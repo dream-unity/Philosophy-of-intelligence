@@ -7,8 +7,8 @@ body[data-view="journey"] .site-header,
 body[data-view="journey"] .site-footer,
 body[data-view="journey"] .skip-link { display: none; }
 #view-journey { max-width: none; padding: 0; }
-.portal-page { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; min-height: 100svh; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) max(20px, env(safe-area-inset-bottom, 0px)) env(safe-area-inset-left, 0px); }
-.portal-artwork { position: relative; isolation: isolate; pointer-events: none; container-type: inline-size; flex: none; width: min(100%, max(320px, calc(100vh - 360px)), 1254px); width: min(100%, max(320px, calc(100svh - 360px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 1254px); aspect-ratio: 1; }
+.portal-page { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; min-height: 100svh; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) max(12px, env(safe-area-inset-bottom, 0px)) env(safe-area-inset-left, 0px); }
+.portal-artwork { position: relative; isolation: isolate; pointer-events: none; container-type: inline-size; flex: none; width: min(100%, calc(100vh - 172px), 1254px); width: min(100%, calc(100svh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px); aspect-ratio: 1; }
 .portal-image { display: block; width: 100%; height: auto; aspect-ratio: 1; user-select: none; pointer-events: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); }
 .portal-title { position: absolute; left: 50%; top: 6.060606%; transform: translate(-50%, -50%); z-index: 3; width: max-content; margin: 0; padding-left: .3em; color: #2b271f; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; font-size: clamp(10px, 1.65cqw, 22px); font-weight: 600; line-height: 1.2; letter-spacing: .3em; text-shadow: 0 1px 0 rgb(255 253 243 / 65%); text-transform: uppercase; white-space: nowrap; }
 .portal-title::before, .portal-title::after { content: ""; position: absolute; top: 50%; width: 2em; height: 1px; background: linear-gradient(to right, transparent, #8b795c); }
@@ -53,7 +53,7 @@ body[data-view="journey"] .skip-link { display: none; }
 }
 @media (max-height: 480px) and (min-width: 601px) {
   .portal-page { padding-bottom: 6px; }
-  .portal-artwork { width: min(100%, 320px); }
+  .portal-artwork { width: min(100%, calc(100svh - 122px)); }
   .portal-caption { font-size: 9px; }
   .portal--unity .portal-caption { font-size: 9px; }
   .portal--world .portal-caption { font-size: 9px; }
