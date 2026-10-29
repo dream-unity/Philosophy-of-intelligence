@@ -3671,7 +3671,7 @@
             "id": "D24",
             "from": "A3",
             "to": "B3",
-            "text": "Produce generates sales that support budget.",
+            "text": "Produce contributes revenue to budget.",
             "kind": "bridges"
           },
           {
@@ -3895,14 +3895,14 @@
             "id": "I13",
             "from": "U2",
             "to": "U3",
-            "text": "Reliability has costs that constrain affordability.",
+            "text": "Reliability constrains affordability through its operating costs.",
             "kind": "criteria cycle"
           },
           {
             "id": "I14",
             "from": "U3",
             "to": "U4",
-            "text": "Affordability influences through transport mode choice ecological impact.",
+            "text": "Affordability influences ecological impact through transport mode choice.",
             "kind": "criteria cycle"
           },
           {

@@ -1,6 +1,6 @@
 # Verification — relational breath-back lessons
 
-Verified 29 October 2026.
+Verified 30 October 2026 (Australia/Hobart).
 
 ## Automated checks
 
@@ -21,6 +21,8 @@ Verified 29 October 2026.
 The self-contained branch preview was opened in a real browser. Circle's desktop layout, exercise selection and four worked entries were inspected. A synthetic stream session was started, opening notes paused it, and two synthetic observations were committed through the ordered encode → recollect → reveal → compare flow. The earlier original remained intact. Ending the stream period restored exercise selection; heart practice retained its separate five-second pacer and bell defaults.
 
 All 42 shape/exercise combinations were opened through their actual controls: every one rendered four examples and the intended complete relationship count. The Circle and Half-circle diagrams were visually inspected, including changed participant labels and meanings. In the heart Geodesic model, tracing C13 across the second and third entries showed the unmet application followed by its provisional repair, with all 120 relationships still present. Explorer controls have explicit accessible names.
+
+After publication, the live Circle route was checked for the new one-relationship definition, all three exercise choices and the ordered four-entry example. The live Sphere explorer retained 120 relationships while changing its entry point, and its state selector responded to keyboard input. GitHub source checks and the Pages deployment completed successfully. A final predicate review removed wording that could hide an unregistered intermediary inside a counted relationship.
 
 The browser review uses synthetic QA records, not personal observations. Full-duration timing and completion are tested with a controlled clock rather than waiting through multi-hour periods. Synthesized audio is verified structurally; no physiological outcome is measured.
 
