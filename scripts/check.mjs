@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { Script } from 'node:vm';
@@ -47,23 +47,62 @@ export function attributes(tag) {
   for (const match of body.matchAll(expression)) {
     const name = match[1].toLowerCase();
     invariant(!Object.hasOwn(result, name), `Duplicate attribute ${name} in ${tag.slice(0, 120)}`);
-    result[name] = match[2] ?? match[3] ?? match[4] ?? '';
+    result[name] = decodeHtmlReferences(match[2] ?? match[3] ?? match[4] ?? '');
   }
   return result;
 }
 
-export function localAsset(reference, fromDirectory = projectRoot) {
+export function decodeHtmlReferences(value) {
+  return value.replace(/&(?:#(x[0-9a-f]+|[0-9]+)|(amp|quot|apos|lt|gt));/gi, (full, numeric, named) => {
+    if (numeric) {
+      const number = numeric[0].toLowerCase() === 'x' ? parseInt(numeric.slice(1), 16) : parseInt(numeric, 10);
+      return number > 0 && number <= 0x10ffff ? String.fromCodePoint(number) : '\ufffd';
+    }
+    return { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' }[named.toLowerCase()];
+  });
+}
+
+export function localAsset(reference, fromDirectory = projectRoot, rootDirectory = projectRoot) {
   invariant(typeof reference === 'string' && reference.trim() !== '', 'An asset has an empty path.');
+  reference = reference.trim();
   invariant(!/^(?:[a-z][\w+.-]*:|\/\/)/i.test(reference), `External asset is not allowed: ${reference}`);
-  const pathname = decodeURIComponent(reference.split(/[?#]/, 1)[0]);
+  let pathname;
+  try { pathname = decodeURIComponent(reference.split(/[?#]/, 1)[0]); }
+  catch { throw new Error(`Invalid encoded asset path: ${reference}`); }
+  invariant(pathname !== '' && !/[\\\u0000-\u001f\u007f]/.test(pathname), `Invalid asset path: ${reference}`);
+  invariant(!/^(?:[a-z][\w+.-]*:|\/\/)/i.test(pathname), `External asset is not allowed: ${reference}`);
   invariant(!isAbsolute(pathname), `Use a relative asset path: ${reference}`);
   const absolute = resolve(fromDirectory, pathname);
-  const fromRoot = relative(projectRoot, absolute);
+  const fromRoot = relative(rootDirectory, absolute);
   invariant(fromRoot !== '..' && !fromRoot.startsWith('..' + sep) && !isAbsolute(fromRoot), `Asset escapes the project: ${reference}`);
   let info;
   try { info = statSync(absolute); } catch { throw new Error(`Missing local asset: ${reference}`); }
   invariant(info.isFile(), `Asset is not a file: ${reference}`);
+  const realRelative = relative(realpathSync(rootDirectory), realpathSync(absolute));
+  invariant(realRelative !== '..' && !realRelative.startsWith('..' + sep) && !isAbsolute(realRelative), `Asset symlink escapes the project: ${reference}`);
   return absolute;
+}
+
+const ASSET_MIME_TYPES = Object.freeze({
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif', '.bmp': 'image/bmp', '.ico': 'image/x-icon',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf'
+});
+
+export function assertInertSvg(source, filename) {
+  invariant(/<svg\b/i.test(source), `${filename} is not an SVG document.`);
+  invariant(!/<script\b|<foreignObject\b|\bon[\w:-]+\s*=|<!ENTITY\b|<!DOCTYPE\b/i.test(source), `${filename} must be inert, self-contained SVG.`);
+  assertDocumentResources(source, { selfContained: true, filename });
+}
+
+export function assetDataUrl(reference, fromDirectory = projectRoot, rootDirectory = projectRoot) {
+  const pathname = localAsset(reference, fromDirectory, rootDirectory);
+  const mime = ASSET_MIME_TYPES[extname(pathname).toLowerCase()];
+  invariant(mime, `Unsupported embedded asset type: ${reference}`);
+  const content = readFileSync(pathname);
+  if (mime === 'image/svg+xml') assertInertSvg(content.toString('utf8'), reference);
+  const fragment = reference.includes('#') ? reference.slice(reference.indexOf('#') + 1) : '';
+  return `data:${mime};base64,${content.toString('base64')}${fragment ? '#' + encodeURIComponent(decodeURIComponent(fragment)) : ''}`;
 }
 
 export function scriptBlocks(html) {
@@ -92,19 +131,33 @@ export function assertNoNetworkCode(source, filename) {
   }
 }
 
-export function assertOfflineCss(css, filename) {
+export function cssUrls(css) {
+  // Comments remain in the output but cannot supply a live resource reference.
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, match => ' '.repeat(match.length));
+  const values = [];
+  for (const match of clean.matchAll(/url\(\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|((?:\\.|[^)\\])*))\s*\)/gi)) {
+    const raw = (match[1] ?? match[2] ?? match[3]).trim();
+    const value = raw.replace(/\\(?:([0-9a-f]{1,6})\s?|([^\r\n]))/gi, (_, hex, literal) => hex ? String.fromCodePoint(parseInt(hex, 16) || 0xfffd) : literal);
+    values.push({ value, start: match.index, end: match.index + match[0].length });
+  }
+  return values;
+}
+
+export function assertOfflineCss(css, filename, { selfContained = true, fromDirectory = projectRoot, rootDirectory = projectRoot } = {}) {
   const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
   invariant(!/@import\b/i.test(clean), `${filename} contains @import; the offline edition must contain all CSS.`);
-  for (const match of clean.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi)) {
-    const url = (match[1] ?? match[2] ?? match[3]).trim();
-    invariant(url.startsWith('#') || /^data:/i.test(url), `${filename} loads a non-embedded CSS resource: ${url}`);
+  invariant(!/(?:-webkit-)?image-set\s*\(/i.test(clean), `${filename}: image-set requires an explicit offline embedding implementation.`);
+  for (const { value: url } of cssUrls(css)) {
+    if (url.startsWith('#') || /^data:/i.test(url)) continue;
+    invariant(!selfContained, `${filename} loads a non-embedded CSS resource: ${url}`);
+    assetDataUrl(url, fromDirectory, rootDirectory);
   }
 }
 
 // A targeted source audit, not a general HTML security parser. External anchor
 // links are intentional navigation; source/font/media/script loads are not.
-export function assertDocumentResources(html, { selfContained = false, filename = 'index.html' } = {}) {
-  for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)) assertOfflineCss(match[1], filename);
+export function assertDocumentResources(html, { selfContained = false, filename = 'index.html', fromDirectory = projectRoot, rootDirectory = projectRoot } = {}) {
+  for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)) assertOfflineCss(match[1], filename, { selfContained, fromDirectory, rootDirectory });
   const markup = html
     .replace(/(<script\b[^>]*>)[\s\S]*?<\/script\s*>/gi, '$1</script>')
     .replace(/(<style\b[^>]*>)[\s\S]*?<\/style\s*>/gi, '$1</style>')
@@ -120,16 +173,18 @@ export function assertDocumentResources(html, { selfContained = false, filename 
   for (const match of markup.matchAll(/<([a-z][\w:-]*)\b[^>]*>/gi)) {
     const name = match[1].toLowerCase();
     const attrs = attributes(match[0]);
-    if (attrs.style) assertOfflineCss(attrs.style, filename + ' inline style');
+    if (attrs.style) assertOfflineCss(attrs.style, filename + ' inline style', { selfContained, fromDirectory, rootDirectory });
     for (const key of resourceAttributes[name] || []) {
       if (!Object.hasOwn(attrs, key)) continue;
       const value = attrs[key].trim();
       invariant(key !== 'srcset', `${filename}: srcset requires an explicit offline embedding implementation.`);
       if (value.startsWith('#') || /^data:/i.test(value)) continue;
       invariant(!selfContained, `${filename} still depends on an external file: ${value}`);
-      const asset = localAsset(value);
+      const asset = localAsset(value, fromDirectory, rootDirectory);
       if (name === 'link' && (attrs.rel || '').split(/\s+/).includes('stylesheet')) {
-        assertOfflineCss(readFileSync(asset, 'utf8'), value);
+        assertOfflineCss(readFileSync(asset, 'utf8'), value, { selfContained: false, fromDirectory: dirname(asset), rootDirectory });
+      } else if (name === 'img' || (name === 'link' && (attrs.rel || '').split(/\s+/).includes('icon'))) {
+        invariant(assetDataUrl(value, fromDirectory, rootDirectory).startsWith('data:image/'), `${filename}: an image requires an image asset: ${value}`);
       }
       count++;
     }
@@ -185,8 +240,7 @@ export function checkProject() {
     assertNoNetworkCode(script.body, 'index.html inline script');
   }
   const icon = readFileSync(resolve(projectRoot, 'icon.svg'), 'utf8');
-  invariant(!/<script\b|\bon\w+\s*=/i.test(icon), 'The icon must be inert SVG.');
-  assertDocumentResources(icon, { selfContained: true, filename: 'icon.svg' });
+  assertInertSvg(icon, 'icon.svg');
   console.log(`Checked ${files.length} source scripts, ${references.size} DOM references and ${resources} local assets. No runtime network dependencies.`);
   return { files: files.length, references: references.size, resources };
 }

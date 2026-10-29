@@ -166,4 +166,13 @@ Those questions would require appropriate measurements, comparison conditions an
 
 The interface uses warm parchment, graphite-coloured line work, serif type and orbital construction diagrams. The home plate makes Observe, Relate and Revise into working links; the three framed pathways lead to lessons, breath-back and the Palace. Lessons, exercises, private records, dialogs and the model lab share this visual language. The visible identity is Philosophy of Intelligence.
 
-Vector engravings use deterministic fine traces and restrained face hatching. Decorative texture and construction lines do not replace labels or task data. Feature-colour swatches remain coloured when colour is part of the exercise; sources also name those colours in text. Reduced motion keeps the artwork centred and removes its breathing movement. All artwork, textures and typography work without network fonts or image requests.
+Vector engravings use deterministic fine traces and restrained face hatching. Decorative texture and construction lines do not replace labels or task data. Feature-colour swatches remain coloured when colour is part of the exercise; sources also name those colours in text. Reduced motion keeps the artwork centred and removes its breathing movement. All artwork and textures are bundled locally. The standalone edition embeds them, and no network fonts are used.
+
+
+## Original portal composition
+
+The opening screen reuses the exact ink artwork, paper texture, medallion overlays, curved bridges and panel-border construction from the owner’s [original page](https://github.com/dream-unity/one/tree/f8df8c6ba58cae686d0437e35e3c69ee73383fc4). It is a title substitution within that composition. The home header, introductory headline and pre-panel call-to-action have been removed. The lesson shortcut and session-resume button remain below the opening composition; navigation and rhythm settings remain available inside the app.
+
+The artwork scales against the available viewport height to reserve room for all three pathways and their captions. Short landscape screens have a compact layout. Labels remain selectable, accessible HTML over the original parchment caption masks. The centre medallion opens the philosophy; Observe opens Circle, Relate opens breath-back, and Revise opens the Palace.
+
+Asset provenance: `assets/intelligence-portals.webp`, `assets/parchment-texture.svg` and `assets/archive-ring.webp` are byte-identical copies of the original repository’s `dream-unity-portals-refined.webp`, `parchment-texture.svg` and `symbol-ring-2.webp` at the linked commit. No generated replacement artwork is used.

@@ -156,9 +156,6 @@
     $('begin-journey').innerHTML=(state.attempts.length?'Continue with ':'Begin with ')+esc(recommended.name)+' <span aria-hidden="true">↗</span>';
     $('begin-journey').dataset.stage=recommended.id;
     $('resume-session').hidden=!session;
-    $('hero-shape').innerHTML=G.shapeSVG(featured.id,{size:410,progress:.65,color:'#363227',label:featured.name+' geometric form'});
-    $('hero-stage-label').textContent=featured.name.toUpperCase()+' · '+(featured.verb||'A GROWING PRACTICE').toUpperCase();
-    document.querySelector('.coordinate-a').textContent=String(featured.index+1).padStart(2,'0')+' : 14';
     const practised=summaries.filter(s=>s.practiceComplete).length;
     const entries=state.palace.length+state.journal.length;
     const completed=state.sessions.filter(s=>s.complete).length;
@@ -493,6 +490,7 @@
     const nextStage=nextView==='practice'?stageById(parts[1]).id:practiceStage;
     if(session&&(nextView!=='practice'||nextStage!==session.stageId)){session=S.pause(session);breath.pause();persist();}
     currentView=nextView;practiceStage=nextStage;
+    document.body.dataset.view=currentView;
     document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!=='view-'+currentView);
     document.querySelectorAll('[data-nav]').forEach(link=>{const active=link.dataset.nav===(currentView==='practice'?'journey':currentView);link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
     renderCurrent();window.scrollTo({top:0,behavior:'instant'});

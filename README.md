@@ -4,7 +4,7 @@
 
 [**Play Philosophy of Intelligence →**](https://dream-unity.github.io/Philosophy-of-intelligence/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/Philosophy-of-Intelligence-Offline.html)
 
-![Philosophy of Intelligence: A mind takes shape](docs/form-preview.jpg)
+![Philosophy of Intelligence: original parchment portal design](docs/form-preview.jpg)
 
 Philosophy of Intelligence turns a philosophy of intelligence into a sequence of small, playable operations: notice an aspect, preserve its source, connect relationships, map a structure, derive a function, and revise it when the evidence changes. Fourteen geometric forms give the journey a visual language.
 
@@ -14,7 +14,7 @@ The accompanying **70–200 scale is symbolic**. It does not measure IQ, classif
 
 Use a current desktop or mobile browser. No account, API key, runtime dependency, external font, or downloaded audio is required.
 
-The single-file edition is [dist/Philosophy-of-Intelligence-Offline.html](dist/Philosophy-of-Intelligence-Offline.html). Download the included file and open it directly in your browser. It contains the game's styles, scripts and vector artwork.
+The single-file edition is [dist/Philosophy-of-Intelligence-Offline.html](dist/Philosophy-of-Intelligence-Offline.html). Download the included file and open it directly in your browser. It contains the game's styles, scripts, original portal artwork and parchment texture.
 
 To run the source edition with a consistent browser storage origin, serve the repository locally:
 

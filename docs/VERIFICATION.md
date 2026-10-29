@@ -4,7 +4,7 @@ Verification performed on 29 October 2026. This records implementation checks, n
 
 ## Automated checks
 
-The Node test suite passes **118 tests** across seven files:
+The Node test suite passes **125 tests** across eight files:
 
 | Area | Tests | Behaviours checked |
 | --- | ---: | --- |
@@ -15,10 +15,11 @@ The Node test suite passes **118 tests** across seven files:
 | Breathing | 13 | Independent phase clock, timing changes, pause/resume, reduced motion and sound scheduling. |
 | Geometry | 13 | Geometric forms and construction diagrams, labels, escaping and accessibility structure. |
 | Model lab | 8 | Predictions committed before outcomes, context/scope handling, distinct evidence and revision history. |
+| Build/assets | 7 | CSS-relative resources, raster/SVG embedding, script order, inert assets and self-contained output. |
 
 The curriculum, session, progress, breathing, geometry and lab tests run against the production modules. The app-storage tests run the actual initialization and storage helpers with minimal browser/storage substitutes; their extraction boundaries are explicitly checked. These are not a substitute for full browser tests.
 
-`npm run check`, `npm run build` and `git diff --check` pass. The offline build embeds all seven script modules, both stylesheets and the icon. Its browser document has zero external script or stylesheet references. There are no npm runtime dependencies.
+`npm run check`, `npm run build` and `git diff --check` pass. The offline build embeds all seven script modules, three stylesheets, three image elements, the parchment texture and the icon. Its browser document has zero external script or stylesheet references. There are no npm runtime dependencies.
 
 ## Browser playthroughs
 
@@ -60,3 +61,8 @@ Keyboard use, focus after committing/advancing and mapping reassignment, disable
 ## Engraved design update
 
 The parchment redesign was checked across Journey, a Circle lesson and scored challenge, Breath-back, Palace, the philosophy page, model lab and rhythm dialog. Home layouts at 320, 390 and 820 pixels had no horizontal document overflow. Mobile dialog content remained scrollable, and a Circle response still committed and received correct feedback. All 118 tests, source checks and the regenerated self-contained edition pass after the branding and geometry changes. The canonical offline file now uses the full project name; the old download filename remains an identical compatibility copy.
+
+
+## Original-artwork restoration
+
+The opening page was restored using the actual source artwork and parchment from the supplied reference. Browser frames at 1536×756, 1280×630, 1024×600, 390×844, 320×568 and 667×375 verified that all three lower panels and the final sentence fit inside the first viewport. The app header is absent from this screen and visible on internal screens. The four entry routes were checked through actual link clicks. These changes leave the training, scoring and saved-record model unchanged. The source checks and single-file build pass with all original artwork embedded in the offline edition.
