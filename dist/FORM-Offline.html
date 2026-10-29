@@ -175,7 +175,7 @@ dialog{border:3px double #8b7d5f;background:var(--paper);border-radius:3px;box-s
 @media(max-width:900px){.training-panel-controls{flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:16px}.training-panel-controls .training-state{margin-bottom:0}}
 
 </style>
-  <style data-form-source="src/landing.css?v=0908cc4f77a2">
+  <style data-form-source="src/landing.css?v=0d8669af32b1">
 /* Original artwork and portal composition from the owner's dream-unity/one.
    Labels are live HTML. The matching paper captions cover the raster labels. */
 :root { --paper: #ebe4d5; --ink: #302b23; color-scheme: light; }
@@ -219,11 +219,12 @@ body[data-view="journey"] .skip-link { display: none; }
 /* Reuse the original fourteen shape cards as the only homepage navigation. */
 .portal-page > .stage-path { flex: none; width: min(calc(100% - 32px), 1440px); }
 .portal-page .stage-tile { text-align: center; }
-.portal-page .stage-tile .stage-icon { width: 80px; height: 80px; }
+/* The ink occupies about 72% of the SVG viewBox. Size the box generously
+   enough for the visible shape, and cap it to the card on narrow screens. */
+.portal-page .stage-tile .stage-icon { flex: none; width: min(120px, 100%); height: auto; aspect-ratio: 1; }
 .portal-page .stage-tile .stage-icon svg { width: 100%; height: 100%; }
 .portal-page .stage-tile:focus-visible { outline: 2px solid #4c3c28; outline-offset: 3px; }
-@media (max-width: 1100px) { .portal-page .stage-tile .stage-icon { width: 68px; height: 68px; } }
-@media (max-width: 600px) { .portal-page .stage-tile .stage-icon { width: 76px; height: 76px; } }
+@media (max-width: 1100px) { .portal-page .stage-tile .stage-icon { width: min(96px, 100%); } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 420px) { .portal--machine .portal-caption, .portal--maker .portal-caption { width: 64%; } .portal--world .portal-caption { width: 67%; } .portal-title { letter-spacing: .2em; padding-left: .2em; } }
 
