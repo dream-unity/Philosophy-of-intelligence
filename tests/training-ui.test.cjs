@@ -597,6 +597,42 @@ test('events from detached fields cannot replace an encoded selection or write i
   assert.equal(page.q('[data-note="source"]').value,'');
 });
 
+test('a detached fresh-stream button cannot discard another exercise’s draft', () => {
+  const page=harness();
+  const oldFresh=page.q('[data-fresh]');
+  page.click('[data-exercise="heart"]');
+  page.type('[data-note="source"]','Private heart selection that must remain.');
+  oldFresh.click();
+  assert.equal(page.q('[data-note="source"]').value,'Private heart selection that must remain.');
+  assert.equal(page.app.hasDraft(),true);
+  page.submit();
+  assert.equal(page.data().entries[0].source,'Private heart selection that must remain.');
+  assert.equal(page.data().entries[0].exercise,'heart');
+});
+
+test('a detached recovery button cannot download an old return or replace the current draft', () => {
+  const page=harness();
+  page.type('[data-note="source"]','Ocean contains boat.');page.submit();
+  page.type('[data-note="source"]','Boat enables passage.');page.click('[data-lock-source]');
+  page.type('[data-note="recollection"]','Ocean contains boat.');page.click('[data-reveal]');
+  page.external(JSON.stringify({schemaVersion:1,entries:[],sessions:[],readiness:{}}));
+  page.click('[data-reload]');
+  const oldRecovery=page.q('[data-recover-return]');
+  const saved=JSON.stringify(page.data());
+  page.click('[data-exercise="body"]');
+  page.type('[data-note="source"]','Private body selection that must remain.');
+  oldRecovery.click();
+  assert.equal(page.downloads.length,0,'a stale control cannot initiate a private download');
+  assert.equal(page.q('[data-note="source"]').value,'Private body selection that must remain.');
+  assert.equal(JSON.stringify(page.data()),saved);
+  page.click('[data-exercise="stream"]');
+  oldRecovery.click();
+  assert.equal(page.downloads.length,0,'returning to the exercise does not reactivate an old render’s control');
+  assert.equal(page.q('[data-note="source"]').value,'Boat enables passage.');
+  assert.equal(page.q('[data-note="source"]').readOnly,true);
+  assert.match(page.q('.training-original').textContent,/Ocean contains boat/);
+});
+
 test('ending or changing an exercise stops a test bell as well as session audio', () => {
   const page=harness();
   page.click('[data-test-sound]');
@@ -618,7 +654,7 @@ test('tracing a relationship keeps its complete meaning and updates participant 
   assert.match(page.q('[data-traced-relationship]').textContent,/Whole structure · 2 relationships/);
   page.choose('[data-model-relation]','R02');
   assert.match(page.q('[data-traced-relationship]').textContent,/Boat provides a means of traversing ocean/);
-  assert.match(page.q('[data-traced-relationship]').textContent,/All 2 relationships remain/);
+  assert.match(page.q('[data-traced-relationship]').textContent,/The full model still contains 2 relationships/);
   assert.equal(page.q('[data-trace-relation="R02"]').getAttribute('aria-pressed'),'true');
   page.choose('[data-model-state]','1');
   assert.equal(page.q('[data-model-relation]').value,'R02');
