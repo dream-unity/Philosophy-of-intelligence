@@ -86,7 +86,7 @@ test('shape labels and colors cannot introduce executable or external SVG conten
   const svg = geometry.shapeSVG('sphere', { label: attack, color: 'url(https://evil.example/color)', size: '" onload="alert(1)', progress: Infinity });
   assert.ok(svg.includes('&lt;/title&gt;&lt;script&gt;'));
   assert.doesNotMatch(svg, /<script|<image|onload=|url\(https:|width="NaN"/);
-  assert.match(svg, /stroke="#237a72"/);
+  assert.match(svg, /stroke="#363227"/);
   assert.match(svg, /width="240"/);
   assert.match(geometry.shapeSVG('<script>'), /data-stage="circle"/);
 });
@@ -98,11 +98,11 @@ test('all document ids are unique, including repeated sphere gradients', () => {
   assert.equal(ids.length, new Set(ids).size);
 });
 
-test('progress creates bounded coral geometry and motion includes a reduced-motion override', () => {
+test('progress creates bounded ink geometry and motion includes a reduced-motion override', () => {
   for (const id of geometry.STAGE_IDS) {
     const svg = geometry.shapeSVG(id, { progress: 0.45, animated: true });
     assert.match(svg, /class="form-geometry-progress"/);
-    assert.match(svg, /#d87559/);
+    assert.match(svg, /#211e18/);
     assert.match(svg, /prefers-reduced-motion: reduce/);
     assert.doesNotMatch(svg, /requestAnimationFrame|setInterval|<animate/);
   }
@@ -163,5 +163,5 @@ test('mapping diagrams retain left and right columns and describe the proposed e
 test('empty construction diagrams expose their unconnected state without highlighting an answer', () => {
   const svg = geometry.relationSVG([{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], []);
   assert.match(svg, /No connections selected/);
-  assert.doesNotMatch(svg, /stroke="#d87559"/);
+  assert.doesNotMatch(svg, /stroke="#211e18"/);
 });

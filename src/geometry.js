@@ -1,4 +1,4 @@
-/* FORM — original, dependency-free geometric illustrations. */
+/* Philosophy of Intelligence — original geometric engravings. */
 (function (root, factory) {
   'use strict';
   const api = factory();
@@ -10,9 +10,9 @@
   const STAGE_IDS = Object.freeze(['circle', 'half-circle', 'triangle', 'square', 'pentagon', 'hexagon', 'prism', 'heptagon', 'octagon', 'cube', 'dodecahedron', 'icosahedron', 'geodesic', 'sphere']);
   const NAMES = { circle: 'Circle', 'half-circle': 'Half-circle', triangle: 'Triangle', square: 'Square', pentagon: 'Pentagon', hexagon: 'Hexagon', prism: 'Triangular prism', heptagon: 'Heptagon', octagon: 'Octagon', cube: 'Cube', dodecahedron: 'Dodecahedron', icosahedron: 'Icosahedron', geodesic: 'Geodesic sphere', sphere: 'Sphere' };
   const SIDES = { triangle: 3, square: 4, pentagon: 5, hexagon: 6, heptagon: 7, octagon: 8 };
-  const TEAL = '#237a72';
-  const CORAL = '#d87559';
-  const IVORY = '#f7f4ec';
+  const INK = '#363227';
+  const PROGRESS_INK = '#211e18';
+  const PARCHMENT = '#eee7d5';
   const TAU = Math.PI * 2;
   const meshCache = Object.create(null);
   let nextId = 0;
@@ -32,8 +32,8 @@
   }
 
   function safeColor(value) {
-    const color = text(value, TEAL, 80).trim();
-    return /^(?:#[\da-f]{3}|#[\da-f]{4}|#[\da-f]{6}|#[\da-f]{8}|[a-z]{1,24}|(?:rgb|rgba|hsl|hsla)\([\d\s.,%+\-/]+\))$/i.test(color) ? color : TEAL;
+    const color = text(value, INK, 80).trim();
+    return /^(?:#[\da-f]{3}|#[\da-f]{4}|#[\da-f]{6}|#[\da-f]{8}|[a-z]{1,24}|(?:rgb|rgba|hsl|hsla)\([\d\s.,%+\-/]+\))$/i.test(color) ? color : INK;
   }
 
   function stageName(id) {
@@ -204,6 +204,60 @@
     return '<line x1="' + number(a[0]) + '" y1="' + number(a[1]) + '" x2="' + number(b[0]) + '" y2="' + number(b[1]) + '"' + (attributes ? ' ' + attributes : '') + '/>';
   }
 
+  /* Ornament is deterministic and separate from the exact mathematical mesh. */
+  function drawnArc(radius, start, end, seed) {
+    const count = Math.max(12, Math.ceil((end - start) / TAU * 144));
+    return Array.from({ length: count + 1 }, (_, index) => {
+      const angle = start + (end - start) * index / count;
+      const offset = 0.22 * Math.sin(angle * 7 + seed) + 0.14 * Math.sin(angle * 13 - seed * 0.7);
+      return (index ? 'L' : 'M') + number(120 + (radius + offset) * Math.cos(angle)) + ' ' + number(120 + (radius + offset) * Math.sin(angle));
+    }).join('');
+  }
+
+  function draftingOrbit(id, color) {
+    const seed = Array.from(id).reduce((sum, letter) => sum + letter.charCodeAt(0), 0) / 13;
+    const circles = [96.8, 99.1, 108.8, 112.4].map((radius, index) => '<circle cx="120" cy="120" r="' + radius + '" stroke-width="' + (index === 2 ? '0.65' : '0.32') + '" opacity="' + (index === 2 ? '0.58' : '0.29') + '"/>').join('');
+    const ticks = Array.from({ length: 60 }, (_, index) => {
+      const angle = index * TAU / 60;
+      const inner = index % 5 === 0 ? 109.5 : 112.4;
+      const outer = index % 5 === 0 ? 117.2 : 114.4;
+      return line([120 + Math.cos(angle) * inner, 120 + Math.sin(angle) * inner], [120 + Math.cos(angle) * outer, 120 + Math.sin(angle) * outer]);
+    }).join('');
+    const arcs = [[100.3, -2.8, -0.6], [107.2, 0.2, 2.1], [111.1, 2.8, 4.9], [98.1, 0.7, 2.6]].map(([radius, start, end], index) => '<path d="' + drawnArc(radius, start, end, seed + index) + '" opacity="' + (index % 2 ? '0.38' : '0.22') + '" stroke-width="0.38"/>').join('');
+    const crosshairs = '<path d="M3 120H30 M210 120H237 M120 3V30 M120 210V237" opacity="0.33" stroke-width="0.42"/><path d="M17 120H223 M120 17V223" opacity="0.13" stroke-width="0.3" stroke-dasharray="17 3 1 3"/>';
+    return '<g class="form-geometry-drafting" aria-hidden="true" fill="none" stroke="' + color + '" stroke-linecap="round">' + circles + arcs + '<g stroke-width="0.36" opacity="0.39">' + ticks + '</g>' + crosshairs + '</g>';
+  }
+
+  function etchedEdges(edges, vertices, frontEdges, color) {
+    const paths = edges.map(([a, b], index) => {
+      if (!frontEdges.has(edgeKey(a, b))) return '';
+      const from = vertices[a], to = vertices[b];
+      const dx = to[0] - from[0], dy = to[1] - from[1], length = Math.hypot(dx, dy) || 1;
+      const nx = -dy / length, ny = dx / length;
+      const offset = 0.45 + Math.sin(index * 2.13) * 0.2;
+      const start = [from[0] + nx * offset - dx / length * 0.7, from[1] + ny * offset - dy / length * 0.7];
+      const end = [to[0] + nx * offset + dx / length * 0.8, to[1] + ny * offset + dy / length * 0.8];
+      return '<path d="M' + number(start[0]) + ' ' + number(start[1]) + 'Q' + number((start[0] + end[0]) / 2 + nx * 0.3) + ' ' + number((start[1] + end[1]) / 2 + ny * 0.3) + ' ' + number(end[0]) + ' ' + number(end[1]) + '"/>';
+    }).join('');
+    return '<g class="form-geometry-etch" aria-hidden="true" fill="none" stroke="' + color + '" stroke-width="0.36" opacity="0.37">' + paths + '</g>';
+  }
+
+  function faceHatching(vertices, faces, color, uid) {
+    if (!faces.length) return '';
+    const face = faces.reduce((best, candidate) => {
+      const centre = candidate.reduce((sum, index) => sum + vertices[index][0], 0) / candidate.length;
+      return centre > best.centre ? { centre, face: candidate } : best;
+    }, { centre: -Infinity, face: faces[0] }).face;
+    const points = face.map(index => vertices[index]);
+    const xs = points.map(point => point[0]), ys = points.map(point => point[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const slant = (maxY - minY) * 0.58;
+    const strokes = [];
+    for (let x = minX - slant; x <= maxX; x += 5.2) strokes.push(line([x, minY], [x + slant, maxY]));
+    const clipId = uid + '-hatching';
+    return '<defs><clipPath id="' + clipId + '"><polygon points="' + points.map(point => number(point[0]) + ',' + number(point[1])).join(' ') + '"/></clipPath></defs><g class="form-geometry-hatching" aria-hidden="true" clip-path="url(#' + clipId + ')" fill="none" stroke="' + color + '" stroke-width="0.35" opacity="0.18">' + strokes.join('') + '</g>';
+  }
+
   function progressLines(edges, vertices, progress, frontEdges, width) {
     const sorted = edges.slice().sort((a, b) => {
       const aFront = frontEdges.has(edgeKey(a[0], a[1])) ? 1 : 0;
@@ -216,35 +270,41 @@
       if (!fraction) return '';
       const end = add(vertices[a], multiply(subtract(vertices[b], vertices[a]), fraction));
       return line(vertices[a], end, 'opacity="' + (frontEdges.has(edgeKey(a, b)) ? '0.95' : '0.4') + '"');
-    }).join('').replace(/^(.+)$/, '<g class="form-geometry-progress" fill="none" stroke="' + CORAL + '" stroke-width="' + width + '" stroke-linecap="round">$1</g>');
+    }).join('').replace(/^(.+)$/, '<g class="form-geometry-progress" fill="none" stroke="' + PROGRESS_INK + '" stroke-width="' + width + '" stroke-linecap="round">$1</g>');
   }
 
-  function drawMesh(id, mesh, color, progress, compact) {
+  function drawMesh(id, mesh, color, progress, compact, detailed, uid) {
     const { vertices, frontEdges, frontFaces } = projection(mesh, id);
-    const width = compact ? 6.8 : id === 'geodesic' ? 1.15 : 1.55;
+    const width = compact ? 5.5 : id === 'geodesic' ? 0.72 : 0.98;
     const hidden = [], visible = [];
     mesh.edges.forEach(([a, b]) => (frontEdges.has(edgeKey(a, b)) ? visible : hidden).push(line(vertices[a], vertices[b])));
     const fill = mesh.kind === 'polygon'
-      ? '<polygon points="' + vertices.map(vertex => number(vertex[0]) + ',' + number(vertex[1])).join(' ') + '" fill="' + color + '" opacity="0.035"/>'
-      : frontFaces.map((face, index) => '<polygon points="' + face.map(i => number(vertices[i][0]) + ',' + number(vertices[i][1])).join(' ') + '" fill="' + color + '" opacity="' + (index % 3 === 0 ? '0.055' : '0.018') + '"/>').join('');
+      ? '<polygon points="' + vertices.map(vertex => number(vertex[0]) + ',' + number(vertex[1])).join(' ') + '" fill="' + color + '" opacity="0.012"/>'
+      : frontFaces.map((face, index) => '<polygon points="' + face.map(i => number(vertices[i][0]) + ',' + number(vertices[i][1])).join(' ') + '" fill="' + color + '" opacity="' + (index % 3 === 0 ? '0.03' : '0.012') + '"/>').join('');
     const vertexDots = compact || id === 'geodesic' ? '' : vertices.map((vertex, index) => {
       const isFront = mesh.edges.some(([a, b]) => (a === index || b === index) && frontEdges.has(edgeKey(a, b)));
       if (!isFront) return '';
-      return '<circle cx="' + number(vertex[0]) + '" cy="' + number(vertex[1]) + '" r="2.15" fill="' + IVORY + '" stroke="' + color + '" stroke-width="1.15"/>';
+      return (detailed ? '<path d="M' + number(vertex[0] - 3.1) + ' ' + number(vertex[1]) + 'h6.2M' + number(vertex[0]) + ' ' + number(vertex[1] - 3.1) + 'v6.2" fill="none" stroke="' + color + '" stroke-width="0.36" opacity="0.32"/>' : '')
+        + '<circle cx="' + number(vertex[0]) + '" cy="' + number(vertex[1]) + '" r="1.35" fill="' + PARCHMENT + '" stroke="' + color + '" stroke-width="0.72"/>';
     }).join('');
-    return fill + '<g fill="none" stroke="' + color + '" stroke-width="' + width + '" stroke-linejoin="round" stroke-linecap="round">'
-      + '<g class="form-geometry-hidden" opacity="0.22" stroke-dasharray="' + (compact ? '9 12' : '2.5 5') + '">' + hidden.join('') + '</g>'
+    return fill + (detailed && mesh.kind === 'solid' && id !== 'geodesic' ? faceHatching(vertices, frontFaces, color, uid) : '')
+      + (detailed ? etchedEdges(mesh.edges, vertices, frontEdges, color) : '')
+      + '<g fill="none" stroke="' + color + '" stroke-width="' + width + '" stroke-linejoin="round" stroke-linecap="round">'
+      + '<g class="form-geometry-hidden" opacity="0.2" stroke-dasharray="' + (compact ? '9 12' : '2.5 5') + '">' + hidden.join('') + '</g>'
       + '<g class="form-geometry-visible" opacity="0.88">' + visible.join('') + '</g></g>'
-      + progressLines(mesh.edges, vertices, progress, frontEdges, compact ? 8 : 2.05) + vertexDots;
+      + progressLines(mesh.edges, vertices, progress, frontEdges, compact ? 6.7 : 1.45) + vertexDots;
   }
 
-  function drawCurve(id, color, progress, compact) {
-    const width = compact ? 7 : 1.7;
+  function drawCurve(id, color, progress, compact, detailed) {
+    const width = compact ? 5.8 : 1.02;
     const curve = id === 'circle' ? 'M120 34 A86 86 0 1 1 119.999 34 Z' : 'M34 155 A86 86 0 0 1 206 155 L34 155 Z';
     const length = id === 'circle' ? TAU * 86 : Math.PI * 86 + 172;
     const path = '<path d="' + curve + '"';
-    return path + ' fill="' + color + '" fill-opacity="0.035" stroke="' + color + '" stroke-width="' + width + '" stroke-linejoin="round"/>'
-      + (progress > 0 ? path + ' class="form-geometry-progress" fill="none" stroke="' + CORAL + '" stroke-width="' + (compact ? 8 : 2.1) + '" stroke-dasharray="' + number(progress * length) + ' ' + number(length + 1) + '" stroke-linecap="round"/>' : '');
+    const etching = !detailed ? '' : id === 'circle'
+      ? '<g class="form-geometry-etch" aria-hidden="true" fill="none" stroke="' + color + '"><path d="' + drawnArc(84.7, 0, TAU, 2.7) + '" stroke-width="0.36" opacity="0.42"/><path d="' + drawnArc(87.1, 0, TAU, 5.1) + '" stroke-width="0.4" opacity="0.35"/><path d="M120 30v8M120 202v8M30 120h8M202 120h8" stroke-width="0.4" opacity="0.42"/></g>'
+      : '<g class="form-geometry-etch" aria-hidden="true" fill="none" stroke="' + color + '" stroke-width="0.36" opacity="0.36">' + path + ' transform="translate(-0.65 0.4)"/>' + path + ' transform="translate(0.7 -0.35)"/></g>';
+    return etching + path + ' fill="' + color + '" fill-opacity="0.012" stroke="' + color + '" stroke-width="' + width + '" stroke-linejoin="round"/>'
+      + (progress > 0 ? path + ' class="form-geometry-progress" fill="none" stroke="' + PROGRESS_INK + '" stroke-width="' + (compact ? 6.8 : 1.5) + '" stroke-dasharray="' + number(progress * length) + ' ' + number(length + 1) + '" stroke-linecap="round"/>' : '');
   }
 
   function curvePaths(points) {
@@ -264,7 +324,7 @@
     return segments;
   }
 
-  function drawSphere(color, progress, compact, uid) {
+  function drawSphere(color, progress, compact, detailed, uid) {
     const front = [], back = [];
     const angles = [-0.28, 0.38, -0.13];
     const addCurve = points => {
@@ -287,12 +347,13 @@
       return [Math.cos(latitude) * Math.cos(angle), Math.sin(latitude), Math.cos(latitude) * Math.sin(angle)];
     })));
     const paths = array => array.map(path => '<path d="' + path + '"/>').join('');
-    const width = compact ? 5.8 : 1.05;
-    return '<defs><radialGradient id="' + uid + '-surface" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="' + IVORY + '" stop-opacity="0"/><stop offset="1" stop-color="' + color + '" stop-opacity="0.1"/></radialGradient></defs>'
+    const width = compact ? 4.8 : 0.64;
+    const etching = detailed ? '<g class="form-geometry-etch" aria-hidden="true" fill="none" stroke="' + color + '" stroke-width="0.34" opacity="0.22"><path d="' + drawnArc(87.1, 0, TAU, 3.2) + '"/><path d="' + drawnArc(84.8, 0, TAU, 6.8) + '"/><g transform="translate(0.55 -0.3)">' + paths(front) + '</g></g>' : '';
+    return '<defs><radialGradient id="' + uid + '-surface" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="' + PARCHMENT + '" stop-opacity="0"/><stop offset="1" stop-color="' + color + '" stop-opacity="0.075"/></radialGradient></defs>'
       + '<circle cx="120" cy="120" r="86" fill="url(#' + uid + '-surface)"/>'
-      + '<g fill="none" stroke="' + color + '" stroke-width="' + width + '" stroke-linecap="round"><g opacity="0.15" stroke-dasharray="' + (compact ? '9 12' : '2 5') + '">' + paths(back) + '</g><g opacity="0.58">' + paths(front) + '</g></g>'
-      + '<circle cx="120" cy="120" r="86" fill="none" stroke="' + color + '" stroke-width="' + (compact ? 7 : 1.65) + '"/>'
-      + (progress > 0 ? '<g class="form-geometry-progress" fill="none" stroke="' + CORAL + '" stroke-width="' + (compact ? 6.5 : 1.55) + '" opacity="0.85">' + front.map((path, i) => {
+      + etching + '<g fill="none" stroke="' + color + '" stroke-width="' + width + '" stroke-linecap="round"><g opacity="0.15" stroke-dasharray="' + (compact ? '9 12' : '2 5') + '">' + paths(back) + '</g><g opacity="0.68">' + paths(front) + '</g></g>'
+      + '<circle cx="120" cy="120" r="86" fill="none" stroke="' + color + '" stroke-width="' + (compact ? 5.7 : 1.02) + '"/>'
+      + (progress > 0 ? '<g class="form-geometry-progress" fill="none" stroke="' + PROGRESS_INK + '" stroke-width="' + (compact ? 5.5 : 1.05) + '" opacity="0.85">' + front.map((path, i) => {
         const fraction = Math.max(0, Math.min(1, progress * front.length - i));
         if (!fraction) return '';
         const coordinates = path.match(/-?\d+(?:\.\d+)?/g).map(Number);
@@ -311,16 +372,19 @@
     const color = escape(safeColor(config.color));
     const uid = 'form-geometry-' + (++nextId);
     const compact = size < 64;
+    const detailed = size >= 120;
+    const plate = size >= 320;
     const label = escape(text(config.label, NAMES[id], 320));
     const mesh = internalMesh(id);
     const description = mesh.kind === 'solid'
       ? NAMES[id] + ', with ' + mesh.vertices.length + ' vertices, ' + mesh.edges.length + ' edges and ' + mesh.faces.length + ' faces. Faint dashed lines show the rear edges.'
       : id === 'sphere' ? 'A smooth sphere, drawn with curved meridians and parallels.' : NAMES[id] + ', a geometric representation of this stage.';
-    const body = mesh.kind === 'solid' || mesh.kind === 'polygon' ? drawMesh(id, mesh, color, progress, compact) : id === 'sphere' ? drawSphere(color, progress, compact, uid) : drawCurve(id, color, progress, compact);
+    const body = mesh.kind === 'solid' || mesh.kind === 'polygon' ? drawMesh(id, mesh, color, progress, compact, detailed, uid) : id === 'sphere' ? drawSphere(color, progress, compact, detailed, uid) : drawCurve(id, color, progress, compact, detailed);
     return '<svg xmlns="http://www.w3.org/2000/svg" class="form-shape form-shape--' + id + (config.animated ? ' is-animated' : '') + '" data-stage="' + id + '" width="' + size + '" height="' + size + '" viewBox="0 0 240 240" role="img" aria-labelledby="' + uid + '-title" aria-describedby="' + uid + '-description" focusable="false">'
       + '<title id="' + uid + '-title">' + label + '</title><desc id="' + uid + '-description">' + escape(description) + '</desc>'
       + (config.animated ? '<style>@media (prefers-reduced-motion: reduce){#' + uid + '-motion{animation:none!important;transition:none!important}}</style>' : '')
-      + '<g id="' + uid + '-motion" class="form-geometry-motion">' + body + '</g></svg>';
+      + (plate ? draftingOrbit(id, color) : '')
+      + '<g id="' + uid + '-motion" class="form-geometry-motion"' + (plate ? ' transform="translate(120 120) scale(0.79) translate(-120 -120)"' : '') + '>' + body + '</g></svg>';
   }
 
   function miniIcon(stageId, size) {
@@ -427,20 +491,21 @@
       }
       const displayLabel = label.length > 32 ? label.slice(0, 29) + '…' : label;
       const labelWidth = Math.min(width - 12, displayLabel.length * 5.8 + 12);
-      return '<g class="form-relation-edge"><title>' + escape(from.label + ' → ' + to.label + (label ? ': ' + label : '')) + '</title><path d="' + path + '" fill="none" stroke="' + TEAL + '" stroke-opacity="0.54" stroke-width="1.5" marker-end="url(#' + uid + '-arrow)"/>'
-        + (label ? '<rect x="' + number(labelX - labelWidth / 2) + '" y="' + number(labelY - 11) + '" width="' + number(labelWidth) + '" height="17" rx="7" fill="' + IVORY + '"/><text x="' + number(labelX) + '" y="' + number(labelY + 1) + '" text-anchor="middle" fill="' + TEAL + '" font-size="10.5" font-family="inherit">' + escape(displayLabel) + '</text>' : '') + '</g>';
+      return '<g class="form-relation-edge"><title>' + escape(from.label + ' → ' + to.label + (label ? ': ' + label : '')) + '</title><path d="' + path + '" fill="none" stroke="' + INK + '" stroke-opacity="0.22" stroke-width="0.35" transform="translate(0.55 -0.35)" aria-hidden="true"/><path d="' + path + '" fill="none" stroke="' + INK + '" stroke-opacity="0.65" stroke-width="1.05" marker-end="url(#' + uid + '-arrow)"/>'
+        + (label ? '<rect x="' + number(labelX - labelWidth / 2) + '" y="' + number(labelY - 11) + '" width="' + number(labelWidth) + '" height="17" rx="1.5" fill="' + PARCHMENT + '"/><text x="' + number(labelX) + '" y="' + number(labelY + 1) + '" text-anchor="middle" fill="' + INK + '" font-size="10.5" font-family="Georgia,serif">' + escape(displayLabel) + '</text>' : '') + '</g>';
     }).join('');
     const nodeMarkup = layout.map((node, index) => {
       const lines = wrapLabel(node.label, Math.max(6, Math.floor(node.width / 6.1)));
       const lineHeight = Math.min(13, (node.height - 10) / Math.max(1, lines.length));
       const firstY = node.y - (lines.length - 1) * lineHeight / 2 + 3.5;
       const isSource = safeEdges.some(edge => text(edge.from, '', 160) === node.id);
-      return '<g class="form-relation-node" role="group" aria-label="' + escape(node.label) + '" data-relation-node="' + escape(node.id) + '"><rect x="' + number(node.x - node.width / 2) + '" y="' + number(node.y - node.height / 2) + '" width="' + number(node.width) + '" height="' + number(node.height) + '" rx="10" fill="' + IVORY + '" stroke="' + (isSource ? CORAL : TEAL) + '" stroke-opacity="0.65" stroke-width="1.3"/>'
-        + '<text text-anchor="middle" fill="' + TEAL + '" font-size="11" font-family="inherit">' + lines.map((content, lineIndex) => '<tspan x="' + number(node.x) + '" y="' + number(firstY + lineIndex * lineHeight) + '">' + escape(content) + '</tspan>').join('') + '</text></g>';
+      return '<g class="form-relation-node" role="group" aria-label="' + escape(node.label) + '" data-relation-node="' + escape(node.id) + '"><rect x="' + number(node.x - node.width / 2) + '" y="' + number(node.y - node.height / 2) + '" width="' + number(node.width) + '" height="' + number(node.height) + '" rx="2.5" fill="' + PARCHMENT + '" stroke="' + (isSource ? PROGRESS_INK : INK) + '" stroke-opacity="0.65" stroke-width="0.85"/>'
+        + '<rect x="' + number(node.x - node.width / 2 + 1.4) + '" y="' + number(node.y - node.height / 2 + 1.1) + '" width="' + number(node.width - 2.9) + '" height="' + number(node.height - 2.3) + '" rx="1.5" fill="none" stroke="' + INK + '" stroke-width="0.3" opacity="0.23" aria-hidden="true"/>'
+        + '<text text-anchor="middle" fill="' + INK + '" font-size="11" font-family="Georgia,serif">' + lines.map((content, lineIndex) => '<tspan x="' + number(node.x) + '" y="' + number(firstY + lineIndex * lineHeight) + '">' + escape(content) + '</tspan>').join('') + '</text></g>';
     }).join('');
     const description = layout.length ? layout.length + ' nodes and ' + safeEdges.length + ' directed relationships. Nodes: ' + layout.map(node => node.label).join('; ') + '. '
       + (safeEdges.length ? 'Connections: ' + safeEdges.map(edge => lookup.get(text(edge.from, '', 160)).label + ' to ' + lookup.get(text(edge.to, '', 160)).label + (text(edge.label, '', 100) ? ', ' + text(edge.label, '', 100) : '')).join('; ') + '.' : 'No connections selected.') : 'No relationships to display.';
-    return '<svg xmlns="http://www.w3.org/2000/svg" class="form-relation-map" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-labelledby="' + uid + '-title" aria-describedby="' + uid + '-description" focusable="false"><title id="' + uid + '-title">' + escape(text(config.label, 'Relationship map', 320)) + '</title><desc id="' + uid + '-description">' + escape(description) + '</desc><defs><marker id="' + uid + '-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="' + TEAL + '" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>' + edgeMarkup + nodeMarkup + '</svg>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" class="form-relation-map" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-labelledby="' + uid + '-title" aria-describedby="' + uid + '-description" focusable="false"><title id="' + uid + '-title">' + escape(text(config.label, 'Relationship map', 320)) + '</title><desc id="' + uid + '-description">' + escape(description) + '</desc><defs><marker id="' + uid + '-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="' + INK + '" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>' + edgeMarkup + nodeMarkup + '</svg>';
   }
 
   return Object.freeze({ shapeSVG, miniIcon, relationSVG, meshFor, STAGE_IDS });

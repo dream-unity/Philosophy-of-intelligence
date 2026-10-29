@@ -1,10 +1,10 @@
-# FORM: design rationale
+# Philosophy of Intelligence: design rationale
 
-FORM asks how a person can preserve what they encounter, organise relationships within it, and turn a useful pattern into something they can apply and revise. Its geometric progression is a practical interpretation of a philosophy of intelligence, expressed through exercises rather than a test of a person's worth or potential.
+Philosophy of Intelligence asks how a person can preserve what they encounter, organise relationships within it, and turn a useful pattern into something they can apply and revise. Its geometric progression is a practical interpretation of a philosophy of intelligence, expressed through exercises rather than a test of a person's worth or potential.
 
 ## Geometry as a language for operations
 
-The initial philosophical intuition connects shapes with the capacity to hold relationships together. FORM uses this as a teaching language. A form gives an operation a memorable identity; its visual structure can suggest connection, coordination or an organised whole.
+The initial philosophical intuition connects shapes with the capacity to hold relationships together. Philosophy of Intelligence uses this as a teaching language. A form gives an operation a memorable identity; its visual structure can suggest connection, coordination or an organised whole.
 
 That choice does not make a polygon's side count a measurement of cognitive capacity. A circle is not being asserted to be a conventional one-sided polygon. A three-dimensional solid is not evidence that its user has reached a higher biological kind of intelligence. The fourteen **70–200 labels are symbolic markers** attached to stages, not measured or estimated IQ.
 
@@ -51,7 +51,7 @@ Settings are fixed during a mission. A submitted attempt cannot be submitted aga
 
 ## Keep difficulty dimensions separate
 
-FORM distinguishes retrieval distance from relational complexity. Square's N-back setting counts **committed observations**, not seconds, breaths or the number of interface interactions. The first N records establish history and are unscored. A later comparison refers to the observation exactly N positions earlier.
+Philosophy of Intelligence distinguishes retrieval distance from relational complexity. Square's N-back setting counts **committed observations**, not seconds, breaths or the number of interface interactions. The first N records establish history and are unscored. A later comparison refers to the observation exactly N positions earlier.
 
 Retrieving the source and comparing its feature are separate responses. A familiar item from the wrong episode must not receive binding credit simply because its feature happens to yield the right comparison. Increasing N changes the retrieval demand; it does not independently demonstrate more sophisticated relational understanding.
 
@@ -121,13 +121,13 @@ Breathing is an optional attention cue. The editable starting setting is four se
 
 The task waits for the learner. One observation or response may take several cycles. The guide never advances a trial, grades compliance, detects a breath or estimates a physiological state. Pausing the guide stops its tones, and hiding the page pauses it. Reduced-motion support preserves phase information without requiring continuous visual movement.
 
-The design asks for comfortable, unforced breathing and allows the guide to be stopped. Its timing is not a medical prescription. The comfort principles and their source are discussed in [Reference notes](REFERENCE_NOTES.md); they do not establish an efficacy claim for FORM.
+The design asks for comfortable, unforced breathing and allows the guide to be stopped. Its timing is not a medical prescription. The comfort principles and their source are discussed in [Reference notes](REFERENCE_NOTES.md); they do not establish an efficacy claim for Philosophy of Intelligence.
 
 ## Local ownership and deliberate export
 
-FORM runs without a backend. Browser local storage holds preferences, attempts, completed sessions, Palace entries and private observations. No analytics, external AI calls or automatic uploads are part of the application. The public repository contains the application and source commentary, not the private attachments that informed its development.
+Philosophy of Intelligence runs without a backend. Browser local storage holds preferences, attempts, completed sessions, Palace entries and private observations. No analytics, external AI calls or automatic uploads are part of the application. The public repository contains the application and source commentary, not the private attachments that informed its development.
 
-The default JSON export removes private journal content, private Palace entries and the active session. A deliberate choice is required to include private content. Compact JSON keeps FORM's own valid exports re-importable without shortening their included private text. Unsaved form drafts and the transient model lab are outside the export.
+The default JSON export removes private journal content, private Palace entries and the active session. A deliberate choice is required to include private content. Compact JSON keeps Philosophy of Intelligence's own valid exports re-importable without shortening their included private text. Unsaved form drafts and the transient model lab are outside the export.
 
 The storage limits distinguish private records from rolling practice evidence:
 
@@ -161,3 +161,9 @@ The implementation contract records module responsibilities and invariants. Test
 The project implements a coherent proposal for practice. It does not establish that the shape sequence describes the structure of human intelligence, that the symbolic labels correspond to IQ, or that practice transfers to everyday reasoning, wellbeing or clinical outcomes.
 
 Those questions would require appropriate measurements, comparison conditions and follow-up beyond successful play. The immediate design commitment is narrower and inspectable: make each operation understandable, preserve its source, expose errors, and give the learner a way to correct them.
+
+## The engraved visual language
+
+The interface uses warm parchment, graphite-coloured line work, serif type and orbital construction diagrams. The home plate makes Observe, Relate and Revise into working links; the three framed pathways lead to lessons, breath-back and the Palace. Lessons, exercises, private records, dialogs and the model lab share this visual language. The visible identity is Philosophy of Intelligence.
+
+Vector engravings use deterministic fine traces and restrained face hatching. Decorative texture and construction lines do not replace labels or task data. Feature-colour swatches remain coloured when colour is part of the exercise; sources also name those colours in text. Reduced motion keeps the artwork centred and removes its breathing movement. All artwork, textures and typography work without network fonts or image requests.

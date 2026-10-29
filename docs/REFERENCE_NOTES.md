@@ -1,6 +1,6 @@
 # Reference notes and design boundaries
 
-FORM develops a geometric apprenticeship in relational reasoning. Its identity comes from a progression of operations: observe, preserve, relate, compare, map, model, test and revise. The supplied reference documents and earlier trainer informed this design; they are not redistributed in this public repository.
+Philosophy of Intelligence develops a geometric apprenticeship in relational reasoning. Its identity comes from a progression of operations: observe, preserve, relate, compare, map, model, test and revise. The supplied reference documents and earlier trainer informed this design; they are not redistributed in this public repository.
 
 ## Influences
 
@@ -40,7 +40,7 @@ The supplied single-file application provides working examples of exact-lag numb
 
 Useful interaction principles include unscored initial history, frozen session settings, separate task scores, explicit explanations, pause and resume, and an unscored listening mode. Its optional synthesis and mathematical-meta exercises are described for private practice; that application does not capture or objectively assess those personal constructions. The presence of numerical prefixes and suffixes alone does not implement the paper's shared-source architecture.
 
-FORM introduces a new curriculum and interaction model instead of reproducing the earlier trainer's settings screen and compass-premise game. Its authored exercises can teach source selection, role preservation, model consequences and justified revision. Private exploration is a separate route with different assessment boundaries.
+Philosophy of Intelligence introduces a new curriculum and interaction model instead of reproducing the earlier trainer's settings screen and compass-premise game. Its authored exercises can teach source selection, role preservation, model consequences and justified revision. Private exploration is a separate route with different assessment boundaries.
 
 ## Shared-content and source commitments
 
@@ -66,7 +66,7 @@ Increasing temporal lag, represented material, relational order, time pressure a
 
 The optional breathing guide provides a timing or attention cue. It does not measure breathing, detect physiological states, grade bodily compliance or establish a health outcome. A chosen pace is adjustable and is not a universally suitable prescription. Free breathing and pausing remain available; complex reasoning does not have to finish within an inhalation or exhalation. No breath holds are required.
 
-The [NHS guidance on breathing exercises for stress](https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/breathing-exercises-for-stress/) recommends comfortable, gentle breathing without forcing it and presents counting as something people may find helpful. That guidance supports the design's emphasis on comfort and choice. It does not validate FORM, its particular pacing defaults, its training schedule or an intelligence benefit.
+The [NHS guidance on breathing exercises for stress](https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/breathing-exercises-for-stress/) recommends comfortable, gentle breathing without forcing it and presents counting as something people may find helpful. That guidance supports the design's emphasis on comfort and choice. It does not validate Philosophy of Intelligence, its particular pacing defaults, its training schedule or an intelligence benefit.
 
 ## Evidence boundary
 

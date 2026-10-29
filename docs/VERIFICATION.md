@@ -1,4 +1,4 @@
-# FORM verification record
+# Philosophy of Intelligence verification record
 
 Verification performed on 29 October 2026. This records implementation checks, not evidence of educational or clinical efficacy.
 
@@ -47,7 +47,7 @@ The source-build playthrough included 48 scored answers: 47 correct and one inte
 
 Desktop rendering was visually reviewed. Responsive layouts were inspected in browser frames set to **320, 390 and 820 pixels** wide. Their content widths were 305, 375 and 805 pixels after the browser scrollbar; document scroll width matched client width. Journey, narrow-screen Cube mapping and the model lab were inspected, including their working controls. This is viewport-layout verification, not testing on physical mobile devices.
 
-Keyboard use, focus after committing/advancing and mapping reassignment, disabled states, visible progress semantics, source text alternatives and reduced-motion controls were checked during implementation. A full assistive-technology audit has not been performed. The preview image in this repository is a capture of the published application.
+Keyboard use, focus after committing/advancing and mapping reassignment, disabled states, visible progress semantics, source text alternatives and reduced-motion controls were checked during implementation. A full assistive-technology audit has not been performed. The preview image in this repository captures the current interface.
 
 ## Practical limits
 
@@ -56,3 +56,7 @@ Keyboard use, focus after committing/advancing and mapping reassignment, disable
 - Local storage may have a smaller quota than the application budgets. Export remains the user's portable backup; there is no account sync or server recovery.
 - Independent mastery was verified through automated two-date fixtures and a real one-date browser session. No claim is made that two days of human training were observed.
 - The 70–200 labels, fourteen-stage order and mastery thresholds are creative product choices. These checks establish software behaviour; they do not validate IQ measurement, cognitive gains or a universal developmental sequence.
+
+## Engraved design update
+
+The parchment redesign was checked across Journey, a Circle lesson and scored challenge, Breath-back, Palace, the philosophy page, model lab and rhythm dialog. Home layouts at 320, 390 and 820 pixels had no horizontal document overflow. Mobile dialog content remained scrollable, and a Circle response still committed and received correct feedback. All 118 tests, source checks and the regenerated self-contained edition pass after the branding and geometry changes. The canonical offline file now uses the full project name; the old download filename remains an identical compatibility copy.

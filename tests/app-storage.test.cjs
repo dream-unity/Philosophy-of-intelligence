@@ -192,7 +192,7 @@ test('recovery download preserves exact unreadable bytes without writing or norm
   assert.equal(app.blobs.length, 1);
   assert.equal(await app.blobs[0].text(), original);
   assert.equal(app.downloads.length, 1);
-  assert.match(app.downloads[0].download, /^FORM-recovery-.*\.json$/);
+  assert.match(app.downloads[0].download, /^Philosophy-of-Intelligence-recovery-.*\.json$/);
   assert.equal(app.writeAttempts(), 0);
   assert.equal(app.inspect().recoveryRequired, true);
 });

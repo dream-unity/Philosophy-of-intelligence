@@ -1,6 +1,6 @@
-# FORM implementation contract
+# Philosophy of Intelligence implementation contract
 
-FORM is a buildless, offline-capable browser game, not a reskin of Sentience N-back. Modules are plain scripts with UMD-style `module.exports` for Node tests and named `globalThis` exports for the browser. No runtime dependencies, remote fonts, analytics, AI calls or external audio. Each module owns only its assigned files.
+Philosophy of Intelligence is a buildless, offline-capable browser game, not a reskin of Sentience N-back. Modules are plain scripts with UMD-style `module.exports` for Node tests and named `globalThis` exports for the browser. No runtime dependencies, remote fonts, analytics, AI calls or external audio. Each module owns only its assigned files.
 
 ## Names and order
 
@@ -70,7 +70,7 @@ The app checks proposed private writes before replacing state. At capacity it le
 
 ### Private predictions and evidence
 
-From Heptagon onward, the studio optionally commits `prediction:{condition,expected,revisionTrigger,committedAt}` with an observation. All three form fields must be supplied together. Original source and prediction stay unchanged. Later `evidence:[{observation,verdict,revision,at}]` records append separately; verdict is `supports|challenges|unclear`, and evidence cannot predate the prediction. General later notes remain in `revisions:[{text,at}]`. Predictions, evidence or personal revisions make an entry private. These are the user's unscored interpretations, not truth judgments made by FORM.
+From Heptagon onward, the studio optionally commits `prediction:{condition,expected,revisionTrigger,committedAt}` with an observation. All three form fields must be supplied together. Original source and prediction stay unchanged. Later `evidence:[{observation,verdict,revision,at}]` records append separately; verdict is `supports|challenges|unclear`, and evidence cannot predate the prediction. General later notes remain in `revisions:[{text,at}]`. Predictions, evidence or personal revisions make an entry private. These are the user's unscored interpretations, not truth judgments made by Philosophy of Intelligence.
 
 ## Model-lab API (global FormLab)
 

@@ -1,20 +1,20 @@
-# FORM
+# Philosophy of Intelligence
 
 **A geometric apprenticeship in relational reasoning.**
 
-[**Play FORM →**](https://dream-unity.github.io/Philosophy-of-intelligence/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/FORM-Offline.html)
+[**Play Philosophy of Intelligence →**](https://dream-unity.github.io/Philosophy-of-intelligence/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/Philosophy-of-Intelligence-Offline.html)
 
-![FORM: A mind takes shape](docs/form-preview.jpg)
+![Philosophy of Intelligence: A mind takes shape](docs/form-preview.jpg)
 
-FORM turns a philosophy of intelligence into a sequence of small, playable operations: notice an aspect, preserve its source, connect relationships, map a structure, derive a function, and revise it when the evidence changes. Fourteen geometric forms give the journey a visual language.
+Philosophy of Intelligence turns a philosophy of intelligence into a sequence of small, playable operations: notice an aspect, preserve its source, connect relationships, map a structure, derive a function, and revise it when the evidence changes. Fourteen geometric forms give the journey a visual language.
 
-The accompanying **70–200 scale is symbolic**. It does not measure IQ, classify people, set entry requirements, or promise cognitive gains. Progress describes performance on FORM's authored exercises. The curriculum and its mastery thresholds are design choices, not validated measures of general intelligence.
+The accompanying **70–200 scale is symbolic**. It does not measure IQ, classify people, set entry requirements, or promise cognitive gains. Progress describes performance on Philosophy of Intelligence's authored exercises. The curriculum and its mastery thresholds are design choices, not validated measures of general intelligence.
 
 ## Play locally
 
 Use a current desktop or mobile browser. No account, API key, runtime dependency, external font, or downloaded audio is required.
 
-The single-file edition is [dist/FORM-Offline.html](dist/FORM-Offline.html). Download the included file and open it directly in your browser. It contains the game's styles, scripts and vector artwork.
+The single-file edition is [dist/Philosophy-of-Intelligence-Offline.html](dist/Philosophy-of-Intelligence-Offline.html). Download the included file and open it directly in your browser. It contains the game's styles, scripts and vector artwork.
 
 To run the source edition with a consistent browser storage origin, serve the repository locally:
 
@@ -106,9 +106,9 @@ The optional breathing guide starts at **4 seconds in / 4 seconds out**, adjusta
 
 ## Saving, privacy and portability
 
-FORM stores progress in the current browser's local storage. It has no account sync, analytics, AI service or automatic upload. Browser storage is not encrypted storage; someone with access to the same browser profile may be able to read it.
+Philosophy of Intelligence stores progress in the current browser's local storage. It has no account sync, analytics, AI service or automatic upload. Browser storage is not encrypted storage; someone with access to the same browser profile may be able to read it.
 
-Use **Palace → Export** for a JSON backup. **Private journal entries, private Palace entries and an unfinished session are excluded by default.** Choose to include private material for a complete backup of committed records. FORM uses compact JSON; its own valid backups can be re-imported without shortening the included private text. Unsaved form drafts and model-lab experiments are not exported.
+Use **Palace → Export** for a JSON backup. **Private journal entries, private Palace entries and an unfinished session are excluded by default.** Choose to include private material for a complete backup of committed records. Philosophy of Intelligence uses compact JSON; its own valid backups can be re-imported without shortening the included private text. Unsaved form drafts and model-lab experiments are not exported.
 
 The Palace and journal share an **8 MiB collection budget**, with at most 128 Palace entries and 100 journal entries. If a new entry or revision would exceed a limit, it remains an unsaved draft in the open form; existing private records are not shortened to make room. Export and remove older entries before trying again. Copy an unsaved draft before closing or reloading.
 
@@ -118,7 +118,7 @@ Your browser may allow less storage than these application limits. If saving fai
 
 Export before clearing browser data or resetting the game. Private source attachments used during development are not included in this repository or the offline build.
 
-If saved data cannot be read or validated, FORM pauses automatic saving and offers the original value as a recovery download. It does not replace the original with an empty record. Import a valid backup or explicitly start a new local record to continue saving.
+If saved data cannot be read or validated, Philosophy of Intelligence pauses automatic saving and offers the original value as a recovery download. It does not replace the original with an empty record. Import a valid backup or explicitly start a new local record to continue saving.
 
 ## GitHub Pages hosting
 
@@ -136,4 +136,4 @@ Alternatively, publish the generated static output with your preferred static-ho
 - [Reference notes](docs/REFERENCE_NOTES.md): conceptual influences and evidence boundaries.
 - [Implementation contract](docs/IMPLEMENTATION_CONTRACT.md): module interfaces and runtime invariants.
 
-FORM implements a proposed practice architecture. Improvements on its tasks would not, by themselves, establish IQ improvement, clinical benefit or transfer to everyday reasoning. Those claims would need separate research.
+Philosophy of Intelligence implements a proposed practice architecture. Improvements on its tasks would not, by themselves, establish IQ improvement, clinical benefit or transfer to everyday reasoning. Those claims would need separate research.

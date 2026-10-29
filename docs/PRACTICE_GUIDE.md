@@ -1,4 +1,4 @@
-# A practical path through FORM
+# A practical path through Philosophy of Intelligence
 
 Begin with Circle. One shape may occupy several visits. Repeat the cycle below, moving forward when you can explain the operation and correct it using feedback. Every shape remains available for exploration.
 
@@ -51,4 +51,4 @@ When working on functions, try the model lab under **The philosophy**: commit a 
 
 From **Heptagon** onward, the studio can preserve a situation, prediction and revision trigger. Later, open the Palace entry and add what happened. Distinguish the observation from your interpretation; “still unclear” is available.
 
-For FORM's independent mastery marker, meet the criteria on **two distinct UTC dates** at the same lag and unit: twenty unaided independent attempts from completed sessions per date, 85% overall and in every required channel, and 90% nonmatch accuracy where applicable. Square also needs five match and five nonmatch trials per date. Distinct dates need not be 24 hours apart. Continue exploring while building that evidence.
+For Philosophy of Intelligence's independent mastery marker, meet the criteria on **two distinct UTC dates** at the same lag and unit: twenty unaided independent attempts from completed sessions per date, 85% overall and in every required channel, and 90% nonmatch accuracy where applicable. Square also needs five match and five nonmatch trials per date. Distinct dates need not be 24 hours apart. Continue exploring while building that evidence.

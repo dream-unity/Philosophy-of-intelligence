@@ -2,7 +2,7 @@
   "name": "philosophy-of-intelligence",
   "version": "1.0.0",
   "private": true,
-  "description": "FORM: a geometric apprenticeship in relational reasoning and breath-back",
+  "description": "Philosophy of Intelligence: a geometric apprenticeship in relational reasoning and breath-back",
   "scripts": {
     "test": "node --test tests/*.test.cjs",
     "build": "node scripts/build.mjs",

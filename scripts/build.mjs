@@ -61,11 +61,13 @@ for (let index = 0; index < outputScripts.length; index++) {
   invariant(outputScripts[index].body.trim() === embeddedScripts[index].code.trim(), `Script content changed unexpectedly: ${expectedOrder[index]}`);
   assertScriptSyntax(outputScripts[index].body, expectedOrder[index] + ' (offline output)');
 }
-assertDocumentResources(html, { selfContained: true, filename: 'FORM-Offline.html' });
+assertDocumentResources(html, { selfContained: true, filename: 'Philosophy-of-Intelligence-Offline.html' });
 invariant(!/<script\b[^>]*\bsrc\s*=/i.test(html), 'Offline build still has a linked script.');
 invariant(!/<link\b[^>]*rel\s*=\s*['"]stylesheet['"]/i.test(html), 'Offline build still has a linked stylesheet.');
 
-const output = resolve(projectRoot, 'dist/FORM-Offline.html');
+const output = resolve(projectRoot, 'dist/Philosophy-of-Intelligence-Offline.html');
 mkdirSync(resolve(projectRoot, 'dist'), { recursive: true });
 writeFileSync(output, html, 'utf8');
-console.log(`Built dist/FORM-Offline.html (${Buffer.byteLength(html).toLocaleString('en-US')} bytes); ${embeddedScripts.length} ordered scripts, ${cssCount} stylesheet and the icon embedded. Offline structure and script syntax verified.`);
+// Preserve previously shared download URLs while using the full project name.
+writeFileSync(resolve(projectRoot, 'dist/FORM-Offline.html'), html, 'utf8');
+console.log(`Built dist/Philosophy-of-Intelligence-Offline.html (${Buffer.byteLength(html).toLocaleString('en-US')} bytes); ${embeddedScripts.length} ordered scripts, ${cssCount} stylesheet and the icon embedded. Offline structure and script syntax verified.`);
