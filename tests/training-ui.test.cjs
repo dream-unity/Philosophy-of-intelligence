@@ -131,6 +131,92 @@ function harness(options = {}) {
   };
 }
 
+test('guided rehearsal preserves receive, encode, retrieve, compare order and synchronizes the complete model', () => {
+  const page=harness();
+  assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
+  assert.match(page.q('[data-walkthrough-prompt]').textContent,/containing environment/);
+  page.click('[data-walk-next]');
+  assert.match(page.q('[data-walkthrough-prompt]').textContent,/encode.*doorway/);
+  page.click('[data-walk-next]');
+  assert.match(page.q('[data-walkthrough-title]').textContent,/Seed the history/);
+  assert.doesNotMatch(page.q('[data-walkthrough-prompt]').textContent,/Retrieve b/);
+  page.click('[data-walk-next]');page.click('[data-walk-next]');
+  assert.equal(page.q('[data-model-state]').value,'1');
+  assert.match(page.q('[data-model-state-summary]').textContent,/Breath 2/);
+  assert.match(page.q('[data-walkthrough-prompt]').textContent,/traversing ocean/);
+  page.click('[data-walk-next]');page.click('[data-walk-next]');
+  assert.match(page.q('[data-walkthrough-prompt]').textContent,/hallway shelf.*doorway/);
+  assert.doesNotMatch(page.q('[data-walkthrough-prompt]').textContent,/meaning changes/);
+  page.click('[data-walk-next]');
+  assert.match(page.q('[data-walkthrough-prompt]').textContent,/Retrieve b1.*containment to traversal/);
+  assert.equal(page.q('[data-walkthrough-title]').focused,true);
+  assert.equal(page.raw.has(page.key),false,'example rehearsal cannot save notes or award readiness');
+});
+
+test('each of 42 guided lessons has four reachable entries, accurate addresses and no timer advancement', () => {
+  const page=harness();
+  for(const stage of require('../src/shape-practice.js').STAGES){
+    page.app.setStage(stage.id);
+    for(const exercise of ['stream','heart','body']){
+      page.click('[data-exercise="'+exercise+'"]');
+      for(let entry=0;entry<4;entry++){
+        assert.equal(page.q('[data-model-state]').value,String(entry));
+        assert.equal(page.q('[data-walkthrough-prompt]').textContent,stage[exercise].examples[entry].inhale);
+        page.click('[data-walk-next]');
+        assert.equal(page.q('[data-walkthrough-prompt]').textContent,stage[exercise].examples[entry].encode);
+        page.click('[data-walk-next]');page.click('[data-walk-next]');
+        if(entry)assert.ok(page.q('[data-walkthrough-prompt]').textContent.startsWith(stage[exercise].examples[entry].compare));
+        page.click('[data-walk-next]');
+      }
+      assert.equal(page.q('[data-model-state]').value,'0','rehearse again starts a fresh example');
+    }
+  }
+  page.click('[data-exercise="heart"]');page.click('[data-start]');
+  const before=page.q('[data-walkthrough-prompt]').textContent;
+  page.advance(85);
+  assert.equal(page.q('[data-walkthrough-prompt]').textContent,before);
+  assert.equal(page.q('[data-model-state]').value,'0');
+  assert.equal(page.raw.has(page.key),false);
+});
+
+test('manual entry selection resets the teaching phase and detached walkthrough buttons cannot advance another lesson', () => {
+  const page=harness();page.click('[data-walk-next]');
+  const oldNext=page.q('[data-walk-next]');
+  page.choose('[data-model-state]','3');
+  assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
+  assert.match(page.q('[data-walkthrough-prompt]').textContent,/environment of boat again/);
+  oldNext.click();
+  assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
+  const stale=page.q('[data-walk-next]');page.click('[data-exercise="body"]');stale.click();
+  assert.equal(page.q('[data-model-state]').value,'0');
+  assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
+  page.click('[data-walk-next]');page.click('[data-walk-back]');
+  assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
+});
+
+test('live shape guidance adapts its topology and example while preserving the separate exercise clock', () => {
+  const page=harness();
+  for(const stage of require('../src/shape-practice.js').STAGES){
+    page.app.setStage(stage.id);
+    for(const exercise of ['stream','heart','body']){
+      page.click('[data-exercise="'+exercise+'"]');
+      const guidance=page.q('[data-live-shape]').textContent;
+      assert.ok(guidance.includes(stage.topology));
+      assert.ok(guidance.includes(stage[exercise].examples[0].inhale));
+      assert.match(guidance,/encode.*first.*retrieve/);
+    }
+  }
+});
+
+test('exercise and readiness rerenders preserve keyboard focus on their replacement controls', () => {
+  const page=harness();page.click('[data-exercise="heart"]');
+  assert.equal(page.q('[data-exercise="heart"]').focused,true);
+  page.q('[data-ready]').checked=true;page.q('[data-ready]').dispatch('change');
+  assert.equal(page.q('[data-ready]').focused,true);
+  page.click('[data-other]');
+  assert.equal(page.q('[data-exercise="body"]').focused,true);
+});
+
 test('manual return keeps the exact two-back source and commits recollection before revealing it', () => {
   const page = harness({ stageId: 'square' });
   page.choose('[data-lag]', '2');

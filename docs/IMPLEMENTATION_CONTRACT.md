@@ -16,6 +16,8 @@ IDs in order: `circle`, `half-circle`, `triangle`, `square`, `pentagon`, `hexago
 
 Models identify stage, exercise, preparation, relationship count, nodes and typed relationships; optional faces describe topology. Frozen static models are distinct from user records. Prepared constructions and partial patches must not be represented as spontaneous complete structures.
 
+The manual walkthrough shares `modelState` with the diagram/register and separately tracks receive, encode, retrieve/seed and compare/preserve steps. Entry changes reset the step. Its generation guard rejects detached controls; neither clock ticks nor walkthrough controls create observations or readiness. All four rows remain available in a disclosure. Live practice includes the selected topology and an exercise-specific example. Optional da Vinci reconstruction is a teaching disclosure, not a paired-record mode.
+
 ## Ordered note capture
 
 The form implements N over 1–4 committed observations within the same shape, exercise and stream. A timer tick or bell does not create an entry or establish an actual breath anchor.
@@ -35,6 +37,8 @@ With history available, source-lock freezes the current source, lag and exact ta
 `FormTrainingStore.createStore(storage)` exposes `data`, `writable`, `warning`, `originalRaw`, `save`, `exportJSON`, `reset` and `reload`. Key: `poi.manual-practice.v1`. Schema: `{schemaVersion:1, entries:[], sessions:[], readiness:{}}`.
 
 Entry fields: `id, stageId, exercise, streamId, createdAt, source, recollection, referenceId, referenceSource, lag, relation, revision`. Exercise accepts `stream|heart|body`. Source is required; text is bounded to 3,000 characters. A supplied reference must preserve the exact target ID and source text at the declared lag. Existing observations cannot be edited, removed or reordered through `save`.
+
+New appended entries must also supply the exact N target whenever it exists. Missing references are valid only for genuine seeds in their own shape/exercise/stream. Earlier v1 records with missing references remain readable and unchanged; appending checks new entries without rewriting history.
 
 Session fields: `id, stageId, exercise, endedAt, seconds, completed`. Both collections have a 500-record limit. Starting a new recorded timer is blocked once the session limit is reached; untimed practice remains available. Readiness is a personal Boolean per exercise. Existing v1 heart/body assessments remain valid; missing stream readiness becomes false in memory without an automatic storage write. Unknown fields, malformed data and overflow are rejected without trimming private text.
 

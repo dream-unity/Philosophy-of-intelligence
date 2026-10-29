@@ -4,7 +4,12 @@ Verified 30 October 2026 (Australia/Hobart).
 
 ## Automated checks
 
-`npm test`, `npm run build`, `npm run check` and `git diff --check` are the release checks. The current suite has 154 passing tests.
+`npm test`, `npm run build`, `npm run check` and `git diff --check` are the release checks. The current suite has 162 passing tests.
+
+- All 42 guided rehearsals traverse four entries in receive → encode → retrieve/seed → compare/preserve order. Entry changes synchronize the full diagram and register; timer advancement never advances the demonstration or creates private records. Detached walkthrough controls cannot alter another lesson.
+- The live practice panel retains each shape's topology and its exercise-specific selection example. Partial-model guidance is explicit, and optional da Vinci reconstruction remains a separately declared mental extension.
+- Newly appended observations cannot omit an existing exact N target. Tests cover all four lags, genuine seeds, fresh streams, uncertain recollection, batch saves, legacy records and storage-failure recovery.
+- Exercise and readiness controls restore keyboard focus after rerendering.
 
 - Fourteen shape routes use one practice controller with three exercise applications and four worked entries each: 42 lessons and 168 complete model states.
 - Counts are 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 30, 30, 120 and 120. Tests verify unique relations, roles, polygon closure, prism/cube bridges, advanced vertex degrees, shared faces and Euler characteristics. An independent graph review checked isomorphism against the intended polyhedra.
@@ -26,7 +31,7 @@ After publication, the live Circle route was checked for the new one-relationshi
 
 The browser review uses synthetic QA records, not personal observations. Full-duration timing and completion are tested with a controlled clock rather than waiting through multi-hour periods. Synthesized audio is verified structurally; no physiological outcome is measured.
 
-The visual browser review used a desktop viewport. Responsive styles are included, but a physical mobile-device review was not performed.
+The latest walkthrough was additionally inspected in a 390-pixel-wide browser frame. The Circle encoding card, controls and focus were visible without horizontal overflow. This checks responsive layout, not a physical mobile device.
 
 ## Limits
 

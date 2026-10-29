@@ -140,6 +140,14 @@
       try {
         next = validate(nextData);
         if (next.entries.length < data.entries.length || data.entries.some((item, index) => JSON.stringify(item) !== JSON.stringify(next.entries[index]))) fail('Saved observations cannot be changed, removed, or reordered. Add a new observation, or explicitly reset all manual practice.');
+        // Older v1 records could omit a reference even after history existed.
+        // Preserve those originals, but a new return must not silently become
+        // a seed when its scheduled earlier entry is already available.
+        for (let index = data.entries.length; index < next.entries.length; index++) {
+          const item = next.entries[index];
+          const history = next.entries.slice(0, index).filter(other => other.stageId === item.stageId && other.exercise === item.exercise && other.streamId === item.streamId);
+          if (history.length >= item.lag && item.referenceId === null) fail('An existing return target cannot be skipped. Preserve the exact earlier observation at the chosen lag, or start a fresh stream to seed new history.');
+        }
       } catch (error) { return result(false, error.message); }
       // Keep the accepted private work available for export even if storage fails.
       data = next;

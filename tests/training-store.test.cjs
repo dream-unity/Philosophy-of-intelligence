@@ -85,7 +85,7 @@ test('entries stay append-only, while readiness is an independent personal asses
 test('references must preserve the exact lag source in the same shape, exercise, and stream', () => {
   const store = P.createStore(memory());
   const a = observation('a', { source: 'Earlier warmth.' });
-  const b = observation('b', { source: 'Later pressure.' });
+  const b = observation('b', { source: 'Later pressure.', referenceId: a.id, referenceSource: a.source });
   assert.equal(add(store, a).ok, true);
   assert.equal(add(store, observation('other-exercise', { exercise: 'body' })).ok, true);
   assert.equal(add(store, observation('other-shape', { stageId: 'triangle' })).ok, true);
@@ -102,6 +102,53 @@ test('references must preserve the exact lag source in the same shape, exercise,
   ]) assert.equal(add(store, observation('invalid', changes)).ok, false);
   assert.equal(add(store, observation('c', { lag: 2, referenceId: 'a', referenceSource: a.source, recollection: 'I remember warmth.' })).ok, true);
   assert.equal(store.data.entries.at(-1).referenceSource, a.source);
+});
+
+test('N-back seeds end at the chosen lag and cannot skip an available exact target', () => {
+  for (const lag of [1, 2, 3, 4]) {
+    const storage = memory(), store = P.createStore(storage);
+    for (let index = 0; index < lag; index++) {
+      assert.equal(add(store, observation('seed-' + index, { lag })).ok, true);
+    }
+    const before = storage.getItem(P.STORAGE_KEY);
+    const skipped = add(store, observation('skipped', { lag }));
+    assert.equal(skipped.ok, false);
+    assert.match(skipped.error, /return target cannot be skipped/);
+    assert.equal(storage.getItem(P.STORAGE_KEY), before);
+    assert.equal(store.data.entries.length, lag);
+    const first = store.data.entries[0];
+    assert.equal(add(store, observation('return', { lag, referenceId: first.id, referenceSource: first.source, recollection: 'I do not reliably recall.' })).ok, true, 'uncertain retrieval still preserves the exact scheduled target');
+    assert.equal(add(store, observation('new-stream', { lag, streamId: 'new-history' })).ok, true);
+  }
+});
+
+test('a batch of new records cannot disguise its second entry as another seed', () => {
+  const storage = memory(), store = P.createStore(storage);
+  const next = store.data;
+  next.entries.push(observation('first'), observation('second'));
+  assert.equal(store.save(next).ok, false);
+  assert.deepEqual(store.data.entries, []);
+  assert.equal(storage.writes, 0);
+  next.entries[1].referenceId = next.entries[0].id;
+  next.entries[1].referenceSource = next.entries[0].source;
+  assert.equal(store.save(next).ok, true);
+});
+
+test('older v1 entries without references remain readable while new returns use their target', () => {
+  const legacy = { schemaVersion: 1, entries: [observation('older-first'), observation('older-second')], sessions: [], readiness: {} };
+  const raw = JSON.stringify(legacy, null, 2), storage = memory({ [P.STORAGE_KEY]: raw });
+  const store = P.createStore(storage);
+  assert.equal(store.writable, true);
+  assert.equal(storage.writes, 0);
+  assert.equal(store.originalRaw, raw);
+  assert.deepEqual(store.data.entries, legacy.entries);
+  const assessment = store.data;
+  assessment.readiness.circle = { heart: true, body: false, stream: false };
+  assert.equal(store.save(assessment).ok, true, 'unrelated valid changes preserve legacy entries');
+  assert.equal(add(store, observation('new-without-reference')).ok, false);
+  const target = legacy.entries[1];
+  assert.equal(add(store, observation('new-return', { referenceId: target.id, referenceSource: target.source })).ok, true);
+  assert.deepEqual(P.createStore(storage).data.entries.slice(0, 2), legacy.entries);
 });
 
 test('pre-stream v1 data loads without rewriting originals and retains every earlier record on save', () => {
@@ -135,7 +182,7 @@ test('pre-stream v1 data loads without rewriting originals and retains every ear
 test('consciousness-stream records use their exact N target independently of heart and body records', () => {
   const store = P.createStore(memory());
   const first = observation('stream-a', { exercise: 'stream', source: 'The ocean contains the boat.' });
-  const second = observation('stream-b', { exercise: 'stream', source: 'The boat enables passage across the ocean.' });
+  const second = observation('stream-b', { exercise: 'stream', source: 'The boat enables passage across the ocean.', referenceId: first.id, referenceSource: first.source });
   assert.equal(add(store, first).ok, true);
   assert.equal(add(store, observation('heart-record')).ok, true);
   assert.equal(add(store, observation('body-record', { exercise: 'body' })).ok, true);
@@ -182,7 +229,8 @@ test('two tabs detect conflicts without overwriting either set of private observ
   assert.equal(storage.getItem(P.STORAGE_KEY), firstRaw);
   assert.equal(second.originalRaw, firstRaw);
   assert.equal(JSON.parse(second.exportJSON()).entries[0].id, 'second');
-  assert.equal(add(second, observation('third')).ok, false);
+  assert.equal(add(second, observation('third', { referenceId: 'second', referenceSource: 'Warmth near the chest.' })).ok, false);
+  assert.deepEqual(second.data.entries.map(item => item.id), ['second', 'third'], 'accepted work remains exportable while persistence is blocked');
   assert.equal(storage.getItem(P.STORAGE_KEY), firstRaw);
   assert.equal(second.reload().ok, true);
   assert.deepEqual(second.data.entries.map(item => item.id), ['first']);
