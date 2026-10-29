@@ -10,17 +10,7 @@ export const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..'
 // is exempt from the static DOM check only if its literal declaration also
 // exists in app.js; adding a misspelled ID to this list cannot hide an error.
 const DYNAMIC_IDS = new Map([
-  ['open-studio-bridge', 'stage preview'],
-  ['start-mission', 'stage lesson'],
-  ['watch-example', 'stage lesson'],
   ['detail-title', 'detail dialog'],
-  ['repeat-mission', 'session result'],
-  ['next-shape', 'session result'],
-  ['save-principle', 'session result'],
-  ['reveal-studio-source', 'studio retrieval'],
-  ['studio-source-reveal', 'studio retrieval'],
-  ['studio-retrieval', 'studio retrieval'],
-  ['fresh-stream', 'studio history'],
   ['save-revision', 'Palace entry dialog'],
   ['revision-text', 'Palace entry dialog'],
   ['delete-entry', 'Palace entry dialog'],

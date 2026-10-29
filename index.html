@@ -9,7 +9,7 @@
   <style id="home-visibility">body[data-view="journey"] .site-header, body[data-view="journey"] .site-footer, body[data-view="journey"] .skip-link { display: none; }</style>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css?v=70d8f87ded11">
-  <link rel="stylesheet" href="src/lab.css?v=b0eb2b1e9dd9">
+  <link rel="stylesheet" href="src/training.css?v=b5926d2fe248">
   <link rel="stylesheet" href="src/landing.css?v=51239b25f053">
 </head>
 <body data-view="journey">
@@ -17,12 +17,11 @@
   <header class="site-header">
     <a class="brand" href="#journey" aria-label="Philosophy of Intelligence home"><svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20"/><circle cx="24" cy="24" r="17.5"/><path d="M24 2v44M2 24h44M11 34 24 11l13 23Z"/><circle cx="24" cy="24" r="4"/></svg><span class="brand-name">Philosophy<span class="brand-subtitle">of Intelligence</span></span></a>
     <nav class="main-nav" aria-label="Main navigation">
-      <a href="#journey" data-nav="journey">Journey</a>
-      <a href="#studio" data-nav="studio">Breath-back</a>
-      <a href="#palace" data-nav="palace">Palace</a>
-      <a href="#philosophy" data-nav="philosophy">The philosophy</a>
+      <a href="#journey" data-nav="journey">Shapes</a>
+      <a href="#practice/circle" data-nav="practice">Practice</a>
+      <a href="#philosophy" data-nav="philosophy">Theory</a>
+      <a href="#palace" data-nav="palace">Archive</a>
     </nav>
-    <button class="pace-trigger" id="open-pace" aria-haspopup="dialog"><span class="pace-dot" aria-hidden="true"></span><span id="pace-trigger-label">Find your rhythm</span><span aria-hidden="true">↗</span></button>
   </header>
 
   <div id="storage-warning" class="storage-warning" role="status" hidden></div>
@@ -82,61 +81,43 @@
     </section>
 
     <section id="view-practice" class="view practice-view" hidden>
-      <div class="practice-heading"><a class="back-link" href="#journey">← The journey</a><div class="practice-heading-right"><span class="pill">GUIDED RELATIONAL TRAINING</span><button class="icon-button" id="practice-help" aria-label="Open stage lesson">?</button></div></div>
-      <div id="practice-stage-header"></div>
-      <div class="practice-layout">
-        <div class="practice-main">
-          <div id="lesson-panel" class="lesson-panel"></div>
-          <section id="mission-panel" class="mission-panel" hidden aria-label="Training mission">
-            <div class="mission-top"><div><span id="mission-mode" class="eyebrow"></span><div id="mission-progress" class="mission-progress" aria-label="Mission progress"></div></div><div class="mission-actions"><button id="pause-mission" class="text-button">Pause</button><button id="end-mission" class="text-button">End mission</button></div></div>
-            <div id="round-content"></div>
-            <div id="round-feedback" class="round-feedback" aria-live="polite" hidden></div>
-            <div id="round-controls" class="round-controls"></div>
-          </section>
-          <section id="session-result" class="session-result" hidden aria-live="polite"></section>
-        </div>
-        <aside class="practice-aside">
-          <div class="breath-card"><div class="aside-heading"><span class="eyebrow">A RHYTHM, NOT A DEADLINE</span><button class="icon-button" data-action="pace" aria-label="Breath guide settings">↗</button></div><div class="breath-orbit" aria-hidden="true"><div class="breath-orbit-ring"></div><div class="breath-orbit-inner"></div><span class="breath-orbit-dot"></span></div><div class="breath-state"><strong class="breath-phase" aria-live="polite" aria-atomic="true">Your own rhythm</strong><span class="breath-detail">Take all the time you need.</span></div><button class="button secondary full-width toggle-breath">Start breath guide</button><p class="microcopy">Keep your breath comfortable. Extra cycles are always welcome.</p></div>
-          <div class="session-settings" id="session-settings"><p class="eyebrow">YOUR PRACTICE</p><label for="practice-mode">Support</label><select id="practice-mode"><option value="guided">Guided · learning with help</option><option value="independent">Independent · check your skill</option></select><div id="lag-setting"><label for="practice-lag">Committed observations back</label><select id="practice-lag"><option value="1">1-back</option><option value="2">2-back</option><option value="3">3-back</option><option value="4">4-back</option></select></div><div id="feature-setting"><label for="practice-feature">Comparison lens</label><select id="practice-feature"><option value="color">Colour · one feature</option><option value="shape">Shape · one feature</option><option value="value">Value · one feature</option><option value="mixed">Mixed · vary the feature</option></select><p class="microcopy">Begin with one lens. Add varied features when retrieval feels familiar.</p></div><label for="mission-length">Mission length</label><select id="mission-length"><option value="8">8 scored challenges</option><option value="20">20 scored challenges</option></select><p class="microcopy">Settings stay fixed during a mission. Breathing never advances or scores a challenge.</p></div>
-          <div id="stage-bridge" class="bridge-card"></div>
-        </aside>
-      </div>
-    </section>
-
-    <section id="view-studio" class="view studio-view" hidden>
-      <div class="page-heading"><p class="eyebrow">FROM THE GAME TO YOUR OWN EXPERIENCE</p><h1>Breath-back <em>studio.</em></h1><p>A quiet space to notice, place and connect.<br>Your experience is explored here. It is never graded.</p></div>
-      <div class="studio-layout"><div class="studio-main">
-        <div class="studio-toolbar"><div><label for="studio-stage">Practice a shape</label><select id="studio-stage"></select></div><div><label for="studio-lag">Observations back</label><select id="studio-lag"><option value="1">1-back</option><option value="2">2-back</option><option value="3">3-back</option><option value="4">4-back</option></select></div></div>
-        <div id="studio-prompt" class="studio-prompt"></div>
-        <form id="studio-form">
-          <div class="field-block"><label for="studio-source"><span class="field-number">01</span> What is here?</label><p class="field-help">One image, phrase, sound or sensation. A few words are enough.</p><textarea id="studio-source" maxlength="3000" rows="3" placeholder="A curved blue line. A thought about starting. The sound outside…" required></textarea></div>
-          <div class="field-block"><label for="studio-locus"><span class="field-number">02</span> Give it a place</label><select id="studio-locus"><option>Atrium</option><option>Window</option><option>Alcove</option><option>Bridge</option><option>Garden</option></select></div>
-          <div id="studio-reference" class="studio-reference"></div>
-          <div class="field-block" id="studio-relation-field"><label for="studio-relation"><span class="field-number">03</span> What connects them?</label><p class="field-help">Name a specific relation, difference or uncertainty. “No clear relation” is a useful observation.</p><textarea id="studio-relation" maxlength="3000" rows="3" placeholder="Both have… This time… I’m not sure yet…"></textarea></div>
-          <div class="field-block" id="studio-function-field"><label for="studio-function"><span class="field-number">04</span> A function worth testing</label><p class="field-help">When might this pattern apply? What would change your mind?</p><textarea id="studio-function" maxlength="3000" rows="3" placeholder="When… try… expect… except when…"></textarea></div>
-          <details id="studio-prediction-field" class="prediction-fields"><summary>Give this pattern something to predict <span>Optional</span></summary><p class="field-help">Choose one future situation. Keep your prediction before returning with evidence.</p><label for="prediction-condition">When might it apply?</label><textarea id="prediction-condition" maxlength="3000" rows="2" placeholder="In this particular situation…"></textarea><label for="prediction-expected">What do you expect to observe?</label><textarea id="prediction-expected" maxlength="3000" rows="2" placeholder="An observation I could check later…"></textarea><label for="prediction-trigger">What result would make you revise it?</label><textarea id="prediction-trigger" maxlength="3000" rows="2" placeholder="I would reconsider if…"></textarea><p class="microcopy">Fill all three fields to keep a prediction, or leave them empty. The original prediction will stay visible in the Palace.</p></details>
-          <div class="studio-submit"><span class="microcopy"><span class="live-dot"></span>Private · saved when placed</span><button class="button primary" type="submit">Place this observation <span aria-hidden="true">＋</span></button></div>
-        </form>
-      </div><aside class="studio-aside"><div class="breath-card"><p class="eyebrow">NOTICE / ENCODE</p><div class="breath-orbit" aria-hidden="true"><div class="breath-orbit-ring"></div><div class="breath-orbit-inner"></div><span class="breath-orbit-dot"></span></div><div class="breath-state"><strong class="breath-phase" aria-live="polite" aria-atomic="true">Your own rhythm</strong><span class="breath-detail">Inhale: notice. Exhale: place.</span></div><button class="button secondary full-width toggle-breath">Start breath guide</button><button class="text-button full-width" data-action="pace">Adjust your rhythm</button></div><div class="studio-note"><h3>Let the record stay honest.</h3><p>Keep the observation as it first appeared. Interpretations can change; later notes are added as revisions.</p><p>Use ordinary comfortable breaths. One record may take several cycles.</p></div><div class="studio-mini-history" id="studio-mini-history"></div></aside></div>
+      <div id="training-root"></div>
     </section>
 
     <section id="view-palace" class="view palace-view" hidden>
-      <div class="page-heading"><p class="eyebrow">A PLACE FOR WHAT YOU LEARN</p><h1>Your <em>palace.</em></h1><p>Keep the source. Connect the structure. Revisit the rule.</p></div>
-      <div class="palace-toolbar"><div class="segmented" aria-label="Palace filter"><button class="active" data-filter="all">All entries</button><button data-filter="principle">Principles</button><button data-filter="personal">Observations</button></div><div class="palace-actions"><button class="text-button" id="export-data">Export</button><button class="text-button" id="import-data">Import</button><button class="text-button" id="reset-data">Reset data</button></div></div>
+      <div class="page-heading"><p class="eyebrow">PRESERVED OBSERVATIONS AND PRINCIPLES</p><h1>Your <em>archive.</em></h1><p>Keep the source. Connect the structure. Revisit the rule.</p></div>
+      <div class="palace-toolbar"><div class="segmented" aria-label="Archive filter"><button class="active" data-filter="all">All entries</button><button data-filter="principle">Principles</button><button data-filter="personal">Observations</button></div><div class="palace-actions"><button class="text-button" id="export-data">Export</button><button class="text-button" id="import-data">Import</button><button class="text-button" id="reset-data">Reset archive</button></div></div>
       <div id="palace-rooms" class="palace-rooms"></div>
       <div id="palace-entries" class="palace-entries"></div>
       <input id="import-file" type="file" accept="application/json,.json" hidden>
     </section>
 
     <section id="view-philosophy" class="view philosophy-view" hidden>
-      <div class="page-heading"><p class="eyebrow">THE IDEA BEHIND THE EXPERIENCE</p><h1>Intelligence as<br><em>relationship.</em></h1><p>A creative philosophy of how understanding takes form.</p><a class="text-button" href="#philosophy/lab">Experiment with the four lenses ↓</a></div>
-      <div class="philosophy-layout"><article class="philosophy-prose"><p class="lead">A mind can collect many things and still miss the structure between them. This practice asks a different question: what can you connect, preserve, test and revise?</p><h2>From a point of contact to an organised whole.</h2><p>The Circle begins with one selected aspect. A Triangle holds two aspects and their relationship together. A Prism connects whole systems. A Sphere represents flexible understanding that can move between perspectives without losing the source.</p><p>The shapes are a teaching language. They describe operations to practise, not fixed types of people.</p><h2>Depth and memory are different demands.</h2><p>You can work with a sophisticated relation while keeping the source visible. You can also practise retrieving a simple relation from further back. Philosophy of Intelligence lets those demands develop separately.</p><h2>A pattern becomes useful when it can do something.</h2><p>An analogy should preserve roles, expose a meaningful difference and support an inference you can check. A function can be an equation, a conditional rule or a short procedure. Its limits belong alongside it.</p><h2>The observer belongs inside the model.</h2><p>When a habit of interpreting becomes visible, it too can be examined. Change one part of the process, inspect the result and return to the world. A useful practice can also know when to simplify.</p><div class="philosophy-callout"><strong>70 → 200</strong><p>These are the symbolic labels in this creative philosophy. They are not measured IQ scores, entry requirements or promised gains. The game tracks demonstrated practice on specific tasks.</p></div><h2>Your breath is an invitation.</h2><p>The optional guide uses a comfortable, adjustable inhale/exhale cycle with no holds. Four seconds in and four seconds out is an editable starting point, not a universal healthy rate. Keep your breath unforced; shorten the cycle or switch the guide off if uncomfortable. Stop if you feel dizzy or unwell.</p><p>Philosophy of Intelligence does not sense your breath or assess your health. The rhythm never decides whether an answer is correct.</p><p class="source-note">Breathing guidance: <a href="https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/breathing-exercises-for-stress/" target="_blank" rel="noopener noreferrer">NHS: gentle, comfortable breathing</a>. Conceptual sources and scoring details are documented in the repository.</p></article><aside><div class="philosophy-sphere" id="philosophy-sphere"></div><blockquote>One relation.<br>Another perspective.<br>A more coherent whole.</blockquote><div id="symbolic-scale" class="symbolic-scale"></div></aside></div>
-      <section id="model-lab" aria-label="A laboratory for a model and its limits"></section>
+      <div class="page-heading"><p class="eyebrow">THE IDEA BEHIND THE PRACTICE</p><h1>Intelligence as<br><em>relationship.</em></h1><p>A manual for noticing, connecting and revising.</p></div>
+      <div class="philosophy-layout">
+        <article class="philosophy-prose">
+          <p class="lead">Understanding grows when an observation becomes a relation, a relation becomes a usable function, and that function can be tested in another setting.</p>
+          <h2>Keep the observation distinct.</h2>
+          <p>Begin with what you can notice: a shape, sensation, image or event. Give it a stable place so you can return to it. Keep what appeared separate from what you infer about it.</p>
+          <h2>Build one relation at a time.</h2>
+          <p>Hold aspects together and name how they connect. Compare their roles, their order and the conditions that change the relationship. The shapes organise these operations; they are invitations to practise, not categories of people.</p>
+          <h2>Turn the pattern into a function.</h2>
+          <p>Describe what the relation lets you do. A function can be an equation, a conditional rule or a short procedure: when this condition holds, try this action and expect this result. Include the limits of the rule.</p>
+          <h2>Carry the structure into another setting.</h2>
+          <p>Ask which roles stay the same, which details change and where the analogy stops working. An example is useful when it helps you form a prediction you can check.</p>
+          <h2>Return, compare and revise.</h2>
+          <p>Recall an earlier observation before consulting its record. Compare the two, preserve the difference and adjust the model. Your own interpretations are part of what can be examined.</p>
+          <h2>Let breathing support attention.</h2>
+          <p>The optional rhythm belongs to the same practice. Keep breathing natural and comfortable, with no holds or forced depth. Pause or stop the guide whenever you need to; noticing and reflection do not have to fit a deadline.</p>
+          <p class="source-note">Personal interpretations are reviewed by you. The practice does not measure IQ, diagnose ability or establish that an interpretation is true.</p>
+          <a class="button primary" href="#journey">Choose a shape ↗</a>
+        </article>
+        <aside><div class="philosophy-sphere" id="philosophy-sphere"></div><blockquote>One relation.<br>Another setting.<br>A function to test.</blockquote></aside>
+      </div>
     </section>
   </main>
   <footer class="site-footer"><span class="footer-brand">Philosophy of Intelligence</span><span>Made for attention. Built for possibility.</span><a href="https://github.com/dream-unity/Philosophy-of-intelligence" target="_blank" rel="noopener noreferrer">View source ↗</a></footer>
 
-  <dialog id="pace-dialog" aria-labelledby="pace-title"><form method="dialog"><button class="dialog-close" aria-label="Close rhythm settings">×</button></form><p class="eyebrow">MAKE ROOM FOR YOUR OWN RHYTHM</p><h2 id="pace-title">A little more <em>space.</em></h2><p class="dialog-description">A gentle metronome for noticing and encoding. Follow only while comfortable; the task always waits for you.</p><div class="pace-fields"><label for="inhale-duration">Inhale <span id="inhale-value">4s</span><input id="inhale-duration" type="range" min="2" max="8" step="0.5" value="4"></label><label for="exhale-duration">Exhale <span id="exhale-value">4s</span><input id="exhale-duration" type="range" min="2" max="8" step="0.5" value="4"></label></div><p id="pace-rate" class="pace-rate">7.5 cycles per minute · no holds</p><label class="switch-row" for="pace-sound"><span>Soft phase tones<small>Different notes for inhale and exhale.</small></span><input id="pace-sound" type="checkbox"></label><label class="switch-row" for="reduced-motion"><span>Reduce motion<small>Keep the phase words; quieten the animation.</small></span><input id="reduced-motion" type="checkbox"></label><label class="volume-label" for="pace-volume">Volume<input id="pace-volume" type="range" min="0" max="0.5" step="0.05" value="0.2"></label><div class="dialog-actions"><button id="pace-stop" class="button secondary">Use my own rhythm</button><button id="pace-start" class="button primary">Start guide ↗</button></div><p class="microcopy">An editable cue, not a prescription. Breathe naturally; no breath holds or forced depth.</p></dialog>
   <dialog id="detail-dialog" aria-labelledby="detail-title"><form method="dialog"><button class="dialog-close" aria-label="Close details">×</button></form><div id="detail-content"></div></dialog>
   <dialog id="confirm-dialog" aria-labelledby="confirm-title"><h2 id="confirm-title"></h2><p id="confirm-message"></p><div class="dialog-actions"><button id="confirm-cancel" class="button secondary">Cancel</button><button id="confirm-ok" class="button primary">Continue</button></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -146,7 +127,10 @@
   <script src="src/breath.js?v=8bf80aaa653b" defer></script>
   <script src="src/geometry.js?v=436d9cf90a1b" defer></script>
   <script src="src/session.js?v=a6af6d36ba23" defer></script>
-  <script src="src/lab.js?v=229c764e0b20" defer></script>
-  <script src="src/app.js?v=717f0728905f" defer></script>
+  <script src="src/shape-practice.js?v=3c13cf21c039" defer></script>
+  <script src="src/exercises.js?v=e2d95b371540" defer></script>
+  <script src="src/training-store.js?v=f9254c8eed95" defer></script>
+  <script src="src/training.js?v=36b9d309f23c" defer></script>
+  <script src="src/app.js?v=f2d33c3f0fd0" defer></script>
 </body>
 </html>

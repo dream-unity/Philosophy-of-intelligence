@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const LegacySession = require('../src/session.js');
 
 const root = path.join(__dirname, '..');
 const read = name => fs.readFileSync(path.join(root, 'src', name), 'utf8');
@@ -24,11 +25,11 @@ const initialization = between('  const loaded = P.loadProgress(storage);', '  c
 const helpers = between('  function toast(message) {', '  function showDialog(id) {');
 const now = () => new Date().toISOString();
 const entry = (id, source = 'An original observation') => ({ id, kind: 'personal', private: true, source, title: id, locus: 'Atrium', stageId: 'circle', createdAt: now(), revisions: [] });
-const saved = journal => JSON.stringify({ schemaVersion: 1, preferences: {}, attempts: [], sessions: [], palace: [], journal, activeSession: null });
+const saved = (journal, activeSession = null) => JSON.stringify({ schemaVersion: 1, preferences: {}, attempts: [], sessions: [], palace: [], journal, activeSession });
 
 function harness(options = {}) {
   let raw = options.raw ?? null;
-  let writes = 0, writeAttempts = 0, pauses = 0, missionRenders = 0;
+  let writes = 0, writeAttempts = 0;
   let readError = !!options.readError, writeError = !!options.writeError;
   const elements = new Map(), blobs = [], downloads = [];
   function element(id) {
@@ -52,9 +53,7 @@ function harness(options = {}) {
     },
     URL: { createObjectURL(blob) { blobs.push(blob); return 'blob:test-' + blobs.length; }, revokeObjectURL() {} },
     setTimeout() { return 1; }, clearTimeout() {},
-    breath: { pause() { pauses++; } },
-    location: { reload() {} },
-    renderMission() { missionRenders++; }
+    location: { reload() {} }
   });
   // Load browser UMD exports in one realm so real plain-object validation runs.
   for (const name of ['curriculum.js', 'session.js', 'progress.js']) vm.runInContext(read(name), context, { filename: name });
@@ -67,7 +66,7 @@ function harness(options = {}) {
       persist, canWrite, downloadSavedOriginal, showRecovery,
       storeEntryJSON(value) { return storeEntry('journal', JSON.parse(value)); },
       setPreference(value) { state.preferences.reducedMotion = value; },
-      startMission() { session = S.create('circle', { mode: 'independent', seed: 9 }); currentView = 'practice'; },
+      openArchive() { currentView = 'palace'; },
       inspect() { return JSON.stringify({ state, session, savedSnapshot, recoveryRequired, storageConflict, saveWarningShown }); }
     };
   `, context, { filename: 'app-storage-harness.js' });
@@ -75,7 +74,6 @@ function harness(options = {}) {
     api: context.storageTest, element, blobs, downloads,
     inspect: () => JSON.parse(context.storageTest.inspect()),
     raw: () => raw, writes: () => writes, writeAttempts: () => writeAttempts,
-    pauses: () => pauses, missionRenders: () => missionRenders,
     externalSave(value) { raw = value; },
     allowReads() { readError = false; }, allowWrites() { writeError = false; }
   };
@@ -86,11 +84,11 @@ for (const [name, options] of [
   ['private text beyond the accepted limit', { raw: saved([entry('original', 'x'.repeat(3001))]) }],
   ['a storage read failure', { raw: saved([entry('original')]), readError: true }]
 ]) {
-  test('automatic saves preserve the original after ' + name, () => {
+  test('archive write guards preserve the original after ' + name, () => {
     const app = harness(options), original = app.raw();
     assert.equal(app.inspect().recoveryRequired, true);
     assert.equal(app.api.storeEntryJSON(JSON.stringify(entry('new'))), false);
-    // Ordinary save, pagehide and beforeunload all use this same persistence path.
+    // Even a repeated explicit write cannot replace an unreadable archive.
     for (let i = 0; i < 3; i++) app.api.persist();
     assert.equal(app.writeAttempts(), 0);
     assert.equal(app.raw(), original);
@@ -124,18 +122,19 @@ test('normal saves keep private records and refresh the baseline for the next wr
   }
 });
 
-test('a newer tab save blocks stale writes and pauses the active mission once', () => {
-  const baseline = saved([entry('older')]), newer = saved([entry('newer')]);
+test('a newer archive save blocks stale writes and keeps earlier sessions inactive', () => {
+  const earlierSession = LegacySession.create('circle', { mode: 'independent', seed: 9 });
+  const baseline = saved([entry('older')], earlierSession), newer = saved([entry('newer')], earlierSession);
   const app = harness({ raw: baseline });
-  app.api.startMission();
+  app.api.openArchive();
+  assert.equal(app.inspect().session.phase, 'paused', 'restoring an earlier session does not run it');
+  assert.equal(app.raw(), baseline, 'reading the archive does not rewrite its original bytes');
   app.externalSave(newer);
   app.api.persist();
   assert.equal(app.raw(), newer);
   assert.equal(app.writeAttempts(), 0);
   assert.equal(app.inspect().storageConflict, true);
   assert.equal(app.inspect().session.phase, 'paused');
-  assert.equal(app.pauses(), 1);
-  assert.equal(app.missionRenders(), 1);
   assert.equal(app.element('storage-warning').hidden, false);
   assert.equal(app.api.storeEntryJSON(JSON.stringify(entry('blocked'))), false);
   assert.deepEqual(app.inspect().state.journal.map(item => item.id), ['older']);
@@ -143,7 +142,7 @@ test('a newer tab save blocks stale writes and pauses the active mission once', 
   app.externalSave(baseline);
   app.api.persist();
   assert.equal(app.writeAttempts(), 0);
-  assert.equal(app.pauses(), 1);
+  assert.equal(app.inspect().session.phase, 'paused');
 });
 
 test('another tab clearing storage does not resurrect this tab’s old private journal', () => {

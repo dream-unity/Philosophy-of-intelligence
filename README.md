@@ -1,32 +1,59 @@
 # Philosophy of Intelligence
 
-**A geometric apprenticeship in relational reasoning.**
+A geometric practice of noticing, remembering, relating and revising.
 
-[**Play Philosophy of Intelligence →**](https://www.philosophyofintelligence.life/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/Philosophy-of-Intelligence-Offline.html)
+[Open the site](https://www.philosophyofintelligence.life/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/Philosophy-of-Intelligence-Offline.html)
 
-![Philosophy of Intelligence: original parchment portal design](docs/form-preview.jpg)
+The fourteen shapes open one shared training page. Each shape changes the theory and the instructions applied to **Heart-Coherence** and **Body-Sensation Mapping**, adapted from [Project Meaning](https://o0ooooooooooo0o.github.io/Project-Meaning/). The exercises use your own observations. There are no multiple-choice missions, answer scores, mastery thresholds or locked levels in the current practice interface.
 
-Philosophy of Intelligence turns a philosophy of intelligence into a sequence of small, playable operations: notice an aspect, preserve its source, connect relationships, map a structure, derive a function, and revise it when the evidence changes. Fourteen geometric forms give the journey a visual language.
+## Begin a practice
 
-The accompanying **70–200 scale is symbolic**. It does not measure IQ, classify people, set entry requirements, or promise cognitive gains. Progress describes performance on Philosophy of Intelligence's authored exercises. The curriculum and its mastery thresholds are design choices, not validated measures of general intelligence.
+1. Choose **Circle**, or any other shape, from the home screen.
+2. Read its theory and the **Notice → Recall → Relate → Revise** instructions.
+3. Choose Heart-Coherence or Body-Sensation Mapping. Both teach the selected shape.
+4. Practise mentally, or open **Make a breath-back return** to pause and keep an optional private observation.
+5. Review the shape's criteria. Mark readiness separately for each exercise when that reflects your own judgement; revisit or reverse it whenever needed.
 
-## Play locally
+Every shape stays available. More complex shapes change the relations you examine; they do not require slower breathing, stronger sensations or longer sessions.
 
-Use a current desktop or mobile browser. No account, API key, runtime dependency, external font, or downloaded audio is required.
+## The two exercises
 
-The single-file edition is [dist/Philosophy-of-Intelligence-Offline.html](dist/Philosophy-of-Intelligence-Offline.html). Download the included file and open it directly in your browser. It contains the game's styles, scripts, original portal artwork and parchment texture.
+| Exercise | Source structure retained | Available lengths |
+| --- | --- | --- |
+| Heart-Coherence | Heart-focused breathing, heart feeling, then deepening; phases change at 33% and 66% of the selected period. | 15, 30, 60, 120 or 180 minutes |
+| Body-Sensation Mapping | Location, quality, intensity, movement, direction, coherence and meaning-tone; each dimension receives 30 seconds and the sequence repeats. | 15, 30 or 60 minutes |
 
-To run the source edition with a consistent browser storage origin, serve the repository locally:
+The source's bowl sounds, completion sequence and ambient pulse options are available with **sound off by default**. These are listening choices, not measurements or guarantees of a mental state. Pause or end at any time; finishing a timer records time without awarding readiness.
+
+**My own rhythm** is the default breathing mode. An optional five-seconds-in / five-seconds-out cue has no holds. Breathe gently without forcing depth or pace, and stop if dizzy or uncomfortable. The page does not sense breathing or measure heart coherence. This timing is a design choice, not a claim of a universally healthiest pace. See [Reference notes](docs/REFERENCE_NOTES.md).
+
+## Breath-back and private records
+
+N means **committed observations**, not breaths or seconds. The note form offers a return distance of one to four observations within the current shape, exercise and observation stream. Recall before revealing the preserved earlier source, then describe a relation and any revision. The current observation and recollection lock when that source is revealed. Initial observations build the stream before an earlier target is available. A fresh stream starts a new return history while retaining previously saved records.
+
+Notes are optional. Saved observations are append-only; a correction belongs in a new record. The interface does not automatically judge the truth of an experience, a recollection or an interpretation.
+
+Current practice uses the browser key `poi.manual-practice.v1`, separately from the earlier archive. It stores at most **500 observations and 500 practice periods**, with up to **3,000 characters per text field**. It refuses excess records or text instead of silently discarding older material. At capacity, export before explicitly clearing the record. There is no current-practice import or individual observation deletion.
+
+**Download practice record (includes notes)** exports the complete current manual-practice record as readable JSON, including private observations and self-assessments. Unfinished form drafts and an active timer are not included. Drafts remain available while navigating within the open app, but are not persisted across a page reload. A browser leave-page warning helps protect unfinished notes and records that could not be saved; copy, commit or export them before leaving.
+
+If browser storage fails, accepted work remains in the tab for export. Invalid saved data is preserved unchanged. Conflicting tabs do not merge automatically; export the current tab's work before choosing **Load saved version** or clearing the record. Loading the saved record keeps unfinished note drafts in the open tab. The recovery control can download the original stored value. Local storage is not encryption or guaranteed archival storage, and a different browser profile or address has a separate record.
+
+The earlier **Archive** retains access to old observations and its own backup controls. It neither supplies current readiness nor modifies current training data. Historical modules remain for compatibility and tests; their quizzes are not offered by the current interface.
+
+## Run locally
+
+No account, API key, external font or downloaded audio is required. The application uses plain HTML, CSS and JavaScript with browser-generated sound.
+
+Open the [standalone offline edition](dist/Philosophy-of-Intelligence-Offline.html), or serve this repository for a consistent browser-storage origin:
 
 ```bash
 python3 -m http.server 8000
 ```
 
-Then open [http://localhost:8000](http://localhost:8000). Keep the same browser and address when returning to saved progress. Browsers can treat storage for directly opened files differently; export a backup before moving files or changing how you open the game.
+Open [http://localhost:8000](http://localhost:8000). Export before moving between hosted and offline copies: browsers can handle storage for directly opened files differently.
 
-## Develop and verify
-
-Node.js 20 or later is required for the development commands. There are no npm dependencies to install.
+For development, use Node.js 20 or later. No npm packages need installing.
 
 ```bash
 npm test
@@ -34,106 +61,15 @@ npm run build
 npm run check
 ```
 
-The tests exercise the curriculum, scoring, progression, geometry, breathing clock and model lab. The build packages the offline edition. The check command performs repository and output checks. The source application is plain HTML, CSS and JavaScript; a development server or compilation step is not needed to edit it.
+The build embeds the local scripts, styles and artwork into the offline HTML. Current tests cover exercise timing and audio lifecycle, all fourteen teaching configurations, source-preserving storage and routing, alongside retained legacy-module tests. See the [verification record](docs/VERIFICATION.md) for actual checks and limits.
 
-## A first session
+## Design and evidence
 
-1. Open **Journey** and choose **Circle**. Every shape is available from the beginning.
-2. Read the short lesson and inspect a worked challenge.
-3. Start a **Guided** mission of eight scored challenges. Hints and source reveals support learning; an assisted answer remains assisted in the record.
-4. Read the feedback and keep a useful principle in the **Palace**.
-5. When ready, choose **Independent** practice. Twenty challenges provide a practical starting point for a mastery check, provided the attempts remain unaided.
+The home retains its parchment artwork and symbol composition. Its medallion titles are descriptive; the shape tiles are its navigation controls. The same training page serves every shape.
 
-Both modes offer **8 or 20 scored challenges**. Warmup records are additional and unscored. There is no response deadline. Mission settings stay fixed until the mission ends, and breathing does not advance a challenge or determine an answer's correctness.
+- [Practice guide](docs/PRACTICE_GUIDE.md)
+- [Design rationale](docs/DESIGN.md)
+- [Implementation contract](docs/IMPLEMENTATION_CONTRACT.md)
+- [Reference notes](docs/REFERENCE_NOTES.md)
 
-In **Square → Guided**, begin with one comparison lens: colour, shape or value. Choose **Mixed** when you want the requested feature to vary; independent Square missions use mixed features. The exact earlier record still matters whichever lens you choose. Connection, ordering and mapping exercises draw your construction as you make it, so the relationship can be inspected alongside the source and feedback.
-
-## The fourteen forms
-
-Each stage foregrounds one new operation while reusing earlier operations. The geometry is a teaching metaphor; side counts and dimensions do not establish a scientific ranking of minds.
-
-| Form | Symbolic label | Operation | Practice |
-| --- | ---: | --- | --- |
-| Circle | 70 | Notice | Select one relevant feature. |
-| Half-circle | 80 | Bind | Recall an item together with its location. |
-| Triangle | 90 | Connect | Combine stated relations into a directed inference. |
-| Square | 100 | Return | Retrieve the exact N-back observation and compare a declared feature. |
-| Pentagon | 110 | Contextualise | Choose a comparison using its context, including insufficient information. |
-| Hexagon | 120 | Organise | Reconstruct a system's supplied dependencies. |
-| Triangular prism | 130 | Map | Preserve three corresponding roles across systems. |
-| Heptagon | 140 | Abstract | Derive, apply and predict with a rule. |
-| Octagon | 150 | Transfer | Map a function into a new domain, check its conditions and predict within its scope. |
-| Cube | 160 | Coordinate | Align four stated roles across accounts. |
-| Dodecahedron | 170 | Select | Retrieve and apply the relevant function from a small library. |
-| Icosahedron | 180 | Discriminate | Choose a diagnostic test and update competing explanations. |
-| Geodesic sphere | 190 | Repair | Diagnose and correct a specific lag, role or scope error. |
-| Sphere | 200 | Revise | Connect a function, prediction and evidence-led revision. |
-
-## Explore the model lab
-
-Open **The philosophy** and scroll to **How far does a pattern hold?** One example, green `2 → 4`, fits both “add two” and “double.” Reveal further evidence, choose a provisional rule, change the input or context, and commit a prediction before revealing the machine's output.
-
-The lab makes four working ideas inspectable: **strength** through supporting and conflicting cases; **density** through the relationships connecting a model; **parameters** through settings you can vary; and **horizon** through the conditions beyond which a model gives no support. A calculation outside the reference region is labelled an extrapolation. Predictions and observations remain visible when you revise.
-
-This is an authored toy world, not evidence for a universal rule. It is **unscored, does not affect mastery, and is not saved or exported**. Resetting or reloading clears its experiments.
-
-## Progress means demonstrated practice
-
-Progress is stage-specific. Success on an easier form does not award mastery on another form.
-
-- **Explored:** an attempt has been recorded.
-- **Practised:** a completed session contains at least six qualifying attempts with at least 75% whole-challenge accuracy. The interface offers missions of eight or twenty challenges.
-- **First independent check:** one recorded date meets the independent criteria below.
-- **Independent mastery:** two distinct recorded dates meet those criteria at the same lag and lag unit.
-
-Each qualifying date needs at least **20 unaided independent attempts from completed sessions**, at least **85% whole-challenge accuracy**, and at least **85% accuracy in every channel required by that stage**. Tutorials, warmups and assisted attempts cannot supply independent mastery evidence. Attempts are grouped by their recorded UTC date; two dates do not necessarily mean a full 24-hour interval.
-
-Where nonmatch trials occur, nonmatch accuracy must also reach **90%**. Square additionally requires at least five match and five nonmatch trials on each qualifying date. Its source-binding and relational-comparison channels are assessed separately, so a correct comparison cannot conceal retrieval of the wrong episode. Several completed sessions on the same date can contribute to that date's evidence.
-
-These thresholds are transparent practice rules. A mastery badge is not a psychometric result or evidence of broader cognitive transfer.
-
-## Breath-back and the Palace
-
-The **Breath-back studio** supports private, free exploration alongside the authored exercises. Notice an image, phrase, sound or sensation; give it a location; compare it with an earlier committed observation; and, where useful, propose a function to test. Each stage offers a bridge from the game into this practice.
-
-Private experience is not automatically graded for truth. “No clear relation” and uncertainty are acceptable. A function may be an equation, a conditional rule or a procedure; record its conditions and what could change your mind. Sources remain as first recorded, while later interpretations are added as revisions.
-
-The Palace holds learned principles and personal observations. The authored challenges have answer keys. Personal entries have provenance and revision history rather than invented correctness scores.
-
-From **Heptagon** onward, the studio offers **Give this pattern something to predict**. Record a situation, an expected observation and a result that would make you revise it. Later, open that entry in the Palace and use **Return with an observation** to add what happened, whether you judge it to support or challenge the prediction (or leave it unclear), and any revision. The original prediction stays visible. These records remain private and unscored.
-
-The optional breathing guide starts at **4 seconds in / 4 seconds out**, adjustable from **2–8 seconds per phase**, with **no holds**. Sound is optional and off by default. Use your own comfortable rhythm, take additional cycles, or turn the guide off. Do not force depth or pace; stop if dizzy or unwell. The guide does not sense breathing or assess health. It pauses when the page is hidden.
-
-## Saving, privacy and portability
-
-Philosophy of Intelligence stores progress in the current browser's local storage. It has no account sync, analytics, AI service or automatic upload. Browser storage is not encrypted storage; someone with access to the same browser profile may be able to read it.
-
-Use **Palace → Export** for a JSON backup. **Private journal entries, private Palace entries and an unfinished session are excluded by default.** Choose to include private material for a complete backup of committed records. Philosophy of Intelligence uses compact JSON; its own valid backups can be re-imported without shortening the included private text. Unsaved form drafts and model-lab experiments are not exported.
-
-The Palace and journal share an **8 MiB collection budget**, with at most 128 Palace entries and 100 journal entries. If a new entry or revision would exceed a limit, it remains an unsaved draft in the open form; existing private records are not shortened to make room. Export and remove older entries before trying again. Copy an unsaved draft before closing or reloading.
-
-Practice history is a rolling record of up to **3,000 attempts and 1,000 sessions**, with a **4 MiB limit for each log**. Export periodically to preserve older practice evidence. Imports accept files up to **32 MiB**, subject to the collection and record limits.
-
-Your browser may allow less storage than these application limits. If saving fails, a warning explains that the latest work remains only in the tab; export it before leaving. If another tab saves newer progress, the older tab pauses and blocks further writes. Its banner lets you **export that tab's records** or **reload the saved version**; the tabs do not merge automatically.
-
-Export before clearing browser data or resetting the game. Private source attachments used during development are not included in this repository or the offline build.
-
-If saved data cannot be read or validated, Philosophy of Intelligence pauses automatic saving and offers the original value as a recovery download. It does not replace the original with an empty record. Import a valid backup or explicitly start a new local record to continue saving.
-
-## GitHub Pages hosting
-
-The game is available at [www.philosophyofintelligence.life](https://www.philosophyofintelligence.life/). It is served as static files from this repository.
-
-To host a fork, in its GitHub **Settings → Pages**, choose deployment from a branch, select the branch containing the app and the root folder, then save. Exact settings depend on the repository's permissions and current GitHub interface. The app uses relative asset paths and does not require a server API.
-
-Alternatively, publish the generated static output with your preferred static-host workflow. Hosting the application does not synchronise visitors' local progress. A hosted address and a locally opened offline file have separate browser storage.
-
-## Design and sources
-
-- [Practice guide](docs/PRACTICE_GUIDE.md): a flexible visit-by-visit schedule from Circle to Sphere.
-- [Verification record](docs/VERIFICATION.md): automated checks, browser playthroughs and known limits.
-- [Design rationale](docs/DESIGN.md): progression, source integrity, assessment and privacy decisions.
-- [Reference notes](docs/REFERENCE_NOTES.md): conceptual influences and evidence boundaries.
-- [Implementation contract](docs/IMPLEMENTATION_CONTRACT.md): module interfaces and runtime invariants.
-
-Philosophy of Intelligence implements a proposed practice architecture. Improvements on its tasks would not, by themselves, establish IQ improvement, clinical benefit or transfer to everyday reasoning. Those claims would need separate research.
+Shapes are philosophical teaching scaffolds. Self-assessed readiness does not measure intelligence, establish a health outcome or demonstrate transfer beyond this practice. The application has no analytics, external AI service or automatic upload of personal records.
