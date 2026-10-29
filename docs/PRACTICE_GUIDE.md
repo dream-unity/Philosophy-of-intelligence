@@ -38,15 +38,27 @@ For Half-circle, select **ocean contains boat** and **boat enables passage acros
 
 ## Reading the four-cycle examples
 
+The guided rehearsal shows one action at a time. Receive the selected relationships, continue to encoding, then explicitly confirm the current entry is encoded. Retrieve the stated previous address before revealing the worked comparison. The first entry instead seeds history. **Next entry** updates the diagram and full register to that same entry. You can step back, select an entry directly or expand all four worked entries. These are demonstration controls; they do not save notes, count breaths or assess readiness.
+
 Example contents are demonstrations, not images or sensations you must produce. Deliberate constructions are labelled rehearsal material. In a compact one-entry-per-breath sequence, each return after the first entry addresses the immediately preceding entry, after securing the current source.
 
 Larger examples require a prepared, recoverable model. Inspect its register and learn it over as many ordinary breaths as needed. A model's name is not a substitute for its thirty or 120 links. The short trace demonstrates working with that prepared structure; it does not impose a four-breath learning deadline. If a record takes several breaths, use record-paced returns and describe the actual work honestly.
+
+If fewer relationships are available than the shape calls for, preserve that partial selection and its actual count. It can support a return while remaining an incomplete example of the intended shape. Do not supply unsupported links just to finish the outline.
+
+## Optional da Vinci reconstruction
+
+Declare this mode before a fresh run. Fix and encode the source; build a distinct counterpart; explicitly map the roles and check the selected relationships; then make the scheduled historical return. For Circle, ocean containing boat can become sky containing aircraft under a stated environmental-containment meaning. For Half-circle, also preserve the vessel's passage through that environment. Higher forms require the whole declared graph under one consistent correspondence.
+
+Source versus counterpart and current versus historical entry are separate comparisons. Mapping roles does not add source links. Use extra ordinary breaths as needed. This extension is taught as mental practice; the app's walkthrough and notebook remain core breath-back, without a separate paired-record tracker. Label written sources, counterparts and mappings explicitly, and keep them in a separate fresh stream. [Original da Vinci method](https://mike-stack1982364.github.io/Ontological-Worlds/#mode-one-guide).
 
 ## Three settings
 
 Consciousness Stream uses inner images, words, remembered sounds and other selected contents. It starts in your own rhythm with sound off. Heart-Coherence retains heart-focused attention, heart feeling and deepening. Body-Sensation Mapping repeats location, quality, intensity, movement, direction, coherence and meaning-tone, with 30 seconds per dimension.
 
 Heart practice initially offers five seconds in and five seconds out, with distinct bells after Begin. Mute the bell, choose your own rhythm, pause or end as needed. Body begins naturally and silently. The guide does not detect breathing, measure a heart state or guarantee a feeling.
+
+The live panel keeps your selected shape's relationship count and organisation visible with an expandable example specific to the exercise. These cues do not change the heart phases or the body-dimension timing. Your own entry advances when its work is finished, independently of the timer.
 
 ## A written return
 

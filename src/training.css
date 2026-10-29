@@ -146,3 +146,19 @@
 .training-network-key i{display:inline-block;width:18px;height:2px;background:#756d5a}
 .training-network-key .is-changed{background:#39766b;height:3px}
 .training-network-key .is-traced{background:#a65f1d;height:4px}
+
+/* Manual steps teach the order without making the breathing pacer a deadline. */
+.training-walkthrough{border:1px solid #a89b76;border-left:3px solid #817044;background:#fffbed38;padding:24px;margin:28px 0}
+.training-walkthrough h3{font-size:27px;font-weight:400;line-height:1.3;margin:18px 0}
+.training-walkthrough h3:focus{outline:2px solid #817044;outline-offset:6px}
+.training-walkthrough-actions{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin:24px 0}
+.training-walkthrough-actions button{white-space:normal;text-align:left}
+.training-walkthrough p:last-child{margin-bottom:0!important}
+.training-all-examples{border-top:1px solid #bcb39680;padding-top:20px;margin:24px 0}
+.training-live-shape{border-left:2px solid #817044;background:#e9e0c530;padding:20px;margin:26px 0}
+.training-live-shape p{font-size:17px;line-height:1.6;margin-bottom:16px}
+.training-live-shape details{margin:18px 0}.training-live-shape details[open]>summary{margin-bottom:16px}
+.training-live-shape p:last-child{margin-bottom:0!important}
+.training-live-order{border-top:1px solid #bcb39680;padding-top:18px}
+.training-reconstruction p{font-size:17px}.training-reconstruction a{color:inherit;text-decoration:underline}
+@media(max-width:620px){.training-walkthrough{padding:18px}.training-walkthrough h3{font-size:24px}.training-walkthrough-actions{align-items:stretch;flex-direction:column}.training-walkthrough-actions button{min-height:44px}.training-live-shape{padding:16px}.training-all-examples summary{min-height:44px}}

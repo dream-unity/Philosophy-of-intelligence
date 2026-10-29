@@ -6,6 +6,8 @@ A manual practice of organising relationships in the stream of consciousness.
 
 The fourteen shapes open one shared practice page. Each has theory, instructions and four worked cycles for **Consciousness Stream**, **Heart-Coherence** and **Body-Sensation Mapping**. The shape changes the selected relationships; the full breath-back procedure remains available from Circle onward.
 
+The guided rehearsal presents receive, encode, retrieve and compare one step at a time for all 42 lessons. Its entry selector updates the full diagram and relationship register together. Advance when ready; the pacer never advances the rehearsal or records an observation. Expand **Read all four worked entries** for the complete reference. Running practice also keeps the selected shape's organisation and an exercise-specific example close to the breathing or body prompts.
+
 ## The method
 
 1. **Inhale: receive and choose.** Select the current meaningful relationship or relational model.
@@ -26,6 +28,8 @@ Circle is one explicit meaningful relationship: **ocean contains boat**. Two par
 Heart practice initially offers five seconds in and five seconds out with phase bells after Begin. Its bell toggle is independent of ambient sound. Body mapping starts naturally and silently. Stream practice has no automatic breathing-bell cadence. Pause, end or follow your own rhythm; the task does not require finishing a thought within one breath.
 
 Larger worked models are prepared constructions, not instructions to discover thirty or 120 new relationships in one breath. Their registers make the declared contents inspectable.
+
+An optional da Vinci disclosure explains source, constructed counterpart and role correspondence before the historical return. It is a separate mental extension, not a required step or an automatically tracked paired-record mode. Honest partial selections can be encoded and compared without claiming completion of the selected shape.
 
 ## Returns and private notes
 

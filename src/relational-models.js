@@ -3867,7 +3867,7 @@
             "id": "I09",
             "from": "S",
             "to": "L3",
-            "text": "Budget funds the implementation of fares.",
+            "text": "Budget funds implementation of the fare policy, including its declared support.",
             "kind": "budget to choices"
           },
           {
@@ -3909,7 +3909,7 @@
             "id": "I15",
             "from": "U4",
             "to": "U0",
-            "text": "Ecological impact must remain consistent with safety.",
+            "text": "Ecological-impact requirements must remain consistent with safety requirements.",
             "kind": "criteria cycle"
           },
           {
