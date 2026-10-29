@@ -6,7 +6,7 @@ Begin with Circle, or return to a shape that helps you examine a current experie
 
 1. **Read the shape.** State its operation in ordinary words. Read the four prompts for the exercise you chose.
 2. **Choose an exercise.** Heart-Coherence moves from heart-focused attention to inviting a sincere feeling of care and staying with it. Body-Sensation Mapping cycles through seven dimensions of a sensation. A faint, absent or uncertain feeling is an acceptable observation.
-3. **Keep breathing comfortable.** My own rhythm is the default. The optional cue is five seconds in and five seconds out, without holds. There is no requirement to complete a thought within one breath or to intensify a sensation. Sound is optional and initially off.
+3. **Keep breathing comfortable.** Heart-Coherence starts with five seconds in and five seconds out, without holds. After Begin, a higher bell marks inhale and a lower bell marks exhale. Use **Bell: on/off** to mute these cues independently of ambient sound, or choose **My own rhythm** before or during practice. Body mapping starts in My own rhythm and silent; ambient sound starts off. The page remembers each exercise's breathing choice while open. There is no requirement to complete a thought within one breath or to intensify a sensation.
 4. **Make a return.** Pause when useful. Notice the present observation, recall an earlier one before looking at its note, compare a stated feature or relation, and identify what needs revising. Do this mentally or use the optional note form.
 5. **Review your understanding.** Use the shape's checklist and mark your own readiness for this exercise if appropriate. Try the same shape in the other exercise. Both readiness marks are reversible; the timer cannot award either one.
 

@@ -87,3 +87,7 @@
 .reduced-motion .training-orb{transform:none!important;transition:none}
 
 .training-panel .eyebrow,.training-theory>.eyebrow{font-size:11px;line-height:1.5;letter-spacing:.16em}
+
+.training-panel-controls{display:flex;flex-direction:column;align-items:flex-end;gap:12px;flex-shrink:0}
+#training-root .training-bell-toggle{font-size:15px;line-height:1.4}
+@media(max-width:900px){.training-panel-controls{flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:16px}.training-panel-controls .training-state{margin-bottom:0}}

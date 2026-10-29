@@ -22,7 +22,7 @@ Shape identifiers are `circle`, `half-circle`, `triangle`, `square`, `pentagon`,
 
 `new ExerciseAudio(options?)` supports injected audio/timer facilities for tests. Methods are `start({frequency,bellVolume})`, `cue(inhale)`, `complete()`, `stop()` and `destroy()`. Audio starts only through a deliberate user action. It uses synthesized bowls and ambient sound, not downloaded media. Pause/end/navigation must stop active cues; teardown must clean up owned timers and audio nodes. A sound failure must leave the exercise usable silently.
 
-The UI defaults to natural breathing and sound off. Optional paced breathing has five seconds per phase, no holds and no adjustable physiological target. No timer or audio event commits an observation or establishes readiness.
+Heart practice defaults to `pacing='paced'` and `heartBell=true`; body mapping defaults to natural breathing. Ambient sound defaults off. Heart phase bells require heart practice, paced breathing and an enabled heart bell; they do not require ambient sound. The visible Bell on/off control changes only that bell preference. The source bowls remain G4 (392 Hz) for inhale and D4 (293.66 Hz) for exhale. Begin starts the clock/audio through a user gesture; loading the page does not autoplay. Body mapping remains silent unless its sound control is enabled. Breathing choices are remembered per exercise during the mount, and My own rhythm can be selected before or during a practice. Paced breathing has five seconds per phase, no holds and no adjustable physiological target. No timer or audio event commits an observation or establishes readiness.
 
 ## Private manual store: `FormTrainingStore`
 

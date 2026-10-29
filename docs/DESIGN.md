@@ -12,7 +12,7 @@ The progression develops noticing, binding, explicit comparison, contextual epis
 
 The adaptation retains Project Meaning's three heart phases, its seven body-mapping dimensions, its duration choices, 30-second body cadence, and the recognizable synthesized bowl and ambient audio. Source provenance and evidence limits are recorded in [Reference notes](REFERENCE_NOTES.md).
 
-Natural breathing and silent practice are the defaults. The optional pacer uses a fixed five-second inhalation and five-second exhalation without holds. Heart breathing bells follow it only when paced breathing and sound are enabled. Body cues mark mapping dimensions. Audio preferences do not claim physiological effects.
+Heart-Coherence defaults to a five-second inhalation and five-second exhalation guide, without holds, and a bell at each phase. The higher inhale bowl and lower exhale bowl start only after Begin; a visible bell toggle controls them independently of ambient sound. Ambient sound is initially off. Body-Sensation Mapping defaults to natural breathing and silence; its optional cues mark mapping dimensions. My own rhythm remains available before and during heart practice and disables its timed breathing bells. Each exercise's breathing choice is remembered while the page remains mounted. Audio preferences do not claim physiological effects.
 
 The timer gives structure rather than a response deadline. Opening a breath-back return pauses practice, and hiding the page pauses it. A person can stop, take more time or follow a comfortable natural rhythm. More advanced shapes never demand slower or deeper breathing.
 

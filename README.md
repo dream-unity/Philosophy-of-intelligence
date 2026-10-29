@@ -23,9 +23,9 @@ Every shape stays available. More complex shapes change the relations you examin
 | Heart-Coherence | Heart-focused breathing, heart feeling, then deepening; phases change at 33% and 66% of the selected period. | 15, 30, 60, 120 or 180 minutes |
 | Body-Sensation Mapping | Location, quality, intensity, movement, direction, coherence and meaning-tone; each dimension receives 30 seconds and the sequence repeats. | 15, 30 or 60 minutes |
 
-The source's bowl sounds, completion sequence and ambient pulse options are available with **sound off by default**. These are listening choices, not measurements or guarantees of a mental state. Pause or end at any time; finishing a timer records time without awarding readiness.
+Heart-Coherence starts with a **five-seconds-in / five-seconds-out guide and breath bell enabled**. After you choose **Begin heart practice**, a higher bowl tone marks inhalation and a lower tone marks exhalation. The visible **Bell: on/off** button controls these cues independently of ambient sound. Ambient sound starts off; Body-Sensation Mapping starts silent and in **My own rhythm**. The source's completion sequence and ambient pulse options remain available. These are listening choices, not measurements or guarantees of a mental state.
 
-**My own rhythm** is the default breathing mode. An optional five-seconds-in / five-seconds-out cue has no holds. Breathe gently without forcing depth or pace, and stop if dizzy or uncomfortable. The page does not sense breathing or measure heart coherence. This timing is a design choice, not a claim of a universally healthiest pace. See [Reference notes](docs/REFERENCE_NOTES.md).
+You can choose **My own rhythm** before or during heart practice to stop timed breathing cues, or mute the bell while keeping the visual guide. Breathing choices are remembered separately for the two exercises while the page remains open. The guide has no holds. Pause or end at any time; finishing a timer records time without awarding readiness. Breathe gently without forcing depth or pace, and stop if dizzy or uncomfortable. The page does not sense breathing or measure heart coherence. This timing is a design choice, not a claim of a universally healthiest pace. See [Reference notes](docs/REFERENCE_NOTES.md).
 
 ## Breath-back and private records
 

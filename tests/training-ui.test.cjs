@@ -249,6 +249,114 @@ test('heart completion records once, time never awards readiness, and all audio 
   assert.equal(page.intervals.size, 0);
 });
 
+test('heart practice starts with paced breathing and audible phase bells without enabling ambient sound', () => {
+  const page = harness();
+  assert.equal(page.q('[data-pacing]').value, 'paced');
+  assert.equal(page.q('[data-sound]').checked, false);
+  assert.equal(page.q('[data-heart-bell]').hidden, false);
+  assert.match(page.q('[data-heart-bell]').textContent, /Bell: on/i);
+  assert.equal(page.q('.training-sound').querySelector('[data-heart-bell]'), null, 'the bell control is available outside collapsed sound settings');
+  assert.ok(page.sounds.every(audio => !audio.enabled), 'rendering a page must not start audio');
+  page.click('[data-start]');
+  assert.equal(page.sounds[0].enabled, true);
+  assert.equal(page.sounds[0].settings.frequency, 0, 'the default starts bowls only, with no ambient pulse');
+  assert.deepEqual(page.sounds[0].cues, [true]);
+  assert.equal(page.q('[data-breath]').textContent, 'Inhale');
+  page.advance(4.8);
+  assert.deepEqual(page.sounds[0].cues, [true]);
+  page.advance(0.2);
+  assert.deepEqual(page.sounds[0].cues, [true, false]);
+  assert.equal(page.q('[data-breath]').textContent, 'Exhale');
+  page.advance(5);
+  assert.deepEqual(page.sounds[0].cues, [true, false, true]);
+});
+
+test('muting and unmuting heart bells skips missed cues without inventing a mid-phase ring', () => {
+  const page = harness();
+  page.click('[data-start]'); page.advance(2);
+  page.click('[data-heart-bell]');
+  assert.match(page.q('[data-heart-bell]').textContent, /Bell: off/i);
+  assert.equal(page.sounds[0].enabled, false, 'muting bells with ambient off leaves the exercise silent');
+  page.advance(5);
+  assert.deepEqual(page.sounds[0].cues, [true], 'the exhale cue at five seconds was muted');
+  page.click('[data-heart-bell]');
+  assert.equal(page.sounds[0].enabled, true);
+  assert.deepEqual(page.sounds[0].cues, [true], 'unmuting at seven seconds is not a new breath phase');
+  page.advance(2.8);
+  assert.deepEqual(page.sounds[0].cues, [true]);
+  page.advance(0.2);
+  assert.deepEqual(page.sounds[0].cues, [true, true], 'the next regular inhale cue remains audible');
+  page.click('[data-pause]');
+  page.click('[data-heart-bell]'); page.click('[data-heart-bell]');
+  assert.equal(page.sounds[0].enabled, false, 'changing the bell preference while paused must not restart audio');
+});
+
+test('ambient controls and pause/resume remain independent of the heart bell cadence', () => {
+  const page = harness();
+  page.click('[data-start]'); page.advance(2);
+  const sound = page.q('[data-sound]'); sound.checked = true; sound.dispatch('change');
+  assert.equal(page.sounds[0].settings.frequency, 10);
+  assert.deepEqual(page.sounds[0].cues, [true], 'enabling ambient sound adds no phase cue');
+  page.click('[data-pause]'); page.advance(100);
+  assert.equal(page.sounds[0].enabled, false);
+  page.click('[data-pause]');
+  assert.equal(page.sounds[0].enabled, true);
+  assert.equal(page.sounds[0].settings.frequency, 10);
+  assert.deepEqual(page.sounds[0].cues, [true], 'resuming two seconds into inhale must not repeat its bell');
+  page.advance(3);
+  assert.deepEqual(page.sounds[0].cues, [true, false]);
+  sound.checked = false; sound.dispatch('change');
+  assert.equal(page.sounds[0].enabled, true, 'turning ambient off does not mute the independent heart bell');
+  assert.equal(page.sounds[0].settings.frequency, 0);
+  page.advance(5);
+  assert.deepEqual(page.sounds[0].cues, [true, false, true]);
+  sound.checked = true; sound.dispatch('change');
+  page.click('[data-heart-bell]');
+  assert.equal(page.sounds[0].enabled, true, 'muting the heart bell does not stop requested ambient audio');
+  assert.equal(page.sounds[0].settings.frequency, 10);
+  page.advance(5);
+  assert.deepEqual(page.sounds[0].cues, [true, false, true]);
+});
+
+test('using one’s own rhythm suppresses heart breathing bells until a later paced phase boundary', () => {
+  const page = harness();
+  page.click('[data-start]'); page.advance(2);
+  page.click('[data-live-pace]');
+  assert.equal(page.q('[data-breath]').textContent, 'Own rhythm');
+  assert.equal(page.sounds[0].enabled, false);
+  page.advance(5);
+  assert.deepEqual(page.sounds[0].cues, [true]);
+  page.click('[data-live-pace]');
+  assert.equal(page.q('[data-breath]').textContent, 'Exhale');
+  assert.equal(page.sounds[0].enabled, true);
+  assert.deepEqual(page.sounds[0].cues, [true], 'switching to a guide partway through exhale adds no cue');
+  page.advance(3);
+  assert.deepEqual(page.sounds[0].cues, [true, true]);
+});
+
+test('body practice keeps its natural silent default and each exercise remembers its own pacing choice', () => {
+  const page = harness();
+  page.click('[data-exercise="body"]');
+  assert.equal(page.q('[data-pacing]').value, 'natural');
+  assert.equal(page.q('[data-sound]').checked, false);
+  const bell = page.host.querySelector('[data-heart-bell]');
+  assert.ok(!bell || bell.hidden, 'body mapping does not display the heart-only bell control');
+  page.click('[data-start]'); page.advance(30);
+  assert.equal(page.sounds[0].enabled, false);
+  assert.deepEqual(page.sounds[0].cues, []);
+  page.click('[data-end]'); page.click('[data-exercise="heart"]');
+  assert.equal(page.q('[data-pacing]').value, 'paced');
+  page.choose('[data-pacing]', 'natural');
+  page.click('[data-exercise="body"]');
+  assert.equal(page.q('[data-pacing]').value, 'natural');
+  page.choose('[data-pacing]', 'paced');
+  page.click('[data-exercise="heart"]');
+  assert.equal(page.q('[data-pacing]').value, 'natural', 'the chosen heart rhythm survives switching away');
+  page.choose('[data-pacing]', 'paced');
+  page.click('[data-other]');
+  assert.equal(page.q('[data-pacing]').value, 'paced', 'the readiness shortcut also restores the body’s own choice');
+});
+
 test('body bowl cues follow the source dimension pattern when the seven-step sequence repeats', () => {
   const page = harness();
   page.click('[data-exercise="body"]');
