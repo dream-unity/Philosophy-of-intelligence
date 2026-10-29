@@ -19,24 +19,24 @@
 
   const HEART_PHASES = Object.freeze([
     Object.freeze({ id: 'early', label: 'Step 1 · Heart-Focused Breathing',
-      inhale: 'Breathe in gently with attention at the heart. Soften the chest. Let a sincere feeling of love come forward if it is available; ease is enough to begin.',
-      exhale: 'Breathe out slowly with attention at the heart. Unhurried. Let the rhythm remain comfortable and unforced.' }),
+      inhale: 'Breathe gently; rest attention at your chest.',
+      exhale: 'Keep attention there; let the breath stay comfortable.' }),
     Object.freeze({ id: 'middle', label: 'Step 2 · Heart Feeling',
-      inhale: 'Breathe the love in. Not just the idea of it: notice any felt warmth in the chest. Let it move through you without forcing it.',
-      exhale: 'Breathe the love out with attention at the heart. Sustain the sincere feeling that is actually present, however small.' }),
+      inhale: 'Invite care or appreciation; notice what you actually feel.',
+      exhale: 'Stay with the feeling without forcing warmth.' }),
     Object.freeze({ id: 'late', label: 'Step 3 · Deepen',
-      inhale: 'Breathe the love in. Deepen it gently. Attend to a subtler, clearer level without pushing beyond what you actually feel.',
-      exhale: 'Breathe the love out. Sustain it. Notice how it changes while you stay with it; there is no required intensity.' })
+      inhale: 'Deepen attention gently, without demanding a stronger feeling.',
+      exhale: 'Notice changes; return when attention wanders.' })
   ]);
 
   const BODY_STEPS = Object.freeze([
-    Object.freeze({ id: 'location', label: 'Location', prompt: 'Okay, now. Where in the body is the feeling sitting? Name the area in the plainest words: chest, throat, belly, jaw, hands, shoulders. Does it have a clear edge, or fade into what surrounds it? Do not explain it yet; just say where it is. Location alone does not identify an emotion.' }),
-    Object.freeze({ id: 'quality', label: 'Quality', prompt: 'Okay, now. What does it feel like, as raw sensation? Plain physical words: pressure, heat, cold, tightness, hollowness, heaviness, lightness. Pick the word that truly fits, not the one that sounds deep. Describe the texture before deciding what it might mean.' }),
-    Object.freeze({ id: 'intensity', label: 'Intensity', prompt: 'Okay, now. How strong is the sensation itself, 0 to 10? Rate the sensation, not the story riding on it. Notice the two can differ: a strong emotion can accompany a faint sensation, and a strong physical sensation can carry little emotional feeling. Notice that gap without trying to change it.' }),
-    Object.freeze({ id: 'movement', label: 'Movement', prompt: 'Okay, now. Is it still, or moving: pulsing, spreading, rising, sinking, flickering, throbbing? Steady, or coming in waves? Describe the movement itself for now, not yet what it means. If you cannot tell, that is an accurate observation too.' }),
-    Object.freeze({ id: 'direction', label: 'Direction', prompt: 'Okay, now. Which way is it going: toward you, away, up, down, inward, outward, radiating from a centre? Describe what you notice without assigning it an emotion. If there is no clear direction, say so; it may simply be staying put.' }),
-    Object.freeze({ id: 'coherence', label: 'Coherence', prompt: 'Okay, now. Is this one feeling, or several at once? Check four layers: the raw sensation, any image it brings to mind, what the body wants to do, and the emotional tone. Are they pointing the same way, or pulling apart? A mixed or uncertain description is welcome. Here coherence means your observed agreement between layers, not a measured heart state.' }),
-    Object.freeze({ id: 'meaning-tone', label: 'Meaning-tone', prompt: 'Okay, now. First the tone: pleasant, unpleasant, neutral, or mixed; drawing you in, pushing away, or holding still? Then try an emotion word if one fits: sadness, joy, fear, anger, longing, calm. Keep the name provisional. The same sensation can have different meanings in different situations; you can say “I do not know.” Separate what you felt from the interpretation and from what the body wants to do.' })
+    Object.freeze({ id: 'location', label: 'Location', prompt: 'Where is the sensation? Notice its edges. Location alone does not identify an emotion.' }),
+    Object.freeze({ id: 'quality', label: 'Quality', prompt: 'Describe the raw sensation: pressure, warmth, tightness, or another texture. Interpret later.' }),
+    Object.freeze({ id: 'intensity', label: 'Intensity', prompt: 'Rate the sensation from 0 to 10. Its strength may differ from the emotion’s strength.' }),
+    Object.freeze({ id: 'movement', label: 'Movement', prompt: 'Is it still, pulsing, spreading, or changing? Unclear is a valid observation.' }),
+    Object.freeze({ id: 'direction', label: 'Direction', prompt: 'Does it move inward, outward, up, down, or nowhere clearly?' }),
+    Object.freeze({ id: 'coherence', label: 'Coherence', prompt: 'Compare sensation, imagery, impulse and emotional tone. Do they agree, conflict, or remain unclear?' }),
+    Object.freeze({ id: 'meaning-tone', label: 'Meaning-tone', prompt: 'Notice pleasant, unpleasant, neutral or mixed tone. Name an emotion only provisionally; keep sensation, interpretation and impulse distinct.' })
   ]);
 
   class ExerciseClock {
@@ -348,3 +348,4 @@
 
   return Object.freeze({ HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, FREQUENCIES, BREATH_SECONDS, BODY_STEP_SECONDS, HEART_PHASES, BODY_STEPS, ExerciseClock, ExerciseAudio });
 });
+

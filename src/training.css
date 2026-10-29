@@ -1,5 +1,5 @@
 /* Shared manual practice. Homepage composition lives exclusively in landing.css. */
-#training-root{max-width:1320px;margin:0 auto;padding:26px 0 72px}
+#training-root{max-width:1080px;margin:0 auto;padding:12px 0 48px}
 .training-topline{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:38px}
 .training-shape-picker{display:flex;align-items:center;gap:12px;font-size:15px;color:var(--muted,#6b6656)}
 .training-shape-picker select{max-width:260px}
@@ -162,3 +162,68 @@
 .training-live-order{border-top:1px solid #bcb39680;padding-top:18px}
 .training-reconstruction p{font-size:17px}.training-reconstruction a{color:inherit;text-decoration:underline}
 @media(max-width:620px){.training-walkthrough{padding:18px}.training-walkthrough h3{font-size:24px}.training-walkthrough-actions{align-items:stretch;flex-direction:column}.training-walkthrough-actions button{min-height:44px}.training-live-shape{padding:16px}.training-all-examples summary{min-height:44px}}
+
+
+/* One compact lesson precedes practice on every screen. */
+.training-topline{margin-bottom:18px}
+.training-heading{margin-bottom:18px;gap:22px}
+.training-heading h1{font-size:clamp(32px,4.4vw,54px);margin:4px 0 10px}
+.training-heading .eyebrow{margin:0;font-size:10px}
+.training-heading p:last-child{max-width:900px;font-size:18px;line-height:1.5}
+.training-exercises{margin-bottom:18px}
+.training-exercises button{font-size:18px;padding:13px 18px}
+.training-exercises small{margin:4px 0 0;font-size:11px}
+.training-exercises small:empty{display:none}
+.training-lesson{margin:0 0 26px;padding:0 0 18px;border-bottom:1px solid #bcb39680}
+.training-lesson p{margin:0 0 10px;font-size:17px;line-height:1.5}
+.training-lesson .training-example{font-size:20px;line-height:1.5;margin-bottom:8px}
+.training-setting{color:#746b58}
+.training-breath-method{display:grid;grid-template-columns:minmax(170px,1fr) minmax(0,2fr);gap:22px;margin-top:14px}
+.training-breath-method strong{display:block;font-weight:600;margin-bottom:3px}
+.training-lesson .training-fine{font-size:13px;line-height:1.5;color:#746b58}
+.training-lesson>details{border:0;margin:8px 0 0;padding:0}
+#training-root .training-lesson>details>summary{font-size:15px}
+.training-lesson>details[open]{padding-top:8px}
+.training-lesson>details[open]>summary{margin-bottom:14px}
+.training-layout{display:block}
+.training-primary{display:flex;gap:18px}
+.training-panel{padding:22px}
+.training-panel-heading{margin-bottom:10px}
+.training-panel h2{font-size:24px;margin:0}
+.training-panel-heading .eyebrow{display:none}
+.training-readiness{border:0;padding:0;box-shadow:none;background:transparent}
+.training-readiness .training-check{margin:4px 0 8px}
+.training-ready-actions{margin:12px 0 0}
+.training-record{margin-top:24px;padding-top:18px}
+.training-attribution{margin-top:18px}
+.training-walkthrough{margin:16px 0;padding:18px}
+.training-walkthrough h3{font-size:22px}
+.training-model-explorer{margin:18px 0;padding:18px 0}
+.training-traced-relationship{min-height:0}
+@media(max-width:900px){
+ .training-heading>span{padding-top:0;flex-basis:54px}
+ .training-heading>span svg{width:54px;height:54px}
+ .training-heading h1{font-size:34px}
+ .training-heading p:last-child{font-size:17px}
+ .training-exercises button{font-size:17px;padding:12px}
+ .training-panel-heading{display:flex}
+ .training-panel-controls{margin:0;flex-direction:column;align-items:flex-end}
+ .training-primary{display:flex}
+}
+@media(max-width:620px){
+ .training-topline{margin-bottom:16px}
+ .training-heading{gap:14px;margin-bottom:14px}
+ .training-heading h1{font-size:30px}
+ .training-exercises{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .training-exercises button{font-size:14px;line-height:1.35;padding:11px 8px;overflow-wrap:normal}
+ .training-exercises button+button{border-top:0;border-left:1px solid #b9b298}
+ .training-lesson .training-example{font-size:18px}
+ .training-lesson p{font-size:16px}
+ .training-breath-method{display:block;margin-top:12px}
+ .training-breath-method strong{display:inline;margin-right:6px}
+ .training-lesson{margin-bottom:20px}
+ .training-panel-heading{gap:10px}
+ .training-panel h2{font-size:22px}
+ .training-panel-controls{max-width:110px}
+ .training-state{white-space:normal;text-align:right;font-size:10px}
+}

@@ -143,6 +143,95 @@
   ]
 ];
 
+  // Compact teaching shown before the practice controls. Detailed registers remain
+  // available for inspection; a named local sample never stands for the full model.
+  const SHORT_LESSONS = {
+    circle: {
+      essence: 'Keep one meaningful relationship between two roles. Remember who relates to whom and how; two objects still make one relationship.',
+      stream: 'Ocean contains boat.',
+      heart: 'Remembered kindness supports appreciation.',
+      body: 'Chair supports torso, as felt in this moment.'
+    },
+    'half-circle': {
+      essence: 'Keep two distinct relationships between the same roles. Reversing the wording of one meaning does not create another.',
+      stream: 'Ocean contains boat; boat enables passage across ocean.',
+      heart: 'Remembered kindness supports appreciation; appreciation gives that memory personal significance.',
+      body: 'Chair supports torso; chair also restricts its movement.'
+    },
+    triangle: {
+      essence: 'Connect three roles with three meaningful relationships. State the closing link explicitly; the first two do not prove it.',
+      stream: 'Ocean contains boat; boat enables fisher; fisher depends on ocean.',
+      heart: 'Kindness memory supports appreciation; appreciation values friend; memory represents the friend’s kindness.',
+      body: 'Chair supports torso; torso contains felt pressure; pressure registers contact with chair.'
+    },
+    square: {
+      essence: 'Keep four roles connected by four relationships in a closed cycle. Preserve each meaning, including the link back to the start.',
+      stream: 'Ocean contains boat; boat enables fisher; fisher supplies village; village depends on ocean.',
+      heart: 'Kindness memory supports appreciation; appreciation expresses care; care values friend; memory represents the friend’s kindness.',
+      body: 'Chair supports torso; torso contains pressure; pressure informs support judgment; that judgment concerns chair.'
+    },
+    pentagon: {
+      essence: 'Separate another role within the cycle and preserve all five relationships. Count the actual links, without retaining an extra shortcut.',
+      stream: 'Ocean contains boat; boat enables fisher; fisher harvests catch; catch nourishes village; village depends on ocean.',
+      heart: 'Kindness memory supports appreciation; appreciation expresses care; care motivates a wish; the wish concerns friend’s wellbeing; memory represents friend’s kindness.',
+      body: 'Chair supports torso; torso contains pressure; pressure informs description; description supports support judgment; that judgment concerns chair.'
+    },
+    hexagon: {
+      essence: 'Connect a context or constraint within a six-link cycle. Name how it relates to both neighbours, keeping every earlier role distinct.',
+      stream: 'Ocean contains boat; boat enables fisher; fisher harvests catch; catch nourishes village; village sets quota; quota constrains ocean extraction.',
+      heart: 'Memory supports appreciation; appreciation expresses care; care motivates a wish; the wish concerns friend’s wellbeing; friend belongs to context; context gives memory meaning.',
+      body: 'Chair supports torso; torso contains pressure; pressure informs description; description supports judgment; judgment is interpreted within context; context includes chair as support.'
+    },
+    heptagon: {
+      essence: 'Distinguish another role and its two connections within a seven-link cycle. Keep agency, experience and interpretation separate as the structure grows.',
+      stream: 'Ocean contains boat; boat enables fisher; fisher harvests catch; catch nourishes village; village authorises council; council sets quota; quota constrains ocean extraction.',
+      heart: 'Memory supports appreciation; appreciation expresses care; care motivates a wish; the wish concerns friend’s wellbeing; friend belongs to context; context informs interpretation; interpretation frames memory.',
+      body: 'Chair supports torso; torso contains pressure; pressure informs description; description supports judgment; judgment is compared with expected support; expectation is shaped by context; context includes chair.'
+    },
+    octagon: {
+      essence: 'Keep eight relationships connected while distinguishing experience from its representation, expectation or interpretation. Preserve uncertainty instead of making the model seem complete.',
+      stream: 'Ocean contains boat; boat enables fisher; fisher harvests catch; catch nourishes village; village authorises council; council sets quota; quota accords with stock estimate; estimate represents ocean stock.',
+      heart: 'Memory supports appreciation; appreciation expresses care; care motivates a wish; the wish concerns friend’s wellbeing; friend belongs to context; context informs interpretation; interpretation acknowledges uncertainty; uncertainty limits memory claims.',
+      body: 'Chair supports torso; torso contains pressure; pressure draws attention; attention selects description; description informs judgment; judgment is compared with expectation; context shapes expectation; context includes chair.'
+    },
+    prism: {
+      essence: 'Join two complete three-link systems with three explicit bridges: nine relationships. Name what each bridge preserves or contrasts.',
+      stream: 'Ocean contains boat; boat enables fisher; fisher depends on ocean. Forest contains path; path enables walker; walker depends on forest. Bridge ocean–forest as environments, boat–path as access, fisher–walker as dependent agents.',
+      heart: 'Kindness memory supports appreciation; appreciation values friend; memory represents friend’s kindness. Pet memory supports fondness; fondness values pet; pet memory represents pet. Bridge the memories as representations, the feelings as valuing, and friend–pet as care recipients.',
+      body: 'Chair supports torso; torso contains pressure; pressure registers chair contact. Floor supports feet; feet contain sole sensation; sensation registers floor contact. Bridge chair–floor as supports, torso–feet as supported regions, pressure–sensation as contact signals.'
+    },
+    cube: {
+      essence: 'Join two complete four-link cycles with four role bridges: twelve relationships. Preserve each system and the limits of their correspondence.',
+      stream: 'Ocean contains boat; boat enables fisher; fisher supplies village; village depends on ocean. Land contains irrigation; irrigation enables grower; grower supplies town; town depends on land. Bridge environments, work infrastructure, producers and dependent communities.',
+      heart: 'Memory supports appreciation; appreciation expresses care; care values friend; memory represents friend’s kindness. Pet memory supports fondness; fondness expresses animal care; animal care values pet; pet memory represents pet. Bridge representations, valuing feelings, care and recipients.',
+      body: 'Chair supports torso; torso contains pressure; pressure informs support judgment; judgment concerns chair. Floor supports feet; feet contain sole sensation; sensation informs footing judgment; judgment concerns floor. Bridge supporting surfaces, supported regions, contact signals and support interpretations.'
+    },
+    dodecahedron: {
+      essence: 'Connect shared pentagonal cycles into thirty relationships. Keep shared roles consistent and all links recoverable; one local patch is only part of the model.',
+      stream: 'Local sample: tank supplies watering system; watering system sustains garden; garden yields produce. Recover these within the full thirty-link cooperative model.',
+      heart: 'Local sample: care intention guides heart attention; attention notices a felt response; response informs a meaning hypothesis. Recover these within the full thirty-link practice model.',
+      body: 'Local sample: mapping intention selects a bodily episode; episode grounds sensation description; description constrains a provisional emotion name. Recover these within the full thirty-link mapping model.'
+    },
+    icosahedron: {
+      essence: 'Connect shared triads into thirty relationships, organised differently from the Dodecahedron. Keep requirements, intentions and achieved results distinguishable.',
+      stream: 'Local triad: safety shapes accessibility; safety sets vessel-design requirements; accessibility sets vessel-design requirements. Keep this triad within the full thirty-link ferry model.',
+      heart: 'Local triad: gentleness limits continuity’s effort; gentleness forbids forcing a felt response; continuity allows that response to fluctuate. Keep all thirty practice relationships recoverable.',
+      body: 'Local triad: specificity makes uncertainty precise; specificity constrains the sensation record; uncertainty qualifies that record. Keep all thirty mapping relationships recoverable.'
+    },
+    geodesic: {
+      essence: 'Replace direct links with named mediators: sixty mediated links plus sixty compatibility requirements. Check their shared connections; compatibility remains a requirement until established.',
+      stream: 'Local sample: service brief states safety commitment; that commitment defines the safety target. Check its compatibility with the access commitment within the full 120-link ferry model.',
+      heart: 'Local sample: gentleness establishes a no-forcing rule; that rule does not demand a particular feeling. Check its compatibility with fluctuation allowance within the full 120-link practice model.',
+      body: 'Local sample: uncertainty supplies a sensation uncertainty marker; that marker qualifies the sensation record. Check its compatibility with descriptive precision within the full 120-link mapping model.'
+    },
+    sphere: {
+      essence: 'Enter the same complete 120-link network through different roles. Keep its relationships, conflicts and limits recoverable; revise without erasing earlier versions.',
+      stream: 'Local entry: safety commitment defines the safety target. Enter the same ferry model through accessibility next; recover all 120 links and locate any conflicting requirements.',
+      heart: 'Local entry: a no-forcing rule does not demand a particular feeling. Enter the same practice model through sincerity next; recover all 120 links and retain any unresolved tension.',
+      body: 'Local entry: a sensation uncertainty marker qualifies the sensation record. Enter the same mapping model through specificity next; recover all 120 links without converting uncertainty into certainty.'
+    }
+  };
+
   const STREAM_EXAMPLES = {
   "circle": {
     "baseline": "Ocean and boat remain available in one imagined scene. Select exactly one complete relationship on each inhale; the selected meaning may change.",
@@ -237,6 +326,7 @@
     const source = exercise === 'stream' ? STREAM_EXAMPLES[stage.id] : null;
     const baseline = source ? source.baseline : stage.relationCount < 30 ? model.relations.map(relation => relation.text).join(' ') : 'Prepare the complete ' + model.title + ' model and all ' + stage.relationCount + ' selected relationships in its register. The four encounters below are versions of that full model.';
     return {
+      shortExample: SHORT_LESSONS[stage.id][exercise],
       notice: EXERCISE_CONTEXT[exercise] + ' On the inhale, select ' + (stage.relationCount === 1 ? 'one complete meaningful relationship' : 'the full declared ' + stage.relationCount + '-link organisation') + '. On the exhale, encode it at a distinct home-palace address before deliberately seeking the earlier target. If fewer links are available, encode an honest partial selection with its actual count and uncertainty. That entry may support a return without completing the intended shape; do not invent the missing links.',
       recall: 'Only after current encoding, retrieve exactly N committed entries back before revealing any earlier note. Until N earlier entries exist, seed history. In the four-breath B = 1 rehearsal, return to the preceding breath’s entry; a matching older entry is not a substitute. Recover roles and meanings, not only the model’s name.',
       relate: 'Compare the complete current and retrieved selections under identified role correspondences. Distinguish preserved meaning, changed meaning, different participants and uncertainty. A historical comparison is an annotation, not another counted relationship in the current source model. ' + (source && source.notes ? source.notes : 'Changing which relationship is foregrounded need not make the earlier relationship false.'),
@@ -252,6 +342,7 @@
   const STAGES = METADATA.map(function (row) {
     const stage = {
       id: row[0], name: row[1], verb: row[2], defaultLag: 1,
+      essence: SHORT_LESSONS[row[0]].essence,
       relationCount: row[3], topology: row[4], theory: row[5],
       preparation: 'Use a separate room or four distinct sublocations in your home for this run: doorway, hallway shelf, desk and window. Keep every entry at its own stable address. ' + (row[3] >= 30 ? 'Learn the full register before rehearsing. A familiar model may be reactivated as a whole; inventing or reading ' + row[3] + ' links is not a one-inhale requirement. Use four record-paced entries if the full work takes extra breaths.' : 'The four-breath rehearsal assumes one complete selection, encoding and return fits each ordinary breath. Otherwise use four record-paced entries without holding or forcing the breath.') + ' Palace bindings, note labels and routine historical comparisons do not add source links.',
       readiness: [row[6], 'I can encode the full current selection before retrieving the exact scheduled earlier entry, with both originals retained.', 'I can distinguish experience, construction and inference. If the scene lacks enough supported links, I choose a simpler selection or explicitly prepare a model rather than inventing links to complete a count.']
@@ -263,3 +354,4 @@
   function getStage(id) { return STAGES.find(stage => stage.id === id) || STAGES[0]; }
   return Object.freeze({ STAGES, INTRO, BREATH_BACK, ADDRESSES, getStage });
 });
+

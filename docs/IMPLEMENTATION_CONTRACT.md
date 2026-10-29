@@ -16,7 +16,7 @@ IDs in order: `circle`, `half-circle`, `triangle`, `square`, `pentagon`, `hexago
 
 Models identify stage, exercise, preparation, relationship count, nodes and typed relationships; optional faces describe topology. Frozen static models are distinct from user records. Prepared constructions and partial patches must not be represented as spontaneous complete structures.
 
-The manual walkthrough shares `modelState` with the diagram/register and separately tracks receive, encode, retrieve/seed and compare/preserve steps. Entry changes reset the step. Its generation guard rejects detached controls; neither clock ticks nor walkthrough controls create observations or readiness. All four rows remain available in a disclosure. Live practice includes the selected topology and an exercise-specific example. Optional da Vinci reconstruction is a teaching disclosure, not a paired-record mode.
+The manual walkthrough shares `modelState` with the diagram/register and separately tracks receive, encode, retrieve/seed and compare/preserve steps. Entry changes reset the step. Its generation guard rejects detached controls; neither clock ticks nor walkthrough controls create observations or readiness. Each shape now opens with a concise `essence`, an exercise-specific `shortExample`, and the complete inhale/exhale method before any practice controls. The optional four-entry walkthrough and full relationship explorer live inside this top lesson; the repeated all-entry prose list, lower lesson sidebar and live duplicate lesson are removed. Live prompts provide brief exercise cues. Optional da Vinci reconstruction remains a top teaching disclosure, not a paired-record mode.
 
 ## Ordered note capture
 

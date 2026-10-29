@@ -194,16 +194,37 @@ test('manual entry selection resets the teaching phase and detached walkthrough 
   assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
 });
 
-test('live shape guidance adapts its topology and example while preserving the separate exercise clock', () => {
+test('all 42 lessons place concise, exercise-specific teaching before practice and keep it visible during the timer', () => {
   const page=harness();
+  const visibleText = element => {
+    if(element.hidden)return '';
+    if(element.tagName==='DETAILS'&&!element.open)return element.querySelector('summary').textContent;
+    return element._text+' '+element.children.map(visibleText).join(' ');
+  };
   for(const stage of require('../src/shape-practice.js').STAGES){
     page.app.setStage(stage.id);
     for(const exercise of ['stream','heart','body']){
       page.click('[data-exercise="'+exercise+'"]');
-      const guidance=page.q('[data-live-shape]').textContent;
-      assert.ok(guidance.includes(stage.topology));
-      assert.ok(guidance.includes(stage[exercise].examples[0].inhale));
-      assert.match(guidance,/encode.*first.*retrieve/);
+      const lesson=page.q('[data-lesson]'),layout=page.q('.training-layout');
+      assert.equal(page.q('[data-shape-essence]').textContent,stage.essence);
+      assert.equal(page.q('[data-short-example]').textContent,stage[exercise].shortExample);
+      assert.ok(page.host.children.indexOf(lesson)<page.host.children.indexOf(layout),'lesson precedes practice in reading order');
+      assert.equal(page.q('[data-examples]').open,false,'detailed rehearsal is optional');
+      assert.equal(page.q('.training-reconstruction').open,false,'reconstruction is optional');
+      assert.equal(page.host.querySelector('.training-theory'),null,'no duplicate lesson sidebar');
+      assert.equal(page.host.querySelector('[data-live-shape]'),null,'no duplicate live shape lecture');
+      const teaching=stage.essence+' '+visibleText(lesson);
+      assert.ok(teaching.trim().split(/\s+/).length<=215,stage.id+'/'+exercise+' has a concise initial lesson');
+      const phases=page.q('.training-breath-method').querySelectorAll('p');
+      assert.equal(phases[0].querySelector('strong').textContent,'Inhale');
+      assert.equal(phases[1].querySelector('strong').textContent,'Exhale');
+      assert.match(phases[1].textContent,/encode.*first.*recall.*exact previous entry/i);
+      assert.match(teaching,/First entry seeds memory/);
+      assert.match(teaching,/Keep both originals/);
+      page.click('[data-start]');page.advance(15);
+      assert.equal(lesson.hidden,false,'teaching remains available while practising');
+      assert.equal(page.q('[data-short-example]').textContent,stage[exercise].shortExample);
+      page.click('[data-end]');
     }
   }
 });
@@ -516,7 +537,7 @@ test('the standalone consciousness stream is the natural, silent default and has
   page.click('[data-start]');
   page.advance(31);
   assert.match(page.q('[data-prompt]').textContent, /Inhale: receive and select\. Exhale: encode first/);
-  assert.match(page.q('[data-next-step]').textContent, /Keep the same scene/);
+  assert.match(page.q('[data-next-step]').textContent, /Keep the return target fixed/);
   assert.equal(page.q('[data-dimension]').hidden, true);
   assert.equal(page.sounds[0].enabled, false);
   const sound=page.q('[data-sound]');sound.checked=true;sound.dispatch('change');
@@ -602,7 +623,8 @@ test('every application teaches four breaths and exposes a complete relationship
     page.app.setStage(id);
     for(const exercise of ['stream','heart','body']){
       page.click('[data-exercise="'+exercise+'"]');
-      assert.equal(page.q('.training-breath-examples').children.length,4,id+'/'+exercise+' has four worked breaths');
+      assert.equal(page.host.querySelector('.training-breath-examples'),null,'repeated full prose rows are removed');
+      assert.match(page.q('.training-four').textContent,/4 breaths/);
       assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' shows the entire starting model');
       assert.equal(page.q('[data-model-state]').querySelectorAll('option').length,4);
       for(let state=1;state<4;state++){page.choose('[data-model-state]',String(state));assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' retains its complete model at breath '+(state+1));}
@@ -611,15 +633,19 @@ test('every application teaches four breaths and exposes a complete relationship
   }
 });
 
-test('example address captions and encode instructions use the same distinct home addresses', () => {
+test('top sequence and guided encoding use the same four exact home addresses', () => {
   const page=harness();
   const addresses=require('../src/shape-practice.js').ADDRESSES;
-  const examples=page.q('.training-breath-examples').children;
   assert.equal(new Set(addresses).size,4);
-  examples.forEach((example,index)=>{
-    assert.match(example.querySelector('.training-example-heading').textContent,new RegExp(addresses[index]));
-    assert.match(example.querySelector('dl').textContent,new RegExp('at your '+addresses[index]));
-    if(index)assert.match(example.querySelector('.training-example-heading').textContent,new RegExp('return to '+addresses[index-1]));
+  assert.ok(page.q('.training-four').textContent.includes(addresses.join(' → ')));
+  addresses.forEach((address,index)=>{
+    page.choose('[data-model-state]',String(index));
+    assert.match(page.q('[data-walkthrough]').textContent,new RegExp(address));
+    page.click('[data-walk-next]');
+    assert.match(page.q('[data-walkthrough-prompt]').textContent,new RegExp('at your '+address));
+    page.click('[data-walk-next]');
+    if(index)assert.match(page.q('[data-walkthrough-prompt]').textContent,new RegExp(addresses[index-1]));
+    else assert.match(page.q('[data-walkthrough-prompt]').textContent,/no earlier entry/);
   });
 });
 
@@ -775,3 +801,4 @@ test('the explorer renders the actual complete network and highlights one edge w
   assert.match(page.q('[data-traced-relationship]').textContent,/unmet/i);
   assert.equal(page.q('[data-model-role-list]').querySelectorAll('dt').length,42);
 });
+
