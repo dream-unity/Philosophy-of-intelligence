@@ -24,7 +24,7 @@ export function prepareHomepage() {
 
   // Changed files get new request URLs, avoiding old icons/JS/CSS paired with new
   // markup after deployment. Unchanged files keep their cached versions.
-  html = html.replace(/(<(?:link|script)\b[^>]*\b(?:href|src)=")([^"?#]+\.(?:css|js|svg))(?:\?[^"#]*)?("[^>]*>)/g,
+  html = html.replace(/(<(?:link|script|img)\b[^>]*\b(?:href|src)=")([^"?#]+\.(?:css|js|svg))(?:\?[^"#]*)?("[^>]*>)/g,
     (_, open, asset, close) => {
       const version = createHash('sha256').update(readFileSync(resolve(root, asset))).digest('hex').slice(0, 12);
       return `${open}${asset}?v=${version}${close}`;
