@@ -110,7 +110,7 @@ function harness(options = {}) {
     removeEventListener(type, callback) { events.get(type)?.delete(callback); }
   });
   vm.runInContext('window = globalThis;', browser);
-  for (const filename of ['shape-practice.js', 'exercises.js', 'training-store.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', filename), 'utf8'), browser, { filename });
+  for (const filename of ['relational-models.js', 'model-view.js', 'shape-practice.js', 'exercises.js', 'training-store.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', filename), 'utf8'), browser, { filename });
   browser.FormExercises = { ...browser.FormExercises, ExerciseAudio: Audio };
   browser.FormGeometry = { miniIcon: () => '<svg aria-hidden="true"></svg>' };
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/training.js'), 'utf8'), browser, { filename: 'training.js' });
@@ -137,6 +137,8 @@ test('manual return keeps the exact two-back source and commits recollection bef
   page.type('[data-note="source"]', 'First: warmth.'); page.submit();
   page.type('[data-note="source"]', 'Second: pressure.'); page.submit();
   page.type('[data-note="source"]', 'Third: movement.');
+  assert.equal(page.host.querySelector('[data-note="recollection"]'), null, 'deliberate recollection is unavailable until the current entry is locked');
+  page.click('[data-lock-source]');
   page.type('[data-note="recollection"]', 'I remember heat.');
   assert.equal(page.q('.training-original').hidden, true);
   assert.doesNotMatch(page.q('.training-original').textContent, /First: warmth/);
@@ -163,6 +165,7 @@ test('manual return keeps the exact two-back source and commits recollection bef
 
 test('changing exercise and shape preserves drafts while keeping observation streams separate', () => {
   const page = harness();
+  page.click('[data-exercise="heart"]');
   page.type('[data-note="source"]', 'Heart draft.');
   page.click('[data-exercise="body"]');
   assert.equal(page.q('[data-note="source"]').value, '');
@@ -180,13 +183,13 @@ test('changing exercise and shape preserves drafts while keeping observation str
   assert.ok(page.data().entries.every(entry => entry.referenceId === null));
 });
 
-test('all fourteen shapes expose both manual applications and readiness remains reversible', () => {
+test('all fourteen shapes expose all three applications and readiness remains reversible', () => {
   const page = harness();
-  const ids = ['circle', 'half-circle', 'triangle', 'square', 'pentagon', 'hexagon', 'prism', 'heptagon', 'octagon', 'cube', 'dodecahedron', 'icosahedron', 'geodesic', 'sphere'];
+  const ids = ['circle', 'half-circle', 'triangle', 'square', 'pentagon', 'hexagon', 'heptagon', 'octagon', 'prism', 'cube', 'dodecahedron', 'icosahedron', 'geodesic', 'sphere'];
   for (const id of ids) {
     page.app.setStage(id);
     assert.equal(page.q('[data-shape]').value, id);
-    for (const exercise of ['heart', 'body']) {
+    for (const exercise of ['stream', 'heart', 'body']) {
       page.click('[data-exercise="' + exercise + '"]');
       assert.equal(page.q('[data-exercise="' + exercise + '"]').getAttribute('aria-pressed'), 'true');
       const check = page.q('[data-ready]'); check.checked = true; check.dispatch('change');
@@ -195,6 +198,7 @@ test('all fourteen shapes expose both manual applications and readiness remains 
     const check = page.q('[data-ready]'); check.checked = false; check.dispatch('change');
     assert.equal(page.data().readiness[id].body, false);
     assert.equal(page.data().readiness[id].heart, true);
+    assert.equal(page.data().readiness[id].stream, true);
   }
   assert.equal(page.data().sessions.length, 0, 'self-assessment does not manufacture a session');
   assert.equal(page.data().entries.length, 0, 'notes are optional for manual practice');
@@ -226,6 +230,7 @@ test('body dimensions advance at 30 seconds, rereading does not change the clock
 
 test('heart completion records once, time never awards readiness, and all audio stops on leave', () => {
   const page = harness();
+  page.click('[data-exercise="heart"]');
   const sound = page.q('[data-sound]'); sound.checked = true; sound.dispatch('change');
   page.choose('[data-pacing]', 'paced'); page.click('[data-start]');
   page.advance(298);
@@ -251,6 +256,7 @@ test('heart completion records once, time never awards readiness, and all audio 
 
 test('heart practice starts with paced breathing and audible phase bells without enabling ambient sound', () => {
   const page = harness();
+  page.click('[data-exercise="heart"]');
   assert.equal(page.q('[data-pacing]').value, 'paced');
   assert.equal(page.q('[data-sound]').checked, false);
   assert.equal(page.q('[data-heart-bell]').hidden, false);
@@ -273,6 +279,7 @@ test('heart practice starts with paced breathing and audible phase bells without
 
 test('muting and unmuting heart bells skips missed cues without inventing a mid-phase ring', () => {
   const page = harness();
+  page.click('[data-exercise="heart"]');
   page.click('[data-start]'); page.advance(2);
   page.click('[data-heart-bell]');
   assert.match(page.q('[data-heart-bell]').textContent, /Bell: off/i);
@@ -293,6 +300,7 @@ test('muting and unmuting heart bells skips missed cues without inventing a mid-
 
 test('ambient controls and pause/resume remain independent of the heart bell cadence', () => {
   const page = harness();
+  page.click('[data-exercise="heart"]');
   page.click('[data-start]'); page.advance(2);
   const sound = page.q('[data-sound]'); sound.checked = true; sound.dispatch('change');
   assert.equal(page.sounds[0].settings.frequency, 10);
@@ -320,6 +328,7 @@ test('ambient controls and pause/resume remain independent of the heart bell cad
 
 test('using one’s own rhythm suppresses heart breathing bells until a later paced phase boundary', () => {
   const page = harness();
+  page.click('[data-exercise="heart"]');
   page.click('[data-start]'); page.advance(2);
   page.click('[data-live-pace]');
   assert.equal(page.q('[data-breath]').textContent, 'Own rhythm');
@@ -391,6 +400,8 @@ test('another tab cannot silently replace this tab’s source stream or private 
   assert.match(page.q('[data-record]').textContent, /Keep this tab’s source/);
   assert.equal(page.q('[data-note="source"]').value, 'Unfinished present observation.');
   assert.deepEqual(page.data(), changed, 'stale local work must not overwrite the other tab');
+  page.click('[data-lock-source]');
+  page.type('[data-note="recollection"]', 'Keep this tab’s source.');
   page.click('[data-reveal]');
   assert.match(page.q('.training-original').textContent, /Keep this tab’s source/);
   page.submit();
@@ -407,4 +418,274 @@ test('a cross-tab replacement guards already-committed local records even when n
   assert.equal(page.q('[data-note="source"]').value, '');
   assert.match(page.q('[data-record]').textContent, /This saved source still needs preserving/);
   assert.equal(page.app.hasDraft(), true, 'the retained local version must be guarded until saved or deliberately reloaded');
+});
+
+test('the standalone consciousness stream is the natural, silent default and has no body or heart cadence', () => {
+  const page = harness();
+  assert.equal(page.q('[data-exercise="stream"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(page.q('[data-pacing]').value, 'natural');
+  assert.equal(page.q('[data-heart-bell]').hidden, true);
+  assert.equal(page.q('[data-body-steps]').hidden, true);
+  assert.equal(page.q('[data-sound]').checked, false);
+  page.click('[data-start]');
+  page.advance(31);
+  assert.match(page.q('[data-prompt]').textContent, /Inhale: receive and select\. Exhale: encode first/);
+  assert.match(page.q('[data-next-step]').textContent, /Keep the same scene/);
+  assert.equal(page.q('[data-dimension]').hidden, true);
+  assert.equal(page.sounds[0].enabled, false);
+  const sound=page.q('[data-sound]');sound.checked=true;sound.dispatch('change');
+  page.advance(61);
+  assert.equal(page.sounds[0].enabled,true);
+  assert.deepEqual(page.sounds[0].cues,[],'ambient audio does not impose the body mapping bell sequence on a mental stream');
+  page.click('[data-end]');
+  assert.equal(page.data().sessions[0].exercise,'stream');
+  assert.equal(page.data().entries.length,0,'timed breaths never manufacture a marked entry');
+});
+
+test('source and return distance lock before deliberate retrieval and cannot be edited through stale events', () => {
+  const page=harness();
+  page.type('[data-note="source"]','The ocean contains the boat.');page.submit();
+  page.type('[data-note="source"]','The boat enables travel across the ocean.');
+  assert.equal(page.host.querySelector('[data-note="recollection"]'),null);
+  assert.equal(page.q('[data-keep]').disabled,true);
+  page.click('[data-lock-source]');
+  assert.equal(page.q('[data-note="source"]').readOnly,true);
+  assert.equal(page.q('[data-lag]').disabled,true);
+  assert.equal(page.host.querySelector('[data-note="relation"]'),null);
+  const source=page.q('[data-note="source"]');source.value='A substituted selection.';source.dispatch('input');
+  page.choose('[data-lag]','2');
+  page.click('[data-reveal]');
+  assert.equal(page.q('.training-original').hidden,true,'empty recollection must be acknowledged before looking');
+  page.type('[data-note="recollection"]','I do not recall');page.click('[data-reveal]');
+  assert.equal(page.q('[data-note="source"]').value,'The boat enables travel across the ocean.');
+  assert.equal(page.q('[data-lag]').value,'1');
+  assert.match(page.q('.training-original').textContent,/The ocean contains the boat/);
+  page.type('[data-note="relation"]','The current entry selects function; the earlier one selects containment.');
+  page.type('[data-note="revision"]','Both relationships can hold.');page.submit();
+  const entries=page.data().entries;
+  assert.equal(entries[1].source,'The boat enables travel across the ocean.');
+  assert.equal(entries[1].recollection,'I do not recall');
+  assert.equal(entries[1].lag,1);
+  assert.equal(entries[1].referenceId,entries[0].id);
+});
+
+test('loading a replacement record preserves a locked return and offers an explicit recovery without retargeting', async () => {
+  const page=harness();
+  page.type('[data-note="source"]','The ocean contains the boat.');page.submit();
+  page.type('[data-note="source"]','The boat enables travel.');page.click('[data-lock-source]');
+  page.type('[data-note="recollection"]','Ocean contains boat.');page.click('[data-reveal]');
+  page.type('[data-note="relation"]','Containment and function differ.');
+  page.external(JSON.stringify({schemaVersion:1,entries:[],sessions:[],readiness:{}}));
+  page.click('[data-reload]');
+  assert.equal(page.q('[data-note="source"]').readOnly,true);
+  assert.equal(page.q('[data-keep]').disabled,true);
+  assert.match(page.q('.training-original').textContent,/The ocean contains the boat/);
+  page.submit();
+  assert.equal(page.data().entries.length,0,'the missing historical target must not be substituted');
+  page.click('[data-recover-return]');
+  assert.equal(page.downloads.length,1);
+  const backup=JSON.parse(await page.downloads[0].text());
+  assert.equal(backup.kind,'unfinished-breath-back-return');
+  assert.equal(backup.source,'The boat enables travel.');
+  assert.equal(backup.recollection,'Ocean contains boat.');
+  assert.equal(backup.reference.source,'The ocean contains the boat.');
+  assert.equal(backup.relation,'Containment and function differ.');
+  assert.equal(page.q('[data-note="source"]').value,'The boat enables travel.');
+  assert.equal(page.q('[data-note="source"]').readOnly,false);
+  assert.equal(page.host.querySelector('[data-note="recollection"]'),null);
+  page.submit();
+  assert.equal(page.data().entries.length,1);
+  assert.equal(page.data().entries[0].referenceId,null,'the preserved current entry explicitly seeds a fresh history');
+});
+
+test('a full session record blocks a new recorded period before the timer starts', () => {
+  const page=harness();
+  const sessions=Array.from({length:500},(_,i)=>({id:'period-'+i,stageId:'circle',exercise:'stream',endedAt:'2026-10-01T00:00:00.000Z',seconds:2,completed:false}));
+  page.external(JSON.stringify({schemaVersion:1,entries:[],sessions,readiness:{}}));page.click('[data-reload]');
+  page.click('[data-start]');page.advance(2);
+  assert.equal(page.q('[data-live]').hidden,true);
+  assert.match(page.q('[data-message]').textContent,/500 practice periods/);
+  assert.equal(page.data().sessions.length,500);
+  assert.ok(page.sounds.every(audio=>!audio.enabled));
+});
+
+test('every application teaches four breaths and exposes a complete relationship register', () => {
+  const page=harness();
+  const counts={circle:1,'half-circle':2,triangle:3,square:4,pentagon:5,hexagon:6,heptagon:7,octagon:8,prism:9,cube:12,dodecahedron:30,icosahedron:30,geodesic:120,sphere:120};
+  for(const [id,count] of Object.entries(counts)){
+    page.app.setStage(id);
+    for(const exercise of ['stream','heart','body']){
+      page.click('[data-exercise="'+exercise+'"]');
+      assert.equal(page.q('.training-breath-examples').children.length,4,id+'/'+exercise+' has four worked breaths');
+      assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' shows the entire starting model');
+      assert.equal(page.q('[data-model-state]').querySelectorAll('option').length,4);
+      for(let state=1;state<4;state++){page.choose('[data-model-state]',String(state));assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' retains its complete model at breath '+(state+1));}
+      assert.match(page.q('[data-examples]').textContent,/extra|additional natural breaths/i);
+    }
+  }
+});
+
+test('example address captions and encode instructions use the same distinct home addresses', () => {
+  const page=harness();
+  const addresses=require('../src/shape-practice.js').ADDRESSES;
+  const examples=page.q('.training-breath-examples').children;
+  assert.equal(new Set(addresses).size,4);
+  examples.forEach((example,index)=>{
+    assert.match(example.querySelector('.training-example-heading').textContent,new RegExp(addresses[index]));
+    assert.match(example.querySelector('dl').textContent,new RegExp('at your '+addresses[index]));
+    if(index)assert.match(example.querySelector('.training-example-heading').textContent,new RegExp('return to '+addresses[index-1]));
+  });
+});
+
+test('a prepared sphere exposes each complete finite model and distinguishes reorientation from a changed relationship', () => {
+  const page=harness({stageId:'sphere'});
+  assert.match(page.q('[data-examples]').textContent,/Learn the full register before rehearsing/);
+  assert.equal(page.q('[data-model-state]').querySelectorAll('option').length,4);
+  assert.equal(page.q('.training-register').children.length,120);
+  page.choose('[data-model-state]','1');
+  assert.equal(page.q('.training-register').children.length,120);
+  assert.equal(page.host.querySelectorAll('.training-relationship-changed').length,0);
+  assert.match(page.q('[data-model-content]').textContent,/Every relationship is retained/);
+  page.choose('[data-model-state]','2');
+  assert.equal(page.q('.training-register').children.length,120);
+  assert.equal(page.host.querySelectorAll('.training-relationship-changed').length,1);
+  assert.match(page.q('.training-relationship-changed').textContent,/C13/);
+  page.choose('[data-model-state]','3');
+  assert.equal(page.q('.training-register').children.length,120);
+  assert.equal(page.host.querySelectorAll('.training-relationship-changed').length,1);
+  assert.match(page.q('.training-relationship-changed').textContent,/C13/);
+  assert.match(page.q('[data-model-content]').textContent,/provisional|proposed/i);
+});
+
+
+test('changing the register’s entry updates participants and meanings together', () => {
+  const page=harness({stageId:'half-circle'});
+  page.choose('[data-model-state]','1');
+  const content=page.q('[data-model-content]').textContent;
+  assert.match(content,/Sky is the containing environment of aircraft/);
+  assert.match(content,/Aircraft provides a means of traversing sky/);
+  assert.doesNotMatch(content,/Ocean is the containing environment of boat/);
+  assert.equal(page.host.querySelectorAll('.training-relationship-changed').length,2);
+  page.choose('[data-model-state]','2');
+  assert.match(page.q('[data-model-content]').textContent,/Harbour shelters boat/);
+  assert.doesNotMatch(page.q('[data-model-content]').textContent,/Boat shelters harbour/);
+});
+
+test('events from detached fields cannot replace an encoded selection or write into another draft', () => {
+  const page=harness();
+  page.type('[data-note="source"]','Ocean contains boat.');page.submit();
+  page.type('[data-note="source"]','Boat enables ocean travel.');
+  const sourceBeforeLock=page.q('[data-note="source"]');
+  const lagBeforeLock=page.q('[data-lag]');
+  page.click('[data-lock-source]');
+  sourceBeforeLock.value='Substituted by a detached event.';sourceBeforeLock.dispatch('input');
+  lagBeforeLock.value='2';lagBeforeLock.dispatch('change');
+  page.type('[data-note="recollection"]','Ocean contains boat.');
+  const recollectionBeforeReveal=page.q('[data-note="recollection"]');
+  page.click('[data-reveal]');
+  recollectionBeforeReveal.value='Changed after seeing the answer.';recollectionBeforeReveal.dispatch('input');
+  page.submit();
+  assert.equal(page.data().entries[1].source,'Boat enables ocean travel.');
+  assert.equal(page.data().entries[1].recollection,'Ocean contains boat.');
+  assert.equal(page.data().entries[1].lag,1);
+  const earlierDraftField=page.q('[data-note="source"]');
+  page.click('[data-exercise="heart"]');
+  earlierDraftField.value='Written after switching exercise.';earlierDraftField.dispatch('input');
+  page.type('[data-note="source"]','Memory supports appreciation.');page.submit();
+  assert.equal(page.data().entries[2].source,'Memory supports appreciation.');
+  page.click('[data-exercise="stream"]');
+  assert.equal(page.q('[data-note="source"]').value,'');
+});
+
+test('a detached fresh-stream button cannot discard another exercise’s draft', () => {
+  const page=harness();
+  const oldFresh=page.q('[data-fresh]');
+  page.click('[data-exercise="heart"]');
+  page.type('[data-note="source"]','Private heart selection that must remain.');
+  oldFresh.click();
+  assert.equal(page.q('[data-note="source"]').value,'Private heart selection that must remain.');
+  assert.equal(page.app.hasDraft(),true);
+  page.submit();
+  assert.equal(page.data().entries[0].source,'Private heart selection that must remain.');
+  assert.equal(page.data().entries[0].exercise,'heart');
+});
+
+test('a detached recovery button cannot download an old return or replace the current draft', () => {
+  const page=harness();
+  page.type('[data-note="source"]','Ocean contains boat.');page.submit();
+  page.type('[data-note="source"]','Boat enables passage.');page.click('[data-lock-source]');
+  page.type('[data-note="recollection"]','Ocean contains boat.');page.click('[data-reveal]');
+  page.external(JSON.stringify({schemaVersion:1,entries:[],sessions:[],readiness:{}}));
+  page.click('[data-reload]');
+  const oldRecovery=page.q('[data-recover-return]');
+  const saved=JSON.stringify(page.data());
+  page.click('[data-exercise="body"]');
+  page.type('[data-note="source"]','Private body selection that must remain.');
+  oldRecovery.click();
+  assert.equal(page.downloads.length,0,'a stale control cannot initiate a private download');
+  assert.equal(page.q('[data-note="source"]').value,'Private body selection that must remain.');
+  assert.equal(JSON.stringify(page.data()),saved);
+  page.click('[data-exercise="stream"]');
+  oldRecovery.click();
+  assert.equal(page.downloads.length,0,'returning to the exercise does not reactivate an old render’s control');
+  assert.equal(page.q('[data-note="source"]').value,'Boat enables passage.');
+  assert.equal(page.q('[data-note="source"]').readOnly,true);
+  assert.match(page.q('.training-original').textContent,/Ocean contains boat/);
+});
+
+test('ending or changing an exercise stops a test bell as well as session audio', () => {
+  const page=harness();
+  page.click('[data-test-sound]');
+  assert.equal(page.sounds[1].enabled,true);
+  page.click('[data-exercise="heart"]');
+  assert.equal(page.sounds[1].enabled,false,'switching before a session starts also stops the test bell');
+  page.click('[data-start]');page.advance(2);page.click('[data-test-sound]');
+  assert.equal(page.sounds[1].enabled,true);
+  page.click('[data-end]');
+  assert.ok(page.sounds.every(audio=>!audio.enabled));
+  page.click('[data-test-sound]');
+  page.click('[data-other]');
+  assert.ok(page.sounds.every(audio=>!audio.enabled),'the readiness shortcut also cleans up all audio');
+});
+
+test('tracing a relationship keeps its complete meaning and updates participant labels across entries', () => {
+  const page=harness({stageId:'half-circle'});
+  assert.equal(page.q('[data-model-relation]').value,'');
+  assert.match(page.q('[data-traced-relationship]').textContent,/Whole structure · 2 relationships/);
+  page.choose('[data-model-relation]','R02');
+  assert.match(page.q('[data-traced-relationship]').textContent,/Boat provides a means of traversing ocean/);
+  assert.match(page.q('[data-traced-relationship]').textContent,/The full model still contains 2 relationships/);
+  assert.equal(page.q('[data-trace-relation="R02"]').getAttribute('aria-pressed'),'true');
+  page.choose('[data-model-state]','1');
+  assert.equal(page.q('[data-model-relation]').value,'R02');
+  assert.match(page.q('[data-traced-relationship]').textContent,/Aircraft provides a means of traversing sky/);
+  assert.match(page.q('[data-model-role-list]').textContent,/Sky/);
+  assert.doesNotMatch(page.q('[data-model-role-list]').textContent,/Ocean/);
+  page.click('[data-trace-relation="R01"]');
+  assert.equal(page.q('[data-model-relation]').value,'R01');
+  assert.match(page.q('[data-traced-relationship]').textContent,/Sky is the containing environment of aircraft/);
+  assert.equal(page.q('[data-model-relation]').focused,true);
+  page.choose('[data-model-relation]','');
+  assert.match(page.q('[data-traced-relationship]').textContent,/Whole structure/);
+  assert.ok(page.host.querySelectorAll('[data-trace-relation]').every(button=>button.getAttribute('aria-pressed')==='false'));
+});
+
+test('the explorer renders the actual complete network and highlights one edge without removing its context', () => {
+  const page=harness();
+  const diagram=()=>page.q('[data-model-diagram]');
+  assert.equal(diagram().querySelectorAll('[data-relation]').length,1);
+  assert.equal(diagram().querySelectorAll('[data-role]').length,2);
+  assert.equal(diagram().querySelector('svg').getAttribute('role'),'img');
+  page.choose('[data-model-relation]','R01');
+  assert.equal(diagram().querySelector('[data-relation="R01"]').getAttribute('data-selected'),'true');
+  assert.equal(diagram().querySelectorAll('[data-role]').filter(node=>node.getAttribute('data-selected')==='true').length,2);
+  page.app.setStage('sphere');
+  assert.equal(diagram().querySelectorAll('[data-relation]').length,120);
+  assert.equal(diagram().querySelectorAll('[data-role]').length,42);
+  page.choose('[data-model-state]','2');page.choose('[data-model-relation]','C13');
+  assert.equal(diagram().querySelectorAll('[data-relation]').length,120);
+  assert.equal(diagram().querySelector('[data-relation="C13"]').getAttribute('data-selected'),'true');
+  assert.equal(diagram().querySelector('svg').getAttribute('data-breath'),'3');
+  assert.match(page.q('[data-traced-relationship]').textContent,/unmet/i);
+  assert.equal(page.q('[data-model-role-list]').querySelectorAll('dt').length,42);
 });

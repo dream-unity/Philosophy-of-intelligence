@@ -1,64 +1,49 @@
 # Current implementation contract
 
-The current practice interface is manual and shared across all fourteen shapes. Legacy authored-challenge modules remain for archived-data compatibility and historical tests; they must not reintroduce quiz missions or scoring into the current practice routes.
+One manual component serves fourteen shapes and three settings. Circle selects one explicit conceptual relationship (ocean contains boat), even though it has two participants. Half-circle coordinates two distinct conceptual meanings between its participants. The circular frame is not an extra self-loop; object/property lists are not the curriculum. The previous authored quiz, session and laboratory lesson engines are removed; retaining archive data does not require executing them.
 
-## Shared page and routing
+## Routing and lifecycle
 
-`FormTraining.mount({root, stageId, onStageChange})` mounts the practice interface and returns `{setStage, pause, hasDraft, destroy}`. `#practice/<stageId>` selects a shape; the earlier `#studio` route forwards to practice. `app.js` owns routing, page visibility, the home composition and access to the earlier archive.
+`FormTraining.mount({root, stageId, onStageChange})` returns `{setStage, pause, hasDraft, destroy}`. `#practice/<stageId>` selects a shape; `#studio` forwards to practice. `app.js` owns routing, visibility, the home composition and archive access.
 
-One mounted controller owns exercise selection, settings, timer/audio lifecycle, optional note drafts and its manual store. A stage or exercise change ends the current period; opening the return form pauses it. Hiding the page or leaving practice pauses it. Drafts are kept per shape/exercise during this mount and are not browser-persisted. The app uses a `beforeunload` warning for unfinished writing and accepted records that could not be persisted. Active timers are not restored after reload.
+One controller owns exercise settings, timer/audio lifecycle, drafts and its store. Stage/exercise changes end the current period. Opening notes, leaving practice or hiding the page pauses it. Drafts are scoped to shape/exercise and kept during the mount, not across reloads. Unfinished writing and accepted unsaved records activate the unload guard. Timers do not resume after reload.
 
-## Shape content: `FormShapePractice`
+## Content and models
 
-`STAGES` is the immutable ordered set of fourteen teaching configurations. Each has `id`, `name`, `verb`, `defaultLag`, `theory`, separate `heart` and `body` objects containing `notice`, `recall`, `relate`, `revise`, and a `readiness` checklist. `getStage(id)` falls back to Circle. `INTRO` and `BREATH_BACK` state the teaching and return principles.
+`FormShapePractice.STAGES` is the ordered immutable teaching configuration. `getStage(id)` falls back to Circle. `INTRO` and `BREATH_BACK` state the common method. Each exercise supplies receive/encode, retrieve, compare and revise guidance plus four examples. `FormRelationalModels.getModel(stageId, exercise)` provides an inspectable model.
 
-Shape identifiers are `circle`, `half-circle`, `triangle`, `square`, `pentagon`, `hexagon`, `prism`, `heptagon`, `octagon`, `cube`, `dodecahedron`, `icosahedron`, `geodesic`, `sphere`. Readiness is the learner's reversible assessment for both exercises; it is never inferred from duration, notes, sensations or breathing.
+IDs in order: `circle`, `half-circle`, `triangle`, `square`, `pentagon`, `hexagon`, `heptagon`, `octagon`, `prism`, `cube`, `dodecahedron`, `icosahedron`, `geodesic`, `sphere`. Working counts: `1,2,3,4,5,6,7,8,9,12,30,30,120,120`. The final two counts describe the specified models, not intrinsic counts of their geometric names.
 
-## Exercises: `FormExercises`
+Models identify stage, exercise, preparation, relationship count, nodes and typed relationships; optional faces describe topology. Frozen static models are distinct from user records. Prepared constructions and partial patches must not be represented as spontaneous complete structures.
 
-`HEART_DURATIONS` is `[15,30,60,120,180]` and `BODY_DURATIONS` is `[15,30,60]`, in minutes for the UI. `BREATH_SECONDS` is 5 and `BODY_STEP_SECONDS` is 30. `HEART_PHASES` defines the three phases; `BODY_STEPS` defines the seven ordered mapping dimensions. `FREQUENCIES` is `[0,1,2,3,8,10,12]`, with zero meaning no ambient pad.
+## Ordered note capture
 
-`new ExerciseClock({exercise, duration, now?, onTick?, onComplete?})` takes a duration in **seconds**, unlike the UI choices. Methods are `start()`, `tick()`, `snapshot()`, `pause()`, `resume()` and `end()`. Status is `idle|running|paused|completed|ended`. Snapshots include elapsed/remaining seconds, normalized progress, heart phase index, breath phase and remainder, body-step index and remainder. Heart transitions occur at 0.33 and 0.66 progress; body steps wrap every seven 30-second intervals. Paused time does not accrue. Completion fires once.
+The form implements N over 1–4 committed observations within the same shape, exercise and stream. A timer tick or bell does not create an entry or establish an actual breath anchor.
 
-`new ExerciseAudio(options?)` supports injected audio/timer facilities for tests. Methods are `start({frequency,bellVolume})`, `cue(inhale)`, `complete()`, `stop()` and `destroy()`. Audio starts only through a deliberate user action. It uses synthesized bowls and ambient sound, not downloaded media. Pause/end/navigation must stop active cues; teardown must clean up owned timers and audio nodes. A sound failure must leave the exercise usable silently.
+With history available, source-lock freezes the current source, lag and exact target snapshot before showing the recollection field. Recollection must be supplied before reveal. Reveal freezes it and exposes the original; comparison and revision follow, then commitment. Initial entries seed history without a fabricated reference. Draft locks are not persistence events. After a reload, a locked draft whose exact target is absent cannot be committed or silently retargeted. Its recovery action downloads the unfinished fields and frozen target, then starts fresh history with the same current source.
 
-Heart practice defaults to `pacing='paced'` and `heartBell=true`; body mapping defaults to natural breathing. Ambient sound defaults off. Heart phase bells require heart practice, paced breathing and an enabled heart bell; they do not require ambient sound. The visible Bell on/off control changes only that bell preference. The source bowls remain G4 (392 Hz) for inhale and D4 (293.66 Hz) for exhale. Begin starts the clock/audio through a user gesture; loading the page does not autoplay. Body mapping remains silent unless its sound control is enabled. Breathing choices are remembered per exercise during the mount, and My own rhythm can be selected before or during a practice. Paced breathing has five seconds per phase, no holds and no adjustable physiological target. No timer or audio event commits an observation or establishes readiness.
+## Exercise engine
 
-## Private manual store: `FormTrainingStore`
+`FormExercises` exposes `STREAM_DURATIONS=[15,30,60]`, `HEART_DURATIONS=[15,30,60,120,180]` and `BODY_DURATIONS=[15,30,60]` in UI minutes. `BREATH_SECONDS=5`, `BODY_STEP_SECONDS=30`; `HEART_PHASES`, `BODY_STEPS` and `FREQUENCIES=[0,1,2,3,8,10,12]` retain source exercise and audio choices.
 
-`createStore(storage)` returns getters `data`, `writable`, `warning`, `originalRaw`, plus `save(nextData)`, `exportJSON()`, `reset()` and `reload()`. The module exports `STORAGE_KEY`, `STAGE_IDS` and `LIMITS`. The storage key is `poi.manual-practice.v1`; legacy `form.progress.v1` is not read or changed by this module.
+`ExerciseClock({exercise, duration, now?, onTick?, onComplete?})` takes **seconds**. Methods: `start`, `tick`, `snapshot`, `pause`, `resume`, `end`. Status: `idle|running|paused|completed|ended`. Paused time does not accrue; completion fires once. Heart boundaries are 0.33/0.66 of duration; body dimensions repeat every seven 30-second intervals.
 
-The active object is:
+`ExerciseAudio` supports `start({frequency,bellVolume})`, `cue(inhale)`, `complete`, `stop` and `destroy`. Sound is locally synthesized, explicitly activated and stopped on pause/end/navigation. Heart initially has paced breathing and phase bells independently of ambient sound. Stream/body initially use natural breathing and silence; stream has no automatic phase-bell cadence. Audio failure must leave practice usable.
 
-```text
-{schemaVersion: 1, entries: [], sessions: [], readiness: {}}
-```
+## Manual store and compatibility
 
-An entry contains `id, stageId, exercise, streamId, createdAt, source, recollection, referenceId, referenceSource, lag, relation, revision`. Exercise is `heart|body`; lag is an integer 1–4; source is required nonempty text. Optional narrative fields default to empty strings, and an empty reference ID becomes null. Dates are valid UTC ISO timestamps. All text fields have a 3,000-character maximum.
+`FormTrainingStore.createStore(storage)` exposes `data`, `writable`, `warning`, `originalRaw`, `save`, `exportJSON`, `reset` and `reload`. Key: `poi.manual-practice.v1`. Schema: `{schemaVersion:1, entries:[], sessions:[], readiness:{}}`.
 
-The referenced observation must be the exact lag target among earlier entries in the same shape, exercise and stream. Its source snapshot must match the original exactly. Existing entries cannot be edited, removed or reordered through `save`; only appending is allowed. The UI locks the present observation and recollection before revealing the earlier source, then adds a relation and revision before saving the complete entry. Later corrections require new entries.
+Entry fields: `id, stageId, exercise, streamId, createdAt, source, recollection, referenceId, referenceSource, lag, relation, revision`. Exercise accepts `stream|heart|body`. Source is required; text is bounded to 3,000 characters. A supplied reference must preserve the exact target ID and source text at the declared lag. Existing observations cannot be edited, removed or reordered through `save`.
 
-A session contains `id, stageId, exercise, endedAt, seconds, completed`; seconds is finite and nonnegative. Readiness maps a shape ID to `{heart:boolean, body:boolean}`. Each collection has a limit of 500. Unsupported fields, invalid records, duplicate identifiers and overflow cause rejection, never silent shortening or deletion.
+Session fields: `id, stageId, exercise, endedAt, seconds, completed`. Both collections have a 500-record limit. Starting a new recorded timer is blocked once the session limit is reached; untimed practice remains available. Readiness is a personal Boolean per exercise. Existing v1 heart/body assessments remain valid; missing stream readiness becomes false in memory without an automatic storage write. Unknown fields, malformed data and overflow are rejected without trimming private text.
 
-`data` returns a defensive copy. `save`, `reset` and `reload` return `{ok,error}`. Validation failure leaves active data unchanged. A valid candidate becomes active in memory even if persistence fails, so `exportJSON()` includes that accepted work. The UI clears an accepted note by checking its new ID in `store.data`, not solely by checking `ok`.
+`data` returns a defensive copy. `save`, `reset`, `reload` return `{ok,error}`. Valid accepted work stays exportable in memory if persistence fails. Before writes, the store checks its saved baseline; conflicting changes block replacement. Corrupt originals remain accessible through `originalRaw`. Reset affects only this key. Reload/reset require deliberate UI handling. Export includes committed private records, not drafts or the clock. No current-practice import is provided.
 
-Before writing, the store compares the current browser value with its last observed baseline. A conflict blocks writes without overwriting the external value. Invalid stored content is preserved and blocks automatic writes. `originalRaw` provides the unchanged stored value for explicit recovery download. A quota/access failure leaves accepted data exportable and can be retried. The UI offers an explicit, confirmed Load saved version action and preserves its unfinished form drafts. Store reload replaces active committed data only when the stored value validates; reset clears only the manual key and requires UI confirmation. Export or copy unfinished work before either action.
+## Archive and build
 
-`exportJSON()` returns the complete active manual object, including private text. It must be called for a deliberate download action. There is no manual-record import feature. Drafts and an active clock are not part of this object.
+`FormProgress` retains the separate `form.progress.v1` schema, validation and archive controls. Archived active-session content remains inert, without restoration by a lesson engine. Navigation must not rewrite archive bytes. Removing lessons does not authorise deleting user records.
 
-## Legacy archive and offline build
+`FormGeometry` supplies the existing accessible SVGs. `FormModelView.render(model, breathNumber, selectedRelationId)` renders each complete semantic network with numbered roles and optional relationship highlighting. Its high-shape layouts are checked against the geometric meshes. `scripts/prepare-homepage.mjs` renders static shape links and hashes linked assets. `scripts/build.mjs` embeds local resources in application order in both offline filenames. Home artwork and styling remain unchanged.
 
-The archive continues using `FormProgress` and its separate original schema/key. Its import, export and reset controls apply only to that archive. Older quiz records do not become new readiness assessments. Historical curriculum, session, progress, breath and lab code may remain in source/build compatibility paths; current navigation does not expose the old missions.
-
-`FormGeometry` supplies the same accessible shape SVGs. `scripts/build.mjs` embeds local scripts, styles, textures and artwork in source order; no runtime downloads are introduced. Tests must distinguish legacy-module compatibility from the current manual-practice behavior.
-
-## Invariants
-
-- Only shape tiles navigate from the home symbol composition; its medallions are descriptive.
-- One practice page provides distinct instructions for every shape in both exercises.
-- Breath-back counts marked observations, never inhalations, seconds or clicks.
-- Original observations and reference snapshots stay immutable; private text is escaped when rendered.
-- Readiness is explicit, reversible and personal. No quiz score, badge threshold or timer completion substitutes for it.
-- Natural breathing, stopping and silent practice remain available. No sensor readings, medical effects or universal optimal pace are claimed.
-- Drafts are not silently represented as saved; failures retain accepted in-tab records for export.
-- Current practice and the earlier archive remain separate. No analytics, remote AI calls or automatic personal-data upload are introduced.
+Checks cover all fourteen routes, three settings and four examples per setting; encoding before retrieval; source/recollection locks; exact N-target isolation; archive preservation; manual readiness; and clock/audio cleanup. Shapes do not claim validated capacities, physiological outcomes or IQ values.

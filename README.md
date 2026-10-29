@@ -1,59 +1,53 @@
 # Philosophy of Intelligence
 
-A geometric practice of noticing, remembering, relating and revising.
+A manual practice of organising relationships in the stream of consciousness.
 
 [Open the site](https://www.philosophyofintelligence.life/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/Philosophy-of-Intelligence-Offline.html)
 
-The fourteen shapes open one shared training page. Each shape changes the theory and the instructions applied to **Heart-Coherence** and **Body-Sensation Mapping**, adapted from [Project Meaning](https://o0ooooooooooo0o.github.io/Project-Meaning/). The exercises use your own observations. There are no multiple-choice missions, answer scores, mastery thresholds or locked levels in the current practice interface.
+The fourteen shapes open one shared practice page. Each has theory, instructions and four worked cycles for **Consciousness Stream**, **Heart-Coherence** and **Body-Sensation Mapping**. The shape changes the selected relationships; the full breath-back procedure remains available from Circle onward.
 
-## Begin a practice
+## The method
 
-1. Choose **Circle**, or any other shape, from the home screen.
-2. Read its theory and the **Notice → Recall → Relate → Revise** instructions.
-3. Choose Heart-Coherence or Body-Sensation Mapping. Both teach the selected shape.
-4. Practise mentally, or open **Make a breath-back return** to pause and keep an optional private observation.
-5. Review the shape's criteria. Mark readiness separately for each exercise when that reflects your own judgement; revisit or reverse it whenever needed.
+1. **Inhale: receive and choose.** Select the current meaningful relationship or relational model.
+2. **Exhale: encode first.** Preserve that selection at a distinct memory-palace address.
+3. **Then retrieve.** Return to the exact earlier entry selected by the chosen lag.
+4. **Compare and annotate.** Keep the current source, earlier source and interpretation distinguishable. Preserve both entries.
 
-Every shape stays available. More complex shapes change the relations you examine; they do not require slower breathing, stronger sensations or longer sessions.
+Circle is one explicit meaningful relationship: **ocean contains boat**. Two participants make one relationship, not two. At Half-circle, select two meanings together: **ocean contains boat** and **boat enables passage across ocean**. The circular frame adds no self-loop. Later forms use a declared number and organisation of substantive relationships; lists of objects or properties do not complete them. Palace addresses, retrieval and historical comparison do not add to the current source's shape count. All shapes remain available; readiness is a reversible personal assessment, not an automatic award.
 
-## The two exercises
+## Three practice settings
 
-| Exercise | Source structure retained | Available lengths |
+| Setting | Material and timing | Available minutes |
 | --- | --- | --- |
-| Heart-Coherence | Heart-focused breathing, heart feeling, then deepening; phases change at 33% and 66% of the selected period. | 15, 30, 60, 120 or 180 minutes |
-| Body-Sensation Mapping | Location, quality, intensity, movement, direction, coherence and meaning-tone; each dimension receives 30 seconds and the sequence repeats. | 15, 30 or 60 minutes |
+| Consciousness Stream | Inner images, words, remembered sounds and other mental contents; natural breathing and silence initially. | 15, 30, 60 |
+| Heart-Coherence | Retained heart-focused, heart-feeling and deepening phases; transitions at 33% and 66%. | 15, 30, 60, 120, 180 |
+| Body-Sensation Mapping | Seven dimensions, each lasting 30 seconds before the sequence repeats. | 15, 30, 60 |
 
-Heart-Coherence starts with a **five-seconds-in / five-seconds-out guide and breath bell enabled**. After you choose **Begin heart practice**, a higher bowl tone marks inhalation and a lower tone marks exhalation. The visible **Bell: on/off** button controls these cues independently of ambient sound. Ambient sound starts off; Body-Sensation Mapping starts silent and in **My own rhythm**. The source's completion sequence and ambient pulse options remain available. These are listening choices, not measurements or guarantees of a mental state.
+Heart practice initially offers five seconds in and five seconds out with phase bells after Begin. Its bell toggle is independent of ambient sound. Body mapping starts naturally and silently. Stream practice has no automatic breathing-bell cadence. Pause, end or follow your own rhythm; the task does not require finishing a thought within one breath.
 
-You can choose **My own rhythm** before or during heart practice to stop timed breathing cues, or mute the bell while keeping the visual guide. Breathing choices are remembered separately for the two exercises while the page remains open. The guide has no holds. Pause or end at any time; finishing a timer records time without awarding readiness. Breathe gently without forcing depth or pace, and stop if dizzy or uncomfortable. The page does not sense breathing or measure heart coherence. This timing is a design choice, not a claim of a universally healthiest pace. See [Reference notes](docs/REFERENCE_NOTES.md).
+Larger worked models are prepared constructions, not instructions to discover thirty or 120 new relationships in one breath. Their registers make the declared contents inspectable.
 
-## Breath-back and private records
+## Returns and private notes
 
-N means **committed observations**, not breaths or seconds. The note form offers a return distance of one to four observations within the current shape, exercise and observation stream. Recall before revealing the preserved earlier source, then describe a relation and any revision. The current observation and recollection lock when that source is revealed. Initial observations build the stream before an earlier target is available. A fresh stream starts a new return history while retaining previously saved records.
+The app uses **N-back over committed observations**, with a distance of one to four entries in the same shape, exercise and stream. A timer does not count actual breaths or create observations. One-entry-back coincides with one-breath-back only when one complete entry is made on every consecutive breath.
 
-Notes are optional. Saved observations are append-only; a correction belongs in a new record. The interface does not automatically judge the truth of an experience, a recollection or an interpretation.
+When history exists, the form first locks the current source and lag. Only then can the recollection be recorded; revealing the original locks that recollection. Comparison and correction follow. Draft locks are not a save: the complete entry is committed afterwards. Initial entries seed history without inventing a target.
 
-Current practice uses the browser key `poi.manual-practice.v1`, separately from the earlier archive. It stores at most **500 observations and 500 practice periods**, with up to **3,000 characters per text field**. It refuses excess records or text instead of silently discarding older material. At capacity, export before explicitly clearing the record. There is no current-practice import or individual observation deletion.
+Current records use `poi.manual-practice.v1`. Existing heart/body records remain compatible; loading them does not automatically rewrite storage. Observations are append-only, with limits of 500 observations, 500 practice periods and 3,000 characters per text field. Overflow is rejected rather than silently trimmed.
 
-**Download practice record (includes notes)** exports the complete current manual-practice record as readable JSON, including private observations and self-assessments. Unfinished form drafts and an active timer are not included. Drafts remain available while navigating within the open app, but are not persisted across a page reload. A browser leave-page warning helps protect unfinished notes and records that could not be saved; copy, commit or export them before leaving.
+The practice-record download includes committed private notes and assessments, not drafts or active timers. Drafts survive in-app navigation, not a reload. Export accepted in-tab work if persistence fails. Corrupt data and competing tab versions retain recovery/export paths. Reload and reset are explicit controls. If a saved reload removes a locked return's exact target, a separate recovery download preserves that unfinished return before new history begins; the target is never silently substituted. There is no current-practice import or individual observation deletion.
 
-If browser storage fails, accepted work remains in the tab for export. Invalid saved data is preserved unchanged. Conflicting tabs do not merge automatically; export the current tab's work before choosing **Load saved version** or clearing the record. Loading the saved record keeps unfinished note drafts in the open tab. The recovery control can download the original stored value. Local storage is not encryption or guaranteed archival storage, and a different browser profile or address has a separate record.
+The separate **Archive** retains its `form.progress.v1` data and backup controls. Removing old lesson engines does not erase those records or resume an archived mission.
 
-The earlier **Archive** retains access to old observations and its own backup controls. It neither supplies current readiness nor modifies current training data. Historical modules remain for compatibility and tests; their quizzes are not offered by the current interface.
+## Run and develop
 
-## Run locally
-
-No account, API key, external font or downloaded audio is required. The application uses plain HTML, CSS and JavaScript with browser-generated sound.
-
-Open the [standalone offline edition](dist/Philosophy-of-Intelligence-Offline.html), or serve this repository for a consistent browser-storage origin:
+No account, API key or npm installation is required. Use Node.js 20 or later for development.
 
 ```bash
 python3 -m http.server 8000
 ```
 
-Open [http://localhost:8000](http://localhost:8000). Export before moving between hosted and offline copies: browsers can handle storage for directly opened files differently.
-
-For development, use Node.js 20 or later. No npm packages need installing.
+Open [http://localhost:8000](http://localhost:8000), or use the offline edition. Browser profiles and origins have separate storage; export before moving between them.
 
 ```bash
 npm test
@@ -61,15 +55,10 @@ npm run build
 npm run check
 ```
 
-The build embeds the local scripts, styles and artwork into the offline HTML. Current tests cover exercise timing and audio lifecycle, all fourteen teaching configurations, source-preserving storage and routing, alongside retained legacy-module tests. See the [verification record](docs/VERIFICATION.md) for actual checks and limits.
+The build embeds local scripts, styles and artwork in both offline filenames. The home symbol, parchment appearance and geometry remain the visual reference. See [verification](docs/VERIFICATION.md) for checks actually performed.
 
-## Design and evidence
-
-The home retains its parchment artwork and symbol composition. Its medallion titles are descriptive; the shape tiles are its navigation controls. The same training page serves every shape.
-
-- [Practice guide](docs/PRACTICE_GUIDE.md)
-- [Design rationale](docs/DESIGN.md)
+- [Design](docs/DESIGN.md)
 - [Implementation contract](docs/IMPLEMENTATION_CONTRACT.md)
-- [Reference notes](docs/REFERENCE_NOTES.md)
+- [Sources and boundaries](docs/REFERENCE_NOTES.md)
 
-Shapes are philosophical teaching scaffolds. Self-assessed readiness does not measure intelligence, establish a health outcome or demonstrate transfer beyond this practice. The application has no analytics, external AI service or automatic upload of personal records.
+The teaching follows the revised project manual and working conventions. Shapes are not IQ values or a validated intelligence scale. The application has no physiological sensors, analytics, remote AI calls or automatic upload of personal records.

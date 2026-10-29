@@ -1,27 +1,33 @@
-# Verification — manual heart and body training
+# Verification — relational breath-back lessons
 
 Verified 29 October 2026.
 
 ## Automated checks
 
-- 174 Node tests cover the current manual flow and the retained legacy data modules.
-- All 14 shape routes use one mounted practice controller and provide both exercise applications.
-- Tests execute the actual training UI event handlers, clock, content and storage modules: exact two-back recall, source concealment before reveal, locked recollection, separate shape/exercise streams, preserved drafts, and reversible readiness.
-- Heart practice starts with the five-second inhale/exhale pacer and its independent bell enabled after Begin. Tests check the first cue and every phase boundary, visible mute/unmute, silent natural breathing, ambient independence, and no duplicate cues on resume. Body practice retains its natural/silent default.
-- Heart phases transition at the source 33% and 66% boundaries; optional pacing alternates every five seconds. Mapping changes every 30 seconds and repeats all seven dimensions. Source bowl parity is preserved across the repeated seven-step sequence.
-- Pauses exclude inactive time. Late ticks do not accumulate drift or repeat completion. A completed or ended timer never grants readiness.
-- Audio tests cover explicit activation, unavailable Web Audio, both ambient bands, bowl synthesis, cancellation of delayed completion cues, and cleanup on pause/navigation/destroy.
-- Storage tests preserve corrupt originals, reject altered source snapshots, detect cross-tab conflicts, retain quota-failed work for export, and keep unload protection active. New manual practice never rewrites the legacy archive during navigation.
-- Offline build embeds all linked scripts, styles, artwork and fonts/assets; syntax, resource order and no-runtime-network checks pass. Static homepage links and content-hash asset versions are checked.
+`npm test`, `npm run build`, `npm run check` and `git diff --check` are the release checks. The current suite has 154 passing tests.
 
-## Browser verification
+- Fourteen shape routes use one practice controller with three exercise applications and four worked entries each: 42 lessons and 168 complete model states.
+- Counts are 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 30, 30, 120 and 120. Tests verify unique relations, roles, polygon closure, prism/cube bridges, advanced vertex degrees, shared faces and Euler characteristics. An independent graph review checked isomorphism against the intended polyhedra.
+- Every displayed model state and SVG contains its complete relationship count. Advanced visual layouts map every semantic edge to the actual geometric mesh. Selecting a relationship highlights its two roles while retaining the network; state changes update labels and meanings together. Circle has one link between two roles; Half-circle has two distinct curves.
+- Sphere's second encounter changes attentional entry without inventing a changed relation. Later conflict/repair states preserve prior changes and distinguish requirements from their application.
+- Real UI handlers enforce current-source locking before recollection, recollection locking before reveal, exact N-target identity, immutable originals, independent drafts and reversible readiness. Detached input events cannot mutate locked or different drafts. Detached fresh-stream and recovery buttons cannot discard another draft or download an old private return.
+- Clock tests cover heart phase boundaries, 30-second body prompts, natural/silent stream defaults, pause/resume, delayed ticks and single completion. Audio tests cover independent heart bells, ambient sound, unavailable audio and cancellation on pause/end/navigation, including preview bells.
+- Storage tests cover old v1 heart/body records, stream readiness migration without read-time writes, exact source snapshots, corrupt originals, quota failures and conflicting tabs. Missing-target recovery preserves the unfinished return; the 500-session limit is checked before another timer starts.
+- The separate archive remains inert and exportable. Removing authored lessons does not execute an old session or rewrite its saved data. Old curriculum/session/laboratory modules are removed from the source and both rebuilt offline editions.
+- The offline build embeds scripts, styles, artwork and the icon in dependency order. Static homepage links follow the revised shape order. Content hashes invalidate changed assets. The application has no runtime network dependency.
 
-Desktop preview: opened a shape from the static homepage, began paced Heart-Coherence, switched to natural breathing, opened a breath-back return and confirmed that the timer paused. Saved a synthetic observation, recorded its recollection before revealing the preserved source, verified the two fields became read-only, and saved a comparison. Ended practice and switched to Body-Sensation Mapping; confirmed the seven dimensions, rereading controls, and separate stream.
+## Browser review
 
-Responsive preview: inspected 390-pixel and 768-pixel frames. Layout remains within its viewport; shape selection, titles, exercise choices and the manual guide remain readable. On smaller screens the shape guide follows the exercise before optional notes and readiness. Homepage symbol assets and main-artwork sizing are unchanged. Shape-card SVG boxes are now 120px on wide screens and up to 96px on narrower screens, capped to card width. The visible desktop Circle measures 86px across, up from 57.3px in the previous release (50% larger); the artwork retains the same measured 764px square and position in the 1363 × 936 browser viewport. All 14 labels clear their icons on desktop and at 390px, and the 768px cards also show the larger 96px icons.
+The self-contained branch preview was opened in a real browser. Circle's desktop layout, exercise selection and four worked entries were inspected. A synthetic stream session was started, opening notes paused it, and two synthetic observations were committed through the ordered encode → recollect → reveal → compare flow. The earlier original remained intact. Ending the stream period restored exercise selection; heart practice retained its separate five-second pacer and bell defaults.
 
-The browser checks use synthetic QA notes, not personal observations. Full-duration timing and completion are tested with a controlled clock rather than waiting through multi-hour sessions. Synthesized audio is verified structurally; no physiological measurement or clinical outcome is tested or claimed.
+All 42 shape/exercise combinations were opened through their actual controls: every one rendered four examples and the intended complete relationship count. The Circle and Half-circle diagrams were visually inspected, including changed participant labels and meanings. In the heart Geodesic model, tracing C13 across the second and third entries showed the unmet application followed by its provisional repair, with all 120 relationships still present. Explorer controls have explicit accessible names.
 
-## Known limits
+The browser review uses synthetic QA records, not personal observations. Full-duration timing and completion are tested with a controlled clock rather than waiting through multi-hour periods. Synthesized audio is verified structurally; no physiological outcome is measured.
 
-The practice operates locally in a browser. Notes and readiness do not synchronize across devices; exported manual records include private notes and currently have no import UI. Drafts and active timers are not restored after reload. Browser storage can fail or be cleared, so explicit backups matter. Readiness remains the learner’s assessment, not a measured cognitive or health result.
+The visual browser review used a desktop viewport. Responsive styles are included, but a physical mobile-device review was not performed.
+
+## Limits
+
+Notes remain local to the browser origin. They do not synchronize across devices. The normal practice-record export includes committed private notes and assessments; unfinished-return recovery is a separate explicit download. Drafts and active timers do not survive a page reload. Current practice has no import interface or individual entry deletion.
+
+Readiness is the learner's assessment. The atlas is a declared philosophical practice convention, not a validated scale of intelligence, memory capacity or health effects. Prepared large models must remain recoverable; their four-entry examples are not promises to construct thirty or 120 relationships within four breaths.

@@ -8,7 +8,8 @@
   // Private manual practice is deliberately separate from the earlier quiz data.
   // Nothing in this module sends data anywhere. Exports require a UI action.
   const STORAGE_KEY = 'poi.manual-practice.v1';
-  const STAGE_IDS = Object.freeze(['circle', 'half-circle', 'triangle', 'square', 'pentagon', 'hexagon', 'prism', 'heptagon', 'octagon', 'cube', 'dodecahedron', 'icosahedron', 'geodesic', 'sphere']);
+  const STAGE_IDS = Object.freeze(['circle', 'half-circle', 'triangle', 'square', 'pentagon', 'hexagon', 'heptagon', 'octagon', 'prism', 'cube', 'dodecahedron', 'icosahedron', 'geodesic', 'sphere']);
+  const EXERCISES = Object.freeze(['stream', 'heart', 'body']);
   const LIMITS = Object.freeze({ entries: 500, sessions: 500, text: 3000 });
   const ENTRY_FIELDS = ['id', 'stageId', 'exercise', 'streamId', 'createdAt', 'source', 'recollection', 'referenceId', 'referenceSource', 'lag', 'relation', 'revision'];
   const SESSION_FIELDS = ['id', 'stageId', 'exercise', 'endedAt', 'seconds', 'completed'];
@@ -38,7 +39,7 @@
     return value.stageId;
   }
   function exercise(value) {
-    if (!own(value, 'exercise') || !['heart', 'body'].includes(value.exercise)) fail('Unknown exercise.');
+    if (!own(value, 'exercise') || !EXERCISES.includes(value.exercise)) fail('Unknown exercise.');
     return value.exercise;
   }
   function timestamp(value, field) {
@@ -98,9 +99,12 @@
     for (const id of Object.keys(value.readiness)) {
       if (!STAGE_IDS.includes(id)) fail('Readiness contains an unknown shape.');
       const assessment = value.readiness[id];
-      fields(assessment, ['heart', 'body'], 'Readiness');
+      fields(assessment, EXERCISES, 'Readiness');
       if (!own(assessment, 'heart') || !own(assessment, 'body') || typeof assessment.heart !== 'boolean' || typeof assessment.body !== 'boolean') fail('Readiness must contain a personal assessment for each exercise.');
-      readiness[id] = { heart: assessment.heart, body: assessment.body };
+      if (own(assessment, 'stream') && typeof assessment.stream !== 'boolean') fail('Consciousness-stream readiness must be a personal true or false assessment.');
+      // Existing v1 records predate standalone stream practice. Reading them is
+      // non-destructive, and their earlier assessments establish no new one.
+      readiness[id] = { heart: assessment.heart, body: assessment.body, stream: own(assessment, 'stream') ? assessment.stream : false };
     }
     return { schemaVersion: 1, entries, sessions, readiness };
   }
@@ -182,5 +186,5 @@
       save, exportJSON: () => JSON.stringify(data, null, 2), reset, reload
     };
   }
-  return { STORAGE_KEY, STAGE_IDS, LIMITS, createStore };
+  return { STORAGE_KEY, STAGE_IDS, EXERCISES, LIMITS, createStore };
 });

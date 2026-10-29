@@ -205,30 +205,6 @@ test('personal revisions make a principle private even if an imported flag incor
   assert.deepEqual(P.exportProgress(state).palace.map(p => p.id), ['unedited']);
   assert.equal(P.exportProgress(state, { includePrivate: true }).palace.length, 2);
 });
-test('generated challenge channel contracts can establish every stage without fabricated evidence', () => {
-  const C = require('../src/curriculum.js');
-  for (const stageId of P.STAGE_IDS) {
-    const state = P.defaultProgress();
-    for (let day = 1; day <= 2; day++) {
-      const sessionId = `${stageId}-${day}`, history = [], ids = [];
-      let ordinal = 0;
-      while (ids.length < 20) {
-        const challenge = C.generateChallenge(stageId, { seed: day * 291, ordinal, history, lag: 1 });
-        const evaluation = C.evaluateChallenge(challenge, C.answerFor(challenge));
-        if (!challenge.warmup && challenge.kind !== 'warmup') {
-          const response = C.answerFor(challenge);
-          const a = makeAttempt(ordinal, { id: `${sessionId}-${ordinal}`, sessionId, stageId, lag: stageId === 'square' ? 1 : 0, lagUnit: stageId === 'square' ? 'observation' : 'none', at: iso(day), correct: evaluation.correct, channelResults: evaluation.channelResults, expectedClass: challenge.expectedClass, responseClass: stageId === 'square' ? response.relation : undefined });
-          state.attempts.push(a); ids.push(a.id);
-        }
-        if (challenge.memoryRecord) history.push(challenge.memoryRecord);
-        ordinal++;
-        assert.ok(ordinal < 30, `${stageId} should leave warmup`);
-      }
-      state.sessions.push({ id: sessionId, stageId, mode: 'independent', lag: stageId === 'square' ? 1 : 0, lagUnit: stageId === 'square' ? 'observation' : 'none', complete: true, at: iso(day), attemptIds: ids });
-    }
-    assert.equal(P.stageSummary(state, stageId).mastered, true, `${stageId} generated channels must match progress requirements`);
-  }
-});
 test('private prediction and later evidence survive backup without changing the committed prediction', () => {
   const state = P.defaultProgress();
   const prediction = { condition: 'If the queue starts with six items', expected: 'One extra place will be needed', revisionTrigger: 'More than one item leaves', committedAt: iso(3) };

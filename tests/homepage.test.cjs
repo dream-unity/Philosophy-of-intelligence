@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { STAGES } = require('../src/curriculum.js');
+const { STAGES } = require('../src/shape-practice.js');
 const checks = import('../scripts/check.mjs');
 const root = path.join(__dirname, '..');
 const source = () => fs.readFileSync(path.join(root, 'index.html'), 'utf8');

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { ExerciseClock, ExerciseAudio, HEART_PHASES, BODY_STEPS, HEART_DURATIONS, BODY_DURATIONS } = require('../src/exercises.js');
+const { ExerciseClock, ExerciseAudio, HEART_PHASES, BODY_STEPS, HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS } = require('../src/exercises.js');
 
 function clockHarness(exercise = 'heart', duration = 900) {
   let time = 0;
@@ -15,6 +15,8 @@ function clockHarness(exercise = 'heart', duration = 900) {
 test('source durations and both complete manual exercise sequences are available', () => {
   assert.deepEqual(HEART_DURATIONS, [15, 30, 60, 120, 180]);
   assert.deepEqual(BODY_DURATIONS, [15, 30, 60]);
+  assert.deepEqual(STREAM_DURATIONS, [15, 30, 60]);
+  assert.equal(Object.isFrozen(STREAM_DURATIONS), true);
   assert.deepEqual(HEART_PHASES.map(phase => phase.id), ['early', 'middle', 'late']);
   assert.ok(HEART_PHASES.every(phase => phase.inhale.length > 40 && phase.exhale.length > 40));
   assert.deepEqual(BODY_STEPS.map(step => step.id), ['location', 'quality', 'intensity', 'movement', 'direction', 'coherence', 'meaning-tone']);
@@ -45,6 +47,24 @@ test('body mapping rotates seven thirty-second steps repeatedly without inventin
     assert.equal(state.bodyStepIndex, step % 7);
     assert.equal(state.stepRemaining, 30);
   }
+});
+
+test('standalone consciousness-stream timing supports pause, resume and completion without counting entries', () => {
+  const h = clockHarness('stream', 900);
+  assert.equal(h.clock.start().exercise, 'stream');
+  assert.equal(h.at(20).elapsedSeconds, 20);
+  assert.equal(h.clock.pause().status, 'paused');
+  assert.equal(h.at(700).elapsedSeconds, 20);
+  assert.equal(h.clock.resume().status, 'running');
+  assert.equal(h.at(710).elapsedSeconds, 30);
+  const finished = h.at(1800);
+  assert.equal(finished.status, 'completed');
+  assert.equal(finished.elapsedSeconds, 900);
+  assert.equal(h.completed.length, 1);
+  assert.equal(Object.hasOwn(finished, 'entryCount'), false);
+  assert.equal(Object.hasOwn(finished, 'readiness'), false);
+  h.clock.tick();
+  assert.equal(h.completed.length, 1);
 });
 
 test('frequent UI ticks do not accumulate fractional-second phase drift', () => {

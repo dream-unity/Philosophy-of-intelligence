@@ -12,6 +12,7 @@
   // audio. Sensations and feelings are observations, not physiological measures.
   const HEART_DURATIONS = Object.freeze([15, 30, 60, 120, 180]);
   const BODY_DURATIONS = Object.freeze([15, 30, 60]);
+  const STREAM_DURATIONS = Object.freeze([15, 30, 60]);
   const FREQUENCIES = Object.freeze([0, 1, 2, 3, 8, 10, 12]);
   const BREATH_SECONDS = 5;
   const BODY_STEP_SECONDS = 30;
@@ -41,7 +42,7 @@
   class ExerciseClock {
     constructor(options) {
       const settings = options || {};
-      if (settings.exercise !== 'heart' && settings.exercise !== 'body') throw new TypeError('Choose heart or body.');
+      if (!['stream', 'heart', 'body'].includes(settings.exercise)) throw new TypeError('Choose consciousness stream, heart or body.');
       if (!Number.isFinite(settings.duration) || settings.duration <= 0) throw new TypeError('Duration must be positive seconds.');
       this.exercise = settings.exercise;
       this.duration = settings.duration;
@@ -345,5 +346,5 @@
     }
   }
 
-  return Object.freeze({ HEART_DURATIONS, BODY_DURATIONS, FREQUENCIES, BREATH_SECONDS, BODY_STEP_SECONDS, HEART_PHASES, BODY_STEPS, ExerciseClock, ExerciseAudio });
+  return Object.freeze({ HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, FREQUENCIES, BREATH_SECONDS, BODY_STEP_SECONDS, HEART_PHASES, BODY_STEPS, ExerciseClock, ExerciseAudio });
 });
