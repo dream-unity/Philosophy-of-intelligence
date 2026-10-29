@@ -2,7 +2,7 @@
 
 **A geometric apprenticeship in relational reasoning.**
 
-[**Play Philosophy of Intelligence →**](https://dream-unity.github.io/Philosophy-of-intelligence/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/Philosophy-of-Intelligence-Offline.html)
+[**Play Philosophy of Intelligence →**](https://www.philosophyofintelligence.life/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/Philosophy-of-Intelligence-Offline.html)
 
 ![Philosophy of Intelligence: original parchment portal design](docs/form-preview.jpg)
 
@@ -122,7 +122,7 @@ If saved data cannot be read or validated, Philosophy of Intelligence pauses aut
 
 ## GitHub Pages hosting
 
-The game is available at [dream-unity.github.io/Philosophy-of-intelligence](https://dream-unity.github.io/Philosophy-of-intelligence/). It is served as static files from this repository.
+The game is available at [www.philosophyofintelligence.life](https://www.philosophyofintelligence.life/). It is served as static files from this repository.
 
 To host a fork, in its GitHub **Settings → Pages**, choose deployment from a branch, select the branch containing the app and the root folder, then save. Exact settings depend on the repository's permissions and current GitHub interface. The app uses relative asset paths and does not require a server API.
 
