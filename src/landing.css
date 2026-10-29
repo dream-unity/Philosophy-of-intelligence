@@ -3,19 +3,19 @@
 :root { --paper: #ebe4d5; --ink: #302b23; color-scheme: light; }
 body { background: #ebe4d5 url("../assets/parchment-texture.svg") repeat; background-size: 268px 268px; }
 body::before, body::after { display: none; }
-body[data-view="journey"] .site-header { display: none; }
+body[data-view="journey"] .site-header,
+body[data-view="journey"] .site-footer,
+body[data-view="journey"] .skip-link { display: none; }
 #view-journey { max-width: none; padding: 0; }
-.journey-content { max-width: 1440px; margin: auto; padding: 0 5%; }
-.journey-actions { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 24px; padding: 32px 0; }
-.portal-page { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; min-height: 100svh; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) max(12px, env(safe-area-inset-bottom, 0px)) env(safe-area-inset-left, 0px); }
-.portal-artwork { position: relative; isolation: isolate; pointer-events: none; container-type: inline-size; flex: none; width: min(100%, calc(100vh - 172px), 1254px); width: min(100%, calc(100svh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px); aspect-ratio: 1; }
+.portal-page { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; min-height: 100svh; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) max(20px, env(safe-area-inset-bottom, 0px)) env(safe-area-inset-left, 0px); }
+.portal-artwork { position: relative; isolation: isolate; pointer-events: none; container-type: inline-size; flex: none; width: min(100%, max(320px, calc(100vh - 360px)), 1254px); width: min(100%, max(320px, calc(100svh - 360px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 1254px); aspect-ratio: 1; }
 .portal-image { display: block; width: 100%; height: auto; aspect-ratio: 1; user-select: none; pointer-events: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); }
 .portal-title { position: absolute; left: 50%; top: 6.060606%; transform: translate(-50%, -50%); z-index: 3; width: max-content; margin: 0; padding-left: .3em; color: #2b271f; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; font-size: clamp(10px, 1.65cqw, 22px); font-weight: 600; line-height: 1.2; letter-spacing: .3em; text-shadow: 0 1px 0 rgb(255 253 243 / 65%); text-transform: uppercase; white-space: nowrap; }
 .portal-title::before, .portal-title::after { content: ""; position: absolute; top: 50%; width: 2em; height: 1px; background: linear-gradient(to right, transparent, #8b795c); }
 .portal-title::before { right: calc(100% + .85em); }
 .portal-title::after { left: calc(100% + .85em); transform: rotate(180deg); }
-.portal { position: absolute; left: var(--x); top: var(--y); width: var(--diameter); height: var(--diameter); min-width: 44px; min-height: 44px; transform: translate(-50%, -50%); border-radius: 50%; clip-path: circle(50%); touch-action: manipulation; -webkit-tap-highlight-color: transparent; background: transparent; transition: background-color 180ms ease, box-shadow 180ms ease; }
-.portal-card { margin: 0; padding: 0; border: 0; color: inherit; font: inherit; text-decoration: none; pointer-events: auto; }
+.portal { position: absolute; left: var(--x); top: var(--y); width: var(--diameter); height: var(--diameter); min-width: 44px; min-height: 44px; transform: translate(-50%, -50%); border-radius: 50%; clip-path: circle(50%); background: transparent; }
+.portal-card { margin: 0; padding: 0; border: 0; color: inherit; font: inherit; text-decoration: none; pointer-events: none; }
 .portal--machine { --x: 28.229665%; --y: 50%; --diameter: 20.414673%; z-index: 2; }
 .portal--unity { --x: 49.920255%; --y: 48.165869%; --diameter: 29.665072%; z-index: 2; }
 .portal--maker { --x: 71.69059%; --y: 50%; --diameter: 20.414673%; z-index: 2; }
@@ -38,58 +38,32 @@ body[data-view="journey"] .site-header { display: none; }
 .bridge-spine { stroke-width: 2.4; opacity: .94; }
 .bridge-arrow { fill: currentColor; stroke: none; }
 .bridge-arrow-etch { fill: none; stroke: #e4dccb; stroke-width: .85; opacity: .8; }
-.intelligence-progression { --path-gap: clamp(18px, 4vw, 56px); flex: none; width: min(calc(100% - 32px), 868px); color: #3b3328; text-align: center; }
-.progression-path { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: var(--path-gap); margin: 0; padding: 0; list-style: none; }
-.progression-stage { position: relative; min-width: 0; }
-.progression-stage:not(:last-child)::after { content: ""; position: absolute; left: calc(100% + 4px); top: 50%; width: calc(var(--path-gap) - 8px); border-top: 1px solid #76664e; box-shadow: 0 3px 0 rgb(118 102 78 / 22%); pointer-events: none; }
-.progression-stage:not(:last-child)::before { content: ""; position: absolute; left: calc(100% + var(--path-gap) - 10px); top: calc(50% - 3px); width: 6px; height: 6px; border-top: 1px solid #66543c; border-right: 1px solid #66543c; transform: rotate(45deg); pointer-events: none; }
-.progression-link { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 100%; min-height: 122px; padding: 12px 8px; border: 1px solid rgb(87 72 50 / 58%); border-radius: 49% 51% 48% 52% / 12px 14px 13px 15px; color: inherit; background: rgb(249 244 231 / 17%); text-decoration: none; touch-action: manipulation; transition: background-color 180ms ease, border-color 180ms ease; }
-.progression-link::before { content: ""; position: absolute; inset: 3px 4px; border: 1px solid rgb(87 72 50 / 25%); border-radius: 51% 49% 52% 48% / 13px 10px 14px 11px; transform: rotate(-.7deg); pointer-events: none; }
-.progression-link[data-foundation="true"] { border-color: #66543c; background: rgb(116 91 53 / 7%); }
-.progression-index { font-size: 11px; line-height: 1; letter-spacing: .14em; color: #736149; }
-.progression-name { font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; font-size: clamp(15px, 1.9vw, 28px); line-height: 1.08; }
-.progression-name > span { display: block; }
-.progression-caption { font-size: clamp(9px, 1.05vw, 14px); line-height: 1.3; color: #695941; }
-.progression-note { max-width: 620px; margin: 12px auto 0; color: #695941; font-size: clamp(10px, 1.1vw, 14px); line-height: 1.5; text-wrap: balance; }
-.progression-link:focus-visible { outline: 2px solid #4c3c28; outline-offset: 4px; background: rgb(255 251 241 / 65%); }
-.progression-link:active { background: rgb(116 91 53 / 13%); }
-@media (hover: hover) { .progression-link:hover { border-color: #3e3020; background: rgb(255 251 241 / 55%); } }
-@media (hover: hover) { .portal:hover { background: rgb(62 45 24 / 5%); box-shadow: inset 0 0 0 1px rgb(62 45 24 / 25%); } }
-.portal:active { background: rgb(62 45 24 / 10%); }
-.portal:focus-visible { outline: none; background: rgb(62 45 24 / 6%); box-shadow: inset 0 0 0 3px #4c3c28, inset 0 0 0 6px rgb(249 244 229 / 85%); }
+/* Reuse the original fourteen shape cards as the only homepage navigation. */
+.portal-page > .stage-path { flex: none; width: min(calc(100% - 32px), 1440px); }
+.portal-page .stage-tile { text-align: center; }
+.portal-page .stage-tile:focus-visible { outline: 2px solid #4c3c28; outline-offset: 3px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 420px) { .portal--machine .portal-caption, .portal--maker .portal-caption { width: 64%; } .portal--world .portal-caption { width: 67%; } .portal-title { letter-spacing: .2em; padding-left: .2em; } }
-@media (max-width: 420px) { .progression-link { min-height: 108px; padding-inline: 4px; } }
-@media (max-width: 320px) { .progression-name { font-size: 13px; } }
-@media (prefers-reduced-motion: reduce) { .portal, .progression-link { transition: none; } }
-@media (forced-colors: active) { .portal, .progression-link { border: 2px solid LinkText; } .portal:focus-visible { border: 5px solid Highlight; } .portal-caption, .progression-link { background: Canvas; color: LinkText; } .progression-index, .progression-caption, .progression-note { color: CanvasText; } }
 
 /* The longer project name fits the original centre medallion. */
 .portal--unity .portal-caption > span { max-width: 100%; }
 @media (max-width: 600px) {
-  .intelligence-progression { --path-gap: 12px; }
-  .progression-link { min-height: 114px; padding-inline: 5px; }
-  .progression-caption { max-width: 100%; font-size: 11px; }
-  .progression-note { padding-inline: 8px; font-size: 12px; }
   .portal--unity .portal-caption { font-size: clamp(10px, 2.7cqw, 16px); }
   .portal-title { font-size: clamp(8px, 1.65cqw, 12px); letter-spacing: .18em; }
 }
-@media (max-width: 360px) {
-  .progression-name { font-size: 15px; }
-  .progression-caption { font-size: 10px; }
-  .progression-note { font-size: 11px; }
-}
 @media (max-height: 480px) and (min-width: 601px) {
   .portal-page { padding-bottom: 6px; }
-  .portal-artwork { width: min(100%, calc(100svh - 122px)); }
-  .intelligence-progression { width: min(calc(100% - 32px), 720px); }
-  .progression-link { min-height: 78px; padding: 7px; gap: 3px; }
-  .progression-name { font-size: 18px; }
-  .progression-caption { font-size: 11px; }
-  .progression-note { font-size: 11px; margin-top: 8px; }
+  .portal-artwork { width: min(100%, 320px); }
   .portal-caption { font-size: 9px; }
   .portal--unity .portal-caption { font-size: 9px; }
   .portal--world .portal-caption { font-size: 9px; }
   .portal-title { font-size: 7px; letter-spacing: .15em; }
 }
 @media print { .portal-page { min-height: auto; break-inside: avoid; } .portal-artwork { width: 400px; } }
+
+@media (prefers-reduced-motion: reduce) { .portal-page .stage-tile { transition: none; } }
+@media (forced-colors: active) {
+  .portal-page .stage-tile { border-color: LinkText; color: LinkText; }
+  .portal-page .stage-tile:focus-visible { outline-color: Highlight; }
+  .portal-caption { background: Canvas; color: CanvasText; }
+}

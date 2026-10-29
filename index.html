@@ -28,7 +28,7 @@
   <main id="main" tabindex="-1">
     <section id="view-journey" class="view journey-view">
       <div class="portal-page">
-        <nav class="portal-artwork" aria-label="Philosophy of Intelligence paths" aria-describedby="portal-connections-description">
+        <div class="portal-artwork" aria-describedby="portal-connections-description">
           <h1 class="portal-title">Philosophy of Intelligence</h1>
           <img class="portal-image" src="assets/intelligence-portals.webp" width="1254" height="1254" alt="" fetchpriority="high" draggable="false" />
           <svg class="portal-connections" viewBox="0 0 1254 1254" aria-hidden="true" focusable="false">
@@ -50,53 +50,18 @@
             <use href="#portal-bridge" />
             <use href="#portal-bridge" transform="translate(1252 0) scale(-1 1)" />
           </svg>
-          <a class="portal portal-card portal--machine" href="#practice/circle" data-world="machine" aria-label="Begin with the foundations"><span class="portal-caption"><span>Observe</span></span></a>
-          <a class="portal portal-card portal--unity" href="#philosophy" data-world="unity" aria-label="Explore the philosophy of intelligence"><span class="portal-caption"><span>Philosophy<br />of<br />Intelligence</span></span></a>
-          <a class="portal portal-card portal--maker" href="#studio" data-world="maker" aria-label="Open breath-back practice"><span class="portal-caption"><span>Relate</span></span></a>
-          <a class="portal portal-card portal--world" href="#palace" data-world="world" aria-label="Open your living archive">
+          <div class="portal portal-card portal--machine"><span class="portal-caption"><span>Observe</span></span></div>
+          <div class="portal portal-card portal--unity"><span class="portal-caption"><span>Philosophy<br />of<br />Intelligence</span></span></div>
+          <div class="portal portal-card portal--maker"><span class="portal-caption"><span>Relate</span></span></div>
+          <div class="portal portal-card portal--world">
             <span class="unity-guide-ring" aria-hidden="true"></span>
             <img class="unity-ink-ring ink-cross" src="assets/archive-ring.webp" width="414" height="414" alt="" draggable="false" />
             <img class="unity-ink-ring" src="assets/archive-ring.webp" width="414" height="414" alt="" draggable="false" />
             <span class="portal-caption"><span>Revise</span></span>
-          </a>
-        </nav>
-        <nav class="intelligence-progression" aria-label="Paths through the practice" aria-describedby="progression-description">
-          <ol class="progression-path">
-            <li class="progression-stage">
-              <a class="progression-link" href="#practice/circle" aria-label="The foundations" data-foundation="true" aria-describedby="foundation-stage-description">
-                <span class="progression-index" aria-hidden="true">I</span>
-                <span class="progression-name">The<span>foundations</span></span>
-                <span class="progression-caption" id="foundation-stage-description">Learn a relation</span>
-              </a>
-            </li>
-            <li class="progression-stage">
-              <a class="progression-link" href="#studio" aria-label="The practice" aria-describedby="practice-stage-description">
-                <span class="progression-index" aria-hidden="true">II</span>
-                <span class="progression-name">The<span>practice</span></span>
-                <span class="progression-caption" id="practice-stage-description">Bring it into breath-back</span>
-              </a>
-            </li>
-            <li class="progression-stage">
-              <a class="progression-link" href="#palace" aria-label="The living archive" aria-describedby="archive-stage-description">
-                <span class="progression-index" aria-hidden="true">III</span>
-                <span class="progression-name">The living<span>archive</span></span>
-                <span class="progression-caption" id="archive-stage-description">Keep, connect &amp; return</span>
-              </a>
-            </li>
-          </ol>
-          <p class="progression-note" id="progression-description">Build your foundations. Advance when ready. One relation at a time.</p>
-        </nav>
-        <p id="portal-connections-description" class="visually-hidden">Observation and relation connect through revision. Choose a medallion or a path below to begin.</p>
-      </div>
-      <div class="journey-content">
-        <div class="journey-actions"><button class="button primary" id="begin-journey">Begin with Circle <span aria-hidden="true">↗</span></button><button class="text-button" id="resume-session" hidden>Resume your session <span aria-hidden="true">↗</span></button></div>
-      <div class="journey-summary" id="journey-summary"></div>
-      <section class="path-section" aria-labelledby="path-heading">
-        <div class="section-heading"><div><p class="eyebrow">THE SHAPE OF YOUR PRACTICE</p><h2 id="path-heading">Build your way inward.</h2></div><p>Every form teaches a new operation.<br>Explore freely. Grow through practice.</p></div>
-        <div id="stage-path" class="stage-path"></div>
-        <div class="stage-preview" id="stage-preview"></div>
-      </section>
-      <section class="approach-strip"><div class="approach-number">01</div><div><h3>First, learn the relation.</h3><p>Work through clear examples with visible support. Add memory distance when the operation feels familiar.</p></div><div class="approach-number">02</div><div><h3>Then, make it your own.</h3><p>Bring the same operation into breath-back. Your observations stay on this device until you choose to export them.</p></div></section>
+          </div>
+        </div>
+        <p id="portal-connections-description" class="visually-hidden">Observation and relation connect through revision.</p>
+        <nav id="stage-path" class="stage-path" aria-label="Choose a shape to explore"></nav>
       </div>
     </section>
 

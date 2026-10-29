@@ -151,22 +151,8 @@
   function stageStatus(summary){return summary.mastered?'Independent mastery':summary.ready?'First independent check':summary.practiceComplete?'Practised':summary.attempts?'In practice':'Explore';}
   function renderJourney(){
     const summaries=stages.map(stage=>P.stageSummary(state,stage.id));
-    const recommended=stages.find((s,i)=>!summaries[i].practiceComplete)||stages[stages.length-1];
-    const featured=stageById(selectedStage);
-    $('begin-journey').innerHTML=(state.attempts.length?'Continue with ':'Begin with ')+esc(recommended.name)+' <span aria-hidden="true">↗</span>';
-    $('begin-journey').dataset.stage=recommended.id;
-    $('resume-session').hidden=!session;
-    const practised=summaries.filter(s=>s.practiceComplete).length;
-    const entries=state.palace.length+state.journal.length;
-    const completed=state.sessions.filter(s=>s.complete).length;
-    $('journey-summary').innerHTML=`<div class="summary-item"><strong>${String(practised).padStart(2,'0')}<span>of 14 shapes</span></strong><div><small>YOUR JOURNEY</small><span>${practised?'Operations practised':'A place to begin'}</span></div></div><div class="summary-item"><strong>${String(completed).padStart(2,'0')}</strong><div><small>COMPLETE MISSIONS</small><span>Attention, one session at a time</span></div></div><div class="summary-item"><strong>${String(entries).padStart(2,'0')}</strong><div><small>PALACE ENTRIES</small><span>Observations &amp; usable principles</span></div></div>`;
-    $('stage-path').innerHTML=stages.map((stage,index)=>`<button class="stage-tile ${stage.id===selectedStage?'selected':''}" data-stage="${esc(stage.id)}" aria-pressed="${stage.id===selectedStage}" aria-label="${esc(stage.name)} · ${esc(stageStatus(summaries[index]))}"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span><span class="stage-status ${summaries[index].practiceComplete?'earned':''}">${esc(stageStatus(summaries[index]))}</span></button>`).join('');
-    $('stage-preview').innerHTML=`<div>${G.miniIcon(featured.id,60)}</div><div><p class="eyebrow">${esc(featured.chapter||'YOUR NEXT CONNECTION')} · PLATE ${String(featured.index+1).padStart(2,'0')}</p><h3>${esc(featured.name)}: ${esc(featured.verb||featured.tagline)}</h3><p>${esc(featured.description)}</p></div><div class="stage-preview-actions"><button class="button primary" data-open-stage="${esc(featured.id)}">Open the lesson <span aria-hidden="true">↗</span></button><button class="text-button" data-studio-stage="${esc(featured.id)}">Try it in breath-back</button></div>`;
+    $('stage-path').innerHTML=stages.map((stage,index)=>`<a class="stage-tile ${stage.id===selectedStage?'selected':''}" href="#practice/${esc(stage.id)}" data-stage="${esc(stage.id)}" aria-label="${esc(stage.name)} · ${esc(stageStatus(summaries[index]))}"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span><span class="stage-status ${summaries[index].practiceComplete?'earned':''}">${esc(stageStatus(summaries[index]))}</span></a>`).join('');
   }
-  $('stage-path').addEventListener('click',event=>{const tile=event.target.closest('[data-stage]');if(!tile)return;selectedStage=tile.dataset.stage;renderJourney();$('stage-path').querySelector(`[data-stage="${selectedStage}"]`).focus({preventScroll:true});});
-  $('stage-preview').addEventListener('click',event=>{const open=event.target.closest('[data-open-stage]');if(open)location.hash='practice/'+open.dataset.openStage;const studio=event.target.closest('[data-studio-stage]');if(studio){$('studio-stage').value=studio.dataset.studioStage;location.hash='studio';}});
-  $('begin-journey').addEventListener('click',()=>{location.hash='practice/'+$('begin-journey').dataset.stage;});
-  $('resume-session').addEventListener('click',()=>{if(session)location.hash='practice/'+session.stageId;});
 
   function sourceHTML(source, className){
     if(!source)return '';
@@ -490,6 +476,7 @@
     const nextStage=nextView==='practice'?stageById(parts[1]).id:practiceStage;
     if(session&&(nextView!=='practice'||nextStage!==session.stageId)){session=S.pause(session);breath.pause();persist();}
     currentView=nextView;practiceStage=nextStage;
+    if(currentView==='practice')selectedStage=practiceStage;
     document.body.dataset.view=currentView;
     document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!=='view-'+currentView);
     document.querySelectorAll('[data-nav]').forEach(link=>{const active=link.dataset.nav===(currentView==='practice'?'journey':currentView);link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
