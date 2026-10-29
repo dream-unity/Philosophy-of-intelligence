@@ -62,7 +62,7 @@ Each stage foregrounds one new operation while reusing earlier operations. The g
 | Hexagon | 120 | Organise | Reconstruct a system's supplied dependencies. |
 | Triangular prism | 130 | Map | Preserve three corresponding roles across systems. |
 | Heptagon | 140 | Abstract | Derive, apply and predict with a rule. |
-| Octagon | 150 | Bound | Check the conditions under which a function applies. |
+| Octagon | 150 | Transfer | Map a function into a new domain, check its conditions and predict within its scope. |
 | Cube | 160 | Coordinate | Align four stated roles across accounts. |
 | Dodecahedron | 170 | Select | Retrieve and apply the relevant function from a small library. |
 | Icosahedron | 180 | Discriminate | Choose a diagnostic test and update competing explanations. |

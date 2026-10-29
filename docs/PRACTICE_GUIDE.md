@@ -28,7 +28,7 @@ Your first visit can end after one Guided mission; Independent checks and person
 | Hexagon | Organise dependencies. | What must happen before what? |
 | Triangular prism | Map three corresponding roles. | What performs the same role elsewhere? |
 | Heptagon | Derive and apply a function. | What rule fits these cases and predicts another? |
-| Octagon | Check a function's boundaries. | Are its conditions satisfied here? |
+| Octagon | Transfer a function with its boundaries. | Do the roles correspond, and are its conditions satisfied here? |
 | Cube | Coordinate four roles across accounts. | Have I preserved every correspondence? |
 | Dodecahedron | Select a relevant stored function. | Which available rule fits this case? |
 | Icosahedron | Test competing explanations. | Which observation would distinguish them? |

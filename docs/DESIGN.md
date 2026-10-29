@@ -28,7 +28,7 @@ Holding more material and organising material differently are distinct demands. 
 | Hexagon — Organise | Reconstruct dependencies. | Individual relationships can constrain a whole sequence. |
 | Triangular prism — Map | Preserve three roles across domains. | Transfer depends on corresponding functions and relationships. |
 | Heptagon — Abstract | Derive and use a rule. | A pattern becomes a procedure that supports a prediction. |
-| Octagon — Bound | Check applicability. | A usable rule includes circumstances where it should not be applied. |
+| Octagon — Transfer | Carry a function into a new domain and check applicability. | A transferred rule must preserve corresponding roles and the conditions under which its prediction is supported. |
 | Cube — Coordinate | Align four roles across accounts. | An additional role adds a coordination demand while retaining the mapping operation. |
 | Dodecahedron — Select | Choose from a small function library. | Knowing a rule and retrieving the relevant rule are different tasks. |
 | Icosahedron — Discriminate | Choose a diagnostic test. | Competing explanations need evidence that can distinguish them. |

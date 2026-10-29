@@ -4,11 +4,11 @@ Verification performed on 29 October 2026. This records implementation checks, n
 
 ## Automated checks
 
-The Node test suite passes **117 tests** across seven files:
+The Node test suite passes **118 tests** across seven files:
 
 | Area | Tests | Behaviours checked |
 | --- | ---: | --- |
-| Curriculum | 26 | Fourteen stages, seeded challenge generation, answer evaluation, varied trial types, supported inference and evidence boundaries. |
+| Curriculum | 27 | Fourteen stages, seeded challenge generation, answer evaluation, varied trial types, supported inference, evidence boundaries and numerical distractors without a fixed answer rank. |
 | Session | 21 | Exact observation lag, warmups, separate binding and comparison, progressive disclosure, committed answers, permanent assistance status, skip scoring and replay validation. |
 | Progress | 26 | Stage-specific practice, two-date independent checks, channel thresholds, answer-class coverage, bounded storage, validation and privacy-preserving export/import. |
 | App storage | 10 | Normal saves, unreadable originals, failed reads, stale tabs, external clearing, private-entry preflight, quota failure and exact recovery downloads. |
@@ -41,7 +41,7 @@ Chrome was used for direct interaction with the application. The source build, g
 | Offline edition | The generated HTML loaded and restored the saved Cube mission in a paused state. |
 | Live site | The published app rendered correctly; a Circle answer committed and received correct feedback. Closing the unfinished mission retained the answer without awarding a completed mission. |
 
-The source-build playthrough included 48 scored answers: 47 correct and one intentional skip. The live-site smoke test added one correct answer. Synthetic personal examples used for QA are not included in the repository.
+The source-build playthrough included 48 scored answers: 47 correct and one intentional skip. The live-site smoke test added one correct answer. After the final numerical-distractor review, another complete Sphere challenge was answered correctly, including prediction and revision after a counterexample. Final checks also remove predictable answer ranks in Octagon and in each Dodecahedron function family. Synthetic personal examples used for QA are not included in the repository.
 
 ## Layout and interaction
 

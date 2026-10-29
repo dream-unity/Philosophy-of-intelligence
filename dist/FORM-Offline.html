@@ -392,10 +392,21 @@
       return typeof entry === 'string' ? { id: 'option-' + index, label: entry } : Object.assign({}, entry);
     }));
   }
-  function numberOptions(rng, answer, extra) {
-    const values = [answer, answer + 1, answer + 2, Math.max(0, answer - 1)];
-    if (extra !== undefined) values.push(extra);
-    return options(rng, Array.from(new Set(values)).map(function (value) { return { id: 'number-' + value, label: String(value) }; }));
+  function numberOptions(rng, answer, extra, distractorCount = 3, maximum = Infinity) {
+    const offsets = [1, 2, 3, 4, 6, 8];
+    const pool = offsets.flatMap(function (offset) { return [answer - offset, answer + offset]; });
+    if (extra !== undefined) pool.push(extra);
+    const candidates = Array.from(new Set(pool)).filter(function (value) {
+      return Number.isFinite(value) && value >= 0 && value <= maximum && value !== answer;
+    });
+    const below = candidates.filter(function (value) { return value < answer; });
+    const above = candidates.filter(function (value) { return value > answer; });
+    const count = Math.min(distractorCount, candidates.length);
+    // Vary numeric rank as well as display position: neither smallest nor
+    // second-smallest must become a substitute for applying the function.
+    const lowerCount = integer(rng, Math.max(0, count - above.length), Math.min(count, below.length));
+    const values = [answer].concat(take(rng, below, lowerCount), take(rng, above, count - lowerCount));
+    return options(rng, values.map(function (value) { return { id: 'number-' + value, label: String(value) }; }));
   }
   function featureText(record) {
     return record.features.color + ' ' + record.features.shape + ', value ' + record.features.value;
@@ -703,7 +714,7 @@
       steps: [
         { id: 'map', prompt: 'Which target quantity corresponds to the source’s ALLOCATION RECORDS?', options: options(rng, [{ id: 'total', label: domain.total }, { id: 'allocated', label: domain.allocated }, { id: 'remaining', label: domain.free }]) },
         { id: 'scope', prompt: 'Does the target satisfy the function’s distinct-position condition?', options: options(rng, [{ id: 'inside', label: 'Yes, every allocation uses a different position' }, { id: 'outside', label: 'No, the allocations overlap' }, { id: 'unknown', label: 'The necessary distinction is not recorded' }]) },
-        { id: 'prediction', prompt: 'How many ' + domain.free + ' does the supplied function establish?', options: options(rng, [{ id: 'value-' + predicted, label: String(predicted) }, { id: 'value-' + total, label: String(total) }, { id: 'value-' + (predicted + 1), label: String(predicted + 1) }, { id: 'no-prediction', label: 'No exact value is established by this rule' }]) }
+        { id: 'prediction', prompt: 'How many ' + domain.free + ' does the supplied function establish?', options: options(rng, numberOptions(rng, predicted, total, 2, total).map(function (option) { return { id: option.id.replace('number-', 'value-'), label: option.label }; }).concat([{ id: 'no-prediction', label: 'No exact value is established by this rule' }])) }
       ],
       answer: { map: 'allocated', scope: applies, prediction: applies === 'inside' ? 'value-' + predicted : 'no-prediction' },
       expectedClass: applies === 'unknown' ? 'unknown' : undefined,
@@ -753,7 +764,9 @@
     ];
     const index = scheduledVariant(c, 'dodecahedron-library', ['listed', 'listed', 'listed', 'listed', 'unlisted']) === 'unlisted' ? 3 : integer(rng, 0, 2);
     const entry = entries[index];
-    const outputs = Array.from(new Set(entries.map(function (item) { return item.apply(value); })));
+    const numericAnchor = (entry || pick(rng, entries)).apply(value);
+    const otherOutputs = entries.map(function (item) { return item.apply(value); }).filter(function (output) { return output !== numericAnchor; });
+    const numericChoices = numberOptions(rng, numericAnchor, pick(rng, otherOutputs), 2).map(function (option) { return { id: option.id.replace('number-', 'value-'), label: option.label }; });
     return base(c, 'dodecahedron', {
       kind: 'function', channel: 'function', channels: { select: 'function', apply: 'function' },
       title: 'Choose from a function library',
@@ -761,7 +774,7 @@
       source: { title: 'Indexed functions', body: 'Current token: ' + patterns[index] + ', value ' + value + '. These are the complete supplied rules; there is no default for unlisted patterns.', items: shuffle(rng, entries.map(function (item) { return { id: item.id, label: item.label }; })) },
       steps: [
         { id: 'select', prompt: 'Which library entry applies?', options: options(rng, entries.map(function (item) { return { id: item.id, label: item.label }; }).concat([{ id: 'none', label: 'No supplied rule covers this pattern' }])) },
-        { id: 'apply', prompt: 'What transformed value is established?', options: options(rng, outputs.map(function (output) { return { id: 'value-' + output, label: String(output) }; }).concat([{ id: 'unknown', label: 'No transformed value is established' }])) }
+        { id: 'apply', prompt: 'What transformed value is established?', options: options(rng, numericChoices.concat([{ id: 'unknown', label: 'No transformed value is established' }])) }
       ],
       answer: { select: entry ? entry.id : 'none', apply: entry ? 'value-' + entry.apply(value) : 'unknown' },
       expectedClass: entry ? undefined : 'unknown',

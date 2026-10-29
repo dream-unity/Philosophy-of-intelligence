@@ -616,6 +616,44 @@ test('function choices, diagnostic directions and case classes cannot be solved 
   for (const [stage, seen] of Object.entries(positions)) assert.ok(seen.size >= 3, `${stage} important case type must move across ordinal positions`);
 });
 
+test('all numeric function predictions have unique answers with varied ranks, including within each selected rule', () => {
+  const ranks = { sphere: [0, 0, 0, 0], octagon: [0, 0, 0], dodecahedron: [0, 0, 0] };
+  const ruleRanks = { add: [0, 0, 0], double: [0, 0, 0], subtract: [0, 0, 0] };
+  for (const seed of ['rank-audit', 19, 'independent-numbers']) {
+    for (let ordinal = 0; ordinal < 240; ordinal += 1) {
+      for (const stage of ['sphere', 'octagon', 'dodecahedron']) {
+        const challenge = generateChallenge(stage, { seed, ordinal });
+        if (stage === 'octagon' && challenge.answer.scope !== 'inside') continue;
+        if (stage === 'dodecahedron' && challenge.answer.select === 'none') continue;
+        const stepId = stage === 'sphere' ? 'infer' : stage === 'octagon' ? 'prediction' : 'apply';
+        const step = challenge.steps.find(item => item.id === stepId);
+        const correct = Number(step.options.find(option => option.id === challenge.answer[stepId]).label);
+        const numbers = step.options.map(option => Number(option.label)).filter(Number.isFinite).sort((a, b) => a - b);
+        assert.equal(new Set(numbers).size, numbers.length, 'numeric alternatives are distinct');
+        assert.equal(numbers.filter(value => value === correct).length, 1, 'exactly one numeric alternative is correct');
+        assert.ok(numbers.every(value => value >= 0));
+        if (stage === 'octagon') {
+          const total = Number(challenge.secondary.items.find(item => item.id === 'total').label.match(/: (\d+)\./)[1]);
+          assert.ok(numbers.every(value => value <= total), 'capacity alternatives remain within the meaningful range');
+        }
+        const rank = numbers.indexOf(correct);
+        ranks[stage][rank] += 1;
+        if (stage === 'dodecahedron') ruleRanks[challenge.answer.select][rank] += 1;
+      }
+    }
+  }
+  for (const [stage, counts] of Object.entries(ranks)) {
+    const total = counts.reduce((sum, value) => sum + value, 0);
+    assert.ok(counts.every(count => count > total * 0.15), `${stage} uses every numeric rank`);
+    assert.ok(Math.max(...counts) / total < 0.5, `${stage} cannot be solved with a consistently favoured numeric rank`);
+  }
+  for (const [rule, counts] of Object.entries(ruleRanks)) {
+    const total = counts.reduce((sum, value) => sum + value, 0);
+    assert.ok(counts.every(count => count > total * 0.15), `${rule} uses every numeric rank even after selecting its function`);
+    assert.ok(Math.max(...counts) / total < 0.5, `${rule} cannot substitute a fixed rank for calculation`);
+  }
+});
+
 test('multi-part responses cannot pass by answering one subtask or adding ambiguous entries', () => {
   for (const id of ['heptagon', 'octagon', 'dodecahedron', 'icosahedron', 'geodesic', 'sphere']) {
     const challenge = generateChallenge(id, { seed: 25, ordinal: 7 });
