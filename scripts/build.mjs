@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prepareHomepage } from './prepare-homepage.mjs';
 import {
   projectRoot, invariant, attributes, localAsset, scriptBlocks,
   assertScriptSyntax, assertNoNetworkCode, assertOfflineCss, assertDocumentResources, assetDataUrl, cssUrls
@@ -107,6 +108,7 @@ export function buildOfflineHtml(source, { fromDirectory = projectRoot, rootDire
 }
 
 export function buildProject() {
+  prepareHomepage();
   const source = readFileSync(resolve(projectRoot, 'index.html'), 'utf8');
   const { html, stats } = buildOfflineHtml(source);
   const output = resolve(projectRoot, 'dist/Philosophy-of-Intelligence-Offline.html');
