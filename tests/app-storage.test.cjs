@@ -5,7 +5,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const LegacySession = require('../src/session.js');
 
 const root = path.join(__dirname, '..');
 const read = name => fs.readFileSync(path.join(root, 'src', name), 'utf8');
@@ -56,9 +55,9 @@ function harness(options = {}) {
     location: { reload() {} }
   });
   // Load browser UMD exports in one realm so real plain-object validation runs.
-  for (const name of ['curriculum.js', 'session.js', 'progress.js']) vm.runInContext(read(name), context, { filename: name });
+  for (const name of ['progress.js']) vm.runInContext(read(name), context, { filename: name });
   vm.runInContext(`
-    const P = FormProgress, S = FormSession, stages = FormContent.STAGES;
+    const P = FormProgress;
     const clone = value => JSON.parse(JSON.stringify(value));
     ${initialization}
     ${helpers}
@@ -67,7 +66,7 @@ function harness(options = {}) {
       storeEntryJSON(value) { return storeEntry('journal', JSON.parse(value)); },
       setPreference(value) { state.preferences.reducedMotion = value; },
       openArchive() { currentView = 'palace'; },
-      inspect() { return JSON.stringify({ state, session, savedSnapshot, recoveryRequired, storageConflict, saveWarningShown }); }
+      inspect() { return JSON.stringify({ state, savedSnapshot, recoveryRequired, storageConflict, saveWarningShown }); }
     };
   `, context, { filename: 'app-storage-harness.js' });
   return {
@@ -123,18 +122,18 @@ test('normal saves keep private records and refresh the baseline for the next wr
 });
 
 test('a newer archive save blocks stale writes and keeps earlier sessions inactive', () => {
-  const earlierSession = LegacySession.create('circle', { mode: 'independent', seed: 9 });
+  const earlierSession = { id: 'old-session', stageId: 'circle', mode: 'independent', lag: 0, phase: 'respond', challenge: { prompt: 'A preserved earlier prompt' }, response: 'an earlier response' };
   const baseline = saved([entry('older')], earlierSession), newer = saved([entry('newer')], earlierSession);
   const app = harness({ raw: baseline });
   app.api.openArchive();
-  assert.equal(app.inspect().session.phase, 'paused', 'restoring an earlier session does not run it');
+  assert.deepEqual(app.inspect().state.activeSession, earlierSession, 'earlier sessions remain inert archive data without a lesson engine');
   assert.equal(app.raw(), baseline, 'reading the archive does not rewrite its original bytes');
   app.externalSave(newer);
   app.api.persist();
   assert.equal(app.raw(), newer);
   assert.equal(app.writeAttempts(), 0);
   assert.equal(app.inspect().storageConflict, true);
-  assert.equal(app.inspect().session.phase, 'paused');
+  assert.deepEqual(app.inspect().state.activeSession, earlierSession);
   assert.equal(app.element('storage-warning').hidden, false);
   assert.equal(app.api.storeEntryJSON(JSON.stringify(entry('blocked'))), false);
   assert.deepEqual(app.inspect().state.journal.map(item => item.id), ['older']);
@@ -142,7 +141,7 @@ test('a newer archive save blocks stale writes and keeps earlier sessions inacti
   app.externalSave(baseline);
   app.api.persist();
   assert.equal(app.writeAttempts(), 0);
-  assert.equal(app.inspect().session.phase, 'paused');
+  assert.deepEqual(app.inspect().state.activeSession, earlierSession);
 });
 
 test('another tab clearing storage does not resurrect this tab’s old private journal', () => {

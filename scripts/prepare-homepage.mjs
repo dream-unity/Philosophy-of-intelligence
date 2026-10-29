@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const { STAGES } = require('../src/curriculum.js');
+const { STAGES } = require('../src/shape-practice.js');
 
 export function prepareHomepage() {
   // Render navigation before JavaScript starts. A delayed or failed script

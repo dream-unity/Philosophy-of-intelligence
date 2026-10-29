@@ -1,14 +1,13 @@
 (function () {
   'use strict';
-  const C = window.FormContent, P = window.FormProgress, S = window.FormSession, G = window.FormGeometry;
-  if (!C || !P || !S || !G) {
+  const C = window.FormShapePractice, P = window.FormProgress, G = window.FormGeometry;
+  if (!C || !P || !G) {
     document.getElementById('storage-warning').hidden = false;
     document.getElementById('storage-warning').textContent = 'A site module could not load. Keep all source files together, or open the single-file offline edition.';
     return;
   }
   const $ = id => document.getElementById(id);
   const esc = value => String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const clone = value => JSON.parse(JSON.stringify(value));
   const stages = C.STAGES;
   const stageById = id => stages.find(stage => stage.id === id) || stages[0];
   const dateLabel = value => { const d = new Date(value); return Number.isFinite(d.getTime()) ? d.toLocaleDateString(undefined, {month:'short',day:'numeric'}) : ''; };
@@ -16,9 +15,8 @@
   try { storage = window.localStorage; } catch (_) { storage = null; }
   const loaded = P.loadProgress(storage);
   let state = loaded.state;
-  // Earlier records stay available in the Archive; this session never runs.
-  let session = S.restore(state.activeSession);
-  if (session) session = S.pause(session);
+  // Earlier sessions are opaque archive data. No retired lesson engine runs
+  // or rewrites them; private exports retain the validated original record.
   let selectedStage = 'circle';
   let training = null;
   let mountedStage = null;
@@ -54,7 +52,7 @@
   }
   function noticeStorageConflict(){
     if(storageConflict)return;
-    storageConflict=true;if(session)session=S.pause(session);
+    storageConflict=true;
     $('storage-warning').hidden=currentView!=='palace';
     $('storage-warning').innerHTML='Another tab saved newer archive records. This tab cannot overwrite them. Export this tab’s archive if you need it, then reload the saved version. <span class="storage-actions"><button id="export-current-tab">Export this archive</button><button id="reload-saved-progress">Reload saved version</button></span>';
     $('export-current-tab').addEventListener('click',()=>{if(recoveryRequired)downloadSavedOriginal();else $('export-data').click();});
@@ -67,7 +65,6 @@
     return true;
   }
   function persist() {
-    state.activeSession = session ? clone(session) : state.activeSession;
     if(!canWrite())return;
     const result = P.saveProgress(storage,state);
     if(result.ok){try{savedSnapshot=storage.getItem(P.STORAGE_KEY);}catch(_) {}}
@@ -172,13 +169,13 @@
     if(!await confirmAction('Replace this archive?',`The file contains ${incoming.palace.length+incoming.journal.length} archive entries. Export the current archive first if you want to keep it. Current training uses its own records.`, 'Import & replace'))return;
     if(!storageConflict)recoveryRequired=false;
     if(!canWrite())return;
-    state=incoming;session=S.restore(state.activeSession);if(session)session=S.pause(session);archiveWarning=null;applyMotion();$('storage-warning').hidden=true;saveWarningShown=false;persist();renderCurrent();toast('Archive imported.');
+    state=incoming;archiveWarning=null;applyMotion();$('storage-warning').hidden=true;saveWarningShown=false;persist();renderCurrent();toast('Archive imported.');
   });
   $('reset-data').addEventListener('click',async()=>{
     if(!await confirmAction('Clear this archive?','This removes the earlier records and observations in this archive on this device. Export a copy first if you want to keep them. Current training records stay separate.','Clear archive'))return;
     if(!storageConflict)recoveryRequired=false;
     if(!canWrite())return;
-    state=P.clearProgress();session=null;archiveWarning=null;applyMotion();$('storage-warning').hidden=true;saveWarningShown=false;persist();renderCurrent();toast('Archive cleared.');
+    state=P.clearProgress();archiveWarning=null;applyMotion();$('storage-warning').hidden=true;saveWarningShown=false;persist();renderCurrent();toast('Archive cleared.');
   });
   $('confirm-dialog').addEventListener('close',()=>{if(confirmResolver){const resolve=confirmResolver;confirmResolver=null;resolve(false);}});
 

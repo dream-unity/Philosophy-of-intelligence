@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const STAGE_IDS = Object.freeze(['circle', 'half-circle', 'triangle', 'square', 'pentagon', 'hexagon', 'prism', 'heptagon', 'octagon', 'cube', 'dodecahedron', 'icosahedron', 'geodesic', 'sphere']);
+  const STAGE_IDS = Object.freeze(['circle', 'half-circle', 'triangle', 'square', 'pentagon', 'hexagon', 'heptagon', 'octagon', 'prism', 'cube', 'dodecahedron', 'icosahedron', 'geodesic', 'sphere']);
   const NAMES = { circle: 'Circle', 'half-circle': 'Half-circle', triangle: 'Triangle', square: 'Square', pentagon: 'Pentagon', hexagon: 'Hexagon', prism: 'Triangular prism', heptagon: 'Heptagon', octagon: 'Octagon', cube: 'Cube', dodecahedron: 'Dodecahedron', icosahedron: 'Icosahedron', geodesic: 'Geodesic sphere', sphere: 'Sphere' };
   const SIDES = { triangle: 3, square: 4, pentagon: 5, hexagon: 6, heptagon: 7, octagon: 8 };
   const INK = '#363227';

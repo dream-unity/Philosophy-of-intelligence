@@ -5,16 +5,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { STAGES } = require('../src/curriculum.js');
+const { STAGES } = require('../src/shape-practice.js');
 const Progress = require('../src/progress.js');
-const LegacySession = require('../src/session.js');
 
 const root = path.join(__dirname, '..');
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const html = read('index.html');
 const appSource = read('src/app.js');
 
-// Run the whole app adapter with real archive/curriculum/geometry modules.
+// Run the whole app adapter with real archive/relationship-atlas/geometry modules.
 // The training controller is a contract double: its exercises are covered
 // separately, while these tests check mounting, routing and record isolation.
 function harness({ hash = '#journey', archive = null } = {}) {
@@ -81,10 +80,9 @@ function harness({ hash = '#journey', archive = null } = {}) {
     FormBreath: { BreathGuide: class { constructor() { throw new Error('The app must not create a second breath clock'); } } }
   });
   context.window = context;
-  for (const name of ['curriculum', 'progress', 'session', 'geometry']) {
+  for (const name of ['relational-models', 'shape-practice', 'progress', 'geometry']) {
     vm.runInContext(read('src/' + name + '.js'), context, { filename: name + '.js' });
   }
-  context.FormSession = { ...context.FormSession, resume() { throw new Error('An archived mission must never resume'); } };
   vm.runInContext(appSource, context, { filename: 'app.js' });
   return {
     calls, document, elements, records, location,
@@ -96,7 +94,7 @@ function harness({ hash = '#journey', archive = null } = {}) {
 
 function earlierArchive() {
   const state = Progress.defaultProgress();
-  state.activeSession = LegacySession.create('circle', { mode: 'independent', seed: 9 });
+  state.activeSession = {id:'earlier-session',stageId:'circle',mode:'independent',lag:1,entries:[{source:'Keep the earlier generated session opaque.'}]};
   state.journal.push({ id: 'earlier-observation', kind: 'personal', private: true, source: 'Keep this original source.', title: 'Earlier observation', locus: 'Atrium', stageId: 'circle', createdAt: '2026-10-01T00:00:00.000Z', revisions: [] });
   // Whitespace makes an accidental parse-and-reserialize write detectable.
   return JSON.stringify(state, null, 2);
@@ -183,9 +181,9 @@ test('the page exposes shared training and theory without the retired studio, qu
   const scripts = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match => match[1].split('?')[0]);
   const trainingIndex = scripts.indexOf('src/training.js');
   assert.ok(trainingIndex >= 0);
-  for (const dependency of ['src/shape-practice.js', 'src/exercises.js', 'src/training-store.js']) {
+  for (const dependency of ['src/relational-models.js', 'src/model-view.js', 'src/shape-practice.js', 'src/exercises.js', 'src/training-store.js']) {
     assert.ok(scripts.indexOf(dependency) >= 0 && scripts.indexOf(dependency) < trainingIndex, dependency + ' loads before shared training');
   }
   assert.ok(trainingIndex < scripts.indexOf('src/app.js'));
-  assert.equal(scripts.includes('src/lab.js'), false);
+  for (const retired of ['src/lab.js','src/curriculum.js','src/session.js']) assert.equal(scripts.includes(retired), false);
 });

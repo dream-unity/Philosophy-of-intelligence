@@ -79,7 +79,7 @@ test('entries stay append-only, while readiness is an independent personal asses
   assessment.readiness.circle.heart = false;
   assessment.readiness.circle.body = true;
   assert.equal(store.save(assessment).ok, true);
-  assert.deepEqual(store.data.readiness.circle, { heart: false, body: true });
+  assert.deepEqual(store.data.readiness.circle, { heart: false, body: true, stream: false });
 });
 
 test('references must preserve the exact lag source in the same shape, exercise, and stream', () => {
@@ -102,6 +102,56 @@ test('references must preserve the exact lag source in the same shape, exercise,
   ]) assert.equal(add(store, observation('invalid', changes)).ok, false);
   assert.equal(add(store, observation('c', { lag: 2, referenceId: 'a', referenceSource: a.source, recollection: 'I remember warmth.' })).ok, true);
   assert.equal(store.data.entries.at(-1).referenceSource, a.source);
+});
+
+test('pre-stream v1 data loads without rewriting originals and retains every earlier record on save', () => {
+  const first = observation('original', { source: '  An earlier source.\nKept exactly.  ' });
+  const second = observation('second', { referenceId: first.id, referenceSource: first.source, recollection: 'My own earlier recollection.' });
+  const legacy = {
+    schemaVersion: 1,
+    entries: [first, second],
+    sessions: [session()],
+    readiness: { circle: { heart: true, body: false } }
+  };
+  const raw = JSON.stringify(legacy, null, 2);
+  const storage = memory({ [P.STORAGE_KEY]: raw });
+  const store = P.createStore(storage);
+  assert.equal(store.writable, true);
+  assert.equal(storage.writes, 0, 'reading must not rewrite old saved data');
+  assert.equal(store.originalRaw, raw);
+  assert.equal(storage.getItem(P.STORAGE_KEY), raw);
+  assert.deepEqual(store.data.entries, legacy.entries);
+  assert.deepEqual(store.data.sessions, legacy.sessions);
+  assert.deepEqual(store.data.readiness.circle, { heart: true, body: false, stream: false });
+
+  assert.equal(add(store, observation('stream-first', { exercise: 'stream', source: 'The ocean contains the boat.' })).ok, true);
+  const restored = P.createStore(storage).data;
+  assert.deepEqual(restored.entries.slice(0, 2), legacy.entries);
+  assert.deepEqual(restored.sessions, legacy.sessions);
+  assert.equal(restored.entries[2].exercise, 'stream');
+  assert.deepEqual(restored.readiness.circle, { heart: true, body: false, stream: false });
+});
+
+test('consciousness-stream records use their exact N target independently of heart and body records', () => {
+  const store = P.createStore(memory());
+  const first = observation('stream-a', { exercise: 'stream', source: 'The ocean contains the boat.' });
+  const second = observation('stream-b', { exercise: 'stream', source: 'The boat enables passage across the ocean.' });
+  assert.equal(add(store, first).ok, true);
+  assert.equal(add(store, observation('heart-record')).ok, true);
+  assert.equal(add(store, observation('body-record', { exercise: 'body' })).ok, true);
+  assert.equal(add(store, second).ok, true);
+  assert.equal(add(store, observation('other-stream', { exercise: 'stream', streamId: 'different-period' })).ok, true);
+  assert.equal(add(store, observation('wrong-target', { exercise: 'stream', referenceId: first.id, referenceSource: first.source })).ok, false);
+  assert.equal(add(store, observation('cross-exercise', { exercise: 'stream', referenceId: 'heart-record', referenceSource: 'Warmth near the chest.' })).ok, false);
+  assert.equal(add(store, observation('stream-c', { exercise: 'stream', lag: 2, referenceId: first.id, referenceSource: first.source })).ok, true);
+  const next = store.data;
+  next.sessions.push(session('stream-session', { exercise: 'stream' }));
+  next.readiness.circle = { heart: false, body: true, stream: true };
+  assert.equal(store.save(next).ok, true);
+  const restored = JSON.parse(store.exportJSON());
+  assert.deepEqual(restored.entries.at(-1), next.entries.at(-1));
+  assert.equal(restored.sessions.at(-1).exercise, 'stream');
+  assert.deepEqual(restored.readiness.circle, { heart: false, body: true, stream: true });
 });
 
 test('corrupt or incompatible stored data is preserved and pauses persistence', () => {
@@ -222,7 +272,7 @@ test('malformed sessions and inherited values cannot manufacture progress', () =
     next.sessions.push(session('invalid', changes));
     assert.equal(store.save(next).ok, false);
   }
-  for (const readiness of [{ circle: { heart: true } }, { circle: { heart: 'true', body: false } }, { unknown: { heart: true, body: true } }]) {
+  for (const readiness of [{ circle: { heart: true } }, { circle: { heart: 'true', body: false } }, { circle: { heart: true, body: false, stream: 'true' } }, { circle: { heart: true, body: false, stream: null } }, { unknown: { heart: true, body: true } }]) {
     const next = store.data;
     next.readiness = readiness;
     assert.equal(store.save(next).ok, false);

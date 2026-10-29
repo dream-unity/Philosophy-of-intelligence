@@ -1,41 +1,41 @@
 # Design rationale
 
-Philosophy of Intelligence teaches a sequence of ways to organise experience. One shared practice page applies the selected shape to Heart-Coherence and Body-Sensation Mapping. The exercises supply a repeated setting in which to notice, recall, relate and revise; the shape changes the operation being taught.
+The current curriculum follows the project's revised consciousness-streaming manual, edition 2.2, as refined by the user's latest conceptual-relationship definitions and clarified sequence. One shared component applies fourteen shapes to consciousness stream, heart practice and body mapping.
 
-## Manual learning and progression
+## Shapes organise content
 
-Each shape has a short theory, separate heart and body instructions, and a readiness checklist. Progress is a reversible judgement by the learner for each exercise. There are no answer keys for personal experience, numerical mastery thresholds or automatic level awards. Time spent, completing a timer, writing more and reporting stronger sensations do not establish understanding.
+Circle holds one complete meaningful relationship, such as ocean contains boat. The ocean and boat are two participants in that one relationship. Half-circle coordinates two meanings, such as containment and the boat's role in enabling passage across the ocean. An isolated object, an attribute list or a symbolic self-loop does not satisfy the current Circle instruction. The circular outline frames the selected relationship; it does not supply an additional relation.
 
-The progression develops noticing, binding, explicit comparison, contextual episodes, role mapping, provisional functions, transfer, competing accounts and revision. Geometry is a teaching metaphor, not a biological hierarchy or measurement of intelligence. Every shape remains available, including simpler shapes that help clarify a difficult relation.
+The working relationship counts are 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 30, 30, 120 and 120. The later graph assignments are declared operational conventions. The content is substantive meaning—containment, function, dependence, support or constraint—rather than incidental labels or properties. The two thirty-link solids differ in organisation. Geodesic sphere uses a specified mesh; Sphere integrates a declared 120-link model here. Neither name supplies an intrinsic universal count.
 
-## Preserve the source exercise
+Endpoints, meaning, frame and evidence status stay identifiable. Inverse wording does not create a second relationship. A derived connection is marked as inferred; unknown links remain unknown. Palace bindings, retrieval and comparison remain procedures rather than extra links in the source count.
 
-The adaptation retains Project Meaning's three heart phases, its seven body-mapping dimensions, its duration choices, 30-second body cadence, and the recognizable synthesized bowl and ambient audio. Source provenance and evidence limits are recorded in [Reference notes](REFERENCE_NOTES.md).
+## The complete circuit
 
-Heart-Coherence defaults to a five-second inhalation and five-second exhalation guide, without holds, and a bell at each phase. The higher inhale bowl and lower exhale bowl start only after Begin; a visible bell toggle controls them independently of ambient sound. Ambient sound is initially off. Body-Sensation Mapping defaults to natural breathing and silence; its optional cues mark mapping dimensions. My own rhythm remains available before and during heart practice and disables its timed breathing bells. Each exercise's breathing choice is remembered while the page remains mounted. Audio preferences do not claim physiological effects.
+Inhale to receive and choose. Exhale to encode the current selection first, then deliberately retrieve the exact earlier entry, compare and annotate. If another ordinary breath is needed, retain the current source and target rather than forcing the breath.
 
-The timer gives structure rather than a response deadline. Opening a breath-back return pauses practice, and hiding the page pauses it. A person can stop, take more time or follow a comfortable natural rhythm. More advanced shapes never demand slower or deeper breathing.
+The source is secured before deliberately seeking the old comparison target. This does not claim to eliminate spontaneous memory or all influence from earlier experience. The note form uses separate source and recollection locks, then reveals the original for comparison. A lock protects the draft's order; it is not persistence. Committed sources remain unchanged, with later corrections recorded separately.
 
-## A source, a recollection and an interpretation
+## Examples and support
 
-The optional return form distinguishes the present observation, recollection of an earlier observation, preserved earlier source, relation and revision. The current observation and recollection lock on reveal; the saved record remains immutable. Subsequent corrections are new records rather than changes to the evidence being examined.
+Every shape has four worked cycles in each setting. The examples distinguish selection, encoding, exact return and comparison. Distinct palace addresses preserve entries instead of overwriting one slot.
 
-Exact-lag retrieval counts committed observations in the same shape, exercise and stream. A reference stores both the earlier record's identity and its exact source text, and validation checks the target at the selected lag. A fresh stream clears the working comparison history without deleting saved notes. Mental comparisons can range more widely, but the interface does not pretend that a remembered experience is an independently verified source.
+Prepared larger models expose their registers. Short traces demonstrate maintaining known structures and inspecting specified changes, not memorising complex unfamiliar graphs at breathing speed. A patch is not a full solid. A construction is identified as constructed, not passed off as spontaneous experience.
 
-Observation and explanation remain distinct. A feeling may be unclear, a comparison may fail and two accounts may remain unresolved. The exercise does not infer an emotion from anatomy, verify autobiographical truth or measure cardiac coherence.
+Heart/body examples concern reported inner experience or constructed models. They do not measure physiology, infer an emotion from anatomy or require a particular feeling. Unclear and contradictory experiences remain valid material.
 
-## Local records and deliberate export
+## Clocks and readiness
 
-Current manual practice has a separate browser key from the earlier archive. It contains append-only observations, practice-period records and self-assessments. The archive remains accessible for old observations and backups; legacy challenge modules have no quiz interface in the current application.
+The form's N counts committed observations within the same shape, exercise and stream. Elapsed time and optional breathing cues do not change this index. A fresh stream starts new return history without deleting earlier notes. The application does not automatically count physiological breaths.
 
-The current record allows 500 observations, 500 practice periods and 3,000 characters per text field. Validation rejects overflow rather than trimming private material. There is no rolling deletion, current-practice import or individual entry deletion. Clearing the record is an explicit confirmed operation that leaves archive data alone.
+Stream and body begin in natural breathing and silence. Heart practice retains a five-second phase guide with independent bell control. Sound begins through user action. Opening notes, leaving practice or hiding the page pauses practice; a reload does not resume a timer.
 
-The practice download includes the full current committed record and its private notes. Unfinished drafts and an active timer are excluded. Drafts survive in-app navigation but remain in memory; a leave-page warning prompts the learner to preserve unfinished writing. Browser persistence failures retain accepted data in the tab for export. Corrupt storage is left untouched, and pre-write comparison detects another tab's conflicting save. Export and explicit reload/reset resolve a conflict; automatic merging would obscure source history.
+Readiness is explicit, reversible and separate for all three contexts. It does not gate shapes or derive from duration, sensation intensity, note count or a quiz result.
 
-No personal records are uploaded. Browser local storage is not encrypted and is subject to browser quotas, clearing and profile/origin changes.
+## Continuity and preservation
 
-## Visual and technical continuity
+Current records remain under `poi.manual-practice.v1`; existing heart/body data stays readable. The separate `form.progress.v1` archive retains inert old session data without executing the removed lesson engines.
 
-Parchment, serif titles, the original symbol artwork and restrained geometric line drawings remain the visual language. On the home screen, the medallions are descriptive and only the fourteen shape tiles navigate. Their destinations all mount the same practice component. Shared exercise, shape-content and storage modules prevent fourteen divergent copies of the training.
+Private text is escaped for display. Validation rejects overflow rather than truncating personal writing. Corrupt originals, competing tab versions and failed persistence retain recovery/export paths. Drafts remain in memory only. No records are uploaded automatically.
 
-The application is plain HTML, CSS and JavaScript, with local artwork and browser-generated audio. The offline build embeds the same source modules. Automated tests protect timing, source identity, privacy and lifecycle behavior; they do not establish educational or clinical efficacy.
+The home artwork, typography, geometry and layout remain the visual reference. Shared content, model, exercise and storage modules prevent fourteen divergent implementations. The offline build embeds the same application. Tests establish software behaviour, not educational or clinical efficacy.

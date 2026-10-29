@@ -79,7 +79,7 @@ dialog{border:3px double #8b7d5f;background:var(--paper);border-radius:3px;box-s
 .empty-state>svg{margin:0 auto 18px}.field-number{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;font-size:10px;flex-shrink:0}
 
 </style>
-  <style data-form-source="src/training.css?v=ca4b701dfdae">
+  <style data-form-source="src/training.css?v=29830ab7b2be">
 /* Shared manual practice. Homepage composition lives exclusively in landing.css. */
 #training-root{max-width:1320px;margin:0 auto;padding:26px 0 72px}
 .training-topline{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:38px}
@@ -208,6 +208,26 @@ dialog{border:3px double #8b7d5f;background:var(--paper);border-radius:3px;box-s
 .training-register-picker{display:block;font-size:15px;line-height:1.5;margin:22px 0}
 .training-relationship-changed{background:#d5cba638;border-left:2px solid #857347;padding-left:12px!important}
 .training-register>li>span>small{display:block;font-size:10px;letter-spacing:.02em;color:#6e5c36;margin-top:6px}
+
+/* Explore a whole selected model; tracing a link never removes its context. */
+.training-model-explorer{border-top:1px solid #bcb39680;border-bottom:1px solid #bcb39680;margin:26px 0;padding:24px 0}
+.training-explorer-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:18px;margin-bottom:20px}
+.training-explorer-controls .training-register-picker{margin:0;min-width:0}
+.training-explorer-controls select{max-width:100%;text-overflow:ellipsis}
+.training-network{margin:18px 0 22px}
+.training-network svg{display:block;width:100%;height:auto;max-height:450px;overflow:visible}
+.training-network figcaption{margin-top:16px}
+.training-traced-relationship{min-height:130px;border-left:2px solid #887746;padding:3px 0 3px 18px}
+.training-traced-relationship p:last-child{margin-bottom:0}
+.training-traced-relationship .eyebrow{margin-bottom:10px}
+.training-relation-link{font:inherit;font-size:12px;color:#645639;border:1px solid #b8a87a;background:transparent;border-radius:2px;padding:7px;min-width:44px;min-height:36px;cursor:pointer}
+.training-relation-link[aria-pressed=true]{color:#3e351d;background:#d3bd7748;border-color:#756238}
+@media(max-width:620px){.training-explorer-controls{grid-template-columns:1fr;gap:14px}.training-network svg{max-height:340px}.training-traced-relationship{min-height:0}.training-register>li{gap:12px}}
+.training-network-key{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;line-height:1.5;color:#726952;margin:12px 0}
+.training-network-key span{display:flex;align-items:center;gap:7px}
+.training-network-key i{display:inline-block;width:18px;height:2px;background:#756d5a}
+.training-network-key .is-changed{background:#39766b;height:3px}
+.training-network-key .is-traced{background:#a65f1d;height:4px}
 
 </style>
   <style data-form-source="src/landing.css?v=0d8669af32b1">
@@ -8276,7 +8296,639 @@ body[data-view="journey"] .skip-link { display: none; }
 });
 
 </script>
-  <script data-form-module="src/shape-practice.js?v=8a698fd3dce0">
+  <script data-form-module="src/model-view.js?v=ccdb16ecc73f">
+(function (root, factory) {
+  'use strict';
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.FormModelView = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  // These vertex assignments were checked offline with NetworkX against
+  // FormGeometry.meshFor(). Geodesic mediator positions are induced from the
+  // icosahedron's edge midpoints, preserving every semantic endpoint pair.
+  const HIGH_LAYOUTS = {
+  "dodecahedron": {
+    "vertexMap": {
+      "A0": 0,
+      "A1": 8,
+      "A2": 4,
+      "B0": 9,
+      "B8": 1,
+      "A9": 10,
+      "B9": 2,
+      "B6": 11,
+      "B4": 5,
+      "B7": 12,
+      "A7": 3,
+      "A8": 13,
+      "B1": 14,
+      "B3": 6,
+      "B2": 15,
+      "A3": 16,
+      "A6": 17,
+      "A5": 7,
+      "B5": 18,
+      "A4": 19
+    },
+    "points": {
+      "A0": [
+        243.18,
+        201.267,
+        -1.30585
+      ],
+      "A1": [
+        311.14,
+        127.177,
+        -1.374
+      ],
+      "A2": [
+        401.914,
+        168.761,
+        -1.44109
+      ],
+      "B0": [
+        293.271,
+        288.805,
+        -1.33082
+      ],
+      "B8": [
+        269.874,
+        351.689,
+        -0.25555
+      ],
+      "A9": [
+        178.372,
+        192.275,
+        -0.21514
+      ],
+      "B9": [
+        213.381,
+        95.055,
+        0.3908
+      ],
+      "B6": [
+        371.888,
+        372.5,
+        0.32541
+      ],
+      "B4": [
+        447.304,
+        312.938,
+        -0.3908
+      ],
+      "B7": [
+        257.797,
+        126.259,
+        1.4144
+      ],
+      "A7": [
+        242.105,
+        266.321,
+        1.44109
+      ],
+      "A8": [
+        190.985,
+        292.617,
+        0.43397
+      ],
+      "B1": [
+        302.477,
+        57.992,
+        -0.32541
+      ],
+      "B3": [
+        405.954,
+        57.5,
+        0.25555
+      ],
+      "B2": [
+        391.213,
+        267.909,
+        -1.4144
+      ],
+      "A3": [
+        466.33,
+        133.861,
+        -0.43397
+      ],
+      "A6": [
+        370.262,
+        323.384,
+        1.374
+      ],
+      "A5": [
+        462.906,
+        219.857,
+        1.30585
+      ],
+      "B5": [
+        394.559,
+        99.112,
+        1.33082
+      ],
+      "A4": [
+        501.628,
+        226.828,
+        0.21514
+      ]
+    },
+    "minNodeDistance": 38.34,
+    "angles": [
+      1.012805299203999,
+      0.1280635526790893,
+      0.09544501155953389
+    ]
+  },
+  "icosahedron": {
+    "vertexMap": {
+      "N": 0,
+      "U0": 1,
+      "U1": 2,
+      "L4": 3,
+      "L1": 4,
+      "L0": 5,
+      "U2": 6,
+      "U4": 7,
+      "U3": 8,
+      "S": 9,
+      "L2": 10,
+      "L3": 11
+    },
+    "points": {
+      "N": [
+        305.275,
+        213.883,
+        -1.86317
+      ],
+      "U0": [
+        231.446,
+        321.016,
+        -0.55271
+      ],
+      "U1": [
+        186.968,
+        159.062,
+        -0.55965
+      ],
+      "L4": [
+        341.99,
+        372.5,
+        0.94467
+      ],
+      "L1": [
+        255.335,
+        57.5,
+        0.93345
+      ],
+      "L0": [
+        181.709,
+        246.965,
+        1.17569
+      ],
+      "U2": [
+        324.36,
+        73.383,
+        -0.94467
+      ],
+      "U4": [
+        393.536,
+        324.56,
+        -0.93345
+      ],
+      "U3": [
+        445.436,
+        175.142,
+        -1.17569
+      ],
+      "S": [
+        374.569,
+        193.544,
+        1.86317
+      ],
+      "L2": [
+        447.217,
+        74.616,
+        0.55271
+      ],
+      "L3": [
+        498.291,
+        259.67,
+        0.55965
+      ]
+    },
+    "minNodeDistance": 70.04,
+    "angles": [
+      0.4771491434716309,
+      0.215977937312811,
+      -0.1527319187682714
+    ]
+  },
+  "geodesic": {
+    "vertexMap": {
+      "N": 0,
+      "U0": 1,
+      "U1": 2,
+      "L4": 3,
+      "L1": 4,
+      "L0": 5,
+      "U2": 6,
+      "U4": 7,
+      "U3": 8,
+      "S": 9,
+      "L2": 10,
+      "L3": 11,
+      "M01": 13,
+      "M02": 12,
+      "M03": 17,
+      "M04": 19,
+      "M05": 15,
+      "M06": 31,
+      "M07": 35,
+      "M08": 38,
+      "M09": 34,
+      "M10": 30,
+      "M11": 14,
+      "M12": 18,
+      "M13": 20,
+      "M14": 21,
+      "M15": 16,
+      "M16": 28,
+      "M17": 36,
+      "M18": 41,
+      "M19": 32,
+      "M20": 25,
+      "M21": 22,
+      "M22": 24,
+      "M23": 27,
+      "M24": 23,
+      "M25": 37,
+      "M26": 29,
+      "M27": 40,
+      "M28": 39,
+      "M29": 26,
+      "M30": 33
+    },
+    "points": {
+      "N": [
+        249.934,
+        279.908,
+        -0.66835
+      ],
+      "U0": [
+        288.721,
+        371.617,
+        0.19908
+      ],
+      "U1": [
+        183.126,
+        233.32,
+        0.27461
+      ],
+      "L4": [
+        453.296,
+        324.423,
+        0.44242
+      ],
+      "L1": [
+        278.65,
+        91.557,
+        0.56464
+      ],
+      "L0": [
+        311.432,
+        258.429,
+        0.9611
+      ],
+      "U2": [
+        243.426,
+        124.323,
+        -0.44242
+      ],
+      "U4": [
+        398.789,
+        330.383,
+        -0.56464
+      ],
+      "U3": [
+        367.662,
+        187.835,
+        -0.9611
+      ],
+      "S": [
+        451.838,
+        147.603,
+        0.66835
+      ],
+      "L2": [
+        394.336,
+        73.624,
+        -0.19908
+      ],
+      "L3": [
+        492.266,
+        205.712,
+        -0.27461
+      ],
+      "M01": [
+        255.694,
+        341.181,
+        -0.27583
+      ],
+      "M02": [
+        197.123,
+        264.537,
+        -0.23143
+      ],
+      "M03": [
+        231.08,
+        200.506,
+        -0.65289
+      ],
+      "M04": [
+        304.536,
+        235.351,
+        -0.95777
+      ],
+      "M05": [
+        320.884,
+        318.88,
+        -0.72473
+      ],
+      "M06": [
+        390.979,
+        198.54,
+        0.95777
+      ],
+      "M07": [
+        368.868,
+        100.226,
+        0.72473
+      ],
+      "M08": [
+        435.848,
+        88.581,
+        0.27583
+      ],
+      "M09": [
+        496.778,
+        170.987,
+        0.23143
+      ],
+      "M10": [
+        473.492,
+        240.771,
+        0.65289
+      ],
+      "M11": [
+        216.803,
+        318.0,
+        0.27843
+      ],
+      "M12": [
+        192.31,
+        169.115,
+        -0.09863
+      ],
+      "M13": [
+        301.662,
+        147.074,
+        -0.82497
+      ],
+      "M14": [
+        389.242,
+        263.658,
+        -0.89681
+      ],
+      "M15": [
+        346.81,
+        372.5,
+        -0.21487
+      ],
+      "M16": [
+        285.133,
+        163.708,
+        0.89681
+      ],
+      "M17": [
+        338.556,
+        57.5,
+        0.21487
+      ],
+      "M18": [
+        460.63,
+        126.52,
+        -0.27843
+      ],
+      "M19": [
+        496.874,
+        270.203,
+        0.09863
+      ],
+      "M20": [
+        392.955,
+        306.867,
+        0.82497
+      ],
+      "M21": [
+        291.244,
+        336.686,
+        0.68194
+      ],
+      "M22": [
+        374.718,
+        372.159,
+        0.37706
+      ],
+      "M23": [
+        208.966,
+        153.413,
+        0.4933
+      ],
+      "M24": [
+        225.506,
+        250.366,
+        0.72634
+      ],
+      "M25": [
+        313.626,
+        79.218,
+        -0.37706
+      ],
+      "M26": [
+        245.298,
+        89.434,
+        0.07184
+      ],
+      "M27": [
+        441.268,
+        192.776,
+        -0.72634
+      ],
+      "M28": [
+        386.537,
+        119.231,
+        -0.68194
+      ],
+      "M29": [
+        438.615,
+        346.472,
+        -0.07184
+      ],
+      "M30": [
+        461.655,
+        277.371,
+        -0.4933
+      ]
+    },
+    "minNodeDistance": 22.84,
+    "angles": [
+      0.21655938132544184,
+      0.8385974835142896,
+      0.026196666433716265
+    ]
+  }
+};
+  const POLYGONS = {triangle: 3, square: 4, pentagon: 5, hexagon: 6, heptagon: 7, octagon: 8};
+  let instance = 0;
+
+  function escape(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, character => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[character]);
+  }
+  function number(value) {
+    if (!Number.isFinite(value)) throw new TypeError('A diagram coordinate must be finite.');
+    return Number(value.toFixed(3));
+  }
+  function stateFor(model, breathNumber) {
+    if (!model || !Array.isArray(model.nodes) || !Array.isArray(model.relations)) throw new TypeError('A complete relational model is required.');
+    if (!Number.isInteger(breathNumber) || breathNumber < 1 || breathNumber > 4) throw new RangeError('Choose breath 1 through 4.');
+    const state = Array.isArray(model.states) ? model.states[breathNumber - 1] : model;
+    if (!state || !Array.isArray(state.nodes) || !Array.isArray(state.relations)) throw new TypeError('The requested state must contain a complete model.');
+    const nodeIds = new Set(state.nodes.map(node => node.id));
+    if (!state.nodes.length || nodeIds.size !== state.nodes.length) throw new TypeError('Diagram roles must have unique identities.');
+    const relationIds = new Set(state.relations.map(relation => relation.id));
+    if (relationIds.size !== state.relations.length) throw new TypeError('Diagram relationships must have unique identities.');
+    state.relations.forEach(relation => {
+      if (!nodeIds.has(relation.from) || !nodeIds.has(relation.to)) throw new TypeError('Every diagram relationship must identify both roles.');
+    });
+    return state;
+  }
+  function polygonPoints(count) {
+    const radius = count > 5 ? 150 : 145;
+    const angle = count === 4 ? -Math.PI * 3 / 4 : -Math.PI / 2;
+    return Array.from({length: count}, (_, i) => [340 + Math.cos(angle + i * 2 * Math.PI / count) * radius,
+      215 + Math.sin(angle + i * 2 * Math.PI / count) * radius, 0]);
+  }
+  function rawPoints(stageId, nodes) {
+    const meshStage = stageId === 'sphere' ? 'geodesic' : stageId;
+    const high = HIGH_LAYOUTS[meshStage];
+    if (high && nodes.length === Object.keys(high.points).length && nodes.every(node => high.points[node.id])) {
+      return {meshStage, points: nodes.map(node => high.points[node.id].slice()), vertexIndices: nodes.map(node => high.vertexMap[node.id])};
+    }
+    if (stageId === 'circle' || stageId === 'half-circle') return {points: [[210, 215, 0], [470, 215, 0]]};
+    if (stageId === 'prism') return {points: [[230, 75, 0.7], [115, 275, 0.7], [345, 275, 0.7], [380, 135, -0.7], [265, 335, -0.7], [495, 335, -0.7]]};
+    if (stageId === 'cube') return {points: [[180, 85, 0.7], [375, 85, 0.7], [375, 280, 0.7], [180, 280, 0.7], [285, 145, -0.7], [480, 145, -0.7], [480, 340, -0.7], [285, 340, -0.7]]};
+    return {points: polygonPoints(POLYGONS[stageId] || nodes.length)};
+  }
+  function caption(stageId, count) {
+    if (stageId === 'circle') return ['The circular frame encloses one complete relational unit.', 'Count one relationship between two roles; the frame is not another link.'];
+    if (stageId === 'half-circle') return ['Two distinct meanings connect the same two roles.', 'The two curves are two relationships; read each complete statement.'];
+    if (stageId === 'sphere') return ['One integrated whole, with ' + count + ' selected relationships recoverable.', 'Numbered roles and links retain their identities across views.'];
+    return [count + ' selected relationships. Numbers identify roles in the register.', 'Connections show the selected structure; their meanings come from the statements.'];
+  }
+  function layoutFor(model, breathNumber) {
+    const state = stateFor(model, breathNumber);
+    const raw = rawPoints(model.stageId, state.nodes);
+    if (raw.points.length !== state.nodes.length) throw new TypeError('The declared shape and its role count do not agree.');
+    const nodes = state.nodes.map((node, index) => ({id: node.id, label: node.label, number: index + 1,
+      x: number(raw.points[index][0]), y: number(raw.points[index][1]), depth: raw.points[index][2],
+      vertexIndex: raw.vertexIndices ? raw.vertexIndices[index] : undefined}));
+    const nodeIndex = new Map(nodes.map(node => [node.id, node]));
+    const relations = state.relations.map((relation, index) => {
+      const a = nodeIndex.get(relation.from), b = nodeIndex.get(relation.to);
+      let path = 'M' + a.x + ' ' + a.y + 'L' + b.x + ' ' + b.y;
+      let midpoint = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+      if (model.stageId === 'half-circle') {
+        const controlY = index === 0 ? 30 : 400;
+        path = 'M' + a.x + ' ' + a.y + 'Q340 ' + controlY + ' ' + b.x + ' ' + b.y;
+        midpoint = [340, (a.y + 2 * controlY + b.y) / 4];
+      }
+      return {id: relation.id, from: relation.from, to: relation.to, text: relation.text,
+        path, midpoint, depth: (a.depth + b.depth) / 2};
+    });
+    return {nodes, relations, meshStage: raw.meshStage || null, caption: caption(model.stageId, relations.length),
+      changedRelationIds: (state.changedRelationIds || []).slice(), changedNodeIds: (state.changedNodeIds || []).slice()};
+  }
+  function wrap(value, maxLength) {
+    const words = String(value).split(/\s+/);
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      if (line && (line + ' ' + word).length > maxLength) { lines.push(line); line = word; }
+      else line += (line ? ' ' : '') + word;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function render(model, breathNumber, selectedRelationId) {
+    const layout = layoutFor(model, breathNumber);
+    const high = layout.nodes.length > 8;
+    const selection = layout.relations.find(relation => relation.id === selectedRelationId);
+    const selectedRoles = new Set(selection ? [selection.from, selection.to] : []);
+    const changed = new Set(layout.changedRelationIds);
+    const uid = 'form-model-view-' + (++instance);
+    const title = (model.title || model.stageId || 'Relational model') + ' · breath ' + breathNumber;
+    const description = layout.nodes.length + ' roles and ' + layout.relations.length + ' selected relationships. ' + layout.caption.join(' ')
+      + ' Lines do not impose a causal direction. Gold highlights a selected relationship; green highlights changes since the previous entry.'
+      + (selection ? ' Selected ' + selection.id + ': ' + selection.text : '');
+    const background = model.stageId === 'circle'
+      ? '<circle class="model-unit-frame" cx="340" cy="215" r="172" fill="none" stroke="#aaa18b" stroke-width="1" stroke-dasharray="4 6" aria-hidden="true"/>'
+      : model.stageId === 'sphere' ? '<ellipse class="model-unit-frame" cx="340" cy="215" rx="234" ry="175" fill="none" stroke="#aaa18b" stroke-width="0.8" stroke-dasharray="3 7" aria-hidden="true"/>' : '';
+    const sortedRelations = layout.relations.slice().sort((a, b) => (a.id === selectedRelationId ? 1 : b.id === selectedRelationId ? -1 : a.depth - b.depth));
+    const edges = sortedRelations.map(relation => {
+      const selected = selection && relation.id === selection.id;
+      const isChanged = changed.has(relation.id);
+      const color = selected ? '#a65f1d' : isChanged ? '#39766b' : '#756d5a';
+      const opacity = selected ? 1 : selection ? isChanged ? 0.55 : high && relation.depth < 0 ? 0.17 : 0.32 : isChanged ? 1 : high && relation.depth < 0 ? 0.35 : 0.68;
+      const width = selected ? 4 : isChanged ? 2.6 : high ? 1.15 : 1.65;
+      const labelWidth = Math.max(30, String(relation.id).length * 7 + 8);
+      const idLabel = !high ? '<g class="model-link-label" aria-hidden="true"><rect x="' + number(relation.midpoint[0] - labelWidth / 2) + '" y="' + number(relation.midpoint[1] - 21) + '" width="' + labelWidth + '" height="18" rx="3" fill="#f7f2e7"/>'
+        + '<text x="' + number(relation.midpoint[0]) + '" y="' + number(relation.midpoint[1] - 8) + '" text-anchor="middle" fill="' + color + '" font-size="12" font-family="system-ui, sans-serif">' + escape(relation.id) + '</text></g>' : '';
+      return '<g class="model-relation' + (selected ? ' is-selected' : '') + (isChanged ? ' is-changed' : '') + '">'
+        + '<path data-relation="' + escape(relation.id) + '" data-from="' + escape(relation.from) + '" data-to="' + escape(relation.to) + '" data-selected="' + Boolean(selected) + '" d="' + relation.path + '" fill="none" stroke="' + color + '" stroke-width="' + width + '" stroke-linecap="round" opacity="' + opacity + '"><title>' + escape(relation.id + ': ' + relation.text) + '</title></path>' + idLabel + '</g>';
+    }).join('');
+    const roles = layout.nodes.slice().sort((a, b) => a.depth - b.depth).map(node => {
+      const selected = selectedRoles.has(node.id);
+      const color = selected ? '#a65f1d' : '#514a3d';
+      const radius = selected ? high ? 12 : 15 : high ? 10 : 13;
+      let label = '';
+      if (!high) {
+        const dx = node.x - 340, dy = node.y - 215;
+        const anchor = Math.abs(dx) < 35 ? 'middle' : dx < 0 ? 'end' : 'start';
+        const x = node.x + (Math.abs(dx) < 35 ? 0 : dx < 0 ? -21 : 21);
+        const y = (model.stageId === 'cube' || model.stageId === 'prism') && node.number === 3
+          ? node.y - 20 : node.y + (dy > 50 ? 28 : dy < -50 ? -23 : -20);
+        const lines = wrap(node.label, 19);
+        label = '<text class="model-role-label" x="' + number(x) + '" y="' + number(y) + '" text-anchor="' + anchor + '" fill="' + color + '" font-size="14" font-family="system-ui, sans-serif">'
+          + lines.map((line, index) => '<tspan x="' + number(x) + '" dy="' + (index ? 17 : 0) + '">' + escape(line) + '</tspan>').join('') + '</text>';
+      }
+      return '<g class="model-role' + (selected ? ' is-selected' : '') + '" data-role="' + escape(node.id) + '" data-role-number="' + node.number + '" data-selected="' + selected + '" opacity="' + (selection && !selected && high ? 0.63 : 1) + '">'
+        + '<title>' + escape(node.number + '. ' + node.label + ' [' + node.id + ']') + '</title>'
+        + '<circle cx="' + node.x + '" cy="' + node.y + '" r="' + radius + '" fill="' + (selected ? '#fff6df' : '#f7f2e7') + '" stroke="' + color + '" stroke-width="' + (selected ? 2.5 : 1.3) + '"/>'
+        + '<text x="' + node.x + '" y="' + number(node.y + 4) + '" text-anchor="middle" fill="' + color + '" font-size="' + (high ? 10.5 : 12) + '" font-weight="600" font-family="system-ui, sans-serif">' + node.number + '</text>' + label + '</g>';
+    }).join('');
+    const captions = layout.caption.map((line, index) => '<text class="model-diagram-caption" x="340" y="' + (424 + index * 20) + '" text-anchor="middle" fill="#6f6654" font-size="12.5" font-family="system-ui, sans-serif">' + escape(line) + '</text>').join('');
+    return '<svg xmlns="http://www.w3.org/2000/svg" class="training-model-diagram" viewBox="0 0 680 470" width="100%" role="img" aria-labelledby="' + uid + '-title" aria-describedby="' + uid + '-description" data-stage="' + escape(model.stageId || '') + '" data-breath="' + breathNumber + '">'
+      + '<title id="' + uid + '-title">' + escape(title) + '</title><desc id="' + uid + '-description">' + escape(description) + '</desc>'
+      + '<style>@media(max-width:500px){.training-model-diagram .model-role-label{display:none}.training-model-diagram .model-diagram-caption{font-size:13px}}</style>'
+      + background + edges + roles + captions + '</svg>';
+  }
+  return Object.freeze({render, layoutFor});
+});
+
+</script>
+  <script data-form-module="src/shape-practice.js?v=81049a80c07a">
 (function (root, factory) {
   'use strict';
   const models = typeof module === 'object' && module.exports ? require('./relational-models.js') : root.FormRelationalModels;
@@ -8290,7 +8942,7 @@ body[data-view="journey"] .skip-link { display: none; }
 
   // These are declared teaching conventions, not a measured cognitive or physiological scale.
   const INTRO = 'Circle begins with one explicit conceptual relationship, such as ocean contains boat: two contents, one relationship. Half-circle holds two distinct relationships. Later shapes organise more selected relationships; properties, palace addresses and routine comparisons do not define their count. Every shape uses the complete breath-back procedure in consciousness streaming, heart practice or body mapping.';
-  const BREATH_BACK = 'Inhale: receive and select the current relationship or full relational model. Exhale: encode it at a distinct address in your home memory palace first; then deliberately retrieve the scheduled earlier entry, compare and append a note while preserving both originals. The notebook uses N committed entries back. N counts committed observations, not breaths or seconds. The four-breath examples use B = 1 only when each complete entry fits one ordinary breath; then N = 1 and B = 1 coincide. If work takes extra breaths, continue normally, keep an already-started return target fixed, and use honest breath anchors or explicitly practise four N = 1 entries instead. Never substitute the most similar record for the scheduled target.';
+  const BREATH_BACK = 'Inhale: receive and select the current relationship or full relational model. Exhale: encode it at a distinct address in your home memory palace first; then deliberately retrieve the scheduled earlier entry, compare and append a note while preserving both originals. The notebook uses N committed entries back. N counts committed observations, not breaths or seconds. The four-breath examples use B = 1 only when each complete entry fits one ordinary breath; then N = 1 and B = 1 coincide. If work takes extra breaths, continue normally, keep an already-started return target fixed, and use honest breath anchors or explicitly practise four N = 1 entries instead. A continuing scene or unchanged selection is valid; do not force novelty. Never substitute the most similar record for the scheduled target.';
   const ADDRESSES = Object.freeze(['doorway', 'hallway shelf', 'desk', 'window']);
 
   const METADATA = [
@@ -8428,7 +9080,7 @@ body[data-view="journey"] .skip-link { display: none; }
     "notes": "Two contents can participate in one relationship. Earlier meanings may remain true while another is foregrounded. Every source entry keeps its own address; the historical comparison does not add a second selected source link."
   },
   "half-circle": {
-    "baseline": "Each row selects two distinct relationships between two wholes.",
+    "baseline": "Each row selects two distinct conceptual relationships between two contents.",
     "notes": "This does not claim that every cage only restricts or every harbour always shelters. These are the selected meanings of the illustrative encounters."
   },
   "triangle": {
@@ -8464,15 +9116,15 @@ body[data-view="journey"] .skip-link { display: none; }
     "notes": ""
   },
   "dodecahedron": {
-    "baseline": "Use the complete imagined cooperative register in the appendix. It includes water provision, food production, maintenance and governance. All thirty links are selected; the following changes are full-model versions.",
+    "baseline": "Use the complete imagined cooperative relationship register below. It includes water provision, food production, maintenance and governance. All thirty links are selected; the following changes are full-model versions.",
     "notes": "All four are encounters with a familiar constructed model. A single workshop-pump thought without recovery of the other relations is a local patch, not the full Dodecahedron."
   },
   "icosahedron": {
-    "baseline": "Use the complete ferry-design register in the appendix: service brief, budget, five aims and five implementation choices. This changes organisation from the Dodecahedron while keeping thirty links.",
+    "baseline": "Use the complete ferry-design relationship register below: service brief, budget, five aims and five implementation choices. This changes organisation from the Dodecahedron while keeping thirty links.",
     "notes": ""
   },
   "geodesic": {
-    "baseline": "Refine the thirty ferry links through thirty named mechanisms, giving sixty links. Add sixty pairwise compatibility requirements across the twenty original triangular contexts. The appendix specifies the whole mesh.",
+    "baseline": "Refine the thirty ferry links through thirty named mechanisms, giving sixty links. Add sixty pairwise compatibility requirements across the twenty original triangular contexts. The full relationship register specifies the whole mesh.",
     "notes": "Replacing old direct links by two mediated links matters: retaining the old thirty as well would give 150 counted links, not this 120-link mesh."
   },
   "sphere": {
@@ -9090,7 +9742,7 @@ body[data-view="journey"] .skip-link { display: none; }
 });
 
 </script>
-  <script data-form-module="src/training.js?v=c2d6de81d3a9">
+  <script data-form-module="src/training.js?v=a34037bd127c">
 (function (root) {
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9102,7 +9754,7 @@ body[data-view="journey"] .skip-link { display: none; }
     let storage; try { storage = root.localStorage; } catch (_) { storage = null; }
     const store = root.FormTrainingStore.createStore(storage);
     let stage = D.getStage(stageId), exercise = 'stream', clock = null, audio = new E.ExerciseAudio();
-    let unsaved = false;
+    let unsaved = false, fieldsGeneration = 0, modelState = 0, selectedRelationship = '';
     const testAudio = new E.ExerciseAudio();
     let recorded = false, peek = null, lastBodyStep = -1, lastCue = '', lastPrompt = '', announcement = '';
     let sound = false, heartBell = true, frequency = 10, bellVolume = 1, pacing = 'natural', duration = 15;
@@ -9149,8 +9801,9 @@ body[data-view="journey"] .skip-link { display: none; }
       audio.stop();testAudio.stop();tick();
     }
     function end() {
+      audio.stop();testAudio.stop();
       if(!clock)return;
-      clock.end();audio.stop();finishRecord(clock.snapshot());tick();renderReadiness();
+      clock.end();finishRecord(clock.snapshot());tick();renderReadiness();
     }
     function breathBellEnabled() { return exercise==='heart' && heartBell && pacing==='paced'; }
     function audioEnabled() { return sound || breathBellEnabled(); }
@@ -9188,10 +9841,35 @@ body[data-view="journey"] .skip-link { display: none; }
       if(exercise==='heart') return `<ol class="training-method"><li><strong>Heart-focused breathing.</strong> Bring attention to the chest. Imagine the breath moving through this area, without changing how deeply you breathe.</li><li><strong>Heart feeling.</strong> Invite a sincere feeling of love, care or appreciation. Notice what is actually present; warmth does not have to appear.</li><li><strong>Sustain and deepen.</strong> Stay gently with that feeling. When attention wanders, return. A quieter or absent feeling is also an observation.</li></ol><p class="training-fine">The timer moves through these three phases. “Coherence” is the source exercise’s name; this page does not measure heart rhythm or physiological coherence.</p>`;
       return `<p>Follow one sensation through seven dimensions. Each receives 30 seconds, then the sequence repeats. A dimension may be unclear or absent. These prompts help you find content; they are not the relationships counted by the shape.</p><ol class="training-method">${E.BODY_STEPS.map(s=>`<li><strong>${esc(s.label)}.</strong> ${esc(s.prompt)}</li>`).join('')}</ol><p class="training-fine">An emotion name is a tentative interpretation of your experience. A body location or texture does not determine a particular emotion.</p>`;
     }
+    function currentModel() { return stage[exercise].model||root.FormRelationalModels?.getModel(stage.id,exercise); }
+    function modelParts(model,stateIndex=modelState) {
+      const state=model.states?.[stateIndex];
+      return {state,relations:state?.relations||model.relations||[],nodes:state?.nodes||model.nodes||[]};
+    }
     function modelHTML(model,stateIndex=0) {
-      const state=model.states?.[stateIndex], relations=state?.relations||model.relations||[], nodes=state?.nodes||model.nodes||[];
-      const changed=new Set(state?.changedRelationIds||[]);
-      return `<p>${esc(state?.label||model.description||'Complete selected relationships for this entry.')}</p><p class="training-fine">${relations.length} relationships across ${nodes.length} roles. ${stateIndex===0?'This is the complete starting model.':changed.size?changed.size+' relationship'+(changed.size===1?' changes':'s change')+' from the previous entry; all others are retained.':'Every relationship is retained from the previous entry.'}</p>${nodes.length?`<details class="training-model-roles"><summary>Roles in this entry · ${nodes.length}</summary><dl>${nodes.map(node=>`<dt>${esc(node.id)}</dt><dd>${esc(node.label)}</dd>`).join('')}</dl></details>`:''}<ol class="training-register">${relations.map(relation=>`<li${changed.has(relation.id)?' class="training-relationship-changed"':''}><span>${esc(relation.id)}${changed.has(relation.id)?'<small>Changed</small>':''}</span><p>${esc(relation.text)}</p></li>`).join('')}</ol>`;
+      const {state,relations,nodes}=modelParts(model,stateIndex),changed=new Set(state?.changedRelationIds||[]);
+      return `<p>${esc(state?.label||model.description||'Complete selected relationships for this entry.')}</p><p class="training-fine">${relations.length} relationship${relations.length===1?'':'s'} across ${nodes.length} roles. ${stateIndex===0?'This is the complete starting model.':changed.size?changed.size+' relationship'+(changed.size===1?' changes':'s change')+' from the previous entry; all others are retained.':'Every relationship is retained from the previous entry.'}</p><ol class="training-register">${relations.map(relation=>`<li${changed.has(relation.id)?' class="training-relationship-changed"':''}><span><button type="button" class="training-relation-link" data-trace-relation="${esc(relation.id)}" aria-pressed="${relation.id===selectedRelationship}" aria-label="Trace ${esc(relation.id)}: ${esc(relation.text)}">${esc(relation.id)}</button>${changed.has(relation.id)?'<small>Changed</small>':''}</span><p>${esc(relation.text)}</p></li>`).join('')}</ol>`;
+    }
+    function explorerHTML(model) {
+      return `<div class="training-model-explorer" data-model-explorer><p class="eyebrow">SEE THE RELATIONSHIPS</p><div class="training-explorer-controls"><label class="training-register-picker">Inspect the whole entry<select data-model-state>${(model.states||[{breath:1}]).map((state,i)=>`<option value="${i}">Breath ${i+1} · full model</option>`).join('')}</select></label><label class="training-register-picker">Trace a relationship<select data-model-relation><option value="">Whole structure</option></select></label></div><p class="training-fine" data-model-state-summary></p><figure class="training-network"><div data-model-diagram></div><div class="training-network-key" aria-label="Diagram legend"><span><i aria-hidden="true"></i>Relationship</span><span><i class="is-changed" aria-hidden="true"></i>Changed since the previous entry</span><span><i class="is-traced" aria-hidden="true"></i>Traced relationship</span></div><figcaption class="training-fine">${stage.id==='circle'?'Two roles, one selected relationship. The Circle icon denotes a complete relational unit; it is not an extra link or a self-loop.':stage.id==='half-circle'?'Two roles, two distinct selected relationships. The two arcs have different meanings; inverse wording alone would still be one relationship.':'Each line is one registered relationship between identified roles. The sentence gives its meaning; the drawing shows how the whole selection is connected.'}</figcaption></figure><div class="training-traced-relationship" data-traced-relationship role="status"></div><details class="training-model-roles" data-model-role-key><summary data-model-role-summary>Numbered role key</summary><dl data-model-role-list></dl></details></div>`;
+    }
+    function updateExplorer() {
+      const model=currentModel();if(!model||!q('[data-model-diagram]'))return;
+      const {state,relations,nodes}=modelParts(model),nodeNames=new Map(nodes.map(node=>[node.id,node.label])),nodeNumbers=new Map(nodes.map((node,index)=>[node.id,index+1]));
+      if(selectedRelationship&&!relations.some(relation=>relation.id===selectedRelationship))selectedRelationship='';
+      const picker=q('[data-model-relation]');
+      picker.innerHTML='<option value="">Whole structure</option>'+relations.map(relation=>`<option value="${esc(relation.id)}" ${relation.id===selectedRelationship?'selected':''}>${esc(relation.id)} · ${nodeNumbers.get(relation.from)} ${esc(nodeNames.get(relation.from)||relation.from)} / ${nodeNumbers.get(relation.to)} ${esc(nodeNames.get(relation.to)||relation.to)}</option>`).join('');
+      picker.value=selectedRelationship;
+      q('[data-model-state-summary]').textContent=(state?.label||model.description||'Complete selected model')+' · '+relations.length+' relationship'+(relations.length===1?'':'s')+' / '+nodes.length+' roles';
+      q('[data-model-diagram]').innerHTML=root.FormModelView?root.FormModelView.render(model,modelState+1,selectedRelationship||undefined):'<p class="training-fine">The full relationship register below describes this model.</p>';
+      const selected=relations.find(relation=>relation.id===selectedRelationship);
+      q('[data-traced-relationship]').innerHTML=selected?`<p class="eyebrow">${esc(selected.id)} · SELECTED RELATIONSHIP</p><p>${esc(selected.text)}</p><p class="training-fine">Roles ${nodeNumbers.get(selected.from)} and ${nodeNumbers.get(selected.to)}: ${esc(nodeNames.get(selected.from)||selected.from)} / ${esc(nodeNames.get(selected.to)||selected.to)} · All ${relations.length} relationship${relations.length===1?' remains':'s remain'} in the model.</p>`:`<p>Whole structure · ${relations.length} relationship${relations.length===1?'':'s'}</p><p class="training-fine">Choose a relationship to trace its two roles and read its complete meaning. The remaining relationships stay present.</p>`;
+      q('[data-model-role-summary]').textContent='Numbered role key · '+nodes.length+' roles';
+      q('[data-model-role-list]').innerHTML=nodes.map((node,index)=>`<dt>${index+1} · ${esc(node.id)}</dt><dd>${esc(node.label)}</dd>`).join('');
+      all('[data-trace-relation]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.traceRelation===selectedRelationship)));
+    }
+    function bindRegister() {
+      all('[data-trace-relation]').forEach(button=>button.addEventListener('click',()=>{selectedRelationship=button.dataset.traceRelation;updateExplorer();q('[data-model-relation]').focus();q('[data-model-explorer]').scrollIntoView({block:'nearest'});}));
     }
     function workedExampleHTML(guide) {
       const examples=guide.examples||[], model=guide.model||root.FormRelationalModels?.getModel(stage.id,exercise);
@@ -9202,12 +9880,14 @@ body[data-view="journey"] .skip-link { display: none; }
         <p>${esc(stage.preparation||'Read the example first, then practise with your own content.')}</p>${guide.preparation?`<p>${esc(guide.preparation)}</p>`:''}
         <p class="training-fine">Begin a fresh history for this walkthrough. Each current entry preserves the whole selected structure. The memory address and the comparison with the previous entry do not add to its relationship count.</p>
         ${guide.baseline?`<details class="training-example-baseline"><summary>Understand the starting scene</summary><p>${esc(guide.baseline)}</p></details>`:''}
+        ${model?explorerHTML(model):''}
         <ol class="training-breath-examples">${examples.map((example,i)=>`<li data-example="${i+1}"><div class="training-example-heading"><span>BREATH ${i+1}</span><small>${esc(places[i])} · ${i===0?'seed the history':'return to '+places[i-1].toLowerCase()}</small></div><dl><dt>Inhale · receive and select</dt><dd>${esc(example.inhale)}</dd><dt>Exhale · encode first</dt><dd>${esc(example.encode)}</dd><dt>${i===0?'Complete the first entry':'Same exhale · retrieve, compare, revise'}</dt><dd>${esc(example.compare)}</dd></dl></li>`).join('')}</ol>
         <p class="training-fine">Use one row per breath only when the full operation fits comfortably. If an entry needs additional natural breaths, finish it at your own pace and count marked entries (N = 1), not actual breaths (B = 1). A large prepared model is a rehearsal, not a demand to invent or recite every relationship in one breath.</p>
-        ${register.length?`<details class="training-model" data-model-register><summary>Full relationship register · ${register.length} relationships</summary><p>${esc(model?.description||'These are the complete selected relationships for the starting model.')}</p>${model?.graphConvention?`<p class="training-fine">${esc(model.graphConvention)}</p>`:''}${model?.states?.length?`<label class="training-register-picker">Inspect the whole entry<select data-model-state>${model.states.map((state,i)=>`<option value="${i}">Breath ${i+1} · full model</option>`).join('')}</select></label>`:''}<div data-model-content>${modelHTML(model||{relations:register})}</div></details>`:''}
+        ${register.length?`<details class="training-model" data-model-register><summary>Full relationship register · ${register.length} relationship${register.length===1?'':'s'}</summary><p>${esc(model?.description||'These are the complete selected relationships for the starting model.')}</p>${model?.graphConvention?`<p class="training-fine">${esc(model.graphConvention)}</p>`:''}<div data-model-content>${modelHTML(model||{relations:register})}</div></details>`:''}
       </section>`;
     }
     function render() {
+      modelState=0;selectedRelationship='';
       const guide = stage[exercise], ready=store.data.readiness[stage.id]||{};
       host.innerHTML=`<div class="training-topline"><a class="back-link" href="#journey">← All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
         <header class="training-heading"><span aria-hidden="true">${G.miniIcon(stage.id,86)}</span><div><p class="eyebrow">BREATH-BACK · SHAPE ${String(D.STAGES.indexOf(stage)+1).padStart(2,'0')} OF 14</p><h1>${esc(stage.name)} <em>/ ${esc(stage.verb)}</em></h1><p>${esc(stage.theory)}</p><p class="training-shape-count">${esc(stage.relationCount)} selected relationship${stage.relationCount===1?'':'s'} · ${esc(stage.topology||'')}</p></div></header>
@@ -9234,7 +9914,9 @@ body[data-view="journey"] .skip-link { display: none; }
         <details class="training-record"><summary>Your practice record <span data-record-count></span></summary><p class="training-fine">Self-assessments describe your judgement, not a test score. Observations may contain personal information; a download includes your private notes.</p><div data-record></div><div class="training-record-actions"><button type="button" class="text-button" data-export>Download practice record (includes notes)</button><button type="button" class="text-button" data-original hidden>Download original saved data</button><button type="button" class="text-button" data-reload hidden>Load saved version</button><button type="button" class="text-button" data-reset>Clear this practice record</button></div></details>
         <p class="training-attribution">Heart and body exercise formats adapted from <a href="https://o0ooooooooooo0o.github.io/Project-Meaning/" target="_blank" rel="noopener noreferrer">Project Meaning</a>. The standalone stream practice and revised relationship atlas follow Philosophy of Intelligence. Heart and body exercise formats retain their distinct attention prompts. <a href="#palace">Earlier saved observations →</a></p>`;
       q('[data-shape]').addEventListener('change',e=>onStageChange(e.target.value));
-      q('[data-model-state]')?.addEventListener('change',event=>{const model=stage[exercise].model||root.FormRelationalModels.getModel(stage.id,exercise);const index=Number(event.target.value);if(Number.isInteger(index)&&model.states?.[index])q('[data-model-content]').innerHTML=modelHTML(model,index);});
+      q('[data-model-state]')?.addEventListener('change',event=>{const model=currentModel(),index=Number(event.target.value);if(!Number.isInteger(index)||!model.states?.[index])return;modelState=index;q('[data-model-content]').innerHTML=modelHTML(model,index);bindRegister();updateExplorer();});
+      q('[data-model-relation]')?.addEventListener('change',event=>{selectedRelationship=event.target.value;updateExplorer();});
+      bindRegister();updateExplorer();
       all('[data-exercise]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.exercise===exercise)return;end();clock=null;exercise=el.dataset.exercise;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();}));
       q('[data-duration]').addEventListener('change',e=>duration=Number(e.target.value));
       q('[data-pacing]').addEventListener('change',e=>setPacing(e.target.value));
@@ -9258,23 +9940,25 @@ body[data-view="journey"] .skip-link { display: none; }
       q('[data-sound-summary]').textContent=soundSummary();
     }
     function renderFields() {
-      const d=draft(), old=target(), h=history(), stale=staleReference();
+      const d=draft(), old=target(), h=history(), stale=staleReference(), draftKey=key(), generation=++fieldsGeneration;
+      const isCurrent=()=>generation===fieldsGeneration&&key()===draftKey&&drafts.get(draftKey)===d;
       q('[data-fields]').innerHTML=`${stale?`<div class="training-notice" role="status"><p>The saved version no longer contains this return’s exact earlier entry. Your current selection, recollection and earlier source remain here; the target has not been changed.</p><button type="button" class="text-button" data-recover-return>Download this unfinished return and begin new history</button></div>`:''}<p class="training-return-phase">${d.revealed?'03 · Compare the preserved entries':d.locked?'02 · Retrieve the exact earlier entry':'01 · Receive and encode the current entry'}</p>
-        <label class="training-field">My current relationships<textarea data-note="source" rows="3" maxlength="3000" required ${d.locked?'readonly':''} placeholder="Preserve the selected relationships, their roles and meanings. This is the current entry, before deliberate retrieval.">${esc(d.source)}</textarea></label>
+        <label class="training-field">My current relationship${stage.relationCount===1?'':'s'}<textarea data-note="source" rows="3" maxlength="3000" required ${d.locked?'readonly':''} placeholder="Preserve the selected relationships, their roles and meanings. This is the current entry, before deliberate retrieval.">${esc(d.source)}</textarea></label>
         <label class="training-lag">Return distance<select data-lag ${d.locked?'disabled':''}>${[1,2,3,4].map(n=>`<option value="${n}" ${n===d.lag?'selected':''}>${n} marked entr${n===1?'y':'ies'} back (N = ${n})</option>`).join('')}</select></label>
         <p class="training-fine">${h.length} entr${h.length===1?'y':'ies'} in this ${esc(stage.name)} / ${esc(exerciseNames[exercise])} stream. Each entry has its own home address. Extra breaths do not move this return distance.</p>
         ${old?`${!d.locked?`<button type="button" class="button secondary" data-lock-source>Encode current entry, then retrieve →</button><p class="training-fine">Keep the current selection first. Deliberate retrieval starts after this step.</p>`:`<label class="training-field">My recollection, before looking<textarea data-note="recollection" rows="2" maxlength="3000" ${d.revealed?'readonly':''} placeholder="Retrieve from the earlier address, or write ‘I do not recall’.">${esc(d.recollection)}</textarea></label><button type="button" class="text-button" data-reveal ${d.revealed?'disabled':''}>Keep recollection and reveal original →</button>`}
           <div class="training-original" ${d.revealed?'':'hidden'}><p class="eyebrow">PRESERVED ORIGINAL · ${d.lag} BACK</p><p>${d.revealed?esc(old.source):''}</p></div>`:`<p class="training-empty-return">Keep ${Math.max(0,d.lag-h.length)} more entr${d.lag-h.length===1?'y':'ies'} to create a ${d.lag}-back return. Encode the current relationships at their own address. This builds the history; no earlier target is invented.</p>`}
         ${d.revealed?`<label class="training-field">My comparison <span>(optional note)</span><textarea data-note="relation" rows="3" maxlength="3000" placeholder="${esc(stage[exercise].relate)}">${esc(d.relation)}</textarea></label><label class="training-field">My correction or uncertainty <span>(optional note)</span><textarea data-note="revision" rows="2" maxlength="3000" placeholder="${esc(stage[exercise].revise)}">${esc(d.revision)}</textarea></label><p class="training-fine">Compare the exact earlier entry with the encoded current one. Preserve both originals. A changed selection does not by itself make the earlier relationship false.</p>`:''}
         <button type="button" class="text-button" data-fresh>Begin a fresh observation stream</button>`;
-      all('[data-note]').forEach(el=>el.addEventListener('input',()=>{if(el.readOnly)return;draft()[el.dataset.note]=el.value;}));
-      q('[data-lag]').addEventListener('change',e=>{if(d.locked)return;d.lag=Number(e.target.value);d.recollection='';d.revealed=false;renderFields();});
+      all('[data-note]').forEach(el=>el.addEventListener('input',()=>{const field=el.dataset.note;if(!isCurrent()||el.readOnly||(field==='source'&&d.locked)||(field==='recollection'&&d.revealed)||(['relation','revision'].includes(field)&&!d.revealed))return;d[field]=el.value;}));
+      q('[data-lag]').addEventListener('change',e=>{if(!isCurrent()||d.locked)return;d.lag=Number(e.target.value);d.recollection='';d.revealed=false;renderFields();});
       q('[data-lock-source]')?.addEventListener('click',()=>{
+        if(!isCurrent()||d.locked)return;
         if(!d.source.trim()){message('First select and describe the current relationships.');q('[data-note="source"]').focus();return;}
         d.reference={id:old.id,source:old.source};d.locked=true;renderFields();message('Current entry encoded. Now retrieve the exact earlier entry before looking.');q('[data-note="recollection"]').focus();
       });
       q('[data-reveal]')?.addEventListener('click',()=>{
-        if(!d.locked)return;
+        if(!isCurrent()||!d.locked||d.revealed)return;
         if(!d.recollection.trim()){message('Write what you remember, or “I do not recall”, before revealing the original.');q('[data-note="recollection"]').focus();return;}
         d.revealed=true;renderFields();message('Recollection kept. Compare both preserved entries, then append any correction.');q('[data-note="relation"]').focus();
       });

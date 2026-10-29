@@ -91,3 +91,58 @@
 .training-panel-controls{display:flex;flex-direction:column;align-items:flex-end;gap:12px;flex-shrink:0}
 #training-root .training-bell-toggle{font-size:15px;line-height:1.4}
 @media(max-width:900px){.training-panel-controls{flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:16px}.training-panel-controls .training-state{margin-bottom:0}}
+
+/* The relationship lesson is shared by three independently chosen exercises. */
+.training-exercises{grid-template-columns:repeat(3,minmax(0,1fr))}
+.training-exercises button{font-size:23px;overflow-wrap:break-word}
+.training-heading .training-shape-count{font-size:14px!important;line-height:1.65!important;letter-spacing:.015em;color:#756a51;margin-top:14px!important}
+.training-examples .training-fine{margin-bottom:18px}
+.training-example-baseline{padding:16px 0;border-top:1px solid #bcb39680;border-bottom:1px solid #bcb39680}
+.training-example-baseline[open] summary{margin-bottom:18px}
+.training-example-baseline p{font-size:17px;margin-bottom:0;white-space:pre-line}
+.training-breath-examples{list-style:none;padding:0;margin:26px 0}
+.training-breath-examples>li{padding:24px 0;border-top:1px solid #bcb39680}
+.training-breath-examples>li:last-child{padding-bottom:12px}
+.training-example-heading{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 18px;margin-bottom:18px}
+.training-example-heading>span{font-size:12px;letter-spacing:.14em;color:#6c6043}
+.training-example-heading>small{font-size:13px;color:#7c735d}
+.training-breath-examples dl{margin:0}
+.training-breath-examples dt{font-size:15px;font-weight:600;color:#5a513c;margin:18px 0 8px}
+.training-breath-examples dd{margin:0;font-size:18px;line-height:1.7;white-space:pre-line}
+.training-model{border-top:1px solid #bcb39680;padding-top:22px;margin-top:24px}
+.training-model[open]>summary{margin-bottom:22px}
+.training-model-roles{padding:16px 0;border-top:1px solid #bcb39650;border-bottom:1px solid #bcb39650}
+.training-model-roles dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 16px;margin:18px 0 0;font-size:15px;line-height:1.5}
+.training-model-roles dt{color:#7c735d}.training-model-roles dd{margin:0}
+.training-register{list-style:none;margin:20px 0 0;padding:0;counter-reset:relationships}
+.training-register>li{display:grid;grid-template-columns:minmax(38px,auto) minmax(0,1fr);align-items:baseline;gap:16px;padding:14px 0;border-top:1px solid #bcb39650}
+.training-register>li>span{font-size:12px;color:#7c735d;letter-spacing:.02em}
+.training-register>li>p{font-size:16px;line-height:1.6;margin:0;overflow-wrap:break-word}
+.training-return-phase{font-size:13px!important;letter-spacing:.025em;border-left:2px solid #827858;padding-left:16px}
+[data-lock-source]{margin-bottom:16px}
+@media(max-width:1000px){.training-exercises button{font-size:21px}}
+@media(max-width:900px){.training-examples{grid-row:3}.training-return{grid-row:4}.training-readiness{grid-row:5}.training-breath-examples dd{font-size:17px}}
+@media(max-width:620px){.training-exercises{grid-template-columns:1fr}.training-exercises button{font-size:21px;padding:16px 20px}.training-exercises button+button{border-left:0;border-top:1px solid #b9b298}.training-exercises button>span{display:inline;margin-bottom:0}.training-exercises small{margin-left:31px}.training-example-heading{display:block}.training-example-heading>small{display:block;margin-top:8px}}
+.training-register-picker{display:block;font-size:15px;line-height:1.5;margin:22px 0}
+.training-relationship-changed{background:#d5cba638;border-left:2px solid #857347;padding-left:12px!important}
+.training-register>li>span>small{display:block;font-size:10px;letter-spacing:.02em;color:#6e5c36;margin-top:6px}
+
+/* Explore a whole selected model; tracing a link never removes its context. */
+.training-model-explorer{border-top:1px solid #bcb39680;border-bottom:1px solid #bcb39680;margin:26px 0;padding:24px 0}
+.training-explorer-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:18px;margin-bottom:20px}
+.training-explorer-controls .training-register-picker{margin:0;min-width:0}
+.training-explorer-controls select{max-width:100%;text-overflow:ellipsis}
+.training-network{margin:18px 0 22px}
+.training-network svg{display:block;width:100%;height:auto;max-height:450px;overflow:visible}
+.training-network figcaption{margin-top:16px}
+.training-traced-relationship{min-height:130px;border-left:2px solid #887746;padding:3px 0 3px 18px}
+.training-traced-relationship p:last-child{margin-bottom:0}
+.training-traced-relationship .eyebrow{margin-bottom:10px}
+.training-relation-link{font:inherit;font-size:12px;color:#645639;border:1px solid #b8a87a;background:transparent;border-radius:2px;padding:7px;min-width:44px;min-height:36px;cursor:pointer}
+.training-relation-link[aria-pressed=true]{color:#3e351d;background:#d3bd7748;border-color:#756238}
+@media(max-width:620px){.training-explorer-controls{grid-template-columns:1fr;gap:14px}.training-network svg{max-height:340px}.training-traced-relationship{min-height:0}.training-register>li{gap:12px}}
+.training-network-key{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;line-height:1.5;color:#726952;margin:12px 0}
+.training-network-key span{display:flex;align-items:center;gap:7px}
+.training-network-key i{display:inline-block;width:18px;height:2px;background:#756d5a}
+.training-network-key .is-changed{background:#39766b;height:3px}
+.training-network-key .is-traced{background:#a65f1d;height:4px}
