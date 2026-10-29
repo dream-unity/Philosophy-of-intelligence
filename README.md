@@ -2,6 +2,10 @@
 
 **A geometric apprenticeship in relational reasoning.**
 
+[**Play FORM →**](https://dream-unity.github.io/Philosophy-of-intelligence/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/FORM-Offline.html)
+
+![FORM: A mind takes shape](docs/form-preview.jpg)
+
 FORM turns a philosophy of intelligence into a sequence of small, playable operations: notice an aspect, preserve its source, connect relationships, map a structure, derive a function, and revise it when the evidence changes. Fourteen geometric forms give the journey a visual language.
 
 The accompanying **70–200 scale is symbolic**. It does not measure IQ, classify people, set entry requirements, or promise cognitive gains. Progress describes performance on FORM's authored exercises. The curriculum and its mastery thresholds are design choices, not validated measures of general intelligence.
@@ -114,18 +118,22 @@ Your browser may allow less storage than these application limits. If saving fai
 
 Export before clearing browser data or resetting the game. Private source attachments used during development are not included in this repository or the offline build.
 
-## Optional GitHub Pages hosting
+If saved data cannot be read or validated, FORM pauses automatic saving and offers the original value as a recovery download. It does not replace the original with an empty record. Import a valid backup or explicitly start a new local record to continue saving.
 
-The source app can be hosted as static files. In the repository's GitHub **Settings → Pages**, choose deployment from a branch, select the branch containing the app and the root folder, then save. Exact settings depend on the repository's permissions and current GitHub interface. The app uses relative asset paths and does not require a server API.
+## GitHub Pages hosting
+
+The game is available at [dream-unity.github.io/Philosophy-of-intelligence](https://dream-unity.github.io/Philosophy-of-intelligence/). It is served as static files from this repository.
+
+To host a fork, in its GitHub **Settings → Pages**, choose deployment from a branch, select the branch containing the app and the root folder, then save. Exact settings depend on the repository's permissions and current GitHub interface. The app uses relative asset paths and does not require a server API.
 
 Alternatively, publish the generated static output with your preferred static-host workflow. Hosting the application does not synchronise visitors' local progress. A hosted address and a locally opened offline file have separate browser storage.
 
 ## Design and sources
 
+- [Practice guide](docs/PRACTICE_GUIDE.md): a flexible visit-by-visit schedule from Circle to Sphere.
+- [Verification record](docs/VERIFICATION.md): automated checks, browser playthroughs and known limits.
 - [Design rationale](docs/DESIGN.md): progression, source integrity, assessment and privacy decisions.
 - [Reference notes](docs/REFERENCE_NOTES.md): conceptual influences and evidence boundaries.
 - [Implementation contract](docs/IMPLEMENTATION_CONTRACT.md): module interfaces and runtime invariants.
 
 FORM implements a proposed practice architecture. Improvements on its tasks would not, by themselves, establish IQ improvement, clinical benefit or transfer to everyday reasoning. Those claims would need separate research.
-
-If saved data cannot be read or validated, FORM pauses automatic saving and offers the original value as a recovery download. It does not replace the original with an empty record. Import a valid backup or explicitly start a new local record to continue saving.
