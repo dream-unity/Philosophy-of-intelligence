@@ -121,3 +121,18 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
   .portal-visual > .portal-artwork { width: 400px; }
   body[data-view="journey"] .portal-page > .stage-path { margin-top: 0; }
 }
+
+/* A quiet, hand-inked inscription in the open right-hand margin.
+   Outlined lettering keeps the same calligraphy on every device, offline too. */
+.portal-hero { position: relative; }
+.universe-tattoo { grid-column: 3; grid-row: 1; align-self: center; justify-self: center; width: min(calc(100% - 48px), 340px); margin: 0 0 128px; transform: rotate(-12deg); pointer-events: none; user-select: none; }
+.universe-tattoo img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
+@media (min-width: 900px) and (max-width: 1199px) {
+  .portal-hero { grid-template-columns: minmax(180px, 1fr) minmax(0, 2.4fr) minmax(140px, .8fr); gap: 0; padding-inline: 12px; }
+  .universe-tattoo { width: calc(100% - 16px); }
+}
+@media (max-width: 899px) {
+  .portal-visual > .portal-artwork { width: min(77%, var(--hero-logo-height)); align-self: flex-start; }
+  .universe-tattoo { position: absolute; right: 2%; top: min(21vw, calc(var(--hero-logo-height) * .28)); width: 25%; max-width: 205px; margin: 0; }
+}
+@media print { .universe-tattoo { position: static; width: 180px; margin: 12px auto; } }
