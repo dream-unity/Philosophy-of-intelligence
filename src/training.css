@@ -337,9 +337,105 @@ body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bot
 }
 
 
-/* Give the actual ink, rather than an empty SVG canvas, the space of a page
-   emblem. The tighter viewBox keeps the original homepage drawing intact. */
-.training-symbol-header{display:grid;place-items:center;padding:clamp(12px,2vw,24px) 0;margin:0 0 20px}
-.training-page-symbol{width:clamp(280px,43vw,480px);max-width:100%;aspect-ratio:1}
-.training-page-symbol--half-circle{width:clamp(300px,52vw,560px);aspect-ratio:192/106}
-.training-page-symbol svg{display:block;width:100%;height:100%}
+/* The selected shape is the breathing guide. Every practice panel shares its
+   height; long instructions and complete references scroll inside the rail. */
+#training-root{padding:0;max-width:1080px}
+.training-unit{--shape-size:clamp(360px,44vw,520px);display:grid;grid-template-columns:var(--shape-size) minmax(0,1fr);gap:28px;height:var(--shape-size);position:relative}
+.training-shape-canvas{position:relative;min-width:0;height:100%;isolation:isolate}
+.training-unit .training-pacer{position:absolute;inset:0;width:100%;height:100%;max-width:none;margin:0;aspect-ratio:auto}
+.training-shape-art{position:absolute;inset:0;pointer-events:none;transition:transform .05s linear}
+.training-shape-art svg{display:block;width:100%;height:100%}
+.training-unit .training-breath-readout{position:absolute;left:50%;top:43%;transform:translate(-50%,-50%);width:55%;max-width:220px;gap:10px;font-size:clamp(28px,3vw,40px);padding:12px 8px;background:radial-gradient(ellipse,#f0ebdce8 35%,#f0ebdcbb 62%,#f0ebdc00 75%)}
+.training-unit .training-breath-readout small{font-size:14px}
+.training-shape-canvas--triangle .training-breath-readout{top:53%}
+.training-shape-canvas--half-circle .training-breath-readout{top:45%}
+.training-shape-actions{position:absolute;top:61%;left:50%;transform:translateX(-50%);width:180px;text-align:center;padding:5px 4px;background:radial-gradient(ellipse,#f0ebdcee 40%,#f0ebdc99 65%,#f0ebdc00 80%)}
+.training-shape-canvas--triangle .training-shape-actions{top:68%}
+.training-unit .training-state{display:block;font-size:10px;padding:0;white-space:normal;text-align:center}
+.training-unit .training-start{margin-top:6px}
+.training-unit .training-start .button{width:auto;min-width:100px;min-height:40px;padding:7px 22px}
+.training-unit .training-session-bar{display:block;border:0;margin:0;padding:3px 0}
+.training-unit .training-session-bar>span{font-size:19px}
+.training-unit .training-session-bar>div{justify-content:center;gap:14px;margin-top:4px}
+.training-unit .training-session-bar .text-button{font-size:14px;min-height:36px;white-space:nowrap}
+.training-unit .training-progress{margin:3px 20px;height:2px}
+.training-side{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;padding:0 0 0 20px;border-left:1px solid #bcb39680}
+.training-unit .training-topline{flex-shrink:0;gap:12px;margin:0 0 12px;align-items:center}
+.training-unit .training-topline .back-link{font-size:13px;white-space:nowrap}
+.training-unit .training-shape-picker{min-width:0;font-size:14px}
+#training-root .training-unit .training-shape-picker select{width:100%;max-width:230px;min-width:0;margin:0!important;font-size:14px;min-height:40px;padding:8px}
+.training-unit .training-exercises{flex-shrink:0;grid-template-columns:repeat(3,minmax(0,1fr));margin:0 0 10px}
+.training-unit .training-exercises button{font-size:14px;line-height:1.3;padding:10px 8px;overflow-wrap:normal;min-height:58px}
+.training-unit .training-exercises button+button{border-left:1px solid #b9b298;border-top:0}
+.training-pane-nav{display:flex;gap:22px;flex-shrink:0;border-bottom:1px solid #bcb39680}
+.training-pane-nav button{font:inherit;font-size:15px;border:0;border-bottom:2px solid transparent;background:transparent;color:#77705c;padding:10px 0;min-height:42px;cursor:pointer}
+.training-pane-nav button[aria-pressed=true]{border-bottom-color:#655d42;color:#39372d}
+.training-pane-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:16px 10px 8px 0;scroll-padding:12px}
+.training-guide h2{font-size:23px;line-height:1.25;font-weight:400;margin:0 0 18px}
+.training-unit .training-cue{padding:0;min-height:0}
+.training-unit .training-current-step{font-size:10px!important;line-height:1.5;margin:0 0 10px!important;text-align:left}
+.training-unit .training-prompt{font-size:20px;line-height:1.5;margin:0 0 12px;text-align:left}
+.training-unit .training-fine{line-height:1.5}
+.training-unit .training-body-steps{margin-top:18px}
+.training-unit .training-config{border:0;padding:0}
+.training-unit .training-rhythm .training-settings,.training-unit .training-rhythm .training-preset-grid:has([data-duration-field][hidden]){grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.training-unit .training-rhythm .training-preset-grid:has([data-duration-field][hidden])>label:nth-child(2){grid-column:1/-1}
+.training-unit .training-sound-row{gap:10px}
+.training-unit .training-sound summary span{display:block;margin:3px 0 0}
+.training-unit .training-reference{margin:0}
+.training-unit .training-reference>.training-examples>summary{font-size:17px!important;padding-top:0!important}
+.training-unit .training-walkthrough{padding:12px;margin:12px 0}
+.training-unit .training-walkthrough p{font-size:16px;line-height:1.5}
+.training-unit .training-walkthrough-actions{display:flex;flex-wrap:wrap;gap:10px}
+.training-unit .training-explorer-controls{grid-template-columns:1fr;gap:12px}
+.training-unit .training-message,.training-unit .training-notice{font-size:14px;margin-bottom:12px;padding:10px}
+.training-panel-opener{display:none}
+@media(max-width:850px) and (min-width:761px){
+ .training-unit{--shape-size:340px;gap:16px}
+ .training-side{padding-left:12px}
+ .training-unit .training-exercises button{font-size:12px;padding:8px 5px}
+ .training-unit .training-topline{gap:8px}
+ .training-unit .training-topline .back-link{font-size:12px}
+ .training-unit .training-breath-readout{font-size:28px}
+ .training-unit .training-prompt{font-size:18px}
+}
+@media(max-width:760px){
+ .training-unit{display:block;width:100%;height:auto;aspect-ratio:1;max-width:520px;margin:0 auto}
+ .training-shape-canvas{height:100%;position:absolute;inset:0}
+ .training-side{display:none;position:absolute;inset:0 0 100px;z-index:2;height:auto;padding:10px 12px 0;border:1px solid #bcb39680;background:#f2edddf5;box-shadow:0 2px 12px #665d4210}
+ .training-panel-open .training-side{display:flex}
+ .training-unit .training-topline{margin-bottom:8px}
+ .training-unit .training-exercises{margin-bottom:5px}
+ .training-unit .training-exercises button{min-height:44px;font-size:12px;padding:7px 5px}
+ .training-pane-nav{gap:24px}
+ .training-pane-nav button{min-height:36px;padding:7px 0;font-size:14px}
+ .training-pane-scroll{padding-top:10px}
+ .training-guide h2{font-size:20px;margin-bottom:12px}
+ .training-unit .training-prompt{font-size:17px}
+ .training-unit .training-breath-readout{font-size:30px;top:43%;padding:10px 5px}
+ .training-unit .training-breath-readout small{font-size:12px}
+ .training-shape-canvas--triangle .training-breath-readout{top:49%}
+ .training-unit .training-shape-actions{top:auto;bottom:38px;width:180px;z-index:3}
+ .training-unit .training-shape-actions .training-state{display:none}
+ .training-unit .training-session-bar{padding:0}
+ .training-unit .training-session-bar>div{margin:0}
+ .training-unit .training-session-bar .text-button{min-height:32px}
+ .training-unit .training-progress{margin-top:0}
+ .training-panel-opener{display:block;position:absolute;z-index:3;bottom:0;left:50%;transform:translateX(-50%);min-height:36px;white-space:nowrap;font-size:14px}
+}
+@media(prefers-reduced-motion:reduce){.training-shape-art{transform:none!important;transition:none}}
+.reduced-motion .training-shape-art{transform:none!important;transition:none}
+@media(max-width:760px){
+ .training-side{bottom:80px}
+ .training-unit .training-shape-actions{width:240px;bottom:36px}
+ .training-unit .training-session-bar{display:flex;justify-content:center;gap:12px}
+ .training-unit .training-session-bar>span{font-size:15px}
+}
+.training-mobile-exercise{display:none}
+@media(max-width:760px){
+ .training-unit .training-topline{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:8px}
+ .training-unit .training-topline .back-link,.training-unit .training-exercises{display:none}
+ .training-mobile-exercise{display:block;min-width:0}
+ #training-root .training-mobile-exercise select{margin:0;min-height:40px;font-size:13px;padding:8px;min-width:0;width:100%}
+ .training-shape-canvas--triangle .training-breath-readout{width:46%;font-size:26px}
+}

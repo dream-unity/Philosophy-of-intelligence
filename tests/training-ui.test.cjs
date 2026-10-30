@@ -113,7 +113,8 @@ function harness(options = {}) {
   vm.runInContext('window = globalThis;', browser);
   for (const filename of ['relational-models.js', 'model-view.js', 'shape-practice.js', 'exercises.js', 'training-store.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', filename), 'utf8'), browser, { filename });
   browser.FormExercises = { ...browser.FormExercises, ExerciseAudio: Audio };
-  browser.FormGeometry = { miniIcon: (stageId, size) => '<svg aria-hidden="true" data-stage="'+stageId+'" width="'+size+'"></svg>' };
+  if (options.realGeometry) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/geometry.js'), 'utf8'), browser, { filename:'geometry.js' });
+  else browser.FormGeometry = { miniIcon: (stageId, size) => '<svg aria-hidden="true" data-stage="'+stageId+'" width="'+size+'"></svg>' };
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/training.js'), 'utf8'), browser, { filename: 'training.js' });
   const host = new Element(), changes = [];
   const app = browser.FormTraining.mount({ root: host, stageId: options.stageId || 'circle', onStageChange: id => changes.push(id) });
@@ -136,6 +137,148 @@ function harness(options = {}) {
     key: browser.FormTrainingStore.STORAGE_KEY
   };
 }
+
+test('every shape supplies the actual animated SVG and one readout in the main practice canvas', () => {
+  const page=harness({realGeometry:true});
+  for(const stage of require('../src/shape-practice.js').STAGES){
+    page.app.setStage(stage.id);
+    const canvas=page.q('.training-shape-canvas'),pacer=canvas.querySelector('[data-pacer]');
+    assert.ok(pacer,stage.id+' has a main shape pacer');
+    const orb=pacer.querySelector('[data-orb]'),svg=orb.querySelector('svg');
+    assert.equal(svg.getAttribute('data-stage'),stage.id);
+    const drawingTags=['path','circle','ellipse','line','polyline','polygon','rect'];
+    assert.ok(drawingTags.some(tag=>svg.querySelector(tag)),stage.id+' contains its drawn geometry');
+    assert.equal(orb.querySelector('[data-breath-label]'),null,'breathing text is not scaled with the shape');
+    assert.equal(page.host.querySelectorAll('[data-pacer]').length,1);
+    assert.equal(page.host.querySelectorAll('[data-orb]').length,1);
+    assert.equal(page.host.querySelectorAll('[data-breath-label]').length,1);
+    assert.equal(page.host.querySelectorAll('[data-breath-count]').length,1);
+    for(const selector of ['[data-start]','[data-pause]','[data-end]'])assert.ok(canvas.querySelector(selector));
+  }
+});
+
+test('guide, settings and example panes switch without restarting or recording the running practice', () => {
+  const page=harness({stageId:'triangle'});
+  page.click('[data-start]');page.advance(3);
+  const timer=page.q('[data-timer]').textContent,starts=page.sounds[0].starts,cues=[...page.sounds[0].cues];
+  for(const name of ['settings','example','guide']){
+    page.click('[data-pane-toggle="'+name+'"]');
+    for(const pane of page.host.querySelectorAll('[data-pane]'))assert.equal(pane.hidden,pane.dataset.pane!==name);
+    assert.equal(page.q('[data-timer]').textContent,timer,'switching panes keeps elapsed time');
+    assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+    assert.equal(page.q('[data-session-state]').textContent,'Practising');
+    assert.equal(page.q('[data-pacer]').hidden,false);
+    assert.equal(page.sounds[0].starts,starts);
+    assert.deepEqual(page.sounds[0].cues,cues,'pane selection produces no extra bell');
+    assert.equal(page.raw.has(page.key),false,'opening a pane does not finish or save the active period');
+  }
+  page.click('[data-open-panel]');
+  assert.equal(page.q('[data-open-panel]').getAttribute('aria-expanded'),'false','Back to shape closes the mobile pane');
+  assert.doesNotMatch(page.q('.training-unit').getAttribute('class'),/training-panel-open/);
+  assert.equal(page.q('[data-pane="guide"]').hidden,false,'closing the mobile pane retains its selected guide for reopening');
+  assert.equal(page.q('[data-pacer]').hidden,false);
+  page.advance(2);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale','the same clock continues behind pane navigation');
+  assert.equal(page.q('[data-timer]').textContent,'14:55');
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
+});
+
+test('changing exercises and shapes keeps an opened example pane reachable with keyboard focus', () => {
+  const page=harness();
+  page.click('[data-open-panel]');
+  assert.equal(page.q('[data-open-panel]').getAttribute('aria-expanded'),'true');
+  page.click('[data-pane-toggle="example"]');
+  page.click('[data-exercise="heart"]');
+  assert.equal(page.q('[data-pane="example"]').hidden,false);
+  assert.equal(page.q('[data-examples]').open,true,'the selected example is restored after the exercise rerenders');
+  assert.equal(page.q('[data-open-panel]').getAttribute('aria-expanded'),'true','mobile controls stay open around the focused exercise button');
+  assert.equal(page.q('[data-exercise="heart"]').focused,true);
+  page.app.setStage('cube');
+  assert.equal(page.q('[data-pane="example"]').hidden,false);
+  assert.equal(page.q('[data-examples]').open,true,'a new shape exposes the selected example pane immediately');
+  assert.equal(page.q('[data-open-panel]').getAttribute('aria-expanded'),'true');
+  page.click('[data-open-panel]');page.click('[data-open-panel]');
+  assert.equal(page.q('[data-pane-toggle="example"]').focused,true,'reopening returns focus to the active pane control');
+  assert.equal(page.sounds[0].starts,0);
+});
+
+test('body mapping keeps the main shape visible in own rhythm throughout the session', () => {
+  const page=harness({stageId:'cube'});
+  page.click('[data-exercise="body"]');
+  assert.equal(page.q('[data-pacing]').value,'natural');
+  assert.equal(page.q('[data-pacer]').hidden,false,'the shape remains visible before Start');
+  page.click('[data-start]');page.advance(30);
+  assert.equal(page.q('[data-pacer]').hidden,false);
+  assert.equal(page.q('[data-breath-label]').textContent,'Own rhythm');
+  assert.equal(page.q('[data-dimension]').textContent,'Quality');
+  page.click('[data-pause]');
+  assert.equal(page.q('[data-pacer]').hidden,false);
+  page.click('[data-end]');
+  assert.equal(page.q('[data-pacer]').hidden,false);
+  assert.equal(page.q('[data-breath-label]').textContent,'Rest');
+});
+
+test('invalid pending timing reveals the settings pane and focuses the invalid field', () => {
+  for(const [field,value] of [['inhale',''],['exhale','0']]){
+    const page=harness();
+    page.type('[data-'+field+']',value);
+    page.click('[data-pane-toggle="guide"]');
+    page.click('[data-start]');
+    assert.equal(page.q('[data-pane="settings"]').hidden,false);
+    assert.equal(page.q('[data-'+field+']').focused,true);
+    assert.equal(page.q('[data-'+field+']').getAttribute('aria-invalid'),'true');
+    assert.ok(page.q('[data-rhythm-status]').textContent.trim());
+    assert.equal(page.q('[data-setup]').hidden,false);
+    assert.equal(page.q('[data-breath-label]').textContent,'Ready');
+    assert.equal(page.sounds[0].starts,0);
+    assert.equal(page.raw.has(page.key),false);
+  }
+});
+
+test('finite but unsupported timing opens a usable error instead of starting the metronome', () => {
+  const page=harness();
+  page.type('[data-inhale]','1e13');
+  page.type('[data-exhale]','5');
+  assert.doesNotThrow(()=>page.click('[data-start]'));
+  assert.equal(page.q('[data-pane="settings"]').hidden,false);
+  assert.equal(page.q('[data-inhale]').getAttribute('aria-invalid'),'true');
+  assert.equal(page.q('[data-inhale]').focused,true);
+  assert.ok(page.q('[data-rhythm-status]').textContent.trim());
+  assert.equal(page.q('[data-setup]').hidden,false);
+  assert.equal(page.q('[data-breath-label]').textContent,'Ready');
+  assert.equal(page.sounds[0].starts,0);
+  assert.equal(page.raw.has('form-breath-timing-v1'),false,'unsupported timing cannot replace the saved preference');
+  page.type('[data-inhale]','3');page.click('[data-start]');
+  assert.equal(page.q('[data-inhale]').getAttribute('aria-invalid'),'false');
+  assert.equal(page.q('[data-breath-count]').textContent,'3 seconds','correcting the field starts a usable session');
+});
+
+test('native exercise selection mirrors desktop buttons and remains disabled for an active period', () => {
+  const page=harness({stageId:'triangle'}),stage=require('../src/shape-practice.js').getStage('triangle');
+  assert.deepEqual(page.q('[data-exercise-select]').querySelectorAll('option').map(option=>option.value),['stream','heart','body']);
+  assert.equal(page.q('[data-exercise-select]').value,'stream');
+  for(const exercise of ['heart','body','stream']){
+    page.choose('[data-exercise-select]',exercise);
+    assert.equal(page.q('[data-exercise-select]').value,exercise);
+    assert.equal(page.q('[data-exercise-select]').focused,true,'the native control retains focus after rerender');
+    for(const button of page.host.querySelectorAll('[data-exercise]'))assert.equal(button.getAttribute('aria-pressed'),String(button.dataset.exercise===exercise));
+    assert.ok(page.q('[data-prompt]').textContent.includes(stage[exercise].cues.inhale),'the selected exercise supplies its guide');
+    assert.equal(page.q('[data-exercise-select]').disabled,false);
+  }
+  page.click('[data-exercise="heart"]');
+  assert.equal(page.q('[data-exercise-select]').value,'heart','desktop selection updates the native control too');
+  page.click('[data-start]');
+  assert.equal(page.q('[data-exercise-select]').disabled,true);
+  assert.ok(page.host.querySelectorAll('[data-exercise]').every(button=>button.disabled));
+  page.click('[data-pause]');
+  assert.equal(page.q('[data-exercise-select]').disabled,true,'paused periods keep the same exercise');
+  page.click('[data-end]');
+  assert.equal(page.q('[data-exercise-select]').disabled,false);
+  page.choose('[data-exercise-select]','body');
+  assert.equal(page.q('[data-exercise-select]').value,'body');
+  assert.equal(page.q('[data-pacing]').value,'natural');
+  assert.equal(page.q('[data-dimension]').textContent,'Location');
+});
 
 test('guided rehearsal preserves receive, encode, retrieve, compare order and synchronizes the complete model', () => {
   const page=harness();
@@ -200,25 +343,27 @@ test('manual entry selection resets the teaching phase and detached walkthrough 
   assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
 });
 
-test('all 42 practices teach through the metronome and keep optional examples below practice', () => {
+test('all 42 practices teach through the main shape metronome with their own guide and worked example', () => {
   const page=harness();
   for(const stage of require('../src/shape-practice.js').STAGES){
     page.app.setStage(stage.id);
     for(const exercise of ['stream','heart','body']){
       page.click('[data-exercise="'+exercise+'"]');
       const context=stage.id+'/'+exercise,cues=stage[exercise].cues;
-      const layout=page.q('.training-layout'),reference=page.q('[data-reference]');
-      assert.equal(page.host.querySelector('[data-shape-essence]'),null,'the descriptive subheading is removed');
-      assert.equal(page.host.querySelector('.training-heading'),null,'the old title and level label are removed');
-      const symbolHeader=page.q('.training-symbol-header');
-      assert.equal(symbolHeader.querySelector('h1').textContent,stage.name,'retain a screen-reader page heading');
-      assert.equal(symbolHeader.querySelector('h1').attributes.class,'visually-hidden');
-      const symbol=page.q('.training-page-symbol').querySelector('svg');
+      const canvas=page.q('.training-shape-canvas'),pacer=canvas.querySelector('[data-pacer]');
+      assert.ok(pacer,context+' uses the main shape as its metronome');
+      assert.equal(page.host.querySelectorAll('[data-pacer]').length,1,'no second small metronome appears');
+      const symbol=pacer.querySelector('[data-orb]').querySelector('svg');
       assert.equal(symbol.attributes['data-stage'],stage.id);
-      assert.equal(symbol.attributes.width,'65','scale the same artwork used on the homepage');
-      assert.ok(page.host.children.indexOf(symbolHeader)<page.host.children.indexOf(layout),'the large symbol precedes practice');
-      assert.ok(page.host.children.indexOf(layout)<page.host.children.indexOf(reference),'optional examples follow the exercise and settings');
-      assert.equal(page.q('[data-examples]').open,false,'detailed rehearsal is optional');
+      assert.equal(page.host.querySelectorAll('[data-breath-label]').length,1);
+      assert.equal(page.host.querySelectorAll('[data-breath-count]').length,1);
+      for(const selector of ['[data-start]','[data-pause]','[data-end]'])assert.ok(canvas.querySelector(selector),selector+' stays inside the main shape');
+      page.click('[data-pane-toggle="example"]');
+      assert.equal(page.q('[data-pane="example"]').hidden,false);
+      assert.ok(page.q('[data-pane="example"]').querySelector('[data-walkthrough]'),context+' keeps its worked example in the side pane');
+      page.click('[data-pane-toggle="guide"]');
+      assert.equal(page.q('[data-pane="guide"]').hidden,false);
+      assert.ok(page.q('[data-pane="guide"]').querySelector('[data-prompt]'),context+' keeps its shape-specific instructions in the guide');
       for(const selector of ['[data-lesson]','[data-short-example]','.training-breath-method','.training-four','.training-reconstruction','.training-theory','[data-live-shape]']){
         assert.equal(page.host.querySelector(selector),null,'removed teaching stays absent: '+selector);
       }
@@ -365,15 +510,14 @@ test('each exercise opens with a stable preview without starting sound or record
   assert.equal(page.q('[data-dimension]').textContent, 'Location', 'Start resets any previewed dimension');
 });
 
-test('one Start follows the exercise and all settings, and applies pending edits without an extra confirmation', () => {
+test('one Start inside the shape applies pending side-pane settings without an extra confirmation', () => {
   const page = harness();
-  const nodes = [];
-  function collect(element) { nodes.push(element); element.children.forEach(collect); }
-  collect(page.host);
-  const position = selector => nodes.indexOf(page.q(selector));
-  assert.ok(position('[data-live]') < position('[data-duration]'));
+  assert.ok(page.q('.training-shape-canvas').querySelector('[data-start]'));
+  page.click('[data-pane-toggle="settings"]');
+  const settings=page.q('[data-pane="settings"]');
+  assert.equal(settings.hidden,false);
   for (const selector of ['[data-duration]', '[data-pacing]', '[data-inhale]', '[data-exhale]', '[data-bell]', '[data-sound]', '[data-frequency]', '[data-volume]']) {
-    assert.ok(position(selector) < position('[data-start]'), selector + ' precedes Start in reading order');
+    assert.ok(settings.querySelector(selector),selector+' is available in the settings pane');
   }
   assert.equal(page.host.querySelectorAll('[data-start]').length, 1);
   assert.equal(page.host.querySelector('[data-again]'), null);
@@ -391,7 +535,7 @@ test('one Start follows the exercise and all settings, and applies pending edits
   assert.equal(page.q('[data-breath-count]').textContent, '6.5 seconds');
 });
 
-test('ending and completing practice restore the same Start below editable settings', () => {
+test('ending and completing practice restore the same Start inside the shape', () => {
   const page = harness();
   page.click('[data-start]');
   page.advance(10);
@@ -496,14 +640,16 @@ test('own rhythm gently expands and contracts without moving its label or imposi
   const page = harness();
   page.choose('[data-pacing]', 'natural');
   page.click('[data-start]');
-  assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
+  const scale=()=>Number(page.q('[data-orb]').style.transform.match(/scale\(([^)]+)\)/)[1]);
+  const base=scale();
   page.advance(6);
-  assert.equal(page.q('[data-orb]').style.transform, 'scale(1.18)');
+  const expanded=scale();
+  assert.ok(expanded>base,'the main shape expands gently');
   assert.equal(page.q('[data-breath-label]').textContent, 'Own rhythm');
   assert.equal(page.q('[data-breath-count]').textContent, 'Gently · without holds');
   assert.equal(page.q('.training-breath-readout').style.transform, undefined);
   page.advance(6);
-  assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
+  assert.equal(scale(),base,'the main shape returns to its starting size');
   assert.deepEqual(page.sounds[0].cues, []);
   page.advance(3);
   page.click('[data-pause]');
@@ -512,14 +658,14 @@ test('own rhythm gently expands and contracts without moving its label or imposi
   assert.equal(page.q('[data-orb]').style.transform, paused, 'pausing stops the decorative pulse');
   page.click('[data-pause]');
   page.advance(3);
-  assert.equal(page.q('[data-orb]').style.transform, 'scale(1.18)', 'resuming continues session time');
+  assert.equal(scale(),expanded,'resuming continues session time');
   page.click('[data-end]');
   page.advance(6);
   assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
   assert.equal(page.q('[data-breath-label]').textContent, 'Rest');
 });
 
-test('paced ring expands on inhale and contracts on exhale without shrinking below its text enclosure', () => {
+test('paced shape expands on inhale and contracts on exhale without altering the readout or worked model', () => {
   const page = harness();
   const diagram = page.q('[data-model-diagram]').querySelector('svg');
   const diagramText = diagram.textContent;
@@ -531,12 +677,14 @@ test('paced ring expands on inhale and contracts on exhale without shrinking bel
   page.choose('[data-pacing]', 'paced');
   page.click('[data-start]');
   const scale = () => Number(page.q('[data-orb]').style.transform.match(/scale\(([^)]+)\)/)[1]);
-  assert.equal(scale(), 1);
-  let previous = scale();
+  const base=scale();
+  let previous = base;
   for (let second = 1; second <= 10; second++) {
     page.advance(1);
     const current = scale();
-    assert.ok(current >= 1 && current <= 1.18, 'the text enclosure remains at least its full base size');
+    assert.ok(current >= base && current <= 1,'the animated artwork stays within its full-size canvas');
+    if(second===5)assert.ok(current>base,'inhale reaches an expanded shape');
+    assert.equal(page.q('.training-breath-readout').style.transform,undefined,'the phase readout stays stationary');
     assert.ok(second <= 5 ? current >= previous : current <= previous);
     assert.equal(label.textContent, second < 5 || second === 10 ? 'Inhale' : 'Exhale');
     assert.equal(diagram.textContent, diagramText, 'ticks must not overwrite the lesson SVG with a breathing label');
@@ -544,14 +692,14 @@ test('paced ring expands on inhale and contracts on exhale without shrinking bel
     assert.equal(diagram.getAttribute('data-breath'), diagramBreath, 'the lesson entry number is independent of the timer');
     previous = current;
   }
-  assert.equal(scale(), 1);
+  assert.equal(scale(),base);
   page.click('[data-pause]');
   page.advance(4);
-  assert.equal(scale(), 1);
+  assert.equal(scale(),base);
   assert.equal(page.q('[data-breath-label]').textContent, 'Paused');
 });
 
-test('custom 3 / 7 timing drives the label, countdown, ring and bell from one phase', () => {
+test('custom 3 / 7 timing drives the label, countdown, shape and bell from one phase', () => {
   const page=harness();
   page.applyRhythm(3,7);
   assert.equal(page.q('[data-pacing]').value,'paced');
@@ -560,20 +708,21 @@ test('custom 3 / 7 timing drives the label, countdown, ring and bell from one ph
   const scale=()=>Number(page.q('[data-orb]').style.transform.match(/scale\(([^)]+)\)/)[1]);
   assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
   assert.equal(page.q('[data-breath-count]').textContent,'3 seconds');
-  assert.equal(scale(),1);
+  const base=scale();
   assert.deepEqual(page.sounds[0].cues,[true]);
   page.advance(1.5);
-  assert.ok(Math.abs(scale()-1.09)<1e-10);
+  const halfway=scale();
+  assert.ok(halfway>base);
   page.advance(1.5);
   assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
   assert.equal(page.q('[data-breath-count]').textContent,'7 seconds');
-  assert.equal(scale(),1.18);
+  assert.ok(scale()>halfway,'the shape reaches full expansion at the exhale boundary');
   assert.deepEqual(page.sounds[0].cues,[true,false]);
   page.advance(3.5);
-  assert.ok(Math.abs(scale()-1.09)<1e-10);
+  assert.ok(Math.abs(scale()-halfway)<1e-10,'half of either phase reaches the same shape size');
   page.advance(3.5);
   assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
-  assert.equal(scale(),1);
+  assert.equal(scale(),base);
   assert.deepEqual(page.sounds[0].cues,[true,false,true]);
   assert.equal(page.q('[data-timer]').textContent,'14:50');
   assert.equal(page.q('.training-sound').open,false);
@@ -621,7 +770,7 @@ test('editing fields does not interrupt the clock and applying a new pair restar
 test('invalid duration pairs leave both active durations and stored preferences unchanged', () => {
   const page=harness();page.applyRhythm(3,7);page.click('[data-start]');page.advance(1);
   const saved=page.raw.get('form-breath-timing-v1');
-  for(const [inhale,exhale] of [['',7],[3,''],[0,7],[-1,7],[3,0.01],['Infinity',7],[3,'NaN'],['1e309',7]]){
+  for(const [inhale,exhale] of [['',7],[3,''],[0,7],[-1,7],[3,0.01],['Infinity',7],[3,'NaN'],['1e309',7],['1e13',5],[3,'1e13']]){
     page.applyRhythm(inhale,exhale);
     assert.ok(page.q('[data-rhythm-status]').textContent.trim(),'invalid input has visible feedback');
     assert.equal(page.raw.get('form-breath-timing-v1'),saved,'invalid pairs cannot overwrite a saved preference');
@@ -1116,7 +1265,7 @@ test('every application retains four optional worked entries and a complete rela
       assert.equal(page.q('[data-pacing]').value,exercise==='body'?'natural':'paced');
       assert.ok(page.sounds.every(audio=>audio.starts===0),'browsing lessons does not autoplay sound');
       assert.equal(page.host.querySelector('.training-breath-examples'),null,'repeated full prose rows are removed');
-      assert.equal(page.q('[data-examples]').open,false,'worked entries remain collapsed by default');
+      assert.ok(page.q('[data-pane="example"]').querySelector('[data-examples]'),'worked entries remain available in their side pane');
       assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' shows the entire starting model');
       assert.equal(page.q('[data-model-state]').querySelectorAll('option').length,4);
       for(let state=1;state<4;state++){page.choose('[data-model-state]',String(state));assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' retains its complete model at breath '+(state+1));}
