@@ -73,11 +73,33 @@ body[data-view="journey"] .skip-link { display: none; }
   .portal-caption { background: Canvas; color: CanvasText; }
 }
 
-/* Keep Suno's own play/pause control visible while navigating the exercises. */
+/* Keep the same iframe mounted and its play/pause control available on every view. */
 .site-music { width: min(340px, calc(100% - 24px)); margin: 12px auto 0; }
 .site-music iframe { display: block; width: 100%; height: 150px; border: 1px solid #b5a78f; border-radius: 12px; background: #ebe4d5; }
 .music-source { display: block; width: fit-content; margin: 3px 0 0 auto; padding: 4px 0; font: 11px/1.5 var(--sans); color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
-@media (min-width: 1200px) {
-  body[data-view="journey"] .site-music { position: absolute; z-index: 4; top: max(12px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); margin: 0; }
+/* Centre the player directly below the logo, before the shape cards.
+   Shared viewport lengths keep both edges aligned without reparenting the iframe. */
+body[data-view="journey"] {
+  position: relative;
+  --portal-width: 100vw;
+  --portal-size: min(calc(var(--portal-width) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)), calc(100vh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px);
 }
-@media print { .site-music { display: none; } }
+@supports (width: 100cqw) {
+  body[data-view="journey"] { container-type: inline-size; --portal-width: 100cqw; }
+}
+@supports (height: 100svh) {
+  body[data-view="journey"] { --portal-size: min(calc(var(--portal-width) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)), calc(100svh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px); }
+}
+body[data-view="journey"] .portal-page { justify-content: flex-start; }
+body[data-view="journey"] .portal-artwork { width: min(100%, var(--portal-size)); }
+body[data-view="journey"] .site-music { position: absolute; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + var(--portal-size) + 4px); left: calc(50% + (env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / 2); transform: translateX(-50%); margin: 0; }
+body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
+@media (max-height: 480px) and (min-width: 601px) {
+  body[data-view="journey"] { --portal-size: min(var(--portal-width), calc(100vh - 122px)); }
+  @supports (height: 100svh) { body[data-view="journey"] { --portal-size: min(var(--portal-width), calc(100svh - 122px)); } }
+}
+@media print {
+  .site-music { display: none; }
+  body[data-view="journey"] .portal-artwork { width: 400px; }
+  body[data-view="journey"] .portal-page > .stage-path { margin-top: 0; }
+}
