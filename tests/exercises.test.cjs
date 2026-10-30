@@ -132,6 +132,7 @@ test('audio is never created before explicit start and missing browser audio is 
   const audio = new ExerciseAudio({ audioContextFactory: () => { calls++; return null; } });
   assert.equal(calls, 0);
   assert.equal(audio.cue(true), false);
+  assert.equal(audio.preview(), false);
   assert.equal(audio.complete(), false);
   audio.stop();
   assert.equal(calls, 0);
@@ -304,5 +305,45 @@ test('restarting while activation is pending discards the old cue and completion
   assert.equal(h.oscillators().length, 4);
   assert.equal(h.oscillators()[0].frequency.value, 293.66);
   assert.equal(h.timers.size, 1, 'only this bell cleanup remains, without a completion chime');
+  h.audio.destroy();
+});
+
+test('bell preview matches Project Meaning with inhale then exhale 650 ms after activation', async () => {
+  const h = suspendedAudioHarness();
+  h.audio.start({ frequency: 0 });
+  assert.equal(h.audio.preview(), true);
+  assert.equal(h.nodes.length, 0);
+  assert.equal(h.timers.size, 0, 'the preview interval starts when sound is ready');
+  h.context.state = 'running'; h.resumes[0].resolve();
+  await Promise.resolve();
+  assert.deepEqual(h.oscillators().map(oscillator => oscillator.frequency.value), [392, 392 * 1.003, 784, 392 * 2.76]);
+  const preview = [...h.timers.values()].find(timer => timer.delay === 650);
+  assert.ok(preview, 'the lower reference bell follows at 650 ms');
+  preview.callback();
+  assert.deepEqual(h.oscillators().slice(4).map(oscillator => oscillator.frequency.value), [293.66, 293.66 * 1.003, 587.32, 293.66 * 2.76]);
+  h.audio.destroy();
+});
+
+test('stop, destroy and restart cancel both pending and between-strike bell previews', async () => {
+  for (const action of ['stop', 'destroy', 'start']) {
+    for (const state of ['suspended', 'running']) {
+      const h = suspendedAudioHarness(state);
+      h.audio.start({ frequency: 0 }); h.audio.preview();
+      const count = h.oscillators().length;
+      h.audio[action]({ frequency: 0 });
+      if (state === 'suspended') {
+        h.context.state = 'running'; h.resumes[0].resolve();
+        await Promise.resolve();
+      }
+      assert.equal(h.oscillators().length, count, action + ' prevents a delayed preview note');
+      assert.equal(h.timers.size, 0, action + ' clears the preview interval');
+      h.audio.destroy();
+    }
+  }
+  const h = suspendedAudioHarness('running');
+  h.audio.start({ frequency: 0, bellVolume: 0 });
+  assert.equal(h.audio.preview(), false);
+  assert.equal(h.nodes.length, 0);
+  assert.equal(h.timers.size, 0);
   h.audio.destroy();
 });

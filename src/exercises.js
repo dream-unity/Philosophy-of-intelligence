@@ -380,6 +380,16 @@
       return this._whenReady(() => this._bowl(inhale ? 392 : 293.66, 0.08, 3.3));
     }
 
+    preview() {
+      if (this.bellVolume <= 0) return false;
+      return this._whenReady(() => {
+        // Match Project Meaning's test: inhale, then exhale 650 ms later.
+        if (!this._bowl(392, 0.08, 3.3)) return false;
+        this._schedule(() => this.cue(false), 650);
+        return true;
+      });
+    }
+
     complete() {
       return this._whenReady(() => {
         this._stopPads(3);
