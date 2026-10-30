@@ -427,7 +427,7 @@ body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bot
 .training-page-symbol svg{display:block;width:100%;height:100%}
 
 </style>
-  <style data-form-source="src/landing.css?v=62bf511818f9">
+  <style data-form-source="src/landing.css?v=938dbbf6abc4">
 /* Original artwork and portal composition from the owner's dream-unity/one.
    Labels are live HTML. The matching paper captions cover the raster labels. */
 :root { --paper: #ebe4d5; --ink: #302b23; color-scheme: light; }
@@ -522,12 +522,15 @@ body[data-view="journey"] .skip-link { display: none; }
 .music-player-window { height: 108px; overflow: hidden; overflow: clip; border: 1px solid #b5a78f; border-radius: 10px; background: #1b1b1b; }
 .site-music iframe { display: block; width: 116.27907%; height: 148px; border: 0; background: #ebe4d5; transform: scale(.86); transform-origin: top left; }
 .music-offline { margin: 16px; color: #f8f4ec; font: 13px/1.5 var(--sans); }
-/* Size the symbol from the available width, not the height left above the
-   shapes. The opening composition may scroll on a short screen. */
+/* Preserve a generous symbol while reserving 4px for the player gap,
+   108px for the player and 16px of clearance inside the initial viewport. */
 body[data-view="journey"] .portal-page { justify-content: flex-start; }
-.portal-hero { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 1800px; margin-inline: auto; }
+.portal-hero { --hero-logo-height: calc(100vh - 128px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 1800px; margin-inline: auto; }
+@supports (height: 100svh) {
+  .portal-hero { --hero-logo-height: calc(100svh - 128px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+}
 .portal-visual { order: 1; display: flex; flex-direction: column; align-items: center; width: 100%; min-width: 0; }
-.portal-visual > .portal-artwork { width: min(100%, 840px); }
+.portal-visual > .portal-artwork { width: min(100%, 840px, var(--hero-logo-height)); }
 .portal-visual > .site-music-panel { width: 100%; }
 .portal-visual .site-music { margin: 4px auto 0; }
 .portal-hero > .creation-intro { order: 2; margin-top: 28px; }
@@ -536,11 +539,11 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
   .portal-hero { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); gap: 8px; padding-inline: 24px; align-items: start; }
   .portal-hero > .creation-intro { grid-column: 1; grid-row: 1; align-self: center; width: min(calc(100% - 24px), 280px); margin: 24px auto 136px; }
   .portal-visual { grid-column: 2; grid-row: 1; }
-  .portal-visual > .portal-artwork { width: 100%; }
+  .portal-visual > .portal-artwork { width: min(100%, var(--hero-logo-height)); }
 }
 @media (min-width: 1200px) {
   /* Equal side columns hold the enlarged logo on the centre of the page. */
-  .portal-hero { --hero-logo-size: min(56vw, calc(100vw - 560px), 1000px); grid-template-columns: minmax(0, 1fr) var(--hero-logo-size) minmax(0, 1fr); gap: 0; padding-inline: 0; }
+  .portal-hero { --hero-logo-size: min(56vw, calc(100vw - 560px), 1000px, var(--hero-logo-height)); grid-template-columns: minmax(0, 1fr) var(--hero-logo-size) minmax(0, 1fr); gap: 0; padding-inline: 0; }
   .portal-hero > .creation-intro { width: min(calc(100% - 48px), 280px); }
 }
 @media print {
