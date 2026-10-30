@@ -51,8 +51,8 @@ body[data-view="journey"] .skip-link { display: none; }
 .portal-page .stage-tile .stage-icon svg { width: 100%; height: 100%; }
 .portal-page .stage-tile:focus-visible { outline: 2px solid #4c3c28; outline-offset: 3px; }
 /* The introduction sits to the left of the symbol on wide screens. */
-.creation-intro { flex: none; width: min(calc(100% - 40px), 650px); margin: clamp(32px, 5vw, 60px) auto 28px; color: var(--ink); font-family: var(--serif); font-size: clamp(17px, 1.6vw, 20px); line-height: 1.75; text-align: center; text-wrap: pretty; }
-.creation-intro::before { content: ""; display: block; width: 72px; height: 1px; margin: 0 auto 28px; background: linear-gradient(to right, transparent, #8b795c, transparent); }
+.creation-intro { flex: none; width: min(calc(100% - 40px), 440px); margin: 28px auto; color: var(--ink); font-family: var(--serif); font-size: 16px; line-height: 1.65; text-align: center; text-wrap: pretty; }
+.creation-intro::before { content: ""; display: block; width: 72px; height: 1px; margin: 0 auto 20px; background: linear-gradient(to right, transparent, #8b795c, transparent); }
 .creation-intro p { margin: 0 0 1em; }
 .creation-intro p:last-child { margin-bottom: 0; }
 .creation-intro em { color: inherit; }
@@ -77,13 +77,6 @@ body[data-view="journey"] .skip-link { display: none; }
 @media (max-width: 600px) {
   .portal-title { font-size: clamp(8px, 1.65cqw, 12px); letter-spacing: .18em; }
 }
-@media (max-height: 480px) and (min-width: 601px) {
-  .portal-page { padding-bottom: 6px; }
-  .portal-artwork { width: min(100%, calc(100svh - 122px)); }
-  .portal-caption { font-size: 9px; }
-  .portal--world .portal-caption { font-size: 9px; }
-  .portal-title { font-size: 7px; letter-spacing: .15em; }
-}
 @media print { .portal-page { min-height: auto; break-inside: avoid; } .portal-artwork { width: 400px; } }
 
 @media (prefers-reduced-motion: reduce) { .portal-page .stage-tile { transition: none; } }
@@ -93,39 +86,32 @@ body[data-view="journey"] .skip-link { display: none; }
   .portal-caption { background: Canvas; color: CanvasText; }
 }
 
-/* Keep the same iframe mounted and its play/pause control available on every view. */
-.site-music { width: min(340px, calc(100% - 24px)); min-height: 150px; margin: 12px auto 0; }
-/* Keep the playback controls visible while clipping the provider's footer.
-   The iframe sandbox also blocks its outbound links, including keyboard use. */
-.music-player-window { height: 124px; overflow: hidden; overflow: clip; border: 1px solid #b5a78f; border-radius: 12px; background: #1b1b1b; }
-/* Preserve the former 150px box's 148px inner viewport; an exact 150px
-   viewport switches this embed to a different compact layout. */
-.site-music iframe { display: block; width: 100%; height: 148px; border: 0; background: #ebe4d5; }
+/* Keep the original player viewport so the provider does not rearrange its
+   controls. Scale the complete player into a smaller, footer-clipped window. */
+.site-music { width: min(292px, calc(100% - 24px)); min-height: 0; margin: 12px auto 0; }
+.music-player-window { height: 108px; overflow: hidden; overflow: clip; border: 1px solid #b5a78f; border-radius: 10px; background: #1b1b1b; }
+.site-music iframe { display: block; width: 116.27907%; height: 148px; border: 0; background: #ebe4d5; transform: scale(.86); transform-origin: top left; }
 .music-offline { margin: 16px; color: #f8f4ec; font: 13px/1.5 var(--sans); }
-/* One hero holds the introduction and the logo/song together. Keep the
-   iframe in its original DOM instance as shape selections reveal practice. */
+/* Size the symbol from the available width, not the height left above the
+   shapes. The opening composition may scroll on a short screen. */
 body[data-view="journey"] .portal-page { justify-content: flex-start; }
-.portal-hero { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.portal-hero { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 1800px; margin-inline: auto; }
 .portal-visual { order: 1; display: flex; flex-direction: column; align-items: center; width: 100%; min-width: 0; }
-.portal-visual > .portal-artwork { width: min(100%, calc(100vh - 172px), 1254px); width: min(100%, calc(100svh - 172px), 1254px); }
+.portal-visual > .portal-artwork { width: min(100%, 840px); }
 .portal-visual > .site-music-panel { width: 100%; }
 .portal-visual .site-music { margin: 4px auto 0; }
-.portal-hero > .creation-intro { order: 2; margin-top: 32px; }
+.portal-hero > .creation-intro { order: 2; margin-top: 28px; }
 body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
 @media (min-width: 900px) {
-  .portal-hero { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
-  .portal-hero > .creation-intro { grid-column: 1; grid-row: 1; align-self: center; width: min(calc(100% - 40px), 350px); margin: 28px auto 178px; }
+  .portal-hero { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); gap: 8px; padding-inline: 24px; align-items: start; }
+  .portal-hero > .creation-intro { grid-column: 1; grid-row: 1; align-self: center; width: min(calc(100% - 24px), 280px); margin: 24px auto 136px; }
   .portal-visual { grid-column: 2; grid-row: 1; }
+  .portal-visual > .portal-artwork { width: 100%; }
 }
 @media (min-width: 1200px) {
-  /* Matching outer columns preserve the central axis of the main symbol. */
-  .portal-hero { --hero-logo-size: min(calc(100vw - 640px), calc(100vh - 172px), 1254px); grid-template-columns: minmax(0, 1fr) var(--hero-logo-size) minmax(0, 1fr); }
-  @supports (height: 100svh) {
-    .portal-hero { --hero-logo-size: min(calc(100vw - 640px), calc(100svh - 172px), 1254px); }
-  }
-}
-@media (max-height: 480px) and (min-width: 601px) {
-  .portal-visual > .portal-artwork { width: min(100%, calc(100vh - 122px)); width: min(100%, calc(100svh - 122px)); }
+  /* Equal side columns hold the enlarged logo on the centre of the page. */
+  .portal-hero { --hero-logo-size: min(56vw, calc(100vw - 560px), 1000px); grid-template-columns: minmax(0, 1fr) var(--hero-logo-size) minmax(0, 1fr); gap: 0; padding-inline: 0; }
+  .portal-hero > .creation-intro { width: min(calc(100% - 48px), 280px); }
 }
 @media print {
   .site-music { display: none; }
