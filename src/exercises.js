@@ -153,6 +153,11 @@
       this._pads = new Set();
       this._timers = new Set();
       this._enabled = false;
+      this._ready = false;
+      this._pendingResume = false;
+      this._pendingSound = null;
+      this._generation = 0;
+      this._onError = typeof settings.onError === 'function' ? settings.onError : function () {};
       this.frequency = 0;
       this.bellVolume = 1;
     }
@@ -194,7 +199,7 @@
     }
 
     _bowl(fundamental, peak, decay) {
-      if (!this._enabled || !this._context || this.bellVolume <= 0) return false;
+      if (!this._enabled || !this._ready || !this._context || this._context.state !== 'running' || this.bellVolume <= 0) return false;
       const ac = this._context;
       const time = ac.currentTime;
       const volume = this.bellVolume <= 1 ? this.bellVolume : 1 + (this.bellVolume - 1) * 3;
@@ -299,12 +304,62 @@
 
     _stop(fade) {
       this._enabled = false;
+      this._ready = false;
+      this._pendingResume = false;
+      this._pendingSound = null;
+      this._generation++;
       this._timers.forEach(id => this._clearTimeout(id)); this._timers.clear();
       this._strikes.forEach(group => this._dispose(group)); this._strikes.clear();
       this._stopPads(fade);
       // Disconnect the reverb as well, so no residual bell continues after stop.
       this._verbNodes.forEach(function (node) { try { node.disconnect(); } catch (_) {} });
       this._verbNodes = []; this._verb = null;
+    }
+
+    _fail(error) {
+      this._stop(0);
+      try { this._onError(error); } catch (_) {}
+      return false;
+    }
+
+    _activate() {
+      this._pendingResume = false;
+      this._ready = true;
+      if (!this._pads.size) this._startPad();
+      const sound = this._pendingSound;
+      this._pendingSound = null;
+      if (sound) sound();
+    }
+
+    _resumeAudio() {
+      if (this._pendingResume) return true;
+      const context = this._context, generation = this._generation;
+      try {
+        if (context.state === 'running') { this._activate(); return true; }
+        // Resume inside the click handler, but build the sound only after the
+        // context runs. Wall-clock cleanup must not expire a suspended bell.
+        this._ready = false;
+        this._pendingResume = true;
+        const pending = context.resume();
+        Promise.resolve(pending).then(() => {
+          if (!this._enabled || generation !== this._generation || context !== this._context) return;
+          if (context.state !== 'running') throw new Error('Audio is still suspended.');
+          this._activate();
+        }).catch(error => {
+          if (this._enabled && generation === this._generation && context === this._context) this._fail(error);
+        });
+        return true;
+      } catch (error) { return this._fail(error); }
+    }
+
+    _whenReady(sound) {
+      if (!this._enabled || !this._context) return false;
+      if (this._ready && this._context.state === 'running') {
+        try { return sound(); } catch (error) { return this._fail(error); }
+      }
+      // Keep only the latest cue: resuming must never play a backlog of bells.
+      this._pendingSound = sound;
+      return this._resumeAudio();
     }
 
     start(options) {
@@ -315,24 +370,23 @@
       try {
         if (!this._context || this._context.state === 'closed') this._context = this._factory();
         if (!this._context) return false;
-        if (this._context.state === 'suspended') {
-          const pending = this._context.resume();
-          if (pending && pending.catch) pending.catch(function () {});
-        }
         this._enabled = true;
-        this._startPad();
-        return true;
-      } catch (_) { this._stop(0); return false; }
+        return this._resumeAudio();
+      } catch (error) { return this._fail(error); }
     }
 
-    cue(inhale) { return this._bowl(inhale ? 392 : 293.66, 0.08, 3.3); }
+    cue(inhale) {
+      if (this.bellVolume <= 0) return false;
+      return this._whenReady(() => this._bowl(inhale ? 392 : 293.66, 0.08, 3.3));
+    }
 
     complete() {
-      if (!this._enabled) return false;
-      this._stopPads(3);
-      this._bowl(392, 0.13, 8.5);
-      this._schedule(() => this._bowl(293.66, 0.11, 9.5), 3000);
-      return true;
+      return this._whenReady(() => {
+        this._stopPads(3);
+        this._bowl(392, 0.13, 8.5);
+        this._schedule(() => this._bowl(293.66, 0.11, 9.5), 3000);
+        return true;
+      });
     }
 
     stop() { this._stop(3); }

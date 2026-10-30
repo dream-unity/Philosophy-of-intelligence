@@ -8,9 +8,10 @@
     const D = root.FormShapePractice, E = root.FormExercises, G = root.FormGeometry;
     let storage; try { storage = root.localStorage; } catch (_) { storage = null; }
     const store = root.FormTrainingStore.createStore(storage);
-    let stage = D.getStage(stageId), exercise = 'stream', clock = null, audio = new E.ExerciseAudio();
+    let stage = D.getStage(stageId), exercise = 'stream', clock = null, audio = new E.ExerciseAudio({onError:sessionSoundFailure});
+    let sessionAudioFailed = false;
     let unsaved = false, fieldsGeneration = 0, modelState = 0, selectedRelationship = '', walkthroughStep = 0, walkthroughGeneration = 0;
-    const testAudio = new E.ExerciseAudio();
+    const testAudio = new E.ExerciseAudio({onError:soundFailure});
     let recorded = false, peek = null, lastBodyStep = -1, lastCue = '', lastPrompt = '', announcement = '';
     let sound = false, heartBell = true, frequency = 10, bellVolume = 1, pacing = 'natural', duration = 15;
     const pacingByExercise = {stream:'natural', heart:'paced', body:'natural'};
@@ -62,8 +63,13 @@
     }
     function breathBellEnabled() { return exercise==='heart' && heartBell && pacing==='paced'; }
     function audioEnabled() { return sound || breathBellEnabled(); }
+    function soundStatus(text) { const el=q('[data-sound-status]');if(el)el.textContent=text; }
+    function soundFailure() { q('.training-sound').open=true;soundStatus('Sound could not start. Tap Test bell to try again.'); }
+    function sessionSoundFailure() { sessionAudioFailed=true;soundFailure(); }
     function startAudio() {
-      if(audioEnabled() && !audio.start({frequency:sound?frequency:0,bellVolume})) message('Sound is unavailable in this browser. The exercise continues silently.');
+      sessionAudioFailed=false;
+      soundStatus('');
+      if(audioEnabled() && !audio.start({frequency:sound?frequency:0,bellVolume})) sessionSoundFailure();
     }
     function refreshAudio() {
       audio.stop();
@@ -174,12 +180,12 @@
           <div class="training-settings"><label>Practice length<select data-duration>${(exercise==='stream'?E.STREAM_DURATIONS:exercise==='heart'?E.HEART_DURATIONS:E.BODY_DURATIONS).map(m=>`<option value="${m}" ${m===duration?'selected':''}>${m<60?m+' minutes':m/60+(m===60?' hour':' hours')}</option>`).join('')}</select></label><label>Breathing<select data-pacing><option value="natural" ${pacing==='natural'?'selected':''}>My own rhythm</option><option value="paced" ${pacing==='paced'?'selected':''}>5 seconds in · 5 seconds out</option></select></label></div>
           <button type="button" class="button primary" data-start>Begin ${exercise==='stream'?'stream practice':exercise==='heart'?'heart practice':'body mapping'} <span aria-hidden="true">↗</span></button></div>
           <div data-live hidden><div class="training-session-bar"><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
-            <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath aria-live="polite">Own rhythm</span><small data-breath-count aria-hidden="true"></small></div></div>
+            <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Own rhythm</span><small data-breath-count aria-hidden="true"></small></div></div>
             <button type="button" class="text-button training-live-pace" data-live-pace>Use a gentle 5 / 5 guide</button><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt"></p><p data-next-step class="training-fine training-centered"></p>
             <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
             <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-fill></span></div>
             <div data-finished class="training-finish" hidden><h3>Practice complete.</h3><button type="button" class="button secondary" data-again>Practise again</button></div></div>
-          <details class="training-sound"><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> ${exercise==='body'?'Enable body mapping bells and ambient sound':'Enable ambient sound'}</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine">Heart bells follow paced breathing. Ambient sound is optional.</p></details>
+          <details class="training-sound"><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> ${exercise==='body'?'Enable body mapping bells and ambient sound':'Enable ambient sound'}</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine">Heart bells follow paced breathing. Ambient sound is optional.</p></details>
         </section>
         <details data-return class="training-panel training-return"><summary>Private notes</summary><p class="training-fine">Pause to write. Entries, not timer breaths, set the return distance.</p><form data-return-form><div data-fields></div><button type="submit" class="button primary" data-keep>Keep this entry</button><p class="training-fine">Saved in this browser.</p></form></details>
         <section data-readiness class="training-panel training-readiness"></section>
@@ -201,7 +207,13 @@
       q('[data-sound]').addEventListener('change',e=>{sound=e.target.checked;refreshAudio();q('[data-sound-summary]').textContent=soundSummary();});
       q('[data-frequency]').addEventListener('change',e=>{frequency=Number(e.target.value);bellVolume=volumes[frequency];q('[data-volume]').value=bellVolume;q('[data-volume-label]').textContent=Math.round(bellVolume*100)+'%';refreshAudio();});
       q('[data-volume]').addEventListener('input',e=>{bellVolume=Number(e.target.value);volumes[frequency]=bellVolume;q('[data-volume-label]').textContent=Math.round(bellVolume*100)+'%';refreshAudio();});
-      q('[data-test-sound]').addEventListener('click',()=>{if(!testAudio.start({frequency:0,bellVolume})){message('Sound is unavailable in this browser.');return;}testAudio.cue(true);});
+      q('[data-test-sound]').addEventListener('click',()=>{
+        if(bellVolume<=0){soundStatus('Bell volume is at 0%. Raise it, then test again.');return;}
+        soundStatus('');
+        if(sessionAudioFailed && clock?.snapshot().status==='running' && audioEnabled())startAudio();
+        if(!testAudio.start({frequency:0,bellVolume})){soundFailure();return;}
+        if(testAudio.cue(true)===false)soundFailure();
+      });
       all('[data-peek]').forEach(el=>el.addEventListener('click',()=>{const i=Number(el.dataset.peek);peek=peek===i?null:i;lastPrompt='';tick();}));
       q('[data-return]').addEventListener('toggle',()=>{if(q('[data-return]').open){pause();renderFields();}});
       q('[data-return-form]').addEventListener('submit',saveObservation);
@@ -275,9 +287,12 @@
       q('[data-shape]').disabled=active;all('[data-exercise]').forEach(el=>el.disabled=active);
       const scaled=pacing==='paced'&&s.status==='running';
       const progress=(5-s.breathRemaining)/5;
-      q('[data-orb]').style.transform=scaled?'scale('+(0.8+0.65*(s.breathPhase==='inhale'?progress:1-progress))+')':'scale(1)';
+      // Keep the label still and enclosed even at the smallest point. Own rhythm
+      // has a gentle visual pulse; only paced mode gives timed breathing cues.
+      const expansion=scaled?(s.breathPhase==='inhale'?progress:1-progress):(1-Math.cos(s.elapsedSeconds*Math.PI/6))/2;
+      q('[data-orb]').style.transform=s.status==='running'?'scale('+(1+0.18*expansion)+')':'scale(1)';
       q('[data-pacer]').hidden=exercise==='body'&&pacing==='natural';
-      q('[data-breath]').textContent=finished?'Rest':s.status==='paused'?'Own rhythm':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
+      q('[data-breath-label]').textContent=finished?'Rest':s.status==='paused'?'Own rhythm':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
       q('[data-breath-count]').textContent=scaled?Math.max(1,Math.ceil(s.breathRemaining))+' seconds':'Gently · without holds';
       if(s.bodyStepIndex!==lastBodyStep){peek=null;lastBodyStep=s.bodyStepIndex;}
       const promptKey=exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):(exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural'))+':'+(peek!==null);

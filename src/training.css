@@ -30,10 +30,13 @@
 .training-session-bar{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:16px 0;border-top:1px solid #bcb39680;border-bottom:1px solid #bcb39680}
 .training-session-bar>span{font-size:25px;font-variant-numeric:tabular-nums;letter-spacing:.04em}
 .training-session-bar>div{display:flex;gap:20px}.training-session-bar .text-button{font-size:17px}
-.training-pacer{position:relative;display:grid;place-items:center;width:210px;height:210px;margin:22px auto 18px}
-.training-orb{position:absolute;width:120px;height:120px;border:1px solid #655e49;border-radius:50%;box-shadow:0 0 0 8px #b6ac8c12,0 0 0 9px #8f866b22;transition:transform .25s linear}
-.training-breath-readout{position:relative;display:flex;flex-direction:column;text-align:center;gap:5px;font-size:21px}
-.training-breath-readout small{font-size:12px;color:#77705c}
+.training-pacer{position:relative;display:grid;place-items:center;width:min(280px,100%);aspect-ratio:1;margin:22px auto 18px}
+.training-orb{position:absolute;width:76%;aspect-ratio:1;border:1px solid #655e49b3;border-radius:50%;transition:transform .25s linear;pointer-events:none}
+.training-orb:before,.training-orb:after{content:'';position:absolute;border:1px solid;border-radius:50%;pointer-events:none}
+.training-orb:before{inset:4px 3px 3px 4px;border-color:#81775c66;transform:rotate(-7deg)}
+.training-orb:after{inset:-4px -3px -3px -4px;border-color:#81775c42;transform:rotate(9deg)}
+.training-breath-readout{position:relative;display:flex;flex-direction:column;align-items:center;width:64%;max-width:178px;text-align:center;gap:8px;font-size:22px;line-height:1.25}
+.training-breath-readout small{font-size:12px;line-height:1.5;color:#77705c}
 .training-live-pace{display:block;margin:10px auto 20px;font-size:14px!important}
 .training-current-step{text-align:center;margin-top:30px!important;font-size:12px!important}
 .training-panel .training-prompt{text-align:center;font-size:23px;line-height:1.6;max-width:600px;margin:0 auto 25px}
@@ -50,6 +53,7 @@
 #training-root summary{cursor:pointer;font-size:18px;line-height:1.5;color:#4d4939}
 #training-root summary:focus-visible,#training-root button:focus-visible,#training-root a:focus-visible{outline:2px solid #655d42;outline-offset:5px}
 .training-sound summary span{font-size:13px;color:#7e765f;margin-left:5px}
+[data-sound-status]:empty{display:none}
 .training-sound[open] summary,.training-instructions[open] summary{margin-bottom:22px}
 .training-check{display:flex;gap:12px;align-items:flex-start;font-size:17px;line-height:1.5;margin:18px 0}
 .training-check input{accent-color:#665d44;width:18px;height:18px;flex-shrink:0;margin-top:4px}
