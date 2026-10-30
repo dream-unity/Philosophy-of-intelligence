@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { prepareHomepage } from './prepare-homepage.mjs';
 import {
-  projectRoot, invariant, attributes, localAsset, scriptBlocks,
+  projectRoot, invariant, attributes, localAsset, scriptBlocks, SUNO_EMBED_URL,
   assertScriptSyntax, assertNoNetworkCode, assertOfflineCss, assertDocumentResources, assetDataUrl, cssUrls
 } from './check.mjs';
 
@@ -38,7 +38,15 @@ export function buildOfflineHtml(source, { fromDirectory = projectRoot, rootDire
   let cssCount = 0;
   let iconCount = 0;
   let imageCount = 0;
-  assertDocumentResources(source, { fromDirectory, rootDirectory });
+  assertDocumentResources(source, { fromDirectory, rootDirectory, allowOnlinePlayer: true });
+  // The online song is optional. Offline exercises must never fetch a remote
+  // iframe; the adjacent Suno link remains available when internet is restored.
+  source = source.replace(/<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|<iframe\b[^>]*>[\s\S]*?<\/iframe\s*>/gi, frame => {
+    if (!/^<iframe\b/i.test(frame)) return frame;
+    const attrs = attributes(frame.match(/^<iframe\b[^>]*>/i)[0]);
+    return attrs['data-online-player'] === 'suno' && attrs.src === SUNO_EMBED_URL
+      ? '<p class="music-offline">Universal DNA · Listen online</p>' : frame;
+  });
 
   // Only actual markup is rewritten: a tag-shaped string in JavaScript or a
   // comment must not mutate application code or change module ordering.

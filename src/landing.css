@@ -72,3 +72,12 @@ body[data-view="journey"] .skip-link { display: none; }
   .portal-page .stage-tile:focus-visible { outline-color: Highlight; }
   .portal-caption { background: Canvas; color: CanvasText; }
 }
+
+/* Keep Suno's own play/pause control visible while navigating the exercises. */
+.site-music { width: min(340px, calc(100% - 24px)); margin: 12px auto 0; }
+.site-music iframe { display: block; width: 100%; height: 150px; border: 1px solid #b5a78f; border-radius: 12px; background: #ebe4d5; }
+.music-source { display: block; width: fit-content; margin: 3px 0 0 auto; padding: 4px 0; font: 11px/1.5 var(--sans); color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+@media (min-width: 1200px) {
+  body[data-view="journey"] .site-music { position: absolute; z-index: 4; top: max(12px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); margin: 0; }
+}
+@media print { .site-music { display: none; } }

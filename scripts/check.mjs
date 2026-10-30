@@ -144,9 +144,11 @@ export function assertOfflineCss(css, filename, { selfContained = true, fromDire
   }
 }
 
+export const SUNO_EMBED_URL = 'https://suno.com/embed/9d62272c-0a81-4f29-b6b0-52f03324b7b8';
+
 // A targeted source audit, not a general HTML security parser. External anchor
 // links are intentional navigation; source/font/media/script loads are not.
-export function assertDocumentResources(html, { selfContained = false, filename = 'index.html', fromDirectory = projectRoot, rootDirectory = projectRoot } = {}) {
+export function assertDocumentResources(html, { selfContained = false, allowOnlinePlayer = false, filename = 'index.html', fromDirectory = projectRoot, rootDirectory = projectRoot } = {}) {
   for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)) assertOfflineCss(match[1], filename, { selfContained, fromDirectory, rootDirectory });
   const markup = html
     .replace(/(<script\b[^>]*>)[\s\S]*?<\/script\s*>/gi, '$1</script>')
@@ -168,6 +170,8 @@ export function assertDocumentResources(html, { selfContained = false, filename 
       if (!Object.hasOwn(attrs, key)) continue;
       const value = attrs[key].trim();
       invariant(key !== 'srcset', `${filename}: srcset requires an explicit offline embedding implementation.`);
+      if (allowOnlinePlayer && !selfContained && name === 'iframe' && key === 'src' &&
+          attrs['data-online-player'] === 'suno' && value === SUNO_EMBED_URL) continue;
       if (value.startsWith('#') || /^data:/i.test(value)) continue;
       invariant(!selfContained, `${filename} still depends on an external file: ${value}`);
       const asset = localAsset(value, fromDirectory, rootDirectory);
@@ -218,7 +222,7 @@ export function checkProject() {
     for (const id of match[2].split(/\s+/)) invariant(staticSet.has(id) || (DYNAMIC_IDS.has(id) && dynamicSet.has(id)), `index.html refers to missing accessibility target #${id}.`);
   }
 
-  const resources = assertDocumentResources(html);
+  const resources = assertDocumentResources(html, { allowOnlinePlayer: true });
   const scripts = scriptBlocks(html);
   invariant(scripts.length > 0, 'index.html contains no application scripts.');
   const linkedScripts = scripts.filter(script => script.attributes.src).map(script => localAsset(script.attributes.src));
@@ -231,7 +235,7 @@ export function checkProject() {
   }
   const icon = readFileSync(resolve(projectRoot, 'icon.svg'), 'utf8');
   assertInertSvg(icon, 'icon.svg');
-  console.log(`Checked ${files.length} source scripts, ${references.size} DOM references and ${resources} local assets. No runtime network dependencies.`);
+  console.log(`Checked ${files.length} source scripts, ${references.size} DOM references and ${resources} local assets. Only the optional Suno player uses the network.`);
   return { files: files.length, references: references.size, resources };
 }
 

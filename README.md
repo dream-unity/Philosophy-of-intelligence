@@ -66,3 +66,7 @@ The build embeds local scripts, styles and artwork in both offline filenames. Th
 - [Sources and boundaries](docs/REFERENCE_NOTES.md)
 
 The teaching follows the revised project manual and working conventions. Shapes are not IQ values or a validated intelligence scale. The application has no physiological sensors, analytics, remote AI calls or automatic upload of personal records.
+
+### Homepage song
+
+The homepage includes Suno's official **Universal DNA** player. Press its Play button to start; it does not autoplay on arrival. The same player stays mounted during shape navigation, with pause and seeking provided by Suno, independently of the breathing bell. Suno serves the player and audio, so an internet connection is required. The offline editions retain a song link instead of loading the remote player.

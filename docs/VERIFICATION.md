@@ -19,7 +19,7 @@ Verified 30 October 2026 (Australia/Hobart).
 - Clock tests cover heart phase boundaries, 30-second body prompts, natural/silent stream defaults, pause/resume, delayed ticks and single completion. Audio tests cover independent heart bells, ambient sound, unavailable audio and cancellation on pause/end/navigation, including preview bells.
 - Storage tests cover old v1 heart/body records, stream readiness migration without read-time writes, exact source snapshots, corrupt originals, quota failures and conflicting tabs. Missing-target recovery preserves the unfinished return; the 500-session limit is checked before another timer starts.
 - The separate archive remains inert and exportable. Removing authored lessons does not execute an old session or rewrite its saved data. Old curriculum/session/laboratory modules are removed from the source and both rebuilt offline editions.
-- The offline build embeds scripts, styles, artwork and the icon in dependency order. Static homepage links follow the revised shape order. Content hashes invalidate changed assets. The application has no runtime network dependency.
+- The offline build embeds scripts, styles, artwork and the icon in dependency order. Static homepage links follow the revised shape order. Content hashes invalidate changed assets. The exercises have no runtime network dependency. The optional online Suno music iframe is replaced with a song link in both offline editions.
 
 ## Browser review
 

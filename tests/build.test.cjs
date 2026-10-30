@@ -106,3 +106,29 @@ test('embedded data and local fragments survive while comment-only URLs are not 
   const css = '/* url(missing.png) */ .a{filter:url(#ink);background:url("data:image/png;base64,' + png.toString('base64') + '")}';
   assert.equal(embedCss(css, 'self-contained.css', f.root, f.root), css);
 });
+
+
+test('the optional Suno player is allowed online and removed from the offline edition', async t => {
+  const [{ buildOfflineHtml }, { assertDocumentResources, SUNO_EMBED_URL }] = await modules;
+  const f = fixture(t);
+  const player = `<iframe data-online-player="suno" src="${SUNO_EMBED_URL}" title="Play Universal DNA"></iframe>`;
+  const songLink = '<a href="https://suno.com/song/9d62272c-0a81-4f29-b6b0-52f03324b7b8">Open in Suno</a>';
+  const source = f.html.replace('<body>', '<body>' + player + songLink)
+    .replace('</body>', `<script>const examplePlayer = '${player}';</script></body>`);
+  assert.doesNotThrow(() => assertDocumentResources(source, { ...f.options, allowOnlinePlayer: true }));
+  assert.throws(() => assertDocumentResources(source, f.options), /External asset/);
+  assert.throws(() => assertDocumentResources(player, { selfContained: true, allowOnlinePlayer: true }), /external file/);
+  const { html } = buildOfflineHtml(source, f.options);
+  assert.doesNotMatch(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''), /<iframe\b/);
+  assert.ok(html.includes(`const examplePlayer = '${player}';`), 'iframe-shaped JavaScript strings remain unchanged');
+  assert.ok(html.includes(songLink));
+  assert.equal(assertDocumentResources(html, { selfContained: true }), 0);
+  for (const invalid of [
+    player.replace(SUNO_EMBED_URL, 'https://example.com/player'),
+    player.replace(SUNO_EMBED_URL, SUNO_EMBED_URL + '?autoplay=1'),
+    player.replace('data-online-player="suno"', ''),
+    player.replaceAll('iframe', 'script')
+  ]) {
+    assert.throws(() => assertDocumentResources(invalid, { ...f.options, allowOnlinePlayer: true }), /External asset/);
+  }
+});
