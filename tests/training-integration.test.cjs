@@ -236,17 +236,31 @@ test('shape selection and legacy deep links reveal the same inline practice', ()
   assert.deepEqual(app.calls.stages, ['cube'], 'returning to the same stage preserves its mounted state');
 });
 
-test('clicking an already selected shape returns to practice without remounting it', () => {
-  const app = harness({ hash: '#practice/triangle' });
-  app.calls.drafts = true;
-  const card = app.document.querySelector('#stage-path [data-stage="triangle"]');
-  const scrollsBefore = app.calls.scrolls.length;
-  app.click(card);
-  assert.equal(app.calls.mounts.length, 1);
-  assert.deepEqual(app.calls.stages, []);
-  assert.ok(app.calls.scrolls.length > scrollsBefore, 'the same-card click still scrolls to the inline practice');
-  assert.equal(app.elements.get('view-journey').hidden, false);
-  assert.equal(app.elements.get('view-practice').hidden, false);
+test('all fourteen shape cards stay inert on the homepage and after a legacy deep link', () => {
+  for (const hash of ['#journey', '#practice/triangle']) {
+    const app = harness({ hash });
+    app.calls.drafts = true;
+    const scrollsBefore = app.calls.scrolls.length;
+    const mountsBefore = app.calls.mounts.length;
+    const practiceHiddenBefore = app.elements.get('view-practice').hidden;
+    const cards = app.document.querySelectorAll('#stage-path .stage-tile');
+    assert.equal(cards.length, STAGES.length);
+    for (const card of cards) {
+      assert.equal(card.tagName, 'div');
+      assert.equal(card.getAttribute('role'), 'group');
+      assert.equal(card.getAttribute('href'), null);
+      assert.equal(card.getAttribute('tabindex'), null);
+      assert.equal(card.getAttribute('aria-controls'), null);
+      app.click(card);
+      app.click(card.querySelector('svg'));
+      assert.equal(app.location.hash, hash, card.dataset.stage + ' cannot navigate');
+      assert.equal(app.calls.scrolls.length, scrollsBefore, card.dataset.stage + ' cannot scroll to practice');
+      assert.equal(app.calls.mounts.length, mountsBefore);
+      assert.deepEqual(app.calls.stages, []);
+      assert.equal(app.elements.get('view-journey').hidden, false);
+      assert.equal(app.elements.get('view-practice').hidden, practiceHiddenBefore);
+    }
+  }
 });
 
 test('repeated All shapes clicks still pause and return to the grid at the same address', () => {

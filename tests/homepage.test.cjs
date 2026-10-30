@@ -11,20 +11,24 @@ const root = path.join(__dirname, '..');
 const source = () => fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 // Inspect the committed HTML without running its application or preparer:
-// a failed script must not leave the homepage's only navigation empty.
-test('homepage ships every curriculum shape as a usable link with its drawing', async () => {
+// a failed script must neither hide the shapes nor restore their old links.
+test('homepage ships every curriculum shape as a noninteractive card with its drawing', async () => {
   const { attributes } = await checks;
   const html = source();
-  const nav = [...html.matchAll(/(<nav\b[^>]*>)([\s\S]*?)<\/nav\s*>/gi)]
-    .find(match => attributes(match[1]).id === 'stage-path');
-  assert.ok(nav, 'the shape navigation is present in the HTML');
-  const cards = [...nav[2].matchAll(/(<a\b[^>]*>)([\s\S]*?)<\/a\s*>/gi)];
+  const gallery = html.match(/(<section\b[^>]*\bid="stage-path"[^>]*>)([\s\S]*?)<\/section\s*>/i);
+  assert.ok(gallery, 'the shape gallery is present in the HTML');
+  const cards = [...gallery[2].matchAll(/(<div\b[^>]*>)([\s\S]*?)<\/div\s*>/gi)];
   assert.equal(cards.length, 14, 'all fourteen shapes render before JavaScript runs');
-  assert.deepEqual(cards.map(card => attributes(card[1]).href), STAGES.map(stage => '#practice/' + stage.id));
+  assert.doesNotMatch(gallery[2], /<(?:a|button)\b|\bon(?:click|keydown)\s*=/i);
   for (const [index, card] of cards.entries()) {
     const stage = STAGES[index];
     const attrs = attributes(card[1]);
     assert.equal(attrs['data-stage'], stage.id);
+    assert.equal(attrs.role, 'group');
+    assert.equal(attrs['aria-label'], stage.name);
+    for (const name of ['href', 'tabindex', 'aria-controls']) {
+      assert.equal(Object.hasOwn(attrs, name), false, stage.id + ' has no ' + name);
+    }
     assert.ok((attrs.class || '').split(/\s+/).includes('stage-tile'));
     assert.ok(card[2].includes(stage.name), stage.id + ' has its visible name');
     const drawing = card[2].match(/<svg\b[^>]*>[\s\S]*?<\/svg\s*>/i);
@@ -34,16 +38,12 @@ test('homepage ships every curriculum shape as a usable link with its drawing', 
   }
 });
 
-test('the homepage symbol has no controls and only shape cards are links', async () => {
+test('the homepage symbol and shape cards have no navigation controls', async () => {
   const { attributes } = await checks;
   const home = [...source().matchAll(/(<section\b[^>]*>)([\s\S]*?)<\/section\s*>/gi)]
     .find(match => attributes(match[1]).id === 'view-journey');
   assert.ok(home, 'the homepage section is present');
-  const anchors = [...home[2].matchAll(/<a\b[^>]*>/gi)].map(match => attributes(match[0]));
-  assert.equal(anchors.length, 14);
-  assert.ok(anchors.every(attrs => (attrs.class || '').split(/\s+/).includes('stage-tile')),
-    'no symbol or extra homepage anchors remain');
-  assert.doesNotMatch(home[2], /<button\b|\brole\s*=\s*["']button["']/i);
+  assert.doesNotMatch(home[2], /<(?:a|button)\b|\brole\s*=\s*["'](?:button|link)["']/i);
   assert.doesNotMatch(home[2], /\bonclick\s*=/i);
 });
 

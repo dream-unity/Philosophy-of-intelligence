@@ -9,18 +9,18 @@ const require = createRequire(import.meta.url);
 const { STAGES } = require('../src/shape-practice.js');
 
 export function prepareHomepage() {
-  // Render navigation before JavaScript starts. A delayed or failed script
+  // Render the noninteractive shape gallery before JavaScript starts. A delayed or failed script
   // must never leave the opening screen without its shape cards.
   delete require.cache[require.resolve('../src/geometry.js')];
   const geometry = require('../src/geometry.js');
   const cards = STAGES.map((stage, index) =>
-    `          <a class="stage-tile" href="#practice/${stage.id}" data-stage="${stage.id}" aria-controls="view-practice" aria-label="${stage.name}"><span class="stage-number">${String(index + 1).padStart(2, '0')}</span><span class="stage-icon" aria-hidden="true">${geometry.miniIcon(stage.id, 65)}</span><span class="stage-name">${stage.name}</span></a>`
+    `          <div class="stage-tile" data-stage="${stage.id}" role="group" aria-label="${stage.name}"><span class="stage-number">${String(index + 1).padStart(2, '0')}</span><span class="stage-icon" aria-hidden="true">${geometry.miniIcon(stage.id, 65)}</span><span class="stage-name">${stage.name}</span></div>`
   ).join('\n');
   const path = resolve(root, 'index.html');
   let html = readFileSync(path, 'utf8');
-  const navigation = /(<nav\b[^>]*\bid="stage-path"[^>]*>)[\s\S]*?(<\/nav>)/;
-  if (!navigation.test(html)) throw new Error('The homepage shape navigation is missing.');
-  html = html.replace(navigation, (_, open, close) => `${open}\n${cards}\n        ${close}`);
+  const gallery = /(<section\b[^>]*\bid="stage-path"[^>]*>)[\s\S]*?(<\/section>)/;
+  if (!gallery.test(html)) throw new Error('The homepage shape gallery is missing.');
+  html = html.replace(gallery, (_, open, close) => `${open}\n${cards}\n        ${close}`);
 
   // Changed files get new request URLs, avoiding old icons/JS/CSS paired with new
   // markup after deployment. Unchanged files keep their cached versions.

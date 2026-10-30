@@ -42,14 +42,13 @@ body[data-view="journey"] .skip-link { display: none; }
 .bridge-spine { stroke-width: 2.4; opacity: .94; }
 .bridge-arrow { fill: currentColor; stroke: none; }
 .bridge-arrow-etch { fill: none; stroke: #e4dccb; stroke-width: .85; opacity: .8; }
-/* Reuse the original fourteen shape cards as the only homepage navigation. */
+/* Keep the fourteen shapes visible as a noninteractive gallery. */
 .portal-page > .stage-path { flex: none; width: min(calc(100% - 32px), 1440px); }
-.portal-page .stage-tile { text-align: center; }
+.portal-page .stage-tile { text-align: center; cursor: default; }
 /* The ink occupies about 72% of the SVG viewBox. Size the box generously
    enough for the visible shape, and cap it to the card on narrow screens. */
 .portal-page .stage-tile .stage-icon { flex: none; width: min(120px, 100%); height: auto; aspect-ratio: 1; }
 .portal-page .stage-tile .stage-icon svg { width: 100%; height: 100%; }
-.portal-page .stage-tile:focus-visible { outline: 2px solid #4c3c28; outline-offset: 3px; }
 /* The introduction sits to the left of the symbol on wide screens. */
 .creation-intro { flex: none; width: min(calc(100% - 40px), 440px); margin: 28px auto; color: var(--ink); font-family: var(--serif); font-size: 16px; line-height: 1.65; text-align: center; text-wrap: pretty; }
 .creation-intro::before { content: ""; display: block; width: 72px; height: 1px; margin: 0 auto 20px; background: linear-gradient(to right, transparent, #8b795c, transparent); }
@@ -81,8 +80,7 @@ body[data-view="journey"] .skip-link { display: none; }
 
 @media (prefers-reduced-motion: reduce) { .portal-page .stage-tile { transition: none; } }
 @media (forced-colors: active) {
-  .portal-page .stage-tile { border-color: LinkText; color: LinkText; }
-  .portal-page .stage-tile:focus-visible { outline-color: Highlight; }
+  .portal-page .stage-tile { border-color: CanvasText; color: CanvasText; }
   .portal-caption { background: Canvas; color: CanvasText; }
 }
 

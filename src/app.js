@@ -103,7 +103,7 @@
 
   function applyMotion() { document.body.classList.toggle('reduced-motion',state.preferences.reducedMotion); }
   function renderJourney(){
-    $('stage-path').innerHTML=stages.map((stage,index)=>`<a class="stage-tile ${hasSelectedShape&&stage.id===selectedStage?'selected':''}" href="#practice/${esc(stage.id)}" data-stage="${esc(stage.id)}" aria-controls="view-practice"${hasSelectedShape&&stage.id===selectedStage?' aria-current="true"':''} aria-label="${esc(stage.name)}"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span></a>`).join('');
+    $('stage-path').innerHTML=stages.map((stage,index)=>`<div class="stage-tile ${hasSelectedShape&&stage.id===selectedStage?'selected':''}" data-stage="${esc(stage.id)}" role="group"${hasSelectedShape&&stage.id===selectedStage?' aria-current="true"':''} aria-label="${esc(stage.name)}"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span></div>`).join('');
   }
 
   function sourceHTML(source, className){
@@ -207,15 +207,6 @@
   $('archive-panel').addEventListener('toggle',updateArchiveVisibility);
   $('philosophy-panel').addEventListener('toggle',()=>{
     if($('philosophy-panel').open)$('philosophy-sphere').innerHTML=G.shapeSVG('sphere',{size:280,progress:1});
-  });
-  // These links select an inline practice. Repeating the same selection still
-  // returns to it, without replacing its controller or restarting a session.
-  $('stage-path').addEventListener('click',event=>{
-    const card=event.target.closest('.stage-tile[data-stage]');
-    if(!card||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
-    event.preventDefault();
-    focusShapePicker=false;
-    if(location.hash===card.getAttribute('href'))route();else location.hash=card.getAttribute('href');
   });
   $('main').addEventListener('click',event=>{
     const link=event.target.closest('a[href="#stage-path"], a[href="#journey"]');
