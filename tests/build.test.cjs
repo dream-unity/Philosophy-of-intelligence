@@ -111,9 +111,8 @@ test('embedded data and local fragments survive while comment-only URLs are not 
 test('the optional Suno player is allowed online and removed from the offline edition', async t => {
   const [{ buildOfflineHtml }, { assertDocumentResources, SUNO_EMBED_URL }] = await modules;
   const f = fixture(t);
-  const player = `<iframe data-online-player="suno" src="${SUNO_EMBED_URL}" title="Play Universal DNA"></iframe>`;
-  const songLink = '<a href="https://suno.com/song/9d62272c-0a81-4f29-b6b0-52f03324b7b8">Open in Suno</a>';
-  const source = f.html.replace('<body>', '<body>' + player + songLink)
+  const player = `<iframe data-online-player="suno" src="${SUNO_EMBED_URL}" sandbox="allow-scripts allow-same-origin" title="Play Philosophy of Intelligence"></iframe>`;
+  const source = f.html.replace('<body>', '<body>' + player)
     .replace('</body>', `<script>const examplePlayer = '${player}';</script></body>`);
   assert.doesNotThrow(() => assertDocumentResources(source, { ...f.options, allowOnlinePlayer: true }));
   assert.throws(() => assertDocumentResources(source, f.options), /External asset/);
@@ -121,8 +120,12 @@ test('the optional Suno player is allowed online and removed from the offline ed
   const { html } = buildOfflineHtml(source, f.options);
   assert.doesNotMatch(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''), /<iframe\b/);
   assert.ok(html.includes(`const examplePlayer = '${player}';`), 'iframe-shaped JavaScript strings remain unchanged');
-  assert.ok(html.includes(songLink));
+  assert.ok(html.includes('Music is available on the website.'));
+  assert.doesNotMatch(html, /<a\b[^>]*href="https:\/\/suno\.com/);
   assert.equal(assertDocumentResources(html, { selfContained: true }), 0);
+  for (const sandbox of ['', 'allow-scripts allow-same-origin allow-popups', 'allow-scripts allow-same-origin allow-top-navigation']) {
+    assert.throws(() => assertDocumentResources(player.replace('sandbox="allow-scripts allow-same-origin"', `sandbox="${sandbox}"`), { ...f.options, allowOnlinePlayer: true }), /sandbox/);
+  }
   for (const invalid of [
     player.replace(SUNO_EMBED_URL, 'https://example.com/player'),
     player.replace(SUNO_EMBED_URL, SUNO_EMBED_URL + '?autoplay=1'),

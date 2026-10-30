@@ -40,12 +40,12 @@ export function buildOfflineHtml(source, { fromDirectory = projectRoot, rootDire
   let imageCount = 0;
   assertDocumentResources(source, { fromDirectory, rootDirectory, allowOnlinePlayer: true });
   // The online song is optional. Offline exercises must never fetch a remote
-  // iframe; the adjacent Suno link remains available when internet is restored.
+  // iframe or introduce a provider link in place of the player.
   source = source.replace(/<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|<iframe\b[^>]*>[\s\S]*?<\/iframe\s*>/gi, frame => {
     if (!/^<iframe\b/i.test(frame)) return frame;
     const attrs = attributes(frame.match(/^<iframe\b[^>]*>/i)[0]);
     return attrs['data-online-player'] === 'suno' && attrs.src === SUNO_EMBED_URL
-      ? '<p class="music-offline">Universal DNA · Listen online</p>' : frame;
+      ? '<p class="music-offline">Music is available on the website.</p>' : frame;
   });
 
   // Only actual markup is rewritten: a tag-shaped string in JavaScript or a
