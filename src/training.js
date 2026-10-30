@@ -14,7 +14,7 @@
     const testAudio = new E.ExerciseAudio({onError:soundFailure});
     let recorded = false, peek = null, lastBodyStep = -1, lastCue = '', lastPrompt = '', announcement = '';
     let sound = true, bell = true, frequency = 10, bellVolume = 1, pacing = 'paced', duration = 15;
-    let inhaleSeconds=5, exhaleSeconds=5;
+    let inhaleSeconds=5, exhaleSeconds=5, selectedPane='guide', panelOpen=false;
     const rhythmStorageKey='form-breath-timing-v1';
     try { const saved=JSON.parse(storage?.getItem(rhythmStorageKey)||'null'); if(saved&&E.validBreathTiming(saved.inhaleSeconds,saved.exhaleSeconds)){inhaleSeconds=saved.inhaleSeconds;exhaleSeconds=saved.exhaleSeconds;} } catch (_) {}
     const pacingByExercise = {stream:'paced', heart:'paced', body:'natural'};
@@ -69,7 +69,7 @@
     }
     function audioEnabled() { return sound || bell; }
     function soundStatus(text) { const el=q('[data-sound-status]');if(el)el.textContent=text; }
-    function soundFailure() { q('.training-sound').open=true;soundStatus('Sound could not start. Tap Test bell to try again.'); }
+    function soundFailure() { selectPane('settings');q('.training-sound').open=true;soundStatus('Sound could not start. Tap Test bell to try again.'); }
     function sessionSoundFailure() { sessionAudioFailed=true;soundFailure(); }
     function startAudio() {
       sessionAudioFailed=false;
@@ -97,7 +97,7 @@
       const valid=E.validBreathTiming(inhale,exhale);
       q('[data-inhale]').setAttribute('aria-invalid',String(!Number.isFinite(inhale)||inhale<0.1));
       q('[data-exhale]').setAttribute('aria-invalid',String(!Number.isFinite(exhale)||exhale<0.1));
-      if(!valid){q('[data-rhythm-status]').textContent='Enter a valid duration of at least 0.1 seconds for both inhale and exhale.';return false;}
+      if(!valid){if(!q('[aria-invalid="true"]')){q('[data-inhale]').setAttribute('aria-invalid','true');q('[data-exhale]').setAttribute('aria-invalid','true');}selectPane('settings');q('[data-rhythm-status]').textContent='Enter a valid duration of at least 0.1 seconds for both inhale and exhale. The combined duration must fit within the timer range.';q('[aria-invalid="true"]').focus();return false;}
       const changed=inhale!==inhaleSeconds||exhale!==exhaleSeconds;
       if(clock&&changed)clock.setBreathTiming(inhale,exhale);
       inhaleSeconds=inhale;exhaleSeconds=exhale;
@@ -127,7 +127,7 @@
         renderReadiness();
       }});
       q('[data-return]').open=false;
-      clock.start(); startAudio(); tick();
+      closePanel();clock.start(); startAudio(); tick();
     }
     function resume() {
       if (!clock) return;
@@ -184,47 +184,84 @@
     function workedExampleHTML(guide) {
       const model=guide.model||root.FormRelationalModels?.getModel(stage.id,exercise);
       const register=guide.register||model?.relations||[];
-      return `<details class="training-examples" data-examples><summary>Explore the example · four entries</summary>
+      return `<details class="training-examples" data-examples ${selectedPane==='example'?'open':''}><summary>Explore the example · four entries</summary>
         <p class="training-fine">${stage.relationCount>8?'Learn the full register before rehearsing. ':''}Take additional natural breaths as needed. These controls rehearse entries; they do not save notes.</p>
         <div class="training-walkthrough" data-walkthrough></div>
         ${model?explorerHTML(model):''}
         <details class="training-model" data-model-register><summary>All ${register.length} relationships</summary><div data-model-content>${modelHTML(model||{relations:register})}</div></details>
       </details>`;
     }
+    function chooseExercise(name, focusSelector) {
+      if(name===exercise||!exerciseOrder.includes(name)||runningSession())return;
+      end();clock=null;exercise=name;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();q(focusSelector).focus();
+    }
+    function selectPane(name) {
+      if(!['guide','settings','example'].includes(name))return;
+      selectedPane=name;panelOpen=true;
+      all('[data-pane]').forEach(el=>el.hidden=el.dataset.pane!==name);
+      all('[data-pane-toggle]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.paneToggle===name)));
+      q('.training-unit').classList.toggle('training-panel-open',true);
+      q('[data-open-panel]').setAttribute('aria-expanded','true');
+      q('[data-open-panel]').textContent='Back to shape';
+      if(name==='example')q('[data-examples]').open=true;
+      q('.training-pane-scroll').scrollTop=0;
+    }
+    function closePanel() {
+      panelOpen=false;
+      q('.training-unit').classList.toggle('training-panel-open',false);
+      q('[data-open-panel]').setAttribute('aria-expanded','false');
+      q('[data-open-panel]').textContent='Guide & settings';
+    }
     function render() {
       modelState=0;selectedRelationship='';walkthroughStep=0;
       const guide = stage[exercise], ready=store.data.readiness[stage.id]||{};
-      host.innerHTML=`<div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
-        <header class="training-symbol-header"><h1 class="visually-hidden">${esc(stage.name)}</h1><div class="training-page-symbol${stage.id==='half-circle'?' training-page-symbol--half-circle':''}" aria-hidden="true">${G.miniIcon(stage.id,65).replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</div></header>
-        <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map((name,i)=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
-        <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
-        <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
-          <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span></div></div>
-          <div data-live><div class="training-session-bar" data-session-bar hidden><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
-            <div class="training-exercise-preview" data-exercise-preview>
-              <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div>
-              <div class="training-cue"><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt" aria-live="polite" aria-atomic="true"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
-            </div>
-            <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
+      host.innerHTML=`<section class="training-unit${panelOpen?' training-panel-open':''}" aria-label="${esc(stage.name)} practice">
+        <div class="training-shape-canvas training-shape-canvas--${esc(stage.id)}" data-live>
+          <h1 class="visually-hidden">${esc(stage.name)}</h1>
+          <div class="training-pacer" data-pacer>
+            <div data-orb class="training-shape-art" aria-hidden="true">${G.miniIcon(stage.id,65).replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</div>
+            <div class="training-breath-readout"><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div>
+          </div>
+          <div class="training-shape-actions">
+            <span data-session-state class="training-state">Ready</span>
+            <div data-setup class="training-start"><button type="button" class="button primary" data-start>Start</button></div>
+            <div class="training-session-bar" data-session-bar hidden><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
             <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span data-fill></span></div>
-            <p data-finished class="training-finish" hidden>Practice complete.</p></div>
-          <div class="training-config" aria-label="Practice settings">
+          </div>
+        </div>
+        <aside class="training-side" aria-label="Exercise guide and settings" id="training-controls">
+          <div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker"><span class="visually-hidden">Shape</span><select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label><label class="training-mobile-exercise"><span class="visually-hidden">Exercise</span><select data-exercise-select aria-label="Choose an exercise">${exerciseOrder.map(name=>`<option value="${name}" ${exercise===name?'selected':''}>${exerciseNames[name]}</option>`).join('')}</select></label></div>
+          <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map(name=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
+          <div class="training-pane-nav" role="group" aria-label="Practice panels">${['guide','settings','example'].map(name=>`<button type="button" data-pane-toggle="${name}" aria-pressed="${selectedPane===name}" aria-controls="practice-${name}">${name[0].toUpperCase()+name.slice(1)}</button>`).join('')}</div>
+          <div class="training-pane-scroll">
+            <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
+            <section class="training-guide" data-pane="guide" id="practice-guide" aria-labelledby="exercise-title" ${selectedPane==='guide'?'':'hidden'}>
+              <h2 id="exercise-title">${exerciseNames[exercise]}</h2>
+              <div class="training-cue" data-exercise-preview><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt" aria-live="polite" aria-atomic="true"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
+              <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
+              <p data-finished class="training-finish" hidden>Practice complete.</p>
+            </section>
+            <section class="training-config" data-pane="settings" id="practice-settings" aria-label="Practice settings" ${selectedPane==='settings'?'':'hidden'}>
           <form class="training-rhythm" data-breath-form novalidate><div class="training-settings training-preset-grid"><label data-duration-field>Length<select data-duration>${(exercise==='stream'?E.STREAM_DURATIONS:exercise==='heart'?E.HEART_DURATIONS:E.BODY_DURATIONS).map(m=>`<option value="${m}" ${m===duration?'selected':''}>${m<60?m+' minutes':m/60+(m===60?' hour':' hours')}</option>`).join('')}</select></label><label>Breathing<select data-pacing><option value="natural" ${pacing==='natural'?'selected':''}>My own rhythm</option><option data-paced-option value="paced" ${pacing==='paced'?'selected':''}>${rhythmLabel()}</option></select></label><label>Inhale (seconds)<input data-inhale type="number" inputmode="decimal" min="0.1" step="any" required value="${inhaleSeconds}" aria-describedby="rhythm-help"></label><label>Exhale (seconds)<input data-exhale type="number" inputmode="decimal" min="0.1" step="any" required value="${exhaleSeconds}" aria-describedby="rhythm-help"></label></div><p id="rhythm-help" class="training-fine">Choose your rhythm, then Start.</p><button type="submit" class="button secondary" data-apply-rhythm hidden>Apply rhythm</button><p class="training-fine training-rhythm-current" data-rhythm-current hidden>Guide: ${rhythmLabel()}.</p><p class="training-fine" data-rhythm-status role="status"></p></form>
           <div class="training-sound-row"><details class="training-sound"><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-bell ${bell?'checked':''}> Enable bell sound</label><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> Enable ambient sound</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine" data-bell-help>${exercise==='body'?'Bells mark each body dimension and the end of practice.':'Bells mark each inhale and exhale with the guide. Own rhythm keeps only the finish bell.'}</p></details><button type="button" class="text-button training-bell-toggle" data-bell-toggle aria-pressed="${bell}" aria-label="${bell?'Mute bell sound':'Enable bell sound'}">Bell: ${bell?'on':'off'}</button></div>
-          <div data-setup class="training-start"><button type="button" class="button primary" data-start>Start</button></div>
+            </section>
+            <section class="training-reference" data-pane="example" id="practice-example" aria-label="${esc(stage.name)} worked reference" data-reference ${selectedPane==='example'?'':'hidden'}>${workedExampleHTML(guide)}</section>
           </div>
-        </section>
+        </aside>
+        <button type="button" class="text-button training-panel-opener" data-open-panel aria-controls="training-controls" aria-expanded="${panelOpen}">${panelOpen?'Back to shape':'Guide & settings'}</button>
+      </section>
         <details hidden data-return class="training-panel training-return"><summary>Private notes</summary><p class="training-fine">Pause to write. Entries, not timer breaths, set the return distance.</p><form data-return-form><div data-fields></div><button type="submit" class="button primary" data-keep>Keep this entry</button><p class="training-fine">Saved in this browser.</p></form></details>
         <section hidden data-readiness class="training-panel training-readiness"></section>
-        </div></div>
-        <section class="training-reference" aria-label="${esc(stage.name)} worked reference" data-reference>${workedExampleHTML(guide)}</section>
         <details hidden class="training-record"><summary>Your practice record <span data-record-count></span></summary><p class="training-fine">Downloads include your private notes.</p><div data-record></div><div class="training-record-actions"><button type="button" class="text-button" data-export>Download practice record (includes notes)</button><button type="button" class="text-button" data-original hidden>Download original saved data</button><button type="button" class="text-button" data-reload hidden>Load saved version</button><button type="button" class="text-button" data-reset>Clear this practice record</button></div></details>
         <p hidden class="training-attribution">Heart and body exercises: <a href="https://o0ooooooooooo0o.github.io/Project-Meaning/" target="_blank" rel="noopener noreferrer">Project Meaning</a>. <a href="#palace">Earlier saved observations →</a></p>`;
+      all('[data-pane-toggle]').forEach(el=>el.addEventListener('click',()=>selectPane(el.dataset.paneToggle)));
+      q('[data-open-panel]').addEventListener('click',()=>{if(q('[data-open-panel]').getAttribute('aria-expanded')==='true')closePanel();else {selectPane(selectedPane);q('[data-pane-toggle="'+selectedPane+'"]').focus();}});
       q('[data-shape]').addEventListener('change',e=>onStageChange(e.target.value));
       q('[data-model-state]')?.addEventListener('change',event=>selectWorkedEntry(Number(event.target.value)));
       q('[data-model-relation]')?.addEventListener('change',event=>{selectedRelationship=event.target.value;updateExplorer();});
       bindRegister();updateExplorer();renderWalkthrough();
-      all('[data-exercise]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.exercise===exercise)return;end();clock=null;exercise=el.dataset.exercise;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();q('[data-exercise="'+exercise+'"]').focus();}));
+      all('[data-exercise]').forEach(el=>el.addEventListener('click',()=>chooseExercise(el.dataset.exercise,'[data-exercise="'+el.dataset.exercise+'"]')));
+      q('[data-exercise-select]').addEventListener('change',event=>chooseExercise(event.target.value,'[data-exercise-select]'));
       q('[data-duration]').addEventListener('change',e=>{duration=Number(e.target.value);tick();});
       q('[data-pacing]').addEventListener('change',e=>setPacing(e.target.value));
       q('[data-breath-form]').addEventListener('submit',event=>{event.preventDefault();applyBreathTiming();});
@@ -325,14 +362,14 @@
       q('[data-live-pace]').hidden=!active;q('[data-live-pace]').textContent=pacing==='natural'?'Use my '+inhaleSeconds+' / '+exhaleSeconds+' guide':'Use my own rhythm';
       // Switching shapes ends and records the old period in setStage(), just
       // like choosing another card in the always-visible shape grid.
-      q('[data-shape]').disabled=false;all('[data-exercise]').forEach(el=>el.disabled=active);
+      q('[data-shape]').disabled=false;q('[data-exercise-select]').disabled=active;all('[data-exercise]').forEach(el=>el.disabled=active);
       const scaled=pacing==='paced'&&active;
       const progress=s.breathProgress;
       // Keep the label still and enclosed even at the smallest point. Own rhythm
       // has a gentle visual pulse; only paced mode gives timed breathing cues.
       const expansion=scaled?(s.breathPhase==='inhale'?progress:1-progress):(1-Math.cos(s.elapsedSeconds*Math.PI/6))/2;
-      q('[data-orb]').style.transform=active?'scale('+(1+0.18*expansion)+')':'scale(1)';
-      q('[data-pacer]').hidden=exercise==='body'&&pacing==='natural';
+      q('[data-orb]').style.transform=active?'scale('+(0.94+0.06*expansion)+')':'scale(1)';
+      q('[data-pacer]').hidden=false;
       q('[data-breath-label]').textContent=idle?(pacing==='paced'?'Ready':'Own rhythm'):finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
       const remaining=Math.ceil(s.breathRemaining*10-1e-8)/10;
       q('[data-breath-count]').textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';

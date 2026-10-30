@@ -79,7 +79,7 @@ dialog{border:3px double #8b7d5f;background:var(--paper);border-radius:3px;box-s
 .empty-state>svg{margin:0 auto 18px}.field-number{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;font-size:10px;flex-shrink:0}
 
 </style>
-  <style data-form-source="src/training.css?v=799387746a5c">
+  <style data-form-source="src/training.css?v=dff27aec1908">
 /* Shared manual practice. Homepage composition lives exclusively in landing.css. */
 #training-root{max-width:1080px;margin:0 auto;padding:12px 0 48px}
 .training-topline{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:38px}
@@ -419,15 +419,111 @@ body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bot
 }
 
 
-/* Give the actual ink, rather than an empty SVG canvas, the space of a page
-   emblem. The tighter viewBox keeps the original homepage drawing intact. */
-.training-symbol-header{display:grid;place-items:center;padding:clamp(12px,2vw,24px) 0;margin:0 0 20px}
-.training-page-symbol{width:clamp(280px,43vw,480px);max-width:100%;aspect-ratio:1}
-.training-page-symbol--half-circle{width:clamp(300px,52vw,560px);aspect-ratio:192/106}
-.training-page-symbol svg{display:block;width:100%;height:100%}
+/* The selected shape is the breathing guide. Every practice panel shares its
+   height; long instructions and complete references scroll inside the rail. */
+#training-root{padding:0;max-width:1080px}
+.training-unit{--shape-size:clamp(360px,44vw,520px);display:grid;grid-template-columns:var(--shape-size) minmax(0,1fr);gap:28px;height:var(--shape-size);position:relative}
+.training-shape-canvas{position:relative;min-width:0;height:100%;isolation:isolate}
+.training-unit .training-pacer{position:absolute;inset:0;width:100%;height:100%;max-width:none;margin:0;aspect-ratio:auto}
+.training-shape-art{position:absolute;inset:0;pointer-events:none;transition:transform .05s linear}
+.training-shape-art svg{display:block;width:100%;height:100%}
+.training-unit .training-breath-readout{position:absolute;left:50%;top:43%;transform:translate(-50%,-50%);width:55%;max-width:220px;gap:10px;font-size:clamp(28px,3vw,40px);padding:12px 8px;background:radial-gradient(ellipse,#f0ebdce8 35%,#f0ebdcbb 62%,#f0ebdc00 75%)}
+.training-unit .training-breath-readout small{font-size:14px}
+.training-shape-canvas--triangle .training-breath-readout{top:53%}
+.training-shape-canvas--half-circle .training-breath-readout{top:45%}
+.training-shape-actions{position:absolute;top:61%;left:50%;transform:translateX(-50%);width:180px;text-align:center;padding:5px 4px;background:radial-gradient(ellipse,#f0ebdcee 40%,#f0ebdc99 65%,#f0ebdc00 80%)}
+.training-shape-canvas--triangle .training-shape-actions{top:68%}
+.training-unit .training-state{display:block;font-size:10px;padding:0;white-space:normal;text-align:center}
+.training-unit .training-start{margin-top:6px}
+.training-unit .training-start .button{width:auto;min-width:100px;min-height:40px;padding:7px 22px}
+.training-unit .training-session-bar{display:block;border:0;margin:0;padding:3px 0}
+.training-unit .training-session-bar>span{font-size:19px}
+.training-unit .training-session-bar>div{justify-content:center;gap:14px;margin-top:4px}
+.training-unit .training-session-bar .text-button{font-size:14px;min-height:36px;white-space:nowrap}
+.training-unit .training-progress{margin:3px 20px;height:2px}
+.training-side{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;padding:0 0 0 20px;border-left:1px solid #bcb39680}
+.training-unit .training-topline{flex-shrink:0;gap:12px;margin:0 0 12px;align-items:center}
+.training-unit .training-topline .back-link{font-size:13px;white-space:nowrap}
+.training-unit .training-shape-picker{min-width:0;font-size:14px}
+#training-root .training-unit .training-shape-picker select{width:100%;max-width:230px;min-width:0;margin:0!important;font-size:14px;min-height:40px;padding:8px}
+.training-unit .training-exercises{flex-shrink:0;grid-template-columns:repeat(3,minmax(0,1fr));margin:0 0 10px}
+.training-unit .training-exercises button{font-size:14px;line-height:1.3;padding:10px 8px;overflow-wrap:normal;min-height:58px}
+.training-unit .training-exercises button+button{border-left:1px solid #b9b298;border-top:0}
+.training-pane-nav{display:flex;gap:22px;flex-shrink:0;border-bottom:1px solid #bcb39680}
+.training-pane-nav button{font:inherit;font-size:15px;border:0;border-bottom:2px solid transparent;background:transparent;color:#77705c;padding:10px 0;min-height:42px;cursor:pointer}
+.training-pane-nav button[aria-pressed=true]{border-bottom-color:#655d42;color:#39372d}
+.training-pane-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:16px 10px 8px 0;scroll-padding:12px}
+.training-guide h2{font-size:23px;line-height:1.25;font-weight:400;margin:0 0 18px}
+.training-unit .training-cue{padding:0;min-height:0}
+.training-unit .training-current-step{font-size:10px!important;line-height:1.5;margin:0 0 10px!important;text-align:left}
+.training-unit .training-prompt{font-size:20px;line-height:1.5;margin:0 0 12px;text-align:left}
+.training-unit .training-fine{line-height:1.5}
+.training-unit .training-body-steps{margin-top:18px}
+.training-unit .training-config{border:0;padding:0}
+.training-unit .training-rhythm .training-settings,.training-unit .training-rhythm .training-preset-grid:has([data-duration-field][hidden]){grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.training-unit .training-rhythm .training-preset-grid:has([data-duration-field][hidden])>label:nth-child(2){grid-column:1/-1}
+.training-unit .training-sound-row{gap:10px}
+.training-unit .training-sound summary span{display:block;margin:3px 0 0}
+.training-unit .training-reference{margin:0}
+.training-unit .training-reference>.training-examples>summary{font-size:17px!important;padding-top:0!important}
+.training-unit .training-walkthrough{padding:12px;margin:12px 0}
+.training-unit .training-walkthrough p{font-size:16px;line-height:1.5}
+.training-unit .training-walkthrough-actions{display:flex;flex-wrap:wrap;gap:10px}
+.training-unit .training-explorer-controls{grid-template-columns:1fr;gap:12px}
+.training-unit .training-message,.training-unit .training-notice{font-size:14px;margin-bottom:12px;padding:10px}
+.training-panel-opener{display:none}
+@media(max-width:850px) and (min-width:761px){
+ .training-unit{--shape-size:340px;gap:16px}
+ .training-side{padding-left:12px}
+ .training-unit .training-exercises button{font-size:12px;padding:8px 5px}
+ .training-unit .training-topline{gap:8px}
+ .training-unit .training-topline .back-link{font-size:12px}
+ .training-unit .training-breath-readout{font-size:28px}
+ .training-unit .training-prompt{font-size:18px}
+}
+@media(max-width:760px){
+ .training-unit{display:block;width:100%;height:auto;aspect-ratio:1;max-width:520px;margin:0 auto}
+ .training-shape-canvas{height:100%;position:absolute;inset:0}
+ .training-side{display:none;position:absolute;inset:0 0 100px;z-index:2;height:auto;padding:10px 12px 0;border:1px solid #bcb39680;background:#f2edddf5;box-shadow:0 2px 12px #665d4210}
+ .training-panel-open .training-side{display:flex}
+ .training-unit .training-topline{margin-bottom:8px}
+ .training-unit .training-exercises{margin-bottom:5px}
+ .training-unit .training-exercises button{min-height:44px;font-size:12px;padding:7px 5px}
+ .training-pane-nav{gap:24px}
+ .training-pane-nav button{min-height:36px;padding:7px 0;font-size:14px}
+ .training-pane-scroll{padding-top:10px}
+ .training-guide h2{font-size:20px;margin-bottom:12px}
+ .training-unit .training-prompt{font-size:17px}
+ .training-unit .training-breath-readout{font-size:30px;top:43%;padding:10px 5px}
+ .training-unit .training-breath-readout small{font-size:12px}
+ .training-shape-canvas--triangle .training-breath-readout{top:49%}
+ .training-unit .training-shape-actions{top:auto;bottom:38px;width:180px;z-index:3}
+ .training-unit .training-shape-actions .training-state{display:none}
+ .training-unit .training-session-bar{padding:0}
+ .training-unit .training-session-bar>div{margin:0}
+ .training-unit .training-session-bar .text-button{min-height:32px}
+ .training-unit .training-progress{margin-top:0}
+ .training-panel-opener{display:block;position:absolute;z-index:3;bottom:0;left:50%;transform:translateX(-50%);min-height:36px;white-space:nowrap;font-size:14px}
+}
+@media(prefers-reduced-motion:reduce){.training-shape-art{transform:none!important;transition:none}}
+.reduced-motion .training-shape-art{transform:none!important;transition:none}
+@media(max-width:760px){
+ .training-side{bottom:80px}
+ .training-unit .training-shape-actions{width:240px;bottom:36px}
+ .training-unit .training-session-bar{display:flex;justify-content:center;gap:12px}
+ .training-unit .training-session-bar>span{font-size:15px}
+}
+.training-mobile-exercise{display:none}
+@media(max-width:760px){
+ .training-unit .training-topline{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:8px}
+ .training-unit .training-topline .back-link,.training-unit .training-exercises{display:none}
+ .training-mobile-exercise{display:block;min-width:0}
+ #training-root .training-mobile-exercise select{margin:0;min-height:40px;font-size:13px;padding:8px;min-width:0;width:100%}
+ .training-shape-canvas--triangle .training-breath-readout{width:46%;font-size:26px}
+}
 
 </style>
-  <style data-form-source="src/landing.css?v=f88a1579ccda">
+  <style data-form-source="src/landing.css?v=3413320bbf50">
 /* Original artwork and portal composition from the owner's dream-unity/one.
    Labels are live HTML. The matching paper captions cover the raster labels. */
 :root { --paper: #ebe4d5; --ink: #302b23; color-scheme: light; }
@@ -565,6 +661,116 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
   body[data-view="journey"] .portal-page > .stage-path { margin-top: 0; }
 }
 
+/* Balance the opening composition at normal zoom. Reserve room for the song
+   and two readable rows of shapes instead of sizing the logo to the viewport. */
+@media screen {
+  .portal-visual > .portal-artwork { width: min(calc(100% - 24px), 480px); }
+  body[data-view="journey"] .portal-page > .stage-path { margin-top: 18px; }
+  .portal-page > .stage-path { width: min(calc(100% - 32px), 1360px); gap: 10px; }
+  .portal-page .stage-tile { min-height: 0; padding: 10px 6px; }
+  .portal-page .stage-tile .stage-icon { width: min(104px, 100%); margin: 2px auto 6px; }
+  .portal-page .stage-name { font-size: 15px; line-height: 1.25; }
+  .portal-page .stage-status { font-size: 10px; line-height: 1.3; margin-top: 3px; }
+  .portal-hero > .creation-intro { font-size: clamp(17px, 1.4vw, 19px); line-height: 1.6; }
+}
+@media screen and (min-width: 900px) {
+  .portal-hero {
+    --hero-logo-size: min(calc(100vw - 560px), clamp(300px, calc(100vh - 500px), 520px));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--hero-logo-size) minmax(0, 1fr);
+    align-items: start;
+  }
+  @supports (height: 100svh) {
+    .portal-hero { --hero-logo-size: min(calc(100vw - 560px), clamp(300px, calc(100svh - 500px), 520px)); }
+  }
+  .portal-visual { grid-column: 2; grid-row: 1; }
+  .portal-visual > .portal-artwork { width: 100%; }
+  .portal-hero > .creation-intro {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    width: min(calc(100% - 36px), 330px);
+    margin: 18px auto 80px;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .portal-hero > .creation-intro::before { margin-bottom: 20px; }
+  .portal-hero > .creation-intro p { margin-bottom: .85em; }
+  .portal-hero > .creation-intro p:last-child { margin-bottom: 0; }
+  .portal-page > .stage-path { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .portal-page .stage-tile .stage-icon { width: min(clamp(88px, 7.6vw, 104px), 100%); }
+}
+@media screen and (min-width: 900px) and (max-height: 800px) {
+  .portal-page .stage-tile .stage-icon { width: min(88px, 100%); }
+  .portal-hero > .creation-intro { margin-top: 12px; margin-bottom: 32px; font-size: 16px; line-height: 1.5; }
+  .portal-hero > .creation-intro::before { margin-bottom: 14px; }
+}
+@media screen and (max-width: 600px) {
+  .portal-page .stage-tile .stage-icon { width: min(96px, 100%); }
+  .portal-page .stage-name { font-size: 14px; }
+  .portal-hero > .creation-intro { margin-top: 26px; margin-bottom: 20px; }
+}
+@media screen and (max-height: 480px) and (min-width: 601px) {
+  .portal-visual > .portal-artwork { width: min(calc(100% - 24px), 280px); }
+  .portal-title { font-size: 9px; letter-spacing: .12em; }
+  .portal-caption, .portal--world .portal-caption { font-size: 11px; }
+}
+
+</style>
+  <style data-form-source="src/music.css?v=432291d20841">
+/* Keep the provider's live controls and fixed embed viewport. Only the
+   artwork, linked heading and provider footer are outside this window. */
+.portal-visual .site-music {
+  width: min(328px, calc(100% - 28px));
+  min-height: 0;
+  margin: 6px auto 0;
+  padding: 10px 12px 6px;
+  border: 1px solid #a99c7d80;
+  border-radius: 4px;
+  background: #f5efdf55;
+  box-shadow: inset 0 0 0 3px #f5efdf55;
+  color: var(--ink);
+}
+.music-title {
+  margin: 0 0 3px;
+  font: 400 17px/1.4 var(--serif);
+  text-align: center;
+  letter-spacing: .015em;
+}
+.site-music .music-player-window {
+  position: relative;
+  width: 240px;
+  max-width: 100%;
+  height: 64px;
+  margin: 0 auto;
+  overflow: hidden;
+  overflow: clip;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.site-music iframe {
+  position: absolute;
+  left: -100px;
+  top: -60px;
+  width: 340px;
+  max-width: none;
+  height: 148px;
+  border: 0;
+  filter: grayscale(1) invert(1) brightness(1.2) sepia(.1);
+  mix-blend-mode: multiply;
+}
+.site-music .music-offline {
+  margin: 8px 0;
+  color: var(--ink);
+  font: 14px/1.5 var(--serif);
+  text-align: center;
+}
+@media (forced-colors: active) {
+  .site-music { border-color: CanvasText; }
+  .site-music iframe { filter: none; mix-blend-mode: normal; }
+}
+
 </style>
 </head>
 <body data-view="journey">
@@ -625,6 +831,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
   <details id="site-music-panel" class="site-music-panel" open>
   <summary>Music</summary>
   <aside class="site-music" aria-label="Philosophy of Intelligence music player">
+    <p class="music-title">Philosophy of Intelligence</p>
     <div class="music-player-window">
     <p class="music-offline">Music is available on the website.</p>
     </div>
@@ -10292,7 +10499,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
 });
 
 </script>
-  <script data-form-module="src/training.js?v=6e2ab2e2edb1">
+  <script data-form-module="src/training.js?v=e05f73c8230b">
 (function (root) {
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10309,7 +10516,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
     const testAudio = new E.ExerciseAudio({onError:soundFailure});
     let recorded = false, peek = null, lastBodyStep = -1, lastCue = '', lastPrompt = '', announcement = '';
     let sound = true, bell = true, frequency = 10, bellVolume = 1, pacing = 'paced', duration = 15;
-    let inhaleSeconds=5, exhaleSeconds=5;
+    let inhaleSeconds=5, exhaleSeconds=5, selectedPane='guide', panelOpen=false;
     const rhythmStorageKey='form-breath-timing-v1';
     try { const saved=JSON.parse(storage?.getItem(rhythmStorageKey)||'null'); if(saved&&E.validBreathTiming(saved.inhaleSeconds,saved.exhaleSeconds)){inhaleSeconds=saved.inhaleSeconds;exhaleSeconds=saved.exhaleSeconds;} } catch (_) {}
     const pacingByExercise = {stream:'paced', heart:'paced', body:'natural'};
@@ -10364,7 +10571,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
     }
     function audioEnabled() { return sound || bell; }
     function soundStatus(text) { const el=q('[data-sound-status]');if(el)el.textContent=text; }
-    function soundFailure() { q('.training-sound').open=true;soundStatus('Sound could not start. Tap Test bell to try again.'); }
+    function soundFailure() { selectPane('settings');q('.training-sound').open=true;soundStatus('Sound could not start. Tap Test bell to try again.'); }
     function sessionSoundFailure() { sessionAudioFailed=true;soundFailure(); }
     function startAudio() {
       sessionAudioFailed=false;
@@ -10392,7 +10599,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
       const valid=E.validBreathTiming(inhale,exhale);
       q('[data-inhale]').setAttribute('aria-invalid',String(!Number.isFinite(inhale)||inhale<0.1));
       q('[data-exhale]').setAttribute('aria-invalid',String(!Number.isFinite(exhale)||exhale<0.1));
-      if(!valid){q('[data-rhythm-status]').textContent='Enter a valid duration of at least 0.1 seconds for both inhale and exhale.';return false;}
+      if(!valid){if(!q('[aria-invalid="true"]')){q('[data-inhale]').setAttribute('aria-invalid','true');q('[data-exhale]').setAttribute('aria-invalid','true');}selectPane('settings');q('[data-rhythm-status]').textContent='Enter a valid duration of at least 0.1 seconds for both inhale and exhale. The combined duration must fit within the timer range.';q('[aria-invalid="true"]').focus();return false;}
       const changed=inhale!==inhaleSeconds||exhale!==exhaleSeconds;
       if(clock&&changed)clock.setBreathTiming(inhale,exhale);
       inhaleSeconds=inhale;exhaleSeconds=exhale;
@@ -10422,7 +10629,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
         renderReadiness();
       }});
       q('[data-return]').open=false;
-      clock.start(); startAudio(); tick();
+      closePanel();clock.start(); startAudio(); tick();
     }
     function resume() {
       if (!clock) return;
@@ -10479,47 +10686,84 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
     function workedExampleHTML(guide) {
       const model=guide.model||root.FormRelationalModels?.getModel(stage.id,exercise);
       const register=guide.register||model?.relations||[];
-      return `<details class="training-examples" data-examples><summary>Explore the example · four entries</summary>
+      return `<details class="training-examples" data-examples ${selectedPane==='example'?'open':''}><summary>Explore the example · four entries</summary>
         <p class="training-fine">${stage.relationCount>8?'Learn the full register before rehearsing. ':''}Take additional natural breaths as needed. These controls rehearse entries; they do not save notes.</p>
         <div class="training-walkthrough" data-walkthrough></div>
         ${model?explorerHTML(model):''}
         <details class="training-model" data-model-register><summary>All ${register.length} relationships</summary><div data-model-content>${modelHTML(model||{relations:register})}</div></details>
       </details>`;
     }
+    function chooseExercise(name, focusSelector) {
+      if(name===exercise||!exerciseOrder.includes(name)||runningSession())return;
+      end();clock=null;exercise=name;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();q(focusSelector).focus();
+    }
+    function selectPane(name) {
+      if(!['guide','settings','example'].includes(name))return;
+      selectedPane=name;panelOpen=true;
+      all('[data-pane]').forEach(el=>el.hidden=el.dataset.pane!==name);
+      all('[data-pane-toggle]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.paneToggle===name)));
+      q('.training-unit').classList.toggle('training-panel-open',true);
+      q('[data-open-panel]').setAttribute('aria-expanded','true');
+      q('[data-open-panel]').textContent='Back to shape';
+      if(name==='example')q('[data-examples]').open=true;
+      q('.training-pane-scroll').scrollTop=0;
+    }
+    function closePanel() {
+      panelOpen=false;
+      q('.training-unit').classList.toggle('training-panel-open',false);
+      q('[data-open-panel]').setAttribute('aria-expanded','false');
+      q('[data-open-panel]').textContent='Guide & settings';
+    }
     function render() {
       modelState=0;selectedRelationship='';walkthroughStep=0;
       const guide = stage[exercise], ready=store.data.readiness[stage.id]||{};
-      host.innerHTML=`<div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
-        <header class="training-symbol-header"><h1 class="visually-hidden">${esc(stage.name)}</h1><div class="training-page-symbol${stage.id==='half-circle'?' training-page-symbol--half-circle':''}" aria-hidden="true">${G.miniIcon(stage.id,65).replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</div></header>
-        <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map((name,i)=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
-        <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
-        <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
-          <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span></div></div>
-          <div data-live><div class="training-session-bar" data-session-bar hidden><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
-            <div class="training-exercise-preview" data-exercise-preview>
-              <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div>
-              <div class="training-cue"><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt" aria-live="polite" aria-atomic="true"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
-            </div>
-            <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
+      host.innerHTML=`<section class="training-unit${panelOpen?' training-panel-open':''}" aria-label="${esc(stage.name)} practice">
+        <div class="training-shape-canvas training-shape-canvas--${esc(stage.id)}" data-live>
+          <h1 class="visually-hidden">${esc(stage.name)}</h1>
+          <div class="training-pacer" data-pacer>
+            <div data-orb class="training-shape-art" aria-hidden="true">${G.miniIcon(stage.id,65).replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</div>
+            <div class="training-breath-readout"><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div>
+          </div>
+          <div class="training-shape-actions">
+            <span data-session-state class="training-state">Ready</span>
+            <div data-setup class="training-start"><button type="button" class="button primary" data-start>Start</button></div>
+            <div class="training-session-bar" data-session-bar hidden><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
             <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span data-fill></span></div>
-            <p data-finished class="training-finish" hidden>Practice complete.</p></div>
-          <div class="training-config" aria-label="Practice settings">
+          </div>
+        </div>
+        <aside class="training-side" aria-label="Exercise guide and settings" id="training-controls">
+          <div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker"><span class="visually-hidden">Shape</span><select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label><label class="training-mobile-exercise"><span class="visually-hidden">Exercise</span><select data-exercise-select aria-label="Choose an exercise">${exerciseOrder.map(name=>`<option value="${name}" ${exercise===name?'selected':''}>${exerciseNames[name]}</option>`).join('')}</select></label></div>
+          <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map(name=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
+          <div class="training-pane-nav" role="group" aria-label="Practice panels">${['guide','settings','example'].map(name=>`<button type="button" data-pane-toggle="${name}" aria-pressed="${selectedPane===name}" aria-controls="practice-${name}">${name[0].toUpperCase()+name.slice(1)}</button>`).join('')}</div>
+          <div class="training-pane-scroll">
+            <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
+            <section class="training-guide" data-pane="guide" id="practice-guide" aria-labelledby="exercise-title" ${selectedPane==='guide'?'':'hidden'}>
+              <h2 id="exercise-title">${exerciseNames[exercise]}</h2>
+              <div class="training-cue" data-exercise-preview><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt" aria-live="polite" aria-atomic="true"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
+              <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
+              <p data-finished class="training-finish" hidden>Practice complete.</p>
+            </section>
+            <section class="training-config" data-pane="settings" id="practice-settings" aria-label="Practice settings" ${selectedPane==='settings'?'':'hidden'}>
           <form class="training-rhythm" data-breath-form novalidate><div class="training-settings training-preset-grid"><label data-duration-field>Length<select data-duration>${(exercise==='stream'?E.STREAM_DURATIONS:exercise==='heart'?E.HEART_DURATIONS:E.BODY_DURATIONS).map(m=>`<option value="${m}" ${m===duration?'selected':''}>${m<60?m+' minutes':m/60+(m===60?' hour':' hours')}</option>`).join('')}</select></label><label>Breathing<select data-pacing><option value="natural" ${pacing==='natural'?'selected':''}>My own rhythm</option><option data-paced-option value="paced" ${pacing==='paced'?'selected':''}>${rhythmLabel()}</option></select></label><label>Inhale (seconds)<input data-inhale type="number" inputmode="decimal" min="0.1" step="any" required value="${inhaleSeconds}" aria-describedby="rhythm-help"></label><label>Exhale (seconds)<input data-exhale type="number" inputmode="decimal" min="0.1" step="any" required value="${exhaleSeconds}" aria-describedby="rhythm-help"></label></div><p id="rhythm-help" class="training-fine">Choose your rhythm, then Start.</p><button type="submit" class="button secondary" data-apply-rhythm hidden>Apply rhythm</button><p class="training-fine training-rhythm-current" data-rhythm-current hidden>Guide: ${rhythmLabel()}.</p><p class="training-fine" data-rhythm-status role="status"></p></form>
           <div class="training-sound-row"><details class="training-sound"><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-bell ${bell?'checked':''}> Enable bell sound</label><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> Enable ambient sound</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine" data-bell-help>${exercise==='body'?'Bells mark each body dimension and the end of practice.':'Bells mark each inhale and exhale with the guide. Own rhythm keeps only the finish bell.'}</p></details><button type="button" class="text-button training-bell-toggle" data-bell-toggle aria-pressed="${bell}" aria-label="${bell?'Mute bell sound':'Enable bell sound'}">Bell: ${bell?'on':'off'}</button></div>
-          <div data-setup class="training-start"><button type="button" class="button primary" data-start>Start</button></div>
+            </section>
+            <section class="training-reference" data-pane="example" id="practice-example" aria-label="${esc(stage.name)} worked reference" data-reference ${selectedPane==='example'?'':'hidden'}>${workedExampleHTML(guide)}</section>
           </div>
-        </section>
+        </aside>
+        <button type="button" class="text-button training-panel-opener" data-open-panel aria-controls="training-controls" aria-expanded="${panelOpen}">${panelOpen?'Back to shape':'Guide & settings'}</button>
+      </section>
         <details hidden data-return class="training-panel training-return"><summary>Private notes</summary><p class="training-fine">Pause to write. Entries, not timer breaths, set the return distance.</p><form data-return-form><div data-fields></div><button type="submit" class="button primary" data-keep>Keep this entry</button><p class="training-fine">Saved in this browser.</p></form></details>
         <section hidden data-readiness class="training-panel training-readiness"></section>
-        </div></div>
-        <section class="training-reference" aria-label="${esc(stage.name)} worked reference" data-reference>${workedExampleHTML(guide)}</section>
         <details hidden class="training-record"><summary>Your practice record <span data-record-count></span></summary><p class="training-fine">Downloads include your private notes.</p><div data-record></div><div class="training-record-actions"><button type="button" class="text-button" data-export>Download practice record (includes notes)</button><button type="button" class="text-button" data-original hidden>Download original saved data</button><button type="button" class="text-button" data-reload hidden>Load saved version</button><button type="button" class="text-button" data-reset>Clear this practice record</button></div></details>
         <p hidden class="training-attribution">Heart and body exercises: <a href="https://o0ooooooooooo0o.github.io/Project-Meaning/" target="_blank" rel="noopener noreferrer">Project Meaning</a>. <a href="#palace">Earlier saved observations →</a></p>`;
+      all('[data-pane-toggle]').forEach(el=>el.addEventListener('click',()=>selectPane(el.dataset.paneToggle)));
+      q('[data-open-panel]').addEventListener('click',()=>{if(q('[data-open-panel]').getAttribute('aria-expanded')==='true')closePanel();else {selectPane(selectedPane);q('[data-pane-toggle="'+selectedPane+'"]').focus();}});
       q('[data-shape]').addEventListener('change',e=>onStageChange(e.target.value));
       q('[data-model-state]')?.addEventListener('change',event=>selectWorkedEntry(Number(event.target.value)));
       q('[data-model-relation]')?.addEventListener('change',event=>{selectedRelationship=event.target.value;updateExplorer();});
       bindRegister();updateExplorer();renderWalkthrough();
-      all('[data-exercise]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.exercise===exercise)return;end();clock=null;exercise=el.dataset.exercise;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();q('[data-exercise="'+exercise+'"]').focus();}));
+      all('[data-exercise]').forEach(el=>el.addEventListener('click',()=>chooseExercise(el.dataset.exercise,'[data-exercise="'+el.dataset.exercise+'"]')));
+      q('[data-exercise-select]').addEventListener('change',event=>chooseExercise(event.target.value,'[data-exercise-select]'));
       q('[data-duration]').addEventListener('change',e=>{duration=Number(e.target.value);tick();});
       q('[data-pacing]').addEventListener('change',e=>setPacing(e.target.value));
       q('[data-breath-form]').addEventListener('submit',event=>{event.preventDefault();applyBreathTiming();});
@@ -10620,14 +10864,14 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
       q('[data-live-pace]').hidden=!active;q('[data-live-pace]').textContent=pacing==='natural'?'Use my '+inhaleSeconds+' / '+exhaleSeconds+' guide':'Use my own rhythm';
       // Switching shapes ends and records the old period in setStage(), just
       // like choosing another card in the always-visible shape grid.
-      q('[data-shape]').disabled=false;all('[data-exercise]').forEach(el=>el.disabled=active);
+      q('[data-shape]').disabled=false;q('[data-exercise-select]').disabled=active;all('[data-exercise]').forEach(el=>el.disabled=active);
       const scaled=pacing==='paced'&&active;
       const progress=s.breathProgress;
       // Keep the label still and enclosed even at the smallest point. Own rhythm
       // has a gentle visual pulse; only paced mode gives timed breathing cues.
       const expansion=scaled?(s.breathPhase==='inhale'?progress:1-progress):(1-Math.cos(s.elapsedSeconds*Math.PI/6))/2;
-      q('[data-orb]').style.transform=active?'scale('+(1+0.18*expansion)+')':'scale(1)';
-      q('[data-pacer]').hidden=exercise==='body'&&pacing==='natural';
+      q('[data-orb]').style.transform=active?'scale('+(0.94+0.06*expansion)+')':'scale(1)';
+      q('[data-pacer]').hidden=false;
       q('[data-breath-label]').textContent=idle?(pacing==='paced'?'Ready':'Own rhythm'):finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
       const remaining=Math.ceil(s.breathRemaining*10-1e-8)/10;
       q('[data-breath-count]').textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';

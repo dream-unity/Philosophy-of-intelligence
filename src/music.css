@@ -1,0 +1,52 @@
+/* Keep the provider's live controls and fixed embed viewport. Only the
+   artwork, linked heading and provider footer are outside this window. */
+.portal-visual .site-music {
+  width: min(328px, calc(100% - 28px));
+  min-height: 0;
+  margin: 6px auto 0;
+  padding: 10px 12px 6px;
+  border: 1px solid #a99c7d80;
+  border-radius: 4px;
+  background: #f5efdf55;
+  box-shadow: inset 0 0 0 3px #f5efdf55;
+  color: var(--ink);
+}
+.music-title {
+  margin: 0 0 3px;
+  font: 400 17px/1.4 var(--serif);
+  text-align: center;
+  letter-spacing: .015em;
+}
+.site-music .music-player-window {
+  position: relative;
+  width: 240px;
+  max-width: 100%;
+  height: 64px;
+  margin: 0 auto;
+  overflow: hidden;
+  overflow: clip;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.site-music iframe {
+  position: absolute;
+  left: -100px;
+  top: -60px;
+  width: 340px;
+  max-width: none;
+  height: 148px;
+  border: 0;
+  filter: grayscale(1) invert(1) brightness(1.2) sepia(.1);
+  mix-blend-mode: multiply;
+}
+.site-music .music-offline {
+  margin: 8px 0;
+  color: var(--ink);
+  font: 14px/1.5 var(--serif);
+  text-align: center;
+}
+@media (forced-colors: active) {
+  .site-music { border-color: CanvasText; }
+  .site-music iframe { filter: none; mix-blend-mode: normal; }
+}
