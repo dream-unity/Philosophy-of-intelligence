@@ -14,7 +14,7 @@ export function prepareHomepage() {
   delete require.cache[require.resolve('../src/geometry.js')];
   const geometry = require('../src/geometry.js');
   const cards = STAGES.map((stage, index) =>
-    `          <a class="stage-tile" href="#practice/${stage.id}" data-stage="${stage.id}" aria-controls="view-practice" aria-label="${stage.name} · Explore"><span class="stage-number">${String(index + 1).padStart(2, '0')}</span><span class="stage-icon" aria-hidden="true">${geometry.miniIcon(stage.id, 65)}</span><span class="stage-name">${stage.name}</span><span class="stage-status">Explore</span></a>`
+    `          <a class="stage-tile" href="#practice/${stage.id}" data-stage="${stage.id}" aria-controls="view-practice" aria-label="${stage.name}"><span class="stage-number">${String(index + 1).padStart(2, '0')}</span><span class="stage-icon" aria-hidden="true">${geometry.miniIcon(stage.id, 65)}</span><span class="stage-name">${stage.name}</span></a>`
   ).join('\n');
   const path = resolve(root, 'index.html');
   let html = readFileSync(path, 'utf8');
