@@ -23,10 +23,11 @@ body[data-view="journey"] .skip-link { display: none; }
    Its smaller footprint leaves more paper between it and the outer ink band. */
 .portal--world { --x: 49.920255%; --y: 74%; --diameter: 17%; z-index: 2; }
 .portal-caption { position: absolute; left: 50%; top: 50%; display: grid; place-content: center; width: 50.78125%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: #ebe4d5 url("../assets/parchment-texture.svg") repeat; background-size: 21.37161cqw 21.37161cqw; color: #302b23; font-size: clamp(11px, 2.05cqw, 26px); line-height: 1.15; text-align: center; pointer-events: none; }
-/* The iris fills the existing paper circle; clipping keeps every graphite
-   stroke inside its original rim at every responsive size. */
+/* Neutral graphite inherits its colour from the original parchment beneath it.
+   Lift the insert's paper to white so multiply adds ink without a sepia disc.
+   The existing circular clip keeps all strokes inside the original rim. */
 .portal--unity .portal-caption { top: 56.182796%; width: 56.989247%; place-content: normal; place-items: center; overflow: hidden; clip-path: circle(50%); }
-.portal-eye { display: block; width: 106%; max-width: none; height: 106%; aspect-ratio: 1; object-fit: contain; mix-blend-mode: multiply; filter: grayscale(1) brightness(1.1); user-select: none; pointer-events: none; }
+.portal-eye { position: absolute; left: 50%; top: 50%; display: block; width: 107%; max-width: none; height: 107%; transform: translate(-50%, -50%); aspect-ratio: 1; object-fit: contain; mix-blend-mode: multiply; filter: grayscale(1) brightness(1.2) contrast(1.1); user-select: none; pointer-events: none; }
 .portal--world .portal-caption { width: 61%; font-size: clamp(11px, 2.05cqw, 26px); }
 .unity-ink-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; user-select: none; }
 .ink-cross { rotate: 90deg; }
