@@ -69,5 +69,5 @@ The teaching follows the revised project manual and working conventions. Shapes 
 
 ### Homepage song
 
-The homepage includes Suno's official **Universal DNA** player. Press its Play button to start; it does not autoplay on arrival. The same player stays mounted during shape navigation, with pause and seeking provided by Suno, independently of the breathing bell. Suno serves the player and audio, so an internet connection is required. The offline editions retain a song link instead of loading the remote player.
+The homepage includes the **Philosophy of Intelligence** song. Press Play to start; it does not autoplay on arrival. The same player stays mounted during shape navigation, with pause and seeking independent of the breathing bell. The provider footer is clipped and the separate provider link is removed. The iframe sandbox allows playback scripts but denies popups and top-level navigation, so its links cannot open Suno. Suno still serves the player and audio, so an internet connection is required. The offline editions show a short availability note instead of loading the remote player.
 

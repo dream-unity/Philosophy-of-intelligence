@@ -171,7 +171,12 @@ export function assertDocumentResources(html, { selfContained = false, allowOnli
       const value = attrs[key].trim();
       invariant(key !== 'srcset', `${filename}: srcset requires an explicit offline embedding implementation.`);
       if (allowOnlinePlayer && !selfContained && name === 'iframe' && key === 'src' &&
-          attrs['data-online-player'] === 'suno' && value === SUNO_EMBED_URL) continue;
+          attrs['data-online-player'] === 'suno' && value === SUNO_EMBED_URL) {
+        const permissions = (attrs.sandbox || '').trim().split(/\s+/).sort().join(' ');
+        invariant(permissions === 'allow-same-origin allow-scripts',
+          'The music player sandbox must block popups and top-level navigation.');
+        continue;
+      }
       if (value.startsWith('#') || /^data:/i.test(value)) continue;
       invariant(!selfContained, `${filename} still depends on an external file: ${value}`);
       const asset = localAsset(value, fromDirectory, rootDirectory);

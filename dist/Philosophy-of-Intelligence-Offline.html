@@ -427,7 +427,7 @@ body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bot
 .training-page-symbol svg{display:block;width:100%;height:100%}
 
 </style>
-  <style data-form-source="src/landing.css?v=59c2dae6de2e">
+  <style data-form-source="src/landing.css?v=03996f1820c3">
 /* Original artwork and portal composition from the owner's dream-unity/one.
    Labels are live HTML. The matching paper captions cover the raster labels. */
 :root { --paper: #ebe4d5; --ink: #302b23; color-scheme: light; }
@@ -510,9 +510,14 @@ body[data-view="journey"] .skip-link { display: none; }
 }
 
 /* Keep the same iframe mounted and its play/pause control available on every view. */
-.site-music { width: min(340px, calc(100% - 24px)); margin: 12px auto 0; }
-.site-music iframe { display: block; width: 100%; height: 150px; border: 1px solid #b5a78f; border-radius: 12px; background: #ebe4d5; }
-.music-source { display: block; width: fit-content; margin: 3px 0 0 auto; padding: 4px 0; font: 11px/1.5 var(--sans); color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.site-music { width: min(340px, calc(100% - 24px)); min-height: 150px; margin: 12px auto 0; }
+/* Keep the playback controls visible while clipping the provider's footer.
+   The iframe sandbox also blocks its outbound links, including keyboard use. */
+.music-player-window { height: 124px; overflow: hidden; overflow: clip; border: 1px solid #b5a78f; border-radius: 12px; background: #1b1b1b; }
+/* Preserve the former 150px box's 148px inner viewport; an exact 150px
+   viewport switches this embed to a different compact layout. */
+.site-music iframe { display: block; width: 100%; height: 148px; border: 0; background: #ebe4d5; }
+.music-offline { margin: 16px; color: #f8f4ec; font: 13px/1.5 var(--sans); }
 /* Centre the player directly below the logo, before the shape cards.
    Shared viewport lengths keep both edges aligned without reparenting the iframe. */
 body[data-view="journey"] {
@@ -557,9 +562,10 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
   <div id="storage-warning" class="storage-warning" role="status" hidden></div>
   <details id="site-music-panel" class="site-music-panel" open>
   <summary>Music</summary>
-  <aside class="site-music" aria-label="Universal DNA music player">
-    <p class="music-offline">Universal DNA · Listen online</p>
-    <a class="music-source" href="https://suno.com/song/9d62272c-0a81-4f29-b6b0-52f03324b7b8" target="_blank" rel="noopener noreferrer">Open in Suno ↗</a>
+  <aside class="site-music" aria-label="Philosophy of Intelligence music player">
+    <div class="music-player-window">
+    <p class="music-offline">Music is available on the website.</p>
+    </div>
   </aside>
   </details>
   <main id="main" tabindex="-1">
