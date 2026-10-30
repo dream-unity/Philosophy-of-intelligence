@@ -195,6 +195,9 @@
     if(currentView==='practice')selectedStage=practiceStage;
     if(parts[0]==='studio')window.history.replaceState(null,'','#practice/'+practiceStage);
     document.body.dataset.view=currentView;
+    // Collapse optional music above practice without replacing its iframe.
+    const musicPanel=$('site-music-panel');
+    if(musicPanel)musicPanel.open=currentView!=='practice';
     document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!=='view-'+currentView);
     document.querySelectorAll('[data-nav]').forEach(link=>{
       const active=link.dataset.nav===currentView;

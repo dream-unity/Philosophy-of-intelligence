@@ -210,18 +210,20 @@
         ${lessonHTML(guide)}
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
         <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
-          <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span><button type="button" class="text-button training-bell-toggle" data-bell-toggle aria-pressed="${bell}" aria-label="${bell?'Mute bell sound':'Enable bell sound'}">Bell: ${bell?'on':'off'}</button></div></div>
-          <div data-setup>
-          <div class="training-settings"><label>Practice length<select data-duration>${(exercise==='stream'?E.STREAM_DURATIONS:exercise==='heart'?E.HEART_DURATIONS:E.BODY_DURATIONS).map(m=>`<option value="${m}" ${m===duration?'selected':''}>${m<60?m+' minutes':m/60+(m===60?' hour':' hours')}</option>`).join('')}</select></label></div>
-          <button type="button" class="button primary" data-start>Begin ${exercise==='stream'?'stream practice':exercise==='heart'?'heart practice':'body mapping'} <span aria-hidden="true">↗</span></button></div>
-          <div data-live hidden><div class="training-session-bar"><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
-            <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Own rhythm</span><small data-breath-count aria-hidden="true"></small></div></div>
-            <button type="button" class="text-button training-live-pace" data-live-pace>Use a gentle 5 / 5 guide</button><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt"></p><p data-next-step class="training-fine training-centered"></p>
+          <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span></div></div>
+          <div data-live><div class="training-session-bar" data-session-bar hidden><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
+            <div class="training-exercise-preview" data-exercise-preview>
+              <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div>
+              <div class="training-cue"><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
+            </div>
             <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
-            <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-fill></span></div>
-            <div data-finished class="training-finish" hidden><h3>Practice complete.</h3><button type="button" class="button secondary" data-again>Practise again</button></div></div>
-          <form class="training-rhythm" data-breath-form novalidate><h3>Breathing rhythm</h3><label class="training-field training-pacing-choice">Breathing<select data-pacing><option value="natural" ${pacing==='natural'?'selected':''}>My own rhythm</option><option data-paced-option value="paced" ${pacing==='paced'?'selected':''}>${rhythmLabel()}</option></select></label><div class="training-settings"><label>Inhale (seconds)<input data-inhale type="number" inputmode="decimal" min="0.1" step="any" required value="${inhaleSeconds}" aria-describedby="rhythm-help"></label><label>Exhale (seconds)<input data-exhale type="number" inputmode="decimal" min="0.1" step="any" required value="${exhaleSeconds}" aria-describedby="rhythm-help"></label></div><p id="rhythm-help" class="training-fine">Set each phase in seconds; decimals are welcome. Apply changes to start a new inhale. Your practice timer continues.</p><button type="submit" class="button secondary" data-apply-rhythm>Apply rhythm</button><p class="training-fine training-rhythm-current" data-rhythm-current>Guide: ${rhythmLabel()}.</p><p class="training-fine" data-rhythm-status role="status"></p></form>
-          <details class="training-sound" open><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-bell ${bell?'checked':''}> Enable bell sound</label><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> Enable ambient sound</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine" data-bell-help>${exercise==='body'?'Bells mark each body dimension and the end of practice.':'Bells mark each inhale and exhale with the guide. Own rhythm keeps only the finish bell.'}</p></details>
+            <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span data-fill></span></div>
+            <p data-finished class="training-finish" hidden>Practice complete.</p></div>
+          <div class="training-config" aria-label="Practice settings">
+          <form class="training-rhythm" data-breath-form novalidate><div class="training-settings training-preset-grid"><label data-duration-field>Length<select data-duration>${(exercise==='stream'?E.STREAM_DURATIONS:exercise==='heart'?E.HEART_DURATIONS:E.BODY_DURATIONS).map(m=>`<option value="${m}" ${m===duration?'selected':''}>${m<60?m+' minutes':m/60+(m===60?' hour':' hours')}</option>`).join('')}</select></label><label>Breathing<select data-pacing><option value="natural" ${pacing==='natural'?'selected':''}>My own rhythm</option><option data-paced-option value="paced" ${pacing==='paced'?'selected':''}>${rhythmLabel()}</option></select></label><label>Inhale (seconds)<input data-inhale type="number" inputmode="decimal" min="0.1" step="any" required value="${inhaleSeconds}" aria-describedby="rhythm-help"></label><label>Exhale (seconds)<input data-exhale type="number" inputmode="decimal" min="0.1" step="any" required value="${exhaleSeconds}" aria-describedby="rhythm-help"></label></div><p id="rhythm-help" class="training-fine">Choose your rhythm, then Start.</p><button type="submit" class="button secondary" data-apply-rhythm hidden>Apply rhythm</button><p class="training-fine training-rhythm-current" data-rhythm-current hidden>Guide: ${rhythmLabel()}.</p><p class="training-fine" data-rhythm-status role="status"></p></form>
+          <div class="training-sound-row"><details class="training-sound"><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-bell ${bell?'checked':''}> Enable bell sound</label><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> Enable ambient sound</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine" data-bell-help>${exercise==='body'?'Bells mark each body dimension and the end of practice.':'Bells mark each inhale and exhale with the guide. Own rhythm keeps only the finish bell.'}</p></details><button type="button" class="text-button training-bell-toggle" data-bell-toggle aria-pressed="${bell}" aria-label="${bell?'Mute bell sound':'Enable bell sound'}">Bell: ${bell?'on':'off'}</button></div>
+          <div data-setup class="training-start"><button type="button" class="button primary" data-start>Start</button></div>
+          </div>
         </section>
         <details data-return class="training-panel training-return"><summary>Private notes</summary><p class="training-fine">Pause to write. Entries, not timer breaths, set the return distance.</p><form data-return-form><div data-fields></div><button type="submit" class="button primary" data-keep>Keep this entry</button><p class="training-fine">Saved in this browser.</p></form></details>
         <section data-readiness class="training-panel training-readiness"></section>
@@ -233,10 +235,10 @@
       q('[data-model-relation]')?.addEventListener('change',event=>{selectedRelationship=event.target.value;updateExplorer();});
       bindRegister();updateExplorer();renderWalkthrough();
       all('[data-exercise]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.exercise===exercise)return;end();clock=null;exercise=el.dataset.exercise;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();q('[data-exercise="'+exercise+'"]').focus();}));
-      q('[data-duration]').addEventListener('change',e=>duration=Number(e.target.value));
+      q('[data-duration]').addEventListener('change',e=>{duration=Number(e.target.value);tick();});
       q('[data-pacing]').addEventListener('change',e=>setPacing(e.target.value));
       q('[data-breath-form]').addEventListener('submit',event=>{event.preventDefault();applyBreathTiming();});
-      q('[data-start]').addEventListener('click',start);q('[data-again]').addEventListener('click',start);
+      q('[data-start]').addEventListener('click',start);
       q('[data-pause]').addEventListener('click',()=>clock.snapshot().status==='running'?pause():resume());
       q('[data-end]').addEventListener('click',end);
       q('[data-live-pace]').addEventListener('click',()=>setPacing(pacing==='natural'?'paced':'natural'));
@@ -314,14 +316,23 @@
     }
     function tick() {
       if(!q('[data-live]'))return;
-      if(!clock){q('[data-live]').hidden=true;q('[data-setup]').hidden=false;return;}
-      const s=clock.tick(),active=['running','paused'].includes(s.status),finished=!active;
-      q('[data-live]').hidden=false;q('[data-setup]').hidden=true;
-      q('[data-session-state]').textContent=s.status==='running'?'Practising':s.status==='paused'?'Paused':s.status==='completed'?'Complete':'Ended';
+      // Preview the first step without starting a clock, sound, or saved session.
+      const idle=!clock;
+      const s=clock?clock.tick():{status:'idle',remainingSeconds:duration*60,elapsedSeconds:0,progress:0,breathPhase:'inhale',breathProgress:0,breathRemaining:inhaleSeconds,breathPhaseIndex:0,heartPhaseIndex:0,bodyStepIndex:0,stepRemaining:E.BODY_STEP_SECONDS};
+      const active=['running','paused'].includes(s.status),finished=!idle&&!active;
+      q('[data-live]').hidden=false;q('[data-setup]').hidden=active;
+      q('[data-session-bar]').hidden=idle;
+      q('[data-duration-field]').hidden=active;
+      q('[data-apply-rhythm]').hidden=!active;
+      q('[data-rhythm-current]').hidden=!active;
+      q('#rhythm-help').textContent=active?'Apply changes to begin a new inhale; the practice timer continues.':'Choose your rhythm, then Start.';
+      q('[data-exercise-preview]').classList.toggle('training-preview-body',exercise==='body'&&pacing==='natural');
+      q('.training-progress').hidden=!active;
+      q('[data-session-state]').textContent=idle?'Ready':s.status==='running'?'Practising':s.status==='paused'?'Paused':s.status==='completed'?'Complete':'Ended';
       q('[data-timer]').textContent=time(s.remainingSeconds);
-      q('[data-pause]').textContent=s.status==='paused'?'Resume':'Pause';q('[data-pause]').hidden=finished;q('[data-end]').hidden=finished;
-      q('[data-finished]').hidden=!finished;
-      q('[data-live-pace]').hidden=finished;q('[data-live-pace]').textContent=pacing==='natural'?'Use my '+inhaleSeconds+' / '+exhaleSeconds+' guide':'Use my own rhythm';
+      q('[data-pause]').textContent=s.status==='paused'?'Resume':'Pause';q('[data-pause]').hidden=!active;q('[data-end]').hidden=!active;
+      q('[data-finished]').hidden=!finished;q('[data-finished]').textContent=s.status==='completed'?'Practice complete.':'Practice ended.';
+      q('[data-live-pace]').hidden=!active;q('[data-live-pace]').textContent=pacing==='natural'?'Use my '+inhaleSeconds+' / '+exhaleSeconds+' guide':'Use my own rhythm';
       q('[data-shape]').disabled=active;all('[data-exercise]').forEach(el=>el.disabled=active);
       const scaled=pacing==='paced'&&active;
       const progress=s.breathProgress;
@@ -330,11 +341,11 @@
       const expansion=scaled?(s.breathPhase==='inhale'?progress:1-progress):(1-Math.cos(s.elapsedSeconds*Math.PI/6))/2;
       q('[data-orb]').style.transform=active?'scale('+(1+0.18*expansion)+')':'scale(1)';
       q('[data-pacer]').hidden=exercise==='body'&&pacing==='natural';
-      q('[data-breath-label]').textContent=finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
+      q('[data-breath-label]').textContent=idle?(pacing==='paced'?'Ready':'Own rhythm'):finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
       const remaining=Math.ceil(s.breathRemaining*10-1e-8)/10;
-      q('[data-breath-count]').textContent=scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
+      q('[data-breath-count]').textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
       if(s.bodyStepIndex!==lastBodyStep){peek=null;lastBodyStep=s.bodyStepIndex;}
-      const promptKey=exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):(exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural'))+':'+(peek!==null);
+      const promptKey=s.status+':'+exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):(exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural'))+':'+(peek!==null);
       if(promptKey!==lastPrompt){
         lastPrompt=promptKey;
         if(exercise==='stream'){
@@ -347,12 +358,12 @@
           q('[data-prompt]').textContent=pacing==='paced'?p[s.breathPhase]:p.inhale+' '+p.exhale;
           q('[data-dimension]').hidden=true;q('[data-next-step]').textContent='Receive → encode → retrieve → compare → revise. Finish at your own pace.';
         }else{
-          const i=peek??s.bodyStepIndex,p=E.BODY_STEPS[i];q('[data-step-label]').textContent=peek!==null?'Rereading · the exercise timer continues':'Dimension '+(i+1)+' of 7';
+          const i=peek??s.bodyStepIndex,p=E.BODY_STEPS[i];q('[data-step-label]').textContent=peek!==null?(idle?'Preview':'Rereading · the exercise timer continues'):'Dimension '+(i+1)+' of 7';
           q('[data-dimension]').hidden=false;q('[data-dimension]').textContent=p.label;q('[data-prompt]').textContent=p.prompt;
           all('[data-peek]').forEach(el=>{el.setAttribute('aria-pressed',String(Number(el.dataset.peek)===i));el.classList.toggle('is-current',Number(el.dataset.peek)===s.bodyStepIndex);});
         }
       }
-      if(exercise==='body')q('[data-next-step]').textContent=finished?'Return to your own rhythm.':'Next: '+E.BODY_STEPS[(s.bodyStepIndex+1)%7].label+' · '+Math.ceil(s.stepRemaining)+'s'+(s.status==='paused'?' · paused':'');
+      if(exercise==='body')q('[data-next-step]').textContent=idle?'Explore a dimension below; Start begins the guided sequence.':finished?'Return to your own rhythm.':'Next: '+E.BODY_STEPS[(s.bodyStepIndex+1)%7].label+' · '+Math.ceil(s.stepRemaining)+'s'+(s.status==='paused'?' · paused':'');
       const bodyCue=exercise==='body'&&pacing==='natural';
       const cueKey=bodyCue?'body:'+Math.floor(s.elapsedSeconds/E.BODY_STEP_SECONDS):'breath:'+s.breathPhaseIndex;
       if(s.status==='running'&&cueKey!==lastCue){lastCue=cueKey;if(bell&&(bodyCue||pacing==='paced'))audio.cue(bodyCue?s.bodyStepIndex%2===0:s.breathPhase==='inhale');}
@@ -368,4 +379,5 @@
   }
   root.FormTraining = Object.freeze({mount});
 })(typeof window !== 'undefined' ? window : globalThis);
+
 

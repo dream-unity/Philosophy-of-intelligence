@@ -54,11 +54,11 @@ Source versus counterpart and current versus historical entry are separate compa
 
 ## Three settings
 
-Consciousness Stream uses inner images, words, remembered sounds and other selected contents. It starts in your own rhythm with sound off. Heart-Coherence retains heart-focused attention, heart feeling and deepening. Body-Sensation Mapping repeats location, quality, intensity, movement, direction, coherence and meaning-tone, with 30 seconds per dimension.
+Consciousness Stream uses inner images, words, remembered sounds and other selected contents. It opens with a silent preview and an optional breathing guide. Heart-Coherence retains heart-focused attention, heart feeling and deepening. Body-Sensation Mapping repeats location, quality, intensity, movement, direction, coherence and meaning-tone, with 30 seconds per dimension.
 
-Heart practice initially offers five seconds in and five seconds out, with distinct bells after Begin. Mute the bell, choose your own rhythm, pause or end as needed. Body begins naturally and silently. The guide does not detect breathing, measure a heart state or guarantee a feeling.
+The exercise is visible before starting. Choose length, breathing mode and phase timing below the preview, adjust the expandable sound settings if wanted, then select **Start**. Stream and heart initially use five seconds in and five seconds out, or your saved timing. Body uses natural breathing. Bell and ambient controls are independent; opening the page starts neither sound nor a practice timer. Pause or end whenever needed. The guide does not detect breathing, measure a heart state or guarantee a feeling.
 
-The live panel keeps your selected shape's relationship count and organisation visible with an expandable example specific to the exercise. These cues do not change the heart phases or the body-dimension timing. Your own entry advances when its work is finished, independently of the timer.
+The compact exercise area keeps the current instruction beside the breathing guide. Body mapping shows its current dimension; you can preview the dimensions before starting. Rhythm and sound remain adjustable during practice. Your own entry advances when its work is finished, independently of the timer.
 
 ## A written return
 
@@ -73,3 +73,4 @@ Accurately recalling that an earlier source was uncertain differs from failing t
 Readiness is your reversible assessment for each setting, without gating. The practice-record download includes committed private notes and assessments, not drafts or active timers. Drafts survive navigation within the open page, not a reload.
 
 The record permits 500 observations and 500 practice periods, with 3,000 characters per text field. At the practice-period limit, starting another recorded timer is blocked; untimed practice remains possible. Export before explicitly clearing it at capacity. There is no individual observation deletion or current-practice import. Older heart/body data and the separate Archive remain available. If persistence fails or a conflict occurs, export the work in the current tab before leaving. If loading a saved version removes a locked return's exact target, use the separate unfinished-return recovery download before beginning new history with the same current source; it preserves the original target snapshot and unfinished fields.
+

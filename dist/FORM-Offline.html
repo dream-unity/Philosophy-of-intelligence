@@ -79,7 +79,7 @@ dialog{border:3px double #8b7d5f;background:var(--paper);border-radius:3px;box-s
 .empty-state>svg{margin:0 auto 18px}.field-number{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;font-size:10px;flex-shrink:0}
 
 </style>
-  <style data-form-source="src/training.css?v=6e70feb2cff6">
+  <style data-form-source="src/training.css?v=d05e235f87a3">
 /* Shared manual practice. Homepage composition lives exclusively in landing.css. */
 #training-root{max-width:1080px;margin:0 auto;padding:12px 0 48px}
 .training-topline{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:38px}
@@ -324,8 +324,99 @@ dialog{border:3px double #8b7d5f;background:var(--paper);border-radius:3px;box-s
 [data-rhythm-status]:empty{display:none}
 .training-breath-readout small{font-variant-numeric:tabular-nums}
 
+/* Preview, settings, Start: one compact flow before and during practice. */
+body[data-view="practice"] .site-header{padding-top:12px;padding-bottom:12px}
+.site-music-panel>summary{display:none}
+body[data-view="practice"] .site-music-panel{width:min(1080px,90%);margin:0 auto}
+body[data-view="practice"] .site-music-panel>summary{display:list-item;cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0;min-height:36px}
+body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bottom:8px}
+.training-topline{margin-bottom:10px}
+.training-heading{margin-bottom:12px;gap:16px}
+.training-heading h1{font-size:clamp(30px,3.5vw,44px);margin:2px 0 6px}
+.training-heading>span{flex-basis:64px}
+.training-heading>span svg{width:64px;height:64px}
+.training-heading p:last-child{font-size:16px;line-height:1.4}
+.training-exercises{margin-bottom:12px}
+.training-exercises button{padding:10px 12px;font-size:16px;min-height:44px}
+.training-lesson{margin-bottom:12px;padding-bottom:10px}
+.training-lesson p{margin-bottom:6px;font-size:16px;line-height:1.4}
+.training-lesson .training-example{font-size:18px;margin-bottom:4px}
+.training-breath-method{gap:16px;margin-top:8px}
+.training-breath-method strong{display:inline;margin-right:5px}
+.training-lesson>details{margin-top:4px}
+.training-panel{padding:16px}
+.training-panel-heading{align-items:center;margin-bottom:4px}
+.training-panel h2{font-size:21px}
+.training-panel-controls{margin:0;gap:0}
+.training-panel-controls .training-state{padding:0;margin:0}
+.training-exercise-preview{display:grid;grid-template-columns:170px minmax(0,1fr);gap:18px;align-items:center;min-height:170px}
+.training-preview-body{grid-template-columns:minmax(0,1fr);min-height:0;padding:12px 0}
+.training-pacer{width:170px;max-width:100%;margin:0}
+.training-breath-readout{font-size:20px;gap:5px}
+.training-breath-readout small{font-size:12px}
+.training-cue{min-width:0}
+.training-cue .training-current-step{margin:0 0 6px!important;text-align:left;font-size:10px!important;letter-spacing:.1em}
+.training-panel .training-prompt{text-align:left;font-size:19px;line-height:1.4;margin:0 0 6px;max-width:none}
+.training-cue .training-fine{margin:0;line-height:1.4}
+.training-cue .training-dimension{text-align:left;font-size:25px;margin:0 0 6px}
+.training-live-pace{margin:7px 0 0;min-height:32px;text-align:left}
+.training-session-bar{padding:7px 0;margin-top:8px}
+.training-session-bar>span{font-size:20px}
+.training-body-steps{justify-content:flex-start;gap:6px;margin:0 0 10px}
+.training-body-steps button{min-height:40px;padding:6px 10px}
+.training-progress{margin:8px 0}
+.training-panel .training-finish{font-size:16px;margin:6px 0;padding:8px 0 0}
+.training-config{border-top:1px solid #bcb39680;padding-top:10px}
+.training-rhythm{border:0;margin:0;padding:0}
+.training-rhythm .training-settings{grid-template-columns:1.1fr 1.5fr .75fr .75fr;gap:10px;max-width:none;margin:0}
+.training-rhythm .training-settings label{font-size:13px;min-width:0}
+#training-root .training-config select,#training-root .training-config input[type=number]{box-sizing:border-box;min-width:0;padding:7px 9px;margin-top:4px;min-height:40px}
+.training-rhythm .training-preset-grid:has([data-duration-field][hidden]){grid-template-columns:1.5fr 1fr 1fr}
+#training-root .training-config .training-fine{font-size:12px;line-height:1.4;margin:6px 0 0}
+.training-rhythm [data-apply-rhythm]{margin-top:8px;min-height:40px;padding:8px 14px}
+.training-sound-row{display:flex;align-items:flex-start;gap:14px;border-top:1px solid #bcb39660;margin-top:10px;padding-top:2px}
+.training-sound{border:0;flex:1;min-width:0;margin:0;padding:0}
+#training-root .training-sound summary{font-size:15px;padding:10px 0;min-height:40px;box-sizing:border-box}
+.training-sound summary span{font-size:12px}
+.training-sound[open] summary{margin-bottom:0}
+#training-root .training-sound-row>.training-bell-toggle{min-height:40px;font-size:13px;white-space:nowrap}
+.training-sound .training-check{display:inline-flex;font-size:14px;gap:8px;margin:4px 16px 8px 0;min-height:32px;align-items:center}
+.training-sound .training-check input{margin:0}
+.training-sound .training-settings{margin:2px 0 8px;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.training-sound .training-settings label{font-size:13px}
+.training-sound .training-settings input[type=range]{margin-top:12px}
+.training-start{margin-top:8px}
+.training-start .button{min-width:120px;min-height:44px;padding:10px 24px}
+@media(max-width:620px){
+ .training-heading>span{flex-basis:48px}
+ .training-heading>span svg{width:48px;height:48px}
+ .training-exercises button{font-size:13px;padding:8px}
+ .training-lesson p{font-size:15px}
+ .training-panel{padding:12px}
+ .training-exercise-preview{grid-template-columns:128px minmax(0,1fr);gap:12px;min-height:140px}
+ .training-preview-body{grid-template-columns:minmax(0,1fr);min-height:0}
+ .training-pacer{width:128px}
+ .training-breath-readout{font-size:17px}
+ .training-breath-readout small{font-size:10px}
+ .training-panel .training-prompt{font-size:17px}
+ .training-cue .training-fine{font-size:12px!important}
+ .training-rhythm .training-settings,.training-rhythm .training-preset-grid:has([data-duration-field][hidden]){grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px}
+ #training-root .training-config select,#training-root .training-config input[type=number]{min-height:44px}
+ .training-rhythm .training-preset-grid:has([data-duration-field][hidden])>label:nth-child(2){grid-column:1/-1}
+ .training-sound summary span{display:block;margin:2px 0 0}
+ .training-start .button{width:100%}
+}
+@media(max-width:380px){
+ .training-exercise-preview{grid-template-columns:100px minmax(0,1fr);gap:10px}
+ .training-preview-body{grid-template-columns:minmax(0,1fr)}
+ .training-pacer{width:100px}
+ .training-breath-readout{font-size:15px}
+ .training-breath-readout small{font-size:9px}
+}
+
+
 </style>
-  <style data-form-source="src/landing.css?v=af8e3157fdbb">
+  <style data-form-source="src/landing.css?v=f7b1ed898cbb">
 /* Original artwork and portal composition from the owner's dream-unity/one.
    Labels are live HTML. The matching paper captions cover the raster labels. */
 :root { --paper: #ebe4d5; --ink: #302b23; color-scheme: light; }
@@ -401,14 +492,36 @@ body[data-view="journey"] .skip-link { display: none; }
   .portal-caption { background: Canvas; color: CanvasText; }
 }
 
-/* Keep Suno's own play/pause control visible while navigating the exercises. */
+/* Keep the same iframe mounted and its play/pause control available on every view. */
 .site-music { width: min(340px, calc(100% - 24px)); margin: 12px auto 0; }
 .site-music iframe { display: block; width: 100%; height: 150px; border: 1px solid #b5a78f; border-radius: 12px; background: #ebe4d5; }
 .music-source { display: block; width: fit-content; margin: 3px 0 0 auto; padding: 4px 0; font: 11px/1.5 var(--sans); color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
-@media (min-width: 1200px) {
-  body[data-view="journey"] .site-music { position: absolute; z-index: 4; top: max(12px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); margin: 0; }
+/* Centre the player directly below the logo, before the shape cards.
+   Shared viewport lengths keep both edges aligned without reparenting the iframe. */
+body[data-view="journey"] {
+  position: relative;
+  --portal-width: 100vw;
+  --portal-size: min(calc(var(--portal-width) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)), calc(100vh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px);
 }
-@media print { .site-music { display: none; } }
+@supports (width: 100cqw) {
+  body[data-view="journey"] { container-type: inline-size; --portal-width: 100cqw; }
+}
+@supports (height: 100svh) {
+  body[data-view="journey"] { --portal-size: min(calc(var(--portal-width) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)), calc(100svh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px); }
+}
+body[data-view="journey"] .portal-page { justify-content: flex-start; }
+body[data-view="journey"] .portal-artwork { width: min(100%, var(--portal-size)); }
+body[data-view="journey"] .site-music { position: absolute; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + var(--portal-size) + 4px); left: calc(50% + (env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / 2); transform: translateX(-50%); margin: 0; }
+body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
+@media (max-height: 480px) and (min-width: 601px) {
+  body[data-view="journey"] { --portal-size: min(var(--portal-width), calc(100vh - 122px)); }
+  @supports (height: 100svh) { body[data-view="journey"] { --portal-size: min(var(--portal-width), calc(100svh - 122px)); } }
+}
+@media print {
+  .site-music { display: none; }
+  body[data-view="journey"] .portal-artwork { width: 400px; }
+  body[data-view="journey"] .portal-page > .stage-path { margin-top: 0; }
+}
 
 </style>
 </head>
@@ -425,10 +538,13 @@ body[data-view="journey"] .skip-link { display: none; }
   </header>
 
   <div id="storage-warning" class="storage-warning" role="status" hidden></div>
+  <details id="site-music-panel" class="site-music-panel" open>
+  <summary>Music</summary>
   <aside class="site-music" aria-label="Universal DNA music player">
     <p class="music-offline">Universal DNA · Listen online</p>
     <a class="music-source" href="https://suno.com/song/9d62272c-0a81-4f29-b6b0-52f03324b7b8" target="_blank" rel="noopener noreferrer">Open in Suno ↗</a>
   </aside>
+  </details>
   <main id="main" tabindex="-1">
     <section id="view-journey" class="view journey-view">
       <div class="portal-page">
@@ -10075,7 +10191,7 @@ body[data-view="journey"] .skip-link { display: none; }
 });
 
 </script>
-  <script data-form-module="src/training.js?v=4a2b9ef9d876">
+  <script data-form-module="src/training.js?v=b8813be3528d">
 (function (root) {
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10288,18 +10404,20 @@ body[data-view="journey"] .skip-link { display: none; }
         ${lessonHTML(guide)}
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
         <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
-          <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span><button type="button" class="text-button training-bell-toggle" data-bell-toggle aria-pressed="${bell}" aria-label="${bell?'Mute bell sound':'Enable bell sound'}">Bell: ${bell?'on':'off'}</button></div></div>
-          <div data-setup>
-          <div class="training-settings"><label>Practice length<select data-duration>${(exercise==='stream'?E.STREAM_DURATIONS:exercise==='heart'?E.HEART_DURATIONS:E.BODY_DURATIONS).map(m=>`<option value="${m}" ${m===duration?'selected':''}>${m<60?m+' minutes':m/60+(m===60?' hour':' hours')}</option>`).join('')}</select></label></div>
-          <button type="button" class="button primary" data-start>Begin ${exercise==='stream'?'stream practice':exercise==='heart'?'heart practice':'body mapping'} <span aria-hidden="true">↗</span></button></div>
-          <div data-live hidden><div class="training-session-bar"><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
-            <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Own rhythm</span><small data-breath-count aria-hidden="true"></small></div></div>
-            <button type="button" class="text-button training-live-pace" data-live-pace>Use a gentle 5 / 5 guide</button><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt"></p><p data-next-step class="training-fine training-centered"></p>
+          <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span></div></div>
+          <div data-live><div class="training-session-bar" data-session-bar hidden><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
+            <div class="training-exercise-preview" data-exercise-preview>
+              <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div>
+              <div class="training-cue"><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
+            </div>
             <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
-            <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-fill></span></div>
-            <div data-finished class="training-finish" hidden><h3>Practice complete.</h3><button type="button" class="button secondary" data-again>Practise again</button></div></div>
-          <form class="training-rhythm" data-breath-form novalidate><h3>Breathing rhythm</h3><label class="training-field training-pacing-choice">Breathing<select data-pacing><option value="natural" ${pacing==='natural'?'selected':''}>My own rhythm</option><option data-paced-option value="paced" ${pacing==='paced'?'selected':''}>${rhythmLabel()}</option></select></label><div class="training-settings"><label>Inhale (seconds)<input data-inhale type="number" inputmode="decimal" min="0.1" step="any" required value="${inhaleSeconds}" aria-describedby="rhythm-help"></label><label>Exhale (seconds)<input data-exhale type="number" inputmode="decimal" min="0.1" step="any" required value="${exhaleSeconds}" aria-describedby="rhythm-help"></label></div><p id="rhythm-help" class="training-fine">Set each phase in seconds; decimals are welcome. Apply changes to start a new inhale. Your practice timer continues.</p><button type="submit" class="button secondary" data-apply-rhythm>Apply rhythm</button><p class="training-fine training-rhythm-current" data-rhythm-current>Guide: ${rhythmLabel()}.</p><p class="training-fine" data-rhythm-status role="status"></p></form>
-          <details class="training-sound" open><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-bell ${bell?'checked':''}> Enable bell sound</label><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> Enable ambient sound</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine" data-bell-help>${exercise==='body'?'Bells mark each body dimension and the end of practice.':'Bells mark each inhale and exhale with the guide. Own rhythm keeps only the finish bell.'}</p></details>
+            <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span data-fill></span></div>
+            <p data-finished class="training-finish" hidden>Practice complete.</p></div>
+          <div class="training-config" aria-label="Practice settings">
+          <form class="training-rhythm" data-breath-form novalidate><div class="training-settings training-preset-grid"><label data-duration-field>Length<select data-duration>${(exercise==='stream'?E.STREAM_DURATIONS:exercise==='heart'?E.HEART_DURATIONS:E.BODY_DURATIONS).map(m=>`<option value="${m}" ${m===duration?'selected':''}>${m<60?m+' minutes':m/60+(m===60?' hour':' hours')}</option>`).join('')}</select></label><label>Breathing<select data-pacing><option value="natural" ${pacing==='natural'?'selected':''}>My own rhythm</option><option data-paced-option value="paced" ${pacing==='paced'?'selected':''}>${rhythmLabel()}</option></select></label><label>Inhale (seconds)<input data-inhale type="number" inputmode="decimal" min="0.1" step="any" required value="${inhaleSeconds}" aria-describedby="rhythm-help"></label><label>Exhale (seconds)<input data-exhale type="number" inputmode="decimal" min="0.1" step="any" required value="${exhaleSeconds}" aria-describedby="rhythm-help"></label></div><p id="rhythm-help" class="training-fine">Choose your rhythm, then Start.</p><button type="submit" class="button secondary" data-apply-rhythm hidden>Apply rhythm</button><p class="training-fine training-rhythm-current" data-rhythm-current hidden>Guide: ${rhythmLabel()}.</p><p class="training-fine" data-rhythm-status role="status"></p></form>
+          <div class="training-sound-row"><details class="training-sound"><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-bell ${bell?'checked':''}> Enable bell sound</label><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> Enable ambient sound</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine" data-bell-help>${exercise==='body'?'Bells mark each body dimension and the end of practice.':'Bells mark each inhale and exhale with the guide. Own rhythm keeps only the finish bell.'}</p></details><button type="button" class="text-button training-bell-toggle" data-bell-toggle aria-pressed="${bell}" aria-label="${bell?'Mute bell sound':'Enable bell sound'}">Bell: ${bell?'on':'off'}</button></div>
+          <div data-setup class="training-start"><button type="button" class="button primary" data-start>Start</button></div>
+          </div>
         </section>
         <details data-return class="training-panel training-return"><summary>Private notes</summary><p class="training-fine">Pause to write. Entries, not timer breaths, set the return distance.</p><form data-return-form><div data-fields></div><button type="submit" class="button primary" data-keep>Keep this entry</button><p class="training-fine">Saved in this browser.</p></form></details>
         <section data-readiness class="training-panel training-readiness"></section>
@@ -10311,10 +10429,10 @@ body[data-view="journey"] .skip-link { display: none; }
       q('[data-model-relation]')?.addEventListener('change',event=>{selectedRelationship=event.target.value;updateExplorer();});
       bindRegister();updateExplorer();renderWalkthrough();
       all('[data-exercise]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.exercise===exercise)return;end();clock=null;exercise=el.dataset.exercise;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();q('[data-exercise="'+exercise+'"]').focus();}));
-      q('[data-duration]').addEventListener('change',e=>duration=Number(e.target.value));
+      q('[data-duration]').addEventListener('change',e=>{duration=Number(e.target.value);tick();});
       q('[data-pacing]').addEventListener('change',e=>setPacing(e.target.value));
       q('[data-breath-form]').addEventListener('submit',event=>{event.preventDefault();applyBreathTiming();});
-      q('[data-start]').addEventListener('click',start);q('[data-again]').addEventListener('click',start);
+      q('[data-start]').addEventListener('click',start);
       q('[data-pause]').addEventListener('click',()=>clock.snapshot().status==='running'?pause():resume());
       q('[data-end]').addEventListener('click',end);
       q('[data-live-pace]').addEventListener('click',()=>setPacing(pacing==='natural'?'paced':'natural'));
@@ -10392,14 +10510,23 @@ body[data-view="journey"] .skip-link { display: none; }
     }
     function tick() {
       if(!q('[data-live]'))return;
-      if(!clock){q('[data-live]').hidden=true;q('[data-setup]').hidden=false;return;}
-      const s=clock.tick(),active=['running','paused'].includes(s.status),finished=!active;
-      q('[data-live]').hidden=false;q('[data-setup]').hidden=true;
-      q('[data-session-state]').textContent=s.status==='running'?'Practising':s.status==='paused'?'Paused':s.status==='completed'?'Complete':'Ended';
+      // Preview the first step without starting a clock, sound, or saved session.
+      const idle=!clock;
+      const s=clock?clock.tick():{status:'idle',remainingSeconds:duration*60,elapsedSeconds:0,progress:0,breathPhase:'inhale',breathProgress:0,breathRemaining:inhaleSeconds,breathPhaseIndex:0,heartPhaseIndex:0,bodyStepIndex:0,stepRemaining:E.BODY_STEP_SECONDS};
+      const active=['running','paused'].includes(s.status),finished=!idle&&!active;
+      q('[data-live]').hidden=false;q('[data-setup]').hidden=active;
+      q('[data-session-bar]').hidden=idle;
+      q('[data-duration-field]').hidden=active;
+      q('[data-apply-rhythm]').hidden=!active;
+      q('[data-rhythm-current]').hidden=!active;
+      q('#rhythm-help').textContent=active?'Apply changes to begin a new inhale; the practice timer continues.':'Choose your rhythm, then Start.';
+      q('[data-exercise-preview]').classList.toggle('training-preview-body',exercise==='body'&&pacing==='natural');
+      q('.training-progress').hidden=!active;
+      q('[data-session-state]').textContent=idle?'Ready':s.status==='running'?'Practising':s.status==='paused'?'Paused':s.status==='completed'?'Complete':'Ended';
       q('[data-timer]').textContent=time(s.remainingSeconds);
-      q('[data-pause]').textContent=s.status==='paused'?'Resume':'Pause';q('[data-pause]').hidden=finished;q('[data-end]').hidden=finished;
-      q('[data-finished]').hidden=!finished;
-      q('[data-live-pace]').hidden=finished;q('[data-live-pace]').textContent=pacing==='natural'?'Use my '+inhaleSeconds+' / '+exhaleSeconds+' guide':'Use my own rhythm';
+      q('[data-pause]').textContent=s.status==='paused'?'Resume':'Pause';q('[data-pause]').hidden=!active;q('[data-end]').hidden=!active;
+      q('[data-finished]').hidden=!finished;q('[data-finished]').textContent=s.status==='completed'?'Practice complete.':'Practice ended.';
+      q('[data-live-pace]').hidden=!active;q('[data-live-pace]').textContent=pacing==='natural'?'Use my '+inhaleSeconds+' / '+exhaleSeconds+' guide':'Use my own rhythm';
       q('[data-shape]').disabled=active;all('[data-exercise]').forEach(el=>el.disabled=active);
       const scaled=pacing==='paced'&&active;
       const progress=s.breathProgress;
@@ -10408,11 +10535,11 @@ body[data-view="journey"] .skip-link { display: none; }
       const expansion=scaled?(s.breathPhase==='inhale'?progress:1-progress):(1-Math.cos(s.elapsedSeconds*Math.PI/6))/2;
       q('[data-orb]').style.transform=active?'scale('+(1+0.18*expansion)+')':'scale(1)';
       q('[data-pacer]').hidden=exercise==='body'&&pacing==='natural';
-      q('[data-breath-label]').textContent=finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
+      q('[data-breath-label]').textContent=idle?(pacing==='paced'?'Ready':'Own rhythm'):finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
       const remaining=Math.ceil(s.breathRemaining*10-1e-8)/10;
-      q('[data-breath-count]').textContent=scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
+      q('[data-breath-count]').textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
       if(s.bodyStepIndex!==lastBodyStep){peek=null;lastBodyStep=s.bodyStepIndex;}
-      const promptKey=exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):(exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural'))+':'+(peek!==null);
+      const promptKey=s.status+':'+exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):(exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural'))+':'+(peek!==null);
       if(promptKey!==lastPrompt){
         lastPrompt=promptKey;
         if(exercise==='stream'){
@@ -10425,12 +10552,12 @@ body[data-view="journey"] .skip-link { display: none; }
           q('[data-prompt]').textContent=pacing==='paced'?p[s.breathPhase]:p.inhale+' '+p.exhale;
           q('[data-dimension]').hidden=true;q('[data-next-step]').textContent='Receive → encode → retrieve → compare → revise. Finish at your own pace.';
         }else{
-          const i=peek??s.bodyStepIndex,p=E.BODY_STEPS[i];q('[data-step-label]').textContent=peek!==null?'Rereading · the exercise timer continues':'Dimension '+(i+1)+' of 7';
+          const i=peek??s.bodyStepIndex,p=E.BODY_STEPS[i];q('[data-step-label]').textContent=peek!==null?(idle?'Preview':'Rereading · the exercise timer continues'):'Dimension '+(i+1)+' of 7';
           q('[data-dimension]').hidden=false;q('[data-dimension]').textContent=p.label;q('[data-prompt]').textContent=p.prompt;
           all('[data-peek]').forEach(el=>{el.setAttribute('aria-pressed',String(Number(el.dataset.peek)===i));el.classList.toggle('is-current',Number(el.dataset.peek)===s.bodyStepIndex);});
         }
       }
-      if(exercise==='body')q('[data-next-step]').textContent=finished?'Return to your own rhythm.':'Next: '+E.BODY_STEPS[(s.bodyStepIndex+1)%7].label+' · '+Math.ceil(s.stepRemaining)+'s'+(s.status==='paused'?' · paused':'');
+      if(exercise==='body')q('[data-next-step]').textContent=idle?'Explore a dimension below; Start begins the guided sequence.':finished?'Return to your own rhythm.':'Next: '+E.BODY_STEPS[(s.bodyStepIndex+1)%7].label+' · '+Math.ceil(s.stepRemaining)+'s'+(s.status==='paused'?' · paused':'');
       const bodyCue=exercise==='body'&&pacing==='natural';
       const cueKey=bodyCue?'body:'+Math.floor(s.elapsedSeconds/E.BODY_STEP_SECONDS):'breath:'+s.breathPhaseIndex;
       if(s.status==='running'&&cueKey!==lastCue){lastCue=cueKey;if(bell&&(bodyCue||pacing==='paced'))audio.cue(bodyCue?s.bodyStepIndex%2===0:s.breathPhase==='inhale');}
@@ -10448,8 +10575,9 @@ body[data-view="journey"] .skip-link { display: none; }
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+
 </script>
-  <script data-form-module="src/app.js?v=8b832569d4d4">
+  <script data-form-module="src/app.js?v=0b77c21ca0d5">
 (function () {
   'use strict';
   const C = window.FormShapePractice, P = window.FormProgress, G = window.FormGeometry;
@@ -10647,6 +10775,9 @@ body[data-view="journey"] .skip-link { display: none; }
     if(currentView==='practice')selectedStage=practiceStage;
     if(parts[0]==='studio')window.history.replaceState(null,'','#practice/'+practiceStage);
     document.body.dataset.view=currentView;
+    // Collapse optional music above practice without replacing its iframe.
+    const musicPanel=$('site-music-panel');
+    if(musicPanel)musicPanel.open=currentView!=='practice';
     document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!=='view-'+currentView);
     document.querySelectorAll('[data-nav]').forEach(link=>{
       const active=link.dataset.nav===currentView;

@@ -241,3 +241,94 @@
 .training-rhythm .training-rhythm-current{margin:14px 0 0}
 [data-rhythm-status]:empty{display:none}
 .training-breath-readout small{font-variant-numeric:tabular-nums}
+
+/* Preview, settings, Start: one compact flow before and during practice. */
+body[data-view="practice"] .site-header{padding-top:12px;padding-bottom:12px}
+.site-music-panel>summary{display:none}
+body[data-view="practice"] .site-music-panel{width:min(1080px,90%);margin:0 auto}
+body[data-view="practice"] .site-music-panel>summary{display:list-item;cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0;min-height:36px}
+body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bottom:8px}
+.training-topline{margin-bottom:10px}
+.training-heading{margin-bottom:12px;gap:16px}
+.training-heading h1{font-size:clamp(30px,3.5vw,44px);margin:2px 0 6px}
+.training-heading>span{flex-basis:64px}
+.training-heading>span svg{width:64px;height:64px}
+.training-heading p:last-child{font-size:16px;line-height:1.4}
+.training-exercises{margin-bottom:12px}
+.training-exercises button{padding:10px 12px;font-size:16px;min-height:44px}
+.training-lesson{margin-bottom:12px;padding-bottom:10px}
+.training-lesson p{margin-bottom:6px;font-size:16px;line-height:1.4}
+.training-lesson .training-example{font-size:18px;margin-bottom:4px}
+.training-breath-method{gap:16px;margin-top:8px}
+.training-breath-method strong{display:inline;margin-right:5px}
+.training-lesson>details{margin-top:4px}
+.training-panel{padding:16px}
+.training-panel-heading{align-items:center;margin-bottom:4px}
+.training-panel h2{font-size:21px}
+.training-panel-controls{margin:0;gap:0}
+.training-panel-controls .training-state{padding:0;margin:0}
+.training-exercise-preview{display:grid;grid-template-columns:170px minmax(0,1fr);gap:18px;align-items:center;min-height:170px}
+.training-preview-body{grid-template-columns:minmax(0,1fr);min-height:0;padding:12px 0}
+.training-pacer{width:170px;max-width:100%;margin:0}
+.training-breath-readout{font-size:20px;gap:5px}
+.training-breath-readout small{font-size:12px}
+.training-cue{min-width:0}
+.training-cue .training-current-step{margin:0 0 6px!important;text-align:left;font-size:10px!important;letter-spacing:.1em}
+.training-panel .training-prompt{text-align:left;font-size:19px;line-height:1.4;margin:0 0 6px;max-width:none}
+.training-cue .training-fine{margin:0;line-height:1.4}
+.training-cue .training-dimension{text-align:left;font-size:25px;margin:0 0 6px}
+.training-live-pace{margin:7px 0 0;min-height:32px;text-align:left}
+.training-session-bar{padding:7px 0;margin-top:8px}
+.training-session-bar>span{font-size:20px}
+.training-body-steps{justify-content:flex-start;gap:6px;margin:0 0 10px}
+.training-body-steps button{min-height:40px;padding:6px 10px}
+.training-progress{margin:8px 0}
+.training-panel .training-finish{font-size:16px;margin:6px 0;padding:8px 0 0}
+.training-config{border-top:1px solid #bcb39680;padding-top:10px}
+.training-rhythm{border:0;margin:0;padding:0}
+.training-rhythm .training-settings{grid-template-columns:1.1fr 1.5fr .75fr .75fr;gap:10px;max-width:none;margin:0}
+.training-rhythm .training-settings label{font-size:13px;min-width:0}
+#training-root .training-config select,#training-root .training-config input[type=number]{box-sizing:border-box;min-width:0;padding:7px 9px;margin-top:4px;min-height:40px}
+.training-rhythm .training-preset-grid:has([data-duration-field][hidden]){grid-template-columns:1.5fr 1fr 1fr}
+#training-root .training-config .training-fine{font-size:12px;line-height:1.4;margin:6px 0 0}
+.training-rhythm [data-apply-rhythm]{margin-top:8px;min-height:40px;padding:8px 14px}
+.training-sound-row{display:flex;align-items:flex-start;gap:14px;border-top:1px solid #bcb39660;margin-top:10px;padding-top:2px}
+.training-sound{border:0;flex:1;min-width:0;margin:0;padding:0}
+#training-root .training-sound summary{font-size:15px;padding:10px 0;min-height:40px;box-sizing:border-box}
+.training-sound summary span{font-size:12px}
+.training-sound[open] summary{margin-bottom:0}
+#training-root .training-sound-row>.training-bell-toggle{min-height:40px;font-size:13px;white-space:nowrap}
+.training-sound .training-check{display:inline-flex;font-size:14px;gap:8px;margin:4px 16px 8px 0;min-height:32px;align-items:center}
+.training-sound .training-check input{margin:0}
+.training-sound .training-settings{margin:2px 0 8px;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.training-sound .training-settings label{font-size:13px}
+.training-sound .training-settings input[type=range]{margin-top:12px}
+.training-start{margin-top:8px}
+.training-start .button{min-width:120px;min-height:44px;padding:10px 24px}
+@media(max-width:620px){
+ .training-heading>span{flex-basis:48px}
+ .training-heading>span svg{width:48px;height:48px}
+ .training-exercises button{font-size:13px;padding:8px}
+ .training-lesson p{font-size:15px}
+ .training-panel{padding:12px}
+ .training-exercise-preview{grid-template-columns:128px minmax(0,1fr);gap:12px;min-height:140px}
+ .training-preview-body{grid-template-columns:minmax(0,1fr);min-height:0}
+ .training-pacer{width:128px}
+ .training-breath-readout{font-size:17px}
+ .training-breath-readout small{font-size:10px}
+ .training-panel .training-prompt{font-size:17px}
+ .training-cue .training-fine{font-size:12px!important}
+ .training-rhythm .training-settings,.training-rhythm .training-preset-grid:has([data-duration-field][hidden]){grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px}
+ #training-root .training-config select,#training-root .training-config input[type=number]{min-height:44px}
+ .training-rhythm .training-preset-grid:has([data-duration-field][hidden])>label:nth-child(2){grid-column:1/-1}
+ .training-sound summary span{display:block;margin:2px 0 0}
+ .training-start .button{width:100%}
+}
+@media(max-width:380px){
+ .training-exercise-preview{grid-template-columns:100px minmax(0,1fr);gap:10px}
+ .training-preview-body{grid-template-columns:minmax(0,1fr)}
+ .training-pacer{width:100px}
+ .training-breath-readout{font-size:15px}
+ .training-breath-readout small{font-size:9px}
+}
+

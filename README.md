@@ -21,11 +21,11 @@ Circle is one explicit meaningful relationship: **ocean contains boat**. Two par
 
 | Setting | Material and timing | Available minutes |
 | --- | --- | --- |
-| Consciousness Stream | Inner images, words, remembered sounds and other mental contents; natural breathing and silence initially. | 15, 30, 60 |
+| Consciousness Stream | Inner images, words, remembered sounds and other mental contents; optional paced or natural breathing. | 15, 30, 60 |
 | Heart-Coherence | Retained heart-focused, heart-feeling and deepening phases; transitions at 33% and 66%. | 15, 30, 60, 120, 180 |
 | Body-Sensation Mapping | Seven dimensions, each lasting 30 seconds before the sequence repeats. | 15, 30, 60 |
 
-Heart practice initially offers five seconds in and five seconds out with phase bells after Begin. Its bell toggle is independent of ambient sound. Body mapping starts naturally and silently. Stream practice has no automatic breathing-bell cadence. Pause, end or follow your own rhythm; the task does not require finishing a thought within one breath.
+Every exercise opens with its first instruction visible before the timer starts. Set the length, breathing mode and inhale/exhale timing directly below the preview; expand Sound settings for ambient sound and bell volume. One **Start** button applies these settings and starts practice. Stream and heart default to a five-second phase guide (or your saved timing); body defaults to natural breathing. Bells and ambient sound are enabled but stay silent until Start or Test bell. Pause, end or follow your own rhythm; the task does not require finishing a thought within one breath.
 
 Larger worked models are prepared constructions, not instructions to discover thirty or 120 new relationships in one breath. Their registers make the declared contents inspectable.
 
@@ -70,3 +70,4 @@ The teaching follows the revised project manual and working conventions. Shapes 
 ### Homepage song
 
 The homepage includes Suno's official **Universal DNA** player. Press its Play button to start; it does not autoplay on arrival. The same player stays mounted during shape navigation, with pause and seeking provided by Suno, independently of the breathing bell. Suno serves the player and audio, so an internet connection is required. The offline editions retain a song link instead of loading the remote player.
+
