@@ -79,7 +79,7 @@ dialog{border:3px double #8b7d5f;background:var(--paper);border-radius:3px;box-s
 .empty-state>svg{margin:0 auto 18px}.field-number{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;font-size:10px;flex-shrink:0}
 
 </style>
-  <style data-form-source="src/training.css?v=d05e235f87a3">
+  <style data-form-source="src/training.css?v=7194c5456021">
 /* Shared manual practice. Homepage composition lives exclusively in landing.css. */
 #training-root{max-width:1080px;margin:0 auto;padding:12px 0 48px}
 .training-topline{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:38px}
@@ -414,6 +414,11 @@ body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bot
  .training-breath-readout small{font-size:9px}
 }
 
+
+/* The page is identified by the same unadorned symbol as its homepage card. */
+.training-symbol-header{display:grid;place-items:center;margin:0 0 12px}
+.training-page-symbol{width:clamp(180px,22vw,260px);max-width:100%;aspect-ratio:1}
+.training-page-symbol svg{display:block;width:100%;height:100%}
 
 </style>
   <style data-form-source="src/landing.css?v=9dbd5c91a07e">
@@ -10188,7 +10193,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
 });
 
 </script>
-  <script data-form-module="src/training.js?v=8d670c56c1d0">
+  <script data-form-module="src/training.js?v=3c76e9b8c38e">
 (function (root) {
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10398,7 +10403,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
       modelState=0;selectedRelationship='';walkthroughStep=0;
       const guide = stage[exercise], ready=store.data.readiness[stage.id]||{};
       host.innerHTML=`<div class="training-topline"><a class="back-link" href="#journey">← All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
-        <header class="training-heading"><span aria-hidden="true">${G.miniIcon(stage.id,86)}</span><div><p class="eyebrow">BREATH-BACK · SHAPE ${String(D.STAGES.indexOf(stage)+1).padStart(2,'0')} OF 14</p><h1>${esc(stage.name)} <em>/ ${esc(stage.verb)}</em></h1><p data-shape-essence>${esc(stage.essence)}</p></div></header>
+        <header class="training-symbol-header"><h1 class="visually-hidden">${esc(stage.name)}</h1><div class="training-page-symbol" aria-hidden="true">${G.miniIcon(stage.id,65)}</div></header>
         <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map((name,i)=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
         ${lessonHTML(guide)}
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>

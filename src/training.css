@@ -332,3 +332,8 @@ body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bot
  .training-breath-readout small{font-size:9px}
 }
 
+
+/* The page is identified by the same unadorned symbol as its homepage card. */
+.training-symbol-header{display:grid;place-items:center;margin:0 0 12px}
+.training-page-symbol{width:clamp(180px,22vw,260px);max-width:100%;aspect-ratio:1}
+.training-page-symbol svg{display:block;width:100%;height:100%}

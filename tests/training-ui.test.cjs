@@ -113,7 +113,7 @@ function harness(options = {}) {
   vm.runInContext('window = globalThis;', browser);
   for (const filename of ['relational-models.js', 'model-view.js', 'shape-practice.js', 'exercises.js', 'training-store.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', filename), 'utf8'), browser, { filename });
   browser.FormExercises = { ...browser.FormExercises, ExerciseAudio: Audio };
-  browser.FormGeometry = { miniIcon: () => '<svg aria-hidden="true"></svg>' };
+  browser.FormGeometry = { miniIcon: (stageId, size) => '<svg aria-hidden="true" data-stage="'+stageId+'" width="'+size+'"></svg>' };
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/training.js'), 'utf8'), browser, { filename: 'training.js' });
   const host = new Element(), changes = [];
   const app = browser.FormTraining.mount({ root: host, stageId: options.stageId || 'circle', onStageChange: id => changes.push(id) });
@@ -212,14 +212,22 @@ test('all 42 lessons place concise, exercise-specific teaching before practice a
     for(const exercise of ['stream','heart','body']){
       page.click('[data-exercise="'+exercise+'"]');
       const lesson=page.q('[data-lesson]'),layout=page.q('.training-layout');
-      assert.equal(page.q('[data-shape-essence]').textContent,stage.essence);
+      assert.equal(page.host.querySelector('[data-shape-essence]'),null,'the descriptive subheading is removed');
+      assert.equal(page.host.querySelector('.training-heading'),null,'the old title and level label are removed');
+      const symbolHeader=page.q('.training-symbol-header');
+      assert.equal(symbolHeader.querySelector('h1').textContent,stage.name,'retain a screen-reader page heading');
+      assert.equal(symbolHeader.querySelector('h1').attributes.class,'visually-hidden');
+      const symbol=page.q('.training-page-symbol').querySelector('svg');
+      assert.equal(symbol.attributes['data-stage'],stage.id);
+      assert.equal(symbol.attributes.width,'65','scale the same artwork used on the homepage');
+      assert.ok(page.host.children.indexOf(symbolHeader)<page.host.children.indexOf(lesson),'the large symbol precedes teaching');
       assert.equal(page.q('[data-short-example]').textContent,stage[exercise].shortExample);
       assert.ok(page.host.children.indexOf(lesson)<page.host.children.indexOf(layout),'lesson precedes practice in reading order');
       assert.equal(page.q('[data-examples]').open,false,'detailed rehearsal is optional');
       assert.equal(page.q('.training-reconstruction').open,false,'reconstruction is optional');
       assert.equal(page.host.querySelector('.training-theory'),null,'no duplicate lesson sidebar');
       assert.equal(page.host.querySelector('[data-live-shape]'),null,'no duplicate live shape lecture');
-      const teaching=stage.essence+' '+visibleText(lesson);
+      const teaching=visibleText(lesson);
       assert.ok(teaching.trim().split(/\s+/).length<=215,stage.id+'/'+exercise+' has a concise initial lesson');
       const phases=page.q('.training-breath-method').querySelectorAll('p');
       assert.equal(phases[0].querySelector('strong').textContent,'Inhale');
