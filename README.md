@@ -29,7 +29,7 @@ Every exercise opens with its first instruction visible before the timer starts.
 
 Larger worked models are prepared constructions, not instructions to discover thirty or 120 new relationships in one breath. Their registers make the declared contents inspectable.
 
-An optional da Vinci disclosure explains source, constructed counterpart and role correspondence before the historical return. It is a separate mental extension, not a required step or an automatically tracked paired-record mode. Honest partial selections can be encoded and compared without claiming completion of the selected shape.
+Honest partial selections can be encoded and compared without claiming completion of the selected shape.
 
 ## Returns and private notes
 

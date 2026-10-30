@@ -195,7 +195,7 @@
       modelState=0;selectedRelationship='';walkthroughStep=0;
       const guide = stage[exercise], ready=store.data.readiness[stage.id]||{};
       host.innerHTML=`<div class="training-topline"><a class="back-link" href="#journey">← All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
-        <header class="training-symbol-header"><h1 class="visually-hidden">${esc(stage.name)}</h1><div class="training-page-symbol" aria-hidden="true">${G.miniIcon(stage.id,65)}</div></header>
+        <header class="training-symbol-header"><h1 class="visually-hidden">${esc(stage.name)}</h1><div class="training-page-symbol${stage.id==='half-circle'?' training-page-symbol--half-circle':''}" aria-hidden="true">${G.miniIcon(stage.id,65).replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</div></header>
         <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map((name,i)=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
         <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
@@ -355,6 +355,12 @@
           q('[data-dimension]').hidden=false;q('[data-dimension]').textContent=p.label;
           q('[data-next-step]').textContent=p.prompt+(phase==='inhale'?' '+cues.example:' '+returnHint);
           all('[data-peek]').forEach(el=>{el.setAttribute('aria-pressed',String(Number(el.dataset.peek)===i));el.classList.toggle('is-current',Number(el.dataset.peek)===s.bodyStepIndex);});
+        }
+        if(finished){
+          q('[data-prompt]').textContent='Keep your last entry. Rest in your own rhythm.';
+          q('[data-step-label]').textContent='';
+          q('[data-dimension]').hidden=true;
+          q('[data-next-step]').textContent='';
         }
       }
       const bodyCue=exercise==='body'&&pacing==='natural';
