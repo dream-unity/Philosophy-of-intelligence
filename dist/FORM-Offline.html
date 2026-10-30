@@ -9373,7 +9373,7 @@ body[data-view="journey"] .skip-link { display: none; }
 
 
 </script>
-  <script data-form-module="src/exercises.js?v=1520a64f371f">
+  <script data-form-module="src/exercises.js?v=56eccfabb774">
 (function (root, factory) {
   'use strict';
   if (typeof module === 'object' && module.exports) module.exports = factory(root);
@@ -9756,6 +9756,16 @@ body[data-view="journey"] .skip-link { display: none; }
       return this._whenReady(() => this._bowl(inhale ? 392 : 293.66, 0.08, 3.3));
     }
 
+    preview() {
+      if (this.bellVolume <= 0) return false;
+      return this._whenReady(() => {
+        // Match Project Meaning's test: inhale, then exhale 650 ms later.
+        if (!this._bowl(392, 0.08, 3.3)) return false;
+        this._schedule(() => this.cue(false), 650);
+        return true;
+      });
+    }
+
     complete() {
       return this._whenReady(() => {
         this._stopPads(3);
@@ -9982,7 +9992,7 @@ body[data-view="journey"] .skip-link { display: none; }
 });
 
 </script>
-  <script data-form-module="src/training.js?v=96a5956cd490">
+  <script data-form-module="src/training.js?v=75e02456513f">
 (function (root) {
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9998,8 +10008,8 @@ body[data-view="journey"] .skip-link { display: none; }
     let unsaved = false, fieldsGeneration = 0, modelState = 0, selectedRelationship = '', walkthroughStep = 0, walkthroughGeneration = 0;
     const testAudio = new E.ExerciseAudio({onError:soundFailure});
     let recorded = false, peek = null, lastBodyStep = -1, lastCue = '', lastPrompt = '', announcement = '';
-    let sound = false, heartBell = true, frequency = 10, bellVolume = 1, pacing = 'natural', duration = 15;
-    const pacingByExercise = {stream:'natural', heart:'paced', body:'natural'};
+    let sound = true, bell = true, frequency = 10, bellVolume = 1, pacing = 'paced', duration = 15;
+    const pacingByExercise = {stream:'paced', heart:'paced', body:'natural'};
     const exerciseNames = {stream:'Consciousness Stream', heart:'Heart-Coherence', body:'Body-Sensation Mapping'};
     
     const exerciseOrder = ['stream','heart','body'];
@@ -10046,15 +10056,14 @@ body[data-view="journey"] .skip-link { display: none; }
       if(!clock)return;
       clock.end();finishRecord(clock.snapshot());tick();renderReadiness();
     }
-    function breathBellEnabled() { return exercise==='heart' && heartBell && pacing==='paced'; }
-    function audioEnabled() { return sound || breathBellEnabled(); }
+    function audioEnabled() { return sound || bell; }
     function soundStatus(text) { const el=q('[data-sound-status]');if(el)el.textContent=text; }
     function soundFailure() { q('.training-sound').open=true;soundStatus('Sound could not start. Tap Test bell to try again.'); }
     function sessionSoundFailure() { sessionAudioFailed=true;soundFailure(); }
     function startAudio() {
       sessionAudioFailed=false;
       soundStatus('');
-      if(audioEnabled() && !audio.start({frequency:sound?frequency:0,bellVolume})) sessionSoundFailure();
+      if(audioEnabled() && !audio.start({frequency:sound?frequency:0,bellVolume:bell?bellVolume:0})) sessionSoundFailure();
     }
     function refreshAudio() {
       audio.stop();
@@ -10064,7 +10073,14 @@ body[data-view="journey"] .skip-link { display: none; }
       pacing=value;pacingByExercise[exercise]=value;
       q('[data-pacing]').value=pacing;lastPrompt='';refreshAudio();tick();
     }
-    function soundSummary() { return exercise==='heart'?'Ambient '+(sound?'on':'off'):(sound?'on':'off'); }
+    function soundSummary() { return 'Bell '+(bell?'on':'off')+' · Ambient '+(sound?'on':'off'); }
+    function setBell(value) {
+      bell=value;
+      q('[data-bell]').checked=bell;
+      const button=q('[data-bell-toggle]');button.textContent='Bell: '+(bell?'on':'off');
+      button.setAttribute('aria-pressed',String(bell));button.setAttribute('aria-label',bell?'Mute bell sound':'Enable bell sound');
+      q('[data-sound-summary]').textContent=soundSummary();refreshAudio();
+    }
     function start() {
       if (runningSession()) return;
       if(store.data.sessions.length>=root.FormTrainingStore.LIMITS.sessions){message('Your record contains '+root.FormTrainingStore.LIMITS.sessions+' practice periods. Download it, then clear it before starting another timed period. You can still practise without the timer.');return;}
@@ -10160,7 +10176,7 @@ body[data-view="journey"] .skip-link { display: none; }
         ${lessonHTML(guide)}
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
         <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
-          <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span><button type="button" class="text-button training-bell-toggle" data-heart-bell aria-pressed="${heartBell}" aria-label="${heartBell?'Mute breath bell':'Enable breath bell'}" title="Rings at each timed inhale and exhale" ${exercise==='heart'?'':'hidden'}>Bell: ${heartBell?'on':'off'}</button></div></div>
+          <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span><button type="button" class="text-button training-bell-toggle" data-bell-toggle aria-pressed="${bell}" aria-label="${bell?'Mute bell sound':'Enable bell sound'}">Bell: ${bell?'on':'off'}</button></div></div>
           <div data-setup>
           <div class="training-settings"><label>Practice length<select data-duration>${(exercise==='stream'?E.STREAM_DURATIONS:exercise==='heart'?E.HEART_DURATIONS:E.BODY_DURATIONS).map(m=>`<option value="${m}" ${m===duration?'selected':''}>${m<60?m+' minutes':m/60+(m===60?' hour':' hours')}</option>`).join('')}</select></label><label>Breathing<select data-pacing><option value="natural" ${pacing==='natural'?'selected':''}>My own rhythm</option><option value="paced" ${pacing==='paced'?'selected':''}>5 seconds in · 5 seconds out</option></select></label></div>
           <button type="button" class="button primary" data-start>Begin ${exercise==='stream'?'stream practice':exercise==='heart'?'heart practice':'body mapping'} <span aria-hidden="true">↗</span></button></div>
@@ -10170,7 +10186,7 @@ body[data-view="journey"] .skip-link { display: none; }
             <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
             <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-fill></span></div>
             <div data-finished class="training-finish" hidden><h3>Practice complete.</h3><button type="button" class="button secondary" data-again>Practise again</button></div></div>
-          <details class="training-sound"><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> ${exercise==='body'?'Enable body mapping bells and ambient sound':'Enable ambient sound'}</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine">Heart bells follow paced breathing. Ambient sound is optional.</p></details>
+          <details class="training-sound"><summary>Sound settings <span data-sound-summary>${soundSummary()}</span></summary><label class="training-check"><input type="checkbox" data-bell ${bell?'checked':''}> Enable bell sound</label><label class="training-check"><input type="checkbox" data-sound ${sound?'checked':''}> Enable ambient sound</label><div class="training-settings"><label>Ambient pulse<select data-frequency>${[0,1,2,3,8,10,12].map(f=>`<option value="${f}" ${f===frequency?'selected':''}>${f===0?'Off · bells only':f+' Hz'}</option>`).join('')}</select></label><label>Bell volume <output data-volume-label>${Math.round(bellVolume*100)}%</output><input data-volume type="range" min="0" max="1.5" step="0.01" value="${bellVolume}" aria-label="Bell volume"></label></div><button type="button" class="text-button" data-test-sound>Test bell</button><p class="training-fine" data-sound-status role="status"></p><p class="training-fine">${exercise==='body'?'Bells mark each body dimension and the end of practice.':'Bells mark each inhale and exhale with the guide. Own rhythm keeps only the finish bell.'}</p></details>
         </section>
         <details data-return class="training-panel training-return"><summary>Private notes</summary><p class="training-fine">Pause to write. Entries, not timer breaths, set the return distance.</p><form data-return-form><div data-fields></div><button type="submit" class="button primary" data-keep>Keep this entry</button><p class="training-fine">Saved in this browser.</p></form></details>
         <section data-readiness class="training-panel training-readiness"></section>
@@ -10188,7 +10204,8 @@ body[data-view="journey"] .skip-link { display: none; }
       q('[data-pause]').addEventListener('click',()=>clock.snapshot().status==='running'?pause():resume());
       q('[data-end]').addEventListener('click',end);
       q('[data-live-pace]').addEventListener('click',()=>setPacing(pacing==='natural'?'paced':'natural'));
-      q('[data-heart-bell]').addEventListener('click',()=>{heartBell=!heartBell;const button=q('[data-heart-bell]');button.textContent='Bell: '+(heartBell?'on':'off');button.setAttribute('aria-pressed',String(heartBell));button.setAttribute('aria-label',heartBell?'Mute breath bell':'Enable breath bell');refreshAudio();});
+      q('[data-bell-toggle]').addEventListener('click',()=>setBell(!bell));
+      q('[data-bell]').addEventListener('change',e=>setBell(e.target.checked));
       q('[data-sound]').addEventListener('change',e=>{sound=e.target.checked;refreshAudio();q('[data-sound-summary]').textContent=soundSummary();});
       q('[data-frequency]').addEventListener('change',e=>{frequency=Number(e.target.value);bellVolume=volumes[frequency];q('[data-volume]').value=bellVolume;q('[data-volume-label]').textContent=Math.round(bellVolume*100)+'%';refreshAudio();});
       q('[data-volume]').addEventListener('input',e=>{bellVolume=Number(e.target.value);volumes[frequency]=bellVolume;q('[data-volume-label]').textContent=Math.round(bellVolume*100)+'%';refreshAudio();});
@@ -10197,7 +10214,7 @@ body[data-view="journey"] .skip-link { display: none; }
         soundStatus('');
         if(sessionAudioFailed && clock?.snapshot().status==='running' && audioEnabled())startAudio();
         if(!testAudio.start({frequency:0,bellVolume})){soundFailure();return;}
-        if(testAudio.cue(true)===false)soundFailure();
+        if(testAudio.preview()===false)soundFailure();
       });
       all('[data-peek]').forEach(el=>el.addEventListener('click',()=>{const i=Number(el.dataset.peek);peek=peek===i?null:i;lastPrompt='';tick();}));
       q('[data-return]').addEventListener('toggle',()=>{if(q('[data-return]').open){pause();renderFields();}});
@@ -10299,8 +10316,8 @@ body[data-view="journey"] .skip-link { display: none; }
         }
       }
       if(exercise==='body')q('[data-next-step]').textContent=finished?'Return to your own rhythm.':'Next: '+E.BODY_STEPS[(s.bodyStepIndex+1)%7].label+' · '+Math.ceil(s.stepRemaining)+'s'+(s.status==='paused'?' · paused':'');
-      const cueKey=exercise==='heart'?Math.floor(s.elapsedSeconds/5):Math.floor(s.elapsedSeconds/30);
-      if(s.status==='running'&&String(cueKey)!==lastCue){lastCue=String(cueKey);if(exercise==='heart'?breathBellEnabled():exercise==='body'&&sound)audio.cue(exercise==='heart'?s.breathPhase==='inhale':s.bodyStepIndex%2===0);}
+      const cueKey=exercise==='body'?Math.floor(s.elapsedSeconds/30):Math.floor(s.elapsedSeconds/5);
+      if(s.status==='running'&&String(cueKey)!==lastCue){lastCue=String(cueKey);if(bell&&(exercise==='body'||pacing==='paced'))audio.cue(exercise==='body'?s.bodyStepIndex%2===0:s.breathPhase==='inhale');}
       const percent=Math.round(s.progress*100);q('[data-fill]').style.width=percent+'%';q('.training-progress').setAttribute('aria-valuenow',String(percent));
     }
     function setStage(id) {

@@ -95,7 +95,8 @@ function harness(options = {}) {
     start(settings) { this.starts++; this.enabled = true; this.settings = settings; return true; }
     stop() { this.enabled = false; }
     cue(inhale) { if (this.enabled) this.cues.push(inhale); }
-    complete() { this.completed = true; }
+    preview() { if (!this.enabled) return false; this.cues.push(true, false); return true; }
+    complete() { this.completed = true; this.completionSettings = { ...this.settings }; }
     destroy() { this.enabled = false; this.destroyed = true; }
   }
   const browser = vm.createContext({
@@ -361,18 +362,19 @@ test('heart completion records once, time never awards readiness, and all audio 
   assert.equal(page.intervals.size, 0);
 });
 
-test('heart practice starts with paced breathing and audible phase bells without enabling ambient sound', () => {
+test('heart practice starts the enabled bell and ambient sound with the first guided inhale', () => {
   const page = harness();
   page.click('[data-exercise="heart"]');
   assert.equal(page.q('[data-pacing]').value, 'paced');
-  assert.equal(page.q('[data-sound]').checked, false);
-  assert.equal(page.q('[data-heart-bell]').hidden, false);
-  assert.match(page.q('[data-heart-bell]').textContent, /Bell: on/i);
-  assert.equal(page.q('.training-sound').querySelector('[data-heart-bell]'), null, 'the bell control is available outside collapsed sound settings');
+  assert.equal(page.q('[data-sound]').checked, true);
+  assert.equal(page.q('[data-bell]').checked, true);
+  assert.equal(page.q('[data-bell-toggle]').hidden, false);
+  assert.match(page.q('[data-bell-toggle]').textContent, /Bell: on/i);
+  assert.equal(page.q('.training-sound').querySelector('[data-bell-toggle]'), null, 'the bell control is available outside collapsed sound settings');
   assert.ok(page.sounds.every(audio => !audio.enabled), 'rendering a page must not start audio');
   page.click('[data-start]');
   assert.equal(page.sounds[0].enabled, true);
-  assert.equal(page.sounds[0].settings.frequency, 0, 'the default starts bowls only, with no ambient pulse');
+  assert.equal(page.sounds[0].settings.frequency, 10, 'ambient sound starts automatically with the default bell');
   assert.deepEqual(page.sounds[0].cues, [true]);
   assert.equal(page.q('[data-breath-label]').textContent, 'Inhale');
   page.advance(4.8);
@@ -386,6 +388,7 @@ test('heart practice starts with paced breathing and audible phase bells without
 
 test('own rhythm gently expands and contracts without moving its label or imposing timed bells', () => {
   const page = harness();
+  page.choose('[data-pacing]', 'natural');
   page.click('[data-start]');
   assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
   page.advance(6);
@@ -451,7 +454,7 @@ test('test bell explains muted volume and retries after asynchronous audio start
   assert.match(page.q('[data-sound-status]').textContent, /0%.*Raise it/);
   page.type('[data-volume]', '1');
   page.click('[data-test-sound]');
-  assert.deepEqual(page.sounds[1].cues, [true]);
+  assert.deepEqual(page.sounds[1].cues, [true, false]);
   assert.equal(page.q('[data-sound-status]').textContent, '');
   page.sounds[1].onError(new Error('Audio context could not resume'));
   assert.equal(page.q('.training-sound').open, true, 'startup error reveals its retry guidance');
@@ -459,7 +462,7 @@ test('test bell explains muted volume and retries after asynchronous audio start
   assert.equal(page.q('[data-sound-status]').getAttribute('role'), 'status');
   page.click('[data-test-sound]');
   assert.equal(page.q('[data-sound-status]').textContent, '');
-  assert.deepEqual(page.sounds[1].cues, [true, true]);
+  assert.deepEqual(page.sounds[1].cues, [true, false, true, false]);
   page.click('[data-exercise="heart"]');
   page.click('[data-start]');
   page.sounds[0].onError(new Error('Interrupted audio context'));
@@ -475,7 +478,7 @@ test('test bell reports immediate startup and cue failures beside the sound cont
   assert.deepEqual(page.sounds[1].cues, []);
   assert.match(page.q('[data-sound-status]').textContent, /could not start/);
   page.sounds[1].start = start;
-  page.sounds[1].cue = () => false;
+  page.sounds[1].preview = () => false;
   page.click('[data-test-sound]');
   assert.match(page.q('[data-sound-status]').textContent, /could not start/);
 });
@@ -513,13 +516,14 @@ test('test bell restores only failed running session audio without inserting ano
 test('muting and unmuting heart bells skips missed cues without inventing a mid-phase ring', () => {
   const page = harness();
   page.click('[data-exercise="heart"]');
+  const ambient=page.q('[data-sound]');ambient.checked=false;ambient.dispatch('change');
   page.click('[data-start]'); page.advance(2);
-  page.click('[data-heart-bell]');
-  assert.match(page.q('[data-heart-bell]').textContent, /Bell: off/i);
+  page.click('[data-bell-toggle]');
+  assert.match(page.q('[data-bell-toggle]').textContent, /Bell: off/i);
   assert.equal(page.sounds[0].enabled, false, 'muting bells with ambient off leaves the exercise silent');
   page.advance(5);
   assert.deepEqual(page.sounds[0].cues, [true], 'the exhale cue at five seconds was muted');
-  page.click('[data-heart-bell]');
+  page.click('[data-bell-toggle]');
   assert.equal(page.sounds[0].enabled, true);
   assert.deepEqual(page.sounds[0].cues, [true], 'unmuting at seven seconds is not a new breath phase');
   page.advance(2.8);
@@ -527,7 +531,7 @@ test('muting and unmuting heart bells skips missed cues without inventing a mid-
   page.advance(0.2);
   assert.deepEqual(page.sounds[0].cues, [true, true], 'the next regular inhale cue remains audible');
   page.click('[data-pause]');
-  page.click('[data-heart-bell]'); page.click('[data-heart-bell]');
+  page.click('[data-bell-toggle]'); page.click('[data-bell-toggle]');
   assert.equal(page.sounds[0].enabled, false, 'changing the bell preference while paused must not restart audio');
 });
 
@@ -552,7 +556,7 @@ test('ambient controls and pause/resume remain independent of the heart bell cad
   page.advance(5);
   assert.deepEqual(page.sounds[0].cues, [true, false, true]);
   sound.checked = true; sound.dispatch('change');
-  page.click('[data-heart-bell]');
+  page.click('[data-bell-toggle]');
   assert.equal(page.sounds[0].enabled, true, 'muting the heart bell does not stop requested ambient audio');
   assert.equal(page.sounds[0].settings.frequency, 10);
   page.advance(5);
@@ -565,7 +569,7 @@ test('using one’s own rhythm suppresses heart breathing bells until a later pa
   page.click('[data-start]'); page.advance(2);
   page.click('[data-live-pace]');
   assert.equal(page.q('[data-breath-label]').textContent, 'Own rhythm');
-  assert.equal(page.sounds[0].enabled, false);
+  assert.equal(page.sounds[0].enabled, true, 'ambient sound continues while own rhythm suppresses timed breath bells');
   page.advance(5);
   assert.deepEqual(page.sounds[0].cues, [true]);
   page.click('[data-live-pace]');
@@ -576,16 +580,16 @@ test('using one’s own rhythm suppresses heart breathing bells until a later pa
   assert.deepEqual(page.sounds[0].cues, [true, true]);
 });
 
-test('body practice keeps its natural silent default and each exercise remembers its own pacing choice', () => {
+test('body practice starts sound with dimension bells and each exercise remembers its own pacing choice', () => {
   const page = harness();
   page.click('[data-exercise="body"]');
   assert.equal(page.q('[data-pacing]').value, 'natural');
-  assert.equal(page.q('[data-sound]').checked, false);
-  const bell = page.host.querySelector('[data-heart-bell]');
-  assert.ok(!bell || bell.hidden, 'body mapping does not display the heart-only bell control');
+  assert.equal(page.q('[data-sound]').checked, true);
+  assert.equal(page.q('[data-bell]').checked, true);
+  assert.equal(page.q('[data-bell-toggle]').hidden, false);
   page.click('[data-start]'); page.advance(30);
-  assert.equal(page.sounds[0].enabled, false);
-  assert.deepEqual(page.sounds[0].cues, []);
+  assert.equal(page.sounds[0].enabled, true);
+  assert.deepEqual(page.sounds[0].cues, [true, false]);
   page.click('[data-end]'); page.click('[data-exercise="heart"]');
   assert.equal(page.q('[data-pacing]').value, 'paced');
   page.choose('[data-pacing]', 'natural');
@@ -607,6 +611,60 @@ test('body bowl cues follow the source dimension pattern when the seven-step seq
   for (let step = 0; step < 7; step++) page.advance(30);
   assert.equal(page.q('[data-dimension]').textContent, 'Location');
   assert.deepEqual(page.sounds[0].cues, [true, false, true, false, true, false, true, true]);
+});
+
+test('bell and ambient checkboxes work independently in every exercise and stay in sync with quick mute', () => {
+  for (const exercise of ['stream','heart','body']) {
+    const page=harness();page.click('[data-exercise="'+exercise+'"]');
+    const bell=page.q('[data-bell]'),ambient=page.q('[data-sound]');
+    assert.equal(page.q('[data-sound-summary]').textContent,'Bell on · Ambient on');
+    page.click('[data-start]');page.advance(2);
+    const session=page.sounds[0],originalCues=[...session.cues];
+    bell.checked=false;bell.dispatch('change');
+    assert.equal(ambient.checked,true);
+    assert.equal(session.enabled,true);
+    assert.equal(session.settings.frequency,10);
+    assert.equal(session.settings.bellVolume,0);
+    assert.equal(page.q('[data-bell-toggle]').getAttribute('aria-pressed'),'false');
+    assert.match(page.q('[data-bell-toggle]').textContent,/Bell: off/);
+    assert.equal(page.q('[data-sound-summary]').textContent,'Bell off · Ambient on');
+    page.advance(exercise==='body'?28:3);
+    assert.deepEqual(session.cues,originalCues,'muting prevents the next automatic cue');
+    page.click('[data-bell-toggle]');
+    assert.equal(bell.checked,true,'quick mute and checkbox control the same bell');
+    assert.equal(session.settings.bellVolume,1);
+    assert.deepEqual(session.cues,originalCues,'enabling a bell does not replay an elapsed boundary');
+    ambient.checked=false;ambient.dispatch('change');
+    assert.equal(bell.checked,true);
+    assert.equal(session.enabled,true);
+    assert.equal(session.settings.frequency,0,'bell-only sound does not create ambient audio');
+    assert.equal(page.q('[data-sound-summary]').textContent,'Bell on · Ambient off');
+    page.advance(exercise==='body'?30:5);
+    assert.equal(session.cues.length,originalCues.length+1,'the independent bell remains audible');
+    bell.checked=false;bell.dispatch('change');
+    assert.equal(session.enabled,false);
+    assert.equal(page.q('[data-sound-summary]').textContent,'Bell off · Ambient off');
+    page.click('[data-test-sound]');
+    assert.deepEqual(page.sounds[1].cues,[true,false],'the explicit preview demonstrates both reference bells');
+    assert.equal(bell.checked,false,'preview does not overwrite the saved bell choice');
+    assert.equal(ambient.checked,false);
+    assert.equal(session.enabled,false,'preview does not restart disabled session sound');
+    page.app.destroy();
+  }
+});
+
+test('muted bell stays muted at completion while ambient audio can fade out', () => {
+  for (const exercise of ['stream','heart','body']) {
+    const page=harness();page.click('[data-exercise="'+exercise+'"]');
+    const bell=page.q('[data-bell]');bell.checked=false;bell.dispatch('change');
+    page.click('[data-start]');page.advance(900);
+    assert.equal(page.q('[data-session-state]').textContent,'Complete');
+    assert.deepEqual(page.sounds[0].cues,[]);
+    assert.equal(page.sounds[0].completed,true);
+    assert.equal(page.sounds[0].completionSettings.frequency,10);
+    assert.equal(page.sounds[0].completionSettings.bellVolume,0,'completion cannot bypass bell mute');
+    page.app.destroy();
+  }
 });
 
 test('quota failures retain private work for export and keep the unload guard active', () => {
@@ -653,23 +711,25 @@ test('a cross-tab replacement guards already-committed local records even when n
   assert.equal(page.app.hasDraft(), true, 'the retained local version must be guarded until saved or deliberately reloaded');
 });
 
-test('the standalone consciousness stream is the natural, silent default and has no body or heart cadence', () => {
+test('the consciousness stream begins with guided inhale/exhale bells and ambient sound', () => {
   const page = harness();
   assert.equal(page.q('[data-exercise="stream"]').getAttribute('aria-pressed'), 'true');
-  assert.equal(page.q('[data-pacing]').value, 'natural');
-  assert.equal(page.q('[data-heart-bell]').hidden, true);
+  assert.equal(page.q('[data-pacing]').value, 'paced');
+  assert.equal(page.q('[data-bell-toggle]').hidden, false);
   assert.equal(page.q('[data-body-steps]').hidden, true);
-  assert.equal(page.q('[data-sound]').checked, false);
+  assert.equal(page.q('[data-bell]').checked, true);
+  assert.equal(page.q('[data-sound]').checked, true);
+  assert.equal(page.sounds[0].starts, 0, 'defaults do not bypass the Begin gesture');
   page.click('[data-start]');
-  page.advance(31);
-  assert.match(page.q('[data-prompt]').textContent, /Inhale: receive and select\. Exhale: encode first/);
-  assert.match(page.q('[data-next-step]').textContent, /Keep the return target fixed/);
+  assert.deepEqual(page.sounds[0].cues, [true]);
+  assert.equal(page.sounds[0].settings.frequency, 10);
+  page.advance(5);
+  assert.deepEqual(page.sounds[0].cues, [true, false]);
+  assert.equal(page.q('[data-breath-label]').textContent, 'Exhale');
+  page.advance(5);
+  assert.deepEqual(page.sounds[0].cues, [true, false, true]);
   assert.equal(page.q('[data-dimension]').hidden, true);
-  assert.equal(page.sounds[0].enabled, false);
-  const sound=page.q('[data-sound]');sound.checked=true;sound.dispatch('change');
-  page.advance(61);
-  assert.equal(page.sounds[0].enabled,true);
-  assert.deepEqual(page.sounds[0].cues,[],'ambient audio does not impose the body mapping bell sequence on a mental stream');
+  assert.match(page.q('[data-next-step]').textContent, /Keep the return target fixed/);
   page.click('[data-end]');
   assert.equal(page.data().sessions[0].exercise,'stream');
   assert.equal(page.data().entries.length,0,'timed breaths never manufacture a marked entry');
@@ -749,6 +809,11 @@ test('every application teaches four breaths and exposes a complete relationship
     page.app.setStage(id);
     for(const exercise of ['stream','heart','body']){
       page.click('[data-exercise="'+exercise+'"]');
+      assert.equal(page.q('[data-bell]').checked,true,id+'/'+exercise+' has bell sound enabled');
+      assert.equal(page.q('[data-sound]').checked,true,id+'/'+exercise+' has ambient sound enabled');
+      assert.equal(page.q('[data-bell-toggle]').hidden,false);
+      assert.equal(page.q('[data-pacing]').value,exercise==='body'?'natural':'paced');
+      assert.ok(page.sounds.every(audio=>audio.starts===0),'browsing lessons does not autoplay sound');
       assert.equal(page.host.querySelector('.training-breath-examples'),null,'repeated full prose rows are removed');
       assert.match(page.q('.training-four').textContent,/4 breaths/);
       assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' shows the entire starting model');
