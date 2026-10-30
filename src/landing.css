@@ -50,7 +50,7 @@ body[data-view="journey"] .skip-link { display: none; }
 .portal-page .stage-tile .stage-icon { flex: none; width: min(120px, 100%); height: auto; aspect-ratio: 1; }
 .portal-page .stage-tile .stage-icon svg { width: 100%; height: 100%; }
 .portal-page .stage-tile:focus-visible { outline: 2px solid #4c3c28; outline-offset: 3px; }
-/* The creation parable follows every shape, leaving the logo and song together. */
+/* The introduction sits to the left of the symbol on wide screens. */
 .creation-intro { flex: none; width: min(calc(100% - 40px), 650px); margin: clamp(32px, 5vw, 60px) auto 28px; color: var(--ink); font-family: var(--serif); font-size: clamp(17px, 1.6vw, 20px); line-height: 1.75; text-align: center; text-wrap: pretty; }
 .creation-intro::before { content: ""; display: block; width: 72px; height: 1px; margin: 0 auto 28px; background: linear-gradient(to right, transparent, #8b795c, transparent); }
 .creation-intro p { margin: 0 0 1em; }
@@ -102,29 +102,35 @@ body[data-view="journey"] .skip-link { display: none; }
    viewport switches this embed to a different compact layout. */
 .site-music iframe { display: block; width: 100%; height: 148px; border: 0; background: #ebe4d5; }
 .music-offline { margin: 16px; color: #f8f4ec; font: 13px/1.5 var(--sans); }
-/* Centre the player directly below the logo, before the shape cards.
-   Shared viewport lengths keep both edges aligned without reparenting the iframe. */
-body[data-view="journey"] {
-  position: relative;
-  --portal-width: 100vw;
-  --portal-size: min(calc(var(--portal-width) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)), calc(100vh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px);
-}
-@supports (width: 100cqw) {
-  body[data-view="journey"] { container-type: inline-size; --portal-width: 100cqw; }
-}
-@supports (height: 100svh) {
-  body[data-view="journey"] { --portal-size: min(calc(var(--portal-width) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)), calc(100svh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px); }
-}
+/* One hero holds the introduction and the logo/song together. Keep the
+   iframe in its original DOM instance as shape selections reveal practice. */
 body[data-view="journey"] .portal-page { justify-content: flex-start; }
-body[data-view="journey"] .portal-artwork { width: min(100%, var(--portal-size)); }
-body[data-view="journey"] .site-music { position: absolute; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + var(--portal-size) + 4px); left: calc(50% + (env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / 2); transform: translateX(-50%); margin: 0; }
-body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
+.portal-hero { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.portal-visual { order: 1; display: flex; flex-direction: column; align-items: center; width: 100%; min-width: 0; }
+.portal-visual > .portal-artwork { width: min(100%, calc(100vh - 172px), 1254px); width: min(100%, calc(100svh - 172px), 1254px); }
+.portal-visual > .site-music-panel { width: 100%; }
+.portal-visual .site-music { margin: 4px auto 0; }
+.portal-hero > .creation-intro { order: 2; margin-top: 32px; }
+body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
+@media (min-width: 900px) {
+  .portal-hero { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
+  .portal-hero > .creation-intro { grid-column: 1; grid-row: 1; align-self: center; width: min(calc(100% - 40px), 350px); margin: 28px auto 178px; }
+  .portal-visual { grid-column: 2; grid-row: 1; }
+}
+@media (min-width: 1200px) {
+  /* Matching outer columns preserve the central axis of the main symbol. */
+  .portal-hero { --hero-logo-size: min(calc(100vw - 640px), calc(100vh - 172px), 1254px); grid-template-columns: minmax(0, 1fr) var(--hero-logo-size) minmax(0, 1fr); }
+  @supports (height: 100svh) {
+    .portal-hero { --hero-logo-size: min(calc(100vw - 640px), calc(100svh - 172px), 1254px); }
+  }
+}
 @media (max-height: 480px) and (min-width: 601px) {
-  body[data-view="journey"] { --portal-size: min(var(--portal-width), calc(100vh - 122px)); }
-  @supports (height: 100svh) { body[data-view="journey"] { --portal-size: min(var(--portal-width), calc(100svh - 122px)); } }
+  .portal-visual > .portal-artwork { width: min(100%, calc(100vh - 122px)); width: min(100%, calc(100svh - 122px)); }
 }
 @media print {
   .site-music { display: none; }
-  body[data-view="journey"] .portal-artwork { width: 400px; }
+  .portal-hero { display: flex; }
+  .portal-hero > .creation-intro { margin: 28px auto; }
+  .portal-visual > .portal-artwork { width: 400px; }
   body[data-view="journey"] .portal-page > .stage-path { margin-top: 0; }
 }
