@@ -23,6 +23,8 @@ body[data-view="journey"] .skip-link { display: none; }
    Its smaller footprint leaves more paper between it and the outer ink band. */
 .portal--world { --x: 49.920255%; --y: 74%; --diameter: 17%; z-index: 2; }
 .portal-caption { position: absolute; left: 50%; top: 50%; display: grid; place-content: center; width: 50.78125%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: #ebe4d5 url("../assets/parchment-texture.svg") repeat; background-size: 21.37161cqw 21.37161cqw; color: #302b23; font-size: clamp(11px, 2.05cqw, 26px); line-height: 1.15; text-align: center; pointer-events: none; }
+/* Give Surrender a sliver of clearance; all three labels keep one scale. */
+.portal-caption > span { font-size: .94em; }
 /* Neutral graphite inherits its colour from the original parchment beneath it.
    Lift the insert's paper to white so multiply adds ink without a sepia disc.
    The existing circular clip keeps all strokes inside the original rim. */
