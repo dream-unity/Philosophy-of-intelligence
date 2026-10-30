@@ -194,7 +194,7 @@
     function render() {
       modelState=0;selectedRelationship='';walkthroughStep=0;
       const guide = stage[exercise], ready=store.data.readiness[stage.id]||{};
-      host.innerHTML=`<div class="training-topline"><a class="back-link" href="#journey">← All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
+      host.innerHTML=`<div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
         <header class="training-symbol-header"><h1 class="visually-hidden">${esc(stage.name)}</h1><div class="training-page-symbol${stage.id==='half-circle'?' training-page-symbol--half-circle':''}" aria-hidden="true">${G.miniIcon(stage.id,65).replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</div></header>
         <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map((name,i)=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
@@ -323,7 +323,9 @@
       q('[data-pause]').textContent=s.status==='paused'?'Resume':'Pause';q('[data-pause]').hidden=!active;q('[data-end]').hidden=!active;
       q('[data-finished]').hidden=!finished;q('[data-finished]').textContent=s.status==='completed'?'Practice complete.':'Practice ended.';
       q('[data-live-pace]').hidden=!active;q('[data-live-pace]').textContent=pacing==='natural'?'Use my '+inhaleSeconds+' / '+exhaleSeconds+' guide':'Use my own rhythm';
-      q('[data-shape]').disabled=active;all('[data-exercise]').forEach(el=>el.disabled=active);
+      // Switching shapes ends and records the old period in setStage(), just
+      // like choosing another card in the always-visible shape grid.
+      q('[data-shape]').disabled=false;all('[data-exercise]').forEach(el=>el.disabled=active);
       const scaled=pacing==='paced'&&active;
       const progress=s.breathProgress;
       // Keep the label still and enclosed even at the smallest point. Own rhythm

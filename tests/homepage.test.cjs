@@ -47,6 +47,21 @@ test('the homepage symbol has no controls and only shape cards are links', async
   assert.doesNotMatch(home[2], /\bonclick\s*=/i);
 });
 
+test('practice is shipped hidden below the complete introductory writing', async () => {
+  const { attributes } = await checks;
+  const html = source();
+  const intro = html.match(/<div class="creation-intro">[\s\S]*?<\/div>/);
+  const practice = [...html.matchAll(/<section\b[^>]*>/gi)].find(match => attributes(match[0]).id === 'view-practice');
+  assert.ok(intro && practice, 'the introduction and inline practice both exist');
+  assert.ok(practice.index > intro.index + intro[0].length, 'practice follows the complete introductory writing');
+  assert.ok(Object.hasOwn(attributes(practice[0]), 'hidden'), 'the metronome stays hidden even before app startup');
+  for (const id of ['archive-panel','philosophy-panel']) {
+    const panel = [...html.matchAll(/<details\b[^>]*>/gi)].find(match => attributes(match[0]).id === id);
+    assert.ok(panel && panel.index > practice.index, id + ' remains accessible as inline details below the practice');
+    assert.equal(Object.hasOwn(attributes(panel[0]), 'open'), false, id + ' starts collapsed');
+  }
+});
+
 // A fresh HTML response must request fresh assets after a release; otherwise
 // old app.js can still look up controls that the new HTML has removed.
 test('every linked script and stylesheet uses the hash of its current file', async () => {
