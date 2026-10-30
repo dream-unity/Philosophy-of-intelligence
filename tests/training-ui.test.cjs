@@ -307,6 +307,10 @@ test('all fourteen shapes expose all three applications and readiness remains re
       assert.equal(page.q('[data-exercise="' + exercise + '"]').getAttribute('aria-pressed'), 'true');
       const check = page.q('[data-ready]'); check.checked = true; check.dispatch('change');
       assert.equal(page.data().readiness[id][exercise], true);
+      for (const selector of ['[data-return]', '[data-readiness]', '.training-record', '.training-attribution']) {
+        assert.equal(page.q(selector).hidden, true, id + ' / ' + exercise + ': removed section stays out of the rendered UI');
+      }
+
     }
     const check = page.q('[data-ready]'); check.checked = false; check.dispatch('change');
     assert.equal(page.data().readiness[id].body, false);
@@ -1064,16 +1068,20 @@ test('loading a replacement record preserves a locked return and offers an expli
   assert.equal(page.data().entries[0].referenceId,null,'the preserved current entry explicitly seeds a fresh history');
 });
 
-test('a full session record blocks a new recorded period before the timer starts', () => {
+test('a full existing record preserves its contents without blocking practice', () => {
   const page=harness();
   const sessions=Array.from({length:500},(_,i)=>({id:'period-'+i,stageId:'circle',exercise:'stream',endedAt:'2026-10-01T00:00:00.000Z',seconds:2,completed:false}));
   page.external(JSON.stringify({schemaVersion:1,entries:[],sessions,readiness:{}}));page.click('[data-reload]');
+  const before=page.raw.get(page.key);
   page.click('[data-start]');page.advance(2);
   assert.equal(page.q('[data-live]').hidden,false);
-  assert.equal(page.q('[data-breath-label]').textContent,'Ready');
-  assert.match(page.q('[data-message]').textContent,/500 practice periods/);
-  assert.equal(page.data().sessions.length,500);
-  assert.ok(page.sounds.every(audio=>!audio.enabled));
+  assert.equal(page.q('[data-session-state]').textContent,'Practising');
+  assert.equal(page.q('[data-timer]').textContent,'14:58');
+  page.click('[data-end]');
+  assert.equal(page.raw.get(page.key),before,'capacity never deletes or rewrites existing records');
+  page.click('[data-start]');page.advance(900);
+  assert.equal(page.q('[data-session-state]').textContent,'Complete');
+  assert.equal(page.raw.get(page.key),before);
 });
 
 test('every application teaches four breaths and exposes a complete relationship register', () => {
