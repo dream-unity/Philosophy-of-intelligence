@@ -305,6 +305,10 @@ body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bot
 .training-sound .training-settings input[type=range]{margin-top:12px}
 .training-start{margin-top:8px}
 .training-start .button{min-width:120px;min-height:44px;padding:10px 24px}
+.training-reference{margin:12px 0 0}
+.training-reference>.training-examples{border:0;margin:0;padding:0}
+#training-root .training-reference>.training-examples>summary{font-size:14px;min-height:44px;padding:10px 0}
+.training-reference>.training-examples[open]>summary{margin-bottom:12px}
 @media(max-width:620px){
  .training-heading>span{flex-basis:48px}
  .training-heading>span svg{width:48px;height:48px}

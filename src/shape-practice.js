@@ -297,6 +297,46 @@
     body: 'Continue the body-mapping prompt in the normal way. Sensation descriptions can supply evidence for a selected relationship, but location, texture and intensity alone do not define shape count. The examples are constructed seated encounters; they do not assign a fixed emotion or diagnosis to a sensation.'
   };
 
+  // Teaching follows the pacer's phase, not its cycle count: a timed breath
+  // never commits an entry, advances an address or changes a return target.
+  const INHALE_CUES = {
+    circle: 'Select two roles and one meaning linking them.',
+    'half-circle': 'Hold two distinct meanings between the same two roles; reversing one link does not add another.',
+    triangle: 'Connect three roles; name all three links, including the closing one.',
+    square: 'Connect four roles in a closed cycle; name each of its four links.',
+    pentagon: 'Connect five roles in a closed cycle; name all five links without adding a shortcut.',
+    hexagon: 'Include a context or constraint; name its two connections within the six-link cycle.',
+    heptagon: 'Distinguish seven roles; name each meaningful link around the complete seven-link cycle.',
+    octagon: 'Connect eight roles in an eight-link cycle; distinguish any representation from what it represents.',
+    prism: 'Join two complete three-link triangles with three explicit correspondences or contrasts: nine links.',
+    cube: 'Join two complete four-link cycles with four explicit role bridges: twelve links.',
+    dodecahedron: 'Hold all thirty links; follow shared pentagons without counting a shared link twice.',
+    icosahedron: 'Hold all thirty links; follow shared triangles and distinguish aims from achieved results.',
+    geodesic: 'Replace thirty direct links with sixty links through named mediators; add sixty compatibility requirements.',
+    sphere: 'Enter the same 120-link whole through another role; keep every link recoverable.'
+  };
+
+  function phaseCues(stage, exercise) {
+    let example;
+    if (stage.relationCount <= 4) example = SHORT_LESSONS[stage.id][exercise];
+    else if (stage.relationCount <= 8) example = {
+      stream: 'Start: ocean contains boat; boat enables fisher. Complete the cycle.',
+      heart: 'Start: memory supports appreciation; appreciation expresses care. Complete the cycle.',
+      body: 'Start: chair supports torso; torso contains pressure. Complete the cycle.'
+    }[exercise];
+    else if (stage.relationCount < 30) example = {
+      stream: stage.id === 'prism' ? 'Try ocean / boat / fisher and forest / path / walker.' : 'Try fishing and cultivation: environments, infrastructure, producers and communities.',
+      heart: 'Try two systems of care: memories of a friend and a pet.',
+      body: 'Try two supports: chair / torso and floor / feet.'
+    }[exercise];
+    else example = 'Learn the full example below; a local part is not the whole. Take extra breaths as needed.';
+    return {
+      inhale: INHALE_CUES[stage.id],
+      exhale: 'Picture this ' + (stage.relationCount === 1 ? 'relationship' : 'whole model') + ' at a new home location. Then recall the previous entry, compare meanings, and append any correction. Keep both originals.',
+      example
+    };
+  }
+
   function freeze(value) {
     if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
     Object.values(value).forEach(freeze);
@@ -326,6 +366,7 @@
     const source = exercise === 'stream' ? STREAM_EXAMPLES[stage.id] : null;
     const baseline = source ? source.baseline : stage.relationCount < 30 ? model.relations.map(relation => relation.text).join(' ') : 'Prepare the complete ' + model.title + ' model and all ' + stage.relationCount + ' selected relationships in its register. The four encounters below are versions of that full model.';
     return {
+      cues: phaseCues(stage, exercise),
       shortExample: SHORT_LESSONS[stage.id][exercise],
       notice: EXERCISE_CONTEXT[exercise] + ' On the inhale, select ' + (stage.relationCount === 1 ? 'one complete meaningful relationship' : 'the full declared ' + stage.relationCount + '-link organisation') + '. On the exhale, encode it at a distinct home-palace address before deliberately seeking the earlier target. If fewer links are available, encode an honest partial selection with its actual count and uncertainty. That entry may support a return without completing the intended shape; do not invent the missing links.',
       recall: 'Only after current encoding, retrieve exactly N committed entries back before revealing any earlier note. Until N earlier entries exist, seed history. In the four-breath B = 1 rehearsal, return to the preceding breath’s entry; a matching older entry is not a substitute. Recover roles and meanings, not only the model’s name.',

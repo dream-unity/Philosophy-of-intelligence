@@ -181,18 +181,6 @@
       q('[data-walk-next]').addEventListener('click',()=>{if(!isCurrent())return;if(walkthroughStep<3){walkthroughStep++;renderWalkthrough();}else selectWorkedEntry(modelState<3?modelState+1:0);q('[data-walkthrough-title]').focus();});
       q('[data-walk-back]').addEventListener('click',()=>{if(!isCurrent())return;if(walkthroughStep>0){walkthroughStep--;renderWalkthrough();}else if(modelState>0)selectWorkedEntry(modelState-1);q('[data-walkthrough-title]').focus();});
     }
-    function lessonHTML(guide) {
-      const setting = exercise==='stream'?'Let an image, thought or meaning arise.':exercise==='heart'?'Attend to your chest; invite care or appreciation, without forcing a feeling.':'Notice a sensation and its context; let the body prompts guide attention.';
-      return `<section class="training-lesson" aria-label="${esc(stage.name)} lesson" data-lesson>
-        <p class="training-example" data-short-example>${esc(guide.shortExample)}</p>
-        <p class="training-setting">${setting}</p>
-        <div class="training-breath-method"><p><strong>Inhale</strong> Receive the scene; select the shape’s relationships.</p><p><strong>Exhale</strong> Encode at a home address first. Then recall the exact previous entry, compare, and append any revision. Keep both originals.</p></div>
-        <p class="training-four"><strong>4 breaths:</strong> ${D.ADDRESSES.map(esc).join(' → ')}. First entry seeds memory; each next entry returns one back.</p>
-        <p class="training-fine">Need longer? Take extra natural breaths and count entries. Keep the same return target. Never force or hold your breath; stop if uncomfortable.</p>
-        ${workedExampleHTML(guide)}
-        <details class="training-reconstruction"><summary>da Vinci variation</summary><p>Encode the source, then rebuild it in another setting with one consistent role mapping. Preserve every relationship before the historical return. Keep source, reconstruction and earlier entry distinct.</p><a class="text-link" href="https://mike-stack1982364.github.io/Ontological-Worlds/#mode-one-guide" target="_blank" rel="noopener noreferrer">Original method ↗</a></details>
-      </section>`;
-    }
     function workedExampleHTML(guide) {
       const model=guide.model||root.FormRelationalModels?.getModel(stage.id,exercise);
       const register=guide.register||model?.relations||[];
@@ -209,14 +197,13 @@
       host.innerHTML=`<div class="training-topline"><a class="back-link" href="#journey">← All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
         <header class="training-symbol-header"><h1 class="visually-hidden">${esc(stage.name)}</h1><div class="training-page-symbol" aria-hidden="true">${G.miniIcon(stage.id,65)}</div></header>
         <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map((name,i)=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
-        ${lessonHTML(guide)}
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
         <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
           <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span></div></div>
           <div data-live><div class="training-session-bar" data-session-bar hidden><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
             <div class="training-exercise-preview" data-exercise-preview>
               <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div>
-              <div class="training-cue"><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
+              <div class="training-cue"><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt" aria-live="polite" aria-atomic="true"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
             </div>
             <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
             <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span data-fill></span></div>
@@ -230,6 +217,7 @@
         <details hidden data-return class="training-panel training-return"><summary>Private notes</summary><p class="training-fine">Pause to write. Entries, not timer breaths, set the return distance.</p><form data-return-form><div data-fields></div><button type="submit" class="button primary" data-keep>Keep this entry</button><p class="training-fine">Saved in this browser.</p></form></details>
         <section hidden data-readiness class="training-panel training-readiness"></section>
         </div></div>
+        <section class="training-reference" aria-label="${esc(stage.name)} worked reference" data-reference>${workedExampleHTML(guide)}</section>
         <details hidden class="training-record"><summary>Your practice record <span data-record-count></span></summary><p class="training-fine">Downloads include your private notes.</p><div data-record></div><div class="training-record-actions"><button type="button" class="text-button" data-export>Download practice record (includes notes)</button><button type="button" class="text-button" data-original hidden>Download original saved data</button><button type="button" class="text-button" data-reload hidden>Load saved version</button><button type="button" class="text-button" data-reset>Clear this practice record</button></div></details>
         <p hidden class="training-attribution">Heart and body exercises: <a href="https://o0ooooooooooo0o.github.io/Project-Meaning/" target="_blank" rel="noopener noreferrer">Project Meaning</a>. <a href="#palace">Earlier saved observations →</a></p>`;
       q('[data-shape]').addEventListener('change',e=>onStageChange(e.target.value));
@@ -310,7 +298,7 @@
       const other=exerciseOrder[(exerciseOrder.indexOf(exercise)+1)%exerciseOrder.length];
       el.innerHTML=`<label class="training-check"><input type="checkbox" data-ready ${ready[exercise]?'checked':''}> I can recover the relationships and make an exact return.</label><p class="training-fine">Your self-assessment · ${exerciseNames[exercise]}</p><div class="training-ready-actions"><button type="button" class="text-button" data-other>Try ${exerciseNames[other]} →</button>${next?`<a class="text-link" href="#practice/${esc(next.id)}">${esc(next.name)} →</a>`:''}</div>`;
       q('[data-ready]').addEventListener('change',e=>{const data=store.data;data.readiness[stage.id]={stream:!!ready.stream,heart:!!ready.heart,body:!!ready.body,[exercise]:e.target.checked};save(data);renderReadiness();renderRecord();all('[data-exercise]').forEach(button=>{const name=button.dataset.exercise;button.querySelector('small').textContent=store.data.readiness[stage.id]?.[name]?'Self-assessed: ready':'';});q('[data-ready]').focus();});
-      q('[data-other]').addEventListener('click',()=>{end();clock=null;exercise=other;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';render();q('[data-exercise="'+exercise+'"]').focus();q('[data-lesson]').scrollIntoView({block:'start'});});
+      q('[data-other]').addEventListener('click',()=>{end();clock=null;exercise=other;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';render();q('[data-exercise="'+exercise+'"]').focus();q('[data-live]').scrollIntoView({block:'start'});});
     }
     function renderRecord() {
       const data=store.data;q('[data-record-count]').textContent='· '+data.entries.length+' observation'+(data.entries.length===1?'':'s');
@@ -347,25 +335,28 @@
       const remaining=Math.ceil(s.breathRemaining*10-1e-8)/10;
       q('[data-breath-count]').textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
       if(s.bodyStepIndex!==lastBodyStep){peek=null;lastBodyStep=s.bodyStepIndex;}
-      const promptKey=s.status+':'+exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):(exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural'))+':'+(peek!==null);
+      const promptKey=s.status+':'+exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural')+':'+(peek!==null);
       if(promptKey!==lastPrompt){
         lastPrompt=promptKey;
+        const cues=stage[exercise].cues;
+        const phase=pacing==='paced'?s.breathPhase:'natural';
+        const returnHint='First entry: store only. Extra breaths keep the same return target.';
+        q('[data-prompt]').textContent=phase==='natural'?'Inhale: '+cues.inhale+' Exhale: '+cues.exhale:cues[phase];
         if(exercise==='stream'){
           q('[data-step-label]').textContent='Consciousness stream · '+stage.name;
           q('[data-dimension]').hidden=true;
-          q('[data-prompt]').textContent=pacing==='paced'?(s.breathPhase==='inhale'?'Receive the current scene or meaning. Select its relationships.':'Encode this entry first. Then retrieve the exact earlier entry, compare and revise.'):'Inhale: receive and select. Exhale: encode first, then retrieve, compare and revise.';
-          q('[data-next-step]').textContent='Extra breaths are fine. Keep the return target fixed.';
+          q('[data-next-step]').textContent=phase==='inhale'?cues.example:returnHint;
         }else if(exercise==='heart'){
           const p=E.HEART_PHASES[s.heartPhaseIndex];q('[data-step-label]').textContent=p.label;
-          q('[data-prompt]').textContent=pacing==='paced'?p[s.breathPhase]:p.inhale+' '+p.exhale;
-          q('[data-dimension]').hidden=true;q('[data-next-step]').textContent='Receive → encode → retrieve → compare → revise. Finish at your own pace.';
+          q('[data-dimension]').hidden=true;
+          q('[data-next-step]').textContent=phase==='inhale'?p.inhale+' '+cues.example:phase==='exhale'?p.exhale+' '+returnHint:p.inhale+' '+returnHint;
         }else{
           const i=peek??s.bodyStepIndex,p=E.BODY_STEPS[i];q('[data-step-label]').textContent=peek!==null?(idle?'Preview':'Rereading · the exercise timer continues'):'Dimension '+(i+1)+' of 7';
-          q('[data-dimension]').hidden=false;q('[data-dimension]').textContent=p.label;q('[data-prompt]').textContent=p.prompt;
+          q('[data-dimension]').hidden=false;q('[data-dimension]').textContent=p.label;
+          q('[data-next-step]').textContent=p.prompt+(phase==='inhale'?' '+cues.example:' '+returnHint);
           all('[data-peek]').forEach(el=>{el.setAttribute('aria-pressed',String(Number(el.dataset.peek)===i));el.classList.toggle('is-current',Number(el.dataset.peek)===s.bodyStepIndex);});
         }
       }
-      if(exercise==='body')q('[data-next-step]').textContent=idle?'Explore a dimension below; Start begins the guided sequence.':finished?'Return to your own rhythm.':'Next: '+E.BODY_STEPS[(s.bodyStepIndex+1)%7].label+' · '+Math.ceil(s.stepRemaining)+'s'+(s.status==='paused'?' · paused':'');
       const bodyCue=exercise==='body'&&pacing==='natural';
       const cueKey=bodyCue?'body:'+Math.floor(s.elapsedSeconds/E.BODY_STEP_SECONDS):'breath:'+s.breathPhaseIndex;
       if(s.status==='running'&&cueKey!==lastCue){lastCue=cueKey;if(bell&&(bodyCue||pacing==='paced'))audio.cue(bodyCue?s.bodyStepIndex%2===0:s.breathPhase==='inhale');}

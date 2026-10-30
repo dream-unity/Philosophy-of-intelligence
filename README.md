@@ -4,9 +4,9 @@ A manual practice of organising relationships in the stream of consciousness.
 
 [Open the site](https://www.philosophyofintelligence.life/) · [Practice guide](docs/PRACTICE_GUIDE.md) · [Offline edition](dist/Philosophy-of-Intelligence-Offline.html)
 
-The fourteen shapes open one shared practice page. Each has theory, instructions and four worked cycles for **Consciousness Stream**, **Heart-Coherence** and **Body-Sensation Mapping**. The shape changes the selected relationships; the full breath-back procedure remains available from Circle onward.
+The fourteen shapes open one shared practice page for **Consciousness Stream**, **Heart-Coherence** and **Body-Sensation Mapping**. Brief teaching appears directly beside the metronome: inhale selects the shape's relationships; exhale stores the current selection before recall, comparison and annotation. The exercise is visible immediately, with settings and Start below it.
 
-The guided rehearsal presents receive, encode, retrieve and compare one step at a time for all 42 lessons. Its entry selector updates the full diagram and relationship register together. Advance when ready; the pacer never advances the rehearsal or records an observation. Expand **Read all four worked entries** for the complete reference. Running practice also keeps the selected shape's organisation and an exercise-specific example close to the breathing or body prompts.
+The optional **Explore the example · four entries** reference sits below the exercise. Its guided rehearsal and entry selector update the full diagram and relationship register together. Advance when ready; the pacer never advances the rehearsal or records an observation. Own rhythm shows both phase instructions together. Heart and body prompts retain their exercise context alongside the selected shape's instruction.
 
 ## The method
 

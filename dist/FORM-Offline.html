@@ -79,7 +79,7 @@ dialog{border:3px double #8b7d5f;background:var(--paper);border-radius:3px;box-s
 .empty-state>svg{margin:0 auto 18px}.field-number{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;font-size:10px;flex-shrink:0}
 
 </style>
-  <style data-form-source="src/training.css?v=7194c5456021">
+  <style data-form-source="src/training.css?v=95f8094f613a">
 /* Shared manual practice. Homepage composition lives exclusively in landing.css. */
 #training-root{max-width:1080px;margin:0 auto;padding:12px 0 48px}
 .training-topline{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:38px}
@@ -387,6 +387,10 @@ body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bot
 .training-sound .training-settings input[type=range]{margin-top:12px}
 .training-start{margin-top:8px}
 .training-start .button{min-width:120px;min-height:44px;padding:10px 24px}
+.training-reference{margin:12px 0 0}
+.training-reference>.training-examples{border:0;margin:0;padding:0}
+#training-root .training-reference>.training-examples>summary{font-size:14px;min-height:44px;padding:10px 0}
+.training-reference>.training-examples[open]>summary{margin-bottom:12px}
 @media(max-width:620px){
  .training-heading>span{flex-basis:48px}
  .training-heading>span svg{width:48px;height:48px}
@@ -9156,7 +9160,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
 });
 
 </script>
-  <script data-form-module="src/shape-practice.js?v=297ac5e53fc7">
+  <script data-form-module="src/shape-practice.js?v=bfd5936fa9f5">
 (function (root, factory) {
   'use strict';
   const models = typeof module === 'object' && module.exports ? require('./relational-models.js') : root.FormRelationalModels;
@@ -9456,6 +9460,46 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
     body: 'Continue the body-mapping prompt in the normal way. Sensation descriptions can supply evidence for a selected relationship, but location, texture and intensity alone do not define shape count. The examples are constructed seated encounters; they do not assign a fixed emotion or diagnosis to a sensation.'
   };
 
+  // Teaching follows the pacer's phase, not its cycle count: a timed breath
+  // never commits an entry, advances an address or changes a return target.
+  const INHALE_CUES = {
+    circle: 'Select two roles and one meaning linking them.',
+    'half-circle': 'Hold two distinct meanings between the same two roles; reversing one link does not add another.',
+    triangle: 'Connect three roles; name all three links, including the closing one.',
+    square: 'Connect four roles in a closed cycle; name each of its four links.',
+    pentagon: 'Connect five roles in a closed cycle; name all five links without adding a shortcut.',
+    hexagon: 'Include a context or constraint; name its two connections within the six-link cycle.',
+    heptagon: 'Distinguish seven roles; name each meaningful link around the complete seven-link cycle.',
+    octagon: 'Connect eight roles in an eight-link cycle; distinguish any representation from what it represents.',
+    prism: 'Join two complete three-link triangles with three explicit correspondences or contrasts: nine links.',
+    cube: 'Join two complete four-link cycles with four explicit role bridges: twelve links.',
+    dodecahedron: 'Hold all thirty links; follow shared pentagons without counting a shared link twice.',
+    icosahedron: 'Hold all thirty links; follow shared triangles and distinguish aims from achieved results.',
+    geodesic: 'Replace thirty direct links with sixty links through named mediators; add sixty compatibility requirements.',
+    sphere: 'Enter the same 120-link whole through another role; keep every link recoverable.'
+  };
+
+  function phaseCues(stage, exercise) {
+    let example;
+    if (stage.relationCount <= 4) example = SHORT_LESSONS[stage.id][exercise];
+    else if (stage.relationCount <= 8) example = {
+      stream: 'Start: ocean contains boat; boat enables fisher. Complete the cycle.',
+      heart: 'Start: memory supports appreciation; appreciation expresses care. Complete the cycle.',
+      body: 'Start: chair supports torso; torso contains pressure. Complete the cycle.'
+    }[exercise];
+    else if (stage.relationCount < 30) example = {
+      stream: stage.id === 'prism' ? 'Try ocean / boat / fisher and forest / path / walker.' : 'Try fishing and cultivation: environments, infrastructure, producers and communities.',
+      heart: 'Try two systems of care: memories of a friend and a pet.',
+      body: 'Try two supports: chair / torso and floor / feet.'
+    }[exercise];
+    else example = 'Learn the full example below; a local part is not the whole. Take extra breaths as needed.';
+    return {
+      inhale: INHALE_CUES[stage.id],
+      exhale: 'Picture this ' + (stage.relationCount === 1 ? 'relationship' : 'whole model') + ' at a new home location. Then recall the previous entry, compare meanings, and append any correction. Keep both originals.',
+      example
+    };
+  }
+
   function freeze(value) {
     if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
     Object.values(value).forEach(freeze);
@@ -9485,6 +9529,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
     const source = exercise === 'stream' ? STREAM_EXAMPLES[stage.id] : null;
     const baseline = source ? source.baseline : stage.relationCount < 30 ? model.relations.map(relation => relation.text).join(' ') : 'Prepare the complete ' + model.title + ' model and all ' + stage.relationCount + ' selected relationships in its register. The four encounters below are versions of that full model.';
     return {
+      cues: phaseCues(stage, exercise),
       shortExample: SHORT_LESSONS[stage.id][exercise],
       notice: EXERCISE_CONTEXT[exercise] + ' On the inhale, select ' + (stage.relationCount === 1 ? 'one complete meaningful relationship' : 'the full declared ' + stage.relationCount + '-link organisation') + '. On the exhale, encode it at a distinct home-palace address before deliberately seeking the earlier target. If fewer links are available, encode an honest partial selection with its actual count and uncertainty. That entry may support a return without completing the intended shape; do not invent the missing links.',
       recall: 'Only after current encoding, retrieve exactly N committed entries back before revealing any earlier note. Until N earlier entries exist, seed history. In the four-breath B = 1 rehearsal, return to the preceding breath’s entry; a matching older entry is not a substitute. Recover roles and meanings, not only the model’s name.',
@@ -10195,7 +10240,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
 });
 
 </script>
-  <script data-form-module="src/training.js?v=3c76e9b8c38e">
+  <script data-form-module="src/training.js?v=7675488826a1">
 (function (root) {
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10379,18 +10424,6 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
       q('[data-walk-next]').addEventListener('click',()=>{if(!isCurrent())return;if(walkthroughStep<3){walkthroughStep++;renderWalkthrough();}else selectWorkedEntry(modelState<3?modelState+1:0);q('[data-walkthrough-title]').focus();});
       q('[data-walk-back]').addEventListener('click',()=>{if(!isCurrent())return;if(walkthroughStep>0){walkthroughStep--;renderWalkthrough();}else if(modelState>0)selectWorkedEntry(modelState-1);q('[data-walkthrough-title]').focus();});
     }
-    function lessonHTML(guide) {
-      const setting = exercise==='stream'?'Let an image, thought or meaning arise.':exercise==='heart'?'Attend to your chest; invite care or appreciation, without forcing a feeling.':'Notice a sensation and its context; let the body prompts guide attention.';
-      return `<section class="training-lesson" aria-label="${esc(stage.name)} lesson" data-lesson>
-        <p class="training-example" data-short-example>${esc(guide.shortExample)}</p>
-        <p class="training-setting">${setting}</p>
-        <div class="training-breath-method"><p><strong>Inhale</strong> Receive the scene; select the shape’s relationships.</p><p><strong>Exhale</strong> Encode at a home address first. Then recall the exact previous entry, compare, and append any revision. Keep both originals.</p></div>
-        <p class="training-four"><strong>4 breaths:</strong> ${D.ADDRESSES.map(esc).join(' → ')}. First entry seeds memory; each next entry returns one back.</p>
-        <p class="training-fine">Need longer? Take extra natural breaths and count entries. Keep the same return target. Never force or hold your breath; stop if uncomfortable.</p>
-        ${workedExampleHTML(guide)}
-        <details class="training-reconstruction"><summary>da Vinci variation</summary><p>Encode the source, then rebuild it in another setting with one consistent role mapping. Preserve every relationship before the historical return. Keep source, reconstruction and earlier entry distinct.</p><a class="text-link" href="https://mike-stack1982364.github.io/Ontological-Worlds/#mode-one-guide" target="_blank" rel="noopener noreferrer">Original method ↗</a></details>
-      </section>`;
-    }
     function workedExampleHTML(guide) {
       const model=guide.model||root.FormRelationalModels?.getModel(stage.id,exercise);
       const register=guide.register||model?.relations||[];
@@ -10407,14 +10440,13 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
       host.innerHTML=`<div class="training-topline"><a class="back-link" href="#journey">← All shapes</a><label class="training-shape-picker">Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
         <header class="training-symbol-header"><h1 class="visually-hidden">${esc(stage.name)}</h1><div class="training-page-symbol" aria-hidden="true">${G.miniIcon(stage.id,65)}</div></header>
         <div class="training-exercises" role="group" aria-label="Choose an exercise">${exerciseOrder.map((name,i)=>`<button type="button" data-exercise="${name}" aria-pressed="${exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
-        ${lessonHTML(guide)}
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
         <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
           <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span></div></div>
           <div data-live><div class="training-session-bar" data-session-bar hidden><span data-timer aria-label="Time remaining">15:00</span><div><button type="button" class="text-button" data-pause>Pause</button><button type="button" class="text-button" data-end>End practice</button></div></div>
             <div class="training-exercise-preview" data-exercise-preview>
               <div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div><div class="training-breath-readout"><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div>
-              <div class="training-cue"><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
+              <div class="training-cue"><p data-step-label class="eyebrow training-current-step"></p><h3 data-dimension class="training-dimension" hidden></h3><p data-prompt class="training-prompt" aria-live="polite" aria-atomic="true"></p><p data-next-step class="training-fine"></p><button type="button" class="text-button training-live-pace" data-live-pace hidden>Use my own rhythm</button></div>
             </div>
             <div data-body-steps class="training-body-steps" role="group" aria-label="Reread a body dimension" ${exercise==='body'?'':'hidden'}>${E.BODY_STEPS.map((s,i)=>`<button type="button" data-peek="${i}" aria-pressed="false">${esc(s.label)}</button>`).join('')}</div>
             <div class="training-progress" role="progressbar" aria-label="Session time elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span data-fill></span></div>
@@ -10428,6 +10460,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
         <details hidden data-return class="training-panel training-return"><summary>Private notes</summary><p class="training-fine">Pause to write. Entries, not timer breaths, set the return distance.</p><form data-return-form><div data-fields></div><button type="submit" class="button primary" data-keep>Keep this entry</button><p class="training-fine">Saved in this browser.</p></form></details>
         <section hidden data-readiness class="training-panel training-readiness"></section>
         </div></div>
+        <section class="training-reference" aria-label="${esc(stage.name)} worked reference" data-reference>${workedExampleHTML(guide)}</section>
         <details hidden class="training-record"><summary>Your practice record <span data-record-count></span></summary><p class="training-fine">Downloads include your private notes.</p><div data-record></div><div class="training-record-actions"><button type="button" class="text-button" data-export>Download practice record (includes notes)</button><button type="button" class="text-button" data-original hidden>Download original saved data</button><button type="button" class="text-button" data-reload hidden>Load saved version</button><button type="button" class="text-button" data-reset>Clear this practice record</button></div></details>
         <p hidden class="training-attribution">Heart and body exercises: <a href="https://o0ooooooooooo0o.github.io/Project-Meaning/" target="_blank" rel="noopener noreferrer">Project Meaning</a>. <a href="#palace">Earlier saved observations →</a></p>`;
       q('[data-shape]').addEventListener('change',e=>onStageChange(e.target.value));
@@ -10508,7 +10541,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
       const other=exerciseOrder[(exerciseOrder.indexOf(exercise)+1)%exerciseOrder.length];
       el.innerHTML=`<label class="training-check"><input type="checkbox" data-ready ${ready[exercise]?'checked':''}> I can recover the relationships and make an exact return.</label><p class="training-fine">Your self-assessment · ${exerciseNames[exercise]}</p><div class="training-ready-actions"><button type="button" class="text-button" data-other>Try ${exerciseNames[other]} →</button>${next?`<a class="text-link" href="#practice/${esc(next.id)}">${esc(next.name)} →</a>`:''}</div>`;
       q('[data-ready]').addEventListener('change',e=>{const data=store.data;data.readiness[stage.id]={stream:!!ready.stream,heart:!!ready.heart,body:!!ready.body,[exercise]:e.target.checked};save(data);renderReadiness();renderRecord();all('[data-exercise]').forEach(button=>{const name=button.dataset.exercise;button.querySelector('small').textContent=store.data.readiness[stage.id]?.[name]?'Self-assessed: ready':'';});q('[data-ready]').focus();});
-      q('[data-other]').addEventListener('click',()=>{end();clock=null;exercise=other;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';render();q('[data-exercise="'+exercise+'"]').focus();q('[data-lesson]').scrollIntoView({block:'start'});});
+      q('[data-other]').addEventListener('click',()=>{end();clock=null;exercise=other;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';render();q('[data-exercise="'+exercise+'"]').focus();q('[data-live]').scrollIntoView({block:'start'});});
     }
     function renderRecord() {
       const data=store.data;q('[data-record-count]').textContent='· '+data.entries.length+' observation'+(data.entries.length===1?'':'s');
@@ -10545,25 +10578,28 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 190px; }
       const remaining=Math.ceil(s.breathRemaining*10-1e-8)/10;
       q('[data-breath-count]').textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
       if(s.bodyStepIndex!==lastBodyStep){peek=null;lastBodyStep=s.bodyStepIndex;}
-      const promptKey=s.status+':'+exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):(exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural'))+':'+(peek!==null);
+      const promptKey=s.status+':'+exercise+':'+(exercise==='body'?(peek??s.bodyStepIndex):exercise==='heart'?s.heartPhaseIndex:stage.id)+':'+(pacing==='paced'?s.breathPhase:'natural')+':'+(peek!==null);
       if(promptKey!==lastPrompt){
         lastPrompt=promptKey;
+        const cues=stage[exercise].cues;
+        const phase=pacing==='paced'?s.breathPhase:'natural';
+        const returnHint='First entry: store only. Extra breaths keep the same return target.';
+        q('[data-prompt]').textContent=phase==='natural'?'Inhale: '+cues.inhale+' Exhale: '+cues.exhale:cues[phase];
         if(exercise==='stream'){
           q('[data-step-label]').textContent='Consciousness stream · '+stage.name;
           q('[data-dimension]').hidden=true;
-          q('[data-prompt]').textContent=pacing==='paced'?(s.breathPhase==='inhale'?'Receive the current scene or meaning. Select its relationships.':'Encode this entry first. Then retrieve the exact earlier entry, compare and revise.'):'Inhale: receive and select. Exhale: encode first, then retrieve, compare and revise.';
-          q('[data-next-step]').textContent='Extra breaths are fine. Keep the return target fixed.';
+          q('[data-next-step]').textContent=phase==='inhale'?cues.example:returnHint;
         }else if(exercise==='heart'){
           const p=E.HEART_PHASES[s.heartPhaseIndex];q('[data-step-label]').textContent=p.label;
-          q('[data-prompt]').textContent=pacing==='paced'?p[s.breathPhase]:p.inhale+' '+p.exhale;
-          q('[data-dimension]').hidden=true;q('[data-next-step]').textContent='Receive → encode → retrieve → compare → revise. Finish at your own pace.';
+          q('[data-dimension]').hidden=true;
+          q('[data-next-step]').textContent=phase==='inhale'?p.inhale+' '+cues.example:phase==='exhale'?p.exhale+' '+returnHint:p.inhale+' '+returnHint;
         }else{
           const i=peek??s.bodyStepIndex,p=E.BODY_STEPS[i];q('[data-step-label]').textContent=peek!==null?(idle?'Preview':'Rereading · the exercise timer continues'):'Dimension '+(i+1)+' of 7';
-          q('[data-dimension]').hidden=false;q('[data-dimension]').textContent=p.label;q('[data-prompt]').textContent=p.prompt;
+          q('[data-dimension]').hidden=false;q('[data-dimension]').textContent=p.label;
+          q('[data-next-step]').textContent=p.prompt+(phase==='inhale'?' '+cues.example:' '+returnHint);
           all('[data-peek]').forEach(el=>{el.setAttribute('aria-pressed',String(Number(el.dataset.peek)===i));el.classList.toggle('is-current',Number(el.dataset.peek)===s.bodyStepIndex);});
         }
       }
-      if(exercise==='body')q('[data-next-step]').textContent=idle?'Explore a dimension below; Start begins the guided sequence.':finished?'Return to your own rhythm.':'Next: '+E.BODY_STEPS[(s.bodyStepIndex+1)%7].label+' · '+Math.ceil(s.stepRemaining)+'s'+(s.status==='paused'?' · paused':'');
       const bodyCue=exercise==='body'&&pacing==='natural';
       const cueKey=bodyCue?'body:'+Math.floor(s.elapsedSeconds/E.BODY_STEP_SECONDS):'breath:'+s.breathPhaseIndex;
       if(s.status==='running'&&cueKey!==lastCue){lastCue=cueKey;if(bell&&(bodyCue||pacing==='paced'))audio.cue(bodyCue?s.bodyStepIndex%2===0:s.breathPhase==='inhale');}
