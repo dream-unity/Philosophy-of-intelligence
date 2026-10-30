@@ -91,8 +91,8 @@ function harness(options = {}) {
     removeItem(key) { raw.delete(key); }
   };
   class Audio {
-    constructor() { this.enabled = false; this.destroyed = false; this.cues = []; sounds.push(this); }
-    start(settings) { this.enabled = true; this.settings = settings; return true; }
+    constructor(settings = {}) { this.enabled = false; this.destroyed = false; this.cues = []; this.starts = 0; this.onError = settings.onError; sounds.push(this); }
+    start(settings) { this.starts++; this.enabled = true; this.settings = settings; return true; }
     stop() { this.enabled = false; }
     cue(inhale) { if (this.enabled) this.cues.push(inhale); }
     complete() { this.completed = true; }
@@ -346,7 +346,7 @@ test('heart completion records once, time never awards readiness, and all audio 
   assert.equal(page.sounds[0].enabled, true, 'test tone does not interrupt the exercise sound');
   assert.equal(page.sounds[1].enabled, true);
   page.click('[data-live-pace]');
-  assert.equal(page.q('[data-breath]').textContent, 'Own rhythm');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Own rhythm');
   page.advance(602);
   assert.equal(page.q('[data-session-state]').textContent, 'Complete');
   assert.equal(page.data().sessions.length, 1);
@@ -374,14 +374,140 @@ test('heart practice starts with paced breathing and audible phase bells without
   assert.equal(page.sounds[0].enabled, true);
   assert.equal(page.sounds[0].settings.frequency, 0, 'the default starts bowls only, with no ambient pulse');
   assert.deepEqual(page.sounds[0].cues, [true]);
-  assert.equal(page.q('[data-breath]').textContent, 'Inhale');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Inhale');
   page.advance(4.8);
   assert.deepEqual(page.sounds[0].cues, [true]);
   page.advance(0.2);
   assert.deepEqual(page.sounds[0].cues, [true, false]);
-  assert.equal(page.q('[data-breath]').textContent, 'Exhale');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Exhale');
   page.advance(5);
   assert.deepEqual(page.sounds[0].cues, [true, false, true]);
+});
+
+test('own rhythm gently expands and contracts without moving its label or imposing timed bells', () => {
+  const page = harness();
+  page.click('[data-start]');
+  assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
+  page.advance(6);
+  assert.equal(page.q('[data-orb]').style.transform, 'scale(1.18)');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Own rhythm');
+  assert.equal(page.q('[data-breath-count]').textContent, 'Gently · without holds');
+  assert.equal(page.q('.training-breath-readout').style.transform, undefined);
+  page.advance(6);
+  assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
+  assert.deepEqual(page.sounds[0].cues, []);
+  page.advance(3);
+  page.click('[data-pause]');
+  const paused = page.q('[data-orb]').style.transform;
+  page.advance(6);
+  assert.equal(page.q('[data-orb]').style.transform, paused, 'pausing stops the decorative pulse');
+  page.click('[data-pause]');
+  page.advance(3);
+  assert.equal(page.q('[data-orb]').style.transform, 'scale(1.18)', 'resuming continues session time');
+  page.click('[data-end]');
+  page.advance(6);
+  assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Rest');
+});
+
+test('paced ring expands on inhale and contracts on exhale without shrinking below its text enclosure', () => {
+  const page = harness();
+  const diagram = page.q('[data-model-diagram]').querySelector('svg');
+  const diagramText = diagram.textContent;
+  const diagramChildren = [...diagram.children];
+  const diagramBreath = diagram.getAttribute('data-breath');
+  assert.ok(diagramChildren.length > 0);
+  const label = page.q('.training-breath-readout').querySelector('[data-breath-label]');
+  assert.ok(label, 'the breath phase belongs to the visible pacer readout');
+  page.choose('[data-pacing]', 'paced');
+  page.click('[data-start]');
+  const scale = () => Number(page.q('[data-orb]').style.transform.match(/scale\(([^)]+)\)/)[1]);
+  assert.equal(scale(), 1);
+  let previous = scale();
+  for (let second = 1; second <= 10; second++) {
+    page.advance(1);
+    const current = scale();
+    assert.ok(current >= 1 && current <= 1.18, 'the text enclosure remains at least its full base size');
+    assert.ok(second <= 5 ? current >= previous : current <= previous);
+    assert.equal(label.textContent, second < 5 || second === 10 ? 'Inhale' : 'Exhale');
+    assert.equal(diagram.textContent, diagramText, 'ticks must not overwrite the lesson SVG with a breathing label');
+    assert.deepEqual(diagram.children, diagramChildren);
+    assert.equal(diagram.getAttribute('data-breath'), diagramBreath, 'the lesson entry number is independent of the timer');
+    previous = current;
+  }
+  assert.equal(scale(), 1);
+  page.click('[data-pause]');
+  page.advance(4);
+  assert.equal(scale(), 1);
+  assert.equal(page.q('[data-breath-label]').textContent, 'Own rhythm');
+});
+
+test('test bell explains muted volume and retries after asynchronous audio startup errors', () => {
+  const page = harness();
+  page.type('[data-volume]', '0');
+  page.click('[data-test-sound]');
+  assert.equal(page.sounds[1].enabled, false);
+  assert.deepEqual(page.sounds[1].cues, []);
+  assert.match(page.q('[data-sound-status]').textContent, /0%.*Raise it/);
+  page.type('[data-volume]', '1');
+  page.click('[data-test-sound]');
+  assert.deepEqual(page.sounds[1].cues, [true]);
+  assert.equal(page.q('[data-sound-status]').textContent, '');
+  page.sounds[1].onError(new Error('Audio context could not resume'));
+  assert.equal(page.q('.training-sound').open, true, 'startup error reveals its retry guidance');
+  assert.match(page.q('[data-sound-status]').textContent, /could not start.*Test bell.*try again/);
+  assert.equal(page.q('[data-sound-status]').getAttribute('role'), 'status');
+  page.click('[data-test-sound]');
+  assert.equal(page.q('[data-sound-status]').textContent, '');
+  assert.deepEqual(page.sounds[1].cues, [true, true]);
+  page.click('[data-exercise="heart"]');
+  page.click('[data-start]');
+  page.sounds[0].onError(new Error('Interrupted audio context'));
+  assert.match(page.q('[data-sound-status]').textContent, /could not start.*try again/);
+  assert.equal(page.q('[data-session-state]').textContent, 'Practising', 'an audio error does not end the exercise');
+});
+
+test('test bell reports immediate startup and cue failures beside the sound controls', () => {
+  const page = harness();
+  const start = page.sounds[1].start;
+  page.sounds[1].start = () => false;
+  page.click('[data-test-sound]');
+  assert.deepEqual(page.sounds[1].cues, []);
+  assert.match(page.q('[data-sound-status]').textContent, /could not start/);
+  page.sounds[1].start = start;
+  page.sounds[1].cue = () => false;
+  page.click('[data-test-sound]');
+  assert.match(page.q('[data-sound-status]').textContent, /could not start/);
+});
+
+test('test bell restores only failed running session audio without inserting another breath cue', () => {
+  const page = harness();
+  page.click('[data-exercise="heart"]');
+  page.click('[data-start]');
+  page.advance(2);
+  const session = page.sounds[0];
+  page.click('[data-test-sound]');
+  assert.equal(session.starts, 1, 'testing a bell must not restart healthy session audio');
+  assert.deepEqual(session.cues, [true]);
+  session.stop();
+  session.onError(new Error('Audio context resume failed'));
+  assert.equal(page.q('.training-sound').open, true);
+  page.click('[data-test-sound]');
+  assert.equal(session.starts, 2);
+  assert.equal(session.enabled, true);
+  assert.equal(page.q('[data-sound-status]').textContent, '');
+  assert.deepEqual(session.cues, [true], 'recovering during an inhale must not repeat its cue');
+  page.click('[data-test-sound]');
+  assert.equal(session.starts, 2, 'successful retry clears the failed-session state');
+  page.advance(3);
+  assert.deepEqual(session.cues, [true, false], 'the next timed boundary still rings');
+  page.click('[data-pause]');
+  session.onError(new Error('Interrupted while paused'));
+  page.click('[data-test-sound]');
+  assert.equal(session.starts, 2, 'test bell must not restart a paused session');
+  assert.equal(session.enabled, false);
+  assert.equal(page.q('[data-session-state]').textContent, 'Paused');
+  assert.deepEqual(session.cues, [true, false]);
 });
 
 test('muting and unmuting heart bells skips missed cues without inventing a mid-phase ring', () => {
@@ -438,12 +564,12 @@ test('using one’s own rhythm suppresses heart breathing bells until a later pa
   page.click('[data-exercise="heart"]');
   page.click('[data-start]'); page.advance(2);
   page.click('[data-live-pace]');
-  assert.equal(page.q('[data-breath]').textContent, 'Own rhythm');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Own rhythm');
   assert.equal(page.sounds[0].enabled, false);
   page.advance(5);
   assert.deepEqual(page.sounds[0].cues, [true]);
   page.click('[data-live-pace]');
-  assert.equal(page.q('[data-breath]').textContent, 'Exhale');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Exhale');
   assert.equal(page.sounds[0].enabled, true);
   assert.deepEqual(page.sounds[0].cues, [true], 'switching to a guide partway through exhale adds no cue');
   page.advance(3);

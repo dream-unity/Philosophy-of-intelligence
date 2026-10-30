@@ -199,3 +199,110 @@ test('bowl cues and both ambient bands build and release their Web Audio graphs'
   assert.ok(nodes.every(item => item.disconnected));
   assert.ok(nodes.filter(item => item.kind === 'oscillator' || item.kind === 'source').every(item => item.stopped));
 });
+
+function suspendedAudioHarness(state = 'suspended') {
+  const nodes = [], resumes = [], errors = [], timers = new Map(); let timerId = 0;
+  const parameter = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {} });
+  const node = kind => {
+    const value = { kind, frequency: parameter(), gain: parameter(), Q: parameter(), pan: parameter(),
+      connect() {}, disconnect() { this.disconnected = true; }, start() { this.started = true; }, stop() { this.stopped = true; } };
+    nodes.push(value); return value;
+  };
+  const context = {
+    state, currentTime: 0, sampleRate: 100, destination: {},
+    resume() { return new Promise((resolve, reject) => resumes.push({ resolve, reject })); },
+    close() { this.state = 'closed'; },
+    createBuffer(channels, length) { const data = Array.from({ length: channels }, () => new Float32Array(length)); return { getChannelData: channel => data[channel] }; },
+    createGain: () => node('gain'), createBiquadFilter: () => node('filter'), createOscillator: () => node('oscillator'),
+    createStereoPanner: () => node('pan'), createConvolver: () => node('convolver')
+  };
+  const audio = new ExerciseAudio({ audioContextFactory: () => context, onError: error => errors.push(error),
+    setTimeout: (callback, delay) => { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
+    clearTimeout: id => timers.delete(id) });
+  return { audio, context, nodes, resumes, errors, timers, oscillators: () => nodes.filter(item => item.kind === 'oscillator') };
+}
+
+test('a suspended test bell waits for audio activation before starting its sound or cleanup timer', async () => {
+  const h = suspendedAudioHarness();
+  assert.equal(h.audio.start({ frequency: 0 }), true);
+  assert.equal(h.audio.cue(true), true);
+  assert.equal(h.resumes.length, 1, 'resume is requested synchronously within the user action');
+  assert.equal(h.nodes.length, 0);
+  assert.equal(h.timers.size, 0, 'a blocked browser cannot dispose the sound before playback');
+  h.context.currentTime = 12; h.context.state = 'running'; h.resumes[0].resolve();
+  await Promise.resolve();
+  assert.equal(h.oscillators().length, 4);
+  assert.equal(h.oscillators()[0].frequency.value, 392);
+  assert.ok(h.oscillators().every(oscillator => oscillator.started));
+  assert.equal(h.timers.size, 1);
+  h.audio.destroy();
+});
+
+test('interrupted audio resumes and plays only the latest pending phase cue', async () => {
+  const h = suspendedAudioHarness('interrupted');
+  h.audio.start({ frequency: 0 });
+  h.audio.cue(true); h.audio.cue(false);
+  assert.equal(h.resumes.length, 1);
+  h.context.state = 'running'; h.resumes[0].resolve();
+  await Promise.resolve();
+  assert.equal(h.oscillators().length, 4, 'no backlog of inhale and exhale bells');
+  assert.equal(h.oscillators()[0].frequency.value, 293.66);
+  h.context.state = 'interrupted';
+  h.audio.cue(true);
+  assert.equal(h.resumes.length, 2, 'a later browser interruption is also recoverable');
+  assert.equal(h.oscillators().length, 4);
+  h.context.state = 'running'; h.resumes[1].resolve();
+  await Promise.resolve();
+  assert.equal(h.oscillators().length, 8);
+  h.audio.destroy();
+});
+
+test('audio activation rejection reports failure and a later explicit start can retry', async () => {
+  const h = suspendedAudioHarness();
+  h.audio.start({ frequency: 0 }); h.audio.cue(true);
+  h.resumes[0].reject(new Error('Playback blocked'));
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(h.errors.length, 1);
+  assert.equal(h.errors[0].message, 'Playback blocked');
+  assert.equal(h.nodes.length, 0);
+  assert.equal(h.audio.cue(true), false);
+  assert.equal(h.audio.start({ frequency: 0 }), true);
+  h.audio.cue(false);
+  h.context.state = 'running'; h.resumes[1].resolve();
+  await Promise.resolve();
+  assert.equal(h.oscillators().length, 4);
+  assert.equal(h.oscillators()[0].frequency.value, 293.66);
+  h.audio.destroy();
+});
+
+test('stop and destroy cancel pending audio without a late bell or error message', async () => {
+  for (const action of ['stop', 'destroy']) {
+    const h = suspendedAudioHarness();
+    h.audio.start({ frequency: 0 }); h.audio.cue(true); h.audio[action]();
+    h.context.state = 'running'; h.resumes[0].resolve();
+    await Promise.resolve();
+    assert.equal(h.nodes.length, 0, action + ' prevents late playback');
+    assert.equal(h.timers.size, 0);
+    assert.equal(h.errors.length, 0);
+  }
+  const h = suspendedAudioHarness();
+  h.audio.start({ frequency: 0 }); h.audio.cue(true); h.audio.stop();
+  h.resumes[0].reject(new Error('Old activation failed'));
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(h.errors.length, 0);
+});
+
+test('restarting while activation is pending discards the old cue and completion chimes', async () => {
+  const h = suspendedAudioHarness();
+  h.audio.start({ frequency: 0 }); h.audio.complete();
+  h.audio.start({ frequency: 0 }); h.audio.cue(false);
+  h.context.state = 'running'; h.resumes[0].resolve();
+  await Promise.resolve();
+  assert.equal(h.nodes.length, 0, 'the earlier promise cannot activate the new request');
+  h.resumes[1].resolve();
+  await Promise.resolve();
+  assert.equal(h.oscillators().length, 4);
+  assert.equal(h.oscillators()[0].frequency.value, 293.66);
+  assert.equal(h.timers.size, 1, 'only this bell cleanup remains, without a completion chime');
+  h.audio.destroy();
+});
