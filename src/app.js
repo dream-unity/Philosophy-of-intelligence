@@ -103,7 +103,7 @@
 
   function applyMotion() { document.body.classList.toggle('reduced-motion',state.preferences.reducedMotion); }
   function renderJourney(){
-    $('stage-path').innerHTML=stages.map((stage,index)=>`<a class="stage-tile ${hasSelectedShape&&stage.id===selectedStage?'selected':''}" href="#practice/${esc(stage.id)}" data-stage="${esc(stage.id)}" aria-controls="view-practice"${hasSelectedShape&&stage.id===selectedStage?' aria-current="true"':''} aria-label="${esc(stage.name)} · Explore"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span><span class="stage-status">Explore</span></a>`).join('');
+    $('stage-path').innerHTML=stages.map((stage,index)=>`<a class="stage-tile ${hasSelectedShape&&stage.id===selectedStage?'selected':''}" href="#practice/${esc(stage.id)}" data-stage="${esc(stage.id)}" aria-controls="view-practice"${hasSelectedShape&&stage.id===selectedStage?' aria-current="true"':''} aria-label="${esc(stage.name)}"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span></a>`).join('');
   }
 
   function sourceHTML(source, className){
