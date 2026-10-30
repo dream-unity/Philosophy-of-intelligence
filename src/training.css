@@ -22,7 +22,7 @@
 .training-state{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:#77705c;white-space:nowrap;padding-top:8px}
 .training-settings{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:20px 0}
 .training-settings label,.training-field,.training-lag{display:block;font-size:15px;line-height:1.5;color:#514b3f}
-#training-root select,#training-root textarea{background:#fffbed38;border:1px solid #afa68a;border-radius:2px;color:#39372d;font:inherit;padding:11px 12px;width:100%;margin:8px 0 0;min-height:44px}
+#training-root select,#training-root textarea,#training-root input[type=number]{background:#fffbed38;border:1px solid #afa68a;border-radius:2px;color:#39372d;font:inherit;padding:11px 12px;width:100%;margin:8px 0 0;min-height:44px}
 #training-root textarea{font-size:17px;line-height:1.55;resize:vertical}
 #training-root textarea[readonly]{background:#dfd7bd40;border-style:dashed}
 #training-root button:disabled{cursor:default;opacity:.62}
@@ -31,7 +31,7 @@
 .training-session-bar>span{font-size:25px;font-variant-numeric:tabular-nums;letter-spacing:.04em}
 .training-session-bar>div{display:flex;gap:20px}.training-session-bar .text-button{font-size:17px}
 .training-pacer{position:relative;display:grid;place-items:center;width:min(280px,100%);aspect-ratio:1;margin:22px auto 18px}
-.training-orb{position:absolute;width:76%;aspect-ratio:1;border:1px solid #655e49b3;border-radius:50%;transition:transform .25s linear;pointer-events:none}
+.training-orb{position:absolute;width:76%;aspect-ratio:1;border:1px solid #655e49b3;border-radius:50%;transition:transform .05s linear;pointer-events:none}
 .training-orb:before,.training-orb:after{content:'';position:absolute;border:1px solid;border-radius:50%;pointer-events:none}
 .training-orb:before{inset:4px 3px 3px 4px;border-color:#81775c66;transform:rotate(-7deg)}
 .training-orb:after{inset:-4px -3px -3px -4px;border-color:#81775c42;transform:rotate(9deg)}
@@ -231,3 +231,13 @@
  .training-panel-controls{max-width:110px}
  .training-state{white-space:normal;text-align:right;font-size:10px}
 }
+
+.training-rhythm{border-top:1px solid #bcb39680;margin-top:26px;padding-top:18px}
+.training-rhythm h3{font-size:20px;font-weight:400;margin:0 0 18px}
+.training-rhythm .training-pacing-choice{margin:0;max-width:480px}
+.training-rhythm .training-settings{grid-template-columns:repeat(2,minmax(0,1fr));max-width:480px}
+.training-rhythm input{box-sizing:border-box;min-width:0;font-variant-numeric:tabular-nums}
+.training-rhythm input[aria-invalid=true]{border-color:#8b442c!important}
+.training-rhythm .training-rhythm-current{margin:14px 0 0}
+[data-rhythm-status]:empty{display:none}
+.training-breath-readout small{font-variant-numeric:tabular-nums}

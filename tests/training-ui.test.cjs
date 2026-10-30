@@ -84,7 +84,7 @@ class Element {
 
 function harness(options = {}) {
   let now = 0, failWrites = !!options.failWrites;
-  const raw = new Map(), intervals = new Map(), events = new Map(), sounds = [], downloads = [];
+  const raw = new Map(options.records || []), intervals = new Map(), events = new Map(), sounds = [], downloads = [];
   const storage = {
     getItem(key) { return raw.get(key) ?? null; },
     setItem(key, value) { if (failWrites) throw new Error('QuotaExceeded'); raw.set(key, value); },
@@ -124,6 +124,11 @@ function harness(options = {}) {
     app, host, q, type, choose, sounds, downloads, raw, changes, intervals,
     click: selector => q(selector).click(),
     submit: () => q('[data-return-form]').dispatch('submit'),
+    applyRhythm(inhale, exhale) {
+      if (inhale !== undefined) type('[data-inhale]', String(inhale));
+      if (exhale !== undefined) type('[data-exhale]', String(exhale));
+      q('[data-breath-form]').dispatch('submit');
+    },
     data: () => JSON.parse(storage.getItem(browser.FormTrainingStore.STORAGE_KEY)),
     advance(seconds) { now += seconds * 1000; for (const callback of intervals.values()) callback(); },
     external(value) { raw.set(browser.FormTrainingStore.STORAGE_KEY, value); for (const callback of events.get('storage') || []) callback({ key: browser.FormTrainingStore.STORAGE_KEY }); },
@@ -442,7 +447,192 @@ test('paced ring expands on inhale and contracts on exhale without shrinking bel
   page.click('[data-pause]');
   page.advance(4);
   assert.equal(scale(), 1);
-  assert.equal(page.q('[data-breath-label]').textContent, 'Own rhythm');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Paused');
+});
+
+test('custom 3 / 7 timing drives the label, countdown, ring and bell from one phase', () => {
+  const page=harness();
+  page.applyRhythm(3,7);
+  assert.equal(page.q('[data-pacing]').value,'paced');
+  assert.match(page.q('[data-pacing]').textContent,/3 seconds in · 7 seconds out/);
+  page.click('[data-start]');
+  const scale=()=>Number(page.q('[data-orb]').style.transform.match(/scale\(([^)]+)\)/)[1]);
+  assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+  assert.equal(page.q('[data-breath-count]').textContent,'3 seconds');
+  assert.equal(scale(),1);
+  assert.deepEqual(page.sounds[0].cues,[true]);
+  page.advance(1.5);
+  assert.ok(Math.abs(scale()-1.09)<1e-10);
+  page.advance(1.5);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.equal(page.q('[data-breath-count]').textContent,'7 seconds');
+  assert.equal(scale(),1.18);
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
+  page.advance(3.5);
+  assert.ok(Math.abs(scale()-1.09)<1e-10);
+  page.advance(3.5);
+  assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+  assert.equal(scale(),1);
+  assert.deepEqual(page.sounds[0].cues,[true,false,true]);
+  assert.equal(page.q('[data-timer]').textContent,'14:50');
+  assert.equal(page.q('.training-sound').open,true);
+  assert.equal(page.q('[data-setup]').querySelector('[data-pacing]'),null,'breathing mode remains reachable while setup is hidden');
+  assert.equal(page.q('[data-setup]').querySelector('[data-breath-form]'),null,'timing controls remain reachable during practice');
+});
+
+test('fractional timings keep their exact phase boundaries over multiple cycles', () => {
+  const page=harness();page.applyRhythm(1.2,2.3);page.click('[data-start]');
+  page.advance(1.199);
+  assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+  page.advance(0.001);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
+  page.advance(2.3);
+  assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+  page.advance(1.2);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  page.advance(2.3);
+  assert.deepEqual(page.sounds[0].cues,[true,false,true,false,true]);
+  assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+});
+
+test('editing fields does not interrupt the clock and applying a new pair restarts only the breath', () => {
+  const page=harness();page.click('[data-start]');page.advance(2);
+  page.type('[data-inhale]','3');page.type('[data-exhale]','7');
+  page.advance(3);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale','unapplied input must not change the active 5 / 5 cycle');
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
+  page.applyRhythm();
+  assert.equal(page.q('[data-timer]').textContent,'14:55','practice elapsed time survives a timing change');
+  assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+  assert.equal(page.q('[data-breath-count]').textContent,'3 seconds');
+  assert.deepEqual(page.sounds[0].cues,[true,false,true]);
+  page.advance(1);
+  const before=page.q('[data-orb]').style.transform;
+  page.applyRhythm(3,7);
+  assert.equal(page.q('[data-orb]').style.transform,before,'reapplying the active pair must not restart the breath');
+  assert.deepEqual(page.sounds[0].cues,[true,false,true]);
+  page.advance(2);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.deepEqual(page.sounds[0].cues,[true,false,true,false]);
+});
+
+test('invalid duration pairs leave both active durations and stored preferences unchanged', () => {
+  const page=harness();page.applyRhythm(3,7);page.click('[data-start]');page.advance(1);
+  const saved=page.raw.get('form-breath-timing-v1');
+  for(const [inhale,exhale] of [['',7],[3,''],[0,7],[-1,7],[3,0.01],['Infinity',7],[3,'NaN'],['1e309',7]]){
+    page.applyRhythm(inhale,exhale);
+    assert.ok(page.q('[data-rhythm-status]').textContent.trim(),'invalid input has visible feedback');
+    assert.equal(page.raw.get('form-breath-timing-v1'),saved,'invalid pairs cannot overwrite a saved preference');
+    assert.equal(page.q('[data-pacing]').value,'paced');
+  }
+  assert.deepEqual(page.sounds[0].cues,[true],'invalid input never restarts or rings the metronome');
+  page.advance(2);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.equal(page.q('[data-breath-count]').textContent,'7 seconds');
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
+});
+
+test('pausing freezes a custom phase and changing timings while paused waits for Resume', () => {
+  const page=harness();page.applyRhythm(3,7);page.click('[data-start]');page.advance(2);
+  const before=page.q('[data-orb]').style.transform;
+  page.click('[data-pause]');page.advance(100);
+  assert.equal(page.q('[data-breath-label]').textContent,'Paused');
+  assert.equal(page.q('[data-orb]').style.transform,before,'pausing holds the ring at its current phase');
+  assert.equal(page.q('[data-timer]').textContent,'14:58');
+  assert.equal(page.sounds[0].enabled,false);
+  page.applyRhythm(4,6);page.advance(100);
+  assert.equal(page.q('[data-session-state]').textContent,'Paused');
+  assert.equal(page.q('[data-timer]').textContent,'14:58');
+  assert.equal(page.sounds[0].enabled,false);
+  assert.deepEqual(page.sounds[0].cues,[true],'editing a paused clock is silent');
+  page.click('[data-pause]');
+  assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+  assert.equal(page.q('[data-breath-count]').textContent,'4 seconds');
+  assert.deepEqual(page.sounds[0].cues,[true,true],'the new inhale rings exactly once on resume');
+  page.advance(4);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.equal(page.q('[data-breath-count]').textContent,'6 seconds');
+  assert.equal(page.q('[data-timer]').textContent,'14:54');
+  assert.deepEqual(page.sounds[0].cues,[true,true,false]);
+});
+
+test('own rhythm retains custom timing without starting timed bells until the guide is selected', () => {
+  const page=harness();page.choose('[data-pacing]','natural');page.applyRhythm(3,7);
+  assert.equal(page.q('[data-pacing]').value,'natural','editing timing must not silently enable a guide');
+  page.click('[data-start]');page.advance(40);
+  assert.equal(page.q('[data-breath-label]').textContent,'Own rhythm');
+  assert.match(page.q('[data-live-pace]').textContent,/3\s*\/\s*7/);
+  assert.deepEqual(page.sounds[0].cues,[]);
+  page.click('[data-live-pace]');
+  assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
+  assert.deepEqual(page.sounds[0].cues,[true]);
+  page.advance(3);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
+});
+
+test('body mapping uses the chosen breath bells when paced and keeps dimension time independent', () => {
+  const page=harness();page.click('[data-exercise="body"]');
+  page.applyRhythm(3,7);page.choose('[data-pacing]','paced');page.click('[data-start]');
+  assert.equal(page.q('[data-dimension]').textContent,'Location');
+  assert.deepEqual(page.sounds[0].cues,[true]);
+  page.advance(3);
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
+  assert.equal(page.q('[data-dimension]').textContent,'Location');
+  page.advance(7);
+  assert.deepEqual(page.sounds[0].cues,[true,false,true]);
+  page.advance(20);
+  assert.equal(page.q('[data-dimension]').textContent,'Quality');
+  assert.deepEqual(page.sounds[0].cues,[true,false,true,true],'a delayed tick emits one current breath cue, not a backlog or extra dimension bell');
+  assert.match(page.q('[data-bell-help]').textContent,/inhale.*exhale/i);
+});
+
+test('custom timing survives exercise changes and reload, and corrupt saved values safely use defaults', () => {
+  const page=harness();page.applyRhythm(3.5,7.25);
+  assert.ok(page.raw.has('form-breath-timing-v1'));
+  page.click('[data-exercise="heart"]');
+  assert.equal(page.q('[data-inhale]').value,'3.5');
+  assert.equal(page.q('[data-exhale]').value,'7.25');
+  page.app.setStage('half-circle');
+  assert.equal(page.q('[data-inhale]').value,'3.5');
+  page.app.destroy();
+  const reloaded=harness({records:page.raw});
+  assert.equal(reloaded.q('[data-inhale]').value,'3.5');
+  assert.equal(reloaded.q('[data-exhale]').value,'7.25');
+  assert.equal(reloaded.q('.training-sound').open,true);
+  for(const saved of ['{broken','null','{"inhaleSeconds":-2,"exhaleSeconds":7}','{"inhaleSeconds":3,"exhaleSeconds":0}']){
+    const corrupt=harness({records:[['form-breath-timing-v1',saved]]});
+    assert.equal(corrupt.q('[data-inhale]').value,'5');
+    assert.equal(corrupt.q('[data-exhale]').value,'5');
+    corrupt.click('[data-start]');corrupt.advance(5);
+    assert.equal(corrupt.q('[data-breath-label]').textContent,'Exhale');
+  }
+});
+
+test('blocked preference storage still allows custom timing for this visit', () => {
+  const page=harness({failWrites:true});page.applyRhythm(3,7);page.click('[data-start]');
+  page.advance(3);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.equal(page.q('[data-breath-count]').textContent,'7 seconds');
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
+  assert.equal(page.raw.has('form-breath-timing-v1'),false);
+});
+
+test('Begin applies pending valid timings and prevents an invalid pair from starting a session', () => {
+  const page=harness();page.type('[data-inhale]','');page.type('[data-exhale]','7');
+  page.click('[data-start]');
+  assert.equal(page.q('[data-live]').hidden,true);
+  assert.equal(page.q('[data-setup]').hidden,false);
+  assert.equal(page.sounds[0].starts,0,'invalid timing cannot start sound or the clock');
+  assert.ok(page.q('[data-rhythm-status]').textContent.trim());
+  page.type('[data-inhale]','3');page.click('[data-start]');
+  assert.equal(page.q('[data-live]').hidden,false);
+  assert.equal(page.q('[data-breath-count]').textContent,'3 seconds');
+  page.advance(3);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.equal(page.q('[data-breath-count]').textContent,'7 seconds');
+  assert.deepEqual(page.sounds[0].cues,[true,false]);
 });
 
 test('test bell explains muted volume and retries after asynchronous audio startup errors', () => {
@@ -563,7 +753,7 @@ test('ambient controls and pause/resume remain independent of the heart bell cad
   assert.deepEqual(page.sounds[0].cues, [true, false, true]);
 });
 
-test('using one’s own rhythm suppresses heart breathing bells until a later paced phase boundary', () => {
+test('returning from own rhythm begins a complete guided inhale without replaying missed bells', () => {
   const page = harness();
   page.click('[data-exercise="heart"]');
   page.click('[data-start]'); page.advance(2);
@@ -573,11 +763,13 @@ test('using one’s own rhythm suppresses heart breathing bells until a later pa
   page.advance(5);
   assert.deepEqual(page.sounds[0].cues, [true]);
   page.click('[data-live-pace]');
-  assert.equal(page.q('[data-breath-label]').textContent, 'Exhale');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Inhale');
   assert.equal(page.sounds[0].enabled, true);
-  assert.deepEqual(page.sounds[0].cues, [true], 'switching to a guide partway through exhale adds no cue');
-  page.advance(3);
+  assert.deepEqual(page.sounds[0].cues, [true, true], 'returning to the guide starts a new inhale');
+  page.advance(4.9);
   assert.deepEqual(page.sounds[0].cues, [true, true]);
+  page.advance(0.1);
+  assert.deepEqual(page.sounds[0].cues, [true, true, false]);
 });
 
 test('body practice starts sound with dimension bells and each exercise remembers its own pacing choice', () => {
@@ -812,6 +1004,8 @@ test('every application teaches four breaths and exposes a complete relationship
       assert.equal(page.q('[data-bell]').checked,true,id+'/'+exercise+' has bell sound enabled');
       assert.equal(page.q('[data-sound]').checked,true,id+'/'+exercise+' has ambient sound enabled');
       assert.equal(page.q('[data-bell-toggle]').hidden,false);
+      assert.equal(page.q('.training-sound').open,true,id+'/'+exercise+' exposes all sound settings');
+      assert.equal(page.q('[data-breath-form]').hidden,false);
       assert.equal(page.q('[data-pacing]').value,exercise==='body'?'natural':'paced');
       assert.ok(page.sounds.every(audio=>audio.starts===0),'browsing lessons does not autoplay sound');
       assert.equal(page.host.querySelector('.training-breath-examples'),null,'repeated full prose rows are removed');

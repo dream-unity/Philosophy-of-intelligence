@@ -17,6 +17,11 @@
   const BREATH_SECONDS = 5;
   const BODY_STEP_SECONDS = 30;
 
+  function validBreathTiming(inhaleSeconds, exhaleSeconds) {
+    return [inhaleSeconds, exhaleSeconds].every(value => Number.isFinite(value) && value >= 0.1) &&
+      (inhaleSeconds * 1000 + exhaleSeconds * 1000) <= Number.MAX_SAFE_INTEGER;
+  }
+
   const HEART_PHASES = Object.freeze([
     Object.freeze({ id: 'early', label: 'Step 1 · Heart-Focused Breathing',
       inhale: 'Breathe gently; rest attention at your chest.',
@@ -46,6 +51,11 @@
       if (!Number.isFinite(settings.duration) || settings.duration <= 0) throw new TypeError('Duration must be positive seconds.');
       this.exercise = settings.exercise;
       this.duration = settings.duration;
+      this.inhaleSeconds = settings.inhaleSeconds === undefined ? BREATH_SECONDS : settings.inhaleSeconds;
+      this.exhaleSeconds = settings.exhaleSeconds === undefined ? BREATH_SECONDS : settings.exhaleSeconds;
+      if (!validBreathTiming(this.inhaleSeconds, this.exhaleSeconds)) throw new TypeError('Inhale and exhale must each be at least 0.1 seconds.');
+      this._breathAnchorMilliseconds = 0;
+      this._breathIndexBase = 0;
       this._now = typeof settings.now === 'function' ? settings.now : function () {
         return root.performance && typeof root.performance.now === 'function' ? root.performance.now() : Date.now();
       };
@@ -72,6 +82,55 @@
       return false;
     }
 
+    _breathData() {
+      // Derive every phase from active elapsed time, not from UI tick counts.
+      // Milliseconds preserve common decimal durations at their boundaries.
+      const elapsed = Math.max(0, this._elapsedMilliseconds - this._breathAnchorMilliseconds);
+      const inhale = this.inhaleSeconds * 1000;
+      const exhale = this.exhaleSeconds * 1000;
+      const cycle = inhale + exhale;
+      let cycleIndex = Math.floor(elapsed / cycle);
+      let position = elapsed - cycleIndex * cycle;
+      // Snap only floating-point noise at exact boundaries; a late UI tick still
+      // advances directly to the current phase, never replaying missed phases.
+      const tolerance = Math.max(1, this._elapsedMilliseconds) * Number.EPSILON * 8;
+      if (cycle - position <= tolerance) { cycleIndex++; position = 0; }
+      else if (position <= tolerance) position = 0;
+      else if (Math.abs(position - inhale) <= tolerance) position = inhale;
+      const inhaling = position < inhale;
+      const phaseElapsed = inhaling ? position : position - inhale;
+      const phaseDuration = inhaling ? inhale : exhale;
+      return {
+        breathPhase: inhaling ? 'inhale' : 'exhale',
+        breathPhaseIndex: this._breathIndexBase + cycleIndex * 2 + (inhaling ? 0 : 1),
+        breathDuration: phaseDuration / 1000,
+        breathProgress: Math.min(1, Math.max(0, phaseElapsed / phaseDuration)),
+        breathRemaining: this._status === 'completed' ? 0 : (phaseDuration - phaseElapsed) / 1000
+      };
+    }
+
+    _restartBreath() {
+      this._breathIndexBase = this._breathData().breathPhaseIndex + 1;
+      this._breathAnchorMilliseconds = this._elapsedMilliseconds;
+    }
+
+    setBreathTiming(inhaleSeconds, exhaleSeconds) {
+      if (!validBreathTiming(inhaleSeconds, exhaleSeconds)) throw new TypeError('Inhale and exhale must each be at least 0.1 seconds.');
+      const completed = this._update();
+      if (inhaleSeconds !== this.inhaleSeconds || exhaleSeconds !== this.exhaleSeconds) {
+        this._restartBreath();
+        this.inhaleSeconds = inhaleSeconds;
+        this.exhaleSeconds = exhaleSeconds;
+      }
+      return this._emit(completed);
+    }
+
+    restartBreath() {
+      const completed = this._update();
+      this._restartBreath();
+      return this._emit(completed);
+    }
+
     _data() {
       const elapsed = this._elapsedMilliseconds / 1000;
       const progress = elapsed / this.duration;
@@ -85,8 +144,7 @@
         progress: progress,
         // Match the source's 0.33 / 0.66 transitions, rather than rounded minutes.
         heartPhaseIndex: progress < 0.33 ? 0 : (progress < 0.66 ? 1 : 2),
-        breathPhase: Math.floor(elapsed / BREATH_SECONDS) % 2 === 0 ? 'inhale' : 'exhale',
-        breathRemaining: finished ? 0 : BREATH_SECONDS - (elapsed % BREATH_SECONDS),
+        ...this._breathData(),
         bodyStepIndex: Math.floor(elapsed / BODY_STEP_SECONDS) % BODY_STEPS.length,
         stepRemaining: finished ? 0 : BODY_STEP_SECONDS - (elapsed % BODY_STEP_SECONDS)
       };
@@ -102,6 +160,8 @@
     start() {
       if (this._status === 'running' || this._status === 'paused') return this.snapshot();
       this._elapsedMilliseconds = 0;
+      this._breathAnchorMilliseconds = 0;
+      this._breathIndexBase = 0;
       this._lastNow = this._now();
       this._status = 'running';
       return this._emit(false);
@@ -410,6 +470,6 @@
     }
   }
 
-  return Object.freeze({ HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, FREQUENCIES, BREATH_SECONDS, BODY_STEP_SECONDS, HEART_PHASES, BODY_STEPS, ExerciseClock, ExerciseAudio });
+  return Object.freeze({ HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, FREQUENCIES, BREATH_SECONDS, BODY_STEP_SECONDS, HEART_PHASES, BODY_STEPS, validBreathTiming, ExerciseClock, ExerciseAudio });
 });
 
