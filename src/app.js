@@ -2,6 +2,8 @@
   'use strict';
   const C = window.FormShapePractice, P = window.FormProgress, G = window.FormGeometry;
   if (!C || !P || !G) {
+    document.getElementById('practice-resources').hidden = false;
+    document.getElementById('archive-panel').open = true;
     document.getElementById('storage-warning').hidden = false;
     document.getElementById('storage-warning').textContent = 'A site module could not load. Keep all source files together, or open the single-file offline edition.';
     return;
@@ -22,6 +24,8 @@
   let mountedStage = null;
   let currentView = '';
   let practiceStage = selectedStage;
+  let hasSelectedShape = false;
+  let focusShapePicker = false;
   let palaceFilter = 'all';
   let toastTimer = null;
   let confirmResolver = null;
@@ -99,7 +103,7 @@
 
   function applyMotion() { document.body.classList.toggle('reduced-motion',state.preferences.reducedMotion); }
   function renderJourney(){
-    $('stage-path').innerHTML=stages.map((stage,index)=>`<a class="stage-tile ${stage.id===selectedStage?'selected':''}" href="#practice/${esc(stage.id)}" data-stage="${esc(stage.id)}" aria-label="${esc(stage.name)} · Explore"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span><span class="stage-status">Explore</span></a>`).join('');
+    $('stage-path').innerHTML=stages.map((stage,index)=>`<a class="stage-tile ${hasSelectedShape&&stage.id===selectedStage?'selected':''}" href="#practice/${esc(stage.id)}" data-stage="${esc(stage.id)}" aria-controls="view-practice"${hasSelectedShape&&stage.id===selectedStage?' aria-current="true"':''} aria-label="${esc(stage.name)} · Explore"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span><span class="stage-status">Explore</span></a>`).join('');
   }
 
   function sourceHTML(source, className){
@@ -121,7 +125,8 @@
         onStageChange(id){
           const stage=stageById(id);
           const target='#practice/'+stage.id;
-          if(location.hash!==target)location.hash=target;
+          focusShapePicker=true;
+          if(location.hash!==target)location.hash=target;else route();
         }
       });
       mountedStage=practiceStage;
@@ -180,37 +185,71 @@
   $('confirm-dialog').addEventListener('close',()=>{if(confirmResolver){const resolve=confirmResolver;confirmResolver=null;resolve(false);}});
 
   function renderCurrent(){
-    if(currentView==='journey')renderJourney();
-    if(currentView==='practice')renderPractice();
-    if(currentView==='palace')renderPalace();
-    if(currentView==='philosophy')$('philosophy-sphere').innerHTML=G.shapeSVG('sphere',{size:280,progress:1});
+    renderJourney();
+    if(hasSelectedShape)renderPractice();
+    if($('archive-panel').open)renderPalace();
+    if($('philosophy-panel').open)$('philosophy-sphere').innerHTML=G.shapeSVG('sphere',{size:280,progress:1});
   }
+  function scrollToSection(element){
+    element.focus({preventScroll:true});
+    element.scrollIntoView({block:'start',behavior:state.preferences.reducedMotion?'instant':'smooth'});
+  }
+  function updateArchiveVisibility(){
+    const open=$('archive-panel').open;
+    currentView=open?'palace':hasSelectedShape?'practice':'journey';
+    $('storage-warning').hidden=!open||(!archiveWarning&&!storageConflict&&!saveWarningShown);
+    if(open){
+      renderPalace();
+      if(archiveWarning&&!storageConflict)warnStorage(archiveWarning);
+      if(recoveryRequired)showRecovery();
+    }
+  }
+  $('archive-panel').addEventListener('toggle',updateArchiveVisibility);
+  $('philosophy-panel').addEventListener('toggle',()=>{
+    if($('philosophy-panel').open)$('philosophy-sphere').innerHTML=G.shapeSVG('sphere',{size:280,progress:1});
+  });
+  // These links select an inline practice. Repeating the same selection still
+  // returns to it, without replacing its controller or restarting a session.
+  $('stage-path').addEventListener('click',event=>{
+    const card=event.target.closest('.stage-tile[data-stage]');
+    if(!card||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+    event.preventDefault();
+    focusShapePicker=false;
+    if(location.hash===card.getAttribute('href'))route();else location.hash=card.getAttribute('href');
+  });
+  $('main').addEventListener('click',event=>{
+    const link=event.target.closest('a[href="#stage-path"], a[href="#journey"]');
+    if(!link||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+    event.preventDefault();
+    if(location.hash===link.getAttribute('href'))route();else location.hash=link.getAttribute('href');
+  });
   function route(){
     const parts=location.hash.replace(/^#/,'').split('/');
     const requested=parts[0]==='studio'?'practice':parts[0];
-    const nextView=['journey','practice','palace','philosophy'].includes(requested)?requested:'journey';
+    const nextView=['practice','palace','philosophy'].includes(requested)?requested:'journey';
     const nextStage=nextView==='practice'?stageById(parts[0]==='studio'?selectedStage:parts[1]||selectedStage).id:practiceStage;
     if(training&&(nextView!=='practice'||nextStage!==practiceStage))training.pause();
     currentView=nextView;practiceStage=nextStage;
-    if(currentView==='practice')selectedStage=practiceStage;
+    if(nextView==='practice'){selectedStage=practiceStage;hasSelectedShape=true;}
     if(parts[0]==='studio')window.history.replaceState(null,'','#practice/'+practiceStage);
-    document.body.dataset.view=currentView;
-    // Collapse optional music above practice without replacing its iframe.
-    const musicPanel=$('site-music-panel');
-    if(musicPanel)musicPanel.open=currentView!=='practice';
-    document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!=='view-'+currentView);
-    document.querySelectorAll('[data-nav]').forEach(link=>{
-      const active=link.dataset.nav===currentView;
-      link.classList.toggle('active',active);
-      if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
-      if(link.dataset.nav==='practice')link.href='#practice/'+selectedStage;
-    });
-    $('storage-warning').hidden=currentView!=='palace'||(!archiveWarning&&!storageConflict&&!saveWarningShown);
-    if(currentView==='palace'&&archiveWarning&&!storageConflict)warnStorage(archiveWarning);
-    renderCurrent();window.scrollTo({top:0,behavior:'instant'});
-    $('main').focus({preventScroll:true});
-    if(currentView==='palace'&&recoveryRequired)showRecovery();
-    document.title=(currentView==='practice'?stageById(practiceStage).name:currentView==='journey'?'Philosophy of Intelligence':currentView==='palace'?'Your archive':'The philosophy')+(currentView==='journey'?'':' · Philosophy of Intelligence');
+    // The logo, song, shapes and introduction always stay on the same page.
+    document.body.dataset.view='journey';
+    $('view-journey').hidden=false;
+    $('view-practice').hidden=!hasSelectedShape;
+    $('practice-resources').hidden=!hasSelectedShape&&!['palace','philosophy'].includes(nextView);
+    if(nextView==='palace')$('archive-panel').open=true;
+    if(nextView==='philosophy')$('philosophy-panel').open=true;
+    renderCurrent();updateArchiveVisibility();
+    if(nextView==='practice'){
+      if(focusShapePicker)$('training-root').querySelector('[data-shape]')?.focus({preventScroll:true});
+      else scrollToSection($('view-practice'));
+    }else if(nextView==='palace'||nextView==='philosophy'){
+      scrollToSection($(nextView==='palace'?'archive-panel':'philosophy-panel'));
+    }else if(parts[0]==='journey'||parts[0]==='stage-path'){
+      scrollToSection($('stage-path'));
+    }
+    focusShapePicker=false;
+    document.title='Philosophy of Intelligence';
   }
   window.addEventListener('hashchange',route);
   window.addEventListener('storage',event=>{if(event.key===P.STORAGE_KEY||event.key===null)noticeStorageConflict();});
