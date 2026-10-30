@@ -200,18 +200,16 @@ test('manual entry selection resets the teaching phase and detached walkthrough 
   assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
 });
 
-test('all 42 lessons place concise, exercise-specific teaching before practice and keep it visible during the timer', () => {
-  const page=harness();
-  const visibleText = element => {
-    if(element.hidden)return '';
-    if(element.tagName==='DETAILS'&&!element.open)return element.querySelector('summary').textContent;
-    return element._text+' '+element.children.map(visibleText).join(' ');
-  };
+test('all 42 practices teach the selected shape inside the metronome through both phases and own rhythm', () => {
+  const flatten = element => [element, ...element.children.flatMap(flatten)];
   for(const stage of require('../src/shape-practice.js').STAGES){
-    page.app.setStage(stage.id);
     for(const exercise of ['stream','heart','body']){
+      const page=harness({stageId:stage.id});
       page.click('[data-exercise="'+exercise+'"]');
-      const lesson=page.q('[data-lesson]'),layout=page.q('.training-layout');
+      page.choose('[data-pacing]','paced');
+      assert.equal(page.host.querySelector('[data-lesson]'),null,'there is no separate instruction block');
+      assert.equal(page.host.querySelector('[data-short-example]'),null,'the example belongs to the active cue');
+      assert.equal(page.host.querySelector('.training-breath-method'),null,'there are no duplicate phase instructions');
       assert.equal(page.host.querySelector('[data-shape-essence]'),null,'the descriptive subheading is removed');
       assert.equal(page.host.querySelector('.training-heading'),null,'the old title and level label are removed');
       const symbolHeader=page.q('.training-symbol-header');
@@ -220,25 +218,46 @@ test('all 42 lessons place concise, exercise-specific teaching before practice a
       const symbol=page.q('.training-page-symbol').querySelector('svg');
       assert.equal(symbol.attributes['data-stage'],stage.id);
       assert.equal(symbol.attributes.width,'65','scale the same artwork used on the homepage');
-      assert.ok(page.host.children.indexOf(symbolHeader)<page.host.children.indexOf(lesson),'the large symbol precedes teaching');
-      assert.equal(page.q('[data-short-example]').textContent,stage[exercise].shortExample);
-      assert.ok(page.host.children.indexOf(lesson)<page.host.children.indexOf(layout),'lesson precedes practice in reading order');
+      assert.ok(page.host.children.indexOf(symbolHeader)<page.host.children.indexOf(page.q('.training-layout')),'the large symbol precedes practice');
+      const order=flatten(page.host),reference=page.q('.training-reference');
+      assert.ok(order.indexOf(reference)>order.indexOf(page.q('.training-config')),'optional reference follows settings');
+      assert.ok(order.indexOf(reference)>order.indexOf(page.q('[data-start]')),'Start remains ahead of the reference');
+      assert.ok(reference.querySelector('[data-examples]'),'the complete model remains available');
       assert.equal(page.q('[data-examples]').open,false,'detailed rehearsal is optional');
       assert.equal(page.q('.training-reconstruction').open,false,'reconstruction is optional');
-      assert.equal(page.host.querySelector('.training-theory'),null,'no duplicate lesson sidebar');
-      assert.equal(page.host.querySelector('[data-live-shape]'),null,'no duplicate live shape lecture');
-      const teaching=visibleText(lesson);
-      assert.ok(teaching.trim().split(/\s+/).length<=215,stage.id+'/'+exercise+' has a concise initial lesson');
-      const phases=page.q('.training-breath-method').querySelectorAll('p');
-      assert.equal(phases[0].querySelector('strong').textContent,'Inhale');
-      assert.equal(phases[1].querySelector('strong').textContent,'Exhale');
-      assert.match(phases[1].textContent,/encode.*first.*recall.*exact previous entry/i);
-      assert.match(teaching,/First entry seeds memory/);
-      assert.match(teaching,/Keep both originals/);
-      page.click('[data-start]');page.advance(15);
-      assert.equal(lesson.hidden,false,'teaching remains available while practising');
-      assert.equal(page.q('[data-short-example]').textContent,stage[exercise].shortExample);
+      assert.equal(page.q('[data-prompt]').textContent,stage.cues.inhale,'idle preview teaches the shape before starting');
+      assert.equal(page.q('[data-next-step]').textContent,stage[exercise].cueExample);
+      assert.equal(page.q('[data-context]').hidden,exercise==='stream','only heart and body need exercise context');
+      if(exercise!=='stream')assert.ok(page.q('[data-context]').textContent.trim(),'exercise context remains visible');
+      assert.ok(page.sounds.every(audio=>audio.starts===0),'preview changes never start sound');
+      page.click('[data-start]');
+      assert.equal(page.q('[data-prompt]').textContent,stage.cues.inhale);
+      page.advance(5);
+      assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+      assert.equal(page.q('[data-prompt]').textContent,stage.cues.exhale,stage.id+'/'+exercise+' updates on exhale');
+      assert.match(page.q('[data-next-step]').textContent,/doorway.*shelf.*desk.*window/i,'exhale teaches distinct home addresses');
+      assert.match(page.q('[data-next-step]').textContent,/first entry/i,'the cue does not invent a return for the initial entry');
+      const exhaleHelp=page.q('[data-next-step]').textContent,exhaleContext=page.q('[data-context]').textContent;
+      page.click('[data-pause]');page.advance(60);
+      assert.equal(page.q('[data-prompt]').textContent,stage.cues.exhale,'paused cues stay on the interrupted phase');
+      assert.equal(page.q('[data-next-step]').textContent,exhaleHelp);
+      assert.equal(page.q('[data-context]').textContent,exhaleContext,'paused body and heart context stays fixed');
+      page.click('[data-pause]');page.advance(5);
+      assert.equal(page.q('[data-prompt]').textContent,stage.cues.inhale);
+      assert.equal(page.q('[data-next-step]').textContent,stage[exercise].cueExample);
+      page.choose('[data-pacing]','natural');
+      assert.equal(page.q('[data-prompt]').textContent,'Inhale: '+stage.cues.inhale+' Exhale: '+stage.cues.exhale,'own rhythm keeps both actions readable');
+      assert.equal(page.q('[data-next-step]').textContent,exhaleHelp,'own rhythm retains the address sequence and first-entry caveat');
+      assert.equal(page.q('[data-pacer]').hidden,exercise==='body','natural body mapping keeps its dimension focus');
+      page.choose('[data-pacing]','paced');
+      assert.equal(page.q('[data-pacer]').hidden,false,'switching back exposes the metronome in every exercise');
+      assert.equal(page.q('[data-prompt]').textContent,stage.cues.inhale,'returning to guided pacing starts with inhale');
       page.click('[data-end]');
+      assert.match(page.q('[data-prompt]').textContent,/Rest/,'ended sessions offer rest instead of an active phase task');
+      assert.equal(page.q('[data-next-step]').textContent,'');
+      assert.equal(page.q('[data-context]').hidden,true);
+      assert.equal(page.data().entries.length,0,'timer phases never manufacture encoded entries');
+      page.app.destroy();
     }
   }
 });
@@ -1014,7 +1033,7 @@ test('the consciousness stream begins with guided inhale/exhale bells and ambien
   page.advance(5);
   assert.deepEqual(page.sounds[0].cues, [true, false, true]);
   assert.equal(page.q('[data-dimension]').hidden, true);
-  assert.match(page.q('[data-next-step]').textContent, /Keep the return target fixed/);
+  assert.equal(page.q('[data-next-step]').textContent, require('../src/shape-practice.js').getStage('circle').stream.cueExample);
   page.click('[data-end]');
   assert.equal(page.data().sessions[0].exercise,'stream');
   assert.equal(page.data().entries.length,0,'timed breaths never manufacture a marked entry');
@@ -1092,7 +1111,7 @@ test('a full existing record preserves its contents without blocking practice', 
   assert.equal(page.raw.get(page.key),before);
 });
 
-test('every application teaches four breaths and exposes a complete relationship register', () => {
+test('every application teaches four entry addresses on exhale and exposes a complete relationship register', () => {
   const page=harness();
   const counts={circle:1,'half-circle':2,triangle:3,square:4,pentagon:5,hexagon:6,heptagon:7,octagon:8,prism:9,cube:12,dodecahedron:30,icosahedron:30,geodesic:120,sphere:120};
   for(const [id,count] of Object.entries(counts)){
@@ -1105,9 +1124,13 @@ test('every application teaches four breaths and exposes a complete relationship
       assert.equal(page.q('.training-sound').open,false,id+'/'+exercise+' keeps optional sound settings compact and expandable');
       assert.equal(page.q('[data-breath-form]').hidden,false);
       assert.equal(page.q('[data-pacing]').value,exercise==='body'?'natural':'paced');
-      assert.ok(page.sounds.every(audio=>audio.starts===0),'browsing lessons does not autoplay sound');
+      assert.ok(page.sounds.every(audio=>!audio.enabled),'browsing lessons does not autoplay sound');
       assert.equal(page.host.querySelector('.training-breath-examples'),null,'repeated full prose rows are removed');
-      assert.match(page.q('.training-four').textContent,/4 breaths/);
+      page.choose('[data-pacing]','paced');page.click('[data-start]');page.advance(5);
+      assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+      assert.ok(page.q('[data-next-step]').textContent.toLowerCase().includes(require('../src/shape-practice.js').ADDRESSES.join(' → ')));
+      page.click('[data-end]');
+      if(exercise==='body')page.choose('[data-pacing]','natural');
       assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' shows the entire starting model');
       assert.equal(page.q('[data-model-state]').querySelectorAll('option').length,4);
       for(let state=1;state<4;state++){page.choose('[data-model-state]',String(state));assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' retains its complete model at breath '+(state+1));}
@@ -1116,11 +1139,14 @@ test('every application teaches four breaths and exposes a complete relationship
   }
 });
 
-test('top sequence and guided encoding use the same four exact home addresses', () => {
+test('exhale sequence and guided encoding use the same four exact home addresses', () => {
   const page=harness();
   const addresses=require('../src/shape-practice.js').ADDRESSES;
   assert.equal(new Set(addresses).size,4);
-  assert.ok(page.q('.training-four').textContent.includes(addresses.join(' → ')));
+  page.click('[data-start]');page.advance(5);
+  assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
+  assert.ok(page.q('[data-next-step]').textContent.toLowerCase().includes(addresses.join(' → ')));
+  page.click('[data-end]');
   addresses.forEach((address,index)=>{
     page.choose('[data-model-state]',String(index));
     assert.match(page.q('[data-walkthrough]').textContent,new RegExp(address));

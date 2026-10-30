@@ -143,8 +143,27 @@
   ]
 ];
 
-  // Compact teaching shown before the practice controls. Detailed registers remain
-  // available for inspection; a named local sample never stands for the full model.
+  // Phase cues teach the selected shape at the metronome. The clock never
+  // infers that a mental entry is complete or advances its memory address.
+  const PHASE_CUES = {
+    circle: ['Choose one relationship between two roles. Keep who relates to whom, and how.', 'this relationship'],
+    'half-circle': ['Hold two distinct meanings between the same roles. Reversing one relationship does not make a second.', 'both relationships'],
+    triangle: ['Connect three roles with three relationships. State the closing link; do not assume it.', 'all three links'],
+    square: ['Connect four roles in a four-link loop, including the relationship back to the start.', 'the four-link loop'],
+    pentagon: ['Extend the loop to five roles and five links. Replace one shortcut with two explicit relationships.', 'the five-link loop'],
+    hexagon: ['Include a context or constraint in a six-link loop. Connect it explicitly to both neighbours.', 'the six-link loop'],
+    heptagon: ['Distinguish seven roles in a seven-link loop. Name each role’s meaning and connections to its neighbours.', 'the seven-link loop'],
+    octagon: ['Connect eight roles in an eight-link loop. Keep an expectation or representation distinct from what it describes.', 'the eight-link loop'],
+    prism: ['Hold two complete three-link systems. Join corresponding roles with three explicit bridges: nine links.', 'both systems and all three bridges'],
+    cube: ['Hold two four-link loops. Join corresponding roles with four precise bridges: twelve links. Keep each match’s limits clear.', 'both loops and all four bridges'],
+    dodecahedron: ['Hold your prepared thirty-link network of shared pentagons. Keep shared roles consistent and every relationship recoverable.', 'the full thirty-link network'],
+    icosahedron: ['Hold your prepared thirty-link network of shared triangles. Distinguish requirements and intentions from achieved results.', 'the full thirty-link network'],
+    geodesic: ['Use a prepared network: sixty links through named mediators, plus sixty compatibility requirements. These replace thirty direct links; check agreement.', 'all 120 links, including unmet requirements'],
+    sphere: ['Enter your prepared 120-link network through another role. Recover the same whole, including conflicts and uncertainty.', 'the whole network, preserving conflicts and uncertainty']
+  };
+
+  // Detailed registers remain available for inspection; a named local sample
+  // never stands for the full model.
   const SHORT_LESSONS = {
     circle: {
       essence: 'Keep one meaningful relationship between two roles. Remember who relates to whom and how; two objects still make one relationship.',
@@ -327,6 +346,7 @@
     const baseline = source ? source.baseline : stage.relationCount < 30 ? model.relations.map(relation => relation.text).join(' ') : 'Prepare the complete ' + model.title + ' model and all ' + stage.relationCount + ' selected relationships in its register. The four encounters below are versions of that full model.';
     return {
       shortExample: SHORT_LESSONS[stage.id][exercise],
+      cueExample: stage.relationCount <= 4 ? SHORT_LESSONS[stage.id][exercise] : 'Example links (part of the model): ' + model.relations.slice(-2).map(relation => relation.text).join(' '),
       notice: EXERCISE_CONTEXT[exercise] + ' On the inhale, select ' + (stage.relationCount === 1 ? 'one complete meaningful relationship' : 'the full declared ' + stage.relationCount + '-link organisation') + '. On the exhale, encode it at a distinct home-palace address before deliberately seeking the earlier target. If fewer links are available, encode an honest partial selection with its actual count and uncertainty. That entry may support a return without completing the intended shape; do not invent the missing links.',
       recall: 'Only after current encoding, retrieve exactly N committed entries back before revealing any earlier note. Until N earlier entries exist, seed history. In the four-breath B = 1 rehearsal, return to the preceding breath’s entry; a matching older entry is not a substitute. Recover roles and meanings, not only the model’s name.',
       relate: 'Compare the complete current and retrieved selections under identified role correspondences. Distinguish preserved meaning, changed meaning, different participants and uncertainty. A historical comparison is an annotation, not another counted relationship in the current source model. ' + (source && source.notes ? source.notes : 'Changing which relationship is foregrounded need not make the earlier relationship false.'),
@@ -343,6 +363,10 @@
     const stage = {
       id: row[0], name: row[1], verb: row[2], defaultLag: 1,
       essence: SHORT_LESSONS[row[0]].essence,
+      cues: {
+        inhale: PHASE_CUES[row[0]][0],
+        exhale: 'Picture ' + PHASE_CUES[row[0]][1] + ' at your next home address. Then recall the previous entry, compare and note changes. Keep both originals.'
+      },
       relationCount: row[3], topology: row[4], theory: row[5],
       preparation: 'Use a separate room or four distinct sublocations in your home for this run: doorway, hallway shelf, desk and window. Keep every entry at its own stable address. ' + (row[3] >= 30 ? 'Learn the full register before rehearsing. A familiar model may be reactivated as a whole; inventing or reading ' + row[3] + ' links is not a one-inhale requirement. Use four record-paced entries if the full work takes extra breaths.' : 'The four-breath rehearsal assumes one complete selection, encoding and return fits each ordinary breath. Otherwise use four record-paced entries without holding or forcing the breath.') + ' Palace bindings, note labels and routine historical comparisons do not add source links.',
       readiness: [row[6], 'I can encode the full current selection before retrieving the exact scheduled earlier entry, with both originals retained.', 'I can distinguish experience, construction and inference. If the scene lacks enough supported links, I choose a simpler selection or explicitly prepare a model rather than inventing links to complete a count.']
