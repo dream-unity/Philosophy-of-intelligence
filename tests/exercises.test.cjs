@@ -2,13 +2,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { ExerciseClock, ExerciseAudio, HEART_PHASES, BODY_STEPS, HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS } = require('../src/exercises.js');
+const { ExerciseClock, ExerciseAudio, HEART_PHASES, BODY_STEPS, HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, validBreathTiming } = require('../src/exercises.js');
 
-function clockHarness(exercise = 'heart', duration = 900) {
+function clockHarness(exercise = 'heart', duration = 900, timing = {}) {
   let time = 0;
   const ticks = [];
   const completed = [];
-  const clock = new ExerciseClock({ exercise, duration, now: () => time, onTick: state => ticks.push(state), onComplete: state => completed.push(state) });
+  const clock = new ExerciseClock({ exercise, duration, ...timing, now: () => time, onTick: state => ticks.push(state), onComplete: state => completed.push(state) });
   return { clock, ticks, completed, at(seconds) { time = seconds * 1000; return clock.tick(); } };
 }
 
@@ -125,6 +125,133 @@ test('ending does not count as completion, and backwards clock readings do not r
 test('invalid exercise and duration are rejected', () => {
   assert.throws(() => new ExerciseClock({ exercise: 'quiz', duration: 900 }), TypeError);
   [0, -1, Infinity, NaN, '900'].forEach(duration => assert.throws(() => new ExerciseClock({ exercise: 'heart', duration }), TypeError));
+});
+
+
+test('custom unequal breath phases share exact boundaries, countdown and progress', () => {
+  const h = clockHarness('heart', 900, { inhaleSeconds: 3, exhaleSeconds: 7 });
+  const start = h.clock.start();
+  assert.equal(start.breathPhaseIndex, 0);
+  assert.equal(start.breathDuration, 3);
+  assert.equal(start.breathProgress, 0);
+  assert.equal(h.at(1.5).breathProgress, 0.5);
+  assert.equal(h.at(2.999).breathPhase, 'inhale');
+  const exhale = h.at(3);
+  assert.equal(exhale.breathPhase, 'exhale');
+  assert.equal(exhale.breathPhaseIndex, 1);
+  assert.equal(exhale.breathDuration, 7);
+  assert.equal(exhale.breathRemaining, 7);
+  assert.equal(exhale.breathProgress, 0);
+  assert.equal(h.at(6.5).breathProgress, 0.5);
+  assert.equal(h.at(9.999).breathPhase, 'exhale');
+  const next = h.at(10);
+  assert.equal(next.breathPhase, 'inhale');
+  assert.equal(next.breathPhaseIndex, 2);
+  assert.equal(next.breathRemaining, 3);
+  const delayed = h.at(83.5);
+  assert.equal(delayed.breathPhase, 'exhale');
+  assert.equal(delayed.breathPhaseIndex, 17);
+  assert.equal(delayed.breathRemaining, 6.5);
+});
+
+test('decimal timing does not drift at inhale, exhale or cycle boundaries', () => {
+  const h = clockHarness('stream', 900, { inhaleSeconds: 1.2, exhaleSeconds: 2.3 });
+  h.clock.start();
+  for (let cycle = 0; cycle < 250; cycle++) {
+    const inhale = h.at(cycle * 3.5);
+    assert.equal(inhale.breathPhase, 'inhale');
+    assert.equal(inhale.breathPhaseIndex, cycle * 2);
+    assert.equal(inhale.breathRemaining, 1.2);
+    const exhale = h.at(cycle * 3.5 + 1.2);
+    assert.equal(exhale.breathPhase, 'exhale');
+    assert.equal(exhale.breathPhaseIndex, cycle * 2 + 1);
+    assert.equal(exhale.breathRemaining, 2.3);
+  }
+});
+
+test('changing a running rhythm begins a new inhale without resetting practice time', () => {
+  const h = clockHarness();
+  h.clock.start();
+  const old = h.at(7);
+  const changed = h.clock.setBreathTiming(3, 7);
+  assert.equal(changed.status, 'running');
+  assert.equal(changed.elapsedSeconds, 7);
+  assert.equal(changed.remainingSeconds, 893);
+  assert.equal(changed.breathPhase, 'inhale');
+  assert.equal(changed.breathRemaining, 3);
+  assert.ok(changed.breathPhaseIndex > old.breathPhaseIndex);
+  const mid = h.at(8);
+  const unchanged = h.clock.setBreathTiming(3, 7);
+  assert.equal(unchanged.breathPhaseIndex, mid.breathPhaseIndex);
+  assert.equal(unchanged.breathRemaining, 2);
+  assert.equal(h.at(10).breathPhase, 'exhale');
+  assert.equal(h.at(17).breathPhase, 'inhale');
+});
+
+test('custom timing freezes when paused and changes apply on resume without idle-time drift', () => {
+  const h = clockHarness('heart', 900, { inhaleSeconds: 3, exhaleSeconds: 7 });
+  h.clock.start(); h.at(4);
+  const paused = h.clock.pause();
+  assert.equal(paused.breathRemaining, 6);
+  assert.equal(h.at(104).breathRemaining, 6);
+  const changed = h.clock.setBreathTiming(2.5, 4.5);
+  assert.equal(changed.status, 'paused');
+  assert.equal(changed.elapsedSeconds, 4);
+  assert.equal(changed.breathRemaining, 2.5);
+  assert.ok(changed.breathPhaseIndex > paused.breathPhaseIndex);
+  assert.equal(h.at(204).breathRemaining, 2.5);
+  h.clock.resume();
+  assert.equal(h.at(206).breathRemaining, 0.5);
+  assert.equal(h.at(206.5).breathPhase, 'exhale');
+  assert.equal(h.clock.snapshot().elapsedSeconds, 6.5);
+});
+
+test('explicit breath restart advances its identity and leaves body progression independent', () => {
+  const h = clockHarness('body', 900, { inhaleSeconds: 3, exhaleSeconds: 7 });
+  h.clock.start();
+  const before = h.at(35);
+  const restart = h.clock.restartBreath();
+  assert.equal(restart.elapsedSeconds, 35);
+  assert.equal(restart.bodyStepIndex, 1);
+  assert.equal(restart.stepRemaining, 25);
+  assert.equal(restart.breathPhase, 'inhale');
+  assert.equal(restart.breathRemaining, 3);
+  assert.ok(restart.breathPhaseIndex > before.breathPhaseIndex);
+  assert.equal(h.at(38).breathPhase, 'exhale');
+  h.clock.end();
+  const again = h.clock.start();
+  assert.equal(again.breathPhaseIndex, 0);
+  assert.equal(again.breathRemaining, 3);
+  assert.equal(again.elapsedSeconds, 0);
+});
+
+test('custom timing validation is atomic and supports long finite durations', () => {
+  const h = clockHarness(); h.clock.start(); h.at(7);
+  const before = h.clock.snapshot();
+  for (const value of [0, -1, 0.01, NaN, Infinity, '3', null, undefined, Number.MAX_VALUE]) {
+    assert.equal(validBreathTiming(value, 5), false);
+    assert.equal(validBreathTiming(5, value), false);
+    assert.throws(() => h.clock.setBreathTiming(value, 5), TypeError);
+    assert.throws(() => h.clock.setBreathTiming(5, value), TypeError);
+    if (value !== undefined) assert.throws(() => new ExerciseClock({ exercise: 'heart', duration: 900, inhaleSeconds: value }), TypeError);
+  }
+  assert.deepEqual(h.clock.snapshot(), before);
+  assert.equal(validBreathTiming(0.1, 0.1), true);
+  assert.equal(validBreathTiming(100000, 200000), true);
+  assert.equal(h.clock.setBreathTiming(100000, 200000).breathRemaining, 100000);
+});
+
+test('timing mutations crossing completion still complete exactly once', () => {
+  let now = 0, completions = 0;
+  const clock = new ExerciseClock({exercise: 'heart', duration: 10, now: () => now, onComplete: () => completions++});
+  clock.start();
+  now = 11000;
+  const complete = clock.setBreathTiming(3, 7);
+  assert.equal(complete.status, 'completed');
+  assert.equal(complete.breathRemaining, 0);
+  assert.equal(complete.elapsedSeconds, 10);
+  clock.restartBreath(); clock.tick(); clock.snapshot();
+  assert.equal(completions, 1);
 });
 
 test('audio is never created before explicit start and missing browser audio is graceful', () => {
