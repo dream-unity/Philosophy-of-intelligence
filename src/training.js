@@ -2627,6 +2627,12 @@
       host.innerHTML=`<div data-practice-surface><div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker" ${exercise==='open'?'hidden':''}>Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
         <h2 class="training-category-title" id="unity-psiduction-title">Unity Psiduction</h2>
         <div class="training-exercises" role="group" aria-labelledby="unity-psiduction-title">${['body','frequency','stream','unitive','open'].map(name=>`<button type="button" data-exercise="${name}" aria-pressed="${name==='frequency'?frequencyActive():exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
+        ${exercise==='stream'?`
+          <section class="open-introduction" aria-labelledby="wave-breath-title">
+            <h2 id="wave-breath-title">Using the breath metronome</h2>
+            <p>Tap Start in the shape. Each full breath is one n-back turn. As the metronome expands, inhale and notice a relationship. As it contracts, exhale and name it silently. For <strong>1-back</strong>, finish the exhale by recalling the previous breath’s relationship and comparing the two.</p>
+            <p>On breath one, picture the wood holding a pencil’s core steady. On breath two, picture the core marking paper. What held it steady enough to make that mark? Use the same rhythm with every shape. For <strong>2-back</strong>, recall the relationship from two breaths ago.</p>
+          </section>`:''}
         ${exercise==='unitive'?`
           <div class="training-body-steps loci-tabs" role="tablist" aria-label="Oscillatory Psiduction practice steps">
             ${LOCI_COURSE.map((step,i)=>`<button type="button" id="loci-tab-${i}" role="tab" data-loci-tab="${i}" aria-selected="${i===lociStep}" aria-controls="loci-panel" tabindex="${i===lociStep?0:-1}" ${i>unlockedLoci?'disabled':''}>${i+1} · ${esc(step.title)}</button>`).join('')}
