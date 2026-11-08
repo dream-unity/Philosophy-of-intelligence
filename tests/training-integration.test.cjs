@@ -105,7 +105,10 @@ function harness({ hash = '#journey', archive = null, missingModule = null } = {
   function renderController() {
     elements.get('training-root').innerHTML = '<a class="back-link" href="#stage-path">All shapes</a><select data-shape="" aria-label="Choose a shape"></select>';
   }
+  let currentMode = hash.split('/')[2] || '';
   const controller = {
+    routeMode() { return currentMode; },
+    showRoute(mode) { currentMode = mode; },
     setStage(id) { calls.stages.push(id); renderController(); },
     pause() { calls.pauses++; },
     hasDraft() { return calls.drafts; },
@@ -140,8 +143,9 @@ function harness({ hash = '#journey', archive = null, missingModule = null } = {
       let node = element;
       while (node) { node.dispatch('click', event); node = node.parentElement; }
       documentEvents.get('click')?.(event);
-      if (!event.defaultPrevented && element.attrs.href?.startsWith('#') && location.hash !== element.attrs.href) {
-        location.hash = element.attrs.href; events.get('hashchange')();
+      const href = element.closest('a[href]')?.getAttribute('href');
+      if (!event.defaultPrevented && href?.startsWith('#') && location.hash !== href) {
+        location.hash = href; events.get('hashchange')();
       }
     },
     toggle(id, open) { const element=elements.get(id); element.open=open; element.dispatch('toggle'); },
@@ -236,29 +240,20 @@ test('shape selection and legacy deep links reveal the same inline practice', ()
   assert.deepEqual(app.calls.stages, ['cube'], 'returning to the same stage preserves its mounted state');
 });
 
-test('all fourteen shape cards stay inert on the homepage and after a legacy deep link', () => {
-  for (const hash of ['#journey', '#practice/triangle']) {
-    const app = harness({ hash });
-    app.calls.drafts = true;
-    const scrollsBefore = app.calls.scrolls.length;
-    const mountsBefore = app.calls.mounts.length;
-    const practiceHiddenBefore = app.elements.get('view-practice').hidden;
-    const cards = app.document.querySelectorAll('#stage-path .stage-tile');
-    assert.equal(cards.length, STAGES.length);
-    for (const card of cards) {
-      assert.equal(card.tagName, 'div');
-      assert.equal(card.getAttribute('role'), 'group');
-      assert.equal(card.getAttribute('href'), null);
-      assert.equal(card.getAttribute('tabindex'), null);
-      assert.equal(card.getAttribute('aria-controls'), null);
-      app.click(card);
+test('shape links on the homepage open practice and preserve a selected module', () => {
+  for (const mode of ['', 'heart', 'transmutation', 'oscillatory']) {
+    const app = harness({ hash: mode ? '#practice/triangle/' + mode : '#journey' });
+    for (const stage of STAGES) {
+      const card = app.document.querySelector('#stage-path .stage-tile[data-stage="' + stage.id + '"]');
+      const href = '#practice/' + stage.id + (mode ? '/' + mode : '');
+      assert.equal(card.tagName, 'a');
+      assert.equal(card.getAttribute('href'), href);
       app.click(card.querySelector('svg'));
-      assert.equal(app.location.hash, hash, card.dataset.stage + ' cannot navigate');
-      assert.equal(app.calls.scrolls.length, scrollsBefore, card.dataset.stage + ' cannot scroll to practice');
-      assert.equal(app.calls.mounts.length, mountsBefore);
-      assert.deepEqual(app.calls.stages, []);
+      assert.equal(app.location.hash, href);
+      assert.equal(app.calls.mounts.length, 1);
       assert.equal(app.elements.get('view-journey').hidden, false);
-      assert.equal(app.elements.get('view-practice').hidden, practiceHiddenBefore);
+      assert.equal(app.elements.get('view-practice').hidden, false);
+      assert.equal(app.document.querySelector('#stage-path .selected').dataset.stage, stage.id);
     }
   }
 });

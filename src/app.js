@@ -11,7 +11,7 @@
   const $ = id => document.getElementById(id);
   const esc = value => String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const stages = C.STAGES;
-  const stageById = id => stages.find(stage => stage.id === id) || stages[0];
+  const stageById = id => id === 'open-streaming' ? {id:'open-streaming', name:'Open Streaming'} : stages.find(stage => stage.id === id) || stages[0];
   const dateLabel = value => { const d = new Date(value); return Number.isFinite(d.getTime()) ? d.toLocaleDateString(undefined, {month:'short',day:'numeric'}) : ''; };
   let storage;
   try { storage = window.localStorage; } catch (_) { storage = null; }
@@ -103,7 +103,9 @@
 
   function applyMotion() { document.body.classList.toggle('reduced-motion',state.preferences.reducedMotion); }
   function renderJourney(){
-    $('stage-path').innerHTML=stages.map((stage,index)=>`<div class="stage-tile ${hasSelectedShape&&stage.id===selectedStage?'selected':''}" data-stage="${esc(stage.id)}" role="group"${hasSelectedShape&&stage.id===selectedStage?' aria-current="true"':''} aria-label="${esc(stage.name)}"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span></div>`).join('');
+    const mode = currentView === 'practice' ? location.hash.split('/')[2] : training?.routeMode();
+    const suffix = ['wave','open','frequency','heart','transmutation','oscillatory','oscillatory-connections','oscillatory-combined'].includes(mode) ? '/' + mode : '';
+    $('stage-path').innerHTML=stages.map((stage,index)=>`<a class="stage-tile ${hasSelectedShape&&stage.id===selectedStage?'selected':''}" data-stage="${esc(stage.id)}" href="#practice/${esc(stage.id)}${suffix}"${hasSelectedShape&&stage.id===selectedStage?' aria-current="true"':''} aria-label="${esc(stage.name)}"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span></a>`).join('');
   }
 
   function sourceHTML(source, className){
@@ -113,7 +115,9 @@
   }
   function safeColor(value){const colors={red:'#bc563c',blue:'#487e9c',green:'#38826e',gold:'#bc9347',amber:'#bc9347',violet:'#8171a6',coral:'#bc6b55',teal:'#237a72'};return colors[value]||'#667d70';}
   function renderPractice(){
-    const root=$('training-root');
+    const root=$('training-root'), openRoot=$('open-streaming-root');
+    root.hidden=false;
+    openRoot.hidden=true;
     if(!window.FormTraining){
       root.innerHTML='<div class="empty-state"><h1>Practice could not load.</h1><p>Reload this page to load the practice files.</p><a class="button secondary" href="#journey">Return to the shapes</a></div>';
       return;
@@ -122,17 +126,25 @@
       training=window.FormTraining.mount({
         root,
         stageId:practiceStage,
-        onStageChange(id){
+        initialExercise:location.hash.split('/')[2] || '',
+        onExerciseChange(name){
+          const path='#practice/'+practiceStage;
+          window.history.replaceState(null,'',path+(name?'/'+name:''));renderJourney();
+        },
+        onStageChange(id,mode){
           const stage=stageById(id);
-          const target='#practice/'+stage.id;
+          const target='#practice/'+stage.id+(mode?'/'+mode:'');
           focusShapePicker=true;
           if(location.hash!==target)location.hash=target;else route();
         }
       });
       mountedStage=practiceStage;
-    }else if(mountedStage!==practiceStage){
-      training.setStage(practiceStage);
-      mountedStage=practiceStage;
+    }else {
+      if(mountedStage!==practiceStage){
+        training.setStage(practiceStage);
+        mountedStage=practiceStage;
+      }
+      if(currentView==='practice')training.showRoute(location.hash.split('/')[2] || '');
     }
   }
 

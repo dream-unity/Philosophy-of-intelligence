@@ -79,7 +79,7 @@ test('entries stay append-only, while readiness is an independent personal asses
   assessment.readiness.circle.heart = false;
   assessment.readiness.circle.body = true;
   assert.equal(store.save(assessment).ok, true);
-  assert.deepEqual(store.data.readiness.circle, { heart: false, body: true, stream: false });
+  assert.deepEqual(store.data.readiness.circle, { heart: false, body: true, stream: false, frequency: false, unitive: false, open: false });
 });
 
 test('references must preserve the exact lag source in the same shape, exercise, and stream', () => {
@@ -169,14 +169,14 @@ test('pre-stream v1 data loads without rewriting originals and retains every ear
   assert.equal(storage.getItem(P.STORAGE_KEY), raw);
   assert.deepEqual(store.data.entries, legacy.entries);
   assert.deepEqual(store.data.sessions, legacy.sessions);
-  assert.deepEqual(store.data.readiness.circle, { heart: true, body: false, stream: false });
+  assert.deepEqual(store.data.readiness.circle, { heart: true, body: false, stream: false, frequency: false, unitive: false, open: false });
 
   assert.equal(add(store, observation('stream-first', { exercise: 'stream', source: 'The ocean contains the boat.' })).ok, true);
   const restored = P.createStore(storage).data;
   assert.deepEqual(restored.entries.slice(0, 2), legacy.entries);
   assert.deepEqual(restored.sessions, legacy.sessions);
   assert.equal(restored.entries[2].exercise, 'stream');
-  assert.deepEqual(restored.readiness.circle, { heart: true, body: false, stream: false });
+  assert.deepEqual(restored.readiness.circle, { heart: true, body: false, stream: false, frequency: false, unitive: false, open: false });
 });
 
 test('consciousness-stream records use their exact N target independently of heart and body records', () => {
@@ -198,7 +198,7 @@ test('consciousness-stream records use their exact N target independently of hea
   const restored = JSON.parse(store.exportJSON());
   assert.deepEqual(restored.entries.at(-1), next.entries.at(-1));
   assert.equal(restored.sessions.at(-1).exercise, 'stream');
-  assert.deepEqual(restored.readiness.circle, { heart: false, body: true, stream: true });
+  assert.deepEqual(restored.readiness.circle, { heart: false, body: true, stream: true, frequency: false, unitive: false, open: false });
 });
 
 test('corrupt or incompatible stored data is preserved and pauses persistence', () => {
@@ -290,23 +290,24 @@ test('failed reset preserves the current data for export', () => {
   assert.equal(store.data.entries.length, 1);
 });
 
-test('all fourteen shapes work, with strict types, bounds and no silent truncation', () => {
-  assert.equal(P.STAGE_IDS.length, 14);
+test('all fourteen shapes and archived open-streaming records work, with strict limits', () => {
+  assert.equal(P.STAGE_IDS.filter(id => id !== 'open-streaming').length, 14);
+  assert.ok(P.STAGE_IDS.includes('open-streaming'));
   const store = P.createStore(memory());
   for (const id of P.STAGE_IDS) assert.equal(add(store, observation(id, { stageId: id, referenceId: '' })).ok, true);
   assert.ok(store.data.entries.every(item => item.referenceId === null));
   for (const changes of [{ source: ' ' }, { source: 'x'.repeat(3001) }, { stageId: 'unknown' }, { exercise: 'other' }, { lag: 0 }, { lag: 5 }, { lag: 1.5 }, { createdAt: '2026-02-30T10:00:00Z' }, { source: 3 }, { privateExtra: 'never discard' }]) {
     assert.equal(add(store, observation('invalid', changes)).ok, false);
-    assert.equal(store.data.entries.length, 14);
+    assert.equal(store.data.entries.length, P.STAGE_IDS.length);
   }
   const duplicate = store.data;
   duplicate.entries.push(observation('circle'));
   assert.equal(store.save(duplicate).ok, false);
   const long = store.data;
-  long.entries.push(...Array.from({ length: 487 }, (_, i) => observation('extra-' + i)));
+  long.entries.push(...Array.from({ length: 501 - P.STAGE_IDS.length }, (_, i) => observation('extra-' + i)));
   assert.equal(long.entries.length, 501);
   assert.equal(store.save(long).ok, false);
-  assert.equal(store.data.entries.length, 14);
+  assert.equal(store.data.entries.length, P.STAGE_IDS.length);
   const tooManySessions = store.data;
   tooManySessions.sessions = Array.from({ length: 501 }, (_, i) => session('session-' + i));
   assert.equal(store.save(tooManySessions).ok, false);

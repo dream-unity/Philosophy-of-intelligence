@@ -22,32 +22,200 @@
       (inhaleSeconds * 1000 + exhaleSeconds * 1000) <= Number.MAX_SAFE_INTEGER;
   }
 
-  const HEART_PHASES = Object.freeze([
-    Object.freeze({ id: 'early', label: 'Step 1 · Heart-Focused Breathing',
-      inhale: 'Breathe gently; rest attention at your chest.',
-      exhale: 'Keep attention there; let the breath stay comfortable.' }),
-    Object.freeze({ id: 'middle', label: 'Step 2 · Heart Feeling',
-      inhale: 'Invite care or appreciation; notice what you actually feel.',
-      exhale: 'Stay with the feeling without forcing warmth.' }),
-    Object.freeze({ id: 'late', label: 'Step 3 · Deepen',
-      inhale: 'Deepen attention gently, without demanding a stronger feeling.',
-      exhale: 'Notice changes; return when attention wanders.' })
-  ]);
+  const HEART_PRACTICE = Object.freeze({
+    label: 'Heart activation',
+    instruction: 'Rest your attention in the centre of your heart. Soften your chest and let a sincere feeling of love come forward as a felt experience. Breathe gently in and out through the heart, sustaining the feeling and gradually deepening it without forcing it.'
+  });
 
   const BODY_STEPS = Object.freeze([
-    Object.freeze({ id: 'location', label: 'Location', prompt: 'Where is the sensation? Notice its edges. Location alone does not identify an emotion.' }),
-    Object.freeze({ id: 'quality', label: 'Quality', prompt: 'Describe the raw sensation: pressure, warmth, tightness, or another texture. Interpret later.' }),
-    Object.freeze({ id: 'intensity', label: 'Intensity', prompt: 'Rate the sensation from 0 to 10. Its strength may differ from the emotion’s strength.' }),
-    Object.freeze({ id: 'movement', label: 'Movement', prompt: 'Is it still, pulsing, spreading, or changing? Unclear is a valid observation.' }),
-    Object.freeze({ id: 'direction', label: 'Direction', prompt: 'Does it move inward, outward, up, down, or nowhere clearly?' }),
-    Object.freeze({ id: 'coherence', label: 'Coherence', prompt: 'Compare sensation, imagery, impulse and emotional tone. Do they agree, conflict, or remain unclear?' }),
-    Object.freeze({ id: 'meaning-tone', label: 'Meaning-tone', prompt: 'Notice pleasant, unpleasant, neutral or mixed tone. Name an emotion only provisionally; keep sensation, interpretation and impulse distinct.' })
-  ]);
+  {
+    "id": "awareness",
+    "label": "Awareness",
+    "prompt": "Sit for a moment. What can you feel in your body? You can notice it before you know its name.",
+    "pairing": "One line goes all the way around the circle. Let it remind you to notice your whole body before you pick one spot.",
+    "example": "I can feel my feet inside my shoes and my back against the chair.",
+    "questions": [
+      "Does my awareness feel expanded or contracted?",
+      "Is my awareness high, low or somewhere in between?",
+      "What sensations are present across my body as a whole?",
+      "What changes in my awareness when I notice several sensations together?"
+    ]
+  },
+  {
+    "id": "attention",
+    "label": "Attention",
+    "prompt": "Pick one feeling to notice for a moment. Then see what else you can feel.",
+    "pairing": "Imagine folding a paper circle in half. You can look at just one half. You can pay attention to one part of your body in the same way.",
+    "example": "I can feel both shoes. This time I notice just where my left sock touches my big toe.",
+    "questions": [
+      "Where is my attention resting right now?",
+      "Is my focus narrow or broad?",
+      "Can I shift attention to another sensation and return?",
+      "What changes when I attend to one sensation rather than the whole body?"
+    ]
+  },
+  {
+    "id": "location",
+    "label": "Location and boundary",
+    "prompt": "Where do you feel it? Can you tell where that feeling ends?",
+    "pairing": "Run your eyes around the three sides of the triangle. They show where its inside ends. See if you can find the edge of a feeling, too.",
+    "example": "A soft rug tickles the bottoms of my feet. I can feel the tickle under my toes. By my ankles it fades away.",
+    "questions": [
+      "Where in my body do I notice the sensation?",
+      "Is it close to the surface or deeper inside?",
+      "Does it have a clear boundary or fade gradually?",
+      "Is it in one place or present across several areas?"
+    ]
+  },
+  {
+    "id": "quality",
+    "label": "Quality",
+    "prompt": "What does it feel like? You might pick a word like warm, itchy, soft or prickly.",
+    "pairing": "Think of the square as a little picture frame. Pick one feeling to put in it and describe how it feels.",
+    "example": "My woolly sleeve feels soft on my arm, but its label feels scratchy on my neck.",
+    "questions": [
+      "What words best describe this sensation?",
+      "Is it warm or cool, smooth or rough, steady or tingling?",
+      "Does its texture change as I stay with it?",
+      "Are there different qualities within the same area?"
+    ]
+  },
+  {
+    "id": "intensity",
+    "label": "Intensity",
+    "prompt": "How strong is the feeling? Does it feel tiny, big or somewhere in between?",
+    "pairing": "The pentagon has five corners. Imagine them as five steps, from a very small feeling to a very strong one. Which step would you choose?",
+    "example": "A feather brushes my hand. I know just where it touched, but the tickle is tiny. I'd pick the first step.",
+    "questions": [
+      "How strong or subtle is the sensation?",
+      "Is it the same intensity throughout the area?",
+      "Does it grow, lessen or remain steady?",
+      "How does its intensity compare with another sensation?"
+    ]
+  },
+  {
+    "id": "rhythm",
+    "label": "Time and rhythm",
+    "prompt": "Stay with one feeling for a little while. Does it keep going, stop, or come back?",
+    "pairing": "Follow the six sides of the hexagon with your eyes. Each time you go around, you come back to the start. Some feelings come back like that too.",
+    "example": "When I drum on the table, my fingertips feel tap, tap, tap. When I rest my hand there, I feel the table the whole time.",
+    "questions": [
+      "Is the sensation continuous or intermittent?",
+      "Does it pulse or repeat in a pattern?",
+      "How quickly or slowly does it change?",
+      "Does its rhythm relate to my breathing or another sensation?"
+    ]
+  },
+  {
+    "id": "movement",
+    "label": "Movement",
+    "prompt": "Does the feeling stay in one spot, move to a new spot, or spread out?",
+    "pairing": "Let your eyes move from one corner of the heptagon to the next. Now see whether a feeling moves across your skin or stays put.",
+    "example": "A drop of water rolls down my arm. I feel the cool spot travel from my elbow toward my hand.",
+    "questions": [
+      "Does the sensation stay still, move or spread?",
+      "Does it move as one whole or in separate parts?",
+      "Is its movement smooth, sudden or wave-like?",
+      "What happens to nearby sensations as it moves?"
+    ]
+  },
+  {
+    "id": "direction",
+    "label": "Direction",
+    "prompt": "If the feeling moves, which way does it go? If it stays in one spot, you can say “still.”",
+    "pairing": "Imagine an arrow from the middle of the octagon to any one of its eight corners. Which way would an arrow point for your feeling?",
+    "example": "The cool drop on my arm moves toward my thumb. That's the way I'd point my arrow.",
+    "questions": [
+      "If the sensation moves, which way does it travel?",
+      "Does it move toward or away from the centre of my body?",
+      "Does its direction stay the same or change?",
+      "If it feels still, is there an impulse or tendency toward movement?"
+    ]
+  },
+  {
+    "id": "tone",
+    "label": "Felt tone",
+    "prompt": "Do you like the feeling, dislike it, feel a bit of both, or have no strong feeling about it?",
+    "pairing": "The prism joins two triangles together. They can remind you that two feelings can go together, too.",
+    "example": "My scarf feels cosy, but one bit tickles my chin. I like the warmth and wish the tickle would stop.",
+    "questions": [
+      "Does the sensation feel pleasant, unpleasant, neutral or mixed?",
+      "Does its felt tone change as I attend to it?",
+      "Do different parts of it have different tones?",
+      "How does its tone relate to my overall state?"
+    ]
+  },
+  {
+    "id": "impulse",
+    "label": "Impulse",
+    "prompt": "What do you feel like doing next? You can notice the wish before you choose what to do.",
+    "pairing": "At a corner of the cube, you can follow more than one edge. Think of each way out as a different thing you could do.",
+    "example": "My nose tickles and I want to rub it. I can feel that wish even while my hands are still.",
+    "questions": [
+      "Does this sensation bring an urge to act or move?",
+      "Where do I notice that urge in my body?",
+      "Does the urge grow, fade or change if I observe it?",
+      "What choices are available before I respond?"
+    ]
+  },
+  {
+    "id": "coherence",
+    "label": "Coherence",
+    "prompt": "Notice a body feeling, a thought and something you want to do. Do they seem to fit together?",
+    "pairing": "The flat sides of a dodecahedron fit together to make one shape. Look for things in your own experience that fit together, too.",
+    "example": "I see my friend, feel a grin spread across my face and want to wave. All three fit together for me.",
+    "questions": [
+      "Do my sensations, thoughts and impulses seem to fit together?",
+      "Which parts of my experience support one another?",
+      "Is anything pulling in a different direction?",
+      "What changes in the whole when I attend to one part?"
+    ]
+  },
+  {
+    "id": "meaning",
+    "label": "Meaning",
+    "prompt": "Say what you feel in your body. Then ask, “What might this feeling mean?” You can have more than one guess.",
+    "pairing": "You can turn an icosahedron to look at a different triangle. Try looking at the same body feeling in a different way.",
+    "example": "My tummy flutters before the school play. Maybe I'm excited to go on stage. Maybe I'm worried I'll forget my line.",
+    "questions": [
+      "What meaning am I giving this sensation?",
+      "What else might the same sensation mean?",
+      "How does the situation shape my interpretation?",
+      "Does a different interpretation change how I experience it?"
+    ]
+  },
+  {
+    "id": "confidence",
+    "label": "Confidence and uncertainty",
+    "prompt": "What can you tell for sure about a feeling? Which part are you still guessing about?",
+    "pairing": "The geodesic sphere has lots of little triangles. Imagine looking closely at just one. Pick one small thing you know, then one thing you're still wondering about.",
+    "example": "I'm sure my cheeks feel warm. Maybe it's the sunshine. Maybe it's from running. I don't know yet.",
+    "questions": [
+      "What can I directly notice about the sensation?",
+      "What am I interpreting or guessing?",
+      "How certain am I about that interpretation?",
+      "What else could I notice before deciding what it means?"
+    ]
+  },
+  {
+    "id": "responsiveness",
+    "label": "Responsiveness",
+    "prompt": "Think about how you feel now. Shift a little if you'd like. What feels different? What feels the same?",
+    "pairing": "Picture turning a ball in your hands. You can see a new side and still hold the whole ball. Check in with your whole body again after you move.",
+    "example": "My backpack strap pressed on one shoulder. After I took it off, I could still feel the spot for a little while. Then the feeling faded.",
+    "questions": [
+      "How does the sensation respond when my attention shifts?",
+      "What changes if I gently adjust my posture or breathing?",
+      "What stays the same after that change?",
+      "Does the response appear immediately or gradually?"
+    ]
+  }
+].map(step => Object.freeze(step)));
 
   class ExerciseClock {
     constructor(options) {
       const settings = options || {};
-      if (!['stream', 'heart', 'body'].includes(settings.exercise)) throw new TypeError('Choose consciousness stream, heart or body.');
+      if (!['stream', 'frequency', 'heart', 'body', 'unitive', 'open'].includes(settings.exercise)) throw new TypeError('Choose a practice.');
       if (!Number.isFinite(settings.duration) || settings.duration <= 0) throw new TypeError('Duration must be positive seconds.');
       this.exercise = settings.exercise;
       this.duration = settings.duration;
@@ -102,6 +270,7 @@
       const phaseDuration = inhaling ? inhale : exhale;
       return {
         breathPhase: inhaling ? 'inhale' : 'exhale',
+        breathCycleIndex: cycleIndex,
         breathPhaseIndex: this._breathIndexBase + cycleIndex * 2 + (inhaling ? 0 : 1),
         breathDuration: phaseDuration / 1000,
         breathProgress: Math.min(1, Math.max(0, phaseElapsed / phaseDuration)),
@@ -435,9 +604,11 @@
       } catch (error) { return this._fail(error); }
     }
 
-    cue(inhale) {
+    cue(inhale, breathingCue = true) {
       if (this.bellVolume <= 0) return false;
-      return this._whenReady(() => this._bowl(inhale ? 392 : 293.66, 0.08, 3.3));
+      // The lower-pitched exhale needs extra gain to be clearly audible on small speakers.
+      const peak = !inhale && breathingCue ? 0.16 : 0.08;
+      return this._whenReady(() => this._bowl(inhale ? 392 : 293.66, peak, 3.3));
     }
 
     preview() {
@@ -470,6 +641,6 @@
     }
   }
 
-  return Object.freeze({ HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, FREQUENCIES, BREATH_SECONDS, BODY_STEP_SECONDS, HEART_PHASES, BODY_STEPS, validBreathTiming, ExerciseClock, ExerciseAudio });
+  return Object.freeze({ HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, FREQUENCIES, BREATH_SECONDS, BODY_STEP_SECONDS, HEART_PRACTICE, BODY_STEPS, validBreathTiming, ExerciseClock, ExerciseAudio });
 });
 

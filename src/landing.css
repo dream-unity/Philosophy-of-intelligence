@@ -23,8 +23,6 @@ body[data-view="journey"] .skip-link { display: none; }
    Its smaller footprint leaves more paper between it and the outer ink band. */
 .portal--world { --x: 49.920255%; --y: 74%; --diameter: 17%; z-index: 2; }
 .portal-caption { position: absolute; left: 50%; top: 50%; display: grid; place-content: center; width: 50.78125%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: #ebe4d5 url("../assets/parchment-texture.svg") repeat; background-size: 21.37161cqw 21.37161cqw; color: #302b23; font-size: clamp(11px, 2.05cqw, 26px); line-height: 1.15; text-align: center; pointer-events: none; }
-/* Give Surrender a sliver of clearance; all three labels keep one scale. */
-.portal-caption > span { font-size: .94em; }
 /* Neutral graphite inherits its colour from the original parchment beneath it.
    Lift the insert's paper to white so multiply adds ink without a sepia disc.
    The existing circular clip keeps all strokes inside the original rim. */
@@ -46,7 +44,7 @@ body[data-view="journey"] .skip-link { display: none; }
 .bridge-arrow-etch { fill: none; stroke: #e4dccb; stroke-width: .85; opacity: .8; }
 /* Keep the fourteen shapes visible as a noninteractive gallery. */
 .portal-page > .stage-path { flex: none; width: min(calc(100% - 32px), 1440px); }
-.portal-page .stage-tile { text-align: center; cursor: default; }
+.portal-page .stage-tile { text-align: center; cursor: pointer; }
 /* The ink occupies about 72% of the SVG viewBox. Size the box generously
    enough for the visible shape, and cap it to the card on narrow screens. */
 .portal-page .stage-tile .stage-icon { flex: none; width: min(120px, 100%); height: auto; aspect-ratio: 1; }

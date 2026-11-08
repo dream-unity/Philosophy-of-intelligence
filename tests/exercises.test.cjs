@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { ExerciseClock, ExerciseAudio, HEART_PHASES, BODY_STEPS, HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, validBreathTiming } = require('../src/exercises.js');
+const { ExerciseClock, ExerciseAudio, HEART_PRACTICE, BODY_STEPS, HEART_DURATIONS, BODY_DURATIONS, STREAM_DURATIONS, validBreathTiming } = require('../src/exercises.js');
 
 function clockHarness(exercise = 'heart', duration = 900, timing = {}) {
   let time = 0;
@@ -12,14 +12,17 @@ function clockHarness(exercise = 'heart', duration = 900, timing = {}) {
   return { clock, ticks, completed, at(seconds) { time = seconds * 1000; return clock.tick(); } };
 }
 
-test('source durations and both complete manual exercise sequences are available', () => {
+test('practice exposes its duration choices, heart instruction and fourteen Signal vectors', () => {
   assert.deepEqual(HEART_DURATIONS, [15, 30, 60, 120, 180]);
   assert.deepEqual(BODY_DURATIONS, [15, 30, 60]);
   assert.deepEqual(STREAM_DURATIONS, [15, 30, 60]);
   assert.equal(Object.isFrozen(STREAM_DURATIONS), true);
-  assert.deepEqual(HEART_PHASES.map(phase => phase.id), ['early', 'middle', 'late']);
-  assert.ok(HEART_PHASES.every(phase => phase.inhale.length > 40 && phase.exhale.length > 40));
-  assert.deepEqual(BODY_STEPS.map(step => step.id), ['location', 'quality', 'intensity', 'movement', 'direction', 'coherence', 'meaning-tone']);
+  assert.match(HEART_PRACTICE.instruction, /love/);
+  assert.deepEqual(BODY_STEPS.map(step => step.id), ['awareness', 'attention', 'location', 'quality', 'intensity', 'rhythm', 'movement', 'direction', 'tone', 'impulse', 'coherence', 'meaning', 'confidence', 'responsiveness']);
+  for (const vector of BODY_STEPS) {
+    assert.equal(new Set(vector.questions).size, 4, vector.label + ' has four distinct reflection questions');
+    assert.ok(vector.questions.every(question => question.endsWith('?')));
+  }
 });
 
 test('heart cadence changes exactly every five seconds and teaching phases use source boundaries', () => {
@@ -38,13 +41,13 @@ test('heart cadence changes exactly every five seconds and teaching phases use s
   assert.equal(h.at(594).heartPhaseIndex, 2);
 });
 
-test('body mapping rotates seven thirty-second steps repeatedly without inventing duration phases', () => {
+test('the clock’s legacy body index wraps through fourteen named steps', () => {
   const h = clockHarness('body', 1800);
   h.clock.start();
   assert.equal(h.at(29.999).bodyStepIndex, 0);
-  for (let step = 1; step < 14; step++) {
+  for (let step = 1; step <= 28; step++) {
     const state = h.at(step * 30);
-    assert.equal(state.bodyStepIndex, step % 7);
+    assert.equal(state.bodyStepIndex, step % 14);
     assert.equal(state.stepRemaining, 30);
   }
 });

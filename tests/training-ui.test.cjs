@@ -15,12 +15,16 @@ const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'in
 class Element {
   constructor(tag = 'div', attributes = {}) {
     this.tagName = tag.toUpperCase(); this.attributes = attributes; this.children = [];
-    this.listeners = new Map(); this.style = {}; this._text = ''; this._value = null;
+    this.parentElement = null; this.listeners = new Map(); this.style = {}; this._text = ''; this._value = null;
     this.hidden = Object.hasOwn(attributes, 'hidden'); this.disabled = Object.hasOwn(attributes, 'disabled');
     this.readOnly = Object.hasOwn(attributes, 'readonly'); this.checked = Object.hasOwn(attributes, 'checked');
     this.open = Object.hasOwn(attributes, 'open');
     this.dataset = Object.fromEntries(Object.entries(attributes).filter(([key]) => key.startsWith('data-')).map(([key, value]) => [key.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()), value]));
-    this.classList = { toggle: (name, force) => {
+    this.classList = {
+      add: (...names) => names.forEach(name => this.classList.toggle(name, true)),
+      remove: (...names) => names.forEach(name => this.classList.toggle(name, false)),
+      contains: name => (this.attributes.class || '').split(/\s+/).includes(name),
+      toggle: (name, force) => {
       const classes = new Set((this.attributes.class || '').split(/\s+/).filter(Boolean));
       if (force === undefined ? !classes.has(name) : force) classes.add(name); else classes.delete(name);
       this.attributes.class = [...classes].join(' ');
@@ -37,7 +41,7 @@ class Element {
         const attrs = {};
         const tail = token.slice(tag.length + 1).replace(/\/?\s*>$/, '');
         for (const match of tail.matchAll(/([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) attrs[match[1]] = decode(match[2] ?? match[3] ?? match[4] ?? '');
-        const child = new Element(tag, attrs); stack.at(-1).children.push(child);
+        const child = new Element(tag, attrs); stack.at(-1).appendChild(child);
         if (!voidTags.has(tag) && !/\/>$/.test(token)) stack.push(child);
       } else stack.at(-1)._text += decode(token);
     }
@@ -63,14 +67,25 @@ class Element {
     return this.tagName.toLowerCase() === selector;
   }
   querySelectorAll(selector) {
+    const wanted = selector.split(',').map(part => part.trim());
     const result = [];
-    for (const child of this.children) {
-      if (child.matches(selector)) result.push(child);
-      result.push(...child.querySelectorAll(selector));
-    }
+    const visit = parent => {
+      for (const child of parent.children) {
+        if (wanted.some(part => child.matches(part))) result.push(child);
+        visit(child);
+      }
+    };
+    visit(this);
     return result;
   }
-  querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+  querySelector(selector) {
+    for (const child of this.children) {
+      if (child.matches(selector)) return child;
+      const match = child.querySelector(selector);
+      if (match) return match;
+    }
+    return null;
+  }
   setAttribute(key, value) { this.attributes[key] = String(value); }
   getAttribute(key) { return this.attributes[key] ?? null; }
   addEventListener(type, callback) { if (!this.listeners.has(type)) this.listeners.set(type, []); this.listeners.get(type).push(callback); }
@@ -78,8 +93,18 @@ class Element {
   click() { if (!this.disabled) this.dispatch('click'); }
   focus() { this.focused = true; }
   scrollIntoView() {}
-  remove() {}
-  append(child) { this.children.push(child); }
+  remove() {
+    if (this.parentElement) this.parentElement.children = this.parentElement.children.filter(child => child !== this);
+    this.parentElement = null;
+  }
+  appendChild(child) {
+    child.remove();
+    child.parentElement = this;
+    this.children.push(child);
+    return child;
+  }
+  append(...children) { children.forEach(child => this.appendChild(child)); }
+  removeEventListener(type, fn) { this.listeners.set(type, (this.listeners.get(type) || []).filter(callback => callback !== fn)); }
 }
 
 function harness(options = {}) {
@@ -102,7 +127,7 @@ function harness(options = {}) {
   const browser = vm.createContext({
     console, Blob, performance: { now: () => now }, localStorage: storage,
     confirm: () => true,
-    document: { body: new Element('body'), createElement: tag => new Element(tag) },
+    document: { body: new Element('body'), createElement: tag => new Element(tag), createTextNode: value => { const el = new Element('#text'); el.textContent = value; return el; } },
     URL: { createObjectURL(blob) { downloads.push(blob); return 'blob:test'; }, revokeObjectURL() {} },
     setTimeout: () => 1, clearTimeout() {},
     setInterval(callback) { const id = intervals.size + 1; intervals.set(id, callback); return id; },
@@ -111,17 +136,23 @@ function harness(options = {}) {
     removeEventListener(type, callback) { events.get(type)?.delete(callback); }
   });
   vm.runInContext('window = globalThis;', browser);
-  for (const filename of ['relational-models.js', 'model-view.js', 'shape-practice.js', 'exercises.js', 'training-store.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', filename), 'utf8'), browser, { filename });
+  for (const filename of ['agency-practice.js', 'agency-map.js', 'relational-models.js', 'model-view.js', 'shape-practice.js', 'exercises.js', 'training-store.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', filename), 'utf8'), browser, { filename });
   browser.FormExercises = { ...browser.FormExercises, ExerciseAudio: Audio };
   browser.FormGeometry = { miniIcon: (stageId, size) => '<svg aria-hidden="true" data-stage="'+stageId+'" width="'+size+'"></svg>' };
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/training.js'), 'utf8'), browser, { filename: 'training.js' });
-  const host = new Element(), changes = [];
-  const app = browser.FormTraining.mount({ root: host, stageId: options.stageId || 'circle', onStageChange: id => changes.push(id) });
+  const host = new Element(), changes = [], routes = [];
+  const app = browser.FormTraining.mount({ root: host, stageId: options.stageId || 'circle', initialExercise: options.initialExercise ?? 'wave', onStageChange: id => changes.push(id), onExerciseChange: route => routes.push(route) });
   const q = selector => { const element = host.querySelector(selector); assert.ok(element, 'Missing UI control: ' + selector); return element; };
   function type(selector, value) { const element = q(selector); assert.equal(element.readOnly, false, 'Cannot type into a committed field'); element.value = value; element.dispatch('input'); }
   function choose(selector, value) { const element = q(selector); element.value = value; element.dispatch('change'); }
   return {
-    app, host, q, type, choose, sounds, downloads, raw, changes, intervals,
+    app, host, q, type, choose, sounds, downloads, raw, changes, routes, intervals,
+    selectExercise(exercise) {
+      if (exercise === 'heart') {
+        q('[data-exercise="frequency"]').click();
+        q('[data-frequency-module="heart"]').click();
+      } else q('[data-exercise="' + exercise + '"]').click();
+    },
     click: selector => q(selector).click(),
     submit: () => q('[data-return-form]').dispatch('submit'),
     applyRhythm(inhale, exhale) {
@@ -164,7 +195,7 @@ test('each of 42 guided lessons has four reachable entries, accurate addresses a
   for(const stage of require('../src/shape-practice.js').STAGES){
     page.app.setStage(stage.id);
     for(const exercise of ['stream','heart','body']){
-      page.click('[data-exercise="'+exercise+'"]');
+      page.selectExercise(exercise);
       for(let entry=0;entry<4;entry++){
         assert.equal(page.q('[data-model-state]').value,String(entry));
         assert.equal(page.q('[data-walkthrough-prompt]').textContent,stage[exercise].examples[entry].inhale);
@@ -177,7 +208,7 @@ test('each of 42 guided lessons has four reachable entries, accurate addresses a
       assert.equal(page.q('[data-model-state]').value,'0','rehearse again starts a fresh example');
     }
   }
-  page.click('[data-exercise="heart"]');page.click('[data-start]');
+  page.selectExercise('heart');page.click('[data-start-orb]');
   const before=page.q('[data-walkthrough-prompt]').textContent;
   page.advance(85);
   assert.equal(page.q('[data-walkthrough-prompt]').textContent,before);
@@ -200,46 +231,57 @@ test('manual entry selection resets the teaching phase and detached walkthrough 
   assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
 });
 
-test('all 42 practices teach through the metronome and keep optional examples below practice', () => {
+test('all 42 Signal, Heart and Wave practices integrate the shape, metronome and exercise cues', () => {
   const page=harness();
   for(const stage of require('../src/shape-practice.js').STAGES){
     page.app.setStage(stage.id);
     for(const exercise of ['stream','heart','body']){
-      page.click('[data-exercise="'+exercise+'"]');
-      const context=stage.id+'/'+exercise,cues=stage[exercise].cues;
+      page.selectExercise(exercise);
+      const context=stage.id+'/'+exercise;
       const layout=page.q('.training-layout'),reference=page.q('[data-reference]');
       assert.equal(page.host.querySelector('[data-shape-essence]'),null,'the descriptive subheading is removed');
       assert.equal(page.host.querySelector('.training-heading'),null,'the old title and level label are removed');
       const symbolHeader=page.q('.training-symbol-header');
-      assert.equal(symbolHeader.querySelector('h1').textContent,stage.name,'retain a screen-reader page heading');
+      const dimension=page.q('[data-dimension]').textContent;
+      assert.equal(symbolHeader.querySelector('h1').textContent,exercise==='stream'?stage.name+' · '+dimension:stage.name,'retain a screen-reader page heading');
       assert.equal(symbolHeader.querySelector('h1').attributes.class,'visually-hidden');
       const symbol=page.q('.training-page-symbol').querySelector('svg');
       assert.equal(symbol.attributes['data-stage'],stage.id);
       assert.equal(symbol.attributes.width,'65','scale the same artwork used on the homepage');
-      assert.ok(page.host.children.indexOf(symbolHeader)<page.host.children.indexOf(layout),'the large symbol precedes practice');
-      assert.ok(page.host.children.indexOf(layout)<page.host.children.indexOf(reference),'optional examples follow the exercise and settings');
+      const surface = page.q('[data-practice-surface]');
+      assert.equal(symbolHeader.parentElement, surface);
+      assert.ok(surface.children.indexOf(symbolHeader)<surface.children.indexOf(layout),'the large symbol precedes practice');
+      assert.equal(reference.hidden,true,'worked records stay off the practice surface');
       assert.equal(page.q('[data-examples]').open,false,'detailed rehearsal is optional');
       for(const selector of ['[data-lesson]','[data-short-example]','.training-breath-method','.training-four','.training-reconstruction','.training-theory','[data-live-shape]']){
         assert.equal(page.host.querySelector(selector),null,'removed teaching stays absent: '+selector);
       }
-      page.choose('[data-pacing]','paced');
-      assert.equal(page.q('[data-prompt]').textContent,cues.inhale,context+' previews its own inhale instruction');
-      page.click('[data-start]');
+      if(exercise!=='body') page.choose('[data-pacing]','paced');
+      const prompt=page.q('[data-prompt]').textContent;
+      assert.ok(prompt.trim(),context+' previews its exercise instruction');
+      page.click('[data-start-orb]');
       assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
-      assert.equal(page.q('[data-prompt]').textContent,cues.inhale);
-      const dimension=page.q('[data-dimension]').textContent;
+      assert.equal(page.q('[data-prompt]').textContent,prompt);
+      const inhaleHelp=page.q('[data-next-step]').textContent;
       page.advance(5);
       assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
-      assert.equal(page.q('[data-prompt]').textContent,cues.exhale,context+' switches to encoding and return on exhale');
-      if(exercise==='body')assert.equal(page.q('[data-dimension]').textContent,dimension,'breath cues change within the same body dimension');
+      assert.equal(page.q('[data-dimension]').textContent,dimension,context+' keeps the same focus through exhale');
+      assert.equal(page.q('[data-prompt]').textContent,prompt);
+      const exhaleHelp=page.q('[data-next-step]').textContent;
+      if(exercise==='stream') {
+        assert.ok(exhaleHelp.trim());
+        assert.notEqual(exhaleHelp,inhaleHelp,context+' changes the reflection question on exhale');
+      }
       page.click('[data-pause]');page.advance(50);
-      assert.equal(page.q('[data-prompt]').textContent,cues.exhale,context+' preserves the paused phase instruction');
-      page.click('[data-live-pace]');
-      assert.ok(page.q('[data-prompt]').textContent.includes('Inhale: '+cues.inhale),context+' keeps inhale teaching in own rhythm');
-      assert.ok(page.q('[data-prompt]').textContent.includes('Exhale: '+cues.exhale),context+' keeps exhale teaching in own rhythm');
-      page.click('[data-pause]');page.advance(15);
+      assert.equal(page.q('[data-next-step]').textContent,exhaleHelp,context+' preserves the paused phase instruction');
+      if(exercise!=='body') {
+        page.click('[data-live-pace]');
+        assert.equal(page.q('[data-pacing]').value,'natural');
+      }
+      page.click('[data-pause]');
+      if(exercise!=='body') assert.equal(page.q('[data-breath-label]').textContent,'Own rhythm');
+      page.advance(15);
       assert.equal(page.q('[data-model-state]').value,'0','pacer cycles do not advance a worked entry or its memory address');
-      assert.ok(page.q('[data-next-step]').textContent.trim(),context+' retains concise contextual help');
       page.click('[data-end]');
       assert.equal(page.data().entries.length,0,'guided breaths never invent committed observations');
     }
@@ -247,8 +289,8 @@ test('all 42 practices teach through the metronome and keep optional examples be
 });
 
 test('exercise and readiness rerenders preserve keyboard focus on their replacement controls', () => {
-  const page=harness();page.click('[data-exercise="heart"]');
-  assert.equal(page.q('[data-exercise="heart"]').focused,true);
+  const page=harness();page.selectExercise('heart');
+  assert.equal(page.q('[data-frequency-module="heart"]').focused,true);
   page.q('[data-ready]').checked=true;page.q('[data-ready]').dispatch('change');
   assert.equal(page.q('[data-ready]').focused,true);
   page.click('[data-other]');
@@ -289,7 +331,7 @@ test('manual return keeps the exact two-back source and commits recollection bef
 
 test('changing exercise and shape preserves drafts while keeping observation streams separate', () => {
   const page = harness();
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   page.type('[data-note="source"]', 'Heart draft.');
   page.click('[data-exercise="body"]');
   assert.equal(page.q('[data-note="source"]').value, '');
@@ -299,7 +341,7 @@ test('changing exercise and shape preserves drafts while keeping observation str
   page.app.setStage('circle');
   assert.equal(page.q('[data-note="source"]').value, 'Body draft.');
   page.submit();
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   assert.equal(page.q('[data-note="source"]').value, 'Heart draft.');
   assert.equal(page.host.querySelector('[data-reveal]'), null, 'a body record cannot become the heart return target');
   page.submit();
@@ -314,8 +356,8 @@ test('all fourteen shapes expose all three applications and readiness remains re
     page.app.setStage(id);
     assert.equal(page.q('[data-shape]').value, id);
     for (const exercise of ['stream', 'heart', 'body']) {
-      page.click('[data-exercise="' + exercise + '"]');
-      assert.equal(page.q('[data-exercise="' + exercise + '"]').getAttribute('aria-pressed'), 'true');
+      page.selectExercise(exercise);
+      assert.equal(page.q(exercise === 'heart' ? '[data-frequency-module="heart"]' : '[data-exercise="' + exercise + '"]').getAttribute('aria-pressed'), 'true');
       const check = page.q('[data-ready]'); check.checked = true; check.dispatch('change');
       assert.equal(page.data().readiness[id][exercise], true);
       for (const selector of ['[data-return]', '[data-readiness]', '.training-record', '.training-attribution']) {
@@ -333,122 +375,123 @@ test('all fourteen shapes expose all three applications and readiness remains re
   assert.doesNotMatch(page.host.textContent, /Cedar|End mission|Commit the relation|CHALLENGE 1/);
 });
 
-test('each exercise opens with a stable preview without starting sound or recording elapsed time', () => {
-  const page = harness();
-  for (const exercise of ['stream', 'heart', 'body']) {
-    page.click('[data-exercise="' + exercise + '"]');
-    assert.equal(page.q('[data-live]').hidden, false, exercise + ' is visible before Start');
-    assert.equal(page.q('[data-setup]').hidden, false);
-    assert.equal(page.q('[data-start]').textContent.trim(), 'Start');
+test('each exercise previews its shape and remains silent until the first guided inhale', () => {
+  const page = harness({stageId:'triangle'});
+  for (const route of ['wave', 'heart', '']) {
+    page.app.showRoute(route);
+    assert.equal(page.q('[data-live]').hidden, false);
+    assert.equal(page.q('[data-start-orb]').getAttribute('aria-label'), 'Start practice');
     assert.equal(page.q('[data-duration-field]').hidden, false);
-    assert.ok(page.q('[data-prompt]').textContent.trim(), exercise + ' explains the visible exercise');
-    if (exercise === 'body') {
-      assert.equal(page.q('[data-dimension]').textContent, 'Location');
-      assert.equal(page.q('[data-body-steps]').hidden, false);
-      page.click('[data-peek="4"]');
-      assert.equal(page.q('[data-dimension]').textContent, 'Direction', 'dimensions can be explored before starting');
-    } else {
-      assert.equal(page.q('[data-pacer]').hidden, false);
-      assert.equal(page.q('[data-breath-label]').textContent, 'Ready');
-      assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
-      if (exercise === 'heart') assert.match(page.q('[data-step-label]').textContent, /Step 1/);
+    assert.equal(page.q('[data-breath-readout]').hidden, true);
+    assert.ok(page.q('[data-prompt]').textContent.trim());
+    if (route === '') {
+      assert.equal(page.q('[data-dimension]').textContent, 'Awareness');
+      page.click('[data-signal-vector="2"]');
+      assert.equal(page.q('[data-dimension]').textContent, 'Location and boundary');
+    } else if (route === 'heart') {
+      assert.equal(page.q('[data-step-label]').textContent, 'Heart Activation · Triangle');
+      assert.equal(page.q('[data-dimension]').textContent, 'Heart, body and mind');
     }
+    assert.equal(page.q('[data-breath-label]').textContent, 'Ready');
     const prompt = page.q('[data-prompt]').textContent;
     page.advance(900);
-    assert.equal(page.q('[data-prompt]').textContent, prompt, 'preview does not advance with wall time');
+    assert.equal(page.q('[data-prompt]').textContent, prompt);
     assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
-    assert.equal(page.raw.has(page.key), false, 'preview does not create a practice record');
+    assert.equal(page.raw.has(page.key), false);
     assert.ok(page.sounds.every(audio => audio.starts === 0 && audio.cues.length === 0));
   }
-  page.click('[data-start]');
-  assert.equal(page.q('[data-timer]').textContent, '15:00', 'Start begins a fresh duration after previewing');
-  assert.equal(page.q('[data-dimension]').textContent, 'Location', 'Start resets any previewed dimension');
+  page.click('[data-start-orb]');
+  assert.equal(page.q('[data-timer]').textContent, '15:00');
+  assert.equal(page.q('[data-dimension]').textContent, 'Awareness');
+  assert.equal(page.q('[data-signal-vector="0"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(page.q('[data-breath-readout]').hidden, false);
 });
 
-test('one Start follows the exercise and all settings, and applies pending edits without an extra confirmation', () => {
+test('the in-shape and toolbar controls start the same clock with the edited duration and rhythm', () => {
   const page = harness();
-  const nodes = [];
-  function collect(element) { nodes.push(element); element.children.forEach(collect); }
-  collect(page.host);
-  const position = selector => nodes.indexOf(page.q(selector));
-  assert.ok(position('[data-live]') < position('[data-duration]'));
-  for (const selector of ['[data-duration]', '[data-pacing]', '[data-inhale]', '[data-exhale]', '[data-bell]', '[data-sound]', '[data-frequency]', '[data-volume]']) {
-    assert.ok(position(selector) < position('[data-start]'), selector + ' precedes Start in reading order');
-  }
-  assert.equal(page.host.querySelectorAll('[data-start]').length, 1);
-  assert.equal(page.host.querySelector('[data-again]'), null);
+  assert.equal(page.q('[data-pacer]').querySelector('[data-start-orb]'), page.q('[data-start-orb]'));
+  assert.equal(page.q('[data-session-bar]').querySelector('[data-start-toolbar]'), page.q('[data-start-toolbar]'));
+  assert.equal(page.q('[data-start-toolbar]').hidden, false);
   page.choose('[data-duration]', '30');
   page.type('[data-inhale]', '2.5');
   page.type('[data-exhale]', '6.5');
-  page.click('[data-start]');
+  page.click('[data-start-toolbar]');
   assert.equal(page.q('[data-timer]').textContent, '30:00');
   assert.equal(page.q('[data-breath-count]').textContent, '2.5 seconds');
   assert.equal(page.q('[data-duration-field]').hidden, true);
-  assert.equal(page.q('[data-setup]').hidden, true);
-  assert.equal(page.q('[data-breath-form]').hidden, false, 'rhythm stays adjustable while practising');
+  assert.equal(page.q('[data-start-toolbar]').hidden, true);
+  assert.equal(page.q('[data-start-orb]').getAttribute('aria-label'), 'Pause practice');
+  assert.equal(page.q('[data-breath-form]').hidden, false);
   page.advance(2.5);
   assert.equal(page.q('[data-breath-label]').textContent, 'Exhale');
   assert.equal(page.q('[data-breath-count]').textContent, '6.5 seconds');
+  page.click('[data-start-orb]');
+  assert.equal(page.q('[data-start-orb]').getAttribute('aria-label'), 'Resume practice');
+  page.click('[data-start-orb]');
+  assert.equal(page.q('[data-breath-label]').textContent, 'Exhale');
 });
 
-test('ending and completing practice restore the same Start below editable settings', () => {
+test('ending and completing practice restore Start and editable settings', () => {
   const page = harness();
-  page.click('[data-start]');
+  const initialPrompt = page.q('[data-prompt]').textContent;
+  page.click('[data-start-orb]');
   page.advance(10);
   page.click('[data-end]');
   assert.equal(page.q('[data-breath-label]').textContent, 'Rest');
-  assert.equal(page.q('[data-prompt]').textContent, 'Keep your last entry. Rest in your own rhythm.');
+  assert.equal(page.q('[data-prompt]').textContent, 'Rest in your own rhythm.');
   assert.equal(page.q('[data-next-step]').textContent, '', 'ending clears instructions to continue the exercise');
-  assert.equal(page.q('[data-setup]').hidden, false);
+  assert.equal(page.q('[data-start-toolbar]').hidden, false);
   assert.equal(page.q('[data-duration-field]').hidden, false);
   assert.equal(page.data().sessions.length, 1);
-  page.click('[data-start]');
+  page.click('[data-start-orb]');
   assert.equal(page.q('[data-timer]').textContent, '15:00');
-  assert.equal(page.q('[data-prompt]').textContent, require('../src/shape-practice.js').getStage('circle').stream.cues.inhale, 'restart restores the first inhale instruction');
+  assert.equal(page.q('[data-prompt]').textContent, initialPrompt, 'restart restores the first instruction');
   page.advance(900);
   assert.equal(page.q('[data-session-state]').textContent, 'Complete');
-  assert.equal(page.q('[data-prompt]').textContent, 'Keep your last entry. Rest in your own rhythm.');
+  assert.equal(page.q('[data-prompt]').textContent, 'Rest in your own rhythm.');
   assert.equal(page.q('[data-next-step]').textContent, '', 'completion clears instructions to continue the exercise');
-  assert.equal(page.q('[data-setup]').hidden, false);
+  assert.equal(page.q('[data-start-toolbar]').hidden, false);
   assert.equal(page.q('[data-duration-field]').hidden, false);
   assert.equal(page.data().sessions.length, 2);
   page.choose('[data-duration]', '30');
-  page.click('[data-start]');
+  page.click('[data-start-orb]');
   assert.equal(page.q('[data-timer]').textContent, '30:00');
-  assert.equal(page.q('[data-setup]').hidden, true);
+  assert.equal(page.q('[data-start-toolbar]').hidden, true);
   assert.equal(page.data().sessions.length, 2, 'restarting does not duplicate the completed record');
 });
 
-test('body dimensions advance at 30 seconds, rereading does not change the clock, and pause freezes it', () => {
-  const page = harness();
-  page.click('[data-exercise="body"]'); page.click('[data-start]');
-  assert.equal(page.q('[data-dimension]').textContent, 'Location');
-  page.advance(10); page.click('[data-peek="4"]');
-  assert.equal(page.q('[data-dimension]').textContent, 'Direction');
-  assert.equal(page.q('[data-timer]').textContent, '14:50');
-  page.advance(20);
-  assert.equal(page.q('[data-dimension]').textContent, 'Quality', 'a new live step ends rereading');
+test('Signal holds each vector through exhale, advances on the next inhale and freezes while paused', () => {
+  const page = harness({stageId:'triangle'});page.selectExercise('body');
+  page.click('[data-start-orb]');
+  assert.equal(page.q('[data-dimension]').textContent, 'Awareness');
+  page.advance(5);page.click('[data-signal-vector="2"]');
+  assert.equal(page.q('[data-dimension]').textContent, 'Awareness');
+  assert.equal(page.q('[data-timer]').textContent, '14:55');
+  page.advance(5);
+  assert.equal(page.q('[data-dimension]').textContent, 'Attention');
   page.click('[data-pause]'); page.advance(500);
-  assert.equal(page.q('[data-timer]').textContent, '14:30');
+  assert.equal(page.q('[data-timer]').textContent, '14:50');
   assert.equal(page.q('[data-session-state]').textContent, 'Paused');
-  page.click('[data-pause]'); page.advance(30);
-  assert.equal(page.q('[data-dimension]').textContent, 'Intensity');
+  page.click('[data-pause]'); page.advance(10);
+  assert.equal(page.q('[data-dimension]').textContent, 'Location and boundary');
+  page.advance(10);
+  assert.equal(page.q('[data-dimension]').textContent, 'Awareness', 'the selected shape sets the cycle length');
   page.click('[data-end]');
   assert.equal(page.data().sessions.length, 1);
-  assert.equal(page.data().sessions[0].seconds, 60);
+  assert.equal(page.data().sessions[0].seconds, 30);
   assert.equal(page.data().sessions[0].completed, false);
   assert.match(page.q('[data-record]').textContent, /1 recorded practice period/);
   page.app.pause(); page.advance(100);
-  assert.equal(page.data().sessions.length, 1, 'lifecycle pauses cannot duplicate a session record');
+  assert.equal(page.data().sessions.length, 1);
 });
 
 test('heart completion records once, time never awards readiness, and all audio stops on leave', () => {
   const page = harness();
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   const sound = page.q('[data-sound]'); sound.checked = true; sound.dispatch('change');
-  page.choose('[data-pacing]', 'paced'); page.click('[data-start]');
+  page.choose('[data-pacing]', 'paced'); page.click('[data-start-orb]');
   page.advance(298);
-  assert.match(page.q('[data-step-label]').textContent, /Step 2/);
+  assert.equal(page.q('[data-step-label]').textContent, 'Heart Activation · Circle');
   page.click('[data-test-sound]');
   assert.equal(page.sounds[0].enabled, true, 'test tone does not interrupt the exercise sound');
   assert.equal(page.sounds[1].enabled, true);
@@ -470,7 +513,7 @@ test('heart completion records once, time never awards readiness, and all audio 
 
 test('heart practice starts the enabled bell and ambient sound with the first guided inhale', () => {
   const page = harness();
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   assert.equal(page.q('[data-pacing]').value, 'paced');
   assert.equal(page.q('[data-sound]').checked, true);
   assert.equal(page.q('[data-bell]').checked, true);
@@ -478,7 +521,7 @@ test('heart practice starts the enabled bell and ambient sound with the first gu
   assert.match(page.q('[data-bell-toggle]').textContent, /Bell: on/i);
   assert.equal(page.q('.training-sound').querySelector('[data-bell-toggle]'), null, 'the bell control is available outside collapsed sound settings');
   assert.ok(page.sounds.every(audio => !audio.enabled), 'rendering a page must not start audio');
-  page.click('[data-start]');
+  page.click('[data-start-orb]');
   assert.equal(page.sounds[0].enabled, true);
   assert.equal(page.sounds[0].settings.frequency, 10, 'ambient sound starts automatically with the default bell');
   assert.deepEqual(page.sounds[0].cues, [true]);
@@ -493,9 +536,9 @@ test('heart practice starts the enabled bell and ambient sound with the first gu
 });
 
 test('own rhythm gently expands and contracts without moving its label or imposing timed bells', () => {
-  const page = harness();
+  const page = harness({initialExercise:'wave'});
   page.choose('[data-pacing]', 'natural');
-  page.click('[data-start]');
+  page.click('[data-start-orb]');
   assert.equal(page.q('[data-orb]').style.transform, 'scale(1)');
   page.advance(6);
   assert.equal(page.q('[data-orb]').style.transform, 'scale(1.18)');
@@ -529,7 +572,7 @@ test('paced ring expands on inhale and contracts on exhale without shrinking bel
   const label = page.q('.training-breath-readout').querySelector('[data-breath-label]');
   assert.ok(label, 'the breath phase belongs to the visible pacer readout');
   page.choose('[data-pacing]', 'paced');
-  page.click('[data-start]');
+  page.click('[data-start-orb]');
   const scale = () => Number(page.q('[data-orb]').style.transform.match(/scale\(([^)]+)\)/)[1]);
   assert.equal(scale(), 1);
   let previous = scale();
@@ -556,7 +599,7 @@ test('custom 3 / 7 timing drives the label, countdown, ring and bell from one ph
   page.applyRhythm(3,7);
   assert.equal(page.q('[data-pacing]').value,'paced');
   assert.match(page.q('[data-pacing]').textContent,/3 seconds in · 7 seconds out/);
-  page.click('[data-start]');
+  page.click('[data-start-orb]');
   const scale=()=>Number(page.q('[data-orb]').style.transform.match(/scale\(([^)]+)\)/)[1]);
   assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
   assert.equal(page.q('[data-breath-count]').textContent,'3 seconds');
@@ -577,12 +620,12 @@ test('custom 3 / 7 timing drives the label, countdown, ring and bell from one ph
   assert.deepEqual(page.sounds[0].cues,[true,false,true]);
   assert.equal(page.q('[data-timer]').textContent,'14:50');
   assert.equal(page.q('.training-sound').open,false);
-  assert.equal(page.q('[data-setup]').querySelector('[data-pacing]'),null,'breathing mode remains reachable while setup is hidden');
-  assert.equal(page.q('[data-setup]').querySelector('[data-breath-form]'),null,'timing controls remain reachable during practice');
+  assert.equal(page.q('[data-pacing]').hidden,false,'breathing mode remains available in practice settings');
+  assert.equal(page.q('[data-breath-form]').hidden,false,'timing controls remain reachable during practice');
 });
 
 test('fractional timings keep their exact phase boundaries over multiple cycles', () => {
-  const page=harness();page.applyRhythm(1.2,2.3);page.click('[data-start]');
+  const page=harness();page.applyRhythm(1.2,2.3);page.click('[data-start-orb]');
   page.advance(1.199);
   assert.equal(page.q('[data-breath-label]').textContent,'Inhale');
   page.advance(0.001);
@@ -598,7 +641,7 @@ test('fractional timings keep their exact phase boundaries over multiple cycles'
 });
 
 test('editing fields does not interrupt the clock and applying a new pair restarts only the breath', () => {
-  const page=harness();page.click('[data-start]');page.advance(2);
+  const page=harness();page.click('[data-start-orb]');page.advance(2);
   page.type('[data-inhale]','3');page.type('[data-exhale]','7');
   page.advance(3);
   assert.equal(page.q('[data-breath-label]').textContent,'Exhale','unapplied input must not change the active 5 / 5 cycle');
@@ -619,7 +662,7 @@ test('editing fields does not interrupt the clock and applying a new pair restar
 });
 
 test('invalid duration pairs leave both active durations and stored preferences unchanged', () => {
-  const page=harness();page.applyRhythm(3,7);page.click('[data-start]');page.advance(1);
+  const page=harness();page.applyRhythm(3,7);page.click('[data-start-orb]');page.advance(1);
   const saved=page.raw.get('form-breath-timing-v1');
   for(const [inhale,exhale] of [['',7],[3,''],[0,7],[-1,7],[3,0.01],['Infinity',7],[3,'NaN'],['1e309',7]]){
     page.applyRhythm(inhale,exhale);
@@ -635,7 +678,7 @@ test('invalid duration pairs leave both active durations and stored preferences 
 });
 
 test('pausing freezes a custom phase and changing timings while paused waits for Resume', () => {
-  const page=harness();page.applyRhythm(3,7);page.click('[data-start]');page.advance(2);
+  const page=harness();page.applyRhythm(3,7);page.click('[data-start-orb]');page.advance(2);
   const before=page.q('[data-orb]').style.transform;
   page.click('[data-pause]');page.advance(100);
   assert.equal(page.q('[data-breath-label]').textContent,'Paused');
@@ -659,9 +702,9 @@ test('pausing freezes a custom phase and changing timings while paused waits for
 });
 
 test('own rhythm retains custom timing without starting timed bells until the guide is selected', () => {
-  const page=harness();page.choose('[data-pacing]','natural');page.applyRhythm(3,7);
+  const page=harness({initialExercise:'wave'});page.choose('[data-pacing]','natural');page.applyRhythm(3,7);
   assert.equal(page.q('[data-pacing]').value,'natural','editing timing must not silently enable a guide');
-  page.click('[data-start]');page.advance(40);
+  page.click('[data-start-orb]');page.advance(40);
   assert.equal(page.q('[data-breath-label]').textContent,'Own rhythm');
   assert.match(page.q('[data-live-pace]').textContent,/3\s*\/\s*7/);
   assert.deepEqual(page.sounds[0].cues,[]);
@@ -673,26 +716,27 @@ test('own rhythm retains custom timing without starting timed bells until the gu
   assert.deepEqual(page.sounds[0].cues,[true,false]);
 });
 
-test('body mapping uses the chosen breath bells when paced and keeps dimension time independent', () => {
-  const page=harness();page.click('[data-exercise="body"]');
-  page.applyRhythm(3,7);page.choose('[data-pacing]','paced');page.click('[data-start]');
-  assert.equal(page.q('[data-dimension]').textContent,'Location');
+test('Signal advances the dimension and rings the inhale together on a custom rhythm', () => {
+  const page=harness({stageId:'triangle'});page.selectExercise('body');
+  page.applyRhythm(3,7);page.click('[data-start-orb]');
+  assert.equal(page.q('[data-dimension]').textContent,'Awareness');
   assert.deepEqual(page.sounds[0].cues,[true]);
   page.advance(3);
   assert.deepEqual(page.sounds[0].cues,[true,false]);
-  assert.equal(page.q('[data-dimension]').textContent,'Location');
+  assert.equal(page.q('[data-dimension]').textContent,'Awareness');
   page.advance(7);
   assert.deepEqual(page.sounds[0].cues,[true,false,true]);
+  assert.equal(page.q('[data-dimension]').textContent,'Attention');
   page.advance(20);
-  assert.equal(page.q('[data-dimension]').textContent,'Quality');
-  assert.deepEqual(page.sounds[0].cues,[true,false,true,true],'a delayed tick emits one current breath cue, not a backlog or extra dimension bell');
+  assert.equal(page.q('[data-dimension]').textContent,'Awareness');
+  assert.deepEqual(page.sounds[0].cues,[true,false,true,true],'delayed ticks ring the current phase only');
   assert.match(page.q('[data-bell-help]').textContent,/inhale.*exhale/i);
 });
 
 test('custom timing survives exercise changes and reload, and corrupt saved values safely use defaults', () => {
   const page=harness();page.applyRhythm(3.5,7.25);
   assert.ok(page.raw.has('form-breath-timing-v1'));
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   assert.equal(page.q('[data-inhale]').value,'3.5');
   assert.equal(page.q('[data-exhale]').value,'7.25');
   page.app.setStage('half-circle');
@@ -706,13 +750,13 @@ test('custom timing survives exercise changes and reload, and corrupt saved valu
     const corrupt=harness({records:[['form-breath-timing-v1',saved]]});
     assert.equal(corrupt.q('[data-inhale]').value,'5');
     assert.equal(corrupt.q('[data-exhale]').value,'5');
-    corrupt.click('[data-start]');corrupt.advance(5);
+    corrupt.click('[data-start-orb]');corrupt.advance(5);
     assert.equal(corrupt.q('[data-breath-label]').textContent,'Exhale');
   }
 });
 
 test('blocked preference storage still allows custom timing for this visit', () => {
-  const page=harness({failWrites:true});page.applyRhythm(3,7);page.click('[data-start]');
+  const page=harness({failWrites:true});page.applyRhythm(3,7);page.click('[data-start-orb]');
   page.advance(3);
   assert.equal(page.q('[data-breath-label]').textContent,'Exhale');
   assert.equal(page.q('[data-breath-count]').textContent,'7 seconds');
@@ -722,13 +766,13 @@ test('blocked preference storage still allows custom timing for this visit', () 
 
 test('Start applies pending valid timings and keeps the preview visible when an invalid pair blocks a session', () => {
   const page=harness();page.type('[data-inhale]','');page.type('[data-exhale]','7');
-  page.click('[data-start]');
+  page.click('[data-start-orb]');
   assert.equal(page.q('[data-live]').hidden,false);
   assert.equal(page.q('[data-breath-label]').textContent,'Ready');
-  assert.equal(page.q('[data-setup]').hidden,false);
+  assert.equal(page.q('[data-start-toolbar]').hidden,false);
   assert.equal(page.sounds[0].starts,0,'invalid timing cannot start sound or the clock');
   assert.ok(page.q('[data-rhythm-status]').textContent.trim());
-  page.type('[data-inhale]','3');page.click('[data-start]');
+  page.type('[data-inhale]','3');page.click('[data-start-orb]');
   assert.equal(page.q('[data-live]').hidden,false);
   assert.equal(page.q('[data-breath-count]').textContent,'3 seconds');
   page.advance(3);
@@ -755,8 +799,8 @@ test('test bell explains muted volume and retries after asynchronous audio start
   page.click('[data-test-sound]');
   assert.equal(page.q('[data-sound-status]').textContent, '');
   assert.deepEqual(page.sounds[1].cues, [true, false, true, false]);
-  page.click('[data-exercise="heart"]');
-  page.click('[data-start]');
+  page.selectExercise('heart');
+  page.click('[data-start-orb]');
   page.sounds[0].onError(new Error('Interrupted audio context'));
   assert.match(page.q('[data-sound-status]').textContent, /could not start.*try again/);
   assert.equal(page.q('[data-session-state]').textContent, 'Practising', 'an audio error does not end the exercise');
@@ -777,8 +821,8 @@ test('test bell reports immediate startup and cue failures beside the sound cont
 
 test('test bell restores only failed running session audio without inserting another breath cue', () => {
   const page = harness();
-  page.click('[data-exercise="heart"]');
-  page.click('[data-start]');
+  page.selectExercise('heart');
+  page.click('[data-start-orb]');
   page.advance(2);
   const session = page.sounds[0];
   page.click('[data-test-sound]');
@@ -807,9 +851,9 @@ test('test bell restores only failed running session audio without inserting ano
 
 test('muting and unmuting heart bells skips missed cues without inventing a mid-phase ring', () => {
   const page = harness();
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   const ambient=page.q('[data-sound]');ambient.checked=false;ambient.dispatch('change');
-  page.click('[data-start]'); page.advance(2);
+  page.click('[data-start-orb]'); page.advance(2);
   page.click('[data-bell-toggle]');
   assert.match(page.q('[data-bell-toggle]').textContent, /Bell: off/i);
   assert.equal(page.sounds[0].enabled, false, 'muting bells with ambient off leaves the exercise silent');
@@ -829,8 +873,8 @@ test('muting and unmuting heart bells skips missed cues without inventing a mid-
 
 test('ambient controls and pause/resume remain independent of the heart bell cadence', () => {
   const page = harness();
-  page.click('[data-exercise="heart"]');
-  page.click('[data-start]'); page.advance(2);
+  page.selectExercise('heart');
+  page.click('[data-start-orb]'); page.advance(2);
   const sound = page.q('[data-sound]'); sound.checked = true; sound.dispatch('change');
   assert.equal(page.sounds[0].settings.frequency, 10);
   assert.deepEqual(page.sounds[0].cues, [true], 'enabling ambient sound adds no phase cue');
@@ -857,8 +901,8 @@ test('ambient controls and pause/resume remain independent of the heart bell cad
 
 test('returning from own rhythm begins a complete guided inhale without replaying missed bells', () => {
   const page = harness();
-  page.click('[data-exercise="heart"]');
-  page.click('[data-start]'); page.advance(2);
+  page.selectExercise('heart');
+  page.click('[data-start-orb]'); page.advance(2);
   page.click('[data-live-pace]');
   assert.equal(page.q('[data-breath-label]').textContent, 'Own rhythm');
   assert.equal(page.sounds[0].enabled, true, 'ambient sound continues while own rhythm suppresses timed breath bells');
@@ -874,45 +918,46 @@ test('returning from own rhythm begins a complete guided inhale without replayin
   assert.deepEqual(page.sounds[0].cues, [true, true, false]);
 });
 
-test('body practice starts sound with dimension bells and each exercise remembers its own pacing choice', () => {
-  const page = harness();
-  page.click('[data-exercise="body"]');
-  assert.equal(page.q('[data-pacing]').value, 'natural');
+test('Signal starts in paced mode while Heart Activation remembers its own pacing choice', () => {
+  const page = harness();page.selectExercise('body');
+  assert.equal(page.q('[data-pacing]').value, 'paced');
   assert.equal(page.q('[data-sound]').checked, true);
   assert.equal(page.q('[data-bell]').checked, true);
   assert.equal(page.q('[data-bell-toggle]').hidden, false);
-  page.click('[data-start]'); page.advance(30);
+  page.click('[data-start-orb]'); page.advance(5);
   assert.equal(page.sounds[0].enabled, true);
   assert.deepEqual(page.sounds[0].cues, [true, false]);
-  page.click('[data-end]'); page.click('[data-exercise="heart"]');
+  assert.equal(page.q('[data-live-pace]').hidden, true);
+  page.click('[data-end]'); page.selectExercise('heart');
   assert.equal(page.q('[data-pacing]').value, 'paced');
   page.choose('[data-pacing]', 'natural');
-  page.click('[data-exercise="body"]');
+  page.selectExercise('body');
+  assert.equal(page.q('[data-pacing]').value, 'paced');
+  page.selectExercise('heart');
   assert.equal(page.q('[data-pacing]').value, 'natural');
-  page.choose('[data-pacing]', 'paced');
-  page.click('[data-exercise="heart"]');
-  assert.equal(page.q('[data-pacing]').value, 'natural', 'the chosen heart rhythm survives switching away');
-  page.choose('[data-pacing]', 'paced');
-  page.click('[data-other]');
-  assert.equal(page.q('[data-pacing]').value, 'paced', 'the readiness shortcut also restores the body’s own choice');
 });
 
-test('body bowl cues follow the source dimension pattern when the seven-step sequence repeats', () => {
-  const page = harness();
-  page.click('[data-exercise="body"]');
-  const sound = page.q('[data-sound]'); sound.checked = true; sound.dispatch('change');
-  page.click('[data-start]');
-  for (let step = 0; step < 7; step++) page.advance(30);
-  assert.equal(page.q('[data-dimension]').textContent, 'Location');
-  assert.deepEqual(page.sounds[0].cues, [true, false, true, false, true, false, true, true]);
+test('the bowl marks both phases through a complete fourteen-vector Signal cycle', () => {
+  const page = harness({stageId:'sphere'});page.selectExercise('body');
+  page.click('[data-start-orb]');
+  const steps=require('../src/exercises.js').BODY_STEPS;
+  for (const step of steps) {
+    assert.equal(page.q('[data-dimension]').textContent, step.label);
+    assert.equal(page.q('[data-signal-questions]').children.length, 4);
+    page.advance(5);
+    assert.equal(page.q('[data-dimension]').textContent, step.label);
+    page.advance(5);
+  }
+  assert.equal(page.q('[data-dimension]').textContent, 'Awareness');
+  assert.deepEqual(page.sounds[0].cues, Array.from({length:29},(_,index)=>index%2===0));
 });
 
 test('bell and ambient checkboxes work independently in every exercise and stay in sync with quick mute', () => {
   for (const exercise of ['stream','heart','body']) {
-    const page=harness();page.click('[data-exercise="'+exercise+'"]');
+    const page=harness();page.selectExercise(exercise);
     const bell=page.q('[data-bell]'),ambient=page.q('[data-sound]');
     assert.equal(page.q('[data-sound-summary]').textContent,'Bell on · Ambient on');
-    page.click('[data-start]');page.advance(2);
+    page.click('[data-start-orb]');page.advance(2);
     const session=page.sounds[0],originalCues=[...session.cues];
     bell.checked=false;bell.dispatch('change');
     assert.equal(ambient.checked,true);
@@ -922,7 +967,7 @@ test('bell and ambient checkboxes work independently in every exercise and stay 
     assert.equal(page.q('[data-bell-toggle]').getAttribute('aria-pressed'),'false');
     assert.match(page.q('[data-bell-toggle]').textContent,/Bell: off/);
     assert.equal(page.q('[data-sound-summary]').textContent,'Bell off · Ambient on');
-    page.advance(exercise==='body'?28:3);
+    page.advance(3);
     assert.deepEqual(session.cues,originalCues,'muting prevents the next automatic cue');
     page.click('[data-bell-toggle]');
     assert.equal(bell.checked,true,'quick mute and checkbox control the same bell');
@@ -933,7 +978,7 @@ test('bell and ambient checkboxes work independently in every exercise and stay 
     assert.equal(session.enabled,true);
     assert.equal(session.settings.frequency,0,'bell-only sound does not create ambient audio');
     assert.equal(page.q('[data-sound-summary]').textContent,'Bell on · Ambient off');
-    page.advance(exercise==='body'?30:5);
+    page.advance(5);
     assert.equal(session.cues.length,originalCues.length+1,'the independent bell remains audible');
     bell.checked=false;bell.dispatch('change');
     assert.equal(session.enabled,false);
@@ -949,9 +994,9 @@ test('bell and ambient checkboxes work independently in every exercise and stay 
 
 test('muted bell stays muted at completion while ambient audio can fade out', () => {
   for (const exercise of ['stream','heart','body']) {
-    const page=harness();page.click('[data-exercise="'+exercise+'"]');
+    const page=harness();page.selectExercise(exercise);
     const bell=page.q('[data-bell]');bell.checked=false;bell.dispatch('change');
-    page.click('[data-start]');page.advance(900);
+    page.click('[data-start-orb]');page.advance(900);
     assert.equal(page.q('[data-session-state]').textContent,'Complete');
     assert.deepEqual(page.sounds[0].cues,[]);
     assert.equal(page.sounds[0].completed,true);
@@ -1010,11 +1055,11 @@ test('the consciousness stream begins with guided inhale/exhale bells and ambien
   assert.equal(page.q('[data-exercise="stream"]').getAttribute('aria-pressed'), 'true');
   assert.equal(page.q('[data-pacing]').value, 'paced');
   assert.equal(page.q('[data-bell-toggle]').hidden, false);
-  assert.equal(page.q('[data-body-steps]').hidden, true);
+  assert.equal(page.host.querySelector('[data-body-steps]'), null);
   assert.equal(page.q('[data-bell]').checked, true);
   assert.equal(page.q('[data-sound]').checked, true);
   assert.equal(page.sounds[0].starts, 0, 'defaults do not bypass the Start gesture');
-  page.click('[data-start]');
+  page.click('[data-start-orb]');
   assert.deepEqual(page.sounds[0].cues, [true]);
   assert.equal(page.sounds[0].settings.frequency, 10);
   page.advance(5);
@@ -1022,8 +1067,8 @@ test('the consciousness stream begins with guided inhale/exhale bells and ambien
   assert.equal(page.q('[data-breath-label]').textContent, 'Exhale');
   page.advance(5);
   assert.deepEqual(page.sounds[0].cues, [true, false, true]);
-  assert.equal(page.q('[data-dimension]').hidden, true);
-  assert.equal(page.q('[data-prompt]').textContent,require('../src/shape-practice.js').getStage('circle').stream.cues.inhale);
+  assert.equal(page.q('[data-dimension]').textContent, 'Relation');
+  assert.ok(page.q('[data-prompt]').textContent.trim());
   page.click('[data-end]');
   assert.equal(page.data().sessions[0].exercise,'stream');
   assert.equal(page.data().entries.length,0,'timed breaths never manufacture a marked entry');
@@ -1090,13 +1135,13 @@ test('a full existing record preserves its contents without blocking practice', 
   const sessions=Array.from({length:500},(_,i)=>({id:'period-'+i,stageId:'circle',exercise:'stream',endedAt:'2026-10-01T00:00:00.000Z',seconds:2,completed:false}));
   page.external(JSON.stringify({schemaVersion:1,entries:[],sessions,readiness:{}}));page.click('[data-reload]');
   const before=page.raw.get(page.key);
-  page.click('[data-start]');page.advance(2);
+  page.click('[data-start-orb]');page.advance(2);
   assert.equal(page.q('[data-live]').hidden,false);
   assert.equal(page.q('[data-session-state]').textContent,'Practising');
   assert.equal(page.q('[data-timer]').textContent,'14:58');
   page.click('[data-end]');
   assert.equal(page.raw.get(page.key),before,'capacity never deletes or rewrites existing records');
-  page.click('[data-start]');page.advance(900);
+  page.click('[data-start-orb]');page.advance(900);
   assert.equal(page.q('[data-session-state]').textContent,'Complete');
   assert.equal(page.raw.get(page.key),before);
 });
@@ -1107,13 +1152,13 @@ test('every application retains four optional worked entries and a complete rela
   for(const [id,count] of Object.entries(counts)){
     page.app.setStage(id);
     for(const exercise of ['stream','heart','body']){
-      page.click('[data-exercise="'+exercise+'"]');
+      page.selectExercise(exercise);
       assert.equal(page.q('[data-bell]').checked,true,id+'/'+exercise+' has bell sound enabled');
       assert.equal(page.q('[data-sound]').checked,true,id+'/'+exercise+' has ambient sound enabled');
       assert.equal(page.q('[data-bell-toggle]').hidden,false);
       assert.equal(page.q('.training-sound').open,false,id+'/'+exercise+' keeps optional sound settings compact and expandable');
       assert.equal(page.q('[data-breath-form]').hidden,false);
-      assert.equal(page.q('[data-pacing]').value,exercise==='body'?'natural':'paced');
+      assert.equal(page.q('[data-pacing]').value,'paced');
       assert.ok(page.sounds.every(audio=>audio.starts===0),'browsing lessons does not autoplay sound');
       assert.equal(page.host.querySelector('.training-breath-examples'),null,'repeated full prose rows are removed');
       assert.equal(page.q('[data-examples]').open,false,'worked entries remain collapsed by default');
@@ -1192,7 +1237,7 @@ test('events from detached fields cannot replace an encoded selection or write i
   assert.equal(page.data().entries[1].recollection,'Ocean contains boat.');
   assert.equal(page.data().entries[1].lag,1);
   const earlierDraftField=page.q('[data-note="source"]');
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   earlierDraftField.value='Written after switching exercise.';earlierDraftField.dispatch('input');
   page.type('[data-note="source"]','Memory supports appreciation.');page.submit();
   assert.equal(page.data().entries[2].source,'Memory supports appreciation.');
@@ -1203,7 +1248,7 @@ test('events from detached fields cannot replace an encoded selection or write i
 test('a detached fresh-stream button cannot discard another exercise’s draft', () => {
   const page=harness();
   const oldFresh=page.q('[data-fresh]');
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   page.type('[data-note="source"]','Private heart selection that must remain.');
   oldFresh.click();
   assert.equal(page.q('[data-note="source"]').value,'Private heart selection that must remain.');
@@ -1240,9 +1285,9 @@ test('ending or changing an exercise stops a test bell as well as session audio'
   const page=harness();
   page.click('[data-test-sound]');
   assert.equal(page.sounds[1].enabled,true);
-  page.click('[data-exercise="heart"]');
+  page.selectExercise('heart');
   assert.equal(page.sounds[1].enabled,false,'switching before a session starts also stops the test bell');
-  page.click('[data-start]');page.advance(2);page.click('[data-test-sound]');
+  page.click('[data-start-orb]');page.advance(2);page.click('[data-test-sound]');
   assert.equal(page.sounds[1].enabled,true);
   page.click('[data-end]');
   assert.ok(page.sounds.every(audio=>!audio.enabled));
