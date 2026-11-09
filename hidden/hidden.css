@@ -26,7 +26,17 @@ body {
 .subtitle { margin: 0; font-size: 16px; }
 .instructions { line-height: 1.65; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.mode-field { grid-column: 1 / -1; }
+.mode-field { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0; border: 0; }
+.mode-field legend { padding: 0; font-size: 14px; }
+.mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.mode-options label {
+  display: flex; align-items: center; gap: 9px; padding: 9px 12px; min-height: 46px;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--white); cursor: pointer;
+}
+.mode-options input[type="checkbox"] { width: 18px; height: 18px; padding: 0; margin: 0; accent-color: var(--deep); }
+.mode-options label:has(:checked) { border-color: var(--deep); }
+.mode-options label:has(:disabled) { opacity: .55; cursor: default; }
+#mode-help { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
 .fields label { font-size: 14px; margin: 0; }
 .fields input, .fields select { margin-top: 6px; border-color: var(--line); font-size: 17px; }
 .session-length { margin-top: 16px; }

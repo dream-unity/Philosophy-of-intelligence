@@ -172,8 +172,8 @@ function finish(message) {
 
 async function start(event) {
   event.preventDefault();
-  if (active || !settings.reportValidity()) return;
-  const direction = get('direction').value;
+  const direction = selectedMode();
+  if (active || !direction || !settings.reportValidity()) return;
   const level = get('level').valueAsNumber;
   const run = {
     direction, level, modeLabel: level + '-' + direction,
@@ -221,17 +221,31 @@ async function start(event) {
   }
 }
 
-const backInstructions = get('instructions').textContent;
+const backMode = get('mode-back');
+const forwardMode = get('mode-forward');
+const modeInstructions = {
+  back: "Listen to the opening digits. Then predict each next digit while remembering the one N places back. When you hear the new digit, compare the two in your mind.",
+  forward: "At the tone, start predicting. Before each spoken digit, guess the digit N reveals ahead. At 3-forward, your first guess is for the third digit you hear, your second for the fourth. Listen through the final reveals to score every prediction."
+};
 
-function updateMode() {
-  const forward = get('direction').value === 'forward';
-  get('level-label').textContent = forward ? 'N-forward level' : 'N-back level';
-  get('instructions').textContent = forward
-    ? 'At the tone, start predicting. Before each spoken digit, guess the digit N reveals ahead. At 3-forward, your first guess is for the third digit you hear, your second for the fourth. Listen through the final reveals to score every prediction.'
-    : backInstructions;
+function selectedMode() {
+  if (backMode.checked) return 'back';
+  if (forwardMode.checked) return 'forward';
+  return null;
 }
 
-get('direction').addEventListener('change', updateMode);
+function updateMode() {
+  const choice = selectedMode();
+  backMode.disabled = choice === 'forward';
+  forwardMode.disabled = choice === 'back';
+  get('start').disabled = !choice;
+  get('level-label').textContent = choice ? 'N-' + choice + ' level' : 'Level';
+  get('instructions').textContent = modeInstructions[choice] || 'Choose a mode to begin.';
+}
+
+backMode.addEventListener('change', updateMode);
+forwardMode.addEventListener('change', updateMode);
+window.addEventListener('pageshow', updateMode);
 updateMode();
 
 get('length-mode').addEventListener('change', () => {
