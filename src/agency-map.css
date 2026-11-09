@@ -40,9 +40,15 @@
 #training-root .agency-map [data-agency-pacer] {flex:0 0 clamp(175px,18vw,220px);max-width:52%}
 #training-root .agency-map [data-agency-pacer] .training-page-symbol {width:100%;max-width:100%}
 #training-root .agency-map [data-agency-pacer] .training-shape-ink {transform:scale(1.1)}
+#training-root .agency-map [data-agency-pacer] .training-pacer {container-type:inline-size}
+#training-root .agency-map [data-agency-pacer] .training-page-symbol:has(.form-shape--triangle,.form-shape--half-circle) .training-pacer {width:clamp(36%,68px,39%)}
+#training-root .agency-map [data-agency-pacer] .training-orb {width:88%}
+#training-root .agency-map [data-agency-pacer] .training-orb::before {inset:3%}
+#training-root .agency-map [data-agency-pacer] .training-orb::after {inset:-3.5%}
 #training-root .agency-map [data-agency-pacer] .training-pacer-start {background:transparent;color:var(--ink);border:0;border-radius:50%;min-height:0;padding:0;font-size:clamp(14px,1.5vw,18px)}
-#training-root .agency-map [data-agency-pacer] .training-breath-readout {width:140%;max-width:none;font-size:clamp(14px,1.5vw,18px);line-height:1.1;white-space:nowrap}
-#training-root .agency-map [data-agency-pacer] .training-breath-readout small {font-size:clamp(9px,.8vw,10px)}
+/* Fit both lines to the contracted ring. Only the ring scales during a breath. */
+#training-root .agency-map [data-agency-pacer] .training-breath-readout {width:100%;font-size:min(clamp(12.5px,1.35vw,16px),20cqi);gap:1px;line-height:1.05;white-space:nowrap}
+#training-root .agency-map [data-agency-pacer] .training-breath-readout small {--count-size:min(9.5px,12cqi);font-size:var(--count-size);line-height:1.1}
 /* Centre the bell in the triangle's inscribed circle. The half-circle's
    inscribed circle is already centred in its cropped viewBox. */
 #training-root .agency-map [data-agency-pacer] .training-page-symbol:has(.form-shape--triangle) .training-pacer {top:64%}
@@ -75,5 +81,7 @@
 }
 @media(max-width:420px) {
  #training-root .agency-map .tm-star {max-height:335px}
- #training-root .agency-map [data-agency-pacer] {flex-basis:165px;max-width:48%}
+ #training-root .agency-map .agency-stage-head {flex-wrap:wrap}
+ #training-root .agency-map .agency-stage-head > :last-child {flex:1 1 7rem}
+ #training-root .agency-map [data-agency-pacer] {flex-basis:clamp(150px,40vw,165px);max-width:100%}
 }

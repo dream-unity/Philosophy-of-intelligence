@@ -2857,7 +2857,12 @@
       q('[data-pacer]').hidden=false;
       q('[data-breath-label]').textContent=idle?(pacing==='paced'?'Ready':'Own rhythm'):finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
       const remaining=Math.ceil(s.breathRemaining*10-1e-8)/10;
-      q('[data-breath-count]').textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
+      const breathCount=q('[data-breath-count]');
+      breathCount.textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
+      if (isTransmutation() && scaled) {
+        // Leave room for longer timings and the phase name when the bell is paused.
+        breathCount.style.fontSize = `min(var(--count-size), ${120 / breathCount.textContent.length}cqi)`;
+      }
       updateAgencyPractice(s);
       if(s.bodyStepIndex!==lastBodyStep){lastBodyStep=s.bodyStepIndex;}
       if(exercise==='body'&&active)signalFocus=(signalCycleBase+(s.breathCycleIndex||0))%signalLimit();
