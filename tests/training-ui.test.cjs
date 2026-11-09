@@ -210,8 +210,8 @@ test('each Psiduction category opens with its own poem and a collapsed practice 
   assert.match(wave, /Inside your mind.*expanding and deepening.*Ad astra\.$/s);
   const waveGuide = page.q('.practice-guide');
   assert.deepEqual(waveGuide.querySelector('ol').children.map(step => step.querySelector('h3').textContent), [
-    'Establish your baseline', 'Notice patterns in the stream', 'Bring in the breath',
-    'Build your reasoning through the shapes', 'Add the method of loci'
+    'Stage 1. Establish your baseline', 'Stage 2. Notice patterns in the stream', 'Stage 3. Bring in the breath',
+    'Stage 4. Build your reasoning through the shapes', 'Stage 5. Add the method of loci'
   ]);
   waveGuide.open = true;
   page.selectExercise('body');

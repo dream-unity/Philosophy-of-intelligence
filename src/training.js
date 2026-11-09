@@ -2663,29 +2663,35 @@
     function practiceInstructions() {
       switch (exercise) {
         case 'stream':
-          return `<ol>
+          return `<ol style="list-style: none; padding-left: 0">
               <li>
-                <h3>Establish your baseline</h3>
-                <p>Gently close your eyes, breathe normally and let your inner world unfold. You may notice an image, a memory, a word, a feeling or a sensation. Stay with what you sense, however faint, and let its vividness deepen naturally. If you need somewhere to begin, picture a familiar place and let the next detail emerge. See how the stream develops on its own. Add each step below only when the preceding one feels comfortable.</p>
+                <h3>Stage 1. Establish your baseline</h3>
+                <p>Gently close your eyes, breathe normally and let your inner world unfold. You may notice an image, a memory, a word, a feeling or a sensation. Stay with what you sense, however faint, and let its vividness deepen naturally. If you need somewhere to begin, picture a familiar place and let the next detail emerge. See how the stream develops on its own.</p>
+                <p>You may find that this natural unfolding is already enough for you. The later stages offer ways to practise and refine the skills that can enrich it. The shapes teach you to reason about relationships in the stream and recognise patterns. The breath gives you a rhythm for pairing and comparing those patterns across time. The method of loci invites you to store information as patterns, imagine ways to compress it, and discover relationships across what you have stored.</p>
+                <p>With practice, these movements can become more automatic. If you already have the joystick, enjoy the ride. If you are still learning, enjoy the training just as much, until you too can feel the wind in your hair. See how far you can go here before entering the next stage, if and when you choose.</p>
               </li>
               <li>
-                <h3>Notice patterns in the stream</h3>
+                <h3>Stage 2. Notice patterns in the stream</h3>
                 <p>As you follow the stream, notice what recurs and how one experience leads to another. A pencil might bring a classroom to mind, then the sound of your teacher’s voice. See if you can recognise what brought the teacher to mind while the stream continues.</p>
+                <p>See how far you can go before entering the next stage.</p>
               </li>
               <li>
-                <h3>Bring in the breath</h3>
+                <h3>Stage 3. Bring in the breath</h3>
                 <p>When relationships are easy to notice, tap <strong>Start</strong> in the shape. As the circle expands, inhale and notice a relationship. As it contracts, exhale and name the relationship silently. Turn on the bell if you want to follow the rhythm with your eyes closed.</p>
                 <details class="wave-detail"><summary>Compare relationships across breaths</summary>
                   <p>Once the rhythm feels familiar, use each full breath as one turn. On breath one, picture the wood holding a pencil’s core steady. On breath two, picture the core marking paper. For <strong>1-back</strong>, bring back the first relationship as you finish the second exhale. How did the wood help the core make that mark? For <strong>2-back</strong>, compare the present relationship with the one from two breaths ago.</p>
                 </details>
+                <p>See how far you can go before entering the next stage.</p>
               </li>
               <li>
-                <h3>Build your reasoning through the shapes</h3>
+                <h3>Stage 4. Build your reasoning through the shapes</h3>
                 <p>Each shape builds on a way of reasoning you have already practised. Circle asks you to notice one relationship, such as how the wood holds the pencil’s core steady. Half-circle asks you to distinguish a second relationship between the same two things. The wood also hides most of the core. Triangle asks how three relationships work together as a system. Stay with each shape until you recognise its kind of relationship naturally in your own stream, even without the shape as a prompt. Then carry that way of seeing into the next shape.</p>
+                <p>See how far you can go before entering the next stage.</p>
               </li>
               <li>
-                <h3>Add the method of loci</h3>
+                <h3>Stage 5. Add the method of loci</h3>
                 <p>When you can follow the stream and recognise these relationships comfortably, open <strong>Oscillatory Psiduction</strong>. Give each relationship a place along a familiar route. At your front door, picture the wood holding the core steady. At your kitchen table, see the core tracing a line on paper. Revisit each place to recall what happened there, then return to the unfolding stream.</p>
+                <p>See how far you can go with this stage before exploring what comes next.</p>
               </li>
             </ol>`;
         case 'unitive':
