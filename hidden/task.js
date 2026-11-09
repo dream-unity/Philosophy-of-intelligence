@@ -4,7 +4,6 @@ const get = id => document.getElementById(id);
 const settings = get('settings');
 const session = get('session');
 const keypad = get('keypad');
-const predictions = 10;
 const clipDuration = 0.85;
 let audio;
 let digitBuffer;
@@ -65,8 +64,11 @@ function cueWarmup(run) {
 
 function openTrial(run) {
   run.guess = null;
+  if (run.startedAt === null) run.startedAt = performance.now();
   run.deadline = performance.now() + run.interval;
-  get('progress').textContent = run.level + '-back · Prediction ' + (run.total + 1) + ' of ' + predictions;
+  const predictionLabel = 'Prediction ' + (run.total + 1);
+  get('progress').textContent = run.level + '-back · ' + predictionLabel +
+    (run.trialLimit === null ? '' : ' of ' + run.trialLimit);
   get('prompt').textContent = 'What number comes next?';
   enableKeys(true);
   schedule(run, reveal, run.interval);
@@ -91,7 +93,8 @@ function reveal(run) {
   if (run.guess === target) run.correct++;
   if (run.guess === null) run.missed++;
   run.total++;
-  if (run.total === predictions) {
+  const timeUp = run.durationMs !== null && performance.now() - run.startedAt >= run.durationMs;
+  if ((run.trialLimit !== null && run.total >= run.trialLimit) || timeUp) {
     get('prompt').textContent = 'Listen to the final digit.';
     schedule(run, () => finish('Session complete.'), clipDuration * 1000);
   } else {
@@ -128,7 +131,9 @@ async function start(event) {
   const run = {
     level: get('level').valueAsNumber,
     interval: Math.round(get('seconds').valueAsNumber * 1000),
-    history: [], deadline: 0, guess: null, correct: 0, total: 0, repeats: 0, missed: 0
+    trialLimit: get('length-mode').value === 'trials' ? get('trials').valueAsNumber : null,
+    durationMs: get('length-mode').value === 'time' ? get('minutes').valueAsNumber * 60000 : null,
+    startedAt: null, history: [], deadline: 0, guess: null, correct: 0, total: 0, repeats: 0, missed: 0
   };
   active = run;
   get('result').hidden = true;
@@ -162,6 +167,13 @@ async function start(event) {
   }
 }
 
+get('length-mode').addEventListener('change', () => {
+  const timed = get('length-mode').value === 'time';
+  get('trials-field').hidden = timed;
+  get('trials').disabled = timed;
+  get('minutes-field').hidden = !timed;
+  get('minutes').disabled = !timed;
+});
 settings.addEventListener('submit', start);
 get('stop').addEventListener('click', () => finish('Session ended.'));
 document.addEventListener('keydown', event => {

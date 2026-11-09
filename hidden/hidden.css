@@ -4,9 +4,9 @@ body {
   background-size: 268px;
 }
 .practice-sheet {
-  width: min(100% - 32px, 490px);
+  width: min(100% - 20px, 590px);
   margin: clamp(22px, 7vh, 76px) auto;
-  padding: clamp(22px, 5vw, 44px);
+  padding: clamp(22px, 5vw, 44px) clamp(16px, 3vw, 36px);
   background: rgb(246 240 225 / 76%);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -27,13 +27,10 @@ body {
 .instructions { line-height: 1.65; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .fields label { font-size: 14px; margin: 0; }
-.fields input { margin-top: 6px; border-color: var(--line); font-size: 17px; }
+.fields input, .fields select { margin-top: 6px; border-color: var(--line); font-size: 17px; }
+.session-length { margin-top: 16px; }
 .hint { font-size: 13px; margin: 14px 0; }
 #start { width: 100%; font-size: 16px; }
-body:has(#session:not([hidden])) .practice-sheet {
-  width: min(100% - 20px, 590px);
-  padding-inline: clamp(16px, 3vw, 36px);
-}
 #session { text-align: center; }
 #progress { margin: 0; font-size: 14px; }
 #prompt { font-size: 21px; margin: 4px 0 16px; }
