@@ -8,13 +8,13 @@
   <link rel="icon" href="../icon.svg">
   <link rel="stylesheet" href="../styles.css">
   <link rel="stylesheet" href="./hidden.css?v=5">
-  <script src="./task.js?v=4" defer></script>
+  <script src="./task.js?v=5" defer></script>
 </head>
 <body>
   <main class="practice-sheet">
     <header>
       <h1>Future Sight</h1>
-      <p class="subtitle">Auditory prediction practice</p>
+      <p class="subtitle">Auditory precognition practice</p>
     </header>
     <p class="instructions" id="instructions">Choose a mode to begin.</p>
     <form id="settings">
@@ -40,13 +40,13 @@
         <label id="trials-field">Number of trials<input id="trials" type="number" min="1" max="10000" step="1" value="10" required></label>
         <label id="minutes-field" hidden>Session time in minutes<input id="minutes" type="number" min="0.1" max="180" step="0.1" value="5" disabled required></label>
       </div>
-      <p class="hint">Tap or type one digit before the next is spoken. Your first entry locks. An unanswered trial counts as a miss. Timed sessions count prediction time and finish the current trial when time is up.</p>
+      <p class="hint">Tap or type one digit before the next is spoken. Your first entry locks. An unanswered trial counts as a miss. Timed sessions count the time spent entering numbers and finish the current trial when time is up.</p>
       <button type="submit" class="button primary" id="start" disabled>Start</button>
     </form>
     <section id="session" hidden aria-label="Session">
       <p id="progress"></p>
       <p id="prompt" role="status"></p>
-      <div id="keypad" role="group" aria-label="Predict a digit"></div>
+      <div id="keypad" role="group" aria-label="Enter a digit"></div>
       <button class="text-button" type="button" id="stop">End session</button>
     </section>
     <p id="result" role="status" hidden></p>

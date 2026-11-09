@@ -81,7 +81,7 @@ function openTrial(run) {
   run.guess = null;
   if (run.startedAt === null) run.startedAt = performance.now();
   run.deadline = performance.now() + run.interval;
-  const predictionLabel = 'Prediction ' + (run.windows + 1);
+  const predictionLabel = 'Trial ' + (run.windows + 1);
   get('progress').textContent = run.modeLabel + ' · ' + predictionLabel +
     (run.trialLimit === null ? '' : ' of ' + run.trialLimit);
   get('prompt').textContent = run.horizon === 1
@@ -96,7 +96,7 @@ function predict(digit) {
   if (!run || run.guess !== null || performance.now() >= run.deadline) return;
   run.guess = digit;
   enableKeys(false);
-  get('prompt').textContent = 'Prediction locked.';
+  get('prompt').textContent = 'Entry locked.';
 }
 
 function reveal(run) {
@@ -165,7 +165,7 @@ function finish(message) {
     : '';
   const unresolved = run.pending.filter(entry => entry.guess !== null).length +
     Number(run.deadline > 0 && run.guess !== null);
-  result.textContent = message + score + (unresolved ? ' Predictions awaiting a reveal: ' + unresolved + '.' : '');
+  result.textContent = message + score + (unresolved ? ' Entries awaiting a reveal: ' + unresolved + '.' : '');
   result.hidden = false;
   get('start').focus();
 }
@@ -224,8 +224,8 @@ async function start(event) {
 const backMode = get('mode-back');
 const forwardMode = get('mode-forward');
 const modeInstructions = {
-  back: "Listen to the opening digits. Then predict each next digit while remembering the one N places back. When you hear the new digit, compare the two in your mind.",
-  forward: "At the tone, start predicting. Before each spoken digit, guess the digit N reveals ahead. At 3-forward, your first guess is for the third digit you hear, your second for the fourth. Listen through the final reveals to score every prediction."
+  back: "Listen to the opening digits. Then enter the next digit that comes to you while remembering the one N places back. When you hear the new digit, compare the two in your mind.",
+  forward: "At the tone, begin. Before each spoken digit, enter the digit that comes to you for N reveals ahead. At 3-forward, your first entry is for the third digit you hear, your second for the fourth. Listen through the final reveals to score every entry."
 };
 
 function selectedMode() {
