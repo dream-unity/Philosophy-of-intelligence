@@ -2667,7 +2667,7 @@
               <li>
                 <h3>Stage 1. Establish your baseline</h3>
                 <p>Gently close your eyes, breathe normally and let your inner world unfold. You may notice an image, a memory, a word, a feeling or a sensation. Stay with what you sense, however faint, and let its vividness deepen naturally. If you need somewhere to begin, picture a familiar place and let the next detail emerge. See how the stream develops on its own.</p>
-                <p>You may find that this natural unfolding is already enough for you. The later stages offer ways to practise and refine the skills that can enrich it. The shapes teach you to reason about relationships in the stream and recognise patterns. The breath gives you a rhythm for pairing and comparing those patterns across time. The method of loci invites you to store information as patterns, imagine ways to compress it, and discover relationships across what you have stored.</p>
+                <p>You may find that this natural unfolding is already enough for you. The later stages offer ways to practise and refine the skills that enrich it. The shapes teach you to reason about relationships in the stream and recognise patterns. The breath gives you a rhythm for pairing and comparing those patterns across time. The method of loci invites you to store information as patterns, imagine ways to compress it, and discover relationships across what you have stored.</p>
                 <p>With practice, these movements can become more automatic. If you already have the joystick, enjoy the ride. If you are still learning, enjoy the training just as much, until you too can feel the wind in your hair. See how far you can go here before entering the next stage, if and when you choose.</p>
               </li>
               <li>
@@ -2678,9 +2678,8 @@
               <li>
                 <h3>Stage 3. Bring in the breath</h3>
                 <p>When relationships are easy to notice, tap <strong>Start</strong> in the shape. As the circle expands, inhale and notice a relationship. As it contracts, exhale and name the relationship silently. Turn on the bell if you want to follow the rhythm with your eyes closed.</p>
-                <details class="wave-detail"><summary>Compare relationships across breaths</summary>
-                  <p>Once the rhythm feels familiar, use each full breath as one turn. On breath one, picture the wood holding a pencil’s core steady. On breath two, picture the core marking paper. For <strong>1-back</strong>, bring back the first relationship as you finish the second exhale. How did the wood help the core make that mark? For <strong>2-back</strong>, compare the present relationship with the one from two breaths ago.</p>
-                </details>
+                <p>Each full breath gives you a place in time. Compare the relationship you notice now with one from a chosen number of breaths earlier, and explore how they relate.</p>
+                <p>For example, on breath 1, the wood holds a pencil’s core steady. On breath 2, a hand guides the pencil. On breath 3, the core marks the paper. On breath 4, the marks form a word. Looking <strong>one breath back</strong> from breath 4, compare the marks forming a word with the core marking the paper. Looking <strong>three breaths back</strong>, compare them with the wood holding the core steady. How does each earlier relationship contribute to the word?</p>
                 <p>See how far you can go before entering the next stage.</p>
               </li>
               <li>

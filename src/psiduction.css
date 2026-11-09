@@ -129,6 +129,8 @@
 #training-root .wave-guide h3 { margin: 0 0 .2em; font: 600 1.12rem/1.4 var(--serif); }
 #training-root .wave-guide li::marker { font-weight: 600; }
 #training-root .wave-guide p { margin: 0; }
+#training-root .wave-guide li > p + p,
+#training-root .wave-guide li > details + p { margin-top: 1em; }
 #training-root .wave-guide details { margin-top: .4em; }
 #training-root .wave-guide details[open] p { margin-top: .4em; }
 
