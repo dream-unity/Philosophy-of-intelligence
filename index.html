@@ -140,21 +140,14 @@
         panel.addEventListener('pointermove', mount);
         panel.addEventListener('pointerdown', mount);
         panel.addEventListener('focusin', mount);
-        window.addEventListener('load', () => {
-          if (!source.isConnected) return;
-          const atHome = () => !location.hash || /^#(?:journey|stage-path)?$/.test(location.hash);
-          if (!('IntersectionObserver' in window)) { if (atHome()) mount(); return; }
-          let scrolledPast = false;
-          observer = new IntersectionObserver(entries => {
-            for (const entry of entries) {
-              if (entry.boundingClientRect.bottom < 0) scrolledPast = true;
-              // A direct practice link scrolls through the homepage on the way
-              // down. Load its music only if the visitor comes back to it.
-              if (entry.isIntersecting && (atHome() || scrolledPast)) { mount(); break; }
-            }
-          });
-          observer.observe(panel);
-        }, {once:true});
+        if (!('IntersectionObserver' in window)) {
+          mount();
+          return;
+        }
+        observer = new IntersectionObserver(entries => {
+          if (entries.some(entry => entry.isIntersecting)) mount();
+        });
+        observer.observe(panel);
       })();
     </script>
     </div>

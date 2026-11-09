@@ -10,7 +10,7 @@ const checks = import('../scripts/check.mjs');
 const root = path.join(__dirname, '..');
 const source = () => fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
-test('the song stays dormant during a direct practice visit and mounts once on return', () => {
+function songPage({ hash, supportsObserver }) {
   const html = source();
   const template = html.match(/<template id="site-song-source">([\s\S]*?)<\/template>/);
   assert.match(template[1], /<iframe\b[^>]+data-online-player="suno"/);
@@ -29,19 +29,37 @@ test('the song stays dormant during a direct practice visit and mounts once on r
     observe(target) { assert.equal(target, panel); }
     disconnect() {}
   }
-  page.IntersectionObserver = Observer;
+  if (supportsObserver) page.IntersectionObserver = Observer;
   const loader = html.match(/<script id="site-song-loader">([\s\S]*?)<\/script>/)[1];
   require('node:vm').runInNewContext(loader, {
-    document:{getElementById:() => slot}, window:page, location:{hash:'#practice/circle'}, IntersectionObserver:Observer
+    document:{getElementById:() => slot}, window:page, location:{hash}, IntersectionObserver:page.IntersectionObserver
   });
-  assert.equal(mounts, 0);
-  page.dispatchEvent(new Event('load'));
-  onVisibility([{isIntersecting:true, boundingClientRect:{bottom:80}}]);
-  onVisibility([{isIntersecting:false, boundingClientRect:{bottom:-150}}]);
-  assert.equal(mounts, 0, 'scrolling through the homepage to a practice does not start the player');
-  onVisibility([{isIntersecting:true, boundingClientRect:{bottom:10}}]);
-  panel.dispatchEvent(new Event('focusin'));
-  assert.equal(mounts, 1, 'returning to the music reveals one persistent player');
+  return {
+    panel, page,
+    get mounts() { return mounts; },
+    visibility(isIntersecting, bottom) {
+      assert.equal(typeof onVisibility, 'function', 'observe visibility before waiting for the page load event');
+      onVisibility([{isIntersecting, boundingClientRect:{bottom}}]);
+    }
+  };
+}
+
+test('a shape deep link loads the song on first visibility without a hash change', () => {
+  const song = songPage({hash:'#practice/icosahedron/wave', supportsObserver:true});
+  song.visibility(false, 1400);
+  assert.equal(song.mounts, 0, 'an offscreen player may wait');
+  song.visibility(true, 350);
+  assert.equal(song.mounts, 1, 'a visible player needs no prior scroll or interaction');
+  song.visibility(false, -150);
+  song.visibility(true, 350);
+  song.page.dispatchEvent(new Event('hashchange'));
+  song.panel.dispatchEvent(new Event('focusin'));
+  assert.equal(song.mounts, 1, 'the same player survives further viewport and navigation events');
+});
+
+test('the song is available on a shape deep link without IntersectionObserver', () => {
+  const song = songPage({hash:'#practice/icosahedron/wave', supportsObserver:false});
+  assert.equal(song.mounts, 1);
 });
 
 // Inspect the committed HTML without running its application or preparer:
