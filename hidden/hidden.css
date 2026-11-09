@@ -1,0 +1,40 @@
+body {
+  min-height: 100vh;
+  background: #ebe4d5 url("../assets/parchment-texture.svg") repeat;
+  background-size: 268px;
+}
+.practice-sheet {
+  width: min(100% - 32px, 490px);
+  margin: clamp(22px, 7vh, 76px) auto;
+  padding: clamp(22px, 5vw, 44px);
+  background: rgb(246 240 225 / 76%);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.practice-sheet header {
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+}
+.practice-sheet h1 {
+  font: 400 clamp(40px, 7vw, 58px)/1.05 Palatino, Georgia, serif;
+  letter-spacing: -.045em;
+  margin: 0 0 8px;
+}
+.subtitle, .hint, #progress { color: var(--muted); }
+.subtitle { margin: 0; font-size: 16px; }
+.instructions { line-height: 1.65; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.fields label { font-size: 14px; margin: 0; }
+.fields input { margin-top: 6px; border-color: var(--line); font-size: 17px; }
+.hint { font-size: 13px; margin: 14px 0; }
+#start { width: 100%; font-size: 16px; }
+#session { text-align: center; }
+#progress { margin: 0; font-size: 14px; }
+#prompt { font-size: 21px; margin: 4px 0 16px; }
+#keypad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+#keypad button { min-height: 46px; padding: 5px; font-size: 21px; }
+#keypad button:last-child { grid-column: 2; }
+#stop { margin-top: 8px; }
+#result { border-top: 1px solid var(--line); padding-top: 16px; margin: 20px 0 0; }
