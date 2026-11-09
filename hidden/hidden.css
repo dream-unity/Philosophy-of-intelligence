@@ -26,6 +26,7 @@ body {
 .subtitle { margin: 0; font-size: 16px; }
 .instructions { line-height: 1.65; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.mode-field { grid-column: 1 / -1; }
 .fields label { font-size: 14px; margin: 0; }
 .fields input, .fields select { margin-top: 6px; border-color: var(--line); font-size: 17px; }
 .session-length { margin-top: 16px; }

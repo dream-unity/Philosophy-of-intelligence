@@ -38,6 +38,21 @@ function playDigit(digit) {
   source.start(0, digit, clipDuration);
 }
 
+function playStartTone() {
+  const tone = audio.createOscillator();
+  const gain = audio.createGain();
+  const start = audio.currentTime;
+  tone.frequency.value = 440;
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(0.09, start + 0.01);
+  gain.gain.linearRampToValueAtTime(0, start + 0.16);
+  tone.connect(gain);
+  gain.connect(audio.destination);
+  tone.start(start);
+  tone.stop(start + 0.16);
+  source = tone;
+}
+
 function schedule(run, callback, delay) {
   timer = setTimeout(() => {
     if (active !== run) return;
@@ -66,10 +81,12 @@ function openTrial(run) {
   run.guess = null;
   if (run.startedAt === null) run.startedAt = performance.now();
   run.deadline = performance.now() + run.interval;
-  const predictionLabel = 'Prediction ' + (run.total + 1);
-  get('progress').textContent = run.level + '-back · ' + predictionLabel +
+  const predictionLabel = 'Prediction ' + (run.windows + 1);
+  get('progress').textContent = run.modeLabel + ' · ' + predictionLabel +
     (run.trialLimit === null ? '' : ' of ' + run.trialLimit);
-  get('prompt').textContent = 'What number comes next?';
+  get('prompt').textContent = run.horizon === 1
+    ? 'What number comes next?'
+    : 'Which digit is ' + run.horizon + ' reveals ahead?';
   enableKeys(true);
   schedule(run, reveal, run.interval);
 }
@@ -85,21 +102,47 @@ function predict(digit) {
 function reveal(run) {
   run.deadline = 0;
   enableKeys(false);
-  const target = drawDigit();
-  playDigit(target);
-  if (target === run.history[0]) run.repeats++;
-  run.history.shift();
-  run.history.push(target);
-  if (run.guess === target) run.correct++;
-  if (run.guess === null) run.missed++;
-  run.total++;
+  run.pending.push({ guess: run.guess, due: run.reveals + run.horizon });
+  run.windows++;
+  speakAndScore(run);
+
   const timeUp = run.durationMs !== null && performance.now() - run.startedAt >= run.durationMs;
-  if ((run.trialLimit !== null && run.total >= run.trialLimit) || timeUp) {
-    get('prompt').textContent = 'Listen to the final digit.';
-    schedule(run, () => finish('Session complete.'), clipDuration * 1000);
+  if (run.windows === run.trialLimit || timeUp) {
+    finishReveals(run);
   } else {
     openTrial(run);
   }
+}
+
+function speakAndScore(run) {
+  const digit = drawDigit();
+  playDigit(digit);
+  run.reveals++;
+  if (run.direction === 'back') {
+    if (digit === run.history.shift()) run.repeats++;
+    run.history.push(digit);
+  }
+  if (run.pending[0].due === run.reveals) {
+    const { guess } = run.pending.shift();
+    run.total++;
+    if (guess === digit) run.correct++;
+    if (guess === null) run.missed++;
+  }
+}
+
+function finishReveals(run) {
+  if (run.pending.length) {
+    const remaining = run.pending[run.pending.length - 1].due - run.reveals;
+    get('progress').textContent = run.modeLabel + ' · Final reveals';
+    get('prompt').textContent = remaining === 1 ? 'One digit left to hear.' : remaining + ' digits left to hear.';
+    schedule(run, () => {
+      speakAndScore(run);
+      finishReveals(run);
+    }, run.interval);
+    return;
+  }
+  get('prompt').textContent = 'Listen to the final digit.';
+  schedule(run, () => finish('Session complete.'), clipDuration * 1000);
 }
 
 function finish(message) {
@@ -116,11 +159,13 @@ function finish(message) {
   settings.hidden = false;
   const result = get('result');
   const score = run.total
-    ? ' ' + run.level + '-back accuracy: ' + run.correct + '/' + run.total + ' (' +
+    ? ' ' + run.modeLabel + ' accuracy: ' + run.correct + '/' + run.total + ' (' +
       Math.round(100 * run.correct / run.total) + '%). Unanswered: ' + run.missed +
-      '. N-back repeats heard: ' + run.repeats + '.'
+      '.' + (run.direction === 'back' ? ' N-back repeats heard: ' + run.repeats + '.' : '')
     : '';
-  result.textContent = message + score;
+  const unresolved = run.pending.filter(entry => entry.guess !== null).length +
+    Number(run.deadline > 0 && run.guess !== null);
+  result.textContent = message + score + (unresolved ? ' Predictions awaiting a reveal: ' + unresolved + '.' : '');
   result.hidden = false;
   get('start').focus();
 }
@@ -128,8 +173,12 @@ function finish(message) {
 async function start(event) {
   event.preventDefault();
   if (active || !settings.reportValidity()) return;
+  const direction = get('direction').value;
+  const level = get('level').valueAsNumber;
   const run = {
-    level: get('level').valueAsNumber,
+    direction, level, modeLabel: level + '-' + direction,
+    horizon: direction === 'forward' ? level : 1,
+    windows: 0, reveals: 0, pending: [],
     interval: Math.round(get('seconds').valueAsNumber * 1000),
     trialLimit: get('length-mode').value === 'trials' ? get('trials').valueAsNumber : null,
     durationMs: get('length-mode').value === 'time' ? get('minutes').valueAsNumber * 60000 : null,
@@ -140,7 +189,7 @@ async function start(event) {
   settings.hidden = true;
   session.hidden = false;
   enableKeys(false);
-  get('progress').textContent = run.level + '-back';
+  get('progress').textContent = run.modeLabel;
   get('prompt').textContent = 'Preparing audio…';
   get('stop').focus();
   try {
@@ -161,11 +210,29 @@ async function start(event) {
       digitBuffer = decoded;
     }
     run.playing = true;
-    cueWarmup(run);
+    if (direction === 'forward') {
+      playStartTone();
+      openTrial(run);
+    } else {
+      cueWarmup(run);
+    }
   } catch {
     if (active === run) finish('Audio could not play. Check your sound and start again.');
   }
 }
+
+const backInstructions = get('instructions').textContent;
+
+function updateMode() {
+  const forward = get('direction').value === 'forward';
+  get('level-label').textContent = forward ? 'N-forward level' : 'N-back level';
+  get('instructions').textContent = forward
+    ? 'At the tone, start predicting. Before each spoken digit, guess the digit N reveals ahead. At 3-forward, your first guess is for the third digit you hear, your second for the fourth. Listen through the final reveals to score every prediction.'
+    : backInstructions;
+}
+
+get('direction').addEventListener('change', updateMode);
+updateMode();
 
 get('length-mode').addEventListener('change', () => {
   const timed = get('length-mode').value === 'time';
