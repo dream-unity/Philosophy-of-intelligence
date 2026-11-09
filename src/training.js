@@ -2430,7 +2430,7 @@
     let labMode='stream',labModule='integrated',labPage=0;
     const labOrder=['signal','frequency','stream','unitive'];
     const labNames={signal:'Signal Psiduction',frequency:'Frequency Psiduction',stream:'Wave Psiduction',unitive:'Oscillatory Psiduction'};
-    const labModuleNames={integrated:'Frequency and the stream',heart:'Heart Activation',transmutation:'Transmutation'};
+    const labModuleNames={heart:'Heart Activation',transmutation:'Transmutation',integrated:'Frequency Practice'};
     const labLessonKey=()=>labMode==='signal'?'body':labMode==='frequency'?(labModule==='integrated'?'frequency':labModule):labMode;
     function laboratoryLessons(mode) {
       const cards=PRACTICE_LESSONS[mode];
@@ -2635,13 +2635,13 @@
       q('[data-lab-tabs]').innerHTML=labOrder.map(name=>`<button type="button" data-lab-tab="${name}" aria-pressed="${labMode===name}">${esc(labNames[name])}</button>`).join('');
       const modules=q('[data-lab-modules]');modules.hidden=labMode!=='frequency';
       modules.innerHTML=Object.keys(labModuleNames).map(name=>`<button type="button" data-lab-module="${name}" aria-pressed="${labModule===name}">${esc(labModuleNames[name])}</button>`).join('');
-      const nextLabel=labMode==='frequency'&&labModule!=='transmutation'?'Next: '+labModuleNames[labModule==='integrated'?'heart':'transmutation']+' →':labOrder.indexOf(labMode)<labOrder.length-1?'Next: '+labNames[labOrder[labOrder.indexOf(labMode)+1]]+' →':'Back to practice';
+      const nextLabel=labMode==='frequency'&&labModule!=='integrated'?'Next: '+labModuleNames[labModule==='heart'?'transmutation':'integrated']+' →':labOrder.indexOf(labMode)<labOrder.length-1?'Next: '+labNames[labOrder[labOrder.indexOf(labMode)+1]]+' →':'Back to practice';
       const progressName=labMode==='frequency'?labNames.frequency+' · '+labModuleNames[labModule]:labNames[labMode];
       q('[data-lab-content]').innerHTML=`<p class="eyebrow lab-progress">${String(labPage+1).padStart(2,'0')} / ${String(lessons.length).padStart(2,'0')} · ${esc(progressName)}</p><h2 tabindex="-1" data-lab-heading>${esc(lesson.title)}</h2><p class="lab-body">${esc(lesson.body)}</p><div class="lab-try"><p class="eyebrow">Try it</p><p>${esc(lesson.try)}</p></div><details class="lab-example"><summary>See an example</summary><p>${esc(lesson.example)}</p></details><div class="lab-nav"><button type="button" class="text-button" data-lab-previous ${labPage===0?'disabled':''}>← Previous</button><button type="button" class="button secondary" data-lab-next>${labPage===lessons.length-1?esc(nextLabel):'Next →'}</button></div>`;
       all('[data-lab-tab]').forEach(el=>el.addEventListener('click',()=>{labMode=el.dataset.labTab;labPage=0;renderLab();q('[data-lab-tab="'+labMode+'"]').focus();}));
       all('[data-lab-module]').forEach(el=>el.addEventListener('click',()=>{labModule=el.dataset.labModule;labPage=0;renderLab();q('[data-lab-module="'+labModule+'"]').focus();}));
       q('[data-lab-previous]').addEventListener('click',()=>{if(labPage>0){labPage--;renderLab();q('[data-lab-heading]').focus();}});
-      q('[data-lab-next]').addEventListener('click',()=>{if(labPage<lessons.length-1){labPage++;renderLab();q('[data-lab-heading]').focus();}else if(labMode==='frequency'&&labModule!=='transmutation'){labModule=labModule==='integrated'?'heart':'transmutation';labPage=0;renderLab();q('[data-lab-heading]').focus();}else {const next=labOrder.indexOf(labMode)+1;if(next<labOrder.length){labMode=labOrder[next];labModule='integrated';labPage=0;renderLab();q('[data-lab-heading]').focus();}else closeLab();}});
+      q('[data-lab-next]').addEventListener('click',()=>{if(labPage<lessons.length-1){labPage++;renderLab();q('[data-lab-heading]').focus();}else if(labMode==='frequency'&&labModule!=='integrated'){labModule=labModule==='heart'?'transmutation':'integrated';labPage=0;renderLab();q('[data-lab-heading]').focus();}else {const next=labOrder.indexOf(labMode)+1;if(next<labOrder.length){labMode=labOrder[next];labModule=labMode==='frequency'?'heart':'integrated';labPage=0;renderLab();q('[data-lab-heading]').focus();}else closeLab();}});
     }
     function openLab(){if(clock?.snapshot().status==='running')pause();testAudio.stop();labMode=exercise==='body'?'signal':['frequency','heart'].includes(exercise)?'frequency':exercise;labModule=exercise==='heart'?'heart':exercise==='frequency'&&frequencyModule==='transmutation'?'transmutation':'integrated';labPage=0;renderLab();q('[data-practice-surface]').hidden=true;q('[data-lab-surface]').hidden=false;q('[data-lab-title]').focus();q('[data-lab-surface]').scrollIntoView({block:'start'});}
     function closeLab(){q('[data-lab-surface]').hidden=true;q('[data-practice-surface]').hidden=false;q('[data-open-lab]').focus();}
@@ -2733,14 +2733,14 @@
         <h2 class="training-category-title" id="unity-psiduction-title">Unity Psiduction</h2>
         <div class="training-exercises" role="group" aria-labelledby="unity-psiduction-title">${['body','frequency','stream','unitive','open'].map(name=>`<button type="button" data-exercise="${name}" aria-pressed="${name==='frequency'?frequencyActive():exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
         <p class="practice-poem">${esc(PRACTICE_POEMS[category])}</p>
-        ${frequencyActive()?`<div class="training-body-steps training-frequency-modules" role="group" aria-label="Frequency Psiduction modules">${['integrated','heart','transmutation'].map(name=>`<button type="button" data-frequency-module="${name}" aria-pressed="${name==='heart'?exercise==='heart':exercise==='frequency'&&frequencyModule===name}">${name==='integrated'?'Frequency Practice':name==='heart'?'Heart Activation':'Transmutation'}</button>`).join('')}</div>`:''}
+        ${frequencyActive()?`<div class="training-body-steps training-frequency-modules" role="group" aria-label="Frequency Psiduction modules">${['heart','transmutation','integrated'].map(name=>`<button type="button" data-frequency-module="${name}" aria-pressed="${name==='heart'?exercise==='heart':exercise==='frequency'&&frequencyModule===name}">${name==='integrated'?'Frequency Practice':name==='heart'?'Heart Activation':'Transmutation'}</button>`).join('')}</div>`:''}
         ${exercise==='unitive'?`
           <div class="training-body-steps loci-tabs" role="tablist" aria-label="Oscillatory Psiduction practice steps">
             ${LOCI_COURSE.map((step,i)=>`<button type="button" id="loci-tab-${i}" role="tab" data-loci-tab="${i}" aria-selected="${i===lociStep}" aria-controls="loci-panel" tabindex="${i===lociStep?0:-1}" ${i>unlockedLoci?'disabled':''}>${i+1} · ${esc(step.title)}</button>`).join('')}
           </div>
           <div id="loci-panel" role="tabpanel" aria-labelledby="loci-tab-${lociStep}">`:''}
         <details class="practice-guide open-introduction${wave ? ' wave-guide' : ''}" data-guide-key="${esc(guideKey)}"${keepGuideOpen ? ' open' : ''}>
-          <summary>How to practise ${esc(exerciseNames[category])}</summary>
+          <summary>How to practise ${esc(frequencyActive()?labModuleNames[exercise==='heart'?'heart':frequencyModule]:exerciseNames[category])}</summary>
           ${practiceInstructions()}
         </details>
         ${exercise==='unitive'?`<div class="loci-progression" data-loci-progression aria-label="Shape-by-shape memory progression"></div>`:''}
