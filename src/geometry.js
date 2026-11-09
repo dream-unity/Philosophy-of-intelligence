@@ -46,44 +46,28 @@
   const add = (a, b) => a.map((value, i) => value + b[i]);
   const subtract = (a, b) => a.map((value, i) => value - b[i]);
   const multiply = (a, scale) => a.map(value => value * scale);
-  const dot = (a, b) => a.reduce((sum, value, i) => sum + value * b[i], 0);
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const magnitude = a => Math.hypot(...a);
   const normalise = a => multiply(a, 1 / (magnitude(a) || 1));
   const edgeKey = (a, b) => a < b ? a + ':' + b : b + ':' + a;
   const number = value => Number(value.toFixed(3));
 
-  /* A face is a supporting plane of the convex solid. Coplanar triples are
-     combined, so the dodecahedron has twelve actual pentagons. */
-  function convexFaces(vertices) {
-    const found = new Map();
-    const epsilon = 0.00001;
-    for (let a = 0; a < vertices.length - 2; a++) {
-      for (let b = a + 1; b < vertices.length - 1; b++) {
-        for (let c = b + 1; c < vertices.length; c++) {
-          let normal = cross(subtract(vertices[b], vertices[a]), subtract(vertices[c], vertices[a]));
-          if (magnitude(normal) < epsilon) continue;
-          normal = normalise(normal);
-          const distances = vertices.map(vertex => dot(normal, subtract(vertex, vertices[a])));
-          if (distances.some(value => value > epsilon) && distances.some(value => value < -epsilon)) continue;
-          if (dot(normal, vertices[a]) < 0) normal = multiply(normal, -1);
-          const members = distances.map((distance, i) => Math.abs(distance) < epsilon ? i : -1).filter(i => i >= 0);
-          const key = members.join(':');
-          if (found.has(key)) continue;
-          const centre = multiply(members.reduce((sum, i) => add(sum, vertices[i]), [0, 0, 0]), 1 / members.length);
-          const axis = normalise(subtract(vertices[members[0]], centre));
-          const perpendicular = cross(normal, axis);
-          members.sort((i, j) => {
-            const first = subtract(vertices[i], centre);
-            const second = subtract(vertices[j], centre);
-            return Math.atan2(dot(first, perpendicular), dot(first, axis)) - Math.atan2(dot(second, perpendicular), dot(second, axis));
-          });
-          found.set(key, members);
-        }
-      }
-    }
-    return Array.from(found.values());
-  }
+  // Outward-facing vertex indices in the order used by makeMesh. The shapes
+  // have fixed topology, so the browser need only project their vertices.
+  const SOLID_FACES = {
+    prism: [[1,0,2], [3,0,1,4], [2,0,3,5], [4,1,2,5], [5,3,4]],
+    cube: [[2,0,1,3], [1,0,4,5], [4,0,2,6], [3,1,5,7], [6,2,3,7], [5,4,6,7]],
+    dodecahedron: [
+      [13,10,0,9,1], [14,8,0,10,2], [15,9,0,8,4], [3,13,1,11,17],
+      [5,11,1,9,15], [3,12,2,10,13], [6,14,2,12,18], [18,12,3,17,7],
+      [5,15,4,16,19], [6,16,4,8,14], [17,11,5,19,7], [19,16,6,18,7]
+    ],
+    icosahedron: [
+      [2,0,1], [1,0,7], [6,0,2], [8,0,6], [7,0,8], [2,1,5], [5,1,3],
+      [3,1,7], [4,2,5], [6,2,4], [5,3,9], [11,3,7], [9,3,11], [9,4,5],
+      [6,4,10], [10,4,9], [8,6,10], [11,7,8], [11,8,10], [10,9,11]
+    ]
+  };
 
   function edgesFromFaces(faces) {
     const edges = new Map();
@@ -96,8 +80,7 @@
   }
 
   function solid(vertices, faces) {
-    const boundary = faces || convexFaces(vertices);
-    return { kind: 'solid', vertices, edges: edgesFromFaces(boundary), faces: boundary };
+    return { kind: 'solid', vertices, edges: edgesFromFaces(faces), faces };
   }
 
   function makeMesh(id) {
@@ -112,12 +95,12 @@
       [-0.62, 0.62].forEach(z => {
         for (let i = 0; i < 3; i++) vertices.push([Math.cos(Math.PI / 2 + i * TAU / 3), Math.sin(Math.PI / 2 + i * TAU / 3), z]);
       });
-      return solid(vertices);
+      return solid(vertices, SOLID_FACES[id]);
     }
     if (id === 'cube') {
       const vertices = [];
       [-1, 1].forEach(x => [-1, 1].forEach(y => [-1, 1].forEach(z => vertices.push([x, y, z]))));
-      return solid(vertices);
+      return solid(vertices, SOLID_FACES[id]);
     }
     if (id === 'dodecahedron' || id === 'icosahedron') {
       const phi = (1 + Math.sqrt(5)) / 2;
@@ -132,7 +115,7 @@
           vertices.push([0, a, b * phi], [a, b * phi, 0], [a * phi, 0, b]);
         }));
       }
-      return solid(vertices);
+      return solid(vertices, SOLID_FACES[id]);
     }
     if (id === 'geodesic') {
       const base = internalMesh('icosahedron');

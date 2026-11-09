@@ -1,13 +1,13 @@
 (function (root, factory) {
   'use strict';
-  const models = typeof module === 'object' && module.exports ? require('./relational-models.js') : root.FormRelationalModels;
-  const api = factory(models);
+  const getModels = typeof module === 'object' && module.exports
+    ? () => require('./relational-models.js')
+    : () => root.FormRelationalModels;
+  const api = factory(getModels);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.FormShapePractice = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (models) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (getModels) {
   'use strict';
-
-  if (!models || typeof models.getModel !== 'function') throw new Error('Load relational-models.js before shape-practice.js.');
 
   // These are declared teaching conventions, not a measured cognitive or physiological scale.
   const INTRO = 'Circle begins with one explicit conceptual relationship, such as ocean contains boat: two contents, one relationship. Half-circle holds two distinct relationships. Later shapes organise more selected relationships; properties, palace addresses and routine comparisons do not define their count. Every shape uses the complete breath-back procedure in consciousness streaming, heart practice or body mapping.';
@@ -359,25 +359,41 @@
   }
 
   function buildGuide(stage, exercise) {
-    const model = models.getModel(stage.id, exercise);
-    if (!model || !Array.isArray(model.relations) || model.relations.length !== stage.relationCount) {
-      throw new Error('The complete relation register is missing for ' + stage.id + '/' + exercise);
-    }
     const source = exercise === 'stream' ? STREAM_EXAMPLES[stage.id] : null;
-    const baseline = source ? source.baseline : stage.relationCount < 30 ? model.relations.map(relation => relation.text).join(' ') : 'Prepare the complete ' + model.title + ' model and all ' + stage.relationCount + ' selected relationships in its register. The four encounters below are versions of that full model.';
-    return {
-      cues: phaseCues(stage, exercise),
+    let model, examples, baseline = source && source.baseline;
+    function readModel() {
+      if (model) return model;
+      const provider = getModels();
+      if (!provider) throw new Error('Load relational-models.js to open the relationship register.');
+      const registered = provider.getModel(stage.id, exercise);
+      if (!registered || !Array.isArray(registered.relations) || registered.relations.length !== stage.relationCount) {
+        throw new Error('The complete relation register is missing for ' + stage.id + '/' + exercise);
+      }
+      model = registered;
+      return model;
+    }
+    return Object.freeze({
+      cues: freeze(phaseCues(stage, exercise)),
       shortExample: SHORT_LESSONS[stage.id][exercise],
       notice: EXERCISE_CONTEXT[exercise] + ' On the inhale, select ' + (stage.relationCount === 1 ? 'one complete meaningful relationship' : 'the full declared ' + stage.relationCount + '-link organisation') + '. On the exhale, encode it at a distinct home-palace address before deliberately seeking the earlier target. If fewer links are available, encode an honest partial selection with its actual count and uncertainty. That entry may support a return without completing the intended shape; do not invent the missing links.',
       recall: 'Only after current encoding, retrieve exactly N committed entries back before revealing any earlier note. Until N earlier entries exist, seed history. In the four-breath B = 1 rehearsal, return to the preceding breath’s entry; a matching older entry is not a substitute. Recover roles and meanings, not only the model’s name.',
       relate: 'Compare the complete current and retrieved selections under identified role correspondences. Distinguish preserved meaning, changed meaning, different participants and uncertainty. A historical comparison is an annotation, not another counted relationship in the current source model. ' + (source && source.notes ? source.notes : 'Changing which relationship is foregrounded need not make the earlier relationship false.'),
       revise: 'Keep both original entries at their own addresses. Append the comparison or a warranted correction with its reason. Label deliberate construction and inference separately from what appeared. If a registered link cannot be recovered, record the partial model and its actual count instead of filling the gap to claim the shape.',
-      baseline: baseline,
+      get baseline() {
+        if (!baseline) {
+          const registered = readModel();
+          baseline = stage.relationCount < 30 ? registered.relations.map(relation => relation.text).join(' ') : 'Prepare the complete ' + registered.title + ' model and all ' + stage.relationCount + ' selected relationships in its register. The four encounters below are versions of that full model.';
+        }
+        return baseline;
+      },
       preparation: EXERCISE_CONTEXT[exercise] + (stage.relationCount >= 30 && exercise !== 'stream' ? ' This is a represented practice episode: attention, interpretation and review are roles inside the imagined model. Only their explicitly selected internal relationships count. Your actual encoding, retrieval and comparison of that model remain the full procedure outside its count.' : '') + ' These are illustrative possibilities, not required arrivals or outcomes. “Keep” and “retain” refer to the model already present in the current encounter; they do not instruct you to retrieve an old palace record before encoding.',
-      register: model.relations,
-      model: model,
-      examples: getExamples(stage, exercise, model)
-    };
+      get register() { return readModel().relations; },
+      get model() { return readModel(); },
+      get examples() {
+        if (!examples) examples = freeze(getExamples(stage, exercise, readModel()));
+        return examples;
+      }
+    });
   }
 
   const STAGES = METADATA.map(function (row) {
@@ -386,12 +402,21 @@
       essence: SHORT_LESSONS[row[0]].essence,
       relationCount: row[3], topology: row[4], theory: row[5],
       preparation: 'Use a separate room or four distinct sublocations in your home for this run: doorway, hallway shelf, desk and window. Keep every entry at its own stable address. ' + (row[3] >= 30 ? 'Learn the full register before rehearsing. A familiar model may be reactivated as a whole; inventing or reading ' + row[3] + ' links is not a one-inhale requirement. Use four record-paced entries if the full work takes extra breaths.' : 'The four-breath rehearsal assumes one complete selection, encoding and return fits each ordinary breath. Otherwise use four record-paced entries without holding or forcing the breath.') + ' Palace bindings, note labels and routine historical comparisons do not add source links.',
-      readiness: [row[6], 'I can encode the full current selection before retrieving the exact scheduled earlier entry, with both originals retained.', 'I can distinguish experience, construction and inference. If the scene lacks enough supported links, I choose a simpler selection or explicitly prepare a model rather than inventing links to complete a count.']
+      readiness: Object.freeze([row[6], 'I can encode the full current selection before retrieving the exact scheduled earlier entry, with both originals retained.', 'I can distinguish experience, construction and inference. If the scene lacks enough supported links, I choose a simpler selection or explicitly prepare a model rather than inventing links to complete a count.'])
     };
-    ['stream', 'heart', 'body'].forEach(exercise => { stage[exercise] = buildGuide(stage, exercise); });
-    return stage;
+    for (const exercise of ['stream', 'heart', 'body']) {
+      let guide;
+      Object.defineProperty(stage, exercise, {
+        enumerable: true,
+        get() {
+          if (!guide) guide = buildGuide(stage, exercise);
+          return guide;
+        }
+      });
+    }
+    return Object.freeze(stage);
   });
-  freeze(STAGES);
+  Object.freeze(STAGES);
   function getStage(id) { return STAGES.find(stage => stage.id === id) || STAGES[0]; }
   return Object.freeze({ STAGES, INTRO, BREATH_BACK, ADDRESSES, getStage });
 });

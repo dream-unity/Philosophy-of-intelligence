@@ -10,23 +10,57 @@ const checks = import('../scripts/check.mjs');
 const root = path.join(__dirname, '..');
 const source = () => fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
+test('the song stays dormant during a direct practice visit and mounts once on return', () => {
+  const html = source();
+  const template = html.match(/<template id="site-song-source">([\s\S]*?)<\/template>/);
+  assert.match(template[1], /<iframe\b[^>]+data-online-player="suno"/);
+  assert.doesNotMatch(html.replace(template[0], ''), /<iframe\b[^>]+data-online-player="suno"/);
+
+  const panel = new EventTarget(), page = new EventTarget();
+  panel.removeAttribute = () => {};
+  const content = { querySelector: () => ({}) };
+  let mounts = 0, onVisibility;
+  const slot = {
+    content, isConnected:true, parentElement:panel,
+    replaceWith(fragment) { assert.equal(fragment, content); this.isConnected = false; mounts++; }
+  };
+  class Observer {
+    constructor(callback) { onVisibility = callback; }
+    observe(target) { assert.equal(target, panel); }
+    disconnect() {}
+  }
+  page.IntersectionObserver = Observer;
+  const loader = html.match(/<script id="site-song-loader">([\s\S]*?)<\/script>/)[1];
+  require('node:vm').runInNewContext(loader, {
+    document:{getElementById:() => slot}, window:page, location:{hash:'#practice/circle'}, IntersectionObserver:Observer
+  });
+  assert.equal(mounts, 0);
+  page.dispatchEvent(new Event('load'));
+  onVisibility([{isIntersecting:true, boundingClientRect:{bottom:80}}]);
+  onVisibility([{isIntersecting:false, boundingClientRect:{bottom:-150}}]);
+  assert.equal(mounts, 0, 'scrolling through the homepage to a practice does not start the player');
+  onVisibility([{isIntersecting:true, boundingClientRect:{bottom:10}}]);
+  panel.dispatchEvent(new Event('focusin'));
+  assert.equal(mounts, 1, 'returning to the music reveals one persistent player');
+});
+
 // Inspect the committed HTML without running its application or preparer:
-// a failed script must neither hide the shapes nor restore their old links.
-test('homepage ships every curriculum shape as a noninteractive card with its drawing', async () => {
+// the shape destinations must be usable before the practice software arrives.
+test('homepage ships every curriculum shape as a native practice link with its drawing', async () => {
   const { attributes } = await checks;
   const html = source();
   const gallery = html.match(/(<section\b[^>]*\bid="stage-path"[^>]*>)([\s\S]*?)<\/section\s*>/i);
   assert.ok(gallery, 'the shape gallery is present in the HTML');
-  const cards = [...gallery[2].matchAll(/(<div\b[^>]*>)([\s\S]*?)<\/div\s*>/gi)];
+  const cards = [...gallery[2].matchAll(/(<a\b[^>]*>)([\s\S]*?)<\/a\s*>/gi)];
   assert.equal(cards.length, 14, 'all fourteen shapes render before JavaScript runs');
-  assert.doesNotMatch(gallery[2], /<(?:a|button)\b|\bon(?:click|keydown)\s*=/i);
+  assert.doesNotMatch(gallery[2], /<button\b|\bon(?:click|keydown)\s*=/i);
   for (const [index, card] of cards.entries()) {
     const stage = STAGES[index];
     const attrs = attributes(card[1]);
     assert.equal(attrs['data-stage'], stage.id);
-    assert.equal(attrs.role, 'group');
+    assert.equal(attrs.href, '#practice/' + stage.id);
     assert.equal(attrs['aria-label'], stage.name);
-    for (const name of ['href', 'tabindex', 'aria-controls']) {
+    for (const name of ['tabindex', 'aria-controls']) {
       assert.equal(Object.hasOwn(attrs, name), false, stage.id + ' has no ' + name);
     }
     assert.ok((attrs.class || '').split(/\s+/).includes('stage-tile'));
@@ -38,12 +72,12 @@ test('homepage ships every curriculum shape as a noninteractive card with its dr
   }
 });
 
-test('the homepage symbol and shape cards have no navigation controls', async () => {
+test('the introductory symbol retains its original noninteractive artwork', async () => {
   const { attributes } = await checks;
   const home = [...source().matchAll(/(<section\b[^>]*>)([\s\S]*?)<\/section\s*>/gi)]
     .find(match => attributes(match[1]).id === 'view-journey');
   assert.ok(home, 'the homepage section is present');
-  assert.doesNotMatch(home[2], /<(?:a|button)\b|\brole\s*=\s*["'](?:button|link)["']/i);
+  assert.doesNotMatch(home[2].split('<section id="stage-path"')[0], /<(?:a|button)\b|\brole\s*=\s*["'](?:button|link)["']/i);
   assert.doesNotMatch(home[2], /\bonclick\s*=/i);
 });
 
@@ -84,4 +118,16 @@ test('every linked script and stylesheet uses the hash of its current file', asy
     const expected = createHash('sha256').update(fs.readFileSync(localAsset(resource.url, root, root))).digest('hex').slice(0, 12);
     assert.equal(versions[0], expected, resource.url + ' must be refreshed after its asset changes');
   }
+});
+
+test('startup keeps the practice engine and worked-model atlas off the homepage request path', () => {
+  const html = source();
+  const outsideTemplates = html.replace(/<template\b[^>]*>[\s\S]*?<\/template>/gi, '');
+  assert.doesNotMatch(outsideTemplates, /<script\b[^>]*\bsrc=/i);
+  const group = id => html.match(new RegExp('<template id="' + id + '"[^>]*>([\\s\\S]*?)</template>'))[1];
+  assert.match(group('practice-scripts'), /src\/training\.js/);
+  assert.doesNotMatch(group('practice-scripts'), /relational-models|model-view/);
+  assert.match(group('reference-scripts'), /relational-models[\s\S]*model-view/);
+  const preload = group('hero-preload').match(/href="([^"]+)"/)[1];
+  assert.ok(html.includes('src="' + preload + '"'), 'the preloaded engraving matches the version displayed');
 });

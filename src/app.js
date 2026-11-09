@@ -102,10 +102,20 @@
   });
 
   function applyMotion() { document.body.classList.toggle('reduced-motion',state.preferences.reducedMotion); }
+  const stageLinks = $('stage-path').querySelectorAll('a[data-stage]');
   function renderJourney(){
     const mode = currentView === 'practice' ? location.hash.split('/')[2] : training?.routeMode();
     const suffix = ['wave','open','frequency','heart','transmutation','oscillatory','oscillatory-connections','oscillatory-combined'].includes(mode) ? '/' + mode : '';
-    $('stage-path').innerHTML=stages.map((stage,index)=>`<a class="stage-tile ${hasSelectedShape&&stage.id===selectedStage?'selected':''}" data-stage="${esc(stage.id)}" href="#practice/${esc(stage.id)}${suffix}"${hasSelectedShape&&stage.id===selectedStage?' aria-current="true"':''} aria-label="${esc(stage.name)}"><span class="stage-number">${String(index+1).padStart(2,'0')}</span><span class="stage-icon" aria-hidden="true">${G.miniIcon(stage.id,65)}</span><span class="stage-name">${esc(stage.name)}</span></a>`).join('');
+    for (const link of stageLinks) {
+      const stage = link.dataset.stage;
+      const href = '#practice/' + stage + suffix;
+      if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+      const selected = hasSelectedShape && stage === selectedStage;
+      if (selected === link.classList.contains('selected')) continue;
+      link.classList.toggle('selected', selected);
+      if (selected) link.setAttribute('aria-current', 'true');
+      else link.removeAttribute('aria-current');
+    }
   }
 
   function sourceHTML(source, className){
@@ -139,21 +149,30 @@
         }
       });
       mountedStage=practiceStage;
+    }else if(mountedStage!==practiceStage){
+      training.setStage(practiceStage, location.hash.split('/')[2] || '');
+      mountedStage=practiceStage;
     }else {
-      if(mountedStage!==practiceStage){
-        training.setStage(practiceStage);
-        mountedStage=practiceStage;
-      }
-      if(currentView==='practice')training.showRoute(location.hash.split('/')[2] || '');
+      training.showRoute(location.hash.split('/')[2] || '');
     }
   }
 
   function allEntries(){return [...state.palace.map(p=>({...p,_type:'principle'})),...state.journal.map(p=>({...p,_type:'personal'}))].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));}
+  let renderedPalace;
   function renderPalace(){
+    // Archive edits replace the arrays. Navigating between shapes or receiving
+    // a second details-toggle event leaves the existing list and focus intact.
+    if (renderedPalace && renderedPalace.journal === state.journal && renderedPalace.palace === state.palace && renderedPalace.filter === palaceFilter) {
+      const href = '#practice/' + selectedStage;
+      const link = renderedPalace.emptyLink;
+      if (link && link.getAttribute('href') !== href) link.setAttribute('href', href);
+      return;
+    }
     const entries=allEntries(),visible=entries.filter(e=>palaceFilter==='all'||e._type===palaceFilter);
     $('palace-rooms').innerHTML=['Atrium','Window','Alcove','Bridge','Garden'].map(room=>`<div class="room-card"><span>${room}</span><small>${entries.filter(e=>(e.locus||'Atrium')===room).length.toString().padStart(2,'0')}</small></div>`).join('');
     document.querySelectorAll('[data-filter]').forEach(b=>{b.classList.toggle('active',b.dataset.filter===palaceFilter);b.setAttribute('aria-pressed',String(b.dataset.filter===palaceFilter));});
     $('palace-entries').innerHTML=visible.length?visible.map(entry=>`<button class="palace-entry" data-entry="${esc(entry.id)}"><span class="entry-meta"><span>${esc(String(entry.locus||'Atrium').toUpperCase())} · ${entry._type==='personal'?'PRIVATE OBSERVATION':'PRINCIPLE'}</span><span>${esc(dateLabel(entry.createdAt))}</span></span><h3>${esc(entry.title||String(entry.source||'An observation').slice(0,72))}</h3><p>${esc(entry._type==='personal'?entry.relation||entry.source:entry.body)}</p><span class="entry-footer">${esc(stageById(entry.stageId).name)} · Open & revisit →</span></button>`).join(''):`<div class="empty-state">${G.miniIcon('prism',75)}<h2>A place for the connections.</h2><p>${palaceFilter==='all'?'Your saved observations and principles are kept here. Open practice to continue exploring a shape.':'No '+(palaceFilter==='personal'?'observations':'principles')+' here yet.'}</p><a class="button primary" href="#practice/${esc(selectedStage)}">Open practice ↗</a></div>`;
+    renderedPalace = {journal:state.journal, palace:state.palace, filter:palaceFilter, emptyLink:visible.length ? null : $('palace-entries').querySelector('.empty-state a')};
   }
   function findEntry(id){return state.palace.find(e=>e.id===id)||state.journal.find(e=>e.id===id);}
   function predictionHTML(entry){
@@ -196,15 +215,19 @@
   });
   $('confirm-dialog').addEventListener('close',()=>{if(confirmResolver){const resolve=confirmResolver;confirmResolver=null;resolve(false);}});
 
+  function renderPhilosophy(){
+    const sphere = $('philosophy-sphere');
+    if ($('philosophy-panel').open && !sphere.children.length) sphere.innerHTML=G.shapeSVG('sphere',{size:280,progress:1});
+  }
   function renderCurrent(){
     renderJourney();
-    if(hasSelectedShape)renderPractice();
+    if(currentView==='practice')renderPractice();
     if($('archive-panel').open)renderPalace();
-    if($('philosophy-panel').open)$('philosophy-sphere').innerHTML=G.shapeSVG('sphere',{size:280,progress:1});
+    renderPhilosophy();
   }
   function scrollToSection(element){
     element.focus({preventScroll:true});
-    element.scrollIntoView({block:'start',behavior:state.preferences.reducedMotion?'instant':'smooth'});
+    element.scrollIntoView({block:'start',behavior:'instant'});
   }
   function updateArchiveVisibility(){
     const open=$('archive-panel').open;
@@ -217,12 +240,11 @@
     }
   }
   $('archive-panel').addEventListener('toggle',updateArchiveVisibility);
-  $('philosophy-panel').addEventListener('toggle',()=>{
-    if($('philosophy-panel').open)$('philosophy-sphere').innerHTML=G.shapeSVG('sphere',{size:280,progress:1});
-  });
+  $('philosophy-panel').addEventListener('toggle',renderPhilosophy);
   $('main').addEventListener('click',event=>{
-    const link=event.target.closest('a[href="#stage-path"], a[href="#journey"]');
+    const link=event.target.closest('a[href="#stage-path"], a[href="#journey"], a.stage-tile[data-stage]');
     if(!link||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+    if(link.dataset.stage && location.hash!==link.getAttribute('href'))return;
     event.preventDefault();
     if(location.hash===link.getAttribute('href'))route();else location.hash=link.getAttribute('href');
   });
@@ -259,5 +281,8 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&training)training.pause();});
   window.addEventListener('pagehide',()=>{if(training)training.pause();});
   window.addEventListener('beforeunload',event=>{if(training&&training.hasDraft()){event.preventDefault();event.returnValue='';}});
+  document.documentElement?.classList.remove('opening-practice');
+  const loadingNotice = document.getElementById('practice-loading');
+  if (loadingNotice) loadingNotice.hidden = true;
   applyMotion();route();
 })();

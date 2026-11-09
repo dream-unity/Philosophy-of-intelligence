@@ -2025,7 +2025,7 @@
     const D = root.FormShapePractice, E = root.FormExercises, G = root.FormGeometry;
     let storage; try { storage = root.localStorage; } catch (_) { storage = null; }
     const store = root.FormTrainingStore.createStore(storage);
-    const resolveStage = id => id === 'open-streaming' ? {...D.getStage('circle'), id:'open-streaming', name:'Open Streaming'} : D.getStage(id);
+    const resolveStage = id => id === 'open-streaming' ? {__proto__:D.getStage('circle'), id:'open-streaming', name:'Open Streaming'} : D.getStage(id);
     const routeExercise = mode => ({
       __proto__: null,
       wave: 'stream', stream: 'stream', frequency: 'frequency', transmutation: 'frequency',
@@ -2036,7 +2036,8 @@
     let sessionAudioFailed = false;
     let unsaved = false, fieldsGeneration = 0, modelState = 0, selectedRelationship = '', walkthroughStep = 0, walkthroughGeneration = 0;
     const testAudio = new E.ExerciseAudio({onError:soundFailure});
-    let recorded = false, peek = null, lastBodyStep = -1, lastCue = '', lastPrompt = '', announcement = '';
+    let interval = null, clockElements, recordOpened = false;
+    let recorded = false, peek = null, lastCue = '', lastPrompt = '', announcement = '';
     let sound = true, bell = true, frequency = 10, bellVolume = 1, pacing = ['stream','frequency','heart','unitive','body'].includes(exercise) ? 'paced' : 'natural', duration = 15;
     let inhaleSeconds=5, exhaleSeconds=5;
     const rhythmStorageKey='form-breath-timing-v1';
@@ -2057,18 +2058,19 @@
     let agencyBreathBase = 0;
     let agencyLastFrame = null;
 
-    function updateAgencyPractice(snapshot) {
+    function updateAgencyPractice(snapshot, periodic) {
       if (!agencyMap) return;
       const status = snapshot.status;
       const active = status === 'running' || status === 'paused';
+      const breath = active ? agencyBreathBase + snapshot.breathCycleIndex : 0;
+      const phase = active ? snapshot.breathPhase : 'inhale';
+      if (periodic && status === 'running' && agencyLastFrame?.stage.level <= 5 &&
+          agencyLastFrame.breath === breath && agencyLastFrame.phase === phase) return;
       if (active || status === 'idle' || !agencyLastFrame) {
         agencyLastFrame = window.AgencyPractice.frame({
-          stageId:stage.id,
-          breath:active ? agencyBreathBase + snapshot.breathCycleIndex : 0,
-          phase:active ? snapshot.breathPhase : 'inhale',
+          stageId:stage.id, breath, phase,
           progress:active ? snapshot.breathProgress : 0,
-          order:agencyOrder,
-          start:agencyStartId
+          order:agencyOrder, start:agencyStartId
         });
       }
       agencyMap.update(agencyLastFrame, {status,phase:snapshot.breathPhase,shapeName:stage.name});
@@ -2095,7 +2097,7 @@
       });
       element.querySelector('[data-agency-pacer]').appendChild(q('.training-page-symbol'));
     }
-    let frequencyModule=['transmutation','heart'].includes(initialExercise) ? initialExercise : 'integrated', signalSelection=new Set(), signalFocus=0, shapeFocus=0, signalCycleBase=0;
+    let frequencyModule=['transmutation','heart'].includes(initialExercise) ? initialExercise : 'integrated', signalFocus=0, shapeFocus=0, signalCycleBase=0;
     const lociProgressKey = 'form-oscillatory-steps-v1';
     function readLociProgress() {
       try {
@@ -2124,7 +2126,7 @@
       if (exercise === 'frequency') return frequencyModule === 'transmutation' ? 'transmutation' : 'frequency';
       return {stream:'wave', open:'open', heart:'heart'}[exercise] || '';
     }
-    function showRoute(mode) {
+    function showRoute(mode, stageChanged=false) {
       const target = routeExercise(mode);
       const module = mode === 'transmutation' || mode === 'heart' ? mode : 'integrated';
       const nextLoci = permittedLociStep(mode);
@@ -2132,8 +2134,11 @@
         onExerciseChange(LOCI_COURSE[nextLoci].route);
       }
       if (exercise === target && (!frequencyActive() || frequencyModule === module)
-          && (target !== 'unitive' || lociStep === nextLoci)) return;
-      end();
+          && (target !== 'unitive' || lociStep === nextLoci)) {
+        if (stageChanged) render();
+        return;
+      }
+      if (!stageChanged) end();
       clock = null;
       exercise = target;
       if (target === 'unitive') lociStep = nextLoci;
@@ -2150,7 +2155,7 @@
     const signalAnchorIndex=()=>stage.id==='open-streaming'?-1:D.STAGES.findIndex(item=>item.id===stage.id);
     const signalAnchor=()=>{const i=signalAnchorIndex();return i<0?null:E.BODY_STEPS[i];};
     const signalLimit=()=>signalAnchorIndex()<0?E.BODY_STEPS.length:signalAnchorIndex()+1;
-    function resetSignalSelection(){signalSelection=new Set(Array.from({length:signalAnchorIndex()<0?1:signalLimit()},(_,i)=>i));signalFocus=0;signalCycleBase=0;shapeFocus=0;}
+    function resetSignalSelection(){signalFocus=0;signalCycleBase=0;shapeFocus=0;}
     function modePairings(){
       if(stage.id==='open-streaming')return [];
       if(exercise==='body')return E.BODY_STEPS.slice(0,signalLimit()).map((d,i)=>({label:d.label,pair:D.STAGES[i].name+' · '+d.label}));
@@ -2177,9 +2182,9 @@
       if(total<=12)return Array.from({length:total},(_,i)=>({label:'Relationship '+(i+1),pair:'Relationship '+(i+1),group:false}));
       return Array.from({length:Math.ceil(total/10)},(_,i)=>({label:'Relationships '+(10*i+1)+'–'+Math.min(total,10*i+10),pair:'Relationships '+(10*i+1)+'–'+Math.min(total,10*i+10),group:true}));
     }
-    function signalShapeLabels(){
+    function signalShapeLabels(svg){
       const items=modePairings();if(!items.length)return '';
-      const count=items.length, svg=G.miniIcon(stage.id,65), lines=[...svg.matchAll(/<line x1="([\d.-]+)" y1="([\d.-]+)" x2="([\d.-]+)" y2="([\d.-]+)"/g)].map(m=>m.slice(1).map(Number));
+      const count=items.length, lines=[...svg.matchAll(/<line x1="([\d.-]+)" y1="([\d.-]+)" x2="([\d.-]+)" y2="([\d.-]+)"/g)].map(m=>m.slice(1).map(Number));
       const point=i=>{
         if(stage.id==='circle')return [50,5];
         if(stage.id==='half-circle')return i===0?[50,2]:[50,91];
@@ -2208,9 +2213,9 @@
       if (!drafts.has(key())) drafts.set(key(), {streamId:uid(),lag:1,source:'',recollection:'',relation:'',revision:'',locked:false,reference:null,revealed:false});
       return drafts.get(key());
     }
-    function history() { const d = draft(); return store.data.entries.filter(e => e.streamId === d.streamId && e.stageId === stage.id && e.exercise === exercise); }
-    function target() { const d=draft(); if(d.locked)return d.reference; const h=history(); return h.length>=d.lag?h[h.length-d.lag]:null; }
-    function staleReference() { const d=draft(); if(!d.locked||!d.reference)return false; const h=history(),exact=h[h.length-d.lag]; return !exact||exact.id!==d.reference.id||exact.source!==d.reference.source; }
+    function history(entries=store.data.entries) { const d = draft(); return entries.filter(e => e.streamId === d.streamId && e.stageId === stage.id && e.exercise === exercise); }
+    function target(h) { const d=draft(); if(d.locked)return d.reference; return h.length>=d.lag?h[h.length-d.lag]:null; }
+    function staleReference(h) { const d=draft(); if(!d.locked||!d.reference)return false; const exact=h[h.length-d.lag]; return !exact||exact.id!==d.reference.id||exact.source!==d.reference.source; }
     function dirty() { return [...drafts.values()].some(d => ['source','recollection','relation','revision'].some(k => d[k].trim())); }
     function runningSession() { return clock && ['running','paused'].includes(clock.snapshot().status); }
     function message(text) { announcement = text; const el=q('[data-message]'); if(el) el.textContent=text; }
@@ -2305,7 +2310,7 @@
     function start() {
       if (runningSession()) return;
       if(!applyBreathTiming())return;
-      recorded=false;peek=null;lastBodyStep=-1;lastCue='';lastPrompt='';message('');
+      recorded=false;peek=null;lastCue='';lastPrompt='';message('');
       if(exercise==='body'){signalFocus=0;signalCycleBase=0;}
       agencyBreathBase=0;
       agencyLastFrame=null;
@@ -2369,15 +2374,49 @@
       q('[data-walk-next]').addEventListener('click',()=>{if(!isCurrent())return;if(walkthroughStep<3){walkthroughStep++;renderWalkthrough();}else selectWorkedEntry(modelState<3?modelState+1:0);q('[data-walkthrough-title]').focus();});
       q('[data-walk-back]').addEventListener('click',()=>{if(!isCurrent())return;if(walkthroughStep>0){walkthroughStep--;renderWalkthrough();}else if(modelState>0)selectWorkedEntry(modelState-1);q('[data-walkthrough-title]').focus();});
     }
-    function workedExampleHTML(guide) {
-      const model=guide.model||root.FormRelationalModels?.getModel(stage.id,exercise);
-      const register=guide.register||model?.relations||[];
-      return `<details class="training-examples" data-examples><summary>More detail · four practice turns</summary>
-        <p class="training-fine">${stage.relationCount>8?'Learn the full register before rehearsing. ':''}Take additional natural breaths as needed. These controls rehearse entries; they do not save notes.</p>
-        <div class="training-walkthrough" data-walkthrough></div>
-        ${model?explorerHTML(model):''}
-        <details class="training-model" data-model-register><summary>All ${register.length} relationships</summary><div data-model-content>${modelHTML(model||{relations:register})}</div></details>
-      </details>`;
+    function bindWorkedExample() {
+      const examples = q('[data-examples]');
+      const content = examples.querySelector('[data-example-content]');
+      const generation = ++walkthroughGeneration;
+      const current = () => examples.open && generation === walkthroughGeneration;
+      let loading = false;
+      async function openExample() {
+        if (!current() || loading) return;
+        try {
+          if ((!root.FormRelationalModels || !root.FormModelView) && root.FormAssets?.loadReference) {
+            loading = true;
+            content.innerHTML = '<p role="status">Loading the worked reference…</p>';
+            await root.FormAssets.loadReference();
+            if (!current()) return;
+          }
+          renderExample();
+          examples.removeEventListener('toggle', openExample);
+        } catch {
+          if (!current()) return;
+          content.innerHTML = '<p role="status">The worked reference could not load.</p><button type="button" class="text-button" data-retry-example>Try again</button>';
+          content.querySelector('[data-retry-example]').addEventListener('click', () => {
+            examples.querySelector('summary').focus();
+            openExample();
+          });
+        } finally {
+          loading = false;
+        }
+      }
+      function renderExample() {
+        const guide = stage[guideId()], model = currentModel();
+        const register = guide.register || model?.relations || [];
+        content.innerHTML = `
+          <p class="training-fine">${stage.relationCount>8?'Learn the full register before rehearsing. ':''}Take additional natural breaths as needed. These controls rehearse entries; they do not save notes.</p>
+          <div class="training-walkthrough" data-walkthrough></div>
+          ${model?explorerHTML(model):''}
+          <details class="training-model" data-model-register><summary>All ${register.length} relationships</summary><div data-model-content>${modelHTML(model||{relations:register})}</div></details>`;
+        q('[data-model-state]')?.addEventListener('change',event=>selectWorkedEntry(Number(event.target.value)));
+        q('[data-model-relation]')?.addEventListener('change',event=>{selectedRelationship=event.target.value;updateExplorer();});
+        bindRegister();
+        updateExplorer();
+        renderWalkthrough();
+      }
+      examples.addEventListener('toggle', openExample);
     }
     // The laboratory is self-paced and separate from the running exercise.
     let labMode='stream',labModule='integrated',labPage=0;
@@ -2620,8 +2659,10 @@
       if (isTransmutation()) pacing='paced';
       modelState=0;selectedRelationship='';walkthroughStep=0;
       previewLociCue=false;
-      const guide = stage[guideId()], ready=store.data.readiness[stage.id]||{};
+      const savedPractice=store.data, ready=savedPractice.readiness[stage.id]||{};
+      recordOpened=false;
       const wave = exercise === 'stream' ? WAVE[stage.id] : null;
+      const shapeIcon=exercise==='open'||stage.id==='open-streaming'?'':G.miniIcon(stage.id,65);
       host.innerHTML=`<div data-practice-surface><div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker" ${exercise==='open'?'hidden':''}>Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
         <h2 class="training-category-title" id="unity-psiduction-title">Unity Psiduction</h2>
         <div class="training-exercises" role="group" aria-labelledby="unity-psiduction-title">${['body','frequency','stream','unitive','open'].map(name=>`<button type="button" data-exercise="${name}" aria-pressed="${name==='frequency'?frequencyActive():exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
@@ -2656,7 +2697,7 @@
           <section data-transmutation-map aria-label="Agency hexagram"></section>` : ''}
         ${exercise==='body'&&stage.id!=='open-streaming'?`<p class="signal-cycle-intro"><strong>${esc(stage.name)} · ${signalLimit()} ${signalLimit()===1?'vector':'vectors'}</strong> — This shape brings ${signalLimit()===1?'one vector':'these '+signalLimit()+' vectors'} into practice and invites you to notice how ${signalLimit()===1?'it informs your experience':'they influence and depend on one another'}. Follow the highlighted vector for one complete inhale and exhale. At the next inhale, move to the next vector; continue in order, returning to the first until your chosen time ends. The bell marks each inhale and exhale.</p>`:''}
         ${exercise==='heart'?`<p class="heart-progression-intro">Begin by bringing a sincere feeling of love forward from the heart. Each shape builds on the last, applying what you learned in Signal Psiduction to notice, deepen and sustain that feeling throughout your experience.</p>`:''}
-        <header ${isTransmutation()?'hidden':''} class="training-symbol-header${wave?' wave-header':''}"><h1 class="visually-hidden">${exercise==='open'?'Synchronised Psiduction':esc(stage.name)+(wave?' · '+esc(wave.name):'')}</h1><div class="training-page-symbol${exercise==='open'||stage.id==='open-streaming'?' training-page-symbol--open':stage.id==='half-circle'?' training-page-symbol--half-circle':''}"><span class="training-shape-ink" aria-hidden="true">${exercise==='open'||stage.id==='open-streaming'?'':G.miniIcon(stage.id,65).replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</span>${exercise==='open'?'':signalShapeLabels()}<div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div>${wave?`<span class="wave-medallion"><small>${esc(stage.name)}</small><strong>${esc(wave.name)}</strong></span>`:''}<button type="button" class="training-pacer-start" data-start-orb aria-label="Start practice">Start</button><div class="training-breath-readout" data-breath-readout hidden><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div></div><aside class="training-signal-explanation" data-signal-explanation hidden aria-label="${exercise==='open'?'Synchronised Psiduction guidance':'Shape pairing explanation'}"><div data-pair-details>${exercise==='open'?`<p class="eyebrow training-current-step">A RETURN TO THE STREAM</p><p class="training-prompt">Come back to this practice whenever you like. Notice what now arises naturally, without trying to use every skill.</p><p class="training-fine">You can begin here, or return after practising the other categories.</p>`:''}${wave?`<p class="eyebrow training-current-step">Picture this</p><p class="training-prompt">${esc(wave.example)}</p><p class="training-fine">${esc(wave.check)}</p><div class="wave-selected-relationship" data-wave-relationship ${stage.relationCount>12?'hidden':''} aria-live="polite"><span class="visually-hidden" data-wave-selected></span>`:''}<p class="eyebrow training-current-step" data-signal-pair></p><div class="training-prompt" data-signal-pairing></div><p class="training-fine" data-signal-example></p>${wave?'</div>':''}</div><div class="training-heart-instructions" data-heart-instructions hidden aria-label="Heart activation guidance"><p class="eyebrow training-current-step" data-heart-step></p><p class="training-prompt" data-heart-prompt aria-live="polite"></p><div class="training-body-instructions" data-unitive-body hidden aria-label="Body sensation guidance"><p class="eyebrow training-current-step" data-unitive-body-label></p><p class="training-prompt" data-unitive-body-prompt></p></div></div></aside></header>
+        <header ${isTransmutation()?'hidden':''} class="training-symbol-header${wave?' wave-header':''}"><h1 class="visually-hidden">${exercise==='open'?'Synchronised Psiduction':esc(stage.name)+(wave?' · '+esc(wave.name):'')}</h1><div class="training-page-symbol${exercise==='open'||stage.id==='open-streaming'?' training-page-symbol--open':stage.id==='half-circle'?' training-page-symbol--half-circle':''}"><span class="training-shape-ink" aria-hidden="true">${shapeIcon.replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</span>${exercise==='open'?'':signalShapeLabels(shapeIcon)}<div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div>${wave?`<span class="wave-medallion"><small>${esc(stage.name)}</small><strong>${esc(wave.name)}</strong></span>`:''}<button type="button" class="training-pacer-start" data-start-orb aria-label="Start practice">Start</button><div class="training-breath-readout" data-breath-readout hidden><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div></div><aside class="training-signal-explanation" data-signal-explanation hidden aria-label="${exercise==='open'?'Synchronised Psiduction guidance':'Shape pairing explanation'}"><div data-pair-details>${exercise==='open'?`<p class="eyebrow training-current-step">A RETURN TO THE STREAM</p><p class="training-prompt">Come back to this practice whenever you like. Notice what now arises naturally, without trying to use every skill.</p><p class="training-fine">You can begin here, or return after practising the other categories.</p>`:''}${wave?`<p class="eyebrow training-current-step">Picture this</p><p class="training-prompt">${esc(wave.example)}</p><p class="training-fine">${esc(wave.check)}</p><div class="wave-selected-relationship" data-wave-relationship ${stage.relationCount>12?'hidden':''} aria-live="polite"><span class="visually-hidden" data-wave-selected></span>`:''}<p class="eyebrow training-current-step" data-signal-pair></p><div class="training-prompt" data-signal-pairing></div><p class="training-fine" data-signal-example></p>${wave?'</div>':''}</div><div class="training-heart-instructions" data-heart-instructions hidden aria-label="Heart activation guidance"><p class="eyebrow training-current-step" data-heart-step></p><p class="training-prompt" data-heart-prompt aria-live="polite"></p><div class="training-body-instructions" data-unitive-body hidden aria-label="Body sensation guidance"><p class="eyebrow training-current-step" data-unitive-body-label></p><p class="training-prompt" data-unitive-body-prompt></p></div></div></aside></header>
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
         <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">
           <div class="training-panel-heading"><div><p class="eyebrow">THE EXERCISE</p><h2 id="exercise-title">${exercise==='heart'?'Frequency Psiduction · Heart Activation':exercise==='frequency'&&frequencyModule==='transmutation'?'Frequency Psiduction · Transmutation':exerciseNames[exercise]}</h2></div><div class="training-panel-controls"><span data-session-state class="training-state">At your own pace</span></div></div>
@@ -2679,7 +2720,7 @@
         <section hidden data-readiness class="training-panel training-readiness"></section>
         </div></div>
         ${exercise==='unitive'?'</div>':''}
-        <section class="training-reference" aria-label="${esc(stage.name)} worked reference" data-reference hidden>${workedExampleHTML(guide)}</section>
+        <section class="training-reference" aria-label="${esc(stage.name)} worked reference" data-reference hidden><details class="training-examples" data-examples><summary>More detail · four practice turns</summary><div data-example-content></div></details></section>
         <details hidden class="training-record"><summary>Your practice record <span data-record-count></span></summary><p class="training-fine">Downloads include your private notes.</p><div data-record></div><div class="training-record-actions"><button type="button" class="text-button" data-export>Download practice record (includes notes)</button><button type="button" class="text-button" data-original hidden>Download original saved data</button><button type="button" class="text-button" data-reload hidden>Load saved version</button><button type="button" class="text-button" data-reset>Clear this practice record</button></div></details>
         <p hidden class="training-attribution"><a href="#palace">Earlier saved observations →</a></p></div>
         <section class="learning-lab" data-lab-surface hidden aria-labelledby="lab-title">
@@ -2693,6 +2734,10 @@
           <section id="lab-theory" class="lab-theory" data-lab-theory aria-label="Theory and research"></section>
         </section>`;
       mountAgencyPractice();
+      clockElements = {
+        timer:q('[data-timer]'), orb:q('[data-orb]'), label:q('[data-breath-label]'),
+        count:q('[data-breath-count]'), progress:q('.training-progress'), fill:q('[data-fill]')
+      };
       mountLociProgression();
       function openLociStep(index) {
         if (runningSession() || index > unlockedLoci || index === lociStep) return;
@@ -2723,9 +2768,7 @@
       q('[data-close-lab]').addEventListener('click',closeLab);
       q('[data-lab-research-jump]').addEventListener('click',()=>q('[data-lab-theory]').scrollIntoView({behavior:'smooth',block:'start'}));
       q('[data-shape]').addEventListener('change',e=>onStageChange(e.target.value,routeMode()));
-      q('[data-model-state]')?.addEventListener('change',event=>selectWorkedEntry(Number(event.target.value)));
-      q('[data-model-relation]')?.addEventListener('change',event=>{selectedRelationship=event.target.value;updateExplorer();});
-      bindRegister();updateExplorer();renderWalkthrough();
+      bindWorkedExample();
       all('[data-exercise]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.exercise===exercise||(el.dataset.exercise==='frequency'&&frequencyActive()))return;end();clock=null;exercise=el.dataset.exercise;if(exercise==='frequency'&&frequencyModule==='heart')frequencyModule='integrated';onExerciseChange(routeMode());shapeFocus=0;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();q('[data-exercise="'+exercise+'"]').focus();}));
       all('[data-frequency-module]').forEach(el=>el.addEventListener('click',()=>{const next=el.dataset.frequencyModule;if((next==='heart'&&exercise==='heart')||(exercise==='frequency'&&frequencyModule===next))return;end();clock=null;exercise=next==='heart'?'heart':'frequency';frequencyModule=next;onExerciseChange(routeMode());shapeFocus=0;pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';announcement='';render();q('[data-frequency-module="'+next+'"]').focus();}));
       q('[data-duration]').addEventListener('change',e=>{duration=Number(e.target.value);tick();});
@@ -2755,11 +2798,18 @@
       q('[data-original]').addEventListener('click',()=>download(store.originalRaw,'original-recovery'));
       q('[data-reload]').addEventListener('click',()=>{if(!root.confirm('Load the saved version from this browser? Download this tab’s record first to keep any work that could not be saved. Unfinished notes stay in this tab.'))return;pause();const result=store.reload();if(result.ok){unsaved=false;renderStorage();renderReadiness();renderRecord();renderFields();message('Saved version loaded.');}else message(result.error);});
       q('[data-reset]').addEventListener('click',()=>{if(!root.confirm('Clear this browser’s new practice record, including private notes and self-assessments? Earlier archive data is kept. Download a copy first if you want to keep it.'))return;end();const result=store.reset();if(!result.ok){message(result.error);return;}clock=null;unsaved=false;drafts.clear();message('This practice record has been cleared.');render();});
-      renderFields();renderReadiness();renderRecord();renderStorage();updateRhythmLabels();tick();
+      const records=q('.training-record');
+      records.addEventListener('toggle',()=>{
+        if (records.open && !recordOpened) {
+          recordOpened=true;
+          renderRecord();
+        }
+      });
+      renderFields(savedPractice.entries);renderReadiness(ready);renderRecord(savedPractice);renderStorage();updateRhythmLabels();tick();
       q('[data-sound-summary]').textContent=soundSummary();
     }
-    function renderFields() {
-      const d=draft(), old=target(), h=history(), stale=staleReference(), draftKey=key(), generation=++fieldsGeneration;
+    function renderFields(entries) {
+      const d=draft(), h=history(entries), old=target(h), stale=staleReference(h), draftKey=key(), generation=++fieldsGeneration;
       const isCurrent=()=>generation===fieldsGeneration&&key()===draftKey&&drafts.get(draftKey)===d;
       q('[data-fields]').innerHTML=`${stale?`<div class="training-notice" role="status"><p>The saved version no longer contains this return’s exact earlier entry. Your current selection, recollection and earlier source remain here; the target has not been changed.</p><button type="button" class="text-button" data-recover-return>Download this unfinished return and begin new history</button></div>`:''}<p class="training-return-phase">${d.revealed?'03 · Compare the preserved entries':d.locked?'02 · Retrieve the exact earlier entry':'01 · Receive and encode the current entry'}</p>
         <label class="training-field">My current relationship${stage.relationCount===1?'':'s'}<textarea data-note="source" rows="3" maxlength="3000" required ${d.locked?'readonly':''} placeholder="Preserve the selected relationships, their roles and meanings. This is the current entry, before deliberate retrieval.">${esc(d.source)}</textarea></label>
@@ -2786,9 +2836,9 @@
       q('[data-fresh]').addEventListener('click',()=>{if(!isCurrent())return;if(['source','recollection','relation','revision'].some(field=>d[field].trim())&&!root.confirm('Begin a fresh stream and discard the unfinished note for this exercise? Saved observations stay in your record.'))return;drafts.delete(key());renderFields();message('A fresh observation stream is ready.');});
     }
     function saveObservation(event) {
-      event.preventDefault();const d=draft(),old=target();
+      event.preventDefault();const d=draft(),h=history(),old=target(h);
       if(!d.source.trim())return;
-      if(staleReference()){message('This return’s exact earlier entry is absent from the loaded record. Download the unfinished return and begin a new history with your current selection.');q('[data-recover-return]').focus();return;}
+      if(staleReference(h)){message('This return’s exact earlier entry is absent from the loaded record. Download the unfinished return and begin a new history with your current selection.');q('[data-recover-return]').focus();return;}
       if(old&&!d.locked){message('Encode the current entry before deliberately retrieving the earlier one.');q('[data-lock-source]').focus();return;}
       if(old&&!d.revealed){message('Retrieve first, then reveal the preserved original before keeping your comparison. It is fine not to remember.');q('[data-reveal]').focus();return;}
       const data=store.data,id=uid();
@@ -2796,28 +2846,22 @@
       const result=save(data);
       if(store.data.entries.some(e=>e.id===id)){d.source='';d.recollection='';d.relation='';d.revision='';d.locked=false;d.reference=null;d.revealed=false;renderFields();renderRecord();if(result.ok)message('Entry kept. Its original wording and the earlier original are preserved.');}
     }
-    function renderReadiness() {
+    function renderReadiness(ready=store.data.readiness[stage.id]||{}) {
       const el=q('[data-readiness]');if(!el)return;
-      const ready=store.data.readiness[stage.id]||{},next=D.STAGES[D.STAGES.indexOf(stage)+1];
+      const next=D.STAGES[D.STAGES.indexOf(stage)+1];
       const other=exerciseOrder[(exerciseOrder.indexOf(exercise)+1)%exerciseOrder.length];
       el.innerHTML=`<label class="training-check"><input type="checkbox" data-ready ${ready[exercise]?'checked':''}> I can recover the relationships and make an exact return.</label><p class="training-fine">Your self-assessment · ${exerciseNames[exercise]}</p><div class="training-ready-actions"><button type="button" class="text-button" data-other>Try ${exerciseNames[other]} →</button>${next?`<a class="text-link" href="#practice/${esc(next.id)}${routeMode()?'/'+routeMode():''}">${esc(next.name)} →</a>`:''}</div>`;
       q('[data-ready]').addEventListener('change',e=>{const data=store.data;data.readiness[stage.id]={stream:!!ready.stream,frequency:!!ready.frequency,heart:!!ready.heart,body:!!ready.body,unitive:!!ready.unitive,[exercise]:e.target.checked};save(data);renderReadiness();renderRecord();all('[data-exercise]').forEach(button=>{const name=button.dataset.exercise;button.querySelector('small').textContent=store.data.readiness[stage.id]?.[name]?'Self-assessed: ready':'';});q('[data-ready]').focus();});
       q('[data-other]').addEventListener('click',()=>{end();clock=null;exercise=other;onExerciseChange(routeMode());pacing=pacingByExercise[exercise];duration=15;peek=null;lastPrompt='';render();q('[data-exercise="'+exercise+'"]').focus();q('[data-live]').scrollIntoView({block:'start'});});
     }
-    function renderRecord() {
-      const data=store.data;q('[data-record-count]').textContent='· '+data.entries.length+' observation'+(data.entries.length===1?'':'s');
-      q('[data-record]').innerHTML=`<p>${data.sessions.length} recorded practice period${data.sessions.length===1?'':'s'} · ${data.entries.length} private observation${data.entries.length===1?'':'s'}</p>${data.entries.slice().reverse().map(e=>`<details class="training-saved-entry"><summary>${esc(D.getStage(e.stageId).name)} · ${exerciseNames[e.exercise]} · ${esc(new Date(e.createdAt).toLocaleString())}</summary><h4>Original observation</h4><p>${esc(e.source)}</p>${e.referenceId?`<h4>Recollection before reveal</h4><p>${esc(e.recollection||'No recollection recorded.')}</p><h4>Original ${e.lag} observation${e.lag===1?'':'s'} back</h4><p>${esc(e.referenceSource)}</p>`:''}${e.relation?`<h4>My comparison</h4><p>${esc(e.relation)}</p>`:''}${e.revision?`<h4>Appended correction</h4><p>${esc(e.revision)}</p>`:''}</details>`).join('')}`;
+    function renderRecord(data=store.data) {
+      const entries=recordOpened ? data.entries.slice().reverse() : [];
+      q('[data-record-count]').textContent='· '+data.entries.length+' observation'+(data.entries.length===1?'':'s');
+      q('[data-record]').innerHTML=`<p>${data.sessions.length} recorded practice period${data.sessions.length===1?'':'s'} · ${data.entries.length} private observation${data.entries.length===1?'':'s'}</p>${entries.map(e=>`<details class="training-saved-entry"><summary>${esc(D.getStage(e.stageId).name)} · ${exerciseNames[e.exercise]} · ${esc(new Date(e.createdAt).toLocaleString())}</summary><h4>Original observation</h4><p>${esc(e.source)}</p>${e.referenceId?`<h4>Recollection before reveal</h4><p>${esc(e.recollection||'No recollection recorded.')}</p><h4>Original ${e.lag} observation${e.lag===1?'':'s'} back</h4><p>${esc(e.referenceSource)}</p>`:''}${e.relation?`<h4>My comparison</h4><p>${esc(e.relation)}</p>`:''}${e.revision?`<h4>Appended correction</h4><p>${esc(e.revision)}</p>`:''}</details>`).join('')}`;
     }
-    function tick() {
-      if(!q('[data-live]'))return;
-      // Preview the first step without starting a clock, sound, or saved session.
-      const idle=!clock;
-      const s=clock?clock.tick():{status:'idle',remainingSeconds:duration*60,elapsedSeconds:0,progress:0,breathPhase:'inhale',breathProgress:0,breathRemaining:inhaleSeconds,breathPhaseIndex:0,heartPhaseIndex:0,bodyStepIndex:0,stepRemaining:E.BODY_STEP_SECONDS};
-      const active=['running','paused'].includes(s.status),finished=!idle&&!active;
-      // Keep the same live cue and its controls, moving it beside the shape only during a session.
-      const symbolHeader=q('.training-symbol-header'),cue=q('.training-cue'),cueHome=q('[data-exercise-preview]');
-      const cueTarget=symbolHeader;
-      if(cue.parentElement!==cueTarget)cueTarget.appendChild(cue);
+    function updateSessionControls(s, idle, active, finished) {
+      const symbolHeader=q('.training-symbol-header'),cue=q('.training-cue');
+      if(cue.parentElement!==symbolHeader)symbolHeader.appendChild(cue);
       cue.hidden=false;
       symbolHeader.classList.add('has-live-cue','has-signal-layout');
       q('[data-signal-explanation]').hidden=exercise!=='open'&&stage.id==='open-streaming'&&!(active&&exercise==='unitive');
@@ -2836,7 +2880,6 @@
       q('[data-exercise-preview]').classList.toggle('training-preview-body',exercise==='body'&&pacing==='natural');
       q('.training-progress').hidden=!active;
       q('[data-session-state]').textContent=idle?'Ready':s.status==='running'?'Practising':s.status==='paused'?'Paused':s.status==='completed'?'Complete':'Ended';
-      q('[data-timer]').textContent=time(s.remainingSeconds);
       q('[data-pause]').textContent=s.status==='paused'?'Resume':'Pause';q('[data-pause]').hidden=!active;q('[data-end]').hidden=!active;
       q('[data-finished]').hidden=!finished;q('[data-finished]').textContent=s.status==='completed'?'Practice complete.':'Practice ended.';
       q('[data-live-pace]').hidden=!active||exercise==='body'||isTransmutation();q('[data-live-pace]').textContent=pacing==='natural'?'Use my '+inhaleSeconds+' / '+exhaleSeconds+' guide':'Use my own rhythm';
@@ -2848,26 +2891,43 @@
         const proceed=q('[data-loci-continue]');
         if (proceed) proceed.disabled=active;
       }
+      q('[data-pacer]').hidden=false;
+    }
+    function tick(periodic = false) {
+      // An exercise only needs animation while its clock is running.
+      const idle=!clock;
+      const s=clock?clock.tick():{status:'idle',remainingSeconds:duration*60,elapsedSeconds:0,progress:0,breathPhase:'inhale',breathProgress:0,breathRemaining:inhaleSeconds,breathPhaseIndex:0};
+      const running=s.status==='running', active=running||s.status==='paused', finished=!idle&&!active;
+      if (running && interval === null) interval=setInterval(() => tick(true),50);
+      if (!running && interval !== null) {
+        clearInterval(interval);
+        interval=null;
+      }
+      if (!periodic || !running) updateSessionControls(s,idle,active,finished);
+      const {timer,orb,label,count,progress:progressBar,fill}=clockElements;
+      const timeLeft=time(s.remainingSeconds);
+      if (timer.textContent!==timeLeft) timer.textContent=timeLeft;
       const scaled=pacing==='paced'&&active;
       const progress=s.breathProgress;
       // Keep the label still and enclosed even at the smallest point. Own rhythm
       // has a gentle visual pulse; only paced mode gives timed breathing cues.
       const expansion=scaled?(s.breathPhase==='inhale'?progress:1-progress):(1-Math.cos(s.elapsedSeconds*Math.PI/6))/2;
-      q('[data-orb]').style.transform=active?'scale('+(1+0.18*expansion)+')':'scale(1)';
-      q('[data-pacer]').hidden=false;
-      q('[data-breath-label]').textContent=idle?(pacing==='paced'?'Ready':'Own rhythm'):finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
+      orb.style.transform=active?'scale('+(1+0.18*expansion)+')':'scale(1)';
+      const phaseLabel=idle?(pacing==='paced'?'Ready':'Own rhythm'):finished?'Rest':s.status==='paused'?'Paused':pacing==='paced'?(s.breathPhase==='inhale'?'Inhale':'Exhale'):'Own rhythm';
+      if (label.textContent!==phaseLabel) label.textContent=phaseLabel;
       const remaining=Math.ceil(s.breathRemaining*10-1e-8)/10;
-      const breathCount=q('[data-breath-count]');
-      breathCount.textContent=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
-      if (isTransmutation() && scaled) {
-        // Leave room for longer timings and the phase name when the bell is paused.
-        breathCount.style.fontSize = `min(var(--count-size), ${120 / breathCount.textContent.length}cqi)`;
+      const countdown=idle?(pacing==='paced'?inhaleSeconds+'s in · '+exhaleSeconds+'s out':'Gently · without holds'):scaled?(s.status==='paused'?(s.breathPhase==='inhale'?'Inhale · ':'Exhale · '):'')+remaining+' second'+(remaining===1?'':'s'):'Gently · without holds';
+      if (count.textContent!==countdown) {
+        count.textContent=countdown;
+        if (isTransmutation() && scaled) {
+          // Longer timings and the paused phase name share the contracted ring.
+          count.style.fontSize = `min(var(--count-size), ${120 / countdown.length}cqi)`;
+        }
       }
-      updateAgencyPractice(s);
-      if(s.bodyStepIndex!==lastBodyStep){lastBodyStep=s.bodyStepIndex;}
+      updateAgencyPractice(s,periodic);
       if(exercise==='body'&&active)signalFocus=(signalCycleBase+(s.breathCycleIndex||0))%signalLimit();
       const firstLociEntry=exercise==='unitive'&&(idle||(active&&s.breathPhaseIndex<2));
-      const promptKey=s.status+':'+exercise+':'+stage.id+':'+lociStep+':'+frequencyModule+':'+signalFocus+':'+shapeFocus+':'+[...signalSelection].sort().join(',')+':'+(pacing==='paced'?s.breathPhase:'natural')+':'+(firstLociEntry?'first':'later');
+      const promptKey=s.status+':'+exercise+':'+stage.id+':'+lociStep+':'+frequencyModule+':'+signalFocus+':'+shapeFocus+':'+(pacing==='paced'?s.breathPhase:'natural')+':'+(firstLociEntry?'first':'later');
       if(promptKey!==lastPrompt){
         lastPrompt=promptKey;
         const story=FEELING_AND_STORY[stage.id];
@@ -2957,21 +3017,32 @@
           q('[data-next-step]').textContent='';
         }
       }
-      const bodyCue=false;
-      const cueKey=bodyCue?'body:'+Math.floor(s.elapsedSeconds/E.BODY_STEP_SECONDS):'breath:'+s.breathPhaseIndex;
-      if(s.status==='running'&&cueKey!==lastCue){lastCue=cueKey;if(bell&&(bodyCue||pacing==='paced'))audio.cue(bodyCue?s.bodyStepIndex%2===0:s.breathPhase==='inhale', !bodyCue);}
-      const percent=Math.round(s.progress*100);q('[data-fill]').style.width=percent+'%';q('.training-progress').setAttribute('aria-valuenow',String(percent));
+      if (running && s.breathPhaseIndex!==lastCue) {
+        lastCue=s.breathPhaseIndex;
+        if (bell && pacing==='paced') audio.cue(s.breathPhase==='inhale',true);
+      }
+      const percent=String(Math.round(s.progress*100));
+      if (fill.style.width!==percent+'%') {
+        fill.style.width=percent+'%';
+        progressBar.setAttribute('aria-valuenow',percent);
+      }
     }
-    function setStage(id) {
-      const next=resolveStage(id);if(next.id===stage.id)return;
+    function setStage(id,mode) {
+      const next=resolveStage(id);
+      if (next.id===stage.id) {
+        if (mode!==undefined) showRoute(mode);
+        return;
+      }
       end();clock=null;stage=next;
       lociExampleIndex=Math.max(0,D.STAGES.findIndex(item=>item.id===stage.id));
-      resetSignalSelection();peek=null;lastPrompt='';announcement='';render();
+      resetSignalSelection();peek=null;lastPrompt='';announcement='';
+      if (mode===undefined) render();
+      else showRoute(mode,true);
     }
     function storageChanged(event){if(event.key===root.FormTrainingStore.STORAGE_KEY||event.key===null){pause();save(store.data);renderStorage();message('Another tab changed the saved record. Your existing data is preserved; practice can continue without saving.');}}
     if (exercise === 'unitive' && initialExercise !== routeMode()) onExerciseChange(routeMode());
-    render();const interval=setInterval(tick,50);root.addEventListener('storage',storageChanged);
-    return {setStage,pause,showRoute,routeMode,showWave(){if(exercise!=='stream')q('[data-exercise="stream"]').click();},showOpen(){if(exercise!=='open')q('[data-exercise="open"]').click();},hasDraft:()=>dirty()||unsaved,destroy(){pause();if(agencyMap)agencyMap.destroy();clearInterval(interval);audio.destroy();testAudio.destroy();root.removeEventListener('storage',storageChanged);}};
+    render();root.addEventListener('storage',storageChanged);
+    return {setStage,pause,showRoute,routeMode,showWave(){if(exercise!=='stream')q('[data-exercise="stream"]').click();},showOpen(){if(exercise!=='open')q('[data-exercise="open"]').click();},hasDraft:()=>dirty()||unsaved,destroy(){walkthroughGeneration++;pause();if(agencyMap)agencyMap.destroy();clearInterval(interval);audio.destroy();testAudio.destroy();root.removeEventListener('storage',storageChanged);}};
   }
   root.FormTraining = Object.freeze({mount});
 })(typeof window !== 'undefined' ? window : globalThis);

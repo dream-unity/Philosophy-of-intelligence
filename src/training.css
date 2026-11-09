@@ -244,10 +244,6 @@
 
 /* Preview, settings, Start: one compact flow before and during practice. */
 body[data-view="practice"] .site-header{padding-top:12px;padding-bottom:12px}
-.site-music-panel>summary{display:none}
-body[data-view="practice"] .site-music-panel{width:min(1080px,90%);margin:0 auto}
-body[data-view="practice"] .site-music-panel>summary{display:list-item;cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0;min-height:36px}
-body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bottom:8px}
 .training-topline{margin-bottom:10px}
 .training-heading{margin-bottom:12px;gap:16px}
 .training-heading h1{font-size:clamp(30px,3.5vw,44px);margin:2px 0 6px}

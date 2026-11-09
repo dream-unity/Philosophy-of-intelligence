@@ -53,6 +53,18 @@ test('inline styles, style attributes, SVG fragments and entity-encoded image na
   assert.equal(assertDocumentResources(html, { selfContained: true }), 0);
 });
 
+test('offline runs the deferred local modules directly without online loaders or preloads', async t => {
+  const [{ buildOfflineHtml }, { scriptBlocks }] = await modules;
+  const f = fixture(t);
+  const source = f.html.replace('<script src="scripts/first.js" defer></script>',
+    '<template id="practice" data-local-assets><script src="scripts/first.js"></script></template>')
+    .replace('</head>', '<template data-online-only><link rel="preload" href="scripts/first.js" as="script"></template></head>')
+    .replace('</body>', '<script data-online-only>throw new Error("online-only");</script></body>');
+  const { html } = buildOfflineHtml(source, f.options);
+  assert.doesNotMatch(html, /online-only|data-local-assets|<template|rel="preload"/);
+  assert.deepEqual(scriptBlocks(html).map(script => script.attributes['data-form-module']), ['scripts/first.js','scripts/last.js']);
+});
+
 test('source audit accepts local resources but final audit rejects every remaining file dependency', async t => {
   const [, { assertDocumentResources, assertOfflineCss }] = await modules;
   const f = fixture(t);

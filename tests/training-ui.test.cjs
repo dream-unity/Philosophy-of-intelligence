@@ -137,6 +137,16 @@ function harness(options = {}) {
   });
   vm.runInContext('window = globalThis;', browser);
   for (const filename of ['agency-practice.js', 'agency-map.js', 'relational-models.js', 'model-view.js', 'shape-practice.js', 'exercises.js', 'training-store.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', filename), 'utf8'), browser, { filename });
+  if (options.loadReference) {
+    const models = browser.FormRelationalModels, view = browser.FormModelView;
+    browser.FormRelationalModels = undefined;
+    browser.FormModelView = undefined;
+    browser.FormAssets = { async loadReference() {
+      await options.loadReference();
+      browser.FormRelationalModels = models;
+      browser.FormModelView = view;
+    } };
+  }
   browser.FormExercises = { ...browser.FormExercises, ExerciseAudio: Audio };
   browser.FormGeometry = { miniIcon: (stageId, size) => '<svg aria-hidden="true" data-stage="'+stageId+'" width="'+size+'"></svg>' };
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/training.js'), 'utf8'), browser, { filename: 'training.js' });
@@ -147,6 +157,11 @@ function harness(options = {}) {
   function choose(selector, value) { const element = q(selector); element.value = value; element.dispatch('change'); }
   return {
     app, host, q, type, choose, sounds, downloads, raw, changes, routes, intervals,
+    openExamples() {
+      const details = q('[data-examples]');
+      details.open = true;
+      details.dispatch('toggle');
+    },
     selectExercise(exercise) {
       if (exercise === 'heart') {
         q('[data-exercise="frequency"]').click();
@@ -170,6 +185,7 @@ function harness(options = {}) {
 
 test('guided rehearsal preserves receive, encode, retrieve, compare order and synchronizes the complete model', () => {
   const page=harness();
+  page.openExamples();
   assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
   assert.match(page.q('[data-walkthrough-prompt]').textContent,/containing environment/);
   page.click('[data-walk-next]');
@@ -190,12 +206,51 @@ test('guided rehearsal preserves receive, encode, retrieve, compare order and sy
   assert.equal(page.raw.has(page.key),false,'example rehearsal cannot save notes or award readiness');
 });
 
+test('a failed online reference can retry, finish while closed, and open with its complete model', async () => {
+  let calls = 0, resolve, reject;
+  const page = harness({stageId:'open-streaming', initialExercise:'open', loadReference() {
+    calls++;
+    return new Promise((ok, fail) => {resolve = ok; reject = fail;});
+  }});
+  assert.equal(calls, 0, 'legacy Open Streaming starts without fetching worked models');
+  page.openExamples();
+  page.openExamples();
+  assert.equal(calls, 1);
+  assert.match(page.q('[data-example-content]').textContent, /Loading/);
+  reject(new Error('network unavailable'));
+  await new Promise(setImmediate);
+  page.click('[data-retry-example]');
+  assert.equal(calls, 2);
+  const details = page.q('[data-examples]');
+  details.open = false;
+  details.dispatch('toggle');
+  resolve();
+  await new Promise(setImmediate);
+  assert.equal(page.host.querySelector('[data-model-diagram]'), null);
+  page.openExamples();
+  assert.equal(page.q('[data-model-diagram]').querySelectorAll('[data-relation]').length, 1);
+  assert.equal(calls, 2, 'cached modules initialise synchronously');
+});
+
+test('a pending reference cannot redraw a different shape or a destroyed practice', async () => {
+  for (const leave of [page => page.app.setStage('square'), page => page.app.destroy()]) {
+    let resolve;
+    const page = harness({stageId:'triangle', loadReference:() => new Promise(ok => {resolve=ok;})});
+    page.openExamples();
+    leave(page);
+    resolve();
+    await new Promise(setImmediate);
+    assert.equal(page.host.querySelector('[data-model-diagram]'), null);
+  }
+});
+
 test('each of 42 guided lessons has four reachable entries, accurate addresses and no timer advancement', () => {
   const page=harness();
   for(const stage of require('../src/shape-practice.js').STAGES){
     page.app.setStage(stage.id);
     for(const exercise of ['stream','heart','body']){
       page.selectExercise(exercise);
+      page.openExamples();
       for(let entry=0;entry<4;entry++){
         assert.equal(page.q('[data-model-state]').value,String(entry));
         assert.equal(page.q('[data-walkthrough-prompt]').textContent,stage[exercise].examples[entry].inhale);
@@ -209,6 +264,7 @@ test('each of 42 guided lessons has four reachable entries, accurate addresses a
     }
   }
   page.selectExercise('heart');page.click('[data-start-orb]');
+  page.openExamples();
   const before=page.q('[data-walkthrough-prompt]').textContent;
   page.advance(85);
   assert.equal(page.q('[data-walkthrough-prompt]').textContent,before);
@@ -217,14 +273,14 @@ test('each of 42 guided lessons has four reachable entries, accurate addresses a
 });
 
 test('manual entry selection resets the teaching phase and detached walkthrough buttons cannot advance another lesson', () => {
-  const page=harness();page.click('[data-walk-next]');
+  const page=harness();page.openExamples();page.click('[data-walk-next]');
   const oldNext=page.q('[data-walk-next]');
   page.choose('[data-model-state]','3');
   assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
   assert.match(page.q('[data-walkthrough-prompt]').textContent,/environment of boat again/);
   oldNext.click();
   assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
-  const stale=page.q('[data-walk-next]');page.click('[data-exercise="body"]');stale.click();
+  const stale=page.q('[data-walk-next]');page.click('[data-exercise="body"]');page.openExamples();stale.click();
   assert.equal(page.q('[data-model-state]').value,'0');
   assert.match(page.q('[data-walkthrough-title]').textContent,/receive and select/);
   page.click('[data-walk-next]');page.click('[data-walk-back]');
@@ -281,6 +337,7 @@ test('all 42 Signal, Heart and Wave practices integrate the shape, metronome and
       page.click('[data-pause]');
       if(exercise!=='body') assert.equal(page.q('[data-breath-label]').textContent,'Own rhythm');
       page.advance(15);
+      page.openExamples();
       assert.equal(page.q('[data-model-state]').value,'0','pacer cycles do not advance a worked entry or its memory address');
       page.click('[data-end]');
       assert.equal(page.data().entries.length,0,'guided breaths never invent committed observations');
@@ -564,6 +621,7 @@ test('own rhythm gently expands and contracts without moving its label or imposi
 
 test('paced ring expands on inhale and contracts on exhale without shrinking below its text enclosure', () => {
   const page = harness();
+  page.openExamples();
   const diagram = page.q('[data-model-diagram]').querySelector('svg');
   const diagramText = diagram.textContent;
   const diagramChildren = [...diagram.children];
@@ -1012,6 +1070,7 @@ test('quota failures retain private work for export and keep the unload guard ac
   assert.equal(page.data(), null);
   assert.equal(page.q('[data-note="source"]').value, '', 'accepted work moved into the in-tab record');
   assert.equal(page.app.hasDraft(), true, 'in-tab-only accepted work still needs protection on close');
+  page.q('.training-record').open=true;page.q('.training-record').dispatch('toggle');
   assert.match(page.q('[data-record]').textContent, /Private unsaved observation/);
   assert.match(page.q('[data-storage]').textContent, /tab only/);
   page.allowWrites();
@@ -1027,6 +1086,7 @@ test('another tab cannot silently replace this tab’s source stream or private 
   page.type('[data-note="source"]', 'Unfinished present observation.');
   const changed = { schemaVersion: 1, entries: [], sessions: [], readiness: { sphere: { heart: true, body: true } } };
   page.external(JSON.stringify(changed));
+  page.q('.training-record').open=true;page.q('.training-record').dispatch('toggle');
   assert.match(page.q('[data-record]').textContent, /Keep this tab’s source/);
   assert.equal(page.q('[data-note="source"]').value, 'Unfinished present observation.');
   assert.deepEqual(page.data(), changed, 'stale local work must not overwrite the other tab');
@@ -1046,6 +1106,7 @@ test('a cross-tab replacement guards already-committed local records even when n
   assert.equal(page.app.hasDraft(), false);
   page.external(JSON.stringify({ schemaVersion: 1, entries: [], sessions: [], readiness: {} }));
   assert.equal(page.q('[data-note="source"]').value, '');
+  page.q('.training-record').open=true;page.q('.training-record').dispatch('toggle');
   assert.match(page.q('[data-record]').textContent, /This saved source still needs preserving/);
   assert.equal(page.app.hasDraft(), true, 'the retained local version must be guarded until saved or deliberately reloaded');
 });
@@ -1162,6 +1223,8 @@ test('every application retains four optional worked entries and a complete rela
       assert.ok(page.sounds.every(audio=>audio.starts===0),'browsing lessons does not autoplay sound');
       assert.equal(page.host.querySelector('.training-breath-examples'),null,'repeated full prose rows are removed');
       assert.equal(page.q('[data-examples]').open,false,'worked entries remain collapsed by default');
+      assert.equal(page.host.querySelector('[data-model-diagram]'),null,'the closed reference builds no diagram');
+      page.openExamples();
       assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' shows the entire starting model');
       assert.equal(page.q('[data-model-state]').querySelectorAll('option').length,4);
       for(let state=1;state<4;state++){page.choose('[data-model-state]',String(state));assert.equal(page.q('.training-register').children.length,count,id+'/'+exercise+' retains its complete model at breath '+(state+1));}
@@ -1172,6 +1235,7 @@ test('every application retains four optional worked entries and a complete rela
 
 test('guided encoding preserves all four exact home addresses and earlier return targets', () => {
   const page=harness();
+  page.openExamples();
   const addresses=require('../src/shape-practice.js').ADDRESSES;
   assert.equal(new Set(addresses).size,4);
   addresses.forEach((address,index)=>{
@@ -1187,6 +1251,7 @@ test('guided encoding preserves all four exact home addresses and earlier return
 
 test('a prepared sphere exposes each complete finite model and distinguishes reorientation from a changed relationship', () => {
   const page=harness({stageId:'sphere'});
+  page.openExamples();
   assert.match(page.q('[data-examples]').textContent,/Learn the full register before rehearsing/);
   assert.equal(page.q('[data-model-state]').querySelectorAll('option').length,4);
   assert.equal(page.q('.training-register').children.length,120);
@@ -1208,6 +1273,7 @@ test('a prepared sphere exposes each complete finite model and distinguishes reo
 
 test('changing the register’s entry updates participants and meanings together', () => {
   const page=harness({stageId:'half-circle'});
+  page.openExamples();
   page.choose('[data-model-state]','1');
   const content=page.q('[data-model-content]').textContent;
   assert.match(content,/Sky is the containing environment of aircraft/);
@@ -1298,6 +1364,7 @@ test('ending or changing an exercise stops a test bell as well as session audio'
 
 test('tracing a relationship keeps its complete meaning and updates participant labels across entries', () => {
   const page=harness({stageId:'half-circle'});
+  page.openExamples();
   assert.equal(page.q('[data-model-relation]').value,'');
   assert.match(page.q('[data-traced-relationship]').textContent,/Whole structure · 2 relationships/);
   page.choose('[data-model-relation]','R02');
@@ -1320,6 +1387,7 @@ test('tracing a relationship keeps its complete meaning and updates participant 
 
 test('the explorer renders the actual complete network and highlights one edge without removing its context', () => {
   const page=harness();
+  page.openExamples();
   const diagram=()=>page.q('[data-model-diagram]');
   assert.equal(diagram().querySelectorAll('[data-relation]').length,1);
   assert.equal(diagram().querySelectorAll('[data-role]').length,2);
@@ -1328,6 +1396,7 @@ test('the explorer renders the actual complete network and highlights one edge w
   assert.equal(diagram().querySelector('[data-relation="R01"]').getAttribute('data-selected'),'true');
   assert.equal(diagram().querySelectorAll('[data-role]').filter(node=>node.getAttribute('data-selected')==='true').length,2);
   page.app.setStage('sphere');
+  page.openExamples();
   assert.equal(diagram().querySelectorAll('[data-relation]').length,120);
   assert.equal(diagram().querySelectorAll('[data-role]').length,42);
   page.choose('[data-model-state]','2');page.choose('[data-model-relation]','C13');
@@ -1339,3 +1408,26 @@ test('the explorer renders the actual complete network and highlights one edge w
 });
 
 
+
+test('only a running practice schedules clock refreshes', () => {
+  const page=harness({stageId:'triangle',initialExercise:'transmutation'});
+  assert.equal(page.intervals.size,0);
+  page.click('[data-start-orb]');
+  assert.equal(page.intervals.size,1);
+  assert.equal(page.q('[data-fill]').style.width,'0%');
+  page.advance(1);
+  page.click('[data-pause]');
+  assert.equal(page.intervals.size,0);
+  page.click('[data-pause]');
+  assert.equal(page.intervals.size,1);
+  page.advance(900);
+  assert.equal(page.q('[data-session-state]').textContent,'Complete');
+  assert.equal(page.intervals.size,0);
+  page.click('[data-start-orb]');
+  assert.equal(page.intervals.size,1);
+  page.app.setStage('square');
+  assert.equal(page.intervals.size,0);
+  page.click('[data-start-orb]');
+  page.click('[data-end]');
+  assert.equal(page.intervals.size,0);
+});

@@ -1,3 +1,8 @@
+.site-music-panel>summary{display:none}
+body[data-view="practice"] .site-music-panel{width:min(1080px,90%);margin:0 auto}
+body[data-view="practice"] .site-music-panel>summary{display:list-item;cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0;min-height:36px}
+body[data-view="practice"] .site-music-panel .site-music{margin-top:0;margin-bottom:8px}
+
 /* Original artwork and portal composition from the owner's dream-unity/one.
    Labels are live HTML. The matching paper captions cover the raster labels. */
 :root { --paper: #ebe4d5; --ink: #302b23; color-scheme: light; }
@@ -9,7 +14,8 @@ body[data-view="journey"] .skip-link { display: none; }
 #view-journey { max-width: none; padding: 0; }
 .portal-page { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; min-height: 100svh; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) max(12px, env(safe-area-inset-bottom, 0px)) env(safe-area-inset-left, 0px); }
 .portal-artwork { position: relative; isolation: isolate; pointer-events: none; container-type: inline-size; flex: none; width: min(100%, calc(100vh - 172px), 1254px); width: min(100%, calc(100svh - 172px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 1254px); aspect-ratio: 1; }
-.portal-image { display: block; width: 100%; height: auto; aspect-ratio: 1; user-select: none; pointer-events: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); }
+/* A small copy of the artwork fills the reserved square while the full engraving arrives. */
+.portal-image { background: center / 100% 100% no-repeat url("data:image/webp;base64,UklGRqADAABXRUJQVlA4IJQDAACQFQCdASpgAGAAPuVopk4pJqQiKrldqSAciWkAEhKe/GLFsqRJk3K9PBewxvTumN/Xhd8OT2WYiGU5b6FvEb1q9v5AXXR/pjc1a6djhnwrLJUA7t2sZgAmPv5B1MenV8HULTe9dt21EDl9NAp/3OOwuPtvjL6DHgmXJRrkcSwxPba01CD2ZQakUdSwIynsx3dKIJnITTd20q/FQFGX+MWmJYx8bRjrY/PSUNCQ84XfHteTyFgAAP7z0Xv0Hxcth623avlCTM25HzDK5hzEnUsJv284FosaLyOWnNIIfDMXzsl5NhDXo/OGFjSmT6cXZ2MjhfKNUCWMEaKRKaZgtTaIwc6ABmZPDVxT+HskKSotlogV4d8KNtBbZ1M2u4XjNhVuLoogc3tUHxoxz8CnvUhCC+d9eidAyIuMsdFA2ag1uFkXm3qHTMNjijFkxyI4n3idCkkQHsJVpKRmkXAEwaeEi6Ggnv5mIQBU/Bp/OwWF5eEE/7o9kn2CC/6Ci5mai7/RyQ6B8tuuC3C3wnKcPeY6sPyDwlzrdRlhlKUm+HQv1dVh77ovikQ3REg/E2W0pueHfT7BuTep+2cFc514yoXRJ7DxAH12qdq0pDQqqcrmvoce29m40cu1ZrnleUqW1kf6Hl06nGNOF3VNYrVvjIwotjBP3SgHyPlKpm4zK/JKfXuWNK+1QAIoj2v96/TV9dWf5ERQXl61EQFC7vHsptYmGqi5R6jEZ7T0m+RR6TwFJw1YNeVlQQoK/6GeOJ6wCH7R1QkiNFFsIZBpfJXyZm4nhPjpWhZHO1LXmRLatGM+VURJYFNsCDeJSR2cY7i3NoHoIblKBRsBd6wcT1dvFWO3fjs0Wd2qq3wTJHLdsk6JVFC9kP0XJi+mguI69gvS5VfRC5Bj5WNmDcqKh600MsExvsKbWS0lCkvGebR+4W12RYR/xxj5MwG7zfV02Nuh1BliFxGYv/h46y8K33EnkceaixB7KyMtvZ98ZSgbNpMiy+1GhREY6UNGuxYXT2Rj0zRfjVpD5BlxxQDlpXNRh+QdBwtwOAS0cQ2VYX+5fMm81AxNuvy2gxrv1ZH84NnvPz9AYpacQ/lYNwyEo/YIWvjZPESGyjbAlHCdN0qfr3kvB2OT/0e5J4VrYWfNBcvNjVxpJqQxl4NInz+tGEKqJ8FuqgWyYxvW2Mo7DnZZWsyg3+U97dJ308f8FaITYEE6oOXk4AAA"); display: block; width: 100%; height: auto; aspect-ratio: 1; user-select: none; pointer-events: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); }
 .portal-title { position: absolute; left: 50%; top: 6.060606%; transform: translate(-50%, -50%); z-index: 3; width: max-content; margin: 0; padding-left: .3em; color: #2b271f; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; font-size: clamp(10px, 1.65cqw, 22px); font-weight: 600; line-height: 1.2; letter-spacing: .3em; text-shadow: 0 1px 0 rgb(255 253 243 / 65%); text-transform: uppercase; white-space: nowrap; }
 .portal-title::before, .portal-title::after { content: ""; position: absolute; top: 50%; width: 2em; height: 1px; background: linear-gradient(to right, transparent, #8b795c); }
 .portal-title::before { right: calc(100% + .85em); }
@@ -23,11 +29,9 @@ body[data-view="journey"] .skip-link { display: none; }
    Its smaller footprint leaves more paper between it and the outer ink band. */
 .portal--world { --x: 49.920255%; --y: 74%; --diameter: 17%; z-index: 2; }
 .portal-caption { position: absolute; left: 50%; top: 50%; display: grid; place-content: center; width: 50.78125%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: #ebe4d5 url("../assets/parchment-texture.svg") repeat; background-size: 21.37161cqw 21.37161cqw; color: #302b23; font-size: clamp(11px, 2.05cqw, 26px); line-height: 1.15; text-align: center; pointer-events: none; }
-/* Neutral graphite inherits its colour from the original parchment beneath it.
-   Lift the insert's paper to white so multiply adds ink without a sepia disc.
-   The existing circular clip keeps all strokes inside the original rim. */
+/* The eye contains transparent graphite ink so the original paper shows through. */
 .portal--unity .portal-caption { top: 56.182796%; width: 56.989247%; place-content: normal; place-items: center; overflow: hidden; clip-path: circle(50%); }
-.portal-eye { position: absolute; left: 50%; top: 50%; display: block; width: 107%; max-width: none; height: 107%; transform: translate(-50%, -50%); aspect-ratio: 1; object-fit: contain; mix-blend-mode: multiply; filter: grayscale(1) brightness(1.2) contrast(1.1); user-select: none; pointer-events: none; }
+.portal-eye { position: absolute; left: 50%; top: 50%; display: block; width: 107%; max-width: none; height: 107%; transform: translate(-50%, -50%); aspect-ratio: 1; object-fit: contain; user-select: none; pointer-events: none; }
 .portal--world .portal-caption { width: 61%; font-size: clamp(11px, 2.05cqw, 26px); }
 .unity-ink-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; user-select: none; }
 .ink-cross { rotate: 90deg; }
@@ -136,3 +140,41 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
   .universe-tattoo { position: absolute; right: 2%; top: min(21vw, calc(var(--hero-logo-height) * .28)); width: 25%; max-width: 205px; margin: 0; }
 }
 @media print { .universe-tattoo { position: static; width: 180px; margin: 12px auto; } }
+
+/* proportional layout */
+/* Keep the desktop composition intact as the viewport narrows. */
+@media screen and (max-width: 1199px) {
+  .portal-hero {
+    --preview-logo: min(56vw, var(--hero-logo-height));
+    --preview-player: min(292px, calc(var(--preview-logo) * .4));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--preview-logo) minmax(0, 1fr);
+    gap: 0;
+    width: 100%;
+    padding: 0;
+    align-items: start;
+  }
+  .portal-hero > .creation-intro {
+    grid-column: 1; grid-row: 1; order: 0;
+    align-self: center; justify-self: center;
+    width: min(88%, 280px);
+    margin: 0 0 calc(var(--preview-player) * .37);
+    font-size: min(16px, 1.18vw, calc(var(--preview-logo) * .022));
+    line-height: 1.65;
+  }
+  .portal-hero > .creation-intro::before { width: 25%; margin-bottom: 1.25em; }
+  .portal-visual { grid-column: 2; grid-row: 1; order: 0; width: 100%; }
+  .portal-visual > .portal-artwork { width: 100%; align-self: center; }
+  .portal-visual .site-music { width: var(--preview-player); margin: 4px auto 0; container-type: inline-size; }
+  .music-player-window { height: calc(var(--preview-player) * .369863); aspect-ratio: auto; box-sizing: border-box; }
+  .site-music iframe { width: 340px; height: 148px; transform: scale(calc(100cqw / 340px)); }
+  .universe-tattoo {
+    position: static; grid-column: 3; grid-row: 1;
+    align-self: center; justify-self: center;
+    width: min(88%, 340px); max-width: none;
+    margin: 0 0 calc(var(--preview-player) * .37);
+  }
+  .portal-title { font-size: 1.65cqw; letter-spacing: .3em; padding-left: .3em; }
+  .portal-caption { width: 50.78125%; font-size: 2.05cqw; }
+  .portal--world .portal-caption { width: 61%; font-size: 2.05cqw; }
+}

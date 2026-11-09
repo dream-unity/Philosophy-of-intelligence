@@ -145,3 +145,26 @@ test('offline browser scripts expose the same lessons and data without network d
   assert.deepEqual(Array.from(browser.FormShapePractice.ADDRESSES), practice.ADDRESSES);
   assert.equal(browser.FormShapePractice.getStage('sphere').id, 'sphere');
 });
+
+test('stage navigation and journal prompts work before the reference models load', () => {
+  const browser = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/shape-practice.js'), 'utf8'), browser);
+  const stage = browser.FormShapePractice.getStage('sphere');
+  assert.ok(Object.keys(stage).includes('body'));
+  const guide = stage.body;
+  assert.ok(Object.isFrozen(guide));
+  assert.equal(stage.body, guide);
+  assert.match(guide.relate, /Compare/);
+  assert.match(guide.revise, /original entries/);
+  assert.throws(() => guide.register, /Load relational-models/);
+
+  let reads = 0;
+  browser.FormRelationalModels = {
+    getModel(id, context) { reads++; return models.getModel(id, context); }
+  };
+  assert.equal(stage.body.model, models.getModel('sphere', 'body'));
+  assert.equal(guide.register, guide.model.relations);
+  assert.equal(guide.examples, guide.examples);
+  assert.ok(Object.isFrozen(guide.examples));
+  assert.equal(reads, 1, 'opening the register resolves only the requested model, once');
+});

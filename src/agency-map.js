@@ -104,6 +104,7 @@
     </div>`;
     const q = selector => host.querySelector(selector);
     const regions = Array.from(host.querySelectorAll('[data-agency-cell]'));
+    const badges = regions.map(region => region.querySelector('.tm-index'));
     const figure = q('figure');
     const caption = q('[data-agency-caption]');
     const edit = q('[data-agency-edit]');
@@ -117,6 +118,7 @@
     const title = q('[data-agency-title]');
     const guide = q('[data-agency-instruction]');
     const phaseGuide = q('[data-agency-phase-cue]');
+    const cueList = q('[data-agency-cue-list]');
     const memberRows = [];
     for (let index=0; index<stage.count; index++) {
       const row = document.createElement('li');
@@ -136,8 +138,18 @@
       apply.disabled = more > 0;
     };
 
+    const emphasisLevel = member => Math.min(5, Math.max(1, Math.round(member.emphasis*5)));
     function update(frame, info = {}) {
       if (!frame) return;
+      // Continuous attention changes are painted in five discrete shades.
+      // Between changes, keep the current SVG, text and accessible names intact.
+      if (frame!==lastFrame && info.status==='running' && lastInfo.status==='running' &&
+          frame.breath===lastFrame.breath && frame.phase===lastFrame.phase &&
+          frame.cue===lastFrame.cue && frame.phaseCue===lastFrame.phaseCue &&
+          frame.focusId===lastFrame.focusId && frame.members.every((member,i)=>{
+            const prev=lastFrame.members[i];
+            return prev && member.id===prev.id && member.role===prev.role && emphasisLevel(member)===emphasisLevel(prev);
+          })) return;
       lastFrame = frame;
       lastInfo = info;
       busy = ['running','paused'].includes(info.status);
@@ -155,7 +167,7 @@
         textIfChanged(blindButton, blind ? 'Show quality cues' : 'Hide quality cues');
       }
       const hiddenGuide = blind && !editing;
-      q('[data-agency-cue-list]').hidden = hiddenGuide;
+      cueList.hidden = hiddenGuide;
       phaseGuide.hidden = hiddenGuide;
       figure.hidden = hiddenGuide;
       textIfChanged(title,frame.stage.title);
@@ -186,11 +198,11 @@
         attrIfChanged(region,'aria-disabled',busy);
         attrIfChanged(region,'aria-pressed',selected);
         attrIfChanged(region,'aria-label',qualityCues[id][1]+(lead?' · foreground':'')+(focusedQuality?' · current turn':''));
-        const weight = selected && !editing ? Math.min(5, Math.max(1, Math.round((member?.emphasis ?? 1)*5))) : 0;
+        const weight = selected && !editing ? emphasisLevel(member) : 0;
         attrIfChanged(region,'data-emphasis',weight);
         const orderIndex = frame.order ? frame.order.indexOf(id) : index;
         const badge = editing ? (draftIndex<0 ? '+' : String(draftIndex+1)) : (orderIndex<0 ? '·' : String(orderIndex+1).padStart(2,'0'));
-        textIfChanged(region.querySelector('.tm-index'),focusedQuality ? '▶ '+badge : badge);
+        textIfChanged(badges[index],focusedQuality ? '▶ '+badge : badge);
       });
       if (!editing) {
         memberRows.forEach(({row,label,cue,family}, index) => {

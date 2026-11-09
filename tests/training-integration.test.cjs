@@ -109,7 +109,7 @@ function harness({ hash = '#journey', archive = null, missingModule = null } = {
   const controller = {
     routeMode() { return currentMode; },
     showRoute(mode) { currentMode = mode; },
-    setStage(id) { calls.stages.push(id); renderController(); },
+    setStage(id, mode) { if (mode !== undefined) currentMode = mode; calls.stages.push(id); renderController(); },
     pause() { calls.pauses++; },
     hasDraft() { return calls.drafts; },
     destroy() { throw new Error('Selecting shapes must preserve the shared controller and its drafts'); }
@@ -238,6 +238,28 @@ test('shape selection and legacy deep links reveal the same inline practice', ()
   assert.equal(app.document.body.dataset.view, 'journey');
   assert.equal(app.calls.mounts.length, 1);
   assert.deepEqual(app.calls.stages, ['cube'], 'returning to the same stage preserves its mounted state');
+});
+
+test('the gallery keeps its drawings and responds when the current shape is selected again', () => {
+  const app = harness();
+  const cards = app.document.querySelectorAll('#stage-path a[data-stage]');
+  assert.equal(cards.length, STAGES.length);
+  const drawings = cards.map(card => card.querySelector('svg'));
+  const triangle = cards.find(card => card.dataset.stage === 'triangle');
+  app.click(triangle);
+  app.calls.mounts[0].onExerciseChange('transmutation');
+  assert.equal(triangle.getAttribute('href'), '#practice/triangle/transmutation');
+  const before = app.calls.scrolls.length;
+  app.click(triangle.querySelector('svg'));
+  assert.equal(app.calls.scrolls.length, before + 1);
+  assert.equal(app.calls.scrolls.at(-1).element, app.elements.get('view-practice'));
+  assert.equal(app.calls.scrolls.at(-1).options.behavior, 'instant');
+  const current = app.document.querySelectorAll('#stage-path a[data-stage]');
+  for (const [i, card] of current.entries()) {
+    assert.equal(card, cards[i]);
+    assert.equal(card.querySelector('svg'), drawings[i]);
+    assert.equal(card.getAttribute('aria-current'), card === triangle ? 'true' : null);
+  }
 });
 
 test('shape links on the homepage open practice and preserve a selected module', () => {

@@ -9,12 +9,11 @@ const require = createRequire(import.meta.url);
 const { STAGES } = require('../src/shape-practice.js');
 
 export function prepareHomepage() {
-  // Render the noninteractive shape gallery before JavaScript starts. A delayed or failed script
-  // must never leave the opening screen without its shape cards.
+  // Each shape is already drawn and linked while the practice software loads.
   delete require.cache[require.resolve('../src/geometry.js')];
   const geometry = require('../src/geometry.js');
   const cards = STAGES.map((stage, index) =>
-    `          <div class="stage-tile" data-stage="${stage.id}" role="group" aria-label="${stage.name}"><span class="stage-number">${String(index + 1).padStart(2, '0')}</span><span class="stage-icon" aria-hidden="true">${geometry.miniIcon(stage.id, 65)}</span><span class="stage-name">${stage.name}</span></div>`
+    `          <a class="stage-tile" data-stage="${stage.id}" href="#practice/${stage.id}" aria-label="${stage.name}"><span class="stage-number">${String(index + 1).padStart(2, '0')}</span><span class="stage-icon" aria-hidden="true">${geometry.miniIcon(stage.id, 65).replace(/form-geometry-(\d+)-/g, 'gallery-geometry-$1-')}</span><span class="stage-name">${stage.name}</span></a>`
   ).join('\n');
   const path = resolve(root, 'index.html');
   let html = readFileSync(path, 'utf8');
@@ -24,7 +23,7 @@ export function prepareHomepage() {
 
   // Changed files get new request URLs, avoiding old icons/JS/CSS paired with new
   // markup after deployment. Unchanged files keep their cached versions.
-  html = html.replace(/(<(?:link|script|img)\b[^>]*\b(?:href|src)=")([^"?#]+\.(?:css|js|svg))(?:\?[^"#]*)?("[^>]*>)/g,
+  html = html.replace(/(<(?:link|script|img)\b[^>]*\b(?:href|src)=")([^"?#]+\.(?:css|js|svg|webp))(?:\?[^"#]*)?("[^>]*>)/g,
     (_, open, asset, close) => {
       const version = createHash('sha256').update(readFileSync(resolve(root, asset))).digest('hex').slice(0, 12);
       return `${open}${asset}?v=${version}${close}`;

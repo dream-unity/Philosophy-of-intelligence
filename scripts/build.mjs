@@ -32,13 +32,23 @@ function replaceAttribute(tag, name, value) {
 }
 
 export function buildOfflineHtml(source, { fromDirectory = projectRoot, rootDirectory = projectRoot } = {}) {
+  // File downloads are already local in this edition. Inline the same modules
+  // in dependency order and omit the online request scheduler and preloads.
+  assertDocumentResources(source, { fromDirectory, rootDirectory, allowOnlinePlayer: true });
+  source = source.replace(/<!--[\s\S]*?-->|[ \t]*<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|[ \t]*<template\b[^>]*\b(?:data-online-only|data-local-assets)\b[^>]*>[\s\S]*?<\/template\s*>/gi, block => {
+    const tag = block.match(/^[ \t]*<(?:script|template)\b[^>]*>/i)?.[0];
+    if (!tag) return block;
+    const attrs = attributes(tag.trimStart());
+    if (Object.hasOwn(attrs, 'data-online-only')) return '';
+    if (Object.hasOwn(attrs, 'data-local-assets')) return block.slice(tag.length).replace(/[ \t]*<\/template\s*>$/i, '');
+    return block;
+  });
   const originalScripts = scriptBlocks(source);
   const expectedOrder = originalScripts.map((script, index) => script.attributes.src || `inline-${index}`);
   const embeddedScripts = [];
   let cssCount = 0;
   let iconCount = 0;
   let imageCount = 0;
-  assertDocumentResources(source, { fromDirectory, rootDirectory, allowOnlinePlayer: true });
   // The online song is optional. Offline exercises must never fetch a remote
   // iframe or introduce a provider link in place of the player.
   source = source.replace(/<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|<iframe\b[^>]*>[\s\S]*?<\/iframe\s*>/gi, frame => {
@@ -93,7 +103,7 @@ export function buildOfflineHtml(source, { fromDirectory = projectRoot, rootDire
     const code = attrs.src ? readFileSync(localAsset(attrs.src, fromDirectory, rootDirectory), 'utf8') : inlineSource;
     assertScriptSyntax(code, name);
     assertNoNetworkCode(code, name);
-    const safeCode = escapeScript(code);
+    const safeCode = escapeScript(code.trimEnd());
     assertScriptSyntax(safeCode, name + ' (embedded)');
     embeddedScripts.push({ name, code: safeCode });
     return `<script data-form-module="${escapeAttribute(name)}">\n${safeCode}\n</script>`;

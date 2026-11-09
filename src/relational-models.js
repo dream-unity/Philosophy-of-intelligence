@@ -6815,12 +6815,27 @@
     return value;
   }
   function triangleFaces(nodes, relations) {
-    const pairs = new Map(relations.map(r => [[r.from, r.to].sort().join('|'), r.id]));
+    const edges = new Map(nodes.map(node => [node.id, new Map()]));
+    for (const relation of relations) {
+      edges.get(relation.from).set(relation.to, relation.id);
+      edges.get(relation.to).set(relation.from, relation.id);
+    }
     const faces = [];
-    for (let a = 0; a < nodes.length; a += 1) for (let b = a + 1; b < nodes.length; b += 1) for (let c = b + 1; c < nodes.length; c += 1) {
-      const ids = [nodes[a].id, nodes[b].id, nodes[c].id];
-      const edges = [[ids[0], ids[1]], [ids[1], ids[2]], [ids[2], ids[0]]].map(pair => pairs.get(pair.sort().join('|')));
-      if (edges.every(Boolean)) faces.push({ id: 'F' + String(faces.length + 1).padStart(2, '0'), nodes: ids, relations: edges });
+    // Walk nodes in register order so face numbers and edge ordering stay stable.
+    for (let a = 0; a < nodes.length; a += 1) {
+      const first = nodes[a].id;
+      const adjacent = edges.get(first);
+      for (let b = a + 1; b < nodes.length; b += 1) {
+        const second = nodes[b].id;
+        const ab = adjacent.get(second);
+        if (!ab) continue;
+        const fromSecond = edges.get(second);
+        for (let c = b + 1; c < nodes.length; c += 1) {
+          const third = nodes[c].id;
+          const bc = fromSecond.get(third), ca = adjacent.get(third);
+          if (bc && ca) faces.push({id: 'F' + String(faces.length + 1).padStart(2, '0'), nodes: [first, second, third], relations: [ab, bc, ca]});
+        }
+      }
     }
     return faces;
   }
@@ -6893,59 +6908,60 @@
     heart: 'Illustrative experienced meanings and deliberately constructed models of a heart-focused exercise. Feelings, imagery and practice rules are not measurements of cardiac coherence or claims of physiological causation.',
     body: 'Illustrative seated-mapping experiences and deliberately constructed models of describing and interpreting a bodily episode. The links relate roles and meanings; sensation properties alone do not constitute the progression or establish an emotion or diagnosis.'
   };
-  const models = {};
-  DATA.stages.forEach(stage => {
-    models[stage.id] = {};
-    EXERCISES.forEach(exercise => {
-      let graph;
-      if (stage.id === 'geodesic' || stage.id === 'sphere') graph = refine(exercise);
-      else graph = clone(DATA.low[exercise][stage.id] || DATA.high[exercise][stage.id]);
-      if (stage.id === 'dodecahedron') graph.faces = pentagonalFaces(graph.nodes, graph.relations);
-      if (stage.id === 'icosahedron') graph.faces = clone(DATA.originalFaces).map(face => ({id: face.id, nodes: face.nodes, relations: face.edges}));
-      if (stage.id === 'sphere') graph.fourBreaths = sphereStates(exercise);
-      if (DATA.lowStates[exercise][stage.id]) graph.fourBreaths = clone(DATA.lowStates[exercise][stage.id]);
-      const prepared = stage.count >= 30;
-      const model = Object.assign(graph, {
-        stageId: stage.id, exercise, title: stage.name + ' · ' + (exercise === 'stream' ? 'Consciousness streaming' : exercise === 'heart' ? 'Heart-focused practice' : 'Body mapping'),
-        description: CONTEXT[exercise], relationshipCount: stage.count, nodeCount: graph.nodes.length,
-        graphConvention: GRAPHS[stage.id], prepared,
-        preparation: prepared ? 'Learn and recover the complete register before four-entry rehearsal. A baseline plus named changes stands for the entire model only when its other links remain recoverable. This is not a claim that 30 or 120 new relationships can be constructed in one ordinary inhale. If an entry takes several breaths, use record-paced N = 1 rather than calling it one-breath-back.' : 'Read the complete selected register. Every inhale selects the current relationship structure; every exhale encodes it before deliberate retrieval and comparison. The rest of the scene may remain present.',
-        provenance: {manualEdition: '2.2', status: 'illustrative construction', countBasis: 'distinct selected semantic relationships', physiologicalMeasurement: false},
-        countingNote: 'Count source relationships, not properties, palace bindings or routine historical comparisons. An inverse paraphrase is not a second relationship. A relation can be represented as failed, provisional or unknown without being counted as an established functioning support. Requirements and their satisfaction status remain distinguishable.'
-      });
-      if (model.fourBreaths) {
-        let stateNodes = clone(model.nodes);
-        let stateRelations = clone(model.relations);
-        model.states = model.fourBreaths.map((step, index) => {
-          const changes = step.changes || [];
-          const nodeChanges = step.nodes || [];
-          const relationIndex = new Map(stateRelations.map(relation => [relation.id, relation]));
-          const nodeIndex = new Map(stateNodes.map(node => [node.id, node]));
-          changes.forEach(change => {
-            const relation = relationIndex.get(change.relationId);
-            if (!relation) throw new Error('Unknown relationship in example: ' + change.relationId);
-            ['text', 'from', 'to', 'status'].forEach(key => { if (change[key] !== undefined) relation[key] = change[key]; });
-          });
-          nodeChanges.forEach(change => {
-            const node = nodeIndex.get(change.id);
-            if (!node) throw new Error('Unknown role in example: ' + change.id);
-            node.label = change.label;
-          });
-          const changedNodes = new Set(nodeChanges.map(change => change.id));
-          const changedRelations = new Set(changes.map(change => change.relationId));
-          stateRelations.forEach(relation => { if (changedNodes.has(relation.from) || changedNodes.has(relation.to)) changedRelations.add(relation.id); });
-          return {label: 'Breath ' + (index + 1), breath: index + 1, nodes: clone(stateNodes), relations: clone(stateRelations), changedRelationIds: Array.from(changedRelations), changedNodeIds: Array.from(changedNodes), inhale: step.inhale, compare: step.compare};
-        });
-      }
-      models[stage.id][exercise] = model;
+  function buildModel(stage, exercise) {
+    let graph;
+    if (stage.id === 'geodesic' || stage.id === 'sphere') graph = refine(exercise);
+    else graph = clone(DATA.low[exercise][stage.id] || DATA.high[exercise][stage.id]);
+    if (stage.id === 'dodecahedron') graph.faces = pentagonalFaces(graph.nodes, graph.relations);
+    if (stage.id === 'icosahedron') graph.faces = clone(DATA.originalFaces).map(face => ({id: face.id, nodes: face.nodes, relations: face.edges}));
+    if (stage.id === 'sphere') graph.fourBreaths = sphereStates(exercise);
+    if (DATA.lowStates[exercise][stage.id]) graph.fourBreaths = clone(DATA.lowStates[exercise][stage.id]);
+    const prepared = stage.count >= 30;
+    const model = Object.assign(graph, {
+      stageId: stage.id, exercise, title: stage.name + ' · ' + (exercise === 'stream' ? 'Consciousness streaming' : exercise === 'heart' ? 'Heart-focused practice' : 'Body mapping'),
+      description: CONTEXT[exercise], relationshipCount: stage.count, nodeCount: graph.nodes.length,
+      graphConvention: GRAPHS[stage.id], prepared,
+      preparation: prepared ? 'Learn and recover the complete register before four-entry rehearsal. A baseline plus named changes stands for the entire model only when its other links remain recoverable. This is not a claim that 30 or 120 new relationships can be constructed in one ordinary inhale. If an entry takes several breaths, use record-paced N = 1 rather than calling it one-breath-back.' : 'Read the complete selected register. Every inhale selects the current relationship structure; every exhale encodes it before deliberate retrieval and comparison. The rest of the scene may remain present.',
+      provenance: {manualEdition: '2.2', status: 'illustrative construction', countBasis: 'distinct selected semantic relationships', physiologicalMeasurement: false},
+      countingNote: 'Count source relationships, not properties, palace bindings or routine historical comparisons. An inverse paraphrase is not a second relationship. A relation can be represented as failed, provisional or unknown without being counted as an established functioning support. Requirements and their satisfaction status remain distinguishable.'
     });
-  });
-  deepFreeze(models);
+    if (model.fourBreaths) {
+      let stateNodes = clone(model.nodes);
+      let stateRelations = clone(model.relations);
+      model.states = model.fourBreaths.map((step, index) => {
+        const changes = step.changes || [];
+        const nodeChanges = step.nodes || [];
+        const relationIndex = new Map(stateRelations.map(relation => [relation.id, relation]));
+        const nodeIndex = new Map(stateNodes.map(node => [node.id, node]));
+        changes.forEach(change => {
+          const relation = relationIndex.get(change.relationId);
+          if (!relation) throw new Error('Unknown relationship in example: ' + change.relationId);
+          ['text', 'from', 'to', 'status'].forEach(key => { if (change[key] !== undefined) relation[key] = change[key]; });
+        });
+        nodeChanges.forEach(change => {
+          const node = nodeIndex.get(change.id);
+          if (!node) throw new Error('Unknown role in example: ' + change.id);
+          node.label = change.label;
+        });
+        const changedNodes = new Set(nodeChanges.map(change => change.id));
+        const changedRelations = new Set(changes.map(change => change.relationId));
+        stateRelations.forEach(relation => { if (changedNodes.has(relation.from) || changedNodes.has(relation.to)) changedRelations.add(relation.id); });
+        return {label: 'Breath ' + (index + 1), breath: index + 1, nodes: clone(stateNodes), relations: clone(stateRelations), changedRelationIds: Array.from(changedRelations), changedNodeIds: Array.from(changedNodes), inhale: step.inhale, compare: step.compare};
+      });
+    }
+    return deepFreeze(model);
+  }
+
   const STAGES = deepFreeze(clone(DATA.stages));
+  const modelCache = new Map();
+  const stagesById = Object.create(null);
+  for (const stage of STAGES) stagesById[stage.id] = stage;
   function getModel(stageId, exercise) {
-    const stage = Object.prototype.hasOwnProperty.call(models, stageId) ? stageId : 'circle';
+    const stage = stagesById[stageId] || STAGES[0];
     const context = EXERCISES.includes(exercise) ? exercise : 'stream';
-    return models[stage][context];
+    const key = stage.id + '/' + context;
+    if (!modelCache.has(key)) modelCache.set(key, buildModel(stage, context));
+    return modelCache.get(key);
   }
   function applyChanges(model, changes) {
     if (!model || !Array.isArray(model.relations) || !Array.isArray(changes)) throw new TypeError('A model and a changes array are required.');
