@@ -234,6 +234,28 @@ test('each Psiduction category opens with its own poem and a collapsed practice 
   page.app.destroy();
 });
 
+test('Wave uses deepening and Frequency practice draws on the visitor’s own felt experience', () => {
+  const page = harness({stageId: 'icosahedron', initialExercise: 'wave'});
+  const wave = page.q('.practice-poem').textContent;
+  assert.match(wave, /\bdeepening\b/i);
+  assert.doesNotMatch(wave, /\bdepending\b/i);
+
+  const shapes = page.q('[data-shape]').querySelectorAll('option').map(option => option.value);
+  const prompts = ['.practice-poem', '.practice-guide', '[data-prompt]', '[data-next-step]', '[data-signal-pairing]', '[data-signal-example]'];
+  const outsideCue = /\b(someone|friend|friends|loved one|playground|party|crowd|new student|celebration)\b|let a scene come to mind/i;
+  for (const id of [...shapes, 'open-streaming']) {
+    for (const mode of ['frequency', 'heart', 'transmutation']) {
+      page.app.setStage(id, mode);
+      const poem = page.q('.practice-poem').textContent;
+      assert.match(poem, /\b(heart|chest)\b/i);
+      assert.match(poem, /\blove\b/i);
+      const practiceCopy = prompts.map(selector => page.q(selector).textContent).join('\n');
+      assert.doesNotMatch(practiceCopy, outsideCue, id + ' / ' + mode);
+    }
+  }
+  page.app.destroy();
+});
+
 test('guided rehearsal preserves receive, encode, retrieve, compare order and synchronizes the complete model', () => {
   const page=harness();
   page.openExamples();

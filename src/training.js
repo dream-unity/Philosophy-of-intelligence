@@ -6,7 +6,7 @@
 
   const PRACTICE_POEMS = {
     body: 'Close your eyes and turn one palm upwards. Somewhere in that small field of skin there may be warmth, a pulse, the cool trace of air. Let your attention find the edge of one sensation. Where does the warmth thin out? Where does the pulse go quiet? A whole landscape begins to take shape in a hand you thought you knew by heart.',
-    frequency: 'Bring to mind someone whose face softens your own. Stay for a breath with the feeling of seeing them. Perhaps it gathers under your ribs or leaves a little more room in your chest. Let love deepen into devotion and feel where the two part company. In time you may know the way back to a feeling as surely as your fingers know a song.',
+    frequency: 'Rest your attention in your heart. Let your chest soften as you breathe gently through that spot. Give the feeling of love time to stir, however faintly. When you feel it, stay with it for another breath and gently deepen it. In time you may know the way back to that feeling as surely as your fingers know a song.',
     stream: 'Inside your mind, an endless world is unfolding, expanding and deepening. You discover it through awareness, attention and observation. As you grow more attuned to your inner eye, you can explore infinite plains that stretch beyond a horizon you can never reach. To begin, simply close your eyes. Let the darkness fill with stars, and let each star unfold into a miniature universe. Ad astra.',
     unitive: 'In the house you know by heart, leave the rain from an old afternoon on the windowsill. Give its quiet a place there too. Let your inner stream carry you on. When you return to that window, see whether you can hear the rain again and remember how it felt to stand there. Carry a little of that afternoon back into this one.',
     open: 'A bird calls outside your window. Before its last note fades, you are back in a summer garden. Your shoulders ease. For a breath, the garden is present in the room. When the bird calls again, listen for what you can hear now that the garden is with you. A note in the world called up a world in you, and something of that world goes out to meet the next note.'
@@ -1751,9 +1751,9 @@
   const FEELING_AND_STORY = {
   "circle": {
     "freq": {
-      "why": "Let the circle hold one feeling. Pick a word for it if you can.",
-      "example": "Imagine a dog greeting someone at the door. What feeling might come with that scene for you?",
-      "check": "What do you notice as you picture the greeting?"
+      "why": "Rest your attention in your heart. As you breathe, find one quality in the feeling of love.",
+      "example": "You might notice a little warmth in the middle of your chest. Stay with it for one easy breath.",
+      "check": "What word comes closest to what you feel?"
     },
     "unitive": {
       "why": "Picture two things that go together. Notice how you feel as you watch.",
@@ -1763,9 +1763,9 @@
   },
   "half-circle": {
     "freq": {
-      "why": "Use the line across the shape to tell two feelings apart. You can have both at once.",
-      "example": "Before a party you might be glad to go and shy about walking in.",
-      "check": "Which part of going to the party feels good? Which part feels different?"
+      "why": "Use the two halves to tell apart two qualities of the same feeling.",
+      "example": "Love might feel both warm and tender. Attend to the warmth, then to the tenderness.",
+      "check": "What lets you tell one quality from the other?"
     },
     "unitive": {
       "why": "Keep the same two things in mind. Look for two ways they go together.",
@@ -1775,9 +1775,9 @@
   },
   "triangle": {
     "freq": {
-      "why": "Let each corner remind you of a part of the same moment. See which feelings go together.",
-      "example": "Imagine a friend gives you a drawing. You may feel pleased that they thought of you.",
-      "check": "What makes this drawing special to you?"
+      "why": "Give each corner a quality you notice as you stay with love. Feel how they fit together.",
+      "example": "Your chest might feel warm, soft and open. Follow the softness for a breath and see what happens to the warmth and openness.",
+      "check": "When one quality changes, can you still feel the others?"
     },
     "unitive": {
       "why": "Pick three things in your picture. See how each one goes with the other two.",
@@ -1787,9 +1787,9 @@
   },
   "square": {
     "freq": {
-      "why": "Picture something happening at one side of the square. Follow the feeling over to someone else.",
-      "example": "Imagine joining a game and a friend making room. How might the invitation change the way you feel?",
-      "check": "What did your friend do that changed the way you felt?"
+      "why": "Follow a felt quality around the square. At each side, notice what else is present.",
+      "example": "As you soften your chest, you might find it easier to feel warmth. Breathe with that warmth, then return to the softness.",
+      "check": "How does the first quality feel when you come back to it?"
     },
     "unitive": {
       "why": "Follow the four sides like a story that comes back to where it began.",
@@ -1799,9 +1799,9 @@
   },
   "pentagon": {
     "freq": {
-      "why": "Pick a place to look from. See whether the same thing feels different from there.",
-      "example": "You watch a tall slide from the grass. Now picture sitting at the top. The slide is the same. How do you feel?",
-      "check": "What changed when you imagined being at the top?"
+      "why": "Choose one quality as your starting point. Notice the heart feeling from there, then start elsewhere.",
+      "example": "Attend first to the warmth of love, then to its stillness. See what comes forward each time.",
+      "check": "Which part of the feeling is clearer from each starting point?"
     },
     "unitive": {
       "why": "Choose who gets to look. Picture what they see and how it might feel to be there.",
@@ -1811,9 +1811,9 @@
   },
   "hexagon": {
     "freq": {
-      "why": "Leave room to notice what happens that comes between one feeling and the next.",
-      "example": "Imagine wondering whether a friend has forgotten you, then seeing them wave from across the playground.",
-      "check": "What helped you go from feeling left out to feeling seen?"
+      "why": "As love deepens, notice the small change between one felt quality and the next.",
+      "example": "Perhaps your chest softens as you breathe out, and only then do you notice warmth spreading.",
+      "check": "What could you feel in the moment before the change?"
     },
     "unitive": {
       "why": "Follow what carries something from one part of your picture to another.",
@@ -1823,9 +1823,9 @@
   },
   "heptagon": {
     "freq": {
-      "why": "Keep one feeling in mind. Look at what happened around it.",
-      "example": "A loud cheer surprises you. Then you see your friend finish a race and hear everyone clap for them.",
-      "check": "Does the cheer feel different once you know why it happened?"
+      "why": "Stay with one quality of love while you widen your attention to the rest of your body.",
+      "example": "There may be tenderness in your chest and tightness in your shoulders. Notice how the tenderness feels as your shoulders settle.",
+      "check": "What stays the same as you take in more of what you feel?"
     },
     "unitive": {
       "why": "Pick one bit of your picture. Find the story around it.",
@@ -1835,9 +1835,9 @@
   },
   "octagon": {
     "freq": {
-      "why": "Follow two feelings side by side. Notice when one changes and the other stays.",
-      "example": "Imagine feeling pleased to see a friend at a pool but unsure about the water. Your friend waves. One feeling may change while the other stays.",
-      "check": "Which feeling changed when your friend waved?"
+      "why": "Follow two qualities side by side across a few easy breaths.",
+      "example": "A sense of warmth might rise and fall while a quiet fondness stays steady underneath.",
+      "check": "Do the two qualities change together or at different times?"
     },
     "unitive": {
       "why": "Follow two stories side by side. Watch for the place where they meet.",
@@ -1847,9 +1847,9 @@
   },
   "prism": {
     "freq": {
-      "why": "Look at one end, then the other. Can you find a feeling from one story in a different story?",
-      "example": "Imagine being new at school. Later you meet another new student and wonder how they feel.",
-      "check": "What could you ask to find out how the new child really feels?"
+      "why": "Notice one quality of love on the inhale. Look for that quality again on the exhale.",
+      "example": "Warmth might feel gathered in the centre of your chest as you breathe in and more spread out as you breathe out.",
+      "check": "What helps you recognise it across both parts of the breath?"
     },
     "unitive": {
       "why": "Picture a story at each end. Match the parts that do the same job.",
@@ -1859,9 +1859,9 @@
   },
   "cube": {
     "freq": {
-      "why": "Imagine two whole scenes. Watch where your feelings match and where they change.",
-      "example": "Playing catch with a friend can be fun. Playing catch with a dog can be fun too. You might feel cross when the dog runs off with the ball.",
-      "check": "Which part feels different when the dog keeps the ball?"
+      "why": "Notice which qualities go together now. Across the next breath, check whether they still do.",
+      "example": "Your chest might feel warm and open at first. A breath later, the warmth may still be there even if the openness fades.",
+      "check": "Which qualities stayed together across both breaths?"
     },
     "unitive": {
       "why": "Compare two stories. Check whether the things you matched actually work the same way.",
@@ -1871,9 +1871,9 @@
   },
   "dodecahedron": {
     "freq": {
-      "why": "Look at two shapes that share a side. Think of one thing that matters in two parts of your day.",
-      "example": "You take your bear to school and hug it at bedtime. The same bear might help you feel at home in both places.",
-      "check": "Does the bear feel special in the same way in both places?"
+      "why": "See whether one quality belongs to two different parts of your experience of love.",
+      "example": "You might feel a gentle warmth in your chest and a gentle ease in your breathing. Attend to what you mean by gentle in each.",
+      "check": "Does that word describe the same feeling in both places?"
     },
     "unitive": {
       "why": "Find a side that two faces share. Imagine one thing helping two parts of a story.",
@@ -1883,9 +1883,9 @@
   },
   "icosahedron": {
     "freq": {
-      "why": "Try looking at a whole group as one part of a bigger picture. Does your feeling change?",
-      "example": "At a party you see a big crowd. Now you spot a small group making paper hats. You might feel curious about joining them.",
-      "check": "What do you notice when you look at the small group?"
+      "why": "Feel love as a whole, then turn your attention to one quality within it. Move between the two.",
+      "example": "A feeling you call tenderness might include warmth, softness and a sense of openness. Stay with the softness, then sense the tenderness as a whole again.",
+      "check": "What does attending to that one quality reveal about the whole feeling?"
     },
     "unitive": {
       "why": "Imagine each group as one point. Join two points if the groups share something.",
@@ -1895,9 +1895,9 @@
   },
   "geodesic": {
     "freq": {
-      "why": "Look closer at a feeling, as if one big triangle had become four smaller ones.",
-      "example": "At first you feel funny about the school play. Look closer. You love the costume and worry about forgetting one line.",
-      "check": "Which small part would you like help with?"
+      "why": "Choose one quality you can feel clearly. Look more closely for smaller differences within it.",
+      "example": "What first felt like a single patch of warmth might feel steady at its centre and faintly pulsing at its edge.",
+      "check": "Which detail can you feel most clearly as you breathe?"
     },
     "unitive": {
       "why": "Choose one part of the big picture. Look for a step hiding inside it.",
@@ -1907,9 +1907,9 @@
   },
   "sphere": {
     "freq": {
-      "why": "Pick one way into the whole moment. Then try another. See which feelings come back.",
-      "example": "Remember a celebration. Begin with a sound, then try starting with a smell. See whether each brings back the same event.",
-      "check": "What do you remember both times?"
+      "why": "Take in the whole feeling of love. Then see whether you can find your way back to it through a different quality.",
+      "example": "Begin with the warmth you notice in your chest and feel what accompanies it. On your next breath, begin with the tenderness instead, if you feel it.",
+      "check": "What do you recognise about the whole feeling from either starting point?"
     },
     "unitive": {
       "why": "Hold the whole story in mind. Start in a different place and find your way through it again.",
@@ -1968,28 +1968,28 @@
   ],
   "frequency": [
     {
-      "title": "Notice the mood",
-      "body": "As you imagine a scene, notice how you feel. The feeling can change while the story goes on.",
-      "try": "Picture a small empty playground. How does it feel to be there?",
-      "example": "At first it feels quiet. Then I imagine my friend on the swing and feel glad."
+      "title": "Begin at the heart",
+      "body": "Rest your attention in your heart and soften your chest. Give a sincere feeling of love time to surface.",
+      "try": "Breathe gently through the heart area. What can you feel there?",
+      "example": "At first I notice only my breath. After a while I feel a little tenderness in my chest."
     },
     {
-      "title": "Notice how it moves",
-      "body": "Sometimes pictures come quickly. Sometimes one picture stays for a while.",
-      "try": "Does your picture stay still, change bit by bit, or jump to something new?",
-      "example": "I picture a cloud rolling slowly across the sky. Suddenly it looks like a dog."
+      "title": "Follow the feeling",
+      "body": "Stay with the feeling through an easy inhale and exhale.",
+      "try": "Where do you feel it most clearly? Does it stay there as you breathe?",
+      "example": "The warmth is clearest in the middle of my chest. As I breathe out, I can feel it a little farther down."
     },
     {
-      "title": "Make room for a feeling",
-      "body": "You can gently try out a feeling, like kindness or curiosity. See what happens.",
-      "try": "Think of a friend or a favourite toy. What happens to the mood of your picture?",
-      "example": "I imagine someone I trust beside me and notice how the scene feels."
+      "title": "Deepen the feeling",
+      "body": "Once you can feel love in your heart, gently deepen it with each breath.",
+      "try": "What changes as you give that feeling your full attention?",
+      "example": "The tenderness is quiet. When I stay with it, I can feel it through the whole breath."
     },
     {
       "title": "Hold two feelings together",
-      "body": "A picture can come with more than one feeling. The shape helps you remember the feelings you find.",
-      "try": "Pick one feeling and see if another is there too.",
-      "example": "At the top of a big slide, I feel excited and a bit scared. Both belong in the same picture."
+      "body": "You may notice more than one quality in the same feeling. Use the shape to keep track of what you sense.",
+      "try": "Stay with one quality. If another comes forward, can you still feel the first?",
+      "example": "I notice warmth first. Then I feel a sense of ease alongside it."
     }
   ],
   "heart": [
@@ -2710,7 +2710,7 @@
             <p>At Circle, stay with one quality for a full inhale and exhale. At the next inhale, enter the next quality. The next four shapes build blends of two, three, four and five. From Hexagon onwards, keep five present and follow the shading to expand or soften each quality.</p>
             <p>The Agency hexagram is an example you can adapt or draw for yourself. Its twelve families represent qualities associated with the capacity to choose and act. Practise calling them up alone and together until you can recognise agency as a whole felt state.</p>
             <p><strong>Energetic → emotional → meaning entrainment</strong> begins with a bodily shift. You might feel yourself steady, recognise resolve and sense what “I choose” means. As with love in Heart Activation, repeated practice may make that state easier to enter and sustain. This model proposes “cellular learning” as a possible explanation for how the nervous system comes to recognise agency more deeply.</p>`;
-          return '<p>Let a scene come to mind and notice the feeling it brings. Follow one felt quality with the shape. If a second quality arises, notice how the two feel together. As the scene changes, attend to what happens in your body and how that feeling colours the next image.</p>';
+          return '<p>As you breathe through the heart area, attend to the feeling of love as it arises. Use the shape to follow one quality you can feel. If a second quality emerges, notice how the two feel together. If an image or thought comes of its own accord, notice how the feeling colours it and whether it changes the feeling in turn.</p>';
       }
     }
 
@@ -3016,7 +3016,7 @@
           q('[data-step-label]').textContent=exerciseNames.frequency;
           q('[data-dimension]').hidden=true;
           if (!isTransmutation()) {
-            q('[data-prompt]').textContent=story?story.freq.why:'Imagine walking into the playground. How does it feel to be there?';
+            q('[data-prompt]').textContent=story?story.freq.why:'Rest your attention in your heart. As you breathe gently, what can you feel there?';
             q('[data-next-step]').textContent='You can name just the feelings you notice. It’s okay to say “I’m not sure.”';
           }
         }else if(exercise==='heart'){
