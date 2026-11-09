@@ -2431,7 +2431,7 @@
         {title:'The body as a source of information', paragraphs:[
           'Project Meaning treats bodily sensation as an entry point into feeling. Its central idea is that an apparently undivided mood can be examined through its sensory features and the meanings that form around them.',
           'Interoception research concerns how signals from within the body are sensed and represented. Sensations can contribute to emotional experience, but a particular location, texture or movement does not uniquely identify an emotion. Context, interpretation and individual differences matter.',
-          'The project’s stronger statement that sensation simply is emotion is a theoretical framing, not a settled finding established by the cited heart studies.' ], refs:['craig']},
+          'Project Meaning describes emotion at the felt level as a pattern of sensation learned to be named. This is a theoretical framing, not a settled finding established by the cited heart studies.' ], refs:['craig']},
         {title:'Fourteen vectors, fourteen shape cues', paragraphs:[
           'Signal Psiduction pairs each shape level with one vector. Circle represents awareness as an unbroken field; half-circle represents attention as a focus within that field. The later shapes introduce location and boundary, quality, intensity, time and rhythm, movement, direction, felt tone, impulse, coherence, meaning, confidence and responsiveness.',
           'These shape pairings are proposed memory cues for this practice. Some vectors depend on others: direction may be absent without movement; coherence compares aspects of experience; meaning is an interpretation. An unclear or absent quality is a valid observation.',
