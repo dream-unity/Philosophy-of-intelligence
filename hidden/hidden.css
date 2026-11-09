@@ -30,11 +30,15 @@ body {
 .fields input { margin-top: 6px; border-color: var(--line); font-size: 17px; }
 .hint { font-size: 13px; margin: 14px 0; }
 #start { width: 100%; font-size: 16px; }
+body:has(#session:not([hidden])) .practice-sheet {
+  width: min(100% - 20px, 590px);
+  padding-inline: clamp(16px, 3vw, 36px);
+}
 #session { text-align: center; }
 #progress { margin: 0; font-size: 14px; }
 #prompt { font-size: 21px; margin: 4px 0 16px; }
-#keypad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
-#keypad button { min-height: 46px; padding: 5px; font-size: 21px; }
+#keypad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-inline: -10px; }
+#keypad button { min-height: clamp(64px, 10vh, 76px); padding: 8px; font-size: 27px; }
 #keypad button:last-child { grid-column: 2; }
 #stop { margin-top: 8px; }
 #result { border-top: 1px solid var(--line); padding-top: 16px; margin: 20px 0 0; }
