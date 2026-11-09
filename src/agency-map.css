@@ -34,17 +34,18 @@
 #training-root .agency-map {margin-top:1.2rem}
 #training-root .agency-map [hidden] {display:none!important}
 #training-root .agency-map .tm-grid {grid-template-columns:minmax(0,1.07fr) minmax(0,1fr);gap:clamp(20px,4vw,56px)}
-#training-root .agency-map .tm-lesson {align-self:center}
 #training-root .agency-map .tm-star {max-height:510px}
 #training-root .agency-map .agency-stage-head {display:flex;align-items:center;gap:clamp(14px,2vw,28px);margin-bottom:16px}
 #training-root .agency-map .agency-stage-head h3 {font-size:clamp(23px,2.25vw,34px);text-wrap:balance}
 #training-root .agency-map [data-agency-pacer] {flex:0 0 clamp(175px,18vw,220px);max-width:52%}
 #training-root .agency-map [data-agency-pacer] .training-page-symbol {width:100%;max-width:100%}
+#training-root .agency-map [data-agency-pacer] .training-shape-ink {transform:scale(1.1)}
 #training-root .agency-map [data-agency-pacer] .training-pacer-start {background:transparent;color:var(--ink);border:0;border-radius:50%;min-height:0;padding:0;font-size:clamp(14px,1.5vw,18px)}
 #training-root .agency-map [data-agency-pacer] .training-breath-readout {width:140%;max-width:none;font-size:clamp(14px,1.5vw,18px);line-height:1.1;white-space:nowrap}
 #training-root .agency-map [data-agency-pacer] .training-breath-readout small {font-size:clamp(9px,.8vw,10px)}
-#training-root .agency-map [data-agency-pacer] .training-page-symbol:has(.form-shape--triangle) .training-pacer {top:59%}
-#training-root .agency-map [data-agency-pacer] .training-page-symbol--half-circle .training-pacer {top:63%}
+/* Centre the bell in the triangle's inscribed circle. The half-circle's
+   inscribed circle is already centred in its cropped viewBox. */
+#training-root .agency-map [data-agency-pacer] .training-page-symbol:has(.form-shape--triangle) .training-pacer {top:64%}
 #training-root .agency-map [data-agency-phase-cue] {font-weight:600;margin-top:8px}
 #training-root .agency-map .agency-members {list-style:none;padding:0;margin:1.1rem 0 0;line-height:1.42;font-size:clamp(14px,1vw,16px)}
 #training-root .agency-map .agency-members li {margin:0;padding:.22rem 0}
@@ -60,6 +61,12 @@
 #training-root .agency-map .tm-region[aria-disabled="true"]:hover polygon {stroke:#786e5a;stroke-width:1.5px}
 #training-root .agency-map.agency-blind .tm-grid {grid-template-columns:minmax(0,42rem);justify-content:center}
 #training-root .agency-map [data-agency-apply] {background:var(--deep);color:var(--white)}
+@media(min-width:761px) {
+ /* Anchor the practice to the top of the hexagram row so wrapping cues
+    can grow downwards without re-centring the bell on each breath. */
+ #training-root .agency-map:not(.agency-blind,.agency-editing) .tm-grid {align-items:start}
+ #training-root .agency-map:not(.agency-blind,.agency-editing) .tm-lesson {padding-top:min(20%,96px)}
+}
 @media(max-width:760px) {
  #training-root .agency-map .tm-grid {grid-template-columns:1fr;gap:12px}
  #training-root .agency-map .tm-star {max-height:380px}
