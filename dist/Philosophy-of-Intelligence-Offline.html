@@ -617,7 +617,7 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
 </style>
 
 
-    <style data-form-source="src/psiduction.css?v=cfaddd9c8cac">
+    <style data-form-source="src/psiduction.css?v=2d4bbcb1eedd">
 /* remove practice tabs */
 .training-reference, #practice-resources { display: none !important; }
 
@@ -706,7 +706,44 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
 #training-root .open-introduction p { font: 17px/1.65 var(--serif); margin: 0 0 14px; }
 @media (max-width: 600px) { #training-root .open-introduction { margin: 26px auto 30px; text-align: left; } #training-root .open-introduction p { font-size: 16px; } }
 
-#training-root .wave-guide { max-width: 72ch; text-align: start; }
+#training-root .practice-poem {
+  max-width: 65ch;
+  margin: clamp(22px, 3vw, 38px) auto 20px;
+  color: #39362e;
+  font: 400 clamp(18px, 1.45vw, 22px)/1.6 var(--serif);
+  text-align: center;
+}
+#training-root .practice-guide {
+  max-width: 72ch;
+  margin: 16px auto 28px;
+  text-align: start;
+  border-block: 1px solid var(--line);
+}
+#training-root .practice-guide > summary {
+  display: flex;
+  align-items: center;
+  gap: .65em;
+  min-height: 44px;
+  padding: .45em .15em;
+  list-style: none;
+  font: 500 clamp(17px, 1.3vw, 20px)/1.4 var(--serif);
+}
+#training-root .practice-guide > summary::-webkit-details-marker { display: none; }
+#training-root .practice-guide > summary::before {
+  content: '';
+  width: .44em;
+  height: .44em;
+  flex: none;
+  border: solid currentColor;
+  border-width: 2px 2px 0 0;
+  transform: rotate(45deg);
+}
+#training-root .practice-guide[open] { padding-bottom: 14px; }
+#training-root .practice-guide[open] > summary { margin-bottom: .5em; }
+#training-root .practice-guide[open] > summary::before { transform: rotate(135deg); }
+@media (max-width: 600px) {
+  #training-root .practice-poem { text-align: start; }
+}
 #training-root .wave-guide ol { margin: 0; padding-inline-start: 1.65em; }
 #training-root .wave-guide li + li { margin-top: 1em; }
 #training-root .wave-guide h3 { margin: 0 0 .2em; font: 600 1.12rem/1.4 var(--serif); }
@@ -766,12 +803,10 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
 @media(max-width:700px){#training-root .lab-theory-section summary {font-size:19px;}#training-root .lab-theory-heading > p:last-child,#training-root .lab-theory-section p,#training-root .lab-references p {font-size:16px;}}
 
 /* signal pairings on shape */
-#training-root .heart-progression-intro {max-width:980px;margin:24px auto 18px;text-align:center;font:clamp(16px,1.3vw,19px)/1.55 var(--serif);color:#494336;}
 #training-root .signal-reflection-questions {margin:10px 0 12px;padding-left:1.15em;font:clamp(15px,1.2vw,18px)/1.42 var(--serif);color:#39362e;}
 #training-root .signal-reflection-questions li + li {margin-top:7px;}
 #training-root .signal-reflection-questions[hidden] {display:none!important;}
 @media(max-width:700px){#training-root .signal-reflection-questions {font-size:clamp(13px,2.5vw,16px);line-height:1.4;}#training-root .signal-reflection-questions li + li {margin-top:6px;}}
-#training-root .signal-cycle-intro {max-width:980px;margin:24px auto 18px;text-align:center;font:clamp(16px,1.3vw,19px)/1.55 var(--serif);color:#494336;}
 #training-root .signal-shape-labels {position:absolute;inset:0;z-index:4;pointer-events:none;}
 #training-root .signal-shape-label {position:absolute;transform:translate(-50%,-50%);pointer-events:auto;border:1px solid rgba(105,96,72,.40);border-radius:3px;background:rgba(239,233,218,.96);color:#39362e;padding:3px 5px;font-family:var(--serif);font-size:clamp(10px,.92vw,13px);line-height:1.08;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(60,52,35,.08);}
 #training-root .signal-shape-label.is-current {background:#514b3c;color:#fffaf0;border-color:#312d24;box-shadow:0 0 0 3px #e8dfc8,0 0 0 5px #6c6046;z-index:5;max-width:180px;overflow:visible;text-overflow:clip;white-space:normal;text-align:center;}
@@ -11482,12 +11517,20 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
   window.TransmutationMap = Object.freeze({mount});
 })();
 </script>
-    <script data-form-module="src/training.js?v=d89c3d14829c">
+    <script data-form-module="src/training.js?v=53300009cd42">
 (function (root) {
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const uid = () => Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,10);
   const time = seconds => { const n = Math.max(0, Math.ceil(seconds)); return Math.floor(n / 60).toString().padStart(2,'0') + ':' + (n % 60).toString().padStart(2,'0'); };
+
+  const PRACTICE_POEMS = {
+    body: 'Close your eyes and turn one palm upwards. Somewhere in that small field of skin there may be warmth, a pulse, the cool trace of air. Let your attention find the edge of one sensation. Where does the warmth thin out? Where does the pulse go quiet? A whole landscape begins to take shape in a hand you thought you knew by heart.',
+    frequency: 'Bring to mind someone whose face softens your own. Stay for a breath with the feeling of seeing them. Perhaps it gathers under your ribs or leaves a little more room in your chest. Let love deepen into devotion and feel where the two part company. In time you may know the way back to a feeling as surely as your fingers know a song.',
+    stream: 'Inside your mind is an endless, expanding, depending infinite unfolding world that is awaiting your own awareness, attention and observation in order to be found. Through this discovery you will become more in touch with your inner eye, navigating infinite plains that forever live behind a horizon you can never reach. All it takes to begin is the simple closing of your eyes, and the allowing of blackness to turn into the stars of the night, and those stars miniature universes that await your own ad astra.',
+    unitive: 'In the house you know by heart, leave the rain from an old afternoon on the windowsill. Give its quiet a place there too. Let your inner stream carry you on. When you return to that window, see whether you can hear the rain again and remember how it felt to stand there. Carry a little of that afternoon back into this one.',
+    open: 'A bird calls outside your window. Before its last note fades, you are back in a summer garden. Your shoulders ease. For a breath, the garden is present in the room. When the bird calls again, listen for what you can hear now that the garden is with you. A note in the world called up a world in you, and something of that world goes out to meet the next note.'
+  };
 
   const WAVE = {
   "circle": {
@@ -14137,24 +14180,10 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
       }
       draw(false);
     }
-    function render() {
-      if (agencyMap) agencyMap.destroy();
-      agencyMap=null;
-      agencyLastFrame=null;
-      if (isTransmutation()) pacing='paced';
-      modelState=0;selectedRelationship='';walkthroughStep=0;
-      previewLociCue=false;
-      const savedPractice=store.data, ready=savedPractice.readiness[stage.id]||{};
-      recordOpened=false;
-      const wave = exercise === 'stream' ? WAVE[stage.id] : null;
-      const shapeIcon=exercise==='open'||stage.id==='open-streaming'?'':G.miniIcon(stage.id,65);
-      host.innerHTML=`<div data-practice-surface><div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker" ${exercise==='open'?'hidden':''}>Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
-        <h2 class="training-category-title" id="unity-psiduction-title">Unity Psiduction</h2>
-        <div class="training-exercises" role="group" aria-labelledby="unity-psiduction-title">${['body','frequency','stream','unitive','open'].map(name=>`<button type="button" data-exercise="${name}" aria-pressed="${name==='frequency'?frequencyActive():exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
-        ${exercise==='stream'?`
-          <section class="open-introduction wave-guide" aria-labelledby="wave-guide-title">
-            <h2 id="wave-guide-title">How to practise Wave Psiduction</h2>
-            <ol>
+    function practiceInstructions() {
+      switch (exercise) {
+        case 'stream':
+          return `<ol>
               <li>
                 <h3>Establish your baseline</h3>
                 <p>Gently close your eyes, breathe normally and let your inner world unfold. You may notice an image, a memory, a word, a feeling or a sensation. Stay with what you sense, however faint, and let its vividness deepen naturally. If you need somewhere to begin, picture a familiar place and let the next detail emerge. See how the stream develops on its own. Add each step below only when the preceding one feels comfortable.</p>
@@ -14178,32 +14207,64 @@ body[data-view="journey"] .portal-page > .stage-path { margin-top: 28px; }
                 <h3>Add the method of loci</h3>
                 <p>When you can follow the stream and recognise these relationships comfortably, open <strong>Oscillatory Psiduction</strong>. Give each relationship a place along a familiar route. At your front door, picture the wood holding the core steady. At your kitchen table, see the core tracing a line on paper. Revisit each place to recall what happened there, then return to the unfolding stream.</p>
               </li>
-            </ol>
-          </section>`:''}
+            </ol>`;
+        case 'unitive':
+          return `<p>${esc(LOCI_COURSE[lociStep].description)}</p>
+            <p>Begin with placement at Circle. On later shapes, build the pattern one connection at a time across breaths.</p>
+            <details class="loci-background"><summary>About Oscillatory Psiduction and the method of loci</summary><p>Oscillatory Psiduction is the practice of learning to oscillate between the world you encounter through inner sight and the vision you give those experiences through memory mapping and the connections you forge between them.</p><p>As the stream unfolds, you give an experience a place in a remembered imagined space. You can later return to that place, recall the experience and connect it with what is unfolding now. In doing so, you move between the present stream and the experiences you have mapped.</p><p>Mapping also brings you into relationship with the state in which an experience was encoded. You can revisit a remembered frequency and practise returning to it, while recognising the states and strategies connected to earlier experiences. These memories can become experiences you re-enact and learn to synchronise with, carrying the practice into Synchronised Psiduction, the fifth stage.</p><p>The <a href="https://www.laits.utexas.edu/memoria/Cicero.html" target="_blank" rel="noopener noreferrer">method of loci</a>, or memory palace, is an ancient technique traditionally attributed to the Greek poet Simonides of Ceos and described by Cicero in <em>De Oratore</em>. To learn its basic principle, imagine placing an image at a remembered doorway, then returning to that doorway to retrieve it. From there, the locations and the kinds of places you use are yours to imagine and create.</p><p>In Oscillatory Psiduction, you give memories their own cues and build paths among the entries in your palace. The relationships you recognise in Wave Psiduction can guide the connections you make between what you map; those connections can, in turn, reveal new relationships as your stream unfolds. The two practices feed one another, cycling experiences, meanings and their felt energies between the present stream and memory.</p></details>`;
+        case 'open':
+          return `<p>Throughout these modules, you’ve been learning to stay aware of each event as it unfolds in consciousness. You’ve learned to let a sincere feeling of love arise from the heart, breathe with it and sustain and deepen its felt signal. Through Transmutation, you’ve practised honing a particular felt frequency and returning to it from a different state. With the method of loci, you’ve learned to map events in your stream to places along a familiar route, so that revisiting a place brings the event back to mind.</p>
+        <p>Now you’re ready to bring it all together. In Synchronised Psiduction, let these skills begin to work on autopilot while you stream. Stay aware as one event gives way to the next. As a memory surfaces, you might feel your breathing change. You can bring that bodily response into focus, sense the shift in your felt frequency and encode it at a familiar place. You can tune back to a frequency you remember or follow a new connection between the memory and what’s unfolding now. Let the stream itself suggest what comes next.</p>
+        <h3>Four meanings of synchronisation</h3><p><strong>First · Signal Psiduction.</strong> Synchronise with the body. Bring the sensations you have learned to notice into awareness as the stream unfolds. Notice their location, quality, intensity and movement, and how a sensation and an event in consciousness influence one another.</p>
+        <p><strong>Second · Frequency Psiduction.</strong> Synchronise with your felt state. Attend to the frequency you are experiencing, including the feeling of love cultivated through Heart Activation and the qualities explored through Transmutation. Notice how that state shapes the contents of consciousness and how those contents can, in turn, change the state. Practise returning to and adjusting a frequency as the stream continues.</p>
+        <p><strong>Third · Wave Psiduction.</strong> Synchronise with the movement and relationships within the stream. Let images, thoughts, sensations, feelings and meanings unfold, and notice the relationships and interdependencies that emerge among them. In this framework, a change in consciousness may involve a change in how these events come together and influence one another.</p>
+        <p><strong>Fourth · Oscillatory Psiduction.</strong> Synchronise the present stream with what you have mapped in memory. Move between the experience arising now and the places, connections and states you have encoded. Return to an earlier experience or frequency and bring it into relationship with the present, so that an embodied state and its associated strategies can be recognised and re-enacted.</p>
+        <p>Together, these four practices can move as one: bodily signals, felt frequency, the evolving stream and remembered experience continually inform one another. The project also proposes that each point of synchronisation has an internal and an external aspect, with consciousness, bodily action and the surrounding world meeting through movement in time and space. Within this framework, dimensional and energetic alignment may influence which possible realities become available to explore in consciousness. This proposed correspondence between inner and outer experience is at the heart of psi in the project.</p>`;
+        case 'body':
+          if (stage.id === 'open-streaming') return '<p>Bring your attention to one bodily sensation. Follow it for a breath and notice where or how it changes.</p>';
+          return `<p><strong>${esc(stage.name)} · ${signalLimit()} ${signalLimit()===1?'vector':'vectors'}</strong> — This shape brings ${signalLimit()===1?'one vector':'these '+signalLimit()+' vectors'} into practice and invites you to notice how ${signalLimit()===1?'it informs your experience':'they influence and depend on one another'}. Follow the highlighted vector for one complete inhale and exhale. At the next inhale, move to the next vector; continue in order, returning to the first until your chosen time ends. The bell marks each inhale and exhale.</p>`;
+        case 'heart':
+          return `<p>Begin by bringing a sincere feeling of love forward from the heart. Each shape builds on the last, applying what you learned in Signal Psiduction to notice, deepen and sustain that feeling throughout your experience.</p>`;
+        case 'frequency':
+          if (isTransmutation()) return `<p>Begin as you did in Heart Activation. Let love arise from the heart, then shift into devotion and feel what changes. Bring back the quality you explored on the star below.</p>
+            <p>At Circle, stay with one quality for a full inhale and exhale. At the next inhale, enter the next quality. The next four shapes build blends of two, three, four and five. From Hexagon onwards, keep five present and follow the shading to expand or soften each quality.</p>
+            <p>The Agency hexagram is an example you can adapt or draw for yourself. Its twelve families represent qualities associated with the capacity to choose and act. Practise calling them up alone and together until you can recognise agency as a whole felt state.</p>
+            <p><strong>Energetic → emotional → meaning entrainment</strong> begins with a bodily shift. You might feel yourself steady, recognise resolve and sense what “I choose” means. As with love in Heart Activation, repeated practice may make that state easier to enter and sustain. This model proposes “cellular learning” as a possible explanation for how the nervous system comes to recognise agency more deeply.</p>`;
+          return '<p>Let a scene come to mind and notice the feeling it brings. Follow one felt quality with the shape. If a second quality arises, notice how the two feel together. As the scene changes, attend to what happens in your body and how that feeling colours the next image.</p>';
+      }
+    }
+
+    function render() {
+      if (agencyMap) agencyMap.destroy();
+      agencyMap=null;
+      agencyLastFrame=null;
+      if (isTransmutation()) pacing='paced';
+      modelState=0;selectedRelationship='';walkthroughStep=0;
+      previewLociCue=false;
+      const savedPractice=store.data, ready=savedPractice.readiness[stage.id]||{};
+      recordOpened=false;
+      const wave = exercise === 'stream' ? WAVE[stage.id] : null;
+      const category = frequencyActive() ? 'frequency' : exercise;
+      const guideKey = stage.id + '/' + routeMode();
+      const previousGuide = q('.practice-guide');
+      const keepGuideOpen = previousGuide?.open && previousGuide.dataset.guideKey === guideKey;
+      const shapeIcon=exercise==='open'||stage.id==='open-streaming'?'':G.miniIcon(stage.id,65);
+      host.innerHTML=`<div data-practice-surface><div class="training-topline"><a class="back-link" href="#stage-path">↑ All shapes</a><label class="training-shape-picker" ${exercise==='open'?'hidden':''}>Shape <select data-shape aria-label="Choose a shape">${D.STAGES.map((s,i)=>`<option value="${esc(s.id)}" ${s.id===stage.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(s.name)}</option>`).join('')}</select></label></div>
+        <h2 class="training-category-title" id="unity-psiduction-title">Unity Psiduction</h2>
+        <div class="training-exercises" role="group" aria-labelledby="unity-psiduction-title">${['body','frequency','stream','unitive','open'].map(name=>`<button type="button" data-exercise="${name}" aria-pressed="${name==='frequency'?frequencyActive():exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
+        <p class="practice-poem">${esc(PRACTICE_POEMS[category])}</p>
+        ${frequencyActive()?`<div class="training-body-steps training-frequency-modules" role="group" aria-label="Frequency Psiduction modules">${['integrated','heart','transmutation'].map(name=>`<button type="button" data-frequency-module="${name}" aria-pressed="${name==='heart'?exercise==='heart':exercise==='frequency'&&frequencyModule===name}">${name==='integrated'?'Frequency Practice':name==='heart'?'Heart Activation':'Transmutation'}</button>`).join('')}</div>`:''}
         ${exercise==='unitive'?`
           <div class="training-body-steps loci-tabs" role="tablist" aria-label="Oscillatory Psiduction practice steps">
             ${LOCI_COURSE.map((step,i)=>`<button type="button" id="loci-tab-${i}" role="tab" data-loci-tab="${i}" aria-selected="${i===lociStep}" aria-controls="loci-panel" tabindex="${i===lociStep?0:-1}" ${i>unlockedLoci?'disabled':''}>${i+1} · ${esc(step.title)}</button>`).join('')}
           </div>
-          <div id="loci-panel" role="tabpanel" aria-labelledby="loci-tab-${lociStep}">
-          <section class="open-introduction loci-intro">
-            <h2>${esc(LOCI_COURSE[lociStep].title)}</h2><p>${esc(LOCI_COURSE[lociStep].description)}</p>
-            <p>Begin with placement at Circle. On later shapes, build the pattern one connection at a time across breaths.</p>
-            <details class="loci-background"><summary>About Oscillatory Psiduction and the method of loci</summary><p>Oscillatory Psiduction is the practice of learning to oscillate between the world you encounter through inner sight and the vision you give those experiences through memory mapping and the connections you forge between them.</p><p>As the stream unfolds, you give an experience a place in a remembered imagined space. You can later return to that place, recall the experience and connect it with what is unfolding now. In doing so, you move between the present stream and the experiences you have mapped.</p><p>Mapping also brings you into relationship with the state in which an experience was encoded. You can revisit a remembered frequency and practise returning to it, while recognising the states and strategies connected to earlier experiences. These memories can become experiences you re-enact and learn to synchronise with, carrying the practice into Synchronised Psiduction, the fifth stage.</p><p>The <a href="https://www.laits.utexas.edu/memoria/Cicero.html" target="_blank" rel="noopener noreferrer">method of loci</a>, or memory palace, is an ancient technique traditionally attributed to the Greek poet Simonides of Ceos and described by Cicero in <em>De Oratore</em>. To learn its basic principle, imagine placing an image at a remembered doorway, then returning to that doorway to retrieve it. From there, the locations and the kinds of places you use are yours to imagine and create.</p><p>In Oscillatory Psiduction, you give memories their own cues and build paths among the entries in your palace. The relationships you recognise in Wave Psiduction can guide the connections you make between what you map; those connections can, in turn, reveal new relationships as your stream unfolds. The two practices feed one another, cycling experiences, meanings and their felt energies between the present stream and memory.</p></details>
-            <div class="loci-progression" data-loci-progression aria-label="Shape-by-shape memory progression"></div>
-          </section>`:''}
-        ${exercise==='open'?`<section class="open-introduction" aria-labelledby="open-introduction-title"><h2 id="open-introduction-title">Bringing the practice together</h2><p>Throughout these modules, you’ve been learning to stay aware of each event as it unfolds in consciousness. You’ve learned to let a sincere feeling of love arise from the heart, breathe with it and sustain and deepen its felt signal. Through Transmutation, you’ve practised honing a particular felt frequency and returning to it from a different state. With the method of loci, you’ve learned to map events in your stream to places along a familiar route, so that revisiting a place brings the event back to mind.</p><p>Now you’re ready to bring it all together. In Synchronised Psiduction, let these skills begin to work on autopilot while you stream. Stay aware as one event gives way to the next. As a memory surfaces, you might feel your breathing change. You can bring that bodily response into focus, sense the shift in your felt frequency and encode it at a familiar place. You can tune back to a frequency you remember or follow a new connection between the memory and what’s unfolding now. Let the stream itself suggest what comes next.</p><h2>Four meanings of synchronisation</h2><p><strong>First · Signal Psiduction.</strong> Synchronise with the body. Bring the sensations you have learned to notice into awareness as the stream unfolds. Notice their location, quality, intensity and movement, and how a sensation and an event in consciousness influence one another.</p><p><strong>Second · Frequency Psiduction.</strong> Synchronise with your felt state. Attend to the frequency you are experiencing, including the feeling of love cultivated through Heart Activation and the qualities explored through Transmutation. Notice how that state shapes the contents of consciousness and how those contents can, in turn, change the state. Practise returning to and adjusting a frequency as the stream continues.</p><p><strong>Third · Wave Psiduction.</strong> Synchronise with the movement and relationships within the stream. Let images, thoughts, sensations, feelings and meanings unfold, and notice the relationships and interdependencies that emerge among them. In this framework, a change in consciousness may involve a change in how these events come together and influence one another.</p><p><strong>Fourth · Oscillatory Psiduction.</strong> Synchronise the present stream with what you have mapped in memory. Move between the experience arising now and the places, connections and states you have encoded. Return to an earlier experience or frequency and bring it into relationship with the present, so that an embodied state and its associated strategies can be recognised and re-enacted.</p><p>Together, these four practices can move as one: bodily signals, felt frequency, the evolving stream and remembered experience continually inform one another. The project also proposes that each point of synchronisation has an internal and an external aspect, with consciousness, bodily action and the surrounding world meeting through movement in time and space. Within this framework, dimensional and energetic alignment may influence which possible realities become available to explore in consciousness. This proposed correspondence between inner and outer experience is at the heart of psi in the project.</p></section>`:''}
-        ${frequencyActive()?`<div class="training-body-steps training-frequency-modules" role="group" aria-label="Frequency Psiduction modules">${['integrated','heart','transmutation'].map(name=>`<button type="button" data-frequency-module="${name}" aria-pressed="${name==='heart'?exercise==='heart':exercise==='frequency'&&frequencyModule===name}">${name==='integrated'?'Frequency Practice':name==='heart'?'Heart Activation':'Transmutation'}</button>`).join('')}</div>`:''}
-        ${isTransmutation() ? `
-          <section class="open-introduction tm-intro" aria-labelledby="tm-intro">
-            <h2 id="tm-intro">Transmutation</h2>
-            <p>Begin as you did in Heart Activation. Let love arise from the heart, then shift into devotion and feel what changes. Bring back the quality you explored on the star below.</p>
-            <p>At Circle, stay with one quality for a full inhale and exhale. At the next inhale, enter the next quality. The next four shapes build blends of two, three, four and five. From Hexagon onwards, keep five present and follow the shading to expand or soften each quality.</p>
-            <p>The Agency hexagram is an example you can adapt or draw for yourself. Its twelve families represent qualities associated with the capacity to choose and act. Practise calling them up alone and together until you can recognise agency as a whole felt state.</p>
-            <p><strong>Energetic → emotional → meaning entrainment</strong> begins with a bodily shift. You might feel yourself steady, recognise resolve and sense what “I choose” means. As with love in Heart Activation, repeated practice may make that state easier to enter and sustain. This model proposes “cellular learning” as a possible explanation for how the nervous system comes to recognise agency more deeply.</p>
-          </section>
-          <section data-transmutation-map aria-label="Agency hexagram"></section>` : ''}
-        ${exercise==='body'&&stage.id!=='open-streaming'?`<p class="signal-cycle-intro"><strong>${esc(stage.name)} · ${signalLimit()} ${signalLimit()===1?'vector':'vectors'}</strong> — This shape brings ${signalLimit()===1?'one vector':'these '+signalLimit()+' vectors'} into practice and invites you to notice how ${signalLimit()===1?'it informs your experience':'they influence and depend on one another'}. Follow the highlighted vector for one complete inhale and exhale. At the next inhale, move to the next vector; continue in order, returning to the first until your chosen time ends. The bell marks each inhale and exhale.</p>`:''}
-        ${exercise==='heart'?`<p class="heart-progression-intro">Begin by bringing a sincere feeling of love forward from the heart. Each shape builds on the last, applying what you learned in Signal Psiduction to notice, deepen and sustain that feeling throughout your experience.</p>`:''}
+          <div id="loci-panel" role="tabpanel" aria-labelledby="loci-tab-${lociStep}">`:''}
+        <details class="practice-guide open-introduction${wave ? ' wave-guide' : ''}" data-guide-key="${esc(guideKey)}"${keepGuideOpen ? ' open' : ''}>
+          <summary>How to practise ${esc(exerciseNames[category])}</summary>
+          ${practiceInstructions()}
+        </details>
+        ${exercise==='unitive'?`<div class="loci-progression" data-loci-progression aria-label="Shape-by-shape memory progression"></div>`:''}
+        ${isTransmutation()?`<section data-transmutation-map aria-label="Agency hexagram"></section>`:''}
         <header ${isTransmutation()?'hidden':''} class="training-symbol-header${wave?' wave-header':''}"><h1 class="visually-hidden">${exercise==='open'?'Synchronised Psiduction':esc(stage.name)+(wave?' · '+esc(wave.name):'')}</h1><div class="training-page-symbol${exercise==='open'||stage.id==='open-streaming'?' training-page-symbol--open':stage.id==='half-circle'?' training-page-symbol--half-circle':''}"><span class="training-shape-ink" aria-hidden="true">${shapeIcon.replace('viewBox="0 0 240 240"',stage.id==='half-circle'?'viewBox="24 59 192 106"':'viewBox="24 24 192 192"')}</span>${exercise==='open'?'':signalShapeLabels(shapeIcon)}<div class="training-pacer" data-pacer><div data-orb class="training-orb" aria-hidden="true"></div>${wave?`<span class="wave-medallion"><small>${esc(stage.name)}</small><strong>${esc(wave.name)}</strong></span>`:''}<button type="button" class="training-pacer-start" data-start-orb aria-label="Start practice">Start</button><div class="training-breath-readout" data-breath-readout hidden><span data-breath-label aria-live="polite">Ready</span><small data-breath-count aria-hidden="true"></small></div></div></div><aside class="training-signal-explanation" data-signal-explanation hidden aria-label="${exercise==='open'?'Synchronised Psiduction guidance':'Shape pairing explanation'}"><div data-pair-details>${exercise==='open'?`<p class="eyebrow training-current-step">A RETURN TO THE STREAM</p><p class="training-prompt">Come back to this practice whenever you like. Notice what now arises naturally, without trying to use every skill.</p><p class="training-fine">You can begin here, or return after practising the other categories.</p>`:''}${wave?`<p class="eyebrow training-current-step">Picture this</p><p class="training-prompt">${esc(wave.example)}</p><p class="training-fine">${esc(wave.check)}</p><div class="wave-selected-relationship" data-wave-relationship ${stage.relationCount>12?'hidden':''} aria-live="polite"><span class="visually-hidden" data-wave-selected></span>`:''}<p class="eyebrow training-current-step" data-signal-pair></p><div class="training-prompt" data-signal-pairing></div><p class="training-fine" data-signal-example></p>${wave?'</div>':''}</div><div class="training-heart-instructions" data-heart-instructions hidden aria-label="Heart activation guidance"><p class="eyebrow training-current-step" data-heart-step></p><p class="training-prompt" data-heart-prompt aria-live="polite"></p><div class="training-body-instructions" data-unitive-body hidden aria-label="Body sensation guidance"><p class="eyebrow training-current-step" data-unitive-body-label></p><p class="training-prompt" data-unitive-body-prompt></p></div></div></aside></header>
         <div data-storage class="training-notice" role="status" hidden></div><p data-message class="training-message" role="status">${esc(announcement)}</p>
         <div class="training-layout"><div class="training-primary"><section class="training-panel" aria-labelledby="exercise-title">

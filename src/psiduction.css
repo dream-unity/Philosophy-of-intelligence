@@ -86,7 +86,44 @@
 #training-root .open-introduction p { font: 17px/1.65 var(--serif); margin: 0 0 14px; }
 @media (max-width: 600px) { #training-root .open-introduction { margin: 26px auto 30px; text-align: left; } #training-root .open-introduction p { font-size: 16px; } }
 
-#training-root .wave-guide { max-width: 72ch; text-align: start; }
+#training-root .practice-poem {
+  max-width: 65ch;
+  margin: clamp(22px, 3vw, 38px) auto 20px;
+  color: #39362e;
+  font: 400 clamp(18px, 1.45vw, 22px)/1.6 var(--serif);
+  text-align: center;
+}
+#training-root .practice-guide {
+  max-width: 72ch;
+  margin: 16px auto 28px;
+  text-align: start;
+  border-block: 1px solid var(--line);
+}
+#training-root .practice-guide > summary {
+  display: flex;
+  align-items: center;
+  gap: .65em;
+  min-height: 44px;
+  padding: .45em .15em;
+  list-style: none;
+  font: 500 clamp(17px, 1.3vw, 20px)/1.4 var(--serif);
+}
+#training-root .practice-guide > summary::-webkit-details-marker { display: none; }
+#training-root .practice-guide > summary::before {
+  content: '';
+  width: .44em;
+  height: .44em;
+  flex: none;
+  border: solid currentColor;
+  border-width: 2px 2px 0 0;
+  transform: rotate(45deg);
+}
+#training-root .practice-guide[open] { padding-bottom: 14px; }
+#training-root .practice-guide[open] > summary { margin-bottom: .5em; }
+#training-root .practice-guide[open] > summary::before { transform: rotate(135deg); }
+@media (max-width: 600px) {
+  #training-root .practice-poem { text-align: start; }
+}
 #training-root .wave-guide ol { margin: 0; padding-inline-start: 1.65em; }
 #training-root .wave-guide li + li { margin-top: 1em; }
 #training-root .wave-guide h3 { margin: 0 0 .2em; font: 600 1.12rem/1.4 var(--serif); }
@@ -146,12 +183,10 @@
 @media(max-width:700px){#training-root .lab-theory-section summary {font-size:19px;}#training-root .lab-theory-heading > p:last-child,#training-root .lab-theory-section p,#training-root .lab-references p {font-size:16px;}}
 
 /* signal pairings on shape */
-#training-root .heart-progression-intro {max-width:980px;margin:24px auto 18px;text-align:center;font:clamp(16px,1.3vw,19px)/1.55 var(--serif);color:#494336;}
 #training-root .signal-reflection-questions {margin:10px 0 12px;padding-left:1.15em;font:clamp(15px,1.2vw,18px)/1.42 var(--serif);color:#39362e;}
 #training-root .signal-reflection-questions li + li {margin-top:7px;}
 #training-root .signal-reflection-questions[hidden] {display:none!important;}
 @media(max-width:700px){#training-root .signal-reflection-questions {font-size:clamp(13px,2.5vw,16px);line-height:1.4;}#training-root .signal-reflection-questions li + li {margin-top:6px;}}
-#training-root .signal-cycle-intro {max-width:980px;margin:24px auto 18px;text-align:center;font:clamp(16px,1.3vw,19px)/1.55 var(--serif);color:#494336;}
 #training-root .signal-shape-labels {position:absolute;inset:0;z-index:4;pointer-events:none;}
 #training-root .signal-shape-label {position:absolute;transform:translate(-50%,-50%);pointer-events:auto;border:1px solid rgba(105,96,72,.40);border-radius:3px;background:rgba(239,233,218,.96);color:#39362e;padding:3px 5px;font-family:var(--serif);font-size:clamp(10px,.92vw,13px);line-height:1.08;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(60,52,35,.08);}
 #training-root .signal-shape-label.is-current {background:#514b3c;color:#fffaf0;border-color:#312d24;box-shadow:0 0 0 3px #e8dfc8,0 0 0 5px #6c6046;z-index:5;max-width:180px;overflow:visible;text-overflow:clip;white-space:normal;text-align:center;}

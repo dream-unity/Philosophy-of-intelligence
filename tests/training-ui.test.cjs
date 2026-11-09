@@ -183,6 +183,57 @@ function harness(options = {}) {
   };
 }
 
+test('each Psiduction category opens with its own poem and a collapsed practice guide', () => {
+  const page = harness();
+  const poems = new Set();
+
+  function checkIntroduction(extraControls = []) {
+    const poem = page.q('.practice-poem');
+    const guide = page.q('.practice-guide');
+    assert.equal(page.host.querySelectorAll('.practice-poem').length, 1);
+    assert.equal(page.host.querySelectorAll('.practice-guide').length, 1);
+    assert.equal(guide.tagName, 'DETAILS');
+    assert.equal(guide.open, false);
+    assert.equal(guide.children[0].tagName, 'SUMMARY');
+    assert.match(guide.children[0].textContent, /How to practise/i);
+    assert.ok(guide.children.length > 1, 'the disclosure contains practice guidance');
+    for (const selector of ['.practice-poem', '[data-exercise]', '[data-start-toolbar]', ...extraControls]) {
+      page.q(selector);
+      assert.equal(guide.querySelector(selector), null, selector + ' belongs outside the collapsed guide');
+    }
+    assert.ok(poem.textContent.trim());
+    return poem.textContent.trim();
+  }
+
+  const wave = checkIntroduction();
+  poems.add(wave);
+  assert.match(wave, /Inside your mind.*ad astra/s);
+  const waveGuide = page.q('.practice-guide');
+  assert.deepEqual(waveGuide.querySelector('ol').children.map(step => step.querySelector('h3').textContent), [
+    'Establish your baseline', 'Notice patterns in the stream', 'Bring in the breath',
+    'Build your reasoning through the shapes', 'Add the method of loci'
+  ]);
+  waveGuide.open = true;
+  page.selectExercise('body');
+  poems.add(checkIntroduction());
+  page.selectExercise('frequency');
+  const frequency = checkIntroduction(['[data-frequency-module]']);
+  poems.add(frequency);
+  page.click('[data-frequency-module="heart"]');
+  assert.equal(checkIntroduction(['[data-frequency-module]']), frequency);
+  page.click('[data-frequency-module="transmutation"]');
+  assert.equal(checkIntroduction(['[data-frequency-module]', '[data-transmutation-map]']), frequency);
+
+  page.selectExercise('unitive');
+  poems.add(checkIntroduction(['[data-loci-tab]', '[data-loci-progression]', '[data-loci-continue]']));
+  page.selectExercise('open');
+  poems.add(checkIntroduction());
+  assert.equal(poems.size, 5);
+  page.selectExercise('stream');
+  assert.equal(checkIntroduction(), wave);
+  page.app.destroy();
+});
+
 test('guided rehearsal preserves receive, encode, retrieve, compare order and synchronizes the complete model', () => {
   const page=harness();
   page.openExamples();
