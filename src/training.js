@@ -2667,11 +2667,33 @@
         <h2 class="training-category-title" id="unity-psiduction-title">Unity Psiduction</h2>
         <div class="training-exercises" role="group" aria-labelledby="unity-psiduction-title">${['body','frequency','stream','unitive','open'].map(name=>`<button type="button" data-exercise="${name}" aria-pressed="${name==='frequency'?frequencyActive():exercise===name}">${exerciseNames[name]} <small hidden>${ready[name]?'Self-assessed: ready':''}</small></button>`).join('')}</div>
         ${exercise==='stream'?`
-          <section class="open-introduction" aria-labelledby="wave-breath-title">
-            <h2 id="wave-breath-title">Using the breath metronome</h2>
-            <p>Tap Start in the shape. Each full breath is one n-back turn. As the metronome expands, inhale and notice a relationship. As it contracts, exhale and name it silently. For <strong>1-back</strong>, finish the exhale by recalling the previous breath’s relationship and comparing the two.</p>
-            <p>On breath one, picture the wood holding a pencil’s core steady. On breath two, picture the core marking paper. What held it steady enough to make that mark? Use the same rhythm with every shape. For <strong>2-back</strong>, recall the relationship from two breaths ago.</p>
-            <p>Once you have started, gently close your eyes and allow your inner world to unfold before you. You may notice an image, a memory, a word, a feeling or a sensation. It does not have to be vivid. Stay with what you know or sense is there, and allow its vividness to deepen as fully as it naturally can, without forcing it. Follow what arises and notice how one experience leads to or influences another. If nothing comes to mind, begin with the pencil example or imagine a familiar place, then allow the next detail to emerge. As you breathe, notice a relationship within what is unfolding and bring the earlier one back to compare. With the guided rhythm, you can enable the bell to hear each inhale and exhale while your eyes are closed; open them whenever you need to check the guide.</p>
+          <section class="open-introduction wave-guide" aria-labelledby="wave-guide-title">
+            <h2 id="wave-guide-title">How to practise Wave Psiduction</h2>
+            <ol>
+              <li>
+                <h3>Establish your baseline</h3>
+                <p>Gently close your eyes, breathe normally and let your inner world unfold. You may notice an image, a memory, a word, a feeling or a sensation. Stay with what you sense, however faint, and let its vividness deepen naturally. If you need somewhere to begin, picture a familiar place and let the next detail emerge. See how the stream develops on its own. Add each step below only when the preceding one feels comfortable.</p>
+              </li>
+              <li>
+                <h3>Notice patterns in the stream</h3>
+                <p>As you follow the stream, notice what recurs and how one experience leads to another. A pencil might bring a classroom to mind, then the sound of your teacher’s voice. See if you can recognise what brought the teacher to mind while the stream continues.</p>
+              </li>
+              <li>
+                <h3>Bring in the breath</h3>
+                <p>When relationships are easy to notice, tap <strong>Start</strong> in the shape. As the circle expands, inhale and notice a relationship. As it contracts, exhale and name the relationship silently. Turn on the bell if you want to follow the rhythm with your eyes closed.</p>
+                <details class="wave-detail"><summary>Compare relationships across breaths</summary>
+                  <p>Once the rhythm feels familiar, use each full breath as one turn. On breath one, picture the wood holding a pencil’s core steady. On breath two, picture the core marking paper. For <strong>1-back</strong>, bring back the first relationship as you finish the second exhale. How did the wood help the core make that mark? For <strong>2-back</strong>, compare the present relationship with the one from two breaths ago.</p>
+                </details>
+              </li>
+              <li>
+                <h3>Build your reasoning through the shapes</h3>
+                <p>Each shape builds on a way of reasoning you have already practised. Circle asks you to notice one relationship, such as how the wood holds the pencil’s core steady. Half-circle asks you to distinguish a second relationship between the same two things. The wood also hides most of the core. Triangle asks how three relationships work together as a system. Stay with each shape until you recognise its kind of relationship naturally in your own stream, even without the shape as a prompt. Then carry that way of seeing into the next shape.</p>
+              </li>
+              <li>
+                <h3>Add the method of loci</h3>
+                <p>When you can follow the stream and recognise these relationships comfortably, open <strong>Oscillatory Psiduction</strong>. Give each relationship a place along a familiar route. At your front door, picture the wood holding the core steady. At your kitchen table, see the core tracing a line on paper. Revisit each place to recall what happened there, then return to the unfolding stream.</p>
+              </li>
+            </ol>
           </section>`:''}
         ${exercise==='unitive'?`
           <div class="training-body-steps loci-tabs" role="tablist" aria-label="Oscillatory Psiduction practice steps">
