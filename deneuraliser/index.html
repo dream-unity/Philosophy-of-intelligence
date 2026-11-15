@@ -93,12 +93,15 @@ h1, h2, h3 { font-weight: 400; text-wrap: balance; }
 .breaths span { border-radius: 50%; }
 .breaths span[aria-current], .breaths span.active { color: var(--olive); }
 .progress { display: flex; align-items: stretch; gap: 0; margin-block: .75rem; border-block: 1px solid var(--rule); }
-.progress > span {
+.progress > button {
+  border: 0; background: transparent; min-height: 44px; cursor: pointer; touch-action: manipulation;
   flex: 1; min-width: 0; padding: .62rem .25rem; text-align: center; position: relative;
   font: .72rem/1.35 var(--mono); color: var(--quiet);
 }
-.progress > span + span { border-left: 1px solid var(--rule); }
-.progress > [aria-current="step"] { color: var(--olive); background: #e4e6d7; box-shadow: inset 0 -2px var(--olive); }
+.progress > button:hover { background: #edece1; color: var(--ink); }
+.progress > button:focus-visible { outline-offset: -3px; }
+.progress > button + button { border-left: 1px solid var(--rule); }
+.progress > [aria-selected="true"] { color: var(--olive); background: #e4e6d7; box-shadow: inset 0 -2px var(--olive); }
 .toolbar, .controls { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
 .toolbar { margin-block: .55rem 1.25rem; }
 .controls { margin-top: 1.2rem; }
@@ -144,7 +147,7 @@ textarea::placeholder, input::placeholder { color: #686d60; }
   .shape-button { max-width: 255px; }
   .shape-caption .vector { font-size: 1.65rem; }
   .field { padding: 0; border: 0; }
-  .progress > span { font-size: .65rem; overflow-wrap: anywhere; }
+  .progress > button { font-size: .65rem; overflow-wrap: anywhere; }
   .toolbar, .controls { gap: .45rem; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -174,7 +177,8 @@ textarea::placeholder, input::placeholder { color: #686d60; }
 <div class="intro"><div class="eyebrow">Guided practice</div><h1>Deneuraliser</h1><p class="lead">Catch the rule your mind is following. See what changes when, for one breath, you give yourself a choice.</p></div>
 <noscript>This practice needs JavaScript to move between breaths and shapes.</noscript>
 <section id="session" aria-label="Shape practice">
-<div class="progress" id="progress" aria-label="Shape sequence"></div>
+<div class="progress" id="progress" role="tablist" aria-label="Shape levels"></div>
+<div id="shape-panel" role="tabpanel" aria-labelledby="tab-circle">
 <div class="workbench">
 <section class="inquiry"><p class="eyebrow" id="stage-number">Stage 1 of 5</p><h2 id="question">What were you already trying to do as you arrived here?</h2><p id="guidance"></p><details id="example-box"><summary>See an example</summary><p id="example"></p></details></section>
 <div class="instrument"><button type="button" class="shape-button" id="shape-button" aria-label="Begin practice"><svg id="drawing" viewBox="0 0 320 320" aria-hidden="true"></svg><span class="shape-caption"><span class="shape-name" id="shape-name">Circle</span><strong class="vector" id="vector">Awareness</strong><span id="shape-action" class="shape-action">Begin practice</span></span></button><div class="breaths" id="breaths" aria-hidden="true"></div><p class="phase" id="phase" role="status"></p></div>
@@ -183,7 +187,7 @@ textarea::placeholder, input::placeholder { color: #686d60; }
 <p class="compact" id="previous" hidden></p><label id="note-label" for="note">A few words <small>(optional)</small></label><textarea id="note" rows="2" placeholder="What did you notice?" autocomplete="off"></textarea><small class="muted">Your words stay in this tab and clear when you restart, reload or close it.</small></section>
 </div>
 <div class="toolbar"><p id="cue" class="compact"></p><div class="controls"><button class="btn" id="back" type="button" hidden>Back</button><button class="btn primary" id="advance" type="button">Begin practice</button></div></div>
-</section>
+</div></section>
 <section class="endcard" id="finish" hidden aria-labelledby="finish-title"><p class="eyebrow">Reflection</p><h2 id="finish-title" tabindex="-1">What would you recognise next time?</h2><p>Recall the first sign that the rule was guiding you. If it appears again today, what might you choose to do?</p><dl id="reflections"></dl><div class="controls"><button type="button" class="btn" id="revisit">Revisit sphere</button><button type="button" class="btn primary" id="restart">Start a fresh practice</button></div></section>
 </main>
 <script>window.deneuraliserContent = {
@@ -297,20 +301,50 @@ function drawShape(id) {
   $('drawing').innerHTML = `<g fill="none" stroke="currentColor" stroke-width=".8" opacity=".36"><circle cx="160" cy="160" r="153"/>${ticks}</g><g fill="none" stroke="currentColor" stroke-width="1.65">${paths[id]}</g>`;
   $('shape-button').dataset.shape = id;
 }
-function makeSpan(value) {
-  const span = document.createElement('span');
-  span.textContent = value;
-  return span;
+// Keep the controls mounted so changing a level preserves keyboard focus.
+const lastBreaths = stages.map(() => 0);
+const tabs = stages.map((stage, index) => {
+  const tab = document.createElement('button');
+  tab.type = 'button';
+  tab.id = 'tab-' + stage.id;
+  tab.setAttribute('role', 'tab');
+  tab.setAttribute('aria-controls', 'shape-panel');
+  tab.textContent = `${index + 1}. ${stage.shape}`;
+  tab.addEventListener('click', () => openLevel(index));
+  tab.addEventListener('keydown', event => {
+    let target;
+    switch (event.key) {
+      case 'ArrowLeft': target = (index + stages.length - 1) % stages.length; break;
+      case 'ArrowRight': target = (index + 1) % stages.length; break;
+      case 'Home': target = 0; break;
+      case 'End': target = stages.length - 1; break;
+      default: return;
+    }
+    event.preventDefault();
+    openLevel(target);
+    tabs[target].focus();
+  });
+  return tab;
+});
+$('progress').append(...tabs);
+
+function openLevel(index) {
+  step = index;
+  breath = lastBreaths[index];
+  started = true;
+  $('example-box').open = false;
+  render();
 }
 function render() {
   const stage = stages[step];
   const lastBreath = breath === stage.breaths.length - 1;
   const nextAction = !started ? 'Begin practice' : stage.id === 'square' && breath === 1 ? 'Deneuralise' : !lastBreath ? 'Next breath' : step === stages.length - 1 ? 'Finish practice' : `Continue to ${stages[step + 1].shape.toLowerCase()}`;
-  $('progress').replaceChildren(...stages.map((item, i) => {
-    const span = makeSpan(`${i + 1}. ${item.shape}`);
-    if (step === i) span.setAttribute('aria-current', 'step');
-    return span;
-  }));
+  lastBreaths[step] = breath;
+  tabs.forEach((tab, index) => {
+    tab.setAttribute('aria-selected', String(index === step));
+    tab.tabIndex = index === step ? 0 : -1;
+  });
+  $('shape-panel').setAttribute('aria-labelledby', tabs[step].id);
   $('stage-number').textContent = `Stage ${step + 1} of ${stages.length}`;
   $('question').textContent = stage.prompt;
   $('guidance').textContent = stage.guidance;
@@ -398,6 +432,7 @@ $('restart').addEventListener('click', () => {
   breath = 0;
   started = false;
   notes = stages.map(() => '');
+  lastBreaths.fill(0);
   $('reflections').replaceChildren();
   $('example-box').open = false;
   $('lens').selectedIndex = 0;
