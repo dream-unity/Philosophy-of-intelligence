@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#f0e9d6">
+  <title>Deneuraliser · Philosophy of Intelligence</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='9' fill='%23f0e9d6'/%3E%3Cg fill='none' stroke='%2350523a' stroke-width='2'%3E%3Ccircle cx='24' cy='24' r='17'/%3E%3Cpath d='M24 7 39 33H9Z'/%3E%3C/g%3E%3C/svg%3E">
+  <style>:root {
+  color-scheme: light;
+  --paper: #f5f1e7;
+  --paper-deep: #eae6d8;
+  --ink: #282b24;
+  --quiet: #5e6254;
+  --olive: #474f38;
+  --gold: #897348;
+  --rule: #bfbbaa;
+  --serif: Georgia, "Times New Roman", serif;
+  --sans: "Trebuchet MS", Arial, sans-serif;
+  --mono: ui-monospace, "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { min-height: 100%; }
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--ink);
+  background: radial-gradient(ellipse at 52% 4%, #faf7ef 0, transparent 65%), var(--paper);
+  font: 1rem/1.5 var(--serif);
+}
+button, input, textarea, select { color: inherit; font: inherit; }
+button, select, summary { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--olive); outline-offset: 4px; }
+::selection { color: #26311e; background: #d7debd; }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { font-weight: 400; text-wrap: balance; }
+.shell { width: min(1240px, calc(100% - clamp(34px, 8vw, 128px))); margin: 0 auto; padding-bottom: clamp(36px, 6vw, 86px); }
+.mast {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  min-height: 62px; border-bottom: 1px solid var(--rule);
+  font: 500 .94rem/1.3 var(--serif); letter-spacing: .02em;
+}
+.mast .brand { display: inline-flex; gap: .55rem; align-items: center; }
+.mast img, .mast .brand > svg { width: 27px; height: 27px; }
+.edition, .eyebrow, .phase, .shape-name {
+  font: 500 .68rem/1.45 var(--mono); text-transform: uppercase; letter-spacing: .13em;
+}
+.edition, .eyebrow { color: var(--quiet); }
+.intro { max-width: 880px; padding: clamp(28px, 4.2vw, 60px) 0 clamp(22px, 3.5vw, 42px); }
+.intro h1 {
+  font-size: clamp(3.3rem, 8.1vw, 6.55rem); line-height: 1.08;
+  letter-spacing: -.068em; margin: .1em 0 .14em -.045em;
+}
+.lead { font-size: clamp(1.05rem, 1.6vw, 1.27rem); line-height: 1.5; max-width: 65ch; color: #494d40; }
+.workbench {
+  border-top: 1px solid #8c907d; border-bottom: 1px solid #8c907d;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 1.3fr) minmax(0, 1fr);
+  padding-block: clamp(20px, 3vw, 38px); align-items: start;
+}
+.inquiry, .field, .instrument { min-width: 0; }
+.inquiry { padding-right: clamp(15px, 2.4vw, 34px); }
+.field { padding-left: clamp(15px, 2.4vw, 34px); }
+.inquiry, .field { display: grid; gap: .85rem; align-content: start; }
+.inquiry h2, .field h2, .endcard h2 { font-size: clamp(1.5rem, 2.4vw, 2.15rem); line-height: 1.17; letter-spacing: -.035em; }
+.field h3, .inquiry h3 { font-size: 1.24rem; line-height: 1.3; }
+.inquiry p, .field p, .endcard p, .field li { overflow-wrap: break-word; }
+.inquiry p + p, .field p + p, .endcard p + p { margin-top: .58rem; }
+.instrument {
+  display: flex; flex-flow: column nowrap; align-items: center; justify-content: center;
+  position: relative; isolation: isolate; text-align: center;
+  padding: .15rem clamp(8px, 1.35vw, 20px) .6rem;
+  border-inline: 1px solid var(--rule);
+}
+.shape-button {
+  width: min(100%, 350px); aspect-ratio: 1; position: relative; display: block; padding: 0;
+  margin: 0 auto; border: 0; border-radius: 50%; color: var(--olive); background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+.shape-button svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.shape-button:focus-visible { outline-offset: 0; }
+.shape-caption {
+  width: 62%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  display: grid; place-items: center; gap: .18rem; color: var(--ink); pointer-events: none;
+}
+.shape-caption .vector { font: 400 clamp(1.23rem, 2.5vw, 2.06rem)/1.03 var(--serif); letter-spacing: -.045em; text-wrap: balance; }
+.shape-caption .shape-name { font-size: clamp(.6rem, 1vw, .72rem); }
+.shape-button:disabled { cursor: default; opacity: 1; }
+.phase { color: var(--olive); }
+.guide { color: var(--quiet); line-height: 1.5; }
+.breaths { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .45rem; margin: .5rem 0; }
+.breaths span { border-radius: 50%; }
+.breaths span[aria-current], .breaths span.active { color: var(--olive); }
+.progress { display: flex; align-items: stretch; gap: 0; margin-block: .75rem; border-block: 1px solid var(--rule); }
+.progress > span {
+  flex: 1; min-width: 0; padding: .62rem .25rem; text-align: center; position: relative;
+  font: .72rem/1.35 var(--mono); color: var(--quiet);
+}
+.progress > span + span { border-left: 1px solid var(--rule); }
+.progress > [aria-current="step"] { color: var(--olive); background: #e4e6d7; box-shadow: inset 0 -2px var(--olive); }
+.toolbar, .controls { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
+.toolbar { margin-block: .55rem 1.25rem; }
+.controls { margin-top: 1.2rem; }
+.btn, select {
+  display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 42px;
+  padding: .6rem 1.05rem; border: 1px solid #9b9d8d; border-radius: 4px; background: transparent;
+  font: 600 .82rem/1.32 var(--sans); text-decoration: none; letter-spacing: .01em;
+}
+select { display: inline-block; max-width: 100%; background: var(--paper); }
+.btn:hover { background: #e8e8da; border-color: var(--olive); }
+.btn.primary { color: #fffdf6; background: var(--olive); border-color: var(--olive); }
+.btn.primary:hover { background: #38412b; }
+.btn:disabled { color: #74776d; background: #edece3; border-color: #cecec2; cursor: default; }
+details { border-top: 1px solid var(--rule); padding: .7rem 0 .1rem; }
+summary { width: fit-content; color: var(--olive); font: 600 .83rem/1.4 var(--sans); }
+details[open] > summary { margin-bottom: .6rem; }
+textarea, input[type="text"] {
+  width: 100%; border: 1px solid var(--rule); border-radius: 3px; background: #fbf9f2;
+  padding: .7rem .8rem; color: var(--ink); line-height: 1.5;
+}
+textarea { min-height: 6rem; resize: vertical; }
+textarea::placeholder, input::placeholder { color: #686d60; }
+.muted { color: var(--quiet); }
+.compact { font-size: .88rem; }
+.endcard { margin-top: 1rem; padding: clamp(20px, 3.5vw, 42px); border: 1px solid var(--rule); background: #f9f6ee; }
+.endcard h2, .endcard h3 { margin-bottom: .6rem; }
+.endcard p { max-width: 68ch; }
+@media (max-width: 800px) {
+  .shell { width: calc(100% - 2.5rem); }
+  .workbench { grid-template-columns: minmax(0, 1fr) minmax(200px, 1fr); row-gap: 1.25rem; }
+  .instrument { border-right: 0; }
+  .field { grid-column: 1/-1; border-top: 1px solid var(--rule); padding: 1.1rem 0 0; }
+}
+@media (max-width: 540px) {
+  .shell { width: calc(100% - 2rem); }
+  .mast { min-height: 50px; }
+  .mast .edition { font-size: .59rem; letter-spacing: .06em; text-align: right; }
+  .intro { padding-top: 1.5rem; padding-bottom: 1.25rem; }
+  .intro h1 { font-size: clamp(2.85rem, 13.5vw, 4.5rem); }
+  .workbench { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+  .inquiry { padding: 0; }
+  .instrument { padding: .75rem 0; border-inline: 0; border-block: 1px solid var(--rule); }
+  .shape-button { max-width: 255px; }
+  .shape-caption .vector { font-size: 1.65rem; }
+  .field { padding: 0; border: 0; }
+  .progress > span { font-size: .65rem; overflow-wrap: anywhere; }
+  .toolbar, .controls { gap: .45rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+#entry {display:grid;gap:.65rem}
+#entry select {width:100%}
+.guide h3 {color:var(--ink);margin-top:.5rem}
+.guide p + h3 {margin-top:1rem}
+.breaths span {height:6px;width:6px;border:1px solid var(--gold)}
+.breaths .filled {background:var(--gold)}
+.shape-action {margin-top:.45rem; padding:.27rem .65rem; background:var(--olive);color:#fffdf6;border-radius:2rem;font:500 .68rem/1.2 var(--sans)}
+.shape-button:hover .shape-action {background:#31382a}
+.shape-button[data-shape="triangle"] .shape-caption {top:55%}
+.shape-button[data-shape="sphere"] .shape-caption {border-radius:50%;background:radial-gradient(ellipse closest-side,var(--paper) 85%,transparent 150%)}
+.toolbar {justify-content:space-between;margin-top:1.1rem}
+.toolbar .controls {margin:0}
+#reflections {max-width:52rem}
+#reflections dt {font:600 .8rem var(--sans);color:var(--olive);margin-top:1.1rem}
+#reflections dd {margin:.25rem 0 .8rem;white-space:pre-wrap;overflow-wrap:anywhere}
+#previous {white-space:pre-wrap;overflow-wrap:anywhere;color:var(--olive);border-left:2px solid var(--gold);padding-left:.8rem}
+@media(max-width:540px){.shape-action{font-size:.65rem}.progress{margin-top:0}.workbench{padding-top:1rem}.guide p{margin:.2rem 0 .5rem}.controls .btn{min-height:44px}}
+</style>
+</head>
+<body><main class="shell">
+<header class="mast"><span class="brand"><svg width="28" height="28" viewBox="0 0 36 36" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="18" cy="18" r="16"/><path d="M18 2 32 26H4Z"/><circle cx="18" cy="18" r="7"/></svg> Philosophy of Intelligence</span><span class="edition">Psiduction</span></header>
+<div class="intro"><div class="eyebrow">Guided practice</div><h1>Deneuraliser</h1><p class="lead">Catch the rule your mind is following. See what changes when, for one breath, you give yourself a choice.</p></div>
+<noscript>This practice needs JavaScript to move between breaths and shapes.</noscript>
+<section id="session" aria-label="Shape practice">
+<div class="progress" id="progress" aria-label="Shape sequence"></div>
+<div class="workbench">
+<section class="inquiry"><p class="eyebrow" id="stage-number">Stage 1 of 5</p><h2 id="question">What were you already trying to do as you arrived here?</h2><p id="guidance"></p><details id="example-box"><summary>See an example</summary><p id="example"></p></details></section>
+<div class="instrument"><button type="button" class="shape-button" id="shape-button" aria-label="Begin practice"><svg id="drawing" viewBox="0 0 320 320" aria-hidden="true"></svg><span class="shape-caption"><span class="shape-name" id="shape-name">Circle</span><strong class="vector" id="vector">Awareness</strong><span id="shape-action" class="shape-action">Begin practice</span></span></button><div class="breaths" id="breaths" aria-hidden="true"></div><p class="phase" id="phase" role="status"></p></div>
+<section class="field"><div id="entry"><label class="eyebrow" for="lens">Starting point</label><select id="lens"></select><p id="lens-prompt"></p></div>
+<div id="breath-guide" class="guide" hidden><p class="eyebrow" id="breath-label"></p><h3>Inhale</h3><p id="inhale"></p><h3>Exhale</h3><p id="exhale"></p></div>
+<p class="compact" id="previous" hidden></p><label id="note-label" for="note">A few words <small>(optional)</small></label><textarea id="note" rows="2" placeholder="What did you notice?" autocomplete="off"></textarea><small class="muted">Your words stay in this tab and clear when you restart, reload or close it.</small></section>
+</div>
+<div class="toolbar"><p id="cue" class="compact"></p><div class="controls"><button class="btn" id="back" type="button" hidden>Back</button><button class="btn primary" id="advance" type="button">Begin practice</button></div></div>
+</section>
+<section class="endcard" id="finish" hidden aria-labelledby="finish-title"><p class="eyebrow">Reflection</p><h2 id="finish-title" tabindex="-1">What would you recognise next time?</h2><p>Recall the first sign that the rule was guiding you. If it appears again today, what might you choose to do?</p><dl id="reflections"></dl><div class="controls"><button type="button" class="btn" id="revisit">Revisit sphere</button><button type="button" class="btn primary" id="restart">Start a fresh practice</button></div></section>
+</main>
+<script>window.deneuraliserContent = {
+  lenses: [
+    {
+      id: "reaction",
+      label: "Follow a reaction",
+      prompt: "Recall the last thing that made you lean in, pull away or hurry. What did it seem to mean to you at the time?"
+    },
+    {
+      id: "instruction",
+      label: "Catch an instruction",
+      prompt: "What do you feel you ought to do next? Imagine waiting a moment. What do you expect would happen?"
+    },
+    {
+      id: "compare",
+      label: "Compare two states",
+      prompt: "Recall doing this same activity on a day when it felt different. What mattered to you then? What matters today?"
+    }
+  ],
+  stages: [
+    {
+      id: "circle",
+      shape: "Circle",
+      vector: "Awareness",
+      prompt: "What were you already trying to do as you arrived here?",
+      guidance: "Include the words, sensations and impulses you notice. If your first answer is “I’m reading”, linger on what you came to these words hoping to find.",
+      example: "“I was already looking ahead to see how much I could learn. I felt a little impatient before I had even begun.”",
+      breaths: [
+        { inhale: "Take in the whole moment.", exhale: "Remember one detail as it is now." },
+        { inhale: "Notice what you feel drawn to do.", exhale: "What has shifted since one breath ago?" },
+        { inhale: "Let a word, image or sensation come forward.", exhale: "Which detail still belongs to the moment you began with?" },
+        { inhale: "Take in the whole moment again.", exhale: "Compare now with three breaths ago. What has stayed with you?" }
+      ]
+    },
+    {
+      id: "semicircle",
+      shape: "Half-circle",
+      vector: "Attention",
+      prompt: "Which part keeps drawing your attention back?",
+      guidance: "Let the dividing line mark what you selected from everything you noticed. Look once at what fell outside your focus.",
+      example: "“I keep checking whether I understand. When I stop checking for a moment, I notice that the shape itself interests me.”",
+      breaths: [
+        { inhale: "Choose one detail from the circle.", exhale: "Remember where your attention settled." },
+        { inhale: "Notice where your attention goes next.", exhale: "Compare its direction with one breath ago." },
+        { inhale: "Notice something just outside your focus.", exhale: "What makes the original detail draw you back, if it does?" },
+        { inhale: "Allow your attention to choose again.", exhale: "Compare its pull with three breaths ago." }
+      ]
+    },
+    {
+      id: "triangle",
+      shape: "Triangle",
+      vector: "First system",
+      prompt: "What are you doing, what do you expect, and what feels at stake?",
+      guidance: "Give each corner a part of this moment. Trace how your expectation makes your action seem sensible, and why its outcome matters to you.",
+      example: "“I reread the instruction. I expect a right answer. Getting it right would tell me I’m making progress.”",
+      breaths: [
+        { inhale: "Catch the action, even if it is happening entirely in thought.", exhale: "Name what you were trying to do." },
+        { inhale: "What outcome were you expecting?", exhale: "Relate the expectation to the action from one breath ago." },
+        { inhale: "Imagine a different outcome.", exhale: "What, if anything, would that outcome mean to you?" },
+        { inhale: "Hold the action, expectation and stakes together.", exhale: "Return to the action from three breaths ago. How do you understand it now?" }
+      ]
+    },
+    {
+      id: "square",
+      shape: "Square",
+      vector: "Container",
+      prompt: "What unspoken rule would make this moment make sense?",
+      guidance: "Try the words “It seems I’m treating … as true.” You can revise them or leave the question open. To deneuralise, keep the rule in view while giving yourself one ordinary breath to choose what to do.",
+      example: "“I seem to be treating quick understanding as proof of progress. For one breath, I can leave the question open and see where my attention goes.”",
+      breaths: [
+        { inhale: "Try a few words for the rule you sense.", exhale: "Remember how the moment feels while following it." },
+        { inhale: "Notice what the rule asks you to do next.", exhale: "Compare that impulse with one breath ago." },
+        { inhale: "Let the rule be there. Give yourself a moment to choose.", exhale: "What did you find yourself doing with that freedom?" },
+        { inhale: "Notice what the same situation feels like now.", exhale: "Compare now with three breaths ago. A similar feeling counts too." }
+      ]
+    },
+    {
+      id: "sphere",
+      shape: "Sphere",
+      vector: "Global coherence",
+      prompt: "Where else does this pattern fit? Where does your experience differ?",
+      guidance: "Bring to mind one familiar situation and one exception. See how well the words you chose account for both, then return to what is happening here.",
+      example: "“I rush to understand when someone is watching. Playing a new song alone, I enjoy working it out slowly. Perhaps being observed is part of the pattern.”",
+      breaths: [
+        { inhale: "Recall the rule as it felt in this session.", exhale: "Keep one detail of this moment in mind." },
+        { inhale: "Recall another occasion when it seemed to apply.", exhale: "What does that occasion share with one breath ago?" },
+        { inhale: "Recall a similar occasion that felt different.", exhale: "What changed between the two situations?" },
+        { inhale: "Return to this moment with both occasions in view.", exhale: "Compare now with three breaths ago. Which words for the pattern still fit?" }
+      ]
+    }
+  ]
+};
+</script>
+<script>'use strict';
+const { stages, lenses } = window.deneuraliserContent;
+const $ = id => document.getElementById(id);
+const paths = {
+  circle: '<circle cx="160" cy="160" r="115"/>',
+  semicircle: '<path d="M35 218a125 125 0 0 1 250 0Z"/>',
+  triangle: '<path d="M160 37 293 249H27Z"/>',
+  square: '<rect x="62" y="62" width="196" height="196"/>',
+  sphere: '<circle cx="160" cy="160" r="113"/><g opacity=".42"><ellipse cx="160" cy="160" rx="64" ry="113"/><path d="M54 121q106 -55 212 0M54 199q106 55 212 0"/></g>'
+};
+let step = 0;
+let breath = 0;
+let started = false;
+let notes = stages.map(() => '');
+function drawShape(id) {
+  const ticks = Array.from({length:72}, (_, i) => `<path transform="rotate(${i * 5} 160 160)" d="M160 8v${i % 6 === 0 ? 8 : 3}"/>`).join('');
+  $('drawing').innerHTML = `<g fill="none" stroke="currentColor" stroke-width=".8" opacity=".36"><circle cx="160" cy="160" r="153"/>${ticks}</g><g fill="none" stroke="currentColor" stroke-width="1.65">${paths[id]}</g>`;
+  $('shape-button').dataset.shape = id;
+}
+function makeSpan(value) {
+  const span = document.createElement('span');
+  span.textContent = value;
+  return span;
+}
+function render() {
+  const stage = stages[step];
+  const lastBreath = breath === stage.breaths.length - 1;
+  const nextAction = !started ? 'Begin practice' : stage.id === 'square' && breath === 1 ? 'Deneuralise' : !lastBreath ? 'Next breath' : step === stages.length - 1 ? 'Finish practice' : `Continue to ${stages[step + 1].shape.toLowerCase()}`;
+  $('progress').replaceChildren(...stages.map((item, i) => {
+    const span = makeSpan(`${i + 1}. ${item.shape}`);
+    if (step === i) span.setAttribute('aria-current', 'step');
+    return span;
+  }));
+  $('stage-number').textContent = `Stage ${step + 1} of ${stages.length}`;
+  $('question').textContent = stage.prompt;
+  $('guidance').textContent = stage.guidance;
+  const previous = $('previous');
+  previous.hidden = step !== 4 || !notes[3].trim();
+  previous.textContent = previous.hidden ? '' : `Your words at the square: ${notes[3]}`;
+  $('example').textContent = stage.example;
+  $('entry').hidden = started;
+  $('breath-guide').hidden = !started;
+  $('breath-label').textContent = `Breath ${breath + 1} of ${stage.breaths.length}`;
+  $('inhale').textContent = step === 0 && breath === 0 ? lenses.find(lens => lens.id === $('lens').value).prompt : stage.breaths[breath].inhale;
+  $('exhale').textContent = stage.breaths[breath].exhale;
+  $('shape-name').textContent = stage.shape;
+  $('vector').textContent = stage.vector;
+  $('shape-action').textContent = nextAction;
+  $('shape-button').setAttribute('aria-label', `${stage.shape}, ${stage.vector}. ${nextAction}`);
+  $('advance').textContent = nextAction;
+  $('back').hidden = !started;
+  $('breaths').replaceChildren(...stage.breaths.map((_, i) => {
+    const span = document.createElement('span');
+    if (started && i <= breath) span.classList.add('filled');
+    return span;
+  }));
+  $('phase').textContent = started ? `${stage.shape} · Breath ${breath + 1} of 4` : '5 shapes · 4 breaths each';
+  $('cue').textContent = started ? 'Move on after your exhale. Take as long as you like.' : 'Tap the shape to begin. Breathe at your own pace.';
+  $('note').value = notes[step];
+  drawShape(stage.id);
+}
+function advance() {
+  if (!started) started = true;
+  else if (breath < 3) breath++;
+  else if (step < stages.length - 1) {
+    step++;
+    breath = 0;
+    $('example-box').open = false;
+  } else {
+    finish();
+    return;
+  }
+  render();
+}
+function back() {
+  if (breath > 0) breath--;
+  else if (step > 0) {
+    step--;
+    breath = 3;
+    $('example-box').open = false;
+  } else started = false;
+  render();
+  if (!started) $('advance').focus();
+}
+function finish() {
+  const reflections = $('reflections');
+  reflections.replaceChildren();
+  notes.forEach((note, index) => {
+    if (!note.trim()) return;
+    const label = document.createElement('dt');
+    label.textContent = `${stages[index].shape} · ${stages[index].vector}`;
+    const words = document.createElement('dd');
+    words.textContent = note;
+    reflections.append(label, words);
+  });
+  $('session').hidden = true;
+  $('finish').hidden = false;
+  $('finish-title').focus();
+}
+function resume() {
+  $('finish').hidden = true;
+  $('session').hidden = false;
+  render();
+  $('shape-button').focus();
+}
+for (const lens of lenses) $('lens').add(new Option(lens.label, lens.id));
+function selectLens() {
+  $('lens-prompt').textContent = lenses.find(lens => lens.id === $('lens').value).prompt;
+}
+$('lens').addEventListener('change', selectLens);
+$('advance').addEventListener('click', advance);
+$('shape-button').addEventListener('click', advance);
+$('back').addEventListener('click', back);
+$('note').addEventListener('input', () => { notes[step] = $('note').value; });
+$('revisit').addEventListener('click', resume);
+$('restart').addEventListener('click', () => {
+  step = 0;
+  breath = 0;
+  started = false;
+  notes = stages.map(() => '');
+  $('reflections').replaceChildren();
+  $('example-box').open = false;
+  $('lens').selectedIndex = 0;
+  selectLens();
+  resume();
+});
+selectLens();
+render();
+</script>
+</body></html>
