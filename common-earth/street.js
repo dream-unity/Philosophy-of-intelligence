@@ -218,7 +218,12 @@
     if(at?.type==='building'&&PLOTS[at.plot])return entry(PLOTS[at.plot]);
     return marketDoor();
   }
-  function siteKey(s) { return s?`${s.id}/${s.lat}/${s.lon}`:null; }
+  function siteKey(site) {
+    if(!site)return null;
+    const location=`${site.id}/${site.lat}/${site.lon}`;
+    // Existing saves used the location alone. Refounding the same place starts a new visit.
+    return site.foundingRevision ? location+'/'+site.foundingRevision : location;
+  }
   function sameBlock(a,b) { return a[0]===b[0] && a[1]===b[1]; }
   function coords(event,canvas) {
     const bounds=canvas.getBoundingClientRect();
@@ -1062,7 +1067,7 @@
       if(recentTerrain){recentTerrain.tile.width=recentTerrain.tile.height=1;recentTerrain=null;}
     }
     function swapTerrain(nextSite) {
-      if(!terrainLayer || !nextSite || !visits.has(siteKey(nextSite)) ||
+      if(!terrainLayer || !nextSite || visits.get(nextSite.id)?.key!==siteKey(nextSite) ||
           !visitMemoryMiB || !terrainLayer.groundSurface.replaceWith){
         releaseRecentTerrain();return null;
       }
@@ -2285,10 +2290,11 @@
       if(previousKey!==nextKey){
         restoredTerrain=swapTerrain(site);
         clearCatch();works.clear();workLots.clear();crew.clear();selectedCrew.clear();watchedJob=null;priorCrewView=null;
-        if(previousKey)visits.set(previousKey,{berth:embarked?.id,player:{...state.player},van:{...state.van},mode:state.mode,zoom:priorPlacementView?.overviewZoom??priorPlacementView?.zoom??overviewZoom??zoom});
+        if(previousKey)visits.set(previous.id,{key:previousKey,berth:embarked?.id,player:{...state.player},van:{...state.van},mode:state.mode,zoom:priorPlacementView?.overviewZoom??priorPlacementView?.zoom??overviewZoom??zoom});
         stop();clearInput();state.placed=null;previewedPlot=null;state.active=null;state.hover=null;state.companion=null;priorPlacementView=null;overviewZoom=null;shortMessage='';cameraFollows=true;
         if(!nextKey)visits.clear();
-        const stored=nextKey&&visits.get(nextKey);
+        const visit=site&&visits.get(site.id);
+        const stored=visit?.key===nextKey?visit:null;
         refreshBerths(site);embarked=berths.find(b=>b.id===stored?.berth)||null;
         state.player=stored?.player||{...returnPoint(site),dx:0,dy:1};state.van=stored?.van||vanAtExchange();state.mode=stored?.mode||'walk';
         zoom=stored?.zoom||1;unit=baseUnit()*zoom;

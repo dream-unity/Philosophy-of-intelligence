@@ -1459,11 +1459,12 @@
       lastOpening=null;
       journalFilter='all';journalLimit=20;
       street?.destroy();street=null;city?.destroy();city=null;group='people';researchPage='eras';councilPage='agenda';
-      selected=sim.active()?{...sim.active()}:start;planOpen=false;reportOpen=false;viewingShift=false;
-      setView('world');atlas.focus(selected.lat,selected.lon,1);put('action-outcome','');show('action-outcome',false);
+      selected=sim.active()?{...sim.active()}:start;planOpen=false;reportOpen=false;
     }
     cancelPlacement();street?.cancelTravel?.();viewingShift=false;visiting=null;peers=false;encounter=null;
-    if(!sim.active()){selected=start;setView('world');}
+    if(notice.switched){
+      setView('world');atlas.focus(selected.lat,selected.lon,1);put('action-outcome','');show('action-outcome',false);
+    }else if(!sim.active()){selected=start;setView('world');}
     else {street?.setSite(sim.active());render();}
     if(notice.message)notify(notice.message);
   });
@@ -1475,7 +1476,7 @@
       if(!site){sessionStorage.removeItem(viewKey);return;}
       const point={lat:selected.lat,lon:selected.lon,name:selected.name,region:selected.region,water:!!selected.water,
         partnerId:selected.partnerId,siteId:known(selected)?.id};
-      const snapshot={slot:book?.current()?.id||'first',siteId:site.id,lat:site.lat,lon:site.lon,view,group,visiting,viewingShift,peers,
+      const snapshot={slot:book?.current()?.id||'first',siteId:site.id,foundingRevision:site.foundingRevision,lat:site.lat,lon:site.lon,view,group,visiting,viewingShift,peers,
         researchPage,councilPage,worksiteId:encounter?.type==='construction'?encounter.jobId:null,point,atlas:atlas.getView(),street:street?.snapshotView?.(),city:city?.snapshotView?.(),
         reportOpen,planOpen,voyageStyle};
       sessionStorage.setItem(viewKey,JSON.stringify(snapshot));
@@ -1486,7 +1487,7 @@
     try{saved=JSON.parse(sessionStorage.getItem(viewKey));}catch{return false;}
     const site=sim.active();
     if(!site||!saved||saved.slot!==(book?.current()?.id||'first')||saved.siteId!==site.id||
-      saved.lat!==site.lat||saved.lon!==site.lon||!['world','street','city'].includes(saved.view))return false;
+      (saved.foundingRevision??0)!==(site.foundingRevision??0)||saved.lat!==site.lat||saved.lon!==site.lon||!['world','street','city'].includes(saved.view))return false;
     const p=saved.point;
     if(p && Number.isFinite(p.lat)&&Math.abs(p.lat)<=90 && Number.isFinite(p.lon)&&Math.abs(p.lon)<=180 && typeof p.name==='string'){
       selected=window.EarthPartners?.get(sim.state,site,p.partnerId)||sim.state.sites.find(other=>other.id===p.siteId)||

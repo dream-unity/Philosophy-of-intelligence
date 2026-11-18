@@ -263,6 +263,7 @@
   }
   function validSite(site,world,ids){
     if(!recordLike(site) || !shortName(site.id) || !shortName(site.name) || !geoPoint(site) || typeof site.water!=='boolean')return false;
+    if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
     if(!['food','funds','materials'].includes(site.specialty))return false;
     if(!['funds','food','materials','population'].every(k=>integer(site[k])) || !['trust','wellbeing'].every(k=>integer(site[k],0,100)))return false;
     site.region ??= site.name;
@@ -589,7 +590,7 @@
     }
     function newSettlement({id,name,region,point,water,names,old,offer}){
       const specialty=water?'food':['food','materials','funds'][Math.abs(Math.round(point.lat*2+point.lon))%3];
-      const site={id,name,region,lat:point.lat,lon:point.lon,water,specialty,era:'Settlement',founded:world.week,foundedBy:old?.id || null,routeLinks:0,
+      const site={id,name,region,lat:point.lat,lon:point.lon,water,specialty,era:'Settlement',founded:world.week,foundingRevision:(world.actionRevision||0)+1,foundedBy:old?.id || null,routeLinks:0,
         population:offer.newPopulation,funds:old?offer.goods.funds:16,food:old?offer.goods.food:12,materials:old?offer.goods.materials:8,trust:50,wellbeing:54,tech:[],buildings:[],construction:[],delivery:null,
         residents:PROFILES.map((p,slot)=>({id:id+'-p'+slot,slot,name:names[slot],role:p.role,value:p.value,bond:0,heard:false,promise:null,lastTalk:0,lastPromise:-10})),
         issue:null,pending:[],stats:{kept:0,missed:0,resolved:0,deliveries:0},issueIndex:-1,lastDeliveryWeek:0};

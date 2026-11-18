@@ -839,3 +839,72 @@ test('cast feedback applies only to the occupied boat and stops it for the haul'
   assert(g.street.showCatch(site.id));assert.equal(g.street.getState().travelling,false);
   assert.equal(g.street.getState().mode,'boat');
 });
+
+test('restarting a waterfront community resets its boat and leaves another district’s van parked where it was', async () => {
+  const runtime={structuredClone};
+  vm.runInNewContext(readFileSync(path.join(gameRoot,'simulation.js'),'utf8'),runtime);
+  const sim=runtime.CommonEarthSim.create({storage:null});
+  const harbour={name:'Harbour',water:true,lat:0,lon:120};
+  assert((await sim.perform('found',harbour)).ok);
+  const harbourId=sim.active().id;
+  assert((await sim.perform('found',{name:'Mainland',water:false,lat:-33,lon:145})).ok);
+  const mainlandId=sim.active().id;
+  const g=surface();
+  g.street.setSite(sim.active());g.drive();
+  const parked=g.street.snapshotView();
+  assert((await sim.perform('visit',harbourId)).ok);
+  g.street.setSite(sim.active());
+  const fresh=g.street.snapshotView();
+  assert(g.street.toggleBoat());g.finish();assert(g.street.move('down'));
+  const offshore=g.street.snapshotView();
+  assert.equal(offshore.mode,'boat');
+  // A world map or another tab can manage the district while Street is hidden.
+  assert((await sim.perform('manageSite',harbourId,'restart')).ok);
+  g.street.setSite(sim.active());
+  assert.equal(g.street.getState().mode,'walk');
+  g.at(fresh.player.x,fresh.player.y);
+  assert.equal(g.street.restoreView(offshore),false);
+  assert(g.street.toggleBoat());g.finish();
+  const secondTrip=g.street.snapshotView();
+  assert((await sim.perform('visit',mainlandId)).ok);
+  g.street.setSite(sim.active());
+  assert.equal(g.street.getState().mode,'drive');
+  g.at(parked.player.x,parked.player.y);
+  // Restarting a previously visited district also drops its remembered vehicle.
+  assert((await sim.perform('manageSite',harbourId,'restart')).ok);
+  assert((await sim.perform('visit',harbourId)).ok);
+  g.street.setSite(sim.active());
+  assert.equal(g.street.getState().mode,'walk');
+  assert.equal(g.street.restoreView(secondTrip),false);
+  g.at(fresh.player.x,fresh.player.y);
+  sim.destroy();
+});
+
+test('refounding a deleted waterfront at the same coordinates rejects its earlier trip and preserves legacy snapshots', async () => {
+  const runtime={structuredClone};
+  vm.runInNewContext(readFileSync(path.join(gameRoot,'simulation.js'),'utf8'),runtime);
+  const sim=runtime.CommonEarthSim.create({storage:null});
+  const point={name:'Lagoon',water:true,lat:4,lon:112};
+  assert((await sim.perform('found',point)).ok);
+  const id=sim.active().id;
+  const g=surface();
+  const legacy={...sim.active()};delete legacy.foundingRevision;
+  g.street.setSite(legacy);
+  assert(g.street.toggleBoat());g.finish();
+  const legacyTrip=g.street.snapshotView();
+  assert.equal(legacyTrip.site,id+'/4/112');
+  assert(g.street.restoreView(legacyTrip));
+  g.street.setSite(sim.active());
+  assert(g.street.toggleBoat());g.finish();
+  const saved=g.street.snapshotView();
+  assert((await sim.perform('manageSite',id,'delete')).ok);
+  assert((await sim.perform('found',point)).ok);
+  assert.equal(sim.active().id,id);
+  g.street.setSite(sim.active());
+  assert.equal(g.street.getState().mode,'walk');
+  assert.equal(g.street.restoreView(saved),false);
+  assert.equal(g.street.restoreView(legacyTrip),false);
+  const disk=JSON.stringify(sim.state),reopened=runtime.CommonEarthSim.create({storage:null,snapshot:disk});
+  assert.equal(reopened.active().foundingRevision,sim.active().foundingRevision);
+  sim.destroy();reopened.destroy();
+});

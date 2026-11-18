@@ -468,7 +468,7 @@
   };
   function mount({mapRoot,panel,sim,onStreet,onResult,onChange,onRehearse,onManageCrew}) {
     if(!mapRoot||!panel||!sim)throw new Error('City plan needs a map, inspector and simulation.');
-    let currentId=null,renderedWeek=null,select=0,layer='land',project='food',busy=false,message='',onMapFocus=false,hasDestroyed=false;
+    let currentId=null,currentFoundingRevision=0,renderedWeek=null,select=0,layer='land',project='food',busy=false,message='',onMapFocus=false,hasDestroyed=false;
     const scene=make('div','city-scene');
     const heading=make('header','city-chart-head'),headText=make('div');
     headText.append(make('p','kicker','Local planning map'));
@@ -507,7 +507,7 @@
       if(hasDestroyed || !site || !Number.isInteger(index) || index<0 || index>5)return false;
       if(projectId==='cancel'){
         if(!site.city?.precincts?.[index]?.target)return false;
-        if(site.id!==currentId)render();
+        if(!sameCommunity(site))render();
         choose(index,false);
         reveal?.();
         const review=panel.querySelector('.city-cancel-review');
@@ -515,7 +515,7 @@
         return true;
       }
       if(!model.options.includes(projectId))return false;
-      if(site.id!==currentId)render();
+      if(!sameCommunity(site))render();
       const record=model.overview(site).records[index];
       if(record.use===projectId || (record.target && record.target!==projectId))return false;
       project=projectId;choose(index,false);
@@ -528,21 +528,22 @@
     function focusWorksite(index){
       const site=sim.active();
       if(hasDestroyed || !Number.isInteger(index) || !site?.city?.precincts?.[index]?.target)return false;
-      if(site.id!==currentId)render();
+      if(!sameCommunity(site))render();
       choose(index,true);
       mapRoot.scrollIntoView({block:'start',behavior:'instant'});
       return true;
     }
+    function sameCommunity(site){return site.id===currentId && (site.foundingRevision??0)===currentFoundingRevision;}
     function snapshotView(){
       if(hasDestroyed || !currentId)return null;
-      const state={siteId:currentId,precinct:select};
+      const state={siteId:currentId,foundingRevision:currentFoundingRevision,precinct:select};
       if(!busy)Object.assign(state,{layer,project});
       return state;
     }
     function restoreView(snapshot){
       const site=sim.active();
-      if(hasDestroyed || !site || snapshot?.siteId!==site.id || !Number.isInteger(snapshot.precinct) || snapshot.precinct<0 || snapshot.precinct>5)return false;
-      if(site.id!==currentId)render();
+      if(hasDestroyed || !site || snapshot?.siteId!==site.id || (snapshot.foundingRevision??0)!==(site.foundingRevision??0) || !Number.isInteger(snapshot.precinct) || snapshot.precinct<0 || snapshot.precinct>5)return false;
+      if(!sameCommunity(site))render();
       if(!busy){
         if(typeof snapshot.layer==='string' && Object.hasOwn(LAYERS,snapshot.layer))layer=snapshot.layer;
         if(model.options.includes(snapshot.project))project=snapshot.project;
@@ -665,7 +666,7 @@
     function render() {
       const site=sim.active();
       if(!site||hasDestroyed)return;
-      if(site.id!==currentId){currentId=site.id;select=0;layer='land';project='food';message='';}
+      if(!sameCommunity(site)){currentId=site.id;currentFoundingRevision=site.foundingRevision??0;select=0;layer='land';project='food';message='';}
       if(renderedWeek!==sim.state.week){renderedWeek=sim.state.week;message='';}
       const city=model.overview(site),r=city.records[select];
       const street=(site.construction||[]).filter(j=>j.scope==='street');

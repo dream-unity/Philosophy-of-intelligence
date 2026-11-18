@@ -45,7 +45,7 @@ async function atlas(options={}) {
     handlers.get('pointer'+type)({pointerId:id,pointerType:'touch',button:0,clientX:x+box.left,clientY:y+box.top});
   }
   const tap=(x,y)=>{point('down',x,y);point('up',x,y);};
-  return {view,point,tap,selected,draw,blur:()=>windowHandlers.get('blur')?.()};
+  return {canvas,view,point,tap,selected,draw,blur:()=>windowHandlers.get('blur')?.()};
 }
 
 test('a small finger wobble selects without rotating, while swipes and cancellations never select',async()=>{
@@ -113,6 +113,24 @@ test('switching away during a gesture leaves the next single-finger tap usable',
   tap(160,150);
   assert.equal(selected.length,1);
   assert.equal(view.getView().zoom,1);
+});
+
+test('reopening the atlas restores its drawing surface, camera and settlement selection',async()=>{
+  const {canvas,view,draw,tap,selected}=await atlas({lat:35,lon:18,zoom:6});
+  view.setSites([{id:'port',name:'Port',lat:35,lon:18,active:true}]);
+  draw();
+  const size=[canvas.width,canvas.height],camera=view.getView();
+  assert.ok(size.every(value=>value>1));
+  for(let visit=0;visit<3;visit++){
+    view.setActive(false);
+    assert.deepEqual([canvas.width,canvas.height],[1,1]);
+    view.setActive(true);
+    draw();
+    assert.deepEqual([canvas.width,canvas.height],size);
+    assert.deepEqual(view.getView(),camera);
+  }
+  tap(160,150);
+  assert.equal(selected[0].id,'port');
 });
 
 test('regional labels use the nearest touch target and preserve direct hits',()=>{

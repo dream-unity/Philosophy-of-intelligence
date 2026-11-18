@@ -236,6 +236,7 @@
         ctx.drawImage(gpu,0,0,w,h);
         return true;
       },
+      releaseFrame(){gpu.width=gpu.height=1;},
       destroy
     };
   }
@@ -290,7 +291,8 @@
         ctx.putImageData(out,0,0);lastProjection=key;dest.drawImage(off,0,0,w,h);
         return true;
       },
-      destroy(){ pixels=null;off.width=off.height=1; }
+      releaseFrame(){off.width=off.height=1;out=null;lastProjection=null;},
+      destroy(){pixels=null;off.width=off.height=1;}
     };
   }
 
@@ -335,6 +337,12 @@
       if(active){loadRenderer();resize();return;}
       if(frame){cancelAnimationFrame(frame);frame=0;}
       stopJourney(true);
+      // The district has its own canvases. Release the hidden atlas buffers
+      // while retaining the decoded relief, geographic lookup and camera.
+      if(canvas.width>1 || canvas.height>1){
+        canvas.width=canvas.height=1;
+        renderer?.releaseFrame();
+      }
     }
     function resize() {
       if(!active)return;
@@ -348,10 +356,11 @@
       queue();
     }
     const radius=()=>Math.min(w,h)*.428*view.zoom;
+    let cameraCos=1,cameraSin=0;
     const project=(lat,lon)=>{
-      const phi=lat*RAD,l=(lon-view.lon)*RAD,cv=Math.cos(view.lat*RAD),sv=Math.sin(view.lat*RAD);
-      const c=Math.cos(phi),s=Math.sin(phi),cl=Math.cos(l),rr=radius();
-      return {x:w*.5+rr*c*Math.sin(l),y:h*.5-rr*(s*cv-c*cl*sv),z:s*sv+c*cl*cv};
+      const phi=lat*RAD,l=(lon-view.lon)*RAD;
+      const c=Math.cos(phi),s=Math.sin(phi),cl=Math.cos(l);
+      return {x:w*.5+r*c*Math.sin(l),y:h*.5-r*(s*cameraCos-c*cl*cameraSin),z:s*cameraSin+c*cl*cameraCos};
     };
     function inverse(x,y) {
       const rr=radius(), px=(x-w*.5)/rr, py=(h*.5-y)/rr;
@@ -624,7 +633,10 @@
     }
     function draw() {
       if(!w||!h)return;r=radius();
-      ctx.save();background();
+      cameraSin=Math.sin(view.lat*RAD);cameraCos=Math.cos(view.lat*RAD);
+      ctx.save();
+      // At close zoom the opaque globe covers even the corners of the canvas.
+      if(!renderer || r<Math.hypot(w*.5,h*.5)+2)background();
       if(renderer){
         if(!renderer.draw(ctx,w,h,r,view,dragging||pointers.size>1) && !cpu){
           renderer.destroy();renderer=softwareRenderer(geo.chart);cpu=true;renderer.draw(ctx,w,h,r,view,dragging);

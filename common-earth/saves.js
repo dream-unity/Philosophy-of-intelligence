@@ -375,7 +375,7 @@
       }catch(error){setNote('The browser could not read that file.',true);}
     });
     function refresh() {
-      if(details && !details.open || section && el.closest?.('[hidden]'))return;
+      if(work || details && !details.open || section && el.closest?.('[hidden]'))return;
       const slots=book.list(),current=slots.find(slot=>slot.selected),status=book.status();
       if(lastId!==null && current.id!==lastId)clearReview();
       lastId=current.id;
