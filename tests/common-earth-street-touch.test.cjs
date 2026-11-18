@@ -36,6 +36,8 @@ function surface(width = 820, height = 500) {
   const documentEvents = new Map();
   let covered = false;
   const runtime = {
+    setTimeout() { return 1; },
+    clearTimeout() {},
     window: { addEventListener() {}, removeEventListener() {} },
     document: {
       hidden: false,
@@ -805,4 +807,35 @@ test('a companion stays aboard when the boat moves and steps ashore when it dock
   const awake=g.street.getState();
   assert.equal(awake.mode,'walk');
   assert(awake.companion.y<25 && Math.hypot(awake.companion.x-awake.x,awake.companion.y-awake.y)<1.2);
+});
+
+test('sailing offshore preserves the camera anchor under pinch, zoom and pan', () => {
+  const g=surface();
+  g.street.setSite({...site,water:true});
+  g.street.toggleBoat();g.finish();
+  g.street.recenter();g.tap(g.interactionFrame()(15,38,-.44));g.finish();g.street.recenter();
+  const before=g.street.snapshotView().camera;
+  assert(before.centreY>28);
+  const centre={x:410,y:265};
+  g.street.zoomBy(1.12,centre);
+  const after=g.street.snapshotView().camera;
+  assert(Math.abs(before.centreY-after.centreY)<.01);
+  g.pointer('pointerdown',centre);g.pointer('pointermove',{x:431,y:265});g.pointer('pointerup',{x:431,y:265});
+  assert(Math.abs(g.street.snapshotView().camera.centreY-after.centreY)<1);
+  g.pointer('pointerdown',{x:360,y:265},1);g.pointer('pointerdown',{x:460,y:265},2);
+  g.pointer('pointermove',{x:480,y:265},2);g.pointer('pointerup',{x:480,y:265},2);g.pointer('pointerup',{x:360,y:265},1);
+  assert(g.street.snapshotView().camera.centreY>28);
+});
+
+test('cast feedback applies only to the occupied boat and stops it for the haul', () => {
+  const g=surface();
+  g.street.setSite({...site,water:true});
+  assert.equal(g.street.showCatch(site.id),false);
+  g.street.toggleBoat();g.finish();
+  g.street.recenter();g.tap(g.interactionFrame()(17.3,31.7,-.44));
+  assert(g.street.getState().travelling);
+  assert.equal(g.street.showCatch('another-community'),false);
+  assert(g.street.getState().travelling);
+  assert(g.street.showCatch(site.id));assert.equal(g.street.getState().travelling,false);
+  assert.equal(g.street.getState().mode,'boat');
 });

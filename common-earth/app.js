@@ -172,25 +172,29 @@
     atlas.setSites(sim.state.sites.map(s=>({...s,active:s.id===sim.state.activeId})));
     const partners=window.EarthPartners?.list(sim.state,sim.active())||[];
     atlas.setBeacons?.(showBeacons?partners:[]);
+    const sitesById=new Map(sim.state.sites.map(s=>[s.id,s]));
     const routes = sim.state.routes.map(route => ({
-      from:sim.state.sites.find(s=>s.id===(route.from || route.fromId || route.a)),
-      to:sim.state.sites.find(s=>s.id===(route.to || route.toId || route.b))
+      from:sitesById.get(route.from || route.fromId || route.a),
+      to:sitesById.get(route.to || route.toId || route.b)
     })).filter(r=>r.from&&r.to);
     if(sim.state.voyage)routes.push({from:sim.state.voyage.origin,to:sim.state.voyage.target,preview:true});
     atlas.setRoutes?.(routes);
     atlas.setSelection(selected);
   }
-  function choosePlace(point,fly=true) {
-    if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return;
+  function selectPlace(point,fly){
     selected=point;planOpen=false;reportOpen=false;
     if($('commission-at-founding'))$('commission-at-founding').checked=false;
     if($('commission-brief'))$('commission-brief').open=false;
     if ($('found-name')) $('found-name').value='';
     if(fly) atlas.focus(point.lat,point.lon,1.6);
     atlas.setSelection(point);
-    inspect();
+  }
+  function choosePlace(point,fly=true) {
+    if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return;
+    selectPlace(point,fly);
     hideDialog('places-dialog');
-    if (view !== 'world') setView('world');
+    if(view==='world')inspect();
+    else setView('world');
   }
   function inspect() {
     const partner=selected.kind==='partner'&&sim.active()&&window.EarthPartners?.get(sim.state,sim.active(),selected.partnerId);
@@ -362,8 +366,15 @@
     crewOrders?.cancel();
     const result=await sim.perform('visit',s.id);
     if(result && !result.ok){presentResult(result);return;}
+    const destination=sim.active();
+    if(!destination || destination.id!==s.id)return;
+    const sameStreet=view==='street' && arrivalView==='street';
+    if(sameStreet){cancelPlacement();street?.cancelTravel?.();}
     visiting=null;peers=false;encounter=null;placement=null;viewingShift=false;group='people';
-    choosePlace(s,false);setView(arrivalView);hideDialog('society-dialog');
+    selectPlace(destination,false);
+    hideDialog('places-dialog');hideDialog('society-dialog');
+    setView(arrivalView);
+    if(sameStreet && stackedMap.matches)$('street-stage').scrollIntoView({block:'start',behavior:'instant'});
   }
   async function found() {
     if(known(selected)){openSite(known(selected));return;}
@@ -1079,15 +1090,16 @@
           if(!presentResult(result))return;
           arrivalVersion++;crewOrders?.cancel();cancelPlacement();street?.cancelTravel?.();
           visiting=null;encounter=null;viewingShift=false;lastOpening=null;
-          selected=sim.active()||start;setView('world',false);renderSociety();
+          selected=sim.active()||start;setView('world',false);
         },'text-button');
         control.setAttribute('aria-label',label+' '+s.name);row.append(control);
       }
       return row;
     }));
     if($('route-status')){
+      const sitesById=new Map(state.sites.map(s=>[s.id,s]));
       const routes=state.routes.map(r=>{
-        const from=state.sites.find(s=>s.id===r.from),to=state.sites.find(s=>s.id===r.to);
+        const from=sitesById.get(r.from),to=sitesById.get(r.to);
         const item=node('article','route-entry');
         item.append(node('strong','',from.name+' ↔ '+to.name),node('p','',r.lastStatus));return item;
       });
@@ -1325,7 +1337,7 @@
     fishing=true;
     try{
       const result=await sim.perform('fish',state.siteId);
-      if(presentResult(result))render();
+      if(presentResult(result)){if(view==='street')street?.showCatch(state.siteId);render();}
     }finally{fishing=false;if(street)updateStreetInteract(street.getState());}
   });
   const heldDirections=new Map();
