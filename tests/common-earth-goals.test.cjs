@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const directory=process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname,'../common-earth');
 const context=vm.createContext({});context.window=context;
-for(const file of ['neighbours','voyages','shifts','campaigns','strategy','partners','city','goals','legacy','simulation']){
+for(const file of ['construction','neighbours','voyages','shifts','campaigns','strategy','partners','city','goals','legacy','simulation']){
   vm.runInContext(fs.readFileSync(path.join(directory,file+'.js'),'utf8'),context,{filename:file+'.js'});
 }
 const engine=context.CommonEarthSim,goals=context.EarthGoals;
@@ -56,12 +56,12 @@ test('legacy worlds open, preview is pure, setting the two commitments spends no
 
 test('the endpoint can improve while missing the aim, and an earlier weekly breach survives a recovery',()=>{
   const sim=fresh(),s=sim.active(),p=s.residents[0];
-  ok(sim.beginGoal(s.id,'food','trust',2));ok(sim.act('listen:'+p.id));ok(sim.act('promise:'+p.id));ok(sim.planCity(0,'market'));
+  ok(sim.beginGoal(s.id,'food','trust',2));ok(sim.act('listen:'+p.id));ok(sim.act('promise:'+p.id));ok(sim.planCity(0,'market'));ok(sim.workConstruction(120));
   const before=serialize(sim),first=sim.forecastNext();
   assert.match(first.highlights.join(' '),/safeguard crossed its limit/i);assert.equal(serialize(sim),before);
   advances(sim,1);assert.equal(goals.summary(sim.state).active.guard.worst,49);
   const resumed=game(serialize(sim));sim.destroy();
-  ok(resumed.act('fulfil:'+p.id));ok(resumed.planCity(1,'care'));ok(resumed.act('work:forage'));
+  ok(resumed.act('fulfil:'+p.id));ok(resumed.planCity(1,'care'));ok(resumed.workConstruction(120));ok(resumed.act('work:forage'));
   const snapshot=serialize(resumed),Forecast=resumed.forecastNext();
   assert.equal(serialize(resumed),snapshot);
   assert.match(Forecast.highlights.join(' '),/Learning goal review/);
@@ -82,7 +82,7 @@ test('actual voices, bonds and sequential housing openings give independent, mea
   assert.match(review(sim).aim.status,/Already met and maintained/);
   assert.equal(review(sim).guard.base,startBond);assert.equal(review(sim).guard.value,startBond);
   ok(sim.beginGoal(s.id,'housing','shortage',2));ok(sim.planCity(0,'homes'));advances(sim,1);
-  assert.equal(goals.summary(sim.state).active.aim.value,18);advances(sim,1);
+  assert.equal(goals.summary(sim.state).active.aim.value,18);ok(sim.workConstruction(120));advances(sim,1);
   const end=review(sim);assert.ok(end.aim.value>=24);assert.equal(end.aim.status,'Target reached');
   assert.equal(end.guard.base,0);assert.equal(end.guard.worst,0);sim.destroy();
 });
@@ -108,10 +108,10 @@ test('housing safeguard records an opening-week shortage even when replacement h
   district.population=24;district.city.precincts[2].use='homes';initial.destroy();
   const sim=game(JSON.stringify(saved)),s=sim.active();
   assert.equal(context.EarthCityModel.overview(s).crowding.excess,0);
-  ok(sim.beginGoal(s.id,'food','shortage',4));ok(sim.planCity(2,'yard'));
+  ok(sim.beginGoal(s.id,'food','shortage',4));ok(sim.planCity(2,'yard'));ok(sim.workConstruction(120));
   advances(sim,1);assert.equal(goals.summary(sim.state).active.guard.worst,0);
   advances(sim,1);assert.equal(goals.summary(sim.state).active.guard.worst,6);
-  ok(sim.planCity(1,'homes'));advances(sim,2);
+  ok(sim.planCity(1,'homes'));ok(sim.workConstruction(120));advances(sim,2);
   const r=review(sim);assert.equal(r.guard.value,0);assert.equal(r.guard.worst,6);assert.equal(r.guard.worstWeek,3);
   assert.equal(r.guard.status,'Crossed the limit, then recovered');
   assert.ok(engine.readSave(serialize(sim)));sim.destroy();
@@ -148,12 +148,18 @@ test('construction goals guide the player to a useful precinct and recognise wor
     assert.equal(serialize(sim),before);
     assert.equal(step.kind,'city');assert.equal(step.project,project);
     ok(sim.planCity(step.precinct,step.project));
+    const work=goals.nextStep(sim);assert.equal(work.kind,'construction');
+    assert.equal(work.jobId,sim.constructionView().jobs[0].id);
+    assert.equal(goals.summary(sim.state).active.aim.value,goals.summary(sim.state).active.aim.base);
+    ok(sim.workConstruction(120));
     assert.equal(goals.nextStep(sim).kind,'week');
     advances(sim,2);assert.equal(review(sim).aim.status,'Target reached');
 
     const queued=fresh(),home=queued.active();
     ok(queued.planCity(step.precinct,project));advances(queued,1);
     ok(queued.beginGoal(home.id,aim,'trust',1));
+    assert.equal(goals.nextStep(queued).kind,'construction');
+    ok(queued.workConstruction(120));
     assert.equal(goals.nextStep(queued).kind,'week');
     advances(queued,1);assert.equal(review(queued).aim.status,'Target reached');
     sim.destroy();queued.destroy();
@@ -172,4 +178,90 @@ test('a food commitment near review uses the projected closing pantry rather tha
   assert.equal(goals.nextStep(sim).kind,'week');
   advances(sim,1);assert.equal(review(sim).aim.status,'Target reached');
   sim.destroy();first.destroy();
+});
+
+test('two calendar closes cannot satisfy a housing review when no worker staffed the site',()=>{
+  const sim=fresh(),site=sim.active();
+  ok(sim.beginGoal(site.id,'housing','trust',2));
+  const next=goals.nextStep(sim);ok(sim.planCity(next.precinct,next.project));
+  for(const resident of site.residents)ok(sim.setWorkPreference(resident.id,'usual'));
+  ok(sim.workConstruction(120));
+  const guide=goals.nextStep(sim);assert.equal(guide.kind,'construction');assert.match(guide.label,/crew/);
+  advances(sim,2);
+  const result=review(sim);assert.equal(result.aim.value,result.aim.base);assert.notEqual(result.aim.status,'Target reached');
+  const siteJob=site.construction[0];ok(sim.setWorkPreference(site.residents[0].id,'build',siteJob.id));
+  ok(sim.workConstruction(120));assert.ok(context.EarthCityModel.overview(site).capacity>=result.aim.target);
+  assert.equal(review(sim).aim.value,result.aim.base,'a later opening must not rewrite an archived review');
+  sim.destroy();
+});
+
+test('short reviews account for remaining effort and an empty resident shift that can still be refunded',()=>{
+  const sim=fresh(),site=sim.active();
+  ok(sim.act('work:contract'));ok(sim.act('work:contract'));
+  assert.equal(sim.beginGoal(site.id,'voices','trust',1).ok,false);
+  ok(sim.act('work:contract'));
+  assert.equal(sim.beginGoal(site.id,'housing','trust',2).ok,false);
+  ok(sim.beginGoal(site.id,'housing','trust',3));sim.destroy();
+
+  const active=fresh(),home=active.active();
+  ok(active.act('work:contract'));ok(active.act('work:contract'));ok(active.beginShift(home.residents[1].id));
+  assert.equal(active.state.effort,1);ok(active.beginGoal(home.id,'housing','trust',2));
+  const guide=goals.nextStep(active);assert.equal(guide.page,'shift');assert.match(guide.detail,/one effort/i);
+  ok(active.finishShift());assert.equal(active.state.effort,2);
+  const city=goals.nextStep(active);ok(active.planCity(city.precinct,city.project));
+  ok(active.workConstruction(120));advances(active,2);assert.equal(review(active).aim.status,'Target reached');
+  active.destroy();
+});
+
+test('a one-week housing review exposes a conflicting conversion for voluntary cancellation',()=>{
+  const sim=fresh(),site=sim.active();
+  ok(sim.planCity(0,'homes'));ok(sim.workConstruction(120));advances(sim,2);
+  for(let i=0;i<3;i++)ok(sim.act('work:contract'));
+  ok(sim.act('work:salvage'));advances(sim,1);
+  ok(sim.planCity(0,'yard'));ok(sim.planCity(1,'homes'));advances(sim,1);
+  ok(sim.beginGoal(site.id,'housing','trust',1));
+  const current=serialize(sim),guide=goals.nextStep(sim);
+  assert.equal(serialize(sim),current);assert.equal(guide.kind,'city');assert.equal(guide.precinct,0);assert.equal(guide.project,'cancel');
+  ok(sim.planCity(guide.precinct,guide.project));
+  assert.equal(goals.nextStep(sim).kind,'construction');
+  ok(sim.workConstruction(120));advances(sim,1);
+  assert.equal(review(sim).aim.status,'Target reached');
+  assert.equal(context.EarthCityModel.overview(site).records[0].use,'homes');
+  sim.destroy();
+});
+
+test('a short review may recover supplies from occupied projects before its final commissioning window closes',()=>{
+  const sim=fresh(),site=sim.active();
+  ok(sim.planCity(0,'food'));ok(sim.planCity(1,'water'));
+  assert.equal(sim.state.effort,2);assert.equal(site.materials,2);
+  ok(sim.beginGoal(site.id,'housing','trust',2));
+  for(let n=0;n<2;n++){
+    const before=serialize(sim),review=goals.nextStep(sim);
+    assert.equal(serialize(sim),before);
+    assert.equal(review.kind,'city');assert.equal(review.project,'cancel');
+    ok(sim.planCity(review.precinct,review.project));
+  }
+  assert.equal(sim.state.effort,2);assert.equal(site.materials,4);
+  const homes=goals.nextStep(sim);assert.equal(homes.project,'homes');
+  ok(sim.planCity(homes.precinct,homes.project));ok(sim.workConstruction(120));advances(sim,2);
+  assert.equal(review(sim).aim.status,'Target reached');
+  sim.destroy();
+});
+
+test('a paid but completed street project cannot fund a two-week goal when every remaining effort is needed for commissioning',()=>{
+  const sim=fresh(),site=sim.active();
+  ok(sim.act('build:market',1));ok(sim.act('build:market',3));ok(sim.workConstruction(180));
+  assert.equal(sim.state.effort,2);assert.ok(site.funds<7);
+  const proposal=goals.preview(sim.state,site.id,'housing','trust',2);
+  assert.equal(proposal.ok,false);assert.match(proposal.message,/remaining effort covers only the commission/i);
+  ok(sim.beginGoal(site.id,'housing','trust',3));
+  let next;
+  for(let n=0;n<20 && sim.state.learningGoals.active;n++){
+    next=goals.nextStep(sim);
+    if(next.kind==='week')ok(sim.advance());
+    else if(next.kind==='city')ok(sim.planCity(next.precinct,next.project));
+    else if(next.kind==='construction')ok(sim.workConstruction(120));
+    else ok(sim.act(next.actionId));
+  }
+  assert.equal(review(sim).aim.status,'Target reached');sim.destroy();
 });

@@ -18,7 +18,7 @@
       {key:'food',label:'Add four food to the pantry',measure:'Food in store',value:site.food,
         target:base=>Math.min(Number.MAX_SAFE_INTEGER,base+4),hint:'A food cooperative, a garden or a shift tending the food beds can supply the pantry.'},
       {key:'voices',label:'Hear all three founding residents',measure:'Residents heard',value:site.residents.filter(person=>person.heard).length,
-        max:3,target:()=>3,hint:'Visit each resident in Street view and listen.'}
+        max:3,target:()=>3,hint:'Open People in Street view, choose Meet beside each resident’s name, then listen.'}
     ];
     const guards=[
       {key:'trust',label:'Protect district trust',measure:'District trust',value:site.trust,max:100},
@@ -27,9 +27,9 @@
     if(city) {
       aims.splice(1,0,
         {key:'housing',label:'Make room for six more residents',measure:'Housing places',value:city.capacity,min:18,max:56,
-          target:base=>Math.min(56,base+6),hint:'Courtyard homes open two weeks after commissioning and keep their current use until opening.'},
+          target:base=>Math.min(56,base+6),hint:'Courtyard homes open after two weeks and a resident crew finishes the building. The existing land use continues until opening.'},
         {key:'reach',label:'Bring another precinct within 15 minutes',measure:'Precincts within 15 minutes',value:city.reachable,max:6,
-          target:base=>Math.min(6,base+1),hint:'A transit cooperative serves its precinct and both neighbours. It opens after two weeks.'}
+          target:base=>Math.min(6,base+1),hint:'A transit cooperative serves its precinct and both neighbours. Opening takes at least two weekly closes plus the crew’s completed work.'}
       );
       guards.push({key:'shortage',label:'Protect access to housing',measure:'Residents without a housing place',
         value:Math.max(0,site.population-city.capacity),lower:true});
@@ -47,18 +47,21 @@
     return {aim:catalog.aims.find(m=>m.key===aimKey),guard:catalog.guards.find(m=>m.key===guardKey)};
   }
   const cityAims={
-    housing:{project:'homes',metric:'capacity',name:'Courtyard homes'},
-    reach:{project:'transit',metric:'reachable',name:'Transit cooperatives'}
+    housing:{project:'homes',metric:'capacity'},
+    reach:{project:'transit',metric:'reachable'}
   };
-  function plannedCity(site,aimKey,weeks,optimistic=false) {
-    const rule=cityAims[aimKey], model=root.EarthCityModel;
-    if(!rule || !model)return null;
+  function plannedCity(site,aimKey,weeks) {
+    const baseRule=cityAims[aimKey],model=root.EarthCityModel;
+    if(!baseRule || !model)return null;
+    const rule={...baseRule,name:model.nameOf(site,baseRule.project)};
     const records=model.overview(site).records;
-    const byReview=records.map(p=>{
-      if(!p.target || p.turns>weeks || (optimistic && p.use===rule.project))return p;
+    const projection=(onlyFinished,keep)=>model.overview(site,records.map(p=>{
+      if(!p.target || p.turns>weeks || keep?.(p))return p;
+      if(onlyFinished && root.EarthConstruction && !p.laborReady)return p;
       return {...p,use:p.target,target:null,turns:0};
-    });
-    return {rule,model,records,value:model.overview(site,byReview)[rule.metric]};
+    }))[rule.metric];
+    const retained=projection(false,p=>p.use===rule.project);
+    return {rule,model,records,value:projection(false),ready:projection(true),retained};
   }
   function preview(world,siteId,aimKey,guardKey,weeks) {
     const site=siteById(world,siteId);
@@ -68,12 +71,31 @@
     if(!aim || !guard)return reject('Choose an aim and a safeguard available in this district.');
     if(aim.key===guard.key)return reject('Choose a different safeguard so you can follow two effects.');
     if(!integer(weeks,1,4))return reject('Choose a review in one to four weeks.');
-    if(weeks===1 && aim.target(aim.value)>aim.value){
-      const pending=plannedCity(site,aimKey,weeks,true);
-      if(pending && pending.value<aim.target(aim.value))return reject(pending.rule.name+' take two weeks to open. Choose a longer review or set this goal once enough construction is one week from opening.');
+    const extraEffort=world.sites.some(s=>s.shift && !s.shift.history.length)?1:0;
+    const availableEffort=world.effort+extraEffort;
+    let hint=aim.hint;
+    if(aim.target(aim.value)>aim.value){
+      const pending=plannedCity(site,aimKey,weeks);
+      if(pending && pending.retained<aim.target(aim.value)){
+        const project=pending.model.projects[pending.rule.project];
+        if(weeks<project.turns)return reject('Opening a '+pending.rule.name.toLowerCase()+' project takes at least two weeks and a crew to finish. Choose a longer review or set this goal once the scheduled opening is within a week.');
+        if(weeks===project.turns && availableEffort<project.effort)return reject('This review would require starting '+pending.rule.name.toLowerCase()+' this week. Starting the project costs '+project.effort+' effort. Choose at least '+(weeks+1)+' weeks or return after your effort refreshes.');
+        if(weeks===project.turns && (site.funds<project.funds || site.materials<project.materials)){
+          const budget='Commissioning this week costs '+project.effort+' effort, '+project.funds+' funds and '+project.materials+' materials. You have '+site.funds+' funds and '+site.materials+' materials.';
+          const alternative=site.delivery || site.shift || world.voyage || site.construction?.length || pending.records.some(r=>r.target);
+          if(availableEffort===project.effort && !alternative)return reject(budget+' Your remaining effort covers only the commission. Choose a longer review so you can raise the supplies first.');
+          hint=budget+' Include time to raise or release supplies before this week closes. '+hint;
+        }
+      }
+      if(aimKey==='voices' && weeks===1){
+        const unheard=site.residents.filter(p=>!p.heard).length;
+        // A convenor can also hear one resident in a council session at the close.
+        const sessions=world.legacy?.term?.slot===2?1:0;
+        if(unheard>availableEffort+sessions)return reject(unheard+' residents still need a hearing. Listening takes one effort each. Choose a longer review or return next week.');
+      }
     }
     return {ok:true,siteId:site.id,siteName:site.name,startWeek:world.week,dueWeek:world.week+weeks,
-      aim:{key:aim.key,label:aim.measure,base:aim.value,target:aim.target(aim.value),hint:aim.hint},
+      aim:{key:aim.key,label:aim.measure,base:aim.value,target:aim.target(aim.value),hint},
       guard:{key:guard.key,label:guard.measure,base:guard.value,lower:!!guard.lower}};
   }
   function start(world,siteId,aimKey,guardKey,weeks) {
@@ -122,22 +144,50 @@
     const city=plannedCity(site,aim.key,dueWeek-world.week);
     let step;
     if(city){
-      if(city.value>=entry.aim.target)return wait('Work already commissioned in '+site.name+' will reach this target by week '+dueWeek+'.');
+      if(city.value<entry.aim.target && city.retained>=entry.aim.target){
+        const loss=city.records.find(r=>r.use===city.rule.project && r.target && r.turns<=dueWeek-world.week);
+        if(loss)return {kind:'city',siteId,precinct:loss.id,project:'cancel',label:'Review the conversion at '+loss.name,
+          detail:'This project would remove existing '+city.rule.name.toLowerCase()+' before the review. If you want to protect the target, you can cancel the conversion and keep the current use.'};
+      }
+      if(city.ready>=entry.aim.target)return wait('The crew has finished the work needed for this target. The opening is scheduled by week '+dueWeek+'.');
+      if(city.value>=entry.aim.target){
+        const matching=city.records.filter(r=>r.target===city.rule.project && r.turns<=dueWeek-world.week && !r.laborReady);
+        const work=root.EarthLegacy?.constructionStep(world,site,j=>j.scope==='city' && matching.some(r=>r.id===j.precinct));
+        if(work)return work;
+      }
       const {project,metric,name}=city.rule;
-      if(dueWeek-world.week<city.model.projects[project].turns)return wait(name+' take two weeks to open. This goal is due in week '+dueWeek+'.');
+      if(dueWeek-world.week<city.model.projects[project].turns)return wait('A new '+name.toLowerCase()+' project takes two weeks to open. This goal is due in week '+dueWeek+'.');
+      const orders=city.records.filter(r=>r.target);
+      if(dueWeek-world.week===city.model.projects[project].turns && orders.length>=2){
+        const canOpenNow=orders.filter(r=>r.turns===0);
+        const ready=root.EarthLegacy?.constructionStep(world,site,j=>j.scope==='city' && canOpenNow.some(r=>r.id===j.precinct));
+        if(ready)return {...ready,detail:ready.detail+' Opening this site now will free a precinct project slot before your deadline.'};
+        // Waiting for even one more weekly close would make a new project too late.
+        const reserved=orders.find(r=>r.use===project) || orders.find(r=>r.target!==project) || orders[0];
+        return {kind:'city',siteId,precinct:reserved.id,project:'cancel',label:'Review the project at '+reserved.name,
+          detail:'Both project slots are reserved. To meet this review, free a slot and commission '+name.toLowerCase()+' this week. Inspect the existing project and its cancellation terms before deciding.'};
+      }
       const candidates=city.records.filter(r=>r.use!==project && !r.target)
         .map(r=>({r,plan:city.model.preview(site,world,r.id,project)}))
         .filter(({plan})=>plan.ok && plan.completedView[metric]>aim.value)
         .sort((a,b)=>Number(b.plan.available)-Number(a.plan.available) || Number(b.r.use==='open')-Number(a.r.use==='open') || b.plan.completedView[metric]-a.plan.completedView[metric]);
-      if(!candidates.length)return wait('The current precinct projects must finish or be reconsidered before another site can improve this aim.');
+      if(!candidates.length)return root.EarthLegacy?.constructionStep(world,site,job=>job.scope==='city') ||
+        wait('The current precinct projects must open or be reconsidered before another site can improve this aim.');
       const {r,plan}=candidates[0];
-      step={kind:'city',siteId,precinct:r.id,project,label:'Inspect '+plan.title.toLowerCase()+' at '+r.name,detail:plan.forecast};
+      step={kind:'city',siteId,precinct:r.id,project,startByWeek:dueWeek-city.model.projects[project].turns,label:'Inspect '+plan.title.toLowerCase()+' at '+r.name,detail:plan.forecast};
     }else if(aim.key==='food'){
+      const foodWork=root.EarthLegacy?.constructionStep(world,site,j=>j.scope==='street' && j.kind==='garden' ||
+        j.scope==='city' && ['food','water'].includes(j.kind) && root.EarthCityModel.overview(site).records[j.precinct].turns<=dueWeek-world.week);
+      if(foodWork)return {...foodWork,detail:foodWork.detail+' Once it opens, the next weekly harvest can help stock the pantry. You can also tend the food beds now.'};
       step={kind:'group',siteId,group:'work',actionId:'work:forage',label:'Tend the food beds in '+site.name,
         detail:aim.value>=entry.aim.target?'Household needs and deliveries are projected to bring the pantry below target at review.':aim.hint};
     }else{
       const person=aim.key==='voices'?site.residents.find(p=>!p.heard):site.residents.find(p=>aim.key==='bond:'+p.id);
       if(!person)return null;
+      if(person.promise && aim.key!=='voices'){
+        const work=root.EarthLegacy?.buildingPromiseStep(world,site,person);
+        if(work)return work;
+      }
       const action=person.promise?'fulfil':!person.heard || person.lastTalk!==world.week?'listen':world.week-person.lastPromise>=3?'promise':null;
       if(!action)return wait('You already spoke this week. Check in with '+person.name+' again next week or complete an activity together.');
       step={kind:'resident',siteId,group:'people',residentId:person.id,actionId:action+':'+person.id,label:'Visit '+person.name,detail:aim.hint};
@@ -263,13 +313,15 @@
     }
     function render() {
       const site=sim.active(),state=sim.state;
-      const book=summary(state),last=book.history[0];
-      if(outerTitle)outerTitle.textContent=book.active?'Your learning goal · due week '+book.active.dueWeek:last?'Review your learning goal':'Set a learning goal';
+      const activeEntry=state.learningGoals?.active,hasReview=!!state.learningGoals?.history?.length;
+      if(outerTitle)outerTitle.textContent=activeEntry?'Your learning goal · due week '+activeEntry.dueWeek:hasReview?'Review your learning goal':'Set a learning goal';
       if(!site){container.replaceChildren();lastSignature='';draftSite=null;return;}
+      if(outer && !outer.open)return;
+      const book=summary(state),last=book.history[0];
       const opts=options(site);
       if(site.id!==draftSite){draftSite=site.id;aimKey='food';guardKey='trust';horizon=2;composing=false;}
       const guide=book.active?nextStep(sim):null;
-      const signature=JSON.stringify([site.id,site.name,state.week,book,guide,opts.aims.map(m=>m.value),opts.guards.map(m=>m.value),composing]);
+      const signature=JSON.stringify([site.id,site.name,state.week,state.effort,site.funds,site.materials,site.city?.precincts,book,guide,opts.aims.map(m=>m.value),opts.guards.map(m=>m.value),composing]);
       if(signature===lastSignature)return;
       lastSignature=signature;
       const focused=container.contains(document.activeElement)?document.activeElement.dataset.goalControl:null;
@@ -305,8 +357,9 @@
       container.classList.add('learning-goal');container.replaceChildren(...parts);
       if(focused)container.querySelector('[data-goal-control="'+focused+'"]')?.focus({preventScroll:true});
     }
+    outer?.addEventListener('toggle',render);
     render();
-    return {render,destroy(){container.replaceChildren();lastSignature='';}};
+    return {render,destroy(){outer?.removeEventListener('toggle',render);container.replaceChildren();lastSignature='';}};
   }
   root.EarthGoals=Object.freeze({options,preview,valid,summary,start,tick,nextStep,mount});
 })(typeof window==='undefined'?globalThis:window);

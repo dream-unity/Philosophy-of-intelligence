@@ -40,10 +40,28 @@
   const weekStep=(site,detail)=>({kind:'week',siteId:site.id,label:'Review the next week',detail});
   const meetStep=(site,p,verb='Hear',action='listen')=>({kind:'resident',group:'people',siteId:site.id,residentId:p.id,actionId:action+':'+p.id,label:verb+' '+p.name+' in '+site.name});
 
+  function constructionStep(world,site,accept) {
+    if(!site.construction?.length)return null;
+    const jobs=root.EarthConstruction?.view(site,world)?.jobs || [];
+    const matches=jobs.filter(job=>job.progress<1 && accept(job));
+    if(!matches.length)return null;
+    const job=matches.find(job=>job.workerNames.length) || matches[0];
+    const staffed=job.workerNames.length>0;
+    const detail=staffed?job.workerNames.join(' and ')+(job.workerNames.length===1?' is':' are')+' on the '+job.name+' crew in '+site.name+'. Stay in active play to let the crew finish.':
+      job.name+' is waiting for builders in '+site.name+'. Review the residents’ activities and offer a construction role.';
+    return {kind:'construction',siteId:site.id,jobId:job.id,label:(staffed?'Watch work on ':'Find a crew for ')+job.name,detail};
+  }
+  function buildingPromiseStep(world,site,p) {
+    const alternative=['garden','workshop','hall'][p.slot];
+    const step=constructionStep(world,site,job=>job.scope==='street' && job.kind===alternative);
+    if(!step)return null;
+    step.detail+=' Opening it this week can keep the promise to '+p.name+'. You can also deliver the agreed supplies in People before the end of week '+p.promise.dueWeek+'.';
+    return step;
+  }
   function promiseStep(world,site) {
     const people=site.residents;
     const promised=people.filter(p=>p.promise).sort((a,b)=>a.promise.dueWeek-b.promise.dueWeek)[0];
-    if(promised)return meetStep(site,promised,'Keep the promise to','fulfil');
+    if(promised)return buildingPromiseStep(world,site,promised) || meetStep(site,promised,'Keep the promise to','fulfil');
     const ready=people.find(p=>p.heard && world.week-p.lastPromise>=3);
     if(ready)return meetStep(site,ready,'Discuss a promise with','promise');
     const unheard=people.find(p=>!p.heard);
@@ -52,10 +70,16 @@
     return weekStep(site,'Residents are seeing how their last agreements worked out. A new promise is available in week '+nextWeek+'.');
   }
 
-  function apprenticeshipStep(site) {
+  function apprenticeshipStep(world,site) {
     if(!site.residents.some(p=>p.heard))return meetStep(site,site.residents[0]);
     if(!has(site,'hall')&&!has(site,'workshop')){
-      if(site.buildings.length===9)return {...groupStep(site,'build','Choose a lot to reopen in '+site.name),inspectReclaim:true};
+      const underway=constructionStep(world,site,job=>job.scope==='street' && ['workshop','hall'].includes(job.kind));
+      if(underway)return underway;
+      const occupied=site.buildings.length+(site.construction || []).filter(job=>job.scope==='street').length;
+      if(occupied>=9){
+        if(!site.buildings.length)return constructionStep(world,site,job=>job.scope==='street');
+        return {...groupStep(site,'build','Choose a lot to reopen in '+site.name),inspectReclaim:true};
+      }
       return groupStep(site,'build','Plan a repair workshop in '+site.name,'build:workshop');
     }
     return groupStep(site,'research','Review apprenticeship in '+site.name,'research:apprenticeship');
@@ -71,7 +95,7 @@
   }
 
   function stewardshipStep(world,site) {
-    if(!site.tech.includes('apprenticeship'))return apprenticeshipStep(site);
+    if(!site.tech.includes('apprenticeship'))return apprenticeshipStep(world,site);
     if(!site.tech.includes('exchange')){
       if(!world.routes.some(r=>r.from===site.id || r.to===site.id)){
         const partner=world.sites.find(s=>s.id!==site.id);
@@ -111,7 +135,7 @@
     }else if(world.charter==='craft'){
       const learner=sites.find(s=>!s.tech.includes('apprenticeship'));
       add('schools','Establish shared apprenticeships in two communities',facts.schools,2,
-        units(facts.schools,'community has','communities have')+' completed apprenticeship. The charter calls for two.',learner?apprenticeshipStep(learner):atlasStep(current));
+        units(facts.schools,'community has','communities have')+' completed apprenticeship. The charter calls for two.',learner?apprenticeshipStep(world,learner):atlasStep(current));
       const courier=sites.find(s=>s.delivery)||current;
       const recipient=personById(courier,courier.delivery?.residentId);
       add('deliveries','Deliver one street errand',facts.deliveries,1,units(facts.deliveries,'parcel','parcels')+' delivered.'+(recipient?' The current parcel belongs to '+recipient.name+' in '+courier.name+'.':''),
@@ -126,6 +150,38 @@
     const priority=!world.completed && (facts.termsMet || facts.stewards>0 || sites.some(s=>s.tech.includes('exchange')));
     return {key:world.charter,termsMet:facts.termsMet,stewardshipMet:facts.stewards>0,ratified:world.completed,rows,priority,
       next:world.completed?null:unfinished?.action||null,summary:world.completed?'Your network has ratified its charter.':unfinished?.detail||''};
+  }
+
+  function reclaimableShift(world) {
+    const host=world.sites.find(s=>s.shift && !s.shift.history.length);
+    if(!host)return null;
+    const person=personById(host,host.shift.residentId);
+    return {kind:'group',group:'people',page:'shift',siteId:host.id,label:'Review your day with '+person.name,
+      detail:'You have not completed a visit together. Ending the shift now returns its one effort immediately.'};
+  }
+
+  function reservedSupplies(sim,site,goods,step) {
+    const choices=[],jobs=site.construction || [],model=root.EarthCityModel;
+    for(const r of model?.overview(site).records || []){
+      if(!r.target || r.target===step.project)continue;
+      const refund=model.preview(site,sim.state,r.id,'cancel').recovery;
+      const job=jobs.find(j=>j.id===r.jobId);
+      choices.push({refund,progress:r.laborReady?1:job?job.work/job.total:0,
+        review:{kind:'city',siteId:site.id,precinct:r.id,project:'cancel',label:'Review the project at '+r.name}});
+    }
+    if(site.id===sim.state.activeId)for(const job of jobs){
+      if(job.scope!=='street')continue;
+      const cancellation=sim.previewCancelConstruction(job.id);
+      if(cancellation?.available)choices.push({refund:cancellation.refund,progress:job.work/job.total,
+        review:{kind:'construction',siteId:site.id,jobId:job.id,label:'Review the supplies reserved for '+job.name}});
+    }
+    const gaps=Object.entries(goods).filter(([key,need])=>site[key]<need);
+    const useful=choices.filter(c=>gaps.some(([key])=>c.refund[key]>0));
+    if(!useful.length || gaps.some(([key,need])=>site[key]+useful.reduce((n,c)=>n+(c.refund[key]||0),0)<need))return null;
+    const covers=c=>gaps.every(([key,need])=>site[key]+(c.refund[key]||0)>=need);
+    const chosen=useful.sort((a,b)=>Number(covers(b))-Number(covers(a)) || a.progress-b.progress)[0];
+    return {...chosen.review,detail:step.label+' needs the remaining effort this week. Cancelling this project would return '+chosen.refund.funds+' funds and '+chosen.refund.materials+' materials.'+
+      (!covers(chosen)?' A further release would also be needed.':'')+' Review the trade-off before deciding.'};
   }
 
   const paidWork={funds:'work:contract',materials:'work:salvage',food:'work:forage'};
@@ -143,7 +199,8 @@
     }else if(step.kind==='city'){
       const proposal=root.EarthCityModel?.preview(site,world,step.precinct,step.project);
       if(!proposal?.ok || proposal.available)return step;
-      if(root.EarthCityModel.overview(site).works>=2)return weekStep(site,'Both crews are working. Let a project finish or cancel an existing project before commissioning another.');
+      if(root.EarthCityModel.overview(site).works>=2)return constructionStep(world,site,job=>job.scope==='city') ||
+        weekStep(site,'Both precinct work sites are occupied. Advance to the scheduled opening or review a cancellation.');
       cost=proposal.cost.effort;goods={funds:proposal.cost.funds,materials:proposal.cost.materials};
     }else if(step.inspectVote || step.inspectPilot || step.actionId){
       const actions=sim.actions(step.group,site.id);
@@ -159,11 +216,33 @@
     const missing=Object.entries(goods).find(([key,n])=>site[key]<n);
     if(missing && world.effort>0){
       const [key,needed]=missing;
+      if(key==='funds' && site.delivery){
+        const handover=sim.actions('work',site.id).find(a=>a.id==='courier:deliver:'+site.delivery.residentId && a.available);
+        if(handover)return {...groupStep(site,'work',handover.label,handover.id),detail:'Hand over the parcel already collected. The delivery earns 3 funds and uses no effort.'};
+      }
+      const promised=step.actionId?.startsWith('fulfil:') && personById(site,step.actionId.slice('fulfil:'.length));
+      if(world.effort===cost && (step.startByWeek===world.week || promised?.promise?.dueWeek<=world.week)){
+        const released=reservedSupplies(sim,site,goods,step);
+        if(released)return released;
+        const p=promised;
+        if(p){
+          const extension=sim.actions('people',site.id).find(a=>a.id==='revise:'+p.id && a.available);
+          if(extension)return {...meetStep(site,p,'Discuss more time with','revise'),detail:extension.description};
+          const kind=['garden','workshop','hall'][p.slot];
+          const build=sim.actions('build',site.id).find(a=>a.kind===kind && a.available);
+          if(build)return {...groupStep(site,'build','Plan a '+build.label.toLowerCase()+' for '+p.name,build.id),
+            detail:'There is one effort left. You can commission this project now and let a crew finish it before advancing the week to keep the promise.'};
+        }
+      }
       const work=sim.actions('work',site.id).find(a=>a.id===paidWork[key]&&a.available);
       if(work)return {...groupStep(site,'work',work.label+' in '+site.name,work.id),
         detail:step.label+'. You have '+site[key]+' of the '+needed+' '+key+' needed. '+work.description};
     }
-    if(world.effort<cost)return weekStep(site,step.label+' needs '+cost+' effort. You have '+world.effort+' left. The next week restores four.');
+    if(world.effort<cost){
+      const shift=cost===world.effort+1 && reclaimableShift(world);
+      if(shift)return {...shift,detail:step.label+' needs '+cost+' effort. '+shift.detail};
+      return weekStep(site,step.label+' needs '+cost+' effort. You have '+world.effort+' left. The next week restores four.');
+    }
     return step;
   }
 
@@ -171,21 +250,39 @@
     const world=sim.state,site=sim.active();
     if(!site)return null;
     // Bring an expiring commitment back into view even if the player has travelled.
-    const urgent=world.sites.flatMap(s=>s.residents.filter(p=>p.promise?.dueWeek<=world.week).map(p=>({s,p})))
-      .sort((a,b)=>a.p.promise.dueWeek-b.p.promise.dueWeek)[0];
-    if(urgent && world.effort>0){
-      const step=meetStep(urgent.s,urgent.p,'Review the promise to','fulfil');
-      return prepareStep(sim,{...step,detail:urgent.p.name+'’s promise is due by the end of this week.'});
-    }
+    const due=world.sites.flatMap(s=>s.residents.filter(p=>p.promise?.dueWeek<=world.week).map(p=>({s,p})));
+    const urgent=due.map(({s,p})=>{
+      const building=buildingPromiseStep(world,s,p);
+      if(building)return {rank:0,step:building};
+      if(!world.effort && !reclaimableShift(world))return null;
+      const delivery=meetStep(s,p,'Review the promise to','fulfil');
+      const step=prepareStep(sim,{...delivery,detail:p.name+'’s promise is due by the end of this week.'});
+      // If several dates coincide, give the last effort to a promise it can still keep.
+      const rank=step.actionId===delivery.actionId?1:step.actionId?.startsWith('revise:')?2:3;
+      return {rank,step};
+    }).filter(Boolean).sort((a,b)=>a.rank-b.rank)[0];
+    if(urgent)return urgent.step;
     const commission=root.EarthCampaigns?.guidance(sim,site);
     if(commission)return prepareStep(sim,commission);
     if(world.completed){
       const term=active(world),last=world.legacy?.history?.[0];
-      if(term)return weekStep(world.sites.find(s=>s.id===term.siteId),
-        term.person+' has chaired '+term.siteName+' for '+term.decisions.length+' of '+WEEKS+' weeks. The handover review is due in week '+(term.start+WEEKS)+'.');
+      const shiftSite=world.sites.find(s=>s.shift);
+      if(term){
+        const due=term.start+WEEKS;
+        if(shiftSite){
+          const host=personById(shiftSite,shiftSite.shift.residentId);
+          return {kind:'group',group:'people',page:'shift',siteId:shiftSite.id,label:'Resume your day with '+host.name,
+            detail:term.person+' is serving on the council through the handover in week '+due+'. Your current resident shift ends at this week’s close.'};
+        }
+        return weekStep(world.sites.find(s=>s.id===term.siteId),
+          term.person+' has chaired '+term.siteName+' for '+term.decisions.length+' of '+WEEKS+' weeks. The handover review is due in week '+due+'.');
+      }
       if(!last){
-        if(!world.effort)return weekStep(site,'Your charter was ratified. Electing a resident takes one effort, available again next week.');
-        if(!site.residents.some(p=>p.heard))return {...meetStep(site,site.residents[0]),detail:'Hear a local resident before offering them the council chair.'};
+        if(!world.effort)return reclaimableShift(world) || weekStep(site,'Your charter was ratified. Electing a resident takes one effort, available again next week.');
+        const heard=site.residents.filter(p=>p.heard);
+        if(!heard.length)return {...meetStep(site,site.residents[0]),detail:'Hear a local resident before offering them the council chair.'};
+        if(heard.every(p=>p.id===site.shift?.residentId))return {kind:'group',group:'people',page:'shift',siteId:site.id,
+          label:'Review your day with '+heard[0].name,detail:'Finish the day together before electing '+heard[0].name+', or hear another local candidate.'};
       }
       return {...groupStep(site,'council',last?'Review '+last.person+'’s handover':'Review council succession'),page:'legacy',
         detail:last?last.result:'Your charter was ratified. You can elect a resident to chair the council for four weeks.'};
@@ -320,7 +417,8 @@
       const office = OFFICES[person.slot];
       add('council','legacy:start:'+person.id,'Elect '+person.name+' as '+office.name.toLowerCase(),
         office.brief+' For the next four weeks '+person.name+' will also choose this council’s votes. Keeps 2 funds and 2 materials in reserve, and at least 6 food for local households.',
-        {legacy:true,effort:1,gate:person.heard?'':'Hear '+person.name+' in People before offering the chair.'},() => {
+        {legacy:true,effort:1,gate:site.shift?.residentId===person.id?'Finish your day with '+person.name+' first, or elect another resident.':
+          person.heard?'':'Hear '+person.name+' in People before offering the chair.'},() => {
           world.legacy ||= {version:1,term:null,history:[]};
           world.legacy.term = {siteId:site.id,siteName:site.name,residentId:person.id,person:person.name,slot:person.slot,
             start:world.week,opening:measure(world),decisions:[],reached:[],partners:[]};
@@ -402,5 +500,5 @@
       t.decisions.length === world.week-t.start && strings(t.partners,WEEKS) && strings(t.reached,WEEKS));
   }
 
-  root.EarthLegacy = Object.freeze({governs,actions,tick,summary,valid,charterProgress,guidance,prepareStep,promiseStep});
+  root.EarthLegacy = Object.freeze({governs,actions,tick,summary,valid,charterProgress,guidance,prepareStep,promiseStep,constructionStep,buildingPromiseStep});
 })(typeof window === 'undefined' ? globalThis : window);

@@ -484,3 +484,102 @@ body.street-expanded[data-map-view="street"] #back-to-street { display: block; m
 @media (max-height: 535px) and (orientation: landscape) {
   .actions-list { max-height: none; overflow: visible; }
 }
+
+/* The active site reuses the existing town nameplate as a touch target. */
+#street-works {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  pointer-events: auto;
+}
+#street-works:hover { background: #c8d8b712; }
+#street-works:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+#street-work-label {
+  display: block;
+  margin-top: 3px;
+  color: #e7d49b;
+  font: 600 11px/1.25 var(--sans);
+  text-wrap: pretty;
+}
+#street-work-label[hidden], #street-works[hidden] { display: none; }
+.actions-list .worksite-card {
+  border-inline-start: 3px solid #bfa16a;
+  background: #193034;
+}
+.worksite-card h3, .worksite-heading { margin: 3px 0 8px; }
+.worksite-card h3 { font: 600 18px/1.2 var(--serif); }
+.actions-list .worksite-location { color: #c7d7c2; font: 550 11px/1.35 var(--sans); }
+.worksite-stages { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; }
+.worksite-stages strong { font: 550 12px/1.4 var(--sans); }
+.worksite-percent { color: #efdaa2; font: 600 12px/1.35 var(--mono); }
+.worksite-progress { appearance: none; width: 100%; height: 6px; margin: 4px 0; border: 0; border-radius: 3px; overflow: hidden; background: #314448; accent-color: #d7b475; }
+.worksite-progress::-webkit-progress-bar { background: #314448; }
+.worksite-progress::-webkit-progress-value { background: #d7b475; }
+.worksite-progress::-moz-progress-bar { background: #d7b475; }
+.worksite-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.actions-list .worksite-actions button, .actions-list .worksite-cancel button { min-height: 44px; }
+.actions-list .worksite-cancel { margin-top: 6px; padding: 0; border: 0; background: transparent; }
+.worksite-cancel summary, .worksite-roster summary { min-height: 44px; align-content: center; font-weight: 600; }
+.worksite-cancel summary { color: var(--teal); }
+.actions-list .worksite-roster { padding-block: 0 4px; }
+.worksite-worker { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--line); }
+.worksite-worker-status { color: #e3d19e; font: 550 12px/1.4 var(--sans); }
+.worksite-role { display: grid; gap: 4px; margin-top: 4px; font: 550 11px/1.4 var(--sans); color: var(--muted); }
+.worksite-role select { display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 44px; padding: 6px; color: var(--paper); background: #152b30; border: 1px solid #637975; border-radius: 3px; }
+.actions-list .worksite-proposal { margin-bottom: 0; border-inline-start-color: #bfa16a; }
+
+.actions-list .worksite-queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+}
+.worksite-queue-head .worksite-heading { margin: 0; }
+#crew-order-hud[hidden] { display: none; }
+body[data-crew-order] .street-stage-heading > :not(#crew-order-hud) { display: none; }
+#crew-order-hud { pointer-events: auto; color: #eae8d6; }
+#crew-order-hud .kicker { color: #dfc38b; font-size: 9px; }
+#crew-order-names { display: block; font: 600 14px/1.3 var(--sans); margin: 2px 0 5px; }
+#crew-order-hud > div { display: flex; flex-wrap: wrap; gap: 5px; }
+#crew-order-hud button { min-width: 44px; min-height: 44px; padding: 3px 9px; background: #1c3637; border: 1px solid #728681; border-radius: 3px; color: #f0e9d1; font-size: 12px; }
+#crew-order-hud #crew-order-cancel { border-color: #8b785a; }
+.crew-selection { min-width: 0; margin: 0; padding: 0; border: 0; }
+.crew-selection legend { margin: 0 0 6px; font: 650 15px/1.35 var(--sans); color: var(--paper); }
+#crew-order-workers { display: grid; gap: 5px; }
+.sheet .crew-order-person {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #152d30;
+  cursor: pointer;
+}
+.crew-order-person:has(input:checked) { border-color: #c9ae75; background: #263b34; }
+.crew-order-person input { width: 19px; height: 19px; min-height: 19px; margin: 0; accent-color: #c9ae75; }
+.crew-order-copy { display: grid; gap: 1px; min-width: 0; font: 500 12px/1.35 var(--sans); }
+.crew-order-copy strong { color: var(--paper); font-size: 14px; }
+.crew-order-duty { color: #dbd0a6; }
+.crew-order-limit { color: var(--muted); font-size: 11px; }
+.crew-order-aim { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 9px; margin: 10px 0 5px; }
+#crew-order-status { margin: 0; font-size: 12px; }
+#crew-order-arm { min-height: 44px; }
+#crew-order-listing { border-top: 1px solid var(--line); margin-top: 8px; }
+#crew-order-listing summary { min-height: 44px; align-content: center; color: var(--teal); cursor: pointer; }
+#crew-order-targets { display: grid; gap: 6px; }
+#crew-order-targets button { min-height: 44px; text-align: left; }
+.actions-list .resident-duty { margin: 3px 0 0; color: #cad8bd; }
+.actions-list .plot-crew { color: #d7c796; }

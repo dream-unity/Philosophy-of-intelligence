@@ -6,7 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const source=process.env.COMMON_EARTH_GAME_DIR||path.resolve(__dirname,'../common-earth');
 const browser=vm.createContext({});browser.window=browser;
-for(const name of ['legacy','simulation'])vm.runInContext(fs.readFileSync(path.join(source,name+'.js'),'utf8'),browser);
+for(const name of ['construction','navigation','campaigns','legacy','simulation'])vm.runInContext(fs.readFileSync(path.join(source,name+'.js'),'utf8'),browser);
 const game=()=>browser.CommonEarthSim.create({storage:null});
 const place=(name,lat,lon)=>({name,lat,lon,water:false});
 function success(result){assert.equal(result.ok,true,result.message);}
@@ -14,7 +14,7 @@ function step(s,id){
   for(let i=0;i<40;i++){
     const action=s.actions().find(a=>a.id===id);
     assert.ok(action,id);
-    if(action.available){success(s.act(id));return;}
+    if(action.available){success(s.act(id));if(id.startsWith('build:'))success(s.workConstruction(300));return;}
     if(s.state.effort<action.cost){success(s.advance());continue;}
     const missing=Object.entries(action.goods).find(([key,quantity])=>s.active()[key]<quantity);
     assert.ok(missing,id+': '+action.reason);
@@ -104,6 +104,10 @@ for(const charter of ['care','voice','craft']){
       assert.equal(JSON.stringify(s.state),before,'reading the guide must be free');
       assert.ok(guide?.label,'missing guidance');
       if(guide.siteId!==s.state.activeId)success(s.visit(guide.siteId));
+      if(guide.kind==='construction'){
+        const job=s.constructionView().jobs.find(job=>job.id===guide.jobId);
+        assert.ok(job,guide.label);success(s.workConstruction(120));continue;
+      }
       if(guide.kind==='week'){success(s.advance());continue;}
       if(guide.kind==='atlas'){
         assert.ok(s.sponsorshipOffer().available,'the atlas shortcut should wait for viable sponsorship');
@@ -131,7 +135,7 @@ for(const charter of ['care','voice','craft']){
 
 test('both trials in all nine local commissions can be completed by following their local priorities',()=>{
   const ctx=vm.createContext({});ctx.window=ctx;
-  for(const name of ['navigation','city','neighbours','shifts','campaigns','legacy','simulation']){
+  for(const name of ['construction','navigation','city','neighbours','shifts','campaigns','legacy','simulation']){
     vm.runInContext(fs.readFileSync(path.join(source,name+'.js'),'utf8'),ctx);
   }
   const places=[
@@ -146,6 +150,10 @@ test('both trials in all nine local commissions can be completed by following th
     assert.equal(site.commission.key,key);
     for(let move=0;move<30 && site.commission.phase!=='complete';move++){
       const step=ctx.EarthLegacy.guidance(sim);assert.ok(step,key);
+      if(step.kind==='construction'){
+        const job=sim.constructionView().jobs.find(job=>job.id===step.jobId);
+        assert.ok(job,key+' should follow a real worksite');success(sim.workConstruction(120));continue;
+      }
       if(step.kind==='week'){success(sim.advance());continue;}
       const actions=sim.actions(step.group);
       const selected=step.inspectPilot?actions.filter(a=>a.id.startsWith('commission:pilot:'))[trial]:
@@ -162,4 +170,106 @@ test('both trials in all nine local commissions can be completed by following th
     assert.ok(ctx.CommonEarthSim.readSave(JSON.stringify(sim.state)),key+' round-trip');
     sim.destroy();
   }
+});
+
+test('an in-progress building can meet an active promise at opening or the player can deliver before then',()=>{
+  for(const [slot,kind] of ['garden','workshop','hall'].entries())for(const outcome of ['open','deliver','expire']){
+    const s=game();success(s.found(place('Stone Town',-6.1622,39.1922)));
+    const site=s.active(),person=site.residents[slot];
+    step(s,'listen:'+person.id);
+    // An agreement may even be made after the work has started.
+    success(s.act('build:'+kind,2));
+    step(s,'promise:'+person.id);
+    const job=site.construction[0];
+    const waiting=browser.EarthLegacy.guidance(s);
+    assert.equal(waiting.kind,'construction');assert.equal(waiting.jobId,job.id);
+    assert.ok(waiting.detail.includes(person.name));assert.match(waiting.detail,/deliver.*supplies/i);
+    assert.equal(site.stats.kept,0);assert.equal(site.buildings.length,0);
+    if(outcome==='deliver')step(s,'fulfil:'+person.id);
+    if(outcome==='expire')while(person.promise)success(s.advance());
+    const kept=site.stats.kept,bond=person.bond;
+    success(s.workConstruction(120));
+    assert.equal(site.buildings.length,1);assert.equal(site.buildings[0].plot,2);
+    const partners=Array.from(site.buildings[0].partners);
+    assert.deepEqual(partners,outcome==='open'?[person.id]:[]);
+    assert.equal(site.stats.kept,kept+(outcome==='open'?1:0));
+    if(outcome!=='open')assert.equal(person.bond,bond);
+    assert.ok(browser.CommonEarthSim.readSave(JSON.stringify(s.state)));
+    s.destroy();
+  }
+});
+
+test('an unstaffed apprenticeship site keeps the same lot and offers a crew before research',()=>{
+  const s=game();success(s.found(place('Stone Town',-6.1622,39.1922)));
+  const site=s.active();step(s,'charter:craft');step(s,'listen:'+site.residents[0].id);
+  success(s.act('build:workshop',7));
+  const job=site.construction[0];
+  for(const p of site.residents)success(s.setWorkPreference(p.id,'usual'));
+  const stalled=browser.EarthLegacy.guidance(s);assert.equal(stalled.kind,'construction');
+  assert.equal(stalled.jobId,job.id);assert.match(stalled.label,/crew/i);
+  success(s.workConstruction(120));success(s.advance());
+  assert.equal(job.work,0);assert.equal(site.buildings.length,0);
+  assert.equal(s.actions('research').find(a=>a.id==='research:apprenticeship').available,false);
+  success(s.setWorkPreference(site.residents[1].id,'build',job.id));
+  const staffed=browser.EarthLegacy.guidance(s);assert.equal(staffed.jobId,job.id);
+  assert.match(staffed.label,/watch/i);assert.ok(staffed.detail.includes(site.residents[1].name));
+  success(s.workConstruction(120));assert.equal(site.buildings[0].plot,7);
+  assert.equal(browser.EarthLegacy.guidance(s).actionId,'research:apprenticeship');
+  s.destroy();
+});
+
+test('a Melbourne commission follows the two halves of a planned street link until each really opens',()=>{
+  const s=game();success(s.found(place('Melbourne',-37.81,144.96),'District','accept'));
+  const site=s.active();
+  step(s,'listen:'+site.residents[0].id);step(s,'listen:'+site.residents[1].id);
+  success(s.act('build:garden',0));success(s.advance());
+  while(site.funds<6)step(s,'work:contract');
+  while(site.materials<3)step(s,'work:salvage');
+  success(s.act('build:workshop',1));
+  for(const p of site.residents)success(s.setWorkPreference(p.id,'usual'));
+  const jobs=Array.from(site.construction);
+  assert.equal(browser.EarthCampaigns.summary(s.state,site).milestones[1].met,false);
+  for(const job of jobs){
+    success(s.setWorkPreference(site.residents[0].id,'build',job.id));
+    assert.equal(browser.EarthLegacy.guidance(s).jobId,job.id);
+    success(s.workConstruction(job.total+35));
+    assert.equal(site.buildings.at(-1).plot,job.plot);
+    success(s.setWorkPreference(site.residents[0].id,'usual'));
+  }
+  assert.equal(browser.EarthCampaigns.summary(s.state,site).milestones[1].met,true);
+  assert.equal(browser.EarthLegacy.guidance(s).inspectPilot,true);
+});
+
+test('one remaining effort goes to a viable promise and can secure an extension when only a deposit is available',()=>{
+  const initial=game();success(initial.found(place('Stone Town',-6.1622,39.1922)));
+  const people=initial.active().residents;
+  for(const p of people.slice(0,2)){step(initial,'listen:'+p.id);step(initial,'promise:'+p.id);}
+  success(initial.advance());step(initial,'listen:'+people[1].id);success(initial.advance());
+  const snapshot=JSON.parse(JSON.stringify(initial.state));
+  snapshot.effort=1;snapshot.sites[0].food=0;snapshot.sites[0].materials=2;
+  const fresh=()=>browser.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(snapshot)});
+  const first=fresh(),ready=browser.EarthLegacy.guidance(first);
+  assert.equal(ready.actionId,'fulfil:'+people[1].id);
+  success(first.act(ready.actionId));assert.equal(first.active().stats.kept,1);first.destroy();
+  snapshot.sites[0].residents[0].promise=null;snapshot.sites[0].materials=1;
+  const later=fresh(),extend=browser.EarthLegacy.guidance(later);
+  assert.equal(extend.actionId,'revise:'+people[1].id);success(later.act(extend.actionId));
+  success(later.advance());const fulfil=browser.EarthLegacy.guidance(later);
+  if(fulfil.actionId==='work:salvage')success(later.act(fulfil.actionId));
+  success(later.act('fulfil:'+people[1].id));assert.equal(later.active().stats.kept,1);
+  initial.destroy();later.destroy();
+});
+
+test('an outstanding parcel can fund a same-week promise without spending the final effort on paid work',()=>{
+  const initial=game();success(initial.found(place('Stone Town',-6.1622,39.1922)));
+  const p=initial.active().residents[2];step(initial,'listen:'+p.id);step(initial,'promise:'+p.id);
+  success(initial.advance());success(initial.advance());step(initial,'courier:pick');
+  const snapshot=JSON.parse(JSON.stringify(initial.state));
+  snapshot.effort=1;snapshot.sites[0].funds=0;
+  const sim=browser.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(snapshot)});
+  const parcel=browser.EarthLegacy.guidance(sim);assert.match(parcel.actionId,/^courier:deliver:/);
+  success(sim.act(parcel.actionId));assert.equal(sim.state.effort,1);
+  const promise=browser.EarthLegacy.guidance(sim);assert.equal(promise.actionId,'fulfil:'+p.id);
+  success(sim.act(promise.actionId));assert.equal(sim.active().stats.kept,1);
+  initial.destroy();sim.destroy();
 });

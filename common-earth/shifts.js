@@ -150,6 +150,10 @@
       const active=world.sites.find(s=>s.shift),host=person(active,active.shift.residentId);
       reason=`Finish the shift with ${host?.name||'the resident'} in ${active.name} first.`;
     }
+    else if(world.legacy?.term?.siteId===site.id && world.legacy.term.residentId===residentId){
+      const term=world.legacy.term;
+      reason=resident.name+' is chairing the council until week '+(term.start+4)+'. Plan a day with another resident or return after the handover.';
+    }
     else if(site.lastShiftWeek===world.week)reason='This district has already hosted a shift this week.';
     else if(resident.lastShiftWeek&&world.week-resident.lastShiftWeek<3)reason=`${resident.name} can host another shift in week ${resident.lastShiftWeek+3}.`;
     else if(world.effort<1)reason='A resident shift needs 1 effort. Advance the week to refresh.';

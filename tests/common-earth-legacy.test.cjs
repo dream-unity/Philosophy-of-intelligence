@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const directory = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname,'../common-earth');
 const ctx = vm.createContext({});
 ctx.window = ctx;
-for (const basename of ['navigation','voyages','neighbours','shifts','campaigns','city','strategy','legacy','simulation']) {
+for (const basename of ['construction','navigation','voyages','neighbours','shifts','campaigns','city','strategy','legacy','simulation']) {
   vm.runInContext(fs.readFileSync(path.join(directory,basename+'.js'),'utf8'),ctx,{filename:basename+'.js'});
 }
 const E = ctx.CommonEarthSim;
@@ -43,7 +43,7 @@ function olderRatifiedWorld() {
     spend(sim,'promise:'+p.id);
     spend(sim,'fulfil:'+p.id);
   }
-  spend(sim,'build:workshop');
+  spend(sim,'build:workshop');ok(sim.workConstruction(120));
   spend(sim,'research:apprenticeship');
   while(!home.stats.resolved){
     const vote=sim.actions('council').find(o=>o.available && o.id.startsWith('vote:'));
@@ -160,3 +160,23 @@ for(const affordable of [false,true]){
     assert.ok(E.readSave(JSON.stringify(sim.state)));
   });
 }
+
+test('a shift host finishes the day before accepting the chair, while other residents can still work with the player',()=>{
+  const sim=getGame(memory(olderRatifiedWorld())),site=sim.active(),[chair,host]=site.residents;
+  if(sim.state.effort<3)ok(sim.advance());
+  ok(sim.beginShift(chair.id));
+  const blocked=sim.actions('council').find(a=>a.id==='legacy:start:'+chair.id);
+  assert.equal(blocked.available,false);assert.match(blocked.reason,/finish your day/i);
+  assert(sim.actions('council').find(a=>a.id==='legacy:start:'+host.id).available);
+  ok(sim.finishShift());ok(sim.act('legacy:start:'+chair.id));
+  const earlier=sim.state.week;
+  const conflict=sim.beginShift(chair.id);
+  assert.equal(conflict.ok,false);assert.ok(conflict.message.includes('week '+(earlier+4)));
+  ok(sim.beginShift(host.id));
+  const day=ctx.EarthLegacy.guidance(sim);assert.equal(day.page,'shift');assert.ok(day.label.includes(host.name));
+  ok(sim.finishShift());
+  const other=sim.state.sites.find(s=>s.id!==site.id);ok(sim.visit(other.id));
+  ok(sim.beginShift(other.residents[chair.slot].id));ok(sim.finishShift());
+  fourAdvances(sim);
+  ok(sim.visit(site.id));assert.equal(sim.state.legacy.term,null);ok(sim.beginShift(chair.id));
+});

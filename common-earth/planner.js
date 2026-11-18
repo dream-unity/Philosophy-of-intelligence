@@ -3,7 +3,7 @@
   'use strict';
   const dimensions={food:'Food',funds:'Funds',materials:'Materials',trust:'Trust',wellbeing:'Wellbeing',population:'Residents'};
   const groups={work:'Work',people:'Relationships',build:'Construction',city:'City planning',council:'Council',research:'Research',routes:'Trade routes'};
-  const idle='wait', cityMove='city-project';
+  const idle='wait', cityMove='city-project', crewMove='crew-preference';
   const urbanMeasures={capacity:'Housing capacity',reachable:'Precincts within 15 minutes',pressure:'Precincts facing rent pressure',noise:'Precincts affected by industry'};
   const cityModel=()=>globalThis.EarthCityModel;
   function urbanOptions(sim, firstOnly=false) {
@@ -31,16 +31,19 @@
   }
   function moves(sim) {
     const available=sim.actions().filter(a=>a.available&&groups[a.group]);
+    if(sim.active() && sim.setWorkPreference)available.push({id:crewMove,group:'work',label:'Change a resident’s work preference',cost:0});
     if(urbanOptions(sim,true).length)available.push({id:cityMove,group:'city',label:'Plan a precinct project',cost:null});
     return available;
   }
   function apply(sim,move) {
     if(!move || move.id===idle)return {ok:true,message:''};
     if(move.id===cityMove)return sim.planCity(move.location,move.project);
+    if(move.id===crewMove)return sim.setWorkPreference(move.residentId,move.preference || 'build',move.jobId || null);
     return sim.act(move.id,move.plot);
   }
-  function project(initial,plan,horizon) {
+  function project(initial,plan,horizon,workSeconds=0) {
     if(!Number.isInteger(horizon)||horizon<1||horizon>4)return {ok:false,message:'Choose a horizon of one to four weeks.'};
+    if(!Number.isInteger(workSeconds)||workSeconds<0||workSeconds>300)return {ok:false,message:'Choose up to five minutes of active work per week.'};
     const sim=fork(initial),effects=[];
     try {
       if(!sim.active())return {ok:false,message:'Found a community before rehearsing a decision.'};
@@ -51,12 +54,17 @@
       }
       const site=sim.active(),people=site.residents.map(p=>({id:p.id,name:p.name}));
       for(let i=0;i<horizon;i++){
+        if(workSeconds){
+          const worked=sim.workConstruction(workSeconds);
+          if(!worked.ok)return worked;
+          if(worked.message)effects.push(worked.message);
+        }
         const result=sim.advance({includeHighlights:true});
         if(!result.ok)return result;
         for(const note of result.highlights)effects.push(note);
       }
       const end=sim.active();
-      return {ok:true,week:sim.state.week,name:end.name,site:Object.fromEntries(Object.keys(dimensions).map(k=>[k,end[k]])),
+      return {ok:true,week:sim.state.week,name:end.name,openBuildings:end.buildings.length,ongoing:end.construction?.length || 0,site:Object.fromEntries(Object.keys(dimensions).map(k=>[k,end[k]])),
         city:cityModel()?.overview(end),
         links:globalThis.EarthNeighbours?.summary(end).links||[],
         people:people.map(p=>{const endPerson=end.residents.find(r=>r.id===p.id);return {...p,bond:endPerson.bond,promise:endPerson.promise?.dueWeek||null};}),
@@ -69,9 +77,13 @@
     const label=el('label',caption),select=el('select');label.append(select);return {label,select};
   }
   function mount(root,live) {
-    let state, fingerprint='', horizon=2, plans=[];
+    let state,liveWorld,horizon=2,workSeconds=60,plans=[];
+    function capture() {
+      liveWorld=live.state;
+      state=JSON.parse(JSON.stringify(liveWorld));
+    }
     function fresh() {
-      state=JSON.parse(JSON.stringify(live.state));
+      capture();
       const temp=fork(state);
       const available=moves(temp);
       const starter=available.find(m=>m.id==='build:garden')||available.find(m=>m.group==='work');
@@ -105,6 +117,37 @@
             pick.select.value=move.plot;pick.select.dataset.control='plot-'+index+'-'+i;
             pick.select.addEventListener('change',()=>{move.plot=Number(pick.select.value);draw('plot-'+index+'-'+i);});box.append(pick.label);
           }
+          if(move.id===crewMove){
+            const {jobs,workers,preferences}=virtual.constructionView();
+            const person=dropdown('Resident'),role=dropdown('Work preference');
+            const worker=workers.find(w=>w.residentId===move.residentId) || workers.find(w=>!w.jobId && w.slot===1) || workers[0];
+            move.residentId=worker.residentId;
+            move.preference ||= jobs.length?'build':'food';
+            for(const w of workers){
+              const o=el('option',w.name+' · '+w.role);o.value=w.residentId;person.select.append(o);
+            }
+            for(const pref of preferences){
+              const o=el('option',pref.label);o.value=pref.id;role.select.append(o);
+            }
+            person.select.value=move.residentId;role.select.value=move.preference;
+            person.select.dataset.control='worker-'+index+'-'+i;role.select.dataset.control='role-'+index+'-'+i;
+            person.select.addEventListener('change',()=>{move.residentId=person.select.value;draw(person.select.dataset.control);});
+            role.select.addEventListener('change',()=>{move.preference=role.select.value;move.jobId=null;draw(role.select.dataset.control);});
+            box.append(person.label,role.label);
+            if(move.preference==='build' && jobs.length){
+              const site=dropdown('Worksite');
+              const any=el('option','Any available site');any.value='';site.select.append(any);
+              for(const job of jobs){
+                const place=job.scope==='street'?'Lot '+(job.plot+1):'Precinct '+(job.precinct+1);
+                const o=el('option',job.name+' · '+place);o.value=job.id;site.select.append(o);
+              }
+              if(!jobs.some(j=>j.id===move.jobId))move.jobId=null;
+              site.select.value=move.jobId || '';site.select.dataset.control='job-'+index+'-'+i;
+              site.select.addEventListener('change',()=>{move.jobId=site.select.value || null;draw(site.select.dataset.control);});
+              box.append(site.label);
+            }else move.jobId=null;
+            box.append(el('p','Residents travel to their new work and finish existing commitments. The time you allow before the week closes affects their contribution.','plan-consequence'));
+          }
           if(move.id===cityMove) {
             const available=urbanOptions(virtual);
             if(!available.length) {
@@ -127,7 +170,7 @@
               proposal.select.addEventListener('change',()=>{move.project=proposal.select.value;draw(proposal.select.dataset.control);});
               const detail=selected.preview.cancel
                 ? 'Return '+selected.preview.recovery.funds+' funds and '+selected.preview.recovery.materials+' materials. The existing land use continues.'
-                : 'Opens in week '+selected.preview.week+'. '+selected.preview.people;
+                : 'Earliest opening is week '+selected.preview.week+', after the crew finishes construction. '+selected.preview.people;
               box.append(area.label,proposal.label,el('p',detail,'plan-consequence'));
             }
           }
@@ -148,9 +191,17 @@
       h.select.value=horizon;h.select.dataset.control='horizon';
       h.select.addEventListener('change',()=>{horizon=Number(h.select.value);draw('horizon');});
       const home=state.sites.find(s=>s.id===state.activeId);
-      root.append(el('p','Try two plans for '+home.name+' from week '+state.week+'. Both start with today’s resources. After your chosen moves, the same number of weeks pass with no further player action.','plan-intro'),h.label);
+      const clock=dropdown('Active play before each weekly close');
+      for(const seconds of [0,15,30,60,120,300]){
+        const option=el('option',seconds===0?'None · advance immediately':seconds<60?seconds+' seconds':(seconds/60)+' min');
+        option.value=seconds;clock.select.append(option);
+      }
+      clock.select.value=workSeconds;clock.select.dataset.control='work-time';
+      clock.select.addEventListener('change',()=>{workSeconds=Number(clock.select.value);draw('work-time');});
+      const refresh=btn('Use current district conditions',()=>{capture();draw('refresh');});refresh.dataset.control='refresh';
+      root.append(el('p','Compare two plans from the same moment in '+home.name+', week '+state.week+'. Choose how long the game stays visible before each calendar advance. Only staffed projects make progress during that time.','plan-intro'),h.label,clock.label,refresh);
       drawBranch(0,controls);drawBranch(1,controls);root.append(controls);
-      const [a,b]=plans.map(plan=>project(state,plan,horizon));
+      const [a,b]=plans.map(plan=>project(state,plan,horizon,workSeconds));
       if(a.ok&&b.ok){
         const table=el('table',null,'plan-table');
         table.append(el('caption','Projected conditions in week '+a.week));
@@ -161,6 +212,9 @@
           if(first!==second)r.className='plan-difference';body.append(r);
         }
         for(const [key,label] of Object.entries(dimensions))row(label,home[key],a.site[key],b.site[key]);
+        if(home.buildings.length!==a.openBuildings||home.buildings.length!==b.openBuildings)row('Open central buildings',home.buildings.length,a.openBuildings,b.openBuildings);
+        const ongoing=home.construction?.length || 0;
+        if(ongoing||a.ongoing||b.ongoing)row('Projects under construction',ongoing,a.ongoing,b.ongoing);
         if(a.city&&b.city) {
           const today=cityModel().overview(home);
           for(const [key,label] of Object.entries(urbanMeasures))if(a.city[key]!==b.city[key]||a.city[key]!==today[key])row(label,today[key],a.city[key],b.city[key]);
@@ -197,15 +251,15 @@
     function render() {
       if(details)details.hidden=!live.active();
       if(!live.active()||details&&!details.open)return;
-      const next=JSON.stringify(live.state);
-      if(next!==fingerprint){fresh();fingerprint=next;draw();}
+      // Keep the selected branches stable while real crews work in the background.
+      if(!state||liveWorld!==live.state||state.activeId!==live.state.activeId){fresh();draw();}
     }
     details?.addEventListener('toggle',render);
     function compareCity(location,project) {
       if(!live.active()||!details)return;
       const check=cityModel()?.preview(live.active(),live.state,location,project);
       if(!check?.available)return;
-      fresh();fingerprint=JSON.stringify(live.state);horizon=Math.max(2,check.turns);
+      fresh();horizon=Math.max(2,check.turns);
       plans=[[{id:idle}],[{id:cityMove,location,project}]];
       details.hidden=false;details.open=true;draw('project-1-0');
       details.scrollIntoView({block:'start',behavior:'instant'});

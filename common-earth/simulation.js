@@ -163,7 +163,7 @@
       return c?{name:c.name,agenda:q.title,effect:summary(c.practice)+' per week',rate:{...c.practice}}:null;
     }).filter(Boolean);
   }
-  function rates(site,cityDelta) {
+  function rates(site,cityDelta,world) {
     const result={funds:2,food:3-Math.ceil(site.population/5),materials:1,wellbeing:0};
     result[site.specialty]++;
     const markets=marketPlan(site);
@@ -178,7 +178,7 @@
     if(site.tech.includes('apprenticeship')) result.materials++;
     for(const practice of practices(site))for(const [k,v] of Object.entries(practice.rate))result[k]+=v;
     const district=cityDelta ?? root.EarthCityModel?.overview(site)?.weekly;
-    for(const contribution of [district,root.EarthStrategy?.rates(site)]){
+    for(const contribution of [district,root.EarthStrategy?.rates(site),root.EarthConstruction?.weeklyAdjustment(site,world)]){
       for(const [k,v] of Object.entries(contribution || {}))result[k]=(result[k] || 0)+v;
     }
     return result;
@@ -314,6 +314,13 @@
     if(site.shiftFollowUps!=null && (!Array.isArray(site.shiftFollowUps) ||
       root.EarthShifts?.validFollowUp && !site.shiftFollowUps.every(f=>root.EarthShifts.validFollowUp(site,f))))return false;
     root.EarthCityModel?.normalise(site);
+    if(root.EarthConstruction){
+      site.construction ??= [];
+      if(!root.EarthConstruction.valid(site,world))return false;
+      if(root.EarthCityModel?.migrateWork?.(site,world)===false)return false;
+      if(!root.EarthConstruction.valid(site,world))return false;
+      if(root.EarthCityModel?.validWork && !root.EarthCityModel.validWork(site,site.construction))return false;
+    }
     return true;
   }
   function validRoute(route,world,ids){
@@ -352,6 +359,7 @@
       const saved=JSON.parse(raw);
       if(!recordLike(saved)||saved.version!==VERSION||!integer(saved.week,1)||!integer(saved.effort,0,MAX_EFFORT)||!Array.isArray(saved.sites))return null;
       const world={...blank(),...saved},ids=new Set(world.sites.map(site=>site?.id));
+      if(['actionRevision','workRevision','constructionThrough'].some(key=>world[key]!=null && !integer(world[key])))return null;
       if(ids.size!==world.sites.length || !world.sites.every(site=>validSite(site,world,ids)))return null;
       if(!unique(world.sites.flatMap(s=>s.residents.map(p=>p.id))))return null;
       if(!Array.isArray(world.routes)||!world.routes.every(route=>validRoute(route,world,ids))||!unique(world.routes.map(r=>r.id)))return null;
@@ -386,14 +394,15 @@
     if(storage===undefined){ try { storage=root.localStorage; } catch(e){storage=null;} }
     const key=options.key || 'common-earth.world.v1';
     let world=blank(),saveIssue=!storage,saveMessage=!storage?'This browser cannot store the world between visits.':'';
-    let lastSeen=null,lastGood=null,futureSave=false;
+    let lastSeen=null,lastGood=null,futureSave=false,unsavedAction=false,diverged=false;
+    let actionGeneration=0,lastSyncWasWork=false;
     const backupKey=key+'.previous',listeners=new Set();
     const current=()=>world.sites.find(s=>s.id===world.activeId)||null;
     const record=(text,site)=>{world.journal.unshift({week:world.week,text,siteId:site ? site.id : null}); world.journal.length=Math.min(world.journal.length,160);};
     const reject=message=>({ok:false,message});
-    function notify(external=false){
+    function notify(external=false,details={}){
       for(const fn of listeners){
-        try{fn(world,{external,message:saveMessage});}
+        try{fn(world,{external,message:saveMessage,...details});}
         catch(error){
           // A view that fails to redraw cannot undo a committed economic turn.
           if(root.reportError)root.reportError(error);
@@ -423,27 +432,59 @@
     const initial=!storage && typeof options.snapshot==='string'?options.snapshot:storageRead(key);
     if(initial!==undefined)restore(initial,false);
     function sync(){
-      if(!storage)return false;
+      if(!storage || diverged)return false;
       const raw=storageRead(key);
       if(raw===undefined || raw===lastSeen)return false;
-      restore(raw,true);notify(true);return true;
+      if(unsavedAction){
+        // A clock in another tab can write the old economic position after a
+        // local quota failure. Keep the player's choice and retry on the next save.
+        const incoming=readSave(raw),base=readSave(lastGood);
+        if(incoming && base && (incoming.actionRevision||0)===(base.actionRevision||0) &&
+            incoming.week===base.week && (incoming.workRevision||0)>(base.workRevision||0)){
+          lastSeen=raw;lastGood=raw;
+          return false;
+        }
+        // Both tabs made a player choice. Keep both turns available: the other
+        // one on disk, and this one here for copying or export under a new name.
+        diverged=true;saveIssue=true;lastSyncWasWork=false;actionGeneration++;
+        saveMessage='Another tab saved a different turn. Your choices are still here. Use Saved worlds to copy or export this version.';
+        notify(true);
+        return true;
+      }
+      const prior=world;
+      restore(raw,true);
+      lastSyncWasWork=!!world.workRevision && world.workRevision>(prior.workRevision||0) &&
+        world.actionRevision===prior.actionRevision && world.week===prior.week && !saveIssue;
+      if(lastSyncWasWork){
+        const completed=[];
+        for(const before of prior.sites){
+          const after=world.sites.find(s=>s.id===before.id);
+          for(const job of before.construction||[]){
+            if(after && !after.construction?.some(next=>next.id===job.id))completed.push({...job,siteId:before.id});
+          }
+        }
+        notify(true,{construction:true,completed});
+      }else{actionGeneration++;notify(true);}
+      return true;
     }
     const conflict='Another tab updated this world. Review the current state and try again.';
     function guarded(operation,allowNewer=false){
       return (...args)=>{
-        if(sync())return reject(conflict);
+        if(sync()&&!lastSyncWasWork)return reject(conflict);
         if(futureSave&&!allowNewer)return reject(saveMessage);
         return operation(...args);
       };
     }
     function onStorage(event){if((event.key===key||event.key===null) && (!event.storageArea || event.storageArea===storage))sync();}
     if(storage && root.addEventListener)root.addEventListener('storage',onStorage);
-    function save(){
+    function save(notice={}){
       if(sync())return reject(conflict);
-      if(storage){
+      if(notice.construction)world.workRevision=(world.workRevision||0)+1;
+      else{world.actionRevision=(world.actionRevision||0)+1;actionGeneration++;}
+      if(storage && !diverged){
         const text=JSON.stringify(world);
         try{
-          if(lastGood && lastGood!==text){
+          if(lastGood && lastGood!==text && (!notice.construction || notice.completed?.length)){
             try{storage.setItem(backupKey,lastGood);}catch(e){/* Primary save takes priority when storage is full. */}
           }
           try{storage.setItem(key,text);}
@@ -451,10 +492,10 @@
             if(!storage.removeItem)throw e;
             storage.removeItem(backupKey);storage.setItem(key,text);
           }
-          lastSeen=text;lastGood=text;futureSave=false;saveIssue=false;saveMessage='';
-        }catch(e){saveIssue=true;saveMessage='This turn is in memory. The browser could not save it for a later visit.';}
+          lastSeen=text;lastGood=text;futureSave=false;saveIssue=false;saveMessage='';unsavedAction=false;
+        }catch(e){if(!notice.construction)unsavedAction=true;saveIssue=true;saveMessage='This turn is in memory. The browser could not save it for a later visit.';}
       }
-      notify();
+      notify(false,notice);
       return null;
     }
     function fulfilled(site,p,why){
@@ -530,7 +571,7 @@
       if(old){payment(old,offer.goods);old.population-=offer.relocating;world.effort-=offer.effort;}
       const specialty=water?'food':['food','materials','funds'][Math.abs(Math.round(point.lat*2+point.lon))%3];
       const site={id,name,region,lat:point.lat,lon:point.lon,water,specialty,era:'Settlement',founded:world.week,foundedBy:old?.id || null,routeLinks:0,
-        population:offer.newPopulation,funds:old?offer.goods.funds:16,food:old?offer.goods.food:12,materials:old?offer.goods.materials:8,trust:50,wellbeing:54,tech:[],buildings:[],delivery:null,
+        population:offer.newPopulation,funds:old?offer.goods.funds:16,food:old?offer.goods.food:12,materials:old?offer.goods.materials:8,trust:50,wellbeing:54,tech:[],buildings:[],construction:[],delivery:null,
         residents:PROFILES.map((p,slot)=>({id:id+'-p'+slot,slot,name:names[slot],role:p.role,value:p.value,bond:0,heard:false,promise:null,lastTalk:0,lastPromise:-10})),
         issue:null,pending:[],stats:{kept:0,missed:0,resolved:0,deliveries:0},issueIndex:-1,lastDeliveryWeek:0};
       root.EarthCityModel?.normalise(site);
@@ -673,18 +714,20 @@
         }
       }
       for(const [kind,b] of Object.entries(BUILDINGS)){
-        const gate=site.buildings.length===9?'All nine district lots are occupied.':kind==='wetland' && !site.tech.includes('apprenticeship')?'First research shared apprenticeship.':'';
-        add('build','build:'+kind,b.name,b.info,{kind,goods:{funds:b.funds,materials:Math.max(1,b.materials-(root.EarthStrategy?.buildDiscount(site) || 0))},gate},(plot)=>{
-          const partners=site.residents.filter(p=>p.promise && PROFILES[p.slot].alternative===kind);
-          // An unused shift can return its effort. Identity must survive refunds and rebuilding a lot.
-          let serial=(site.projectSerial || 0)+1;
-          while(site.buildings.some(b=>b.id===site.id+'-build-'+serial))serial++;
-          site.projectSerial=serial;
+        const gate=!root.EarthConstruction?'Construction crews could not load. Reload the game to try again.':
+          site.buildings.length+(site.construction||[]).filter(job=>job.scope==='street').length>=9?'All nine district lots are occupied or reserved.':
+          kind==='wetland' && !site.tech.includes('apprenticeship')?'First research shared apprenticeship.':'';
+        const goods={funds:b.funds,materials:Math.max(1,b.materials-(root.EarthStrategy?.buildDiscount(site) || 0))};
+        add('build','build:'+kind,b.name,b.info,{kind,goods,gate},plot=>{
+          // The order reserves this plot and these supplies. Opening is a later worker event.
+          let serial=(site.projectSerial||0)+1;
+          const occupiedIds=new Set([...site.buildings,...(site.construction||[])].map(item=>item.id));
+          while(occupiedIds.has(site.id+'-build-'+serial))serial++;
           const id=site.id+'-build-'+serial;
-          site.buildings.push({id,kind,plot,name:b.name,partners:partners.map(p=>p.id)});
-          let msg=b.name+' opened on lot '+(plot+1)+'.';
-          for(const p of partners)msg+=' '+fulfilled(site,p,'The project met the need they raised.');
-          return msg;
+          const result=root.EarthConstruction.start(site,world,{id,scope:'street',kind,plot,name:b.name,paid:{...goods}});
+          if(!result.ok)return result;
+          site.projectSerial=serial;
+          return b.name+' commissioned on lot '+(plot+1)+'.';
         });
       }
       if(group==='all' || group==='build')for(const b of site.buildings){
@@ -739,11 +782,11 @@
         const reward=p.bond<10?'3 funds and 1 bond':'3 funds. Your bond is already at 10';
         add('work','courier:pick','Collect the market parcel','Carry the parcel to '+p.name+', the '+p.role.toLowerCase()+'. Delivery earns '+reward+'.',{residentId:p.id,venue:'market',gate:site.lastDeliveryWeek===world.week?'The next parcel arrives next week.':''},()=>{
           site.delivery={residentId:p.id,week:world.week};
-          return 'Parcel collected. '+(site.shift?.residentId===p.id?p.name+' is with you and can take the parcel now.':'Find '+p.name+' at the '+p.role.toLowerCase()+'’s door.');
+          return 'Parcel collected. '+(site.shift?.residentId===p.id?p.name+' is with you and can take the parcel now.':'Choose Meet in People to find '+p.name+' in the district.');
         });
       }else{
         const p=site.residents.find(r=>r.id===site.delivery.residentId);
-        if(p)add('work','courier:deliver:'+p.id,'Deliver the parcel to '+p.name,(site.shift?.residentId===p.id?'Hand the parcel to '+p.name+' while you are together.':'Hand over the market parcel at '+p.name+'’s door.')+(p.bond<10?' +3 funds · +1 bond.':' +3 funds · bond already at 10.'),{effort:0,residentId:p.id,venue:'resident'},()=>{
+        if(p)add('work','courier:deliver:'+p.id,'Deliver the parcel to '+p.name,(site.shift?.residentId===p.id?'Hand the parcel to '+p.name+' while you are together.':'Meet '+p.name+' in the district to hand over the market parcel.')+(p.bond<10?' +3 funds · +1 bond.':' +3 funds · bond already at 10.'),{effort:0,residentId:p.id,venue:'resident'},()=>{
           site.delivery=null;site.lastDeliveryWeek=world.week;site.stats.deliveries++;return p.name+' received the parcel. '+outcome(apply(site,{funds:3}),bond(p,1));
         });
       }
@@ -766,11 +809,17 @@
       if(!a.available)return reject(a.reason);
       if(a.id.startsWith('build:')){
         if(plot===undefined || plot===null){
-          plot=Array.from({length:9},(_,n)=>n).find(n=>!site.buildings.some(b=>b.plot===n));
+          plot=Array.from({length:9},(_,n)=>n).find(n=>!occupiedLot(site,n));
         }
-        if(!Number.isInteger(plot)||plot<0||plot>8 || site.buildings.some(b=>b.plot===plot))return reject('Choose an empty district lot.');
+        if(!Number.isInteger(plot)||plot<0||plot>8 || occupiedLot(site,plot))return reject('Choose a vacant lot. An active worksite reserves its plot.');
       }
-      world.effort-=a.cost;payment(site,a.goods);return complete(a.run(plot),site);
+      world.effort-=a.cost;payment(site,a.goods);
+      const outcome=a.run(plot);
+      if(outcome?.ok===false){world.effort+=a.cost;apply(site,a.goods);return outcome;}
+      return complete(outcome,site);
+    }
+    function occupiedLot(site,plot){
+      return site.buildings.some(item=>item.plot===plot) || (site.construction||[]).some(job=>job.scope==='street'&&job.plot===plot);
     }
     function previewBuild(kind,plot) {
       const site=current(),b=BUILDINGS[kind];
@@ -778,12 +827,12 @@
       if(!site)return invalid('Found your first settlement.');
       if(!b)return invalid('Choose a project.');
       if(!Number.isInteger(plot) || plot<0 || plot>8)return invalid('Choose a district lot.');
-      if(site.buildings.some(item=>item.plot===plot))return invalid('This lot is already in use.');
+      if(occupiedLot(site,plot))return invalid('This lot is already built on or reserved for construction.');
       const action=actionsAndRules('build').find(item=>item.kind===kind);
       const around=site.buildings.filter(item=>adjacent(item.plot,plot)).map(({kind,plot,name})=>({kind,plot,name}));
-      const oldRate=rates(site);
+      const oldRate=rates(site,undefined,world);
       const builtSite={...site,buildings:[...site.buildings,{kind,plot,name:b.name}]};
-      const newRate=rates(builtSite);
+      const newRate=rates(builtSite,undefined,world);
       const delta=rateDifference(oldRate,newRate);
       const promises=site.residents.filter(p=>p.promise && PROFILES[p.slot].alternative===kind).map(p=>p.name);
       let pairing='';
@@ -801,7 +850,7 @@
         if(improved>0)pairing=' Shared access adds '+improved+' '+unit+' across '+(kind==='workshop'?'neighbouring gardens.':'operating markets.');
       }
       const forecast=summary(delta) || 'No direct change in weekly yield';
-      const effects=promises.length?' Keeps the promise to '+promises.join(' and ')+'.':'';
+      const effects=promises.length?' Opening before the deadline keeps the promise to '+promises.join(' and ')+'.':'';
       let service='';
       if(kind==='pier'){
         const partners=world.sites.filter(other=>tradeRoute(site,other));
@@ -810,12 +859,12 @@
           partners.length || has(site,'pier')?' Existing route capacity stays the same.':' Future routes from this depot have a base capacity of 4 units.';
       }
       if(kind==='wetland')service=' Protects local homes and food during high water.';
-      return {ok:true,available:action.available,reason:action.reason,label:b.name,text:'Lot '+(plot+1)+' · '+forecast+'.'+pairing+service+effects,forecast,delta,goods:{...action.goods},fulfilled:promises,neighbours:around};
+      return {ok:true,available:action.available,reason:action.reason,label:b.name,text:'Lot '+(plot+1)+' once open · '+forecast+'.'+pairing+service+effects,forecast,delta,goods:{...action.goods},fulfilled:promises,neighbours:around};
     }
     function previewReclaim(plot,site=current()){
       const b=site && site.buildings.find(p=>p.plot===plot);
       if(!b)return {ok:false,available:false,reason:'Choose an occupied district lot.',text:'Choose an occupied district lot.'};
-      const previous=rates(site),next=rates({...site,buildings:site.buildings.filter(p=>p.plot!==plot)});
+      const previous=rates(site,undefined,world),next=rates({...site,buildings:site.buildings.filter(p=>p.plot!==plot)},undefined,world);
       const delta=rateDifference(previous,next);
       const recovered=Math.max(1,Math.floor(BUILDINGS[b.kind].materials/2));
       const partners=site.residents.filter(p=>(b.partners || []).includes(p.id));
@@ -884,6 +933,10 @@
         if(host.lastShiftWeek===world.week)delete host.lastShiftWeek;
         result.message+=' Your 1 effort is available again.';
       }
+      if(kind==='finish'){
+        const actor=id?.siteId===site.id && id.residentId===site.shift.residentId?id:undefined;
+        root.EarthConstruction?.releaseFromShift?.(site,site.shift,actor);
+      }
       site.shift=result.shift;
       if(result.followUps?.length)site.shiftFollowUps=[...(site.shiftFollowUps || []),...result.followUps];
       return complete(result.message,site);
@@ -942,7 +995,7 @@
       return inbound;
     }
     function dispatchCargo(turn,byId,inbound,event){
-      const foodRate=new Map(turn.sites.map(site=>[site.id,rates(site).food]));
+      const foodRate=new Map(turn.sites.map(site=>[site.id,rates(site,undefined,turn).food]));
       const used=new Set();
       // Include voted local supplies and voted partner grants expected within
       // the route horizon, alongside cargo already committed in either direction.
@@ -1068,6 +1121,7 @@
     function settleResidents(turn,site,event){
       if(root.EarthShifts && (site.shift || site.shiftFollowUps?.length)){
         const result=root.EarthShifts.tick(site,turn.week);
+        if(site.shift && !result.shift)root.EarthConstruction?.releaseFromShift?.(site,site.shift);
         site.shift=result.shift;site.shiftFollowUps=result.followUps;
         for(const item of result.events){applyShiftResult(site,item,false);event(item.message,site);}
       }
@@ -1115,7 +1169,7 @@
         const city=root.EarthCityModel?.weekly(site,turn);
         const report=reports.get(site.id);
         const cityView=root.EarthCityModel?.overview(site),recurring=cityView?.weekly;
-        report.production=rates(site,recurring);
+        report.production=rates(site,recurring,turn);
         if(city && recurring){
           report.cityOneOff=rateDifference(recurring,city.delta);
           apply(site,report.cityOneOff);
@@ -1234,11 +1288,122 @@
         const a=actionsAndRules('research')[0];
         objective=tech.name+': '+(a.available?'ready to research.':a.reason);
       }else objective=charter.text;
-      return {objective,era:s.era,housingCapacity:capacity(s),chapter:world.completed?'Charter ratified':charter?charter.name:'Founding years',forecast:summary(rates(s))+' per week',charter:charter?{...charter,met:charterMet()}:null};
+      return {objective,era:s.era,housingCapacity:capacity(s),chapter:world.completed?'Charter ratified':charter?charter.name:'Founding years',forecast:summary(rates(s,undefined,world))+' per week',charter:charter?{...charter,met:charterMet()}:null};
     }
-    function planCity(precinctId,projectId){
+    function constructionView(siteId=world.activeId){
+      const site=world.sites.find(candidate=>candidate.id===siteId);
+      if(!site||!root.EarthConstruction)return {jobs:[],workers:[],roster:[]};
+      const report=root.EarthConstruction.view(site,world);
+      return {...report,roster:report.workers};
+    }
+    function openWorksite(site,job){
+      if(job.scope==='city'){
+        const result=root.EarthCityModel?.finish(site,job,world);
+        if(result?.message)record(result.message,site);
+        return result?.message || '';
+      }
+      const partners=site.residents.filter(person=>person.promise && PROFILES[person.slot].alternative===job.kind);
+      const name=BUILDINGS[job.kind].name;
+      site.buildings.push({id:job.id,kind:job.kind,plot:job.plot,name,partners:partners.map(person=>person.id)});
+      let story=name+' opened on lot '+(job.plot+1)+'.';
+      for(const person of partners)story+=' '+fulfilled(site,person,'The completed project met the need they raised.');
+      record(story,site);
+      return story;
+    }
+    function workConstruction(seconds,through){
+      const domain=root.EarthConstruction;
+      if(!domain || !Number.isFinite(seconds) || seconds<=0 || seconds>3600)return reject('Choose a valid period of construction time.');
+      if(through!==undefined){
+        if(!Number.isSafeInteger(through)||through<=0)return reject('Invalid construction clock.');
+        // Two visible tabs may cover the same time span. Only the uncredited portion counts.
+        const previous=world.constructionThrough || 0;
+        // A suspended tab or a Web Lock can deliver an old tick several seconds late.
+        // Rebase only when the device's actual clock is now behind the saved watermark.
+        const now=Date.now();
+        const resetClock=previous>now+5000 && Math.abs(through-now)<5000;
+        if(!resetClock)seconds=Math.min(seconds,Math.max(0,(through-previous)/1000));
+      }
+      const completed=[],messages=[];
+      let changed=false;
+      // A rehearsal can cover several sites in one call. Settle each second in
+      // play order so visits, new workplaces and journal entries match live play.
+      let remaining=Math.round(seconds*1000);
+      while(remaining>0){
+        const slice=Math.min(1000,remaining);
+        const startingCount=completed.length;
+        let active=false;
+        for(const site of world.sites){
+          if(!(domain.needsTime?.(site,world)??site.construction?.length))continue;
+          active=true;
+          const step=domain.advance(site,world,slice/1000,job=>{
+            const message=openWorksite(site,job);
+            completed.push({...job,siteId:site.id,message});
+            if(message)messages.push(message);
+          });
+          changed ||= step.changed;
+        }
+        if(!active)break;
+        if(completed.length>startingCount){
+          const victory=ratify(world);
+          if(victory){record(victory);messages.push(victory);}
+        }
+        remaining-=slice;
+      }
+      if(changed || completed.length){
+        if(through!==undefined)world.constructionThrough=through;
+        const collision=save({construction:true,completed});
+        if(collision)return collision;
+      }
+      return {ok:true,changed,completed,message:messages.join(' ')};
+    }
+    function setWorkPreference(residentId,preference,jobId){
+      const site=current(),domain=root.EarthConstruction;
+      if(!site || !domain)return reject('Choose an active community.');
+      const result=domain.setPreference(site,world,residentId,preference,jobId);
+      return result.ok?complete(result.message,site):result;
+    }
+    function assignBuilders(residentIds,jobId){
+      const site=current(),domain=root.EarthConstruction;
+      if(!site || !domain || !Array.isArray(residentIds) || !residentIds.length ||
+        residentIds.length>site.residents.length || !unique(residentIds) ||
+        !residentIds.every(id=>site.residents.some(person=>person.id===id)))return reject('Choose residents from this community first.');
+      const job=site.construction?.find(item=>item.id===jobId);
+      if(!job)return reject('That worksite has closed. Choose a current project.');
+      for(const id of residentIds)domain.setPreference(site,world,id,'build',jobId);
+      const roster=domain.view(site,world).workers.filter(w=>residentIds.includes(w.residentId));
+      const ready=roster.filter(w=>w.jobId===jobId).map(w=>w.name);
+      const busy=roster.filter(w=>w.jobId!==jobId).map(w=>w.name+' will join when free. '+w.reason);
+      const message=(ready.length?ready.join(' and ')+' assigned to '+job.name.toLowerCase()+'. ':'')+busy.join(' ');
+      return complete(message.trim(),site);
+    }
+    function previewCancelConstruction(jobId){
+      const site=current(),job=site?.construction?.find(item=>item.id===jobId);
+      if(!job)return {ok:false,available:false,reason:'This worksite has already closed.'};
+      if(job.scope==='city'){
+        const plan=root.EarthCityModel.preview(site,world,job.precinct,'cancel');
+        return {...plan,refund:plan.recovery,effort:plan.cost?.effort||0,label:job.name,text:plan.forecast||plan.reason||''};
+      }
+      const remaining=1-clamp(job.work/job.total,0,1);
+      const refund=Object.fromEntries(['funds','materials'].map(key=>[key,Math.floor(job.paid[key]*remaining)]));
+      return {ok:true,available:true,refund,effort:0,label:job.name,
+        text:'Release the workers and clear lot '+(job.plot+1)+'. Recover '+refund.funds+' funds and '+refund.materials+' materials. The effort used to organise the job has been spent.'};
+    }
+    function cancelConstruction(jobId,quotedRefund){
+      const plan=previewCancelConstruction(jobId);
+      if(!plan.available)return reject(plan.reason);
+      if(quotedRefund && ['funds','materials'].some(key=>(plan.refund[key]||0)<(quotedRefund[key]||0)))
+        return reject('The crew used more supplies before this request arrived. Review the updated refund and confirm again.');
+      const site=current(),job=site.construction.find(item=>item.id===jobId);
+      if(job.scope==='city')return planCity(job.precinct,'cancel',job.id);
+      root.EarthConstruction.cancel(site,jobId);
+      apply(site,plan.refund);
+      return complete('Cancelled '+job.name.toLowerCase()+' on lot '+(job.plot+1)+'. Recovered '+plan.refund.funds+' funds and '+plan.refund.materials+' materials.',site);
+    }
+    function planCity(precinctId,projectId,expectedJobId){
       const site=current(),model=root.EarthCityModel;
       if(!site || !model)return reject('City planning is unavailable here.');
+      if(projectId==='cancel' && expectedJobId!==undefined && site.city?.precincts?.[precinctId]?.jobId!==expectedJobId)
+        return reject('The project here has changed. Inspect the current worksite before cancelling.');
       const plan=model.preview(site,world,precinctId,projectId);
       if(!plan.ok || !plan.available)return reject(plan.reason || 'This project cannot begin here.');
       const result=model.apply(site,world,precinctId,projectId);
@@ -1251,10 +1416,11 @@
       return result.ok?complete(result.message,site):reject(result.message);
     }
     const commands={
-      planCity:guarded(planCity),beginGoal:guarded(beginGoal),
+      planCity:guarded(planCity),beginGoal:guarded(beginGoal),workConstruction:guarded(workConstruction),
+      setWorkPreference:guarded(setWorkPreference),assignBuilders:guarded(assignBuilders),cancelConstruction:guarded(cancelConstruction),
       found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
       beginShift:guarded(id=>shiftCommand('start',id)),arriveShift:guarded(id=>shiftCommand('arrive',id)),
-      chooseShift:guarded(id=>shiftCommand('choose',id)),finishShift:guarded(()=>shiftCommand('finish')),
+      chooseShift:guarded(id=>shiftCommand('choose',id)),finishShift:guarded(actor=>shiftCommand('finish',actor)),
       beginVoyage:guarded(beginVoyage),sail:guarded(sail),reclaim:guarded(reclaim),
       reset:guarded(()=>{world=blank();return save() || {ok:true,message:'A new world is ready.'};},true)
     };
@@ -1262,8 +1428,8 @@
     // the Web Locks API. The direct commands retain synchronous compatibility.
     async function perform(command,...args){
       if(!Object.hasOwn(commands,command))return reject('Unknown game action.');
-      const expected=lastSeen;
-      function run(){return expected!==lastSeen?reject(conflict):commands[command](...args);}
+      const expected=actionGeneration;
+      function run(){return expected!==actionGeneration?reject(conflict):commands[command](...args);}
       if(!storage||!root.navigator?.locks?.request)return run();
       let entered=false;
       try{return await root.navigator.locks.request('civic-world:'+key,()=>{entered=true;return run();});}
@@ -1273,8 +1439,8 @@
       }
     }
     return {
-      ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},
-      active:current,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecastNext,perform,sync,
+      ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get hasUnsavedChoice(){return unsavedAction;},
+      active:current,constructionView,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecastNext,perform,sync,
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
       destroy(){listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };

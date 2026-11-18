@@ -9,7 +9,7 @@ const vm = require('node:vm');
 const game = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const runtime = vm.createContext({});
 runtime.window = runtime;
-vm.runInContext(fs.readFileSync(path.join(game, 'simulation.js'), 'utf8'), runtime);
+for(const file of ['construction.js','simulation.js'])vm.runInContext(fs.readFileSync(path.join(game,file),'utf8'),runtime);
 
 function campaign() {
   const files = new Map();
@@ -68,6 +68,8 @@ test('the final week remains playable, and building the requested project closes
   assert.equal(plan.fulfilled[0], site.residents[1].name);
   const funds = site.funds, materials = site.materials;
   success(sim.act('build:workshop', 0));
+  assert.equal(site.stats.kept,0);
+  success(sim.workConstruction(120));
   assert.equal(site.funds, funds - plan.goods.funds);
   assert.equal(site.materials, materials - plan.goods.materials);
   success(sim.advance());

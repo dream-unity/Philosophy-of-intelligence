@@ -125,8 +125,8 @@
     const requesters=b.seats.map(slot=>site.residents[slot]);
     const channels=b.proof.map(key=>baseProof[key]);
     return {requesters,milestones:[
-      {label:'Hear both sides',detail:requesters.map((p,i)=>p.name+' on '+b.voices[i]).join(' · ')+'. Visit their doors in People.',met:heard(site,b.seats)},
-      {label:'Try one practical approach',detail:channels.map(x=>x.label).join(' OR ')+'. Existing work counts.',met:channels.some(x=>x.test(world,site))}
+      {label:'Hear both sides',detail:requesters.map((p,i)=>p.name+' on '+b.voices[i]).join(' · ')+'. Open People and choose Meet beside each name to find them.',met:heard(site,b.seats)},
+      {label:'Try one practical approach',detail:channels.map(x=>x.label).join(' OR ')+'. Completed work counts.',met:channels.some(x=>x.test(world,site))}
     ]};
   }
   function summary(world,site) {
@@ -161,13 +161,19 @@
     function prepareBacking(){
       const detail=state.support+(state.phase==='ready'?' Both trial choices are already open in Council.':'');
       if(brief.test===heardAll)return {...meet(site.residents.find(p=>!p.heard)),detail};
-      if(brief.test===keptPromise)return {...root.EarthLegacy.promiseStep(sim.state,site),detail};
+      if(brief.test===keptPromise){
+        const step=root.EarthLegacy.promiseStep(sim.state,site);
+        return {...step,detail:[detail,step.detail].filter(Boolean).join(' ')};
+      }
       const task=brief.test===tools?'salvage':brief.test===caretaker?'contract':'forage';
       const work=sim.actions('work',siteId).find(a=>a.id==='work:'+task);
       return group('work',work.id,work.label,detail);
     }
     if(state.phase==='trial'){
-      if(!state.conditionMet && sim.state.effort)return prepareBacking();
+      if(!state.conditionMet){
+        const backing=prepareBacking();
+        if(sim.state.effort || backing.kind==='construction')return backing;
+      }
       return {kind:'week',siteId,label:'Review the next week',detail:state.title+' is due for review in week '+saved.due+'. '+state.support};
     }
     if(state.phase==='ready' && !state.conditionMet)return prepareBacking();
@@ -177,6 +183,12 @@
     if(unheard)return meet(unheard);
     // Every invitation offers several ways to contribute. Point to an actual local
     // job; the invitation still lists every other way to meet its requirement.
+    const sites=(site.construction || []).filter(job=>job.scope==='street');
+    const links=sites.length && brief.proof.includes('grid')
+      ? root.CommonEarthSim.productiveLinks({...site,buildings:[...site.buildings,...sites]}) : [];
+    const underway=root.EarthLegacy?.constructionStep(sim.state,site,job=>job.scope==='street' &&
+      (brief.proof.includes(job.kind) || links.some(link=>link.from===job.plot || link.to===job.plot)));
+    if(underway)return {...underway,detail:state.title+'. '+underway.detail+' This practical step counts once the building opens.'};
     const practical=sim.actions('build',siteId).filter(a=>a.kind && brief.proof.includes(a.kind));
     const project=practical.find(a=>a.available);
     if(project)return group('build',project.id,'Plan a '+project.label.toLowerCase(),state.title+'. '+state.milestones[1].detail);
@@ -184,9 +196,13 @@
       const action=sim.actions('work',siteId).find(a=>a.id.startsWith('courier:'));
       if(action)return group('work',action.id,action.label,state.title+'. '+action.description);
     }
-    if(brief.proof.includes('promise'))return {...root.EarthLegacy.promiseStep(sim.state,site),detail:state.title+'. '+state.milestones[1].detail};
-    if(site.buildings.length<9 && practical.length)return group('build',practical[0].id,'Plan a '+practical[0].label.toLowerCase(),state.title+'. '+state.milestones[1].detail);
+    if(brief.proof.includes('promise')){
+      const step=root.EarthLegacy.promiseStep(sim.state,site);
+      return {...step,detail:state.title+'. '+(step.detail || state.milestones[1].detail)};
+    }
+    if(site.buildings.length+sites.length<9 && practical.length)return group('build',practical[0].id,'Plan a '+practical[0].label.toLowerCase(),state.title+'. '+state.milestones[1].detail);
     if(brief.proof.includes('project'))return {...group('people',null,'Plan a shared project',state.title+'. The neighbours can work together on a practical trial.'),page:'projects'};
+    if(practical.length && !site.buildings.length && sites.length)return root.EarthLegacy.constructionStep(sim.state,site,job=>job.scope==='street');
     if(practical.length)return {...group('build',null,'Choose a lot to reopen',state.title+'. Reopen a central lot to make space for the proposed building.'),inspectReclaim:true};
     return {...group('council',null,'Review the local commission',state.title),page:'commission'};
   }

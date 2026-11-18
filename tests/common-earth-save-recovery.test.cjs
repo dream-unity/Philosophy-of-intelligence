@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const root = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const runtime = vm.createContext({ TextEncoder });
 runtime.window = runtime;
-for (const file of ['simulation.js', 'saves.js']) {
+for (const file of ['construction.js', 'simulation.js', 'saves.js']) {
   vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), runtime, {filename: file});
 }
 
@@ -77,4 +77,50 @@ test('external reads and play in a temporary or retained world do not signal a d
   assert.equal(JSON.parse(store.getItem(savedKey)).week, 1);
   external.destroy();
   book.dispose();
+});
+
+test('a background crew cannot erase a player order that is in memory during a quota failure',async()=>{
+  const store=toggledStore();store.writable=true;
+  const book=open(store),s=book.sim;
+  assert((await s.perform('found',town)).ok);assert((await s.perform('act','build:workshop',8)).ok);
+  const remote=runtime.CommonEarthSim.create({storage:store});
+  store.writable=false;
+  assert((await s.perform('act','build:garden',7)).ok);assert(s.hasUnsavedChoice);
+  assert.equal(s.active().construction.length,2);
+  store.writable=true;
+  assert((await remote.perform('workConstruction',3,100000)).ok);
+  s.sync();assert(s.hasUnsavedChoice);assert.equal(s.active().construction.length,2);
+  assert((await s.perform('workConstruction',2,100500)).ok);
+  assert.equal(s.hasUnsavedChoice,false);assert.equal(book.status().mode,'autosave');
+  assert.equal(JSON.parse(store.getItem(savedKey)).sites[0].construction.length,2);
+  remote.destroy();book.dispose();
+});
+
+test('two different player choices after a quota failure remain available separately',async()=>{
+  const store=toggledStore();store.writable=true;
+  const book=open(store),s=book.sim;
+  assert((await s.perform('found',town)).ok);
+  const remote=runtime.CommonEarthSim.create({storage:store});
+  store.writable=false;assert((await s.perform('act','build:garden',7)).ok);
+  store.writable=true;assert((await remote.perform('act','build:workshop',8)).ok);
+  assert(s.sync());assert.match(book.status().message,/copy or export/);
+  assert.equal(JSON.parse(book.exportWorld().text).world.sites[0].construction[0].kind,'garden');
+  assert((await s.perform('workConstruction',3)).ok);
+  assert.equal(JSON.parse(store.getItem(savedKey)).sites[0].construction[0].kind,'workshop');
+  const copy=await book.copy('My garden');assert(copy.ok);assert.equal(book.status().mode,'autosave');
+  assert.equal(book.sim.active().construction[0].kind,'garden');
+  assert.equal(JSON.parse(store.getItem(savedKey)).sites[0].construction[0].kind,'workshop');
+  remote.destroy();book.dispose();
+});
+
+test('the saved-world picker keeps focus during normal labour but still reports a quota change or recovery',async()=>{
+  const store=toggledStore();store.writable=true;
+  const book=open(store),s=book.sim;
+  assert((await s.perform('found',town)).ok);assert((await s.perform('act','build:garden',7)).ok);
+  let refresh=0;const off=book.watch(()=>refresh++);
+  assert((await s.perform('workConstruction',2)).ok);assert.equal(refresh,0);
+  store.writable=false;assert((await s.perform('workConstruction',2)).ok);assert.equal(refresh,1);
+  assert((await s.perform('workConstruction',2)).ok);assert.equal(refresh,1);
+  store.writable=true;assert((await s.perform('workConstruction',2)).ok);assert.equal(refresh,2);
+  off();book.dispose();
 });

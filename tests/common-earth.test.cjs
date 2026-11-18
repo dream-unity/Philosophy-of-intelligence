@@ -12,7 +12,7 @@ runtime.window = runtime;
 function load(name) {
   vm.runInContext(fs.readFileSync(path.join(gameRoot, name), 'utf8'), runtime, { filename: name });
 }
-for (const name of ['navigation.js', 'voyages.js', 'neighbours.js', 'simulation.js']) load(name);
+for (const name of ['navigation.js', 'voyages.js', 'neighbours.js', 'construction.js', 'simulation.js']) load(name);
 
 const south = { lat: -42.88, lon: 147.33, name: 'Tasmania', water: false };
 const north = { lat: 50.05, lon: -140, name: 'North Pacific Ocean', water: true };
@@ -61,6 +61,9 @@ test('settlements share weekly effort and restore their exact active district, p
   next(copy);
   assert.equal(copy.state.effort, 4);
   success(copy.visit(first.id));
+  assert.equal(copy.active().construction[0].plot, 4);
+  assert.equal(copy.active().buildings.length, 0);
+  success(copy.workConstruction(120));
   assert.equal(copy.active().buildings[0].plot, 4);
   assert.ok(copy.active().residents[0].promise);
   const storageFailure = create({ getItem() { return null; }, setItem() { throw Error('storage disabled'); } });
@@ -88,6 +91,7 @@ test('garden yields use shared sides on the three-by-three map, and failed place
     const sim = create(memory());
     const site = settle(sim);
     action(sim, 'build:workshop', 2);
+    success(sim.workConstruction(120));
     const before = snapshot(sim);
     const preview = sim.previewBuild('garden', plot);
     assert.equal(preview.ok, true);
@@ -99,6 +103,9 @@ test('garden yields use shared sides on the three-by-three map, and failed place
     }
     const without = sim.forecastNext().sites[0].production.food;
     action(sim, 'build:garden', plot);
+    // The grower leaves their ordinary food production while constructing the garden.
+    assert.equal(sim.forecastNext().sites[0].production.food, without - 1);
+    success(sim.workConstruction(120));
     const openingFood = site.food;
     next(sim);
     assert.equal(site.food - openingFood, without + expectedGain);
@@ -141,6 +148,8 @@ test('a promised building meets the named need once and remains deliverable thro
   while (sim.state.week < deadline) next(sim);
   assert.equal(sim.previewBuild('garden', 0).fulfilled[0], grower.name);
   action(sim, 'build:garden', 0);
+  assert.equal(site.stats.kept, 0);
+  success(sim.workConstruction(120));
   assert.equal(site.stats.kept, 1);
   assert.equal(site.trust, 53);
   assert.equal(grower.bond, 3);
@@ -294,6 +303,7 @@ for (const charter of ['care', 'voice', 'craft']) {
     invest(sim, 'promise:' + grower.id);
     invest(sim, 'fulfil:' + grower.id);
     invest(sim, 'build:workshop', 4);
+    success(sim.workConstruction(120));
     invest(sim, 'research:apprenticeship');
     resolveNextVote(sim);
 
@@ -325,6 +335,7 @@ for (const charter of ['care', 'voice', 'craft']) {
     } else {
       invest(sim, 'listen:' + partner.residents[0].id);
       invest(sim, 'build:hall', 0);
+      success(sim.workConstruction(120));
       invest(sim, 'research:apprenticeship');
       assert.equal(sim.state.completed, false, 'craft also needs an errand');
       invest(sim, 'courier:pick');

@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const directory = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const runtime = vm.createContext({});
 runtime.window = runtime;
-for (const name of ['navigation','voyages','neighbours','shifts','campaigns','city','strategy','partners','legacy','simulation']) {
+for (const name of ['navigation','voyages','neighbours','shifts','campaigns','city','strategy','partners','legacy','construction','simulation']) {
   vm.runInContext(fs.readFileSync(path.join(directory, name+'.js'), 'utf8'), runtime, {filename:name+'.js'});
 }
 const origin = {name:'Melbourne',lat:-37.8181,lon:144.9731,water:false};
@@ -45,14 +45,17 @@ test('a second street market serves limited local demand while full district exc
   const sim=fresh(),s=sim.active();
   const ordinary=sim.forecastNext().sites[0].production.funds;
   ok(sim.act('build:market',0));
+  ok(sim.workConstruction(120));
   const first=sim.forecastNext().sites[0].production.funds-ordinary;
   const second=sim.previewBuild('market',1).delta.funds;
   ok(sim.act('build:market',1));
+  ok(sim.workConstruction(120));
   assert.equal(sim.forecastNext().sites[0].production.funds,ordinary+first+second);
   assert.ok(first>second);
   const other=fresh();
   const outside=runtime.EarthCityModel.overview(other.active()).records.filter(p=>p.terrain.id!=='crossing');
   for(const precinct of outside.slice(0,2))ok(other.planCity(precinct.id,'market'));
+  ok(other.workConstruction(240));
   const outer=other.forecastNext().sites[0].production;
   assert.ok(outer.funds>sim.forecastNext().sites[0].production.funds);
   assert.ok(outer.trust<0);
@@ -75,7 +78,8 @@ test('a food deficit takes precedence over a much larger industrial surplus on a
       if(vote){ok(sim.act(vote.id));continue;}
       if(industrial.food<12){ok(sim.act('work:forage'));continue;}
       if(industrial.buildings.length===3)break;
-      if(!optional(sim,'build:workshop'))ok(sim.act(industrial.funds<6?'work:contract':'work:salvage'));
+      if(optional(sim,'build:workshop'))ok(sim.workConstruction(120));
+      else ok(sim.act(industrial.funds<6?'work:contract':'work:salvage'));
     }
     ok(sim.advance());
   }

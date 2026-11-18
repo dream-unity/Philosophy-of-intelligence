@@ -56,8 +56,10 @@
   function cleanPrecinct(raw) {
     const use=isUse(raw?.use) ? raw.use : 'open';
     const target=isUse(raw?.target) && raw.target!==use ? raw.target : null;
-    const turns=target && Number.isFinite(raw.turns) ? clamp(Math.ceil(raw.turns),1,USES[target].turns) : 0;
-    return {use,target:turns?target:null,turns};
+    if(!target)return {use,target:null,turns:0};
+    const tracked=typeof raw.jobId==='string' && raw.jobId.length>0;
+    const turns=clamp(Number.isInteger(raw.turns)?raw.turns:USES[target].turns,tracked?0:1,USES[target].turns);
+    return tracked?{use,target,turns,jobId:raw.jobId,laborReady:raw.laborReady===true}:{use,target,turns};
   }
   function precincts(site) {
     const source=site?.city?.precincts;
@@ -66,18 +68,25 @@
   function valid(city) {
     if(city===undefined || city===null)return true;
     if(city.version!==1 || !Array.isArray(city.precincts) || city.precincts.length!==6)return false;
+    if(city.serial!==undefined && (!Number.isSafeInteger(city.serial)||city.serial<0))return false;
     let working=0;
+    const jobIds=new Set();
     for(const p of city.precincts) {
       if(!p || !isUse(p.use))return false;
-      if(p.target===null){ if(p.turns!==0)return false; continue; }
-      if(!isUse(p.target) || p.target===p.use || !Number.isInteger(p.turns) || p.turns<1 || p.turns>USES[p.target].turns)return false;
+      if(p.target===null){ if(p.turns!==0 || p.jobId!=null || p.laborReady!=null)return false; continue; }
+      const tracked=p.jobId!==undefined;
+      if(tracked){
+        if(typeof p.jobId!=='string' || !p.jobId || p.jobId.length>180 || jobIds.has(p.jobId) || typeof p.laborReady!=='boolean')return false;
+        jobIds.add(p.jobId);
+      }else if(p.laborReady!==undefined)return false;
+      if(!isUse(p.target) || p.target===p.use || !Number.isInteger(p.turns) || p.turns<(tracked?0:1) || p.turns>USES[p.target].turns || p.laborReady && !p.turns)return false;
       working++;
     }
     return working<=2;
   }
   function normalise(site) {
     if(!site || typeof site!=='object')return;
-    site.city={version:1, precincts:precincts(site)};
+    site.city={version:1,serial:site.city?.serial||0,precincts:precincts(site)};
   }
   function marketCatchments(site) { return precincts(site).filter(p=>p.use==='market').length; }
   function housingCapacity(site) {
@@ -128,7 +137,7 @@
       }
       grant(weekly,deltas);
       records.push({id:i,terrain:t,minutes,accessible,transit,pressure:rent,disturbed,beds,yields:deltas,reasons,
-        name:site.water?t.sea:t.land,type:site.water?t.marine:t.label,direction:DIRECTIONS[i],use:p.use,target:p.target,turns:p.turns});
+        name:site.water?t.sea:t.land,type:site.water?t.marine:t.label,direction:DIRECTIONS[i],use:p.use,target:p.target,turns:p.turns,jobId:p.jobId,laborReady:p.laborReady===true});
     });
     const residents=site.population||0,excess=Math.max(0,residents-capacity);
     const crowding={residents,capacity,excess,wellbeing:excess?-Math.min(2,Math.ceil(excess/4)):0};
@@ -142,7 +151,43 @@
   function flows(obj) {
     return numbers.filter(k=>obj?.[k]).map(k=>(obj[k]>0?'+':'')+obj[k]+' '+units[k]).join(' · ');
   }
-  function preview(site,world,index,project) {
+  function jobSpec(site,index,project){
+    const {funds,materials}=USES[project],serial=(site.city?.serial||0)+1;
+    return {id:'city:'+String(site.id).slice(0,120)+':'+index+':'+project+':'+serial,scope:'city',precinct:index,kind:project,
+      name:nameOf(site,project),paid:{funds,materials}};
+  }
+  function previewCrew(site,world,index,project){
+    const spec=jobSpec(site,index,project),cost=spec.paid;
+    const afterPaying={...site,funds:site.funds-cost.funds,materials:site.materials-cost.materials};
+    return window.EarthConstruction?.preview(afterPaying,world,spec);
+  }
+  function book(site,world,index,project,workFraction=0){
+    const spec=jobSpec(site,index,project);
+    const built=window.EarthConstruction?.start(site,world,{...spec,workFraction});
+    if(!built?.ok)return {ok:false,message:built?.message||built?.reason||'The construction roster is unavailable.'};
+    site.city.serial=(site.city.serial||0)+1;
+    const row=site.city.precincts[index];
+    row.target=project;row.jobId=spec.id;row.laborReady=false;
+    return {ok:true};
+  }
+  function migrateWork(site,world){
+    if(!site?.city || !window.EarthConstruction)return true;
+    for(const [i,p] of site.city.precincts.entries()){
+      if(!p.target || p.jobId)continue;
+      const fraction=1-p.turns/USES[p.target].turns;
+      if(!book(site,world,i,p.target,fraction).ok)return false;
+    }
+    return true;
+  }
+  function validWork(site,jobs=[]){
+    if(!Array.isArray(jobs))return false;
+    const active=jobs.filter(j=>j.scope==='city');
+    const pending=precincts(site).map((p,index)=>({...p,index})).filter(p=>p.target);
+    if(pending.some(p=>!p.jobId))return false;
+    const orders=pending.filter(p=>!p.laborReady);
+    return active.length===orders.length && orders.every(p=>active.some(j=>j.id===p.jobId && j.precinct===p.index && j.kind===p.target));
+  }
+  function preview(site,world,index,project,withCrew=false) {
     const bad=reason=>({ok:false,available:false,reason});
     if(!site)return bad('Found a community first.');
     if(!Number.isInteger(index)||index<0||index>5)return bad('Choose one of the six outer precincts.');
@@ -152,14 +197,14 @@
       const target=USES[p.target];
       return {ok:true,available:true,reason:'',cancel:true,cost:{effort:0,funds:0,materials:0},turns:0,
         title:'Cancel construction',recovery:{funds:Math.floor(target.funds/2),materials:Math.floor(target.materials/2)},
-        forecast:'The current use continues. Half the original funds and materials are recovered, rounded down.'};
+        forecast:'The current use continues. Half the original funds and materials are recovered, rounded down. Work already done and the original effort are lost.'};
     }
     if(!isUse(project))return bad('Choose a land use.');
     const spec=USES[project],cost={funds:spec.funds,materials:spec.materials,effort:spec.effort};
     if(p.target)return bad('A crew is already working here. Finish or cancel its job first.');
     if(p.use===project)return bad('This precinct already has that use.');
     // Compare the same opening week, including nearby work already commissioned.
-    const baseline=state.map(row=>row.target && row.turns<=spec.turns?{use:row.target,target:null,turns:0}:row);
+    const baseline=state.map(row=>row.target && row.laborReady && row.turns<=spec.turns?{use:row.target,target:null,turns:0}:row);
     const concurrent=baseline.filter((row,i)=>row!==state[i]).length;
     const was=concurrent?overview(site,baseline):now;
     const afterState=baseline.map((x,i)=>i===index?{use:project,target:null,turns:0}:x);
@@ -171,9 +216,12 @@
     const beds=after.capacity-was.capacity, reach=after.reachable-was.reachable;
     const risk=after.pressure-was.pressure, noise=after.noise-was.noise;
     let reason='';
-    if(now.works>=2)reason='Both city crews have jobs. Finish or cancel one before starting another.';
+    if(now.works>=2)reason='Two precinct projects are already commissioned. Open or cancel one before starting another.';
     else if(world.effort<cost.effort)reason='Needs '+cost.effort+' effort. Advance the week to refresh it.';
     else if(site.funds<cost.funds || site.materials<cost.materials)reason='The treasury needs '+cost.funds+' funds and '+cost.materials+' materials for this project.';
+    const scheduler=window.EarthConstruction;
+    const staffing=withCrew && scheduler?previewCrew(site,world,index,project):null;
+    if(!reason && (!scheduler || (staffing && !staffing.ok)))reason=staffing?.reason||'The construction roster is unavailable.';
     const capacityNote=beds?'Housing capacity '+was.capacity+' → '+after.capacity:'';
     let crowdingNote='';
     if(beds && (was.crowding.excess || after.crowding.excess)) {
@@ -185,7 +233,7 @@
     const impact=[flows(rate)?flows(rate)+' per week':'',capacityNote,accessNote,crowdingNote].filter(Boolean);
     const forecast=impact.length?impact.join(' · '):'The weekly totals stay the same.';
     return {ok:true,available:!reason,reason,cost,turns:spec.turns,title:nameOf(site,project),old:nameOf(site,p.use),forecast,rate,beds,reach,risk,noise,localFunds,concurrent,capacityNote,accessNote,crowdingNote,
-      record:r,siteName:record.name,people:spec.people,purpose:spec.purpose,completedView:after,week:(Number(world.week)||1)+spec.turns};
+      record:r,siteName:record.name,people:spec.people,purpose:spec.purpose,completedView:after,week:(Number(world.week)||1)+spec.turns,crew:staffing?.job||null};
   }
   function apply(site,world,index,project) {
     const p=preview(site,world,index,project);
@@ -194,29 +242,48 @@
     const row=site.city.precincts[index], name=overview(site).records[index].name;
     if(project==='cancel') {
       const work=nameOf(site,row.target);
-      row.target=null;row.turns=0;
+      if(row.jobId && !row.laborReady)window.EarthConstruction?.cancel(site,row.jobId);
+      site.city.precincts[index]={use:row.use,target:null,turns:0};
       site.funds+=p.recovery.funds;site.materials+=p.recovery.materials;
       return {ok:true,message:'Cancelled '+work.toLowerCase()+' at '+name+'. Recovered '+p.recovery.funds+' funds and '+p.recovery.materials+' materials.'};
     }
+    const order=book(site,world,index,project);
+    if(!order.ok)return order;
     world.effort-=p.cost.effort;site.funds-=p.cost.funds;site.materials-=p.cost.materials;
-    row.target=project;row.turns=p.turns;
-    return {ok:true,message:p.title+' commissioned at '+name+'. Opens in week '+p.week+'. '+p.forecast};
+    row.turns=p.turns;
+    return {ok:true,message:p.title+' commissioned at '+name+'. Opens once the crew finishes and week '+p.week+' begins. '+p.forecast};
+  }
+  function openPrecinct(site,i){
+    const p=site.city.precincts[i],use=p.target,ground=terrainAt(site,i),place=site.water?ground.sea:ground.land;
+    site.city.precincts[i]={use,target:null,turns:0};
+    const material=use==='open'?1:0;
+    const message=material?place+' reopened as common ground. One material was recovered.':nameOf(site,use)+' opened at '+place+'.';
+    return {message,material};
+  }
+  function finish(site,job){
+    const row=site?.city?.precincts?.[job?.precinct];
+    if(job?.scope!=='city' || !row || row.jobId!==job.id || row.target!==job.kind || row.laborReady)return {ok:false};
+    row.laborReady=true;
+    if(row.turns>0)return {ok:true,opened:false,message:nameOf(site,row.target)+' crew work finished. Opens in '+row.turns+' more '+(row.turns===1?'week.':'weeks.')};
+    const opened=openPrecinct(site,job.precinct);
+    site.materials=clamp(site.materials+opened.material,0,Number.MAX_SAFE_INTEGER);
+    return {ok:true,opened:true,message:opened.message,recovery:{materials:opened.material}};
   }
   function weekly(site) {
     normalise(site);
     const notes=[];let recovered=0;
     site.city.precincts.forEach((p,i)=>{
-      if(!p.target || --p.turns>0)return;
-      const ground=terrainAt(site,i),place=site.water?ground.sea:ground.land,original=p.use;
-      p.use=p.target;p.target=null;p.turns=0;
-      if(p.use==='open' && original!=='open'){recovered++;notes.push(place+' reopened as common ground. One material was recovered.');}
-      else notes.push(nameOf(site,p.use)+' opened at '+place+'.');
+      if(!p.target || !p.jobId)return;
+      p.turns=Math.max(0,p.turns-1);
+      if(p.turns || !p.laborReady)return;
+      const opened=openPrecinct(site,i);
+      recovered+=opened.material;notes.push(opened.message);
     });
     const delta={...overview(site).weekly};delta.materials+=recovered;
     return {delta,notes};
   }
 
-  const Model=Object.freeze({valid,normalise,preview,apply,weekly,housingCapacity,marketCatchments,overview,projects:USES,options:BUILD_OPTIONS,flows,nameOf});
+  const Model=Object.freeze({valid,validWork,normalise,migrateWork,preview,previewCrew,apply,finish,weekly,housingCapacity,marketCatchments,overview,projects:USES,options:BUILD_OPTIONS,flows,nameOf});
   window.EarthCityModel=Model;
 })();
 
@@ -242,6 +309,7 @@
   const PROJECTS=model.projects;
   const TERRAINS=['field','ridge','crossing','shelter','yard','wet'];
   const DEVELOPMENTS=['homes','food','yard','market','transit','care','water','centre'];
+  const WORKSITE_ROWS={food:0,water:1,yard:3,market:4,care:5,homes:6,transit:7};
   const LAND_COLOURS={field:'#b5ad72',ridge:'#8d9b79',crossing:'#cfb997',shelter:'#99ae81',yard:'#bcac8c',wet:'#78b19c'};
   const USE_COLOURS={homes:'#e1b18b',food:'#a4be7b',yard:'#bfa382',market:'#e2bb79',transit:'#9ec7b2',care:'#d0b4ac',water:'#82c5b3'};
   const fmt=n=>Number(n.toFixed(1));
@@ -321,18 +389,27 @@
   function layerDescription(rec,sea,layer) {
     if(layer==='access')return rec.minutes+' MIN TO CENTRE';
     if(layer==='impact')return rec.pressure?'RENT PRESSURE':rec.disturbed?'DISTURBANCE':rec.use==='care'||rec.use==='water'?'PROTECTED':'NO ACTIVE STRAIN';
-    if(rec.target)return 'WORK IN PROGRESS';
+    if(rec.target)return rec.laborReady?'AWAITING OPENING':'WORKSITE';
     return rec.use==='open'?(sea?'OPEN DECK':'COMMON GROUND'):PROJECTS[rec.use].category.toUpperCase();
   }
   function parcelArt(rec,sea,layer,selected,site) {
     const [x,y]=SITES[rec.id],name=model.nameOf(site,rec.use),boundary=hex(x,y,.97);
     const artwork=rec.use==='open'?TERRAINS.indexOf(rec.terrain.id):6+DEVELOPMENTS.indexOf(rec.use);
     const label=layerDescription(rec,sea,layer);
-    const progress=rec.target?`<g class="city-construction-rule"><path d="M-32 56h64"/><path d="M-32 56h${rec.turns===1?46:22}"/></g>`:'';
+    const summary=[rec.direction,rec.name,name];
+    if(rec.target)summary.push(model.nameOf(site,rec.target)+(rec.laborReady?' awaiting opening':' under construction'));
+    const workRow=WORKSITE_ROWS[rec.target==='open'?rec.use:rec.target]??3;
+    const finalArt=rec.target==='open'?TERRAINS.indexOf(rec.terrain.id):6+DEVELOPMENTS.indexOf(rec.target);
+    const progress=rec.target?`<g class="city-worksite" aria-hidden="true" pointer-events="none">
+      ${rec.laborReady?sprite(finalArt,29,20,90,67):
+        `<svg x="-28" y="-54" width="112" height="93.3" class="city-work-art" overflow="hidden" viewBox="0 ${workRow*240} 288 240"><use href="#city-worksite-atlas"/></svg>`}
+      <g class="city-workers"></g>
+      <g class="city-construction-rule"><path d="M-32 56h64"/><path data-work-bar d="M-32 56h0"/></g>
+    </g>`:'';
     return `<g data-city-precinct="${rec.id}"
-      class="city-parcel${selected?' is-current':''}" role="button" aria-pressed="${selected}" tabindex="0" aria-label="${attr(rec.direction+', '+rec.name+', '+name)}"><title>${attr(rec.direction+' · '+rec.name+' · '+name)}</title>
+      class="city-parcel${selected?' is-current':''}" role="button" aria-pressed="${selected}" tabindex="0" aria-label="${attr(summary.join(', '))}"><title>${attr(summary.join(' · '))}</title>
       <polygon points="${boundary}" class="city-region-fill" fill="${layerColour(rec,layer,sea)}"/>
-      <g transform="translate(${x} ${y})">${sprite(artwork,0,24,142,96)}${caption(rec.name,label)}${progress}</g>
+      <g transform="translate(${x} ${y})">${rec.target?sprite(artwork,-30,17,87,67):sprite(artwork,0,24,142,96)}${progress}${caption(rec.name,label)}</g>
       <polygon points="${boundary}" class="city-zone-edge" vector-effect="non-scaling-stroke"/></g>`;
   }
   function allMap(site,city,select,layer) {
@@ -340,7 +417,7 @@
     return `<svg viewBox="62 4 716 511" preserveAspectRatio="xMidYMid meet" class="city-plan-svg city-layer-${layer}" role="group" aria-labelledby="city-picture-title city-picture-desc" xmlns="http://www.w3.org/2000/svg">
       <title id="city-picture-title">${attr(site.name)} city plan</title>
       <desc id="city-picture-desc">Six planning precincts surround the central street district. Tap a precinct or use the arrow keys to inspect it. Activate the centre to enter street view. The precinct selector offers the same planning choices.</desc>
-      <defs>${spriteDefinitions(mapSetting(site))}</defs>
+      <defs>${spriteDefinitions(mapSetting(site))}${city.records.some(rec=>rec.target&&!rec.laborReady)?'<image id="city-worksite-atlas" href="art/worksites-v1.webp" width="864" height="1920"/>':''}</defs>
       ${connections(sea)}
       ${city.records.map(rec=>parcelArt(rec,sea,layer,select===rec.id,site)).join('')}
       <g data-city-precinct="centre" class="city-core" role="button" tabindex="0" aria-label="Enter central streets">
@@ -358,7 +435,7 @@
   const definition=(parent,term,value)=>{
     const d=make('div','city-metric');d.append(make('dt','',term),make('dd','',value));parent.append(d);
   };
-  function mount({mapRoot,panel,sim,onStreet,onResult,onChange,onRehearse}) {
+  function mount({mapRoot,panel,sim,onStreet,onResult,onChange,onRehearse,onManageCrew}) {
     if(!mapRoot||!panel||!sim)throw new Error('City plan needs a map, inspector and simulation.');
     let currentId=null,renderedWeek=null,select=0,layer='land',project='food',busy=false,message='',onMapFocus=false,hasDestroyed=false;
     const scene=make('div','city-scene');
@@ -367,10 +444,12 @@
     const cityName=make('h2','city-title');headText.append(cityName);
     const scale=make('span','city-chart-scale','Six precincts · One centre');heading.append(headText,scale);
     const picture=make('div','city-picture');
-    let mapRevision='';
+    let mapRevision='',inspectorRevision='';
     function fitPicture() {
-      const svg=picture.querySelector('svg');
-      if(svg)svg.setAttribute('viewBox',picture.clientWidth<610?'142 42 556 459':'45 31 752 462');
+      const svg=picture.querySelector('svg'),width=picture.clientWidth;
+      if(!svg || !width)return;
+      const bounds=width<610?'142 42 556 459':'45 31 752 462';
+      if(svg.getAttribute('viewBox')!==bounds)svg.setAttribute('viewBox',bounds);
     }
     const observed=typeof ResizeObserver==='function'?new ResizeObserver(fitPicture):null;
     observed?.observe(picture);
@@ -394,7 +473,16 @@
     }
     function previewProject(index,projectId) {
       const site=sim.active();
-      if(hasDestroyed || !site || !Number.isInteger(index) || index<0 || index>5 || !model.options.includes(projectId))return false;
+      if(hasDestroyed || !site || !Number.isInteger(index) || index<0 || index>5)return false;
+      if(projectId==='cancel'){
+        if(!site.city?.precincts?.[index]?.target)return false;
+        if(site.id!==currentId)render();
+        choose(index,false);
+        const review=panel.querySelector('.city-cancel-review');
+        review.open=true;review.querySelector('summary').focus({preventScroll:true});review.scrollIntoView({block:'nearest',behavior:'instant'});
+        return true;
+      }
+      if(!model.options.includes(projectId))return false;
       if(site.id!==currentId)render();
       const record=model.overview(site).records[index];
       if(record.use===projectId || (record.target && record.target!==projectId))return false;
@@ -402,6 +490,14 @@
       panel.tabIndex=-1;
       panel.focus({preventScroll:true});
       panel.scrollIntoView({block:'start'});
+      return true;
+    }
+    function focusWorksite(index){
+      const site=sim.active();
+      if(hasDestroyed || !Number.isInteger(index) || !site?.city?.precincts?.[index]?.target)return false;
+      if(site.id!==currentId)render();
+      choose(index,true);
+      mapRoot.scrollIntoView({block:'start',behavior:'instant'});
       return true;
     }
     function snapshotView(){
@@ -434,11 +530,11 @@
         else if(next!==null)choose(next,true);
       }
     });
-    async function submit(id) {
+    async function submit(id,expectedJobId) {
       if(busy||hasDestroyed)return;
       busy=true;message='';const prior=sim.active()?.id;render();
       try{
-        const result=await sim.perform('planCity',select,id);
+        const result=await sim.perform('planCity',select,id,expectedJobId);
         if(hasDestroyed)return;
         if(prior===sim.active()?.id)message=result.message;
         onResult?.(result);
@@ -456,6 +552,58 @@
       definition(dl,'Rent pressure',city.pressure===0?'None':String(city.pressure));
       return dl;
     }
+    function describeCrew(job){
+      if(!job)return 'Waiting for a builder.';
+      if(!job.workerNames.length)return job.status;
+      const names=job.workerNames.length<3?job.workerNames.join(' and '):job.workerNames.slice(0,-1).join(', ')+' and '+job.workerNames.at(-1);
+      const eta=Number.isFinite(job.etaSeconds)?' · about '+Math.ceil(job.etaSeconds)+' s at this pace':'';
+      return names+' · '+job.status+eta;
+    }
+    function renderProgress(schedule,proposedCrew){
+      const site=sim.active();
+      if(!site || hasDestroyed)return;
+      const proposal=panel.querySelector('.city-proposed-crew');
+      if(proposal){
+        const job=proposedCrew||model.previewCrew(site,sim.state,select,project)?.job;
+        const text=describeCrew(job);if(proposal.textContent!==text)proposal.textContent=text;
+      }
+      if(!site.city?.precincts.some(p=>p.target))return;
+      schedule??=window.EarthConstruction?.view(site,sim.state);
+      if(!schedule)return;
+      for(const [i,row] of site.city.precincts.entries()){
+        if(!row.target)continue;
+        const job=schedule.jobs.find(j=>j.id===row.jobId),progress=row.laborReady?1:job?.progress||0;
+        const yard=picture.querySelector('[data-city-precinct="'+i+'"] .city-worksite');
+        if(yard){
+          yard.querySelector('[data-work-bar]').setAttribute('d','M-32 56h'+fmt(64*progress));
+          const art=yard.querySelector('.city-work-art');
+          if(art && job && art.dataset.stage!==String(job.stageIndex)){
+            const kind=row.target==='open'?row.use:row.target,phase=row.target==='open'?2-job.stageIndex:job.stageIndex;
+            art.setAttribute('viewBox',phase*288+' '+(WORKSITE_ROWS[kind]??3)*240+' 288 240');art.dataset.stage=String(job.stageIndex);
+          }
+          const group=yard.querySelector('.city-workers');
+          const active=schedule.workers.filter(w=>w.jobId===row.jobId && w.activity==='building');
+          const stamp=active.map(w=>w.slot).join(',');
+          if(group.dataset.roster!==stamp){
+            group.dataset.roster=stamp;
+            // The district view has just three neighbours. Draw only workers
+            // who have reached this precinct, using their actual resident slot.
+            group.innerHTML=active.map((w,n)=>`<g transform="translate(${20+14*n} ${18-(n%2)*8})" class="city-builder city-builder-${w.slot}">
+              <ellipse cy="1" rx="4" ry="1.6"/><path class="city-boot" d="m-2 0 1-4m4 4-2-4"/>
+              <path class="city-coat" d="m-2-4 .5-5 3 .4 1.4 4z"/><circle class="city-face" cx=".6" cy="-11" r="1.9"/>
+              <path class="city-tool" d="m1-7 4 2 1-5m-2-.3 3.6 1"/></g>`).join('');
+          }
+        }
+        if(i!==select)continue;
+        const meter=panel.querySelector('.city-work-meter');
+        if(!meter)continue;
+        meter.value=progress;
+        const pct=Math.round(progress*100);
+        panel.querySelector('.city-work-stage').textContent=row.laborReady?'Crew work complete':(job?.stage||'Awaiting crew')+' · '+pct+'%';
+        panel.querySelector('.city-work-team').textContent=row.laborReady?'The crew is available for other work.':describeCrew(job);
+        const manage=panel.querySelector('.city-manage-crew');if(manage)manage.hidden=row.laborReady||!job;
+      }
+    }
     function render() {
       const site=sim.active();
       if(!site||hasDestroyed)return;
@@ -465,14 +613,28 @@
       cityName.textContent=site.name;inspectLink.textContent='Inspect '+r.name+' ↘';
       // Form edits and repeated simulation notifications don't repaint an unchanged map.
       const revision=JSON.stringify([site.id,site.name,site.water,select,layer,site.buildings.map(b=>[b.plot,b.kind]),
-        city.records.map(rec=>[rec.terrain.id,rec.use,rec.target,rec.turns,rec.minutes,rec.pressure,rec.disturbed])]);
+        city.records.map(rec=>[rec.terrain.id,rec.use,rec.target,rec.laborReady,rec.minutes,rec.pressure,rec.disturbed])]);
       if(revision!==mapRevision){
         picture.dataset.setting=mapSetting(site);
-        picture.innerHTML=allMap(site,city,select,layer);mapRevision=revision;fitPicture();
+        picture.innerHTML=allMap(site,city,select,layer);mapRevision=revision;
       }
+      fitPicture();
       if(onMapFocus){onMapFocus=false;picture.querySelector('[data-city-precinct="'+select+'"]')?.focus({preventScroll:true});}
       layerButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===layer)));
       legend.textContent=layer==='access'?'Journey to central streets':layer==='impact'?'Rent, habitat and workshop noise':'Select a precinct to plan its use';
+      // Full app refreshes (including an unrelated worksite opening) must not
+      // dismiss the native precinct picker or collapse a cancellation review.
+      const available=model.options.filter(id=>id!==r.use);
+      if(!r.target && !available.includes(project))project=available[0];
+      const projection=r.target?null:model.preview(site,sim.state,select,project,true);
+      const proposal=projection && [project,projection.available,projection.reason,projection.forecast,projection.risk,projection.noise,
+        projection.concurrent,projection.localFunds,Boolean(projection.crew)];
+      const inspector=JSON.stringify([currentId,select,r.name,r.jobId,r.use,r.target,r.turns,r.laborReady,r.minutes,r.reasons,
+        sim.state.week,site.population,city.capacity,city.reachable,city.pressure,city.crowding,city.weekly,busy,message,proposal]);
+      if(inspector===inspectorRevision){renderProgress(undefined,projection?.crew);return;}
+      inspectorRevision=inspector;
+      const previousFocus=panel.contains(document.activeElement)?document.activeElement:null;
+      const keepPicker=previousFocus?.matches('.city-select');
       const head=make('header','city-panel-head');head.append(make('span','kicker','City plan'));
       const survey=make('label','city-control','Planning precinct');
       const pick=make('select','city-select');
@@ -487,19 +649,22 @@
       const content=[head,survey,title,subtitle,data];
       if(r.target){
         const pending=make('div','city-pending');
-        pending.append(make('strong','',model.nameOf(site,r.target)+' underway'),make('p','','Opens in week '+(sim.state.week+r.turns)+'. The existing use continues until then.'));
-        const refund=model.preview(site,sim.state,select,'cancel').recovery;
-        const cancel=button('Cancel · recover '+refund.funds+' funds and '+refund.materials+' materials',()=>submit('cancel'),'city-secondary');
-        cancel.disabled=busy;pending.append(cancel);content.push(pending);
+        const opening=r.turns?'Earliest opening is week '+(sim.state.week+r.turns)+'.':'The scheduled week has arrived. The precinct opens when crew work finishes.';
+        const meter=make('progress','city-work-meter');meter.max=1;meter.value=0;meter.setAttribute('aria-label','Builder progress');
+        pending.append(make('strong','',model.nameOf(site,r.target)+' underway'),make('p','city-work-stage'),meter,make('p','city-work-team'),
+          make('p','',opening+' '+model.nameOf(site,r.use)+' continues until opening.'));
+        if(onManageCrew && !r.laborReady)pending.append(button('Manage builders',()=>onManageCrew(r.jobId),'city-secondary city-manage-crew'));
+        const {recovery}=model.preview(site,sim.state,select,'cancel');
+        const review=make('details','city-cancel-review');
+        review.append(make('summary','','Review cancellation'),make('p','','Recover '+recovery.funds+' funds and '+recovery.materials+' materials. Work already done and the original effort are lost. '+model.nameOf(site,r.use)+' stays in use.'));
+        const cancel=button('Cancel project',()=>submit('cancel',r.jobId),'city-secondary');
+        cancel.disabled=busy;review.append(cancel);pending.append(review);content.push(pending);
       }else{
         const form=make('div','city-project');
         const selector=make('label','city-control','Proposed use'), dropdown=make('select','city-project-select');
-        const available=model.options.filter(id=>id!==r.use);
-        if(!available.includes(project))project=available[0];
         for(const key of available){const opt=make('option','',model.nameOf(site,key));opt.value=key;dropdown.append(opt);}
         dropdown.value=project;dropdown.addEventListener('change',()=>{project=dropdown.value;message='';render();panel.querySelector('.city-project-select')?.focus({preventScroll:true});});
         selector.append(dropdown);form.append(selector);
-        const projection=model.preview(site,sim.state,select,project);
         if(projection.ok){
           const info=make('details','city-project-detail');info.append(make('summary','','Who benefits?'),make('p','',projection.people),make('p','',projection.purpose));
           const cost=make('p','city-project-cost',projection.cost.effort+' effort · '+projection.cost.funds+' funds · '+projection.cost.materials+' materials');
@@ -509,14 +674,14 @@
           if(projection.accessNote)forecast.append(make('small','',projection.accessNote+' of six.'));
           if(projection.crowdingNote)forecast.append(make('small','',projection.crowdingNote));
           if(projection.localFunds)forecast.append(make('small','','Includes '+(projection.localFunds>0?'+':'')+projection.localFunds+' funds from shops in central streets.'));
-          if(projection.concurrent)forecast.append(make('small','','Includes other commissioned work due by opening week.'));
+          if(projection.concurrent)forecast.append(make('small','','Includes crew-finished projects scheduled to open by that week.'));
           if(projection.risk){
             const n=Math.abs(projection.risk);
             forecast.append(make('small','',n+' '+(n===1?'precinct':'precincts')+(projection.risk>0?' newly exposed to rent pressure.':' newly protected against rent pressure.')));
           }
           if(projection.noise)forecast.append(make('small','',projection.noise>0?'More households or habitat will face disturbance.':'A source of disturbance will be buffered.'));
-          const timing=projection.turns===1?'Operates from next week (week '+projection.week+').':'Next week is a construction week. Opens in week '+projection.week+'.';
-          forecast.append(make('small','',timing));
+          forecast.append(make('small','','Earliest opening is week '+projection.week+', once the builders finish.'));
+          if(projection.crew)forecast.append(make('small','city-proposed-crew',describeCrew(projection.crew)));
           form.append(info,cost,forecast);
           const submitButton=button(busy?'Saving project…':project==='open'?'Reopen common ground':'Commission project',()=>submit(project),'primary city-commission');
           submitButton.disabled=busy||!projection.available;form.append(submitButton);
@@ -532,12 +697,14 @@
       const brief=make('details','city-brief');brief.append(make('summary','','Read the city ledger'));
       const q=model.flows(city.weekly)||'No city production yet';
       brief.append(make('p','','Outer precincts per week: '+q+'.'),
-        make('p','','Two crews can work at once. The central streets contain nine smaller lots. Housing changes how many people can settle here. Shared transit shortens journeys in neighbouring precincts.'));
+        make('p','','Up to two precincts can be commissioned together. The same residents staff these and the nine central lots. Work advances while the game is open. Housing makes room for residents, and shared transit shortens journeys in neighbouring precincts.'));
       content.push(brief);
       panel.replaceChildren(...content);
+      if(keepPicker)pick.focus({preventScroll:true});
+      renderProgress(undefined,projection?.crew);
     }
     render();
-    return {render,previewProject,snapshotView,restoreView,destroy(){hasDestroyed=true;observed?.disconnect();mapRoot.replaceChildren();panel.replaceChildren();}};
+    return {render,renderProgress,previewProject,focusWorksite,snapshotView,restoreView,destroy(){hasDestroyed=true;observed?.disconnect();mapRoot.replaceChildren();panel.replaceChildren();}};
   }
   window.EarthCity=Object.freeze({mount});
 

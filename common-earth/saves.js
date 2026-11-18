@@ -97,7 +97,7 @@
     const access=probe(requested),durable=access.read?requested:null,temp=memory();
     const retained=new Set(),subscribers=new Set(),views=new Set();
     const locks=options.locks!==undefined?options.locks:window.navigator?.locks;
-    let engine,id,unsubscribe,review=null,closed=false;
+    let engine,id,unsubscribe,review=null,closed=false,lastSaveMessage='';
     const identity=options.idGenerator || uid;
     function metadata(s,slot) {
       if(slot===FIRST)return {id:FIRST,name:'First world',created:0};
@@ -151,12 +151,16 @@
     function notifyViews(){for(const view of views)view();}
     function inform(world,notice) {
       for(const fn of subscribers)fn(world,notice);
-      notifyViews();
+      // The saved-world list shows weeks and communities, not work percentages.
+      // Keep the focused Open button in place while a crew is on the clock.
+      const message=status().message;
+      if(!notice.construction || message!==lastSaveMessage)notifyViews();
+      lastSaveMessage=message;
     }
     function preserveUnsaved(){
       if(!engine || !durable || backing(id)!==durable || !engine.saveIssue)return;
       const raw=get(durable,dataKey(id));
-      try{if(raw && JSON.parse(raw)?.version>1)return;}catch(error){/* Keep a recovered legacy turn in memory. */}
+      try{if(raw && JSON.parse(raw)?.version>1 && !engine.hasUnsavedChoice)return;}catch(error){/* Keep a recovered legacy turn in memory. */}
       const state=JSON.stringify(engine.state);
       if(state!==raw){temp.setItem(dataKey(id),state);retained.add(id);}
     }
@@ -171,6 +175,7 @@
       if(unsubscribe)unsubscribe();
       if(engine)engine.destroy();
       id=slot;engine=next;
+      lastSaveMessage=status().message;
       unsubscribe=next.subscribe((state,notice)=>{
         if(!notice.external && target===durable && !next.saveIssue)access.write=true;
         inform(state,notice);
@@ -241,7 +246,7 @@
         if(scope!==engine)return fail('The source world has changed. Choose the world to copy again.');
         scope.sync();
         let raw=get(backing(id),dataKey(id));
-        try{if(raw&&JSON.parse(raw)?.version>1)return fail('A newer edition is needed to copy this world.');}catch(error){/* A recovered valid state can be copied. */}
+        try{if(raw&&JSON.parse(raw)?.version>1&&!scope.hasUnsavedChoice)return fail('A newer edition is needed to copy this world.');}catch(error){/* A recovered valid state can be copied. */}
         return register(name||sourceName+' copy',JSON.stringify(scope.state));
       });
     }
@@ -252,7 +257,7 @@
       const fileBase=(meta.name||'Common Earth').normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'').slice(0,50)||'Common-Earth';
       const legacyRaw=get(backing(id),dataKey(id));
       try{
-        if(legacyRaw && JSON.parse(legacyRaw)?.version>1)return {ok:true,filename:fileBase+'-original.json',text:legacyRaw};
+        if(legacyRaw && JSON.parse(legacyRaw)?.version>1 && !engine.hasUnsavedChoice)return {ok:true,filename:fileBase+'-original.json',text:legacyRaw};
       }catch(error){/* Export the recovered turn. */}
       const file={format:FORMAT,version:1,name:meta.name,world:engine.state};
       return {ok:true,filename:fileBase+'-week-'+engine.state.week+'.json',text:JSON.stringify(file)};

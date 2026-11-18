@@ -6,6 +6,7 @@ const vm = require('node:vm');
 
 const gameRoot = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const script = readFileSync(path.join(gameRoot, 'street.js'), 'utf8');
+const constructionScript = readFileSync(path.join(gameRoot, 'construction.js'), 'utf8');
 const site = {
   id: 'harbour',
   lat: -37.8,
@@ -50,16 +51,18 @@ function surface(width = 820, height = 500) {
     cancelAnimationFrame() { frame = null; },
     matchMedia: () => ({ matches: true })
   };
+  vm.runInNewContext(constructionScript, runtime);
   vm.runInNewContext(script, runtime);
   const encounters = [], updates = [];
   const hints = [];
-  const placed = [], previews = [];
+  const placed = [], previews = [], assignments = [];
   const street = runtime.window.EarthStreet.mount(canvas, {
     onState: state => updates.push(state),
     onInteract: event => encounters.push(event),
     onHint: text => hints.push(text),
     onPlace: point => placed.push(point.plot),
-    onPlotPreview: plot => previews.push(plot)
+    onPlotPreview: plot => previews.push(plot),
+    onAssignWorksite: jobId => assignments.push(jobId)
   });
   street.setSite(site);
   const unit = Math.max(19, Math.min(37, width * .028 + height * .014));
@@ -115,7 +118,7 @@ function surface(width = 820, height = 500) {
     covered = open;
     documentEvents.get('earthsheetchange')?.({type:'earthsheetchange'});
   }
-  return { street, sheet, updates, encounters, hints, placed, previews, interactionFrame, overviewFrame, pointer, tap, step, finish, drive, at };
+  return { street, sheet, updates, encounters, hints, placed, previews, assignments, interactionFrame, overviewFrame, pointer, tap, step, finish, drive, at };
 }
 
 test('driving to successive taps preserves their screen coordinates on a tablet', () => {
@@ -445,4 +448,185 @@ test('opening a sheet freezes an in-progress trip until dismissal, without catch
   g.sheet(false);
   for (let i = 0; i < 20; i++) g.step();
   g.at(stopped.x, stopped.y, 0);
+});
+
+const workshop = {
+  id: 'workshop-1', name: 'Repair workshop', kind: 'workshop', scope: 'street', plot: 8,
+  stageIndex: 1, stage: 'Timber framing', progress: .52, workers: ['r1'], workerNames: ['Idris']
+};
+function onCrew(activity, x, y, jobId = workshop.id) {
+  return { residentId: 'r1', name: 'Idris', slot: 1, activity, x, y, jobId,
+    travelling: ['travelling', 'commuting', 'returning'].includes(activity) };
+}
+
+test('a progress update preserves the camera and journey; only an explicit Watch changes the view', () => {
+  const g = surface();
+  g.street.toggleOverview();
+  g.tap(g.overviewFrame()(6, 6));
+  assert(g.street.getState().travelling);
+  const snapshot = () => JSON.stringify(g.street.snapshotView());
+  const enRoute = snapshot();
+  g.street.setConstruction({ jobs: [workshop], workers: [onCrew('travelling', 18, 12)] });
+  g.street.setConstruction({ jobs: [{ ...workshop, progress: .61 }], workers: [onCrew('building', 15, 17.04)] });
+  assert.equal(snapshot(), enRoute);
+  assert(g.street.getState().travelling);
+  assert.equal(g.street.focusWorksite('absent'), false);
+  assert(g.street.focusWorksite(workshop.id));
+  const watch = g.street.snapshotView();
+  assert.equal(watch.camera.centreX, 15);
+  assert.equal(watch.player.x, JSON.parse(enRoute).player.x);
+  assert(g.street.getState().travelling);
+  g.finish();
+  g.at(6, 6);
+});
+
+test('a finger can inspect a foundation or order selected residents without accidentally moving or building', () => {
+  const g = surface(390, 355);
+  const view = { jobs: [workshop], workers: [onCrew('building', 14.4, 17.04)] };
+  g.street.setConstruction(view);
+  g.street.toggleOverview();
+  let screen = g.overviewFrame();
+  g.tap(screen(15, 15));
+  assert.equal(g.encounters.at(-1)?.jobId, workshop.id);
+  assert.equal(g.encounters.at(-1)?.type, 'construction');
+  assert.equal(g.street.getState().travelling, false);
+  g.street.setCrewSelection(['r0', 'r1']);
+  g.tap(screen(6, 6));
+  g.tap(screen(9, 23.04, .9));
+  assert.equal(g.street.getState().travelling, false);
+  assert.equal(g.encounters.length, 1);
+  assert.deepEqual(g.assignments, []);
+  const a = screen(15, 15), b = { x: a.x + 40, y: a.y - 9 };
+  g.pointer('pointerdown', a);
+  g.pointer('pointermove', b);
+  g.pointer('pointerup', b);
+  assert.deepEqual(g.assignments, []);
+  g.street.recenter();
+  g.street.toggleOverview();
+  screen = g.overviewFrame();
+  g.tap(screen(15, 15));
+  assert.deepEqual(g.assignments, [workshop.id]);
+  g.street.setCrewSelection([]);
+  g.street.setPlacement('garden');
+  g.tap(g.overviewFrame()(15, 15, .66));
+  assert.match(g.hints.at(-1), /vacant/);
+  assert.deepEqual(g.placed, []);
+  g.street.setConstruction({ jobs: [], workers: [] });
+  g.tap(g.overviewFrame()(15, 15, .66));
+  assert.equal(g.previews.at(-1), 8);
+  g.tap(g.overviewFrame()(15, 15, .66));
+  assert.deepEqual(g.placed, [8]);
+});
+
+test('People and parcel visits find a worker at their actual position, including after their project opens mid-trip', () => {
+  const ref = { type: 'resident', residentId: 'r1' };
+  for (const mode of ['walk', 'drive']) {
+    const g = surface();
+    if (mode === 'drive') g.drive();
+    g.street.setConstruction({ jobs: [workshop], workers: [onCrew('building', 15, 17.04)] });
+    const arrivals = [];
+    assert(g.street.focusStop(ref, p => arrivals.push(p)));
+    for (let i = 0; i < 8; i++) g.step();
+    const workplace = { type: 'market', label: 'Market exchange', x: 9, y: 5.04 };
+    g.street.setConstruction({ jobs: [], workers: [{ ...onCrew('commuting', 9, 6, null), workplace, occupation: 'exchange' }] });
+    g.street.setConstruction({ jobs: [], workers: [{ ...onCrew('working', 9, 5.04, null), workplace, occupation: 'exchange' }] });
+    g.finish();
+    assert.equal(arrivals.length, 1, mode);
+    assert.equal(arrivals[0].residentId, 'r1');
+    assert.equal(arrivals[0].x, 9);
+    assert.equal(arrivals[0].y, 5.04);
+    assert.equal(g.street.atStop(ref), true);
+    assert.equal(g.street.getState().mode, mode);
+  }
+});
+
+test('tapping a builder or a resident taking a short break starts their own conversation', () => {
+  for (const activity of ['building', 'resting', 'returning']) {
+    const g = surface();
+    g.street.toggleOverview();
+    const jobs = activity === 'building' ? [workshop] : [];
+    const worker = onCrew(activity, 18, 12, jobs.length ? workshop.id : null);
+    g.street.setConstruction({ jobs, workers: [worker] });
+    g.tap(g.overviewFrame()(18, 12, .48));
+    g.finish();
+    assert.equal(g.encounters.length, 1, activity);
+    assert.equal(g.encounters[0].residentId, 'r1', activity);
+    assert.equal(g.encounters[0].x, 18);
+    assert.equal(g.encounters[0].y, 12);
+  }
+});
+
+test('a new timber frame diverts only a crossing foot journey, and a player already on the plot can leave it', () => {
+  const g = surface();
+  function startAt(x, y) {
+    const shot = g.street.snapshotView();
+    assert(g.street.restoreView({ ...shot, player: { ...shot.player, x, y } }));
+  }
+  startAt(15, 12.6);
+  g.street.toggleOverview();
+  g.tap(g.overviewFrame()(15, 18.8));
+  assert(g.street.getState().travelling);
+  const camera = JSON.stringify(g.street.snapshotView().camera);
+  const view = { jobs: [workshop], workers: [] };
+  g.street.setConstruction(view);
+  assert.equal(JSON.stringify(g.street.snapshotView().camera), camera);
+  let steps = 0;
+  while (g.street.getState().travelling && steps++ < 300) {
+    g.step();
+    const { x, y } = g.street.getState();
+    assert(!(Math.abs(x - 15) < 1.23 && Math.abs(y - 15) < 1.02), 'frame remains outside the walking route');
+  }
+  g.at(15, 18.8);
+  g.street.setConstruction({ jobs: [], workers: [] });
+  startAt(15, 15);
+  g.street.setConstruction(view);
+  g.at(15, 15, 0);
+  assert(g.street.focusResident('r1'));
+  g.finish();
+  assert.equal(g.street.atStop({ type: 'resident', residentId: 'r1' }), true);
+});
+
+test('crew orders frame distant active sites together, preserve an already suitable view, and return to the earlier camera on cancel', () => {
+  const width=390,height=355,g=surface(width,height);
+  const district={ ...workshop,id:'north',plot:0 },city={ ...workshop,id:'eastern-gateway',scope:'city',kind:'homes',precinct:2,plot:undefined };
+  g.street.setConstruction({ jobs:[district,city],workers:[] });
+  g.street.zoomBy(2.1);
+  const before=g.street.snapshotView();
+  g.street.setCrewSelection(['r0','r1']);
+  assert(g.street.frameCrewTargets());
+  const framed=g.street.snapshotView();
+  assert(framed.camera.zoom<before.camera.zoom);
+  assert.deepEqual(framed.player,before.player);
+  assert.equal(g.street.getState().travelling,false);
+  const u=Math.max(19,Math.min(37,width*.028+height*.014))*framed.camera.zoom;
+  for(const [id,x,y] of [['north',3,3],['eastern-gateway',25.07,12]]){
+    const target={
+      x:8+width*.5+(x-y-framed.camera.centreX+framed.camera.centreY)*u,
+      y:12+height*.53+(x+y-framed.camera.centreX-framed.camera.centreY)*u*.51
+    };
+    assert(target.x>30&&target.x<width-16);
+    assert(target.y>28&&target.y<height-16);
+    g.tap(target);
+    assert.equal(g.assignments.at(-1),id);
+  }
+  g.street.frameCrewTargets();
+  assert.deepEqual(g.street.snapshotView().camera,framed.camera);
+  g.street.setCrewSelection([]);
+  assert.deepEqual(g.street.snapshotView().camera,before.camera);
+  g.at(before.player.x,before.player.y,0);
+});
+
+test('ending a shift can hand off the companion at their actual walking or riding position', () => {
+  const g=surface();
+  assert.equal(g.street.getState().companion,null);
+  g.street.setSite({...site,shift:{residentId:'r1',week:1}});
+  const walking=g.street.getState();
+  assert.equal(walking.companion.residentId,'r1');
+  assert(Math.hypot(walking.x-walking.companion.x,walking.y-walking.companion.y)<1.5);
+  g.drive();
+  const riding=g.street.getState();
+  assert.equal(riding.companion.x,riding.x);
+  assert.equal(riding.companion.y,riding.y);
+  g.street.setSite(site);
+  assert.equal(g.street.getState().companion,null);
 });
