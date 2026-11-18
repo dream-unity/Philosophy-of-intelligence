@@ -14,8 +14,8 @@
     result.addEventListener('click', callback);
     return result;
   }
-  const show = (id, visible) => { if ($(id)) $(id).hidden = !visible; };
-  const put = (id, value) => { if ($(id)) $(id).textContent = value ?? ''; };
+  const show = (id, visible) => { const el=$(id); if(el && el.hidden!==!visible)el.hidden=!visible; };
+  const put = (id, value) => { const el=$(id),text=String(value??''); if(el && el.textContent!==text)el.textContent=text; };
   const listen = (id, event, fn) => $(id)?.addEventListener(event, fn);
   const groups = {people:'People',build:'Build',research:'Research',work:'Work',council:'Council',routes:'Routes'};
   const start = {name:'Stone Town',region:'Zanzibar, Tanzania',lat:-6.1622,lon:39.1922,water:false};
@@ -219,8 +219,9 @@
     put('commission-title',scenario?.title);put('commission-step',scenario?.firstStep||scenario?.question);
     show('commission-brief',!!scenario);
     put('place-name',site?.name||selected.name);
-    put('place-type',site ? (site.water?'Floating community':'Established community') :
-      selected.region|| (selected.water?'Open water':'Landfall'));
+    const placeType=site ? (site.water?'Floating community':'Established community') :
+      selected.region || (selected.water?'Open water':'Landfall');
+    put('place-type',window.CommonEarthSim.waterfront(site || selected)?placeType+' · Waterfront':placeType);
     put('place-coords',coords(selected));
     put('place-description',site ? (site.population+' residents · '+site.era+'. Visit to meet the people who live here.') :
       (scenario ? 'Fictional opening · '+scenario.brief : '') || selected.caption || (selected.water ?
@@ -248,11 +249,16 @@
   }
   const placeSearchKey=text=>String(text||'').normalize('NFKD').toLowerCase().replace(/\p{M}/gu,'')
     .replace(/[’']/g,'').replace(/[\p{P}\s]+/gu,' ').trim();
-  function searchPlaces() {
+  let searchVersion=0;
+  async function searchPlaces() {
+    const version=++searchVersion;
     const query=$('place-search')?.value.trim()||'';
     if(!query){$('place-results').replaceChildren();return;}
     const needle=placeSearchKey(query),terms=needle.split(' ');
-    const places=window.EarthNavigation.search(query,9);
+    const list=$('place-results');
+    list.replaceChildren(node('p','empty-state','Searching places…'));
+    const places=await window.EarthNavigation.searchAsync(query,9);
+    if(version!==searchVersion)return;
     const neighbours=window.EarthPartners?.list(sim.state,sim.active())||[];
     const matches=[];
     if(needle)for(const point of [...sim.state.sites,...neighbours]){
@@ -271,7 +277,20 @@
     if(!results.length) $('place-results').append(node('p','empty-state','No match. Try another spelling or enter coordinates below.'));
   }
   function updateStreetInteract(state) {
-    const label=document.body.hasAttribute('data-crew-order')?'Choose worksite':
+    const aboard=state.mode==='boat',crewOrder=document.body.hasAttribute('data-crew-order');
+    show('street-interact',!aboard);
+    show('street-vehicle',!aboard);
+    show('street-boat',state.waterfront && !state.placement && !crewOrder);
+    put('street-boat',state.boarding?'Cancel boarding':state.returning?'Cancel return':aboard?'Return to shore':'Board boat');
+    show('street-fish',aboard && !state.returning);
+    show('street-fishing-terms',aboard && !state.returning);
+    if(aboard && !state.returning && $('street-fish')){
+      const offer=sim.fishingOffer();
+      $('street-fish').disabled=!offer.available;
+      put('street-fishing-terms',offer.available?'Cast nets for '+offer.food+' food · '+offer.effort+' effort':offer.reason);
+    }
+    put('street-mode',aboard?'On the water':'On the ground');
+    const label=crewOrder?'Choose worksite':
       state.placement?'Commission on plot '+(state.plot+1):state.travelling?(state.mode==='drive'?'Brake':'Stop walking'):'Interact';
     put('street-interact',label);
   }
@@ -289,7 +308,7 @@
     view=next;
     document.body.dataset.mapView=view;
     const isStreet=view==='street',isWorld=view==='world',isCity=view==='city';
-    show('atlas-stage',isWorld);show('street-stage',isStreet);show('street-controls',isStreet);show('city-stage',isCity);
+    show('atlas-stage',isWorld);atlas.setActive?.(isWorld);show('street-stage',isStreet);show('street-controls',isStreet);show('city-stage',isCity);
     show('site-inspector',isWorld);show('actions-panel',isStreet);show('city-panel',isCity);
     for(const [id,isActive] of [['world-view',isWorld],['street-view',isStreet],['city-view',isCity]]) {
       if(!$(id))continue;
@@ -306,7 +325,7 @@
           put('street-hint',preview.available?preview.text+' Choose Commission on plot '+(plot+1)+' to start work.':preview.reason);
         },
         onState:state=>{
-          put('street-location',state.nearby?.label||'Local district');
+          put('street-location',state.mode==='boat'?'Harbour waters':state.nearby?.label||'Local district');
           const driving=state.mode==='drive';
           updateStreetInteract(state);
           const vehicle=$('street-vehicle');
@@ -396,7 +415,7 @@
         if(job)watchWorksite(job.id);
       }finally{start.disabled=false;}
     },'action-button');
-    list.append(start,button('Keep building',renderActions,'text-button'));
+    list.append(start,button('Keep building',()=>renderActions(),'text-button'));
   }
   async function placeBuilding({plot},watch=false) {
     if(!placement||commissioning)return;
@@ -518,6 +537,7 @@
     street?.setSite(sim.active());render();
   }
   function atVenue(venue, destination, act) {
+    if(street.getState().mode==='boat'){notify('Return to shore to reach '+destination+'.',true);return;}
     const siteId=sim.state.activeId,week=sim.state.week,version=++arrivalVersion;
     if(street.atStop(venue)){
       street.cancelTravel?.();
@@ -546,6 +566,7 @@
     if(!action.available) {notify(action.reason || 'This choice is currently unavailable.',true);return;}
     if(action.id.startsWith('reclaim:')){confirmReclaim(action.plot);return;}
     if(action.group==='build') {
+      if(street.getState().mode==='boat'){notify('Return to shore to choose a building plot.',true);return;}
       placement=action;street.setPlacement(action.kind||action.id.split(':').pop());
       show('cancel-placement',true);
       notify('Choose a plot for '+action.label+'. Tap a lot to preview, or commission it from the list.');
@@ -587,9 +608,12 @@
       render();focusActions();
     });
   }
+  const portraits=new WeakMap();
   function portrait(site,person) {
+    const saved=portraits.get(person);
+    if(saved)return saved;
     const canvas=node('canvas','resident-portrait');canvas.width=48;canvas.height=48;
-    canvas.setAttribute('aria-hidden','true');window.EarthStreet.portrait(canvas,site,person);return canvas;
+    canvas.setAttribute('aria-hidden','true');window.EarthStreet.portrait(canvas,site,person);portraits.set(person,canvas);return canvas;
   }
   function actionRow(a) {
     const card=node('article','action-card');
@@ -612,7 +636,7 @@
     return card;
   }
   function actionContext(){return [sim.state.activeId,group,visiting,peers,researchPage,councilPage].join('/');}
-  function renderActions() {
+  function renderActions(workModel) {
     if(outcomeContext && outcomeContext!==actionContext()){
       show('action-outcome',false);put('action-outcome','');outcomeContext='';
     }
@@ -641,7 +665,6 @@
       tab.setAttribute('aria-pressed',String(active));tab.classList.toggle('active',active);
     }
     put('actions-heading',groups[group]);
-    const actions=sim.actions(group);
     if(placement) {
       show('decision-context',false);
       put('actions-heading','Choose a plot');
@@ -667,12 +690,12 @@
       }
       works?.updateLots(grid,placement);
       list.append(grid,button('Cancel placement',()=>{cancelPlacement();renderActions();}));
-      if(works)works.roster(list,works.view());
+      if(works)works.roster(list,workModel||works.view());
       return;
     }
     if(works && group==='build' && encounter?.type==='construction'){
       show('decision-context',false);
-      const model=works.view(),job=model.jobs.find(j=>j.id===encounter.jobId);
+      const model=workModel||works.view(),job=model.jobs.find(j=>j.id===encounter.jobId);
       if(job){
         put('actions-heading','Worksite');
         list.append(works.jobCard(job,true,model));
@@ -728,6 +751,7 @@
           links.append(link);
         }
         list.append(links);
+        const actions=sim.actions(group);
         const projectActions=actions.filter(a=>a.peerProject);
         if(projectActions.some(a=>a.id.startsWith('together:'))){
           for(const resident of site.residents.filter(p=>!p.heard)){
@@ -748,7 +772,7 @@
       }
       if(!person) {
         list.append(node('p','action-description','Choose a resident to meet. Listen to hear what they need and how you can help.'));
-        const currentWork=works?.view();
+        const currentWork=workModel||works?.view();
         for(const r of site.residents) {
           const item=node('article','action-card resident-card');
           if(window.EarthStreet.portrait)item.append(portrait(site,r));
@@ -768,12 +792,13 @@
       const bio=node('div','resident-bio');
       if(window.EarthStreet.portrait)bio.append(portrait(site,person));
       const identity=node('p','resident-line',person.role+' · '+person.value+' · Bond '+person.bond);
-      if(works)identity.append(works.residentSummary(person,works.view()));
+      const model=workModel||works?.view();
+      if(works)identity.append(works.residentSummary(person,model));
       bio.append(identity);list.append(bio);
       const delivery=(sim.actions('work')||[]).find(a=>a.id==='courier:deliver:'+person.id);
       if(delivery)list.append(actionRow(delivery));
-      for(const a of actions.filter(a=>a.residentId===person.id||a.id.includes(':'+person.id)))list.append(actionRow(a));
-      if(works)works.roster(list,works.view(),{personId:person.id});
+      for(const a of sim.actions(group).filter(a=>a.residentId===person.id||a.id.includes(':'+person.id)))list.append(actionRow(a));
+      if(works)works.roster(list,model,{personId:person.id});
       if(window.EarthNeighbours)list.append(button('Shared projects with other residents',()=>showPeople('projects'),'secondary-button'));
       if(window.EarthShifts&&!day){
         const gate=window.EarthShifts.gate(sim.state,site,person.id);
@@ -786,8 +811,9 @@
         }),'action-button');b.dataset.action='begin-day';b.disabled=!gate.available;if(!gate.available)card.append(node('small','action-reason',gate.reason));card.append(b);list.append(card);
       }
     } else {
+      const actions=sim.actions(group);
       if(works && group==='build'){
-        const model=works.view();
+        const model=workModel||works.view();
         works.jobList(list,model);
         works.roster(list,model);
       }
@@ -1009,19 +1035,25 @@
     refreshObjective(overview);
     if($('society-open')) $('society-open').disabled=!site;
     const resources=$('resource-strip');
-    resources.replaceChildren();
+    if(!site && resources.firstChild)resources.replaceChildren();
     if(site) for(const [key,label] of Object.entries(resourceLabels)){
-      const metric=node('div','resource');metric.append(node('span','resource-label',label),node('strong','resource-value',site[key]));resources.append(metric);
+      let value=resources.querySelector('[data-metric="'+key+'"]');
+      if(!value){
+        const metric=node('div','resource');value=node('strong','resource-value');value.dataset.metric=key;
+        metric.append(node('span','resource-label',label),value);resources.append(metric);
+      }
+      if(value.textContent!==String(site[key]))value.textContent=site[key];
     }
     show('week-review-open',!!sim.lastWeek?.());
     if(sheetOpen('society-dialog'))renderSociety();
     if(sheetOpen('journal-dialog'))renderRecords();
     if(view==='world'){inspect();markers();}
-    if(!options?.keepCrewEditor)renderActions();
+    const workModel=works?.view();
+    if(!options?.keepCrewEditor)renderActions(workModel);
     renderForecast();planning?.render();
     show('goal-details',!!site && !!learning);learning?.render();
     if(view==='city')city?.render();
-    refreshWorksites(works?.view(),true);
+    refreshWorksites(workModel,true);
   }
   function sheetOpen(id){
     const sheet=$(id);
@@ -1279,6 +1311,19 @@
     else street?.interact();
   });
   listen('street-vehicle','click',()=>street?.toggleVehicle());
+  listen('street-boat','click',()=>street?.toggleBoat());
+  let fishing=false;
+  listen('street-fish','click',async()=>{
+    const state=street?.getState();
+    if(fishing || state?.mode!=='boat' || state.returning || view!=='street')return;
+    const offer=sim.fishingOffer();
+    if(!offer.available){notify(offer.reason,true);return;}
+    fishing=true;
+    try{
+      const result=await sim.perform('fish',state.siteId);
+      if(presentResult(result))render();
+    }finally{fishing=false;if(street)updateStreetInteract(street.getState());}
+  });
   const heldDirections=new Map();
   function steerPad(id,button){
     const previous=heldDirections.get(id);

@@ -140,7 +140,11 @@
         return {...meta,...summaryOf(state),selected:meta.id===id,temporary:!durable||s===temp};
       });
     }
-    function current(){return list().find(x=>x.selected);}
+    function current(){
+      const source=availableStore(id),meta=metadata(source,id);
+      if(!meta)return undefined;
+      return {...meta,...summaryOf(engine.state),selected:true,temporary:!durable||retained.has(id)||source===temp};
+    }
     function status(){
       const mode=backing(id)===temp||!durable?'temporary':access.write&&!engine.saveIssue?'autosave':'limited';
       const message=mode==='temporary'?'This world is in this tab only. Export a file before closing it.':

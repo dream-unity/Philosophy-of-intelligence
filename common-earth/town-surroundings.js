@@ -56,6 +56,8 @@
   }
 
   function profile(site) {
+    const waterfront=window.CommonEarthSim?.waterfront(site);
+    if(waterfront)return waterfront;
     if (site?.water) return 'ocean';
     const lat = Number(site?.lat), lon = Number(site?.lon);
     // The opening settlement is on the western waterfront of Unguja. Other
@@ -272,10 +274,19 @@
     if(port) {
       seawall(g,project,unit);
       for(const [x,length] of [[2.9,1.80],[11.4,2.76],[22.4,2.20]])jetty(g,project,unit,x,length);
-      ink(g,project,[[11.78,28.10,.12],[12.57,28.91,-.26],[13.48,29.75,-.16]],'#9b9373',Math.max(.6,unit*.024));
-      drawBoat(g,project,unit,'lateen',14.32,30.44,1.09,false);
-      drawBoat(g,project,unit,'canopy',21.65,29.61,.84,true);
-
+    }
+    if((sea || port) && site.buildings?.some(b=>b.kind==='fishingDock')){
+      // The shore station occupies its reserved lot. Its landing reaches open water.
+      const x=6.5;
+      jetty(g,project,unit,x,2.74);
+      box(g,project,x-.72,27.48,1.45,.71,-.27,.33,'#bdb18b','#897652','#75674f');
+      for(const dx of [-.62,.56])box(g,project,x+dx,27.96,.09,.09,-.42,1.00,'#bda06c','#7d6b4a','#705e42');
+      for(let i=0;i<7;i++){
+        const rx=x-.55+i*.16;
+        ink(g,project,[[rx,28,.50],[rx+.13,28,.21],[rx+.22,28,.09]],'#7b8c76',Math.max(.6,unit*.025));
+        ink(g,project,[[rx+.22,28,.50],[rx+.13,28,.21],[rx,28,.09]],'#91a288',Math.max(.6,unit*.025));
+      }
+      for(let i=0;i<2;i++)box(g,project,x-.29,26.04+i*.37,.39,.32,.02,.23,'#d2b991','#a3845a','#876f4e');
     }
     g.restore();
   }

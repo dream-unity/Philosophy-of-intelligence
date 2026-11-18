@@ -725,3 +725,52 @@ test('a household shift requires visiting the actual door when its host is along
   assert(g.street.focusResident('r0'));
   assert.equal(g.encounters.at(-1).doorstep,undefined);
 });
+
+test('touch a moored boat, steer in water, restore the view, and return to the same landing', () => {
+  const g=surface();
+  g.street.setSite({...site,water:true});
+  const shore=g.interactionFrame();
+  g.tap(shore(16.6,26.85,-.34));
+  assert(g.street.getState().boarding);
+  g.finish();
+  assert.equal(g.street.getState().mode,'boat');
+  g.at(16.6,26.85);
+  g.street.recenter();
+  g.tap(g.interactionFrame()(13.6,33.5,-.44));
+  g.finish();g.at(13.6,33.5);
+  const snapshot=g.street.snapshotView();
+  assert(g.street.move('left'));
+  assert(g.street.restoreView(snapshot));
+  g.at(13.6,33.5);
+  assert.equal(g.street.toggleVehicle(),false);
+  assert(g.street.toggleBoat());
+  assert(g.street.getState().returning);
+  g.finish();
+  assert.equal(g.street.getState().mode,'walk');
+  g.at(15,24.53);
+});
+
+test('boat button is unavailable inland and can cancel boarding or a return to shore', () => {
+  const g=surface();
+  assert.equal(g.street.getState().waterfront,false);
+  assert.equal(g.street.toggleBoat(),false);
+  g.street.setSite({...site,water:true});
+  g.street.toggleBoat();assert(g.street.getState().boarding);
+  g.street.toggleBoat();assert.equal(g.street.getState().travelling,false);
+  assert.equal(g.street.getState().mode,'walk');
+  g.drive();
+  g.street.toggleBoat();g.finish();assert.equal(g.street.getState().mode,'boat');
+  const before=g.street.getState();
+  g.street.toggleBoat();g.street.toggleBoat();g.finish();
+  assert.equal(g.street.getState().mode,'boat');g.at(before.x,before.y);
+});
+
+test('a finished fishing dock adds a working berth and removing it lands its occupant', () => {
+  const g=surface();
+  const dock={id:'dock',kind:'fishingDock',name:'Fishing dock',plot:0};
+  const active={...site,water:true,buildings:[dock]};
+  g.street.setSite(active);g.tap(g.interactionFrame()(8,27.9,-.34));g.finish();
+  assert.equal(g.street.getState().mode,'boat');g.at(8,27.9);
+  g.street.setSite({...active,buildings:[]});
+  assert.equal(g.street.getState().mode,'walk');g.at(6.5,24.53);
+});

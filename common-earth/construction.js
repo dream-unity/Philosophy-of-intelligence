@@ -12,17 +12,18 @@
     {id:'usual',label:'Usual occupation'}, {id:'food',label:'Food growing'},
     {id:'repair',label:'Repair work'}, {id:'exchange',label:'Trade and exchange'}
   ].map(Object.freeze));
-  const streetWork = {garden:22,workshop:39,market:35,hall:31,pier:44,wetland:32};
-  const dismantleWork={garden:14,workshop:23,market:21,hall:19,pier:26,wetland:18};
+  const streetWork = {garden:22,workshop:39,market:35,hall:31,pier:44,fishingDock:41,wetland:32};
+  const dismantleWork={garden:14,workshop:23,market:21,hall:19,pier:26,fishingDock:24,wetland:18};
   const cityWork = {food:35,homes:55,yard:58,market:42,transit:62,care:39,water:41,open:20};
   const stages = {
     growing:['Preparing ground','Laying beds','Planting'],
+    fishing:['Setting pilings','Laying the deck','Rigging the nets'],
     water:['Surveying ground','Shaping channels','Planting banks'],
     open:['Securing the site','Taking down structures','Restoring access'],
     dismantle:['Securing the site','Salvaging materials','Clearing the plot'],
     building:['Foundations','Framing','Fitting out']
   };
-  const tradeByKind={garden:0,food:0,wetland:0,water:0,hall:2,market:2,care:2,transit:2};
+  const tradeByKind={garden:0,fishingDock:0,food:0,wetland:0,water:0,hall:2,market:2,care:2,transit:2};
   const schoolBySlot=['larder','toolbank','relay'];
   const facilities=[['garden','wetland'],['workshop'],['market','pier']];
   const pairs={tools:[0,1],meals:[0,2],room:[1,2]};
@@ -76,16 +77,22 @@
   }
   function roadRoute(from,to){
     if(distance(from,to)<.001)return [];
-    const a=roadAccess(from),b=roadAccess(to),options=[];
-    if(a.kerb.x===b.kerb.x||a.kerb.y===b.kerb.y){
-      // A shared coordinate forms a road only if the common line is on the street grid.
-      if(a.kerb.x===b.kerb.x&&a.kerb.x%6===0 || a.kerb.y===b.kerb.y&&a.kerb.y%6===0)
-        options.push([a.kerb,b.kerb,to]);
+    const a=roadAccess(from),b=roadAccess(to);
+    let best;
+    if(a.kerb.x===b.kerb.x&&a.kerb.x%6===0 || a.kerb.y===b.kerb.y&&a.kerb.y%6===0){
+      best=[a.kerb,b.kerb,to];
+    }else{
+      // Every candidate follows the same kerbs at its ends. Between those kerbs
+      // every leg is axis-aligned. Only construct the shortest of the four paths.
+      let shortest=Infinity,start,end;
+      for(const i of a.choices)for(const j of b.choices){
+        const length=Math.abs(a.kerb.x-i.x)+Math.abs(a.kerb.y-i.y)+
+          Math.abs(i.x-j.x)+Math.abs(i.y-j.y)+Math.abs(j.x-b.kerb.x)+Math.abs(j.y-b.kerb.y);
+        if(length<shortest){shortest=length;start=i;end=j;}
+      }
+      best=[a.kerb,start,point(start.x,end.y),end,b.kerb,to];
     }
-    for(const i of a.choices)for(const j of b.choices)options.push([a.kerb,i,point(i.x,j.y),j,b.kerb,to]);
-    function length(path){return path.reduce((sum,p,i)=>sum+distance(i?path[i-1]:from,p),0);}
-    options.sort((a,b)=>length(a)-length(b));
-    return options[0].filter((p,i,path)=>distance(i?path[i-1]:from,p)>.001);
+    return best.filter((p,i)=>distance(i?best[i-1]:from,p)>.001);
   }
   function itinerary(person,worker,job){
     const target=station(job,person.slot),last=worker.route.at(-1)||worker.position;
@@ -179,7 +186,7 @@
     // A settled earlier world keeps its home markers until somebody starts taking up new work.
     if(!site.workforce&&occupation===roles[person.slot])return doorstep(person);
     const convening=person.slot===2&&occupation==='exchange'&&preference!=='exchange';
-    const kinds=convening?['hall']:occupation==='food'?['garden','wetland']:occupation==='repair'?['workshop']:['market','pier'];
+    const kinds=convening?['hall']:occupation==='food'?['garden','wetland','fishingDock']:occupation==='repair'?['workshop']:['market','pier'];
     const facility=locateFacility(site,person,kinds);
     if(facility)return facility;
     if(convening)return doorstep(person);
@@ -275,6 +282,7 @@
 
   function stageNames(kind){
     if(kind==='garden'||kind==='food')return stages.growing;
+    if(kind==='fishingDock')return stages.fishing;
     if(kind==='wetland'||kind==='water')return stages.water;
     if(kind==='dismantle')return stages.dismantle;
     return kind==='open'?stages.open:stages.building;

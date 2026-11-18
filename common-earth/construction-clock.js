@@ -21,7 +21,7 @@
     }
     async function tick(){
       timer=null;
-      if(closed || leftPage || page.hidden || !hasWork()){stopTimer();return;}
+      if(closed || leftPage || page.hidden){stopTimer();return;}
       const end=now(),elapsed=Math.min(2,Math.max(0,(end-last)/1000));
       last=end;inFlight=true;
       try{
@@ -32,7 +32,7 @@
     }
     const off=sim.subscribe((_state,notice)=>{
       if(notice.switched)stopTimer();
-      schedule();
+      if(!inFlight)schedule();
     });
     function leave(){leftPage=true;stopTimer();}
     function resume(){leftPage=false;schedule();}

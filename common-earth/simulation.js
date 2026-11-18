@@ -19,6 +19,7 @@
     workshop: {name:'Repair workshop', funds:6, materials:3, info:'Recovers 2 materials each week. Its tools also improve adjacent gardens.'},
     market: {name:'Neighbourhood market', funds:7, materials:3, info:'A full customer catchment earns 3 funds per week. A shared one earns 1, and a shop without customers earns 0. Outer exchanges, population and trading links expand demand. A depot adds 1 fund to an operating shop.'},
     hall: {name:'Assembly hall', funds:5, materials:2, info:'Adds 1 wellbeing each week and makes room for shared apprenticeships.'},
+    fishingDock: {name:'Fishing dock', funds:6, materials:4, info:'Build a shore station and fishing jetty. Once the crew opens the dock, board a boat to land 4 food for 1 effort, once per week.'},
     pier: {name:'Exchange depot', funds:6, materials:3, info:'One depot at either end raises a route’s base shipment limit from 2 to 4. An adjacent market earns 1 extra fund.'},
     wetland: {name:'Water commons', funds:5, materials:4, info:'Grows 1 food each week. Protects the district during a flood and supports slow repair.'}
   };
@@ -123,6 +124,11 @@
   function affordable(site,goods) { return Object.entries(goods || {}).every(([key,amount])=>site[key]>=amount); }
   function payment(site,goods) { for(const [key,value] of Object.entries(goods || {})) site[key]-=value; }
   function has(site,kind) { return site.buildings.some(b=>b.kind===kind); }
+  function waterfront(site){
+    if(site?.water)return 'ocean';
+    if(site && Math.abs(site.lat+6.163)<.046 && Math.abs(site.lon-39.189)<.036)return 'zanzibar';
+    return null;
+  }
   function adjacent(a,b) { return Math.abs(Math.floor(a/3)-Math.floor(b/3))+Math.abs(a%3-b%3)===1; }
   function neighbours(site,plot,kind) { return site.buildings.some(b=>b.kind===kind && adjacent(b.plot,plot)); }
   function marketPlan(site,options={}){
@@ -304,6 +310,7 @@
     if(site.agendaVisits!=null && (!recordLike(site.agendaVisits) || !Object.entries(site.agendaVisits).every(([index,week])=>
       knownAgenda(Number(index)) && integer(week,1,world.week))))return false;
     if(site.mandate!=null && !Object.hasOwn(MANDATES,site.mandate))return false;
+    if(site.lastFishingWeek!=null && !integer(site.lastFishingWeek,0,world.week))return false;
     if(site.lastAidWeek!=null && !integer(site.lastAidWeek,0,world.week))return false;
     if(site.lastShiftWeek!=null && !integer(site.lastShiftWeek,0,world.week))return false;
     if(root.EarthStrategy?.valid && !root.EarthStrategy.valid(site.strategy))return false;
@@ -701,17 +708,30 @@
       payment(site,choice.goods);
       return recordVote(turn,site,choice,week);
     }
+    function buildQuote(site,kind,b){
+      const gate=!root.EarthConstruction?'Construction crews could not load. Reload the game to try again.':
+        !Number.isSafeInteger((site.projectSerial||0)+1)?'This district cannot record another work order.':
+        site.buildings.length+(site.construction||[]).filter(job=>job.scope==='street').length>=9?'All nine district lots are occupied or reserved.':
+        kind==='fishingDock' && !waterfront(site)?'Choose a community with a navigable waterfront.':
+        kind==='fishingDock' && (has(site,kind)||site.construction?.some(job=>job.kind===kind||job.original?.kind===kind))?'This community already has a fishing dock or dock work order.':
+        kind==='wetland' && !site.tech.includes('apprenticeship')?'First research shared apprenticeship.':'';
+      const goods={funds:b.funds,materials:Math.max(1,b.materials-(root.EarthStrategy?.buildDiscount(site) || 0))};
+      return {goods,gate};
+    }
+    function actionReason(site,effort,goods,gate){
+      return gate || (world.effort<effort?'Requires '+effort+' effort. Advance the week to refresh.':'') ||
+        (!affordable(site,goods)?'Requires '+resources(goods)+'.':'');
+    }
     function actionsAndRules(group='all',site=current()){
       const actions=[];
       if(!site)return actions;
       function add(category,id,label,description,options,run){
         if(group!=='all' && group!==category)return;
         const {effort=1,goods={},gate='',...meta}=options || {};
-        const reason=gate || (world.effort<effort?'Requires '+effort+' effort. Advance the week to refresh.':'') ||
-          (!affordable(site,goods)?'Requires '+resources(goods)+'.':'');
+        const reason=actionReason(site,effort,goods,gate);
         actions.push({id,group:category,label,description,cost:effort,goods,available:!reason,reason,...meta,run});
       }
-      for(const p of site.residents){
+      if(group==='all'||group==='people')for(const p of site.residents){
         const profile=PROFILES[p.slot],who={residentId:p.id};
         const when=p.promise?p.promise.dueWeek:0;
         add('people','listen:'+p.id,p.heard?'Check in with '+p.name:'Listen to '+p.name,p.role+' · '+p.value+'. '+(p.heard?'Hear how the work is going.':'Hear the experience behind this resident’s priorities.'),{...who,gate:p.lastTalk===world.week?'You already spoke this week.':''},()=>{
@@ -750,12 +770,8 @@
           }
         }
       }
-      for(const [kind,b] of Object.entries(BUILDINGS)){
-        const gate=!root.EarthConstruction?'Construction crews could not load. Reload the game to try again.':
-          !Number.isSafeInteger((site.projectSerial||0)+1)?'This district cannot record another work order.':
-          site.buildings.length+(site.construction||[]).filter(job=>job.scope==='street').length>=9?'All nine district lots are occupied or reserved.':
-          kind==='wetland' && !site.tech.includes('apprenticeship')?'First research shared apprenticeship.':'';
-        const goods={funds:b.funds,materials:Math.max(1,b.materials-(root.EarthStrategy?.buildDiscount(site) || 0))};
+      if(group==='all'||group==='build')for(const [kind,b] of Object.entries(BUILDINGS)){
+        const {goods,gate}=buildQuote(site,kind,b);
         add('build','build:'+kind,b.name,b.info,{kind,goods,gate},plot=>{
           // The order reserves this plot and these supplies. Opening is a later worker event.
           let serial=site.projectSerial||0,id;
@@ -778,7 +794,7 @@
         });
       }
       const nextTech=TECH[site.tech.length];
-      if(nextTech){
+      if(nextTech&&(group==='all'||group==='research')){
         let gate='';
         if(nextTech.id==='apprenticeship'){
           if(!site.residents.some(p=>p.heard))gate='Listen to a resident first.';
@@ -795,11 +811,12 @@
           site.tech.push(nextTech.id);site.era=nextTech.era;return site.name+' entered the '+nextTech.era+' era. '+nextTech.info;
         });
       }
-      if(!world.charter)for(const [id,c] of Object.entries(CHARTERS)){
+      if(!world.charter&&(group==='all'||group==='council'))for(const [id,c] of Object.entries(CHARTERS)){
         add('council','charter:'+id,c.name,c.text+' Ratification also requires two linked communities and the Stewardship compact researched in one of them.',{effort:0},()=>{world.charter=id;return 'Your founding charter is “'+c.name+'”. '+c.text;});
       }
-      const delegated=root.EarthLegacy?.governs(world,site);
-      if(site.issue && !delegated){
+      const council=group==='all'||group==='council';
+      const delegated=council&&root.EarthLegacy?.governs(world,site);
+      if(council && site.issue && !delegated){
         const q=QUESTIONS[site.issue.index];
         for(const c of q.choices){
           const plan=votePlan(world,site,c,world.week);
@@ -807,7 +824,7 @@
             {goods:c.goods || {},issueTitle:q.title},()=>recordVote(world,site,c,world.week));
         }
       }
-      if(!delegated)mandateActions(world,site,add);
+      if(council && !delegated)mandateActions(world,site,add);
       if(group==='all' || group==='routes')for(const other of world.sites.filter(s=>s.id!==site.id)){
         const route=tradeRoute(site,other),weeks=travelTime(site,other);
         const mode=site.water||other.water?'Sea passage':site.region===other.region?'Supply road':'Trade passage';
@@ -844,6 +861,27 @@
       const site=world.sites.find(candidate=>candidate.id===siteId);
       return site?actionsAndRules(group,site).map(({run,...view})=>view):[];
     }
+    function fishingOffer(){
+      const site=current(),food=4,effort=1;
+      let reason='';
+      if(!waterfront(site))reason='Fishing needs a community with a navigable waterfront.';
+      else if(!has(site,'fishingDock')){
+        reason=site.construction?.some(job=>job.kind==='fishingDock')?'The crew is still building the fishing dock.':'Build a fishing dock in Community actions → Build.';
+      }else if(site.lastFishingWeek===world.week)reason='This week’s catch is in. Fish again in week '+(world.week+1)+'.';
+      else if(world.effort<effort)reason='Fishing needs 1 effort. Advance the week to refresh.';
+      else if(site.food>Number.MAX_SAFE_INTEGER-food)reason='The community food store is full.';
+      return {available:!reason,reason,food,effort};
+    }
+    function fish(siteId){
+      const site=current();
+      if(!site || site.id!==siteId)return reject('Return to the boat in the selected community.');
+      const offer=fishingOffer();
+      if(!offer.available)return reject(offer.reason);
+      world.effort-=offer.effort;
+      apply(site,{food:offer.food});
+      site.lastFishingWeek=world.week;
+      return complete('The fishing crew landed '+offer.food+' food for '+site.name+'.',site);
+    }
     function act(id,plot){
       const site=current();
       if(!site)return reject('Found your first settlement on the globe.');
@@ -871,7 +909,8 @@
       if(!b)return invalid('Choose a project.');
       if(!Number.isInteger(plot) || plot<0 || plot>8)return invalid('Choose a district lot.');
       if(occupiedLot(site,plot))return invalid('This lot is already built on or reserved for construction.');
-      const action=actionsAndRules('build').find(item=>item.kind===kind);
+      const {goods,gate}=buildQuote(site,kind,b);
+      const reason=actionReason(site,1,goods,gate);
       const around=site.buildings.filter(item=>adjacent(item.plot,plot)).map(({kind,plot,name})=>({kind,plot,name}));
       const oldRate=rates(site,undefined,world);
       const builtSite={...site,buildings:[...site.buildings,{kind,plot,name:b.name}]};
@@ -901,8 +940,9 @@
         service=improved?' Adds 2 units of cargo capacity on '+improved+' current route'+(improved===1?'':'s')+'.':
           partners.length || has(site,'pier')?' Existing route capacity stays the same.':' Future routes from this depot have a base capacity of 4 units.';
       }
+      if(kind==='fishingDock')service=' Board a waterfront boat and spend 1 effort to land 4 food once per week.';
       if(kind==='wetland')service=' Protects local homes and food during high water.';
-      return {ok:true,available:action.available,reason:action.reason,label:b.name,text:'Lot '+(plot+1)+' once open · '+forecast+'.'+pairing+service+effects,forecast,delta,goods:{...action.goods},fulfilled:promises,neighbours:around};
+      return {ok:true,available:!reason,reason,label:b.name,text:'Lot '+(plot+1)+' once open · '+forecast+'.'+pairing+service+effects,forecast,delta,goods,fulfilled:promises,neighbours:around};
     }
     function previewReclaim(plot,site=current(),withCrew=true){
       const b=site && site.buildings.find(p=>p.plot===plot);
@@ -924,6 +964,7 @@
       if(plan.crew)text+=plan.crew.workerNames.length?' Expected crew · '+plan.crew.workerNames.join(', ')+' · about '+plan.crew.etaSeconds+' seconds.':' No builder is currently available. Assign a resident to clear the lot.';
       if(crewDelta && summary(crewDelta))text+=' While the crew clears the lot · '+summary(crewDelta)+' per week.';
       if(partners.length)text+=' '+partners.map(p=>p.name).join(' and ')+' helped secure this project. Trust can fall by 2 and their bonds by 1.';
+      if(b.kind==='fishingDock')text+=' Boats can fish again when a fishing dock reopens.';
       if(b.kind==='hall' && site.mandate && site.buildings.filter(b=>b.kind==='hall').length===1)text+=' The local assembly will need another hall before it can vote.';
       if(b.kind==='pier' && site.buildings.filter(b=>b.kind==='pier').length===1)text+=' Routes with no depot at the other end will lose 2 units of base cargo capacity.';
       return {...plan,available:plan.available&&world.effort>=1,reason:plan.reason||(world.effort<1?'Requires 1 effort. Advance the week to refresh.':''),buildingId:b.id,label:b.name,text,forecast,delta,crewDelta,recovered,partners:partners.map(p=>p.id)};
@@ -1500,7 +1541,7 @@
     const commands={
       planCity:guarded(planCity),beginGoal:guarded(beginGoal),workConstruction:guarded(workConstruction),
       setWorkPreference:guarded(setWorkPreference),setConstructionPaused:guarded(setConstructionPaused),assignBuilders:guarded(assignBuilders),cancelConstruction:guarded(cancelConstruction),
-      manageSite:guarded(manageSite),found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
+      fish:guarded(fish),manageSite:guarded(manageSite),found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
       beginShift:guarded(id=>shiftCommand('start',id)),arriveShift:guarded(id=>shiftCommand('arrive',id)),
       chooseShift:guarded(id=>shiftCommand('choose',id)),finishShift:guarded(actor=>shiftCommand('finish',actor)),
       beginVoyage:guarded(beginVoyage),sail:guarded(sail),reclaim:guarded(reclaim),
@@ -1522,10 +1563,10 @@
     }
     return {
       ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
-      active:current,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,perform,sync,
+      active:current,fishingOffer,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,perform,sync,
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
       destroy(){closed=true;listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };
   }
-  root.CommonEarthSim={create,readSave,marketPlan,productiveLinks,practices,charterFacts,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
+  root.CommonEarthSim={create,waterfront,readSave,marketPlan,productiveLinks,practices,charterFacts,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
 })(typeof window==='undefined'?globalThis:window);

@@ -209,7 +209,7 @@
     let pixels=canvasPixels(image);
     const tw=image.width, th=image.height;
     const off=document.createElement('canvas'),ctx=off.getContext('2d');
-    let out;
+    let out, lastProjection;
     return {
       draw(dest,w,h,r,view,interacting) {
         // Sample only as densely as the relief source can resolve here. Fine
@@ -217,6 +217,9 @@
         const reliefDensity=view.zoom>=4 ? clamp(1.65*tw/(TAU*r*Math.max(.32,Math.cos(view.lat*RAD))),.38,.92) : 1;
         const scale=Math.min(interacting?.64:1,reliefDensity,Math.sqrt((interacting?140000:430000)/(w*h)));
         const sw=Math.max(1,Math.round(w*scale)), sh=Math.max(1,Math.round(h*scale));
+        // Overlay changes reuse the already shaded bitmap at this camera.
+        const key=[w,h,sw,sh,r,view.lat,view.lon,scale].join('/');
+        if(key===lastProjection){dest.drawImage(off,0,0,w,h);return true;}
         if(off.width!==sw || off.height!==sh || !out){
           off.width=sw;off.height=sh;out=ctx.createImageData(sw,sh);
         }
@@ -245,7 +248,7 @@
             result[k+3]=255;
           }
         }
-        ctx.putImageData(out,0,0);dest.drawImage(off,0,0,w,h);
+        ctx.putImageData(out,0,0);lastProjection=key;dest.drawImage(off,0,0,w,h);
         return true;
       },
       destroy(){ pixels=null;off.width=off.height=1; }
@@ -262,7 +265,7 @@
       return [noise(i*3),noise(i*3+1),noise(i*3+2)];
     });
     let w=0,h=0,r=0, sites=[], beacons=[], routes=[], selection=null,hover=null;
-    let frame=0, dead=false, renderer=null, cpu=false, failure=false, gesture=null;
+    let active=true,frame=0, dead=false, renderer=null, cpu=false, failure=false, gesture=null;
     let dragging=false, start=null, pinched=false, lastTap=null, keyboard=false;
     let regional=null,regionalRequested=false,nextRegionalTry=0;
     function regionalDetail(){
@@ -284,9 +287,18 @@
       events.push(()=>target.removeEventListener(name,handler,config));
     }
     function queue() {
-      if(!frame && !dead)frame=requestAnimationFrame(()=>{frame=0;if(!dead)draw();});
+      if(active && !document.hidden && !frame && !dead)frame=requestAnimationFrame(()=>{
+        frame=0;if(active && !document.hidden && !dead)draw();
+      });
+    }
+    function setActive(next){
+      active=Boolean(next);
+      if(active){resize();return;}
+      if(frame){cancelAnimationFrame(frame);frame=0;}
+      stopJourney(true);
     }
     function resize() {
+      if(!active)return;
       const rect=canvas.getBoundingClientRect();
       if(!rect.width||!rect.height)return;
       w=rect.width;h=rect.height;
@@ -711,7 +723,7 @@
       if(ids.length){canvas.style.cursor='grab';queue();}
     }
     on(window,'blur',resetPointers);
-    if(document.addEventListener)on(document,'visibilitychange',()=>{if(document.hidden)resetPointers();});
+    if(document.addEventListener)on(document,'visibilitychange',()=>{if(document.hidden)resetPointers();else queue();});
     on(canvas,'pointerleave',()=>{if(hover){hover=null;queue();}});
     on(canvas,'wheel',e=>{e.preventDefault();zoomBy(Math.exp(clamp(-e.deltaY*(e.deltaMode===1?.035:.0018),-1,1)),local(e));},{passive:false});
     on(canvas,'keydown',e=>{
@@ -738,7 +750,7 @@
       queue();options.onReady?.();
     }).catch(err=>{failure=true;queue();options.onError?.(err);});
     resize();
-    return {focus,zoomBy,setSites,setBeacons,setRoutes,setSelection,journey,stopJourney,resize,ready,locate,getScale:scaleInfo,getView:()=>({...view}),
+    return {setActive,focus,zoomBy,setSites,setBeacons,setRoutes,setSelection,journey,stopJourney,resize,ready,locate,getScale:scaleInfo,getView:()=>({...view}),
       destroy(){dead=true;stopJourney();cancelAnimationFrame(frame);observer?.disconnect();events.forEach(off=>off());regional?.destroy();renderer?.destroy();canvas.style.touchAction=previousTouch;}
     };
   }

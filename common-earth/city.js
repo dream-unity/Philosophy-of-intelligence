@@ -317,7 +317,7 @@
   const PROJECTS=model.projects;
   const TERRAINS=['field','ridge','crossing','shelter','yard','wet'];
   const DEVELOPMENTS=['homes','food','yard','market','transit','care','water','centre'];
-  const WORKSITE_ROWS={garden:0,food:0,wetland:1,water:1,pier:2,workshop:3,yard:3,market:4,hall:5,care:5,homes:6,transit:7};
+  const WORKSITE_ROWS={garden:0,food:0,wetland:1,water:1,pier:2,fishingDock:2,workshop:3,yard:3,market:4,hall:5,care:5,homes:6,transit:7};
   const LAND_COLOURS={field:'#b5ad72',ridge:'#8d9b79',crossing:'#cfb997',shelter:'#99ae81',yard:'#bcac8c',wet:'#78b19c'};
   const USE_COLOURS={homes:'#e1b18b',food:'#a4be7b',yard:'#bfa382',market:'#e2bb79',transit:'#9ec7b2',care:'#d0b4ac',water:'#82c5b3'};
   const fmt=n=>Number(n.toFixed(1));
@@ -379,7 +379,7 @@
     return street.length+' RESERVED LOTS  ↗';
   }
   function coreArt(site,street) {
-    const artFor={garden:'food',wetland:'water',workshop:'yard',market:'market',hall:'centre',pier:'transit'};
+    const artFor={garden:'food',wetland:'water',workshop:'yard',market:'market',hall:'centre',pier:'transit',fishingDock:'transit'};
     const projectArt=kind=>6+DEVELOPMENTS.indexOf(kind);
     const models=[
       {ground:-12,svg:sprite(projectArt('homes'),-20,-12,72,57)},

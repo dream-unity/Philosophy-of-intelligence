@@ -1,6 +1,6 @@
 /* Common Earth offline gazetteer. Natural Earth populated places and boundaries are public domain.
    https://www.naturalearthdata.com/about/terms-of-use/ */
-(() => {
+((window) => {
  'use strict';
  // Natural Earth populated places (1:10m), public domain. Coordinates are map references.
  const countries = [
@@ -8027,23 +8027,32 @@
    record(place,row[5],row[4],row[1],place.locality,row[7]);
   }
  }
- // Prepare the search index between frames. Earth and the six opening scenarios
- // can render immediately even on a slower device. A search always sees all rows.
- function prepareIndex() {
-  if(indexedCities===cities.length) return;
-  if(typeof window.requestIdleCallback==='function') {
-   window.requestIdleCallback(deadline=>{
-    addCities(indexedCities+100);
-    while(indexedCities<cities.length && deadline.timeRemaining()>3) addCities(indexedCities+100);
-    prepareIndex();
-   });
-  } else if(typeof document!=='undefined') {
-   window.setTimeout(()=>{addCities(indexedCities+200);prepareIndex();},20);
+ // The atlas only needs coordinates. Build the text index on the first place
+ // search, in a worker when available so it never competes with street input.
+ const searchScript=typeof document==='undefined'?null:document.currentScript?.src;
+ let worker=null, workerFailed=false, requestNumber=0;
+ const pending=new Map();
+ function searchAsync(query,limit) {
+  if(!searchScript || workerFailed || typeof Worker!=='function')return Promise.resolve(search(query,limit));
+  if(!worker){
+   try{
+    worker=new Worker(searchScript);
+    worker.onmessage=({data})=>{
+     const request=pending.get(data.id);
+     if(request){pending.delete(data.id);request.resolve(data.places);}
+    };
+    worker.onerror=()=>{
+     worker.terminate();worker=null;workerFailed=true;
+     for(const request of pending.values())request.resolve(search(request.query,request.limit));
+     pending.clear();
+    };
+   }catch{workerFailed=true;return Promise.resolve(search(query,limit));}
   }
- }
- if(typeof window.addEventListener==='function' && typeof document!=='undefined') {
-  if(document.readyState==='complete') prepareIndex();
-  else window.addEventListener('load',prepareIndex,{once:true});
+  const id=++requestNumber;
+  return new Promise(resolve=>{
+   pending.set(id,{query,limit,resolve});
+   worker.postMessage({id,query,limit});
+  });
  }
  function featured() {return starts.map(pin=>({...pin.place}));}
  // Index all words in names; country tokens qualify a named settlement, e.g. "London, Canada".
@@ -8553,5 +8562,8 @@
   recentRegion={key,items};
   return items.map(p=>({...p}));
  }
- window.EarthNavigation=Object.freeze({featured,search,scenario,anchorAt,nearbyCities,waterName});
-})();
+ window.EarthNavigation=Object.freeze({featured,search,searchAsync,scenario,anchorAt,nearbyCities,waterName});
+ if(typeof DedicatedWorkerGlobalScope!=='undefined' && window instanceof DedicatedWorkerGlobalScope){
+  window.onmessage=({data})=>window.postMessage({id:data.id,places:search(data.query,data.limit)});
+ }
+})(typeof self==='undefined'?window:self);

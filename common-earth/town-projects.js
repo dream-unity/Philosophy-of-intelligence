@@ -15,7 +15,7 @@
   const listeners=new Set();
   function watch(callback){listeners.add(callback);return ()=>listeners.delete(callback);}
   function frameFor(site,kind){
-    let name=kind;
+    let name=kind==='fishingDock'?'pier':kind;
     if(kind==='garden'&&site.water)name='seaFarm';
     if(kind==='pier'&&!site.water)name='depot';
     return frames[name];
