@@ -973,6 +973,17 @@
       if(expanded)$('street-stage')?.scrollIntoView({block:'start',behavior:'instant'});
     });
   });
+  // A shorter masthead after rotation can clip the map controls despite the panel still fitting.
+  window.matchMedia('(orientation: portrait)').addEventListener?.('change',()=>requestAnimationFrame(()=>{
+    if(!document.body.matches('.street-expanded[data-map-view="street"]:not([data-sheet-open])'))return;
+    const panel=$('street-stage').parentElement,focus=document.activeElement;
+    if(focus && focus!==document.body && !panel.contains(focus) && focus.getClientRects().length)return;
+    const frame=panel.getBoundingClientRect();
+    const visible=Math.min(frame.bottom,innerHeight)-Math.max(frame.top,0);
+    if(frame.height<=innerHeight && visible>=frame.height*.82 && visible<frame.height-1){
+      $('street-stage').scrollIntoView({block:'start',behavior:'instant'});
+    }
+  }));
   listen('world-view','click',()=>setView('world'));
   listen('street-view','click',()=>setView('street'));
   listen('city-view','click',()=>setView('city'));
