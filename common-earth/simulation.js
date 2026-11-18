@@ -15,9 +15,9 @@
   const BUILDINGS = {
     garden: {name:'Community garden', funds:5, materials:3, info:'Grows 3 food each week. Shares tools with an adjoining workshop for 1 extra food.'},
     workshop: {name:'Repair workshop', funds:6, materials:3, info:'Recovers 2 materials each week. Its tools also improve adjacent gardens.'},
-    market: {name:'Neighbourhood market', funds:7, materials:3, info:'Earns 3 funds each week. Next to a pier, earns 1 more from visiting traders.'},
+    market: {name:'Neighbourhood market', funds:7, materials:3, info:'A full customer catchment earns 3 funds per week. A shared one earns 1, and a shop without customers earns 0. Outer exchanges, population and trading links expand demand. A depot adds 1 fund to an operating shop.'},
     hall: {name:'Assembly hall', funds:5, materials:2, info:'Adds 1 wellbeing each week and makes room for shared apprenticeships.'},
-    pier: {name:'Exchange depot', funds:6, materials:3, info:'Moves another 2 units per trade shipment. An adjacent market earns 1 extra fund.'},
+    pier: {name:'Exchange depot', funds:6, materials:3, info:'One depot at either end raises a route’s base shipment limit from 2 to 4. An adjacent market earns 1 extra fund.'},
     wetland: {name:'Water commons', funds:5, materials:4, info:'Grows 1 food each week. Protects the district during a flood and supports slow repair.'}
   };
   const PROFILES = [
@@ -53,7 +53,7 @@
       {id:'homes',name:'Reinforce the homes',terms:'Spend 2 materials now. In two weeks gain 4 wellbeing but lose 2 food. A water commons prevents that food loss.',goods:{materials:2},after:{wellbeing:4,food:-2},ally:2,story:'Residents sheltered in their homes while crews checked what remained of the harvest.'}]
     },
     {
-      title:'The last lantern procession',stage:1,services:'lanterns',
+      title:'The last lantern procession',stage:1,services:'night',
       prompt:'The lantern makers are retiring. Some families want the craft carried on. Others want younger groups to decide what the night becomes.',
       choices:[
         {id:'lanterns',name:'Pay two apprentices',goods:{funds:3,materials:1},after:{wellbeing:3},ally:1,
@@ -66,7 +66,7 @@
     },
     {
       title:'The donor’s conditions',stage:2,services:'subscriptions',
-      prompt:'A donor can finance the meeting rooms immediately, in return for reserving their busiest hours. The alternative asks residents to fund a slower reopening.',
+      prompt:'A donor can finance the meeting rooms immediately, in return for naming the rooms and reserving their busiest hours. The alternative asks residents to fund a slower reopening.',
       choices:[
         {id:'sponsor',name:'Accept five sponsored evenings',now:{funds:6},after:{materials:2,wellbeing:-2},ally:1,
           terms:'Take 6 funds now. In two weeks receive 2 materials for repairs and lose 2 wellbeing as groups move their evening meetings.',
@@ -101,6 +101,7 @@
       ]
     }
   ];
+  const MANDATES={services:'Give household needs priority',reserves:'Give productive reserves priority'};
   const LABELS={funds:'funds',food:'food',materials:'materials',trust:'trust',wellbeing:'wellbeing'};
   const blank = () => ({version:VERSION,week:1,effort:MAX_EFFORT,sites:[],activeId:null,routes:[],journal:[],charter:null,completed:false,voyage:null,lastVoyage:null});
   const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
@@ -122,11 +123,28 @@
   function has(site,kind) { return site.buildings.some(b=>b.kind===kind); }
   function adjacent(a,b) { return Math.abs(Math.floor(a/3)-Math.floor(b/3))+Math.abs(a%3-b%3)===1; }
   function neighbours(site,plot,kind) { return site.buildings.some(b=>b.kind===kind && adjacent(b.plot,plot)); }
-  function productiveLinks(site) {
+  function marketPlan(site,options={}){
+    const cityMarkets=options.cityMarkets ?? root.EarthCityModel?.marketCatchments?.(site) ?? 0;
+    const fullSlots=1+cityMarkets;
+    const sharedSlots=1+Math.floor(Math.max(0,site.population-12)/8)+(site.routeLinks>0?1:0);
+    const shops=site.buildings.filter(b=>b.kind==='market').map((b,order)=>({
+      plot:b.plot,order,served:neighbours(site,b.plot,'pier')
+    }));
+    shops.sort((a,b)=>Number(b.served)-Number(a.served) || a.order-b.order);
+    let baseFunds=0,depotFunds=0;
+    const markets=shops.map((shop,index)=>{
+      const tier=index<fullSlots?'full':index<fullSlots+sharedSlots?'shared':'idle';
+      const base=tier==='full'?3:tier==='shared'?1:0,depot=base && shop.served?1:0;
+      baseFunds+=base;depotFunds+=depot;
+      return {plot:shop.plot,tier,base,depot};
+    });
+    return {fullSlots,sharedSlots,cityMarkets,markets,baseFunds,depotFunds,totalFunds:baseFunds+depotFunds};
+  }
+  function productiveLinks(site,plan=marketPlan(site)) {
     const links=[];
     for(const b of site.buildings){
       const source=b.kind==='garden'?'workshop':b.kind==='market'?'pier':null;
-      if(!source)continue;
+      if(!source || b.kind==='market' && !plan.markets.some(m=>m.plot===b.plot && m.base))continue;
       const partners=site.buildings.filter(other=>other.kind===source && adjacent(other.plot,b.plot)).sort((a,b)=>a.plot-b.plot);
       if(partners.length)links.push({from:partners[0].plot,to:b.plot,resource:b.kind==='garden'?'food':'funds'});
     }
@@ -138,20 +156,34 @@
       return c?{name:c.name,agenda:q.title,effect:summary(c.practice)+' per week',rate:{...c.practice}}:null;
     }).filter(Boolean);
   }
-  function rates(site) {
+  function rates(site,cityDelta) {
     const result={funds:2,food:3-Math.ceil(site.population/5),materials:1,wellbeing:0};
     result[site.specialty]++;
+    const markets=marketPlan(site);
+    result.funds+=markets.baseFunds;
     for(const b of site.buildings) {
       if(b.kind==='garden') result.food+=3;
-      if(b.kind==='market') result.funds+=3;
       if(b.kind==='workshop') result.materials+=2;
       if(b.kind==='hall') result.wellbeing++;
       if(b.kind==='wetland') result.food++;
     }
-    for(const link of productiveLinks(site))result[link.resource]++;
+    for(const link of productiveLinks(site,markets))result[link.resource]++;
     if(site.tech.includes('apprenticeship')) result.materials++;
     for(const practice of practices(site))for(const [k,v] of Object.entries(practice.rate))result[k]+=v;
+    const district=cityDelta ?? root.EarthCityModel?.overview(site)?.weekly;
+    for(const contribution of [district,root.EarthStrategy?.rates(site)]){
+      for(const [k,v] of Object.entries(contribution || {}))result[k]=(result[k] || 0)+v;
+    }
     return result;
+  }
+  const capacity=site=>root.EarthCityModel?.housingCapacity(site) ?? 18;
+  function rateDifference(before,after){
+    const change={};
+    for(const k of new Set([...Object.keys(before),...Object.keys(after)])){
+      const difference=(after[k] || 0)-(before[k] || 0);
+      if(difference)change[k]=difference;
+    }
+    return change;
   }
   function distance(a,b) {
     const rad=Math.PI/180, u=Math.sin((b.lat-a.lat)*rad/2),v=Math.sin((b.lon-a.lon)*rad/2);
@@ -166,39 +198,131 @@
     const parts=[summary(delta),relationship].filter(Boolean);
     return parts.length?parts.join(' · ')+'.':'The public measures were already at their limit.';
   }
-  // Validate facts the rules depend on. Optional fields added during the first
-  // edition get defaults without discarding residents, sites or extension data.
+  const integer=(n,lo=0,hi=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(n)&&n>=lo&&n<=hi;
+  const recordLike=x=>x!==null && typeof x==='object' && !Array.isArray(x);
+  const shortName=x=>typeof x==='string' && x.length>0 && x.length<=512;
+  const unique=items=>new Set(items).size===items.length;
+  const geoPoint=p=>p && Number.isFinite(p.lat) && Math.abs(p.lat)<=90 && Number.isFinite(p.lon) && Math.abs(p.lon)<=180;
+  const knownAgenda=index=>integer(index,0,QUESTIONS.length-1);
+  function validResident(person,slot,week){
+    if(!recordLike(person) || person.slot!==slot || !shortName(person.id) || !shortName(person.name))return false;
+    if(!integer(person.bond,0,10) || typeof person.heard!=='boolean')return false;
+    person.role ??= PROFILES[slot].role;
+    person.value ??= PROFILES[slot].value;
+    person.lastTalk ??= 0;
+    person.lastPromise ??= -10;
+    if(!shortName(person.role) || !shortName(person.value) || !integer(person.lastTalk,0,week) || !integer(person.lastPromise,-10,week))return false;
+    if(person.promise!=null && (!recordLike(person.promise)||!integer(person.promise.dueWeek,1)))return false;
+    if(person.lastShiftWeek!=null && !integer(person.lastShiftWeek,0,week))return false;
+    if(person.shiftMemory!=null){
+      const m=person.shiftMemory;
+      if(!recordLike(m) || m.residentId!==person.id || !integer(m.week,1,week) || !shortName(m.quote) || typeof m.summary!=='string')return false;
+      if(m.discussedWeek!=null && !integer(m.discussedWeek,m.week,week))return false;
+    }
+    return true;
+  }
+  function validSite(site,world,ids){
+    if(!recordLike(site) || !shortName(site.id) || !shortName(site.name) || !geoPoint(site) || typeof site.water!=='boolean')return false;
+    if(!['food','funds','materials'].includes(site.specialty))return false;
+    if(!['funds','food','materials','population'].every(k=>integer(site[k])) || !['trust','wellbeing'].every(k=>integer(site[k],0,100)))return false;
+    site.region ??= site.name;
+    site.tech ??= [];
+    site.pending ??= [];
+    site.founded ??= 1;
+    site.issueIndex ??= -1;
+    site.lastDeliveryWeek ??= 0;
+    if(!shortName(site.region) || !integer(site.founded,1,world.week) || !integer(site.lastDeliveryWeek,0,world.week))return false;
+    if(site.foundedBy!=null && (!ids.has(site.foundedBy)||site.foundedBy===site.id))return false;
+    if(!integer(site.issueIndex,-1,QUESTIONS.length-1)||!Array.isArray(site.tech)||!site.tech.every((id,i)=>TECH[i]?.id===id))return false;
+    site.era=TECH[site.tech.length-1]?.era || 'Settlement';
+    if(site.stats!=null && !recordLike(site.stats))return false;
+    site.stats={kept:0,missed:0,resolved:0,deliveries:0,...site.stats};
+    if(!Object.values(site.stats).every(n=>integer(n)))return false;
+    if(!Array.isArray(site.residents) || site.residents.length!==3 || !site.residents.every((p,i)=>validResident(p,i,world.week)))return false;
+    const residents=new Set(site.residents.map(p=>p.id));
+    if(residents.size!==site.residents.length || !Array.isArray(site.buildings))return false;
+    for(const building of site.buildings){
+      if(!recordLike(building) || !integer(building.plot,0,8) || !Object.hasOwn(BUILDINGS,building.kind))return false;
+      building.id ??= site.id+'-b'+building.plot;
+      building.name ??= BUILDINGS[building.kind].name;
+      if(!shortName(building.id) || !shortName(building.name))return false;
+      if(building.partners!=null && (!Array.isArray(building.partners) || !unique(building.partners) || !building.partners.every(id=>residents.has(id))))return false;
+    }
+    if(!unique(site.buildings.map(b=>b.plot)) || !unique(site.buildings.map(b=>b.id)))return false;
+    if(site.delivery!=null && (!residents.has(site.delivery.residentId) || !integer(site.delivery.week,1,world.week)))return false;
+    if(site.issue!=null){
+      const issue=site.issue;
+      if(!recordLike(issue)||!knownAgenda(issue.index)||!integer(issue.deadline,1))return false;
+      issue.title ??= QUESTIONS[issue.index].title;
+      issue.prompt ??= QUESTIONS[issue.index].prompt;
+      if(!shortName(issue.title) || typeof issue.prompt!=='string')return false;
+      if(QUESTIONS[issue.index].partner && (!ids.has(issue.targetId)||issue.targetId===site.id))return false;
+    }
+    if(!Array.isArray(site.pending))return false;
+    for(const item of site.pending){
+      if(!recordLike(item) || !knownAgenda(item.index) || !integer(item.week,1))return false;
+      const choice=QUESTIONS[item.index].choices.find(c=>c.id===item.choice);
+      if(!choice || choice.transfer&&(!ids.has(item.targetId)||item.targetId===site.id))return false;
+    }
+    if(site.practices!=null && (!recordLike(site.practices) || !Object.entries(site.practices).every(([index,id])=>
+      knownAgenda(Number(index)) && QUESTIONS[index]?.choices.some(c=>c.id===id&&c.practice))))return false;
+    if(site.agendaVisits!=null && (!recordLike(site.agendaVisits) || !Object.entries(site.agendaVisits).every(([index,week])=>
+      knownAgenda(Number(index)) && integer(week,1,world.week))))return false;
+    if(site.mandate!=null && !Object.hasOwn(MANDATES,site.mandate))return false;
+    if(site.lastAidWeek!=null && !integer(site.lastAidWeek,0,world.week))return false;
+    if(site.lastShiftWeek!=null && !integer(site.lastShiftWeek,0,world.week))return false;
+    if(root.EarthStrategy?.valid && !root.EarthStrategy.valid(site.strategy))return false;
+    if(root.EarthCityModel?.valid && !root.EarthCityModel.valid(site.city))return false;
+    if(root.EarthNeighbours?.valid && !root.EarthNeighbours.valid(site))return false;
+    if(root.EarthCampaigns?.valid && !root.EarthCampaigns.valid(site))return false;
+    if(site.shift && root.EarthShifts?.validShift && !root.EarthShifts.validShift(site,site.shift))return false;
+    if(site.shiftFollowUps!=null && (!Array.isArray(site.shiftFollowUps) ||
+      root.EarthShifts?.validFollowUp && !site.shiftFollowUps.every(f=>root.EarthShifts.validFollowUp(site,f))))return false;
+    root.EarthCityModel?.normalise(site);
+    return true;
+  }
+  function validRoute(route,world,ids){
+    if(!recordLike(route)||!ids.has(route.from)||!ids.has(route.to)||route.from===route.to)return false;
+    if(!shortName(route.id)||!shortName(route.name)||typeof route.lastStatus!=='string')return false;
+    if(!integer(route.deliveries)||!integer(route.opened,1,world.week)||!integer(route.lastDispatch,0,world.week))return false;
+    if(route.lastArrivalWeek!=null && !integer(route.lastArrivalWeek,1,world.week))return false;
+    if(!Array.isArray(route.shipments))return false;
+    return route.shipments.every(cargo=>{
+      if(!recordLike(cargo) || !['food','materials'].includes(cargo.good) || !integer(cargo.amount,1) || !integer(cargo.due,1))return false;
+      return cargo.from===route.from&&cargo.to===route.to || cargo.from===route.to&&cargo.to===route.from;
+    });
+  }
+  // Opening a world and importing a save use the same migration and integrity
+  // rules. Only the parsed copy is changed; the input remains recoverable.
   function readSave(raw){
-    if(!raw)return null;
-    try {
+    if(typeof raw!=='string' || !raw)return null;
+    try{
       const saved=JSON.parse(raw);
-      const integer=(value,min=0,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(value)&&value>=min&&value<=max;
-      const unique=values=>new Set(values).size===values.length;
-      if(!saved || saved.version!==VERSION || !integer(saved.week,1) || !integer(saved.effort,0,MAX_EFFORT) || !Array.isArray(saved.sites))return null;
-      const w={...blank(),...saved};
-      if(!Array.isArray(w.routes)||!Array.isArray(w.journal)||!unique(w.sites.map(s=>s.id)))return null;
-      for(const s of w.sites){
-        if(!s || typeof s.id!=='string' || !s.id || typeof s.name!=='string' || !Number.isFinite(s.lat)||Math.abs(s.lat)>90 || !Number.isFinite(s.lon)||Math.abs(s.lon)>180)return null;
-        if(!['food','funds','materials'].includes(s.specialty) || !['funds','food','materials','population'].every(k=>integer(s[k])) || !['trust','wellbeing'].every(k=>integer(s[k],0,100)))return null;
-        if(!Array.isArray(s.buildings)||!s.buildings.every(b=>b&&integer(b.plot,0,8)&&Object.hasOwn(BUILDINGS,b.kind))||!unique(s.buildings.map(b=>b.plot)))return null;
-        if(!Array.isArray(s.residents)||s.residents.length!==3 || !s.residents.every((p,i)=>p&&p.slot===i&&typeof p.id==='string'&&typeof p.name==='string'&&integer(p.bond,0,10)&&(!p.promise||integer(p.promise.dueWeek,1)))||!unique(s.residents.map(p=>p.id)))return null;
-        s.tech=s.tech || [];
-        if(!Array.isArray(s.tech)||!s.tech.every((id,i)=>TECH[i]&&TECH[i].id===id))return null;
-        s.stats={kept:0,missed:0,resolved:0,deliveries:0,...s.stats};
-        if(!Object.values(s.stats).every(n=>integer(n)))return null;
-        s.founded=s.founded??1;s.lastDeliveryWeek=s.lastDeliveryWeek??0;s.issueIndex=s.issueIndex??-1;s.pending=s.pending || [];
-        if(!integer(s.founded,1,w.week)||!integer(s.lastDeliveryWeek)||!integer(s.issueIndex,-1,QUESTIONS.length-1))return null;
-        if(s.issue && (!integer(s.issue.index,0,QUESTIONS.length-1)||!integer(s.issue.deadline,1)))return null;
-        if(!Array.isArray(s.pending)||!s.pending.every(p=>p&&integer(p.index,0,QUESTIONS.length-1)&&integer(p.week,1)&&QUESTIONS[p.index].choices.some(c=>c.id===p.choice)))return null;
-        if(s.delivery&&!s.residents.some(p=>p.id===s.delivery.residentId))return null;
+      if(!recordLike(saved)||saved.version!==VERSION||!integer(saved.week,1)||!integer(saved.effort,0,MAX_EFFORT)||!Array.isArray(saved.sites))return null;
+      const world={...blank(),...saved},ids=new Set(world.sites.map(site=>site?.id));
+      if(ids.size!==world.sites.length || !world.sites.every(site=>validSite(site,world,ids)))return null;
+      if(!unique(world.sites.flatMap(s=>s.residents.map(p=>p.id))))return null;
+      if(!Array.isArray(world.routes)||!world.routes.every(route=>validRoute(route,world,ids))||!unique(world.routes.map(r=>r.id)))return null;
+      if(!unique(world.routes.map(r=>JSON.stringify([r.from,r.to].sort()))))return null;
+      const links=new Map(world.sites.map(site=>[site.id,0]));
+      for(const route of world.routes){links.set(route.from,links.get(route.from)+1);links.set(route.to,links.get(route.to)+1);}
+      for(const site of world.sites)site.routeLinks=links.get(site.id);
+      if(!Array.isArray(world.journal)||!world.journal.every(j=>recordLike(j)&&integer(j.week,1,world.week)&&typeof j.text==='string'))return null;
+      if(world.charter!=null && !Object.hasOwn(CHARTERS,world.charter) || typeof world.completed!=='boolean')return null;
+      if(root.EarthPartners?.valid && !root.EarthPartners.valid(world.partners,ids))return null;
+      if(root.EarthLegacy?.valid && !root.EarthLegacy.valid(world))return null;
+      if(world.voyage!=null){
+        const v=world.voyage;
+        if(!geoPoint(v.origin)||!ids.has(v.origin.id)||!geoPoint(v.target)||!integer(v.legs,1)||!integer(v.leg,0,v.legs-1)||!Array.isArray(v.itinerary))return null;
+        if(root.EarthVoyages?.valid && !root.EarthVoyages.valid(v))return null;
       }
-      const ids=new Set(w.sites.map(s=>s.id));
-      if(!w.routes.every(r=>r&&ids.has(r.from)&&ids.has(r.to)&&r.from!==r.to&&Array.isArray(r.shipments)&&r.shipments.every(sh=>sh && (sh.from===r.from&&sh.to===r.to||sh.from===r.to&&sh.to===r.from)&&['food','materials'].includes(sh.good)&&integer(sh.amount,1)&&integer(sh.due,1))))return null;
-      if(!w.journal.every(j=>j&&integer(j.week,1)&&typeof j.text==='string'))return null;
-      if(w.charter&&!Object.hasOwn(CHARTERS,w.charter))return null;
-      if(w.voyage && (!w.voyage.origin || !ids.has(w.voyage.origin.id) || !w.voyage.target || !integer(w.voyage.legs,1)||!integer(w.voyage.leg,0,w.voyage.legs-1)||!Array.isArray(w.voyage.itinerary)))return null;
-      if(!ids.has(w.activeId))w.activeId=w.sites.length?w.sites[0].id:null;
-      return w;
+      if(world.lastVoyage!=null){
+        const r=world.lastVoyage;
+        if(!geoPoint(r.origin)||!ids.has(r.origin.id)||!geoPoint(r.target)||!Array.isArray(r.log))return null;
+        if(root.EarthVoyages?.validReport && !root.EarthVoyages.validReport(r))return null;
+      }
+      if(!ids.has(world.activeId))world.activeId=world.sites[0]?.id ?? null;
+      return world;
     }catch(e){return null;}
   }
   function create(options={}) {
@@ -294,24 +418,57 @@
       const collision=save();
       return collision || {ok:true,message:message+(victory?' '+victory:'')};
     }
-    function found(point,customName){
-      if(!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon) || Math.abs(point.lat)>90 || Math.abs(point.lon)>180)return reject('Choose a point on Earth first.');
-      const old=current();
-      const nearby=world.sites.find(s=>distance(s,point)<10);
-      if(nearby)return reject('A settlement already serves this area: '+nearby.name+'.');
-      if(old && (world.effort<1 || old.funds<6 || old.materials<2))return reject('A new outpost needs 1 effort, 6 funds and 2 materials from '+old.name+'.');
+    function foundingOffer(point){
+      const sponsor=current();
+      const children=sponsor?world.sites.filter(s=>s.foundedBy===sponsor.id):[];
+      const original=sponsor?.id===world.sites[0]?.id;
+      // Early v1 worlds do not record parentage. Existing communities keep
+      // their locations and resources, and the starting hub remains a sponsor.
+      const repeat=children.length>0 || original&&world.sites.length>1;
+      const firstGrant=sponsor && original && !repeat;
+      const goods=sponsor?(repeat?{funds:8,materials:3,food:4}:{funds:6,materials:2,food:3}):{};
+      const reserves=sponsor&&!firstGrant?{funds:2,materials:1,food:3}:{};
+      const localSupport='Hear two local residents, keep a local promise, or hear one resident and open one local project.';
+      const terms=sponsor?'One effort transfers '+resources(goods)+' to the new settlement. Two volunteers move from '+sponsor.name+' and four new members join them. Each hub sponsors at most once a week.'+
+        (firstGrant?'':' The sponsor keeps '+resources(reserves)+' after departure.'):'Your first settlement begins with 12 residents, 16 funds, 8 materials and 12 food.';
+      let reason='';
+      if(!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon) || Math.abs(point.lat)>90 || Math.abs(point.lon)>180)reason='Choose a point on Earth first.';
+      else if(point.kind==='partner' || point.partnerId!=null)reason='This independent community governs itself. Open its partner panel to negotiate.';
+      else{
+        const nearby=world.sites.find(s=>distance(s,point)<10);
+        if(nearby)reason='A settlement already serves this area: '+nearby.name+'.';
+      }
+      if(!reason && sponsor){
+        const heard=sponsor.residents.filter(p=>p.heard).length;
+        const built=sponsor.buildings.length>0 || (root.EarthCityModel?.overview(sponsor).developed || 0)>0;
+        const ready=heard>=2 || sponsor.stats.kept>0 || heard>0 && built;
+        if(children.some(s=>s.founded===world.week))reason=sponsor.name+' sponsored a settlement this week. It can sponsor again next week.';
+        else if(!firstGrant && !ready)reason=sponsor.name+' needs local support before sponsoring another community. '+localSupport;
+        else if(sponsor.population<6)reason='At least six residents must live here before two volunteer to relocate.';
+        else if(world.effort<1)reason='Sponsorship needs 1 effort. Advance the week to refresh.';
+        else if(Object.entries(goods).some(([k,n])=>sponsor[k]<n+(reserves[k] || 0)))reason='Sponsorship needs '+resources(goods)+(firstGrant?'':' and must leave '+resources(reserves)+' at home')+'.';
+      }
+      return {available:!reason,reason,terms,goods,reserves,effort:sponsor?1:0,newPopulation:sponsor?6:12,relocating:sponsor?2:0,readiness:sponsor && !firstGrant?localSupport:''};
+    }
+    function found(point,customName,commission='later'){
+      const offer=foundingOffer(point),old=current();
+      if(!offer.available)return reject(offer.reason);
       const index=world.sites.length,water=Boolean(point.water),region=tidy(point.name || point.region) || (water?'Open water':'Earth');
-      const names=NAMES[index % NAMES.length], id='site-'+(index+1);
+      let serial=index+1;
+      while(world.sites.some(site=>site.id==='site-'+serial))serial++;
+      const names=NAMES[index % NAMES.length],id='site-'+serial;
       let name=tidy(customName) || (region==='Earth'?'Earth':region)+(water?' Anchorage':' Commons');
       if(world.sites.some(s=>s.name===name))name+=' '+(index+1);
-      if(old){payment(old,{funds:6,materials:2});world.effort--;}
+      if(old){payment(old,offer.goods);old.population-=offer.relocating;world.effort-=offer.effort;}
       const specialty=water?'food':['food','materials','funds'][Math.abs(Math.round(point.lat*2+point.lon))%3];
-      const site={id,name,region,lat:point.lat,lon:point.lon,water,specialty,era:'Settlement',founded:world.week,
-        population:12,funds:old?9:16,food:old?9:12,materials:old?5:8,trust:50,wellbeing:54,tech:[],buildings:[],delivery:null,
+      const site={id,name,region,lat:point.lat,lon:point.lon,water,specialty,era:'Settlement',founded:world.week,foundedBy:old?.id || null,routeLinks:0,
+        population:offer.newPopulation,funds:old?offer.goods.funds:16,food:old?offer.goods.food:12,materials:old?offer.goods.materials:8,trust:50,wellbeing:54,tech:[],buildings:[],delivery:null,
         residents:PROFILES.map((p,slot)=>({id:id+'-p'+slot,slot,name:names[slot],role:p.role,value:p.value,bond:0,heard:false,promise:null,lastTalk:0,lastPromise:-10})),
         issue:null,pending:[],stats:{kept:0,missed:0,resolved:0,deliveries:0},issueIndex:-1,lastDeliveryWeek:0};
+      root.EarthCityModel?.normalise(site);
       world.sites.push(site);world.activeId=id;
-      return complete(name+' founded. '+(old?old.name+' contributed 6 funds and 2 materials. ':'')+'Local strength: '+LABELS[specialty]+'.',site);
+      const note=root.EarthCampaigns?.found(world,site,commission);
+      return complete(name+' founded. '+(old?old.name+' transferred '+resources(offer.goods)+'. Two volunteers and four new members started the settlement. ':'')+({food:'Its growers produce 1 extra food each week.',materials:'Its salvage team recovers 1 extra material each week.',funds:'Its cooperative earns 1 extra fund each week.'})[specialty]+(note?' '+note:''),site);
     }
     function visit(id){
       const next=world.sites.find(s=>s.id===id);
@@ -324,6 +481,79 @@
     function travelTime(a,b){
       const weeks=distance(a,b)<1800?1:distance(a,b)<7500?2:3;
       return Math.max(1,weeks-Number(a.tech.includes('exchange')||b.tech.includes('exchange')));
+    }
+    function supplyPartner(turn,site){
+      const partnerIds=new Set();
+      for(const r of turn.routes){
+        if(r.from===site.id)partnerIds.add(r.to);
+        if(r.to===site.id)partnerIds.add(r.from);
+      }
+      const candidates=turn.sites.filter(s=>partnerIds.has(s.id));
+      candidates.sort((a,b)=>a.food/Math.max(1,a.population)-b.food/Math.max(1,b.population));
+      return candidates[0] || null;
+    }
+    function openIssue(turn,site) {
+      const partner=supplyPartner(turn,site);
+      const visited=site.agendaVisits || {};
+      // Legacy worlds have a current agenda index but no record of older
+      // agendas. Mark the current one so resuming does not instantly repeat it.
+      if(site.issueIndex>=0 && !site.agendaVisits)visited[site.issueIndex]=turn.week-1;
+      const eligible=QUESTIONS.map((q,index)=>({index,stage:q.stage||0,needsPartner:q.partner})).filter(q=>
+        site.tech.length>=q.stage && (!q.needsPartner || partner)
+      );
+      eligible.sort((a,b)=>(visited[a.index]||0)-(visited[b.index]||0) || b.stage-a.stage || a.index-b.index);
+      const index=site.issueIndex<0?0:eligible[0].index,q=QUESTIONS[index];
+      site.issueIndex=index;visited[index]=turn.week;site.agendaVisits=visited;
+      const target=q.partner?partner:null;
+      site.issue={index,title:q.title,prompt:q.prompt+(target?' The receiving partner is '+target.name+'.':''),deadline:turn.week+2,targetId:target?.id || null};
+    }
+    function votePlan(turn,site,choice,week){
+      const target=choice.transfer?turn.sites.find(s=>s.id===site.issue.targetId):null;
+      const delay=Math.max(choice.delay || 2,target?travelTime(site,target):0);
+      const due=week+delay;
+      const details=choice.terms+(target?' Partner: '+target.name+'.':'')+' Outcome in week '+due+'.';
+      return {target,due,details};
+    }
+    function recordVote(turn,site,c,week){
+      const plan=votePlan(turn,site,c,week);
+      apply(site,c.now);
+      site.pending.push({index:site.issue.index,choice:c.id,week:plan.due,targetId:plan.target?.id || null});
+      site.issue=null;
+      return site.name+' voted to '+c.name.charAt(0).toLowerCase()+c.name.slice(1)+'. '+plan.details;
+    }
+    function mandateActions(turn,site,add){
+      if(turn.sites.length<3 || !has(site,'hall')&&!site.mandate)return;
+      const limit='A local vote costs 1 fund. It must leave at least 2 funds, 2 materials and 5 food. You may still vote first.';
+      for(const [id,name] of Object.entries(MANDATES)){
+        if(site.mandate===id)continue;
+        const emphasis=id==='services'?'It favours households and access when views differ.':'It favours productive capacity and financial reserves when views differ.';
+        add('council','mandate:'+id,name,'Let the assembly vote at the end of each deadline. '+emphasis+' '+limit,{goods:{funds:2},gate:has(site,'hall')?'':'Build an assembly hall before changing the mandate.'},()=>{
+          site.mandate=id;return site.name+' authorised its assembly. '+name+'. '+limit;
+        });
+      }
+      if(site.mandate)add('council','mandate:recall','Bring votes back to the player','The standing instruction is “'+MANDATES[site.mandate]+'”. Recall it before a deadline to resume personal responsibility.',{effort:0},()=>{
+        site.mandate=null;return 'The assembly will wait for your vote on the next decision.';
+      });
+    }
+    function delegatedVote(turn,site){
+      if(!site.mandate)return '';
+      if(!has(site,'hall'))return 'The assembly lost its meeting hall. ';
+      const q=QUESTIONS[site.issue.index];
+      const c=q.choices.find(c=>(c.id===q.services)===(site.mandate==='services'));
+      const dues={...c.goods,funds:1+(c.goods?.funds||0)};
+      const floors={funds:2,materials:2,food:5};
+      if(Object.keys(floors).some(k=>site[k]-(dues[k] || 0)<floors[k]))return 'The assembly protected its minimum reserves. ';
+      payment(site,dues);
+      return 'The assembly used its standing mandate and 1 fund for the meeting. '+recordVote(turn,site,c,turn.week-1);
+    }
+    function successorVote(turn,site,slot){
+      if(!site.issue)return null;
+      const q=QUESTIONS[site.issue.index],floors={food:Math.max(6,Math.ceil(site.population/5)),materials:2,funds:2};
+      const choices=q.choices.filter(c=>Object.entries(c.goods || {}).every(([k,n])=>site[k]-n>=floors[k]));
+      const choice=choices.find(c=>c.ally===slot) || choices.find(c=>(slot===1)!==(c.id===q.services)) || choices[0];
+      if(!choice)return null;
+      payment(site,choice.goods);
+      return recordVote(turn,site,choice,turn.week);
     }
     function actionsAndRules(group='all'){
       const site=current(),actions=[];
@@ -339,8 +569,12 @@
         const profile=PROFILES[p.slot],who={residentId:p.id};
         const when=p.promise?p.promise.dueWeek:0;
         add('people','listen:'+p.id,p.heard?'Check in with '+p.name:'Listen to '+p.name,p.role+' · '+p.value+'. '+(p.heard?'Hear how the work is going.':'Hear the experience behind this resident’s priorities.'),{...who,gate:p.lastTalk===world.week?'You already spoke this week.':''},()=>{
-          const quote=profile.quotes[p.heard?1:0];p.heard=true;p.lastTalk=world.week;
-          return p.name+': '+quote+' '+bond(p,1)+'.';
+          const memory=p.shiftMemory;
+          const recall=memory && memory.week<world.week && !memory.discussedWeek && memory.quote;
+          const quote=recall?'“'+memory.quote.replace(/^[“"]|[”"]$/g,'')+'”':profile.quotes[p.heard?1:0];
+          if(recall)memory.discussedWeek=world.week;
+          p.heard=true;p.lastTalk=world.week;
+          return p.name+': '+quote+' '+bond(p,1)+'.'+(root.EarthCampaigns?.testimony?.(world,site,p) || '');
         });
         if(p.heard && !p.promise){
           add('people','promise:'+p.id,'Make a promise to '+p.name,'Commit to '+profile.ask+' by the end of week '+(world.week+2)+'. Keeping it costs '+resources(profile.goods)+' or a new '+BUILDINGS[profile.alternative].name.toLowerCase()+'.',
@@ -352,7 +586,7 @@
       }
       for(const [kind,b] of Object.entries(BUILDINGS)){
         const gate=site.buildings.length===9?'All nine district lots are occupied.':kind==='wetland' && !site.tech.includes('apprenticeship')?'First research shared apprenticeship.':'';
-        add('build','build:'+kind,b.name,b.info,{kind,goods:{funds:b.funds,materials:b.materials},gate},(plot)=>{
+        add('build','build:'+kind,b.name,b.info,{kind,goods:{funds:b.funds,materials:Math.max(1,b.materials-(root.EarthStrategy?.buildDiscount(site) || 0))},gate},(plot)=>{
           const partners=site.residents.filter(p=>p.promise && PROFILES[p.slot].alternative===kind);
           site.buildings.push({id:site.id+'-b'+plot,kind,plot,name:b.name,partners:partners.map(p=>p.id)});
           let msg=b.name+' opened on lot '+(plot+1)+'.';
@@ -360,7 +594,7 @@
           return msg;
         });
       }
-      if(site.buildings.length===9)for(const b of site.buildings){
+      if((group==='all' || group==='build') && site.buildings.length===9)for(const b of site.buildings){
         const plan=previewReclaim(b.plot);
         add('build','reclaim:'+b.plot,'Dismantle lot '+(b.plot+1),plan.text,{plot:b.plot},()=>takeDown(site,b.plot));
       }
@@ -385,19 +619,23 @@
       if(!world.charter)for(const [id,c] of Object.entries(CHARTERS)){
         add('council','charter:'+id,c.name,'Choose a lasting measure of success. '+c.text,{effort:0},()=>{world.charter=id;return 'Your founding charter is “'+c.name+'”. '+c.text;});
       }
-      if(site.issue){
+      const delegated=root.EarthLegacy?.governs(world,site);
+      if(site.issue && !delegated){
         const q=QUESTIONS[site.issue.index];
-        for(const c of q.choices)add('council','vote:'+c.id,c.name,q.title+' · '+q.prompt+' '+c.terms,{goods:c.goods || {},issueTitle:q.title},()=>{
-          apply(site,c.now);site.pending.push({index:site.issue.index,choice:c.id,week:world.week+2});site.issue=null;
-          return site.name+' voted: '+c.name+'. '+c.terms;
-        });
+        for(const c of q.choices){
+          const plan=votePlan(world,site,c,world.week);
+          add('council','vote:'+c.id,c.name,q.title+' · '+site.issue.prompt+' '+plan.details,
+            {goods:c.goods || {},issueTitle:q.title},()=>recordVote(world,site,c,world.week));
+        }
       }
-      for(const other of world.sites.filter(s=>s.id!==site.id)){
+      if(!delegated)mandateActions(world,site,add);
+      if(group==='all' || group==='routes')for(const other of world.sites.filter(s=>s.id!==site.id)){
         const route=tradeRoute(site,other),weeks=travelTime(site,other);
         const mode=site.water||other.water?'Sea passage':site.region===other.region?'Supply road':'Trade passage';
-        if(!route)add('routes','route:'+other.id,'Link '+other.name,mode+' · '+Math.round(distance(site,other)).toLocaleString('en')+' km · '+weeks+' week'+(weeks===1?'':'s')+' each way. Partners lend food or materials to the neighbour with less, keeping reserves of 5.',{targetId:other.id,goods:{funds:3,materials:1}},()=>{
+        if(!route)add('routes','route:'+other.id,'Link '+other.name,mode+' · '+Math.round(distance(site,other)).toLocaleString('en')+' km · '+weeks+' week'+(weeks===1?'':'s')+' each way. Partners protect a reserve of 5. Projected household food shortages take priority over balancing other stocks.',{targetId:other.id,goods:{funds:3,materials:1}},()=>{
+          site.routeLinks=(site.routeLinks || 0)+1;other.routeLinks=(other.routeLinks || 0)+1;
           world.routes.push({id:site.id+'~'+other.id,from:site.id,to:other.id,name:mode,opened:world.week,shipments:[],deliveries:0,lastDispatch:0,lastStatus:'Partners are comparing reserves.'});
-          return mode+' opened between '+site.name+' and '+other.name+'. Consignments move when one partner has at least three more units.';
+          return mode+' opened between '+site.name+' and '+other.name+'. Food is sent first when a partner is projected to fall below its reserve. Other surpluses move when stocks differ by at least three units.';
         });
       }
       add('work','work:forage','Tend the food beds','Spend a shift harvesting food for the district. +3 food.',{},()=>{apply(site,{food:3});return 'The food beds yielded 3 food.';});
@@ -414,7 +652,11 @@
           site.delivery=null;site.lastDeliveryWeek=world.week;site.stats.deliveries++;return p.name+' received the parcel. '+outcome(apply(site,{funds:3}),bond(p,1));
         });
       }
-      if(root.EarthNeighbours)root.EarthNeighbours.actions(world,site,add);
+      if(root.EarthNeighbours && (group==='all'||group==='people'))root.EarthNeighbours.actions(world,site,add);
+      if(root.EarthCampaigns && (group==='all'||group==='council'))root.EarthCampaigns.actions(world,site,add);
+      if(root.EarthPartners && (group==='all'||group==='routes'))root.EarthPartners.actions(world,site,add);
+      if(root.EarthLegacy && (group==='all'||group==='council'))root.EarthLegacy.actions(world,site,add);
+      if(root.EarthStrategy && (group==='all'||group==='research'))root.EarthStrategy.actions(world,site,add);
       return actions;
     }
     function actions(group='all'){return actionsAndRules(group).map(({run,...view})=>view);}
@@ -442,52 +684,101 @@
       const action=actionsAndRules('build').find(item=>item.kind===kind);
       const around=site.buildings.filter(item=>adjacent(item.plot,plot)).map(({kind,plot,name})=>({kind,plot,name}));
       const oldRate=rates(site);
-      const newRate=rates({...site,buildings:[...site.buildings,{kind,plot,name:b.name}]});
-      const delta={};
-      for(const k of Object.keys(newRate))if(newRate[k]!==oldRate[k])delta[k]=newRate[k]-oldRate[k];
+      const builtSite={...site,buildings:[...site.buildings,{kind,plot,name:b.name}]};
+      const newRate=rates(builtSite);
+      const delta=rateDifference(oldRate,newRate);
       const promises=site.residents.filter(p=>p.promise && PROFILES[p.slot].alternative===kind).map(p=>p.name);
       let pairing='';
       if(kind==='garden' && around.some(n=>n.kind==='workshop'))pairing=' A neighbouring workshop adds 1 food.';
-      if(kind==='market' && around.some(n=>n.kind==='pier'))pairing=' A neighbouring depot adds 1 fund.';
+      if(kind==='market'){
+        const shop=marketPlan(builtSite).markets.find(m=>m.plot===plot);
+        pairing=' This shop '+(shop.tier==='idle'?'has no remaining customer catchment':shop.tier==='full'?'serves a full catchment':'shares a catchment')+' and earns '+(shop.base+shop.depot)+' funds per week.'+
+          (shop.depot?' That includes 1 from the adjoining depot.':'');
+      }
       if(kind==='workshop' || kind==='pier'){
-        const partner=kind==='workshop'?'garden':'market',unit=kind==='workshop'?'food':'fund';
-        const improved=around.filter(n=>n.kind===partner && !neighbours(site,n.plot,kind)).length;
-        if(improved)pairing=' Neighbouring '+(kind==='workshop'?'gardens':'markets')+' gain '+improved+' '+unit+(unit==='fund'&&improved>1?'s':'')+' in total.';
+        const unit=kind==='workshop'?'food':'funds';
+        const oldLinks=productiveLinks(site).filter(x=>x.resource===unit).length;
+        const newLinks=productiveLinks(builtSite).filter(x=>x.resource===unit).length;
+        const improved=newLinks-oldLinks;
+        if(improved>0)pairing=' Shared access adds '+improved+' '+unit+' across '+(kind==='workshop'?'neighbouring gardens.':'operating markets.');
       }
       const forecast=summary(delta) || 'No direct change in weekly yield';
       const effects=promises.length?' Keeps the promise to '+promises.join(' and ')+'.':'';
       let service='';
-      if(kind==='pier')service=' Increases route cargo capacity to 4 units.';
+      if(kind==='pier'){
+        const partners=world.sites.filter(other=>tradeRoute(site,other));
+        const improved=has(site,'pier')?0:partners.filter(p=>!has(p,'pier')).length;
+        service=improved?' Adds 2 units of cargo capacity on '+improved+' current route'+(improved===1?'':'s')+'.':
+          partners.length || has(site,'pier')?' Existing route capacity stays the same.':' Future routes from this depot have a base capacity of 4 units.';
+      }
       if(kind==='wetland')service=' Protects local homes and food during high water.';
-      return {ok:true,available:action.available,reason:action.reason,label:b.name,text:'Lot '+(plot+1)+' · '+forecast+'.'+pairing+service+effects,forecast,delta,fulfilled:promises,neighbours:around};
+      return {ok:true,available:action.available,reason:action.reason,label:b.name,text:'Lot '+(plot+1)+' · '+forecast+'.'+pairing+service+effects,forecast,delta,goods:{...action.goods},fulfilled:promises,neighbours:around};
     }
     function previewReclaim(plot){
       const site=current(),b=site && site.buildings.find(p=>p.plot===plot);
       if(!b)return {ok:false,available:false,reason:'Choose an occupied district lot.',text:'Choose an occupied district lot.'};
       const previous=rates(site),next=rates({...site,buildings:site.buildings.filter(p=>p.plot!==plot)});
-      const delta={};
-      for(const k of Object.keys(next))if(next[k]!==previous[k])delta[k]=next[k]-previous[k];
+      const delta=rateDifference(previous,next);
       const recovered=Math.max(1,Math.floor(BUILDINGS[b.kind].materials/2));
       const partners=site.residents.filter(p=>(b.partners || []).includes(p.id));
       const forecast=summary(delta)||'No direct change in weekly yield';
       let text='Dismantle '+b.name.toLowerCase()+' on lot '+(plot+1)+'. Recover '+recovered+' material'+(recovered===1?'':'s')+'. '+forecast+'.';
-      if(partners.length)text+=' '+partners.map(p=>p.name).join(' and ')+' helped secure this project. Trust −2 · bond −1.';
+      if(partners.length)text+=' '+partners.map(p=>p.name).join(' and ')+' helped secure this project. Trust can fall by 2 and their bonds by 1.';
+      if(b.kind==='hall' && site.mandate && site.buildings.filter(b=>b.kind==='hall').length===1)text+=' The local assembly will need another hall before it can vote.';
+      if(b.kind==='pier' && site.buildings.filter(b=>b.kind==='pier').length===1)text+=' Routes with no depot at the other end will lose 2 units of base cargo capacity.';
       return {ok:true,available:world.effort>=1,reason:world.effort>=1?'':'Requires 1 effort. Advance the week to refresh.',label:b.name,text,forecast,delta,recovered,partners:partners.map(p=>p.id)};
     }
     function takeDown(site,plot){
       const plan=previewReclaim(plot);
       site.buildings=site.buildings.filter(b=>b.plot!==plot);
       apply(site,{materials:plan.recovered});
+      const effects=[];
       if(plan.partners.length){
-        apply(site,{trust:-2});
-        for(const p of site.residents)if(plan.partners.includes(p.id))bond(p,-1);
+        const trust=apply(site,{trust:-2});
+        if(trust.trust)effects.push(summary(trust));
+        for(const p of site.residents)if(plan.partners.includes(p.id))effects.push(p.name+' '+bond(p,-1));
       }
-      return 'Lot '+(plot+1)+' reopened. '+plan.text;
+      return 'Lot '+(plot+1)+' reopened. Recovered '+plan.recovered+' material'+(plan.recovered===1?'':'s')+'. '+plan.forecast+'.'+(effects.length?' '+effects.join(' · ')+'.':'');
     }
     function reclaim(plot){
       const plan=previewReclaim(plot);
       if(!plan.ok || !plan.available)return reject(plan.reason);
       world.effort--;return complete(takeDown(current(),plot),current());
+    }
+    function applyShiftResult(site,result,requiresFunds=true){
+      const spent=Object.fromEntries(Object.entries(result.now||{}).filter(([k,v])=>['funds','materials','food'].includes(k)&&v<0).map(([k,v])=>[k,-v]));
+      if(requiresFunds && !affordable(site,spent))return reject('This choice needs '+resources(spent)+'.');
+      apply(site,result.now);
+      if(result.memory){
+        const person=site.residents.find(p=>p.id===result.memory.residentId);
+        if(person)person.shiftMemory={...result.memory};
+      }
+      for(const effect of result.bonds || []){
+        const p=site.residents.find(person=>person.id===effect.residentId);
+        if(p)bond(p,effect.amount);
+      }
+      return null;
+    }
+    function shiftCommand(kind,id){
+      const site=current(),domain=root.EarthShifts;
+      if(!site || !domain)return reject('A resident shift is unavailable here.');
+      if(kind==='start'){
+        if(world.effort<1)return reject('Starting a shift needs 1 effort. Advance the week to refresh.');
+        const gate=domain.gate(world,site,id);
+        if(!gate.available)return reject(gate.reason);
+      }
+      const result=kind==='start'?domain.start(world,site,id):
+        kind==='finish'?domain.finish(site,world.week):domain[kind](site,id,world.week);
+      if(!result.ok)return reject(result.message);
+      const shortfall=applyShiftResult(site,result);
+      if(shortfall)return shortfall;
+      if(kind==='start'){
+        world.effort--;site.lastShiftWeek=world.week;
+        site.residents.find(p=>p.id===id).lastShiftWeek=world.week;
+      }
+      site.shift=result.shift;
+      if(result.followUps?.length)site.shiftFollowUps=[...(site.shiftFollowUps || []),...result.followUps];
+      return complete(result.message,site);
     }
     function beginVoyage(target,style='exchange'){
       const site=current(),nav=root.EarthVoyages;
@@ -510,103 +801,230 @@
       if(!step.ok)return reject(step.message);
       let message=step.message;
       if(step.complete){
-        apply(site,step.reward);
+        const reward=apply(site,step.reward);
+        site.stats.voyages=(site.stats.voyages || 0)+1;
         const dest=world.sites.find(s=>s.id!==site.id && s.id===v.target.id);
-        if(dest && step.report.targetReward && Object.keys(step.report.targetReward).length){
-          apply(dest,step.report.targetReward);message+=' '+dest.name+' received '+summary(step.report.targetReward)+'.';
-        }
-        world.lastVoyage=step.report;world.voyage=null;
+        const targetReward=dest?apply(dest,step.report.targetReward):{};
+        message='Arrived at '+v.target.name+'. '+step.report.headline+'. '+site.name+' received '+(summary(reward)||'no further gains at its current limits')+'.';
+        if(dest && Object.keys(targetReward).length)message+=' '+dest.name+' received '+(summary(targetReward)||'no further gains at its current limits')+'.';
+        world.lastVoyage={...step.report,reward,targetReward};world.voyage=null;
       }else world.voyage=step.voyage;
       return complete(message,site,step.complete);
     }
-    function moveCargo(turn,arrive,depart){
-      const arrivals=[],byId=new Map(turn.sites.map(s=>[s.id,s]));
-      const inbound=new Map(turn.sites.map(s=>[s.id,{food:0,materials:0}]));
-      // Deliver every due shipment before computing new departures. Incoming
-      // cargo is included in the demand calculation to avoid repeat shipments.
-      for(const r of turn.routes) {
-        r.shipments=r.shipments.filter(sh=>{
-          if(sh.due>turn.week){inbound.get(sh.to)[sh.good]+=sh.amount;return true;}
-          const dest=byId.get(sh.to);
-          if(dest){apply(dest,{[sh.good]:sh.amount});r.deliveries++;
-            const text=sh.amount+' '+LABELS[sh.good]+' arrived in '+dest.name+'.';arrive(text,dest);arrivals.push(text);r.lastStatus=text;}
+    function receiveCargo(turn,byId,event){
+      const inbound=new Map(turn.sites.map(site=>[site.id,{food:0,materials:0,foodByWeek:{}}]));
+      for(const route of turn.routes){
+        route.shipments=route.shipments.filter(cargo=>{
+          if(cargo.due>turn.week){
+            const incoming=inbound.get(cargo.to);incoming[cargo.good]+=cargo.amount;
+            if(cargo.good==='food')incoming.foodByWeek[cargo.due]=(incoming.foodByWeek[cargo.due] || 0)+cargo.amount;
+            return true;
+          }
+          const dest=byId.get(cargo.to);
+          apply(dest,{[cargo.good]:cargo.amount});route.deliveries++;route.lastArrivalWeek=turn.week;
+          route.lastStatus=cargo.amount+' '+cargo.good+' arrived in '+dest.name+'.';
+          event(route.lastStatus,dest,'arrivals');
           return false;
         });
       }
-      function projected(site,good){
-        return site[good]+inbound.get(site.id)[good];
+      return inbound;
+    }
+    function dispatchCargo(turn,byId,inbound,reports){
+      const foodRate=new Map(turn.sites.map(site=>[site.id,rates(site).food]));
+      const used=new Set();
+      // Include voted local supplies and voted partner grants expected within
+      // the route horizon, alongside cargo already committed in either direction.
+      for(const site of turn.sites)for(const item of site.pending){
+        const c=QUESTIONS[item.index].choices.find(c=>c.id===item.choice);
+        if(c.after?.food && !(item.index===2 && c.after.food<0 && has(site,'wetland')))addFuture(site.id,item.week,c.after.food);
+        if(c.transfer?.food && byId.has(item.targetId))addFuture(item.targetId,item.week,c.transfer.food);
       }
-      for(const r of turn.routes){
-        const a=byId.get(r.from),b=byId.get(r.to);
-        const options=[];
+      function addFuture(id,week,amount){
+        const due=inbound.get(id).foodByWeek;
+        due[week]=(due[week] || 0)+amount;
+      }
+      function projectedFood(site,transit){
+        let stock=site.food+(site.strategy?.reserve || 0);
+        const due=inbound.get(site.id).foodByWeek,change=foodRate.get(site.id);
+        let lowest=stock;
+        for(let k=1;k<=transit;k++){
+          stock+=change+(due[turn.week+k] || 0);
+          lowest=Math.min(lowest,stock);
+        }
+        return {arrival:stock,lowest};
+      }
+      function availableFood(site,weeks){
+        return Math.max(0,Math.min(site.food-5,projectedFood(site,weeks).lowest-5));
+      }
+      function capacityFor(a,b){
+        return 2+(has(a,'pier')||has(b,'pier')?2:0)+(root.EarthStrategy?.cargoBonus(a) || 0);
+      }
+      function send(route,from,to,good,amount,weeks,aid=false){
+        const due=turn.week+weeks;
+        payment(from,{[good]:amount});
+        inbound.get(to.id)[good]+=amount;
+        if(good==='food')addFuture(to.id,due,amount);
+        route.shipments.push({from:from.id,to:to.id,good,amount,due});
+        route.lastDispatch=turn.week;
+        if(aid)to.lastAidWeek=turn.week;
+        route.lastStatus=amount+' '+good+' travelling to '+to.name+' · due week '+due+'.'+(aid?' Household food takes priority.':'');
+        reports.get(from.id).departures.push(route.lastStatus);
+        used.add(route);
+      }
+      const essential=[];
+      for(const route of turn.routes){
+        const a=byId.get(route.from),b=byId.get(route.to),weeks=travelTime(a,b);
+        for(const [from,to] of [[a,b],[b,a]]){
+          const expected=projectedFood(to,weeks).arrival;
+          if(expected>=5 || availableFood(from,weeks)<=0)continue;
+          const coverage=(to.food+(to.strategy?.reserve || 0)+(inbound.get(to.id).foodByWeek[turn.week+1] || 0))/Math.max(1,Math.ceil(to.population/5));
+          essential.push({route,from,to,weeks,coverage,expected,lastAid:to.lastAidWeek || 0});
+        }
+      }
+      essential.sort((a,b)=>a.coverage-b.coverage || a.lastAid-b.lastAid || a.weeks-b.weeks || a.expected-b.expected);
+      for(const {route,from,to,weeks} of essential){
+        if(used.has(route))continue;
+        const need=5-projectedFood(to,weeks).arrival;
+        const amount=Math.min(need,availableFood(from,weeks),capacityFor(from,to));
+        if(amount>0)send(route,from,to,'food',amount,weeks,true);
+      }
+      for(const route of turn.routes){
+        if(used.has(route))continue;
+        const a=byId.get(route.from),b=byId.get(route.to),weeks=travelTime(a,b),options=[];
         for(const [from,to] of [[a,b],[b,a]])for(const good of ['food','materials']){
-          const difference=projected(from,good)-projected(to,good);
-          const capacity=2+(has(from,'pier')||has(to,'pier')?2:0);
-          const amount=Math.min(capacity,from[good]-5,Math.floor(difference/2));
+          const difference=(from[good]+inbound.get(from.id)[good])-(to[good]+inbound.get(to.id)[good]);
+          const safe=good==='food'?availableFood(from,weeks):from[good]-5;
+          const amount=Math.min(capacityFor(from,to),safe,Math.floor(difference/2));
           if(difference>=3 && amount>=1)options.push({from,to,good,amount,difference});
         }
-        options.sort((l,h)=>h.difference-l.difference);
-        const choice=options[0];
-        if(!choice){if(!r.shipments.length)r.lastStatus='Reserves are balanced. No cargo is due.';continue;}
-        const {from,to,good,amount}=choice,due=turn.week+travelTime(from,to);
-        payment(from,{[good]:amount});inbound.get(to.id)[good]+=amount;r.shipments.push({from:from.id,to:to.id,good,amount,due});r.lastDispatch=turn.week;
-        r.lastStatus=amount+' '+LABELS[good]+' travelling to '+to.name+' · due week '+due+'.';depart(r.lastStatus,from);
+        options.sort((a,b)=>b.difference-a.difference);
+        if(!options.length){
+          if(!route.shipments.length && route.lastArrivalWeek!==turn.week)route.lastStatus='No further shipment is due on this route.';
+          continue;
+        }
+        const {from,to,good,amount}=options[0];send(route,from,to,good,amount,weeks);
       }
-      return arrivals;
     }
-    // Mutate exactly the supplied snapshot. Both the actual transition and
-    // the week-ahead forecast run these rules, including in-transit cargo.
-    function rollWeek(turn) {
-      const events=[];
-      const reports=new Map(turn.sites.map(s=>[s.id,{id:s.id,name:s.name,production:{},forecast:'',promises:[],council:[],arrivals:[],departures:[],highlights:[],closing:{},delta:{}}]));
-      const keys=['funds','food','materials','trust','wellbeing','population'];
-      const opening=new Map(turn.sites.map(s=>[s.id,Object.fromEntries(keys.map(k=>[k,s[k]]))]));
+    function closeDeadlines(turn,site,event){
+      for(const p of site.residents)if(p.promise && turn.week>p.promise.dueWeek){
+        p.promise=null;p.lastPromise=turn.week;site.stats.missed++;
+        const result=outcome(apply(site,{trust:-3}),bond(p,-1));
+        event('The promise to '+p.name+' lapsed. '+result+' Check in to rebuild the relationship.',site,'promises');
+      }
+      if(!site.issue || turn.week<=site.issue.deadline || root.EarthLegacy?.governs(turn,site))return;
+      const decision=delegatedVote(turn,site);
+      const delegated=root.EarthLegacy?.governs(world,site);
+      if(site.issue && !delegated){
+        const q=QUESTIONS[site.issue.index];site.issue=null;
+        event(decision+'The decision on “'+q.title+'” lapsed. '+outcome(apply(site,{trust:-2})),site,'council');
+      }else event(decision,site,'council');
+    }
+    function settleCouncil(turn,site,transfers,event){
+      site.pending=site.pending.filter(item=>{
+        if(item.week>turn.week)return true;
+        const question=QUESTIONS[item.index],choice=question.choices.find(c=>c.id===item.choice);
+        const after={...choice.after};
+        if(item.index===2 && has(site,'wetland'))for(const k of Object.keys(after))if(after[k]<0)after[k]=0;
+        const ally=site.residents[choice.ally];
+        const result=outcome(apply(site,after),ally.name+' '+bond(ally,1));
+        site.stats.resolved++;
+        let followup='';
+        if(choice.practice){
+          site.practices={...site.practices,[item.index]:choice.id};
+          followup=' The new arrangement contributes '+summary(choice.practice)+' each week starting next week.';
+        }
+        if(choice.transfer && item.targetId)transfers.push({from:site,to:item.targetId,goods:choice.transfer});
+        event(choice.name+' in '+site.name+'. '+choice.story+' '+result+followup,site,'council');
+        return false;
+      });
+    }
+    function settleResidents(turn,site,event){
+      if(root.EarthShifts && (site.shift || site.shiftFollowUps?.length)){
+        const result=root.EarthShifts.tick(site,turn.week);
+        site.shift=result.shift;site.shiftFollowUps=result.followUps;
+        for(const item of result.events){applyShiftResult(site,item,false);event(item.message,site);}
+      }
+      if(root.EarthNeighbours)for(const note of root.EarthNeighbours.tick(turn,site) || [])event(note,site);
+    }
+    function settleHouseholds(turn,site,production,event){
+      if(root.EarthStrategy)for(const note of root.EarthStrategy.protect(site,production) || [])event(note,site);
+      const shortage=site.food+production.food<0;
+      apply(site,production);
+      if(shortage)event(site.name+' ran short of food. '+outcome(apply(site,{wellbeing:-3,trust:-1})),site);
+      if((turn.week-site.founded)%3!==0 || site.food<9 || site.trust<50)return;
+      const room=Math.max(0,capacity(site)-site.population);
+      const growth=Math.min(2,room);
+      if(growth && (site.buildings.length || capacity(site)>18)){
+        site.population+=growth;
+        event((growth===1?'One resident settled':'Two residents settled')+' in '+site.name+'. Its weekly food need is now '+Math.ceil(site.population/5)+'.',site);
+      }
+    }
+    // This same transition runs on a detached snapshot for the forecast.
+    // Close last week's decisions before new income. Deliver goods due this
+    // week before assessing hunger. Dispatch only the uncommitted surplus.
+    function rollWeek(turn){
+      const events=[],transfers=[];
+      const byId=new Map(turn.sites.map(site=>[site.id,site]));
+      const metrics=['funds','food','materials','trust','wellbeing','population'];
+      const opening=new Map(),reports=new Map();
+      for(const site of turn.sites){
+        opening.set(site.id,Object.fromEntries(metrics.map(k=>[k,site[k]])));
+        reports.set(site.id,{id:site.id,name:site.name,production:{},forecast:'',
+          promises:[],council:[],arrivals:[],departures:[],highlights:[],closing:{},delta:{}});
+      }
       function event(text,site,type){
-        const item=reports.get(site.id);item.highlights.push(text);
-        if(type)item[type].push(text);
+        const report=reports.get(site.id);
+        report.highlights.push(text);
+        if(type)report[type].push(text);
         events.push({site,text});
       }
       turn.week++;turn.effort=MAX_EFFORT;
-      for(const s of turn.sites){
-        const delta=rates(s),shortage=s.food+delta.food<0;
-        const report=reports.get(s.id);
-        report.production={...delta};report.forecast=summary(delta)+' per week';
-        apply(s,delta);
-        if(shortage){apply(s,{wellbeing:-3,trust:-1});event(s.name+' ran short of food. Wellbeing −3 · trust −1.',s);}
-        if((turn.week-s.founded)%3===0 && s.food>=9 && s.trust>=50 && s.buildings.length){
-          s.population+=2;event('Two residents settled in '+s.name+'. Its weekly food need is now '+Math.ceil(s.population/5)+'.',s);
+      for(const site of turn.sites)closeDeadlines(turn,site,event);
+      for(const site of turn.sites){
+        const city=root.EarthCityModel?.weekly(site,turn);
+        const report=reports.get(site.id);
+        const recurring=root.EarthCityModel?.overview(site)?.weekly;
+        report.production=rates(site,recurring);
+        if(city && recurring){
+          report.cityOneOff=rateDifference(recurring,city.delta);
+          apply(site,report.cityOneOff);
         }
-        for(const p of s.residents)if(p.promise && turn.week>p.promise.dueWeek){
-          p.promise=null;p.lastPromise=turn.week;s.stats.missed++;bond(p,-1);apply(s,{trust:-3});
-          event('The promise to '+p.name+' lapsed. Trust −3 · bond −1. Check in to rebuild the relationship.',s,'promises');
-        }
-        s.pending=s.pending.filter(item=>{
-          if(item.week>turn.week)return true;
-          const q=QUESTIONS[item.index],c=q.choices.find(choice=>choice.id===item.choice);
-          const after={...c.after};
-          if(item.index===2 && has(s,'wetland'))for(const k of Object.keys(after))if(after[k]<0)after[k]=0;
-          apply(s,after);bond(s.residents[c.ally],1);s.stats.resolved++;
-          event(c.name+' in '+s.name+': '+c.story+' '+summary(after)+' · '+s.residents[c.ally].name+' bond +1.',s,'council');return false;
-        });
-        if(s.issue && turn.week>s.issue.deadline){
-          const q=QUESTIONS[s.issue.index];s.issue=null;apply(s,{trust:-2});
-          event('The decision on “'+q.title+'” lapsed without a vote. Trust −2.',s,'council');
-        }
-        if(!s.issue && (turn.week-s.founded-1)%4===0 && turn.week>s.founded){
-          s.issueIndex=(s.issueIndex+1)%QUESTIONS.length;s.issue={index:s.issueIndex,title:QUESTIONS[s.issueIndex].title,prompt:QUESTIONS[s.issueIndex].prompt,deadline:turn.week+2};
-          event('Council opened “'+s.issue.title+'”. Vote by the end of week '+s.issue.deadline+'.',s,'council');
-        }
-        for(const p of s.residents)if(p.promise && p.promise.dueWeek===turn.week)report.promises.push(p.name+'’s promise is due by the end of week '+turn.week+'.');
-        if(s.issue && s.issue.deadline===turn.week)report.council.push('Final week to vote on “'+s.issue.title+'”.');
-        if(root.EarthNeighbours)for(const text of (root.EarthNeighbours.tick(turn,s) || []))event(text,s);
+        report.housingCapacity=capacity(site);
+        report.forecast=summary(report.production)+' per week';
+        for(const note of city?.notes || [])event(note,site);
       }
-      moveCargo(turn,(text,site)=>event(text,site,'arrivals'),(text,site)=>reports.get(site.id).departures.push(text));
+      const inbound=receiveCargo(turn,byId,event);
+      for(const site of turn.sites){
+        settleCouncil(turn,site,transfers,event);
+        settleResidents(turn,site,event);
+      }
+      for(const transfer of transfers){
+        const dest=byId.get(transfer.to);
+        if(dest)event('The council shipment from '+transfer.from.name+' reached '+dest.name+'. '+outcome(apply(dest,transfer.goods)),dest,'arrivals');
+      }
+      if(root.EarthPartners)for(const item of root.EarthPartners.tick(turn,{apply}) || []){
+        const site=byId.get(item.siteId);if(site)event(item.text,site,item.type);
+      }
+      for(const site of turn.sites)settleHouseholds(turn,site,reports.get(site.id).production,event);
+      dispatchCargo(turn,byId,inbound,reports);
+      for(const site of turn.sites){
+        if(!site.issue && (turn.week-site.founded-1)%4===0 && turn.week>site.founded){
+          openIssue(turn,site);
+          event('Council opened “'+site.issue.title+'”. Vote by the end of week '+site.issue.deadline+'.',site,'council');
+        }
+        if(root.EarthStrategy)for(const note of root.EarthStrategy.tick(turn,site) || [])event(note,site);
+        if(root.EarthCampaigns)for(const note of root.EarthCampaigns.tick(turn,site,{apply,bond}) || [])event(note,site);
+      }
+      if(root.EarthLegacy)for(const item of root.EarthLegacy.tick(turn,{vote:(site,slot)=>successorVote(turn,site,slot),travelTime}) || []){
+        if(byId.has(item.site?.id))event(item.text,item.site,'council');
+      }
       for(const site of turn.sites){
         const report=reports.get(site.id),before=opening.get(site.id);
-        for(const k of keys){report.closing[k]=site[k];report.delta[k]=site[k]-before[k];}
+        for(const p of site.residents)if(p.promise?.dueWeek===turn.week)report.promises.push(p.name+'’s promise is due by the end of week '+turn.week+'.');
+        if(site.issue?.deadline===turn.week)report.council.push('Final week to vote on “'+site.issue.title+'”.');
+        for(const k of metrics){report.closing[k]=site[k];report.delta[k]=site[k]-before[k];}
       }
-      const sites=Array.from(reports.values());
-      return {week:turn.week,sites,highlights:events.map(e=>e.text),events};
+      return {week:turn.week,sites:Array.from(reports.values()),highlights:events.map(e=>e.text),events};
     }
     function forecastNext(){
       const copy=JSON.parse(JSON.stringify(world));
@@ -634,10 +1052,22 @@
         const a=actionsAndRules('research')[0];
         objective=tech.name+': '+(a.available?'ready to research.':a.reason);
       }else objective=charter.text;
-      return {objective,era:s.era,chapter:world.completed?'Charter ratified':charter?charter.name:'Founding years',forecast:summary(rates(s))+' per week',charter:charter?{...charter,met:charterMet()}:null};
+      return {objective,era:s.era,housingCapacity:capacity(s),chapter:world.completed?'Charter ratified':charter?charter.name:'Founding years',forecast:summary(rates(s))+' per week',charter:charter?{...charter,met:charterMet()}:null};
+    }
+    function planCity(precinctId,projectId){
+      const site=current(),model=root.EarthCityModel;
+      if(!site || !model)return reject('City planning is unavailable here.');
+      model.normalise(site);
+      const plan=model.preview(site,world,precinctId,projectId);
+      if(!plan.ok || !plan.available)return reject(plan.reason || 'This project cannot begin here.');
+      const result=model.apply(site,world,precinctId,projectId);
+      return result.ok?complete(result.message,site):reject(result.message);
     }
     const commands={
+      planCity:guarded(planCity),
       found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
+      beginShift:guarded(id=>shiftCommand('start',id)),arriveShift:guarded(id=>shiftCommand('arrive',id)),
+      chooseShift:guarded(id=>shiftCommand('choose',id)),finishShift:guarded(()=>shiftCommand('finish')),
       beginVoyage:guarded(beginVoyage),sail:guarded(sail),reclaim:guarded(reclaim),
       reset:guarded(()=>{world=blank();return save() || {ok:true,message:'A new world is ready.'};},true)
     };
@@ -648,14 +1078,15 @@
       const expected=lastSeen;
       function run(){return expected!==lastSeen?reject(conflict):commands[command](...args);}
       if(!storage||!root.navigator?.locks?.request)return run();
-      return root.navigator.locks.request('civic-world:'+key,run);
+      try{return await root.navigator.locks.request('civic-world:'+key,run);}
+      catch(error){if(error?.name==='SecurityError' || error?.name==='NotSupportedError')return run();throw error;}
     }
     return {
       ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},
-      active:current,actions,overview,previewBuild,previewReclaim,forecastNext,perform,sync,
+      active:current,actions,overview,foundingOffer,previewBuild,previewReclaim,forecastNext,perform,sync,
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
       destroy(){listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };
   }
-  root.CommonEarthSim={create,productiveLinks,practices,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
+  root.CommonEarthSim={create,readSave,marketPlan,productiveLinks,practices,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
 })(typeof window==='undefined'?globalThis:window);

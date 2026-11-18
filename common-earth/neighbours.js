@@ -99,5 +99,20 @@
     const text=first.name+' and '+second.name+' '+p.verb+'. +'+amount+' '+p.value+'. '+why+' Their working relationship is '+relation(d.links[key])+'.';
     d.active=null;d.completed++;d.nextWeek=world.week+1;remember(d,text,world.week);return [text];
   }
-  globalThis.EarthNeighbours=Object.freeze({actions,tick,summary});
+  function valid(site) {
+    const data=site.neighbourWork;
+    if(data==null)return true;
+    const integer=(n,min,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
+    const keys=PROJECTS.map(linkKey);
+    if(typeof data!=='object'||!data.links||Array.isArray(data.links)||typeof data.links!=='object' ||
+      !Object.entries(data.links).every(([key,value])=>keys.includes(key)&&integer(value,-3,6)) ||
+      !integer(data.nextWeek,0)||!integer(data.completed,0) || !Array.isArray(data.history)||data.history.length>8 ||
+      !data.history.every(e=>e&&integer(e.week,1)&&typeof e.text==='string'&&e.text.length<=1600))return false;
+    const a=data.active;
+    if(a===null)return true;
+    if(!a||!PROJECTS.some(p=>p.id===a.kind)||!integer(a.due,1))return false;
+    if(a.phase==='offered')return true;
+    return a.phase==='working'&&['lead','rota','pilot'].includes(a.agreement)&&typeof a.followed==='boolean';
+  }
+  globalThis.EarthNeighbours=Object.freeze({actions,tick,summary,valid});
 })();

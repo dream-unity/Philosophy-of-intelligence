@@ -1,0 +1,64 @@
+/* The city plan uses a cartographic surface, with the same type and controls as the atlas. */
+#city-stage { background:#162c2c; }
+#city-map, .city-scene { height:100%; min-height:0; min-width:0; }
+.city-scene { display:grid; grid-template-rows:auto minmax(0,1fr) auto; }
+.city-chart-head,.city-chart-tools { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px clamp(12px,1.5vw,24px); background:#172d31; }
+.city-chart-head { border-bottom:1px solid #3f5453; }
+.city-title { font:normal clamp(24px,2.6vw,40px)/1.05 var(--serif); letter-spacing:-.045em; margin:3px 0 0; overflow-wrap:anywhere; }
+.city-chart-scale { font:500 9px/1.35 var(--mono); color:var(--quiet); text-align:right; max-width:150px; }
+.city-picture { min-height:0; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; background:linear-gradient(90deg,#60776b,#738775 25%,#738775 75%,#687e70); }
+#city-map svg.city-plan-svg { width:100%; height:100%; display:block; fill:none; stroke:none; stroke-width:0; cursor:default; }
+.city-map-name,.city-map-detail { pointer-events:none; paint-order:stroke; stroke-linejoin:round; }
+.city-map-name { fill:#1e3832; stroke:#b5bea6; stroke-width:2.4px; font:650 13.7px var(--serif); letter-spacing:-.035em; }
+.city-map-detail { fill:#334e41; stroke:#acb99e; stroke-width:1.65px; font:650 6.2px var(--mono); letter-spacing:.07em; }
+.city-centre-name { fill:#243e35; font-size:14.3px; }
+.city-parcel,.city-core { cursor:pointer; outline:none; }
+.city-parcel:hover .city-zone-edge,.city-core:hover .city-zone-edge { stroke:#fbe2a4; }
+.city-parcel:focus .city-zone-edge,.city-core:focus .city-zone-edge { stroke:#fff1c6; stroke-width:3px; }
+.city-chart-tools { border-top:1px solid #597065; padding-block:8px; }
+.city-chart-layers { display:flex; gap:3px; flex-wrap:wrap; }
+.city-layer,.city-secondary { min-height:34px; background:#152a2e; border:1px solid #4c625f; color:var(--muted); font:550 11.5px/1.3 var(--sans); padding:7px 10px; }
+.city-layer[aria-pressed="true"],.city-layer:hover,.city-secondary:hover { background:#2c4039; color:var(--gold); border-color:#8e815e; }
+.city-legend { max-width:160px; color:var(--muted); font:500 9px/1.4 var(--mono); text-align:right; }
+.city-panel { min-width:0; border:1px solid var(--line); border-top:2px solid #a2b082; border-radius:5px; background:#14292d; padding:clamp(14px,1.5vw,23px); }
+.city-panel-head .kicker { color:var(--gold); }
+.city-control { display:block; font:600 12px/1.4 var(--sans); color:var(--paper); margin:9px 0 0; }
+.city-control select { display:block; width:100%; min-height:39px; padding:6px 8px; margin:5px 0 0; color:var(--paper); border:1px solid #4a6562; background:#102428; border-radius:3px; font:500 13px/1.4 var(--sans); }
+.city-area-title { font:normal clamp(27px,2.2vw,38px)/1.06 var(--serif); letter-spacing:-.045em; margin:14px 0 3px; }
+.city-subtitle { margin:0; color:var(--teal); font:550 10px/1.45 var(--mono); }
+.city-site-fact { margin-top:10px; padding:8px 0 10px; border-block:1px solid var(--line); }
+.city-site-fact > strong { color:var(--paper); font-size:13px; }
+.city-site-fact p,.city-project-detail p,.city-pending p,.city-brief p { font-size:12px; line-height:1.5; color:var(--muted); margin:4px 0; }
+.city-site-fact p.city-impact { color:#d9caab; }
+.city-project-detail { margin:7px 0; }
+.city-project-detail summary,.city-brief summary { font:550 12px/1.5 var(--sans); color:var(--teal); cursor:pointer; }
+.city-project-cost { margin:9px 0; color:var(--gold); font:550 11px/1.5 var(--mono); }
+.city-result-preview { margin:9px 0 0; padding:9px 10px; background:#193536; border-left:2px solid var(--teal); color:var(--paper); }
+.city-result-preview strong,.city-result-preview small { display:block; overflow-wrap:anywhere; }
+.city-result-preview strong { margin-top:4px; font-size:13px; font-weight:620; }
+.city-result-preview small { margin-top:4px; font:400 11.5px/1.5 var(--sans); color:var(--muted); }
+.city-commission { justify-content:center; min-height:38px; margin-top:8px; }
+.city-reason, .city-outcome { margin:6px 0; font-size:12px; line-height:1.5; color:var(--gold); }
+.city-outcome { padding:7px 9px; border-left:2px solid var(--gold); background:#313a2d; color:var(--paper); }
+.city-pending { padding:12px 0 2px; }.city-pending strong { font-size:14px; color:var(--gold); }.city-pending .city-secondary { margin-top:6px; font-size:11px; }
+.city-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin:13px 0 8px; padding-top:10px; border-top:1px solid var(--line); }
+.city-metrics dt { font:550 10px/1.35 var(--sans); color:var(--muted); }.city-metrics dd { font:650 15px/1.3 var(--sans); color:var(--paper); margin:3px 0 0; }
+.city-brief { margin-top:9px; border-top:1px solid var(--line); padding-top:8px; }
+@media(max-width:950px){ .city-legend { display:none; }.city-chart-tools { justify-content:center; }.city-chart-scale { font-size:8px; }.city-chart-head{padding:10px 12px;}.city-chart-layers { flex:1; }.city-layer{flex:1;} }
+@media(max-width:730px){
+  .city-stage.stage { height:clamp(385px,90vw,515px); }
+  .city-chart-scale { max-width:105px; }.city-panel { padding:15px 16px; }.city-control select{font-size:16px;}
+  .city-map-name { font-size:16.5px; }.city-map-detail { font-size:7.15px; }
+  .city-legend { display:none; }.city-chart-tools { padding:6px 8px; }.city-layer { min-height:39px; }
+}
+@media(max-width:450px){ .city-title { font-size:25px; }.city-map-name { font-size:17px; }.city-map-detail { font-size:8px; }.city-chart-scale{max-width:80px;}.city-chart-head .kicker {font-size:8px;} }
+@media (pointer:coarse){ .city-control select,.city-commission,.city-layer,.city-secondary { min-height:44px; } }
+@media(max-height:490px) and (min-width:540px){.city-stage.stage{height:max(340px,83dvh)}.city-chart-head{padding-block:6px;}.city-title{font-size:22px;}.city-chart-tools{padding-block:3px;}}
+.city-map-name,.city-centre-name { stroke:#c2c5ab;stroke-width:1.5px;font-size:15px;font-weight:650; }
+.city-map-detail { stroke:#bbc3a9;stroke-width:1.27px;font-size:7.1px;letter-spacing:.04em; }
+.city-inspect-link { display:none; }
+@media(max-width:730px) {
+  .city-inspect-link { display:block;padding:4px;color:var(--teal);font:550 11px/1.4 var(--sans);text-align:right;flex:0 1 auto;text-underline-offset:2px; }
+  .city-chart-tools { flex-wrap:wrap; }.city-chart-layers { flex:1 1 230px; }.city-layer {padding-inline:4px;}
+  .city-map-name,.city-centre-name { font-size:17px; }.city-map-detail{font-size:8px;}
+}

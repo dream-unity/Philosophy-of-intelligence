@@ -23,6 +23,41 @@
   // Every scene includes an option without a resource requirement. Choice ids
   // include the leg index so a delayed input cannot resolve the following scene.
   const scenes = {
+    zanzibarCart:{title:'The cart at the waterfront',prompt:'In the Stone Town scenario, traders and a tool-sharing group have booked the same handcart. Only one load can reach the waterfront before departure.',options:[
+      ['direct','Honour the first booking','The first booking reached the waterfront. The tools waited for another trip.'],
+      ['split','Reserve space on both trips','You gave up part of the outbound load and guaranteed a return space for the tool group.'],
+      ['open','Let the two groups choose the order','The two groups split the timetable themselves. Your expedition left a day later.']
+    ]},
+    melbourneVan:{title:'The van on the Yarra',prompt:'The Melbourne co-op has one van and two commitments. A kitchen needs food collected; a trader has already paid for the loading window.',options:[
+      ['share','Borrow cargo space for the kitchen','The expedition gave up some provisions and carried the kitchen’s collection with its own.'],
+      ['direct','Protect the paid window','The trader kept the promised slot. The kitchen arranged a separate collection.'],
+      ['open','Let both groups revise the roster','The kitchen and trader changed the order together and passed the next slot back to your crew.']
+    ]},
+    mombasaSlot:{title:'A berth and a bench',prompt:'At the fictional Mombasa handover, a repair crew can mend a trolley today. The growers who need it have been given a different quay time.',options:[
+      ['relay','Connect the growers and repairer','The two groups aligned their handovers by phone. Your watch stayed on duty to pass the changes along.'],
+      ['consult','Bring both groups to the loading plan','One agreed schedule showed when the repaired trolley and the growers’ crates would meet.'],
+      ['repair','Join the repair shift','The crew spent another day learning the repair and handed over a working trolley.']
+    ]},
+    valparaisoHill:{title:'The last uphill load',prompt:'In Valparaíso’s hillside setting, reaching the waterfront depot is a short trip for the traders and a long climb home for several residents.',options:[
+      ['direct','Keep the waterfront handover','The shipment met its booked window. Residents took on the last uphill leg.'],
+      ['share','Carry a share of the uphill load','The expedition set aside part of its stores to help deliver beyond the waterfront.'],
+      ['open','Wait for a hillside collection','Residents arranged a shared uphill collection. Your departure moved to the next day.']
+    ]},
+    rotterdamHours:{title:'The price of a quiet quay',prompt:'In the Rotterdam scenario, the first loading slot falls before dawn. Workshop orders are waiting, and people live beside the loading area.',options:[
+      ['direct','Take the first slot','The workshop got its parts early. Residents heard the handover before dawn.'],
+      ['consult','Negotiate the noisy work window','Residents and repairers agreed when the loudest jobs could start. Both received the revised schedule.'],
+      ['open','Move the load to daylight','The crew took a later slot and kept the quiet hours intact.']
+    ]},
+    suvaCargo:{title:'A hold for both directions',prompt:'In the Suva scenario, a visiting island co-op asks for return cargo space. The outward booking would fill the hold and pay the freight.',options:[
+      ['split','Hold space for the return','The visiting co-op helped decide what the return journey would carry.'],
+      ['study','Compare the costs both ways','Both crews documented who provided the vessel, storage and return cargo.'],
+      ['open','Wait for the visiting group’s vote','The visiting group chose its return priorities before the expedition left.']
+    ]},
+    reykjavikWorkshop:{title:'Who keeps the light on?',prompt:'It is winter in the Reykjavík scenario. The crew can use the harbour workshop tonight; neighbours have already planned a gathering in the same room.',options:[
+      ['direct','Use the booked workshop','The crew finished its loading checks on time. The gathering found another room.'],
+      ['consult','Agree a shared evening','The crew and neighbours worked out how to divide the room and look after the last shift.'],
+      ['rest','Give the neighbours the evening','The crew rested and returned to the workshop after the gathering.']
+    ]},
     depot:{title:'One loading bay',prompt:'A borrowed loading bay has room for one cart at a time. A second crew arrives before you have finished.',options:[
       ['direct','Keep the booked slot','You handed over on schedule. The other crew reorganised its morning.'],
       ['consult','Agree a shared timetable','The crews wrote down who would go first today and who would have priority next time.'],
@@ -89,6 +124,20 @@
       ['open','Keep the notes local for now','You left the notes with their contributors and agreed to seek permission later.']
     ]}
   };
+  const localStops={
+    'Stone Town':['zanzibarCart','At the Zanzibar waterfront, the people sharing the storeroom await your handover.'],
+    Melbourne:['melbourneVan','At the Yarra-side handover, the co-op has recorded both the trader’s and the kitchen’s requests.'],
+    Mombasa:['mombasaSlot','At the Indian Ocean handover, the growers and repair crew compare their schedules.'],
+    'Valparaíso':['valparaisoHill','Beside the Pacific waterfront, some residents must still carry the final load uphill.'],
+    Rotterdam:['rotterdamHours','At the delta workshop, residents and repairers are both represented.'],
+    Suva:['suvaCargo','At the Viti Levu handover, the visiting co-op is also planning its return load.'],
+    'Reykjavík':['reykjavikWorkshop','At the North Atlantic harbour, the shared workshop hosts the handover.']
+  };
+  function localStop(place) {
+    if(place.water)return null;
+    const name=window.EarthNavigation?.scenario(place)?.place;
+    return Object.hasOwn(localStops,name)?localStops[name]:null;
+  }
   const max={supplies:16,readiness:6,goodwill:12,knowledge:12};
   const labels={supplies:'provisions',readiness:'readiness',goodwill:'goodwill',knowledge:'observations',days:'route days'};
   const radians=Math.PI/180;
@@ -142,7 +191,7 @@
     const {origin,target,style,legs}=p;
     const mid=position(origin,target,.5),polar=Math.max(Math.abs(origin.lat),Math.abs(mid.lat),Math.abs(target.lat))>=60;
     const sea=origin.water||target.water;
-    const first=origin.water?'water':origin.region&&target.region&&origin.region!==target.region?'highland':'depot';
+    const first=localStop(origin)?.[0] || (origin.water?'water':origin.region&&target.region&&origin.region!==target.region?'highland':'depot');
     const interior=[];
     if(Math.abs(origin.lon-target.lon)>180) interior.push('dates');
     if(polar) interior.push('polar');
@@ -158,13 +207,15 @@
     const p=preview(source,destination,style);
     if(!p.ok)return p;
     const voyage={version:1,origin:p.origin,target:p.target,style:p.style,distance:p.distance,legs:p.legs,leg:0,targetDays:p.targetDays,
-      itinerary:itinerary(p),cost:p.cost,days:0,supplies:p.legs+1+(style==='mutual-aid'?2:0),readiness:3,goodwill:0,knowledge:0,
+      itinerary:itinerary(p),arrivalNote:localStop(p.target)?.[1] || '',cost:p.cost,days:0,supplies:p.legs+1+(style==='mutual-aid'?2:0),readiness:3,goodwill:0,knowledge:0,
       position:position(p.origin,p.target,0),log:[]};
     return {ok:true,message:p.label+' expedition commissioned from '+p.origin.name+' to '+p.target.name+'.',cost:{...p.cost},voyage};
   }
   function scene(v) {
     const s=v && Number.isInteger(v.leg)&&v.leg>=0&&v.leg<v.legs && Array.isArray(v.itinerary) && scenes[v.itinerary[v.leg]];
-    return s?{title:s.title,prompt:s.prompt,number:v.leg+1,total:v.legs}:null;
+    if(!s)return null;
+    const prefix=v.leg+1===v.legs && v.arrivalNote?v.arrivalNote+' ':'';
+    return {title:s.title,prompt:prefix+s.prompt,number:v.leg+1,total:v.legs};
   }
   function choices(v) {
     if(!scene(v)) return [];
@@ -224,5 +275,43 @@
     return {ok:true,message:'Arrived at '+v.target.name+'. '+report.headline+'. '+goods+' for '+v.origin.name+'.',voyage:next,complete:true,reward:report.reward,report};
   }
   const styles=Object.freeze(Object.entries(briefs).map(([id,b])=>Object.freeze({id,label:b.label,description:b.description})));
-  window.EarthVoyages=Object.freeze({preview,start,step,scene,choices,styles,position});
+  function whole(n,min,max) {return Number.isSafeInteger(n) && n>=min && n<=max;}
+  function shortText(value,limit) {return typeof value==='string' && value.length<=limit;}
+  function savedPoint(p) {
+    return !!point(p) && shortText(p.name,72) && shortText(p.region,72) && typeof p.water==='boolean'
+      && (p.id===null || typeof p.id==='string' && p.id.length<=120 || Number.isSafeInteger(p.id));
+  }
+  function savedLog(log,n,days) {
+    if(!Array.isArray(log) || log.length!==n)return false;
+    let prior=0;
+    for(const [i,line] of log.entries()){
+      if(!line || line.leg!==i+1 || !shortText(line.title,140) || !shortText(line.choice,200) || !shortText(line.text,480)
+          || !whole(line.days,prior+1,prior+2))return false;
+      prior=line.days;
+    }
+    return prior===days;
+  }
+  function routeFacts(x) {
+    if(!x || !savedPoint(x.origin) || !savedPoint(x.target) || !Object.hasOwn(briefs,x.style))return false;
+    const p=preview(x.origin,x.target,x.style);
+    return p.ok && x.distance===p.distance && x.legs===p.legs && x.targetDays===p.targetDays &&
+      whole(x.days,0,2*x.legs) && whole(x.supplies,0,max.supplies) && whole(x.readiness,0,max.readiness)
+      && whole(x.goodwill,0,max.goodwill) && whole(x.knowledge,0,max.knowledge) && !!point(x.position);
+  }
+  function valid(v) {
+    if(!routeFacts(v) || v.version!==1 || !whole(v.leg,0,v.legs-1)
+        || !Array.isArray(v.itinerary) || v.itinerary.length!==v.legs || !v.itinerary.every(id=>Object.hasOwn(scenes,id))
+        || !savedLog(v.log,v.leg,v.days) || (v.arrivalNote!=null && !shortText(v.arrivalNote,256)))return false;
+    const p=preview(v.origin,v.target,v.style),expected=position(v.origin,v.target,v.leg/v.legs);
+    return !!v.cost && v.cost.funds===p.cost.funds && v.cost.food===p.cost.food && angle(expected,v.position)<1e-6;
+  }
+  function rewardShape(r) {
+    return !!r && typeof r==='object' && !Array.isArray(r) &&
+      Object.entries(r).every(([key,n])=>['funds','materials','food','trust'].includes(key) && whole(n,0,20));
+  }
+  function validReport(r) {
+    return routeFacts(r) && savedLog(r.log,r.legs,r.days) && rewardShape(r.reward) && rewardShape(r.targetReward)
+      && shortText(r.headline,160) && shortText(r.lesson,700) && angle(r.target,r.position)<1e-6;
+  }
+  window.EarthVoyages=Object.freeze({preview,start,step,scene,choices,styles,position,valid,validReport});
 })();

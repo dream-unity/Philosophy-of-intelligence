@@ -24,6 +24,20 @@
   ];
   let assetsPromise;
   let geo;
+  let regionLibrary;
+  function loadRegions() {
+    if(window.EarthRegions)return Promise.resolve(window.EarthRegions);
+    if(regionLibrary)return regionLibrary;
+    if(!document.head)return Promise.resolve(null);
+    regionLibrary=new Promise(resolve=>{
+      const script=document.createElement('script');
+      script.src=new URL('regions.js',BASE).href;
+      script.onload=()=>resolve(window.EarthRegions||null);
+      script.onerror=()=>resolve(null);
+      document.head.appendChild(script);
+    });
+    return regionLibrary;
+  }
   const loadImage = name => new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -69,6 +83,12 @@
   function locate(lat,lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || !geo) return null;
     lat=clamp(lat,-90,90); lon=wrap(lon);
+    // A named point is more precise than the chart's global classification pixel.
+    // Exact-coordinate lookup keeps the adjacent harbour and shoreline independent.
+    const anchor=window.EarthNavigation?.anchorAt?.(lat,lon);
+    if(anchor) return {...anchor,lat,lon};
+    const refined=window.EarthRegions?.lookup(lat,lon);
+    if(refined)return {lat,lon,water:refined.water,name:refined.name||seaName(lat,lon)};
     const x=clamp(Math.floor((lon+180)/360*geo.width),0,geo.width-1);
     const y=clamp(Math.floor((90-lat)/180*geo.height),0,geo.height-1);
     const id=geo.ids[y*geo.width+x], land=id>0 && id<COUNTRY_NAMES.length, lake=id-COUNTRY_NAMES.length;
@@ -188,9 +208,17 @@
       const noise=n=>{const s=Math.sin(n*12.9898+53.35)*43758.545;return s-Math.floor(s);};
       return [noise(i*3),noise(i*3+1),noise(i*3+2)];
     });
-    let w=0,h=0,r=0, sites=[], routes=[], selection=null,hover=null;
+    let w=0,h=0,r=0, sites=[], beacons=[], routes=[], selection=null,hover=null;
     let frame=0, dead=false, renderer=null, cpu=false, failure=false, gesture=null;
     let dragging=false, start=null, pinched=false, lastTap=null, keyboard=false;
+    let regional=null,regionalRequested=false;
+    function regionalDetail(){
+      if(!regionalRequested && !dead){
+        regionalRequested=true;
+        loadRegions().then(library=>{if(library&&!dead){regional=library.mount(BASE,queue);queue();}});
+      }
+      return regional;
+    }
     const previousTouch=canvas.style.touchAction;
     canvas.style.touchAction='none';
     if(!canvas.hasAttribute('tabindex'))canvas.tabIndex=0;
@@ -267,6 +295,7 @@
       changed();
     }
     function setSites(next) {sites=(Array.isArray(next)?next:[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));queue();}
+    function setBeacons(next){beacons=(Array.isArray(next)?next:[]).filter(p=>p.kind==='partner'&&Number.isFinite(p.lat)&&Number.isFinite(p.lon));queue();}
     function setRoutes(next){routes=(Array.isArray(next)?next:[]).filter(p=>p?.from&&p?.to);queue();}
     function setSelection(next){selection=next&&Number.isFinite(next.lat)&&Number.isFinite(next.lon)?next:null;queue();}
     function line(path,color,width=1,dashes=[]) {
@@ -407,18 +436,33 @@
     function drawMarkers(){
       markers.length=0;
       const occupied=[];
-      const all=sites.map(s=>({...s,selected:selection&&Math.abs(s.lat-selection.lat)<.015&&Math.abs(wrap(s.lon-selection.lon))<.015}));
-      if(selection && !all.some(s=>s.selected))all.push({...selection,selected:true});
+      const all=[...beacons,...sites].map(s=>({...s,selected:selection && (s.id && selection.id ? s.id===selection.id :
+        s.kind!=='partner' && selection.kind!=='partner' && Math.abs(s.lat-selection.lat)<.015 && Math.abs(wrap(s.lon-selection.lon))<.015)}));
+      if(selection && selection.kind!=='partner' && !all.some(s=>s.selected))all.push({...selection,selected:true});
       // Draw the selected point last so that it stays legible around busy ports.
       all.sort((a,b)=>Number(!!a.selected)-Number(!!b.selected));
       for(const s of all){
         const p=project(s.lat,s.lon);
         if(p.z<.025 || p.x< -12 || p.y< -12 || p.x>w+12 || p.y>h+12)continue;
         const active=s.selected||s.active;
-        arc(p.x,p.y,active?8:5.3);
-        ctx.fillStyle=active?'rgba(246,184,85,.28)':'rgba(16,39,43,.78)';ctx.fill();
-        ctx.strokeStyle=active?'#edb960':'rgba(238,224,176,.85)';ctx.lineWidth=1.1;ctx.stroke();
-        arc(p.x,p.y,active?3.6:2.1);ctx.fillStyle=active?'#ffe4a6':'#f0dba9';ctx.fill();
+        if(s.kind==='partner'){
+          const nearHome=sites.some(home=>{
+            const h=project(home.lat,home.lon);return h.z>0&&Math.hypot(h.x-p.x,h.y-p.y)<16;
+          });
+          if(nearHome){
+            ctx.beginPath();ctx.moveTo(p.x,p.y);p.x+=14;p.y-=13;ctx.lineTo(p.x,p.y);
+            ctx.strokeStyle='#72c8cb';ctx.lineWidth=.8;ctx.stroke();
+          }
+          const size=active?8:6;
+          ctx.beginPath();ctx.moveTo(p.x,p.y-size);ctx.lineTo(p.x+size,p.y);ctx.lineTo(p.x,p.y+size);ctx.lineTo(p.x-size,p.y);ctx.closePath();
+          ctx.fillStyle='#0f343b';ctx.fill();ctx.strokeStyle=active?'#f2c575':'#8cd7d2';ctx.lineWidth=active?2:1.5;ctx.stroke();
+          arc(p.x,p.y,2);ctx.fillStyle='#b5ede1';ctx.fill();
+        } else {
+          arc(p.x,p.y,active?8:5.3);
+          ctx.fillStyle=active?'rgba(246,184,85,.28)':'rgba(16,39,43,.78)';ctx.fill();
+          ctx.strokeStyle=active?'#edb960':'rgba(238,224,176,.85)';ctx.lineWidth=1.1;ctx.stroke();
+          arc(p.x,p.y,active?3.6:2.1);ctx.fillStyle=active?'#ffe4a6':'#f0dba9';ctx.fill();
+        }
         markers.push({...p,site:s});occupied.push({x:p.x,y:p.y,w:13,h:13});
         if(s.selected || s.active || hover?.id && hover.id===s.id){
           const n=String(s.name||s.label||'').trim();if(!n)continue;
@@ -431,7 +475,39 @@
           occupied.push({x:x+size/2,y,w:size,h:19});
         }
       }
+      if(view.zoom>=4.5)regional?.labels(ctx,project,view,w,h,r,occupied);
       labels(occupied);
+    }
+    function scaleInfo() {
+      if(!w||!h)return null;
+      const maxPx=Math.min(w<430?72:100,w*.25),x2=w-15,y=26;
+      // Measure the great-circle separation at the bar's actual location.
+      // At world scale the bar can lie outside the sphere; it then explicitly
+      // describes the local scale at the central meridian and latitude.
+      const atCentre= !inverse(x2,y) || !inverse(x2-maxPx,y);
+      const endpoints=px=>atCentre ? [inverse(w/2-px/2,h/2),inverse(w/2+px/2,h/2)] : [inverse(x2-px,y),inverse(x2,y)];
+      const distance=px=>{
+        const [a,b]=endpoints(px);if(!a||!b)return 0;
+        const u=Math.sin((a.lat-b.lat)*RAD/2),v=Math.sin(wrap(a.lon-b.lon)*RAD/2);
+        return 12742*Math.asin(Math.sqrt(clamp(u*u+Math.cos(a.lat*RAD)*Math.cos(b.lat*RAD)*v*v,0,1)));
+      };
+      const maximum=distance(maxPx);if(!maximum)return null;
+      const power=10**Math.floor(Math.log10(maximum));
+      const km=(maximum/power>=5?5:maximum/power>=2?2:1)*power;
+      let lower=0,upper=maxPx;
+      for(let i=0;i<14;i++){const mid=(lower+upper)/2;if(distance(mid)<km)lower=mid;else upper=mid;}
+      const pixels=(lower+upper)/2;
+      return {km,pixels,x:x2-pixels,y,atCentre,latitude:(endpoints(pixels)[0].lat+endpoints(pixels)[1].lat)/2};
+    }
+    function drawScale() {
+      const bar=scaleInfo();if(!bar)return;
+      const text=(bar.km>=1?bar.km.toLocaleString()+' km':Math.round(bar.km*1000)+' m')+(bar.atCentre?' at centre':'');
+      ctx.save();ctx.font='500 10px system-ui';ctx.textAlign='right';ctx.textBaseline='middle';
+      const finish=bar.x+bar.pixels,panel=Math.max(bar.pixels,ctx.measureText(text).width)+13;
+      ctx.fillStyle='rgba(6,24,30,.79)';ctx.fillRect(finish-panel+6,bar.y-15,panel,25);
+      ctx.fillStyle='#d6e5d6';ctx.fillText(text,finish,bar.y-7);
+      ctx.beginPath();ctx.moveTo(bar.x,bar.y);ctx.lineTo(bar.x,bar.y+4);ctx.lineTo(finish,bar.y+4);ctx.lineTo(finish,bar.y);
+      ctx.lineWidth=1.3;ctx.strokeStyle='#cee2d4';ctx.stroke();ctx.restore();
     }
     function draw() {
       if(!w||!h)return;r=radius();
@@ -440,7 +516,9 @@
         if(!renderer.draw(ctx,w,h,r,view,dragging||pointers.size>1) && !cpu){
           renderer.destroy();renderer=softwareRenderer(geo.chart);cpu=true;renderer.draw(ctx,w,h,r,view,dragging);
         }
-        ctx.save();arc(w/2,h/2,r);ctx.clip();graticule();
+        ctx.save();arc(w/2,h/2,r);ctx.clip();
+        if(view.zoom>=4.5)regionalDetail()?.draw(ctx,view,w,h,r);
+        graticule();
         for(const route of routes)line(sphereRoute(route.from,route.to),route.preview?'#dfc69b':'#f0bd6a',route.preview?1:1.5,route.preview?[3,5]:[5,3]);
         if(voyage)line(sphereRoute(voyage.from,voyage.to),'#f4c675',1.5,[4,4]);
         ctx.restore();
@@ -462,6 +540,7 @@
         graticule();ctx.textAlign='center';ctx.font='14px system-ui';ctx.fillStyle='#d4ddce';
         ctx.fillText(failure?'Map unavailable. Reload to retry.':'Opening Earth atlas…',w/2,h/2);
       }
+      if(renderer)drawScale();
       if(keyboard){
         ctx.strokeStyle='#ffe2a0';ctx.lineWidth=1;ctx.beginPath();
         ctx.moveTo(w/2-8,h/2);ctx.lineTo(w/2-3,h/2);ctx.moveTo(w/2+3,h/2);ctx.lineTo(w/2+8,h/2);
@@ -481,9 +560,11 @@
       return found;
     }
     function choose(p,limit=10) {
-      const site=markerAt(p,limit),location=site||inverse(p.x,p.y);
+      const marker=markerAt(p,limit),city=!marker && view.zoom>=4.5 ? regional?.hit(p) : null;
+      const site=marker||city,location=site||inverse(p.x,p.y);
       if(!location||!geo)return null;
       const point={...locate(location.lat,location.lon),...site};
+      if(city)focus(city.lat,city.lon,view.zoom);
       setSelection(point);options.onSelect?.(point);
       return point;
     }
@@ -510,7 +591,7 @@
       const p=local(e),before=pointers.get(e.pointerId);
       if(!before){
         if(e.pointerType==='mouse'){
-          const next=markerAt(p,10);
+          const next=markerAt(p,10)||(view.zoom>=4.5&&regional?.hit(p));
           if(hover?.id!==next?.id){hover=next;queue();}
           canvas.style.cursor=next?'pointer':inverse(p.x,p.y)?'grab':'default';
         }
@@ -572,8 +653,8 @@
       queue();options.onReady?.();
     }).catch(err=>{failure=true;queue();options.onError?.(err);});
     resize();
-    return {focus,zoomBy,setSites,setRoutes,setSelection,journey,stopJourney,resize,ready,locate,getView:()=>({...view}),
-      destroy(){dead=true;stopJourney();cancelAnimationFrame(frame);observer?.disconnect();events.forEach(off=>off());renderer?.destroy();canvas.style.touchAction=previousTouch;}
+    return {focus,zoomBy,setSites,setBeacons,setRoutes,setSelection,journey,stopJourney,resize,ready,locate,getScale:scaleInfo,getView:()=>({...view}),
+      destroy(){dead=true;stopJourney();cancelAnimationFrame(frame);observer?.disconnect();events.forEach(off=>off());regional?.destroy();renderer?.destroy();canvas.style.touchAction=previousTouch;}
     };
   }
   window.EarthAtlas={mount,locate,ready:assets};

@@ -1,0 +1,15 @@
+#planning-details{background:var(--panel,#12252a);border:1px solid #31464a;border-radius:4px;margin-top:12px;padding:0 18px;color:#eee8d7}
+#planning-details>summary{width:100%;padding:15px 0;cursor:pointer;font-weight:650}
+#planning-table{padding:0 0 18px;max-width:1100px;margin-inline:auto}
+#planning-table label{display:grid;gap:.4rem;font-size:.8rem;color:#c4d4cf;font-weight:600}
+#planning-table select{display:block;width:100%;min-width:0;max-width:100%;padding:.5rem;background:#112328;color:#f4eddb;border:1px solid #58706d;border-radius:3px;font:inherit}
+#planning-table>label{width:min(20rem,100%)}
+.plan-intro{font-size:.93rem;line-height:1.55;margin:0 0 .8rem;color:#d4dfd7}
+.plan-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
+.plan-branch{min-width:0;border:1px solid #3d5657;border-radius:3px;margin:0;padding:12px;display:grid;align-content:start;gap:10px}
+.plan-branch legend{color:#e8bd77;padding:0 5px}
+.plan-table{margin:18px 0 10px;border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:.85rem}
+.plan-table caption{text-align:left;font-weight:700;margin:0 0 6px}.plan-table :is(td,th){padding:6px;border-bottom:1px solid #33494c;text-align:right}
+.plan-table th:first-child{text-align:left}.plan-table tbody th{font-weight:400}.plan-table .plan-difference td:nth-child(n+3){color:#f1c786;font-weight:700}
+.rehearsal-log{padding:.45rem 0;font-size:.85rem}.rehearsal-log summary{color:#b6dad1;cursor:pointer}.rehearsal-log li{line-height:1.45;margin-top:.35rem}
+@media(max-width:640px){.plan-controls{grid-template-columns:1fr}#planning-details{padding:0 12px}.plan-table :is(td,th){padding:5px 3px}.plan-branch{padding:10px}}

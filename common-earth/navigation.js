@@ -7223,7 +7223,8 @@
   ["Mbeya","TZ",-8.89,33.43,10,"",1418],
   ["Windhoek","NA",-22.57,17.0835,12,"",1112],
   ["Grootfontein","NA",-19.5666,18.1166,7,"",1713],
-  ["Zanzibar","TZ",-6.16,39.2,10,"",2486],
+  ["Zanzibar","TZ",-6.16,39.2,10,"Zanzibar City|Mjini",2486],
+  ["Stone Town","TZ",-6.1622,39.1922,10,"Mji Mkongwe|Stone Town of Zanzibar",2486],
   ["Valencia","ES",39.487,-0.402,11,"",530],
   ["Palana","RU",59.084,159.95,4,"",1035],
   ["Petropavlovsk-Kamchatsky","RU",53.062,158.623,9,"Petropavlovsk Kamchatskiy",1035],
@@ -7764,6 +7765,11 @@
   const row=cities.find(c=>c[0]===pin.name && c[1]===pin.code);
   return {...pin,place:row && makeCity(row)};
  }).filter(pin=>pin.place);
+ const openingStories=[...starts,{
+  place:{name:'Stone Town',lat:-6.1622,lon:39.1922},title:'An address everyone can use',
+  brief:'On the waterfront of Zanzibar’s Stone Town, imagine a co-op sharing one storeroom. Traders need space for stock. Neighbours want a place to collect shared tools.',
+  question:'Who should hold a key, and who should decide when the arrangement changes?'
+ }];
  let indexedCities=0;
  function addCities(limit) {
   const end=Math.min(limit,cities.length);
@@ -7850,12 +7856,86 @@
  function scenario(point){
   if(!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return null;
   const radians=Math.PI/180;
-  for(const pin of starts){
+  for(const pin of openingStories){
    const dLat=(point.lat-pin.place.lat)*radians, dLon=(point.lon-pin.place.lon)*radians;
    const hav=Math.sin(dLat/2)**2+Math.cos(point.lat*radians)*Math.cos(pin.place.lat*radians)*Math.sin(dLon/2)**2;
-   if(12742*Math.asin(Math.min(1,Math.sqrt(hav)))<=40) return {title:pin.title,brief:pin.brief,question:pin.question,label:'Fictional starting brief'};
+   if(12742*Math.asin(Math.min(1,Math.sqrt(hav)))<=40) return {place:pin.place.name,title:pin.title,brief:pin.brief,question:pin.question,label:'Fictional starting brief'};
   }
   return null;
  }
- window.EarthNavigation=Object.freeze({featured,search,scenario});
+ // Many places sit on tiny islands or narrow channels. This index recognises
+ // only the published pin itself; nearby ground is classified by the globe.
+ let anchors=null;
+ function anchorKey(lat,lon) {
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90) return null;
+  const latitude=Math.round(lat*1e7),span=3600000000,half=1800000000;
+  const longitude=((Math.round((lon%360)*1e7)+half)%span+span)%span-half;
+  return latitude+','+longitude;
+ }
+ function anchorPlace(entry) {
+  const {type,row}=entry;
+  if(type==='city') return makeCity(row);
+  if(type==='country') return {name:row[1],region:'Country or territory',lat:row[2],lon:row[3],water:false,kind:'region',caption:'Country or territory'};
+  return {name:row[0],region:row[3],lat:row[1],lon:row[2],water:true,kind:'water',caption:row[3]};
+ }
+ function anchorAt(lat,lon) {
+  const key=anchorKey(lat,lon);
+  if(key===null) return null;
+  if(!anchors) {
+   anchors=new Map();
+   function add(type,row,lat,lon) {
+    const indexKey=anchorKey(lat,lon),entry={type,row};
+    const prior=anchors.get(indexKey);
+    if(prior && (prior.type==='water')!==(type==='water')) {
+     // Explicit water pins win only at the exact shared anchor.
+     const chosen=type==='water'?entry:prior;
+     chosen.conflict=[anchorPlace(prior).name,anchorPlace(entry).name];
+     anchors.set(indexKey,chosen);
+    } else anchors.set(indexKey,entry);
+   }
+   for(const row of countries) add('country',row,row[2],row[3]);
+   for(const row of cities) add('city',row,row[2],row[3]);
+   for(const row of waters) add('water',row,row[1],row[2]);
+  }
+  const entry=anchors.get(key);
+  if(!entry) return null;
+  const result=anchorPlace(entry);
+  if(entry.conflict) result.conflict=entry.conflict.slice();
+  return result;
+ }
+ let latitudeBands=null;
+ let recentRegion=null;
+ function nearbyCities(lat,lon,reach,limit=48) {
+  if(!Number.isFinite(lat)||Math.abs(lat)>90||!Number.isFinite(lon)||!Number.isFinite(reach)||reach<0)return [];
+  const count=Number.isFinite(limit)?Math.max(0,Math.min(80,Math.floor(limit))):48;
+  if(!count)return [];
+  const radius=Math.min(180,reach),longitude=((lon%360)+540)%360-180;
+  const key=[lat,longitude,radius,count].join(',');
+  if(recentRegion?.key===key)return recentRegion.items.map(p=>({...p}));
+  const band=latitude=>Math.min(44,Math.max(0,Math.floor((latitude+90)/4)));
+  if(!latitudeBands) {
+   latitudeBands=Array.from({length:45},()=>[]);
+   for(let i=0;i<cities.length;i++) latitudeBands[band(cities[i][2])].push(i);
+  }
+  const radians=Math.PI/180,cosLat=Math.cos(lat*radians),maxHav=Math.sin(radius*radians/2)**2,found=[];
+  for(let i=band(lat-radius);i<=band(lat+radius);i++){
+   for(const idx of latitudeBands[i]){
+    const row=cities[idx],d=row[2]-lat;
+    if(Math.abs(d)>radius)continue;
+    const h=Math.sin(d*radians/2)**2+cosLat*Math.cos(row[2]*radians)*Math.sin((row[3]-longitude)*radians/2)**2;
+    if(h<=maxHav+1e-15)found.push({idx,h,rank:row[4]});
+   }
+  }
+  found.sort((a,b)=>b.rank-a.rank||a.h-b.h||a.idx-b.idx);
+  const items=[],seen=new Set();
+  for(const hit of found) {
+   const row=cities[hit.idx],id=anchorKey(row[2],row[3]);
+   if(seen.has(id))continue;
+   seen.add(id);items.push({...makeCity(row),importance:hit.rank,distanceDegrees:2*Math.asin(Math.sqrt(Math.min(1,hit.h)))/radians});
+   if(items.length===count)break;
+  }
+  recentRegion={key,items};
+  return items.map(p=>({...p}));
+ }
+ window.EarthNavigation=Object.freeze({featured,search,scenario,anchorAt,nearbyCities});
 })();

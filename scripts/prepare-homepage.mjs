@@ -8,6 +8,15 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const { STAGES } = require('../src/shape-practice.js');
 
+// Keep a cached page paired with the versions of its scripts and styles it uses.
+function versionAssets(html, directory) {
+  return html.replace(/(<(?:link|script|img)\b[^>]*\b(?:href|src)=")([^"?#]+\.(?:css|js|svg|webp))(?:\?[^"#]*)?("[^>]*>)/g,
+    (_, open, asset, close) => {
+      const version = createHash('sha256').update(readFileSync(resolve(directory, asset))).digest('hex').slice(0, 12);
+      return `${open}${asset}?v=${version}${close}`;
+    });
+}
+
 export function prepareHomepage() {
   // Each shape is already drawn and linked while the practice software loads.
   delete require.cache[require.resolve('../src/geometry.js')];
@@ -21,14 +30,11 @@ export function prepareHomepage() {
   if (!gallery.test(html)) throw new Error('The homepage shape gallery is missing.');
   html = html.replace(gallery, (_, open, close) => `${open}\n${cards}\n        ${close}`);
 
-  // Changed files get new request URLs, avoiding old icons/JS/CSS paired with new
-  // markup after deployment. Unchanged files keep their cached versions.
-  html = html.replace(/(<(?:link|script|img)\b[^>]*\b(?:href|src)=")([^"?#]+\.(?:css|js|svg|webp))(?:\?[^"#]*)?("[^>]*>)/g,
-    (_, open, asset, close) => {
-      const version = createHash('sha256').update(readFileSync(resolve(root, asset))).digest('hex').slice(0, 12);
-      return `${open}${asset}?v=${version}${close}`;
-    });
-  writeFileSync(path, html);
+  writeFileSync(path, versionAssets(html, root));
+
+  const gameDirectory = resolve(root, 'common-earth');
+  const gameEntry = resolve(gameDirectory, 'index.html');
+  writeFileSync(gameEntry, versionAssets(readFileSync(gameEntry, 'utf8'), gameDirectory));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
