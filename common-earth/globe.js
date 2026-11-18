@@ -54,12 +54,23 @@
     });
     return regionLibrary;
   }
-  const loadImage = name => new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Could not load '+name));
-    img.src = assetURL(name).href;
-  });
+  function loadImage(name) {
+    function request(url) {
+      return new Promise((resolve,reject)=>{
+        const img=new Image();
+        img.onload=()=>resolve(img);
+        img.onerror=()=>reject(new Error('Could not load '+name));
+        img.src=url.href;
+      });
+    }
+    return request(assetURL(name)).catch(error=>{
+      // Recover a transient image/decode failure using the same deployed file.
+      // A fresh image element also retries an unversioned local installation.
+      const bare=new URL(name,BASE);
+      if(bare.origin!==new URL(document.baseURI || source.href).origin)throw error;
+      return request(bare);
+    });
+  }
   function canvasPixels(img) {
     const bitmap = document.createElement('canvas');
     bitmap.width = img.width;
