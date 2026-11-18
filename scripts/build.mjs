@@ -69,6 +69,10 @@ export function buildOfflineHtml(source, { fromDirectory = projectRoot, rootDire
       });
     }
     const attrs = attributes(tag);
+    // A separately hosted game is reachable from a downloaded copy of the practice manual.
+    if (/^<a\b/i.test(tag) && attrs['data-offline-href']) {
+      return replaceAttribute(tag, 'href', attrs['data-offline-href']);
+    }
     const relations = (attrs.rel || '').toLowerCase().split(/\s+/);
     if (/^<link\b/i.test(tag) && relations.includes('stylesheet')) {
       const cssPath = localAsset(attrs.href, fromDirectory, rootDirectory);

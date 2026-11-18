@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b191e">
+  <meta name="description" content="Explore Earth, found a community and shape its future, from street encounters to ocean routes. A strategy game by Philosophy of Intelligence.">
+  <title>Common Earth · Philosophy of Intelligence</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="neighbours.js" defer></script>
+  <script src="voyages.js" defer></script>
+  <script src="simulation.js" defer></script>
+  <script src="globe.js" defer></script>
+  <script src="street.js" defer></script>
+  <script src="navigation.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#play">Skip to game</a>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-earth" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4.2" ry="9"/><path d="M3 12h18M5.2 6.3c3.8 2 9.8 2 13.6 0M5.2 17.7c3.8-2 9.8-2 13.6 0"/></symbol>
+    <symbol id="i-street" viewBox="0 0 24 24"><path d="m2 12 8-5 5 3 7-4M2 16l8-5 5 3 7-4M4 11V6l5-3 4 2v4M15 18v-4l4-2v4M2 20l8-5 5 3 7-4"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M18.5 9c0 5-6.5 12-6.5 12s-6.5-7-6.5-12a6.5 6.5 0 1 1 13 0Z"/><circle cx="12" cy="9" r="2.1"/></symbol>
+    <symbol id="i-journal" viewBox="0 0 24 24"><path d="M5 4h14v16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM7 4v16M10.5 9h5M10.5 12.5h4"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M15 5a3.3 3.3 0 0 1 0 6M17 14a5 5 0 0 1 4 5"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.8 2.2c-1.3.7-1.3 1.4-1.3 2.2M12 16.5h.01"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h3"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H5m6 6-6-6 6-6"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.8"/><circle cx="12" cy="12" r="1.5"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14m-7-7v14"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-scope" viewBox="0 0 24 24"><path d="m2 16 5-8 4 5 3-3 8 10H2ZM16 5h.01"/><circle cx="16" cy="5" r="1.5"/></symbol>
+    <symbol id="i-explore" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m16.5 7.5-3 6-6 3 3-6Z"/></symbol>
+    <symbol id="i-house" viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M5 10v11h14V10M10 21v-6h4v6"/></symbol>
+    <symbol id="i-grain" viewBox="0 0 24 24"><path d="M5 21 18 8m-4 4c-5 1-7-2-7-6 4 0 7 2 7 6Zm-4 4c-5 1-7-2-7-6 4 0 7 2 7 6Zm4-4c-1-5 2-8 7-9 1 5-2 8-7 9Zm-4 4c3-4 8-4 11-2-3 4-7 5-11 2Z"/></symbol>
+    <symbol id="i-council" viewBox="0 0 24 24"><path d="m2 8 10-5 10 5H2Zm2 12h16M6 10v7m4-7v7m4-7v7m4-7v7"/></symbol>
+    <symbol id="i-tech" viewBox="0 0 24 24"><path d="M8 3h8m-2 0v6l5.8 9.5A1.6 1.6 0 0 1 18.5 21h-13a1.6 1.6 0 0 1-1.4-2.5L10 9V3m-3 13h10"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="5" cy="17" r="2.2"/><circle cx="19" cy="6" r="2.2"/><path d="M7.2 17h6.3a3 3 0 0 0 0-6H10a2.5 2.5 0 0 1 0-5h6.8"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l3.5 2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="m15.5 15.5 5 5"/></symbol>
+    <symbol id="i-tilt" viewBox="0 0 24 24"><path d="m7 15 5-5 5 5"/></symbol>
+    <symbol id="i-mark" viewBox="0 0 48 48"><path d="M2 24h44M24 2v44" stroke="currentColor" stroke-width=".85"/><circle cx="24" cy="24" r="18.5"/><circle cx="24" cy="24" r="14.2" stroke-width=".7"/><path d="M5.5 24c5.5-1 10.2-5.7 13.9-12.6 2.36 5.7 5.4 9.5 8.7 11.6l4-5.9c3.5 5.6 6.3 8.5 10.3 9.7M6.5 30.3c8.8 1.7 13.8-5.3 20.2-1.3 5 3 9.8.6 14.1-.5"/><circle cx="31" cy="13.7" r="2" fill="currentColor" stroke="none"/></symbol>
+  </svg>
+
+  <header class="masthead">
+    <div class="brand"><svg aria-hidden="true" class="brand-mark"><use href="#i-mark"/></svg><div><h1>Common Earth</h1><a href="../" class="parent-link">Philosophy of Intelligence</a></div></div>
+    <nav class="view-nav" aria-label="Game view">
+      <button id="world-view" type="button" aria-pressed="true" aria-controls="atlas-stage"><svg aria-hidden="true"><use href="#i-earth"/></svg> <span>World atlas</span></button>
+      <button id="street-view" type="button" aria-pressed="false" aria-controls="street-stage" disabled><svg aria-hidden="true"><use href="#i-street"/></svg> <span>Street view</span></button>
+    </nav>
+    <nav class="tools-nav" aria-label="Game records and help">
+      <button type="button" id="society-open" popovertarget="society-dialog" title="Communities" aria-label="Communities"><svg aria-hidden="true"><use href="#i-people"/></svg><span>Communities</span></button>
+      <button type="button" id="journal-open" popovertarget="journal-dialog" title="Chronicle" aria-label="Chronicle"><svg aria-hidden="true"><use href="#i-journal"/></svg><span>Chronicle</span></button>
+      <button type="button" id="help-open" popovertarget="help-dialog" title="How to play" aria-label="How to play"><svg aria-hidden="true"><use href="#i-help"/></svg></button>
+    </nav>
+  </header>
+
+  <main id="play" tabindex="-1">
+    <div class="workspace">
+      <section class="map-frame" aria-label="Interactive map">
+        <div id="atlas-stage" class="stage atlas-stage">
+          <canvas id="globe-canvas" tabindex="0" aria-label="Earth globe. Drag to rotate, tap to select a point, or use Explore places to enter a location.">Use Explore places to pick a location on Earth.</canvas>
+          <div class="stage-title"><div class="kicker"><span class="status-dot"></span>Earth / Surface</div><h2>World atlas</h2></div>
+          <div class="atlas-tools" aria-label="Globe controls"><button type="button" class="icon-button" id="zoom-in" aria-label="Zoom in" title="Zoom in"><svg aria-hidden="true"><use href="#i-plus"/></svg></button><button type="button" class="icon-button" id="zoom-out" aria-label="Zoom out" title="Zoom out"><svg aria-hidden="true"><use href="#i-minus"/></svg></button><button type="button" class="icon-button" id="recenter" aria-label="Centre on selection" title="Centre on selection"><svg aria-hidden="true"><use href="#i-target"/></svg></button></div>
+          <div class="map-bottom"><button type="button" id="places-open" class="map-places" popovertarget="places-dialog"><svg aria-hidden="true"><use href="#i-explore"/></svg>Explore places</button><span class="map-hint"><span class="desktop-hint">Drag to orbit · Scroll to zoom</span><span class="touch-hint">Drag to orbit · Pinch to zoom</span></span></div>
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        </div>
+        <div id="street-stage" class="stage street-stage" hidden>
+          <canvas id="street-canvas" tabindex="0" aria-label="Your neighbourhood. Walk or drive with the arrow keys, or tap a reachable street. Use the buttons below to interact.">Use the street controls and community panel to explore.</canvas>
+          <div class="street-stage-heading"><div class="kicker"><span class="status-dot"></span>Local district</div><h2 id="street-title">Street view</h2></div>
+          <a id="street-open-actions" href="#actions-heading">Community actions <span aria-hidden="true">↘</span></a>
+        </div>
+        <div id="street-controls" class="street-controls" hidden>
+          <div class="street-control-intro"><p class="kicker">On the ground</p><p id="street-hint">Walk toward a neighbour or the market to interact.</p></div>
+          <div class="move-pad" role="group" aria-label="Move"><button type="button" data-move="up" aria-label="Move up">↑</button><button type="button" data-move="left" aria-label="Move left">←</button><button type="button" data-move="down" aria-label="Move down">↓</button><button type="button" data-move="right" aria-label="Move right">→</button></div>
+          <div class="street-buttons"><button type="button" class="secondary" id="street-interact">Interact</button><button type="button" class="secondary" id="street-vehicle">Use vehicle</button><button type="button" class="secondary" id="cancel-placement" hidden>Cancel placement</button></div>
+        </div>
+      </section>
+
+      <aside class="inspector" aria-label="Game controls">
+        <section id="site-inspector" class="inspection-panel" aria-labelledby="place-name">
+          <div class="inspector-top"><span class="kicker"><svg aria-hidden="true"><use href="#i-target"/></svg> Site survey</span><span class="locating" aria-hidden="true"><i></i><i></i><i></i></span></div>
+          <div class="site-illustration" aria-hidden="true">
+            <svg viewBox="0 0 280 92" preserveAspectRatio="xMidYMid meet" fill="none">
+              <defs><pattern id="paper-grid" width="12" height="12" patternUnits="userSpaceOnUse"><circle fill="currentColor" cx=".7" cy=".7" r=".65"/></pattern></defs>
+              <path fill="url(#paper-grid)" d="M0 0h280v92H0z" opacity=".58"/>
+              <g stroke="currentColor" opacity=".46" stroke-width=".6"><path d="M0 50q18 13 39-1t40-18q18-1 28 7t24 0q21-13 36-10t29 17q12 8 28 4t25-24q12-24 31-19M0 55q20 13 41-1t39-18q18-1 28 7t25 0q20-13 34-10t27 16q14 10 31 6t27-24q12-24 28-19M0 61q21 13 44-2t37-16q16-2 26 6t28 0q17-11 31-8t26 15q16 12 35 7t28-24q12-22 25-18M0 69q25 9 48-4t34-15q14-2 25 5t31 0q15-9 27-7t25 14q19 15 40 8t28-23q13-19 22-17M0 76q28 7 50-5t34-15q12 0 23 5t33 0q13-8 23-5t25 13q23 17 45 7t28-21q10-16 19-16"/>
+              <path d="M0 43q16 13 35 0t43-18q16-2 27 5t24 0q19-12 37-10t32 16q11 10 25 6t24-24q11-22 33-18M0 36q11 11 29 1t45-19q19-3 30 5t23 1q21-13 40-10t35 17q9 8 20 4t22-23q7-13 17-16M0 27q6 9 24 2t48-20q20-4 32 3t21 4q24-14 43-12t37 17q7 7 16 4t18-20M0 86q32 5 57-10t31-13q12 1 23 5t32-1q11-5 18-4t24 13q27 18 51 6t31-24q4-7 13-9"/></g>
+              <g transform="translate(148 44)" stroke="currentColor"><circle r="21" opacity=".32" stroke-width=".7"/><circle r="13.5" opacity=".5" stroke-width=".65" stroke-dasharray="2 2"/><path d="M-26 0h10m32 0h10M0-27v10m0 34v10" opacity=".73"/><path d="m0-8 8 8-8 8-8-8Z" fill="currentColor" stroke="none"/><circle r="2.2" fill="#14262c" stroke="none"/></g>
+            </svg>
+          </div>
+          <div class="site-info"><span id="place-type" class="site-kind">Zanzibar, Tanzania</span><h2 id="place-name">Stone Town</h2><p id="place-coords" class="coords">6.1622° S · 39.1922° E</p><p id="place-description" class="selection-copy">Start a community here, or select another point on the globe.</p></div>
+          <div id="found-area" class="found-area"><label for="found-name">Community name <span>Optional</span></label><input id="found-name" type="text" placeholder="Name your community" maxlength="48" autocomplete="off"><button id="found-button" type="button" class="primary">Found a community <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
+          <button type="button" class="primary" id="visit-button" hidden>Enter community <svg aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          <div id="voyage-console" class="voyage-console" aria-label="Voyage planning"></div>
+        </section>
+        <section id="actions-panel" class="action-panel" aria-labelledby="actions-heading" hidden>
+          <div class="inspector-top"><span class="kicker"><svg aria-hidden="true"><use href="#i-people"/></svg> Community actions</span></div>
+          <nav id="action-tabs" class="action-tabs" aria-label="Action group">
+            <button type="button" data-group="people" aria-pressed="true"><svg aria-hidden="true"><use href="#i-people"/></svg>People</button><button type="button" data-group="build" aria-pressed="false"><svg aria-hidden="true"><use href="#i-house"/></svg>Build</button><button type="button" data-group="work" aria-pressed="false"><svg aria-hidden="true"><use href="#i-grain"/></svg>Work</button><button type="button" data-group="council" aria-pressed="false"><svg aria-hidden="true"><use href="#i-council"/></svg>Council</button><button type="button" data-group="research" aria-pressed="false"><svg aria-hidden="true"><use href="#i-tech"/></svg>Research</button><button type="button" data-group="routes" aria-pressed="false"><svg aria-hidden="true"><use href="#i-route"/></svg>Routes</button>
+          </nav>
+          <div class="mobile-budget"><span id="action-budget"></span><a href="#calendar">Calendar <span aria-hidden="true">↓</span></a></div>
+          <div class="action-list-heading"><h2 id="actions-heading" tabindex="-1">People</h2></div><div id="decision-context" class="decision-context"></div><div id="action-outcome" class="action-outcome" role="status" aria-live="polite" hidden></div><div id="actions-list" class="actions-list"></div>
+        </section>
+      </aside>
+    </div>
+
+    <section id="calendar" class="time-bar" aria-label="Game time" tabindex="-1"><div class="time-week"><svg aria-hidden="true"><use href="#i-calendar"/></svg><div><span class="data-label">Calendar</span><strong id="week">Week 1</strong></div></div><div class="time-effort"><svg aria-hidden="true"><use href="#i-clock"/></svg><div><span class="data-label">Available effort</span><strong id="effort">4 / 4</strong></div></div><details class="weekly-preview"><summary>Week preview</summary><div id="week-summary" aria-label="Coming week">Found a community to see its next weekly change.</div></details><button type="button" class="advance" id="advance-week" disabled>Advance week <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></section>
+    <section id="settlement-status" class="settlement-status" aria-label="Community status" hidden><div class="resource-overview"><div class="kicker"><svg aria-hidden="true"><use href="#i-house"/></svg> Community ledger</div><div id="resource-strip" class="resource-strip"></div></div><div class="outlook"><div class="outlook-title"><span class="kicker">Outlook</span><span id="era"></span></div><h2 id="objective"></h2><p id="forecast"></p></div></section>
+    <noscript><p class="no-script">Turn on JavaScript to play Common Earth.</p></noscript>
+  </main>
+  <footer><a href="../"><svg aria-hidden="true"><use href="#i-back"/></svg> Philosophy of Intelligence</a><span>Common Earth</span></footer>
+
+  <div id="places-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="places-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-explore"/></svg> World atlas</div><h2 id="places-title">Explore places</h2></div><button id="places-close" type="button" class="icon-button" popovertarget="places-dialog" popovertargetaction="hide" aria-label="Close places"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body"><label for="place-search">Find a place</label><div class="search-wrap"><svg aria-hidden="true"><use href="#i-search"/></svg><input id="place-search" type="search" placeholder="Search countries, cities and seas" autocomplete="off"></div><div id="place-results" class="place-results"></div><h3>Starting points</h3><div id="quick-picks" class="quick-picks"></div><form id="coords-form" class="coords-form"><h3>Go to coordinates</h3><div class="coord-fields"><label>Latitude<input id="latitude" type="number" step="any" min="-90" max="90" placeholder="−90 to 90" required></label><label>Longitude<input id="longitude" type="number" step="any" min="-180" max="180" placeholder="−180 to 180" required></label></div><button type="submit" class="secondary">Locate on globe <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></form></div></div>
+  <div id="society-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="society-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-people"/></svg> Society</div><h2 id="society-title">Your communities</h2></div><button id="society-close" type="button" class="icon-button" popovertarget="society-dialog" popovertargetaction="hide" aria-label="Close communities"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body"><div id="site-list" class="site-list">Found your first community to see it here.</div><div id="route-status" class="route-status"></div></div></div>
+  <div id="journal-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="journal-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-journal"/></svg> Field journal</div><h2 id="journal-title">Chronicle</h2></div><button id="journal-close" type="button" class="icon-button" popovertarget="journal-dialog" popovertargetaction="hide" aria-label="Close chronicle"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body"><ol id="journal-list" class="journal-list"><li>Your community’s story begins when you choose a home.</li></ol></div></div>
+  <div id="help-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="help-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-explore"/></svg> Field guide</div><h2 id="help-title">How to play</h2></div><button id="help-close" type="button" class="icon-button" popovertarget="help-dialog" popovertargetaction="hide" aria-label="Close field guide"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body guide"><section><h3>Choose a home</h3><p>Drag the globe to rotate it. Tap anywhere to survey a location, or use <b>Explore places</b> to search the atlas and enter exact coordinates. Found your first community when you find its home.</p></section><section><h3>Meet your neighbours</h3><p>In Street view, walk to a neighbour, then choose <b>Interact</b>. Listen to what they need. A promise can open doors, and it gives someone a reason to count on you.</p></section><section><h3>Plan the week</h3><p>Use your limited effort to work, build or deliberate. Check the ledger before you advance the week. Research opens new possibilities, and trade routes connect the fortunes of distant communities.</p></section><section><h3>Decide what endures</h3><p>Listen to different voices in council. Who gains from a choice, who carries its cost, and what would you want the next generation to inherit? Revisit the chronicle to see how your decisions unfold.</p></section></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <script>
+    (() => {
+      const covers = Array.from(document.querySelectorAll('.sheet[popover]'));
+      const controls = Array.from(document.querySelectorAll('[popovertarget]'));
+      const background = Array.from(document.querySelectorAll('body > .skip, body > header, body > main, body > footer'));
+      const native = typeof HTMLElement.prototype.showPopover === 'function';
+      let current = null;
+      let opener = null;
+      function opened(sheet) {
+        current = sheet;
+        background.forEach(el => { el.inert = true; });
+        const entry = sheet.querySelector('input[type="search"]') || sheet.querySelector('button');
+        entry?.focus({preventScroll:true});
+      }
+      function closed(sheet) {
+        if (current !== sheet) return;
+        current = null;
+        background.forEach(el => { el.inert = false; });
+        if (opener?.isConnected && !opener.disabled && opener.offsetWidth) opener.focus({preventScroll:true});
+        opener = null;
+      }
+      controls.forEach(button => {
+        button.addEventListener('click', () => {
+          const sheet = document.getElementById(button.getAttribute('popovertarget'));
+          const hide = button.getAttribute('popovertargetaction') === 'hide';
+          if (!hide) opener = button;
+          if (!native) {
+            if (hide || current === sheet) sheet.hidePopover();
+            else sheet.showPopover();
+          }
+        });
+      });
+      covers.forEach(sheet => {
+        if (native) {
+          sheet.addEventListener('toggle', event => {
+            if (event.newState === 'open') opened(sheet);
+            else closed(sheet);
+          });
+        } else {
+          sheet.hidden = true;
+          sheet.showPopover = () => {
+            if (current && current !== sheet) current.hidePopover();
+            sheet.hidden = false;
+            sheet.classList.add('sheet-fallback');
+            opened(sheet);
+          };
+          sheet.hidePopover = () => {
+            sheet.hidden = true;
+            sheet.classList.remove('sheet-fallback');
+            closed(sheet);
+          };
+        }
+        sheet.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && !native) { event.preventDefault(); sheet.hidePopover(); return; }
+          if (event.key !== 'Tab') return;
+          const focusable = Array.from(sheet.querySelectorAll('button:not(:disabled), input:not(:disabled), summary, [href], [tabindex="0"]')).filter(el => el.offsetWidth);
+          if (!focusable.length) return;
+          if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+          else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
