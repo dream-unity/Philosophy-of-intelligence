@@ -17,6 +17,7 @@
   const show = (id, visible) => { const el=$(id); if(el && el.hidden!==!visible)el.hidden=!visible; };
   const put = (id, value) => { const el=$(id),text=String(value??''); if(el && el.textContent!==text)el.textContent=text; };
   const listen = (id, event, fn) => $(id)?.addEventListener(event, fn);
+  const nativeSheets=typeof HTMLElement.prototype.showPopover==='function';
   const groups = {people:'People',build:'Build',research:'Research',work:'Work',council:'Council',routes:'Routes'};
   const start = {name:'Stone Town',region:'Zanzibar, Tanzania',lat:-6.1622,lon:39.1922,water:false};
   const book=window.EarthSaves?.open();
@@ -1072,7 +1073,7 @@
   }
   function sheetOpen(id){
     const sheet=$(id);
-    return !!sheet && (sheet.classList.contains('sheet-fallback') || (typeof HTMLElement.prototype.showPopover==='function' && sheet.matches(':popover-open')));
+    return !!sheet && (sheet.classList.contains('sheet-fallback') || (nativeSheets && sheet.matches(':popover-open')));
   }
   function renderSociety(){
     const state=sim.state;
@@ -1088,6 +1089,7 @@
           if(!window.confirm(label+' '+s.name+'? '+impact+' Its progress, routes and linked agreements will be lost.'))return;
           const result=await sim.perform('manageSite',s.id,action);
           if(!presentResult(result))return;
+          street?.discardTerrain();
           arrivalVersion++;crewOrders?.cancel();cancelPlacement();street?.cancelTravel?.();
           visiting=null;encounter=null;viewingShift=false;lastOpening=null;
           selected=sim.active()||start;setView('world',false);
@@ -1168,14 +1170,16 @@
     const b=e.target.closest('[data-records]');if(b){recordsPage=b.dataset.records;renderRecords();}
   });
   listen('society-open','click',renderSociety);
-  listen('journal-dialog','toggle',e=>{if(e.newState==='open'&&recordsPage==='saves')savedWorlds?.refresh();});
-  listen('journal-open','click',()=>{renderRecords();if(recordsPage==='saves')requestAnimationFrame(()=>savedWorlds?.refresh());});
+  // Populate the Chronicle once each time it opens. Native popovers dispatch
+  // beforetoggle after the opening button has selected the requested tab.
+  if(nativeSheets)listen('journal-dialog','beforetoggle',e=>{if(e.newState==='open')renderRecords();});
+  else listen('journal-open','click',()=>{if(sheetOpen('journal-dialog'))renderRecords();});
   listen('open-save-tools','click',()=>{
     recordsPage='saves';$('journal-open').click();
   });
   listen('journal-filter','change',()=>{journalFilter=$('journal-filter').value;journalLimit=20;renderRecords();});
   listen('earlier-events','click',()=>{journalLimit+=30;renderRecords();});
-  listen('week-review-open','click',()=>{recordsPage='review';renderRecords();});
+  listen('week-review-open','click',()=>{recordsPage='review';if(!nativeSheets&&sheetOpen('journal-dialog'))renderRecords();});
   function upcomingDeadlines() {
     const {week,sites}=sim.state, deadlines=[];
     for(const site of sites){
@@ -1449,6 +1453,7 @@
       return;
     }
     if(!notice.external)return;
+    street?.discardTerrain();
     crewOrders?.cancel();
     if(notice.switched){
       lastOpening=null;

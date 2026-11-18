@@ -246,16 +246,21 @@
     let ctx=canvas.getContext('2d',{alpha:Boolean(terrainLayer)});
     const state={site:null,seed:0,lots:[],points:[],solids:[],trees:[],decor:[],links:[],looks:new Map(),traffic:null,preview:null,companion:null,shiftStops:[],placed:null,mode:'walk',player:{...marketDoor(),dx:0,dy:1},van:vanAtExchange(),route:[],destination:null,arrival:null,hover:null,active:null};
     let width=0,height=0,unit=30,zoom=1,pixelRatio=1,centreX=state.player.x,centreY=state.player.y;
+    let fullPixelRatio=1,motionPixelRatio=1,slowFrameCount=0;
     let frame=0,idleTimer=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
     const sheetOpen=()=>typeof document!=='undefined'&&Boolean(document.body?.hasAttribute('data-sheet-open'));
     let covered=sheetOpen();
     let shortMessage='',messageUntil=0,cameraFollows=true;
     let priorPlacementView=null,overviewZoom=null,placingFocus=0,previewedPlot=null,dragging=null,pinch=null,groundCache=null;
     let miniCanvas=null,miniButton=null,miniTick=-1;
+    let recentTerrain=null, artGeneration=0;
     let zoomTimer=0, backdropGradient=null, backdropSite=null;
     const compactTextures=typeof navigator!=='undefined' && navigator.deviceMemory>0 && navigator.deviceMemory<=4;
     // At a 40-unit bake the entire map fits in a 3,360 × 1,720 texture.
     const maxGroundUnit=compactTextures?32:40;
+    const deviceMemory=typeof navigator==='undefined'?0:navigator.deviceMemory||0;
+    const touchDevice=typeof matchMedia==='function' && matchMedia('(pointer: coarse)').matches;
+    const visitMemoryMiB=!deviceMemory?8:deviceMemory<=2?0:deviceMemory<=4||touchDevice?16:24;
     const fitZoom=()=>clamp(Math.min(width/57,height/33)/baseUnit(),.29,1.55);
     const lightRig=window.EarthTownLight;
     let evening=false, streetLights=[];
@@ -366,7 +371,7 @@
       image.decoding = 'async';
       image.onload = () => {
         if (!alive) return;
-        plantingAtlas = image;
+        plantingAtlas = image;artGeneration++;
         clearGround();
         dirty = true;
         schedule();
@@ -1047,6 +1052,38 @@
       }
       streetName(15,24.44,'EXCHANGE ST','x');streetName(6.4,9,'GARDEN WALK','y');streetName(8.9,12.43,'COMMONS RD','x');
     }
+    function discardTerrain(){
+      releaseRecentTerrain();clearGround();dirty=true;schedule();
+    }
+    function terrainSignature(site) {
+      return JSON.stringify([siteKey(site),Boolean(site.water),...(site.buildings||[]).map(b=>[b.plot,b.kind])]);
+    }
+    function releaseRecentTerrain(){
+      if(recentTerrain){recentTerrain.tile.width=recentTerrain.tile.height=1;recentTerrain=null;}
+    }
+    function swapTerrain(nextSite) {
+      if(!terrainLayer || !nextSite || !visits.has(siteKey(nextSite)) ||
+          !visitMemoryMiB || !terrainLayer.groundSurface.replaceWith){
+        releaseRecentTerrain();return null;
+      }
+      const leaving=groundCache, stored=recentTerrain;
+      const canKeep=leaving && leaving.signature && !leaving.dirtyPlots.size && !workLots.size &&
+        leaving.w*leaving.h*4 <= visitMemoryMiB*1024*1024;
+      const reuse=stored && stored.generation===artGeneration &&
+        stored.signature===terrainSignature(nextSite);
+      if(!canKeep && !reuse){releaseRecentTerrain();return null;}
+      const oldSurface=terrainLayer.groundSurface;
+      // Recycle the two backing surfaces. A third visit replaces the older
+      // district in place. Browsers reporting 2 GB RAM or less keep just one.
+      const nextSurface=stored?.tile || document.createElement('canvas');
+      Object.assign(nextSurface.style,{transformOrigin:'0 0',pointerEvents:'none'});
+      oldSurface.replaceWith(nextSurface);
+      terrainLayer.groundSurface=nextSurface;
+      recentTerrain=canKeep?leaving:null;
+      if(!canKeep)oldSurface.width=oldSurface.height=1;
+      groundCache=null;
+      return reuse?stored:null;
+    }
     function clearGround() {
       terrainSnapshot=null;
       if(terrainLayer){
@@ -1101,11 +1138,20 @@
         paintGroundTile(tileCtx,gw,gh,targetUnit);
         const texture=bitmapCapable?tile.transferToImageBitmap():tile;
         groundCache={unit:targetUnit,tile:texture,w:gw,h:gh,site:siteKey(state.site),water:Boolean(state.site.water),dock:state.site.buildings?.some(building=>building.kind==='fishingDock')||false,dirtyPlots:new Set()};
-        if(terrainLayer){tile.style.width=gw+'px';tile.style.height=gh+'px';}
+        groundCache.signature=terrainSignature(state.site);groundCache.generation=artGeneration;
+        if(terrainLayer){
+          tile.style.width=gw+'px';tile.style.height=gh+'px';
+          tile.oncontextrestored=()=>{
+            if(!alive)return;
+            if(terrainLayer?.groundSurface===tile)discardTerrain();
+            else if(recentTerrain?.tile===tile)releaseRecentTerrain();
+          };
+        }
       }
       if(groundCache.dirtyPlots.size){
         const {tile,w,h,unit,dirtyPlots}=groundCache;
         paintGroundTile(tile.getContext('2d'),w,h,unit,dirtyPlots);dirtyPlots.clear();
+        groundCache.signature=terrainSignature(state.site);
       }
       const p=screen(12,12),scale=unit/groundCache.unit,w=groundCache.w*scale,h=groundCache.h*scale;
       const left=p[0]-w*.5,top=p[1]-h*.53,x=Math.max(0,left),y=Math.max(0,top);
@@ -2235,7 +2281,9 @@
     }
     function setSite(site) {
       const previous=state.site,previousKey=siteKey(previous),nextKey=siteKey(site);
+      let restoredTerrain=null;
       if(previousKey!==nextKey){
+        restoredTerrain=swapTerrain(site);
         clearCatch();works.clear();workLots.clear();crew.clear();selectedCrew.clear();watchedJob=null;priorCrewView=null;
         if(previousKey)visits.set(previousKey,{berth:embarked?.id,player:{...state.player},van:{...state.van},mode:state.mode,zoom:priorPlacementView?.overviewZoom??priorPlacementView?.zoom??overviewZoom??zoom});
         stop();clearInput();state.placed=null;previewedPlot=null;state.active=null;state.hover=null;state.companion=null;priorPlacementView=null;overviewZoom=null;shortMessage='';cameraFollows=true;
@@ -2255,7 +2303,9 @@
           Object.assign(state.player,embarked?landing(embarked):returnPoint(site));
           state.mode='walk';embarked=null;clearCatch();stop();
         }
-        districtData();streetLights=site&&lightRig?lightRig.lightsFor(state.decor,centre(MARKET)):[];state.fingerprint=nextFingerprint;
+        districtData();
+        if(restoredTerrain)groundCache=restoredTerrain;
+        streetLights=site&&lightRig?lightRig.lightsFor(state.decor,centre(MARKET)):[];state.fingerprint=nextFingerprint;
         if(state.placed&&!vacant(state.lots[placingFocus])){
           const replacement=state.lots.find(vacant);
           if(replacement){placingFocus=replacement.plot;previewedPlot=null;options.onPlotPreview?.(placingFocus);}
@@ -2501,15 +2551,37 @@
       if(q.companion||(q.type!=='ground'&&dist(state.player,q)<interactionRange())){stop();pressed.clear();choose(q);return;}
       navigate(q,q.type==='ground'?null:q,false);
     }
+    function sizeForeground(ratio) {
+      pixelRatio=ratio;
+      canvas.width=Math.max(1,Math.round(width*ratio));
+      canvas.height=Math.max(1,Math.round(height*ratio));
+    }
+    function adjustForeground(active,delta) {
+      if(motionPixelRatio===fullPixelRatio)return;
+      if(!active){
+        slowFrameCount=0;
+        if(pixelRatio!==fullPixelRatio)sizeForeground(fullPixelRatio);
+        return;
+      }
+      if(pixelRatio!==fullPixelRatio)return;
+      // At the 30 fps target, healthy paints are normally ~33 ms apart. An
+      // isolated late frame (opening a sheet or loading art) need not change quality.
+      slowFrameCount=delta>=48 ? Math.min(6,slowFrameCount+1) : Math.max(0,slowFrameCount-1);
+      if(slowFrameCount===6)sizeForeground(motionPixelRatio);
+    }
     function resize() {
       const bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;
       const w=Math.round(bounds.width),h=Math.round(bounds.height),ratio=Math.min(typeof devicePixelRatio==='number'?devicePixelRatio:1,2,Math.sqrt(2200000/(w*h)));
-      if(width===w&&height===h&&ratio===pixelRatio)return;
-      width=w;height=h;pixelRatio=ratio;canvas.width=Math.max(1,Math.round(w*ratio));canvas.height=Math.max(1,Math.round(h*ratio));
+      if(width===w&&height===h&&ratio===fullPixelRatio)return;
+      width=w;height=h;fullPixelRatio=ratio;slowFrameCount=0;
+      const motionRatio=Math.max(1,Math.sqrt(1050000/(w*h)));
+      motionPixelRatio=terrainLayer&&motionRatio<ratio*.9 ? motionRatio : ratio;
+      sizeForeground(ratio);
       if(state.placed||overviewZoom!==null)zoom=fitZoom();
       unit=baseUnit()*zoom;backdropGradient=null;terrainSnapshot=null;dirty=true;schedule();
     }
     function moving(){return Boolean(pressed.size||state.route.length);}
+    function activeMotion(){return Boolean(moving()||dragging?.moved||pinch);}
     function cancelIdle(){if(idleTimer){clearTimeout(idleTimer);idleTimer=0;}}
     function suspend(){cancelIdle();if(frame){cancelAnimationFrame(frame);frame=0;}}
     function schedule(){
@@ -2528,7 +2600,10 @@
         for(let i=0;i<steps&&!covered;i++){visualTime+=dt;if(state.site)follow(dt);}
         if(covered)return;
         if(castStarted!==null&&visualTime-castStarted>=castDuration)clearCatch();
-        if(visible)draw();dirty=false;
+        if(visible){adjustForeground(activeMotion(),delta);draw();}
+        dirty=false;
+      }else if(visible && pixelRatio!==fullPixelRatio && !activeMotion()){
+        adjustForeground(false,delta);draw();
       }
       if(!state.site||frame)return;
       if(moving()||dragging||pinch||(!reduced&&visible&&castStarted!==null)){schedule();return;}
@@ -2563,7 +2638,7 @@
       cleanups.push(window.EarthTownArchitecture.watch(()=>{dirty=true;schedule();}));
     }
     if(window.EarthTownSurroundings?.onReady){
-      cleanups.push(window.EarthTownSurroundings.onReady(()=>{clearGround();dirty=true;schedule();}));
+      cleanups.push(window.EarthTownSurroundings.onReady(()=>{artGeneration++;clearGround();dirty=true;schedule();}));
     }
     const eveningButton=canvas.parentElement?.querySelector?.('#street-evening');
     if(eveningButton)listen(eveningButton,'click',()=>{
@@ -2651,7 +2726,7 @@
       covered=next;clearInput();state.player.moving=false;lastFrame=0;dirty=true;
       if(covered)suspend();else schedule();
     });
-    if(typeof document!=='undefined')listen(document,'visibilitychange',()=>{pressed.clear();if(document.hidden){fingers.clear();dragging=null;pinch=null;suspend();}else{lastFrame=0;dirty=true;schedule();}});
+    if(typeof document!=='undefined')listen(document,'visibilitychange',()=>{pressed.clear();if(document.hidden){releaseRecentTerrain();fingers.clear();dragging=null;pinch=null;suspend();}else{lastFrame=0;dirty=true;schedule();}});
     const sizing=typeof ResizeObserver!=='undefined'?new ResizeObserver(resize):null;sizing?.observe(canvas);
     const showing=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{
       visible=entries.some(e=>e.isIntersecting);
@@ -2661,7 +2736,7 @@
       if(visible||moving())schedule();else suspend();
     }):null;showing?.observe(canvas);
     if(typeof window!=='undefined')listen(window,'resize',resize);
-    function destroy(){clearCatch();alive=false;if(zoomTimer)clearTimeout(zoomTimer);pressed.clear();fingers.clear();suspend();sizing?.disconnect();showing?.disconnect();cleanups.forEach(fn=>fn());clearGround();
+    function destroy(){releaseRecentTerrain();clearCatch();alive=false;if(zoomTimer)clearTimeout(zoomTimer);pressed.clear();fingers.clear();suspend();sizing?.disconnect();showing?.disconnect();cleanups.forEach(fn=>fn());clearGround();
       if(terrainLayer){
         terrainLayer.surface.width=terrainLayer.surface.height=1;
         terrainLayer.clip.remove();terrainLayer=null;
@@ -2669,7 +2744,7 @@
       canvas.style.touchAction=previousStyle;if(oldTab===null)canvas.removeAttribute('tabindex');else canvas.setAttribute('tabindex',oldTab);
       if(oldLabel===null)canvas.removeAttribute('aria-label');else canvas.setAttribute('aria-label',oldLabel);}
     resize();schedule();
-    return {setSite,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {setSite,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

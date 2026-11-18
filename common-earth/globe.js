@@ -240,17 +240,18 @@
     };
   }
   function softwareRenderer(image) {
+    const {sqrt, min, max, floor, asin, atan2}=Math;
     let pixels=canvasPixels(image);
     const tw=image.width, th=image.height;
     const off=document.createElement('canvas'),ctx=off.getContext('2d');
-    let out, lastProjection;
+    let out, lastProjection, previousRadius;
     return {
       draw(dest,w,h,r,view,interacting) {
         // Sample only as densely as the relief source can resolve here. Fine
         // vector coasts, rivers, type and markers keep the full canvas density.
-        const reliefDensity=view.zoom>=4 ? clamp(1.65*tw/(TAU*r*Math.max(.32,Math.cos(view.lat*RAD))),.38,.92) : 1;
-        const scale=Math.min(interacting?.64:1,reliefDensity,Math.sqrt((interacting?140000:430000)/(w*h)));
-        const sw=Math.max(1,Math.round(w*scale)), sh=Math.max(1,Math.round(h*scale));
+        const reliefDensity=view.zoom>=4 ? clamp(1.65*tw/(TAU*r*max(.32,Math.cos(view.lat*RAD))),.38,.92) : 1;
+        const scale=min(interacting?.64:1,reliefDensity,sqrt((interacting?140000:430000)/(w*h)));
+        const sw=max(1,Math.round(w*scale)), sh=max(1,Math.round(h*scale));
         // Overlay changes reuse the already shaded bitmap at this camera.
         const key=[w,h,sw,sh,r,view.lat,view.lon,scale].join('/');
         if(key===lastProjection){dest.drawImage(off,0,0,w,h);return true;}
@@ -258,19 +259,23 @@
           off.width=sw;off.height=sh;out=ctx.createImageData(sw,sh);
         }
         const result=out.data, rr=r*scale, c=Math.cos(view.lat*RAD),s=Math.sin(view.lat*RAD);
-        const lam=view.lon*RAD,smooth=view.zoom>=3.5;
-        result.fill(0);
+        const pi=Math.PI,lam=view.lon*RAD,smooth=view.zoom>=3.5;
+        // At close zoom the globe covers every destination pixel. At lower
+        // zoom the mask is unchanged until the projected disc changes size.
+        if(!lastProjection || previousRadius!==rr)result.fill(0);
+        previousRadius=rr;
+
         for(let y=0;y<sh;y++){
-          const ny=(sh/2-y-.5)/rr,half=Math.sqrt(Math.max(0,1-ny*ny)),start=Math.max(0,Math.ceil(sw/2-half*rr-.5)),end=Math.min(sw,Math.ceil(sw/2+half*rr-.5));
+          const ny=(sh/2-y-.5)/rr,half=sqrt(max(0,1-ny*ny)),start=max(0,Math.ceil(sw/2-half*rr-.5)),end=min(sw,Math.ceil(sw/2+half*rr-.5));
           for(let x=start,k=(y*sw+start)*4;x<end;x++,k+=4){
-            const nx=(x+.5-sw/2)/rr, z=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
-            const lat=Math.asin(clamp(ny*c+z*s,-1,1));
-            const lon=Math.atan2(nx,z*c-ny*s)+lam;
-            const u=(.5+lon/TAU)*tw-(smooth?.5:0),v=clamp((.5-lat/Math.PI)*th-(smooth?.5:0),0,th-1);
-            const tx=((Math.floor(u)%tw)+tw)%tw,ty=Math.floor(v);
-            const p=(ty*tw+tx)*4,light=.44+.64*clamp(.72*z+.38*ny-.48*nx+.24,0,1), edge=(1-z)**4*.66;
+            const nx=(x+.5-sw/2)/rr, z=sqrt(max(0,1-nx*nx-ny*ny));
+            const lat=asin(min(1,max(-1,ny*c+z*s)));
+            const lon=atan2(nx,z*c-ny*s)+lam;
+            const u=(.5+lon/TAU)*tw-(smooth?.5:0),v=max(0,min((.5-lat/pi)*th-(smooth?.5:0),th-1));
+            const tx=((floor(u)%tw)+tw)%tw,ty=floor(v);
+            const p=(ty*tw+tx)*4,light=.44+.64*min(1,max(0,.72*z+.38*ny-.48*nx+.24)), rim=1-z, rim2=rim*rim, edge=rim2*rim2*.66;
             if(smooth){
-              const east=tx+1===tw?-(tw-1)*4:4,south=ty+1===th?0:tw*4,fx=u-Math.floor(u),fy=v-ty;
+              const east=tx+1===tw?-(tw-1)*4:4,south=ty+1===th?0:tw*4,fx=u-floor(u),fy=v-ty;
               for(let i=0;i<3;i++){
                 const top=pixels[p+i]+(pixels[p+east+i]-pixels[p+i])*fx;
                 const bottom=pixels[p+south+i]+(pixels[p+south+east+i]-pixels[p+south+i])*fx;
