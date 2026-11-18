@@ -6,6 +6,13 @@
   const BLOCK = 6;
   const HALF_ROAD = .87;
   const STEP = .45;
+  const GRID_SIDE = 58;
+  const GRID_ORIGIN = -.68;
+  const GRID_SIZE = GRID_SIDE*GRID_SIDE;
+  const gridPoint=i=>({x:GRID_ORIGIN + i%GRID_SIDE*STEP, y:GRID_ORIGIN + Math.floor(i/GRID_SIDE)*STEP});
+  const GRID_NEIGHBOURS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]].map(([dx,dy])=>({
+    dx,dy,offset:dy*GRID_SIDE+dx,cost:dx&&dy?1.414:1
+  }));
   const WALK_SPEED = 3.15;
   const DRIVE_SPEED = 6.7;
   const BOAT_SPEED = 4.9;
@@ -230,8 +237,10 @@
         clip.setAttribute('aria-hidden','true');
         Object.assign(clip.style,{position:'absolute',inset:'0',overflow:'hidden',pointerEvents:'none'});
         Object.assign(surface.style,{transformOrigin:'0 0',pointerEvents:'none'});
-        clip.appendChild(surface);canvas.before(clip);
-        terrainLayer={clip,surface,brush};
+        const groundSurface=document.createElement('canvas');
+        Object.assign(groundSurface.style,{transformOrigin:'0 0',pointerEvents:'none'});
+        clip.appendChild(surface);clip.appendChild(groundSurface);canvas.before(clip);
+        terrainLayer={clip,surface,brush,groundSurface};
       }
     }
     let ctx=canvas.getContext('2d',{alpha:Boolean(terrainLayer)});
@@ -252,6 +261,8 @@
     let evening=false, streetLights=[];
     const fingers=new Map(),pressed=new Set();
     let works=new Map(),workLots=new Map(),crew=new Map(),watchedJob=null,priorCrewView=null;
+    const roadEdges=new Uint16Array(GRID_SIZE),footEdges=new Uint16Array(GRID_SIZE);
+    const roadPassability=new Uint8Array(GRID_SIZE),footPassability=new Uint8Array(GRID_SIZE);
     const selectedCrew=new Set(),workBounds=new Set(),fixedDoors=new WeakMap();
     let worksiteAtlas=null,worksitePending=false;
     const reduced=typeof matchMedia==='function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -260,13 +271,13 @@
     const landing=berth=>({x:berth.dockX,y:SIDE+.53});
     // A clear channel runs along the outer ends of the jetties. Inside it, each
     // boat follows its own narrow slip so that it cannot sail through a pier.
-    const channelY=31.0, seaLimit=39;
+    const channelY=29.25, seaLimit=39;
     function onWater(p,berth){
       if(!berth || p.x<-.6 || p.x>SIDE+.6 || p.y>seaLimit)return false;
       return p.y>=channelY || (Math.abs(p.x-berth.x)<=.35 && p.y>=berth.y-.03);
     }
     function refreshBerths(site){
-      const waterfront=site?.water?'ocean':window.EarthTownSurroundings?.profile(site);
+      const waterfront=window.CommonEarthSim?.waterfront?.(site) ?? (site?.water?'ocean':window.EarthTownSurroundings?.profile(site));
       berths=waterfront==='ocean'?oceanBerths:waterfront==='zanzibar'?stoneTownBerths:[];
       if(berths.length&&site?.buildings?.some(b=>b.kind==='fishingDock'))berths=[...berths,fishingBerth];
     }
@@ -934,13 +945,14 @@
     function cachedGround() {
       if(typeof document==='undefined'||!document.createElement){ground();return;}
       const targetUnit=clamp(16*Math.pow(Math.SQRT2,Math.round(Math.log(unit/16)/Math.log(Math.SQRT2))),8,maxGroundUnit);
-      // Keep panning a single cached image while a pinch or scroll wheel is in motion.
-      if(!groundCache||(!pinch&&!zoomTimer&&Math.abs(groundCache.unit-targetUnit)>.02)){
+      // A detailed tile can also render the overview. Only rebake on a zoom-in
+      // that needs finer detail, and wait until an active pinch has settled.
+      if(!groundCache||(!pinch&&!zoomTimer&&targetUnit>groundCache.unit+.02)){
         clearGround();
         const prior={w:width,h:height,x:centreX,y:centreY,u:unit,ctx};
         const gw=Math.ceil(84*targetUnit),gh=Math.ceil(43*targetUnit);
-        const bitmapCapable=typeof OffscreenCanvas==='function'&&typeof OffscreenCanvas.prototype.transferToImageBitmap==='function';
-        const tile=bitmapCapable?new OffscreenCanvas(gw,gh):document.createElement('canvas');
+        const bitmapCapable=!terrainLayer && typeof OffscreenCanvas==='function'&&typeof OffscreenCanvas.prototype.transferToImageBitmap==='function';
+        const tile=terrainLayer?.groundSurface || (bitmapCapable?new OffscreenCanvas(gw,gh):document.createElement('canvas'));
         if(!bitmapCapable){tile.width=gw;tile.height=gh;}
         const tileCtx=tile.getContext('2d');
         if(!tileCtx){ground();return;}
@@ -948,58 +960,43 @@
         try{ground();}finally{width=prior.w;height=prior.h;unit=prior.u;centreX=prior.x;centreY=prior.y;ctx=prior.ctx;}
         const texture=bitmapCapable?tile.transferToImageBitmap():tile;
         groundCache={unit:targetUnit,tile:texture,w:gw,h:gh};
+        if(terrainLayer){tile.style.width=gw+'px';tile.style.height=gh+'px';}
       }
       const p=screen(12,12),scale=unit/groundCache.unit,w=groundCache.w*scale,h=groundCache.h*scale;
       const left=p[0]-w*.5,top=p[1]-h*.53,x=Math.max(0,left),y=Math.max(0,top);
+      if(terrainLayer){
+        const transform='translate3d('+left.toFixed(3)+'px,'+top.toFixed(3)+'px,0) scale('+scale+')';
+        if(groundCache.transform!==transform){
+          terrainLayer.groundSurface.style.transform=transform;groundCache.transform=transform;
+        }
+        return;
+      }
       const dw=Math.min(width,left+w)-x,dh=Math.min(height,top+h)-y;
       if(dw>0&&dh>0)ctx.drawImage(groundCache.tile,(x-left)/scale,(y-top)/scale,dw/scale,dh/scale,x,y,dw,dh);
     }
 
-    function paintTerrain() {
-      background();
+    function paintTerrainLayer() {
+      if(terrainLayer){
+        const {brush,surface}=terrainLayer;
+        // The distant landscape is a soft gradient. Repaint its small projection
+        // only when the view changes; the detailed ground tile moves independently.
+        const horizon=state.site && window.EarthTownSurroundings?.profile?.(state.site)==='zanzibar';
+        if(!terrainSnapshot || (horizon && (terrainSnapshot.x!==centreX || terrainSnapshot.y!==centreY || terrainSnapshot.u!==unit))){
+          const w=Math.max(1,Math.ceil(width/3)),h=Math.max(1,Math.ceil(height/3));
+          if(surface.width!==w || surface.height!==h){surface.width=w;surface.height=h;}
+          const foreground=ctx;ctx=brush;
+          try{
+            ctx.setTransform(w/width,0,0,h/height,0,0);
+            background();
+          }finally{ctx=foreground;}
+          terrainSnapshot={x:centreX,y:centreY,u:unit};
+        }
+        ctx.clearRect(0,0,width,height);
+      }else background();
       if(state.site){
         cachedGround();
         if(evening)lightRig?.paving(ctx,screen,unit,streetLights);
       }
-    }
-    function paintTerrainLayer() {
-      if(!terrainLayer){paintTerrain();return;}
-      const {surface,brush}=terrainLayer;
-      const buffer=Math.min(96,Math.ceil(Math.min(width,height)*.12));
-      const w=width+2*buffer,h=height+2*buffer;
-      // The terrain tile has a fixed source resolution. Keeping this layer
-      // close to CSS resolution leaves the higher pixel budget for the actors.
-      const ratio=Math.min(pixelRatio,1.25);
-      let scale=1,x=-buffer,y=-(h-height)*.53;
-      if(terrainSnapshot){
-        const anchor=screen(terrainSnapshot.x,terrainSnapshot.y);
-        scale=unit/terrainSnapshot.unit;
-        x=anchor[0]-w*.5*scale;y=anchor[1]-h*.53*scale;
-      }
-      if(!terrainSnapshot || terrainSnapshot.evening!==evening ||
-          (Math.abs(scale-1)>.0001 && !pinch && !zoomTimer) ||
-          x>0 || y>0 || x+w*scale<width || y+h*scale<height){
-        const oldWidth=width,oldHeight=height,foreground=ctx;
-        const pw=Math.ceil(w*ratio),ph=Math.ceil(h*ratio);
-        if(surface.width!==pw || surface.height!==ph){
-          surface.width=pw;surface.height=ph;
-          surface.style.width=w+'px';surface.style.height=h+'px';
-        }
-        ctx=brush;width=w;height=h;
-        try{
-          ctx.setTransform(pw/w,0,0,ph/h,0,0);
-          ctx.lineJoin='round';ctx.lineCap='round';
-          paintTerrain();
-        }finally{ctx=foreground;width=oldWidth;height=oldHeight;}
-        terrainSnapshot={x:centreX,y:centreY,unit,evening};
-        x=-buffer;y=-(h-height)*.53;scale=1;
-      }
-      const transform='translate3d('+x.toFixed(3)+'px,'+y.toFixed(3)+'px,0) scale('+scale+')';
-      if(terrainSnapshot.transform!==transform){
-        surface.style.transform=transform;
-        terrainSnapshot.transform=transform;
-      }
-      ctx.clearRect(0,0,width,height);
     }
     function streetName(x,y,name,direction){
       if(unit<16)return;
@@ -1270,10 +1267,11 @@
       return bx>=0&&bx<3&&by>=0&&by<3&&workLots.has(by*3+bx);
     }
     function updateWorkBounds(){
+      footPassability.fill(0);footEdges.fill(0);
       if(workBounds.size)state.solids=state.solids.filter(bounds=>!workBounds.has(bounds));
       workBounds.clear();
       for(const job of works.values()){
-        if(job.scope!=='street'||!['market','workshop','hall'].includes(job.artKind))continue;
+        if(job.scope!=='street'||!['market','workshop','hall','fishingDock'].includes(job.artKind))continue;
         const halfX=job.removal?1.56:1.23,halfY=job.removal?1.42:1.02;
         const bounds=[job.x-halfX,job.y-halfY,job.x+halfX,job.y+halfY];
         workBounds.add(bounds);state.solids.push(bounds);
@@ -1439,7 +1437,7 @@
       // course is fitted. The scaffold and the exposed upper frame remain visible.
       ctx.save();
       if(built<1){
-        const upright=['workshop','market','hall'].includes(artKind);
+        const upright=['workshop','market','hall','fishingDock'].includes(artKind);
         const roof=upright?4.25:1.8,amount=clamp((built-start)/(1-start),0,1);
         const cut=sy+unit*(1.55-(1.55+roof)*amount),width=3.5*unit;
         ctx.beginPath();ctx.moveTo(sx-width,sy+unit*2);
@@ -1758,10 +1756,14 @@
     // A uniform lattice handles route finding. A heap keeps long street trips inexpensive.
     function makeRoute(start,target) {
       if(clearSegment(start,target))return [target];
-      const N=58,origin=-.68;
-      const fromIndex=i=>({x:origin+i%N*STEP,y:origin+Math.floor(i/N)*STEP});
-      const count=N*N,cost=new Float64Array(count).fill(Infinity),parent=new Int32Array(count).fill(-1),pass=new Uint8Array(count),visited=new Uint8Array(count),heap=[];
-      const valid=i=>{if(pass[i]===0)pass[i]=traversable(fromIndex(i))?2:1;return pass[i]===2;};
+      const N=GRID_SIDE,origin=GRID_ORIGIN,count=GRID_SIZE;
+      const cost=new Float64Array(count).fill(Infinity),parent=new Int32Array(count).fill(-1),visited=new Uint8Array(count),heap=[];
+      // Standing inside a newly fenced worksite grants temporary exit permission.
+      // Those exceptional paths need their own mask so another trip cannot inherit the exit.
+      let pass=state.mode==='drive'?roadPassability:footPassability;
+      let edges=state.mode==='drive'?roadEdges:footEdges;
+      if(state.mode==='walk' && [...workBounds].some(bounds=>insideFootprint(start,bounds))){pass=new Uint8Array(count);edges=new Uint16Array(count);}
+      const valid=i=>{if(pass[i]===0)pass[i]=traversable(gridPoint(i))?2:1;return pass[i]===2;};
       function anchor(point) {
         const cx=Math.round((point.x-origin)/STEP),cy=Math.round((point.y-origin)/STEP);
         let nearest=-1,range=Infinity;
@@ -1769,7 +1771,7 @@
           for(let x=Math.max(0,cx-1);x<=Math.min(N-1,cx+1);x++){
             const i=y*N+x;
             if(!valid(i))continue;
-            const p=fromIndex(i),d=dist(point,p);
+            const p=gridPoint(i),d=dist(point,p);
             if(d<range&&clearSegment(point,p)){nearest=i;range=d;}
           }
         }
@@ -1779,23 +1781,36 @@
       if(startI<0||goalI<0)return [];
       const push=(i,rank)=>{const n={i,rank};let k=heap.length;heap.push(n);while(k>0){const a=(k-1)>>1;if(heap[a].rank<=rank)break;heap[k]=heap[a];k=a;}heap[k]=n;};
       const pop=()=>{const first=heap[0].i,last=heap.pop();if(heap.length){let k=0;while(k*2+1<heap.length){let j=k*2+1;if(j+1<heap.length&&heap[j+1].rank<heap[j].rank)j++;if(heap[j].rank>=last.rank)break;heap[k]=heap[j];k=j;}heap[k]=last;}return first;};
-      const offsets=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+      const goalX=goalI%N,goalY=Math.floor(goalI/N);
+      function neighbours(i,px,py){
+        if(edges[i])return edges[i];
+        let mask=1<<8; // Eight edge bits, with an extra bit to mark even an isolated node as checked.
+        for(let d=0;d<GRID_NEIGHBOURS.length;d++){
+          const {dx,dy,offset}=GRID_NEIGHBOURS[d],nx=px+dx,ny=py+dy;
+          if(nx<0||ny<0||nx>=N||ny>=N||!valid(i+offset))continue;
+          if(dx&&dy&&(!valid(i+dx)||!valid(i+dy*N)))continue;
+          mask|=1<<d;
+        }
+        edges[i]=mask;return mask;
+      }
       cost[startI]=0;push(startI,0);let reached=-1;
       while(heap.length){
         const i=pop();if(visited[i])continue;visited[i]=1;
-        const px=i%N,py=Math.floor(i/N);
         if(i===goalI){reached=i;break;}
-        for(const [dx,dy] of offsets){const nx=px+dx,ny=py+dy,j=ny*N+nx;
-          if(nx<0||ny<0||nx>=N||ny>=N||visited[j]||!valid(j))continue;
-          if(dx&&dy&&(!valid(py*N+nx)||!valid(ny*N+px)))continue;
-          const stepCost=dx&&dy?1.414:1,nc=cost[i]+stepCost;
-          if(nc>=cost[j])continue;cost[j]=nc;parent[j]=i;
-          const q=fromIndex(j);push(j,nc+dist(q,target)/STEP);
+        const px=i%N,py=Math.floor(i/N),mask=neighbours(i,px,py);
+        for(let d=0;d<GRID_NEIGHBOURS.length;d++){
+          if(!(mask&(1<<d)))continue;
+          const edge=GRID_NEIGHBOURS[d],j=i+edge.offset,nc=cost[i]+edge.cost;
+          if(visited[j]||nc>=cost[j])continue;cost[j]=nc;parent[j]=i;
+          const dx=Math.abs(goalX-px-edge.dx),dy=Math.abs(goalY-py-edge.dy);
+          const remaining=dx>dy?dx+.414*dy:dy+.414*dx;
+          // When total costs tie, expand the node closest to the goal first.
+          push(j,nc+remaining+remaining*1e-8);
         }
       }
       if(reached<0)return [];
       const raw=[];
-      for(let n=reached;n>=0;n=parent[n])raw.push(fromIndex(n));
+      for(let n=reached;n>=0;n=parent[n])raw.push(gridPoint(n));
       raw.reverse();raw.push(target);
       const simplified=[];
       let from=start;

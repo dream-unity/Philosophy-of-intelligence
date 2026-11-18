@@ -56,7 +56,7 @@
   }
 
   function profile(site) {
-    const waterfront=window.CommonEarthSim?.waterfront(site);
+    const waterfront=window.CommonEarthSim?.waterfront?.(site);
     if(waterfront)return waterfront;
     if (site?.water) return 'ocean';
     const lat = Number(site?.lat), lon = Number(site?.lon);

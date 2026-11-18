@@ -6,6 +6,7 @@ const vm = require('node:vm');
 
 const gameRoot = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const script = readFileSync(path.join(gameRoot, 'street.js'), 'utf8');
+const surroundingsScript = readFileSync(path.join(gameRoot, 'town-surroundings.js'), 'utf8');
 const constructionScript = readFileSync(path.join(gameRoot, 'construction.js'), 'utf8');
 const shiftScript = readFileSync(path.join(gameRoot, 'shifts.js'), 'utf8');
 const site = {
@@ -52,6 +53,7 @@ function surface(width = 820, height = 500) {
     cancelAnimationFrame() { frame = null; },
     matchMedia: () => ({ matches: true })
   };
+  vm.runInNewContext(surroundingsScript, runtime);
   vm.runInNewContext(constructionScript, runtime);
   vm.runInNewContext(script, runtime);
   const encounters = [], updates = [];
@@ -773,4 +775,34 @@ test('a finished fishing dock adds a working berth and removing it lands its occ
   assert.equal(g.street.getState().mode,'boat');g.at(8,27.9);
   g.street.setSite({...active,buildings:[]});
   assert.equal(g.street.getState().mode,'walk');g.at(6.5,24.53);
+});
+
+test('both Stone Town harbour boats can leave their moorings and return after a district visit', () => {
+  const g=surface();
+  const stone={...site,id:'stone',lat:-6.163,lon:39.189,water:false};
+  for(const [x,y,landingX] of [[14.32,30.44,11.4],[21.65,29.61,22.4]]){
+    g.street.setSite(stone);assert(g.street.getState().waterfront);
+    g.street.recenter();g.tap(g.interactionFrame()(x,y,-.34));g.finish();g.at(x,y);
+    assert.equal(g.street.getState().mode,'boat');
+    assert.equal(g.street.focusResident(stone.residents[0].id),false);
+    g.street.setSite(site);assert.equal(g.street.getState().waterfront,false);
+    g.street.setSite(stone);assert.equal(g.street.getState().mode,'boat');
+    g.street.interact();g.finish();g.at(landingX,24.53);
+  }
+});
+
+test('a companion stays aboard when the boat moves and steps ashore when it docks', () => {
+  const g=surface(),{active}=g.host('r0');
+  g.street.setSite({...active,water:true});g.key('b');g.finish();
+  g.street.recenter();g.tap(g.interactionFrame()(17.5,34,-.44));g.finish();
+  const rider=g.street.getState();
+  assert.equal(rider.mode,'boat');
+  assert.equal(rider.companion.x,rider.x);assert.equal(rider.companion.y,rider.y);
+  const saved=g.street.snapshotView();
+  assert.equal(g.street.restoreView({...saved,player:{...saved.player,y:16}}),false);
+  assert.equal(g.street.getState().mode,'boat');
+  g.street.interact();g.finish();
+  const awake=g.street.getState();
+  assert.equal(awake.mode,'walk');
+  assert(awake.companion.y<25 && Math.hypot(awake.companion.x-awake.x,awake.companion.y-awake.y)<1.2);
 });

@@ -324,8 +324,11 @@
     if(root.EarthConstruction){
       site.construction ??= [];
       if(!root.EarthConstruction.valid(site,world))return false;
+      const beforeMigration=site.construction.length;
       if(root.EarthCityModel?.migrateWork?.(site,world)===false)return false;
-      if(!root.EarthConstruction.valid(site,world))return false;
+      // Migration appends worker orders for older precincts. Modern saves
+      // reach this point with the same orders that just passed validation.
+      if(site.construction.length!==beforeMigration && !root.EarthConstruction.valid(site,world))return false;
       if(root.EarthDismantling && !root.EarthDismantling.valid(site))return false;
       if(root.EarthCityModel?.validWork && !root.EarthCityModel.validWork(site,site.construction))return false;
     }
@@ -464,9 +467,10 @@
       lastSyncWasWork=!!world.workRevision && world.workRevision>(prior.workRevision||0) &&
         world.actionRevision===prior.actionRevision && world.week===prior.week && !saveIssue;
       if(lastSyncWasWork){
-        const completed=[];
+        const completed=[],updated=new Map(world.sites.map(site=>[site.id,site]));
         for(const before of prior.sites){
-          const after=world.sites.find(s=>s.id===before.id);
+          if(!before.construction?.length)continue;
+          const after=updated.get(before.id);
           for(const job of before.construction||[]){
             if(after && !after.construction?.some(next=>next.id===job.id))completed.push({...job,siteId:before.id});
           }

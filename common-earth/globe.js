@@ -81,16 +81,50 @@
     bitmap.width = bitmap.height = 1;
     return pixels;
   }
+  // Each row stores the exclusive end column and geographic ID of each run.
+  // This preserves every lookup pixel without expanding 8.4 million IDs.
+  function rowIndex(buffer) {
+    const data=new DataView(buffer);
+    if(data.byteLength<12 || data.getUint32(0)!==0x43454731)throw Error('Invalid Earth index');
+    const width=data.getUint16(4,true),height=data.getUint16(6,true),start=8+4*(height+1);
+    if(!width || !height || start>data.byteLength)throw Error('Invalid Earth index size');
+    const count=data.getUint32(start-4,true);
+    if(start+4*count!==data.byteLength || data.getUint32(8,true)!==0)throw Error('Incomplete Earth index');
+    let lo=0;
+    for(let y=0;y<height;y++){
+      const end=data.getUint32(12+4*y,true);
+      if(end<=lo || end>count || data.getUint16(start+(end-1)*4,true)!==width)throw Error('Invalid Earth index row');
+      lo=end;
+    }
+    return {width,height,at(x,y){
+      let left=data.getUint32(8+4*y,true),right=data.getUint32(12+4*y,true)-1;
+      while(left<right){
+        const middle=(left+right)>>>1;
+        if(x<data.getUint16(start+4*middle,true))right=middle;
+        else left=middle+1;
+      }
+      return data.getUint16(start+4*left+2,true);
+    }};
+  }
+  async function loadIndex() {
+    if(typeof fetch==='function' && typeof DecompressionStream==='function' && /^https?:$/.test(source.protocol)){
+      try{
+        const response=await fetch(assetURL('earth-cells-v1.bin'));
+        if(response.ok && response.body){
+          const unpacked=response.body.pipeThrough(new DecompressionStream('gzip'));
+          return rowIndex(await new Response(unpacked).arrayBuffer());
+        }
+      }catch{/* Local editions and incomplete cached releases can use the bitmap. */}
+    }
+    const image=await loadImage('earth-index.png'),rgba=canvasPixels(image);
+    const width=image.width,height=image.height,ids=new Uint16Array(width*height);
+    for(let i=0,p=0;i<ids.length;i++,p+=4)ids[i]=rgba[p]+256*rgba[p+1];
+    return {width,height,at:(x,y)=>ids[y*width+x]};
+  }
   function assets() {
-    if (!assetsPromise) assetsPromise = Promise.all([
-      loadImage('earth-chart.webp'), loadImage('earth-index.png')
-    ]).then(([chart,lookup]) => {
-      const rgba = canvasPixels(lookup);
-      const ids = new Uint16Array(lookup.width * lookup.height);
-      for(let i=0,p=0; i<ids.length; ++i,p+=4) ids[i] = rgba[p] + 256*rgba[p+1];
-      geo = {ids, width: lookup.width, height: lookup.height, chart};
-      return geo;
-    }).catch(error => {assetsPromise = null; throw error;});
+    if(!assetsPromise)assetsPromise=Promise.all([loadImage('earth-chart.webp'),loadIndex()])
+      .then(([chart,index])=>{geo={...index,chart};return geo;})
+      .catch(error=>{assetsPromise=null;throw error;});
     return assetsPromise;
   }
   function contains(ring, x, y) {
@@ -120,7 +154,7 @@
     if(refined)return {lat,lon,water:refined.water,name:refined.name||seaName(lat,lon)};
     const x=clamp(Math.floor((lon+180)/360*geo.width),0,geo.width-1);
     const y=clamp(Math.floor((90-lat)/180*geo.height),0,geo.height-1);
-    const id=geo.ids[y*geo.width+x], land=id>0 && id<COUNTRY_NAMES.length, lake=id-COUNTRY_NAMES.length;
+    const id=geo.at(x,y), land=id>0 && id<COUNTRY_NAMES.length, lake=id-COUNTRY_NAMES.length;
     return {lat,lon,water:!land,name:land ? COUNTRY_NAMES[id] : (lake>=0 ? LAKE_NAMES[lake] || 'Inland water' : seaName(lat,lon))};
   }
   function unit(lat,lon) {
@@ -265,7 +299,7 @@
       return [noise(i*3),noise(i*3+1),noise(i*3+2)];
     });
     let w=0,h=0,r=0, sites=[], beacons=[], routes=[], selection=null,hover=null;
-    let active=true,frame=0, dead=false, renderer=null, cpu=false, failure=false, gesture=null;
+    let active=options.active!==false,frame=0, dead=false, renderer=null, cpu=false, failure=false, gesture=null;
     let dragging=false, start=null, pinched=false, lastTap=null, keyboard=false;
     let regional=null,regionalRequested=false,nextRegionalTry=0;
     function regionalDetail(){
@@ -293,7 +327,7 @@
     }
     function setActive(next){
       active=Boolean(next);
-      if(active){resize();return;}
+      if(active){loadRenderer();resize();return;}
       if(frame){cancelAnimationFrame(frame);frame=0;}
       stopJourney(true);
     }
@@ -743,14 +777,18 @@
       keyboard=true;queue();e.preventDefault();
     });
     on(canvas,'blur',()=>{keyboard=false;queue();});
-    const ready=assets().then(a=>{
-      if(dead)return;
-      try{renderer=gpuRenderer(a.chart);}catch{renderer=null;}
-      if(!renderer){renderer=softwareRenderer(a.chart);cpu=true;}
-      queue();options.onReady?.();
-    }).catch(err=>{failure=true;queue();options.onError?.(err);});
-    resize();
-    return {setActive,focus,zoomBy,setSites,setBeacons,setRoutes,setSelection,journey,stopJourney,resize,ready,locate,getScale:scaleInfo,getView:()=>({...view}),
+    let ready;
+    function loadRenderer(){
+      if(!ready)ready=assets().then(a=>{
+        if(dead)return;
+        try{renderer=gpuRenderer(a.chart);}catch{renderer=null;}
+        if(!renderer){renderer=softwareRenderer(a.chart);cpu=true;}
+        queue();options.onReady?.();
+      }).catch(err=>{failure=true;queue();options.onError?.(err);});
+      return ready;
+    }
+    if(active){loadRenderer();resize();}
+    return {setActive,focus,zoomBy,setSites,setBeacons,setRoutes,setSelection,journey,stopJourney,resize,get ready(){return loadRenderer();},locate,getScale:scaleInfo,getView:()=>({...view}),
       destroy(){dead=true;stopJourney();cancelAnimationFrame(frame);observer?.disconnect();events.forEach(off=>off());regional?.destroy();renderer?.destroy();canvas.style.touchAction=previousTouch;}
     };
   }

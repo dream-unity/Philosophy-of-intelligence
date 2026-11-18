@@ -100,7 +100,7 @@
     if(top < 0 || top > innerHeight*.76) el.scrollIntoView({block:'nearest',behavior:'instant'});
   }
   const atlas = window.EarthAtlas.mount($('globe-canvas'),{
-    lat:7,lon:32,zoom:1,
+    active:false,lat:7,lon:32,zoom:1,
     onSelect:point => choosePlace(point,false),
     onError:() => notify('The globe artwork could not load. You can still choose a place using Places.',true)
   });
@@ -453,6 +453,10 @@
   }
   function armCrewOrder(ids) {
     if(view!=='street')setView('street',false);
+    if(street?.getState().mode==='boat'){
+      crewOrders.cancel();
+      notify('Return to shore to select a worksite on the map.',true);return;
+    }
     cancelPlacement();
     street?.setCrewSelection?.(ids);if(street)updateStreetInteract(street.getState());
     requestAnimationFrame(()=>{
