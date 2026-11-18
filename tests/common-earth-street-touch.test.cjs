@@ -18,10 +18,11 @@ const site = {
   buildings: [{ id: 'hall-1', kind: 'hall', name: 'Cooperative Hall', plot: 4 }]
 };
 
-function surface(width = 820, height = 500, {animated=false, links=null}={}) {
+function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false}={}) {
   const pointerEvents = new Map();
   let frame = null;
-  let now = 100;
+  let now = 100, timerId = 0;
+  const timers = new Map();
   const canvas = {
     style: {},
     getContext: () => ({}),
@@ -37,8 +38,12 @@ function surface(width = 820, height = 500, {animated=false, links=null}={}) {
   const documentEvents = new Map();
   let covered = false;
   const runtime = {
-    setTimeout() { return 1; },
-    clearTimeout() {},
+    performance: { now: () => now },
+    setTimeout(callback, delay) {
+      timers.set(++timerId, {callback, due: now + delay});
+      return timerId;
+    },
+    clearTimeout(id) { timers.delete(id); },
     window: { addEventListener() {}, removeEventListener() {} },
     document: {
       hidden: false,
@@ -108,7 +113,11 @@ function surface(width = 820, height = 500, {animated=false, links=null}={}) {
   }
   function step() {
     now += 40;
-    if (!frame) return;
+    for (const [id, timer] of [...timers]) {
+      if (timer.due > now || !timers.delete(id)) continue;
+      timer.callback();
+    }
+    if (deferFrames || !frame) return;
     const callback = frame;
     frame = null;
     callback(now);
@@ -1232,4 +1241,35 @@ test('market collection uses the physical doorway of the active district',()=>{
   assert.equal(seen.tx,15);assert.equal(seen.ty,23.04);
   assert(g.street.focusResident('r1'));g.finish();
   assert.equal(g.street.meeting({type:'market'}),null);
+});
+
+
+test('the first shoal course from a Stone Town mooring can be stopped, redirected, and completed',()=>{
+  const g=surface(),town={...site,lat:-6.16,lon:39.19};g.street.setSite(town);
+  assert(g.street.toggleBoat());g.finish();assert.equal(g.street.getState().mode,'boat');
+  assert(g.street.approachFishing('shoal'));assert.equal(g.updates.at(-1).sailingToShoal,true);
+  g.step();g.street.cancelTravel();assert.equal(g.updates.at(-1).sailingToShoal,false);
+  assert(g.street.approachFishing('shoal'));g.step();g.street.move('down');
+  assert.equal(g.updates.at(-1).sailingToShoal,false);
+  assert(g.street.approachFishing('shoal'));g.finish();
+  const arrival=g.updates.at(-1);assert.equal(arrival.mode,'boat');assert.equal(arrival.sailingToShoal,false);
+  assert.equal(arrival.travelling,false);assert(arrival.y>32);
+});
+
+test('a scrolled-away district finishes walking and sailing when animation frames are deferred', () => {
+  const g = surface(740,390,{deferFrames:true});
+  g.street.setSite({...site,id:'stone',lat:-6.163,lon:39.189});
+  assert(g.street.approachFishing('shore'));
+  g.finish();
+  assert(g.street.toggleBoat());
+  g.finish();
+  const boarded = g.street.getState();
+  assert.equal(boarded.mode,'boat');
+  assert(g.street.approachFishing('shoal'));
+  g.finish();
+  const arrived=g.street.getState();
+  assert.equal(arrived.sailingToShoal,false);
+  assert(Math.hypot(arrived.x-boarded.x,arrived.y-boarded.y)>2);
+  assert.equal(g.updates.at(-1).travelling,false);
+  g.street.destroy();
 });

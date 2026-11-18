@@ -4,25 +4,32 @@
   'use strict';
   function start(sim){
     const page=root.document;
-    let timer=null,last=null,inFlight=false,closed=false,leftPage=false;
+    let timer=null,last=null,orders=null,inFlight=false,closed=false,leftPage=false;
     const now=()=>Math.round(root.performance.timeOrigin+root.performance.now());
+    const interval=1000,maxBatch=15*interval;
     const hasWork=()=>sim.state.sites.some(site=>!sim.worksiteLoadIssue?.(site) && (root.EarthConstruction?.needsTime?.(site,sim.state)??site.construction?.length));
+    const workOrders=()=>JSON.stringify(sim.state.sites.map(site=>root.EarthConstruction?.clockOrders?.(site,sim.state)));
     function stopTimer(){
       if(timer!==null)root.clearTimeout(timer);
-      timer=null;last=null;
+      timer=null;last=null;orders=null;
     }
     function schedule(crewStillWorking=false){
       if(closed || leftPage || page.hidden || crewStillWorking!==true && !hasWork()){
         stopTimer();
         return;
       }
-      if(last===null)last=now();
-      if(timer===null && !inFlight)timer=root.setTimeout(tick,1000);
+      if(last===null){last=now();orders=workOrders();}
+      if(timer===null && !inFlight)timer=root.setTimeout(tick,interval);
     }
     async function tick(){
       timer=null;
       if(closed || leftPage || page.hidden){stopTimer();return;}
-      const end=now(),elapsed=Math.min(2,Math.max(0,(end-last)/1000));
+      // Slow foreground callbacks still cover real play time. Commit a bounded
+      // slice in chronological order and leave the remainder for later ticks.
+      // Another visible tab may already have credited part of our interval.
+      const clock=now(),credited=sim.state.constructionThrough;
+      if(credited>last && credited<=clock)last=credited;
+      const end=Math.min(clock,last+maxBatch),elapsed=Math.max(0,(end-last)/1000);
       last=end;inFlight=true;
       let continuing=false;
       try{
@@ -38,6 +45,13 @@
     }
     const off=sim.subscribe((_state,notice)=>{
       if(notice.switched)stopTimer();
+      else if(last!==null && (!notice.construction || notice.completed?.length)){
+        // A new assignment can change every worker's job. Do not apply an
+        // overdue batch to a new crew. Unrelated player choices preserve it.
+        const next=workOrders();
+        if(!notice.construction && next!==orders)last=Math.max(last,now()-interval);
+        orders=next;
+      }
       if(!inFlight)schedule();
     });
     function leave(){leftPage=true;stopTimer();}

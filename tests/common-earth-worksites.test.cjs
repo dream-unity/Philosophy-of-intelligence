@@ -109,6 +109,77 @@ test('a backgrounded or closed game never accrues construction while away',async
   time+=15000;onWindow.pageshow();time+=1000;await timer();assert.equal(calls[2][1],1);
   stop();assert.equal(timer,null);assert.equal(listener,null);
 });
+function visibleClock(sim){
+  const origin=1_700_000_000_000,events={},pageEvents={},calls=[];
+  let elapsed=0,timer=null;
+  const doc={hidden:false,addEventListener:(id,fn)=>pageEvents[id]=fn,removeEventListener:id=>delete pageEvents[id]};
+  const env=makeRuntime({document:doc,performance:{timeOrigin:origin,now:()=>elapsed},
+    addEventListener:(id,fn)=>events[id]=fn,removeEventListener:id=>delete events[id],
+    setTimeout:(fn,delay)=>{assert.equal(delay,1000);timer=fn;return 1;},clearTimeout:()=>timer=null});
+  const host={get state(){return sim.state;},subscribe:sim.subscribe,worksiteLoadIssue:sim.worksiteLoadIssue,
+    perform:(command,seconds,through)=>{calls.push([seconds,through-origin]);return sim.perform(command,seconds,through);}};
+  const stop=env.EarthConstructionClock.start(host);
+  return {origin,calls,stop,pass(ms){elapsed+=ms;},async fire(ms){elapsed+=ms;const next=timer;timer=null;assert(next);await next();},
+    hidden(value){doc.hidden=value;pageEvents.visibilitychange();},get pending(){return !!timer;}};
+}
+test('delayed foreground timers settle the same workshop and crew as a steady clock',async()=>{
+  const live=found();ok(live.act('build:workshop',4));
+  const steady=runtime.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(live.state)});
+  const clock=visibleClock(live);
+  try{
+    const local=game=>JSON.stringify([game.active().construction,game.active().buildings,game.active().workforce]);
+    for(let i=0;i<10;i++){
+      await clock.fire(6000);
+      for(let second=0;second<6;second++)ok(steady.workConstruction(1));
+      assert.equal(local(live),local(steady));
+      if(live.active().buildings.length)break;
+    }
+    assert.equal(live.active().buildings[0]?.plot,4);
+    assert(clock.calls.length<=10);
+  }finally{clock.stop();live.destroy();steady.destroy();}
+});
+test('foreground catch-up batches are bounded, respect another tab’s watermark and end when the game is hidden',async()=>{
+  const disk=storage(),live=found(disk);ok(live.act('build:workshop',4));
+  const other=runtime.CommonEarthSim.create({storage:disk}),clock=visibleClock(live);
+  try{
+    await clock.fire(42000);
+    assert.deepEqual(clock.calls,[[15,15000]]);
+    ok(await other.perform('workConstruction',5,clock.origin+20000));
+    assert(live.sync());
+    await clock.fire(1000);
+    assert.deepEqual(clock.calls.at(-1),[15,35000]);
+    clock.hidden(true);
+    assert.equal(clock.pending,false);clock.pass(600000);
+    clock.hidden(false);await clock.fire(1000);
+    assert.deepEqual(clock.calls.at(-1),[1,644000]);
+  }finally{clock.stop();other.destroy();live.destroy();}
+});
+test('new work orders receive no overdue batch from before their crew assignment',async()=>{
+  const live=found();ok(live.act('build:workshop',4));
+  const clock=visibleClock(live);
+  try{
+    await clock.fire(42000);
+    ok(live.act('build:garden',0));
+    await clock.fire(1000);
+    assert.deepEqual(clock.calls,[[15,15000],[2,43000]]);
+  }finally{clock.stop();live.destroy();}
+});
+test('paid shifts and resident visits preserve foregone timer callbacks while a workshop crew stays on the same job',async()=>{
+  const live=found();ok(live.act('build:workshop',4));
+  const steady=runtime.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(live.state)});
+  const clock=visibleClock(live);
+  try{
+    await clock.fire(42000);
+    for(const game of [live,steady]){
+      ok(game.act('work:contract'));ok(game.act('listen:'+game.active().residents[0].id));
+    }
+    await clock.fire(1000);await clock.fire(1000);
+    assert.deepEqual(clock.calls,[[15,15000],[15,30000],[14,44000]]);
+    ok(steady.workConstruction(44));
+    assert.equal(JSON.stringify(live.active().construction),JSON.stringify(steady.active().construction));
+    assert.equal(JSON.stringify(live.active().workforce),JSON.stringify(steady.active().workforce));
+  }finally{clock.stop();live.destroy();steady.destroy();}
+});
 test('a cheaper cancellation quote requires another confirmation and a stale map order cannot partially assign a crew',()=>{
   const s=found(),site=s.active();ok(s.act('build:workshop',8));
   const job=site.construction[0],first=s.previewCancelConstruction(job.id).refund;

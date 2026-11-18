@@ -23,6 +23,7 @@
   function offer(site,week,p,now){
     if(!site || site.id!==p?.siteId || !root.CommonEarthSim.waterfront(site))return null;
     const cast=site.handline,place=zone(p.mode,p,shoal(site,week),cast);
+    if(p.sailingToShoal && !cast)return {action:'sailing',label:'Cast handline',text:'Sailing to the shoal… Cast when you reach the seabirds for 2 food.'};
     if(cast){
       if(place===5)return {action:'return',label:'Return to handline',text:cast.mode==='boat'?'Your float is on the water. Return to it to collect the catch.':'The handline is tied at the quay. Return to collect the catch.'};
       const wait=waitTime(cast,now);

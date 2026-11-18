@@ -109,3 +109,27 @@ test('an unreadable optional fishing script cannot roll back an otherwise valid 
   assert.equal(sim.handlineOffer({...shore,siteId:sim.active().id}),null);
   ok(sim.advance());sim.destroy();
 });
+
+
+test('the fishing controls distinguish underway, stopped, and ready to cast beneath the seabirds',()=>{
+  const g=setup(),sim=g.open();ok(sim.found({name:'Stone Town',lat:-6.16,lon:39.19}));
+  const site=sim.active(),berth={siteId:site.id,mode:'boat',waterfront:true,x:14.32,y:30.44};
+  const mark=g.context.EarthFisheries.shoal(site,sim.state.week);
+  const fields=new Map(),field=id=>{if(!fields.has(id))fields.set(id,{});return fields.get(id);};
+  const source=fs.readFileSync(path.join(directory,'app.js'),'utf8');
+  const a=source.indexOf('  function updateStreetInteract(state)'),b=source.indexOf('  function cityController()',a);
+  Object.assign(g.context,{sim,document:{body:{hasAttribute:()=>false}},$:field,handlineDue:0,
+    put:(id,content)=>{field(id).text=content;},show:(id,visible)=>{field(id).visible=visible;}});
+  vm.runInContext(source.slice(a,b),g.context);
+  const draw=scene=>g.context.updateStreetInteract(scene);
+  draw(berth);assert.equal(field('street-shoal').text,'Sail to shoal');
+  assert.equal(field('street-shoal').visible,true);assert.match(field('street-line-terms').text,/1 food/);
+  const sailing={...berth,...mark,sailingToShoal:true};draw(sailing);
+  assert.equal(field('street-shoal').text,'Stop sailing');assert.equal(field('street-shoal').visible,true);
+  assert.equal(field('street-handline').disabled,true);assert.match(field('street-line-terms').text,/Sailing to the shoal/);
+  assert.equal(sim.useHandline(sailing,'cast',2).ok,false);
+  draw(berth);assert.equal(field('street-handline').disabled,false);assert.equal(field('street-shoal').text,'Sail to shoal');
+  const arrived={...berth,...mark};draw(arrived);
+  assert.equal(field('street-shoal').visible,false);assert.equal(field('street-handline').disabled,false);
+  assert.match(field('street-line-terms').text,/2 food/);ok(sim.useHandline(arrived,'cast',2));sim.destroy();
+});

@@ -377,9 +377,10 @@
     if(line){
       put('street-handline',line.label);
       put('street-line-terms',line.text);
-      $('street-handline').disabled=['wait','full'].includes(line.action);
+      $('street-handline').disabled=['sailing','wait','full'].includes(line.action);
     }
-    show('street-shoal',aboard && line?.action==='cast' && line.food===1);
+    show('street-shoal',aboard && (state.sailingToShoal || line?.action==='cast' && line.food===1));
+    put('street-shoal',state.sailingToShoal?'Stop sailing':'Sail to shoal');
     const due=line?.wait?sim.active().handline.castAt:0;
     if(due!==handlineDue){
       clearTimeout(handlineTimer);handlineDue=due;
@@ -1641,7 +1642,10 @@
       document.body.hasAttribute('data-crew-order') || Math.hypot(scene.x-original.x,scene.y-original.y)>.35)return null;
     return scene;
   }
-  listen('street-shoal','click',()=>{if(street?.approachFishing('shoal'))followStreet();});
+  listen('street-shoal','click',()=>{
+    if(street?.getState().sailingToShoal)street.cancelTravel();
+    else if(street?.approachFishing('shoal'))followStreet();
+  });
   listen('street-handline','click',async()=>{
     const state=street?.getState();
     if(fishing || view!=='street' || !state || state.returning || state.boarding || state.placement || state.seated || document.body.hasAttribute('data-crew-order'))return;

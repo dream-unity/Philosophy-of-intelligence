@@ -533,6 +533,19 @@
     return workers.some(w=>w.job)&&workers;
   }
   function needsTime(site,world){return Boolean(timeDemand(site,world));}
+  // Inputs a player decision can change between two crew ticks. Current work,
+  // fatigue and positions advance on the clock and do not constitute new orders.
+  function clockOrders(site,world){
+    const jobs=queues(site),members=site.workforce?.members;
+    if(!jobs.length&&!members&&!possibleRelief(site)&&!site.strategy?.active&&!site.strategy?.studying&&world?.legacy?.term?.siteId!==site.id)return null;
+    return [site.id,site.foundingRevision,site.routeLinks,jobs.map(j=>[j.id,!!j.paused]),
+      site.buildings.map(b=>[b.id,b.plot,b.kind]),site.city?.precincts?.map(p=>p.use),
+      site.residents.map(p=>{
+        const worker=members?.[p.id];
+        return [p.id,worker?.preference||'auto',worker?.preferredJobId,commitment(site,world,p)?.[0],!!localPriority(site,p.slot)];
+      }),
+      roles.map(role=>[lowSupply(site,role),lowSupply(site,role,true),spareSupply(site,role),spareSupply(site,role,true)])];
+  }
   function advance(site,world,seconds,onFinished){
     if(!Number.isFinite(seconds)||seconds<0||seconds>3600)return {ok:false,changed:false,completed:[],reason:'Advance up to one hour of active play at a time.'};
     const completed=[];
@@ -576,5 +589,5 @@
     }
     return {ok:true,changed,completed};
   }
-  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,releaseFromShift,weeklyAdjustment,needsTime});
+  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,releaseFromShift,weeklyAdjustment,needsTime,clockOrders});
 })(typeof window==='undefined'?globalThis:window);

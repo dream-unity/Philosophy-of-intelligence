@@ -191,3 +191,15 @@ test('alternating missed refreshes reduce motion cost in stages and release rest
   assert.equal(g.canvas.width,fullWidth);
   g.street.destroy();
 });
+
+test('a restored foreground or backdrop wakes the stationary reduced-motion district',()=>{
+  const g=waterfront(4,{reduced:true}),ground=g.visit(site('restore'));
+  const backdrop=ground.parentElement.children[0];
+  assert.equal(g.hasFrame(),false);
+  const original=g.street.snapshotView();
+  for(const surface of [g.canvas,backdrop]){
+    surface.handlers.get('contextrestored')({});assert(g.hasFrame());g.draw();
+    assert.equal(g.hasFrame(),false);assert.deepEqual(g.street.snapshotView(),original);
+  }
+  g.street.destroy();assert.equal(backdrop.handlers.has('contextrestored'),false);
+});

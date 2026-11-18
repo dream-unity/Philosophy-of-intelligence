@@ -11,13 +11,15 @@ const source=fs.readFileSync(path.join(game,'globe.js'),'utf8');
 const box={left:32,top:58,width:320,height:300};
 const noop=()=>{};
 
-async function atlas(options={},layered=false) {
-  const handlers=new Map(),selected=[];
+async function atlas(options={},layered=false,withGpu=false) {
+  const handlers=new Map(),selected=[],paints={relief:0,transform:[]};
   // Keep rendering active so hit tests use positions and labels from the real
   // projection. The tiny image only supplies the software relief renderer.
   const context=new Proxy({
     measureText:text=>({width:text.length*7}),
     createRadialGradient:()=>({addColorStop:noop}),
+    setTransform:(...values)=>{paints.transform=values;},
+    putImageData:()=>{paints.relief++;},
     createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),
     getImageData:()=>({data:new Uint8ClampedArray(8)})
   },{get:(obj,k)=>k in obj?obj[k]:noop});
@@ -29,11 +31,24 @@ async function atlas(options={},layered=false) {
   const layers=[];
   if(layered){
     canvas.parentElement={classList:{contains:s=>s==='atlas-stage'}};
-    canvas.before=surface=>layers.push(surface);
+    canvas.before=surface=>{
+      const at=layers.indexOf(surface);if(at>=0)layers.splice(at,1);layers.push(surface);
+    };
   }
-  const document={baseURI:'https://example.invalid/game/',createElement:()=>{
-    const surface={...canvas,style:{},setAttribute:noop};
-    surface.remove=()=>layers.splice(layers.indexOf(surface),1);
+  const documentHandlers=new Map(),timers=new Map();
+  let timerId=0,gpuLost=false;
+  const gl=withGpu?new Proxy({NO_ERROR:0,getError:()=>0,getParameter:()=>4096,
+    getProgramParameter:()=>true,getShaderParameter:()=>true,isContextLost:()=>gpuLost,
+    getExtension:()=>({loseContext:noop})},{get:(obj,k)=>k in obj?obj[k]:noop}):null;
+  const document={baseURI:'https://example.invalid/game/',
+    addEventListener:(key,fn)=>documentHandlers.set(key,fn),removeEventListener:noop,createElement:()=>{
+    const surface={...canvas,style:{},setAttribute:noop,getContext:type=>type==='webgl'?gl:context};
+    const listeners=new Map();
+    surface.addEventListener=(type,fn)=>listeners.set(type,fn);
+    surface.removeEventListener=(type,fn)=>{if(listeners.get(type)===fn)listeners.delete(type);};
+    surface.dispatchEvent=event=>listeners.get(event.type)?.(event);
+    surface.hasListener=type=>listeners.has(type);
+    surface.remove=()=>{const at=layers.indexOf(surface);if(at>=0)layers.splice(at,1);};
     return surface;
   }};
   const windowHandlers=new Map();
@@ -44,6 +59,7 @@ async function atlas(options={},layered=false) {
   }
   let frame,now=100;
   vm.runInNewContext(source,{document,window,Image,URL,performance:{now:()=>now},
+    setTimeout:(fn,ms)=>{timers.set(++timerId,{fn,ms});return timerId;},clearTimeout:id=>timers.delete(id),
     requestAnimationFrame:fn=>{frame=fn;return 1;},cancelAnimationFrame:noop});
   const view=window.EarthAtlas.mount(canvas,{lat:0,lon:0,...options,onSelect:p=>selected.push(p)});
   await view.ready;
@@ -54,7 +70,11 @@ async function atlas(options={},layered=false) {
     handlers.get('pointer'+type)({pointerId:id,pointerType:'touch',button:0,clientX:x+box.left,clientY:y+box.top});
   }
   const tap=(x,y)=>{point('down',x,y);point('up',x,y);};
-  return {window,canvas,layers,view,point,tap,selected,draw,blur:()=>windowHandlers.get('blur')?.()};
+  const hide=hidden=>{document.hidden=hidden;documentHandlers.get('visibilitychange')?.();};
+  const expire=()=>{for(const [id,t] of timers){timers.delete(id);t.fn();}};
+  return {window,canvas,layers,view,point,tap,selected,draw,hide,expire,paints,
+    loseGpu:()=>{gpuLost=true;layers[1].dispatchEvent({type:'webglcontextlost'});},
+    restoreOverlay:()=>handlers.get('contextrestored')?.(),blur:()=>windowHandlers.get('blur')?.()};
 }
 
 test('a small finger wobble selects without rotating, while swipes and cancellations never select',async()=>{
@@ -219,4 +239,49 @@ test('a moving regional layer restores exact survey lines and responds to arrivi
   view.setActive(true);draw();assert.equal(chart.width,canvas.width);
   view.focus(0,0,1);draw();assert.equal(chart.width,1);
   view.destroy();assert.equal(layers.length,0);
+});
+
+test('short tab switches keep a warm atlas and a dormant tab releases its canvases',async()=>{
+  const {view,canvas,layers,draw,hide,expire}=await atlas({},true);
+  const size=canvas.width,camera=view.getView();
+  hide(true);assert.equal(canvas.width,size);hide(false);expire();draw();
+  assert.equal(canvas.width,size,'a cancelled background timer leaves the map warm');
+  hide(true);expire();assert([...layers,canvas].every(s=>s.width===1&&s.height===1));
+  view.resize();assert.equal(canvas.width,1,'a hidden orientation change waits for a visible page');
+  hide(false);draw();assert.equal(canvas.width,size);assert.deepEqual(view.getView(),camera);
+  hide(true);view.destroy();expire();assert.equal(layers.length,0);
+});
+
+test('restored canvas contexts rebuild the full-density atlas overlay and software relief',async()=>{
+  const {window,layers,view,paints,restoreOverlay,draw,tap,selected}=await atlas({},true);
+  window.devicePixelRatio=2;view.resize();draw();
+  const relief=layers[1],before=paints.relief;
+  relief.oncontextrestored();assert.equal(paints.relief,before+1,'restore cached relief at a stationary camera');
+  paints.transform=[];restoreOverlay();assert.deepEqual(paints.transform,[2,0,0,2,0,0]);
+  view.setSites([{id:'restored',name:'Restored',lat:0,lon:0}]);draw();tap(160,150);
+  assert.equal(selected.at(-1).id,'restored');view.destroy();assert.equal(relief.oncontextrestored,null);
+});
+
+test('a fractional display ratio settles a padded chart even when its pixel dimensions match',async()=>{
+  const {window,canvas,view,layers,point,draw}=await atlas({},true);
+  canvas.getBoundingClientRect=()=>({...box,width:300,height:300});window.devicePixelRatio=1.08;
+  window.EarthRegions={mount(){return {draw:noop,labels:noop,destroy:noop};}};
+  view.resize();view.focus(48,2,10);draw();await new Promise(setImmediate);draw();
+  const chart=layers[2],full=chart.width;assert.equal(full,324);
+  point('down',140,150);point('move',176,151);draw();
+  assert.equal(chart.width,full);assert.equal(chart.style.left,'-12px');
+  point('up',176,151);draw();assert.equal(chart.width,full);assert.equal(chart.style.left,'0px');
+  view.destroy();
+});
+
+test('losing the GPU switches to software at a stationary camera while regional UI stays in order',async()=>{
+  const {window,view,layers,loseGpu,draw,tap,selected}=await atlas({},true,true);
+  const gpu=layers[1];assert(gpu.hasListener('webglcontextlost'));
+  window.EarthRegions={lookup:()=>null,mount(){return {draw:()=>{},labels:()=>{},destroy:()=>{},hit:()=>null};}};
+  view.focus(44,12,8);draw();await new Promise(setImmediate);draw();
+  const sky=layers[0],regional=layers[2];assert(regional);
+  loseGpu();draw();assert.equal(layers.length,3);assert.equal(layers[0],sky);assert.equal(layers[2],regional);
+  assert.notEqual(layers[1],gpu);assert.equal(typeof layers[1].oncontextrestored,'function');
+  assert.equal(gpu.hasListener('webglcontextlost'),false);view.setSites([{id:'safe',name:'Port',lat:44,lon:12}]);draw();
+  tap(160,150);assert.equal(selected.at(-1).id,'safe');view.destroy();assert.equal(layers.length,0);
 });

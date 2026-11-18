@@ -204,7 +204,7 @@
 
   // Render the orthographic projection in a fragment shader when available.
   // The same inverse projection has a canvas implementation for software-only devices.
-  function gpuRenderer(image) {
+  function gpuRenderer(image,invalidate) {
     const gpu = document.createElement('canvas');
     const gl = gpu.getContext('webgl', {antialias:false, premultipliedAlpha:false, alpha:true, depth:false, stencil:false});
     if (!gl) return null;
@@ -260,10 +260,12 @@
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,image);
     function destroy(){
+      gpu.removeEventListener('webglcontextlost',invalidate);
       gl.deleteTexture(tex);gl.deleteProgram(program);gl.deleteBuffer(buffer);
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     }
     if(gl.getError()!==gl.NO_ERROR){destroy();return null;}
+    gpu.addEventListener('webglcontextlost',invalidate);
     const loc={view:gl.getUniformLocation(program,'camera'),size:gl.getUniformLocation(program,'resolution'),r:gl.getUniformLocation(program,'radius')};
     let previousView='';
     return {
@@ -287,12 +289,16 @@
       destroy
     };
   }
-  function softwareRenderer(image) {
+  function softwareRenderer(image,invalidate) {
     const {sqrt, min, max, floor, asin, atan2}=Math;
     let pixels=canvasPixels(image);
     const tw=image.width, th=image.height;
     const off=document.createElement('canvas'),ctx=off.getContext('2d');
     let out, lastProjection, previousRadius;
+    off.oncontextrestored=()=>{
+      if(out)ctx.putImageData(out,0,0);
+      invalidate();
+    };
     return {
       surface:off,
       draw(dest,w,h,r,view,interacting) {
@@ -340,7 +346,7 @@
         return true;
       },
       releaseFrame(){off.width=off.height=1;out=null;lastProjection=null;},
-      destroy(){pixels=null;off.width=off.height=1;}
+      destroy(){off.oncontextrestored=null;pixels=null;off.width=off.height=1;}
     };
   }
 
@@ -404,7 +410,7 @@
       const pad=moving?chartMargin:0,fullW=w+2*pad,fullH=h+2*pad;
       const pw=moving?Math.ceil(fullW*Math.min(canvas.width/w,1)):canvas.width;
       const ph=moving?Math.ceil(fullH*Math.min(canvas.height/h,1)):canvas.height;
-      const key=[pw,ph,w,h,view.lat,view.lon,r].join('/');
+      const key=[pw,ph,w,h,pad,view.lat,view.lon,r].join('/');
       // Failed geographic tiles become eligible for another request after a minute.
       const now=Date.now();
       if(regionalView===key && now-regionalTime<60000){
@@ -473,10 +479,17 @@
       if(!next)selectionRevision++;
       active=Boolean(next);
       if(active){loadRenderer();resize();return;}
+      stopJourney(true);releaseFrames();
+    }
+    let backgroundTimer=0;
+    function cancelParking(){
+      if(backgroundTimer){clearTimeout(backgroundTimer);backgroundTimer=0;}
+    }
+    function releaseFrames(){
+      cancelParking();
       if(frame){cancelAnimationFrame(frame);frame=0;}
-      stopJourney(true);
-      // The district has its own canvases. Release the hidden atlas buffers
-      // while retaining the decoded relief, geographic lookup and camera.
+      // Keep geography and camera, but return the invisible backing stores
+      // while playing in a district or while the browser tab is backgrounded.
       if(canvas.width>1 || canvas.height>1){
         canvas.width=canvas.height=1;
         renderer?.releaseFrame();
@@ -484,7 +497,7 @@
       }
     }
     function resize() {
-      if(!active)return;
+      if(!active || document.hidden)return;
       const rect=canvas.getBoundingClientRect();
       if(!rect.width||!rect.height)return;
       w=rect.width;h=rect.height;
@@ -831,7 +844,7 @@
       if(renderer){
         if(!renderer.draw(layered?null:ctx,w,h,r,view,dragging||pointers.size>1) && !cpu){
           if(layered)renderer.surface.remove();
-          renderer.destroy();renderer=softwareRenderer(geo.chart);cpu=true;
+          renderer.destroy();renderer=softwareRenderer(geo.chart,queue);cpu=true;
           if(layered){placeLayer(renderer.surface);if(regionalBrush)placeLayer(regionalSurface);}
           renderer.draw(layered?null:ctx,w,h,r,view,dragging);
         }
@@ -870,6 +883,7 @@
     }
     const observer=typeof ResizeObserver==='function'?new ResizeObserver(resize):null;
     observer?.observe(canvas);on(window,'resize',resize);
+    on(canvas,'contextrestored',resize);
     const local=e=>{const rect=canvas.getBoundingClientRect();return {x:e.clientX-rect.left,y:e.clientY-rect.top};};
     function markerAt(p,limit,includeLabels=true) {
       let found=null,best=limit;
@@ -981,7 +995,20 @@
       if(ids.length){canvas.style.cursor='grab';queue();}
     }
     on(window,'blur',resetPointers);
-    if(document.addEventListener)on(document,'visibilitychange',()=>{if(document.hidden)resetPointers();else queue();});
+    function resumePage(){cancelParking();resize();}
+    if(document.addEventListener){
+      on(document,'visibilitychange',()=>{
+        if(!document.hidden){resumePage();return;}
+        resetPointers();
+        // Short tab switches return to a warm map. Give a dormant game its
+        // drawing memory back before the browser has to discard the whole tab.
+        if(!backgroundTimer && active && typeof setTimeout==='function')backgroundTimer=setTimeout(()=>{
+          backgroundTimer=0;if(document.hidden)releaseFrames();
+        },30000);
+      });
+      on(document,'freeze',releaseFrames);
+    }
+    on(window,'pagehide',releaseFrames);on(window,'pageshow',resumePage);
     on(canvas,'pointerleave',()=>{if(hover){hover=null;queue();}});
     on(canvas,'wheel',e=>{e.preventDefault();zoomBy(Math.exp(clamp(-e.deltaY*(e.deltaMode===1?.035:.0018),-1,1)),local(e));},{passive:false});
     on(canvas,'keydown',e=>{
@@ -1005,8 +1032,8 @@
     function loadRenderer(){
       if(!ready)ready=assets().then(a=>{
         if(dead)return;
-        try{renderer=gpuRenderer(a.chart);}catch{renderer=null;}
-        if(!renderer){renderer=softwareRenderer(a.chart);cpu=true;}
+        try{renderer=gpuRenderer(a.chart,queue);}catch{renderer=null;}
+        if(!renderer){renderer=softwareRenderer(a.chart,queue);cpu=true;}
         if(layered)placeLayer(renderer.surface);
         queue();options.onReady?.();
       }).catch(err=>{failure=true;queue();options.onError?.(err);});
@@ -1015,7 +1042,7 @@
     if(active){loadRenderer();resize();}
     return {setActive,focus,zoomBy,setSites,setBeacons,setRoutes,setSelection,journey,stopJourney,resize,get ready(){return Promise.all([loadRenderer(),surveyReady()]).then(([render])=>render);},locate,getScale:scaleInfo,getView:()=>({...view}),
       destroy(){
-        dead=true;stopJourney();cancelAnimationFrame(frame);observer?.disconnect();
+        dead=true;cancelParking();stopJourney();cancelAnimationFrame(frame);observer?.disconnect();
         events.forEach(off=>off());regional?.destroy();
         if(layered){
           sky.oncontextrestored=null;sky.remove();renderer?.surface.remove();

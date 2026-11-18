@@ -254,7 +254,7 @@
     const state={site:null,seed:0,lots:[],points:[],solids:[],trees:[],decor:[],links:[],looks:new Map(),traffic:null,preview:null,companion:null,shiftStops:[],placed:null,mode:'walk',player:{...marketDoor(),dx:0,dy:1},van:vanAtExchange(),route:[],destination:null,arrival:null,hover:null,active:null};
     let width=0,height=0,unit=30,zoom=1,pixelRatio=1,centreX=state.player.x,centreY=state.player.y;
     let fullPixelRatio=1,motionPixelRatio=1,limitedPixelRatio=1,slowFrameCount=0;
-    let frame=0,idleTimer=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
+    let frame=0,idleTimer=0,routeTimer=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
     const sheetOpen=()=>typeof document!=='undefined'&&Boolean(document.body?.hasAttribute('data-sheet-open'));
     let covered=sheetOpen();
     let shortMessage='',messageUntil=0,cameraFollows=true;
@@ -1059,7 +1059,7 @@
     function refreshFishingFloat(){if(state.site?.handline){dirty=true;schedule();}}
     function approachFishing(target){
       if(!berths.length || state.placed || selectedCrew.size)return false;
-      if(target==='shoal')return state.mode==='boat' && Boolean(feedingGround()) && sail(feedingGround());
+      if(target==='shoal')return state.mode==='boat' && Boolean(feedingGround()) && sail({...feedingGround(),shoal:true});
       const cast=target==='line'?state.site.handline:null;
       if(cast?.mode==='boat' && state.mode!=='boat')return toggleBoat();
       if(cast?.mode!=='boat' && state.mode==='boat')return toggleBoat();
@@ -2612,7 +2612,7 @@
     function getState() {
       const body=state.companion&&(state.mode!=='walk'?state.player:state.companion);
       const companion=body?{residentId:state.companion.id,x:body.x,y:body.y}:null;
-      return {actor:playedId,mode:state.mode,seated:Boolean(seatedAt),waterfront:berths.length>0,boarding:state.arrival?.type==='board',returning:state.arrival?.type==='land',siteId:state.site?.id||null,plot:placingFocus,placement:state.placed,nearby:state.active?publicPoint(state.active):null,companion,x:state.player.x,y:state.player.y,travelling:state.route.length>0,zoom};
+      return {actor:playedId,mode:state.mode,seated:Boolean(seatedAt),waterfront:berths.length>0,boarding:state.arrival?.type==='board',returning:state.arrival?.type==='land',sailingToShoal:state.destination?.shoal===true,siteId:state.site?.id||null,plot:placingFocus,placement:state.placed,nearby:state.active?publicPoint(state.active):null,companion,x:state.player.x,y:state.player.y,travelling:state.route.length>0,zoom};
     }
     function publicPoint(q) {
       if(!q)return null;
@@ -2807,6 +2807,7 @@
       if(path.some((q,i)=>!clearWater(i?path[i-1]:p,q,embarked)))path=waterDetour(p,target,embarked);
       if(!path.length){message('The moored boats block that approach. Choose open water.');emitState();return false;}
       state.route=path;state.destination=path[path.length-1];
+      if(target.shoal)state.destination.shoal=true;
       state.arrival=returning?{type:'land',berthId:embarked.id}:null;
       lastFrame=0;cameraFollows=true;emitState();return true;
     }
@@ -3377,10 +3378,25 @@
     function moving(){return Boolean(pressed.size||state.route.length);}
     function activeMotion(){return Boolean(moving()||dragging?.moved||pinch);}
     function cancelIdle(){if(idleTimer){clearTimeout(idleTimer);idleTimer=0;}}
-    function suspend(){cancelIdle();if(frame){cancelAnimationFrame(frame);frame=0;}}
+    function cancelRouteTimer(){if(routeTimer){clearTimeout(routeTimer);routeTimer=0;}}
+    function cancelFrame(){if(frame){cancelAnimationFrame(frame);frame=0;}}
+    function suspend(){cancelIdle();cancelRouteTimer();cancelFrame();}
     function schedule(){
       cancelIdle();
-      if(alive&&!covered&&!frame&&!canvas.parentElement?.hidden&&(visible||moving())&&typeof requestAnimationFrame==='function'&&(typeof document==='undefined'||!document.hidden))frame=requestAnimationFrame(tick);
+      if(!alive||covered||canvas.parentElement?.hidden||(typeof document!=='undefined'&&document.hidden))return;
+      if(!visible&&typeof setTimeout==='function'){
+        // A scrolled-away frame can lose its repaint clock. Keep accepted journeys
+        // advancing at low frequency without drawing an invisible scene.
+        cancelFrame();
+        if(!moving()){cancelRouteTimer();return;}
+        if(!routeTimer)routeTimer=setTimeout(()=>{
+          routeTimer=0;
+          tick(frameTimer?frameTimer.now():Date.now());
+        },lastFrame?120:0);
+        return;
+      }
+      cancelRouteTimer();
+      if(!frame&&(visible||moving())&&typeof requestAnimationFrame==='function')frame=requestAnimationFrame(tick);
     }
     const frameTimer=typeof performance!=='undefined' && typeof performance.now==='function'?performance:null;
     let previousMotionTick=0,lastPaintCost=null,quickPaints=0,latePaints=0,fastTravel=false,limitedTravel=false;
@@ -3454,6 +3470,12 @@
       canvas.parentElement.appendChild(miniButton);listen(miniButton,'click',toggleOverview);cleanups.push(()=>miniButton.remove());
     }
     addMapControls();
+    function restoreStreetSurface(){
+      idleScene=null;terrainSnapshot=null;backdropGradient=null;miniTick=-1;dirty=true;
+    }
+    listen(canvas,'contextrestored',restoreStreetSurface);
+    if(terrainLayer)listen(terrainLayer.surface,'contextrestored',restoreStreetSurface);
+    if(miniCanvas)listen(miniCanvas,'contextrestored',restoreStreetSurface);
     if(window.EarthTownProjects?.watch){
       cleanups.push(window.EarthTownProjects.watch(()=>{dirty=true;schedule();}));
     }

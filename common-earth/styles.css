@@ -633,3 +633,9 @@ body[data-crew-order] .street-stage-heading > :not(#crew-order-hud) { display: n
 #build-plan-mark { min-height: 38px; }
 
 .actor-review { flex-basis:100%; } .actor-review button { margin-right:.5rem; }
+
+@media (any-pointer: coarse), (max-width: 730px) {
+  #calendar-personal-work, #build-plan-lot, #build-plan-mark,
+  .build-plan .text-button, .actions-list .plan-link, .actor-controls select,
+  #personal-work summary, #build-plan-survey summary { min-height: 44px; }
+}
