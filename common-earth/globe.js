@@ -152,9 +152,9 @@
           float lon=atan(p.x,z*camera.y-p.y*camera.x)+camera.z;
           vec2 uv=vec2(fract(.5+lon/6.28318530718),clamp(.5-lat/3.14159265359,0.00001,.99999));
           vec3 surface=texture2D(chart,uv).rgb;
-          float light=.55+.45*clamp(.68*z+.28*p.y-.39*p.x+.29,0.,1.);
+          float light=.44+.64*clamp(.72*z+.38*p.y-.48*p.x+.24,0.,1.);
           float fresnel=pow(1.-z,4.);
-          vec3 color=surface*light+vec3(.15,.31,.31)*fresnel*.36;
+          vec3 color=surface*light+vec3(.16,.49,.78)*fresnel*.66;
           gl_FragColor=vec4(color,1.);
         }`);
       gl.attachShader(program,vert);gl.attachShader(program,frag);gl.linkProgram(program);
@@ -220,16 +220,16 @@
             const lon=Math.atan2(nx,z*c-ny*s)+lam;
             const u=(.5+lon/TAU)*tw-(smooth?.5:0),v=clamp((.5-lat/Math.PI)*th-(smooth?.5:0),0,th-1);
             const tx=((Math.floor(u)%tw)+tw)%tw,ty=Math.floor(v);
-            const p=(ty*tw+tx)*4,light=.55+.45*clamp(.68*z+.28*ny-.39*nx+.29,0,1), edge=(1-z)**4*.36;
+            const p=(ty*tw+tx)*4,light=.44+.64*clamp(.72*z+.38*ny-.48*nx+.24,0,1), edge=(1-z)**4*.66;
             if(smooth){
               const east=tx+1===tw?-(tw-1)*4:4,south=ty+1===th?0:tw*4,fx=u-Math.floor(u),fy=v-ty;
               for(let i=0;i<3;i++){
                 const top=pixels[p+i]+(pixels[p+east+i]-pixels[p+i])*fx;
                 const bottom=pixels[p+south+i]+(pixels[p+south+east+i]-pixels[p+south+i])*fx;
-                result[k+i]=(top+(bottom-top)*fy)*light+(i?79:38)*edge;
+                result[k+i]=(top+(bottom-top)*fy)*light+(i===0?41:i===1?125:199)*edge;
               }
             }else{
-              result[k]=pixels[p]*light+38*edge;result[k+1]=pixels[p+1]*light+79*edge;result[k+2]=pixels[p+2]*light+79*edge;
+              result[k]=pixels[p]*light+41*edge;result[k+1]=pixels[p+1]*light+125*edge;result[k+2]=pixels[p+2]*light+199*edge;
             }
             result[k+3]=255;
           }
@@ -706,3 +706,4 @@
   }
   window.EarthAtlas={mount,locate,ready:assets};
 })();
+
