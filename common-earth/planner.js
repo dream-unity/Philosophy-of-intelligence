@@ -2,18 +2,31 @@
 (() => {
   'use strict';
   const dimensions={food:'Food',funds:'Funds',materials:'Materials',trust:'Trust',wellbeing:'Wellbeing',population:'Residents'};
-  const groups={work:'Work',people:'Relationships',build:'Construction',council:'Council',research:'Research',routes:'Trade routes'};
-  const idle='wait';
+  const groups={work:'Work',people:'Relationships',build:'Construction',city:'City planning',council:'Council',research:'Research',routes:'Trade routes'};
+  const idle='wait', cityMove='city-project';
+  const urbanMeasures={capacity:'Housing capacity',reachable:'Precincts within 15 minutes',pressure:'Precincts facing rent pressure',noise:'Precincts affected by industry'};
+  const cityModel=()=>globalThis.EarthCityModel;
+  function urbanOptions(sim) {
+    const model=cityModel(),site=sim.active();
+    if(!model||!site)return [];
+    return model.overview(site).records.map((precinct,location)=>{
+      const projects=model.options.map(id=>({id,preview:model.preview(site,sim.state,location,id)})).filter(p=>p.preview.available);
+      return {location,precinct,projects};
+    }).filter(row=>row.projects.length);
+  }
   function fork(state) {
     const key='rehearsal',items=new Map([[key,JSON.stringify(state)]]);
     const storage={getItem:k=>items.get(k)??null,setItem:(k,v)=>items.set(k,v),removeItem:k=>items.delete(k)};
     return globalThis.CommonEarthSim.create({storage,key});
   }
   function moves(sim) {
-    return sim.actions().filter(a=>a.available&&!a.id.startsWith('courier:')&&!a.id.startsWith('reclaim:')&&groups[a.group]);
+    const available=sim.actions().filter(a=>a.available&&!a.id.startsWith('courier:')&&!a.id.startsWith('reclaim:')&&groups[a.group]);
+    if(cityModel()&&sim.active()&&sim.state.effort>0)available.push({id:cityMove,group:'city',label:'Commission a precinct project',cost:null});
+    return available;
   }
   function apply(sim,move) {
     if(!move || move.id===idle)return {ok:true,message:''};
+    if(move.id===cityMove)return sim.planCity(move.location,move.project);
     const a=moves(sim).find(a=>a.id===move.id);
     if(!a)return {ok:false,message:'This move is unavailable after the earlier choice.'};
     const result=sim.act(move.id,move.plot);
@@ -36,6 +49,8 @@
       }
       const end=sim.active();
       return {ok:true,week:sim.state.week,name:end.name,site:Object.fromEntries(Object.keys(dimensions).map(k=>[k,end[k]])),
+        city:cityModel()?.overview(end),
+        links:globalThis.EarthNeighbours?.summary(end).links||[],
         people:people.map(p=>{const endPerson=end.residents.find(r=>r.id===p.id);return {...p,bond:endPerson.bond,promise:endPerson.promise?.dueWeek||null};}),
         sites:sim.state.sites.map(s=>({id:s.id,name:s.name,food:s.food,trust:s.trust,wellbeing:s.wellbeing})), effects};
     } finally {sim.destroy();}
@@ -64,7 +79,7 @@
           for(const [key,name] of Object.entries(groups)) {
             const list=available.filter(a=>a.group===key);if(!list.length)continue;
             const optgroup=el('optgroup');optgroup.label=name;
-            for(const a of list){const o=el('option',a.label+' · '+a.cost+' effort');o.value=a.id;optgroup.append(o);}
+            for(const a of list){const o=el('option',a.cost==null?a.label:a.label+' · '+a.cost+' effort');o.value=a.id;optgroup.append(o);}
             select.append(optgroup);
           }
           if(!available.some(a=>a.id===move.id))move.id=idle;
@@ -81,8 +96,31 @@
             pick.select.value=move.plot;pick.select.dataset.control='plot-'+index+'-'+i;
             pick.select.addEventListener('change',()=>{move.plot=Number(pick.select.value);draw('plot-'+index+'-'+i);});box.append(pick.label);
           }
+          if(move.id===cityMove) {
+            const available=urbanOptions(virtual);
+            if(!available.length) {
+              box.append(el('p','No precinct project is affordable with the resources and effort left in this plan.','action-reason'));
+            } else {
+              const area=dropdown('Precinct'),proposal=dropdown('Project');
+              for(const row of available){const o=el('option',row.precinct.name);o.value=row.location;area.select.append(o);}
+              const row=available.find(r=>r.location===move.location)||available[0];
+              move.location=row.location;area.select.value=row.location;
+              const selected=row.projects.find(p=>p.id===move.project)||row.projects[0];move.project=selected.id;
+              for(const p of row.projects){
+                const c=p.preview.cost;
+                const o=el('option',p.preview.title+' · '+c.effort+' effort, '+c.funds+' funds, '+c.materials+' materials');
+                o.value=p.id;proposal.select.append(o);
+              }
+              proposal.select.value=move.project;
+              area.select.dataset.control='precinct-'+index+'-'+i;
+              area.select.addEventListener('change',()=>{move.location=Number(area.select.value);draw(area.select.dataset.control);});
+              proposal.select.dataset.control='project-'+index+'-'+i;
+              proposal.select.addEventListener('change',()=>{move.project=proposal.select.value;draw(proposal.select.dataset.control);});
+              box.append(area.label,proposal.label,el('p','Opens in week '+selected.preview.week+'. '+selected.preview.people,'plan-consequence'));
+            }
+          }
           const r=apply(virtual,move);
-          if(!r.ok)box.append(el('p',r.message,'action-reason'));
+          if(!r.ok && (move.id!==cityMove||move.project))box.append(el('p',r.message,'action-reason'));
         }
         const edit=plans[index].length===1?btn('Add a second move',()=>{plans[index].push({id:idle});draw('move-'+index+'-1');}):
           btn('Remove second move',()=>{plans[index].pop();draw('move-'+index+'-0');});
@@ -111,6 +149,20 @@
           if(first!==second)r.className='plan-difference';body.append(r);
         }
         for(const [key,label] of Object.entries(dimensions))row(label,home[key],a.site[key],b.site[key]);
+        if(a.city&&b.city) {
+          const today=cityModel().overview(home);
+          for(const [key,label] of Object.entries(urbanMeasures))if(a.city[key]!==b.city[key]||a.city[key]!==today[key])row(label,today[key],a.city[key],b.city[key]);
+        }
+        const beforeLinks=globalThis.EarthNeighbours?.summary(home).links||[];
+        for(const pair of a.links){
+          const before=beforeLinks.find(link=>link.id===pair.id),other=b.links.find(link=>link.id===pair.id);
+          if(before&&other&&(pair.strength!==before.strength||pair.strength!==other.strength)){
+            row(pair.names.join(' & '),before.status,pair.status,other.status);
+          }
+          if(before&&other&&(pair.handover!==before.handover||pair.handover!==other.handover)){
+            row(pair.names.join(' & ')+' · agreement',before.handover||'None',pair.handover||'None',other.handover||'None');
+          }
+        }
         for(const p of a.people){
           const orig=home.residents.find(r=>r.id===p.id),other=b.people.find(r=>r.id===p.id);
           if(p.bond!==orig.bond||p.bond!==other.bond)row(p.name+' · bond',orig.bond,p.bond,other.bond);
@@ -137,7 +189,16 @@
       if(next!==fingerprint){fresh();fingerprint=next;draw();}
     }
     details?.addEventListener('toggle',render);
-    return {render,destroy(){details?.removeEventListener('toggle',render);root.replaceChildren();}};
+    function compareCity(location,project) {
+      if(!live.active()||!details)return;
+      const check=cityModel()?.preview(live.active(),live.state,location,project);
+      if(!check?.available)return;
+      fresh();fingerprint=JSON.stringify(live.state);horizon=Math.max(2,check.turns);
+      plans=[[{id:idle}],[{id:cityMove,location,project}]];
+      details.hidden=false;details.open=true;draw('project-1-0');
+      details.scrollIntoView({block:'start',behavior:'instant'});
+    }
+    return {render,compareCity,destroy(){details?.removeEventListener('toggle',render);root.replaceChildren();}};
   }
   globalThis.EarthPlanner=Object.freeze({project,mount});
 })();

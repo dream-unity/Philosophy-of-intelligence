@@ -25,7 +25,7 @@
   const planning=window.EarthPlanner && $('planning-table') ? window.EarthPlanner.mount($('planning-table'),sim):null;
   let city=null,shiftStop=null,researchPage='eras',councilPage='agenda';
   let selected = start, view = 'world', group = 'people', visiting = null, peers = false, encounter = null, placement = null, street = null;
-  let toastTimer;
+  let toastTimer, recordsPage='events',journalLimit=20,journalFilter='all';
   function notify(message, error = false) {
     const box = $('toast');
     if (!message || !box) return;
@@ -164,6 +164,7 @@
     if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return;
     selected=point;planOpen=false;reportOpen=false;
     if($('commission-at-founding'))$('commission-at-founding').checked=false;
+    if($('commission-brief'))$('commission-brief').open=false;
     if ($('found-name')) $('found-name').value='';
     if(fly) atlas.focus(point.lat,point.lon,1.6);
     atlas.setSelection(point);
@@ -186,6 +187,8 @@
       return;
     }
     const scenario=window.EarthCampaigns?.preview(selected)||window.EarthNavigation.scenario(selected);
+    put('commission-title',scenario?.title);put('commission-step',scenario?.firstStep||scenario?.question);
+    show('commission-brief',!!scenario);
     put('place-name',site?.name||selected.name);
     put('place-type',site ? (site.water?'Floating community':'Established community') :
       selected.region|| (selected.water?'Open water':'Landfall'));
@@ -250,7 +253,7 @@
       put('street-title',sim.active().name);street.setSite(sim.active());
       requestAnimationFrame(()=>street.resize());
     } else if(isCity && window.EarthCity && $('city-map')) {
-      if(!city)city=window.EarthCity.mount({mapRoot:$('city-map'),panel:$('city-panel'),sim,onStreet:()=>setView('street'),onResult:presentResult,onChange:render});
+      if(!city)city=window.EarthCity.mount({mapRoot:$('city-map'),panel:$('city-panel'),sim,onStreet:()=>setView('street'),onResult:presentResult,onChange:render,onRehearse:planning?.compareCity});
       requestAnimationFrame(()=>city?.render());
     } else requestAnimationFrame(()=>atlas.resize());
     if(changed && matchMedia('(max-width: 760px)').matches) requestAnimationFrame(()=>$(isStreet?'street-stage':isCity?'city-stage':'atlas-stage').scrollIntoView({block:'start',behavior:'instant'}));
@@ -427,7 +430,11 @@
         put('actions-heading',work.title);
         list.append(button('← All residents',()=>{peers=false;renderActions();},'text-button'),node('p','action-description',work.body));
         const links=node('ul','peer-links');
-        for(const pair of work.links)links.append(node('li','',pair.names.join(' & ')+' · '+pair.status));
+        for(const pair of work.links){
+          const link=node('li','',pair.names.join(' & ')+' · '+pair.status);
+          if(pair.handover)link.append(node('small','peer-agreement',pair.handover));
+          links.append(link);
+        }
         list.append(links);
         for(const a of actions.filter(x=>x.peerProject))list.append(actionRow(a));
         if(work.history.length)list.append(node('p','resident-line',work.history[0].text));
@@ -619,10 +626,7 @@
       const b=button('',()=>openSite(s),'site-entry');
       b.append(node('strong','',s.name),node('small','',s.region+' · '+s.population+' residents'));return b;
     }));
-    $('journal-list').replaceChildren(...state.journal.slice(0,100).map(entry=>{
-      const e=node('li','journal-entry');e.append(node('small','', 'Week '+entry.week),node('p','',entry.text));return e;
-    }));
-    if(!state.journal.length)$('journal-list').append(node('li','empty-state','Your first entry is written when you found a community.'));
+    renderRecords();
     if($('route-status')){
       const routes=state.routes.map(r=>{
         const from=state.sites.find(s=>s.id===r.from),to=state.sites.find(s=>s.id===r.to);
@@ -633,6 +637,57 @@
     }
     inspect();markers();renderActions();renderForecast();planning?.render();if(view==='city')city?.render();
   }
+  function renderRecords(){
+    if(!$('records-views'))return;
+    for(const b of controls($('records-views'),'[data-records]')){
+      const active=b.dataset.records===recordsPage;b.setAttribute('aria-pressed',String(active));
+      show('records-'+b.dataset.records,active);
+    }
+    const latest=sim.lastWeek?.();
+    show('week-review-open',!!latest);
+    if(recordsPage==='review'){
+      const panel=$('records-review');panel.replaceChildren();
+      if(!latest){panel.append(node('p','empty-state','Advance a week to see its outcome here.'));return;}
+      panel.append(node('h3','','Week '+latest.week+' in review'));
+      for(const item of latest.sites){
+        const d=node('details','week-report-site');d.open=item.id===sim.state.activeId;
+        d.append(node('summary','',item.name));
+        const metrics=node('dl','report-ledger');
+        for(const [key,label] of Object.entries(resourceLabels)){
+          const delta=item.delta[key]||0;metrics.append(node('dt','',label),node('dd','',item.closing[key]+' ('+(delta>0?'+':'')+delta+')'));
+        }
+        d.append(metrics);
+        if(item.arrivals||item.departures)d.append(node('p','action-cost',item.arrivals+' shipment arrivals · '+item.departures+' departures.'));
+        for(const line of item.highlights)d.append(node('p','action-description',line));
+        if(item.totalEvents>item.highlights.length)d.append(node('small','', 'More entries are recorded under Events.'));
+        panel.append(d);
+      }
+      return;
+    }
+    if(recordsPage!=='events')return;
+    show('journal-filter-label',sim.state.sites.length>1);
+    const filter=$('journal-filter');
+    if(!sim.state.sites.some(s=>s.id===journalFilter))journalFilter='all';
+    const choices=[['all','All communities'],...sim.state.sites.map(s=>[s.id,s.name])];
+    if(choices.length!==filter.options.length||choices.some(([id,name],i)=>filter.options[i]?.value!==id||filter.options[i]?.text!==name)){
+      filter.replaceChildren(...choices.map(([id,name])=>{const o=node('option','',name);o.value=id;return o;}));
+    }
+    filter.value=journalFilter;
+    const entries=sim.state.journal.filter(e=>journalFilter==='all'||e.siteId===journalFilter);
+    $('journal-list').replaceChildren(...entries.slice(0,journalLimit).map(entry=>{
+      const e=node('li','journal-entry');
+      const place=sim.state.sites.find(s=>s.id===entry.siteId);
+      e.append(node('small','','Week '+entry.week+(place&&sim.state.sites.length>1?' · '+place.name:'')),node('p','',entry.text));return e;
+    }));
+    if(!entries.length)$('journal-list').append(node('li','empty-state','No events recorded here yet.'));
+    show('earlier-events',entries.length>journalLimit);
+  }
+  listen('records-views','click',e=>{
+    const b=e.target.closest('[data-records]');if(b){recordsPage=b.dataset.records;renderRecords();}
+  });
+  listen('journal-filter','change',()=>{journalFilter=$('journal-filter').value;journalLimit=20;renderRecords();});
+  listen('earlier-events','click',()=>{journalLimit+=30;renderRecords();});
+  listen('week-review-open','click',()=>{recordsPage='review';renderRecords();});
   function renderForecast() {
     const el=$('week-summary'),site=sim.active();
     if(!el)return;
@@ -699,6 +754,7 @@
   sim.subscribe((_world,notice)=>{
     if(!notice.external)return;
     if(notice.switched){
+      journalFilter='all';journalLimit=20;
       street?.destroy();street=null;city?.destroy();city=null;group='people';researchPage='eras';councilPage='agenda';
       selected=sim.active()?{...sim.active()}:start;planOpen=false;reportOpen=false;shiftStop=null;
       setView('world');atlas.focus(selected.lat,selected.lon,1);put('action-outcome','');show('action-outcome',false);

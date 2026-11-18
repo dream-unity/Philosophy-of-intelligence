@@ -6,25 +6,26 @@
   <meta name="theme-color" content="#0b191e">
   <meta name="description" content="Explore Earth, found a community and shape its future, from street encounters to ocean routes. A strategy game by Philosophy of Intelligence.">
   <title>Common Earth · Philosophy of Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=53efae23884b">
+  <link rel="icon" type="image/svg+xml" href="../icon.svg?v=69d49b562939">
+  <link rel="stylesheet" href="styles.css?v=de6bd9a3e224">
   <link rel="stylesheet" href="city.css?v=e3fe3d79f6ad">
-  <link rel="stylesheet" href="planner.css?v=bd6c22061280">
+  <link rel="stylesheet" href="planner.css?v=19c8b546877b">
   <link rel="stylesheet" href="saves.css?v=211ec723a0c5">
-  <script src="neighbours.js?v=01810c60ff7d" defer></script>
+  <script src="neighbours.js?v=c440651dfadb" defer></script>
   <script src="voyages.js?v=d6f3a4cdc8a2" defer></script>
   <script src="shifts.js?v=bf925c4c0dda" defer></script>
-  <script src="campaigns.js?v=6f9326122e0c" defer></script>
+  <script src="campaigns.js?v=2f09cd6c9a42" defer></script>
   <script src="strategy.js?v=269d0bebb54d" defer></script>
   <script src="partners.js?v=19982f961a21" defer></script>
-  <script src="city.js?v=fc038317c879" defer></script>
+  <script src="city.js?v=2d461912daeb" defer></script>
   <script src="legacy.js?v=be7d1dab9fe5" defer></script>
-  <script src="simulation.js?v=1c3a4e5f66bd" defer></script>
-  <script src="globe.js?v=b54966a841f2" defer></script>
-  <script src="street.js?v=f25b3755da63" defer></script>
-  <script src="navigation.js?v=3500c4b950fd" defer></script>
-  <script src="planner.js?v=bc66666de28b" defer></script>
+  <script src="simulation.js?v=66cf208832c1" defer></script>
+  <script src="globe.js?v=d51f9971fa6e" data-atlas-version="03e02d4b8b58" defer></script>
+  <script src="street.js?v=5077ce1b7420" defer></script>
+  <script src="navigation.js?v=aae8734cedf7" defer></script>
+  <script src="planner.js?v=5ee80d169482" defer></script>
   <script src="saves.js?v=710f64a6974c" defer></script>
-  <script src="app.js?v=8e4389267fc3" defer></script>
+  <script src="app.js?v=29bf819f2ba1" defer></script>
 </head>
 <body>
   <a class="skip" href="#play">Skip to game</a>
@@ -105,7 +106,7 @@
             </svg>
           </div>
           <div class="site-info"><span id="place-type" class="site-kind">Zanzibar, Tanzania</span><h2 id="place-name">Stone Town</h2><p id="place-coords" class="coords">6.1622° S · 39.1922° E</p><p id="place-description" class="selection-copy">Start a community here, or select another point on the globe.</p></div>
-          <div id="found-area" class="found-area"><label for="found-name">Community name <span>Optional</span></label><input id="found-name" type="text" placeholder="Name your community" maxlength="48" autocomplete="off"><p id="found-terms" class="found-terms"></p><label class="commission-option"><input type="checkbox" id="commission-at-founding"> Take the local commission</label><button id="found-button" type="button" class="primary">Found a community <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
+          <div id="found-area" class="found-area"><label for="found-name">Community name <span>Optional</span></label><input id="found-name" type="text" placeholder="Name your community" maxlength="48" autocomplete="off"><p id="found-terms" class="found-terms"></p><label class="commission-option"><input type="checkbox" id="commission-at-founding"> Take the local commission</label><details id="commission-brief" class="commission-brief"><summary>Read the invitation</summary><strong id="commission-title"></strong><p id="commission-step"></p><small>You can take this up later in Council.</small></details><button id="found-button" type="button" class="primary">Found a community <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
           <button type="button" class="primary" id="visit-button" hidden>Enter community <svg aria-hidden="true"><use href="#i-arrow"/></svg></button>
           <div id="partner-inspector" class="partner-inspector"></div>
           <div id="voyage-console" class="voyage-console" aria-label="Voyage planning"></div>
@@ -122,7 +123,7 @@
       </aside>
     </div>
 
-    <section id="calendar" class="time-bar" aria-label="Game time" tabindex="-1"><div class="time-week"><svg aria-hidden="true"><use href="#i-calendar"/></svg><div><span class="data-label">Calendar</span><strong id="week">Week 1</strong></div></div><div class="time-effort"><svg aria-hidden="true"><use href="#i-clock"/></svg><div><span class="data-label">Available effort</span><strong id="effort">4 / 4</strong></div></div><details class="weekly-preview"><summary>Week preview</summary><div id="week-summary" aria-label="Coming week">Found a community to see its next weekly change.</div></details><button type="button" class="advance" id="advance-week" disabled>Advance week <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></section>
+    <section id="calendar" class="time-bar" aria-label="Game time" tabindex="-1"><div class="time-week"><svg aria-hidden="true"><use href="#i-calendar"/></svg><div><span class="data-label">Calendar</span><strong id="week">Week 1</strong></div></div><div class="time-effort"><svg aria-hidden="true"><use href="#i-clock"/></svg><div><span class="data-label">Available effort</span><strong id="effort">4 / 4</strong></div></div><button type="button" class="week-review-link" id="week-review-open" popovertarget="journal-dialog" hidden>Last week</button><details class="weekly-preview"><summary>Week preview</summary><div id="week-summary" aria-label="Coming week">Found a community to see its next weekly change.</div></details><button type="button" class="advance" id="advance-week" disabled>Advance week <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></section>
     <section id="settlement-status" class="settlement-status" aria-label="Community status" hidden><div class="resource-overview"><div class="kicker"><svg aria-hidden="true"><use href="#i-house"/></svg> Community ledger</div><div id="resource-strip" class="resource-strip"></div></div><div class="outlook"><div class="outlook-title"><span class="kicker">Outlook</span><span id="era"></span></div><h2 id="objective"></h2><button id="objective-action" class="objective-button" type="button" hidden>Follow objective <span aria-hidden="true">↗</span></button><p id="forecast"></p></div></section>
     <details id="planning-details" hidden><summary>Rehearse a decision</summary><div id="planning-table"></div></details>
     <noscript><p class="no-script">Turn on JavaScript to play Common Earth.</p></noscript>
@@ -131,8 +132,21 @@
 
   <div id="places-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="places-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-explore"/></svg> World atlas</div><h2 id="places-title">Explore places</h2></div><button id="places-close" type="button" class="icon-button" popovertarget="places-dialog" popovertargetaction="hide" aria-label="Close places"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body"><label for="place-search">Find a place</label><div class="search-wrap"><svg aria-hidden="true"><use href="#i-search"/></svg><input id="place-search" type="search" placeholder="Search countries, cities and seas" autocomplete="off"></div><div id="place-results" class="place-results"></div><h3>Starting points</h3><div id="quick-picks" class="quick-picks"></div><form id="coords-form" class="coords-form"><h3>Go to coordinates</h3><div class="coord-fields"><label>Latitude<input id="latitude" type="number" step="any" min="-90" max="90" placeholder="−90 to 90" required></label><label>Longitude<input id="longitude" type="number" step="any" min="-180" max="180" placeholder="−180 to 180" required></label></div><button type="submit" class="secondary">Locate on globe <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></form></div></div>
   <div id="society-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="society-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-people"/></svg> Society</div><h2 id="society-title">Your communities</h2></div><button id="society-close" type="button" class="icon-button" popovertarget="society-dialog" popovertargetaction="hide" aria-label="Close communities"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body"><div id="site-list" class="site-list">Found your first community to see it here.</div><div id="route-status" class="route-status"></div><div id="partner-list"></div><label class="beacon-option"><input type="checkbox" id="beacon-toggle" checked> Show neighbouring communities on the globe</label></div></div>
-  <div id="journal-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="journal-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-journal"/></svg> Field journal</div><h2 id="journal-title">Chronicle</h2></div><button id="journal-close" type="button" class="icon-button" popovertarget="journal-dialog" popovertargetaction="hide" aria-label="Close chronicle"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body"><ol id="journal-list" class="journal-list"><li>Your community’s story begins when you choose a home.</li></ol><section id="saved-worlds" aria-label="Saved worlds"></section></div></div>
-  <div id="help-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="help-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-explore"/></svg> Field guide</div><h2 id="help-title">How to play</h2></div><button id="help-close" type="button" class="icon-button" popovertarget="help-dialog" popovertargetaction="hide" aria-label="Close field guide"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body guide"><section><h3>Choose a home</h3><p>Drag the globe to rotate it. Tap anywhere to survey a location, or use <b>Explore places</b> to search the atlas and enter exact coordinates. Found your first community when you find its home.</p></section><section><h3>Plan the city</h3><p>Survey the six outer precincts in City plan. Compare travel times and local impacts, then choose a project and read its cost and opening week. The central district takes you to the streets where residents live.</p></section><section><h3>Meet your neighbours</h3><p>In Street view, walk to a neighbour, then choose <b>Interact</b>. Listen to what they need. A promise can open doors, and it gives someone a reason to count on you.</p></section><section><h3>Plan the week</h3><p>Use your limited effort to work, build or deliberate. Check the ledger before you advance the week. Research opens new possibilities, and trade routes connect the fortunes of distant communities.</p></section><section><h3>Decide what endures</h3><p>Listen to different voices in council. Who gains from a choice, who carries its cost, and what would you want the next generation to inherit? Revisit the chronicle to see how your decisions unfold.</p></section><details class="guide-details"><summary>Map and street controls</summary><dl><dt>Globe</dt><dd>Focus the map and use the arrow keys to orbit. Hold Shift to turn farther. Use + and − to zoom, Enter to survey the centre, and Home to restore the opening view. Double-tap a location to move closer.</dd><dt>Street</dt><dd>Tap a street or doorway to travel there. Use the arrow keys to move, E to interact, V to board or leave the van, and Home to centre the view on your character. Select a resident in People to find their door.</dd></dl></details><details class="guide-details"><summary>About the atlas</summary><p>The globe uses real geographical coordinates, country outlines and relief from Natural Earth. Each settlement grows into a fictional neighbourhood shaped by your decisions. Progress saves in this browser when local storage is available.</p></details></div></div>
+  <div id="journal-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="journal-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-journal"/></svg> Field journal</div><h2 id="journal-title">Chronicle</h2></div><button id="journal-close" type="button" class="icon-button" popovertarget="journal-dialog" popovertargetaction="hide" aria-label="Close chronicle"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body">
+      <nav id="records-views" class="records-views" aria-label="Chronicle sections">
+        <button type="button" data-records="events" aria-pressed="true">Events</button>
+        <button type="button" data-records="review" aria-pressed="false">Last week</button>
+        <button type="button" data-records="saves" aria-pressed="false">Saved worlds</button>
+      </nav>
+      <section id="records-events" aria-label="Events">
+        <label id="journal-filter-label" for="journal-filter" hidden>Community <select id="journal-filter"></select></label>
+        <ol id="journal-list" class="journal-list"><li>Your community’s story begins when you choose a home.</li></ol>
+        <button type="button" id="earlier-events" class="secondary" hidden>Earlier events</button>
+      </section>
+      <section id="records-review" aria-label="Last week" hidden></section>
+      <section id="records-saves" aria-label="Saved worlds" hidden><div id="saved-worlds"></div></section>
+    </div></div>
+  <div id="help-dialog" class="sheet" popover="auto" role="dialog" aria-modal="true" aria-labelledby="help-title"><div class="sheet-head"><div><div class="kicker"><svg aria-hidden="true"><use href="#i-explore"/></svg> Field guide</div><h2 id="help-title">How to play</h2></div><button id="help-close" type="button" class="icon-button" popovertarget="help-dialog" popovertargetaction="hide" aria-label="Close field guide"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-body guide"><section><h3>Choose a home</h3><p>Drag the globe to rotate it. Tap anywhere to survey a location, or use <b>Explore places</b> to search the atlas and enter exact coordinates. Found your first community when you find its home.</p></section><section><h3>Plan the city</h3><p>Survey the six outer precincts in City plan. Compare travel times and local impacts, then choose a project and read its cost and opening week. The central district takes you to the streets where residents live.</p></section><section><h3>Meet your neighbours</h3><p>In Street view, walk to a neighbour, then choose <b>Interact</b>. Listen to what they need. Read the cost and due week before making a promise. Return to the resident to keep it. After you get to know them, you can also spend a day in their shoes.</p></section><section><h3>Plan the week</h3><p>Your communities share four effort each week. Open <b>Rehearse a decision</b> to compare two plans before committing. Use <b>Week preview</b> to see what advancing would do, then <b>Last week</b> to review what actually happened.</p></section><section><h3>Decide what endures</h3><p>Listen to different voices in council. Who gains from a choice, who carries its cost, and what would you want the next generation to inherit? Choose a charter in Council. Its commitments shape what counts as success. Once the network meets them, you can hand the chair to a resident and see how they govern.</p></section><details class="guide-details"><summary>Map and street controls</summary><dl><dt>Globe</dt><dd>Focus the map and use the arrow keys to orbit. Hold Shift to turn farther. Use + and − to zoom, Enter to survey the centre, and Home to restore the opening view. Double-tap a location to move closer.</dd><dt>Street</dt><dd>Tap a street or doorway to travel there. Use the arrow keys to move, E to interact, V to board or leave the van, and Home to centre the view on your character. Select a resident in People to find their door.</dd></dl></details><details class="guide-details"><summary>About the atlas</summary><p>The globe uses Natural Earth relief, coastlines and country outlines. Zoom closer to see rivers, lakes, towns and a distance scale. Local districts and their residents are fictional. Open Chronicle → Saved worlds to start another world or export a copy of your progress.</p></details></div></div>
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script>
     (() => {
@@ -189,7 +203,7 @@
         sheet.addEventListener('keydown', event => {
           if (event.key === 'Escape' && !native) { event.preventDefault(); sheet.hidePopover(); return; }
           if (event.key !== 'Tab') return;
-          const focusable = Array.from(sheet.querySelectorAll('button:not(:disabled), input:not(:disabled), summary, [href], [tabindex="0"]')).filter(el => el.offsetWidth);
+          const focusable = Array.from(sheet.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [href], [tabindex="0"]')).filter(el => el.offsetWidth);
           if (!focusable.length) return;
           if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
           else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }

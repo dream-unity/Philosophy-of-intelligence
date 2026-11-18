@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +34,14 @@ export function prepareHomepage() {
 
   const gameDirectory = resolve(root, 'common-earth');
   const gameEntry = resolve(gameDirectory, 'index.html');
-  writeFileSync(gameEntry, versionAssets(readFileSync(gameEntry, 'utf8'), gameDirectory));
+  // The globe requests its regional atlas and terrain separately as the player zooms.
+  const atlasHash = createHash('sha256');
+  const cellFiles = readdirSync(resolve(gameDirectory, 'regions')).filter(name => name.endsWith('.bin')).sort();
+  for (const asset of ['globe.js', 'regions.js', 'earth-chart.webp', 'earth-index.png', ...cellFiles.map(name => 'regions/' + name)].sort()) {
+    atlasHash.update(asset).update(readFileSync(resolve(gameDirectory, asset)));
+  }
+  const game = readFileSync(gameEntry, 'utf8').replace(/data-atlas-version="[^"]*"/, 'data-atlas-version="' + atlasHash.digest('hex').slice(0, 12) + '"');
+  writeFileSync(gameEntry, versionAssets(game, gameDirectory));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

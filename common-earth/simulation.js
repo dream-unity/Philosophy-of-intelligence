@@ -12,6 +12,8 @@
   'use strict';
   const VERSION = 1;
   const MAX_EFFORT = 4;
+  const METRICS=['funds','food','materials','trust','wellbeing','population'];
+  const REVIEW_STORIES=64;
   const BUILDINGS = {
     garden: {name:'Community garden', funds:5, materials:3, info:'Grows 3 food each week. Shares tools with an adjoining workshop for 1 extra food.'},
     workshop: {name:'Repair workshop', funds:6, materials:3, info:'Recovers 2 materials each week. Its tools also improve adjacent gardens.'},
@@ -103,10 +105,10 @@
   ];
   const MANDATES={services:'Give household needs priority',reserves:'Give productive reserves priority'};
   const LABELS={funds:'funds',food:'food',materials:'materials',trust:'trust',wellbeing:'wellbeing'};
-  const blank = () => ({version:VERSION,week:1,effort:MAX_EFFORT,sites:[],activeId:null,routes:[],journal:[],charter:null,completed:false,voyage:null,lastVoyage:null});
+  const blank = () => ({version:VERSION,week:1,effort:MAX_EFFORT,sites:[],activeId:null,routes:[],journal:[],charter:null,completed:false,voyage:null,lastVoyage:null,lastWeekReview:null});
   const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
   const signed = v => v >= 0 ? '+'+v : String(v);
-  const tidy = (value,max=48) => String(value || '').replace(/[<>&"'\u0000-\u001f]/g,'').replace(/\s+/g,' ').trim().slice(0,max);
+  const tidy = (value,max=48) => String(value || '').replace(/[<>\u0000-\u001f]/g,'').replace(/\s+/g,' ').trim().slice(0,max);
   function resources(cost) { return Object.entries(cost || {}).map(([k,v])=> v+' '+LABELS[k]).join(' · '); }
   function summary(delta) { return Object.entries(delta).filter(([,v])=>v!==0).map(([k,v])=>signed(v)+' '+LABELS[k]).join(' · '); }
   function apply(site,delta) {
@@ -149,6 +151,11 @@
       if(partners.length)links.push({from:partners[0].plot,to:b.plot,resource:b.kind==='garden'?'food':'funds'});
     }
     return links;
+  }
+  function promiseBalance(person){
+    const goods={...PROFILES[person.slot].goods};
+    for(const [k,n] of Object.entries(person.promise?.advance || {}))goods[k]-=n;
+    return goods;
   }
   function practices(site){
     return Object.entries(site.practices || {}).map(([i,id])=>{
@@ -212,7 +219,20 @@
     person.lastTalk ??= 0;
     person.lastPromise ??= -10;
     if(!shortName(person.role) || !shortName(person.value) || !integer(person.lastTalk,0,week) || !integer(person.lastPromise,-10,week))return false;
-    if(person.promise!=null && (!recordLike(person.promise)||!integer(person.promise.dueWeek,1)))return false;
+    if(person.promise!=null){
+      const p=person.promise;
+      if(!recordLike(p) || !integer(p.dueWeek,week))return false;
+      if(p.revised){
+        const key=Object.keys(PROFILES[slot].goods)[0];
+        if(p.revised!==true || !integer(p.originalDue,1) || p.dueWeek!==p.originalDue+1 || !integer(p.agreedWeek,1,p.originalDue) ||
+          !recordLike(p.advance) || Object.keys(p.advance).length!==1 || p.advance[key]!==1)return false;
+      }else if(p.advance!=null)return false;
+    }
+    if(person.lastMissed!=null){
+      const m=person.lastMissed;
+      if(!recordLike(m)||!integer(m.week,1,week)||typeof m.revised!=='boolean')return false;
+      if(m.discussedWeek!=null && !integer(m.discussedWeek,m.week,week))return false;
+    }
     if(person.lastShiftWeek!=null && !integer(person.lastShiftWeek,0,week))return false;
     if(person.shiftMemory!=null){
       const m=person.shiftMemory;
@@ -292,6 +312,23 @@
       return cargo.from===route.from&&cargo.to===route.to || cargo.from===route.to&&cargo.to===route.from;
     });
   }
+  function validReview(review,world,ids){
+    if(review==null)return true;
+    if(!recordLike(review)||!integer(review.week,1,world.week)||!Array.isArray(review.sites)||review.sites.length>world.sites.length)return false;
+    let saved=0,total=0;
+    const seen=new Set();
+    for(const s of review.sites){
+      if(!recordLike(s)||!ids.has(s.id)||seen.has(s.id)||!shortName(s.name))return false;
+      seen.add(s.id);
+      if(!recordLike(s.closing)||!recordLike(s.delta))return false;
+      for(const k of METRICS)if(!integer(s.closing[k])||!Number.isSafeInteger(s.delta[k]))return false;
+      if(s.closing.trust>100||s.closing.wellbeing>100)return false;
+      if(!Array.isArray(s.highlights)||s.highlights.length>4||!s.highlights.every(t=>typeof t==='string'&&t.length<=360))return false;
+      if(!integer(s.totalEvents,s.highlights.length)||!integer(s.arrivals)||!integer(s.departures))return false;
+      saved+=s.highlights.length;total+=s.totalEvents;
+    }
+    return saved<=REVIEW_STORIES && review.totalEvents===total && review.omittedEvents===total-saved;
+  }
   // Opening a world and importing a save use the same migration and integrity
   // rules. Only the parsed copy is changed; the input remains recoverable.
   function readSave(raw){
@@ -309,11 +346,14 @@
       for(const site of world.sites)site.routeLinks=links.get(site.id);
       if(!Array.isArray(world.journal)||!world.journal.every(j=>recordLike(j)&&integer(j.week,1,world.week)&&typeof j.text==='string'))return null;
       if(world.charter!=null && !Object.hasOwn(CHARTERS,world.charter) || typeof world.completed!=='boolean')return null;
+      if(!validReview(world.lastWeekReview,world,ids))return null;
       if(root.EarthPartners?.valid && !root.EarthPartners.valid(world.partners,ids))return null;
       if(root.EarthLegacy?.valid && !root.EarthLegacy.valid(world))return null;
       if(world.voyage!=null){
         const v=world.voyage;
         if(!geoPoint(v.origin)||!ids.has(v.origin.id)||!geoPoint(v.target)||!integer(v.legs,1)||!integer(v.leg,0,v.legs-1)||!Array.isArray(v.itinerary))return null;
+        const origin=world.sites.find(s=>s.id===v.origin.id),target=world.sites.find(s=>s.id===v.target.id);
+        if(distance(v.origin,origin)>=10 || target && distance(v.target,target)>=10)return null;
         if(root.EarthVoyages?.valid && !root.EarthVoyages.valid(v))return null;
       }
       if(world.lastVoyage!=null){
@@ -336,7 +376,14 @@
     const record=(text,site)=>{world.journal.unshift({week:world.week,text,siteId:site ? site.id : null}); world.journal.length=Math.min(world.journal.length,160);};
     const reject=message=>({ok:false,message});
     function notify(external=false){
-      for(const fn of listeners)fn(world,{external,message:saveMessage});
+      for(const fn of listeners){
+        try{fn(world,{external,message:saveMessage});}
+        catch(error){
+          // A view that fails to redraw cannot undo a committed economic turn.
+          if(root.reportError)root.reportError(error);
+          else root.console?.error('Unable to refresh a game view',error);
+        }
+      }
     }
     function storageRead(k){
       if(!storage)return null;
@@ -395,26 +442,27 @@
       return null;
     }
     function fulfilled(site,p,why){
+      const revised=p.promise?.revised;
+      const credit=revised?' The earlier '+resources(p.promise.advance)+' counted toward the agreement.':'';
       p.promise=null;p.lastPromise=world.week;site.stats.kept++;
-      return p.name+' saw the promise kept. '+why+' '+outcome(apply(site,{trust:3}),bond(p,2));
+      return p.name+' saw the '+(revised?'revised ':'')+'promise kept. '+why+credit+' '+outcome(apply(site,{trust:3}),bond(p,2));
     }
-    function charterMet(){
-      if(world.charter==='care') return world.sites.every(s=>s.food>=6) && world.sites.reduce((a,s)=>a+s.stats.kept,0)>=2;
-      if(world.charter==='voice')return world.sites.filter(s=>s.residents.every(p=>p.heard)).length>=2 && world.sites.reduce((a,s)=>a+s.stats.resolved,0)>=2;
-      if(world.charter==='craft')return world.sites.filter(s=>s.tech.includes('apprenticeship')).length>=2 && world.sites.some(s=>s.stats.deliveries>0);
+    function charterMet(turn=world){
+      if(turn.charter==='care') return turn.sites.every(s=>s.food>=6) && turn.sites.reduce((a,s)=>a+s.stats.kept,0)>=2;
+      if(turn.charter==='voice')return turn.sites.filter(s=>s.residents.every(p=>p.heard)).length>=2 && turn.sites.reduce((a,s)=>a+s.stats.resolved,0)>=2;
+      if(turn.charter==='craft')return turn.sites.filter(s=>s.tech.includes('apprenticeship')).length>=2 && turn.sites.some(s=>s.stats.deliveries>0);
       return false;
     }
-    function checkVictory(){
-      if(!world.completed && world.sites.some(s=>s.tech.includes('stewardship')) && charterMet()){
-        world.completed=true;
-        const msg='Charter fulfilled: '+CHARTERS[world.charter].name+'. The assembly ratified your network’s compact. Your settlements remain open to play.';
-        record(msg);return msg;
+    function ratify(turn){
+      if(!turn.completed && turn.sites.some(s=>s.tech.includes('stewardship')) && charterMet(turn)){
+        turn.completed=true;
+        return 'Charter fulfilled: '+CHARTERS[turn.charter].name+'. The assembly ratified your network’s compact. Your settlements remain open to play.';
       }
       return '';
     }
     function complete(message,site,write=true){
       if(write && message)record(message,site);
-      const victory=checkVictory();
+      const victory=ratify(world);if(victory)record(victory);
       const collision=save();
       return collision || {ok:true,message:message+(victory?' '+victory:'')};
     }
@@ -569,10 +617,16 @@
         const profile=PROFILES[p.slot],who={residentId:p.id};
         const when=p.promise?p.promise.dueWeek:0;
         add('people','listen:'+p.id,p.heard?'Check in with '+p.name:'Listen to '+p.name,p.role+' · '+p.value+'. '+(p.heard?'Hear how the work is going.':'Hear the experience behind this resident’s priorities.'),{...who,gate:p.lastTalk===world.week?'You already spoke this week.':''},()=>{
-          const memory=p.shiftMemory;
-          const recall=memory && memory.week<world.week && !memory.discussedWeek && memory.quote;
-          const quote=recall?'“'+memory.quote.replace(/^[“"]|[”"]$/g,'')+'”':profile.quotes[p.heard?1:0];
-          if(recall)memory.discussedWeek=world.week;
+          const memory=p.shiftMemory,miss=p.lastMissed;
+          let quote=profile.quotes[p.heard?1:0];
+          if(miss && !miss.discussedWeek){
+            quote=miss.revised?'“We made a new plan together. When the rest didn’t arrive, I had to ask the others to wait again. Tell me what you have in hand the next time we agree a date.”':
+              '“When the date passed, I still had to answer to the people who were waiting. Come and talk to me while there’s time to make a different plan.”';
+            miss.discussedWeek=world.week;
+          }else if(memory && memory.week<world.week && !memory.discussedWeek && memory.quote){
+            quote='“'+memory.quote.replace(/^[“"]|[”"]$/g,'')+'”';
+            memory.discussedWeek=world.week;
+          }
           p.heard=true;p.lastTalk=world.week;
           return p.name+': '+quote+' '+bond(p,1)+'.'+(root.EarthCampaigns?.testimony?.(world,site,p) || '');
         });
@@ -582,7 +636,21 @@
               p.promise={dueWeek:world.week+2};return 'You promised '+p.name+' to '+profile.ask+' by the end of week '+p.promise.dueWeek+'.';
             });
         }
-        if(p.promise)add('people','fulfil:'+p.id,profile.support,'Keep your promise to '+p.name+' by the end of week '+when+'. '+profile.result,{...who,goods:profile.goods},()=>fulfilled(site,p,profile.result));
+        if(p.promise){
+          const outstanding=promiseBalance(p);
+          const credit=p.promise.revised?' Already delivered: '+resources(p.promise.advance)+'.':'';
+          add('people','fulfil:'+p.id,profile.support,'Deliver '+resources(outstanding)+' to '+p.name+' by the end of week '+when+'.'+credit+' '+profile.result,
+            {...who,goods:outstanding},()=>fulfilled(site,p,profile.result));
+          if(!p.promise.revised){
+            const item=Object.keys(profile.goods)[0],advance={[item]:1},rest={[item]:profile.goods[item]-1};
+            const conditions=p.name+' will move the deadline from week '+when+' to week '+(when+1)+' if you visit now with '+resources(advance)+'. The remaining '+resources(rest)+' will still be due. Missing that revised date costs up to 4 trust and 2 bond.';
+            add('people','revise:'+p.id,'Ask '+p.name+' for one more week',conditions,
+              {...who,goods:advance,gate:p.bond<2?'A bond of 2 is needed for '+p.name+' to agree to revised terms.':''},()=>{
+                p.promise={dueWeek:when+1,originalDue:when,revised:true,agreedWeek:world.week,advance};
+                return p.name+' accepted '+resources(advance)+' today and agreed to the end of week '+(when+1)+'. '+resources(rest)+' remains due.';
+              });
+          }
+        }
       }
       for(const [kind,b] of Object.entries(BUILDINGS)){
         const gate=site.buildings.length===9?'All nine district lots are occupied.':kind==='wetland' && !site.tech.includes('apprenticeship')?'First research shared apprenticeship.':'';
@@ -786,7 +854,11 @@
       if(!nav)return reject('Voyage navigation is unavailable.');
       if(world.voyage)return reject('Finish the current voyage before launching another.');
       if(world.effort<1)return reject('Commissioning a voyage takes 1 effort. Advance the week to refresh.');
-      const launch=nav.start(site,target,style);
+      const id=target?.siteId ?? target?.id,owned=world.sites.find(s=>s.id===id);
+      if(owned && geoPoint(target) && distance(owned,target)>=10)return reject('This settlement marker does not match the chosen coordinates.');
+      if(!owned && typeof id==='string' && /^site-\d+$/.test(id))return reject('This settlement no longer exists.');
+      const end=owned || {...target,id:null,siteId:null};
+      const launch=nav.start(site,end,style);
       if(!launch.ok)return reject(launch.message);
       if(!affordable(site,launch.cost))return reject('The expedition needs '+resources(launch.cost)+'.');
       payment(site,launch.cost);world.effort--;world.voyage=launch.voyage;
@@ -822,14 +894,14 @@
           }
           const dest=byId.get(cargo.to);
           apply(dest,{[cargo.good]:cargo.amount});route.deliveries++;route.lastArrivalWeek=turn.week;
-          route.lastStatus=cargo.amount+' '+cargo.good+' arrived in '+dest.name+'.';
+          route.lastStatus=cargo.amount+' '+cargo.good+' from '+byId.get(cargo.from).name+' arrived in '+dest.name+'.';
           event(route.lastStatus,dest,'arrivals');
           return false;
         });
       }
       return inbound;
     }
-    function dispatchCargo(turn,byId,inbound,reports){
+    function dispatchCargo(turn,byId,inbound,event){
       const foodRate=new Map(turn.sites.map(site=>[site.id,rates(site).food]));
       const used=new Set();
       // Include voted local supplies and voted partner grants expected within
@@ -838,6 +910,15 @@
         const c=QUESTIONS[item.index].choices.find(c=>c.id===item.choice);
         if(c.after?.food && !(item.index===2 && c.after.food<0 && has(site,'wetland')))addFuture(site.id,item.week,c.after.food);
         if(c.transfer?.food && byId.has(item.targetId))addFuture(item.targetId,item.week,c.transfer.food);
+      }
+      // Quoted or conditional diplomatic offers have no guaranteed cargo.
+      // Paid reserved shipments and return loads already afloat do.
+      if(root.EarthPartners)for(const [key,partner] of Object.entries(turn.partners || {})){
+        const a=partner.agreement,home=a && byId.get(a.homeId);
+        if(!home || !['return','outbound'].includes(a.phase))continue;
+        if(root.EarthPartners.get(turn,home,key)?.exportGood!=='food')continue;
+        if(a.phase==='return')addFuture(home.id,a.due,a.returned);
+        else if(a.reserved)addFuture(home.id,a.due+a.days,a.reserved);
       }
       function addFuture(id,week,amount){
         const due=inbound.get(id).foodByWeek;
@@ -868,7 +949,7 @@
         route.lastDispatch=turn.week;
         if(aid)to.lastAidWeek=turn.week;
         route.lastStatus=amount+' '+good+' travelling to '+to.name+' · due week '+due+'.'+(aid?' Household food takes priority.':'');
-        reports.get(from.id).departures.push(route.lastStatus);
+        event(route.lastStatus,from,'departures',false);
         used.add(route);
       }
       const essential=[];
@@ -907,9 +988,11 @@
     }
     function closeDeadlines(turn,site,event){
       for(const p of site.residents)if(p.promise && turn.week>p.promise.dueWeek){
+        const revised=Boolean(p.promise.revised),remaining=promiseBalance(p);
+        p.lastMissed={week:turn.week,revised};
         p.promise=null;p.lastPromise=turn.week;site.stats.missed++;
-        const result=outcome(apply(site,{trust:-3}),bond(p,-1));
-        event('The promise to '+p.name+' lapsed. '+result+' Check in to rebuild the relationship.',site,'promises');
+        const result=outcome(apply(site,{trust:revised?-4:-3}),bond(p,revised?-2:-1));
+        event('The '+(revised?'revised ':'')+'promise to '+p.name+' lapsed with '+resources(remaining)+' undelivered. '+result+' Check in to rebuild the relationship.',site,'promises');
       }
       if(!site.issue || turn.week<=site.issue.deadline || root.EarthLegacy?.governs(turn,site))return;
       const decision=delegatedVote(turn,site);
@@ -954,7 +1037,8 @@
       if((turn.week-site.founded)%3!==0 || site.food<9 || site.trust<50)return;
       const room=Math.max(0,capacity(site)-site.population);
       const growth=Math.min(2,room);
-      if(growth && (site.buildings.length || capacity(site)>18)){
+      const developed=site.buildings.length || (root.EarthCityModel?.overview(site).developed || 0);
+      if(growth && developed){
         site.population+=growth;
         event((growth===1?'One resident settled':'Two residents settled')+' in '+site.name+'. Its weekly food need is now '+Math.ceil(site.population/5)+'.',site);
       }
@@ -965,18 +1049,18 @@
     function rollWeek(turn){
       const events=[],transfers=[];
       const byId=new Map(turn.sites.map(site=>[site.id,site]));
-      const metrics=['funds','food','materials','trust','wellbeing','population'];
+      const metrics=METRICS;
       const opening=new Map(),reports=new Map();
       for(const site of turn.sites){
         opening.set(site.id,Object.fromEntries(metrics.map(k=>[k,site[k]])));
         reports.set(site.id,{id:site.id,name:site.name,production:{},forecast:'',
           promises:[],council:[],arrivals:[],departures:[],highlights:[],closing:{},delta:{}});
       }
-      function event(text,site,type){
+      function event(text,site,type,logged=true){
         const report=reports.get(site.id);
         report.highlights.push(text);
         if(type)report[type].push(text);
-        events.push({site,text});
+        events.push({site,text,type,logged});
       }
       turn.week++;turn.effort=MAX_EFFORT;
       for(const site of turn.sites)closeDeadlines(turn,site,event);
@@ -1006,7 +1090,7 @@
         const site=byId.get(item.siteId);if(site)event(item.text,site,item.type);
       }
       for(const site of turn.sites)settleHouseholds(turn,site,reports.get(site.id).production,event);
-      dispatchCargo(turn,byId,inbound,reports);
+      dispatchCargo(turn,byId,inbound,event);
       for(const site of turn.sites){
         if(!site.issue && (turn.week-site.founded-1)%4===0 && turn.week>site.founded){
           openIssue(turn,site);
@@ -1018,26 +1102,55 @@
       if(root.EarthLegacy)for(const item of root.EarthLegacy.tick(turn,{vote:(site,slot)=>successorVote(turn,site,slot),travelTime}) || []){
         if(byId.has(item.site?.id))event(item.text,item.site,'council');
       }
+      const ratified=ratify(turn);
+      if(ratified)event(ratified,turn.sites.find(s=>s.tech.includes('stewardship')),'council');
       for(const site of turn.sites){
         const report=reports.get(site.id),before=opening.get(site.id);
-        for(const p of site.residents)if(p.promise?.dueWeek===turn.week)report.promises.push(p.name+'’s promise is due by the end of week '+turn.week+'.');
+        for(const p of site.residents)if(p.promise?.dueWeek===turn.week)report.promises.push(p.name+' is due '+resources(promiseBalance(p))+' by the end of week '+turn.week+(p.promise.revised?' under the revised agreement.':'.'));
         if(site.issue?.deadline===turn.week)report.council.push('Final week to vote on “'+site.issue.title+'”.');
         for(const k of metrics){report.closing[k]=site[k];report.delta[k]=site[k]-before[k];}
       }
-      return {week:turn.week,sites:Array.from(reports.values()),highlights:events.map(e=>e.text),events};
+      return {week:turn.week,sites:Array.from(reports.values()),highlights:events.map(e=>e.text),events,ratified};
     }
     function forecastNext(){
-      const copy=JSON.parse(JSON.stringify(world));
+      const copy=JSON.parse(JSON.stringify({...world,lastWeekReview:null}));
       const {events,...forecast}=rollWeek(copy);
       return forecast;
+    }
+    function weekReview(report){
+      const stories=new Map(report.sites.map(s=>[s.id,[]]));
+      for(const e of report.events)stories.get(e.site.id).push(e);
+      const priority=e=>e.text===report.ratified?0:({promises:1,council:2,arrivals:4,departures:5})[e.type] || 3;
+      const sites=report.sites.map(s=>{
+        const messages=stories.get(s.id);
+        messages.sort((a,b)=>priority(a)-priority(b));
+        return {id:s.id,name:s.name,closing:{...s.closing},delta:{...s.delta},highlights:[],
+          totalEvents:messages.length,arrivals:s.arrivals.length,departures:s.departures.length};
+      });
+      const focus=sites.find(site=>site.id===world.activeId);
+      const order=focus?[focus,...sites.filter(site=>site!==focus)]:sites;
+      let saved=0;
+      // Offer each place one story before adding a second to any place.
+      for(let depth=0;depth<4 && saved<REVIEW_STORIES;depth++){
+        for(const site of order){
+          const message=stories.get(site.id)[depth]?.text;
+          if(message){
+            site.highlights.push(message.length>360?message.slice(0,359)+'…':message);
+            if(++saved===REVIEW_STORIES)break;
+          }
+        }
+      }
+      const totalEvents=sites.reduce((sum,s)=>sum+s.totalEvents,0);
+      return {week:report.week,sites,totalEvents,omittedEvents:totalEvents-saved};
     }
     function advance(){
       if(!current())return reject('Found your first settlement on the globe.');
       const report=rollWeek(world);
-      for(const e of report.events)record(e.text,e.site);
+      for(const e of report.events)if(e.logged)record(e.text,e.site);
+      world.lastWeekReview=weekReview(report);
       const local=report.sites.find(s=>s.id===world.activeId);
       const text='Week '+world.week+' began. '+(local.highlights[0] || report.highlights[0] || 'Local production and household needs have been settled.');
-      return complete(text,current(),false);
+      return complete(report.ratified && !text.includes(report.ratified)?text+' '+report.ratified:text,current(),false);
     }
     function overview(){
       const s=current();
@@ -1046,7 +1159,11 @@
       let objective;
       if(world.completed)objective='Your charter has been ratified. Continue shaping the world.';
       else if(!s.residents.some(p=>p.heard))objective='Meet a resident and listen to what they need.';
-      else if(!s.stats.kept) objective='Make a promise to a resident, then deliver it before its deadline.';
+      else if(!s.stats.kept){
+        const p=s.residents.filter(r=>r.promise).sort((a,b)=>a.promise.dueWeek-b.promise.dueWeek)[0];
+        objective=p?'Keep your promise to '+p.name+' by the end of week '+p.promise.dueWeek+'. Deliver '+resources(promiseBalance(p))+' or open a '+BUILDINGS[PROFILES[p.slot].alternative].name.toLowerCase()+'.':
+          'Make a promise to a resident, then deliver it before its deadline.';
+      }
       else if(!world.charter)objective='Choose in Council how this network will measure a life well lived.';
       else if(tech){
         const a=actionsAndRules('research')[0];
@@ -1078,12 +1195,16 @@
       const expected=lastSeen;
       function run(){return expected!==lastSeen?reject(conflict):commands[command](...args);}
       if(!storage||!root.navigator?.locks?.request)return run();
-      try{return await root.navigator.locks.request('civic-world:'+key,run);}
-      catch(error){if(error?.name==='SecurityError' || error?.name==='NotSupportedError')return run();throw error;}
+      let entered=false;
+      try{return await root.navigator.locks.request('civic-world:'+key,()=>{entered=true;return run();});}
+      catch(error){
+        if(!entered && (error?.name==='SecurityError' || error?.name==='NotSupportedError'))return run();
+        throw error;
+      }
     }
     return {
       ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},
-      active:current,actions,overview,foundingOffer,previewBuild,previewReclaim,forecastNext,perform,sync,
+      active:current,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,previewBuild,previewReclaim,forecastNext,perform,sync,
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
       destroy(){listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };

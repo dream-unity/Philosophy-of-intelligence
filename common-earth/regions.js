@@ -3,6 +3,8 @@
  * and 1:50m lakes. Cell clipping edges are excluded from visible boundaries. */
 (function(root){
   'use strict';
+  const script=typeof document==='undefined'?null:document.currentScript;
+  const version=script?.dataset?.atlasVersion || (script?.src ? new URL(script.src).searchParams.get('v') : '') || '';
   const RAD=Math.PI/180, step=60/65535, cache=new Map(),pending=new Map(),failed=new Map();
   const wrap=n=>((n+180)%360+360)%360-180;
   const clip=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -47,7 +49,10 @@
     if(cache.has(key))return Promise.resolve(cache.get(key));
     if(pending.has(key))return pending.get(key);
     if((failed.get(key)||0)>Date.now())return null;
-    const request=fetch(new URL('regions/'+key+'.bin',base)).then(response=>{
+    const url=new URL('regions/'+key+'.bin',base);
+    if(version)url.searchParams.set('v',version);
+    const signal=typeof AbortSignal==='undefined' ? undefined : AbortSignal.timeout?.(45000);
+    const request=fetch(url,{signal}).then(response=>{
       if(!response.ok)throw Error('Regional chart unavailable');
       return response.arrayBuffer();
     }).then(buffer=>{
@@ -64,7 +69,8 @@
   }
   function lookup(lat,lon) {
     lon=wrap(lon);const col=column(lon),r=row(lat),tile=cache.get(col+'-'+r);if(!tile)return null;
-    const x=(lon+180-col*60)/step,y=(lat+90-r*60)/step;
+    if(lat<=-89.99999)return {water:false,name:'Antarctica'};
+    const x=clip((lon+180-col*60)/step,.001,65534.999),y=clip((lat+90-r*60)/step,.001,65534.999);
     let country='';
     for(const f of tile.features){
       if(f.kind>1)continue;const [west,south,east,north]=f.bounds;
@@ -78,6 +84,7 @@
   }
   function mount(base,invalidate){
     let needed=new Set(),hits=[],waterLabels=[],dead=false,cityCache=null;
+    const waiting=new Set();
     function draw(ctx,view,w,h,radius){
       hits=[];waterLabels=[];needed=new Set();
       const cap=Math.asin(clip(Math.hypot(w/2,h/2)/radius,0,1))/RAD+1;
@@ -88,7 +95,13 @@
         if(Math.abs(wrap((-150+col*60)-view.lon))>span+30)continue;
         const key=col+'-'+r;needed.add(key);
         if(cache.has(key)){tiles.push(cache.get(key));continue;}
-        if(!pending.has(key))fetchCell(base,col,r)?.then(tile=>{if(tile&&!dead&&needed.has(key))invalidate();});
+        if(!waiting.has(key)){
+          const request=fetchCell(base,col,r);
+          if(request){
+            waiting.add(key);
+            request.then(tile=>{waiting.delete(key);if(tile&&!dead&&needed.has(key))invalidate();});
+          }
+        }
       }
       const visibility=clip((view.zoom-4.25)/2.5,0,1);
       if(!tiles.length || visibility<=0)return;
@@ -99,16 +112,21 @@
       }
       function trace(dest,path,outline=false){
         const v=path.xyz,local=path.points;
-        let pen=false,px=0,py=0;
+        let pen=false,buffered=false,lastX=0,lastY=0,outside=0;
+        function flush(){if(buffered){dest.lineTo(lastX,lastY);buffered=false;}}
         for(let j=0,i=0;j<v.length;j+=3,i+=2){
           const x=v[j],y=v[j+1],z=v[j+2],side=cl*x+sl*z,front=sv*y+cv*side;
-          if(front<0){pen=false;continue;}
+          if(front<0){flush();pen=false;continue;}
           const xx=w/2+radius*(cl*z-sl*x),yy=h/2-radius*(cv*y-sv*side);
+          // A chain wholly outside one edge may be replaced by its chord:
+          // it contributes the same winding and no visible line to the map.
+          const code=(xx< -12?1:xx>w+12?2:0)|(yy< -12?4:yy>h+12?8:0);
           const cut=outline && i>0 && ((local[i]===local[i-2]&&(local[i]===0||local[i]===65535))||(local[i+1]===local[i-1]&&(local[i+1]===0||local[i+1]===65535)));
-          if(!pen||cut)dest.moveTo(xx,yy);
-          else if(!outline || Math.abs(px-xx)+Math.abs(py-yy)>.17 || i===local.length-2)dest.lineTo(xx,yy);
-          pen=true;px=xx;py=yy;
+          if(!pen||cut){flush();dest.moveTo(xx,yy);pen=true;outside=code;continue;}
+          if(outside&code){buffered=true;lastX=xx;lastY=yy;outside&=code;continue;}
+          flush();dest.lineTo(xx,yy);outside=code;
         }
+        flush();
       }
       function intersects([west,south,east,north]){
         return north>=lo && south<=hi && Math.abs(wrap((west+east)*.5-view.lon))<=span+(east-west)*.5;
@@ -121,7 +139,7 @@
           if(!intersects(f.bounds))continue;
           for(const part of f.parts){
             if(f.kind===0){
-              trace(ocean,part);ocean.closePath();trace(land,part);land.closePath();trace(border,part,true);
+              trace(land,part);land.closePath();trace(border,part,true);
             }else if(f.kind===1){
               trace(lakes,part);lakes.closePath();trace(banks,part,true);
             }else if(f.kind===2){
@@ -134,7 +152,7 @@
             }else trace(coast,part,true);
           }
         }
-        ctx.fillStyle='rgba(14,47,64,.78)';ctx.fill(ocean,'evenodd');
+        ocean.addPath(land);ctx.fillStyle='rgba(14,47,64,.78)';ctx.fill(ocean,'evenodd');
         ctx.fillStyle='rgba(113,156,134,.38)';ctx.fill(land,'evenodd');
         ctx.strokeStyle='rgba(92,84,60,.87)';ctx.lineWidth=.95;ctx.setLineDash([3,2.4]);ctx.stroke(border);ctx.setLineDash([]);
         ctx.strokeStyle='#a3c3ae';ctx.lineWidth=view.zoom>=10?1.3:1;ctx.stroke(coast);
@@ -187,5 +205,5 @@
     }
     return {draw,labels,hit,destroy(){dead=true;needed.clear();hits=[];}};
   }
-  root.EarthRegions=Object.freeze({mount,lookup});
+  root.EarthRegions=Object.freeze({mount,lookup,version});
 })(typeof window==='undefined'?globalThis:window);

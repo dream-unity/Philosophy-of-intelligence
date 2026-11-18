@@ -266,3 +266,17 @@ footer > span { font-family: var(--serif); font-style: italic; }
 .resident-bio{display:flex;align-items:center;gap:10px;margin:8px 0}
 .action-subnav{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}.action-subnav [aria-pressed="true"]{color:#f1c486;border-color:#c09963}
 .shift-guide>summary{cursor:pointer;color:#bcd7cf}.partner-voice{margin:10px 0;padding-inline-start:10px;border-inline-start:2px solid #a58a5d;font-family:Georgia,serif;font-style:italic}
+.records-views{display:flex;gap:4px;padding:0 0 12px;flex-wrap:wrap}
+.records-views button,.week-review-link{min-height:36px;padding:5px 9px;border:1px solid #435b5b;background:transparent;color:#c7d6d0;border-radius:3px}
+.records-views button[aria-pressed="true"]{color:#efc786;border-color:#b28f58}
+.week-report-site{border-top:1px solid #394f50;padding:10px 0}.week-report-site>summary{cursor:pointer;font-weight:bold}
+.report-ledger{display:grid;grid-template-columns:1fr auto;gap:5px 12px;margin:12px 0;color:#c9d8d1;font-size:.85rem}
+.report-ledger dd{text-align:right;margin:0;font-variant-numeric:tabular-nums}
+@media(max-width:520px){.week-review-link{grid-column:1/-1;justify-self:start}}
+
+.commission-brief {margin:0 0 7px;font-size:.83rem;color:var(--muted,#b1c0b9)}
+.commission-brief summary {cursor:pointer;text-decoration:underline;text-underline-offset:.18em;padding:3px 0}
+.commission-brief strong {display:block;color:var(--ink,#efeada);margin-top:5px}
+.commission-brief p {margin:4px 0;line-height:1.45}
+
+.peer-agreement{display:block;color:#a9c9bd;line-height:1.45}

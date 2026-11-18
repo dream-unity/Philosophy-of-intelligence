@@ -49,7 +49,7 @@
   ["IT","Italy",42.5005,12.6887,"ITA|Italia"],
   ["IM","Isle of Man",54.2438,-4.515,"IMN"],
   ["GB","United Kingdom",54.3103,-1.9125,"GBR|UK|Great Britain|Britain|United Kingdom of Great Britain and Northern Ireland"],
-  ["AX","Åland Islands",60.113,19.9077,"ALA"],
+  ["AX","Åland Islands",60.113,19.9077,"ALA|Åland"],
   ["FO","Faroe Islands",62.1213,-6.9716,"FRO|Faeroe Islands"],
   ["IO","British Indian Ocean Territory",-7.3557,72.4349,"IOT"],
   ["FJ","Fiji",-17.803,177.9827,"FJI|Fiji Islands"],
@@ -62,7 +62,7 @@
   ["BH","Bahrain",26.0166,50.5439,"BHR"],
   ["TK","Tokelau",-9.3475,-171.1935,"TKL"],
   ["PW","Palau",7.5458,134.5822,"PLW"],
-  ["MO","Macao",22.1344,113.5554,"MAC"],
+  ["MO","Macao",22.1344,113.5554,"MAC|Macau|Macao SAR|Macau SAR"],
   ["AU","Australia",-24.915,133.0756,"AUS|Oz"],
   ["EG","Egypt",26.7423,29.463,"EGY|مصر"],
   ["CD","Democratic Republic of the Congo",-4.0059,22.49,"COD|Congo, The Democratic Republic of the|DR Congo|DRC|Congo Kinshasa"],
@@ -147,7 +147,7 @@
   ["BF","Burkina Faso",12.235,-1.2058,"BFA"],
   ["MW","Malawi",-13.2908,33.7361,"MWI"],
   ["MZ","Mozambique",-18.6326,34.6726,"MOZ"],
-  ["HK","Hong Kong",22.4159,114.0605,"HKG"],
+  ["HK","Hong Kong",22.4159,114.0605,"HKG|Hong Kong SAR"],
   ["CY","Cyprus",34.9113,32.9868,"CYP"],
   ["CG","Republic of the Congo",-0.6937,16.0384,"COG|Congo|Congo Brazzaville"],
   ["QA","Qatar",25.3532,51.139,"QAT"],
@@ -174,7 +174,7 @@
   ["MG","Madagascar",-18.7304,46.7264,"MDG"],
   ["ER","Eritrea",15.1892,38.0907,"ERI"],
   ["LY","Libya",26.3341,17.2307,"LBY"],
-  ["CV","Cape Verde",15.1066,-23.6425,"CPV|Cabo Verde"],
+  ["CV","Cabo Verde",15.1066,-23.6425,"CPV|Cape Verde"],
   ["ZA","South Africa",-28.4736,26.1216,"ZAF"],
   ["IS","Iceland",64.9647,-18.4653,"ISL|Ísland"],
   ["LR","Liberia",6.462,-9.6897,"LBR"],
@@ -7706,6 +7706,25 @@
   ['Lake Baikal',53.59,108.3,'Russia','Baikal'],
   ['Lake Titicaca',-15.87,-69.34,'Peru / Bolivia','Titicaca']
  ];
+ // Australian jurisdiction pins use interior points of the Natural Earth/QGIS
+ // administrative polygons. Island pins and the two geographic poles are places
+ // a player can centre directly even when no city marks the intended area.
+ const mapPlaces=[
+  ['Tasmania','AU',-42.1331,146.674,'State','TAS|lutruwita'],
+  ['Victoria','AU',-36.5696,144.5619,'State','VIC'],
+  ['New South Wales','AU',-32.8462,146.4461,'State','NSW'],
+  ['Queensland','AU',-19.9237,143.0592,'State','QLD'],
+  ['South Australia','AU',-32.0532,136.9676,'State','SA'],
+  ['Western Australia','AU',-24.4732,121.2078,'State','WA'],
+  ['Northern Territory','AU',-18.4321,133.5001,'Territory','NT'],
+  ['Australian Capital Territory','AU',-35.5501,148.9548,'Territory','ACT'],
+  ['Jervis Bay Territory','AU',-35.1603,150.6949,'Territory','JBT'],
+  ['Lord Howe Island','AU',-31.5537,159.0837,'Island','Lord Howe'],
+  ['Macquarie Island','AU',-54.6283,158.8908,'Island','Macquarie Island Tasmania'],
+  ['Ashmore and Cartier Islands','AU',-12.4325,123.5863,'Territory','Ashmore Reef'],
+  ['North Pole','',90,0,'Arctic Ocean','Geographic North Pole|Geographical North Pole',true],
+  ['South Pole','AQ',-90,0,'Antarctica','Geographic South Pole|Geographical South Pole']
+ ];
  const storyPins = [
   {name:'Melbourne',code:'AU',title:'Who gets the last delivery?',brief:'Where the Yarra meets Port Phillip, imagine a neighbourhood delivery co-op with one van left on its roster. Market traders need stock. A cook needs the van to collect food for the evening meal.',question:'Which promise would you make first, and who would hear about the delay?'},
   {name:'Mombasa',code:'KE',title:'A timetable the harbour can trust',brief:'At this Indian Ocean port, imagine a repair crew and a group of growers sharing one unloading slot. A fixed schedule protects one group. A flexible schedule could give both a turn, if someone keeps everyone informed.',question:'Who should be able to change a shared schedule, and how will the others know?'},
@@ -7717,9 +7736,9 @@
  // Unicode property escapes retain local-script place names. Normalize punctuation
  // to spaces so a query like "city, country" uses the same index as a plain phrase.
  function normalize(value) {
-  return String(value ?? '').slice(0,180).toLowerCase().normalize('NFD')
+  return String(value ?? '').slice(0,180).toLowerCase().replace(/(?:\b[a-z]\.){2,}[a-z]?\.?/g,abbr=>abbr.replace(/\./g,'')).normalize('NFD')
    .replace(/[\u0300-\u036f]/g,'').replace(/æ/g,'ae').replace(/œ/g,'oe').replace(/ø/g,'o')
-   .replace(/ł/g,'l').replace(/đ/g,'d').replace(/ß/g,'ss').replace(/[’']/g,'')
+   .replace(/ł/g,'l').replace(/đ/g,'d').replace(/ß/g,'ss').replace(/[’‘'ʻʼ]/g,'')
    .replace(/[^\p{L}\p{N}]+/gu,' ').trim();
  }
  const byCode = new Map();
@@ -7758,6 +7777,13 @@
   const caption=['US','AU','CA'].includes(code) && locality && locality!==name?locality+', '+region:region;
   return {name,region,locality,lat,lon,water:false,kind:'place',caption};
  }
+ function markedPlace(row){
+  const [name,code,lat,lon,type,,water=false]=row;
+  const region=byCode.get(code)?.place.name || type;
+  const polar=Math.abs(lat)===90;
+  return {name,region,lat,lon,water,kind:polar?'landmark':'subdivision',caption:polar?type:type+', '+region};
+ }
+ for(const row of mapPlaces)record(markedPlace(row),row[5],17,row[1]);
  for (const [name,lat,lon,region,aliases] of waters) {
   record({name,region,lat,lon,water:true,kind:'water',caption:region},aliases,14,'');
  }
@@ -7812,7 +7838,7 @@
   if(tokens.length>1 && qualifierCodes.has(last) && !context.includes(last)) return 0;
   if(tokens.some(token=>words.some(word=>word.startsWith(token))) &&
      tokens.every(token=>[words,context].some(pool=>pool.some(word=>word.startsWith(token))))) return 680+importance;
-  if(place.kind==='place' && address.includes(query)) return 220+importance;
+  if(place.kind==='place' && address.includes(query)) return 580+importance;
   if(place.kind==='place' && tokens.length>1 && tokens.every(token=>context.includes(token))) return 210+importance;
   if(query.length>=3 && fields.some(field=>field.includes(query))) return 440+importance;
   return 0;
@@ -7840,7 +7866,7 @@
    const tokens=query.split(' ');
    const ranked=[],country=countryMatches.get(query);
    for(const row of index) {
-    const points=country && row.code===country ? (row.place.kind==='region'?1600:1300)+row.importance : score(row,query,tokens);
+    const points=country && row.code===country ? (row.place.kind==='region'?1600:row.place.kind==='subdivision'?1240:1300)+row.importance : score(row,query,tokens);
     if(points) ranked.push({row,points});
    }
    if(!ranked.length && tokens.length===1 && query.length>=5) {
@@ -7870,11 +7896,12 @@
   if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90) return null;
   const latitude=Math.round(lat*1e7),span=3600000000,half=1800000000;
   const longitude=((Math.round((lon%360)*1e7)+half)%span+span)%span-half;
-  return latitude+','+longitude;
+  return latitude+','+(Math.abs(latitude)===900000000?0:longitude);
  }
  function anchorPlace(entry) {
   const {type,row}=entry;
   if(type==='city') return makeCity(row);
+  if(type==='marked') return markedPlace(row);
   if(type==='country') return {name:row[1],region:'Country or territory',lat:row[2],lon:row[3],water:false,kind:'region',caption:'Country or territory'};
   return {name:row[0],region:row[3],lat:row[1],lon:row[2],water:true,kind:'water',caption:row[3]};
  }
@@ -7886,9 +7913,9 @@
    function add(type,row,lat,lon) {
     const indexKey=anchorKey(lat,lon),entry={type,row};
     const prior=anchors.get(indexKey);
-    if(prior && (prior.type==='water')!==(type==='water')) {
+    if(prior && anchorPlace(prior).water!==anchorPlace(entry).water) {
      // Explicit water pins win only at the exact shared anchor.
-     const chosen=type==='water'?entry:prior;
+     const chosen=anchorPlace(entry).water?entry:prior;
      chosen.conflict=[anchorPlace(prior).name,anchorPlace(entry).name];
      anchors.set(indexKey,chosen);
     } else anchors.set(indexKey,entry);
@@ -7896,6 +7923,7 @@
    for(const row of countries) add('country',row,row[2],row[3]);
    for(const row of cities) add('city',row,row[2],row[3]);
    for(const row of waters) add('water',row,row[1],row[2]);
+   for(const row of mapPlaces) add('marked',row,row[2],row[3]);
   }
   const entry=anchors.get(key);
   if(!entry) return null;

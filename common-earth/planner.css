@@ -13,3 +13,6 @@
 .plan-table th:first-child{text-align:left}.plan-table tbody th{font-weight:400}.plan-table .plan-difference td:nth-child(n+3){color:#f1c786;font-weight:700}
 .rehearsal-log{padding:.45rem 0;font-size:.85rem}.rehearsal-log summary{color:#b6dad1;cursor:pointer}.rehearsal-log li{line-height:1.45;margin-top:.35rem}
 @media(max-width:640px){.plan-controls{grid-template-columns:1fr}#planning-details{padding:0 12px}.plan-table :is(td,th){padding:5px 3px}.plan-branch{padding:10px}}
+
+.plan-consequence {margin:0;color:#c4d4cf;font-size:.82rem;line-height:1.45}
+.plan-table {overflow-wrap:anywhere}

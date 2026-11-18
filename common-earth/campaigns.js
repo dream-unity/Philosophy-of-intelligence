@@ -110,7 +110,9 @@
   }
   function preview(point) {
     const {key,definition:b,opening}=describe(point);
-    return {key,title:b.title,brief:b.brief||opening?.brief||'',question:b.question||opening?.question||'',label};
+    const roles=['grower','repairer','convenor'];
+    const firstStep='Hear the '+b.seats.map(i=>roles[i]).join(' and the ')+', then try one practical step, such as “'+baseProof[b.proof[0]].label+'”.';
+    return {key,title:b.title,brief:b.brief||opening?.brief||'',question:b.question||opening?.question||'',firstStep,label};
   }
   const PHASES=new Set(['offered','active','declined','trial','complete']);
   function record(site) {

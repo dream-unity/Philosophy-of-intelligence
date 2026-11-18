@@ -478,7 +478,7 @@
   const definition=(parent,term,value)=>{
     const d=make('div','city-metric');d.append(make('dt','',term),make('dd','',value));parent.append(d);
   };
-  function mount({mapRoot,panel,sim,onStreet,onResult,onChange}) {
+  function mount({mapRoot,panel,sim,onStreet,onResult,onChange,onRehearse}) {
     if(!mapRoot||!panel||!sim)throw new Error('City plan needs a map, inspector and simulation.');
     let currentId=null,select=0,layer='land',project='food',busy=false,message='',onMapFocus=false,hasDestroyed=false;
     const scene=make('div','city-scene');
@@ -596,6 +596,7 @@
           form.append(info,cost,forecast);
           const submitButton=button(busy?'Saving project…':project==='open'?'Reopen common ground':'Commission project',()=>submit(project),'primary city-commission');
           submitButton.disabled=busy||!projection.available;form.append(submitButton);
+          if(projection.available && onRehearse)form.append(button('Rehearse this project',()=>onRehearse(select,project),'city-secondary'));
           if(!projection.available)form.append(make('p','city-reason',projection.reason));
         }
         content.push(form);
