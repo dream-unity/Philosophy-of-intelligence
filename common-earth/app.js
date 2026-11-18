@@ -1031,7 +1031,23 @@
     const state=sim.state;
     $('site-list').replaceChildren(...state.sites.map(s=>{
       const b=button('',()=>openSite(s),'site-entry');
-      b.append(node('strong','',s.name),node('small','',s.region+' · '+s.population+' residents'));return b;
+      b.append(node('strong','',s.name),node('small','',s.region+' · '+s.population+' residents'));
+      const row=node('div','community-entry');
+      row.append(b);
+      for(const action of ['restart','delete']){
+        const label=action==='restart'?'Restart':'Delete';
+        const control=button(label,async()=>{
+          const impact=action==='restart'?'Start again here with founding supplies and 12 residents.':'Remove this community from this world.';
+          if(!window.confirm(label+' '+s.name+'? '+impact+' Its progress, routes and linked agreements will be lost.'))return;
+          const result=await sim.perform('manageSite',s.id,action);
+          if(!presentResult(result))return;
+          arrivalVersion++;crewOrders?.cancel();cancelPlacement();street?.cancelTravel?.();
+          visiting=null;encounter=null;viewingShift=false;lastOpening=null;
+          selected=sim.active()||start;setView('world',false);renderSociety();
+        },'text-button');
+        control.setAttribute('aria-label',label+' '+s.name);row.append(control);
+      }
+      return row;
     }));
     if($('route-status')){
       const routes=state.routes.map(r=>{

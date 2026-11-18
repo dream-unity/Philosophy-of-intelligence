@@ -571,15 +571,50 @@
       let name=tidy(customName) || (region==='Earth'?'Earth':region)+(water?' Anchorage':' Commons');
       if(world.sites.some(s=>s.name===name))name+=' '+(index+1);
       if(old){payment(old,offer.goods);old.population-=offer.relocating;world.effort-=offer.effort;}
+      const site=newSettlement({id,name,region,point,water,names,old,offer});
+      world.sites.push(site);world.activeId=id;
+      const note=root.EarthCampaigns?.found(world,site,commission);
+      return complete(name+' founded. '+(old?old.name+' transferred '+resources(offer.goods)+'. Two volunteers and four new members started the settlement. ':'')+({food:'Its growers produce 1 extra food each week.',materials:'Its salvage team recovers 1 extra material each week.',funds:'Its cooperative earns 1 extra fund each week.'})[site.specialty]+(note?' '+note:''),site);
+    }
+    function newSettlement({id,name,region,point,water,names,old,offer}){
       const specialty=water?'food':['food','materials','funds'][Math.abs(Math.round(point.lat*2+point.lon))%3];
       const site={id,name,region,lat:point.lat,lon:point.lon,water,specialty,era:'Settlement',founded:world.week,foundedBy:old?.id || null,routeLinks:0,
         population:offer.newPopulation,funds:old?offer.goods.funds:16,food:old?offer.goods.food:12,materials:old?offer.goods.materials:8,trust:50,wellbeing:54,tech:[],buildings:[],construction:[],delivery:null,
         residents:PROFILES.map((p,slot)=>({id:id+'-p'+slot,slot,name:names[slot],role:p.role,value:p.value,bond:0,heard:false,promise:null,lastTalk:0,lastPromise:-10})),
         issue:null,pending:[],stats:{kept:0,missed:0,resolved:0,deliveries:0},issueIndex:-1,lastDeliveryWeek:0};
       root.EarthCityModel?.normalise(site);
-      world.sites.push(site);world.activeId=id;
-      const note=root.EarthCampaigns?.found(world,site,commission);
-      return complete(name+' founded. '+(old?old.name+' transferred '+resources(offer.goods)+'. Two volunteers and four new members started the settlement. ':'')+({food:'Its growers produce 1 extra food each week.',materials:'Its salvage team recovers 1 extra material each week.',funds:'Its cooperative earns 1 extra fund each week.'})[specialty]+(note?' '+note:''),site);
+      return site;
+    }
+    function manageSite(id,action){
+      const index=world.sites.findIndex(site=>site.id===id);
+      if(index<0 || !['restart','delete'].includes(action))return reject('This community is unavailable.');
+      const site=world.sites[index];
+      const next=structuredClone(world);
+      next.routes=next.routes.filter(route=>route.from!==id && route.to!==id);
+      next.journal=next.journal.filter(entry=>entry.siteId!==id);
+      next.lastWeekReview=null;
+      for(const key of ['voyage','lastVoyage']){
+        if(next[key]?.origin.id===id || next[key]?.target.id===id)next[key]=null;
+      }
+      for(const partner of Object.values(next.partners||{})){
+        for(const key of ['offer','agreement'])if(partner[key]?.homeId===id)partner[key]=null;
+      }
+      if(next.legacy?.term?.siteId===id)next.legacy.term=null;
+      if(next.learningGoals){
+        if(next.learningGoals.active?.siteId===id)next.learningGoals.active=null;
+        next.learningGoals.history=next.learningGoals.history.filter(entry=>entry.siteId!==id);
+      }
+      for(const other of next.sites){
+        if(other.foundedBy===id)other.foundedBy=null;
+        if(other.issue?.targetId===id)other.issue=null;
+        other.pending=other.pending.filter(entry=>entry.targetId!==id);
+      }
+      if(action==='delete')next.sites.splice(index,1);
+      else next.sites[index]=newSettlement({id,name:site.name,region:site.region,point:site,water:site.water,names:site.residents.map(p=>p.name),old:null,offer:{newPopulation:12}});
+      const validated=readSave(JSON.stringify(next));
+      if(!validated)return reject('This community could not be changed safely.');
+      world=validated;
+      return complete(site.name+(action==='delete'?' deleted.':' restarted.'),action==='restart'?world.sites[index]:null);
     }
     function visit(id){
       const next=world.sites.find(s=>s.id===id);
@@ -1465,7 +1500,7 @@
     const commands={
       planCity:guarded(planCity),beginGoal:guarded(beginGoal),workConstruction:guarded(workConstruction),
       setWorkPreference:guarded(setWorkPreference),setConstructionPaused:guarded(setConstructionPaused),assignBuilders:guarded(assignBuilders),cancelConstruction:guarded(cancelConstruction),
-      found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
+      manageSite:guarded(manageSite),found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
       beginShift:guarded(id=>shiftCommand('start',id)),arriveShift:guarded(id=>shiftCommand('arrive',id)),
       chooseShift:guarded(id=>shiftCommand('choose',id)),finishShift:guarded(actor=>shiftCommand('finish',actor)),
       beginVoyage:guarded(beginVoyage),sail:guarded(sail),reclaim:guarded(reclaim),
