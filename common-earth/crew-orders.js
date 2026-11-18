@@ -5,7 +5,7 @@
     const get=id=>document.getElementById(id);
     const dialog=get('crew-order-dialog'),hud=get('crew-order-hud'),picker=get('crew-order-workers');
     const targets=get('crew-order-targets'),armButton=get('crew-order-arm'),status=get('crew-order-status');
-    const selected=new Set();
+    const selected=new Set(),canvas=get('street-canvas'),normalLabel=canvas.getAttribute('aria-label');
     let mode='idle',siteId=null,invoker=null,targetsKey='',pending=false,generation=0;
     const active=()=>sim.constructionView?.()||{jobs:[],workers:[]};
     const isOpen=()=>dialog.classList.contains('sheet-fallback') ||
@@ -16,17 +16,25 @@
       const item=document.createElement(tag);
       if(cls)item.className=cls;if(text)item.textContent=text;return item;
     };
+    function focusAfterSheet(target,expectedMode){
+      const focus=()=>{
+        if(mode!==expectedMode||!target?.isConnected||document.body.hasAttribute('data-sheet-open'))return;
+        target.focus({preventScroll:true});
+        const rect=target.getBoundingClientRect();
+        if(rect.bottom>innerHeight||rect.top<0)target.scrollIntoView({block:'nearest',behavior:'instant'});
+      };
+      if(document.querySelector('main').inert)dialog.addEventListener('earthsheetclosed',focus,{once:true});
+      else focus();
+    }
     function cancel(restore=false,hideSheet=true){
       if(mode==='idle')return;
       const origin=invoker;
       generation++;mode='idle';siteId=null;invoker=null;selected.clear();pending=false;targetsKey='';
       document.body.removeAttribute('data-crew-order');
-      hud.hidden=true;
+      hud.hidden=true;canvas.setAttribute('aria-label',normalLabel);
       onDisarm();
       if(hideSheet&&isOpen())dialog.hidePopover();
-      if(restore && origin?.isConnected)requestAnimationFrame(()=>{
-        if(!document.body.hasAttribute('data-sheet-open'))origin.focus({preventScroll:true});
-      });
+      if(restore && origin?.isConnected)focusAfterSheet(origin,'idle');
     }
     function chosenNames(model){
       return model.workers.filter(worker=>selected.has(worker.residentId)).map(worker=>worker.name);
@@ -34,14 +42,15 @@
     function update(model=active()){
       if(mode==='idle')return;
       if(sim.state.activeId!==siteId){cancel();return;}
-      if(!model.jobs.length){cancel();return;}
+      if(!model.jobs.length||mode==='map'&&model.jobs.every(job=>job.paused)){cancel();return;}
       const names=chosenNames(model);
       if(mode==='map'){
         put(get('crew-order-names'),names.join(', '));
+        canvas.setAttribute('aria-label','Assign '+names.join(' and ')+'. Tap a marked worksite or press Enter to choose a site from the list. Escape cancels.');
         return;
       }
-      put(status,pending?'Sending crew request…':names.length?names.length+' selected':'Select one or more residents.');
-      armButton.disabled=pending||!names.length;
+      put(status,model.jobs.every(job=>job.paused)?'Resume a worksite before sending a crew.':pending?'Sending crew request…':names.length?names.length+' selected':'Select one or more residents.');
+      armButton.disabled=pending||!names.length||model.jobs.every(job=>job.paused);
       for(const row of picker.children){
         const worker=model.workers.find(person=>person.residentId===row.dataset.resident);
         if(!worker)continue;
@@ -50,16 +59,16 @@
         put(row.querySelector('.crew-order-duty'),current);
         put(row.querySelector('.crew-order-limit'),worker.reason||'');
       }
-      const topology=model.jobs.map(job=>job.id).join('/');
+      const topology=model.jobs.map(job=>job.id+':'+!!job.paused).join('/');
       if(targetsKey!==topology){
         targetsKey=topology;targets.replaceChildren();
         for(const job of model.jobs){
-          const b=element('button','secondary',job.name+' · '+location(job));
-          b.type='button';b.dataset.crewTarget=job.id;
+          const b=element('button','secondary',job.name+' · '+location(job)+(job.paused?' (paused)':''));
+          b.type='button';b.dataset.crewTarget=job.id;b.dataset.paused=String(!!job.paused);
           b.addEventListener('click',()=>assign(job.id));targets.append(b);
         }
       }
-      for(const b of targets.children)b.disabled=pending||!names.length;
+      for(const b of targets.children)b.disabled=pending||!names.length||b.dataset.paused==='true';
     }
     function open(origin,initial=[],listOpen=false){
       const model=active();
@@ -69,7 +78,7 @@
         for(const id of initial)if(model.workers.some(w=>w.residentId===id))selected.add(id);
       }
       siteId=sim.state.activeId;mode='pick';pending=false;targetsKey='';
-      document.body.removeAttribute('data-crew-order');hud.hidden=true;onDisarm();
+      document.body.removeAttribute('data-crew-order');hud.hidden=true;canvas.setAttribute('aria-label',normalLabel);onDisarm();
       picker.replaceChildren();
       for(const worker of model.workers){
         const row=element('label','crew-order-person'),box=element('input');
@@ -91,13 +100,13 @@
     async function assign(jobId){
       if(pending||mode==='idle'||sim.state.activeId!==siteId||!selected.size)return;
       const model=active(),job=model.jobs.find(item=>item.id===jobId);
-      if(!job){update(model);onResult({ok:false,message:'That worksite has closed. Choose another active project.'});return;}
+      if(!job||job.paused){update(model);onResult({ok:false,message:job?'Resume the worksite before assigning a crew.':'That worksite has closed. Choose another active project.'});return;}
       const orderedSite=siteId,ticket=generation;
       pending=true;update(model);
       try{
         const result=await sim.perform('assignBuilders',[...selected],jobId);
         if(orderedSite!==sim.state.activeId||ticket!==generation)return;
-        if(result.ok)cancel();
+        if(result.ok)cancel(mode==='pick');
         onResult(result);
         if(result.ok)onChange(result,true);
       }finally{pending=false;update();}
@@ -109,6 +118,7 @@
       hud.hidden=false;update();
       dialog.hidePopover();
       onArm([...selected]);
+      focusAfterSheet(canvas,'map');
     });
     get('crew-order-cancel').addEventListener('click',()=>{
       cancel();get('street-canvas').focus({preventScroll:true});
@@ -122,7 +132,12 @@
     document.addEventListener('keydown',event=>{
       if(mode==='map'&&event.key==='Escape'){event.preventDefault();cancel();get('street-canvas').focus({preventScroll:true});}
     });
-    return {open,assign,cancel,update};
+    function openTargets(){
+      if(mode!=='map')return false;
+      open(get('crew-order-sites'),[],true);
+      return true;
+    }
+    return {open,openTargets,assign,cancel,update};
   }
   window.EarthCrewOrders={mount};
 })();

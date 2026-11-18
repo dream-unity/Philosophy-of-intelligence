@@ -247,7 +247,14 @@
         scope.sync();
         let raw=get(backing(id),dataKey(id));
         try{if(raw&&JSON.parse(raw)?.version>1&&!scope.hasUnsavedChoice)return fail('A newer edition is needed to copy this world.');}catch(error){/* A recovered valid state can be copied. */}
-        return register(name||sourceName+' copy',JSON.stringify(scope.state));
+        const sourceId=id,diverged=scope.hasDiverged;
+        const result=register(name||sourceName+' copy',JSON.stringify(scope.state));
+        if(result.ok && diverged){
+          // The copy now holds this branch. Reveal the other tab's saved turn
+          // immediately when the player selects the original world again.
+          retained.delete(sourceId);temp.removeItem(dataKey(sourceId));notifyViews();
+        }
+        return result;
       });
     }
     function select(slot){return serial(()=>validId(slot)?activate(slot,true):fail('Unknown saved world.'));}

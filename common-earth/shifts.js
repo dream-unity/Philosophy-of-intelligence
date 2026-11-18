@@ -82,7 +82,7 @@
   function matches(ref,event){
     if(!ref||!event||ref.type!==event.type)return false;
     if(ref.type==='market')return true;
-    if(ref.type==='resident')return ref.residentId===event.residentId;
+    if(ref.type==='resident')return ref.residentId===event.residentId && (!ref.doorstep || event.doorstep===true);
     return ref.type==='building'&&ref.plot===event.plot&&(!ref.kind||!event.kind||ref.kind===event.kind);
   }
   function validVenue(site,q){
@@ -141,7 +141,7 @@
     const visited=shift.history.some(step=>step.stopId===id),current=shift.stopId===id&&matches(shift.at,place);
     const arrival=shift.time+trip,choices=item.choices.map(c=>option(site,shift,id,c,arrival));
     const reason=visited?'This visit is complete.':choices.some(c=>c.available)?'':choices.every(c=>c.end>item.close)?`The available time before ${clock(item.close)} is too short.`:'The district cannot cover an available choice here.';
-    return {id,label:item.name,detail:item.detail,venue:place,venueName:venueName(site,place),window:`${clock(item.open)}–${clock(item.close)}`,arrival:`${clock(arrival)}${trip?' · '+duration(trip)+' to travel':' · here'}`,travel:trip,available:!reason,reason,current,visited,choices};
+    return {id,label:item.name,detail:item.detail,venue:place.type==='resident'?{...place,doorstep:true}:place,venueName:venueName(site,place),window:`${clock(item.open)}–${clock(item.close)}`,arrival:`${clock(arrival)}${trip?' · '+duration(trip)+' to travel':' · here'}`,travel:trip,available:!reason,reason,current,visited,choices};
   }
   function gate(world,site,residentId){
     const resident=person(site,residentId);let reason='';
@@ -175,7 +175,7 @@
       clock:clock(shift.time),timeLeft:duration(END-shift.time),location:venueName(site,shift.at),
       household:budget,householdLabel:`Household costs ${NEED} · reserve ${budget.reserve} · pay ${budget.pay} · covered by neighbours ${budget.relief}`,
       guide:'The clock moves when you arrive or choose an activity. Finish by 15:00. After a completed visit, covering 2 household credits adds 1 wellbeing next week. A shortfall costs 1 wellbeing. Up to 2 spare credits carry into this resident’s next shift.',
-      priorityLabel:`${r.name} asked to make time for “${story.stops[story.priority].name}”. ${r.bond<10?'Combining that visit with another builds 1 bond.':'Your bond is already at 10.'}`,
+      priorityStopId:story.priority,priorityLabel:`${r.name} asked to make time for “${story.stops[story.priority].name}”. ${r.bond<10?'Combining that visit with another builds 1 bond.':'Your bond is already at 10.'}`,
       stops,currentStopId:current?.id||null,choices:current?.choices||[],history,
       finishLabel:shift.history.length?'Finish the day together':'Cancel day · recover 1 effort',canFinish:true};
   }
@@ -185,7 +185,7 @@
     const shift=site.shift,stop=stopView(site,shift,stopId);
     if(!stop.available)return reject(stop.reason);
     if(stop.current)return reject('You are already at this stop.');
-    return {ok:true,shift:{...shift,time:shift.time+stop.travel,at:{...stop.venue},stopId},message:`${clock(shift.time+stop.travel)} · You reached ${stop.venueName} with ${shiftPerson(site).name}.`};
+    return {ok:true,shift:{...shift,time:shift.time+stop.travel,at:{...venue(site,shift,stopId)},stopId},message:`${clock(shift.time+stop.travel)} · You reached ${stop.venueName} with ${shiftPerson(site).name}.`};
   }
   function choose(site,optionId,week){
     if(!live(site,week))return reject('There is no current resident shift.');

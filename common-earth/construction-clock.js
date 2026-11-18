@@ -6,7 +6,7 @@
     const page=root.document;
     let timer=null,last=null,inFlight=false,closed=false,leftPage=false;
     const now=()=>Math.round(root.performance.timeOrigin+root.performance.now());
-    const hasWork=()=>sim.state.sites.some(site=>root.EarthConstruction?.needsTime?.(site,sim.state)??site.construction?.length);
+    const hasWork=()=>sim.state.sites.some(site=>!sim.worksiteLoadIssue?.(site) && (root.EarthConstruction?.needsTime?.(site,sim.state)??site.construction?.length));
     function stopTimer(){
       if(timer!==null)root.clearTimeout(timer);
       timer=null;last=null;

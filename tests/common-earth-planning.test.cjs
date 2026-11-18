@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const directory = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const world = vm.createContext({});
 world.window = world;
-for (const name of ['construction','neighbours','voyages','shifts','campaigns','strategy','partners','city','legacy','simulation','planner']) {
+for (const name of ['construction','dismantling','neighbours','voyages','shifts','campaigns','strategy','partners','city','legacy','simulation','planner']) {
   vm.runInContext(fs.readFileSync(path.join(directory, name + '.js'), 'utf8'), world, {filename: name + '.js'});
 }
 const measures = ['food','funds','materials','trust','wellbeing','population'];
@@ -215,4 +215,55 @@ test('the week-end rehearsal prices a builder’s missed ordinary trade until th
   assert(sim.setWorkPreference(person.id,'build',job.id).ok);
   advance(sim,1);verifyProjected(sim,building);
   sim.destroy();
+});
+
+test('a private branch can release a street reservation and reuse the lot immediately',()=>{
+  const sim=found(),site=sim.active();assert(sim.act('build:garden',3).ok);
+  const job=site.construction[0],move={id:'worksite-cancel:'+job.id};
+  const before=JSON.stringify(sim.state);
+  const swap=world.EarthPlanner.project(sim.state,[move,{id:'build:hall',plot:3}],1,150);
+  assert(swap.ok,swap.message);assert.equal(swap.openBuildings,1);assert.equal(swap.ongoing,0);
+  assert.equal(JSON.stringify(sim.state),before);
+  assert(sim.cancelConstruction(job.id).ok);assert(sim.act('build:hall',3).ok);
+  staffedWeeks(sim,1,150);verifyProjected(sim,swap);
+  sim.destroy();
+});
+
+test('demolition reserves a lot until it is clear and the rehearsal awards salvage only at completion',()=>{
+  const live=found(),site=live.active();
+  assert(live.act('build:garden',2).ok);assert(live.workConstruction(120).ok);
+  const garden=site.buildings[0];const remove={id:'reclaim:'+garden.id};
+  const pending=world.EarthPlanner.project(live.state,[remove],1,0),cleared=world.EarthPlanner.project(live.state,[remove],1,120);
+  assert(pending.ok,pending.message);assert(cleared.ok,cleared.message);
+  assert.equal(pending.openBuildings,0);assert.equal(pending.ongoing,1);
+  assert.equal(cleared.openBuildings,0);assert.equal(cleared.ongoing,0);
+  assert.equal(world.EarthPlanner.project(live.state,[remove,{id:'build:workshop',plot:2}],1,120).ok,false);
+  assert(live.act(remove.id).ok);const job=site.construction[0];
+  const before=JSON.stringify(live.state),cancel={id:'worksite-cancel:'+job.id};
+  const restored=world.EarthPlanner.project(live.state,[cancel],1,120);
+  assert(restored.ok);assert.equal(restored.openBuildings,1);assert.equal(restored.ongoing,0);
+  assert.equal(JSON.stringify(live.state),before);
+  while(!job.work)assert(live.workConstruction(1).ok);
+  assert.equal(world.EarthPlanner.project(live.state,[cancel],1,120).ok,false);
+  assert(live.workConstruction(120).ok);advance(live,1);verifyProjected(live,cleared);
+  live.destroy();
+});
+
+test('private branches can resume or pause existing work at the same calendar time without changing live orders',()=>{
+  for(const [scope,kind] of [['street','garden'],['city','homes']]){
+    const live=found(),site=live.active();
+    assert(scope==='city'?live.planCity(0,kind).ok:live.act('build:'+kind,0).ok);
+    const job=site.construction[0];assert(live.setConstructionPaused(job.id,true).ok);
+    const held=JSON.stringify(live.state);
+    const stayed=world.EarthPlanner.project(live.state,[{id:'wait'}],2,120);
+    const woke=world.EarthPlanner.project(live.state,[{id:'worksite-resume:'+job.id}],2,120);
+    assert(stayed.ok,stayed.message);assert(woke.ok,woke.message);
+    assert.equal(stayed.ongoing,1);assert.equal(woke.ongoing,0);
+    if(scope==='city')assert(woke.city.capacity>stayed.city.capacity);else assert(woke.openBuildings>stayed.openBuildings);
+    assert.equal(JSON.stringify(live.state),held);
+    assert(live.setConstructionPaused(job.id,false).ok);
+    const paused=world.EarthPlanner.project(live.state,[{id:'worksite-pause:'+job.id}],2,120);
+    assert(paused.ok);assert.equal(paused.ongoing,1);
+    staffedWeeks(live,2,120);verifyProjected(live,woke);live.destroy();
+  }
 });

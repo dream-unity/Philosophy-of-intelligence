@@ -163,7 +163,7 @@
       return c?{name:c.name,agenda:q.title,effect:summary(c.practice)+' per week',rate:{...c.practice}}:null;
     }).filter(Boolean);
   }
-  function rates(site,cityDelta,world) {
+  function rates(site,cityDelta,world,workforce=undefined) {
     const result={funds:2,food:3-Math.ceil(site.population/5),materials:1,wellbeing:0};
     result[site.specialty]++;
     const markets=marketPlan(site);
@@ -178,7 +178,7 @@
     if(site.tech.includes('apprenticeship')) result.materials++;
     for(const practice of practices(site))for(const [k,v] of Object.entries(practice.rate))result[k]+=v;
     const district=cityDelta ?? root.EarthCityModel?.overview(site)?.weekly;
-    for(const contribution of [district,root.EarthStrategy?.rates(site),root.EarthConstruction?.weeklyAdjustment(site,world)]){
+    for(const contribution of [district,root.EarthStrategy?.rates(site),workforce??root.EarthConstruction?.weeklyAdjustment(site,world)]){
       for(const [k,v] of Object.entries(contribution || {}))result[k]=(result[k] || 0)+v;
     }
     return result;
@@ -319,6 +319,7 @@
       if(!root.EarthConstruction.valid(site,world))return false;
       if(root.EarthCityModel?.migrateWork?.(site,world)===false)return false;
       if(!root.EarthConstruction.valid(site,world))return false;
+      if(root.EarthDismantling && !root.EarthDismantling.valid(site))return false;
       if(root.EarthCityModel?.validWork && !root.EarthCityModel.validWork(site,site.construction))return false;
     }
     return true;
@@ -395,7 +396,7 @@
     const key=options.key || 'common-earth.world.v1';
     let world=blank(),saveIssue=!storage,saveMessage=!storage?'This browser cannot store the world between visits.':'';
     let lastSeen=null,lastGood=null,futureSave=false,unsavedAction=false,diverged=false;
-    let actionGeneration=0,lastSyncWasWork=false;
+    let actionGeneration=0,lastSyncWasWork=false,closed=false;
     const backupKey=key+'.previous',listeners=new Set();
     const current=()=>world.sites.find(s=>s.id===world.activeId)||null;
     const record=(text,site)=>{world.journal.unshift({week:world.week,text,siteId:site ? site.id : null}); world.journal.length=Math.min(world.journal.length,160);};
@@ -470,6 +471,7 @@
     const conflict='Another tab updated this world. Review the current state and try again.';
     function guarded(operation,allowNewer=false){
       return (...args)=>{
+        if(closed)return reject('This world is no longer open in this tab.');
         if(sync()&&!lastSyncWasWork)return reject(conflict);
         if(futureSave&&!allowNewer)return reject(saveMessage);
         return operation(...args);
@@ -715,15 +717,18 @@
       }
       for(const [kind,b] of Object.entries(BUILDINGS)){
         const gate=!root.EarthConstruction?'Construction crews could not load. Reload the game to try again.':
+          !Number.isSafeInteger((site.projectSerial||0)+1)?'This district cannot record another work order.':
           site.buildings.length+(site.construction||[]).filter(job=>job.scope==='street').length>=9?'All nine district lots are occupied or reserved.':
           kind==='wetland' && !site.tech.includes('apprenticeship')?'First research shared apprenticeship.':'';
         const goods={funds:b.funds,materials:Math.max(1,b.materials-(root.EarthStrategy?.buildDiscount(site) || 0))};
         add('build','build:'+kind,b.name,b.info,{kind,goods,gate},plot=>{
           // The order reserves this plot and these supplies. Opening is a later worker event.
-          let serial=(site.projectSerial||0)+1;
-          const occupiedIds=new Set([...site.buildings,...(site.construction||[])].map(item=>item.id));
-          while(occupiedIds.has(site.id+'-build-'+serial))serial++;
-          const id=site.id+'-build-'+serial;
+          let serial=site.projectSerial||0,id;
+          const occupiedIds=new Set([...site.buildings,...(site.construction||[])].flatMap(item=>item.original?[item.id,item.original.id]:[item.id]));
+          do{
+            if(!Number.isSafeInteger(serial+1))return reject('This district cannot record another work order.');
+            id=site.id.slice(0,420)+'-build-'+(++serial);
+          }while(occupiedIds.has(id));
           const result=root.EarthConstruction.start(site,world,{id,scope:'street',kind,plot,name:b.name,paid:{...goods}});
           if(!result.ok)return result;
           site.projectSerial=serial;
@@ -731,8 +736,11 @@
         });
       }
       if(group==='all' || group==='build')for(const b of site.buildings){
-        const plan=previewReclaim(b.plot,site);
-        add('build','reclaim:'+b.id,'Dismantle lot '+(b.plot+1),plan.text,{plot:b.plot,buildingId:b.id},()=>takeDown(site,b.plot));
+        const plan=previewReclaim(b.plot,site,false);
+        add('build','reclaim:'+b.id,'Dismantle lot '+(b.plot+1),plan.text,{plot:b.plot,buildingId:b.id,gate:plan.available?'':plan.reason},()=>{
+          const order=root.EarthDismantling.start(site,world,b.plot,b.id);
+          return order.ok?order.message:order;
+        });
       }
       const nextTech=TECH[site.tech.length];
       if(nextTech){
@@ -861,37 +869,35 @@
       if(kind==='wetland')service=' Protects local homes and food during high water.';
       return {ok:true,available:action.available,reason:action.reason,label:b.name,text:'Lot '+(plot+1)+' once open · '+forecast+'.'+pairing+service+effects,forecast,delta,goods:{...action.goods},fulfilled:promises,neighbours:around};
     }
-    function previewReclaim(plot,site=current()){
+    function previewReclaim(plot,site=current(),withCrew=true){
       const b=site && site.buildings.find(p=>p.plot===plot);
       if(!b)return {ok:false,available:false,reason:'Choose an occupied district lot.',text:'Choose an occupied district lot.'};
-      const previous=rates(site,undefined,world),next=rates({...site,buildings:site.buildings.filter(p=>p.plot!==plot)},undefined,world);
-      const delta=rateDifference(previous,next);
-      const recovered=Math.max(1,Math.floor(BUILDINGS[b.kind].materials/2));
+      const plan=root.EarthDismantling?.preview(site,world,plot,withCrew);
+      if(!plan?.ok){
+        const reason=plan?.reason||'The dismantling crew could not load. Reload the game to try again.';
+        return {ok:false,available:false,reason,text:reason};
+      }
+      const closed={...site,buildings:site.buildings.filter(p=>p.plot!==plot)};
+      // Keep lost services separate from the temporary labour assignment. Closing
+      // a facility can also move its staff, already included in the crew estimate.
+      const delta=rateDifference(rates(site,undefined,world,{}),rates(closed,undefined,world,{}));
+      const crewDelta=plan.crew?.weeklyDelta;
+      const recovered=plan.recovered;
       const partners=site.residents.filter(p=>(b.partners || []).includes(p.id));
       const forecast=summary(delta)||'No direct change in weekly yield';
-      let text='Dismantle '+b.name.toLowerCase()+' on lot '+(plot+1)+'. Recover '+recovered+' material'+(recovered===1?'':'s')+'. '+forecast+'.';
+      let text='Close '+b.name.toLowerCase()+' on lot '+(plot+1)+'. When the crew clears the lot, recover '+recovered+' material'+(recovered===1?'':'s')+'. Weekly services on closure · '+forecast+'. You can withdraw the order before the crew begins work.';
+      if(plan.crew)text+=plan.crew.workerNames.length?' Expected crew · '+plan.crew.workerNames.join(', ')+' · about '+plan.crew.etaSeconds+' seconds.':' No builder is currently available. Assign a resident to clear the lot.';
+      if(crewDelta && summary(crewDelta))text+=' While the crew clears the lot · '+summary(crewDelta)+' per week.';
       if(partners.length)text+=' '+partners.map(p=>p.name).join(' and ')+' helped secure this project. Trust can fall by 2 and their bonds by 1.';
       if(b.kind==='hall' && site.mandate && site.buildings.filter(b=>b.kind==='hall').length===1)text+=' The local assembly will need another hall before it can vote.';
       if(b.kind==='pier' && site.buildings.filter(b=>b.kind==='pier').length===1)text+=' Routes with no depot at the other end will lose 2 units of base cargo capacity.';
-      return {ok:true,available:world.effort>=1,reason:world.effort>=1?'':'Requires 1 effort. Advance the week to refresh.',buildingId:b.id,label:b.name,text,forecast,delta,recovered,partners:partners.map(p=>p.id)};
-    }
-    function takeDown(site,plot){
-      const plan=previewReclaim(plot);
-      site.buildings=site.buildings.filter(b=>b.plot!==plot);
-      apply(site,{materials:plan.recovered});
-      const effects=[];
-      if(plan.partners.length){
-        const trust=apply(site,{trust:-2});
-        if(trust.trust)effects.push(summary(trust));
-        for(const p of site.residents)if(plan.partners.includes(p.id))effects.push(p.name+' '+bond(p,-1));
-      }
-      return 'Lot '+(plot+1)+' reopened. Recovered '+plan.recovered+' material'+(plan.recovered===1?'':'s')+'. '+plan.forecast+'.'+(effects.length?' '+effects.join(' · ')+'.':'');
+      return {...plan,available:plan.available&&world.effort>=1,reason:plan.reason||(world.effort<1?'Requires 1 effort. Advance the week to refresh.':''),buildingId:b.id,label:b.name,text,forecast,delta,crewDelta,recovered,partners:partners.map(p=>p.id)};
     }
     function reclaim(plot,buildingId){
       const plan=previewReclaim(plot);
       if(!plan.ok || !plan.available)return reject(plan.reason);
       if(plan.buildingId!==buildingId)return reject('The building on this lot changed. Review it before dismantling.');
-      world.effort--;return complete(takeDown(current(),plot),current());
+      return act('reclaim:'+buildingId);
     }
     function applyShiftResult(site,result,requiresFunds=true){
       const spent=Object.fromEntries(Object.entries(result.now||{}).filter(([k,v])=>['funds','materials','food'].includes(k)&&v<0).map(([k,v])=>[k,-v]));
@@ -1169,7 +1175,8 @@
         const city=root.EarthCityModel?.weekly(site,turn);
         const report=reports.get(site.id);
         const cityView=root.EarthCityModel?.overview(site),recurring=cityView?.weekly;
-        report.production=rates(site,recurring,turn);
+        report.workforce=root.EarthConstruction?.weeklyAdjustment(site,turn)||{};
+        report.production=rates(site,recurring,turn,report.workforce);
         if(city && recurring){
           report.cityOneOff=rateDifference(recurring,city.delta);
           apply(site,report.cityOneOff);
@@ -1271,6 +1278,10 @@
       }
       return result;
     }
+    function forecast(siteId=world.activeId){
+      const site=world.sites.find(s=>s.id===siteId);
+      return site?summary(rates(site,undefined,world))+' per week':'';
+    }
     function overview(){
       const s=current();
       if(!s)return {objective:'Select a place on Earth and found your first community.',era:'Earth',chapter:'First landing',forecast:'',charter:null};
@@ -1288,12 +1299,22 @@
         const a=actionsAndRules('research')[0];
         objective=tech.name+': '+(a.available?'ready to research.':a.reason);
       }else objective=charter.text;
-      return {objective,era:s.era,housingCapacity:capacity(s),chapter:world.completed?'Charter ratified':charter?charter.name:'Founding years',forecast:summary(rates(s,undefined,world))+' per week',charter:charter?{...charter,met:charterMet()}:null};
+      return {objective,era:s.era,housingCapacity:capacity(s),chapter:world.completed?'Charter ratified':charter?charter.name:'Founding years',forecast:forecast(s.id),charter:charter?{...charter,met:charterMet()}:null};
+    }
+    function worksiteLoadIssue(site){
+      if(!site?.construction?.length)return '';
+      const needsCity=site.construction.some(job=>job.scope==='city'&&!job.paused);
+      const needsDismantling=site.construction.some(job=>job.kind==='dismantle'&&!job.paused);
+      if(!root.EarthConstruction || needsCity && !root.EarthCityModel?.finish || needsDismantling && !root.EarthDismantling?.finish)
+        return 'Part of this district could not load. Reload the game to resume its saved work.';
+      return '';
     }
     function constructionView(siteId=world.activeId){
       const site=world.sites.find(candidate=>candidate.id===siteId);
       if(!site||!root.EarthConstruction)return {jobs:[],workers:[],roster:[]};
       const report=root.EarthConstruction.view(site,world);
+      const issue=worksiteLoadIssue(site);
+      if(issue)report.jobs=report.jobs.map(job=>({...job,status:'Waiting for reload',loadIssue:issue,workRate:0,etaSeconds:null,activeWorkerIds:[]}));
       return {...report,roster:report.workers};
     }
     function openWorksite(site,job){
@@ -1301,6 +1322,11 @@
         const result=root.EarthCityModel?.finish(site,job,world);
         if(result?.message)record(result.message,site);
         return result?.message || '';
+      }
+      if(job.kind==='dismantle'){
+        const result=root.EarthDismantling.finish(site,job,world);
+        if(result.ok)record(result.message,site);
+        return result.ok?result.message:'';
       }
       const partners=site.residents.filter(person=>person.promise && PROFILES[person.slot].alternative===job.kind);
       const name=BUILDINGS[job.kind].name;
@@ -1333,16 +1359,18 @@
         const startingCount=completed.length;
         let active=false;
         for(const site of world.sites){
-          if(!(domain.needsTime?.(site,world)??site.construction?.length))continue;
-          active=true;
+          // A partially loaded page must not detach a finished job without the
+          // domain that delivers its precinct or salvage. Other districts can run.
+          if(worksiteLoadIssue(site))continue;
           const step=domain.advance(site,world,slice/1000,job=>{
             const message=openWorksite(site,job);
             completed.push({...job,siteId:site.id,message});
             if(message)messages.push(message);
           });
-          changed ||= step.changed;
+          active ||= step.changed;
         }
         if(!active)break;
+        changed=true;
         if(completed.length>startingCount){
           const victory=ratify(world);
           if(victory){record(victory);messages.push(victory);}
@@ -1362,6 +1390,12 @@
       const result=domain.setPreference(site,world,residentId,preference,jobId);
       return result.ok?complete(result.message,site):result;
     }
+    function setConstructionPaused(jobId,paused){
+      const site=current(),domain=root.EarthConstruction;
+      if(!site || !domain?.setPaused)return reject('Choose a current worksite.');
+      const result=domain.setPaused(site,world,jobId,paused);
+      return result.ok && !result.unchanged?complete(result.message,site):result;
+    }
     function assignBuilders(residentIds,jobId){
       const site=current(),domain=root.EarthConstruction;
       if(!site || !domain || !Array.isArray(residentIds) || !residentIds.length ||
@@ -1369,6 +1403,7 @@
         !residentIds.every(id=>site.residents.some(person=>person.id===id)))return reject('Choose residents from this community first.');
       const job=site.construction?.find(item=>item.id===jobId);
       if(!job)return reject('That worksite has closed. Choose a current project.');
+      if(job.paused)return reject('Resume work at this site before inviting builders.');
       for(const id of residentIds)domain.setPreference(site,world,id,'build',jobId);
       const roster=domain.view(site,world).workers.filter(w=>residentIds.includes(w.residentId));
       const ready=roster.filter(w=>w.jobId===jobId).map(w=>w.name);
@@ -1379,9 +1414,17 @@
     function previewCancelConstruction(jobId){
       const site=current(),job=site?.construction?.find(item=>item.id===jobId);
       if(!job)return {ok:false,available:false,reason:'This worksite has already closed.'};
+      if(!root.EarthConstruction || job.scope==='city' && !root.EarthCityModel || job.kind==='dismantle' && !root.EarthDismantling)
+        return {ok:false,available:false,reason:'Reload the game to manage this saved worksite.'};
       if(job.scope==='city'){
         const plan=root.EarthCityModel.preview(site,world,job.precinct,'cancel');
         return {...plan,refund:plan.recovery,effort:plan.cost?.effort||0,label:job.name,text:plan.forecast||plan.reason||''};
+      }
+      if(job.kind==='dismantle'){
+        const available=root.EarthDismantling.canCancel(site,job);
+        const reason=job.paused?'This partly dismantled building will remain here until you resume work.':'Dismantling has begun. Choose Pause work to keep the lot as it is, or let the crew finish clearing it.';
+        return {ok:true,available,reason:available?'':reason,refund:{funds:0,materials:0},effort:0,label:job.name,
+          text:available?'Withdraw the order to reopen the original '+job.original.name.toLowerCase()+'. The organising effort has been spent.':reason};
       }
       const remaining=1-clamp(job.work/job.total,0,1);
       const refund=Object.fromEntries(['funds','materials'].map(key=>[key,Math.floor(job.paid[key]*remaining)]));
@@ -1395,6 +1438,10 @@
         return reject('The crew used more supplies before this request arrived. Review the updated refund and confirm again.');
       const site=current(),job=site.construction.find(item=>item.id===jobId);
       if(job.scope==='city')return planCity(job.precinct,'cancel',job.id);
+      if(job.kind==='dismantle'){
+        const result=root.EarthDismantling.cancel(site,job,world);
+        return result.ok?complete(result.message,site):result;
+      }
       root.EarthConstruction.cancel(site,jobId);
       apply(site,plan.refund);
       return complete('Cancelled '+job.name.toLowerCase()+' on lot '+(job.plot+1)+'. Recovered '+plan.refund.funds+' funds and '+plan.refund.materials+' materials.',site);
@@ -1417,7 +1464,7 @@
     }
     const commands={
       planCity:guarded(planCity),beginGoal:guarded(beginGoal),workConstruction:guarded(workConstruction),
-      setWorkPreference:guarded(setWorkPreference),assignBuilders:guarded(assignBuilders),cancelConstruction:guarded(cancelConstruction),
+      setWorkPreference:guarded(setWorkPreference),setConstructionPaused:guarded(setConstructionPaused),assignBuilders:guarded(assignBuilders),cancelConstruction:guarded(cancelConstruction),
       found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
       beginShift:guarded(id=>shiftCommand('start',id)),arriveShift:guarded(id=>shiftCommand('arrive',id)),
       chooseShift:guarded(id=>shiftCommand('choose',id)),finishShift:guarded(actor=>shiftCommand('finish',actor)),
@@ -1439,10 +1486,10 @@
       }
     }
     return {
-      ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get hasUnsavedChoice(){return unsavedAction;},
-      active:current,constructionView,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecastNext,perform,sync,
+      ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
+      active:current,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,perform,sync,
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
-      destroy(){listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
+      destroy(){closed=true;listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };
   }
   root.CommonEarthSim={create,readSave,marketPlan,productiveLinks,practices,charterFacts,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};

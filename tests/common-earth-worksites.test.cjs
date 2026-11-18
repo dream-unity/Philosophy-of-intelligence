@@ -8,7 +8,7 @@ const directory=process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname,'../
 function makeRuntime(extra={}){
   const runtime=vm.createContext(extra);
   runtime.window=runtime;
-  for(const name of ['construction','shifts','city','strategy','partners','legacy','simulation','construction-clock']){
+  for(const name of ['construction','dismantling','shifts','city','strategy','partners','legacy','simulation','construction-clock']){
     vm.runInContext(fs.readFileSync(path.join(directory,name+'.js'),'utf8'),runtime,{filename:name+'.js'});
   }
   return runtime;
@@ -142,4 +142,63 @@ test('a world imported from a device with its clock set ahead resumes on the fir
   s.state.constructionThrough=now+86400000;
   const restored=runtime.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(s.state)});
   const r=ok(restored.workConstruction(1,now));assert.equal(r.changed,true);assert.equal(restored.state.constructionThrough,now);
+});
+
+test('pausing one lot retains precisely its work and budget while a second lot and the week continue',async()=>{
+  const disk=storage(),s=found(disk),site=s.active();
+  ok(s.act('build:workshop',8));ok(s.act('build:garden',0));
+  const [hold,other]=site.construction;
+  ok(s.assignBuilders([site.residents[1].id],hold.id));ok(s.workConstruction(12));
+  const retained=hold.work,weekly=s.forecastNext().sites[0];assert(retained>0);assert(weekly.workforce.materials<0);
+  const funds=site.funds,materials=site.materials,effort=s.state.effort;
+  ok(await s.perform('setConstructionPaused',hold.id,true));
+  const revision=s.state.actionRevision;
+  ok(await s.perform('setConstructionPaused',hold.id,true));assert.equal(s.state.actionRevision,revision);
+  assert.equal(s.assignBuilders([site.residents[0].id],hold.id).ok,false);
+  assert.equal(site.funds,funds);assert.equal(site.materials,materials);assert.equal(s.state.effort,effort);
+  const resume=runtime.CommonEarthSim.create({storage:disk});
+  const paused=resume.constructionView().jobs.find(j=>j.id===hold.id);
+  assert.equal(paused.paused,true);assert.equal(paused.work,retained);assert.equal(paused.etaSeconds,null);
+  assert.equal(resume.active().construction.find(j=>j.id===other.id).work,other.work);
+  ok(resume.workConstruction(120));ok(resume.advance());
+  assert.equal(resume.active().construction.find(j=>j.id===hold.id).work,retained);
+  assert(resume.active().buildings.some(b=>b.plot===0));assert(!resume.active().buildings.some(b=>b.plot===8));
+  ok(resume.setConstructionPaused(hold.id,false));ok(resume.workConstruction(90));
+  assert.equal(resume.active().buildings.filter(b=>b.plot===8).length,1);
+  assert.equal(resume.setConstructionPaused(hold.id,false).ok,false);
+});
+
+test('finishing a shift uses the visible companion position only when the resident and district match',()=>{
+  const s=found(),site=s.active(),host=site.residents[0];
+  ok(s.act('build:garden',2));ok(s.workConstruction(8));
+  ok(s.beginShift(host.id));
+  const wrong=runtime.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(s.state)});
+  const original=JSON.stringify(wrong.active().workforce.members[host.id].position);
+  ok(wrong.finishShift({x:1,y:2,siteId:'elsewhere',residentId:host.id}));
+  assert.equal(JSON.stringify(wrong.active().workforce.members[host.id].position),original);
+  ok(s.finishShift({x:12,y:18.5,siteId:site.id,residentId:host.id}));
+  assert.deepEqual({...site.workforce.members[host.id].position},{x:12,y:18.5});
+  ok(s.workConstruction(1));assert.notEqual(JSON.stringify(site.workforce.members[host.id].position),JSON.stringify({x:12,y:18.5}));
+});
+
+test('an exhausted street order counter stays readable and cannot consume the final effort',()=>{
+  const s=found(),site=s.active();site.projectSerial=Number.MAX_SAFE_INTEGER;
+  const before=JSON.stringify(s.state);
+  assert.equal(s.act('build:workshop',8).ok,false);assert.equal(JSON.stringify(s.state),before);
+  assert.equal(runtime.CommonEarthSim.readSave(before).sites[0].projectSerial,Number.MAX_SAFE_INTEGER);
+});
+
+test('a missing precinct or salvage module cannot consume an almost-finished job or its reserved goods',()=>{
+  for(const module of ['EarthCityModel','EarthDismantling']){
+    const r=makeRuntime(),s=r.CommonEarthSim.create({storage:null});ok(s.found(point));
+    const site=s.active();
+    if(module==='EarthCityModel')ok(s.planCity(2,'food'));
+    else{ok(s.act('build:workshop',8));ok(s.workConstruction(90));ok(s.reclaim(8,site.buildings[0].id));}
+    const pending=site.construction[0],owner=r[module];pending.work=pending.total-1;
+    const before=JSON.stringify(s.state);r[module]=undefined;
+    assert.match(s.constructionView().jobs[0].loadIssue,/Reload/);
+    assert.equal(s.previewCancelConstruction(pending.id).available,false);
+    ok(s.workConstruction(90));assert.equal(JSON.stringify(s.state),before);
+    r[module]=owner;ok(s.workConstruction(90));assert.equal(site.construction.length,0);
+  }
 });

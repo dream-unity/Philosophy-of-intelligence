@@ -3,7 +3,8 @@
   'use strict';
   const dimensions={food:'Food',funds:'Funds',materials:'Materials',trust:'Trust',wellbeing:'Wellbeing',population:'Residents'};
   const groups={work:'Work',people:'Relationships',build:'Construction',city:'City planning',council:'Council',research:'Research',routes:'Trade routes'};
-  const idle='wait', cityMove='city-project', crewMove='crew-preference';
+  const idle='wait', cityMove='city-project', crewMove='crew-preference',cancelWork='worksite-cancel:';
+  const pauseWork='worksite-pause:',resumeWork='worksite-resume:';
   const urbanMeasures={capacity:'Housing capacity',reachable:'Precincts within 15 minutes',pressure:'Precincts facing rent pressure',noise:'Precincts affected by industry'};
   const cityModel=()=>globalThis.EarthCityModel;
   function urbanOptions(sim, firstOnly=false) {
@@ -31,12 +32,23 @@
   }
   function moves(sim) {
     const available=sim.actions().filter(a=>a.available&&groups[a.group]);
+    for(const job of sim.active()?.construction || []){
+      const location=job.scope==='street'?'lot '+(job.plot+1):'precinct '+(job.precinct+1);
+      if(sim.setConstructionPaused)available.push({id:(job.paused?resumeWork:pauseWork)+job.id,group:'build',
+        label:(job.paused?'Resume ':'Pause ')+job.name.toLowerCase()+' at '+location,cost:0});
+      if(job.scope==='street' && sim.previewCancelConstruction(job.id).available)
+        available.push({id:cancelWork+job.id,group:'build',label:'Cancel '+job.name.toLowerCase()+' on '+location,cost:0});
+    }
     if(sim.active() && sim.setWorkPreference)available.push({id:crewMove,group:'work',label:'Change a resident’s work preference',cost:0});
     if(urbanOptions(sim,true).length)available.push({id:cityMove,group:'city',label:'Plan a precinct project',cost:null});
     return available;
   }
   function apply(sim,move) {
     if(!move || move.id===idle)return {ok:true,message:''};
+    if(typeof move.id!=='string')return {ok:false,message:'Choose a rehearsal move.'};
+    if(move.id.startsWith(pauseWork))return sim.setConstructionPaused(move.id.slice(pauseWork.length),true);
+    if(move.id.startsWith(resumeWork))return sim.setConstructionPaused(move.id.slice(resumeWork.length),false);
+    if(move.id.startsWith(cancelWork))return sim.cancelConstruction(move.id.slice(cancelWork.length));
     if(move.id===cityMove)return sim.planCity(move.location,move.project);
     if(move.id===crewMove)return sim.setWorkPreference(move.residentId,move.preference || 'build',move.jobId || null);
     return sim.act(move.id,move.plot);
@@ -78,8 +90,9 @@
   }
   function mount(root,live) {
     let state,liveWorld,horizon=2,workSeconds=60,plans=[];
+    const previousResults=new Map();
     function capture() {
-      liveWorld=live.state;
+      previousResults.clear();liveWorld=live.state;
       state=JSON.parse(JSON.stringify(liveWorld));
     }
     function fresh() {
@@ -201,7 +214,12 @@
       const refresh=btn('Use current district conditions',()=>{capture();draw('refresh');});refresh.dataset.control='refresh';
       root.append(el('p','Compare two plans from the same moment in '+home.name+', week '+state.week+'. Choose how long the game stays visible before each calendar advance. Only staffed projects make progress during that time.','plan-intro'),h.label,clock.label,refresh);
       drawBranch(0,controls);drawBranch(1,controls);root.append(controls);
-      const [a,b]=plans.map(plan=>project(state,plan,horizon,workSeconds));
+      const keys=plans.map(plan=>JSON.stringify([horizon,workSeconds,plan]));
+      for(const key of previousResults.keys())if(!keys.includes(key))previousResults.delete(key);
+      const [a,b]=plans.map((plan,i)=>{
+        if(!previousResults.has(keys[i]))previousResults.set(keys[i],project(state,plan,horizon,workSeconds));
+        return previousResults.get(keys[i]);
+      });
       if(a.ok&&b.ok){
         const table=el('table',null,'plan-table');
         table.append(el('caption','Projected conditions in week '+a.week));

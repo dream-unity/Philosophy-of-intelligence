@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const gameRoot = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const script = readFileSync(path.join(gameRoot, 'street.js'), 'utf8');
 const constructionScript = readFileSync(path.join(gameRoot, 'construction.js'), 'utf8');
+const shiftScript = readFileSync(path.join(gameRoot, 'shifts.js'), 'utf8');
 const site = {
   id: 'harbour',
   lat: -37.8,
@@ -55,14 +56,15 @@ function surface(width = 820, height = 500) {
   vm.runInNewContext(script, runtime);
   const encounters = [], updates = [];
   const hints = [];
-  const placed = [], previews = [], assignments = [];
+  const placed = [], previews = [], assignments = [], targetLists = [];
   const street = runtime.window.EarthStreet.mount(canvas, {
     onState: state => updates.push(state),
     onInteract: event => encounters.push(event),
     onHint: text => hints.push(text),
     onPlace: point => placed.push(point.plot),
     onPlotPreview: plot => previews.push(plot),
-    onAssignWorksite: jobId => assignments.push(jobId)
+    onAssignWorksite: jobId => assignments.push(jobId),
+    onChooseCrewTarget: () => targetLists.push(true)
   });
   street.setSite(site);
   const unit = Math.max(19, Math.min(37, width * .028 + height * .014));
@@ -92,6 +94,9 @@ function surface(width = 820, height = 500) {
     pointer('pointerdown', point, 1, device);
     pointer('pointerup', point, 1, device);
   }
+  function key(key) {
+    pointerEvents.get('keydown')?.({ key, preventDefault() {} });
+  }
   function step() {
     now += 40;
     if (!frame) return;
@@ -118,7 +123,15 @@ function surface(width = 820, height = 500) {
     covered = open;
     documentEvents.get('earthsheetchange')?.({type:'earthsheetchange'});
   }
-  return { street, sheet, updates, encounters, hints, placed, previews, assignments, interactionFrame, overviewFrame, pointer, tap, step, finish, drive, at };
+  function host(residentId) {
+    vm.runInNewContext(shiftScript,runtime);
+    const active = { ...site, food:8, funds:12, materials:9, delivery:{residentId:'r1'} };
+    const shifts=runtime.window.EarthShifts;
+    active.shift=shifts.start({sites:[active],week:1,effort:3},active,residentId).shift;
+    street.setSite(active);
+    return {active,stops:shifts.view(active,1).stops};
+  }
+  return { street, sheet, host, updates, encounters, hints, placed, previews, assignments, targetLists, interactionFrame, overviewFrame, pointer, tap, key, step, finish, drive, at };
 }
 
 test('driving to successive taps preserves their screen coordinates on a tablet', () => {
@@ -491,6 +504,9 @@ test('a finger can inspect a foundation or order selected residents without acci
   assert.equal(g.encounters.at(-1)?.type, 'construction');
   assert.equal(g.street.getState().travelling, false);
   g.street.setCrewSelection(['r0', 'r1']);
+  assert(g.street.interact());
+  for(const code of ['e','Enter',' '])g.key(code);
+  assert.equal(g.targetLists.length,4);
   g.tap(screen(6, 6));
   g.tap(screen(9, 23.04, .9));
   assert.equal(g.street.getState().travelling, false);
@@ -629,4 +645,83 @@ test('ending a shift can hand off the companion at their actual walking or ridin
   assert.equal(riding.companion.y,riding.y);
   g.street.setSite(site);
   assert.equal(g.street.getState().companion,null);
+});
+
+test('a workshop being dismantled stays reserved, blocks its original footprint, and opens the salvage inspector throughout', () => {
+  const g=surface(),real={id:'existing',plot:8,kind:'workshop',name:'Repair workshop'};
+  const job={ ...workshop,id:'decommission-8',kind:'dismantle',name:'Dismantle repair workshop',original:real };
+  g.street.setSite({...site,buildings:[...site.buildings,real]});
+  g.street.setSite(site);
+  g.street.toggleOverview();
+  for(const [stage,progress] of [[0,.05],[1,.52],[2,.93]]){
+    g.street.setConstruction({jobs:[{...job,stageIndex:stage,progress}],workers:[]});
+    g.tap(g.overviewFrame()(15,15));
+    const event=g.encounters.at(-1);
+    assert.equal(event.type,'construction');
+    assert.equal(event.kind,'dismantle');
+    assert.equal(event.jobId,job.id);
+    const shot=g.street.snapshotView();
+    assert.equal(g.street.restoreView({...shot,player:{...shot.player,x:16.5,y:15}}),false);
+    g.street.setPlacement('hall');
+    g.tap(g.overviewFrame()(15,15,.66));
+    assert.match(g.hints.at(-1),/vacant/);
+    g.street.setPlacement(null);
+  }
+  g.street.setConstruction({jobs:[],workers:[]});
+  const shot=g.street.snapshotView();
+  assert(g.street.restoreView({...shot,player:{...shot.player,x:16.5,y:15}}));
+  g.street.setPlacement('hall');
+  g.tap(g.overviewFrame()(15,15,.66));
+  assert.equal(g.previews.at(-1),8);
+});
+
+test('a school lead or council steward can be reached at their actual post and while commuting', () => {
+  const g=surface(),ref={type:'resident',residentId:'r1'};
+  for(const [physicalDuty,role,travelling,x,y] of [['school','Teacher',true,12,6],['council','Council steward',false,9,11.04]]){
+    const w={...onCrew('busy',x,y,null),physicalDuty,role,travelling,workplace:{type:'building',label:'Hall',x:9,y:11.04}};
+    g.street.setConstruction({jobs:[],workers:[w]});
+    assert(g.street.focusStop(ref));
+    g.finish();
+    const event=g.encounters.at(-1);
+    assert.equal(event.residentId,'r1');
+    assert.equal(event.x,x);
+    assert.equal(event.y,y);
+    assert(g.hints.some(h=>h.includes(role)));
+  }
+});
+
+test('a household shift requires visiting the actual door when its host is alongside you or its neighbour works elsewhere', () => {
+  const g=surface(),{active,stops}=g.host('r0');
+  const companion={type:'resident',residentId:'r0'},neighbour={type:'resident',residentId:'r1'};
+  const home=stops.find(s=>s.id==='meaning').venue,household=stops.find(s=>s.id==='care').venue;
+  assert(home.doorstep&&household.doorstep);
+  assert(g.street.atStop(companion));
+  assert.equal(g.street.atStop(home),false);
+  const crew={jobs:[workshop],workers:[onCrew('building',15,17.04)]};
+  g.street.setConstruction(crew);
+  assert(g.street.focusResident('r1'));
+  g.finish();
+  assert(g.street.atStop(neighbour));
+  assert.equal(g.street.atStop(household),false);
+  assert.equal(g.encounters.at(-1).actionId,'courier:deliver:r1');
+  assert.equal(g.encounters.at(-1).doorstep,undefined);
+  const visits=[];
+  assert(g.street.focusStop(household,p=>visits.push(p)));
+  g.step();
+  g.street.setSite({...active,buildings:[]});
+  g.street.setConstruction({jobs:[],workers:[onCrew('commuting',12,6,null)]});
+  g.finish();
+  assert.equal(visits.length,1);
+  assert.equal(visits[0].doorstep,true);
+  assert.equal(visits[0].actionId,undefined);
+  g.at(21,17.04);
+  assert(g.street.interact());
+  assert.equal(g.encounters.at(-1).doorstep,true);
+  assert.equal(g.street.atStop(neighbour),false);
+  assert(g.street.focusStop(home,p=>visits.push(p)));
+  assert.equal(visits.length,1,'travelling with the host does not instantly visit their house');
+  g.finish();g.at(9,23.04);
+  assert.equal(visits[1].doorstep,true);
+  assert(g.street.focusResident('r0'));
+  assert.equal(g.encounters.at(-1).doorstep,undefined);
 });

@@ -408,3 +408,207 @@ test('actual builders forgo customary production from departure through work and
   C.cancel(s,spec.id);
   assert.deepEqual(C.weeklyAdjustment(s,world),{food:0,materials:0,funds:0});
 });
+
+test('dismantling reserves a street lot, preserves the closed building and needs named workers for every stage',()=>{
+  const s=town(),original={id:'former-grove',plot:2,kind:'wetland',name:'Reed beds',partners:['person-1'],history:{founded:3}};
+  const spec={id:'clear-1',scope:'street',kind:'dismantle',name:'Dismantle the reed beds',plot:2,original,recovered:2,paid:{funds:0,materials:0}};
+  s.buildings.push(original);
+  assert.equal(C.preview(s,world,spec).ok,false);
+  s.buildings=[];
+  const quoted=ok(C.preview(s,world,spec)).job;
+  const j=ok(C.start(s,world,spec)).job;
+  assert.deepEqual(j.original,original);
+  assert.equal(j.total,18);assert.equal(j.work,0);
+  assert.equal(quoted.workers[0],'person-1');
+  original.history.founded=999;
+  assert.equal(j.original.history.founded,3);
+  const publicView=siteJob(s,spec.id);
+  publicView.original.name='Changed in UI';
+  assert.equal(j.original.name,'Reed beds');
+  assert.equal(C.start(s,world,order('market',2)).ok,false);
+  assert.equal(C.start(s,world,{...order('market',0),id:j.original.id}).ok,false);
+  const reached=new Set();
+  while(s.construction.length){
+    const current=siteJob(s,spec.id);
+    reached.add(current.stage);
+    assert.equal(C.valid(s),true);
+    C.advance(s,world,1);
+  }
+  assert.deepEqual([...reached],['Securing the site','Salvaging materials','Clearing the plot']);
+  assert.deepEqual(s.buildings,[]);
+});
+
+test('every dismantle quote enforces the saved lot, building, zero payment, distinct identities and exact ordinary salvage',()=>{
+  const known=['garden','workshop','market','hall','pier','wetland'];
+  for(const kind of known){
+    const s=town(),original={id:'old',plot:0,kind,name:'Preserved name',partners:['person-0']};
+    const spec={id:'remove',scope:'street',plot:0,kind:'dismantle',name:'Careful removal',original,recovered:kind==='wetland'?2:1,paid:{funds:0,materials:0}};
+    for(const invalid of [{...spec,recovered:4},{...spec,paid:{funds:0,materials:1}},{...spec,paid:{food:2}},{...spec,id:'old'},
+      {...spec,scope:'city',precinct:0},{...spec,original:{...original,kind:'dismantle'}},{...spec,original:{...original,plot:3}},
+      {...spec,original:{...original,name:''}},{...spec,original:{...original,partners:['missing']}},
+      {...spec,original:{...original,partners:['person-0','person-0']}},{...order(),original},{...order(),recovered:1}]){
+      assert.equal(C.start(s,world,invalid).ok,false);
+    }
+    ok(C.start(s,world,spec));
+    const restored=copy(s);
+    assert.equal(C.valid(restored),true);
+    for(const damage of [z=>z.construction[0].total++,z=>z.construction[0].original.id='remove',z=>z.construction[0].recovered++,
+      z=>z.construction[0].paid.food=8,z=>z.buildings.push({id:'old',plot:1,kind:'hall'})]){
+      const z=copy(s);damage(z);assert.equal(C.valid(z),false);
+    }
+    assert.deepEqual(C.cancel(restored,spec.id).original,original);
+    assert.equal(C.valid(restored),true);
+  }
+});
+
+test('a proposed worksite quotes the change in occupational output across all existing assignments',()=>{
+  const s=town(),spec=order('workshop',2),afterPayment={...s,funds:s.funds-spec.paid.funds,materials:s.materials-spec.paid.materials};
+  const old=C.weeklyAdjustment(s,world),quote=ok(C.preview(afterPayment,world,spec,s)).job;
+  const candidate=copy(afterPayment);
+  ok(C.start(candidate,world,spec));
+  let after=C.weeklyAdjustment(candidate,world);
+  const diff=(before,now)=>({food:now.food-before.food,materials:now.materials-before.materials,funds:now.funds-before.funds});
+  assert.deepEqual(quote.weeklyDelta,diff(old,after));
+  assert.deepEqual(quote.weeklyDelta,{food:0,materials:-1,funds:0});
+  // A second location can borrow another resident; its quote must never count already-assigned Idris twice.
+  const second=order('hall',5),q=ok(C.preview(candidate,world,second)).job;
+  ok(C.start(candidate,world,second));
+  assert.deepEqual(q.weeklyDelta,diff(after,C.weeklyAdjustment(candidate,world)));
+  assert.deepEqual(q.weeklyDelta,{food:0,materials:0,funds:-1});
+});
+
+test('a restored assignment with an obsolete route cannot contribute until its named worker physically arrives',()=>{
+  const s=town(),id=s.residents[1].id,spec=order('pier',0);
+  ok(C.start(s,world,spec));oneBuilder(s,1,spec.id);
+  const stored=s.workforce.members[id];
+  stored.jobId=spec.id;stored.route=[];
+  assert.equal(C.valid(s),true);
+  const w=C.workerRole(s,world,id);
+  assert.equal(w.activity,'travelling');
+  assert.ok(w.travelLeft>1);
+  C.advance(s,world,1);
+  assert.equal(siteJob(s,spec.id).work,0);
+  const restored=copy(s);
+  restored.workforce.members[id].route=[{x:21,y:23.04}];
+  const journey=C.workerRole(restored,world,id);
+  C.advance(restored,world,journey.travelLeft);
+  assert.equal(siteJob(restored,spec.id).work,0);
+  C.advance(restored,world,1);
+  assert.equal(siteJob(restored,spec.id).work,1);
+});
+
+test('teachers and school leads commute to operating facilities, release work on closure and return on reopening',()=>{
+  const s=town(),id=s.residents[1].id,venue={id:'school',kind:'workshop',plot:0,name:'Repair workshop'};
+  s.buildings=[venue];s.strategy={crew:[1,1,1],studying:'toolbank',active:null};
+  const first=C.workerRole(s,world,id);
+  assert.equal(first.role,'Teacher');assert.equal(first.physicalDuty,'school');
+  assert.equal(first.activity,'busy');assert.equal(first.travelling,true);
+  assert.equal(first.workplace.plot,0);assert.ok(first.travelLeft>0);
+  assert.equal(C.needsTime(s,world),true);assert.equal(s.workforce,undefined);
+  C.advance(s,world,30);
+  const arrived=C.workerRole(s,world,id);
+  assert.equal(arrived.travelling,false);
+  assert.deepEqual([arrived.x,arrived.y],[arrived.workplace.x,arrived.workplace.y]);
+  assert.equal(C.needsTime(s,world),false);
+  s.strategy.studying=null;s.strategy.active='toolbank';
+  assert.equal(C.workerRole(s,world,id).role,'School lead');
+  s.buildings=[];
+  const pending=order('hall',7);
+  ok(C.start(s,world,pending));oneBuilder(s,1,pending.id);
+  assert.equal(C.workerRole(s,world,id).jobId,pending.id);
+  assert.equal(C.workerRole(s,world,id).physicalDuty,null);
+  C.advance(s,world,2);
+  s.buildings=[venue];
+  const recalled=C.workerRole(s,world,id);
+  assert.equal(recalled.jobId,null);assert.equal(recalled.travelling,true);assert.equal(recalled.role,'School lead');
+  const kept=siteJob(s,pending.id).work;C.advance(s,world,40);
+  assert.equal(siteJob(s,pending.id).work,kept);
+  assert.equal(C.workerRole(s,world,id).travelling,false);
+  s.shift={residentId:id};
+  assert.equal(C.workerRole(s,world,id).physicalDuty,null);
+  assert.equal(C.workerRole(s,world,id).role,'Resident companion');
+});
+
+test('a steward physically hosts at the hall or their doorstep, and shared tasks without a recorded venue retain home access',()=>{
+  const s=town(),person=s.residents[0],term={...world,legacy:{term:{siteId:s.id,residentId:person.id}}};
+  const hall={id:'h',plot:0,kind:'hall',name:'District assembly'};
+  const first=C.workerRole(s,term,person.id);
+  assert.equal(first.role,'Council steward');assert.equal(first.physicalDuty,'council');assert.equal(first.travelling,false);
+  assert.equal(first.workplace.residentId,person.id);
+  assert.equal(C.needsTime(s,term),false);
+  s.buildings=[hall];C.advance(s,term,3);
+  const moving=C.workerRole(s,term,person.id);
+  assert.equal(moving.workplace.kind,'hall');assert.equal(moving.travelling,true);
+  s.buildings=[];
+  assert.equal(C.workerRole(s,term,person.id).workplace.residentId,person.id);
+  C.advance(s,term,30);assert.equal(C.needsTime(s,term),false);
+  s.buildings=[hall];C.advance(s,term,30);
+  assert.equal(C.workerRole(s,term,person.id).workplace.plot,0);
+  assert.equal(C.workerRole(s,term,person.id).travelling,false);
+  s.neighbourWork={active:{phase:'working',kind:'tools',agreement:'rota'}};
+  assert.equal(C.workerRole(s,world,person.id).role,'Project partner');
+  assert.equal(C.workerRole(s,world,person.id).physicalDuty,null);
+});
+
+test('pausing a specific street job preserves its progress and invitation while a precinct crew carries on',()=>{
+  const s=town(),a=order('pier',1),b={id:'city',scope:'city',kind:'yard',precinct:2,name:'Repair yard'};
+  ok(C.start(s,world,a));ok(C.start(s,world,b));
+  ok(C.setPreference(s,world,'person-0','build',a.id));ok(C.setPreference(s,world,'person-1','build',b.id));
+  ok(C.setPreference(s,world,'person-2','usual'));
+  C.advance(s,world,13);
+  const original=siteJob(s,a.id).work,other=siteJob(s,b.id).work;
+  assert.ok(original>0);assert.ok(other>0);
+  assert.equal(C.setPaused(s,world,a.id,'yes').ok,false);
+  assert.equal(C.setPaused(s,world,'missing',true).ok,false);
+  ok(C.setPaused(s,world,a.id,true));
+  const frozen=JSON.stringify(s);
+  assert.equal(C.setPaused(s,world,a.id,true).unchanged,true);assert.equal(JSON.stringify(s),frozen);
+  assert.equal(C.setPreference(s,world,'person-2','build',a.id).ok,false);
+  const held=siteJob(s,a.id),worker=C.workerRole(s,world,'person-0');
+  assert.equal(held.status,'Paused · work kept');assert.equal(held.etaSeconds,null);assert.deepEqual(held.workers,[]);
+  assert.equal(worker.preferredJobId,a.id);assert.equal(worker.jobId,null);
+  assert.deepEqual(worker.weeklyDelta,{food:0,materials:0,funds:0});
+  const resumed=copy(s);assert.equal(C.valid(resumed),true);
+  C.advance(resumed,world,7);
+  assert.equal(siteJob(resumed,a.id).work,original);
+  assert.ok(siteJob(resumed,b.id).work>other);
+  ok(C.setPaused(resumed,world,a.id,false));
+  C.advance(resumed,world,20);
+  assert.ok(siteJob(resumed,a.id).work>original);
+  assert.equal(C.workerRole(resumed,world,'person-0').jobId,a.id);
+});
+
+test('paused precincts and dismantling stay inert across saves without occupying their former crew',()=>{
+  const s=town(),demo={id:'clear',scope:'street',kind:'dismantle',plot:2,name:'Dismantle garden',
+    paid:{funds:0,materials:0},original:{id:'garden',kind:'garden',plot:2,name:'Garden'},recovered:1};
+  const city={id:'city',scope:'city',kind:'homes',precinct:1,name:'Settlement housing'};
+  ok(C.start(s,world,demo));ok(C.start(s,world,city));
+  C.advance(s,world,7);
+  for(const job of [demo,city])ok(C.setPaused(s,world,job.id,true));
+  C.advance(s,world,40);
+  assert.equal(C.needsTime(s,world),false);
+  const saved=JSON.stringify(s),restored=JSON.parse(saved);
+  assert.equal(C.advance(restored,world,3600).changed,false);
+  assert.equal(JSON.stringify(restored),saved);
+  assert.equal(C.valid(restored),true);
+  restored.construction[0].paused=1;
+  assert.equal(C.valid(restored),false);restored.construction[0].paused=true;
+  ok(C.setPaused(restored,world,demo.id,false));
+  const result=C.advance(restored,world,90);
+  assert.deepEqual(result.completed.map(j=>j.id),[demo.id]);
+  assert.equal(siteJob(restored,city.id).status,'Paused · work kept');
+});
+
+test('a first tick on a partial legacy roster moves the prepared persistent member and reconsiders later decisions',()=>{
+  const s=town();s.food=0;
+  ok(C.start(s,world,order('pier',0)));
+  const partial=copy(s);
+  delete partial.workforce.members['person-2'];
+  assert.equal(C.valid(partial),true);
+  const ordinary=C.advance(s,world,4),repaired=C.advance(partial,world,4);
+  assert.equal(ordinary.changed,true);assert.equal(repaired.changed,true);
+  assert.deepEqual(copy(partial),copy(s));
+  const role=C.workerRole(partial,world,'person-2');
+  assert.ok(role.relief||role.jobId);
+  assert.notDeepEqual([role.x,role.y],[21,23.04]);
+});

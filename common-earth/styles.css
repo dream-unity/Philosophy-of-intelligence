@@ -583,3 +583,6 @@ body[data-crew-order] .street-stage-heading > :not(#crew-order-hud) { display: n
 #crew-order-targets button { min-height: 44px; text-align: left; }
 .actions-list .resident-duty { margin: 3px 0 0; color: #cad8bd; }
 .actions-list .plot-crew { color: #d7c796; }
+.crew-tradeoff { margin: 0 0 9px; max-width: 45ch; font-size: 12px; line-height: 1.4; }
+.forecast-highlights > small { display: block; color: var(--muted); }
+.forecast-outcomes > strong, .forecast-deadlines > strong { color: var(--paper); }

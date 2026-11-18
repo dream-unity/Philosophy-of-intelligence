@@ -88,3 +88,20 @@ test('activities for each resident can be completed in one day, recalled and set
     ok(finished.beginShift(other.id));
   }
 });
+
+test('a household visit requires the actual doorstep even when the resident is already beside the player',()=>{
+  const sim=simulation(),site=sim.active(),p=site.residents[1],model=runtime.EarthShifts;
+  ok(sim.beginShift(p.id));
+  const day=model.view(site,sim.state.week),stop=day.stops.find(s=>s.venue.residentId===p.id);
+  assert.ok(stop);assert.equal(stop.venue.doorstep,true);
+  const mobile={type:'resident',residentId:p.id};
+  assert.equal(model.matches(stop.venue,mobile),false);
+  assert.equal(model.matches(stop.venue,{...mobile,doorstep:true}),true);
+  assert.equal(model.matches({type:'resident',residentId:p.id},mobile),true);
+  assert.equal(day.stops.find(s=>s.venue.type==='market').venue.doorstep,undefined);
+  ok(sim.arriveShift(stop.id));
+  assert.equal(site.shift.at.doorstep,undefined);assert.equal(site.shift.venues[stop.id].doorstep,undefined);
+  const restored=simulation(snapshot(sim));
+  assert.equal(model.view(restored.active(),restored.state.week).currentStopId,stop.id);
+  ok(restored.chooseShift('card'));ok(restored.finishShift());
+});

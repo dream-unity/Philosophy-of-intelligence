@@ -45,7 +45,9 @@
     const jobs=root.EarthConstruction?.view(site,world)?.jobs || [];
     const matches=jobs.filter(job=>job.progress<1 && accept(job));
     if(!matches.length)return null;
-    const job=matches.find(job=>job.workerNames.length) || matches[0];
+    const job=matches.find(job=>!job.paused && job.workerNames.length) || matches.find(job=>!job.paused) || matches[0];
+    if(job.paused)return {kind:'construction',siteId:site.id,jobId:job.id,label:'Resume work on '+job.name,
+      detail:'This worksite in '+site.name+' is paused. Choose Resume work in its inspector, then allow available residents to reach the site and finish the job.'};
     const staffed=job.workerNames.length>0;
     const detail=staffed?job.workerNames.join(' and ')+(job.workerNames.length===1?' is':' are')+' on the '+job.name+' crew in '+site.name+'. Stay in active play to let the crew finish.':
       job.name+' is waiting for builders in '+site.name+'. Review the residents’ activities and offer a construction role.';
@@ -70,16 +72,27 @@
     return weekStep(site,'Residents are seeing how their last agreements worked out. A new promise is available in week '+nextWeek+'.');
   }
 
+  function makeRoomStep(world,site,need) {
+    const jobs=(site.construction || []).filter(j=>j.scope==='street');
+    if(site.buildings.length+jobs.length<9)return null;
+    const clearing=constructionStep(world,site,j=>j.scope==='street' && j.kind==='dismantle');
+    if(clearing)return {...clearing,detail:clearing.detail+' Finishing this clearance will release a lot for '+need+'.'};
+    if(!site.buildings.length){
+      const job=jobs.slice().sort((a,b)=>a.work/a.total-b.work/b.total)[0];
+      return {kind:'construction',siteId:site.id,jobId:job.id,label:'Review lot '+(job.plot+1)+' in '+site.name,
+        detail:'All nine lots are reserved by unfinished projects. To make room for '+need+', you can cancel a commission in Build. Check the refund before deciding.'};
+    }
+    return {...groupStep(site,'build','Choose a lot to reopen in '+site.name),inspectReclaim:true,
+      detail:'All nine lots are occupied or reserved. You can commission a crew to dismantle an open building, or cancel an unfinished project to make room for '+need+'.'};
+  }
+
   function apprenticeshipStep(world,site) {
     if(!site.residents.some(p=>p.heard))return meetStep(site,site.residents[0]);
     if(!has(site,'hall')&&!has(site,'workshop')){
       const underway=constructionStep(world,site,job=>job.scope==='street' && ['workshop','hall'].includes(job.kind));
       if(underway)return underway;
-      const occupied=site.buildings.length+(site.construction || []).filter(job=>job.scope==='street').length;
-      if(occupied>=9){
-        if(!site.buildings.length)return constructionStep(world,site,job=>job.scope==='street');
-        return {...groupStep(site,'build','Choose a lot to reopen in '+site.name),inspectReclaim:true};
-      }
+      const room=makeRoomStep(world,site,'an apprenticeship workshop');
+      if(room)return room;
       return groupStep(site,'build','Plan a repair workshop in '+site.name,'build:workshop');
     }
     return groupStep(site,'research','Review apprenticeship in '+site.name,'research:apprenticeship');
@@ -170,7 +183,7 @@
         review:{kind:'city',siteId:site.id,precinct:r.id,project:'cancel',label:'Review the project at '+r.name}});
     }
     if(site.id===sim.state.activeId)for(const job of jobs){
-      if(job.scope!=='street')continue;
+      if(job.scope!=='street' || job.kind==='dismantle')continue;
       const cancellation=sim.previewCancelConstruction(job.id);
       if(cancellation?.available)choices.push({refund:cancellation.refund,progress:job.work/job.total,
         review:{kind:'construction',siteId:site.id,jobId:job.id,label:'Review the supplies reserved for '+job.name}});
@@ -216,6 +229,13 @@
     const missing=Object.entries(goods).find(([key,n])=>site[key]<n);
     if(missing && world.effort>0){
       const [key,needed]=missing;
+      if(key==='materials' && world.effort>=cost){
+        const clearances=(site.construction || []).filter(j=>j.scope==='street' && j.kind==='dismantle');
+        if(site.materials+clearances.reduce((sum,j)=>sum+(j.recovered||0),0)>=needed){
+          const job=constructionStep(world,site,j=>j.scope==='street' && j.kind==='dismantle' && j.recovered>0);
+          if(job)return {...job,detail:job.detail+' The recovered materials are added when the clearance finishes. They can help pay for '+step.label.toLowerCase()+' this week.'};
+        }
+      }
       if(key==='funds' && site.delivery){
         const handover=sim.actions('work',site.id).find(a=>a.id==='courier:deliver:'+site.delivery.residentId && a.available);
         if(handover)return {...groupStep(site,'work',handover.label,handover.id),detail:'Hand over the parcel already collected. The delivery earns 3 funds and uses no effort.'};
@@ -500,5 +520,5 @@
       t.decisions.length === world.week-t.start && strings(t.partners,WEEKS) && strings(t.reached,WEEKS));
   }
 
-  root.EarthLegacy = Object.freeze({governs,actions,tick,summary,valid,charterProgress,guidance,prepareStep,promiseStep,constructionStep,buildingPromiseStep});
+  root.EarthLegacy = Object.freeze({governs,actions,tick,summary,valid,charterProgress,guidance,prepareStep,promiseStep,constructionStep,buildingPromiseStep,makeRoomStep});
 })(typeof window === 'undefined' ? globalThis : window);

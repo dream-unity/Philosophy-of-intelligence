@@ -13,18 +13,20 @@
     {id:'repair',label:'Repair work'}, {id:'exchange',label:'Trade and exchange'}
   ].map(Object.freeze));
   const streetWork = {garden:22,workshop:39,market:35,hall:31,pier:44,wetland:32};
+  const dismantleWork={garden:14,workshop:23,market:21,hall:19,pier:26,wetland:18};
   const cityWork = {food:35,homes:55,yard:58,market:42,transit:62,care:39,water:41,open:20};
   const stages = {
     growing:['Preparing ground','Laying beds','Planting'],
     water:['Surveying ground','Shaping channels','Planting banks'],
     open:['Securing the site','Taking down structures','Restoring access'],
+    dismantle:['Securing the site','Salvaging materials','Clearing the plot'],
     building:['Foundations','Framing','Fitting out']
   };
   const tradeByKind={garden:0,food:0,wetland:0,water:0,hall:2,market:2,care:2,transit:2};
   const schoolBySlot=['larder','toolbank','relay'];
   const facilities=[['garden','wetland'],['workshop'],['market','pier']];
   const pairs={tools:[0,1],meals:[0,2],room:[1,2]};
-  const homes=[[9,23.04],[21,17.04],[21,23.04]];
+  const homeBlocks=[[1,3],[3,2],[3,3]];
   const gateways=[[12,.5],[23.5,6],[23.5,12],[18,23.5],[.5,18],[.5,6]];
   const SPEED=3.5,WORK_INTERVAL=28,REST_SECONDS=6;
   const point=(x,y)=>({x,y});
@@ -33,14 +35,16 @@
   const cleanMoney=cost=>({funds:cost?.funds??0,materials:cost?.materials??0});
   const amount=(n,lo=0,hi=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(n)&&n>=lo&&n<=hi;
   const validPoint=p=>p&&Number.isFinite(p.x)&&p.x>=0&&p.x<=24&&Number.isFinite(p.y)&&p.y>=0&&p.y<=24;
-  const home=p=>point(...homes[p.slot]);
+  const doorAt=(bx,by)=>point(3+6*bx,5.04+6*by);
+  const home=p=>doorAt(...(root.EarthShifts?.district?.homes?.[p.slot]||homeBlocks[p.slot]));
+  const marketDoor=()=>doorAt(...(root.EarthShifts?.district?.market||[2,3]));
   const queues=site=>site?.construction||[];
   const hasPreference=id=>preferences.some(p=>p.id===id);
   const table=scope=>scope==='city'?cityWork:streetWork;
 
   function streetPoint(job) {
     if(job.scope==='city')return point(...gateways[job.precinct]);
-    return point(3+6*(job.plot%3),5.04+6*Math.floor(job.plot/3));
+    return doorAt(job.plot%3,Math.floor(job.plot/3));
   }
   function station(job,slot){
     const p=streetPoint(job),spread=(slot-1)*.45;
@@ -84,7 +88,9 @@
     return options[0].filter((p,i,path)=>distance(i?path[i-1]:from,p)>.001);
   }
   function itinerary(person,worker,job){
-    return worker.jobId===job.id?worker.route:roadRoute(worker.position,station(job,person.slot));
+    const target=station(job,person.slot),last=worker.route.at(-1)||worker.position;
+    if(worker.jobId===job.id&&distance(last,target)<.001)return worker.route;
+    return roadRoute(worker.position,target);
   }
   function travelSeconds(position,route){
     const length=route.reduce((sum,p,i)=>sum+distance(i?route[i-1]:position,p),0);
@@ -94,7 +100,7 @@
   function commitment(site,world,person) {
     if(site.shift?.residentId===person.id)return ['Resident companion','Spending the workday with you.'];
     const term=world?.legacy?.term;
-    if(term?.siteId===site.id&&term.residentId===person.id)return ['Council steward','Serving an elected council term.'];
+    if(term?.siteId===site.id&&term.residentId===person.id)return ['Council steward','Serving an elected council term.','council'];
     const joint=site.neighbourWork?.active;
     if(joint?.phase==='working'){
       const partners=pairs[joint.kind]||[];
@@ -103,8 +109,8 @@
     }
     const strategy=site.strategy,slot=person.slot,school=schoolBySlot[slot];
     if(strategy&&strategy.crew[slot]>0&&site.buildings.some(b=>facilities[slot].includes(b.kind))){
-      if(strategy.studying===school)return ['Teacher','Leading a study with the neighbourhood crew.'];
-      if(strategy.active===school)return ['School lead','Staffing the district’s operating school.'];
+      if(strategy.studying===school)return ['Teacher','Leading a study with the neighbourhood crew.','school'];
+      if(strategy.active===school)return ['School lead','Staffing the district’s operating school.','school'];
     }
     return null;
   }
@@ -152,12 +158,8 @@
       return;
     }
   }
-  function workplace(site,person,occupation,preference) {
-    const usualHome=p=>({type:'resident',residentId:p.id,label:p.name+'’s doorstep',...home(p)});
-    // Existing playthroughs retain their original door markers until construction or role play starts.
-    if(!site.workforce&&occupation===roles[person.slot])return usualHome(person);
-    const convening=person.slot===2&&occupation==='exchange'&&preference!=='exchange';
-    const kinds=convening?['hall']:occupation==='food'?['garden','wetland']:occupation==='repair'?['workshop']:['market','pier'];
+  const doorstep=p=>({type:'resident',residentId:p.id,label:p.name+'’s doorstep',...home(p)});
+  function locateFacility(site,person,kinds){
     let marketPlans;
     for(const kind of kinds){
       const options=site.buildings.filter(b=>b.kind===kind);
@@ -168,32 +170,58 @@
         return {type:'building',plot:building.plot,kind:building.kind,label:building.name||building.kind,...p};
       }
     }
-    if(convening)return usualHome(person);
-    if(occupation==='exchange')return {type:'market',label:'Market exchange',x:15+(person.slot-1)*.45,y:23.04};
-    const lead=site.residents[occupation==='food'?0:1],door=usualHome(lead);
+    return null;
+  }
+  function dutyWorkplace(site,person,duty){
+    return locateFacility(site,person,duty==='council'?['hall']:facilities[person.slot])||doorstep(person);
+  }
+  function workplace(site,person,occupation,preference) {
+    // A settled earlier world keeps its home markers until somebody starts taking up new work.
+    if(!site.workforce&&occupation===roles[person.slot])return doorstep(person);
+    const convening=person.slot===2&&occupation==='exchange'&&preference!=='exchange';
+    const kinds=convening?['hall']:occupation==='food'?['garden','wetland']:occupation==='repair'?['workshop']:['market','pier'];
+    const facility=locateFacility(site,person,kinds);
+    if(facility)return facility;
+    if(convening)return doorstep(person);
+    if(occupation==='exchange'){
+      const door=marketDoor();door.x+=(person.slot-1)*.45;
+      return {type:'market',label:'Market exchange',...door};
+    }
+    const lead=site.residents[occupation==='food'?0:1],door=doorstep(lead);
     if(lead.id!==person.id)door.x+=.45*(person.slot>lead.slot?1:-1);
     return door;
   }
+  function commuteRoute(state,dest){
+    if(distance(state.position,dest)<.001)return [];
+    const last=state.route.at(-1);
+    return state.jobId===null&&last&&distance(last,dest)<.001?state.route:roadRoute(state.position,point(dest.x,dest.y));
+  }
   function occupationOf(person,state){return roles.includes(state.preference)?state.preference:roles[person.slot];}
   function allocate(site,world){
-    const jobs=queues(site),teams=new Map(jobs.map(j=>[j.id,[]]));
+    const orders=queues(site),jobs=orders.filter(j=>!j.paused),teams=new Map(orders.map(j=>[j.id,[]]));
     const workers=site.residents.map(person=>{
       const state=member(site,person),duty=commitment(site,world,person),pref=state.preference;
       const fixed=roles.includes(pref);
+      const heldJob=pref==='build'&&state.preferredJobId?orders.find(j=>j.id===state.preferredJobId&&j.paused):null;
       const need=pref==='auto'?localPriority(site,person.slot):'';
-      const occupation=occupationOf(person,state),place=workplace(site,person,occupation,pref);
+      const occupation=occupationOf(person,state),physicalDuty=duty?.[2]||null;
+      const place=physicalDuty?dutyWorkplace(site,person,physicalDuty):workplace(site,person,occupation,pref);
       const usualRole=person.role||customaryTitles[person.slot];
       const changedProfession=fixed&&(pref!==roles[person.slot]||pref==='exchange');
       let activity='usual',role=changedProfession?professions[occupation]:usualRole;
       let reason=fixed?'Chose this occupation.':pref==='usual'?'Keeping their usual occupation.':'Working their usual occupation.';
       if(need)reason=need;
-      if(duty){activity='busy';[role,reason]=duty;}
+      if(heldJob)reason='Keeping their usual work until '+heldJob.name+' resumes.';
+      if(duty){
+        activity='busy';[role,reason]=duty;
+        if(physicalDuty==='council'&&place.type==='resident')reason='Chairing the council from their doorstep while no assembly hall is open.';
+      }
       else if(state.rest){activity='resting';role='On a break';reason='Resting after a building shift ('+state.rest+' s).';}
-      return {person,state,occupation,usualRole,workplace:place,activity,role,reason,need,candidate:!duty&&!state.rest&&(pref==='auto'||pref==='build'),job:null,route:[]};
+      return {person,state,occupation,usualRole,physicalDuty,heldJob,workplace:place,activity,role,reason,need,candidate:!heldJob&&!duty&&!state.rest&&(pref==='auto'||pref==='build'),job:null,route:[]};
     });
     function assign(w,j,reason){
       const path=itinerary(w.person,w.state,j);
-      w.job=j;w.route=path;w.activity=path.length?'travelling':'building';w.role='Builder';w.reason=reason;
+      w.job=j;w.route=path;w.activity=path.length?'travelling':'building';w.role=j.kind==='dismantle'?'Dismantling crew':'Builder';w.reason=reason;
       teams.get(j.id).push(w);
     }
     // A request for a particular site wins over an invitation to any site. Social commitments still win.
@@ -223,6 +251,7 @@
     }
     relieveShortage(site,workers);
     for(const w of workers){
+      if(w.physicalDuty){w.route=commuteRoute(w.state,w.workplace);continue;}
       if(w.job || w.activity==='busy')continue;
       if(w.activity==='resting'){
         if(w.state.preference==='auto'||w.state.preference==='build'){
@@ -234,12 +263,11 @@
       const dest=w.workplace,atHome=dest.type==='resident'&&dest.residentId===w.person.id;
       if(distance(w.state.position,dest)>.001){
         w.activity=atHome?'returning':'commuting';
-        if(!w.relief)w.reason=atHome?'Walking back to their doorstep.':'Going to '+dest.label+' for work.';
-        const last=w.state.route.at(-1);
-        w.route=w.state.jobId===null&&last&&distance(last,dest)<.001?w.state.route:roadRoute(w.state.position,point(dest.x,dest.y));
+        if(!w.relief&&!w.heldJob)w.reason=atHome?'Walking back to their doorstep.':'Going to '+dest.label+' for work.';
+        w.route=commuteRoute(w.state,dest);
       }else if(!atHome||roles.includes(w.state.preference)){
         w.activity='working';
-        if(!w.need&&!w.relief)w.reason='Working at '+dest.label+'.';
+        if(!w.need&&!w.relief&&!w.heldJob)w.reason='Working at '+dest.label+'.';
       }
     }
     return {workers,teams};
@@ -248,11 +276,12 @@
   function stageNames(kind){
     if(kind==='garden'||kind==='food')return stages.growing;
     if(kind==='wetland'||kind==='water')return stages.water;
+    if(kind==='dismantle')return stages.dismantle;
     return kind==='open'?stages.open:stages.building;
   }
   function weeklyDelta(w,prospective=false){
     const delta={food:0,materials:0,funds:0},customaryGood=goods[roles[w.person.slot]];
-    if(w.job||w.restJob||prospective&&w.state.preference==='build'&&w.state.preferredJobId){
+    if(w.job||w.restJob||prospective&&!w.heldJob&&w.state.preference==='build'&&w.state.preferredJobId){
       // A committed crew member is away from their ordinary weekly production from departure until release.
       delta[customaryGood]--;
     }else if((prospective||w.activity==='usual'||w.activity==='working')&&(w.relief||roles.includes(w.state.preference))){
@@ -261,16 +290,18 @@
     }
     return delta;
   }
+  function workforceDelta(workers){
+    const delta={food:0,materials:0,funds:0};
+    for(const w of workers){
+      const person=weeklyDelta(w);
+      delta.food+=person.food;delta.materials+=person.materials;delta.funds+=person.funds;
+    }
+    return delta;
+  }
   function weeklyAdjustment(site,world){
     const delta={food:0,materials:0,funds:0},building=queues(site).length>0;
     if(!site.workforce&&!building)return delta;
-    if(building||possibleRelief(site)){
-      for(const w of allocate(site,world).workers){
-        const change=weeklyDelta(w);
-        for(const k of Object.values(goods))delta[k]+=change[k];
-      }
-      return delta;
-    }
+    if(building||possibleRelief(site))return workforceDelta(allocate(site,world).workers);
     for(const p of site.residents){
       const s=member(site,p),pref=s.preference;
       if(!roles.includes(pref)||pref===roles[p.slot]||s.rest||commitment(site,world,p))continue;
@@ -299,8 +330,9 @@
       etaSeconds=t;
     }
     const active=team.filter(w=>w.activity==='building');
-    const status=!team.length?'Awaiting a builder':active.length?'Under construction':team.some(w=>w.activity==='travelling')?'Crew travelling':'Crew resting';
-    return {...job,paid:{...job.paid},partners:[...(job.partners||[])],progress,stageIndex,stage:stageNames(job.kind)[stageIndex],status,
+    const workingStatus=job.kind==='dismantle'?'Dismantling underway':'Under construction';
+    const status=job.paused?'Paused · work kept':!team.length?'Awaiting a builder':active.length?workingStatus:team.some(w=>w.activity==='travelling')?'Crew travelling':'Crew resting';
+    return {...job,...(job.original?{original:copyBuilding(job.original)}:{}),paid:{...job.paid},partners:[...(job.partners||[])],progress,stageIndex,stage:stageNames(job.kind)[stageIndex],status,
       workers:team.map(w=>w.person.id),workerNames:team.map(w=>w.person.name),
       activeWorkerIds:active.map(w=>w.person.id),workRate:active.length,etaSeconds};
   }
@@ -309,29 +341,46 @@
     const {workers,teams}=allocate(site,world);
     return {preferences,jobs:queues(site).map(j=>jobView(j,teams.get(j.id))),workers:workers.map(w=>({
       residentId:w.person.id,name:w.person.name,slot:w.person.slot,role:w.role,reason:w.reason,preference:w.state.preference,
-      occupation:w.occupation,usualRole:w.usualRole,workplace:w.workplace,relief:w.relief||null,
+      occupation:w.occupation,usualRole:w.usualRole,workplace:w.workplace,physicalDuty:w.physicalDuty,relief:w.relief||null,
       preferredJobId:w.state.preferredJobId,jobId:(w.job||w.restJob)?.id||null,area:(w.job||w.restJob)?.scope||null,activity:w.activity,
-      x:w.state.position.x,y:w.state.position.y,travelling:['travelling','returning','commuting'].includes(w.activity),
+      x:w.state.position.x,y:w.state.position.y,travelling:Boolean(w.physicalDuty&&w.route.length)||['travelling','returning','commuting'].includes(w.activity),
       travelLeft:travelSeconds(w.state.position,w.route),restLeft:w.state.rest,weeklyDelta:weeklyDelta(w),preferenceDelta:weeklyDelta(w,true)
     }))};
   }
   function workerRole(site,world,id){return view(site,world).workers.find(w=>w.residentId===id)||null;}
+  const identifier=id=>typeof id==='string'&&id.length>0&&id.length<=512;
+  const validPartners=(site,ids)=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(id=>site.residents.some(p=>p.id===id));
+  const copyBuilding=building=>JSON.parse(JSON.stringify(building));
+  const reservedIds=job=>job.original?[job.id,job.original.id]:[job.id];
+  function validDismantle(site,j){
+    const b=j.original;
+    if(!b||typeof b!=='object'||Array.isArray(b)||!Object.hasOwn(dismantleWork,b.kind)||
+      !identifier(b.id)||b.id===j.id||b.plot!==j.plot||!identifier(b.name)||
+      b.partners!=null&&!validPartners(site,b.partners))return false;
+    const materials=root.CommonEarthSim?.buildings?.[b.kind]?.materials??(b.kind==='wetland'?4:3);
+    return j.total===dismantleWork[b.kind]&&Object.keys(j.paid).length===2&&j.paid.funds===0&&j.paid.materials===0&&
+      j.recovered===Math.max(1,Math.floor(materials/2));
+  }
   function validJob(site,j){
-    if(!j||typeof j.id!=='string'||!j.id||j.id.length>512||!['city','street'].includes(j.scope)||!Object.hasOwn(table(j.scope),j.kind))return false;
-    const cost=j.paid;
-    if(!cost||!amount(cost.funds)||!amount(cost.materials)||!amount(j.total,1,3600)||!amount(j.work,0,j.total-1)||typeof j.name!=='string'||!j.name||j.name.length>512)return false;
+    if(!j||!identifier(j.id)||!identifier(j.name)||!['city','street'].includes(j.scope))return false;
+    if(Object.hasOwn(j,'paused')&&typeof j.paused!=='boolean')return false;
+    const dismantling=j.scope==='street'&&j.kind==='dismantle',cost=j.paid;
+    if(!cost||!amount(cost.funds)||!amount(cost.materials)||!amount(j.total,1,3600)||!amount(j.work,0,j.total-1))return false;
     if(j.scope==='street'?!amount(j.plot,0,8):!amount(j.precinct,0,5))return false;
-    return j.partners===undefined || Array.isArray(j.partners)&&j.partners.every(id=>site.residents.some(p=>p.id===id))&&new Set(j.partners).size===j.partners.length;
+    if(dismantling){if(!validDismantle(site,j))return false;}
+    else if(!Object.hasOwn(table(j.scope),j.kind)||Object.hasOwn(j,'original')||Object.hasOwn(j,'recovered'))return false;
+    return j.partners===undefined||validPartners(site,j.partners);
   }
   function valid(site){
     if(site.construction!=null){
       if(!Array.isArray(site.construction)||site.construction.length>15)return false;
-      const ids=new Set(),lots=new Set();
+      const ids=new Set(site.buildings.map(b=>b.id)),lots=new Set();
       for(const j of site.construction){
         if(!validJob(site,j))return false;
         const lot=j.scope+':'+(j.scope==='city'?j.precinct:j.plot);
-        if(ids.has(j.id)||lots.has(lot)||j.scope==='street'&&site.buildings.some(b=>b.plot===j.plot||b.id===j.id))return false;
-        ids.add(j.id);lots.add(lot);
+        if(lots.has(lot)||j.scope==='street'&&site.buildings.some(b=>b.plot===j.plot))return false;
+        for(const id of reservedIds(j)){if(ids.has(id))return false;ids.add(id);}
+        lots.add(lot);
       }
     }
     const workforce=site.workforce;
@@ -344,17 +393,26 @@
       amount(s.fatigue,0,WORK_INTERVAL-1)&&amount(s.rest,0,REST_SECONDS));
   }
   function makeJob(site,spec){
-    const scope=spec.scope||'street',total=table(scope)[spec.kind],fraction=spec.workFraction??0;
+    const scope=spec.scope||'street',dismantling=scope==='street'&&spec.kind==='dismantle';
+    const total=dismantling?dismantleWork[spec.original?.kind]:table(scope)[spec.kind],fraction=spec.workFraction??0;
     if(!Number.isFinite(fraction)||fraction<0||fraction>=1)return reject('Invalid saved construction progress.');
     const j={id:spec.id,scope,kind:spec.kind,name:spec.name||spec.kind,paid:cleanMoney(spec.paid),
       ...(scope==='city'?{precinct:spec.precinct}:{plot:spec.plot}),work:Math.floor(total*fraction),total};
+    if(Object.hasOwn(spec,'paused'))j.paused=spec.paused;
+    if(dismantling){
+      if(!spec.original)return reject('Choose the existing building to dismantle.');
+      if(spec.paid&&Object.keys(spec.paid).some(k=>k!=='funds'&&k!=='materials'))return reject('Dismantling does not charge additional goods.');
+      try{j.original=copyBuilding(spec.original);}catch{return reject('The building record could not be preserved.');}
+      j.recovered=spec.recovered;
+    }else if(Object.hasOwn(spec,'original')||Object.hasOwn(spec,'recovered'))return reject('Only a dismantling project can recover building materials.');
     if(spec.partners!==undefined){
       if(!Array.isArray(spec.partners))return reject('Choose residents from this town.');
       j.partners=[...spec.partners];
     }
     if(!validJob(site,j))return reject('Choose a valid project and site.');
-    if(queues(site).some(k=>k.id===j.id || k.scope===scope&&(scope==='city'?k.precinct===j.precinct:k.plot===j.plot)))return reject('This site already has a project.');
-    if(scope==='street'&&site.buildings.some(b=>b.plot===j.plot||b.id===j.id))return reject('This plot is already occupied.');
+    const ids=reservedIds(j);
+    if(queues(site).some(k=>reservedIds(k).some(id=>ids.includes(id)) || k.scope===scope&&(scope==='city'?k.precinct===j.precinct:k.plot===j.plot)))return reject('This site already has a project.');
+    if(site.buildings.some(b=>ids.includes(b.id)||scope==='street'&&b.plot===j.plot))return reject('This plot is already occupied.');
     return {ok:true,job:j};
   }
   function start(site,world,spec){
@@ -363,11 +421,14 @@
     prepare(site);(site.construction||=[]).push(result.job);
     return {ok:true,message:result.job.name+' commissioned.',job:result.job};
   }
-  function preview(site,world,spec){
+  function preview(site,world,spec,beforeSite=site){
     const result=makeJob(site,spec);
     if(!result.ok)return result;
-    const projected={...site,construction:[...queues(site),result.job]},team=allocate(projected,world).teams.get(result.job.id);
-    return {ok:true,reason:'',job:jobView(result.job,team)};
+    const projected={...site,construction:[...queues(site),result.job]},allocation=allocate(projected,world);
+    const job=jobView(result.job,allocation.teams.get(result.job.id));
+    const before=weeklyAdjustment(beforeSite,world),after=workforceDelta(allocation.workers);
+    job.weeklyDelta={food:after.food-before.food,materials:after.materials-before.materials,funds:after.funds-before.funds};
+    return {ok:true,reason:'',job};
   }
   function detach(site,job){
     for(const w of Object.values(site.workforce?.members||{})){
@@ -381,9 +442,17 @@
     const [job]=list.splice(index,1);detach(site,job);
     return job;
   }
+  function setPaused(site,world,jobId,paused){
+    const job=queues(site).find(j=>j.id===jobId);
+    if(!job||typeof paused!=='boolean')return reject('Choose an active worksite to pause or resume.');
+    if(Boolean(job.paused)===paused)return {ok:true,unchanged:true,message:job.name+(paused?' is already paused.':' is already open for work.')};
+    job.paused=paused;
+    return {ok:true,message:paused?job.name+' paused. Completed work and invitations are kept.':job.name+' resumed. Available crew can return.'};
+  }
   function setPreference(site,world,id,preference,jobId=null){
     if(!site?.residents.some(p=>p.id===id)||!hasPreference(preference))return reject('Choose a resident and an available occupation.');
     if(jobId!==null&&(preference!=='build'||!queues(site).some(j=>j.id===jobId)))return reject('This construction site is no longer available.');
+    if(jobId!==null&&queues(site).some(j=>j.id===jobId&&j.paused))return reject('Resume this worksite before assigning a crew.');
     const m=prepare(site).members[id];
     m.preference=preference;m.preferredJobId=jobId;if(preference!=='auto')m.relief=null;
     const who=site.residents.find(p=>p.id===id),work=workerRole(site,world,id);
@@ -405,7 +474,7 @@
       // A cancelled meeting with no travel began wherever the person was already working.
       if(!shift.time&&!shift.stopId&&!shift.history?.length)return false;
       const venue=shift.at;
-      if(venue?.type==='market')location=point(15,23.04);
+      if(venue?.type==='market')location=marketDoor();
       else if(venue?.type==='building'&&amount(venue.plot,0,8))location=streetPoint({scope:'street',plot:venue.plot});
       else if(venue?.type==='resident'){
         const host=site.residents.find(p=>p.id===venue.residentId);
@@ -430,33 +499,45 @@
   }
   function pendingMovement(site,world){
     const members=site.workforce?.members;
-    if(!members)return false;
+    if(!members&&!site.strategy?.active&&!site.strategy?.studying&&world?.legacy?.term?.siteId!==site.id)return false;
     return site.residents.some(p=>{
-      const s=Object.hasOwn(members,p.id)?members[p.id]:null;
-      return s&&(s.jobId||s.rest||s.fatigue||s.route.length||
-        !commitment(site,world,p)&&distance(s.position,workplace(site,p,occupationOf(p,s),s.preference))>.001);
+      const s=members&&Object.hasOwn(members,p.id)?members[p.id]:fresh(p);
+      if(s.jobId||s.rest||s.fatigue||s.route.length)return true;
+      const duty=commitment(site,world,p);
+      if(duty)return Boolean(duty[2]&&distance(s.position,dutyWorkplace(site,p,duty[2]))>.001);
+      return Boolean(members&&distance(s.position,workplace(site,p,occupationOf(p,s),s.preference))>.001);
     });
   }
-  function needsTime(site,world){
+  // Most idle towns can answer without assigning people. When a roster decision is
+  // necessary, return those exact workers for the same tick to avoid deciding twice.
+  function timeDemand(site,world){
     if(!site)return false;
     if(possibleRelief(site)){
-      return allocate(site,world).workers.some(w=>w.job||w.route.length||w.state.jobId||w.state.route.length||
+      const {workers}=allocate(site,world);
+      const moving=workers.some(w=>w.job||w.route.length||w.state.jobId||w.state.route.length||
         w.state.rest||w.state.fatigue||(w.state.relief||null)!==(w.relief||null));
+      return moving&&workers;
     }
     if(pendingMovement(site,world))return true;
     if(!queues(site).length)return false;
-    return allocate(site,world).workers.some(w=>w.job);
+    const {workers}=allocate(site,world);
+    return workers.some(w=>w.job)&&workers;
   }
+  function needsTime(site,world){return Boolean(timeDemand(site,world));}
   function advance(site,world,seconds,onFinished){
     if(!Number.isFinite(seconds)||seconds<0||seconds>3600)return {ok:false,changed:false,completed:[],reason:'Advance up to one hour of active play at a time.'};
     const completed=[];
-    if(!seconds||!needsTime(site,world))return {ok:true,changed:false,completed};
+    const demand=seconds&&timeDemand(site,world);
+    if(!demand)return {ok:true,changed:false,completed};
     const wf=prepare(site),oldCarry=wf.carryMs,ms=oldCarry+Math.round(seconds*1000);
     if(ms===oldCarry)return {ok:true,changed:false,completed};
     wf.carryMs=ms%1000;
     let changed=oldCarry!==wf.carryMs;
+    // New and older partial saves acquire real members in prepare. Discard any
+    // provisional workers from before that point, and reconsider roles every later second.
+    const first=Array.isArray(demand)&&demand.every(w=>wf.members[w.person.id]===w.state)?demand:null;
     for(let i=0;i<Math.floor(ms/1000);i++){
-      const {workers}=allocate(site,world);
+      const workers=(i===0&&first)||allocate(site,world).workers;
       let stepped=false;
       for(const w of workers){
         const state=w.state;
@@ -466,7 +547,7 @@
             if(state.jobId||state.route.length)stepped=true;
             state.jobId=null;state.route=w.route;
           }
-          if(w.activity==='returning'||w.activity==='commuting'){stepWalk(state);stepped=true;}
+          if(w.activity==='returning'||w.activity==='commuting'||w.physicalDuty&&state.route.length){stepWalk(state);stepped=true;}
           if(state.rest){state.rest--;stepped=true;}
           else if(state.fatigue){state.fatigue=Math.max(0,state.fatigue-3);stepped=true;}
           continue;
@@ -486,5 +567,5 @@
     }
     return {ok:true,changed,completed};
   }
-  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,workerRole,streetPoint,releaseFromShift,weeklyAdjustment,needsTime});
+  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,releaseFromShift,weeklyAdjustment,needsTime});
 })(typeof window==='undefined'?globalThis:window);

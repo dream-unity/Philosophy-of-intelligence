@@ -110,6 +110,8 @@ test('two different player choices after a quota failure remain available separa
   const copy=await book.copy('My garden');assert(copy.ok);assert.equal(book.status().mode,'autosave');
   assert.equal(book.sim.active().construction[0].kind,'garden');
   assert.equal(JSON.parse(store.getItem(savedKey)).sites[0].construction[0].kind,'workshop');
+  assert((await book.select('original')).ok);assert.equal(book.sim.active().construction[0].kind,'workshop');
+  assert((await book.select(copy.id)).ok);assert.equal(book.sim.active().construction[0].kind,'garden');
   remote.destroy();book.dispose();
 });
 
@@ -123,4 +125,19 @@ test('the saved-world picker keeps focus during normal labour but still reports 
   assert((await s.perform('workConstruction',2)).ok);assert.equal(refresh,1);
   store.writable=true;assert((await s.perform('workConstruction',2)).ok);assert.equal(refresh,2);
   off();book.dispose();
+});
+
+test('a queued player order cannot change a previous saved world after the player switches slots',async()=>{
+  const store=toggledStore();store.writable=true;
+  const book=open(store),s=book.sim;assert((await s.perform('found',town)).ok);
+  const alternate=await book.create('Other community');assert(alternate.ok);assert((await book.select('original')).ok);
+  let resume;
+  runtime.navigator={locks:{request:(_key,run)=>new Promise(resolve=>{resume=()=>resolve(run());})}};
+  try{
+    const pending=s.perform('act','build:workshop',8);
+    assert.equal(typeof resume,'function');assert((await book.select(alternate.id)).ok);
+    resume();assert.equal((await pending).ok,false);
+    assert((await book.select('original')).ok);assert.equal(s.active().construction.length,0);
+    assert.equal(s.active().funds,16);
+  }finally{delete runtime.navigator;book.dispose();}
 });

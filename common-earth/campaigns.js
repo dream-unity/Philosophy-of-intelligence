@@ -190,6 +190,10 @@
       (brief.proof.includes(job.kind) || links.some(link=>link.from===job.plot || link.to===job.plot)));
     if(underway)return {...underway,detail:state.title+'. '+underway.detail+' This practical step counts once the building opens.'};
     const practical=sim.actions('build',siteId).filter(a=>a.kind && brief.proof.includes(a.kind));
+    if(practical.length && sites.some(j=>j.kind==='dismantle')){
+      const room=root.EarthLegacy.makeRoomStep(sim.state,site,'a practical project for this commission');
+      if(room)return room;
+    }
     const project=practical.find(a=>a.available);
     if(project)return group('build',project.id,'Plan a '+project.label.toLowerCase(),state.title+'. '+state.milestones[1].detail);
     if(brief.proof.includes('parcel')){
@@ -202,8 +206,10 @@
     }
     if(site.buildings.length+sites.length<9 && practical.length)return group('build',practical[0].id,'Plan a '+practical[0].label.toLowerCase(),state.title+'. '+state.milestones[1].detail);
     if(brief.proof.includes('project'))return {...group('people',null,'Plan a shared project',state.title+'. The neighbours can work together on a practical trial.'),page:'projects'};
-    if(practical.length && !site.buildings.length && sites.length)return root.EarthLegacy.constructionStep(sim.state,site,job=>job.scope==='street');
-    if(practical.length)return {...group('build',null,'Choose a lot to reopen',state.title+'. Reopen a central lot to make space for the proposed building.'),inspectReclaim:true};
+    if(practical.length){
+      const room=root.EarthLegacy.makeRoomStep(sim.state,site,'a practical project for this commission');
+      if(room)return room;
+    }
     return {...group('council',null,'Review the local commission',state.title),page:'commission'};
   }
 

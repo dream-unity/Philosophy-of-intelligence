@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const game = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const browser = vm.createContext({});
 browser.window = browser;
-for (const name of ['navigation', 'city', 'partners', 'campaigns', 'shifts', 'construction', 'simulation']) {
+for (const name of ['navigation', 'city', 'partners', 'campaigns', 'shifts', 'construction', 'dismantling', 'simulation']) {
   vm.runInContext(fs.readFileSync(path.join(game,name+'.js'),'utf8'),browser,{filename:name+'.js'});
 }
 const start = {name:'Stone Town',lat:-6.1622,lon:39.1922,water:false};
@@ -125,6 +125,8 @@ test('an earlier demolition confirmation cannot dismantle a replacement built on
   finishCrewWork(sim);
   const first=sim.previewReclaim(0);
   ok(sim.reclaim(0,first.buildingId));
+  assert.equal(sim.act('build:garden',0).ok,false);
+  finishCrewWork(sim);
   ok(sim.act('build:garden',0));
   finishCrewWork(sim);
   const next=sim.previewReclaim(0),before=JSON.stringify(sim.state);
@@ -279,6 +281,27 @@ test('a broken city queue falls back to the previous paid order and migrates it'
   assert.match(recovered.saveMessage,/Recovered/);
   assert.equal(recovered.active().city.precincts[1].jobId,recovered.active().construction[0].id);
   assert.equal(recovered.active().construction[0].work,Math.floor(recovered.active().construction[0].total/2));
+});
+
+test('long imported site ids and the last safe project number preserve readable city saves',()=>{
+  const raw=JSON.parse(JSON.stringify(world().sim.state)),s=raw.sites[0],id='c'.repeat(512);
+  s.id=id;raw.activeId=id;s.city.serial=Number.MAX_SAFE_INTEGER-1;
+  const sim=world(JSON.stringify(raw)).sim,city=browser.EarthCityModel;
+  ok(sim.planCity(0,'food'));
+  const live=sim.active(),job=live.city.precincts[0].jobId;
+  assert.equal(live.city.serial,Number.MAX_SAFE_INTEGER);assert(job.length<180);
+  const before=JSON.stringify(sim.state);
+  assert.equal(city.preview(live,sim.state,1,'care',true).available,false);
+  assert.equal(sim.planCity(1,'care').ok,false);
+  assert.equal(JSON.stringify(sim.state),before);
+  assert(browser.CommonEarthSim.readSave(before));
+  ok(sim.planCity(0,'cancel',job));
+  raw.sites[0].city.serial=Number.MAX_SAFE_INTEGER;
+  raw.sites[0].city.precincts[0]={use:'open',target:'homes',turns:1};
+  const legacy=browser.CommonEarthSim.readSave(JSON.stringify(raw));
+  assert.equal(legacy.sites[0].city.serial,Number.MAX_SAFE_INTEGER);
+  assert.equal(legacy.sites[0].construction[0].kind,'homes');
+  assert(browser.CommonEarthSim.readSave(JSON.stringify(legacy)));
 });
 
 test('a cancellation releases the exact crew booking and cannot finish the next booking',()=>{

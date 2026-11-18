@@ -228,7 +228,7 @@
     let evening=false, streetLights=[];
     const fingers=new Map(),pressed=new Set();
     let works=new Map(),workLots=new Map(),crew=new Map(),watchedJob=null,priorCrewView=null;
-    const selectedCrew=new Set(),workBounds=new Set();
+    const selectedCrew=new Set(),workBounds=new Set(),fixedDoors=new WeakMap();
     let worksiteAtlas=null,worksitePending=false;
     const reduced=typeof matchMedia==='function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     const visits=new Map();
@@ -1162,7 +1162,11 @@
       else y+=1.57;
       const vertical=job.scope==='city'&&[1,2,4,5].includes(job.precinct);
       const sign={x:gate.x+(vertical?0:1.05),y:gate.y+(vertical?1.05:0)};
-      return {...job,x,y,gate,sign,vertical,scale:job.scope==='city'?.73:1,type:'construction',jobId:job.id,label:job.name};
+      const removal=job.kind==='dismantle',artKind=removal?job.original?.kind:job.kind;
+      const reverse=removal||job.kind==='open',stage=clamp(job.stageIndex||0,0,2);
+      const frame=reverse?2-stage:stage;
+      const built=removal?clamp((1-job.progress)/.72,0,1):job.progress;
+      return {...job,x,y,gate,sign,vertical,removal,artKind,frame,built,scale:job.scope==='city'?.73:1,type:'construction',jobId:job.id,label:job.name};
     }
     const vacant=lot=>Boolean(lot&&!lot.building&&!workLots.has(lot.plot));
     function workTree(tree){
@@ -1173,8 +1177,9 @@
       if(workBounds.size)state.solids=state.solids.filter(bounds=>!workBounds.has(bounds));
       workBounds.clear();
       for(const job of works.values()){
-        if(job.scope!=='street'||!['market','workshop','hall'].includes(job.kind))continue;
-        const bounds=[job.x-1.23,job.y-1.02,job.x+1.23,job.y+1.02];
+        if(job.scope!=='street'||!['market','workshop','hall'].includes(job.artKind))continue;
+        const halfX=job.removal?1.56:1.23,halfY=job.removal?1.42:1.02;
+        const bounds=[job.x-halfX,job.y-halfY,job.x+halfX,job.y+halfY];
         workBounds.add(bounds);state.solids.push(bounds);
       }
     }
@@ -1206,7 +1211,7 @@
       return {...record,from,corner,dx,dy,since:visualTime};
     }
     function setConstruction(view) {
-      if(!view?.jobs?.length&&!works.size&&!crew.size&&!view?.workers?.some(w=>w.travelling||['returning','resting','working','commuting'].includes(w.activity)))return;
+      if(!view?.jobs?.length&&!works.size&&!crew.size&&!view?.workers?.some(w=>w.travelling||w.physicalDuty||['returning','resting','working','commuting'].includes(w.activity)))return;
       const next=new Map(),lots=new Map(),people=new Map();
       if(state.site){
         for(const job of view?.jobs||[]){
@@ -1216,7 +1221,7 @@
           if(place.scope==='street')lots.set(place.plot,place.id);
         }
         for(const w of view?.workers||[]){
-          if(!next.has(w.jobId)&&!['returning','resting','commuting','working'].includes(w.activity))continue;
+          if(!next.has(w.jobId)&&!w.physicalDuty&&!['returning','resting','commuting','working'].includes(w.activity))continue;
           if(!Number.isFinite(w.x)||!Number.isFinite(w.y))continue;
           const base=state.points.find(q=>q.residentId===w.residentId);
           if(!base)continue;
@@ -1255,7 +1260,17 @@
     function workerPoint(base) {
       return base?.type==='resident'&&state.companion?.id!==base.residentId?crew.get(base.residentId)?.meeting||base:base;
     }
-    function hitWorksite(sx,sy) {
+    function doorstep(base){
+      if(!fixedDoors.has(base))fixedDoors.set(base,{...base,doorstep:true});
+      return fixedDoors.get(base);
+    }
+    function shiftDoor(base){
+      return base.type==='resident'&&state.shiftStops.some(s=>s.venue.doorstep&&s.venue.residentId===base.residentId)?doorstep(base):null;
+    }
+    function projectContains(kind,index,dx,dy){
+      return window.EarthTownArchitecture?.contains(state.site,kind,index,dx,dy,unit)??window.EarthTownProjects?.contains?.(state.site,kind,dx,dy,unit);
+    }
+    function hitWorksite(sx,sy,paintedOnly=false) {
       const ground=world(sx,sy);
       let found=null,depth=-Infinity;
       for(const job of works.values()){
@@ -1263,10 +1278,12 @@
         if(d<clamp(unit*.31,8,13))return job;
         const scale=job.scale;
         const inside=Math.abs(ground.x-job.x)<1.54*scale&&Math.abs(ground.y-job.y)<1.48*scale;
-        const tall=job.stageIndex>0&&workArt[job.kind]>2;
+        const tall=job.frame>0&&workArt[job.artKind]>2;
         const [cx,cy]=screen(job.x,job.y);
         const frame=tall&&Math.abs(sx-cx)<unit*1.48*scale&&sy>cy-unit*2.35*scale&&sy<cy;
-        if((inside||frame)&&job.x+job.y>depth){found=job;depth=job.x+job.y;}
+        const finishedHere=job.scope==='street'&&job.built>.72&&(!paintedOnly||job.built===1||sy>=cy-unit*.3);
+        const original=finishedHere&&projectContains(job.artKind,0,sx-cx,sy-cy);
+        if((original||!paintedOnly&&(inside||frame))&&job.x+job.y>depth){found=job;depth=job.x+job.y;}
       }
       return found;
     }
@@ -1313,11 +1330,48 @@
       centreX=site.x;centreY=site.y-.48;watchedJob=id;cameraFollows=false;
       miniTick=-1;dirty=true;schedule();return true;
     }
+    function finishedProject(item){
+      if(!window.EarthTownProjects?.draw(ctx,state.site,item.kind,screen,item.x,item.y,unit))civic(item);
+    }
+    function assembledWalls(job){
+      const {x,y,built,artKind}=job;
+      const start=job.removal?.45:.65;
+      if(job.scope!=='street'||!(built>start))return;
+      const [sx,sy]=screen(x,y);
+      // Use the real building's regional walls, doors and windows as each lower
+      // course is fitted. The scaffold and the exposed upper frame remain visible.
+      ctx.save();
+      if(built<1){
+        const upright=['workshop','market','hall'].includes(artKind);
+        const roof=upright?4.25:1.8,amount=clamp((built-start)/(1-start),0,1);
+        const cut=sy+unit*(1.55-(1.55+roof)*amount),width=3.5*unit;
+        ctx.beginPath();ctx.moveTo(sx-width,sy+unit*2);
+        ctx.lineTo(sx-width,cut-unit*.29);ctx.lineTo(sx-unit*.98,cut-unit*.20);
+        ctx.lineTo(sx-unit*.98,cut+unit*.005);ctx.lineTo(sx+unit*.28,cut+unit*.32);
+        ctx.lineTo(sx+unit*.28,cut+unit*.13);ctx.lineTo(sx+width,cut-unit*.39);
+        ctx.lineTo(sx+width,sy+unit*2);ctx.closePath();ctx.clip();
+      }
+      finishedProject({x,y,kind:artKind});ctx.restore();
+    }
     function worksiteArt(job){
       const {x,y,scale}=job;
-      const stage=clamp(job.stageIndex||0,0,2),row=workArt[job.kind]??3;
-      // Restoration opens a precinct progressively instead of erecting a new building.
-      const phase=job.kind==='open'?2-stage:stage;
+      const row=job.artKind==='garden'&&state.site.water?2:workArt[job.artKind]??3;
+      if(job.removal&&job.progress>=.89){
+        // The last shift clears stacked reusable material from the bare plot.
+        const pieces=job.progress<.95?4:2;
+        for(let i=0;i<pieces;i++){
+          const a=x-.74+(i%2)*.31,b=y-.37;
+          if(row<2){
+            box(a,b+(i>>1)*.38,.28,.30,.08,.16,'#9d8a65','#8c775b','#77674f');
+            sphere(a+.14,b+(i>>1)*.38+.14,.25,.12,.1,row?'#769a85':'#90a16d');
+          }else box(a,b,.23,1.18,.08+Math.floor(i/2)*.087,.076,'#c9ad7d','#a18a65','#846d51');
+        }
+        return;
+      }
+      // Use the open frame beneath the real finished cladding. Its roof must
+      // follow the local building, including the sawtooth roof of the brick shop.
+      const fittedShell=job.scope==='street'&&job.frame===2&&row>2;
+      const phase=job.removal&&job.stageIndex===0?0:fittedShell?1:job.frame;
       loadWorksiteAtlas();
       if(job.scope==='city'){
         const polygon=plazaOutline(x,y,1.57*scale,.24);
@@ -1337,6 +1391,7 @@
         }
         if(phase===2)rect(x-w*.43,y-d*.45,w*.64,d*.75,z+.93*scale,row===4?'#bc8464':'#879b83');
       }
+      assembledWalls(job);
     }
     function workbench(job,addItem){
       const hands=[...crew.values()].filter(w=>w.jobId===job.id&&w.activity==='building'&&w.residentId!==state.companion?.id);
@@ -1350,7 +1405,7 @@
       const w=job.vertical?.27:span,d=job.vertical?span:.27;
       const xx=x-w/2,yy=y-d/2;
       addItem(x,y,x+y+.12,()=>{
-        const planting=['garden','food','wetland','water'].includes(job.kind);
+        const planting=['garden','food','wetland','water'].includes(job.artKind);
         const top=planting?.31:.40;
         for(const i of [-1,1])for(const j of [-1,1]){
           const a=x+i*w*.38,b=y+j*d*.34;
@@ -1378,10 +1433,14 @@
       ctx.fillStyle='#2c3931';ctx.strokeStyle='#624d31';ctx.lineWidth=2.3;
       ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.stroke();
       ctx.strokeStyle='#f1c575';ctx.lineWidth=2.3;ctx.beginPath();ctx.arc(0,0,r,-Math.PI/2,-Math.PI/2+Math.max(.06,job.progress)*2*Math.PI);ctx.stroke();
-      ctx.strokeStyle='#f7dfaa';ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(-r*.36,r*.42);ctx.lineTo(r*.26,-r*.35);ctx.moveTo(-r*.1,-r*.46);ctx.lineTo(r*.48,-r*.12);ctx.stroke();
+      ctx.strokeStyle=job.removal?'#f5bea0':'#f7dfaa';ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(-r*.36,r*.42);ctx.lineTo(r*.26,-r*.35);
+      if(job.removal){ctx.lineTo(r*.40,-r*.19);ctx.lineTo(r*.39,-r*.04);}
+      else{ctx.moveTo(-r*.1,-r*.46);ctx.lineTo(r*.48,-r*.12);}
+      ctx.stroke();
       ctx.restore();
       if(watchedJob===job.id&&x>=0&&x<=width&&y>=0&&y<=height){
-        const [cx,cy]=screen(job.x,job.y,(job.stageIndex>0?2.73:1.52)*job.scale);
+        const rise=job.scope==='street'&&job.built>.72&&workArt[job.artKind]>2?3.58:job.frame>0?2.73:1.52;
+        const [cx,cy]=screen(job.x,job.y,rise*job.scale);
         const stage=`${job.stage} · ${Math.floor((job.progress||0)*100)}%`;
         const workers=job.workerNames?.join(' · ')||'Awaiting a builder';
         ctx.font='600 11px system-ui,sans-serif';
@@ -1411,7 +1470,12 @@
       if(profession){
         // Equipment travels with the named resident rather than duplicating the
         // worker at their doorstep. The props are sized to the same figure rig.
-        if(w.occupation==='food'){
+        if(w.physicalDuty){
+          const xx=sx+side*k*.14,yy=sy-k*.39;
+          const cover=w.physicalDuty==='council'?'#5d7870':'#9b7659';
+          path([[xx-k*.12,yy-k*.065],[xx+k*.092,yy-k*.086],[xx+k*.13,yy+k*.073],[xx-k*.095,yy+k*.094]],cover,'#514f42',Math.max(.7,k*.026));
+          path([[xx-k*.061,yy-.036*k],[xx+.051*k,yy-.052*k]],null,'#e9d7b3',Math.max(.75,k*.022));
+        }else if(w.occupation==='food'){
           const xx=sx+side*k*.16,yy=sy-k*.32;
           ellipse(xx,yy,k*.15,k*.09,'#ac8053','#6b6149');
           ellipse(xx,yy-k*.044,k*.115,k*.038,'#787f54');
@@ -1436,7 +1500,7 @@
           ellipse(grip[0],grip[1],Math.max(1.3,k*.041),Math.max(1.1,k*.036),'#c7a17e');
         }
         path([grip,tip],null,'#ba9468',Math.max(1.1,k*.041));
-        const landscape=job&&['garden','wetland','water','food'].includes(job.kind);
+        const landscape=job&&['garden','wetland','water','food'].includes(job.artKind);
         path([[tip[0]-side*.07*k,tip[1]-.025*k],[tip[0]+side*.095*k,tip[1]+.034*k]],null,landscape?'#727967':'#575e56',Math.max(2,k*.083));
       }
       if((selectedCrew.has(w.residentId)||(watchedJob&&watchedJob===w.jobId))&&walking){
@@ -1465,9 +1529,7 @@
       {const p=centre(MARKET);addItem(p.x,p.y,p.x+p.y+2.68,()=>exchangeDetails(p));}
       if(state.site.water){for(let i=0;i<4;i++){const x=4.6+i*6,y=26.85;addItem(x,y,x+y+.14,()=>skiff(x,y,['#b77960','#799c94','#c3ac7e','#86a9ac'][i],i===2));}}
       HOMES.forEach((block,index)=>{const p=centre(block);addItem(p.x,p.y,blockDepth(p),()=>residence({...p,index}));});
-      for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>{
-        if(!window.EarthTownProjects?.draw(ctx,state.site,item.kind,screen,item.x,item.y,unit))civic(item);
-      });}
+      for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item));}
       for(const job of works.values()){
         addItem(job.x,job.y,blockDepth(job),()=>worksiteArt(job));
         workbench(job,addItem);
@@ -1507,8 +1569,9 @@
       list.sort((a,b)=>a.depth-b.depth).forEach(d=>d.draw());
       if(evening)lightRig?.blueHour(ctx,width,height);
       if(!state.placed)for(const job of works.values())workMark(job);
-      if(state.placed)lotNumbers();else for(const point of state.points){
-        if(point.type==='resident'&&crew.has(point.residentId))continue;
+      if(state.placed)lotNumbers();else for(const base of state.points){
+        const point=shiftDoor(base)||base;
+        if(point.type==='resident'&&crew.has(point.residentId)&&!point.doorstep)continue;
         const shiftStop=state.shiftStops.find(s=>window.EarthShifts.matches(s.venue,point));
         if(point.type==='building'&&state.active!==point&&!shiftStop)continue;
         pin(point,state.active===point,Boolean(shiftStop)||point.type==='resident'&&state.site.delivery?.residentId===point.residentId);
@@ -1646,12 +1709,13 @@
       if(!q)return null;
       const {type,label,x,y,residentId,buildingId,plot,kind}=q;
       const e={type,label,x,y};
+      if(q.doorstep)e.doorstep=true;
       if(residentId!=null)e.residentId=residentId;
       if(buildingId!=null)e.buildingId=buildingId;
       if(q.jobId!=null)e.jobId=q.jobId;
       if(plot!=null)e.plot=plot;if(kind)e.kind=kind;
       if(type==='market')e.actionId='courier:pick';
-      if(type==='resident'&&state.site?.delivery?.residentId===residentId)e.actionId=`courier:deliver:${residentId}`;
+      if(type==='resident'&&!q.doorstep&&state.site?.delivery?.residentId===residentId)e.actionId=`courier:deliver:${residentId}`;
       return e;
     }
     function emitState() {options.onState?.(getState());schedule();}
@@ -1660,6 +1724,9 @@
     function nearest() {
       let q=null,range=interactionRange();
       for(const base of state.points){
+        const door=shiftDoor(base),doorDistance=door?dist(state.player,door):Infinity;
+        if(doorDistance<range){range=doorDistance;q=door;}
+        if(base.type==='resident'&&base.residentId===state.companion?.id)continue;
         const point=workerPoint(base),d=dist(state.player,point);
         if(d<range){range=d;q=point;}
       }
@@ -1679,7 +1746,7 @@
     function updateNearby() {
       const next=nearest();
       const shiftStop=next&&state.shiftStops.find(s=>window.EarthShifts.matches(s.venue,next));
-      const delivery=next?.type==='resident'&&state.site?.delivery?.residentId===next.residentId;
+      const delivery=next?.type==='resident'&&!next.doorstep&&state.site?.delivery?.residentId===next.residentId;
       const role=crew.get(next?.residentId)?.role;
       const key=[next?.type,next?.residentId,next?.plot,next?.jobId,role,shiftStop?.id,Boolean(delivery),state.placed,state.mode,state.companion?.id].join('/');
       if(next===state.active&&key===state.hintKey)return;
@@ -1740,6 +1807,7 @@
       state.route=route;state.destination=free;state.arrival=arrival;emitState();return true;
     }
     function interact() {
+      if(selectedCrew.size){options.onChooseCrewTarget?.();return true;}
       if(state.placed){const l=state.lots.find(q=>q.plot===placingFocus);if(vacant(l))options.onPlace?.({plot:l.plot,x:l.x,y:l.y});return vacant(l);}
       const q=nearest()||companionPoint();
       if(q){stop();pressed.clear();choose(q);return true;}
@@ -1928,6 +1996,10 @@
     function resolveStop(ref) {
       if(!ref)return null;
       const base=state.points.find(p=>p.type===ref.type&&(p.type==='market'||p.type==='resident'&&p.residentId===ref.residentId||p.type==='building'&&p.plot===ref.plot&&(!ref.kind||p.kind===ref.kind)));
+      if(base?.type==='resident'){
+        if(ref.doorstep)return doorstep(base);
+        if(state.companion?.id===base.residentId)return companionPoint();
+      }
       return workerPoint(base);
     }
     function focusStop(ref,onArrival) {
@@ -2009,19 +2081,20 @@
       const job=hitWorksite(sx,sy);
       if(job)return workCard(job);
       let selected=null,best=Infinity,building=null,topDepth=-Infinity;
-      for(const q of state.points){
-        if(q.type==='resident'&&crew.has(q.residentId))continue;
+      for(const base of state.points){
+        const q=shiftDoor(base)||base;
+        if(q.type==='resident'&&crew.has(q.residentId)&&!q.doorstep)continue;
         const pinPos=screen(q.x,q.y,.9),foot=screen(q.x,q.y,.10);
         let score=Math.min(Math.hypot(sx-pinPos[0],sy-pinPos[1]),Math.hypot(sx-foot[0],sy-foot[1]));
-        if(q.type==='resident'&&q.residentId!==state.companion?.id){
+        if(q.type==='resident'&&!q.doorstep&&q.residentId!==state.companion?.id){
           score=Math.min(score,figureDistance(residentFigure(q),sx,sy));
         }
         if(score<best&&score<clamp(unit*.72,19,30)){best=score;selected=q;}
         const lot=centre(q.block),depth=lot.x+lot.y;
         if(depth<topDepth)continue;
-        const base=screen(lot.x,lot.y),dx=sx-base[0],dy=sy-base[1];
+        const origin=screen(lot.x,lot.y),dx=sx-origin[0],dy=sy-origin[1];
         const kind=q.type==='resident'?'home':q.type==='market'?'exchange':q.kind;
-        const inside=window.EarthTownArchitecture?.contains(state.site,kind,q.index,dx,dy,unit);
+        const inside=projectContains(kind,q.index,dx,dy);
         // Geometric fallback also keeps the procedural, pre-load art interactive.
         if(inside??(Math.abs(dx)<unit*1.4&&Math.abs(dy+unit*.96)<unit*.82)){building=q;topDepth=depth;}
       }
@@ -2056,7 +2129,10 @@
         return;
       }
       if(!state.placed&&state.mode==='drive'){
-        // Always honour a road tap, including where broad venue hitboxes overlap a kerb.
+        // A painted worksite sign or intact roof can occlude the road behind it.
+        // All other taps on the road take precedence over broad venue hitboxes.
+        const marked=hitWorksite(p.x,p.y,true);
+        if(marked){choose(workCard(marked));return;}
         const ground=world(p.x,p.y);
         if(traversable(ground,true)){navigate(ground,null,false);return;}
         const worksite=hitWorksite(p.x,p.y);
@@ -2064,8 +2140,9 @@
         // Only an actual visible marker can direct an off-road tap to a specific venue.
         // Other taps park on the closest visible lane; scenery beyond the map stops the van.
         let marker=null,range=clamp(unit*.37,8,13);
-        for(const q of state.points){
-          if(q.type==='resident'&&crew.has(q.residentId))continue;
+        for(const base of state.points){
+          const q=shiftDoor(base)||base;
+          if(q.type==='resident'&&crew.has(q.residentId)&&!q.doorstep)continue;
           if(q.type==='building'&&state.active?.buildingId!==q.buildingId&&!state.shiftStops.some(s=>window.EarthShifts.matches(s.venue,q)))continue;
           const pin=screen(q.x,q.y,.86),d=Math.hypot(p.x-pin[0],p.y-pin[1]);
           if(d<range){marker=q;range=d;}

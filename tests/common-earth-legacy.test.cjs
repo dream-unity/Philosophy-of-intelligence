@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const directory = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname,'../common-earth');
 const ctx = vm.createContext({});
 ctx.window = ctx;
-for (const basename of ['construction','navigation','voyages','neighbours','shifts','campaigns','city','strategy','legacy','simulation']) {
+for (const basename of ['construction','dismantling','navigation','voyages','neighbours','shifts','campaigns','city','strategy','legacy','simulation']) {
   vm.runInContext(fs.readFileSync(path.join(directory,basename+'.js'),'utf8'),ctx,{filename:basename+'.js'});
 }
 const E = ctx.CommonEarthSim;

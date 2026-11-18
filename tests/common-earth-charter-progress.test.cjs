@@ -6,7 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const source=process.env.COMMON_EARTH_GAME_DIR||path.resolve(__dirname,'../common-earth');
 const browser=vm.createContext({});browser.window=browser;
-for(const name of ['construction','navigation','campaigns','legacy','simulation'])vm.runInContext(fs.readFileSync(path.join(source,name+'.js'),'utf8'),browser);
+for(const name of ['construction','dismantling','navigation','campaigns','legacy','simulation'])vm.runInContext(fs.readFileSync(path.join(source,name+'.js'),'utf8'),browser);
 const game=()=>browser.CommonEarthSim.create({storage:null});
 const place=(name,lat,lon)=>({name,lat,lon,water:false});
 function success(result){assert.equal(result.ok,true,result.message);}
@@ -135,7 +135,7 @@ for(const charter of ['care','voice','craft']){
 
 test('both trials in all nine local commissions can be completed by following their local priorities',()=>{
   const ctx=vm.createContext({});ctx.window=ctx;
-  for(const name of ['construction','navigation','city','neighbours','shifts','campaigns','legacy','simulation']){
+  for(const name of ['construction','dismantling','navigation','city','neighbours','shifts','campaigns','legacy','simulation']){
     vm.runInContext(fs.readFileSync(path.join(source,name+'.js'),'utf8'),ctx);
   }
   const places=[
@@ -272,4 +272,70 @@ test('an outstanding parcel can fund a same-week promise without spending the fi
   const promise=browser.EarthLegacy.guidance(sim);assert.equal(promise.actionId,'fulfil:'+p.id);
   success(sim.act(promise.actionId));assert.equal(sim.active().stats.kept,1);
   initial.destroy();sim.destroy();
+});
+
+test('a full district points to its existing clearance or lets the player reclaim an unfinished reservation',()=>{
+  const s=game();success(s.found(place('Stone Town',-6.1622,39.1922)));
+  const site=s.active();step(s,'charter:craft');step(s,'listen:'+site.residents[0].id);
+  for(const p of site.residents)success(s.setWorkPreference(p.id,'usual'));
+  for(let plot=0;plot<9;plot++){
+    while(site.funds<5)step(s,'work:contract');
+    while(site.materials<3)step(s,'work:salvage');
+    if(!s.state.effort)success(s.advance());
+    success(s.act('build:garden',plot));
+  }
+  const reserved=JSON.stringify(s.state),full=browser.EarthLegacy.guidance(s);
+  assert.equal(full.kind,'construction');assert.ok(site.construction.some(j=>j.id===full.jobId));
+  assert.match(full.detail,/cancel a commission/);assert.equal(site.buildings.length,0);
+  const branch=browser.CommonEarthSim.create({storage:null,snapshot:reserved});
+  success(branch.cancelConstruction(full.jobId));
+  assert.equal(browser.EarthLegacy.charterProgress(branch.state).next.actionId,'build:workshop');
+  branch.destroy();
+
+  for(const p of site.residents)success(s.setWorkPreference(p.id,'build'));
+  success(s.workConstruction(1000));assert.equal(site.buildings.length,9);assert.equal(site.construction.length,0);
+  const initial=browser.EarthLegacy.charterProgress(s.state).next;assert.equal(initial.inspectReclaim,true);
+  if(!s.state.effort)success(s.advance());
+  const lot=site.buildings[0];success(s.reclaim(lot.plot,lot.id));
+  const clear=site.construction.find(j=>j.kind==='dismantle');assert.ok(clear);
+  assert.equal(s.previewBuild('workshop',lot.plot).available,false);
+  const guide=browser.EarthLegacy.guidance(s);
+  assert.equal(guide.kind,'construction');assert.equal(guide.jobId,clear.id);
+  assert.match(guide.detail,/release a lot/);
+  const stock=site.materials;success(s.workConstruction(120));assert.equal(site.materials,stock+clear.recovered);
+  assert.equal(site.construction.length,0);
+  assert.equal(browser.EarthLegacy.charterProgress(s.state).next.actionId,'build:workshop');
+  s.destroy();
+});
+
+test('a nearly funded charter project can draw on an already commissioned clearance within the current week',()=>{
+  const original=game();success(original.found(place('Stone Town',-6.1622,39.1922)));
+  const site=original.active();step(original,'listen:'+site.residents[0].id);step(original,'charter:craft');
+  step(original,'build:garden');const garden=site.buildings[0];success(original.reclaim(garden.plot,garden.id));
+  const from=JSON.parse(JSON.stringify(original.state));from.effort=1;from.sites[0].materials=2;from.sites[0].funds=10;
+  const sim=browser.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(from)});
+  const clear=sim.active().construction[0];success(sim.setConstructionPaused(clear.id,true));
+  const guide=browser.EarthLegacy.guidance(sim);
+  assert.equal(guide.kind,'construction');assert.equal(guide.jobId,clear.id);
+  assert.match(guide.label,/Resume work/);assert.match(guide.detail,/recovered materials/i);
+  success(sim.workConstruction(120));assert.equal(sim.active().materials,2);
+  success(sim.setConstructionPaused(clear.id,false));
+  success(sim.workConstruction(120));assert.equal(sim.state.effort,1);
+  const next=browser.EarthLegacy.guidance(sim);assert.equal(next.actionId,'build:workshop');
+  success(sim.act(next.actionId));original.destroy();sim.destroy();
+});
+
+test('a deliberately paused apprenticeship project points to Resume work, then proceeds after workers arrive',()=>{
+  const s=game();success(s.found(place('Stone Town',-6.1622,39.1922)));const site=s.active();
+  step(s,'charter:craft');step(s,'listen:'+site.residents[0].id);success(s.act('build:workshop',4));
+  const job=site.construction[0];success(s.setConstructionPaused(job.id,true));success(s.workConstruction(120));success(s.advance());
+  assert.equal(job.work,0);assert.equal(site.buildings.length,0);assert.equal(s.previewBuild('workshop',4).available,false);
+  const held=browser.EarthLegacy.guidance(s);assert.equal(held.jobId,job.id);assert.match(held.label,/^Resume work/);
+  assert.match(held.detail,/inspector/);
+  const restored=browser.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(s.state)});
+  assert.equal(browser.EarthLegacy.guidance(restored).jobId,job.id);
+  success(restored.setConstructionPaused(job.id,false));assert.equal(restored.active().buildings.length,0);
+  assert.equal(browser.EarthLegacy.guidance(restored).kind,'construction');
+  success(restored.workConstruction(120));assert.equal(browser.EarthLegacy.guidance(restored).actionId,'research:apprenticeship');
+  s.destroy();restored.destroy();
 });

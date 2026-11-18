@@ -32,6 +32,12 @@
 .city-central-lot { fill:#a0ac7d; fill-opacity:.67; stroke:#d4bf93; stroke-width:.8; }
 .city-picture[data-setting="sea"] .city-central-lot { fill:#9b8769; }
 .city-central-lot.is-built { fill:#82785e; }
+.city-central-lot.is-reserved {fill:#dbb475;fill-opacity:.96;stroke:#594b31;}
+.city-lot-number circle {fill:#f8d589;stroke:#453e31;stroke-width:.9;}
+.city-lot-number text {fill:#3c3d2d;font:700 7.3px/1 var(--mono);}
+.is-paused .city-lot-number circle {fill:#d3dace;stroke:#58666a;}
+.city-order-row {display:block;width:100%;text-align:start;margin-top:5px;}
+.city-order-row small {display:block;color:var(--muted);margin-top:3px;}
 .city-map-caption rect { fill:#f0e4c7; fill-opacity:.93; stroke:#7a795b; stroke-opacity:.75; stroke-width:.65; }
 .city-map-name,.city-map-detail { stroke:none; pointer-events:none; }
 .city-map-name { fill:#253a34; font:650 15px/1 var(--serif); letter-spacing:-.03em; }
