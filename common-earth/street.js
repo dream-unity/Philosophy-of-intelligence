@@ -214,6 +214,8 @@
     const state={site:null,seed:0,lots:[],points:[],solids:[],trees:[],decor:[],links:[],looks:new Map(),traffic:null,preview:null,companion:null,shiftStops:[],placed:null,mode:'walk',player:{...marketDoor(),dx:0,dy:1},van:vanAtExchange(),route:[],destination:null,arrival:null,hover:null,active:null};
     let width=0,height=0,unit=30,zoom=1,pixelRatio=1,centreX=state.player.x,centreY=state.player.y;
     let frame=0,idleTimer=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
+    const sheetOpen=()=>typeof document!=='undefined'&&Boolean(document.body?.hasAttribute('data-sheet-open'));
+    let covered=sheetOpen();
     let shortMessage='',messageUntil=0,cameraFollows=true;
     let priorPlacementView=null,overviewZoom=null,placingFocus=0,previewedPlot=null,dragging=null,pinch=null,groundCache=null;
     let miniCanvas=null,miniButton=null,miniTick=-1;
@@ -1424,7 +1426,7 @@
       const oldX=p.x,oldY=p.y;p.x=candidate.x;p.y=candidate.y;p.dx=p.x-oldX;p.dy=p.y-oldY;p.moving=true;cameraFollows=true;return true;
     }
     function holdMove(direction) {
-      if(!AXIS[direction]||!state.site)return false;
+      if(covered||!AXIS[direction]||!state.site)return false;
       if(state.placed){cyclePlot(direction==='left'||direction==='up'?-1:1);return true;}
       if(overviewZoom!==null)exitOverview();
       if(pressed.has(direction))return true;
@@ -1433,7 +1435,7 @@
     }
     function releaseMove(direction){pressed.delete(direction);}
     function move(direction) {
-      if(!AXIS[direction]||!state.site)return false;
+      if(covered||!AXIS[direction]||!state.site)return false;
       if(state.placed){cyclePlot(direction==='left'||direction==='up'?-1:1);return true;}
       if(overviewZoom!==null)exitOverview();
       stop();const v=AXIS[direction];const result=manual(v[0],v[1],state.mode==='drive'?.80:.48);dirty=true;updateNearby();emitState();return result;
@@ -1720,10 +1722,10 @@
     function suspend(){cancelIdle();if(frame){cancelAnimationFrame(frame);frame=0;}}
     function schedule(){
       cancelIdle();
-      if(alive&&!frame&&!canvas.parentElement?.hidden&&(visible||moving())&&typeof requestAnimationFrame==='function'&&(typeof document==='undefined'||!document.hidden))frame=requestAnimationFrame(tick);
+      if(alive&&!covered&&!frame&&!canvas.parentElement?.hidden&&(visible||moving())&&typeof requestAnimationFrame==='function'&&(typeof document==='undefined'||!document.hidden))frame=requestAnimationFrame(tick);
     }
     function tick(now) {
-      frame=0;if(!alive||canvas.parentElement?.hidden||(!visible&&!moving())||(typeof document!=='undefined'&&document.hidden))return;
+      frame=0;if(!alive||covered||canvas.parentElement?.hidden||(!visible&&!moving())||(typeof document!=='undefined'&&document.hidden))return;
       const delta=lastFrame?now-lastFrame:36;
       if(dirty||delta>=32){
         const maxStep=state.route.length ? 1 : pressed.size ? 0.3 : 0.1;
@@ -1731,7 +1733,8 @@
         // Slow devices may miss paints. Small movement steps preserve travel speed and street collisions.
         const steps=Math.max(1,Math.ceil(elapsed/.075)),dt=elapsed/steps;
         lastFrame=now;
-        for(let i=0;i<steps;i++){visualTime+=dt;if(state.site)follow(dt);}
+        for(let i=0;i<steps&&!covered;i++){visualTime+=dt;if(state.site)follow(dt);}
+        if(covered)return;
         if(visible)draw();dirty=false;
       }
       if(!state.site||frame)return;
@@ -1786,7 +1789,7 @@
       dragging=null;overviewZoom=null;
     }
     listen(canvas,'pointerdown',e=>{
-      if(!state.site||e.button!==0||fingers.has(e.pointerId))return;
+      if(covered||!state.site||e.button!==0||fingers.has(e.pointerId))return;
       state.hover=null;
       if(e.cancelable)e.preventDefault();
       if(e.pointerType!=='touch')canvas.focus({preventScroll:true});
@@ -1848,6 +1851,12 @@
     listen(canvas,'keyup',e=>{const dir=KEYS[e.key.length===1?e.key.toLowerCase():e.key];if(dir){pressed.delete(dir);e.preventDefault();}});
     listen(canvas,'blur',()=>pressed.clear());
     if(typeof window!=='undefined')listen(window,'blur',()=>{pressed.clear();fingers.clear();dragging=null;pinch=null;});
+    if(typeof document!=='undefined')listen(document,'earthsheetchange',()=>{
+      const next=sheetOpen();
+      if(next===covered)return;
+      covered=next;clearInput();state.player.moving=false;lastFrame=0;dirty=true;
+      if(covered)suspend();else schedule();
+    });
     if(typeof document!=='undefined')listen(document,'visibilitychange',()=>{pressed.clear();if(document.hidden){fingers.clear();dragging=null;pinch=null;suspend();}else{lastFrame=0;dirty=true;schedule();}});
     const sizing=typeof ResizeObserver!=='undefined'?new ResizeObserver(resize):null;sizing?.observe(canvas);
     const showing=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{

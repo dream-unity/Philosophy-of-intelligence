@@ -95,7 +95,6 @@
     const requested=options.storage!==undefined?options.storage:optionalStorage('localStorage');
     const session=options.session!==undefined?options.session:optionalStorage('sessionStorage');
     const access=probe(requested),durable=access.read?requested:null,temp=memory();
-    const readyStore=access.write?durable:temp;
     const retained=new Set(),subscribers=new Set(),views=new Set();
     const locks=options.locks!==undefined?options.locks:window.navigator?.locks;
     let engine,id,unsubscribe,review=null,closed=false;
@@ -172,7 +171,10 @@
       if(unsubscribe)unsubscribe();
       if(engine)engine.destroy();
       id=slot;engine=next;
-      unsubscribe=engine.subscribe((state,notice)=>inform(state,notice));
+      unsubscribe=next.subscribe((state,notice)=>{
+        if(!notice.external && target===durable && !next.saveIssue)access.write=true;
+        inform(state,notice);
+      });
       put(session,TAB,id);
       if(target===durable)put(durable,LAST,id);
       review=null;
@@ -217,6 +219,7 @@
       try{if(source.getItem(key)===value)source.removeItem(key);}catch(error){/* An unregistered new payload cannot replace another world. */}
     }
     function register(name,payload) {
+      const readyStore=access.write?durable:temp;
       let slot;
       for(let i=0;i<12;i++){
         const candidate=identity();

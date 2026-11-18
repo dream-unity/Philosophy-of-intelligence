@@ -420,7 +420,7 @@
       if(selected && world.sites.some(s=>s.id===selected))world.activeId=selected;
       lastSeen=raw;lastGood=restored?goodText:null;
     }
-    const initial=storageRead(key);
+    const initial=!storage && typeof options.snapshot==='string'?options.snapshot:storageRead(key);
     if(initial!==undefined)restore(initial,false);
     function sync(){
       if(!storage)return false;
@@ -1204,14 +1204,18 @@
       const totalEvents=sites.reduce((sum,s)=>sum+s.totalEvents,0);
       return {week:report.week,sites,totalEvents,omittedEvents:totalEvents-saved};
     }
-    function advance(){
+    function advance(reportOptions){
       if(!current())return reject('Found your first settlement on the globe.');
       const report=rollWeek(world);
       for(const e of report.events)if(e.logged)record(e.text,e.site);
       world.lastWeekReview=weekReview(report);
       const local=report.sites.find(s=>s.id===world.activeId);
       const text='Week '+world.week+' began. '+(local.highlights[0] || report.highlights[0] || 'Local production and household needs have been settled.');
-      return complete(report.ratified && !text.includes(report.ratified)?text+' '+report.ratified:text,current(),false);
+      const result=complete(report.ratified && !text.includes(report.ratified)?text+' '+report.ratified:text,current(),false);
+      if(result.ok && reportOptions?.includeHighlights){
+        result.highlights=report.sites.flatMap(site=>site.highlights.map(note=>site.name+' · '+note));
+      }
+      return result;
     }
     function overview(){
       const s=current();

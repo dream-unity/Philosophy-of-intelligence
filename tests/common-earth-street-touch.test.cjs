@@ -30,8 +30,16 @@ function surface(width = 820, height = 500) {
     addEventListener(type, handler) { pointerEvents.set(type, handler); },
     removeEventListener(type) { pointerEvents.delete(type); }
   };
+  const documentEvents = new Map();
+  let covered = false;
   const runtime = {
     window: { addEventListener() {}, removeEventListener() {} },
+    document: {
+      hidden: false,
+      body: { hasAttribute(name) { return name === 'data-sheet-open' && covered; } },
+      addEventListener(name, handler) { documentEvents.set(name, handler); },
+      removeEventListener(name) { documentEvents.delete(name); }
+    },
     // Offscreen rendering is suspended while the actual input and movement loop still run.
     IntersectionObserver: class {
       constructor(handler) { this.handler = handler; }
@@ -82,8 +90,8 @@ function surface(width = 820, height = 500) {
     pointer('pointerup', point, 1, device);
   }
   function step() {
-    if (!frame) return;
     now += 40;
+    if (!frame) return;
     const callback = frame;
     frame = null;
     callback(now);
@@ -103,7 +111,11 @@ function surface(width = 820, height = 500) {
     const p = street.getState();
     assert(Math.hypot(p.x - x, p.y - y) <= tolerance, `Expected (${x}, ${y}), reached (${p.x}, ${p.y})`);
   }
-  return { street, updates, encounters, hints, placed, previews, interactionFrame, overviewFrame, pointer, tap, step, finish, drive, at };
+  function sheet(open) {
+    covered = open;
+    documentEvents.get('earthsheetchange')?.({type:'earthsheetchange'});
+  }
+  return { street, sheet, updates, encounters, hints, placed, previews, interactionFrame, overviewFrame, pointer, tap, step, finish, drive, at };
 }
 
 test('driving to successive taps preserves their screen coordinates on a tablet', () => {
@@ -406,4 +418,31 @@ test('taking over a tap route with the D-pad immediately updates the Stop or Bra
   assert(g.street.holdMove('right'));
   assert.equal(g.updates.at(-1).travelling, false);
   g.street.releaseMove('right');
+});
+
+test('opening a sheet freezes an in-progress trip until dismissal, without catch-up or stale inputs', () => {
+  const g = surface();
+  const arrivals = [];
+  assert(g.street.focusStop({ type: 'resident', residentId: 'r1' }, e => arrivals.push(e.residentId)));
+  for (let i = 0; i < 5; i++) g.step();
+  const before = g.street.getState();
+  assert(before.travelling);
+  g.sheet(true);
+  for (let i = 0; i < 750; i++) g.step();
+  g.at(before.x, before.y, 0);
+  assert.deepEqual(arrivals, []);
+  assert.equal(g.street.holdMove('right'), false);
+  g.sheet(false);
+  g.step();
+  const resumed = g.street.getState();
+  assert(Math.hypot(resumed.x - before.x, resumed.y - before.y) < .2);
+  g.finish();
+  assert.deepEqual(arrivals, ['r1']);
+  g.street.holdMove('left');
+  g.step();
+  g.sheet(true);
+  const stopped = g.street.getState();
+  g.sheet(false);
+  for (let i = 0; i < 20; i++) g.step();
+  g.at(stopped.x, stopped.y, 0);
 });

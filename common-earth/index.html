@@ -7,7 +7,7 @@
   <meta name="description" content="Explore Earth, found a community and shape its future, from street encounters to ocean routes. A strategy game by Philosophy of Intelligence.">
   <title>Common Earth · Philosophy of Intelligence</title>
   <link rel="icon" type="image/svg+xml" href="../icon.svg?v=69d49b562939">
-  <link rel="stylesheet" href="styles.css?v=5de3b53c8231">
+  <link rel="stylesheet" href="styles.css?v=db9c2ce6d6ad">
   <link rel="stylesheet" href="city.css?v=741526f29270">
   <link rel="stylesheet" href="planner.css?v=19c8b546877b">
   <link rel="stylesheet" href="saves.css?v=9298f1cd041a">
@@ -22,17 +22,17 @@
   <script src="city.js?v=e485cf0e4cb5" defer></script>
   <script src="legacy.js?v=6133a80dacb4" defer></script>
   <script src="goals.js?v=1cf76d842eef" defer></script>
-  <script src="simulation.js?v=ba4f8330d828" defer></script>
+  <script src="simulation.js?v=d1b5055e2236" defer></script>
   <script src="globe.js?v=948806bfae8e" data-atlas-version="8ea0ff8a44dc" defer></script>
   <script src="town-architecture.js?v=531b9b33038a" defer></script>
   <script src="town-surroundings.js?v=c712aec57505" defer></script>
   <script src="town-projects.js?v=e91797dab724" defer></script>
   <script src="town-light.js?v=1388552d046e" defer></script>
-  <script src="street.js?v=680b6572a130" defer></script>
+  <script src="street.js?v=2707f74bc32d" defer></script>
   <script src="navigation.js?v=59a80dff43a0" defer></script>
-  <script src="planner.js?v=a71414e7e927" defer></script>
-  <script src="saves.js?v=b438e7c131b6" defer></script>
-  <script src="app.js?v=eaa7d600aaac" defer></script>
+  <script src="planner.js?v=fd5529e3fbdc" defer></script>
+  <script src="saves.js?v=2e1b684d3210" defer></script>
+  <script src="app.js?v=f1bccd33d6ff" defer></script>
 </head>
 <body>
   <a class="skip" href="#play">Skip to game</a>
@@ -120,7 +120,7 @@
             </svg>
           </div>
           <div class="site-info"><span id="place-type" class="site-kind">Zanzibar, Tanzania</span><h2 id="place-name" tabindex="-1">Stone Town</h2><p id="place-coords" class="coords">6.1622° S · 39.1922° E</p><p id="place-description" class="selection-copy">Start a community here, or select another point on the globe.</p></div>
-          <div id="found-area" class="found-area"><label for="found-name">Community name <span>Optional</span></label><input id="found-name" type="text" placeholder="Name your community" maxlength="48" autocomplete="off"><p id="found-terms" class="found-terms"></p><label class="commission-option"><input type="checkbox" id="commission-at-founding"> Take the local commission</label><details id="commission-brief" class="commission-brief"><summary>Read the invitation</summary><strong id="commission-title"></strong><p id="commission-step"></p><small>You can take this up later in Council.</small></details><button id="found-button" type="button" class="primary">Found a community <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
+          <div id="found-area" class="found-area"><label for="found-name">Community name <span>Optional</span></label><input id="found-name" type="text" placeholder="Name your community" maxlength="48" autocomplete="off"><p id="found-terms" class="found-terms"></p><label class="commission-option"><input type="checkbox" id="commission-at-founding"> Take the local commission</label><details id="commission-brief" class="commission-brief"><summary>Read the invitation</summary><strong id="commission-title"></strong><p id="commission-step"></p><small>You can take this up later in Council.</small></details><button id="found-button" type="button" class="primary" disabled>Loading game… <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
           <button type="button" class="primary" id="visit-button" hidden>Enter community <svg aria-hidden="true"><use href="#i-arrow"/></svg></button>
           <div id="partner-inspector" class="partner-inspector"></div>
           <div id="voyage-console" class="voyage-console" aria-label="Voyage planning"></div>
@@ -165,13 +165,35 @@
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script>
     (() => {
+      window.addEventListener('load', () => {
+        if (document.body.dataset.gameReady === 'true') return;
+        const retry = document.getElementById('found-button');
+        document.getElementById('place-description').textContent = 'The game controls could not start. Reload the page to try again.';
+        retry.disabled = false;
+        retry.textContent = 'Reload game';
+        retry.addEventListener('click', event => {
+          event.stopImmediatePropagation();
+          location.reload();
+        }, {capture:true});
+      }, {once:true});
       const covers = Array.from(document.querySelectorAll('.sheet[popover]'));
       const controls = Array.from(document.querySelectorAll('[popovertarget]'));
       const background = Array.from(document.querySelectorAll('body > .skip, body > header, body > main, body > footer'));
       const native = typeof HTMLElement.prototype.showPopover === 'function';
       let current = null;
       let opener = null;
+      const openSheets = new Set();
+      function trackSheet(sheet, isOpen) {
+        const hadSheet = openSheets.size > 0;
+        if (isOpen) openSheets.add(sheet);
+        else openSheets.delete(sheet);
+        const hasSheet = openSheets.size > 0;
+        if (hasSheet === hadSheet) return;
+        document.body.toggleAttribute('data-sheet-open', hasSheet);
+        document.dispatchEvent(new Event('earthsheetchange'));
+      }
       function opened(sheet) {
+        trackSheet(sheet, true);
         current = sheet;
         background.forEach(el => { el.inert = true; });
         const search = sheet.querySelector('input[type="search"]');
@@ -179,6 +201,7 @@
         entry?.focus({preventScroll:true});
       }
       function closed(sheet) {
+        trackSheet(sheet, false);
         if (current !== sheet) return;
         current = null;
         background.forEach(el => { el.inert = false; });
@@ -198,6 +221,7 @@
       });
       covers.forEach(sheet => {
         if (native) {
+          sheet.addEventListener('beforetoggle', event => trackSheet(sheet, event.newState === 'open'));
           sheet.addEventListener('toggle', event => {
             if (event.newState === 'open') opened(sheet);
             else closed(sheet);

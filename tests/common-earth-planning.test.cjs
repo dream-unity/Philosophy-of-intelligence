@@ -130,3 +130,20 @@ test('a blank world returns a useful rehearsal message', () => {
   assert.equal(plan.ok,false);
   assert.match(plan.message,/community/i);
 });
+
+test('rehearsal keeps the full weekly highlights while advancing each private week only once', () => {
+  const home=found();
+  const expected=[];
+  const before=JSON.stringify(home.state);
+  const projected=world.EarthPlanner.project(home.state,[{id:'wait'}],4);
+  assert(projected.ok);
+  assert.equal(JSON.stringify(home.state),before);
+  for(let i=0;i<4;i++){
+    for(const site of home.forecastNext().sites)for(const text of site.highlights)expected.push(site.name+' · '+text);
+    const live=home.advance();
+    assert(live.ok);
+    assert.equal(live.highlights,undefined);
+  }
+  assert(expected.length>0);
+  assert.deepEqual(Array.from(projected.effects),expected);
+});

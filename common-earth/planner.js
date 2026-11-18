@@ -26,9 +26,8 @@
     return rows;
   }
   function fork(state) {
-    const key='rehearsal',items=new Map([[key,JSON.stringify(state)]]);
-    const storage={getItem:k=>items.get(k)??null,setItem:(k,v)=>items.set(k,v),removeItem:k=>items.delete(k)};
-    return globalThis.CommonEarthSim.create({storage,key});
+    // Isolated scenarios read the same v1 save format and never write a browser slot.
+    return globalThis.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(state)});
   }
   function moves(sim) {
     const available=sim.actions().filter(a=>a.available&&groups[a.group]);
@@ -52,9 +51,9 @@
       }
       const site=sim.active(),people=site.residents.map(p=>({id:p.id,name:p.name}));
       for(let i=0;i<horizon;i++){
-        const next=sim.forecastNext();
-        for(const f of next.sites)for(const text of f.highlights)effects.push(f.name+' · '+text);
-        const r=sim.advance();if(!r.ok)return r;
+        const result=sim.advance({includeHighlights:true});
+        if(!result.ok)return result;
+        for(const note of result.highlights)effects.push(note);
       }
       const end=sim.active();
       return {ok:true,week:sim.state.week,name:end.name,site:Object.fromEntries(Object.keys(dimensions).map(k=>[k,end[k]])),

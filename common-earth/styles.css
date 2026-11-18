@@ -446,7 +446,7 @@ a.brand { color: inherit; text-decoration: none; min-height: 44px; }
   .street-controls .kicker { display: none; }
   #street-hint { margin: 0; }
 }
-@media (max-width: 730px), (max-width: 900px) and (orientation: portrait), (max-height: 535px) and (orientation: landscape) {
+@media (any-pointer: coarse), (max-width: 730px), (max-width: 900px) and (orientation: portrait), (max-height: 535px) and (orientation: landscape) {
   /* Both the map and controls must fit when the player expands the street. */
   body.street-expanded[data-map-view="street"] .map-frame {
     display: grid;

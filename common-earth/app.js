@@ -283,7 +283,7 @@
         onPlotPreview:plot=>{
           if(!placement)return;
           const preview=sim.previewBuild(placement.kind,plot);
-          put('street-hint',preview.available?preview.text+' Tap again to build here.':preview.reason);
+          put('street-hint',preview.available?preview.text+' Choose Build on plot '+(plot+1)+' to confirm.':preview.reason);
         },
         onState:state=>{
           put('street-location',state.nearby?.label||'Local district');
@@ -1035,6 +1035,7 @@
   for(const event of ['pointerup','pointercancel'])window.addEventListener(event,releasePad);
   listen('street-controls','lostpointercapture',releasePad);
   window.addEventListener('blur',clearPad);
+  document.addEventListener('earthsheetchange',clearPad);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)clearPad();});
   listen('street-controls','click',e=>{
     const b=e.target.closest('[data-move]');if(b&&e.detail===0)street?.move(b.dataset.move);
@@ -1125,4 +1126,5 @@
   window.addEventListener('pagehide',rememberView);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)rememberView();});
   if(!restoreTab())setView('world',false);
+  document.body.dataset.gameReady='true';
 })();
