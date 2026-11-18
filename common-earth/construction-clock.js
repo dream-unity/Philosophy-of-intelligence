@@ -11,8 +11,8 @@
       if(timer!==null)root.clearTimeout(timer);
       timer=null;last=null;
     }
-    function schedule(){
-      if(closed || leftPage || page.hidden || !hasWork()){
+    function schedule(crewStillWorking=false){
+      if(closed || leftPage || page.hidden || crewStillWorking!==true && !hasWork()){
         stopTimer();
         return;
       }
@@ -24,11 +24,17 @@
       if(closed || leftPage || page.hidden){stopTimer();return;}
       const end=now(),elapsed=Math.min(2,Math.max(0,(end-last)/1000));
       last=end;inFlight=true;
+      let continuing=false;
       try{
-        if(elapsed>0)await sim.perform('workConstruction',elapsed,end);
+        if(elapsed>0){
+          const result=await sim.perform('workConstruction',elapsed,end);
+          // Advancing the crew already evaluated work across the world. Check
+          // demand again when work ends or no progress was possible.
+          continuing=result?.changed===true && !result.completed?.length;
+        }
       }catch(error){
         root.console?.error('Unable to update the construction crew',error);
-      }finally{inFlight=false;schedule();}
+      }finally{inFlight=false;schedule(continuing);}
     }
     const off=sim.subscribe((_state,notice)=>{
       if(notice.switched)stopTimer();

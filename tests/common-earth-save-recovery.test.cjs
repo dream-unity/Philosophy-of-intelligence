@@ -141,3 +141,27 @@ test('a queued player order cannot change a previous saved world after the playe
     assert.equal(s.active().funds,16);
   }finally{delete runtime.navigator;book.dispose();}
 });
+
+test('saved world summaries follow replaced, corrupted and restored payloads',async()=>{
+  const store=toggledStore();store.writable=true;
+  const book=open(store);
+  assert((await book.sim.perform('found',town)).ok);
+  const copied=await book.copy('Port copy');assert(copied.ok);
+  assert((await book.select('original')).ok);
+  const other=()=>book.list().find(s=>s.id===copied.id);
+  const first=other();
+  assert.equal(first.week,1);
+  first.names[0]='Changed only in the returned list';
+  assert.equal(other().names[0],'Hobart Commons');
+  const key='common-earth.playthrough.v1.'+copied.id;
+  const original=store.getItem(key),later=JSON.parse(original);
+  later.week=9;later.sites[0].name='Northern port';
+  store.setItem(key,JSON.stringify(later));
+  assert.equal(other().week,9);
+  assert.equal(other().active,'Northern port');
+  store.setItem(key,'unfinished');
+  assert.equal(other().settlements,0);
+  store.setItem(key,original);
+  assert.equal(other().active,'Hobart Commons');
+  book.dispose();
+});

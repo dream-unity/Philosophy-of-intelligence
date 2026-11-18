@@ -121,11 +121,22 @@
     for(let i=0,p=0;i<ids.length;i++,p+=4)ids[i]=rgba[p]+256*rgba[p+1];
     return {width,height,at:(x,y)=>ids[y*width+x]};
   }
+  let indexPromise,coastIndex;
+  function geographyReady(){
+    if(!indexPromise)indexPromise=loadIndex().then(index=>{coastIndex=index;return index;})
+      .catch(error=>{indexPromise=null;throw error;});
+    return indexPromise;
+  }
   function assets() {
-    if(!assetsPromise)assetsPromise=Promise.all([loadImage('earth-chart.webp'),loadIndex()])
+    if(!assetsPromise)assetsPromise=Promise.all([loadImage('earth-chart.webp'),geographyReady()])
       .then(([chart,index])=>{geo={...index,chart};return geo;})
       .catch(error=>{assetsPromise=null;throw error;});
     return assetsPromise;
+  }
+  function surveyReady(){
+    const places=window.EarthNavigation;
+    if(!places?.load)return assets();
+    return Promise.all([assets(),places.load()]).then(([map])=>map);
   }
   function contains(ring, x, y) {
     let inside = false;
@@ -143,8 +154,37 @@
     }
     return 'Open water';
   }
+  // A land pin may represent a harbour or a small island. The chart stores
+  // ocean as cell 0 and freshwater lakes under separate IDs. Check neighbouring
+  // cells only when a settlement's location is inspected, never during a frame.
+  // These exact gazetteer pins lie beside a shore in the shipped 1:10m
+  // regional chart, inside estuaries missed by the small global index.
+  const portPins=new Map([
+    [-42.85,147.295],   // Hobart, 1.81 km from the mapped shore
+    [50.9,-1.4],        // Southampton, 0.89 km
+    [49.2754,-123.1236],// Vancouver BC, 1.52 km
+    [35.687,139.7495]   // Tokyo, 4.00 km
+  ]);
+  const coastCells=new Map();
+  function nearOceanShore(lat,lon){
+    if(!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat)>90)return false;
+    const harbour=portPins.get(Math.round(lat*1e6)/1e6);
+    if(harbour!==undefined && Math.abs(wrap(lon-harbour))<.000001)return true;
+    if(!coastIndex)return null;
+    const x=Math.floor((wrap(lon)+180)/360*coastIndex.width);
+    const y=clamp(Math.floor((90-lat)/180*coastIndex.height),0,coastIndex.height-1);
+    const key=y*coastIndex.width+x;
+    if(coastCells.has(key))return coastCells.get(key);
+    let coast=false;
+    for(let row=Math.max(0,y-1);row<=Math.min(coastIndex.height-1,y+1)&&!coast;row++){
+      for(let dx=-1;dx<=1;dx++)if(coastIndex.at((x+dx+coastIndex.width)%coastIndex.width,row)===0){coast=true;break;}
+    }
+    if(coastCells.size>=256)coastCells.delete(coastCells.keys().next().value);
+    coastCells.set(key,coast);
+    return coast;
+  }
   function locate(lat,lon) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !geo) return null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !geo || window.EarthNavigation?.load) return null;
     lat=clamp(lat,-90,90); lon=wrap(lon);
     // A named point is more precise than the chart's global classification pixel.
     // Exact-coordinate lookup keeps the adjacent harbour and shoreline independent.
@@ -225,18 +265,25 @@
     }
     if(gl.getError()!==gl.NO_ERROR){destroy();return null;}
     const loc={view:gl.getUniformLocation(program,'camera'),size:gl.getUniformLocation(program,'resolution'),r:gl.getUniformLocation(program,'radius')};
+    let previousView='';
     return {
+      surface:gpu,
       draw(ctx,w,h,r,v) {
         if(gl.isContextLost()) return false;
         const density=Math.min(window.devicePixelRatio||1,1.65,2000/w,1500/h);
         const pw=Math.max(1,Math.round(w*density)),ph=Math.max(1,Math.round(h*density));
         if(gpu.width!==pw || gpu.height!==ph){gpu.width=pw;gpu.height=ph;gl.viewport(0,0,pw,ph);}
+        // In a DOM layer the browser retains the presented frame. A change
+        // to a label or a journey marker does not change the shaded planet.
+        const key=[pw,ph,r,density,v.lat,v.lon].join('/');
+        if(!ctx && key===previousView)return true;
+        previousView=key;
         gl.uniform2f(loc.size,pw,ph);gl.uniform4f(loc.view,Math.sin(v.lat*RAD),Math.cos(v.lat*RAD),v.lon*RAD,0);gl.uniform1f(loc.r,r*density);
         gl.drawArrays(gl.TRIANGLES,0,3);
-        ctx.drawImage(gpu,0,0,w,h);
+        if(ctx)ctx.drawImage(gpu,0,0,w,h);
         return true;
       },
-      releaseFrame(){gpu.width=gpu.height=1;},
+      releaseFrame(){gpu.width=gpu.height=1;previousView='';},
       destroy
     };
   }
@@ -247,6 +294,7 @@
     const off=document.createElement('canvas'),ctx=off.getContext('2d');
     let out, lastProjection, previousRadius;
     return {
+      surface:off,
       draw(dest,w,h,r,view,interacting) {
         // Sample only as densely as the relief source can resolve here. Fine
         // vector coasts, rivers, type and markers keep the full canvas density.
@@ -255,7 +303,7 @@
         const sw=max(1,Math.round(w*scale)), sh=max(1,Math.round(h*scale));
         // Overlay changes reuse the already shaded bitmap at this camera.
         const key=[w,h,sw,sh,r,view.lat,view.lon,scale].join('/');
-        if(key===lastProjection){dest.drawImage(off,0,0,w,h);return true;}
+        if(key===lastProjection){if(dest)dest.drawImage(off,0,0,w,h);return true;}
         if(off.width!==sw || off.height!==sh || !out){
           off.width=sw;off.height=sh;out=ctx.createImageData(sw,sh);
         }
@@ -288,7 +336,7 @@
             result[k+3]=255;
           }
         }
-        ctx.putImageData(out,0,0);lastProjection=key;dest.drawImage(off,0,0,w,h);
+        ctx.putImageData(out,0,0);lastProjection=key;if(dest)dest.drawImage(off,0,0,w,h);
         return true;
       },
       releaseFrame(){off.width=off.height=1;out=null;lastProjection=null;},
@@ -297,7 +345,93 @@
   }
 
   function mount(canvas,options={}) {
-    const ctx=canvas.getContext('2d', {alpha:false});
+    // Present relief directly instead of copying a WebGL drawing buffer
+    // into the atlas UI canvas on every drag. Detached and single-canvas
+    // consumers still get the complete map in their original surface.
+    const sky=canvas.before && canvas.parentElement?.classList?.contains('atlas-stage')?document.createElement('canvas'):null;
+    const skyBrush=sky?.getContext('2d',{alpha:false});
+    const layered=Boolean(skyBrush);
+    function placeLayer(surface){
+      surface.setAttribute('aria-hidden','true');surface.style.pointerEvents='none';
+      canvas.before(surface);
+    }
+    let skyView='',regionalView='',regionalSurface=null,regionalBrush=null,regionalTime=0;
+    let regionalOrigin=null;
+    const chartMargin=12;
+    function invalidateRegional(){regionalView='';regionalOrigin=null;queue();}
+    function releaseRegionalSurface(){
+      if(!regionalSurface || regionalSurface.width<=1)return;
+      regionalSurface.width=regionalSurface.height=1;regionalView='';regionalOrigin=null;
+    }
+    function moveChart(){
+      if(!regionalOrigin || regionalOrigin.w!==w || regionalOrigin.h!==h || regionalOrigin.r!==r)return false;
+      const samples=regionalOrigin.samples;
+      const projected=samples.map(({geo})=>project(geo.lat,geo.lon));
+      const [centre,right,left,bottom,top,corner]=projected;
+      const a=(right.x-left.x)/w,b=(right.y-left.y)/w;
+      const c=(bottom.x-top.x)/h,d=(bottom.y-top.y)/h;
+      // Opposite edge samples cancel spherical depth. Only depth varies
+      // nonlinearly, so centring the offset between its two extrema minimises
+      // the remaining alignment error across the whole viewport.
+      const e=(centre.x-a*w/2-c*h/2+corner.x)/2;
+      const f=(centre.y-b*w/2-d*h/2+corner.y)/2;
+      // A short camera movement on a zoomed-in sphere is nearly affine.
+      // Redraw immediately when the projected map bends by half a CSS pixel,
+      // or when the next view would escape the transparent margin.
+      for(let i=0;i<samples.length;i++){
+        const {x,y}=samples[i],point=projected[i];
+        if(point.z<=0 || Math.max(Math.abs(point.x-x),Math.abs(point.y-y))>chartMargin-2 ||
+           Math.hypot(point.x-(a*x+c*y+e),point.y-(b*x+d*y+f))>.48)return false;
+      }
+      regionalSurface.style.transform=`matrix(${a},${b},${c},${d},${e+chartMargin*(1-a-c)},${f+chartMargin*(1-b-d)})`;
+      return true;
+    }
+    function drawRegional(detail,moving){
+      if(!detail)return;
+      if(!layered){detail.draw(ctx,view,w,h,r);return;}
+      if(!regionalSurface){
+        regionalSurface=document.createElement('canvas');
+        regionalBrush=regionalSurface.getContext('2d');
+        if(regionalBrush){
+          placeLayer(regionalSurface);
+          regionalSurface.oncontextrestored=invalidateRegional;
+        }
+      }
+      if(!regionalBrush){detail.draw(ctx,view,w,h,r);return;}
+      // A pointer or trading-route overlay does not change the chart. Keep
+      // country, river and lake geometry on its own transparent surface.
+      // Use CSS-pixel lines while dragging and restore the fine lines on release.
+      const pad=moving?chartMargin:0,fullW=w+2*pad,fullH=h+2*pad;
+      const pw=moving?Math.ceil(fullW*Math.min(canvas.width/w,1)):canvas.width;
+      const ph=moving?Math.ceil(fullH*Math.min(canvas.height/h,1)):canvas.height;
+      const key=[pw,ph,w,h,view.lat,view.lon,r].join('/');
+      // Failed geographic tiles become eligible for another request after a minute.
+      const now=Date.now();
+      if(regionalView===key && now-regionalTime<60000){
+        if(regionalOrigin)regionalSurface.style.transform='';
+        return;
+      }
+      if(moving && now-regionalTime<60000 && moveChart())return;
+      if(regionalSurface.width!==pw || regionalSurface.height!==ph){
+        regionalSurface.width=pw;regionalSurface.height=ph;
+      }
+      regionalBrush.setTransform(pw/fullW,0,0,ph/fullH,0,0);regionalBrush.clearRect(0,0,fullW,fullH);
+      Object.assign(regionalSurface.style,{left:-pad+'px',top:-pad+'px',width:fullW+'px',height:fullH+'px',transform:'',transformOrigin:'0 0'});
+      regionalBrush.translate(pad,pad);
+      regionalBrush.save();regionalBrush.beginPath();regionalBrush.arc(w/2,h/2,r,0,TAU);regionalBrush.clip();
+      detail.draw(regionalBrush,view,w,h,r);regionalBrush.restore();
+      regionalView=key;regionalTime=now;regionalOrigin=null;
+      if(moving){
+        const samples=[[w/2,h/2],[w,h/2],[0,h/2],[w/2,h],[w/2,0],[0,0],[w,0],[0,h],[w,h]]
+          .map(([x,y])=>({x,y,geo:inverse(x,y)}));
+        if(samples.every(p=>p.geo))regionalOrigin={w,h,r,samples};
+      }
+    }
+    if(layered){
+      placeLayer(sky);
+      sky.oncontextrestored=()=>{skyView='';queue();};
+    }
+    const ctx=canvas.getContext('2d', {alpha:layered});
     const initial={lat:clamp(options.lat??defaultView.lat,-90,90),lon:wrap(options.lon??defaultView.lon),zoom:clamp(options.zoom??1,.72,32)};
     const view={...initial};
     const pointers=new Map(), events=[], markers=[];
@@ -308,12 +442,15 @@
     let w=0,h=0,r=0, sites=[], beacons=[], routes=[], selection=null,hover=null;
     let active=options.active!==false,frame=0, dead=false, renderer=null, cpu=false, failure=false, gesture=null;
     let dragging=false, start=null, pinched=false, lastTap=null, keyboard=false;
-    let regional=null,regionalRequested=false,nextRegionalTry=0;
+    let regional=null,regionalRequested=false,nextRegionalTry=0,selectionRevision=0;
     function regionalDetail(){
       if(!regionalRequested && !dead && Date.now()>=nextRegionalTry){
         regionalRequested=true;
+        // Detailed city labels can appear over the regional chart as soon as
+        // the place data arrives. The low-zoom globe has no use for that table.
+        window.EarthNavigation?.load?.().then(queue,()=>{});
         loadRegions().then(library=>{
-          if(library&&!dead){regional=library.mount(BASE,queue);queue();}
+          if(library&&!dead){regional=library.mount(BASE,invalidateRegional);queue();}
           else{regionalRequested=false;nextRegionalTry=Date.now()+60000;}
         });
       }
@@ -333,6 +470,7 @@
       });
     }
     function setActive(next){
+      if(!next)selectionRevision++;
       active=Boolean(next);
       if(active){loadRenderer();resize();return;}
       if(frame){cancelAnimationFrame(frame);frame=0;}
@@ -342,6 +480,7 @@
       if(canvas.width>1 || canvas.height>1){
         canvas.width=canvas.height=1;
         renderer?.releaseFrame();
+        if(layered){sky.width=sky.height=1;skyView='';releaseRegionalSurface();}
       }
     }
     function resize() {
@@ -415,7 +554,7 @@
     function setSites(next) {sites=(Array.isArray(next)?next:[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));queue();}
     function setBeacons(next){beacons=(Array.isArray(next)?next:[]).filter(p=>p.kind==='partner'&&Number.isFinite(p.lat)&&Number.isFinite(p.lon));queue();}
     function setRoutes(next){routes=(Array.isArray(next)?next:[]).filter(p=>p?.from&&p?.to);queue();}
-    function setSelection(next){selection=next&&Number.isFinite(next.lat)&&Number.isFinite(next.lon)?next:null;queue();}
+    function setSelection(next){if(next!==selection)selectionRevision++;selection=next&&Number.isFinite(next.lat)&&Number.isFinite(next.lon)?next:null;queue();}
     function line(path,color,width=1,dashes=[]) {
       ctx.beginPath();let prev=null;
       for(const p of path){
@@ -459,10 +598,39 @@
         return {lat:Math.asin(clamp(v[1],-1,1))/RAD,lon:wrap(Math.atan2(v[2],v[0])/RAD)};
       }};
     }
-    function sphereRoute(from,to) {
-      const nav=navigator(from,to),count=Math.max(16,Math.ceil(nav.distance*44*clamp(view.zoom/4,1,4))),path=[];
-      for(let i=0;i<=count;i++){const p=nav.at(i/count);path.push(project(p.lat,p.lon));}
-      return path;
+    // Trade paths are fixed on Earth. Reuse their geographic samples across
+    // rotations, and project them into the current view without recalculating
+    // the great circle or allocating a new point for every vertex.
+    const arcSamples=new WeakMap();
+    function drawRoute(route,color,width,dashes) {
+      const {from,to}=route;
+      let geometry=arcSamples.get(route);
+      if(!geometry || geometry.a!==from.lat || geometry.b!==from.lon || geometry.c!==to.lat || geometry.d!==to.lon){
+        geometry={a:from.lat,b:from.lon,c:to.lat,d:to.lon,nav:navigator(from,to),points:null};
+        arcSamples.set(route,geometry);
+      }
+      const nav=geometry.nav,count=Math.max(16,Math.ceil(nav.distance*44*clamp(view.zoom/4,1,4)));
+      if(geometry.points?.length!==(count+1)*3){
+        const points=new Float64Array((count+1)*3);
+        for(let i=0;i<=count;i++){
+          const p=nav.at(i/count);
+          points.set(unit(p.lat,p.lon),3*i);
+        }
+        geometry.points=points;
+      }
+      const points=geometry.points,cos=Math.cos(view.lon*RAD),sin=Math.sin(view.lon*RAD);
+      let visible=false;
+      ctx.beginPath();
+      for(let i=0;i<points.length;i+=3){
+        const x=points[i],y=points[i+1],z=points[i+2],axis=x*cos+z*sin;
+        const front=y*cameraSin+axis*cameraCos>0;
+        if(front){
+          const sx=w*.5+r*(z*cos-x*sin),sy=h*.5-r*(y*cameraCos-axis*cameraSin);
+          if(visible)ctx.lineTo(sx,sy);else ctx.moveTo(sx,sy);
+        }
+        visible=front;
+      }
+      ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dashes);ctx.stroke();ctx.setLineDash([]);
     }
     let voyage=null;
     function stopJourney(complete=false) {
@@ -502,7 +670,7 @@
     }
     if(document.addEventListener)on(document,'visibilitychange',()=>{if(document.hidden)stopJourney(true);});
     const arc=(x,y,rad,start=0,end=TAU)=>{ctx.beginPath();ctx.arc(x,y,rad,start,end);};
-    function background() {
+    function background(ctx) {
       ctx.fillStyle='#071319';ctx.fillRect(0,0,w,h);
       const bg=ctx.createRadialGradient(w*.48,h*.44,0,w*.5,h*.5,Math.max(w,h)*.7);
       bg.addColorStop(0,'#193238');bg.addColorStop(.65,'#0d1f27');bg.addColorStop(1,'#061219');
@@ -515,7 +683,7 @@
       const glow=ctx.createRadialGradient(w/2,h/2,r*.86,w/2,h/2,r*1.2);
       glow.addColorStop(0,'rgba(92,166,158,0)');glow.addColorStop(.68,'rgba(76,155,158,.12)');glow.addColorStop(1,'rgba(64,133,140,0)');
       ctx.fillStyle=glow;ctx.fillRect(0,0,w,h);
-      arc(w/2,h/2,r*1.082);ctx.strokeStyle='rgba(142,184,169,.18)';ctx.lineWidth=.7;ctx.stroke();
+      ctx.beginPath();ctx.arc(w/2,h/2,r*1.082,0,TAU);ctx.strokeStyle='rgba(142,184,169,.18)';ctx.lineWidth=.7;ctx.stroke();
       // Small engraved graduations, like a mechanical globe's meridian ring.
       for(let i=0;i<120;i++){
         const angle=i*TAU/120,co=Math.cos(angle),si=Math.sin(angle);
@@ -526,14 +694,24 @@
         ctx.lineTo(w/2+co*(r*1.082+extra),h/2+si*(r*1.082+extra));ctx.stroke();
       }
     }
+    // Geographic label text uses a fixed palette of system fonts. Store its
+    // dimensions once, and skip measuring labels entirely outside the viewport.
+    const geographicWidths=new Map();
     function labels(occupied) {
       const fits=(x,y,width,height)=>x-width/2>=4 && x+width/2<=w-4 && y-height/2>=3 && y+height/2<=h-3 && !occupied.some(s=>Math.abs(x-s.x)<(width+s.w)/2+6 && Math.abs(y-s.y)<(height+s.h)/2+3);
       function mark(text,lat,lon,font,color,spacing=0) {
-        const pos=project(lat,lon);if(pos.z<.28)return;
-        ctx.font=font;ctx.textAlign='center';ctx.textBaseline='middle';
-        if('letterSpacing'in ctx)ctx.letterSpacing=spacing+'px';
-        const width=ctx.measureText(text).width;
+        const pos=project(lat,lon);
+        if(pos.z<.28 || pos.x<4 || pos.x>w-4 || pos.y<9 || pos.y>h-9)return;
+        const key=font+'/'+spacing+'/'+text;
+        let width=geographicWidths.get(key);
+        if(width===undefined){
+          ctx.font=font;
+          if('letterSpacing'in ctx)ctx.letterSpacing=spacing+'px';
+          width=ctx.measureText(text).width;geographicWidths.set(key,width);
+        }
         if(fits(pos.x,pos.y,width,12)){
+          ctx.font=font;ctx.textAlign='center';ctx.textBaseline='middle';
+          if('letterSpacing'in ctx)ctx.letterSpacing=spacing+'px';
           ctx.fillStyle=color;ctx.shadowColor='rgba(5,19,24,.68)';ctx.shadowBlur=3;ctx.fillText(text,pos.x,pos.y);ctx.shadowBlur=0;
           occupied.push({x:pos.x,y:pos.y,w:width,h:12});
         }
@@ -636,16 +814,33 @@
       cameraSin=Math.sin(view.lat*RAD);cameraCos=Math.cos(view.lat*RAD);
       ctx.save();
       // At close zoom the opaque globe covers even the corners of the canvas.
-      if(!renderer || r<Math.hypot(w*.5,h*.5)+2)background();
+      const showSky=!renderer || r<Math.hypot(w*.5,h*.5)+2;
+      if(layered){
+        ctx.clearRect(0,0,w,h);
+        if(showSky) {
+          const key=[canvas.width,canvas.height,w,h,r].join('/');
+          if(skyView!==key){
+            if(sky.width!==canvas.width || sky.height!==canvas.height){
+              sky.width=canvas.width;sky.height=canvas.height;
+            }
+            skyBrush.setTransform(sky.width/w,0,0,sky.height/h,0,0);
+            background(skyBrush);skyView=key;
+          }
+        }else if(skyView){sky.width=sky.height=1;skyView='';}
+      }else if(showSky)background(ctx);
       if(renderer){
-        if(!renderer.draw(ctx,w,h,r,view,dragging||pointers.size>1) && !cpu){
-          renderer.destroy();renderer=softwareRenderer(geo.chart);cpu=true;renderer.draw(ctx,w,h,r,view,dragging);
+        if(!renderer.draw(layered?null:ctx,w,h,r,view,dragging||pointers.size>1) && !cpu){
+          if(layered)renderer.surface.remove();
+          renderer.destroy();renderer=softwareRenderer(geo.chart);cpu=true;
+          if(layered){placeLayer(renderer.surface);if(regionalBrush)placeLayer(regionalSurface);}
+          renderer.draw(layered?null:ctx,w,h,r,view,dragging);
         }
         ctx.save();arc(w/2,h/2,r);ctx.clip();
-        if(view.zoom>=4.5)regionalDetail()?.draw(ctx,view,w,h,r);
+        if(view.zoom>=4.5)drawRegional(regionalDetail(),dragging||pointers.size>1);
+        else releaseRegionalSurface();
         graticule();
-        for(const route of routes)line(sphereRoute(route.from,route.to),route.preview?'#dfc69b':'#f0bd6a',route.preview?1:1.5,route.preview?[3,5]:[5,3]);
-        if(voyage)line(sphereRoute(voyage.from,voyage.to),'#f4c675',1.5,[4,4]);
+        for(const route of routes)drawRoute(route,route.preview?'#dfc69b':'#f0bd6a',route.preview?1:1.5,route.preview?[3,5]:[5,3]);
+        if(voyage)drawRoute(voyage,'#f4c675',1.5,[4,4]);
         ctx.restore();
         arc(w/2,h/2,r);ctx.strokeStyle='rgba(147,213,204,.62)';ctx.lineWidth=1.2;ctx.stroke();
         drawMarkers();
@@ -694,10 +889,22 @@
       const site=markerAt(p,Math.min(limit,8)) || cities?.hit(p) ||
         markerAt(p,limit,false) || (limit>10 && cities?.hit(p,limit-8));
       const location=site||inverse(p.x,p.y);
-      if(!location||!geo)return null;
-      const point={...locate(location.lat,location.lon),...site};
-      setSelection(point);options.onSelect?.(point);
-      return point;
+      if(!location)return null;
+      const ticket=++selectionRevision;
+      function select(){
+        if(dead||!active||ticket!==selectionRevision)return null;
+        const place=locate(location.lat,location.lon);if(!place)return null;
+        const point={...place,...site};
+        setSelection(point);options.onSelect?.(point);return point;
+      }
+      if(geo&&!window.EarthNavigation?.load)return select();
+      options.onPlaceLoading?.();
+      surveyReady().then(select,()=>{
+        if(!dead&&active&&ticket===selectionRevision)options.onPlaceError?.();
+      });
+      // Double-tap zoom only needs the coordinates; its gesture window must
+      // not depend on how quickly the first precise place name downloads.
+      return location;
     }
     function pinchInfo(){
       const [a,b]=[...pointers.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,dist:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))};
@@ -800,15 +1007,24 @@
         if(dead)return;
         try{renderer=gpuRenderer(a.chart);}catch{renderer=null;}
         if(!renderer){renderer=softwareRenderer(a.chart);cpu=true;}
+        if(layered)placeLayer(renderer.surface);
         queue();options.onReady?.();
       }).catch(err=>{failure=true;queue();options.onError?.(err);});
       return ready;
     }
     if(active){loadRenderer();resize();}
-    return {setActive,focus,zoomBy,setSites,setBeacons,setRoutes,setSelection,journey,stopJourney,resize,get ready(){return loadRenderer();},locate,getScale:scaleInfo,getView:()=>({...view}),
-      destroy(){dead=true;stopJourney();cancelAnimationFrame(frame);observer?.disconnect();events.forEach(off=>off());regional?.destroy();renderer?.destroy();canvas.style.touchAction=previousTouch;}
+    return {setActive,focus,zoomBy,setSites,setBeacons,setRoutes,setSelection,journey,stopJourney,resize,get ready(){return Promise.all([loadRenderer(),surveyReady()]).then(([render])=>render);},locate,getScale:scaleInfo,getView:()=>({...view}),
+      destroy(){
+        dead=true;stopJourney();cancelAnimationFrame(frame);observer?.disconnect();
+        events.forEach(off=>off());regional?.destroy();
+        if(layered){
+          sky.oncontextrestored=null;sky.remove();renderer?.surface.remove();
+          if(regionalSurface){regionalSurface.oncontextrestored=null;regionalSurface.remove();}
+        }
+        renderer?.destroy();canvas.style.touchAction=previousTouch;
+      }
     };
   }
-  window.EarthAtlas={mount,locate,ready:assets};
+  window.EarthAtlas={mount,locate,nearOceanShore,geographyReady,ready:surveyReady};
 })();
 

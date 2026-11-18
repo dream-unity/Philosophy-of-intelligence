@@ -17,7 +17,7 @@
       const options=precinct.target?['cancel']:model.options;
       for(const id of options){
         if(id===precinct.use)continue;
-        const preview=model.preview(site,sim.state,location,id);
+        const preview=(model.terms||model.preview)(site,sim.state,location,id);
         if(!preview.available)continue;
         projects.push({id,preview});
         if(firstOnly)return [{location,precinct,projects}];
@@ -251,16 +251,23 @@
           const orig=home.residents.find(r=>r.id===p.id),other=b.people.find(r=>r.id===p.id);
           if(p.bond!==orig.bond||p.bond!==other.bond)row(p.name+' · bond',orig.bond,p.bond,other.bond);
         }
-        for(const dest of a.sites.filter(x=>x.id!==home.id)){
-          const other=b.sites.find(x=>x.id===dest.id),base=state.sites.find(x=>x.id===dest.id);
+        const baseSites=new Map(state.sites.map(s=>[s.id,s])),otherSites=new Map(b.sites.map(s=>[s.id,s]));
+        for(const dest of a.sites){
+          if(dest.id===home.id)continue;
+          const other=otherSites.get(dest.id),base=baseSites.get(dest.id);
           for(const key of ['food','trust','wellbeing'])if(dest[key]!==other[key])row(dest.name+' · '+key,base[key],dest[key],other[key]);
         }
         table.append(body);root.append(table);
         for(const [index,result] of [a,b].entries()){
           const d=el('details',null,'rehearsal-log');d.append(el('summary','What happens in plan '+(index===0?'A':'B')));
-          const list=el('ul');
-          for(const effect of result.effects)list.append(el('li',effect));
-          if(!result.effects.length)list.append(el('li','Only routine production and household consumption take place.'));d.append(list);root.append(d);
+          d.addEventListener('toggle',()=>{
+            if(!d.open||d.querySelector('ul'))return;
+            const list=el('ul');
+            for(const effect of result.effects)list.append(el('li',effect));
+            if(!result.effects.length)list.append(el('li','Only routine production and household consumption take place.'));
+            d.append(list);
+          });
+          root.append(d);
         }
       }else root.append(el('p',a.message||b.message,'action-reason'));
       if(focus)root.querySelector('[data-control="'+focus+'"]')?.focus({preventScroll:true});

@@ -8,6 +8,7 @@ const gameRoot = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '.
 const script = readFileSync(path.join(gameRoot, 'street.js'), 'utf8');
 const surroundingsScript = readFileSync(path.join(gameRoot, 'town-surroundings.js'), 'utf8');
 const constructionScript = readFileSync(path.join(gameRoot, 'construction.js'), 'utf8');
+const agencyScript = readFileSync(path.join(gameRoot, 'agency.js'), 'utf8');
 const shiftScript = readFileSync(path.join(gameRoot, 'shifts.js'), 'utf8');
 const site = {
   id: 'harbour',
@@ -17,7 +18,7 @@ const site = {
   buildings: [{ id: 'hall-1', kind: 'hall', name: 'Cooperative Hall', plot: 4 }]
 };
 
-function surface(width = 820, height = 500) {
+function surface(width = 820, height = 500, {animated=false, links=null}={}) {
   const pointerEvents = new Map();
   let frame = null;
   let now = 100;
@@ -53,16 +54,20 @@ function surface(width = 820, height = 500) {
     },
     requestAnimationFrame(handler) { frame = handler; return 1; },
     cancelAnimationFrame() { frame = null; },
-    matchMedia: () => ({ matches: true })
+    matchMedia: query => ({ matches: !animated||!query.includes('prefers-reduced-motion') })
   };
+  vm.runInNewContext(readFileSync(path.join(gameRoot,'fisheries.js'),'utf8'),runtime);
+  if(links)runtime.window.CommonEarthSim={productiveLinks:()=>links};
   vm.runInNewContext(surroundingsScript, runtime);
   vm.runInNewContext(constructionScript, runtime);
+  vm.runInNewContext(agencyScript,runtime);
   vm.runInNewContext(script, runtime);
   const encounters = [], updates = [];
-  const hints = [];
+  const hints = [], handcarts = [];
   const placed = [], previews = [], assignments = [], targetLists = [];
   const street = runtime.window.EarthStreet.mount(canvas, {
     onState: state => updates.push(state),
+    onHandcart: () => handcarts.push(true),
     onInteract: event => encounters.push(event),
     onHint: text => hints.push(text),
     onPlace: point => placed.push(point.plot),
@@ -135,7 +140,7 @@ function surface(width = 820, height = 500) {
     street.setSite(active);
     return {active,stops:shifts.view(active,1).stops};
   }
-  return { street, sheet, host, updates, encounters, hints, placed, previews, assignments, targetLists, interactionFrame, overviewFrame, pointer, tap, key, step, finish, drive, at };
+  return { street, sheet, host, updates, encounters, hints, handcarts, placed, previews, assignments, targetLists, interactionFrame, overviewFrame, pointer, tap, key, step, finish, drive, at };
 }
 
 test('driving to successive taps preserves their screen coordinates on a tablet', () => {
@@ -416,18 +421,42 @@ test('the first finger or pen tap previews a plot, the next confirms it and chan
   }
 });
 
-test('tapping a passing pedestrian directs the player to a real contact or active delivery', () => {
+test('tapping a passing neighbour meets that same person in walking range without redirecting to a parcel', () => {
   const g = surface();
-  g.street.toggleOverview();
-  let screen = g.overviewFrame();
-  const passing = screen(2.03, 6.98, .54);
-  g.tap(passing);
-  assert.match(g.hints.at(-1), /Nearest resident: (Mira|Idris|Avery)/);
-  assert.equal(g.encounters.length, 0);
   g.street.setSite({ ...site, delivery: { residentId: 'r1' } });
+  g.street.toggleOverview();
+  const passing = g.overviewFrame()(2.03,6.98,.54);
   g.tap(passing);
-  assert.match(g.hints.at(-1), /parcel is for Idris/);
-  assert.equal(g.street.getState().travelling, false);
+  assert.ok(g.street.getState().travelling);
+  assert.equal(g.encounters.length,0);
+  g.finish();
+  const visit=g.encounters.at(-1);
+  assert.equal(visit.npcId,'walker-0');
+  assert.equal(visit.label,'Noor');
+  assert.ok(g.street.meeting(visit));
+  assert.equal(g.street.meeting({type:'resident',residentId:'r1'}),null);
+});
+
+test('all pedestrians and the delivery driver can be met from the roster, and changing actor moves control to their body',()=>{
+  const g=surface();
+  const people=g.street.localPeople();
+  assert.equal(people.length,6);
+  for(const person of people){
+    assert.ok(g.street.focusStop(person),person.label);
+    g.finish();
+    assert.equal(g.encounters.at(-1).npcId,person.npcId);
+    assert.ok(g.street.meeting(person),person.label);
+  }
+  const saved=g.street.snapshotView();
+  const place={...site,agency:{actor:'r2',meals:[],stewardPosition:{x:12,y:12}}};
+  g.street.setSite(place);
+  assert.equal(g.street.getState().actor,'r2');
+  assert.ok(!g.street.restoreView(saved));
+  assert.equal(g.street.focusResident('r2'),false);
+  assert.ok(g.street.localPeople().some(p=>p.npcId==='steward'));
+  assert.ok(g.street.focusStop({type:'npc',npcId:'steward'}));
+  g.finish();
+  assert.equal(g.street.meeting({type:'npc',npcId:'steward'}).actor,'r2');
 });
 
 test('taking over a tap route with the D-pad immediately updates the Stop or Brake button state', () => {
@@ -799,6 +828,8 @@ test('a companion stays aboard when the boat moves and steps ashore when it dock
   g.street.recenter();g.tap(g.interactionFrame()(17.5,34,-.44));g.finish();
   const rider=g.street.getState();
   assert.equal(rider.mode,'boat');
+  assert.equal(g.street.meeting({type:'resident',residentId:'r0'}).companion,'r0');
+  assert.equal(g.street.meeting({type:'resident',residentId:'r1'}),null);
   assert.equal(rider.companion.x,rider.x);assert.equal(rider.companion.y,rider.y);
   const saved=g.street.snapshotView();
   assert.equal(g.street.restoreView({...saved,player:{...saved.player,y:16}}),false);
@@ -944,4 +975,261 @@ test('the stern and jetty end board the intended skiff in compact views', () => 
     assert.equal(g.street.getState().mode,'boat');
     g.at(10.6,26.85);
   }
+});
+
+test('a park bench can be reached, used, saved and left by moving', () => {
+  const g=surface();
+  assert(g.street.useSeat());
+  assert(g.street.getState().travelling);
+  assert.equal(g.street.getState().seated,false,'sitting requires reaching the bench');
+  g.finish();
+  assert.equal(g.street.getState().seated,true);
+  const seated=g.street.snapshotView();
+  assert(seated.seat);
+  const away=surface();
+  assert(away.street.restoreView(JSON.parse(JSON.stringify(seated))));
+  assert(away.street.getState().seated);
+  assert(away.street.interact());
+  assert.equal(away.street.getState().seated,false);
+  assert(away.street.useSeat());
+  away.finish();
+  away.street.move('down');
+  assert.equal(away.street.getState().seated,false);
+  g.street.setSite({...site,id:'other-district'});
+  assert.equal(g.street.getState().seated,false);
+  g.street.setSite(site);
+  assert.equal(g.street.getState().seated,true,'returning restores that community’s posture');
+});
+
+test('tapping a bench approaches its seat; reading a board uses an in-person range', () => {
+  const g=surface();
+  g.street.toggleOverview();
+  const map=g.overviewFrame();
+  // The fourth block of the first row is a public park with both seats and a kiosk.
+  g.tap(map(21.42,3.85,.2));
+  assert(g.street.getState().travelling);
+  g.finish();
+  assert(g.street.getState().seated);
+  g.street.toggleOverview();g.street.toggleOverview();
+  g.tap(g.overviewFrame()(21.07,2.6,.56));
+  assert.equal(g.street.getState().seated,false);
+  g.finish();
+  assert(g.hints.some(h=>/Park noticeboard · /.test(h)));
+  const {x,y}=g.street.getState();
+  assert(Math.hypot(x-21.07,y-2.6)<1.2);
+});
+
+test('the lamp post rejects a saved position and the D-pad cannot cut through it', () => {
+  const g=surface();
+  const snap=g.street.snapshotView();
+  const at=(x,y)=>g.street.restoreView({...snap,player:{...snap.player,x,y}});
+  // The .48-unit diagonal step would jump the .15-unit base if only its endpoint were tested.
+  assert.equal(at(5.06,4.94),false);
+  assert(at(4.89,4.77));
+  g.street.move('down');
+  const p=g.street.getState();
+  assert(p.x<=4.891||p.y<=4.771,'the avatar slides along one side instead of crossing the post');
+  assert.equal(at(21.42,3.85),false,'bench seat');
+  assert.equal(at(21.07,2.6),false,'kiosk');
+  assert.equal(at(snap.van.x,snap.van.y),false,'parked van');
+  assert(g.street.toggleVehicle());g.finish();
+  assert.equal(g.street.getState().mode,'drive','physical sides still allow boarding');
+});
+
+test('a narrow post between two route nodes is avoided for the full tap-to-walk path', () => {
+  const g=surface();
+  const shot=g.street.snapshotView();
+  assert(g.street.restoreView({...shot,player:{...shot.player,x:3.75,y:4.94}}));
+  g.street.toggleOverview();
+  g.tap(g.overviewFrame()(7.62,4.94));
+  assert(g.street.getState().travelling);
+  let count=0;
+  while(g.street.getState().travelling&&count++<250){
+    g.step();const {x,y}=g.street.getState();
+    assert(!(Math.abs(x-5.06)<.17&&Math.abs(y-4.94)<.17),'route avoids the lamp base');
+  }
+  g.at(7.62,4.94);
+});
+
+test('a foot journey bends around a waiting delivery vehicle without boarding or phoning its driver', () => {
+  const g=surface();
+  const shot=g.street.snapshotView();
+  assert(g.street.restoreView({...shot,player:{...shot.player,x:19.1,y:18.29}}));
+  g.street.toggleOverview();
+  g.tap(g.overviewFrame()(23.4,18.29));
+  assert(g.street.getState().travelling);
+  let steps=0;
+  while(g.street.getState().travelling&&steps++<250){
+    g.step();const {x,y}=g.street.getState();
+    assert(!(Math.abs(x-21)<.915&&Math.abs(y-18.29)<.415),'the walker stays outside the delivery vehicle');
+  }
+  g.at(23.4,18.29);
+  assert.equal(g.encounters.length,0);
+});
+
+test('the waterfront action walks to a playable quay and pilots the boat to its actual feeding ground',()=>{
+  const g=surface(),active={...site,water:true};
+  g.street.setSite(active);
+  assert(g.street.approachFishing('shore'));g.finish();
+  assert.equal(g.street.getState().mode,'walk');
+  assert(g.street.getState().y>=23.1);
+  assert(g.street.toggleBoat());g.finish();
+  assert(g.street.approachFishing('shoal'));g.finish();
+  assert.equal(g.street.getState().mode,'boat');
+  assert(g.street.getState().y>32);
+  const p=g.street.getState();
+  active.handline={x:p.x,y:p.y,mode:'boat',castAt:12345,food:2};
+  g.street.setSite(active);
+  g.street.toggleBoat();g.finish();
+  assert(g.street.approachFishing('line'));g.finish();
+  assert.equal(g.street.getState().mode,'boat');
+  assert(g.street.approachFishing('line'));g.finish();
+  g.at(p.x,p.y);
+});
+
+
+test('the handcart appears as a solid, approachable market object as soon as residents complete it',()=>{
+  const g=surface(),slot={...site,pursuits:{serial:1,cart:{builder:'Mira',fixture:'baskets'},ticket:null}};
+  g.street.setSite(slot);
+  const shot=g.street.snapshotView();
+  assert.equal(g.street.restoreView({...shot,player:{...shot.player,x:12.95,y:21.15}}),false);
+  g.street.toggleOverview();
+  g.tap(g.overviewFrame()(12.95,21.15,.36));
+  g.finish();
+  assert.equal(g.handcarts.length,1);
+  assert(Math.hypot(g.street.getState().x-12.95,g.street.getState().y-21.15)<1.15);
+  g.street.setSite({...site,pursuits:undefined});
+  assert(g.street.restoreView({...shot,player:{...shot.player,x:12.95,y:21.15}}));
+});
+
+test('supply couriers between productive lots can be approached and met before and after their workspace changes',()=>{
+  const link={from:0,to:1,resource:'food'},g=surface(820,500,{animated:true,links:[link]});
+  const projects=['workshop','garden'].map((kind,plot)=>({kind,plot,id:'lot'+plot,name:kind}));
+  g.street.setSite({...site,buildings:projects});
+  const carrier=g.street.localPeople().find(p=>p.npcId==='carrier-0-1');
+  assert.ok(carrier);
+  assert.equal(g.street.meeting(carrier),null);
+  assert.ok(g.street.focusStop(carrier));g.finish();
+  const meeting=g.street.meeting(carrier);
+  assert.ok(meeting);
+  assert.equal(meeting.target,carrier.npcId);
+  assert.equal(g.encounters.at(-1).npcId,carrier.npcId);
+  g.street.focusMarket();g.finish();
+  assert.equal(g.street.meeting(carrier),null);
+});
+
+test('floating homes leave their gangways open while the surrounding berth water blocks walking', () => {
+  const g=surface();
+  g.street.setSite({...site,water:true});
+  const shot=g.street.snapshotView();
+  const place=(x,y)=>g.street.restoreView({...shot,player:{...shot.player,x,y}});
+  assert.equal(place(10.65,21.4),false,'water between hull and boardwalk');
+  assert.equal(place(9,22.68),true,'wooden gangway leading to the front');
+  assert(g.street.focusResident('r0'));g.finish();
+  assert(g.street.atStop({type:'resident',residentId:'r0'}));
+});
+
+test('a walker beside the kiosk can find a way out of a narrow gap between park trees', () => {
+  const g=surface();
+  g.street.setSite({...site,id:'park-3',lat:0,lon:10,water:false});
+  const shot=g.street.snapshotView();
+  assert(g.street.restoreView({...shot,player:{...shot.player,x:20.46,y:2.84}}));
+  assert(g.street.focusMarket());
+  g.finish();
+  assert(g.street.atStop({type:'market'}));
+});
+
+test('returning to a community resumes a walking resident at the job they reached while the player was away',()=>{
+  const g=surface(),local={...site,agency:{actor:'r1',meals:[]},workforce:{members:{r1:{position:{x:9,y:6}}}}};
+  g.street.setSite(local);g.at(9,6);
+  g.street.setSite({...site,id:'another'});
+  local.workforce.members.r1.position={x:15,y:12};
+  g.street.setSite(local);
+  assert.equal(g.street.getState().actor,'r1');
+  g.at(15,12);
+});
+
+test('a Stone Town boat detours around a moored neighbour and can still return to its own quay',()=>{
+  const g=surface();
+  g.street.setSite({...site,id:'stone',lat:-6.163,lon:39.189,water:false});
+  assert(g.street.toggleBoat());g.finish();
+  const original=g.street.snapshotView();
+  assert.equal(original.berth,'harbour-lateen');
+  const canopy={x:21.65,y:29.61};
+  assert.equal(g.street.restoreView({...original,player:{...original.player,...canopy}}),false);
+  g.street.recenter();g.tap(g.interactionFrame()(24.55,30.22,-.44));
+  assert(g.street.getState().travelling);
+  for(let i=0;i<500&&g.street.getState().travelling;i++){
+    g.step();const p=g.street.getState();
+    assert(!(Math.abs(p.x-canopy.x)<2.70&&Math.abs(p.y-canopy.y)<1.81),'the sailing hull leaves the moored canopy boat clear');
+  }
+  g.at(24.55,30.22);
+  assert(g.street.toggleBoat());g.finish();
+  assert.equal(g.street.getState().mode,'walk');g.at(11.4,24.53);
+});
+
+test('a neighbour follows a detour when the community van is parked across their usual path',()=>{
+  const g=surface(820,500,{animated:true});
+  const snap=g.street.snapshotView(),van={x:3.4,y:6.71,dx:1,dy:0};
+  assert(g.street.restoreView({...snap,van}));
+  assert(g.street.focusStop({type:'market'},()=>{}));
+  assert(g.street.focusResident('r1'));
+  let observed=false;
+  for(let i=0;i<220;i++){
+    if(!g.street.getState().travelling)g.street.focusResident(i%2?'r1':'r0');
+    g.step();
+    const actor=g.street.localPeople().find(p=>p.npcId==='walker-0');
+    assert(actor);
+    assert(!(Math.abs(actor.x-van.x)<.759&&Math.abs(actor.y-van.y)<.429));
+    if(Math.abs(actor.y-6.98)>.18)observed=true;
+  }
+  assert(observed,'the neighbour leaves their usual straight path to pass the van');
+});
+
+test('a restarted community and a different controlled character cannot inherit a saved seat',()=>{
+  const g=surface();assert(g.street.useSeat());g.finish();
+  const seated=g.street.snapshotView();
+  g.street.setSite({...site,agency:{actor:'r1',meals:[]}});
+  assert.equal(g.street.getState().actor,'r1');
+  assert.equal(g.street.getState().seated,false);
+  assert.equal(g.street.restoreView(seated),false);
+  g.street.setSite({...site,foundingRevision:1});
+  assert.equal(g.street.getState().actor,'steward');
+  assert.equal(g.street.getState().seated,false);
+  assert.equal(g.street.restoreView(seated),false);
+});
+
+test('resuming at a delivery stop keeps the saved van and gives the driver a clear kerb',()=>{
+  const g=surface();
+  const shot=g.street.snapshotView(),driver=g.street.localPeople().find(p=>p.npcId==='driver');
+  const van={x:driver.x,y:driver.y,dx:1,dy:0};
+  assert(g.street.restoreView({...shot,van}));
+  assert.deepEqual({...g.street.snapshotView().van},van);
+  const next=g.street.localPeople().find(p=>p.npcId==='driver');
+  assert(Math.hypot(next.x-van.x,next.y-van.y)>1.5);
+});
+
+test('a pre-collision saved driver beside a lamp resumes on the same kerb',()=>{
+  const g=surface(),shot=g.street.snapshotView();
+  const van={x:17.06,y:17.3,dx:1,dy:0};
+  const previous={...shot,mode:'drive',van,player:van};
+  delete previous.geometry;
+  assert(g.street.restoreView(previous));
+  assert.equal(g.street.getState().mode,'drive');
+  const safe=g.street.snapshotView();
+  assert(Math.hypot(safe.van.x-van.x,safe.van.y-van.y)<.92);
+  assert.notDeepEqual({...safe.van},van);
+  assert(g.street.restoreView(safe));
+  assert.equal(g.street.restoreView({...safe,van,player:van}),false,'fresh snapshots enforce the wider footprint');
+});
+
+
+test('market collection uses the physical doorway of the active district',()=>{
+  const g=surface();
+  assert(g.street.focusMarket());g.finish();
+  const seen=g.street.meeting({type:'market'});
+  assert.equal(seen.siteId,site.id);assert.equal(seen.target,'market');assert.equal(seen.actor,'steward');
+  assert.equal(seen.tx,15);assert.equal(seen.ty,23.04);
+  assert(g.street.focusResident('r1'));g.finish();
+  assert.equal(g.street.meeting({type:'market'}),null);
 });

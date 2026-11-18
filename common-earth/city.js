@@ -88,10 +88,17 @@
     if(!site || typeof site!=='object')return;
     site.city={version:1,serial:site.city?.serial||0,precincts:precincts(site)};
   }
-  function marketCatchments(site) { return precincts(site).filter(p=>p.use==='market').length; }
+  function marketCatchments(site) {
+    let count=0;
+    for(let i=0;i<6;i++)if(site?.city?.precincts?.[i]?.use==='market')count++;
+    return count;
+  }
   function housingCapacity(site) {
-    if(!site)return 18;
-    return precincts(site).reduce((sum,p,i)=>sum+(p.use==='homes' ? (terrainAt(site,i).id==='shelter'?8:6) : 0),18);
+    let capacity=18;
+    for(let i=0;i<6;i++){
+      if(site?.city?.precincts?.[i]?.use==='homes')capacity+=terrainAt(site,i).id==='shelter'?8:6;
+    }
+    return capacity;
   }
   function overview(site, state = precincts(site)) {
     const weekly={...ZERO}, records=[];
@@ -194,11 +201,11 @@
     const orders=pending.filter(p=>!p.laborReady);
     return active.length===orders.length && orders.every(p=>active.some(j=>j.id===p.jobId && j.precinct===p.index && j.kind===p.target));
   }
-  function preview(site,world,index,project,withCrew=false) {
+  function terms(site,world,index,project,state=precincts(site)) {
     const bad=reason=>({ok:false,available:false,reason});
     if(!site)return bad('Found a community first.');
     if(!Number.isInteger(index)||index<0||index>5)return bad('Choose one of the six outer precincts.');
-    const state=precincts(site),p=state[index],now=overview(site,state),record=now.records[index];
+    const p=state[index];
     if(project==='cancel') {
       if(!p.target)return bad('There is no construction to cancel here.');
       const target=USES[p.target];
@@ -210,6 +217,19 @@
     const spec=USES[project],cost={funds:spec.funds,materials:spec.materials,effort:spec.effort};
     if(p.target)return bad('A crew is already working here. Finish or cancel its job first.');
     if(p.use===project)return bad('This precinct already has that use.');
+    let reason='';
+    if(!Number.isSafeInteger((site.city?.serial||0)+1))reason=noProjectNumber;
+    else if(state.filter(row=>row.target).length>=2)reason='Two precinct projects are already commissioned. Open or cancel one before starting another.';
+    else if(world.effort<cost.effort)reason='Needs '+cost.effort+' effort. Advance the week to refresh it.';
+    else if(site.funds<cost.funds || site.materials<cost.materials)reason='The treasury needs '+cost.funds+' funds and '+cost.materials+' materials for this project.';
+    else if(!window.EarthConstruction)reason='The construction roster is unavailable.';
+    return {ok:true,available:!reason,reason,cost,turns:spec.turns,title:nameOf(site,project),people:spec.people,
+      week:(Number(world.week)||1)+spec.turns};
+  }
+  function preview(site,world,index,project,withCrew=false) {
+    const state=precincts(site),quote=terms(site,world,index,project,state);
+    if(!quote.ok || quote.cancel)return quote;
+    const spec=USES[project],p=state[index],now=overview(site,state),record=now.records[index];
     // Compare the same opening week, including nearby work already commissioned.
     const baseline=state.map(row=>row.target && row.laborReady && row.turns<=spec.turns?{use:row.target,target:null,turns:0}:row);
     const concurrent=baseline.filter((row,i)=>row!==state[i]).length;
@@ -222,14 +242,9 @@
     if(localFunds)rate.funds=(rate.funds||0)+localFunds;
     const beds=after.capacity-was.capacity, reach=after.reachable-was.reachable;
     const risk=after.pressure-was.pressure, noise=after.noise-was.noise;
-    let reason='';
-    if(!Number.isSafeInteger((site.city?.serial||0)+1))reason=noProjectNumber;
-    else if(now.works>=2)reason='Two precinct projects are already commissioned. Open or cancel one before starting another.';
-    else if(world.effort<cost.effort)reason='Needs '+cost.effort+' effort. Advance the week to refresh it.';
-    else if(site.funds<cost.funds || site.materials<cost.materials)reason='The treasury needs '+cost.funds+' funds and '+cost.materials+' materials for this project.';
     const scheduler=window.EarthConstruction;
     const staffing=withCrew && scheduler?previewCrew(site,world,index,project):null;
-    if(!reason && (!scheduler || (staffing && !staffing.ok)))reason=staffing?.reason||'The construction roster is unavailable.';
+    const reason=quote.reason || (staffing && !staffing.ok?staffing.reason||'The construction roster is unavailable.':'');
     const capacityNote=beds?'Housing capacity '+was.capacity+' → '+after.capacity:'';
     let crowdingNote='';
     if(beds && (was.crowding.excess || after.crowding.excess)) {
@@ -240,14 +255,14 @@
     const accessNote=reach?'Precincts within 15 minutes '+was.reachable+' → '+after.reachable:'';
     const impact=[flows(rate)?flows(rate)+' per week':'',capacityNote,accessNote,crowdingNote].filter(Boolean);
     const forecast=impact.length?impact.join(' · '):'The weekly totals stay the same.';
-    return {ok:true,available:!reason,reason,cost,turns:spec.turns,title:nameOf(site,project),old:nameOf(site,p.use),forecast,rate,beds,reach,risk,noise,localFunds,concurrent,capacityNote,accessNote,crowdingNote,
-      record:r,siteName:record.name,people:spec.people,purpose:spec.purpose,completedView:after,week:(Number(world.week)||1)+spec.turns,crew:staffing?.job||null};
+    return {...quote,available:!reason,reason,old:nameOf(site,p.use),forecast,rate,beds,reach,risk,noise,localFunds,concurrent,capacityNote,accessNote,crowdingNote,
+      record:r,siteName:record.name,purpose:spec.purpose,completedView:after,crew:staffing?.job||null};
   }
   function apply(site,world,index,project) {
     const p=preview(site,world,index,project);
     if(!p.ok||!p.available)return {ok:false,message:p.reason};
     normalise(site);
-    const row=site.city.precincts[index], name=overview(site).records[index].name;
+    const row=site.city.precincts[index],ground=terrainAt(site,index),name=site.water?ground.sea:ground.land;
     if(project==='cancel') {
       const work=nameOf(site,row.target);
       if(row.jobId && !row.laborReady)window.EarthConstruction?.cancel(site,row.jobId);
@@ -287,11 +302,12 @@
       const opened=openPrecinct(site,i);
       recovered+=opened.material;notes.push(opened.message);
     });
-    const delta={...overview(site).weekly};delta.materials+=recovered;
-    return {delta,notes};
+    const district=overview(site,site.city.precincts);
+    const delta={...district.weekly};delta.materials+=recovered;
+    return {delta,notes,district};
   }
 
-  const Model=Object.freeze({valid,validWork,normalise,migrateWork,preview,previewCrew,apply,finish,weekly,housingCapacity,marketCatchments,overview,projects:USES,options:BUILD_OPTIONS,flows,nameOf});
+  const Model=Object.freeze({valid,validWork,normalise,migrateWork,terms,preview,previewCrew,apply,finish,weekly,housingCapacity,marketCatchments,overview,projects:USES,options:BUILD_OPTIONS,flows,nameOf});
   window.EarthCityModel=Model;
 })();
 

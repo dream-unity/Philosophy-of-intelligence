@@ -105,6 +105,7 @@
   }
 
   function commitment(site,world,person) {
+    if(site.agency?.actor===person.id)return ['Under your control','Working and travelling with your direction.'];
     if(site.shift?.residentId===person.id)return ['Resident companion','Spending the workday with you.'];
     const term=world?.legacy?.term;
     if(term?.siteId===site.id&&term.residentId===person.id)return ['Council steward','Serving an elected council term.','council'];

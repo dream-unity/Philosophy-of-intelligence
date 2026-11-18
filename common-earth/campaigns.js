@@ -151,6 +151,20 @@
     inland:['I can share this bench if I can find every tool before my first job.','A room is free on paper. Somebody still gives up their evening to shut the door.'],
     water:['Food in this locker stays dry long enough for the next shared meal.','A visiting crew cannot lend us its voice today. It could still need our pump tomorrow.']
   };
+  const reviewedTrials=new WeakMap();
+  function projectedSupport(sim,site){
+    const world=sim.state,actions=world.actionRevision||0,work=world.workRevision||0;
+    let cache=reviewedTrials.get(world);
+    if(!cache || cache.actions!==actions || cache.work!==work || cache.week!==world.week){
+      const support=new Map();
+      for(const report of sim.forecastNext().sites){
+        if(typeof report.commissionSupported==='boolean')support.set(report.id,report.commissionSupported);
+      }
+      cache={week:world.week,actions,work,support};
+      reviewedTrials.set(world,cache);
+    }
+    return cache.support.get(site.id);
+  }
   function guidance(sim,site) {
     const saved=record(site);
     if(!saved || !['active','trial'].includes(saved.phase))return null;
@@ -159,27 +173,36 @@
     const meet=(person,action='listen')=>({kind:'resident',siteId,group:'people',residentId:person.id,actionId:action+':'+person.id,
       label:'Visit '+person.name,detail:state.title+'. '+(saved.phase==='trial'?state.support:state.milestones[0].detail)});
     function prepareBacking(){
-      const detail=state.support+(state.phase==='ready'?' Both trial choices are already open in Council.':'');
-      if(brief.test===heardAll)return {...meet(site.residents.find(p=>!p.heard)),detail};
+      const detail=state.support+(state.phase==='ready'?' Both proposals are ready for review in Council. Check the costs before choosing.':'');
+      if(brief.test===heardAll)return {...meet(site.residents.find(p=>!p.heard&&p.id!==site.agency?.actor)||site.residents.find(p=>!p.heard)),detail};
       if(brief.test===keptPromise){
         const step=root.EarthLegacy.promiseStep(sim.state,site);
         return {...step,detail:[detail,step.detail].filter(Boolean).join(' ')};
       }
       const task=brief.test===tools?'salvage':brief.test===caretaker?'contract':'forage';
+      if(!sim.state.effort && root.EarthPursuits){
+        const resource=task==='salvage'?'materials':task==='contract'?'funds':'food';
+        return {kind:'personalWork',siteId,resource,label:'Earn '+resource+' before the trial review',detail:detail+' Personal work can add to the stores this week.'};
+      }
       const work=sim.actions('work',siteId).find(a=>a.id==='work:'+task);
       return group('work',work.id,work.label,detail);
     }
     if(state.phase==='trial'){
-      if(!state.conditionMet){
+      // Meals, deliveries and production land before the trial is judged.
+      // A pantry that looks full in Street view can still miss its review.
+      const numeric=[tools,caretaker,stocked].includes(brief.test);
+      const projected=numeric?projectedSupport(sim,site):undefined;
+      if(!(projected??state.conditionMet)){
         const backing=prepareBacking();
-        if(sim.state.effort || backing.kind==='construction')return backing;
+        if(sim.state.effort || ['construction','personalWork'].includes(backing.kind))return backing;
       }
       return {kind:'week',siteId,label:'Review the next week',detail:state.title+' is due for review in week '+saved.due+'. '+state.support};
     }
     if(state.phase==='ready' && !state.conditionMet)return prepareBacking();
     if(state.phase==='ready')return {...group('council',null,'Choose a local trial',state.title+'. Both sides have been heard and the practical step is complete. Choose how to run the trial.'),
       page:'commission',inspectPilot:true};
-    const unheard=brief.seats.map(i=>site.residents[i]).find(p=>!p.heard);
+    const waiting=brief.seats.map(i=>site.residents[i]).filter(p=>!p.heard);
+    const unheard=waiting.find(p=>p.id!==site.agency?.actor)||waiting[0];
     if(unheard)return meet(unheard);
     // Every invitation offers several ways to contribute. Point to an actual local
     // job; the invitation still lists every other way to meet its requirement.

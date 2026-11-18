@@ -257,7 +257,18 @@
  ];
  const otherRegions={"SLD":"Somaliland","NCY":"Northern Cyprus"};
  const subdivisions=["","?li Bayramli","Aargau","Aberdeen","Abia","Abkhazia","Abruzzo","Abu Dhabi","Aceh","Achham","Acre","Ad Dakhliyah","Ad Daqahliyah","Ad Dawhah","Adamaoua","Adamawa","Adana","Addis Ababa","Adiyaman","Adjumani","Adrar","Adygey","Afyon","Aga Buryat","Agadez","Agnéby","Agri","Aguascalientes","Agusan del Norte","Ahal","Ahuachapán","Aichi","Ais","Aisén del General Carlos Ibáñez del Campo","Ajaria","Ajdabiya","Akershus","Akita","Akrahreppur","Akureyri","Akwa Ibom","Al Ahmadi","Al Bahr al Ahmar","Al Batnah","Al Bayda'","Al Buhayrah","Al Butnan","Al Dhahira","Al Fayyum","Al Gharbiyah","Al Hizam Al Akhdar","Al Hudaydah","Al Hudud ash Shamaliyah","Al Iskandariyah","Al Isma`iliyah","Al Jabal al Akhdar","Al Jahrah","Al Jawf","Al Jizah","Al Jufrah","Al Kufrah","Al Kuwayt","Al Madinah","Al Mahrah","Al Marqab","Al Minufiyah","Al Minya","Al Qahirah","Al Qalyubiyah","Al Quassim","Al Qubbah","Al Wadi at Jadid","Al-Anbar","Al-Basrah","Al-Muthannia","Al-Qadisiyah","Alabama","Alagoas","Alajuela","Alaska","Alba","Albay","Alberta","Aleppo (Halab)","Alger","Ali Sabieh","Alibori","Almaty","Alsace","Alta Verapaz","Altay","Alto Paraguay","Alto Paran","Alto Paranp","Amambay","Amanat Al Asimah","Amapi","Amapá","Amasya","Amazonas","Amhara","Amman","Amur","An Giang","An Nabatiyah","An Nuqat al Khams","An-Najaf","Anambra","Anatoliki Makedonia kai Thraki","Ancash","Andalucía","Andaman and Nicobar","Andhra Pradesh","Andijon","Ang Thong","Anhui","Ankara","Annaba","Anseba","Antalya","Antananarivo","Antioquia","Antofagasta","Antsiranana","Antwerp","Anuradhapura","Anzoztegui","Anzoátegui","Aomori","Appenzell Ausserrhoden","Appenzell Innerrhoden","Apulia","Apure","Apurímac","Aqaba","Aqmola","Aqt","Aqtöbe","Aquitaine","Ar Raqqah","Ar Riyad","Arad","Aragatsotn","Aragua","Aragón","Ararat","Arauca","Arbil","Ardebil","Arequipa","Arges","Arhangay","Arica y Parinacota","Arizona","Arkansas","Arkhangel'sk","Arlon","Artigas","Artvin","Arua Municipality","Arunachal Pradesh","Arusha","As Suwayda'","As Suways","As-Sulaymaniyah","Ash Sharqiyah","Ash Shati'","Ashanti","Assaba","Assam","Astara","Astrakhan'","Asunción","Aswa","Aswan","Asyut","At-Ta'mim","Atacama","Atakora","Atlantique","Atlántico","Atlántico Norte","Atlántico Sur","Atlántida","Attapu","Attiki","Atyrau","Auckland","Aust-Agder","Australian Capital Territory","Austur-Hérað","Auvergne","Aveiro","Ayacucho","Aydin","Ayeyarwady","Az Zawiyah","Azores","Azua","Azuay","B?c Giang","B?c Liêu","B?n Tre","BHo-B","BNnh Phu?c","BZchar","Babil","Bacau","Badakhshan","Baden-Württemberg","Badghis","Badulla","Bafatá","Bafing","Baghdad","Baghlan","Bago","Bahia","Bahoruco","Baja California","Baja California Sur","Baja Verapaz","Baki","Bakool","Bali","Balikesir","Balkan","Balkh","Balqa","Balti","Baluchistan","Bamako","Bamingui-Bangoran","Bamunanika","Bamyan","Banaadir","Bandundu","Bangka-Belitung","Bangkok Metropolis","Bangui","Bani Suwayf","Bani Walid","Banjul","Banke","Banskobystrický","Banten","Banwa","Barahona","Baranya","Bari","Barima-Waini","Barinas","Barisal","Bas-Congo","Bas-Sassandra","Basel-Landschaft","Basel-Stadt","Bashkortostan","Basilicata","Basse-Kotto","Basse-Normandie","Batangas","Batdâmbâng","Bath and North East Somerset","Batha","Batman","Batna","Batticaloa","Bauchi","Bay","Bay of Plenty","Bayan-Ölgiy","Bayanhongor","Bayern","Bazéga","Beijing","Beirut","Beja","Belfast","Belgorod","Belize","Bender","Benghazi","Bengkulu","Bengo","Benguela","Benguet","Benshangul-Gumaz","Benue","Berat","Berea","Berlin","Bern","Bet","Bhaktapur","Bhojpur","BiO","Bihar","Bihor","Bilecik","Bingöl","Bioko Norte","Bioko Sur","Bishkek","Biskra","Biskupstungnahreppur","Bissau","Bistrita-Nasaud","Bitlis","Bitola","Bizerte","Bié","Blantyre","Blekinge","Blida","Blue Nile","Boaco","Bocas del Toro","Bogota","Boke","Bokeo","Bol","Bolama","Bolivar","Bolu","Bolívar","Bong","Boqueran","Boquerón","Bordj Bou Arreridj","Borgou","Borno","Borsod-Abaúj-Zemplén","Botosani","Bouenza","Bougouriba","Bouira","Boulgou","Boulkiemdé","Bourgogne","Bournemouth","Boyacá","Braga","Bragança","Braila","Brakna","Brandenburg","Brasov","Bratislavský","Bremen","Brest","Bretagne","Brighton and Hove","Bristol","British Columbia","Brodsko-Posavska","Brokopondo","Brong Ahafo","Brugge","Brunei and Muara","Brussels","Bryansk","Bubanza","Bucharest","Budadiri","Budapest","Bujumbura Mairie","Bukhoro","Bulawayo","Bulgan","Bungokho","Bur Sa`id","Burdur","Burgas","Burgenland","Buri Ram","Bursa","Bururi","Buryat","Busan","Bushehr","Busia","Buskerud","Busujju","Buzau","Bà R?a - Vung Tàu","Bács-Kiskun","Bântéay Méanchey","Béchar","Béja","Béjaïa","Békés","Bình Duong","Bình Thu?n","Bình Ð?nh","Bío-Bío","CRrdoba","Caaguazú","Caazapa","Caazapá","Cabañas","Cabinda","Cabo Delgado","Cacheu","Cagayan","Cahul","Cajamarca","Calabria","Calarasi","Caldas","California","Callao","Camagüey","Camarines Sur","Cambridgeshire","Campania","Campeche","Canelones","Canindey","Canindeyú","Cankuzo","Cantabria","Canterbury","Cao B?ng","Capiz","Caprivi","Caqueti","Caquetá","Carabobo","Caras-Severin","Carazo","Carchi","Cardiff","Cartago","Casanare","Castelo Branco","Castilla y León","Castilla-La Mancha","Cataluña","Catamarca","Cauca","Cayo","Cañar","Ceará","Cebu","Centar","Central","Central Equatoria","Central Finland","Centre","Centro Sur","Cerro Largo","Cesar","Ceuta","Chachoengsao","Chaco","Chagang-do","Chahar Mahall and Bakhtiari","Chai Nat","Chaiyaphum","Chalatenango","Champagne-Ardenne","Champasak","Chandigarh","Changhua","Chanthaburi","Chaouia - Ouardigha","Chardzhou","Charleroi","Chatham Is. aggregation","Chechnya","Chelyabinsk","Cherkasy","Chernihiv","Chernivtsi","Cheshire","Chhattisgarh","Chiang Mai","Chiang Rai","Chiapas","Chiayi","Chiayi City","Chihuahua","Chimaltenango","Chimborazo","Chimbu","Chin","Chinandega","Chiquimula","Chiradzulu","Chiriquí","Chisinau","Chita","Chitipa","Chittagong","Chlef","Chocó","Choiseul","Choluteca","Chon Buri","Chongqing","Chontales","Chubut","Chukchi Autonomous Okrug","Chumphon","Chungcheongbuk-do","Chuquisaca","Chuvash","Ciego de Ávila","Cienfuegos","City of St. Petersburg","Ciudad de Buenos Aires","Ciudad de la Habana","Clare","Clarendon","Cluj","Coahuila","Coast","Cochabamba","Coclé","Coimbra","Cojedes","Colima","Colombo","Colonia","Colorado","Colón","Comayagua","Commewijne","Comunidad Foral de Navarra","Comunidad Valenciana","Comunidad de Madrid","Conakry","Concepción","Connecticut","Constanta","Constantine","Copperbelt","Copán","Coquimbo","Cordillera","Cork","Cornwall","Coronie","Corozal","Corrientes","Corse","Cortés","Cotopaxi","Covasna","Cquateur","Crimea","Cross River","Csongrád","Cuando Cubango","Cuanza Norte","Cuanza Sul","Cumbria","Cundinamarca","Cunene","Cuscatlán","Cusco","Cuvette","Cuvette-Ouest","Cuyuni-Mazaruni","Cà Mau","Córdoba","Dadra and Nagar Haveli","Daegu","Daejeon","Dagestan","Dajabón","Dak Lak","Dakar","Dakhlet Nouadhibou","Dalarna","Damascus","Dar-Es-Salaam","Dar`a","Darién","Daugavpils","Davao Del Sur","Davao del Norte","Dayr Az Zawr","Debub","Debubawi Keyih Bahri","Dedza","Delaware","Delhi","Delta","Denguélé","Denizli","Derry","Devon","Dhaka","Dhamar","Dhawalagiri","Dhi-Qar","Dhofar","Dibër","Diekirch","Diffa","Dihok","Dikhil","Dili","Dinagat Islands","Diourbel","Dire Dawa","District of Columbia","Distrito Capital","Distrito Federal","Distrito Nacional","Dix-Huit Montagnes","Diyala","Diyarbakir","Djelfa","Djibouti","Dnipropetrovs'k","Dobrich","Dodoma","Dolj","Donegal","Donets'k","Donga","Dornod","Dornogovi","Dosso","Doukkala - Abda","Drenthe","Duarte","Dubay","Dublin","Dubrovacko-Neretvanska","Dumfries and Galloway","Dumyat","Dundee","Dundgovi","Dungannon","Durango","Durazno","Durrës","Dytiki Ellada","Dzavhan","Dâmbovita","East Azarbaijan","East Berbice-Corentyne","East Equatoria","East Flanders","East Kazakhstan","East New Britain","East Sepik","Eastern","Eastern Cape","Eastern Finland","Eastern Highlands","Eastern Uusimaa","Edinburgh","Edirne","Edo","Ehime","Ekiti","El Bayadh","El Beni","El Oro","El Paraíso","El Progreso","El Seybo","Elazig","Elbasan","Elias Pina","Emilia-Romagna","Enga","Entre Ríos","Enugu","Erevan","Erongo","Erzincan","Erzurum","Escuintla","Esfahan","Eskisehir","Esmeraldas","Espaillat","Espírito Santo","Essequibo Islands-West Demerara","Est","Estelí","Estuaire","Evenk","Extremadura","Extrême-Nord","Eysturoyar","F.A.T.A.","F.C.T.","Falcón","Farah","Faranah","Faro","Fars","Faryab","Fatick","Federal Capital Territory","Fejér","Ferghana","Fianarantsoa","Fier","Finland Proper","Finnmark","Finström","Flores","Florida","Formosa","Franche-Comté","Francisco Morazán","Fribourg","Friesland","Friuli-Venezia Giulia","Fromager","Fujayrah","Fujian","Fukui","Fukuoka","Fukushima","Fès - Boulemane","G?d?b?y","G?nc?","Gabès","Gabú","Gafsa","Gal","Galati","Galguduud","Galicia","Galle","Galway","Galápagos","Gangwon-do","Gansu","Ganzourgou","Gao","Gash Barka","Gauteng","Gaza","Gaziantep","Gedarif","Gedo","Gegharkunik","Gelderland","Genève","Georgia","Gezira","Ghadamis","Ghanzi","Gharb - Chrarda - Béni Hssen","Ghardaaa","Ghat","Ghazni","Ghor","Gia Lai","Gibraltar","Gifu","Gilan","Giresun","Gisborne","Giurgiu","Gjirokastër","Glarus","Glasgow","Gnagna","Goa","Goi","Goiás","Golan","Golestan","Gombe","Goranboy","Gorj","Gorkha","Gorno-Altay","Gorno-Badakhshan","Gorontalo","Gotland","Gourma","Govi-Altay","Gracias a Dios","Grad Beograd","Grad Sofiya","Grad Zagreb","Granada","Grand Bassa","Grand Cape Mount","Grand Casablanca","Grand'Anse","GrandGedeh","GrandKru","Granma","Graubünden","Greater Accra","Greater Poland","Grevenmacher","Groningen","Guadalcanal","Guadeloupe","Guainía","Guairá","Guanacaste","Guanajuato","Guangdong","Guangxi","Guantánamo","Guarda","Guatemala","Guayas","Guelma","Guelmim - Es-Semara","Guerrero","Guidimaka","Guinaa","Guizhou","Gulf","Gunma","Guárico","Guéra","Gwangju","Gyeonggi-do","Gyeongsangnam-do","Gyor-Moson-Sopron","Gävleborg","Göyçay","Gümüshane","H? Chí Minh city","H?i Duong","Ha Tinh","Ha'il","HaDarom","HaMerkaz","HaZafon","Hadjer-Lamis","Hadramawt","Haifa","Hainan","Hainaut","Hajdú-Bihar","Hajjah","Hakkari","Halland","Hamadan","Hamah","Hamburg","Hamgyong-bukto","Hamgyong-namdo","Hanover","Harare","Hardap","Harghita","Harju","Haryana","Hasaka (Al Haksa)","Haskovo","Hatay","Hato Mayor","Haut-Mbomou","Haut-Ogooué","Haut-Sassandra","Haute-Kotto","Haute-Normandie","Hawaii","Hawalli","Hebei","Hedmark","Heilongjiang","Henan","Hentiy","Heredia","Hermanas","Herrera","Herzegovina-Neretva","Hessen","Heves","Hhohho","Hidalgo","Highland","Hiiraan","Hilmand","Himachal Pradesh","Hirat","Hiroshima","Hodh ech Chargui","Hodh el Gharbi","Hokkaido","Holguín","Homs (Hims)","Homyel'","Hordaland","Hormozgan","Houaphan","Houet","Hovd","Hovedstaden","Hrodna","Hsinchu","Hsinchu City","HuOla","HuRnuco","Hualien","Huambo","Huancavelica","Hubei","Huehuetenango","Huila","Hunan","Hunedoara","Huánuco","Huíla","Hwanghae-bukto","Hwanghae-namdo","Hyogo","Hà Giang","Hà Tây","Hòa Bình","Hövsgöl","Ialomita","Iasi","Ibaraki","Ibb","Ica","Ida-Viru","Idaho","Idlib","Iganga","Ilam","Illinois","Illizi","Ilocos Norte","Ilocos Sur","Iloilo","Imbabura","Imereti","Imo","Inch'on-gwangyoksi","Inchiri","Independencia","Indiana","Ingush","Inhambane","Intibucá","Inverclyde","Ionioi Nisoi","Iowa","Ipeiros","Irbid","Irian Jaya Barat","Iringa","Irkutsk","Ishikawa","Isla de la Juventud","Islas Baleares","Islas de la Bahía","Isparta","Istanbul","Istarska","Itapga","Itapúa","Ivano-Frankivs'k","Ivanovo","Iwate","Izabal","Izmir","Jaffna","Jakarta Raya","Jalal-Abad","Jalapa","Jalisco","Jambi","Jammu and Kashmir","Janakpur","Janub Sina'","Jawa Barat","Jawa Tengah","Jawa Timur","Jawzjan","Jeju","Jelgava","Jendouba","Jeollabuk-do","Jerusalem","Jharkhand","Jiangsu","Jiangxi","Jigawa","Jihoceský","Jijel","Jilin","Jinja","Jinotega","Jizan","Jizzakh","Johor","Jubbada Dhexe","Jubbada Hoose","Jujuy","Jungoli","Junín","Jura","Jutiapa","Južno-Backi","Jász-Nagykun-Szolnok","Jämtland","Jönköping","K. Maras","Kaabong","Kabale","Kabardin-Balkar","Kabarole","Kaberamaido","Kabul","Kachin","Kadiogo","Kaduna","Kaesong","Kafr ash Shaykh","Kagawa","Kagera","Kagoshima","Kairouan","Kalangala","Kalasin","Kalimantan Barat","Kalimantan Selatan","Kalimantan Tengah","Kalimantan Timur","Kaliningrad","Kalmar","Kalmyk","Kaluga","Kamchatka","Kampala","Kamphaeng Phet","Kamuli","Kanagawa","Kanchanaburi","Kandahar","Kandy","Kanem","Kangwon-do","Kankan","Kano","Kansas","Kaohsiung City","Kaolack","Kapisa","Kara","Karachay-Cherkess","Karak","Karakalpakstan","Karaman","Karas","Karbala'","Karelia","Karlovacka","Karlovarský","Karnali","Karnataka","Kars","Karuzi","Kasao-Occidental","Kasaï-Occidental","Kasaï-Oriental","Kasese","Kashari","Kashkadarya","Kaskazini-Pemba","Kaskazini-Unguja","Kassala","Kasssrine","Kassérine","Kastamonu","Katanga","Katsina","Kauno","Kavango","Kayah","Kayanza","Kayes","Kayin","Kayseri","Kayunga","Kaôh Kong","Kebbi","Kebili","Kedah","Keelung City","Kelantan","Kemerovo","Kent","Kentriki Makedonia","Kentucky","Kepulauan Riau","Kerala","Kerman","Kermanshah","Kerry","Kgalagadi","Kgatleng","Khabarovsk","Khakass","Khammouan","Khanty-Mansiy","Kharkiv","Khartoum","Khatlon","Khmel'nyts'kyy","Khomas","Khon Kaen","Khorezm","Khulna","Khuzestan","Khánh Hòa","Kibale","Kiboga","Kidal","Kiev","Kigali City","Kigoma","Kilimanjaro","Kilinochchi","Kilkenny","Kindia","Kingston","Kingston upon Hull","Kinkkale","Kinshasa City","Kirklareli","Kirov","Kirovohrad","Kirsehir","Kirundo","Kisoro","Kitgum","Kiên Giang","Klaipedos","Kocaeli","Kochi","Kogi","Kohgiluyeh and Buyer Ahmad","Kolda","Komi","Komi-Permyak","Kommune Kujalleq","Kommuneqarfik Sermersooq","Komoé","Komárom-Esztergom","Konya","Kor","Kordestan","Koryak","Korçë","Kossi","Kostroma","Kouilou","Kouritenga","Košický","Krabi","Kraj Vysocina","Krasnodar","Krasnoyarsk","Kriti","Kronoberg","Královéhradecký","Krâchéh","Kukës","Kumamoto","Kumi","Kuna Yala","Kunar","Kunduz","Kunene","Kurgan","Kursk","Kusini-Pemba","Kuyavian-Pomeranian","Kvemo Kartli","KwaZulu-Natal","Kwangju-gwangyoksi","Kwara","Kweneng","Kyoto","Kyustendil","Kâmpóng Cham","Kâmpóng Chhnang","Kâmpóng Spœ","Kâmpóng Thum","Kâmpôt","Kärnten","Kémo","Kénédougou","Kütahya","L'Artibonite","L'viv","L?ng Son","La Altagracia","La Araucanpa","La Araucanía","La Guajira","La Habana","La Libertad","La Pampa","La Paz","La Rioja","La Romana","La Réunion","La Unión","La Vega","LaRyoune - Boujdour - Sakia El Hamra","Labe","Lac","Lacs","Ladakh","Laghman","Laghouat","Lagos","Laguna","Lagunes","Lahij","Lakes","Lakshadweep","Lambayeque","Lampang","Lamphun","Lampung","Lanao del Norte","Lancashire","Languedoc-Roussillon","Lapland","Lara","Larnaca","Las Tunas","Latgale","Lattakia (Al Ladhiqiyah)","Lavalleja","Lazio","Laâyoune - Boujdour - Sakia El Hamra","Le Kef","Leicester","Leiria","Lempira","Leninabad","Leningrad","Leribe","Lesser Poland","Leyte","Lezhë","León","Liaoning","Liberecký","Libertador General Bernardo O'Higgins","Liege","Liepaja","Liguria","Likouala","Lilongwe","Lima","Limassol","Limburg","Limerick","Limousin","Limpopo","Limón","Lindi","Lipetsk","Lira","Lisboa","Litoral","Littoral","Lobaye","Loei","Lofa","Logar","Logone Oriental","Loja","Lombardia","Long An","Lop Buri","Lorestan","Loreto","Lori","Lorraine","Los Lagos","Los R","Los Rios","Los Ríos","Los Santos","Louang Namtha","Louangphrabang","Louga","Louisiana","Louth","Lovech","Lower River","Lower Silesian","Luanda","Luapula","Lublin","Lubombo","Lubusz","Lucerne","Luhans'k","Lumbini","Lunda Norte","Lunda Sul","Lusaka","Luton","Luxembourg","Lào Cai","Lâm Ð?ng","Lääne","Lékoumou","Lódz","M'Sila","MOre og Romsdal","MUdenine","Ma'rib","Ma`an","Maccarthy Island","Machinga","Madang","Madeira","Madhya Pradesh","Madre de Dios","Madriz","Mae Hong Son","Maekel","Mafeteng","Mafraq","Maga Buryatdan","Magallanes y Antartica Chilena","Magallanes y Antártica Chilena","Magdalena","Magway","Maha Sarakham","Mahaica-Berbice","Mahajanga","Mahakali","Maharashtra","Mahdia","Mahilyow","Maine","Makamba","Makkah","Malanje","Malatya","Malborough","Maldonado","Maluku","Maluku Utara","Mambéré-Kadéï","Mamou","Manabi","Managua","Manawatu-Wanganui","Manchester","Mandalay","Mandoul","Mangghystau","Mangochi","Manica","Manicaland","Maniema","Manipur","Manisa","Manitoba","Manubah","Manus","Manzini","Maputo","Mara","Maradi","Marahoué","Maramures","Maranh","Maranhão","Marche","Mardin","Margibi","Maribor","Maritime","Mariy-El","Markazi","Marlborough","Marowijne","Marrakech - Tensift - Al Haouz","Martinique","Mary","Maryland","María Trinidad Sánchez","Masaka","Masaya","Mascara","Maseru","Mashonaland Central","Mashonaland West","Masindi","Masovian","Massachusetts","Masvingo","Matabeleland North","Matabeleland South","Matagalpa","Matam","Matanzas","Matara","Mato Grosso","Mato Grosso do Sul","Matruh","Maule","Mayo-Kebbi Est","Maysan","Mazandaran","Mbeya","Mbomou","Mchinji","Mechi","Mecklenburg-Vorpommern","Meghalaya","Mehedinti","Mekncs - Tafilalet","Meknès - Tafilalet","Melaka","Melilla","Mendoza","Merseyside","Mersin","Meta","Metropolitan Manila","Miaoli","Michigan","Michoacán","Midi-Pyrénées","Midlands","Midtjylland","Mie","Milne Bay","Minas Gerais","Minnesota","Minsk","Miranda","Misamis Occidental","Misamis Oriental","Misiones","Misratah","Mississippi","Missouri","Miyagi","Miyazaki","Mizdah","Mizoram","Mohale's Hoek","Mokhotlong","Molise","Mon","Monagas","Monaghan","Monastir","Mono","Monseñor Nouel","Montana","Monte Cristi","Monte Plata","Montevideo","Montserrado","Mopti","Moquegua","Moravicki","Moravskoslezský","Moray","Morazán","Mordovia","Morelos","Morobe","Morogoro","Morona Santiago","Moroto","Moskovsskaya","Moskva","Mostaganem","Mou Houn","Mount Lebanon","Moxico","Moyen-Cavally","Moyen-Comoe","Moyen-Ogooul","Moyen-Ogooué","Moyo","Moyotte","Mpigi","Mpumalanga","Mtwara","Mubende","Mudug","Mugla","Mulanje","Muramvya","Mures","Murmansk","Murzuq","Mus","Muscat","Muyinga","Mwanza","Mykolayiv","Mzimba","Médenine","Médéa","Mérida","México","Môndól Kiri","Møre og Romsdal","N'zi-Comoé","N.W.F.P.","Nabeul","Nagaland","Nagano","Nagasaki","Nahouri","Nairobi","Najran","Nakasongola","Nakhon Nayok","Nakhon Pathom","Nakhon Phanom","Nakhon Ratchasima","Nakhon Sawan","Nakhon Si Thammarat","Nam n?nh","Namangan","Namentenga","Namibe","Namp'o-si","Nampula","Namur","Nan","Nana-Grébizi","Nana-Mambéré","Nangarhar","Nantou","Napo","Narathiwat","Narayani","Nariño","Naryn","Nassa","Nassarawa","Nationalparken","Navoi","Naxçivan","Nayarit","Naâma","Neamt","Nebbi","Nebraska","Negeri Sembilan","Negros Occidental","Nei Mongol","Nelson","Nenets","Neuchâtel","Neuqutn","Neuquén","Nevada","Nevsehir","New Brunswick","New Hampshire","New Ireland","New Jersey","New Mexico","New South Wales","New Taipei City","New York","Newfoundland and Labrador","Ngh? An","Ngounié","Ngozi","Niamey","Niari","Nicaragua","Nickerie","Nidwalden","Niedersachsen","Niederösterreich","Nigde","Niger","Niigata","Nimba","Nimroz","Ninawa","Ningxia Hui","Ninh Bmnh","Ninh Thu?n","Niue aggregation","Nizhegorod","Nišavski","Nkhata Bay","Nkhotakota","Nong Khai","Nonthaburi","Noord-Brabant","Noord-Holland","Nord","Nord-Est","Nord-Kivu","Nord-Ouest","Nord-Pas-de-Calais","Nord-Trøndelag","Nordjylland","Nordland","Nordrhein-Westfalen","Norfolk","Norrbotten","Norte de Santander","North Bahr-al-Ghazal","North Carolina","North Dakota","North Karelia","North Kazakhstan","North Khorasan","North Kurdufan","North Lebanon","North Ossetia","North Solomons","North West","North Yorkshire","North-Eastern","North-West","North-Western","Northern","Northern Areas","Northern Cape","Northern Darfur","Northern Ostrobothnia","Northern Territory","Northland","Northwest Territories","Notio Aigaio","Nottingham","Nouakchott","Nova Scotia","Novgorod","Novosibirsk","Nsanje","Ntcheu","Ntungamo","Nueva Ecija","Nueva Esparta","Nueva Segovia","Nuevo León","Nugaal","Nunavut","Nusa Tenggara Barat","Nusa Tenggara Timur","Nyanga","Nyanza","Nzerekore","Nógrád","Oaxaca","Oberösterreich","Obock","Obwalden","Ocotepeque","Odessa","Ogoou","Ogooué-Ivindo","Ogooué-Lolo","Ogooué-Maritime","Ogun","Oguz","Ohangwena","Ohio","Oio","Oita","Okayama","Okinawa","Oklahoma","Olancho","Olt","Omagh","Omaheke","Omsk","Ondo","Ontario","Opole","Oppland","Oran","Orange Free State","Orange Walk","Ordu","Orebro","Oregon","Orel","Orenburg","Orhon","Oriental","Orientale","Orissa","Oruro","Osaka","Osh","Oshana","Oshikoto","Osjecko-Baranjska","Oslo","Osrednjeslovenska","Osun","Otago","Otjozondjupa","Ouaddaï","Ouaka","Ouargla","Oubritenga","Oudalan","Oued el Dahab","Ouest","Ouham","Ouham-Pendé","Oum el Bouaghi","Ouémé","Overijssel","Oxfordshire","Oyo","P'yongan-bukto","P'yongan-namdo","P'yongyang","Pahang","Paktika","Paktya","Palawan","Pallisa","Pampanga","Panama","Panevezio","Pangasinan","Paphos","Papua","Par","Para","Paraguarí","Paramaribo","Paraná","Paraíba","Parwan","Pará","Pasco","Passoré","Pastaza","Pathum Thani","Pattani","Pavlodar","Pays de la Loire","Paysandú","País Vasco","Pedernales","Peembucy","Peloponnisos","Penghu","Pennsylvania","Penza","Perak","Peravia","Perlis","Perm'","Pernambuco","Pernik","Perthshire and Kinross","Pest","Peterborough","Petén","Phangnga","Phatthalung","Phayao","Phetchabun","Phetchaburi","Phichit","Phitsanulok","Phnom Penh","Phra Nakhon Si Ayutthaya","Phrae","Phuket","Phôngsali","Phú Th?","Phú Yên","Piauí","Picardie","Pichincha","Piemonte","Pinar del Río","Pingtung","Pirkanmaa","Piura","Plateau","Plateaux","Pleven","Plovdiv","Plymouth","Podgorica","Podlachian","Poitou-Charentes","Poltava","Pomeranian","Pomeroon-Supenaam","Poni","Pool","Port of Spain","Portalegre","Portland","Porto","Portsmouth","Portuguesa","Potosi","Potosí","Pouthisat","Prachin Buri","Prachuap Khiri Khan","Prague","Prahova","Preah Vihéar","Presidente Hayes","Prey Ving","Prešov","Primor'ye","Primorsko-Goranska","Prince Edward Island","Principado de Asturias","Pristina","Prizren","Provence-Alpes-Côte-d'Azur","Pskov","Puducherry","Puebla","Puerto Plata","Pulau Pinang","Punakha","Punjab","Puntarenas","Puttalam","Putumayo","Pwani","Päijänne Tavastia","Pärnu","Q?b?l?","Qaasuitsup Kommunia","Qaraghandy","Qazvin","Qeqqata Kommunia","Qina","Qom","Qostanay","Qu?ng Bình","Qu?ng Nam","Qu?ng Ngãi","Qu?ng Ninh","Qu?ng Tr?","Queensland","Querétaro","Quezaltenango","Quiché","Quinara","Quindío","Quintana Roo","Quthing","Québec","Qyzylorda","RRo Negro","Rabat - Salé - Zemmour - Zaer","Rajasthan","Rajshahi","Rakhine","Ranong","Rapti","Ras Al Khaymah","Ratchaburi","Ratnapura","Rayong","Razavi Khorasan","Razgrad","Red Sea","Región Metropolitana de Santiago","Región de Murcia","Retalhuleu","Rheinland-Pfalz","Rhode Island","Rhône-Alpes","Riau","Rift Valley","Riga","Rio Grande do Norte","Rio Grande do Sul","Rio de Janeiro","Risaralda","River Cess","River Nile","Rivera","Rivers","Rivne","Rize","Rocha","Rogaland","Roi Et","Rondinia","Rondônia","Roraima","Roscommon","Rostov","Rukwa","Ruse","Rutana","Ruvuma","Ruyigi","Ryanggang","Ryazan'","Río Negro","Rôtânôkiri","S?ki","SZtif","Sa Kaeo","Sa`dah","Saarland","Sabah","Sabha","Sacatepéquez","Sachsen","Sachsen-Anhalt","Sagaing","Sagarmatha","Saint Andrew","Saint Ann","Saint Catherine","Saint Elizabeth","Saint George","Saint James","Saint Mary","Saint Michael","Saint Thomas","Saitama","Sakarya","Sakha (Yakutia)","Sakhalin","Sakon Nakhon","Sala ad-Din","Salaj","Salamat","Salima","Salta","Salto","Salzburg","Samangan","Samaná","Samar","Samara","Samarkand","Samegrelo-Zemo Svaneti","Samsun","Samut Prakan","Samut Sakhon","Samut Songkhram","San Cristóbal","San Fernando","San José","San Juan","San Luis","San Luis Potosí","San Marcos","San Mart","San Martín","San Miguel","San Pedro","San Pedro de Macorís","San Salvador","San Vicente","Sancti Spíritus","Sandaun","Sangha","Sangha-Mbaéré","Sanguié","Sankt Gallen","Sanliurfa","Sanma","Sanmatenga","Santa Ana","Santa Bárbara","Santa Catarina","Santa Cruz","Santa Fe","Santa Rosa","Santander","Santarém","Santiago","Santiago Rodríguez","Santiago de Cuba","Santiago del Estero","Saraburi","Sarajevo","Saramacca","Saratov","Saravan","Sarawak","Sardegna","Saskatchewan","Satakunta","Satu Mare","Satun","Savanes","Savannakhét","Saïda","Schaffhausen","Schleswig-Holstein","Schwyz","Selangor","Selenge","Semenawi Keyih Bahri","Semnan","Sennar","Seoul","Serbian Republic","Sergipe","Severno-Backi","Sfax","Shaanxi","Shabeellaha Dhexe","Shabeellaha Hoose","Shabwah","Shamal Sina'","Shan","Shandong","Shanghai","Shanxi","Shariff Kabunsuan","Sharjah","Shefa","Shida Kartli","Shiga","Shimane","Shinyanga","Shirak","Shiselweni","Shizuoka","Shkodër","Shumen","Si Sa Ket","Sibiu","Sichuan","Sicily","Sidi Bel Abbès","Sidi Bou Zid","Siemréab","Siirt","Sikasso","Sikkim","Silesian","Siliana","Sinaloa","Sind","Sing Buri","Singida","Sinoe","Sinop","Sipaliwini","Sirdaryo","Sissili","Sistan and Baluchestan","Sivas","Sjaælland","Skikda","Skåne","Sligo","Sliven","Smolensk","Sofala","Sogn og Fjordane","Sokoto","Sololá","Solothurn","Somali","Somogy","Son La","Songkhla","Songkhla (Songkhla Lake)","Sonora","Sonsonate","Soriano","Soroti","Souk Ahras","Soum","Sourou","Souss - Massa - Draâ","Sousse","South Australia","South Ayrshire","South Carolina","South Cotabato","South Dakota","South Darfur","South I. remainder","South Karelia","South Kazakhstan","South Khorasan","South Kordofan","South Kordufan","South Lebanon","South Yorkshire","South-East","Southampton","Southend-on-Sea","Southern","Southern Finland","Southern Highlands","Southern Nations, Nationalities and Peoples","Southern Savonia","Southland","Splitsko-Dalmatinska","Srednje-Banatski","StMng Tr","Stann Creek","Stara Zagora","Stavropol'","Steiermark","Stereá Elláda","Stockholm","Stockton-on-Tees","Stoke-on-Trent","Subcarpathian","Suceava","Suchitepéquez","Sucre","Sud","Sud-Bandama","Sud-Comoé","Sud-Est","Sud-Kivu","Sud-Ouest","Suffolk","Suhaj","Sukhothai","Sulawesi Barat","Sulawesi Selatan","Sulawesi Tengah","Sulawesi Tenggara","Sulawesi Utara","Sumatera Barat","Sumatera Selatan","Sumatera Utara","Sumqayit","Sumy","Suphan Buri","Surat Thani","Surin","Surkhandarya","Surt","Suðurnes","Svalbard","Svay Rieng","Sveitarfélagið Hornafjörður","Sverdlovsk","Swansea","Swietokrzyskie","Syddanmark","Sylhet","Szabolcs-Szatmár-Bereg","Sánchez Ramírez","São Paulo","Ségou","Séno","Sóc Trang","Södermanland","Sør-Trøndelag","Sühbaatar","TZbessa","Ta`izz","Tabasco","Tabora","Tabuk","Tacna","Tacuarembó","Tadjourah","Tadzhikistan Territories","Taegu-gwangyoksi","Tafilah","Tagant","Tahoua","Taichung City","Tainan City","Taipei City","Taitung","Tajura' wa an Nawahi al Arba","Tak","Takhar","Talas","Tamanghasset","Tamaulipas","Tambacounda","Tambov","Tamil Nadu","Tandjilé","Tanga","Tanger - Tétouan","Tanintharyi","Taoyuan","Tapoa","Taraba","Taranaki","Tarapac","Tarapace","Tarapacm","Tarapacá","Tarija","Tarlac","Tartu","Tartus","Tashauz","Tashkent","Tasmania","Tataouine","Tatarstan","Tavastia Proper","Tavush","Taymyr","Taza - Al Hoceima - Taounate","Tbilisi","Tehran","Tekirdag","Tel Aviv","Telangana","Telemark","Teleorman","Temotu","Tennessee","Ternopil'","Tete","Tetovo","Texas","Th?a Thiên - Hu?","ThMi Bmnh","Thanh H","Thessalia","Thimphu","Thiès","Thurgau","Thái Nguyên","Thüringen","Tianjin","Tiaret","Ticino","Tierra del Fuego","Tigray","Timbuktu","Timis","Tindouf","Tiris Zemmour","Tirol","Tizi Ouzou","Tlaxcala","Tlemcen","Toamasina","Tocantins","Tochigi","Tokat","Tokelau aggregation","Tokushima","Tokyo","Toledo","Toliary","Tolima","Tolna","Tombali","Tomsk","Tororo","Toscana","Totonicapán","Tottori","Tovuz","Toyama","Tozeur","TrM Vinh","Trabzon","Trang","Transcarpathia","Transnistria","Trarza","Trat","Treinta y Tres","Trelawny","Trengganu","Trentino-Alto Adige","Trincomalee","Tripura","Trnavský","Troms","Trujillo","Tucumtn","Tucumán","Tula","Tumbes","Tunceli","Tungurahua","Tunis","Tuva","Tuyên Quang","Tuzla","Tver'","Tyne and Wear","Tyumen'","Táchira","Tây Ninh","Töv","UGge","Ubon Ratchathani","Ucayali","Udmurt","Udon Thani","Ul'yanovsk","Ulaanbaatar","Ulsan","Umbria","Umm Al Qaywayn","Unity","Upper Demerara-Berbice","Upper East","Upper Nile","Upper River","Upper Takutu-Upper Essequibo","Upper West","Uppsala","Uri","Uruzgan","Usak","Ust-Orda Buryat","Usuk","Usulután","Utah","Uthai Thani","Utrecht","Uttar Pradesh","Uttaradit","Uttaranchal","Uvs","Uíge","Vakaga","Valais","Valle","Valle d'Aosta","Valle del Cauca","Vallée du Bandama","Valparaíso","Valverde","Van","Vargas","Varna","Vas","Vaslui","Vaud","Vaupés","Vayots Dzor","Veliko Tarnovo","Veneto","Ventspils","Veracruz","Veraguas","Vermont","Vest-Agder","Vestfirðir","Vestfold","Vesturland","Veszprém","Vi?n Bi","Viana do Castelo","Vichada","Victoria","Vientiane [prefecture]","Vila Real","Viljandi","Villa Clara","Vilniaus","Vinh Long","Vinnytsya","Virginia","Viseu","Vitsyebsk","Vladimir","Vlorë","Volgograd","Vologda","Volta","Volyn","Vorarlberg","Voreio Aigaio","Voronezh","Vrancea","Vratsa","Vâlcea","Värmland","Västerbotten","Västernorrland","Västmanland","Västra Götaland","Wadi Fira","Waikato","Wakayama","Wakiso","Wangdi Phodrang","Warap","Wardak","Warmian-Masurian","Washington","Wasit","Wele-Nzás","Wellington","West Azarbaijan","West Bahr-al-Ghazal","West Bengal","West Coast","West Darfur","West Equatoria","West Kazakhstan","West Midlands","West New Britain","West Pomeranian","West Virginia","West Yorkshire","Western","Western Australia","Western Cape","Western Finland","Western Highlands","Westminster","Westmoreland","White Nile","Wien","Wisconsin","Worodougou","Wouleu-Ntem","Wyoming","Xaignabouri","Xiangkhoang","Xinjiang Uygur","Xizang","Xocali","Yagha","Yala","Yamagata","Yamaguchi","Yamal-Nenets","Yamanashi","Yangon","Yaracuy","Yaroslavl'","Yasothon","Yatenga","Yazd","Yevlax","Yevrey","Yilan","Yobe","Yogyakarta","York","Yoro","Yozgat","Ysyk-Köl","Yucatán","Yukon","Yunlin","Yunnan","Yên Bái","Z?ngilan","Zabul","Zacapa","Zacatecas","Zadarska","Zaghouan","Zaire","Zala","Zambales","Zambezia","Zamboanga Del Sur","Zamboanga del Sur","Zamfara","Zamora Chinchipe","Zanjan","Zanzan","Zanzibar West","Zaporizhzhya","Zarqa","Zeeland","Zenica-Doboj","Zhambyl","Zhejiang","Zhytomyr","Ziguinchor","Zinder","Zinguldak","Ziro","Zomba","Zou","Zoundwéogo","Zug","Zuid-Holland","Zulia","Zürich","`Adan","`Asir","d?ng b?ng sông C?u Long","Ãstfold","Çanakkale","Çankiri","Çorum","Équateur","Évora","Île-de-France","Ð?ng Tháp","Ðakovica","Ðà N?ng","Ðông B?c","Ðông Nam B?","Ñuble","Ömnögovi","Östergötland","Övörhangay","Šiauliai","Šibensko-Kninska","Šumadijski","Žilinský"];
- const cities = [
+ // The opening pins can render before the full city table is needed.
+ const openingRows={
+  "Melbourne":["Melbourne","AU",-37.8181,144.9731,13,"Narrm",2374],
+  "Mombasa":["Mombasa","KE",-4.0381,39.688,11,"",517],
+  "Valparaíso":["Valparaíso","CL",-33.0458,-71.623,11,"",2350],
+  "Rotterdam":["Rotterdam","NL",51.9219,4.478,12,"",2502],
+  "Suva":["Suva","FJ",-18.133,178.4417,11,"",446],
+  "Reykjavík":["Reykjavík","IS",64.15,-21.95,11,"",2156],
+ };
+ let cities;
+ function cityRows(){
+  return cities??=[
   ["Colonia del Sacramento","UY",-34.48,-57.84,7,"",524],
   ["Trinidad","UY",-33.544,-56.901,7,"",709],
   ["Fray Bentos","UY",-33.139,-58.304,7,"",1918],
@@ -5269,7 +5280,7 @@
   ["Porto","PT",41.152,-8.6219,12,"",1813],
   ["Al Qunfudhah","SA",19.1264,41.0789,1,"",1348],
   ["Longyearbyen","SJ",78.2167,15.55,3,"",2157],
-  ["Rotterdam","NL",51.9219,4.478,12,"",2502],
+  openingRows["Rotterdam"],
   ["Luxembourg","LU",49.6117,6.13,11,"",1312],
   ["Haugesund","NO",59.4119,5.2775,7,"",1904],
   ["Stavanger","NO",58.97,5.68,9,"",1904],
@@ -7133,7 +7144,7 @@
   ["Port Vila","VU",-17.7334,168.3166,9,"",2036],
   ["Tegucigalpa","HN",14.104,-87.2195,13,"",713],
   ["Georgetown","GY",6.802,-58.167,12,"",645],
-  ["Reykjavík","IS",64.15,-21.95,11,"",2156],
+  openingRows["Reykjavík"],
   ["Port-au-Prince","HT",18.543,-72.338,14,"",1720],
   ["Glasgow","GB",55.8764,-4.2527,12,"",767,"Scotland"],
   ["Kampala","UG",0.3186,32.5814,14,"",1036],
@@ -7242,7 +7253,7 @@
   ["Huainan","CN",32.6319,116.978,12,"",115],
   ["Shantou","CN",23.372,116.6681,12,"",807],
   ["Tarakan","ID",3.3,117.633,9,"",1030],
-  ["Mombasa","KE",-4.0381,39.688,11,"",517],
+  openingRows["Mombasa"],
   ["Maseru","LS",-29.3167,27.4833,12,"",1398],
   ["Antananarivo","MG",-18.9147,47.5147,14,"",120],
   ["Semarang","ID",-6.9647,110.4181,12,"",978],
@@ -7281,13 +7292,13 @@
   ["Cayenne","GF",4.933,-52.33,8,"",817],
   ["Libreville","GA",0.3854,9.458,13,"",687],
   ["Vishakhapatnam","IN",17.732,83.303,12,"Visakhapatnam",112],
-  ["Suva","FJ",-18.133,178.4417,11,"",446],
+  openingRows["Suva"],
   ["Port-Gentil","GA",-0.72,8.78,9,"",1672],
   ["Timbuktu","ML",16.7666,-3.0166,8,"",2252],
   ["Punta Arenas","CL",-53.165,-70.94,9,"",1336],
   ["Iquique","CL",-20.25,-70.13,10,"",2211],
   ["Antofagasta","CL",-23.65,-70.4,10,"",122],
-  ["Valparaíso","CL",-33.0458,-71.623,11,"",2350],
+  openingRows["Valparaíso"],
   ["Valdivia","CL",-39.795,-73.245,9,"",1290],
   ["Concepción","CL",-36.83,-73.05,11,"",395],
   ["Puerto Montt","CL",-41.47,-72.93,9,"",1287],
@@ -7571,7 +7582,7 @@
   ["Buenos Aires","AR",-34.6006,-58.3995,17,"CABA",511],
   ["Kabul","AF",34.5186,69.1813,14,"",1015],
   ["Vienna","AT",48.202,16.3647,15,"Wien",2434],
-  ["Melbourne","AU",-37.8181,144.9731,13,"Narrm",2374],
+  openingRows["Melbourne"],
   ["Taipei","TW",25.0358,121.5683,16,"",2189],
   ["Auckland","NZ",-36.8481,174.763,13,"",187],
   ["Los Angeles","US",33.9919,-118.1819,15,"L.A.|LA|Los Angeles-Long Beach-Santa Ana",410],
@@ -7605,7 +7616,8 @@
   ["Ngerulmud","PW",7.5004,134.6241,7,"",0],
   ["Rarotonga","CK",-21.232,-159.793,7,"",0],
   ["London","KI",1.984,-157.472,5,"Ronton",0],
- ];
+  ];
+ }
  // Each pin is a representative point within the named body, not a navigation waypoint.
  const waters = [
   ['Pacific Ocean',0,-150,'Pacific',''],
@@ -7962,6 +7974,7 @@
    .replace(/ł/g,'l').replace(/đ/g,'d').replace(/ß/g,'ss').replace(/[’‘'ʻʼ]/g,'')
    .replace(/[^\p{L}\p{N}]+/gu,' ').trim();
  }
+ const countryNames=new Map(countries.map(([code,name])=>[code,name]));
  const byCode = new Map();
  const index = [];
  const addressCache=new Map();
@@ -7987,13 +8000,8 @@
   index.push(row);
   return row;
  }
- for (const [code,name,lat,lon,aliases] of countries) {
-  const row=record({name,region:'Country or territory',lat,lon,water:false,kind:'region',caption:'Country or territory'},[code,aliases].join('|'),18,code);
-  byCode.set(code,row);
-  for(const key of row.fields) if(!countryMatches.has(key)) countryMatches.set(key,code);
- }
  function makeCity([name,code,lat,lon,,,subdivision,nation]) {
-  const region=byCode.get(code)?.place.name || otherRegions[code] || code;
+  const region=countryNames.get(code) || otherRegions[code] || code;
   const locality=subdivisions[subdivision]||'';
   const showLocality=['US','AU','CA'].includes(code) || code==='UA' && locality==='Crimea';
   const prefix=nation || (showLocality && locality!==name?locality:'');
@@ -8002,16 +8010,12 @@
  }
  function markedPlace(row){
   const [name,code,lat,lon,type,,water=false]=row;
-  const region=byCode.get(code)?.place.name || type;
+  const region=countryNames.get(code) || type;
   const polar=Math.abs(lat)===90;
   return {name,region,lat,lon,water,kind:polar?'landmark':'subdivision',caption:polar?type:type+', '+region};
  }
- for(const row of mapPlaces)record(markedPlace(row),row[5],17,row[1]);
- for (const [name,lat,lon,region,aliases] of waters) {
-  record({name,region,lat,lon,water:true,kind:'water',caption:region},aliases,14,'');
- }
  const starts=storyPins.map(pin=>{
-  const row=cities.find(c=>c[0]===pin.name && c[1]===pin.code);
+  const row=openingRows[pin.name];
   return {...pin,place:row && makeCity(row)};
  }).filter(pin=>pin.place);
  const openingStories=[...starts,{
@@ -8020,8 +8024,21 @@
   question:'Who should hold a key, and who should decide when the arrangement changes?'
  }];
  let indexedCities=0;
- function addCities(limit) {
-  const end=Math.min(limit,cities.length);
+ function indexRegions(){
+  if(byCode.size)return;
+  for (const [code,name,lat,lon,aliases] of countries) {
+   const row=record({name,region:'Country or territory',lat,lon,water:false,kind:'region',caption:'Country or territory'},[code,aliases].join('|'),18,code);
+   byCode.set(code,row);
+   for(const key of row.fields) if(!countryMatches.has(key)) countryMatches.set(key,code);
+  }
+  for(const row of mapPlaces)record(markedPlace(row),row[5],17,row[1]);
+  for (const [name,lat,lon,region,aliases] of waters) {
+   record({name,region,lat,lon,water:true,kind:'water',caption:region},aliases,14,'');
+  }
+ }
+ function indexPlaces(count=Infinity){
+  indexRegions();
+  const cities=cityRows(),end=Math.min(indexedCities+count,cities.length);
   while(indexedCities<end) {
    const row=cities[indexedCities++],place=makeCity(row);
    record(place,row[5],row[4],row[1],place.locality,row[7]);
@@ -8030,34 +8047,69 @@
  // The atlas only needs coordinates. Build the text index on the first place
  // search, in a worker when available so it never competes with street input.
  const searchScript=typeof document==='undefined'?null:document.currentScript?.src;
- let worker=null, workerFailed=false, requestNumber=0;
+ let worker=null, workerFailed=false, requestNumber=0,idleTimer=null;
  const pending=new Map();
+ function stopIdleWorker(){
+  if(idleTimer!==null)clearTimeout(idleTimer);
+  idleTimer=null;
+  if(!worker||pending.size)return;
+  worker.terminate();worker=null;
+ }
+ function releaseAfterSearch(){
+  if(pending.size||!worker)return;
+  if(document.hidden){stopIdleWorker();return;}
+  if(idleTimer!==null)clearTimeout(idleTimer);
+  idleTimer=setTimeout(stopIdleWorker,60000);
+ }
+ if(typeof document!=='undefined'){
+  document.addEventListener?.('visibilitychange',()=>{if(document.hidden)stopIdleWorker();});
+ }
+ let indexing=null;
+ async function searchHere(query,limit){
+  if(typeof document!=='undefined' && query && indexedCities<cityRows().length){
+   // Browsers without a working worker can still paint, scroll and process taps
+   // while preparing the spelling and alternate-name index on the first search.
+   if(!indexing)indexing=(async()=>{
+    while(indexedCities<cityRows().length){
+     await new Promise(resolve=>setTimeout(resolve,0));
+     const end=performance.now()+5;
+     do{indexPlaces(64);}while(indexedCities<cityRows().length && performance.now()<end);
+    }
+   })().finally(()=>{indexing=null;});
+   await indexing;
+  }
+  return search(query,limit);
+ }
  function searchAsync(query,limit) {
-  if(!searchScript || workerFailed || typeof Worker!=='function')return Promise.resolve(search(query,limit));
+  if(!searchScript || workerFailed || typeof Worker!=='function')return searchHere(query,limit);
   if(!worker){
    try{
     worker=new Worker(searchScript);
     worker.onmessage=({data})=>{
      const request=pending.get(data.id);
-     if(request){pending.delete(data.id);request.resolve(data.places);}
+     if(request){pending.delete(data.id);request.resolve(data.places);releaseAfterSearch();}
     };
-    worker.onerror=()=>{
-     worker.terminate();worker=null;workerFailed=true;
-     for(const request of pending.values())request.resolve(search(request.query,request.limit));
-     pending.clear();
-    };
-   }catch{workerFailed=true;return Promise.resolve(search(query,limit));}
+    worker.onerror=disableWorker;
+   }catch{workerFailed=true;return searchHere(query,limit);}
   }
+  if(idleTimer!==null){clearTimeout(idleTimer);idleTimer=null;}
   const id=++requestNumber;
   return new Promise(resolve=>{
    pending.set(id,{query,limit,resolve});
-   worker.postMessage({id,query,limit});
+   try{worker.postMessage({id,query,limit});}catch{disableWorker();}
   });
+ }
+ function disableWorker(){
+  workerFailed=true;
+  if(idleTimer!==null)clearTimeout(idleTimer);idleTimer=null;
+  worker?.terminate();worker=null;
+  for(const request of pending.values())request.resolve(searchHere(request.query,request.limit));
+  pending.clear();
  }
  function featured() {return starts.map(pin=>({...pin.place}));}
  // Index all words in names; country tokens qualify a named settlement, e.g. "London, Canada".
  const memo=new Map();
- const qualifierCodes=new Set([...byCode.keys(),...Object.values(stateAbbreviations),...Object.values(australianStates),...Object.values(canadianProvinces)].map(normalize));
+ const qualifierCodes=new Set([...countryNames.keys(),...Object.values(stateAbbreviations),...Object.values(australianStates),...Object.values(canadianProvinces)].map(normalize));
  function score(row,query,tokens) {
   const {name,fields,importance,words,context,address,place}=row;
   if(name===query) return 1200+importance;
@@ -8099,7 +8151,7 @@
   const count=Number.isFinite(Number(limit))?Math.max(0,Math.min(100,Math.floor(Number(limit)))):8;
   if(!count) return [];
   if(!query) return featured().slice(0,count);
-  addCities(cities.length);
+  indexPlaces();
   let results=memo.get(query);
   if(!results) {
    const tokens=query.split(' ');
@@ -8137,7 +8189,7 @@
  }
  // Many places sit on tiny islands or narrow channels. This index recognises
  // only the published pin itself; nearby ground is classified by the globe.
- let anchors=null;
+ const anchorBands=new Map();
  function anchorKey(lat,lon) {
   if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90) return null;
   const latitude=Math.round(lat*1e7),span=3600000000,half=1800000000;
@@ -8154,9 +8206,13 @@
  function anchorAt(lat,lon) {
   const key=anchorKey(lat,lon);
   if(key===null) return null;
+  const band=latitudeBand(Math.round(lat*1e7)/1e7);
+  let anchors=anchorBands.get(band);
   if(!anchors) {
    anchors=new Map();
+   anchorBands.set(band,anchors);
    function add(type,row,lat,lon) {
+    if(latitudeBand(lat)!==band)return;
     const indexKey=anchorKey(lat,lon),entry={type,row};
     const prior=anchors.get(indexKey);
     if(prior && anchorPlace(prior).water!==anchorPlace(entry).water) {
@@ -8167,7 +8223,8 @@
     } else anchors.set(indexKey,entry);
    }
    for(const row of countries) add('country',row,row[2],row[3]);
-   for(const row of cities) add('city',row,row[2],row[3]);
+   const cities=cityRows();
+   for(const index of cityBands()[band]){const row=cities[index];add('city',row,row[2],row[3]);}
    for(const row of waters) add('water',row,row[1],row[2]);
    for(const row of mapPlaces) add('marked',row,row[2],row[3]);
   }
@@ -8529,6 +8586,15 @@
   return '';
  }
  let latitudeBands=null;
+ function latitudeBand(latitude){return Math.min(44,Math.max(0,Math.floor((latitude+90)/4)));}
+ function cityBands(){
+  if(!latitudeBands){
+   const cities=cityRows();
+   latitudeBands=Array.from({length:45},()=>[]);
+   for(let i=0;i<cities.length;i++)latitudeBands[latitudeBand(cities[i][2])].push(i);
+  }
+  return latitudeBands;
+ }
  let recentRegion=null;
  function nearbyCities(lat,lon,reach,limit=48) {
   if(!Number.isFinite(lat)||Math.abs(lat)>90||!Number.isFinite(lon)||!Number.isFinite(reach)||reach<0)return [];
@@ -8537,14 +8603,10 @@
   const radius=Math.min(180,reach),longitude=((lon%360)+540)%360-180;
   const key=[lat,longitude,radius,count].join(',');
   if(recentRegion?.key===key)return recentRegion.items.map(p=>({...p}));
-  const band=latitude=>Math.min(44,Math.max(0,Math.floor((latitude+90)/4)));
-  if(!latitudeBands) {
-   latitudeBands=Array.from({length:45},()=>[]);
-   for(let i=0;i<cities.length;i++) latitudeBands[band(cities[i][2])].push(i);
-  }
+  const bands=cityBands(),cities=cityRows();
   const radians=Math.PI/180,cosLat=Math.cos(lat*radians),maxHav=Math.sin(radius*radians/2)**2,found=[];
-  for(let i=band(lat-radius);i<=band(lat+radius);i++){
-   for(const idx of latitudeBands[i]){
+  for(let i=latitudeBand(lat-radius);i<=latitudeBand(lat+radius);i++){
+   for(const idx of bands[i]){
     const row=cities[idx],d=row[2]-lat;
     if(Math.abs(d)>radius)continue;
     const h=Math.sin(d*radians/2)**2+cosLat*Math.cos(row[2]*radians)*Math.sin((row[3]-longitude)*radians/2)**2;

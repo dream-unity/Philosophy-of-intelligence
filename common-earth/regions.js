@@ -148,7 +148,10 @@
               trace(f.rank<5?major:river,part);
               if(f.name && (f.rank<=5 || view.zoom>=15)){
                 const mid=Math.floor(part.xyz.length/6)*3,point=xy(part.xyz,mid);
-                if(point.z>0 && point.x>30 && point.x<w-30 && point.y>20 && point.y<h-22)waterLabels.push({name:f.name,...point,rank:f.rank});
+                if(point.z>0 && point.x>30 && point.x<w-30 && point.y>20 && point.y<h-22){
+                  const i=mid/3*2;
+                  waterLabels.push({name:f.name,rank:f.rank,lon:-180+tile.col*60+part.points[i]*step,lat:-90+tile.r*60+part.points[i+1]*step});
+                }
               }
             }else trace(coast,part,true);
           }
@@ -193,8 +196,8 @@
         for(const river of waterLabels.sort((a,b)=>a.rank-b.rank)){
           if(count>=Math.max(2,limit/4)||seen.has(river.name))continue;
           const text=river.name;ctx.font='italic 11px Georgia,serif';const wid=ctx.measureText(text).width;
-          if(!free(river.x+5,river.y-7,wid,13))continue;
-          const x=river.x+5,y=river.y;
+          const at=project(river.lat,river.lon),x=at.x+5,y=at.y;
+          if(at.z<=0 || !free(x,y-7,wid,13))continue;
           ctx.lineWidth=2;ctx.strokeStyle='#163c4d';ctx.strokeText(text,x,y);ctx.fillStyle='#b3e4eb';ctx.fillText(text,x,y);
           occupied.push({x:x+wid/2,y,w:wid,h:13});seen.add(text);count++;
         }

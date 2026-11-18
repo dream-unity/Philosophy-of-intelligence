@@ -11,7 +11,7 @@ const source=fs.readFileSync(path.join(game,'globe.js'),'utf8');
 const box={left:32,top:58,width:320,height:300};
 const noop=()=>{};
 
-async function atlas(options={}) {
+async function atlas(options={},layered=false) {
   const handlers=new Map(),selected=[];
   // Keep rendering active so hit tests use positions and labels from the real
   // projection. The tiny image only supplies the software relief renderer.
@@ -26,7 +26,16 @@ async function atlas(options={}) {
     getContext:type=>type==='2d'?context:null,setPointerCapture:noop,releasePointerCapture:noop,
     addEventListener:(name,handler)=>handlers.set(name,handler),removeEventListener:noop
   };
-  const document={baseURI:'https://example.invalid/game/',createElement:()=>({...canvas})};
+  const layers=[];
+  if(layered){
+    canvas.parentElement={classList:{contains:s=>s==='atlas-stage'}};
+    canvas.before=surface=>layers.push(surface);
+  }
+  const document={baseURI:'https://example.invalid/game/',createElement:()=>{
+    const surface={...canvas,style:{},setAttribute:noop};
+    surface.remove=()=>layers.splice(layers.indexOf(surface),1);
+    return surface;
+  }};
   const windowHandlers=new Map();
   const window={addEventListener:(key,fn)=>windowHandlers.set(key,fn),removeEventListener:noop};
   class Image {
@@ -45,7 +54,7 @@ async function atlas(options={}) {
     handlers.get('pointer'+type)({pointerId:id,pointerType:'touch',button:0,clientX:x+box.left,clientY:y+box.top});
   }
   const tap=(x,y)=>{point('down',x,y);point('up',x,y);};
-  return {canvas,view,point,tap,selected,draw,blur:()=>windowHandlers.get('blur')?.()};
+  return {window,canvas,layers,view,point,tap,selected,draw,blur:()=>windowHandlers.get('blur')?.()};
 }
 
 test('a small finger wobble selects without rotating, while swipes and cancellations never select',async()=>{
@@ -145,4 +154,69 @@ test('regional labels use the nearest touch target and preserve direct hits',()=
   assert.equal(regions.hit({x:117,y:80},14).name,'East');
   assert.equal(regions.hit({x:117,y:80}),null);
   assert.equal(regions.hit({x:30,y:130},14),null);
+});
+
+
+test('the layered atlas keeps touch selection live and releases and recreates its backing surfaces',async()=>{
+  const {view,canvas,layers,selected,tap,draw}=await atlas({},true);
+  assert.equal(layers.length,2);
+  assert.ok(layers.every(s=>s.style.pointerEvents==='none' && s.width>1));
+  view.setSites([{id:'harbour',name:'Harbour',lat:0,lon:0}]);draw();tap(160,150);
+  assert.equal(selected.at(-1).id,'harbour');
+  const home=view.getView();
+  view.setActive(false);
+  assert.ok([...layers,canvas].every(s=>s.width===1 && s.height===1));
+  view.setActive(true);draw();
+  assert.deepEqual(view.getView(),home);assert.ok(layers.every(s=>s.width>1));
+  view.focus(20,30,8);draw();
+  assert.equal(layers[0].width,1,'the invisible starfield is released at close zoom');
+  view.focus(home.lat,home.lon,home.zoom);draw();assert.ok(layers[0].width>1);
+  view.destroy();assert.equal(layers.length,0);
+});
+
+test('slow place lookups select the latest tap and cannot reopen a hidden atlas',async()=>{
+  const g=await atlas();
+  let resolvePlaces;
+  function hold(){
+    const wait=new Promise(resolve=>{resolvePlaces=()=>{g.window.EarthNavigation={};resolve();};});
+    g.window.EarthNavigation={load:()=>wait};
+  }
+  hold();g.tap(155,155);g.tap(232,170);
+  assert.equal(g.selected.length,0);
+  resolvePlaces();await new Promise(setImmediate);
+  assert.equal(g.selected.length,1);
+  const chosen=g.selected[0];
+  assert(chosen.lon>0);
+  hold();g.tap(122,145);g.view.setActive(false);resolvePlaces();await new Promise(setImmediate);
+  assert.deepEqual(g.selected,[chosen]);
+  g.view.setActive(true);g.draw();
+  hold();g.tap(160,150);g.tap(161,150);assert.equal(g.view.getView().zoom,1.7);
+  resolvePlaces();await new Promise(setImmediate);
+  g.view.destroy();
+});
+
+test('a moving regional layer restores exact survey lines and responds to arriving tiles',async()=>{
+  const {window,view,canvas,layers,point,draw}=await atlas({},true);
+  let paints=0,invalidate;
+  window.devicePixelRatio=2;
+  window.EarthRegions={mount(_base,onTile){
+    invalidate=onTile;
+    return {draw(){paints++;},labels:noop,destroy:noop};
+  }};
+  view.resize();view.focus(52,1,8);draw();await new Promise(setImmediate);draw();
+  const chart=layers[2];
+  assert.equal(paints,1);assert.equal(chart.width,canvas.width);
+  view.setSelection({name:'Harbour',lat:52,lon:1});draw();assert.equal(paints,1);
+  invalidate();draw();assert.equal(paints,2,'a decoded tile invalidates the chart');
+  point('down',160,151);point('move',184,152);draw();
+  assert(chart.width<canvas.width,'camera motion keeps a lightweight regional layer');
+  const before=paints;
+  point('move',185,152);draw();
+  assert.equal(paints,before);assert.match(chart.style.transform,/^matrix\(/);
+  point('up',185,152);draw();assert.equal(paints,before+1);
+  assert.equal(chart.width,canvas.width);assert.equal(chart.style.transform,'');
+  view.setActive(false);assert.equal(chart.width,1);
+  view.setActive(true);draw();assert.equal(chart.width,canvas.width);
+  view.focus(0,0,1);draw();assert.equal(chart.width,1);
+  view.destroy();assert.equal(layers.length,0);
 });

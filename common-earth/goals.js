@@ -63,6 +63,10 @@
     const retained=projection(false,p=>p.use===rule.project);
     return {rule,model,records,value:projection(false),ready:projection(true),retained};
   }
+  function mealPossible(world,site,person){
+    return Boolean(root.EarthAgency && person.bond<10 && (site.food>0 || root.EarthPursuits) &&
+      !site.agency?.meals?.some(meal=>meal.week===world.week && meal.to===person.id));
+  }
   function oneWeekBond(world,site,person,effort,target) {
     let maximum=person.bond+effort;
     // Each new paid activity can add one bond; a kept promise adds two.
@@ -74,6 +78,7 @@
       else if(effort>hearing)maximum++;
     }
     if(site.delivery?.residentId===person.id)maximum++;
+    if(mealPossible(world,site,person))maximum++;
     if(site.shift?.residentId===person.id)maximum++;
     // Use a generous bound: any of these already-arranged decisions might name this resident.
     maximum+=site.pending.filter(v=>v.week<=world.week+1).length;
@@ -117,7 +122,7 @@
         if(weeks===project.turns && availableEffort<project.effort)return reject('This review would require starting '+pending.rule.name.toLowerCase()+' this week. Starting the project costs '+project.effort+' effort. Choose at least '+(weeks+1)+' weeks or return after your effort refreshes.');
         if(weeks===project.turns && (site.funds<project.funds || site.materials<project.materials)){
           const budget='Commissioning this week costs '+project.effort+' effort, '+project.funds+' funds and '+project.materials+' materials. You have '+site.funds+' funds and '+site.materials+' materials.';
-          const alternative=site.delivery || site.shift || world.voyage || site.construction?.length || pending.records.some(r=>r.target);
+          const alternative=root.EarthPursuits || site.delivery || site.shift || world.voyage || site.construction?.length || pending.records.some(r=>r.target);
           if(availableEffort===project.effort && !alternative)return reject(budget+' Your remaining effort covers only the commission. Choose a longer review so you can raise the supplies first.');
           hint=budget+' Include time to raise or release supplies before this week closes. '+hint;
         }
@@ -133,8 +138,8 @@
         if(closing<target){
           const current=root.EarthConstruction?.weeklyAdjustment(site,world).food || 0;
           // At most the repairer and exchange worker can add another food each.
-          if(!hasFlexibleFood(world,site) && closing-current+2<target)return reject('Closing now projects '+closing+' food against a target of '+target+'. With no effort left, even moving the whole local crew to food cannot fill the gap. Choose a longer review or return after your effort refreshes.');
-          hint='Closing now projects '+closing+' food against a target of '+target+'. There is no effort left for tending the beds. Check what staffed projects, incoming supplies or a move into food growing can deliver before review.';
+          if(!root.EarthPursuits && !hasFlexibleFood(world,site) && closing-current+2<target)return reject('Closing now projects '+closing+' food against a target of '+target+'. With no effort left, even moving the whole local crew to food cannot fill the gap. Choose a longer review or return after your effort refreshes.');
+          hint='Closing now projects '+closing+' food against a target of '+target+'. '+(root.EarthPursuits?'Personal work can bring in food before you advance, even with no effort left.':'There is no effort left for tending the beds. Check what staffed projects, incoming supplies or a move into food growing can deliver before review.');
         }
       }
       if(aimKey==='voices' && weeks===1){
@@ -204,6 +209,12 @@
         priority.visited || priority.available?day.priorityLabel:'The requested visit has closed for this day. Finish the day before looking for another way to build the bond.';
       return {kind:'group',group:'people',page:'shift',siteId,label:(connected?'Finish your day with ':'Review your day with ')+person.name,detail};
     }
+    if(mealPossible(sim.state,site,person)){
+      if(site.food<1)return {kind:'personalWork',siteId,resource:'food',label:'Gather food for a shared meal',
+        detail:'Collect some food in Personal work, then meet '+person.name+' to share one food and build your bond.'};
+      return {kind:'resident',siteId,group:'people',residentId:person.id,page:'meal',label:'Share a meal with '+person.name,
+        detail:'Meet '+person.name+' in person and share one food from the pantry. A meal adds one bond and uses no weekly effort.'};
+    }
     if(days?.gate(sim.state,site,person.id).available)return {kind:'resident',group:'people',siteId,residentId:person.id,page:'startShift',
       label:'Spend a day with '+person.name,detail:'Choose Spend a day together. Complete the visit they request and one other stop, then finish the day. That adds one bond.'};
     return null;
@@ -266,6 +277,8 @@
         const crew=foodCrewStep(sim,site,entry.aim.target-closingFood);
         if(crew)return crew;
       }
+      if(!world.effort && root.EarthPursuits)return {kind:'personalWork',siteId,resource:'food',label:'Glean produce for '+site.name,
+        detail:'Collect a produce load in Personal work, then check the closing pantry. You can repeat the job before the review.'};
       step={kind:'group',siteId,group:'work',actionId:'work:forage',label:'Tend the food beds in '+site.name,
         detail:aim.value>=entry.aim.target?'Household needs and deliveries are projected to bring the pantry below target at review.':aim.hint};
     }else{

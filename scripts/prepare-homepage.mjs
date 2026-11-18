@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +16,16 @@ function versionAssets(html, directory) {
       const version = createHash('sha256').update(readFileSync(resolve(directory, asset))).digest('hex').slice(0, 12);
       return `${open}${asset}?v=${version}${close}`;
     });
+}
+
+// Keep the small landing list identical to the full gazetteer used after a map pick.
+function openingPlaces(directory){
+  const runtime={window:{}};
+  runInNewContext(readFileSync(resolve(directory,'navigation.js'),'utf8'),runtime);
+  const nav=runtime.window.EarthNavigation;
+  const pins=nav.featured().map(place=>({place,featured:true}));
+  pins.push({place:{name:'Stone Town',lat:-6.1622,lon:39.1922},featured:false});
+  return JSON.stringify(pins.map(pin=>({...pin,story:nav.scenario(pin.place)}))).replaceAll('<','\\u003c');
 }
 
 export function prepareHomepage() {
@@ -34,14 +45,16 @@ export function prepareHomepage() {
 
   const gameDirectory = resolve(root, 'common-earth');
   const gameEntry = resolve(gameDirectory, 'index.html');
-  // The globe requests its regional atlas and terrain separately as the player zooms.
+  // The renderer has its own script hash. Keep unchanged geography cached across renderer releases.
   const atlasHash = createHash('sha256');
   const cellFiles = readdirSync(resolve(gameDirectory, 'regions')).filter(name => name.endsWith('.bin')).sort();
-  for (const asset of ['globe.js', 'regions.js', 'earth-chart.webp', 'earth-index.png', ...cellFiles.map(name => 'regions/' + name)].sort()) {
+  for (const asset of ['regions.js', 'earth-cells-v1.bin', 'earth-chart.webp', 'earth-index.png', ...cellFiles.map(name => 'regions/' + name)].sort()) {
     atlasHash.update(asset).update(readFileSync(resolve(gameDirectory, asset)));
   }
   const game = readFileSync(gameEntry, 'utf8').replace(/data-atlas-version="[^"]*"/, 'data-atlas-version="' + atlasHash.digest('hex').slice(0, 12) + '"');
-  writeFileSync(gameEntry, versionAssets(game, gameDirectory));
+  const withPlaces=game.replace(/(<script id="earth-opening-places"[^>]*>)[\s\S]*?(<\/script>)/,
+    (_,open,close)=>open+openingPlaces(gameDirectory)+close);
+  writeFileSync(gameEntry, versionAssets(withPlaces, gameDirectory));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

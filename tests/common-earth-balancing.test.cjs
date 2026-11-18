@@ -100,3 +100,26 @@ test('a food deficit takes precedence over a much larger industrial surplus on a
   assert.ok(firstArrival>0);
   assert.ok(industrial.food>0);
 });
+
+test('a third settlement can launch from a ready sponsor while the player is visiting a young outpost',()=>{
+  const sim=fresh(),home=sim.active();
+  for(const person of home.residents.slice(0,2))ok(sim.act('listen:'+person.id));
+  ok(sim.found(destination));const outpost=sim.active();
+  ok(sim.advance());
+  const next={lat:-24,lon:75,water:true,name:'Indian Ocean'};
+  assert.equal(sim.foundingOffer(next).available,false);
+  assert.equal(sim.foundingOffer(next,home.id).available,true);
+  const snapshot=JSON.stringify(sim.state);
+  assert.equal(sim.found(next,'Unfunded','later','deleted-id').ok,false);
+  assert.equal(JSON.stringify(sim.state),snapshot);
+  const terms=sim.foundingOffer(next,home.id),before=Object.fromEntries(['population','funds','materials','food'].map(k=>[k,home[k]]));
+  const outpostBefore=JSON.stringify(outpost);
+  ok(sim.found(next,'Ocean commons','later',home.id));
+  assert.equal(sim.state.sites.length,3);
+  assert.equal(sim.active().foundedBy,home.id);
+  assert.equal(sim.active().food,terms.goods.food);
+  for(const k of Object.keys(terms.goods))assert.equal(home[k],before[k]-terms.goods[k]);
+  assert.equal(home.population,before.population-2);
+  assert.equal(JSON.stringify(outpost),outpostBefore);
+  assert.ok(runtime.CommonEarthSim.readSave(JSON.stringify(sim.state)));
+});

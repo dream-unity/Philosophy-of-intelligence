@@ -34,3 +34,31 @@ test('an unreadable packed index falls back to the original classification bitma
   assert(images.some(url=>url.includes('earth-index.png')));
   assert(api.locate(0,0));
 });
+
+test('harbour eligibility uses the existing ocean chart and excludes inland lakes',async()=>{
+  const {api}=atlas(fs.readFileSync(path.join(dir,'earth-cells-v1.bin')));
+  await api.ready();
+  assert.equal(api.nearOceanShore(-42.881,147.327),true,'Hobart estuary');
+  assert.equal(api.nearOceanShore(-4.05,39.67),true,'Mombasa Island');
+  assert.equal(api.nearOceanShore(47.377,8.542),false,'Zürich');
+  assert.equal(api.nearOceanShore(43.64,-79.38),false,'Toronto lies on freshwater');
+});
+test('a returning land community can resolve its harbour without loading globe artwork',async()=>{
+  const {api,images,files}=atlas(fs.readFileSync(path.join(dir,'earth-cells-v1.bin')));
+  assert.equal(api.nearOceanShore(-42.88,147.33),null);
+  await api.geographyReady();
+  assert.equal(api.nearOceanShore(-42.88,147.33),true);
+  assert.equal(images.length,0);
+  await api.ready();
+  assert.equal(images.length,1);assert.equal(files.length,1);
+});
+test('the gazetteer estuary ports keep their landing without reclassifying neighbouring inland survey pins',async()=>{
+  const {api}=atlas(fs.readFileSync(path.join(dir,'earth-cells-v1.bin')));
+  for(const [lat,lon] of [[-42.85,147.295],[50.9,-1.4],[49.2754,-123.1236],[35.687,139.7495]]){
+    assert.equal(api.nearOceanShore(lat,lon),true);
+    assert.equal(api.nearOceanShore(lat+.001,lon),null);
+  }
+  await api.ready();
+  assert.equal(api.nearOceanShore(-42.85,147.295),true);
+  assert.equal(api.nearOceanShore(-42.849,147.295),false);
+});

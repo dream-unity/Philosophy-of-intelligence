@@ -38,6 +38,8 @@
   const groupStep=(site,group,label,actionId)=>({kind:'group',siteId:site.id,group,label,actionId});
   const atlasStep=site=>({kind:'atlas',siteId:site.id,label:'Found a second community on Earth'});
   const weekStep=(site,detail)=>({kind:'week',siteId:site.id,label:'Review the next week',detail});
+  const neighboursFirst=(site,people=site.residents)=>site.agency?.actor?
+    [...people.filter(p=>p.id!==site.agency.actor),...people.filter(p=>p.id===site.agency.actor)]:people;
   const meetStep=(site,p,verb='Hear',action='listen')=>({kind:'resident',group:'people',siteId:site.id,residentId:p.id,actionId:action+':'+p.id,label:verb+' '+p.name+' in '+site.name});
 
   function constructionStep(world,site,accept) {
@@ -61,7 +63,7 @@
     return step;
   }
   function promiseStep(world,site) {
-    const people=site.residents;
+    const people=neighboursFirst(site);
     const promised=people.filter(p=>p.promise).sort((a,b)=>a.promise.dueWeek-b.promise.dueWeek)[0];
     if(promised)return buildingPromiseStep(world,site,promised) || meetStep(site,promised,'Keep the promise to','fulfil');
     const ready=people.find(p=>p.heard && world.week-p.lastPromise>=3);
@@ -87,7 +89,7 @@
   }
 
   function apprenticeshipStep(world,site) {
-    if(!site.residents.some(p=>p.heard))return meetStep(site,site.residents[0]);
+    if(!site.residents.some(p=>p.heard))return meetStep(site,neighboursFirst(site)[0]);
     if(!has(site,'hall')&&!has(site,'workshop')){
       const underway=constructionStep(world,site,job=>job.scope==='street' && ['workshop','hall'].includes(job.kind));
       if(underway)return underway;
@@ -118,7 +120,7 @@
       return groupStep(site,'research','Review Exchange network in '+site.name,'research:exchange');
     }
     if(site.stats.resolved===0)return councilStep(world,site);
-    const unheard=site.residents.find(p=>!p.heard);
+    const unheard=neighboursFirst(site).find(p=>!p.heard);
     if(unheard)return meetStep(site,unheard);
     return groupStep(site,'research','Review the Stewardship compact in '+site.name,'research:stewardship');
   }
@@ -138,7 +140,7 @@
       const host=sites.find(s=>s.residents.some(p=>p.promise))||current;
       add('promises','Keep two promises',facts.kept,2,units(facts.kept,'promise','promises')+' kept across the network.',promiseStep(world,host));
     }else if(world.charter==='voice'){
-      const unheard=s=>s.residents.filter(p=>!p.heard);
+      const unheard=s=>neighboursFirst(s).filter(p=>!p.heard);
       const incomplete=sites.filter(s=>unheard(s).length).sort((a,b)=>unheard(a).length-unheard(b).length)[0];
       const testimony=incomplete?meetStep(incomplete,unheard(incomplete)[0]):atlasStep(current);
       add('voices','Hear every founding resident in two communities',facts.heard,2,
@@ -203,6 +205,12 @@
     if(!step)return null;
     const world=sim.state, site=world.sites.find(s=>s.id===step.siteId);
     if(!site)return null;
+    const self=site.agency?.actor;
+    if(self && (step.kind==='resident'&&step.residentId===self || step.actionId==='courier:deliver:'+self)){
+      const name=personById(site,self).name;
+      return {kind:'actor',siteId:site.id,label:'Choose someone to meet '+name,
+        detail:'You are playing as '+name+'. Switch to the steward or another neighbour to meet '+name+' in person.'};
+    }
     let cost, goods;
     if(step.kind==='atlas'){
       const offer=sim.sponsorshipOffer(site.id);
@@ -222,11 +230,23 @@
         ? actions.find(a=>a.id.startsWith(choicePrefix)&&a.available)||actions.find(a=>a.id.startsWith(choicePrefix))
         : actions.find(a=>a.id===step.actionId);
       if(!action)return step;
+      if(!action.available && root.EarthPursuits && !world.effort){
+        const resource=Object.keys(paidWork).find(key=>paidWork[key]===action.id);
+        if(resource)return {kind:'personalWork',siteId:site.id,resource,label:'Earn '+resource+' in '+site.name,
+          detail:step.detail+' Personal work can supply '+resource+' before the next weekly close.'};
+      }
       // A vote is the player's choice. Show the options together when any is actionable.
       if(action.available)return step;
       cost=action.cost;goods=action.goods;
     }else return step;
     const missing=Object.entries(goods).find(([key,n])=>site[key]<n);
+    // Paid civic shifts would spend the effort needed to finish this decision.
+    // A resident can take personal work before the calendar closes instead.
+    if(missing && root.EarthPursuits && world.effort===cost && Object.hasOwn(paidWork,missing[0])){
+      const [resource,needed]=missing;
+      return {kind:'personalWork',siteId:site.id,resource,label:'Earn '+resource+' for '+site.name,
+        detail:step.label+' needs '+needed+' '+resource+'. Personal work can earn the remaining '+(needed-site[resource])+' while keeping the effort for the decision.'};
+    }
     if(missing && world.effort>0){
       const [key,needed]=missing;
       if(key==='materials' && world.effort>=cost){
@@ -300,7 +320,7 @@
       if(!last){
         if(!world.effort)return reclaimableShift(world) || weekStep(site,'Your charter was ratified. Electing a resident takes one effort, available again next week.');
         const heard=site.residents.filter(p=>p.heard);
-        if(!heard.length)return {...meetStep(site,site.residents[0]),detail:'Hear a local resident before offering them the council chair.'};
+        if(!heard.length)return {...meetStep(site,neighboursFirst(site)[0]),detail:'Hear a local resident before offering them the council chair.'};
         if(heard.every(p=>p.id===site.shift?.residentId))return {kind:'group',group:'people',page:'shift',siteId:site.id,
           label:'Review your day with '+heard[0].name,detail:'Finish the day together before electing '+heard[0].name+', or hear another local candidate.'};
       }

@@ -82,7 +82,7 @@
       name=cleanName(content.name);world=content.world;
     }
     if(!world || typeof world!=='object' || world.version!==1)return fail('This world edition is unsupported. The current game reads version 1.');
-    const result=window.CommonEarthSim.readSave(JSON.stringify(world));
+    const result=window.CommonEarthSim.migrateDetachedSave(world);
     if(!result)return fail('This file failed the game’s integrity check. Your current world is still open.');
     const info=summaryOf(result);
     return {ok:true,snapshot:JSON.stringify(result),name:name||info.first||'Imported world',info};
@@ -115,8 +115,22 @@
       return metadata(durable,slot)?durable:null;
     }
     function backing(slot){return retained.has(slot)?temp:availableStore(slot);}
-    function readHeader(source,slot) {
-      try{const raw=get(source,dataKey(slot));return raw?JSON.parse(raw):null;}catch(error){return null;}
+    // Compare the stored text before reusing a summary. Another tab, an older
+    // game edition or a recovered in-memory turn can replace a slot at any time.
+    let headers=new Map();
+    function storedSummary(source,slot,nextCache,budget) {
+      const raw=get(source,dataKey(slot));
+      let entry=headers.get(slot);
+      if(!entry || raw!==entry.raw){
+        let world=null;
+        try{if(raw)world=JSON.parse(raw);}catch{/* An unreadable world still has a registry entry. */}
+        entry={raw,summary:summaryOf(world)};
+      }
+      if((raw?.length||0)<=budget.remaining){
+        budget.remaining-=raw?.length||0;
+        nextCache.set(slot,entry);
+      }
+      return {...entry.summary,names:[...entry.summary.names]};
     }
     function entries(){
       const slots=new Map([[FIRST,{id:FIRST,name:'First world',created:0}]]);
@@ -134,11 +148,14 @@
       return Array.from(slots.values()).sort((a,b)=>a.created-b.created||a.id.localeCompare(b.id));
     }
     function list() {
-      return entries().map(meta=>{
-        const s=backing(meta.id);
-        const state=meta.id===id?engine.state:readHeader(s,meta.id);
-        return {...meta,...summaryOf(state),selected:meta.id===id,temporary:!durable||s===temp};
+      const nextCache=new Map(),budget={remaining:MAX_BYTES};
+      const worlds=entries().map(meta=>{
+        const s=backing(meta.id),selected=meta.id===id;
+        const info=selected?summaryOf(engine.state):storedSummary(s,meta.id,nextCache,budget);
+        return {...meta,...info,selected,temporary:!durable||s===temp};
       });
+      headers=nextCache;
+      return worlds;
     }
     function current(){
       const source=availableStore(id),meta=metadata(source,id);
@@ -290,10 +307,16 @@
         return r;
       });
     }
-    function onStore(e){if(!e.key || e.key.startsWith(REGISTRY))notifyViews();}
+    function onStore(e){
+      if(!e.key || e.key.startsWith(REGISTRY)){notifyViews();return;}
+      // The active engine handles its own storage events. Refresh a visible
+      // collection when another tab advances an inactive world.
+      if(e.key===dataKey(id))return;
+      if(e.key===LEGACY || e.key.startsWith(DATA) && validId(e.key.slice(DATA.length)))notifyViews();
+    }
     if(window.addEventListener)window.addEventListener('storage',onStore);
     function dispose(){
-      closed=true;review=null;
+      closed=true;review=null;headers.clear();
       unsubscribe?.();engine.destroy();subscribers.clear();views.clear();
       window.removeEventListener?.('storage',onStore);
     }
@@ -318,7 +341,7 @@
     const body=node('div',null,'save-body'),statusLine=node('p',null,'save-status'),list=node('ul',null,'save-list');
     const notice=node('p',null,'save-notice');notice.setAttribute('role','status');notice.hidden=true;
     const setNote=(text,error=false)=>{notice.textContent=text;notice.hidden=!text;notice.classList.toggle('warning',error);};
-    let work=false,revision=0,lastId=null;
+    let work=false,revision=0,lastId=null,displayed='';
     const review=node('section',null,'save-review');review.hidden=true;
     function clearReview(){
       revision++;book.cancelImport();review.replaceChildren();review.hidden=true;
@@ -379,7 +402,12 @@
       const slots=book.list(),current=slots.find(slot=>slot.selected),status=book.status();
       if(lastId!==null && current.id!==lastId)clearReview();
       lastId=current.id;
-      statusLine.textContent=status.message;
+      if(statusLine.textContent!==status.message)statusLine.textContent=status.message;
+      // Construction and personal jobs can save while this sheet has focus.
+      // Keep the same controls until a value shown in the list actually changes.
+      const signature=JSON.stringify(slots.map(slot=>[slot.id,slot.name,slot.week,slot.settlements,slot.temporary,slot.selected]));
+      if(displayed===signature)return;
+      displayed=signature;
       list.replaceChildren();
       for(const slot of slots){
         const li=node('li'),info=node('div'),title=node('strong',slot.name),meta=node('small',

@@ -50,7 +50,8 @@ function waterfront(memory,{reduced=false,paintCost=1}={}) {
   function pointer(type,id,x,y){
     canvas.handlers.get(type)({type,pointerId:id,clientX:x,clientY:y,pointerType:'touch',button:0});
   }
-  return {paintCount:()=>foregroundPaints,street,paints,lampPaints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
+  function hideTab(hidden){runtime.document.hidden=hidden;runtime.document.handlers.get('visibilitychange')({});}
+  return {hideTab,paintCount:()=>foregroundPaints,street,paints,lampPaints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
 }
 function site(id){return {id,name:id,lat:0,lon:12,water:true,residents:[],buildings:[]};}
 
@@ -155,4 +156,38 @@ test('travel uses extra display refreshes only with sustained headroom and prese
     const trip=follow(limited);assert(trip.samples>=29 && trip.samples<=31,JSON.stringify({limited,trip}));
     assert(Math.abs(trip.elapsed-fast.elapsed)<=35);
   }
+});
+
+
+test('backgrounding releases viewport buffers and restores exactly the same street camera and terrain',()=>{
+  const g=waterfront(4);
+  const ground=g.visit(site('bay')),before=g.street.snapshotView(),fullWidth=g.canvas.width;
+  assert.ok(fullWidth>1 && ground.width>1);
+  g.hideTab(true);
+  assert.equal(g.hasFrame(),false);
+  assert.equal(g.canvas.width,1);
+  assert.equal(g.canvas.height,1);
+  assert.ok(ground.width>1);
+  g.hideTab(false);g.draw();
+  assert.equal(g.canvas.width,fullWidth);
+  assert.equal(g.paints.length,1);
+  assert.deepEqual(g.street.snapshotView(),before);
+  g.street.destroy();
+});
+
+test('alternating missed refreshes reduce motion cost in stages and release restores full detail',()=>{
+  const g=waterfront(4,{reduced:true});
+  const tile=g.visit(site('bay')),groundWidth=tile.width,fullWidth=g.canvas.width;
+  g.pointer('pointerdown',1,420,200);
+  const sizes=new Set([fullWidth]);
+  for(let i=1;i<=105;i++){
+    g.pointer('pointermove',1,430+Math.sin(i/10)*75,200+Math.cos(i/10)*34);
+    g.draw(i%2?50:1000/30);sizes.add(g.canvas.width);
+  }
+  assert.equal(sizes.size,3);
+  assert.equal(g.canvas.width,1024);
+  assert.equal(tile.width,groundWidth);
+  g.pointer('pointerup',1,420,200);g.draw();
+  assert.equal(g.canvas.width,fullWidth);
+  g.street.destroy();
 });

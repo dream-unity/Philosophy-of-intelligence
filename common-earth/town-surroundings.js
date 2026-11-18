@@ -22,7 +22,7 @@
     nursery: [1198, 866, 205, 141, 111.23, 100.72, 0.02782]
   };
   const backgroundColors = {
-    zanzibar: ['#598f88', '#395e65'], ocean: ['#497a7e', '#2f545f'],
+    coast: ['#668e8d','#496872'], zanzibar: ['#598f88', '#395e65'], ocean: ['#497a7e', '#2f545f'],
     temperate: ['#798a73', '#546957'], warm: ['#8a9478', '#65745b'],
     boreal: ['#778a84', '#506861']
   };
@@ -141,7 +141,7 @@
   }
 
   function paintHorizon(g, project, unit, width, height, site) {
-    if (!atlas || profile(site) !== 'zanzibar' || !width || !height) return false;
+    if (!atlas || !['zanzibar','coast'].includes(profile(site)) || !width || !height) return false;
     // A tiny landscape gradient continues the western waterfront outside the
     // cached map at any zoom. Only its visible subsection reaches the GPU.
     const [sx,sy,w,h] = tiles.horizon;
@@ -240,7 +240,7 @@
     }
   }
   function outskirts(g, project, unit, place, seed, plant) {
-    const port = place === 'zanzibar', hot = place === 'warm';
+    const port = place === 'zanzibar' || place==='coast', hot = place === 'warm';
     const features = [];
     if(port) {
       // Lower contrast and setbacks keep the occupied quarter visually distinct
@@ -248,7 +248,7 @@
       const sites=[[-4.9,.3],[-4.4,4.8],[-6.2,12.4],[-4.3,16.3],[-6.7,21.4],[-7.8,-3.6],[.1,-4.3],[4.4,-4.0],[10.8,-6.3],[17.3,-5.1],[21.0,-4.3],[27.7,-3.1],[29.0,4.3],[30.4,11.3],[28.8,16.5],[29.1,20.4]];
       for(let i=0;i<sites.length;i++){
         const x=sites[i][0]+jitter(seed,i)*.42, y=sites[i][1]+jitter(seed,i+62)*.47;
-        features.push({x,y, size:.74+jitter(seed,i+88)*.16, tile:'coral'+((i+seed%3)%3), flip:false});
+        features.push({x,y, size:.74+jitter(seed,i+88)*.16, tile:(place==='coast'?'cottage':'coral')+((i+seed%3)%3), flip:false});
       }
     } else {
       const sites=[[-4.75,4.0],[-5.3,10.0],[-4.3,19.9],[2.7,-4.8],[7.5,-5.1],[20.6,-4.2],[29.4,5.1],[28.8,13.8],[29.0,22.5],[3.3,29.4],[8.5,28.8],[19.5,29.7]];
@@ -267,7 +267,7 @@
         const house=homes[i], dx=i%2 ? -2.15 : 2.16, dy=i%3 ? 1.06 : 2.24;
         const x=house.x+dx, y=house.y+dy;
         if ((x<-1.9 || x>26.0 || y<-1.9 || y>26.0) && (!port || y<24)) {
-          features.push({x,y,tree:true,size:.75+jitter(seed,441+i)*.47,variant:i%4,palm:(port || hot) && i%3!==0});
+          features.push({x,y,tree:true,size:.75+jitter(seed,441+i)*.47,variant:i%4,palm:(place==='zanzibar' || hot) && i%3!==0});
         }
       }
       if (!port) {
@@ -290,7 +290,7 @@
   }
   function paint(g, project, unit, site, seed=0, plant=null) {
     if(!site) return;
-    const place=profile(site), sea=place==='ocean', port=place==='zanzibar';
+    const place=profile(site), sea=place==='ocean', port=place==='zanzibar'||place==='coast';
     g.save();
     if(sea || port) water(g,project,unit,sea,seed);
     if(!sea) {
