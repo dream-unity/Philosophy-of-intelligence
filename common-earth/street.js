@@ -18,13 +18,13 @@
   const BOAT_SPEED = 4.9;
   // Each berth has an accessible shore landing and a mooring in front of it.
   const oceanBerths = ['#b77960','#799c94','#c3ac7e','#86a9ac'].map((paint,i)=>({
-    id:'quay-'+i, dockX:3+i*6, x:4.6+i*6, y:26.85, paint, large:i===2
+    id:'quay-'+i, dockX:3+i*6, dockStart:SIDE+1.12, dockLength:i===2?2.58:2.21, x:4.6+i*6, y:26.85, paint, large:i===2
   }));
   const stoneTownBerths = [
-    {id:'harbour-lateen',dockX:11.4,x:14.32,y:30.44,paint:'#c49c76',art:'lateen',size:1.09},
-    {id:'harbour-canopy',dockX:22.4,x:21.65,y:29.61,paint:'#9ca591',art:'canopy',size:.84,flip:true,large:true}
+    {id:'harbour-lateen',dockX:11.4,dockStart:25.48,dockLength:2.76,x:14.32,y:30.44,paint:'#c49c76',art:'lateen',size:1.09},
+    {id:'harbour-canopy',dockX:22.4,dockStart:25.48,dockLength:2.20,x:21.65,y:29.61,paint:'#9ca591',art:'canopy',size:.84,flip:true,large:true}
   ];
-  const fishingBerth = {id:'fishing',dockX:6.5,x:8,y:27.9,paint:'#639c96'};
+  const fishingBerth = {id:'fishing',dockX:6.5,dockStart:25.48,dockLength:2.74,x:8,y:27.9,paint:'#639c96'};
   const TILT = .51;
   const AXIS = {up:[-1,-1], down:[1,1], left:[-1,1], right:[1,-1]};
   const KEYS = {ArrowUp:'up', w:'up', ArrowDown:'down', s:'down', ArrowLeft:'left', a:'left', ArrowRight:'right', d:'right'};
@@ -632,8 +632,7 @@
           line(x,y,-.44,x+length,y-length*.56,-.44,'rgba(194,231,208,.33)',Math.max(.55,unit*.025));
         }
         for(let k=0;k<4;k++) {
-          const px=3+6*k,py=SIDE+1.12;
-          const length=k===2?2.58:2.21;
+          const {dockX:px,dockStart:py,dockLength:length}=oceanBerths[k];
           // The dock frame is below its deck. Its reflection runs along the shaded side of the pontoon.
           poly([[px-.40,py,-.45],[px+.72,py,-.45],[px+.78,py+length+.27,-.45],[px-.32,py+length+.23,-.45]],'rgba(36,68,65,.31)');
           box(px-.48,py,.96,length,-.29,.18,'#a69472','#746854','#625f50');
@@ -790,11 +789,14 @@
         }
       }
     }
-    function skiff(x,y,paint,large,lateen=false) {
-      const art=window.EarthTownSurroundings;
-      const indianOcean=state.site.lon>36 && state.site.lon<81 && state.site.lat>-22 && state.site.lat<19;
-      if(large && art?.drawBoat?.(ctx,screen,unit,'canopy',x,y,.73,false))return;
-      if(lateen && indianOcean && art?.drawBoat?.(ctx,screen,unit,'lateen',x,y,.56,true))return;
+    const oceanCanopy={art:'canopy',size:.73,flip:false},oceanSail={art:'lateen',size:.56,flip:true};
+    function mooredArt(berth){
+      if(berth.art)return berth;
+      if(berth.large)return oceanCanopy;
+      const site=state.site;
+      return berth===oceanBerths[0] && site.lon>36 && site.lon<81 && site.lat>-22 && site.lat<19?oceanSail:null;
+    }
+    function skiff(x,y,paint,large) {
       const a=large?1.31:.96, b=large?.41:.33;
       const outline=[[-1,0],[-.68,-.74],[-.14,-1],[.58,-.94],[.98,-.54],[.91,.54],[.48,.86],[-.18,1],[-.69,.68]];
       const hull=(scale,z,drift=0)=>outline.map(([xx,yy])=>[x+xx*a*scale,y+yy*b*scale+drift,z]);
@@ -1821,8 +1823,9 @@
         const {x,y}=boat;
         addItem(x,y,x+y+.14,()=>{
           if(aboard){pilotedBoat(berth);fishingNet();return;}
-          if(!berth.art||!window.EarthTownSurroundings?.drawBoat?.(ctx,screen,unit,berth.art,x,y,berth.size,berth.flip))
-            skiff(x,y,berth.paint,berth.large,berth===oceanBerths[0]);
+          const choice=mooredArt(berth);
+          if(!choice||!window.EarthTownSurroundings?.drawBoat?.(ctx,screen,unit,choice.art,x,y,choice.size,choice.flip))
+            skiff(x,y,berth.paint,berth.large);
         });
       }
       HOMES.forEach((block,index)=>{const p=centre(block);addItem(p.x,p.y,blockDepth(p),()=>residence({...p,index}));});
@@ -2436,14 +2439,22 @@
     function hitBerth(sx,sy){
       // Include the hull and canopy at harbour scale, plus the corresponding wooden landing.
       let selected=null,score=Infinity;
+      const deck=world(sx,sy-.08*unit);
       for(const berth of berths){
-        const [bx,by]=screen(berth.x,berth.y,-.34);
-        const mast=berth.art==='lateen'?2.7:berth.large?1.12:.26;
-        const width=(berth.large||berth.art?1.18:.96)*unit;
-        const d=Math.hypot((sx-bx)/Math.max(10,width),(sy-clamp(sy,by-mast*unit,by))/Math.max(7,.43*unit));
-        const [qx,qy]=screen(berth.dockX,26.4,-.08);
-        const quay=Math.hypot(sx-qx,sy-qy)/Math.max(9,.61*unit);
-        if(Math.min(d,quay)<Math.min(score,1)){selected=berth;score=Math.min(d,quay);}
+        const [bx,by]=screen(berth.x,berth.y,-.44),choice=mooredArt(berth);
+        const dx=(sx-bx)/unit,dy=(sy-by)/unit;
+        if(berth!==embarked && choice && window.EarthTownSurroundings?.boatContains?.(choice.art,dx,dy,choice.size,choice.flip))return berth;
+        // A skiff's long axis projects diagonally. Follow it through the bow
+        // and stern; at district scale allow a finger-sized central target.
+        const half=berth.large?1.31:.96;
+        const along=clamp((dx+dy*TILT)/(1+TILT*TILT),-half,half);
+        const hull=berth===embarked?Infinity:Math.hypot(dx-along,dy-along*TILT+.10);
+        const mid=berth.dockStart+berth.dockLength/2;
+        const quay=Math.max(Math.abs(deck.x-berth.dockX)/.67,Math.abs(deck.y-mid)/(berth.dockLength/2+.17));
+        // An enlarged target in the overview must not steal the next jetty's deck.
+        const physical=Math.min(quay,hull/(berth.large?.68:.57));
+        const distance=physical<1?physical-1:hull*unit/8;
+        if(distance<Math.min(score,1)){selected=berth;score=distance;}
       }
       return selected;
     }
@@ -2612,7 +2623,9 @@
         adjustForeground(false,delta);draw();
       }
       if(!state.site||frame)return;
-      if(moving()||dragging||pinch||(!reduced&&visible&&castStarted!==null)){schedule();return;}
+      // Reduced-motion camera gestures repaint through the input listener.
+      // A stationary finger does not require its own animation loop.
+      if(moving()||(!reduced&&(dragging||pinch||visible&&castStarted!==null))){schedule();return;}
       if(visible&&(!reduced||shortMessage&&visualTime<messageUntil)){
         // The idle service van and pedestrians can run at 12 fps; an input wakes the next paint immediately.
         if(typeof setTimeout==='function')idleTimer=setTimeout(()=>{idleTimer=0;schedule();},70);
@@ -2710,6 +2723,7 @@
       }
       if(dragging?.id!==e.pointerId)return;
       const gesture=dragging;dragging=null;
+      if(gesture.moved&&pixelRatio!==fullPixelRatio)dirty=true;
       if(e.type!=='pointerup'||gesture.moved)return;
       const release=coords(e,canvas);
       if(Math.hypot(release.x-gesture.start.x,release.y-gesture.start.y)<gesture.slop)tap(gesture.start,gesture.device);
@@ -2725,7 +2739,7 @@
     });
     listen(canvas,'keyup',e=>{const dir=KEYS[e.key.length===1?e.key.toLowerCase():e.key];if(dir){pressed.delete(dir);e.preventDefault();}});
     listen(canvas,'blur',()=>pressed.clear());
-    if(typeof window!=='undefined')listen(window,'blur',()=>{pressed.clear();fingers.clear();dragging=null;pinch=null;});
+    if(typeof window!=='undefined')listen(window,'blur',()=>{pressed.clear();fingers.clear();dragging=null;pinch=null;if(pixelRatio!==fullPixelRatio)dirty=true;});
     if(typeof document!=='undefined')listen(document,'earthsheetchange',()=>{
       const next=sheetOpen();
       if(next===covered)return;

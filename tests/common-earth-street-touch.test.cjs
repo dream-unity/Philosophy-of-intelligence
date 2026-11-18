@@ -908,3 +908,40 @@ test('refounding a deleted waterfront at the same coordinates rejects its earlie
   assert.equal(reopened.active().foundingRevision,sim.active().foundingRevision);
   sim.destroy();reopened.destroy();
 });
+
+test('an opaque sail pixel and its mirrored image use the same compact touch mask', () => {
+  let reads=0;
+  const runtime={
+    window:{},Image:class {set src(url){this.onload();}},
+    document:{createElement:()=>({getContext:()=>({
+      drawImage(){},
+      getImageData(_x,_y,w,h){
+        reads++;
+        const data=new Uint8ClampedArray(w*h*4);
+        data[(151*w+33)*4+3]=255;
+        return {data};
+      }
+    })})}
+  };
+  vm.runInNewContext(surroundingsScript,runtime);
+  const art=runtime.window.EarthTownSurroundings;
+  art.onReady(()=>{});
+  const x=(33.5-109.62)*.01949,y=(151.5-209.79)*.01949;
+  assert(art.boatContains('lateen',x*1.09,y*1.09,1.09,false));
+  assert(art.boatContains('lateen',-x*.56,y*.56,.56,true));
+  assert(!art.boatContains('lateen',0,y*.56,.56,true),'clear water stays tappable');
+  assert.equal(reads,1);
+});
+
+test('the stern and jetty end board the intended skiff in compact views', () => {
+  for(const [w,h] of [[390,355],[760,225]]) {
+    const g=surface(w,h);g.street.setSite({...site,water:true});
+    g.tap(g.interactionFrame()(16.6-.8,26.85+.18,-.35));g.finish();
+    assert.equal(g.street.getState().mode,'boat');
+    g.at(16.6,26.85);
+    g.street.toggleBoat();g.finish();g.street.recenter();
+    g.tap(g.interactionFrame()(9,27.25,-.08));g.finish();
+    assert.equal(g.street.getState().mode,'boat');
+    g.at(10.6,26.85);
+  }
+});

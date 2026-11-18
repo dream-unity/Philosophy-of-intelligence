@@ -114,6 +114,32 @@
     return true;
   }
 
+  // Make the painted sail and hull tappable, including the mirrored artwork.
+  // The two masks are made on demand and occupy one byte per 4 × 4 source pixels.
+  const boatMasks=new Map();
+  function boatContains(name,dx,dy,size,flip){
+    if(!atlas || !tiles[name])return false;
+    const [sx,sy,w,h,ax,ay,s]=tiles[name];
+    const x=ax+(flip?-dx:dx)/(size*s), y=ay+dy/(size*s);
+    if(x<0 || y<0 || x>=w || y>=h)return false;
+    const stride=Math.ceil(w/4);
+    if(!boatMasks.has(name)){
+      let mask=null;
+      try{
+        const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+        const g=canvas.getContext('2d',{willReadFrequently:true});
+        g.drawImage(atlas,sx,sy,w,h,0,0,w,h);
+        const rgba=g.getImageData(0,0,w,h).data;
+        mask=new Uint8Array(stride*Math.ceil(h/4));
+        for(let row=0;row<h;row++)for(let col=0;col<w;col++){
+          if(rgba[(row*w+col)*4+3]>=48)mask[(row>>2)*stride+(col>>2)]=1;
+        }
+      }catch{/* The geometric hull and jetty remain available if pixels cannot be read. */}
+      boatMasks.set(name,mask);
+    }
+    return Boolean(boatMasks.get(name)?.[(y>>2)*stride+(x>>2)]);
+  }
+
   function paintHorizon(g, project, unit, width, height, site) {
     if (!atlas || profile(site) !== 'zanzibar' || !width || !height) return false;
     // A tiny landscape gradient continues the western waterfront outside the
@@ -290,5 +316,5 @@
     }
     g.restore();
   }
-  window.EarthTownSurroundings = Object.freeze({profile,background,onReady,paint,paintHorizon,drawBoat});
+  window.EarthTownSurroundings = Object.freeze({profile,background,onReady,paint,paintHorizon,drawBoat,boatContains});
 })();

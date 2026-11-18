@@ -8,13 +8,14 @@ const vm = require('node:vm');
 const game = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const source = readFileSync(path.join(game, 'street.js'), 'utf8');
 
-function waterfront(memory) {
-  let frame, now=0, underlay;
+function waterfront(memory,{reduced=false}={}) {
+  let frame, now=0, underlay, evenings=0;
   const paints=[];
   function element() {
     const noop=()=>{};
-    const node={children:[], style:{}, getAttribute:()=>null, setAttribute:noop, removeAttribute:noop,
-      addEventListener:noop, removeEventListener:noop, remove:noop, append:noop, querySelector:()=>null,
+    const handlers=new Map();
+    const node={handlers,children:[], style:{}, getAttribute:()=>null, setAttribute:noop, removeAttribute:noop,
+      addEventListener:(type,fn)=>handlers.set(type,fn), removeEventListener:type=>handlers.delete(type), remove:noop, append:noop, querySelector:()=>null,
       appendChild(child){child.parentElement=this;this.children.push(child);},
       replaceWith(next){const p=this.parentElement;p.children[p.children.indexOf(this)]=next;next.parentElement=p;}
     };
@@ -25,7 +26,8 @@ function waterfront(memory) {
     node.getContext=()=>brush;
     return node;
   }
-  const canvas=element(),stage=element();
+  const canvas=element(),stage=element(),evening=element();
+  stage.querySelector=selector=>selector==='#street-evening'?evening:null;
   stage.classList={contains:key=>key==='street-stage'};stage.appendChild(canvas);
   canvas.before=clip=>{underlay=clip;};
   canvas.getBoundingClientRect=()=>({left:0,top:0,width:1024,height:620});
@@ -34,16 +36,20 @@ function waterfront(memory) {
   }};
   const runtime={
     window:{...element(),EarthTownSurroundings:surroundings,
+      EarthTownLight:{lightsFor:()=>[],paving(){},blueHour(){evenings++;}},
       EarthConstruction:{streetPoint:job=>({x:3+(job.plot%3)*6,y:5.04+Math.floor(job.plot/3)*6})}},
     document:{...element(),createElement:element,createElementNS:element,body:{hasAttribute:()=>false}},
-    navigator:{deviceMemory:memory},matchMedia:()=>({matches:false}),
+    devicePixelRatio:2,navigator:{deviceMemory:memory},matchMedia:()=>({matches:reduced}),
     requestAnimationFrame(fn){frame=fn;return 1;},cancelAnimationFrame(){frame=null;}
   };
   vm.runInNewContext(source,runtime,{filename:'street.js'});
   const street=runtime.window.EarthStreet.mount(canvas);
   function draw() {const next=frame;frame=null;assert.ok(next);next(now+=100);}
   function visit(site){street.setSite(site);draw();return underlay.children.at(-1);}
-  return {street,paints,draw,visit};
+  function pointer(type,id,x,y){
+    canvas.handlers.get(type)({type,pointerId:id,clientX:x,clientY:y,pointerType:'touch',button:0});
+  }
+  return {street,paints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
 }
 function site(id){return {id,name:id,lat:0,lon:12,water:true,residents:[],buildings:[]};}
 
@@ -81,4 +87,33 @@ test('low-memory devices retain a single ground surface across visits',()=>{
   const first=visit(a);
   for(const destination of [b,a,b,a])assert.equal(visit(destination),first);
   assert.equal(paints.length,5);street.destroy();
+});
+
+
+test('reduced-motion paint wakes on input, rests between gestures and resolves at full detail',()=>{
+  const g=waterfront(4,{reduced:true});
+  g.visit(site('bay'));
+  const fullWidth=g.canvas.width;
+  assert.equal(g.hasFrame(),false,'the idle map rests');
+  g.light();g.draw();assert.equal(g.evenings(),1);
+  g.light();g.draw();assert.equal(g.evenings(),1);
+  assert.equal(g.hasFrame(),false,'changing the light does not start a permanent loop');
+
+  g.pointer('pointerdown',1,420,200);
+  for(let i=1;i<=8;i++){g.pointer('pointermove',1,432+i*6,200);g.draw();}
+  assert(g.canvas.width<fullWidth,'repeated slow drag frames use motion resolution');
+  assert.equal(g.hasFrame(),false,'holding the finger still pauses the renderer');
+  g.pointer('pointerup',1,480,200);g.draw();
+  assert.equal(g.canvas.width,fullWidth,'lifting the finger restores the full-resolution image');
+  assert.equal(g.hasFrame(),false);
+
+  const start=g.street.getState().zoom;
+  g.pointer('pointerdown',2,385,220);g.pointer('pointerdown',3,505,220);
+  g.pointer('pointermove',3,555,220);g.draw();
+  assert(g.street.getState().zoom>start);
+  assert.equal(g.hasFrame(),false,'pinch redraws only when fingers move');
+  g.pointer('pointerup',3,555,220);g.draw();g.pointer('pointerup',2,385,220);
+  if(g.hasFrame())g.draw();
+  assert.equal(g.hasFrame(),false);
+  g.street.destroy();
 });
