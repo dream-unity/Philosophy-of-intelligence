@@ -157,6 +157,38 @@
       for(let t=.24;t<w;t+=.34)line(x+t,mid,h+eave+.01,x+t,y+d+oy,h+.015,'rgba(16,38,44,.20)',Math.max(.5,unit*.02));
       line(x-ox,mid,h+eave,x+w+ox,mid,h+eave,'#c4b292',Math.max(.7,unit*.035));
     }
+    // Paint eight reusable crowns once. Leaves retain their detail while the camera moves.
+    const crowns = new Map();
+    function crownSprite(seed) {
+      const variant = Math.abs(seed | 0) % 8;
+      if (crowns.has(variant)) return crowns.get(variant);
+      const tile = document.createElement('canvas');
+      tile.width = tile.height = 128;
+      const g = tile.getContext('2d');
+      const palette = [
+        ['#294d45','#416e53','#759057','#c5c780'],
+        ['#274e48','#3d7765','#79a47a','#ccd89f'],
+        ['#394f41','#657953','#9aa86b','#dcce90'],
+        ['#294c50','#487971','#78a48e','#c4d5a3']
+      ][variant % 4];
+      // Draw the far, shaded side first and overlap it with sunlit leaf clusters.
+      for (let i = 0; i < 94; i++) {
+        const angle = noise(variant + 19,i,1) * Math.PI * 2;
+        const radius = Math.sqrt(noise(variant + 19,i,2));
+        const x = 64 + 44 * radius * Math.cos(angle);
+        const y = 64 + 45 * radius * Math.sin(angle);
+        const r = 9 + 5 * noise(variant + 19,i,3);
+        const shade = (x + y) / 256;
+        const paint = g.createRadialGradient(x-r*.35,y-r*.48,0,x,y,r);
+        paint.addColorStop(0, shade < .47 ? palette[3] : palette[2]);
+        paint.addColorStop(.51, shade < .48 ? palette[2] : palette[1]);
+        paint.addColorStop(1, shade < .39 ? palette[1] : palette[0]);
+        g.fillStyle = paint;
+        g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill();
+      }
+      crowns.set(variant,tile);
+      return tile;
+    }
     function plant(x,y,size,seed,palm=false) {
       const [sx,sy]=screen(x+.21*size,y+.07*size);
       ellipse(sx,sy,unit*.64*size,unit*.22*size,'rgba(13,38,37,.20)');
@@ -168,9 +200,9 @@
           path([crown,[crown[0]+dx*.55-dy*.18,crown[1]+dy*.55-dx*.18-size*unit*.18],[crown[0]+dx,crown[1]+dy+size*unit*.13],[crown[0]+dx*.52+dy*.08,crown[1]+dy*.55+dx*.08]],i%2?c:'#375f54');
         }
       }else{
-        sphere(x,y,1.07*size,.61*size,.63*size,'#365e56');
-        sphere(x-.13*size,y+.03*size,1.24*size,.48*size,.5*size,ELMS[seed%4]);
-        sphere(x-.27*size,y,1.43*size,.25*size,.18*size,'rgba(186,196,140,.23)');
+        const [cx,cy]=screen(x,y,1.20*size), span=1.47*unit*size;
+        ctx.drawImage(crownSprite(seed),cx-span*.5,cy-span*.52,span,span);
+
       }
     }
     function roofPanel(x,y,z,w,d) {
@@ -181,6 +213,15 @@
     function residence(item) {
       const {x,y,index:i}=item; const w=2.52,d=2.18,h=[1.46,2.08,1.63][i];const px=x-w/2,py=y-d/2;
       shadow(px,py,w,d,h);box(px,py,w,d,0,h,'#bba682',['#b99877','#9bada0','#b7ac89'][i],['#887c6a','#728f85','#959278'][i]);
+      // Eaves shade the upper facade, with a warmer bounce from the paving below.
+      const wall=ctx.createLinearGradient(...screen(px+w/2,py+d,h),...screen(px+w/2,py+d,0));
+      wall.addColorStop(0,'rgba(32,36,39,.35)');
+      wall.addColorStop(.22,'rgba(51,43,37,.07)');
+      wall.addColorStop(1,'rgba(242,197,138,.17)');
+      poly([[px,py+d,0],[px+w,py+d,0],[px+w,py+d,h],[px,py+d,h]],wall);
+      for(let row=.19;row<h;row+=.21){
+        line(px,py+d,row,px+w,py+d,row,'rgba(70,63,53,.18)',Math.max(.55,unit*.019));
+      }
       windows(px,py,w,d,.49,h,i===1?3:2);if(i===1)windows(px,py,w,d,1.45,h,3);
       if(i===1){rect(px-.12,py-.12,w+.24,d+.24,h+.07,'#76948e');roofPanel(px+.25,py+.2,h+.09,1.45,.86);box(px+.42,py+1.29,.65,.45,h+.09,.28,'#aba48d','#7c8c84','#617974');}
       else{gable(px,py,w,d,h,.64,i===0?'#bc815e':'#77978d',i===0?'#995f4b':'#55766f');box(px+w*.7,py+d*.66,.25,.28,h+.25,.48,'#b2a58d','#9b8774','#786e64');}
@@ -286,6 +327,22 @@
     function landscape() {
       // The same exchange opens onto a working waterfront or an inland green belt.
       if(state.site?.water){
+        // Shallows and reflected light are anchored to the shore and baked into the ground tile.
+        const coast=SIDE+1.25;
+        for(let band=13;band>=0;band--){
+          const depth=.3+band*.49, points=[[-1.4,coast,-.46],[SIDE+1.3,coast,-.46]];
+          for(let j=32;j>=0;j--){
+            const x=-1.4+j*(SIDE+2.7)/32;
+            points.push([x,coast+depth*(1+.12*Math.sin(x*.83)+.09*Math.cos(x*1.42)),-.46]);
+          }
+          poly(points,'rgba(83,177,160,.045)');
+        }
+        for(let i=0;i<205;i++){
+          const x=-1.2+noise(state.seed,i,711)*(SIDE+2);
+          const y=coast+.13+noise(state.seed,i,712)**1.6*6;
+          const length=.09+.48*noise(state.seed,i,713);
+          line(x,y,-.44,x+length,y-length*.56,-.44,'rgba(194,231,208,.33)',Math.max(.55,unit*.025));
+        }
         for(let k=0;k<4;k++){
           const px=3+6*k,py=SIDE+1.12;
           for(let i=0;i<9;i++)rect(px-.46,py+i*.26,.94,.236,-.13,'#9c9277');
@@ -356,6 +413,14 @@
       for(let i=0;i<5;i++){
         const p=i*BLOCK;
         rect(p-HALF_ROAD,top,HALF_ROAD*2,span,.003,'#546b66');rect(top,p-HALF_ROAD,span,HALF_ROAD*2,.003,'#546b66');
+      }
+      // Aggregate and expansion joints are static, so these strokes cost nothing on moving frames.
+      for(let i=0;i<5;i++)for(let j=0;j<160;j++){
+        const along=top+span*noise(state.seed,j,i+100);
+        const across=i*BLOCK+(noise(state.seed,j,i+130)-.5)*HALF_ROAD*1.95;
+        const tint=j%3?'rgba(19,42,43,.22)':'rgba(215,207,173,.28)';
+        line(along,across,.007,along+.075,across,.007,tint,.8);
+        line(across,along,.007,across,along+.075,.007,tint,.8);
       }
       for(let by=0;by<4;by++)for(let bx=0;bx<4;bx++){
         const block=[bx,by],p=centre(block),lot=state.lots.find(l=>sameBlock(l.block,block));
@@ -933,7 +998,7 @@
     }
     function resize() {
       const bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;
-      const w=Math.round(bounds.width),h=Math.round(bounds.height),ratio=Math.min(typeof devicePixelRatio==='number'?devicePixelRatio:1,2);
+      const w=Math.round(bounds.width),h=Math.round(bounds.height),ratio=Math.min(typeof devicePixelRatio==='number'?devicePixelRatio:1,2,Math.sqrt(2200000/(w*h)));
       if(width===w&&height===h&&ratio===pixelRatio)return;
       width=w;height=h;pixelRatio=ratio;canvas.width=Math.max(1,Math.round(w*ratio));canvas.height=Math.max(1,Math.round(h*ratio));
       if(state.placed||overviewZoom!==null)zoom=fitZoom();
@@ -1044,3 +1109,4 @@
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();
+
