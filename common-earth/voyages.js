@@ -359,5 +359,5 @@
     return routeFacts(r) && savedLog(r.log,r.legs,r.days) && rewardShape(r.reward) && rewardShape(r.targetReward)
       && shortText(r.headline,160) && shortText(r.lesson,700) && angle(r.target,r.position)<1e-6;
   }
-  window.EarthVoyages=Object.freeze({preview,start,step,scene,choices,styles,position,valid,validReport});
+  window.EarthVoyages=Object.freeze({terms,preview,start,step,scene,choices,styles,position,valid,validReport});
 })();

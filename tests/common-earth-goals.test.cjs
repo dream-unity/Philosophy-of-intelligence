@@ -30,7 +30,11 @@ test('legacy worlds open, preview is pure, setting the two commitments spends no
   assert.equal(legacy.learningGoals,undefined);
   for(const key of ['food','housing','reach','voices','bond:'+s.residents[1].id]){
     for(let weeks=1;weeks<=4;weeks++){
-      const p=goals.preview(sim.state,s.id,key,'wellbeing',weeks);ok(p);
+      const p=goals.preview(sim.state,s.id,key,'wellbeing',weeks);
+      if(weeks===1 && ['housing','reach'].includes(key)){
+        assert.equal(p.ok,false);assert.match(p.message,/two weeks/);continue;
+      }
+      ok(p);
       assert.equal(p.dueWeek,sim.state.week+weeks);assert.ok(p.aim.target>=p.aim.base);
     }
   }
@@ -133,4 +137,39 @@ test('only four completed reviews remain; invalid limits, identities, own-week c
   ok(sim.beginGoal(s.id,'reach','trust',4));
   const active=JSON.parse(serialize(sim));active.learningGoals.active.checkedWeek--;assert.equal(engine.readSave(JSON.stringify(active)),null);
   assert.ok(engine.readSave(serialize(sim)));sim.destroy();
+});
+
+test('construction goals guide the player to a useful precinct and recognise work already scheduled to finish',()=>{
+  for(const [aim,project] of [['housing','homes'],['reach','transit']]){
+    const sim=fresh(),site=sim.active();
+    assert.equal(sim.beginGoal(site.id,aim,'trust',1).ok,false);
+    ok(sim.beginGoal(site.id,aim,'trust',2));
+    const before=serialize(sim),step=goals.nextStep(sim);
+    assert.equal(serialize(sim),before);
+    assert.equal(step.kind,'city');assert.equal(step.project,project);
+    ok(sim.planCity(step.precinct,step.project));
+    assert.equal(goals.nextStep(sim).kind,'week');
+    advances(sim,2);assert.equal(review(sim).aim.status,'Target reached');
+
+    const queued=fresh(),home=queued.active();
+    ok(queued.planCity(step.precinct,project));advances(queued,1);
+    ok(queued.beginGoal(home.id,aim,'trust',1));
+    assert.equal(goals.nextStep(queued).kind,'week');
+    advances(queued,1);assert.equal(review(queued).aim.status,'Target reached');
+    sim.destroy();queued.destroy();
+  }
+});
+
+test('a food commitment near review uses the projected closing pantry rather than the stock before household meals',()=>{
+  const first=fresh(),saved=JSON.parse(serialize(first));
+  saved.sites[0].population=30;saved.sites[0].specialty='materials';
+  const sim=game(JSON.stringify(saved)),site=sim.active();
+  ok(sim.beginGoal(site.id,'food','trust',1));
+  ok(sim.act('work:forage'));ok(sim.act('work:forage'));
+  assert.ok(site.food>=16);
+  assert.equal(goals.nextStep(sim).actionId,'work:forage');
+  ok(sim.act('work:forage'));
+  assert.equal(goals.nextStep(sim).kind,'week');
+  advances(sim,1);assert.equal(review(sim).aim.status,'Target reached');
+  sim.destroy();first.destroy();
 });

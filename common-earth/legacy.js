@@ -36,28 +36,38 @@
   }
 
   const groupStep=(site,group,label,actionId)=>({kind:'group',siteId:site.id,group,label,actionId});
-  const atlasStep=site=>({kind:'atlas',siteId:site.id,label:'Find a second community on Earth'});
-  const meetStep=(site,p,verb='Hear')=>({kind:'resident',siteId:site.id,residentId:p.id,label:verb+' '+p.name+' in '+site.name});
+  const atlasStep=site=>({kind:'atlas',siteId:site.id,label:'Found a second community on Earth'});
+  const weekStep=(site,detail)=>({kind:'week',siteId:site.id,label:'Review the next week',detail});
+  const meetStep=(site,p,verb='Hear',action='listen')=>({kind:'resident',group:'people',siteId:site.id,residentId:p.id,actionId:action+':'+p.id,label:verb+' '+p.name+' in '+site.name});
 
   function promiseStep(world,site) {
     const people=site.residents;
     const promised=people.filter(p=>p.promise).sort((a,b)=>a.promise.dueWeek-b.promise.dueWeek)[0];
-    if(promised)return meetStep(site,promised,'Review the promise to');
+    if(promised)return meetStep(site,promised,'Keep the promise to','fulfil');
     const ready=people.find(p=>p.heard && world.week-p.lastPromise>=3);
-    if(ready)return meetStep(site,ready,'Discuss a promise with');
-    return meetStep(site,people.find(p=>!p.heard)||people[0]);
+    if(ready)return meetStep(site,ready,'Discuss a promise with','promise');
+    const unheard=people.find(p=>!p.heard);
+    if(unheard)return meetStep(site,unheard);
+    const nextWeek=Math.min(...people.map(p=>p.lastPromise+3));
+    return weekStep(site,'Residents are seeing how their last agreements worked out. A new promise is available in week '+nextWeek+'.');
   }
 
   function apprenticeshipStep(site) {
     if(!site.residents.some(p=>p.heard))return meetStep(site,site.residents[0]);
-    if(!has(site,'hall')&&!has(site,'workshop'))return groupStep(site,'build','Plan a hall or workshop in '+site.name);
+    if(!has(site,'hall')&&!has(site,'workshop')){
+      if(site.buildings.length===9)return {...groupStep(site,'build','Choose a lot to reopen in '+site.name),inspectReclaim:true};
+      return groupStep(site,'build','Plan a repair workshop in '+site.name,'build:workshop');
+    }
     return groupStep(site,'research','Review apprenticeship in '+site.name,'research:apprenticeship');
   }
 
-  function councilStep(site) {
+  function councilStep(world,site) {
+    if(site.issue)return {...groupStep(site,'council','Review the vote in '+site.name),inspectVote:true};
     const due=Math.min(...site.pending.map(p=>p.week));
-    const label=site.issue?'Review the vote in '+site.name:Number.isFinite(due)?'Review '+site.name+'’s decision due in week '+due:'See the next council agenda in '+site.name;
-    return groupStep(site,'council',label);
+    if(Number.isFinite(due))return weekStep(site,site.name+'’s vote has been cast. Its outcome counts in week '+due+'.');
+    const first=site.founded+1;
+    const next=first+Math.max(0,Math.floor((world.week-first)/4)+1)*4;
+    return weekStep(site,'The next council agenda in '+site.name+' opens in week '+next+'.');
   }
 
   function stewardshipStep(world,site) {
@@ -70,7 +80,7 @@
       if(site.stats.kept===0)return promiseStep(world,site);
       return groupStep(site,'research','Review Exchange network in '+site.name,'research:exchange');
     }
-    if(site.stats.resolved===0)return councilStep(site);
+    if(site.stats.resolved===0)return councilStep(world,site);
     const unheard=site.residents.find(p=>!p.heard);
     if(unheard)return meetStep(site,unheard);
     return groupStep(site,'research','Review the Stewardship compact in '+site.name,'research:stewardship');
@@ -97,7 +107,7 @@
       add('voices','Hear every founding resident in two communities',facts.heard,2,
         units(facts.heard,'community has','communities have')+' heard everyone. The charter calls for two.'+(incomplete&&facts.heard<2?' Still to hear in '+incomplete.name+': '+unheard(incomplete).map(p=>p.name).join(', ')+'.':''),testimony);
       const agenda=sites.find(s=>s.issue)||sites.find(s=>s.pending.length)||current;
-      add('decisions','Resolve two council decisions',facts.decisions,2,units(facts.decisions,'decision','decisions')+' resolved. A vote counts when its outcome takes effect.',councilStep(agenda));
+      add('decisions','Resolve two council decisions',facts.decisions,2,units(facts.decisions,'decision','decisions')+' resolved. A vote counts when its outcome takes effect.',councilStep(world,agenda));
     }else if(world.charter==='craft'){
       const learner=sites.find(s=>!s.tech.includes('apprenticeship'));
       add('schools','Establish shared apprenticeships in two communities',facts.schools,2,
@@ -116,6 +126,83 @@
     const priority=!world.completed && (facts.termsMet || facts.stewards>0 || sites.some(s=>s.tech.includes('exchange')));
     return {key:world.charter,termsMet:facts.termsMet,stewardshipMet:facts.stewards>0,ratified:world.completed,rows,priority,
       next:world.completed?null:unfinished?.action||null,summary:world.completed?'Your network has ratified its charter.':unfinished?.detail||''};
+  }
+
+  const paidWork={funds:'work:contract',materials:'work:salvage',food:'work:forage'};
+
+  function prepareStep(sim,step) {
+    if(!step)return null;
+    const world=sim.state, site=world.sites.find(s=>s.id===step.siteId);
+    if(!site)return null;
+    let cost, goods;
+    if(step.kind==='atlas'){
+      const offer=sim.sponsorshipOffer(site.id);
+      if(offer.available)return step;
+      cost=offer.effort;
+      goods=Object.fromEntries(Object.entries(offer.goods).map(([k,n])=>[k,n+(offer.reserves[k]||0)]));
+    }else if(step.kind==='city'){
+      const proposal=root.EarthCityModel?.preview(site,world,step.precinct,step.project);
+      if(!proposal?.ok || proposal.available)return step;
+      if(root.EarthCityModel.overview(site).works>=2)return weekStep(site,'Both crews are working. Let a project finish or cancel an existing project before commissioning another.');
+      cost=proposal.cost.effort;goods={funds:proposal.cost.funds,materials:proposal.cost.materials};
+    }else if(step.inspectVote || step.inspectPilot || step.actionId){
+      const actions=sim.actions(step.group,site.id);
+      const choicePrefix=step.inspectVote?'vote:':step.inspectPilot?'commission:pilot:':null;
+      const action=choicePrefix
+        ? actions.find(a=>a.id.startsWith(choicePrefix)&&a.available)||actions.find(a=>a.id.startsWith(choicePrefix))
+        : actions.find(a=>a.id===step.actionId);
+      if(!action)return step;
+      // A vote is the player's choice. Show the options together when any is actionable.
+      if(action.available)return step;
+      cost=action.cost;goods=action.goods;
+    }else return step;
+    const missing=Object.entries(goods).find(([key,n])=>site[key]<n);
+    if(missing && world.effort>0){
+      const [key,needed]=missing;
+      const work=sim.actions('work',site.id).find(a=>a.id===paidWork[key]&&a.available);
+      if(work)return {...groupStep(site,'work',work.label+' in '+site.name,work.id),
+        detail:step.label+'. You have '+site[key]+' of the '+needed+' '+key+' needed. '+work.description};
+    }
+    if(world.effort<cost)return weekStep(site,step.label+' needs '+cost+' effort. You have '+world.effort+' left. The next week restores four.');
+    return step;
+  }
+
+  function guidance(sim) {
+    const world=sim.state,site=sim.active();
+    if(!site)return null;
+    // Bring an expiring commitment back into view even if the player has travelled.
+    const urgent=world.sites.flatMap(s=>s.residents.filter(p=>p.promise?.dueWeek<=world.week).map(p=>({s,p})))
+      .sort((a,b)=>a.p.promise.dueWeek-b.p.promise.dueWeek)[0];
+    if(urgent && world.effort>0){
+      const step=meetStep(urgent.s,urgent.p,'Review the promise to','fulfil');
+      return prepareStep(sim,{...step,detail:urgent.p.name+'’s promise is due by the end of this week.'});
+    }
+    const commission=root.EarthCampaigns?.guidance(sim,site);
+    if(commission)return prepareStep(sim,commission);
+    if(world.completed){
+      const term=active(world),last=world.legacy?.history?.[0];
+      if(term)return weekStep(world.sites.find(s=>s.id===term.siteId),
+        term.person+' has chaired '+term.siteName+' for '+term.decisions.length+' of '+WEEKS+' weeks. The handover review is due in week '+(term.start+WEEKS)+'.');
+      if(!last){
+        if(!world.effort)return weekStep(site,'Your charter was ratified. Electing a resident takes one effort, available again next week.');
+        if(!site.residents.some(p=>p.heard))return {...meetStep(site,site.residents[0]),detail:'Hear a local resident before offering them the council chair.'};
+      }
+      return {...groupStep(site,'council',last?'Review '+last.person+'’s handover':'Review council succession'),page:'legacy',
+        detail:last?last.result:'Your charter was ratified. You can elect a resident to chair the council for four weeks.'};
+    }
+    if(world.charter){
+      const progress=charterProgress(world);
+      return progress.next?prepareStep(sim,{detail:progress.summary,...progress.next}):
+        weekStep(site,'The Stewardship compact and your charter commitments are ready for assembly review.');
+    }
+    if(!world.sites.some(s=>s.stats.kept>0)){
+      const promising=world.sites.find(s=>s.residents.some(p=>p.promise));
+      const host=promising || site;
+      const step=promiseStep(world,host);
+      const description=step.actionId && sim.actions('people',host.id).find(a=>a.id===step.actionId)?.description;
+      return prepareStep(sim,{detail:description || 'Visit a neighbour, hear what they need and keep one agreement.',...step});
+    }
+    return {...groupStep(site,'council','Choose your network charter'),detail:'Choose what success means for your communities. Each charter has different commitments.'};
   }
 
   function contacts(world, site) {
@@ -248,7 +335,7 @@
     const home = world.sites.find(s => s.id === term.siteId);
     if (!home) return [];
     const pending = Boolean(home.issue);
-    const vote = pending && helpers.vote?.(home,term.slot);
+    const vote = helpers.closingVote?.(home) || (pending && helpers.vote?.(home,term.slot));
     const decision = vote || (pending?'Deferred the vote to protect reserves. ':'')+
       (term.slot === 2 ? hear(world,home,term) : provision(world,home,term,helpers));
     const line = 'Week '+world.week+' · '+term.person+' — '+decision;
@@ -315,5 +402,5 @@
       t.decisions.length === world.week-t.start && strings(t.partners,WEEKS) && strings(t.reached,WEEKS));
   }
 
-  root.EarthLegacy = Object.freeze({governs,actions,tick,summary,valid,charterProgress});
+  root.EarthLegacy = Object.freeze({governs,actions,tick,summary,valid,charterProgress,guidance,prepareStep,promiseStep});
 })(typeof window === 'undefined' ? globalThis : window);

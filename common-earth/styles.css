@@ -161,7 +161,7 @@ footer > span { font-family: var(--serif); font-style: italic; }
 .no-script { padding: 14px; background: var(--gold); color: var(--night); }
 @media (min-width: 1600px) { .stage { height: min(70vh, 880px); }.selection-copy { font-size: 15px; }.parent-link { font-size: 9px; }.action-tabs button { font-size: 12px; } }
 @media (max-width: 1030px) { .tools-nav button span { display: none; }.masthead { padding-inline: 20px; }.view-nav button { padding: 0 10px; }.stage { height: clamp(455px, 62vh, 680px); } main { padding-inline: 19px; }.workspace { grid-template-columns: minmax(0, 1fr) clamp(255px, 30vw, 305px); }.map-hint { font-size: 8px; }.street-controls { flex-wrap: wrap; }.street-control-intro { flex-basis: 100%; }.street-buttons { max-width: 55%; }.street-stage-heading h2 { font-size: 22px; } }
-@media (max-width: 730px) { .masthead { min-height: 0; padding: 10px 14px 0; grid-template-columns: 1fr auto; gap: 7px; }.brand .brand-mark { width: 42px; height: 42px; }.brand { gap: 6px; }.brand h1 { font-size: 26px; }.parent-link { font-size: 7.4px; }.tools-nav { grid-column: 2; grid-row: 1; }.tools-nav button { padding: 0 7px; min-width: 37px; }.tools-nav button:last-child { margin-left: 1px; padding-left: 9px; }.view-nav { grid-column: 1 / -1; grid-row: 2; justify-self: start; }.view-nav button { padding: 6px 12px 10px; font-size: 12px; }.view-nav button[aria-pressed="true"]::after, .view-nav button.active::after, .view-nav button.is-active::after { bottom: -1px; left: 9px; right: 9px; }.view-nav svg { width: 16px; height: 16px; }main { padding: 12px 12px 8px; }.workspace { grid-template-columns: 1fr; gap: 10px; }.stage { height: clamp(335px, 77vw, 470px); }.stage-title h2 { font-size: 37px; }.stage-title .kicker { font-size: 8.5px; }.map-bottom { bottom: 11px; left: 11px; right: 11px; }.atlas-tools { right: 10px; }.atlas-tools button { height: 36px; width: 36px; }.inspection-panel { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,.85fr); gap: 0 18px; padding: 15px 18px 17px; }.inspection-panel .inspector-top { grid-column: 1 / -1; }.site-illustration { display: none; }.site-info { margin-top: 12px; }.site-info h2 { font-size: 29px; }.site-kind { font-size: 8.5px; }.selection-copy { font-size: 13px; margin: 8px 0 0; }.found-area { padding: 0; border: 0; margin-top: 12px; align-self: end; }.found-area .primary { margin-top: 7px; }.found-area label { font-size: 11px; }.found-area label span { font-size: 10px; }#visit-button { align-self: end; }.actions-list { max-height: none; }.action-tabs { grid-template-columns: repeat(6,minmax(0,1fr)); }.action-tabs button { font-size: 11px; padding: 8px 1px; }.action-tabs svg { height: 17px; width: 17px; }.actions-list > button { min-height: 44px; }.street-stage-heading { top: 9px; left: 9px; }.street-stage-heading h2 { font-size: 22px; }#street-open-actions { display: block; position: absolute; right: 8px; top: 9px; max-width: 35%; padding: 5px 7px; font-size: 10px; font-weight: 600; color: var(--paper); background: #112b2feb; border: 1px solid #56706d; text-decoration: none; border-radius: 3px; }.street-controls { gap: 6px; }.street-buttons { max-width: none; }.street-buttons button { min-height: 38px; }.move-pad { grid-template: repeat(2, 38px) / repeat(3, 38px); }.time-bar { gap: 16px; margin-top: 10px; min-height: 57px; }.settlement-status { grid-template-columns: 1fr; margin-top: 10px; gap: 8px; }.resource-overview, .outlook { padding: 13px 16px; }.resource-strip { gap: 13px; }footer { padding: 6px 13px 20px; } }
+@media (max-width: 730px), (max-width: 900px) and (orientation: portrait) { .masthead { min-height: 0; padding: 10px 14px 0; grid-template-columns: 1fr auto; gap: 7px; }.brand .brand-mark { width: 42px; height: 42px; }.brand { gap: 6px; }.brand h1 { font-size: 26px; }.parent-link { font-size: 7.4px; }.tools-nav { grid-column: 2; grid-row: 1; }.tools-nav button { padding: 0 7px; min-width: 37px; }.tools-nav button:last-child { margin-left: 1px; padding-left: 9px; }.view-nav { grid-column: 1 / -1; grid-row: 2; justify-self: start; }.view-nav button { padding: 6px 12px 10px; font-size: 12px; }.view-nav button[aria-pressed="true"]::after, .view-nav button.active::after, .view-nav button.is-active::after { bottom: -1px; left: 9px; right: 9px; }.view-nav svg { width: 16px; height: 16px; }main { padding: 12px 12px 8px; }.workspace { grid-template-columns: 1fr; gap: 10px; }.stage { height: clamp(335px, 77vw, 470px); }.stage-title h2 { font-size: 37px; }.stage-title .kicker { font-size: 8.5px; }.map-bottom { bottom: 11px; left: 11px; right: 11px; }.atlas-tools { right: 10px; }.atlas-tools button { height: 36px; width: 36px; }.inspection-panel { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,.85fr); gap: 0 18px; padding: 15px 18px 17px; }.inspection-panel .inspector-top { grid-column: 1 / -1; }.site-illustration { display: none; }.site-info { margin-top: 12px; }.site-info h2 { font-size: 29px; }.site-kind { font-size: 8.5px; }.selection-copy { font-size: 13px; margin: 8px 0 0; }.found-area { padding: 0; border: 0; margin-top: 12px; align-self: end; }.found-area .primary { margin-top: 7px; }.found-area label { font-size: 11px; }.found-area label span { font-size: 10px; }#visit-button { align-self: end; }.actions-list { max-height: none; }.action-tabs { grid-template-columns: repeat(6,minmax(0,1fr)); }.action-tabs button { font-size: 11px; padding: 8px 1px; }.action-tabs svg { height: 17px; width: 17px; }.actions-list > button { min-height: 44px; }.street-stage-heading { top: 9px; left: 9px; }.street-stage-heading h2 { font-size: 22px; }#street-open-actions { display: block; position: absolute; right: 8px; top: 9px; max-width: 35%; padding: 5px 7px; font-size: 10px; font-weight: 600; color: var(--paper); background: #112b2feb; border: 1px solid #56706d; text-decoration: none; border-radius: 3px; }.street-controls { gap: 6px; }.street-buttons { max-width: none; }.street-buttons button { min-height: 38px; }.move-pad { grid-template: repeat(2, 38px) / repeat(3, 38px); }.time-bar { gap: 16px; margin-top: 10px; min-height: 57px; }.settlement-status { grid-template-columns: 1fr; margin-top: 10px; gap: 8px; }.resource-overview, .outlook { padding: 13px 16px; }.resource-strip { gap: 13px; }footer { padding: 6px 13px 20px; } }
 @media (max-width: 460px) { .stage { height: clamp(320px, 92vw, 400px); }.stage-title { top: 13px; left: 16px; }.stage-title h2 { font-size: 33px; }.map-hint { font-size: 7.7px; }.inspection-panel { display: block; padding: 14px 15px 16px; }.site-info { margin-top: 9px; }.site-info h2 { font-size: 31px; }.site-info .coords { font-size: 10px; }.found-area { margin-top: 13px; }.found-area label { margin-bottom: 5px; }.found-area input { min-height: 38px; }.found-area .primary, #visit-button { min-height: 42px; }#visit-button { margin-top: 12px; }.selection-copy { margin-top: 6px; }.street-control-intro { flex-basis: 100%; }.street-buttons { max-width: 49%; }.time-bar { gap: 14px; padding: 8px 10px; }.time-week, .time-effort { gap: 5px; }.time-week > svg, .time-effort > svg { width: 15px; }.time-bar .advance { font-size: 11px; padding-inline: 8px; }.action-tabs button { font-size: 10px; }.data-label { font-size: 7.5px; }.sheet { max-height: min(87dvh, 700px); }.sheet-head { padding: 14px 16px 12px; }.sheet-body { padding: 13px 16px 18px; }.sheet input, .found-area input { font-size: 16px; } }
 @media (pointer: coarse) { .touch-hint { display: inline; }.desktop-hint { display: none; }.atlas-tools button { min-height: 41px; min-width: 41px; }.tools-nav button { min-height: 44px; }.move-pad { grid-template: repeat(2, 42px) / repeat(3, 42px); } }
 @media (max-width: 350px) { .masthead { padding-inline: 8px; }.tools-nav button { min-width: 33px; padding-inline: 4px; }.brand .brand-mark { width: 36px; }.view-nav button { padding-inline: 9px; }.map-hint { display: none; }.time-effort > svg, .time-week > svg { display: none; }.action-tabs { grid-template-columns: repeat(3,minmax(0,1fr)); }.action-tabs button { flex-direction: row; justify-content: center; }.resource-strip { gap: 10px; } }
@@ -236,9 +236,9 @@ footer > span { font-family: var(--serif); font-style: italic; }
   .sheet { max-height: 91dvh; }
   .sheet-head { padding-block: 9px; }.sheet-head h2 { font-size: 23px; }
 }
-.sheet:popover-open, .sheet.sheet-fallback { display: flex; flex-direction: column; overflow: hidden; }
+.sheet:is(:popover-open, .sheet-fallback) { display: flex; flex-direction: column; overflow: hidden; }
 .sheet-head { position: relative; flex: 0 0 auto; }
-.sheet-body { overflow-y: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: #526663 #152a2d; }
+.sheet-body { overflow-y: auto; overscroll-behavior-y: contain; min-height: 0; scrollbar-width: thin; scrollbar-color: #526663 #152a2d; }
 @media(max-height: 350px) {
   .sheet-head { align-items:center; padding: 6px 12px; }
   .sheet-head .kicker { display:none; }.sheet-head h2 { font-size:22px; margin:0; }
@@ -304,3 +304,181 @@ body.street-expanded[data-map-view="street"] #street-open-actions { display: inl
 @media (pointer:coarse) { .street-camera-tools .icon-button { width: 44px; height: 44px; } }
 @media (max-width: 460px) { .street-stage-heading { left: 8px; top: 8px; padding: 6px 9px 7px; max-width: 56%; } .street-camera-tools { right: 8px; bottom: 8px; } .district-overview { left: 8px; bottom: 8px; width: 65px; height: 47px; } }
 @media (max-height: 480px) and (orientation:landscape) { body.street-expanded[data-map-view="street"] .street-stage { height: 88svh; } }
+
+/* Direction holds belong to the game, including when a thumb slides across keys. */
+.move-pad button {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.move-pad button.is-held {
+  border-color: var(--gold);
+  background: #38524a;
+  color: #fff4d6;
+}
+a.brand { color: inherit; text-decoration: none; min-height: 44px; }
+.map-survey, #back-to-street { display: none; }
+#week-summary .text-button, #back-to-street {
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font: 600 12px/1.4 var(--sans);
+}
+#week-summary .text-button { display: block; padding: 5px 0; text-align: left; }
+#week-summary { overscroll-behavior-y: contain; }
+
+@media (max-width: 730px), (max-width: 900px) and (orientation: portrait) {
+  .view-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-self: stretch;
+  }
+  .view-nav button { gap: 5px; min-height: 44px; padding: 5px 3px; }
+  .map-bottom { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 8px; }
+  .map-bottom .map-survey {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    justify-self: end;
+    min-height: 44px;
+    padding: 7px 10px;
+    border: 1px solid #9fbc9f;
+    background: #173431f2;
+    color: #f4e5bb;
+    font: 650 12px/1.3 var(--sans);
+    text-align: start;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+  .map-bottom .map-hint { grid-column: 1 / -1; justify-self: start; }
+  .street-controls {
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr);
+    align-items: center;
+    gap: 8px 12px;
+  }
+  .street-control-intro { grid-column: 1 / -1; }
+  .street-buttons { justify-self: end; max-width: none; }
+  #street-open-actions, body.street-expanded[data-map-view="street"] #street-open-actions {
+    display: grid;
+    place-items: center;
+    right: 8px;
+    top: 8px;
+    min-height: 44px;
+    padding: 5px 9px;
+    text-align: center;
+    font-size: 11px;
+  }
+  #street-open-actions span { display: none; }
+  #actions-panel { overflow: clip; }
+  #actions-panel .inspector-top {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    min-height: 44px;
+    background: #152c30;
+    border-bottom: 1px solid var(--line);
+  }
+  #back-to-street { display: block; padding: 6px 2px 6px 10px; min-height: 44px; }
+  #actions-panel :is(button,summary,select), #actions-heading { scroll-margin-top: 52px; }
+  .mobile-budget a { display: inline-flex; align-items: center; min-height: 44px; }
+  .city-inspect-link { align-content: center; min-height: 44px; }
+  .street-stage-heading .kicker, .city-title { overflow-wrap: anywhere; }
+
+
+}
+@media (any-pointer: coarse), (max-width: 730px), (max-width: 900px) and (orientation: portrait), (max-height: 535px) and (orientation: landscape) {
+  /* Let a long weekly report grow into the page and keep its actions in reading order. */
+  .time-bar { flex-wrap: wrap; }
+  .weekly-preview[open] { order: 3; flex: 1 0 100%; }
+  .weekly-preview[open] #week-summary {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    margin: 0 0 3px;
+    box-shadow: none;
+  }
+}
+@media (max-width: 390px) {
+  .brand { gap: 4px; }
+  .brand .brand-mark { width: 30px; height: 34px; }
+  .brand h1 { font-size: 22px; }
+  .parent-link { font-size: 6.8px; letter-spacing: .06em; }
+  .masthead { gap: 5px; padding-inline: 8px; }
+  .map-bottom .map-survey, .map-places { font-size: 11px; padding-inline: 8px; }
+  .map-places { gap: 5px; }
+  .action-tabs { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .action-tabs button { padding-inline: 3px; flex-direction: row; justify-content: center; }
+}
+@media (any-pointer: coarse) {
+  /* ID scopes also reach panels that are rebuilt after a game action. */
+  #play :is(button, select, input:not([type="checkbox"]), summary),
+  .sheet[popover] :is(button, select, input:not([type="checkbox"]), summary),
+  .tools-nav button, .view-nav button {
+    min-height: 44px;
+  }
+  #play button, .sheet[popover] button, .tools-nav button { min-width: 44px; }
+  .sheet[popover] .icon-button { width: 44px; height: 44px; }
+  #play :is(select,input:not([type="checkbox"])), .sheet[popover] :is(select,input:not([type="checkbox"])) { font-size: 16px; }
+  #play summary, .sheet[popover] summary { align-content: center; }
+  #play .commission-option, .sheet .beacon-option { min-height: 44px; align-items: center; }
+  .move-pad { grid-template: repeat(2,44px) / repeat(3,44px); gap: 3px; }
+  .street-buttons { gap: 6px; }
+  .street-buttons button { font-size: 12px; }
+  .sheet:is(:popover-open,.sheet-fallback) { max-height: min(760px,calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)))); }
+  footer a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+@media (max-height: 535px) and (orientation: landscape) {
+  .street-stage { height: clamp(180px,calc(100svh - 150px),440px); }
+  .street-controls {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto minmax(82px,.75fr);
+    gap: 6px 10px;
+    padding: 6px 10px;
+  }
+  .street-control-intro { grid-column: auto; min-width: 0; }
+  .street-buttons { max-width: none; justify-content: end; }
+  .street-controls .kicker { display: none; }
+  #street-hint { margin: 0; }
+}
+@media (max-width: 730px), (max-width: 900px) and (orientation: portrait), (max-height: 535px) and (orientation: landscape) {
+  /* Both the map and controls must fit when the player expands the street. */
+  body.street-expanded[data-map-view="street"] .map-frame {
+    display: grid;
+    grid-template-rows: minmax(120px,1fr) auto;
+    height: calc(100svh - max(12px,env(safe-area-inset-bottom)));
+  }
+  body.street-expanded[data-map-view="street"] .street-stage { height: auto; min-height: 0; }
+}
+body.street-expanded[data-map-view="street"] #back-to-street { display: block; min-height: 44px; }
+@media (any-pointer: coarse) {
+  html:has(.sheet:is(:popover-open,.sheet-fallback)) { overflow: hidden; }
+}
+@media (max-width: 730px), (max-width: 900px) and (orientation: portrait) {
+  #street-hint { min-height: 2.8em; }
+  main {
+    padding-left: max(12px,env(safe-area-inset-left));
+    padding-right: max(12px,env(safe-area-inset-right));
+  }
+}
+@media (max-height: 535px) and (orientation: landscape) {
+  /* Keep the zoom row clear of lighting and expand controls on a shallow street. */
+  .street-camera-tools { bottom: 8px; right: 8px; }
+  .district-tools {
+    top: auto;
+    bottom: 8px;
+    right: 108px;
+    display: flex;
+    transform: none;
+  }
+  .district-tools .icon-button:last-child { margin-top: 0; }
+  .district-overview { bottom: 8px; left: 8px; width: 62px; height: 44px; }
+}
+@media (max-height: 535px) and (orientation: landscape) {
+  .actions-list { max-height: none; overflow: visible; }
+}

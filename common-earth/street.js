@@ -12,6 +12,10 @@
   const AXIS = {up:[-1,-1], down:[1,1], left:[-1,1], right:[1,-1]};
   const KEYS = {ArrowUp:'up', w:'up', ArrowDown:'down', s:'down', ArrowLeft:'left', a:'left', ArrowRight:'right', d:'right'};
   const PLOTS = Array.from({length:9},(_,i)=>[i%3,Math.floor(i/3)]);
+  const OFF_ROAD = Array.from({length:16},(_,i)=>{
+    const x=i%4*BLOCK,y=Math.floor(i/4)*BLOCK;
+    return [x+HALF_ROAD,y+HALF_ROAD,x+BLOCK-HALF_ROAD,y+BLOCK-HALF_ROAD];
+  });
   const HOMES = window.EarthShifts?.district.homes || [[1,3],[3,2],[3,3]];
   const MARKET = window.EarthShifts?.district.market || [2,3];
   const marketDoor = () => entry(MARKET);
@@ -210,8 +214,8 @@
     const state={site:null,seed:0,lots:[],points:[],solids:[],trees:[],decor:[],links:[],looks:new Map(),traffic:null,preview:null,companion:null,shiftStops:[],placed:null,mode:'walk',player:{...marketDoor(),dx:0,dy:1},van:vanAtExchange(),route:[],destination:null,arrival:null,hover:null,active:null};
     let width=0,height=0,unit=30,zoom=1,pixelRatio=1,centreX=state.player.x,centreY=state.player.y;
     let frame=0,idleTimer=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
-    let shortMessage='',messageUntil=0,hovering=false;
-    let savedZoom=null,overviewZoom=null,placingFocus=0,dragging=null,pinch=null,groundCache=null;
+    let shortMessage='',messageUntil=0,cameraFollows=true;
+    let priorPlacementView=null,overviewZoom=null,placingFocus=0,previewedPlot=null,dragging=null,pinch=null,groundCache=null;
     let miniCanvas=null,miniButton=null,miniTick=-1;
     let zoomTimer=0, backdropGradient=null, backdropSite=null;
     const compactTextures=typeof navigator!=='undefined' && navigator.deviceMemory>0 && navigator.deviceMemory<=4;
@@ -1013,6 +1017,15 @@
       const x=i?7.27:13.27, y=(i?12:18)-1.08+2.16*portion;
       return {x,y,moves:!reduced&&((t>3&&t<6.7)||(t>10.5&&t<14.2)),dy:t<10.5?1:-1};
     }
+    function streetWalker(i) {
+      if(i>=3){
+        const crossing=pedestrianAt(i-3);
+        return {...crossing,dx:0,pace:crossing.moves?.7:0,coat:i===3?'#c3a480':'#9bad94',phase:visualTime*5+i-3};
+      }
+      const t=((reduced?0:visualTime*.34)+i*2.91)%5.34;
+      return {x:[2.03,8.01,14.11][i]+(t<2.67?t:5.34-t),y:[6.98,12.98,18.99][i],
+        dx:t<2.67?1:-1,dy:0,pace:reduced?0:.55,coat:['#a9b99c','#c39c83','#8ca9ab'][i],phase:visualTime*4+i};
+    }
     function nextDelivery(q){for(let i=1;i<=SERVICE_LOOP.length;i++){const label=SERVICE_LOOP[(q.leg+i)%SERVICE_LOOP.length][2];if(label)return label;}return 'Market exchange';}
     function stepTraffic(dt){
       const q=state.traffic;if(!q||reduced)return;
@@ -1112,6 +1125,9 @@
       ctx.save();ctx.setLineDash([4,5]);path(points,null,'#f4d48d',1.6);ctx.restore();
       const end=points.at(-1);ellipse(end[0],end[1],unit*.18,unit*.1,'#e6bb7c');
     }
+    function residentFigure(point) {
+      return {x:point.x+.47+(reduced?0:Math.sin(visualTime*.45+point.index)*.12),y:point.y-.21};
+    }
     function draw() {
       if(!width||!height)return;
       ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);ctx.lineJoin='round';ctx.lineCap='round';background();
@@ -1141,15 +1157,13 @@
         });
       }
       for(const q of state.points)if(q.type==='resident'&&q.residentId!==state.companion?.id){
-        const sx=q.x+.47+(reduced?0:Math.sin(visualTime*.45+q.index)*.12),sy=q.y-.21;
-        addItem(sx,sy,sx+sy+.1,()=>person(sx,sy,COATS[q.index],1,0,0,q.index,false,state.looks.get(q.residentId)));
+        const {x,y}=residentFigure(q);
+        addItem(x,y,x+y+.1,()=>person(x,y,COATS[q.index],1,0,0,q.index,false,state.looks.get(q.residentId)));
       }
-      for(let i=0;i<3;i++){
-        const t=((reduced?0:visualTime*.34)+i*2.91)%5.34;
-        const aa=t<2.67?t:5.34-t,a=[2.03,8.01,14.11,19.99][i],b=[6.98,12.98,18.99,6.98][i];
-        const sx=a+aa,sy=b;addItem(sx,sy,sx+sy+.01,()=>person(sx,sy,['#a9b99c','#c39c83','#8ca9ab','#bcac93'][i],t<2.67?1:-1,0,reduced?0:.55,visualTime*4+i));
+      for(let i=0;i<5;i++){
+        const w=streetWalker(i);
+        addItem(w.x,w.y,w.x+w.y+(i<3?.01:.09),()=>person(w.x,w.y,w.coat,w.dx,w.dy,w.pace,w.phase));
       }
-      for(let i=0;i<2;i++){const w=pedestrianAt(i);addItem(w.x,w.y,w.x+w.y+.09,()=>person(w.x,w.y,i?'#9bad94':'#c3a480',0,w.dy,w.moves?.7:0,visualTime*5+i));}
       if(state.traffic){const q=state.traffic;addItem(q.x,q.y,q.x+q.y+.5,()=>serviceVehicle(q));}
       state.links.forEach((link,i)=>linkedWorker(link,i,addItem));
       const p=state.player,rp=screen(p.x,p.y,.015);
@@ -1186,7 +1200,29 @@
       return !state.solids.some(([x1,y1,x2,y2])=>p.x>x1-margin&&p.x<x2+margin&&p.y>y1-margin&&p.y<y2+margin);
     }
     function closestFree(target,driving=state.mode==='drive') {
-      if(traversable(target,driving))return {...target};
+      if(traversable(target,driving))return {x:target.x,y:target.y};
+      if(driving){
+        // Park at the closest lane to an off-road tap inside the district.
+        // A tap on the surrounding scenery must never send the van across town.
+        if(target.x < -1 || target.x > SIDE+1 || target.y < -1 || target.y > SIDE+1)return null;
+        const laneLimit=HALF_ROAD-.06,edge=.76;
+        const along=(1-TILT*TILT)/(1+TILT*TILT);
+        let best=null,bestError=Infinity;
+        const consider=p=>{
+          const dx=p.x-target.x,dy=p.y-target.y;
+          const screenError=(dx-dy)**2+((dx+dy)*TILT)**2;
+          if(screenError<bestError-1e-7||(Math.abs(screenError-bestError)<1e-7&&dist(p,state.player)<dist(best,state.player))){
+            best=p;bestError=screenError;
+          }
+        };
+        for(let lane=0;lane<=SIDE;lane+=BLOCK){
+          const x=clamp(clamp(target.x,lane-laneLimit,lane+laneLimit),-edge,SIDE+edge);
+          const y=clamp(clamp(target.y,lane-laneLimit,lane+laneLimit),-edge,SIDE+edge);
+          consider({x,y:clamp(target.y+(x-target.x)*along,-edge,SIDE+edge)});
+          consider({x:clamp(target.x+(y-target.y)*along,-edge,SIDE+edge),y});
+        }
+        return best;
+      }
       let nearest=null,best=Infinity;
       for(let i=-7;i<=7;i++)for(let j=-7;j<=7;j++){
         const p={x:target.x+i*.23,y:target.y+j*.23},cost=Math.hypot(i,j);
@@ -1194,22 +1230,57 @@
       }
       return nearest;
     }
+    // A route segment must stay on the actual surface even where a tapped point
+    // falls between lattice nodes. Clip it against each axis-aligned footprint.
+    function clearSegment(a,b) {
+      const driving=state.mode==='drive',blocks=driving?OFF_ROAD:state.solids;
+      const margin=driving?0:.095,dx=b.x-a.x,dy=b.y-a.y;
+      return !blocks.some(([left,top,right,bottom])=>{
+        left-=margin;top-=margin;right+=margin;bottom+=margin;
+        if(Math.max(a.x,b.x)<=left||Math.min(a.x,b.x)>=right||
+           Math.max(a.y,b.y)<=top||Math.min(a.y,b.y)>=bottom)return false;
+        let enter=0,leave=1;
+        if(dx){
+          const u=(left-a.x)/dx,v=(right-a.x)/dx;
+          enter=Math.max(enter,Math.min(u,v));leave=Math.min(leave,Math.max(u,v));
+        }
+        if(dy){
+          const u=(top-a.y)/dy,v=(bottom-a.y)/dy;
+          enter=Math.max(enter,Math.min(u,v));leave=Math.min(leave,Math.max(u,v));
+        }
+        return enter<leave;
+      });
+    }
     // A uniform lattice handles route finding. A heap keeps long street trips inexpensive.
     function makeRoute(start,target) {
-      const N=58, origin=-.68, toIndex=p=>clamp(Math.round((p.y-origin)/STEP),0,N-1)*N+clamp(Math.round((p.x-origin)/STEP),0,N-1);
+      if(clearSegment(start,target))return [target];
+      const N=58,origin=-.68;
       const fromIndex=i=>({x:origin+i%N*STEP,y:origin+Math.floor(i/N)*STEP});
-      const startI=toIndex(start),goalI=toIndex(target);
-      if(startI===goalI)return [target];
       const count=N*N,cost=new Float64Array(count).fill(Infinity),parent=new Int32Array(count).fill(-1),pass=new Uint8Array(count),visited=new Uint8Array(count),heap=[];
       const valid=i=>{if(pass[i]===0)pass[i]=traversable(fromIndex(i))?2:1;return pass[i]===2;};
+      function anchor(point) {
+        const cx=Math.round((point.x-origin)/STEP),cy=Math.round((point.y-origin)/STEP);
+        let nearest=-1,range=Infinity;
+        for(let y=Math.max(0,cy-1);y<=Math.min(N-1,cy+1);y++){
+          for(let x=Math.max(0,cx-1);x<=Math.min(N-1,cx+1);x++){
+            const i=y*N+x;
+            if(!valid(i))continue;
+            const p=fromIndex(i),d=dist(point,p);
+            if(d<range&&clearSegment(point,p)){nearest=i;range=d;}
+          }
+        }
+        return nearest;
+      }
+      const startI=anchor(start),goalI=anchor(target);
+      if(startI<0||goalI<0)return [];
       const push=(i,rank)=>{const n={i,rank};let k=heap.length;heap.push(n);while(k>0){const a=(k-1)>>1;if(heap[a].rank<=rank)break;heap[k]=heap[a];k=a;}heap[k]=n;};
       const pop=()=>{const first=heap[0].i,last=heap.pop();if(heap.length){let k=0;while(k*2+1<heap.length){let j=k*2+1;if(j+1<heap.length&&heap[j+1].rank<heap[j].rank)j++;if(heap[j].rank>=last.rank)break;heap[k]=heap[j];k=j;}heap[k]=last;}return first;};
       const offsets=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
       cost[startI]=0;push(startI,0);let reached=-1;
       while(heap.length){
         const i=pop();if(visited[i])continue;visited[i]=1;
-        const px=i%N,py=Math.floor(i/N),here=fromIndex(i);
-        if(i===goalI||(dist(here,target)<STEP*.85&&traversable(target))){reached=i;break;}
+        const px=i%N,py=Math.floor(i/N);
+        if(i===goalI){reached=i;break;}
         for(const [dx,dy] of offsets){const nx=px+dx,ny=py+dy,j=ny*N+nx;
           if(nx<0||ny<0||nx>=N||ny>=N||visited[j]||!valid(j))continue;
           if(dx&&dy&&(!valid(py*N+nx)||!valid(ny*N+px)))continue;
@@ -1219,10 +1290,16 @@
         }
       }
       if(reached<0)return [];
-      const raw=[];for(let n=reached;n!==startI&&n>=0;n=parent[n])raw.push(fromIndex(n));raw.reverse();raw.push(target);
-      const simplified=[];let prior=start,lastDirection='';
-      for(const p of raw){const d=`${Math.sign(Math.round((p.x-prior.x)*100))},${Math.sign(Math.round((p.y-prior.y)*100))}`;
-        if(d===lastDirection)simplified[simplified.length-1]=p;else simplified.push(p);prior=p;lastDirection=d;}
+      const raw=[];
+      for(let n=reached;n>=0;n=parent[n])raw.push(fromIndex(n));
+      raw.reverse();raw.push(target);
+      const simplified=[];
+      let from=start;
+      for(let i=1;i<raw.length;i++){
+        if(clearSegment(from,raw[i]))continue;
+        from=raw[i-1];simplified.push(from);
+      }
+      simplified.push(target);
       return simplified;
     }
     function getState() {
@@ -1241,16 +1318,23 @@
     }
     function emitState() {options.onState?.(getState());schedule();}
     function message(label) {shortMessage=label;messageUntil=visualTime+3.1;options.onHint?.(label);dirty=true;schedule();}
-    function nearest(stopDistance) {
-      let q=null,range=stopDistance;
+    function interactionRange() {return state.mode==='drive'?1.9:1.56;}
+    function nearest() {
+      let q=null,range=interactionRange();
       for(const point of state.points){const d=dist(state.player,point);if(d<range){range=d;q=point;}}
       return q;
     }
+    function companionPoint() {
+      const c=state.companion;
+      if(!c)return null;
+      const home=state.points.find(q=>q.residentId===c.id);
+      return home?{...home,x:c.x,y:c.y,companion:true}:null;
+    }
     function updateNearby() {
-      const next=nearest(state.mode==='drive'?1.8:1.53);
+      const next=nearest();
       const shiftStop=next&&state.shiftStops.find(s=>window.EarthShifts.matches(s.venue,next));
       const delivery=next?.type==='resident'&&state.site?.delivery?.residentId===next.residentId;
-      const key=[next?.type,next?.residentId,next?.plot,shiftStop?.id,Boolean(delivery),state.placed].join('/');
+      const key=[next?.type,next?.residentId,next?.plot,shiftStop?.id,Boolean(delivery),state.placed,state.mode,state.companion?.id].join('/');
       if(next===state.active&&key===state.hintKey)return;
       state.active=next;state.hintKey=key;
       if(!state.placed){
@@ -1260,53 +1344,73 @@
           options.onHint?.(delivery?`Parcel for ${next.label}. Interact to deliver.`:`${next.label}${resident?.role?' · '+resident.role:''}. Interact to speak.`);
         }else if(next?.type==='market')options.onHint?.('At the exchange. Interact to check the market parcel.');
         else if(next?.type==='building')options.onHint?.(`${next.label} · Lot ${next.plot+1}. Interact to inspect.`);
-        else if(state.site)options.onHint?.('Tap a marker to visit, or tap open ground to travel there.');
+        else if(state.companion)options.onHint?.(`Travelling with ${companionPoint()?.label||'your neighbour'}. Interact to speak together.`);
+        else if(state.site)options.onHint?.(state.mode==='drive'?'Tap a road to drive. Drag to pan or pinch to zoom.':'Tap a neighbour to meet, or tap open ground to walk.');
       }
       emitState();dirty=true;
     }
     function stop() {state.route=[];state.arrival=null;state.destination=null;state.player.moving=false;}
+    function clearInput() {
+      pressed.clear();fingers.clear();dragging=null;pinch=null;
+    }
+    function cancelTravel() {
+      clearInput();stop();dirty=true;emitState();
+    }
     function choose(point) {
       if(!point)return;
-      if(point.type==='vehicle'){toggleVehicle();return;}
+      if(point.type==='vehicle'){toggleVehicle(cameraFollows);return;}
       state.active=point;dirty=true;
-      const event=publicPoint(point);options.onInteract?.(event);emitState();
+      const event=publicPoint(point);
+      (point.onArrival||options.onInteract)?.(event);
+      emitState();
     }
-    function navigate(target,arrival=null) {
+    function kerb(point) {return {x:point.x,y:Math.round(point.y/BLOCK)*BLOCK};}
+    function navigate(target,arrival=null,followCamera=true) {
       if(!state.site||state.placed)return false;
-      if(overviewZoom!==null)exitOverview();
-      if(state.mode==='drive'&&arrival&&arrival.type!=='vehicle'){
-        // Aim for the public kerb outside the venue. People can speak from the van.
-        const q={x:arrival.x,y:Math.round(arrival.y/BLOCK)*BLOCK};target=q;
-      }
+      // A tap is a fresh destination, including when it lands on the player or outside the map.
+      stop();pressed.clear();dirty=true;
+      if(followCamera&&overviewZoom!==null)exitOverview();
+      cameraFollows=followCamera;
+      if(state.mode==='drive'&&arrival&&arrival.type!=='vehicle')target=kerb(arrival);
       const free=closestFree(target);
-      if(!free){message('Choose a street or open ground.');return false;}
-      if(dist(free,state.player)<.23){if(arrival)choose(arrival);return true;}
+      if(!free){
+        message(state.mode==='drive'?'Tap a road inside the district to drive there.':'Tap open ground or a doorstep inside the district.');
+        emitState();return false;
+      }
+      if(dist(free,state.player)<.16){
+        if(arrival)choose(arrival);else emitState();
+        return true;
+      }
       const route=makeRoute(state.player,free);
-      if(!route.length){message(state.mode==='drive'?'Choose a connected street.':'That path is closed. Try another approach.');return false;}
-      if(!moving())lastFrame=0;
-      state.route=route;state.destination=free;state.arrival=arrival;hovering=false;dirty=true;emitState();return true;
+      if(!route.length){
+        message(state.mode==='drive'?'Choose a connected street.':'That path is closed. Try another approach.');
+        emitState();return false;
+      }
+      lastFrame=0;
+      if(state.mode==='drive'&&!traversable(target,true))message('Nearest road selected. Tap another road to change course.');
+      state.route=route;state.destination=free;state.arrival=arrival;emitState();return true;
     }
     function interact() {
       if(state.placed){const l=state.lots.find(q=>q.plot===placingFocus);if(l&&!l.building)options.onPlace?.({plot:l.plot,x:l.x,y:l.y});return Boolean(l&&!l.building);}
-      const q=nearest(state.mode==='drive'?1.9:1.56);
-      if(q){stop();choose(q);return true;}
+      const q=nearest()||companionPoint();
+      if(q){stop();pressed.clear();choose(q);return true;}
       if(state.mode==='walk'&&dist(state.van,state.player)<1.6)return toggleVehicle();
-      message('Walk to a marker to meet someone or use a venue.');return false;
+      message(state.mode==='drive'?'Park by a doorstep or venue marker, then choose Interact.':'Walk to a marker to meet someone or use a venue.');return false;
     }
-    function toggleVehicle() {
+    function toggleVehicle(followCamera=cameraFollows) {
       if(!state.site)return false;
       if(state.placed)setPlacement(null);
-      stop();const p=state.player;
+      stop();pressed.clear();const p=state.player;
       if(state.mode==='drive'){
         state.van={...p};state.mode='walk';
         const q=closestFree(add(p,.46,.48),false);if(q)Object.assign(p,{x:q.x,y:q.y});
         message('On foot');
       }else if(dist(p,state.van)<1.65){
-        Object.assign(p,state.van);state.mode='drive';message('Driving the community van');
+        Object.assign(p,state.van);state.mode='drive';message('Tap a road to drive. Use Interact when parked by a marker.');
       }else{
-        message('Walking to the community van');navigate(state.van,{type:'vehicle',x:state.van.x,y:state.van.y});return true;
+        message('Walking to the community van');return navigate(state.van,{type:'vehicle',x:state.van.x,y:state.van.y},followCamera);
       }
-      hovering=false;dirty=true;updateNearby();emitState();return true;
+      cameraFollows=followCamera;dirty=true;updateNearby();emitState();return true;
     }
     function manual(dx,dy,length) {
       if(!dx&&!dy)return false;
@@ -1317,7 +1421,7 @@
         if(traversable(a)&&Math.abs(px)>.08&&(!traversable(b)||Math.abs(px)>=Math.abs(py)))candidate=a;
         else if(traversable(b)&&Math.abs(py)>.08)candidate=b;else return false;
       }
-      const oldX=p.x,oldY=p.y;p.x=candidate.x;p.y=candidate.y;p.dx=p.x-oldX;p.dy=p.y-oldY;p.moving=true;hovering=false;return true;
+      const oldX=p.x,oldY=p.y;p.x=candidate.x;p.y=candidate.y;p.dx=p.x-oldX;p.dy=p.y-oldY;p.moving=true;cameraFollows=true;return true;
     }
     function holdMove(direction) {
       if(!AXIS[direction]||!state.site)return false;
@@ -1325,12 +1429,13 @@
       if(overviewZoom!==null)exitOverview();
       if(pressed.has(direction))return true;
       if(!moving())lastFrame=0;
-      stop();pressed.add(direction);const v=AXIS[direction];manual(v[0],v[1],state.mode==='drive'?.45:.28);dirty=true;updateNearby();schedule();return true;
+      stop();pressed.add(direction);const v=AXIS[direction];manual(v[0],v[1],state.mode==='drive'?.45:.28);dirty=true;updateNearby();emitState();return true;
     }
     function releaseMove(direction){pressed.delete(direction);}
     function move(direction) {
       if(!AXIS[direction]||!state.site)return false;
       if(state.placed){cyclePlot(direction==='left'||direction==='up'?-1:1);return true;}
+      if(overviewZoom!==null)exitOverview();
       stop();const v=AXIS[direction];const result=manual(v[0],v[1],state.mode==='drive'?.80:.48);dirty=true;updateNearby();emitState();return result;
     }
     function follow(dt) {
@@ -1348,7 +1453,7 @@
       }
       if(p.moving)updateNearby();
       followCompanion();stepTraffic(dt);
-      if(!hovering&&!dragging&&!pinch){
+      if(cameraFollows&&!dragging&&!pinch){
         const target=followTarget(),rate=reduced?1:1-Math.exp(-dt*7.2);
         centreX+=(target.x-centreX)*rate;centreY+=(target.y-centreY)*rate;
       }
@@ -1377,24 +1482,30 @@
     function cyclePlot(direction) {
       const empty=state.lots.filter(l=>!l.building);
       if(!empty.length)return;
-      const current=empty.findIndex(l=>l.plot===placingFocus);placingFocus=empty[(current+direction+empty.length)%empty.length].plot;dirty=true;emitState();
+      const current=empty.findIndex(l=>l.plot===placingFocus);placingFocus=empty[(current+direction+empty.length)%empty.length].plot;previewedPlot=null;dirty=true;emitState();options.onPlotPreview?.(placingFocus);
     }
     function setPlacement(kind) {
-      if(!state.site)return;
-      if(overviewZoom!==null)exitOverview();
+      if(!state.site||(!kind&&!state.placed))return;
       if(kind){
         const empty=state.lots.filter(l=>!l.building);if(!empty.length){message('Every plot is in use.');return;}
-        if(!state.placed)savedZoom=zoom;
-        stop();pressed.clear();placingFocus=empty[0].plot;hovering=false;centreX=12;centreY=12;
+        if(!state.placed)priorPlacementView={zoom,overviewZoom,centreX,centreY,cameraFollows};
+        overviewZoom=null;
+        stop();clearInput();
+        placingFocus=empty[0].plot;cameraFollows=false;centreX=12;centreY=12;
         zoom=fitZoom();
-      }else if(state.placed&&savedZoom!==null){zoom=savedZoom;savedZoom=null;}
-      unit=baseUnit()*zoom;state.placed=kind||null;state.hover=null;dirty=true;emitState();
+      }else if(priorPlacementView){
+        ({zoom,overviewZoom,centreX,centreY,cameraFollows}=priorPlacementView);
+        if(overviewZoom!==null)zoom=fitZoom();
+        priorPlacementView=null;
+      }
+      unit=baseUnit()*zoom;state.placed=kind||null;state.hover=null;previewedPlot=null;miniTick=-1;dirty=true;emitState();
+      if(kind)options.onPlotPreview?.(placingFocus);
     }
     function setSite(site) {
       const previous=state.site,previousKey=siteKey(previous),nextKey=siteKey(site);
       if(previousKey!==nextKey){
-        if(previousKey)visits.set(previousKey,{player:{...state.player},van:{...state.van},mode:state.mode,zoom:savedZoom??zoom});
-        stop();pressed.clear();state.placed=null;state.active=null;state.hover=null;state.companion=null;savedZoom=null;overviewZoom=null;shortMessage='';hovering=false;
+        if(previousKey)visits.set(previousKey,{player:{...state.player},van:{...state.van},mode:state.mode,zoom:priorPlacementView?.overviewZoom??priorPlacementView?.zoom??overviewZoom??zoom});
+        stop();clearInput();state.placed=null;previewedPlot=null;state.active=null;state.hover=null;state.companion=null;priorPlacementView=null;overviewZoom=null;shortMessage='';cameraFollows=true;
         if(!nextKey)visits.clear();
         const stored=nextKey&&visits.get(nextKey);
         state.player=stored?.player||{...returnPoint(site),dx:0,dy:1};state.van=stored?.van||vanAtExchange();state.mode=stored?.mode||'walk';
@@ -1406,35 +1517,79 @@
       if(previousKey!==nextKey || state.fingerprint!==nextFingerprint){
         const target=state.destination,arrival=state.arrival;
         districtData();streetLights=site&&lightRig?lightRig.lightsFor(state.decor,centre(MARKET)):[];state.fingerprint=nextFingerprint;
+        if(state.placed&&state.lots[placingFocus]?.building){
+          const vacant=state.lots.find(lot=>!lot.building);
+          if(vacant){placingFocus=vacant.plot;previewedPlot=null;options.onPlotPreview?.(placingFocus);}
+          else{setPlacement(null);message('Every plot is now in use.');}
+        }
         if(site&&!traversable(state.player)){
           const free=closestFree(state.player);if(free){state.player.x=free.x;state.player.y=free.y;}
         }
         if(site&&target){
-          stop();const updated=arrival?.type==='vehicle'?arrival:state.points.find(q=>q.type===arrival?.type&&q.residentId===arrival?.residentId&&q.plot===arrival?.plot);
-          if(!arrival||updated)navigate(target,updated||null);
+          const updated=arrival?.type==='vehicle'?arrival:resolveStop(arrival);
+          stop();
+          if(!arrival)navigate(target,null,cameraFollows);
+          else if(updated&&updated.buildingId===arrival.buildingId){
+            navigate(updated,arrival.onArrival?{...updated,onArrival:arrival.onArrival}:updated,cameraFollows);
+          }
         }
       }
       prepareCompanion();unit=baseUnit()*zoom;dirty=true;updateNearby();emitState();schedule();
+    }
+    function actorPosition(actor) {
+      return {x:actor.x,y:actor.y,dx:actor.dx,dy:actor.dy};
+    }
+    function snapshotView() {
+      if(!state.site)return null;
+      const camera=priorPlacementView||{zoom,overviewZoom,centreX,centreY,cameraFollows};
+      return {v:1,site:siteKey(state.site),mode:state.mode,player:actorPosition(state.player),
+        van:actorPosition(state.mode==='drive'?state.player:state.van),camera:{...camera}};
+    }
+    function restoreView(snapshot) {
+      if(!state.site||snapshot?.v!==1||snapshot.site!==siteKey(state.site))return false;
+      const {mode,player,van,camera}=snapshot;
+      const between=(n,min,max)=>Number.isFinite(n)&&n>=min&&n<=max;
+      const validActor=(p,drive)=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&
+        between(p.dx,-1.001,1.001)&&between(p.dy,-1.001,1.001)&&traversable(p,drive);
+      if((mode!=='walk'&&mode!=='drive')||!validActor(player,mode==='drive')||!validActor(van,true))return false;
+      if(mode==='drive'&&dist(player,van)>.001)return false;
+      if(!camera||typeof camera.cameraFollows!=='boolean'||!between(camera.zoom,.29,2.15)||
+         !between(camera.centreX,-3,SIDE+3)||!between(camera.centreY,-3,SIDE+3))return false;
+      if(camera.overviewZoom!==null&&(!between(camera.overviewZoom,.29,2.15)||camera.cameraFollows))return false;
+      // Resume the player's position, never an unconfirmed activity or an old arrival callback.
+      stop();clearInput();priorPlacementView=null;state.placed=null;previewedPlot=null;state.active=null;state.hover=null;
+      state.mode=mode;state.player=actorPosition(player);state.van=actorPosition(van);
+      state.companion=null;prepareCompanion();
+      overviewZoom=camera.overviewZoom;zoom=overviewZoom===null?camera.zoom:fitZoom();unit=baseUnit()*zoom;
+      centreX=camera.centreX;centreY=camera.centreY;cameraFollows=camera.cameraFollows;
+      lastFrame=0;miniTick=-1;shortMessage='';dirty=true;updateNearby();emitState();return true;
     }
     function resolveStop(ref) {
       if(!ref)return null;
       return state.points.find(p=>p.type===ref.type&&(p.type==='market'||p.type==='resident'&&p.residentId===ref.residentId||p.type==='building'&&p.plot===ref.plot&&(!ref.kind||p.kind===ref.kind)));
     }
-    function focusStop(ref) {const q=resolveStop(ref);return q?navigate(q,q):false;}
-    function atStop(ref) {const q=resolveStop(ref);return Boolean(q&&dist(state.player,q)<(state.mode==='drive'?1.9:1.57));}
-    function focusMarket() {const q=state.points.find(p=>p.type==='market');return q?navigate(q,q):false;}
-    function focusResident(id) {const q=state.points.find(p=>p.type==='resident'&&p.residentId===id);return q?navigate(q,q):false;}
+    function focusStop(ref,onArrival) {
+      const q=resolveStop(ref);
+      if(state.placed)return false;
+      if(!q){cancelTravel();return false;}
+      const arrival=onArrival?{...q,onArrival}:q;
+      if(atStop(ref)){stop();pressed.clear();choose(arrival);return true;}
+      return navigate(q,arrival);
+    }
+    function atStop(ref) {const q=resolveStop(ref);return Boolean(q&&dist(state.player,q)<interactionRange());}
+    function focusMarket() {return focusStop({type:'market'});}
+    function focusResident(id) {return focusStop({type:'resident',residentId:id});}
     function exitOverview() {
       if(overviewZoom===null)return;
-      zoom=overviewZoom;overviewZoom=null;unit=baseUnit()*zoom;hovering=false;
+      zoom=overviewZoom;overviewZoom=null;unit=baseUnit()*zoom;cameraFollows=true;
     }
     function toggleOverview() {
       if(!state.site||state.placed)return;
       if(overviewZoom!==null){exitOverview();recenter();}
-      else {overviewZoom=zoom;zoom=fitZoom();unit=baseUnit()*zoom;centreX=12;centreY=12;hovering=true;}
+      else {overviewZoom=zoom;zoom=fitZoom();unit=baseUnit()*zoom;centreX=12;centreY=12;cameraFollows=false;}
       miniTick=-1;dirty=true;schedule();
     }
-    function recenter() {exitOverview();hovering=false;const target=followTarget();centreX=target.x;centreY=target.y;miniTick=-1;dirty=true;schedule();}
+    function recenter() {exitOverview();cameraFollows=true;const target=followTarget();centreX=target.x;centreY=target.y;miniTick=-1;dirty=true;schedule();}
     function drawMini() {
       if(!miniCanvas||!miniButton)return;
       miniButton.hidden=Boolean(state.placed);if(state.placed||Math.floor(visualTime*6)===miniTick)return;
@@ -1456,7 +1611,7 @@
       const after=world(point.x,point.y);
       centreX=clamp(centreX+anchor.x-after.x,-3,SIDE+3);
       centreY=clamp(centreY+anchor.y-after.y,-3,SIDE+3);
-      hovering=true;
+      cameraFollows=false;
     }
     function zoomBy(factor,point) {
       if(!Number.isFinite(factor)||factor<=0)return;
@@ -1469,17 +1624,27 @@
       }
       dirty=true;schedule();
     }
+    function figureDistance(actor,sx,sy) {
+      const [x,y]=screen(actor.x,actor.y);
+      return Math.hypot(sx-x,sy-clamp(sy,y-.81*unit,y-.08*unit));
+    }
     function hit(sx,sy) {
       const w=world(sx,sy);
       if(state.placed){
         for(const lot of state.lots){const p=screen(lot.x,lot.y,.66);if(!lot.building&&(Math.hypot(sx-p[0],sy-p[1])<clamp(unit*.41,12,19)||(Math.abs(w.x-lot.x)<=2.17&&Math.abs(w.y-lot.y)<=2.17)))return {type:'plot',...lot};}
         return null;
       }
+      if(state.mode==='walk'&&state.companion&&figureDistance(state.companion,sx,sy)<Math.max(7,unit*.23)){
+        return companionPoint();
+      }
       let selected=null,best=Infinity,building=null,topDepth=-Infinity;
       for(const q of state.points){
         const pinPos=screen(q.x,q.y,.9),foot=screen(q.x,q.y,.10);
-        const score=Math.min(Math.hypot(sx-pinPos[0],sy-pinPos[1]),Math.hypot(sx-foot[0],sy-foot[1]));
-        if(score<best&&score<clamp(unit*.72,17,30)){best=score;selected=q;}
+        let score=Math.min(Math.hypot(sx-pinPos[0],sy-pinPos[1]),Math.hypot(sx-foot[0],sy-foot[1]));
+        if(q.type==='resident'&&q.residentId!==state.companion?.id){
+          score=Math.min(score,figureDistance(residentFigure(q),sx,sy));
+        }
+        if(score<best&&score<clamp(unit*.72,19,30)){best=score;selected=q;}
         const lot=centre(q.block),depth=lot.x+lot.y;
         if(depth<topDepth)continue;
         const base=screen(lot.x,lot.y),dx=sx-base[0],dy=sy-base[1];
@@ -1490,17 +1655,57 @@
       }
       if(selected)return selected;
       if(state.traffic){const q=state.traffic,p=screen(q.x,q.y,.5);if(Math.hypot(sx-p[0],sy-p[1])<Math.max(11,unit*.64))return {type:'service',x:q.x,y:q.y,label:'Co-op deliveries'};}
-      if(state.mode==='walk'){const v=screen(state.van.x,state.van.y,.5);if(Math.hypot(sx-v[0],sy-v[1])<Math.max(16,unit*.82))return {type:'vehicle',...state.van};}
+      if(state.mode==='walk'){
+        const v=screen(state.van.x,state.van.y,.5);
+        if(Math.hypot(sx-v[0],sy-v[1])<Math.max(16,unit*.82))return {type:'vehicle',...state.van};
+        // Only a tap on the passing figure itself should interrupt ground movement.
+        for(let i=0;i<5;i++){
+          const actor=streetWalker(i);
+          if(figureDistance(actor,sx,sy)<clamp(unit*.18,3,9))return {type:'pedestrian',x:actor.x,y:actor.y,label:'Passing neighbour'};
+        }
+      }
       return building||{type:'ground',...w};
     }
-    function tap(event) {
-      if(!state.site)return;const p=coords(event,canvas),q=hit(p.x,p.y);
-      if(state.placed){if(q){placingFocus=q.plot;options.onPlace?.({plot:q.plot,x:q.x,y:q.y});dirty=true;}else message('Choose a marked, vacant plot.');return;}
+    function passingHint(point) {
+      const recipient=state.site.residents.find(r=>r.id===state.site.delivery?.residentId);
+      if(recipient)return `Your parcel is for ${recipient.name}. Open Work to hand it over.`;
+      if(state.companion)return 'Open the resident’s day in People to choose your next stop together.';
+      const doors=state.points.filter(q=>q.type==='resident');
+      if(!doors.length)return 'Tap the market marker to visit the exchange.';
+      const closest=doors.reduce((a,b)=>dist(point,a)<dist(point,b)?a:b);
+      return `Nearest resident: ${closest.label}. Tap their doorstep marker to meet.`;
+    }
+    function tap(p,device) {
+      if(!state.site)return;
+      if(!state.placed&&state.mode==='drive'){
+        // Always honour a road tap, including where broad venue hitboxes overlap a kerb.
+        const ground=world(p.x,p.y);
+        if(traversable(ground,true)){navigate(ground,null,false);return;}
+        // Only an actual visible marker can direct an off-road tap to a specific venue.
+        // Other taps park on the closest visible lane; scenery beyond the map stops the van.
+        let marker=null,range=clamp(unit*.37,8,13);
+        for(const q of state.points){
+          if(q.type==='building'&&state.active?.buildingId!==q.buildingId&&!state.shiftStops.some(s=>window.EarthShifts.matches(s.venue,q)))continue;
+          const pin=screen(q.x,q.y,.86),d=Math.hypot(p.x-pin[0],p.y-pin[1]);
+          if(d<range){marker=q;range=d;}
+        }
+        navigate(marker?kerb(marker):ground,null,false);return;
+      }
+      const q=hit(p.x,p.y);
+      if(state.placed){
+        if(!q){message('Choose a marked, vacant plot.');return;}
+        placingFocus=q.plot;state.hover=null;dirty=true;
+        if((device==='touch'||device==='pen')&&previewedPlot!==q.plot){
+          previewedPlot=q.plot;emitState();options.onPlotPreview?.(q.plot);return;
+        }
+        previewedPlot=null;options.onPlace?.({plot:q.plot,x:q.x,y:q.y});return;
+      }
       if(!q)return;
+      if(q.type==='pedestrian'){stop();pressed.clear();message(passingHint(q));emitState();return;}
       if(q.type==='service'){const v=state.traffic;message(v.yielding?'The delivery driver is giving way.':`Co-op deliveries · next stop ${nextDelivery(v)}`);return;}
-      if(q.type==='vehicle')return toggleVehicle();
-      if(q.type!=='ground'&&dist(state.player,q)<(state.mode==='drive'?1.9:1.54)){stop();choose(q);return;}
-      navigate(q,q.type==='ground'?null:q);
+      if(q.type==='vehicle')return toggleVehicle(false);
+      if(q.companion||(q.type!=='ground'&&dist(state.player,q)<interactionRange())){stop();pressed.clear();choose(q);return;}
+      navigate(q,q.type==='ground'?null:q,false);
     }
     function resize() {
       const bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;
@@ -1574,54 +1779,80 @@
     const previousStyle=canvas.style.touchAction,oldTab=canvas.getAttribute('tabindex'),oldLabel=canvas.getAttribute('aria-label');
     canvas.style.touchAction='none';if(oldTab===null)canvas.tabIndex=0;
     if(!oldLabel)canvas.setAttribute('aria-label','District streets. Tap to walk, drag to look around, or use the arrow keys. E interacts. V boards the van.');
+    function beginPinch() {
+      const [a,b]=fingers.values();
+      const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+      pinch={distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),zoom,anchor:world(mid.x,mid.y)};
+      dragging=null;overviewZoom=null;
+    }
     listen(canvas,'pointerdown',e=>{
-      if(!state.site||e.button!==0)return;state.hover=null;canvas.focus({preventScroll:true});const p=coords(e,canvas);fingers.set(e.pointerId,p);
+      if(!state.site||e.button!==0||fingers.has(e.pointerId))return;
+      state.hover=null;
+      if(e.cancelable)e.preventDefault();
+      if(e.pointerType!=='touch')canvas.focus({preventScroll:true});
+      const p=coords(e,canvas);
+      fingers.set(e.pointerId,p);
       try{canvas.setPointerCapture(e.pointerId);}catch{}
-      if(fingers.size===2){
-        const [a,b]=fingers.values();
-        pinch={distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),zoom,anchor:world((a.x+b.x)/2,(a.y+b.y)/2)};
-        overviewZoom=null;dragging=null;
-      }
-      else dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false};
+      if(fingers.size===1){
+        dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,slop:e.pointerType==='touch'?12:5};
+      }else if(fingers.size===2)beginPinch();
     });
     listen(canvas,'pointermove',e=>{
       const p=coords(e,canvas);
       if(!fingers.has(e.pointerId)){
-        const target=hit(p.x,p.y);state.hover=target?.type==='ground'?null:target;dirty=true;return;
+        if(e.pointerType!=='touch'){
+          const target=hit(p.x,p.y);state.hover=target?.type==='ground'?null:target;dirty=true;
+        }
+        return;
       }
       fingers.set(e.pointerId,p);
-      if(pinch&&fingers.size>=2){const [a,b]=Array.from(fingers.values());const d=Math.hypot(a.x-b.x,a.y-b.y);
-        zoom=clamp(pinch.zoom*d/pinch.distance,.29,2.15);unit=baseUnit()*zoom;
-        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;return;}
+      if(pinch){
+        const [a,b]=fingers.values(),distance=Math.hypot(a.x-b.x,a.y-b.y);
+        zoom=clamp(pinch.zoom*distance/pinch.distance,.29,2.15);unit=baseUnit()*zoom;
+        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;return;
+      }
       if(dragging?.id!==e.pointerId)return;
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
-      if(!dragging.moved&&Math.hypot(dx,dy)<6)return;
-      dragging.moved=true;hovering=true;
-      centreX=clamp(dragging.x-(dx/unit+dy/(unit*TILT))/2,-3,SIDE+3);centreY=clamp(dragging.y-(dy/(unit*TILT)-dx/unit)/2,-3,SIDE+3);dirty=true;
+      if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
+      dragging.moved=true;cameraFollows=false;
+      centreX=clamp(dragging.x-(dx/unit+dy/(unit*TILT))/2,-3,SIDE+3);
+      centreY=clamp(dragging.y-(dy/(unit*TILT)-dx/unit)/2,-3,SIDE+3);dirty=true;
     });
-    listen(canvas,'pointerup',e=>{
-      const wasDrag=Boolean(dragging?.moved),wasPinch=Boolean(pinch),valid=fingers.has(e.pointerId);
-      fingers.delete(e.pointerId);if(dragging?.id===e.pointerId)dragging=null;
-      if(!fingers.size&&pinch){pinch=null;dirty=true;}
-      if(valid&&!wasDrag&&!wasPinch)tap(e);
-    });
-    const cancelPointer=e=>{fingers.delete(e.pointerId);if(dragging?.id===e.pointerId)dragging=null;if(!fingers.size&&pinch){pinch=null;dirty=true;}};
-    listen(canvas,'pointercancel',cancelPointer);listen(canvas,'lostpointercapture',cancelPointer);
+    function endPointer(e) {
+      if(!fingers.delete(e.pointerId))return;
+      if(pinch){
+        if(fingers.size>=2){beginPinch();return;}
+        pinch=null;
+        if(fingers.size){
+          const [id,p]=fingers.entries().next().value;
+          // Continue panning with the remaining finger; its release cannot steer the van.
+          dragging={id,start:p,x:centreX,y:centreY,moved:true};
+        }
+        dirty=true;return;
+      }
+      if(dragging?.id!==e.pointerId)return;
+      const gesture=dragging;dragging=null;
+      if(e.type!=='pointerup'||gesture.moved)return;
+      const release=coords(e,canvas);
+      if(Math.hypot(release.x-gesture.start.x,release.y-gesture.start.y)<gesture.slop)tap(gesture.start,gesture.device);
+    }
+    for(const event of ['pointerup','pointercancel','lostpointercapture'])listen(canvas,event,endPointer);
     listen(canvas,'pointerleave',()=>{state.hover=null;dirty=true;});
     listen(canvas,'wheel',e=>{if(!state.site)return;e.preventDefault();zoomBy(Math.exp(-clamp(e.deltaY,-150,150)*.0033),coords(e,canvas));},{passive:false});
     listen(canvas,'keydown',e=>{
       if(!state.site||e.ctrlKey||e.metaKey||e.altKey)return;const k=e.key.length===1?e.key.toLowerCase():e.key;
       if(KEYS[k]){e.preventDefault();if(!e.repeat)holdMove(KEYS[k]);}
       else if(['e',' ','Enter','v','m','+','=','-','Home','Escape'].includes(k)){e.preventDefault();if(e.repeat)return;
-        if(k==='v')toggleVehicle();else if(k==='m')toggleOverview();else if(k==='e'||k===' '||k==='Enter')interact();else if(k==='Home')recenter();else if(k==='Escape'){if(state.placed)setPlacement(null);else stop();}else zoomBy(k==='-'?1/1.2:1.2);}
+        if(k==='v')toggleVehicle();else if(k==='m')toggleOverview();else if(k==='e'||k===' '||k==='Enter')interact();else if(k==='Home')recenter();else if(k==='Escape'){if(state.placed)setPlacement(null);else cancelTravel();}else zoomBy(k==='-'?1/1.2:1.2);}
     });
     listen(canvas,'keyup',e=>{const dir=KEYS[e.key.length===1?e.key.toLowerCase():e.key];if(dir){pressed.delete(dir);e.preventDefault();}});
     listen(canvas,'blur',()=>pressed.clear());
-    if(typeof document!=='undefined')listen(document,'visibilitychange',()=>{pressed.clear();if(document.hidden)suspend();else{lastFrame=0;dirty=true;schedule();}});
+    if(typeof window!=='undefined')listen(window,'blur',()=>{pressed.clear();fingers.clear();dragging=null;pinch=null;});
+    if(typeof document!=='undefined')listen(document,'visibilitychange',()=>{pressed.clear();if(document.hidden){fingers.clear();dragging=null;pinch=null;suspend();}else{lastFrame=0;dirty=true;schedule();}});
     const sizing=typeof ResizeObserver!=='undefined'?new ResizeObserver(resize):null;sizing?.observe(canvas);
     const showing=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{
       visible=entries.some(e=>e.isIntersecting);
-      if(canvas.parentElement?.hidden){pressed.clear();stop();suspend();return;}
+      if(canvas.parentElement?.hidden){cancelTravel();suspend();return;}
       if(visible){lastFrame=0;dirty=true;resize();}
       // Accessible route buttons keep working when the canvas scrolls out of view.
       if(visible||moving())schedule();else suspend();
@@ -1631,7 +1862,7 @@
       canvas.style.touchAction=previousStyle;if(oldTab===null)canvas.removeAttribute('tabindex');else canvas.setAttribute('tabindex',oldTab);
       if(oldLabel===null)canvas.removeAttribute('aria-label');else canvas.setAttribute('aria-label',oldLabel);}
     resize();schedule();
-    return {setSite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleVehicle,resize,destroy,focusMarket,focusResident,focusStop,atStop,getState,recenter,zoomBy};
+    return {setSite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

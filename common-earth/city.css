@@ -74,7 +74,7 @@
 .city-metrics dt { font:550 10px/1.35 var(--sans); color:var(--muted); }.city-metrics dd { font:650 15px/1.3 var(--sans); color:var(--paper); margin:3px 0 0; }
 .city-brief { margin-top:9px; border-top:1px solid var(--line); padding-top:8px; }
 @media(max-width:950px){ .city-legend { display:none; }.city-chart-tools { justify-content:center; }.city-chart-scale { font-size:8px; }.city-chart-head{padding:10px 12px;}.city-chart-layers { flex:1; }.city-layer{flex:1;} }
-@media(max-width:730px){
+@media (max-width: 730px), (max-width: 900px) and (orientation: portrait){
   .city-stage.stage { height:clamp(385px,90vw,515px); }
   .city-chart-scale { max-width:105px; }.city-panel { padding:15px 16px; }.city-control select{font-size:16px;}
   .city-map-name { font-size:16.5px; }.city-map-detail { font-size:7.15px; }
@@ -84,7 +84,7 @@
 @media (pointer:coarse){ .city-control select,.city-commission,.city-layer,.city-secondary { min-height:44px; } }
 @media(max-height:490px) and (min-width:540px){.city-stage.stage{height:max(340px,83dvh)}.city-chart-head{padding-block:6px;}.city-title{font-size:22px;}.city-chart-tools{padding-block:3px;}}
 .city-inspect-link { display:none; }
-@media(max-width:730px) {
+@media (max-width: 730px), (max-width: 900px) and (orientation: portrait) {
   .city-inspect-link { display:block;padding:4px;color:var(--teal);font:550 11px/1.4 var(--sans);text-align:right;flex:0 1 auto;text-underline-offset:2px; }
   .city-chart-tools { flex-wrap:wrap; }.city-chart-layers { flex:1 1 230px; }.city-layer {padding-inline:4px;}
   .city-map-name { font-size:16.5px; }.city-map-detail{font-size:8px;}

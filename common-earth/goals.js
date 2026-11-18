@@ -46,6 +46,20 @@
     const catalog=options(site);
     return {aim:catalog.aims.find(m=>m.key===aimKey),guard:catalog.guards.find(m=>m.key===guardKey)};
   }
+  const cityAims={
+    housing:{project:'homes',metric:'capacity',name:'Courtyard homes'},
+    reach:{project:'transit',metric:'reachable',name:'Transit cooperatives'}
+  };
+  function plannedCity(site,aimKey,weeks,optimistic=false) {
+    const rule=cityAims[aimKey], model=root.EarthCityModel;
+    if(!rule || !model)return null;
+    const records=model.overview(site).records;
+    const byReview=records.map(p=>{
+      if(!p.target || p.turns>weeks || (optimistic && p.use===rule.project))return p;
+      return {...p,use:p.target,target:null,turns:0};
+    });
+    return {rule,model,records,value:model.overview(site,byReview)[rule.metric]};
+  }
   function preview(world,siteId,aimKey,guardKey,weeks) {
     const site=siteById(world,siteId);
     if(!site || world.activeId!==siteId)return reject('Visit the district where you want to set this goal.');
@@ -54,6 +68,10 @@
     if(!aim || !guard)return reject('Choose an aim and a safeguard available in this district.');
     if(aim.key===guard.key)return reject('Choose a different safeguard so you can follow two effects.');
     if(!integer(weeks,1,4))return reject('Choose a review in one to four weeks.');
+    if(weeks===1 && aim.target(aim.value)>aim.value){
+      const pending=plannedCity(site,aimKey,weeks,true);
+      if(pending && pending.value<aim.target(aim.value))return reject(pending.rule.name+' take two weeks to open. Choose a longer review or set this goal once enough construction is one week from opening.');
+    }
     return {ok:true,siteId:site.id,siteName:site.name,startWeek:world.week,dueWeek:world.week+weeks,
       aim:{key:aim.key,label:aim.measure,base:aim.value,target:aim.target(aim.value),hint:aim.hint},
       guard:{key:guard.key,label:guard.measure,base:guard.value,lower:!!guard.lower}};
@@ -87,6 +105,44 @@
     return {siteId:site.id,siteName:site.name,startWeek:entry.startWeek,dueWeek:entry.dueWeek,checkedWeek:entry.checkedWeek,done,
       aim:{label:aim.measure,base:a.base,target:a.target,value:aimValue,status:aimStatus},
       guard:{label:guard.measure,base:g.base,lower:!!guard.lower,value:guardValue,worst:g.worst,worstWeek:g.worstWeek,breached,status:guardStatus}};
+  }
+  function nextStep(sim){
+    const world=sim.state,entry=world.learningGoals?.active;
+    if(!entry)return null;
+    const site=siteById(world,entry.siteId),aim=metrics(site,entry.aim.key,entry.guard.key).aim;
+    if(!aim)return null;
+    const {siteId,dueWeek}=entry;
+    const wait=detail=>({kind:'week',siteId,label:'Review the next week',detail});
+    // Food can leave the pantry through consumption or shipping at the review itself.
+    // Use the same weekly accounting as the calendar before suggesting the player wait.
+    if(aim.key==='food' && dueWeek===world.week+1){
+      const food=sim.forecastNext().sites.find(report=>report.id===siteId)?.closing.food;
+      if(food>=entry.aim.target)return wait('The pantry is projected to close at '+food+' food against a target of '+entry.aim.target+'. Check the safeguard before advancing.');
+    }else if(aim.value>=entry.aim.target)return wait('Your aim is at target. Keep the safeguard through the week '+dueWeek+' review.');
+    const city=plannedCity(site,aim.key,dueWeek-world.week);
+    let step;
+    if(city){
+      if(city.value>=entry.aim.target)return wait('Work already commissioned in '+site.name+' will reach this target by week '+dueWeek+'.');
+      const {project,metric,name}=city.rule;
+      if(dueWeek-world.week<city.model.projects[project].turns)return wait(name+' take two weeks to open. This goal is due in week '+dueWeek+'.');
+      const candidates=city.records.filter(r=>r.use!==project && !r.target)
+        .map(r=>({r,plan:city.model.preview(site,world,r.id,project)}))
+        .filter(({plan})=>plan.ok && plan.completedView[metric]>aim.value)
+        .sort((a,b)=>Number(b.plan.available)-Number(a.plan.available) || Number(b.r.use==='open')-Number(a.r.use==='open') || b.plan.completedView[metric]-a.plan.completedView[metric]);
+      if(!candidates.length)return wait('The current precinct projects must finish or be reconsidered before another site can improve this aim.');
+      const {r,plan}=candidates[0];
+      step={kind:'city',siteId,precinct:r.id,project,label:'Inspect '+plan.title.toLowerCase()+' at '+r.name,detail:plan.forecast};
+    }else if(aim.key==='food'){
+      step={kind:'group',siteId,group:'work',actionId:'work:forage',label:'Tend the food beds in '+site.name,
+        detail:aim.value>=entry.aim.target?'Household needs and deliveries are projected to bring the pantry below target at review.':aim.hint};
+    }else{
+      const person=aim.key==='voices'?site.residents.find(p=>!p.heard):site.residents.find(p=>aim.key==='bond:'+p.id);
+      if(!person)return null;
+      const action=person.promise?'fulfil':!person.heard || person.lastTalk!==world.week?'listen':world.week-person.lastPromise>=3?'promise':null;
+      if(!action)return wait('You already spoke this week. Check in with '+person.name+' again next week or complete an activity together.');
+      step={kind:'resident',siteId,group:'people',residentId:person.id,actionId:action+':'+person.id,label:'Visit '+person.name,detail:aim.hint};
+    }
+    return root.EarthLegacy?.prepareStep(sim,step) || step;
   }
   function summary(world) {
     const book=world?.learningGoals;
@@ -138,7 +194,7 @@
     return true;
   }
 
-  function mount(container,{sim,onResult,onChange}={}) {
+  function mount(container,{sim,onResult,onChange,onFollow}={}) {
     if(!container || !sim)return {render(){},destroy(){}};
     const outer=container.closest('details'), outerTitle=outer?.querySelector('summary');
     let draftSite=null,aimKey='food',guardKey='trust',horizon=2,lastSignature='',busy=false,composing=false;
@@ -212,14 +268,26 @@
       if(!site){container.replaceChildren();lastSignature='';draftSite=null;return;}
       const opts=options(site);
       if(site.id!==draftSite){draftSite=site.id;aimKey='food';guardKey='trust';horizon=2;composing=false;}
-      const signature=JSON.stringify([site.id,site.name,state.week,book,opts.aims.map(m=>m.value),opts.guards.map(m=>m.value),composing]);
+      const guide=book.active?nextStep(sim):null;
+      const signature=JSON.stringify([site.id,site.name,state.week,book,guide,opts.aims.map(m=>m.value),opts.guards.map(m=>m.value),composing]);
       if(signature===lastSignature)return;
       lastSignature=signature;
       const focused=container.contains(document.activeElement)?document.activeElement.dataset.goalControl:null;
       const oldHistory=container.querySelector('.goal-history')?.open;
       const parts=[];
-      if(book.active)parts.push(review(book.active,'Goal in progress'));
-      if(!book.active && last)parts.push(review(last,'Latest goal review'));
+      if(book.active){
+        const active=review(book.active,'Goal in progress'),step=guide;
+        if(step && onFollow){
+          if(step.detail)active.append(el('p',step.detail,'goal-note'));
+          active.append(button(step.label,()=>onFollow(step),'secondary'));
+        }
+        parts.push(active);
+      }
+      if(!book.active && last){
+        const reached=last.aim.value>=last.aim.target;
+        const verdict=reached?(last.guard.breached?'Aim reached, safeguard crossed':'Both commitments met'):(last.guard.breached?'Both commitments missed':'Safeguard held, aim fell short');
+        parts.push(review(last,verdict));
+      }
       if(!book.active && (!last || composing))parts.push(editor(site,opts));
       else if(!book.active && last) {
         const again=button('Set another goal',()=>{
@@ -240,5 +308,5 @@
     render();
     return {render,destroy(){container.replaceChildren();lastSignature='';}};
   }
-  root.EarthGoals=Object.freeze({options,preview,valid,summary,start,tick,mount});
+  root.EarthGoals=Object.freeze({options,preview,valid,summary,start,tick,nextStep,mount});
 })(typeof window==='undefined'?globalThis:window);

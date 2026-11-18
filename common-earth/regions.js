@@ -201,8 +201,15 @@
       }
       ctx.restore();
     }
-    function hit(p){
-      return hits.find(a=>(p.x>=a.x&&p.x<=a.x+a.w&&p.y>=a.y&&p.y<=a.y+a.h)||Math.hypot(p.x-a.dx,p.y-a.dy)<6)?.city||null;
+    function hit(p,padding=0){
+      let city=null,best=padding;
+      for(const a of hits){
+        const dx=Math.max(a.x-p.x,0,p.x-a.x-a.w),dy=Math.max(a.y-p.y,0,p.y-a.y-a.h);
+        const gap=Math.min(Math.hypot(dx,dy),Math.hypot(p.x-a.dx,p.y-a.dy)-6);
+        if(gap<=0)return a.city;
+        if(gap<best){best=gap;city=a.city;}
+      }
+      return city;
     }
     return {draw,labels,hit,destroy(){dead=true;needed.clear();hits=[];}};
   }

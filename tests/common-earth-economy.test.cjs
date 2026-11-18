@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const game = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const browser = vm.createContext({});
 browser.window = browser;
-for (const name of ['navigation', 'city', 'partners', 'campaigns', 'simulation']) {
+for (const name of ['navigation', 'city', 'partners', 'campaigns', 'shifts', 'simulation']) {
   vm.runInContext(fs.readFileSync(path.join(game,name+'.js'),'utf8'),browser,{filename:name+'.js'});
 }
 const start = {name:'Stone Town',lat:-6.1622,lon:39.1922,water:false};
@@ -184,4 +184,14 @@ test('a forfeited diplomatic deposit transfers once and its outstanding balance 
   }
   assert.equal(messages.filter(t=>t.includes('received the forfeited')).length,1);
   assert.equal(get(load()).standing,-1);
+});
+
+test('returning an unused shift effort cannot give two different projects the same identity',()=>{
+  const {sim,load}=world(),site=sim.active();
+  ok(sim.beginShift(site.residents[0].id));
+  ok(sim.act('build:garden',0));
+  ok(sim.finishShift());
+  ok(sim.act('build:workshop',1));
+  assert.notEqual(site.buildings[0].id,site.buildings[1].id);
+  assert.deepEqual(Array.from(load().active().buildings,b=>b.kind),['garden','workshop']);
 });

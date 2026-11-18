@@ -152,7 +152,7 @@
     }
     else if(site.lastShiftWeek===world.week)reason='This district has already hosted a shift this week.';
     else if(resident.lastShiftWeek&&world.week-resident.lastShiftWeek<3)reason=`${resident.name} can host another shift in week ${resident.lastShiftWeek+3}.`;
-    else if(world.effort<1)reason='A resident shift needs 1 effort.';
+    else if(world.effort<1)reason='A resident shift needs 1 effort. Advance the week to refresh.';
     return {available:!reason,reason};
   }
   function start(world,site,residentId){
@@ -171,9 +171,9 @@
       clock:clock(shift.time),timeLeft:duration(END-shift.time),location:venueName(site,shift.at),
       household:budget,householdLabel:`Household costs ${NEED} · reserve ${budget.reserve} · pay ${budget.pay} · covered by neighbours ${budget.relief}`,
       guide:'The clock moves when you arrive or choose an activity. Finish by 15:00. After a completed visit, covering 2 household credits adds 1 wellbeing next week. A shortfall costs 1 wellbeing. Up to 2 spare credits carry into this resident’s next shift.',
-      priorityLabel:`${r.name} asked to make time for “${story.stops[story.priority].name}”. Combining that visit with another builds 1 bond.`,
+      priorityLabel:`${r.name} asked to make time for “${story.stops[story.priority].name}”. ${r.bond<10?'Combining that visit with another builds 1 bond.':'Your bond is already at 10.'}`,
       stops,currentStopId:current?.id||null,choices:current?.choices||[],history,
-      finishLabel:shift.history.length?'Finish the day together':'Leave the shift',canFinish:true};
+      finishLabel:shift.history.length?'Finish the day together':'Cancel day · recover 1 effort',canFinish:true};
   }
   function arrive(site,stopId,week){
     if(!live(site,week))return reject('There is no current resident shift.');

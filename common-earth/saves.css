@@ -18,3 +18,6 @@
 .save-review h4{margin:0}
 .save-review[hidden],.save-notice[hidden]{display:none}
 .save-notice.warning{color:#ffd59b}
+
+.save-warning { display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; margin-bottom:.75rem; padding:.6rem .85rem; color:var(--paper); background:#30372d; border-left:3px solid var(--gold); font-size:.875rem; }
+.save-warning button { min-height:44px; }

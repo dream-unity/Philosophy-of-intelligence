@@ -10,6 +10,8 @@
   const project=s=>(s.neighbourWork?.completed || 0)>0;
   const stocked=s=>s.food>=8;
   const tools=s=>s.materials>=6;
+  const keptPromise=s=>s.stats.kept>0;
+  const caretaker=s=>s.funds>=7;
   const heardAll=s=>s.residents.every(p=>p.heard);
   const heard=(s,slots)=>slots.every(i=>s.residents[i].heard);
   const baseProof={
@@ -17,7 +19,7 @@
     promise:{label:'Keep a promise to a resident',test:(w,s)=>s.stats.kept>0},
     project:{label:'Finish a shared project between neighbours',test:(w,s)=>project(s)},
     route:{label:'Open an exchange route from this community',test:linked},
-    voyage:{label:'Bring an expedition home from this community',test:completedVoyage},
+    voyage:{label:'Complete an expedition launched from this community',test:completedVoyage},
     hall:{label:'Open an assembly hall',test:(w,s)=>has(s,'hall')},
     garden:{label:'Open a community garden',test:(w,s)=>has(s,'garden')},
     workshop:{label:'Open a repair workshop',test:(w,s)=>has(s,'workshop')},
@@ -32,7 +34,7 @@
     stone:{
       title:'An address everyone can use',
       seats:[1,2],voices:['how a tool can travel between several small jobs','who can get into a storeroom when its owner is away'],proof:['parcel','workshop','project'],
-      test:s=>s.stats.kept>0,support:'Keep a local promise by review so a second keyholder can rely on the handover.',backing:'A trusted second keyholder',
+      test:keptPromise,support:'Keep a local promise by review so a second keyholder can rely on the handover.',backing:'A trusted second keyholder',
       trials:[
         trial('stock','Rent the stock shelves to traders','The co-op earns a reliable fee. A second keyholder could run the tool shelf after the traders leave.',{},'funds',4,1,'Traders stocked the room before dawn. A neighbour needing a borrowed tool found nobody with a key.','Traders stocked the room before dawn. A trusted second keyholder opened the tool shelf when a neighbour came after closing.'),
         trial('keys','Let borrowers manage the tool shelf','Spend 2 funds on keys and a ledger. Neighbours can borrow without waiting for a trader.',{funds:2},'trust',4,2,'Two neighbours borrowed a spanner. The early trader had to track down the key before unloading.','Two neighbours borrowed a spanner. A trusted handover left the key and ledger ready for the early trader.')
@@ -53,7 +55,7 @@
       ]},
     valparaiso:{
       title:'The cost of the hill',seats:[0,2],voices:['how much food one collection can carry','whose time the walk to a collection point consumes'],proof:['parcel','garden','hall'],
-      test:(s)=>s.stats.kept>0,support:'Keep at least one local promise by the review to give vulnerable neighbours a dependable handover.',backing:'A trusted handover',
+      test:keptPromise,support:'Keep at least one local promise by the review to give vulnerable neighbours a dependable handover.',backing:'A trusted handover',
       trials:[
         trial('depot','Pool collections at one depot','One bulk trip yields extra food. A dependable local contact can pass baskets on to uphill households.',{},'food',4,0,'The depot filled the shelves. One household still needed a second trip up the hill.','The depot filled the shelves. A trusted contact passed baskets to neighbours who could not make the return walk.'),
         trial('uphill','Pay for small uphill collections','Spend 2 funds to bring the collection point closer to residents. Smaller loads leave fewer spare baskets.',{funds:2},'wellbeing',4,2,'Shorter walks brought a carer to the kitchen, though the handovers still ran late.','A carer reached the nearby collection in time. A familiar contact took the last basket to a household further up.')
@@ -74,7 +76,7 @@
       ]},
     reykjavik:{
       title:'A light left on',seats:[1,2],voices:['how much paid repair time the room can support','who can afford a warm place to meet after closing'],proof:['workshop','hall','project'],
-      test:s=>s.funds>=7,support:'Keep 7 funds by review to cover a caretaker and keep the room open during handovers.',backing:'A paid caretaker',
+      test:caretaker,support:'Keep 7 funds by review to cover a caretaker and keep the room open during handovers.',backing:'A paid caretaker',
       trials:[
         trial('repairs','Guarantee the repair hours','A regular bench booking earns income. A caretaker could pass the key to neighbours after the last job.',{},'funds',4,1,'The repairer finished a full shift. With no one paid to close up later, the key went home.','The repairer finished a full shift. A paid caretaker handed the room to an evening reading group.'),
         trial('open','Guarantee an open evening','Spend 2 funds on an evening booking. Neighbours can stay without buying anything.',{funds:2},'wellbeing',4,2,'Neighbours met in the warm room. The last volunteer stayed late to put every tool back.','Neighbours met in the warm room. A paid caretaker set the benches out for the first repair shift.')
@@ -84,7 +86,7 @@
       brief:'Imagine two residents sharing one room. A repairer wants to keep the bench ready for paid jobs. A convenor wants a room that neighbours can enter without paying.',
       question:'Whose time makes a room truly public?',
       seats:[1,2],voices:['who depends on a dependable workbench','who misses meetings when nobody can stay to close up'],proof:['workshop','hall','project'],
-      test:s=>s.stats.kept>0,support:'Keep a local promise by review so someone trusts the proposed handover.',backing:'A trusted keyholder',
+      test:keptPromise,support:'Keep a local promise by review so someone trusts the proposed handover.',backing:'A trusted keyholder',
       trials:[
         trial('bench','Book the bench for paid repairs','A regular shift earns funds. A trusted keyholder can let a group use the room afterwards.',{},'funds',4,1,'The repairer kept the bench open. The evening group found the room locked.','The repairer kept the bench open. A trusted keyholder stayed back so a group could meet afterwards.'),
         trial('room','Give the evening group a key','Spend 2 funds on room access. The evening group can meet on its own terms.',{funds:2},'trust',4,2,'The group met. Someone had to find the repairer the next morning to sort out the tools.','The group met. A trusted handover left the complete tool set on the bench for morning repairs.')
@@ -134,7 +136,8 @@
     const status=saved?.phase||'offered',phase=status==='active'&&milestones.every(m=>m.met)?'ready':status;
     const pilot=b.trials.find(t=>t.id===saved?.choice);
     return {key,title:b.title,brief:opening.brief,question:opening.question,label,phase,
-      requesters:requesters.map(p=>p.name+' · '+p.role).join(' and '),milestones,reviewWeek:saved?.due||null,
+      requesters:requesters.map(p=>p.name+' · '+p.role).join(' and '),milestones,
+      testimony:requesters.flatMap((p,index)=>p.heard?[{name:p.name,text:witnesses[key][index]}]:[]),reviewWeek:saved?.due||null,
       support:b.support,conditionMet:b.test(site),choice:pilot?.name||'',outcome:saved?.outcome||''};
   }
   const witnesses={
@@ -148,6 +151,46 @@
     inland:['I can share this bench if I can find every tool before my first job.','A room is free on paper. Somebody still gives up their evening to shut the door.'],
     water:['Food in this locker stays dry long enough for the next shared meal.','A visiting crew cannot lend us its voice today. It could still need our pump tomorrow.']
   };
+  function guidance(sim,site) {
+    const saved=record(site);
+    if(!saved || !['active','trial'].includes(saved.phase))return null;
+    const state=summary(sim.state,site),brief=briefs[state.key],siteId=site.id;
+    const group=(name,id,label,detail)=>({kind:'group',group:name,siteId,actionId:id,label,detail});
+    const meet=(person,action='listen')=>({kind:'resident',siteId,group:'people',residentId:person.id,actionId:action+':'+person.id,
+      label:'Visit '+person.name,detail:state.title+'. '+(saved.phase==='trial'?state.support:state.milestones[0].detail)});
+    function prepareBacking(){
+      const detail=state.support+(state.phase==='ready'?' Both trial choices are already open in Council.':'');
+      if(brief.test===heardAll)return {...meet(site.residents.find(p=>!p.heard)),detail};
+      if(brief.test===keptPromise)return {...root.EarthLegacy.promiseStep(sim.state,site),detail};
+      const task=brief.test===tools?'salvage':brief.test===caretaker?'contract':'forage';
+      const work=sim.actions('work',siteId).find(a=>a.id==='work:'+task);
+      return group('work',work.id,work.label,detail);
+    }
+    if(state.phase==='trial'){
+      if(!state.conditionMet && sim.state.effort)return prepareBacking();
+      return {kind:'week',siteId,label:'Review the next week',detail:state.title+' is due for review in week '+saved.due+'. '+state.support};
+    }
+    if(state.phase==='ready' && !state.conditionMet)return prepareBacking();
+    if(state.phase==='ready')return {...group('council',null,'Choose a local trial',state.title+'. Both sides have been heard and the practical step is complete. Choose how to run the trial.'),
+      page:'commission',inspectPilot:true};
+    const unheard=brief.seats.map(i=>site.residents[i]).find(p=>!p.heard);
+    if(unheard)return meet(unheard);
+    // Every invitation offers several ways to contribute. Point to an actual local
+    // job; the invitation still lists every other way to meet its requirement.
+    const practical=sim.actions('build',siteId).filter(a=>a.kind && brief.proof.includes(a.kind));
+    const project=practical.find(a=>a.available);
+    if(project)return group('build',project.id,'Plan a '+project.label.toLowerCase(),state.title+'. '+state.milestones[1].detail);
+    if(brief.proof.includes('parcel')){
+      const action=sim.actions('work',siteId).find(a=>a.id.startsWith('courier:'));
+      if(action)return group('work',action.id,action.label,state.title+'. '+action.description);
+    }
+    if(brief.proof.includes('promise'))return {...root.EarthLegacy.promiseStep(sim.state,site),detail:state.title+'. '+state.milestones[1].detail};
+    if(site.buildings.length<9 && practical.length)return group('build',practical[0].id,'Plan a '+practical[0].label.toLowerCase(),state.title+'. '+state.milestones[1].detail);
+    if(brief.proof.includes('project'))return {...group('people',null,'Plan a shared project',state.title+'. The neighbours can work together on a practical trial.'),page:'projects'};
+    if(practical.length)return {...group('build',null,'Choose a lot to reopen',state.title+'. Reopen a central lot to make space for the proposed building.'),inspectReclaim:true};
+    return {...group('council',null,'Review the local commission',state.title),page:'commission'};
+  }
+
   function testimony(world,site,person) {
     const saved=record(site);
     if(!saved || !['active','trial'].includes(saved.phase))return '';
@@ -209,5 +252,5 @@
     if(!Number.isSafeInteger(saved.due) || saved.due<1 || !briefs[saved.key].trials.some(p=>p.id===saved.choice))return false;
     return saved.phase==='trial' || (typeof saved.outcome==='string' && typeof saved.supported==='boolean');
   }
-  root.EarthCampaigns=Object.freeze({preview,summary,found,actions,tick,testimony,valid});
+  root.EarthCampaigns=Object.freeze({preview,summary,found,actions,tick,testimony,guidance,valid});
 })(typeof window==='undefined'?globalThis:window);

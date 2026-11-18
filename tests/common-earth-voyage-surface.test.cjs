@@ -62,3 +62,17 @@ test('saved original voyage resumes its itinerary and completes with a valid rep
     voyage=result.voyage;
   }
 });
+
+test('an ordinary atlas survey can quote eligibility and costs before tracing the terrain', () => {
+  const home=city('Melbourne VIC'), destination=city('Hobart TAS'), terrain=runtime.EarthRouteTerrain;
+  let traces=0;
+  runtime.EarthRouteTerrain={describe(...args){traces++;return terrain.describe(...args);}};
+  try{
+    const terms=voyages.terms(home,destination,'survey');
+    assert(terms.ok);
+    assert.equal(traces,0);
+    const detail=voyages.preview(home,destination,'survey');
+    assert.equal(traces,1);
+    for(const key of ['distance','legs','cost','targetDays'])assert.deepEqual(detail[key],terms[key]);
+  }finally{runtime.EarthRouteTerrain=terrain;}
+});

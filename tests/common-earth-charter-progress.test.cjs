@@ -93,3 +93,73 @@ test('a knowledge charter guides a learner through the workshop gate and tracks 
   step(s,parcel.action.actionId);
   assert.equal(progress(s).rows.find(row=>row.id==='deliveries').met,true);
 });
+
+for(const charter of ['care','voice','craft']){
+  test('a first-time player can follow available steps all the way to the '+charter+' charter',()=>{
+    const s=game();
+    success(s.found(place('Stone Town',-6.1622,39.1922)));
+    let settlements=1;
+    for(let n=0;n<120 && !s.state.completed;n++){
+      const before=JSON.stringify(s.state),guide=browser.EarthLegacy.guidance(s);
+      assert.equal(JSON.stringify(s.state),before,'reading the guide must be free');
+      assert.ok(guide?.label,'missing guidance');
+      if(guide.siteId!==s.state.activeId)success(s.visit(guide.siteId));
+      if(guide.kind==='week'){success(s.advance());continue;}
+      if(guide.kind==='atlas'){
+        assert.ok(s.sponsorshipOffer().available,'the atlas shortcut should wait for viable sponsorship');
+        assert.equal(settlements++,1,'a third community should never be required');
+        success(s.found(place('Lisbon',38.72,-9.14)));
+        continue;
+      }
+      assert.ok(['resident','group'].includes(guide.kind),guide.label);
+      const options=s.actions(guide.group);
+      const action=guide.actionId?options.find(a=>a.id===guide.actionId):
+        guide.inspectVote?options.find(a=>a.id.startsWith('vote:')&&a.available):
+        options.find(a=>a.id==='charter:'+charter);
+      assert.ok(action,guide.label);
+      assert.ok(action.available,guide.label+' recommended a disabled choice: '+action.reason);
+      success(s.act(action.id));
+    }
+    assert.equal(settlements,2);
+    assert.ok(s.state.completed,'all steps should end in ratification');
+    const succession=browser.EarthLegacy.guidance(s);
+    if(s.state.effort===0){assert.equal(succession.kind,'week');success(s.advance());}
+    assert.equal(browser.EarthLegacy.guidance(s).page,'legacy');
+    assert.ok(browser.CommonEarthSim.readSave(JSON.stringify(s.state)));
+  });
+}
+
+test('both trials in all nine local commissions can be completed by following their local priorities',()=>{
+  const ctx=vm.createContext({});ctx.window=ctx;
+  for(const name of ['navigation','city','neighbours','shifts','campaigns','legacy','simulation']){
+    vm.runInContext(fs.readFileSync(path.join(source,name+'.js'),'utf8'),ctx);
+  }
+  const places=[
+    ['stone',-6.16,39.19],['melbourne',-37.81,144.96],['mombasa',-4.04,39.66],
+    ['valparaiso',-33.04,-71.63],['rotterdam',51.92,4.48],['suva',-18.13,178.42],
+    ['reykjavik',64.14,-21.94],['inland',47.38,8.54],['water',0,-150]
+  ];
+  for(const [key,lat,lon] of places)for(const trial of [0,1]){
+    const sim=ctx.CommonEarthSim.create({storage:null});
+    success(sim.found({name:'Independent trial',lat,lon,water:key==='water'},'Neighbourhood','accept'));
+    const site=sim.active();
+    assert.equal(site.commission.key,key);
+    for(let move=0;move<30 && site.commission.phase!=='complete';move++){
+      const step=ctx.EarthLegacy.guidance(sim);assert.ok(step,key);
+      if(step.kind==='week'){success(sim.advance());continue;}
+      const actions=sim.actions(step.group);
+      const selected=step.inspectPilot?actions.filter(a=>a.id.startsWith('commission:pilot:'))[trial]:
+        actions.find(a=>a.id===step.actionId);
+      assert.ok(selected?.available,key+': '+step.label);
+      success(sim.act(selected.id));
+    }
+    assert.equal(site.commission.phase,'complete',key);
+    assert.equal(site.commission.supported,true,key+' can secure backing before the review');
+    assert.equal(ctx.EarthCampaigns.summary(sim.state,site).testimony.length,2);
+    const reviewed=site.commission.outcome;
+    success(sim.advance());
+    assert.equal(site.commission.outcome,reviewed,'completed trials must stay final');
+    assert.ok(ctx.CommonEarthSim.readSave(JSON.stringify(sim.state)),key+' round-trip');
+    sim.destroy();
+  }
+});

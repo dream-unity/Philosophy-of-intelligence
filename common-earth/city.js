@@ -225,6 +225,19 @@
   const model=window.EarthCityModel;
   const CENTRE=[420,271], SX=104, SY=71;
   const SITES=[[420,129],[576,200],[576,342],[420,413],[264,342],[264,200]];
+  const mapNodes=[...SITES,CENTRE];
+  const arrowDirection={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+  function neighbourOnMap(from,[dx,dy]){
+    const [x,y]=mapNodes[from==='centre'?SITES.length:from];
+    let nearest=null,best=Infinity;
+    for(const [i,[px,py]] of mapNodes.entries()){
+      const ahead=(px-x)*dx+(py-y)*dy,across=Math.abs((px-x)*dy-(py-y)*dx);
+      if(ahead<=0 || across>ahead)continue;
+      const distance=Math.hypot(ahead,across);
+      if(distance<best){best=distance;nearest=i===SITES.length?'centre':i;}
+    }
+    return nearest;
+  }
   const LAYERS={land:'Land use',access:'Travel time',impact:'Local impact'};
   const PROJECTS=model.projects;
   const TERRAINS=['field','ridge','crossing','shelter','yard','wet'];
@@ -326,7 +339,7 @@
     const sea=Boolean(site.water),[cx,cy]=CENTRE;
     return `<svg viewBox="62 4 716 511" preserveAspectRatio="xMidYMid meet" class="city-plan-svg city-layer-${layer}" role="group" aria-labelledby="city-picture-title city-picture-desc" xmlns="http://www.w3.org/2000/svg">
       <title id="city-picture-title">${attr(site.name)} city plan</title>
-      <desc id="city-picture-desc">Six planning precincts surround the central street district. Choose a precinct to inspect and develop it. The precinct selector offers the same choices.</desc>
+      <desc id="city-picture-desc">Six planning precincts surround the central street district. Tap a precinct or use the arrow keys to inspect it. Activate the centre to enter street view. The precinct selector offers the same planning choices.</desc>
       <defs>${spriteDefinitions(mapSetting(site))}</defs>
       ${connections(sea)}
       ${city.records.map(rec=>parcelArt(rec,sea,layer,select===rec.id,site)).join('')}
@@ -379,14 +392,46 @@
       if(record && (project===record.use || project==='open' && record.use==='open'))project=record.use==='food'?'homes':'food';
       onMapFocus=fromMap;render();
     }
+    function previewProject(index,projectId) {
+      const site=sim.active();
+      if(hasDestroyed || !site || !Number.isInteger(index) || index<0 || index>5 || !model.options.includes(projectId))return false;
+      if(site.id!==currentId)render();
+      const record=model.overview(site).records[index];
+      if(record.use===projectId || (record.target && record.target!==projectId))return false;
+      project=projectId;choose(index,false);
+      panel.tabIndex=-1;
+      panel.focus({preventScroll:true});
+      panel.scrollIntoView({block:'start'});
+      return true;
+    }
+    function snapshotView(){
+      if(hasDestroyed || !currentId)return null;
+      const state={siteId:currentId,precinct:select};
+      if(!busy)Object.assign(state,{layer,project});
+      return state;
+    }
+    function restoreView(snapshot){
+      const site=sim.active();
+      if(hasDestroyed || !site || snapshot?.siteId!==site.id || !Number.isInteger(snapshot.precinct) || snapshot.precinct<0 || snapshot.precinct>5)return false;
+      if(site.id!==currentId)render();
+      if(!busy){
+        if(typeof snapshot.layer==='string' && Object.hasOwn(LAYERS,snapshot.layer))layer=snapshot.layer;
+        if(model.options.includes(snapshot.project))project=snapshot.project;
+      }
+      choose(snapshot.precinct,false);
+      return true;
+    }
     function parcelFrom(el){const tile=el?.closest?.('[data-city-precinct]');return tile ? (tile.dataset.cityPrecinct==='centre'?'centre':Number(tile.dataset.cityPrecinct)) : null;}
     picture.addEventListener('click',ev=>{const n=parcelFrom(ev.target);if(n!==null)choose(n,false);});
     picture.addEventListener('keydown',ev=>{
+      if(ev.altKey || ev.ctrlKey || ev.metaKey)return;
       const n=parcelFrom(ev.target);if(n===null)return;
       if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();choose(n,true);}
-      if(['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(ev.key)){
-        ev.preventDefault();const dir=ev.key==='ArrowRight'||ev.key==='ArrowDown'?1:-1;
-        choose(((typeof n==='number'?n:0)+dir+6)%6,true);
+      if(Object.hasOwn(arrowDirection,ev.key)){
+        ev.preventDefault();
+        const next=neighbourOnMap(n,arrowDirection[ev.key]);
+        if(next==='centre')picture.querySelector('[data-city-precinct="centre"]')?.focus({preventScroll:true});
+        else if(next!==null)choose(next,true);
       }
     });
     async function submit(id) {
@@ -492,7 +537,7 @@
       panel.replaceChildren(...content);
     }
     render();
-    return {render,destroy(){hasDestroyed=true;observed?.disconnect();mapRoot.replaceChildren();panel.replaceChildren();}};
+    return {render,previewProject,snapshotView,restoreView,destroy(){hasDestroyed=true;observed?.disconnect();mapRoot.replaceChildren();panel.replaceChildren();}};
   }
   window.EarthCity=Object.freeze({mount});
 

@@ -135,3 +135,28 @@ for(const slot of [0,1,2]) {
     ok(restored.advance());assert.equal(restored.state.legacy.history.length,1);
   });
 }
+
+
+for(const affordable of [false,true]){
+  test('the chair settles a closing agenda using the outgoing week’s '+(affordable?'adequate':'insufficient')+' reserves',()=>{
+    const saved=JSON.parse(olderRatifiedWorld()),home=saved.sites.find(s=>s.id===saved.activeId);
+    const deadline=saved.week;
+    home.food=affordable?16:0;home.funds=affordable?10:0;
+    home.issue={index:0,title:'A lean harvest',prompt:'Who carries the cost?',deadline,targetId:null};
+    const sim=getGame(memory(JSON.stringify(saved)));
+    ok(sim.act('legacy:start:'+sim.active().residents[0].id));
+    const next=ctx.EarthLegacy.guidance(sim);
+    assert.equal(next.kind,'week');assert.ok(next.detail.includes(home.name));
+    ok(sim.advance());
+    const notes=sim.lastWeek().sites.find(s=>s.id===home.id).highlights;
+    if(affordable){
+      assert.ok(notes.some(t=>t.includes('voted')));
+      assert.ok(sim.active().pending.some(v=>v.index===0 && v.week===deadline+2));
+      assert.equal(sim.state.legacy.term.decisions.length,1);
+    }else{
+      assert.ok(notes.some(t=>t.includes('lapsed')));
+      assert.ok(!sim.active().pending.some(v=>v.index===0));
+    }
+    assert.ok(E.readSave(JSON.stringify(sim.state)));
+  });
+}

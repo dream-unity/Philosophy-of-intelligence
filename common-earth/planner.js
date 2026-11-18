@@ -6,13 +6,24 @@
   const idle='wait', cityMove='city-project';
   const urbanMeasures={capacity:'Housing capacity',reachable:'Precincts within 15 minutes',pressure:'Precincts facing rent pressure',noise:'Precincts affected by industry'};
   const cityModel=()=>globalThis.EarthCityModel;
-  function urbanOptions(sim) {
+  function urbanOptions(sim, firstOnly=false) {
     const model=cityModel(),site=sim.active();
     if(!model||!site)return [];
-    return model.overview(site).records.map((precinct,location)=>{
-      const projects=model.options.map(id=>({id,preview:model.preview(site,sim.state,location,id)})).filter(p=>p.preview.available);
-      return {location,precinct,projects};
-    }).filter(row=>row.projects.length);
+    const rows=[];
+    for(const precinct of model.overview(site).records){
+      const location=precinct.id, projects=[];
+      // Active crews can be recalled even with no effort left this week.
+      const options=precinct.target?['cancel']:model.options;
+      for(const id of options){
+        if(id===precinct.use)continue;
+        const preview=model.preview(site,sim.state,location,id);
+        if(!preview.available)continue;
+        projects.push({id,preview});
+        if(firstOnly)return [{location,precinct,projects}];
+      }
+      if(projects.length)rows.push({location,precinct,projects});
+    }
+    return rows;
   }
   function fork(state) {
     const key='rehearsal',items=new Map([[key,JSON.stringify(state)]]);
@@ -20,22 +31,20 @@
     return globalThis.CommonEarthSim.create({storage,key});
   }
   function moves(sim) {
-    const available=sim.actions().filter(a=>a.available&&!a.id.startsWith('courier:')&&!a.id.startsWith('reclaim:')&&groups[a.group]);
-    if(cityModel()&&sim.active()&&sim.state.effort>0)available.push({id:cityMove,group:'city',label:'Commission a precinct project',cost:null});
+    const available=sim.actions().filter(a=>a.available&&groups[a.group]);
+    if(urbanOptions(sim,true).length)available.push({id:cityMove,group:'city',label:'Plan a precinct project',cost:null});
     return available;
   }
   function apply(sim,move) {
     if(!move || move.id===idle)return {ok:true,message:''};
     if(move.id===cityMove)return sim.planCity(move.location,move.project);
-    const a=moves(sim).find(a=>a.id===move.id);
-    if(!a)return {ok:false,message:'This move is unavailable after the earlier choice.'};
-    const result=sim.act(move.id,move.plot);
-    return {...result,label:a.label};
+    return sim.act(move.id,move.plot);
   }
   function project(initial,plan,horizon) {
     if(!Number.isInteger(horizon)||horizon<1||horizon>4)return {ok:false,message:'Choose a horizon of one to four weeks.'};
     const sim=fork(initial),effects=[];
     try {
+      if(!sim.active())return {ok:false,message:'Found a community before rehearsing a decision.'};
       for(const m of plan){
         const r=apply(sim,m);
         if(!r.ok)return r;
@@ -65,7 +74,8 @@
     function fresh() {
       state=JSON.parse(JSON.stringify(live.state));
       const temp=fork(state);
-      const starter=moves(temp).find(m=>m.id==='build:garden')||moves(temp).find(m=>m.group==='work');
+      const available=moves(temp);
+      const starter=available.find(m=>m.id==='build:garden')||available.find(m=>m.group==='work');
       temp.destroy();
       plans=[[{id:idle}],[{id:starter?.id||idle}]];
     }
@@ -116,7 +126,10 @@
               area.select.addEventListener('change',()=>{move.location=Number(area.select.value);draw(area.select.dataset.control);});
               proposal.select.dataset.control='project-'+index+'-'+i;
               proposal.select.addEventListener('change',()=>{move.project=proposal.select.value;draw(proposal.select.dataset.control);});
-              box.append(area.label,proposal.label,el('p','Opens in week '+selected.preview.week+'. '+selected.preview.people,'plan-consequence'));
+              const detail=selected.preview.cancel
+                ? 'Return '+selected.preview.recovery.funds+' funds and '+selected.preview.recovery.materials+' materials. The existing land use continues.'
+                : 'Opens in week '+selected.preview.week+'. '+selected.preview.people;
+              box.append(area.label,proposal.label,el('p',detail,'plan-consequence'));
             }
           }
           const r=apply(virtual,move);

@@ -94,3 +94,39 @@ test('the precinct inspector includes another project scheduled to open alongsid
   assert.ok(p.rate.food>=2);
   sim.destroy();
 });
+
+test('the two-step parcel rehearsal matches delivery on the street, including a zero-effort handover', () => {
+  const live=found();
+  for(let i=0;i<3;i++)assert(live.act('work:salvage').ok);
+  const collect=live.actions('work').find(a=>a.id==='courier:pick');
+  const deliver='courier:deliver:'+collect.residentId, before=JSON.stringify(live.state);
+  const forecast=world.EarthPlanner.project(live.state,[{id:collect.id},{id:deliver}],1);
+  assert.equal(JSON.stringify(live.state),before);
+  assert(live.act(collect.id).ok);
+  assert.equal(live.state.effort,0);
+  assert(live.act(deliver).ok);
+  advance(live,1);
+  verifyProjected(live,forecast);
+});
+
+test('a crew can be recalled in rehearsal at zero effort and a closed lot can be dismantled', () => {
+  const live=found();
+  assert(live.act('build:garden',0).ok);
+  const remove=live.actions('build').find(a=>a.id.startsWith('reclaim:')).id;
+  const dismantle=world.EarthPlanner.project(live.state,[{id:remove}],1);
+  assert(dismantle.ok,dismantle.message);
+  assert(live.planCity(0,'homes').ok);
+  assert(live.act('work:contract').ok);
+  assert.equal(live.state.effort,0);
+  const cancel=world.EarthPlanner.project(live.state,[{id:'city-project',location:0,project:'cancel'}],2);
+  assert(live.planCity(0,'cancel').ok);
+  advance(live,2);
+  verifyProjected(live,cancel);
+});
+
+test('a blank world returns a useful rehearsal message', () => {
+  const live=world.CommonEarthSim.create({storage:null});
+  const plan=world.EarthPlanner.project(live.state,[{id:'wait'}],1);
+  assert.equal(plan.ok,false);
+  assert.match(plan.message,/community/i);
+});
