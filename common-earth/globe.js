@@ -368,6 +368,8 @@
       }
     }
     function navigator(from,to) {
+      const surveyed=window.EarthRouteTerrain?.arc(from,to);
+      if(surveyed)return surveyed;
       const a=unit(from.lat,from.lon),b=unit(to.lat,to.lon);
       const distance=Math.acos(clamp(a.reduce((sum,x,i)=>sum+x*b[i],0),-1,1));
       const sinD=Math.sin(distance);

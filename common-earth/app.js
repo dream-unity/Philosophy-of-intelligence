@@ -21,8 +21,9 @@
   const start = {name:'Stone Town',region:'Zanzibar, Tanzania',lat:-6.1622,lon:39.1922,water:false};
   const book=window.EarthSaves?.open();
   const sim=book?.sim||window.CommonEarthSim.create();
-  if(book && $('saved-worlds'))book.mount($('saved-worlds'));
+  const savedWorlds=book && $('saved-worlds') ? book.mount($('saved-worlds'),{section:true}):null;
   const planning=window.EarthPlanner && $('planning-table') ? window.EarthPlanner.mount($('planning-table'),sim):null;
+  const learning=window.EarthGoals && $('learning-goal') ? window.EarthGoals.mount($('learning-goal'),{sim,onResult:presentResult,onChange:render}):null;
   let city=null,shiftStop=null,researchPage='eras',councilPage='agenda';
   let selected = start, view = 'world', group = 'people', visiting = null, peers = false, encounter = null, placement = null, street = null;
   let toastTimer, recordsPage='events',journalLimit=20,journalFilter='all';
@@ -141,17 +142,6 @@
     atlas.setSites(sim.state.sites.map(s=>({...s,active:s.id===sim.state.activeId})));
     const partners=window.EarthPartners?.list(sim.state,sim.active())||[];
     atlas.setBeacons?.(showBeacons?partners:[]);
-    const panel=$('partner-list');
-    if(panel){
-      panel.replaceChildren();
-      if(partners.length){
-        panel.append(node('h3','','Independent neighbours'));
-        for(const p of partners){
-          const b=button('',()=>{hideDialog('society-dialog');choosePlace(p);},'site-entry');
-          b.append(node('strong','',p.name),node('small','',p.locality+' · '+p.distanceKm.toLocaleString()+' km · '+p.relation));panel.append(b);
-        }
-      }
-    }
     const routes = sim.state.routes.map(route => ({
       from:sim.state.sites.find(s=>s.id===(route.from || route.fromId || route.a)),
       to:sim.state.sites.find(s=>s.id===(route.to || route.toId || route.b))
@@ -247,7 +237,7 @@
             vehicle.textContent=driving?'Leave van':'Use van';
             vehicle.setAttribute('title',driving?'Leave the van':'Use the community van');
           }
-          if(!state.placement && placement){placement=null;show('cancel-placement',false);}
+          if(!state.placement && placement){placement=null;show('cancel-placement',false);renderActions();}
         }
       });
       put('street-title',sim.active().name);street.setSite(sim.active());
@@ -296,7 +286,7 @@
     if(!preview.available){notify(preview.reason,true);return;}
     const list=$('actions-list');list.replaceChildren(node('h3','',preview.label),node('p','action-description',preview.text));
     list.append(button('Dismantle this building',async()=>{
-      presentResult(await sim.perform('reclaim',plot));encounter=null;street.setSite(sim.active());render();
+      presentResult(await sim.perform('reclaim',plot,preview.buildingId));encounter=null;street.setSite(sim.active());render();
     },'action-button'),button('Keep building',renderActions,'text-button'));
   }
   function placeBuilding({plot}) {
@@ -480,6 +470,20 @@
         if(legacy?.unlocked)pages.push(['legacy','Succession']);
         if(councilPage==='legacy'&&!legacy?.unlocked)councilPage='agenda';
         const choices=subnav(list,pages,councilPage,next=>{councilPage=next;renderActions();});
+        if(choices==='agenda'&&sim.state.charter){
+          const progress=window.EarthLegacy?.charterProgress?.(sim.state);
+          if(progress){
+            const details=node('details','charter-progress');details.open=progress.priority&&!progress.ratified;
+            details.append(node('summary','','Charter progress'));
+            for(const item of progress.rows){
+              const row=node('div','charter-milestone');
+              row.append(node('strong','',(item.met?'Met · ':'')+item.label),node('p','',item.detail));
+              if(!item.met&&item.action)row.append(button(item.action.label,()=>followCharter(item.action),'text-button'));
+              details.append(row);
+            }
+            list.append(details);
+          }
+        }
         if(choices==='legacy'){
           list.append(node('h3','',legacy.title),node('p','action-description',legacy.description));
           if(legacy.current)list.append(node('p','resident-line',legacy.current));
@@ -579,6 +583,26 @@
       if(presentResult(await sim.perform('finishShift'))){shiftStop=null;street.setSite(sim.active());render();}
     },'secondary-button'));
   }
+  async function followCharter(step) {
+    if(!step)return;
+    const target=sim.state.sites.find(s=>s.id===step.siteId);
+    if(target && target.id!==sim.state.activeId){
+      await openSite(target);
+      if(sim.state.activeId!==target.id)return;
+    }
+    if(step.kind==='atlas'){setView('world');$('places-open')?.click();return;}
+    if(view!=='street')setView('street');
+    if(step.kind==='resident'){
+      selectGroup('people');street.focusResident(step.residentId);followStreet();return;
+    }
+    if(step.group==='council')councilPage='agenda';
+    if(step.group==='research')researchPage='eras';
+    selectGroup(step.group||'council');
+    const control=Array.from($('actions-list').querySelectorAll('[data-action]')).find(row=>row.dataset.action===step.actionId);
+    if(!control){focusActions();return;}
+    const card=control.closest('article')||control;
+    card.tabIndex=-1;card.focus({preventScroll:true});card.scrollIntoView({block:'nearest',behavior:'instant'});
+  }
   function nextObjective() {
     const site=sim.active();if(!site)return null;
     const heard=site.residents.filter(r=>r.heard),waiting=site.residents.find(r=>r.promise);
@@ -587,13 +611,15 @@
       selectGroup('people');street.focusResident(person.id);followStreet();
     };
     const open=target=>{if(view!=='street')setView('street');selectGroup(target);focusActions();};
+    const charter=window.EarthLegacy?.charterProgress?.(sim.state);
+    if(sim.state.completed&&window.EarthLegacy)return {label:'Review council succession',action:()=>{councilPage='legacy';open('council');}};
+    if(charter?.priority&&charter.next)return {label:charter.next.label,detail:charter.summary,action:()=>followCharter(charter.next)};
     if(!heard.length)return {label:'Meet '+site.residents[0].name,action:()=>meet(site.residents[0])};
     if(!site.stats.kept){
       const person=waiting||heard[0];
       return {label:waiting?'Review your promise to '+person.name:'Discuss a promise with '+person.name,action:()=>meet(person)};
     }
     if(!sim.state.charter)return {label:'Visit the council',action:()=>{councilPage='agenda';open('council');}};
-    if(sim.state.completed&&window.EarthLegacy)return {label:'Meet a possible successor',action:()=>{councilPage='legacy';open('council');}};
     if(site.tech.length<3){
       const research=sim.actions('research').find(a=>a.id.startsWith('research:'));
       if(research?.id==='research:apprenticeship'&&!site.buildings.some(b=>['workshop','hall'].includes(b.kind)))
@@ -615,18 +641,31 @@
     show('settlement-status',!!site);$('advance-week').disabled=!site;$('street-view').disabled=!site;
     if($('city-view'))$('city-view').disabled=!site;
     if($('beacon-toggle'))$('beacon-toggle').disabled=!site;
-    const guide=nextObjective();if(guide)put('objective-action',guide.label);show('objective-action',!!guide);show('follow-objective',!!guide);
+    const guide=nextObjective();if(guide){put('objective-action',guide.label);if(guide.detail)put('objective',guide.detail);}show('objective-action',!!guide);show('follow-objective',!!guide);
     if($('society-open')) $('society-open').disabled=!site;
     const resources=$('resource-strip');
     resources.replaceChildren();
     if(site) for(const [key,label] of Object.entries(resourceLabels)){
       const metric=node('div','resource');metric.append(node('span','resource-label',label),node('strong','resource-value',site[key]));resources.append(metric);
     }
+    show('week-review-open',!!sim.lastWeek?.());
+    if(sheetOpen('society-dialog'))renderSociety();
+    if(sheetOpen('journal-dialog'))renderRecords();
+    if(view==='world'){inspect();markers();}
+    renderActions();renderForecast();planning?.render();
+    show('goal-details',!!site && !!learning);learning?.render();
+    if(view==='city')city?.render();
+  }
+  function sheetOpen(id){
+    const sheet=$(id);
+    return !!sheet && (sheet.classList.contains('sheet-fallback') || (typeof HTMLElement.prototype.showPopover==='function' && sheet.matches(':popover-open')));
+  }
+  function renderSociety(){
+    const state=sim.state;
     $('site-list').replaceChildren(...state.sites.map(s=>{
       const b=button('',()=>openSite(s),'site-entry');
       b.append(node('strong','',s.name),node('small','',s.region+' · '+s.population+' residents'));return b;
     }));
-    renderRecords();
     if($('route-status')){
       const routes=state.routes.map(r=>{
         const from=state.sites.find(s=>s.id===r.from),to=state.sites.find(s=>s.id===r.to);
@@ -635,7 +674,18 @@
       });
       $('route-status').replaceChildren(...routes);
     }
-    inspect();markers();renderActions();renderForecast();planning?.render();if(view==='city')city?.render();
+    const partners=window.EarthPartners?.list(state,sim.active())||[];
+    const panel=$('partner-list');
+    if(panel){
+      panel.replaceChildren();
+      if(partners.length){
+        panel.append(node('h3','','Independent neighbours'));
+        for(const p of partners){
+          const b=button('',()=>{hideDialog('society-dialog');choosePlace(p);},'site-entry');
+          b.append(node('strong','',p.name),node('small','',p.locality+' · '+p.distanceKm.toLocaleString()+' km · '+p.relation));panel.append(b);
+        }
+      }
+    }
   }
   function renderRecords(){
     if(!$('records-views'))return;
@@ -664,6 +714,7 @@
       }
       return;
     }
+    if(recordsPage==='saves'){savedWorlds?.refresh();return;}
     if(recordsPage!=='events')return;
     show('journal-filter-label',sim.state.sites.length>1);
     const filter=$('journal-filter');
@@ -685,6 +736,9 @@
   listen('records-views','click',e=>{
     const b=e.target.closest('[data-records]');if(b){recordsPage=b.dataset.records;renderRecords();}
   });
+  listen('society-open','click',renderSociety);
+  listen('journal-dialog','toggle',e=>{if(e.newState==='open'&&recordsPage==='saves')savedWorlds?.refresh();});
+  listen('journal-open','click',()=>{renderRecords();if(recordsPage==='saves')requestAnimationFrame(()=>savedWorlds?.refresh());});
   listen('journal-filter','change',()=>{journalFilter=$('journal-filter').value;journalLimit=20;renderRecords();});
   listen('earlier-events','click',()=>{journalLimit+=30;renderRecords();});
   listen('week-review-open','click',()=>{recordsPage='review';renderRecords();});

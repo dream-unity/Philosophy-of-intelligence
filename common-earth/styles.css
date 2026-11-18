@@ -280,3 +280,8 @@ footer > span { font-family: var(--serif); font-style: italic; }
 .commission-brief p {margin:4px 0;line-height:1.45}
 
 .peer-agreement{display:block;color:#a9c9bd;line-height:1.45}
+
+.charter-progress {border:1px solid var(--line);border-radius:4px;padding:9px 10px;margin:8px 0}
+.charter-progress summary {cursor:pointer;font-size:.88rem;color:var(--gold)}
+.charter-milestone {border-top:1px solid var(--line);padding-top:8px;margin-top:8px;font-size:.84rem}
+.charter-milestone p {line-height:1.4;color:var(--muted);margin:4px 0}

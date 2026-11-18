@@ -81,3 +81,16 @@ test('choosing a city precinct in a rehearsal pays its full cost and opens it on
   assert.equal(world.EarthPlanner.project(live.state,[{...project,location:99}],2).ok,false);
   live.destroy();reference.destroy();
 });
+
+test('the precinct inspector includes another project scheduled to open alongside the proposed project', () => {
+  const sim=found(),model=world.EarthCityModel,site=sim.active();
+  assert.equal(sim.planCity(0,'food').ok,true);
+  const p=model.preview(site,sim.state,1,'water');
+  assert.equal(p.concurrent,1);
+  const actual=JSON.parse(JSON.stringify(site)),original=JSON.parse(JSON.stringify(site));
+  assert.equal(model.apply(actual,{effort:2,week:sim.state.week},1,'water').ok,true);
+  model.weekly(actual);model.weekly(original);
+  assert.equal(p.rate.food,model.overview(actual).weekly.food-model.overview(original).weekly.food);
+  assert.ok(p.rate.food>=2);
+  sim.destroy();
+});

@@ -30,6 +30,7 @@
       const kind=d.getUint8(at++),rank=d.getUint8(at++),name=names[u16()],cnt=u16(),parts=[];
       for(let j=0;j<cnt;j++){
         const n=d.getUint32(at,true);at+=4;
+        if(n<2 || n>(d.byteLength-at)/4)throw Error('Incomplete regional geometry');
         const xy=new Uint16Array(n*2);
         for(let i=0;i<xy.length;i++)xy[i]=u16();
         parts.push(geometry(xy,col,r));

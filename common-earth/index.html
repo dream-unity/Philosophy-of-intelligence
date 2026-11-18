@@ -7,25 +7,28 @@
   <meta name="description" content="Explore Earth, found a community and shape its future, from street encounters to ocean routes. A strategy game by Philosophy of Intelligence.">
   <title>Common Earth · Philosophy of Intelligence</title>
   <link rel="icon" type="image/svg+xml" href="../icon.svg?v=69d49b562939">
-  <link rel="stylesheet" href="styles.css?v=de6bd9a3e224">
+  <link rel="stylesheet" href="styles.css?v=6129340e244b">
   <link rel="stylesheet" href="city.css?v=e3fe3d79f6ad">
   <link rel="stylesheet" href="planner.css?v=19c8b546877b">
   <link rel="stylesheet" href="saves.css?v=211ec723a0c5">
+  <link rel="stylesheet" href="goals.css?v=a8c0252a8404">
   <script src="neighbours.js?v=c440651dfadb" defer></script>
-  <script src="voyages.js?v=d6f3a4cdc8a2" defer></script>
+  <script src="route-terrain.js?v=d3feccda2612" defer></script>
+  <script src="voyages.js?v=d4c9d9d125a2" defer></script>
   <script src="shifts.js?v=bf925c4c0dda" defer></script>
   <script src="campaigns.js?v=2f09cd6c9a42" defer></script>
   <script src="strategy.js?v=269d0bebb54d" defer></script>
   <script src="partners.js?v=19982f961a21" defer></script>
-  <script src="city.js?v=2d461912daeb" defer></script>
-  <script src="legacy.js?v=be7d1dab9fe5" defer></script>
-  <script src="simulation.js?v=66cf208832c1" defer></script>
-  <script src="globe.js?v=d51f9971fa6e" data-atlas-version="03e02d4b8b58" defer></script>
-  <script src="street.js?v=5077ce1b7420" defer></script>
-  <script src="navigation.js?v=aae8734cedf7" defer></script>
+  <script src="city.js?v=4b765cd53833" defer></script>
+  <script src="legacy.js?v=2551544fd5ba" defer></script>
+  <script src="goals.js?v=0daf4eae0c4b" defer></script>
+  <script src="simulation.js?v=8e98525bfa56" defer></script>
+  <script src="globe.js?v=e67991dfef18" data-atlas-version="3ef7f9f381bc" defer></script>
+  <script src="street.js?v=6fab68d00d79" defer></script>
+  <script src="navigation.js?v=59a80dff43a0" defer></script>
   <script src="planner.js?v=5ee80d169482" defer></script>
-  <script src="saves.js?v=710f64a6974c" defer></script>
-  <script src="app.js?v=29bf819f2ba1" defer></script>
+  <script src="saves.js?v=b438e7c131b6" defer></script>
+  <script src="app.js?v=754a82c923ed" defer></script>
 </head>
 <body>
   <a class="skip" href="#play">Skip to game</a>
@@ -126,6 +129,7 @@
     <section id="calendar" class="time-bar" aria-label="Game time" tabindex="-1"><div class="time-week"><svg aria-hidden="true"><use href="#i-calendar"/></svg><div><span class="data-label">Calendar</span><strong id="week">Week 1</strong></div></div><div class="time-effort"><svg aria-hidden="true"><use href="#i-clock"/></svg><div><span class="data-label">Available effort</span><strong id="effort">4 / 4</strong></div></div><button type="button" class="week-review-link" id="week-review-open" popovertarget="journal-dialog" hidden>Last week</button><details class="weekly-preview"><summary>Week preview</summary><div id="week-summary" aria-label="Coming week">Found a community to see its next weekly change.</div></details><button type="button" class="advance" id="advance-week" disabled>Advance week <svg aria-hidden="true"><use href="#i-arrow"/></svg></button></section>
     <section id="settlement-status" class="settlement-status" aria-label="Community status" hidden><div class="resource-overview"><div class="kicker"><svg aria-hidden="true"><use href="#i-house"/></svg> Community ledger</div><div id="resource-strip" class="resource-strip"></div></div><div class="outlook"><div class="outlook-title"><span class="kicker">Outlook</span><span id="era"></span></div><h2 id="objective"></h2><button id="objective-action" class="objective-button" type="button" hidden>Follow objective <span aria-hidden="true">↗</span></button><p id="forecast"></p></div></section>
     <details id="planning-details" hidden><summary>Rehearse a decision</summary><div id="planning-table"></div></details>
+    <details id="goal-details" hidden><summary>Set a learning goal</summary><div id="learning-goal"></div></details>
     <noscript><p class="no-script">Turn on JavaScript to play Common Earth.</p></noscript>
   </main>
   <footer><a href="../"><svg aria-hidden="true"><use href="#i-back"/></svg> Philosophy of Intelligence</a><span>Common Earth</span></footer>

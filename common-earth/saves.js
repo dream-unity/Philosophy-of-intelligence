@@ -281,11 +281,11 @@
     sim.destroy=dispose;
     const book={sim,list,current,status,create,copy,select,exportWorld,prepareImport,confirmImport,
       cancelImport(){review=null;},watch(fn){views.add(fn);return ()=>views.delete(fn);},
-      mount(el){return mount(el,book);},dispose};
+      mount(el,options){return mount(el,book,options);},dispose};
     return book;
   }
-  function mount(el,book) {
-    if(!el)return ()=>{};
+  function mount(el,book,{section=false}={}) {
+    if(!el){const noop=()=>{};noop.refresh=noop;return noop;}
     function node(tag,text,cls) {
       const n=document.createElement(tag);
       if(text!==null && text!==undefined)n.textContent=text;
@@ -295,11 +295,11 @@
     function button(label,fn){
       const b=node('button',label,'save-button');b.type='button';b.addEventListener('click',fn);return b;
     }
-    const details=node('details',null,'save-manager'),heading=node('summary','Saved worlds');
+    const details=section?null:node('details',null,'save-manager');
     const body=node('div',null,'save-body'),statusLine=node('p',null,'save-status'),list=node('ul',null,'save-list');
     const notice=node('p',null,'save-notice');notice.setAttribute('role','status');notice.hidden=true;
     const setNote=(text,error=false)=>{notice.textContent=text;notice.hidden=!text;notice.classList.toggle('warning',error);};
-    let work=false,revision=0,lastId=book.current().id;
+    let work=false,revision=0,lastId=null;
     const review=node('section',null,'save-review');review.hidden=true;
     function clearReview(){
       revision++;book.cancelImport();review.replaceChildren();review.hidden=true;
@@ -356,12 +356,13 @@
       }catch(error){setNote('The browser could not read that file.',true);}
     });
     function refresh() {
-      if(!details.open)return;
-      const current=book.current(),status=book.status();
-      if(current.id!==lastId){lastId=current.id;clearReview();}
+      if(details && !details.open || section && el.closest?.('[hidden]'))return;
+      const slots=book.list(),current=slots.find(slot=>slot.selected),status=book.status();
+      if(lastId!==null && current.id!==lastId)clearReview();
+      lastId=current.id;
       statusLine.textContent=status.message;
       list.replaceChildren();
-      for(const slot of book.list()){
+      for(const slot of slots){
         const li=node('li'),info=node('div'),title=node('strong',slot.name),meta=node('small',
           'Week '+slot.week+' · '+slot.settlements+' '+(slot.settlements===1?'community':'communities')+(slot.temporary?' · tab only':''));
         info.append(title,meta);li.append(info);
@@ -373,10 +374,22 @@
         list.append(li);
       }
     }
-    details.addEventListener('toggle',refresh);
-    body.append(statusLine,list,nameLabel,createRow,transport,review,notice);details.append(heading,body);el.replaceChildren(details);
-    const off=book.watch(refresh);
-    return ()=>{off();clearReview();el.replaceChildren();};
+    body.append(statusLine,list,nameLabel,createRow,transport,review,notice);
+    if(details){
+      details.append(node('summary','Saved worlds'),body);
+      details.addEventListener('toggle',refresh);
+      el.replaceChildren(details);
+    }else el.replaceChildren(body);
+    function refreshVisible(){
+      // Closed popovers and hidden Chronicle tabs do not need a storage scan.
+      if(section && (el.closest?.('[hidden]') || el.getClientRects?.().length===0))return;
+      refresh();
+    }
+    const off=book.watch(refreshVisible);
+    if(section)refreshVisible();
+    function cleanup(){off();clearReview();el.replaceChildren();}
+    cleanup.refresh=refresh;
+    return cleanup;
   }
   window.EarthSaves=Object.freeze({open,maxBytes:MAX_BYTES});
 })();

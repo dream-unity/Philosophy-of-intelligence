@@ -1,0 +1,18 @@
+#goal-details{background:var(--panel,#11242a);border:1px solid #31464a;border-radius:4px;margin-top:8px;padding:0 clamp(12px,2vw,18px)}
+#goal-details>summary{cursor:pointer;padding:.75rem 0;color:var(--paper,#f1eddd);font-weight:650}
+.learning-goal{display:grid;gap:.85rem;color:var(--paper,#e7e6d5);font-size:.9rem;line-height:1.42;min-width:0;padding-bottom:.85rem}
+.learning-goal h3,.learning-goal p{margin:0}
+.learning-goal h3{font:500 1.25rem Georgia,serif;color:#ede9d9}
+.learning-goal .goal-district,.learning-goal .goal-note{color:#b3c6bf;font-size:.83rem}
+.goal-editor,.goal-review{display:grid;gap:.65rem;padding:.65rem 0}
+.goal-field{display:grid;gap:.22rem;color:#d9ddd0;font-weight:600;min-width:0}
+.goal-field select{display:block;width:100%;min-width:0;max-width:100%;min-height:38px;padding:.4rem .5rem;font:inherit;color:#edf0df;background:#193037;border:1px solid #536c6c;border-radius:3px}
+.goal-proposal,.goal-reading{border-left:2px solid #769b94;padding:.35rem .65rem;min-width:0}
+.goal-proposal{display:grid;gap:.3rem}
+.goal-reading strong,.goal-values{color:#e4c691}
+.goal-reading p{margin-top:.15rem}
+.goal-values{font-variant-numeric:tabular-nums}
+.learning-goal>.secondary,.goal-editor .secondary{justify-self:start}
+.goal-history{border-top:1px solid #3c5253;padding-top:.55rem}
+.goal-history>summary{cursor:pointer}
+.goal-history .goal-review+.goal-review{border-top:1px solid #3c5253}

@@ -130,7 +130,10 @@
       records.push({id:i,terrain:t,minutes,accessible,transit,pressure:rent,disturbed,beds,yields:deltas,reasons,
         name:site.water?t.sea:t.land,type:site.water?t.marine:t.label,direction:DIRECTIONS[i],use:p.use,target:p.target,turns:p.turns});
     });
-    return {weekly,records,capacity,reachable,pressure,noise,developed,marketCatchments:state.filter(p=>p.use==='market').length,works:state.filter(p=>p.target).length};
+    const residents=site.population||0,excess=Math.max(0,residents-capacity);
+    const crowding={residents,capacity,excess,wellbeing:excess?-Math.min(2,Math.ceil(excess/4)):0};
+    weekly.wellbeing+=crowding.wellbeing;
+    return {weekly,records,capacity,crowding,reachable,pressure,noise,developed,marketCatchments:state.filter(p=>p.use==='market').length,works:state.filter(p=>p.target).length};
   }
   const units = {food:'food',funds:'funds',materials:'materials',wellbeing:'wellbeing',trust:'trust'};
   function difference(a,b) {
@@ -143,7 +146,7 @@
     const bad=reason=>({ok:false,available:false,reason});
     if(!site)return bad('Found a community first.');
     if(!Number.isInteger(index)||index<0||index>5)return bad('Choose one of the six outer precincts.');
-    const state=precincts(site),p=state[index],was=overview(site,state),record=was.records[index];
+    const state=precincts(site),p=state[index],now=overview(site,state),record=now.records[index];
     if(project==='cancel') {
       if(!p.target)return bad('There is no construction to cancel here.');
       const target=USES[p.target];
@@ -155,7 +158,11 @@
     const spec=USES[project],cost={funds:spec.funds,materials:spec.materials,effort:spec.effort};
     if(p.target)return bad('A crew is already working here. Finish or cancel its job first.');
     if(p.use===project)return bad('This precinct already has that use.');
-    const afterState=state.map((x,i)=>i===index?{use:project,target:null,turns:0}:x);
+    // Compare the same opening week, including nearby work already commissioned.
+    const baseline=state.map(row=>row.target && row.turns<=spec.turns?{use:row.target,target:null,turns:0}:row);
+    const concurrent=baseline.filter((row,i)=>row!==state[i]).length;
+    const was=concurrent?overview(site,baseline):now;
+    const afterState=baseline.map((x,i)=>i===index?{use:project,target:null,turns:0}:x);
     const after=overview(site,afterState),r=after.records[index];
     const rate=difference(after.weekly,was.weekly);
     const shopPlan=window.CommonEarthSim?.marketPlan;
@@ -164,14 +171,20 @@
     const beds=after.capacity-was.capacity, reach=after.reachable-was.reachable;
     const risk=after.pressure-was.pressure, noise=after.noise-was.noise;
     let reason='';
-    if(was.works>=2)reason='Both city crews have jobs. Finish or cancel one before starting another.';
+    if(now.works>=2)reason='Both city crews have jobs. Finish or cancel one before starting another.';
     else if(world.effort<cost.effort)reason='Needs '+cost.effort+' effort. Advance the week to refresh it.';
     else if(site.funds<cost.funds || site.materials<cost.materials)reason='The treasury needs '+cost.funds+' funds and '+cost.materials+' materials for this project.';
     const capacityNote=beds?'Housing capacity '+was.capacity+' → '+after.capacity:'';
+    let crowdingNote='';
+    if(beds && (was.crowding.excess || after.crowding.excess)) {
+      const gap=after.crowding.excess;
+      crowdingNote=gap ? gap+' '+(gap===1?'resident would':'residents would')+' lack a housing place ('+after.crowding.wellbeing+' wellbeing per week from crowding).' :
+        'All current residents would have a housing place. The weekly crowding cost would end.';
+    }
     const accessNote=reach?'Precincts within 15 minutes '+was.reachable+' → '+after.reachable:'';
-    const impact=[flows(rate)?flows(rate)+' per week':'',capacityNote,accessNote].filter(Boolean);
+    const impact=[flows(rate)?flows(rate)+' per week':'',capacityNote,accessNote,crowdingNote].filter(Boolean);
     const forecast=impact.length?impact.join(' · '):'The weekly totals stay the same.';
-    return {ok:true,available:!reason,reason,cost,turns:spec.turns,title:nameOf(site,project),old:nameOf(site,p.use),forecast,rate,beds,reach,risk,noise,localFunds,capacityNote,accessNote,
+    return {ok:true,available:!reason,reason,cost,turns:spec.turns,title:nameOf(site,project),old:nameOf(site,p.use),forecast,rate,beds,reach,risk,noise,localFunds,concurrent,capacityNote,accessNote,crowdingNote,
       record:r,siteName:record.name,people:spec.people,purpose:spec.purpose,completedView:after,week:(Number(world.week)||1)+spec.turns};
   }
   function apply(site,world,index,project) {
@@ -587,9 +600,13 @@
           forecast.append(make('span','data-label','When the project opens'),make('strong','',model.flows(projection.rate)?model.flows(projection.rate)+' per week':'Weekly production stays level.'));
           if(projection.capacityNote)forecast.append(make('small','',projection.capacityNote+' residents.'));
           if(projection.accessNote)forecast.append(make('small','',projection.accessNote+' of six.'));
-          if(projection.completedView.capacity<site.population)forecast.append(make('small','','Residents keep their homes. Further arrivals pause until more space opens.'));
+          if(projection.crowdingNote)forecast.append(make('small','',projection.crowdingNote));
           if(projection.localFunds)forecast.append(make('small','','Includes '+(projection.localFunds>0?'+':'')+projection.localFunds+' funds from shops in central streets.'));
-          if(projection.risk)forecast.append(make('small','',projection.risk>0?'One more precinct faces rent pressure.':'One precinct gains protection against rent pressure.'));
+          if(projection.concurrent)forecast.append(make('small','','Includes other commissioned work due by opening week.'));
+          if(projection.risk){
+            const n=Math.abs(projection.risk);
+            forecast.append(make('small','',n+' '+(n===1?'precinct':'precincts')+(projection.risk>0?' newly exposed to rent pressure.':' newly protected against rent pressure.')));
+          }
           if(projection.noise)forecast.append(make('small','',projection.noise>0?'More households or habitat will face disturbance.':'A source of disturbance will be buffered.'));
           const timing=projection.turns===1?'Operates from next week (week '+projection.week+').':'Next week is a construction week. Opens in week '+projection.week+'.';
           forecast.append(make('small','',timing));
@@ -604,6 +621,7 @@
       if(message)content.push(make('p','city-outcome',message));
       const dl=metricLine(city,site);
       content.push(dl);
+      if(city.crowding.excess)content.push(make('p','city-reason',city.crowding.excess+' '+(city.crowding.excess===1?'resident lacks':'residents lack')+' a housing place. Crowding costs '+Math.abs(city.crowding.wellbeing)+' wellbeing per week. More homes can make room.'));
       const brief=make('details','city-brief');brief.append(make('summary','','Read the city ledger'));
       const q=model.flows(city.weekly)||'No city production yet';
       brief.append(make('p','','Outer precincts per week: '+q+'.'),

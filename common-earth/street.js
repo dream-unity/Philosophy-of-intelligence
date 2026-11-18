@@ -91,7 +91,7 @@
     let ctx=canvas.getContext('2d');
     const state={site:null,seed:0,lots:[],points:[],solids:[],trees:[],decor:[],links:[],looks:new Map(),traffic:null,preview:null,companion:null,shiftStops:[],placed:null,mode:'walk',player:{...marketDoor(),dx:0,dy:1},van:vanAtExchange(),route:[],destination:null,arrival:null,hover:null,active:null};
     let width=0,height=0,unit=30,zoom=1,pixelRatio=1,centreX=state.player.x,centreY=state.player.y;
-    let frame=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
+    let frame=0,idleTimer=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
     let shortMessage='',messageUntil=0,hovering=false;
     let savedZoom=null,overviewZoom=null,placingFocus=0,dragging=null,pinch=null,groundCache=null;
     let miniCanvas=null,miniButton=null,miniTick=-1;
@@ -687,7 +687,7 @@
       return e;
     }
     function emitState() {options.onState?.(getState());schedule();}
-    function message(label) {shortMessage=label;messageUntil=visualTime+3.1;options.onHint?.(label);dirty=true;}
+    function message(label) {shortMessage=label;messageUntil=visualTime+3.1;options.onHint?.(label);dirty=true;schedule();}
     function nearest(stopDistance) {
       let q=null,range=stopDistance;
       for(const point of state.points){const d=dist(state.player,point);if(d<range){range=d;q=point;}}
@@ -730,6 +730,7 @@
       if(dist(free,state.player)<.23){if(arrival)choose(arrival);return true;}
       const route=makeRoute(state.player,free);
       if(!route.length){message(state.mode==='drive'?'Choose a connected street.':'That path is closed. Try another approach.');return false;}
+      if(!moving())lastFrame=0;
       state.route=route;state.destination=free;state.arrival=arrival;hovering=false;dirty=true;emitState();return true;
     }
     function interact() {
@@ -770,6 +771,7 @@
       if(state.placed){cyclePlot(direction==='left'||direction==='up'?-1:1);return true;}
       if(overviewZoom!==null)exitOverview();
       if(pressed.has(direction))return true;
+      if(!moving())lastFrame=0;
       stop();pressed.add(direction);const v=AXIS[direction];manual(v[0],v[1],state.mode==='drive'?.45:.28);dirty=true;updateNearby();schedule();return true;
     }
     function releaseMove(direction){pressed.delete(direction);}
@@ -938,15 +940,31 @@
       unit=baseUnit()*zoom;clearGround();dirty=true;schedule();
     }
     function moving(){return Boolean(pressed.size||state.route.length);}
+    function cancelIdle(){if(idleTimer){clearTimeout(idleTimer);idleTimer=0;}}
+    function suspend(){cancelIdle();if(frame){cancelAnimationFrame(frame);frame=0;}}
     function schedule(){
+      cancelIdle();
       if(alive&&!frame&&!canvas.parentElement?.hidden&&(visible||moving())&&typeof requestAnimationFrame==='function'&&(typeof document==='undefined'||!document.hidden))frame=requestAnimationFrame(tick);
     }
     function tick(now) {
-      frame=0;if(!alive||canvas.parentElement?.hidden||(!visible&&!moving()))return;
+      frame=0;if(!alive||canvas.parentElement?.hidden||(!visible&&!moving())||(typeof document!=='undefined'&&document.hidden))return;
       const delta=lastFrame?now-lastFrame:36;
-      if(dirty||delta>=32){const dt=clamp(delta/1000,0,.1);lastFrame=now;visualTime+=dt;
-        if(state.site)follow(dt);if(visible)draw();dirty=false;}
-      if(state.site&&(moving()||visible&&(!reduced||shortMessage&&visualTime<messageUntil)))schedule();
+      if(dirty||delta>=32){
+        const maxStep=state.route.length ? 1 : pressed.size ? 0.3 : 0.1;
+        const elapsed=clamp(delta/1000,0,maxStep);
+        // Slow devices may miss paints. Small movement steps preserve travel speed and street collisions.
+        const steps=Math.max(1,Math.ceil(elapsed/.075)),dt=elapsed/steps;
+        lastFrame=now;
+        for(let i=0;i<steps;i++){visualTime+=dt;if(state.site)follow(dt);}
+        if(visible)draw();dirty=false;
+      }
+      if(!state.site||frame)return;
+      if(moving()||dragging||pinch){schedule();return;}
+      if(visible&&(!reduced||shortMessage&&visualTime<messageUntil)){
+        // The idle service van and pedestrians can run at 12 fps; an input wakes the next paint immediately.
+        if(typeof setTimeout==='function')idleTimer=setTimeout(()=>{idleTimer=0;schedule();},70);
+        else schedule();
+      }
     }
     function addMapControls() {
       if(!canvas.parentElement || typeof document==='undefined')return;
@@ -1002,23 +1020,23 @@
     listen(canvas,'wheel',e=>{if(!state.site)return;e.preventDefault();zoomBy(Math.exp(-clamp(e.deltaY,-150,150)*.0033),coords(e,canvas));},{passive:false});
     listen(canvas,'keydown',e=>{
       if(!state.site||e.ctrlKey||e.metaKey||e.altKey)return;const k=e.key.length===1?e.key.toLowerCase():e.key;
-      if(KEYS[k]){e.preventDefault();if(overviewZoom!==null)exitOverview();if(state.placed){if(!e.repeat)cyclePlot(KEYS[k]==='up'||KEYS[k]==='left'?-1:1);}else pressed.add(KEYS[k]);}
+      if(KEYS[k]){e.preventDefault();if(!e.repeat)holdMove(KEYS[k]);}
       else if(['e',' ','Enter','v','m','+','=','-','Home','Escape'].includes(k)){e.preventDefault();if(e.repeat)return;
         if(k==='v')toggleVehicle();else if(k==='m')toggleOverview();else if(k==='e'||k===' '||k==='Enter')interact();else if(k==='Home')recenter();else if(k==='Escape'){if(state.placed)setPlacement(null);else stop();}else zoomBy(k==='-'?1/1.2:1.2);}
     });
     listen(canvas,'keyup',e=>{const dir=KEYS[e.key.length===1?e.key.toLowerCase():e.key];if(dir){pressed.delete(dir);e.preventDefault();}});
     listen(canvas,'blur',()=>pressed.clear());
-    if(typeof document!=='undefined')listen(document,'visibilitychange',()=>{pressed.clear();if(!document.hidden){lastFrame=0;dirty=true;schedule();}});
+    if(typeof document!=='undefined')listen(document,'visibilitychange',()=>{pressed.clear();if(document.hidden)suspend();else{lastFrame=0;dirty=true;schedule();}});
     const sizing=typeof ResizeObserver!=='undefined'?new ResizeObserver(resize):null;sizing?.observe(canvas);
     const showing=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{
       visible=entries.some(e=>e.isIntersecting);
-      if(canvas.parentElement?.hidden){pressed.clear();stop();return;}
+      if(canvas.parentElement?.hidden){pressed.clear();stop();suspend();return;}
       if(visible){lastFrame=0;dirty=true;resize();}
       // Accessible route buttons keep working when the canvas scrolls out of view.
-      if(visible||moving())schedule();
+      if(visible||moving())schedule();else suspend();
     }):null;showing?.observe(canvas);
     if(typeof window!=='undefined')listen(window,'resize',resize);
-    function destroy(){alive=false;pressed.clear();fingers.clear();if(frame)cancelAnimationFrame(frame);sizing?.disconnect();showing?.disconnect();cleanups.forEach(fn=>fn());clearGround();
+    function destroy(){alive=false;pressed.clear();fingers.clear();suspend();sizing?.disconnect();showing?.disconnect();cleanups.forEach(fn=>fn());clearGround();
       canvas.style.touchAction=previousStyle;if(oldTab===null)canvas.removeAttribute('tabindex');else canvas.setAttribute('tabindex',oldTab);
       if(oldLabel===null)canvas.removeAttribute('aria-label');else canvas.setAttribute('aria-label',oldLabel);}
     resize();schedule();

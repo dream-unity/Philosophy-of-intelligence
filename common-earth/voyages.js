@@ -4,7 +4,7 @@
   'use strict';
 
   const briefs = {
-    exchange:{label:'Exchange goods',description:'Carry a sample consignment. An on-time handover earns funds; a fair agreement builds trust.',funds:3,food:2},
+    exchange:{label:'Exchange goods',description:'Carry a sample consignment. An on-time handover earns funds and a fair agreement builds trust.',funds:3,food:2},
     'mutual-aid':{label:'Carry mutual aid',description:'Bring extra provisions. Sharing them with consent strengthens trust at home and sends food to a linked destination.',funds:2,food:3},
     survey:{label:'Share a field survey',description:'Bring home material samples and observations. Ask permission before making local knowledge public.',funds:2,food:2}
   };
@@ -87,6 +87,16 @@
       ['share','Share a spare provision crate','Both crews could wait for a reliable handover without anyone missing a meal.'],
       ['relay','Relay both estimates now','A tired watch passed both estimates on and told the receiving crew why they differed.'],
       ['repair','Pause to check the calculation','An extra day let the crew examine the discrepancy and restore the watch rotation.']
+    ]},
+    transfer:{title:'One load, two crews',prompt:'The chart crosses both land and water. In this fictional exchange, two crews share a cargo handover. Each has counted on the other to carry the spare crate.',options:[
+      ['reserve','Reserve the crate for the next crew','You set aside a provision crate and finished the transfer with a better-prepared receiving crew.'],
+      ['consult','Write the handover with both crews','The two crews recorded who would store the crate and who would collect it. Both signed the handover.'],
+      ['open','Give the receiving crew time to vote','The other crew chose its own collection time. The crate stayed where everyone had agreed to meet.']
+    ]},
+    passage:{title:'The second watch',prompt:'The chart shows a substantial water crossing. In this fictional passage, the same two people have been assigned to watch the stores twice. The handover crew has asked for an arrival time.',options:[
+      ['direct','Keep the tight roster','The crew reached the handover on time. The two storekeepers arrived tired.'],
+      ['reserve','Pack a meal for a relief watch','The crew freed a relief watchkeeper by using part of its packed stores. The handover kept its slot.'],
+      ['rest','Move the handover back a watch','The receiving crew accepted a later handover so the storekeepers could rest.']
     ]},
     inland:{title:'Two addresses for the same stop',prompt:'A dispatch sheet uses a warehouse number. The neighbourhood calls the same place by a landmark. A driver is waiting for an answer.',options:[
       ['direct','Send the warehouse number','The driver found the depot in time; the public notice still used a name few neighbours knew.'],
@@ -175,7 +185,7 @@
     const p=u.map((x,i)=>Math.cos(af)*x+Math.sin(af)*tangent[i]/len);
     return {lat:Math.atan2(p[2],Math.hypot(p[0],p[1]))/radians,lon:Math.atan2(p[1],p[0])/radians};
   }
-  function preview(source,destination,style='exchange') {
+  function terms(source,destination,style='exchange') {
     const origin=point(source),target=point(destination);
     if(!origin||!target)return fail('Choose an origin and destination with valid Earth coordinates.');
     if(!Object.hasOwn(briefs,style))return fail('Choose an expedition brief.');
@@ -187,21 +197,57 @@
       targetDays:Math.ceil(legs*1.5),cost:{funds:brief.funds+(legs===4?1:0),food:brief.food+(legs>2?1:0)},
       note:'Schematic great-circle arc. Route days belong to this expedition.'};
   }
+  function preview(source,destination,style='exchange') {
+    const p=terms(source,destination,style);
+    if(!p.ok)return p;
+    const terrain=window.EarthRouteTerrain?.describe(p.origin,p.target);
+    const descriptions={
+      'primarily-land':'The sampled arc runs mostly over land.',
+      'mixed-crossing':'The sampled arc includes stretches of both land and water.',
+      'open-water':'Most of the sampled arc lies over water.',
+      'coastal-or-local':'At this scale the chart gives only an approximate picture of local shorelines.'
+    };
+    const label=terrain && descriptions[terrain.category];
+    const named=label && terrain.waterName && terrain.category!=='coastal-or-local'?' Sampled water includes '+terrain.waterName+'.':'';
+    const terrainText=label?label+named:'';
+    return {...p,terrain:terrain || null,terrainText,note:'Schematic great-circle arc. '+(terrainText?terrainText+' ':'')+'Route days belong to this expedition.'};
+  }
+  function waterOverlap(terrain,index,legs) {
+    const start=index/legs,end=(index+1)/legs;
+    return (terrain.segments || []).reduce((total,part)=>{
+      if(!part.water || part.uncertain)return total;
+      return total+Math.max(0,Math.min(end,part.t1)-Math.max(start,part.t0))*legs;
+    },0);
+  }
   function itinerary(p) {
-    const {origin,target,style,legs}=p;
-    const mid=position(origin,target,.5),polar=Math.max(Math.abs(origin.lat),Math.abs(mid.lat),Math.abs(target.lat))>=60;
-    const sea=origin.water||target.water;
-    const first=localStop(origin)?.[0] || (origin.water?'water':origin.region&&target.region&&origin.region!==target.region?'highland':'depot');
-    const interior=[];
-    if(Math.abs(origin.lon-target.lon)>180) interior.push('dates');
-    if(polar) interior.push('polar');
-    if(sea) interior.push('openSea');
-    if(style==='survey') interior.push('sample');
-    if(p.distance>=7000) interior.push('distance');
-    if(origin.region && target.region && origin.region!==target.region) interior.push('language');
-    interior.push(sea?'language':'inland','distance');
+    const {origin,target,style,legs,terrain}=p;
+    const first=localStop(origin)?.[0] || (origin.water?'water':origin.region && target.region && origin.region!==target.region?'highland':'depot');
     const final={exchange:'exchangeEnd','mutual-aid':'aidEnd',survey:'surveyEnd'}[style];
-    return [first,...Array.from(new Set(interior)).slice(0,legs-2),final];
+    const stages=Array(legs).fill(null);
+    stages[0]=first;
+    stages[legs-1]=final;
+    const majorWater=terrain && ['mixed-crossing','open-water'].includes(terrain.category);
+    if(majorWater){
+      // A short island-to-island trip still needs its crossing decision. On a longer
+      // trip keep the departure in town and place the crossing in the wettest middle leg.
+      let stage=legs===2?0:1;
+      for(let i=stage+1;i<legs-1;i++)if(waterOverlap(terrain,i,legs)>waterOverlap(terrain,stage,legs))stage=i;
+      const wet=waterOverlap(terrain,stage,legs);
+      stages[stage]=terrain.category==='mixed-crossing' || wet<.35?'transfer':stage===0?'passage':'openSea';
+    }
+    const mid=position(origin,target,.5);
+    const remaining=[];
+    if(Math.abs(origin.lon-target.lon)>180 && Math.abs(origin.lat)<90 && Math.abs(target.lat)<90)remaining.push('dates');
+    if(Math.max(Math.abs(origin.lat),Math.abs(mid.lat),Math.abs(target.lat))>=60)remaining.push('polar');
+    if(terrain?.category==='primarily-land')remaining.push('inland');
+    if(!terrain && (origin.water || target.water))remaining.push('openSea');
+    if(style==='survey')remaining.push('sample');
+    if(p.distance>=7000)remaining.push('distance');
+    if(origin.region && target.region && origin.region!==target.region)remaining.push('language');
+    remaining.push('inland','language','distance');
+    const available=[...new Set(remaining)].filter(id=>!stages.includes(id));
+    for(let i=1;i<legs-1;i++)if(!stages[i])stages[i]=available.shift();
+    return stages;
   }
   function start(source,destination,style='exchange') {
     const p=preview(source,destination,style);
@@ -293,7 +339,7 @@
   }
   function routeFacts(x) {
     if(!x || !savedPoint(x.origin) || !savedPoint(x.target) || !Object.hasOwn(briefs,x.style))return false;
-    const p=preview(x.origin,x.target,x.style);
+    const p=terms(x.origin,x.target,x.style);
     return p.ok && x.distance===p.distance && x.legs===p.legs && x.targetDays===p.targetDays &&
       whole(x.days,0,2*x.legs) && whole(x.supplies,0,max.supplies) && whole(x.readiness,0,max.readiness)
       && whole(x.goodwill,0,max.goodwill) && whole(x.knowledge,0,max.knowledge) && !!point(x.position);
@@ -302,7 +348,7 @@
     if(!routeFacts(v) || v.version!==1 || !whole(v.leg,0,v.legs-1)
         || !Array.isArray(v.itinerary) || v.itinerary.length!==v.legs || !v.itinerary.every(id=>Object.hasOwn(scenes,id))
         || !savedLog(v.log,v.leg,v.days) || (v.arrivalNote!=null && !shortText(v.arrivalNote,256)))return false;
-    const p=preview(v.origin,v.target,v.style),expected=position(v.origin,v.target,v.leg/v.legs);
+    const p=terms(v.origin,v.target,v.style),expected=position(v.origin,v.target,v.leg/v.legs);
     return !!v.cost && v.cost.funds===p.cost.funds && v.cost.food===p.cost.food && angle(expected,v.position)<1e-6;
   }
   function rewardShape(r) {

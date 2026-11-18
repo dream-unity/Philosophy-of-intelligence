@@ -1,7 +1,7 @@
 /* Common Earth civic simulation. Browser global, no network or timers.
  * create({storage?, key?}) -> state, active(), actions(group), act(id, plot?),
  * found(point, name?), visit(id), advance(), overview(), reset(), subscribe(fn),
- * previewBuild(kind,lot), previewReclaim(lot), reclaim(lot), forecastNext(),
+ * previewBuild(kind,lot), previewReclaim(lot), reclaim(lot,buildingId), forecastNext(),
  * beginVoyage(target,style), sail(choiceId).
  * Groups: people, build, research, council, routes, work, all.
  * Commands return {ok,message}. Lots 0–8 form a 3×3 grid in row-major order.
@@ -201,6 +201,20 @@
     resident.bond=clamp(before+amount,0,10);
     return resident.bond===before?'bond stayed at '+resident.bond:signed(resident.bond-before)+' bond';
   }
+  function charterFacts(turn){
+    const facts={supplied:0,kept:0,heard:0,decisions:0,schools:0,deliveries:0,stewards:0,termsMet:false};
+    for(const s of turn.sites){
+      if(s.food>=6)facts.supplied++;
+      if(s.residents.every(person=>person.heard))facts.heard++;
+      if(s.tech.includes('apprenticeship'))facts.schools++;
+      if(s.tech.includes('stewardship'))facts.stewards++;
+      facts.kept+=s.stats.kept;facts.decisions+=s.stats.resolved;facts.deliveries+=s.stats.deliveries;
+    }
+    if(turn.charter==='care')facts.termsMet=facts.supplied===turn.sites.length && facts.kept>=2;
+    if(turn.charter==='voice')facts.termsMet=facts.heard>=2 && facts.decisions>=2;
+    if(turn.charter==='craft')facts.termsMet=facts.schools>=2 && facts.deliveries>=1;
+    return facts;
+  }
   function outcome(delta,relationship){
     const parts=[summary(delta),relationship].filter(Boolean);
     return parts.length?parts.join(' · ')+'.':'The public measures were already at their limit.';
@@ -349,6 +363,7 @@
       if(!validReview(world.lastWeekReview,world,ids))return null;
       if(root.EarthPartners?.valid && !root.EarthPartners.valid(world.partners,ids))return null;
       if(root.EarthLegacy?.valid && !root.EarthLegacy.valid(world))return null;
+      if(root.EarthGoals?.valid && !root.EarthGoals.valid(world.learningGoals,world))return null;
       if(world.voyage!=null){
         const v=world.voyage;
         if(!geoPoint(v.origin)||!ids.has(v.origin.id)||!geoPoint(v.target)||!integer(v.legs,1)||!integer(v.leg,0,v.legs-1)||!Array.isArray(v.itinerary))return null;
@@ -448,13 +463,12 @@
       return p.name+' saw the '+(revised?'revised ':'')+'promise kept. '+why+credit+' '+outcome(apply(site,{trust:3}),bond(p,2));
     }
     function charterMet(turn=world){
-      if(turn.charter==='care') return turn.sites.every(s=>s.food>=6) && turn.sites.reduce((a,s)=>a+s.stats.kept,0)>=2;
-      if(turn.charter==='voice')return turn.sites.filter(s=>s.residents.every(p=>p.heard)).length>=2 && turn.sites.reduce((a,s)=>a+s.stats.resolved,0)>=2;
-      if(turn.charter==='craft')return turn.sites.filter(s=>s.tech.includes('apprenticeship')).length>=2 && turn.sites.some(s=>s.stats.deliveries>0);
-      return false;
+      return charterFacts(turn).termsMet;
     }
     function ratify(turn){
-      if(!turn.completed && turn.sites.some(s=>s.tech.includes('stewardship')) && charterMet(turn)){
+      if(turn.completed || !turn.charter)return '';
+      const progress=charterFacts(turn);
+      if(progress.stewards && progress.termsMet){
         turn.completed=true;
         return 'Charter fulfilled: '+CHARTERS[turn.charter].name+'. The assembly ratified your network’s compact. Your settlements remain open to play.';
       }
@@ -656,7 +670,9 @@
         const gate=site.buildings.length===9?'All nine district lots are occupied.':kind==='wetland' && !site.tech.includes('apprenticeship')?'First research shared apprenticeship.':'';
         add('build','build:'+kind,b.name,b.info,{kind,goods:{funds:b.funds,materials:Math.max(1,b.materials-(root.EarthStrategy?.buildDiscount(site) || 0))},gate},(plot)=>{
           const partners=site.residents.filter(p=>p.promise && PROFILES[p.slot].alternative===kind);
-          site.buildings.push({id:site.id+'-b'+plot,kind,plot,name:b.name,partners:partners.map(p=>p.id)});
+          // Every construction uses a different effort slot within its week.
+          const id=site.id+'-project-'+world.week+'-'+world.effort;
+          site.buildings.push({id,kind,plot,name:b.name,partners:partners.map(p=>p.id)});
           let msg=b.name+' opened on lot '+(plot+1)+'.';
           for(const p of partners)msg+=' '+fulfilled(site,p,'The project met the need they raised.');
           return msg;
@@ -664,7 +680,7 @@
       }
       if((group==='all' || group==='build') && site.buildings.length===9)for(const b of site.buildings){
         const plan=previewReclaim(b.plot);
-        add('build','reclaim:'+b.plot,'Dismantle lot '+(b.plot+1),plan.text,{plot:b.plot},()=>takeDown(site,b.plot));
+        add('build','reclaim:'+b.id,'Dismantle lot '+(b.plot+1),plan.text,{plot:b.plot,buildingId:b.id},()=>takeDown(site,b.plot));
       }
       const nextTech=TECH[site.tech.length];
       if(nextTech){
@@ -794,7 +810,7 @@
       if(partners.length)text+=' '+partners.map(p=>p.name).join(' and ')+' helped secure this project. Trust can fall by 2 and their bonds by 1.';
       if(b.kind==='hall' && site.mandate && site.buildings.filter(b=>b.kind==='hall').length===1)text+=' The local assembly will need another hall before it can vote.';
       if(b.kind==='pier' && site.buildings.filter(b=>b.kind==='pier').length===1)text+=' Routes with no depot at the other end will lose 2 units of base cargo capacity.';
-      return {ok:true,available:world.effort>=1,reason:world.effort>=1?'':'Requires 1 effort. Advance the week to refresh.',label:b.name,text,forecast,delta,recovered,partners:partners.map(p=>p.id)};
+      return {ok:true,available:world.effort>=1,reason:world.effort>=1?'':'Requires 1 effort. Advance the week to refresh.',buildingId:b.id,label:b.name,text,forecast,delta,recovered,partners:partners.map(p=>p.id)};
     }
     function takeDown(site,plot){
       const plan=previewReclaim(plot);
@@ -808,9 +824,10 @@
       }
       return 'Lot '+(plot+1)+' reopened. Recovered '+plan.recovered+' material'+(plan.recovered===1?'':'s')+'. '+plan.forecast+'.'+(effects.length?' '+effects.join(' · ')+'.':'');
     }
-    function reclaim(plot){
+    function reclaim(plot,buildingId){
       const plan=previewReclaim(plot);
       if(!plan.ok || !plan.available)return reject(plan.reason);
+      if(plan.buildingId!==buildingId)return reject('The building on this lot changed. Review it before dismantling.');
       world.effort--;return complete(takeDown(current(),plot),current());
     }
     function applyShiftResult(site,result,requiresFunds=true){
@@ -996,8 +1013,7 @@
       }
       if(!site.issue || turn.week<=site.issue.deadline || root.EarthLegacy?.governs(turn,site))return;
       const decision=delegatedVote(turn,site);
-      const delegated=root.EarthLegacy?.governs(world,site);
-      if(site.issue && !delegated){
+      if(site.issue){
         const q=QUESTIONS[site.issue.index];site.issue=null;
         event(decision+'The decision on “'+q.title+'” lapsed. '+outcome(apply(site,{trust:-2})),site,'council');
       }else event(decision,site,'council');
@@ -1029,7 +1045,8 @@
       }
       if(root.EarthNeighbours)for(const note of root.EarthNeighbours.tick(turn,site) || [])event(note,site);
     }
-    function settleHouseholds(turn,site,production,event){
+    function settleHouseholds(turn,site,report,event){
+      const production=report.production;
       if(root.EarthStrategy)for(const note of root.EarthStrategy.protect(site,production) || [])event(note,site);
       const shortage=site.food+production.food<0;
       apply(site,production);
@@ -1037,8 +1054,7 @@
       if((turn.week-site.founded)%3!==0 || site.food<9 || site.trust<50)return;
       const room=Math.max(0,capacity(site)-site.population);
       const growth=Math.min(2,room);
-      const developed=site.buildings.length || (root.EarthCityModel?.overview(site).developed || 0);
-      if(growth && developed){
+      if(growth && (site.buildings.length || report.developedPrecincts)){
         site.population+=growth;
         event((growth===1?'One resident settled':'Two residents settled')+' in '+site.name+'. Its weekly food need is now '+Math.ceil(site.population/5)+'.',site);
       }
@@ -1065,17 +1081,28 @@
       turn.week++;turn.effort=MAX_EFFORT;
       for(const site of turn.sites)closeDeadlines(turn,site,event);
       for(const site of turn.sites){
+        const previousExcess=Math.max(0,site.population-capacity(site));
         const city=root.EarthCityModel?.weekly(site,turn);
         const report=reports.get(site.id);
-        const recurring=root.EarthCityModel?.overview(site)?.weekly;
+        const cityView=root.EarthCityModel?.overview(site),recurring=cityView?.weekly;
         report.production=rates(site,recurring);
         if(city && recurring){
           report.cityOneOff=rateDifference(recurring,city.delta);
           apply(site,report.cityOneOff);
         }
-        report.housingCapacity=capacity(site);
+        report.housingCapacity=cityView?.capacity ?? 18;
+        report.developedPrecincts=cityView?.developed ?? 0;
+        report.crowding=cityView?.crowding || null;
         report.forecast=summary(report.production)+' per week';
         for(const note of city?.notes || [])event(note,site);
+        if(report.crowding?.excess){
+          const {excess,capacity,wellbeing}=report.crowding;
+          const note=excess+' '+(excess===1?'resident shares':'residents share')+' housing beyond its capacity of '+capacity+'. Crowding contributes '+signed(wellbeing)+' wellbeing this week.';
+          report.forecast+=' '+note;
+          event(note,site);
+        }else if(previousExcess && report.crowding){
+          event('Housing now has room for all '+site.population+' residents. The weekly crowding cost has ended.',site);
+        }
       }
       const inbound=receiveCargo(turn,byId,event);
       for(const site of turn.sites){
@@ -1089,7 +1116,7 @@
       if(root.EarthPartners)for(const item of root.EarthPartners.tick(turn,{apply}) || []){
         const site=byId.get(item.siteId);if(site)event(item.text,site,item.type);
       }
-      for(const site of turn.sites)settleHouseholds(turn,site,reports.get(site.id).production,event);
+      for(const site of turn.sites)settleHouseholds(turn,site,reports.get(site.id),event);
       dispatchCargo(turn,byId,inbound,event);
       for(const site of turn.sites){
         if(!site.issue && (turn.week-site.founded-1)%4===0 && turn.week>site.founded){
@@ -1104,6 +1131,10 @@
       }
       const ratified=ratify(turn);
       if(ratified)event(ratified,turn.sites.find(s=>s.tech.includes('stewardship')),'council');
+      if(root.EarthGoals)for(const result of root.EarthGoals.tick(turn)){
+        const site=byId.get(result.siteId);
+        if(site)event(result.text,site);
+      }
       for(const site of turn.sites){
         const report=reports.get(site.id),before=opening.get(site.id);
         for(const p of site.residents)if(p.promise?.dueWeek===turn.week)report.promises.push(p.name+' is due '+resources(promiseBalance(p))+' by the end of week '+turn.week+(p.promise.revised?' under the revised agreement.':'.'));
@@ -1180,8 +1211,14 @@
       const result=model.apply(site,world,precinctId,projectId);
       return result.ok?complete(result.message,site):reject(result.message);
     }
+    function beginGoal(siteId,aimKey,guardKey,weeks){
+      const site=world.sites.find(s=>s.id===siteId);
+      if(!site || !root.EarthGoals)return reject('Choose a settlement before setting a goal.');
+      const result=root.EarthGoals.start(world,siteId,aimKey,guardKey,weeks);
+      return result.ok?complete(result.message,site):reject(result.message);
+    }
     const commands={
-      planCity:guarded(planCity),
+      planCity:guarded(planCity),beginGoal:guarded(beginGoal),
       found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
       beginShift:guarded(id=>shiftCommand('start',id)),arriveShift:guarded(id=>shiftCommand('arrive',id)),
       chooseShift:guarded(id=>shiftCommand('choose',id)),finishShift:guarded(()=>shiftCommand('finish')),
@@ -1209,5 +1246,5 @@
       destroy(){listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };
   }
-  root.CommonEarthSim={create,readSave,marketPlan,productiveLinks,practices,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
+  root.CommonEarthSim={create,readSave,marketPlan,productiveLinks,practices,charterFacts,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
 })(typeof window==='undefined'?globalThis:window);

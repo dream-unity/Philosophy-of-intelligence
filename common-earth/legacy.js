@@ -23,23 +23,99 @@
   };
 
   function measure(world) {
-    const sites = world.sites;
-    if (world.charter === 'care') {
-      const supplied = sites.filter(s => s.food >= 6).length;
-      const kept = sites.reduce((sum,s) => sum + s.stats.kept, 0);
-      return {met:supplied === sites.length && kept >= 2,
-        text:supplied+' of '+units(sites.length,'community','communities')+' had at least 6 food, with '+units(kept,'promise','promises')+' kept.'};
+    const {termsMet:met,supplied,kept,heard,decisions,schools,deliveries}=root.CommonEarthSim.charterFacts(world);
+    let text;
+    if(world.charter==='care'){
+      text=supplied+' of '+units(world.sites.length,'community','communities')+' had at least 6 food, with '+units(kept,'promise','promises')+' kept.';
+    }else if(world.charter==='voice'){
+      text='All founding residents had spoken in '+units(heard,'community','communities')+'. Councils had resolved '+units(decisions,'decision','decisions')+'.';
+    }else{
+      text=units(schools,'community','communities')+' had shared apprenticeships. Residents had received '+units(deliveries,'street delivery','street deliveries')+'.';
     }
-    if (world.charter === 'voice') {
-      const heard = sites.filter(s => s.residents.every(p => p.heard)).length;
-      const cases = sites.reduce((sum,s) => sum + s.stats.resolved, 0);
-      return {met:heard >= 2 && cases >= 2,
-        text:'All founding residents had spoken in '+units(heard,'community','communities')+'. Councils had resolved '+units(cases,'decision','decisions')+'.'};
+    return {met,text};
+  }
+
+  const groupStep=(site,group,label,actionId)=>({kind:'group',siteId:site.id,group,label,actionId});
+  const atlasStep=site=>({kind:'atlas',siteId:site.id,label:'Find a second community on Earth'});
+  const meetStep=(site,p,verb='Hear')=>({kind:'resident',siteId:site.id,residentId:p.id,label:verb+' '+p.name+' in '+site.name});
+
+  function promiseStep(world,site) {
+    const people=site.residents;
+    const promised=people.filter(p=>p.promise).sort((a,b)=>a.promise.dueWeek-b.promise.dueWeek)[0];
+    if(promised)return meetStep(site,promised,'Review the promise to');
+    const ready=people.find(p=>p.heard && world.week-p.lastPromise>=3);
+    if(ready)return meetStep(site,ready,'Discuss a promise with');
+    return meetStep(site,people.find(p=>!p.heard)||people[0]);
+  }
+
+  function apprenticeshipStep(site) {
+    if(!site.residents.some(p=>p.heard))return meetStep(site,site.residents[0]);
+    if(!has(site,'hall')&&!has(site,'workshop'))return groupStep(site,'build','Plan a hall or workshop in '+site.name);
+    return groupStep(site,'research','Review apprenticeship in '+site.name,'research:apprenticeship');
+  }
+
+  function councilStep(site) {
+    const due=Math.min(...site.pending.map(p=>p.week));
+    const label=site.issue?'Review the vote in '+site.name:Number.isFinite(due)?'Review '+site.name+'’s decision due in week '+due:'See the next council agenda in '+site.name;
+    return groupStep(site,'council',label);
+  }
+
+  function stewardshipStep(world,site) {
+    if(!site.tech.includes('apprenticeship'))return apprenticeshipStep(site);
+    if(!site.tech.includes('exchange')){
+      if(!world.routes.some(r=>r.from===site.id || r.to===site.id)){
+        const partner=world.sites.find(s=>s.id!==site.id);
+        return partner?groupStep(site,'routes','Review a link from '+site.name+' to '+partner.name,'route:'+partner.id):atlasStep(site);
+      }
+      if(site.stats.kept===0)return promiseStep(world,site);
+      return groupStep(site,'research','Review Exchange network in '+site.name,'research:exchange');
     }
-    const schools = sites.filter(s => s.tech.includes('apprenticeship')).length;
-    const errands = sites.reduce((sum,s) => sum + s.stats.deliveries, 0);
-    return {met:schools >= 2 && errands > 0,
-      text:units(schools,'community','communities')+' had shared apprenticeships. Residents had received '+units(errands,'street delivery','street deliveries')+'.'};
+    if(site.stats.resolved===0)return councilStep(site);
+    const unheard=site.residents.find(p=>!p.heard);
+    if(unheard)return meetStep(site,unheard);
+    return groupStep(site,'research','Review the Stewardship compact in '+site.name,'research:stewardship');
+  }
+
+  function charterProgress(world) {
+    if(!world?.sites?.length || !world.charter)return null;
+    const facts=root.CommonEarthSim.charterFacts(world),sites=world.sites,rows=[];
+    const current=sites.find(s=>s.id===world.activeId)||sites[0];
+    function add(id,label,count,target,detail,action){
+      rows.push({id,label,count,target,met:count>=target,detail,action:count>=target || world.completed?null:action});
+    }
+    if(world.charter==='care'){
+      const low=sites.find(s=>s.food<6);
+      add('food','Keep six food in every community',facts.supplied,sites.length,
+        facts.supplied+' of '+units(sites.length,'community','communities')+' hold at least 6 food.'+(low?' '+low.name+' currently has '+low.food+'.':''),
+        low&&groupStep(low,'work','Tend the food beds in '+low.name,'work:forage'));
+      const host=sites.find(s=>s.residents.some(p=>p.promise))||current;
+      add('promises','Keep two promises',facts.kept,2,units(facts.kept,'promise','promises')+' kept across the network.',promiseStep(world,host));
+    }else if(world.charter==='voice'){
+      const unheard=s=>s.residents.filter(p=>!p.heard);
+      const incomplete=sites.filter(s=>unheard(s).length).sort((a,b)=>unheard(a).length-unheard(b).length)[0];
+      const testimony=incomplete?meetStep(incomplete,unheard(incomplete)[0]):atlasStep(current);
+      add('voices','Hear every founding resident in two communities',facts.heard,2,
+        units(facts.heard,'community has','communities have')+' heard everyone. The charter calls for two.'+(incomplete&&facts.heard<2?' Still to hear in '+incomplete.name+': '+unheard(incomplete).map(p=>p.name).join(', ')+'.':''),testimony);
+      const agenda=sites.find(s=>s.issue)||sites.find(s=>s.pending.length)||current;
+      add('decisions','Resolve two council decisions',facts.decisions,2,units(facts.decisions,'decision','decisions')+' resolved. A vote counts when its outcome takes effect.',councilStep(agenda));
+    }else if(world.charter==='craft'){
+      const learner=sites.find(s=>!s.tech.includes('apprenticeship'));
+      add('schools','Establish shared apprenticeships in two communities',facts.schools,2,
+        units(facts.schools,'community has','communities have')+' completed apprenticeship. The charter calls for two.',learner?apprenticeshipStep(learner):atlasStep(current));
+      const courier=sites.find(s=>s.delivery)||current;
+      const recipient=personById(courier,courier.delivery?.residentId);
+      add('deliveries','Deliver one street errand',facts.deliveries,1,units(facts.deliveries,'parcel','parcels')+' delivered.'+(recipient?' The current parcel belongs to '+recipient.name+' in '+courier.name+'.':''),
+        groupStep(courier,'work',recipient?'Review the parcel for '+recipient.name:'Collect a market parcel in '+courier.name,recipient?'courier:deliver:'+recipient.id:'courier:pick'));
+    }else return null;
+    const researchSite=sites.reduce((a,b)=>b.tech.length>a.tech.length?b:a,current);
+    const nextResearch=stewardshipStep(world,researchSite);
+    const researchDetail=facts.stewards?units(facts.stewards,'community has','communities have')+' completed the Stewardship compact.':
+      'One community must research Stewardship. Its Exchange network requires a route between two communities. '+nextResearch.label+'.';
+    add('stewardship','Research the Stewardship compact',facts.stewards,1,researchDetail,nextResearch);
+    const unfinished=rows.find(row=>!row.met);
+    const priority=!world.completed && (facts.termsMet || facts.stewards>0 || sites.some(s=>s.tech.includes('exchange')));
+    return {key:world.charter,termsMet:facts.termsMet,stewardshipMet:facts.stewards>0,ratified:world.completed,rows,priority,
+      next:world.completed?null:unfinished?.action||null,summary:world.completed?'Your network has ratified its charter.':unfinished?.detail||''};
   }
 
   function contacts(world, site) {
@@ -239,5 +315,5 @@
       t.decisions.length === world.week-t.start && strings(t.partners,WEEKS) && strings(t.reached,WEEKS));
   }
 
-  root.EarthLegacy = Object.freeze({governs,actions,tick,summary,valid});
+  root.EarthLegacy = Object.freeze({governs,actions,tick,summary,valid,charterProgress});
 })(typeof window === 'undefined' ? globalThis : window);

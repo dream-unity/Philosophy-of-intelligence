@@ -1,0 +1,187 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const game = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
+const browser = vm.createContext({});
+browser.window = browser;
+for (const name of ['navigation', 'city', 'partners', 'campaigns', 'simulation']) {
+  vm.runInContext(fs.readFileSync(path.join(game,name+'.js'),'utf8'),browser,{filename:name+'.js'});
+}
+const start = {name:'Stone Town',lat:-6.1622,lon:39.1922,water:false};
+const saveKey = 'common-earth.world.v1';
+function ok(result) { assert.equal(result.ok,true,result.message); }
+function world(raw) {
+  const rows = new Map(raw ? [[saveKey,raw]] : []);
+  const storage = {getItem:key=>rows.get(key) ?? null,setItem:(key,value)=>rows.set(key,value)};
+  const load = () => browser.CommonEarthSim.create({storage});
+  const sim = load();
+  if(!raw)ok(sim.found(start));
+  return {sim,load};
+}
+function close(sim) {
+  const forecast = sim.forecastNext().sites.find(s=>s.id===sim.active().id);
+  ok(sim.advance());
+  const report = sim.lastWeek().sites.find(s=>s.id===sim.active().id);
+  for(const [key,amount] of Object.entries(forecast.closing)) {
+    assert.equal(sim.active()[key],amount,key);
+    assert.equal(report.closing[key],amount,key);
+    assert.equal(report.delta[key],forecast.delta[key],key);
+  }
+  return forecast;
+}
+function vote(sim) {
+  const ballot=sim.actions('council').find(a=>a.available && a.id.startsWith('vote:') && !['vote:store','vote:lease'].includes(a.id));
+  if(ballot)ok(sim.act(ballot.id));
+}
+
+test('a growing district can begin with a productive outer precinct as well as a central garden', () => {
+  const central=world().sim, outer=world().sim, idle=world().sim;
+  ok(central.act('build:garden',0));
+  const plot=browser.EarthCityModel.overview(outer.active()).records.find(r=>r.terrain.id==='field');
+  ok(outer.planCity(plot.id,'food'));
+  for(let week=0;week<3;week++)for(const game of [central,outer,idle])close(game);
+  assert.equal(outer.active().buildings.length,0);
+  assert.equal(outer.active().population,central.active().population);
+  assert.equal(outer.active().food,central.active().food);
+  assert.equal(outer.active().population,14);
+  assert.equal(idle.active().population,12);
+});
+
+test('actual opening and replacement of housing change crowding at the opening week and preserve existing residents', () => {
+  const {sim,load}=world(),site=sim.active(),city=browser.EarthCityModel;
+  ok(sim.act('build:garden',0));
+  ok(sim.act('build:hall',1));
+  close(sim);
+  const plot=city.overview(site).records.find(r=>r.terrain.id==='shelter').id;
+  for(let tries=0;!city.preview(site,sim.state,plot,'homes').available;tries++){
+    assert(tries<10);
+    if(sim.state.effort)ok(sim.act(site.materials<4?'work:salvage':'work:contract'));
+    else close(sim);
+  }
+  ok(sim.planCity(plot,'homes'));
+  while(site.population<26){assert(sim.state.week<40);vote(sim);close(sim);}
+  const requested=city.preview(site,sim.state,plot,'yard');
+  assert.equal(requested.completedView.crowding.excess,8);
+  assert.match(requested.forecast,/8 residents/i);
+  ok(sim.planCity(plot,'yard'));
+  const construction=close(sim);
+  assert.equal(construction.crowding.excess,0);
+  assert.equal(construction.housingCapacity,26);
+  const converted=close(sim);
+  assert.equal(site.population,26);
+  assert.equal(converted.housingCapacity,18);
+  assert.equal(converted.crowding.excess,8);
+  assert.equal(converted.crowding.wellbeing,-2);
+  assert.match(converted.forecast,/8 residents.*-2 wellbeing/);
+  assert(converted.highlights.some(t=>t.includes('Crowding')));
+  assert.equal(load().active().population,26);
+  const recovery=city.preview(site,sim.state,plot,'homes');
+  assert.equal(recovery.completedView.crowding.wellbeing,0);
+  ok(sim.planCity(plot,'homes'));
+  const rebuilding=close(sim);
+  assert.equal(rebuilding.crowding.excess,8);
+  const reopened=close(sim);
+  assert.equal(reopened.crowding.excess,0);
+  assert.equal(reopened.crowding.wellbeing,0);
+  assert(reopened.highlights.some(t=>t.includes('crowding cost has ended')));
+  assert.equal(site.population,26);
+  assert.equal(load().active().wellbeing,site.wellbeing);
+});
+
+test('a settlement with exhausted effort, empty stores and zero public trust can rebuild its food supply without a loan', () => {
+  const initial=JSON.parse(JSON.stringify(world().sim.state)),site=initial.sites[0];
+  Object.assign(site,{food:0,funds:0,materials:0,trust:0,wellbeing:0,population:24});
+  initial.effort=0;
+  const {sim,load}=world(JSON.stringify(initial));
+  assert.match(close(sim).highlights.join(' '),/ran short of food/);
+  const grower=sim.active().residents[0];
+  for(const id of ['listen:'+grower.id,'promise:'+grower.id,'work:forage','fulfil:'+grower.id,'work:forage'])ok(sim.act(id));
+  assert.equal(sim.active().food,3);
+  assert.equal(sim.active().trust,3);
+  close(sim);
+  for(const id of ['work:contract','work:salvage','build:garden'])ok(sim.act(id));
+  assert.equal(close(sim).production.food,2);
+  assert.equal(sim.active().food,4);
+  assert.equal(load().active().food,4);
+});
+
+test('an earlier demolition confirmation cannot dismantle a replacement built on the same lot', () => {
+  const {sim,load}=world();
+  ok(sim.act('build:garden',0));
+  const first=sim.previewReclaim(0);
+  ok(sim.reclaim(0,first.buildingId));
+  ok(sim.act('build:garden',0));
+  const next=sim.previewReclaim(0),before=JSON.stringify(sim.state);
+  assert.notEqual(next.buildingId,first.buildingId);
+  assert.equal(sim.reclaim(0,first.buildingId).ok,false);
+  assert.equal(JSON.stringify(sim.state),before);
+  const restored=load();
+  assert.equal(restored.previewReclaim(0).buildingId,next.buildingId);
+  ok(restored.reclaim(0,next.buildingId));
+  assert.equal(restored.active().buildings.length,0);
+});
+
+test('payday, cancelled work and a completed local commission cannot pay twice after a reload', () => {
+  const wages=world();
+  const opening=wages.sim.active().funds;
+  for(let i=0;i<4;i++)ok(wages.sim.act('work:contract'));
+  assert.equal(wages.sim.active().funds,opening+16);
+  const paid=wages.load();
+  assert.equal(paid.act('work:contract').ok,false);
+  assert.equal(paid.active().funds,opening+16);
+
+  const builder=world();
+  const site=builder.sim.active(),funds=site.funds,materials=site.materials;
+  ok(builder.sim.planCity(0,'homes'));
+  ok(builder.sim.planCity(0,'cancel'));
+  assert.deepEqual([site.funds,site.materials],[funds-4,materials-2]);
+  assert.equal(builder.load().planCity(0,'cancel').ok,false);
+
+  const charter=world(),sim=charter.sim;
+  ok(sim.act('commission:accept'));
+  const [,repairer,convenor]=sim.active().residents;
+  for(const id of ['listen:'+repairer.id,'listen:'+convenor.id,'build:workshop','commission:pilot:stock'])ok(sim.act(id));
+  const decision=close(sim);
+  assert(decision.highlights.some(t=>t.includes('Traders stocked')));
+  assert.equal(sim.active().commission.phase,'complete');
+  const after=charter.load();
+  assert.equal(after.active().funds,sim.active().funds);
+  assert.equal(after.act('commission:accept').ok,false);
+  assert.equal(after.act('commission:pilot:stock').ok,false);
+  assert.equal(close(after).highlights.some(t=>t.includes('Traders stocked')),false);
+});
+
+test('a forfeited diplomatic deposit transfers once and its outstanding balance expires', () => {
+  const {sim,load}=world();
+  let key,booking;
+  for(const item of sim.actions('routes').filter(a=>a.id.endsWith(':meet'))) {
+    ok(sim.act(item.id));
+    key=item.partnerId;
+    booking=sim.actions('routes').find(a=>a.id==='partner:'+key+':book' && a.available);
+    if(booking)break;
+  }
+  assert(booking);
+  ok(sim.act(booking.id));
+  const get=s=>browser.EarthPartners.get(s.state,s.active(),key);
+  const pact=get(sim).agreement;
+  assert.equal(pact.paid,1);
+  assert.equal(pact.balance,2);
+  const restored=load();
+  assert.equal(restored.act(booking.id).ok,false);
+  const messages=[];
+  while(get(restored).agreement){
+    assert(restored.state.week<pact.due+6);
+    messages.push(...close(restored).highlights);
+    const agreement=get(restored).agreement;
+    if(agreement?.phase==='forfeit'){
+      assert.equal(agreement.balance,0);
+      assert.equal(restored.act('partner:'+key+':dispatch').ok,false);
+    }
+  }
+  assert.equal(messages.filter(t=>t.includes('received the forfeited')).length,1);
+  assert.equal(get(load()).standing,-1);
+});
