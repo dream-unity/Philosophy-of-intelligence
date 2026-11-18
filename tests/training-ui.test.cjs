@@ -107,6 +107,13 @@ class Element {
   removeEventListener(type, fn) { this.listeners.set(type, (this.listeners.get(type) || []).filter(callback => callback !== fn)); }
 }
 
+const homepage = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+const chairTemplates = new Map(
+  [...homepage.matchAll(/<template id="(wave-chair-[^"]+)">([\s\S]*?)<\/template>/g)]
+    .map(([, id, innerHTML]) => [id, { innerHTML }])
+);
+const { meshFor } = require('../src/geometry.js');
+
 function harness(options = {}) {
   let now = 0, failWrites = !!options.failWrites;
   const raw = new Map(options.records || []), intervals = new Map(), events = new Map(), sounds = [], downloads = [];
@@ -127,7 +134,7 @@ function harness(options = {}) {
   const browser = vm.createContext({
     console, Blob, performance: { now: () => now }, localStorage: storage,
     confirm: () => true,
-    document: { body: new Element('body'), createElement: tag => new Element(tag), createTextNode: value => { const el = new Element('#text'); el.textContent = value; return el; } },
+    document: { body: new Element('body'), getElementById: id => chairTemplates.get(id) ?? null, createElement: tag => new Element(tag), createTextNode: value => { const el = new Element('#text'); el.textContent = value; return el; } },
     URL: { createObjectURL(blob) { downloads.push(blob); return 'blob:test'; }, revokeObjectURL() {} },
     setTimeout: () => 1, clearTimeout() {},
     setInterval(callback) { const id = intervals.size + 1; intervals.set(id, callback); return id; },
@@ -148,7 +155,7 @@ function harness(options = {}) {
     } };
   }
   browser.FormExercises = { ...browser.FormExercises, ExerciseAudio: Audio };
-  browser.FormGeometry = { miniIcon: (stageId, size) => '<svg aria-hidden="true" data-stage="'+stageId+'" width="'+size+'"></svg>' };
+  browser.FormGeometry = { meshFor, miniIcon: (stageId, size) => '<svg aria-hidden="true" data-stage="'+stageId+'" width="'+size+'"></svg>' };
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/training.js'), 'utf8'), browser, { filename: 'training.js' });
   const host = new Element(), changes = [], routes = [];
   const app = browser.FormTraining.mount({ root: host, stageId: options.stageId || 'circle', initialExercise: options.initialExercise ?? 'wave', onStageChange: id => changes.push(id), onExerciseChange: route => routes.push(route) });
@@ -182,6 +189,37 @@ function harness(options = {}) {
     key: browser.FormTrainingStore.STORAGE_KEY
   };
 }
+
+test('each Wave stage has its pictured observation, a paired comparison and a working numbered register', () => {
+  const { STAGES } = require('../src/shape-practice.js');
+  const basicExamples = new Set(), advancedExamples = new Set();
+  for (const stage of STAGES) {
+    const page = harness({ stageId: stage.id, initialExercise: 'wave' });
+    const card = page.q('[data-pair-details]');
+    const study = page.q('.wave-chair-study');
+    assert.match(card.querySelector('img').getAttribute('src'), /wave-chair-basic\.svg/);
+    assert.equal(study.open, false);
+    assert.deepEqual(study.querySelectorAll('figcaption').map(el => el.textContent), ['Chair A', 'Chair B']);
+    basicExamples.add(card.textContent);
+    advancedExamples.add(page.q('.wave-comparison-example').textContent);
+    const register = page.host.querySelectorAll('[data-signal-vector]');
+    register.at(-1).click();
+    assert.equal(page.q('[data-wave-relationship]').hidden, false);
+    assert.equal(register.at(-1).getAttribute('aria-pressed'), 'true');
+    const text = page.q('[data-signal-pairing]').textContent;
+    assert.ok(text.trim());
+    assert.doesNotMatch(text, /undefined|park map|duck pond|hammock/i);
+    if (stage.relationCount > 12) {
+      assert.equal(page.q('[data-signal-pairing]').querySelectorAll('li').length, 10);
+      assert.match(text, /joins vertices \d+ and \d+ and borders faces \d+ and \d+/);
+    }
+    page.selectExercise('body');
+    assert.equal(page.host.querySelector('.wave-chair-study'), null);
+    page.app.destroy();
+  }
+  assert.equal(basicExamples.size, 14);
+  assert.equal(advancedExamples.size, 14);
+});
 
 test('each Psiduction category opens with its own poem and a collapsed practice guide', () => {
   const page = harness();
