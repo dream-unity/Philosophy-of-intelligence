@@ -230,6 +230,7 @@
       if(!street) street=window.EarthStreet.mount($('street-canvas'),{
         onInteract:interactAt,onPlace:placeBuilding,onHint:text=>put('street-hint',text),
         onState:state=>{
+          put('street-location',state.nearby?.label||'Local district');
           const driving=state.mode==='drive';
           const vehicle=$('street-vehicle');
           if(vehicle) {
@@ -761,6 +762,16 @@
   $('week-summary')?.closest('details')?.addEventListener('toggle',renderForecast);
   for(const id of ['objective-action','follow-objective'])listen(id,'click',()=>nextObjective()?.action());
   listen('beacon-toggle','change',()=>{showBeacons=$('beacon-toggle').checked;markers();});
+  listen('street-wide','click',()=>{
+    const expanded=document.body.classList.toggle('street-expanded');
+    const control=$('street-wide');
+    control.setAttribute('aria-pressed',String(expanded));
+    control.title=expanded?'Restore street view':'Expand street view';
+    requestAnimationFrame(()=>{
+      street?.resize();
+      if(expanded)$('street-stage')?.scrollIntoView({block:'start',behavior:'instant'});
+    });
+  });
   listen('world-view','click',()=>setView('world'));
   listen('street-view','click',()=>setView('street'));
   listen('city-view','click',()=>setView('city'));

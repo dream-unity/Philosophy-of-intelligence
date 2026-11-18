@@ -285,3 +285,22 @@ footer > span { font-family: var(--serif); font-style: italic; }
 .charter-progress summary {cursor:pointer;font-size:.88rem;color:var(--gold)}
 .charter-milestone {border-top:1px solid var(--line);padding-top:8px;margin-top:8px;font-size:.84rem}
 .charter-milestone p {line-height:1.4;color:var(--muted);margin:4px 0}
+
+
+/* The district tools stay on the glass, leaving the market frontage clear. */
+.street-stage { scroll-margin-top: 7px; }
+.street-stage-heading { top: 12px; left: 12px; max-width: min(61%, 430px); padding: 8px 13px 9px; border-color: #baae8b85; border-radius: 4px; background: #18302ce8; box-shadow: 0 2px 10px #18241c29; }
+.street-stage-heading .kicker { color: #d8c79f; font-size: 8px; letter-spacing: .15em; }
+.street-stage-heading .status-dot { background: #dbc48d; box-shadow: none; width: 4px; height: 4px; }
+.street-stage-heading h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 3px 0 0; font-size: clamp(21px, 2.2vw, 32px); letter-spacing: -.035em; }
+.street-camera-tools { position: absolute; z-index: 1; right: 12px; bottom: 12px; display: flex; gap: 5px; }
+.street-camera-tools .icon-button, .district-tools .icon-button { color: #f7ead0; border: 1px solid #b3b3919c; border-radius: 5px; background: #203a34ed; box-shadow: 0 2px 6px #16241f30; }
+.street-camera-tools .icon-button[aria-pressed="true"] { background: #eedbb4; color: #233e38; border-color: #fff1d2; }
+.street-camera-tools .icon-button:hover, .district-tools .icon-button:hover { border-color: #fff1d2; }
+.district-overview { position: absolute; z-index: 1; left: 12px; bottom: 12px; width: 77px; height: 55px; padding: 0; border: 1px solid #b3b3919c; border-radius: 4px; background: #18332dec; box-shadow: 0 2px 6px #16241f30; }
+body.street-expanded[data-map-view="street"] .workspace { grid-template-columns: minmax(0,1fr); }
+body.street-expanded[data-map-view="street"] .street-stage { height: clamp(360px, 77svh, 1120px); }
+body.street-expanded[data-map-view="street"] #street-open-actions { display: inline-block; position: absolute; right: 12px; top: 12px; padding: 8px 11px; border: 1px solid #b3b3919c; border-radius: 4px; background: #18332ded; color: #f7ead0; text-decoration: none; font-size: 12px; }
+@media (pointer:coarse) { .street-camera-tools .icon-button { width: 44px; height: 44px; } }
+@media (max-width: 460px) { .street-stage-heading { left: 8px; top: 8px; padding: 6px 9px 7px; max-width: 56%; } .street-camera-tools { right: 8px; bottom: 8px; } .district-overview { left: 8px; bottom: 8px; width: 65px; height: 47px; } }
+@media (max-height: 480px) and (orientation:landscape) { body.street-expanded[data-map-view="street"] .street-stage { height: 88svh; } }

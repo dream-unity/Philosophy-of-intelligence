@@ -227,260 +227,114 @@
   const SITES=[[420,129],[576,200],[576,342],[420,413],[264,342],[264,200]];
   const LAYERS={land:'Land use',access:'Travel time',impact:'Local impact'};
   const PROJECTS=model.projects;
-  const PALETTES={
-    open:['#667f67','#66856f'],homes:['#a39473','#a89b7b'],food:['#788e61','#869c69'],
-    yard:['#927f6d','#958474'],market:['#a99668','#b09d72'],transit:['#6b9185','#78a296'],
-    care:['#908980','#a39b98'],water:['#658d7e','#6b9b8d']
-  };
-  const LAND_TINT={field:'#8a966c',ridge:'#868d73',crossing:'#95977c',shelter:'#83947b',yard:'#8c8d79',wet:'#6d8f79'};
-  const SEA_TINT={field:'#679082',ridge:'#748983',crossing:'#83978e',shelter:'#7f998d',yard:'#83918c',wet:'#77a596'};
-  const STRUCTURE_TONES={
-    homes:['#d8baa0','#8a725d','#b39a77'],food:['#a7b3a2','#619481','#8ba38e'],yard:['#a9b1a5','#6a8180','#8f9590'],
-    market:['#ddb67d','#956f50','#b88d5a'],transit:['#a2c0ab','#648981','#87a592'],care:['#d4bcad','#947e78','#baa49b']
-  };
+  const TERRAINS=['field','ridge','crossing','shelter','yard','wet'];
+  const DEVELOPMENTS=['homes','food','yard','market','transit','care','water','centre'];
+  const LAND_COLOURS={field:'#b5ad72',ridge:'#8d9b79',crossing:'#cfb997',shelter:'#99ae81',yard:'#bcac8c',wet:'#78b19c'};
+  const USE_COLOURS={homes:'#e1b18b',food:'#a4be7b',yard:'#bfa382',market:'#e2bb79',transit:'#9ec7b2',care:'#d0b4ac',water:'#82c5b3'};
   const fmt=n=>Number(n.toFixed(1));
-  const attr = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const nss=' vector-effect="non-scaling-stroke"';
-  function poly(points, fill, stroke, sw=.7, additional='') {
-    return '<polygon points="'+points.map(p=>fmt(p[0])+','+fmt(p[1])).join(' ')+'" fill="'+fill+'"'+(stroke?' stroke="'+stroke+'" stroke-width="'+sw+'"':'')+additional+'/>';
-  }
-  function path(d,stroke,sw=1,fill='none',extra='') { return '<path d="'+d+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-linejoin="round" '+extra+'/>'; }
-  function ellipse(x,y,rx,ry,fill,extra=''){return '<ellipse cx="'+fmt(x)+'" cy="'+fmt(y)+'" rx="'+fmt(rx)+'" ry="'+fmt(ry)+'" fill="'+fill+'" '+extra+'/>';}
-  const rect=(x,y,w,h,fill)=>'<rect x="'+fmt(x)+'" y="'+fmt(y)+'" width="'+fmt(w)+'" height="'+fmt(h)+'" fill="'+fill+'"/>';
+  const attr=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function hex(x,y,s=1) {
     const corners=[[-SX,0],[-SX/2,-SY],[SX/2,-SY],[SX,0],[SX/2,SY],[-SX/2,SY]];
     return corners.map(([dx,dy])=>{
       const u=x+dx,v=y+dy;
       const a=8.6*Math.sin((u+v*.81)/41)+3.9*Math.cos((v-u*.3)/19);
       const b=6.4*Math.sin((v-u*.35)/33)+2.7*Math.cos((u+v*.5)/27);
-      return [x+(dx+a)*s,y+(dy+b)*s];
-    });
+      return fmt(x+(dx+a)*s)+','+fmt(y+(dy+b)*s);
+    }).join(' ');
   }
-  function between(seed, a, b) {
-    let t=seed|0;t=Math.imul(t^(t>>>16),0x7feb352d);t=Math.imul(t^(t>>>15),0x846ca68b);
-    return a+((t^(t>>>16))>>>0)/4294967295*(b-a);
+  function mapSetting(site) {
+    if(site.water)return 'sea';
+    // Use the Swahili coastal artwork for the Zanzibar islands. A custom town
+    // name can change, so its coordinates determine the regional appearance.
+    const {lat,lon}=site;
+    const unguja=lat>=-6.55&&lat<=-5.68&&lon>=39.14&&lon<=39.60;
+    const pemba=lat>=-5.54&&lat<=-4.84&&lon>=39.55&&lon<=39.90;
+    return unguja||pemba?'zanzibar':'land';
   }
-  function tree(x,y,size,shade=0) {
-    const dark=['#3d6957','#496b53','#52745b','#49735d'][shade%4],top=['#729774','#8da37c','#a5af7e','#80a286'][shade%4];
-    return ellipse(x+size*.3,y+2,size*.9,size*.42,'#566e59','opacity=".59"')+
-      path('M'+fmt(x)+' '+fmt(y+1)+'v-'+fmt(size*.95),'#745f48',1.3)+
-      ellipse(x,y-size*.76,size*.77,size*.82,dark)+ellipse(x-size*.16,y-size*.98,size*.57,size*.49,top);
+  function spriteDefinitions(setting) {
+    const atlas=`<image id="city-precinct-atlas" href="plan-art/${setting}-precincts.webp" width="1024" height="896"/>`;
+    const sprites=TERRAINS.concat(DEVELOPMENTS).map((_,index)=>
+      `<symbol id="city-art-${index}" viewBox="${index%4*256} ${Math.floor(index/4)*224} 256 224" preserveAspectRatio="none" overflow="hidden"><use href="#city-precinct-atlas"/></symbol>`);
+    return atlas+sprites.join('');
   }
-  function grove(seed,x,y,count,scale=1) {
-    const trees=[];
-    for(let k=0;k<count;k++)trees.push([x+between(seed+k*33,-16,16)*scale,y+between(seed+k*97+31,-8,8)*scale,between(seed+k*77+12,3.8,6.4)*scale,k%4]);
-    return trees.sort((a,b)=>a[1]-b[1]).map(q=>tree(...q)).join('');
+  // The bottom centre of each trimmed sprite is its physical contact with the map.
+  function sprite(index,x,ground,width,height=width*.81) {
+    return `<use href="#city-art-${index}" x="${fmt(x-width/2)}" y="${fmt(ground-height)}" width="${fmt(width)}" height="${fmt(height)}" class="city-model"/>`;
   }
-  function block(x,y,w,d,z,kind,style='flat') {
-    const [roof,left,right]=STRUCTURE_TONES[kind]||STRUCTURE_TONES.homes;
-    const ax=w*.83,ay=w*.35,bx=-d*.83,by=d*.35;
-    const front=[x+ax+bx,y+ay+by],a=[x+ax,y+ay],b=[x+bx,y+by],top=q=>[q[0],q[1]-z];
-    let s=poly([[x+5,y+2],[a[0]+4,a[1]+3],[front[0]+4,front[1]+3],[b[0]+2,b[1]+2]],'#50685b');
-    s+=poly([top(a),a,front,top(front)],right,'#4c6259',.5)+poly([top(b),b,front,top(front)],left,'#4c6259',.5);
-    s+=poly([[x,y-z],top(a),top(front),top(b)],roof,'#536b62',.55);
-    if(style==='gable'){
-      const g0=[x+bx*.50,y+by*.50-z-z*.33],g1=[g0[0]+ax,g0[1]+ay];
-      s+=poly([[x,y-z],g0,g1,top(a)],roof,'#667267',.5)+poly([g0,top(b),top(front),g1],kind==='homes'?'#ae8e79':'#899c8f','#6c776d',.5);
-    } else if(style==='stripe'){
-      for(let i=2;i<d;i+=3)s+=path('M'+fmt(x-i*.83)+' '+fmt(y+i*.35-z)+'l'+fmt(ax)+' '+fmt(ay),'#70867c',.55);
-    } else {
-      s+=poly([[x+1,y-z+1],[a[0]-2,a[1]-z+1],[front[0],front[1]-z-1],[b[0]+2,b[1]-z]],'none','#97a79a',.45);
-    }
-    for(let k=1;k<w/6;k++) {
-      const f=k/(Math.floor(w/6)+1); const xx=b[0]+f*ax,yy=b[1]+f*ay-z*.65;
-      s+=poly([[xx,yy],[xx+1.7,yy+.64],[xx+1.7,yy+2.7],[xx,yy+2.1]],'#566f68');
-    }
-    return s;
-  }
-  function bed(x,y,wide=26) {
-    let s=poly([[x,y],[x+wide,y+wide*.37],[x+wide-11,y+wide*.37+5],[x-11,y+5]],'#887953','#687457',.5);
-    for(let j=0;j<4;j++)s+=path('M'+fmt(x-j*2.6)+' '+fmt(y+j*1.2)+'l'+wide+' '+fmt(wide*.37),'#a9bb77',1.2);
-    return s;
-  }
-  function ripple(x,y,long,color='#9dbab0') {
-    return path('M'+fmt(x)+' '+fmt(y)+'q'+fmt(long*.25)+' -1.7 '+fmt(long*.49)+' 0t'+fmt(long*.51)+' 0',color,.65);
-  }
-  function waterPatch(x,y,s) {
-    let out='<g transform="translate('+x+' '+y+') scale('+s+')">';
-    out+=path('M-47 2Q-38-10-24-10T6-15Q29-23 43-14T47 0Q38 9 23 10T-8 19Q-29 19-43 12Z','#648c77',2,'#769e8d');
-    out+=path('M-41 1Q-34-7-22-7T6-12Q24-18 38-12T40-1Q33 6 19 7T-8 15Q-27 16-38 9Z','#709a8c',1,'#577e76');
-    for(let i=0;i<10;i++){const xx=between(i+38,-31,23),yy=between(i+144,-6,9);out+=ripple(xx,yy,between(i+33,4,10));}
-    for(let i=0;i<9;i++){const xx=-33+i*6,yy=13+Math.sin(i*.8)*4;out+=path('M'+xx+' '+fmt(yy)+'l-1.6-4m1.6 4 .6-6m-.6 6 2.3-4','#617a52',1);}
-    return out+'</g>';
-  }
-  function platform(x,y,scale=1) {
-    const pts=hex(x,y,scale);
-    let str=poly(pts.map(([a,b])=>[a+1,b+4]),'#4a6965','#789b90',1)+poly(pts,'#8b9e8a','#a7b2a0',1);
-    return str;
-  }
-  function baseGarden(terrain,seed) {
-    let s='';
-    if(terrain==='field'){
-      s+=bed(-38,-13,26)+bed(-24,-19,26)+bed(-9,-24,26)+grove(seed,22,-1,8,.87);
-      s+=block(-42,9,8,6,3,'food','gable');
-    } else if(terrain==='ridge'){
-      for(let i=0;i<4;i++)s+=path('M'+(-61+i*2)+' '+(-6-i*3)+'q24-17 48-7t51-9','#758769',1);
-      s+=grove(seed,-12,-13,9,.96)+grove(seed+13,38,-17,6,.84);
-    } else if(terrain==='crossing'){
-      s+=path('M-76-16Q-27 2 1-2T71-20','#aaa998',7)+path('M-76-16Q-27 2 1-2T71-20','#6e8378',3.8);
-      s+=block(-30,-12,10,7,4,'market','gable')+block(15,-14,8,6,4,'market','gable')+tree(43,1,5);
-    } else if(terrain==='shelter'){
-      s+=grove(seed,-27,-4,7,.89)+grove(seed+21,27,-14,8,.83)+block(-8,-15,11,8,4,'homes','gable');
-      s+=path('M-36 11Q-6-7 20 5T51 0','#c0b399',3);
-    } else if(terrain==='yard'){
-      for(let k=0;k<2;k++){const y=-25+k*9;s+=path('M-56 '+y+'l92 35','#596f69',1.8);}
-      for(let k=0;k<14;k++){const x=-52+k*6,y=-23+k*2.3;s+=path('M'+x+' '+fmt(y)+'l-3 6','#798578',.9);}
-      s+=block(13,-22,17,7,4,'yard','stripe')+block(38,-10,8,6,3,'yard');s+=grove(seed,-43,2,4,.76);
-    } else s+=waterPatch(-2,-7,.83)+grove(seed,-44,-19,5,.73);
-    return s;
-  }
-  function art(use,seed) {
-    let s='';
-    if(use==='homes') {
-      s+=path('M-53-7 0 13 55-10','#c0ae8e',5)+grove(seed,11,0,3,.65);
-      s+=block(-33,-18,24,12,10,'homes','gable')+block(10,-20,25,12,11,'homes','gable')+block(26,0,18,9,7,'homes','gable')+block(-23,3,16,8,7,'homes','gable');
-    } else if(use==='food'){
-      for(let k=0;k<5;k++)s+=bed(-44+k*11,-6-k*4.6,29);
-      s+=block(19,-10,20,10,6,'food','stripe')+block(30,3,12,6,4,'food','gable')+tree(-39,7,4.4);
-    } else if(use==='yard'){
-      s+=block(-29,-16,34,17,13,'yard','stripe')+block(10,-19,27,12,8,'yard','stripe');
-      s+=rect(-30,-35,4,14,'#767b70')+ellipse(-28,-35,2.8,1,'#b5a18a')+block(10,1,15,8,5,'yard')+block(28,6,9,6,4,'market');
-    } else if(use==='market'){
-      s+=poly([[-57,-6],[-3,-27],[56,-6],[-4,15]],'#aa9b79','#8b8b73');
-      for(let k=0;k<4;k++){
-        const x=-33+(k%2)*39+(k>1?3:0),y=-14+(k>1?16:0);
-        s+=block(x,y,18,10,5,'market','gable');
-        for(let j=1;j<=3;j++)s+=path('M'+(x+j*3.7)+' '+fmt(y-5+j*1.5)+'l-8.7 3.8','#d2bba3',1.8);
-      }s+=grove(seed,44,-3,3,.58);
-    } else if(use==='transit'){
-      s+=path('M-67 8Q-40-12-12-8T55-15','#576d68',7)+path('M-67 8Q-40-12-12-8T55-15','#b0b595',1,'none','stroke-dasharray="3 2"');
-      s+=block(-20,-13,28,8,6,'transit','stripe')+block(16,-8,20,6,4,'transit')+path('M-27-10l18 6','#d4aa6f',2);
-      s+=grove(seed,39,3,4,.7);
-    } else if(use==='care'){
-      s+=poly([[-49,-4],[-20,-18],[38,4],[8,17]],'#bbad93','#a2a38e');
-      s+=block(-26,-12,38,15,10,'care')+block(0,-19,18,15,12,'care','gable')+block(9,-3,16,9,4,'care');
-      s+=grove(seed,35,6,5,.73);
-    } else if(use==='water'){
-      s+=waterPatch(-5,-6,.98)+grove(seed,-40,-13,7,.84)+grove(seed+9,35,-14,5,.77);
-      s+=path('M-33 12q16 6 36-7t33-7','#c7b48a',2.3);
-    }
-    return s;
+  function previewModel(site,record,use) {
+    const index=use==='open'?TERRAINS.indexOf(record.terrain.id):6+DEVELOPMENTS.indexOf(use);
+    const thumb=make('span','city-project-model');
+    thumb.setAttribute('aria-hidden','true');
+    thumb.style.backgroundImage=`url(plan-art/${mapSetting(site)}-precincts.webp)`;
+    thumb.style.backgroundPosition=`${index%4*100/3}% ${Math.floor(index/4)*100/3}%`;
+    return thumb;
   }
   function coreArt(site) {
-    let s='';
-    for(let row=0;row<3;row++)for(let col=0;col<3;col++){
-      const x=(col-row)*16,y=(col+row)*6-22,b=site.buildings.find(b=>b.plot===row*3+col);
-      s+=poly([[x,y-5.2],[x+13,y],[x,y+5.2],[x-13,y]],b?'#82927c':'#73816c','#c0b896',.65);
-      if(!b) continue;
-      if(b.kind==='garden')s+=bed(x-3,y-2.4,10);
-      else if(b.kind==='wetland')s+=waterPatch(x,y,.23);
-      else s+=block(x,y-3.4,12,9,6,{workshop:'yard',market:'market',hall:'care',pier:'transit'}[b.kind]||'homes','gable');
-    }
-    s+=block(-47,-8,15,8,6,'homes','gable')+block(29,-17,16,9,7,'homes','gable')+block(30,4,13,8,5,'market','stripe');
-    return s;
-  }
-
-  function tint(rec,layer,sea) {
-    if(layer==='access')return rec.minutes<=12?'#80a78e':rec.minutes<=15?'#98a684':rec.minutes<=19?'#b09e75':'#bd9276';
-    if(layer==='impact')return rec.pressure||rec.disturbed?'#c18c76':rec.use==='water'||rec.use==='care'?'#82ae99':'#889486';
-    return rec.use==='open'?(sea?SEA_TINT:LAND_TINT)[rec.terrain.id]:PALETTES[rec.use][0];
-  }
-  const label= (x,y,s,cls,anchor='middle')=>'<text x="'+x+'" y="'+y+'" class="'+cls+'" text-anchor="'+anchor+'">'+attr(s)+'</text>';
-  function transportLines(sea) {
-    const roadways=[
-      'M55 174Q121 162 181 190T287 223Q340 223 383 246T472 285Q539 300 590 337T768 398',
-      'M212 485Q248 422 302 391T395 326Q439 292 460 230T524 96Q548 46 595 12',
-      'M111 367Q192 352 244 314T370 266Q446 252 508 213T650 164Q694 155 749 122'
+    const artFor={garden:'food',wetland:'water',workshop:'yard',market:'market',hall:'centre',pier:'transit'};
+    const projectArt=kind=>6+DEVELOPMENTS.indexOf(kind);
+    const models=[
+      {ground:-12,svg:sprite(projectArt('homes'),-20,-12,72,57)},
+      {ground:-3,svg:sprite(projectArt('market'),24,-3,65,54)},
+      {ground:12,svg:sprite(projectArt('homes'),-42,12,52,39)}
     ];
-    return roadways.map(d=>path(d,sea?'#acaf93':'#b3ad96',sea?5.2:7.2)+path(d,sea?'#918e73':'#768071',sea?3.6:4.7)+path(d,'#bcb79c',.62,'none','stroke-dasharray="4 4"')).join('');
-  }
-  function peripheralLandscape(sea) {
-    let s='';
-    if(!sea){
-      const river='M64-35C130 24 88 78 118 111s53 29 37 68-28 70-12 121 10 71-20 113-7 85 49 132';
-      s+=path(river,'#a1ad8f',24)+path(river,'#63887e',17)+path(river,'#93ad9a',.85);
-      const cottages=[[173,125],[190,131],[207,120],[658,97],[674,106],[691,115],[688,396],[703,404],[669,416],[180,436],[173,450],[516,493]];
-      for(let i=0;i<cottages.length;i++){const [x,y]=cottages[i];s+=block(x,y,10+i%4,7+i%3,3+i%4,'homes','gable');}
-      for(let i=0;i<7;i++)s+=bed(79+i*8,273-i*3,20)+bed(680+i*8,294-i*3.6,23);
-    }else for(const [x,y] of [[130,223],[698,182],[677,431]]) {
-      s+=ellipse(x,y+3,7,1.6,'#406861')+path('M'+(x-7)+' '+y+'l14-2-4 5-8-1Z','#899f8e',.6,'#b8b99a')+path('M'+x+' '+(y-1)+'v-9l4 7Z','#a8b8a4',.6,'#d3cdb0');
+    let paving='';
+    for(let row=0;row<3;row++)for(let col=0;col<3;col++){
+      const x=(col-row)*13+11,y=(col+row)*4.1-1;
+      const b=site.buildings.find(building=>building.plot===row*3+col);
+      paving+=`<path d="M${fmt(x)},${fmt(y-4)}l12.6 4.1-12.6 4.1-12.6-4.1Z" class="city-central-lot${b?' is-built':''}"/>`;
+      if(b && artFor[b.kind])models.push({ground:y+4,svg:sprite(projectArt(artFor[b.kind]),x,y+4,26,22)});
     }
-    return s+transportLines(sea);
+    return paving+models.sort((a,b)=>a.ground-b.ground).map(model=>model.svg).join('');
   }
-  function detailedParcel(rec,sea,seed) {
-    const u=rec.use,t=rec.terrain.id;
-    const lane=['M-82-25Q-50-11-23-12T24-24Q44-34 76-26','M-76 26q26-29 60-35T62-33','M-73-25q25 24 48 22T53-18'][rec.id%3];
-    let s=path(lane,sea?'#a7aa8b':'#aea88f',3.5)+path(lane,'#8d9984',1.5)+path('M-53 25q24-11 46-7t46 1','#b7ab8f',1.7);
-    if(u==='open')return s+(t==='field'?bed(24,8,15)+bed(35,5,15):grove(seed+45,50,-24,5,.7))+grove(seed+65,-46,8,t==='ridge'?7:4,.69);
-    if(u==='water')return s+grove(seed+700,-42,-24,9,.81)+grove(seed+45,52,0,4,.7);
-    if(u==='food')return s+bed(-48,-26,18)+bed(-40,-31,20)+bed(-29,-34,18)+block(45,0,12,6,4,'food','stripe')+grove(seed,-48,8,4,.65);
-    const rows={
-      homes:[[-48,-29,18,9,7],[-25,-35,17,9,7],[3,-33,20,9,8],[48,-9,15,9,7],[-47,5,16,9,8]],
-      market:[[-48,-23,17,9,7],[-29,-32,15,9,7],[-9,-36,15,9,6],[41,-10,13,9,7]],
-      yard:[[-47,-27,26,10,7],[43,-7,17,8,5],[-43,6,10,6,4],[-34,9,10,6,4]],
-      transit:[[-45,-26,22,8,6],[9,-33,11,7,5],[43,-15,14,7,6]],care:[[-43,-28,18,13,7],[19,-33,16,11,7]]
-    };
-    const rowsHere=rows[u]||[];
-    for(const [x,y,w,d,z] of rowsHere)s+=block(x,y,w,d,z,u,(u==='yard'||u==='transit')?'stripe':'gable');
-    return s+grove(seed+629,48,5,4,.76);
+  const ROAD_SEGMENTS=[
+    'M-20 114Q103 107 179 156T307 214Q357 231 420 254T527 287Q579 302 634 330T864 418',
+    'M172 551Q219 460 276 404T372 327Q420 289 441 243T513 111Q545 49 609-29',
+    'M-30 446Q74 383 182 363T285 320Q339 280 389 269T499 240Q553 212 614 193T754 150Q796 131 868 77'
+  ];
+  function connections(sea) {
+    const strokes=ROAD_SEGMENTS.map(d=>`<path d="${d}"/>`).join('');
+    return `<g aria-hidden="true" class="city-connections${sea?' at-sea':''}"><g class="city-track-bank">${strokes}</g><g class="city-track">${strokes}</g><g class="city-track-mark">${strokes}</g></g>`;
   }
-
-  function outerScenery(site) {
-    let s='';
-    const sea=site.water;
-    if(sea){
-      for(let i=0;i<165;i++)s+=ripple(between(i*3+41,20,830),between(i*13+8,0,560),between(i*19+76,5,22),'#799b94');
-      for(let i=0;i<3;i++){const x=between(i*41+758,125,700),y=[75,465,385][i];s+=path('M'+x+' '+y+'l11 -2 -7 5z','#b3b7a1',.8,'#b0b59d');}
-      return s;
-    }
-    // Perimeter contours and scattered copses belong to the fictional plan.
-    for(let i=0;i<14;i++){
-      const x=-80+i*16; const dx=73+i*4;
-      s+=path('M'+x+' -10q'+dx+' 66 43 114t19 130q17 51-1 102t48 151','#65816e',.8);
-      const xx=620+i*14;
-      s+=path('M'+xx+' -22q-29 53 8 83t54 98q11 58-35 121t25 119q43 39 27 130','#708874',.72);
-    }
-    const woods=[[139,92],[170,396],[705,135],[648,448],[194,38],[725,342],[33,240],[385,505]];
-    for(let i=0;i<woods.length;i++)s+=grove(i*81+33,woods[i][0],woods[i][1],7,1.04);
-    return s;
+  function layerColour(rec,layer,sea) {
+    if(layer==='access')return rec.minutes<=12?'#79b891':rec.minutes<=15?'#acbd86':rec.minutes<=19?'#e0bd79':'#d9916b';
+    if(layer==='impact')return rec.pressure||rec.disturbed?'#da8c72':rec.use==='water'||rec.use==='care'?'#83c5a5':'#a6b8aa';
+    return rec.use==='open'?(sea?'#a1d8ca':LAND_COLOURS[rec.terrain.id]):USE_COLOURS[rec.use];
+  }
+  function caption(name,detail) {
+    const w=Math.max(95,Math.min(159,Math.max(name.length*8.25,detail.length*5.45)+17));
+    const half=fmt(w/2);
+    return `<g class="city-map-caption" pointer-events="none"><rect x="-${half}" y="21" width="${fmt(w)}" height="32" rx="4"/><text y="35" text-anchor="middle" class="city-map-name">${attr(name)}</text><text y="47" text-anchor="middle" class="city-map-detail">${attr(detail)}</text></g>`;
+  }
+  function layerDescription(rec,sea,layer) {
+    if(layer==='access')return rec.minutes+' MIN TO CENTRE';
+    if(layer==='impact')return rec.pressure?'RENT PRESSURE':rec.disturbed?'DISTURBANCE':rec.use==='care'||rec.use==='water'?'PROTECTED':'NO ACTIVE STRAIN';
+    if(rec.target)return 'WORK IN PROGRESS';
+    return rec.use==='open'?(sea?'OPEN DECK':'COMMON GROUND'):PROJECTS[rec.use].category.toUpperCase();
+  }
+  function parcelArt(rec,sea,layer,selected,site) {
+    const [x,y]=SITES[rec.id],name=model.nameOf(site,rec.use),boundary=hex(x,y,.97);
+    const artwork=rec.use==='open'?TERRAINS.indexOf(rec.terrain.id):6+DEVELOPMENTS.indexOf(rec.use);
+    const label=layerDescription(rec,sea,layer);
+    const progress=rec.target?`<g class="city-construction-rule"><path d="M-32 56h64"/><path d="M-32 56h${rec.turns===1?46:22}"/></g>`:'';
+    return `<g data-city-precinct="${rec.id}"
+      class="city-parcel${selected?' is-current':''}" role="button" aria-pressed="${selected}" tabindex="0" aria-label="${attr(rec.direction+', '+rec.name+', '+name)}"><title>${attr(rec.direction+' · '+rec.name+' · '+name)}</title>
+      <polygon points="${boundary}" class="city-region-fill" fill="${layerColour(rec,layer,sea)}"/>
+      <g transform="translate(${x} ${y})">${sprite(artwork,0,24,142,96)}${caption(rec.name,label)}${progress}</g>
+      <polygon points="${boundary}" class="city-zone-edge" vector-effect="non-scaling-stroke"/></g>`;
   }
   function allMap(site,city,select,layer) {
-    const sea=site.water;
-    const backdrop=sea?'#517a73':'#7c9078';
-    let s='<svg viewBox="62 4 716 511" preserveAspectRatio="xMidYMid meet" class="city-plan-svg" role="group" aria-labelledby="city-picture-title city-picture-desc" xmlns="http://www.w3.org/2000/svg">'+
-      '<title id="city-picture-title">'+attr(site.name)+' city plan</title><desc id="city-picture-desc">Six planning precincts surround the central street district. Choose a precinct to inspect and develop it. The precinct selector offers the same choices.</desc>'+
-      '<defs><pattern id="city-grain" patternUnits="userSpaceOnUse" width="6" height="6"><circle cx="1" cy="1" r=".42" fill="#ebd9b4" opacity=".57"/><circle cx="4.1" cy="3.8" r=".53" fill="#4f685a" opacity=".58"/></pattern><pattern id="city-construction" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(38)"><path d="M0 0v7" stroke="#e4b96f" stroke-width="2"/></pattern><filter id="city-drop" x="-30%" y="-40%" width="160%" height="190%"><feDropShadow dx="0" dy="1.1" stdDeviation=".7" flood-color="#425951" flood-opacity=".4"/></filter></defs>'+
-      rect(-90,-90,1040,740,backdrop)+rect(-90,-90,1040,740,'url(#city-grain)')+outerScenery(site)+peripheralLandscape(sea);
-    // All six neighbourhoods share a continuous surveyed street or boardwalk.
-    const shell=[...SITES,[...CENTRE]];
-    for(const [x,y] of shell)s+=poly(hex(x,y,1.018),'none',sea?'#8da99c':'#a8a895',sea?3.2:6);
-    for(const [x,y] of shell)s+=poly(hex(x,y,1.004),'none',sea?'#616d62':'#667a6e',1);
-    for(const rec of city.records){
-      const i=rec.id,[x,y]=SITES[i];
-      s+='<g data-city-precinct="'+i+'" class="city-parcel'+(select===i?' is-current':'')+'" role="button" aria-pressed="'+(select===i)+'" tabindex="0" aria-label="'+attr(rec.direction+', '+rec.name+', '+model.nameOf(site,rec.use))+'"><title>'+attr(rec.direction+' · '+rec.name+' · '+model.nameOf(site,rec.use))+'</title>';
-      if(sea)s+=platform(x,y,.95);
-      s+=poly(hex(x,y,sea?.928:.974),tint(rec,layer,sea),'#a7ae96',.8)+poly(hex(x,y,.945),'url(#city-grain)',null);
-      if(rec.target)s+=poly(hex(x,y,.939),'url(#city-construction)',null,1,' opacity=".19"');
-      const selected=select===i,clip='city-clip-'+i;
-      s+='<defs><clipPath id="'+clip+'">'+poly(hex(x,y,sea?.92:.965),'black',null)+'</clipPath></defs>';
-      s+='<g clip-path="url(#'+clip+')" opacity="'+(layer==='land'?.83:.48)+'">'+transportLines(sea)+'</g>';
-      s+='<g class="city-parcel-art" transform="translate('+x+' '+y+')" opacity="'+(layer==='land'?1:.66)+'">'+
-        detailedParcel(rec,sea,288+i*23)+(rec.use==='open'?baseGarden(rec.terrain.id,293+i*39):art(rec.use,210+i*31))+'</g>';
-      const tag=layer==='access'?rec.minutes+' MIN TO CENTRE':layer==='impact'?(rec.pressure?'RENT PRESSURE':rec.disturbed?'DISTURBANCE':rec.use==='care'||rec.use==='water'?'PROTECTED':'NO ACTIVE STRAIN'):rec.target?'WORK IN PROGRESS':rec.use==='open'?(sea?'OPEN DECK':'COMMON GROUND'):PROJECTS[rec.use].category.toUpperCase();
-      s+=label(x,y+32,rec.name,'city-map-name')+label(x,y+46,tag,'city-map-detail');
-      if(rec.target) s+=path('M'+(x-37)+' '+(y+48)+'h74','#bc9c5d',2.6)+path('M'+(x-37)+' '+(y+48)+'h'+(rec.turns===1?55:24),'#efc478',2.6);
-      if(layer==='access' && rec.transit)s+=path('M'+(x-12)+' '+(y-44)+'h24','#d3ddd0',2.2);
-      s+=poly(hex(x,y,.956),'transparent',selected?'#fae6ae':'transparent',selected?2.5:1,' class="city-zone-edge"'+nss);
-      if(selected)s+=path('M'+(x-10)+' '+(y-SY*.96+2)+'h20','#f6c779',3);
-      s+='</g>';
-    }
-    const [x,y]=CENTRE;
-    s+='<g data-city-precinct="centre" class="city-core" role="button" tabindex="0" aria-label="Enter central streets"><title>Enter central streets · '+site.buildings.length+' of nine lots developed</title>';
-    s+=poly(hex(x,y,.965),sea?'#829884':'#949779','#acb39d',.9)+poly(hex(x,y,.945),'url(#city-grain)',null)+
-      '<g transform="translate('+x+' '+y+')">'+coreArt(site)+'</g>'+
-      label(x,y+31,'Central streets','city-map-name city-centre-name')+label(x,y+45,'ENTER STREET VIEW  ↗','city-map-detail')+poly(hex(x,y,.953),'transparent','transparent',2,' class="city-zone-edge"'+nss)+'</g>';
-    s+='</svg>';
-    return s;
+    const sea=Boolean(site.water),[cx,cy]=CENTRE;
+    return `<svg viewBox="62 4 716 511" preserveAspectRatio="xMidYMid meet" class="city-plan-svg city-layer-${layer}" role="group" aria-labelledby="city-picture-title city-picture-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="city-picture-title">${attr(site.name)} city plan</title>
+      <desc id="city-picture-desc">Six planning precincts surround the central street district. Choose a precinct to inspect and develop it. The precinct selector offers the same choices.</desc>
+      <defs>${spriteDefinitions(mapSetting(site))}</defs>
+      ${connections(sea)}
+      ${city.records.map(rec=>parcelArt(rec,sea,layer,select===rec.id,site)).join('')}
+      <g data-city-precinct="centre" class="city-core" role="button" tabindex="0" aria-label="Enter central streets">
+        <title>Enter central streets · ${site.buildings.length} of nine lots developed</title>
+        <polygon points="${hex(cx,cy,.96)}" class="city-region-fill city-core-fill"/>
+        <g transform="translate(${cx} ${cy})">${coreArt(site)}${caption('Central streets','ENTER STREET VIEW  ↗')}</g>
+        <polygon points="${hex(cx,cy,.96)}" class="city-zone-edge" vector-effect="non-scaling-stroke"/></g></svg>`;
   }
   const make=(tag,style,text)=>{
     const n=document.createElement(tag);if(style)n.className=style;if(text!==undefined)n.textContent=text;return n;
@@ -500,6 +354,7 @@
     const cityName=make('h2','city-title');headText.append(cityName);
     const scale=make('span','city-chart-scale','Six precincts · One centre');heading.append(headText,scale);
     const picture=make('div','city-picture');
+    let mapRevision='';
     function fitPicture() {
       const svg=picture.querySelector('svg');
       if(svg)svg.setAttribute('viewBox',picture.clientWidth<610?'142 42 556 459':'45 31 752 462');
@@ -563,7 +418,13 @@
       if(renderedWeek!==sim.state.week){renderedWeek=sim.state.week;message='';}
       const city=model.overview(site),r=city.records[select];
       cityName.textContent=site.name;inspectLink.textContent='Inspect '+r.name+' ↘';
-      picture.innerHTML=allMap(site,city,select,layer);fitPicture();
+      // Form edits and repeated simulation notifications don't repaint an unchanged map.
+      const revision=JSON.stringify([site.id,site.name,site.water,select,layer,site.buildings.map(b=>[b.plot,b.kind]),
+        city.records.map(rec=>[rec.terrain.id,rec.use,rec.target,rec.turns,rec.minutes,rec.pressure,rec.disturbed])]);
+      if(revision!==mapRevision){
+        picture.dataset.setting=mapSetting(site);
+        picture.innerHTML=allMap(site,city,select,layer);mapRevision=revision;fitPicture();
+      }
       if(onMapFocus){onMapFocus=false;picture.querySelector('[data-city-precinct="'+select+'"]')?.focus({preventScroll:true});}
       layerButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===layer)));
       legend.textContent=layer==='access'?'Journey to central streets':layer==='impact'?'Rent, habitat and workshop noise':'Select a precinct to plan its use';
@@ -598,7 +459,7 @@
           const info=make('details','city-project-detail');info.append(make('summary','','Who benefits?'),make('p','',projection.people),make('p','',projection.purpose));
           const cost=make('p','city-project-cost',projection.cost.effort+' effort · '+projection.cost.funds+' funds · '+projection.cost.materials+' materials');
           const forecast=make('div','city-result-preview');
-          forecast.append(make('span','data-label','When the project opens'),make('strong','',model.flows(projection.rate)?model.flows(projection.rate)+' per week':'Weekly production stays level.'));
+          forecast.append(previewModel(site,r,project),make('span','data-label','When the project opens'),make('strong','',model.flows(projection.rate)?model.flows(projection.rate)+' per week':'Weekly production stays level.'));
           if(projection.capacityNote)forecast.append(make('small','',projection.capacityNote+' residents.'));
           if(projection.accessNote)forecast.append(make('small','',projection.accessNote+' of six.'));
           if(projection.crowdingNote)forecast.append(make('small','',projection.crowdingNote));

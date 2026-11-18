@@ -7,8 +7,8 @@
   <meta name="description" content="Explore Earth, found a community and shape its future, from street encounters to ocean routes. A strategy game by Philosophy of Intelligence.">
   <title>Common Earth · Philosophy of Intelligence</title>
   <link rel="icon" type="image/svg+xml" href="../icon.svg?v=69d49b562939">
-  <link rel="stylesheet" href="styles.css?v=6129340e244b">
-  <link rel="stylesheet" href="city.css?v=e3fe3d79f6ad">
+  <link rel="stylesheet" href="styles.css?v=346733849854">
+  <link rel="stylesheet" href="city.css?v=208b51e34d37">
   <link rel="stylesheet" href="planner.css?v=19c8b546877b">
   <link rel="stylesheet" href="saves.css?v=211ec723a0c5">
   <link rel="stylesheet" href="goals.css?v=a8c0252a8404">
@@ -19,16 +19,20 @@
   <script src="campaigns.js?v=2f09cd6c9a42" defer></script>
   <script src="strategy.js?v=269d0bebb54d" defer></script>
   <script src="partners.js?v=19982f961a21" defer></script>
-  <script src="city.js?v=999f1661254a" defer></script>
+  <script src="city.js?v=425c993e7dfc" defer></script>
   <script src="legacy.js?v=2551544fd5ba" defer></script>
   <script src="goals.js?v=0daf4eae0c4b" defer></script>
   <script src="simulation.js?v=8e98525bfa56" defer></script>
-  <script src="globe.js?v=92eceb964c34" data-atlas-version="3ef7f9f381bc" defer></script>
-  <script src="street.js?v=afe2b7cacaa0" defer></script>
+  <script src="globe.js?v=92eceb964c34" data-atlas-version="b47591f32cf8" defer></script>
+  <script src="town-architecture.js?v=531b9b33038a" defer></script>
+  <script src="town-surroundings.js?v=c712aec57505" defer></script>
+  <script src="town-projects.js?v=e91797dab724" defer></script>
+  <script src="town-light.js?v=1388552d046e" defer></script>
+  <script src="street.js?v=3ff8133802c3" defer></script>
   <script src="navigation.js?v=59a80dff43a0" defer></script>
   <script src="planner.js?v=5ee80d169482" defer></script>
   <script src="saves.js?v=b438e7c131b6" defer></script>
-  <script src="app.js?v=754a82c923ed" defer></script>
+  <script src="app.js?v=c1f4b4a532ba" defer></script>
 </head>
 <body>
   <a class="skip" href="#play">Skip to game</a>
@@ -55,6 +59,8 @@
     <symbol id="i-route" viewBox="0 0 24 24"><circle cx="5" cy="17" r="2.2"/><circle cx="19" cy="6" r="2.2"/><path d="M7.2 17h6.3a3 3 0 0 0 0-6H10a2.5 2.5 0 0 1 0-5h6.8"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l3.5 2"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="m15.5 15.5 5 5"/></symbol>
+    <symbol id="i-evening" viewBox="0 0 24 24"><path d="M2.5 16.2h19m-16 3h13M6.5 16a5.5 5.5 0 0 1 11 0M12 5v2M3.7 9.2l1.6 1.4M20.3 9.2l-1.6 1.4"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/></symbol>
     <symbol id="i-tilt" viewBox="0 0 24 24"><path d="m7 15 5-5 5 5"/></symbol>
     <symbol id="i-mark" viewBox="0 0 48 48"><path d="M2 24h44M24 2v44" stroke="currentColor" stroke-width=".85"/><circle cx="24" cy="24" r="18.5"/><circle cx="24" cy="24" r="14.2" stroke-width=".7"/><path d="M5.5 24c5.5-1 10.2-5.7 13.9-12.6 2.36 5.7 5.4 9.5 8.7 11.6l4-5.9c3.5 5.6 6.3 8.5 10.3 9.7M6.5 30.3c8.8 1.7 13.8-5.3 20.2-1.3 5 3 9.8.6 14.1-.5"/><circle cx="31" cy="13.7" r="2" fill="currentColor" stroke="none"/></symbol>
   </svg>
@@ -86,7 +92,11 @@
         <div id="city-stage" class="stage city-stage" hidden><div id="city-map"></div></div>
         <div id="street-stage" class="stage street-stage" hidden>
           <canvas id="street-canvas" tabindex="0" aria-label="Your neighbourhood. Arrow keys move, E interacts, V uses the van. Tap a street to travel or use the controls below.">Use the street controls and community panel to explore.</canvas>
-          <div class="street-stage-heading"><div class="kicker"><span class="status-dot"></span>Local district</div><h2 id="street-title">Street view</h2></div>
+          <div class="street-stage-heading"><div class="kicker"><span class="status-dot"></span><span id="street-location">Local district</span></div><h2 id="street-title">Street view</h2></div>
+          <div class="street-camera-tools" role="group" aria-label="Street appearance">
+            <button id="street-evening" type="button" class="icon-button" aria-label="Evening light" aria-pressed="false" title="Evening light"><svg aria-hidden="true"><use href="#i-evening"/></svg></button>
+            <button id="street-wide" type="button" class="icon-button" aria-label="Expanded street view" aria-pressed="false" title="Expand street view"><svg aria-hidden="true"><use href="#i-expand"/></svg></button>
+          </div>
           <a id="street-open-actions" href="#actions-heading">Community actions <span aria-hidden="true">↘</span></a>
         </div>
         <div id="street-controls" class="street-controls" hidden>
