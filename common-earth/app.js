@@ -275,6 +275,12 @@
       state.placement?'Commission on plot '+(state.plot+1):state.travelling?(state.mode==='drive'?'Brake':'Stop walking'):'Interact';
     put('street-interact',label);
   }
+  function cityController(){
+    if(!city&&window.EarthCity&&$('city-map')){
+      city=window.EarthCity.mount({mapRoot:$('city-map'),panel:$('city-panel'),sim,onStreet:()=>setView('street'),onResult:presentResult,onChange:render,onRehearse:planning?.compareCity,onManageCrew:openWorksite});
+    }
+    return city;
+  }
   function setView(next,scrollToMap=true) {
     if(next!=='street')crewOrders?.cancel();
     const changed=next!==view;
@@ -314,10 +320,8 @@
       });
       put('street-title',sim.active().name);street.setSite(sim.active());
       requestAnimationFrame(()=>street.resize());
-    } else if(isCity && window.EarthCity && $('city-map')) {
-      if(!city)city=window.EarthCity.mount({mapRoot:$('city-map'),panel:$('city-panel'),sim,onStreet:()=>setView('street'),onResult:presentResult,onChange:render,onRehearse:planning?.compareCity,onManageCrew:openWorksite});
-      requestAnimationFrame(()=>city?.render());
-    } else requestAnimationFrame(()=>atlas.resize());
+    } else if(isCity)cityController();
+    else requestAnimationFrame(()=>atlas.resize());
     render();
     if(changed && scrollToMap && stackedMap.matches) $(isStreet?'street-stage':isCity?'city-stage':'atlas-stage').scrollIntoView({block:'start',behavior:'instant'});
   }
@@ -944,8 +948,8 @@
     if(step.kind==='construction'){openWorksite(step.jobId);return;}
     if(step.kind==='atlas'){setView('world');$('places-open')?.click();return;}
     if(step.kind==='city'){
-      setView('city');
-      requestAnimationFrame(()=>city?.previewProject(step.precinct,step.project));
+      const ready=cityController()?.previewProject(step.precinct,step.project,()=>setView('city',false));
+      if(!ready)notify('That city proposal has changed. Check the current goal for its next step.',true);
       return;
     }
     if(view!=='street')setView('street');

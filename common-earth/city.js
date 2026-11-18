@@ -502,13 +502,14 @@
       if(record && (project===record.use || project==='open' && record.use==='open'))project=record.use==='food'?'homes':'food';
       onMapFocus=fromMap;render();
     }
-    function previewProject(index,projectId) {
+    function previewProject(index,projectId,reveal) {
       const site=sim.active();
       if(hasDestroyed || !site || !Number.isInteger(index) || index<0 || index>5)return false;
       if(projectId==='cancel'){
         if(!site.city?.precincts?.[index]?.target)return false;
         if(site.id!==currentId)render();
         choose(index,false);
+        reveal?.();
         const review=panel.querySelector('.city-cancel-review');
         review.open=true;review.querySelector('summary').focus({preventScroll:true});review.scrollIntoView({block:'nearest',behavior:'instant'});
         return true;
@@ -518,6 +519,7 @@
       const record=model.overview(site).records[index];
       if(record.use===projectId || (record.target && record.target!==projectId))return false;
       project=projectId;choose(index,false);
+      reveal?.();
       panel.tabIndex=-1;
       panel.focus({preventScroll:true});
       panel.scrollIntoView({block:'start'});
@@ -561,13 +563,16 @@
         else if(next!==null)choose(next,true);
       }
     });
-    async function submit(id,expectedJobId) {
-      if(busy||hasDestroyed)return;
-      busy=true;message='';const prior=sim.active()?.id;render();
+    async function submit(control,review) {
+      const {siteId,precinct,use,id,jobId}=review,site=sim.active();
+      if(busy||hasDestroyed||control.disabled||!panel.contains(control)||site?.id!==siteId||select!==precinct)return;
+      const row=site.city?.precincts?.[precinct];
+      if((row?.use||'open')!==use || (id==='cancel'?row?.jobId!==jobId:project!==id||row?.target))return;
+      busy=true;message='';render();
       try{
-        const result=await sim.perform('planCity',select,id,expectedJobId);
+        const result=await sim.perform('planCity',precinct,id,jobId);
         if(hasDestroyed)return;
-        if(prior===sim.active()?.id)message=result.message;
+        if(siteId===sim.active()?.id&&select===precinct)message=result.message;
         onResult?.(result);
         onChange?.();
       }catch(err){
@@ -712,7 +717,8 @@
         const {recovery}=model.preview(site,sim.state,select,'cancel');
         const review=make('details','city-cancel-review');
         review.append(make('summary','','Review cancellation'),make('p','','Recover '+recovery.funds+' funds and '+recovery.materials+' materials. Work already done and the original effort are lost. '+model.nameOf(site,r.use)+' stays in use.'));
-        const cancel=button('Cancel project',()=>submit('cancel',r.jobId),'city-secondary');
+        const request={siteId:site.id,precinct:r.id,use:r.use,id:'cancel',jobId:r.jobId};
+        const cancel=button('Cancel project',event=>submit(event.currentTarget,request),'city-secondary');
         cancel.disabled=busy;review.append(cancel);pending.append(review);content.push(pending);
       }else{
         const form=make('div','city-project');
@@ -738,7 +744,8 @@
           forecast.append(make('small','','Earliest opening is week '+projection.week+', once the builders finish.'));
           if(projection.crew)forecast.append(make('small','city-proposed-crew',describeProposedCrew(projection.crew)));
           form.append(info,cost,forecast);
-          const submitButton=button(busy?'Saving project…':project==='open'?'Reopen common ground':'Commission project',()=>submit(project),'primary city-commission');
+          const request={siteId:site.id,precinct:r.id,use:r.use,id:project};
+          const submitButton=button(busy?'Saving project…':project==='open'?'Reopen common ground':'Commission project',event=>submit(event.currentTarget,request),'primary city-commission');
           submitButton.disabled=busy||!projection.available;form.append(submitButton);
           if(projection.available && onRehearse)form.append(button('Rehearse this project',()=>onRehearse(select,project),'city-secondary'));
           if(!projection.available)form.append(make('p','city-reason',projection.reason));
