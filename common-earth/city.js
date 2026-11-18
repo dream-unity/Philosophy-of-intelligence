@@ -493,7 +493,7 @@
   };
   function mount({mapRoot,panel,sim,onStreet,onResult,onChange,onRehearse}) {
     if(!mapRoot||!panel||!sim)throw new Error('City plan needs a map, inspector and simulation.');
-    let currentId=null,select=0,layer='land',project='food',busy=false,message='',onMapFocus=false,hasDestroyed=false;
+    let currentId=null,renderedWeek=null,select=0,layer='land',project='food',busy=false,message='',onMapFocus=false,hasDestroyed=false;
     const scene=make('div','city-scene');
     const heading=make('header','city-chart-head'),headText=make('div');
     headText.append(make('p','kicker','Local planning map'));
@@ -560,6 +560,7 @@
       const site=sim.active();
       if(!site||hasDestroyed)return;
       if(site.id!==currentId){currentId=site.id;select=0;layer='land';project='food';message='';}
+      if(renderedWeek!==sim.state.week){renderedWeek=sim.state.week;message='';}
       const city=model.overview(site),r=city.records[select];
       cityName.textContent=site.name;inspectLink.textContent='Inspect '+r.name+' ↘';
       picture.innerHTML=allMap(site,city,select,layer);fitPicture();
