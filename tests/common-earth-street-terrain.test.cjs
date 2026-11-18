@@ -8,9 +8,9 @@ const vm = require('node:vm');
 const game = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const source = readFileSync(path.join(game, 'street.js'), 'utf8');
 
-function waterfront(memory,{reduced=false}={}) {
-  let frame, now=0, underlay, evenings=0;
-  const paints=[];
+function waterfront(memory,{reduced=false,paintCost=1}={}) {
+  let frame, now=0, underlay, evenings=0, work=0, foregroundPaints=0;
+  const paints=[],lampPaints=[];
   function element() {
     const noop=()=>{};
     const handlers=new Map();
@@ -29,6 +29,7 @@ function waterfront(memory,{reduced=false}={}) {
   const canvas=element(),stage=element(),evening=element();
   stage.querySelector=selector=>selector==='#street-evening'?evening:null;
   stage.classList={contains:key=>key==='street-stage'};stage.appendChild(canvas);
+  canvas.getContext().setTransform=()=>{foregroundPaints++;};
   canvas.before=clip=>{underlay=clip;};
   canvas.getBoundingClientRect=()=>({left:0,top:0,width:1024,height:620});
   const surroundings={profile:()=> 'ocean',background:()=>['#abc','#def'],paint(g,project,unit,site){
@@ -36,20 +37,20 @@ function waterfront(memory,{reduced=false}={}) {
   }};
   const runtime={
     window:{...element(),EarthTownSurroundings:surroundings,
-      EarthTownLight:{lightsFor:()=>[],paving(){},blueHour(){evenings++;}},
+      EarthTownLight:{lightsFor:()=>[{x:8,y:11,radius:1.22}],paving:g=>lampPaints.push(g),halo(){},blueHour(){evenings++;}},
       EarthConstruction:{streetPoint:job=>({x:3+(job.plot%3)*6,y:5.04+Math.floor(job.plot/3)*6})}},
     document:{...element(),createElement:element,createElementNS:element,body:{hasAttribute:()=>false}},
-    devicePixelRatio:2,navigator:{deviceMemory:memory},matchMedia:()=>({matches:reduced}),
+    performance:{now:()=>work+=paintCost},devicePixelRatio:2,navigator:{deviceMemory:memory},matchMedia:()=>({matches:reduced}),
     requestAnimationFrame(fn){frame=fn;return 1;},cancelAnimationFrame(){frame=null;}
   };
   vm.runInNewContext(source,runtime,{filename:'street.js'});
   const street=runtime.window.EarthStreet.mount(canvas);
-  function draw() {const next=frame;frame=null;assert.ok(next);next(now+=100);}
+  function draw(delta=100) {const next=frame;frame=null;assert.ok(next);next(now+=delta);}
   function visit(site){street.setSite(site);draw();return underlay.children.at(-1);}
   function pointer(type,id,x,y){
     canvas.handlers.get(type)({type,pointerId:id,clientX:x,clientY:y,pointerType:'touch',button:0});
   }
-  return {street,paints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
+  return {paintCount:()=>foregroundPaints,street,paints,lampPaints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
 }
 function site(id){return {id,name:id,lat:0,lon:12,water:true,residents:[],buildings:[]};}
 
@@ -116,4 +117,42 @@ test('reduced-motion paint wakes on input, rests between gestures and resolves a
   if(g.hasFrame())g.draw();
   assert.equal(g.hasFrame(),false);
   g.street.destroy();
+});
+
+test('lamp pools are painted once in the evening, restored after a lot repair and removed without rebaking for daylight',()=>{
+  const {street,paints,lampPaints,draw,visit,light}=waterfront(4),harbour=site('port');
+  visit(harbour);assert.equal(lampPaints.length,0);
+  light();draw();assert.equal(lampPaints.length,1);
+  for(let i=0;i<4;i++)visit(harbour);
+  assert.equal(lampPaints.length,1);
+  harbour.buildings.push({id:'garden',kind:'garden',plot:1});
+  visit(harbour);assert.equal(lampPaints.length,2);assert.equal(paints.at(-1).patch,true);
+  const terrainPaints=paints.length;
+  light();draw();assert.equal(lampPaints.length,2);assert.equal(paints.length,terrainPaints);
+  light();draw();assert.equal(lampPaints.length,3);assert.equal(paints.length,terrainPaints);
+  street.destroy();
+});
+
+
+test('travel uses extra display refreshes only with sustained headroom and preserves the walking route',()=>{
+  function follow({memory=4,cost=1,reduced=false,refresh=60,stall=false}={}){
+    const {street,visit,draw,paintCount}=waterfront(memory,{paintCost:cost,reduced});
+    const town=site('harbour');town.residents=['A','B','C'].map((name,slot)=>({name,slot,id:'r'+slot}));
+    visit(town);assert(street.focusResident('r1'));
+    let elapsed=0,samples=0;
+    while(street.getState().travelling && elapsed<5000){
+      const step=stall && elapsed>=750 && elapsed<1000 ? 1000/30 : 1000/refresh;
+      const before=paintCount();draw(step);elapsed+=step;
+      if(elapsed>1100 && elapsed<=2100)samples+=paintCount()-before;
+    }
+    const end=street.getState();street.destroy();
+    assert.equal(end.travelling,false);assert.equal(end.x,21);assert.equal(end.y,17.04);
+    return {elapsed,samples};
+  }
+  const fast=follow();assert(fast.samples>=58 && fast.samples<=61);
+  const highRefresh=follow({refresh:120});assert(highRefresh.samples>=58 && highRefresh.samples<=61);
+  for(const limited of [{memory:2},{cost:12},{reduced:true},{refresh:30},{stall:true}]){
+    const trip=follow(limited);assert(trip.samples>=29 && trip.samples<=31,JSON.stringify({limited,trip}));
+    assert(Math.abs(trip.elapsed-fast.elapsed)<=35);
+  }
 });

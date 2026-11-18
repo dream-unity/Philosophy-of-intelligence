@@ -1066,6 +1066,7 @@
       return JSON.stringify([siteKey(site),Boolean(site.water),...(site.buildings||[]).map(b=>[b.plot,b.kind])]);
     }
     function releaseRecentTerrain(){
+      dropLampBackup(recentTerrain);
       if(recentTerrain){recentTerrain.tile.width=recentTerrain.tile.height=1;recentTerrain=null;}
     }
     function swapTerrain(nextSite) {
@@ -1074,8 +1075,10 @@
         releaseRecentTerrain();return null;
       }
       const leaving=groundCache, stored=recentTerrain;
+      const backup=leaving?.light?.underlay;
+      const extraPixels=backup?backup.width*backup.height:0;
       const canKeep=leaving && leaving.signature && !leaving.dirtyPlots.size && !workLots.size &&
-        leaving.w*leaving.h*4 <= visitMemoryMiB*1024*1024;
+        (leaving.w*leaving.h+extraPixels)*4 <= visitMemoryMiB*1024*1024;
       const reuse=stored && stored.generation===artGeneration &&
         stored.signature===terrainSignature(nextSite);
       if(!canKeep && !reuse){releaseRecentTerrain();return null;}
@@ -1087,12 +1090,13 @@
       oldSurface.replaceWith(nextSurface);
       terrainLayer.groundSurface=nextSurface;
       recentTerrain=canKeep?leaving:null;
-      if(!canKeep)oldSurface.width=oldSurface.height=1;
+      if(!canKeep){dropLampBackup(leaving);oldSurface.width=oldSurface.height=1;}
+      if(!reuse)dropLampBackup(stored);
       groundCache=null;
       return reuse?stored:null;
     }
     function clearGround() {
-      terrainSnapshot=null;
+      dropLampBackup(groundCache);terrainSnapshot=null;
       if(terrainLayer){
         if(!state.site || !alive)terrainLayer.groundSurface.width=terrainLayer.groundSurface.height=1;
       }else if(groundCache){
@@ -1127,6 +1131,43 @@
         ctx.restore();width=prior.w;height=prior.h;unit=prior.u;centreX=prior.x;centreY=prior.y;ctx=prior.ctx;
       }
     }
+    function dropLampBackup(cache){
+      if(!cache?.light)return;
+      const patch=cache.light.underlay;
+      patch.width=patch.height=1;cache.light=null;
+    }
+    function setPavingLight(cache,lit) {
+      const brush=cache.tile.getContext('2d');
+      if(!lit){
+        const {underlay,areas}=cache.light;
+        for(const {x,y,w,h,u} of areas){
+          brush.clearRect(x,y,w,h);
+          brush.drawImage(underlay,u,0,w,h,x,y,w,h);
+        }
+        dropLampBackup(cache);
+        return;
+      }
+      // Keep only the small patches under the lamp pools so the day/night
+      // control can restore the base without repainting the town.
+      const project=(x,y,z=0)=>[
+        cache.w*.5+(x-y)*cache.unit,
+        cache.h*.53+((x+y-24)*TILT-z)*cache.unit
+      ];
+      let width=0,height=0;
+      const areas=streetLights.map(lamp=>{
+        const [cx,cy]=project(lamp.x,lamp.y,.014),radius=1.25*cache.unit*lamp.radius;
+        const x=Math.floor(cx-radius)-1,y=Math.floor(cy-radius*.52)-1;
+        const w=Math.ceil(cx+radius)-x+1,h=Math.ceil(cy+radius*.52)-y+1;
+        const u=width;width+=w;height=Math.max(height,h);
+        return {x,y,w,h,u};
+      });
+      const underlay=document.createElement('canvas');underlay.width=width;underlay.height=height;
+      const backing=underlay.getContext('2d');
+      if(!backing){cache.lightFallback=true;return;}
+      for(const {x,y,w,h,u} of areas)backing.drawImage(cache.tile,x,y,w,h,u,0,w,h);
+      lightRig.paving(brush,project,cache.unit,streetLights);
+      cache.light={underlay,areas,lights:streetLights};
+    }
     function cachedGround() {
       if(typeof document==='undefined'||!document.createElement){ground();return;}
       const targetUnit=clamp(16*Math.pow(Math.SQRT2,Math.round(Math.log(unit/16)/Math.log(Math.SQRT2))),8,maxGroundUnit);
@@ -1155,11 +1196,13 @@
           };
         }
       }
+      if(groundCache.light && (!evening || groundCache.dirtyPlots.size || groundCache.light.lights!==streetLights))setPavingLight(groundCache,false);
       if(groundCache.dirtyPlots.size){
         const {tile,w,h,unit,dirtyPlots}=groundCache;
         paintGroundTile(tile.getContext('2d'),w,h,unit,dirtyPlots);dirtyPlots.clear();
         groundCache.signature=terrainSignature(state.site);
       }
+      if(terrainLayer && evening && lightRig && streetLights.length && !groundCache.light && !groundCache.lightFallback)setPavingLight(groundCache,true);
       const p=screen(12,12),scale=unit/groundCache.unit,w=groundCache.w*scale,h=groundCache.h*scale;
       const left=p[0]-w*.5,top=p[1]-h*.53,x=Math.max(0,left),y=Math.max(0,top);
       if(terrainLayer){
@@ -1193,7 +1236,7 @@
       }else background();
       if(state.site){
         cachedGround();
-        if(evening)lightRig?.paving(ctx,screen,unit,streetLights);
+        if(evening && (!terrainLayer || !groundCache?.light))lightRig?.paving(ctx,screen,unit,streetLights);
       }
     }
     function streetName(x,y,name,direction){
@@ -2605,10 +2648,33 @@
       cancelIdle();
       if(alive&&!covered&&!frame&&!canvas.parentElement?.hidden&&(visible||moving())&&typeof requestAnimationFrame==='function'&&(typeof document==='undefined'||!document.hidden))frame=requestAnimationFrame(tick);
     }
+    const frameTimer=typeof performance!=='undefined' && typeof performance.now==='function'?performance:null;
+    let previousMotionTick=0,lastPaintCost=null,quickPaints=0,latePaints=0,fastTravel=false,limitedTravel=false;
+    function travelInterval(now,watch) {
+      const gap=now-previousMotionTick;
+      if(!watch || !previousMotionTick || !lastFrame){
+        quickPaints=0;latePaints=0;fastTravel=false;limitedTravel=false;
+      }else if(lastPaintCost!==null && !limitedTravel){
+        // Count the refresh immediately following a paint. Counting skipped
+        // frames would make a device appear faster simply because it did less.
+        if(!fastTravel){
+          quickPaints=gap<=19 && lastPaintCost<=5 ? quickPaints+1 : 0;
+          if(quickPaints>=10)fastTravel=true;
+        }else{
+          latePaints=gap>=23 || lastPaintCost>=10 ? latePaints+1 : Math.max(0,latePaints-1);
+          if(latePaints>=3){fastTravel=false;limitedTravel=true;}
+        }
+      }
+      previousMotionTick=watch?now:0;lastPaintCost=null;
+      return fastTravel?15.5:32;
+    }
     function tick(now) {
       frame=0;if(!alive||covered||canvas.parentElement?.hidden||(!visible&&!moving())||(typeof document!=='undefined'&&document.hidden))return;
       const delta=lastFrame?now-lastFrame:36;
-      if(dirty||delta>=32){
+      const watch=Boolean(frameTimer && visible && !reduced && (state.route.length || pressed.size && state.player.moving) && !dragging && !pinch &&
+        pixelRatio===fullPixelRatio && (!deviceMemory || deviceMemory>2));
+      const interval=travelInterval(now,watch);
+      if(dirty||delta>=interval){
         const maxStep=state.route.length ? 1 : pressed.size ? 0.3 : 0.1;
         const elapsed=clamp(delta/1000,0,maxStep);
         // Slow devices may miss paints. Small movement steps preserve travel speed and street collisions.
@@ -2617,7 +2683,11 @@
         for(let i=0;i<steps&&!covered;i++){visualTime+=dt;if(state.site)follow(dt);}
         if(covered)return;
         if(castStarted!==null&&visualTime-castStarted>=castDuration)clearCatch();
-        if(visible){adjustForeground(activeMotion(),delta);draw();}
+        if(visible){
+          const started=watch?frameTimer.now():0;
+          adjustForeground(activeMotion(),delta);draw();
+          if(watch)lastPaintCost=frameTimer.now()-started;
+        }
         dirty=false;
       }else if(visible && pixelRatio!==fullPixelRatio && !activeMotion()){
         adjustForeground(false,delta);draw();
