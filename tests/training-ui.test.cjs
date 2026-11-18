@@ -199,7 +199,12 @@ test('each Wave stage has its pictured observation, a paired comparison and a wo
     const study = page.q('.wave-chair-study');
     assert.match(card.querySelector('img').getAttribute('src'), /wave-chair-basic\.svg/);
     assert.equal(study.open, false);
-    assert.deepEqual(study.querySelectorAll('figcaption').map(el => el.textContent), ['Chair A', 'Chair B']);
+    const captions = stage.id === 'sphere' ? ['Chair A', 'Chair B', 'Chair C', 'Chair D'] : ['Chair A', 'Chair B'];
+    assert.deepEqual(study.querySelectorAll('figcaption').map(el => el.textContent), captions);
+    if (stage.id === 'sphere') {
+      assert.equal(page.q('.wave-chair-further').open, false);
+      assert.match(page.q('.wave-chair-further').textContent, /ten/i);
+    }
     basicExamples.add(card.textContent);
     advancedExamples.add(page.q('.wave-comparison-example').textContent);
     const register = page.host.querySelectorAll('[data-signal-vector]');

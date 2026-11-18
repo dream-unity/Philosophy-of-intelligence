@@ -272,6 +272,11 @@
   #training-root .wave-chair-pair img {aspect-ratio:510 / 281;object-fit:cover;object-position:top}
 }
 
+#training-root .wave-chair-further {margin:12px 0 0;border-top:1px solid #b9b29890}
+#training-root .wave-chair-five img {aspect-ratio:auto;object-fit:contain}
+#training-root .wave-chair-five {max-width:45rem;margin-inline:auto}
+@media(max-width:570px){#training-root .wave-chair-five {max-width:320px}}
+
 /* unity psiduction heading */
 #training-root .training-category-title {
   margin: 0 0 14px;
