@@ -52,22 +52,33 @@
       const shade=limit((soil.height||0)*7,-5,8)+3*Math.sin(x*5.9+y*2.3)+2*Math.cos(y*9.2-x);
       samples.push([c[0]+shade,c[1]+shade,c[2]+shade,soil.height||0]);
     }
-    for(let row=0;row<N;row++)for(let col=0;col<N;col++){
-      const gx=(col+.5)*(S-1)/N,gy=(row+.5)*(S-1)/N,i=gx|0,j=gy|0,fx=gx-i,fy=gy-j;
-      const a=samples[j*S+i],b=samples[j*S+i+1],c=samples[(j+1)*S+i],d=samples[(j+1)*S+i+1];
-      const grain=(seed(ix*N+col,iy*N-row,12)-.5)*(detail?5:3);
-      const k=(row*N+col)*4;
-      const wa=(1-fx)*(1-fy),wb=fx*(1-fy),wc=(1-fx)*fy,wd=fx*fy;
-      const height=a[3]*wa+b[3]*wb+c[3]*wc+d[3]*wd;
-      if(height<.09){
-        // The map traces the terrain height threshold also used for landings;
-        // interpolating RGB alone makes shorelines look like square ponds.
-        const wet=limit((height+.65)/.58,0,1);
-        const sand=limit((height+.07)/.11,0,1);
-        const deep=[49,99,114],shoal=[86,143,147],shore=[184,177,139];
-        for(let ch=0;ch<3;ch++)data.data[k+ch]=(deep[ch]+(shoal[ch]-deep[ch])*wet)*(1-sand)+shore[ch]*sand+grain;
-      }else for(let ch=0;ch<3;ch++)data.data[k+ch]=a[ch]*wa+b[ch]*wb+c[ch]*wc+d[ch]*wd+grain;
-      data.data[k+3]=255;
+    // Every row uses the same horizontal sample positions. Compute them once
+    // per tile, keeping the original bilinear shoreline and deterministic grain.
+    const cells=new Uint8Array(N),fractions=new Float64Array(N);
+    for(let i=0;i<N;i++){
+      const position=(i+.5)*(S-1)/N;
+      cells[i]=Math.floor(position);fractions[i]=position-cells[i];
+    }
+    const pixels=data.data,noise=detail?5:3;
+    for(let row=0;row<N;row++){
+      const top=cells[row]*S,fy=fractions[row],bottom=top+S;
+      for(let col=0;col<N;col++){
+        const cell=cells[col],fx=fractions[col],k=(row*N+col)*4;
+        const a=samples[top+cell],b=samples[top+cell+1],c=samples[bottom+cell],d=samples[bottom+cell+1];
+        const wa=(1-fx)*(1-fy),wb=fx*(1-fy),wc=(1-fx)*fy,wd=fx*fy;
+        const height=a[3]*wa+b[3]*wb+c[3]*wc+d[3]*wd;
+        const grain=(seed(ix*N+col,iy*N-row,12)-.5)*noise;
+        if(height<.09){
+          // Interpolate deep water, shoals and sand across the landing threshold.
+          const wet=limit((height+.65)/.58,0,1),sand=limit((height+.07)/.11,0,1),water=1-sand;
+          pixels[k]=(49+37*wet)*water+184*sand+grain;
+          pixels[k+1]=(99+44*wet)*water+177*sand+grain;
+          pixels[k+2]=(114+33*wet)*water+139*sand+grain;
+        }else{
+          for(let ch=0;ch<3;ch++)pixels[k+ch]=a[ch]*wa+b[ch]*wb+c[ch]*wc+d[ch]*wd+grain;
+        }
+        pixels[k+3]=255;
+      }
     }
     g.putImageData(data,0,0);tiles.set(key,canvas);
     if(tiles.size>160){const first=tiles.keys().next().value;tiles.get(first).width=1;tiles.delete(first);}

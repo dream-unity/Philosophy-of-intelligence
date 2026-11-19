@@ -18,6 +18,8 @@ jobs:
           node-version: '22'
       - name: Test
         run: npm test
+      - name: Check Common Earth navigation in Chrome
+        run: node scripts/check-common-earth-navigation.mjs
       - name: Check source and offline dependencies
         run: npm run check
       - name: Build and verify the standalone offline edition

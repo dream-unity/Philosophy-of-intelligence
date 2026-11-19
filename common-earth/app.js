@@ -787,7 +787,7 @@
     view=next;syncLiveClock();
     document.body.dataset.mapView=view;
     const isStreet=view==='street',isWorld=view==='world';
-    show('atlas-stage',isWorld);atlas.setActive?.(isWorld);show('street-stage',isStreet);show('street-controls',isStreet);show('street-actors',isStreet);
+    show('atlas-stage',isWorld);atlas.setActive?.(isWorld);show('street-stage',isStreet);show('street-navigation',isStreet);show('street-controls',isStreet);show('street-actors',isStreet);
     show('site-inspector',isWorld);show('actions-panel',isStreet);
     for(const [id,isActive] of [['world-view',isWorld],['street-view',isStreet]]) {
       if(!$(id))continue;
