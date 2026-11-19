@@ -40,6 +40,9 @@
   const MARKET = window.EarthShifts?.district.market || [2,3];
   const marketDoor = () => entry(MARKET);
   const vanAtExchange = () => ({...add(marketDoor(),1.8,.7),dx:1,dy:0});
+  // Kerbside space beside the exchange, clear of its awning posts and public van.
+  const exchangeFleetBay = {x:17.45,y:22.65,dx:1,dy:0};
+  const homeScale = household => .36+.055*household.home;
   const COATS = ['#e6ac77','#94b7d0','#db9794'];
   // The cooperative's supply vehicle follows the streets and serves four kerbs.
   const SERVICE_LOOP=[[15,24,'Market exchange'],[9,24,'Pantry stop'],[6,24],[6,12],[0,12],[0,0],[18,0],[18,18],[21,18,'Repair stop'],[24,18],[24,24],[21,24,'Assembly stop']];
@@ -627,7 +630,7 @@
       if(state.mode!=='drive')return null;
       return visitPedestrians(p=>{
         if(!p||Math.abs(to.x-p.x)>1.6||Math.abs(to.y-p.y)>1.6)return null;
-        const bounds=footprint(p.x,p.y,1.34,1.34);
+        const bounds=footprint(p.x,p.y,Math.SQRT2,Math.SQRT2);
         if(drivingTruck){
           const size=truckExtent(to.x-from.x,to.y-from.y);
           return crossesBounds(from,to,[p.x,p.y,p.x,p.y],size[0]+footRadius,size[1]+footRadius)?bounds:null;
@@ -655,8 +658,10 @@
       return null;
     }
     function vanBounds(van){
-      const sideways=Math.abs(van.dy)>Math.abs(van.dx);
-      return footprint(van.x,van.y,sideways?.67:1.33,sideways?1.33:.67);
+      const x=Math.abs(van.dx),y=Math.abs(van.dy);
+      if(y<=x*octantSlope)return footprint(van.x,van.y,1.33,.67);
+      if(x<=y*octantSlope)return footprint(van.x,van.y,.67,1.33);
+      return footprint(van.x,van.y,Math.SQRT2,Math.SQRT2);
     }
     function clearTrafficSpawn(){
       const truck=state.traffic;if(!truck||state.site?.fleet?.custody)return;
@@ -713,6 +718,7 @@
         }
       }
       state.solids.forEach(insert);
+      frontages.boxes.forEach(insert);
       for(const tree of state.trees){
         if(workTree(tree))continue;
         const width=.27*tree.size;
@@ -1247,8 +1253,14 @@
         solid(add(p,0,-.39),3.56,2.78);
         for(const side of [-1,1])solid(add(p,side*1.085,1.39),1.39,.78);
       }
-      for(const mark of landmarks)if(mark.kind==='courtyard')solid(mark,.84,1.02);
+      for(const mark of landmarks){
+        if(mark.kind==='courtyard')solid(mark,.84,1.02);
+        if(mark.kind==='orchard')solid(add(mark,-.015,.035),1.31,.43);
+        if(mark.kind==='ensemble')solid(mark,.78,.12);
+      }
       const marketCentre=centre(MARKET);berthWell(marketCentre);
+      if(s.growth?.vehicle)state.solids.push(trafficBounds(exchangeFleetBay));
+      solid(add(marketCentre,-1.175,1.525),.91,.29);
       const addFixture=(kind,x,y,front,label)=>fixtures.push({type:'fixture',kind,label,x,y:y+front,objectX:x,objectY:y});
       if(s.pursuits?.cart){
         const cart=add(marketCentre,-2.05,.15);
@@ -2557,7 +2569,7 @@
           }
           route||=makeRoute(first,last,false);
         }
-        if(reduced||locals.get('driver')?.plan){
+        if(!trafficDetour&&(reduced||locals.get('driver')?.plan)){
           const hull=trafficBounds();
           if(hull&&route.some((p,i)=>obstructedByTraffic(i?route[i-1]:first,p,hull))){
             const prior=trafficDetour;trafficDetour=[hull];
@@ -2672,19 +2684,28 @@
       if(shopProof(plot)){stop();pressed.clear();arrive();emitState();return true;}
       return navigate(door,{type:'activityVenue',shopPlot:plot,onArrival:arrive});
     }
-    const frontages={site:null,round:-1,boxes:[],west:-.78,north:-.78};
+    function growthWorksite(site,h,home){
+      if(h.build?.shop)return window.EarthDistrictGrowth.shopPoint(site,h.build.lot);
+      return h.build||site.growth.road?.lot===h.plot?add(home,.4,.5):null;
+    }
+    const frontages={boxes:[],west:-.78,north:-.78};
     function refreshFrontages(site){
-      const g=site.growth;
-      if(frontages.site===site&&frontages.round===(g?.round||0))return;
-      frontages.site=site;frontages.round=g?.round||0;frontages.boxes.length=0;frontages.west=-.78;frontages.north=-.78;
+      const g=site?.growth;
+      frontages.boxes.length=0;frontages.west=-.78;frontages.north=-.78;
       if(!g)return;
-      const add=p=>{
+      const add=(p,width,depth)=>{
         frontages.west=Math.min(frontages.west,p.x-.74);frontages.north=Math.min(frontages.north,p.y-.74);
-        frontages.boxes.push([p.x-.30,p.y-.25,p.x+.30,p.y+.25]);
+        frontages.boxes.push(footprint(p.x,p.y,width,depth));
       };
       for(const h of g.households){
-        add(window.EarthDistrictGrowth.homePoint(site,h.plot));
-        if(h.shop)add(window.EarthDistrictGrowth.shopPoint(site,h.businessPlot));
+        const scale=homeScale(h),home=window.EarthDistrictGrowth.homePoint(site,h.plot);
+        add(home,2.54*scale,2.25*scale);
+        const work=growthWorksite(site,h,home);
+        if(work){
+          add({x:work.x-.01,y:work.y+.13},.72,.26);
+          for(const side of [-1,1])add({x:work.x+side*.4+.0375,y:work.y+.3075},.075,.075);
+        }
+        if(h.shop)add(window.EarthDistrictGrowth.shopPoint(site,h.businessPlot),2.4*.36,1.7*.36);
       }
     }
     function pairedStop(row,id){
@@ -2699,34 +2720,61 @@
     }
     const paidRoutes=new Map();
     function refreshPaidRoutes(site){
-      refreshFrontages(site);
-      const active=new Set(),orders=window.EarthDistrictOrders;
+      const active=new Set();
       for(const job of window.EarthDistrictGrowth?.activeWork?.(site)||[]){
         const id=job.ownerId;
         if(id===playedId||id===state.companion?.id||window.EarthCommunityLife?.present?.(site,id)===false)continue;
         active.add(id);
-        const key=site.id+'/'+job.id+'/'+job.phase;
+        const key=siteKey(site)+'/'+job.id+'/'+job.phase;
         if(paidRoutes.get(id)?.key===key)continue;
-        const points=orders.path(job.from,job.to),legs=[];
-        let total=0;
-        for(let i=1;i<points.length;i++){
-          const from=points[i-1],to=points[i],dx=to.x-from.x,dy=to.y-from.y,length=Math.hypot(dx,dy);
-          if(length){legs.push({from,dx:dx/length,dy:dy/length,start:total,length});total+=length;}
-        }
         const series=activity?.plan({kind:job.kind,activity:job.activity,orderPhase:job.phase,orderGood:job.orderGood,resource:job.resource,cargo:job.resourceName,
           amount:job.amount,venue:job.venue,goal:job.action,assignment:job.reason,destination:job.destination});
-        paidRoutes.set(id,{key,job,route:{first:points[0],legs,total},body:{series,stop:job.to,dir:1,forward:true}});
+        paidRoutes.set(id,{key,job,body:{series,stop:job.to,dir:1,forward:true}});
       }
       for(const id of paidRoutes.keys())if(!active.has(id))paidRoutes.delete(id);
     }
     function paidOrderBody(id){
       const paid=paidRoutes.get(id);if(!paid)return null;
-      if(paid.time===visualTime)return paid.body;
+      if(paid.time===visualTime&&paid.revision===footpathRevision)return paid.body;
       paid.time=visualTime;
-      const {job,body,route}=paid,elapsed=Math.max(0,Date.now()-job.startedAt);
-      const fraction=job.travelMs?Math.min(1,elapsed/job.travelMs):1;
-      onPath(route,fraction,body);body.moving=fraction<1;body.pace=body.moving?.72:0;
-      body.seconds=Math.max(0,elapsed-job.travelMs)/1000;body.phase=visualTime*4;
+      const {job,body}=paid,now=Date.now(),due=job.startedAt+job.travelMs;
+      const barriers=[trafficBounds(drivingTruck?state.player:state.traffic)];
+      if(state.mode==='drive'&&!drivingTruck)barriers.push(vanBounds(state.player));
+      const blocked=(a,b)=>barriers.some(hull=>hull&&obstructedByTraffic(a,b,hull));
+      const progress=()=>paid.duration>0?clamp((now-paid.departure)/paid.duration,0,1):1;
+      let replan=!paid.route||paid.revision!==footpathRevision;
+      if(!replan&&paid.route.total&&body.routeFraction<1){
+        // Check only the portion traversed since the last frame. Joining the
+        // two samples directly would cut the corner of a legitimate detour.
+        const distance=progress()*paid.route.total;
+        let from=body;
+        for(const leg of paid.route.legs){
+          if(leg.start+leg.length<=body.routeFraction*paid.route.total)continue;
+          const along=clamp(distance-leg.start,0,leg.length);
+          const to={x:leg.from.x+leg.dx*along,y:leg.from.y+leg.dy*along};
+          if(blocked(from,to)){replan=true;break;}
+          if(distance<=leg.start+leg.length)break;
+          from=to;
+        }
+      }
+      if(!replan&&!paid.route.reached&&visualTime>=paid.retryAt)replan=true;
+      if(replan){
+        const rerouting=Boolean(paid.route);
+        const from=rerouting?{x:body.x,y:body.y}:job.from;
+        paid.departure=rerouting?now:job.startedAt;
+        const previous=trafficDetour;
+        trafficDetour=barriers.filter(Boolean);
+        try {
+          const pathId='paid-'+id;
+          localPaths.delete(pathId);
+          paid.route=localPath(pathId,from,job.to);
+        }finally{trafficDetour=previous;}
+        paid.duration=Math.max(due-paid.departure,rerouting?paid.route.total*1000/WALK_SPEED:0);
+        paid.revision=footpathRevision;paid.retryAt=visualTime+.75;
+      }
+      const route=paid.route,fraction=progress();
+      onPath(route,fraction,body);body.moving=route.total>0&&fraction<1;body.pace=body.moving?.72:0;
+      body.seconds=Math.max(0,now-due)/1000;body.phase=visualTime*4;
       body.routeLeg=body.moving?route:null;body.routeFraction=fraction;
       return body;
     }
@@ -2992,14 +3040,14 @@
       for(const worker of crew.values()){
         if(worker.residentId===playedId||worker.residentId===state.companion?.id)continue;
         let body=builderPosition(worker);
-        if(worker.walkLength&&visualTime-worker.since<=.72+dt&&insideFootprint(body,hull)){
+        if(worker.walkLength&&visualTime-worker.since<=.72+dt&&(insideFootprint(body,hull)||playerCar&&insideFootprint(body,playerCar))){
           worker.since+=dt;body=builderPosition(worker);
         }
         if(people&&Math.abs(body.x-q.x)<3.5&&Math.abs(body.y-q.y)<3.5)people.push(body);
       }
       for(const base of state.points){
         if(base.type!=='resident'||base.residentId===playedId||base.residentId===state.companion?.id||crew.has(base.residentId))continue;
-        if(Math.abs(base.x-q.x)>4||Math.abs(base.y-q.y)>4)continue;
+        if(!paidRoutes.has(base.residentId)&&(Math.abs(base.x-q.x)>4||Math.abs(base.y-q.y)>4))continue;
         consider('home-'+base.residentId,residentFigure(base));
       }
       if(!people)return null;
@@ -3172,10 +3220,15 @@
       if(drivingTruck){Object.assign(q,actorPosition(state.player));return;}
       if(disputedOrder?.action==='take')checkDisputedStop();
       const independent=independentDriver();
-      if(independent&&q.leg===1&&q.distance<.03&&!q.diversion){checkDisputedStop();return;}
-      if(!independent&&(playedId==='driver'||state.site?.fleet?.custody||!driverMember) || state.arrival?.type==='dispatchTruck' || visualTime<truckHailUntil || reduced&&!activity&&!regularQuote?.available&&!regularQuote?.done)return;
-      if(regularPending||!independent&&regularQuote&&!regularQuote.available&&q.leg===0&&q.distance<.03&&!q.diversion)return;
-      if(!independent&&(heldLocal?.npcId==='driver'||locals.get('driver')?.plan))return;
+      const idle=independent?q.leg===1&&q.distance<.03&&!q.diversion:
+        playedId==='driver'||state.site?.fleet?.custody||!driverMember||heldLocal?.npcId==='driver'||locals.get('driver')?.plan;
+      if(idle||state.arrival?.type==='dispatchTruck'||visualTime<truckHailUntil||
+          reduced&&!activity&&!regularQuote?.available&&!regularQuote?.done||regularPending||
+          !independent&&regularQuote&&!regularQuote.available&&q.leg===0&&q.distance<.03&&!q.diversion){
+        if(!reduced||activity)crossingsNear(q,dt,true);
+        if(independent)checkDisputedStop();
+        return;
+      }
       const crossers=crossingsNear(q,dt);
       if(q.wait>0){q.wait-=dt;return;}
       if(regularQuote?.unloadingObserved)regularQuote={...regularQuote,available:false,done:true,unloadingObserved:false};
@@ -3577,7 +3630,7 @@
       const growth=window.EarthDistrictGrowth;
       if(growth)for(const h of site.growth?.households||[]){
         const home=growth.homePoint(site,h.plot);
-        test(home,'home',(h.plot+h.home-1)%3,.36+.055*h.home,.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
+        test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
           assetName:h.name+'’s home',ownerKey:h.owner,activity:'Residential lot '+(h.plot+1)+'. '+(h.extension||'')}));
         if(h.shop)test(growth.shopPoint(site,h.businessPlot),'market',0,.36,.3,()=>{
           const item=window.EarthResidentShops?.products[h.shop];
@@ -4098,9 +4151,9 @@
         for(const h of g.households){
           const {x,y}=window.EarthDistrictGrowth.homePoint(state.site,h.plot);
           if(h.plot<g.roads)rect(x-.17,y+.4,.34,Math.abs(y)-.4,.015,'#a69a83');
-          addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*(.36+.055*h.home)),buildingBounds);
-          if(h.build||g.road?.lot===h.plot){
-            const appointment=h.build?.shop?window.EarthDistrictGrowth.shopPoint(state.site,h.build.lot):{x:x+.4,y:y+.5};
+          addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
+          const appointment=growthWorksite(state.site,h,{x,y});
+          if(appointment){
             const {x:ax,y:ay}=appointment;
             addItem(ax,ay,ax+ay+.32,()=>{
               for(let row=0;row<2;row++)box(ax-.37,ay+row*.14,.72,.12,.03,.13,'#c5a475','#a18662','#856e52');
@@ -4114,8 +4167,8 @@
           }
         }
         if(g.vehicle){
-          const x=16.7,y=22.95;
-          addItem(x,y,x+y+.2,()=>drawTransport({x,y,dx:1,dy:0},g.vehicle===1?2:g.vehicle===2?0:1),vehicleBounds);
+          const {x,y}=exchangeFleetBay;
+          addItem(x,y,x+y+.2,()=>drawTransport(exchangeFleetBay,g.vehicle===1?2:g.vehicle===2?0:1),vehicleBounds);
         }
       }
       for(const mark of landmarks)addItem(mark.x,mark.y,mark.x+mark.y+.30,()=>paintAchievement(mark),furnitureBounds);
@@ -4213,7 +4266,6 @@
       if(p.x>SIDE+.78||p.y>SIDE+.78)return false;
       if(p.x<-.78||p.y<-.78){
         if(driving||p.x<frontages.west||p.y<frontages.north||p.x<-.78&&p.y<-.78)return false;
-        return !frontages.boxes.some(b=>p.x>b[0]-footRadius&&p.x<b[2]+footRadius&&p.y>b[1]-footRadius&&p.y<b[3]+footRadius);
       }
       if(driving)return road(p.x,p.y)&&!carHitsObject(p,p,truck)&&!occupiedNode(p,obstacles,truck);
       if(van&&insideFootprint(p,van)||trafficDetour?.some(bounds=>insideFootprint(p,bounds)))return false;
@@ -4320,7 +4372,6 @@
         return crossesBounds(a,b,bounds,margin);
       };
       if(driving)return !OFF_ROAD.some(intersects)&&!carHitsObject(a,b,truck)&&!occupiedEdge(a,b,obstacles,truck);
-      if((Math.min(a.x,b.x)<-.78||Math.min(a.y,b.y)<-.78)&&frontages.boxes.some(intersects))return false;
       if(parkedBounds&&intersects(parkedBounds)||trafficDetour?.some(bounds=>obstructedByTraffic(a,b,bounds)))return false;
       const x1=collisionCell(Math.min(a.x,b.x)),x2=collisionCell(Math.max(a.x,b.x));
       const y1=collisionCell(Math.min(a.y,b.y)),y2=collisionCell(Math.max(a.y,b.y));
@@ -4343,7 +4394,7 @@
         const approaches=p=>{
           if(p.x>=-.78&&p.y>=-.78)return [[p]];
           const west=p.x<-.78;
-          return [0,.72,-.72].map(offset=>{
+          return [0,.72,-.72,1,-1].map(offset=>{
             const corner=west?{x:p.x,y:p.y+offset}:{x:p.x+offset,y:p.y};
             const curb=west?{x:0,y:clamp(corner.y,0,SIDE)}:{x:clamp(corner.x,0,SIDE),y:0};
             return [p,corner,curb];
@@ -4459,7 +4510,9 @@
       let from=start;
       for(let i=1;i<raw.length;i++){
         if(clearSegment(from,raw[i],driving,truck))continue;
-        from=raw[i-1];simplified.push(from);
+        const corner=raw[i-1];
+        if(!clearSegment(from,corner,driving,truck)||!clearSegment(corner,raw[i],driving,truck))return [];
+        from=corner;simplified.push(from);
       }
       simplified.push(target);
       return simplified;
@@ -4849,6 +4902,12 @@
           if(d<.001){state.route.shift();continue;}
           const dx=(q.x-p.x)/d,dy=(q.y-p.y)/d,step=Math.min(d,budget);
           const next={x:p.x+dx*step,y:p.y+dy*step};
+          if(state.mode==='walk'&&!clearSegment(p,next,false)){
+            const free=closestFree(state.destination,false),route=free&&makeRoute(p,free,false);
+            if(route?.length){state.route=route;state.destination=free;}
+            else{stop();message('The path is blocked.');}
+            break;
+          }
           const obstacle=traffic&&blockedByVehicle(p,next,traffic)?traffic:pedestrianBarrier(p,next);
           if(obstacle){
             const detour=routeAroundTraffic(p,state.destination,obstacle);
@@ -4878,7 +4937,7 @@
         }
       }
       if(heldLocal&&state.arrival?.npcId!==heldLocal.npcId&&p.moving&&dist(p,heldLocal)>interactionRange()+.1)releaseLocal();
-      followCompanion();stepTraffic(dt);
+      followCompanion(dt);stepTraffic(dt);
       if(workingErrands.length)checkSignedErrands();
       const checkPassingNeighbour=visible&&!reduced&&state.mode==='walk'&&locals.size&&visualTime-lastLocalCheck>=.4;
       if(p.moving||checkPassingNeighbour){lastLocalCheck=visualTime;updateNearby();}
@@ -4899,17 +4958,28 @@
       const p=state.player,start=closestFree(add(p,.49,-.36),false)||p;
       state.companion={id:resident.id,slot:resident.slot,x:start.x,y:start.y,trail:[],onboard:state.mode==='drive'};
     }
-    function followCompanion() {
+    function followCompanion(dt) {
       const c=state.companion;if(!c)return;
       const p=state.player;
       if(state.mode!=='walk'){c.x=p.x;c.y=p.y;c.trail.length=0;c.onboard=true;return;}
       if(c.onboard){const q=closestFree(add(p,-.45,.38),false)||p;c.x=q.x;c.y=q.y;c.onboard=false;}
-      if(!p.moving)return;
+      if(!traversable(c,false)){
+        const free=closestFree(c,false);
+        if(free){Object.assign(c,free);c.trail.length=0;}
+      }
+      if(!p.moving&&!c.trail.length)return;
       if(!c.trail.length)c.trail.push({x:c.x,y:c.y});
       if(dist(c.trail[c.trail.length-1],p)>.13)c.trail.push({x:p.x,y:p.y});
       let length=0;for(let i=c.trail.length-1;i>0;i--){
         length+=dist(c.trail[i],c.trail[i-1]);
-        if(length>=.7){c.x=c.trail[i-1].x;c.y=c.trail[i-1].y;if(i>1)c.trail.splice(0,i-1);break;}
+        if(length<.7)continue;
+        const target=c.trail[i-1];
+        const next=clearSegment(c,target,false)?target:makeRoute(c,target,false)[0];
+        if(!next||obstructedByTraffic(c,next,trafficBounds()))break;
+        const distance=dist(c,next),fraction=distance?Math.min(1,dt*WALK_SPEED*1.2/distance):1;
+        c.x+=(next.x-c.x)*fraction;c.y+=(next.y-c.y)*fraction;
+        if(next===target&&fraction===1&&i>1)c.trail.splice(0,i-1);
+        break;
       }
     }
     function cyclePlot(direction) {
@@ -4961,7 +5031,9 @@
       state.site=site||null;refreshGeography();state.seed=hash(`${site?.lat??0},${site?.lon??0},${site?.id||'district'}`);
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
-      const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,landmarks.filter(mark=>mark.kind==='courtyard').map(mark=>mark.home.plot),
+      const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
+        site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
+        landmarks.filter(mark=>mark.kind!=='balcony').map(mark=>mark.key),
         site?.residents?.map(r=>[r.id,r.name,window.EarthCommunityLife?.present(site,r.id)!==false])]);
       if(previousKey!==nextKey || state.fingerprint!==nextFingerprint){
         const target=state.destination,arrival=state.arrival;
@@ -4970,6 +5042,7 @@
           Object.assign(state.player,embarked?landing(embarked):returnPoint(site));
           state.mode='walk';embarked=null;clearCatch();stop();
         }
+        refreshFrontages(site);
         districtData();
         for(const id of crew.keys())if(window.EarthCommunityLife?.present?.(site,id)===false)crew.delete(id);
         if(previousKey!==nextKey)restoreSeat(visits.get(site?.id)?.key===nextKey?visits.get(site?.id)?.seat:null);
@@ -5125,7 +5198,7 @@
     function snapshotView() {
       if(!state.site)return null;
       const camera=priorPlacementView||observationView||{zoom,overviewZoom,centreX,centreY,cameraFollows};
-      return {v:1,geometry:1,site:siteKey(state.site),actor:playedId,...(playedSerial?{actorSerial:playedSerial}:{}),mode:state.mode,...(seatedAt?{seat:{x:seatedAt.x,y:seatedAt.y}}:{}),berth:embarked?.id,player:actorPosition(state.player),
+      return {v:1,geometry:2,site:siteKey(state.site),actor:playedId,...(playedSerial?{actorSerial:playedSerial}:{}),mode:state.mode,...(seatedAt?{seat:{x:seatedAt.x,y:seatedAt.y}}:{}),berth:embarked?.id,player:actorPosition(state.player),
         van:actorPosition(state.mode==='drive'&&!drivingTruck?state.player:state.van),...(drivingTruck?{vehicle:'truck'}:{}),camera:{...camera}};
     }
     function restoreView(snapshot) {
@@ -5142,7 +5215,7 @@
       // Earlier saves allowed a point-sized driver and omitted furniture/trunks.
       // Keep the visit on the same kerb or pavement when a newly solid object
       // occupies that saved point. Fresh snapshots retain strict validation.
-      const legacy=snapshot.geometry===undefined;
+      const legacy=snapshot.geometry===undefined||snapshot.geometry===1;
       const inDistrict=p=>between(p.x,-.78,SIDE+.78)&&between(p.y,-.78,SIDE+.78);
       if(!traversable(van,true,null,false)){
         if(!legacy||!inDistrict(van)||!road(van.x,van.y))return false;
@@ -5153,7 +5226,7 @@
       if(mode==='boat'){
         if(!onWater(player,berth))return false;
       }else if(!traversable(player,mode==='drive',mode==='walk'?vanBounds(van):null,restoredTruck)){
-        if(!legacy||mode!=='walk'||!inDistrict(player))return false;
+        if(!legacy||mode!=='walk'||(!inDistrict(player)&&!frontages.boxes.some(box=>insideFootprint(player,box))))return false;
         const free=closestFree(player,false,vanBounds(van));
         if(!free||dist(player,free)>.8)return false;
         player={...player,...free};

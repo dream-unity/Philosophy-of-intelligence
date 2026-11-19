@@ -2312,3 +2312,88 @@ test('tapping a building inspects the premises while walking or driving, even wh
   assert.equal(g.street.getState().travelling,false);
   g.street.destroy();
 });
+
+test('the exchange fleet vehicle has a physical body as soon as it arrives and both van doors remain usable',()=>{
+  const g=surface(1024,640,{paidWork:true});
+  const town={...site,growth:{round:1,vehicle:0,roads:0,households:[]}};
+  g.street.setSite(town);
+  const snap=g.street.snapshotView(),bay={x:17.45,y:22.65};
+  const place=(x,y)=>g.street.restoreView({...snap,player:{...snap.player,x,y}});
+  assert(place(bay.x,bay.y));
+  town.growth.vehicle=1;g.street.setSite(town);
+  const clear=p=>Math.abs(p.x-bay.x)>=.915||Math.abs(p.y-bay.y)>=.415;
+  assert(clear(g.street.getState()),'a newly parked vehicle leaves the pedestrian on clear ground');
+  assert.equal(place(bay.x,bay.y),false);
+  assert(g.street.restoreView({...snap,geometry:1,player:{...snap.player,...bay}}));
+  assert(clear(g.street.getState()),'an older save resumes beside the new obstruction');
+  assert(place(17.45,22.1));
+  for(let i=0;i<5;i++){g.street.move('down');assert(clear(g.street.getState()));}
+  assert(place(17.45,21.8));
+  g.street.toggleOverview();g.tap(g.overviewFrame()(18.5,24.66));
+  assert(g.street.getState().travelling);
+  for(let i=0;i<200&&g.street.getState().travelling;i++){g.step();assert(clear(g.street.getState()));}
+  g.at(18.5,24.66);
+  assert(g.street.toggleVehicle());g.finish();assert.equal(g.street.getState().mode,'drive');
+  assert(g.street.toggleVehicle());assert(clear(g.street.getState()));
+  town.growth.vehicle=0;g.street.setSite(town);assert(place(bay.x,bay.y));
+  g.street.destroy();
+});
+
+test('a paid courier passes the parked van and reaches the counter without crossing the vehicle or market walls',()=>{
+  const g=surface(1024,640,{animated:true,visible:true,lives:true,paidWork:true});
+  const order={id:'courier-1',worker:'Courier',plot:2,person:'walker-2',kind:'food',client:'broker',resource:'grain',resourceName:'grain',
+    wage:2,dues:1,source:'pantry',sourceVenue:'pantry',destVenue:'market',start:'market',at:100,travelMs:7000,workMs:3000,
+    why:'A pantry delivery',request:2,cargo:0,phase:'collect',tool:'basket',fromPoint:{x:15,y:23.48}};
+  const town={...site,growth:{round:1,vehicle:1,roads:0,households:[{owner:'test',plot:2,home:1,name:'Courier',shop:'',order}]}};
+  g.street.setSite(town);
+  const snap=g.street.snapshotView(),van={...snap.van,x:12,y:24,dx:1,dy:0};
+  assert(g.street.restoreView({...snap,van}));
+  let position;
+  for(let i=0;i<195;i++){
+    position=g.street.activityOf(order.person);
+    assert(Math.abs(position.x-12)>=.76||Math.abs(position.y-24)>=.43,'clear of the parked van');
+    assert(Math.abs(position.x-15)>=1.645||Math.abs(position.y-21)>=1.545,'clear of the exchange walls');
+    const truck=g.street.truckStatus().truck;
+    const alongX=Math.abs(truck.dx)>=Math.abs(truck.dy);
+    assert(Math.abs(position.x-truck.x)>=(alongX?.915:.415)||Math.abs(position.y-truck.y)>=(alongX?.415:.915),'clear of the service truck');
+    g.step();
+  }
+  assert(Math.hypot(position.x-9.32,position.y-23.48)<.01,'the courier reaches the pantry frontage');
+  g.street.destroy();
+});
+
+test('completed and expanded household walls block the player up to the visible frontage',()=>{
+  const g=surface(1024,640,{paidWork:true});
+  const household={owner:'test',plot:0,home:1,name:'Owner',shop:'',houseSite:{x:3,y:-1.9}};
+  const town={...site,growth:{round:1,vehicle:0,roads:0,households:[household]}};
+  g.street.setSite(town);
+  const snap=g.street.snapshotView(),place=(x,y)=>g.street.restoreView({...snap,player:{...snap.player,x,y}});
+  assert.equal(place(3.49,-1.9),false,'front wall extends past the old miniature footprint');
+  assert(place(3.7,-1.9));
+  household.home=3;g.street.setSite(town);
+  assert.equal(place(3.7,-1.9),false,'extensions immediately change the occupied space');
+  assert(place(3,-1.1),'the exterior approach stays accessible');
+  g.street.destroy();
+});
+
+test('a resident coming from an outer row walks around the intervening home and civic hall',()=>{
+  const g=surface(1024,640,{animated:true,visible:true,lives:true,paidWork:true});
+  const order={id:'outer-delivery',worker:'Porter',plot:2,person:'walker-1',kind:'food',client:'broker',resource:'grain',resourceName:'grain',
+    wage:2,dues:1,source:'pantry',sourceVenue:'pantry',destVenue:'market',start:'home',at:100,travelMs:17000,workMs:1500,
+    why:'The pantry placed an order',request:1,cargo:0,phase:'collect',tool:'basket',fromPoint:{x:9.32,y:-3}};
+  const households=[{owner:'a',plot:0,home:3,name:'Resident',shop:'',houseSite:{x:9.32,y:-1.9}},
+    {owner:'b',plot:1,home:2,name:'Porter',shop:'',houseSite:{x:9.32,y:-3.8},order}];
+  g.street.setSite({...site,growth:{round:1,vehicle:0,roads:0,households}});
+  let p=g.street.activityOf(order.person);
+  assert(Math.hypot(p.x-9.32,p.y+3)<.01);
+  for(let i=0;i<550&&Math.hypot(p.x-9.32,p.y-23.48)>.01;i++){
+    g.step();const next=g.street.activityOf(order.person);
+    assert(Math.hypot(next.x-p.x,next.y-p.y)<.55,'continuous foot travel');
+    for(const [x,y,halfX,halfY] of [[9.32,-1.9,.66675,.590625],[9,9,1.56,1.42],[9,21,1.27,1.125]]){
+      assert(Math.abs(next.x-x)>=halfX+.094||Math.abs(next.y-y)>=halfY+.094,'outside each wall');
+    }
+    p=next;
+  }
+  assert(Math.hypot(p.x-9.32,p.y-23.48)<.01,JSON.stringify(p));
+  g.street.destroy();
+});
