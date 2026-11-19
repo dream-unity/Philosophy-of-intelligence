@@ -46,7 +46,7 @@
     return !!(row?.contribution?.week===week||row?.dream?.last===week||row?.pastime?.lastWeek===week||
       item?.week===week&&(usedSessions.has(item.kind)||item.errand===true));
   }
-  function busy(site,person,world,skipPromisedVisit=false){
+  function busy(site,person,world,skipPromisedVisit=false,handover=undefined){
     const resident=site.residents?.find(p=>p.id===person.id),worker=site.workforce?.members?.[person.id];
     if(resident?.promise&&!skipPromisedVisit){
       const signer=resident.promise.by&&identity(site,resident.promise.by);
@@ -59,7 +59,9 @@
     if(relief)return 'I agreed to cover the '+relief.label.toLowerCase()+' round at '+relief.employer+' this week.';
     const t=site.careers?.[person.id]?.training;
     if(t?.pace==='intensive'&&!t.paused)return 'I am keeping my intensive study timetable.';
-    if(Object.values(site.careers||{}).some(c=>c.departure?.coverId===person.id&&c.departure.throughWeek>=world.week||c.application?.phase==='notice'&&c.application.coverId===person.id))
+    const covering=handover===undefined?root.EarthCareers?.handoverDuty?.(site,person.id,world.week):handover;
+    if(covering)return covering.reason;
+    if(!root.EarthCareers?.handoverDuty&&Object.values(site.careers||{}).some(c=>c.departure?.coverId===person.id&&c.departure.throughWeek>=world.week||c.application?.phase==='notice'&&c.application.coverId===person.id))
       return 'I agreed to cover a colleague through their handover.';
     if(worker?.jobId||worker?.preferredJobId)return 'My crew is depending on me for the booked job.';
     if(worker?.preference && worker.preference!=='auto'){
@@ -282,13 +284,17 @@
     const traits=person.traits||defaultTraits,job=root.EarthCareers?.work?.(site,person.id),role=job?.label||job?.role||person.role;
     const venue=workplace(job?.venue,role),week=world.week;
     const resident=site.residents?.find(r=>r.id===person.id),failed=resident?.lastMissed?.week>=week-2;
-    const priorDuty=busy(site,person,world)||(assigned?.has(person.id)?'My crew is counting on me at an active construction site.':'');
+    const handover=root.EarthCareers?.handoverDuty?.(site,person.id,week)||null;
+    const priorDuty=busy(site,person,world,false,handover)||(assigned?.has(person.id)?'My crew is counting on me at an active construction site.':'');
     const civic=!priorDuty&&root.EarthCivicInitiatives?.commitment?.(site,world,person.id);
     const duty=priorDuty||civic?.reason||'',relief=root.EarthCareers?.specialistShift?.(site,person.id,week);
     const base=person.id===controlled(site,world)?line(week,'player','I choose where to go and what to do.','home'):
       duty?line(week,relief?'cover':'commitment',duty,relief?.venue||(venues.has(civic?.venue)?civic.venue:venue)):row.energy<2?line(week,'rest','I have worked several weeks without a proper break.','bench'):
       failed?line(week,'routine','After the missed promise I want a dependable shift.',venue):plannedDuty(site,person,week,role,job?.venue);
     if(relief&&base.kind==='cover')base.title='Cover the '+relief.label.toLowerCase()+' round at '+relief.employer;
+    if(handover?.scope&&base.kind==='commitment'&&duty===handover.reason){
+      base.venue=handover.venue;base.title=handover.title;base.handoverScope=handover.scope;base.handoverRole=handover.role;
+    }
     if(civic&&base.kind==='commitment'){
       base.civic=true;
       if(civic.title)base.title=civic.title;
@@ -380,7 +386,13 @@
       p.item=decision;p.free=false;
       if(decision.target){
         const colleague=all.find(q=>q.id===decision.target);
-        if(colleague){colleague.item=line(week,'commitment','I agreed to receive '+p.name+'’s handover before their new post begins.',decision.venue,p.id);colleague.free=false;}
+        if(colleague){
+          const handover=root.EarthCareers?.handoverDuty?.(site,decision.target,week);
+          colleague.item=handover?.scope?{...line(week,'commitment',handover.reason,handover.venue,p.id),
+            title:handover.title,handoverScope:handover.scope,handoverRole:handover.role}:
+            line(week,'commitment','I agreed to receive '+p.name+'’s handover before their new post begins.',decision.venue,p.id);
+          colleague.free=false;
+        }
       }
     }
     const projects=root.EarthLocalProjects?.prepare(site,world,all);
@@ -415,7 +427,8 @@
       if(root.EarthProvisions?.volunteer(world,site,self))offer(self,'preserve',73+traits.patience/8-repeat('preserve'),'I can keep some of the surplus for a lean week.','market');
       for(const gap of gaps)if(!gap.coverId&&gap.personId!==self.id){
         const oldVenue=gap.venue||workplace(root.EarthCareers?.catalog?.find(j=>j.label===gap.oldRole)?.venue,gap.oldRole);
-        const canCover=gap.opening?root.EarthCareers?.canCoverPost?.(site,self.id,gap.opening):self.base.venue===oldVenue||traits.adaptability>=70;
+        const checkedPost=gap.opening||gap.credential;
+        const canCover=checkedPost?root.EarthCareers?.canCoverPost?.(site,self.id,checkedPost):self.base.venue===oldVenue||traits.adaptability>=70;
         if(canCover){
           if(gap.laneId&&self.profile.kind==='carrier'&&root.EarthCareers?.supplyLane?.(site,world,self.id)?.status==='staffed')continue;
           const reason=gap.opening?'I can take this month’s '+gap.oldRole.toLowerCase()+' round at '+gap.employer+' while the employer looks for '+gap.formerName+'’s replacement.':gap.laneId?'I can take the supply run from lot '+(gap.from+1)+' to lot '+(gap.to+1)+' while the porter works elsewhere.':
@@ -483,6 +496,9 @@
       }
       if(o.kind==='cover'){
         const map={farming:'food',food:'food',farm:'food',repair:'materials',repairs:'materials',trade:'funds',exchange:'funds'};
+        if(o.gap.credential||o.gap.opening&&root.EarthCareers?.requiresCredential?.(o.gap.opening)){
+          chosen.handoverScope='qualified';chosen.handoverRole=o.gap.oldRole;
+        }
         if(o.gap.opening){
           if(!root.EarthEmployers?.cover(site,world,p.profile,o.gap))continue;
           chosen.title='Cover the '+o.gap.oldRole.toLowerCase()+' round at '+o.gap.employer;
@@ -559,6 +575,8 @@
       Array.isArray(r.history)&&r.history.length<=4&&r.history.every((h,i)=>dict(h)&&int(h.week,1,d.week)&&(!i||h.week<r.history[i-1].week)&&has(labels,h.kind)&&
         typeof h.reason==='string'&&h.reason.length>0&&h.reason.length<=450&&venues.has(h.venue)&&(h.target==null||allowed(h.target)&&h.target!==id)&&
         validLane(h)&&(h.kind!=='dream'||!!root.EarthDreams?.validIntent(h))&&
+        (h.handoverScope==null&&h.handoverRole==null||['admin','qualified'].includes(h.handoverScope)&&
+          ['cover','commitment'].includes(h.kind)&&root.EarthCareers?.catalog?.some(j=>j.label===h.handoverRole&&root.EarthCareers.requiresCredential(j.id)))&&
         (h.kind!=='gather'||h.resource==null||!!root.EarthResources?.isCrop(h.resource)&&typeof h.title==='string'&&h.title.length<200)&&
         (h.kind!=='marketSupply'||h.venue==='market'&&['prepare','sell'].includes(h.activity)&&typeof h.title==='string'&&h.title.length<200&&
           typeof h.goal==='string'&&h.goal.length<360)&&(h.errand==null||h.errand===true&&h.kind==='commitment')&&

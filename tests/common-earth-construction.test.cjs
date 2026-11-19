@@ -687,3 +687,22 @@ test('a confirmed pantry relief and pre-departure handover take the founding wor
   }
   assert(care&&handover);assert.equal(s.food,0);
 });
+
+test('a named founding substitute keeps the handover appointment even with an empty pantry and an open worksite',()=>{
+  const vm=require('node:vm'),fs=require('node:fs'),runtime={};
+  for(const file of ['personas.js','careers.js','autonomy.js','construction.js'])vm.runInNewContext(fs.readFileSync(path.join(game,file),'utf8'),runtime);
+  const crew=runtime.EarthConstruction,s=town(),p=s.residents[0],current={week:7};
+  s.food=0;s.buildings=[{id:'clinic',plot:4,kind:'hall',name:'Community clinic'}];
+  s.autonomy={people:{[p.id]:{history:[{week:7,kind:'commitment',venue:'hall',handoverScope:'admin',handoverRole:'Nurse',title:'Cover the appointment desk'}]}}};
+  ok(crew.start(s,current,order('workshop',7)));
+  let arrived=false;
+  for(let i=0;i<80;i++){
+    const worker=crew.workerRole(s,current,p.id);
+    if(worker.initiative){
+      assert.equal(worker.initiative.handoverScope,'admin');assert.equal(worker.jobId,null);assert.equal(worker.workplace.kind,'hall');
+      if(worker.activity==='working'){assert(Math.hypot(worker.x-worker.workplace.x,worker.y-worker.workplace.y)<.01);arrived=true;}
+    }
+    ok(crew.advance(s,current,1));
+  }
+  assert(arrived);assert.equal(s.workforce.members[p.id].outingLeft,0);
+});

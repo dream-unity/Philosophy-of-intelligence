@@ -102,3 +102,18 @@ test('a signed supply pledge carries the contract quantity in the right containe
     assert.equal(stage(recipient,2).label,'Receiving 3 promised '+good+' from Idris');assert.equal(recipient.travel.prop,'none');
   }
 });
+
+test('a restricted handover gives an administrative substitute only records work and a qualified substitute the outgoing role',()=>{
+  for(const kind of ['commitment','cover']){
+    const admin=plan({kind,role:'Practice nurse',careerId:'practice-nurse',handoverScope:'admin',handoverRole:'Practice nurse',venue:'hall'});
+    assert.equal(admin.id,'handover-admin');assert(admin.steps.every(step=>['book','ledger'].includes(step.prop)));
+    const nurse=plan({kind,role:'Carpenter',handoverScope:'qualified',handoverRole:'Practice nurse',venue:'hall'});
+    assert.equal(nurse.id,'practice-nurse');assert(nurse.steps.some(step=>/home-visit/.test(step.label)));
+    assert.equal(plan({kind,handoverScope:'qualified',handoverRole:'Police officer',venue:'hall'}).id,'police');
+    const surveyOffice=plan({kind,handoverScope:'admin',handoverRole:'Building surveyor',venue:'workshop'});
+    assert.equal(surveyOffice.id,'handover-schedule');
+    assert.match(surveyOffice.steps.map(s=>s.label).join(' '),/duty rota and handover records/);
+    assert.doesNotMatch(surveyOffice.steps.map(s=>s.label).join(' '),/clinic|referral|appointment/);
+  }
+  assert.equal(plan({kind:'routine',careerId:'surveyor',handoverRole:'Nurse',handoverScope:'qualified'}).id,'surveyor');
+});

@@ -70,6 +70,14 @@
     geneticist:series('geneticist','Catalogue seed samples',prepare('label-sample','Labelling a seed sample','ledger','write'),collect,record),
     surveyor:series('surveyor','Survey the neighbourhood buildings',prepare('read-floor-plan','Reading the building survey plan','book','read'),
       work('measure-frontage','Measuring the shared building frontage','ruler','measure'),hand('record-survey','Recording the frontage measurements','ledger','write')),
+    handoverAdmin:series('handover-admin','Keep the outgoing employer’s appointment records current',
+      prepare('read-handover-register','Checking the appointment register','book','read'),
+      work('update-handover-diary','Updating appointment and referral records','ledger','write'),
+      hand('pass-handover-notes','Leaving the records for the qualified colleague','book','place')),
+    handoverSchedule:series('handover-schedule','Keep the outgoing employer’s work schedule current',
+      prepare('read-handover-rota','Reading the employer’s duty schedule','book','read'),
+      work('update-handover-records','Updating the duty rota and handover records','ledger','write'),
+      hand('pass-schedule-notes','Leaving the handover notes for the qualified colleague','book','place')),
     'practice-nurse':series('practice-nurse','Prepare the neighbourhood follow-up round',
       prepare('review-home-round','Checking the household follow-up rota','ledger','read'),
       work('pack-home-round','Packing the clinic supplies for the home-visit round','basket','place'),
@@ -175,6 +183,13 @@
   const own=(table,key)=>typeof key==='string'&&Object.hasOwn(table,key)?table[key]:null;
   function routine(input){
     const kind=input.kind;
+    if(kind==='commitment'||kind==='cover'){
+      if(input.handoverScope==='admin')return /^(practice nurse|nurse)$/i.test(input.handoverRole)?routines.handoverAdmin:routines.handoverSchedule;
+      if(input.handoverScope==='qualified'&&typeof input.handoverRole==='string'){
+        const role=input.handoverRole.toLowerCase(),duty=own(routines,own(roles,role)||role);
+        if(duty)return duty;
+      }
+    }
     if(input.shipmentPhase&&own(harvestPlans,input.resource)){
       const crop=input.resource,id='basket-'+input.shipmentPhase+'-'+crop;
       const moving=input.shipmentPhase==='unload';

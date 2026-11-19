@@ -2083,3 +2083,25 @@ test('the twelve founding people remain individually observable, including the n
     assert.equal(observed.size,2);for(const [id] of roles){assert(g.street.observePerson(id));assert(g.street.focusStop({type:'npc',npcId:id}));g.finish();}
   }g.street.destroy();
 });
+
+test('substitutes walk to the former employer and visibly perform only their agreed handover scope',()=>{
+  const id='walker-1',g=surface(740,390,{animated:true,lives:true,deferFrames:true});
+  const town={...site,buildings:[{kind:'hall',plot:7,name:'Community clinic'}],careers:{[id]:{jobId:'carpenter'}},autonomy:{people:{[id]:{history:[]}}}};
+  const scope=(handoverScope,title)=>{
+    town.autonomy.people[id].history=[{week:2,kind:'commitment',handoverRole:'Practice nurse',handoverScope,venue:'hall',title}];
+    g.street.setSite(town);assert(g.street.observePerson(id));
+    const steps=new Set();
+    for(let i=0;i<1800;i++){
+      g.step();const body=g.street.activityOf(id);
+      if(body?.goal!==title||body.phase==='travel')continue;
+      assert(Math.hypot(body.x-9,body.y-17.04)<1.52);
+      steps.add(body.label);
+    }
+    return [...steps].join('|');
+  };
+  const admin=scope('admin','Cover the outgoing appointment desk');
+  assert.match(admin,/Updating appointment and referral records/);assert.doesNotMatch(admin,/clinic supplies/);
+  const qualified=scope('qualified','Cover the qualified home-visit round');
+  assert.match(qualified,/Packing the clinic supplies for the home-visit round/);
+  assert.equal(town.careers[id].jobId,'carpenter');g.street.destroy();
+});

@@ -695,7 +695,9 @@
       if (!points.length) return;
       ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
       for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);
-      if(fill){ctx.closePath();ctx.fillStyle=fill;ctx.fill();}
+      // Canvas fills implicitly close each subpath. Explicit closure is
+      // only needed when a stroke follows and must include the final edge.
+      if(fill){if(stroke)ctx.closePath();ctx.fillStyle=fill;ctx.fill();}
       if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke();}
     };
     const poly=(vertices,fill,stroke,lw=1)=>path(vertices.map(v=>screen(v[0],v[1],v[2]||0)),fill,stroke,lw);
@@ -2377,7 +2379,7 @@
         if(!profile&&!career&&!local.scheduleKey&&!intent&&!newRelease)continue;
         const specialist=window.EarthCareers?.specialistShift?.(site,id,week);
         const errand=workingErrands.find(row=>row.actorId===id||row.targetId===id);
-        const voluntary=outingKinds.has(intent?.kind)||intent?.kind==='commitment'&&(intent.civic===true||intent.errand===true);
+        const voluntary=outingKinds.has(intent?.kind)||intent?.kind==='commitment'&&(intent.civic===true||intent.errand===true||window.EarthConstruction?.handoverDuty?.(intent));
         let outing=voluntary&&intent.week===week?intent:null;
         if(errand)outing={...intent,week,kind:'commitment',venue:errand.venue,errand:true,target:errand.actorId===id?errand.targetId:errand.actorId};
         if(window.EarthConstruction?.foodResource?.(site,outing)==='fish')shoreFishers.add(id);
@@ -2400,7 +2402,7 @@
           outing={kind:'learn',week,venue:courseJob?.venue||'hall',goal:courseJob?'Study for '+courseJob.label:'Attend a class'};
         }
         const ordinary=intent?.kind==='routine'&&intent.week===week?intent:null;
-        const key=[state.fingerprint,career?.id,career?.venue,career?.label,ordinary?.venue,ordinary?.goal,transition?.targetId,course?.targetId,course?.paused,outing?.week,outing?.kind,outing?.venue,outing?.target,outing?.projectId,outing?.projectKind,outing?.phase,outing?.dreamId,outing?.step,outing?.activity,outing?.jobId,outing?.plot,errand?.rowId,errand?.method,shipment?.crop,shipment?.amount,outing?.civic&&outing.reason,specialist?.id,
+        const key=[state.fingerprint,career?.id,career?.venue,career?.label,ordinary?.venue,ordinary?.goal,transition?.targetId,course?.targetId,course?.paused,outing?.week,outing?.kind,outing?.venue,outing?.target,outing?.projectId,outing?.projectKind,outing?.phase,outing?.dreamId,outing?.step,outing?.activity,outing?.handoverScope,outing?.handoverRole,outing?.jobId,outing?.plot,errand?.rowId,errand?.method,shipment?.crop,shipment?.amount,outing?.civic&&outing.reason,specialist?.id,
           released?.serial,id===playedId].join('|');
         if(key===local.scheduleKey)continue;
         if(id==='driver')footpathRevision++;
@@ -2464,7 +2466,7 @@
         const jobSeries=activity?.plan({role:local.role,kind:tour?.kind==='inspect'?'inspectHome':null,careerId:career?.id,occupation:career?.occupation,venue:atWork,destination:duty.label,goal:ordinary?.goal,training:Boolean(education&&!career),personality:profile});
         const outingSeries=activity?.plan({role:local.role,kind:outing?.kind||breakKind,venue:outing?.venue||defaultVisit,specialistId:specialist?.id,
           destination:outingPlace.label,civic:outing?.civic,goal:outing?.title||(outing?.civic?outing.reason:outing?.goal),projectKind:outing?.projectKind||(!outing&&pastime?'hobby':null),
-          projectPhase:outing?.phase,axis:outing?.axis||profile?.hobbyAxis,dreamId:outing?.dreamId,step:outing?.step,activity:outing?.activity,
+          projectPhase:outing?.phase,handoverScope:outing?.handoverScope,handoverRole:outing?.handoverRole,axis:outing?.axis||profile?.hobbyAxis,dreamId:outing?.dreamId,step:outing?.step,activity:outing?.activity,
           errandKind:errand?.kind,method:errand?.method,pledge:errand?.ordinary?errand:null,peerName:errand?.ordinary?window.EarthAgency?.identity(site,errand.targetId===id?errand.actorId:errand.targetId)?.name:null,recipient:errand?.targetId===id,resource:shipment?.crop||window.EarthConstruction?.foodResource?.(site,outing),shipmentPhase:shipment?'pickup':null,personality:profile});
         const unloading=shipment&&activity?.plan({kind:'project',shipmentPhase:'unload',resource:shipment.crop,venue:'pantry',destination:visit.label});
         const returnShift=shipment&&{receipt,returnTo:duty,resume:jobSeries,breakPlace:localVenue(defaultVisit,local),
@@ -2923,12 +2925,12 @@
         const kind=w.activity==='resting'?'rest':job?'build':w.physicalDuty==='inspect'?'inspect':intent?.kind||'routine';
         const venue=job?.name||w.workplace?.label||'the district';
         const errand=workingErrands.find(row=>row.actorId===w.residentId||row.targetId===w.residentId);
-        const key=[kind,w.role,w.specialistId,venue,intent?.projectKind,intent?.phase,intent?.shipmentPhase,intent?.dreamId,intent?.step,intent?.target,intent?.activity,errand?.rowId,errand?.method,intent?.civic&&intent.reason,w.activity,w.travelling].join('|');
+        const key=[kind,w.role,w.specialistId,venue,intent?.projectKind,intent?.phase,intent?.shipmentPhase,intent?.dreamId,intent?.step,intent?.target,intent?.activity,intent?.handoverScope,intent?.handoverRole,errand?.rowId,errand?.method,intent?.civic&&intent.reason,w.activity,w.travelling].join('|');
         if(key===life.dutyKey)continue;
         life.dutyKey=key;life.venue=venue;life.place=w.workplace;life.start=visualTime;life.partner=intent?.target||null;
         life.travelling=w.travelling;life.atBreak=w.activity==='resting';
         life.duty=activity.plan({role:w.role,kind,specialistId:w.specialistId,careerId:life.job?.id,occupation:w.occupation,venue:intent?.venue||w.workplace?.kind,civic:intent?.civic,
-          projectKind:intent?.projectKind,projectPhase:intent?.phase,shipmentPhase:intent?.shipmentPhase,axis:intent?.axis,dreamId:intent?.dreamId,step:intent?.step,activity:intent?.activity,
+          projectKind:intent?.projectKind,projectPhase:intent?.phase,shipmentPhase:intent?.shipmentPhase,handoverScope:intent?.handoverScope,handoverRole:intent?.handoverRole,axis:intent?.axis,dreamId:intent?.dreamId,step:intent?.step,activity:intent?.activity,
           errandKind:errand?.kind,method:errand?.method,pledge:errand?.ordinary?errand:null,peerName:errand?.ordinary?window.EarthAgency?.identity(state.site,errand.targetId===w.residentId?errand.actorId:errand.targetId)?.name:null,recipient:errand?.targetId===w.residentId,resource:window.EarthConstruction?.foodResource?.(state.site,intent),goal:intent?.title||(intent?.civic?intent.reason:intent?.goal),destination:venue});
       }
       if(!view?.jobs?.length&&!works.size&&!crew.size&&!view?.workers?.some(w=>w.travelling||w.physicalDuty||['returning','resting','working','commuting'].includes(w.activity)))return;

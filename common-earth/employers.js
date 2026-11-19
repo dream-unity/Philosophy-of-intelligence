@@ -10,6 +10,13 @@
   const group=(site,id)=>site.employers&&Object.hasOwn(site.employers,id)?site.employers[id]:null;
   const due=(v,week)=>week>=v.opened+4&&(week-v.opened)%4===0;
   const recorded=(site,id)=>group(site,id)?.open.length||0;
+  function staffed(site,id,v,week){
+    const receipt=v.lastCover;
+    if(!receipt||receipt.week!==week)return false;
+    if(!root.EarthCareers?.requiresCredential?.(id)||receipt.qualified===true)return true;
+    const person=root.EarthPersonas?.profile(site,receipt.id);
+    return person?.name===receipt.name&&root.EarthCareers.canCoverPost(site,receipt.id,id);
+  }
 
   function open(world,site,person,old,appointed){
     const job=post(old.id);
@@ -47,11 +54,11 @@
   }
   function review(world,site){
     const week=world.week-1;
-    for(const listing of Object.values(site.employers||{})){
+    for(const [id,listing] of Object.entries(site.employers||{})){
       for(const vacancy of listing.open){
         if(week<=vacancy.checked)continue;
         if(due(vacancy,week)){
-          if(vacancy.lastCover?.week===week)vacancy.covered++;
+          if(staffed(site,id,vacancy,week))vacancy.covered++;
           else vacancy.missed++;
         }
         vacancy.checked=week;
@@ -63,7 +70,7 @@
     for(const [id,employer] of Object.entries(site.employers||{})){
       const job=post(id);if(!job)continue;
       for(const v of employer.open){
-        if(!due(v,world.week)||v.lastCover?.week===world.week)continue;
+        if(!due(v,world.week)||staffed(site,id,v,world.week))continue;
         list.push({personId:v.formerId,formerName:v.name,oldRole:job.label,occupation:job.occupation,
           venue:job.venue==='pier'?'dock':job.venue,opening:id,openedWeek:v.opened,employer:job.employer,coverId:null});
       }
@@ -72,9 +79,11 @@
   }
   function cover(site,world,person,gap){
     const vacancy=group(site,gap.opening)?.open.find(v=>v.formerId===gap.personId&&v.opened===gap.openedWeek);
-    if(!vacancy||!due(vacancy,world.week)||vacancy.lastCover?.week===world.week||person.id===vacancy.formerId||
+    if(!vacancy||!due(vacancy,world.week)||staffed(site,gap.opening,vacancy,world.week)||person.id===vacancy.formerId||
       !root.EarthCareers?.canCoverPost?.(site,person.id,gap.opening))return false;
-    vacancy.lastCover={id:person.id,name:person.name,week:world.week};return true;
+    vacancy.lastCover={id:person.id,name:person.name,week:world.week};
+    if(root.EarthCareers.requiresCredential?.(gap.opening))vacancy.lastCover.qualified=true;
+    return true;
   }
   function rates(site,world){
     const loss=new Set(),extra=new Set();
@@ -82,7 +91,7 @@
       const job=post(id);if(!job)continue;
       for(const vacancy of employer.open){
         if(!due(vacancy,world.week))continue;
-        const covered=vacancy.lastCover?.week===world.week;
+        const covered=staffed(site,id,vacancy,world.week);
         if(vacancy.baseline&&!covered)loss.add(goods[job.occupation]);
         // An appointed specialist's regular benefit already disappears on
         // departure. Only an actual qualified relief session restores output.
@@ -98,7 +107,7 @@
     const employer=group(site,id),job=post(id);
     if(!employer||!job)return null;
     const rows=employer.open.map(v=>{
-      const current=v.lastCover?.week===world.week;
+      const current=staffed(site,id,v,world.week);
       const next=v.opened+Math.max(4,Math.ceil((world.week-v.opened)/4)*4);
       return {formerId:v.formerId,name:v.name,opened:v.opened,age:world.week-v.opened,next,
         covered:v.covered,missed:v.missed,coverName:current?v.lastCover.name:null};
@@ -125,6 +134,7 @@
           v.covered+v.missed>Math.floor((v.checked-v.opened)/4))return false;
         const key=v.formerId+'/'+v.opened;if(keys.has(key))return false;keys.add(key);
         const c=v.lastCover;
+        if(c?.qualified!==undefined&&(c.qualified!==true||!root.EarthCareers?.requiresCredential?.(id)))return false;
         if(c!==undefined&&(!object(c)||!known(c.id)||c.id===v.formerId||!text(c.name)||!int(c.week,v.opened+4,week)||!due(v,c.week)))return false;
       }
       const last=listing.lastHire;

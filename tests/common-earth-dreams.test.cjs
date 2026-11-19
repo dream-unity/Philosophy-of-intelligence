@@ -289,3 +289,77 @@ test('native health and survey households take their actual rounds and keep thei
   c.EarthCareers.departureForMove(w,dest,key);assert.equal(Object.keys(dest.employers).length,0);
   sim.destroy();
 });
+function clinicalHandoverFixture(qualifiedPeer=false){
+  const t=game(),{s,w,c}=t,owner='carrier-8-7',helper='walker-0',peer='carrier-8-5';
+  const departing=c.EarthPersonas.householdProfile(s,owner,'practice-nurse');
+  const current=new Map([[owner,departing],[helper,c.EarthPersonas.birthProfile(s,helper)]]);
+  if(qualifiedPeer){
+    const clinic=c.EarthPersonas.householdProfile(s,peer,'practice-nurse');
+    current.set(peer,{...clinic,role:'Nurse',originRole:'Nurse',qualificationIds:['nurse']});
+  }
+  const baker=current.get(helper);
+  current.set(helper,{...baker,aptitudes:{...baker.aptitudes,care:85,organisation:72},
+    bounds:{...baker.bounds,care:{min:85,max:96},organisation:{min:72,max:82}}});
+  s.agency={actor:'steward',porters:qualifiedPeer?[owner,peer]:[owner],meals:[]};
+  c.EarthCommunityLife={profile:(_s,id)=>current.get(id)||null,present:(_s,id)=>current.has(id)||id==='steward',
+    residency:(_s,id)=>current.has(id)||id==='steward'?'member':'away'};
+  s.careers={[owner]:{revision:1,skills:{},qualifications:{refuse:1},portfolios:{},references:{},history:[],
+    application:{phase:'notice',targetId:'refuse',appliedWeek:1,dueWeek:4,autonomous:true}}};
+  const action=()=>c.EarthCareers.view(w,s,owner,'refuse',{speakerId:owner,autonomous:true}).choices.find(o=>o.id==='handover');
+  function agree(){
+    const offer=action();assert(offer?.available);const m=s.careers[owner];
+    const ok=c.EarthCareers.command(w,s,owner,'handover','refuse',m.revision,null,{speakerId:owner,autonomous:true,coverId:offer.coverId});
+    assert.ok(ok.ok,ok.message);return ok;
+  }
+  return {...t,owner,helper,peer,current,action,agree};
+}
+test('office support keeps the appointment book staffed while the professional round, reference and permanent vacancy reflect the real shortage',()=>{
+  const t=clinicalHandoverFixture(),{c,w,s,owner,helper}=t;
+  const offer=t.action();assert.equal(offer.coverScope,'admin');
+  const admin=offer.coverId;assert(!c.EarthCareers.canCoverPost(s,helper,'practice-nurse'),'a baker with 85 care still lacks the qualification');
+  assert.match(c.EarthCareers.view(w,s,helper,'nurse').opening.relief.reason,/qualification/);
+  assert.match(offer.detail,/appointment schedules and clinic records/);assert.match(t.agree().message,/qualified colleague/);
+  const duty=c.EarthCareers.handoverDuty(s,admin,1);
+  assert.equal(duty.scope,'admin');assert.equal(duty.venue,'hall');assert.equal(duty.role,'Practice nurse');
+  w.week=2;c.EarthAutonomy.settle(s,w);const outing=c.EarthAutonomy.intent(s,admin);
+  assert.equal(outing.handoverScope,'admin');assert.match(outing.title,/appointment/);assert.equal(outing.venue,'hall');
+  w.week=4;c.EarthCareers.tick(w,s);
+  assert.equal(s.careers[owner].latestReference.quality,1);assert.equal(s.careers[owner].departure.coverScope,'admin');
+  const immediate=c.EarthCareers.coverage(s,w).find(g=>g.personId===owner);assert.equal(immediate.coverId,null);
+  assert.equal(immediate.adminId,admin);assert.equal(immediate.credential,'practice-nurse');
+  assert(c.EarthCareers.weeklyAdjustment(s,w).funds<0);assert.equal(c.EarthCareers.serviceWeeks(w,s,admin,'practice-nurse'),0);
+  w.week=8;const vacancy=c.EarthEmployers.gaps(s,w).find(g=>g.opening==='practice-nurse');assert(vacancy);
+  assert.equal(c.EarthEmployers.cover(s,w,t.current.get(helper),vacancy),false);assert.equal(c.EarthEmployers.view(s,w,'practice-nurse').rows[0].coverName,null);
+  w.week++;c.EarthEmployers.review(w,s);assert.equal(c.EarthEmployers.view(s,w,'practice-nurse').rows[0].missed,1);
+  t.sim.destroy();
+});
+test('equivalent qualified nurses take priority over a skilled administrator and earn the round without filling the permanent vacancy',()=>{
+  const t=clinicalHandoverFixture(true),{s,w,c,owner,peer}=t,option=t.action();
+  assert(c.EarthCareers.canCoverPost(s,owner,'nurse'));assert(c.EarthCareers.canCoverPost(s,peer,'practice-nurse'));
+  s.communityLife={people:{[peer]:{originId:'another-district',status:'member',profile:t.current.get(peer)}}};
+  const eligible=c.EarthCareers.view(w,s,peer,'nurse',{speakerId:peer,autonomous:true});
+  assert.equal(eligible.careerId,'origin');assert(eligible.opening.relief.available,eligible.opening.relief.reason);
+  assert.equal(option.coverId,peer);assert.equal(option.coverScope,'qualified');t.agree();
+  assert.equal(c.EarthCareers.handoverDuty(s,peer,1).scope,'qualified');
+  w.week=2;c.EarthAutonomy.settle(s,w);assert.equal(c.EarthAutonomy.intent(s,peer).handoverRole,'Practice nurse');
+  w.week=4;c.EarthCareers.tick(w,s);assert.equal(s.careers[owner].latestReference.quality,2);
+  assert.equal(c.EarthCareers.coverage(s,w).find(g=>g.personId===owner).coverId,peer);
+  w.week=8;const gap=c.EarthEmployers.gaps(s,w).find(g=>g.opening==='practice-nurse');assert(gap);
+  assert(c.EarthEmployers.cover(s,w,t.current.get(peer),gap));assert.equal(c.EarthEmployers.cover(s,w,t.current.get(peer),gap),false);
+  assert.equal(c.EarthEmployers.view(s,w,'practice-nurse').rows[0].coverName,t.current.get(peer).name);
+  w.week++;c.EarthEmployers.review(w,s);const live=c.EarthEmployers.view(s,w,'practice-nurse');
+  assert.equal(live.rows.length,1);assert.equal(live.rows[0].covered,1);assert.equal(live.rows[0].missed,0);t.sim.destroy();
+});
+test('legacy clinical cover imports and rechecks the named worker before awarding service or closing the round',()=>{
+  const t=clinicalHandoverFixture(),{c,s,w,owner,helper}=t,m=s.careers[owner],name=t.current.get(helper).name;
+  Object.assign(m.application,{coverId:helper,coverName:name});
+  assert(c.EarthCareers.valid(s,w.week));assert.equal(c.EarthCareers.handoverDuty(s,helper,w.week).scope,'admin');
+  w.week=4;c.EarthCareers.tick(w,s);delete m.departure.coverScope;
+  assert(c.EarthCareers.valid(s,w.week));assert.equal(c.EarthCareers.coverage(s,w)[0].coverId,null);
+  const old=s.employers['practice-nurse'].open[0];w.week=8;
+  old.lastCover={id:helper,name,week:w.week};
+  assert(c.EarthEmployers.valid(s,w.week));
+  assert.equal(c.EarthEmployers.view(s,w,'practice-nurse').rows[0].coverName,null);
+  assert.equal(c.EarthEmployers.gaps(s,w).length,1);assert.equal(c.EarthEmployers.rates(s,w).funds,-1);
+  w.week++;c.EarthEmployers.review(w,s);assert.equal(old.missed,1);assert.equal(old.covered,0);t.sim.destroy();
+});

@@ -30,6 +30,8 @@
     job('practice-nurse','Practice nurse','Neighbourhood practice','care',72,'organisation',55,156,2,'exchange','hall','wellbeing',3,'Coordinate neighbourhood follow-up visits and community care.')
   ]);
   const jobs=Object.fromEntries(catalog.map(j=>[j.id,j]));
+  const jobLabels=new Map(catalog.map(j=>[j.label,j.id]));
+  const nursingPosts=['nurse','practice-nurse'];
   const get=(map,key)=>map&&Object.hasOwn(map,key)?map[key]:undefined;
   const int=(v,min=0,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(v)&&v>=min&&v<=max;
   const record=x=>x!=null&&typeof x==='object'&&!Array.isArray(x);
@@ -132,7 +134,13 @@
     return Math.min(room,clamp(Math.ceil(room/15),1,4));
   }
   const samples=(m,j)=>get(m.portfolios,j.id)||0;
-  const qualified=(p,m,j)=>Boolean(get(m.qualifications,j.id)||origin(p).id===j.id||p.qualificationIds?.includes(j.id));
+  const clinicalPractice=(p,m)=>nursingPosts.includes(m.jobId)||nursingPosts.includes(origin(p).id)||nursingPosts.some(id=>get(m.experience,id)>0);
+  function qualified(p,m,j){
+    const trained=id=>Boolean(get(m.qualifications,id)||p.qualificationIds?.includes(id));
+    const birth=origin(p).id;
+    if(nursingPosts.includes(j.id))return nursingPosts.some(id=>id===birth||m.jobId===id||trained(id));
+    return birth===j.id||trained(j.id);
+  }
   function employerReference(p,m,j){
     if(get(m.references,j.id)!=null)return {jobId:j.id,quality:m.references[j.id],employer:j.employer,occupation:j.occupation};
     if(!m.latestReference)return null;
@@ -154,7 +162,10 @@
   function canCoverPost(site,id,jobId){
     const p=profile(site,id),j=get(jobs,jobId),m=state(site,id);
     if(!p||!j||!residentHere(site,id))return false;
-    if(Object.hasOwn(specialistSites,j.id))return (m.jobId===j.id||qualified(p,m,j))&&skill(p,m,j.skill)+2*samples(m,j)>=j.requiredSkill&&skill(p,m,j.secondary)>=j.secondMinimum;
+    if(requiresCredential(j.id)){
+      const workSamples=nursingPosts.includes(j.id)?Math.max(...nursingPosts.map(id=>get(m.portfolios,id)||0)):samples(m,j);
+      return (m.jobId===j.id||qualified(p,m,j))&&skill(p,m,j.skill)+2*workSamples>=j.requiredSkill&&skill(p,m,j.secondary)>=j.secondMinimum;
+    }
     return skill(p,m,j.skill)>=Math.min(55,j.requiredSkill)&&skill(p,m,j.secondary)>=j.secondMinimum;
   }
   function departureForMove(world,site,id){
@@ -207,7 +218,8 @@
     const occupation=link?.resource==='food'?'food':old.occupation;
     const axis={food:'care',repair:'craft',exchange:'organisation'}[occupation];
     const assigned=new Set(Object.values(site.careers||{}).flatMap(m=>[m.application?.coverId,m.departure?.coverId]).filter(Boolean));
-    let best=null,bestScore=-1;
+    const credential=requiresCredential(old.id)?old.id:null;
+    let best=null,bestScore=-1,bestQualified=false;
     for(const other of people(site)){
       if(other.id===p.id||other.id===excludeId||assigned.has(other.id)||link&&porterSlot(other.id)&&!changedTrade(state(site,other.id))&&activeLane(site,other.id))continue;
       const m=state(site,other.id);
@@ -222,9 +234,38 @@
       const recentMeal=site.agency?.meals?.some(row=>row.week>=week-3&&
         (row.from===p.id&&row.to===other.id||row.to===p.id&&row.from===other.id));
       const score=skill(other,m,axis)+(post.occupation===occupation?25:0)+bond*3+(recentMeal?8:0)+(other.traits?.sociability??50)/12;
-      if(score>bestScore){best=other;bestScore=score;}
+      const professionallyQualified=credential&&canCoverPost(site,other.id,credential);
+      if(!best||professionallyQualified&&!bestQualified||Boolean(professionallyQualified)===bestQualified&&score>bestScore){
+        best={id:other.id,name:other.name,scope:credential?(professionallyQualified?'qualified':'admin'):null};
+        bestScore=score;bestQualified=Boolean(professionallyQualified);
+      }
     }
     return best;
+  }
+  const requiresCredential=id=>id==='practice-nurse'||id==='surveyor'||Object.hasOwn(specialistSites,id);
+  function scope(site,agreement,jobId){
+    if(!agreement?.coverId||!requiresCredential(jobId))return null;
+    if(agreement.coverScope==='admin')return 'admin';
+    // Earlier saves recorded a colleague with no distinction between office
+    // support and professional service. Recheck competence before crediting it.
+    return canCoverPost(site,agreement.coverId,jobId)?'qualified':'admin';
+  }
+  function departingPost(m){return jobLabels.get(m.departure?.oldRole)||m.latestReference?.jobId;}
+  function supportTask(jobId){return nursingPosts.includes(jobId)?'appointment schedules and clinic records':'schedules and handover records';}
+  function handoverDuty(site,id,week){
+    for(const [owner,m] of Object.entries(site.careers||{})){
+      const notice=m.application?.phase==='notice'&&m.application.coverId===id?m.application:null;
+      const left=m.departure?.throughWeek>=week&&m.departure.coverId===id?m.departure:null;
+      if(!notice&&!left)continue;
+      const p=profile(site,owner),job=notice&&p?employment(site,p,m):get(jobs,departingPost(m));
+      if(!job||!requiresCredential(job.id))return {reason:'I agreed to cover a colleague through their handover.'};
+      const part=scope(site,notice||left,job.id);
+      const title=part==='admin'?'Organise '+supportTask(job.id):'Cover the '+job.label.toLowerCase()+' round';
+      const reason=part==='admin'?'I agreed to organise '+supportTask(job.id)+' at '+job.employer+'. The professional round still needs a qualified colleague.':
+        'I agreed to cover the '+job.label.toLowerCase()+' round at '+job.employer+' during the handover.';
+      return {scope:part,title,reason,role:job.label,venue:job.venue==='pier'?'dock':job.venue};
+    }
+    return null;
   }
   // Every established district shares the first specialist with its regional
   // employer. Further posts need households to serve and actual working space.
@@ -250,7 +291,7 @@
   }
   function specialistShift(site,id,week){
     const relief=memory(site,id)?.specialistRelief,j=get(jobs,relief?.targetId);
-    return j&&relief.week===week?{id:j.id,venue:j.venue,label:j.label,employer:j.employer,metric:j.metric,week}:null;
+    return j&&relief.week===week&&canCoverPost(site,id,j.id)?{id:j.id,venue:j.venue,label:j.label,employer:j.employer,metric:j.metric,week}:null;
   }
   function onOtherDuty(site,id,m,week){
     return m.training?.pace==='intensive'&&!m.training.paused||m.specialistRelief?.week===week||
@@ -268,7 +309,7 @@
     let reliefTaken=null,staffed=0;
     for(const [id,v] of Object.entries(site.careers||{})){
       if(!residentHere(site,id))continue;
-      if(v.specialistRelief?.targetId===j.id&&v.specialistRelief.week===week+1)reliefTaken=id;
+      if(v.specialistRelief?.targetId===j.id&&v.specialistRelief.week===week+1&&canCoverPost(site,id,j.id))reliefTaken=id;
       if(v.jobId===j.id||reserves(v,j.id)){
         const appointed=v.jobId===j.id;
         team.push({id,name:profile(site,id)?.name||id,status:appointed?'appointed':v.application.phase});
@@ -288,7 +329,8 @@
       goal.volunteer?.week===week&&(goal.volunteer.from===p.id||id===p.id));
     let reason='';
     if(current.id===j.id)reason='This person already holds the regular post.';
-    else if(!qualified(p,m,j)||screening(p,m,j).length)reason='Finish the qualification and demonstrate the entry skills before covering an independent round.';
+    else if(nursingPosts.includes(j.id)&&clinicalPractice(p,m)?!canCoverPost(site,p.id,j.id):
+      !qualified(p,m,j)||screening(p,m,j).length)reason='Finish the qualification and demonstrate the entry skills before covering an independent round.';
     else if(debt||m.application?.phase==='notice'||onOtherDuty(site,p.id,m,day)||site.shift?.residentId===p.id||site.residents?.some(r=>r.id===p.id&&r.promise)||roster?.jobId||roster?.preferredJobId||roster?.preference&&roster.preference!=='auto'||joint||
       root.EarthConstruction?.assignedDuty?.(site,world,p.id)||root.EarthCivicInitiatives?.commitment?.(site,world,p.id)||site.pursuits?.ticket?.maker===p.name)
       reason='Another practice session, shift or promise already needs this person.';
@@ -314,12 +356,16 @@
     }
     return null;
   }
-  function status(world,p,m,current){
+  function status(world,site,p,m,current){
     const a=m.application,t=m.training,j=get(jobs,a?.targetId);
     if(a?.phase==='screening')return j.employer+' is reviewing the application for '+j.label+'. A decision is due in week '+a.dueWeek+'. '+current.employer+' still employs '+p.name+'.';
     if(a?.phase==='waiting')return p.name+' met the '+j.label+' entry standard and is on the qualified waiting list. '+j.employer+' checks openings again in week '+a.dueWeek+'. Their current work and qualification continue.';
     if(a?.phase==='offer')return j.employer+' offered the '+j.label+' post. Accept by week '+a.dueWeek+' to begin notice at '+current.employer+'.';
-    if(a?.phase==='notice')return p.name+' remains '+current.label+' until week '+a.dueWeek+', then starts at '+j.employer+'. '+(a.coverName?a.coverName+' will cover the old post.':'The former team still needs cover.');
+    if(a?.phase==='notice'){
+      const part=scope(site,a,current.id),plan=part==='admin'?a.coverName+' will handle '+supportTask(current.id)+'. The professional round still needs a qualified colleague.':
+        a.coverName?a.coverName+' will cover the old post.':'The former team still needs cover.';
+      return p.name+' remains '+current.label+' until week '+a.dueWeek+', then starts at '+j.employer+'. '+plan;
+    }
     if(t){const target=jobs[t.targetId];return (t.paused?'Study paused at ':'Studying for '+target.label+' · ')+t.credits+'/'+target.trainingWeeks+' credits. '+(t.paused?'Completed credits are retained.':coursePhase(target,t.credits).phase+'. ')+(t.paused?'':t.pace==='intensive'?'Intensive study earns two credits per week and reduces working time.':'Evening study earns one credit each week after work.');
     }
     if(a?.phase==='deferred')return j.employer+' deferred the application. '+a.reason+' Reapply from week '+a.dueWeek+'.';
@@ -383,7 +429,12 @@
         }
         if(a.phase==='notice'){
           const cover=context.matchPeople!==false&&!a.coverId?coverFor(site,p,current,week,context.autonomous&&world.activeId===site.id?root.EarthAgency?.actorId(site)||'steward':null):null;
-          if(cover)add('handover','Arrange cover with '+cover.name,'They can take up the old duties through the first two weeks after departure. They may step away from their own trade.', '', {coverId:cover.id,coverName:cover.name});
+          if(cover){
+            const office=cover.scope==='admin',text=office?'Arrange office support with '+cover.name:'Arrange cover with '+cover.name;
+            const detail=office?cover.name+' can manage '+supportTask(current.id)+' through the first two weeks after departure. A qualified colleague is still needed for the '+current.label.toLowerCase()+' round.':
+              'They can take up the old duties through the first two weeks after departure. They may step away from their own trade.';
+            add('handover',text,detail,'',{coverId:cover.id,coverName:cover.name,coverScope:cover.scope});
+          }
           if(!a.releaseAsked&&a.dueWeek>week+1)add('release','Request an early release',current.employer+' can refuse if important work is uncovered. Leaving urgently without cover affects their future reference.');
         }else add('withdraw','Withdraw application','Keep the current job and all completed learning.');
       }else if(!sameJob && active)add('apply','Apply to '+j.employer,'Only one live job application is considered at a time.','Finish or withdraw the current application first.');
@@ -394,7 +445,7 @@
       recruitment:j?root.EarthEmployers?.view(site,world,j.id)||null:null,qualifications:{...m.qualifications},portfolios:{...m.portfolios},references:{...m.references},latestReference:m.latestReference?{...m.latestReference}:null,agreedPlan:m.agreedPlan||null,
       targetId:j?.id,opening:posts,supplyLane:porterSlot(id)?supplyLane(site,world,id):null,qualified:j?qualified(p,m,j):false,missing:j?screening(p,m,j):[],
       fits:j?canFit(p,j):false,stage:a?.phase==='deferred'&&t?'training':a?.phase||(t?'training':'employed'),
-      status:status(world,p,m,current),choices,revision};
+      status:status(world,site,p,m,current),choices,revision};
   }
   function command(world,site,id,action,targetId,expectedRevision,proof,context={}){
     const p=profile(site,id),j=get(jobs,targetId),old=state(site,id);
@@ -463,16 +514,21 @@
       case 'accept':
         a.phase='notice';a.dueWeek=week+(current.trainingWeeks>=52?4:2);
         message=p.name+' accepted the offer. '+current.employer+' expects notice through week '+a.dueWeek+'.';break;
-      case 'handover':
+      case 'handover':{
         a.coverId=option.coverId;a.coverName=option.coverName;delete a.releaseAsked;
-        {const colleague=ensure(site,a.coverId);note(colleague,week,'Agreed to cover '+p.name+' at '+current.employer+'.');colleague.revision++;}
-        root.EarthAutonomy?.remember?.(site,week,p.id,option.coverId,'cover');
-        message=option.coverName+' agreed to cover '+p.name+'’s duties at '+current.employer+' during the change.';break;
+        if(option.coverScope)a.coverScope=option.coverScope;
+        const admin=option.coverScope==='admin',colleague=ensure(site,a.coverId);
+        note(colleague,week,admin?'Agreed to organise '+supportTask(current.id)+' for '+p.name+' at '+current.employer+'.':'Agreed to cover '+p.name+' at '+current.employer+'.');colleague.revision++;
+        root.EarthAutonomy?.remember?.(site,week,p.id,option.coverId,admin?'office':'cover');
+        message=admin?option.coverName+' agreed to organise '+supportTask(current.id)+' at '+current.employer+'. The '+current.label.toLowerCase()+' round still needs a qualified colleague.':
+          option.coverName+' agreed to cover '+p.name+'’s duties at '+current.employer+' during the change.';break;
+      }
       case 'release':{
         const metric=replacementGoods[current.occupation];
         a.releaseAsked=true;
-        if(!a.coverId && site[metric]<4)message=current.employer+' declined the early release. '+metric+' are low and nobody has agreed to cover. The original notice ends in week '+a.dueWeek+'.';
-        else{a.early=true;a.dueWeek=week+1;message=current.employer+' agreed to release '+p.name+' next week.'+(a.coverId?' '+a.coverName+' will cover the handover.':' The unfilled post will affect the reference.');}
+        const fullCover=a.coverId&&scope(site,a,current.id)!=='admin';
+        if(!fullCover && site[metric]<4)message=current.employer+' declined the early release. '+metric+' are low and the round still needs cover. The original notice ends in week '+a.dueWeek+'.';
+        else{a.early=true;a.dueWeek=week+1;message=current.employer+' agreed to release '+p.name+' next week.'+(fullCover?' '+a.coverName+' will cover the handover.':' The unfilled post will affect the reference.');}
         break;
       }
       default:return fail('Choose a current career action.');
@@ -535,7 +591,7 @@
       let changed=false;
       const announce=text=>{note(m,week,text);events.push(text);changed=true;};
       if(a?.phase==='notice' && a.coverId && !residentHere(site,a.coverId)){
-        const oldName=a.coverName;delete a.coverId;delete a.coverName;
+        const oldName=a.coverName;delete a.coverId;delete a.coverName;delete a.coverScope;
         announce(oldName+' moved away before the handover. '+p.name+' needs another available colleague.');
       }
       if(t && !t.paused && t.lastWeek<week){
@@ -562,14 +618,19 @@
         announce(p.name+' let the offer expire. Their existing post continues.');
       }else if(a?.phase==='notice' && week>=a.dueWeek){
         const prior=employment(site,p,m),target=jobs[a.targetId];
-        const reference=a.coverId?2:a.early?-2:1;
+        const part=scope(site,a,prior.id),fullCover=a.coverId&&part!=='admin';
+        const reference=fullCover?2:a.early?-2:1;
         m.references[prior.id]=reference;
         m.latestReference={jobId:prior.id,employer:prior.employer,quality:reference,week};
         if(m.agreedPlan===target.id)delete m.agreedPlan;
         m.departure={oldRole:prior.label,oldEmployer:prior.employer,occupation:prior.occupation,coverId:a.coverId||null,throughWeek:week+1};
+        if(part)m.departure.coverScope=part;
         if(root.EarthEmployers)moves.push({person:p,from:prior,to:target,appointed:!!m.jobId});
         m.jobId=target.id;m.joinedWeek=week;delete m.application;
-        announce(p.name+' started as '+target.label+' at '+target.employer+'. '+prior.employer+(a.coverId?' handed the work to '+a.coverName+' and recorded a strong reference.':a.early?' is short-staffed after the early release and recorded a poor reference.':' accepted the full notice and needs temporary cover.'));
+        const outcome=fullCover?' handed the work to '+a.coverName+' and recorded a strong reference.':part==='admin'?
+          ' has '+a.coverName+' handling '+supportTask(prior.id)+'. The professional round is still open. '+(a.early?'Early departure affected the reference.':'The employer recorded the full notice.'):
+          a.early?' is short-staffed after the early release and recorded a poor reference.':' accepted the full notice and needs temporary cover.';
+        announce(p.name+' started as '+target.label+' at '+target.employer+'. '+prior.employer+outcome);
       }
       const credited=clockService(world,site,p,m);
       if(credited){changed=true;if(credited.message)announce(credited.message);}
@@ -647,7 +708,13 @@
       if(!residentHere(site,id))continue;
       const gap=m.departure,active=gap&&world.week<=gap.throughWeek,porter=porterSlot(id);
       const link=porter&&changedTrade(m)?activeLane(site,id,links??=operatingLinks(site)):null;
-      if(active&&!(porter&&previousLane(m,link)))gaps.push({personId:id,...gap});
+      if(active&&!(porter&&previousLane(m,link))){
+        const jobId=departingPost(m),part=scope(site,gap,jobId);
+        const round={personId:id,...gap};
+        if(requiresCredential(jobId))round.credential=jobId;
+        if(part==='admin'){round.adminId=gap.coverId;round.coverId=null;}
+        gaps.push(round);
+      }
       if(link){
         const cover=laneWorker(site,world,link),venue=link.resource==='food'?'garden':'market';
         gaps.push({personId:id,laneId:id,venue,oldRole:link.resource==='food'?'Garden courier':'Exchange porter',
@@ -661,8 +728,8 @@
     const add=(key,amount)=>{delta[key]=(delta[key]||0)+amount;};
     for(const [id,m] of Object.entries(site.careers||{})){
       const j=get(jobs,m.jobId),p=profile(site,id);if(!p||!residentHere(site,id))continue;
-      if(j && world.week>m.joinedWeek && (world.week-m.joinedWeek)%j.interval===0&&(!Object.hasOwn(specialistSites,j.id)||!onOtherDuty(site,id,m,world.week)))add(j.metric,1);
-      if(m.specialistRelief?.week===world.week){
+      if(j && world.week>m.joinedWeek && (world.week-m.joinedWeek)%j.interval===0&&(!requiresCredential(j.id)||!onOtherDuty(site,id,m,world.week)))add(j.metric,1);
+      if(m.specialistRelief?.week===world.week&&canCoverPost(site,id,m.specialistRelief.targetId)){
         add(jobs[m.specialistRelief.targetId].metric,1);add(replacementGoods[m.specialistRelief.occupation],-1);
       }
       if(m.reducedWorkWeek===world.week || m.training?.pace==='intensive'&&!m.training.paused)add(replacementGoods[(j||origin(p)).occupation],-1);
@@ -673,8 +740,9 @@
         const laneDeparture=porter&&previousLane(m,link);
         // The link itself pays only when staffed. Its old employer must not
         // also lose a generic exchange unit for the same vacant assignment.
-        if(!gap.coverId){if(!laneDeparture)add(replacementGoods[gap.occupation],-1);}
-        else if(!laneDeparture||link&&changedTrade(m)){
+        const unstaffed=!gap.coverId||scope(site,gap,departingPost(m))==='admin';
+        if(unstaffed&&!laneDeparture)add(replacementGoods[gap.occupation],-1);
+        if(gap.coverId&&(!laneDeparture||link&&changedTrade(m))){
           const worker=profile(site,gap.coverId),coverJob=get(jobs,state(site,gap.coverId).jobId)||(worker&&origin(worker));
           const occupation=laneDeparture&&link.resource==='food'?'food':gap.occupation;
           if(coverJob && coverJob.occupation!==occupation)add(replacementGoods[coverJob.occupation],-1);
@@ -709,6 +777,7 @@
       if(m.experience!=null && (!values(m.experience,ids,0,week)||Object.values(m.experience).reduce((sum,n)=>sum+n,0)>week))return false;
       if(['lastPracticeWeek','lastTeachingWeek','processedWeek','reducedWorkWeek','manualWeek'].some(k=>m[k]!=null&&!int(m[k],1,week)))return false;
       const t=m.training,a=m.application,d=m.departure;
+      if([a,d].some(v=>v?.coverScope!==undefined&&(!v.coverId||!['admin','qualified'].includes(v.coverScope))))return false;
       if(['training','application','departure'].some(k=>m[k]!==undefined&&!record(m[k])))return false;
       if(t&&(!get(jobs,t.targetId)||!int(t.credits,0,jobs[t.targetId].trainingWeeks-1)||!int(t.startedWeek,1,week)||!int(t.lastWeek,t.startedWeek,week)||
         !['evening','intensive'].includes(t.pace)||typeof t.paused!=='boolean'||typeof t.autonomous!=='boolean'))return false;
@@ -719,5 +788,5 @@
     }
     return true;
   }
-  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,canCoverPost,departureForMove,openings,serviceWeeks,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
+  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,canCoverPost,requiresCredential,handoverDuty,departureForMove,openings,serviceWeeks,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
 })(typeof window==='undefined'?globalThis:window);
