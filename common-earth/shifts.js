@@ -17,13 +17,13 @@
           {id:'pack',name:'Pack the wholesale order',time:5,pay:3,detail:'Grade and pack every tray. The buyer leaves the sound seconds for the shared pantry.',now:{food:1},after:{funds:1},story:'The buyer returned to the cooperative for another collection.'},
           {id:'share',name:'Split the packing shift',time:3,pay:1,detail:'Give the second half of the order to a neighbour who needs work.',after:{trust:1},story:'A second household was offered a share of the next packing shift.'}
         ]},
-        care:{name:'The doorstep pantry',open:0,close:11,detail:'The repairer has a list of households that cannot carry the weekly baskets home.',choices:[
-          {id:'baskets',name:'Carry two baskets upstairs',time:3,relief:1,detail:'Use one food from the district. In return, a neighbour provides the grower’s evening meal.',now:{food:-1},after:{wellbeing:2},story:'The doorstep deliveries reached households absent from the usual collection.'},
+        care:{name:'The doorstep pantry',open:0,close:11,detail:'Your neighbour keeps a list of households that cannot carry the weekly baskets home.',choices:[
+          {id:'baskets',name:'Carry two baskets upstairs',time:3,relief:1,detail:'Use one food from the district. In return, a neighbour provides an evening meal for your host.',now:{food:-1},after:{wellbeing:2},story:'The doorstep deliveries reached households absent from the usual collection.'},
           {id:'rota',name:'Arrange the next pickup',time:2,detail:'Ask each household which pickup time fits. Leave the amended list for the next harvest.',after:{food:1},story:'An extra basket was collected before the food spoiled.'}
         ]},
         meaning:{name:'Seeds for another season',open:3,close:END,detail:'A learner wants to grow something with a history in this neighbourhood.',choices:[
           {id:'seed',name:'Teach the seed-saving method',time:4,facility:1,detail:'Set aside one food as seed. Sort the ripe heads with a learner and let them try the next tray.',now:{food:-1},after:{food:3},story:'The saved seed and the learner’s second tray replenished the shared beds.'},
-          {id:'memory',name:'Record the grower’s field note',time:2,detail:'Write down who shared this seed and what each household calls it. Leave copies for neighbours.',after:{trust:1},story:'Neighbours recognised their own names and growing knowledge in the common record.'}
+          {id:'memory',name:'Record a field note about the seed',time:2,detail:'Write down who shared this seed and what each household calls it. Leave copies for neighbours.',after:{trust:1},story:'Neighbours recognised their own names and growing knowledge in the common record.'}
         ]}
       }
     },
@@ -35,9 +35,9 @@
           {id:'overhaul',name:'Overhaul the trolley',time:5,pay:3,detail:'Rebuild the axle for the carrier and reclaim the usable metal from the old assembly.',now:{materials:1},after:{funds:1},story:'The carrier bought the next service from the district workshop fund.'},
           {id:'diagnose',name:'Diagnose it together',time:3,pay:1,detail:'Teach the carrier to find the fault. They finish the job and bring the spare fittings back.',after:{materials:1},story:'The carrier returned the spare fittings rather than throwing them away.'}
         ]},
-        care:{name:'Water at the grower’s door',open:0,close:9,detail:'The grower is carrying water by hand. The afternoon watering begins at 13:30.',choices:[
-          {id:'pump',name:'Restore the hand pump',time:3,relief:1,detail:'Use one district material for a fitting. The grower shares tonight’s vegetables in exchange.',now:{materials:-1},after:{wellbeing:2},story:'Water could be drawn near the beds, easing the work for several neighbours.'},
-          {id:'carry',name:'Share the next water run',time:2,detail:'Carry enough for today together and learn where the route is difficult.',after:{wellbeing:1},story:'The grower was able to work the next morning after sharing the heavy water run.'}
+        care:{name:'Water at a neighbour’s door',open:0,close:9,detail:'Your neighbour is carrying water by hand. The afternoon watering begins at 13:30.',choices:[
+          {id:'pump',name:'Restore the hand pump',time:3,relief:1,detail:'Use one district material for a fitting. Your neighbour shares tonight’s vegetables in exchange.',now:{materials:-1},after:{wellbeing:2},story:'Water could be drawn near the beds, easing the work for several neighbours.'},
+          {id:'carry',name:'Share the next water run',time:2,detail:'Carry enough for today together and learn where the route is difficult.',after:{wellbeing:1},story:'A neighbour was able to work the next morning after sharing the heavy water run.'}
         ]},
         meaning:{name:'An apprentice at the bench',open:2,close:END,detail:'A learner has time before the evening shift and wants to finish a first repair.',choices:[
           {id:'teach',name:'Let the learner finish a repair',time:4,facility:1,detail:'Give up one material for a practice piece. Stay while the learner repeats the job independently.',now:{materials:-1},after:{materials:3},story:'The apprentice repaired three fittings that would otherwise have been replaced.'},
@@ -53,9 +53,9 @@
           {id:'interpret',name:'Interpret the full negotiation',time:5,pay:3,detail:'Stay through signatures. The cooperative receives a small service fee, separately from household pay.',now:{funds:1},after:{trust:1},story:'Both traders returned with the same understanding of the agreement.'},
           {id:'phrases',name:'Prepare a shared phrase sheet',time:3,pay:1,detail:'Help both sides explain the prices and quantities, then leave them to finish.',after:{funds:1},story:'The phrase sheet helped a new trader complete a small order.'}
         ]},
-        care:{name:'A neighbour at the meeting',open:2,close:11,detail:'The repairer finishes late and has no way to make the ordinary meeting time.',choices:[
-          {id:'ride',name:'Arrange a shared ride',time:3,relief:1,detail:'Spend one district fund for a group fare. One of the riders covers the convenor’s return trip.',now:{funds:-1},after:{trust:2},story:'The repairer and a neighbour spoke at the meeting after the shared ride arrived.'},
-          {id:'statement',name:'Carry their words into the room',time:2,detail:'Ask what the repairer wants said and read it back before leaving.',after:{trust:1},story:'The minutes recorded the repairer’s own words and their requested change.'}
+        care:{name:'A neighbour at the meeting',open:2,close:11,detail:'A neighbour finishes late and has no way to make the ordinary meeting time.',choices:[
+          {id:'ride',name:'Arrange a shared ride',time:3,relief:1,detail:'Spend one district fund for a group fare. One of the riders covers your host’s return trip.',now:{funds:-1},after:{trust:2},story:'Both neighbours spoke at the meeting after the shared ride arrived.'},
+          {id:'statement',name:'Carry their words into the room',time:2,detail:'Ask what your neighbour wants said and read it back before leaving.',after:{trust:1},story:'The minutes recorded the neighbour’s own words and their requested change.'}
         ]},
         meaning:{name:'The memory circle',open:3,close:END,detail:'People have brought objects that remind them why this community exists.',choices:[
           {id:'circle',name:'Host the whole memory circle',time:4,facility:1,detail:'Stay long enough for everyone to tell a story, including the people who usually leave quietly.',after:{wellbeing:2},story:'Residents returned to the stories when they welcomed the next household.'},
@@ -67,8 +67,8 @@
 
   const memories=[
     {pack:'I remember packing that whole order together. We could count the day’s pay before the buyer left.',share:'Splitting that job gave someone else a place at the table. It also made my own household budget tighter.',baskets:'You climbed those stairs with me. The baskets finally reached people who never make it to collection.',rota:'I still have the list we drew up at the doorstep. We asked people which pickup time they could actually keep.',seed:'You stayed while the learner sorted a second tray alone. That was when the lesson became theirs.',memory:'That seed has more than one name. You asked me who taught it to me and wrote their name down.'},
-    {overhaul:'We got the carrier moving in time. I liked that we stopped to recover the sound metal, too.',diagnose:'The carrier found the fault themselves after we showed them where to look. They left knowing more than they arrived with.',pump:'We used one of our last fittings where someone was hauling water. I remember the grower’s relief.',carry:'Carrying that water together showed us exactly where the path causes trouble.',teach:'You waited while the apprentice tried again. They put the last fitting in with their own hands.',card:'I can still picture us drawing that repair card. Someone else can follow the sequence when I’m away.'},
-    {interpret:'We stayed until both sides could explain the agreement back to each other. That took time I usually have to justify.',phrases:'The traders kept that phrase sheet. I liked that they finished the discussion in their own voices.',ride:'I remember arranging that ride together. The repairer could speak from their own chair at last.',statement:'You read those words back before we carried them into the room. That mattered to the person who trusted us with them.',circle:'You stayed through the quiet part of the circle. The last person spoke because nobody hurried to close it.',listen:'You asked who could hear that story before sharing it. Giving someone that choice made the conversation possible.'}
+    {overhaul:'We got the carrier moving in time. I liked that we stopped to recover the sound metal, too.',diagnose:'The carrier found the fault themselves after we showed them where to look. They left knowing more than they arrived with.',pump:'We used one of our last fittings where someone was hauling water. I remember how relieved our neighbour was.',carry:'Carrying that water together showed us exactly where the path causes trouble.',teach:'You waited while the apprentice tried again. They put the last fitting in with their own hands.',card:'I can still picture us drawing that repair card. Someone else can follow the sequence when I’m away.'},
+    {interpret:'We stayed until both sides could explain the agreement back to each other. That took time I usually have to justify.',phrases:'The traders kept that phrase sheet. I liked that they finished the discussion in their own voices.',ride:'I remember arranging that ride together. Our neighbour could speak from their own chair at last.',statement:'You read those words back before we carried them into the room. That mattered to the person who trusted us with them.',circle:'You stayed through the quiet part of the circle. The last person spoke because nobody hurried to close it.',listen:'You asked who could hear that story before sharing it. Giving someone that choice made the conversation possible.'}
   ];
 
   const reject=message=>({ok:false,message});
@@ -171,7 +171,7 @@
     if(!live(site,week))return null;
     const shift=site.shift,r=shiftPerson(site),story=stories[r.slot],budget=household(site,shift);
     const stops=stopIds.map(id=>stopView(site,shift,id)),current=stops.find(s=>s.current&&!s.visited),history=shift.history.map(step=>({label:pick(site,shift,step).name,clock:`${clock(step.begin)}–${clock(step.end)}`}));
-    return {residentId:r.id,name:r.name,role:r.role,title:story.title,brief:story.brief,
+    return {residentId:r.id,name:r.name,role:root.EarthCareers?.role(site,r.id)||r.role,title:story.title,brief:story.brief,
       clock:clock(shift.time),timeLeft:duration(END-shift.time),location:venueName(site,shift.at),
       household:budget,householdLabel:`Household costs ${NEED} · reserve ${budget.reserve} · pay ${budget.pay} · covered by neighbours ${budget.relief}`,
       guide:'The clock moves when you arrive or choose an activity. Finish by 15:00. After a completed visit, covering 2 household credits adds 1 wellbeing next week. A shortfall costs 1 wellbeing. Up to 2 spare credits carry into this resident’s next shift.',

@@ -18,7 +18,7 @@ const site = {
   buildings: [{ id: 'hall-1', kind: 'hall', name: 'Cooperative Hall', plot: 4 }]
 };
 
-function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false}={}) {
+function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false}={}) {
   const pointerEvents = new Map();
   let frame = null;
   let now = 100, timerId = 0;
@@ -62,7 +62,8 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
     matchMedia: query => ({ matches: !animated||!query.includes('prefers-reduced-motion') })
   };
   vm.runInNewContext(readFileSync(path.join(gameRoot,'fisheries.js'),'utf8'),runtime);
-  if(links)runtime.window.CommonEarthSim={productiveLinks:()=>links};
+  if(links)runtime.window.CommonEarthSim={productiveLinks:typeof links==='function'?links:()=>links};
+  if(lives)for(const file of ['personas.js','careers.js','autonomy.js'])vm.runInNewContext(readFileSync(path.join(gameRoot,file),'utf8'),runtime);
   vm.runInNewContext(surroundingsScript, runtime);
   vm.runInNewContext(constructionScript, runtime);
   vm.runInNewContext(agencyScript,runtime);
@@ -1272,4 +1273,70 @@ test('a scrolled-away district finishes walking and sailing when animation frame
   assert(Math.hypot(arrived.x-boarded.x,arrived.y-boarded.y)>2);
   assert.equal(g.updates.at(-1).travelling,false);
   g.street.destroy();
+});
+
+test('workers who leave the van and a supply run can be met at a new workplace, including after their old route closes',()=>{
+  const link={from:0,to:1,resource:'food'};
+  const g=surface(740,390,{animated:true,lives:true,links:town=>town.buildings.some(b=>b.kind==='garden')?[link]:[]});
+  const town={...site,buildings:['workshop','garden','hall'].map((kind,plot)=>({id:'b'+plot,kind,plot,name:kind+' workplace'}))};
+  const person=id=>g.street.localPeople().find(p=>p.npcId===id);
+  g.street.setSite(town);
+  const oldDriver=person('driver'),oldPorter=person('carrier-0-1');
+  assert(oldDriver.label&&oldPorter.label&&oldDriver.label!==oldPorter.label);
+  town.careers={driver:{jobId:'nurse'},'carrier-0-1':{jobId:'musician'}};
+  g.street.setSite(town);
+  assert.equal(person('driver').role,'Nurse');
+  assert.equal(person('carrier-0-1').role,'Musician');
+  assert(Math.hypot(person('driver').x-oldDriver.x,person('driver').y-oldDriver.y)<1.1);
+  assert.equal(person('carrier-0-1').label,oldPorter.label);
+  const reported=new Set();
+  g.street.holdMove('right');
+  for(let i=0;i<2400&&reported.size<2;i++){
+    g.step();
+    for(const id of ['driver','carrier-0-1']){
+      const p=person(id);
+      if(p.routine==='At hall workplace'){
+        assert(Math.hypot(p.x-15,p.y-5.04)<1.50);reported.add(id);
+      }
+    }
+  }
+  g.street.releaseMove('right');assert.equal(reported.size,2);
+  town.buildings=town.buildings.filter(b=>b.kind!=='garden');
+  g.street.setSite(town);
+  assert.equal(person('carrier-0-1').role,'Musician');
+  assert(g.street.focusStop(person('carrier-0-1')));g.finish();
+  assert.equal(g.street.meeting(person('carrier-0-1')).target,'carrier-0-1');
+  const before=person('driver');town.careers.driver.jobId='driver';g.street.setSite(town);
+  const returning=person('driver');
+  assert(Math.hypot(returning.x-before.x,returning.y-before.y)<.25,'the driver walks back to the vehicle');
+  g.street.holdMove('right');
+  let boarded=false;
+  for(let i=0;i<2300&&!boarded;i++){g.step();boarded=person('driver').routine==='Co-op delivery driver';}
+  g.street.releaseMove('right');assert(boarded);
+});
+
+test('a visitor and host reach the same park bench and a porter in training stays reachable after the corridor closes',()=>{
+  const link={from:0,to:1,resource:'food'};
+  const g=surface(740,390,{animated:true,lives:true,links:town=>town.buildings.some(b=>b.kind==='garden')?[link]:[]});
+  const town={...site,buildings:['workshop','garden','hall'].map((kind,plot)=>({id:'b'+plot,kind,plot,name:kind+' workplace'}))};
+  const person=id=>g.street.localPeople().find(p=>p.npcId===id);
+  g.street.setSite(town);
+  town.careers={'carrier-0-1':{training:{targetId:'nurse'}}};
+  town.buildings=town.buildings.filter(b=>b.kind!=='garden');
+  town.autonomy={people:{'walker-0':{history:[{kind:'visit',venue:'bench',week:1,target:'walker-4'}]},
+    'walker-4':{history:[{kind:'host',venue:'bench',week:1,target:'walker-0'}]}}};
+  g.street.setSite(town);
+  assert(person('carrier-0-1'),'the former porter is still present while studying');
+  g.street.holdMove('up');
+  let together=false,studying=false;
+  for(let i=0;i<2200&&(!studying||!together);i++){
+    g.step();const a=person('walker-0'),b=person('walker-4'),p=person('carrier-0-1');
+    if(a.routine==='At Park bench'&&b.routine==='At Park bench'){
+      const apart=Math.hypot(a.x-b.x,a.y-b.y);assert(apart>.25&&apart<1.56);together=true;
+    }
+    if(p.routine==='At hall workplace')studying=true;
+  }
+  g.street.releaseMove('up');assert(together);assert(studying);
+  assert(g.street.focusStop(person('carrier-0-1')));g.finish();
+  assert.equal(g.street.meeting(person('carrier-0-1')).target,'carrier-0-1');
 });

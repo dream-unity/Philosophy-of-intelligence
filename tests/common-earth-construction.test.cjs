@@ -612,3 +612,42 @@ test('a first tick on a partial legacy roster moves the prepared persistent memb
   assert.ok(role.relief||role.jobId);
   assert.notDeepEqual([role.x,role.y],[21,23.04]);
 });
+
+test('an accepted career changes the physical workplace, and a saved weekly outing returns the person to that post once',()=>{
+  const vm=require('node:vm'),fs=require('node:fs'),runtime={};
+  for(const file of ['personas.js','careers.js','autonomy.js','construction.js']){
+    vm.runInNewContext(fs.readFileSync(path.join(game,file),'utf8'),runtime);
+  }
+  const crew=runtime.EarthConstruction,s=town(),person=s.residents[0],current={week:7};
+  s.buildings=[{id:'clinic',plot:0,kind:'hall',name:'Community clinic'}];
+  s.careers={[person.id]:{jobId:'nurse'}};
+  assert(crew.needsTime(s,current));
+  ok(crew.advance(s,current,30));
+  const nurse=()=>crew.workerRole(s,current,person.id);
+  assert.equal(nurse().role,'Nurse');
+  assert.equal(nurse().workplace.kind,'hall');
+  assert.equal(nurse().activity,'working');
+  assert.deepEqual({...crew.weeklyAdjustment(s,current)},{food:0,materials:0,funds:0});
+  const shift={week:7,kind:'rest',venue:'bench',reason:'Rest after a long shift.'};
+  s.autonomy={people:{[person.id]:{history:[shift]}}};
+  assert(crew.needsTime(s,current));
+  assert.equal(nurse().workplace.type,'park');
+  ok(crew.advance(s,current,5));
+  const loaded=copy(s);
+  ok(crew.advance(s,current,60));
+  for(let i=0;i<60;i++)ok(crew.advance(loaded,current,1));
+  assert.deepEqual(copy(s),copy(loaded));
+  assert.equal(nurse().workplace.kind,'hall');
+  assert.equal(s.workforce.members[person.id].outingWeek,7);
+  assert.equal(s.workforce.members[person.id].outingLeft,0);
+  assert.equal(crew.needsTime(s,current),false);
+  current.week=8;s.autonomy.people[person.id].history=[{...shift,week:8}];
+  s.agency={actor:person.id};
+  assert.equal(crew.needsTime(s,current),false);
+  assert.equal(nurse().role,'Under your control');
+  delete s.agency;
+  assert.equal(crew.needsTime(s,current),true);
+  ok(crew.setPreference(s,current,person.id,'repair'));
+  assert.equal(nurse().occupation,'repair');
+  assert.notEqual(nurse().workplace.type,'park');
+});

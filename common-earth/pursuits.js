@@ -11,7 +11,7 @@
     rack:{label:'Fit a timber rack',seconds:7}
   };
   const fittingNames={flat:'a flat bed',baskets:'produce baskets',rack:'a timber rack'};
-  const person=site=>root.EarthAgency?.actor(site)?.name || 'Community steward';
+  const person=site=>root.EarthAgency?.identity?.(site,root.EarthAgency?.actorId?.(site)||'steward')?.name || root.EarthAgency?.actor(site)?.name || 'Community steward';
   const actorId=site=>root.EarthAgency?.actorId(site)||'steward';
   const nameOK=s=>typeof s==='string' && s.trim().length>0 && s.length<=512;
   const integer=n=>Number.isSafeInteger(n) && n>=0;

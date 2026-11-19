@@ -9,7 +9,7 @@
     function update(){
       const site=sim.active();
       if(!site)return;
-      const people=[agency.founder,...site.residents],key=JSON.stringify(people.map(p=>[p.id,p.name]));
+      const people=[agency.identity(site,'steward'),...site.residents],key=JSON.stringify(people.map(p=>[p.id,p.name]));
       if(siteKey!==key){
         dismissReview();actorSelect.replaceChildren(...people.map(p=>option(p.id,p.name)));
         siteKey=key;
@@ -67,7 +67,7 @@
       const buttons=node('div','quick-picks');
       row.append(node('strong','action-label','Talk with '+target.name),reply,buttons);
       const source=agency.actorId(site);
-      for(const [topic,label] of [['news','How are things?'],['work','What are you working on?'],['meal','Share a meal · 1 food']]){
+      for(const [topic,label] of [['news','How are things?'],['work','What are you working on?'],['interests','Outside work'],['meal','Share a meal · 1 food']]){
         const talk=button(label,async()=>{
           const local=street();
           if(!local||sim.state.activeId!==site.id||agency.actorId(sim.active())!==source)return;
@@ -101,7 +101,11 @@
       }
       container.append(details);
     }
-    return {update,conversation,localsList,dismissReview};
+    async function playAs(id){
+      await switchTo(id);
+      if(review)review.scrollIntoView({block:'center',behavior:'instant'});
+    }
+    return {update,conversation,localsList,dismissReview,playAs};
   }
   root.EarthAgencyUI=Object.freeze({mount});
 })(typeof window==='undefined'?globalThis:window);

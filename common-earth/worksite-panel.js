@@ -156,8 +156,8 @@
       const name=node('strong','',worker.name),state=node('span','worksite-worker-status');
       const label=node('label','worksite-role'),select=node('select');
       select.dataset.action='work-role:'+worker.residentId;
-      label.append(node('span','','Work preference'),select);
-      select.setAttribute('aria-label','Work preference for '+worker.name);
+      label.append(node('span','','Weekly community duty'),select);
+      select.setAttribute('aria-label','Weekly duty for '+worker.name);
       for(const preference of model.preferences){
         const option=node('option','',preference.label);option.value=preference.id;select.append(option);
       }
@@ -189,9 +189,9 @@
       const group=node('details','worksite-roster');
       group.dataset.worksiteDisclosure='crew:'+(personId||'all');
       group.open=open;
-      const title=personId?'Work and preferences':'Crew and work preferences';
+      const title=personId?'Work and weekly duty':'Crew and weekly duties';
       const summary=node('summary','',title);summary.dataset.action=group.dataset.worksiteDisclosure;
-      group.append(summary,node('p','worksite-explainer','Residents choose work around their commitments. You can request a different role or worksite at any time.'));
+      group.append(summary,node('p','worksite-explainer','Residents choose work around their commitments. You can request a different weekly duty or worksite.'));
       for(const worker of workers)group.append(workerRow(worker,model));
       if(personId&&model.jobs.length)group.append(button('Assign on map',e=>chooseCrew(e.currentTarget,[personId]),'assign-person:'+personId));
       list.append(group);

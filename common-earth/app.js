@@ -58,7 +58,11 @@
     version:()=>arrivalVersion,button,node,refresh:render,onResult:presentResult,
     resetEncounter:()=>{arrivalVersion++;crewOrders?.cancel();cancelPlacement();street?.cancelTravel();encounter=null;visiting=null;peers=false;viewingShift=false;group='people';}
   });
-  let lastOpening=null,arrivalVersion=0,commissioning=false,localWorkRate='',previewWorkRates='',goalWorkRates='';
+  const lifePanel=window.EarthLifePanel?.mount($('character-lives'),{
+    sim,street:()=>view==='street'?street:null,version:()=>arrivalVersion,reviewWeek,
+    meet:meetForLife,playAs:id=>agencyUI?.playAs(id),onResult:presentResult,after:()=>{street?.setSite(sim.active());render();}
+  });
+  let lastOpening=null,arrivalVersion=0,commissioning=false,localWorkRate='',previewWorkRates='',goalWorkRates='',courseWorkRates='';
   let toastTimer, outcomeContext='', recordsPage='events',journalLimit=20,journalFilter='all';
   function notify(message, error = false) {
     const box = $('toast');
@@ -254,7 +258,9 @@
     const site=partner?null:known(selected);
     const name=partner?.name||site?.name||selected.name||'Selected location';
     put('map-survey',(site?'Visit ':partner?'Meet ':'Survey ')+name+' ↓');
-    const partnerPanel=$('partner-inspector');if(partnerPanel){partnerPanel.hidden=!partner;partnerPanel.replaceChildren();}
+    const partnerPanel=$('partner-inspector');
+    const delegateOpen=partner&&partnerPanel?.querySelector('details[open]')?.dataset.delegate===partner.person?.id;
+    if(partnerPanel){partnerPanel.hidden=!partner;partnerPanel.replaceChildren();}
     if(partner && partnerPanel){
       put('place-name',partner.name);put('place-type',partner.locality+' · Independent cooperative');
       put('place-coords',coords(partner));put('place-description',partner.interest);
@@ -262,6 +268,15 @@
       partnerPanel.append(node('p','resident-line',partner.delegate+' · '+partner.relation),node('blockquote','partner-voice',partner.voice),
         node('p','action-description','Offers '+partner.exportGood+' · Needs '+partner.importGood+'. Local reserve '+partner.reserve+' · Surplus '+partner.surplus+'.'),
         node('p','action-cost',partner.status),node('p','voyage-note',partner.activity||''));
+      if(partner.person){
+        const person=partner.person,profile=node('details','shift-guide');
+        profile.dataset.delegate=person.id;profile.open=Boolean(delegateOpen);
+        profile.append(node('summary','',person.name+'’s work and development'),
+          node('p','action-description',person.personality+' Their strongest skill is '+person.strength.toLowerCase()+'.'),
+          node('p','action-cost',person.skill+' · '+person.sessions+' of '+person.goal+' workplace sessions · '+(person.completed?'Now serving as ':'Preparing for ')+person.nextRole+'.'),
+          node('p','action-description',person.next),node('p','voyage-note',partner.decision.reason));
+        partnerPanel.append(profile);
+      }
       const booking=partner.agreement?.phase==='pledge'?partner.agreement:partner.offer;
       if(booking && booking.homeId!==sim.state.activeId){
         const home=sim.state.sites.find(s=>s.id===booking.homeId);
@@ -679,12 +694,15 @@
     if(rate!==localWorkRate && !forecastAlreadyRendered)put('forecast',sim.forecast?.()||sim.overview().forecast);
     localWorkRate=rate;
     const readingPreview=$('week-summary')?.closest('details')?.open,readingGoal=$('goal-details')?.open&&sim.state.learningGoals?.active;
-    if(readingPreview||readingGoal){
+    const readingCourse=lifePanel?.readingCalendar();
+    if(readingPreview||readingGoal||readingCourse){
       const rates=networkWorkRates(model);
       if(readingPreview&&!forecastAlreadyRendered&&rates!==previewWorkRates){previewWorkRates=rates;renderForecastValues();}
       if(readingGoal&&rates!==goalWorkRates){goalWorkRates=rates;if(!forecastAlreadyRendered)learning?.render();}
+      if(readingCourse&&rates!==courseWorkRates){courseWorkRates=rates;if(!forecastAlreadyRendered)lifePanel.refreshCalendar();}
     }
     if(!readingGoal)goalWorkRates='';
+    if(!readingCourse)courseWorkRates='';
     crewOrders?.update(model);
     if(view==='street'){
       street?.setConstruction?.(model);
@@ -741,6 +759,19 @@
     }
     if(street.getState().mode==='drive')street.toggleVehicle();
     atVenue(venue,person.name,act);
+  }
+  function meetForLife(ref,name,arrive){
+    if(view!=='street'||!street)return false;
+    const local=street,site=sim.active(),week=sim.state.week,trip=++arrivalVersion;
+    if(local.getState().mode==='drive')local.toggleVehicle();
+    if(local.getState().mode!=='walk')return false;
+    local.cancelTravel?.();
+    if(local.meeting(ref,true)){arrive();return true;}
+    const started=local.focusStop(ref,()=>{
+      if(view==='street'&&street===local&&sim.active()?.id===site.id&&sim.state.week===week&&arrivalVersion===trip)arrive();
+    });
+    if(started){notify('Walking to '+name+'.');followStreet();}
+    return started;
   }
   function requestAction(action,keyboard=false) {
     crewOrders?.cancel();
@@ -1004,6 +1035,7 @@
       if(encounter?.type==='npc'&&!peers){
         put('actions-heading',encounter.label);
         list.append(button('All residents',()=>showPeople(),'text-button'));
+        if(lifePanel)list.append(button('View character life',()=>lifePanel.open(encounter.npcId),'text-button'));
         agencyUI?.conversation(list,encounter);return;
       }
       const person=site.residents.find(r=>r.id===visiting);
@@ -1046,11 +1078,12 @@
           const status=r.promise?'Promise due week '+r.promise.dueWeek:r.heard?'Bond '+r.bond:'Ready to meet';
           const parcel=site.delivery?.residentId===r.id?' · awaiting parcel':'';
           const company=day?.residentId===r.id?' · with you':'';
-          const info=node('p','action-description',r.role+' · '+status+parcel+company);
+          const info=node('p','action-description',(window.EarthCareers?.role(site,r.id)||r.role)+' · '+status+parcel+company);
           if(currentWork)info.append(works.residentSummary(r,currentWork));
           item.append(node('strong','action-label',r.name),info);
           if(r.id===site.agency?.actor)item.append(node('small','resident-line','Playing as '+r.name));
           else item.append(button('Meet '+r.name,()=>meetResident(r),'action-button'));
+          if(lifePanel)item.append(button('View character life',()=>lifePanel.open(r.id),'text-button'));
           list.append(item);
         }
         agencyUI?.localsList(list,person=>{
@@ -1064,10 +1097,11 @@
       put('actions-heading',person.name);
       const bio=node('div','resident-bio');
       if(window.EarthStreet.portrait)bio.append(portrait(site,person));
-      const identity=node('p','resident-line',person.role+' · '+person.value+' · Bond '+person.bond);
+      const identity=node('p','resident-line',(window.EarthCareers?.role(site,person.id)||person.role)+' · '+person.value+' · Bond '+person.bond);
       const model=workModel||works?.view();
       if(works)identity.append(works.residentSummary(person,model));
       bio.append(identity);list.append(bio);
+      if(lifePanel)list.append(button('View character life',()=>lifePanel.open(person.id),'text-button'));
       agencyUI?.conversation(list,{type:'resident',residentId:person.id});
       const delivery=(sim.actions('work')||[]).find(a=>a.id==='courier:deliver:'+person.id);
       if(delivery)list.append(actionRow(delivery));
@@ -1315,7 +1349,7 @@
   }
   function render(options) {
     const site=sim.active(), overview=sim.overview(), state=sim.state;
-    if(view==='street')agencyUI?.update();
+    if(view==='street'){agencyUI?.update();lifePanel?.render();}
     put('action-budget',site ? state.effort+' civic effort · '+site.funds+' funds · '+site.materials+' materials · '+site.food+' food' : '');
     refreshSaveWarning();
     put('week','Week '+state.week);put('effort',state.effort+' / '+window.CommonEarthSim.maxEffort);
@@ -1769,6 +1803,7 @@
       refreshSaveWarning();
       const finished=notice.completed||[];
       if(finished.length){
+        lifePanel?.refreshCalendar();
         lastOpening=finished.find(j=>j.id===encounter?.jobId)||lastOpening;
         const local=finished.filter(j=>j.siteId===sim.state.activeId);
         if(local.length){
@@ -1802,6 +1837,7 @@
     street?.discardTerrain();
     crewOrders?.cancel();
     if(notice.switched){
+      lifePanel?.invalidate();
       preparedSurvey=null;lastOpening=null;
       journalFilter='all';journalLimit=20;
       street?.destroy();street=null;city?.destroy();city=null;group='people';researchPage='eras';councilPage='agenda';
