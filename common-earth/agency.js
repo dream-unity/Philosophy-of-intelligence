@@ -59,6 +59,24 @@
     if(!profile&&!occupation&&(resident||initial===founder))return initial;
     return {...initial,...profile,id,role:occupation||profile?.originRole||initial.role};
   }
+  function shadowPass(site,world,id){
+    const token=site?.agency?.shadow,who=site&&identity(site,id);
+    return !!(token&&who&&token.id===id&&token.key===who.identityKey&&token.week<=world.week&&world.week<=token.week+1&&
+      site.id===world.activeId&&residentHere(site,id));
+  }
+  function finishShadow(world,site){
+    const token=site?.agency?.shadow;
+    if(!token||world.activeId!==site.id||root.EarthCommunityLife?.isHome?.(world,site)||shadowPass(site,world,token.id))return null;
+    const state=site.agency;delete state.shadow;
+    if(actorId(site)!==token.id)return null;
+    const name=identity(site,token.id)?.name||'The resident';
+    if(state.actorAt)(state.localPositions||={})[token.id]={x:state.actorAt.x,y:state.actorAt.y,serial:state.actorAt.serial};
+    state.actor='steward';delete state.actorAt;delete state.returningActor;
+    if(world.communityLife.viewpointHistory?.until==null&&world.communityLife.viewpointHistory){
+      const record=world.communityLife.viewpointHistory;record.changes=changesSince(world,site,record.before);record.until=world.week;
+    }
+    return name+' finished the round you agreed to share. You have returned to '+world.communityLife.profile.name+'.';
+  }
   function playables(site){
     if(!site)return [];
     const routes=links(site),porters=root.EarthPersonas?.porterIds?.(site,routes)||[...new Set([...(site.agency?.porters||[]),...routes.map(linkId)])];
@@ -73,6 +91,8 @@
     if(a?.porters!=null&&(!Array.isArray(a.porters)||a.porters.length>24||new Set(a.porters).size!==a.porters.length||!a.porters.every(porter)))return false;
     if(root.EarthDialogue && !root.EarthDialogue.valid(site,week))return false;
     if(a==null)return site.introductions===undefined;
+    if(a.shadow!=null&&(!a.shadow||!canPlay(site,a.shadow.id)||a.shadow.id==='steward'||typeof a.shadow.key!=='string'||
+      !a.shadow.key.length||a.shadow.key.length>1040||!Number.isSafeInteger(a.shadow.week)||a.shadow.week<1||a.shadow.week>week))return false;
     if(typeof a!=='object'||Array.isArray(a)||!canPlay(site,a.actor))return false;
     if(a.returningActor!=null && (a.actor!==founder.id || a.returningActor===founder.id || !canPlay(site,a.returningActor)))return false;
     if(porter(a.actor)&&!savedPorter(site,a.actor)||porter(a.returningActor)&&!savedPorter(site,a.returningActor))return false;
@@ -116,7 +136,66 @@
     const x=Math.max(0,Math.min(24,scene.x)),y=Math.max(0,Math.min(24,scene.y));
     root.EarthConstruction?.releaseFromShift(site,{residentId:person.id},{residentId:person.id,x,y});
   }
-  function change(site,id,scene){
+  const skillNames=['care','communication','craft','music','numeracy','organisation','stamina'];
+  function originalState(world,site){
+    const life=world?.communityLife;
+    if(!life||!site)return null;
+    const person=identity(site,'steward'),career=site.careers?.steward;
+    const accounts=world.sites.filter(s=>s.id===life.originId||s.communityLife?.people?.steward?.status==='anchor');
+    const cash=accounts.reduce((n,s)=>n+(s.purses?.people?.steward?.balance||0),0);
+    return {week:world.week,place:site.id,home:life.homeId,cash,role:person?.role||'Steward',reliability:life.duty.reliability,
+      skills:skillNames.map(k=>career?.skills?.[k]??person?.aptitudes?.[k]??0),
+    };
+  }
+  function changesSince(world,site,before){
+    if(!before)return [];
+    const now=originalState(world,site);if(!now)return [];
+    const rows=[],person=world.communityLife.profile.name,own=site.autonomy?.people?.steward;
+    if(before.home!==now.home){
+      const home=world.sites.find(s=>s.id===now.home);if(home)rows.push('Accepted membership in '+home.name+'.');
+    }
+    if(before.role!==now.role)rows.push('Changed from '+before.role.toLowerCase()+' work to '+now.role.toLowerCase()+'.');
+    for(const town of world.sites){
+      for(const target of town.residents){
+        const receipt=target.agreements?.find(r=>r.by==='steward'&&r.week>before.week);
+        if(receipt)rows.push((receipt.status==='kept'?'Kept':'Missed')+' the promise to '+target.name+' in '+town.name+' in week '+receipt.week+'.');
+      }
+      for(const r of town.agency?.arrangements?.rows||[])if(r.actorId==='steward'&&r.finishedWeek>before.week&&['kept','missed'].includes(r.status))
+        rows.push((r.status==='kept'?'Kept':'Missed')+' the agreement with '+(identity(town,r.requesterId)?.name||'a neighbour')+' in week '+r.finishedWeek+'.');
+    }
+    if(before.reliability!==now.reliability){
+      const log=world.sites.flatMap(t=>t.communityLife?.log||[]).filter(e=>e.week>before.week&&e.text.includes(person)&&e.text.includes('pantry round')).sort((a,b)=>b.week-a.week)[0];
+      if(log)rows.push(log.text);
+    }
+    if(before.cash!==now.cash)rows.push('Personal funds went from '+before.cash+' to '+now.cash+'.');
+    const learned=skillNames.filter((k,i)=>now.skills[i]>before.skills[i]).map(k=>k+' +'+(now.skills[skillNames.indexOf(k)]-before.skills[skillNames.indexOf(k)]));
+    if(learned.length)rows.push('Improved '+learned.join(', ')+'.');
+    const progress=own?.history?.find(h=>h.week>before.week&&h.kind!=='player'&&h.kind!=='routine'&&h.kind!=='rest');
+    if(progress&&rows.length<4)rows.push('Week '+progress.week+' · '+(progress.title||progress.reason));
+    return [...new Set(rows)].slice(0,6);
+  }
+  function recall(world,site){
+    const record=world?.communityLife?.viewpointHistory;
+    if(!record)return null;
+    return {since:record.before.week,until:record.until||world.week,active:record.until==null,changes:record.changes||changesSince(world,site,record.before)};
+  }
+  function validRecall(record,week){
+    if(record==null)return true;
+    const b=record.before,n=(value,min,max)=>Number.isSafeInteger(value)&&value>=min&&value<=max;
+    const word=(v,len=512)=>typeof v==='string'&&v.length>0&&v.length<=len;
+    return !!b&&n(b.week,1,week)&&word(b.place)&&word(b.home)&&n(b.cash,0,Number.MAX_SAFE_INTEGER)&&word(b.role,140)&&n(b.reliability,-6,6)&&
+      Array.isArray(b.skills)&&b.skills.length===skillNames.length&&b.skills.every(v=>n(v,0,100))&&
+      (record.until==null?record.changes==null:n(record.until,b.week,week)&&Array.isArray(record.changes)&&record.changes.length<=6&&record.changes.every(s=>word(s,1100)));
+  }
+  function change(site,id,scene,world){
+    if(world?.communityLife){
+      const previous=actorId(site),life=world.communityLife;
+      if(previous==='steward'&&id!==previous)life.viewpointHistory={before:originalState(world,site)};
+      else if(id==='steward'&&life.viewpointHistory?.until==null&&life.viewpointHistory){
+        const record=life.viewpointHistory;
+        record.changes=changesSince(world,site,record.before);record.until=world.week;
+      }
+    }
     const before=actor(site),state=ensure(site);
     if(before)releaseAt(site,before,scene);
     else state.stewardPosition={x:scene.x,y:scene.y};
@@ -214,5 +293,5 @@
   function topics(site,world,id){
     return root.EarthDialogue?.topics(site,world,id)||[['news','How are things?'],['work','What are you working on?'],['interests','Outside work'],['meal','Share a meal · 1 food']].map(([id,label])=>({id,label}));
   }
-  root.EarthAgency=Object.freeze({actor,actorId,canPlay,playables,founder,identity,valid,checkHandoff,change,depart,resume,converse,topics});
+  root.EarthAgency=Object.freeze({actor,actorId,canPlay,playables,founder,identity,valid,checkHandoff,change,recall,validRecall,shadowPass,finishShadow,depart,resume,converse,topics});
 })(typeof window==='undefined'?globalThis:window);

@@ -318,7 +318,12 @@
   function mount(canvas, options={}) {
     if (!canvas || !canvas.getContext) throw new TypeError('EarthStreet needs a canvas.');
     const spectator=options.spectator===true;
+    const meter=options.thumbnail?null:window.EarthPerformance;
+    const inset=spectator&&options.regionalInset===true;
+    const regionalParent=inset?options.regionalParent:null;
     const thumbnail=spectator&&options.thumbnail===true;
+    const renderRegion=window.EarthRegionalRender;
+    const regionalModel=window.EarthRegionalWorld;
     if(spectator){
       // A second camera can read the regional clock without acquiring any
       // of the interaction, freight receipt or construction callbacks.
@@ -328,7 +333,7 @@
     // Terrain can move as a compositor layer. People, vehicles, pins and input
     // stay on the original canvas. Standalone canvas mounts use a single surface.
     let terrainLayer=null, terrainSnapshot=null;
-    if(canvas.parentElement?.classList?.contains('street-stage') && canvas.before){
+    if(!inset&&(canvas.parentElement?.classList?.contains('street-stage')||canvas.parentElement?.id==='district-observer')&&canvas.before){
       const clip=document.createElement('div'), surface=document.createElement('canvas');
       const brush=surface.getContext('2d',{alpha:false});
       if(brush){
@@ -340,6 +345,12 @@
         clip.appendChild(surface);clip.appendChild(groundSurface);canvas.before(clip);
         terrainLayer={clip,surface,brush,groundSurface};
       }
+    }
+    if(regionalParent){
+      const groundSurface=document.createElement('canvas');
+      Object.assign(groundSurface.style,{position:'absolute',inset:'0',transformOrigin:'0 0',pointerEvents:'none'});
+      regionalParent.appendChild(groundSurface);
+      terrainLayer={regionalTile:true,groundSurface};
     }
     let ctx=canvas.getContext('2d',{alpha:Boolean(terrainLayer)});
     const state={site:null,seed:0,lots:[],points:[],solids:[],trees:[],decor:[],links:[],looks:new Map(),traffic:null,preview:null,companion:null,shiftStops:[],placed:null,mode:'walk',player:{...marketDoor(),dx:0,dy:1},van:vanAtExchange(),route:[],destination:null,arrival:null,hover:null,active:null};
@@ -710,6 +721,7 @@
     }
     const cleanups=[];
     const listen=(element,name,fn,opts)=>{
+      if(inset)return;
       const update=event=>{fn(event);if(dirty)schedule();};
       element.addEventListener(name,update,opts);cleanups.push(()=>element.removeEventListener(name,update,opts));
     };
@@ -751,6 +763,171 @@
     function world(px,py) {
       const u=(px-width*.5)/unit, v=(py-height*.53)/(unit*TILT);
       return {x:centreX+(u+v)/2,y:centreY+(v-u)/2};
+    }
+    let geo=null,baseTown=null,regionWorld=null,regionSignature='',exploration='',inspectionKey='',lastRegionFrame=null;
+    let remote=null,regionalFollow=null,visibleTravellers=false;
+    const regionEnabled=()=>Boolean(!thumbnail&&!inset&&renderRegion&&regionalModel&&options.getWorld);
+    function refreshGeography(){
+      if(!regionEnabled()||!state.site){geo=null;baseTown=null;return;}
+      const w=options.getWorld(),sites=w?.sites;
+      if(!sites)return;
+      const outposts=w.communityLife?.outposts||[];
+      const key=[state.site.id,sites.length,outposts.length,window.EarthAtlas?.geographyLoaded,...[...sites,...outposts].map(s=>
+        [s.id,s.lat,s.lon,s.water,s.coastal,s.lakeShore].join(','))].join('|');
+      if(w!==regionWorld||key!==regionSignature){
+        geo=regionalModel.geography(w,state.site);
+        baseTown=geo?.towns.find(t=>t.site.id===state.site.id)||null;
+        regionWorld=w;regionSignature=key;terrainSnapshot=null;lastRegionFrame=null;
+        if(remote&&!geo?.towns.some(t=>t.site.id===remote.id))releaseRegionalScene();
+      }
+    }
+    function regionView(){
+      if(!geo||!baseTown)return null;
+      const p=renderRegion.regionalPoint(baseTown,centreX,centreY),sx=unit/renderRegion.KM;
+      return renderRegion.viewport(p.x,p.y,width,height,sx,sx*TILT,.53);
+    }
+    function regionalCamera(){
+      const v=regionView();if(!v)return null;
+      return {x:v.x,y:v.y,zoom,originId:geo.origin.id,siteId:state.site.id,exploration,
+        bounds:{...geo.bounds},footprint:{minX:v.minX,minY:v.minY,maxX:v.maxX,maxY:v.maxY}};
+    }
+    function minZoom(){
+      if(!geo||state.placed)return .29;
+      const b=geo.bounds;
+      return Math.min(.29,.92*renderRegion.KM/baseUnit()*Math.min(width/(b.maxX-b.minX),height/(TILT*(b.maxY-b.minY))));
+    }
+    function boundCamera(x,y,frameRegion=false){
+      if(!geo||!baseTown||state.placed){centreX=clamp(x,-3,SIDE+3);centreY=clamp(y,northCameraLimit(),state.mode==='boat'?seaLimit:SIDE+3);return;}
+      const p=renderRegion.regionalPoint(baseTown,x,y),b=geo.bounds;
+      let east=clamp(p.x,b.minX,b.maxX),north=clamp(p.y,b.minY,b.maxY);
+      if(frameRegion){
+        const sx=unit/renderRegion.KM,half=width/(2*sx),span=height/(sx*TILT);
+        east=2*half>=b.maxX-b.minX?(b.minX+b.maxX)/2:clamp(east,b.minX+half,b.maxX-half);
+        north=span>=b.maxY-b.minY?(b.minY+b.maxY)/2-.03*span:clamp(north,b.minY+.47*span,b.maxY-.53*span);
+      }
+      const q=renderRegion.localPoint(baseTown,east,north);
+      centreX=q.x;centreY=q.y;
+    }
+    function townAt(p){
+      if(!geo)return null;
+      let nearest=null,best=Infinity;
+      for(const t of geo.towns){
+        const q=renderRegion.localPoint(t,p.x,p.y),edge=-5-2*Math.ceil((t.site.growth?.households?.length||0)/10);
+        if(q.x<-4||q.x>29||q.y<edge||q.y>32)continue;
+        const d=(p.x-t.x)**2+(p.y-t.y)**2;
+        if(d<best){nearest=t;best=d;}
+      }
+      return nearest;
+    }
+    function regionalEvent(p,picked=false,extra={}){
+      if(!geo||!p||!Number.isFinite(p.x)||!Number.isFinite(p.y))return;
+      const t=townAt(p),cell=geo.cellSize||.5;
+      const key=[geo.origin.id,t?.site.id,Math.round(p.x/cell),Math.round(p.y/cell),exploration,options.getWeek?.()].join('/');
+      if(!picked&&inspectionKey===key)return;
+      inspectionKey=key;
+      const terrain=regionalModel.terrain(geo,p.x,p.y);
+      const inspection=picked?regionalModel.inspect?.(regionWorld,state.site,p.x,p.y,exploration||regionWorld.communityLife?.homeId||state.site.id):null;
+      const detail={x:p.x,y:p.y,originSiteId:state.site.id,siteId:t?.site.id||null,siteName:t?.site.name||null,
+        kind:t?'town':'terrain',picked,terrain,inspection,...extra};
+      if(typeof CustomEvent==='function')canvas.dispatchEvent?.(new CustomEvent('earthregionalinspect',{bubbles:true,detail}));
+    }
+    function setExploration(id){
+      exploration=id&&geo?.towns.some(t=>t.site.id===id)?id:'';
+      terrainSnapshot=null;dirty=true;schedule();
+    }
+    function inspectRegion(x,y,config={}){
+      refreshGeography();if(!geo||!baseTown||!Number.isFinite(x)||!Number.isFinite(y))return false;
+      clearObservation(false);regionalFollow=null;cameraFollows=false;overviewZoom=null;
+      if(Number.isFinite(config.zoom)){zoom=clamp(config.zoom,minZoom(),2.15);unit=baseUnit()*zoom;}
+      const p=renderRegion.localPoint(baseTown,x,y);boundCamera(p.x,p.y);
+      const view=regionView();regionalEvent(view,config.picked!==false);
+      dirty=true;schedule();return true;
+    }
+    function releaseRegionalScene(){if(remote){remote.scene.destroy();remote=null;}regionalFollow=null;}
+    function detailVisible(t,v){
+      if(unit<3.25)return false;
+      const extent=.52+.02*Math.ceil((t.site.growth?.households?.length||0)/10);
+      return renderRegion.inView(v,t.x,t.y,extent);
+    }
+    function localDetail(v){return !v||detailVisible(baseTown,v);}
+    function remoteScene(t){
+      const world=regionWorld,site=t.site;
+      if(remote?.id!==site.id){
+        releaseRegionalScene();
+        const surface=document.createElement('canvas');surface.width=surface.height=1;
+        remote={id:site.id,scene:mount(surface,{spectator:true,regionalInset:true,regionalParent:terrainLayer?.clip,getWorld:options.getWorld,getWeek:options.getWeek}),stamp:''};
+      }
+      const stamp=[world.week,world.productionSerial,world.actionRevision,world.workRevision,site.foundingRevision,
+        site.growth?.points,site.buildings?.length,site.construction?.map(j=>j.id+j.phase+j.workers?.length).join('.')].join('/');
+      if(remote.stamp!==stamp||remote.source!==site){
+        const copy=typeof structuredClone==='function'?structuredClone(site):JSON.parse(JSON.stringify(site));
+        remote.scene.setSite(copy);
+        const works=window.EarthConstruction?.view(copy,world);if(works)remote.scene.setConstruction(works);
+        remote.source=site;remote.stamp=stamp;
+      }
+      return remote.scene;
+    }
+    function paintRegionalTowns(v){
+      if(!v)return;
+      const candidates=geo.towns.filter(t=>t!==baseTown&&detailVisible(t,v));
+      // One full neighbour at a time bounds memory on a tablet. The regional
+      // street plan is sufficient for more distant settlements in the frame.
+      candidates.sort((a,b)=>(v.x-a.x)**2+(v.y-a.y)**2-(v.x-b.x)**2-(v.y-b.y)**2);
+      const detailed=candidates[0];
+      for(const t of geo.towns){
+        if(t===detailed||t===baseTown&&localDetail(v)||!renderRegion.inView(v,t.x,t.y,.56))continue;
+        renderRegion.townPlan(ctx,t,v,false);
+      }
+      if(!detailed)remote?.scene.hideTile();
+      if(detailed){
+        const p=renderRegion.localPoint(detailed,v.x,v.y),scene=remoteScene(detailed);
+        scene.paintAt(ctx,{x:p.x,y:p.y,unit,width,height,ratio:pixelRatio,time:visualTime,evening});
+      }
+      visibleTravellers=renderRegion.actors(ctx,regionWorld,state.site,v,false,regionalActor)>0;
+      const moved=!lastRegionFrame||lastRegionFrame.x!==v.x||lastRegionFrame.y!==v.y||lastRegionFrame.sx!==v.sx||
+        lastRegionFrame.w!==v.w||lastRegionFrame.h!==v.h;
+      if(moved){
+        if(!regionalFollow)regionalEvent(v);
+        if(typeof CustomEvent==='function')canvas.dispatchEvent?.(new CustomEvent('earthregionalcamera',{bubbles:true}));
+      }
+      lastRegionFrame=v;
+    }
+    const regionalLooks=new Map();
+    function regionalActor(actor){
+      if(unit<7)return false;
+      const t=geo.towns.find(t=>t.site.id===actor.siteId);if(!t)return false;
+      const who={id:actor.personId,name:actor.name},key=t.site.id+'/'+who.id+'/'+who.name;
+      let look=regionalLooks.get(key);
+      if(!look){look=communityLook(t.site,who);remember(regionalLooks,key,look,48);}
+      const p=renderRegion.localPoint(baseTown,actor.x,actor.y),dx=(actor.dx||0)-(actor.dy||0),dy=-(actor.dx||0)-(actor.dy||0);
+      const norm=Math.hypot(dx,dy)||1,ax=dx/norm,ay=dy/norm,stationary=actor.phase==='working';
+      if(actor.mode==='van'){
+        drawTransport({...p,dx:ax,dy:ay},0,false,true);return true;
+      }
+      const seated=actor.mode==='boat'?{objectX:p.x,objectY:p.y}:null;
+      if(seated)skiff(p.x,p.y,'#829f99',false);
+      const phase=visualTime*5+(hash(key)%157)/29;
+      person(p.x,p.y,look.cloth[0],ax,ay,stationary||seated?0:.75,phase,false,look,seated);
+      if(actor.cargo?.materials||actor.cargo?.food){
+        const x=p.x+ax*.16,y=p.y+ay*.16;box(x-.1,y-.11,.2,.22,.23,.16,'#b59365','#8e714a','#785f42');
+      }else if(stationary){
+        const resource=regionalModel.terrain(geo,actor.x,actor.y).resource;
+        const action=actor.kind==='gather'?activity?.harvestStep?.(resource==='field crops'?'grain':resource):
+          actor.kind==='survey'?{prop:'slate',gesture:'write'}:actor.kind==='parley'?{prop:'none',gesture:'speak'}:
+          actor.kind==='build'||actor.kind==='trail'||actor.kind==='found'?{prop:'hammer',gesture:'strike'}:null;
+        if(action)activityGesture(p,action,look.cloth[0],ax,ay,seated,look.skin,.5+.5*Math.sin(phase));
+      }
+      return true;
+    }
+    function inspectRegionalPerson(id,siteId){
+      const v=regionView();if(!v)return false;
+      const t=siteId?geo.towns.find(t=>t.site.id===siteId):townAt(v);if(!t)return false;
+      if(t===baseTown)return observePerson(id);
+      const scene=remoteScene(t),seen=scene.activityOf(id);if(!seen)return false;
+      const at=renderRegion.regionalPoint(t,seen.x,seen.y);
+      if(!inspectRegion(at.x,at.y,{zoom:Math.max(zoom,1),picked:false}))return false;
+      regionalFollow={id,siteId:t.site.id};
+      regionalEvent(at,true,{kind:'resident',siteId:t.site.id,siteName:t.site.name,personId:id,personName:seen.name,activity:seen});return true;
     }
     function followTarget() {
       if(spectator||state.placed)return {x:SIDE/2,y:SIDE/2};
@@ -1763,6 +1940,20 @@
           ctx.clip();ctx.clearRect(0,0,width,height);
         }
         ground(repairAreas,pass,preview);
+        if((geo||inset)&&!dirtyPlots&&(pass===null||pass===7)){
+          // The legacy cached neighbourhood includes wide painted shallows and
+          // fields. Fade just their clipped outer frame into the surveyed land.
+          const w=tileWidth,h=tileHeight,edge=4.2*tileUnit;
+          ctx.globalCompositeOperation='destination-out';
+          for(const [x0,y0,x1,y1,x,y,tw,th] of [
+            [0,0,edge,0,0,0,edge,h],[w,0,w-edge,0,w-edge,0,edge,h],
+            [0,0,0,edge,0,0,w,edge],[0,h,0,h-edge,0,h-edge,w,edge]
+          ]){
+            const fade=ctx.createLinearGradient(x0,y0,x1,y1);
+            fade.addColorStop(0,'rgba(0,0,0,1)');fade.addColorStop(1,'rgba(0,0,0,0)');
+            ctx.fillStyle=fade;ctx.fillRect(x,y,tw,th);
+          }
+        }
       }finally{
         ctx.restore();width=prior.w;height=prior.h;unit=prior.u;centreX=prior.x;centreY=prior.y;ctx=prior.ctx;
       }
@@ -1890,7 +2081,7 @@
       requestPlantingAtlas();
       // The untextured opening view lasts only until its local atlas decodes.
       // Drawing a full-size terrain map in that interval delays the first input.
-      const limit=plantingPending?16:maxGroundUnit;
+      const limit=plantingPending||inset?16:maxGroundUnit;
       const wanted=clamp(16*Math.pow(Math.SQRT2,Math.round(Math.log(unit/16)/Math.log(Math.SQRT2))),8,limit);
       // A detailed tile can also render the overview. Only rebake on a zoom-in
       // that needs finer detail, and wait until an active pinch has settled.
@@ -1949,25 +2140,53 @@
       if(dw>0&&dh>0)ctx.drawImage(groundCache.tile,(x-left)/scale,(y-top)/scale,dw/scale,dh/scale,x,y,dw,dh);
     }
 
-    function paintTerrainLayer() {
+    function regionalBackdrop(v,surface,brush){
+      const stamp=[geo.origin.id,regionWorld.week,regionWorld.productionSerial,regionWorld.actionRevision,regionWorld.workRevision,exploration,Boolean(plantingAtlas)].join('/');
+      let cached=terrainSnapshot,scale=1,left=0,top=0;
+      if(cached?.regional){
+        scale=v.sx/cached.sx;
+        left=width*.5-cached.w*.5*scale+(cached.x-v.x)*v.sx;
+        top=height*.53-cached.horizon*scale+(v.y-cached.y)*v.sy;
+      }
+      if(!cached?.regional||cached.stamp!==stamp||scale<.80||scale>1.30||
+        left>.5||top>.5||left+cached.w*scale<width-.5||top+cached.h*scale<height-.5){
+        // Pan the prepared landscape underneath the street canvas. Repaint
+        // when the viewport reaches the saved margin or crosses a detail level.
+        const mx=Math.min(180,Math.ceil(width*.22)),my=Math.min(145,Math.ceil(height*.22));
+        const w=width+2*mx,h=height+2*my,horizon=height*.53+my;
+        const density=Math.min(.72,Math.sqrt(630000/(w*h)));
+        const rw=Math.max(1,Math.round(w*density)),rh=Math.max(1,Math.round(h*density));
+        if(surface.width!==rw||surface.height!==rh){surface.width=rw;surface.height=rh;}
+        surface.style.width=w+'px';surface.style.height=h+'px';
+        const field=renderRegion.viewport(v.x,v.y,w,h,v.sx,v.sy,horizon/h);
+        const foreground=ctx;ctx=brush;
+        try{ctx.setTransform(rw/w,0,0,rh/h,0,0);background(field);}finally{ctx=foreground;}
+        cached=terrainSnapshot={regional:true,x:v.x,y:v.y,sx:v.sx,w,h,horizon,stamp};
+        scale=1;left=-mx;top=-my;
+      }
+      const transform='translate3d('+left.toFixed(3)+'px,'+top.toFixed(3)+'px,0) scale('+scale+')';
+      if(cached.transform!==transform){surface.style.transform=transform;cached.transform=transform;}
+    }
+    function paintTerrainLayer(v=null) {
       if(terrainLayer){
         const {brush,surface}=terrainLayer;
-        // The distant landscape is a soft gradient. Repaint its small projection
-        // only when the view changes; the detailed ground tile moves independently.
-        const horizon=state.site && window.EarthTownSurroundings?.profile?.(state.site)==='zanzibar';
-        if(!terrainSnapshot || (horizon && (terrainSnapshot.x!==centreX || terrainSnapshot.y!==centreY || terrainSnapshot.u!==unit))){
-          const w=Math.max(1,Math.ceil(width/3)),h=Math.max(1,Math.ceil(height/3));
-          if(surface.width!==w || surface.height!==h){surface.width=w;surface.height=h;}
-          const foreground=ctx;ctx=brush;
-          try{
-            ctx.setTransform(w/width,0,0,h/height,0,0);
-            background();
-          }finally{ctx=foreground;}
-          terrainSnapshot={x:centreX,y:centreY,u:unit};
+        if(v)regionalBackdrop(v,surface,brush);
+        else{
+          const horizon=state.site&&window.EarthTownSurroundings?.profile?.(state.site)==='zanzibar';
+          if(!terrainSnapshot||terrainSnapshot.regional||horizon&&(terrainSnapshot.x!==centreX||terrainSnapshot.y!==centreY||terrainSnapshot.u!==unit)){
+            const w=Math.max(1,Math.ceil(width/3)),h=Math.max(1,Math.ceil(height/3));
+            if(surface.width!==w||surface.height!==h){surface.width=w;surface.height=h;}
+            surface.style.width='100%';surface.style.height='100%';surface.style.transform='';
+            const foreground=ctx;ctx=brush;
+            try{ctx.setTransform(w/width,0,0,h/height,0,0);background();}finally{ctx=foreground;}
+            terrainSnapshot={x:centreX,y:centreY,u:unit};
+          }
         }
         ctx.clearRect(0,0,width,height);
-      }else background();
-      if(state.site){
+      }else background(v);
+      const show=localDetail(v);
+      if(terrainLayer)terrainLayer.groundSurface.style.visibility=show?'':'hidden';
+      if(state.site&&show){
         cachedGround();
         if(evening && (!terrainLayer || !groundCache?.light))lightRig?.paving(ctx,screen,unit,streetLights);
       }
@@ -1977,7 +2196,13 @@
       const p=screen(x,y,.014);ctx.save();ctx.translate(...p);ctx.rotate(direction==='x'?Math.atan(TILT):-Math.atan(TILT));
       ctx.font=`600 ${clamp(unit*.22,4.5,11)}px system-ui,sans-serif`;ctx.fillStyle='rgba(232,227,198,.61)';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(name,0,0);ctx.restore();
     }
-    function background() {
+    function background(v) {
+      if(v){
+        renderRegion.soil(ctx,geo,v,true,plantingAtlas);
+        renderRegion.routeLayer(ctx,regionWorld,state.site,v,false);
+        renderRegion.useLayer(ctx,regionWorld,state.site,v,false);
+        renderRegion.explored(ctx,geo,regionWorld,state.site,v,exploration);return;
+      }
       if(state.site&&window.EarthTownSurroundings?.paintHorizon?.(ctx,screen,unit,width,height,state.site))return;
       if(!backdropGradient||backdropSite!==state.site?.id){
         const colors=window.EarthTownSurroundings?.background(state.site) || (state.site?.water?['#568984','#375f68']:['#758773','#526657']);
@@ -2405,9 +2630,9 @@
     function venuePoint(venue,id){
       if(!state.site||!visitVenues.has(venue)||window.EarthCommunityLife?.present(state.site,id)===false)return null;
       const resident=state.site.residents.find(r=>r.id===id),local=locals.get(id);
-      if(!resident&&!local)return null;
+      if(!resident&&!local&&id!=='steward')return null;
       if(resident&&venue==='home')return state.points.find(p=>p.residentId===id)||null;
-      const participant=local||{npcId:id,ordinal:resident.slot,index:resident.slot};
+      const participant=local||{npcId:id,ordinal:resident?.slot??0,index:resident?.slot??0};
       return localVenue(venue,participant,null,null);
     }
     function venueProof(venue,personId){
@@ -2438,7 +2663,40 @@
       if(venueProof(venue,personId)){stop();pressed.clear();arrive();emitState();return true;}
       return navigate(target,{type:'activityVenue',venue,personId,onArrival:arrive});
     }
+    const paidRoutes=new Map();
+    function refreshPaidRoutes(site){
+      const active=new Set(),orders=window.EarthDistrictOrders;
+      for(const job of window.EarthDistrictGrowth?.activeWork?.(site)||[]){
+        const id=job.ownerId;
+        if(id===playedId||id===state.companion?.id||window.EarthCommunityLife?.present?.(site,id)===false)continue;
+        active.add(id);
+        const key=site.id+'/'+job.id+'/'+job.phase;
+        if(paidRoutes.get(id)?.key===key)continue;
+        const points=orders.path(job.from,job.to),legs=[];
+        let total=0;
+        for(let i=1;i<points.length;i++){
+          const from=points[i-1],to=points[i],dx=to.x-from.x,dy=to.y-from.y,length=Math.hypot(dx,dy);
+          if(length){legs.push({from,dx:dx/length,dy:dy/length,start:total,length});total+=length;}
+        }
+        const series=activity?.plan({kind:job.kind,orderPhase:job.phase,orderGood:job.orderGood,resource:job.resource,cargo:job.resourceName,
+          amount:job.amount,venue:job.venue,goal:job.action,assignment:job.reason,destination:job.destination});
+        paidRoutes.set(id,{key,job,route:{first:points[0],legs,total},body:{series,stop:job.to,dir:1,forward:true}});
+      }
+      for(const id of paidRoutes.keys())if(!active.has(id))paidRoutes.delete(id);
+    }
+    function paidOrderBody(id){
+      const paid=paidRoutes.get(id);if(!paid)return null;
+      if(paid.time===visualTime)return paid.body;
+      paid.time=visualTime;
+      const {job,body,route}=paid,elapsed=Math.max(0,Date.now()-job.startedAt);
+      const fraction=job.travelMs?Math.min(1,elapsed/job.travelMs):1;
+      onPath(route,fraction,body);body.moving=fraction<1;body.pace=body.moving?.72:0;
+      body.seconds=Math.max(0,elapsed-job.travelMs)/1000;body.phase=visualTime*4;
+      body.routeLeg=body.moving?route:null;body.routeFraction=fraction;
+      return body;
+    }
     function routineBody(local){
+      const order=local&&paidOrderBody(local.npcId);if(order)return order;
       const plan=local?.plan;
       if(!plan||local.npcId===playedId)return null;
       const now=localTime(local.npcId);
@@ -2515,6 +2773,8 @@
     function refreshLocalRoutines(){
       const site=state.site;if(!site)return;
       shoreFishers.clear();
+      refreshPaidRoutes(site);
+      for(const [id,p] of paidRoutes)if(p.job.resource==='fish'&&p.job.phase==='collect')shoreFishers.add(id);
       const districtWeek=options.getWeek?.()??site.autonomy?.week;
       workingErrands=window.EarthNeighbourErrands?.working?.(site,districtWeek??site.founded??1)||[];
       const openRows=new Set(workingErrands.map(row=>row.rowId));
@@ -2624,7 +2884,8 @@
           localVenue(outing?.venue||defaultVisit,local,outing?.target,meeting));
         const work=outing&&!service?outingPlace:duty;
         const visit=shipment?window.EarthConstruction.pantryStop():outing&&!service?duty:outingPlace;
-        const speed=.63+(profile?.aptitudes?.stamina??50)*.005;
+        const stamina=site.careers?.[id]?.skills?.stamina??profile?.aptitudes?.stamina??50;
+        const speed=.63+stamina*.005;
         const jobSeries=activity?.plan({role:local.role,kind:tour?.kind==='inspect'?'inspectHome':null,careerId:career?.id,occupation:career?.occupation,venue:atWork,destination:duty.label,assignment:ordinary?.activity||ordinary?.title,goal:ordinary?.goal,training:Boolean(education&&!career),personality:profile});
         const outingSeries=activity?.plan({role:local.role,kind:outing?.kind||breakKind,venue:outing?.venue||defaultVisit,specialistId:specialist?.id,
           destination:outingPlace.label,civic:outing?.civic,goal:outing?.title||(outing?.civic?outing.reason:outing?.goal),projectKind:outing?.projectKind||(!outing&&pastime?'hobby':null),
@@ -2634,7 +2895,7 @@
         const returnShift=shipment&&{receipt,returnTo:duty,resume:jobSeries,breakPlace:localVenue(defaultVisit,local),
           breakSeries:activity?.plan({kind:breakKind,role:local.role,venue:defaultVisit,destination:'a break',personality:profile}),
           dwell:11+(profile?.traits?.patience??50)*.22,breakTime:5+(profile?.traits?.sociability??50)*.10};
-        local.plan={from,work,visit,service,rejoin,holdMeeting:Boolean(errand||outing?.placementJob),shipment:returnShift,speed,dwell:shipment?3:service?0:meeting?60:11+(profile?.traits?.patience??50)*.22,
+        local.plan={from,work,visit,service,rejoin,holdMeeting:Boolean(errand||outing?.placementJob||outing?.practiceSession),shipment:returnShift,speed,dwell:shipment?3:service?0:meeting?60:11+(profile?.traits?.patience??50)*.22,
           visitDwell:shipment?3:meeting?60:5+(profile?.traits?.sociability??50)*.10,started:localTime(id),revision:-1,
           workSeries:outing&&!service?outingSeries:jobSeries,visitSeries:unloading||(outing&&!service?jobSeries:outingSeries),
           body:{coat:walkerCoats[local.index??3]||walkerCoats[2],pace:0}};
@@ -2762,14 +3023,40 @@
         checkRegularStop();schedule();
       });
     }
+    let householdPickup=null;
+    function householdTruckBody(id,origin){
+      const held=state.site?.fleet?.custody,q=state.traffic;
+      if(!q||id===playedId||id===state.companion?.id)return null;
+      if(held?.actor===id&&state.site.fleet?.incident?.independent){
+        if(independentDriver()===id)return q;
+        const key=state.site.id+'/'+held.token+'/parked';
+        if(householdPickup?.key!==key)householdPickup={key,body:dispatchStand(held.anchor,q)};
+        return householdPickup.body;
+      }
+      const offer=disputedOrder;
+      if(offer?.actor!==id||offer.action!=='take')return null;
+      const key=[state.site.id,offer.generation,id,offer.week,offer.serial,footpathRevision].join('/');
+      if(householdPickup?.key!==key){
+        const kerb=dispatchStand(q,q);if(!kerb)return null;
+        const prior=householdPickup;
+        const from=prior?.actor===id&&prior.site===state.site.id&&prior.offer===offer.serial&&prior.week===offer.week?prior.body:origin;
+        const path=localPath('household-pickup-'+id,from,kerb);
+        householdPickup={key,actor:id,site:state.site.id,offer:offer.serial,week:offer.week,body:{...from},path,at:visualTime};
+      }
+      const approach=householdPickup,fraction=approach.path.total?(visualTime-approach.at)*1.05/approach.path.total:1;
+      const body=onPath(approach.path,fraction,approach.body);
+      body.moving=fraction<1;body.pace=body.moving?.75:0;body.phase=visualTime*4;
+      return body;
+    }
     function disputeProof(){
       const offer=disputedOrder,q=state.traffic;
       if(!offer||!q||!state.site||offer.actor===playedId||state.site.id!==offer.siteId||state.placed)return null;
-      const inCab=offer.action==='park',body=inCab?q:routineBody(locals.get(offer.actor));
+      const inCab=offer.action==='park',body=inCab?q:personBody(offer.actor);
       if(!body||!inCab&&heldLocal?.npcId===offer.actor)return null;
       const emptyCab=!drivingTruck&&!state.site.fleet?.custody&&Boolean(dispatchDriver||locals.get('driver')?.plan||playedId==='driver'||!locals.has('driver'));
       return {siteId:state.site.id,actor:offer.actor,x:body.x,y:body.y,truck:actorPosition(q),
-        mode:inCab?'drive':'walk',emptyCab,stopped:q.speed<.1&&!q.diversion};
+        mode:inCab?'drive':'walk',emptyCab,stopped:q.speed<.1&&!q.diversion,
+        witnesses:inCab?[]:cabWitnesses(q,offer.actor)};
     }
     function checkDisputedStop(){
       const offer=disputedOrder;
@@ -3106,6 +3393,8 @@
       return point.x>bounds[0]-margin&&point.y>bounds[1]-margin&&point.x<bounds[2]+margin&&point.y<bounds[3]+margin;
     }
     function builderPosition(w) {
+      const order=!w.jobId&&paidOrderBody(w.residentId);if(order)return order;
+      const pickup=!w.jobId&&householdTruckBody(w.residentId,w);if(pickup)return pickup;
       const fraction=reduced?1:clamp((visualTime-w.since)/.72,0,1);
       if(fraction>=1||!w.walkLength)return w;
       let travel=w.walkLength*fraction,from=w.from;
@@ -3211,6 +3500,7 @@
       return {type:'construction',jobId:job.id,label:job.name,plot:job.plot,kind:job.kind,x:job.gate.x,y:job.gate.y};
     }
     function workerPoint(base) {
+      const order=base?.type==='resident'&&paidOrderBody(base.residentId);if(order)return {...base,x:order.x,y:order.y};
       return base?.type==='resident'&&state.companion?.id!==base.residentId?crew.get(base.residentId)?.meeting||base:base;
     }
     function doorstep(base){
@@ -3470,6 +3760,8 @@
       }
     }
     function residentFigure(point) {
+      const order=paidOrderBody(point.residentId);if(order)return order;
+      const pickup=householdTruckBody(point.residentId,point);if(pickup)return pickup;
       return {x:point.x+.47+(reduced?0:Math.sin((visualTime-(trafficWaits.get('home-'+point.residentId)||0))*.45+point.index)*.12),y:point.y-.21};
     }
     function paintAchievement(mark){
@@ -3593,7 +3885,7 @@
       const w=card.w;
       brush.fillStyle='rgba(27,48,42,.9)';brush.fillRect(left,top,w,31);
       brush.fillStyle='#dbc08a';brush.fillRect(left,top,2,31);
-      brush.textAlign='left';brush.textBaseline='middle';brush.font='650 12px system-ui,sans-serif';
+      brush.textAlign='left';brush.textBaseline='middle';brush.font='600 12px system-ui,sans-serif';
       brush.fillStyle='#fff2d1';brush.fillText(card.name,left+7,top+9,w-12);
       brush.font='500 11px system-ui,sans-serif';brush.fillStyle='#deedda';
       brush.fillText(card.caption,left+7,top+22,w-12);
@@ -3670,15 +3962,32 @@
     }
     function draw() {
       if(!width||!height)return;
+      const started=meter?.now();
+      if(regionalFollow&&remote?.id===regionalFollow.siteId){
+        const person=remote.scene.activityOf(regionalFollow.id);
+        const town=geo?.towns.find(t=>t.site.id===remote.id);
+        if(person&&town){const p=renderRegion.regionalPoint(town,person.x,person.y),q=renderRegion.localPoint(baseTown,p.x,p.y);boundCamera(q.x,q.y);}
+        else regionalFollow=null;
+      }
+      const v=regionView();
+      if(v&&!localDetail(v)){
+        idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);
+        meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));return;
+      }
       watchedPath=observedRoute();updateGlanceCards();
-      const clipped=clipIdleActors();
-      try{drawScene(clipped);}finally{if(clipped)ctx.restore();}
+      const clipped=v&&(visibleTravellers||v.sx<140||geo.towns.some(t=>t!==baseTown&&detailVisible(t,v)))?false:clipIdleActors();
+      try{drawScene(clipped);}finally{
+        if(clipped)ctx.restore();
+        meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));
+      }
     }
     const buildingBounds=[4.2,6.5,2.5],treeBounds=[2,3.65,.35],furnitureBounds=[1.5,2.6,.7];
     const bodyBounds=[1.05,1.6,.68],waterWorkBounds=[3.25,1.6,2.5],vehicleBounds=[2.4,2.5,1.5];
     const actorBounds=id=>shoreFishers.has(id)?waterWorkBounds:bodyBounds;
     function drawScene(repaint) {
-      ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);ctx.lineJoin='round';ctx.lineCap='round';paintTerrainLayer();
+      ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);ctx.lineJoin='round';ctx.lineCap='round';
+      if(inset)cachedGround();
+      else{const view=regionView();paintTerrainLayer(view);paintRegionalTowns(view);}
       if(!state.site)return;
       if(state.placed){lotOverlay();showConnections();}routeRibbon();fishMarks();
       const list=[];
@@ -3713,11 +4022,20 @@
       if(state.site.growth){
         const g=state.site.growth;
         for(const h of g.households){
-          const x=1.7+(h.plot%10)*2.2,y=-1.9-Math.floor(h.plot/10)*1.75;
+          const {x,y}=window.EarthDistrictGrowth.homePoint(state.site,h.plot);
           if(h.plot<g.roads)rect(x-.17,y+.4,.34,Math.abs(y)-.4,.015,'#a69a83');
           addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*(.36+.055*h.home)),buildingBounds);
+          if(h.build||g.road?.lot===h.plot){
+            const appointment=h.build?.shop?window.EarthDistrictGrowth.shopPoint(state.site,h.build.lot):{x:x+.4,y:y+.5};
+            const {x:ax,y:ay}=appointment;
+            addItem(ax,ay,ax+ay+.32,()=>{
+              for(let row=0;row<2;row++)box(ax-.37,ay+row*.14,.72,.12,.03,.13,'#c5a475','#a18662','#856e52');
+              for(const side of [-1,1])box(ax+side*.4,ay+.27,.075,.075,.02,.37,'#d7aa64','#b98b50','#987039');
+              line(ax-.37,ay+.3,.33,ax+.42,ay+.3,.33,'#e3c47e',1.4);
+            },furnitureBounds);
+          }
           if(h.shop){
-            const sx=1.7+(h.businessPlot%10)*2.2,sy=-2.1-(Math.ceil(g.households.length/10)+Math.floor(h.businessPlot/10))*1.75;
+            const {x:sx,y:sy}=window.EarthDistrictGrowth.shopPoint(state.site,h.businessPlot);
             addItem(sx,sy,sx+sy+.3,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'market',0,...screen(sx,sy),unit*.36),buildingBounds);
           }
         }
@@ -3732,7 +4050,7 @@
         workbench(job,addItem);
       }
       for(const w of crew.values()){
-        if(w.residentId===state.companion?.id||w.residentId===playedId)continue;
+        if(w.residentId===state.companion?.id||w.residentId===playedId||w.residentId===independentDriver())continue;
         const p=builderPosition(w);addItem(p.x,p.y,p.x+p.y+.18,()=>builder(w),selectedCrew.has(w.residentId)||w.jobId&&watchedJob===w.jobId?buildingBounds:actorBounds(w.residentId));
       }
       for(const q of state.trees)if(!workTree(q))addItem(q.x,q.y,q.x+q.y+.17,()=>plant(q.x,q.y,q.size,q.index,q.palm),treeBounds);
@@ -3744,7 +4062,7 @@
           if(evening)lightRig.halo(ctx,screen,unit,light);
         });
       }
-      for(const q of state.points)if(q.type==='resident'&&q.residentId!==playedId&&q.residentId!==state.companion?.id&&!crew.has(q.residentId)){
+      for(const q of state.points)if(q.type==='resident'&&q.residentId!==playedId&&q.residentId!==independentDriver()&&q.residentId!==state.companion?.id&&!crew.has(q.residentId)){
         const figure=residentFigure(q),{x,y}=figure;
         if(selectedCrew.has(q.residentId)){const foot=screen(x,y);ellipse(...foot,Math.max(6,unit*.36),Math.max(3,unit*.16),'rgba(166,226,176,.28)','#e0f6c9');}
         addItem(x,y,x+y+.1,()=>activityFigure(q.residentId,figure,COATS[q.index],1,0,0,q.index,state.looks.get(q.residentId)),actorBounds(q.residentId));
@@ -3933,7 +4251,11 @@
       return true;
     }
     // A uniform lattice handles route finding. A heap keeps long street trips inexpensive.
-    function makeRoute(start,target,driving=state.mode==='drive',detour=null,truck=drivingTruck) {
+    const makeRoute=meter ? function(...args){
+      const started=meter.now();
+      try{return planRoute(...args);}finally{meter.finish('path',started);}
+    } : planRoute;
+    function planRoute(start,target,driving=state.mode==='drive',detour=null,truck=drivingTruck) {
       if(clearSegment(start,target,driving,truck))return [target];
       const N=GRID_SIDE,origin=GRID_ORIGIN,count=GRID_SIZE;
       // Standing inside a newly fenced worksite grants temporary exit permission.
@@ -4459,7 +4781,7 @@
       if((observedId||cameraFollows)&&!dragging&&!pinch){
         const target=observedId?personBody(observedId):followTarget(),rate=reduced?1:1-Math.exp(-dt*7.2);
         if(!target){clearObservation();return;}
-        if(observedId&&Math.abs(target.x-centreX)+Math.abs(target.y-centreY)<.001){centreX=target.x;centreY=target.y;}
+        if(Math.abs(target.x-centreX)+Math.abs(target.y-centreY)<.001){centreX=target.x;centreY=target.y;}
         else{centreX+=(target.x-centreX)*rate;centreY+=(target.y-centreY)*rate;}
       }
     }
@@ -4513,7 +4835,7 @@
       const previous=state.site,previousKey=siteKey(previous),nextKey=siteKey(site);
       let restoredTerrain=null;
       if(previousKey!==nextKey){
-        clearStamps();
+        releaseRegionalScene();lastRegionFrame=null;inspectionKey='';clearStamps();
         if(drivingTruck){releaseServiceTruck(false);}
         drivingTruck=false;dispatchDriver=null;fleetToken='';truckHailUntil=0;regularPending=null;regularQuote=null;regularAttempt=null;seenConsignment=null;
         disputePending=null;disputedOrder=null;neighbourHelp=null;resourceWork=null;inspectedLandmark=null;landmarkPanel=null;
@@ -4531,7 +4853,7 @@
         zoom=stored?.zoom||1;unit=baseUnit()*zoom;
         const target=followTarget();centreX=target.x;centreY=target.y;
       }
-      state.site=site||null;state.seed=hash(`${site?.lat??0},${site?.lon??0},${site?.id||'district'}`);
+      state.site=site||null;refreshGeography();state.seed=hash(`${site?.lat??0},${site?.lon??0},${site?.id||'district'}`);
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
       const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,landmarks.filter(mark=>mark.kind==='courtyard').map(mark=>mark.home.plot),
@@ -4591,13 +4913,26 @@
     function restoreSeat(seat){
       seatedAt=state.mode==='walk'&&seat?fixtures.find(q=>q.kind==='bench'&&q.x===seat.x&&q.y===seat.y&&dist(state.player,q)<.85)||null:null;
     }
+    function cabWitnesses(cab,operator){
+      // Only sample at the kerb when a dispatch action asks for evidence.
+      const ids=new Set([playedId,...locals.keys(),...state.points.map(p=>p.residentId).filter(Boolean)]);
+      const witnesses=[];
+      for(const id of ids){
+        if(!id||id===operator)continue;
+        const body=personBody(id);
+        if(!body||dist(cab,body)>2.7||state.solids.some(bounds=>crossesBounds(cab,body,bounds,0)))continue;
+        witnesses.push(id);
+      }
+      return witnesses;
+    }
     function truckStatus(){
       const q=state.traffic;if(!q)return null;
       const parked=q.leg===0&&q.distance<.03&&!q.diversion,standby=regularQuote&&!regularQuote.available&&parked&&!state.site?.fleet?.custody;
       return {...getState(),truck:actorPosition(drivingTruck?state.player:q),next:regularQuote?.available?regularQuote.next.name:regularQuote?'Market exchange':nextDelivery(q),
         status:standby?'standby':regularQuote&&!regularQuote.available&&!state.site?.fleet?.custody?'returning':'assigned',
         reason:regularQuote?.reason||'',good:regularQuote?.available?regularQuote.next.good:null,
-        stopped:drivingTruck||Boolean(state.site?.fleet?.custody)||q.wait>0||q.speed<.1};
+        stopped:drivingTruck||Boolean(state.site?.fleet?.custody)||q.wait>0||q.speed<.1,
+        witnesses:!drivingTruck&&dist(q,state.player)<=1.56?cabWitnesses(q,playedId):[]};
     }
     function hailTruck(onArrival){
       const q=state.traffic;if(crossingOpen()||!q||state.mode!=='walk')return false;
@@ -4718,14 +5053,18 @@
         if(!free||dist(player,free)>.8)return false;
         player={...player,...free};
       }
-      if(!camera||typeof camera.cameraFollows!=='boolean'||!between(camera.zoom,.29,2.15)||
-         !between(camera.centreX,-3,SIDE+3)||!between(camera.centreY,-3,mode==='boat'?seaLimit:SIDE+3))return false;
-      if(camera.overviewZoom!==null&&(!between(camera.overviewZoom,.29,2.15)||camera.cameraFollows))return false;
+      if(!camera||typeof camera.cameraFollows!=='boolean'||!between(camera.zoom,geo?.bounds?1e-6:.29,2.15)||
+        !Number.isFinite(camera.centreX)||!Number.isFinite(camera.centreY))return false;
+      if(geo&&baseTown){
+        const p=renderRegion.regionalPoint(baseTown,camera.centreX,camera.centreY),b=geo.bounds;
+        if(!between(p.x,b.minX-.00001,b.maxX+.00001)||!between(p.y,b.minY-.00001,b.maxY+.00001))return false;
+      }else if(!between(camera.centreX,-3,SIDE+3)||!between(camera.centreY,-3,mode==='boat'?seaLimit:SIDE+3))return false;
+      if(camera.overviewZoom!==null&&(!between(camera.overviewZoom,geo?.bounds?1e-6:.29,2.15)||camera.cameraFollows))return false;
       // Resume the player's position, never an unconfirmed activity or an old arrival callback.
       stop();clearInput();priorPlacementView=null;state.placed=null;previewedPlot=null;state.active=null;state.hover=null;
       standUp(false);clearCatch();drivingTruck=restoredTruck;state.mode=mode;embarked=mode==='boat'?berth:null;state.player=actorPosition(player);state.van=actorPosition(van);if(drivingTruck)Object.assign(state.traffic,actorPosition(player));setParkedVan();clearTrafficSpawn();restoreSeat(snapshot.seat);
       state.companion=null;prepareCompanion();
-      overviewZoom=camera.overviewZoom;zoom=overviewZoom===null?camera.zoom:fitZoom();unit=baseUnit()*zoom;
+      overviewZoom=camera.overviewZoom;zoom=overviewZoom===null?Math.max(minZoom(),camera.zoom):fitZoom();unit=baseUnit()*zoom;
       centreX=camera.centreX;centreY=camera.centreY;cameraFollows=camera.cameraFollows;
       lastFrame=0;miniTick=-1;shortMessage='';dirty=true;updateNearby();emitState();return true;
     }
@@ -4811,7 +5150,7 @@
       else {overviewZoom=zoom;zoom=fitZoom();unit=baseUnit()*zoom;centreX=12;centreY=12;cameraFollows=false;}
       miniTick=-1;dirty=true;schedule();
     }
-    function recenter() {clearObservation();exitOverview();cameraFollows=true;const target=followTarget();centreX=target.x;centreY=target.y;miniTick=-1;dirty=true;schedule();}
+    function recenter() {regionalFollow=null;clearObservation();exitOverview();if(geo&&zoom<.38){zoom=1;unit=baseUnit()*zoom;}cameraFollows=true;const target=followTarget();centreX=target.x;centreY=target.y;miniTick=-1;dirty=true;schedule();}
     function drawMini() {
       if(!miniCanvas||!miniButton)return;
       miniButton.hidden=Boolean(state.placed);if(state.placed||Math.floor(visualTime*6)===miniTick)return;
@@ -4841,20 +5180,19 @@
       miniButton.setAttribute('aria-pressed',String(overviewZoom!==null));miniButton.title=overviewZoom===null?'Show whole district':'Return to street scale';
     }
     function keepUnderPointer(anchor,point){
-      const after=world(point.x,point.y);
-      centreX=clamp(centreX+anchor.x-after.x,-3,SIDE+3);
-      centreY=clamp(centreY+anchor.y-after.y,northCameraLimit(),state.mode==='boat'?seaLimit:SIDE+3);
+      const after=world(point.x,point.y);regionalFollow=null;
+      boundCamera(centreX+anchor.x-after.x,centreY+anchor.y-after.y,true);
       cameraFollows=false;
     }
     function zoomBy(factor,point) {
       if(!Number.isFinite(factor)||factor<=0)return;
       overviewZoom=null;
-      const prior=point&&world(point.x,point.y);zoom=clamp(zoom*factor,.29,2.15);unit=baseUnit()*zoom;
+      const prior=point&&world(point.x,point.y);zoom=clamp(zoom*factor,minZoom(),2.15);unit=baseUnit()*zoom;
       if(prior){
         keepUnderPointer(prior,point);
         if(zoomTimer)clearTimeout(zoomTimer);
         zoomTimer=setTimeout(()=>{zoomTimer=0;dirty=true;schedule();},120);
-      }
+      }else if(geo)boundCamera(centreX,centreY,true);
       dirty=true;schedule();
     }
     function figureDistance(actor,sx,sy) {
@@ -5016,6 +5354,28 @@
     }
     function tap(p,device) {
       if(!state.site)return;
+      const v=regionView();
+      if(v&&!state.placed){
+        const at=v.ground(p.x,p.y),t=townAt(at),home=t===baseTown;
+        const actor=(regionalModel.travellers?.(regionWorld,state.site)||[]).map(person=>{
+          const pt=v.screen(person.x,person.y);const top=pt.y-(unit>=7?unit*(person.mode==='van'?.9:.85):0);
+          const d=Math.hypot(p.x-pt.x,p.y-clamp(p.y,top,pt.y+2));
+          return {person,d};
+        }).filter(o=>o.d<16).sort((a,b)=>a.d-b.d)[0]?.person;
+        if(actor){regionalEvent(at,true,{kind:'resident',personId:actor.personId,personName:actor.name,siteId:actor.siteId,inTransit:true,activity:actor});return;}
+        if(t&&!home&&remote?.id===t.site.id&&detailVisible(t,v)){
+          const choice=remote.scene.regionalPick(p.x,p.y,device)||{};
+          regionalEvent(at,true,{siteId:t.site.id,siteName:t.site.name,...choice});return;
+        }
+        if(!home||unit<3.25){
+          regionalEvent(at,true,t?{kind:'town',siteId:t.site.id,siteName:t.site.name}:{});
+          if(t&&unit<3.25)inspectRegion(t.x,t.y,{zoom:.55,picked:true});return;
+        }
+        if(spectator){
+          const item=regionalPick(p.x,p.y,device);
+          if(item){regionalEvent(at,true,item);if(item.personId)observePerson(item.personId);return;}
+        }
+      }
       if(spectator){
         const hit=figureHit(p.x,p.y,device),id=hit?.npcId||hit?.residentId;
         if(id)observePerson(id);
@@ -5094,7 +5454,7 @@
       if(q.type==='construction'){choose(q);return;}
       if(q.type==='pedestrian'){stop();pressed.clear();message(passingHint(q));emitState();return;}
       if(q.type==='npc'&&state.mode==='walk'){focusStop(q);return;}
-      if(q.type==='service'&&options.onTruckInteract){options.onTruckInteract(truckStatus());if(state.mode==='walk')hailTruck();return;}
+      if(q.type==='service'&&options.onTruckInteract){options.onTruckInteract(truckStatus());return;}
       if(q.type==='service'&&locals.get('driver')?.plan){message('The co-op van is parked while its driver is away.');return;}
       if(q.type==='service'&&state.mode==='walk'&&playedId!=='driver'&&locals.has('driver')){focusStop(localPoint('driver'));return;}
       if(q.type==='service'){const v=state.traffic;message(v.yielding?'The delivery driver is giving way.':`Co-op deliveries · next stop ${nextDelivery(v)}`);return;}
@@ -5118,8 +5478,8 @@
       if(next>=pixelRatio)return;
       // Misses often alternate with on-time frames. Drop a level only after
       // sustained misses, then evaluate the smaller surface independently.
-      const threshold=pixelRatio===fullPixelRatio?6:12;
-      slowFrameCount=delta>=48 ? slowFrameCount+1 : Math.max(0,slowFrameCount-.5);
+      const threshold=pixelRatio===fullPixelRatio?4:8;
+      slowFrameCount=delta>=40 ? slowFrameCount+1 : Math.max(0,slowFrameCount-.5);
       if(slowFrameCount>=threshold){slowFrameCount=0;sizeForeground(next);}
     }
     function parkForeground(){
@@ -5136,9 +5496,9 @@
       const w=Math.round(bounds.width),h=Math.round(bounds.height),ratio=Math.min(thumbnail?1:2,typeof devicePixelRatio==='number'?devicePixelRatio:1,2,Math.sqrt(2200000/(w*h)));
       if(width===w&&height===h&&ratio===fullPixelRatio&&canvas.width>1)return;
       width=w;height=h;fullPixelRatio=ratio;slowFrameCount=0;
-      const motionRatio=Math.max(1,Math.sqrt(1050000/(w*h)));
+      const motionRatio=regionEnabled()?Math.max(.76,Math.sqrt(950000/(w*h))):Math.max(1,Math.sqrt(1050000/(w*h)));
       motionPixelRatio=terrainLayer&&motionRatio<ratio*.9 ? motionRatio : ratio;
-      const lower=Math.max(1,Math.sqrt(600000/(w*h)));
+      const lower=Math.max(regionEnabled()?.65:1,Math.sqrt(600000/(w*h)));
       limitedPixelRatio=terrainLayer&&lower<motionPixelRatio*.9 ? lower : motionPixelRatio;
       sizeForeground(ratio);
       if(state.placed||overviewZoom!==null)zoom=fitZoom();
@@ -5150,8 +5510,9 @@
     function cancelIdle(){if(idleTimer){clearTimeout(idleTimer);idleTimer=0;}}
     function cancelRouteTimer(){if(routeTimer){clearTimeout(routeTimer);routeTimer=0;}}
     function cancelFrame(){if(frame){cancelAnimationFrame(frame);frame=0;}}
-    function suspend(){cancelIdle();cancelRouteTimer();cancelFrame();}
+    function suspend(){cancelIdle();cancelRouteTimer();cancelFrame();meter?.suspend(canvas);}
     function schedule(){
+      if(inset)return;
       cancelIdle();
       if(!alive||covered||canvas.parentElement?.hidden||(typeof document!=='undefined'&&document.hidden))return;
       if(!visible&&typeof setTimeout==='function'){
@@ -5174,6 +5535,12 @@
     }
     const frameTimer=typeof performance!=='undefined' && typeof performance.now==='function'?performance:null;
     let previousMotionTick=0,lastPaintCost=null,quickPaints=0,latePaints=0,fastTravel=false,limitedTravel=false;
+    let paintAverage=8,foregroundBusy=false;
+    function visibleStreetLife(){
+      if(reduced||thumbnail||!visible||!state.site)return false;
+      const v=lastRegionFrame;
+      return !geo||!v||visibleTravellers||localDetail(v)||Boolean(remote&&geo.towns.some(t=>t.site.id===remote.id&&detailVisible(t,v)));
+    }
     function travelInterval(now,watch) {
       const gap=now-previousMotionTick;
       if(!watch || !previousMotionTick || !lastFrame){
@@ -5209,12 +5576,16 @@
         refreshObservation();
         if(castStarted!==null&&visualTime-castStarted>=castDuration)clearCatch();
         if(visible){
-          const started=watch?frameTimer.now():0;
-          adjustForeground(activeMotion(),delta);draw();
-          if(watch)lastPaintCost=frameTimer.now()-started;
+          const started=frameTimer?.now()||0;
+          foregroundBusy=activeMotion()||visibleStreetLife()&&paintAverage>20;
+          adjustForeground(foregroundBusy,delta);draw();
+          if(frameTimer){
+            const cost=frameTimer.now()-started;paintAverage=paintAverage*.87+Math.min(90,cost)*.13;
+            if(watch)lastPaintCost=cost;
+          }
         }
         dirty=false;
-      }else if(visible && pixelRatio!==fullPixelRatio && !activeMotion()){
+      }else if(visible && pixelRatio!==fullPixelRatio && !foregroundBusy&&!activeMotion()){
         adjustForeground(false,delta);draw();
       }
       if(!state.site||frame)return;
@@ -5222,8 +5593,11 @@
       // A stationary finger does not require its own animation loop.
       if(moving()||!visible&&autonomousMotion()||(!reduced&&(dragging||pinch||visible&&(watchedTravel||castStarted!==null)))){schedule();return;}
       if(visible&&(!reduced||autonomousMotion()||shortMessage&&visualTime<messageUntil)){
-        // The idle service van and pedestrians can run at 12 fps; an input wakes the next paint immediately.
-        if(typeof setTimeout==='function')idleTimer=setTimeout(()=>{idleTimer=0;schedule();},reduced?800:thumbnail?200:70);
+        // Attend to people moving in the current viewport at the same cadence
+        // as player travel. A quiet field or gallery costs much less to observe.
+        if(visibleStreetLife()&&frameTimer&&paintAverage<30){schedule();return;}
+        const idleDelay=reduced?800:thumbnail?200:visibleStreetLife()?36:240;
+        if(typeof setTimeout==='function')idleTimer=setTimeout(()=>{idleTimer=0;schedule();},idleDelay);
         else schedule();
       }
     }
@@ -5238,13 +5612,14 @@
         svg.setAttribute('aria-hidden','true');use.setAttribute('href','#'+icon);svg.appendChild(use);button.appendChild(svg);group.appendChild(button);listen(button,'click',action);
       }
       canvas.parentElement.appendChild(group);cleanups.push(()=>group.remove());
+      if(regionEnabled()&&document.getElementById?.('region-mini'))return;
       miniButton=document.createElement('button');miniButton.type='button';miniButton.className='district-overview';
       miniButton.setAttribute('aria-label','Toggle district overview');miniButton.title='Show whole district';
       miniCanvas=document.createElement('canvas');miniCanvas.width=148;miniCanvas.height=108;miniCanvas.setAttribute('aria-hidden','true');
       Object.assign(miniCanvas.style,{width:'100%',height:'100%',position:'static',display:'block',pointerEvents:'none'});miniButton.appendChild(miniCanvas);
       canvas.parentElement.appendChild(miniButton);listen(miniButton,'click',toggleOverview);cleanups.push(()=>miniButton.remove());
     }
-    if(!thumbnail)addMapControls();
+    if(!thumbnail&&!inset)addMapControls();
     function restoreStreetSurface(){
       clearStamps();idleScene=null;terrainSnapshot=null;backdropGradient=null;miniTick=-1;dirty=true;
     }
@@ -5271,6 +5646,7 @@
     canvas.style.touchAction='none';if(oldTab===null)canvas.tabIndex=0;
     if(!oldLabel)canvas.setAttribute('aria-label',spectator?'Observe this district. Tap a resident to follow them, drag to pan or pinch to zoom.':'District streets. Tap to walk, drag to look around, or use the arrow keys. E interacts. V boards the van.');
     function beginPinch() {
+      clearObservation(false);regionalFollow=null;
       const [a,b]=fingers.values();
       const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
       pinch={distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),zoom,anchor:world(mid.x,mid.y)};
@@ -5278,6 +5654,7 @@
     }
     listen(canvas,'pointerdown',e=>{
       if(covered||!state.site||e.button!==0||fingers.has(e.pointerId))return;
+      if(!fingers.size&&e.pointerType==='touch')meter?.begin(canvas);
       state.hover=null;
       if(e.cancelable)e.preventDefault();
       if(e.pointerType!=='touch')canvas.focus({preventScroll:true});
@@ -5298,21 +5675,23 @@
         }
         return;
       }
+      if(e.pointerType==='touch')meter?.input(canvas,e);
       fingers.set(e.pointerId,p);
       if(pinch){
         const [a,b]=fingers.values(),distance=Math.hypot(a.x-b.x,a.y-b.y);
-        zoom=clamp(pinch.zoom*distance/pinch.distance,.29,2.15);unit=baseUnit()*zoom;
+        zoom=clamp(pinch.zoom*distance/pinch.distance,minZoom(),2.15);unit=baseUnit()*zoom;
         keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;return;
       }
       if(dragging?.id!==e.pointerId)return;
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
       clearObservation(false);dragging.moved=true;cameraFollows=false;
-      centreX=clamp(dragging.x-(dx/unit+dy/(unit*TILT))/2,-3,SIDE+3);
-      centreY=clamp(dragging.y-(dy/(unit*TILT)-dx/unit)/2,northCameraLimit(),state.mode==='boat'?seaLimit:SIDE+3);dirty=true;
+      regionalFollow=null;overviewZoom=null;
+      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;
     });
     function endPointer(e) {
       if(!fingers.delete(e.pointerId))return;
+      if(e.pointerType==='touch'){meter?.input(canvas,e);if(!fingers.size)meter?.end(canvas);}
       if(pinch){
         if(fingers.size>=2){beginPinch();return;}
         pinch=null;
@@ -5335,6 +5714,11 @@
     listen(canvas,'wheel',e=>{if(covered||!state.site)return;e.preventDefault();zoomBy(Math.exp(-clamp(e.deltaY,-150,150)*.0033),coords(e,canvas));},{passive:false});
     listen(canvas,'keydown',e=>{
       if(covered||!state.site||e.ctrlKey||e.metaKey||e.altKey)return;const k=e.key.length===1?e.key.toLowerCase():e.key;
+      const v=regionView(),dirs={ArrowLeft:[-.3,0],ArrowRight:[.3,0],ArrowUp:[0,.3],ArrowDown:[0,-.3]};
+      if(v&&dirs[k]&&(spectator||e.shiftKey||!townAt(v)||townAt(v)!==baseTown)){
+        const [dx,dy]=dirs[k];e.preventDefault();
+        inspectRegion(v.x+dx*(v.maxX-v.minX),v.y+dy*(v.maxY-v.minY),{picked:false});return;
+      }
       if(spectator){
         if(k==='Home')recenter();else if(k==='m')toggleOverview();else if(k==='+'||k==='=')zoomBy(1.2);
         else if(k==='-')zoomBy(1/1.2);else if(k==='Escape'&&observedId)observePerson(null);else return;
@@ -5359,8 +5743,8 @@
       if(document.hidden){clearStamps();releaseRecentTerrain();fingers.clear();dragging=null;pinch=null;suspend();parkForeground();}
       else if(!canvas.parentElement?.hidden){lastFrame=0;dirty=true;resize();schedule();}
     });
-    const sizing=typeof ResizeObserver!=='undefined'?new ResizeObserver(resize):null;sizing?.observe(canvas);
-    const showing=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{
+    const sizing=!inset&&typeof ResizeObserver!=='undefined'?new ResizeObserver(resize):null;sizing?.observe(canvas);
+    const showing=!inset&&typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{
       visible=entries.some(e=>e.isIntersecting);
       if(canvas.parentElement?.hidden){cancelTravel();suspend();parkForeground();return;}
       if(visible){lastFrame=0;dirty=true;resize();}
@@ -5368,10 +5752,11 @@
       if(visible||!spectator&&(moving()||autonomousMotion()))schedule();else suspend();
     }):null;showing?.observe(canvas);
     if(typeof window!=='undefined')listen(window,'resize',resize);
-    function destroy(){clearStamps();releaseRecentTerrain();clearCatch();alive=false;if(zoomTimer)clearTimeout(zoomTimer);pressed.clear();fingers.clear();suspend();sizing?.disconnect();showing?.disconnect();cleanups.forEach(fn=>fn());clearGround();
+    function destroy(){releaseRegionalScene();clearStamps();releaseRecentTerrain();clearCatch();alive=false;if(zoomTimer)clearTimeout(zoomTimer);pressed.clear();fingers.clear();suspend();sizing?.disconnect();showing?.disconnect();cleanups.forEach(fn=>fn());clearGround();
       if(terrainLayer){
-        terrainLayer.surface.width=terrainLayer.surface.height=1;
-        terrainLayer.clip.remove();terrainLayer=null;
+        if(terrainLayer.regionalTile)terrainLayer.groundSurface.remove();
+        else{terrainLayer.surface.width=terrainLayer.surface.height=1;terrainLayer.clip.remove();}
+        terrainLayer=null;
       }
       canvas.style.touchAction=previousStyle;if(oldTab===null)canvas.removeAttribute('tabindex');else canvas.setAttribute('tabindex',oldTab);
       if(oldLabel===null)canvas.removeAttribute('aria-label');else canvas.setAttribute('aria-label',oldLabel);}
@@ -5468,6 +5853,9 @@
     }
     function liveActivity(id,position){
       if(!activity||!position)return null;
+      const paid=paidOrderBody(id);
+      if(paid?.series)return {series:paid.series,stage:activity.stage(paid.series,paid.seconds,paid.moving),venue:paid.stop.label,
+        seconds:paid.seconds,stop:paid.stop,company:null};
       if(neighbourHelp&&id===neighbourHelp.target){
         return {series:{goal:neighbourHelp.actorStep.label},stage:neighbourHelp.targetStep,venue:'with '+neighbourHelp.actorName,
           seconds:0,stop:null,company:neighbourHelp.actor};
@@ -5534,6 +5922,8 @@
         return {id,name:who?.label||disputedOrder.name,x:body.x,y:body.y,following:observedId===id,
           label:'Taking the truck to the pantry',phase:'travel',goal:'Press for an emergency collection',venue:'Pantry stop'};
       }
+      if(!played&&id===disputedOrder?.actor&&disputedOrder.action==='take')return {id,name:disputedOrder.name,x:body.x,y:body.y,following:observedId===id,
+        label:'Walking to the blue truck',phase:'travel',goal:'Ask for an emergency collection for the empty pantry',venue:'Dispatch kerb'};
       return {id,name:who?.name||who?.label||'Community steward',x:body.x,y:body.y,following:observedId===id,
         label:played?(state.player.moving?'On the move':'Under your control'):current?.stage.label||who?.routine||who?.role||'In the district',
         phase:played?'player':current?.stage.phase||'work',completedSession:played?null:residentActivities.get(id)?.completedSession||null,assignment:played?null:current?.series.assignment||null,goal:played?'Choose your next action':current?.series.goal||who?.role||'Work in the district',
@@ -5586,7 +5976,30 @@
       if(actor!==playedId||state.mode!=='walk'||!state.site||!step)return false;
       neighbourHelp=null;resourceWork={actor,good,step,until:visualTime+6};dirty=true;schedule();return true;
     }
-    if(spectator)return Object.freeze({observedRoute,setSite,setConstruction,observePerson,activityOf,personAnchor,zoomBy,toggleOverview,recenter,resize,destroy,
+    function regionalPick(sx,sy,device){
+      const q=figureHit(sx,sy,device);
+      if(q){const id=q.npcId||q.residentId;const seen=id&&activityOf(id);
+        if(seen)return {kind:'resident',personId:id,personName:seen.name,activity:seen};}
+      const a=hit(sx,sy,device);
+      if(a?.type==='service')return {kind:'asset',assetId:'truck',assetName:'Co-op work truck',asset:truckStatus()};
+      if(a?.type==='vehicle')return {kind:'asset',assetId:'van',assetName:'Public van'};
+      const berth=hitBerth(sx,sy);if(berth)return {kind:'asset',assetId:berth.id,assetName:'Moored boat'};
+      return null;
+    }
+    if(inset){
+      let last=0;
+      return Object.freeze({setSite,setConstruction,activityOf,regionalPick,destroy,
+        hideTile(){if(terrainLayer)terrainLayer.groundSurface.style.visibility='hidden';},
+        paintAt(context,v){
+          if(terrainLayer)terrainLayer.groundSurface.style.visibility='';
+          ctx=context;width=v.width;height=v.height;pixelRatio=v.ratio;unit=v.unit;zoom=unit/baseUnit();evening=v.evening;
+          const dt=clamp(v.time-last,0,.18);last=v.time;visualTime=v.time;
+          if(dt&&state.site)follow(dt);
+          centreX=v.x;centreY=v.y;cameraFollows=false;watchedPath=null;
+          updateGlanceCards();context.save();try{drawScene(false);}finally{context.restore();}
+        }});
+    }
+    if(spectator)return Object.freeze({observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,setSite,setConstruction,observePerson,activityOf,personAnchor,zoomBy,toggleOverview,recenter,resize,destroy,
       getState:()=>({siteId:state.site?.id||null,observedId,zoom,overview:overviewZoom!==null,mode:'observe'})});
     function endConversation(){
       if(['resident','npc'].includes(state.arrival?.type))cancelTravel();
@@ -5600,7 +6013,7 @@
         if(traversable(q)&&clearSegment(p,q)){navigate(q);break;}
       }
     }
-    return {comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,focusPrivateHome,privateHomeProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

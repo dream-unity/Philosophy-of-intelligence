@@ -21,11 +21,38 @@
     function choose(text,callback){
       const button=make('button','',text);button.type='button';button.addEventListener('click',callback);menu.append(button);return button;
     }
+    let regionalLine=null,regionalProjection=null;
+    function plotCrossing(ctx,w,h){
+      const from=sim.active(),region=root.EarthRegionalWorld,render=root.EarthRegionalRender;
+      const rows=from&&trip.path&&region?.tripLine?.(world,from,trip);
+      if(!render||!rows||rows.length<2){regionalLine=null;regionalProjection=null;return false;}
+      regionalLine=rows;
+      const west=Math.min(...rows.map(p=>p.x)),east=Math.max(...rows.map(p=>p.x));
+      const south=Math.min(...rows.map(p=>p.y)),north=Math.max(...rows.map(p=>p.y));
+      const scale=Math.min(w/(east-west+1.3),h/(north-south+1.3));
+      const v=render.viewport((east+west)/2,(north+south)/2,w,h,scale,scale);
+      regionalProjection=v;
+      const geo=region.geography(world,from);
+      render.soil(ctx,geo,v,false);render.routeLayer(ctx,world,from,v,false);render.useLayer(ctx,world,from,v,false);
+      for(const t of geo.towns)if(render.inView(v,t.x,t.y,.2))render.townPlan(ctx,t,v,false);
+      ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+      for(const [i,p] of rows.entries()){const screen=v.screen(p.x,p.y);if(i)ctx.lineTo(screen.x,screen.y);else ctx.moveTo(screen.x,screen.y);}
+      ctx.strokeStyle='#284e46';ctx.lineWidth=5;ctx.stroke();ctx.strokeStyle='#f7cf85';ctx.lineWidth=2;ctx.stroke();
+      markers.forEach((el,i)=>{const [x,y]=bodyAt(model.landmarks[i].fraction);el.style.left=x*100+'%';el.style.top=y*100+'%';});
+      return true;
+    }
     function points(){
       const mid=model.via==='work'?[.48,.35]:[.47,.68];
       return [[.085,.67],[.245,.53],mid,[.73,.45],[.905,.27]];
     }
     function bodyAt(progress){
+      if(regionalLine&&regionalProjection){
+        const end=regionalLine.findIndex(p=>p.fraction>=progress);
+        const b=regionalLine[end<0?regionalLine.length-1:end],a=regionalLine[Math.max(0,(end<0?regionalLine.length-1:end)-1)];
+        const f=b.fraction>a.fraction?(progress-a.fraction)/(b.fraction-a.fraction):0,v=regionalProjection;
+        const p=v.screen(a.x+(b.x-a.x)*f,a.y+(b.y-a.y)*f);
+        return [p.x/v.w,p.y/v.h];
+      }
       const stops=[0,.23,.51,.78,1],p=points();
       let i=0;while(i<3&&progress>stops[i+1])i++;
       const f=(progress-stops[i])/(stops[i+1]-stops[i]);
@@ -34,10 +61,11 @@
     function paint(force){
       if(!trip||!model||host.hidden)return;
       const w=Math.max(240,Math.round(landscape.clientWidth||600)),h=Math.max(120,Math.round(landscape.clientHeight||240));
-      const key=[w,h,model.via,model.from,model.to,model.water,model.distant].join('|');if(painted===key&&!force)return;painted=key;
+      const key=[w,h,model.via,model.from,model.to,model.water,model.distant,trip.path?.join('/')].join('|');if(painted===key&&!force)return;painted=key;
       const dpr=Math.min(root.devicePixelRatio||1,1.35);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
       const ctx=canvas.getContext('2d');if(!ctx)return;
       ctx.setTransform(canvas.width/w,0,0,canvas.height/h,0,0);
+      if(plotCrossing(ctx,w,h))return;
       const water=model.water,far=model.distant;
       const grad=ctx.createLinearGradient(0,0,w*.3,h);grad.addColorStop(0,water?'#a0c6bd':'#afc4a4');grad.addColorStop(1,water?'#537f80':'#789474');
       ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
@@ -96,8 +124,8 @@
         note.textContent=current?(trip.seen?.includes(current.id)?current.note:'Stopped at '+current.label+'. Look around or continue.'):'You have stopped on the path.';
         if(current)choose('Look around',()=>action('inspect'));
         if(progress<=.235){
-          choose(model.water?'Sheltered channel':model.distant?'Regional connection':'Kitchen garden path',()=>action('commons'));
-          choose(model.water?'Working berth':model.distant?'Freight interchange':'Service lane',()=>action('work'));
+          choose(model.regional?'Via food sources':model.water?'Sheltered channel':model.distant?'Regional connection':'Kitchen garden path',()=>action('commons'));
+          choose(model.regional?'Via material sources':model.water?'Working berth':model.distant?'Freight interchange':'Service lane',()=>action('work'));
         }else{
           const next=model.landmarks.find(n=>n.fraction>progress+.003);
           if(next)choose('Continue to '+next.label,()=>action(String(next.id)));

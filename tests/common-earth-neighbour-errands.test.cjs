@@ -140,13 +140,12 @@ test('a released signer schedules their own paid visit with its requester, then 
   assert(events.some(t=>t.includes('late table')));assert.equal(off.row.status,'kept');assert.equal(off.g.site.food,before);
   assert.equal(off.g.dialogue.closeWeek(off.g.site,{...off.g.world,week:off.g.world.week+1}).length,0);off.g.saved();
 });
-test('a viewpoint change cannot cause the original person’s promise to be taken over by automatic scheduling',()=>{
+test('the original signer keeps their agreed work personally while the player experiences another resident',()=>{
   const g=setup(true),row=g.ask('walker-0');
   assert(g.act(row,'goods').changed);g.switchTo('walker-1');assert(g.sim.advance().ok);
-  assert.equal(row.status,'agreed');assert.equal(row.workWeek,undefined);
-  assert.equal(g.runtime.EarthNeighbourErrands.assignment(g.site,g.world,'steward'),null);
-  assert.equal(g.runtime.EarthNeighbourErrands.working(g.site,g.world.week).length,0);
-  assert(g.sim.advance().ok);assert(g.sim.advance().ok);assert.equal(row.status,'missed');g.saved();
+  assert.equal(row.status,'agreed');assert.equal(row.workWeek,g.world.week);
+  assert.equal(g.runtime.EarthNeighbourErrands.working(g.site,g.world.week)[0].actorId,'steward');
+  g.saved();assert(g.sim.advance().ok);assert.equal(row.status,'kept');g.saved();
 });
 
 test('custodians respond differently to a real spoiled crop, and the extra reserve expires after a fresh round',()=>{
@@ -231,7 +230,7 @@ test('the original receipt follows an ordinary non-original signer to the househ
   assert.equal(manual.g.site.funds,funds);assert.equal(manual.p.agreements[0].deliveredBy,'steward');manual.g.saved();
 });
 
-test('the original and unsigned legacy promises still need personal help; a receiver already booked at a hearing cannot be double-booked',()=>{
+test('the original resident can deliver a signed promise when unplayed; unsigned promises and booked recipients still need help',()=>{
   for(const signer of ['steward',undefined,'walker-1']){
     const g=setup(true),r=g.site.residents[0];
     if(signer!=='steward')g.switchTo('walker-1');
@@ -240,8 +239,9 @@ test('the original and unsigned legacy promises still need personal help; a rece
     g.switchTo(signer==='steward'?'walker-2':'steward');
     if(signer==='walker-1')g.runtime.EarthCivicInitiatives={tick:()=>[],valid:()=>true,commitment:(_s,_w,id)=>id===r.id?{venue:'hall',reason:'I agreed to chair the hearing.'}:null};
     assert(g.sim.advance().ok);assert(g.sim.advance().ok);
-    assert(!g.runtime.EarthNeighbourErrands.working(g.site,g.world.week).some(q=>q.ordinary));
-    assert(g.sim.advance().ok);assert.equal(g.site.stats.missed,1);
+    const assigned=g.runtime.EarthNeighbourErrands.working(g.site,g.world.week).some(q=>q.ordinary);
+    assert.equal(assigned,signer==='steward');
+    assert(g.sim.advance().ok);assert.equal(g.site.stats.missed,signer==='steward'?0:1);
     assert.equal(r.agreements?.[0]?.by,signer);g.saved();
   }
 });

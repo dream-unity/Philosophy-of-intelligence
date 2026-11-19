@@ -11,7 +11,7 @@
     let pane=null,talkId=null,goalId='',identity='',revision=0,lastDraw='',listKey='',lastContact='',reply='',busy=false,opener=null;
     let goal=null,overview=null,stripKey='',civicKey='',civic=null,rangeTimer=0,noticeTimer=0,watching=null,speech=null,placementKey='';
     const talkTopics=new Set(),contactButtons=new Map(),transcript=[];
-    let pickPeople=[],lastPrompt='',spokenContact=null,spokenStore=false,spokenMemory=null,invitation=null,nearSignature='',invitationWeek='';
+    let pickPeople=[],lastPrompt='',spokenContact=null,spokenStore=false,spokenMemory=null,spokenPerspective=null,invitation=null,nearSignature='',invitationWeek='';
     const invitationsSeen=new Set(),invitedBySite=new WeakMap();
     const present=(site,id)=>root.EarthCommunityLife?.present?.(site,id)!==false;
     const visitor=(site,id)=>root.EarthCommunityLife?.residency?.(site,id)==='visitor';
@@ -131,7 +131,7 @@
       if(!transcript.length)details.open=false;
     }
     function replyWith(message,prompt=''){
-      spokenContact=null;spokenStore=false;spokenMemory=null;
+      spokenContact=null;spokenStore=false;spokenMemory=null;spokenPerspective=null;
       if(!message){transcript.length=0;lastPrompt='';}
       else if(reply&&reply!==String(message)){
         transcript.push({prompt:lastPrompt,words:reply});if(transcript.length>4)transcript.shift();
@@ -246,7 +246,7 @@
       text($('scene-close'),id==='talk'?'End conversation':'✕');
       $('scene-close')?.setAttribute('aria-label',id==='talk'?'End conversation':'Close street panel');
       card.hidden=false;clearInvitation();show($('scene-notice'),false);
-      text($('scene-title'),({people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',original:'Original life',live:'Calendar'})[id]);
+      text($('scene-title'),({practice:'Practice and decisions',people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',original:'Original life',live:'Calendar'})[id]);
       render(true);tick();changed?.();if(focus)$('scene-title')?.focus({preventScroll:true});return true;
     }
     function openTalk(ref){
@@ -396,7 +396,7 @@
         const result=await run(ctx);
         if(!ctx.current())return;
         if(result?.message){
-          replyWith(result.message,prompt);spokenContact=result.followContact||null;spokenStore=result.followStore===true;spokenMemory=result.followMemory||null;
+          replyWith(result.message,prompt);spokenContact=result.followContact||null;spokenStore=result.followStore===true;spokenMemory=result.followMemory||null;spokenPerspective=result.perspective||null;
           drawArrangement(sim.active(),talkId);
         }
         if(result?.ok&&result.neighbourHelp){
@@ -469,7 +469,11 @@
       const from=actorId();
       const row=root.EarthDialogue?.arrangements?.(site,sim.state,from)?.find(r=>
         (r.status==='agreed'||r.status==='asked')&&r.dueWeek>=sim.state.week&&(r.requesterId===id||r.contactId===id));
-      area.replaceChildren();show(area,!!row||!!spokenContact||spokenStore||!!spokenMemory);
+      area.replaceChildren();show(area,!!row||!!spokenContact||spokenStore||!!spokenMemory||!!spokenPerspective);
+      if(spokenPerspective&&playAs){
+        const invited=spokenPerspective;
+        area.append(press('Experience '+name(invited)+'’s round',()=>playAs(invited),false,'invited-perspective'));
+      }
       if(spokenMemory){
         const note=spokenMemory,person=id;
         area.append(press(note.label,()=>performTalk(c=>sim.perform('converse',person,note.id,c.proof),person,note.label),false,'remember-topic'));
@@ -772,6 +776,10 @@
         }
         return fresh.join(' ');
       }
+      const paid=root.EarthDialogue?.workOrder?.(site,p.id);
+      if(paid){
+        box.append(info(paid.order.action,freshText(paid.order.reason+' '+paid.terms)));
+      }
       if(plan)box.append(info(freshText(plan.goal||plan.label),freshText(plan.reason)));
       root.EarthInterdependence?.appendPerson?.(box,{site,world:sim.state,people,id:p.id,select:selectPurpose});
       if(plan?.dream){
@@ -845,7 +853,7 @@
       if(p.id!==actorId()){
         actions.append(press('Meet '+p.name,()=>{openTalk(subjectRef(p.id));walkTo(p.id,()=>updateContact());},false,'meet'));
         const playable=root.EarthAgency.playables?.(site).some(person=>person.id===p.id)??(p.kind==='resident'||p.kind==='steward');
-        if(!foreign&&playAs&&playable&&!visitor(site,p.id)&&present(site,p.id))actions.append(press('Play as '+p.name,()=>playAs(p.id),false,'play-as'));
+        if((!foreign||root.EarthAgency.shadowPass?.(site,sim.state,p.id))&&playAs&&playable&&!visitor(site,p.id)&&present(site,p.id))actions.append(press('Play as '+p.name,()=>playAs(p.id),false,'play-as'));
         if(street()?.observePerson)actions.append(press('See '+p.name,()=>{
           if(!street().observePerson(p.id)){notify('This person is unavailable to see at the moment.');return;}
           const seen=street().activityOf(p.id);if(seen)setWatch(seen);

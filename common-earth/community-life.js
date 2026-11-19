@@ -119,14 +119,18 @@
   }
   function founderSurvey(world,site){
     const occupied=stores(world),r=Math.PI/180,lat=site.lat*r,lon=site.lon*r;
-    for(const radius of [14,24,36,49,62]){
+    for(const radius of [11,14,24,36,49,62]){
       const arc=radius/6371;
       for(let step=0;step<12;step++){
         const bearing=(127+30*step)*r;
         const phi=Math.asin(cap(Math.sin(lat)*Math.cos(arc)+Math.cos(lat)*Math.sin(arc)*Math.cos(bearing),-1,1));
         const lambda=lon+Math.atan2(Math.sin(bearing)*Math.sin(arc)*Math.cos(lat),Math.cos(arc)-Math.sin(lat)*Math.sin(phi));
         const point={lat:phi/r,lon:((lambda/r+540)%360)-180,water:site.water,coastal:site.coastal};
-        if(occupied.every(s=>km(s,point)>=10))return point;
+        if(occupied.every(s=>km(s,point)>=10)){
+          if(!root.EarthRegionalWorld)return point;
+          const surveyed=root.EarthRegionalWorld.foundingGround(world,site,point);
+          if(surveyed)return surveyed;
+        }
       }
     }
     return null;
@@ -135,8 +139,11 @@
     const r=Math.PI/180,d=Math.sin((a.lat-b.lat)*r/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin((a.lon-b.lon)*r/2)**2;
     return 12742*Math.asin(Math.sqrt(cap(d,0,1)));
   }
-  function writeLog(site,week,text){
-    const l=local(site).log;l.unshift({week,text:text.slice(0,500)});if(l.length>9)l.pop();return text;
+  function writeLog(site,week,text,founding=false){
+    const l=local(site).log;
+    l.unshift({week,text:text.slice(0,500),...(founding?{founding:true}:{})});
+    if(l.length>9)l.splice(l.at(-1).founding?l.length-2:l.length-1,1);
+    return text;
   }
   const seededRoles=['practice-nurse','surveyor'];
   function openHousehold(site,role,week){
@@ -186,6 +193,7 @@
       }
       const dest=c.away?.[id],g=c.people?.[id];
       if(!dest){if(!g||g.status==='member')here++;continue;}
+      if(dest==='regional-field'||dest==='regional-freight'||dest==='regional-visit'){away++;continue;}
       if(dest==='outside-roster'||dest==='elsewhere')continue;
       const peer=lookup(world,dest);
       if(Object.values(peer?.communityLife?.people||{}).some(v=>v.status==='visitor'&&v.visitFrom===site.id&&v.visitSlot===id))away++;
@@ -194,7 +202,7 @@
     const commuters=(root.EarthPersonas?.porterIds?.(site)||[]).filter(id=>commuting(site,id)&&present(site,id)).length;
     const represented=here+away,anonymous=Math.max(0,site.population-represented);
     const clauses=[site.population+' residents on the household roll',here+' named residents here'];
-    if(away)clauses.push(away+' resident'+(away===1?'':'s')+' away on a visit');
+    if(away)clauses.push(away+' resident'+(away===1?'':'s')+' away from town');
     if(anonymous)clauses.push(anonymous+' other household member'+(anonymous===1?'':'s')+(c.foundingHouseholds==null?' in the earlier census':' awaiting a street record'));
     if(represented>site.population)clauses.push('the earlier household count predates this street roster');
     if(visitors)clauses.push(visitors+' visiting');
@@ -440,6 +448,7 @@
     const now=world?.week||site.autonomy?.week||site.founded||1, resident=site.residents.find(p=>p.id===id);
     const name=key=>root.EarthPersonas?.profile?.(site,key)?.name||'a neighbour';
     const here=local(site),career=site.careers?.[id],fleet=site.fleet;
+    if(root.EarthPractice?.reserved?.(site,id,now))return 'Booked for a practice session with another resident this week.';
     if(here.hearing?.id===id&&now<here.hearing.due)return 'Asked to speak at the district meeting in week '+here.hearing.due+'.';
     if((world?.communityLife?.duty.siteId||world?.communityLife?.homeId)===site.id&&world.communityLife.duty.coveredBy===id)
       return 'Agreed to cover the home pantry round through week '+world.communityLife.duty.due+'.';
@@ -457,7 +466,7 @@
       const duty=root.EarthConstruction?.assignedDuty?.(site,world,id);if(duty)return duty;
     }
     if(fleet?.custody?.actor===id)return 'The transport cooperative is waiting for its vehicle to return.';
-    if(fleet?.incident?.actor===id)return 'Owes a restitution shift to the displaced transport crew.';
+    if(fleet?.incident?.actor===id&&(root.EarthFleet?.identified?.(site,id)??true))return 'Owes a restitution shift to the displaced transport crew.';
     if(id==='driver'&&fleet?.custody)return 'Holding the dispatch handover until the truck returns.';
     if(fleet?.roster?.[id]?.ready>now)return 'Completing transport induction through week '+fleet.roster[id].ready+'.';
     const council=site.civicInitiatives?.active;
@@ -466,6 +475,8 @@
     const errand=(site.agency?.arrangements?.rows||[]).find(r=>['asked','agreed'].includes(r.status)&&
       (r.dueWeek>=now||r.workWeek===now)&&[r.actorId,r.requesterId,r.contactId].includes(id));
     if(errand)return 'Meeting '+name(errand.actorId===id?errand.requesterId:errand.actorId)+' for an errand due in week '+errand.dueWeek+'.';
+    const booking=site.residents.find(p=>p.promise?.handover?.worker===id&&root.EarthNeighbourErrands?.deliveryWorker?.(site,p)===id);
+    if(booking)return 'Booked to carry '+booking.name+'’s delivery in week '+booking.promise.dueWeek+'.';
     const creditor=site.residents.find(p=>p.promise?.by===id);
     if(creditor)return 'Promised '+creditor.name+' supplies by week '+creditor.promise.dueWeek+'.';
     const projects=site.autonomy?.projects?.owners||{},partner=Object.entries(projects).find(([other,p])=>p.volunteer&&(other===id||p.volunteer.from===id));
@@ -568,7 +579,9 @@
   function duty(world,site,a){
     if(world.week<a.due)return [];
     if(!site||site.id!==(a.siteId||world.communityLife.homeId))return [];
-    const name=world.communityLife.profile.name,good=a.attended||Boolean(a.coveredBy&&present(site,a.coveredBy));
+    const round=site.autonomy?.people?.steward?.history?.find(h=>h.pantryRound===a.due&&h.week===a.due-1);
+    const completedOnShift=round&&present(site,'steward')&&(!world.communityLife?.journey||world.communityLife.journey.from!==site.id);
+    const name=world.communityLife.profile.name,good=a.attended||completedOnShift||Boolean(a.coveredBy&&present(site,a.coveredBy));
     const helper=a.coveredBy&&root.EarthPersonas?.profile(site,a.coveredBy)?.name;
     a.reliability=cap(a.reliability+(good?1:-1),-6,6);site.trust=cap(site.trust+(good?1:-1));
     const text=good?(helper?helper+' covered '+name+'’s agreed pantry round.':name+' completed the agreed pantry round.')+' Neighbours gained one trust.':
@@ -580,11 +593,15 @@
   function beginInspection(world,from,to,id,motive){
     const p=portable(from,id),old=local(from).people[id];
     if(!p||!present(from,id))return null;
+    const regional=root.EarthRegionalWorld;
+    if(regional&&!regional.passageAgreement(world,from,to))return null;
+    const path=regional?.crossingPath(world,from,to);if(path===null)return null;
     const next=guestSlot(to,p,old?.originId||from.id,old?.originSlot||id,'visitor',world.week);
     if(!next||!local(to).people[next])return null;
     const guest=local(to).people[next];guest.visitFrom=from.id;guest.visitSlot=id;guest.inspects=world.week+1;
     if(motive)guest.motive=motive.slice(0,500);
     awaySlot(from,id,to.id);
+    if(path)regional.shareCrossing(world,from,to,id,p.name,path);
     const text=p.name+' arrived from '+from.name+' to inspect '+to.name+'’s '+(kind(to).goods==='food'?'shared kitchen':'workplaces')+' and meet the households. '+p.name+' will decide after a week.';
     writeLog(from,world.week,p.name+' took a week away to inspect '+to.name+'.');writeLog(to,world.week,text);
     return text;
@@ -651,17 +668,46 @@
     }
     return best;
   }
+  function settleFieldCamp(world,from,trip,point,makeSite){
+    if(!makeSite||from.population<=trip.crew.length)return null;
+    const profiles=trip.crew.map(p=>portable(from,p.id));
+    if(profiles.some(p=>!p))return null;
+    const purpose=foundingPurpose(profiles),id='field-'+world.regionalWorld.step+'-'+from.id;
+    if(lookup(world,id))return null;
+    const site=makeSite({id,name:profiles[0].name+'’s '+purpose.suffix,region:from.region,point,
+      water:point.water,names:['Housing delegate','Work delegate','Admission delegate'],old:null,offer:{newPopulation:0}});
+    site.founded=world.week;site.specialty=purpose.goods;
+    Object.assign(site,trip.kit);
+    // Reserved street slots stay empty. Every household on this roll actually
+    // came from the named crew, with its purse and qualifications.
+    seedHouseholds(site,3,world.week);
+    const c=local(site);Object.assign(c,{cluster:from.communityLife.cluster,district:purpose.district,
+      habitat:root.EarthResources?.environment?.(site)||'mixed',deputies:[]});
+    c.away.steward='elsewhere';
+    for(const placeholder of site.residents)c.away[placeholder.id]='outside-roster';
+    for(const member of trip.crew){
+      const moved=movePerson(world,from,site,member.id);
+      if(moved)c.deputies.push({id:moved.id,name:moved.name,week:world.week});
+    }
+    world.communityLife.outposts.push(site);
+    writeLog(site,world.week,trip.crew.map(p=>p.name).join(' and ')+' settled here with '+site.food+' food, '+site.materials+' materials and '+site.funds+' funds transferred from '+from.name+'.');
+    return site;
+  }
   function groupSettlement(world,site,makeSite){
     const c=local(site),old=c.foundingPlan;
     if(!old){
       const people=volunteers(site,world),kit={food:4,materials:2,funds:2};
       if(people.length<2||site.population<5||!makeSite||Object.entries(kit).some(([k,n])=>uncommitted(site,k)<n))return '';
+      const candidate=founderSurvey(world,site);if(!candidate)return '';
       for(const [k,n] of Object.entries(kit))site[k]-=n;
-      c.foundingPlan={members:people.map(p=>p.id),kit,ready:world.week+2};
+      const {path,...point}=candidate;
+      c.foundingPlan={members:people.map(p=>p.id),kit,ready:world.week+2,point};
+      if(path)c.foundingPlan.path=path;
       const text=people.map(p=>p.name).join(' and ')+' asked nearby households about starting a settlement. The council released 4 food, 2 materials and 2 funds for their household shares after protecting home commitments. They will reconsider in week '+c.foundingPlan.ready+'.';
       return writeLog(site,world.week,text);
     }
     if(world.week<old.ready)return '';
+    for(const id of old.members)if(c.away[id]==='regional-visit')delete c.away[id];
     const free=old.members.every(id=>present(site,id)&&transferable(site,id,world));
     if(!free||c.strain<3||site.population<5){
       for(const [k,n] of Object.entries(old.kit))site[k]+=n;
@@ -670,7 +716,7 @@
     }
     const people=old.members.map(id=>portable(site,id)),purpose=foundingPurpose(people);
     const name=people[0].name+'’s '+purpose.suffix,id='circle-'+site.id+'-'+world.week;
-    const point=founderSurvey(world,site);
+    const point=old.point&&stores(world).every(s=>km(s,old.point)>=10)?old.point:founderSurvey(world,site);
     if(!point){
       for(const [k,n] of Object.entries(old.kit))site[k]+=n;
       delete c.foundingPlan;c.lastExit=world.week;
@@ -680,9 +726,11 @@
     newHome.founded=world.week;newHome.specialty=purpose.goods;Object.assign(newHome,old.kit);seedHouseholds(newHome,newHome.population,world.week);
     Object.assign(local(newHome),{cluster:site.communityLife.cluster,district:purpose.district,habitat:root.EarthResources?.environment?.(newHome)||'mixed'});local(newHome).away.steward='elsewhere';
     const moved=old.members.map(personId=>movePerson(world,site,newHome,personId));
-    world.communityLife.outposts.push(newHome);delete c.foundingPlan;c.lastExit=world.week;
+    world.communityLife.outposts.push(newHome);
+    if(old.path)root.EarthRegionalWorld?.shareCrossing(world,site,newHome,old.members[0],people[0].name,old.path);
+    delete c.foundingPlan;c.lastExit=world.week;
     const text=moved.map(person=>person.name).join(' and ')+' joined three neighbouring households to found '+name+'. Their skills and interests shaped its first joint undertaking, '+purpose.purpose+'. They brought the food, repair stock and funds set aside for them. '+site.name+' has two fewer residents to cover its shifts.';
-    writeLog(newHome,world.week,text);return writeLog(site,world.week,text);
+    writeLog(newHome,world.week,text,true);return writeLog(site,world.week,text);
   }
   function neighbourhoodDecision(world,site,makeSite,notify){
     const c=site.communityLife;if(!c?.cluster)return;
@@ -758,6 +806,7 @@
     for(const [id,plan] of Object.entries(c.excursions)){
       if(plan.due>world.week)continue;
       delete c.excursions[id];
+      if(c.away[id]==='regional-visit')delete c.away[id];
       const name=root.EarthPersonas?.profile(site,id)?.name||'A resident',dest=lookup(world,plan.to);
       if(!dest||!present(site,id)||!transferable(site,id,world)||room(dest)<1){
         notify(site,writeLog(site,world.week,name+' stayed after the handover or the destination’s housing changed.'));continue;
@@ -869,23 +918,30 @@
   function districtTrade(world,sites,notify){
     const message=(site,text)=>notify(site,writeLog(site,world.week,text));
     for(const site of sites){
-      const c=site.communityLife,run=c?.freight;
-      if(!run||run.due>world.week)continue;
-      const dest=lookup(world,run.to);
-      if(dest){
-        const other=dest.communityLife?.freight;
-        if(other&&(dest[run.good]>Number.MAX_SAFE_INTEGER-run.amount||site[other.good]>Number.MAX_SAFE_INTEGER-other.amount)){
-          run.due=other.due=world.week+1;
-          message(site,'The district exchange held both sealed loads for another week because a receiving store is full.');
-          continue;
-        }
-        dest[run.good]+=run.amount;
-        message(dest,run.name+' delivered '+run.amount+' '+run.good+' from '+site.name+' under the two districts’ exchange agreement.');
-      }else{
-        site[run.good]+=run.amount;
-        message(site,run.name+' returned the undelivered '+run.good+' to the exchange.');
+      const c=site.communityLife,run=c?.freight;if(!run||run.due>world.week)continue;
+      const dest=lookup(world,run.to),other=dest?.communityLife?.freight;
+      if(!dest||!other)continue;
+      const regional=root.EarthRegionalWorld;
+      const access=!regional||regional.passageAgreement(world,site,dest);
+      let path=run.path;
+      if(path&&access&&regional?.routeOpen(world,site,path)===false)path=regional.crossingPath(world,site,dest);
+      if(!access||path===null||dest[run.good]>Number.MAX_SAFE_INTEGER-run.amount||site[other.good]>Number.MAX_SAFE_INTEGER-other.amount){
+        run.due=other.due=world.week+1;
+        run.held=other.held=true;
+        const text=!access||path===null?'The field parties suspended this crossing. Both sealed consignments are held until a passage agreement or an accessible route is available.':
+          'The district exchange held both sealed loads for another week because a receiving store is full.';
+        message(site,text);message(dest,text);continue;
       }
-      delete c.freight;
+      // Both sides settle the same exchange. A later change of terms cannot
+      // strand one side's cargo after its counterpart has already been paid.
+      for(const [from,to,shipment,course] of [[site,dest,run,path],[dest,site,other,path?.slice().reverse()]]){
+        to[shipment.good]+=shipment.amount;
+        if(course)regional?.shareCrossing(world,from,to,shipment.signer,shipment.name,course);
+        message(to,shipment.name+' delivered '+shipment.amount+' '+shipment.good+' from '+from.name+' under the two districts’ exchange agreement.');
+        const own=local(from);
+        if(own.away[shipment.signer]==='regional-freight')delete own.away[shipment.signer];
+        delete own.freight;
+      }
     }
     if(world.week%3!==0)return;
     const clusters=new Map();
@@ -912,7 +968,7 @@
         const foodDiff=grower.food-yard.food,materialsDiff=yard.materials-grower.materials;
         if(foodDiff<4||materialsDiff<4)continue;
         const distance=km(grower.site,yard.site);
-        if(distance>70)continue;
+        if(distance>70||root.EarthRegionalWorld?.passageAgreement(world,grower.site,yard.site)===false)continue;
         const maxFood=Math.min(3,grower.food,Math.floor(foodDiff/2)),maxMaterials=Math.min(3,yard.materials,Math.floor(materialsDiff/2));
         for(let food=1;food<=maxFood;food++)for(let materials=1;materials<=maxMaterials;materials++){
           const farmBenefit=materials*grower.materialValue-food*grower.foodValue;
@@ -925,10 +981,17 @@
       if(!best)continue;
       const {grower,yard,food,materials}=best,left=freightSigner(world,grower),right=freightSigner(world,yard);
       if(!left||!right)continue;
+      const path=root.EarthRegionalWorld?.crossingPath(world,grower,yard);
+      if(path===null)continue;
       const due=world.week+1;
       for(const [from,to,good,amount,other,expected,person] of [[grower,yard,'food',food,'materials',materials,left],[yard,grower,'materials',materials,'food',food,right]]){
         from[good]-=amount;
         local(from).freight={signer:person.id,name:person.name,good,amount,expected,to:to.id,due};
+        if(path){
+          local(from).freight.path=from===grower?path.slice():path.slice().reverse();
+          local(from).freight.departedRound=world.regionalWorld?.step||0;
+          local(from).away[person.id]='regional-freight';
+        }
         message(from,person.name+' signed out '+amount+' '+good+' for '+to.name+'. The other council has sent '+expected+' '+other+' in return, due in week '+due+'. Both towns kept their own reserves.');
       }
     }
@@ -973,7 +1036,7 @@
     const residents=(root.EarthPersonas?.list(site)||[]).filter(p=>!commuting(site,p.id)&&residency(site,p.id)==='member');
     const candidates=id?residents.filter(p=>p.id===id):residents;
     for(const p of candidates){
-      const dispatch=incident?.actor===p.id;
+      const dispatch=incident?.actor===p.id&&(root.EarthFleet?.identified?.(site,p.id)??true);
       const witnesses=[];
       for(const peer of residents){
         if(peer.id===p.id)continue;
@@ -1003,7 +1066,7 @@
       return;
     }
     if(world.week<hearing.due)return;
-    const stillOwes=hearing.issue==='dispatch'&&site.fleet?.incident?.actor===hearing.id;
+    const stillOwes=hearing.issue==='dispatch'&&site.fleet?.incident?.actor===hearing.id&&(root.EarthFleet?.identified?.(site,hearing.id)??true);
     const remaining=concerns(world,site,hearing.id)||(stillOwes?hearing:null),voice=(hearing.heard||[]).includes(hearing.id);
     const bothSides=voice&&hearing.witnesses.some(w=>hearing.heard.includes(w.id));
     let decision,summary;
@@ -1034,6 +1097,8 @@
     const notes=[],add=(site,text)=>{if(text&&world.sites.some(s=>s.id===site.id))notes.push({site,text});};
     const home=lookup(world,a.homeId);if(!home)return notes;
     const districts=stores(world);
+    const activeSite=lookup(world,world.activeId),roundEnded=root.EarthAgency?.finishShadow?.(world,activeSite);
+    if(roundEnded)add(activeSite,writeLog(activeSite,world.week,roundEnded));
     for(const site of districts){
       const c=site.communityLife;
       if(c?.vacancies)c.vacancies=c.vacancies.filter(v=>v.through>=world.week);
@@ -1150,8 +1215,9 @@
     }
     if(cmd==='found'&&(root.EarthAgency?.actorId(site)||'steward')!=='steward')return 'Return to '+a.profile.name+' to sign a founding proposal.';
     if(cmd==='beginGoal'&&args[0]!==a.homeId||cmd==='found'&&args[3]&&args[3]!==a.homeId)return 'Only your home community can sponsor that decision.';
-    if(isHome(world,site)||cmd==='changeActor'&&args[0]==='steward')return '';
+    if(isHome(world,site)||cmd==='changeActor'&&(args[0]==='steward'||root.EarthAgency?.shadowPass?.(site,world,args[0])))return '';
     if(['visit','advance','workConstruction','regularTruck','disputedTruck','neighbourAppointment','communityLife','reset'].includes(cmd))return '';
+    if(cmd==='converse'&&['shadow','truck-testimony','truck-report'].includes(args[1]))return '';
     if(cmd==='converse'&&(root.EarthDialogue?.readOnly?.(args[1])??['news','work','interests','purpose','dream','visit-fit','followup'].includes(args[1])))return '';
     return 'You are visiting '+site.name+'. Its residents decide here. Open Towns to meet the host, apply to join, or go home.';
   }
@@ -1177,11 +1243,22 @@
         to.name+' keeps '+to.food+' food. Even with a spare room, a new household needs a share of the next meals.',
       hostFor(to).name+' speaks at admissions. There '+(room(to)===1?'is one spare place':'are '+Math.max(0,room(to))+' spare places')+' and the local rota depends on '+goods+'.'
     ];
-    return {from:from.name,to:to.name,water,distant,via,landmarks:titles.map((label,i)=>({label,id:i,fraction:stops[i],note:notes[i]}))};
+    const region=root.EarthRegionalWorld,geo=trip.path?.length&&region?.geography(world,from);
+    const landmarks=titles.map((label,i)=>{
+      const fraction=stops[i],at=geo&&region.tripPosition(world,from,trip,fraction);
+      if(!at)return {label,id:i,fraction,note:notes[i]};
+      const ground=region.terrain(geo,at.x,at.y),p=geo.locate(at.x,at.y);
+      const work=region.works(world,from).find(w=>Math.hypot(w.x-at.x,w.y-at.y)<=geo.cellSize*.55);
+      const owner=work&&geo.towns.find(t=>t.site.id===work.siteId)?.site.name;
+      return {label:(work?.label||ground.label)+' · '+(fraction*trip.km).toFixed(1)+' km',id:i,fraction,
+        note:ground.label+' at '+p.lat.toFixed(3)+'°, '+p.lon.toFixed(3)+'°. '+ground.resource+' is found here.'+
+          (work&&owner?' '+owner+' maintains the '+work.label+'.':'')};
+    });
+    return {from:from.name,to:to.name,water,distant,via,regional:!!geo,landmarks};
   }
   function continueTrip(trip,progress,target){
     const time=Date.now();trip.base=progress;trip.start=time;
-    trip.finish=time+Math.max(100,Math.round(cap(trip.km*650,2400,6200)*(trip.vehicle==='van'?.45:1)*(1-progress)));
+    trip.finish=time+Math.max(100,Math.round((trip.baseDuration||cap(trip.km*650,2400,6200))*(trip.vehicle==='van'?.45:1)*(1-progress)));
     delete trip.stop;delete trip.hold;
     if(target==='pause')trip.hold=progress;
     else if(target!=='direct'&&Number.isInteger(target))trip.stop=target;
@@ -1201,8 +1278,13 @@
       const block=journeyBlock(site);if(block)return fail(block);
       const dest=neighbours(world,site).find(n=>n.id===req.target);
       if(!dest)return fail('Choose a reachable neighbouring district.');
-      const start=Date.now(),duration=Math.round(cap(dest.distance*620,1600,6200));
-      a.journey={from:site.id,to:dest.id,start,finish:start+(driving?Math.round(duration*.45):duration),km:dest.distance};
+      const path=root.EarthRegionalWorld?.crossingPath(world,site,lookup(world,dest.id),driving?'van':'walk');
+      if(path===null)return fail('Present transport and passage agreements do not provide a crossing to '+dest.name+'.');
+      const km=path?Math.max(dest.distance,(path.length-1)*.5):dest.distance;
+      const effort=path?root.EarthRegionalWorld.routeEffort(world,site,path,driving?'van':'walk')*.5:km;
+      const start=Date.now(),duration=Math.round(cap(effort*620,1600,6200));
+      a.journey={from:site.id,to:dest.id,start,finish:start+(driving?Math.round(duration*.45):duration),km};
+      if(path)Object.assign(a.journey,{path,baseDuration:duration});
       if(driving)Object.assign(a.journey,{vehicle:'van',interactive:true,via:'commons',seen:[]});
       if(req.action==='walkTrail')Object.assign(a.journey,{interactive:true,via:'commons',stop:0,seen:[]});
       return {ok:true,message:a.profile.name+' set out for '+dest.name+'.',journey:true};
@@ -1212,10 +1294,13 @@
       const progress=routeProgress(trip),target=req.target,road=trail(world,trip);
       if(target==='commons'||target==='work'){
         if(progress>stops[1])return fail('You have passed the fork on this crossing.');
+        if(root.EarthRegionalWorld?.changeBranch(world,site,trip,target,progress)===false)return fail('There is no other accessible crossing from the remaining route.');
+        root.EarthRegionalWorld?.observeLeg(world,site,trip,progress);
         trip.via=target;continueTrip(trip,progress,1);
       }else if(target==='inspect'){
         const i=stops.findIndex(v=>Math.abs(v-progress)<.035);
         if(i<0)return fail('Stop by a marked landmark to inspect it.');
+        root.EarthRegionalWorld?.observeLeg(world,site,trip,progress);
         if(!(trip.seen||=[]).includes(i))trip.seen.push(i);
         continueTrip(trip,stops[i],'pause');
         return receipt(road.landmarks[i].label+' · '+road.landmarks[i].note);
@@ -1230,6 +1315,7 @@
     }
     if(req.action==='cancel'){
       if(!a.journey)return fail('There is no crossing to turn back from.');
+      root.EarthRegionalWorld?.observeLeg(world,site,a.journey,routeProgress(a.journey));
       a.journey=null;return receipt('Returned to the exchange path at '+site.name+'.');
     }
     if(req.action==='arrive'){
@@ -1246,6 +1332,7 @@
         writeLog(dest,world.week,a.profile.name+' inspected '+seen+' on the way from '+site.name+'.');
         const book=local(dest);book.pathVisits={week:world.week,seen:trip.seen.length,from:site.id};
       }
+      if(trip.path)root.EarthRegionalWorld?.shareCrossing(world,site,dest,'steward',a.profile.name,trip.path);
       a.journey=null;arrive(world,site,dest,makeSite);
       return {ok:true,arrived:true,vehicle:trip.vehicle,message:writeLog(dest,world.week,a.profile.name+' arrived in '+dest.name+(isHome(world,dest)?' and returned to their home.':' as a visitor. '+hostFor(dest).name+' speaks for the admissions meeting.'))};
     }
@@ -1350,6 +1437,7 @@
   }
   function valid(world,validateSite){
     const a=world.communityLife;if(a==null)return true;
+    if(world.communityLife&&root.EarthAgency?.validRecall&&!root.EarthAgency.validRecall(world.communityLife.viewpointHistory,world.week))return false;
     if(!obj(a)||!Array.isArray(a.outposts)||!word(a.originId)||!word(a.originName)||!word(a.homeId)||!validProfile(a.profile,'steward')||
       !world.sites.some(s=>s.id===a.homeId)||!obj(a.duty)||!int(a.duty.due,world.week,world.week+3)||!int(a.duty.reliability,-6,6)||
       typeof a.duty.attended!=='boolean'||a.duty.coveredBy!=null&&!word(a.duty.coveredBy))return false;
@@ -1366,7 +1454,7 @@
     if(a.journey!=null){
       const t=a.journey;
       if(!obj(t)||t.from!==world.activeId||t.from===t.to||!ids.has(t.to)||!int(t.start)||!int(t.finish,t.start,t.start+6200)||!Number.isFinite(t.km)||t.km<0)return false;
-      if(t.vehicle!=null&&t.vehicle!=='van')return false;
+      if(t.vehicle!=null&&t.vehicle!=='van'||t.baseDuration!=null&&!int(t.baseDuration,1600,6200))return false;
       if(t.base!=null&&(!Number.isFinite(t.base)||t.base<0||t.base>1)||t.hold!=null&&(!Number.isFinite(t.hold)||t.hold<0||t.hold>1)||
          t.stop!=null&&!int(t.stop,0,2)||t.via!=null&&!['commons','work'].includes(t.via)||t.seen!=null&&(!Array.isArray(t.seen)||t.seen.length>3||!t.seen.every(i=>int(i,0,2))))return false;
     }
@@ -1425,5 +1513,5 @@
       ['numeracy','music','communication','care','craft','stamina','organisation'].every(k=>int(p.aptitudes[k],0,100)&&int(p.bounds[k]?.min,0,p.aptitudes[k])&&int(p.bounds[k]?.max,p.aptitudes[k],100));
   }
   root.EarthCommunityLife=Object.freeze({initialise,restart,valid,present,profile,personLabel,census,commuting,residency,anchor,coverCandidate,isHome,neighbours,travelIntent,volunteers,founding,
-    visitorReception,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,run});
+    visitorReception,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
 })(typeof window==='undefined'?globalThis:window);

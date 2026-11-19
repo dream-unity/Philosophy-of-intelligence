@@ -21,7 +21,7 @@
   // A literal below 0x8000 uses its own code unit. Higher literals use an
   // escape. A match stores length and backward distance in two code units.
   // The representation never sends an unpaired surrogate to browser storage.
-  function encodeBlock(text,dictionary){
+  function encodeBlock(text,dictionary,history){
     const out=new Uint16Array(chunkSize),parts=[];
     let filled=0,position=0;
     function emit(code){
@@ -35,20 +35,46 @@
       let count=0,offset=0;
       if(position+3<text.length){
         const slot=(hash(position)>>>8)&65535,prior=dictionary[slot]-1;
-        dictionary[slot]=position+1;offset=position-prior;
-        if(prior>=0&&offset<=distanceLimit&&text.charCodeAt(prior)===text.charCodeAt(position)&&
+        dictionary[slot]=position+1;
+        if(history){
+          // Keep a short chain only for the optional dense pass. A recently
+          // used JSON prefix may lead to a much longer match one receipt back.
+          history[position&32767]=prior>=0&&position-prior<distanceLimit?position-prior:0;
+          let candidate=prior,attempts=12;
+          const limit=min(maxMatch,text.length-position);
+          while(candidate>=0&&position-candidate<=distanceLimit&&attempts--){
+            if(text.charCodeAt(candidate+count)===text.charCodeAt(position+count)&&
+               text.charCodeAt(candidate)===text.charCodeAt(position)&&
+               text.charCodeAt(candidate+1)===text.charCodeAt(position+1)&&
+               text.charCodeAt(candidate+2)===text.charCodeAt(position+2)&&
+               text.charCodeAt(candidate+3)===text.charCodeAt(position+3)){
+              let length=4;
+              while(length<limit&&text.charCodeAt(candidate+length)===text.charCodeAt(position+length))length++;
+              if(length>count){count=length;offset=position-candidate;if(count===limit||count>=1024)break;}
+            }
+            const back=history[candidate&32767];if(!back)break;candidate-=back;
+          }
+        }else if(prior>=0&&position-prior<=distanceLimit&&text.charCodeAt(prior)===text.charCodeAt(position)&&
           text.charCodeAt(prior+1)===text.charCodeAt(position+1)&&text.charCodeAt(prior+2)===text.charCodeAt(position+2)&&
           text.charCodeAt(prior+3)===text.charCodeAt(position+3)){
-          count=4;const limit=min(maxMatch,text.length-position);
+          offset=position-prior;count=4;const limit=min(maxMatch,text.length-position);
           while(count<limit&&text.charCodeAt(prior+count)===text.charCodeAt(position+count))count++;
         }
       }
       if(count){
-        emit(matchFirst+count-4);emit(offset-1);position+=count;
-        if(position+1<text.length){
-          const tail=position-2;
+        emit(matchFirst+count-4);emit(offset-1);
+        const end=position+count;
+        if(history){
+          for(let i=position+1;i<end&&i+3<text.length;i++){
+            const slot=(hash(i)>>>8)&65535,back=i+1-dictionary[slot];
+            history[i&32767]=dictionary[slot]&&back<distanceLimit?back:0;
+            dictionary[slot]=i+1;
+          }
+        }else if(end+1<text.length){
+          const tail=end-2;
           dictionary[(hash(tail)>>>8)&65535]=tail+1;
         }
+        position=end;
       }else{
         const code=text.charCodeAt(position++);
         if(code>=escape)emit(escape);
@@ -73,8 +99,8 @@
   function packedText(length,rawSum,payloadSum,payload){
     return marker+length.toString(36)+'.'+rawSum.toString(36)+'.'+payloadSum.toString(36)+'.'+payload;
   }
-  function compressWhole(text){
-    const payload=encodeBlock(text,new Int32Array(65536));
+  function compressWhole(text,dense=false){
+    const payload=encodeBlock(text,new Int32Array(65536),dense?new Uint16Array(distanceLimit):null);
     if(payload.length+35>=text.length)return text;
     return packedText(text.length,checksum(text),checksum(payload),payload);
   }
@@ -159,12 +185,12 @@
     const raw=parts.join('');
     return checksum(raw)===head.hash?raw:null;
   }
-  function remember(raw,packed){
+  function remember(raw,packed,dense=false){
     const units=raw.length+(raw===packed?0:packed.length);
     if(units>cacheLimit)return;
     const existing=recent.findIndex(entry=>entry.raw===raw);
     if(existing!==-1)cachedUnits-=recent.splice(existing,1)[0].units;
-    recent.unshift({raw,packed,units});cachedUnits+=units;
+    recent.unshift({raw,packed,units,dense});cachedUnits+=units;
     while(recent.length>2||cachedUnits>cacheLimit)cachedUnits-=recent.pop().units;
   }
   function prepare(raw){
@@ -172,12 +198,22 @@
     const prior=recent.find(p=>p.raw===raw);if(prior)return prior.packed;
     const packed=compress(raw);remember(raw,packed);return packed;
   }
-  function prime(raw,packed){
+  function prepareDense(raw){
+    const packed=prepare(raw);
+    if(typeof raw!=='string'||raw.length<threshold||raw.length>maxLength)return packed;
+    if(recent.some(item=>item.raw===raw&&item.dense))return packed;
+    const alternative=compressWhole(raw,true);
+    const best=alternative.length<packed.length?alternative:packed;
+    remember(raw,best,true);
+    return best;
+  }
+  function prime(raw,packed,dense=false){
     if(typeof raw!=='string'||typeof packed!=='string'||raw.length<threshold)return false;
-    if(recent.some(p=>p.raw===raw&&p.packed===packed))return true;
+    const cached=recent.find(p=>p.raw===raw&&p.packed===packed);
+    if(cached){if(dense)cached.dense=true;return true;}
     const h=header(packed);
     if(!h||h.length!==raw.length||h.hash!==checksum(raw)||h.packedHash!==checksum(packed.slice(h.start)))return false;
-    remember(raw,packed);return true;
+    remember(raw,packed,dense);return true;
   }
   function unpack(packed){
     if(typeof packed!=='string'||!packed.startsWith(marker))return packed;
@@ -207,12 +243,10 @@
           const packed=prepare(raw);
           try{native.setItem(name,packed);}
           catch(error){
-            // A single dictionary can store a few percent more densely. A
-            // nearly full tablet keeps its existing save capacity and backup.
-            if(!reusableSize(raw))throw error;
-            const dense=compressWhole(raw);
+            // Try longer matches across district boundaries under quota pressure.
+            const dense=prepareDense(raw);
             if(dense.length>=packed.length)throw error;
-            native.setItem(name,dense);remember(raw,dense);
+            native.setItem(name,dense);
           }
         },
         removeItem:k=>native.removeItem(k)
@@ -226,5 +260,5 @@
   }
   function standardKey(k){return k==='common-earth.world.v1'||k==='common-earth.world.v1.previous'||k.startsWith('common-earth.playthrough.v1.');}
   const nativeOf=storage=>natives.get(storage)||storage;
-  root.EarthWorldStorage=Object.freeze({wrap,nativeOf,prepare,prime,unpack});
+  root.EarthWorldStorage=Object.freeze({wrap,nativeOf,prepare,prepareDense,prime,unpack});
 })(typeof window==='undefined'?globalThis:window);

@@ -12,7 +12,7 @@ function district(){
   const sim=c.CommonEarthSim.create({storage:null});
   assert(sim.found({name:'Stone Town',lat:-6.16,lon:39.19,water:true}).ok);
   const site=sim.active(),w=sim.state;
-  const pose=(at,mode='walk',extra={})=>({siteId:site.id,actor:c.EarthAgency.actorId(site),x:at.x,y:at.y,mode,truck:{x:at.x,y:at.y},...(mode==='drive'?{vehicle:'truck'}:{}),...extra});
+  const pose=(at,mode='walk',extra={})=>({siteId:site.id,actor:c.EarthAgency.actorId(site),x:at.x,y:at.y,mode,stopped:true,witnesses:['driver'],truck:{x:at.x,y:at.y},...(mode==='drive'?{vehicle:'truck'}:{}),...extra});
   const drive=(action,at,mode='walk',extra={})=>{
     const q=sim.truckView();return sim.useTruck({actorId:q.actorId,siteId:q.siteId,generation:q.generation,week:q.week,serial:q.serial,action},()=>pose(at,mode,extra));
   };
@@ -162,7 +162,7 @@ test('a worker in a recent dispute can take an unattended truck only during a fa
   site.food=2;assert.equal(fleet.dispute(world,site),null);site.food=0;
   site.trust=65;assert.equal(fleet.dispute(world,site),null);site.trust=20;
   runtime.EarthMarket.canLoadFreight=()=>true;assert.equal(fleet.dispute(world,site),null);runtime.EarthMarket.canLoadFreight=()=>false;
-  const scene={siteId:site.id,actor:q.actor,x:15,y:22.8,truck,mode:'walk',stopped:true,emptyCab:true};
+  const scene={siteId:site.id,actor:q.actor,x:15,y:22.8,truck,mode:'walk',stopped:true,emptyCab:true,witnesses:['driver']};
   for(const patch of [{emptyCab:false},{x:4},{stopped:false},{actor:'steward'}])assert.equal(fleet.finishDispute(world,site,q,{...scene,...patch}).ok,false);
   assert.equal(site.fleet,undefined);
   assert(fleet.finishDispute(world,site,q,scene).ok);assert.equal(site.trust,16);assert.equal(site.food,0);
@@ -175,4 +175,41 @@ test('a worker in a recent dispute can take an unattended truck only during a fa
   world.week++;fleet.tick(world,site);assert.equal(site.fleet.custody,undefined);assert.equal(site.funds,3);
   world.week++;site.food=2;fleet.tick(world,site);assert.equal(site.fleet.incident,undefined);assert.equal(site.trust,18);
   assert(fleet.valid(site,world.week));site.food=0;assert.equal(fleet.dispute(world,site),null,'a repaired relationship cannot immediately repeat the incident');
+});
+
+test('two otherwise identical handovers produce different accounts, access and trust depending on who could see the cab',()=>{
+  const unwitnessed=district(),heard=district(),witness='walker-2',listener='walker-0';
+  const before=unwitnessed.site.trust;
+  for(const [t,witnesses] of [[unwitnessed,[]],[heard,[witness]]]){
+    assert(!t.drive('take',t.depot,'walk',{stopped:false,witnesses}).ok);
+    assert(t.drive('take',t.depot,'walk',{witnesses}).ok);
+    assert.equal(t.site.trust,before);
+    assert(!t.c.EarthFleet.regular(t.w,t.site).available);
+    assert.match(t.talk('driver','truck').message,/no signed handover/);
+    assert.match(t.talk(listener,'truck').message,/didn’t see/);
+    assert(t.drive('return',t.depot,'drive').ok);t.read();
+    assert(t.play(listener).ok);
+    assert.equal(t.talk('driver','truck-report').ok,false);
+  }
+  assert(!unwitnessed.talk(witness,'truck-testimony').ok);
+  assert(heard.talk(witness,'truck-testimony').changed);
+  assert.equal(heard.site.trust,before,'an account heard privately has not reached the cooperative');
+  assert(heard.talk('driver','truck-report').changed);
+  assert.equal(heard.site.trust,before-4);assert.equal(unwitnessed.site.trust,before);
+  assert(!heard.talk('driver','truck-report').ok,'a duplicate cannot penalise anyone twice');
+  assert(heard.play('steward').ok);
+  assert(!heard.drive('enrol',heard.depot).ok);
+  heard.read();unwitnessed.read();
+});
+
+test('a worker describes the currently funded leg from the same order that supplies the street',()=>{
+  const t=district(),id=t.site.residents[0].id;
+  const order={id:'order-a',phase:'collect',source:'the landing',tool:'shared handline',action:'Land the fish',reason:'The kitchen ordered a catch.',price:2,payer:'The kitchen',resource:'fish',amount:2,destination:'Public pantry'};
+  t.c.EarthDistrictGrowth={work:(_site,worker)=>worker===id?order:null};
+  const before=JSON.stringify(t.w);
+  assert.match(t.talk(id,'work').message,/shared handline to the landing/);
+  assert.match(t.talk(id,'purpose').message,/kitchen ordered a catch/);
+  assert.doesNotMatch(t.talk('walker-1','work').message,/shared handline to the landing/);
+  Object.assign(order,{phase:'deliver',action:'Deliver fish to Public pantry'});
+  assert.match(t.talk(id,'work').message,/2 fish to hand over at Public pantry/);assert.equal(JSON.stringify(t.w),before);
 });

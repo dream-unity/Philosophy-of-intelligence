@@ -200,7 +200,8 @@
     const pupils=site.residents||[];
     // Forecasts, save checks and other tabs use detached site objects. Reuse only
     // immutable birth profiles; the live roster and jobs are looked up separately.
-    const fingerprint=JSON.stringify([site.id,site.foundingRevision,site.lat,site.lon,region,
+    const birth=site.birthCoordinate||site;
+    const fingerprint=JSON.stringify([site.id,site.foundingRevision,birth.lat,birth.lon,region,
       pupils.map(p=>[p.id,p.slot,p.name,p.role]),site.birthNames,site.workRotation]);
     const entry=foundings.get(fingerprint);
     if(entry){
@@ -229,7 +230,8 @@
     return reg;
   }
   function makeRegistry(site,region,pupils){
-    const seed=[site.id,site.lat,site.lon,region].join('|');
+    const birth=site.birthCoordinate||site;
+    const seed=[site.id,birth.lat,birth.lon,region].join('|');
     const bank=nameBanks.find(([pattern])=>pattern.test(region))?.[1]||[];
     const local=shuffled(bank,seed+'local'),shared=shuffled(generalNames,seed+'shared');
     const names=new Set(pupils.map(p=>p.name));
@@ -270,7 +272,8 @@
       for(const slot of registry(other).slots.values())used.add(slot.name);
       for(const g of Object.values(other.communityLife?.people||{}))if(g?.profile)used.add(g.profile.name);
     }
-    const seed=site.id+'|'+site.lat+'|'+site.lon;
+    const birth=site.birthCoordinate||site;
+    const seed=site.id+'|'+birth.lat+'|'+birth.lon;
     const local=nameBanks.find(([pattern])=>pattern.test(site.region||''))?.[1]||[];
     const surnames=shuffled(families([...local,...generalNames]),seed+'family');
     const middleNames=shuffled([...new Set([...local,...generalNames].map(n=>n.split(' ')[0]))],seed+'middle');
@@ -416,11 +419,20 @@
     for(const introduction of site.introductions?.rows||[]){add(introduction?.actorId);add(introduction?.guideId);add(introduction?.contactId);}
     for(const crate of site.provisions?.crates||[]){add(crate?.by);add(crate?.sourceBy);}
     for(const entry of site.fleet?.records||[]){add(entry?.actor);add(entry?.otherId);}
+    const incident=site.fleet?.incident;
+    if(incident){add(incident.actor);for(const w of incident.witnesses||[])add(w.id);for(const row of incident.statements||[])add(row.listener.id);}
     for(const id of Object.keys(site.fleet?.roster||{}))add(id);
     return recorded;
   }
   function retainsPorter(site,id){
-    return Boolean(site&&isPorterId(id)&&recordedPorters(site).has(id));
+    if(!site||!isPorterId(id))return false;
+    // A retained account is already conclusive. The wider search matters for
+    // a former route worker remembered only as somebody else's contact.
+    if(site.purses?.people?.[id]||site.agency?.porters?.includes(id))return true;
+    const career=site.careers?.[id],life=site.autonomy?.people?.[id];
+    if(career?.jobId||career?.training||career?.application||career?.agreedPlan||career?.history?.length||
+       life?.history?.length||life?.pastime||life?.dream||life?.ties?.length)return true;
+    return recordedPorters(site).has(id);
   }
   function porterIds(site,links){
     if(!site)return [];

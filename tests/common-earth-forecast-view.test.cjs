@@ -6,8 +6,8 @@ const script='https://example.org/common-earth/forecast-view.js?v=test';
 const urlFor=name=>new URL(name,script).href;
 const modules=[...fs.readFileSync(path.join(folder,'index.html'),'utf8').matchAll(/<script src="([\w-]+\.js)(?:\?[^"]*)?"[^>]*><\/script>/g)].map(m=>m[1]);
 const core=modules.slice(0,modules.indexOf('simulation.js')+1).filter(f=>!f.endsWith('-ui.js'));
-function runtime(){
-  const c=vm.createContext({URL,console,Date});c.window=c;
+function runtime(Clock=Date){
+  const c=vm.createContext({URL,console,Date:Clock});c.window=c;
   for(const f of core)vm.runInContext(fs.readFileSync(path.join(folder,f),'utf8'),c,{filename:f});
   vm.runInContext(source,c);
   return c;
@@ -61,8 +61,8 @@ function eightDistricts(context){
   world.activeId=world.sites[0].id;first.destroy();
   return JSON.stringify(world);
 }
-function workerForGame(){
-  const worker=vm.createContext({URL,Date,console,location:{href:script}});
+function workerForGame(Clock=Date){
+  const worker=vm.createContext({URL,Date:Clock,console,location:{href:script}});
   const bridge={replies:[],terminate(){},postMessage(msg){setImmediate(()=>worker.onmessage({data:msg}));}};
   worker.postMessage=reply=>{bridge.replies.push(reply);bridge.onmessage({data:reply});};
   worker.importScripts=(...urls)=>{for(const url of urls){
@@ -82,7 +82,8 @@ test('committing a prepared full turn writes exactly the same world and last-wee
     assert.ok(prepared.ok,prepared.message);assert.equal(prepared.message,regular.message);
     assert.notEqual(sim.state,prior,'the command consumed the staged state');
     assert.equal(JSON.stringify(sim.state),JSON.stringify(ordinary.state));
-    assert.ok(Array.from(values.values()).includes(JSON.stringify(sim.state)),'the stored state matches memory');
+    const persisted=runtime().EarthWorldStorage.unpack(values.get('common-earth.world.v1'));
+    assert.equal(persisted,JSON.stringify(sim.state),'a cold reader opens the exact committed primary, including packed saves');
   }
   preview.close();sim.destroy();ordinary.destroy();
 });
@@ -193,4 +194,45 @@ test('the worker threshold counts independent towns in the regional economy',asy
   const preparing=forecast.prepareAdvance();assert.ok(sent);assert.equal(forecasts,0);
   worker.onmessage({data:{sequence:sent.sequence,forecast:{week:4}}});
   assert.equal(await preparing,true);forecast.close();
+});
+
+test('four founding communities can settle their calendar in the worker',async()=>{
+  const c=runtime(),sim=c.CommonEarthSim.create({storage:null});
+  assert.ok(sim.found({name:'Cairns',region:'Queensland',lat:-16.92,lon:145.77}).ok);
+  assert.equal(sim.state.sites.length+sim.state.communityLife.outposts.length,4);
+  const forecast=c.EarthForecastView.create(sim,{url:script,modules:core.map(urlFor),workerFactory:workerForGame});
+  const original=sim.state;
+  assert.ok(await forecast.prepareAdvance());assert.ok(sim.advance({usePrepared:true}).ok);
+  assert.notEqual(sim.state,original);assert.equal(sim.state.week,2);
+  forecast.close();sim.destroy();
+});
+test('a large production round commits the same inventories, development and receipts through the save lock',async()=>{
+  class Clock extends Date{static now(){return 1800000000000;}}
+  const c=runtime(Clock),raw=eightDistricts(c),key='common-earth.world.v1',values=new Map([[key,raw]]);
+  const storage={getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v)};
+  const sim=c.CommonEarthSim.create({storage}),ordinary=c.CommonEarthSim.create({storage:null,snapshot:raw});
+  const worker=workerForGame(Clock),forecast=c.EarthForecastView.create(sim,{url:script,modules:core.map(urlFor),workerFactory:()=>worker});
+  const prior=sim.state,site=sim.active(),person=site.residents[0],serial=prior.productionSerial||0;
+  assert.ok(await forecast.prepareProduction(serial,()=>true));assert.equal(sim.state,prior);
+  assert.ok(ordinary.production(serial,()=>true).ok);assert.ok((await sim.perform('production',serial,()=>true)).ok);
+  assert.ok(worker.replies.at(-1).after);assert.equal(sim.state,prior);assert.equal(sim.active(),site);
+  assert.equal(sim.active().residents[0],person);assert.equal(sim.state.productionSerial,serial+1);
+  assert.equal(JSON.stringify(sim.state),JSON.stringify(ordinary.state));
+  const reopened=runtime().CommonEarthSim.create({storage});assert.equal(reopened.state.week,sim.state.week);
+  assert.equal(JSON.stringify(reopened.state),JSON.stringify(sim.state));
+  forecast.close();sim.destroy();ordinary.destroy();reopened.destroy();
+});
+test('a worker production receipt cannot supersede a same-revision edit or an expired eligibility check',async()=>{
+  class Clock extends Date{static now(){return 1800000000000;}}
+  const c=runtime(Clock),sim=c.CommonEarthSim.create({storage:null,snapshot:eightDistricts(c)}),prior=sim.state;
+  const forecast=c.EarthForecastView.create(sim,{url:script,modules:core.map(urlFor),workerFactory:()=>workerForGame(Clock)});
+  let eligible=true;
+  const preparing=forecast.prepareProduction(0,()=>eligible);eligible=false;
+  assert.equal(await preparing,false);assert.equal(sim.state.productionSerial||0,0);
+  assert.ok(await forecast.prepareProduction(0,()=>true));sim.active().funds+=19;
+  const ordinary=c.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(sim.state)});
+  assert.ok(ordinary.production(0,()=>true).ok);assert.ok(sim.production(0,()=>true).ok);
+  assert.equal(sim.state,prior,'a direct input edit forced the ordinary in-place path');
+  assert.equal(JSON.stringify(sim.state),JSON.stringify(ordinary.state));
+  forecast.close();sim.destroy();ordinary.destroy();
 });

@@ -166,8 +166,9 @@
     if(!source)return result;
     let plot=owned?.plot;
     if(plot==null)for(let i=0;i<housePlots(site);i++){if(!houses.some(h=>h.plot===i)){plot=i;break;}}
-    const skillValue=skill(site,p.id,p,'craft'),threshold=[44,50,46][stage],ready=owned?owned.lastWork+homeStages[stage-1].next:world.week;
-    const peak=p.bounds?.craft?.max??100;
+    const builder=terms.builder||p;
+    const skillValue=skill(site,builder.id,builder,'craft'),threshold=[44,50,46][stage],ready=owned?owned.lastWork+homeStages[stage-1].next:world.week;
+    const peak=builder.bounds?.craft?.max??100;
     const reason=!owned&&peak<50?'Finishing the frame needs craft 50. You can look for a finished home or practise within your own range.':
       plot==null?'The serviced courtyard sites are occupied. A housing precinct opens another site.':
       skillValue<threshold?'This stage needs craft '+threshold+'. Current skill '+skillValue+'.':
@@ -178,8 +179,14 @@
       detail:source.price+' personal fund'+(source.price===1?'':'s')+' buys one lot of '+source.name+'. '+(stage===0?'Framing later needs craft 50. ':'')+(step.next?'Allow '+step.next+' weeks before the next stage.':'Finishing adds two housing places to the district.')});
     return result;
   }
-  function housingAction(world,site,p,q){
-    const options=privateHomeTerms(world,site,p,session(world,site,p));
+  function constructionOffer(world,site,owner,builder=owner){
+    const terms=session(world,site,owner);
+    terms.builder=builder;
+    if(builder.id!==owner.id)terms.workConflict=root.EarthPurses.workConflict(site,builder.id,world.week);
+    return privateHomeTerms(world,site,owner,terms).find(o=>o.action==='buildHome');
+  }
+  function housingAction(world,site,p,q,builder=p,reserveSession=true){
+    const options=q.action==='buildHome'?[constructionOffer(world,site,p,builder)].filter(Boolean):privateHomeTerms(world,site,p,session(world,site,p));
     const chosen=options.find(o=>o.action===q.action&&o.ownerId===q.ownerId);
     if(!chosen?.available||chosen.plot!==q.plot||chosen.stage!==q.stage||chosen.price!==q.price||chosen.input!==q.input)
       return fail(chosen?.reason||'The site, owner or asking price changed. Review the courtyard register.');
@@ -189,7 +196,7 @@
       if(!paid.ok)return paid;
       const home=existing||{plot:q.plot,ownerId:p.id,started:world.week,stage:0,cost:0};
       if(!existing)(site.privateHomes||=[]).push(home);
-      home.stage++;home.lastWork=world.week;home.cost+=q.price;payer.craftWeek=world.week;
+      home.stage++;home.lastWork=world.week;home.cost+=q.price;if(reserveSession)payer.craftWeek=world.week;
       return {ok:true,message:p.name+' completed stage '+home.stage+' of their '+homeName(site)+' at plot '+(home.plot+1)+'. '+
         (home.stage===3?'The dwelling now has two housing places.':'The next stage can start in week '+(world.week+homeStages[home.stage-1].next)+'.')};
     }
@@ -392,5 +399,5 @@
     if(from.craftWeek)to.craftWeek=Math.max(to.craftWeek||0,from.craftWeek);
     if(uncollected.length)from.stall.wares=uncollected;else delete from.stall;
   }
-  root.EarthResidentShops=Object.freeze({products,homes,housingPlaces,validHomes,view,action,savingReason,opportunity,work,gatherBonus,restBonus,instrument,wardrobe,validAccount,hasGoods,moveGoods});
+  root.EarthResidentShops=Object.freeze({constructionOffer,buildWith:(world,site,owner,q,builder)=>housingAction(world,site,owner,q,builder,false),products,homes,housingPlaces,validHomes,view,action,savingReason,opportunity,work,gatherBonus,restBonus,instrument,wardrobe,validAccount,hasGoods,moveGoods});
 })(typeof window==='undefined'?globalThis:window);

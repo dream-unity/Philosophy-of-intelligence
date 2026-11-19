@@ -473,16 +473,92 @@
     const resident=site.residents.find(r=>r.id===row.requesterId);if(resident)resident.bond=Math.min(10,resident.bond+1);
     return name(site,row.actorId)+' met '+name(site,row.requesterId)+' for “'+story.title+'”. '+outcomeFor(row);
   }
+  function deliveryWorker(site,resident){
+    const p=resident.promise,h=p?.handover;
+    if(!h)return p?.by||null;
+    const worker=person(site,h.worker);
+    return worker&&member(site,h.worker)&&visible(site,h.worker)&&(!h.key||h.key===worker.identityKey)?h.worker:p.by;
+  }
+  function relayTerms(site,world,receiver,talker,worker){
+    const p=receiver.promise;
+    if(!p?.by||p.by!==talker.id||receiver.id===worker.id||talker.id===worker.id||!member(site,worker.id)||!member(site,talker.id))return null;
+    const balance=root.CommonEarthSim?.promiseBalance?.(receiver);
+    const parcel=balance&&Object.entries(balance).find(([,n])=>n>0);
+    if(!parcel)return null;
+    const [good,amount]=parcel;
+    const trust=root.EarthAutonomy?.bond?.(site,worker.id,talker.id,world.week)||0;
+    const customerTrust=root.EarthAutonomy?.bond?.(site,worker.id,receiver.id,world.week)||0;
+    const held=site.residents.some(r=>r!==receiver&&r.promise?.dueWeek===p.dueWeek&&deliveryWorker(site,r)===worker.id);
+    const career=site.careers?.[worker.id];
+    const conflict=held||records(site).some(r=>r.status==='agreed'&&r.dueWeek===p.dueWeek&&r.actorId===worker.id)||
+      career?.application?.phase==='notice'&&career.application.dueWeek===p.dueWeek;
+    const ref=receiver.slot+':'+p.start+':'+p.dueWeek;
+    const fee=trust>=2||customerTrust>=2?0:Math.max(1,Math.ceil(amount/2));
+    const gate=p.handover?'Another worker has taken this booking.':
+      p.dueWeek<=world.week?'The delivery window is already open. I would need time to arrange my own round.':
+      trust<0?'I want us to settle our last missed arrangement before I promise to carry anything.':
+      customerTrust<=-3?'I need to speak with the recipient about our last handover first.':
+      conflict?'I already promised my time to someone else that week.':
+      career?.training?.pace==='intensive'&&!career.training.paused?'My intensive course takes the time I would need for the handover.':'';
+    const payGate=fee&&!root.EarthPurses?.canTransfer?.(site,talker.id,worker.id,fee)?'The booking costs '+count(fee,'funds')+' from your own purse.':'';
+    return {good,amount,fee,gate,payGate,ref,due:p.dueWeek,terms:'I can carry '+count(amount,good)+' to '+receiver.name+' in week '+p.dueWeek+
+      (fee?' for a booking fee of '+count(fee,'funds')+'.':' as a favour.')+' You still need to leave the promised goods available.'};
+  }
+  function relayTopics(site,world,worker,talker){
+    if(!worker||!talker||world?.activeId!==site.id)return [];
+    const result=[];
+    for(const receiver of site.residents){
+      const p=receiver.promise,h=p?.handover;
+      if(!p?.by||p.by!==talker.id)continue;
+      const ref=receiver.slot+':'+p.start+':'+p.dueWeek;
+      if(h?.worker===worker.id&&deliveryWorker(site,receiver)===worker.id&&world.week<p.dueWeek){
+        result.push({id:'relay:release:'+ref,label:'Release the delivery booking for '+receiver.name+
+          (h.fee?' · worker keeps the booking fee':'')});continue;
+      }
+      if(h&&receiver.id===worker.id&&!h.informed&&deliveryWorker(site,receiver)===h.worker){
+        result.push({id:'relay:notify:'+ref,label:'Tell '+receiver.name+' who is making the delivery',context:true});continue;
+      }
+      const terms=relayTerms(site,world,receiver,talker,worker);if(!terms||h)continue;
+      result.push({id:'relay:terms:'+ref,label:'Could you cover my delivery to '+receiver.name+'?',context:true});
+      if(!terms.gate&&!terms.payGate)result.push({id:'relay:book:'+ref+':'+terms.fee,label:
+        terms.fee?'Book the handover · '+terms.fee+' personal fund'+(terms.fee===1?'':'s'):'Agree the handover as a favour'});
+    }
+    return result;
+  }
+  function relay(site,world,worker,talker,topic,proof){
+    if(world?.activeId!==site.id||root.EarthAgency.actorId(site)!==talker.id||proof?.mode!=='walk'||proof.siteId!==site.id||
+      proof.actor!==talker.id||proof.target!==worker.id||![proof.x,proof.y,proof.tx,proof.ty].every(Number.isFinite)||
+      Math.hypot(proof.x-proof.tx,proof.y-proof.ty)>1.56||!relayTopics(site,world,worker,talker).some(o=>o.id===topic))return fail('Meet the people involved and check the current agreement.');
+    const [,verb,slot]=topic.split(':'),receiver=site.residents.find(p=>p.slot===Number(slot)),p=receiver.promise;
+    if(verb==='release'){
+      delete p.handover;
+      return said(worker,'I’ve released the time. You’re responsible for getting the supplies to '+receiver.name+' by week '+p.dueWeek+'.',true);
+    }
+    if(verb==='notify'){
+      p.handover.informed=true;
+      return said(worker,'I’ll look for '+name(site,p.handover.worker)+' at the handover in week '+p.dueWeek+'. I still have your name on the agreement.',true);
+    }
+    const terms=relayTerms(site,world,receiver,talker,worker);
+    if(verb==='terms')return said(worker,terms.gate||terms.terms+(terms.payGate?' '+terms.payGate:''));
+    if(terms.gate||terms.payGate)return fail(terms.gate||terms.payGate);
+    if(terms.fee){
+      const paid=root.EarthPurses.transferPerson(world,site,talker.id,worker.id,terms.fee,'Delivery booking for '+receiver.name+' in week '+terms.due);
+      if(!paid.ok)return paid;
+    }
+    p.handover={worker:worker.id,key:worker.identityKey||null,week:world.week,fee:terms.fee,informed:false};
+    return {...said(worker,'I’ve booked week '+terms.due+' to carry '+count(terms.amount,terms.good)+' to '+receiver.name+
+      '. You can let them know to expect me.',true),followContact:receiver.id};
+  }
   function promisedDelivery(site,person,week){
-    const promise=person.promise;
-    if(!promise?.by||promise.by==='steward'||promise.by===person.id||promise.dueWeek!==week||
-      !member(site,promise.by)||!member(site,person.id)||!visible(site,promise.by)||!visible(site,person.id))return null;
+    const promise=person.promise,worker=deliveryWorker(site,person);
+    if(!promise?.by||!worker||worker===person.id||promise.dueWeek!==week||
+      !member(site,worker)||!member(site,person.id)||!visible(site,worker)||!visible(site,person.id))return null;
     const balance=root.CommonEarthSim?.promiseBalance?.(person);
     if(!balance)return null;
     const kind=['supper','bench','meeting'][person.slot],good=stories[kind]?.good,amount=balance[good];
     if(!Number.isSafeInteger(amount)||amount<1)return null;
     return {siteId:site.id,generation:site.foundingRevision||0,week,ordinary:true,
-      rowId:'pledge:'+person.slot+':'+promise.start+':'+promise.dueWeek,actorId:promise.by,targetId:person.id,
+      rowId:'pledge:'+person.slot+':'+promise.start+':'+promise.dueWeek,actorId:worker,targetId:person.id,
       good,amount,kind,method:'goods',venue:venues[kind]};
   }
   function deliverable(site,week,quote){
@@ -499,7 +575,7 @@
   function ordinaryOffers(site,world,id,controlled){
     const result=[];
     for(const resident of site.residents){
-      if(resident.promise?.by!==id||resident.id===controlled)continue;
+      if(deliveryWorker(site,resident)!==id||resident.id===controlled)continue;
       const q=promisedDelivery(site,resident,world.week);
       if(q&&deliverable(site,world.week,q)){
         const title='Deliver '+count(q.amount,q.good)+' to '+resident.name;
@@ -510,8 +586,8 @@
     return result;
   }
   function assignments(site,world,id){
-    if(!records(site).length&&!site.residents.some(p=>p.promise?.by===id&&p.promise.dueWeek===world.week))return empty;
-    if(id==='steward'||!visible(site,id)||!member(site,id))return empty;
+    if(!records(site).length&&!site.residents.some(p=>p.promise?.dueWeek===world.week&&deliveryWorker(site,p)===id))return empty;
+    if(!visible(site,id)||!member(site,id))return empty;
     const controlled=world.activeId===site.id?root.EarthAgency?.actorId(site):null;
     if(controlled===id)return empty;
     const offers=ordinaryOffers(site,world,id,controlled);
@@ -548,7 +624,7 @@
     const rich=workingArrangements(site,week);
     const deliveries=[];
     for(const person of site?.residents||[]){
-      if(!person.promise?.by||person.promise.by==='steward'||person.promise.dueWeek!==week)continue;
+      if(!person.promise?.by||person.promise.dueWeek!==week)continue;
       const q=promisedDelivery(site,person,week);
       if(q&&pairedDuty(site,q,week))deliveries.push(Object.freeze(q));
     }
@@ -587,7 +663,7 @@
     const row=quote.ordinary===true?quote:records(site).find(r=>r.id===quote.rowId&&r.actorId===quote.actorId&&r.requesterId===quote.targetId&&
       r.kind===quote.kind&&r.method===quote.method&&r.status==='agreed'&&r.workWeek===world.week);
     const target=row?.targetId||row?.requesterId;
-    if(!row||row.actorId==='steward'||!visible(site,row.actorId)||!visible(site,target))return fail('The named appointment has already changed.');
+    if(!row||!visible(site,row.actorId)||!visible(site,target)||row.actorId===(root.EarthAgency?.actorId(site)||'steward')||target===(root.EarthAgency?.actorId(site)||'steward'))return fail('The named appointment has already changed.');
     const place=venues[row.kind];
     if(quote.venue!==place||!pairedDuty(site,row,world.week)||
       proof?.siteId!==site.id||proof.actorId!==row.actorId||proof.targetId!==target||
@@ -633,6 +709,10 @@
   }
   function valid(site,week){
     for(const person of site.residents){
+      const pledge=person.promise,h=pledge?.handover;
+      if(h!==undefined&&(!h||!pledge.by||!(root.EarthAgency.canPlay(site,h.worker)||root.EarthPersonas?.isPorterId?.(h.worker))||h.worker===pledge.by||h.worker===person.id||
+        !bounded(h.week,week)||h.week<pledge.start||h.week>=pledge.dueWeek||!Number.isInteger(h.fee)||h.fee<0||h.fee>4||
+        typeof h.informed!=='boolean'||h.key!==null&&(typeof h.key!=='string'||!h.key.length||h.key.length>1040)))return false;
       if(!person.promise?.by||person.promise.dueWeek!==week)continue;
       const q=promisedDelivery(site,person,week);
       if(!q)continue;
@@ -665,7 +745,7 @@
       if(r.dateDecision!==undefined||r.dateAskedWeek!==undefined){
         if(!committed||!['agreed','declined'].includes(r.dateDecision)||!bounded(r.dateAskedWeek,Math.min(week,firstDue(r)))||r.dateAskedWeek<firstDue(r)-1)return false;
       }
-      if(r.workWeek!==undefined&&(!committed||r.actorId==='steward'||!bounded(r.workWeek,Math.min(week,r.dueWeek))||
+      if(r.workWeek!==undefined&&(!committed||!bounded(r.workWeek,Math.min(week,r.dueWeek))||
         r.workWeek<=r.agreedWeek||!['agreed','kept','withdrawn'].includes(r.status)))return false;
       if(r.localSession!==undefined&&(r.localSession!==true||r.method!=='time'||r.workWeek==null))return false;
       if(r.status==='agreed'&&r.workWeek!==undefined&&(r.workWeek!==week||!pairedDuty(site,r,week)))return false;
@@ -679,5 +759,5 @@
       owners.add(r.requesterId);actors.add(r.actorId);return true;
     });
   }
-  root.EarthNeighbourErrands=Object.freeze({heldGoods,topics,converse,arrangements:rowsFor,greeting,reliability,witness,account,assignment,assignments,work,working,finishAt,closeDeliveries,closeWeek,valid});
+  root.EarthNeighbourErrands=Object.freeze({heldGoods,topics,deliveryWorker,relayTopics,relay,converse,arrangements:rowsFor,greeting,reliability,witness,account,assignment,assignments,work,working,finishAt,closeDeliveries,closeWeek,valid});
 })(typeof window==='undefined'?globalThis:window);

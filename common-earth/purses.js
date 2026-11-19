@@ -16,7 +16,7 @@
   const ticket=(site,id)=>own(site.purses?.tickets,id);
   const escrow=site=>wage*Object.keys(site?.purses?.tickets||{}).length;
   const worked=(p,week)=>p?.lastWeek===week||p?.carriedWeek===week;
-  const committed=(site,id,week)=>Boolean(ticket(site,id)||worked(account(site,id),week)||account(site,id)?.craftWeek===week);
+  const committed=(site,id,week)=>Boolean(root.EarthPractice?.reserved?.(site,id,week)||ticket(site,id)||worked(account(site,id),week)||account(site,id)?.craftWeek===week);
   const book=site=>site.purses||={serial:0,household:0,people:{},tickets:{}};
   const named=(site,id)=>book(site).people[id]||=empty();
   const limitBook=b=>b.serial=Math.min(limit,b.serial+1);

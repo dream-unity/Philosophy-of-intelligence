@@ -4,7 +4,7 @@
   'use strict';
   // Preserve the ordinary JSON exactly, while recording where each district
   // ends. A tablet can then reopen a large computed turn over several frames.
-  function encodeTurn(world){
+  function* turnParts(world){
     const shell={...world,sites:[]},groups=[{key:'sites',rows:world.sites}];
     if(world.communityLife?.outposts?.length){
       shell.communityLife={...world.communityLife,outposts:[]};
@@ -25,11 +25,23 @@
         if(ends.length){parts.push(',');offset++;}
         const district=JSON.stringify(row);
         parts.push(district);offset+=district.length;ends.push(offset);
+        yield;
       }
       if(ends.length)sections.push({key,start,ends});
     }
     parts.push(text.slice(source));
     return {after:parts.join(''),sections};
+  }
+  function encodeTurn(world){
+    const parts=turnParts(world);let part;
+    do{part=parts.next();}while(!part.done);
+    return part.value;
+  }
+  function packTurn(after){
+    const codec=root.EarthWorldStorage;
+    const dense=Boolean(codec?.prepareDense&&after.length>=4*1024*1024);
+    const encoded=dense?codec.prepareDense(after):codec?.prepare(after);
+    return {dense,packed:encoded&&encoded!==after?encoded:undefined};
   }
   if(typeof root.importScripts==='function'&&typeof root.document==='undefined'){
     let loaded=false,previous=null;
@@ -54,6 +66,22 @@
           if(split<0)coasts.add(hint);else lakes.set(hint.slice(0,split),hint.slice(split+1));
         }
         root.EarthAtlas={nearOceanShore:(lat,lon)=>coasts.has(lat+'/'+lon),nearLakeShore:(lat,lon)=>lakes.get(lat+'/'+lon)||''};
+        if(data.production!=null){
+          // The weekly projection can still be used by another open panel.
+          // An independent production round has its own detached simulation.
+          sim=root.CommonEarthSim.create({storage:null,snapshot});
+          if(sim.state.week!==data.week||sim.state.activeId!==data.siteId||JSON.stringify(sim.state)!==snapshot){
+            root.postMessage({sequence,foreground:true});return;
+          }
+          const started=(root.performance||Date).now();
+          const result=sim.production(data.production,()=>true);
+          if(!result.ok){root.postMessage({sequence,foreground:true});return;}
+          const productionMs=(root.performance||Date).now()-started;
+          const packet=encodeTurn(sim.state);
+          root.postMessage({sequence,...packet,productionMs,message:result.message,
+            ...packTurn(packet.after)});
+          return;
+        }
         const reuse=previous&&data.resume===previous.sequence;
         if(reuse)sim=previous.sim;
         else{
@@ -66,10 +94,12 @@
         if(!reuse&&JSON.stringify(sim.state)!==snapshot){
           root.postMessage({sequence,foreground:true});return;
         }
+        const started=data.measure?(root.performance||Date).now():0;
         const turn=sim.advance({returnProjection:true});
+        const workerMs=data.measure?(root.performance||Date).now()-started:undefined;
         if(turn?.ok&&turn.projection){
-          const packet=encodeTurn(sim.state),encoded=root.EarthWorldStorage?.prepare(packet.after);
-          root.postMessage({sequence,forecast:turn.projection,...packet,packed:encoded&&encoded!==packet.after?encoded:undefined,message:turn.message});
+          const packet=encodeTurn(sim.state);
+          root.postMessage({sequence,forecast:turn.projection,workerMs,...packet,...packTurn(packet.after),message:turn.message});
           previous={sequence,sim};
         }else{
           // A live crossing can temporarily prevent an advance. Keep the
@@ -82,8 +112,10 @@
     return;
   }
   const scriptURL=root.document?.currentScript?.src;
-  const staged=new WeakMap();
+  const staged=new WeakMap(),productionTurns=new WeakMap();
   const districtCount=world=>world.sites.length+(world.communityLife?.outposts?.length||0);
+  // The founding district and its three independent neighbours already run four complete economies.
+  const workerMinimum=4;
   function shores(world){
     const hints=[];
     for(const site of [...world.sites,...world.communityLife?.outposts||[]]){
@@ -98,13 +130,13 @@
   function sameShores(first,second){
     return first.length===second.length&&first.every((hint,index)=>hint===second[index]);
   }
-  function takeTurn(world){
-    const turn=staged.get(world);
+  function takeTurn(world,store=staged){
+    const turn=store.get(world);
     if(!turn)return null;
-    staged.delete(world);
+    store.delete(world);
     if(turn.week!==world.week||turn.action!==(world.actionRevision||0)||turn.work!==(world.workRevision||0)||
       turn.site!==world.activeId||!sameShores(turn.shores,shores(world))||turn.before!==JSON.stringify(world))return null;
-    if(turn.packed)root.EarthWorldStorage?.prime(turn.after,turn.packed);
+    if(turn.packed)root.EarthWorldStorage?.prime(turn.after,turn.packed,turn.dense);
     return turn;
   }
   function create(sim,{url=scriptURL,modules=null,workerFactory}={}){
@@ -142,7 +174,7 @@
         return worker;
       }catch{workerFailure();return null;}
     }
-    function reopenTurn(turn,at,sections){
+    function reopenTurn(turn,at,sections,store=staged){
       const canSchedule=typeof root.setTimeout==='function'||typeof root.requestIdleCallback==='function';
       if(!canSchedule||!Array.isArray(sections)||!sections.length)return;
       const schedule=fn=>{
@@ -153,7 +185,7 @@
       turn.reopening=new Promise(resolve=>{
         let next,section=0,index=0;
         function portion(){
-          if(ended||staged.get(at.world)!==turn||!same(at,stamp())){resolve();return;}
+          if(ended||store.get(at.world)!==turn||!same(at,stamp())){resolve();return;}
           try{
             const until=(root.performance||Date).now()+5;
             if(!next){
@@ -177,6 +209,51 @@
         schedule(portion);
       });
     }
+    async function snapshotInTasks(world,eligible){
+      const parts=turnParts(world),clock=root.performance||Date;
+      do{
+        const deadline=clock.now()+4;
+        let part;
+        do{part=parts.next();}while(!part.done&&clock.now()<deadline);
+        if(part.done)return part.value.after;
+        if(root.scheduler?.yield)await root.scheduler.yield();
+        else if(root.setTimeout)await new Promise(resolve=>root.setTimeout(resolve,0));
+      }while(eligible());
+      return null;
+    }
+    async function prepareProduction(serial,eligible){
+      const at=stamp();
+      const current=()=>!ended&&sim.state===at.world&&same(at,stamp())&&
+        (at.world.productionSerial||0)===serial&&eligible();
+      if(!current())return false;
+      // A small collection settles directly. A mature, multi-district round
+      // can occupy hundreds of milliseconds of the tablet's input thread.
+      if((districtCount(at.world)<workerMinimum&&!(sim.savedUnits>=512*1024))||!initialise())return true;
+      const before=await snapshotInTasks(at.world,current);
+      if(before===null||!current())return false;
+      const coasts=shores(at.world),request=++sequence;
+      const reply=new Promise(resolve=>{
+        active.set(request,{resolve});
+        try{worker.postMessage({sequence:request,modules,week:at.week,siteId:at.site,
+          production:serial,count:at.world.sites.length,snapshot:before,shores:coasts});}
+        catch{workerFailure();}
+      });
+      let timeout;
+      if(root.setTimeout)timeout=root.setTimeout(()=>{if(active.has(request))workerFailure();},8000);
+      let result;
+      try{result=await reply;}finally{if(timeout!=null)root.clearTimeout(timeout);}
+      if(!current())return false;
+      if(!result?.after)return true;
+      if(Number.isFinite(result.productionMs))root.EarthPerformance?.record('workerProduction',result.productionMs);
+      if(result.packed)root.EarthWorldStorage?.prime(result.after,result.packed,result.dense);
+      const turn={before,after:result.after,packed:result.packed,dense:result.dense,message:result.message,
+        shores:coasts,week:at.week,site:at.site,action:at.action,work:at.work};
+      productionTurns.set(at.world,turn);reopenTurn(turn,at,result.sections,productionTurns);
+      if(turn.reopening)await turn.reopening;
+      if(current())return true;
+      if(productionTurns.get(at.world)===turn)productionTurns.delete(at.world);
+      return false;
+    }
     function read(forecast=true){
       if(ended)return Promise.resolve(null);
       const at=stamp(),world=at.world;
@@ -188,7 +265,7 @@
         if(!forecast&&!same(at,stamp()))return null;
         return read(forecast);
       });
-      const engine=districtCount(world)>=8?initialise():null;
+      const engine=districtCount(world)>=workerMinimum?initialise():null;
       if(!engine){
         if(!forecast)return Promise.resolve(null);
         const value=sim.forecastNext();
@@ -199,22 +276,32 @@
       let before,coasts;
       const promise=new Promise(resolve=>{
         active.set(request,{resolve});
-        try{
-          before=JSON.stringify(world);coasts=shores(world);
-          const resume=workerWorld?.after===before&&sameShores(workerWorld.shores,coasts)?workerWorld.sequence:null;
-          engine.postMessage({sequence:request,modules,week:world.week,siteId:world.activeId,count:world.sites.length,
-            snapshot:resume?undefined:before,resume,shores:coasts});
+        function submit(snapshot){
+          if(snapshot===null||ended||!same(at,stamp())){
+            active.delete(request);resolve(null);return;
+          }
+          try{
+            before=snapshot;coasts=shores(world);
+            const resume=workerWorld?.after===before&&sameShores(workerWorld.shores,coasts)?workerWorld.sequence:null;
+            engine.postMessage({sequence:request,modules,measure:Boolean(root.EarthPerformance),week:world.week,siteId:world.activeId,count:world.sites.length,
+              snapshot:resume?undefined:before,resume,shores:coasts});
+          }catch{workerFailure();}
         }
-        catch{workerFailure();}
+        if(districtCount(world)>=16&&root.setTimeout){
+          snapshotInTasks(world,()=>!ended&&same(at,stamp())).then(submit,workerFailure);
+        }else{
+          try{submit(JSON.stringify(world));}catch{workerFailure();}
+        }
       }).then(result=>{
         if(ended)return null;
+        if(Number.isFinite(result?.workerMs))root.EarthPerformance?.record('workerWeek',result.workerMs);
         workerWorld=result?.after?{sequence:request,after:result.after,shores:coasts,
           week:at.week+1,site:at.site,action:at.action+1,work:at.work}:null;
         if(!same(at,stamp()))return null;
         const value=result?.forecast||(forecast?sim.forecastNext():null);
         if(result?.after){
-          if(result.packed)root.EarthWorldStorage?.prime(result.after,result.packed);
-          const turn={before,after:result.after,packed:result.packed,message:result.message,shores:coasts,week:at.week,site:at.site,action:at.action,work:at.work};
+          if(result.packed)root.EarthWorldStorage?.prime(result.after,result.packed,result.dense);
+          const turn={before,after:result.after,packed:result.packed,dense:result.dense,message:result.message,shores:coasts,week:at.week,site:at.site,action:at.action,work:at.work};
           staged.set(world,turn);
           reopenTurn(turn,at,result.sections);
         }
@@ -228,7 +315,7 @@
     // save lock and checks the full prepared snapshot before adopting it.
     async function prepareAdvance(){
       const at=stamp();
-      if(districtCount(at.world)>=8&&!ended&&initialise()){
+      if(districtCount(at.world)>=workerMinimum&&!ended&&initialise()){
         let timeout;
         if(root.setTimeout)timeout=root.setTimeout(()=>{if(pending)workerFailure();},8000);
         try{
@@ -259,11 +346,11 @@
       },wait);
     }
     function close(){
-      ended=true;cache=null;warmingAt=null;staged.delete(sim.state);
+      ended=true;cache=null;warmingAt=null;staged.delete(sim.state);productionTurns.delete(sim.state);
       if(warmTimer!=null)root.clearTimeout(warmTimer);
       workerFailure();
     }
-    return {read,warm,close,prepareAdvance};
+    return {read,warm,close,prepareAdvance,prepareProduction};
   }
   const chosen=new WeakMap();
   function paint(results,forecast,focusId){
@@ -301,5 +388,5 @@
     results.replaceChildren(title,label,region);show();
     if(restoreFocus)select.focus({preventScroll:true});
   }
-  root.EarthForecastView=Object.freeze({create,paint,takeTurn});
+  root.EarthForecastView=Object.freeze({create,paint,takeTurn,takeProduction:world=>takeTurn(world,productionTurns)});
 })(typeof globalThis==='undefined'?window:globalThis);

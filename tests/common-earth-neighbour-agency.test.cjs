@@ -80,9 +80,17 @@ function reachedFee(donor){
   const t=fixture();if(donor)assert(t.change(donor).ok);
   t.earn();while(t.world.week<4)t.next();
   const candidates=t.context.EarthPersonas.list(t.site).filter(p=>p.id!=='steward'&&p.id!==t.actor()&&
-    !t.site.purses.people[p.id]?.balance&&t.context.EarthCommunityLife.residency(t.site,p.id)==='member');
+    t.context.EarthCommunityLife.residency(t.site,p.id)==='member');
   const recipient=candidates.find(p=>t.context.EarthAutonomy.bond(t.site,p.id,t.actor(),t.world.week)<=0)||candidates[0];
   assert(recipient);
+  // Hold the fee shortfall fixed even when the normal paid shifts have already
+  // given every resident a balance. Record the prior expenses on the real purse.
+  const purse=t.site.purses.people[recipient.id];
+  while(purse?.balance)assert(t.context.EarthPurses.dreamExpense(t.world,t.site,recipient.id,Math.min(4,purse.balance),'the orchard club'));
+  if(donor){
+    const funds=t.site.purses.people[donor];
+    while(funds.balance>2)assert(t.context.EarthPurses.dreamExpense(t.world,t.site,donor,Math.min(4,funds.balance-2),'their own course'));
+  }
   const row=t.site.autonomy.people[recipient.id];assert(row);
   row.dream={id:'orchard',step:1,sessions:0,started:1,checkpoint:3,last:3};
   delete row.nextDream;
@@ -136,4 +144,28 @@ test('a chosen listening topic remembers the real ambition, its blocked stage an
   assert.equal(t.context.CommonEarthSim.readSave(JSON.stringify(changed)),null);
   v.toKey='another person registered at this slot';
   assert(!t.talk(id,'followup').ok);t.sim.destroy();
+});
+
+test('one signatory can find a different carrier; recipients learn the change through a meeting and actual delivery settles the original promise',()=>{
+  const t=fixture(),{site,world,context}=t,receiver=site.residents[1],helper='walker-1';
+  assert(t.sim.act('listen:'+receiver.id).ok);assert(t.sim.act('promise:'+receiver.id).ok);
+  const p=receiver.promise,ref=receiver.slot+':'+p.start+':'+p.dueWeek;
+  const quote='relay:terms:'+ref;
+  const fundsBefore=JSON.stringify(site.purses);
+  assert.match(t.talk(helper,quote).message,/booking fee/);
+  assert(!t.topics(helper).some(o=>o.id.startsWith('relay:book:')));
+  assert.equal(JSON.stringify(site.purses),fundsBefore);
+  context.EarthAutonomy.remember(site,world.week,'steward',helper,'kept');
+  const free=t.topics(helper).find(o=>o.id.startsWith('relay:book:'));assert(free);assert.match(free.id,/:0$/);
+  assert(!t.talk(helper,free.id,{tx:12}).ok);assert(t.talk(helper,free.id).changed);
+  assert.equal(p.by,'steward');assert.equal(context.EarthNeighbourErrands.deliveryWorker(site,receiver),helper);
+  assert(!t.talk(helper,free.id).ok);assert(!p.handover.informed);
+  assert.match(t.talk(helper,'purpose').message,new RegExp(receiver.name));
+  const notify='relay:notify:'+ref;assert(t.talk(receiver.id,notify).changed);assert(p.handover.informed);
+  assert.match(t.talk(receiver.id,'purpose').message,new RegExp(context.EarthPersonas.profile(site,helper).name));
+  t.saved();
+  while(world.week<p.dueWeek)t.next();
+  const working=context.EarthNeighbourErrands.working(site,world.week).find(q=>q.targetId===receiver.id);assert(working);
+  assert.equal(working.actorId,helper);assert.equal(p.by,'steward');
+  t.next();assert.equal(receiver.agreements[0].by,'steward');assert.equal(receiver.agreements[0].deliveredBy,helper);t.saved();
 });

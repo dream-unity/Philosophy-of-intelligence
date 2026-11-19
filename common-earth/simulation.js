@@ -298,6 +298,8 @@
   function validSite(site,world,ids){
     if(!recordLike(site) || !shortName(site.id) || !shortName(site.name) || !geoPoint(site) || typeof site.water!=='boolean')return false;
     if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
+    if(site.birthCoordinate!=null&&!geoPoint(site.birthCoordinate))return false;
+    if(root.EarthPractice&&!root.EarthPractice.valid(site,world.week))return false;
     if(root.EarthPersonas?.validBirthNames&&!root.EarthPersonas.validBirthNames(site.birthNames))return false;
     if(site.workRotation!=null&&(!integer(site.workRotation,0,2)||site.birthNames==null))return false;
     if(site.coastal!=null && typeof site.coastal!=='boolean')return false;
@@ -503,6 +505,7 @@
       if(world.charter!=null && !Object.hasOwn(CHARTERS,world.charter) || typeof world.completed!=='boolean')return null;
       if(!validReview(world.lastWeekReview,world,ids))return null;
       if(root.EarthCommunityLife?.valid && !root.EarthCommunityLife.valid(world,validSite))return null;
+      if(root.EarthRegionalWorld?.valid && !root.EarthRegionalWorld.valid(world))return null;
       if(root.EarthPurses?.validMoves && !root.EarthPurses.validMoves(world))return null;
       if(root.EarthPartners?.valid && !root.EarthPartners.valid(world.partners,ids))return null;
       if(root.EarthLegacy?.valid && !root.EarthLegacy.valid(world))return null;
@@ -520,6 +523,7 @@
         if(root.EarthVoyages?.validReport && !root.EarthVoyages.validReport(r))return null;
       }
       if(!ids.has(world.activeId))world.activeId=world.sites[0]?.id ?? null;
+      root.EarthRegionalWorld?.reconcileLocations?.(world);
       return world;
     }catch(e){return null;}
   }
@@ -575,8 +579,10 @@
       root.EarthCommunityLife?.initialise(world,newSettlement);
       lastSeen=raw;lastGood=restored?goodText:null;
     }
+    const openStarted=root.EarthPerformance?.now();
     const initial=!storage && typeof options.snapshot==='string'?options.snapshot:storageRead(key);
     if(initial!==undefined)restore(initial,false);
+    root.EarthPerformance?.finish('open',openStarted);
     function sync(){
       if(!storage || diverged)return false;
       const raw=storageRead(key);
@@ -639,6 +645,7 @@
       if(notice.construction)world.workRevision=(world.workRevision||0)+1;
       else{world.actionRevision=(world.actionRevision||0)+1;actionGeneration++;}
       if(storage && !diverged){
+        const saveStarted=root.EarthPerformance?.now();
         const text=preparedText??JSON.stringify(world);
         try{
           let deferredBackup=false;
@@ -666,6 +673,7 @@
           }
           lastSeen=text;lastGood=text;futureSave=null;saveIssue=false;saveMessage='';unsavedAction=false;
         }catch(e){if(!notice.construction)unsavedAction=true;saveIssue=true;saveMessage='This turn is in memory. Export it from Saved worlds to keep it for a later visit.';}
+        root.EarthPerformance?.finish('save',saveStarted);
       }
       notify(false,notice);
       return null;
@@ -1017,6 +1025,7 @@
       if(!byGrowth&&site.stats.resolved<goal||site.trust<45+level*5||site.food<floor.food+(held.food||0)||
         site.funds<next.funds+floor.funds+(held.funds||0)||site.materials<next.materials+floor.materials+(held.materials||0))return '';
       site.funds-=next.funds;site.materials-=next.materials;
+      root.EarthDistrictGrowth?.recordResearch?.(turn,site,next);
       return adoptResearch(site,next);
     }
     function civicOptions(turn,site){
@@ -1674,6 +1683,7 @@
     // Close last week's decisions before new income. Deliver goods due this
     // week before assessing hunger. Dispatch only the uncommitted surplus.
     function rollWeek(turn){
+      const weekStarted=root.EarthPerformance?.now();
       const events=[],transfers=[];
       const byId=new Map(turn.sites.map(site=>[site.id,site]));
       // A crossing changes where the player is standing. An unseen district
@@ -1705,9 +1715,10 @@
       }
       // Manual and fast-forwarded calendar weeks can settle an unattended
       // shift too. A week already serviced by the visible clock is not paid twice.
-      if(turn.productionSerial&&root.EarthDistrictGrowth){
-        for(const site of districts)if(site.growth?.history[0]?.week!==turn.week)root.EarthDistrictGrowth.settle(turn,site);
+      if(turn.communityLife&&root.EarthDistrictGrowth){
+        for(const site of districts)if(site.growth?.history[0]?.week!==turn.week)root.EarthDistrictGrowth.closeWeek(turn,site);
       }
+      for(const site of districts)for(const note of root.EarthPractice?.closeWeek(turn,site)||[])event(note,site);
       turn.week++;turn.effort=MAX_EFFORT;
       // A chair may cast the outgoing week's last ballot using the resources then in hand.
       const closingVotes=new Map();
@@ -1763,6 +1774,7 @@
       }
       for(const site of districts)settleHouseholds(turn,site,reports.get(site.id),event);
       if(root.EarthCommunityLife)for(const movement of root.EarthCommunityLife.tick(turn,spec=>newSettlement(spec,turn)))event(movement.text,movement.site);
+      root.EarthRegionalWorld?.advance?.(turn,spec=>newSettlement(spec,turn),'calendar');
       dispatchCargo(turn,byId,inbound,event);
       for(const site of districts){
         if(!site.issue && (turn.week-site.founded-1)%4===0 && turn.week>site.founded){
@@ -1792,6 +1804,7 @@
         if(site.issue?.deadline===turn.week)report.council.push('Final week to vote on “'+site.issue.title+'”.');
         for(const k of metrics){report.closing[k]=site[k];report.delta[k]=site[k]-before[k];}
       }
+      root.EarthPerformance?.finish('week',weekStarted);
       return {week:turn.week,sites:turn.sites.map(site=>reports.get(site.id)),highlights:events.map(e=>e.text),events,ratified};
     }
     function forecastNext(){
@@ -2201,8 +2214,14 @@
         if(!end.ok)return end;
         record(end.message,site);closed=end.message+' ';
       }else if(finishQuote)return reject('The resident’s day has already changed. Choose a character again.');
-      const result=agency.change(site,id,scene);
+      const result=agency.change(site,id,scene,world);
       return complete(closed+result.message,site,false);
+    }
+    function practiceSession(request,at){
+      const site=current(),proof=typeof at==='function'?at():at;
+      const result=root.EarthPractice?.run(world,site,request,proof);
+      if(!result?.ok)return result||reject('The practice session is unavailable.');
+      return complete(result.message,site);
     }
     function converse(id,topic,meeting){
       const site=current(),proof=typeof meeting==='function'?meeting():meeting;
@@ -2257,14 +2276,48 @@
       if(!result.ok)return result;
       const saved=complete(result.message,site);return saved.ok?result:saved;
     }
+    function adoptProduction(next){
+      // A household round may settle while a resident is walking to a meeting.
+      // Retain the live world, district and resident handles used by the trip
+      // and the UI while installing precisely the worker's committed fields.
+      const previous=new Map([...world.sites,...world.communityLife.outposts].map(site=>[site.id,site]));
+      function replace(target,source){
+        if(!target)return source;
+        for(const field of Object.keys(target))delete target[field];
+        return Object.assign(target,source);
+      }
+      function district(source){
+        const target=previous.get(source.id);
+        if(!target)return source;
+        const residents=new Map(target.residents.map(p=>[p.id,p]));
+        source.residents=source.residents.map(p=>replace(residents.get(p.id),p));
+        return replace(target,source);
+      }
+      next.sites=next.sites.map(district);
+      next.communityLife.outposts=next.communityLife.outposts.map(district);
+      next.communityLife=replace(world.communityLife,next.communityLife);
+      replace(world,next);
+    }
     function runProduction(expected,eligible){
       if(!current()||!world.communityLife||!root.EarthDistrictGrowth||typeof eligible!=='function'||!eligible()||
-        expected!==(world.productionSerial||0)||Date.now()-(world.lastProductionAt||0)<root.EarthDistrictGrowth.period)return reject('Production is already current.');
+        expected!==(world.productionSerial||0)||!root.EarthDistrictGrowth.due(world))return reject('Production is already current.');
+      const prepared=root.EarthForecastView?.takeProduction?.(world);
+      if(prepared){
+        const next=prepared.next??JSON.parse(prepared.after);
+        if(next.version===world.version&&next.activeId===world.activeId&&next.week===world.week&&
+          next.productionSerial===expected+1&&next.actionRevision===(world.actionRevision||0)+1){
+          next.actionRevision=world.actionRevision||0;adoptProduction(next);
+          return save({},prepared.after)||{ok:true,message:prepared.message};
+        }
+      }
+      const productionStarted=root.EarthPerformance?.now();
       for(const site of [...world.sites,...world.communityLife.outposts]){
         root.EarthDistrictGrowth.settle(world,site);
         const era=developRegionalCouncil(world,site);
         if(era)site.growth.history[0].events.push(era);
       }
+      root.EarthRegionalWorld?.advance?.(world,newSettlement,'production');
+      root.EarthPerformance?.finish('production',productionStarted);
       world.productionSerial=expected+1;world.lastProductionAt=Date.now();
       return complete('District production settled.',current(),false);
     }
@@ -2276,6 +2329,10 @@
         return complete('Fishing line put away.',site,false);
       }),
       production:guarded(runProduction),
+      regionalWork:guarded(request=>{
+        const result=root.EarthRegionalWorld?.propose?.(world,current(),request);
+        return result?.ok?complete(result.message,current()):result||reject('Regional work is unavailable.');
+      }),
       neighbourAppointment:guarded((quote,guard)=>{
         const site=current(),proof=typeof guard==='function'?guard():guard;
         const result=root.EarthNeighbourErrands?.finishAt?.(site,world,quote,proof,
@@ -2304,7 +2361,7 @@
       exchange:guarded((request,guard)=>transact(root.EarthMarket,request,guard)),
       purseAction:guarded((request,guard)=>transact(root.EarthPurses,request,guard)),
       setBuildPlan:guarded(setBuildPlan),markPlanLot:guarded(markPlanLot),
-      changeActor:guarded(changeActor),converse:guarded(converse),lifeAction:guarded(lifeAction),studyTerm:guarded(studyTerm),
+      practiceSession:guarded(practiceSession),changeActor:guarded(changeActor),converse:guarded(converse),lifeAction:guarded(lifeAction),studyTerm:guarded(studyTerm),
       pursue:guarded(pursue),provision:guarded(provision),planCity:guarded(planCity),beginGoal:guarded(beginGoal),workConstruction:guarded(workConstruction),
       setWorkPreference:guarded(setWorkPreference),setConstructionPaused:guarded(setConstructionPaused),assignBuilders:guarded(assignBuilders),cancelConstruction:guarded(cancelConstruction),
       useHandline:guarded(useHandline),fish:guarded(fish),manageSite:guarded(manageSite),found:guarded(found),visit:guarded(visit),act:guarded(act),advance:guarded(advance),
@@ -2352,7 +2409,7 @@
       }
     }
     return {
-      ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get newerSaveText(){return futureSave;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
+      ...commands,get state(){return world;},get savedUnits(){return lastGood?.length||0;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get newerSaveText(){return futureSave;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
       buildPlanView,active:current,liveWeekHold,marketView,purseView:id=>root.EarthPurses?.view(world,current(),id),provisionsView,civicView:()=>root.EarthCivicInitiatives?.view(world,current()),truckView:()=>root.EarthFleet?.view(world,current()),regularTruckView:()=>root.EarthFleet?.regular(world,current()),handlineOffer,fishingOffer,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,courseCalendar,perform,sync,
       truckDisputeView:()=>root.EarthFleet?.dispute?.(world,current()),
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},

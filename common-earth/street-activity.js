@@ -224,6 +224,18 @@
     if((kind==='learn'&&input.placementSide==='learner'||kind==='commitment'&&input.placementSide==='mentor')){
       const demonstration=placement(input);if(demonstration)return demonstration;
     }
+    if(kind==='paidOrder'){
+      if(input.orderPhase==='deliver'){
+        const prop=input.resource==='parcel'?'parcel':input.orderGood==='food'?'basket':'crate';
+        return series('order-delivery',input.goal,hand('put-down-order','Handing over '+input.amount+' '+input.cargo,prop,'place'),
+          hand('sign-order-receipt','Signing for the reserved wage','ledger','write'));
+      }
+      if(input.orderGood==='retail')return routine({kind:'marketSupply',activity:'makeWare',ware:input.resource});
+      if(input.resource==='fish')return harvestPlans.fish;
+      if(own(harvestPlans,input.resource))return harvestPlans[input.resource];
+      return series('order-collection',input.goal,prepare('read-order','Checking the order and its destination','ledger','read'),
+        work('collect-order','Collecting '+input.cargo,input.resource==='parcel'?'parcel':'crate','lift'));
+    }
     if(kind==='freight'&&['food','materials'].includes(input.good)&&Number.isSafeInteger(input.amount)&&input.amount>0){
       const cargo=input.amount+' '+input.good,prop=input.good==='food'?'basket':'crate';
       return series('regional-freight','Prepare an inter-district consignment',log,
@@ -297,6 +309,11 @@
     const pledged=chosen.id.startsWith('help-pledge-')&&!input.recipient;
     const loadedBasket=input.shipmentPhase==='unload',travel=action(chosen.id+'-travel','travel',pledged?'Carrying '+input.pledge.amount+' promised '+input.pledge.good+(input.peerName?' to '+input.peerName:''):loadedBasket?'Carrying '+input.resource+' to the shared pantry':chosen===routines.returnTruck?'Returning the empty truck to dispatch':driver?'Driving '+(input.destination?'to '+input.destination:'the supply route'):porter?'Carrying a supply crate':courier?'Carrying a parcel':'Walking to '+(input.destination||'the next stop'),
       pledged?chosen.steps[0].prop:loadedBasket?'basket':porter?'crate':courier?'parcel':'none',pledged||loadedBasket||porter||courier?'carry':'walk',0);
+    if(input.kind==='paidOrder'&&input.orderPhase==='deliver'){
+      const cargo=input.resource==='parcel'?'parcel':input.orderGood==='food'?'basket':'crate';
+      const carried=action('carrying-order','travel','Carrying '+input.amount+' '+input.cargo+' to '+input.destination,cargo,'carry',0);
+      return Object.freeze({id:chosen.id,goal:input.goal,assignment:input.assignment,venue,steps:chosen.steps,duration:chosen.duration,pace:1,travel:carried});
+    }
     const patience=input.personality?.traits?.patience??input.personality?.patience;
     const pace=Number.isFinite(patience)?1.12-.0024*Math.max(0,Math.min(100,patience)):1;
     return Object.freeze({id:chosen.id,goal:input.goal||chosen.goal,assignment:input.assignment||null,venue,steps:chosen.steps,duration:chosen.duration/pace,pace,travel});

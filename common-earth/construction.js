@@ -236,6 +236,8 @@
     return doorstep(person);
   }
   function travelPlan(site,id,week){
+    const agreed=root.EarthPractice?.duty(site,id,week);
+    if(agreed)return agreed;
     const tour=root.EarthCommunityLife?.travelIntent?.(site,id);if(!tour)return null;
     const kind=tour.kind==='care'?'pantryCover':tour.kind==='freight'?'freight':site.communityLife?.excursions?.[id]?'departure':'inspect';
     return {...tour,week:week??tour.week,kind,label:tour.activity,agreedDuty:kind!=='inspect'};

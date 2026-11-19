@@ -217,6 +217,23 @@ test('a reviewed import survives a full store in this tab and leaves the durable
   }
 });
 
+test('a reviewed import that fails to reopen keeps the previous world and removes the incomplete slot',async()=>{
+  const store=toggledStore();store.writable=true;
+  const book=open(store);assert(book.sim.found(town).ok);
+  const original=store.getItem(savedKey),file=book.exportWorld().text;
+  const migrate=runtime.CommonEarthSim.migrateDetachedSave;
+  try{
+    runtime.CommonEarthSim.migrateDetachedSave=world=>{
+      const result=migrate(world);result.sites[0].residents=[];return result;
+    };
+    const review=book.prepareImport(file);assert(review.ok);
+    const result=await book.confirmImport(review.token,'Unusable copy');
+    assert.equal(result.ok,false);assert.match(result.message,/could not be reopened/);
+    assert.equal(book.current().id,'original');assert.equal(store.getItem(savedKey),original);
+    assert.equal(book.list().length,1);
+  }finally{runtime.CommonEarthSim.migrateDetachedSave=migrate;book.dispose();}
+});
+
 test('larger file support preserves byte, value, depth, inert-key and simulation integrity checks',()=>{
   const storage=toggledStore();storage.writable=true;
   const book=open(storage);assert.equal(book.sim.found(town).ok,true);

@@ -90,6 +90,20 @@ test('native storage events reconcile the same compressed world and keep two gen
   const persisted=runtime(true).CommonEarthSim.create({storage:store});assert.equal(persisted.state.week,2);
   left.destroy();right.destroy();persisted.destroy();
 });
+test('opening another saved world leaves the unselected first world on disk until the picker is opened',async()=>{
+  const setup=runtime(true),store=storage();
+  const initial=setup.EarthSaves.open({storage:store,session:null,locks:null,idGenerator:()=> 'small-world'});
+  assert((await initial.create('Second world')).ok);initial.dispose();
+  store.setItem(key,setup.EarthWorldStorage.prepare(largeWorld(setup)));
+  const read=store.getItem.bind(store);let firstReads=0;
+  store.getItem=name=>{if(name===key)firstReads++;return read(name);};
+  const book=runtime(true).EarthSaves.open({storage:store,session:null,locks:null});
+  assert.equal(book.current().id,'small-world');assert.equal(firstReads,0);
+  const original=book.list().find(row=>row.id==='original');
+  assert.equal(original.active,'Stone Town Commons');assert.equal(firstReads,1);
+  store.setItem(key,'broken');assert.equal(book.list().find(row=>row.id==='original').settlements,0);
+  book.dispose();
+});
 test('incompressible Unicode retains the exact plain payload and private temporary worlds retain their listing after a switch',async()=>{
   const c=runtime(true),codec=c.EarthWorldStorage,parts=[];let value=13;
   for(let block=0;block<35;block++){

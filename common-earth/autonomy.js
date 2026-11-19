@@ -44,7 +44,7 @@
   function sessionSpent(site,id,week){
     const row=record(site,id),item=row?.history?.[0];
     return !!(row?.contribution?.week===week||row?.dream?.last===week||row?.pastime?.lastWeek===week||
-      item?.week===week&&(usedSessions.has(item.kind)||item.errand===true));
+      item?.week===week&&(usedSessions.has(item.kind)||item.errand===true||item.pantryRound!=null));
   }
   function busy(site,person,world,skipPromisedVisit=false,handover=undefined){
     const resident=site.residents?.find(p=>p.id===person.id),worker=site.workforce?.members?.[person.id];
@@ -112,18 +112,22 @@
   function openingPlan(site,id,week=site?.autonomy?.week||site?.founded||1){
     if(!site||!member(site,id))return null;
     const p=identity(site,id);if(!p)return null;
-    const key=[week,site.careers?.[id]?.revision||0,site.careers?.[id]?.jobId,p.role,site.food,site.materials].join('/');
+    const key=[week,site.careers?.[id]?.revision||0,site.careers?.[id]?.jobId,p.identityKey,p.role,site.food,site.materials,site.population,
+      site.purses?.tickets?.[id]?.serial,site.residents?.find(r=>r.promise&&(r.id===id||r.promise.by===id))?.promise?.dueWeek].join('/');
     const byPerson=initialPlans.get(site)||new Map();
     if(byPerson.get(id)?.key===key)return byPerson.get(id).plan;
     const job=root.EarthCareers?.work?.(site,id),role=job?.label||p.role;
     let item=plannedDuty(site,p,week,role,job?.venue,job?.assignment);
-    // Two neighbours already have a personal appointment when the first shift
-    // opens. This is an intention only. No fee, skill or result is awarded.
-    if(root.EarthDreams && !site.autonomy?.people?.[id]?.history?.length && week===(site.founded||week)&&
-      (id==='walker-1'||id==='walker-3')){
-      const goal=dream(site,{week},id);
-      if(goal&&!goal.earned&&!goal.blockers.length)item={...line(week,'dream',goal.quote,goal.venue),
-        title:goal.activity,activity:goal.activity,goal:goal.title,axis:goal.axis,dreamId:goal.id,step:goal.step+1,total:goal.stages};
+    if(root.EarthDreams&&!site.autonomy?.people?.[id]?.history?.length&&week===(site.founded||week)){
+      const ambition=dream(site,{week},id),traits=p.traits||defaultTraits;
+      const affinity=ambition?(p.aptitudes?.[ambition.axis]??45)+(p.hobbyAxis===ambition.axis?14:0):0;
+      const initiative=traits.initiative*.45+traits.curiosity*.25+traits.patience*.15+affinity*.35;
+      const foodPressure=site.food<Math.ceil((site.population||1)/5)*2&&item.venue==='garden';
+      const booked=site.residents?.some(r=>r.promise&&(r.id===id||r.promise.by===id))||site.purses?.tickets?.[id];
+      const professionalRound=!!(job||p.qualificationIds?.length);
+      if(ambition&&!ambition.earned&&!ambition.blockers.length&&!booked&&!foodPressure&&!professionalRound&&initiative>=87)
+        item={...line(week,'dream',ambition.quote,ambition.venue),title:ambition.activity,activity:ambition.activity,
+          goal:ambition.title,axis:ambition.axis,dreamId:ambition.id,step:ambition.step+1,total:ambition.stages};
     }
     const plan=describe(id,item);
     byPerson.set(id,{key,plan});initialPlans.set(site,byPerson);
@@ -292,6 +296,13 @@
     const base=person.id===controlled(site,world)?line(week,'player','I choose where to go and what to do.','home'):
       duty?line(week,relief?'cover':'commitment',duty,relief?.venue||(venues.has(civic?.venue)?civic.venue:venue)):row.energy<2?line(week,'rest','I have worked several weeks without a proper break.','bench'):
       failed?line(week,'routine','After the missed promise I want a dependable shift.',venue):plannedDuty(site,person,week,role,job?.venue,job?.assignment);
+    const rota=world.communityLife?.duty;
+    if(base.kind==='routine'&&person.id==='steward'&&rota&&rota.due===week+1&&!rota.attended&&!rota.coveredBy&&
+       (rota.siteId||world.communityLife.homeId)===site.id&&member(site,person.id)&&
+       !site.residents.some(p=>p.promise?.by===person.id&&p.promise.dueWeek===week)){
+      Object.assign(base,line(week,'commitment','I signed for the household count. The next cook needs the figures before week '+rota.due+'.','market'),
+        {pantryRound:rota.due,title:'Count pantry stock for the next cook',activity:'Check the household tally and pantry shelves',goal:'Keep the pantry round I signed for'});
+    }
     if(relief&&base.kind==='cover')base.title='Cover the '+relief.label.toLowerCase()+' round at '+relief.employer;
     if(handover?.scope&&base.kind==='commitment'&&duty===handover.reason){
       base.venue=handover.venue;base.title=handover.title;base.handoverScope=handover.scope;base.handoverRole=handover.role;
@@ -303,9 +314,9 @@
     }
     // The promise already reserved this resident's appointment with its named
     // signer. It cannot interrupt a different shift, hearing or required rest.
-    const promise=resident?.promise;
-    const receivesFrom=base.kind==='commitment'&&promise?.by&&promise.by!=='steward'&&promise.dueWeek===week&&row.energy>=2&&
-      !failed&&!assigned?.has(person.id)&&!busy(site,person,world,true)&&!root.EarthCivicInitiatives?.commitment?.(site,world,person.id)?promise.by:null;
+    const promise=resident?.promise,carrier=promise&&(root.EarthNeighbourErrands?.deliveryWorker?.(site,resident)||promise.by);
+    const receivesFrom=base.kind==='commitment'&&carrier&&carrier!==controlled(site,world)&&promise.dueWeek===week&&row.energy>=2&&
+      !failed&&!assigned?.has(person.id)&&!busy(site,person,world,true)&&!root.EarthCivicInitiatives?.commitment?.(site,world,person.id)?carrier:null;
     return {id:person.id,name:person.name,profile:person,row,traits,slot:resident?.slot,duty,base,item:base,receivesFrom,free:base.kind==='routine'&&!failed,wasAdvised:row.advice?.accepted&&row.advice.week===week-1?row.advice.action:null};
   }
   function bestJob(person,site,world){
@@ -625,6 +636,7 @@
         (h.kind!=='marketSupply'||(h.venue==='market'&&['prepare','sell','makeWare','stockStall','shop','deed'].includes(h.activity)||h.venue==='home'&&h.activity==='buildHome'&&h.homePlot!=null||['garden','workshop','dock'].includes(h.venue)&&h.activity==='tendPatch'&&root.EarthResources?.isResource?.(h.resource))&&typeof h.title==='string'&&h.title.length<200&&
           typeof h.goal==='string'&&h.goal.length<360)&&(h.errand==null||h.errand===true&&h.kind==='commitment')&&
         (h.ordinary==null||h.ordinary===true&&h.errand===true&&typeof h.rowId==='string'&&/^pledge:[012]:[1-9]\d*:[1-9]\d*$/.test(h.rowId)&&Number(h.rowId.split(':')[3])===h.week)&&
+        (h.pantryRound==null||id==='steward'&&h.kind==='commitment'&&h.venue==='market'&&h.pantryRound===h.week+1)&&
         (h.civic==null||h.civic===true&&h.kind==='commitment'&&
           (h.jobId==null&&h.plot==null||typeof h.jobId==='string'&&h.jobId.length>0&&h.jobId.length<=512&&int(h.plot,0,8)))&&
         (h.kind!=='project'||['research','build','food','teach','hobby'].includes(h.projectKind)&&['plan','work','finish'].includes(h.phase)&&

@@ -185,7 +185,7 @@ test('recent effects open only for recorded outcomes, link the people involved, 
   assert(id('scene-recent-effects'));ui.selectPurpose('walker-0');assert(!id('scene-recent-effects'));
   ui.invalidate();sim.destroy();
 });
-test('switching characters during a shared day quotes the outcome inside the scene and an abandoned handoff cannot finish it',async()=>{
+for(const surface of ['goals','talk'])test('a shared-day handoff in '+surface+' quotes the outcome and an abandoned review cannot finish it',async()=>{
   const g=fixture(),{sim,ui,w,doc,street}=g,site=sim.active(),[host,next]=site.residents;
   const node=(tag,cls,label)=>{const x=doc.createElement(tag);x.className=cls;x.textContent=label||'';return x;};
   const button=(label,fn)=>{const x=node('button','',label);x.addEventListener('click',fn);return x;};
@@ -198,13 +198,14 @@ test('switching characters during a shared day quotes the outcome inside the sce
     resetEncounter(){},refresh:()=>ui.render()});
   controls.update();
   g.near(host.id);ui.openTalk({residentId:host.id});await g.cmd('startShift-'+host.id).fire('click');assert(site.shift);
-  ui.selectPurpose(next.id);
-  const pane=g.id('scene-goal-detail'),field=g.id('scene-goal-person'),origin=()=>({host:pane,returnFocus:field,
-    current:()=>ui.active()==='goals'&&field.value===next.id});
+  const select=id=>surface==='goals'?ui.selectPurpose(id):ui.openTalk({residentId:id});
+  select(next.id);
+  const pane=g.id(surface==='goals'?'scene-goal-detail':'scene-talk-handoff'),field=g.id(surface==='goals'?'scene-goal-person':'scene-talk-person');
+  const origin=()=>({host:pane,returnFocus:field,current:()=>ui.active()===surface&&field.value===next.id});
   await controls.playAs(next.id,origin());const first=pane.querySelector('.actor-review');assert(first);assert.match(first.content(),/Finish day and switch/);
-  const old=first.querySelector('button');ui.selectPurpose(host.id);await old.fire('click');
+  const old=first.querySelector('button');select(host.id);await old.fire('click');
   assert.equal(w.EarthAgency.actorId(site),'steward');assert(site.shift);
-  ui.selectPurpose(next.id);await controls.playAs(next.id,origin());await pane.querySelector('.actor-review').querySelector('button').fire('click');
+  select(next.id);await controls.playAs(next.id,origin());await pane.querySelector('.actor-review').querySelector('button').fire('click');
   assert.equal(w.EarthAgency.actorId(sim.active()),next.id);assert(!sim.active().shift);
   sim.destroy();
 });
@@ -471,4 +472,52 @@ test('Calendar lists activities inside the panel and offers fishing only on a pl
   id('scene-open-live').fire('click');ui.scene({waterfront:false});assert.ok(fishing.hidden);
   member=false;ui.scene({waterfront:true});assert.ok(fishing.hidden);
   sim.destroy();
+});
+
+test('a face-to-face truck eyewitness can refer the listener to dispatch and the scene files the account at the kerb',async()=>{
+  const g=fixture(),{sim,w,ui,cmd,id}=g,site=sim.active();
+  vm.runInContext(fs.readFileSync(path.join(game,'fleet.js'),'utf8'),w);
+  const witness='walker-2',operator='walker-1',depot=w.EarthFleet.depot;
+  const scene=(mode,extra={})=>({siteId:site.id,actor:w.EarthAgency.actorId(site),...depot,truck:depot,stopped:true,mode,...extra});
+  const control=actor=>sim.changeActor(actor,()=>scene('walk',{targetPose:{...depot,id:actor,mode:'walk'}}));
+  const dispatch=(action,mode,extra)=>{const offer=sim.truckView();return sim.useTruck({actorId:offer.actorId,siteId:site.id,generation:offer.generation,week:offer.week,serial:offer.serial,action},()=>scene(mode,extra));};
+  try{
+    assert(control(operator).ok);assert(dispatch('take','walk',{witnesses:[witness]}).ok);
+    assert(dispatch('return','drive',{vehicle:'truck'}).ok);assert(control('steward').ok);
+    const name=w.EarthAgency.identity(site,operator).name;
+    assert(!site.fleet.records.some(row=>row.actor===operator||row.text.includes(name)));
+    ui.openTalk({npcId:witness});g.near(witness);
+    await cmd('topic-truck').fire('click');assert(id('scene-reply').textContent.includes(name));
+    const trust=site.trust;
+    await cmd('topic-truck-testimony').fire('click');
+    assert.match(id('scene-reply').textContent,/give dispatch my name/);assert.equal(site.trust,trust);
+    await cmd('meet-other-perspective').fire('click');assert.equal(g.route(),'driver');
+    assert(cmd('topic-truck-report').disabled);g.arrive();assert(!cmd('topic-truck-report').disabled);
+    await cmd('topic-truck-report').fire('click');
+    assert.match(id('scene-reply').textContent,/Dispatch suspended/);assert.equal(site.fleet.incident.report.source,witness);
+    assert.equal(site.trust,trust-4);assert(w.CommonEarthSim.readSave(JSON.stringify(sim.state)));
+  }finally{ui.close();sim.destroy();}
+});
+
+test('the signer can arrange a different carrier and tell the recipient using the buttons in the street conversation',async()=>{
+  const g=fixture(),{sim,w,ui,cmd,id}=g,site=sim.active(),receiver=site.residents[1],helper='walker-1';
+  vm.runInContext(fs.readFileSync(path.join(game,'social-memory.js'),'utf8'),w);
+  try{
+    ui.openTalk({residentId:receiver.id});g.near(receiver.id);
+    await cmd('people-listen:'+receiver.id).fire('click');
+    await cmd('people-promise:'+receiver.id).fire('click');
+    const p=receiver.promise,ref=receiver.slot+':'+p.start+':'+p.dueWeek;
+    ui.openTalk({npcId:helper});g.near(helper);
+    await cmd('topic-relay:terms:'+ref).fire('click');assert.match(id('scene-reply').textContent,/booking fee/);
+    w.EarthAutonomy.remember(site,sim.state.week,'steward',helper,'kept');
+    ui.render(true);
+    await cmd('topic-relay:book:'+ref+':0').fire('click');assert.equal(p.handover.worker,helper);
+    assert(!p.handover.informed);
+    await cmd('meet-other-perspective').fire('click');assert.equal(g.route(),receiver.id);
+    const notice='topic-relay:notify:'+ref;
+    assert(cmd(notice).disabled);g.arrive();await cmd(notice).fire('click');
+    assert(p.handover.informed);
+    await cmd('topic-purpose').fire('click');assert(id('scene-reply').textContent.includes(w.EarthAgency.identity(site,helper).name));
+    assert.equal(p.by,'steward');assert(w.CommonEarthSim.readSave(JSON.stringify(sim.state)));
+  }finally{ui.close();sim.destroy();}
 });

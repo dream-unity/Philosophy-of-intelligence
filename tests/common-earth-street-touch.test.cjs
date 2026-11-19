@@ -18,7 +18,7 @@ const site = {
   buildings: [{ id: 'hall-1', kind: 'hall', name: 'Cooperative Hall', plot: 4 }]
 };
 
-function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onStowLine, onState, waterfront, getWeek, getRegularRun, onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,landmarks,membership,visible=false,working,onNeighbourHelp,resources,spectator=false,getWorld,privateHousing=false}={}) {
+function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onStowLine, onState, waterfront, getWeek, getRegularRun, onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,landmarks,membership,visible=false,working,onNeighbourHelp,resources,spectator=false,getWorld,privateHousing=false,paidWork=false}={}) {
   const pointerEvents = new Map();
   let frame = null;
   let now = 100, timerId = 0;
@@ -64,6 +64,12 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
     cancelAnimationFrame() { frame = null; },
     matchMedia: query => ({ matches: !animated||!query.includes('prefers-reduced-motion') })
   };
+  if(paidWork){
+    runtime.Date=class extends Date{static now(){return now;}};
+    for(const file of ['district-orders','district-growth']){
+      vm.runInNewContext(readFileSync(path.join(gameRoot,file+'.js'),'utf8'),runtime.window);
+    }
+  }
   vm.runInNewContext(readFileSync(path.join(gameRoot,'fisheries.js'),'utf8'),runtime);
   if(links)runtime.window.CommonEarthSim={productiveLinks:typeof links==='function'?links:()=>links};
   if(waterfront)runtime.window.CommonEarthSim={...runtime.window.CommonEarthSim,waterfront};
@@ -1875,15 +1881,16 @@ test('a fully stocked district parks its interactive truck at the exchange until
   g.street.destroy();
 });
 
-test('an independent contested pickup is proved at its cab and drives the real truck to the pantry',async()=>{
+for(const claimant of ['walker-2','r1'])test(claimant+' approaches a contested pickup on foot and drives the real truck to the pantry',async()=>{
   const town={...site,agency:{localPositions:{'walker-2':{x:6.1,y:5.2,serial:1}}}};
   let action='take',serial=0,armed=false,g;
   const observations=[];
-  const quote=()=>armed&&action?{siteId:town.id,generation:0,week:1,serial,actor:'walker-2',action,name:'Neighbour',destination:{x:9,y:24,name:'Pantry stop'}}:null;
+  const quote=()=>armed&&action?{siteId:town.id,generation:0,week:1,serial,actor:claimant,action,name:'Neighbour',destination:{x:9,y:24,name:'Pantry stop'}}:null;
   g=surface(740,390,{lives:true,animated:true,deferFrames:true,getRegularRun:()=>({available:false,week:1,siteId:town.id,reason:'No load is available.'}),
     onRegularArrival:()=>null,getTruckDispute:quote,onTruckDispute:(q,getProof)=>{
       const proof=getProof();observations.push(proof);
       if(q.action==='take'){
+        assert(Array.from(proof.witnesses).every(id=>id!==claimant),'the claimant cannot witness themself');
         assert.equal(proof.emptyCab,true);assert.equal(proof.stopped,true);assert.equal(proof.mode,'walk');assert(Math.hypot(proof.x-proof.truck.x,proof.y-proof.truck.y)<=1.56);
         town.fleet={serial:1,incident:{actor:q.actor,independent:true,week:1},custody:{kind:'theft',actor:q.actor,week:1,token:1,pickup:proof.truck,anchor:proof.truck,stop:0,delivered:false}};
         action='park';serial++;
@@ -1894,19 +1901,19 @@ test('an independent contested pickup is proved at its cab and drives the real t
       g.street.setSite(town);return {ok:true};
     }});
   armed=true;g.street.setSite(town);
-  const initial=g.street.actorScene('walker-2').targetPose;assert(initial.x<9&&initial.y<9);
+  const initial=g.street.actorScene(claimant).targetPose;assert(Math.hypot(initial.x-15,initial.y-24)>2);
   const saved=g.street.snapshotView();assert(g.street.restoreView({...saved,player:{x:21.42,y:4.86,dx:1,dy:0}}));
   let sawOnFoot=false,sawDriving=false;
   for(let i=0;i<12500&&observations.length<2;i++){
     g.step();if(i%20===0){
-      const at=g.street.actorScene('walker-2').targetPose;
+      const at=g.street.actorScene(claimant).targetPose;
       if(at.mode==='walk'&&Math.hypot(at.x-initial.x,at.y-initial.y)>1)sawOnFoot=true;
       if(at.mode==='drive'&&at.x<14&&at.x>10)sawDriving=true;
       await new Promise(setImmediate);
     }
   }
   assert.equal(observations.length,2);assert(sawOnFoot&&sawDriving);
-  assert.equal(g.street.actorScene('walker-2').targetPose.mode,'walk');
+  assert.equal(g.street.actorScene(claimant).targetPose.mode,'walk');
   g.street.destroy();
 });
 
@@ -2231,6 +2238,32 @@ test('tablet movement stows a line and an arriving driver can steer and park',()
   assert.equal(g.street.getState().mode,'drive');
   assert.ok(g.street.toggleVehicle());assert.equal(g.street.getState().mode,'walk');
   g.street.destroy();
+});
+
+test('a funded coastal order occupies its saved street route, casts at the quay and carries the catch to its actual buyer',()=>{
+  const g=surface(1024,640,{animated:true,visible:true,lives:true,paidWork:true,waterfront:()=> 'coast'});
+  const order={id:'4-2',worker:'Bay fisher',plot:2,person:'walker-2',kind:'food',client:'broker',resource:'fish',resourceName:'fresh fish',
+    wage:2,dues:1,source:'coastal fishing ground',sourceVenue:'dock',destVenue:'market',start:'market',at:100,travelMs:4000,workMs:4500,
+    why:'The confirmed buyer reserved a two-fund wage.',request:2,cargo:0,phase:'collect',tool:'shared handline'};
+  const home={owner:'tester/2',plot:2,home:1,name:'Bay fisher',shop:'',order};
+  const town={...site,coastal:true,growth:{round:4,vehicle:0,roads:0,households:[home]}};
+  g.street.setSite(town);
+  const start=g.street.activityOf(order.person);
+  assert.equal(start.phase,'travel');assert.match(start.goal,/handline/);
+  for(let i=0;i<55;i++)g.step();
+  const midway=g.street.activityOf(order.person);assert.notEqual(midway.x,start.x);
+  for(let i=0;i<80;i++)g.step();
+  const casting=g.street.activityOf(order.person);
+  assert.equal(casting.venue,'the fishing quay');assert(Math.abs(casting.y-24)<.01);
+  assert.match(casting.goal,/handline/);assert.notEqual(casting.phase,'travel');
+  Object.assign(order,{phase:'deliver',cargo:2,at:5500,travelMs:4800,workMs:1300});
+  g.street.setSite(town);g.step();
+  const carrying=g.street.activityOf(order.person);assert.match(carrying.label,/Carrying 2 fresh fish/);
+  assert.equal(carrying.phase,'travel');
+  for(let i=0;i<160;i++)g.step();
+  const unloading=g.street.activityOf(order.person);assert.equal(unloading.venue,'the exchange loading counter');
+  assert(Math.abs(unloading.x-15)<.01);assert(Math.abs(unloading.y-23.48)<.01);
+  assert.match(unloading.goal,/Deliver fresh fish/);g.street.destroy();
 });
 
 test('public van doors work after a round trip, including a repeated boarding request',()=>{

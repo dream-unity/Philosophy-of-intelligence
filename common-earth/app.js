@@ -104,9 +104,10 @@
         switched:result=>{streetHud.notify(result.message);$('street-canvas').focus({preventScroll:true});}
       });
     }
-    if(pane!=='life'&&pane!=='goals')return agencyUI?.playAs(id);
-    const epoch=streetHud.version(),field=$(pane==='life'?'life-person':'scene-goal-person');
-    return agencyUI?.playAs(id,{host:$(pane==='life'?'life-profile':'scene-goal-detail'),returnFocus:field,
+    const surfaces={life:['life-person','life-profile'],goals:['scene-goal-person','scene-goal-detail'],talk:['scene-talk-person','scene-talk-handoff']};
+    const surface=surfaces[pane];if(!surface)return agencyUI?.playAs(id);
+    const epoch=streetHud.version(),field=$(surface[0]);
+    return agencyUI?.playAs(id,{host:$(surface[1]),returnFocus:field,
       current:()=>!document.hidden&&streetHud.active()===pane&&streetHud.version()===epoch&&field.value===id,
       switched:result=>{streetHud.notify(result.message);$('street-canvas').focus({preventScroll:true});}
     });
@@ -128,6 +129,8 @@
       selectPlace(site,false);setView('street',false);redrawStreet();if(vehicle==='van')street?.arriveByVan();else if(street?.getState().vehicle==='van')street.toggleVehicle();streetHud?.close(false);
     }});
   if(districtPanel)streetHud?.registerTool('neighbours',districtPanel);
+  const practice=window.EarthPracticeUI?.mount($('scene-practice'),{sim,street:getStreet,redraw:redrawStreet,notify});
+  if(practice)streetHud?.registerTool('practice',practice);
   const originalLife=window.EarthOriginalLife?.mount($('scene-original'),{sim,playAs:sceneHandoff,
     observing:()=>districtDesk?.observing(),pantry:(action,target)=>districtPanel?.pantry(action,target),
     towns:id=>{if(streetHud.openTool('neighbours')&&id)districtPanel?.travelTo(id);},
@@ -198,7 +201,7 @@
     if(decisionKey!==key){decisionKey=key;decisionHold=sim.liveWeekHold();}
     const paneReasons={talk:'Finish the conversation.',stores:'Close the stores and exchange.',life:'Close character planning.',
       original:'Finish reviewing your original character’s commitments.',precinct:'Finish reviewing the neighbourhood project.',
-      work:'Close personal work.',truck:'Close co-op dispatch.',fishing:'Close the fishing controls.'};
+      practice:'Finish the current practice decision.',work:'Close personal work.',truck:'Close co-op dispatch.',fishing:'Close the fishing controls.'};
     const hold=document.hidden?'Return to this browser tab.':!local?'Return to Street view.':
       document.body.hasAttribute('data-sheet-open')?'Close the open game sheet.':
       paneReasons[pane]|| (local.placement||document.body.hasAttribute('data-crew-order')?'Finish or cancel the current building or crew assignment.':
@@ -221,10 +224,12 @@
   let productionPending=false;
   const producing=()=>!document.hidden&&!!sim.active();
   setInterval(async()=>{
-    if(productionPending||!producing()||Date.now()-(sim.state.lastProductionAt||0)<window.EarthDistrictGrowth.period)return;
+    if(productionPending||!producing()||!window.EarthDistrictGrowth.due(sim.state))return;
     productionPending=true;
     try{
-      const result=await sim.perform('production',sim.state.productionSerial||0,producing);
+      const serial=sim.state.productionSerial||0;
+      if(forecastView?.prepareProduction&&!(await forecastView.prepareProduction(serial,producing)))return;
+      const result=await sim.perform('production',serial,producing);
       if(result.ok){if(view==='street')street?.setSite(sim.active());render();}
     }finally{productionPending=false;}
   },4000);
@@ -350,11 +355,19 @@
     return Math.abs(value).toFixed(2) + '° ' + (value < 0 ? negative : positive);
   }
   function coords(point) { return formatCoord(point.lat,'N','S')+'  ·  '+formatCoord(point.lon,'E','W'); }
+  function regionAt(point){
+    const base=sim.active(),model=window.EarthRegionalWorld;
+    if(!base||!model||!point||!Number.isFinite(point.lon)||!Number.isFinite(point.lat))return null;
+    const geo=model.geography(sim.state,base),p=geo.project(point),b=geo.bounds;
+    return p.x>=b.minX&&p.x<=b.maxX&&p.y>=b.minY&&p.y<=b.maxY?{geo,...p}:null;
+  }
   function known(point) {
     if(!point)return null;
     const sites=[...sim.state.sites,...(sim.state.communityLife?.outposts||[])];
     if(point.id){const exact=sites.find(s=>s.id===point.id);if(exact)return exact;}
-    const d=Math.PI/180;let closest=null,range=10;
+    // Globe markers carry the settlement id. A geographic tap inside a
+    // playable region selects its ground unless it lands within the town.
+    const d=Math.PI/180;let closest=null,range=regionAt(point)?.geo?.cellSize??10;
     for(const site of sites){
       const h=Math.sin((site.lat-point.lat)*d/2)**2+Math.cos(site.lat*d)*Math.cos(point.lat*d)*Math.sin((site.lon-point.lon)*d/2)**2;
       const distance=12742*Math.asin(Math.sqrt(Math.min(1,h)));if(distance<range){range=distance;closest=site;}
@@ -524,7 +537,10 @@
   function inspect() {
     const partner=selected.kind==='partner'&&sim.active()&&window.EarthPartners?.get(sim.state,sim.active(),selected.partnerId);
     const site=partner?null:known(selected);
-    const name=partner?.name||site?.name||selected.name||'Selected location';
+    const ground=!partner&&!site&&regionAt(selected);
+    const groundInfo=ground&&window.EarthRegionalWorld.terrain(ground.geo,ground.x,ground.y);
+    show('inspect-region-selection',Boolean(groundInfo));
+    const name=partner?.name||site?.name||groundInfo?.label||selected.name||'Selected location';
     put('map-survey',(site?'Visit ':partner?'Meet ':'Survey ')+name+' ↓');
     const partnerPanel=$('partner-inspector');
     const delegateOpen=partner&&partnerPanel?.querySelector('details[open]')?.dataset.delegate===partner.person?.id;
@@ -553,6 +569,13 @@
       }
       for(const a of sim.actions('routes').filter(a=>a.partnerId===partner.partnerId))partnerPanel.append(actionRow(a));
       if(sim.state.voyage || reportOpen)renderVoyage();
+      return;
+    }
+    if(groundInfo){
+      put('place-name',groundInfo.label);put('place-coords',selected.lat.toFixed(4)+'°, '+selected.lon.toFixed(4)+'°');
+      put('place-type',ground.geo.origin.name+' region');
+      put('place-description',groundInfo.resource+' · Inspect this land and its current use, claims and exploration records.');
+      for(const control of ['watch-selected-streets','found-area','visit-button','voyage-console'])show(control,false);
       return;
     }
     const scenario=window.EarthCampaigns?.preview(selected)||window.EarthNavigation.scenario(selected);
@@ -1995,6 +2018,10 @@
   listen('resume-founding','click',resumeFounding);
   listen('prepare-founding','click',prepareFounding);
   listen('street-view','click',()=>setView('street'));
+  listen('inspect-region-selection','click',()=>{
+    const ground=regionAt(selected);if(!ground)return;
+    setView('street');getStreet()?.inspectRegion?.(ground.x,ground.y,{picked:true});
+  });
   listen('visit-button','click',()=>travelFromAtlas(known(selected)));
   listen('watch-selected-streets','click',()=>{const site=known(selected);if(site)districtDesk?.watch(site.id);});
   listen('found-another','click',()=>{

@@ -599,6 +599,21 @@
     store.serial=Math.min(max,store.serial+1);site.resourceLedger=store;
     return {amount,stored};
   }
+  // Quotes and extraction read the same standing fields, closures and fishery as
+  // a handline, a project harvest or a resident gathering a lot personally.
+  function orderSources(world,site,good){
+    const sources=localIds(site).filter(id=>good==='food'?foodKey(id):
+      ['Fibre & wood','Minerals'].includes(resources[id].family)).map(id=>{
+        const r=resources[id];
+        return {id,name:r.name.toLowerCase(),place:r.place,available:standing(site,id,world.week),
+          venue:['kelp','shellfish'].includes(id)?'dock':good==='food'?'garden':'workshop'};
+      });
+    if(good==='food'&&!site.handline){
+      const stock=root.EarthFisheries?.ground?.(site,world.week);
+      if(stock)sources.push({id:'fish',name:'fresh fish',place:stock.name.toLowerCase(),venue:'dock',available:stock.available});
+    }
+    return sources;
+  }
   function collectDistrictLot(world,site,food){
     const store=ledger(world,site);
     const candidates=localIds(site).filter(id=>Boolean(foodKey(id))===food&&(food||!['water','herbs'].includes(id))&&standing(site,id,world.week)>0&&
@@ -674,5 +689,5 @@
       (f.stripped==null||living(k)&&integer(f.stripped,1,f.week))&&
       (f.pressureUntil==null||living(k)&&integer(f.pressureUntil,1,Math.min(max,f.week+6))));
   }
-  root.EarthResources=Object.freeze({collectDistrictLot,survey,environment,view,run,tick,makerInput,ageStores,expiringPublicLot,crewOpportunity,crewWork,projectCrop,quickGather,projectShipment,harvestForProject,useForPantry,valid,isResource:id=>own(resources,id),isCrop:id=>id==='fish'||own(resources,id)&&foodKey(id),isAction:action=>actions.has(action)});
+  root.EarthResources=Object.freeze({orderSources,collectDistrictLot,survey,environment,view,run,tick,makerInput,ageStores,expiringPublicLot,crewOpportunity,crewWork,projectCrop,quickGather,projectShipment,harvestForProject,useForPantry,valid,isResource:id=>own(resources,id),isCrop:id=>id==='fish'||own(resources,id)&&foodKey(id),isAction:action=>actions.has(action)});
 })(typeof window==='undefined'?globalThis:window);

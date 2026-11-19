@@ -41,8 +41,8 @@
     if(!store)return {read:false,write:false};
     let readable=false,probeKey;
     try{
-      store.getItem(LEGACY);readable=true;
       probeKey=REGISTRY+'probe-'+uid();
+      store.getItem(probeKey);readable=true;
       store.setItem(probeKey,'1');
       return {read:true,write:store.getItem(probeKey)==='1'};
     }catch(error){return {read:readable,write:false};}
@@ -126,15 +126,15 @@
     // game edition or a recovered in-memory turn can replace a slot at any time.
     let headers=new Map();
     function storedSummary(source,slot,nextCache,budget) {
-      const raw=get(source,dataKey(slot));
+      const physical=get(window.EarthWorldStorage?.nativeOf(source)||source,dataKey(slot));
       let entry=headers.get(slot);
-      if(!entry || raw!==entry.raw){
+      if(!entry || physical!==entry.physical){
         let world=null;
-        try{if(raw)world=JSON.parse(raw);}catch{/* An unreadable world still has a registry entry. */}
-        entry={raw,summary:summaryOf(world)};
+        try{if(physical)world=JSON.parse(window.EarthWorldStorage?.unpack(physical)??physical);}catch{/* An unreadable world still has a registry entry. */}
+        entry={physical,summary:summaryOf(world)};
       }
-      if((raw?.length||0)<=budget.remaining){
-        budget.remaining-=raw?.length||0;
+      if((physical?.length||0)<=budget.remaining){
+        budget.remaining-=physical?.length||0;
         nextCache.set(slot,entry);
       }
       return {...entry.summary,names:[...entry.summary.names]};
@@ -193,13 +193,18 @@
       const state=JSON.stringify(engine.state);
       if(state!==raw){temp.setItem(dataKey(id),state);retained.add(id);}
     }
-    function activate(slot,announce) {
+    function activate(slot,announce,requireSavedTurn=false) {
       const target=backing(slot);
       if(!target)return fail('That saved world is no longer on this device.');
       if(engine && slot===id)return ok('This world is already open.');
       let next;
       try{next=window.CommonEarthSim.create({storage:target,key:dataKey(slot),compressStorage:target!==temp});}
       catch(error){return fail('This world could not be opened. The previous world is still selected.');}
+      // A new slot must reopen the complete turn just written, including a
+      // migrated import. Keep the current session if its new copy fails to read.
+      if(requireSavedTurn&&next.saveIssue){
+        next.destroy();return fail('The saved copy could not be reopened. Your current world is still open.');
+      }
       preserveUnsaved();
       if(unsubscribe)unsubscribe();
       if(engine)engine.destroy();
@@ -273,7 +278,7 @@
         issue=writeRegistration(readyStore);
       }
       if(issue)return fail(issue);
-      const activated=activate(slot,true);
+      const activated=activate(slot,true,true);
       if(!activated.ok){rollback(readyStore,labelKey,meta);rollback(readyStore,key,payload);}
       else if(importFile && readyStore===temp)return ok(activated.message+' This imported world is in this tab only. Keep your file and export changes before closing the tab.',{id:slot,temporary:true});
       return activated;

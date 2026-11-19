@@ -18,6 +18,86 @@
   const person=(site,id)=>root.EarthPersonas?.profile(site,id)?.name||site.residents.find(p=>p.id===id)?.name||'Community steward';
   const driver=site=>person(site,'driver');
   function entry(f,week,actor,text,otherId=null){f.records.unshift({week,actor,text,...(otherId&&otherId!==actor?{otherId}:{})});f.records.length=Math.min(8,f.records.length);}
+  function identityStamp(site,id){
+    const p=root.EarthPersonas?.profile?.(site,id);
+    return {id,name:p?.name||person(site,id),key:p?.identityKey||null};
+  }
+  function isSame(site,stamp,id){
+    if(!stamp||stamp.id!==id)return false;
+    const actual=identityStamp(site,id);
+    return stamp.key?stamp.key===actual.key:stamp.name===actual.name;
+  }
+  function recorded(incident){return !!incident&&(!incident.operator||!!incident.report);}
+  function operatorHere(site,incident,id){
+    return incident?.actor===id&&(!incident.operator||isSame(site,incident.operator,id));
+  }
+  function witness(site,incident,id){
+    return incident?.witnesses?.find(p=>isSame(site,p,id));
+  }
+  function heard(site,incident,id){
+    return incident?.statements?.find(s=>isSame(site,s.listener,id));
+  }
+  function report(world,site,source){
+    const f=site.fleet,i=f.incident;
+    if(recorded(i))return '';
+    const urgent=i.independent&&site.mandate==='services';
+    const loss=Math.min(site.trust,urgent?2:4);
+    i.report={source:source.id,sourceName:source.name,week:world.week,loss};
+    site.trust-=loss;
+    const message=(source.id===i.actor?source.name+' acknowledged taking':source.name+' identified '+i.operator.name+' as the person who took')+
+      ' the truck without a booking. Dispatch suspended '+i.operator.name+'’s access.'+
+      (urgent?' The service mandate weighed the emergency request.':'')+(loss?' Community trust fell by '+loss+'.':'');
+    entry(f,world.week,i.actor,message,'driver');
+    return message;
+  }
+  function openIncident(world,site,actor,scene,independent=false){
+    const operator=identityStamp(site,actor);
+    const present=id=>root.EarthCommunityLife?.present?.(site,id)!==false;
+    const ids=[...new Set(scene.witnesses||[])].filter(id=>id!==actor&&(crew(site).includes(id)||root.EarthAgency?.canPlay?.(site,id))&&present(id));
+    const i={actor,operator,week:world.week,witnesses:ids.slice(0,40).map(id=>identityStamp(site,id)),statements:[],...(independent?{independent:true}:{})};
+    const f=writable(site);f.incident=i;
+    entry(f,world.week,'driver','No signed consignment accompanied the truck. The usual pickup lost its vehicle.');
+    const dispatch=witness(site,i,'driver');
+    return dispatch?report(world,site,dispatch):'The co-op has lost use of its truck. Dispatch has no identification on file.';
+  }
+  function incidentTopics(world,site,listenerId,speakerId){
+    const i=site.fleet?.incident;
+    if(!i)return [];
+    const options=[{id:'truck',label:'What do you know about the missing pickup?',context:true}];
+    if(!i.operator||recorded(i))return options;
+    const saw=witness(site,i,listenerId),previous=heard(site,i,speakerId);
+    if(saw&&i.statements.length<128&&!previous&&!witness(site,i,speakerId)&&!operatorHere(site,i,speakerId))
+      options.push({id:'truck-testimony',label:'Could I take your account to dispatch?',context:true});
+    if(listenerId==='driver'&&(operatorHere(site,i,speakerId)||previous||witness(site,i,speakerId))){
+      options.push({id:'truck-report',label:operatorHere(site,i,speakerId)?'Tell dispatch I took the truck':'Give dispatch the eyewitness account',context:true});
+    }
+    return options;
+  }
+  function incidentReply(world,site,listenerId,speakerId,topic){
+    const f=site.fleet,i=f?.incident;if(!i)return null;
+    const name=person(site,listenerId),quote=(words,next)=>({ok:true,message:name+' · “'+words+'”',...(next&&next!==speakerId?{followContact:next}:{})});
+    const self=operatorHere(site,i,listenerId),dispatcher=listenerId==='driver',seen=witness(site,i,listenerId);
+    if(topic==='truck-testimony'||topic==='truck-report'){
+      if(!incidentTopics(world,site,listenerId,speakerId).some(r=>r.id===topic))return fail('The account or the person who can give it has changed.');
+      if(topic==='truck-testimony'){
+        i.statements.push({listener:identityStamp(site,speakerId),source:seen,week:world.week});
+        f.serial++;
+        return {...quote('I was at the kerb. I saw '+i.operator.name+' take the truck. You can give dispatch my name.','driver'),changed:true};
+      }
+      const source=operatorHere(site,i,speakerId)?i.operator:witness(site,i,speakerId)||heard(site,i,speakerId).source;
+      const message=report(world,site,source);f.serial++;return {ok:true,message,changed:true};
+    }
+    if(topic!=='truck')return null;
+    if(self)return quote('I took the co-op truck without a booking.'+(i.independent?' I wanted a collection for the empty pantry.':'')+
+      (recorded(i)?' Dispatch has my name on the report.':' Dispatch has yet to identify the operator.'),'driver');
+    if(seen)return quote('I saw '+(i.operator?.name||person(site,i.actor))+' climb into the cab near me. '+(recorded(i)?'Dispatch has a report.':'I can tell dispatch what I saw.'),'driver');
+    if(dispatcher&&recorded(i))return quote('We missed a pickup. '+(i.operator?.name||person(site,i.actor))+
+      ' took the vehicle without a booking.'+(i.report?' '+i.report.sourceName+' gave the account in week '+i.report.week+'.':''),i.actor);
+    if(dispatcher)return quote('We missed a pickup. The van was booked and there is no signed handover. I need someone who saw who took it.');
+    const statement=heard(site,i,listenerId);
+    if(statement)return quote(statement.source.name+' told me they saw '+i.operator.name+' at the wheel. I did not see the handover myself.','driver');
+    return quote('I didn’t see who took it. Dispatch keeps the bookings. I’d ask the person responsible for the run.','driver');
+  }
   function instruction(site,id){
     const person=root.EarthPersonas?.profile(site,id),skills=site.careers?.[id]?.skills||{},reference=site.careers?.[id]?.latestReference;
     const routeReading=skills.organisation??person?.aptitudes?.organisation??50;
@@ -94,11 +174,13 @@
     // rota and a resident willing to act immediately must coincide.
     const controlled=root.EarthAgency?.actorId(site)||'steward';
     let candidate=null,best=0;
-    for(const id of crew(site).filter(id=>id.startsWith('walker-'))){
+    const residents=root.EarthPersonas?.list?.(site)?.map(p=>p.id)||crew(site);
+    for(const id of residents){
       const career=site.careers?.[id],reference=career?.latestReference,plan=root.EarthAutonomy?.intent(site,id);
       if(!reference||reference.quality>=0||!whole(reference.week,Math.max(1,week-12),week)||
-        id===controlled||root.EarthCommunityLife?.present?.(site,id)===false||root.EarthCommunityLife?.travelIntent?.(site,id)||
-        career.jobId==='driver'||f.roster?.[id]||career.application||career.training||plan?.week===week&&!['routine','gather'].includes(plan.kind))continue;
+        id===controlled||root.EarthCommunityLife?.present?.(site,id)===false||root.EarthCommunityLife?.residency?.(site,id)==='visitor'||root.EarthCommunityLife?.travelIntent?.(site,id)||
+        career.jobId==='driver'||f.roster?.[id]||career.application||career.training||site.workforce?.members?.[id]?.jobId||
+        root.EarthDistrictGrowth?.work?.(site,id)||plan?.week===week&&!['routine','gather'].includes(plan.kind))continue;
       const self=root.EarthPersonas?.profile(site,id),traits=self?.traits;if(!traits)continue;
       const urgency=traits.initiative-traits.patience+Math.round((self.aptitudes?.care||0)/5);
       if(urgency>=18&&urgency>best){candidate=id;best=urgency;}
@@ -115,16 +197,16 @@
       if(scene.mode!=='drive'||!within(scene,scene.truck,.22)||!within(scene.truck,stops[0],1.2))return fail('The truck has yet to reach the pantry.');
       const f=site.fleet;
       f.custody.anchor={x:scene.truck.x,y:scene.truck.y};
-      const message=offer.name+' left the blue truck at the pantry to ask for an emergency collection. No food was available to unload.';
-      f.serial++;entry(f,world.week,offer.actor,message,'driver');return {ok:true,message};
+      const identified=recorded(f.incident);
+      const message=identified?offer.name+' left the blue truck at the pantry to ask for an emergency collection. No food was available to unload.':'The missing blue truck has reached the pantry. No dispatch load was available to unload.';
+      f.serial++;entry(f,world.week,identified?offer.actor:'driver',message,'driver');return {ok:true,message};
     }
     if(scene.mode!=='walk'||scene.emptyCab!==true||!within(scene,scene.truck,1.56)||!within(scene.truck,depot,1.2))return fail('The co-op truck is occupied, moving or beyond the resident’s reach.');
-    const f=writable(site),pickup={x:scene.truck.x,y:scene.truck.y},trustLost=Math.min(4,site.trust);
-    site.trust-=trustLost;f.serial++;f.independentWeek=world.week;
+    const f=writable(site),pickup={x:scene.truck.x,y:scene.truck.y};
+    f.serial++;f.independentWeek=world.week;
     f.custody={actor:offer.actor,token:f.serial,kind:'theft',week:world.week,stop:0,pickup,anchor:{...pickup},delivered:false};
-    f.incident={actor:offer.actor,week:world.week,independent:true};
-    const message=offer.name+' took the co-op truck without permission to press for an emergency pantry collection after a dispute at work. Dispatch lost its vehicle and community trust fell by '+trustLost+'.';
-    entry(f,world.week,offer.actor,message,'driver');return {ok:true,message};
+    const message=openIncident(world,site,offer.actor,scene,true);
+    return {ok:true,message};
   }
   function view(world,site){
     if(!world||!site)return null;
@@ -134,7 +216,7 @@
     const licence=hired||Boolean(relief&&relief.ready<=world.week);
     let next=manifest(site,world.week);
     if(custody)next=stops[custody.stop];
-    const suspended=f.incident?.actor===id;
+    const suspended=recorded(f.incident)&&operatorHere(site,f.incident,id);
     const hasLoad=!root.EarthMarket||root.EarthMarket.canLoadFreight(site,next.good);
     const role=licence?(hired?'Transport cooperative employee':'Co-op relief roster'):relief?'Dispatch induction in progress':'Enquiring about a driving shift';
     const choices=[];
@@ -145,7 +227,7 @@
       add('checkout','Take the assigned delivery','Collect one '+next.good+' from exchange stock for '+next.name+'. Unload at the marked kerb to transfer it to community stores.',
         custody?'The truck is checked out.':suspended?'Dispatch has suspended this person’s access.':!licence?relief?'Induction finishes in week '+relief.ready+'.':'The transport cooperative authorises employees and its relief roster.':
         f.servedWeek===world.week?'This week’s contracted delivery is complete.':!hasLoad?'The stall has no spare freight. Sell stock at the market or return after its next supplier round.':'');
-      if(!licence||suspended)add('take','Take without permission','Trust falls by 4. The co-op loses its scheduled run while the truck is missing. You can return it and repair the relationship.',
+      if(!licence||suspended)add('take','Take without permission','The booked worker loses the truck. Anyone at the kerb who sees you can identify you to dispatch.',
         f.incident?'The co-op is already dealing with a missing-truck incident.':'');
     }else if(custody.actor===id){
       if(custody.kind==='work'&&!custody.delivered)add('deliver','Unload at '+next.name,'Drive to the labelled kerb. The cooperative releases the freight into community stores on arrival.',site[next.good]>=Number.MAX_SAFE_INTEGER?'The community store is full. Free one space or return the load to dispatch.':'','stop');
@@ -153,10 +235,25 @@
       add('return','Return truck to dispatch',custody.kind==='theft'?'Report back at the market exchange. The original driver gets the vehicle back and you can make amends.':
         'Return it at the market exchange so the regular driver can resume deliveries.','','depot');
     }
-    if(f.incident?.actor===id&&!custody)add('repair','Volunteer a dispatch shift','Give one civic effort to help the displaced crew. Dispatch restores access and the town regains 2 trust.',
+    if(suspended&&!custody)add('repair','Volunteer a dispatch shift','Give one civic effort to help the displaced crew. Dispatch restores access and the town regains 2 trust.',
       world.effort<1?'Civic effort refreshes next week.':'','depot');
     return {actorId:id,siteId:site.id,generation:site.foundingRevision||0,week:world.week,serial:f.serial||0,owner:'Transport cooperative',
       driver:driver(site),role,induction,next,depot,custody,choices,incident:f.incident||null,history:f.records||[]};
+  }
+  function assignment(world,site){
+    if(!world||!site)return null;
+    const f=data(site),held=f.custody,service=regular(world,site),owner='Transport cooperative';
+    if(held){
+      const operator=person(site,held.actor);
+      if(held.kind==='theft')return {owner,operator,operatorId:held.actor,destination:f.incident?.independent?stops[0].name:null,
+        cargo:null,status:'Unbooked use',reason:'The vehicle is away from dispatch without a signed booking.'};
+      const stop=stops[held.stop];
+      return {owner,operator,operatorId:held.actor,destination:held.delivered?depot.name:stop.name,cargo:held.stock||null,
+        status:held.delivered?'Returning to dispatch':'Contracted delivery',reason:held.delivered?'Dispatch is waiting for the vehicle after the freight delivery.':'The exchange released the signed load for '+stop.name+'.'};
+    }
+    if(service.available)return {owner,operator:service.driverName,operatorId:service.driverId,destination:service.next.name,cargo:service.next.good,
+      status:'Contracted delivery',reason:'The receiving store needs '+service.next.good+' and the exchange has the consignment.'};
+    return {owner,operator:null,operatorId:null,destination:depot.name,cargo:null,status:'Standby',reason:service.reason};
   }
   function run(world,site,request,scene){
     const quote=view(world,site);
@@ -166,12 +263,14 @@
     if(!choice?.available)return fail(choice?.reason||'That dispatch action is no longer available.');
     const id=quote.actorId,own=quote.custody?.actor===id;
     if(!scene||scene.siteId!==site.id||scene.actor!==id||!location(scene)||!location(scene.truck))return fail('Meet the blue co-op truck in this community.');
+    if(['take','checkout'].includes(request.action)&&scene.stopped===false)return fail('Wait for the truck to stop at the kerb before a handover.');
     const at=['vehicle','truck'].includes(choice.at)?scene.truck:choice.at==='stop'?quote.next:depot;
     if(!within(scene,at,choice.at==='truck'?1.56:1.8))return fail('Travel to '+(choice.at==='truck'?'the blue co-op truck':at.name)+' first.');
     if(own){
       if(scene.mode!=='drive'||scene.vehicle!=='truck'||!within(scene,scene.truck,.22))return fail('Drive the checked-out blue truck to this stop.');
     }else if(scene.mode!=='walk')return fail('Step out and meet dispatch on foot.');
     const f=writable(site),actorName=person(site,id);
+    const unreported=f.custody?.kind==='theft'&&!recorded(f.incident);
     let message;
     switch(request.action){
       case 'enrol':
@@ -185,8 +284,7 @@
           const load=root.EarthMarket.freight(site,quote.next.good,'load',world.week);
           if(!load.ok){delete f.custody;return fail(load.message);}
         }
-        if(stolen){const loss=Math.min(4,site.trust);site.trust-=loss;f.incident={actor:id,week:world.week};
-          message=actorName+' took the co-op truck without permission. '+quote.driver+' reported the missed pickup. Community trust fell by '+loss+'.';}
+        if(stolen)message=openIncident(world,site,id,scene);
         else message='Dispatch assigned '+actorName+' the blue truck and a delivery for '+quote.next.name+'.';break;
       }
       case 'deliver':
@@ -198,29 +296,41 @@
         f.servedWeek=world.week;
         message=actorName+' delivered the co-op order to '+quote.next.name+'. Community stores received 1 '+quote.next.good+'.';break;
       case 'park':
-        f.custody.anchor={x:scene.x,y:scene.y};message=actorName+' parked the blue truck. Dispatch recorded this kerb for the next pickup.';break;
+        f.custody.anchor={x:scene.x,y:scene.y};message=unreported?'The blue truck is parked. Dispatch still has no signed handover.':actorName+' parked the blue truck. Dispatch recorded this kerb for the next pickup.';break;
       case 'return':
         if(f.custody.stock){
           const refund=root.EarthMarket?.freight(site,f.custody.stock,'return',world.week);
           if(!refund?.ok)return fail(refund?.message||'Reload the exchange to receive this cargo.');
         }
         delete f.custody;f.parkedWeek=world.week;
-        message=actorName+' returned the blue truck at the exchange. '+quote.driver+' can resume the co-op route.';break;
+        message=(unreported?'Dispatch recovered the blue truck at the exchange. ':actorName+' returned the blue truck at the exchange. ')+quote.driver+' can resume the co-op route.';break;
       case 'repair':
         delete f.incident;world.effort--;site.trust=Math.min(100,site.trust+2);
         message=actorName+' helped the dispatch crew cover the missed work. The restriction is lifted and the community regained 2 trust.';break;
     }
-    entry(f,world.week,id,message,['take','return','repair'].includes(request.action)?'driver':null);f.serial++;
+    if(request.action!=='take')entry(f,world.week,unreported?'driver':id,message,['return','repair'].includes(request.action)?'driver':null);f.serial++;
     return {ok:true,message,action:request.action};
   }
   function tick(world,site){
-    const f=site.fleet,held=f?.custody;
-    if(!held&&f?.incident?.independent&&world.week>=f.incident.week+2&&site.food>0){
+    const f=site.fleet,held=f?.custody,i=f?.incident;
+    const notes=[];
+    if(i?.operator&&!recorded(i)){
+      // Someone who actually saw the handover can report on a later visit to
+      // the exchange. Absence, a changed identity or a different duty delays it.
+      const source=i.witnesses.find(w=>isSame(site,w,w.id)&&root.EarthCommunityLife?.present?.(site,w.id)!==false&&
+        site.autonomy?.people?.[w.id]?.history?.[0]?.week===world.week-1&&site.autonomy.people[w.id].history[0].venue==='market');
+      if(source){notes.push(report(world,site,source));f.serial++;}
+      else if(!held&&world.week>=i.week+4){
+        const text='Dispatch closed the recovered-truck enquiry without identifying an operator.';
+        delete f.incident;f.serial++;entry(f,world.week,'driver',text);return [text];
+      }
+    }
+    if(!held&&f?.incident?.independent&&recorded(f.incident)&&world.week>=f.incident.week+2&&site.food>0){
       const actor=f.incident.actor,gain=Math.min(2,100-site.trust);
       const message=person(site,actor)+' volunteered a dispatch shift after the truck was returned. The co-op lifted the restriction and the town regained '+gain+' trust.';
       site.trust+=gain;delete f.incident;f.serial++;entry(f,world.week,actor,message,'driver');return [message];
     }
-    if(!held||held.week>=world.week||f.review===world.week)return [];
+    if(!held||held.week>=world.week||f.review===world.week)return notes;
     f.review=world.week;f.serial++;
     let message;
     if(held.kind==='theft'){
@@ -232,7 +342,7 @@
       message='The relief run ended. Dispatch brought the blue truck back to the market exchange.';
       delete f.custody;f.parkedWeek=world.week;
     }else message='Dispatch is waiting for '+person(site,held.actor)+' to return the truck. The regular driver is covering the exchange.';
-    entry(f,world.week,held.actor,message,'driver');return [message];
+    entry(f,world.week,held.kind==='theft'&&!recorded(i)?'driver':held.actor,message,'driver');return [...notes,message];
   }
   function valid(site,week){
     const f=site.fleet;if(f===undefined)return true;
@@ -243,9 +353,20 @@
     if(['servedWeek','parkedWeek','review','regularWeek','independentWeek'].some(k=>f[k]!==undefined&&!whole(f[k],1,week)))return false;
     if(f.incident&&(!known(f.incident.actor)||!whole(f.incident.week,1,week)||
       f.incident.independent!=null&&(f.incident.independent!==true||f.independentWeek!==f.incident.week)))return false;
+    if(f.incident?.operator){
+      const i=f.incident;
+      const stamp=p=>p&&known(p.id)&&typeof p.name==='string'&&p.name.length>0&&p.name.length<=200&&(p.key===null||typeof p.key==='string'&&p.key.length>0&&p.key.length<=1040);
+      if(!stamp(i.operator)||i.operator.id!==i.actor||!Array.isArray(i.witnesses)||i.witnesses.length>40||
+         !i.witnesses.every(w=>stamp(w)&&w.id!==i.actor)||new Set(i.witnesses.map(w=>w.id)).size!==i.witnesses.length||
+         !Array.isArray(i.statements)||i.statements.length>128||!i.statements.every(r=>stamp(r.listener)&&stamp(r.source)&&
+           whole(r.week,i.week,week)&&i.witnesses.some(w=>w.id===r.source.id&&w.key===r.source.key&&w.name===r.source.name))||
+         new Set(i.statements.map(s=>s.listener.key||s.listener.id+'/'+s.listener.name)).size!==i.statements.length||
+         i.report&&(![i.operator,...i.witnesses].some(s=>s.id===i.report.source&&s.name===i.report.sourceName)||
+           !whole(i.report.week,i.week,week)||!whole(i.report.loss,0,4)))return false;
+    }
     const c=f.custody;
     return !c||known(c.actor)&&whole(c.week,1,week)&&whole(c.stop,0,stops.length-1)&&location(c.anchor)&&location(c.pickup)&&
       whole(c.token,1,f.serial)&&typeof c.delivered==='boolean'&&['work','theft'].includes(c.kind)&&(c.stock===undefined||c.kind==='work'&&!c.delivered&&c.stock===stops[c.stop].good)&&(c.kind!=='theft'||f.incident?.actor===c.actor&&!c.delivered);
   }
-  root.EarthFleet=Object.freeze({view,run,tick,valid,regular,finishRegular,closeWeek,dispute,finishDispute,depot,stops});
+  root.EarthFleet=Object.freeze({view,assignment,run,tick,valid,identified:(site,id)=>recorded(site.fleet?.incident)&&operatorHere(site,site.fleet.incident,id),incidentTopics,incidentReply,regular,finishRegular,closeWeek,dispute,finishDispute,depot,stops});
 })(typeof window==='undefined'?globalThis:window);

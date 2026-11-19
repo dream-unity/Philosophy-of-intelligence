@@ -77,9 +77,9 @@ test('original duties continue in other perspectives; forecasts leave attendance
   const {sim,life,home,doAction,saved}=fixture(),p=home.residents[0],scene=id=>({siteId:home.id,actor:id,mode:'walk',x:5,y:4});
   assert.ok(sim.changeActor(p.id,scene('steward')).ok);assert.equal(doAction('round',null,'market').ok,false);
   sim.advance();sim.advance();sim.forecastNext();assert.equal(life.anchor(sim.state).reliability,0);
-  sim.advance();assert.equal(life.anchor(sim.state).reliability,-1);assert.ok(sim.changeActor('steward',scene(p.id)).ok);
+  sim.advance();assert.equal(life.anchor(sim.state).reliability,1);assert.ok(sim.changeActor('steward',scene(p.id)).ok);
   assert.ok(doAction('round',null,'market').ok);assert.equal(doAction('round',null,'market').ok,false);
-  sim.advance();sim.advance();sim.advance();assert.equal(life.anchor(sim.state).reliability,0);saved();
+  sim.advance();sim.advance();sim.advance();assert.equal(life.anchor(sim.state).reliability,2);saved();
 });
 test('multi-week departures and independent new settlements survive save and reload',()=>{
   const {sim,life,home,saved}=fixture();
@@ -116,14 +116,22 @@ test('a legacy 112-district world keeps its distant viewpoint, separate trained 
   assert.ok(reachable.every(p=>p.home||p.distance<=70));upgraded.saved();
 });
 test('the playable crossing stops at three real landmarks, takes a chosen fork, and resumes a paused save',()=>{
-  const {sim,life,home,doAction,wait,saved}=fixture(),n=life.neighbours(sim.state,home)[0];
+  const {sim,life,home,context,doAction,wait,saved}=fixture(),n=life.neighbours(sim.state,home)[0];
   assert.ok(doAction('walkTrail',n.id,'market').ok);wait(7000);
   let trip=sim.state.communityLife.journey;assert.equal(life.routeProgress(trip),.23);
   assert.equal(doAction('arrive',n.id).ok,false);assert.ok(doAction('routeChoice','inspect').ok);
   assert.deepEqual(Array.from(trip.seen),[0]);const paused=fixture(saved());paused.wait(100000);
   assert.equal(paused.life.routeProgress(paused.sim.state.communityLife.journey),.23);
   assert.ok(doAction('routeChoice','work').ok);wait(7000);
-  assert.equal(life.trail(sim.state,trip).landmarks[1].label,'Tool yard');assert.equal(life.routeProgress(trip),.51);
+  assert.equal(life.routeProgress(trip),.51);
+  const regional=context.EarthRegionalWorld,geo=regional.geography(sim.state,home),position=regional.tripPosition(sim.state,home,trip,.51);
+  const here=regional.terrain(geo,position.x,position.y),coord=geo.locate(position.x,position.y);
+  const marker=life.trail(sim.state,trip).landmarks[1];
+  assert.equal(marker.label,here.label+' · '+(.51*trip.km).toFixed(1)+' km');
+  assert.ok(marker.note.includes(coord.lat.toFixed(3)+'°, '+coord.lon.toFixed(3)+'°'));
+  assert.ok(marker.note.includes(here.resource));
+  const olderTrip={...trip};delete olderTrip.path;
+  assert.equal(life.trail(sim.state,olderTrip).landmarks[1].label,'Tool yard');
   assert.ok(doAction('routeChoice','inspect').ok);assert.ok(doAction('routeChoice','2').ok);wait(7000);
   assert.equal(life.routeProgress(trip),.78);assert.ok(doAction('routeChoice','inspect').ok);
   assert.ok(doAction('routeChoice','direct').ok);wait(7000);assert.ok(doAction('arrive',n.id).ok);
@@ -299,7 +307,10 @@ test('a regional shift worker enters the local household census only after takin
   assert.ok(dest);const oldCount=home.population,newCount=dest.population;dest.food=24;dest.wellbeing=90;dest.trust=90;
   assert.equal(life.census(sim.state,dest).visitors,1);sim.advance();
   assert.equal(home.population,oldCount);assert.equal(dest.population,newCount+1);
-  assert.equal(life.census(sim.state,dest).here,dest.population);saved();
+  const roll=life.census(sim.state,dest);
+  const travelling=context.EarthRegionalWorld.travellers(sim.state,dest).filter(p=>p.siteId===dest.id);
+  assert.equal(roll.away,travelling.length);
+  assert.equal(roll.here+roll.away,dest.population);saved();
 });
 test('a large historical population is retained without manufacturing retroactive personal records',()=>{
   const {saved}=fixture(),old=JSON.parse(saved());
@@ -590,6 +601,18 @@ test('visible production settles all four settlements while the calendar waits, 
     assert(town.tech.length>0);
   }
   assert(context.EarthDistrictGrowth.members(home).every(p=>context.EarthDistrictGrowth.goal(home,p).points>0));
+});
+
+test('a host may invite the original visitor to share a round while both communities keep their own authority',()=>{
+  const {sim,home,context,life,visit,saved}=fixture();
+  visit(life.neighbours(sim.state,home)[0].id);const site=sim.active(),host=site.residents[0];
+  const at=(actor,target)=>({siteId:site.id,actor,target,mode:'walk',x:9,y:8,tx:9.6,ty:8});
+  assert.equal(sim.changeActor(host.id,at('steward',host.id)).ok,false);
+  const agreed=sim.converse(host.id,'shadow',at('steward',host.id));assert(agreed.changed,agreed.message);
+  assert(sim.changeActor(host.id,at('steward',host.id)).ok);assert.equal(life.anchor(sim.state).homeId,home.id);
+  assert.equal(sim.manageSite(site.id,'restart').ok,false);assert(sim.actions('build').every(a=>!a.available));
+  saved();sim.advance();sim.advance();assert.equal(context.EarthAgency.actorId(site),'steward');
+  const recap=context.EarthAgency.recall(sim.state,site);assert.equal(recap.active,false);saved();
 });
 
 test('a driver can depart with a cast out, reopen the journey and arrive by van',()=>{

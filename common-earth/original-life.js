@@ -39,6 +39,13 @@
       const balance=accounts.reduce((sum,p)=>sum+p.balance,0);
       summary.append(el('p','Personal purse · '+balance+' fund'+(balance===1?'':'s')+
         (accounts.length>1?' ('+accounts.map(p=>p.name+' '+p.balance).join(', ')+')':'')+'.'));
+      const absence=root.EarthAgency.recall?.(world,site);
+      if(absence){
+        const section=row(absence.active?'Since you changed viewpoint':'While you were away',
+          'Week '+absence.since+' to '+absence.until+' · '+original.name);
+        if(absence.changes.length)for(const detail of absence.changes)section.append(el('p',detail));
+        else section.append(el('p','No completed commitments, changes of work or personal gains recorded in that interval.'));
+      }
       if(!mine&&!journey&&!remote){
         const handoff=button(summary,'Return to playing as '+original.name,'original-handoff',()=>playAs(original.id));
         handoff.id='scene-original-handoff';
@@ -56,7 +63,7 @@
           else rota.append(el('p','Cover requires a trusted neighbour you have heard, with no outstanding promise.'));
         }else button(rota,'Travel to '+a.dutyPlace+' for the round','original-rota-route',()=>towns(a.dutySiteId));
       }
-      if(!mine&&!a.attended&&!a.coveredBy)rota.append(el('p','Return to '+original.name+' to make the round or ask for cover.'));
+      if(!mine&&!a.attended&&!a.coveredBy)rota.append(el('p',original.name+' can fit the count into an available shift at the exchange. Return to them to arrange cover personally.'));
       const signed=row('Signed commitments',original.held.length?'Agreements signed by '+original.name+'.':'No outstanding signed promises.');
       for(const item of original.held){
         const where=world.sites.find(s=>s.id===item.siteId),person=where?.residents.find(p=>p.id===item.who);
