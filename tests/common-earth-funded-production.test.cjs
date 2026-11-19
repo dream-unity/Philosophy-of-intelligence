@@ -31,7 +31,7 @@ const accountNames={funds:'Community treasury',materials:'Public building store'
 function cashInRegion(world){
   const sites=[...world.sites,...world.communityLife.outposts];
   const regionalEscrow=Object.values(world.regionalWorld?.regions||{}).flatMap(r=>Object.values(r.trips)).reduce((n,t)=>n+t.kit.funds,0);
-  return sites.reduce((n,t)=>n+(t.growth?wealth(t):t.funds+(t.exchange?.till??8)),regionalEscrow);
+  return sites.reduce((n,t)=>n+(t.growth?wealth(t):t.funds+(t.exchange?.till??8)),regionalEscrow)+(world.widerEarth?.fees||0)-(world.widerEarth?.importedFunds||0);
 }
 
 test('calendar-only play opens funded livelihoods in new and existing unvisited settlements',()=>{
@@ -60,8 +60,8 @@ test('a rotating regional economy reconciles advances, wages, public stores and 
       const beforeWealth=cashInRegion(g.sim.state);
       let external=0,capital=0;
       await g.step();
-      sites.forEach((site,index)=>{
-        const last=site.growth.history[0],rows=growth.transfers(last);
+      for(const site of [...g.sim.state.sites,...g.sim.state.communityLife.outposts]){
+        const last=site.growth?.history[0];if(!last)continue;const rows=growth.transfers(last);
         // Regional expeditions booked after the local shift have a separate
         // manifest. The economic round reports only its own transactions.
         for(const [good,name] of Object.entries(accountNames))assert.equal(net(rows,name,good),last[good],site.name+' '+good+' round '+last.round);
@@ -71,7 +71,7 @@ test('a rotating regional economy reconciles advances, wages, public stores and 
         sales+=rows.filter(t=>t.reason==='Retail payment').length;
         roads+=rows.filter(t=>t.reason==='Laid the road').length;
         built+=rows.filter(t=>t.reason==='Construction completed').length;
-      });
+      }
       assert.equal(cashInRegion(g.sim.state)-beforeWealth,external-capital,place.name+' regional cash including travel reserves, round '+i);
     }
     assert(delivered>30);assert(roads>0);assert(built>0);assert(sales>0);

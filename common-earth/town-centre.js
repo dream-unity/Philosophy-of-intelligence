@@ -127,6 +127,7 @@
     const pool=world.widerEarth||={seed:poolSeed(world),serial:0,cursors:{}};
     pool.cursors[person.externalHistory.cohort]=person.externalHistory.index;pool.serial++;
     site.population++;site.funds-=q.price;
+    pool.importedFunds=(pool.importedFunds||0)+saved;pool.fees=(pool.fees||0)+q.price;
     root.EarthHousing?.sync?.(world,site);
     const d=site.communityLife.townCentre||={serial:0,arrivals:[]};d.serial++;
     d.arrivals.unshift({week:world.week,number:d.serial,id,person:person.identityKey,name:person.name,route:q.route,price:q.price,criteria:q.criteria});
@@ -210,6 +211,16 @@
     const terms=quote(world,site,targeted?'targeted':'random',targeted?criteria:{},unhoused);
     return {terms,reason:reason+(canBridge?' A completed housing crew is awaiting next week’s opening.':'')};
   }
+  function productionReview(world,site){
+    const round=site.growth?.round||0;
+    if(!round||round%6||!site.communityLife?.cluster||root.EarthCommunityLife.isHome(world,site))return;
+    const prior=ledger(site)?.review;
+    if(prior?.week===world.week||prior?.round===round)return;
+    const {terms,reason}=recruitmentPlan(world,site);
+    if(!terms?.ok)return;
+    const result=admit(world,site,terms);
+    if(result.ok)site.communityLife.townCentre.review={week:world.week,round,route:terms.route,reason};
+  }
   function tick(world,site){
     const age=world.week-site.founded;
     if(!site.communityLife?.cluster||root.EarthCommunityLife.isHome(world,site)||(!newCottage(site)&&(age<8||age%8!==0))||ledger(site)?.review?.week===world.week)return [];
@@ -224,6 +235,7 @@
   }
   function validPool(pool){
     if(!object(pool)||typeof pool.seed!=='string'||!/^[0-9a-z]{1,8}$/.test(pool.seed)||!int(pool.serial,1)||!object(pool.cursors))return false;
+    if(pool.importedFunds!=null&&!int(pool.importedFunds,0)||pool.fees!=null&&!int(pool.fees,0))return false;
     let sum=0;
     for(const [cohort,last] of Object.entries(pool.cursors)){
       if(!int(last,1)||cohort.length>fields.length*11)return false;
@@ -263,5 +275,5 @@
     }
     return true;
   }
-  root.EarthTownCentre=Object.freeze({fields,label,price,specification,quote,command,applications,authorised,tick,valid});
+  root.EarthTownCentre=Object.freeze({productionReview,fields,label,price,specification,quote,command,applications,authorised,tick,valid});
 })(typeof window==='undefined'?globalThis:window);

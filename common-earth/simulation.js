@@ -2402,6 +2402,7 @@
       const productionStarted=root.EarthPerformance?.now();
       for(const site of [...world.sites,...world.communityLife.outposts]){
         root.EarthDistrictGrowth.settle(world,site);
+        root.EarthTownCentre?.productionReview(world,site);
         const era=developRegionalCouncil(world,site);
         if(era)site.growth.history[0].events.push(era);
       }
