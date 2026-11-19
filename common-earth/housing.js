@@ -20,19 +20,20 @@
     });
     return {rows,visitors};
   }
+  const foundingPlaces=site=>site.foundingPlaces??18;
   function stock(site){
     const homes=[],works=[];
     function add(key,label,places,point,owner=null,ownerName='',available=true){
       homes.push({key,label,places,point,owner,ownerName,available,occupants:[],anonymous:0,reserved:[]});
     }
     const streets=site.growth?.households||[],baseBlocks=root.EarthShifts?.district.homes||blocks;
-    for(let index=0;index<18;index++){
+    for(let index=0;index<foundingPlaces(site);index++){
       const h=streets[index],block=baseBlocks[index%baseBlocks.length];
       const point=h?root.EarthDistrictGrowth.homePoint(site,index):{x:block[0]*6+3,y:block[1]*6+4};
       const label=h?'Street home on lot '+(index+1):'Founding block '+(index%3+1)+' · place '+(Math.floor(index/3)+1);
       add(homeKey('founding',index),label,1,point);
     }
-    for(const h of streets.slice(18)){
+    for(const h of streets.slice(foundingPlaces(site))){
       const point=root.EarthDistrictGrowth.homePoint(site,h.plot);
       if(h.home>=2)add(homeKey('property',h.plot),h.name+'’s home on lot '+(h.plot+1),1,point,h.owner,h.name,false);
       else if(h.build&&!h.build.shop)works.push({label:'Home on lot '+(h.plot+1),places:1,point,detail:h.last});
@@ -54,9 +55,9 @@
       else works.push({label,places:2,point,detail:(person?.name||'Owner')+' · '+house.stage+' of 3 stages complete'});
     }
     for(const h of site.growth?.households||[]){
-      if(!h.guestRoom||!h.access||root.EarthCommunityLife.residency(site,h.guestRoom)!=='member')continue;
+      if(!h.guestRoom||!h.access)continue;
       const point=root.EarthDistrictGrowth.homePoint(site,h.plot);
-      add(homeKey('guest',h.plot),h.name+'’s guest room, lot '+(h.plot+1),1,point,null,h.name);
+      add(homeKey('guest',h.plot),h.name+'’s guest room, lot '+(h.plot+1),1,point,null,h.name,root.EarthCommunityLife.residency(site,h.guestRoom)==='member');
     }
     return {homes,works};
   }
@@ -78,7 +79,7 @@
     for(const h of homes)if(h.owner)allocate(residents.get(h.owner),h);
     for(const r of ordered){
       const held=byKey.get(prior.get(r.key));
-      if(held?.available)allocate(r,held);
+      if(held?.available||held?.key.startsWith('guest-'))allocate(r,held);
     }
     for(const lease of site.housing?.leases||[]){
       const h=byKey.get(lease.home);
@@ -107,7 +108,7 @@
       const g=site.communityLife?.people?.[r.id];
       return Boolean(g?.profile.externalHistory)&&g.since===world.week&&!prior.has(r.key);
     };
-    for(const h of (site.growth?.households||[]).slice(0,18)){
+    for(const h of (site.growth?.households||[]).slice(0,foundingPlaces(site))){
       const occupant=residents.get(h.owner);
       if(occupant&&!later(occupant))allocate(occupant,byKey.get(homeKey('founding',h.plot)));
     }
@@ -141,12 +142,12 @@
       anonymousMissing:unplaced,namedMissing,reservations,vacant:homes.reduce((n,h)=>n+remaining(h),0),
       open:homes.reduce((n,h)=>n+(h.available?remaining(h):0),0)};
   }
-  const frontage=(site,h)=>h.plot<18||h.home>=2?'home':'lot';
-  const additionalPlaces=site=>(site.growth?.households||[]).slice(18).filter(h=>h.home>=2).length;
+  const frontage=(site,h)=>h.plot<foundingPlaces(site)||h.home>=2?'home':'lot';
+  const additionalPlaces=site=>(site.growth?.households||[]).slice(foundingPlaces(site)).filter(h=>h.home>=2).length;
   function need(world,site){
-    // Every one of the 18 founding places is a public right. Most towns do
+    // Each of the founding places is a public right. Most towns do
     // not need a full private-rights calculation to rule out homelessness.
-    const headroom=18-site.population;
+    const headroom=foundingPlaces(site)-site.population;
     if(headroom>=0&&(site.housing?.reservations?.length||0)<=headroom){
       const people=site.communityLife?.people||{};
       if(!Object.values(people).some(g=>g.profile?.externalHistory&&g.since===world.week)||
@@ -301,7 +302,9 @@
     const data=store(site);
     data.week=world.week;
     if(data.leases)data.leases=data.leases.filter(l=>l.through>=world.week&&report.homes.some(h=>h.key===l.home&&h.owner===l.owner)&&report.rows.some(r=>r.key===l.tenant));
-    const relief=data.relief||'reserve',floor=relief==='emergency'?1:6;
+    const relief=data.relief||'reserve';
+    const held=data.hardship.length?root.EarthNeighbourErrands?.heldGoods(site,world.week)||{}:{};
+    const floor=(relief==='emergency'?1:6)+(held.funds||0);
     if(relief!=='private'&&data.hardship.length&&site.funds>floor&&site.trust>=40){
       for(const h of report.homes){
         if(!data.hardship.length||site.funds<=floor)break;
@@ -329,15 +332,23 @@
         const text=donor.name+' gave '+row.name+' one personal fund for emergency accommodation.';
         if(root.EarthPurses.transferPerson(world,site,donor.id,row.id,1,text).ok)help=text;
       }
-      if(!help&&relief!=='private'&&(site.trust>=45||relief==='emergency')&&site.food>(relief==='emergency'?0:2*Math.ceil(site.population/5))){
+      if(!help&&relief!=='private'&&(site.trust>=45||relief==='emergency')&&site.food>(held.food||0)+(relief==='emergency'?0:2*Math.ceil(site.population/5))){
         site.food--;help=site.name+' released one food from its reserve for '+row.name+'.';
+      }
+      if(!help&&relief==='emergency'&&site.funds>floor){
+        const text=site.name+' paid one emergency fund to '+row.name+' for temporary shelter.';
+        if(root.EarthPurses.productionReceipt(world,site,row.id,1,text)){site.funds--;help=text;}
       }
       difficulty.help=help;
       difficulty.strain=help?Math.max(0,difficulty.strain-1):Math.min(20,difficulty.strain+1);
       difficulty.withoutMeals=!help&&site.food===0&&funds(site,row.id)===0?Math.min(20,(difficulty.withoutMeals||0)+1):0;
-      if(difficulty.withoutMeals>=8&&difficulty.strain>=12&&difficulty.weeks>=16&&
+      const extended=difficulty.strain>=12&&difficulty.weeks>=16;
+      const ties=site.autonomy?.people?.[row.id]?.ties||[];
+      const personalCrisis=extended&&difficulty.strain>=18&&site.wellbeing<=20&&site.trust<25&&
+        !ties.some(t=>t.strength>0)&&profile(site,row.id)?.traits.patience<38;
+      if(extended&&(difficulty.withoutMeals>=8||personalCrisis)&&
         root.EarthCommunityLife.closeLife(world,site,row.id)){
-        const text=row.name+' died after '+difficulty.weeks+' weeks without stable housing, including a prolonged period without meals or assistance.';
+        const text=personalCrisis?row.name+' died by suicide during a prolonged personal crisis. Earlier calls for shelter and support are recorded.':row.name+' died after '+difficulty.weeks+' weeks without stable housing, including a prolonged period without meals or assistance.';
         const losses=data.losses||=[];losses.unshift({week:world.week,id:row.id,key:row.key,name:row.name,text});losses.length=Math.min(16,losses.length);
         root.EarthCommunityLife.recordWeek(site,world.week,text);notes.push(text);
         site.trust=Math.max(0,site.trust-1);continue;
@@ -371,6 +382,7 @@
     return hardship&&local(site,id)&&profile(site,id)?.identityKey===hardship.key?'Seeking shelter before taking another ordinary shift':'';
   }
   function valid(site,week){
+    if(site.foundingPlaces!=null&&!integer(site.foundingPlaces,2,18))return false;
     const h=site.housing;
     if(h==null)return true;
     const text=s=>typeof s==='string'&&s.length>0&&s.length<=1100;
@@ -391,5 +403,5 @@
       list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&
       !h.hardship.some(r=>h.rights.some(a=>r.key===a.key));
   }
-  root.EarthHousing=Object.freeze({frontage,additionalPlaces,view,need,projected,privateInspection,quote,pay,finance,buildDuty,setRelief,grant,sync,tick,workHold,valid});
+  root.EarthHousing=Object.freeze({foundingPlaces,frontage,additionalPlaces,view,need,projected,privateInspection,quote,pay,finance,buildDuty,setRelief,grant,sync,tick,workHold,valid});
 })(typeof window==='undefined'?globalThis:window);

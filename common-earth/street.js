@@ -930,7 +930,13 @@
       if(seated)skiff(p.x,p.y,'#829f99',false);
       const phase=visualTime*5+(hash(key)%157)/29;
       person(p.x,p.y,look.cloth[0],ax,ay,stationary||seated?0:.75,phase,false,look,seated);
-      if(actor.cargo?.materials||actor.cargo?.food){
+      if(actor.phase==='fighting'){
+        const [sx,sy]=screen(p.x,p.y),side=actor.dx>0?1:-1;
+        const beat=reduced?.5:(1+Math.sin(visualTime*7+side*Math.PI*.5))*.5;
+        const reach=side*(.15+.34*beat)*unit,shoulder=sy-.48*unit;
+        path([[sx,shoulder],[sx+reach*.45,shoulder+.07*unit],[sx+reach,shoulder-.03*unit]],null,look.cloth[0],Math.max(1.5,unit*.10));
+        ellipse(sx+reach,shoulder-.03*unit,unit*.066,unit*.054,look.skin?.[0]||'#ab8069');
+      }else if(actor.cargo?.materials||actor.cargo?.food){
         const x=p.x+ax*.16,y=p.y+ay*.16;box(x-.1,y-.11,.2,.22,.23,.16,'#b59365','#8e714a','#785f42');
       }else if(stationary){
         const resource=regionalModel.terrain(geo,actor.x,actor.y).resource;
@@ -1137,6 +1143,20 @@
       if(i===0||i===2){box(px+.02,py+d+.015,.68,.24,.43,.18,'#6c9270','#86745c','#77654e');}
     }
     function market(item,small=false) {
+      marketStructure(item,small);
+      if(small)return;
+      const [x,y]=screen(item.x+.65,item.y+1.38,.85);
+      // The civic office and exchange share a front door in every settlement.
+      // Use a painted emblem at miniature scale and lettering at street scale.
+      const size=Math.max(2,unit*.24);
+      ctx.save();
+      ctx.fillStyle='#294e51';ctx.fillRect(x-size*3.9,y-size*.75,size*7.8,size*1.55);
+      ctx.fillStyle='#fff0c7';
+      if(size>=6){ctx.font='bold '+Math.round(size)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Town Centre',x,y);}
+      else ctx.fillRect(x-size*.55,y-size*.45,size*1.1,size*.9);
+      ctx.restore();
+    }
+    function marketStructure(item,small=false) {
       const {x,y}=item, w=small?2.4:3.05,d=small?1.7:2.12,h=small?1.03:1.48,px=x-w/2,py=y-d/2;
       shadow(px,py,w,d,h);
       if(window.EarthTownArchitecture?.draw(ctx,state.site,small?'market':'exchange',0,...screen(x,y),unit))return;
@@ -3658,7 +3678,7 @@
         const fallback=Math.abs(dx)/size<1.8&&dy/size> -2.2&&dy/size<1-Math.abs(dx)/size*.45;
         if(inside??fallback){depth=order;front=()=>({...describe(),objectX:pos.x,objectY:pos.y});}
       }
-      test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Market exchange',use:'market',
+      test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Town Centre & exchange',use:'market',
         activity:'Collect parcels, bring finished work for payment, or visit the Town Centre here.'}));
       HOMES.forEach((block,i)=>test(centre(block),'home',i,1,.35,()=>{
         const person=site.residents[i];
@@ -4294,6 +4314,17 @@
         if(neighbourHelp)activityGesture(p,neighbourHelp.actorStep,'#dbab68',p.dx,p.dy,null);
         else if(resourceWork)activityGesture(p,resourceWork.step,'#dbab68',p.dx,p.dy,null);
       });
+      const gate=state.site.communityLife?.gateFight;
+      if(gate&&!spectator&&playedId==='steward'&&state.mode==='walk'){
+        const guard=gate.guard,look=communityLook(state.site,guard),beat=reduced?.5:(1+Math.sin(visualTime*6))*.5;
+        const gx=p.x-.46+.08*beat,gy=p.y+.1;
+        addItem(gx,gy,gx+gy+.1,()=>{
+          person(gx,gy,look.cloth[0],1,0,p.moving?.8:0,visualTime*6,false,look);
+          const [px,py]=screen(gx,gy),hand=px+(.18+.32*beat)*unit,shoulder=py-unit*.49;
+          path([[px,shoulder],[px+unit*.15,shoulder+unit*.06],[hand,shoulder]],null,look.cloth[0],Math.max(1.5,unit*.1));
+          ellipse(hand,shoulder,unit*.065,unit*.055,look.skin?.[0]||'#ae826f');
+        });
+      }
       if(state.companion&&state.mode==='walk'){
         const c=state.companion;addItem(c.x,c.y,c.x+c.y+.075,()=>activityFigure(c.id,c,COATS[c.slot],p.dx,p.dy,p.moving?1:0,visualTime*10+c.slot,state.looks.get(c.id)));
       }

@@ -2,7 +2,7 @@
    journey and proposal buttons can issue a command to the simulation. */
 (function(root){
   'use strict';
-  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,contextChanged}){
+  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,openTownCentre,contextChanged}){
     const doc=root.document,id=key=>doc.getElementById(key),host=id('region-inspector');
     if(!host)return null;
     const detail=id('region-point-detail'),toggle=id('region-inspect-point');
@@ -89,6 +89,10 @@
           else if(p.externalHistory)line('Recruitment assessment · '+p.externalHistory.learningRate+'/100 learning rate.');
           else line('No current course attendance to judge learning pace.');
           if(career?.history?.length)line('Week '+career.history[0].week+' · '+career.history[0].text);
+          heading('Temperament and local testimony');
+          line('Current aggression '+root.EarthCommunityLife.aggression(view,p)+'/100'+(p.externalHistory?' · wider Earth reference '+p.externalHistory.aggression+'/100.':'.'));
+          const injury=view.communityLife?.recovery?.[p.id];
+          if(injury)line('Recovering from a border injury. Regular work reopens after '+Math.max(0,injury.until-w.regionalWorld.step)+' regional shifts.');
           heading('Reliability and local testimony');
           if(p.externalHistory)line(p.externalHistory.origin+' reference · '+p.externalHistory.reliability+'/100 reliability and '+p.externalHistory.reputation+'/100 reputation. '+p.externalHistory.serviceYears+' years of work. '+p.externalHistory.record);
           const record=root.EarthCommunityLife.personalAccess(w,view,p);
@@ -127,7 +131,7 @@
           if(event.use==='market'){localAction('Visit the exchange','market');localAction('Open the Town Centre','townCentre');}
           if(event.use==='project')localAction('Visit this project','project');
           if(event.use==='market'||event.use==='project')localAction('See available jobs','work');
-        }
+        }else if(event.use==='market'&&openTownCentre)action('Inspect the Town Centre',()=>openTownCentre(view.id));
       }else if(event.kind==='asset'){
         const fleet=view&&event.assetId==='truck'&&root.EarthFleet?.assignment?.(w,view);
         line(typeof event.activity==='string'?event.activity:event.activity?.label);
@@ -139,6 +143,20 @@
       if(view){
         line(view.era+' · '+view.population+' residents · '+view.food+' food · '+view.materials+' materials · '+view.funds+' public funds');
         if(event.kind==='town'&&w.communityLife){
+          if(openTownCentre)action('Inspect the Town Centre',()=>openTownCentre(view.id));
+          const district=w.regionalWorld?.regions[geo?.origin.id],campaign=district?.border;
+          if(campaign&&[campaign.attacker,campaign.defender].includes(view.id)){
+            heading('Territorial campaign');
+            line(campaign.by+' authorised '+campaign.unit.name+' to contest parcel '+campaign.cell+'. '+(campaign.guard?
+              campaign.guard.name+' is defending it.':'The expedition is '+campaign.phase+'.'));
+            line(campaign.food+' provisions remain · '+campaign.wages+' funds reserved for wages');
+            action('Observe the expedition',()=>{
+              const position=root.EarthBorderConflict.visible(w,geo,district)[0];
+              if(position){clear();street()?.inspectRegion?.(position.x,position.y,{zoom:1.5,picked:true});}
+            });
+          }
+          const last=district?.lastBorder;
+          if(last&&[last.attacker,last.defender].includes(view.id))line('Week '+last.week+' · '+last.detail);
           const entry=communityEntry(w,view);
           heading('Entry and local divisions');
           line(entry.character.type+'. '+entry.character.detail);

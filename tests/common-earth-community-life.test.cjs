@@ -688,13 +688,13 @@ test('a physical encounter, sponsorship and the delayed report change distinct j
   const proof={siteId:town.id,actor:'steward',target:guard.id,mode:'walk',x:1,y:1,tx:1,ty:1};
   const impact=sim.converse(guard.id,'news',proof);
   assert.ok(impact.repelled);
-  const [incident]=town.communityLife.entryRecords;
+  const incident=town.communityLife.entryRecords.find(r=>r.kind==='removal');
   assert.equal(incident.actorName,guard.name);assert.equal(incident.guestName,world.communityLife.profile.name);
   assert.equal(incident.official,true);
   assert.ok(sim.converse(guard.id,'news',proof).repelled);
-  assert.equal(town.communityLife.entryRecords.length,1,'one witness cannot manufacture independent reports');
+  assert.equal(town.communityLife.entryRecords.filter(e=>e.kind==='removal').length,1,'one witness cannot manufacture independent reports');
   const immediate=life.entryAssessment(world,town);
-  assert.equal(immediate.personal.score,initial.personal.score,'being shoved is not evidence of misconduct by the visitor');
+  assert.ok(immediate.personal.score<initial.personal.score,'uninvited physical entry is recorded separately from the guard’s use of force');
   assert.equal(immediate.reputation.length,0);
   while(world.week<incident.reported)assert.ok(sim.advance().ok);
   const news=life.entryAssessment(world,town);

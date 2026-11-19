@@ -30,7 +30,8 @@ const net=(rows,account,good)=>rows.filter(r=>r.good===good).reduce((n,r)=>n+(r.
 const accountNames={funds:'Community treasury',materials:'Public building store',food:'Public pantry'};
 function cashInRegion(world){
   const sites=[...world.sites,...world.communityLife.outposts];
-  const regionalEscrow=Object.values(world.regionalWorld?.regions||{}).flatMap(r=>Object.values(r.trips)).reduce((n,t)=>n+t.kit.funds,0);
+  const regionalEscrow=Object.values(world.regionalWorld?.regions||{}).reduce((sum,r)=>
+    sum+(r.border?.wages||0)+Object.values(r.trips).reduce((n,t)=>n+t.kit.funds,0),0);
   return sites.reduce((n,t)=>n+(t.growth?wealth(t):t.funds+(t.exchange?.till??8)),regionalEscrow);
 }
 
@@ -254,7 +255,12 @@ test('changing one remembered employment relationship changes a real hiring deci
     const prior=g.snapshot(),round=g.home.growth?.round||0;
     await g.step();
     for(const site of all(g)){
-      const picked=site.growth.households.find(h=>h.order?.kind==='retail'&&h.order.phase==='collect'&&h.order.stageRound===round+1);
+      const original=JSON.parse(prior);
+      const beforeTown=[...original.sites,...original.communityLife.outposts].find(t=>t.id===site.id);
+      // Select people who could have met before this round. A worker who
+      // returned from a journey or treatment during it was still away.
+      const picked=site.growth?.households.find(h=>h.order?.kind==='retail'&&h.order.phase==='collect'&&h.order.stageRound===round+1&&
+        h.order.person!==h.order.employerId&&beforeTown&&!beforeTown.communityLife.away[h.order.person]&&!beforeTown.communityLife.away[h.order.employerId]);
       if(picked){before=prior;accepted={...picked.order};district=site.id;break;}
     }
   }

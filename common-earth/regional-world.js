@@ -287,7 +287,7 @@
   }
   function tenure(geo,r,id){
     const p=point(id),lot=r?.parcels[id],incorporated=nearestTown(geo,p,.54);
-    return {parcel:lot,owner:lot?.owner||null,jurisdiction:incorporated?.site.id||lot?.charter||null,
+    return {parcel:lot,owner:lot?.owner||null,jurisdiction:lot?.charter||incorporated?.site.id||null,
       claims:Object.keys(lot?.claims||{})};
   }
   function localAgreement(r,a,b,id){
@@ -305,7 +305,8 @@
     r.contacts[k]=meeting;
   }
   function passage(geo,r,siteId,id){
-    const {owner,jurisdiction,claims}=tenure(geo,r,id);
+    const {parcel,owner,jurisdiction,claims}=tenure(geo,r,id);
+    if(parcel?.occupation?.holder===siteId&&jurisdiction===siteId&&(!owner||owner===siteId))return true;
     for(const other of new Set([owner,jurisdiction,...claims])){
       if(!other||other===siteId)continue;
       const pact=localAgreement(r,siteId,other,id);
@@ -314,7 +315,8 @@
     return true;
   }
   function harvestRights(geo,r,siteId,id){
-    const {owner,jurisdiction,claims}=tenure(geo,r,id);
+    const {parcel,owner,jurisdiction,claims}=tenure(geo,r,id);
+    if(parcel?.occupation?.holder===siteId&&jurisdiction===siteId&&(!owner||owner===siteId))return true;
     for(const other of new Set([owner,jurisdiction,...claims])){
       if(!other||other===siteId)continue;
       const agreement=localAgreement(r,siteId,other,id);
@@ -325,7 +327,8 @@
   }
   function buildingRights(geo,r,siteId,id){
     if(!harvestRights(geo,r,siteId,id))return false;
-    const {claims}=tenure(geo,r,id);
+    const {parcel,claims}=tenure(geo,r,id);
+    if(parcel?.occupation?.holder===siteId&&parcel.charter===siteId)return true;
     return claims.every(other=>other===siteId||localAgreement(r,siteId,other,id)?.terms==='joint');
   }
   function nodeCost(geo,r,town,id,byWater){
@@ -458,6 +461,7 @@
     const authority=home&&home.site.id===world.activeId&&(root.EarthAgency?.actorId?.(actor)||'steward')==='steward'&&!world.communityLife?.journey;
     const summary=[ground.label+' · '+ground.resource+'.',knowledge.length?'Mapped by '+knowledge.map(v=>v.name).join(', ')+'.':'No community has recorded this ground.',
       owner?'The '+(parcel?.work?.label||'site')+' belongs to '+townName(owner)+'.':'',jurisdiction?'Local authority: '+townName(jurisdiction)+'.':'',
+      parcel?.occupation?townName(parcel.occupation.holder)+' took control from '+townName(parcel.occupation.former)+' in week '+parcel.occupation.week+'.':'',
       names.length?'Recorded use claims: '+names.join(', ')+'.':'',...agreements.map(a=>townName(a.a)+' and '+townName(a.b)+' recorded '+(a.terms==='joint'?'shared use':a.terms)+' for this parcel in week '+a.week+'.')].filter(Boolean).join(' ');
     const choices=Object.entries(titles).filter(([kind])=>
       kind==='parley'?!!(home&&counterpart(geo,r,home,id)):kind==='trail'?!!parcel?.traffic:true).map(([kind,title])=>{
@@ -701,7 +705,9 @@
     // Proposals only use this community's records. A survey can choose an
     // unexamined bearing, but nobody knows its yield or builds sight unseen.
     const demand=site.food-floor.food<site.materials-floor.materials?'food':'materials';
-    const approaching=site.population>=(root.EarthCityModel?.housingCapacity?.(site)||18)-1;
+    const capacity=root.EarthCityModel?.housingCapacity?.(site)||18;
+    const buildingHere=site.city?.precincts?.some(p=>p.target==='homes')||site.civicInitiatives?.active?.choiceId==='precinct:homes';
+    const approaching=site.population>=capacity&&!buildingHere&&site.population>=6&&world.week-(site.founded||1)>=4;
     const recent=(r.records||[]).find(n=>n.siteId===site.id&&n.personId);
     const rotation=(step+Math.abs(Math.round(town.x*3+town.y)))%5;
     const disputes=new Set(Object.values(r.contacts).filter(c=>c.terms==='disputed'&&(c.a===site.id||c.b===site.id)).map(c=>c.cell));
@@ -901,6 +907,7 @@
       if(solitary&&!book.regions[site.id]?.trips[site.id]&&(cycle+book.step)%16!==0)continue;
       const geo=geography(world,site);if(groups.has(geo.origin.id))continue;groups.add(geo.origin.id);
       const r=state(world,geo);
+      root.EarthBorderConflict?.advance(world,geo,r,{record,agreement:saveAgreement,reveal});
       for(const town of geo.towns)scheduledJourneys(world,geo,r,town);
       for(const town of geo.towns){const trip=r.trips[town.site.id];if(trip)moveTrip(world,geo,r,town,trip,makeSite);}
       if(!solitary||(cycle+book.step)%16===0)for(const town of geo.towns)planning(world,geo,r,town);
@@ -1054,6 +1061,7 @@
         destination,remainingKm:(run.path.length-1)*cellSize*(1-f),cargo:{[run.good]:run.amount},kit:{},
         detail:'The receiving community agreed to send '+run.expected+' units in exchange. Delivery is due in week '+run.due+'.'});
     }
+    if(r?.border)visible.push(...root.EarthBorderConflict.visible(world,geo,r));
     return visible;
   }
   function ledger(world,site){
@@ -1117,11 +1125,13 @@
     const all=new Map(sites.map(s=>[s.id,s]));
     for(const [origin,r] of Object.entries(b.regions)){
       if(!all.has(origin)||!object(r)||r.projection!=null&&r.projection!=='polar'||!['knowledge','parcels','routes','trips','contacts'].every(k=>object(r[k]))||!Array.isArray(r.records)||r.records.length>48)return false;
+      if((r.border||r.lastBorder)&&!root.EarthBorderConflict?.valid(world,geography(world,all.get(origin)),r))return false;
       for(const [id,map] of records(r,'knowledge'))if(!all.has(id)||!object(map)||!Object.entries(map).every(([c,w])=>coordinate(c)&&integer(w,1,world.week)))return false;
       for(const [id,p] of records(r,'parcels')){
         if(!coordinate(id)||!object(p)||!object(p.uses)||!Object.entries(p.uses).every(([s,n])=>all.has(s)&&integer(n,1))||
           p.stock!=null&&!integer(p.stock,0,8)||p.harvestWeek!=null&&!integer(p.harvestWeek,1,world.week)||
           p.owner!=null&&!all.has(p.owner)||p.charter!=null&&!all.has(p.charter)||
+          p.occupation!=null&&(!object(p.occupation)||p.occupation.holder!==p.charter||!all.has(p.occupation.former)||p.occupation.former===p.charter||!integer(p.occupation.week,1,world.week))||
           p.traffic!=null&&(!object(p.traffic)||!Object.entries(p.traffic).every(([s,n])=>all.has(s)&&integer(n,1,65535)))||
           p.claims!=null&&(!object(p.claims)||!Object.entries(p.claims).every(([s,c])=>all.has(s)&&object(c)&&integer(c.week,1,world.week)&&text(c.by)&&text(c.basis))))return false;
         if(p.agreements&&(!object(p.agreements)||!Object.entries(p.agreements).every(([k,a])=>object(a)&&all.has(a.a)&&all.has(a.b)&&a.a!==a.b&&k===pair(a.a,a.b)&&integer(a.week,1,world.week)&&['joint','exchange','passage','disputed'].includes(a.terms))))return false;

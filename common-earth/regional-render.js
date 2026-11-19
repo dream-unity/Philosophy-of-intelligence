@@ -251,7 +251,7 @@
         for(const turn of [2.35,-2.35])g.lineTo(p.x+Math.cos(angle+turn)*r*1.2,p.y+Math.sin(angle+turn)*r*1.2);
         g.closePath();
       }else{g.beginPath();g.arc(p.x,p.y,r,0,7);}
-      g.fillStyle=t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
+      g.fillStyle=t.kind==='border'?(t.phase==='fighting'?'#ef704f':'#c86246'):t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
       if(!mini&&v.sx>90){g.fillStyle='#343d35';g.fillRect(p.x-r*.5,p.y+r*.7,r,r);}
     }
     return count;

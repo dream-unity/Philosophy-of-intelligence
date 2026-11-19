@@ -1071,7 +1071,12 @@
       const city=root.EarthCityModel;
       // Only undeveloped public land can be offered. An agreed location stays
       // fixed throughout consultation, including when a competing use appears.
-      const housingPressure=site.population>=capacity(site)-1||(root.EarthHousing?.need(turn,site)||0)>0;
+      const spare=capacity(site)-site.population;
+      // A town with recent arrivals or a hiring queue needs enough time to
+      // plan and finish homes before the next household comes to its gate.
+      const recruiting=site.communityLife?.townCentre?.arrivals?.some(a=>turn.week-a.week<=6)||
+        Object.values(site.employers||{}).some(job=>job.open?.length);
+      const housingPressure=spare<=1||spare<=3&&recruiting||(root.EarthHousing?.need(turn,site)||0)>0;
       if(city && (existing?.kind==='precinct'||housingPressure)){
         const records=city.overview(site).records;
         const free=records.filter(p=>p.use==='open'&&!p.target);

@@ -375,3 +375,45 @@ test('a housing request competes for public reserves and available land',()=>{
   assert.equal(decision(19),'precinct:homes');
   assert.notEqual(decision(10),'precinct:homes');
 });
+
+test('a territorial expedition reserves its people and wages, survives reopening and changes access to an actual parcel',()=>{
+  const f=game(),life=f.ctx.EarthCommunityLife,combat=f.ctx.EarthBorderConflict;
+  let start,clash,last,seenReload=false;
+  for(let n=0;n<72;n++){
+    assert.ok(f.progress().ok);
+    const c=f.region.border;
+    if(c&&!start){
+      const attacker=f.geo.towns.find(t=>t.site.id===c.attacker).site;
+      assert.equal(life.entryRule(attacker),'hosted');
+      assert.equal(attacker.communityLife.away[c.unit.id],'border-duty');
+      assert.equal(c.wages,2);assert.equal(c.food,3);
+      assert.ok(!life.fieldCandidates(attacker,f.w).includes(c.unit.id));
+      start={attacker:c.attacker,defender:c.defender,cell:c.cell};
+    }
+    if(c?.phase==='fighting'){
+      const units=combat.visible(f.w,f.geo,f.region);assert.equal(units.length,2);
+      assert.notEqual(units[0].siteId,units[1].siteId);assert.equal(units[0].phase,'fighting');
+      clash={...c.guard};
+      if(!seenReload){
+        const raw=f.save(),reopened=game(raw);
+        assert.equal(reopened.region.border.guard.key,c.guard.key);
+        assert.equal(reopened.region.border.rounds,c.rounds);seenReload=true;
+      }
+    }
+    if(f.region.lastBorder){last=f.region.lastBorder;break;}
+    if(n%3===2)assert.ok(f.sim.advance().ok);
+  }
+  assert.ok(start&&clash&&seenReload&&last);
+  const lot=f.region.parcels[last.cell];assert.equal(last.cell,start.cell);
+  assert.ok(last.captured);assert.equal(lot.charter,start.attacker);assert.equal(lot.occupation.former,start.defender);
+  assert.ok(lot.claims[start.defender]&&lot.claims[start.attacker]);
+  const attacker=f.geo.towns.find(t=>t.site.id===start.attacker).site,defender=f.geo.towns.find(t=>t.site.id===start.defender).site;
+  const local=defender.communityLife.entryRecords.find(e=>e.kind==='invasion');
+  assert.ok(local.official);assert.equal(local.originId,attacker.id);
+  assert.ok(attacker.communityLife.entryRecords.some(e=>e.kind==='campaign'&&e.reported>e.week));
+  assert.equal(defender.communityLife.away[clash.id],'deceased');
+  const diary=defender.communityLife.memorial.find(e=>e.key===clash.key);assert.ok(diary);
+  for(let n=0;n<35&&f.region.border;n++)assert.ok(f.progress().ok);
+  assert.ok(!f.region.border);assert.equal(lot.occupation.holder,attacker.id);
+  assert.ok(!life.census(f.w,defender,true).ids.includes(clash.id));f.save();
+});

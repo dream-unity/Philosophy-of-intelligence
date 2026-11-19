@@ -196,7 +196,7 @@
     const opening=precincts.some(p=>p.target==='homes'&&p.laborReady&&p.turns<=1);
     const canBridge=unhoused===1&&vacancy&&opening&&site.trust>=60&&site.food>=2*foodFloor;
     if(unhoused>0&&!canBridge)return {reason:reason+' Inviting another person would leave '+unhoused+' residents without housing rights.'};
-    const character=root.EarthCommunityLife.communityCharacter(site);
+    const character=root.EarthCommunityLife.communityCharacter(site,world);
     if(character.tally.forceful>character.tally.welcoming+character.tally.guarded&&!vacancy)
       return {reason:'The local majority requires a named employer vacancy before inviting an unfamiliar person from wider Earth.'};
     const criteria=vacancy?{[vacancy.skill]:[vacancy.requiredSkill,100],[vacancy.secondary]:[vacancy.secondMinimum,100]}:{};

@@ -40,8 +40,7 @@
     return {west,north};
   }
   function housingPlaces(site){
-    return (site?.growth?.households||[]).reduce((n,h)=>n+Number(Boolean(h.guestRoom&&h.access&&
-      root.EarthCommunityLife.residency(site,h.guestRoom)==='member')),0);
+    return (site?.growth?.households||[]).reduce((n,h)=>n+Number(Boolean(h.guestRoom&&h.access)),0);
   }
   function register(site,people){
     const g=site.growth||={round:0,points:0,roads:0,vehicle:0,custom:'',households:[],history:[],sales:0};

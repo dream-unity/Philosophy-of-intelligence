@@ -94,7 +94,7 @@
     return count;
   }
   function domesticCapacity(site){
-    return 18+(window.EarthResidentShops?.housingPlaces?.(site)||0)+
+    return (site?.foundingPlaces??18)+(window.EarthResidentShops?.housingPlaces?.(site)||0)+
       (window.EarthDistrictGrowth?.housingPlaces?.(site)||0)+(window.EarthHousing?.additionalPlaces?.(site)||0);
   }
   function housingCapacity(site) {
