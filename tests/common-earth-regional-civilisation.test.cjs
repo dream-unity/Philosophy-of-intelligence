@@ -114,10 +114,10 @@ test('the same visitor receives different treatment with sponsored entry, and a 
 });
 
 test('a resident turns earnings and a council advance into a working shop, then repays the town from sales',()=>{
-  const seed=region().save(),a=region(seed),b=region(seed),town=a.w.communityLife.outposts[0],ledger=a.ctx.EarthDistrictGrowth;
+  const seed=region().save(),a=region(seed),b=region(seed),town=a.market,ledger=a.ctx.EarthDistrictGrowth;
   let owner=null,loan=0,repayment=0,receipt;
   for(let i=0;i<80&&!repayment;i++){
-    for(const f of [a,b]){f.production();if(i%8===7)f.week();}
+    for(const f of [a,b]){f.production();if(i%3===2)f.week();}
     a.ctx.EarthHousing.view(a.w,town);
     const rows=ledger.transfers(town.growth.history[0]);
     for(const entry of rows){
