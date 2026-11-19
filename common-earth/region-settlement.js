@@ -40,6 +40,16 @@
       if(home.shop){const [sx,sy]=shopDoor(home.businessPlot);architecture(sx,sy,'market',0,.23);}
     }
     architecture(startX+.25,marketY,'exchange',0,.44);
+    if(site.housing){
+      architecture(startX-.4,marketY-.4,'hall',0,.38);
+      for(const t of site.housing.titles){
+        if(t.kind==='house'||t.kind==='shop')architecture(startX+t.plot%cols,startY-1-Math.floor(t.plot/cols),t.kind==='shop'?'market':'home',0,.26);
+      }
+      if(site.housing.project){
+        const j=site.housing.project,[px,py]=project(startX+j.plot%cols,startY-1-Math.floor(j.plot/cols));
+        ctx.fillStyle='#f1bc70';ctx.fillRect(px,py,Math.max(2,unit*.6),Math.max(1,unit*.3));
+      }
+    }
     for(const [i,b] of (site.buildings||[]).entries()){
       architecture(startX+1+(i%cols)*.7,marketY+Math.floor(i/cols)*.5,['market','hall','workshop'].includes(b.kind)?b.kind:'workshop',0,.28);
     }

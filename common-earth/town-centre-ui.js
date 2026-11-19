@@ -38,7 +38,7 @@
         entry(target,m.name,(away?'Away · ':'')+(t?H.label(t)+' · '+t.ownerName:d?.reason||'Awaiting allocation')+
           (d?' · condition '+d.health+'/100':'')+(p?.originRole?' · '+p.originRole:''),buttons);
       }
-      if(h.other)para(target,h.other+' household members in the earlier census · '+h.otherUnhoused+' without a place. Their names were not recorded in this save.');
+      if(h.other&&(!filter||h.otherUnhoused))para(target,h.other+' household members in the earlier census · '+h.otherUnhoused+' without a place. Their names were not recorded in this save.');
       if(filter&&!Object.keys(h.distress).length&&!h.otherUnhoused)para(target,'Every resident has a dwelling with residential rights.');
     }
     function housing(s){
@@ -141,6 +141,8 @@
       }
       const spec=elem('details');spec.open=Object.keys(terms).length>0;spec.append(elem('summary','Personality, abilities and references'),criteria);
       content.append(spec,quote,order);update();
+      const receipts=(w.townCentres.receipts||[]).filter(r=>r.town===s.id).slice(-4).reverse();
+      if(receipts.length){content.append(elem('h3','Recent admissions'));for(const r of receipts)entry(content,r.name,'Week '+r.week+' · '+r.capital+' personal funds brought in · '+r.fee+' treasury funds spent on recruitment.');}
     }
     function draw(force=false){
       if(!sheet.open)return;

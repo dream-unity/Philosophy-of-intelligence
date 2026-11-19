@@ -83,6 +83,15 @@
     }
     return homes;
   }
+  // Reallocate rights after a change of physical capacity or ownership. Most
+  // production rounds have the same titles, precincts and private licences.
+  const allocations=new WeakMap();
+  function allocationKey(s){
+    const h=s.housing;
+    return [h.titles.length,s.city?.precincts.map(p=>p.use+'-'+(p.level||0)).join('/'),
+      (s.privateHomes||[]).map(p=>p.stage+'-'+p.ownerId).join('/'),
+      (s.growth?.households||[]).filter(f=>f.guestRoom&&f.access).map(f=>f.plot).join('/')].join('|');
+  }
   function reconcile(s){
     const h=roll(s),homes=dwellings(s),byId=new Map(homes.map(t=>[t.id,t])),used=new Map();
     const rights=h.licences;
@@ -104,7 +113,14 @@
       else h.distress[key]||={weeks:0,health:100,reason:m.name+' has no completed dwelling with residential rights.'};
     }
     for(const key of Object.keys(rights))delete h.distress[key];
-    h.otherUnhoused=unallocated;
+    h.otherUnhoused=unallocated;allocations.set(h,allocationKey(s));
+  }
+  function occupyPrivate(s,family){
+    const h=roll(s);if(!h||h.titles.some(t=>t.kind==='family'&&t.owner===family.owner))return;
+    const title={id:'owned-'+family.plot,kind:'family',plot:family.plot,owner:family.owner,ownerName:family.name,beds:1};
+    h.titles.push(title);
+    if(h.members[family.owner])h.licences[family.owner]=title.id;
+    reconcile(s);
   }
   function summary(s){
     const h=roll(s);if(!h)return null;
@@ -152,8 +168,9 @@
     return Math.max(0,beds-h.other+h.otherUnhoused);
   }
   function reason(s,id){
+    const h=s.housing;if(!h||!Object.keys(h.distress).length)return '';
     const key=root.EarthPersonas.profile(s,id)?.identityKey;
-    return key&&s.housing?.distress[key]?.reason||'';
+    return key&&h.distress[key]?.reason||'';
   }
   function reserved(s,id){
     return s.housing?.project?.worker===id?s.housing.project:null;
@@ -169,11 +186,11 @@
   }
   function production(w,s,people,busy,floor,at,closeWeek,rows,events){
     const h=roll(s);if(!h)return;
-    reconcile(s);
+    if(allocations.get(h)!==allocationKey(s))reconcile(s);
     const add=root.EarthDistrictOrders.record,publicStore='Public building store',publicFunds=root.EarthDistrictOrders.publicAccount;
     const name=s.name+' Town Centre',g=s.growth;
     let j=h.project;
-    const employed=p=>!busy.has(p.id)&&!reason(s,p.id)&&!root.EarthDistrictOrders.commitment(w,s,p)&&
+    const employed=p=>!busy.has(p.id)&&!s.communityLife?.excursions?.[p.id]&&!reason(s,p.id)&&!root.EarthDistrictOrders.commitment(w,s,p)&&
       !(s.id===w.activeId&&p.id===root.EarthAgency.actorId(s))&&!g.road?.ids?.includes(p.id)&&
       !g.households.some(f=>f.build?.person===p.id||f.order?.person===p.id||f.purchase?.person===p.id);
     const craft=p=>s.careers?.[p.id]?.skills?.craft??p.aptitudes.craft;
@@ -237,8 +254,8 @@
     busy.add(seller.id);busy.add(buyer.id);
   }
   function relief(w,s){
-    const h=roll(s);if(!h)return;
-    sync(w,s);
+    const h=roll(s);if(!h||h.lastRelief===w.week)return;
+    h.lastRelief=w.week;sync(w,s);
     for(const [key,d] of Object.entries(h.distress)){
       const m=h.members[key],p=root.EarthPersonas.profile(s,m.id);if(!p)continue;
       d.weeks++;const donors=root.EarthDistrictGrowth.members(s).filter(a=>h.licences[townKey(a)]&&cash(s,a.id)>=3&&a.traits.sociability>=55);
@@ -281,5 +298,5 @@
       Object.entries(h.distress).every(([k,d])=>Object.hasOwn(h.members,k)&&!h.licences[k]&&obj(d)&&nat(d.weeks)&&nat(d.health)&&d.health<=100&&txt(d.reason))&&
       h.history.every(e=>obj(e)&&nat(e.week)&&nat(e.round)&&txt(e.text));
   }
-  root.EarthHousing={centre,structures,initialise,sync,dwellings,directory,summary,position,label,accessible,reason,reserved,production,trade,relief,log,valid,jobView,newPlot,namedMembers};
+  root.EarthHousing={centre,structures,initialise,sync,occupyPrivate,dwellings,directory,summary,position,label,accessible,reason,reserved,production,trade,relief,log,valid,jobView,newPlot,namedMembers};
 })(globalThis);

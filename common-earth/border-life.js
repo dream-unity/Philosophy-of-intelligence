@@ -31,13 +31,13 @@
     const n=members.length||1,share=tally.forceful/n,mean=clamp(total/n);
     const type=share>=.55?'Hostile to unintroduced visitors':tally.welcoming/n>.5?'Welcoming with introductions':tally.guarded/n>.5?'Guarded and private':'Divided over visitors';
     const law=custom(s),trust=clamp(75-mean*.6+(s.trust-50)*.2+(law==='closed'?-18:law==='hospitality'?12:0));
-    const reputation=clamp(50+(tally.welcoming/n-share)*25+(s.wellbeing-50)*.18);
+    const reputation=clamp(50+(tally.welcoming/n-share)*25+(s.wellbeing-50)*.18-Math.min(22,(s.communityLife?.visitorIncidents||0)*4));
     return {type,tally,mean,leader,share,trust,reputation,custom:law,host:host.name,
       summary:type+' · aggression '+mean+'/100 · '+customs[law],
       detail:tally.forceful+' prepared to fight, '+tally.guarded+' guarded, '+tally.welcoming+' welcoming. '+host.name+' speaks for admissions. '+histories[founding(s)]};
   }
-  function assessment(w,s,p=w.communityLife.profile,from=places(w).find(t=>t.id===w.communityLife.homeId)){
-    const c=character(s),b=s.border,personal=b?.people[p.identityKey],nation=b?.origins[from?.id],introduced=b?.invitations[p.identityKey]>=w.week||
+  function assessment(w,s,p=w.communityLife.profile,from=places(w).find(t=>t.id===w.communityLife.homeId),c=character(s)){
+    const b=s.border,personal=b?.people[p.identityKey],nation=b?.origins[from?.id],introduced=b?.invitations[p.identityKey]>=w.week||
       s.communityLife?.people?.steward?.profile?.identityKey===p.identityKey&&s.communityLife?.visits?.steward?.met;
     const score=clamp(c.trust+(personal?.points||0)),group=clamp(50+(nation?.points||0)),contact=score*.72+group*.28;
     const closed=c.custom==='closed'&&!introduced&&contact<58&&c.share>=.35;
@@ -79,13 +79,22 @@
     if(!watch)return null;
     const warrant=a.custom==='closed'&&a.share>=.5,pass=arranged||a.introduced;
     if(a.closed&&!pass){
-      const text=watch.name+' fought '+p.name+' at the boundary. '+host.name+(warrant?' upheld the exclusion.':' recorded an unauthorised assault.')+' '+p.name+' returned to '+from.name+' injured.';
+      const vulnerable=p.id!=='steward'&&from.population>2&&(a.share>=.8||book(from).injuries[p.id]>=w.week);
+      const died=vulnerable&&root.EarthCommunityLife.loseResident(w,from,p.id,'died during an uninvited boundary crossing');
+      const text=watch.name+' fought '+p.name+' at the boundary. '+host.name+(warrant?' upheld the exclusion.':' recorded an unauthorised assault.')+' '+(died?p.name+' died in the confrontation.':p.name+' returned to '+from.name+' injured.');
       remember(w,s,p,from,-10,'Uninvited entry witnessed by '+host.name+'.',warrant);
-      book(from).injuries[p.id]=w.week+1;
+      if(!died)book(from).injuries[p.id]=w.week+1;
       incident(w,s,from,watch.name,host.name,-12,text,warrant);return {denied:true,message:text};
     }
     const text=pass?host.name+' vouched for '+p.name+' at the boundary.':a.custom==='hospitality'?watch.name+' welcomed '+p.name+' at the open table.':watch.name+' escorted '+p.name+' to the Town Centre for an introduction.';
     remember(w,s,p,from,pass?6:3,text,true);incident(w,s,from,watch.name,host.name,pass?4:2,text,true);return {message:text};
+  }
+  function personalEncounter(w,s,resident,visitor){
+    const home=places(w).find(t=>t.id===w.communityLife.homeId),host=root.EarthCommunityLife.hostFor(s);
+    const approved=custom(s)==='closed'&&!s.communityLife?.visits?.steward?.met;
+    const text=resident.name+' shoved '+visitor.name+'. '+host.name+(approved?' upheld the boundary rule.':' objected to the confrontation.');
+    remember(w,s,visitor,home,-3,text,false);
+    incident(w,s,home,resident.name,host.name,approved?-6:-2,text,approved);
   }
   function request(w,s,p,from){
     const a=assessment(w,s,p,from),b=book(s),host=root.EarthCommunityLife.hostFor(s);
@@ -219,10 +228,13 @@
     const person=p=>obj(p)&&str(p.id)&&str(p.key)&&str(p.name);
     const j=b?.party;
     return obj(b)&&Object.hasOwn(customs,b.custom)&&['people','origins','reports','injuries','invitations'].every(k=>obj(b[k]))&&Number.isSafeInteger(b.practice)&&
+      Object.values(b.people).concat(Object.values(b.origins)).every(e=>obj(e)&&Number.isSafeInteger(e.points)&&Math.abs(e.points)<=60&&nat(e.count)&&str(e.last))&&
+      Object.values(b.invitations).concat(Object.values(b.injuries)).every(nat)&&
+      Object.values(b.reports).every(e=>obj(e)&&nat(e.score)&&e.score<=100&&Number.isSafeInteger(e.trend)&&nat(e.count)&&nat(e.week)&&str(e.last)&&str(e.witness))&&
       Array.isArray(b.events)&&b.events.length<=16&&b.events.every(e=>e&&nat(e.week)&&str(e.text)&&str(e.witness)&&str(e.actor))&&
       Array.isArray(b.news)&&b.news.length<=24&&b.news.every(e=>e&&nat(e.at)&&str(e.to)&&str(e.text)&&str(e.witness)&&Number.isSafeInteger(e.change))&&
       (!b.defender||person(b.defender)&&str(b.defender.from))&&(!j||obj(j)&&str(j.to)&&Array.isArray(j.crew)&&j.crew.length>=1&&j.crew.length<=2&&j.crew.every(person)&&
       ['march','clash','return'].includes(j.phase)&&Array.isArray(j.path)&&j.path.length>0&&j.path.length<=4097&&j.path.every(id=>/^-?\d+,-?\d+$/.test(id))&&nat(j.index)&&j.index<j.path.length&&nat(j.beats)&&j.wage===2);
   }
-  root.EarthBorders={aggression,custom,customs,character,assessment,remember,request,receive,calendar,advance,actors,workBlock,reserved,valid};
+  root.EarthBorders={aggression,custom,customs,character,assessment,remember,personalEncounter,request,receive,calendar,advance,actors,workBlock,reserved,valid};
 })(globalThis);

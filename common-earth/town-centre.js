@@ -88,6 +88,8 @@
   }
   function apply(w){
     const b=w.townCentres,sites=all(w),life=root.EarthCommunityLife;
+    const climates=new Map(sites.map(s=>[s.id,root.EarthBorders?.character(s)]));
+    const openings=new Map(sites.filter(s=>s.housing).map(s=>[s.id,root.EarthHousing.accessible(s)]));
     b.applications=b.applications.filter(a=>a.until>=w.week&&find(w,a.from)?.housing?.members[a.key]&&find(w,a.to));
     for(const s of sites){
       if(s.population<=4||!s.housing)continue;
@@ -101,8 +103,8 @@
         for(const d of sites){
           if(d===s||!d.housing||d.communityLife.cluster!==s.communityLife.cluster)continue;
           const need={food:'care',materials:'craft',funds:'organisation'}[d.specialty]||'craft';
-          const reception=root.EarthBorders?.assessment(w,d,p,s);
-          const fit=score+p.aptitudes[need]/2+d.wellbeing/4+(root.EarthHousing.accessible(d)>0?15:0)-(reception?.closed?60:0);
+          const reception=root.EarthBorders?.assessment(w,d,p,s,climates.get(d.id));
+          const fit=score+p.aptitudes[need]/2+d.wellbeing/4+(openings.get(d.id)>0?15:0)-(reception?.closed?60:0);
           if(fit>=75&&(!best||fit>best.fit))best={fit,id,key:p.identityKey,name:p.name,from:s.id,to:d.id,need};
         }
       }
@@ -155,7 +157,7 @@
     const host=root.EarthCommunityLife.hostFor(s),worker=s.growth?.households.find(h=>h.owner===p.identityKey);
     if(host.id&&host.id!==p.id){
       const g=s.communityLife.people[p.id];if(g){g.sponsor=host.id;g.sponsorName=host.name;}
-      root.EarthAutonomy?.remember(s,w.week,host.id,p.id,'host');
+      root.EarthAutonomy?.remember(s,w.week,host.id,p.id,'visit');
       root.EarthBorders?.remember(w,s,p,from,4,host.name+' signed the admission and introduced '+p.name+'.',true);
     }
     if(worker)worker.last='Settling into '+s.name+' and reviewing local work.';
@@ -171,6 +173,8 @@
     if(mode==='blind'){b.pool.shift();b.pool.push(address(b.seed,n));}
     b.next++;s.funds-=cost;s.population++;
     root.EarthPurses.productionReceipt(w,s,id,found.savings,p.name+' brought '+found.savings+' personal funds saved at '+p.home+'.');
+    (b.receipts||=[]).push({town:s.id,number:n,week:w.week,name:p.name,capital:found.savings,fee:cost});
+    if(b.receipts.length>48)b.receipts.shift();
     root.EarthHousing.sync(w,s);const person=root.EarthPersonas.profile(s,id);
     welcome(w,s,person,null);
     const house=s.housing.licences[p.identityKey],place=house?root.EarthHousing.label(root.EarthHousing.dwellings(s).find(t=>t.id===house)):'no habitable place';
@@ -215,6 +219,7 @@
     const nat=n=>Number.isSafeInteger(n)&&n>=0,word=t=>typeof t==='string'&&t.length>0&&t.length<=1200;
     return b&&b.version===1&&word(b.seed)&&nat(b.next)&&nat(b.serial)&&Array.isArray(b.pool)&&b.pool.length===6&&
       b.pool.every(e=>e&&nat(e.number)&&e.number<b.next&&e.seed===b.seed&&e.values&&Object.keys(fields).every(k=>nat(e.values[k])&&e.values[k]<=100))&&
+      (!b.receipts||Array.isArray(b.receipts)&&b.receipts.length<=48&&b.receipts.every(e=>e&&word(e.town)&&nat(e.number)&&nat(e.week)&&word(e.name)&&nat(e.capital)&&e.capital<=12&&nat(e.fee)))&&
       Array.isArray(b.applications)&&b.applications.every(a=>a&&nat(a.number)&&a.number<=b.serial&&word(a.key)&&word(a.from)&&word(a.to)&&word(a.id)&&word(a.name)&&nat(a.week)&&nat(a.until)&&skills.includes(a.need));
   }
   root.EarthTownCentre={fields,skills,price,ledger,initialise,command,calendar,decisions,valid,applications,housingOffer,licence};

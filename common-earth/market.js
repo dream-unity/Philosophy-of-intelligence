@@ -20,6 +20,11 @@
   function fresh(week){
     return {serial:0,lastWeek:week,till:8,shelf:{food:3,materials:2},locked:{funds:0,materials:0},history:[]};
   }
+  function openFieldStall(week){
+    const stall=fresh(week);stall.serial=1;stall.till=0;stall.shelf={food:0,materials:0};
+    log(stall,week,'The founding households opened a stall. Its till and shelves await the first delivery.');
+    return stall;
+  }
   function policy(site){
     const shops=root.CommonEarthSim?.marketPlan?.(site)?.markets?.filter(m=>m.base>0).length??0;
     const actual=site.buildings||[];
@@ -358,5 +363,5 @@
     }
     return true;
   }
-  root.EarthMarket=Object.freeze({view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,personalQuote,personal,quantity,makerInput,resourceOpportunity,resourceWork});
+  root.EarthMarket=Object.freeze({openFieldStall,view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,personalQuote,personal,quantity,makerInput,resourceOpportunity,resourceWork});
 })(typeof window==='undefined'?globalThis:window);

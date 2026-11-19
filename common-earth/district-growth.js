@@ -296,7 +296,7 @@
       if(!closeWeek&&!reachedWork(at,buildingJob(site,h,p.id))){act(p,build.shop?'shop':'home');continue;}
       const arrived=buildingJob(site,h,p.id);if(arrived)h.lastPoint=arrived.to;
       const name=build.shop?root.EarthResidentShops.products[build.shop].name+' shop':build.extension;
-      if(build.shop){h.shopSite=shopPoint(site,build.lot);h.shop=build.shop;h.businessPlot=build.lot;}else{h.home++;h.extension=build.extension;}
+      if(build.shop){h.shopSite=shopPoint(site,build.lot);h.shop=build.shop;h.businessPlot=build.lot;}else{h.home++;h.extension=build.extension;if(h.home===1)root.EarthHousing?.occupyPrivate(site,h);}
       const message=p.name+' finished '+name+' with the two materials held for their '+(build.shop?'shop':'home')+'.';
       add(transfers,'Property worksite',name,'materials',2,p.id,build.id,'Construction completed');
       events.push(message);h.last=message;act(p,build.shop?'shop':'home');workedOn(p,3);finished.add(p.id);delete h.build;

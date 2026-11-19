@@ -31,7 +31,7 @@
     const controlled=actor(world,site),assigned=site.construction?.length?new Set((root.EarthConstruction?.view?.(site,world)?.workers||[]).filter(p=>p.jobId).map(p=>p.residentId)):null;
     return residents(site).filter(p=>{
       const worker=site.workforce?.members?.[p.id],resident=site.residents?.find(r=>r.id===p.id),career=site.careers?.[p.id];
-      return p.id!==controlled && !alreadyWorked.has(p.id) && !assigned?.has(p.id) && !resident?.promise && site.shift?.residentId!==p.id &&
+      return p.id!==controlled && !root.EarthHousing?.reason(site,p.id) && !root.EarthHousing?.reserved(site,p.id) && !root.EarthBorders?.workBlock(world,site,p.id) && !alreadyWorked.has(p.id) && !assigned?.has(p.id) && !resident?.promise && site.shift?.residentId!==p.id &&
         !worker?.jobId && !worker?.preferredJobId && (!worker?.preference || worker.preference==='auto') &&
         !career?.training && !career?.application && !(career?.specialistRelief?.week>=world.week) && site.pursuits?.ticket?.maker!==p.name;
     });
@@ -61,7 +61,8 @@
   function reservedChoice(site,c){
     const key=tag(c.id);
     if(c.kind!=='build')return false;
-    if(site.civicInitiatives?.history?.filter(h=>h.phase==='commissioned').length>=2)return true;
+    // The completed building and the remaining street parcels already bound
+    // expansion. A past commission does not consume a second vacant parcel.
     return site.buildPlan===key || site.buildPlanPlot!=null&&site.buildPlanPlot===c.plot ||
       (site.buildings||[]).some(b=>b.kind===key||b.plot===c.plot) || (site.construction||[]).some(j=>j.kind===key||j.scope==='street'&&j.plot===c.plot) ||
       (site.buildings?.length||0)+(site.construction||[]).filter(j=>j.scope==='street'&&j.type!=='demolish').length>=7;

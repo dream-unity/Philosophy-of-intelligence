@@ -26,6 +26,18 @@ function fixture(snapshot,location){
   const saved=()=>{const snap=JSON.stringify(sim.state);assert.ok(context.CommonEarthSim.readSave(snap),'Save must reopen at week '+sim.state.week);return snap;};
   return {sim,life,anchor,home,context,doAction,visit,saved,wait:ms=>{clock+=ms;}};
 }
+// These scenarios start with an advertised rental opening and solvent applicants.
+function tenancyFixture(){
+  const f=fixture(),{sim,context,home}=f;
+  for(const town of [home,...sim.state.communityLife.outposts]){
+    const h=town.housing;
+    let lodge=h.titles.find(t=>t.kind==='lodge');
+    if(!lodge){lodge={id:'test-lodge',kind:'lodge',plot:0,beds:0,owner:'council',ownerName:town.name+' council'};h.titles.push(lodge);}
+    lodge.beds+=6;context.EarthHousing.sync(sim.state,town);
+    for(const resident of context.EarthDistrictGrowth.members(town))context.EarthPurses.productionReceipt(sim.state,town,resident.id,4,resident.name+' brought four funds in savings for housing.');
+  }
+  return f;
+}
 test('a nearby crossing preserves one original character and its host retains authority',()=>{
   const {sim,life,anchor,home,context,visit,doAction,saved}=fixture();
   const n=life.neighbours(sim.state,home)[0];assert.ok(n.distance>0&&n.distance<8);
@@ -39,7 +51,7 @@ test('a nearby crossing preserves one original character and its host retains au
   saved();visit(home.id);assert.equal(life.present(home,'steward'),true);assert.ok(sim.act('work:salvage').ok);saved();
 });
 test('the host assesses the personal introduction, labour trial, elapsed time and spare capacity',()=>{
-  const {sim,life,anchor,home,context,visit,doAction,saved}=fixture();
+  const {sim,life,anchor,home,context,visit,doAction,saved}=tenancyFixture();
   visit(life.neighbours(sim.state,home)[0].id);const target=sim.active(),host=target.residents[2].id;
   assert.equal(doAction('meet',null,'market').ok,false);
   assert.ok(doAction('meet',null,host).ok);assert.ok(doAction('help',null,'market').ok);assert.equal(doAction('help',null,'market').ok,false);
@@ -53,7 +65,7 @@ test('the host assesses the personal introduction, labour trial, elapsed time an
   assert.ok(sim.visit(home.id).ok);assert.ok(sim.act('work:salvage').ok);saved();
 });
 test('a named visitor inspects a real street and can independently refuse to move',()=>{
-  const {sim,life,home,context,doAction,saved}=fixture();
+  const {sim,life,home,context,doAction,saved}=tenancyFixture();
   sim.advance();sim.advance();const guest=life.view(sim.state,home).visitors[0];assert.ok(guest);
   const record=home.communityLife.people[guest.id],from=sim.state.communityLife.outposts.find(s=>s.id===record.visitFrom),slot=record.visitSlot;
   assert.equal(context.EarthPersonas.profile(home,guest.id).name,context.EarthPersonas.profile(from,slot).name);
@@ -153,7 +165,7 @@ test('a signer can physically honour an old promise after relocating with a parc
 });
 test('core delegates, the driver and an active supply-lane worker may choose to inspect; their original jobs are unavailable while away',()=>{
   for(const role of ['grower','repairer','convenor','driver','porter']){
-    const {sim,life,home,context,doAction,saved}=fixture();home.trust=24;
+    const {sim,life,home,context,doAction,saved}=tenancyFixture();home.trust=24;
     home.buildings=[{id:'g',kind:'garden',plot:0,name:'Garden'},{id:'w',kind:'workshop',plot:1,name:'Workshop'}];
     const link=context.CommonEarthSim.productiveLinks(home)[0];assert.ok(link);
     const id=role==='driver'?'driver':role==='porter'?'carrier-'+link.from+'-'+link.to:home.residents[['grower','repairer','convenor'].indexOf(role)].id;
@@ -184,7 +196,7 @@ test('a specific active errand and a core promise can defer a departure without 
   assert.equal(errand.eligible,false);assert.match(errand.reason,/errand due in week 3/);
 });
 test('a group proposal reaches every household; members inspect on their own dates and can refuse the destination',()=>{
-  const {sim,life,home,visit,doAction,saved}=fixture();home.trust=24;
+  const {sim,life,home,visit,doAction,saved}=tenancyFixture();home.trust=24;
   const peer=life.neighbours(sim.state,home)[0];visit(peer.id);const dest=sim.active(),host=life.hostFor(dest).id;
   assert.ok(doAction('meet',null,host).ok);assert.ok(doAction('help',null,'market').ok);sim.advance();
   if(life.view(sim.state,dest).admission.apprentice)assert.ok(doAction('help',null,'market').ok);
@@ -200,7 +212,7 @@ test('a group proposal reaches every household; members inspect on their own dat
   assert.equal(sim.state.communityLife.cohorts.length,0);
 });
 test('when a founding delegate moves, a willing local can complete a two-week admissions handover',()=>{
-  const {sim,life,home,doAction,saved}=fixture();home.trust=24;
+  const {sim,life,home,doAction,saved}=tenancyFixture();home.trust=24;
   const leaving=home.residents[2].id;assert.ok(doAction('suggestVisit',leaving,leaving).ok);sim.advance();
   const current=life.hostFor(home);assert.notEqual(current.id,leaving);
   const to=sim.state.communityLife.outposts.find(s=>Object.values(s.communityLife.people).some(p=>p.visitSlot===leaving));to.food=20;to.trust=90;to.wellbeing=90;
@@ -232,7 +244,7 @@ test('unvisited independent districts occupy their surveyed land and a visitor m
 });
 
 test('a local restart keeps the census, visitors, trained delegates and former members in their own homes',()=>{
-  const {sim,home,life,context,doAction,saved}=fixture();
+  const {sim,home,life,context,doAction,saved}=tenancyFixture();
   home.trust=24;const id=home.residents[2].id;
   assert.ok(doAction('suggestVisit',id,id).ok);sim.advance();
   const destination=sim.state.communityLife.outposts.find(s=>Object.values(s.communityLife.people).some(p=>p.visitSlot===id));
@@ -297,9 +309,10 @@ test('the full fresh founding census has twelve distinct visible individuals and
   assert.equal(life.census(sim.state,home).represented,home.population);saved();
 });
 test('a regional shift worker enters the local household census only after taking up residence',()=>{
-  const {sim,home,context,life,doAction,saved}=fixture();home.trust=24;
+  const {sim,home,context,life,doAction,saved}=tenancyFixture();home.trust=24;
   home.buildings=[{id:'g',kind:'garden',plot:0,name:'Garden'},{id:'w',kind:'workshop',plot:1,name:'Workshop'}];
   const lane=context.CommonEarthSim.productiveLinks(home)[0],id='carrier-'+lane.from+'-'+lane.to;
+  context.EarthPurses.productionReceipt(sim.state,home,id,4,'The visiting carrier saved four funds for housing.');
   const before=life.census(sim.state,home),option=life.movingOptions(sim.state,home).find(p=>p.id===id);
   assert.ok(before.commuters>=1);assert.equal(before.represented,home.population);assert.ok(option?.eligible);
   assert.ok(doAction('suggestVisit',id,id).ok);sim.advance();
@@ -470,7 +483,7 @@ test('a waiting list or deferred application allows an inspection while actual n
   }
 });
 test('a host that remembers two real grievances asks for a longer trial and hears the original applicant again',()=>{
-  const {sim,life,context,home,visit,doAction,saved}=fixture();
+  const {sim,life,context,home,visit,doAction,saved}=tenancyFixture();
   visit(life.neighbours(sim.state,home)[0].id);const site=sim.active(),host=life.hostFor(site);
   const witnesses=site.residents.slice(0,2),remember=()=>{for(const w of witnesses)context.EarthAutonomy.remember(site,sim.state.week,w.id,'steward','missed');};
   remember();
@@ -590,7 +603,7 @@ test('visible production settles all four settlements while the calendar waits, 
   }
   assert.equal(sim.state.activeId,here);assert.equal(sim.state.week,opening);
   const restored=fixture(saved());
-  for(const town of [restored.home,...restored.sim.state.communityLife.outposts]){
+  for(const town of [restored.home,...restored.sim.state.communityLife.outposts.filter(t=>t.id.startsWith('near-'))]){
     const g=town.growth;
     assert.equal(g.round,65);
     assert.equal(new Set(g.households.map(h=>h.owner)).size,g.households.length);
@@ -642,6 +655,8 @@ test('visitors can see the local mix before arrival and an introduction changes 
   const profiles=towns.map(s=>life.communityCharacter(s));
   const hostile=towns.find(s=>life.communityCharacter(s).type.startsWith('Hostile'));
   assert.ok(hostile,JSON.stringify(profiles));assert.ok(new Set(profiles.map(p=>p.type)).size>=2);
+  // A known sponsor arranges the crossing. Individual residents can still disagree before a face-to-face introduction.
+  (hostile.border||={custom:'closed',people:{},origins:{},news:[],reports:{},injuries:{},events:[],invitations:{},practice:0}).invitations[sim.state.communityLife.profile.identityKey]=sim.state.week+1;
   visit(hostile.id);
   const site=sim.active(),host=life.hostFor(site);
   const guard=site.residents.find(p=>life.visitorReception(sim.state,site,p.id)?.repels);

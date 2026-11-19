@@ -420,11 +420,12 @@
     const a=world.communityLife,v=site.communityLife?.visits?.steward||{},host=hostFor(site),own=lookup(world,a.homeId);
     const person=portable(own,'steward')||a.profile,f=fit(site,person,Boolean(v.met));
     const concerned=objectionsTo(world,site,person);
+    const housing=site.housing&&root.EarthTownCentre?.housingOffer(world,site,own,'steward');
     const checks=[
       {label:'Named sponsor',pass:Boolean(v.met&&host.id),detail:!host.id?'The district is training an admissions delegate.':v.met?(v.hostName||host.name)+' recorded your introduction.'+(v.hostId&&v.hostId!==host.id?' '+host.name+' receives the application after the handover.':''):'Meet '+host.name+' on the street.'},
       {label:'Useful contribution',pass:Boolean(v.help),detail:v.help?'Your trial shift is in the roster.':'Take a trial shift '+f.need+'.'},
       {label:'Time to decide',pass:Boolean(v.met&&world.week>v.met),detail:v.met?'The council can decide from week '+(v.met+1)+'.':'Members consider applications the week after an introduction.'},
-      {label:'Housing and meals',pass:room(site)>=1&&site.food>=meals(site),detail:Math.max(0,room(site))+' places free. '+site.food+' food held, '+meals(site)+' needed for the enlarged household.'},
+      {label:'Housing and meals',pass:(housing?housing.ready:room(site)>=1)&&site.food>=meals(site),detail:(housing?housing.reason+' ':'')+Math.max(0,room(site))+' places free. '+site.food+' food held, '+meals(site)+' needed for the enlarged household.'},
       {label:'Community agreement',pass:site.trust>=35,detail:site.trust>=35?'The council is hearing applications.':'Members have paused new admissions while resolving local disputes.'}
     ];
     if(!f.match)checks.push({label:'Skill and training fit',pass:(v.shifts||0)>=2,detail:'Your experience is outside the vacancy. A second supervised trial lets the host judge the fit.'});
@@ -632,8 +633,9 @@
     const home=lookup(world,guest.visitFrom);if(!home)return null;
     const contacts=tiesAt(world,home,guest.visitSlot,site),concerned=objectionsTo(world,site,guest.profile),known=Boolean(guest.welcomed||contacts.length),match=fit(site,guest.profile,known);
     const ties=links(home,guest.visitSlot);
-    const space=room(site)>0,food=site.food>=meals(site),open=site.trust>=42;
-    return {homeId:home.id,homeName:home.name,reviewWeek:guest.inspects,known,contacts,concerned,space,food,open,
+    const terms=site.housing&&root.EarthTownCentre?.housingOffer(world,site,home,guest.visitSlot);
+    const space=terms?terms.ready:room(site)>0,food=site.food>=meals(site),open=site.trust>=42;
+    return {homeId:home.id,homeName:home.name,reviewWeek:guest.inspects,known,contacts,concerned,space,food,open,terms,
       skillMatch:match.match,need:match.need,lifestyle:match.policy.life,employer:match.employer,
       ties:ties.map(key=>({id:key,name:root.EarthPersonas?.profile(home,key)?.name||'a neighbour'})),
       localYes:space&&food&&open&&concerned.length<2&&(match.match||known),
@@ -646,10 +648,12 @@
       const from=lookup(world,g.visitFrom);if(!from)continue;
       const review=visitorFit(world,site,id),{localYes,personalYes}=review;
       let text;
-      if(localYes&&personalYes&&from.population>1&&movePerson(world,from,site,g.visitSlot,id)){
+      const oldSlot=g.visitSlot,moved=localYes&&personalYes&&from.population>1&&movePerson(world,from,site,oldSlot,id);
+      if(moved){
+        if(review.terms)root.EarthTownCentre.licence(world,site,from,oldSlot,moved,review.terms);
         text=g.profile.name+' accepted a place in '+site.name+'. The residents offered housing and valued help '+review.need+'. '+from.name+' has one fewer resident on its rota.';
       }else{
-        const why=!localYes?(review.concerned.length>=2?review.concerned.slice(0,2).join(' and ')+' want to repair a past disagreement before sharing a household':room(site)<=0?'no spare home is available':site.food<meals(site)?'the kitchen cannot cover another household':!review.skillMatch?'the vacancy needs a different skill':'the council has paused invitations'):
+        const why=!localYes?(review.concerned.length>=2?review.concerned.slice(0,2).join(' and ')+' want to repair a past disagreement before sharing a household':review.terms&&!review.terms.ready?review.terms.reason:room(site)<=0?'no spare home is available':site.food<meals(site)?'the kitchen cannot cover another household':!review.skillMatch?'the vacancy needs a different skill':'the council has paused invitations'):
           (review.ties.length?'their friendships at home matter more than the opening':'the daily work and lifestyle suit them better at home');
         text=g.profile.name+' returned to '+from.name+' because '+why+'.';
         const returnSlot=g.visitSlot;awaySlot(site,id,from.id);g.status='former';delete g.visitFrom;delete g.visitSlot;delete g.inspects;
@@ -683,6 +687,8 @@
     let best=null,top=-1;
     for(const dest of places){
       const contacts=tiesAt(world,site,id,dest),match=fit(dest,p,contacts.length>0);
+      const entry=dest.housing&&root.EarthBorders?.assessment(world,dest,p,site);
+      if(entry?.closed&&!contacts.length)continue;
       const score=match.appeal+Math.min(2,contacts.length);
       if(match.match&&(score>top||score===top&&dest.trust>best.trust)){best=dest;top=score;}
     }
@@ -697,7 +703,7 @@
     const site=makeSite({id,name:profiles[0].name+'’s '+purpose.suffix,region:from.region,point,
       water:point.water,names:['Housing delegate','Work delegate','Admission delegate'],old:null,offer:{newPopulation:0}});
     site.founded=world.week;site.specialty=purpose.goods;
-    Object.assign(site,trip.kit);
+    Object.assign(site,trip.kit);if(root.EarthMarket)site.exchange=root.EarthMarket.openFieldStall(world.week);
     // Reserved street slots stay empty. Every household on this roll actually
     // came from the named crew, with its purse and qualifications.
     seedHouseholds(site,3,world.week);
@@ -745,7 +751,7 @@
       return writeLog(site,world.week,'The founders found no unoccupied site within travelling distance. Their reserved supplies returned to the stores.');
     }
     const newHome=makeSite({id,name,region:site.region,point,water:site.water,names:['Cass','Min','Rae'],old:null,offer:{newPopulation:3}});
-    newHome.founded=world.week;newHome.specialty=purpose.goods;Object.assign(newHome,old.kit);seedHouseholds(newHome,newHome.population,world.week);
+    newHome.founded=world.week;newHome.specialty=purpose.goods;Object.assign(newHome,old.kit);if(root.EarthMarket)newHome.exchange=root.EarthMarket.openFieldStall(world.week);seedHouseholds(newHome,newHome.population,world.week);
     Object.assign(local(newHome),{cluster:site.communityLife.cluster,district:purpose.district,habitat:root.EarthResources?.environment?.(newHome)||'mixed'});local(newHome).away.steward='elsewhere';
     const moved=old.members.map(personId=>movePerson(world,site,newHome,personId));
     world.communityLife.outposts.push(newHome);
@@ -1144,11 +1150,6 @@
     districtTrade(world,districts,add);
     recruit(world,districts,add);
     for(const site of districts){membershipReview(world,site,add);prepareDeputy(world,site,add);excursions(world,site,add);neighbourhoodDecision(world,site,makeSite,add);}
-    for(const district of stores(world)){
-      root.EarthHousing?.relief(world,district);
-    }
-    root.EarthBorders?.calendar(world);
-    root.EarthTownCentre?.calendar(world);
     const c=local(home);
     if(world.week%4===3&&room(home)>0&&home.population>=3&&!Object.values(c.people).some(g=>g.status==='visitor')){
       const possible=neighbours(world,home).filter(n=>n.distance<=70).map(n=>lookup(world,n.id)).filter(s=>s.population>4);
@@ -1253,6 +1254,11 @@
     if(cmd==='production'||cmd==='stowHandline')return '';
     const actor=root.EarthAgency?.actorId(site)||'steward',need=root.EarthHousing?.reason(site,actor);
     if(need&&(cmd==='act'&&/^(work:|courier:)/.test(args[0])||cmd==='pursue'&&args[0]?.action==='start'||cmd==='purseAction'&&args[0]?.action==='take'))return need;
+    if(actor==='steward'&&site.housing&&!isHome(world,site)&&cmd==='exchange'){
+      const host=hostFor(site),visit=site.communityLife.visits?.steward,from=lookup(world,a.homeId);
+      const entry=root.EarthBorders.assessment(world,site,a.profile,from);
+      if(entry.custom!=='hospitality'&&!entry.introduced&&!visit?.met)return 'Meet '+host.name+' for access to the local exchange.';
+    }
     if(a.journey&&!['communityLife','reset','workConstruction'].includes(cmd))return 'You are on the road. Open Towns to arrive or turn back.';
     if(cmd==='manageSite'){
       if(args[0]!==a.homeId)return 'This district governs itself. Only members can alter their home community.';
@@ -1477,7 +1483,9 @@
       v.help=true;v.shifts=(v.shifts||0)+1;v.lastShift=world.week;
       root.EarthBorders?.remember(world,site,a.profile,home,12,host.name+' witnessed a completed trial shift.',true);
       const good=kind(site).goods;site[good]=Math.min(Number.MAX_SAFE_INTEGER,site[good]+1);
-      return receipt(a.profile.name+' completed a supervised shift '+kind(site).need+'. '+host.name+' recorded one '+good+' in local stores.');
+      const wage=site.housing&&site.funds>=4&&root.EarthPurses.productionReceipt(world,home,'steward',2,'Two personal funds earned at '+site.name+' during the supervised trial.');
+      if(wage)site.funds-=2;
+      return receipt(a.profile.name+' completed a supervised shift '+kind(site).need+'. '+host.name+' recorded one '+good+' in local stores.'+(wage?' The town paid two funds into your purse.':''));
     }
     if(req.action==='apply'||req.action==='moveGroup'){
       if(!at(host.id))return fail('Bring the application to '+host.name+' in person.');
@@ -1486,7 +1494,9 @@
       const willing=answers.filter(p=>p.willInspect);
       if(group&&willing.length)(a.cohorts||=[]).push({from:oldHome.id,to:site.id,opened:world.week,
         expires:world.week+Math.ceil(willing.length/2)+3,pending:willing.map(p=>p.id)});
+      const terms=site.housing&&root.EarthTownCentre?.housingOffer(world,site,oldHome,'steward');
       moveAnchor(world,oldHome,site);
+      if(terms)root.EarthTownCentre.licence(world,site,oldHome,'steward',{id:'steward'},terms);
       const outcome=group?' '+answers.length+' households considered the invitation. '+willing.length+' agreed to inspect in pairs after their handovers. Each visitor and the host meeting will decide separately.':'';
       return receipt(host.name+' and the local meeting welcomed '+a.profile.name+' as a member of '+site.name+'. '+oldHome.name+' now chooses its own affairs.'+outcome);
     }

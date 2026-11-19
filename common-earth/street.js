@@ -4107,7 +4107,8 @@
         idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);
         meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));return;
       }
-      watchedPath=observedRoute();updateGlanceCards();
+      watchedPath=observedRoute();
+      if(!dragging?.moved&&!pinch)updateGlanceCards();
       const clipped=v&&(visibleTravellers||v.sx<140||geo.towns.some(t=>t!==baseTown&&detailVisible(t,v)))?false:clipIdleActors();
       try{drawScene(clipped);}finally{
         if(clipped)ctx.restore();
@@ -5047,7 +5048,7 @@
       state.site=site||null;refreshGeography();state.seed=hash(`${site?.lat??0},${site?.lon??0},${site?.id||'district'}`);
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
-      const nextFingerprint=JSON.stringify([nextKey,site?.housing?.titles.length,site?.housing?.project?.id,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
+      const nextFingerprint=JSON.stringify([nextKey,site?.housing?.titles.length,site?.housing?.project?.id,site?.housing?.project?.phase,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
         site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
         landmarks.filter(mark=>mark.kind!=='balcony').map(mark=>mark.key),
         site?.residents?.map(r=>[r.id,r.name,window.EarthCommunityLife?.present(site,r.id)!==false])]);
@@ -5805,7 +5806,10 @@
       const delta=lastFrame?now-lastFrame:36;
       const watch=Boolean(frameTimer && visible && !reduced && (state.route.length || pressed.size && state.player.moving || watchedTravel) && !dragging && !pinch &&
         pixelRatio===fullPixelRatio && (!deviceMemory || deviceMemory>2));
-      const interval=travelInterval(now,watch);
+      const normalInterval=travelInterval(now,watch);
+      // A finger controls the camera at display cadence. Keep the slower clock
+      // on devices where the last paints consumed most of a frame.
+      const interval=(dragging?.moved||pinch)&&paintAverage<12?15.5:normalInterval;
       if(dirty||delta>=interval){
         const maxStep=state.route.length ? 1 : pressed.size ? 0.3 : autonomousMotion()?1:0.1;
         const elapsed=clamp(delta/1000,0,maxStep);

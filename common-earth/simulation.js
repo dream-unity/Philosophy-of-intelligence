@@ -1811,6 +1811,11 @@
       }
       for(const site of districts)settleHouseholds(turn,site,reports.get(site.id),event);
       if(root.EarthCommunityLife)for(const movement of root.EarthCommunityLife.tick(turn,spec=>newSettlement(spec,turn)))event(movement.text,movement.site);
+      if(turn.townCentres){
+        for(const district of [...turn.sites,...turn.communityLife.outposts])root.EarthHousing.relief(turn,district);
+        root.EarthBorders.calendar(turn);
+        root.EarthTownCentre.calendar(turn);
+      }
       root.EarthRegionalWorld?.advance?.(turn,spec=>newSettlement(spec,turn),'calendar');
       dispatchCargo(turn,byId,inbound,event);
       for(const site of districts){
@@ -2060,7 +2065,7 @@
         const job=site.construction?.find(j=>j.id===agreement.jobId);
         if(!job||job.paused)continue;
         const volunteers=agreement.votes.filter(v=>{
-          if(v.stance!=='support'||promised.has(v.personId)||root.EarthCommunityLife?.residency(site,v.personId)==='away'||site.id===turn.activeId&&v.personId===(site.agency?.actor||'steward'))return false;
+          if(v.stance!=='support'||promised.has(v.personId)||root.EarthHousing?.reason(site,v.personId)||root.EarthHousing?.reserved(site,v.personId)||root.EarthBorders?.workBlock(turn,site,v.personId)||root.EarthCommunityLife?.residency(site,v.personId)==='away'||site.id===turn.activeId&&v.personId===(site.agency?.actor||'steward'))return false;
           if(root.EarthCareers?.specialistShift?.(site,v.personId,turn.week))return false;
           if(site.shift?.residentId===v.personId||site.careers?.[v.personId]?.training||site.careers?.[v.personId]?.application)return false;
           const worker=site.workforce?.members?.[v.personId];
