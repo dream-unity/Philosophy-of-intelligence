@@ -98,7 +98,7 @@
       const proprietor=owners.get(h.owner),product=root.EarthResidentShops?.products?.[h.shop];
       if(!proprietor||!product)continue;
       const shop={key:'shop/'+h.owner,title:proprietor.name+'’s '+product.shop+' shop',kind:'Business',status:'Trading on lot '+(h.businessPlot+1),
-        details:[product.name+' · '+h.stock+' ready to sell', (h.businessFunds||0)+' funds in the business till · '+(h.hires||0)+' paid shifts completed'],
+        details:[product.name+' · '+h.stock+' ready to sell', (h.businessFunds||0)+' funds in the business till · '+(h.hires||0)+' paid shifts completed'+(h.shopDebt?' · '+h.shopDebt+' funds still owed on the deed':'')],
         people:[participant(proprietor.id,'Proprietor')],related:[]};
       shops.set(proprietor.id,shop);entries.push(shop);
     }
