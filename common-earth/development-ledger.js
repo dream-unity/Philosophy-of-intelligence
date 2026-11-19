@@ -9,6 +9,16 @@
 
   function records(world, site) {
     const entries = [];
+    const land=site.civicLand;
+    if(land){
+      const projects=[...land.homes,...(land.project?[land.project]:[])];
+      for(const c of projects){
+        const people=[participant(c.proposerId,'Commissioned the plot'),participant(c.worker||c.workerId,c.completed?'Completed the cottage':'Assigned paid shift')].filter(p=>p.id);
+        entries.push({key:'cottage/'+c.plot,title:'Council cottage C'+(c.plot+1),kind:'Housing',status:c.completed?'Occupied or ready to let':c.phase==='delivery'?'Materials in transit':'Under construction',
+          people,details:[c.reason,c.completed?'Opened in week '+c.completed+' with two completed places.':'Three materials reserved · '+c.escrow+' wage funds in escrow · '+c.built+' of two building shifts completed.',...(!c.completed&&land.delay?[land.delay]:[])]});
+      }
+      if(land.delay&&!land.project)entries.push({key:'cottage/shortage',title:'Serviced housing plot',kind:'Housing',status:'Awaiting a contract',people:[],details:[land.delay]});
+    }
     const civic = root.EarthCivicInitiatives?.view(world, site);
     for (const proposal of [civic?.active, ...(civic?.history || [])].filter(Boolean)) {
       const people = [participant(proposal.leadId,'Proposer',proposal.reason), participant(proposal.beneficiaryId,'Affected resident',proposal.benefit)];

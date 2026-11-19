@@ -198,7 +198,7 @@
       }
       const dest=c.away?.[id],g=c.people?.[id];
       if(!dest){if(!g||g.status==='member'){here++;ids?.push(id);}continue;}
-      if(dest==='regional-field'||dest==='regional-freight'||dest==='regional-visit'){away++;ids?.push(id);continue;}
+      if(dest==='regional-field'||dest==='regional-freight'||dest==='regional-visit'||dest==='regional-watch'||dest==='recovering-at-home'){away++;ids?.push(id);continue;}
       if(dest==='outside-roster'||dest==='elsewhere')continue;
       const peer=lookup(world,dest);
       if(Object.values(peer?.communityLife?.people||{}).some(v=>v.status==='visitor'&&v.visitFrom===site.id&&v.visitSlot===id)){away++;ids?.push(id);}
@@ -231,7 +231,7 @@
       const other=makeSite({id,name,region:base.region,point,water:base.water,names:d.hosts,old:null,offer:{newPopulation:i===2?10:10+i}});
       other.specialty=d.goods;other.founded=world.week;seedHouseholds(other,other.population,world.week);
       other.food=14-i;other.materials=9+i;other.trust=i===2?55:58+i*5;other.wellbeing=61-i;
-      Object.assign(local(other),{cluster:base.id,district:d.district,habitat:habitat||'mixed'});local(other).away.steward='elsewhere';
+      Object.assign(local(other),{cluster:base.id,district:d.district,habitat:habitat||'mixed',foundingPlaces:i===2?other.population-1:18});local(other).away.steward='elsewhere';
       world.communityLife.outposts.push(other);
     });
   }
@@ -376,6 +376,10 @@
   // Birth dispositions travel with a person. Current bonds and experiences
   // affect how that person receives strangers in their present community.
   function visitorStance(site,p){
+    if(root.EarthBorderConflict){
+      const value=root.EarthBorderConflict.force(site,p);
+      return value>=62?'forceful':value>=42?'guarded':'welcoming';
+    }
     const birth=p.birthCommunityId||site.communityLife?.people?.[p.id]?.originId||site.id;
     const cohort=birth.match(/-(\d+)$/),regional=birth.startsWith('near-')&&cohort;
     const baseline=p.externalHistory?.aggression??(regional?([36,75,51][Number(cohort[1])]??50):50);
@@ -410,6 +414,9 @@
     admission:{outside:7,inside:3,words:'secured an agreed place in the community'},
     declined:{outside:-3,inside:0,words:'was refused by the admissions meeting'},
     freight:{outside:4,inside:4,words:'delivered the promised consignment'},
+    assault:{outside:-16,inside:0,words:'was attacked on arrival'},
+    invasion:{outside:-22,inside:0,words:'reported a territorial attack by the watch'},
+    trespass:{outside:0,inside:-10,words:'entered disputed land with an attacking party'},
     removal:{outside:-12,inside:0,words:'was physically turned back'}
   };
   function recordReception(world,site,origin,guest,kind,actor){
@@ -419,7 +426,7 @@
     if(records.some(e=>e.week===world.week&&e.guestKey===guestKey&&e.kind===kind&&e.actorId===actorId&&e.actorName===actor.name))return;
     // The visitor can testify to a confrontation. A register of names does
     // not imply that another resident witnessed the physical encounter.
-    const official=kind!=='removal'||(currentRule(site)==='hosted'&&delegates(site).some(d=>d.id===actor.id));
+    const official=!['removal','assault'].includes(kind)||currentRule(site)==='hosted'&&(kind==='assault'||delegates(site).some(d=>d.id===actor.id));
     const entry={week:world.week,originId:origin.id,guestKey,guestName:guest.name,kind,
       actorId,actorName:actor.name,official,
       reported:world.week+Math.max(1,Math.min(4,Math.ceil(km(site,origin)/6)))};
@@ -445,6 +452,9 @@
       if(name){voices.push({name,strength});if(strength>0)backing++;else opposition++;}
     }
     const service=(site.communityLife?.entryRecords||[]).filter(e=>e.guestKey===key&&(e.kind==='shift'||e.kind==='freight')).length;
+    const incursions=(site.communityLife?.entryRecords||[]).filter(e=>e.kind==='trespass'&&e.guestKey===key).length;
+    if(incursions)voices.push({name:'Boundary register · '+incursions+' witnessed incursion'+(incursions===1?'':'s'),strength:-2});
+    opposition+=incursions;
     const known=!!visit?.met||service>0||backing>opposition;
     const score=cap(40+Math.min(18,backing*6)-Math.min(24,opposition*8)+(visit?.met?12:0)+
       Math.min(18,6*Math.max(service,visit?.shifts||0)));
@@ -455,7 +465,7 @@
     let honoured=0,credit=0;
     for(const e of site.communityLife?.entryRecords||[]){
       if(e.originId!==origin.id||!encounters[e.kind].inside)continue;
-      honoured++;credit+=encounters[e.kind].inside;
+      if(encounters[e.kind].inside>0)honoured++;credit+=encounters[e.kind].inside;
       if(rule==='exchange'&&e.kind==='freight'||rule==='hosted'&&e.kind==='shift'||rule==='welcome'&&e.kind==='admission')credit+=2;
     }
     const value=rule==='exchange'?'Completed return loads carry most weight here.':rule==='hosted'?'The gate meeting values supervised service.':'Making a home for a newcomer earns extra credit here.';
@@ -524,6 +534,7 @@
       host:host.name,personal,originTrust:bilateral.score,originName:origin.name,fulfilled:bilateral.honoured,passage:bilateral.passage,values:bilateral.value,reputation,
       expected:restriction?restriction.reason:isHome(world,site)?'You belong to this community.':personal.known?'A named introduction, completed service or local supporter opens the exchange.':
       rule==='hosted'&&bilateral.score>=66?'Your home community’s delivery and service record opens the exchange. Private introductions still go through '+host.name+'.':
+      character.border?.closed?'The boundary watch confronts people who enter uninvited. A sponsor or a recognised trading relationship changes the reception.':
       rule==='hosted'?'Report to '+host.name+' before seeking work. Some residents physically turn away unintroduced strangers.':
       rule==='exchange'?'The exchange receives visitors. Individual households may ask for a sponsor.':'The kitchen receives visitors. Residents decide individually which invitations to offer.'};
   }
@@ -561,15 +572,18 @@
     return writeLog(site,world.week,host.name+' recorded the assembly’s vote for '+entryRules[next].label.toLowerCase()+' after hearing '+welcomed+' reports of cooperation and '+opposed+' confrontations.');
   }
   function communityCharacter(site){
-    const tally={welcoming:0,guarded:0,forceful:0};
-    const members=(root.EarthPersonas?.list(site,{includeCommuters:false})||[]).filter(p=>!commuting(site,p.id)&&residency(site,p.id)==='member');
-    for(const p of members)tally[visitorStance(site,p)]++;
-    const count=members.length||1,force=tally.forceful/count,welcome=tally.welcoming/count;
+    const border=root.EarthBorderConflict?.profile(site);
+    const tally=border?.tally||{welcoming:0,guarded:0,forceful:0};
+    if(!border)for(const p of root.EarthPersonas?.list(site,{includeCommuters:false})||[]){
+      if(!commuting(site,p.id)&&residency(site,p.id)==='member')tally[visitorStance(site,p)]++;
+    }
+    const count=tally.welcoming+tally.guarded+tally.forceful||1,force=tally.forceful/count,welcome=tally.welcoming/count;
     const type=force>.5?'Hostile to unintroduced visitors':welcome>.5?'Welcoming with introductions':tally.guarded/count>.5?'Guarded and private':'Divided over visitors';
     const trust=cap(Math.round(.55*site.trust+45*(welcome+.45*tally.guarded/count)),0,100);
     const reputation=cap(Math.round(50+24*(welcome-force)+.2*(site.wellbeing-50)+
       Math.min(18,(site.stats?.kept||0)*3+(site.stats?.deliveries||0))-Math.min(24,(site.communityLife?.visitorIncidents||0)*4)),0,100);
-    return {type,trust,reputation,tally,summary:type+' · '+entryRules[currentRule(site)].label,
+    const risk=border?.closed?'Closed border · physical entry risks a fight':entryRules[currentRule(site)].label;
+    return {type,trust,reputation,tally,aggression:border?.score,border,summary:type+' · '+risk+(border?' · aggression '+border.score+'/100':''),
       detail:tally.welcoming+' welcoming, '+tally.guarded+' guarded, '+tally.forceful+' willing to use force.'};
   }
   function visitorReception(world,site,id){
@@ -626,6 +640,7 @@
     return id;
   }
   function departureReason(site,id,world){
+    if(root.EarthCouncilHomes?.work(site,id))return 'Has a paid cottage shift on the town building register.';
     const now=world?.week||site.autonomy?.week||site.founded||1, resident=site.residents.find(p=>p.id===id);
     const name=key=>root.EarthPersonas?.profile?.(site,key)?.name||'a neighbour';
     const here=local(site),career=site.careers?.[id],fleet=site.fleet;
@@ -907,7 +922,7 @@
     // Reserved street slots stay empty. Every household on this roll actually
     // came from the named crew, with its purse and qualifications.
     seedHouseholds(site,3,world.week);
-    const c=local(site);Object.assign(c,{cluster:from.communityLife.cluster,district:purpose.district,
+    const c=local(site);Object.assign(c,{cluster:from.communityLife.cluster,district:purpose.district,foundingPlaces:Math.max(1,Math.min(18,trip.crew.length-1)),
       habitat:root.EarthResources?.environment?.(site)||'mixed',deputies:[]});
     c.away.steward='elsewhere';
     for(const placeholder of site.residents)c.away[placeholder.id]='outside-roster';
@@ -950,7 +965,7 @@
     }
     const newHome=makeSite({id,name,region:site.region,point,water:site.water,names:['Cass','Min','Rae'],old:null,offer:{newPopulation:3}});
     newHome.founded=world.week;newHome.specialty=purpose.goods;Object.assign(newHome,old.kit);seedHouseholds(newHome,newHome.population,world.week);
-    Object.assign(local(newHome),{cluster:site.communityLife.cluster,district:purpose.district,habitat:root.EarthResources?.environment?.(newHome)||'mixed'});local(newHome).away.steward='elsewhere';
+    Object.assign(local(newHome),{cluster:site.communityLife.cluster,district:purpose.district,foundingPlaces:3,habitat:root.EarthResources?.environment?.(newHome)||'mixed'});local(newHome).away.steward='elsewhere';
     const moved=old.members.map(personId=>movePerson(world,site,newHome,personId));
     world.communityLife.outposts.push(newHome);
     const course=point===old.point?old.path:point.path;
@@ -1435,7 +1450,7 @@
     const c=local(fresh);
     c.people=people;c.away=away;c.log=copy(localBefore.log||[]);
     for(const key of ['cluster','district','habitat','foundingHouseholds','foundingRosterReady','deputies','pathVisits','pantryCover','freight','lastInvitation','hearing','lastHearing','settling',
-      'townCentre','visits','entryRecords','entryDecision','entryPass','visitorIncidents']){
+      'foundingPlaces','border','townCentre','visits','entryRecords','entryDecision','entryPass','visitorIncidents']){
       if(localBefore[key]!=null)c[key]=copy(localBefore[key]);
     }
     const a=world.communityLife;
@@ -1599,8 +1614,10 @@
       }
       if(trip.path)root.EarthRegionalWorld?.shareCrossing(world,site,dest,'steward',a.profile.name,trip.path,trip.observed);
       carryReceptionReport(world,site,dest,a.profile.name);
-      a.journey=null;arrive(world,site,dest,makeSite);
-      return {ok:true,arrived:true,vehicle:trip.vehicle,message:writeLog(dest,world.week,a.profile.name+' arrived in '+dest.name+(isHome(world,dest)?' and returned to their home.':' as a visitor. '+hostFor(dest).name+' speaks for the admissions meeting.'))};
+      a.journey=null;
+      const attack=!isHome(world,dest)&&root.EarthBorderConflict?.entry(world,site,dest,a.profile,false);
+      arrive(world,site,dest,makeSite);
+      return {ok:true,arrived:true,vehicle:trip.vehicle,message:writeLog(dest,world.week,a.profile.name+' arrived in '+dest.name+(isHome(world,dest)?' and returned to their home.':' as a visitor. '+(attack?attack+' ':'')+hostFor(dest).name+' speaks for the admissions meeting.'))};
     }
     if(a.journey)return fail('Finish the current crossing first.');
     if(req.action==='housingRelief')return root.EarthHousing?.setRelief(world,site,req)||fail('The housing register is unavailable.');
@@ -1796,5 +1813,5 @@
       ['numeracy','music','communication','care','craft','stamina','organisation'].every(k=>int(p.aptitudes[k],0,100)&&int(p.bounds[k]?.min,0,p.aptitudes[k])&&int(p.bounds[k]?.max,p.aptitudes[k],100));
   }
   root.EarthCommunityLife=Object.freeze({initialise,restart,valid,present,profile,personLabel,census,commuting,residency,anchor,coverCandidate,isHome,neighbours,travelIntent,volunteers,founding,
-    nearLocation:pointNear,guestSlot,closeLife,personalAccess,visitorReception,confrontation,entryAssessment,entryRestriction,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,acceptVisitor,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
+    nearLocation:pointNear,guestSlot,recordReception,closeLife,personalAccess,visitorReception,confrontation,entryAssessment,entryRestriction,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,acceptVisitor,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
 })(typeof window==='undefined'?globalThis:window);

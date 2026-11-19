@@ -589,6 +589,7 @@
       return vehicleHitsFootprint(a,b,truckHalfWidth,truckHalfLength)&&vehicleHitsFootprint(a,b,truckHalfLength,truckHalfWidth);
     }
     const collisionCell=n=>clamp(Math.floor(n/BLOCK),0,collisionSide-1);
+    let walkingDiversion=null;
     const footRadius=.095;
     const footprint=(x,y,w,d)=>[x-w/2,y-d/2,x+w/2,y+d/2];
     function hitsTruckObstacles(a,b,boxes){
@@ -930,7 +931,14 @@
       if(seated)skiff(p.x,p.y,'#829f99',false);
       const phase=visualTime*5+(hash(key)%157)/29;
       person(p.x,p.y,look.cloth[0],ax,ay,stationary||seated?0:.75,phase,false,look,seated);
-      if(actor.cargo?.materials||actor.cargo?.food){
+      if(actor.phase==='fighting'){
+        const [sx,sy]=screen(p.x,p.y),side=actor.dx>0?1:-1;
+        const extension=reduced?.34:.2+.34*Math.max(0,Math.sin(visualTime*5+side));
+        ctx.strokeStyle=look.cloth[0];ctx.lineWidth=Math.max(1.5,unit*.095);
+        ctx.beginPath();ctx.moveTo(sx+side*.06*unit,sy-.50*unit);
+        ctx.lineTo(sx+side*extension*unit,sy-.47*unit);ctx.stroke();
+        ellipse(sx+side*extension*unit,sy-.47*unit,unit*.055,unit*.055,look.skin||'#bd9171');
+      }else if(actor.cargo?.materials||actor.cargo?.food){
         const x=p.x+ax*.16,y=p.y+ay*.16;box(x-.1,y-.11,.2,.22,.23,.16,'#b59365','#8e714a','#785f42');
       }else if(stationary){
         const resource=regionalModel.terrain(geo,actor.x,actor.y).resource;
@@ -1630,6 +1638,12 @@
         for(let k=0;k<3;k++)sphere(x+.06+k*.064,y+.12,.19,.055,.05,i%2?'#91aa74':'#d1a365');
       }
       const x=p.x+1.83,y=p.y+.5;
+      const [signX,signY]=screen(x+.32,y,1.3);
+      const size=Math.max(7,Math.min(14,unit*.28));
+      ctx.save();ctx.font='600 '+size+'px system-ui,sans-serif';
+      const width=ctx.measureText('Town Centre').width+size*.9;
+      ctx.fillStyle='#233b39';ctx.fillRect(signX-width/2,signY-size*.72,width,size*1.44);
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ffedc6';ctx.fillText('Town Centre',signX,signY);ctx.restore();
       if(furniture(3,x+.22,y))return;
       for(const off of [0,.61])line(x+off,y,.02,x+off,y,.99,'#6b6c54',Math.max(.9,unit*.054));
       poly([[x-.07,y,.43],[x+.69,y,.43],[x+.69,y,1.06],[x-.07,y,1.06]],'#a38e66','#69755e',Math.max(.65,unit*.035));
@@ -2740,6 +2754,7 @@
         frontages.west=Math.min(frontages.west,p.x-.74);frontages.north=Math.min(frontages.north,p.y-.74);
         frontages.boxes.push(footprint(p.x,p.y,width,depth));
       };
+      for(const h of site.civicLand?.homes||[])add(window.EarthCouncilHomes.plot(h.plot),1.15,1.1);
       for(const h of g.households){
         const scale=homeScale(h),home=window.EarthDistrictGrowth.homePoint(site,h.plot);
         if(hasDwelling(site,h))add(home,2.54*scale,2.25*scale);
@@ -3658,7 +3673,7 @@
         const fallback=Math.abs(dx)/size<1.8&&dy/size> -2.2&&dy/size<1-Math.abs(dx)/size*.45;
         if(inside??fallback){depth=order;front=()=>({...describe(),objectX:pos.x,objectY:pos.y});}
       }
-      test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Market exchange',use:'market',
+      test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Town Centre and market exchange',use:'market',
         activity:'Collect parcels, bring finished work for payment, or visit the Town Centre here.'}));
       HOMES.forEach((block,i)=>test(centre(block),'home',i,1,.35,()=>{
         const person=site.residents[i];
@@ -3671,6 +3686,11 @@
           activity:'Plot '+(lot.plot+1)+'. '+(window.CommonEarthSim?.buildings?.[b.kind]?.info||'Completed district project.')}));
       }
       const growth=window.EarthDistrictGrowth;
+      for(const h of site.civicLand?.homes||[]){
+        const point=window.EarthCouncilHomes.plot(h.plot);
+        test(point,'home',h.plot%3,.53,.34,()=>({assetId:'cottage-'+h.plot,cottagePlot:h.plot,assetName:'Council cottage C'+(h.plot+1),use:'home',
+          activity:'Two habitable places. Commissioned by '+h.proposer+' and completed by '+h.builder+' in week '+h.completed+'.'}));
+      }
       if(growth)for(const h of site.growth?.households||[]){
         const home=growth.homePoint(site,h.plot);
         if(hasDwelling(site,h))test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
@@ -4202,6 +4222,19 @@
       for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item),buildingBounds);}
       if(state.site.growth){
         const g=state.site.growth;
+        for(const h of state.site.civicLand?.homes||[]){
+          const {x,y}=window.EarthCouncilHomes.plot(h.plot);
+          addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',h.plot%3,...screen(x,y),unit*.53),buildingBounds);
+        }
+        const cottage=state.site.civicLand?.project;
+        if(cottage){
+          const {x,y}=window.EarthCouncilHomes.plot(cottage.plot);
+          addItem(x,y,x+y+.32,()=>{
+            rect(x-.56,y-.5,1.12,1,.02,'#9c8266');
+            for(const offset of [-.44,.44])box(x+offset,y+.42,.10,.10,.03,.55,'#dfb16e','#9a744c','#7f5b39');
+            if(cottage.phase==='build')box(x-.5,y-.5,1,.18,.03,.2+.24*cottage.built,'#bf9c72','#9e7d62','#7e6147');
+          },buildingBounds);
+        }
         for(const h of g.households){
           const {x,y}=window.EarthDistrictGrowth.homePoint(state.site,h.plot);
           if(h.plot<g.roads)rect(x-.17,y+.4,.34,Math.abs(y)-.4,.015,'#a69a83');
@@ -4326,7 +4359,7 @@
     function traversable(p, driving=state.mode==='drive',van=parkedBounds,truck=drivingTruck,obstacles=trafficDetour) {
       if(p.x>SIDE+.78||p.y>SIDE+.78)return false;
       if(p.x<-.78||p.y<-.78){
-        if(driving||p.x<frontages.west||p.y<frontages.north||p.x<-.78&&p.y<-.78)return false;
+        if(driving||p.x<frontages.west||p.y<frontages.north||p.x<-.78&&p.y<-.78&&!(state.site?.civicLand?.opened))return false;
       }
       if(driving)return road(p.x,p.y)&&!carHitsObject(p,p,truck)&&!occupiedNode(p,obstacles,truck);
       if(van&&insideFootprint(p,van)||trafficDetour?.some(bounds=>insideFootprint(p,bounds)))return false;
@@ -4473,7 +4506,16 @@
       let pass=driving?(truck?truckPassability:roadPassability):footPassability;
       let edges=driving?(truck?truckEdges:roadEdges):footEdges;
       if(detour){pass=detour.pass;edges=detour.edges;}
-      else if(trafficDetour||!driving&&[...workBounds].some(bounds=>insideFootprint(start,bounds))){pass=new Uint8Array(count);edges=new Uint16Array(count);}
+      else if(trafficDetour||!driving&&[...workBounds].some(bounds=>insideFootprint(start,bounds))){
+        // Workers dispatched together face the same vehicles and street layout. Reuse
+        // only collision masks. Each person still searches from their own location.
+        const ordinaryWalk=!driving&&trafficDetour&&![...workBounds].some(bounds=>insideFootprint(start,bounds)||insideFootprint(state.player,bounds));
+        if(ordinaryWalk){
+          const key=footpathRevision+'/'+trafficDetour.map(bounds=>bounds.join(',')).join('/');
+          if(walkingDiversion?.key!==key)walkingDiversion={key,pass:new Uint8Array(count),edges:new Uint16Array(count)};
+          pass=walkingDiversion.pass;edges=walkingDiversion.edges;
+        }else{pass=new Uint8Array(count);edges=new Uint16Array(count);}
+      }
       const useTruck=driving&&truck;
       function valid(i,staticOnly=false){
         const mask=staticOnly?truckPassability:pass;
@@ -5093,7 +5135,7 @@
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
       const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
-        site?.city?.precincts.map(p=>p.use==='homes'),site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
+        site?.civicLand?.homes.length,site?.civicLand?.project?.plot,site?.city?.precincts.map(p=>p.use==='homes'),site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
         landmarks.filter(mark=>mark.kind!=='balcony').map(mark=>mark.key),
         site?.residents?.map(r=>[r.id,r.name,window.EarthCommunityLife?.present(site,r.id)!==false])]);
       if(previousKey!==nextKey || state.fingerprint!==nextFingerprint){
@@ -5331,6 +5373,10 @@
       if(!ref)return null;
       if(ref.type==='activityVenue'){
         if(Number.isInteger(ref.homeSlot)&&HOMES[ref.homeSlot])return {...ref,...entry(HOMES[ref.homeSlot])};
+        if(ref.cottagePlot!=null){
+          const house=state.site.civicLand?.homes.find(h=>h.plot===ref.cottagePlot);
+          return house?{...ref,...add(window.EarthCouncilHomes.plot(house.plot),0,.72)}:null;
+        }
         if(ref.householdPlot!=null){
           const house=state.site.growth?.households[ref.householdPlot];
           return house?{...ref,...add(window.EarthDistrictGrowth.homePoint(state.site,house.plot),0,.72)}:null;
@@ -5951,6 +5997,19 @@
         dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,slop:e.pointerType==='touch'?12:5};
       }else if(fingers.size===2)beginPinch();
     });
+    let lastGesturePaint=0;
+    function paintDelayedGesture(){
+      // If input arrives while the browser is withholding animation callbacks, redraw
+      // the camera at the new finger position. Movement and work keep their normal
+      // clocks. The pending animation frame still runs; expensive scenes wait for it.
+      if(!frameTimer||!visible||covered||!lastFrame||paintAverage>10)return;
+      const now=frameTimer.now();
+      if(now-lastFrame<65||now-lastGesturePaint<20)return;
+      lastGesturePaint=now;
+      draw();
+      const cost=frameTimer.now()-now;
+      paintAverage=paintAverage*.87+Math.min(90,cost)*.13;
+    }
     listen(canvas,'pointermove',e=>{
       const p=coords(e,canvas);
       if(!fingers.has(e.pointerId)){
@@ -5966,14 +6025,14 @@
       if(pinch){
         const [a,b]=fingers.values(),distance=Math.hypot(a.x-b.x,a.y-b.y);
         zoom=clamp(pinch.zoom*distance/pinch.distance,minZoom(),2.15);unit=baseUnit()*zoom;
-        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;return;
+        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;if(e.pointerType==='touch')paintDelayedGesture();return;
       }
       if(dragging?.id!==e.pointerId)return;
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
       clearObservation(false);dragging.moved=true;cameraFollows=false;
       regionalFollow=null;overviewZoom=null;
-      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;
+      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;if(e.pointerType==='touch')paintDelayedGesture();
     });
     function endPointer(e) {
       if(!fingers.delete(e.pointerId))return;

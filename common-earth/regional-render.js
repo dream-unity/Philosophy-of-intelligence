@@ -262,7 +262,7 @@
         for(const turn of [2.35,-2.35])g.lineTo(p.x+Math.cos(angle+turn)*r*1.2,p.y+Math.sin(angle+turn)*r*1.2);
         g.closePath();
       }else{g.beginPath();g.arc(p.x,p.y,r,0,7);}
-      g.fillStyle=t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
+      g.fillStyle=t.kind==='border'?'#e25e4b':t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
       if(!mini&&v.sx>90){g.fillStyle='#343d35';g.fillRect(p.x-r*.5,p.y+r*.7,r,r);}
     }
     return count;
@@ -275,7 +275,7 @@
       const courtyards=s.city?.precincts.filter(p=>p.use==='homes').length||0;
       const r=limit(2.1+Math.sqrt((homes||s.population||1)+courtyards*6)*.26,2,6);
       g.strokeStyle='#3d5850';g.lineWidth=1;g.fillStyle='#e6c891';g.beginPath();g.moveTo(p.x,p.y-r);g.lineTo(p.x+r,p.y);g.lineTo(p.x,p.y+r);g.lineTo(p.x-r,p.y);g.closePath();g.fill();g.stroke();
-      if(s.construction?.length||s.growth?.households.some(h=>h.build)){
+      if(s.civicLand?.project||s.construction?.length||s.growth?.households.some(h=>h.build)){
         g.strokeStyle='#594938';g.lineWidth=2.6;g.beginPath();g.moveTo(p.x+r-1,p.y-r+.5);g.lineTo(p.x+r+1.5,p.y-r-2);g.lineTo(p.x+r+4,p.y-r+.5);g.stroke();
         g.strokeStyle='#fbe6ac';g.lineWidth=1.3;g.stroke();
       }
@@ -293,6 +293,7 @@
         const shop=h.shop&&root.EarthDistrictGrowth?.shopPoint?.(s,h.businessPlot);
         if(shop)homes.push([shop.x,shop.y]);
       }
+      for(const house of s.civicLand?.homes||[]){const pt=root.EarthCouncilHomes.plot(house.plot);homes.push([pt.x,pt.y]);}
       for(const [precinct,p] of (s.city?.precincts||[]).entries()){
         if(p.use!=='homes')continue;
         const court=root.EarthConstruction?.buildingPoint?.({scope:'city',precinct});
