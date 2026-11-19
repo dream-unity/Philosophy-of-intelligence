@@ -450,8 +450,9 @@ a.brand { color: inherit; text-decoration: none; min-height: 44px; }
   /* Both the map and controls must fit when the player expands the street. */
   body.street-expanded[data-map-view="street"] .map-frame {
     display: grid;
-    grid-template-rows: minmax(120px,1fr) auto;
-    height: calc(100svh - max(12px,env(safe-area-inset-bottom)));
+    grid-template-rows: minmax(clamp(220px,38svh,320px),1fr);
+    grid-auto-rows: auto;
+    min-height: calc(100svh - max(12px,env(safe-area-inset-bottom)));
   }
   body.street-expanded[data-map-view="street"] .street-stage { height: auto; min-height: 0; }
   body.street-expanded[data-map-view="street"] #street-open-actions { display: grid; place-items: center; min-height: 44px; }

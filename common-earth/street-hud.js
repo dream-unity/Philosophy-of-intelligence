@@ -7,7 +7,9 @@
     const doc=host.ownerDocument,$=id=>doc.getElementById(id);
     const card=$('scene-card');if(!card)return null;
     const scroll=card.querySelector('.scene-scroll')||card,toolbox=new Map(),panes=[...card.querySelectorAll('[data-scene-pane]')];
-    const openers=[...host.querySelectorAll('[data-scene-open]')],talkField=$('scene-talk-person'),goalField=$('scene-goal-person');
+    const navigation=$('street-navigation');
+    const openers=[...host.querySelectorAll('[data-scene-open]'),...(navigation?.querySelectorAll('[data-scene-open]')||[])];
+    const talkField=$('scene-talk-person'),goalField=$('scene-goal-person');
     let pane=null,talkId=null,goalId='',identity='',revision=0,lastDraw='',listKey='',lastContact='',reply='',busy=false,opener=null;
     let goal=null,overview=null,stripKey='',civicKey='',civic=null,rangeTimer=0,noticeTimer=0,watching=null,speech=null,placementKey='';
     const talkTopics=new Set(),contactButtons=new Map(),transcript=[];
@@ -222,7 +224,11 @@
       if(previous)toolbox.get(previous)?.close?.();
       for(const b of openers)b.setAttribute('aria-expanded','false');
       card.hidden=true;changed?.();
-      if(restore)(opener?.isConnected&&!opener.hidden?opener:$('street-canvas'))?.focus({preventScroll:true});
+      if(restore){
+        const target=opener?.isConnected&&!opener.hidden?opener:$('street-canvas');
+        target?.focus({preventScroll:true});
+        if(target?.closest('#street-navigation'))target.scrollIntoView?.({block:'nearest'});
+      }
       opener=null;
     }
     function invalidate(){
@@ -247,7 +253,12 @@
       $('scene-close')?.setAttribute('aria-label',id==='talk'?'End conversation':'Close street panel');
       card.hidden=false;clearInvitation();show($('scene-notice'),false);
       text($('scene-title'),({practice:'Practice and decisions',people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',original:'Original life',live:'Calendar'})[id]);
-      render(true);tick();changed?.();if(focus)$('scene-title')?.focus({preventScroll:true});return true;
+      render(true);tick();changed?.();
+      if(focus){
+        $('scene-title')?.focus({preventScroll:true});
+        if(source?.closest('#street-navigation'))card.scrollIntoView?.({block:'nearest'});
+      }
+      return true;
     }
     function openTalk(ref){
       if(!street())return false;
@@ -308,9 +319,11 @@
       if(id===pane)close();else openTool(id,b);
     });
     $('scene-close')?.addEventListener('click',()=>close());
-    host.parentElement.addEventListener('keydown',event=>{
+    function escapePanel(event){
       if(event.key==='Escape'&&pane){event.preventDefault();event.stopPropagation();close();}
-    },true);
+    }
+    host.parentElement.addEventListener('keydown',escapePanel,true);
+    navigation?.addEventListener('keydown',escapePanel,true);
     doc.addEventListener('visibilitychange',()=>{
       if(doc.hidden){revision++;lastDraw='';clearTimer();clearSpeech();}else if(pane){render(true);tick();}
     });

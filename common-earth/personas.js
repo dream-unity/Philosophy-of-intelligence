@@ -441,9 +441,19 @@
     for(const link of live){const id='carrier-'+link.from+'-'+link.to;if(isPorterId(id))ids.add(id);}
     return Array.from(ids).sort();
   }
-  function list(site){
+  function list(site,{includeCommuters=true}={}){
     if(!registry(site))return [];
-    const ids=['steward',...(site.residents||[]).map(p=>p.id),...walkerRoles.map((_,i)=>'walker-'+i),'driver',...porterIds(site)];
+    let porters;
+    if(includeCommuters)porters=porterIds(site);
+    else{
+      // Visiting and resident carriers have local identity records. A historic
+      // commuter without one cannot contribute to the household roster.
+      const local=site.communityLife?.people||{};
+      const candidates=Object.keys(local).filter(id=>isPorterId(id)&&local[id]);
+      if(candidates.every(id=>site.agency?.porters?.includes(id)||site.purses?.people?.[id]))porters=candidates.sort();
+      else porters=porterIds(site).filter(id=>local[id]);
+    }
+    const ids=['steward',...(site.residents||[]).map(p=>p.id),...walkerRoles.map((_,i)=>'walker-'+i),'driver',...porters];
     return ids.filter(id=>root.EarthCommunityLife?.present?.(site,id)!==false).map(id=>profile(site,id)).filter(Boolean);
   }
   root.EarthPersonas=Object.freeze({axes,traits,profile,birthProfile,householdProfile,identityKey,allocateBirthNames,validBirthNames,dutiesFor,validWorkFocus,list,retainsPorter,porterIds,isPorterId});

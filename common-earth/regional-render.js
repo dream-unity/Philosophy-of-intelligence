@@ -35,37 +35,50 @@
     if(!key){key=[geo.origin.lat,geo.origin.lon,geo.seed,geo.tidal,geo.atlasReady,...geo.surveys.map(t=>t.quay)].join(',')+'|'+geo.towns.map(t=>[t.site.id,t.x.toFixed(4),t.y.toFixed(4),+!!t.site.water,+!!t.site.coastal,+!!t.site.lakeShore].join(',')).join('|');regions.set(geo,key);}
     return key;
   }
+  const tileKey=(geo,span,ix,iy,detail)=>signature(geo)+'/'+span+'/'+ix+'/'+iy+'/'+detail;
   function groundTile(geo,span,ix,iy,detail){
-    const key=signature(geo)+'/'+span+'/'+ix+'/'+iy+'/'+detail;
+    const key=tileKey(geo,span,ix,iy,detail);
     if(tiles.has(key)){const tile=tiles.get(key);tiles.delete(key);tiles.set(key,tile);return tile;}
-    const canvas=document.createElement('canvas'),N=detail?64:48,S=Math.min(33,Math.max(9,Math.ceil(span/.12)+1));
+    const preview=detail==='preview';
+    const canvas=document.createElement('canvas'),N=preview?20:detail?64:48,S=preview?9:Math.min(33,Math.max(9,Math.ceil(span/.12)+1));
     canvas.width=canvas.height=N;
     const g=canvas.getContext('2d'),data=g.createImageData(N,N);
-    const samples=[];
+    const samples=[],surface={};
     for(let j=0;j<S;j++)for(let i=0;i<S;i++){
       const x=(ix+i/(S-1))*span,y=(iy+1-j/(S-1))*span;
-      const soil=root.EarthRegionalWorld.terrain(geo,x,y);
+      const soil=root.EarthRegionalWorld.terrain(geo,x,y,surface);
       const c=colour[soil.kind]||colour.meadow;
       // Relief and humidity alter the same surface through all zoom levels.
       const shade=limit((soil.height||0)*7,-5,8)+3*Math.sin(x*5.9+y*2.3)+2*Math.cos(y*9.2-x);
       samples.push([c[0]+shade,c[1]+shade,c[2]+shade,soil.height||0]);
     }
-    for(let row=0;row<N;row++)for(let col=0;col<N;col++){
-      const gx=(col+.5)*(S-1)/N,gy=(row+.5)*(S-1)/N,i=gx|0,j=gy|0,fx=gx-i,fy=gy-j;
-      const a=samples[j*S+i],b=samples[j*S+i+1],c=samples[(j+1)*S+i],d=samples[(j+1)*S+i+1];
-      const grain=(seed(ix*N+col,iy*N-row,12)-.5)*(detail?5:3);
-      const k=(row*N+col)*4;
-      const wa=(1-fx)*(1-fy),wb=fx*(1-fy),wc=(1-fx)*fy,wd=fx*fy;
-      const height=a[3]*wa+b[3]*wb+c[3]*wc+d[3]*wd;
-      if(height<.09){
-        // The map traces the terrain height threshold also used for landings;
-        // interpolating RGB alone makes shorelines look like square ponds.
-        const wet=limit((height+.65)/.58,0,1);
-        const sand=limit((height+.07)/.11,0,1);
-        const deep=[49,99,114],shoal=[86,143,147],shore=[184,177,139];
-        for(let ch=0;ch<3;ch++)data.data[k+ch]=(deep[ch]+(shoal[ch]-deep[ch])*wet)*(1-sand)+shore[ch]*sand+grain;
-      }else for(let ch=0;ch<3;ch++)data.data[k+ch]=a[ch]*wa+b[ch]*wb+c[ch]*wc+d[ch]*wd+grain;
-      data.data[k+3]=255;
+    // Every row uses the same horizontal sample positions. Compute them once
+    // per tile, keeping the original bilinear shoreline and deterministic grain.
+    const cells=new Uint8Array(N),fractions=new Float64Array(N);
+    for(let i=0;i<N;i++){
+      const position=(i+.5)*(S-1)/N;
+      cells[i]=Math.floor(position);fractions[i]=position-cells[i];
+    }
+    const pixels=data.data,noise=detail?5:3;
+    for(let row=0;row<N;row++){
+      const top=cells[row]*S,fy=fractions[row],bottom=top+S;
+      for(let col=0;col<N;col++){
+        const cell=cells[col],fx=fractions[col],k=(row*N+col)*4;
+        const a=samples[top+cell],b=samples[top+cell+1],c=samples[bottom+cell],d=samples[bottom+cell+1];
+        const wa=(1-fx)*(1-fy),wb=fx*(1-fy),wc=(1-fx)*fy,wd=fx*fy;
+        const height=a[3]*wa+b[3]*wb+c[3]*wc+d[3]*wd;
+        const grain=(seed(ix*N+col,iy*N-row,12)-.5)*noise;
+        if(height<.09){
+          // Interpolate deep water, shoals and sand across the landing threshold.
+          const wet=limit((height+.65)/.58,0,1),sand=limit((height+.07)/.11,0,1),water=1-sand;
+          pixels[k]=(49+37*wet)*water+184*sand+grain;
+          pixels[k+1]=(99+44*wet)*water+177*sand+grain;
+          pixels[k+2]=(114+33*wet)*water+139*sand+grain;
+        }else{
+          for(let ch=0;ch<3;ch++)pixels[k+ch]=a[ch]*wa+b[ch]*wb+c[ch]*wc+d[ch]*wd+grain;
+        }
+        pixels[k+3]=255;
+      }
     }
     g.putImageData(data,0,0);tiles.set(key,canvas);
     if(tiles.size>160){const first=tiles.keys().next().value;tiles.get(first).width=1;tiles.delete(first);}
@@ -73,12 +86,12 @@
   }
   const inView=(v,x,y,gap=0)=>x>=v.minX-gap&&x<=v.maxX+gap&&y>=v.minY-gap&&y<=v.maxY+gap;
   const fields=new Map();
-  function fieldTile(geo,span,ix,iy,base,atlas){
-    const key=signature(geo)+'/'+span+'/'+ix+'/'+iy+'/'+Boolean(atlas);
+  function fieldTile(geo,span,ix,iy,atlas){
+    const key=tileKey(geo,span,ix,iy,Boolean(atlas));
     let tile=fields.get(key);if(tile){fields.delete(key);fields.set(key,tile);return tile;}
     tile=document.createElement('canvas');tile.width=208;tile.height=106;
     const g=tile.getContext('2d'),v=viewport((ix+.5)*span,(iy+.5)*span,tile.width,tile.height,tile.width/span,tile.height/span);
-    g.drawImage(base,0,0,tile.width,tile.height);
+    g.drawImage(groundTile(geo,span,ix,iy,true),0,0,tile.width,tile.height);
     if(atlas){
       // Use the street's original grass, earth and stone for a survey about
       // to resolve into individual trees. Water keeps its own material.
@@ -98,7 +111,7 @@
     if(fields.size>100){const oldest=fields.keys().next().value;fields.get(oldest).width=1;fields.delete(oldest);}
     return tile;
   }
-  function soil(g,geo,v,detail=true,atlas=null){
+  function soil(g,geo,v,detail=true,atlas=null,prepare=null){
     const b=geo.bounds;
     g.fillStyle='#263f42';g.fillRect(0,0,v.w,v.h);
     // Fixed dyadic tiles have stable world edges. Limit tile count even on
@@ -109,17 +122,50 @@
     if(x1<=x0||y1<=y0)return;
     const topLeft=v.screen(x0,y1);
     g.save();g.beginPath();g.rect(topLeft.x,topLeft.y,(x1-x0)*v.sx,(y1-y0)*v.sy);g.clip();
-    for(let ix=Math.floor(x0/span);ix<=Math.floor(x1/span);ix++)for(let iy=Math.floor(y0/span);iy<=Math.floor(y1/span);iy++){
+    const transform=g.getTransform?.(),rx=transform?.a||1,ry=transform?.d||1;
+    for(let ix=Math.floor(x0/span);ix<Math.ceil(x1/span);ix++)for(let iy=Math.floor(y0/span);iy<Math.ceil(y1/span);iy++){
       const a=v.screen(ix*span,(iy+1)*span),z=v.screen((ix+1)*span,iy*span);
-      const base=groundTile(geo,span,ix,iy,detail);
-      const tile=detail&&span<=1?fieldTile(geo,span,ix,iy,base,atlas):base;
+      // Sample the same terrain at a lower resolution while the precise
+      // texture and field detail are being prepared between frames.
+      const field=detail&&span<=1;
+      const stored=field?fields:tiles,key=tileKey(geo,span,ix,iy,field?Boolean(atlas):detail);
+      const complete=()=>field?fieldTile(geo,span,ix,iy,atlas):groundTile(geo,span,ix,iy,detail);
+      let tile;
+      if(prepare&&!stored.has(key)){
+        tile=groundTile(geo,span,ix,iy,'preview');prepare(complete);
+      }else tile=complete();
       // The backdrop is drawn below device density. Snap opposite edges out
       // to its actual pixels so subpixel filtering never reveals a dark seam.
-      const transform=g.getTransform?.(),rx=transform?.a||1,ry=transform?.d||1;
       const left=Math.floor(a.x*rx)/rx,top=Math.floor(a.y*ry)/ry;
       g.drawImage(tile,left,top,Math.ceil(z.x*rx)/rx-left+.5/rx,Math.ceil(z.y*ry)/ry-top+.5/ry);
     }
     g.restore();
+  }
+  // A superseded or invisible viewport never finishes work for an old view.
+  // wake() is called again after the camera becomes visible.
+  function tileRefinement(active,done){
+    const idle=typeof root.requestIdleCallback==='function';
+    if(!idle&&typeof setTimeout!=='function')return null;
+    const jobs=[];let timer=null;
+    function wake(){
+      if(timer!==null||!jobs.length||!active())return;
+      timer=idle?root.requestIdleCallback(run,{timeout:120}):setTimeout(run,16);
+    }
+    function run(deadline){
+      timer=null;
+      if(!jobs.length||!active())return;
+      const clock=root.performance||Date,start=clock.now();
+      // Even a saturated browser that only calls back after the timeout
+      // can finish a tile. Yield before beginning a second expensive one.
+      jobs.pop()();
+      if(jobs.length&&clock.now()-start<4&&(!deadline||deadline.timeRemaining()>3))jobs.pop()();
+      if(jobs.length)wake();else done();
+    }
+    function cancel(){
+      jobs.length=0;
+      if(timer!==null){if(idle)root.cancelIdleCallback?.(timer);else clearTimeout(timer);timer=null;}
+    }
+    return {add:job=>jobs.push(job),wake,cancel};
   }
   function surfaceFeatures(g,geo,v,atlas){
     // Flora, exposed stone and ripples occupy repeatable locations. Sparse
@@ -202,14 +248,13 @@
     }
     g.fill();
   }
-  function actors(g,world,base,v,mini,drawPerson){
+  function actors(g,world,base,v,mini,drawPerson,people=root.EarthRegionalWorld.travellers?.(world,base)||[]){
     let count=0;
-    const people=root.EarthRegionalWorld.travellers?.(world,base)||[];
     for(const t of people){
       if(!inView(v,t.x,t.y,.03))continue;
       count++;if(drawPerson?.(t))continue;
       const p=v.screen(t.x,t.y),r=mini?1.9:limit(v.sx*.0035,2.5,8);
-      if(t.kind==='fight'){
+      if(t.phase==='fighting'){
         // Two opponents stand closer together than one pixel on the minimap.
         // Fan their symbols around that position, facing each other.
         const side=t.fightSide,shift=mini?2.7:3.8;
@@ -225,7 +270,7 @@
         for(const turn of [2.35,-2.35])g.lineTo(p.x+Math.cos(angle+turn)*r*1.2,p.y+Math.sin(angle+turn)*r*1.2);
         g.closePath();
       }else{g.beginPath();g.arc(p.x,p.y,r,0,7);}
-      g.fillStyle=t.kind==='boundary watch'?'#db735c':t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
+      g.fillStyle=t.kind==='border'?'#e25e4b':t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
       if(!mini&&v.sx>90){g.fillStyle='#343d35';g.fillRect(p.x-r*.5,p.y+r*.7,r,r);}
     }
     return count;
@@ -234,9 +279,11 @@
     const s=town.site,p=v.screen(town.x,town.y),scale=v.sx*KM,small=mini||scale<.20;
     const proj=(x,y)=>{const pt=regionalPoint(town,x,y);return v.screen(pt.x,pt.y);};
     if(small){
-      const r=limit(2.1+Math.sqrt((s.growth?.households?.length||s.population||1))*.26,2,5);
+      const homes=s.growth?.households?.filter(h=>root.EarthHousing?.frontage?.(s,h)!=='lot').length||0;
+      const courtyards=s.city?.precincts.filter(p=>p.use==='homes').length||0;
+      const r=limit(2.1+Math.sqrt((homes||s.population||1)+courtyards*6)*.26,2,6);
       g.strokeStyle='#3d5850';g.lineWidth=1;g.fillStyle='#e6c891';g.beginPath();g.moveTo(p.x,p.y-r);g.lineTo(p.x+r,p.y);g.lineTo(p.x,p.y+r);g.lineTo(p.x-r,p.y);g.closePath();g.fill();g.stroke();
-      if(s.centre?.project||s.construction?.length||s.growth?.households.some(h=>h.build)){
+      if(s.cooperative?.project||s.civicLand?.project||s.construction?.length||s.growth?.households.some(h=>h.build)){
         g.strokeStyle='#594938';g.lineWidth=2.6;g.beginPath();g.moveTo(p.x+r-1,p.y-r+.5);g.lineTo(p.x+r+1.5,p.y-r-2);g.lineTo(p.x+r+4,p.y-r+.5);g.stroke();
         g.strokeStyle='#fbe6ac';g.lineWidth=1.3;g.stroke();
       }
@@ -247,13 +294,23 @@
       for(let i=0;i<=24;i+=6){
         for(const [a,b] of [[[i,0],[i,24]],[[0,i],[24,i]]]){const z=proj(...a),d=proj(...b);g.moveTo(z.x,z.y);g.lineTo(d.x,d.y);}
       }g.stroke();
-      const homes=s.centre?s.centre.plots.map(d=>[d.x,d.y]):[];
-      if(s.centre)homes.push([21,3]);
+      const homes=[];
       for(const h of s.growth?.households||[]){
         const home=root.EarthDistrictGrowth?.homePoint?.(s,h.plot)||{x:1.7+h.plot%10*2.2,y:-1.9-Math.floor(h.plot/10)*1.75};
-        if(!s.centre)homes.push([home.x,home.y]);
+        if(root.EarthHousing?.frontage?.(s,h)!=='lot')homes.push([home.x,home.y]);
         const shop=h.shop&&root.EarthDistrictGrowth?.shopPoint?.(s,h.businessPlot);
         if(shop)homes.push([shop.x,shop.y]);
+      }
+      for(const house of s.civicLand?.homes||[]){const pt=root.EarthCouncilHomes.plot(house.plot);homes.push([pt.x,pt.y]);}
+      for(const [precinct,p] of (s.city?.precincts||[]).entries()){
+        if(p.use!=='homes')continue;
+        const court=root.EarthConstruction?.buildingPoint?.({scope:'city',precinct});
+        if(court)homes.push([court.x,court.y]);
+      }
+      for(const house of s.privateHomes||[]){
+        if(house.stage!==3)continue;
+        const place=root.EarthConstruction?.privateHomeSite(house.plot);
+        if(place)homes.push([place.objectX,place.objectY]);
       }
       const sites=[[9,21],[21,15],[21,21],[15,21],...(s.buildings||[]).map(b=>[3+6*(b.plot%3),3+6*Math.floor(b.plot/3)]),...homes];
       g.fillStyle='#b78360';for(const [x,y] of sites){const z=proj(x,y);g.fillRect(z.x-scale,z.y-scale*.72,scale*2,scale*1.3);}
@@ -263,5 +320,5 @@
       const y=p.y+Math.max(8,scale*15*v.sy/v.sx)+9;g.fillStyle='#20392fe8';g.fillRect(p.x-w/2,y-9,w,18);g.fillStyle='#f5e6cb';g.fillText(s.name,p.x,y);
     }
   }
-  root.EarthRegionalRender={KM,TILT,regionalPoint,localPoint,viewport,fit,soil,inView,routeLayer,useLayer,explored,actors,townPlan};
+  root.EarthRegionalRender={KM,TILT,regionalPoint,localPoint,viewport,fit,soil,tileRefinement,inView,routeLayer,useLayer,explored,actors,townPlan};
 })(typeof window==='undefined'?globalThis:window);

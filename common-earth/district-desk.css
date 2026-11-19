@@ -35,21 +35,24 @@
 .observer-report { max-width:320px; }
 .observer-report strong { font-size:.95rem; }
 .observer-head button,.observer-dock button { flex:none; }
-body[data-observing-town] #street-stage > :not(#town-population,#district-observer,#region-mini,#region-open,#region-inspector,#region-view),
+body[data-observing-town] #street-stage > :not(#district-observer,#region-view,dialog[open]),
 body[data-observing-town] :is(#actions-panel,#street-controls,#street-actors) { display:none!important; }
 body[data-observing-town] .workspace { grid-template-columns:minmax(0,1fr); }
 body[data-observing-town] .map-frame { width:100%; }
 #district-observer .district-tools { top:40%; }
+/* The drawer leaves room for the zoom controls beside it on wide streets. */
 @container street (min-width:596px) {
-  .scene-tools button { min-height:40px; padding-inline:11px; font-size:.88rem; }
+  .street-hud:not([data-talk-dock="left"]) .scene-card { right:calc(clamp(12px,1.6vw,28px) + 52px); }
 }
 @container street (max-width:595px) {
-  .scene-tools { left:6px; right:auto; top:7px; }
-  .scene-tools button { min-height:36px; font-size:.78rem; }
   .street-stage-heading { top:auto; bottom:9px; left:79px; max-width:calc(100% - 180px); padding:5px 8px; }
   .street-stage-heading h2 { font-size:1.06rem; }
   .street-stage-heading .kicker { font-size:.64rem; }
-  .scene-strip { top:52px; }
+  .street-hud:not([data-talk-dock]) .scene-card { top:6px; bottom:auto; max-height:calc(100% - 66px); }
+  #street-stage:has(#scene-card:not([hidden])) > .district-tools {
+    top:auto; bottom:8px; right:108px; display:flex; transform:none;
+  }
+  #street-stage:has(#scene-card:not([hidden])) > .district-tools .icon-button:last-child { margin-top:0; }
   .observer-head { width:calc(100% - 16px); top:8px; left:8px; }
   .observer-dock { display:grid; grid-template-columns:minmax(0,1fr) auto; left:6px; right:6px; bottom:6px; max-width:none; gap:4px 10px; }
   .observer-report { grid-row:2;grid-column:1/-1;max-width:none; }
@@ -119,25 +122,53 @@ body[data-observing-town] :is(#settlement-status,#planning-details,#goal-details
 #observer-clock { display:none; }
 body[data-observing-town] #observer-clock { display:inline-flex; align-items:center; }
 #street-stage .district-overview { display:none; }
-#region-mini { position:absolute; z-index:21; bottom:8px; left:8px; width:clamp(66px,7vw,90px); height:58px; padding:0; border:1px solid #b3bb99; border-radius:4px; overflow:hidden; cursor:crosshair; }
-#region-mini canvas,#region-land { width:100%; height:100%; display:block; position:static; }
-#region-view { position:absolute; inset:0; z-index:20; background:#24483e; color:#f9ecd0; }
-#region-view[hidden],#region-mini[hidden] { display:none!important; }
-#region-land { touch-action:none; cursor:grab; }
-#region-view header,#region-view nav { position:absolute; display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:8px; background:#172e2bea; border-radius:4px; }
-#region-view header { top:8px; left:8px; pointer-events:none; }
-#region-view header span { font-size:.8rem; }
-#region-view nav { bottom:8px; right:8px; max-width:calc(100% - 108px); }
-#region-view nav :is(select,button) { min-height:40px; max-width:100%; background:#243e37; color:#f4e8ca; border:1px solid #779186; border-radius:4px; }
-body[data-observing-town] .observer-dock { left:104px; max-width:calc(100% - 114px); }
-#region-streets { position:absolute; inset:46px 4px 65px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:minmax(0,1fr); gap:4px; overflow:auto; }
-#region-streets[hidden] { display:none; }
+/* Map shortcuts and street tabs share normal document flow outside the canvas.
+   Every group can wrap as the map column narrows or the player enlarges text. */
+#street-navigation {
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 8px;
+  container:street-navigation / inline-size;
+  background:#14292d; color:#f5efde; border-top:1px solid #52675b;
+}
+#street-navigation[hidden] { display:none; }
+.region-shortcuts { display:flex; align-items:center; gap:4px; }
+#region-mini { width:clamp(66px,7vw,100px); height:48px; padding:0; align-self:center; border:1px solid #aabd9e; border-radius:4px; overflow:hidden; cursor:crosshair; }
+#region-mini canvas { width:100%; height:100%; display:block; }
+#region-open { min-height:48px; padding:5px 10px; border:1px solid #aabd9e; border-radius:4px; background:#203c35; color:#fff0cf; cursor:pointer; }
+#street-navigation .scene-tools { display:flex; flex:1 1 auto; flex-wrap:wrap; }
+#street-navigation .scene-strip { flex:2 1 30rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,7.25rem),1fr)); }
+@container street-navigation (max-width:29rem) {
+  #street-navigation .scene-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+#street-navigation :is(.scene-tools,.scene-strip) { position:static; min-width:0; max-width:none; }
+#street-navigation .scene-tools button { flex:1 1 auto; padding:6px 10px; font-size:.88rem; }
+#street-navigation :is(.scene-tools,.scene-strip) button { min-height:44px; }
+#street-navigation .scene-strip span { white-space:normal; overflow-wrap:anywhere; }
+#region-inspector { flex:1 1 100%; min-width:0; padding:8px 10px; border:1px solid #829784; border-radius:5px; background:#193630; color:#faefcf; overflow-wrap:anywhere; }
+body:is([data-observing-town],[data-district-crossing],[data-region-roaming]) #street-navigation :is(.scene-tools,.scene-strip),
+body[data-district-crossing] #region-inspector { display:none; }
+#street-stage:has(#region-view:not([hidden])) + #street-navigation { display:none; }
+/* Only the active map surface receives focus or paints. Regional previews
+   remain visible inside the atlas and the crossing keeps its own route clock. */
+#street-stage:has(#region-view:not([hidden])) > :not(#region-view,dialog[open]),
+body[data-district-crossing] #street-stage > :not(#district-crossing,#region-view,dialog[open]) { display:none!important; }
+#region-view {
+  position:absolute; inset:0; z-index:20; display:grid; grid-template-rows:auto minmax(110px,1fr) auto;
+  grid-template-areas:"heading" "map" "controls"; overflow:auto; background:#24483e; color:#f9ecd0;
+}
+#region-view[hidden],#region-land[hidden],#region-mini[hidden] { display:none!important; }
+#region-land { grid-area:map; position:static; width:100%; height:100%; min-height:0; touch-action:none; cursor:grab; }
+#region-view header,#region-view nav { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:7px 9px; background:#172e2b; }
+#region-view header {grid-area:heading;}
+#region-view header span {font-size:.8rem;}
+#region-view nav {grid-area:controls;}
+#region-view nav label,#region-view nav select {min-width:0;max-width:100%;}
+#region-view nav :is(select,button) { min-height:44px; max-width:100%; background:#243e37; color:#f4e8ca; border:1px solid #779186; border-radius:4px; }
+#region-streets { grid-area:map; position:relative; display:grid; min-height:0; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:minmax(92px,1fr); gap:4px; padding:4px; overflow:auto; background:#172e2b; }
+#region-streets[hidden] {display:none;}
 #region-streets button { position:relative; min-width:0; min-height:84px; border:1px solid #829e87; padding:0; overflow:hidden; background:#526951; }
-#region-streets canvas { width:100%;height:100%;pointer-events:none; }
+#region-streets canvas { width:100%; height:100%; pointer-events:none; }
 #region-streets span { position:absolute; bottom:4px; left:4px; background:#142a27e8; color:#fff1cb; padding:4px 7px; border-radius:3px; }
 
-#region-open { position:absolute; z-index:19; bottom:67px; left:8px; width:clamp(66px,7vw,90px); min-height:40px; border:1px solid #aabd9e; border-radius:4px; background:#18342eee; color:#fff0cf; cursor:pointer; }
-#region-inspector { max-height:calc(100% - 22px); overflow:auto; position:absolute; z-index:14; top:10px; left:10px; max-width:min(420px,calc(100% - 86px)); border:1px solid #829784; border-radius:5px; background:#142e2df7; color:#faefcf; padding:8px 10px; }
 #region-inspector[hidden],#region-point-detail[hidden] {display:none;}
 #region-inspector header {display:flex;align-items:center;gap:12px;justify-content:space-between;}
 #region-inspector strong,#region-inspector small { display:block; }
@@ -150,12 +181,10 @@ body[data-observing-town] .observer-dock { left:104px; max-width:calc(100% - 114
 #region-point-detail button {margin:3px 4px 2px 0;}
 #region-point-detail button:disabled {opacity:.62;cursor:default;}
 body[data-region-roaming] :is(.street-stage-heading,#scene-watching,.observer-head,.observer-dock,#observer-goals),body[data-region-detail] .street-stage-heading {visibility:hidden;}
-#street-stage:has(.scene-card:not([hidden])) #region-inspector {visibility:hidden;}
-#street-stage:has(#region-view:not([hidden])) :is(#region-open,#region-inspector) {visibility:hidden;}
+body[data-region-roaming] #street-hud .scene-card {display:none;}
 #region-view nav label {display:flex;align-items:center;gap:5px;font-size:.83rem;}
 @container street (max-width:595px) {
-  #region-inspector { top:5px;left:5px;max-width:calc(100% - 64px); }
-  #region-view nav { max-width:calc(100% - 86px);gap:4px; }
+  #region-view nav { gap:4px; }
   #region-view nav :is(button,select) {font-size:.78rem;}
 }
 @media (any-pointer:coarse) {#region-inspector button,#region-open {min-height:44px;}}
@@ -176,91 +205,8 @@ body[data-region-roaming] :is(.street-stage-heading,#scene-watching,.observer-he
 .development-shortcut { margin:0 0 8px;border:1px solid #889a7b;border-radius:4px;background:#243e35;color:#fff0cb;padding:6px 10px;min-height:44px; }
 @media (any-pointer:coarse) { #district-ledger .development-book :is(button,select,summary) { min-height:44px; } }
 
-@container street (min-width:760px) {
-  #region-mini {width:112px;height:76px;}
-  #region-open {width:112px;bottom:85px;}
-  body[data-observing-town] .observer-dock {left:130px;max-width:calc(100% - 140px);}
-}
-
 #region-point-detail label {display:grid;gap:4px;margin-block:8px;color:#d6e2d1;font-size:.86rem;}
 #region-point-detail select {width:100%;min-height:44px;padding:5px;border:1px solid #829784;border-radius:4px;background:#1b352f;color:#f8efd5;}
 
-#town-population {
-  position:absolute; z-index:23; top:8px; right:8px; display:grid; gap:1px;
-  min-height:44px; max-width:min(40%,220px); padding:4px 10px;
-  text-align:right; font:600 .84rem/1.2 var(--sans,system-ui,sans-serif);
-  color:#ffedbe; background:#15302efa; border:1px solid #a9b89c; border-radius:5px; cursor:pointer;
-}
-#town-population[hidden] {display:none;}
-#population-town {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#d6e3d7;font-size:.78rem;}
-#population-count {font-variant-numeric:tabular-nums;}
-#street-stage:has(#town-population:not([hidden])) .scene-tools {
-  right:auto;left:8px;top:8px;max-width:calc(100% - min(40%,220px) - 24px);
-  overflow-x:auto;white-space:nowrap;scrollbar-width:thin;
-}
-#street-stage .scene-tools button {flex:none;}
-#street-stage .street-camera-tools {top:60px;bottom:auto;right:8px;}
-#street-stage:has(#town-population:not([hidden])) .street-stage-heading {top:65px;bottom:auto;left:8px;}
-#street-stage #observer-goals {top:65px;}
-#street-stage #region-inspector {top:60px;max-height:calc(100% - 190px);max-width:min(420px,calc(100% - 116px));}
-
-/* The regional map and status share the bottom row. A panel opens between
-   the two rows, leaving both the population control and camera tools usable. */
-#street-stage {--mini-room:calc(clamp(66px,7vw,90px) + 18px);}
-@container street (min-width:760px) {
-  #street-stage .street-hud {--mini-room:130px;}
-}
-#street-stage .street-hud .scene-strip {
-  top:auto;bottom:8px;left:var(--mini-room);right:8px;
-}
-#street-stage .scene-strip small {
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
-}
-#street-stage > .district-tools {
-  display:grid;top:112px;bottom:auto;right:8px;transform:none;gap:4px;
-}
-#street-stage > .district-tools .icon-button:last-child {margin-top:0;}
-#street-stage .street-hud:not([data-talk-dock]) .scene-card {
-  top:60px;bottom:auto;right:108px;
-  width:min(355px,calc(100% - var(--mini-room) - 112px));
-  max-height:calc(100% - 126px);
-}
-@container street (max-width:475px) {
-  #street-stage .street-hud:not([data-talk-dock]) .scene-card {
-    right:60px;width:calc(100% - 70px);max-height:calc(100% - 182px);
-  }
-  #street-stage .street-camera-tools {flex-direction:column;}
-  #street-stage > .district-tools {top:158px;}
-}
-@media (max-height:535px) and (orientation:landscape) {
-  #street-stage .street-hud:has(.scene-card:not([hidden])) .scene-strip {
-    left:var(--mini-room);right:8px;bottom:8px;
-  }
-}
-@media (any-pointer:coarse) {
-  #street-stage :is(.street-camera-tools,.district-tools) .icon-button {width:44px;height:44px;}
-}
-.centre-sheet {width:min(620px,calc(100vw - 16px));max-height:min(82dvh,760px);color:#f4ecda;}
-.centre-sheet:popover-open {display:flex;flex-direction:column;}
-.centre-sheet .sheet-head {align-items:flex-start;}
-.centre-sheet .sheet-head h2 {margin:0 0 .35rem;}
-.centre-sheet .sheet-head label {display:flex;gap:.5rem;align-items:center;}
-.centre-sheet select,.centre-sheet input[type=number] {font:inherit;max-width:100%;min-height:40px;padding:.3rem .55rem;background:#18342f;color:#f6efd9;border:1px solid #718779;border-radius:4px;}
-#town-centre-tabs {display:flex;flex-wrap:wrap;gap:3px;padding:5px 12px;border-block-end:1px solid #526b5d;}
-#town-centre-tabs button,.centre-sheet .sheet-body button {font:550 .9rem/1.25 var(--sans,system-ui,sans-serif);min-height:44px;padding:6px 10px;background:#254139;color:#f9edd0;border:1px solid #789783;border-radius:4px;cursor:pointer;}
-#town-centre-tabs [aria-pressed=true] {background:#dcd0a8;color:#192e28;}
-.centre-sheet .sheet-body {min-height:0;overflow:auto;overscroll-behavior:contain;font:400 .96rem/1.45 var(--sans,system-ui,sans-serif);}
-.centre-sheet .sheet-body button {margin:2px 4px 2px 0;}
-.centre-sheet button:disabled {opacity:.6;cursor:default;}
-.centre-sheet p,.centre-sheet h3 {margin:.5rem 0;}
-.centre-sheet .sheet-body details {border-top:1px solid #4b6156;padding:3px 0;}
-.centre-sheet summary {display:list-item;cursor:pointer;padding:8px 0;color:#f3dfa8;}
-.centre-sheet label {display:grid;gap:4px;margin:.4rem 0;}
-.centre-sheet .centre-filter {display:flex;align-items:center;gap:8px;min-height:44px;}
-.centre-directory {margin:8px 0;}
-.centre-facts {display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:8px;margin:8px 0;}
-.centre-facts div {border-inline-start:2px solid #83a493;padding-inline:8px;}
-.centre-facts dt,.centre-sheet article small {font-size:.81rem;color:#d3dfd0;}
-.centre-facts dd {margin:0;font-variant-numeric:tabular-nums;}
-.centre-criterion fieldset {display:flex;align-items:center;flex-wrap:wrap;gap:6px;border:1px solid #587162;margin:8px 0;}
-.centre-criterion input {width:6em;}
+#region-point-detail label {display:grid;gap:4px;margin-block:8px;color:#d6e2d1;font-size:.86rem;}
+#region-point-detail select {width:100%;min-height:44px;padding:5px;border:1px solid #829784;border-radius:4px;background:#1b352f;color:#f8efd5;}

@@ -10,12 +10,16 @@
     const bound=(v,a,b)=>Math.max(a,Math.min(b,v)),previews=new Map(),cache=new WeakMap(),fingers=new Map();
     let geo=null,towns=[],base=null,camera={x:0,y:0},zoom=1,miniView,mainView,drag=null,pinch=null,
       fit=true,menuKey='',overlayId='',lastScene=null,animation=0,queued=0;
+    let stageVisible=true,miniVisible=true,opener=null;
     const dimensions=new WeakMap();
     const street=()=>getScene?.();
     function point(event,canvas){const r=canvas.getBoundingClientRect();return {x:event.clientX-r.left,y:event.clientY-r.top};}
     function refresh(){
       const world=sim.state;base=sim.active();
-      if(!base){mini.hidden=true;close();geo=null;towns=[];return;}
+      if(!base){
+        mini.hidden=true;miniView=null;cache.get(small)?.refinement?.cancel();cache.delete(small);
+        close();geo=null;towns=[];return;
+      }
       const next=model.geography(world,base);
       if(!next)return;
       const changed=geo?.origin.id!==next.origin.id;geo=next;towns=geo.towns;
@@ -39,10 +43,8 @@
       return {x:bound(p.x,geo.bounds.minX,geo.bounds.maxX),y:bound(p.y,geo.bounds.minY,geo.bounds.maxY)};
     }
     function project(canvas,miniature){
-      // Production changes several panels before this map draws. Reuse the
-      // last rendered CSS size so a painted map does not force page layout.
-      const size=dimensions.get(canvas);
-      const w=size?.width||canvas.clientWidth,h=size?.height||canvas.clientHeight;
+      // Use the observed CSS size while production updates the surrounding panels.
+      const size=dimensions.get(canvas),w=size?.width||canvas.clientWidth,h=size?.height||canvas.clientHeight;
       if(!w||!h||!geo)return null;
       const b=geo.bounds;
       if(miniature)return paint.viewport((b.minX+b.maxX)/2,(b.minY+b.maxY)/2,w,h,w/(b.maxX-b.minX),h/(b.maxY-b.minY));
@@ -52,25 +54,49 @@
     }
     function draw(canvas,miniature){
       const view=project(canvas,miniature);if(!view)return null;
-      const ratio=Math.min(root.devicePixelRatio||1,miniature?1.5:2);
+      const ratio=Math.min(root.devicePixelRatio||1,miniature?1.5:2,Math.sqrt(2200000/(view.w*view.h)));
       const pixW=Math.max(1,Math.round(view.w*ratio)),pixH=Math.max(1,Math.round(view.h*ratio));
       if(canvas.width!==pixW||canvas.height!==pixH){canvas.width=pixW;canvas.height=pixH;}
       const w=sim.state,g=canvas.getContext('2d');
       // Keep the map's terrain, plots and rights warm when only its camera
       // footprint or a person moving along a route needs to change.
-      const key=[w.week,w.productionSerial,w.actionRevision,w.workRevision,w.regionalWorld?.step,w.regionalWorld?.regions[geo.origin.id]?.mapRevision,menuKey,overlayId,pixW,pixH,view.x,view.y,view.sx,
+      const key=[w.week,w.productionSerial,w.actionRevision,w.workRevision,w.regionalWorld?.step,w.regionalWorld?.regions[geo.origin.id]?.mapRevision,menuKey,overlayId,pixW,pixH,ratio,view.sx,view.sy,
         ...towns.map(t=>[t.site.growth?.points,t.site.buildings?.length,t.site.population].join(','))].join('/');
-      let staticMap=cache.get(canvas);
-      if(!staticMap||staticMap.key!==key||staticMap.world!==w||staticMap.geo!==geo){
-        const tile=staticMap?.tile||document.createElement('canvas');
-        tile.width=pixW;tile.height=pixH;const ground=tile.getContext('2d');
-        ground.setTransform(ratio,0,0,ratio,0,0);
-        paint.soil(ground,geo,view,false);paint.routeLayer(ground,w,base,view,miniature);
-        paint.useLayer(ground,w,base,view,miniature);paint.explored(ground,geo,w,base,view,overlayId);
-        for(const t of towns)if(paint.inView(view,t.x,t.y,.8))paint.townPlan(ground,t,view,miniature);
-        staticMap={tile,key,world:w,geo};cache.set(canvas,staticMap);
+      // Crop short pans from a slightly larger raster. Travellers and the
+      // street camera footprint still use the exact current projection.
+      const padX=miniature?0:Math.ceil(Math.min(view.w*.14,85)*ratio);
+      const padY=miniature?0:Math.ceil(Math.min(view.h*.14,60)*ratio);
+      let layer=cache.get(canvas);
+      let left=layer?padX+(view.x-layer.area.x)*view.sx*ratio:0;
+      let top=layer?padY+(layer.area.y-view.y)*view.sy*ratio:0;
+      const changed=!layer||layer.key!==key||layer.world!==w||layer.geo!==geo||
+        left<0||left>2*padX||top<0||top>2*padY;
+      if(changed){
+        layer?.refinement?.cancel();
+        const tile=layer?.tile||document.createElement('canvas');
+        const tw=pixW+2*padX,th=pixH+2*padY;
+        if(tile.width!==tw)tile.width=tw;
+        if(tile.height!==th)tile.height=th;
+        const area=paint.viewport(view.x,view.y,view.w+2*padX/ratio,view.h+2*padY/ratio,view.sx,view.sy);
+        layer={tile,key,world:w,geo,area};
+        cache.set(canvas,layer);left=padX;top=padY;
+        layer.refinement=paint.tileRefinement?.(
+          ()=>cache.get(canvas)===layer&&!document.hidden&&(miniature?miniVisible&&panel.hidden:stageVisible&&!panel.hidden&&grid.hidden),
+          ()=>{layer.finish=true;nextPaint();}
+        );
       }
-      g.setTransform(1,0,0,1,0,0);g.drawImage(staticMap.tile,0,0);
+      if(changed||layer.finish){
+        const {tile,area}=layer,ground=tile.getContext('2d');
+        ground.setTransform(ratio,0,0,ratio,0,0);
+        paint.soil(ground,geo,area,false,null,changed?layer.refinement?.add:null);
+        paint.routeLayer(ground,w,base,area,miniature);
+        paint.useLayer(ground,w,base,area,miniature);paint.explored(ground,geo,w,base,area,overlayId);
+        for(const t of towns)if(paint.inView(area,t.x,t.y,.8))paint.townPlan(ground,t,area,miniature);
+        layer.finish=false;
+      }
+      layer.refinement?.wake();
+      g.setTransform(1,0,0,1,0,0);
+      g.drawImage(layer.tile,left,top,pixW,pixH,0,0,pixW,pixH);
       g.setTransform(ratio,0,0,ratio,0,0);
       paint.actors(g,w,base,view,miniature);
       const sceneView=street()?.regionalCamera?.();
@@ -94,8 +120,8 @@
     }
     function redraw(){
       if(!geo||document.hidden)return;
-      miniView=draw(small,true);
-      if(panel.hidden||!grid.hidden)return;
+      if(panel.hidden){if(miniVisible)miniView=draw(small,true);return;}
+      if(!stageVisible||!grid.hidden)return;
       mainView=draw(map,false);
       const pos=geo.locate(camera.x,camera.y);
       info.textContent='Week '+sim.state.week+' · '+towns.length+' communities · '+pos.lat.toFixed(3)+'°, '+pos.lon.toFixed(3)+'°';
@@ -103,13 +129,39 @@
     function nextPaint(){
       if(!queued)queued=requestAnimationFrame(()=>{queued=0;redraw();});
     }
-    function centre(p){if(!geo)return;fit=false;camera=clip(p);redraw();}
-    function close(){panel.hidden=true;drag=null;pinch=null;fingers.clear();clearTimeout(animation);animation=0;liveGrid(false);}
+    function cameraChanged(){
+      // Input can arrive several times in one display frame. Keep the inverse
+      // projection current for the next finger, then paint the final position.
+      mainView=project(map,false);
+      nextPaint();
+    }
+    function centre(p){if(!geo)return;fit=false;camera=clip(p);cameraChanged();}
+    function close(restoreFocus=false){
+      if(panel.hidden)return;
+      panel.hidden=true;drag=null;pinch=null;fingers.clear();
+      cache.get(map)?.refinement?.cancel();cache.delete(map);
+      clearTimeout(animation);animation=0;liveGrid(false);nextPaint();
+      if(restoreFocus){
+        opener?.focus({preventScroll:true});
+        opener?.scrollIntoView?.({block:'nearest'});
+      }
+      opener=null;
+    }
     function animate(){clearTimeout(animation);if(panel.hidden)return;redraw();animation=setTimeout(animate,900);}
-    function open(){if(!geo)return;panel.hidden=false;fit=true;liveGrid(false);redraw();animate();map.focus({preventScroll:true});}
+    function open(source){
+      if(!geo)return;
+      opener=source||get('region-open');panel.hidden=false;fit=true;liveGrid(false);
+      field.setAttribute('aria-label',sim.state.communityLife?.journey?'Centre the map on a community':'See community streets');
+      animate();map.focus({preventScroll:true});panel.scrollIntoView?.({block:'nearest'});
+    }
     function inspect(p,settings={}){
       if(!geo)return;
       const q=clip(p),scene=street();
+      if(sim.state.communityLife?.journey){
+        if(panel.hidden)open(mini);
+        if(!grid.hidden)liveGrid(false);
+        zoom=Math.max(zoom,2);centre(q);return;
+      }
       if(scene?.inspectRegion){
         close();scene.setExploration?.(overlayId);
         scene.inspectRegion(q.x,q.y,{zoom:Math.max(.46,scene.regionalCamera?.()?.zoom||.55),...settings});
@@ -124,12 +176,18 @@
       if(t)inspect(t,{zoom:.56,picked:true});
       field.value='';
     }
+    function syncPreview(preview){
+      const site=preview.site,world=sim.state;
+      const stamp=[world.week,world.productionSerial,world.actionRevision,world.workRevision].join('/');
+      if(preview.source===site&&preview.stamp===stamp)return;
+      preview.scene.setSite(structuredClone(site));
+      const workers=root.EarthConstruction?.view(site,world);
+      if(workers)preview.scene.setConstruction(workers);
+      preview.scene.resize();preview.source=site;preview.stamp=stamp;
+    }
     function startPreview(preview){
       preview.scene=root.EarthStreet.mount(preview.canvas,{spectator:true,thumbnail:true,getWeek:()=>sim.state.week,getWorld:()=>sim.state});
-      preview.scene.setSite(structuredClone(preview.site));
-      const workers=root.EarthConstruction?.view(preview.site,sim.state);
-      if(workers)preview.scene.setConstruction(workers);
-      preview.scene.resize();
+      syncPreview(preview);
       const locals=root.EarthDistrictGrowth.members(preview.site);
       // A district camera follows a local worker. Keep that choice between
       // rounds so their journey remains continuous as accounts settle.
@@ -151,10 +209,14 @@
       }
     },{root:grid});
     function liveGrid(open){
-      grid.hidden=!open;get('region-layout').textContent=open?'Regional terrain':'Live streets';
+      grid.hidden=!open;map.hidden=open;get('region-layout').textContent=open?'Regional terrain':'Live streets';
       if(!open){for(const {scene,button} of previews.values()){gridObserver?.unobserve(button);scene?.destroy();button.remove();}previews.clear();return;}
+      for(const [id,preview] of previews){
+        if(towns.some(t=>t.site.id===id))continue;
+        gridObserver?.unobserve(preview.button);preview.scene?.destroy();preview.button.remove();previews.delete(id);
+      }
       for(const town of towns){
-        const site=town.site,stamp=[site.id,sim.state.week,sim.state.productionSerial,sim.state.actionRevision,sim.state.workRevision].join('/');
+        const site=town.site;
         let preview=previews.get(site.id);
         if(!preview){
           const button=document.createElement('button'),canvas=document.createElement('canvas'),label=document.createElement('span');
@@ -166,14 +228,14 @@
         preview.site=site;
         const growth=root.EarthDistrictGrowth.report(site);
         preview.label.textContent=site.name+' · '+site.era+' · '+growth.points+(growth.target?'/'+growth.target:'')+' growth';
-        if(preview.scene&&preview.stamp!==stamp){
-          preview.scene.setSite(structuredClone(site));const workers=root.EarthConstruction?.view(site,sim.state);if(workers)preview.scene.setConstruction(workers);
-          preview.scene.resize();preview.stamp=stamp;
-        }
+        if(preview.scene)syncPreview(preview);
       }
     }
-    get('region-layout').onclick=()=>liveGrid(grid.hidden);
-    get('region-open')?.addEventListener('click',open);
+    get('region-layout').onclick=()=>{
+      liveGrid(grid.hidden);
+      if(grid.hidden){nextPaint();map.focus({preventScroll:true});}
+    };
+    get('region-open')?.addEventListener('click',event=>open(event.currentTarget));
     function selectChart(id){
       overlayId=towns.some(t=>t.site.id===id)?id:'';
       if(overlay)overlay.value=overlayId;
@@ -183,18 +245,18 @@
     field.addEventListener('change',()=>{if(field.value)streets(field.value);});
     mini.addEventListener('click',e=>{
       if(!miniView)return;
-      if(e.detail===0){open();return;}
+      if(e.detail===0){open(mini);return;}
       const p=point(e,small);inspect(miniView.ground(p.x,p.y),{picked:true});
     });
     function zoomBy(factor,p){
       if(!geo)return;
-      liveGrid(false);
+      if(!grid.hidden)liveGrid(false);
       const at=p&&mainView?.ground(p.x,p.y);fit=false;zoom=bound(zoom*factor,1,160);
       if(at){
         const next=project(map,false),after=next?.ground(p.x,p.y);
         if(after)camera=clip({x:camera.x+at.x-after.x,y:camera.y+at.y-after.y});
       }
-      redraw();
+      cameraChanged();
     }
     function beginPinch(){
       const [a,b]=fingers.values(),p={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
@@ -241,29 +303,37 @@
     map.addEventListener('keydown',e=>{
       const dir={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]}[e.key];
       if(dir&&mainView){e.preventDefault();centre({x:camera.x+dir[0]*map.clientWidth/(8*mainView.sx),y:camera.y+dir[1]*map.clientHeight/(8*mainView.sy)});}
-      if(e.key==='Escape'){close();mini.focus();}if(e.key==='Enter'){e.preventDefault();inspect(camera,{picked:true});}
+      if(e.key==='Escape'){e.preventDefault();close(true);}if(e.key==='Enter'){e.preventDefault();inspect(camera,{picked:true});}
     });
     get('region-closer').onclick=()=>zoomBy(1.6);
     get('region-further').onclick=()=>zoomBy(1/1.6);
     map.addEventListener('wheel',e=>{e.preventDefault();zoomBy(e.deltaY<0?1.2:1/1.2,point(e,map));},{passive:false});
     get('region-fit').onclick=()=>{liveGrid(false);fit=true;zoom=1;redraw();};
-    get('region-close').onclick=()=>{close();mini.focus();};
-    const mapSizes=new ResizeObserver(entries=>{
-      for(const entry of entries){
-        if(!entry.contentRect)continue;
+    get('region-close').onclick=()=>close(true);
+    if(typeof IntersectionObserver!=='undefined'){
+      const visibility=new IntersectionObserver(entries=>{
+        for(const entry of entries){
+          if(entry.target===stage)stageVisible=entry.isIntersecting;
+          if(entry.target===mini)miniVisible=entry.isIntersecting;
+        }
+        if(panel.hidden?miniVisible:stageVisible)nextPaint();
+      });
+      visibility.observe(stage);visibility.observe(mini);
+    }
+    const sizing=new ResizeObserver(entries=>{
+      for(const entry of entries||[])if((entry.target===map||entry.target===small)&&entry.contentRect){
         dimensions.set(entry.target,{width:Math.round(entry.contentRect.width),height:Math.round(entry.contentRect.height)});
       }
       nextPaint();
     });
-    mapSizes.observe(small);mapSizes.observe(map);
-    new ResizeObserver(nextPaint).observe(stage);
+    sizing.observe(stage);sizing.observe(map);sizing.observe(small);
     let lastMini=0;
     function cameraMoved(){
       const now=performance.now();
       if(panel.hidden&&now-lastMini>=60){lastMini=now;nextPaint();}
     }
-    for(const event of ['pointermove','pointerup','wheel','earthregionalinspect','earthregionalcamera'])stage.addEventListener(event,cameraMoved,{passive:true});
-    setInterval(()=>{if(geo&&!document.hidden&&panel.hidden&&mini.offsetWidth)miniView=draw(small,true);},900);
+    for(const event of ['earthregionalinspect','earthregionalcamera'])stage.addEventListener(event,cameraMoved,{passive:true});
+    setInterval(()=>{if(geo&&miniVisible&&!document.hidden&&panel.hidden&&mini.offsetWidth)miniView=draw(small,true);},900);
     return {refresh,close,open,selectChart,chart:()=>overlayId};
   }
   root.EarthRegionMap={mount};

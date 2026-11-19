@@ -58,18 +58,30 @@
       wrap.append(header);
       const relevant=rows.slice(0,8);
       const people=new Map(relevant.flatMap(row=>[[row.actorKey,row.actorName],...(row.peerKey?[[row.peerKey,row.peerName]]:[])]));
-      if(!people.has(reviewer))reviewer=person.identityKey||person.id;
+      const observer='@actions',community='@community';
+      if(!people.has(reviewer)&&reviewer!==observer&&reviewer!==community)reviewer=person.identityKey||person.id;
+      people.set(observer,'Observer · recorded actions');people.set(community,'Community · work and resources');
       const label=el('label','Read from'),field=el('select');field.setAttribute('aria-label','Read from');
       for(const [id,name] of people){const o=el('option',name);o.value=id;field.append(o);}field.value=reviewer;
       field.onchange=()=>{reviewer=field.value;host.dataset.journalOpen='true';render();host.querySelector('[aria-label="Read from"]')?.focus({preventScroll:true});};
       label.append(field);wrap.append(label);
-      for(const row of relevant.filter(r=>r.actorKey===reviewer||r.peerKey===reviewer)){
+      for(const row of relevant.filter(r=>reviewer===observer||reviewer===community||r.actorKey===reviewer||r.peerKey===reviewer)){
         const item=el('article');item.append(el('h4','Week '+row.week+' · '+model.tasks[row.subject].name),el('small',row.place+' · '+row.by));
         if(row.actorKey===reviewer){
           if(row.intention)item.append(el('p','Intention · '+row.intention));
           item.append(el('p','Expected · '+model.predictions[row.prediction]),el('p','First action · '+model.tasks[row.subject].choices[row.first]));
           if(row.choice!==row.first)item.append(el('p','Adjustment · '+model.tasks[row.subject].choices[row.choice]));
           item.append(el('p',row.result),el('small','Skill gained '+row.gain+' · Paid '+row.fee+' funds'));
+        }else if(reviewer===observer){
+          item.append(el('p',row.brief),el('p',row.by+' · '+model.tasks[row.subject].choices[row.first]));
+          if(row.choice!==row.first)item.append(el('p','Then · '+model.tasks[row.subject].choices[row.choice]));
+          item.append(el('p',row.result));
+        }else if(reviewer===community){
+          item.append(el('p',row.by+' spent a practice session on '+model.tasks[row.subject].name.toLowerCase()+'.'));
+          if(row.fee)item.append(el('p',row.actorName+' paid '+row.peerName+' '+row.fee+' personal funds for the session.'));
+          if(row.community?.plot!=null)item.append(el('p','Residential plot '+(row.community.plot+1)+' reached stage '+row.community.stage+' of 3.'+
+            (row.community.places?' Completed housing gained '+row.community.places+' place'+(row.community.places===1?'':'s')+'.':'')));
+          if(row.community?.routeCell)item.append(el('p','The town gained walking directions for surveyed cell '+row.community.routeCell+'.'));
         }else item.append(el('p',row.otherView),el('small','Worked with '+row.actorName));
         wrap.append(item);
       }
@@ -104,7 +116,17 @@
         }else peer='';
         const q=model.offer(w,site,subject,route,peer);
         line(q.field?.brief);
-        const history=model.latest(site,person).find(e=>e.subject===subject&&e.actorKey===(person.identityKey||person.id));
+        const previous=model.history(w,person).filter(e=>e.subject===subject&&e.actorKey===(person.identityKey||person.id));
+        const history=previous[0];
+        if(previous.length>=2){
+          const comparable=previous.filter(e=>e.route===route).slice(0,3);
+          if(comparable.length>=2){
+            const repeated=comparable.every(e=>e.first===comparable[0].first);
+            const revised=comparable.filter(e=>e.first!==e.choice).length,matched=comparable.filter(e=>e.prediction===e.outcome).length;
+            line('Last '+comparable.length+' attempts this way · '+matched+' matched your expectation; '+revised+' involved a change of approach.'+
+              (repeated?' Each time you began with “'+model.tasks[subject].choices[comparable[0].first]+'”.':''));
+          }
+        }
         if(history){line('Your previous attempt · '+history.result);if(q.confidence)line('Confidence · '+q.confidence.value+' / 100 across '+q.confidence.attempts+' recorded attempts.');}
         if(q.task){
           line('Your '+q.task.axis+' · '+q.skill+(q.fee?' · '+q.fee+' personal funds for '+q.peer.name:' · No labour fee')+(q.home?' · '+q.home.price+' for the material':''));

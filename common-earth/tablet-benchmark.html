@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Common Earth regional performance test</title>
+<style>
+*{box-sizing:border-box}body{background:#162b2a;color:#f2ecd8;margin:0;font:16px/1.45 system-ui}main{max-width:1060px;margin:auto;padding:.7rem}h1{font-size:1.35rem;margin:0}button{font:inherit;padding:.45rem .8rem}#stage{position:relative;width:min(100%,1024px);height:min(64vh,650px);overflow:hidden}#stage canvas{width:100%;height:100%;display:block;touch-action:none}#stage button{display:none}pre{white-space:pre-wrap;font:14px/1.45 monospace}
+</style>
+<main><h1>Regional performance test</h1><p>Pan a populated region with scripted touch input and time 24 production rounds. The test uses an isolated world and keeps the same starting save for repeated runs in this tab.</p>
+<button id="run" disabled>Run comparison</button> <span id="status" role="status">Loading game modules…</span>
+<div id="stage"><canvas aria-label="Benchmark street"></canvas></div><pre id="report"></pre></main>
+<script>
+(async()=>{
+  const status=document.querySelector('#status'),report=document.querySelector('#report'),run=document.querySelector('#run'),canvas=document.querySelector('canvas');
+  const html=await (await fetch('./index.html',{cache:'no-cache'})).text(),page=new DOMParser().parseFromString(html,'text/html');
+  const scripts=Array.from(page.querySelectorAll('script[src]')).map(s=>s.getAttribute('src')).filter(src=>/^[a-z][a-z0-9-]*\.js(?:\?[\w=-]+)?$/.test(src)&&!/^app\.js|^performance-meter\.js/.test(src));
+  for(const src of scripts){const link=document.createElement('link');link.rel='preload';link.as='script';link.href=src;document.head.append(link);}
+  for(const src of scripts){await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error(src));document.head.append(s);});}
+  const saveKey='ce-isolated-tablet-comparison-v1';
+  let snapshot=sessionStorage.getItem(saveKey);
+  if(!snapshot){
+    const fresh=CommonEarthSim.create({storage:null});fresh.found({name:'Bay Settlement',lat:-6.1622,lon:39.1922,coastal:true});
+    for(let i=0;i<4;i++)fresh.advance();
+    snapshot=JSON.stringify(fresh.state);sessionStorage.setItem(saveKey,snapshot);
+  }
+  const sortedStats=a=>{
+    const sorted=a.slice().sort((a,b)=>a-b),n=sorted.length;if(!n)return 'unavailable';
+    return sorted[Math.floor((n-1)/2)].toFixed(1)+' ms median, '+sorted[Math.ceil(n*.95)-1].toFixed(1)+' ms p95 (n='+n+')';
+  };
+  let frameTimes=[],draw=[],input=[],last=0,queued=null,sampling=false;
+  window.EarthPerformance={now:()=>performance.now(),record(){},finish(){},suspend(){},begin(){},end(){},input(c,e){if(sampling&&queued===null)queued=e.timeStamp;},
+    painted(c,started){if(!sampling||c!==canvas)return;const now=performance.now();draw.push(now-started);if(last)frameTimes.push(now-last);last=now;if(queued!==null){input.push(now-queued);queued=null;}}};
+  let scene;
+  run.addEventListener('click',async()=>{
+    run.disabled=true;report.textContent='';status.textContent='Warming the street…';
+    try{
+      scene?.destroy();
+      const sim=CommonEarthSim.create({storage:null,snapshot}),w=sim.state,home=sim.active();
+      scene=EarthStreet.mount(canvas,{getWorld:()=>w,getWeek:()=>w.week});scene.setSite(home);scene.resize();
+      const rect=canvas.getBoundingClientRect(),x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+      const touch=(type,dx,dy)=>canvas.dispatchEvent(new PointerEvent(type,{pointerType:'touch',pointerId:73,button:0,buttons:type==='pointerup'?0:1,bubbles:true,cancelable:true,clientX:x+dx,clientY:y+dy}));
+      await new Promise(done=>setTimeout(done,1200));frameTimes=[];input=[];draw=[];last=0;queued=null;sampling=true;
+      status.textContent='Panning for ten seconds…';touch('pointerdown',0,0);
+      const start=performance.now();await new Promise(done=>{
+        const pan=now=>{const t=(now-start)/1000;if(t>=10){done();return;}
+          touch('pointermove',rect.width*.26*Math.sin(t*1.7),rect.height*.18*Math.sin(t*.9));requestAnimationFrame(pan);};requestAnimationFrame(pan);
+      });
+      touch('pointerup',0,0);sampling=false;scene.destroy();scene=null;
+      status.textContent='Timing the regional economy…';const shift=[],realNow=Date.now;let clock=Math.max(realNow(),w.lastProductionAt||0);
+      try{Date.now=()=>clock;
+      for(let i=0;i<24;i++){
+        // The isolated benchmark advances the production eligibility clock between complete normal shifts.
+        clock+=24001;const t=performance.now(),result=sim.production(w.productionSerial||0,()=>true);
+        if(!result.ok)throw Error(result.message);shift.push(performance.now()-t);
+        await new Promise(done=>setTimeout(done,0));
+      }
+      }finally{Date.now=realNow;}
+      const n=frameTimes.length,secs=frameTimes.reduce((a,b)=>a+b,0)/1000;
+      report.textContent=['Viewport '+Math.round(rect.width)+' × '+Math.round(rect.height)+' CSS px, DPR '+devicePixelRatio,
+        'Starting save '+snapshot.length+' characters, week '+JSON.parse(snapshot).week,
+        'Completed draws '+(secs?n/secs:0).toFixed(1)+' FPS; '+frameTimes.filter(v=>v>34).length+'/'+n+' frame intervals over 34 ms',
+        'Frame intervals '+sortedStats(frameTimes),'Scene drawing '+sortedStats(draw),'Synthetic touch to draw '+sortedStats(input),
+        'Production '+sortedStats(shift),'Simulation throughput '+(1000*shift.length/shift.reduce((a,b)=>a+b,0)).toFixed(1)+' rounds/sec'].join('\n');
+      status.textContent='Comparison complete.';
+    }catch(error){status.textContent='Test stopped. '+error.message;}
+    finally{sampling=false;run.disabled=false;}
+  });status.textContent='Ready.';run.disabled=false;
+})().catch(error=>document.querySelector('#status').textContent='Could not load the test. '+error.message);
+</script></html>

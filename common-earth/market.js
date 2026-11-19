@@ -366,5 +366,10 @@
     }
     return true;
   }
-  root.EarthMarket=Object.freeze({view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,payWork,personalQuote,personal,quantity,makerInput,resourceOpportunity,resourceWork});
+  function foundingExchange(week){
+    const book=fresh(week);
+    book.till=0;book.shelf={food:0,materials:0};book.serial=1;
+    return book;
+  }
+  root.EarthMarket=Object.freeze({foundingExchange,view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,payWork,personalQuote,personal,quantity,makerInput,resourceOpportunity,resourceWork});
 })(typeof window==='undefined'?globalThis:window);

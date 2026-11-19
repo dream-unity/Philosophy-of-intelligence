@@ -53,6 +53,15 @@
     if(job.scope==='city')return point(...gateways[job.precinct]);
     return doorAt(job.plot%3,Math.floor(job.plot/3));
   }
+  // Keep the street works, finished buildings and regional map on one parcel.
+  function buildingPoint(job){
+    const gate=streetPoint(job);
+    if(job.scope==='street')return {x:gate.x,y:gate.y-2.04};
+    const outward=1.57;
+    if(gate.x<1)return {x:gate.x-outward,y:gate.y};
+    if(gate.x>23)return {x:gate.x+outward,y:gate.y};
+    return {x:gate.x,y:gate.y+(gate.y<1?-outward:outward)};
+  }
   function station(job,slot){
     const p=streetPoint(job),spread=(slot-1)*.45;
     if(job.scope==='city'&&[1,2,4,5].includes(job.precinct))p.y+=spread;
@@ -196,7 +205,7 @@
     return null;
   }
   function dutyWorkplace(site,person,duty,relief){
-    if(duty==='inspect')return chosenPlace(site,person,'market');
+    if(duty==='inspect'||duty==='housing')return chosenPlace(site,person,'market');
     if(duty==='specialist')return chosenPlace(site,person,relief.venue);
     return locateFacility(site,person,duty==='council'?['hall']:facilities[person.slot])||doorstep(person);
   }
@@ -306,7 +315,8 @@
   function allocate(site,world){
     const orders=queues(site),jobs=orders.filter(j=>!j.paused),teams=new Map(orders.map(j=>[j.id,[]]));
     const workers=site.residents.map(person=>{
-      const state=member(site,person),duty=commitment(site,world,person),pref=state.preference;
+      const state=member(site,person),hold=root.EarthHousing?.workHold(site,person.id);
+      const duty=commitment(site,world,person)||(hold?['Seeking shelter',hold,'housing']:null),pref=state.preference;
       const fixed=roles.includes(pref),tour=travelPlan(site,person.id,world?.week);
       const handover=reservedWork(site,world,person,state);
       const heldJob=pref==='build'&&state.preferredJobId?orders.find(j=>j.id===state.preferredJobId&&j.paused):null;
@@ -538,6 +548,7 @@
       j.partners=[...spec.partners];
     }
     if(!validJob(site,j))return reject('Choose a valid project and site.');
+    if(scope==='street'&&site.cooperative?.project?.plot===j.plot)return reject('A funded cooperative construction contract reserves this lot.');
     const ids=reservedIds(j);
     if(queues(site).some(k=>reservedIds(k).some(id=>ids.includes(id)) || k.scope===scope&&(scope==='city'?k.precinct===j.precinct:k.plot===j.plot)))return reject('This site already has a project.');
     if(site.buildings.some(b=>ids.includes(b.id)||scope==='street'&&b.plot===j.plot))return reject('This plot is already occupied.');
@@ -722,5 +733,5 @@
     }
     return {ok:true,changed,completed};
   }
-  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,privateHomeSite,errandStop,placementStop,placementDuty,travelPlan,handoverDuty,foodResource,harvestQuay,projectShipment,pantryStop,assignedDuty,releaseFromShift,weeklyAdjustment,needsTime,clockOrders});
+  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,buildingPoint,privateHomeSite,errandStop,placementStop,placementDuty,travelPlan,handoverDuty,foodResource,harvestQuay,projectShipment,pantryStop,assignedDuty,releaseFromShift,weeklyAdjustment,needsTime,clockOrders});
 })(typeof window==='undefined'?globalThis:window);

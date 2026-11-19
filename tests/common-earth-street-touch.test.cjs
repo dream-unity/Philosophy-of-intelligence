@@ -50,7 +50,7 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
     window: { addEventListener() {}, removeEventListener() {} },
     document: {
       hidden: false,
-      body: { dataset:{},hasAttribute(name) { return name === 'data-sheet-open' && covered; } },
+      body: { dataset:{},hasAttribute(name) { return name === 'data-sheet-open' ? covered : name === 'data-district-crossing' && Object.hasOwn(this.dataset,'districtCrossing'); } },
       addEventListener(name, handler) { documentEvents.set(name, handler); },
       removeEventListener(name) { documentEvents.delete(name); }
     },
@@ -159,7 +159,8 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
     documentEvents.get('earthsheetchange')?.({type:'earthsheetchange'});
   }
   function crossing(open) {
-    runtime.document.body.dataset.districtCrossing=String(open);
+    if(open)runtime.document.body.dataset.districtCrossing='';
+    else delete runtime.document.body.dataset.districtCrossing;
     documentEvents.get('earthdistrictcrossing')?.({type:'earthdistrictcrossing'});
   }
   function observeOther(id){

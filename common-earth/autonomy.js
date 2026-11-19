@@ -74,7 +74,7 @@
     }
     const pair={tools:[0,1],meals:[0,2],room:[1,2]}[site.neighbourWork?.active?.kind];
     if(site.neighbourWork?.active?.phase==='working' && pair?.includes(resident?.slot))return 'My neighbour and I already agreed on a joint job.';
-    return '';
+    return root.EarthHousing?.workHold(site,person.id)||'';
   }
   const memo=new WeakMap();
   function describe(id,item){

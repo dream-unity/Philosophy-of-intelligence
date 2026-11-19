@@ -158,7 +158,7 @@
     return proof.target==='market';
   }
   function summary(text){return String(text||'').slice(0,360);}
-  function addRecord(site,world,row,q,choice,outcome,gain,words){
+  function addRecord(site,world,row,q,choice,outcome,gain,words,community){
     const b=site.practice,peer=q.peer,doer=q.route==='commission'?peer:q.person;
     const reply=row.subject==='invitation'?(outcome===0?'I declined the invitation and kept my existing plans.':q.field.best===2?'They gave me the space I asked for.':'I agreed to spend time together on the terms we discussed.'):
       row.subject==='conversation'?(outcome===0?'I had to correct what they understood.':'I felt heard and confirmed what I meant.'):'We completed the activity together.';
@@ -166,7 +166,7 @@
     b.events.unshift({subject:row.subject,route:row.route,week:world.week,actorKey:row.actorKey,actorName:q.person.name,
       peerKey:row.peerKey,peerName:peer?.name||'',prediction:row.prediction,choice,first:row.first??choice,outcome,gain,
       fee:row.fee,intention:row.intention||'',brief:summary(q.field.brief),result:summary(words),otherView:summary(participant),place:site.name,
-      by:doer.name});
+      by:doer.name,community});
     b.events.length=Math.min(b.events.length,40);
   }
   function release(site,row){site.practice.open=site.practice.open.filter(r=>r!==row);site.practice.serial++;}
@@ -186,6 +186,7 @@
     const outcome=succeeded?(row.first==null?2:1):0;
     // The housing register pays the material supplier, registers the deed, and
     // changes housing capacity only when the final stage has really opened.
+    const beforeBeds=q.home&&root.EarthCityModel?.housingCapacity(site);
     if(succeeded&&q.home){
       const built=root.EarthResidentShops.buildWith(world,site,q.person,q.home,row.route==='solo'?q.person:q.peer);
       if(!built.ok)return built;
@@ -202,7 +203,13 @@
     const gain=row.route==='commission'?0:lesson.gain||0;
     const result=row.subject==='invitation'&&row.route==='together'?(succeeded?'The coach agreed that your rehearsal respected the other person’s stated preference.':'The coach asked you to reconsider the other person’s preference.'):(succeeded?q.field.success:q.field.miss);
     const words=result+(succeeded&&q.home?' '+q.home.title+' completed on plot '+(q.home.plot+1)+'.':'');
-    addRecord(site,world,row,q,selected,outcome,gain,words);release(site,row);
+    const community={};
+    if(succeeded&&q.home){
+      community.plot=q.home.plot;community.stage=q.home.stage;
+      if(Number.isFinite(beforeBeds))community.places=root.EarthCityModel.housingCapacity(site)-beforeBeds;
+    }
+    if(succeeded&&q.field.note)community.routeCell=q.field.note.cell;
+    addRecord(site,world,row,q,selected,outcome,gain,words,community);release(site,row);
     return {ok:true,message:words+(gain?' '+q.person.name+' gained '+gain+' '+q.task.axis+'.':'')};
   }
   function run(world,site,request,proof){
@@ -263,7 +270,16 @@
         r.subject==='housing'&&(!number(r.plot,0,5)||!number(r.stage,1,3)||!word(r.input,32)||!number(r.materialCost,1,6)))return false;
       for(const id of [r.actor,r.peer].filter(Boolean)){if(busy.has(id))return false;busy.add(id);}
     }
-    return b.events.every(e=>common(e)&&number(e.first,0,2)&&number(e.choice,0,2)&&number(e.outcome,0,2)&&number(e.gain,0,4)&&
+    function validEffect(e){
+      const c=e.community;
+      if(c===undefined)return true;
+      if(!c||typeof c!=='object'||Array.isArray(c))return false;
+      if(c.plot!=null||c.stage!=null||c.places!=null){
+        if(e.subject!=='housing'||!e.outcome||!number(c.plot,0,5)||!number(c.stage,1,3)||c.places!=null&&!number(c.places,0,8))return false;
+      }
+      return c.routeCell==null||e.subject==='design'&&e.outcome>0&&typeof c.routeCell==='string'&&/^-?\d{1,4},-?\d{1,4}$/.test(c.routeCell);
+    }
+    return b.events.every(e=>common(e)&&validEffect(e)&&number(e.first,0,2)&&number(e.choice,0,2)&&number(e.outcome,0,2)&&number(e.gain,0,4)&&
       ['actorName','peerName','brief','result','otherView','place','by'].every(k=>word(e[k],360)));
   }
   root.EarthPractice={tasks,routes,predictions,participants,offer,target,run,live,duty,booked,reserved,closeWeek,valid,latest,history,waymarked};

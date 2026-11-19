@@ -360,7 +360,7 @@
     let width=0,height=0,unit=30,zoom=1,pixelRatio=1,centreX=state.player.x,centreY=state.player.y;
     let fullPixelRatio=1,motionPixelRatio=1,limitedPixelRatio=1,slowFrameCount=0;
     let frame=0,idleTimer=0,routeTimer=0,routeDelay=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
-    const crossingOpen=()=>typeof document!=='undefined'&&document.body?.dataset?.districtCrossing==='true';
+    const crossingOpen=()=>typeof document!=='undefined'&&document.body?.hasAttribute('data-district-crossing');
     const sheetOpen=()=>!spectator&&typeof document!=='undefined'&&(crossingOpen()||Boolean(document.body?.hasAttribute('data-sheet-open')));
     let covered=sheetOpen();
     let shortMessage='',messageUntil=0,cameraFollows=true;
@@ -734,20 +734,34 @@
     };
     // Foreground props keep their normal depth in the painter's list. Only
     // their immutable local ink is reused; residents can walk in front or behind.
-    const stamps=new Map();
+    const stamps=new Map(),stampPixelLimit=compactTextures?1000000:2400000;
+    let stampPixels=0,stampFrame=0;
     function clearStamps(){
-      for(const tile of stamps.values())tile.width=tile.height=1;
-      stamps.clear();
+      for(const {tile} of stamps.values())tile.width=tile.height=1;
+      stamps.clear();stampPixels=0;
     }
     function stamp(key,x,y,size,bounds,density,paint){
       if(!terrainLayer){paint();return;}
       const stampSize=density<=32?32:density<=64?64:density<=112?112:160;
       const code=key+'/'+stampSize;
-      let tile=stamps.get(code);
+      const cached=stamps.get(code);
+      let tile=cached?.tile;
       const [left,above,w,h]=bounds;
-      if(!tile){
+      if(cached){
+        // Evict cold zoom levels first when a developed town has many different props.
+        cached.frame=stampFrame;stamps.delete(code);stamps.set(code,cached);
+      }else{
+        const tw=Math.ceil(w*stampSize)+4,th=Math.ceil(h*stampSize)+4,pixels=tw*th;
+        while(stampPixels+pixels>stampPixelLimit){
+          const oldest=stamps.entries().next().value;
+          // When the visible props exceed the budget, draw the remainder directly.
+          // Evicting another visible prop would rebuild both rasters every frame.
+          if(!oldest||oldest[1].frame>=stampFrame-1){paint();return;}
+          const [key,{tile:old}]=oldest;
+          stampPixels-=old.width*old.height;old.width=old.height=1;stamps.delete(key);
+        }
         tile=document.createElement('canvas');
-        tile.width=Math.ceil(w*stampSize)+4;tile.height=Math.ceil(h*stampSize)+4;
+        tile.width=tw;tile.height=th;
         const brush=tile.getContext('2d');
         if(!brush){paint();return;}
         const previous=ctx,ratio=stampSize/size;
@@ -756,7 +770,7 @@
           ctx.setTransform(ratio,0,0,ratio,left*stampSize+2-x*ratio,above*stampSize+2-y*ratio);
           ctx.lineJoin=ctx.lineCap='round';paint();
         }finally{ctx=previous;}
-        stamps.set(code,tile);
+        stampPixels+=pixels;stamps.set(code,{tile,frame:stampFrame});
       }
       const scale=size/stampSize;
       ctx.drawImage(tile,x-left*size-2*scale,y-above*size-2*scale,tile.width*scale,tile.height*scale);
@@ -876,6 +890,15 @@
       }
       return remote.scene;
     }
+    let travellerStamp='',travellerTime=-1,regionalTravellers=[];
+    function sceneTravellers(){
+      const stamp=[regionWorld.week,regionWorld.productionSerial,regionWorld.actionRevision,regionWorld.regionalWorld?.step,state.site.id].join('/');
+      if(stamp!==travellerStamp||visualTime-travellerTime>=.065||visualTime<travellerTime){
+        regionalTravellers=regionalModel.travellers?.(regionWorld,state.site)||[];
+        travellerStamp=stamp;travellerTime=visualTime;
+      }
+      return regionalTravellers;
+    }
     function paintRegionalTowns(v){
       if(!v)return;
       const candidates=geo.towns.filter(t=>t!==baseTown&&detailVisible(t,v));
@@ -892,7 +915,7 @@
         const p=renderRegion.localPoint(detailed,v.x,v.y),scene=remoteScene(detailed);
         scene.paintAt(ctx,{x:p.x,y:p.y,unit,width,height,ratio:pixelRatio,time:visualTime,evening});
       }
-      visibleTravellers=renderRegion.actors(ctx,regionWorld,state.site,v,false,regionalActor)>0;
+      visibleTravellers=renderRegion.actors(ctx,regionWorld,state.site,v,false,regionalActor,sceneTravellers())>0;
       const moved=!lastRegionFrame||lastRegionFrame.x!==v.x||lastRegionFrame.y!==v.y||lastRegionFrame.sx!==v.sx||
         lastRegionFrame.w!==v.w||lastRegionFrame.h!==v.h;
       if(moved){
@@ -910,7 +933,7 @@
       if(!look){look=communityLook(t.site,who);remember(regionalLooks,key,look,48);}
       const p=renderRegion.localPoint(baseTown,actor.x,actor.y),dx=(actor.dx||0)-(actor.dy||0),dy=-(actor.dx||0)-(actor.dy||0);
       const norm=Math.hypot(dx,dy)||1,ax=dx/norm,ay=dy/norm,stationary=actor.phase==='working';
-      if(actor.kind==='fight'){
+      if(actor.phase==='fighting'){
         // Both figures share one rhythm. The opposing body gives ground as the
         // first reaches forward. Their saved positions and the outcome stay fixed.
         const step=actor.fightRow===1?.22:0;
@@ -1088,7 +1111,6 @@
     }
     function plant(x,y,size,seed,palm=false) {
       const species=treeSpecies(seed,palm),h=treeSize(size,species),foot=screen(x,y,.086);
-      ellipse(foot[0],foot[1],unit*size*.143,unit*size*.056,'rgba(49,48,32,.22)');
       if (plantingAtlas) {
         const [x0,y0,w,d]=treeInk[species],scale=h/256;
         ctx.drawImage(plantingAtlas,species*256+x0,y0,w,d,foot[0]-h*treeFoot[species]+x0*scale,foot[1]-h*.9766+y0*scale,w*scale,d*scale);
@@ -1305,7 +1327,6 @@
       for(let by=0;by<4;by++)for(let bx=0;bx<4;bx++){
         const block=[bx,by],cell=by*4+bx, p=centre(block), lot=state.lots.find(l=>sameBlock(l.block,block));
         const park=!lot&&!sameBlock(block,MARKET)&&!HOMES.some(home=>sameBlock(home,block));
-        if(s?.centre&&bx===3&&by===0)continue;
         const n=park?7:(!lot||lot.building)?1:2;
         for(let i=0;i<n;i++){
           const tx=park?p.x-1.7+noise(seed,cell*23+i,11)*3.4:p.x+(i%2?1:-1)*(1.37+noise(seed,cell,9)*.45);
@@ -1591,7 +1612,12 @@
       const site=state.site;
       return berth===oceanBerths[0] && site.lon>36 && site.lon<81 && site.lat>-22 && site.lat<19?oceanSail:null;
     }
-    function skiff(x,y,paint,large) {
+    const skiffBounds=[1.9,1.4,3.8,3.0];
+    function skiff(x,y,paint,large){
+      const [sx,sy]=screen(x,y);
+      stamp('boat/'+paint+'/'+Boolean(large),sx,sy,unit,skiffBounds,unit*pixelRatio,()=>paintSkiff(x,y,paint,large));
+    }
+    function paintSkiff(x,y,paint,large) {
       const a=large?1.31:.96, b=large?.41:.33;
       const outline=[[-1,0],[-.68,-.74],[-.14,-1],[.58,-.94],[.98,-.54],[.91,.54],[.48,.86],[-.18,1],[-.69,.68]];
       const hull=(scale,z,drift=0)=>outline.map(([xx,yy])=>[x+xx*a*scale,y+yy*b*scale+drift,z]);
@@ -1626,6 +1652,12 @@
         for(let k=0;k<3;k++)sphere(x+.06+k*.064,y+.12,.19,.055,.05,i%2?'#91aa74':'#d1a365');
       }
       const x=p.x+1.83,y=p.y+.5;
+      const [signX,signY]=screen(x+.32,y,1.3);
+      const size=Math.max(7,Math.min(14,unit*.28));
+      ctx.save();ctx.font='600 '+size+'px system-ui,sans-serif';
+      const width=ctx.measureText('Town Centre').width+size*.9;
+      ctx.fillStyle='#233b39';ctx.fillRect(signX-width/2,signY-size*.72,width,size*1.44);
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ffedc6';ctx.fillText('Town Centre',signX,signY);ctx.restore();
       if(furniture(3,x+.22,y))return;
       for(const off of [0,.61])line(x+off,y,.02,x+off,y,.99,'#6b6c54',Math.max(.9,unit*.054));
       poly([[x-.07,y,.43],[x+.69,y,.43],[x+.69,y,1.06],[x-.07,y,1.06]],'#a38e66','#69755e',Math.max(.65,unit*.035));
@@ -1887,6 +1919,8 @@
           ellipse(...foot,unit*.205,unit*.097,water?'#796e51':'#8a8063');
           ellipse(...foot,unit*.14,unit*.063,'#655f43');
         }
+        const contact=screen(tree.x,tree.y,.086);
+        ellipse(contact[0],contact[1],unit*tree.size*.143,unit*tree.size*.056,'rgba(49,48,32,.22)');
         castTree(tree);
       }
       streetName(15,24.44,'EXCHANGE ST','x');streetName(6.4,9,'GARDEN WALK','y');streetName(8.9,12.43,'COMMONS RD','x');
@@ -2187,12 +2221,25 @@
         const rw=Math.max(1,Math.round(w*density)),rh=Math.max(1,Math.round(h*density));
         if(surface.width!==rw||surface.height!==rh){surface.width=rw;surface.height=rh;}
         surface.style.width=w+'px';surface.style.height=h+'px';
-        const field=renderRegion.viewport(v.x,v.y,w,h,v.sx,v.sy,horizon/h);
-        const foreground=ctx;ctx=brush;
-        try{ctx.setTransform(rw/w,0,0,rh/h,0,0);background(field);}finally{ctx=foreground;}
-        cached=terrainSnapshot={regional:true,x:v.x,y:v.y,sx:v.sx,w,h,horizon,stamp};
+        cached?.refinement?.cancel();
+        const layer={regional:true,x:v.x,y:v.y,sx:v.sx,w,h,horizon,stamp,repaint:true,
+          field:renderRegion.viewport(v.x,v.y,w,h,v.sx,v.sy,horizon/h)};
+        layer.refinement=renderRegion.tileRefinement?.(
+          ()=>alive&&visible&&!covered&&!document.hidden&&terrainSnapshot===layer,
+          ()=>{layer.refinement=null;layer.repaint=true;dirty=true;schedule();}
+        );
+        cached=terrainSnapshot=layer;
         scale=1;left=-mx;top=-my;
       }
+      if(cached.repaint){
+        const foreground=ctx;ctx=brush;
+        try{
+          ctx.setTransform(surface.width/cached.w,0,0,surface.height/cached.h,0,0);
+          background(cached.field,cached.refinement?.add);
+        }finally{ctx=foreground;}
+        cached.repaint=false;
+      }
+      cached.refinement?.wake();
       const transform='translate3d('+left.toFixed(3)+'px,'+top.toFixed(3)+'px,0) scale('+scale+')';
       if(cached.transform!==transform){surface.style.transform=transform;cached.transform=transform;}
     }
@@ -2225,9 +2272,9 @@
       const p=screen(x,y,.014);ctx.save();ctx.translate(...p);ctx.rotate(direction==='x'?Math.atan(TILT):-Math.atan(TILT));
       ctx.font=`600 ${clamp(unit*.22,4.5,11)}px system-ui,sans-serif`;ctx.fillStyle='rgba(232,227,198,.61)';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(name,0,0);ctx.restore();
     }
-    function background(v) {
+    function background(v,prepare) {
       if(v){
-        renderRegion.soil(ctx,geo,v,true,plantingAtlas);
+        renderRegion.soil(ctx,geo,v,true,plantingAtlas,prepare);
         renderRegion.routeLayer(ctx,regionWorld,state.site,v,false);
         renderRegion.useLayer(ctx,regionWorld,state.site,v,false);
         renderRegion.explored(ctx,geo,regionWorld,state.site,v,exploration);return;
@@ -2712,23 +2759,34 @@
       if(h.build?.shop)return window.EarthDistrictGrowth.shopPoint(site,h.build.lot);
       return h.build||site.growth.road?.lot===h.plot?add(home,.4,.5):null;
     }
-    const frontages={boxes:[],west:-.78,north:-.78};
+    const hasDwelling=(site,h)=>window.EarthHousing?.frontage(site,h)!=='lot';
+    const frontages={boxes:[],courtyards:[],west:-.78,north:-.78};
     function refreshFrontages(site){
       const g=site?.growth;
       frontages.boxes.length=0;frontages.west=-.78;frontages.north=-.78;
-      if(!g&&!site?.centre)return;
+      frontages.courtyards.length=0;
+      if(site?.city?.precincts.some(p=>p.use==='homes')){
+        for(const row of window.EarthCityModel.overview(site).records){
+          if(row.use!=='homes')continue;
+          // The completed courtyard stands on the site the crew just vacated.
+          const built=projectSite({scope:'city',precinct:row.id,kind:'homes',progress:1});
+          if(built)frontages.courtyards.push({x:built.x,y:built.y,precinct:row.id,name:row.name,beds:row.beds});
+        }
+      }
+      if(!g)return;
       const add=(p,width,depth)=>{
         frontages.west=Math.min(frontages.west,p.x-.74);frontages.north=Math.min(frontages.north,p.y-.74);
         frontages.boxes.push(footprint(p.x,p.y,width,depth));
       };
-      if(site.centre){
-        add(window.EarthTownCentre.centrePoint,3.2,2.4);
-        for(const p of site.centre.plots)if(p.streetPlot==null&&!p.founding)add(p,1.04,.94);
-        if(site.centre.project)add(site.centre.project.point,.95,.72);
-      }
-      for(const h of g?.households||[]){
+      for(const h of site.civicLand?.homes||[])add(window.EarthCouncilHomes.plot(h.plot),1.15,1.1);
+      for(const h of g.households){
         const scale=homeScale(h),home=window.EarthDistrictGrowth.homePoint(site,h.plot);
-        if(!site.centre)add(home,2.54*scale,2.25*scale);
+        if(hasDwelling(site,h))add(home,2.54*scale,2.25*scale);
+        else{
+          // An undeveloped parcel extends the street but leaves it walkable.
+          frontages.west=Math.min(frontages.west,home.x-.74);
+          frontages.north=Math.min(frontages.north,home.y-.74);
+        }
         const work=growthWorksite(site,h,home);
         if(work){
           add({x:work.x-.01,y:work.y+.13},.72,.26);
@@ -3475,12 +3533,7 @@
     function projectSite(job){
       const gate=window.EarthConstruction?.streetPoint(job);
       if(!gate)return null;
-      let x=gate.x,y=gate.y;
-      if(job.scope==='street')y-=2.04;
-      else if(x<1)x-=1.57;
-      else if(x>SIDE-1)x+=1.57;
-      else if(y<1)y-=1.57;
-      else y+=1.57;
+      const {x,y}=window.EarthConstruction.buildingPoint(job);
       const vertical=job.scope==='city'&&[1,2,4,5].includes(job.precinct);
       const sign={x:gate.x+(vertical?0:1.05),y:gate.y+(vertical?1.05:0)};
       const removal=job.kind==='dismantle',artKind=removal?job.original?.kind:job.kind;
@@ -3489,7 +3542,7 @@
       const built=removal?clamp((1-job.progress)/.72,0,1):job.progress;
       return {...job,x,y,gate,sign,vertical,removal,artKind,frame,built,scale:job.scope==='city'?.73:1,type:'construction',jobId:job.id,label:job.name};
     }
-    const vacant=lot=>Boolean(lot&&!lot.building&&state.site?.centre?.project?.streetPlot!==lot.plot&&!workLots.has(lot.plot));
+    const vacant=lot=>Boolean(lot&&!lot.building&&state.site?.cooperative?.project?.plot!==lot.plot&&!workLots.has(lot.plot));
     function workTree(tree){
       const bx=Math.floor(tree.x/BLOCK),by=Math.floor(tree.y/BLOCK);
       return bx>=0&&bx<3&&by>=0&&by<3&&workLots.has(by*3+bx);
@@ -3644,27 +3697,31 @@
         const fallback=Math.abs(dx)/size<1.8&&dy/size> -2.2&&dy/size<1-Math.abs(dx)/size*.45;
         if(inside??fallback){depth=order;front=()=>({...describe(),objectX:pos.x,objectY:pos.y});}
       }
-      if(site.centre){
-        test(window.EarthTownCentre.centrePoint,'hall',0,.78,.35,()=>({assetId:'town-centre',assetName:'Town Centre',use:'centre',activity:'Housing register, recruitment, entry customs and civic decisions.'}));
-        for(const d of site.centre.plots)if(d.streetPlot==null)test(d,d.kind==='home'?'home':'market',d.id%3,.43,.34,()=>({assetId:'register-'+d.id,assetName:d.title,use:'dwelling',ownerKey:d.owner,activity:d.kind==='home'?d.beds+' completed residential places.':'Resident cooperative, serving the local district.'}));
-        const j=site.centre.project;if(j)test(j.point,'home',0,.4,.35,()=>({assetId:j.id,assetName:'Construction on plot '+(j.plot+1),use:'centre',activity:j.workerName+' · '+j.reason}));
-      }
-      test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Market exchange',use:'market',
-        activity:'Collect a parcel or bring finished work here for payment.'}));
+      test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Town Centre and market exchange',use:'market',
+        activity:'Collect parcels, bring finished work for payment, or visit the Town Centre here.'}));
       HOMES.forEach((block,i)=>test(centre(block),'home',i,1,.35,()=>{
         const person=site.residents[i];
         return {assetId:'home-'+i,use:'home',homeSlot:i,assetName:person?person.name+'’s home':'District home',ownerId:person?.id,
           activity:person?person.name+' lives here.':'A home in '+site.name+'.'};
       }));
+      const project=site.cooperative?.project;
+      if(project)test(window.EarthCooperativeWorks.centre(project.plot),project.kind,0,.7,.34,()=>({assetId:project.id,
+        assetName:project.kind==='market'?'Cooperative store worksite':'Workshop construction',use:'project',plot:project.plot,
+        activity:project.reason+' '+(project.workerName||'The council')+' · '+['delivering materials','assembling the frame','fitting out'][project.stage]+'.'}));
       for(const lot of state.lots)if(lot.building){
         const b=lot.building;
         test(lot,b.kind,0,1,.35,()=>({assetId:b.id,assetName:b.name,use:'project',plot:lot.plot,buildingKind:b.kind,
           activity:'Plot '+(lot.plot+1)+'. '+(window.CommonEarthSim?.buildings?.[b.kind]?.info||'Completed district project.')}));
       }
       const growth=window.EarthDistrictGrowth;
+      for(const h of site.civicLand?.homes||[]){
+        const point=window.EarthCouncilHomes.plot(h.plot);
+        test(point,'home',h.plot%3,.53,.34,()=>({assetId:'cottage-'+h.plot,cottagePlot:h.plot,assetName:'Council cottage C'+(h.plot+1),use:'home',
+          activity:'Two habitable places. Commissioned by '+h.proposer+' and completed by '+h.builder+' in week '+h.completed+'.'}));
+      }
       if(growth)for(const h of site.growth?.households||[]){
         const home=growth.homePoint(site,h.plot);
-        if(!site.centre)test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
+        if(hasDwelling(site,h))test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
           assetName:h.name+'’s home',ownerKey:h.owner,activity:'Residential lot '+(h.plot+1)+'. '+(h.extension||'')}));
         if(h.shop)test(growth.shopPoint(site,h.businessPlot),'market',0,.36,.3,()=>{
           const item=window.EarthResidentShops?.products[h.shop];
@@ -3672,6 +3729,10 @@
             activity:(item?.name||h.shop)+' · '+h.stock+' in stock.'};
         });
       }
+      for(const court of frontages.courtyards)test(court,'home',court.precinct%3,.73,.34,()=>({
+        assetId:'courtyard-'+court.precinct,use:'courtyard',assetName:court.name+' courtyards',
+        activity:court.beds+' completed housing places. The population directory lists their occupants.'
+      }));
       return front?{type:'premises',kind:'building',...front()}:null;
     }
     function hitWorksite(sx,sy,paintedOnly=false) {
@@ -3925,6 +3986,12 @@
       const pickup=householdTruckBody(point.residentId,point);if(pickup)return pickup;
       return {x:point.x+.47+(reduced?0:Math.sin((visualTime-(trafficWaits.get('home-'+point.residentId)||0))*.45+point.index)*.12),y:point.y-.21};
     }
+    const achievementBounds=[1.35,2.28,2.7,3];
+    function drawAchievement(mark){
+      const [sx,sy]=screen(mark.x,mark.y);
+      const key='landmark/'+mark.kind+'/'+(mark.stage||0)+'/'+(mark.home?.price!=null)+'/'+Boolean(state.site.water);
+      stamp(key,sx,sy,unit,achievementBounds,unit*pixelRatio,()=>paintAchievement(mark));
+    }
     function paintAchievement(mark){
       const {x,y}=mark;
       if(mark.kind==='courtyard'){
@@ -4146,6 +4213,7 @@
     const bodyBounds=[1.05,1.6,.68],waterWorkBounds=[3.25,1.6,2.5],vehicleBounds=[2.4,2.5,1.5];
     const actorBounds=id=>shoreFishers.has(id)?waterWorkBounds:bodyBounds;
     function drawScene(repaint) {
+      stampFrame++;
       ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);ctx.lineJoin='round';ctx.lineCap='round';
       if(inset)cachedGround();
       else{const view=regionView();paintTerrainLayer(view);paintRegionalTowns(view);}
@@ -4179,37 +4247,41 @@
         });
       }
       HOMES.forEach((block,index)=>{const p=centre(block);addItem(p.x,p.y,blockDepth(p),()=>residence({...p,index}),buildingBounds);});
-      for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item),buildingBounds);}
-      if(state.site.centre){
-        const civic=state.site.centre,at=window.EarthTownCentre.centrePoint;
-        addItem(at.x,at.y,at.x+at.y+.35,()=>{
-          if(!window.EarthTownArchitecture?.draw(ctx,state.site,'hall',0,...screen(at.x,at.y),unit*.78))
-            box(at.x-1.1,at.y-.9,2.2,1.8,.04,1.7,'#d4b987','#b39a73','#a58a68');
-          const [px,py]=screen(at.x,at.y+1.22);
-          ctx.save();ctx.font='600 12px system-ui';ctx.textAlign='center';ctx.fillStyle='#16352e';ctx.fillRect(px-40,py-12,80,17);ctx.fillStyle='#f5e8c8';ctx.fillText('Town Centre',px,py);ctx.restore();
+      const cooperative=state.site.cooperative?.project;
+      if(cooperative){
+        const {x,y}=window.EarthCooperativeWorks.centre(cooperative.plot);
+        addItem(x,y,x+y+.34,()=>{
+          rect(x-1.15,y-.85,2.3,1.7,.026,'#ae8c61');
+          for(const dx of [-.95,.95])for(const dy of [-.68,.68])
+            box(x+dx,y+dy,.11,.11,.03,.33+cooperative.stage*.39,'#dfbd86','#ad8559','#917153');
+          if(cooperative.stage)box(x-.55,y-.37,1.1,.74,.03,.26,'#b79973','#9a7856','#81694c');
+          if(cooperative.stage===2)line(x-1,y+.68,1.17,x+1,y+.68,1.17,'#d6b17c',2);
         },buildingBounds);
-        for(const d of civic.plots){
-          if(d.founding||d.streetPlot!=null)continue;
-          const art=d.kind==='home'?'home':'market';
-          addItem(d.x,d.y,d.x+d.y+.34,()=>{
-            if(!window.EarthTownArchitecture?.draw(ctx,state.site,art,d.id%3,...screen(d.x,d.y),unit*.43))
-              box(d.x-.4,d.y-.37,.8,.74,0,.63,'#cfaf89','#ad896a','#8a7966');
-          },buildingBounds);
-        }
-        const j=civic.project;
-        if(j){const {x,y}=j.point;addItem(x,y,x+y+.36,()=>{
-          rect(x-.52,y-.42,1.04,.84,.025,'#aa9677');
-          for(const dx of [-.42,.38])for(const dy of [-.31,.31])box(x+dx,y+dy,.09,.09,.02,.23+j.stage*.26,'#e3c48c','#ac8561','#8b6c4f');
-          if(j.delivered)box(x-.41,y-.30,.84,.64,.02,.20,'#b58c62','#997656','#806348');
-          if(j.stage>=2)line(x-.4,y+.3,.73,x+.4,y+.3,.73,'#dcb781',2);
-        },buildingBounds);}
       }
+      for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item),buildingBounds);}
       if(state.site.growth){
         const g=state.site.growth;
+        for(const h of state.site.civicLand?.homes||[]){
+          const {x,y}=window.EarthCouncilHomes.plot(h.plot);
+          addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',h.plot%3,...screen(x,y),unit*.53),buildingBounds);
+        }
+        const cottage=state.site.civicLand?.project;
+        if(cottage){
+          const {x,y}=window.EarthCouncilHomes.plot(cottage.plot);
+          addItem(x,y,x+y+.32,()=>{
+            rect(x-.56,y-.5,1.12,1,.02,'#9c8266');
+            for(const offset of [-.44,.44])box(x+offset,y+.42,.10,.10,.03,.55,'#dfb16e','#9a744c','#7f5b39');
+            if(cottage.phase==='build')box(x-.5,y-.5,1,.18,.03,.2+.24*cottage.built,'#bf9c72','#9e7d62','#7e6147');
+          },buildingBounds);
+        }
         for(const h of g.households){
           const {x,y}=window.EarthDistrictGrowth.homePoint(state.site,h.plot);
           if(h.plot<g.roads)rect(x-.17,y+.4,.34,Math.abs(y)-.4,.015,'#a69a83');
-          if(!state.site.centre)addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
+          if(hasDwelling(state.site,h)){
+            addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
+          }else{
+            rect(x-.52,y-.43,1.04,.86,.012,'#a59871');
+          }
           const appointment=growthWorksite(state.site,h,{x,y});
           if(appointment){
             const {x:ax,y:ay}=appointment;
@@ -4229,7 +4301,10 @@
           addItem(x,y,x+y+.2,()=>drawTransport(exchangeFleetBay,g.vehicle===1?2:g.vehicle===2?0:1),vehicleBounds);
         }
       }
-      for(const mark of landmarks)addItem(mark.x,mark.y,mark.x+mark.y+.30,()=>paintAchievement(mark),furnitureBounds);
+      for(const court of frontages.courtyards){
+        addItem(court.x,court.y,court.x+court.y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',court.precinct%3,...screen(court.x,court.y),unit*.73),buildingBounds);
+      }
+      for(const mark of landmarks)addItem(mark.x,mark.y,mark.x+mark.y+.30,()=>drawAchievement(mark),furnitureBounds);
       for(const job of works.values()){
         addItem(job.x,job.y,blockDepth(job),()=>worksiteArt(job));
         workbench(job,addItem);
@@ -4323,7 +4398,7 @@
     function traversable(p, driving=state.mode==='drive',van=parkedBounds,truck=drivingTruck,obstacles=trafficDetour) {
       if(p.x>SIDE+.78||p.y>SIDE+.78)return false;
       if(p.x<-.78||p.y<-.78){
-        if(driving||p.x<frontages.west||p.y<frontages.north||p.x<-.78&&p.y<-.78)return false;
+        if(driving||p.x<frontages.west||p.y<frontages.north||p.x<-.78&&p.y<-.78&&!(state.site?.civicLand?.opened))return false;
       }
       if(driving)return road(p.x,p.y)&&!carHitsObject(p,p,truck)&&!occupiedNode(p,obstacles,truck);
       if(van&&insideFootprint(p,van)||trafficDetour?.some(bounds=>insideFootprint(p,bounds)))return false;
@@ -5098,8 +5173,8 @@
       state.site=site||null;refreshGeography();state.seed=hash(`${site?.lat??0},${site?.lon??0},${site?.id||'district'}`);
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
-      const nextFingerprint=JSON.stringify([nextKey,site?.centre?.plots.length,site?.centre?.project?.id,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
-        site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
+      const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
+        site?.civicLand?.homes.length,site?.civicLand?.project?.plot,site?.city?.precincts.map(p=>p.use==='homes'),site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
         landmarks.filter(mark=>mark.kind!=='balcony').map(mark=>mark.key),
         site?.residents?.map(r=>[r.id,r.name,window.EarthCommunityLife?.present(site,r.id)!==false])]);
       if(previousKey!==nextKey || state.fingerprint!==nextFingerprint){
@@ -5337,6 +5412,10 @@
       if(!ref)return null;
       if(ref.type==='activityVenue'){
         if(Number.isInteger(ref.homeSlot)&&HOMES[ref.homeSlot])return {...ref,...entry(HOMES[ref.homeSlot])};
+        if(ref.cottagePlot!=null){
+          const house=state.site.civicLand?.homes.find(h=>h.plot===ref.cottagePlot);
+          return house?{...ref,...add(window.EarthCouncilHomes.plot(house.plot),0,.72)}:null;
+        }
         if(ref.householdPlot!=null){
           const house=state.site.growth?.households[ref.householdPlot];
           return house?{...ref,...add(window.EarthDistrictGrowth.homePoint(state.site,house.plot),0,.72)}:null;
@@ -5790,7 +5869,8 @@
       width=w;height=h;fullPixelRatio=ratio;slowFrameCount=0;
       const motionRatio=regionEnabled()?Math.max(.76,Math.sqrt(950000/(w*h))):Math.max(1,Math.sqrt(1050000/(w*h)));
       motionPixelRatio=terrainLayer&&motionRatio<ratio*.9 ? motionRatio : ratio;
-      const lower=Math.max(regionEnabled()?.65:1,Math.sqrt(600000/(w*h)));
+      // On a DPR-one tablet, a full-size backing store can still miss several frames.
+      const lower=regionEnabled()?Math.max(.68,Math.min(ratio*.80,Math.sqrt(600000/(w*h)))):Math.max(1,Math.sqrt(600000/(w*h)));
       limitedPixelRatio=terrainLayer&&lower<motionPixelRatio*.9 ? lower : motionPixelRatio;
       sizeForeground(ratio);
       if(state.placed||overviewZoom!==null)zoom=fitZoom();
@@ -5946,7 +6026,7 @@
     }
     listen(canvas,'pointerdown',e=>{
       if(covered||!state.site||e.button!==0||fingers.has(e.pointerId))return;
-      if(!fingers.size&&e.pointerType==='touch')meter?.begin(canvas);
+      if(!fingers.size&&e.pointerType==='touch'){meter?.begin(canvas);previousGestureAt=frameTimer?.now()||0;}
       state.hover=null;
       if(e.cancelable)e.preventDefault();
       if(e.pointerType!=='touch')canvas.focus({preventScroll:true});
@@ -5957,15 +6037,15 @@
         dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,slop:e.pointerType==='touch'?12:5};
       }else if(fingers.size===2)beginPinch();
     });
-    let lastGesturePaint=0;
+    let lastGesturePaint=0,previousGestureAt=0;
     function paintDelayedGesture(){
-      // If input arrives while the browser is withholding animation callbacks, redraw
-      // the camera at the new finger position. Movement and work keep their normal
-      // clocks. An expensive cold paint backs off before sampling again, so
-      // newly cached artwork can recover during this gesture.
       if(!frameTimer||!visible||covered||!lastFrame)return;
-      const now=frameTimer.now(),interval=paintAverage<=10?20:Math.max(60,paintAverage*4);
-      if(now-lastFrame<65||now-lastGesturePaint<interval)return;
+      const now=frameTimer.now(),gap=now-previousGestureAt;
+      previousGestureAt=now;
+      // A long input gap may put the input and animation callbacks in the same
+      // batch. Otherwise allow costly scenes time to recover before resampling.
+      const interval=paintAverage<=10?20:Math.max(60,paintAverage*4);
+      if(now-lastGesturePaint<interval||(gap<90&&now-lastFrame<65))return;
       lastGesturePaint=now;
       draw();
       const cost=frameTimer.now()-now;
@@ -5986,14 +6066,14 @@
       if(pinch){
         const [a,b]=fingers.values(),distance=Math.hypot(a.x-b.x,a.y-b.y);
         zoom=clamp(pinch.zoom*distance/pinch.distance,minZoom(),2.15);unit=baseUnit()*zoom;
-        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;if(e.pointerType==='touch')paintDelayedGesture();return;
+        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;schedule();if(e.pointerType==='touch')paintDelayedGesture();return;
       }
       if(dragging?.id!==e.pointerId)return;
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
       clearObservation(false);dragging.moved=true;cameraFollows=false;
       regionalFollow=null;overviewZoom=null;
-      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;if(e.pointerType==='touch')paintDelayedGesture();
+      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;schedule();if(e.pointerType==='touch')paintDelayedGesture();
     });
     function endPointer(e) {
       if(!fingers.delete(e.pointerId))return;

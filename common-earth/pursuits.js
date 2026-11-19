@@ -49,12 +49,12 @@
     const job=jobs[kind],cart=site.pursuits?.cart;
     if(kind==='cart' && cart)return null;
     if(['baskets','rack'].includes(kind) && (!cart||cart.fixture===kind))return null;
-    const output=reward(site,kind),price=job.price||0;
+    const output=reward(site,kind),price=job.price||0,hold=root.EarthHousing?.workHold(site,actorId(site))||'';
     const terms=job.item?'+'+output+' '+job.item:
       kind==='cart'?'2 materials · carry more on every personal job':
       kind==='baskets'?'Food loads carry 4 food':'Timber loads carry 4 materials';
     return {kind,label:job.label,seconds:job.seconds,terms,output,price,
-      available:!site.pursuits?.ticket && site.materials>=price && (site.pursuits?.serial||0)<Number.MAX_SAFE_INTEGER};
+      reason:hold,available:!hold&&!site.pursuits?.ticket && site.materials>=price && (site.pursuits?.serial||0)<Number.MAX_SAFE_INTEGER};
   }
   function view(site,now=Date.now()){
     if(!site)return null;
@@ -72,7 +72,7 @@
     if(request.action==='start'){
       if(ticket)return nope('Finish the current job or release it first.');
       const task=offer(site,request.kind);
-      if(!task || !task.available)return nope('Review the current materials and handcart before starting.');
+      if(!task || !task.available)return nope(task?.reason||'Review the current materials and handcart before starting.');
       site.materials-=task.price;
       const book=site.pursuits??={serial:0,cart:null};
       book.serial++;

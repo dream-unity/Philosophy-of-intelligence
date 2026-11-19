@@ -88,11 +88,19 @@
         const m=root.EarthCommunityLife.districtProfile(sim.state,target);
         actions.replaceChildren();
         if(watchTown)actions.append(btn('See streets',()=>watchTown(n.id),'See '+n.name+' while your character stays in '+site.name+'.'));
-        if(v.viewId==='steward')actions.append(btn((getStreet()?.getState()?.vehicle==='van'?'Drive there':n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
+        const gate=root.EarthCommunityLife.hostedVisit(sim.state,target);
+        if(v.viewId==='steward'){
+          if(gate){
+            const request=btn('Request a hosted visit',()=>station('requestEntry',n.id,{type:'market'},'the exchange desk'));
+            request.disabled=gate.pending||!gate.host.id;actions.append(request);
+          }
+          if(!gate||gate.optional&&!gate.pending)actions.append(btn((getStreet()?.getState()?.vehicle==='van'?'Drive there':n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
+        }
         const character=root.EarthCommunityLife.communityCharacter(target);
         facts.textContent=character.summary+'. '+m.population+' residents · '+m.freeBeds+' open housing places. '+m.works;
         detail.replaceChildren(heading,el('p',n.host+' is looking for help '+n.need+'. Residents value '+n.lifestyle+'.'),
           el('p',character.detail),el('p',m.food+' food · '+m.materials+' materials · '+m.funds+' town funds.'));
+        if(gate)facts.textContent+=' '+gate.reason;
         if(m.pressure)detail.append(el('p',m.pressure+'. Households weigh these conditions against their local ties.'));
         appendHouseholds(detail,m.households);
         if(m.trade)detail.append(el('p',m.trade));

@@ -33,9 +33,8 @@
     return Math.max(0,Math.min(openings-paid(site,week)-Object.keys(site.purses?.tickets||{}).length,Math.floor(cash/wage)));
   }
   function elsewhere(site,id,week){
-    const p=root.EarthPersonas?.profile(site,id),restriction=p&&root.EarthTownCentre?.restriction(site,p);
-    if(restriction)return restriction;
     const row=site.autonomy?.people?.[id],career=site.careers?.[id];
+    const shelter=root.EarthHousing?.workHold(site,id);if(shelter)return shelter;
     if(account(site,id)?.craftWeek===week)return 'This resident has already filled this week’s personal making session.';
     if(root.EarthCareers?.specialistShift?.(site,id,week)||career?.specialistRelief?.week>=week)return 'A specialist relief shift already needs this person.';
     const coverThrough=root.EarthCareers?.coverCommitment?.(site,id,week);
@@ -337,9 +336,18 @@
     receipt(to,toId,world.week,'moveIn',amount,message);destination.entries[0].transfer={...link};
     return {moved:amount,kept:origin.balance,worked:busy};
   }
+  function receiveArrivalSavings(world,site,id){
+    const immigrant=site.communityLife?.people?.[id]?.profile,amount=immigrant?.externalHistory?.savings;
+    if(!local(site,id)||account(site,id)||!int(amount,2,12))return false;
+    const p=named(site,id);
+    p.arrivalSavings=amount;p.balance=amount;
+    receipt(site,id,world.week,'arrival',amount,immigrant.name+' brought '+funds(amount,'personal')+' saved working at '+immigrant.birthCommunityName+'.');
+    return true;
+  }
   function reopenSavings(world,before,fresh){
+    const owners=new Set((fresh.privateHomes||[]).map(h=>h.ownerId));
     for(const [id,prior] of Object.entries(before.purses?.people||{})){
-      if(!local(fresh,id)||!prior.balance&&!root.EarthResidentShops?.hasGoods(prior))continue;
+      if(!local(fresh,id)||!prior.balance&&!root.EarthResidentShops?.hasGoods(prior)&&!owners.has(id))continue;
       const p=named(fresh,id);
       p.balance=prior.balance;p.openingSavings=prior.balance;
       // The earlier generation's receipts remain with the earlier ledger.
@@ -347,18 +355,19 @@
       receipt(fresh,id,world.week,'carriedSavings',prior.balance,'Personal savings carried into the reopened town accounts.');
     }
   }
-  function productionReceipt(world,site,id,amount,text,source){
+  const localReceipts=p=>BigInt(p.earned)+BigInt(p.productionIncome||0)+BigInt(p.arrivalSavings||0)+BigInt(p.openingSavings||0);
+  function productionReceipt(world,site,id,amount,text){
     if(!local(site,id)||!Number.isSafeInteger(amount)||!amount||Math.abs(amount)>12)return false;
     const p=named(site,id),balance=p.balance+amount;
     if(!int(balance)||!int((p.productionIncome||0)+Math.max(0,amount)))return false;
     p.balance=balance;
     if(amount>0)p.productionIncome=(p.productionIncome||0)+amount;
-    receipt(site,id,world.week,amount>0?(source||'production'):'property',amount,text);
+    receipt(site,id,world.week,amount>0?'production':'property',amount,text);
     return true;
   }
   function validEntry(e,site,id,week,p,i,netAtEntry){
     if(!obj(e)||!int(e.week,1,i?p.entries[i-1].week:week)||!int(e.balance)||
-      BigInt(e.balance)>BigInt(p.earned)+BigInt(p.openingSavings||0)+BigInt(p.productionIncome||0)+netAtEntry||!Number.isSafeInteger(e.amount)||
+      BigInt(e.balance)>localReceipts(p)+netAtEntry||!Number.isSafeInteger(e.amount)||
       (i===0?e.balance!==p.balance:BigInt(e.balance)+BigInt(p.entries[i-1].amount)!==BigInt(p.entries[i-1].balance))||
       typeof e.text!=='string'||e.text.length===0||e.text.length>650)return false;
     if(e.action==='moveIn'||e.action==='moveOut'){
@@ -376,8 +385,9 @@
         (sale?pair.product==='courtyardHome'||Object.hasOwn(root.EarthResidentShops?.products||{},pair.product):pair.product===undefined)&&
         (incoming?pair.to===id&&int(e.amount,1,12):pair.from===id&&int(-e.amount,1,12));
     }
-    if(e.action==='carriedSavings')return e.amount===p.openingSavings&&int(e.amount)&&i===p.entries.length-1;
-    if(e.action==='production'||e.action==='arrivalSavings'||e.action==='housingRefund')return int(e.amount,1,12);
+    if(e.action==='carriedSavings')return p.openingSavings===e.amount&&int(e.amount)&&e.balance===e.amount&&i===p.entries.length-1;
+    if(e.action==='arrival')return int(p.arrivalSavings,2,12)&&i===p.entries.length-1&&e.amount===p.arrivalSavings&&e.balance===e.amount;
+    if(e.action==='production')return int(e.amount,1,12);
     if(e.action==='property')return int(-e.amount,1,12);
     if(e.action==='input')return int(-e.amount,1,6);
     return e.action==='wage'?e.amount===wage:e.action==='donate'?e.amount===-1:e.action==='buy'?e.amount<0&&e.amount>=-6:e.action==='dream'?e.amount<0&&e.amount>=-4:
@@ -390,15 +400,16 @@
       Object.keys(b.people).length>site.residents.length+7+24||!Object.keys(b.people).length||Object.keys(b.tickets).length>openings)return false;
     let used=0,maxDonated=0n;
     for(const [id,p] of Object.entries(b.people)){
-      if(!obj(p)||!int(p.productionIncome??0)||!int(p.openingSavings??0))return false;
+      if(!obj(p)||!int(p.productionIncome??0)||!int(p.openingSavings??0)||p.openingSavings!=null&&p.arrivalSavings!=null)return false;
+      if(p.arrivalSavings!=null&&(!int(p.arrivalSavings,2,12)||p.arrivalSavings!==site.communityLife?.people?.[id]?.profile?.externalHistory?.savings))return false;
       const net=netTransfers(p);
       if(!local(site,id)||!obj(p)||!int(p.earned)||p.earned%wage||p.earned/wage>week-(site.founded||1)+1||
-        net===null||!int(p.balance)||!int(p.received??0)||BigInt(p.balance)>BigInt(p.earned)+BigInt(p.openingSavings||0)+BigInt(p.productionIncome||0)+net+BigInt(p.received||0)||
+        net===null||!int(p.balance)||!int(p.received??0)||BigInt(p.balance)>localReceipts(p)+net+BigInt(p.received||0)||
         root.EarthResidentShops&&!root.EarthResidentShops.validAccount(p,week)||
         p.carriedWeek!=null&&(!int(p.carriedWeek,site.founded||1,week)||p.netTransfers==null)||
         !int(p.lastWeek,p.earned?site.founded||1:0,p.earned?week:0)||!Array.isArray(p.entries)||!p.entries.length||p.entries.length>8)return false;
       if(p.lastWeek===week)used++;
-      maxDonated+=BigInt(p.earned)+BigInt(p.openingSavings||0)+BigInt(p.productionIncome||0)+net-BigInt(p.balance);
+      maxDonated+=localReceipts(p)+net-BigInt(p.balance);
       let netAtEntry=net+BigInt(p.received||0);
       for(let i=0;i<p.entries.length;i++){
         const entry=p.entries[i];
@@ -414,7 +425,7 @@
         }
       }
       // Fewer than eight receipts means we can see the full account history.
-      if(p.entries.length<8&&netAtEntry!==0n)return false;
+      if(p.entries.length<8&&(netAtEntry!==0n||p.arrivalSavings&&p.entries.at(-1).action!=='arrival'||p.openingSavings!=null&&p.entries.at(-1).action!=='carriedSavings'))return false;
     }
     const seen=new Set();
     for(const [id,j] of Object.entries(b.tickets)){
@@ -444,5 +455,5 @@
     }
     return true;
   }
-  root.EarthPurses=Object.freeze({productionReceipt,reopenSavings,view,run,tick,valid,escrow,committed,canTransfer,transferPerson,buyMakerInput,noteDeed,workConflict,opportunity,workWeek,dreamExpense,moveBalance,validMoves});
+  root.EarthPurses=Object.freeze({reopenSavings,receiveArrivalSavings,productionReceipt,view,run,tick,valid,escrow,committed,canTransfer,transferPerson,buyMakerInput,noteDeed,workConflict,opportunity,workWeek,dreamExpense,moveBalance,validMoves});
 })(typeof window==='undefined'?globalThis:window);

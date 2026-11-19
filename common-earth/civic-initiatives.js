@@ -5,6 +5,7 @@
 (function(root){
   'use strict';
   const policies={
+    homes:{axis:'care',evidence:['build','care'],venue:'hall',benefit:'The completed courtyard will give households a place to live and the town room to welcome applicants.'},
     garden:{axis:'care',evidence:['food','build'],venue:'garden',benefit:'Households will receive food from the completed garden each week.'},
     workshop:{axis:'craft',evidence:['build','research'],venue:'workshop',benefit:'Repairers and apprentices will share a bench and recover materials each week.'},
     market:{axis:'organisation',evidence:['build','food'],venue:'market',benefit:'Local sellers can use a market with a paying catchment.'},
@@ -68,6 +69,7 @@
   }
   function need(world,site,key){
     switch(key){
+      case 'homes':return [62,site.population+' residents share '+root.EarthCityModel.housingCapacity(site)+' completed housing places.'];
       case 'garden':case 'fishingDock':case 'wetland':return [site.food<=Math.max(8,Math.ceil(site.population/5)*3)?34:13,site.food+' food serves '+site.population+' residents.'];
       case 'workshop':return [site.materials<=6||world.charter==='craft'?30:16,'Repair crews share '+site.materials+' materials, and a workshop can train apprentices.'];
       case 'hall':return [world.charter==='voice'||site.wellbeing<55?32:14,'Residents need a place for meetings and shared learning.'];
@@ -120,7 +122,7 @@
       return (founding&&!hasTestimony(site,p.id)?100:0)+(p.traits?.patience??50);
     };
     const critic=others.filter(p=>p!==beneficiary).sort((a,b)=>scoreCritic(b)-scoreCritic(a))[0];
-    const p={id:site.id+'-civic-'+(++ledger.serial),title:c.label,choiceId:c.id,kind:c.kind,plot:c.kind==='build'?c.plot:null,phase:'consultation',
+    const p={id:site.id+'-civic-'+(++ledger.serial),title:c.label,choiceId:c.id,kind:c.kind,plot:c.kind==='research'?null:c.plot,phase:'consultation',
       leadId:lead.id,leadName:lead.name,beneficiaryId:beneficiary.id,beneficiaryName:beneficiary.name,benefit:policy.benefit,reason:why,
       proposedWeek:world.week,decisionWeek:world.week+2,reviewWeek:world.week+2,goods:{funds:c.goods.funds||0,materials:c.goods.materials||0},
       pledged:goods(),labour:0,effort:c.effort,contributions:[],meetingWeek:0,attendees:[],votes:[lead,beneficiary,critic].map(v=>({personId:v.id,name:v.name,stance:'abstain',reason:'Considering the terms.'})),
@@ -162,6 +164,11 @@
   }
   function jobState(site,p){
     if(p.phase!=='commissioned')return p;
+    if(p.kind==='precinct'){
+      const row=site.city?.precincts[p.plot];
+      if(row?.jobId===p.jobId)return p;
+      if(row?.use==='homes')return {...p,phase:'built',status:p.title+' opened. '+p.benefit};
+    }
     if(site.buildings?.some(b=>b.id===p.jobId&&b.plot===p.plot))return {...p,phase:'built',status:p.title+' opened on lot '+(p.plot+1)+'. '+p.benefit};
     if(site.construction?.some(j=>j.id===p.jobId))return p;
     return {...p,phase:'cancelled',status:p.title+' left the construction queue before opening. The site is free for another decision.'};
@@ -180,7 +187,7 @@
     }
     const p=d.active;
     if(world.week<p.reviewWeek)return [];
-    const choice=choices.find(c=>c.id===p.choiceId&&(c.kind!=='build'||c.plot===p.plot));
+    const choice=choices.find(c=>c.id===p.choiceId&&(c.kind==='research'||c.plot===p.plot));
     if(world.week-p.proposedWeek>=14)return finish(world,site,d,p,'withdrawn',p.leadName+' withdrew '+p.title+' after the town could not agree the promised site and budget. No goods were spent.');
     hear(world,site,p,available,d);
     if(!choice?.available||reservedChoice(site,choice)||choice.effort!==p.effort||choice.goods.funds!==p.goods.funds||choice.goods.materials!==p.goods.materials){
@@ -194,8 +201,8 @@
     if(p.pledged.funds<p.goods.funds || p.pledged.materials<p.goods.materials || p.labour<p.effort){p.status='Residents authorised '+p.pledged.funds+' of '+p.goods.funds+' funds and '+p.pledged.materials+' of '+p.goods.materials+' materials; '+p.labour+' of '+p.effort+' civic shifts committed.';p.reviewWeek=world.week+1;return [];}
     const result=hooks.enact(world,site,choice,p);
     if(!result?.ok){p.phase='blocked';p.reviewWeek=world.week+1;p.status=result?.message||'Conditions changed before the contract could be signed.';return [];}
-    const building=choice.kind==='build',jobId=building?(result.jobId||site.construction?.find(j=>j.kind===tag(choice.id)&&j.plot===p.plot)?.id):null;
-    const outcome=p.leadName+' and the residents '+(building?'commissioned '+p.title+' on lot '+(p.plot+1):'adopted '+p.title)+' after consultation.';
+    const building=choice.kind!=='research',jobId=building?(result.jobId||site.construction?.find(j=>j.kind===tag(choice.id)&&j.plot===p.plot)?.id):null;
+    const outcome=p.leadName+' and the residents '+(building?'commissioned '+p.title+(p.kind==='precinct'?' in precinct ':' on lot ')+(p.plot+1):'adopted '+p.title)+' after consultation.';
     return finish(world,site,d,p,building?'commissioned':'adopted',outcome+' '+(result.message||p.benefit),jobId||null);
   }
   function view(world,site){
@@ -230,7 +237,7 @@
       {title:'Hear “'+site.issue.title+'”',reason:'I am taking the household estimates to the assembly for today’s vote on “'+site.issue.title+'”.',venue:'hall'}:null;
     const d=site?.civicInitiatives;if(!d||d.week!==world.week)return hearing;
     const job=d.history.find(h=>h.works?.week===world.week && h.works.people.includes(id));
-    if(job)return {reason:'I worked a construction shift on '+job.title+' at lot '+(job.plot+1)+'.',venue:policies[tag(job.choiceId)].venue,jobId:job.jobId,plot:job.plot};
+    if(job)return {reason:'I worked a construction shift on '+job.title+(job.kind==='precinct'?' in precinct ':' at lot ')+(job.plot+1)+'.',venue:policies[tag(job.choiceId)].venue,jobId:job.jobId,plot:job.plot};
     const p=d.active||d.history[0];if(!p)return hearing;
     const pledged=p.contributions.some(c=>c.week===world.week&&c.personId===id);
     const attending=p.meetingWeek===world.week&&p.attendees.includes(id);
@@ -243,16 +250,26 @@
     const cost=g=>dict(g)&&integer(g.funds,0,1000)&&integer(g.materials,0,1000);
     const member=c=>dict(c)&&actorId(c.personId)&&string(c.name,120);
     function proposal(p,active){
-      if(!dict(p)||!string(p.id,160)||!string(p.title,120)||!string(p.choiceId,100)||!Object.hasOwn(policies,tag(p.choiceId))||!['research','build'].includes(p.kind)||p.choiceId.split(':')[0]!==p.kind||
+      if(!dict(p)||!string(p.id,160)||!string(p.title,120)||!string(p.choiceId,100))return false;
+      const subject=tag(p.choiceId);
+      if(!Object.hasOwn(policies,subject)||!['research','build','precinct'].includes(p.kind)||
+        p.choiceId!==p.kind+':'+subject||(p.kind==='precinct')!==(subject==='homes')||
         !(active?activePhases:closedPhases).includes(p.phase)||!actorId(p.leadId)||!actorId(p.beneficiaryId)||p.leadId===p.beneficiaryId||!string(p.leadName,120)||!string(p.beneficiaryName,120)||!string(p.reason,600)||!string(p.benefit,600)||!string(p.status,1800)||
         !integer(p.proposedWeek,1,week)||p.decisionWeek!==p.proposedWeek+2||!integer(p.reviewWeek,p.decisionWeek,week+16)||!cost(p.goods)||!cost(p.pledged)||!integer(p.effort,1,12)||!integer(p.labour,0,p.effort)||
-        !(p.kind==='build'?integer(p.plot,0,8):p.plot===null)||!Array.isArray(p.votes)||p.votes.length!==3||new Set(p.votes.map(v=>v?.personId)).size!==3||
+        !(p.kind==='precinct'?integer(p.plot,0,5):p.kind==='build'?integer(p.plot,0,8):p.plot===null)||!Array.isArray(p.votes)||p.votes.length!==3||new Set(p.votes.map(v=>v?.personId)).size!==3||
         !integer(p.meetingWeek,0,week)||!Array.isArray(p.attendees)||p.attendees.length>3||new Set(p.attendees).size!==p.attendees.length||!p.attendees.every(id=>p.votes.some(v=>v.personId===id))||
         !p.votes.every(v=>member(v)&&['support','dissent','abstain'].includes(v.stance)&&string(v.reason,1000))||!Array.isArray(p.contributions)||p.contributions.length>30)return false;
       if(p.evidence!=null && (!dict(p.evidence)||!string(p.evidence.id,200)||!string(p.evidence.title,200)||!actorId(p.evidence.ownerId)||!string(p.evidence.ownerName,120)||!integer(p.evidence.week,1,p.proposedWeek)))return false;
       if(p.endorsement!=null && (!member(p.endorsement)||!integer(p.endorsement.week,p.proposedWeek,week)))return false;
       if(p.responseWeek!=null&&!integer(p.responseWeek,p.proposedWeek,week))return false;
-      if(p.works!=null && (active||p.kind!=='build'||!dict(p.works)||!integer(p.works.week,p.closedWeek,week)||!Array.isArray(p.works.people)||p.works.people.length<1||p.works.people.length>4||!p.works.people.every(id=>actorId(id)&&p.votes.some(v=>v.personId===id&&v.stance==='support'))||new Set(p.works.people).size!==p.works.people.length))return false;
+      if(p.works!=null){
+        const shift=p.works,crew=shift.people,relief=shift.relief??[];
+        if(active||p.kind==='research'||!dict(shift)||!integer(shift.week,p.closedWeek,week)||!Array.isArray(crew)||!integer(crew.length,1,4)||
+          !Array.isArray(relief)||relief.length>crew.length||new Set(crew).size!==crew.length||new Set(relief.map(r=>r?.replaces)).size!==relief.length)return false;
+        const supports=id=>p.votes.some(v=>v.personId===id&&v.stance==='support');
+        if(!relief.every(r=>member(r)&&crew.includes(r.personId)&&supports(r.replaces)&&!crew.includes(r.replaces)&&!p.votes.some(v=>v.personId===r.personId))||
+          !crew.every(id=>actorId(id)&&(supports(id)||relief.some(r=>r.personId===id))))return false;
+      }
       if(!active && (!integer(p.closedWeek,p.proposedWeek,week)||p.jobId!=null&&!string(p.jobId,160)))return false;
       const total=goods();let work=0;const counted=new Set();
       for(const c of p.contributions){const key=c?.week+'/'+c?.personId;

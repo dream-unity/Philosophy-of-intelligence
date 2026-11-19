@@ -323,139 +323,55 @@ test('an agreement opens precisely the witnessed parcel and survives a later mee
   const loaded=game(f.save());assert.ok(loaded.R.inspect(loaded.w,loaded.home,1,1).agreements.some(a=>a.terms==='joint'));
 });
 
-test('watching a neighbour through the atlas, its directory and its market cannot change its next 36 shifts',()=>{
-  const initial=game().save(),watch=game(initial),away=game(initial);
-  const target=f=>f.w.communityLife.outposts.find(s=>s.id.endsWith('-2'));
-  const observed=target(watch),other=target(away),ward=watch.geo.towns.find(t=>t.site===observed);
-  assert.equal(observed.population,10);
-  assert.equal(watch.ctx.EarthTownCentre.view(watch.w,observed).missing,1);
-  const events=new Set();
-  for(let n=0;n<36;n++){
-    watch.R.inspect(watch.w,watch.home,ward.x,ward.y,observed.id);
-    watch.R.travellers(watch.w,watch.home);watch.R.ledger(watch.w,observed);
-    watch.ctx.EarthTownCentre.view(watch.w,observed);
-    watch.ctx.EarthBoundaryAssembly.assessment(watch.w,observed);
-    assert(watch.progress().ok);assert(away.progress().ok);
-    assert.equal(JSON.stringify(observed),JSON.stringify(other),'the complete settlement diverged on shift '+(n+1));
-    for(const event of observed.centre.history)events.add(event.kind);
+test('an ungoverned district finances, finishes and occupies the same courtyard on and off camera',()=>{
+  const f=game(),town=f.w.communityLife.outposts[1];
+  Object.assign(town,{population:19,food:80,funds:80,materials:80});
+  const opening=f.save();
+  function run(observe){
+    const f=game(opening),town=f.w.communityLife.outposts[1],city=f.ctx.EarthCityModel;
+    let plot=null,relief=false,capacityBefore=null;
+    for(let n=0;n<100;n++){
+      if(observe){
+        const geo=f.R.geography(f.w,town),point=geo.towns.find(t=>t.site===town);
+        f.R.inspect(f.w,town,point.x,point.y,town.id);
+        f.R.travellers(f.w,town);
+        f.ctx.EarthCommunityLife.districtProfile(f.w,town);
+        f.ctx.EarthHousing.view(f.w,town);
+      }
+      assert.ok(f.sim.advance().ok);
+      const agreement=town.civicInitiatives?.history?.find(p=>p.choiceId==='precinct:homes');
+      const job=agreement&&town.construction?.find(j=>j.id===agreement.jobId);
+      if(job&&plot===null){
+        plot=job.precinct;
+        capacityBefore=city.housingCapacity(town);
+        assert.equal(job.paid.funds,7);assert.equal(job.paid.materials,4);
+        assert.equal(town.city.precincts[plot].use,'open');
+      }
+      if(agreement?.works?.relief?.length)relief=true;
+      if(plot===null||town.city.precincts[plot].use!=='homes')continue;
+      const directory=f.ctx.EarthHousing.view(f.w,town);
+      const opened=directory.homes.find(h=>h.key==='precinct-'+plot);
+      assert.ok(opened);assert.ok(city.housingCapacity(town)>=capacityBefore+6);
+      if(opened.occupants.length){
+        assert.ok(relief,'A replacement covered a departing signatory’s shift.');
+        const tenant=opened.occupants[0];
+        assert.ok(town.housing.rights.some(r=>r.key===tenant.key&&r.home===opened.key));
+        assert.ok(f.ctx.CommonEarthSim.readSave(JSON.stringify(f.w)));
+        return JSON.stringify(f.w);
+      }
+    }
+    assert.fail('The financed courtyard should open and a named resident should take up a place.');
   }
-  assert.equal(watch.save(),away.save());
-  for(const event of ['commission','completed','arrival','sale'])assert(events.has(event),event);
-  const housing=watch.ctx.EarthTownCentre.view(watch.w,observed);
-  assert.equal(housing.missing,0);
-  assert(housing.residents.some(r=>r.plot?.contract));
-  assert(observed.buildings.some(b=>b.kind==='market'));
-  const shop=observed.centre.plots.find(p=>p.kind==='shop');
-  assert(shop.sales>0);assert(shop.lastSale.clerkName);assert(shop.lastSale.buyerName);
+  assert.equal(run(true),run(false));
 });
 
-test('a material shortage stalls an identified building, actual delivery then releases habitable capacity',()=>{
-  const save=game().save(),enough=game(save),short=game(save);
-  const town=f=>f.w.communityLife.outposts.find(s=>s.id.endsWith('-2')),a=town(enough),b=town(short);
-  const original=b.materials;b.materials=0;
-  enough.progress();short.progress();
-  assert(a.centre.project);assert.equal(b.centre.project,undefined);assert.match(b.centre.stall,/materials/);
-  const active=a.centre.project,expected=a.centre.plots.length,capacity=enough.ctx.EarthTownCentre.capacity(a);
-  const rows=enough.ctx.EarthDistrictGrowth.transfers(a.growth.history[0]).filter(r=>r.workId===active.id);
-  assert(rows.some(r=>r.good==='materials'&&r.amount===4&&r.to==='Building store reservation'));
-  assert(rows.some(r=>r.good==='funds'&&r.amount===3&&r.to==='Construction wage escrow'));
-  assert(a.centre.distress[Object.keys(a.centre.distress)[0]]);assert.equal(active.delivered,0);
-  b.materials+=original;
-  for(let n=0;n<12&&(!b.centre.project||a.centre.plots.length===expected);n++){
-    enough.progress();short.progress();
-    if(a.centre.plots.length===expected)assert.equal(enough.ctx.EarthTownCentre.capacity(a),capacity);
+test('a housing request competes for public reserves and available land',()=>{
+  function decision(population){
+    const f=game(),town=f.w.communityLife.outposts[1];
+    Object.assign(town,{population,food:80,funds:80,materials:80});
+    for(let i=0;i<3;i++)assert.ok(f.sim.advance().ok);
+    return town.civicInitiatives?.active?.choiceId;
   }
-  assert.equal(a.centre.plots[expected].builder,active.workerName);
-  assert.equal(a.centre.plots[expected].beds,2);assert.equal(enough.ctx.EarthTownCentre.capacity(a),capacity+2);
-  assert(Object.values(a.centre.rights).includes(expected));assert(b.centre.project||b.centre.plots.some(p=>p.contract));
-  enough.save();short.save();
-});
-
-test('personal contact, population mix, institutional permissions and the travel of reports change distinct judgements',()=>{
-  const f=game(),social=f.ctx.EarthBoundaryAssembly,origin=f.home,closed=f.w.communityLife.outposts.find(s=>s.centre.charter==='closed');
-  const outsider=f.w.communityLife.profile;
-  const before=social.assessment(f.w,closed,outsider,origin.id),old=social.character(closed);
-  assert(old.aggression>=80);assert.equal(before.access,false);assert.equal(social.reportView(origin,closed.id).count,0);
-  const refused=social.encounter(f.w,origin,closed,outsider);assert.equal(refused.allowed,false);
-  assert(closed.centre.incidents[0].authorized);assert(closed.centre.incidents[0].witness);
-  assert(social.assessment(f.w,closed,outsider,origin.id).personal<before.personal);
-  assert.equal(social.reportView(origin,closed.id).count,0);
-  const permit=social.requestPass(f.w,origin,{target:closed.id});assert(permit.ok);
-  assert(social.assessment(f.w,closed,outsider,origin.id).access);
-  assert.equal(social.character(closed).aggression,old.aggression);
-  f.progress();f.progress();const received=social.reportView(origin,closed.id);
-  assert(received.score<50&&received.confidence>0);
-  const townTrust=social.assessment(f.w,closed,outsider,origin.id).personal;
-  // Admit an otherwise identical set of peaceful adults to the same charter.
-  const office=f.ctx.EarthPopulationOffice,base=f.w.populationOffice.outside[0],counter=closed.population;
-  for(let i=0;i<5;i++){
-    const row={...base,district:base.district+'-compare-'+i,serial:70+i,scores:{...base.scores,aggression:2,sociability:91,patience:90,initiative:30}};
-    const p=office.profile(row);
-    assert(f.ctx.EarthCommunityLife.guestSlot(closed,p,row.district,p.id,'member',f.w.week));closed.population++;
-  }
-  const changed=social.character(closed);assert(changed.aggression<old.aggression);assert(changed.tally.welcoming>=5);
-  assert.equal(closed.population,counter+5);assert.equal(closed.centre.charter,'closed');
-  assert.equal(social.assessment(f.w,closed,outsider,origin.id).personal,townTrust);
-  assert.equal(social.reportView(origin,closed.id).score,received.score);
-});
-
-test('wider Earth recruitment quotes the deficit, collects a search fee once, meets bounds, and survives reopening',()=>{
-  const f=game(),{home,w,ctx}=f,o=ctx.EarthPopulationOffice,c=ctx.EarthTownCentre;
-  home.funds+=100;
-  const criteria={aggression:[72,78],learningRate:[90,100],craft:[78,85],potential:[91,99]};
-  const q=o.quote(w,home,'targeted',criteria),loose=o.quote(w,home,'targeted',{aggression:[0,100]});
-  assert(q.price>loose.price);
-  const req={action:'recruit',route:'targeted',siteId:home.id,revision:home.centre.revision,criteria,price:q.price,deficit:q.projected};
-  const before=home.funds;assert(f.sim.townCentre(req).ok);
-  assert.equal(home.funds,before-q.price);assert.equal(f.sim.townCentre(req).ok,false);
-  const invited=home.centre.incoming,settled=game(f.save());settled.progress();settled.progress();
-  const a=settled.home.centre.lastArrival,reg=c.view(settled.w,settled.home);
-  assert.equal(a.key,invited.key);const migrant=reg.residents.find(r=>r.key===a.key);
-  assert(migrant.plot);assert(migrant.cash>=invited.record.cash);
-  for(const [axis,[lo,hi]] of Object.entries(criteria))assert(migrant.p.background[axis]>=lo&&migrant.p.background[axis]<=hi,axis);
-  assert(settled.ctx.EarthAutonomy.contacts(settled.home,migrant.p.id,settled.w.week).length>0);
-  settled.save();
-});
-
-test('a blind invitation can exceed actual housing, a meal relieves deprivation, and a finished dwelling releases work',()=>{
-  const f=game(),s=f.home,c=f.ctx.EarthTownCentre,o=f.ctx.EarthPopulationOffice;
-  // Make the empty founders' lodging privately held. Its six physical places
-  // still exist, but the owner has not offered any of them to a new household.
-  const resident=c.roster(f.w,s)[0],lodging=s.centre.plots.find(d=>!d.owner);
-  lodging.owner=resident.identityKey;s.materials=0;
-  const before=c.view(f.w,s),quote=o.quote(f.w,s,'random');assert(before.vacant>0);assert.equal(before.available,0);assert.equal(quote.projected,1);
-  const q={siteId:s.id,revision:s.centre.revision,action:'recruit',route:'random',price:quote.price,deficit:quote.projected};
-  assert.equal(quote.name,undefined);assert(f.sim.townCentre(q).ok);
-  const identity=s.centre.incoming.key;assert(s.centre.incoming.name);
-  f.progress();f.progress();const register=c.view(f.w,s),waiting=register.unhoused.find(r=>r.key===identity);
-  assert(waiting);assert.match(c.restriction(s,waiting.p),/housing/);
-  const food=s.food,aid={siteId:s.id,revision:s.centre.revision,person:identity,action:'assist'};
-  assert(f.sim.townCentre(aid).ok);assert.equal(s.food,food-1);assert.equal(f.sim.townCentre({...aid,revision:s.centre.revision}).ok,false);
-  s.materials+=12;
-  for(let i=0;i<18&&!c.view(f.w,s).residents.find(r=>r.key===identity)?.plot;i++)f.progress();
-  const housed=c.view(f.w,s).residents.find(r=>r.key===identity);
-  assert(housed?.plot);assert(housed.plot.contract);assert.doesNotMatch(c.restriction(s,housed.p),/seeking stable housing/i);
-  f.save();
-});
-
-test('a quoted targeted candidate has their own work references before they arrive',()=>{
-  const f=game(),s=f.home,o=f.ctx.EarthPopulationOffice,listed=f.w.populationOffice.outside[0];
-  const preExisting=o.profile(listed),local=f.ctx.EarthPersonas.profile(s,preExisting.id);
-  assert.notEqual(preExisting.identityKey,local.identityKey);
-  f.ctx.EarthAutonomy.remember(s,f.w.week,local.id,local.id==='driver'?'walker-0':'driver','kept');
-  const request={route:'targeted',criteria:{craft:[listed.scores.craft,listed.scores.craft]}};
-  const q=o.quote(f.w,s,request.route,request.criteria);s.funds+=q.price;
-  assert(f.sim.townCentre({...request,action:'recruit',siteId:s.id,revision:s.centre.revision,price:q.price,deficit:q.projected}).ok);
-  assert.equal(s.centre.incoming.key,preExisting.identityKey);
-  assert.equal(o.dossier(s,o.profile(s.centre.incoming.record)).references.length,0);
-  assert.equal(f.w.populationOffice.outside.some(r=>r.district===listed.district),false);f.save();
-});
-
-test('unnamed households imported from an earlier census can occupy subsequently finished public homes',()=>{
-  const f=game(),s=f.w.communityLife.outposts[2],c=f.ctx.EarthTownCentre;
-  delete s.centre;s.population+=17;c.establish(f.w,s,true);
-  const waiting=c.view(f.w,s).missing;assert(waiting>0);
-  for(let i=0;i<12&&!s.centre.plots.some(d=>d.contract);i++)f.progress();
-  const deed=s.centre.plots.find(d=>d.contract);assert(deed&&deed.legacy>0);
-  assert(c.view(f.w,s).missing<waiting);f.save();
+  assert.equal(decision(19),'precinct:homes');
+  assert.notEqual(decision(10),'precinct:homes');
 });

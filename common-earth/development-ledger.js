@@ -9,6 +9,29 @@
 
   function records(world, site) {
     const entries = [];
+    const land=site.civicLand;
+    if(land){
+      const projects=[...land.homes,...(land.project?[land.project]:[])];
+      for(const c of projects){
+        const people=[participant(c.proposerId,'Commissioned the plot'),participant(c.worker||c.workerId,c.completed?'Completed the cottage':'Assigned paid shift')].filter(p=>p.id);
+        entries.push({key:'cottage/'+c.plot,title:'Council cottage C'+(c.plot+1),kind:'Housing',status:c.completed?'Occupied or ready to let':c.phase==='delivery'?'Materials in transit':'Under construction',
+          people,details:[c.reason,c.completed?'Opened in week '+c.completed+' with two completed places.':'Three materials reserved · '+c.escrow+' wage funds in escrow · '+c.built+' of two building shifts completed.',...(!c.completed&&land.delay?[land.delay]:[])]});
+      }
+      if(land.delay&&!land.project)entries.push({key:'cottage/shortage',title:'Serviced housing plot',kind:'Housing',status:'Awaiting a contract',people:[],details:[land.delay]});
+    }
+    const business=site.cooperative;
+    if(business){
+      for(const j of [...business.open,...(business.project?[business.project]:[])]){
+        const done=j.week!=null,participants=[participant(j.proposerId,'Commissioned the plot'),participant(j.worker||j.builder,done?'Built the premises':'Contracted builder')];
+        const sale=j.lastSale;
+        if(sale)participants.push(participant(sale.clerk,'Served the last customer'),participant(sale.buyer,'Bought provisions'));
+        entries.push({key:'order/'+j.id,title:(j.kind==='market'?'Cooperative provisions store':'Materials workshop')+' · lot '+(j.plot+1),
+          kind:'Cooperative enterprise',status:j.closed!=null?'Closed in production round '+j.closed:done?'Opened in week '+j.week:['Materials reserved','Materials delivered','Frame completed'][j.stage],
+          people:participants.filter(p=>p.id),details:[j.reason,done?(j.kind==='market'?j.sales+' retail sales.':'Producing materials for local construction.'):j.escrow+' funds in wage escrow.',
+            sale?sale.clerkName+' sold provisions to '+sale.buyerName+' in week '+sale.week+'.':'',!done&&business.delay].filter(Boolean)});
+      }
+      if(!business.project&&business.delay)entries.push({key:'cooperative/proposal',title:'Proposed cooperative premises',kind:'Council',status:'Waiting',people:[],details:[business.delay]});
+    }
     const civic = root.EarthCivicInitiatives?.view(world, site);
     for (const proposal of [civic?.active, ...(civic?.history || [])].filter(Boolean)) {
       const people = [participant(proposal.leadId,'Proposer',proposal.reason), participant(proposal.beneficiaryId,'Affected resident',proposal.benefit)];
@@ -19,12 +42,25 @@
         people.push(participant(pledge.personId,'Pledged in week '+pledge.week,allotment.join(', ')));
       }
       if (proposal.evidence) people.push(participant(proposal.evidence.ownerId,'Supplied evidence',proposal.evidence.title));
-      for (const id of proposal.works?.people || []) people.push(participant(id,'Worked on site','Week '+proposal.works.week));
+      for (const id of proposal.works?.people || []) {
+        const relief=proposal.works.relief?.find(shift=>shift.personId===id);
+        const absent=relief&&proposal.votes.find(v=>v.personId===relief.replaces);
+        people.push(participant(id,absent?'Covered '+absent.name+'’s shift':'Worked on site','Week '+proposal.works.week));
+      }
       const spent = ['commissioned','built','adopted'].includes(proposal.phase);
       details.push((spent?'Public funds spent and materials used · ':'Quoted cost · ')+goods(proposal.goods));
       if (!proposal.closedWeek) details.push('Authorised by residents · '+goods(proposal.pledged)+' · '+proposal.labour+' of '+proposal.effort+' shifts pledged · next review week '+proposal.reviewWeek);
       entries.push({key:'civic/'+proposal.id, title:proposal.title, kind:'Council', status:titleCase(proposal.phase), details, people,
         related:[proposal.jobId && 'site/'+proposal.jobId, proposal.evidence && 'project/'+proposal.evidence.id].filter(Boolean)});
+    }
+    for (const arrival of site.communityLife?.townCentre?.arrivals || []) {
+      const profile=root.EarthPersonas?.profile(site,arrival.id);
+      const current=profile?.identityKey===arrival.person&&root.EarthCommunityLife?.residency(site,arrival.id)==='member';
+      const details=['Week '+arrival.week+' · '+(arrival.route==='random'?'Open invitation · no recruitment fee.':
+        'Targeted search · '+arrival.price+' treasury funds spent.')];
+      if(current&&profile.externalHistory)details.push(profile.description);
+      entries.push({key:'arrival/'+arrival.number,title:arrival.name+' joined '+site.name,kind:'Town Centre',status:'Arrived',details,
+        people:current?[participant(arrival.id,'Arriving resident')]:[]});
     }
     for (const job of site.construction || []) {
       const workers = Object.entries(site.workforce?.members || {}).filter(([,w]) => w.jobId===job.id);
@@ -53,25 +89,6 @@
     const orders = new Map();
     const people = root.EarthPersonas?.list(site) || site.residents || [];
     const owners = new Map(people.map(p=>[p.identityKey||p.id,p]));
-    const centre=site.centre;
-    if(centre){
-      const j=centre.project;
-      if(j){
-        const proposer=people.find(p=>p.name===j.proposer),future=centre.incoming?.key===j.buyer?centre.incoming?.name:null;
-        const participants=[participant(j.worker,'Contracted builder')];if(proposer)participants.push(participant(proposer.id,'Proposer'));
-        orders.set(j.id,{key:'order/'+j.id,kind:'Town Centre contract',title:(j.kind==='home'?'Two-room dwelling':j.kind==='shop'?'Cooperative store':'Repair workshop')+' · plot '+(j.plot+1),
-          status:['Materials reserved','Materials delivered','Frame completed'][j.stage],people:participants,
-          details:[j.reason,'Commissioned by '+j.proposer+'. Three funds in escrow for the builder. '+j.delivered+' of 4 materials on site.',future?'Reserved for '+future+'.':''].filter(Boolean)});
-      }
-      for(const plot of centre.plots.filter(d=>d.contract)){
-        const peopleAt=Object.entries(centre.rights).filter(([,id])=>id===plot.id).map(([k])=>owners.get(k)).filter(Boolean);
-        const builder=people.find(p=>p.name===plot.builder),sale=plot.lastSale;
-        entries.push({key:'order/'+plot.contract,kind:'Completed civic works',title:plot.title,status:'Opened in week '+plot.opened,
-          people:[...(builder?[participant(builder.id,'Built the property')]:[]),...peopleAt.map(p=>participant(p.id,'Lives here'))],
-          details:[plot.beds?plot.beds+' completed places · '+peopleAt.length+' named occupants.':(plot.sales||0)+' cooperative sales.',
-            sale?sale.clerkName+' sold provisions to '+sale.buyerName+' in week '+sale.week+'.':''].filter(Boolean)});
-      }
-    }
     for(const row of site.practice?.open||[]){
       if(!['housing','design'].includes(row.subject))continue;
       entries.push({key:'booking/'+row.actorKey,title:root.EarthPractice.tasks[row.subject].name,kind:'Agreed work',status:'Booked in week '+row.week,

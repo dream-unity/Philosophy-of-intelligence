@@ -23,11 +23,6 @@
   }
   function commitment(world,site,p,appointments){
     if(!member(site,p.id))return 'Away from this district';
-    const housing=root.EarthTownCentre?.restriction(site,p);
-    if(housing)return housing;
-    if(p.background&&p.background.workEthic<25&&((site.growth?.round||0)+p.background.patience)%4<2)
-      return 'Chose personal time instead of taking this shift';
-    if(site.centre?.reliefShift===p.id)return 'Taking this shift to help a neighbour obtain relief';
     if(root.EarthPractice?.reserved?.(site,p.id,world.week))return 'Keeping a booked practice session';
     if(site.purses?.tickets?.[p.id])return 'A stock check is already booked';
     if(site.shift?.residentId===p.id||site.shift&&p.id===(site.agency?.actor||'steward'))return 'Working an accompanied shift';
@@ -38,7 +33,7 @@
     if(site.communityLife?.excursions?.[p.id])return 'Travelling to another community';
     if(site.communityLife?.foundingPlan?.members?.includes(p.id))return 'Preparing an agreed relocation';
     if(appointments?appointments.has(p.id):root.EarthNeighbourErrands?.working?.(site,world.week).some(e=>e.actorId===p.id||e.targetId===p.id))return 'Keeping an agreed appointment';
-    return '';
+    return root.EarthHousing?.workHold(site,p.id)||root.EarthHousing?.buildDuty(world,site,p.id)||'';
   }
   function supplier(site){
     return site.growth.broker||={cash:0,parcel:0,crate:0,boards:0,arrivals:0};
@@ -144,7 +139,7 @@
     let best=null;
     for(const opening of offers.openings){
       const {shop,employer,item,source,demand}=opening;
-      if(offers.hired.has(shop.owner)||!demand)continue;
+      if(employer.id===p.id||offers.hired.has(shop.owner)||!demand)continue;
       const proficiency=site.careers?.[p.id]?.skills?.[item.axis]??p.aptitudes?.[item.axis]??40;
       const threshold=item.threshold-(site.growth.custom==='Repair circle'&&shop.access&&item.axis==='craft'?4:0);
       if(proficiency<threshold)continue;
