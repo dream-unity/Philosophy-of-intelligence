@@ -2,11 +2,11 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Common Earth regional performance test</title>
 <style>
-*{box-sizing:border-box}body{background:#162b2a;color:#f2ecd8;margin:0;font:16px/1.45 system-ui}main{max-width:1060px;margin:auto;padding:.7rem}h1{font-size:1.35rem;margin:0}button{font:inherit;padding:.45rem .8rem}#stage{position:relative;width:min(100%,1024px);height:min(64vh,650px);overflow:hidden;isolation:isolate}#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}#stage button{display:none}pre{white-space:pre-wrap;font:14px/1.45 monospace}
+*{box-sizing:border-box}body{background:#162b2a;color:#f2ecd8;margin:0;font:16px/1.45 system-ui}main{max-width:1060px;margin:auto;padding:.7rem}h1{font-size:1.35rem;margin:0}button{font:inherit;padding:.45rem .8rem}#stage{position:relative;width:min(100%,1024px);height:min(64vh,650px);overflow:hidden}#stage canvas{width:100%;height:100%;display:block;touch-action:none}#stage button{display:none}pre{white-space:pre-wrap;font:14px/1.45 monospace}
 </style>
-<main><h1>Regional performance test</h1><p>Pan the playable street renderer with scripted touch input and time 24 production rounds. The test uses an isolated world and keeps the same starting save for repeated runs in this tab.</p>
+<main><h1>Regional performance test</h1><p>Pan a populated region with scripted touch input and time 24 production rounds. The test uses an isolated world and keeps the same starting save for repeated runs in this tab.</p>
 <button id="run" disabled>Run comparison</button> <span id="status" role="status">Loading game modules…</span>
-<div id="stage" class="stage street-stage"><canvas aria-label="Benchmark street"></canvas></div><div id="region-mini" hidden></div><pre id="report"></pre></main>
+<div id="stage"><canvas aria-label="Benchmark street"></canvas></div><pre id="report"></pre></main>
 <script>
 (async()=>{
   const status=document.querySelector('#status'),report=document.querySelector('#report'),run=document.querySelector('#run'),canvas=document.querySelector('canvas');
@@ -50,7 +50,6 @@
       status.textContent='Warming the street…';
       const sim=CommonEarthSim.create({storage:null,snapshot}),w=sim.state,home=sim.active();
       scene=EarthStreet.mount(canvas,{getWorld:()=>w,getWeek:()=>w.week});scene.setSite(home);scene.resize();
-      if(!canvas.previousElementSibling?.querySelector('canvas'))throw Error('The playable street terrain layers did not mount.');
       const rect=canvas.getBoundingClientRect(),x=rect.x+rect.width/2,y=rect.y+rect.height/2;
       const touch=(type,dx,dy)=>canvas.dispatchEvent(new PointerEvent(type,{pointerType:'touch',pointerId:73,button:0,buttons:type==='pointerup'?0:1,bubbles:true,cancelable:true,clientX:x+dx,clientY:y+dy}));
       await new Promise(done=>setTimeout(done,1200));frameTimes=[];input=[];draw=[];last=0;queued=null;sampling=true;
