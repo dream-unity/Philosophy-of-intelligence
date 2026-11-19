@@ -72,7 +72,7 @@ test('one missing material prevents the contract, which later pays a named build
 test('a hostile watch commits a paid resident, fights on regional time and changes jurisdiction without transferring a private deed',()=>{
   const run=region(),{w,ctx,watch}=run;
   assert.ok(ctx.EarthBorderConflict.profile(watch).expansionist);
-  const ids=new Set(),encounters=[];
+  const ids=new Set(),encounters=[],contested=new Set();
   let claim=null;
   for(let i=0;i<100&&!claim;i++){
     run.production();if(i%4===3)run.week();
@@ -80,12 +80,14 @@ test('a hostile watch commits a paid resident, fights on regional time and chang
     if(campaign){
       ids.add(campaign.attacker.key);
       if(campaign.phase==='fight'){
-        encounters.push(campaign.defender.key);
+        encounters.push(campaign.defender.key);contested.add(campaign.cell);
         const actors=ctx.EarthRegionalWorld.travellers(w,watch).filter(a=>a.phase==='fighting');
         assert.ok(actors.find(p=>p.personId===campaign.attacker.id));
       }
     }
-    claim=Object.values(w.regionalWorld.regions[run.sim.active().id].parcels).find(p=>p.occupation&&p.charter===watch.id);
+    // An earlier undefended occupation need not have involved a fight.
+    const parcels=w.regionalWorld.regions[run.sim.active().id].parcels;
+    claim=[...contested].map(cell=>parcels[cell]).find(p=>p?.occupation&&p.charter===watch.id);
     run.save();
   }
   assert.ok(ids.size);assert.ok(encounters.length);assert.ok(claim);
