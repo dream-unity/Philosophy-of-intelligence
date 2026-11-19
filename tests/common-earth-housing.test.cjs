@@ -196,3 +196,35 @@ test('a witnessed loss, an unanswered request and a neighbour choosing to give t
   assert(!helped.home.housing.losses?.some(r=>r.key===helped.row.key));
   isolated.save();helped.save();
 });
+
+test('emergency help interrupts a personal crisis even after strain peaks, with the same person and history',()=>{
+  const t=game(),{ctx,home,w,housing}=t;
+  for(let i=0;i<6;i++)recruit(t);
+  home.funds=100;
+  const q=ctx.EarthTownCentre.quote(w,home,'targeted',{patience:[30,35]});
+  const result=t.sim.communityLife({...q,actor:'steward',action:'townCentre'});
+  assert.ok(result.ok,result.message);
+  const resident=housing.view(w,home).namedMissing.find(r=>r.id===result.id);assert.ok(resident);
+  for(const [id,p] of Object.entries(home.purses.people))if(id!==resident.id&&p.balance)
+    ctx.EarthPurses.productionReceipt(w,home,id,-p.balance,'Bought personal supplies.');
+  home.food=12;home.trust=55;home.housing.relief='private';
+  for(let week=2;week<=21;week++){
+    w.week=week;w.communityLife.duty.due=week+2;housing.tick(w,home);
+  }
+  const prior=home.housing.hardship.find(d=>d.key===resident.key);
+  assert.equal(prior.strain,20);assert.equal(prior.withoutMeals,0);
+  home.wellbeing=12;home.trust=18;
+  const base=t.save(),unsupported=game(base),supported=game(base);
+  const n=home.population,food=home.food;
+  const action={site:supported.home.id,week:supported.w.week,actor:'steward',action:'housingRelief',generation:home.foundingRevision,level:'emergency',prior:'private'};
+  assert.ok(supported.sim.communityLife(action).ok);
+  for(const run of [unsupported,supported]){
+    run.w.week++;run.w.communityLife.duty.due=run.w.week+2;
+    run.housing.tick(run.w,run.home);run.save();
+  }
+  assert.equal(unsupported.home.population,n-1);assert.equal(unsupported.home.housing.losses[0].key,resident.key);
+  assert.match(unsupported.home.housing.losses[0].text,/died by suicide/);
+  assert.equal(supported.home.food,food-1);assert.equal(supported.home.population,n);
+  const after=supported.home.housing.hardship.find(d=>d.key===resident.key);
+  assert.equal(after.strain,19);assert.match(after.help,/released one food/);
+});

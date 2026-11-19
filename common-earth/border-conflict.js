@@ -56,9 +56,18 @@
     return ids.filter(id=>!life().commuting(site,id)&&!root.EarthDistrictGrowth.work(site,id))
       .map(id=>root.EarthPersonas.profile(site,id)).filter(p=>p&&
         !root.EarthDistrictOrders.commitment(world,site,p,appointments)&&!root.EarthHousing?.workHold(site,p.id)&&
-        (!warParty||force(site,p)>=60)).sort((a,b)=>force(site,b)-force(site,a)||a.id.localeCompare(b.id));
+        (!warParty||force(site,p)>=60)).sort((a,b)=>readiness(world,site,b)-readiness(world,site,a)||a.id.localeCompare(b.id));
   }
   const clerk=site=>site.communityLife.border||={records:[],health:{},lost:0};
+  function service(world,site,p){
+    const old=site.communityLife.border?.service?.[p.identityKey||p.key];
+    return old?{experience:old.experience,fatigue:Math.max(0,old.fatigue-Math.floor((world.regionalWorld.step-old.step)*.6))}:{experience:0,fatigue:0};
+  }
+  function readiness(world,site,p){const s=service(world,site,p);return force(site,p)+Math.min(8,s.experience*2)-s.fatigue*.60;}
+  function debrief(world,site,p,cost){
+    if(!p)return;const old=service(world,site,p),log=clerk(site).service||={};
+    log[p.key]={step:world.regionalWorld.step,experience:Math.min(50,old.experience+1),fatigue:cap(old.fatigue+cost)};
+  }
   function record(world,site,other,text,people=[],official=true){
     const office=clerk(site);
     office.records.unshift({week:world.week,step:world.regionalWorld?.step||0,other:other.id,text,people:people.map(p=>p.identityKey),official});
@@ -77,7 +86,7 @@
   }
   function retire(world,site,id,reason){
     const c=site.communityLife,p=root.EarthPersonas.profile(site,id);
-    if(!p||id==='steward'||site.population<=1||c.away[id]===deceased)return false;
+    if(!p||id==='steward'||p.identityKey===world.communityLife.profile.identityKey||site.population<=1||c.away[id]===deceased)return false;
     const office=clerk(site);
     root.EarthCareers?.departureForMove?.(world,site,id);
     c.away[id]=deceased;
@@ -153,21 +162,30 @@
     clerkBook.last=step;
     clerkBook.campaign={against:next.rival.site.id,cell:next.cell,path:next.path,index:0,phase:'march',round:0,
       travelCosts,credit:0,began:step,attacker:assign(site,leader),defender:null};
-    const text=site.name+' declared war over the outer parcel at '+next.cell+' in '+next.rival.site.name+'. '+leader.name+' left with 2 food and a watch wage of 2 funds.';
-    record(world,site,next.rival.site,text,[leader]);
+    const partner=volunteers[1],party=[leader];
+    if(partner&&site.food-(held.food||0)>=Math.max(floor.food,Math.ceil(site.population/5)*2)+2&&site.funds-(held.funds||0)>=floor.funds+2&&
+        root.EarthPurses.productionReceipt(world,site,partner.id,2,'A second watch wage for the same expedition.')){
+      site.food-=2;site.funds-=2;clerkBook.campaign.partner=assign(site,partner);party.push(partner);
+    }
+    const text=site.name+' declared war over the outer parcel at '+next.cell+' in '+next.rival.site.name+'. '+party.map(p=>p.name).join(' and ')+' left with 2 food and a watch wage of 2 funds each.';
+    record(world,site,next.rival.site,text,party);
   }
   function publish(world,site,other,campaign,text,kind){
     const p=root.EarthPersonas.profile(site,campaign.attacker.id);
     const guard=campaign.defender&&root.EarthPersonas.profile(other,campaign.defender.id);
-    const witnesses=[p,guard].filter(Boolean);
+    const witnesses=[p,guard,campaign.partner&&root.EarthPersonas.profile(site,campaign.partner.id),campaign.support&&root.EarthPersonas.profile(other,campaign.support.id)].filter(Boolean);
     record(world,site,other,text,witnesses);record(world,other,site,text,witnesses);
     if(kind&&p){
-      const witness=guard||life().hostFor(other);
+      const witness=guard&&other.communityLife.away[guard.id]!==deceased?guard:
+        campaign.support&&root.EarthPersonas.profile(other,campaign.support.id)||campaign.partner&&root.EarthPersonas.profile(site,campaign.partner.id)||p;
       life().recordReception(world,site,other,witness,'invasion',p);
       life().recordReception(world,other,site,p,'trespass',witness);
     }
   }
   function settle(world,r,site,other,c,victory,message){
+    const travel=Math.min(18,Math.ceil(c.path.length/(site.growth?.vehicle?3:2)));
+    for(const p of [c.attacker,c.partner])debrief(world,site,p,19+travel+(victory?0:7));
+    for(const p of [c.defender,c.support])debrief(world,other,p,victory?23:17);
     if(victory){
       const parcel=r.parcels[c.cell]||={uses:{}};
       parcel.charter=site.id;parcel.occupation=world.week;
@@ -182,7 +200,7 @@
     }
     other.trust=Math.max(0,other.trust-2);site.trust=Math.max(0,site.trust-1);
     publish(world,site,other,c,message,'invasion');
-    release(other,c.defender);
+    release(other,c.defender);release(other,c.support);
     c.phase='return';c.outcome=message;
   }
   function march(c,pace,returning){
@@ -198,25 +216,32 @@
   }
   function advanceWar(world,geo,r,town,c){
     const site=town.site,other=geo.towns.find(t=>t.site.id===c.against)?.site;
-    if(!other){release(site,c.attacker);delete clerk(site).campaign;return;}
+    if(!other){release(site,c.attacker);release(site,c.partner);delete clerk(site).campaign;return;}
     if(c.phase==='return'){
       march(c,2,true);
-      if(!c.index){release(site,c.attacker);delete clerk(site).campaign;}
+      if(!c.index){release(site,c.attacker);release(site,c.partner);delete clerk(site).campaign;}
       return;
     }
     const pact=r.contacts[keyOf(site.id,other.id)];
     if(pact&&pact.step>=c.began&&['joint','exchange','passage'].includes(pact.terms)){
-      release(other,c.defender);c.phase='return';
+      release(other,c.defender);release(other,c.support);c.phase='return';
       c.outcome='The councils recognised passage and recalled the watch.';
       publish(world,site,other,c,c.outcome);return;
     }
     if(c.phase==='march'){
       march(c,1+(site.growth?.vehicle?1:0),false);
       if(c.index<c.path.length-1)return;
-      const p=available(world,other,false)[0];
+      const guards=available(world,other,false),p=guards[0];
       if(!p){settle(world,r,site,other,c,true,other.name+' had no free resident to defend its outer parcel.');return;}
       c.defender=assign(other,p);c.phase='fight';
-      publish(world,site,other,c,c.attacker.name+' entered the boundary without leave. '+p.name+' confronted them. The two residents began fighting.','invasion');
+      const rallied=other.communityLife.border?.records.some(note=>note.other===site.id&&note.text.includes('took jurisdiction'));
+      const second=guards.slice(1).find(g=>rallied||force(other,g)>=65);
+      if(second)c.support=assign(other,second);
+      const attackers=[c.attacker,c.partner].filter(Boolean),defenders=[c.defender,c.support].filter(Boolean);
+      const travel=Math.min(18,Math.ceil(c.path.length/(site.growth?.vehicle?3:2)));
+      for(const a of attackers)a.energy=Math.max(25,a.energy-service(world,site,a).fatigue-travel);
+      for(const b of defenders)b.energy=Math.max(25,b.energy-service(world,other,b).fatigue);
+      publish(world,site,other,c,attackers.map(person=>person.name).join(' and ')+' entered the boundary without leave. '+defenders.map(person=>person.name).join(' and ')+' confronted them and began fighting.','invasion');
       return;
     }
     c.round++;
@@ -224,46 +249,69 @@
     // Stamina, willingness to continue and the previous exchange decide the
     // result. No random draws or camera frames are consumed by combat.
     const originalA=a.energy,originalB=b.energy;
-    a.energy-=13+Math.round((b.stamina+b.resolve)/14);
-    b.energy-=14+Math.round((a.stamina+a.resolve)/13);
+    const strength=(field,p)=>13+(p.stamina+p.resolve)/14+Math.min(7,service(world,field,p).experience)-service(world,field,p).fatigue*.08;
+    a.energy-=Math.round(strength(other,b)+(c.support?strength(other,c.support)*.54:0));
+    b.energy-=Math.round(strength(site,a)+(c.partner?strength(site,c.partner)*.61:0));
     // A less committed watch can accept withdrawal. The most militant
     // expeditions continue the fight unless the councils negotiate passage.
     const retreat=b.resolve<58&&b.energy<42&&a.resolve<83;
     if(a.energy>0&&b.energy>0&&!retreat&&!(a.resolve<65&&a.energy<32))return;
     const victory=b.energy<=0&&a.energy<=0?a.energy>b.energy||a.energy===b.energy&&originalA>=originalB:b.energy<=0||retreat;
     const loser=victory?b:a,losingTown=victory?other:site;
-    const death=loser.energy<=0&&((victory?a:b).resolve>=78||loser.resolve>=80)&&retire(world,losingTown,loser.id,'Died in the boundary fight at '+c.cell+'.');
+    const winner=victory?a:b,exposure=Math.max(0,-loser.energy)+Math.max(0,winner.energy)*.4+service(world,losingTown,loser).fatigue*.3;
+    const death=loser.energy<=0&&exposure>=15&&Math.max(winner.resolve,loser.resolve)>=75&&retire(world,losingTown,loser.id,'Died in the boundary fight at '+c.cell+'.');
     if(!death)hurt(world,losingTown,loser,'Injured in the boundary fight at '+c.cell+'.');
-    const message=loser.name+(death?' died in the fight.':' withdrew injured.');
+    const witness=[c.partner,c.support,winner].find(person=>person&&person.key!==loser.key);
+    const message=loser.name+(death?' died in the fight.':' withdrew injured.')+(witness?' '+witness.name+' witnessed the outcome.':'');
     settle(world,r,site,other,c,victory,message);
-    if(death&&!victory)delete clerk(site).campaign;
+    if(death&&!victory&&!c.partner)delete clerk(site).campaign;
   }
   function advance(world,geo,r){
     for(const t of geo.towns){
       recovery(world,t.site);
+      const gate=t.site.communityLife?.border?.gate;
+      if(gate&&world.regionalWorld.step>=gate.until){release(t.site,gate.guard);delete t.site.communityLife.border.gate;}
       const c=t.site.communityLife?.border?.campaign;
       if(c)advanceWar(world,geo,r,t,c);
       else openWar(world,geo,r,t);
     }
   }
+  function combatants(at,visitors,guards,from,to,detail){
+    const result=[];
+    if(!visitors.length||!guards.length)return result;
+    function add(p,i,all,opponents,site,side){
+      const row=all.length===1?0:i===0?-1:1,opponent=opponents[i]||opponents[0];
+      result.push({x:at.x+side*.004,y:at.y+row*.0065,dx:-side*.62,dy:opponents.length===all.length?0:-row*.5,
+        kind:'border',phase:'fighting',fightSide:side,fightRow:row,mode:'walk',name:p.name,personId:p.id,siteId:site.id,
+        destination:to.name+' boundary',activity:'Fighting '+opponent.name+' at the boundary',detail,remainingKm:0});
+    }
+    visitors.forEach((p,i)=>add(p,i,visitors,guards,from,-1));guards.forEach((p,i)=>add(p,i,guards,visitors,to,1));
+    return result;
+  }
   function actors(world,geo){
     const rows=[];
     for(const t of geo.towns){
-      const c=t.site.communityLife?.border?.campaign;if(!c)continue;
-      const rival=geo.towns.find(d=>d.site.id===c.against);if(!rival)continue;
-      const fighting=c.phase==='fight',next=c.phase==='return'?Math.max(0,c.index-2):Math.min(c.path.length-1,c.index+1);
-      const a=point(c.path[c.index]),b=point(c.path[next]);
-      const dt=Date.now()-(world.lastProductionAt||Date.now()),f=fighting?0:Math.max(0,Math.min(.98,dt/(root.EarthDistrictGrowth.period||12000)));
-      const x=a.x+(b.x-a.x)*f,y=a.y+(b.y-a.y)*f;
-      const label=fighting?'Fighting at the boundary':c.phase==='return'?'Returning from the boundary':'Marching to contest the boundary';
-      function row(p,site,dx,offset){
-        return {x:x+offset,y,dx,dy:fighting?0:b.y-a.y,kind:'border',phase:fighting?'fighting':c.phase,mode:'walk',
-          personId:p.id,name:p.name,siteId:site.id,destination:rival.site.name+' boundary',activity:label,
-          detail:c.outcome||label+' · '+t.site.name+' and '+rival.site.name+' · parcel '+c.cell,
-          remainingKm:Math.max(0,c.path.length-1-c.index)*.5};
+      const office=t.site.communityLife?.border,gate=office?.gate;
+      if(gate){
+        const source=geo.towns.find(d=>d.site.id===gate.from);
+        if(source){
+          const dx=source.x-t.x,dy=source.y-t.y,n=Math.max(.01,Math.abs(dx)+Math.abs(dy));
+          rows.push(...combatants({x:t.x+dx/n*.155,y:t.y+dy/n*.155},[gate.visitor],[gate.guard],source.site,t.site,gate.message));
+        }
       }
-      if(t.site.communityLife.away[c.attacker.id]===borderDuty)rows.push(row(c.attacker,t.site,fighting?1:b.x-a.x,fighting?-.005:0));
-      if(fighting&&c.defender)rows.push(row(c.defender,rival.site,-1,.005));
+      const c=office?.campaign;if(!c)continue;
+      const rival=geo.towns.find(d=>d.site.id===c.against);if(!rival)continue;
+      const next=c.phase==='return'?Math.max(0,c.index-2):Math.min(c.path.length-1,c.index+1);
+      const a=point(c.path[c.index]),b=point(c.path[next]),crew=[c.attacker,c.partner].filter(p=>p&&t.site.communityLife.away[p.id]===borderDuty);
+      if(c.phase==='fight'){
+        rows.push(...combatants(a,crew,[c.defender,c.support].filter(Boolean),t.site,rival.site,t.site.name+' authorised the claim on parcel '+c.cell+'.'));continue;
+      }
+      const dt=Date.now()-(world.lastProductionAt||Date.now()),f=Math.max(0,Math.min(.98,dt/(root.EarthDistrictGrowth.period||12000)));
+      const x=a.x+(b.x-a.x)*f,y=a.y+(b.y-a.y)*f,back=c.phase==='return';
+      const label=back?'Returning from the boundary':'Marching to contest the boundary';
+      for(const [i,p] of crew.entries())rows.push({x:x+i*.01,y:y+i*.007,dx:b.x-a.x,dy:b.y-a.y,kind:'border',phase:c.phase,mode:'walk',
+        personId:p.id,name:p.name,siteId:t.site.id,destination:back?t.site.name:rival.site.name+' boundary',activity:label,
+        detail:c.outcome||label+' · parcel '+c.cell,remainingKm:(back?c.index:c.path.length-1-c.index)*.5});
     }
     return rows;
   }
@@ -288,6 +336,8 @@
     if(owner==='steward')hurt(world,from,{id:owner,key:visitor.identityKey},'Injured at the boundary of '+to.name+'.');
     record(world,to,from,msg,[guard,visitor],true);record(world,from,to,msg,[visitor,guard],false);
     if(atCell)return {host:to.id,cell:atCell,guard:assign(to,guard),visitor:fighter(from,visitor),round:0,message:msg};
+    const office=clerk(to);if(office.gate)release(to,office.gate.guard);
+    office.gate={from:from.id,until:(world.regionalWorld?.step||0)+2,guard:assign(to,guard),visitor:fighter(from,visitor),message:msg};
     return msg;
   }
   function guardShift(world,host,origin,trip){
@@ -323,12 +373,14 @@
     const actor=p=>p&&text(p.id)&&text(p.name)&&text(p.key)&&Number.isFinite(p.energy)&&p.energy>=-100&&p.energy<=120&&int(p.resolve,0,100)&&int(p.stamina,0,100);
     if(!int(d.lost)||d.last!=null&&!int(d.last)||!Array.isArray(d.records)||d.records.length>16||!d.records.every(e=>e&&int(e.week,1,week)&&int(e.step)&&text(e.other)&&text(e.text)&&typeof e.official==='boolean'&&Array.isArray(e.people)&&e.people.length<=4&&e.people.every(text)))return false;
     if(!d.health||typeof d.health!=='object'||Array.isArray(d.health)||!Object.values(d.health).every(h=>h&&text(h.key)&&int(h.week,1,week)&&['injured','died','recovered'].includes(h.condition)&&text(h.reason)&&(h.condition!=='injured'||int(h.until,h.week,week+2))))return false;
+    if(d.service&&(!d.service||typeof d.service!=='object'||Array.isArray(d.service)||!Object.values(d.service).every(v=>v&&int(v.step)&&int(v.experience,0,50)&&int(v.fatigue,0,100))))return false;
+    if(d.gate&&(!text(d.gate.from)||!text(d.gate.message)||!int(d.gate.until)||!actor(d.gate.guard)||!actor(d.gate.visitor)))return false;
     const c=d.campaign;
     return !c||text(c.against)&&coord(c.cell)&&Array.isArray(c.path)&&c.path.length>=2&&c.path.length<=4097&&c.path.every(coord)&&c.path.at(-1)===c.cell&&
       (c.travelCosts==null||Array.isArray(c.travelCosts)&&c.travelCosts.length===c.path.length&&c.travelCosts[0]===0&&
         c.travelCosts.slice(1).every(n=>Number.isFinite(n)&&n>0&&n<=5)&&Number.isFinite(c.credit)&&c.credit>=0&&c.credit<=5)&&
       int(c.index,0,c.path.length-1)&&['march','fight','return'].includes(c.phase)&&int(c.round,0,12)&&int(c.began)&&actor(c.attacker)&&
-      (c.defender==null?c.phase!=='fight':actor(c.defender));
+      (c.partner==null||actor(c.partner))&&(c.support==null||actor(c.support))&&(c.defender==null?c.phase!=='fight':actor(c.defender));
   }
-  root.EarthBorderConflict=Object.freeze({disposition,force,profile,advance,actors,entry,hasPass,guardShift,homecoming,retire,valid});
+  root.EarthBorderConflict=Object.freeze({disposition,force,profile,advance,actors,combatants,entry,hasPass,guardShift,homecoming,retire,valid});
 })(globalThis);

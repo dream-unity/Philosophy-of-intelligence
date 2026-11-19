@@ -304,6 +304,7 @@
     if(site.birthCoordinate!=null&&!geoPoint(site.birthCoordinate))return false;
     if(root.EarthPractice&&!root.EarthPractice.valid(site,world.week))return false;
     if(root.EarthCouncilHomes&&!root.EarthCouncilHomes.valid(site,world.week))return false;
+    if(root.EarthCooperativeWorks&&!root.EarthCooperativeWorks.valid(site,world.week))return false;
     if(root.EarthBorderConflict&&!root.EarthBorderConflict.valid(site,world.week))return false;
     if(root.EarthHousing&&!root.EarthHousing.valid(site,world.week))return false;
     if(root.EarthTownCentre&&!root.EarthTownCentre.valid(world,site))return false;
@@ -1344,7 +1345,7 @@
     }
     function payForWork(site,label){
       const actor=signer(site);
-      const paid=root.EarthPurses?.productionReceipt(world,site,actor,1,label+' earned 1 personal fund.');
+      const paid=root.EarthMarket?.payWork(world,site,actor,label);
       const point=root.EarthDistrictGrowth?.contribute(world,site,actor);
       const restored=world.effort<MAX_EFFORT;
       if(restored)world.effort++;
@@ -1373,7 +1374,7 @@
       return complete(outcome+reward,site,true,root.EarthAgency?.actor(site));
     }
     function occupiedLot(site,plot){
-      return site.buildings.some(item=>item.plot===plot) || (site.construction||[]).some(job=>job.scope==='street'&&job.plot===plot);
+      return site.cooperative?.project?.plot===plot||site.buildings.some(item=>item.plot===plot) || (site.construction||[]).some(job=>job.scope==='street'&&job.plot===plot);
     }
     function previewBuild(kind,plot) {
       const site=current(),b=BUILDINGS[kind];

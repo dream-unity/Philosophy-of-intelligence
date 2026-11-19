@@ -933,6 +933,18 @@
       if(!look){look=communityLook(t.site,who);remember(regionalLooks,key,look,48);}
       const p=renderRegion.localPoint(baseTown,actor.x,actor.y),dx=(actor.dx||0)-(actor.dy||0),dy=-(actor.dx||0)-(actor.dy||0);
       const norm=Math.hypot(dx,dy)||1,ax=dx/norm,ay=dy/norm,stationary=actor.phase==='working';
+      if(actor.phase==='fighting'){
+        // Both figures share one rhythm. The opposing body gives ground as the
+        // first reaches forward. Their saved positions and the outcome stay fixed.
+        const step=actor.fightRow===1?.22:0;
+        const wave=reduced?0:Math.sin(visualTime*4.1+step);
+        const pulse=reduced?.35:Math.max(0,wave*-actor.fightSide)**2;
+        const shift=reduced?0:(pulse*.075-Math.max(0,wave*actor.fightSide)*.035);
+        p.x+=ax*shift;p.y+=ay*shift;
+        person(p.x,p.y,look.cloth[0],ax,ay,0,0,false,look);
+        activityGesture(p,{gesture:'spar',prop:'none'},look.cloth[0],ax,ay,null,look.skin[0],pulse);
+        return true;
+      }
       if(actor.mode==='van'){
         drawTransport({...p,dx:ax,dy:ay},0,false,true);return true;
       }
@@ -940,14 +952,7 @@
       if(seated)skiff(p.x,p.y,'#829f99',false);
       const phase=visualTime*5+(hash(key)%157)/29;
       person(p.x,p.y,look.cloth[0],ax,ay,stationary||seated?0:.75,phase,false,look,seated);
-      if(actor.phase==='fighting'){
-        const [sx,sy]=screen(p.x,p.y),side=actor.dx>0?1:-1;
-        const extension=reduced?.34:.2+.34*Math.max(0,Math.sin(visualTime*5+side));
-        ctx.strokeStyle=look.cloth[0];ctx.lineWidth=Math.max(1.5,unit*.095);
-        ctx.beginPath();ctx.moveTo(sx+side*.06*unit,sy-.50*unit);
-        ctx.lineTo(sx+side*extension*unit,sy-.47*unit);ctx.stroke();
-        ellipse(sx+side*extension*unit,sy-.47*unit,unit*.055,unit*.055,look.skin||'#bd9171');
-      }else if(actor.cargo?.materials||actor.cargo?.food){
+      if(actor.cargo?.materials||actor.cargo?.food){
         const x=p.x+ax*.16,y=p.y+ay*.16;box(x-.1,y-.11,.2,.22,.23,.16,'#b59365','#8e714a','#785f42');
       }else if(stationary){
         const resource=regionalModel.terrain(geo,actor.x,actor.y).resource;
@@ -2418,6 +2423,16 @@
         const rim=Math.max(.75,k*.025);
         ctx.fillStyle=fill;ctx.fillRect(px+rim,py+rim,Math.max(1,w*k-rim*2),Math.max(1,h*k-rim*2));
       }
+      if(step.gesture==='spar'){
+        const shoulder=x+side*.065*k,elbow=x+side*(.19+.07*t)*k;
+        const hand=x+side*(.23+.27*t)*k,elbowY=y-(.36+.12*t)*k,fistY=y-(.49+.07*t)*k;
+        stroke(x-side*.04*k,shoulderY,x+side*.09*k,y-.51*k,coat,.075);
+        ellipse(x+side*.10*k,y-.52*k,k*.047,k*.05,skin);
+        stroke(shoulder,shoulderY,elbow,elbowY,coat,.096);
+        stroke(elbow,elbowY,hand,fistY,skin,.065);
+        ellipse(hand,fistY,k*.049,k*.05,skin);
+        return;
+      }
       if(step.gesture==='sit'||step.gesture==='listen')return;
       stroke(x+side*.07*k,shoulderY,gripX,gripY,coat,.09);
       ellipse(gripX,gripY,k*.041,k*.042,skin);
@@ -3541,7 +3556,7 @@
       const built=removal?clamp((1-job.progress)/.72,0,1):job.progress;
       return {...job,x,y,gate,sign,vertical,removal,artKind,frame,built,scale:job.scope==='city'?.73:1,type:'construction',jobId:job.id,label:job.name};
     }
-    const vacant=lot=>Boolean(lot&&!lot.building&&!workLots.has(lot.plot));
+    const vacant=lot=>Boolean(lot&&!lot.building&&state.site?.cooperative?.project?.plot!==lot.plot&&!workLots.has(lot.plot));
     function workTree(tree){
       const bx=Math.floor(tree.x/BLOCK),by=Math.floor(tree.y/BLOCK);
       return bx>=0&&bx<3&&by>=0&&by<3&&workLots.has(by*3+bx);
@@ -3703,6 +3718,10 @@
         return {assetId:'home-'+i,use:'home',homeSlot:i,assetName:person?person.name+'’s home':'District home',ownerId:person?.id,
           activity:person?person.name+' lives here.':'A home in '+site.name+'.'};
       }));
+      const project=site.cooperative?.project;
+      if(project)test(window.EarthCooperativeWorks.centre(project.plot),project.kind,0,.7,.34,()=>({assetId:project.id,
+        assetName:project.kind==='market'?'Cooperative store worksite':'Workshop construction',use:'project',plot:project.plot,
+        activity:project.reason+' '+(project.workerName||'The council')+' · '+['delivering materials','assembling the frame','fitting out'][project.stage]+'.'}));
       for(const lot of state.lots)if(lot.building){
         const b=lot.building;
         test(lot,b.kind,0,1,.35,()=>({assetId:b.id,assetName:b.name,use:'project',plot:lot.plot,buildingKind:b.kind,
@@ -4242,6 +4261,17 @@
         });
       }
       HOMES.forEach((block,index)=>{const p=centre(block);addItem(p.x,p.y,blockDepth(p),()=>residence({...p,index}),buildingBounds);});
+      const cooperative=state.site.cooperative?.project;
+      if(cooperative){
+        const {x,y}=window.EarthCooperativeWorks.centre(cooperative.plot);
+        addItem(x,y,x+y+.34,()=>{
+          rect(x-1.15,y-.85,2.3,1.7,.026,'#ae8c61');
+          for(const dx of [-.95,.95])for(const dy of [-.68,.68])
+            box(x+dx,y+dy,.11,.11,.03,.33+cooperative.stage*.39,'#dfbd86','#ad8559','#917153');
+          if(cooperative.stage)box(x-.55,y-.37,1.1,.74,.03,.26,'#b79973','#9a7856','#81694c');
+          if(cooperative.stage===2)line(x-1,y+.68,1.17,x+1,y+.68,1.17,'#d6b17c',2);
+        },buildingBounds);
+      }
       for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item),buildingBounds);}
       if(state.site.growth){
         const g=state.site.growth;
@@ -6026,9 +6056,10 @@
       if(!frameTimer||!visible||covered||!lastFrame)return;
       const now=frameTimer.now(),gap=now-previousGestureAt;
       previousGestureAt=now;
-      // Input and animation callbacks can arrive in the same batch after a long
-      // pause. Waiting for the next batch then adds an entire missed frame.
-      if(now-lastGesturePaint<32||gap<90&&(now-lastFrame<65||paintAverage>12))return;
+      // A long input gap may put the input and animation callbacks in the same
+      // batch. Otherwise allow costly scenes time to recover before resampling.
+      const interval=paintAverage<=10?20:Math.max(60,paintAverage*4);
+      if(now-lastGesturePaint<interval||(gap<90&&now-lastFrame<65))return;
       lastGesturePaint=now;
       draw();
       const cost=frameTimer.now()-now;

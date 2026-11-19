@@ -103,6 +103,11 @@
     }
     const reservations=[],visiting=Object.entries(site.communityLife?.people||{}).filter(([id,g])=>g.status==='visitor'&&local(site,id)&&g.visitFrom&&
       !site.privateHomes?.some(h=>h.ownerId===id));
+    const anchor=site.communityLife?.people?.steward;
+    if(anchor?.residence==='visitor'&&site.id===world.activeId&&site.communityLife?.visits?.steward?.met&&
+       !site.privateHomes?.some(h=>h.ownerId==='steward')){
+      visiting.push(['steward',{profile:anchor.profile,visitFrom:world.communityLife.homeId,visitSlot:'steward'}]);
+    }
     function reserveRoom(id,guest,h){
       const origin=world.sites.find(s=>s.id===guest.visitFrom)||world.communityLife?.outposts.find(s=>s.id===guest.visitFrom);
       if(!origin||funds(origin,guest.visitSlot)<personalPrice||!h?.available||remaining(h)<1)return;
@@ -186,7 +191,8 @@
   function quote(world,site,origin,id){
     const report=view(world,site),held=report.reservations.find(r=>r.origin===origin.id&&r.sourceId===id);
     const guest=Object.entries(site.communityLife?.people||{}).find(([,g])=>g.status==='visitor'&&g.visitFrom===origin.id&&g.visitSlot===id);
-    const buyerId=guest?.[0],owned=buyerId&&site.privateHomes?.find(h=>h.ownerId===buyerId);
+    const anchor=id==='steward'&&origin.id===world.communityLife?.homeId&&world.activeId===site.id&&site.communityLife?.people?.steward?.residence==='visitor';
+    const buyerId=anchor?'steward':guest?.[0],owned=buyerId&&site.privateHomes?.find(h=>h.ownerId===buyerId);
     if(owned){
       const ready=owned.stage===3;
       return {available:ready,reason:ready?'':'The funded courtyard is still under construction.',kind:ready?'owned':'pending',price:0,
@@ -390,7 +396,7 @@
       difficulty.withoutMeals=!help&&site.food===0&&funds(site,row.id)===0?Math.min(20,(difficulty.withoutMeals||0)+1):0;
       const extended=difficulty.strain>=12&&difficulty.weeks>=16;
       const ties=site.autonomy?.people?.[row.id]?.ties||[];
-      const personalCrisis=extended&&difficulty.strain>=18&&site.wellbeing<=20&&site.trust<25&&
+      const personalCrisis=!help&&extended&&difficulty.strain>=18&&site.wellbeing<=20&&site.trust<25&&
         !ties.some(t=>t.strength>0)&&profile(site,row.id)?.traits.patience<38;
       const unsupported=difficulty.crisis!=null&&world.week-difficulty.crisis>=6&&difficulty.strain>=14;
       if((unsupported||extended&&(difficulty.withoutMeals>=8||personalCrisis))&&
@@ -449,7 +455,7 @@
       if(!c||!text(c.key)||!text(c.id)||!text(c.worker)||!integer(c.plot,0,5)||!integer(c.week,1,week))return false;
       const house=site.privateHomes?.find(v=>v.plot===c.plot),guest=site.communityLife?.people?.[c.id];
       return house&&house.ownerId===c.id&&house.stage>=1&&house.stage<3&&c.wages===3-house.stage&&c.materials===c.wages&&
-        guest?.profile?.identityKey===c.key&&guest.status==='visitor';
+        guest?.profile?.identityKey===c.key&&(guest.status==='visitor'||c.id==='steward'&&guest.status==='anchor'&&guest.residence==='visitor');
     })||new Set(h.contracts.map(c=>c.plot)).size!==h.contracts.length))return false;
     return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage)-\d{1,4})$/.test(r.home))&&
       list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.crisis==null||integer(r.crisis,1,week))&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&

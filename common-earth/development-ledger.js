@@ -19,6 +19,19 @@
       }
       if(land.delay&&!land.project)entries.push({key:'cottage/shortage',title:'Serviced housing plot',kind:'Housing',status:'Awaiting a contract',people:[],details:[land.delay]});
     }
+    const business=site.cooperative;
+    if(business){
+      for(const j of [...business.open,...(business.project?[business.project]:[])]){
+        const done=j.week!=null,participants=[participant(j.proposerId,'Commissioned the plot'),participant(j.worker||j.builder,done?'Built the premises':'Contracted builder')];
+        const sale=j.lastSale;
+        if(sale)participants.push(participant(sale.clerk,'Served the last customer'),participant(sale.buyer,'Bought provisions'));
+        entries.push({key:'order/'+j.id,title:(j.kind==='market'?'Cooperative provisions store':'Materials workshop')+' · lot '+(j.plot+1),
+          kind:'Cooperative enterprise',status:j.closed!=null?'Closed in production round '+j.closed:done?'Opened in week '+j.week:['Materials reserved','Materials delivered','Frame completed'][j.stage],
+          people:participants.filter(p=>p.id),details:[j.reason,done?(j.kind==='market'?j.sales+' retail sales.':'Producing materials for local construction.'):j.escrow+' funds in wage escrow.',
+            sale?sale.clerkName+' sold provisions to '+sale.buyerName+' in week '+sale.week+'.':'',!done&&business.delay].filter(Boolean)});
+      }
+      if(!business.project&&business.delay)entries.push({key:'cooperative/proposal',title:'Proposed cooperative premises',kind:'Council',status:'Waiting',people:[],details:[business.delay]});
+    }
     const civic = root.EarthCivicInitiatives?.view(world, site);
     for (const proposal of [civic?.active, ...(civic?.history || [])].filter(Boolean)) {
       const people = [participant(proposal.leadId,'Proposer',proposal.reason), participant(proposal.beneficiaryId,'Affected resident',proposal.benefit)];

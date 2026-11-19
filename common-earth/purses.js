@@ -344,7 +344,18 @@
     receipt(site,id,world.week,'arrival',amount,immigrant.name+' brought '+funds(amount,'personal')+' saved working at '+immigrant.birthCommunityName+'.');
     return true;
   }
-  const localReceipts=p=>BigInt(p.earned)+BigInt(p.productionIncome||0)+BigInt(p.arrivalSavings||0);
+  function reopenSavings(world,before,fresh){
+    const owners=new Set((fresh.privateHomes||[]).map(h=>h.ownerId));
+    for(const [id,prior] of Object.entries(before.purses?.people||{})){
+      if(!local(fresh,id)||!prior.balance&&!root.EarthResidentShops?.hasGoods(prior)&&!owners.has(id))continue;
+      const p=named(fresh,id);
+      p.balance=prior.balance;p.openingSavings=prior.balance;
+      // The earlier generation's receipts remain with the earlier ledger.
+      for(const key of ['belongings','stall','craftWeek'])if(prior[key]!=null)p[key]=structuredClone(prior[key]);
+      receipt(fresh,id,world.week,'carriedSavings',prior.balance,'Personal savings carried into the reopened town accounts.');
+    }
+  }
+  const localReceipts=p=>BigInt(p.earned)+BigInt(p.productionIncome||0)+BigInt(p.arrivalSavings||0)+BigInt(p.openingSavings||0);
   function productionReceipt(world,site,id,amount,text){
     if(!local(site,id)||!Number.isSafeInteger(amount)||!amount||Math.abs(amount)>12)return false;
     const p=named(site,id),balance=p.balance+amount;
@@ -374,6 +385,7 @@
         (sale?pair.product==='courtyardHome'||Object.hasOwn(root.EarthResidentShops?.products||{},pair.product):pair.product===undefined)&&
         (incoming?pair.to===id&&int(e.amount,1,12):pair.from===id&&int(-e.amount,1,12));
     }
+    if(e.action==='carriedSavings')return p.openingSavings===e.amount&&int(e.amount)&&e.balance===e.amount&&i===p.entries.length-1;
     if(e.action==='arrival')return int(p.arrivalSavings,2,12)&&i===p.entries.length-1&&e.amount===p.arrivalSavings&&e.balance===e.amount;
     if(e.action==='production')return int(e.amount,1,12);
     if(e.action==='property')return int(-e.amount,1,12);
@@ -388,7 +400,7 @@
       Object.keys(b.people).length>site.residents.length+7+24||!Object.keys(b.people).length||Object.keys(b.tickets).length>openings)return false;
     let used=0,maxDonated=0n;
     for(const [id,p] of Object.entries(b.people)){
-      if(!obj(p)||!int(p.productionIncome??0))return false;
+      if(!obj(p)||!int(p.productionIncome??0)||!int(p.openingSavings??0)||p.openingSavings!=null&&p.arrivalSavings!=null)return false;
       if(p.arrivalSavings!=null&&(!int(p.arrivalSavings,2,12)||p.arrivalSavings!==site.communityLife?.people?.[id]?.profile?.externalHistory?.savings))return false;
       const net=netTransfers(p);
       if(!local(site,id)||!obj(p)||!int(p.earned)||p.earned%wage||p.earned/wage>week-(site.founded||1)+1||
@@ -413,7 +425,7 @@
         }
       }
       // Fewer than eight receipts means we can see the full account history.
-      if(p.entries.length<8&&(netAtEntry!==0n||p.arrivalSavings&&p.entries.at(-1).action!=='arrival'))return false;
+      if(p.entries.length<8&&(netAtEntry!==0n||p.arrivalSavings&&p.entries.at(-1).action!=='arrival'||p.openingSavings!=null&&p.entries.at(-1).action!=='carriedSavings'))return false;
     }
     const seen=new Set();
     for(const [id,j] of Object.entries(b.tickets)){
@@ -443,5 +455,5 @@
     }
     return true;
   }
-  root.EarthPurses=Object.freeze({receiveArrivalSavings,productionReceipt,view,run,tick,valid,escrow,committed,canTransfer,transferPerson,buyMakerInput,noteDeed,workConflict,opportunity,workWeek,dreamExpense,moveBalance,validMoves});
+  root.EarthPurses=Object.freeze({reopenSavings,receiveArrivalSavings,productionReceipt,view,run,tick,valid,escrow,committed,canTransfer,transferPerson,buyMakerInput,noteDeed,workConflict,opportunity,workWeek,dreamExpense,moveBalance,validMoves});
 })(typeof window==='undefined'?globalThis:window);

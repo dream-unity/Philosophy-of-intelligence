@@ -68,6 +68,14 @@
       site[good]>=limit?'Make space in the district store.':'';
     return {price,reason,available:!reason};
   }
+  function payWork(world,site,id,label){
+    const book=site.exchange||fresh(world.week);
+    if(book.till<1||book.serial>=limit)return false;
+    if(!root.EarthPurses?.productionReceipt(world,site,id,1,label+' earned one fund from the exchange.'))return false;
+    book.till--;book.serial++;site.exchange=book;
+    log(book,world.week,'Paid '+actorName(site,id)+' one fund for '+label.toLowerCase()+'.');
+    return true;
+  }
   function personalQuote(world,site,good){
     if(!world||!site||!goods.includes(good))return {price:0,reason:'Choose food or materials from the stall.',available:false};
     return giftQuote(site,good,site.exchange||fresh(world.week),policy(site));
@@ -363,5 +371,5 @@
     book.till=0;book.shelf={food:0,materials:0};book.serial=1;
     return book;
   }
-  root.EarthMarket=Object.freeze({foundingExchange,view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,personalQuote,personal,quantity,makerInput,resourceOpportunity,resourceWork});
+  root.EarthMarket=Object.freeze({foundingExchange,view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,payWork,personalQuote,personal,quantity,makerInput,resourceOpportunity,resourceWork});
 })(typeof window==='undefined'?globalThis:window);

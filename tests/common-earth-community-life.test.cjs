@@ -157,6 +157,8 @@ test('core delegates, the driver and an active supply-lane worker may choose to 
     home.buildings=[{id:'g',kind:'garden',plot:0,name:'Garden'},{id:'w',kind:'workshop',plot:1,name:'Workshop'}];
     const link=context.CommonEarthSim.productiveLinks(home)[0];assert.ok(link);
     const id=role==='driver'?'driver':role==='porter'?'carrier-'+link.from+'-'+link.to:home.residents[['grower','repairer','convenor'].indexOf(role)].id;
+    for(const host of sim.state.communityLife.outposts)if(context.EarthBorderConflict.profile(host).closed)
+      life.recordReception(sim.state,host,home,context.EarthPersonas.profile(home,id),'introduction',life.hostFor(host));
     const offered=life.movingOptions(sim.state,home).find(p=>p.id===id);assert.ok(offered?.eligible,role+' · '+offered?.reason);
     assert.ok(doAction('suggestVisit',id,id).ok);
     assert.ok(life.travelIntent(home,id));assert.equal(life.present(home,id),true);saved();
@@ -304,6 +306,8 @@ test('a regional shift worker enters the local household census only after takin
   home.buildings=[{id:'g',kind:'garden',plot:0,name:'Garden'},{id:'w',kind:'workshop',plot:1,name:'Workshop'}];
   const lane=context.CommonEarthSim.productiveLinks(home)[0],id='carrier-'+lane.from+'-'+lane.to;
   context.EarthPurses.productionReceipt(sim.state,home,id,2,'Saved two funds to secure a housing share.');
+  for(const host of sim.state.communityLife.outposts)if(context.EarthBorderConflict.profile(host).closed)
+    life.recordReception(sim.state,host,home,context.EarthPersonas.profile(home,id),'introduction',life.hostFor(host));
   const before=life.census(sim.state,home),option=life.movingOptions(sim.state,home).find(p=>p.id===id);
   assert.ok(before.commuters>=1);assert.equal(before.represented,home.population);assert.ok(option?.eligible);
   assert.ok(doAction('suggestVisit',id,id).ok);sim.advance();
@@ -401,7 +405,7 @@ test('settling into a new household takes two observable shared sessions and rec
   assert.ok(context.EarthAutonomy.bond(town,guide,entrant,last)>=2);
   const model=life.districtProfile(sim.state,town);
   assert.ok(model.households.completed.some(p=>p.guide===guide&&p.entrant===entrant));
-  assert.ok(model.origins.length>=2);
+  assert.ok(model.origins.length>=2);assert.equal(model.origins.reduce((n,row)=>n+row.count,0),model.census.represented);
   assert.equal(model.occupations.reduce((n,row)=>n+row.count,0),model.census.here);
   const again=fixture(saved()),s=[...again.sim.state.sites,...again.sim.state.communityLife.outposts].find(s=>s.id===town.id);
   assert.equal(again.life.districtProfile(again.sim.state,s).households.completed[0].sessions,2);
@@ -640,13 +644,16 @@ test('a driver can depart with a cast out, reopen the journey and arrive by van'
   assert.equal(resumed.sim.active().id,dest.id);
 });
 
+function arrangeInvitation(sim,doAction,site){
+  assert.ok(doAction('requestEntry',site.id,'market').ok);assert.ok(sim.advance().ok);
+}
 test('visitors can see the local mix before arrival and an introduction changes a hostile reception',()=>{
-  const {life,sim,home,visit,saved}=fixture();
+  const {life,sim,home,visit,doAction,saved}=fixture();
   const towns=sim.state.communityLife.outposts;
   const profiles=towns.map(s=>life.communityCharacter(s));
   const hostile=towns.find(s=>life.communityCharacter(s).type.startsWith('Hostile'));
   assert.ok(hostile,JSON.stringify(profiles));assert.ok(new Set(profiles.map(p=>p.type)).size>=2);
-  visit(hostile.id);
+  arrangeInvitation(sim,doAction,hostile);visit(hostile.id);
   const site=sim.active(),host=life.hostFor(site);
   const guard=site.residents.find(p=>life.visitorReception(sim.state,site,p.id)?.repels);
   assert.ok(guard);const old=life.communityCharacter(site);
@@ -682,7 +689,7 @@ test('a physical encounter, sponsorship and the delayed report change distinct j
   const world=sim.state,town=world.communityLife.outposts[1],observer=world.communityLife.outposts[0];
   const initial=life.entryAssessment(world,town);
   assert.equal(initial.rule.label,'Hosted entry');assert.equal(initial.reputation.length,0);
-  visit(town.id);
+  arrangeInvitation(sim,doAction,town);visit(town.id);
   assert.match(sim.act('work:salvage').message,/sponsor/);
   const guard=town.residents.find(p=>life.visitorReception(world,town,p.id)?.repels);
   const proof={siteId:town.id,actor:'steward',target:guard.id,mode:'walk',x:1,y:1,tx:1,ty:1};
@@ -757,7 +764,8 @@ test('residents carry their disposition through relocation while the receiving t
 test('a hosted town can defer physical entry and offer a dated visit without cancelling the guest’s other obligations',()=>{
   const {life,sim,home,visit,doAction,context,saved}=fixture();
   const world=sim.state,peer=world.communityLife.outposts[1];
-  visit(peer.id);
+  arrangeInvitation(sim,doAction,peer);visit(peer.id);
+  delete peer.communityLife.entryPass;
   const witnesses=peer.residents.slice(0,2);
   for(const who of witnesses)context.EarthAutonomy.remember(peer,world.week,who.id,'steward','missed');
   visit(home.id);
@@ -770,7 +778,11 @@ test('a hosted town can defer physical entry and offer a dated visit without can
   const permit=doAction('requestEntry',peer.id,'market');assert.ok(permit.ok,permit.message);
   assert.match(doAction('depart',peer.id,'market').message,/week/);
   saved();
-  assert.ok(sim.advance().ok);visit(peer.id);
+  assert.ok(sim.advance().ok);
+  visit(peer.id);
+  const hearingWitnesses=context.EarthPersonas.list(peer,{includeCommuters:false}).filter(p=>p.id!=='steward'&&life.residency(peer,p.id)==='member').slice(0,2);
+  assert.equal(hearingWitnesses.length,2);
+  for(const who of hearingWitnesses)context.EarthAutonomy.remember(peer,world.week,who.id,'steward','missed');
   assert.equal(life.anchor(world).homeId,home.id);
   assert.equal(life.residency(peer,'steward'),'visitor');
   assert.ok(life.view(world,peer).admission.checks.some(c=>c.label==='Rebuild local confidence'&&!c.pass));
@@ -795,4 +807,83 @@ test('the selected newcomer changes the same town’s reception and their recrui
   const open=resettle(0),cautious=resettle(100);
   assert.equal(open.after.tally.welcoming-open.before.tally.welcoming,1);
   assert.equal(cautious.after.tally.forceful-cautious.before.tally.forceful,1);
+});
+
+
+test('a first uninvited physical entry is turned back while a later hosted crossing admits the original visitor',()=>{
+  const {sim,home,life,context,doAction,wait,saved}=fixture(),w=sim.state,peer=w.communityLife.outposts[1];
+  assert.ok(doAction('depart',peer.id,'market').ok);wait(6500);
+  const result=doAction('arrive',peer.id);assert.ok(result.refused);assert.equal(result.arrived,false);assert.equal(sim.active().id,home.id);
+  const actors=context.EarthRegionalWorld.travellers(w,home).filter(a=>a.phase==='fighting');
+  assert.ok(actors.some(p=>p.personId==='steward'&&p.name===w.communityLife.profile.name));assert.ok(actors.some(p=>p.siteId===peer.id&&p.fightSide===1));
+  saved();assert.ok(doAction('requestEntry',peer.id,'market').ok);assert.ok(sim.advance().ok);
+  assert.ok(doAction('depart',peer.id,'market').ok);wait(6500);assert.ok(doAction('arrive',peer.id).arrived);
+  assert.equal(life.residency(peer,'steward'),'visitor');assert.equal(w.communityLife.homeId,home.id);saved();
+});
+
+test('the original visitor pays for a real share from their own purse after a host-funded trial',()=>{
+  const {sim,life,home,context,visit,doAction,saved}=fixture(),world=sim.state;
+  visit(life.neighbours(world,home)[0].id);
+  const target=sim.active(),host=life.hostFor(target).id;
+  assert.ok(doAction('meet',null,host).ok);
+  const admission=()=>life.view(world,target).admission;
+  assert.equal(admission().housing.available,false);assert.match(admission().housing.reason,/personal funds/);
+  const till=target.funds;assert.ok(doAction('help',null,'market').ok);
+  assert.equal(target.funds,till-2);assert.equal(home.purses.people.steward.balance,2);
+  assert.equal(doAction('help',null,'market').ok,false);assert.equal(target.funds,till-2);
+  assert.equal(context.EarthHousing.view(world,target).reservations.find(r=>r.id==='steward').sourceId,'steward');
+  sim.advance();if(admission().needsTrial)assert.ok(doAction('help',null,'market').ok);
+  const dwelling=admission().housing.dwelling,price=admission().housing.price,hostFunds=target.funds;
+  const purse=home.purses.people.steward.balance+(target.purses?.people?.steward?.balance||0);
+  const signed=doAction('apply',null,life.hostFor(target).id);assert.ok(signed.ok,signed.message);
+  assert.equal(target.funds,hostFunds+price);
+  assert.equal((home.purses.people.steward.balance||0)+(target.purses?.people?.steward?.balance||0),purse-price);
+  assert.equal(context.EarthHousing.view(world,target).rows.find(r=>r.id==='steward').home,dwelling);
+  saved();
+});
+
+test('a restart keeps the named arrival’s savings, in-flight regional duties and their housing record',()=>{
+  const {sim,context,home,life,saved}=fixture(),w=sim.state,centre=context.EarthTownCentre;
+  const recruit=sim.communityLife({...centre.quote(w,home,'random'),actor:'steward',action:'townCentre'});
+  assert.ok(recruit.ok,recruit.message);
+  const id=recruit.id,key=home.communityLife.people[id].profile.identityKey,initial=home.purses.people[id].balance;
+  assert.ok(context.EarthPurses.productionReceipt(w,home,id,3,'Earned three personal funds.'));
+  const due=life.movingOptions(w,home).find(r=>r.eligible);
+  assert.ok(due);assert.ok(sim.communityLife({site:home.id,actor:'steward',week:w.week,action:'suggestVisit',target:due.id},
+    {siteId:home.id,actor:'steward',mode:'walk',target:due.id,x:2,y:2,tx:2,ty:2}).ok);
+  const plan=JSON.stringify(home.communityLife.excursions),oldHouse=context.EarthHousing.view(w,home).rows.find(r=>r.key===key).home;
+  assert.ok(plan);saved();
+  const reopened=sim.manageSite(home.id,'restart');assert.ok(reopened.ok,reopened.message);
+  const fresh=sim.active(),record=fresh.purses.people[id];
+  assert.equal(JSON.stringify(fresh.communityLife.excursions),plan);
+  assert.equal(fresh.communityLife.people[id].profile.identityKey,key);
+  assert.equal(record.balance,initial+3);assert.equal(record.entries[0].action,'carriedSavings');
+  assert.equal(context.EarthHousing.view(sim.state,fresh).rows.find(r=>r.key===key).home,oldHouse);
+  saved();assert.ok(sim.advance().ok);saved();
+});
+
+test('an original applicant can finance a plot and become a resident only after the cottage opens',()=>{
+  const {sim,context,life,home,visit,doAction,saved}=fixture(),w=sim.state,housing=context.EarthHousing;
+  visit(life.neighbours(w,home)[0].id);const host=sim.active();
+  assert.ok(doAction('meet',null,life.hostFor(host).id).ok);
+  assert.ok(doAction('help',null,'market').ok);w.week++;w.communityLife.duty.due=w.week+2;
+  if(life.view(w,host).admission.needsTrial)assert.ok(doAction('help',null,'market').ok);
+  host.population=housing.view(w,host).capacity;if(host.housing)delete host.housing.reservations;host.food=70;host.materials=30;host.trust=90;
+  assert.ok(context.EarthPurses.productionReceipt(w,home,'steward',10,'Income saved for a courtyard.'));
+  const quote=life.view(w,host).admission.housing;
+  assert.equal(quote.kind,'finance');assert.ok(quote.available,quote.reason);
+  const population=host.population,cash=home.purses.people.steward.balance;
+  const start=doAction('apply',null,life.hostFor(host).id);assert.ok(start.ok,start.message);
+  assert.equal(w.communityLife.homeId,home.id);assert.equal(host.population,population);
+  assert.equal(home.purses.people.steward.balance,cash-10);assert.equal(host.housing.contracts.length,1);
+  const again=fixture(saved()),world=again.sim.state,town=again.sim.active(),original=again.life.anchor(world).homeId;
+  assert.equal(original,home.id);assert.equal(again.doAction('apply',null,again.life.hostFor(town).id).ok,false);
+  for(let i=0;i<9&&town.housing.contracts.length;i++){
+    world.week++;world.communityLife.duty.due=world.week+2;again.context.EarthHousing.tick(world,town);
+  }
+  assert.equal(town.privateHomes.find(h=>h.ownerId==='steward').stage,3);
+  const signed=again.doAction('apply',null,again.life.hostFor(town).id);assert.ok(signed.ok,signed.message);
+  assert.equal(world.communityLife.homeId,town.id);assert.equal(town.population,population+1);
+  assert.equal(again.context.EarthHousing.view(world,town).rows.find(r=>r.id==='steward').home,'private-'+quote.plot);
+  again.saved();
 });

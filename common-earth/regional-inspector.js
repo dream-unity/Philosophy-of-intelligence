@@ -77,7 +77,7 @@
         const work=p&&root.EarthDistrictGrowth?.goal(view,p)?.h;
         const order=p&&root.EarthDialogue?.workOrder?.(view,event.personId)?.order;
         const actual=typeof event.activity==='string'?event.activity:event.activity?.label||event.activity?.activity;
-        line([p?.role||p?.originRole,actual||work?.last,goal?.reason].filter(Boolean).join(' · '));
+        line([p?.role||p?.originRole,actual||work?.last,event.inTransit&&event.activity?.phase==='fighting'?'':goal?.reason].filter(Boolean).join(' · '));
         if(order?.reason&&order.reason!==actual)line(order.reason);
         if(goal?.dream)line(goal.dream.title+' · '+goal.dream.next);
         if(p){

@@ -829,7 +829,7 @@
       }
       record(world,r,site,'Conditions changed before the founding group arrived. The households are bringing their supplies home.',trip);
     }else if(trip.kind==='build'&&!lot.work){
-      lot.owner=site.id;lot.uses[site.id]=visits+1;
+      lot.owner||=site.id;lot.uses[site.id]=visits+1;
       lot.work={x:p.x,y:p.y,resource:ground.resource,kind:ground.facility,label:ground.work,builder:trip.name,personId:trip.personId,week:world.week,level:1};
       trip.kit.materials=0;
       record(world,r,site,trip.name+' finished the '+ground.work+' at '+id+' using 3 materials. Subsequent crews can load two more units here. '+why,trip);
@@ -1062,9 +1062,8 @@
       const town=townFor(geo,trip.siteId);if(!town)return [];
       if(trip.checkpoint){
         const gate=trip.checkpoint,p=point(gate.cell);
-        return [[gate.visitor,town.site.id,-1],[gate.guard,gate.host,1]].map(([b,siteId,dx])=>({
-          x:p.x-dx*.005,y:p.y,dx,dy:0,name:b.name,personId:b.id,siteId,kind:'border',phase:'fighting',mode:'walk',
-          destination:trip.destination,activity:trip.activity,detail:trip.detail,remainingKm:0}));
+        const host=townFor(geo,gate.host);
+        return host?root.EarthBorderConflict.combatants(p,[gate.visitor],[gate.guard],town.site,host.site,trip.detail):[];
       }
       const {x,y,dx,dy}=fieldPosition(world,geo,r,town,trip);
       return trip.crew.map((crew,i)=>({x:x+.024*i,y:y+.014*i,name:crew.name,personId:crew.id,siteId:trip.siteId,

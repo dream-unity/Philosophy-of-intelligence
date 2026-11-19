@@ -88,7 +88,7 @@
         const m=root.EarthCommunityLife.districtProfile(sim.state,target);
         actions.replaceChildren();
         if(watchTown)actions.append(btn('See streets',()=>watchTown(n.id),'See '+n.name+' while your character stays in '+site.name+'.'));
-        const gate=root.EarthCommunityLife.entryRestriction(sim.state,target);
+        const gate=root.EarthCommunityLife.hostedVisit(sim.state,target);
         if(v.viewId==='steward'){
           const host=gate?.host||root.EarthCommunityLife.hostFor(target);
           const origin=sim.state.sites.find(t=>t.id===sim.state.communityLife.homeId);
@@ -97,7 +97,7 @@
             const request=btn('Request a hosted visit',()=>station('requestEntry',n.id,{type:'market'},'the exchange desk'));
             request.disabled=gate?.pending||target.communityLife?.entryPass?.opens>sim.state.week||!host.id;actions.append(request);
           }
-          if(!gate)actions.append(btn(exposed?'Enter without invitation':(getStreet()?.getState()?.vehicle==='van'?'Drive there':n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
+          if(!gate||gate.optional&&!gate.pending)actions.append(btn(exposed?'Enter without invitation':(getStreet()?.getState()?.vehicle==='van'?'Drive there':n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
         }
         const character=root.EarthCommunityLife.communityCharacter(target);
         facts.textContent=character.summary+'. '+m.population+' residents · '+m.freeBeds+' open housing places. '+m.works;

@@ -254,6 +254,15 @@
       if(!inView(v,t.x,t.y,.03))continue;
       count++;if(drawPerson?.(t))continue;
       const p=v.screen(t.x,t.y),r=mini?1.9:limit(v.sx*.0035,2.5,8);
+      if(t.phase==='fighting'){
+        // Two opponents stand closer together than one pixel on the minimap.
+        // Fan their symbols around that position, facing each other.
+        const side=t.fightSide,shift=mini?2.7:3.8;
+        const x=p.x+side*shift,y=p.y+t.fightRow*shift*.72;
+        g.beginPath();g.moveTo(x-side*r,y);g.lineTo(x+side*r,y-r);g.lineTo(x+side*r,y+r);g.closePath();
+        g.fillStyle=side<0?'#ee8b65':'#abd6db';g.fill();g.strokeStyle='#392f30';g.lineWidth=.8;g.stroke();
+        continue;
+      }
       const moving=t.phase!=='working'&&Math.hypot(t.dx||0,t.dy||0)>.001;
       if(moving&&(mini||v.sx<95)){
         const angle=Math.atan2(-t.dy*v.sy,t.dx*v.sx);
@@ -274,7 +283,7 @@
       const courtyards=s.city?.precincts.filter(p=>p.use==='homes').length||0;
       const r=limit(2.1+Math.sqrt((homes||s.population||1)+courtyards*6)*.26,2,6);
       g.strokeStyle='#3d5850';g.lineWidth=1;g.fillStyle='#e6c891';g.beginPath();g.moveTo(p.x,p.y-r);g.lineTo(p.x+r,p.y);g.lineTo(p.x,p.y+r);g.lineTo(p.x-r,p.y);g.closePath();g.fill();g.stroke();
-      if(s.civicLand?.project||s.construction?.length||s.growth?.households.some(h=>h.build)){
+      if(s.cooperative?.project||s.civicLand?.project||s.construction?.length||s.growth?.households.some(h=>h.build)){
         g.strokeStyle='#594938';g.lineWidth=2.6;g.beginPath();g.moveTo(p.x+r-1,p.y-r+.5);g.lineTo(p.x+r+1.5,p.y-r-2);g.lineTo(p.x+r+4,p.y-r+.5);g.stroke();
         g.strokeStyle='#fbe6ac';g.lineWidth=1.3;g.stroke();
       }

@@ -548,6 +548,7 @@
       j.partners=[...spec.partners];
     }
     if(!validJob(site,j))return reject('Choose a valid project and site.');
+    if(scope==='street'&&site.cooperative?.project?.plot===j.plot)return reject('A funded cooperative construction contract reserves this lot.');
     const ids=reservedIds(j);
     if(queues(site).some(k=>reservedIds(k).some(id=>ids.includes(id)) || k.scope===scope&&(scope==='city'?k.precinct===j.precinct:k.plot===j.plot)))return reject('This site already has a project.');
     if(site.buildings.some(b=>ids.includes(b.id)||scope==='street'&&b.plot===j.plot))return reject('This plot is already occupied.');
