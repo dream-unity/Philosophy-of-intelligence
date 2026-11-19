@@ -117,8 +117,12 @@
   $('district-membership-hint')?.addEventListener('click',()=>streetHud?.openTool('neighbours'));
   const districtDesk=streetHud&&window.EarthDistrictDesk?.mount({sim,hud:streetHud,street:getStreet,
     enterStreet:()=>{if(view!=='street')setView('street',false);},redraw:redrawStreet,notify,inspectWork:openWorksite,
-    buildingAction:(kind,building,owner)=>{
-      if(kind==='meet')streetHud.meetPerson(owner);
+    openTownCentre,buildingAction:(kind,building,owner)=>{
+      if(kind==='townCentre'){
+        atVenue({type:'market'},'the Town Centre at the exchange',()=>{
+          openTownCentre(sim.active()?.id);
+        });
+      }else if(kind==='meet')streetHud.meetPerson(owner);
       else if(kind==='door'){
         const door={type:'activityVenue',homeSlot:building.homeSlot,householdPlot:building.householdPlot};
         atVenue(door,building.assetName,()=>districtDesk.inspectBuilding(building));
@@ -141,6 +145,16 @@
       selectPlace(site,false);setView('street',false);redrawStreet();if(vehicle==='van')street?.arriveByVan();else if(street?.getState().vehicle==='van')street.toggleVehicle();streetHud?.close(false);
     }});
   if(districtPanel)streetHud?.registerTool('neighbours',districtPanel);
+  const townCentre=window.EarthTownCentreUI?.mount($('town-centre'),sim,presentResult);
+  function openTownCentre(siteId){
+    const dialog=$('town-centre');
+    if(!dialog||!townCentre)return;
+    if(!dialog.open)dialog.showModal();
+    townCentre.open(siteId);
+    syncLiveClock();
+  }
+  listen('town-centre','close',()=>syncLiveClock());
+  listen('scene-open-town-centre','click',()=>openTownCentre(sim.active()?.id));
   const practice=window.EarthPracticeUI?.mount($('scene-practice'),{sim,street:getStreet,redraw:redrawStreet,notify});
   if(practice)streetHud?.registerTool('practice',practice);
   const originalLife=window.EarthOriginalLife?.mount($('scene-original'),{sim,playAs:sceneHandoff,
@@ -221,6 +235,7 @@
       original:'Finish reviewing your original character’s commitments.',precinct:'Finish reviewing the neighbourhood project.',
       practice:'Finish the current practice decision.',work:'Close personal work.',truck:'Close co-op dispatch.',fishing:'Close the fishing controls.'};
     const hold=document.hidden?'Return to this browser tab.':!local?'Return to Street view.':
+      $('town-centre')?.open?'Finish reviewing recruitment.':
       document.body.hasAttribute('data-sheet-open')?'Close the open game sheet.':
       paneReasons[pane]|| (local.placement||document.body.hasAttribute('data-crew-order')?'Finish or cancel the current building or crew assignment.':
       local.mode==='boat'?'Return to shore.':local.mode==='drive'?'Park the vehicle and return to walking.':
@@ -1772,6 +1787,7 @@
     show('objective-action',!!guide);show('follow-objective',!!guide);
   }
   function render(options) {
+    townCentre?.refresh();
     forecastView?.warm();
     const site=sim.active(), overview=sim.overview(), state=sim.state;
     const visitingDistrict=Boolean(site&&state.communityLife&&!window.EarthCommunityLife.isHome(state,site));

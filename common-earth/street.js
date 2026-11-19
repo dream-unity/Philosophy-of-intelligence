@@ -733,20 +733,34 @@
     };
     // Foreground props keep their normal depth in the painter's list. Only
     // their immutable local ink is reused; residents can walk in front or behind.
-    const stamps=new Map();
+    const stamps=new Map(),stampPixelLimit=compactTextures?1000000:2400000;
+    let stampPixels=0,stampFrame=0;
     function clearStamps(){
-      for(const tile of stamps.values())tile.width=tile.height=1;
-      stamps.clear();
+      for(const {tile} of stamps.values())tile.width=tile.height=1;
+      stamps.clear();stampPixels=0;
     }
     function stamp(key,x,y,size,bounds,density,paint){
       if(!terrainLayer){paint();return;}
       const stampSize=density<=32?32:density<=64?64:density<=112?112:160;
       const code=key+'/'+stampSize;
-      let tile=stamps.get(code);
+      const cached=stamps.get(code);
+      let tile=cached?.tile;
       const [left,above,w,h]=bounds;
-      if(!tile){
+      if(cached){
+        // Evict cold zoom levels first when a developed town has many different props.
+        cached.frame=stampFrame;stamps.delete(code);stamps.set(code,cached);
+      }else{
+        const tw=Math.ceil(w*stampSize)+4,th=Math.ceil(h*stampSize)+4,pixels=tw*th;
+        while(stampPixels+pixels>stampPixelLimit){
+          const oldest=stamps.entries().next().value;
+          // When the visible props exceed the budget, draw the remainder directly.
+          // Evicting another visible prop would rebuild both rasters every frame.
+          if(!oldest||oldest[1].frame>=stampFrame-1){paint();return;}
+          const [key,{tile:old}]=oldest;
+          stampPixels-=old.width*old.height;old.width=old.height=1;stamps.delete(key);
+        }
         tile=document.createElement('canvas');
-        tile.width=Math.ceil(w*stampSize)+4;tile.height=Math.ceil(h*stampSize)+4;
+        tile.width=tw;tile.height=th;
         const brush=tile.getContext('2d');
         if(!brush){paint();return;}
         const previous=ctx,ratio=stampSize/size;
@@ -755,7 +769,7 @@
           ctx.setTransform(ratio,0,0,ratio,left*stampSize+2-x*ratio,above*stampSize+2-y*ratio);
           ctx.lineJoin=ctx.lineCap='round';paint();
         }finally{ctx=previous;}
-        stamps.set(code,tile);
+        stampPixels+=pixels;stamps.set(code,{tile,frame:stampFrame});
       }
       const scale=size/stampSize;
       ctx.drawImage(tile,x-left*size-2*scale,y-above*size-2*scale,tile.width*scale,tile.height*scale);
@@ -1075,7 +1089,6 @@
     }
     function plant(x,y,size,seed,palm=false) {
       const species=treeSpecies(seed,palm),h=treeSize(size,species),foot=screen(x,y,.086);
-      ellipse(foot[0],foot[1],unit*size*.143,unit*size*.056,'rgba(49,48,32,.22)');
       if (plantingAtlas) {
         const [x0,y0,w,d]=treeInk[species],scale=h/256;
         ctx.drawImage(plantingAtlas,species*256+x0,y0,w,d,foot[0]-h*treeFoot[species]+x0*scale,foot[1]-h*.9766+y0*scale,w*scale,d*scale);
@@ -1577,7 +1590,12 @@
       const site=state.site;
       return berth===oceanBerths[0] && site.lon>36 && site.lon<81 && site.lat>-22 && site.lat<19?oceanSail:null;
     }
-    function skiff(x,y,paint,large) {
+    const skiffBounds=[1.9,1.4,3.8,3.0];
+    function skiff(x,y,paint,large){
+      const [sx,sy]=screen(x,y);
+      stamp('boat/'+paint+'/'+Boolean(large),sx,sy,unit,skiffBounds,unit*pixelRatio,()=>paintSkiff(x,y,paint,large));
+    }
+    function paintSkiff(x,y,paint,large) {
       const a=large?1.31:.96, b=large?.41:.33;
       const outline=[[-1,0],[-.68,-.74],[-.14,-1],[.58,-.94],[.98,-.54],[.91,.54],[.48,.86],[-.18,1],[-.69,.68]];
       const hull=(scale,z,drift=0)=>outline.map(([xx,yy])=>[x+xx*a*scale,y+yy*b*scale+drift,z]);
@@ -1873,6 +1891,8 @@
           ellipse(...foot,unit*.205,unit*.097,water?'#796e51':'#8a8063');
           ellipse(...foot,unit*.14,unit*.063,'#655f43');
         }
+        const contact=screen(tree.x,tree.y,.086);
+        ellipse(contact[0],contact[1],unit*tree.size*.143,unit*tree.size*.056,'rgba(49,48,32,.22)');
         castTree(tree);
       }
       streetName(15,24.44,'EXCHANGE ST','x');streetName(6.4,9,'GARDEN WALK','y');streetName(8.9,12.43,'COMMONS RD','x');
@@ -2173,12 +2193,25 @@
         const rw=Math.max(1,Math.round(w*density)),rh=Math.max(1,Math.round(h*density));
         if(surface.width!==rw||surface.height!==rh){surface.width=rw;surface.height=rh;}
         surface.style.width=w+'px';surface.style.height=h+'px';
-        const field=renderRegion.viewport(v.x,v.y,w,h,v.sx,v.sy,horizon/h);
-        const foreground=ctx;ctx=brush;
-        try{ctx.setTransform(rw/w,0,0,rh/h,0,0);background(field);}finally{ctx=foreground;}
-        cached=terrainSnapshot={regional:true,x:v.x,y:v.y,sx:v.sx,w,h,horizon,stamp};
+        cached?.refinement?.cancel();
+        const layer={regional:true,x:v.x,y:v.y,sx:v.sx,w,h,horizon,stamp,repaint:true,
+          field:renderRegion.viewport(v.x,v.y,w,h,v.sx,v.sy,horizon/h)};
+        layer.refinement=renderRegion.tileRefinement?.(
+          ()=>alive&&visible&&!covered&&!document.hidden&&terrainSnapshot===layer,
+          ()=>{layer.refinement=null;layer.repaint=true;dirty=true;schedule();}
+        );
+        cached=terrainSnapshot=layer;
         scale=1;left=-mx;top=-my;
       }
+      if(cached.repaint){
+        const foreground=ctx;ctx=brush;
+        try{
+          ctx.setTransform(surface.width/cached.w,0,0,surface.height/cached.h,0,0);
+          background(cached.field,cached.refinement?.add);
+        }finally{ctx=foreground;}
+        cached.repaint=false;
+      }
+      cached.refinement?.wake();
       const transform='translate3d('+left.toFixed(3)+'px,'+top.toFixed(3)+'px,0) scale('+scale+')';
       if(cached.transform!==transform){surface.style.transform=transform;cached.transform=transform;}
     }
@@ -2211,9 +2244,9 @@
       const p=screen(x,y,.014);ctx.save();ctx.translate(...p);ctx.rotate(direction==='x'?Math.atan(TILT):-Math.atan(TILT));
       ctx.font=`600 ${clamp(unit*.22,4.5,11)}px system-ui,sans-serif`;ctx.fillStyle='rgba(232,227,198,.61)';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(name,0,0);ctx.restore();
     }
-    function background(v) {
+    function background(v,prepare) {
       if(v){
-        renderRegion.soil(ctx,geo,v,true,plantingAtlas);
+        renderRegion.soil(ctx,geo,v,true,plantingAtlas,prepare);
         renderRegion.routeLayer(ctx,regionWorld,state.site,v,false);
         renderRegion.useLayer(ctx,regionWorld,state.site,v,false);
         renderRegion.explored(ctx,geo,regionWorld,state.site,v,exploration);return;
@@ -2688,10 +2721,20 @@
       if(h.build?.shop)return window.EarthDistrictGrowth.shopPoint(site,h.build.lot);
       return h.build||site.growth.road?.lot===h.plot?add(home,.4,.5):null;
     }
-    const frontages={boxes:[],west:-.78,north:-.78};
+    const hasDwelling=(site,h)=>window.EarthHousing?.frontage(site,h)!=='lot';
+    const frontages={boxes:[],courtyards:[],west:-.78,north:-.78};
     function refreshFrontages(site){
       const g=site?.growth;
       frontages.boxes.length=0;frontages.west=-.78;frontages.north=-.78;
+      frontages.courtyards.length=0;
+      if(site?.city?.precincts.some(p=>p.use==='homes')){
+        for(const row of window.EarthCityModel.overview(site).records){
+          if(row.use!=='homes')continue;
+          // The completed courtyard stands on the site the crew just vacated.
+          const built=projectSite({scope:'city',precinct:row.id,kind:'homes',progress:1});
+          if(built)frontages.courtyards.push({x:built.x,y:built.y,precinct:row.id,name:row.name,beds:row.beds});
+        }
+      }
       if(!g)return;
       const add=(p,width,depth)=>{
         frontages.west=Math.min(frontages.west,p.x-.74);frontages.north=Math.min(frontages.north,p.y-.74);
@@ -2699,7 +2742,12 @@
       };
       for(const h of g.households){
         const scale=homeScale(h),home=window.EarthDistrictGrowth.homePoint(site,h.plot);
-        add(home,2.54*scale,2.25*scale);
+        if(hasDwelling(site,h))add(home,2.54*scale,2.25*scale);
+        else{
+          // An undeveloped parcel extends the street but leaves it walkable.
+          frontages.west=Math.min(frontages.west,home.x-.74);
+          frontages.north=Math.min(frontages.north,home.y-.74);
+        }
         const work=growthWorksite(site,h,home);
         if(work){
           add({x:work.x-.01,y:work.y+.13},.72,.26);
@@ -3446,12 +3494,7 @@
     function projectSite(job){
       const gate=window.EarthConstruction?.streetPoint(job);
       if(!gate)return null;
-      let x=gate.x,y=gate.y;
-      if(job.scope==='street')y-=2.04;
-      else if(x<1)x-=1.57;
-      else if(x>SIDE-1)x+=1.57;
-      else if(y<1)y-=1.57;
-      else y+=1.57;
+      const {x,y}=window.EarthConstruction.buildingPoint(job);
       const vertical=job.scope==='city'&&[1,2,4,5].includes(job.precinct);
       const sign={x:gate.x+(vertical?0:1.05),y:gate.y+(vertical?1.05:0)};
       const removal=job.kind==='dismantle',artKind=removal?job.original?.kind:job.kind;
@@ -3616,7 +3659,7 @@
         if(inside??fallback){depth=order;front=()=>({...describe(),objectX:pos.x,objectY:pos.y});}
       }
       test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Market exchange',use:'market',
-        activity:'Collect a parcel or bring finished work here for payment.'}));
+        activity:'Collect parcels, bring finished work for payment, or visit the Town Centre here.'}));
       HOMES.forEach((block,i)=>test(centre(block),'home',i,1,.35,()=>{
         const person=site.residents[i];
         return {assetId:'home-'+i,use:'home',homeSlot:i,assetName:person?person.name+'’s home':'District home',ownerId:person?.id,
@@ -3630,7 +3673,7 @@
       const growth=window.EarthDistrictGrowth;
       if(growth)for(const h of site.growth?.households||[]){
         const home=growth.homePoint(site,h.plot);
-        test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
+        if(hasDwelling(site,h))test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
           assetName:h.name+'’s home',ownerKey:h.owner,activity:'Residential lot '+(h.plot+1)+'. '+(h.extension||'')}));
         if(h.shop)test(growth.shopPoint(site,h.businessPlot),'market',0,.36,.3,()=>{
           const item=window.EarthResidentShops?.products[h.shop];
@@ -3638,6 +3681,10 @@
             activity:(item?.name||h.shop)+' · '+h.stock+' in stock.'};
         });
       }
+      for(const court of frontages.courtyards)test(court,'home',court.precinct%3,.73,.34,()=>({
+        assetId:'courtyard-'+court.precinct,use:'courtyard',assetName:court.name+' courtyards',
+        activity:court.beds+' completed housing places. The population directory lists their occupants.'
+      }));
       return front?{type:'premises',kind:'building',...front()}:null;
     }
     function hitWorksite(sx,sy,paintedOnly=false) {
@@ -3891,6 +3938,12 @@
       const pickup=householdTruckBody(point.residentId,point);if(pickup)return pickup;
       return {x:point.x+.47+(reduced?0:Math.sin((visualTime-(trafficWaits.get('home-'+point.residentId)||0))*.45+point.index)*.12),y:point.y-.21};
     }
+    const achievementBounds=[1.35,2.28,2.7,3];
+    function drawAchievement(mark){
+      const [sx,sy]=screen(mark.x,mark.y);
+      const key='landmark/'+mark.kind+'/'+(mark.stage||0)+'/'+(mark.home?.price!=null)+'/'+Boolean(state.site.water);
+      stamp(key,sx,sy,unit,achievementBounds,unit*pixelRatio,()=>paintAchievement(mark));
+    }
     function paintAchievement(mark){
       const {x,y}=mark;
       if(mark.kind==='courtyard'){
@@ -4112,6 +4165,7 @@
     const bodyBounds=[1.05,1.6,.68],waterWorkBounds=[3.25,1.6,2.5],vehicleBounds=[2.4,2.5,1.5];
     const actorBounds=id=>shoreFishers.has(id)?waterWorkBounds:bodyBounds;
     function drawScene(repaint) {
+      stampFrame++;
       ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);ctx.lineJoin='round';ctx.lineCap='round';
       if(inset)cachedGround();
       else{const view=regionView();paintTerrainLayer(view);paintRegionalTowns(view);}
@@ -4151,7 +4205,11 @@
         for(const h of g.households){
           const {x,y}=window.EarthDistrictGrowth.homePoint(state.site,h.plot);
           if(h.plot<g.roads)rect(x-.17,y+.4,.34,Math.abs(y)-.4,.015,'#a69a83');
-          addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
+          if(hasDwelling(state.site,h)){
+            addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
+          }else{
+            rect(x-.52,y-.43,1.04,.86,.012,'#a59871');
+          }
           const appointment=growthWorksite(state.site,h,{x,y});
           if(appointment){
             const {x:ax,y:ay}=appointment;
@@ -4171,7 +4229,10 @@
           addItem(x,y,x+y+.2,()=>drawTransport(exchangeFleetBay,g.vehicle===1?2:g.vehicle===2?0:1),vehicleBounds);
         }
       }
-      for(const mark of landmarks)addItem(mark.x,mark.y,mark.x+mark.y+.30,()=>paintAchievement(mark),furnitureBounds);
+      for(const court of frontages.courtyards){
+        addItem(court.x,court.y,court.x+court.y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',court.precinct%3,...screen(court.x,court.y),unit*.73),buildingBounds);
+      }
+      for(const mark of landmarks)addItem(mark.x,mark.y,mark.x+mark.y+.30,()=>drawAchievement(mark),furnitureBounds);
       for(const job of works.values()){
         addItem(job.x,job.y,blockDepth(job),()=>worksiteArt(job));
         workbench(job,addItem);
@@ -5032,7 +5093,7 @@
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
       const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
-        site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
+        site?.city?.precincts.map(p=>p.use==='homes'),site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
         landmarks.filter(mark=>mark.kind!=='balcony').map(mark=>mark.key),
         site?.residents?.map(r=>[r.id,r.name,window.EarthCommunityLife?.present(site,r.id)!==false])]);
       if(previousKey!==nextKey || state.fingerprint!==nextFingerprint){

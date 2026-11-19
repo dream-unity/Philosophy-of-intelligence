@@ -197,6 +197,7 @@
       const home=existing||{plot:q.plot,ownerId:p.id,started:world.week,stage:0,cost:0};
       if(!existing)(site.privateHomes||=[]).push(home);
       home.stage++;home.lastWork=world.week;home.cost+=q.price;if(reserveSession)payer.craftWeek=world.week;
+      if(home.stage===3&&site.housing)root.EarthHousing?.sync(world,site);
       return {ok:true,message:p.name+' completed stage '+home.stage+' of their '+homeName(site)+' at plot '+(home.plot+1)+'. '+
         (home.stage===3?'The dwelling now has two housing places.':'The next stage can start in week '+(world.week+homeStages[home.stage-1].next)+'.')};
     }
@@ -206,6 +207,7 @@
       const paid=root.EarthPurses.transferPerson(world,site,p.id,q.ownerId,q.price,reason,'courtyardHome');
       if(!paid.ok)return paid;
       existing.ownerId=p.id;existing.acquired=world.week;delete existing.offer;
+      if(site.housing)root.EarthHousing?.sync(world,site);
       return {ok:true,message:reason};
     }
     if(q.action==='listHome')existing.offer=q.price;else delete existing.offer;

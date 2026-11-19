@@ -33,7 +33,7 @@
     if(site.communityLife?.excursions?.[p.id])return 'Travelling to another community';
     if(site.communityLife?.foundingPlan?.members?.includes(p.id))return 'Preparing an agreed relocation';
     if(appointments?appointments.has(p.id):root.EarthNeighbourErrands?.working?.(site,world.week).some(e=>e.actorId===p.id||e.targetId===p.id))return 'Keeping an agreed appointment';
-    return '';
+    return root.EarthHousing?.workHold(site,p.id)||root.EarthHousing?.buildDuty(world,site,p.id)||'';
   }
   function supplier(site){
     return site.growth.broker||={cash:0,parcel:0,crate:0,boards:0,arrivals:0};

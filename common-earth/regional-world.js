@@ -8,7 +8,7 @@
   const places=world=>[...(world?.sites||[]),...(world?.communityLife?.outposts||[])];
   const key=(i,j)=>i+','+j;
   const cell=(x,y)=>key(Math.round(x/cellSize),Math.round(y/cellSize));
-  const point=id=>{const [i,j]=id.split(',').map(Number);return {x:i*cellSize,y:j*cellSize};};
+  const point=id=>{const comma=id.indexOf(',');return {x:Number(id.slice(0,comma))*cellSize,y:Number(id.slice(comma+1))*cellSize};};
   const inside=(geo,x,y)=>Number.isFinite(x)&&Number.isFinite(y)&&x>=geo.bounds.minX&&x<=geo.bounds.maxX&&y>=geo.bounds.minY&&y<=geo.bounds.maxY;
   const descriptors={
     water:{kind:'water',label:'Open water',good:'food',resource:'fish',facility:'landing',work:'fishing landing'},
@@ -113,6 +113,7 @@
       }
     }
   }
+  const macroPlanes=new WeakMap();
   function macroHeight(geo,x,y){
     const ix=Math.floor(x/4),iy=Math.floor(y/4),u=x/4-ix,v=y/4-iy;
     function sample(i,j){
@@ -120,10 +121,17 @@
       const water=root.EarthRouteTerrain?.waterAt(geo.locate(i*4,j*4))??geo.origin.water;
       const value=water?-1:1;geo.macro.set(id,value);return value;
     }
-    const a=sample(ix,iy)*(1-u)+sample(ix+1,iy)*u,b=sample(ix,iy+1)*(1-u)+sample(ix+1,iy+1)*u;
+    // Adjacent pixels and route probes usually share the same four atlas
+    // samples. Interpolate in the same order used for settlement and travel.
+    let plane=macroPlanes.get(geo);
+    if(!plane||plane.x!==ix||plane.y!==iy){
+      plane={x:ix,y:iy,sw:sample(ix,iy),se:sample(ix+1,iy),nw:sample(ix,iy+1),ne:sample(ix+1,iy+1)};
+      macroPlanes.set(geo,plane);
+    }
+    const a=plane.sw*(1-u)+plane.se*u,b=plane.nw*(1-u)+plane.ne*u;
     return a*(1-v)+b*v;
   }
-  function terrain(geo,x,y){
+  function terrain(geo,x,y,surface){
     const s=geo.seed;
     const ridge=Math.sin(.8*x+.42*y+s)+.58*Math.cos(.53*x-.94*y-s)+.3*Math.sin(2*x+.87*y);
     let nearest=null,minDistance=Infinity;
@@ -155,6 +163,9 @@
     const canopy=Math.sin(1.2*x-.63*y+s)+Math.cos(.65*y+.45*x)+.55*ridge;
     const descriptor=height<-.07?descriptors.water:height<.09?descriptors.shore:
       ridge>1.12?descriptors.rock:canopy>.38?descriptors.woodland:descriptors.meadow;
+    if(surface){
+      surface.kind=descriptor.kind;surface.height=height;return surface;
+    }
     if(descriptor.kind==='water'&&geo.origin.water&&canopy>1.2)
       return {...descriptor,height,good:'materials',resource:'driftwood',work:'salvage landing'};
     if(descriptor.kind==='meadow'){
@@ -344,7 +355,14 @@
     const start=point(from),end=point(to);if(!inside(geo,end.x,end.y))return null;
     const byWater=mode!=='van'&&!!canSail(town,r),sailing=town.site.water,knownCells=r?.knowledge?.[town.site.id]||{},exploring=mode==='survey';
     const mapped=(id,p)=>knownCells[id]||dist(town,p)<=localRadius;
-    if((!exploring||mapped(to,end))&&!Number.isFinite(nodeCost(geo,r,town,to,byWater)))return null;
+    // Restrictions and terrain are fixed for this synchronous route search.
+    const prices=new Map();
+    function price(id){
+      if(prices.has(id))return prices.get(id);
+      const cost=nodeCost(geo,r,town,id,byWater);
+      prices.set(id,cost);return cost;
+    }
+    if((!exploring||mapped(to,end))&&!Number.isFinite(price(to)))return null;
     const open=[{id:from,priority:dist(start,end)/cellSize}],cost=new Map([[from,0]]),parent=new Map(),done=new Set();
     const directions=[[1,0],[-1,0],[0,1],[0,-1]];
     // Binary heap, ordered by estimated total walking / sailing time.
@@ -377,7 +395,7 @@
         if(examined&&!byWater&&!dryEdge(geo,current,id))continue;
         // A scout can choose a bearing into unknown country. Its actual
         // conditions enter the community record when the crew reaches it.
-        const terrainCost=examined?nodeCost(geo,r,town,id,byWater):1.55;
+        const terrainCost=examined?price(id):1.55;
         const next=cost.get(current)+terrainCost+(knownCells[id]?0:.1)+(sailing&&examined&&terrainCell(geo,id).kind!=='water'?.25:0);
         if(!Number.isFinite(next)||next>=(cost.get(id)??Infinity))continue;
         cost.set(id,next);parent.set(id,current);
@@ -686,10 +704,11 @@
     const approaching=site.population>=(root.EarthCityModel?.housingCapacity?.(site)||18)-1;
     const recent=(r.records||[]).find(n=>n.siteId===site.id&&n.personId);
     const rotation=(step+Math.abs(Math.round(town.x*3+town.y)))%5;
+    const disputes=new Set(Object.values(r.contacts).filter(c=>c.terms==='disputed'&&(c.a===site.id||c.b===site.id)).map(c=>c.cell));
     for(const p of observed){
       const id=cell(p.x,p.y),range=dist(town,p);if(range>10||streetFootprint(geo,p.x,p.y))continue;
       const ground=terrainCell(geo,id),lot=r.parcels[id],uses=lot?.uses?.[site.id]||0;
-      const foreign=counterpart(geo,r,town,id);
+      const foreign=(disputes.has(id)||lot?.agreements)&&counterpart(geo,r,town,id);
       if(foreign&&localAgreement(r,site.id,foreign.site.id,id)?.terms==='disputed'){
         const prior=r.contacts[pair(site.id,foreign.site.id)];
         if(!prior.reviewWeek||prior.reviewWeek<=world.week)candidatesFor.push({kind:'parley',id,score:20-range,why:'The disputed passage is delaying households in both communities'});

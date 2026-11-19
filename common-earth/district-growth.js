@@ -11,7 +11,7 @@
   const traditions=['Harvest supper','Repair circle','Market gathering'];
   const institutions=['Seed library','Apprentices’ guild','Merchants’ cooperative'];
   const vehicles=['Handcart','Freight wagon','Delivery van','Electric carrier'];
-  const members=site=>(root.EarthPersonas?.list(site)||[]).filter(p=>root.EarthCommunityLife.residency(site,p.id)==='member'&&!root.EarthCommunityLife.commuting(site,p.id));
+  const members=site=>(root.EarthPersonas?.list(site,{includeCommuters:false})||[]).filter(p=>root.EarthCommunityLife.residency(site,p.id)==='member'&&!root.EarthCommunityLife.commuting(site,p.id));
   const key=p=>p.identityKey||p.id;
   const resident=(site,p)=>site.growth?.households.find(h=>h.owner===key(p));
   const account=(site,id)=>site.purses?.people?.[id];
@@ -144,6 +144,11 @@
     // The frontage faces the serviced footpath running along this strip.
     return {x:p.x,y:p.y+.53,label:'commercial lot '+(plot+1)};
   }
+  function shoppingOrigin(site,h){
+    if(h.lastPoint)return h.lastPoint;
+    const house=homePoint(site,h.plot);
+    return {x:house.x,y:house.y+.51,label:h.name+'’s home'};
+  }
   function shopOffer(site,p,h,owner,shop,held){
     if(!shop.shop||shop.owner===h?.owner)return null;
     const item=root.EarthResidentShops.products[shop.shop],purse=account(site,p.id);
@@ -199,7 +204,7 @@
     return {id:buy.id,kind:'marketSupply',activity:'shop',ownerId:buy.person,workerName:h.name,name:action,phase:'collect',step:1,steps:1,
       action,reason:h.last,from:buy.from,to,point:to,source:buy.sellerName+'’s shop',destination:to.label,venue:'market',
       tool:'personal purse',amount:1,resource:buy.good,resourceName:item.name,orderGood:'retail',beneficiaryId:buy.sellerId,beneficiaryName:buy.sellerName,
-      payer:h.name,price:buy.price,startedAt:buy.at,travelMs:root.EarthDistrictOrders.movement(site,buy.from,to),workMs:1500};
+      payer:h.name,price:buy.price,startedAt:buy.at,travelMs:buy.travelMs??root.EarthDistrictOrders.movement(site,buy.from,to),workMs:1500};
   }
   function activeWork(site){
     const g=site.growth;if(!g)return [];
@@ -286,7 +291,9 @@
       if(!closeWeek&&!reachedWork(at,buildingJob(site,h,p.id))){act(p,build.shop?'shop':'home');continue;}
       const arrived=buildingJob(site,h,p.id);if(arrived)h.lastPoint=arrived.to;
       const name=build.shop?root.EarthResidentShops.products[build.shop].name+' shop':build.extension;
-      if(build.shop){h.shopSite=shopPoint(site,build.lot);h.shop=build.shop;h.businessPlot=build.lot;}else{h.home++;h.extension=build.extension;}
+      if(build.shop){h.shopSite=shopPoint(site,build.lot);h.shop=build.shop;h.businessPlot=build.lot;}else{h.home++;h.extension=build.extension;
+        if(h.plot>=18&&h.home===2&&site.housing?.hardship?.length)root.EarthHousing?.sync(world,site);
+      }
       const message=p.name+' finished '+name+' with the two materials held for their '+(build.shop?'shop':'home')+'.';
       add(transfers,'Property worksite',name,'materials',2,p.id,build.id,'Construction completed');
       events.push(message);h.last=message;act(p,build.shop?'shop':'home');workedOn(p,3);finished.add(p.id);delete h.build;
@@ -386,6 +393,12 @@
       const h=hOf(p);if(busy.has(p.id)||h.build)continue;
       const intent=root.EarthAutonomy?.intent?.(site,p.id),rest=intent?.kind==='rest'&&(g.round+h.plot)%3===0;
       if(rest||onOrder>=capacity){h.activity='home';h.last=rest?'Resting at home between orders.':'The available orders are already staffed.';continue;}
+      // A newcomer can decline an optional shift. Existing orders and
+      // commitments were settled above, before offering new work.
+      const workEthic=p.externalHistory?.workEthic;
+      if(workEthic!=null&&(g.round*37+h.plot*17)%100>50+workEthic/2){
+        h.activity='home';h.last=p.name+' declined a new production order this round.';continue;
+      }
       const o=jobs.start(world,site,p,h,floor,offers,at,transfers);
       if(!o)continue;
       onOrder++;
@@ -401,19 +414,21 @@
         const used=Object.keys(purse.belongings||{}).find(k=>['basket','stool','satchel'].includes(k));
         if(used){if(--purse.belongings[used]===0)delete purse.belongings[used];add(transfers,p.name,'Worn out',used,1,p.id,null,'Used at work');}
       }
-      let offer=null,owner=null,shop=null,item=null,rank=Infinity;
+      const from=shoppingOrigin(site,h);
+      let offer=null,owner=null,shop=null,item=null,rank=Infinity,travelMs=0;
       for(const merchant of merchants){
         const candidate=hOf(merchant),held=heldStock.get(candidate.owner)||0;
         if(candidate===h||candidate.stock<=held||purse.belongings?.[candidate.shop])continue;
         const q=shopOffer(site,p,h,merchant,candidate,held),product=root.EarthResidentShops.products[q.good];
         if(!q.available)continue;
-        const score=q.price-(product.interest===p.hobbyAxis?8:0);
-        if(score<rank){offer=q;owner=merchant;shop=candidate;item=product;rank=score;}
+        const travel=jobs.movement(site,from,shopDoor(site,candidate.businessPlot));
+        // A round spent walking is a round unavailable for earning wages.
+        const score=q.price+travel/period-(product.interest===p.hobbyAxis?8:0);
+        if(score<rank){offer=q;owner=merchant;shop=candidate;item=product;rank=score;travelMs=travel;}
       }
       if(!offer)continue;
       const id='sale-'+g.round+'-'+h.plot;
-      const house=homePoint(site,h.plot),from=h.lastPoint||{x:house.x,y:house.y+.51,label:h.name+'’s home'};
-      h.purchase={id,at,person:p.id,plot:offer.plot,good:offer.good,sellerId:owner.id,seller:shop.owner,sellerName:owner.name,price:offer.price,from};
+      h.purchase={id,at,travelMs,person:p.id,plot:offer.plot,good:offer.good,sellerId:owner.id,seller:shop.owner,sellerName:owner.name,price:offer.price,from};
       h.activity='purchase';h.last=p.name+' reserved a '+item.name.toLowerCase()+' from '+owner.name+'. It costs '+offer.price+' of '+purse.balance+' personal funds. '+item.use;
       if(closeWeek){const result=settleSale(world,site,p,h,owner,shop,offer.price,id,transfers);if(result.ok)events.push(h.last);delete h.purchase;}
       else heldStock.set(shop.owner,(heldStock.get(shop.owner)||0)+1);
@@ -437,6 +452,7 @@
       const h=hOf(p),level=Math.floor(h.points/12);
       if(h.home===3&&h.access&&!h.guestRoom&&p.traits.sociability>=52){
         h.guestRoom=p.id;
+        if(site.housing?.hardship?.length)root.EarthHousing?.sync(world,site);
         events.push(p.name+' offered a spare room in the completed home on the access road. A visitor can now stay here.');
       }
       if(level>(h.trained||0)&&h.lessonWeek!==world.week){
@@ -493,7 +509,7 @@
       if((h.shopInputs&&!Object.entries(h.shopInputs).every(([id,n])=>h.shop&&root.EarthResidentShops.products[h.shop].inputs.includes(id)&&nat(n)))||
         [h.houseSite,h.shopSite,h.lastPoint].some(p=>p!=null&&!point(p))||h.lastPoint&&!text(h.lastPoint.label))return false;
       const buy=h.purchase;
-      if(buy&&(h.order||h.build||!nat(buy.at)||!nat(buy.plot)||!text(buy.id)||!text(buy.person)||!text(buy.seller)||!text(buy.sellerName)||!text(buy.sellerId)||
+      if(buy&&(h.order||h.build||buy.travelMs!=null&&!nat(buy.travelMs)||!nat(buy.at)||!nat(buy.plot)||!text(buy.id)||!text(buy.person)||!text(buy.seller)||!text(buy.sellerName)||!text(buy.sellerId)||
         !point(buy.from)||!text(buy.from.label)||!Object.hasOwn(root.EarthResidentShops.products,buy.good)||![2,3,4].includes(buy.price)||
         !g.households.some(s=>s.owner===buy.seller&&s.businessPlot===buy.plot&&s.shop===buy.good)))return false;
       if(h.order?.kind==='retail'&&!g.households.some(shop=>shop.owner===h.order.employer&&shop.shop===h.order.resource&&shop.businessPlot===h.order.employerPlot))return false;

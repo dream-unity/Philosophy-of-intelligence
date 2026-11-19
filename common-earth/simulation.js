@@ -303,6 +303,8 @@
     if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
     if(site.birthCoordinate!=null&&!geoPoint(site.birthCoordinate))return false;
     if(root.EarthPractice&&!root.EarthPractice.valid(site,world.week))return false;
+    if(root.EarthHousing&&!root.EarthHousing.valid(site,world.week))return false;
+    if(root.EarthTownCentre&&!root.EarthTownCentre.valid(world,site))return false;
     if(root.EarthPersonas?.validBirthNames&&!root.EarthPersonas.validBirthNames(site.birthNames))return false;
     if(site.workRotation!=null&&(!integer(site.workRotation,0,2)||site.birthNames==null))return false;
     if(site.coastal!=null && typeof site.coastal!=='boolean')return false;
@@ -1066,6 +1068,24 @@
         const reason=gate||(site.buildPlan===kind?'A resident is protecting the player’s pinned plan.':!lots.includes(plot)?'The agreed lot is occupied or reserved.':'');
         return {kind:'build',id:'build:'+kind,label:b.name,goods,effort:1,available:!reason,reason,plot};
       });
+      const city=root.EarthCityModel;
+      // Only undeveloped public land can be offered. An agreed location stays
+      // fixed throughout consultation, including when a competing use appears.
+      const housingPressure=site.population>=capacity(site)-1||(root.EarthHousing?.need(turn,site)||0)>0;
+      if(city && (existing?.kind==='precinct'||housingPressure)){
+        const records=city.overview(site).records;
+        const free=records.filter(p=>p.use==='open'&&!p.target);
+        const plot=existing?.kind==='precinct'?existing.plot:(free.find(p=>p.terrain.id==='shelter')||free[0])?.id;
+        if(plot!=null){
+          const spec=city.projects.homes;
+          const terms=city.terms(site,{...turn,effort:spec.effort},plot,'homes');
+          const reason=records[plot].use!=='open'?'The quoted land has a new use.':
+            records.some(p=>p.target==='homes')?'A housing crew already has an order.':
+            !housingPressure?'The town has enough completed housing.':terms.reason;
+          choices.push({kind:'precinct',id:'precinct:homes',label:city.nameOf(site,'homes')+' at '+records[plot].name,
+            plot,goods:{funds:spec.funds,materials:spec.materials},effort:spec.effort,available:!reason,reason});
+        }
+      }
       const next=TECH[site.tech.length];
       if(next){
         const reason=researchGate(turn,site,next,true);
@@ -1076,6 +1096,7 @@
     function enactCivic(turn,site,quote){
       const currentQuote=civicOptions(turn,site).find(c=>c.id===quote.id&&c.plot===quote.plot);
       if(!currentQuote?.available || !affordable(site,currentQuote.goods))return reject(currentQuote?.reason||'Review the current stock and building lot.');
+      if(quote.kind==='precinct')return root.EarthCityModel.apply(site,turn,quote.plot,'homes',site.civicInitiatives.active.labour);
       const kind=quote.id.split(':')[1];
       const result=quote.kind==='build'?commissionBuilding(turn,site,kind,quote.plot,currentQuote.goods):
         {ok:true,message:adoptResearch(site,TECH[site.tech.length])};
@@ -1128,7 +1149,10 @@
         if(group!=='all' && group!==category)return;
         const {effort=category==='work'?0:1,goods={},gate='',...meta}=options || {};
         const away=meta.residentId&&root.EarthCommunityLife?.residency?.(site,meta.residentId)&&root.EarthCommunityLife.residency(site,meta.residentId)!=='member';
-        const reason=(category!=='work'&&root.EarthCommunityLife?.visitReason?.(world,site))||(away?'This person is away or visiting. Open Towns to check their membership.':'')||actionReason(site,effort,goods,gate);
+        // Existing deliveries can still settle. Starting a fresh shift requires housing.
+        const newShift=category==='work'&&(id.startsWith('work:')||id==='courier:pick');
+        const held=newShift&&root.EarthHousing?.workHold(site,root.EarthAgency?.actorId(site)||'steward');
+        const reason=held||(category!=='work'&&root.EarthCommunityLife?.visitReason?.(world,site))||(away?'This person is away or visiting. Open Towns to check their membership.':'')||actionReason(site,effort,goods,gate);
         actions.push({id,group:category,label,description,cost:effort,goods,available:!reason,reason,blocker:!reason?null:gate?'prerequisite':world.effort<effort?'effort':'supplies',...meta,run});
       }
       if(group==='all'||group==='people')for(const p of site.residents){
@@ -1808,6 +1832,10 @@
       }
       for(const site of districts)settleHouseholds(turn,site,reports.get(site.id),event);
       if(root.EarthCommunityLife)for(const movement of root.EarthCommunityLife.tick(turn,spec=>newSettlement(spec,turn)))event(movement.text,movement.site);
+      for(const site of districts){
+        for(const note of root.EarthTownCentre?.tick(turn,site)||[])event(note,site,'arrivals');
+        for(const note of root.EarthHousing?.tick(turn,site)||[])event(note,site);
+      }
       root.EarthRegionalWorld?.advance?.(turn,spec=>newSettlement(spec,turn),'calendar');
       dispatchCargo(turn,byId,inbound,event);
       for(const site of districts){
@@ -2056,25 +2084,48 @@
         if(agreement.phase!=='commissioned'||agreement.closedWeek>=turn.week)continue;
         const job=site.construction?.find(j=>j.id===agreement.jobId);
         if(!job||job.paused)continue;
-        const volunteers=agreement.votes.filter(v=>{
-          if(v.stance!=='support'||promised.has(v.personId)||root.EarthCommunityLife?.residency(site,v.personId)==='away'||site.id===turn.activeId&&v.personId===(site.agency?.actor||'steward'))return false;
-          if(root.EarthCareers?.specialistShift?.(site,v.personId,turn.week))return false;
-          if(site.shift?.residentId===v.personId||site.careers?.[v.personId]?.training||site.careers?.[v.personId]?.application)return false;
-          const worker=site.workforce?.members?.[v.personId];
+        const authorised=agreement.votes.filter(v=>v.stance==='support');
+        const needed=Math.ceil((job.total-job.work)/4);
+        function available(id){
+          if(promised.has(id)||root.EarthHousing?.workHold(site,id)||root.EarthCommunityLife?.residency(site,id)==='away'||site.id===turn.activeId&&id===(site.agency?.actor||'steward'))return false;
+          if(root.EarthCareers?.specialistShift?.(site,id,turn.week))return false;
+          if(site.shift?.residentId===id||site.careers?.[id]?.training||site.careers?.[id]?.application)return false;
+          const worker=site.workforce?.members?.[id];
           return (!worker?.jobId||worker.jobId===job.id)&&(!worker?.preference||['auto','build'].includes(worker.preference))&&
-            !site.residents.some(r=>r.id===v.personId&&r.promise);
-        }).slice(0,Math.ceil((job.total-job.work)/4));
+            !site.residents.some(r=>r.id===id&&r.promise);
+        }
+        const volunteers=authorised.filter(v=>available(v.personId)).slice(0,needed);
+        const relief=[];
+        // A resident who has left town cannot fulfil a public building contract.
+        // Offer their shift to an available local with an interest in the work.
+        const absent=authorised.filter(v=>root.EarthCommunityLife?.residency(site,v.personId)==='away');
+        if(absent.length&&volunteers.length<needed){
+          for(const person of root.EarthPersonas?.list(site)||[]){
+            if(!available(person.id)||root.EarthCommunityLife.residency(site,person.id)!=='member'||
+              root.EarthCommunityLife.commuting(site,person.id)||agreement.votes.some(v=>v.personId===person.id)||
+              root.EarthDistrictOrders?.commitment(turn,site,person)||root.EarthDistrictGrowth?.work(site,person)||
+              Math.max(person.aptitudes?.craft||0,person.traits?.initiative||0)<50)continue;
+            relief.push({personId:person.id,name:person.name,replaces:absent[relief.length].personId});
+            volunteers.push(relief.at(-1));
+            if(volunteers.length>=needed||relief.length===absent.length)break;
+          }
+        }
         if(!volunteers.length)continue;
         for(const v of volunteers)promised.add(v.personId);
-        // These named volunteers work their calendar shifts between visits.
-        // Only their own public contract earns the shift, following any work already visible on the ground.
         const work=Math.min(job.total-job.work,volunteers.length*4);
         job.work+=work;
         agreement.works={week:turn.week,people:volunteers.map(v=>v.personId)};
+        if(relief.length){
+          agreement.works.relief=relief;
+          messages.push(relief.map(v=>v.name).join(' and ')+' took the absent crew’s shift on '+job.name+'.');
+        }
         if(job.work>=job.total){
           root.EarthConstruction.cancel(site,job.id);
-          messages.push(finishStreetBuilding(turn,site,job));
-        }else messages.push(volunteers.map(v=>v.name).join(' and ')+' worked on '+job.name+' on lot '+(job.plot+1)+' ('+job.work+'/'+job.total+').');
+          if(job.scope==='city'){
+            const opened=root.EarthCityModel.finish(site,job,turn);
+            if(opened.message)messages.push(opened.message);
+          }else messages.push(finishStreetBuilding(turn,site,job));
+        }else messages.push(volunteers.map(v=>v.name).join(' and ')+' worked on '+job.name+(job.scope==='city'?' in precinct '+(job.precinct+1):' on lot '+(job.plot+1))+' ('+job.work+'/'+job.total+').');
       }
       return messages;
     }

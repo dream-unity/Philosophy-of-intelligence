@@ -251,8 +251,7 @@
     if(!target||target.available===false||targetId===speaker.id)return reject('Find another person nearby.');
     const reception=root.EarthCommunityLife?.visitorReception?.(world,site,targetId);
     if(reception?.repels&&topic!=='visit-fit'){
-      site.communityLife.visitorIncidents=Math.min(1000,(site.communityLife.visitorIncidents||0)+1);
-      return {ok:true,changed:true,repelled:true,message:target.name+' shoves you back and ends the exchange. Speak to '+root.EarthCommunityLife.hostFor(site).name+' in Towns for an introduction.'};
+      return {ok:true,changed:true,repelled:true,message:root.EarthCommunityLife.confrontation(world,site,targetId)};
     }
     if(reception?.private&&['interests','dream','purpose','followup','shadow'].includes(topic))return {ok:false,message:target.name+' · '+reception.greeting};
     if(topic!=='meal'&&root.EarthDialogue){
