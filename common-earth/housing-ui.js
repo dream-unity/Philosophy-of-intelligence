@@ -27,7 +27,7 @@
     pick.append(choices);apply.type='button';feedback.setAttribute('role','status');policy.append(policyTitle,terms,pick,apply,feedback);
     dialog.append(head,summary,filters,policy,body);doc.body.append(dialog);
     const descriptions={reserve:'Protect two weeks of meals and six funds. Surplus food and willing hosts can support households.',
-      emergency:'Release food down to the last unit. With a consenting owner, pay one treasury fund for four weeks in a vacant room.',
+      emergency:'Release food down to the last unit, ask residents to make time for urgent support visits, and pay willing owners one fund for four weeks of shelter.',
       private:'Households can still give money or offer a room. The council holds its reserves.'};
     let reliefQuote=null;
     choices.addEventListener('change',()=>{terms.textContent=descriptions[choices.value];});
@@ -73,7 +73,7 @@
           const h=byHome.get(r.home);
           const occupancy=h?h.label+(h.owner===r.key?' · owner':h.owner?' · staying with owner':' · residential rights'):
             r.uncounted?'Named in the street roster; not included in the historical census total.':
-            'Without housing'+(r.weeks?' · '+r.weeks+' weeks':'')+(r.help?' · '+r.help:'');
+            'Without housing'+(r.weeks?' · '+r.weeks+' weeks':'')+(r.crisis?' · Asked for company and urgent support in week '+r.crisis:'')+(r.help?' · '+r.help:'');
           row(r.name,(r.away?'Away · ':'')+occupancy,h);
         }
         if(report.anonymous&&filter.value==='people')row('Other household members',report.anonymous+' people in the historical census have no individual street records. '+report.anonymousMissing+' lack housing.');
@@ -88,12 +88,13 @@
           row(h.label,details.join(' · '),h);
         }
       }else if(filter.value==='records'){
+        for(const entry of site.housing?.support||[])row('Week '+entry.week,entry.text);
         for(const entry of site.housing?.losses||[])row('Week '+entry.week,entry.text);
         for(const lease of site.housing?.leases||[]){
           const tenant=report.rows.find(r=>r.key===lease.tenant),owner=report.rows.find(r=>r.key===lease.owner);
           if(owner&&tenant)row('Emergency lodging',owner.name+' hosts '+tenant.name+' through week '+lease.through,byHome.get(lease.home));
         }
-        if(!entries.length)row('Housing records','No emergency lodging agreements or deaths have been recorded.');
+        if(!entries.length)row('Housing records','No emergency lodging agreements, support visits or deaths have been recorded.');
       }else{
         for(const h of report.works)row(h.label,h.places+' future places · '+h.detail,h);
       }

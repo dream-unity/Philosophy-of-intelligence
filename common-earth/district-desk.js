@@ -494,7 +494,7 @@
     const getScene=()=>scene||street();
     housing=root.EarthHousingUI?.mount({sim,inspected:inspectedStores,scene:getScene,townCentre:openTownCentre});
     const region=root.EarthRegionMap?.mount({sim,watch,getScene});
-    pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,buildingAction,
+    pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,buildingAction,openTownCentre,
       returnStreet:()=>{close();street()?.recenter();},refresh:redraw,ledger:(town,personId)=>{openDevelopment(town,personId?{personId}:{});ledger.scrollIntoView({block:'nearest'});},contextChanged:ribbon});
     $('street-stage')?.addEventListener('earthregionalmeet',e=>hud.meetPerson(e.detail.id));
     return {chart:()=>region?.chart(),selectChart:id=>region?.selectChart(id),watch,inspectBuilding:building=>pointInspector?.inspectBuilding(building),close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},

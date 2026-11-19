@@ -25,7 +25,7 @@ test('the same permanent residential rights back the population control, unvisit
   const {ctx,sim,w,home,peer,housing,save}=game();
   const untouched=JSON.stringify(w),preview=housing.view(w,peer);
   assert.equal(JSON.stringify(w),untouched);
-  assert.equal(preview.occupied,peer.population);assert.equal(preview.capacity,18);assert.equal(preview.unmet,0);
+  assert.equal(preview.occupied,peer.population);assert.equal(preview.capacity,peer.population+3);assert.equal(preview.unmet,0);
   assert.equal(new Set(preview.rows.map(r=>r.home)).size,preview.population);
   assert.equal(ctx.EarthCityModel.housingCapacity(peer),preview.capacity);
   const first=JSON.stringify(preview.rows.map(r=>[r.key,r.home]));housing.sync(w,peer);
@@ -50,7 +50,7 @@ test('a retained private courtyard can be vacant while a resident lacks rights; 
   const {ctx,w,peer,home,life,housing,arrive,pay,save}=game(),id='walker-2',guest=arrive(id);
   // Restore a genuine historical census with unnamed households. They occupy
   // all eighteen founding places, including any vacated by the seller.
-  peer.population=20;
+  delete peer.communityLife.foundingPlaces;peer.population=20;
   const owner=peer.residents[0].id;pay(peer,owner,1);
   peer.privateHomes=[{ownerId:owner,plot:0,stage:3,started:1,lastWork:8,cost:6}];w.week=9;w.communityLife.duty.due=11;
   const before=housing.view(w,peer);assert.equal(before.capacity,20);assert.equal(before.unmet,1);assert.equal(before.vacant,1);
@@ -64,18 +64,18 @@ test('a retained private courtyard can be vacant while a resident lacks rights; 
 });
 test('a visitor finances a vacant plot and waits for materials, professional availability and real construction before admission',()=>{
   const {ctx,w,peer,home,life,housing,arrive,pay,save}=game(),id='walker-2',guest=arrive(id);
-  peer.population=18;pay(home,id,10);peer.materials=3;
+  peer.population=peer.communityLife.foundingPlaces;pay(home,id,10);peer.materials=3;
   let q=housing.quote(w,peer,home,id);assert.equal(q.kind,'finance');assert.equal(q.available,false);assert.match(q.reason,/materials/);
   peer.materials=20;q=housing.quote(w,peer,home,id);assert.ok(q.available,q.reason);
   const population=peer.population,openingCash=peer.funds,signed=life.acceptVisitor(w,peer,guest);assert.ok(signed.pending,signed.message);
   assert.equal(peer.purses.people[q.worker].balance,1);assert.equal(peer.materials,17);assert.equal(peer.funds,openingCash+7);
-  assert.equal(peer.privateHomes[0].stage,1);assert.equal(peer.population,population);assert.equal(housing.view(w,peer).capacity,18);
+  assert.equal(peer.privateHomes[0].stage,1);assert.equal(peer.population,population);assert.equal(housing.view(w,peer).capacity,population);
   assert.equal(housing.view(w,peer).works[0].places,2);save();
   for(let week=2;week<=8;week++){w.week=week;w.communityLife.duty.due=week+2;housing.tick(w,peer);}
   assert.equal(peer.privateHomes[0].stage,3);assert.equal(peer.housing.contracts.length,0);
   const builder=ctx.EarthPersonas.profile(peer,peer.housing.shifts.workers[0]);
   assert.match(ctx.EarthDistrictOrders.commitment(w,peer,builder),/funded housing contract/);
-  assert.equal(housing.view(w,peer).capacity,20);assert.equal(peer.population,population);
+  assert.equal(housing.view(w,peer).capacity,population+2);assert.equal(peer.population,population);
   const done=life.acceptVisitor(w,peer,guest);assert.ok(done.ok,done.message);
   assert.equal(peer.population,population+1);assert.equal(peer.funds,openingCash+7);
   assert.equal(housing.view(w,peer).rows.find(r=>r.id===guest).home,'private-0');
@@ -162,4 +162,69 @@ test('a full district becomes an inspection option when a resident can afford a 
   assert.equal(option().to,undefined);
   pay(home,id,10);assert.equal(option().to,peer.id);
   peer.materials=3;assert.equal(option().to,undefined);
+});
+
+test('a witnessed loss, an unanswered request and a neighbour choosing to give time lead to distinct outcomes',()=>{
+  function caseFile(){
+    const f=game(),{w,home,peer,housing,ctx}=f;
+    for(let i=0;i<7;i++)recruit(f);
+    const row=housing.sync(w,home).namedMissing[0],casework=home.housing.hardship.find(h=>h.key===row.key);
+    for(const [id,purse] of Object.entries(home.purses.people))if(purse.balance)ctx.EarthPurses.productionReceipt(w,home,id,-purse.balance,'Spent household savings.');
+    w.week=9;w.communityLife.duty.due=11;home.food=0;home.funds=0;home.trust=10;home.housing.relief='private';
+    const deceased=ctx.EarthPersonas.profile(peer,'walker-0');
+    assert(ctx.EarthBorderConflict.retire(w,peer,deceased.id,'Died during a regional boundary fight.'));
+    home.communityLife.border={records:[{week:9,step:0,other:peer.id,text:'The boundary witnesses reported the death.',people:[deceased.identityKey,row.key],official:true}],health:{},lost:0};
+    Object.assign(casework,{strain:8,weeks:8});
+    housing.tick(w,home);assert.equal(casework.crisis,9);
+    return {...f,row,casework};
+  }
+  const isolated=caseFile(),helped=caseFile();
+  helped.home.housing.relief='emergency';
+  for(let week=10;week<=15;week++){
+    for(const f of [isolated,helped]){
+      f.w.week=week;f.w.communityLife.duty.due=week+2;f.housing.tick(f.w,f.home);
+    }
+    if(week===10){
+      assert.equal(helped.casework.crisis,undefined);
+      const support=helped.home.housing.care.find(c=>c.person===helped.row.key);
+      assert.match(helped.housing.workHold(helped.home,support.id),/support visit/);
+      assert.equal(helped.ctx.EarthPurses.workConflict(helped.home,support.id,week).length>0,true);
+      helped.save();
+    }
+  }
+  assert(isolated.home.housing.losses.some(r=>r.key===isolated.row.key&&r.text.includes('died by suicide')));
+  assert(!helped.home.housing.losses?.some(r=>r.key===helped.row.key));
+  isolated.save();helped.save();
+});
+
+test('emergency help interrupts a personal crisis even after strain peaks, with the same person and history',()=>{
+  const t=game(),{ctx,home,w,housing}=t;
+  for(let i=0;i<6;i++)recruit(t);
+  home.funds=100;
+  const q=ctx.EarthTownCentre.quote(w,home,'targeted',{patience:[30,35]});
+  const result=t.sim.communityLife({...q,actor:'steward',action:'townCentre'});
+  assert.ok(result.ok,result.message);
+  const resident=housing.view(w,home).namedMissing.find(r=>r.id===result.id);assert.ok(resident);
+  for(const [id,p] of Object.entries(home.purses.people))if(id!==resident.id&&p.balance)
+    ctx.EarthPurses.productionReceipt(w,home,id,-p.balance,'Bought personal supplies.');
+  home.food=12;home.trust=55;home.housing.relief='private';
+  for(let week=2;week<=21;week++){
+    w.week=week;w.communityLife.duty.due=week+2;housing.tick(w,home);
+  }
+  const prior=home.housing.hardship.find(d=>d.key===resident.key);
+  assert.equal(prior.strain,20);assert.equal(prior.withoutMeals,0);
+  home.wellbeing=12;home.trust=18;
+  const base=t.save(),unsupported=game(base),supported=game(base);
+  const n=home.population,food=home.food;
+  const action={site:supported.home.id,week:supported.w.week,actor:'steward',action:'housingRelief',generation:home.foundingRevision,level:'emergency',prior:'private'};
+  assert.ok(supported.sim.communityLife(action).ok);
+  for(const run of [unsupported,supported]){
+    run.w.week++;run.w.communityLife.duty.due=run.w.week+2;
+    run.housing.tick(run.w,run.home);run.save();
+  }
+  assert.equal(unsupported.home.population,n-1);assert.equal(unsupported.home.housing.losses[0].key,resident.key);
+  assert.match(unsupported.home.housing.losses[0].text,/died by suicide/);
+  assert.equal(supported.home.food,food-1);assert.equal(supported.home.population,n);
+  const after=supported.home.housing.hardship.find(d=>d.key===resident.key);
+  assert.equal(after.strain,19);assert.match(after.help,/released one food/);
 });

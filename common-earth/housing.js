@@ -66,7 +66,7 @@
     for(const h of site.growth?.households||[]){
       if(!h.guestRoom||!h.access)continue;
       const point=root.EarthDistrictGrowth.homePoint(site,h.plot);
-      add(homeKey('guest',h.plot),h.name+'’s guest room, lot '+(h.plot+1),1,point,null,h.name);
+      add(homeKey('guest',h.plot),h.name+'’s guest room, lot '+(h.plot+1),1,point,null,h.name,root.EarthCommunityLife.residency(site,h.guestRoom)==='member');
     }
     return {homes,works};
   }
@@ -88,7 +88,7 @@
     for(const h of homes)if(h.owner)allocate(residents.get(h.owner),h);
     for(const r of ordered){
       const held=byKey.get(prior.get(r.key));
-      if(held?.available)allocate(r,held);
+      if(held?.available||held?.key.startsWith('guest-'))allocate(r,held);
     }
     for(const lease of site.housing?.leases||[]){
       const h=byKey.get(lease.home);
@@ -134,7 +134,7 @@
         else allocate(r,homes.find(h=>h.available&&remaining(h)>0));
       }
       const condition=site.housing?.hardship?.find(x=>x.id===r.id&&x.key===r.key);
-      if(condition&&!r.home){r.weeks=condition.weeks;r.strain=condition.strain;r.help=condition.help;}
+      if(condition&&!r.home){r.weeks=condition.weeks;r.strain=condition.strain;r.help=condition.help;r.crisis=condition.crisis;}
     }
     let unplaced=Math.max(0,site.population-counted.size);
     const anonymous=unplaced;
@@ -310,14 +310,41 @@
     data.hardship=report.namedMissing.map(r=>prior.get(r.key)||{id:r.id,key:r.key,weeks:0,strain:0,help:''});
     return report;
   }
+  // A recorded death and a person who was actually there can connect a
+  // housing case to a particular loss. Reports from elsewhere are insufficient.
+  function witnessedLoss(world,site,row){
+    const witnesses=site.communityLife?.border?.records||[];
+    const accounts=witnesses.filter(a=>a.week>=world.week-12&&a.people.includes(row.key));
+    if(!accounts.length)return false;
+    const towns=[...world.sites,...world.communityLife.outposts];
+    return towns.some(t=>Object.values(t.communityLife?.border?.health||{}).some(h=>
+      h.condition==='died'&&accounts.some(a=>a.week===h.week&&a.people.includes(h.key))));
+  }
+  function careRecord(data,row,week,text){
+    const book=data.support||=[];book.unshift({key:row.key,week,text});book.length=Math.min(book.length,16);
+  }
+  function crisisSupport(world,site,data,row,report){
+    const free=new Set(root.EarthCommunityLife.fieldCandidates(site,world));
+    const helper=report.rows.find(p=>p.home&&!p.away&&free.has(p.id)&&
+      !root.EarthDistrictGrowth?.work(site,p.id)&&!workHold(site,p.id)&&
+      (root.EarthAutonomy.bond(site,p.id,row.id,world.week)>=2||
+        data.relief==='emergency'&&profile(site,p.id).traits.sociability>=52));
+    if(!helper)return '';
+    const round=site.growth?.round||0;
+    (data.care||=[]).push({id:helper.id,key:helper.key,person:row.key,week:world.week,round});
+    return helper.name+' set aside their next ordinary shift to stay with '+row.name+' and help them find support.';
+  }
   function tick(world,site){
     if(site.housing?.week===world.week||!world.communityLife)return [];
     const notes=buildWeek(world,site);
     let report=sync(world,site);
     const data=store(site);
     data.week=world.week;
+    if(data.care)delete data.care;
     if(data.leases)data.leases=data.leases.filter(l=>l.through>=world.week&&report.homes.some(h=>h.key===l.home&&h.owner===l.owner)&&report.rows.some(r=>r.key===l.tenant));
-    const relief=data.relief||'reserve',floor=relief==='emergency'?1:6;
+    const relief=data.relief||'reserve';
+    const held=data.hardship.length?root.EarthNeighbourErrands?.heldGoods(site,world.week)||{}:{};
+    const floor=(relief==='emergency'?1:6)+(held.funds||0);
     if(relief!=='private'&&data.hardship.length&&site.funds>floor&&site.trust>=40){
       for(const h of report.homes){
         if(!data.hardship.length||site.funds<=floor)break;
@@ -345,15 +372,36 @@
         const text=donor.name+' gave '+row.name+' one personal fund for emergency accommodation.';
         if(root.EarthPurses.transferPerson(world,site,donor.id,row.id,1,text).ok)help=text;
       }
-      if(!help&&relief!=='private'&&(site.trust>=45||relief==='emergency')&&site.food>(relief==='emergency'?0:2*Math.ceil(site.population/5))){
+      if(!help&&relief!=='private'&&(site.trust>=45||relief==='emergency')&&site.food>(held.food||0)+(relief==='emergency'?0:2*Math.ceil(site.population/5))){
         site.food--;help=site.name+' released one food from its reserve for '+row.name+'.';
+      }
+      if(!help&&relief==='emergency'&&site.funds>floor){
+        const text=site.name+' paid one emergency fund to '+row.name+' for temporary shelter.';
+        if(root.EarthPurses.productionReceipt(world,site,row.id,1,text)){site.funds--;help=text;}
+      }
+      const acute=difficulty.crisis!=null;
+      if(!acute&&!help&&difficulty.strain>=7&&witnessedLoss(world,site,row)){
+        difficulty.crisis=world.week;
+        const message=row.name+' told the housing delegate they were in distress after witnessing a death and asked someone to stay with them.';
+        careRecord(data,row,world.week,message);notes.push(message);root.EarthCommunityLife.recordWeek(site,world.week,message);
+      }
+      if(difficulty.crisis!=null&&!help)help=crisisSupport(world,site,data,row,report);
+      if(help&&difficulty.crisis!=null){
+        careRecord(data,row,world.week,help);
+        notes.push(row.name+' received support after asking for help. The housing case stays open.');
+        delete difficulty.crisis;
       }
       difficulty.help=help;
       difficulty.strain=help?Math.max(0,difficulty.strain-1):Math.min(20,difficulty.strain+1);
       difficulty.withoutMeals=!help&&site.food===0&&funds(site,row.id)===0?Math.min(20,(difficulty.withoutMeals||0)+1):0;
-      if(difficulty.withoutMeals>=8&&difficulty.strain>=12&&difficulty.weeks>=16&&
+      const extended=difficulty.strain>=12&&difficulty.weeks>=16;
+      const ties=site.autonomy?.people?.[row.id]?.ties||[];
+      const personalCrisis=!help&&extended&&difficulty.strain>=18&&site.wellbeing<=20&&site.trust<25&&
+        !ties.some(t=>t.strength>0)&&profile(site,row.id)?.traits.patience<38;
+      const unsupported=difficulty.crisis!=null&&world.week-difficulty.crisis>=6&&difficulty.strain>=14;
+      if((unsupported||extended&&(difficulty.withoutMeals>=8||personalCrisis))&&
         root.EarthCommunityLife.closeLife(world,site,row.id)){
-        const text=row.name+' died after '+difficulty.weeks+' weeks without stable housing, including a prolonged period without meals or assistance.';
+        const text=unsupported?row.name+' died by suicide. The housing records preserve their request for company and the weeks it went unanswered.':personalCrisis?row.name+' died by suicide during a prolonged personal crisis. Earlier calls for shelter and support are recorded.':row.name+' died after '+difficulty.weeks+' weeks without stable housing, including a prolonged period without meals or assistance.';
         const losses=data.losses||=[];losses.unshift({week:world.week,id:row.id,key:row.key,name:row.name,text});losses.length=Math.min(16,losses.length);
         root.EarthCommunityLife.recordWeek(site,world.week,text);notes.push(text);
         site.trust=Math.max(0,site.trust-1);continue;
@@ -385,6 +433,8 @@
   function workHold(site,id){
     const health=site.communityLife?.border?.health?.[id];
     if(health?.condition==='injured'&&health.key===profile(site,id)?.identityKey)return 'Recovering from an injury before taking an ordinary shift';
+    const care=site.housing?.care?.find(r=>r.id===id&&r.week===site.housing.week&&(site.growth?.round||0)<=r.round+1);
+    if(care&&profile(site,id)?.identityKey===care.key)return 'Keeping a promised support visit before the next ordinary shift';
     const hardship=site.housing?.hardship?.find(r=>r.id===id);
     return hardship&&local(site,id)&&profile(site,id)?.identityKey===hardship.key?'Seeking shelter before taking another ordinary shift':'';
   }
@@ -394,6 +444,8 @@
     const text=s=>typeof s==='string'&&s.length>0&&s.length<=1100;
     const list=(a,check)=>Array.isArray(a)&&a.length<=64&&a.every(check)&&new Set(a.map(r=>r.key)).size===a.length;
     if(h.shifts!=null&&(!integer(h.shifts?.week,1,week)||!Array.isArray(h.shifts.workers)||h.shifts.workers.length>6||!h.shifts.workers.every(text)||new Set(h.shifts.workers).size!==h.shifts.workers.length))return false;
+    if(h.support!=null&&(!Array.isArray(h.support)||h.support.length>16||!h.support.every(r=>r&&text(r.key)&&text(r.text)&&integer(r.week,1,week))))return false;
+    if(h.care!=null&&!list(h.care,r=>r&&text(r.id)&&text(r.key)&&text(r.person)&&integer(r.week,1,week)&&integer(r.round,0,site.growth?.round||0)))return false;
     if(h.losses!=null&&(!list(h.losses,r=>r&&text(r.key)&&text(r.id)&&text(r.name)&&text(r.text)&&integer(r.week,1,week))||h.losses.length>16))return false;
     if(h.reservations!=null&&!list(h.reservations,r=>r&&text(r.key)&&text(r.id)&&text(r.home)))return false;
     if(h.relief!=null&&!['reserve','emergency','private'].includes(h.relief))return false;
@@ -406,7 +458,7 @@
         guest?.profile?.identityKey===c.key&&(guest.status==='visitor'||c.id==='steward'&&guest.status==='anchor'&&guest.residence==='visitor');
     })||new Set(h.contracts.map(c=>c.plot)).size!==h.contracts.length))return false;
     return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage)-\d{1,4})$/.test(r.home))&&
-      list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&
+      list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.crisis==null||integer(r.crisis,1,week))&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&
       !h.hardship.some(r=>h.rights.some(a=>r.key===a.key));
   }
   root.EarthHousing=Object.freeze({frontage,additionalPlaces,view,need,projected,privateInspection,quote,pay,finance,buildDuty,setRelief,grant,sync,tick,workHold,valid});

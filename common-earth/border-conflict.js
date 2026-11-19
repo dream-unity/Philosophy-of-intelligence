@@ -153,13 +153,15 @@
     const volunteers=available(world,site,true);
     if(!volunteers.length)return;
     const next=target(world,geo,r,town);if(!next)return;
+    const travelCosts=next.path.map((cell,i)=>i?region().routeEffort(world,site,[next.path[i-1],cell]):0);
+    if(travelCosts.some(n=>!Number.isFinite(n)))return;
     const clerkBook=clerk(site),leader=volunteers[0];
     const pay=leader.name+' accepted 2 treasury funds for the boundary watch.';
     if(!root.EarthPurses.productionReceipt(world,site,leader.id,2,pay))return;
     site.food-=2;site.funds-=2;
     clerkBook.last=step;
     clerkBook.campaign={against:next.rival.site.id,cell:next.cell,path:next.path,index:0,phase:'march',round:0,
-      began:step,attacker:assign(site,leader),defender:null};
+      travelCosts,credit:0,began:step,attacker:assign(site,leader),defender:null};
     const partner=volunteers[1],party=[leader];
     if(partner&&site.food-(held.food||0)>=Math.max(floor.food,Math.ceil(site.population/5)*2)+2&&site.funds-(held.funds||0)>=floor.funds+2&&
         root.EarthPurses.productionReceipt(world,site,partner.id,2,'A second watch wage for the same expedition.')){
@@ -201,11 +203,22 @@
     release(other,c.defender);release(other,c.support);
     c.phase='return';c.outcome=message;
   }
+  function march(c,pace,returning){
+    if(!c.travelCosts){c.index=Math.max(0,Math.min(c.path.length-1,c.index+(returning?-pace:pace)));return;}
+    c.credit=(c.credit||0)+pace;
+    const end=returning?0:c.path.length-1;
+    while(c.index!==end){
+      const next=c.index+(returning?-1:1),effort=c.travelCosts[Math.max(next,c.index)];
+      if(c.credit<effort)break;
+      c.credit-=effort;c.index=next;
+    }
+    if(c.index===end)c.credit=0;
+  }
   function advanceWar(world,geo,r,town,c){
     const site=town.site,other=geo.towns.find(t=>t.site.id===c.against)?.site;
     if(!other){release(site,c.attacker);release(site,c.partner);delete clerk(site).campaign;return;}
     if(c.phase==='return'){
-      c.index=Math.max(0,c.index-2);
+      march(c,2,true);
       if(!c.index){release(site,c.attacker);release(site,c.partner);delete clerk(site).campaign;}
       return;
     }
@@ -216,7 +229,7 @@
       publish(world,site,other,c,c.outcome);return;
     }
     if(c.phase==='march'){
-      c.index=Math.min(c.path.length-1,c.index+1+(site.growth?.vehicle?1:0));
+      march(c,1+(site.growth?.vehicle?1:0),false);
       if(c.index<c.path.length-1)return;
       const guards=available(world,other,false),p=guards[0];
       if(!p){settle(world,r,site,other,c,true,other.name+' had no free resident to defend its outer parcel.');return;}
@@ -302,15 +315,19 @@
     }
     return rows;
   }
+  function hasPass(world,site,guest,origin){
+    if(!origin||origin.id===site.id)return true;
+    const pass=site.communityLife?.entryPass;
+    if(pass?.guestKey===guest.identityKey&&world.week>=pass.opens&&world.week<=pass.until)return true;
+    const assessment=life().entryAssessment(world,site,origin,guest);
+    return assessment.personal.known||assessment.originTrust>=66;
+  }
   function entry(world,from,to,visitor,invited,atCell=null){
     if(invited||from.id===to.id)return '';
     // Check the institution before computing its entire distribution of residents.
     const rule=to.communityLife?.entryDecision?.rule;
     if((rule?rule!=='hosted':!['works','slipway'].includes(to.communityLife?.district))||!profile(to).closed)return '';
-    const assessment=life().entryAssessment(world,to,from,visitor);
-    const pass=to.communityLife?.entryPass;
-    const safeConduct=pass?.guestKey===visitor.identityKey&&world.week>=pass.opens&&world.week<=pass.until;
-    if(assessment.personal.known||assessment.originTrust>=66||safeConduct)return '';
+    if(hasPass(world,to,visitor,from))return '';
     const guard=available(world,to,true)[0];
     if(!guard)return '';
     const msg=guard.name+' struck '+visitor.name+' at the boundary of '+to.name+' for entering without an invitation.';
@@ -360,8 +377,10 @@
     if(d.gate&&(!text(d.gate.from)||!text(d.gate.message)||!int(d.gate.until)||!actor(d.gate.guard)||!actor(d.gate.visitor)))return false;
     const c=d.campaign;
     return !c||text(c.against)&&coord(c.cell)&&Array.isArray(c.path)&&c.path.length>=2&&c.path.length<=4097&&c.path.every(coord)&&c.path.at(-1)===c.cell&&
+      (c.travelCosts==null||Array.isArray(c.travelCosts)&&c.travelCosts.length===c.path.length&&c.travelCosts[0]===0&&
+        c.travelCosts.slice(1).every(n=>Number.isFinite(n)&&n>0&&n<=5)&&Number.isFinite(c.credit)&&c.credit>=0&&c.credit<=5)&&
       int(c.index,0,c.path.length-1)&&['march','fight','return'].includes(c.phase)&&int(c.round,0,12)&&int(c.began)&&actor(c.attacker)&&
       (c.partner==null||actor(c.partner))&&(c.support==null||actor(c.support))&&(c.defender==null?c.phase!=='fight':actor(c.defender));
   }
-  root.EarthBorderConflict=Object.freeze({disposition,force,profile,advance,actors,combatants,entry,guardShift,homecoming,retire,valid});
+  root.EarthBorderConflict=Object.freeze({disposition,force,profile,advance,actors,combatants,entry,hasPass,guardShift,homecoming,retire,valid});
 })(globalThis);

@@ -231,7 +231,7 @@
       const other=makeSite({id,name,region:base.region,point,water:base.water,names:d.hosts,old:null,offer:{newPopulation:i===2?10:10+i}});
       other.specialty=d.goods;other.founded=world.week;seedHouseholds(other,other.population,world.week);
       other.food=14-i;other.materials=9+i;other.trust=i===2?55:58+i*5;other.wellbeing=61-i;
-      Object.assign(local(other),{cluster:base.id,district:d.district,habitat:habitat||'mixed',foundingPlaces:i===2?other.population-1:18});local(other).away.steward='elsewhere';
+      Object.assign(local(other),{cluster:base.id,district:d.district,habitat:habitat||'mixed',foundingPlaces:i===2?other.population-1:Math.min(18,other.population+3)});local(other).away.steward='elsewhere';
       world.communityLife.outposts.push(other);
     });
   }
@@ -355,7 +355,7 @@
     const actor=root.EarthPersonas?.profile(site,id);
     if(!actor)return null;
     const work=root.EarthCareers?.work?.(site,id);
-    return {...copy(actor),birthCommunityName:actor.birthCommunityName||site.name,role:work?.label||actor.role||actor.originRole,lastEmployer:work?.employer||actor.lastEmployer||null,
+    return {...actor,birthCommunityName:actor.birthCommunityName||site.name,role:work?.label||actor.role||actor.originRole,lastEmployer:work?.employer||actor.lastEmployer||null,
       demonstratedSkills:{...actor.aptitudes,...actor.demonstratedSkills,...site.careers?.[id]?.skills},
       qualificationIds:[...new Set([...(actor.qualificationIds||[]),...Object.keys(site.careers?.[id]?.qualifications||{}),...(work?[work.id]:[])])]};
   }
@@ -646,7 +646,7 @@
     const id=returning?originSlot:old?.[0]||guestSlots.find(key=>!used.has(key));
     if(!id)return null;
     delete c.away[id];
-    c.people[id]={profile:{...person,id},status,originId,originSlot,originName:person.birthCommunityName||null,since:week};
+    c.people[id]={profile:{...copy(person),id},status,originId,originSlot,originName:person.birthCommunityName||null,since:week};
     const agency=site.agency||={actor:'steward',meals:[]};
     if(guestSlots.includes(id)&&!(agency.porters||=[]).includes(id))agency.porters.push(id);
     return id;
@@ -1393,7 +1393,7 @@
       const from=possible[(Math.floor(world.week/4))%Math.max(1,possible.length)];
       if(from){
         const candidatesHere=candidates(from,world).filter(id=>inspectable(world,home,from,id));
-        const id=candidatesHere.find(id=>portable(from,id)?.traits.curiosity>=40)||candidatesHere[0];
+        const id=candidatesHere.find(id=>root.EarthPersonas.profile(from,id)?.traits.curiosity>=40)||candidatesHere[0];
         if(id)add(home,beginInspection(world,from,home,id,{invited:true}));
       }
     }
@@ -1438,7 +1438,7 @@
     if(!a)return;
     if(from&&from.id!==to.id)awaySlot(from,'steward',to.id);
     const c=local(to);delete c.away.steward;
-    c.people.steward={profile:portable(lookup(world,a.homeId),'steward')||copy(a.profile),status:'anchor',residence:isHome(world,to)?'member':'visitor'};
+    c.people.steward={profile:copy(portable(lookup(world,a.homeId),'steward')||a.profile),status:'anchor',residence:isHome(world,to)?'member':'visitor'};
     const agency=to.agency||={actor:'steward',meals:[]};
     agency.actor='steward';delete agency.returningActor;delete agency.actorAt;
     world.activeId=to.id;recoverHouseholds(world,to);if(makeSite)makeRegion(world,to,makeSite);
