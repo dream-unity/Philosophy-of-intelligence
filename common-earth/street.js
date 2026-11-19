@@ -1154,6 +1154,20 @@
       if(i===0||i===2){box(px+.02,py+d+.015,.68,.24,.43,.18,'#6c9270','#86745c','#77654e');}
     }
     function market(item,small=false) {
+      marketStructure(item,small);
+      if(small)return;
+      const [x,y]=screen(item.x+.65,item.y+1.38,.85);
+      // The civic office and exchange share a front door in every settlement.
+      // Use a painted emblem at miniature scale and lettering at street scale.
+      const size=Math.max(2,unit*.24);
+      ctx.save();
+      ctx.fillStyle='#294e51';ctx.fillRect(x-size*3.9,y-size*.75,size*7.8,size*1.55);
+      ctx.fillStyle='#fff0c7';
+      if(size>=6){ctx.font='bold '+Math.round(size)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Town Centre',x,y);}
+      else ctx.fillRect(x-size*.55,y-size*.45,size*1.1,size*.9);
+      ctx.restore();
+    }
+    function marketStructure(item,small=false) {
       const {x,y}=item, w=small?2.4:3.05,d=small?1.7:2.12,h=small?1.03:1.48,px=x-w/2,py=y-d/2;
       shadow(px,py,w,d,h);
       if(window.EarthTownArchitecture?.draw(ctx,state.site,small?'market':'exchange',0,...screen(x,y),unit))return;

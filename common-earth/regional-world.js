@@ -322,7 +322,8 @@
     r.contacts[k]=meeting;
   }
   function passage(geo,r,siteId,id){
-    const {owner,jurisdiction,claims}=tenure(geo,r,id);
+    const {parcel,owner,jurisdiction,claims}=tenure(geo,r,id);
+    if(parcel?.occupation&&jurisdiction===siteId&&(!owner||owner===siteId))return true;
     for(const other of new Set([owner,jurisdiction,...claims])){
       if(!other||other===siteId)continue;
       const pact=localAgreement(r,siteId,other,id);
@@ -331,7 +332,8 @@
     return true;
   }
   function harvestRights(geo,r,siteId,id){
-    const {owner,jurisdiction,claims}=tenure(geo,r,id);
+    const {parcel,owner,jurisdiction,claims}=tenure(geo,r,id);
+    if(parcel?.occupation&&jurisdiction===siteId&&(!owner||owner===siteId))return true;
     for(const other of new Set([owner,jurisdiction,...claims])){
       if(!other||other===siteId)continue;
       const agreement=localAgreement(r,siteId,other,id);
@@ -342,7 +344,8 @@
   }
   function buildingRights(geo,r,siteId,id){
     if(!harvestRights(geo,r,siteId,id))return false;
-    const {claims}=tenure(geo,r,id);
+    const {claims,parcel}=tenure(geo,r,id);
+    if(parcel?.occupation&&parcel.charter===siteId)return true;
     return claims.every(other=>other===siteId||localAgreement(r,siteId,other,id)?.terms==='joint');
   }
   function nodeCost(geo,r,town,id,byWater,knownOpen=false){
@@ -721,7 +724,9 @@
     // Proposals only use this community's records. A survey can choose an
     // unexamined bearing, but nobody knows its yield or builds sight unseen.
     const demand=site.food-floor.food<site.materials-floor.materials?'food':'materials';
-    const approaching=site.population>=(root.EarthCityModel?.housingCapacity?.(site)||18)-1;
+    const capacity=root.EarthCityModel?.housingCapacity?.(site)||18;
+    const buildingHere=site.civicLand?.project||site.city?.precincts?.some(p=>p.target==='homes')||site.civicInitiatives?.active?.choiceId==='precinct:homes';
+    const approaching=site.population>=capacity&&!buildingHere&&site.population>=6&&world.week-(site.founded||1)>=4;
     const recent=(r.records||[]).find(n=>n.siteId===site.id&&n.personId);
     const rotation=(step+Math.abs(Math.round(town.x*3+town.y)))%5;
     const disputes=new Set(Object.values(r.contacts).filter(c=>c.terms==='disputed'&&(c.a===site.id||c.b===site.id)).map(c=>c.cell));

@@ -62,10 +62,8 @@
   function reservedChoice(site,c){
     const key=tag(c.id);
     if(c.kind!=='build')return false;
-    if(site.civicInitiatives?.history?.filter(h=>h.phase==='commissioned').length>=2)return true;
     return site.buildPlan===key || site.buildPlanPlot!=null&&site.buildPlanPlot===c.plot ||
-      (site.buildings||[]).some(b=>b.kind===key||b.plot===c.plot) || (site.construction||[]).some(j=>j.kind===key||j.scope==='street'&&j.plot===c.plot) ||
-      (site.buildings?.length||0)+(site.construction||[]).filter(j=>j.scope==='street'&&j.type!=='demolish').length>=7;
+      (site.buildings||[]).some(b=>b.kind===key||b.plot===c.plot) || (site.construction||[]).some(j=>j.kind===key||j.scope==='street'&&j.plot===c.plot);
   }
   function need(world,site,key){
     switch(key){
@@ -125,7 +123,7 @@
     const p={id:site.id+'-civic-'+(++ledger.serial),title:c.label,choiceId:c.id,kind:c.kind,plot:c.kind==='research'?null:c.plot,phase:'consultation',
       leadId:lead.id,leadName:lead.name,beneficiaryId:beneficiary.id,beneficiaryName:beneficiary.name,benefit:policy.benefit,reason:why,
       proposedWeek:world.week,decisionWeek:world.week+2,reviewWeek:world.week+2,goods:{funds:c.goods.funds||0,materials:c.goods.materials||0},
-      pledged:goods(),labour:0,effort:c.effort,contributions:[],meetingWeek:0,attendees:[],votes:[lead,beneficiary,critic].map(v=>({personId:v.id,name:v.name,stance:'abstain',reason:'Considering the terms.'})),
+      pledged:goods(),labour:0,effort:c.effort,contributions:[],meetingWeek:0,attendees:[],votes:[lead,beneficiary,critic].filter(Boolean).map(v=>({personId:v.id,name:v.name,stance:'abstain',reason:'Considering the terms.'})),
       evidence:relevant?{id:relevant.id,title:relevant.title,ownerId:relevant.ownerId,ownerName:relevant.ownerName,week:relevant.week}:null,
       status:'Discuss the proposal before week '+(world.week+2)+'. The quoted goods remain in the treasury.'};
     refreshVotes(world,site,p);ledger.active=p;return p;
@@ -179,9 +177,12 @@
     const d=state(site);d.week=world.week;d.revision++;
     d.history=d.history.map(h=>jobState(site,h));
     if(!d.active&&world.week<d.nextWeek || d.active&&world.week<d.active.reviewWeek)return [];
-    const available=volunteers(world,site),choices=hooks.options(world,site)||[];
+    const available=volunteers(world,site);
+    // Two founding households can decide together. A larger council still
+    // needs three distinct members to propose spending public resources.
+    if(!d.active&&available.length<(site.population===2?2:3))return [];
+    const choices=hooks.options(world,site)||[];
     if(!d.active){
-      if(available.length<3)return [];
       const choice=select(world,site,choices,available);if(!choice)return [];
       const p=propose(world,site,choice,available,d);return [p.leadName+' proposed '+p.title+' for '+p.beneficiaryName+' and their neighbours. '+p.status];
     }
@@ -256,7 +257,7 @@
         p.choiceId!==p.kind+':'+subject||(p.kind==='precinct')!==(subject==='homes')||
         !(active?activePhases:closedPhases).includes(p.phase)||!actorId(p.leadId)||!actorId(p.beneficiaryId)||p.leadId===p.beneficiaryId||!string(p.leadName,120)||!string(p.beneficiaryName,120)||!string(p.reason,600)||!string(p.benefit,600)||!string(p.status,1800)||
         !integer(p.proposedWeek,1,week)||p.decisionWeek!==p.proposedWeek+2||!integer(p.reviewWeek,p.decisionWeek,week+16)||!cost(p.goods)||!cost(p.pledged)||!integer(p.effort,1,12)||!integer(p.labour,0,p.effort)||
-        !(p.kind==='precinct'?integer(p.plot,0,5):p.kind==='build'?integer(p.plot,0,8):p.plot===null)||!Array.isArray(p.votes)||p.votes.length!==3||new Set(p.votes.map(v=>v?.personId)).size!==3||
+        !(p.kind==='precinct'?integer(p.plot,0,5):p.kind==='build'?integer(p.plot,0,8):p.plot===null)||!Array.isArray(p.votes)||p.votes.length<2||p.votes.length>3||new Set(p.votes.map(v=>v?.personId)).size!==p.votes.length||
         !integer(p.meetingWeek,0,week)||!Array.isArray(p.attendees)||p.attendees.length>3||new Set(p.attendees).size!==p.attendees.length||!p.attendees.every(id=>p.votes.some(v=>v.personId===id))||
         !p.votes.every(v=>member(v)&&['support','dissent','abstain'].includes(v.stance)&&string(v.reason,1000))||!Array.isArray(p.contributions)||p.contributions.length>30)return false;
       if(p.evidence!=null && (!dict(p.evidence)||!string(p.evidence.id,200)||!string(p.evidence.title,200)||!actorId(p.evidence.ownerId)||!string(p.evidence.ownerName,120)||!integer(p.evidence.week,1,p.proposedWeek)))return false;

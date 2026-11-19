@@ -1073,7 +1073,10 @@
       const city=root.EarthCityModel;
       // Only undeveloped public land can be offered. An agreed location stays
       // fixed throughout consultation, including when a competing use appears.
-      const housingPressure=site.population>=capacity(site)-1||(root.EarthHousing?.need(turn,site)||0)>0;
+      const spare=capacity(site)-site.population;
+      const recruiting=site.communityLife?.townCentre?.arrivals?.some(a=>turn.week-a.week<=6)||
+        Object.values(site.employers||{}).some(job=>job.open?.length);
+      const housingPressure=spare<=1||spare<=3&&recruiting||(root.EarthHousing?.need(turn,site)||0)>0;
       if(city && (existing?.kind==='precinct'||housingPressure)){
         const records=city.overview(site).records;
         const free=records.filter(p=>p.use==='open'&&!p.target);
@@ -2100,8 +2103,8 @@
         const relief=[];
         // A resident who has left town cannot fulfil a public building contract.
         // Offer their shift to an available local with an interest in the work.
-        const absent=authorised.filter(v=>root.EarthCommunityLife?.residency(site,v.personId)==='away');
-        if(absent.length&&volunteers.length<needed){
+        const absent=authorised.filter(v=>!available(v.personId));
+        if(absent.length&&volunteers.length<needed&&root.EarthCommunityLife){
           for(const person of root.EarthPersonas?.list(site)||[]){
             if(!available(person.id)||root.EarthCommunityLife.residency(site,person.id)!=='member'||
               root.EarthCommunityLife.commuting(site,person.id)||agreement.votes.some(v=>v.personId===person.id)||

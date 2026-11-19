@@ -25,7 +25,7 @@ test('the same permanent residential rights back the population control, unvisit
   const {ctx,sim,w,home,peer,housing,save}=game();
   const untouched=JSON.stringify(w),preview=housing.view(w,peer);
   assert.equal(JSON.stringify(w),untouched);
-  assert.equal(preview.occupied,peer.population);assert.equal(preview.capacity,18);assert.equal(preview.unmet,0);
+  assert.equal(preview.occupied,peer.population);assert.equal(preview.capacity,peer.population+3);assert.equal(preview.unmet,0);
   assert.equal(new Set(preview.rows.map(r=>r.home)).size,preview.population);
   assert.equal(ctx.EarthCityModel.housingCapacity(peer),preview.capacity);
   const first=JSON.stringify(preview.rows.map(r=>[r.key,r.home]));housing.sync(w,peer);
@@ -50,7 +50,7 @@ test('a retained private courtyard can be vacant while a resident lacks rights; 
   const {ctx,w,peer,home,life,housing,arrive,pay,save}=game(),id='walker-2',guest=arrive(id);
   // Restore a genuine historical census with unnamed households. They occupy
   // all eighteen founding places, including any vacated by the seller.
-  peer.population=20;
+  delete peer.communityLife.foundingPlaces;peer.population=20;
   const owner=peer.residents[0].id;pay(peer,owner,1);
   peer.privateHomes=[{ownerId:owner,plot:0,stage:3,started:1,lastWork:8,cost:6}];w.week=9;w.communityLife.duty.due=11;
   const before=housing.view(w,peer);assert.equal(before.capacity,20);assert.equal(before.unmet,1);assert.equal(before.vacant,1);
@@ -64,18 +64,18 @@ test('a retained private courtyard can be vacant while a resident lacks rights; 
 });
 test('a visitor finances a vacant plot and waits for materials, professional availability and real construction before admission',()=>{
   const {ctx,w,peer,home,life,housing,arrive,pay,save}=game(),id='walker-2',guest=arrive(id);
-  peer.population=18;pay(home,id,10);peer.materials=3;
+  peer.population=peer.communityLife.foundingPlaces;pay(home,id,10);peer.materials=3;
   let q=housing.quote(w,peer,home,id);assert.equal(q.kind,'finance');assert.equal(q.available,false);assert.match(q.reason,/materials/);
   peer.materials=20;q=housing.quote(w,peer,home,id);assert.ok(q.available,q.reason);
   const population=peer.population,openingCash=peer.funds,signed=life.acceptVisitor(w,peer,guest);assert.ok(signed.pending,signed.message);
   assert.equal(peer.purses.people[q.worker].balance,1);assert.equal(peer.materials,17);assert.equal(peer.funds,openingCash+7);
-  assert.equal(peer.privateHomes[0].stage,1);assert.equal(peer.population,population);assert.equal(housing.view(w,peer).capacity,18);
+  assert.equal(peer.privateHomes[0].stage,1);assert.equal(peer.population,population);assert.equal(housing.view(w,peer).capacity,population);
   assert.equal(housing.view(w,peer).works[0].places,2);save();
   for(let week=2;week<=8;week++){w.week=week;w.communityLife.duty.due=week+2;housing.tick(w,peer);}
   assert.equal(peer.privateHomes[0].stage,3);assert.equal(peer.housing.contracts.length,0);
   const builder=ctx.EarthPersonas.profile(peer,peer.housing.shifts.workers[0]);
   assert.match(ctx.EarthDistrictOrders.commitment(w,peer,builder),/funded housing contract/);
-  assert.equal(housing.view(w,peer).capacity,20);assert.equal(peer.population,population);
+  assert.equal(housing.view(w,peer).capacity,population+2);assert.equal(peer.population,population);
   const done=life.acceptVisitor(w,peer,guest);assert.ok(done.ok,done.message);
   assert.equal(peer.population,population+1);assert.equal(peer.funds,openingCash+7);
   assert.equal(housing.view(w,peer).rows.find(r=>r.id===guest).home,'private-0');
