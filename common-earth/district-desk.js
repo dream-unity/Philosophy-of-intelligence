@@ -4,7 +4,7 @@
   'use strict';
   const findTown=(world,id)=>world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id);
   const funds=n=>n+' '+(n===1?'fund':'funds');
-  function mount({sim,hud,street,enterStreet,travel,redraw,notify,inspectWork,canObserve}){
+  function mount({sim,hud,street,enterStreet,travel,redraw,notify,inspectWork}){
     const doc=root.document,$=id=>doc.getElementById(id);
     const el=(tag,value,css)=>{const item=doc.createElement(tag);if(value!=null)item.textContent=value;if(css)item.className=css;return item;};
     function btn(label,run){const b=el('button',label);b.type='button';b.addEventListener('click',run);return b;}
@@ -46,7 +46,7 @@
     }
     function syncObserved(force=false){
       const world=sim.state,site=findTown(world,watchedId),home=sim.active();
-      if(!site||home?.id!==watchedFrom||site.id===home?.id||world.communityLife?.journey){close();return;}
+      if(!site||!home){close();return;}
       // The Street renderer owns its own caches. Refresh with the town after a
       // calendar turn, a migration or physical construction completing.
       const works=(site.construction||[]).map(j=>[j.id,j.phase,j.workers?.length].join('/')).join('|');
@@ -61,7 +61,7 @@
       const people=root.EarthPersonas.list(copy).filter(p=>scene.activityOf(p.id));
       const id=people.some(p=>p.id===wanted)?wanted:'';
       options(selector,[['','Whole town'],...people.map(p=>[p.id,p.name+' · '+(root.EarthCareers.role(copy,p.id)||p.role)])],id);
-      text('observer-title',site.name);text('observer-from',home.name);
+      text('observer-title',site.name+' · '+site.era);text('observer-from',home.name);
       text('observer-town-goal',hud.observeNeed(site).label);
       if(id&&scene.observePerson(id))activity(scene.activityOf(id));
       else{
@@ -72,9 +72,7 @@
     }
     function watch(id,resume=null){
       const site=findTown(sim.state,id),origin=sim.active();
-      if(!site||!origin||id===origin.id)return false;
-      const busy=canObserve();
-      if(busy){notify(busy,true);return false;}
+      if(!site||!origin)return false;
       shutLedger();close();enterStreet();hud.close(false);
       watchedId=id;watchedFrom=origin.id;observer.hidden=false;
       doc.body.dataset.observingTown='true';selectedId=resume?.person||'';sceneKey='';
@@ -126,8 +124,8 @@
       function districtRow(town){
         const site=findTown(world,town.id),row=el('article',null,'atlas-district-row');
         const description=el('div');description.append(el('strong',town.name),el('small',town.distance.toFixed(1)+' km · '+site.population+' residents · '+(town.rooms?town.rooms+' open beds':'housing full')));
-        const watchButton=btn('Watch streets',()=>watch(town.id)),go=btn('Travel',()=>travel(town.id));
-        watchButton.setAttribute('aria-label','Watch streets in '+town.name);go.setAttribute('aria-label','Travel to '+town.name);
+        const watchButton=btn('See streets',()=>watch(town.id)),go=btn('Travel',()=>travel(town.id));
+        watchButton.setAttribute('aria-label','See streets in '+town.name);go.setAttribute('aria-label','Travel to '+town.name);
         watchButton.dataset.districtCommand='watch-'+town.id;go.dataset.districtCommand='travel-'+town.id;
         row.append(description,watchButton,go);return row;
       }
@@ -369,7 +367,7 @@
         function entry(label,fn,key){const b=btn(label,fn);b.dataset.personCommand=p.id+'/'+key;b.setAttribute('aria-label',label+' · '+p.name);links.append(b);}
         if(!isMe){
           entry('Meet',()=>hud.meetPerson(p.id),'meet');
-          entry('Watch',()=>hud.watchPerson(p.id),'watch');
+          entry('See',()=>watch(site.id,{person:p.id}),'watch');
         }
         entry(isMe?'My goals':'Goals',()=>hud.selectPurpose(p.id),'goals');
         row.append(title,activity);if(aim)row.append(el('small','Aim · '+aim));
@@ -429,8 +427,9 @@
       siteStamp=site.id+'/'+(site.foundingRevision||0);parcel=index;use=kind;
       return hud.openTool('precinct');
     }
-    return {watch,close,project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},
-      render(isAtlas){if(watchedId)syncObserved();ribbon();atlasDirectory(isAtlas);}};
+    const region=root.EarthRegionMap?.mount({sim,watch});
+    return {watch,close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},
+      render(isAtlas){region?.refresh();if(watchedId)syncObserved();ribbon();atlasDirectory(isAtlas);}};
   }
   root.EarthDistrictDesk=Object.freeze({mount});
 })(typeof window==='undefined'?globalThis:window);

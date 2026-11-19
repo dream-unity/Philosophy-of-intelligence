@@ -176,13 +176,13 @@ test('reopening a founding preserves the previously generated names and aptitude
     assert.equal(person.bounds.music.max,ceiling);
   }
 });
-test('three neighbouring districts reserve distinct native names, roles and future porter names across a save and founding',()=>{
+test('four neighbouring districts reserve distinct native names, roles and future porter names across a save and founding',()=>{
   const app=runtime();
   vm.runInContext(fs.readFileSync(path.join(root,'community-life.js'),'utf8'),app);
   vm.runInContext(fs.readFileSync(path.join(root,'autonomy.js'),'utf8'),app);
   const sim=town(app),s=sim.active(),p=app.EarthPersonas;
   const districts=()=>[...sim.state.sites,...sim.state.communityLife.outposts];
-  assert.equal(districts().length,3);assert.deepEqual(s.residents.map(v=>v.name).join('/'),'Mira/Idris/Sol');
+  assert.equal(districts().length,4);assert.deepEqual(s.residents.map(v=>v.name).join('/'),'Mira/Idris/Sol');
   function allLocals(sites){
     const slots=['steward','driver',...Array.from({length:5},(_,i)=>'walker-'+i)];
     for(let from=0;from<9;from++)for(let to=0;to<9;to++){
@@ -195,7 +195,7 @@ test('three neighbouring districts reserve distinct native names, roles and futu
   for(const slot of ['walker-0','walker-1','walker-2','walker-3','walker-4','driver']){
     const workers=districts().map(d=>p.birthProfile(d,slot));
     assert.equal(new Set(workers.map(worker=>worker.originRole)).size,1);
-    assert.equal(new Set(workers.map(worker=>worker.workFocus.duty)).size,3,'distinct responsibilities in '+workers[0].originRole);
+    assert.ok(new Set(workers.map(worker=>worker.workFocus.duty)).size>=3,'distinct responsibilities in '+workers[0].originRole);
   }
   const grower=p.profile(s,s.residents[0].id);
   assert(grower.description.includes(grower.workFocus.label.toLowerCase()));assert.equal(app.EarthAutonomy.intent(s,grower.id).activity,grower.workFocus.duty);

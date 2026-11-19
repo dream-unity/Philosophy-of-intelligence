@@ -35,7 +35,7 @@
 .observer-report { max-width:320px; }
 .observer-report strong { font-size:.95rem; }
 .observer-head button,.observer-dock button { flex:none; }
-body[data-observing-town] #street-stage > :not(#district-observer),
+body[data-observing-town] #street-stage > :not(#district-observer,#region-mini,#region-view),
 body[data-observing-town] :is(#actions-panel,#street-controls,#street-actors) { display:none!important; }
 body[data-observing-town] .workspace { grid-template-columns:minmax(0,1fr); }
 body[data-observing-town] .map-frame { width:100%; }
@@ -118,3 +118,15 @@ body[data-observing-town] :is(#settlement-status,#planning-details,#goal-details
 
 #observer-clock { display:none; }
 body[data-observing-town] #observer-clock { display:inline-flex; align-items:center; }
+#street-stage .district-overview { display:none; }
+#region-mini { position:absolute; z-index:21; bottom:8px; left:8px; width:clamp(66px,7vw,90px); height:58px; padding:0; border:1px solid #b3bb99; border-radius:4px; overflow:hidden; cursor:crosshair; }
+#region-mini canvas,#region-land { width:100%; height:100%; display:block; position:static; }
+#region-view { position:absolute; inset:0; z-index:20; background:#24483e; color:#f9ecd0; }
+#region-view[hidden],#region-mini[hidden] { display:none!important; }
+#region-land { touch-action:none; cursor:grab; }
+#region-view header,#region-view nav { position:absolute; display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:8px; background:#172e2bea; border-radius:4px; }
+#region-view header { top:8px; left:8px; pointer-events:none; }
+#region-view header span { font-size:.8rem; }
+#region-view nav { bottom:8px; right:8px; max-width:calc(100% - 108px); }
+#region-view nav :is(select,button) { min-height:40px; max-width:100%; background:#243e37; color:#f4e8ca; border:1px solid #779186; border-radius:4px; }
+body[data-observing-town] .observer-dock { left:104px; max-width:calc(100% - 114px); }

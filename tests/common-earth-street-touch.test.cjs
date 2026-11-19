@@ -2186,15 +2186,15 @@ test('each courtyard can be approached and inspected after sale without transfer
 });
 
 
-test('watching another town pauses the home clock and resumes the same accepted courtyard journey through a new building',()=>{
+test('seeing another town lets an accepted courtyard journey finish exactly once',()=>{
   const g=surface(740,390,{animated:true,lives:true,privateHousing:true,deferFrames:true});
   const row={...site,privateHomes:[{plot:0,stage:1,ownerId:'walker-1'}]};
   g.street.setSite(row);
   let arrivals=0,proof;
   assert(g.street.focusPrivateHome(0,p=>{arrivals++;proof=p;}));
-  g.step();const before=g.street.getState(),other=g.street.activityOf('walker-2');
+  g.step();const before=g.street.getState();
   g.observeOther('neighbour');for(let i=0;i<400;i++)g.step();
-  g.at(before.x,before.y,0);assert.equal(arrivals,0);assert.deepEqual(g.street.activityOf('walker-2'),other);
+  assert.equal(arrivals,1);
   row.privateHomes.push({plot:1,stage:1,ownerId:'walker-3'});
   g.street.setSite(row);g.observeOther(null);g.finish();
   assert.equal(arrivals,1);assert.equal(proof.homePlot,0);assert.equal(proof.actor,before.actor);

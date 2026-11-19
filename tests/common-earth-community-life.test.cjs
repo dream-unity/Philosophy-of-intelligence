@@ -250,7 +250,7 @@ test('cold, dry and freshwater regional work is drawn from the local habitat',()
   ]){
     const {home,life,sim,saved}=fixture(undefined,location);
     const neighbours=life.neighbours(sim.state,home);
-    assert.equal(neighbours.length,2);assert.ok(neighbours.every(n=>match.test(n.need+' '+n.lifestyle)));
+    assert.equal(neighbours.length,3);assert.ok(neighbours.every(n=>match.test(n.need+' '+n.lifestyle)));
     const residents=life.movingOptions(sim.state,home);assert.ok(residents.some(p=>p.place));saved();
   }
 });
@@ -550,4 +550,17 @@ test('a missed pantry handover is shown separately from the next live deadline',
   const g=fixture(),h=originalDesk(g);
   for(let i=0;i<3;i++)assert(g.sim.advance().ok);
   h.render();assert.match(h.content(),/Latest missed commitment.*no handover/);assert.match(h.content(),/Due week 7/);
+});
+
+test('all three unseen town councils can finance each era and old regions acquire the third neighbour once',()=>{
+  const original=fixture(),older=JSON.parse(original.saved());
+  older.communityLife.outposts.pop();
+  const {sim,home,saved}=fixture(JSON.stringify(older));
+  const towns=sim.state.communityLife.outposts;
+  assert.equal(towns.length,3);
+  assert.equal(fixture(saved()).sim.state.communityLife.outposts.length,3);
+  for(let i=0;i<40;i++)assert.ok(sim.advance().ok);
+  assert.equal(sim.active().id,home.id);
+  assert(towns.slice(0,3).every(t=>t.era==='Stewardship'));
+  saved();
 });

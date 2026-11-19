@@ -346,7 +346,7 @@
     let fullPixelRatio=1,motionPixelRatio=1,limitedPixelRatio=1,slowFrameCount=0;
     let frame=0,idleTimer=0,routeTimer=0,routeDelay=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
     const crossingOpen=()=>typeof document!=='undefined'&&document.body?.dataset?.districtCrossing==='true';
-    const sheetOpen=()=>!spectator&&typeof document!=='undefined'&&(crossingOpen()||Boolean(document.body?.dataset?.observingTown)||Boolean(document.body?.hasAttribute('data-sheet-open')));
+    const sheetOpen=()=>!spectator&&typeof document!=='undefined'&&(crossingOpen()||Boolean(document.body?.hasAttribute('data-sheet-open')));
     let covered=sheetOpen();
     let shortMessage='',messageUntil=0,cameraFollows=true;
     let priorPlacementView=null,overviewZoom=null,placingFocus=0,previewedPlot=null,dragging=null,pinch=null,groundCache=null;

@@ -116,13 +116,6 @@
   $('district-membership-hint')?.addEventListener('click',()=>streetHud?.openTool('neighbours'));
   const districtDesk=streetHud&&window.EarthDistrictDesk?.mount({sim,hud:streetHud,street:getStreet,
     enterStreet:()=>{if(view!=='street')setView('street',false);},redraw:redrawStreet,notify,inspectWork:openWorksite,
-    canObserve:()=>{
-      const physical=getStreet()?.getState();
-      if(sim.state.communityLife?.journey)return 'Finish the crossing before watching another town.';
-      if(physical&&(physical.travelling||physical.mode!=='walk'||physical.placement||sim.active()?.handline||document.body.hasAttribute('data-crew-order')))
-        return 'Finish the current journey or street activity before watching another town.';
-      return '';
-    },
     travel:id=>{
       if(view!=='street')setView('street',false);
       if(streetHud.openTool('neighbours'))districtPanel?.travelTo(id);
@@ -1751,7 +1744,7 @@
       b.append(node('strong','',s.name),node('small','',(homeId?(s.id===homeId?'Your home · ':'Independent district · '):'')+s.region+' · '+s.population+' residents'));
       const row=node('div','community-entry');
       row.append(b);
-      if(districtDesk&&s.id!==state.activeId)row.append(button('Watch streets',()=>{hideDialog('society-dialog');districtDesk.watch(s.id);},'secondary-button'));
+      if(districtDesk&&s.id!==state.activeId)row.append(button('See streets',()=>{hideDialog('society-dialog');districtDesk.watch(s.id);},'secondary-button'));
       if(homeId&&s.id!==homeId)return row;
       for(const action of ['restart','delete']){
         if(action==='delete'&&homeId&&state.sites.length+(state.communityLife.outposts.length||0)>1)continue;

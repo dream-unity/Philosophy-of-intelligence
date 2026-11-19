@@ -7,10 +7,12 @@
     {name:'Orchard Walk',district:'gardens',hosts:['Wren','Luca','Mae'],axis:'care',second:'stamina',need:'keeping the food rota',goods:'food',life:'quiet gardens and neighbours who share a meal',purpose:'a lunch rota for gardeners'},
     {name:'Foundry Lane',district:'works',hosts:['Ezra','Mara','Ivo'],axis:'craft',second:'numeracy',need:'repairing tools and keeping their measurements',goods:'materials',life:'shared workbenches and apprenticeships',purpose:'an open repair bench'}
   ];
+  land.push({name:'Market Cross',district:'exchange-yard',hosts:['Ari','Noor','Tess'],axis:'organisation',second:'communication',need:'coordinating deliveries between households',goods:'funds',life:'shared market days',purpose:'a district delivery rota'});
   const water=[
     {...land[0],name:'Lantern Landing',district:'landing',life:'shared meals on sheltered pontoons',purpose:'a kitchen rota between boats'},
     {...land[1],name:'Slipway Circle',district:'slipway',life:'boat repairs and cooperative rigging crews',purpose:'a teaching berth'}
   ];
+  water.push({...land[2],name:'Harbour Exchange',district:'harbour-market'});
   const founderPurposes=[
     {district:'growers-circle',suffix:'Growers’ Circle',axis:'care',second:'stamina',goods:'food',need:'keeping the seed rota and sharing the seasonal harvest',life:'shared growing rounds and a pantry held in common',purpose:'a seed-sharing kitchen'},
     {district:'repair-circle',suffix:'Repair Yard',axis:'craft',second:'numeracy',goods:'materials',need:'measuring repairs and passing on workshop techniques',life:'small repair crews who teach one apprentice at a time',purpose:'an open repair yard'},
@@ -65,6 +67,7 @@
   };
   function livelihood(d,habitat){
     const supplied=livelihoods[habitat]?.[d.goods==='food'?0:1];
+    if(d.goods==='funds'&&supplied)return {...d,need:'coordinating deliveries for crews '+supplied.need};
     return supplied?{...d,...supplied}:d;
   }
   const int=(v,min=0,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(v)&&v>=min&&v<=max;
@@ -111,7 +114,7 @@
       life:'neighbours who look after the shared stores',goods:site.specialty,purpose:'a reliable neighbourhood rota'};
   }
   function pointNear(site,index){
-    const north=index?-3.4:2.1,east=index?4.9:-2.9,lat=cap(site.lat+north/111,-89.9,89.9);
+    const north=[2.1,-3.4,5.6][index],east=[-2.9,4.9,3.2][index],lat=cap(site.lat+north/111,-89.9,89.9);
     return {lat,lon:((site.lon+east/(111*Math.max(.08,Math.cos(lat*Math.PI/180)))+540)%360)-180,water:site.water,coastal:site.coastal};
   }
   function founderSurvey(world,site){
@@ -200,7 +203,7 @@
   }
   function makeRegion(world,base,makeSite){
     const state=local(base);
-    if(state.cluster)return;
+    if(state.cluster&&state.cluster!==base.id)return;
     state.cluster=base.id;
     const catalogue=base.water?water:land,habitat=root.EarthResources?.environment?.(base);
     catalogue.forEach((template,i)=>{
@@ -209,9 +212,9 @@
       if(stores(world).some(s=>s.name===name))name=base.name+' '+name;
       if(stores(world).some(s=>s.id===id))return;
       const point=pointNear(base,i);
-      const other=makeSite({id,name,region:base.region,point,water:base.water,names:d.hosts,old:null,offer:{newPopulation:10+i}});
+      const other=makeSite({id,name,region:base.region,point,water:base.water,names:d.hosts,old:null,offer:{newPopulation:i===2?10:10+i}});
       other.specialty=d.goods;other.founded=world.week;seedHouseholds(other,other.population,world.week);
-      other.food=14-i;other.materials=9+i;other.trust=58+i*5;other.wellbeing=61-i;
+      other.food=14-i;other.materials=9+i;other.trust=i===2?55:58+i*5;other.wellbeing=61-i;
       Object.assign(local(other),{cluster:base.id,district:d.district,habitat:habitat||'mixed'});local(other).away.steward='elsewhere';
       world.communityLife.outposts.push(other);
     });
@@ -285,7 +288,7 @@
     }
     if(freshHome&&home)seedHouseholds(home,home.population-1,world.week);
     else recoverHouseholds(world,home);
-    if(home&&makeSite)makeRegion(world,home,makeSite);
+    if(makeSite)for(const base of stores(world).filter(s=>s.communityLife?.cluster===s.id||s===home))makeRegion(world,base,makeSite);
     const here=world.sites.find(s=>s.id===world.activeId);
     if(here&&here!==home){recoverHouseholds(world,here);if(makeSite)makeRegion(world,here,makeSite);}
   }

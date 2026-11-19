@@ -91,7 +91,7 @@
     const staffed=job.workerNames.length>0;
     const detail=staffed?job.workerNames.join(' and ')+(job.workerNames.length===1?' is':' are')+' on the '+job.name+' crew in '+site.name+'. Stay in active play to let the crew finish.':
       job.name+' is waiting for builders in '+site.name+'. Review the residents’ activities and offer a construction role.';
-    return {kind:'construction',siteId:site.id,jobId:job.id,label:(staffed?'Watch work on ':'Find a crew for ')+job.name,detail};
+    return {kind:'construction',siteId:site.id,jobId:job.id,label:(staffed?'See work on ':'Find a crew for ')+job.name,detail};
   }
   function buildingPromiseStep(world,site,p) {
     const alternative=['garden','workshop','hall'][p.slot];

@@ -83,7 +83,7 @@
         if(!target||!n)return;
         const m=root.EarthCommunityLife.districtProfile(sim.state,target);
         actions.replaceChildren();
-        if(watchTown)actions.append(btn('Watch streets',()=>watchTown(n.id),'Watch '+n.name+' while your character stays in '+site.name+'.'));
+        if(watchTown)actions.append(btn('See streets',()=>watchTown(n.id),'See '+n.name+' while your character stays in '+site.name+'.'));
         if(v.viewId==='steward')actions.append(btn((n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
         facts.textContent=m.population+' residents · '+m.freeBeds+' open housing places. '+m.works;
         detail.replaceChildren(heading,el('p',n.host+' is looking for help '+n.need+'. Residents value '+n.lifestyle+'.'),

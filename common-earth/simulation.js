@@ -1001,6 +1001,17 @@
       site.tech.push(tech.id);site.era=tech.era;
       return site.name+' entered the '+tech.era+' era. '+tech.info;
     }
+    function developRegionalCouncil(turn,site){
+      const next=TECH[site.tech.length];
+      if(!next||!turn.communityLife||root.EarthCommunityLife.isHome(turn,site)||site.civicInitiatives?.active?.kind==='research')return '';
+      const level=site.tech.length,goal=[1,3,6][level];
+      const floor=root.EarthCivicInitiatives?.reserve(turn,site)||{food:Math.ceil(site.population/5)*2,funds:6,materials:3};
+      const held=root.EarthNeighbourErrands?.heldGoods?.(site,turn.week)||{};
+      if(site.stats.resolved<goal||site.trust<45+level*5||site.food<floor.food+(held.food||0)||
+        site.funds<next.funds+floor.funds+(held.funds||0)||site.materials<next.materials+floor.materials+(held.materials||0))return '';
+      site.funds-=next.funds;site.materials-=next.materials;
+      return adoptResearch(site,next);
+    }
     function civicOptions(turn,site){
       const lots=Array.from({length:9},(_,i)=>i).filter(i=>i!==site.buildPlanPlot&&!occupiedLot(site,i));
       const existing=site.civicInitiatives?.active;
@@ -1728,6 +1739,8 @@
       for(const site of districts){
         settleCouncil(turn,site,transfers,event);
         settleResidents(turn,site,event);
+        const development=developRegionalCouncil(turn,site);
+        if(development)event(development,site,'council');
       }
       for(const transfer of transfers){
         const dest=byId.get(transfer.to);

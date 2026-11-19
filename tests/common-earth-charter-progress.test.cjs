@@ -212,7 +212,7 @@ test('an unstaffed apprenticeship site keeps the same lot and offers a crew befo
   assert.equal(s.actions('research').find(a=>a.id==='research:apprenticeship').available,false);
   success(s.setWorkPreference(site.residents[1].id,'build',job.id));
   const staffed=browser.EarthLegacy.guidance(s);assert.equal(staffed.jobId,job.id);
-  assert.match(staffed.label,/watch/i);assert.ok(staffed.detail.includes(site.residents[1].name));
+  assert.match(staffed.label,/see/i);assert.ok(staffed.detail.includes(site.residents[1].name));
   success(s.workConstruction(120));assert.equal(site.buildings[0].plot,7);
   assert.equal(browser.EarthLegacy.guidance(s).actionId,'research:apprenticeship');
   s.destroy();

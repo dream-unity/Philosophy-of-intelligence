@@ -136,5 +136,5 @@
     if(results.size>=32)results.delete(results.keys().next().value);
     results.set(key,{nameWater,report});return report;
   }
-  root.EarthRouteTerrain=Object.freeze({describe,arc});
+  root.EarthRouteTerrain=Object.freeze({describe,arc,waterAt(point){unpack();return sample(point).water;}});
 })(typeof window==='undefined'?globalThis:window);

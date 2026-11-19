@@ -838,8 +838,8 @@
         actions.append(press('Meet '+p.name,()=>{openTalk(subjectRef(p.id));walkTo(p.id,()=>updateContact());},false,'meet'));
         const playable=root.EarthAgency.playables?.(site).some(person=>person.id===p.id)??(p.kind==='resident'||p.kind==='steward');
         if(!foreign&&playAs&&playable&&!visitor(site,p.id)&&present(site,p.id))actions.append(press('Play as '+p.name,()=>playAs(p.id),false,'play-as'));
-        if(street()?.observePerson)actions.append(press('Watch '+p.name,()=>{
-          if(!street().observePerson(p.id)){notify('This person is unavailable to watch at the moment.');return;}
+        if(street()?.observePerson)actions.append(press('See '+p.name,()=>{
+          if(!street().observePerson(p.id)){notify('This person is unavailable to see at the moment.');return;}
           const seen=street().activityOf(p.id);if(seen)setWatch(seen);
           close(false);$('street-canvas').focus({preventScroll:true});
         },false,'watch'));

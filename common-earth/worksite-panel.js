@@ -34,9 +34,9 @@
       fields.append(node('strong','worksite-stage'),percent);
       card.append(fields,progress,node('p','worksite-eta'),node('p','worksite-crew'));
       const actions=node('div','worksite-actions');
-      actions.append(button(expanded?'Watch worksite':'Inspect worksite',()=>expanded?watch(job.id):inspect(job.id),'worksite:'+job.id));
+      actions.append(button(expanded?'See worksite':'Inspect worksite',()=>expanded?watch(job.id):inspect(job.id),'worksite:'+job.id));
       if(expanded){
-        if(job.scope==='city')actions.append(button('Watch crew on street',()=>watch(job.id,true),'watch-gate:'+job.id));
+        if(job.scope==='city')actions.append(button('See crew on street',()=>watch(job.id,true),'watch-gate:'+job.id));
         const pause=button('Pause work',async()=>{
           if(pause.dataset.pending)return;
           const next=pause.dataset.paused!=='true';
