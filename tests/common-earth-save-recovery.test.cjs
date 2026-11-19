@@ -230,3 +230,108 @@ test('larger file support preserves byte, value, depth, inert-key and simulation
   base.sites[0].funds=-1;assert.match(book.prepareImport(JSON.stringify(base)).message,/integrity check/);
   assert.equal(storage.getItem(savedKey),prior);assert.equal(book.current().id,'original');book.dispose();
 });
+
+function priorTurn(){
+  const original=runtime.CommonEarthSim.create({storage:null});
+  assert(original.found(town).ok);
+  const good=JSON.stringify(original.state);
+  assert(original.advance().ok);
+  const next=JSON.stringify(original.state);
+  original.destroy();
+  return {good,next};
+}
+test('an empty or missing primary resumes only its own previous turn and a successful action restores autosave',()=>{
+  const {good,next}=priorTurn(),key='common-earth.playthrough.v1.selected';
+  for(const missing of [true,false]){
+    const store=toggledStore(),read=[],get=store.getItem.bind(store);store.writable=true;
+    store.setItem(savedKey+'.previous',good);
+    store.setItem(key+'.previous',next);
+    if(!missing)store.setItem(key,'');
+    store.getItem=k=>{read.push(k);return get(k);};
+    const sim=runtime.CommonEarthSim.create({key,storage:store});
+    assert.deepEqual(read,[key,key+'.previous']);assert.equal(sim.state.week,2);
+    assert.equal(sim.active().name,'Hobart Commons');assert.match(sim.saveMessage,/Recovered/);
+    assert(sim.advance().ok);assert.equal(sim.saveIssue,false);sim.destroy();
+    const resumed=runtime.CommonEarthSim.create({key,storage:store});
+    assert.equal(resumed.state.week,3);assert.equal(resumed.state.sites.length,1);
+    assert.equal(store.getItem(savedKey+'.previous'),good);resumed.destroy();
+  }
+});
+test('a genuinely new world opens normally and an intentional reset overrides its complete earlier turn',()=>{
+  const store=toggledStore();store.writable=true;
+  const fresh=runtime.CommonEarthSim.create({storage:store});
+  assert.equal(fresh.saveIssue,false);assert.equal(fresh.state.sites.length,0);
+  assert(fresh.found(town).ok);assert(fresh.reset().ok);fresh.destroy();
+  assert.equal(JSON.parse(store.getItem(savedKey+'.previous')).sites.length,1);
+  const resumed=runtime.CommonEarthSim.create({storage:store});
+  assert.equal(resumed.saveIssue,false);assert.equal(resumed.state.sites.length,0);resumed.destroy();
+});
+test('a newer edition in the selected primary or its only fallback is game-locked and can be exported intact after switching',async()=>{
+  const {good}=priorTurn(),future='{"version":20,"sites":[],"newerData":"retain this edition"}';
+  for(const source of ['primary','previous']){
+    const store=toggledStore();store.writable=true;
+    if(source==='primary'){store.setItem(savedKey,future);store.setItem(savedKey+'.previous',good);}
+    else store.setItem(savedKey+'.previous',future);
+    const book=open(store);
+    for(let n=0;n<2;n++){
+      assert.match(book.sim.saveMessage,/newer edition/i);assert.equal(book.sim.found(town).ok,false);
+      assert.equal((await book.copy('Copy')).ok,false);assert.equal(book.exportWorld().text,future);
+      if(n===0){assert((await book.create('Other')).ok);assert((await book.select('original')).ok);}
+    }
+    assert.equal(store.getItem(source==='primary'?savedKey:savedKey+'.previous'),future);book.dispose();
+  }
+});
+function recoveryStore(primary,backup){
+  const previous=savedKey+'.previous',values=new Map([[savedKey,primary],[previous,backup]]),removed=[];
+  return {
+    removed,cap:Infinity,failPrimary:()=>false,unreadable:false,failVerification:false,
+    get length(){return values.size;},key:i=>[...values.keys()][i]??null,
+    getItem(k){if(k===savedKey&&this.unreadable)throw Error('Primary is unreadable');return values.get(k)??null;},
+    setItem(k,value){
+      const text=String(value),others=[...values].reduce((size,[id,v])=>size+(id===k?0:id.length+v.length),0);
+      if(k===savedKey&&this.failPrimary(text)||others+k.length+text.length>this.cap){
+        if(k===savedKey&&this.failVerification)this.unreadable=true;
+        throw Error('Storage cannot write this value');
+      }
+      values.set(k,text);
+    },
+    removeItem(k){removed.push(k);values.delete(k);}
+  };
+}
+test('a failed primary write preserves the only recovered turn and keeps the current choice available for export',()=>{
+  const {good}=priorTurn(),previous=savedKey+'.previous',broken='{"week":';
+  for(const unavailable of ['quota','write','read after write failure']){
+    const store=recoveryStore(broken,good),book=open(store);
+    assert.match(book.sim.saveMessage,/Recovered/);
+    if(unavailable==='quota')store.cap=good.length+savedKey.length+previous.length+broken.length+50;
+    else{store.failPrimary=()=>true;store.failVerification=unavailable==='read after write failure';}
+    assert(book.sim.advance().ok);assert.equal(book.sim.state.week,2);
+    assert.match(book.sim.saveMessage,/in memory.*Export/);
+    assert.equal(JSON.parse(book.exportWorld().text).world.week,2);
+    assert.equal(store.getItem(previous),good);assert(!store.removed.includes(previous));
+    book.dispose();store.unreadable=false;
+    const resumed=runtime.CommonEarthSim.create({storage:store});
+    assert.equal(resumed.state.week,1);assert.equal(resumed.state.sites.length,1);assert.match(resumed.saveMessage,/Recovered/);resumed.destroy();
+  }
+});
+test('a quota retry releases the old copy only after a healthy primary exists',()=>{
+  const {good,next}=priorTurn(),previous=savedKey+'.previous';
+  for(const primary of [good,'{"week":']){
+    const store=recoveryStore(primary,good),sim=runtime.CommonEarthSim.create({storage:store});
+    store.cap=Math.max(savedKey.length+previous.length+2*good.length,savedKey.length+next.length);
+    assert(sim.advance().ok);assert.equal(sim.saveIssue,false);
+    assert(store.removed.includes(previous));assert.equal(store.getItem(savedKey),JSON.stringify(sim.state));
+    sim.destroy();const resumed=runtime.CommonEarthSim.create({storage:store});
+    assert.equal(resumed.state.week,2);assert.equal(resumed.state.sites.length,1);resumed.destroy();
+  }
+});
+test('a repaired primary survives a second write failure and the in-memory action can be retried later',()=>{
+  const {good}=priorTurn(),previous=savedKey+'.previous',store=recoveryStore('{"week":',good);
+  const sim=runtime.CommonEarthSim.create({storage:store});
+  store.failPrimary=value=>value!==good;
+  assert(sim.advance().ok);assert(sim.saveIssue);assert.equal(store.getItem(savedKey),good);
+  assert(store.removed.includes(previous));
+  store.failPrimary=()=>false;
+  assert(sim.advance().ok);assert.equal(sim.hasDiverged,false);assert.equal(sim.saveIssue,false);
+  sim.destroy();const resumed=runtime.CommonEarthSim.create({storage:store});assert.equal(resumed.state.week,3);resumed.destroy();
+});

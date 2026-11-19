@@ -186,6 +186,7 @@
     }
     function preserveUnsaved(){
       if(!engine || !durable || backing(id)!==durable || !engine.saveIssue)return;
+      if(engine.newerSaveText && !engine.hasUnsavedChoice)return;
       const raw=get(durable,dataKey(id));
       try{if(raw && JSON.parse(raw)?.version>1 && !engine.hasUnsavedChoice)return;}catch(error){/* Keep a recovered legacy turn in memory. */}
       const state=JSON.stringify(engine.state);
@@ -282,7 +283,7 @@
       return serial(()=>{
         if(scope!==engine)return fail('The source world has changed. Choose the world to copy again.');
         scope.sync();
-        let raw=get(backing(id),dataKey(id));
+        const raw=scope.newerSaveText||get(backing(id),dataKey(id));
         try{if(raw&&JSON.parse(raw)?.version>1&&!scope.hasUnsavedChoice)return fail('A newer edition is needed to copy this world.');}catch(error){/* A recovered valid state can be copied. */}
         const sourceId=id,diverged=scope.hasDiverged;
         const result=register(name||sourceName+' copy',JSON.stringify(scope.state));
@@ -299,7 +300,7 @@
       const meta=current();
       engine.sync();
       const fileBase=(meta.name||'Common Earth').normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'').slice(0,50)||'Common-Earth';
-      const legacyRaw=get(backing(id),dataKey(id));
+      const legacyRaw=engine.newerSaveText||get(backing(id),dataKey(id));
       try{
         if(legacyRaw && JSON.parse(legacyRaw)?.version>1 && !engine.hasUnsavedChoice)return {ok:true,filename:fileBase+'-original.json',text:legacyRaw};
       }catch(error){/* Export the recovered turn. */}

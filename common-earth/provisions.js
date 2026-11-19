@@ -157,5 +157,5 @@
     return l==null||record(l)&&int(l.week,1,week)&&int(l.amount,1,2*limit)&&int(l.shortfall,l.amount)&&Array.isArray(l.contributors)&&
       l.contributors.length>=1&&l.contributors.length<=Math.min(l.amount,limit)&&new Set(l.contributors).size===l.contributors.length&&l.contributors.every(id=>actors(site,id));
   }
-  root.EarthProvisions=Object.freeze({view,run,credit,reconcile,relieve,volunteer,putByCrew,valid});
+  root.EarthProvisions=Object.freeze({view,run,credit,traced,reconcile,relieve,volunteer,putByCrew,valid});
 })(typeof window==='undefined'?globalThis:window);

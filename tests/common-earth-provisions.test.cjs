@@ -6,7 +6,7 @@ const raw=x=>JSON.parse(JSON.stringify(x));
 function town({ocean=false,autonomy=false}={}){
   let now=1700000000000;
   const ctx=vm.createContext({Date:class extends Date{static now(){return now;}},structuredClone});ctx.window=ctx;
-  const files=['shifts','personas','agency','pursuits','fisheries','provisions',...(autonomy?['careers','autonomy']:[]),'simulation'];
+  const files=['shifts','personas','agency','pursuits','fisheries','provisions','community-effects',...(autonomy?['careers','autonomy']:[]),'simulation'];
   for(const file of files)vm.runInContext(fs.readFileSync(path.join(directory,file+'.js'),'utf8'),ctx,{filename:file+'.js'});
   const map=new Map(),storage={getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v),removeItem:k=>map.delete(k)};
   const open=()=>ctx.CommonEarthSim.create({key:'earth',storage});
@@ -72,10 +72,17 @@ test('a boat catch feeds two fish crates packed by a different person and surviv
   ok(sim.fish(s.id,()=>({mode:'boat'})));
   assert.equal(s.food,original+4);
   const fisher=ctx.EarthPersonas.profile(s,'steward').name,packer=s.residents[2];
+  assert.match(ctx.EarthCommunityEffects.view(sim.state,s,'steward')[0].result,/4 food in the shared pantry/);
   ok(sim.changeActor(packer.id,proof(t)));
   ok(act(t,'pack',undefined,proof(t,'quay')));ok(act(t,'pack',undefined,proof(t,'quay')));
   assert.equal(s.food,original);assert.equal(s.provisions.receipt,undefined);
   for(const c of sim.provisionsView().crates){assert.equal(c.origin,'Fish landed by '+fisher);assert.equal(c.packedBy,packer.name);}
+  for(const id of ['steward',packer.id]){
+    const rows=ctx.EarthCommunityEffects.view(sim.state,s,id);
+    assert.equal(rows.filter(e=>e.title==='Two people stocked a provision crate').length,2);
+    assert(rows.every(e=>!e.result.includes('4 food in the shared pantry')));
+    assert.match(rows[0].result,new RegExp(fisher+' caught 2 food. '+packer.name+' packed it'));
+  }
   const saved=raw(sim.provisionsView().crates);sim.destroy();const reloaded=t.open();
   assert.deepEqual(raw(reloaded.provisionsView().crates),saved);reloaded.destroy();
 });

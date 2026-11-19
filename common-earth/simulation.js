@@ -432,6 +432,10 @@
     if(typeof raw!=='string' || !raw)return null;
     try{return migrateDetachedSave(JSON.parse(raw));}catch{return null;}
   }
+  function newerSaveText(raw){
+    if(!raw)return null;
+    try{return JSON.parse(raw)?.version>VERSION?raw:null;}catch{return null;}
+  }
   // The caller owns this detached JSON document. Opening a stored string,
   // reviewing an import and validating a proposed reset share these migrations.
   function migrateDetachedSave(saved){
@@ -473,7 +477,7 @@
     if(storage===undefined){ try { storage=root.localStorage; } catch(e){storage=null;} }
     const key=options.key || 'common-earth.world.v1';
     let world=blank(),saveIssue=!storage,saveMessage=!storage?'This browser cannot store the world between visits.':'';
-    let lastSeen=null,lastGood=null,futureSave=false,unsavedAction=false,diverged=false;
+    let lastSeen=null,lastGood=null,futureSave=null,unsavedAction=false,diverged=false;
     let actionGeneration=0,lastSyncWasWork=false,closed=false;
     const backupKey=key+'.previous',listeners=new Set();
     const current=()=>world.sites.find(s=>s.id===world.activeId)||null;
@@ -499,15 +503,21 @@
     }
     function restore(raw,preserveSelection){
       const selected=preserveSelection && world.activeId;
-      futureSave=false;
+      futureSave=null;
       let restored=readSave(raw),goodText=raw;
-      if(!restored && raw){
-        try{futureSave=JSON.parse(raw)?.version>VERSION;}catch(e){/* Try the last complete turn. */}
-        if(!futureSave){goodText=storageRead(backupKey);restored=readSave(goodText);}
-        saveIssue=true;
-        saveMessage=futureSave?'A newer edition saved this world. Reload the latest game to continue.':
-          restored?'Recovered the previous complete turn.':'The stored world could not be read. A new game is available.';
-      }else{saveIssue=!storage;saveMessage=storage?'':'This browser cannot store the world between visits.';}
+      saveMessage=storage?'':'This browser cannot store the world between visits.';
+      if(!restored){
+        futureSave=newerSaveText(raw);
+        if(!futureSave){
+          goodText=storageRead(backupKey);
+          restored=readSave(goodText);
+          if(!restored)futureSave=newerSaveText(goodText);
+        }
+        if(futureSave)saveMessage='A newer edition saved this world. Reload the latest game to continue.';
+        else if(restored)saveMessage='Recovered the previous complete turn.';
+        else if(goodText!==undefined && (raw!==null || goodText!==null))saveMessage='The stored world could not be read. A new game is available.';
+      }
+      saveIssue=!!saveMessage;
       world=restored || blank();
       if(selected && world.sites.some(s=>s.id===selected))world.activeId=selected;
       lastSeen=raw;lastGood=restored?goodText:null;
@@ -575,11 +585,20 @@
           }
           try{storage.setItem(key,text);}
           catch(e){
-            if(!storage.removeItem)throw e;
+            if(!storage.removeItem||!lastGood)throw e;
+            const primary=storageRead(key);
+            if(primary!==lastGood){
+              // A recovered backup can be the only complete turn on disk.
+              // Repair the primary first, or leave the recovery copy in place.
+              if(primary===undefined||primary!==lastSeen||storageRead(backupKey)!==lastGood)throw e;
+              storage.setItem(key,lastGood);
+              if(storageRead(key)!==lastGood)throw e;
+              lastSeen=lastGood;
+            }
             storage.removeItem(backupKey);storage.setItem(key,text);
           }
-          lastSeen=text;lastGood=text;futureSave=false;saveIssue=false;saveMessage='';unsavedAction=false;
-        }catch(e){if(!notice.construction)unsavedAction=true;saveIssue=true;saveMessage='This turn is in memory. The browser could not save it for a later visit.';}
+          lastSeen=text;lastGood=text;futureSave=null;saveIssue=false;saveMessage='';unsavedAction=false;
+        }catch(e){if(!notice.construction)unsavedAction=true;saveIssue=true;saveMessage='This turn is in memory. Export it from Saved worlds to keep it for a later visit.';}
       }
       notify(false,notice);
       return null;
@@ -2051,7 +2070,7 @@
       }
     }
     return {
-      ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
+      ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get newerSaveText(){return futureSave;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
       buildPlanView,active:current,liveWeekHold,marketView,purseView:id=>root.EarthPurses?.view(world,current(),id),provisionsView,civicView:()=>root.EarthCivicInitiatives?.view(world,current()),truckView:()=>root.EarthFleet?.view(world,current()),regularTruckView:()=>root.EarthFleet?.regular(world,current()),handlineOffer,fishingOffer,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,courseCalendar,perform,sync,
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
       destroy(){closed=true;listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}

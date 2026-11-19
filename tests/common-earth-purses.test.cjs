@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const source=process.env.COMMON_EARTH_GAME_DIR||path.resolve(__dirname,'../common-earth');
 function setup(){
   const c=vm.createContext({});c.window=c;
-  for(const f of ['personas','careers','local-projects','autonomy','agency','market','purses','simulation'])
+  for(const f of ['personas','careers','local-projects','autonomy','agency','market','purses','community-effects','simulation'])
     vm.runInContext(fs.readFileSync(path.join(source,f+'.js'),'utf8'),c,{filename:f+'.js'});
   const disk=new Map(),create=()=>c.CommonEarthSim.create({storage:{getItem:k=>disk.get(k)??null,setItem:(k,v)=>disk.set(k,v)}});
   const sim=create();assert(sim.found({name:'Stone Town',lat:-6.16,lon:39.19}).ok);
@@ -62,6 +62,13 @@ test('jobs stay with their people across handoffs, vacancies are finite, and poo
   ok(act(t,'donate'));ok(act(t,'donate'));assert.equal(t.sim.purseView().household,3);assert.equal(t.sim.purseView().balance,0);
   const food=s.food,stock=s.exchange.shelf.food;ok(act(t,'household'));assert.equal(s.food,food+1);assert.equal(s.exchange.shelf.food,stock-1);
   assert.equal(t.sim.purseView().household,0);assert.match(s.exchange.history[0].text,/household/);
+  const effects=t.c.EarthCommunityEffects.view(w,s);
+  const pledge=effects.find(e=>e.title==='Neighbours pooled money for food'),purchase=effects.find(e=>e.title==='Household funds bought pantry food');
+  assert.deepEqual(Array.from(pledge.people,p=>p.id).sort(),['steward','walker-0']);
+  assert.match(pledge.result,/gave 2 personal funds/);assert.match(pledge.result,/gave 1 personal fund\./);
+  assert.deepEqual(Array.from(purchase.people,p=>p.id),['steward']);
+  assert.match(purchase.result,/3 household funds for 1 shelf food/);assert.doesNotMatch(purchase.result,/Purse now|fund now/);
+  assert(!t.c.EarthCommunityEffects.view(w,s,'driver').some(e=>/pooled|Household funds/.test(e.title)));
   assert.deepEqual(wealth(t),initial);assert.equal(t.sim.purseView('walker-0').balance,1);assert.equal(t.sim.purseView('driver').balance,0);
   assert.equal(s.funds,16);assert.ok(t.c.CommonEarthSim.readSave(JSON.stringify(w)));reload(t);assert.deepEqual(wealth(t),initial);t.sim.destroy();
 });
