@@ -125,16 +125,20 @@ body[data-observing-town] #observer-clock { display:inline-flex; align-items:cen
 /* Map shortcuts and street tabs share normal document flow outside the canvas.
    Every group can wrap as the map column narrows or the player enlarges text. */
 #street-navigation {
-  display:flex; flex-wrap:wrap; align-items:stretch; gap:6px; padding:6px 8px;
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 8px;
+  container:street-navigation / inline-size;
   background:#14292d; color:#f5efde; border-top:1px solid #52675b;
 }
 #street-navigation[hidden] { display:none; }
-.region-shortcuts { display:flex; align-items:stretch; gap:4px; }
+.region-shortcuts { display:flex; align-items:center; gap:4px; }
 #region-mini { width:clamp(66px,7vw,100px); height:48px; padding:0; align-self:center; border:1px solid #aabd9e; border-radius:4px; overflow:hidden; cursor:crosshair; }
 #region-mini canvas { width:100%; height:100%; display:block; }
-#region-open { padding:5px 10px; border:1px solid #aabd9e; border-radius:4px; background:#203c35; color:#fff0cf; cursor:pointer; }
-#street-navigation .scene-tools { display:flex; flex-wrap:wrap; }
-#street-navigation .scene-strip { flex:1 1 24rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,7.25rem),1fr)); }
+#region-open { min-height:48px; padding:5px 10px; border:1px solid #aabd9e; border-radius:4px; background:#203c35; color:#fff0cf; cursor:pointer; }
+#street-navigation .scene-tools { display:flex; flex:1 1 auto; flex-wrap:wrap; }
+#street-navigation .scene-strip { flex:2 1 30rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,7.25rem),1fr)); }
+@container street-navigation (max-width:29rem) {
+  #street-navigation .scene-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
 #street-navigation :is(.scene-tools,.scene-strip) { position:static; min-width:0; max-width:none; }
 #street-navigation .scene-tools button { flex:1 1 auto; padding:6px 10px; font-size:.88rem; }
 #street-navigation :is(.scene-tools,.scene-strip) button { min-height:44px; }
