@@ -18,7 +18,7 @@ const site = {
   buildings: [{ id: 'hall-1', kind: 'hall', name: 'Cooperative Hall', plot: 4 }]
 };
 
-function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onState, waterfront, getWeek, getRegularRun, onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,landmarks,membership,visible=false,working,onNeighbourHelp,resources,spectator=false,getWorld,privateHousing=false}={}) {
+function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onStowLine, onState, waterfront, getWeek, getRegularRun, onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,landmarks,membership,visible=false,working,onNeighbourHelp,resources,spectator=false,getWorld,privateHousing=false}={}) {
   const pointerEvents = new Map();
   let frame = null;
   let now = 100, timerId = 0;
@@ -82,7 +82,7 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
   const placed = [], previews = [], assignments = [], targetLists = [];
   const street = runtime.window.EarthStreet.mount(canvas, {
     spectator,getWorld,onObservation: current => observations.push(current),
-    onFishingMark,getWeek,getRegularRun,onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,onNeighbourHelp,onState: state => {updates.push(state);onState?.(state);},
+    onFishingMark,onStowLine,getWeek,getRegularRun,onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,onNeighbourHelp,onState: state => {updates.push(state);onState?.(state);},
     onHandcart: () => handcarts.push(true),
     onInteract: event => encounters.push(event),
     onHint: text => hints.push(text),
@@ -2213,5 +2213,22 @@ test('a coastal resident shows the real fishing session at the quay and distingu
   g.street.setConstruction({workers:[{...work,activity:'usual',x:9,y:23.04,workplace:{label:'Mira’s doorstep',x:9,y:23.04},initiative:null,completedOuting:true}],jobs:[]});
   const restOfDay=g.street.activityOf(id);
   assert.equal(restOfDay.completedSession,intent.activity);assert.equal(restOfDay.venue,'Mira’s doorstep');assert.notEqual(restOfDay.goal,intent.title);
+  g.street.destroy();
+});
+
+test('tablet movement stows a line and an arriving driver can steer and park',()=>{
+  const town={...site,handline:{mode:'walk',castAt:123,x:8,y:24,food:1}};
+  const g=surface(1100,680,{onStowLine:(id,castAt)=>{
+    assert.equal(id,town.id);assert.equal(castAt,123);delete town.handline;
+  }});
+  g.street.setSite(town);
+  g.street.recenter();g.street.zoomBy(1.1);assert.ok(town.handline);
+  g.street.holdMove('right');g.street.releaseMove('right');assert.equal(town.handline,undefined);
+  g.street.setSite({...site,id:'next-town'});
+  g.street.arriveByVan();assert.equal(g.street.getState().vehicle,'van');
+  const saved=g.street.snapshotView();assert.ok(g.street.restoreView(saved));
+  const screen=g.interactionFrame();g.tap(screen(12.3,24.4));g.finish();
+  assert.equal(g.street.getState().mode,'drive');
+  assert.ok(g.street.toggleVehicle());assert.equal(g.street.getState().mode,'walk');
   g.street.destroy();
 });

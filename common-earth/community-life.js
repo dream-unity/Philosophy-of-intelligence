@@ -359,7 +359,6 @@
   }
   function journeyBlock(site){
     if(site.shift)return 'Finish the shared day before travelling.';
-    if(site.handline)return 'Reel in or put away the line before travelling.';
     if(site.purses?.tickets?.steward)return 'Finish or cancel the paid stock check before leaving the district.';
     if(site.fleet?.custody?.actor==='steward')return 'Return the co-op vehicle before setting off.';
     return '';
@@ -1104,7 +1103,7 @@
   }
   function permission(world,site,cmd,args=[]){
     const a=world.communityLife;if(!a||!site)return '';
-    if(cmd==='production')return '';
+    if(cmd==='production'||cmd==='stowHandline')return '';
     if(a.journey&&!['communityLife','reset','workConstruction'].includes(cmd))return 'You are on the road. Open Towns to arrive or turn back.';
     if(cmd==='manageSite'){
       if(args[0]!==a.homeId)return 'This district governs itself. Only members can alter their home community.';
@@ -1129,7 +1128,7 @@
   function trail(world,trip){
     const from=lookup(world,trip.from),to=lookup(world,trip.to),via=trip.via||'commons';
     if(!from||!to)return null;
-    const distant=trip.km>70,water=from.water||to.water,goods=kind(to).goods;
+    const distant=trip.km>70,water=trip.vehicle!=='van'&&(from.water||to.water),goods=kind(to).goods;
     const titles=distant?['Departure concourse',via==='work'?'Freight interchange':'Regional stop','Arrivals board']:
       water?['Mooring gate',via==='work'?'Repair pontoons':'Sheltered channel','Landing steps']:
       ['Exchange gate',via==='work'?'Tool yard':'Kitchen gardens','District noticeboard'];
@@ -1143,7 +1142,7 @@
   }
   function continueTrip(trip,progress,target){
     const time=Date.now();trip.base=progress;trip.start=time;
-    trip.finish=time+Math.max(100,Math.round(cap(trip.km*650,2400,6200)*(1-progress)));
+    trip.finish=time+Math.max(100,Math.round(cap(trip.km*650,2400,6200)*(trip.vehicle==='van'?.45:1)*(1-progress)));
     delete trip.stop;delete trip.hold;
     if(target==='pause')trip.hold=progress;
     else if(target!=='direct'&&Number.isInteger(target))trip.stop=target;
@@ -1155,14 +1154,17 @@
     const home=lookup(world,a.homeId),c=local(site),receipt=text=>({ok:true,message:writeLog(site,world.week,text)});
     const at=id=>scene?.siteId===site.id&&scene.actor==='steward'&&scene.mode==='walk'&&scene.target===id&&
       [scene.x,scene.y,scene.tx,scene.ty].every(Number.isFinite)&&Math.hypot(scene.x-scene.tx,scene.y-scene.ty)<=1.56;
-    if(req.action==='depart'||req.action==='walkTrail'){
+    const driving=req.action==='driveTrail';
+    if(driving||req.action==='depart'||req.action==='walkTrail'){
       if(a.journey)return fail('A journey is already under way.');
-      if(!at('market'))return fail('Walk to the exchange path to start the crossing.');
+      if(driving && !(scene?.siteId===site.id&&scene.actor===req.actor&&scene.mode==='drive'&&scene.vehicle==='van'))return fail('Board the public van to drive to another town.');
+      if(!driving&&!at('market'))return fail('Walk to the exchange path to start the crossing.');
       const block=journeyBlock(site);if(block)return fail(block);
       const dest=neighbours(world,site).find(n=>n.id===req.target);
       if(!dest)return fail('Choose a reachable neighbouring district.');
       const start=Date.now(),duration=Math.round(cap(dest.distance*620,1600,6200));
-      a.journey={from:site.id,to:dest.id,start,finish:start+duration,km:dest.distance};
+      a.journey={from:site.id,to:dest.id,start,finish:start+(driving?Math.round(duration*.45):duration),km:dest.distance};
+      if(driving)Object.assign(a.journey,{vehicle:'van',interactive:true,via:'commons',seen:[]});
       if(req.action==='walkTrail')Object.assign(a.journey,{interactive:true,via:'commons',stop:0,seen:[]});
       return {ok:true,message:a.profile.name+' set out for '+dest.name+'.',journey:true};
     }
@@ -1206,7 +1208,7 @@
         const book=local(dest);book.pathVisits={week:world.week,seen:trip.seen.length,from:site.id};
       }
       a.journey=null;arrive(world,site,dest,makeSite);
-      return {ok:true,arrived:true,message:writeLog(dest,world.week,a.profile.name+' arrived in '+dest.name+(isHome(world,dest)?' and returned to their home.':' as a visitor. '+hostFor(dest).name+' speaks for the admissions meeting.'))};
+      return {ok:true,arrived:true,vehicle:trip.vehicle,message:writeLog(dest,world.week,a.profile.name+' arrived in '+dest.name+(isHome(world,dest)?' and returned to their home.':' as a visitor. '+hostFor(dest).name+' speaks for the admissions meeting.'))};
     }
     if(a.journey)return fail('Finish the current crossing first.');
     if(req.action==='hearResident'){
@@ -1325,6 +1327,7 @@
     if(a.journey!=null){
       const t=a.journey;
       if(!obj(t)||t.from!==world.activeId||t.from===t.to||!ids.has(t.to)||!int(t.start)||!int(t.finish,t.start,t.start+6200)||!Number.isFinite(t.km)||t.km<0)return false;
+      if(t.vehicle!=null&&t.vehicle!=='van')return false;
       if(t.base!=null&&(!Number.isFinite(t.base)||t.base<0||t.base>1)||t.hold!=null&&(!Number.isFinite(t.hold)||t.hold<0||t.hold>1)||
          t.stop!=null&&!int(t.stop,0,2)||t.via!=null&&!['commons','work'].includes(t.via)||t.seen!=null&&(!Array.isArray(t.seen)||t.seen.length>3||!t.seen.every(i=>int(i,0,2))))return false;
     }

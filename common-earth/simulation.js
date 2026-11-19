@@ -2269,6 +2269,12 @@
       return complete('District production settled.',current(),false);
     }
     const commands={
+      stowHandline:guarded((siteId,castAt)=>{
+        const site=current();
+        if(!site?.handline||site.id!==siteId||site.handline.castAt!==castAt)return reject('That cast has changed.');
+        delete site.handline;
+        return complete('Fishing line put away.',site,false);
+      }),
       production:guarded(runProduction),
       neighbourAppointment:guarded((quote,guard)=>{
         const site=current(),proof=typeof guard==='function'?guard():guard;
@@ -2309,6 +2315,22 @@
       beginVoyage:guarded(beginVoyage),sail:guarded(sail),reclaim:guarded(reclaim),
       reset:guarded(()=>{world=blank();return save() || {ok:true,message:'A new world is ready.'};},true)
     };
+    // Personal actions replace a cast in the same save as the new activity.
+    // Calendar ticks, civic decisions and autonomous work can run while fishing.
+    for(const name of ['act','converse','changeActor','communityLife','visit','useTruck','exchange','purseAction',
+      'lifeAction','studyTerm','pursue','provision','beginShift','arriveShift','chooseShift','finishShift','beginVoyage']){
+      const operation=commands[name];
+      commands[name]=guarded((...args)=>{
+        const site=current(),line=site?.handline;
+        if(!line)return operation(...args);
+        delete site.handline;
+        try{
+          const result=operation(...args);
+          if(!result?.ok)site.handline=line;
+          return result;
+        }catch(error){site.handline=line;throw error;}
+      });
+    }
     if(root.EarthCommunityLife)for(const [name,operation] of Object.entries(commands)){
       commands[name]=(...args)=>{
         const reason=root.EarthCommunityLife.permission(world,current(),name,args);

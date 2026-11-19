@@ -123,9 +123,9 @@
   const districtPanel=window.EarthCommunityLifeUI?.mount($('scene-neighbours'),{sim,getStreet,atVenue,meet:meetForLife,playAs:id=>agencyUI?.playAs(id),
     watchTown:id=>districtDesk?.watch(id),
     refresh:redrawStreet,notify:(message,error)=>streetHud?.notify(message,error),
-    arrive:site=>{
+    arrive:(site,vehicle)=>{
       arrivalVersion++;cancelPlacement();street?.cancelTravel?.();encounter=null;visiting=null;peers=false;viewingShift=false;group='people';
-      selectPlace(site,false);setView('street',false);redrawStreet();streetHud?.openTool('neighbours',null,false);
+      selectPlace(site,false);setView('street',false);redrawStreet();if(vehicle==='van')street?.arriveByVan();streetHud?.openTool('neighbours',null,false);
     }});
   if(districtPanel)streetHud?.registerTool('neighbours',districtPanel);
   const originalLife=window.EarthOriginalLife?.mount($('scene-original'),{sim,playAs:sceneHandoff,
@@ -725,7 +725,9 @@
           if($('actions-list').querySelector('.worksite-proposal'))works?.proposal($('actions-list'),placement,plot);
           put('street-hint',preview.available?preview.text+' Choose Commission on plot '+(plot+1)+' to start work.':preview.reason);
         },
+        onStowLine:(id,castAt)=>sim.stowHandline(id,castAt),
         onState:state=>{
+          districtPanel?.render();
           put('street-location',state.mode==='boat'?'Harbour waters':state.nearby?.label||'Local district');
           const driving=state.mode==='drive';
           updateStreetInteract(state);

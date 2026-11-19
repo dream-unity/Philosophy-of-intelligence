@@ -591,3 +591,21 @@ test('visible production settles all four settlements while the calendar waits, 
   }
   assert(context.EarthDistrictGrowth.members(home).every(p=>context.EarthDistrictGrowth.goal(home,p).points>0));
 });
+
+test('a driver can depart with a cast out, reopen the journey and arrive by van',()=>{
+  const {sim,life,home,saved}=fixture(),dest=life.neighbours(sim.state,home)[0];
+  const request={site:home.id,actor:'steward',week:sim.state.week,action:'driveTrail',target:dest.id};
+  const driver={siteId:home.id,actor:'steward',mode:'drive',vehicle:'van'};
+  home.handline={mode:'walk',castAt:100000,x:5,y:5,food:1};
+  const food=home.food;
+  assert.equal(sim.communityLife(request,{...driver,vehicle:'truck'}).ok,false);
+  assert.ok(home.handline);
+  assert.ok(sim.communityLife(request,driver).ok);
+  assert.equal(home.handline,undefined);
+  assert.equal(home.food,food);
+  const resumed=fixture(saved());
+  resumed.wait(7000);
+  const result=resumed.doAction('arrive',dest.id);
+  assert.equal(result.arrived,true);assert.equal(result.vehicle,'van');
+  assert.equal(resumed.sim.active().id,dest.id);
+});

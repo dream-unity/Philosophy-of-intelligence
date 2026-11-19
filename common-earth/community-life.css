@@ -38,3 +38,6 @@ body[data-district-crossing] :is(#street-controls,#street-actors,#actions-panel,
 .district-destinations select{display:block;width:100%;max-width:100%;min-height:2.55rem;font:inherit}
 .district-destinations .district-options button{flex:1 1 auto;min-height:2.6rem}
 .district-destinations details{margin-top:.45rem}
+
+.trail-traveller.trail-van{width:1.55rem;height:.79rem;border-radius:.22rem .42rem .15rem .15rem;background:linear-gradient(90deg,#376964 60%,#bedcd5 61%);transform:translate(-50%,-100%)}
+.trail-traveller.trail-van::before{top:auto;bottom:-.28rem;left:.12rem;width:.32rem;height:.32rem;background:#27332e;box-shadow:.86rem 0 #27332e}

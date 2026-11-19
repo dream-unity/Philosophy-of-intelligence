@@ -1341,7 +1341,7 @@
         return sail({...spot,fishingLine:true});
       }
       const nearest=berths.reduce((a,b)=>dist(state.player,landing(a))<=dist(state.player,landing(b))?a:b);
-      if(state.mode==='drive'){toggleVehicle();if(state.mode!=='walk')return false;}
+      if(state.mode==='drive'){toggleVehicle(cameraFollows,Boolean(cast));if(state.mode!=='walk')return false;}
       const destination=cast||landing(nearest);
       return navigate(destination,{type:cast?'fishingLine':'fishingQuay',x:destination.x,y:destination.y,onArrival:target==='shore'?onArrival:null});
     }
@@ -4216,7 +4216,7 @@
     }
     function useSeat(){
       if(!state.site||state.placed||state.mode!=='walk')return false;
-      if(seatedAt)return standUp();
+      putAwayLine();if(seatedAt)return standUp();
       const seats=fixtures.filter(q=>q.kind==='bench').sort((a,b)=>dist(state.player,a)-dist(state.player,b));
       for(const seat of seats)if(useFixture(seat))return true;
       return false;
@@ -4268,7 +4268,9 @@
         message(state.mode==='drive'?'Tap a road inside the district to drive there.':'Tap open ground or a doorstep inside the district.');
         emitState();return false;
       }
+      const fishing=arrival?.castAt!=null||['fishingLine','fishingQuay'].includes(arrival?.type);
       if(dist(free,state.player)<.16){
+        if(!fishing)putAwayLine();
         if(arrival)choose(arrival);else emitState();
         return true;
       }
@@ -4283,6 +4285,7 @@
       }
       lastFrame=0;
       if(state.mode==='drive'&&!traversable(target,true))message('Nearest road selected. Tap another road to change course.');
+      if(!fishing)putAwayLine();
       state.route=route;state.destination=free;state.arrival=arrival;emitState();return true;
     }
     function sail(target,returning=false,castAt,onArrival){
@@ -4298,6 +4301,7 @@
       path.push({x:target.x,y:target.y});
       if(path.some((q,i)=>!clearWater(i?path[i-1]:p,q,embarked)))path=waterDetour(p,target,embarked);
       if(!path.length){message('The moored boats block that approach. Choose open water.');emitState();return false;}
+      if(!target.fishingLine&&!target.shoal&&castAt==null)putAwayLine();
       state.route=path;state.destination=path[path.length-1];
       if(target.shoal)state.destination.shoal=true;
       if(target.fishingLine)state.destination.fishingLine=true;
@@ -4321,14 +4325,25 @@
       if(state.placed){const l=state.lots.find(q=>q.plot===placingFocus);if(vacant(l))options.onPlace?.({plot:l.plot,x:l.x,y:l.y});return vacant(l);}
       if(seatedAt)return standUp();
       const q=nearest()||companionPoint();
-      if(q){stop();pressed.clear();choose(q);return true;}
+      if(q){putAwayLine();stop();pressed.clear();choose(q);return true;}
       if(state.mode==='walk'&&dist(state.van,state.player)<1.6)return toggleVehicle();
       message(state.mode==='drive'?'Park by a doorstep or venue marker, then choose Interact.':'Walk to a marker to meet someone or use a venue.');return false;
     }
-    function toggleVehicle(followCamera=cameraFollows) {
+    function putAwayLine(){
+      if(state.site?.handline)options.onStowLine?.(state.site.id,state.site.handline.castAt);
+    }
+    function arriveByVan(){
+      stop();clearInput();standUp(false);embarked=null;clearCatch();
+      state.mode='drive';drivingTruck=false;setParkedVan();
+      const entrance=vanAtExchange();
+      state.player={...entrance,...closestFree(entrance,true)};
+      state.van={...state.player};clearTrafficSpawn();recenter();updateNearby();emitState();
+    }
+    function toggleVehicle(followCamera=cameraFollows,returningToLine=false) {
       if(drivingTruck){message('Use dispatch to park or return the co-op truck.');options.onTruckInteract?.();return false;}
       if(!state.site||!shoreOnly())return false;
       if(state.placed)setPlacement(null);
+      if(!returningToLine)putAwayLine();
       standUp(false);stop();pressed.clear();const p=state.player;
       if(state.mode==='drive'){
         state.van={...p};state.mode='walk';setParkedVan();
@@ -4343,6 +4358,7 @@
     }
     function manual(dx,dy,length) {
       if(!dx&&!dy)return false;
+      putAwayLine();
       standUp(false);
       const mag=Math.hypot(dx,dy),px=dx/mag,py=dy/mag,p=state.player;
       let candidate=add(p,px*length,py*length);
@@ -5559,7 +5575,7 @@
     }
     if(spectator)return Object.freeze({observedRoute,setSite,setConstruction,observePerson,activityOf,personAnchor,zoomBy,toggleOverview,recenter,resize,destroy,
       getState:()=>({siteId:state.site?.id||null,observedId,zoom,overview:overviewZoom!==null,mode:'observe'})});
-    return {observedRoute,focusPrivateHome,privateHomeProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {arriveByVan,observedRoute,focusPrivateHome,privateHomeProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

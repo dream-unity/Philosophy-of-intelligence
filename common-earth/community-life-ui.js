@@ -20,7 +20,7 @@
       try{
         const result=await sim.perform('communityLife',{action,target,site:site.id,actor,week:sim.state.week},proof);
         resultText(result.message||'');
-        if(result.arrived)arrive(sim.active());
+        if(result.arrived)arrive(sim.active(),result.vehicle);
         else if(result.ok)refresh();
         notify?.(lastResult,!result.ok);key='';render();
       }finally{busy=false;}
@@ -28,6 +28,10 @@
     function station(action,target,ref,label){
       const site=sim.active(),local=getStreet(),actor=root.EarthAgency.actorId(site),week=sim.state.week;
       if(!local||actor!=='steward')return issue('Return to your original character before making this decision.');
+      if(action==='walkTrail'&&local.getState().vehicle==='van'){
+        local.cancelTravel();
+        return command('driveTrail',target,()=>local.getState());
+      }
       if(local.getState().mode==='drive'&&local.getState().vehicle!=='truck')local.toggleVehicle();
       if(local.getState().mode!=='walk')return issue('Return the vehicle or come ashore before this visit.');
       const weekHere=()=>sim.active()?.id===site.id&&root.EarthAgency.actorId(sim.active())===actor&&sim.state.week===week&&getStreet()===local;
@@ -84,7 +88,7 @@
         const m=root.EarthCommunityLife.districtProfile(sim.state,target);
         actions.replaceChildren();
         if(watchTown)actions.append(btn('See streets',()=>watchTown(n.id),'See '+n.name+' while your character stays in '+site.name+'.'));
-        if(v.viewId==='steward')actions.append(btn((n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
+        if(v.viewId==='steward')actions.append(btn((getStreet()?.getState()?.vehicle==='van'?'Drive there':n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
         facts.textContent=m.population+' residents · '+m.freeBeds+' open housing places. '+m.works;
         detail.replaceChildren(heading,el('p',n.host+' is looking for help '+n.need+'. Residents value '+n.lifestyle+'.'),
           el('p',m.food+' food · '+m.materials+' materials · '+m.funds+' town funds.'));
@@ -102,7 +106,7 @@
       if(!site||!c||!c.journey)path?.hide();
       if(!site||!c||host.hidden)return;
       if(lastResult&&(resultWeek!==state.week||resultSite!==site.id))lastResult='';
-      const stamp=[site.id,state.week,state.actionRevision,root.EarthAgency.actorId(site),Boolean(c.journey&&Date.now()>=c.journey.finish),lastResult].join('|');
+      const stamp=[getStreet()?.getState()?.vehicle,site.id,state.week,state.actionRevision,root.EarthAgency.actorId(site),Boolean(c.journey&&Date.now()>=c.journey.finish),lastResult].join('|');
       if(stamp===key)return;
       key=stamp;
       const v=root.EarthCommunityLife.view(state,site);

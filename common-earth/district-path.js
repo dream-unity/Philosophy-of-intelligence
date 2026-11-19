@@ -136,7 +136,7 @@
       world=sim.state;const fresh=world.communityLife?.journey;if(!fresh)return hide();
       if(frame)root.cancelAnimationFrame(frame);
       trip=fresh;model=root.EarthCommunityLife.trail(world,trip);if(!model)return hide();
-      host.hidden=false;title.textContent=model.from+' to '+model.to;setCrossing(true);
+      host.hidden=false;marker.classList.toggle('trail-van',trip.vehicle==='van');title.textContent=(trip.vehicle==='van'?'Driving from ':'')+model.from+' to '+model.to;setCrossing(true);
       if(!markers.length){
         markers=model.landmarks.map((_,i)=>{
           const p=pin('',i,()=>{
