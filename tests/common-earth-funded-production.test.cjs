@@ -254,7 +254,7 @@ test('changing one remembered employment relationship changes a real hiring deci
     const prior=g.snapshot(),round=g.home.growth?.round||0;
     await g.step();
     for(const site of all(g)){
-      const picked=site.growth.households.find(h=>h.order?.kind==='retail'&&h.order.phase==='collect'&&h.order.stageRound===round+1);
+      const picked=site.growth.households.find(h=>h.order?.kind==='retail'&&h.order.phase==='collect'&&h.order.stageRound===round+1&&h.order.person!==h.order.employerId&&g.runtime.EarthAutonomy.bond(site,h.order.person,h.order.employerId,g.sim.state.week)===0);
       if(picked){before=prior;accepted={...picked.order};district=site.id;break;}
     }
   }

@@ -72,7 +72,7 @@ test('one missing material prevents the contract, which later pays a named build
 test('a hostile watch commits a paid resident, fights on regional time and changes jurisdiction without transferring a private deed',()=>{
   const run=region(),{w,ctx,watch}=run;
   assert.ok(ctx.EarthBorderConflict.profile(watch).expansionist);
-  const ids=new Set(),encounters=[];
+  const ids=new Set(),encounters=[],contested=new Set();
   let claim=null;
   for(let i=0;i<100&&!claim;i++){
     run.production();if(i%4===3)run.week();
@@ -80,12 +80,14 @@ test('a hostile watch commits a paid resident, fights on regional time and chang
     if(campaign){
       ids.add(campaign.attacker.key);
       if(campaign.phase==='fight'){
-        encounters.push(campaign.defender.key);
+        encounters.push(campaign.defender.key);contested.add(campaign.cell);
         const actors=ctx.EarthRegionalWorld.travellers(w,watch).filter(a=>a.phase==='fighting');
         assert.ok(actors.find(p=>p.personId===campaign.attacker.id));
       }
     }
-    claim=Object.values(w.regionalWorld.regions[run.sim.active().id].parcels).find(p=>p.occupation&&p.charter===watch.id);
+    // An earlier undefended occupation need not have involved a fight.
+    const parcels=w.regionalWorld.regions[run.sim.active().id].parcels;
+    claim=[...contested].map(cell=>parcels[cell]).find(p=>p?.occupation&&p.charter===watch.id);
     run.save();
   }
   assert.ok(ids.size);assert.ok(encounters.length);assert.ok(claim);
@@ -170,4 +172,22 @@ test('an autonomous council turns a vacant street lot into staffed premises usin
   vm.runInContext(fs.readFileSync(path.join(directory,'development-ledger.js'),'utf8'),ctx,{filename:'development-ledger.js'});
   const ledger=ctx.EarthDevelopmentLedger.records(w,market).find(r=>r.title.startsWith('Cooperative provisions store')&&r.kind==='Cooperative enterprise');
   assert(ledger.people.some(p=>p.id===sale.lastSale.clerk));assert(ledger.people.some(p=>p.id===sale.lastSale.buyer));
+});
+
+test('a resident turns earnings and a council advance into a working shop, then repays the town from sales',()=>{
+  const seed=region().save(),a=region(seed),b=region(seed),town=a.market,ledger=a.ctx.EarthDistrictGrowth;
+  let owner=null,loan=0,repayment=0,receipt;
+  for(let i=0;i<80&&!repayment;i++){
+    for(const f of [a,b]){f.production();if(i%3===2)f.week();}
+    a.ctx.EarthHousing.view(a.w,town);
+    const rows=ledger.transfers(town.growth.history[0]);
+    for(const entry of rows){
+      if(!owner&&entry.reason==='Council financed part of the first commercial deed'){owner=entry.to;loan=entry.amount;}
+      if(owner&&entry.reason==='Retail payment'&&entry.to===owner)receipt=entry;
+      if(owner&&entry.reason==='Commercial deed repayment'&&entry.from===owner)repayment+=entry.amount;
+    }
+  }
+  assert.ok(owner&&loan>0&&receipt&&repayment,'a funded commercial deed, completed sale and repayment');
+  const shop=town.growth.households.find(h=>h.name===owner&&h.shop);
+  assert.ok(shop);assert.equal(shop.shopDebt,loan-repayment);assert.equal(a.save(),b.save());
 });
