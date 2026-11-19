@@ -19,55 +19,53 @@
     body.className='town-centre-body';status.setAttribute('role','status');
     arrivalTitle.hidden=true;history.append(arrivalTitle);
     forms.append(regional,random,targeted);body.append(labelled('Community',place),summary,policy,forms,history);host.append(body);
-    const relations=element('section'),other=element('select'),terms=element('p'),defences=element('p');
-    const negotiate=button('',()=>takeDecision()),accept=button('Agree to peace',()=>submit('peace')),cancel=button('Cancel talks',()=>{proposal='';renderRelations();});
-    relations.append(element('h3','Diplomacy'),labelled('Other community',other),terms,negotiate,accept,cancel,defences);
-    body.insertBefore(relations,forms);
-    let proposal='',optionsKey='',lastSelection='';
-    function renderRelations(){
-      const w=sim.state,home=root.EarthCommunityLife.lookup(w,w.communityLife?.homeId);
-      if(!home){relations.hidden=true;return;}relations.hidden=false;
-      const towns=[...w.sites,...w.communityLife.outposts].filter(t=>t!==home);
-      const key=towns.map(t=>t.id+'|'+t.name).join('/');
-      if(optionsKey!==key){other.replaceChildren(...towns.map(t=>option(t.id,t.name)));optionsKey=key;}
-      if(lastSelection!==selected){
-        if(selected!==home.id)other.value=selected;
-        lastSelection=selected;proposal='';
-      }
-      const target=towns.find(t=>t.id===other.value)||towns[0];
-      const war=target&&root.EarthBorderConflict.relation(w,home.id,target.id)?.war;
-      const talking=war&&proposal===target.id;
-      terms.textContent=!target?'No other communities have been founded.':talking?
-        'Both councils will recall their expeditions, return occupied parcels and reopen passage.':home.name+' and '+target.name+(war?' are at war.':' are at peace.');
-      negotiate.textContent=war?'Negotiate peace':'Declare war';
-      negotiate.disabled=busy||!target;negotiate.hidden=!!talking;accept.hidden=cancel.hidden=!talking;accept.disabled=busy;
-      const site=current(),fort=site.communityLife?.border?.defences;
-      defences.hidden=!fort;
-      if(fort)defences.textContent=site.name+' · '+['Walls and gates planned','First wall section built','Second wall section built','Perimeter walls built','Walls and gates complete'][fort.stage]+(fort.builder?' · '+fort.builder:'');
-    }
-    function takeDecision(){
-      const home=sim.state.communityLife.homeId,target=other.value;
-      if(root.EarthBorderConflict.relation(sim.state,home,target)?.war){proposal=target;renderRelations();}
-      else submit('declareWar');
-    }
-    async function submit(action){
-      if(busy)return;
-      const w=sim.state,home=root.EarthCommunityLife.lookup(w,w.communityLife.homeId),target=root.EarthCommunityLife.lookup(w,other.value);
-      if(!target)return;
-      busy=true;renderRelations();
-      try{
-        const result=await sim.perform('communityLife',{action,site:w.activeId,week:w.week,home:home.id,target:target.id,
-          generation:home.foundingRevision||0,targetGeneration:target.foundingRevision||0});
-        status.textContent=result.message;onResult?.(result);
-      }finally{busy=false;proposal='';refresh(true);}
-    }
-    other.addEventListener('change',()=>{proposal='';renderRelations();});
     const select=element('select'),low=element('input'),high=element('input'),rules=element('div'),cost=element('p');
     for(const field of domain.fields)select.append(option(field,domain.label(field)));
     for(const [field,value] of [[low,65],[high,100]]){field.type='number';field.min='0';field.max='100';field.value=String(value);}
     let selected='',expected='',busy=false,criteria={},districts='',lastLedger='',lastWorld=null,lastWeek=0;
     let blind=null,search=null,quotedWorld=null,quoteStamp='',rosterFull=false;
     const current=()=>[...sim.state.sites,...(sim.state.communityLife?.outposts||[])].find(s=>s.id===selected)||sim.active();
+    const embassy=element('section'),embassyTitle=element('h3'),foreign=element('select'),relationText=element('p'),defence=element('p');
+    const decision=button('Declare war',async()=>{
+      const world=sim.state,home=world.communityLife?.homeId;
+      const target=foreign.value,relation=root.EarthBorderConflict.relation(world,home,target);
+      const action=relation?.state==='war'?(relation.offer?'accept':'negotiate'):'declare';
+      decision.disabled=true;
+      try{
+        const result=await sim.perform('diplomacy',{home,target,action});
+        status.textContent=result.message;onResult?.(result);
+      }finally{refresh(true);}
+    });
+    const cancelTalks=button('Cancel talks',async()=>{
+      const world=sim.state;cancelTalks.disabled=true;
+      try{
+        const result=await sim.perform('diplomacy',{home:world.communityLife.homeId,target:foreign.value,action:'cancel'});
+        status.textContent=result.message;onResult?.(result);
+      }finally{refresh(true);}
+    });
+    embassy.append(embassyTitle,labelled('Other community',foreign),relationText,decision,cancelTalks,defence);
+    body.insertBefore(embassy,forms);
+    let embassyKeys='';
+    function showDiplomacy(world,towns,s){
+      const home=towns.find(t=>t.id===world.communityLife?.homeId);
+      embassy.hidden=!home||!root.EarthBorderConflict||towns.length<2;if(embassy.hidden)return;
+      embassyTitle.textContent='Diplomacy for '+home.name;
+      const others=towns.filter(t=>t!==home),keys=others.map(t=>t.id+'|'+t.name).join('/');
+      if(embassyKeys!==keys){
+        const old=foreign.value;
+        foreign.replaceChildren(...others.map(t=>option(t.id,t.name)));
+        foreign.value=others.find(t=>t.id===old)?.id||others[0].id;embassyKeys=keys;
+      }
+      if(expected!==s.id&&s!==home)foreign.value=s.id;
+      const other=others.find(t=>t.id===foreign.value)||others[0],r=root.EarthBorderConflict.relation(world,home.id,other.id);
+      relationText.textContent=home.name+' and '+other.name+(r?.state==='war'?' are at war.':' are at peace.')+
+        (r?.offer?' Both councils will recall their watches, return occupied parcels and reopen passage.':'');
+      decision.textContent=r?.state==='war'?(r.offer?'Accept ceasefire terms':'Negotiate peace'):'Declare war';
+      decision.disabled=false;cancelTalks.hidden=!r?.offer;cancelTalks.disabled=false;
+      const fort=s.communityLife.border?.defence;
+      defence.textContent=fort?s.name+' · '+['Boundary walls and gate commissioned','Gateposts set','Boundary walls built','Walls and guarded gate completed'][fort.stage]+(fort.builder?' · '+fort.builder:''):'';
+    }
+    foreign.addEventListener('change',()=>refresh(true));
     const blindCommit=button('Commit to a blind invitation',()=>sign(blind,blindCommit));
     const paidCommit=button('Commission this search',()=>sign(search,paidCommit));
     const appFold=fold(regional,'Regional applications'),appList=element('div'),applicationRows=new Map(),empty=element('p','No visiting households are applying here this week.');
@@ -182,7 +180,7 @@
       if(keys!==districts){place.replaceChildren(...towns.map(t=>option(t.id,t.name)));districts=keys;}
       if(selected!==s.id){selected=s.id;criteria={};renderRanges();status.textContent='';}
       place.value=selected;
-      renderRelations();offers();
+      showDiplomacy(w,towns,s);offers();
       const ledger=s.communityLife?.townCentre;
       if(force||lastWorld!==w||lastLedger!==ledger?.serial||lastWeek!==w.week||expected!==s.id){
         arrivals(s);lastWorld=w;lastLedger=ledger?.serial;lastWeek=w.week;expected=s.id;

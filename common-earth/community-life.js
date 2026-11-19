@@ -226,10 +226,8 @@
       const d=livelihood(template,habitat);
       let name=d.name,id='near-'+base.id+'-'+i;
       if(stores(world).some(s=>s.name===name))name=base.name+' '+name;
-      if(world.communityLife.retiredTowns?.includes(id)||stores(world).some(s=>s.id===id))return;
+      if(world.communityLife.retired?.[id]||stores(world).some(s=>s.id===id))return;
       const point=pointNear(base,i);
-      const rotation=Math.floor(Math.abs(base.lon))+Math.floor(Math.abs(base.lat)/45);
-      point.foundingTemper=[36,93,48][(i+rotation)%3];
       const other=makeSite({id,name,region:base.region,point,water:base.water,names:d.hosts,old:null,offer:{newPopulation:i===2?10:10+i}});
       other.specialty=d.goods;other.founded=world.week;seedHouseholds(other,other.population,world.week);
       other.food=14-i;other.materials=9+i;other.trust=i===2?55:58+i*5;other.wellbeing=61-i;
@@ -301,19 +299,19 @@
     }
     const home=lookup(world,a.homeId);
     for(const district of stores(world)){
-      const h=district.communityLife;
-      if(h?.foundingHouseholds!=null&&!h.foundingRosterReady)seedHouseholds(district,h.foundingHouseholds,district.founded);
+      const h=local(district);
+      if(h.foundingHouseholds!=null&&!h.foundingRosterReady)seedHouseholds(district,h.foundingHouseholds,district.founded);
     }
     if(freshHome&&home)seedHouseholds(home,home.population-1,world.week);
     else recoverHouseholds(world,home);
     if(makeSite)for(const base of stores(world).filter(s=>s.communityLife?.cluster===s.id||s===home))makeRegion(world,base,makeSite);
-    root.EarthBorderConflict?.openingWars(world);
+    if(home)root.EarthBorderConflict?.openingWars(world,home);
     const here=world.sites.find(s=>s.id===world.activeId);
     if(here&&here!==home){
       recoverHouseholds(world,here);if(makeSite)makeRegion(world,here,makeSite);
-      // Older saves may already have an unassessed visitor in the district.
+      // Resume a legacy visit once when the local watch has not assessed it.
       const visitor=here.communityLife?.people?.steward;
-      if(visitor?.status==='anchor'&&!visitor.gateChecked&&!a.journey&&root.EarthBorderConflict){
+      if(visitor?.status==='anchor'&&!visitor.gateChecked&&!a.journey&&root.EarthBorderConflict?.hostile(world,here)){
         if(!here.communityLife.border?.street)root.EarthBorderConflict.streetEntry(world,home,here);
         visitor.gateChecked=true;
       }
@@ -391,9 +389,7 @@
       const value=root.EarthBorderConflict.force(site,p);
       return value>=62?'forceful':value>=42?'guarded':'welcoming';
     }
-    const birth=p.birthCommunityId||site.communityLife?.people?.[p.id]?.originId||site.id;
-    const cohort=birth.match(/-(\d+)$/),regional=birth.startsWith('near-')&&cohort;
-    const baseline=p.externalHistory?.aggression??(regional?([36,75,51][Number(cohort[1])]??50):50);
+    const baseline=p.traits?.aggression??p.externalHistory?.aggression??p.birthTemperament??50;
     const traits=p.traits||{},resident=site.residents.find(r=>r.id===p.id);
     const ties=(site.agency?.meals||[]).filter(m=>m.from===p.id||m.to===p.id).length;
     const recent=site.autonomy?.people?.[p.id]?.history||[];
@@ -498,7 +494,6 @@
   }
   function recognisedVisitor(world,site,origin,guest){
     const pass=site.communityLife?.entryPass;
-    if(root.EarthBorderConflict?.relation(world,site.id,origin?.id)?.war===false)return true;
     if(pass?.guestKey===guest.identityKey&&world.week>=pass.opens&&world.week<=pass.until)return true;
     const personal=personalAccess(world,site,guest);
     return root.EarthBorderConflict?.hostile(world,site)?personal.introduced:personal.known||bilateralTrust(world,site,origin).score>=66;
@@ -529,7 +524,7 @@
     return cap(value);
   }
   function entryAssessment(world,site,origin=lookup(world,world.communityLife.homeId),visitor=world.communityLife.profile){
-    const character=communityCharacter(site),rule=currentRule(site),host=hostFor(site),personal=personalAccess(world,site,visitor);
+    const character=communityCharacter(site,world),rule=currentRule(site),host=hostFor(site),personal=personalAccess(world,site,visitor);
     const bilateral=bilateralTrust(world,site,origin),restriction=entryRestriction(world,site,visitor);
     const reputation=[];
     const reports=new Map();
@@ -562,9 +557,9 @@
       host:host.name,personal,originTrust:bilateral.score,originName:origin.name,fulfilled:bilateral.honoured,passage:bilateral.passage,values:bilateral.value,reputation,
       expected:restriction?restriction.reason:isHome(world,site)?'You belong to this community.':
       root.EarthBorderConflict?.hostile(world,site)?(recognisedVisitor(world,site,origin,visitor)?
-        'The watch recognises your introduction or hosted visit.':site.name+'’s watch challenges unintroduced visitors. Arrange a hosted visit before crossing.'):
+        'The watch recognises your introduction or hosted visit.':site.name+'’s watch pursues unintroduced visitors. Arrange a hosted visit before crossing.'):
       personal.known?'A named introduction, completed service or local supporter opens the exchange.':
-      rule==='hosted'&&bilateral.score>=66?'Your home community’s delivery and service record opens the exchange. Private introductions still go through '+host.name+'.':
+      rule==='hosted'&&!root.EarthBorderConflict?.hostile(world,site)&&bilateral.score>=66?'Your home community’s delivery and service record opens the exchange. Private introductions still go through '+host.name+'.':
       character.border?.closed?'The boundary watch confronts people who enter uninvited. A sponsor or a recognised trading relationship changes the reception.':
       rule==='hosted'?'Report to '+host.name+' before seeking work. Some residents physically turn away unintroduced strangers.':
       rule==='exchange'?'The exchange receives visitors. Individual households may ask for a sponsor.':'The kitchen receives visitors. Residents decide individually which invitations to offer.'};
@@ -602,7 +597,7 @@
     c.entryDecision={week:world.week,rule:next,host:host.name};
     return writeLog(site,world.week,host.name+' recorded the assembly’s vote for '+entryRules[next].label.toLowerCase()+' after hearing '+welcomed+' reports of cooperation and '+opposed+' confrontations.');
   }
-  function communityCharacter(site){
+  function communityCharacter(site,world){
     const border=root.EarthBorderConflict?.profile(site);
     const tally=border?.tally||{welcoming:0,guarded:0,forceful:0};
     if(!border)for(const p of root.EarthPersonas?.list(site,{includeCommuters:false})||[]){
@@ -613,7 +608,7 @@
     const trust=cap(Math.round(.55*site.trust+45*(welcome+.45*tally.guarded/count)),0,100);
     const reputation=cap(Math.round(50+24*(welcome-force)+.2*(site.wellbeing-50)+
       Math.min(18,(site.stats?.kept||0)*3+(site.stats?.deliveries||0))-Math.min(24,(site.communityLife?.visitorIncidents||0)*4)),0,100);
-    const risk=border?.closed?'Closed border · physical entry risks a fight':entryRules[currentRule(site)].label;
+    const risk=(world?root.EarthBorderConflict?.hostile(world,site):border?.closed)?'Closed border · physical entry risks a fight':entryRules[currentRule(site)].label;
     return {type,trust,reputation,tally,aggression:border?.score,border,summary:type+' · '+risk+(border?' · aggression '+border.score+'/100':''),
       detail:tally.welcoming+' welcoming, '+tally.guarded+' guarded, '+tally.forceful+' willing to use force.'};
   }
@@ -941,7 +936,7 @@
       if(root.EarthBorderConflict?.hostile(world,dest)){
         const pass=dest.communityLife.entryPass;
         const safe=pass?.guestKey===p.identityKey&&world.week>=pass.opens&&world.week<=pass.until;
-        if(!safe&&!root.EarthBorderConflict.hasPass(world,dest,p,site))continue;
+        if(!safe&&!personalAccess(world,dest,p).known&&bilateralTrust(world,dest,site).score<66)continue;
       }
       const contacts=tiesAt(world,site,id,dest),match=fit(dest,p,contacts.length>0);
       // A marginal choice can turn on news that actually reached the person’s
@@ -975,7 +970,7 @@
       if(moved)c.deputies.push({id:moved.id,name:moved.name,week:world.week});
     }
     world.communityLife.outposts.push(site);
-    root.EarthBorderConflict?.openingWars(world);
+    root.EarthBorderConflict?.openingWars(world,site);
     writeLog(site,world.week,trip.crew.map(p=>p.name).join(' and ')+' settled here with '+site.food+' food, '+site.materials+' materials and '+site.funds+' funds transferred from '+from.name+'.');
     return site;
   }
@@ -1014,7 +1009,7 @@
     Object.assign(local(newHome),{cluster:site.communityLife.cluster,district:purpose.district,foundingPlaces:3,habitat:root.EarthResources?.environment?.(newHome)||'mixed'});local(newHome).away.steward='elsewhere';
     const moved=old.members.map(personId=>movePerson(world,site,newHome,personId));
     world.communityLife.outposts.push(newHome);
-    root.EarthBorderConflict?.openingWars(world);
+    root.EarthBorderConflict?.openingWars(world,newHome);
     const course=point===old.point?old.path:point.path;
     if(course)root.EarthRegionalWorld?.shareCrossing(world,site,newHome,old.members[0],people[0].name,course,point===old.point?old.travelIndex:undefined);
     delete c.foundingPlan;c.lastExit=world.week;
@@ -1462,7 +1457,7 @@
   function arrive(world,from,to,makeSite){
     const a=world.communityLife;
     if(!a)return;
-    const conflict=root.EarthBorderConflict,home=lookup(world,a.homeId);
+    const conflict=root.EarthBorderConflict;
     if(from&&from.id!==to.id){
       root.EarthBorderConflict?.leaveStreet(from);
       awaySlot(from,'steward',to.id);
@@ -1482,7 +1477,7 @@
     from.population=Math.max(1,from.population-1);to.population++;
     world.communityLife.duty.siteId||=from.id;
     root.EarthBorderConflict?.leaveStreet(to);
-    local(from).formerHome=true;world.communityLife.homeId=to.id;
+    world.communityLife.homeId=to.id;
     writeLog(from,world.week,world.communityLife.profile.name+' moved their home to '+to.name+'. Their old pantry and promises remain on the record.');
     const c=local(to);c.people.steward={profile:copy(world.communityLife.profile),status:'anchor',residence:'member'};
   }
@@ -1498,86 +1493,93 @@
     writeLog(site,world.week,chosen.map(v=>v.name).join(' and ')+' signed the founding rota with '+state.profile.name+'.');
     // Distant sponsorships need nearby places of their own, not a footpath across an ocean.
     if(km(old,site)>70){delete local(site).cluster;makeRegion(world,site,makeSite);}
-    root.EarthBorderConflict?.openingWars(world);
+    root.EarthBorderConflict?.openingWars(world,site);
   }
-  // Remove a district on the detached save. People already living elsewhere
-  // keep their identities. The old survey origin keeps parcel coordinates stable.
-  function removeDistrict(world,site){
-    const a=world.communityLife,id=site.id,all=stores(world),others=all.filter(t=>t!==site);
-    if(!others.length)return;
-    const home=lookup(world,a.homeId);
-    const next=home!==site?home:others.find(t=>t.id===world.activeId)||others.find(t=>world.sites.includes(t))||others[0];
-    if(next!==home){
-      moveAnchor(world,site,next);
-      if(!world.sites.includes(next)){a.outposts=a.outposts.filter(t=>t!==next);world.sites.push(next);}
+  function removeCommunity(world,removed){
+    const id=removed.id,a=world.communityLife;
+    const surviving=stores(world).filter(s=>s.id!==id);
+    if(!surviving.length)return;
+    const oldHome=lookup(world,a.homeId),nextHome=oldHome===removed?
+      (surviving.find(s=>s.id===world.activeId)||surviving[0]):oldHome;
+    if(!world.sites.includes(nextHome)){
+      a.outposts=a.outposts.filter(s=>s!==nextHome);world.sites.push(nextHome);
     }
-    if(world.activeId===id){
-      world.activeId=next.id;
-      local(next).people.steward={profile:copy(a.profile),status:'anchor',residence:'member'};
-      delete next.communityLife.away.steward;
-      const agency=next.agency||={meals:[]};agency.actor='steward';delete agency.actorAt;delete agency.returningActor;
-    }else if(next!==home&&world.activeId!==next.id)local(next).away.steward=world.activeId;
-    if(a.duty.siteId===id){a.duty.siteId=next.id;a.duty.coveredBy=null;}
-    if(a.journey?.from===id||a.journey?.to===id)a.journey=null;
-    if(a.parcel?.from===id||a.parcel?.to===id)delete a.parcel;
-    if(a.cohorts)a.cohorts=a.cohorts.filter(c=>c.from!==id&&c.to!==id);
-    if(a.fieldNotes)a.fieldNotes=a.fieldNotes.filter(n=>n.sourceSite!==id);
-    if(a.diplomacy){
-      a.diplomacy.known=a.diplomacy.known.filter(k=>k!==id);
-      for(const [key,row] of Object.entries(a.diplomacy.pairs))if(row.from===id||row.to===id)delete a.diplomacy.pairs[key];
+    if(oldHome===removed){
+      moveAnchor(world,removed,nextHome);
+      if(world.activeId!==nextHome.id)local(nextHome).away.steward=world.activeId;
     }
-    (a.retiredTowns||=[]).push(id);
-    if(others.some(t=>t.communityLife?.cluster===id)){
-      const {name,region,lat,lon,water,coastal,lakeShore}=site;
-      (a.surveyOrigins||={})[id]={id,name,region,lat,lon,water,coastal,lakeShore};
-    }
-    for(const other of others){
-      const c=local(other);
+    if(world.activeId===id)arrive(world,removed,nextHome);
+    if(a.duty.siteId===id){a.duty.siteId=nextHome.id;a.duty.coveredBy=null;}
+    (a.retired||={})[id]={id,name:removed.name,region:removed.region,lat:removed.lat,lon:removed.lon,water:removed.water,coastal:removed.coastal,lakeShore:removed.lakeShore};
+    const linked=row=>row&&(row.from===id||row.to===id||row.a===id||row.b===id);
+    const drop=(dict,predicate)=>{for(const [key,value] of Object.entries(dict||{}))if(predicate(value,key))delete dict[key];};
+    for(const key of ['parcel','journey'])if(linked(a[key]))a[key]=null;
+    if(a.cohorts)a.cohorts=a.cohorts.filter(row=>!linked(row));
+    if(a.fieldNotes)a.fieldNotes=a.fieldNotes.filter(row=>row.sourceSite!==id);
+    drop(a.relations,linked);
+    if(a.openingRoster)a.openingRoster=a.openingRoster.filter(town=>town!==id);
+    for(const site of surviving){
+      const c=local(site),b=c.border;
+      if(b?.occupiedBy===id)delete b.occupiedBy;
+      if(b?.foothold?.by===id)delete b.foothold;
+      if(b?.street?.from===id)root.EarthBorderConflict.leaveStreet(site);
+      const recall=(actor)=>{if(actor&&c.away[actor.id]==='regional-watch')delete c.away[actor.id];};
+      if(b?.gate?.from===id){recall(b.gate.guard);delete b.gate;}
+      if(b?.campaign?.against===id){recall(b.campaign.attacker);recall(b.campaign.partner);delete b.campaign;}
+      const incoming=removed.communityLife?.border?.campaign;
+      if(incoming?.against===site.id){recall(incoming.defender);recall(incoming.support);}
+      for(const [slot,visit] of Object.entries(c.excursions||{}))if(visit.to===id){
+        delete c.excursions[slot];if(c.away[slot]==='regional-visit')delete c.away[slot];
+      }
       if(c.freight?.to===id){
-        other[c.freight.good]+=c.freight.amount;
-        if(c.away[c.freight.signer]==='regional-freight')delete c.away[c.freight.signer];
+        const f=c.freight;site[f.good]+=f.amount;
+        if(c.away[f.signer]==='regional-freight')delete c.away[f.signer];
         delete c.freight;
       }
-      for(const [key,trip] of Object.entries(c.excursions||{}))if(trip.to===id){
-        if(c.away[key]==='regional-visit')delete c.away[key];
-        delete c.excursions[key];
+      for(const person of Object.values(c.people))if(person.status==='visitor'&&person.visitFrom===id){
+        person.status='member';delete person.visitFrom;delete person.visitSlot;delete person.inspects;site.population++;
       }
-      for(const [key,where] of Object.entries(c.away))if(where===id){
-        if(c.people[key]?.status==='former')c.away[key]='elsewhere';else delete c.away[key];
-      }
-      for(const [slot,g] of Object.entries(c.people))if(g.status==='visitor'&&g.visitFrom===id){
-        transferDevelopment(world,site,other,g.visitSlot,slot);
-        g.status='member';other.population++;delete g.visitFrom;delete g.visitSlot;delete g.inspects;
+      for(const [slot,away] of Object.entries(c.away))if(away===id){
+        if(slot==='steward'&&site.id!==world.activeId)c.away[slot]=world.activeId;
+        else if(c.people[slot]?.status==='former')c.away[slot]='elsewhere';
+        else delete c.away[slot];
       }
       if(c.entryRecords){
         c.entryRecords=c.entryRecords.filter(e=>e.originId!==id);
         for(const e of c.entryRecords)if(e.relays)e.relays=e.relays.filter(r=>r.to!==id);
       }
-      const b=c.border;
-      if(b?.occupiedBy===id)delete b.occupiedBy;
-      if(b?.foothold?.by===id)delete b.foothold;
-      if(b?.street?.from===id)root.EarthBorderConflict.leaveStreet(other);
-      if(b?.gate?.from===id){if(c.away[b.gate.guard.id]==='regional-watch')delete c.away[b.gate.guard.id];delete b.gate;}
-      const offensive=b?.campaign?.against===id?b.campaign:null;
-      const defending=site.communityLife?.border?.campaign?.against===other.id?site.communityLife.border.campaign:null;
-      for(const actor of [offensive?.attacker,offensive?.partner,defending?.defender,defending?.support]){
-        if(actor&&c.away[actor.id]==='regional-watch')delete c.away[actor.id];
-      }
-      if(offensive)delete b.campaign;
     }
-    root.EarthRegionalWorld?.removeDistrict(world,site,others);
+    for(const r of Object.values(world.regionalWorld?.regions||{})){
+      const checkpoint=r.trips[id]?.checkpoint;
+      const host=checkpoint&&lookup(world,checkpoint.host);
+      if(host?.communityLife.away[checkpoint.guard.id]==='regional-watch')delete host.communityLife.away[checkpoint.guard.id];
+      delete r.trips[id];delete r.knowledge[id];if(r.rest)delete r.rest[id];
+      for(const trip of Object.values(r.trips))if(trip.checkpoint?.host===id)delete trip.checkpoint;
+      drop(r.routes,v=>v.siteId===id);drop(r.contacts,linked);
+      r.records=r.records.filter(v=>v.siteId!==id);
+      for(const p of Object.values(r.parcels)){
+        for(const key of ['uses','claims','traffic'])if(p[key])delete p[key][id];
+        drop(p.agreements,linked);
+        if(p.charter===id){delete p.charter;delete p.occupation;}
+        if(p.occupiedFrom===id||!p.occupation)delete p.occupiedFrom;
+        if(p.owner===id){delete p.owner;delete p.work;}
+        if(p.trail?.siteId===id)delete p.trail;
+        else if(p.trail)p.trail.partners=p.trail.partners.filter(t=>t!==id);
+      }
+      r.mapRevision=(r.mapRevision||0)+1;
+    }
   }
   function restart(world,before,fresh){
     fresh.population=before.population;
     if(before.communityLife)fresh.communityLife=copy(before.communityLife);
-    const c=local(fresh),a=world.communityLife;
-    for(const key of ['birthNames','birthCoordinate','workRotation','foundingTemper'])if(before[key]!=null)fresh[key]=copy(before[key]);
-    if(world.activeId===fresh.id){
-      c.people.steward={profile:copy(a.profile),status:'anchor',residence:a.homeId===fresh.id?'member':'visitor'};delete c.away.steward;
-    }
+    local(fresh);
+    for(const key of ['birthNames','birthCoordinate','workRotation'])if(before[key]!=null)fresh[key]=copy(before[key]);
     // Journeys, deeds and funded building contracts remain with their owners.
     for(const key of ['housing','privateHomes','civicLand'])if(before[key])fresh[key]=copy(before[key]);
-    if(before.growth)fresh.growth=copy(before.growth);
+    if(before.growth){
+      // Occupied and reserved household plots keep their occupants and work contracts.
+      fresh.growth=copy(before.growth);
+    }
     const roster=new Set([...(before.agency?.porters||[]),...Object.keys(before.purses?.people||{}).filter(id=>root.EarthPersonas?.isPorterId(id))]);
     if(roster.size)fresh.agency={actor:'steward',meals:[],porters:[...roster]};
     root.EarthPurses?.reopenSavings?.(world,before,fresh);
@@ -1586,18 +1588,10 @@
   }
   function permission(world,site,cmd,args=[]){
     const a=world.communityLife;if(!a||!site)return '';
-    if(cmd==='manageSite'){
-      const target=lookup(world,args[0]);
-      return target&&(args[1]==='delete'||target.id===a.homeId||/^site-\d+$/.test(target.id)||target.communityLife?.formerHome)?'':'Only a current or former home can be restarted.';
-    }
-    if(cmd==='production'||cmd==='stowHandline'||cmd==='communityLife'&&['declareWar','peace','evade','streetExchange'].includes(args[0]?.action))return '';
-    const watch=site.communityLife?.border?.street;
-    if(watch&&watch.phase!=='won'&&!['advance','workConstruction','reset','visit'].includes(cmd)&&
-      !(cmd==='communityLife'&&['resist','withdraw','walkTrail','driveTrail','depart','arrive','routeChoice','cancel'].includes(args[0]?.action)))
-      return 'The watch controls the gate. Fight back or withdraw before continuing in town.';
+    if(['production','stowHandline','manageSite','diplomacy'].includes(cmd))return '';
     if(cmd==='visit'&&args[0]!==site.id){
-      const dest=lookup(world,args[0]),restriction=hostedVisit(world,dest);
-      if(restriction&&(!restriction.optional||restriction.pending))return restriction.reason;
+      const restriction=hostedVisit(world,lookup(world,args[0]));
+      if(restriction&&!restriction.optional)return restriction.reason;
     }
     if(a.journey&&!['communityLife','reset','workConstruction'].includes(cmd))return 'You are on the road. Open Towns to arrive or turn back.';
     if(cmd==='found'&&(root.EarthAgency?.actorId(site)||'steward')!=='steward')return 'Return to '+a.profile.name+' to sign a founding proposal.';
@@ -1663,20 +1657,12 @@
   function run(world,site,req,scene,makeSite,finishPromise){
     const a=world.communityLife;
     if(!a||!site||!req||req.site!==site.id||req.week!==world.week)return fail('The place or week changed. Open Towns again.');
-    if(['declareWar','peace'].includes(req.action))return root.EarthBorderConflict.diplomacy(world,req);
     if(req.action==='townCentre')return root.EarthTownCentre?.command(world,site,req)||fail('The Town Centre is unavailable.');
     if(req.actor!==detachedView(world)||req.actor!=='steward')return fail('Return to '+a.profile.name+' before making a personal travel or membership decision.');
     const home=lookup(world,a.homeId),c=local(site),receipt=text=>({ok:true,message:writeLog(site,world.week,text)});
     const at=id=>scene?.siteId===site.id&&scene.actor==='steward'&&scene.mode==='walk'&&scene.target===id&&
       [scene.x,scene.y,scene.tx,scene.ty].every(Number.isFinite)&&Math.hypot(scene.x-scene.tx,scene.y-scene.ty)<=1.56;
-    if(req.action==='streetExchange')return root.EarthBorderConflict.streetExchange(world,site,req,scene);
-    if(req.action==='evade'){
-      const watch=c.border?.street;
-      if(!watch||req.target!==(watch.guard?.key||null)||scene?.siteId!==site.id||scene.actor!=='steward'||
-        !(scene.vehicle==='van'||scene.mode==='walk'&&scene.distance>=2.5))return fail('The watch is still in reach.');
-      root.EarthBorderConflict.leaveStreet(site);
-      return receipt(a.profile.name+(scene.vehicle==='van'?' escaped the watch in the van.':' outran the watch.'));
-    }
+    if(req.action==='streetContact')return root.EarthBorderConflict.streetContact(world,site,req,scene);
     if(req.action==='resist'||req.action==='withdraw'){
       const watch=c.border?.street;
       if(!watch||req.target!==(watch.guard?.key||null)||watch.phase==='won')return fail('That encounter has ended.');
@@ -1720,6 +1706,7 @@
       const effort=path?root.EarthRegionalWorld.routeEffort(world,site,path,driving?'van':'walk')*.5:km;
       const start=Date.now(),duration=Math.round(cap(effort*620,1600,6200));
       a.journey={from:site.id,to:dest.id,start,finish:start+(driving?Math.round(duration*.45):duration),km};
+      root.EarthBorderConflict?.leaveStreet(site);
       if(path)Object.assign(a.journey,{path,baseDuration:duration});
       if(driving)Object.assign(a.journey,{vehicle:'van',interactive:true,via:'commons',seen:[]});
       if(req.action==='walkTrail')Object.assign(a.journey,{interactive:true,via:'commons',stop:0,seen:[]});
@@ -1894,10 +1881,9 @@
       !world.sites.some(s=>s.id===a.homeId)||!obj(a.duty)||!int(a.duty.due,world.week,world.week+3)||!int(a.duty.reliability,-6,6)||
       typeof a.duty.attended!=='boolean'||a.duty.coveredBy!=null&&!word(a.duty.coveredBy))return false;
     const districts=stores(world),ids=new Set(districts.map(s=>s?.id));
-    if(root.EarthBorderConflict&&!root.EarthBorderConflict.validDiplomacy(world,ids))return false;
-    if(a.retiredTowns!=null&&(!Array.isArray(a.retiredTowns)||!a.retiredTowns.every(id=>word(id)&&!ids.has(id))))return false;
-    if(a.surveyOrigins!=null&&(!obj(a.surveyOrigins)||!Object.entries(a.surveyOrigins).every(([id,t])=>a.retiredTowns?.includes(id)&&t?.id===id&&
-      Number.isFinite(t.lat)&&Math.abs(t.lat)<=90&&Number.isFinite(t.lon)&&Math.abs(t.lon)<=180&&typeof t.water==='boolean')))return false;
+    if(a.retired&&(!obj(a.retired)||!Object.entries(a.retired).every(([id,s])=>!ids.has(id)&&s?.id===id&&word(s.name)&&Number.isFinite(s.lat)&&Math.abs(s.lat)<=90&&Number.isFinite(s.lon)&&Math.abs(s.lon)<=180&&typeof s.water==='boolean')))return false;
+    if(a.relations&&(!obj(a.relations)||!Object.entries(a.relations).every(([k,r])=>r&&ids.has(r.from)&&ids.has(r.to)&&r.from!==r.to&&[r.from,r.to].sort().join('/')===k&&['peace','war'].includes(r.state)&&int(r.week,1,world.week)&&(r.offer==null||r.offer===true))))return false;
+    if(a.openingRoster&&(!Array.isArray(a.openingRoster)||!a.openingRoster.every(word)))return false;
     if(ids.size!==districts.length||a.duty.siteId!=null&&!ids.has(a.duty.siteId)||a.outposts.some(s=>!validateSite(s,world,ids)))return false;
     if(a.cohorts&&(!Array.isArray(a.cohorts)||a.cohorts.some(g=>!obj(g)||!ids.has(g.from)||!ids.has(g.to)||g.from===g.to||
       !int(g.opened,1,world.week)||!int(g.expires,world.week)||!Array.isArray(g.pending)||g.pending.length>34||
@@ -1981,6 +1967,6 @@
       (p.workFocus==null||root.EarthPersonas?.validWorkFocus?.(p.workFocus))&&
       ['numeracy','music','communication','care','craft','stamina','organisation'].every(k=>int(p.aptitudes[k],0,100)&&int(p.bounds[k]?.min,0,p.aptitudes[k])&&int(p.bounds[k]?.max,p.aptitudes[k],100));
   }
-  root.EarthCommunityLife=Object.freeze({initialise,restart,removeDistrict,lookup,valid,present,profile,personLabel,census,commuting,residency,anchor,coverCandidate,isHome,neighbours,travelIntent,volunteers,founding,
-    nearLocation:pointNear,guestSlot,freeGuestSlot,recordReception,closeLife,personalAccess,visitorReception,confrontation,entryAssessment,entryRestriction,recognisedVisitor,hostedVisit,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,acceptVisitor,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
+  root.EarthCommunityLife=Object.freeze({initialise,restart,lookup,valid,present,profile,personLabel,census,commuting,residency,anchor,coverCandidate,isHome,neighbours,travelIntent,volunteers,founding,
+    removeCommunity,nearLocation:pointNear,guestSlot,freeGuestSlot,recordReception,closeLife,personalAccess,visitorReception,confrontation,entryAssessment,entryRestriction,recognisedVisitor,hostedVisit,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,acceptVisitor,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
 })(typeof window==='undefined'?globalThis:window);

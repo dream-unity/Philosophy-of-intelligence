@@ -53,7 +53,7 @@
     let group=geoCache.get(world);if(!group){group=new Map();geoCache.set(world,group);}
     const cached=group.get(originId),outposts=world.communityLife?.outposts,atlasReady=!!root.EarthAtlas?.geographyLoaded;
     if(cached&&cached.atlasReady===atlasReady&&cached.surveys.every(t=>t.water===t.site.water&&t.coastal===t.site.coastal&&t.lake===t.site.lakeShore)&&cached.first===world.sites[0]&&cached.lastSite===world.sites.at(-1)&&cached.lastOutpost===outposts?.at(-1)&&cached.siteCount===world.sites.length&&cached.outpostCount===(outposts?.length||0))return cached;
-    const all=places(world),origin=all.find(s=>s.id===originId)||world.communityLife?.surveyOrigins?.[originId]||site;
+    const all=places(world),origin=all.find(s=>s.id===originId)||world.communityLife?.retired?.[originId]||site;
     const lonScale=kmPerDegree*Math.max(.01,Math.cos(origin.lat*Math.PI/180));
     let project=loc=>({x:(((loc.lon-origin.lon+540)%360)-180)*lonScale,y:(loc.lat-origin.lat)*kmPerDegree});
     let locate=(x,y)=>({lat:clamp(origin.lat+y/kmPerDegree,-89.99999,89.99999),lon:((origin.lon+x/lonScale+540)%360)-180});
@@ -590,7 +590,7 @@
     const previous=localAgreement(r,site.id,host.id,id)?.terms||'disputed';
     const occupier=site.communityLife?.border?.foothold?.by===host.id?host:
       host.communityLife?.border?.foothold?.by===site.id?site:null;
-    const pressingClaim=occupier&&root.EarthBorderConflict?.relation(world,site.id,host.id)?.war&&
+    const pressingClaim=occupier&&root.EarthBorderConflict?.relation(world,site.id,host.id)?.state==='war'&&
       occupier.food>=reserve(world,occupier).food+2&&occupier.funds>=reserve(world,occupier).funds+2;
     const offersPassage=!pressingClaim&&(adopts||!pressure&&host.trust>=45);
     const terms=joint?'joint':offersPassage?'passage':previous;
@@ -942,7 +942,6 @@
   }
   function advance(world,makeSite,mode){
     if(!world.communityLife||!world.sites.length)return;
-    if(world.communityLife.diplomacy?.known.length!==places(world).length)root.EarthBorderConflict?.openingWars(world);
     const book=world.regionalWorld||={version:1,step:0,week:world.week,regions:{}};
     if(mode==='calendar'&&book.productionWeek===world.week-1)return;
     if(mode==='production')book.productionWeek=world.week;
@@ -1161,35 +1160,6 @@
   const text=v=>typeof v==='string'&&v.length>0&&v.length<=1600;
   const coordinate=id=>typeof id==='string'&&/^-?\d{1,6},-?\d{1,6}$/.test(id);
   const validPath=path=>Array.isArray(path)&&path.length>0&&path.length<=4097&&path.every(coordinate);
-  function removeDistrict(world,site,others){
-    const id=site.id;
-    for(const [origin,r] of Object.entries(world.regionalWorld?.regions||{})){
-      if(!others.some(t=>(t.communityLife?.cluster||t.id)===origin)){delete world.regionalWorld.regions[origin];continue;}
-      delete r.knowledge[id];delete r.rest?.[id];
-      const gate=r.trips[id]?.checkpoint,host=gate&&root.EarthCommunityLife.lookup(world,gate.host);
-      if(host?.communityLife.away[gate.guard.id]==='regional-watch')delete host.communityLife.away[gate.guard.id];
-      delete r.trips[id];
-      for(const trip of Object.values(r.trips))if(trip.checkpoint?.host===id)delete trip.checkpoint;
-      r.records=r.records.filter(n=>n.siteId!==id);
-      for(const [k,route] of Object.entries(r.routes))if(route.siteId===id)delete r.routes[k];
-      const removeAgreements=book=>{
-        for(const [k,pact] of Object.entries(book||{}))if(pact.a===id||pact.b===id)delete book[k];
-      };
-      removeAgreements(r.contacts);
-      for(const parcel of Object.values(r.parcels)){
-        delete parcel.uses[id];delete parcel.traffic?.[id];delete parcel.claims?.[id];removeAgreements(parcel.agreements);
-        if(parcel.charter===id){
-          if(parcel.occupiedFrom&&parcel.occupiedFrom!==id)parcel.charter=parcel.occupiedFrom;else delete parcel.charter;
-          delete parcel.occupation;delete parcel.occupiedFrom;
-        }
-        if(parcel.occupiedFrom===id)delete parcel.occupiedFrom;
-        if(parcel.owner===id){delete parcel.owner;delete parcel.work;}
-        if(parcel.trail?.siteId===id)delete parcel.trail;
-        else if(parcel.trail)parcel.trail.partners=parcel.trail.partners.filter(k=>k!==id);
-      }
-      r.mapRevision=(r.mapRevision||0)+1;
-    }
-  }
   function valid(world){
     const b=world.regionalWorld,journey=world.communityLife?.journey,sites=places(world);
     if(journey?.path!=null&&(!validPath(journey.path)||journey.observed!=null&&!integer(journey.observed,-1,journey.path.length-1)||
@@ -1208,12 +1178,12 @@
       b.productionWeek!=null&&!integer(b.productionWeek,1,world.week))return false;
     const all=new Map(sites.map(s=>[s.id,s]));
     for(const [origin,r] of Object.entries(b.regions)){
-      if(!all.has(origin)&&!world.communityLife?.surveyOrigins?.[origin]||!object(r)||r.projection!=null&&r.projection!=='polar'||!['knowledge','parcels','routes','trips','contacts'].every(k=>object(r[k]))||!Array.isArray(r.records)||r.records.length>48)return false;
+      if((!all.has(origin)&&!world.communityLife?.retired?.[origin])||!object(r)||r.projection!=null&&r.projection!=='polar'||!['knowledge','parcels','routes','trips','contacts'].every(k=>object(r[k]))||!Array.isArray(r.records)||r.records.length>48)return false;
       for(const [id,map] of records(r,'knowledge'))if(!all.has(id)||!object(map)||!Object.entries(map).every(([c,w])=>coordinate(c)&&integer(w,1,world.week)))return false;
       for(const [id,p] of records(r,'parcels')){
         if(!coordinate(id)||!object(p)||!object(p.uses)||!Object.entries(p.uses).every(([s,n])=>all.has(s)&&integer(n,1))||
           p.stock!=null&&!integer(p.stock,0,8)||p.harvestWeek!=null&&!integer(p.harvestWeek,1,world.week)||
-          p.occupiedFrom!=null&&!all.has(p.occupiedFrom)||p.owner!=null&&!all.has(p.owner)||p.charter!=null&&!all.has(p.charter)||
+          p.owner!=null&&!all.has(p.owner)||p.charter!=null&&!all.has(p.charter)||p.occupiedFrom!=null&&!all.has(p.occupiedFrom)||
           p.traffic!=null&&(!object(p.traffic)||!Object.entries(p.traffic).every(([s,n])=>all.has(s)&&integer(n,1,65535)))||
           p.claims!=null&&(!object(p.claims)||!Object.entries(p.claims).every(([s,c])=>all.has(s)&&object(c)&&integer(c.week,1,world.week)&&text(c.by)&&text(c.basis))))return false;
         if(p.agreements&&(!object(p.agreements)||!Object.entries(p.agreements).every(([k,a])=>object(a)&&all.has(a.a)&&all.has(a.b)&&a.a!==a.b&&k===pair(a.a,a.b)&&integer(a.week,1,world.week)&&['joint','exchange','passage','disputed'].includes(a.terms))))return false;
@@ -1251,5 +1221,5 @@
     }
     return true;
   }
-  root.EarthRegionalWorld={geography,polarProjection,streetKilometres,streetExtent,streetFootprint,reconcileLocations,removeDistrict,terrain,known,surveyedCells,works,routes,travellers,inspect,ledger,residentRecord,fieldAccount,shareFieldReport,valid,propose,advance,tripLine,tripPosition,changeBranch,observeLeg,routeEffort,routeOpen,foundingGround,passageAgreement,crossingPath,remainingCrossing,shareCrossing};
+  root.EarthRegionalWorld={geography,polarProjection,streetKilometres,streetExtent,streetFootprint,reconcileLocations,terrain,known,surveyedCells,works,routes,travellers,inspect,ledger,residentRecord,fieldAccount,shareFieldReport,valid,propose,advance,tripLine,tripPosition,changeBranch,observeLeg,routeEffort,routeOpen,foundingGround,passageAgreement,crossingPath,remainingCrossing,shareCrossing};
 })(typeof window==='undefined'?globalThis:window);

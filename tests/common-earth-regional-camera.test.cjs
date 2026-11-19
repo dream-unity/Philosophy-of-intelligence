@@ -358,26 +358,47 @@ test('an open Town Centre dialog stays visible above the observed street',()=>{
   if(observerMask)assert.ok(observerMask[1].split(',').map(s=>s.trim()).includes('dialog[open]'));
 });
 
-test('the playable street keeps both combatants visible and permits escape on foot or in the van',async()=>{
-  for(const mode of ['run','van','arriveByVan']){
-    const {sim,world,streetAt,wait,paint}=fixture(false,null,{name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
-    const target=world.communityLife.outposts.find(t=>t.communityLife.border?.defences==null);
-    const act=(action,id,proof)=>sim.communityLife({site:sim.active().id,actor:'steward',week:world.week,action,target:id},proof||
-      {siteId:sim.active().id,actor:'steward',mode:'walk',target:'market',x:0,y:0,tx:0,ty:0});
-    assert.ok(act('depart',target.id).ok);wait(7000);assert.ok(act('arrive',target.id).arrived);
-    const street=streetAt(target,false,{onEvade:(site,key,proof)=>act('evade',key,proof)});
-    const fight=target.communityLife.border.street,guard=fight.guard;
-    assert.ok(act('resist',guard.key).ok);paint();
-    const before=street.getState();
-    if(mode==='run'){
-      assert.ok(street.move('left'));assert.notEqual(street.getState().x,before.x);
-      assert.ok(street.runFromGuard());
-    }else if(mode==='van')assert.ok(street.toggleVehicle());
-    else street.arriveByVan();
-    for(let i=0;i<200&&target.communityLife.border.street;i++){paint();await Promise.resolve();}
-    assert.equal(target.communityLife.border.street,undefined,mode);
-    assert.equal(target.communityLife.away[guard.id],undefined);
-    assert.equal(sim.active(),target);assert.equal(street.getState().mode,mode==='run'?'walk':'drive');
-    street.destroy();sim.destroy();
+test('the street keeps both fighters on the map and allows walking, running and driving during pursuit',()=>{
+  const {sim,world,home,streetAt,wait,paint}=fixture(false,null,{name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
+  const target=world.communityLife.outposts.find(t=>t.name==='Reed Quay');
+  const act=(action,id)=>sim.communityLife({site:sim.active().id,actor:'steward',week:world.week,action,target:id},
+    {siteId:sim.active().id,actor:'steward',mode:'walk',target:'market',x:0,y:0,tx:0,ty:0});
+  assert.ok(act('depart',target.id).ok);wait(7000);assert.ok(act('arrive',target.id).arrived);
+  const street=streetAt(target),watch=target.communityLife.border.street;
+  const before=street.getState();paint();
+  assert.ok(street.fightProof());assert.notEqual(street.fightProof().gx,before.x);
+  assert.ok(street.move('left')||street.move('right'));assert.notDeepEqual([street.getState().x,street.getState().y],[before.x,before.y]);
+  const moving=street.getState();street.setSite(target);assert.equal(street.getState().x,moving.x);
+  assert.ok(act('resist',watch.guard.key).ok);paint();
+  assert.ok(street.runFromWatch());street.setSite(target);paint();
+  street.cancelTravel();assert.ok(street.toggleVehicle());
+  for(let i=0;i<180&&street.getState().mode!=='drive';i++)paint();
+  assert.equal(street.getState().mode,'drive');const parked=street.getState();
+  assert.ok(street.move('left')||street.move('right')||street.move('down')||street.move('up'));
+  assert.notDeepEqual([street.getState().x,street.getState().y],[parked.x,parked.y]);
+  street.setSite(target);paint();assert.equal(street.getState().mode,'drive');
+  assert.ok(act('withdraw',watch.guard.key).arrived);street.setSite(sim.active());paint();
+  assert.equal(sim.active(),home);assert.equal(target.communityLife.border.street,undefined);
+  street.destroy();sim.destroy();
+});
+
+test('one Run away tap can end a live pursuit from contact range without a hit',async()=>{
+  const {sim,world,streetAt,paint,wait}=fixture(false,null,{name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
+  const town=world.communityLife.outposts[1];
+  const command=(action,target,round,proof)=>sim.communityLife({action,target,round,actor:'steward',site:sim.active().id,week:world.week},proof);
+  const market={siteId:sim.active().id,actor:'steward',mode:'walk',target:'market',x:0,y:0,tx:0,ty:0};
+  assert.ok(command('depart',town.id,0,market).ok);wait(7000);assert.ok(command('arrive',town.id).arrived);
+  const scene=streetAt(town,false,{onStreetContact:(target,round,proof)=>command('streetContact',target,round,proof())});
+  const frame=async()=>{wait(35);paint();await Promise.resolve();};
+  const encounter=town.communityLife.border.street;
+  for(let i=0;i<40;i++){
+    await frame();const g=scene.fightProof();if(g&&Math.hypot(g.x-g.gx,g.y-g.gy)<=1)break;
   }
+  const at=scene.fightProof();assert.ok(Math.hypot(at.x-at.gx,at.y-at.gy)<=1);
+  assert.ok(scene.runFromWatch());
+  for(let i=0;i<150&&town.communityLife.border.street;i++)await frame();
+  assert.equal(town.communityLife.border.street,undefined);
+  assert.equal(encounter.round,0);assert.equal(town.communityLife.away[encounter.guard.id],undefined);
+  assert.equal(sim.active().id,town.id);assert.equal(scene.getState().mode,'walk');
+  scene.destroy();sim.destroy();
 });

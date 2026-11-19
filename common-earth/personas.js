@@ -202,7 +202,7 @@
     // immutable birth profiles; the live roster and jobs are looked up separately.
     const birth=site.birthCoordinate||site;
     const fingerprint=JSON.stringify([site.id,site.foundingRevision,birth.lat,birth.lon,region,
-      pupils.map(p=>[p.id,p.slot,p.name,p.role]),site.birthNames,site.workRotation,site.foundingTemper]);
+      pupils.map(p=>[p.id,p.slot,p.name,p.role]),site.birthNames,site.workRotation]);
     const entry=foundings.get(fingerprint);
     if(entry){
       entry.seen=misses;
@@ -254,10 +254,9 @@
       const key=['grower','repairer','convenor'][slot]||'steward';
       slots.set(person.id,{id:person.id,name:person.name,key,kind:'resident',ordinal:baseSlots.length+slot,originRole:person.role});
     });
-    // Saves from before founding temperaments were stored used three fixed cohorts.
-    const legacy=/^near-.+-([012])$/.exec(site.id);
-    const foundingTemper=site.foundingTemper??(legacy?[36,93,48][Number(legacy[1])]:undefined);
-    return {seed,siteId:site.id,region,slots,foundingTemper,hasAssignments:site.birthNames!=null,workRotation:site.workRotation,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
+    const cohort=site.id.startsWith('near-')?Number(site.id.split('-').at(-1)):NaN;
+    const birthTemperament=Number.isInteger(cohort)?[36,90,48][(cohort+Math.floor((Math.abs(birth.lat)+1)/10))%3]:48;
+    return {seed,siteId:site.id,region,slots,birthTemperament,hasAssignments:site.birthNames!=null,workRotation:site.workRotation,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
       musician:'walker-'+(hash(seed+'performer')%5)};
   }
   const families=names=>[...new Set(names.map(name=>name.slice(name.indexOf(' ')+1)))];
@@ -324,10 +323,7 @@
     if(id===reg.musician||key==='repairer')hobby=pastimes[roll('musical-interest',0,2)];
     const [hobbyAxis,hobbyName,saying]=hobby;
     const [pattern,habit]=dispositions[roll('disposition',0,dispositions.length-1)];
-    const temperament=Object.fromEntries(traits.map((trait,i)=>[trait,clamp(pattern[i]+roll(trait,-14,14),0,100)]));
-    if(Number.isFinite(reg.foundingTemper))temperament.aggression=clamp(Math.round(reg.foundingTemper+
-      (temperament.initiative-temperament.patience)*.24+(50-temperament.sociability)*.36),0,100);
-    Object.freeze(temperament);
+    const temperament=Object.freeze(Object.fromEntries(traits.map((trait,i)=>[trait,clamp(pattern[i]+roll(trait,-14,14),0,100)])));
     const skills={},bounds={};
     for(const axis of axes){
       let skill=roll(axis+'base',16,57);
@@ -362,7 +358,7 @@
     const intro=name+' '+custom+'.';
     const description=intro+' '+name+' '+habit+'. Outside work, '+name+' enjoys '+hobbyName+'.';
     const outsideWork=key==='repairer'?'I enjoy '+hobbyName+'. I can work out a gear ratio in my head, but I have to learn a tune one phrase at a time.':saying;
-    const person={id,name,kind,identityKey:identityKey(reg.siteId,id),birthCommunityId:reg.siteId,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
+    const person={id,name,kind,identityKey:identityKey(reg.siteId,id),birthCommunityId:reg.siteId,birthTemperament:reg.birthTemperament,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
       strengths,traits:temperament,aptitudes:Object.freeze(skills),bounds:Object.freeze(bounds),outsideWork};
     if(reg.hasAssignments){
       let task;
