@@ -25,14 +25,29 @@
     const sorted=a.slice().sort((a,b)=>a-b),n=sorted.length;if(!n)return 'unavailable';
     return sorted[Math.floor((n-1)/2)].toFixed(1)+' ms median, '+sorted[Math.ceil(n*.95)-1].toFixed(1)+' ms p95 (n='+n+')';
   };
+  function idleFrames(){
+    const gaps=[];
+    return new Promise(resolve=>{
+      let first,last;
+      function frame(now){
+        if(last!==undefined)gaps.push(now-last);
+        first??=now;last=now;
+        if(now-first>=3000)resolve(gaps);
+        else requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
+  }
   let frameTimes=[],draw=[],input=[],last=0,queued=null,sampling=false;
   window.EarthPerformance={now:()=>performance.now(),record(){},finish(){},suspend(){},begin(){},end(){},input(c,e){if(sampling&&queued===null)queued=e.timeStamp;},
     painted(c,started){if(!sampling||c!==canvas)return;const now=performance.now();draw.push(now-started);if(last)frameTimes.push(now-last);last=now;if(queued!==null){input.push(now-queued);queued=null;}}};
   let scene;
   run.addEventListener('click',async()=>{
-    run.disabled=true;report.textContent='';status.textContent='Warming the street…';
+    run.disabled=true;report.textContent='';status.textContent='Measuring browser frames before painting…';
     try{
       scene?.destroy();
+      const idle=await idleFrames(),panFrames=[];
+      status.textContent='Warming the street…';
       const sim=CommonEarthSim.create({storage:null,snapshot}),w=sim.state,home=sim.active();
       scene=EarthStreet.mount(canvas,{getWorld:()=>w,getWeek:()=>w.week});scene.setSite(home);scene.resize();
       const rect=canvas.getBoundingClientRect(),x=rect.x+rect.width/2,y=rect.y+rect.height/2;
@@ -40,7 +55,11 @@
       await new Promise(done=>setTimeout(done,1200));frameTimes=[];input=[];draw=[];last=0;queued=null;sampling=true;
       status.textContent='Panning for ten seconds…';touch('pointerdown',0,0);
       const start=performance.now();await new Promise(done=>{
-        const pan=now=>{const t=(now-start)/1000;if(t>=10){done();return;}
+        let previous;
+        const pan=now=>{
+          if(previous!==undefined)panFrames.push(now-previous);
+          previous=now;
+          const t=(now-start)/1000;if(t>=10){done();return;}
           touch('pointermove',rect.width*.26*Math.sin(t*1.7),rect.height*.18*Math.sin(t*.9));requestAnimationFrame(pan);};requestAnimationFrame(pan);
       });
       touch('pointerup',0,0);sampling=false;scene.destroy();scene=null;
@@ -57,6 +76,8 @@
       report.textContent=['Viewport '+Math.round(rect.width)+' × '+Math.round(rect.height)+' CSS px, DPR '+devicePixelRatio,
         'Starting save '+snapshot.length+' characters, week '+JSON.parse(snapshot).week,
         'Completed draws '+(secs?n/secs:0).toFixed(1)+' FPS; '+frameTimes.filter(v=>v>34).length+'/'+n+' frame intervals over 34 ms',
+        'Browser frame callbacks before painting '+sortedStats(idle),
+        'Browser frame callbacks during pan '+sortedStats(panFrames),
         'Frame intervals '+sortedStats(frameTimes),'Scene drawing '+sortedStats(draw),'Synthetic touch to draw '+sortedStats(input),
         'Production '+sortedStats(shift),'Simulation throughput '+(1000*shift.length/shift.reduce((a,b)=>a+b,0)).toFixed(1)+' rounds/sec'].join('\n');
       status.textContent='Comparison complete.';
