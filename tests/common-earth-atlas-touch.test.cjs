@@ -285,3 +285,12 @@ test('losing the GPU switches to software at a stationary camera while regional 
   assert.equal(gpu.hasListener('webglcontextlost'),false);view.setSites([{id:'safe',name:'Port',lat:44,lon:12}]);draw();
   tap(160,150);assert.equal(selected.at(-1).id,'safe');view.destroy();assert.equal(layers.length,0);
 });
+
+test('six sovereign town pins at world scale can each be selected without hiding later breakaway towns',async()=>{
+  const {view,tap,draw,selected}=await atlas();
+  const home={id:'own',name:'Home',lat:0,lon:0,active:true};
+  const neighbours=Array.from({length:6},(_,i)=>({id:'near-'+i,name:'Ward '+i,lat:.018+i*.001,lon:.012+i*.001,nearbyRank:i+1}));
+  view.setSites([home,...neighbours]);draw();
+  for(const [x,y] of [[126,172],[194,172],[126,105],[194,105],[126,233],[194,233]])tap(x,y);
+  assert.deepEqual(selected.map(p=>p.id),neighbours.map(p=>p.id));
+});

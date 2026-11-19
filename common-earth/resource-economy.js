@@ -366,7 +366,18 @@
         cap:here?fieldSize(site,id):0,renew:here?localRate(site,id,world.week+1):0,finite:doc.renew===0,
         storageWeeks:shelfLife[id]||null,binDate:oldestDate(store,'bins',id,world.week),stallDate:oldestDate(store,'shelf',id,world.week)});
     }
-    let cachedOptions,cachedRecipes;
+    let cachedOptions,cachedRecipes,cachedPrices;
+    function priceList(){
+      if(cachedPrices)return cachedPrices;
+      const closedBook=store.serial>=max||exchange.serial>=max;
+      cachedPrices=rows.map(row=>{
+        const [ask,bid]=tradeQuotes(site,world,store,exchange,row.id,room);
+        const terms=(q,expires,lots)=>({price:q.price,lots,expires,available:!closedBook&&q.available,
+          reason:closedBook?'The exchange cannot record another trade.':q.reason});
+        return {id:row.id,name:row.name,ask:terms(ask,row.stallDate,row.shelf),bid:terms(bid,row.binDate,row.owned)};
+      });
+      return cachedPrices;
+    }
     function batches(){
       if(!cachedRecipes){
         const present=new Set(rows.map(r=>r.id));
@@ -393,7 +404,7 @@
     }
     return {habitat:habitats[habitat].title,foodSources:habitats[habitat].food,season:seasonLabels[seasonIndex(site,world.week)],
       fishing:Boolean(root.CommonEarthSim?.waterfront?.(site)||site.water||site.coastal),
-      serial:store.serial,rows,get options(){return orders();},get recipes(){return batches();},binLimit:lotLimit,compost:store.compost||0,compostLimit,mealNeed:Math.ceil(site.population/5),
+      serial:store.serial,rows,get prices(){return priceList();},get options(){return orders();},get recipes(){return batches();},binLimit:lotLimit,compost:store.compost||0,compostLimit,mealNeed:Math.ceil(site.population/5),
       shortage:Math.max(0,Math.ceil(site.population/5)-site.food),
       loss:store.lastLoss?.week===world.week&&Object.keys(store.lastLoss.bins).length?amounts(store.lastLoss.bins):null};
   }

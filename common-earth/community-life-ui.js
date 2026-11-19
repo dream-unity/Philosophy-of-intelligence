@@ -202,7 +202,13 @@
       host.append(history);
     }
     doc.addEventListener('visibilitychange',()=>{if(!doc.hidden){key='';render();}});
-    return {render,travelTo(id){
+    return {render,pantry(action,target){
+      if(action==='round')station('round',null,{type:'market'},'the pantry exchange');
+      else if(action==='cover'){
+        const helper=sim.active()?.residents.find(p=>p.id===target);
+        if(helper)station('cover',helper.id,{type:'resident',residentId:helper.id},helper.name);
+      }
+    },travelTo(id){
       const neighbour=root.EarthCommunityLife.neighbours(sim.state,sim.active()).find(n=>n.id===id);
       if(!neighbour){issue('Open the origin district to reach that path.');return;}
       station('walkTrail',id,{type:'market'},'the exchange path');

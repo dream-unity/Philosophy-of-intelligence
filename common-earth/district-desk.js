@@ -122,15 +122,22 @@
       if(stamp===directoryKey&&atlasWorld===world)return;directoryKey=stamp;atlasWorld=world;
       const rows=near(),host=$('atlas-district-list');
       if(!rows.length){panel.hidden=true;return;}
-      const keeps=doc.activeElement?.dataset.districtCommand;
-      host.replaceChildren(...rows.slice(0,5).map(town=>{
+      const keeps=doc.activeElement?.dataset.districtCommand,expanded=host.querySelector('details')?.open;
+      function districtRow(town){
         const site=findTown(world,town.id),row=el('article',null,'atlas-district-row');
         const description=el('div');description.append(el('strong',town.name),el('small',town.distance.toFixed(1)+' km · '+site.population+' residents · '+(town.rooms?town.rooms+' open beds':'housing full')));
         const watchButton=btn('Watch streets',()=>watch(town.id)),go=btn('Travel',()=>travel(town.id));
         watchButton.setAttribute('aria-label','Watch streets in '+town.name);go.setAttribute('aria-label','Travel to '+town.name);
         watchButton.dataset.districtCommand='watch-'+town.id;go.dataset.districtCommand='travel-'+town.id;
         row.append(description,watchButton,go);return row;
-      }));
+      }
+      host.replaceChildren(...rows.slice(0,4).map(districtRow));
+      if(rows.length>4){
+        const more=el('details',null,'atlas-more-streets'),list=el('div');let built=false;
+        more.append(el('summary','More destinations · '+(rows.length-4)),list);
+        const fill=()=>{if(more.open&&!built){list.replaceChildren(...rows.slice(4).map(districtRow));built=true;}};
+        more.addEventListener('toggle',fill);more.open=!!expanded;fill();host.append(more);
+      }
       if(keeps&&!doc.activeElement?.dataset.districtCommand)Array.from(host.querySelectorAll('button')).find(b=>b.dataset.districtCommand===keeps)?.focus({preventScroll:true});
     }
     const ledger=$('district-ledger'),ledgerBody=$('district-ledger-body');
@@ -177,8 +184,65 @@
     $('district-ledger-close').addEventListener('click',()=>shutLedger(true));
     ledger.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();shutLedger(true);}});
 
+    let priceTown='',stockTown='',comparePrices=false;
     function stockList(site,mine){
       const world=sim.state,market=root.EarthMarket.view(world,site),local=market.local;
+      if(stockTown!==site.id){stockTown=site.id;priceTown='';comparePrices=false;}
+      const modes=el('div',null,'ledger-modes');
+      function refreshFrom(control){
+        if(!control.isConnected||ledgerPage!=='stock')return false;
+        ledgerStamp='';drawLedger();return true;
+      }
+      for(const [label,showPrices] of [['Stock and renewal',false],['Compare market prices',true]]){
+        const control=btn(label,()=>{
+          if(!control.isConnected||comparePrices===showPrices)return;
+          comparePrices=showPrices;
+          if(refreshFrom(control))ledgerBody.querySelector('.ledger-mode-current')?.focus({preventScroll:true});
+        });
+        control.setAttribute('aria-pressed',String(comparePrices===showPrices));
+        if(comparePrices===showPrices)control.className='ledger-mode-current';
+        modes.append(control);
+      }
+      ledgerBody.append(modes);
+      if(comparePrices){
+        const peers=(root.EarthCommunityLife?.neighbours(world,site)||[]).filter(p=>p.distance<=70);
+        if(!peers.some(p=>p.id===priceTown))priceTown='';
+        const peer=priceTown&&findTown(world,priceTown),remote=peer&&root.EarthMarket.view(world,peer),other=remote?.local;
+        const picker=el('select',null,'ledger-price-town'),label=el('label','Compare with');
+        options(picker,[['','This district only'],...peers.map(p=>[p.id,p.name+' · '+Math.round(p.distance)+' km'])],priceTown);
+        picker.addEventListener('change',()=>{
+          if(!picker.isConnected)return;
+          priceTown=picker.value;
+          if(refreshFrom(picker))ledgerBody.querySelector('.ledger-price-town')?.focus({preventScroll:true});
+        });
+        label.append(picker);if(peers.length)ledgerBody.append(label);
+        ledgerBody.append(el('p','Prices are in funds per lot from each district’s own bins and treasury. Each sale can change the next quote. Freight, travel time and losses in transit are separate.'));
+        const table=el('table',null,'ledger-prices'),head=el('thead'),header=el('tr'),body=el('tbody');
+        const resourceHeading=el('th','Resource');resourceHeading.scope='col';header.append(resourceHeading);
+        for(const [town,shop,survey] of [[site,market,local],...(peer?[[peer,remote,other]]:[])]){
+          const th=el('th');th.scope='col';th.append(el('strong',town.name),el('small',survey.season+' · '+funds(shop.till)+' in merchant till'));header.append(th);
+        }
+        head.append(header);
+        const here=new Map(local.prices.map(p=>[p.id,p])),there=new Map((other?.prices||[]).map(p=>[p.id,p]));
+        function quoteCell(prices){
+          const cell=el('td');
+          if(!prices){cell.textContent='No local listing';return cell;}
+          for(const [key,label] of [['bid','Pays'],['ask','Asks']]){
+            const offer=prices[key],line=el('span',null,'ledger-price-line');
+            line.append(el('strong',label+' '+offer.price));
+            if(!offer.available){line.className+=' ledger-price-blocked';line.append(el('small',' · '+offer.reason));}
+            else line.append(el('small',' · '+offer.lots+(key==='bid'?' in public bins':' on shelf')));
+            if(offer.expires!=null)line.append(el('small',' · Expires wk '+offer.expires));
+            cell.append(line);
+          }
+          return cell;
+        }
+        for(const id of new Set([...here.keys(),...there.keys()])){
+          const mine=here.get(id),theirs=there.get(id),row=el('tr'),name=el('th',(mine||theirs).name);
+          name.scope='row';row.append(name,quoteCell(mine));if(peer)row.append(quoteCell(theirs));body.append(row);
+        }
+        table.append(head,body);const wrap=el('div',null,'ledger-table-wrap');wrap.append(table);ledgerBody.append(wrap);return;
+      }
       const caption=el('p',local.habitat+' · '+local.season+' · '+local.mealNeed+' food needed for the next weekly household share.');
       const table=el('table'),head=el('thead'),titles=el('tr'),body=el('tbody');
       ['Resource','Local supply','Public bins','Merchant','Renewal'].forEach(t=>{const th=el('th',t);th.scope='col';titles.append(th);});head.append(titles);

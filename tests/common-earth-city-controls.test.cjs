@@ -63,3 +63,42 @@ test('a housing shortcut exposes only its selected proposal and a retired commis
   assert.equal(site.funds,funds-7);assert.equal(site.materials,materials-4);assert.equal(sim.state.effort,effort-2);
   sim.destroy();
 });
+
+test('the public ledger compares nearby real stalls on demand and leaves guest controls read-only',()=>{
+  const document=documentForInspector(),w=vm.createContext({document,structuredClone,Date});w.window=w;
+  for(const name of ['resource-economy','fisheries','agency','provisions','market','personas','community-life','city','simulation'])
+    vm.runInContext(fs.readFileSync(path.join(game,name+'.js'),'utf8'),w,{filename:name+'.js'});
+  vm.runInContext(fs.readFileSync(path.join(game,'district-desk.js'),'utf8'),w);
+  const sim=w.CommonEarthSim.create({storage:null});
+  assert(sim.found({name:'Stone Town',lat:-6.162,lon:39.191,water:false}).ok);
+  const state=sim.state,home=sim.active(),near=w.EarthCommunityLife.neighbours(state,home)[0];
+  const peer=state.communityLife.outposts.find(s=>s.id===near.id)||state.sites.find(s=>s.id===near.id);
+  // Distinct live tills distinguish a real comparison from a duplicated local quote.
+  assert.ok(peer);peer.exchange={...JSON.parse(JSON.stringify(home.exchange||{serial:1,lastWeek:1,shelf:{food:3,materials:3},locked:{funds:0,materials:0},history:[]})),till:0};
+  const realMarket=w.EarthMarket;
+  const readAt=[],priceReads=[];
+  w.EarthMarket={...realMarket,view(world,site){
+    readAt.push(site.id);const m=realMarket.view(world,site),local=m.local;
+    return {...m,local:new Proxy(local,{get(target,id){if(id==='prices')priceReads.push(site.id);return target[id];}})};
+  }};
+  const ui=w.EarthDistrictDesk.mount({sim,hud:{registerTool(){}},redraw(){}});
+  const body=document.getElementById('district-ledger-body'),ribbon=document.getElementById('ribbon-resources');
+  const button=label=>body.querySelectorAll('button').find(b=>b.textContent===label);
+  const textOf=n=>[n.textContent||'',...n.children.map(textOf)].join(' ');
+  const clickMode=()=>button('Compare market prices').click();
+  ribbon.click();assert.ok(button('Visit the exchange'));assert.deepEqual(priceReads,[]);assert.deepEqual(readAt,[home.id]);
+  const original=JSON.stringify(state);clickMode();
+  assert.deepEqual(priceReads,[home.id]);assert.match(textOf(body),/funds per lot/);assert.match(textOf(body),/Freight/);
+  const picker=body.querySelector('select');picker.value=peer.id;picker.events.change();
+  assert.deepEqual(priceReads.slice(-2),[home.id,peer.id]);const content=textOf(body);
+  assert.ok(content.includes(peer.name));assert.match(content,/0 funds in merchant till/);
+  assert.equal(body.querySelectorAll('button').length,2,'only navigation buttons are present on the comparison');
+  assert.equal(JSON.stringify(state),original,'reading both registers leaves every account unchanged');
+  button('Stock and renewal').click();
+  assert.ok(button('Visit the exchange'));const requests=readAt.length;
+  picker.events.change();assert.equal(readAt.length,requests,'retired selection cannot refresh another view');
+  // Open Public stores while visiting; all stock and both quoted ledgers remain inspectable.
+  state.communityLife.homeId=peer.id;state.actionRevision++;ui.render(false);
+  assert.equal(button('Visit the exchange'),undefined);assert.equal(body.querySelectorAll('button').length,2);
+  clickMode();assert.equal(body.querySelectorAll('button').length,2);sim.destroy();
+});

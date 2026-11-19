@@ -101,3 +101,17 @@ body[data-observing-town] :is(#settlement-status,#planning-details,#goal-details
 #observer-goal-report h3 { font-size:.9rem; margin:8px 0 2px; color:#e9d19b; }
 #observer-goal-report p { margin:3px 0 6px; font-size:.85rem; line-height:1.35; color:#deeadc; }
 @container street (max-width:660px){ #observer-goals { top:78px; left:8px; right:auto; max-width:calc(100% - 65px); } }
+
+.ledger-modes { display:flex; flex-wrap:wrap; gap:5px; margin:6px 0; }
+#district-ledger .ledger-mode-current { border-color:#dbbf85; color:#fff2d5; background:#3a5040; }
+.ledger-prices :is(th,td) { vertical-align:top; }
+.ledger-price-line { display:block; line-height:1.4; }
+.ledger-price-line + .ledger-price-line { margin-top:2px; }
+.ledger-prices th small { display:block; font-weight:400; }
+.ledger-price-blocked strong { font-weight:400; }
+.ledger-price-line small { color:#c5d5cd; font-size:.8rem; }
+@media(any-pointer:coarse){ #district-ledger :is(.ledger-modes button,.ledger-price-town) { min-height:44px; } }
+
+.atlas-more-streets { grid-column:1/-1; }
+.atlas-more-streets summary { color:#f0dda9; padding:6px; cursor:pointer; }
+.atlas-more-streets > div { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),1fr)); gap:8px; max-height:280px; overflow-y:auto; }

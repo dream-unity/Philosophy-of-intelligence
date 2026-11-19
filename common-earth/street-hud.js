@@ -243,7 +243,7 @@
       for(const b of openers)b.setAttribute('aria-expanded',String(b.dataset.sceneOpen===(id==='goals'&&goalId?'person':id)));
       for(const p of panes)p.hidden=p.dataset.scenePane!==id;
       card.hidden=false;clearInvitation();show($('scene-notice'),false);
-      text($('scene-title'),({people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',live:'Live weeks'})[id]);
+      text($('scene-title'),({people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',original:'Original life',live:'Live weeks'})[id]);
       render(true);tick();changed?.();if(focus)$('scene-title')?.focus({preventScroll:true});return true;
     }
     function openTalk(ref){
@@ -652,8 +652,8 @@
       text($('scene-goal-summary'),town.label);text($('scene-person-summary'),aim);
       const townButton=$('scene-open-goals'),personButton=$('scene-open-person');
       const anchor=root.EarthInterdependence?.anchor?.(sim.state,site),original=$('scene-original-return');
-      show(original,!!anchor&&(!anchor.yours||!anchor.atHome));
-      text($('scene-original-status'),anchor?.nearest?'Due week '+anchor.nearest.due:
+      show(original,!!anchor);
+      text($('scene-original-status'),anchor?.nearest&&(anchor.roundCovered||!anchor.dutyWeek||anchor.nearest.due<=anchor.dutyWeek)?'Due week '+anchor.nearest.due:
         anchor?.dutyWeek&&!anchor.roundCovered?'Pantry · week '+anchor.dutyWeek:anchor?.name||'');
       if(original&&anchor){original.title=anchor.status;original.setAttribute('aria-label','Original character, '+anchor.name+'. '+anchor.status);}
       text($('scene-person-label'),anchor&&!anchor.yours&&person?.name?person.name+'’s aim':'My aim');
@@ -897,7 +897,7 @@
       if(pane==='fishing')toolbox.get('fishing')?.onScene?.(state);
       if(pane==='truck')toolbox.get('truck')?.onScene?.(state);
     }
-    const restorable=new Set(['goals','stores','talk','fishing','truck','live','neighbours']);
+    const restorable=new Set(['original','goals','stores','talk','fishing','truck','live','neighbours']);
     function snapshot(){
       const site=sim.active();if(!site)return null;
       return {v:1,siteId:site.id,name:site.name,generation:site.foundingRevision||0,actor:actorId(),

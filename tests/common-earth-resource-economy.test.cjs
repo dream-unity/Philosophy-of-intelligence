@@ -327,3 +327,27 @@ test('dryland millet and traded water support irrigation while shellfish beds re
   const sea=open({lat:-12,lon:80,name:'Open ocean',water:true});assert.equal(row(sea,'shellfish'),undefined);
   sea.s.buildings.push({kind:'fishingDock',plot:3});assert.equal(row(sea,'shellfish').local,true);sea.sim.destroy();
 });
+
+test('public price comparison uses the executable one-lot terms, dated inventory and real merchant and treasury limits',()=>{
+  const t=open({lat:59,lon:15,name:'Woodland'}),{w,s,sim}=t;
+  const prices=()=>t.current().local.prices.find(q=>q.id==='berries');
+  const compare=()=>{
+    const p=prices();
+    for(const [key,action] of [['bid','sellLot'],['ask','buyLot']]){
+      const q=t.intent(action,'berries').option;
+      assert.deepEqual([p[key].price,p[key].reason,p[key].available],[q.price,q.reason,q.available]);
+    }
+    return p;
+  };
+  const before=JSON.stringify(w),initial=compare();
+  assert.equal(initial.bid.available,false);assert.equal(initial.ask.available,true);assert.equal(JSON.stringify(w),before);
+  ok(t.act('gatherLot','berries'));const fresh=compare();assert(fresh.bid.available);
+  w.week++;const marked=compare();assert.equal(marked.bid.price,fresh.bid.price-1);assert.equal(marked.bid.expires,w.week+1);
+  const cash=s.funds;ok(t.act('sellLot','berries'));assert.equal(s.funds,cash+marked.bid.price);
+  const asking=compare();assert.equal(asking.ask.expires,w.week+1);ok(t.act('buyLot','berries'));
+  assert.equal(s.funds,cash+marked.bid.price-asking.ask.price);
+  s.exchange.till=0;s.funds=0;const empty=compare();assert.match(empty.bid.reason,/more cash/);assert.match(empty.ask.reason,/treasury/i);
+  s.resourceLedger.shelf.berries=0;assert.match(compare().ask.reason,/No stock/);
+  s.resourceLedger.serial=Number.MAX_SAFE_INTEGER;
+  assert.equal(prices().bid.available,false);assert.match(prices().ask.reason,/record/);sim.destroy();
+});

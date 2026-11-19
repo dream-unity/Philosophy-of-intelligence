@@ -483,3 +483,71 @@ test('districts negotiate different load sizes when material reserves and food n
   assert.equal(farm.food,18);assert.equal(yard.materials,19);
   world.week++;life.tick(world);assert.equal(yard.food,6);assert.equal(farm.materials,15);
 });
+
+function originalDesk(game,options={}){
+  const {context,sim}=game;
+  for(const name of ['interdependence','original-life','community-life-ui'])vm.runInContext(fs.readFileSync(path.join(dir,name+'.js'),'utf8'),context);
+  const doc={createElement:tag=>new Element(tag),addEventListener(){},getElementById(){return null;}};
+  class Element{
+    constructor(tag){Object.assign(this,{tag,ownerDocument:doc,dataset:{},children:[],events:{},textContent:''});}
+    get isConnected(){return this===host||!!this.parent?.isConnected;}
+    append(...nodes){for(const n of nodes){n.parent=this;this.children.push(n);}}
+    replaceChildren(...nodes){this.children.forEach(n=>{n.parent=null;});this.children=[];this.append(...nodes);}
+    addEventListener(type,fn){this.events[type]=fn;}
+    all(){return [this,...this.children.flatMap(n=>n.all())];}
+  }
+  let stop=null,at='',review;
+  const host=new Element('section'),other=new Element('section');other.hidden=true;
+  const proof=()=>({actor:context.EarthAgency.actorId(sim.active()),siteId:sim.active().id,mode:'walk',x:4,y:5,tx:4,ty:5});
+  const street={getState:proof,meeting(ref){const target=ref.residentId||ref.type;return at===target?{...proof(),target}:null;}};
+  function go(ref,label,arrived){stop=()=>{at=ref.residentId||ref.type;arrived();};}
+  const district=context.EarthCommunityLifeUI.mount(other,{sim,getStreet:()=>street,atVenue:go,meet:go,refresh:()=>{},notify:()=>{}});
+  const routes=[];
+  const ui=context.EarthOriginalLife.mount(host,{sim,playAs:id=>{review=sim.changeActor(id,proof);},pantry:district.pantry,
+    towns:id=>routes.push(id),talk:id=>routes.push(id),observing:options.observing});
+  return {ui,render:()=>ui.render(),button:key=>host.all().find(n=>n.dataset.streetCommand===key),
+    click:key=>host.all().find(n=>n.dataset.streetCommand===key)?.events.click(),arrive:()=>stop(),review:()=>review,routes,
+    content:()=>host.all().map(n=>n.textContent).filter(Boolean).join(' ')};
+}
+test('the original life desk reads the signed ledger and personal purse across perspectives, and keeps a busy handoff under review',()=>{
+  const g=fixture(),{sim,home}=g,[resident,other]=home.residents;
+  assert(sim.changeActor(resident.id,{siteId:home.id,actor:'steward',mode:'walk',x:6,y:8}).ok);
+  other.promise={by:'steward',dueWeek:sim.state.week+1};resident.promise={by:resident.id,dueWeek:sim.state.week};
+  home.purses={people:{steward:{balance:9},[resident.id]:{balance:41}}};
+  const h=originalDesk(g),before=JSON.stringify(sim.state);
+  h.render();assert.equal(JSON.stringify(sim.state),before);assert.match(h.content(),/Personal purse · 9 funds/);
+  assert(h.content().includes('Playing as '+resident.name));assert(h.content().includes('Promise to '+other.name));assert(!h.content().includes('Promise to '+resident.name));
+  assert.match(h.content(),/Due next week/);assert(!h.button('original-round'));assert(h.button('original-handoff'));
+  delete home.purses;other.promise=resident.promise=null;
+  assert(sim.beginShift(other.id).ok);h.render();
+  const busy=JSON.stringify(sim.state);h.click('original-handoff');assert(h.review()?.finishQuote,h.review()?.message);
+  assert.equal(JSON.stringify(sim.state),busy);
+});
+test('pantry actions require reaching the exchange or meeting the consenting helper and cannot run from a stale or observing desk',async()=>{
+  const g=fixture(),p=g.home.residents[0];p.bond=2;p.heard=true;
+  let observing=false;const h=originalDesk(g,{observing:()=>observing});
+  h.render();const stale=h.button('original-cover');assert(stale);
+  observing=true;stale.events.click();h.render();assert(!h.button('original-cover'));assert(!g.life.anchor(g.sim.state).coveredBy);
+  observing=false;h.render();stale.events.click();const before=JSON.stringify(g.sim.state);
+  h.click('original-cover');assert.equal(JSON.stringify(g.sim.state),before);
+  h.arrive();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(g.life.anchor(g.sim.state).coveredBy,p.id);h.render();assert(!h.button('original-round'));assert(h.content().includes(p.name+' agreed'));
+  const other=fixture(),d=originalDesk(other);d.render();d.click('original-round');assert(!other.life.anchor(other.sim.state).attended);
+  d.arrive();await new Promise(resolve=>setImmediate(resolve));assert(other.life.anchor(other.sim.state).attended);
+});
+test('the original can return from a visiting perspective, with real transit home and no authority over foreign residents',()=>{
+  const g=fixture(),{sim,life,home,visit}=g;
+  visit(life.neighbours(sim.state,home)[0].id);const dest=sim.active(),local=dest.residents[0];
+  // A restored guest scene may still hold a local perspective.
+  dest.agency.actor=local.id;
+  const h=originalDesk(g);h.render();assert(h.content().includes(g.anchor.name));assert(h.content().includes('Home in '+home.name));
+  assert(!h.button('original-round'));assert(!h.button('original-rota-route'));
+  h.click('original-handoff');assert(h.review()?.ok,h.review()?.message);assert.equal(dest.agency.actor,'steward');
+  assert(!sim.changeActor(local.id,{siteId:dest.id,actor:'steward',mode:'walk',x:6,y:8}).ok);
+  h.render();h.click('original-rota-route');assert.deepEqual(h.routes,[home.id]);assert.equal(sim.active().id,dest.id);
+});
+test('a missed pantry handover is shown separately from the next live deadline',()=>{
+  const g=fixture(),h=originalDesk(g);
+  for(let i=0;i<3;i++)assert(g.sim.advance().ok);
+  h.render();assert.match(h.content(),/Latest missed commitment.*no handover/);assert.match(h.content(),/Due week 7/);
+});

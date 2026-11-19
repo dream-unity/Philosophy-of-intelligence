@@ -782,8 +782,9 @@
         if(p.z<.025 || p.x< -12 || p.y< -12 || p.x>w+12 || p.y>h+12)continue;
         const active=s.selected||s.active;
         if(s.nearbyRank&&hub&&hub.z>.025&&Math.hypot(p.x-hub.x,p.y-hub.y)<41){
-          const side=s.nearbyRank===1?-1:1;
-          const x=clamp(hub.x+side*33,13,w-13),y=clamp(hub.y+22,15,h-15);
+          const side=s.nearbyRank%2?-1:1;
+          const offset=s.nearbyRank<=2?22:s.nearbyRank<=4?-45:83;
+          const x=clamp(hub.x+side*34,13,w-13),y=clamp(hub.y+offset,15,h-15);
           ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(x,y);
           ctx.strokeStyle='#a3c9ac';ctx.lineWidth=1.2;ctx.stroke();p.x=x;p.y=y;
         }
@@ -811,7 +812,7 @@
           const n=String(s.name||s.label||'').trim();if(!n)continue;
           ctx.font='600 11px system-ui';ctx.textAlign='left';ctx.textBaseline='middle';
           const size=ctx.measureText(n).width+14;
-          const anchorX=s.nearbyRank===1?p.x-size-5:p.x+11;
+          const anchorX=s.nearbyRank%2===1?p.x-size-5:p.x+11;
           const x=clamp(anchorX,4,Math.max(4,w-size-4)),y=clamp(p.y+(s.nearbyRank?16:-21),10,h-10);
           ctx.fillStyle='rgba(8,24,30,.88)';ctx.fillRect(x,y-9,size,19);
           ctx.strokeStyle='rgba(207,179,117,.62)';ctx.lineWidth=.7;ctx.strokeRect(x,y-9,size,19);

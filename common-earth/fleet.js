@@ -136,7 +136,7 @@
     if(custody)next=stops[custody.stop];
     const suspended=f.incident?.actor===id;
     const hasLoad=!root.EarthMarket||root.EarthMarket.canLoadFreight(site,next.good);
-    const role=licence?(hired?'Transport cooperative employee':'Co-op relief roster'):relief?'Dispatch induction in progress':'Visitor';
+    const role=licence?(hired?'Transport cooperative employee':'Co-op relief roster'):relief?'Dispatch induction in progress':'Enquiring about a driving shift';
     const choices=[];
     function add(action,label,detail,gate='',at='truck'){choices.push({action,label,detail,available:!gate,reason:gate,at});}
     if(!custody){

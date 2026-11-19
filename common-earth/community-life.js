@@ -1034,6 +1034,9 @@
     return {week:g.since,kind:'visit',venue:'market',destination:'market',goal:'Inspect the local exchange',activity:'Inspecting the exchange and meeting households',
       reason:g.motive||g.profile.name+' is weighing local food, spare housing and the work available.',rationale:'Considering whether to move here.'};
   }
+  function coverCandidate(rota){
+    return rota.residents.find(p=>residency(rota,p.id)==='member'&&p.bond>=2&&p.heard&&!p.promise);
+  }
   function view(world,site){
     const a=world.communityLife;if(!a||!site)return null;
     const original=anchor(world),home=lookup(world,a.homeId),member=isHome(world,site),purseSites=world.sites.map(s=>({name:s.name,balance:s.purses?.people?.steward?.balance||0})).filter(p=>p.balance);
@@ -1043,7 +1046,7 @@
       journey:a.journey?{...a.journey,targetName:lookup(world,a.journey.to)?.name}:null,neighbours:neighbours(world,site),
       visitors:visitorLedger(site),promises:personalPromises(world),parcel:a.parcel?{...a.parcel,place:lookup(world,a.parcel.to)?.name,source:lookup(world,a.parcel.from)?.name}:null,
       vacancies:site.communityLife?.vacancies||[],log:site.communityLife?.log||[],admission:member?null:reception(world,site),
-      companions:comp,households:householdLife(site,world.week),hearing:site.communityLife?.hearing,lastHearing:site.communityLife?.lastHearing,atRota:site.id===rota.id,canCover:rota.residents.find(p=>residency(rota,p.id)==='member'&&p.bond>=2&&p.heard&&!p.promise)?.id||null,host:hostFor(site),purseSites,
+      companions:comp,households:householdLife(site,world.week),hearing:site.communityLife?.hearing,lastHearing:site.communityLife?.lastHearing,atRota:site.id===rota.id,canCover:coverCandidate(rota)?.id||null,host:hostFor(site),purseSites,
       atHomeText:original.attended?'Your round at '+rota.name+' is recorded.':original.coveredBy?original.coverName+' has agreed to cover your round at '+rota.name+'.':'Your pantry round at '+rota.name+' is due in week '+original.due+'.'};
   }
   const fail=message=>({ok:false,message});
@@ -1105,7 +1108,7 @@
     }
     if(cmd==='found'&&(root.EarthAgency?.actorId(site)||'steward')!=='steward')return 'Return to '+a.profile.name+' to sign a founding proposal.';
     if(cmd==='beginGoal'&&args[0]!==a.homeId||cmd==='found'&&args[3]&&args[3]!==a.homeId)return 'Only your home community can sponsor that decision.';
-    if(isHome(world,site))return '';
+    if(isHome(world,site)||cmd==='changeActor'&&args[0]==='steward')return '';
     if(['visit','advance','workConstruction','regularTruck','disputedTruck','neighbourAppointment','communityLife','reset'].includes(cmd))return '';
     if(cmd==='converse'&&(root.EarthDialogue?.readOnly?.(args[1])??['news','work','interests','purpose','dream','visit-fit','followup'].includes(args[1])))return '';
     return 'You are visiting '+site.name+'. Its residents decide here. Open Towns to meet the host, apply to join, or go home.';
@@ -1374,6 +1377,6 @@
       (p.workFocus==null||root.EarthPersonas?.validWorkFocus?.(p.workFocus))&&
       ['numeracy','music','communication','care','craft','stamina','organisation'].every(k=>int(p.aptitudes[k],0,100)&&int(p.bounds[k]?.min,0,p.aptitudes[k])&&int(p.bounds[k]?.max,p.aptitudes[k],100));
   }
-  root.EarthCommunityLife=Object.freeze({initialise,restart,valid,present,profile,personLabel,census,commuting,residency,anchor,isHome,neighbours,travelIntent,volunteers,founding,
+  root.EarthCommunityLife=Object.freeze({initialise,restart,valid,present,profile,personLabel,census,commuting,residency,anchor,coverCandidate,isHome,neighbours,travelIntent,volunteers,founding,
     view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,run});
 })(typeof window==='undefined'?globalThis:window);

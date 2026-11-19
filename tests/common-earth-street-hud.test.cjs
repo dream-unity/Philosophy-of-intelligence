@@ -432,3 +432,13 @@ test('a local resident can raise a real food shortage unprompted, and hearing th
   g.sim.state.week=week+1;g.near(null);g.near('walker-2');assert(g.cmd('hear-neighbour'));
   g.ui.invalidate();g.sim.destroy();
 });
+test('the original strip opens its own street pane even while playing the founder at home',()=>{
+  const g=fixture(),name=g.w.EarthAgency.identity(g.sim.active(),'steward').name;
+  g.w.EarthInterdependence={anchor:()=>({name,yours:true,atHome:true,held:[],status:'Pantry round',dutyWeek:4,nearest:{due:6}})};
+  let opened=0;g.ui.registerTool('original',{render(){opened++;}});
+  g.ui.invalidate();g.ui.render();const opener=g.id('scene-original-return');
+  assert(!opener.hidden);assert.match(g.id('scene-original-status').textContent,/Pantry.*4/);
+  opener.fire('click');assert.equal(g.ui.active(),'original');assert(!g.id('scene-original').hidden);
+  assert.equal(g.id('scene-title').textContent,'Original life');assert.equal(opened,1);
+  g.ui.invalidate();g.sim.destroy();
+});

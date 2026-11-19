@@ -92,7 +92,8 @@
   function checkHandoff(site,id,scene){
     if(!site||!scene||scene.siteId!==site.id||scene.actor!==actorId(site))return reject('The character changed. Choose again.');
     if(scene.mode!=='walk'||!point(scene))return reject('Come ashore or step out of the van before changing characters.');
-    if(!canPlay(site,id)||!residentHere(site,id))return reject('Choose a current community member. Visitors decide for themselves where to live.');
+    const originalVisitor=id===founder.id&&site.communityLife?.people?.[id]?.status==='anchor'&&root.EarthCommunityLife?.present?.(site,id);
+    if(!canPlay(site,id)||!residentHere(site,id)&&!originalVisitor)return reject('Choose a current community member. Visitors decide for themselves where to live.');
     if(actorId(site)===id)return {ok:true,message:'Already playing as '+identity(site,id).name+'.',unchanged:true};
     if(streetActor(id)){
       const incoming=scene.targetPose;
