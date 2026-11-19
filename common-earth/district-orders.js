@@ -139,7 +139,7 @@
     let best=null;
     for(const opening of offers.openings){
       const {shop,employer,item,source,demand}=opening;
-      if(offers.hired.has(shop.owner)||!demand)continue;
+      if(employer.id===p.id||offers.hired.has(shop.owner)||!demand)continue;
       const proficiency=site.careers?.[p.id]?.skills?.[item.axis]??p.aptitudes?.[item.axis]??40;
       const threshold=item.threshold-(site.growth.custom==='Repair circle'&&shop.access&&item.axis==='craft'?4:0);
       if(proficiency<threshold)continue;

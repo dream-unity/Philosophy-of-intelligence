@@ -303,6 +303,8 @@
     if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
     if(site.birthCoordinate!=null&&!geoPoint(site.birthCoordinate))return false;
     if(root.EarthPractice&&!root.EarthPractice.valid(site,world.week))return false;
+    if(root.EarthCouncilHomes&&!root.EarthCouncilHomes.valid(site,world.week))return false;
+    if(root.EarthBorderConflict&&!root.EarthBorderConflict.valid(site,world.week))return false;
     if(root.EarthHousing&&!root.EarthHousing.valid(site,world.week))return false;
     if(root.EarthTownCentre&&!root.EarthTownCentre.valid(world,site))return false;
     if(root.EarthPersonas?.validBirthNames&&!root.EarthPersonas.validBirthNames(site.birthNames))return false;

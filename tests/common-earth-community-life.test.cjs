@@ -692,7 +692,9 @@ test('a physical encounter, sponsorship and the delayed report change distinct j
   assert.equal(incident.actorName,guard.name);assert.equal(incident.guestName,world.communityLife.profile.name);
   assert.equal(incident.official,true);
   assert.ok(sim.converse(guard.id,'news',proof).repelled);
-  assert.equal(town.communityLife.entryRecords.length,1,'one witness cannot manufacture independent reports');
+  const removals=town.communityLife.entryRecords.filter(e=>e.kind==='removal');
+  assert.equal(removals.length,1,'repeating the same confrontation cannot manufacture another report');
+  assert.equal(new Set(town.communityLife.entryRecords.map(e=>e.guestKey)).size,1,'the visitor separately witnessed the boundary and street incidents');
   const immediate=life.entryAssessment(world,town);
   assert.equal(immediate.personal.score,initial.personal.score,'being shoved is not evidence of misconduct by the visitor');
   assert.equal(immediate.reputation.length,0);
