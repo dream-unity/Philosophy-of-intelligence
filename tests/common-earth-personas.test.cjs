@@ -132,6 +132,24 @@ test('a former porter stays in the directory from study through recruitment afte
   assert.ok(!p.list(s).some(person=>person.id===id));
 });
 
+test('household lists preserve live and historically retained local carriers in directory order',()=>{
+  const app=runtime(),site=town(app).active(),directory=app.EarthPersonas;
+  const resident='carrier-1-4',visitor='carrier-0-1',commuter='carrier-3-4',unrecorded='carrier-4-5';
+  site.communityLife={people:{[resident]:{status:'member'},[visitor]:{status:'visitor'},[unrecorded]:{status:'member'}}};
+  site.agency={porters:[commuter]};
+  site.careers={driver:{application:{coverId:resident}}};
+  site.buildings=[{kind:'workshop',plot:0},{kind:'garden',plot:1}];
+  const carriers=options=>Array.from(directory.list(site,options),p=>p.id).filter(directory.isPorterId);
+  assert.deepEqual(carriers(),[visitor,resident,commuter]);
+  assert.deepEqual(carriers({includeCommuters:false}),[visitor,resident]);
+  delete site.communityLife.people[unrecorded];
+  site.agency.porters.push(resident,visitor);
+  assert.deepEqual(carriers({includeCommuters:false}),[visitor,resident]);
+  delete site.communityLife;
+  assert.deepEqual(carriers({includeCommuters:false}),[]);
+  assert.deepEqual(carriers(),[visitor,resident,commuter]);
+});
+
 test('careers, legacy bonds, promises and outside-work replies refer to the same named person after a save round trip',()=>{
   const app=runtime(),sim=town(app),s=sim.active(),id=s.residents[1].id;
   const who=app.EarthPersonas.profile(s,id),before=JSON.stringify(s),pose=contact(s,id);

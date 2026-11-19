@@ -206,3 +206,14 @@ test('a returning worker can repair a rushed reference even after reaching their
   assert.ok(!view(id,'courier').choices.some(c=>c.id==='relief'));
   advance(1);assert.equal(api.weeklyAdjustment(site,world).food,undefined);
 });
+
+test('a paid lesson at a worker’s skill ceiling leaves a fresh career untouched and older empty records still reopen',()=>{
+  const {api,site,world,people}=setup(),p=people[1],axis='craft';
+  p.bounds[axis].max=p.aptitudes[axis];
+  api.productionLesson(site,p,axis,world.week);
+  assert.equal(site.careers,undefined);
+  site.careers={[p.id]:{revision:0,skills:{},qualifications:{},portfolios:{},references:{},history:[]}};
+  assert.ok(api.valid(site,world.week));
+  site.careers[p.id].jobId='doctor';
+  assert.equal(api.valid(site,world.week),false);
+});

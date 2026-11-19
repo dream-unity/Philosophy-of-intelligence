@@ -10,12 +10,22 @@
     const world=()=>sim.state;
     const town=key=>world().sites.find(s=>s.id===key)||world().communityLife?.outposts.find(s=>s.id===key);
     const activeTown=()=>selection?.siteId?town(selection.siteId):null;
+    // Panning within a town changes terrain and coordinates on every frame.
+    // The admissions register changes only when the simulation commits work.
+    let entryCache=null;
+    function communityEntry(w,site){
+      const revision=[w.week,w.actionRevision,w.productionSerial,w.workRevision].join('/');
+      if(entryCache?.world!==w||entryCache.site!==site||entryCache.revision!==revision){
+        entryCache={world:w,site,revision,result:root.EarthCommunityLife.entryAssessment(w,site)};
+      }
+      return entryCache.result;
+    }
     const element=(tag,text)=>{const el=doc.createElement(tag);el.textContent=text;return el;};
     function action(label,run,disabled=false){
       const b=element('button',label);b.type='button';b.disabled=disabled;b.addEventListener('click',run);detail.append(b);
     }
     function clear(){
-      selection=null;expanded=false;message='';lastStamp='';host.hidden=true;
+      selection=null;expanded=false;message='';lastStamp='';entryCache=null;host.hidden=true;
       delete doc.body.dataset.regionRoaming;delete doc.body.dataset.regionDetail;
     }
     function redraw(){
@@ -44,6 +54,7 @@
       const geo=region?.geography(w,base);
       detail.replaceChildren();
       const line=t=>{if(t)detail.append(element('p',t));};
+      const heading=t=>detail.append(element('h4',t));
       if(event.choices?.length>1){
         const label=element('label','At this point'),field=doc.createElement('select');
         field.setAttribute('aria-label','Choose what to inspect at this point');
@@ -69,6 +80,32 @@
         line([p?.role||p?.originRole,actual||work?.last,goal?.reason].filter(Boolean).join(' · '));
         if(order?.reason&&order.reason!==actual)line(order.reason);
         if(goal?.dream)line(goal.dream.title+' · '+goal.dream.next);
+        if(p){
+          heading('Skills and work record');
+          const career=view.careers?.[p.id],study=career?.training;
+          const skills=Object.entries({...p.aptitudes,...p.demonstratedSkills,...career?.skills}).sort((a,b)=>b[1]-a[1]);
+          for(const [axis,value] of skills.slice(0,2))line(axis+' · '+value+' now, potential '+(p.bounds?.[axis]?.max??value)+'.');
+          if(study)line('Course record · '+study.credits+' credits. '+(study.paused?'Study is paused.':study.pace==='intensive'?'Two credits per study week.':'One credit per study week.'));
+          else if(p.externalHistory)line('Recruitment assessment · '+p.externalHistory.learningRate+'/100 learning rate.');
+          else line('No current course attendance to judge learning pace.');
+          if(career?.history?.length)line('Week '+career.history[0].week+' · '+career.history[0].text);
+          heading('Reliability and local testimony');
+          if(p.externalHistory)line(p.externalHistory.origin+' reference · '+p.externalHistory.reliability+'/100 reliability and '+p.externalHistory.reputation+'/100 reputation. '+p.externalHistory.serviceYears+' years of work. '+p.externalHistory.record);
+          const record=root.EarthCommunityLife.personalAccess(w,view,p);
+          const opinions=record.voices;
+          if(opinions.length)for(const voice of opinions.slice(0,3))line(voice.name+' · '+(voice.strength>0?'vouches for ':'has reservations about ')+p.name+' ('+voice.strength+' relationship).');
+          else line('No named resident has recorded a strong opinion about this person.');
+          if(record.service)line(record.service+' signed service or delivery records here.');
+          const joined=view.communityLife?.people?.[p.id]?.since||0;
+          const agreements=(view.agency?.arrangements?.rows||[]).filter(r=>r.actorId===p.id&&r.week>=joined&&['kept','missed'].includes(r.status));
+          if(agreements.length){
+            const kept=agreements.filter(r=>r.status==='kept').length;
+            line('Local commitments · '+kept+' kept, '+(agreements.length-kept)+' missed.');
+          }
+          const conduct=(view.communityLife?.entryRecords||[]).find(r=>r.actorId===p.id&&r.actorName===p.name&&r.week>=joined&&r.kind==='removal');
+          if(conduct)line('Week '+conduct.week+' · '+conduct.guestName+' reported a physical removal. '+(conduct.official?'The gate rota authorised it.':'The resident acted without the gate rota’s authority.'));
+          if(root.EarthFleet?.identified(view,p.id))line('Dispatch identified '+p.name+' in the report of an unbooked truck. Their access is suspended.');
+        }
         if(event.inTransit){
           const trip=event.activity;
           line(trip?.destination?'Destination · '+trip.destination+(Number.isFinite(trip.remainingKm)?' · '+trip.remainingKm.toFixed(1)+' km remaining':''):'Away on a regional journey.');
@@ -87,7 +124,7 @@
             localAction('Meet '+(root.EarthPersonas?.profile(view,owner)?.name||'the resident'),'meet');
           if(event.use==='home')localAction('Go to the door','door');
           if(event.use==='shop')localAction('Browse this shop','shop');
-          if(event.use==='market')localAction('Visit the exchange','market');
+          if(event.use==='market'){localAction('Visit the exchange','market');localAction('Open the Town Centre','townCentre');}
           if(event.use==='project')localAction('Visit this project','project');
           if(event.use==='market'||event.use==='project')localAction('See available jobs','work');
         }
@@ -101,6 +138,27 @@
       }
       if(view){
         line(view.era+' · '+view.population+' residents · '+view.food+' food · '+view.materials+' materials · '+view.funds+' public funds');
+        if(event.kind==='town'&&w.communityLife){
+          const entry=communityEntry(w,view);
+          heading('Entry and local divisions');
+          line(entry.character.type+'. '+entry.character.detail);
+          line(entry.rule.label+' · '+entry.rule.terms+' '+entry.host+' receives applications.');
+          line(entry.history);
+          if(entry.decision)line('Week '+entry.decision.week+' · '+entry.decision.host+' recorded the latest change in the entry articles.');
+          if(view.id!==home.id){
+            heading('Trust at arrival');
+            line(anchor.name+' · '+entry.personal.score+'/100. '+entry.expected);
+            const witnesses=entry.personal.voices;
+            if(witnesses.length)line(witnesses.slice(0,3).map(v=>v.name+(v.strength>0?' vouches for you':' recalls a disagreement')).join('. ')+'.');
+            if(!witnesses.length&&!entry.personal.visit?.met&&!entry.personal.service)line('No prior personal contact on file. The starting assessment is provisional.');
+            if(entry.personal.visit?.met)line('Introduced in week '+entry.personal.visit.met+'.');
+            if(entry.personal.service)line(entry.personal.service+' completed shifts or freight deliveries on record.');
+            line(entry.originName+' · '+entry.originTrust+'/100. '+entry.fulfilled+' completed services, admissions or consignments. '+entry.values+(entry.passage?'':' Passage is disputed.'));
+          }
+          heading('What other communities report');
+          if(!entry.reputation.length)line('No eyewitness report has reached a neighbouring community.');
+          for(const r of entry.reputation)line(r.observer+' · '+r.score+'/100, '+r.trend+' · '+r.confidence+'. '+r.reason);
+        }
         action('Development ledger',()=>ledger(view,event.personId));
         if(view.id!==local.id)action('Plan a visit',()=>{clear();returnStreet();travel(view.id);});
       }else if(read){

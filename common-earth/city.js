@@ -93,8 +93,12 @@
     for(let i=0;i<6;i++)if(site?.city?.precincts?.[i]?.use==='market')count++;
     return count;
   }
+  function domesticCapacity(site){
+    return 18+(window.EarthResidentShops?.housingPlaces?.(site)||0)+
+      (window.EarthDistrictGrowth?.housingPlaces?.(site)||0)+(window.EarthHousing?.additionalPlaces?.(site)||0);
+  }
   function housingCapacity(site) {
-    let capacity=18+(window.EarthResidentShops?.housingPlaces?.(site)||0)+(window.EarthDistrictGrowth?.housingPlaces?.(site)||0);
+    let capacity=domesticCapacity(site);
     for(let i=0;i<6;i++){
       if(site?.city?.precincts?.[i]?.use==='homes')capacity+=terrainAt(site,i).id==='shelter'?8:6;
     }
@@ -103,7 +107,7 @@
   function overview(site, state = precincts(site)) {
     const weekly={...ZERO}, records=[];
     const centralHall=(site?.buildings||[]).some(b=>b.kind==='hall');
-    let reachable=0,pressure=0,noise=0,capacity=18+(window.EarthResidentShops?.housingPlaces?.(site)||0)+(window.EarthDistrictGrowth?.housingPlaces?.(site)||0),developed=0;
+    let reachable=0,pressure=0,noise=0,capacity=domesticCapacity(site),developed=0;
     state.forEach((p,i)=>{
       const around=ring(i), neighbours=around.map(j=>state[j].use), t=terrainAt(site,i);
       const transit=p.use==='transit' || neighbours.includes('transit');
@@ -258,8 +262,9 @@
     return {...quote,available:!reason,reason,old:nameOf(site,p.use),forecast,rate,beds,reach,risk,noise,localFunds,concurrent,capacityNote,accessNote,crowdingNote,
       record:r,siteName:record.name,purpose:spec.purpose,completedView:after,crew:staffing?.job||null};
   }
-  function apply(site,world,index,project) {
-    const p=preview(site,world,index,project);
+  function apply(site,world,index,project,committeeEffort) {
+    const budget=committeeEffort==null?world:{...world,effort:committeeEffort};
+    const p=preview(site,budget,index,project);
     if(!p.ok||!p.available)return {ok:false,message:p.reason};
     normalise(site);
     const row=site.city.precincts[index],ground=terrainAt(site,index),name=site.water?ground.sea:ground.land;
@@ -272,9 +277,10 @@
     }
     const order=book(site,world,index,project);
     if(!order.ok)return order;
-    world.effort-=p.cost.effort;site.funds-=p.cost.funds;site.materials-=p.cost.materials;
+    if(committeeEffort==null)world.effort-=p.cost.effort;
+    site.funds-=p.cost.funds;site.materials-=p.cost.materials;
     row.turns=p.turns;
-    return {ok:true,message:p.title+' commissioned at '+name+'. Opens once the crew finishes and week '+p.week+' begins. '+p.forecast};
+    return {ok:true,jobId:row.jobId,message:p.title+' commissioned at '+name+'. Opens once the crew finishes and week '+p.week+' begins. '+p.forecast};
   }
   function openPrecinct(site,i){
     const p=site.city.precincts[i],use=p.target,ground=terrainAt(site,i),place=site.water?ground.sea:ground.land;
@@ -283,12 +289,14 @@
     const message=material?place+' reopened as common ground. One material was recovered.':nameOf(site,use)+' opened at '+place+'.';
     return {message,material};
   }
-  function finish(site,job){
+  function finish(site,job,world){
     const row=site?.city?.precincts?.[job?.precinct];
     if(job?.scope!=='city' || !row || row.jobId!==job.id || row.target!==job.kind || row.laborReady)return {ok:false};
     row.laborReady=true;
     if(row.turns>0)return {ok:true,opened:false,message:nameOf(site,row.target)+' crew work finished. Opens in '+row.turns+' more '+(row.turns===1?'week.':'weeks.')};
+    const affectsHomes=row.use==='homes'||row.target==='homes';
     const opened=openPrecinct(site,job.precinct);
+    if(affectsHomes&&world?.communityLife)window.EarthHousing?.sync(world,site);
     site.materials=clamp(site.materials+opened.material,0,Number.MAX_SAFE_INTEGER);
     return {ok:true,opened:true,message:opened.message,recovery:{materials:opened.material}};
   }

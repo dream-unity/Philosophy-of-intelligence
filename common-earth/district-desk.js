@@ -4,7 +4,7 @@
   'use strict';
   const findTown=(world,id)=>world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id);
   const funds=n=>n+' '+(n===1?'fund':'funds');
-  function mount({sim,hud,street,enterStreet,travel,redraw,notify,inspectWork,buildingAction}){
+  function mount({sim,hud,street,enterStreet,travel,redraw,notify,inspectWork,buildingAction,openTownCentre}){
     const doc=root.document,$=id=>doc.getElementById(id);
     const el=(tag,value,css)=>{const item=doc.createElement(tag);if(value!=null)item.textContent=value;if(css)item.className=css;return item;};
     function btn(label,run){const b=el('button',label);b.type='button';b.addEventListener('click',run);return b;}
@@ -13,7 +13,7 @@
     const near=()=>root.EarthCommunityLife.neighbours(sim.state,sim.active());
     let directoryKey='',atlasWorld=null,scene=null,watchedId=null,watchedFrom=null,sceneKey='',selectedId='',observedWeek=0;
     const observer=$('district-observer'),selector=$('observer-person'),canvas=$('observer-canvas');
-    let pointInspector=null;
+    let pointInspector=null,housing=null;
     const observerGoals=$('observer-goals');let observerGoalsKey='';
     function renderObservedGoals(){
       const world=sim.state,site=watchedId&&findTown(world,watchedId);
@@ -176,6 +176,7 @@
     }
     function ribbon(){
       const site=sim.active(),shown=inspectedStores();
+      housing?.refresh();
       $('stores-ribbon').hidden=!site;
       if(!site){shutLedger();return;}
       const account=personalAccount(),person=root.EarthPersonas.profile(account.site,account.id);
@@ -314,7 +315,7 @@
       options(field,[...choices].map(([key,val])=>[key,val.label]),accountChoice);
       field.addEventListener('change',()=>{accountChoice=field.value;ledgerStamp='';drawLedger();$('ledger-person')?.focus({preventScroll:true});});picker.append(field);
       const balance=town.purses?.people?.[id],goods=root.EarthResidentShops?.view(world,town,p,false);
-      const status=el('p',town.name+' · '+funds(balance?.balance||0)+' available · '+funds(balance?.earned||0)+' from stock checks · '+funds(balance?.productionIncome||0)+' from production and road work.');
+      const status=el('p',town.name+' · '+funds(balance?.balance||0)+' available · '+funds(balance?.earned||0)+' from stock checks · '+funds(balance?.productionIncome||0)+' from production and road work.'+(balance?.arrivalSavings?' Brought '+funds(balance.arrivalSavings)+' in prior savings on arrival.':''));
       ledgerBody.append(picker,status);
       if(root.EarthDevelopmentLedger)ledgerBody.append(btn('Follow '+p.name+'’s development',()=>openDevelopment(town,{personId:id})));
       if(root.EarthDistrictGrowth){
@@ -491,6 +492,7 @@
       return hud.openTool('precinct');
     }
     const getScene=()=>scene||street();
+    housing=root.EarthHousingUI?.mount({sim,inspected:inspectedStores,scene:getScene,townCentre:openTownCentre});
     const region=root.EarthRegionMap?.mount({sim,watch,getScene});
     pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,buildingAction,
       returnStreet:()=>{close();street()?.recenter();},refresh:redraw,ledger:(town,personId)=>{openDevelopment(town,personId?{personId}:{});ledger.scrollIntoView({block:'nearest'});},contextChanged:ribbon});

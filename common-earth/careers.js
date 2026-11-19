@@ -156,8 +156,9 @@
     return next-old;
   }
   function productionLesson(site,p,axis,week){
-    const m=ensure(site,p.id),raised=gain(p,m,axis,1);
-    if(raised){m.revision++;note(m,week,'Improved '+axis+' through paid community work.');}
+    if(skill(p,state(site,p.id),axis)>=bounds(p,axis).max)return;
+    const m=ensure(site,p.id);
+    gain(p,m,axis,1);m.revision++;note(m,week,'Improved '+axis+' through paid community work.');
   }
   function projectLesson(world,site,mentorId,learnerId,axis,commit=false,amount=2){
     const tutor=profile(site,mentorId),pupil=profile(site,learnerId),week=world.week;
@@ -189,7 +190,9 @@
   }
   function practicedGain(p,m,axis){
     const room=bounds(p,axis).max-skill(p,m,axis);
-    return Math.min(room,clamp(Math.ceil(room/15),1,4));
+    const pace=p.externalHistory?.learningRate;
+    const adjustment=pace==null?0:pace>=75?1:pace<=25?-1:0;
+    return Math.min(room,clamp(Math.ceil(room/15)+adjustment,1,5));
   }
   const samples=(m,j)=>get(m.portfolios,j.id)||0;
   const clinicalPractice=(p,m)=>nursingPosts.includes(m.jobId)||nursingPosts.includes(origin(p).id)||nursingPosts.some(id=>get(m.experience,id)>0);
@@ -978,7 +981,12 @@
     const ids=catalog.map(j=>j.id);
     const personOK=id=>safeId(id)&&Boolean(profile(site,id)),reliefBookings=new Set();
     for(const [id,m] of Object.entries(site.careers)){
-      if(!personOK(id)||!record(m)||!int(m.revision,1)||!values(m.skills,axes,0,100)||!values(m.qualifications,ids,1,week)||
+      if(!personOK(id)||!record(m))return false;
+      // Earlier paid lessons could create this untouched record when a new
+      // worker already had the highest attainable skill. Keep their save usable.
+      if(m.revision===0&&Object.keys(m).length===6&&Array.isArray(m.history)&&!m.history.length&&
+        [m.skills,m.qualifications,m.portfolios,m.references].every(v=>record(v)&&!Object.keys(v).length))continue;
+      if(!int(m.revision,1)||!values(m.skills,axes,0,100)||!values(m.qualifications,ids,1,week)||
         !values(m.portfolios,ids,0,3)||!values(m.references,[...ids,'origin'],-2,2)||!Array.isArray(m.history)||m.history.length>10||
         !m.history.every(h=>record(h)&&int(h.week,1,week)&&label(h.text)))return false;
       const owner=profile(site,id);

@@ -322,3 +322,56 @@ test('an agreement opens precisely the witnessed parcel and survives a later mee
   assert.equal(canGather(1),true);assert.equal(canGather(1.5),false);
   const loaded=game(f.save());assert.ok(loaded.R.inspect(loaded.w,loaded.home,1,1).agreements.some(a=>a.terms==='joint'));
 });
+
+test('an ungoverned district finances, finishes and occupies the same courtyard on and off camera',()=>{
+  const f=game(),town=f.w.communityLife.outposts[1];
+  Object.assign(town,{population:19,food:80,funds:80,materials:80});
+  const opening=f.save();
+  function run(observe){
+    const f=game(opening),town=f.w.communityLife.outposts[1],city=f.ctx.EarthCityModel;
+    let plot=null,relief=false,capacityBefore=null;
+    for(let n=0;n<100;n++){
+      if(observe){
+        const geo=f.R.geography(f.w,town),point=geo.towns.find(t=>t.site===town);
+        f.R.inspect(f.w,town,point.x,point.y,town.id);
+        f.R.travellers(f.w,town);
+        f.ctx.EarthCommunityLife.districtProfile(f.w,town);
+        f.ctx.EarthHousing.view(f.w,town);
+      }
+      assert.ok(f.sim.advance().ok);
+      const agreement=town.civicInitiatives?.history?.find(p=>p.choiceId==='precinct:homes');
+      const job=agreement&&town.construction?.find(j=>j.id===agreement.jobId);
+      if(job&&plot===null){
+        plot=job.precinct;
+        capacityBefore=city.housingCapacity(town);
+        assert.equal(job.paid.funds,7);assert.equal(job.paid.materials,4);
+        assert.equal(town.city.precincts[plot].use,'open');
+      }
+      if(agreement?.works?.relief?.length)relief=true;
+      if(plot===null||town.city.precincts[plot].use!=='homes')continue;
+      const directory=f.ctx.EarthHousing.view(f.w,town);
+      const opened=directory.homes.find(h=>h.key==='precinct-'+plot);
+      assert.ok(opened);assert.ok(city.housingCapacity(town)>=capacityBefore+6);
+      if(opened.occupants.length){
+        assert.ok(relief,'A replacement covered a departing signatory’s shift.');
+        const tenant=opened.occupants[0];
+        assert.ok(town.housing.rights.some(r=>r.key===tenant.key&&r.home===opened.key));
+        assert.ok(f.ctx.CommonEarthSim.readSave(JSON.stringify(f.w)));
+        return JSON.stringify(f.w);
+      }
+    }
+    assert.fail('The financed courtyard should open and a named resident should take up a place.');
+  }
+  assert.equal(run(true),run(false));
+});
+
+test('a housing request competes for public reserves and available land',()=>{
+  function decision(population){
+    const f=game(),town=f.w.communityLife.outposts[1];
+    Object.assign(town,{population,food:80,funds:80,materials:80});
+    for(let i=0;i<3;i++)assert.ok(f.sim.advance().ok);
+    return town.civicInitiatives?.active?.choiceId;
+  }
+  assert.equal(decision(19),'precinct:homes');
+  assert.notEqual(decision(10),'precinct:homes');
+});

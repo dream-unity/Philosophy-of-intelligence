@@ -19,12 +19,25 @@
         people.push(participant(pledge.personId,'Pledged in week '+pledge.week,allotment.join(', ')));
       }
       if (proposal.evidence) people.push(participant(proposal.evidence.ownerId,'Supplied evidence',proposal.evidence.title));
-      for (const id of proposal.works?.people || []) people.push(participant(id,'Worked on site','Week '+proposal.works.week));
+      for (const id of proposal.works?.people || []) {
+        const relief=proposal.works.relief?.find(shift=>shift.personId===id);
+        const absent=relief&&proposal.votes.find(v=>v.personId===relief.replaces);
+        people.push(participant(id,absent?'Covered '+absent.name+'’s shift':'Worked on site','Week '+proposal.works.week));
+      }
       const spent = ['commissioned','built','adopted'].includes(proposal.phase);
       details.push((spent?'Public funds spent and materials used · ':'Quoted cost · ')+goods(proposal.goods));
       if (!proposal.closedWeek) details.push('Authorised by residents · '+goods(proposal.pledged)+' · '+proposal.labour+' of '+proposal.effort+' shifts pledged · next review week '+proposal.reviewWeek);
       entries.push({key:'civic/'+proposal.id, title:proposal.title, kind:'Council', status:titleCase(proposal.phase), details, people,
         related:[proposal.jobId && 'site/'+proposal.jobId, proposal.evidence && 'project/'+proposal.evidence.id].filter(Boolean)});
+    }
+    for (const arrival of site.communityLife?.townCentre?.arrivals || []) {
+      const profile=root.EarthPersonas?.profile(site,arrival.id);
+      const current=profile?.identityKey===arrival.person&&root.EarthCommunityLife?.residency(site,arrival.id)==='member';
+      const details=['Week '+arrival.week+' · '+(arrival.route==='random'?'Open invitation · no recruitment fee.':
+        'Targeted search · '+arrival.price+' treasury funds spent.')];
+      if(current&&profile.externalHistory)details.push(profile.description);
+      entries.push({key:'arrival/'+arrival.number,title:arrival.name+' joined '+site.name,kind:'Town Centre',status:'Arrived',details,
+        people:current?[participant(arrival.id,'Arriving resident')]:[]});
     }
     for (const job of site.construction || []) {
       const workers = Object.entries(site.workforce?.members || {}).filter(([,w]) => w.jobId===job.id);

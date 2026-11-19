@@ -7,9 +7,10 @@ const vm = require('node:vm');
 
 const game = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const source = readFileSync(path.join(game, 'street.js'), 'utf8');
+const construction=readFileSync(path.join(game,'construction.js'),'utf8');
 
 function waterfront(memory,{reduced=false,paintCost=1,timed=false,bitmap=null}={}) {
-  let frame, now=0, underlay, evenings=0, work=0, foregroundPaints=0;
+  let surfaces=0,frame, now=0, underlay, evenings=0, work=0, foregroundPaints=0;
   const paints=[],lampPaints=[];
   function element() {
     const noop=()=>{};
@@ -37,9 +38,8 @@ function waterfront(memory,{reduced=false,paintCost=1,timed=false,bitmap=null}={
   }};
   const runtime={
     window:{...element(),EarthTownSurroundings:surroundings,
-      EarthTownLight:{lightsFor:()=>[{x:8,y:11,radius:1.22}],paving:g=>lampPaints.push(g),halo(){},blueHour(){evenings++;}},
-      EarthConstruction:{streetPoint:job=>({x:3+(job.plot%3)*6,y:5.04+Math.floor(job.plot/3)*6})}},
-    document:{...element(),createElement:element,createElementNS:element,body:{hasAttribute:()=>false}},
+      EarthTownLight:{lightsFor:()=>[{x:8,y:11,radius:1.22}],paving:g=>lampPaints.push(g),halo(){},blueHour(){evenings++;}}},
+    document:{...element(),createElement:tag=>{if(tag==='canvas')surfaces++;return element();},createElementNS:element,body:{hasAttribute:()=>false}},
     performance:{now:()=>work+=paintCost},devicePixelRatio:2,navigator:{deviceMemory:memory},matchMedia:()=>({matches:reduced}),
     requestAnimationFrame(fn){frame=fn;return 1;},cancelAnimationFrame(){frame=null;}
   };
@@ -58,6 +58,7 @@ function waterfront(memory,{reduced=false,paintCost=1,timed=false,bitmap=null}={
     }
     now=end;
   }
+  vm.runInNewContext(construction,runtime,{filename:'construction.js'});
   vm.runInNewContext(source,runtime,{filename:'street.js'});
   const street=runtime.window.EarthStreet.mount(canvas);
   function draw(delta=100) {const next=frame;frame=null;assert.ok(next);next(now+=delta);}
@@ -66,7 +67,7 @@ function waterfront(memory,{reduced=false,paintCost=1,timed=false,bitmap=null}={
     canvas.handlers.get(type)({type,pointerId:id,clientX:x,clientY:y,pointerType:'touch',button:0});
   }
   function hideTab(hidden){runtime.document.hidden=hidden;runtime.document.handlers.get('visibilitychange')({});}
-  return {hideTab,wait,ground:()=>underlay.children.at(-1),paintCount:()=>foregroundPaints,street,paints,lampPaints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
+  return {surfaces:()=>surfaces,hideTab,wait,ground:()=>underlay.children.at(-1),paintCount:()=>foregroundPaints,street,paints,lampPaints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
 }
 function site(id){return {id,name:id,lat:0,lon:12,water:true,residents:[],buildings:[]};}
 
@@ -106,6 +107,20 @@ test('low-memory devices retain a single ground surface across visits',()=>{
   assert.equal(paints.length,5);street.destroy();
 });
 
+
+test('zooming into a busy low-memory harbour keeps reusing the visible prop surfaces',()=>{
+  const g=waterfront(2);
+  g.visit(site('harbour'));g.street.zoomBy(2);g.draw();
+  g.pointer('pointerdown',1,470,280);
+  function pan(start,end){
+    for(let i=start;i<end;i++){g.pointer('pointermove',1,465+10*(i%2),280);g.draw(34);}
+  }
+  pan(0,20);
+  const warm=g.surfaces();
+  pan(20,50);
+  assert.equal(g.surfaces(),warm,'neighbouring camera positions reuse the same raster surfaces');
+  g.street.destroy();
+});
 
 test('reduced-motion paint wakes on input, rests between gestures and resolves at full detail',()=>{
   const g=waterfront(4,{reduced:true});

@@ -83,8 +83,8 @@ test('the neighbouring observation surface uses the same region bounds, arbitrar
   assert.equal(invariant(),before);s.destroy();sim.destroy();
 });
 
-test('the bottom-left minimap jumps to any point and preserves each community’s survey',()=>{
-  const {sim,world,home,geo,streetAt,runtime,makeCanvas,load,events}=fixture(),scene=streetAt(home);
+function mountMap(f,scene){
+  const {runtime,makeCanvas,load,sim}=f;
   const nodes=new Map();
   function element(id){
     const o=makeCanvas(),handlers=new Map();
@@ -100,7 +100,12 @@ test('the bottom-left minimap jumps to any point and preserves each community’
   runtime.ResizeObserver=class{observe(){}};runtime.setInterval=()=>1;runtime.clearTimeout=()=>{};
   load('region-map');
   const map=runtime.EarthRegionMap.mount({sim,getScene:()=>scene,watch:()=>assert.fail('Map selection caused a district transfer')});
-  map.refresh();
+  return {map,nodes};
+}
+
+test('the bottom-left minimap jumps to any point and preserves each community’s survey',()=>{
+  const f=fixture(),{sim,world,home,geo,streetAt,events}=f,scene=streetAt(home);
+  const {map,nodes}=mountMap(f,scene);map.refresh();
   const before=JSON.stringify([world.week,world.activeId,world.regionalWorld,scene.getState().x,scene.getState().y]);
   const picker=nodes.get('region-overlay');picker.value=geo.towns[2].site.id;picker.fire('change');
   assert.equal(scene.regionalCamera().exploration,picker.value);
@@ -112,6 +117,78 @@ test('the bottom-left minimap jumps to any point and preserves each community’
   assert.equal(events.filter(e=>e.detail?.picked).at(-1).detail.kind,'terrain');
   assert.equal(JSON.stringify([world.week,world.activeId,world.regionalWorld,scene.getState().x,scene.getState().y]),before);
   scene.destroy();sim.destroy();
+});
+
+
+test('a burst of tablet atlas inputs paints once per frame and still picks the final geographic coordinate',()=>{
+  const f=fixture(),{runtime,geo,home}=f,frames=[];
+  const scene=f.streetAt(home),original=runtime.EarthRegionalRender;
+  let landscapes=0;
+  runtime.EarthRegionalRender={...original,soil(...args){landscapes++;return original.soil(...args);}};
+  runtime.requestAnimationFrame=fn=>{frames.push(fn);return 1;};
+  runtime.setTimeout=()=>1;
+  const {map,nodes}=mountMap(f,scene),land=nodes.get('region-land');
+  map.refresh();map.open();
+  const opening=landscapes,before=JSON.stringify(f.world);
+  function pointer(type,x,y){land.fire(type,{type,pointerId:1,button:0,clientX:x,clientY:y});}
+  pointer('pointerdown',300,250);
+  for(let x=301;x<=330;x++)pointer('pointermove',x,250);
+  pointer('pointerup',330,250);
+  assert.equal(landscapes,opening);
+  assert.equal(frames.length,1);
+  frames.shift()();
+  assert.equal(landscapes,opening+1);
+  pointer('pointerdown',390,250);pointer('pointerup',390,250);
+  const camera=scene.regionalCamera(),fit=original.fit(geo,780,500);
+  assert.ok(Math.abs(camera.x-(fit.x-30/fit.sx))<1e-8);
+  assert.equal(camera.y,fit.y);
+  assert.equal(JSON.stringify(f.world),before);
+  scene.destroy();f.sim.destroy();
+});
+
+test('deferred regional terrain resolves to the exact full-resolution raster for the same survey',()=>{
+  const f=fixture(),{runtime,geo}=f,render=runtime.EarthRegionalRender;
+  const noop=()=>{};
+  runtime.document.createElement=()=>{
+    const tile={width:0,height:0};
+    tile.getContext=()=>({createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData:data=>{tile.pixels=Buffer.from(data.data);}});
+    return tile;
+  };
+  const view=render.fit(geo,390,290);
+  function draw(renderer,prepare){
+    const parts=[];
+    const g={fillRect:noop,save:noop,beginPath:noop,rect:noop,clip:noop,restore:noop,
+      drawImage:(tile,...dest)=>parts.push({width:tile.width,dest,pixels:tile.pixels})};
+    renderer.soil(g,geo,view,false,null,prepare);return parts;
+  }
+  const jobs=[],initial=draw(render,job=>jobs.push(job));
+  assert.ok(jobs.length>0);assert.ok(initial.every(p=>p.width===20));
+  for(const job of jobs)job();
+  const complete=draw(render,()=>assert.fail('A prepared tile was queued twice'));
+  assert.ok(complete.every(p=>p.width===48));
+  f.load('regional-render');
+  assert.deepEqual(complete,draw(runtime.EarthRegionalRender));
+  f.sim.destroy();
+});
+
+test('offscreen and superseded regional views stop preparing tiles and never apply an obsolete background',()=>{
+  const f=fixture(),{runtime}=f,callbacks=new Map();
+  let id=0,active=true,finished=0,tiles=0;
+  runtime.requestIdleCallback=fn=>{callbacks.set(++id,fn);return id;};
+  runtime.cancelIdleCallback=key=>callbacks.delete(key);
+  const work=runtime.EarthRegionalRender.tileRefinement(()=>active,()=>finished++);
+  for(let i=0;i<4;i++)work.add(()=>tiles++);
+  function pulse(){
+    const [key,fn]=callbacks.entries().next().value;
+    callbacks.delete(key);fn({timeRemaining:()=>0});
+  }
+  work.wake();active=false;pulse();
+  assert.equal(tiles,0);assert.equal(callbacks.size,0);
+  active=true;work.wake();pulse();assert.equal(tiles,1);assert.equal(callbacks.size,1);
+  work.cancel();assert.equal(callbacks.size,0);assert.equal(finished,0);
+  work.add(()=>tiles++);work.wake();pulse();
+  assert.equal(tiles,2);assert.equal(finished,1);assert.equal(callbacks.size,0);
+  f.sim.destroy();
 });
 
 test('a save made after real travel reopens in the host town and can be panned all the way home',()=>{
