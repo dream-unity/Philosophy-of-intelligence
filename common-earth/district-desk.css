@@ -35,15 +35,24 @@
 .observer-report { max-width:320px; }
 .observer-report strong { font-size:.95rem; }
 .observer-head button,.observer-dock button { flex:none; }
-body[data-observing-town] #street-stage > :not(#district-observer,#region-view),
+body[data-observing-town] #street-stage > :not(#district-observer,#region-view,dialog[open]),
 body[data-observing-town] :is(#actions-panel,#street-controls,#street-actors) { display:none!important; }
 body[data-observing-town] .workspace { grid-template-columns:minmax(0,1fr); }
 body[data-observing-town] .map-frame { width:100%; }
 #district-observer .district-tools { top:40%; }
+/* The drawer leaves room for the zoom controls beside it on wide streets. */
+@container street (min-width:596px) {
+  .street-hud:not([data-talk-dock="left"]) .scene-card { right:calc(clamp(12px,1.6vw,28px) + 52px); }
+}
 @container street (max-width:595px) {
   .street-stage-heading { top:auto; bottom:9px; left:79px; max-width:calc(100% - 180px); padding:5px 8px; }
   .street-stage-heading h2 { font-size:1.06rem; }
   .street-stage-heading .kicker { font-size:.64rem; }
+  .street-hud:not([data-talk-dock]) .scene-card { top:6px; bottom:auto; max-height:calc(100% - 66px); }
+  #street-stage:has(#scene-card:not([hidden])) > .district-tools {
+    top:auto; bottom:8px; right:108px; display:flex; transform:none;
+  }
+  #street-stage:has(#scene-card:not([hidden])) > .district-tools .icon-button:last-child { margin-top:0; }
   .observer-head { width:calc(100% - 16px); top:8px; left:8px; }
   .observer-dock { display:grid; grid-template-columns:minmax(0,1fr) auto; left:6px; right:6px; bottom:6px; max-width:none; gap:4px 10px; }
   .observer-report { grid-row:2;grid-column:1/-1;max-width:none; }
@@ -136,8 +145,8 @@ body[data-district-crossing] #region-inspector { display:none; }
 #street-stage:has(#region-view:not([hidden])) + #street-navigation { display:none; }
 /* Only the active map surface receives focus or paints. Regional previews
    remain visible inside the atlas and the crossing keeps its own route clock. */
-#street-stage:has(#region-view:not([hidden])) > :not(#region-view),
-body[data-district-crossing] #street-stage > :not(#district-crossing,#region-view) { display:none!important; }
+#street-stage:has(#region-view:not([hidden])) > :not(#region-view,dialog[open]),
+body[data-district-crossing] #street-stage > :not(#district-crossing,#region-view,dialog[open]) { display:none!important; }
 #region-view {
   position:absolute; inset:0; z-index:20; display:grid; grid-template-rows:auto minmax(110px,1fr) auto;
   grid-template-areas:"heading" "map" "controls"; overflow:auto; background:#24483e; color:#f9ecd0;

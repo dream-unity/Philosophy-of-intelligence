@@ -348,3 +348,12 @@ test('one touch on overlapping founding travellers exposes both identities in th
   assert.equal(JSON.stringify([world.week,world.activeId,world.regionalWorld,street.getState().x,street.getState().y]),before);
   street.destroy();sim.destroy();
 });
+
+test('an open Town Centre dialog stays visible above the observed street',()=>{
+  const html=fs.readFileSync(path.join(dir,'index.html'),'utf8');
+  const css=fs.readFileSync(path.join(dir,'district-desk.css'),'utf8');
+  assert.match(html,/<dialog id="town-centre"/);
+  // A hidden modal still makes the rest of the page inert in native browsers.
+  const observerMask=css.match(/body\[data-observing-town\] #street-stage > :not\(([^)]*)\)/);
+  if(observerMask)assert.ok(observerMask[1].split(',').map(s=>s.trim()).includes('dialog[open]'));
+});
