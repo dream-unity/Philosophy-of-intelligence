@@ -28,7 +28,7 @@ with sync_playwright() as pw:
     page.locator('#housing-bar button[aria-controls="housing-directory"]').click()
     print('LIVE-HOUSING',page.locator('#housing-title').inner_text(),flush=True)
     for name in ['unhoused','vacant','works','records']:
-        page.locator('#housing-directory select').select_option(name)
+        page.locator('#housing-directory select:has(option[value="unhoused"])').select_option(name)
         print('LIVE-DIRECTORY',name,page.locator('.housing-results').inner_text()[:95],flush=True)
     page.locator('#housing-directory').get_by_role('button',name='Close',exact=True).click()
     page.locator('#town-centre-shortcut').click()
