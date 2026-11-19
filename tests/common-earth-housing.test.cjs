@@ -163,3 +163,36 @@ test('a full district becomes an inspection option when a resident can afford a 
   pay(home,id,10);assert.equal(option().to,peer.id);
   peer.materials=3;assert.equal(option().to,undefined);
 });
+
+test('a witnessed loss, an unanswered request and a neighbour choosing to give time lead to distinct outcomes',()=>{
+  function caseFile(){
+    const f=game(),{w,home,peer,housing,ctx}=f;
+    for(let i=0;i<7;i++)recruit(f);
+    const row=housing.sync(w,home).namedMissing[0],casework=home.housing.hardship.find(h=>h.key===row.key);
+    for(const [id,purse] of Object.entries(home.purses.people))if(purse.balance)ctx.EarthPurses.productionReceipt(w,home,id,-purse.balance,'Spent household savings.');
+    w.week=9;w.communityLife.duty.due=11;home.food=0;home.funds=0;home.trust=10;home.housing.relief='private';
+    const deceased=ctx.EarthPersonas.profile(peer,'walker-0');
+    assert(ctx.EarthBorderConflict.retire(w,peer,deceased.id,'Died during a regional boundary fight.'));
+    home.communityLife.border={records:[{week:9,step:0,other:peer.id,text:'The boundary witnesses reported the death.',people:[deceased.identityKey,row.key],official:true}],health:{},lost:0};
+    Object.assign(casework,{strain:8,weeks:8});
+    housing.tick(w,home);assert.equal(casework.crisis,9);
+    return {...f,row,casework};
+  }
+  const isolated=caseFile(),helped=caseFile();
+  helped.home.housing.relief='emergency';
+  for(let week=10;week<=15;week++){
+    for(const f of [isolated,helped]){
+      f.w.week=week;f.w.communityLife.duty.due=week+2;f.housing.tick(f.w,f.home);
+    }
+    if(week===10){
+      assert.equal(helped.casework.crisis,undefined);
+      const support=helped.home.housing.care.find(c=>c.person===helped.row.key);
+      assert.match(helped.housing.workHold(helped.home,support.id),/support visit/);
+      assert.equal(helped.ctx.EarthPurses.workConflict(helped.home,support.id,week).length>0,true);
+      helped.save();
+    }
+  }
+  assert(isolated.home.housing.losses.some(r=>r.key===isolated.row.key&&r.text.includes('died by suicide')));
+  assert(!helped.home.housing.losses?.some(r=>r.key===helped.row.key));
+  isolated.save();helped.save();
+});
