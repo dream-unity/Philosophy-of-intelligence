@@ -1266,15 +1266,15 @@
           });
         }
       }
-      add('work','work:forage','Tend the food beds','Spend a shift harvesting food for the district. +3 food.',{},()=>{apply(site,{food:3});return 'The food beds yielded 3 food.';});
-      add('work','work:salvage','Recover materials','Salvage and sort reusable timber and fittings. +3 materials.',{},()=>{apply(site,{materials:3});return 'The salvage crew recovered 3 materials.';});
-      add('work','work:contract','Take a paid shift','Work a shift for the trading cooperative. +4 funds.',{},()=>{apply(site,{funds:4});return 'The cooperative paid 4 funds for the shift.';});
+      add('work','work:forage','Tend the food beds','Harvest 3 food for the district. The exchange pays 1 personal fund when its till can cover the wage.',{},()=>{apply(site,{food:3});return 'The food beds yielded 3 food.';});
+      add('work','work:salvage','Recover materials','Recover 3 materials for the district. The exchange pays 1 personal fund when its till can cover the wage.',{},()=>{apply(site,{materials:3});return 'The salvage crew recovered 3 materials.';});
+      add('work','work:contract','Take a paid shift','Work for the trading cooperative. The community treasury receives 4 funds and the exchange pays you 1 fund when its till can cover the wage.',{},()=>{apply(site,{funds:4});return 'The cooperative paid 4 funds into the community treasury.';});
       if(!site.delivery){
         const next=site.stats.deliveries%site.residents.length;
         const order=site.residents.slice(next).concat(site.residents.slice(0,next));
         const p=order.find(r=>r.id!==site.agency?.actor&&(root.EarthCommunityLife?.residency?.(site,r.id)||'member')==='member');
         if(p){
-          const reward=p.bond<10?'3 funds and 1 bond':'3 funds. Your bond is already at 10';
+          const reward='3 community funds'+(p.bond<10?' and 1 bond':'')+'. The exchange pays you 1 fund when its till can cover the wage';
           add('work','courier:pick','Collect the market parcel','Carry the parcel to '+p.name+', the '+p.role.toLowerCase()+'. Delivery earns '+reward+'.',{residentId:p.id,venue:'market'},()=>{
             site.delivery={residentId:p.id,week:world.week};
             return 'Parcel collected. '+(site.shift?.residentId===p.id?p.name+' is with you and can take the parcel now.':'Choose Meet in People to find '+p.name+' in the district.');
@@ -1282,7 +1282,7 @@
         }
       }else{
         const p=site.residents.find(r=>r.id===site.delivery.residentId);
-        if(p)add('work','courier:deliver:'+p.id,'Deliver the parcel to '+p.name,(site.shift?.residentId===p.id?'Hand the parcel to '+p.name+' while you are together.':'Meet '+p.name+' in the district to hand over the market parcel.')+(p.bond<10?' +3 funds · +1 bond.':' +3 funds · bond already at 10.'),{effort:0,residentId:p.id,venue:'resident',gate:p.id===site.agency?.actor?'Switch characters to hand this parcel to '+p.name+'.':''},()=>{
+        if(p)add('work','courier:deliver:'+p.id,'Deliver the parcel to '+p.name,(site.shift?.residentId===p.id?'Hand the parcel to '+p.name+' while you are together.':'Meet '+p.name+' in the district to hand over the market parcel.')+(p.bond<10?' +3 community funds · +1 bond.':' +3 community funds.')+' The exchange pays you 1 fund when its till can cover the wage.',{effort:0,residentId:p.id,venue:'resident',gate:p.id===site.agency?.actor?'Switch characters to hand this parcel to '+p.name+'.':''},()=>{
           site.delivery=null;site.lastDeliveryWeek=world.week;site.stats.deliveries++;return p.name+' received the parcel. '+outcome(apply(site,{funds:3}),bond(p,1));
         });
       }
@@ -1343,14 +1343,15 @@
       site.lastFishingWeek=world.week;
       return complete('The fishing crew landed '+offer.food+' food for '+site.name+'.'+payForWork(site,'Net fishing'),site);
     }
-    function payForWork(site,label){
-      const actor=signer(site);
-      const paid=root.EarthMarket?.payWork(world,site,actor,label);
-      const point=root.EarthDistrictGrowth?.contribute(world,site,actor);
-      const restored=world.effort<MAX_EFFORT;
-      if(restored)world.effort++;
+    function payForWork(site,label,actor=signer(site),turn=world){
+      const worker=root.EarthPersonas?.profile(site,actor)?.name||site.residents.find(p=>p.id===actor)?.name||'The worker';
+      const paid=root.EarthMarket?.payWork(turn,site,actor,label);
+      const point=root.EarthDistrictGrowth?.contribute(turn,site,actor);
+      const restored=turn.effort<MAX_EFFORT;
+      if(restored)turn.effort++;
       const awards=[paid&&'1 personal fund',point&&'1 development point',restored&&'1 civic effort'].filter(Boolean);
-      return awards.length?' Earned '+awards.join(' · ')+'.':'';
+      const earned=awards.length?' '+worker+' earned '+awards.join(' · ')+'.':'';
+      return earned+(paid?'':' The exchange could not pay a personal wage for this job.');
     }
     function act(id,plot,group='all',present){
       if(present&&!present())return reject('Meet again at the destination before completing this action.');
@@ -1496,7 +1497,7 @@
         if(site.shift.effortPaid!==false)result.message+=' Your reserved effort was returned.';
       }
       if(kind==='finish'){
-        if(site.shift.history.length)result.message+=payForWork(site,'Completed resident shift');
+        if(site.shift.history.length)result.message+=payForWork(site,'the completed resident shift',site.shift.residentId);
         const actor=id?.siteId===site.id && id.residentId===site.shift.residentId?id:undefined;
         root.EarthConstruction?.releaseFromShift?.(site,site.shift,actor);
       }
@@ -1715,7 +1716,11 @@
         const result=root.EarthShifts.tick(site,turn.week);
         if(site.shift && !result.shift)root.EarthConstruction?.releaseFromShift?.(site,site.shift);
         site.shift=result.shift;site.shiftFollowUps=result.followUps;
-        for(const item of result.events){applyShiftResult(site,item,false);event(item.message,site);}
+        for(const item of result.events){
+          applyShiftResult(site,item,false);
+          const pay=item.memory?payForWork(site,'the completed resident shift',item.memory.residentId,turn):'';
+          event(item.message+pay,site);
+        }
       }
       if(root.EarthNeighbours)for(const note of root.EarthNeighbours.tick(turn,site) || [])event(note,site);
     }
@@ -2269,9 +2274,15 @@
       if(evidence!==undefined && (!scene||scene.siteId!==site?.id||scene.actor!==request?.actorId))
         return reject('The visit has changed. Choose the job again in Street view.');
       const produces=request?.action==='collect'&&site.pursuits?.ticket?.kind==='food',before=site.food;
+      const ticket=site.pursuits?.ticket;
       const result=root.EarthPursuits.run(site,request,scene);
       if(produces&&result.ok&&site.food>before)root.EarthProvisions?.credit(world,site,'harvest',site.food-before,request.actorId);
-      if(result.ok && request.action==='collect')result.message+=payForWork(site,'Personal work');
+      if(result.ok&&request.action==='collect'){
+        // Earlier tickets stored the maker's name without a roster ID.
+        const legacy=ticket.makerId==null&&root.EarthPersonas?.list(site).filter(p=>p.name===ticket.maker);
+        const worker=ticket.makerId||(legacy?.length===1?legacy[0].id:request.actorId);
+        result.message+=payForWork(site,'personal work',worker);
+      }
       return result.ok?complete(result.message,site,request.action==='collect'):result;
     }
     function provisionsView(){return root.EarthProvisions?.view(world,current())||null;}
@@ -2423,6 +2434,12 @@
         return complete('Fishing line put away.',site,false);
       }),
       production:guarded(runProduction),
+      setPaidOrders:guarded(request=>{
+        const site=current();
+        if(!site||!root.EarthDistrictGrowth)return reject('Choose a community first.');
+        const result=root.EarthDistrictGrowth.setPaidOrders(world,site,request);
+        return result.ok&&!result.unchanged?complete(result.message,site):result;
+      }),
       regionalWork:guarded(request=>{
         const result=root.EarthRegionalWorld?.propose?.(world,current(),request);
         return result?.ok?complete(result.message,current()):result||reject('Regional work is unavailable.');

@@ -66,6 +66,18 @@
     }
     return g;
   }
+  function setPaidOrders(world,site,request){
+    const id=root.EarthAgency.actorId(site),p=root.EarthPersonas.profile(site,id);
+    if(!request||!p||request.actor!==id||request.owner!==key(p)||request.site!==site.id||
+      request.generation!==(site.foundingRevision||0)||typeof request.enabled!=='boolean'||
+      !root.EarthCommunityLife.isHome(world,site)||root.EarthCommunityLife.residency(site,id)!=='member'||
+      root.EarthCommunityLife.commuting(site,id))return {ok:false,message:'Choose your current resident’s account in their home community.'};
+    const previous=resident(site,p);
+    if(Boolean(previous?.takePaidOrders)===request.enabled)return {ok:true,unchanged:true,message:'This work preference is already set.'};
+    register(site,members(site));
+    resident(site,p).takePaidOrders=request.enabled;
+    return {ok:true,message:p.name+(request.enabled?' will take available paid orders while you play as them.':' will finish accepted work and leave new live orders to others.')};
+  }
   function contribute(world,site,id){
     const p=root.EarthPersonas?.profile(site,id);
     if(!p)return false;
@@ -262,7 +274,9 @@
         delete h.purchase;
         continue;
       }
-      const block=(!closeWeek&&p.id===played?'Choosing your own activity':jobs.commitment(world,site,p,appointments));
+      const onPaidCrew=g.road?.ids?.includes(p.id)||site.civicLand?.project?.worker===p.id;
+      const ownTime=!closeWeek&&p.id===played&&!h.takePaidOrders&&!h.order&&!onPaidCrew;
+      const block=ownTime?'Choosing your own activity':jobs.commitment(world,site,p,appointments);
       if(block){
         if(h.order)jobs.cancel(site,h,transfers,block);
         delete h.purchase;
@@ -332,8 +346,11 @@
         delete g.road;events.push('A road crew member moved away. The district returned the reserved supplies and can put together a new crew.');
       }
     }
-    wages+=root.EarthCouncilHomes?.settle(world,site,{people,busy,played,floor,at,closeWeek,rows:transfers,events})||0;
-    wages+=root.EarthCooperativeWorks?.settle(world,site,{people,byOwner,busy,played,floor,at,closeWeek,rows:transfers,events})||0;
+    const currentWorker=played&&people.find(p=>p.id===played);
+    const manualWorker=currentWorker&&!hOf(currentWorker).takePaidOrders&&site.civicLand?.project?.worker!==played?played:null;
+    wages+=root.EarthCouncilHomes?.settle(world,site,{people,busy,played:manualWorker,floor,at,closeWeek,rows:transfers,events})||0;
+    const manualCoopWorker=currentWorker&&!hOf(currentWorker).takePaidOrders&&site.cooperative?.project?.worker!==played?played:null;
+    wages+=root.EarthCooperativeWorks?.settle(world,site,{people,byOwner,busy,played:manualCoopWorker,floor,at,closeWeek,rows:transfers,events})||0;
     const usedLots=new Set();
     for(const h of g.households){
       if(h.shop)usedLots.add(h.businessPlot);
@@ -518,7 +535,7 @@
       !road.owners.every(owner=>g.households.some(h=>h.owner===owner))||
       (road.ids==null?road.at!=null||road.origins!=null:!Array.isArray(road.ids)||road.ids.length!==2||new Set(road.ids).size!==2||!road.ids.every(text)||!nat(road.at)||!origins(road.origins,road.ids))))return false;
     return g.households.every((h,i)=>{
-      if(!h||!root.EarthDistrictOrders.validOrder(h.order,h)||!h.owner||typeof h.owner!=='string'||owners.has(h.owner)||typeof h.name!=='string'||h.plot!==i||
+      if(!h||h.takePaidOrders!==undefined&&typeof h.takePaidOrders!=='boolean'||!root.EarthDistrictOrders.validOrder(h.order,h)||!h.owner||typeof h.owner!=='string'||owners.has(h.owner)||typeof h.name!=='string'||h.plot!==i||
         ![1,2,3].includes(h.home)||h.shopDebt!=null&&(!nat(h.shopDebt)||h.shopDebt>3)||![h.trained,h.pantry,h.supplies,h.roadLot,h.marketLot,h.hires,h.businessFunds,h.saleSerial,h.restockedRound].every(n=>n==null||nat(n))||
         h.activity!=null&&!['home','commitment','food','repair','exchange','road','shop','purchase'].includes(h.activity)||!nat(h.points)||!nat(h.stock)||h.stock>3||typeof h.last!=='string'||
         (h.shop?!Object.hasOwn(root.EarthResidentShops.products,h.shop)||!nat(h.businessPlot)||lots.has(h.businessPlot):h.businessPlot!==null))return false;
@@ -540,5 +557,5 @@
     })&&g.history.every(h=>h&&validTransfers(h)&&nat(h.round)&&h.round<=g.round&&nat(h.week)&&h.week<=week&&nat(h.wages)&&
       [h.food,h.materials,h.funds].every(Number.isSafeInteger)&&Array.isArray(h.events)&&h.events.every(e=>typeof e==='string'));
   }
-  root.EarthDistrictGrowth={contribute,valid,period,due,settle,transfers,recordResearch,closeWeek:(world,site)=>settle(world,site,true),work,activeWork,homePoint,shopPoint,shopDoor,shopListings,buyShopStock,housingPlaces,extent,register,members,report,goal,vehicles};
+  root.EarthDistrictGrowth={setPaidOrders,contribute,valid,period,due,settle,transfers,recordResearch,closeWeek:(world,site)=>settle(world,site,true),work,activeWork,homePoint,shopPoint,shopDoor,shopListings,buyShopStock,housingPlaces,extent,register,members,report,goal,vehicles};
 })(globalThis);

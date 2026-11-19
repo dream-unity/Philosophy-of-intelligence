@@ -3,7 +3,7 @@
 (function(root){
   'use strict';
   const findTown=(world,id)=>world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id);
-  const funds=n=>n+' '+(n===1?'fund':'funds');
+  const funds=n=>n+' '+(n===1||n===1n?'fund':'funds');
   function mount({sim,hud,street,enterStreet,travel,redraw,notify,inspectWork,buildingAction,openTownCentre}){
     const doc=root.document,$=id=>doc.getElementById(id);
     const el=(tag,value,css)=>{const item=doc.createElement(tag);if(value!=null)item.textContent=value;if(css)item.className=css;return item;};
@@ -165,9 +165,8 @@
       sceneLink.className='development-shortcut';$('scene-stores')?.prepend(sceneLink);
     }
     function personalAccount(){
-      const world=sim.state,site=sim.active(),id=root.EarthAgency.actorId(site);
-      const town=id==='steward'&&world.communityLife?findTown(world,world.communityLife.homeId)||site:site;
-      return {site:town,id};
+      const site=sim.active();
+      return {site,id:root.EarthAgency.actorId(site)};
     }
     function inspectedStores(){
       const world=sim.state;
@@ -181,17 +180,27 @@
       if(!site){shutLedger();return;}
       const account=personalAccount(),person=root.EarthPersonas.profile(account.site,account.id);
       text('ribbon-caption',pointInspector?.openGround()?'Home stores':'Public stores');text('ribbon-town',shown.name);text('ribbon-person',person?.name||'Original resident');
-      for(const key of ['food','materials','funds'])text('ribbon-'+key,String(shown[key]));
-      text('ribbon-balance',funds(account.site.purses?.people?.[account.id]?.balance||0));
+      for(const key of ['food','materials'])text('ribbon-'+key,String(shown[key]));
+      text('ribbon-funds',funds(shown.funds));text('ribbon-treasury-town',shown.name);
+      const cash=account.id==='steward'&&sim.state.communityLife
+        ?root.EarthAgency.originalAccounts(sim.state).reduce((total,purse)=>total+BigInt(purse.balance),0n)
+        :(account.site.purses?.people?.[account.id]?.balance||0);
+      text('ribbon-balance',funds(cash));
+      $('ribbon-treasury').setAttribute('aria-label',shown.name+' community treasury, '+funds(shown.funds));
       $('ribbon-resources').title='Inspect stores in '+shown.name;
       $('ribbon-personal').title='Compare household accounts';
       if(ledgerPage)drawLedger();
     }
+    const triggers={stock:'ribbon-resources',development:'ribbon-resources',purse:'ribbon-personal',treasury:'ribbon-treasury'};
+    function markLedger(){
+      for(const id of ['ribbon-resources','ribbon-treasury','ribbon-personal'])
+        $(id).setAttribute('aria-expanded',String(id===triggers[ledgerPage]));
+    }
     function shutLedger(focus=false){
       if(!ledgerPage)return;
-      const trigger=$(ledgerPage==='purse'?'ribbon-personal':'ribbon-resources');
+      const trigger=$(triggers[ledgerPage]);
       ledgerPage='';ledgerStamp='';ledger.hidden=true;ledgerBody.replaceChildren();
-      $('ribbon-personal').setAttribute('aria-expanded','false');$('ribbon-resources').setAttribute('aria-expanded','false');
+      markLedger();
       if(focus)trigger.focus({preventScroll:true});
     }
     function openMarket(page,id){
@@ -203,11 +212,12 @@
     function selectLedger(page){
       if(ledgerPage===page){shutLedger(true);return;}
       ledgerPage=page;ledgerStamp='';accountChoice='';ledger.hidden=false;
-      $('ribbon-personal').setAttribute('aria-expanded',String(page==='purse'));
-      $('ribbon-resources').setAttribute('aria-expanded',String(page!=='purse'));
+      markLedger();
+      ledgerBody.scrollTop=0;
       drawLedger();$('district-ledger-title').focus({preventScroll:true});
     }
     $('ribbon-resources').addEventListener('click',()=>selectLedger('stock'));
+    $('ribbon-treasury').addEventListener('click',()=>selectLedger('treasury'));
     $('ribbon-personal').addEventListener('click',()=>selectLedger('purse'));
     $('district-ledger-close').addEventListener('click',()=>shutLedger(true));
     ledger.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();shutLedger(true);}});
@@ -294,6 +304,26 @@
       if(mine)ledgerBody.append(btn('Visit the exchange',()=>openMarket('trade')));
       else ledgerBody.append(el('p',site.name+' decides how to harvest and trade these supplies.'));
     }
+    function treasury(site){
+      text('district-ledger-title',site.name+' · Community funds');
+      ledgerBody.append(el('h3','Treasury balance · '+funds(site.funds)),
+        el('p',site.name+' uses this account for recruitment, public works and trade. Residents keep their work income in their personal purses.'));
+      if(openTownCentre)ledgerBody.append(btn('Open Town Centre recruitment',()=>openTownCentre(site.id)));
+      const arrivals=site.communityLife?.townCentre?.arrivals||[];
+      if(arrivals.length){
+        ledgerBody.append(el('h3','Recent recruitment payments'));
+        const list=el('ul');
+        for(const row of arrivals)list.append(el('li','Week '+row.week+' · '+row.name+' · '+(row.price?'Search fee −'+funds(row.price):'Free invitation')));
+        ledgerBody.append(list);
+      }
+      const history=site.growth?.history||[];
+      if(history.length){
+        ledgerBody.append(el('h3','Recent production rounds'));
+        const list=el('ul');
+        for(const row of history.slice(0,4))list.append(el('li','Round '+row.round+' · Treasury change '+(row.funds>0?'+':'')+funds(row.funds)+' · Workers received '+funds(row.wages)));
+        ledgerBody.append(list);
+      }
+    }
     function accounts(site){
       const world=sim.state,own=personalAccount(),people=root.EarthPersonas.list(site);
       const originalHome=findTown(world,world.communityLife?.homeId)||sim.active();
@@ -303,20 +333,44 @@
         if(p&&!choices.has(key))choices.set(key,{site:s,id,p,label:label?label+' · '+p.name:p.name});
         return key;
       };
-      const defaultKey=add(own.site,own.id,'Current perspective');
-      add(originalHome,'steward','Original resident');
+      const defaultKey=add(own.site,own.id,'Current perspective · '+own.site.name);
+      add(originalHome,'steward','Original resident · '+originalHome.name);
+      for(const town of root.EarthAgency.originalDistricts(world)){
+        if(town.purses?.people?.steward)add(town,'steward',town.name);
+      }
       for(const p of people){
         if(p.id==='steward'&&site.id===originalHome.id)continue;
         add(site,p.id);
       }
       if(!choices.has(accountChoice))accountChoice=defaultKey;
       const {site:town,id,p}=choices.get(accountChoice);
-      const field=el('select'),picker=el('label','Household account');field.id='ledger-person';
+      const field=el('select'),picker=el('label','Resident account');field.id='ledger-person';
       options(field,[...choices].map(([key,val])=>[key,val.label]),accountChoice);
       field.addEventListener('change',()=>{accountChoice=field.value;ledgerStamp='';drawLedger();$('ledger-person')?.focus({preventScroll:true});});picker.append(field);
       const balance=town.purses?.people?.[id],goods=root.EarthResidentShops?.view(world,town,p,false);
-      const status=el('p',town.name+' · '+funds(balance?.balance||0)+' available · '+funds(balance?.earned||0)+' from stock checks · '+funds(balance?.productionIncome||0)+' from production and road work.'+(balance?.arrivalSavings?' Brought '+funds(balance.arrivalSavings)+' in prior savings on arrival.':''));
+      const status=el('p',town.name+' · '+funds(balance?.balance||0)+' available · '+funds(balance?.earned||0)+' from stock checks · '+funds(balance?.productionIncome||0)+' from work and production.'+(balance?.arrivalSavings?' Brought '+funds(balance.arrivalSavings)+' in prior savings on arrival.':''));
       ledgerBody.append(picker,status);
+      if(id==='steward'&&world.communityLife){
+        const places=root.EarthAgency.originalAccounts(world);
+        if(places.some(a=>a.name!==town.name)||places.length>1)
+          ledgerBody.append(el('p','Personal funds across towns · '+places.map(a=>a.name+' '+funds(a.balance)).join(' · ')+'. Choose a town’s account above for its receipts.'));
+      }
+      const order=root.EarthDistrictGrowth?.work(town,id);
+      if(order?.price>0&&order.kind!=='marketSupply')ledgerBody.append(el('p','Current job · '+order.name+' · '+order.payer+' has reserved '+funds(order.price)+'. '+order.action+'.'));
+      if(root.EarthDistrictGrowth&&town===sim.active()&&id===own.id&&
+        root.EarthCommunityLife.isHome(world,town)&&root.EarthCommunityLife.residency(town,id)==='member'&&!root.EarthCommunityLife.commuting(town,id)){
+        const enabled=Boolean(root.EarthDistrictGrowth.goal(town,p).h?.takePaidOrders);
+        const generation=town.foundingRevision||0;
+        const control=btn(enabled?'Stop taking new paid orders':'Take paid orders while I play',async()=>{
+          if(!control.isConnected||control.disabled)return;
+          control.disabled=true;
+          try{
+            const result=await sim.perform('setPaidOrders',{site:town.id,actor:id,owner:p.identityKey||p.id,generation,enabled:!enabled});
+            notify?.(result.message,!result.ok);
+          }finally{control.disabled=false;}
+        });
+        ledgerBody.append(control,el('p','Available orders reserve a wage. The worker receives it after completing the job.'));
+      }
       if(root.EarthDevelopmentLedger)ledgerBody.append(btn('Follow '+p.name+'’s development',()=>openDevelopment(town,{personId:id})));
       if(root.EarthDistrictGrowth){
         const {h,points,rank,next}=root.EarthDistrictGrowth.goal(town,p);
@@ -330,18 +384,20 @@
       if(possessions.childNodes.length)ledgerBody.append(possessions);
       const receipts=balance?.entries||[];
       if(receipts.length){
-        const lines=el('ol');for(const r of receipts.slice(0,4))lines.append(el('li','Week '+r.week+' · '+r.text));ledgerBody.append(lines);
+        const lines=el('ol');for(const r of receipts)lines.append(el('li','Week '+r.week+' · '+(r.amount>0?'+':'')+funds(r.amount)+' · Balance '+funds(r.balance)+'. '+r.text));ledgerBody.append(lines);
       }else ledgerBody.append(el('p',p.name+' has no recorded personal transactions here yet.'));
       if(!watchedId&&id===own.id&&town===sim.active()&&(!world.communityLife||root.EarthCommunityLife.isHome(world,town)))
         ledgerBody.append(btn('Open my trading account',()=>openMarket('purse')));
     }
+    let ledgerWorld=null;
     function drawLedger(){
       const world=sim.state,site=inspectedStores();if(!site)return;
       const own=personalAccount();
       const stamp=[ledgerPage,site.id,site.foundingRevision,world.week,world.actionRevision,site.resourceLedger?.serial,
-        site.exchange?.serial,site.purses?.serial,site.growth?.round,ledgerPage==='development'&&site.construction?.map(j=>j.id+':'+Math.floor(10*j.work/j.total)).join('|'),own.site.id,own.id,accountChoice,developmentTown,
+        site.exchange?.serial,site.purses?.serial,site.growth?.round,site.funds,world.productionSerial,ledgerPage==='development'&&site.construction?.map(j=>j.id+':'+Math.floor(10*j.work/j.total)).join('|'),own.site.id,own.id,accountChoice,developmentTown,
         ledgerPage==='development'&&developmentSelection.personId,ledgerPage==='development'&&developmentSelection.record].join('/');
-      if(ledgerStamp===stamp)return;
+      if(ledgerStamp===stamp&&ledgerWorld===world)return;
+      ledgerWorld=world;
       const prior=ledgerBody.scrollTop,focusKey=doc.activeElement?.dataset?.developmentFocus;
       const detailsOpen=ledgerBody.querySelector('[data-development-disclosure]')?.open;
       ledgerStamp=stamp;ledgerBody.replaceChildren();
@@ -354,6 +410,7 @@
         if(focusKey)Array.from(ledgerBody.querySelectorAll('[data-development-focus]')).find(node=>node.dataset.developmentFocus===focusKey)?.focus({preventScroll:true});
         ledgerBody.scrollTop=prior;return;
       }
+      if(ledgerPage==='treasury'){treasury(site);ledgerBody.scrollTop=prior;return;}
       if(ledgerPage==='stock'&&root.EarthDevelopmentLedger)ledgerBody.append(btn('Development ledger',()=>openDevelopment()));
       if(ledgerPage==='stock'&&root.EarthDistrictGrowth){
         const g=root.EarthDistrictGrowth.report(site),last=site.growth?.history?.[0],signed=n=>(n>=0?'+':'')+n;

@@ -24,6 +24,8 @@
   function commitment(world,site,p,appointments){
     if(!member(site,p.id))return 'Away from this district';
     if(root.EarthPractice?.reserved?.(site,p.id,world.week))return 'Keeping a booked practice session';
+    if(site.pursuits?.ticket?.makerId===p.id)return 'Completing a personal work order';
+    if(site.handline&&world.activeId===site.id&&(site.agency?.actor||'steward')===p.id)return 'Fishing with the shared handline';
     if(site.purses?.tickets?.[p.id])return 'A stock check is already booked';
     if(site.shift?.residentId===p.id||site.shift&&p.id===(site.agency?.actor||'steward'))return 'Working an accompanied shift';
     if(site.careers?.[p.id]?.training?.pace==='intensive'&&!site.careers[p.id].training.paused)return 'Attending an intensive course';

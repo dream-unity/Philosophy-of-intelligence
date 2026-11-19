@@ -302,3 +302,56 @@ test('a willing title holder with a connected completed home adds a real housing
   assert.equal(development.housingPlaces(town),present-1);assert.equal(city.housingCapacity(town),before-1);
   host.guestRoom=hostId;assert(g.runtime.CommonEarthSim.readSave(g.snapshot()));
 });
+
+test('a played resident can choose funded orders, finish an accepted order after opting out, and receive its wage once',async()=>{
+  let g=game(dry);
+  const id='steward',worker=g.runtime.EarthPersonas.profile(g.home,id);
+  const q={site:g.home.id,actor:id,generation:g.home.foundingRevision||0,owner:worker.identityKey,enabled:true};
+  assert.equal((await g.sim.perform('setPaidOrders',{...q,owner:'someone else'})).ok,false);
+  assert.ok((await g.sim.perform('setPaidOrders',q)).ok);
+  let order;
+  for(let i=0;i<12&&!order;i++){
+    await g.step();
+    order=g.home.growth.households.find(h=>h.order?.person===id)?.order;
+  }
+  assert.ok(order,'a funded job was accepted by the played resident');
+  const opening=g.home.purses?.people?.[id]?.balance||0;
+  g=game(dry,g.snapshot(),g.sim.state.lastProductionAt);
+  assert.ok(g.runtime.EarthDistrictGrowth.goal(g.home,worker).h.takePaidOrders);
+  assert.ok((await g.sim.perform('setPaidOrders',{...q,enabled:false})).ok);
+  for(let i=0;i<8&&g.home.growth.households.some(h=>h.order?.id===order.id);i++)await g.step();
+  const rows=g.home.growth.history.flatMap(r=>Array.from(g.runtime.EarthDistrictGrowth.transfers(r)));
+  const paid=rows.filter(r=>r.workId===order.id&&r.reason==='Wage on delivery');
+  assert.equal(paid.length,1);assert.equal(paid[0].personId,id);
+  assert.equal(g.home.purses.people[id].balance,opening+order.wage);
+  await g.step();assert.equal(g.home.purses.people[id].balance,opening+order.wage);
+  assert.equal(g.home.growth.households.some(h=>h.order?.person===id),false);
+  assert.ok(g.runtime.CommonEarthSim.readSave(g.snapshot()));
+});
+
+test('the worker who made a personal order keeps the wage when someone else collects it',async()=>{
+  const g=game(),s=g.home,[maker,collector]=s.residents;
+  const change=id=>g.sim.changeActor(id,{siteId:s.id,actor:g.runtime.EarthAgency.actorId(s),mode:'walk',x:12,y:12});
+  const request=action=>({action,kind:'materials',siteId:s.id,generation:s.foundingRevision||0,
+    serial:s.pursuits?.serial||0,actorId:g.runtime.EarthAgency.actorId(s)});
+  assert.ok(change(maker.id).ok);assert.ok(g.sim.pursue(request('start')).ok);
+  assert.ok(change(collector.id).ok);await g.step();
+  const scene={siteId:s.id,actor:collector.id,mode:'walk',target:'market',x:15,y:23,tx:15,ty:23};
+  const before=id=>s.purses?.people?.[id]?.balance||0;
+  const producerBalance=before(maker.id),collectorBalance=before(collector.id),q=request('collect');
+  const r=g.sim.pursue(q,scene);assert.ok(r.ok,r.message);
+  assert.equal(before(maker.id),producerBalance+1);assert.equal(before(collector.id),collectorBalance);
+  assert.equal(g.sim.pursue(q,scene).ok,false);assert.equal(before(maker.id),producerBalance+1);
+  assert.ok(g.runtime.CommonEarthSim.readSave(g.snapshot()));
+});
+
+test('a resident finishing an accompanied shift receives their wage at manual or calendar close',()=>{
+  const g=game(),worker=g.home.residents[0],id=worker.id;
+  assert.ok(g.sim.beginShift(id).ok);assert.ok(g.sim.arriveShift('earn').ok);assert.ok(g.sim.chooseShift('share').ok);
+  const saved=g.snapshot(),check=game(coastal,saved);
+  assert.ok(g.sim.finishShift().ok);assert.equal(g.home.purses.people[id].balance,1);
+  assert.equal(g.home.purses.people.steward?.balance||0,0);assert.equal(g.sim.finishShift().ok,false);
+  assert.ok(check.sim.advance().ok);
+  assert.equal(check.home.purses.people[id].entries.filter(r=>r.text.includes('completed resident shift')).length,1);
+  assert.ok(check.runtime.CommonEarthSim.readSave(check.snapshot()));
+});

@@ -15,6 +15,7 @@ function documentForInspector(){
     append(...children){this.children.push(...children);}
     replaceChildren(...children){this.children=children;}
     contains(node){return this===node||this.children.some(child=>child.contains(node));}
+    get childNodes(){return this.children;}
     get isConnected(){return Array.from(roots.values()).some(root=>root.contains(this));}
     querySelectorAll(selector){return this.children.flatMap(child=>[...(child.matches(selector)?[child]:[]),...child.querySelectorAll(selector)]);}
     matches(selector){return selector===this.tag||selector.startsWith('.')&&(this.className||'').split(' ').includes(selector.slice(1));}
@@ -101,4 +102,34 @@ test('the public ledger compares nearby real stalls on demand and leaves guest c
   state.communityLife.homeId=peer.id;state.actionRevision++;ui.render(false);
   assert.equal(button('Visit the exchange'),undefined);assert.equal(body.querySelectorAll('button').length,2);
   clickMode();assert.equal(body.querySelectorAll('button').length,2);sim.destroy();
+});
+
+test('the treasury opens for the inspected town and the personal ribbon includes work paid away from home',()=>{
+  let now=100000;
+  const document=documentForInspector(),w=vm.createContext({document,structuredClone,Date:class extends Date{static now(){return now;}}});w.window=w;
+  for(const name of ['resource-economy','fisheries','agency','provisions','market','personas','community-life','city','purses','simulation','district-desk'])
+    vm.runInContext(fs.readFileSync(path.join(game,name+'.js'),'utf8'),w,{filename:name+'.js'});
+  const sim=w.CommonEarthSim.create({storage:null});assert.ok(sim.found({name:'Reed Quay',lat:-6.162,lon:39.191,water:false}).ok);
+  const state=sim.state,home=sim.active(),peer=w.EarthCommunityLife.neighbours(state,home)[0];home.funds=3001;
+  const ui=w.EarthDistrictDesk.mount({sim,hud:{registerTool(){}},redraw(){}});
+  const get=id=>document.getElementById(id),body=get('district-ledger-body');
+  const textOf=n=>[n.textContent||'',...n.children.map(textOf)].join(' ');
+  ui.render(false);get('ribbon-treasury').click();
+  assert.match(textOf(body),/Treasury balance · 3001 funds/);
+  assert.equal(get('ribbon-treasury').getAttribute('aria-expanded'),'true');
+  assert.equal(get('ribbon-personal').getAttribute('aria-expanded'),'false');
+  assert.ok(w.EarthPurses.productionReceipt(state,home,'steward',1,'Home shift.'));
+  const trip={actor:'steward',site:home.id,week:state.week,target:peer.id};
+  const departure=sim.communityLife({...trip,action:'depart'},{siteId:home.id,actor:'steward',mode:'walk',target:'market',x:6,y:6,tx:6,ty:6});
+  assert.ok(departure.ok,departure.message);now+=6500;
+  assert.ok(sim.communityLife({...trip,action:'arrive'}).ok);
+  assert.ok(w.EarthPurses.productionReceipt(state,sim.active(),'steward',2,'Visiting shift.'));
+  ui.render(false);assert.equal(get('ribbon-balance').textContent,'3 funds');
+  assert.equal(get('ribbon-treasury-town').textContent,peer.name);
+  get('ribbon-personal').click();assert.match(textOf(body),/2 funds available/);
+  assert.match(textOf(body),/\+2 funds · Balance 2 funds\. Visiting shift/);
+  assert.match(textOf(body),/Personal funds across towns/);
+  const select=body.querySelector('select');select.value=JSON.stringify([home.id,'steward']);select.events.change();
+  assert.match(textOf(body),/1 fund available/);assert.match(textOf(body),/\+1 fund · Balance 1 fund\. Home shift/);
+  sim.destroy();
 });

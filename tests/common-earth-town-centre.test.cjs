@@ -135,3 +135,23 @@ test('two tabs signing the same funded search save one person, one treasury debi
   assert.equal(p.arrivalSavings,p.balance);assert.equal(recovered.state.widerEarth.serial,1);
   assert.equal(home.communityLife.townCentre.arrivals.length,1);
 });
+
+test('a resident can sign a free or treasury-funded home invitation from an empty personal purse',async()=>{
+  const t=game(),home=t.home,worker=home.residents[0];
+  home.funds=3001;
+  assert.ok(t.sim.changeActor(worker.id,{siteId:home.id,actor:'steward',mode:'walk',x:12,y:12}).ok);
+  const sign=q=>t.sim.perform('communityLife',{...q,actor:worker.id,action:'townCentre'});
+  const free=t.quote('random'),pop=home.population;
+  assert.equal(t.centre.recruitmentBlock(t.world,home),'');
+  assert.equal(t.sign(free).ok,false,'a different signer cannot reuse the quote');
+  const peer=t.world.communityLife.outposts[0];
+  assert.match(t.centre.recruitmentBlock(t.world,peer),new RegExp(home.name));
+  assert.equal((await sign(t.centre.quote(t.world,peer,'random'))).ok,false);
+  const blind=await sign(free);assert.ok(blind.ok,blind.message);
+  assert.equal(home.funds,3001);assert.equal(home.population,pop+1);
+  assert.equal((await sign(free)).ok,false);
+  const search=t.quote('targeted',{craft:[65,100]});assert.equal(search.price,10);
+  const admitted=await sign(search);assert.ok(admitted.ok,admitted.message);
+  assert.equal(home.funds,2991);assert.equal(home.purses?.people[worker.id]?.balance||0,0);
+  assert.equal(t.world.widerEarth.fees,10);t.save();
+});

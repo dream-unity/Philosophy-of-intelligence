@@ -1,5 +1,4 @@
-/* The Town Centre reads a selected district's ledger. Only the original
-   resident in their home community can sign a recruitment commitment. */
+/* Each Town Centre displays its own treasury and membership decisions. */
 (function(root){
   'use strict';
   function mount(host,sim,onResult){
@@ -19,19 +18,21 @@
     const arrivalRows=new Map(),history=element('div'),arrivalTitle=element('h4','Wider Earth arrivals'),regional=element('div'),random=element('div'),targeted=element('div');
     body.className='town-centre-body';status.setAttribute('role','status');
     arrivalTitle.hidden=true;history.append(arrivalTitle);
-    forms.append(regional,random,targeted);body.append(labelled('Community',place),summary,policy,forms,status,history);host.append(body);
+    forms.append(regional,random,targeted);body.append(labelled('Community',place),summary,policy,forms,history);host.append(body);
     const select=element('select'),low=element('input'),high=element('input'),rules=element('div'),cost=element('p');
     for(const field of domain.fields)select.append(option(field,domain.label(field)));
     for(const [field,value] of [[low,65],[high,100]]){field.type='number';field.min='0';field.max='100';field.value=String(value);}
     let selected='',expected='',busy=false,criteria={},districts='',lastLedger='',lastWorld=null,lastWeek=0;
-    let blind=null,search=null,quotedWorld=null,quoteStamp='';
+    let blind=null,search=null,quotedWorld=null,quoteStamp='',rosterFull=false;
     const current=()=>[...sim.state.sites,...(sim.state.communityLife?.outposts||[])].find(s=>s.id===selected)||sim.active();
-    const blindCommit=button('Commit to a blind invitation',()=>sign(blind));
-    const paidCommit=button('Commission this search',()=>sign(search));
+    const blindCommit=button('Commit to a blind invitation',()=>sign(blind,blindCommit));
+    const paidCommit=button('Commission this search',()=>sign(search,paidCommit));
     const appFold=fold(regional,'Regional applications'),appList=element('div'),applicationRows=new Map(),empty=element('p','No visiting households are applying here this week.');
     appFold.append(appList);appList.append(empty);
     const blindFold=fold(random,'Free invitation from wider Earth'),blindText=element('p');
-    blindFold.append(blindText,blindCommit);
+    const homeRegister=button('',()=>open(sim.state.communityLife.homeId));
+    blindFold.append(blindText,blindCommit,homeRegister);
+    body.insertBefore(status,forms);
     const targetFold=fold(targeted,'Targeted search from wider Earth');
     line(targetFold,'Choose the traits and abilities the recruiter must verify. Each range runs from 0 to 100.');
     const add=button('Apply range',()=>{
@@ -72,7 +73,7 @@
           for(const item of a.evidence)line(panel,item);
           if(!a.evidence.length)line(panel,'The home register includes no recent work reference or named testimony.');
           row={panel,afford,decision,applicant,quote:null};
-          row.accept=button('Accept regional application',()=>sign(row.quote));
+          row.accept=button('Accept regional application',()=>sign(row.quote,row.accept));
           panel.append(afford,applicant,decision,row.accept);applicationRows.set(a.identity,row);
         }
         const terms=a.housing?.kind==='finance'?' Pay for the plot and three stages of construction. Remain a visitor until the home is habitable.':
@@ -80,28 +81,35 @@
         row.afford.textContent='Personal funds '+a.balance+'. '+(a.housing?(a.housing.available?'Housing offer · '+a.housing.price+' funds for '+a.housing.label+'.'+terms:a.housing.reason):'The host will review available places.');
         row.applicant.textContent=a.fit.personalYes?'The applicant is willing to stay.':'The applicant prefers to return home under present conditions.';
         row.decision.textContent=a.fit.localYes?'The host supports admission.':a.fit.concerned?.length?'The host is reviewing household objections.':'The host has yet to agree a place and a role.';
-        row.quote={route:'regional',site:s.id,generation:s.foundingRevision||0,week:w.week,id:a.id,identity:a.identity,terms:a.terms};
+        row.quote={actor:root.EarthAgency.actorId(sim.active()),route:'regional',site:s.id,generation:s.foundingRevision||0,week:w.week,id:a.id,identity:a.identity,terms:a.terms};
         row.accept.disabled=busy||!domain.authorised(w,s)||!a.fit.localYes||!a.fit.personalYes||a.housing?.available===false;
       }
     }
     function offers(){
       const w=sim.state,s=current();if(!s)return;
-      const capacity=root.EarthCityModel.housingCapacity(s),authority=domain.authorised(w,s);
-      const stamp=[s.id,s.foundingRevision,w.week,w.actionRevision,w.workRevision,w.productionSerial,s.population,capacity,w.widerEarth?.serial].join('/');
+      const capacity=root.EarthCityModel.housingCapacity(s),blocked=domain.recruitmentBlock(w,s),actor=root.EarthAgency.actorId(sim.active());
+      const stamp=[actor,s.id,s.foundingRevision,w.week,w.actionRevision,w.workRevision,w.productionSerial,s.population,capacity,w.widerEarth?.serial].join('/');
       if(stamp!==quoteStamp||w!==quotedWorld){
-        blind=domain.quote(w,s,'random',{});quoteStamp=stamp;quotedWorld=w;
+        blind={...domain.quote(w,s,'random',{}),actor};quoteStamp=stamp;quotedWorld=w;
+        rosterFull=!root.EarthCommunityLife.freeGuestSlot(s);
       }
-      search=domain.quote(w,s,'targeted',criteria,blind.unhoused);
-      summary.textContent=s.name+' · '+s.population+' residents, '+capacity+' completed places, '+s.funds+' public funds.'+
-        (authority?'':' The local members decide on applications here.');
+      search={...domain.quote(w,s,'targeted',criteria,blind.unhoused),actor};
+      summary.textContent=s.name+' · '+s.population+' residents, '+capacity+' completed places. Community treasury · '+s.funds+' funds.';
       const review=s.communityLife?.townCentre?.review;
       policy.hidden=!review;
       if(review)policy.textContent='Council review, week '+review.week+' · '+({targeted:'Commissioned a search.',random:'Issued an open invitation.',deferred:'Deferred an invitation.'}[review.route])+' '+review.reason;
-      blindText.textContent='Commit before meeting the person. Treasury cost 0. Projected housing deficit after arrival: '+blind.unhoused+'.';
-      blindCommit.disabled=busy||!authority;
-      cost.textContent=search.ok?'Treasury quote '+search.price+' funds. Projected housing deficit '+search.unhoused+'.'+
-        (s.funds<search.price?' The treasury needs '+(search.price-s.funds)+' more funds.':''):search.message;
-      paidCommit.disabled=busy||!authority||!search.ok||s.funds<search.price;
+      const reason=blocked||(rosterFull?'Every street roster place is in use. A place must open before another person can join.':'');
+      blindText.textContent='Invite one person to '+s.name+' before meeting them. Free of charge. Projected housing deficit after arrival: '+blind.unhoused+'.'+(reason?' '+reason:'');
+      blindCommit.disabled=busy||!!reason;
+      homeRegister.hidden=s.id===w.communityLife?.homeId;
+      if(!homeRegister.hidden){
+        const name=Array.from(place.options).find(o=>o.value===w.communityLife.homeId)?.textContent;
+        homeRegister.textContent='Open '+name+' recruitment';
+      }
+      cost.textContent=(search.ok?'Search fee from '+s.name+'’s community treasury: '+search.price+' funds. Balance after payment: '+
+        (s.funds>=search.price?(s.funds-search.price)+' funds.':'insufficient funds ('+(search.price-s.funds)+' more needed).')+
+        ' Projected housing deficit: '+search.unhoused+'.':search.message)+(reason?' '+reason:'');
+      paidCommit.disabled=busy||!!reason||!search.ok||s.funds<search.price;
     }
     function arrivals(s){
       const rows=s.communityLife?.townCentre?.arrivals||[],visible=new Set(rows.map(r=>r.person));
@@ -138,11 +146,12 @@
       }
       if(appFold.open)applicantList(w,s);
     }
-    async function sign(q){
+    async function sign(q,trigger){
       if(busy||!q?.site||!host.open)return;
-      busy=true;offers();
+      busy=true;trigger.after(status);
+      offers();
       try{
-        const result=await sim.perform('communityLife',{...q,action:'townCentre',actor:'steward'});
+        const result=await sim.perform('communityLife',{...q,action:'townCentre'});
         status.textContent=result.message;onResult?.(result);
       }catch{status.textContent='The recruitment decision could not be saved. Reopen the register before retrying.';}
       finally{busy=false;refresh(true);}

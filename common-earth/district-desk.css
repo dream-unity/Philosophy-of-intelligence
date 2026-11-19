@@ -2,13 +2,13 @@
 .stores-ribbon[hidden], #atlas-districts[hidden], #district-observer[hidden] { display:none; }
 .stores-ribbon button { display:flex; align-items:center; justify-content:space-between; gap:1.1rem; padding:8px 15px; color:inherit; background:transparent; border:0; cursor:pointer; text-align:left; min-width:0; }
 .stores-ribbon button:disabled { opacity:1;cursor:default; }
-#ribbon-resources { flex:2.2; }
-#ribbon-personal { flex:1; border-left:1px solid #456164; }
+#ribbon-resources { flex:1.6; }
+#ribbon-treasury,#ribbon-personal { flex:1; border-left:1px solid #456164; }
 .ribbon-caption { display:grid; gap:3px; color:#abc8ba; font-size:.76rem; line-height:1.12; }
 .ribbon-caption strong { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:.9rem; font-weight:570; color:#f4eedb; }
 .ribbon-balances { display:flex; align-items:center; gap:clamp(.8rem,3.4vw,3rem); flex-wrap:wrap; }
 .ribbon-balances span { display:flex; align-items:baseline; gap:.35rem; color:#c2d4cb; font-size:.88rem; }
-.ribbon-balances b,#ribbon-balance { color:#ffe3aa; font-size:1.04rem; font-variant-numeric:tabular-nums; }
+.ribbon-balances b,#ribbon-funds,#ribbon-balance { color:#ffe3aa; font-size:1.04rem; font-variant-numeric:tabular-nums; }
 #atlas-districts { padding:12px clamp(12px,2vw,24px); background:#172c30; }
 #atlas-districts h3 { margin:0 0 8px; font:500 1.25rem var(--serif,Georgia,serif); color:#f8efdb; }
 #atlas-district-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),1fr)); gap:8px; }
@@ -61,12 +61,18 @@ body[data-observing-town] .map-frame { width:100%; }
 @media(max-width:640px){
   .stores-ribbon { margin-bottom:7px; }
   .stores-ribbon button { padding:7px 8px; gap:4px; display:grid; justify-content:stretch; }
-  #ribbon-resources { flex:2.2; } #ribbon-personal { flex:1; }
+  .stores-ribbon button { min-height:44px; }
   .ribbon-caption { display:block; font-size:.7rem; line-height:1.2; overflow:hidden; }
   .ribbon-caption strong { display:block; font-size:.82rem; }
   .ribbon-balances { gap:3px 9px; }
   .ribbon-balances span { font-size:.73rem; gap:3px; }
-  .ribbon-balances b,#ribbon-balance { font-size:.86rem; }
+  .ribbon-balances b,#ribbon-funds,#ribbon-balance { font-size:.86rem; }
+}
+@media(max-width:440px){
+  .stores-ribbon { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #ribbon-resources { grid-column:1/-1; display:flex; flex-wrap:wrap; }
+  #ribbon-personal,#ribbon-treasury { border-top:1px solid #456164; }
+  #ribbon-treasury { border-left:0; }
 }
 @media(any-pointer:coarse){
   .atlas-district-row button,.observer-head button,.observer-dock button,.observer-dock select,.scene-tools button { min-height:44px; }

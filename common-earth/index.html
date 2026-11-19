@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="goals.css?v=a8c0252a8404">
   <link rel="stylesheet" href="community-life.css?v=242b226cee03">
   <script src="performance-meter.js?v=f99e82ee12c0" defer></script>
-  <script src="community-life.js?v=3cefcc29bbe1" defer></script>
+  <script src="community-life.js?v=f81fb30ff978" defer></script>
   <script src="district-path.js?v=d98146b63902" defer></script>
   <script src="original-life.js?v=75cbf177cef8" defer></script>
   <script src="community-life-ui.js?v=03f612036093" defer></script>
@@ -29,7 +29,7 @@
   <script src="goals.js?v=c69088ca33af" defer></script>
   <script src="construction.js?v=6896eb7daa79" defer></script>
   <script src="dismantling.js?v=0f7ed53cbeca" defer></script>
-  <script src="personas.js?v=4a4a685e6c70" defer></script>
+  <script src="personas.js?v=c5c321a7a4be" defer></script>
   <script src="dreams.js?v=1b9210c61cd8" defer></script>
   <script src="social-memory.js?v=9d794afa0d35" defer></script>
   <script src="careers.js?v=63275a304c4b" defer></script>
@@ -46,21 +46,21 @@
   <script src="social-introductions.js?v=e89dcbd4eee5" defer></script>
   <script src="neighbour-errands.js?v=7d41aeb621a7" defer></script>
   <script src="dialogue.js?v=c8e6ca59f616" defer></script>
-  <script src="agency.js?v=837b63c9b0a3" defer></script>
+  <script src="agency.js?v=1648b0247264" defer></script>
   <script src="fisheries.js?v=5e684d83bdca" defer></script>
   <link rel="stylesheet" href="pursuits.css?v=ee480992dba3">
-  <script src="pursuits.js?v=a751643d43ab" defer></script>
+  <script src="pursuits.js?v=ff3d9d2678ad" defer></script>
   <script src="world-storage.js?v=74478e265b19" defer></script>
-  <script src="district-orders.js?v=f766a9a1cdd4" defer></script>
-  <script src="district-growth.js?v=72d32306573e" defer></script>
+  <script src="district-orders.js?v=9b4f96b63e02" defer></script>
+  <script src="district-growth.js?v=cfaa4d66f01b" defer></script>
   <script src="regional-world.js?v=7fd7e17fd5c4" defer></script>
   <script src="practice.js?v=bcb08a674cda" defer></script>
   <script src="cooperative-works.js?v=0dd0468c0f56" defer></script>
   <script src="council-homes.js?v=eb07456d3ae8" defer></script>
   <script src="border-conflict.js?v=da7c8d9617ef" defer></script>
   <script src="housing.js?v=eedb72f06d76" defer></script>
-  <script src="town-centre.js?v=de2c736dbf26" defer></script>
-  <script src="simulation.js?v=17c90f521c4f" defer></script>
+  <script src="town-centre.js?v=c4a657bd876b" defer></script>
+  <script src="simulation.js?v=7e87057a1f5f" defer></script>
   <script src="globe.js?v=e5ac0830781f" data-atlas-version="f3924fe3de33" defer></script>
   <script src="town-architecture.js?v=057b827537b1" defer></script>
   <script src="town-surroundings.js?v=47c9513713d5" defer></script>
@@ -91,7 +91,7 @@
   <script src="community-effects.js?v=55ce1197edc0" defer></script>
   <script src="street-hud.js?v=07db28781236" defer></script>
   <script src="forecast-view.js?v=065152487012" defer></script>
-  <link rel="stylesheet" href="district-desk.css?v=a6fc639e320a">
+  <link rel="stylesheet" href="district-desk.css?v=2766bb6835ce">
   <script src="region-settlement.js?v=1064e9f91a80" defer></script>
   <script src="region-map.js?v=1a46d89c703e" defer></script>
   <script src="regional-inspector.js?v=dae2bfa249a1" defer></script>
@@ -99,8 +99,8 @@
   <script src="practice-ui.js?v=b888b9cf2d0d" defer></script>
   <link rel="stylesheet" href="housing.css?v=8c6a15bfb78c">
   <script src="housing-ui.js?v=fe6ce2790a2a" defer></script>
-  <script src="town-centre-ui.js?v=a57fb66fb9ca" defer></script>
-  <script src="district-desk.js?v=3a98c76b505c" defer></script>
+  <script src="town-centre-ui.js?v=50ceca67a60e" defer></script>
+  <script src="district-desk.js?v=6d44bce7d3e9" defer></script>
   <script src="app.js?v=ff9098cdbc06" defer></script>
 </head>
 <body>
@@ -149,14 +149,18 @@
 
   <main id="play" tabindex="-1">
     <aside id="save-warning" class="save-warning" aria-label="Save status" hidden><span id="save-warning-message"></span><button type="button" id="open-save-tools" class="secondary">Saved worlds</button></aside>
-    <section id="stores-ribbon" class="stores-ribbon" aria-label="Resources and personal funds" hidden>
-      <button type="button" id="ribbon-resources" aria-controls="district-ledger" aria-expanded="false"><span class="ribbon-caption"><span id="ribbon-caption">Public stores</span><strong id="ribbon-town"></strong></span><span class="ribbon-balances"><span>Food <b id="ribbon-food"></b></span><span>Materials <b id="ribbon-materials"></b></span><span>Treasury <b id="ribbon-funds"></b></span></span></button>
+    <section id="stores-ribbon" class="stores-ribbon" aria-label="Community and personal accounts" hidden>
+      <button type="button" id="ribbon-resources" aria-controls="district-ledger" aria-expanded="false"><span class="ribbon-caption"><span id="ribbon-caption">Public stores</span><strong id="ribbon-town"></strong></span><span class="ribbon-balances"><span>Food <b id="ribbon-food"></b></span><span>Materials <b id="ribbon-materials"></b></span></span></button>
+      <button type="button" id="ribbon-treasury" aria-controls="district-ledger" aria-expanded="false"><span class="ribbon-caption">Community funds <strong id="ribbon-treasury-town"></strong></span><span id="ribbon-funds"></span></button>
       <button type="button" id="ribbon-personal" aria-controls="district-ledger" aria-expanded="false"><span class="ribbon-caption">Personal purse <strong id="ribbon-person"></strong></span><span id="ribbon-balance"></span></button>
     </section>
     <section id="district-ledger" aria-labelledby="district-ledger-title" hidden>
       <header><h2 id="district-ledger-title" tabindex="-1"></h2><button type="button" id="district-ledger-close">Close ledger</button></header>
       <div id="district-ledger-body"></div>
     </section>
+    <dialog id="town-centre" aria-labelledby="town-centre-title">
+      <header><h2 id="town-centre-title">Town Centre</h2><form method="dialog"><button type="submit">Close</button></form></header>
+    </dialog>
     <div class="workspace">
       <section class="map-frame" aria-label="Interactive map">
         <div id="atlas-stage" class="stage atlas-stage">
@@ -168,9 +172,6 @@
         </div>
         <section id="atlas-districts" aria-labelledby="atlas-districts-title" hidden><h3 id="atlas-districts-title">Nearby streets</h3><div id="atlas-district-list"></div></section>
         <div id="street-stage" class="stage street-stage" hidden>
-          <dialog id="town-centre" aria-labelledby="town-centre-title">
-            <header><h2 id="town-centre-title">Town Centre</h2><form method="dialog"><button type="submit">Close</button></form></header>
-          </dialog>
           <canvas id="street-canvas" tabindex="0" aria-label="Drag to inspect the region. Pinch to zoom. Arrow keys move your character, E interacts, V enters or exits your vehicle. Tap a moored boat to board, then tap water to sail. The movement and boat buttons also work with a keyboard.">Use the street controls and community panel to explore.</canvas>
           <div class="street-stage-heading"><div class="kicker"><span class="status-dot"></span><span id="street-location">Local district</span></div><h2 id="street-title">Street view</h2><span id="street-work-label" hidden></span><button id="street-works" type="button" aria-label="Inspect active worksites" aria-controls="actions-panel" hidden></button>
             <div id="crew-order-hud" hidden><span class="kicker">Choose a worksite</span><strong id="crew-order-names"></strong><div><button type="button" id="crew-order-sites">Site list</button><button type="button" id="crew-order-cancel">Cancel</button></div></div>
