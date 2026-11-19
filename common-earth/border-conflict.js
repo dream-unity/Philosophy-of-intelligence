@@ -423,7 +423,7 @@
       if(c.phase==='fight'){
         rows.push(...combatants(a,crew,[c.defender,c.support].filter(Boolean),t.site,rival.site,t.site.name+' authorised the claim on parcel '+c.cell+'.'));continue;
       }
-      const dt=Date.now()-(world.lastProductionAt||Date.now()),f=Math.max(0,Math.min(.98,dt/(root.EarthDistrictGrowth.period||12000)));
+      const time=root.EarthDayClock?.now(world)??Date.now(),dt=time-(world.lastProductionAt||time),f=Math.max(0,Math.min(.98,dt/(root.EarthDistrictGrowth.period||12000)));
       const x=a.x+(b.x-a.x)*f,y=a.y+(b.y-a.y)*f,back=c.phase==='return';
       const label=back?'Returning from the boundary':'Marching to contest the boundary';
       for(const [i,p] of crew.entries())rows.push({x:x+i*.01,y:y+i*.007,dx:b.x-a.x,dy:b.y-a.y,kind:'border',phase:c.phase,mode:'walk',

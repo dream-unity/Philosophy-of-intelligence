@@ -4,7 +4,7 @@
 (function(root){
   'use strict';
   const period=120000;
-  function create({read,advance,paint,notice,detail=()=>false,now=()=>performance.now(),later=setTimeout,cancel=clearTimeout}){
+  function create({read,advance,paint,notice,detail=()=>false,rate=()=>1,now=()=>performance.now(),later=setTimeout,cancel=clearTimeout}){
     let enabled=false,started=false,remaining=period,since=null,scope='',epoch=0,hold='',flight=null,timer=null,last='';
     function clearTimer(){if(timer!==null)cancel(timer);timer=null;}
     const identity=s=>[s.siteId,s.generation,s.actorId,s.week].join('/');
@@ -41,7 +41,7 @@
       if(!enabled||hold||flight){draw(s);return;}
       if(remaining===0){commit(s);return;}
       since=at;draw(s);
-      timer=later(()=>{timer=null;update();},Math.min(remaining,detail()?1000:15000));
+      timer=later(()=>{timer=null;update();},Math.max(20,Math.min(remaining,detail()?1000:15000)/rate()));
     }
     function start(){
       if(enabled)return;

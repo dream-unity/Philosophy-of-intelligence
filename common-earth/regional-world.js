@@ -721,7 +721,7 @@
     if(exact.kind==='water'&&!canSail(town,r)&&!['survey','parley'].includes(req.kind))return fail('The crew needs a boat or a working landing to reach this water.');
     const path=meetingPath(geo,r,town,id,req.kind);
     if(!path)return fail('This crew could not find an accessible crossing with its present transport and passage agreements.');
-    return {ok:true,message:depart(world,geo,state(world,geo),town,req.kind,id,crew,path,'The home community accepted the proposal',{x:req.x,y:req.y},Date.now())};
+    return {ok:true,message:depart(world,geo,state(world,geo),town,req.kind,id,crew,path,'The home community accepted the proposal',{x:req.x,y:req.y},root.EarthDayClock?.now(world)??Date.now())};
   }
   function planning(world,geo,r,town){
     const site=town.site,step=world.regionalWorld.step;
@@ -1048,7 +1048,7 @@
     const at=fieldPoint(town,trip,trip.index);
     if(trip.phase==='working')return {...(trip.kind==='parley'?at:trip.targetPoint||at),dx:0,dy:0};
     if(trip.phase==='waiting'||trip.index===trip.path.length-1)return {...at,dx:0,dy:0};
-    const period=root.EarthDistrictGrowth?.period||24000,elapsed=Date.now()-Math.max(trip.startedAt||0,world.lastProductionAt||0);
+    const period=root.EarthDistrictGrowth?.period||24000,elapsed=(root.EarthDayClock?.now(world)??Date.now())-Math.max(trip.startedAt||0,world.lastProductionAt||0);
     // Interpolate the same terrain-priced legs the next paid shift will settle.
     // Opening a sleeping save resumes at its last committed point.
     const fraction=elapsed>=0&&elapsed<=period*1.5?clamp(elapsed/period,0,1):0;
@@ -1106,7 +1106,8 @@
       }
       const run=town.site.communityLife?.freight;if(!run?.path?.length)continue;
       const destination=townFor(geo,run.to)?.site.name||run.to;
-      const partial=clamp((Date.now()-(world.lastProductionAt||Date.now()))/(root.EarthDistrictGrowth?.period||24000),0,1);
+      const time=root.EarthDayClock?.now(world)??Date.now();
+      const partial=clamp((time-(world.lastProductionAt||time))/(root.EarthDistrictGrowth?.period||24000),0,1);
       const closed=r?.contacts[pair(town.site.id,run.to)]?.cell,stop=closed?run.path.indexOf(closed):-1;
       const f=run.held?(stop>0?(stop-1)/Math.max(1,run.path.length-1):.94):
         clamp(((world.regionalWorld?.step||0)-(run.departedRound||0)+partial)/5,0,.98);

@@ -402,3 +402,28 @@ test('one Run away tap can end a live pursuit from contact range without a hit',
   assert.equal(sim.active().id,town.id);assert.equal(scene.getState().mode,'walk');
   scene.destroy();sim.destroy();
 });
+
+test('each starting town has three walkable venue doors and residents physically reach their evening activities',()=>{
+  const {home,world,sim,runtime,streetAt,wait,load,paint}=fixture();
+  load('street-activity');
+  const life=runtime.EarthNightlife,clock=runtime.EarthDayClock;
+  const towns=[home,...world.communityLife.outposts];
+  assert.equal(towns.length,4);
+  for(const site of towns)assert.equal(life.guests(world,site,clock.read(world)).length,0);
+  wait(clock.half+60000);
+  for(const site of towns){
+    const list=life.guests(world,site,clock.read(world)),scene=streetAt(site);
+    paint();
+    const present=new Set(list.map(r=>r.venue));
+    assert.deepEqual([...present].sort(),['arcade','cafe','nightclub'],site.name+' has night visitors in all three venues');
+    const seen=new Set();
+    for(const row of list){
+      const activity=scene.activityOf(row.id);
+      if(activity?.venue?.startsWith(life.find(row.venue).name)&&activity.phase!=='travel')seen.add(row.venue);
+    }
+    assert.deepEqual([...seen].sort(),['arcade','cafe','nightclub'],site.name+' residents reached the three venues');
+    for(const venue of life.venues)assert.ok(scene.focusVenue(venue.id,'steward',()=>{}),venue.name+' has a reachable entrance');
+    scene.destroy();
+  }
+  sim.destroy();
+});

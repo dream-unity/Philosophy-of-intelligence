@@ -301,6 +301,7 @@
   function validSite(site,world,ids){
     if(!recordLike(site) || !shortName(site.id) || !shortName(site.name) || !geoPoint(site) || typeof site.water!=='boolean')return false;
     if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
+    if(root.EarthNightlife&&!root.EarthNightlife.valid(site.nightlife))return false;
     if(site.birthCoordinate!=null&&!geoPoint(site.birthCoordinate))return false;
     if(root.EarthPractice&&!root.EarthPractice.valid(site,world.week))return false;
     if(root.EarthCouncilHomes&&!root.EarthCouncilHomes.valid(site,world.week))return false;
@@ -502,6 +503,7 @@
       if(!recordLike(saved)||saved.version!==VERSION||!integer(saved.week,1)||!integer(saved.effort,0,MAX_EFFORT)||!Array.isArray(saved.sites))return null;
       const world={...blank(),...saved},ids=new Set(world.sites.map(site=>site?.id));
       if(['actionRevision','workRevision','constructionThrough','productionSerial','lastProductionAt'].some(key=>world[key]!=null && !integer(world[key])))return null;
+      if(root.EarthDayClock&&!root.EarthDayClock.valid(world.dayClock))return null;
       if(ids.size!==world.sites.length || !world.sites.every(site=>validSite(site,world,ids)))return null;
       if(!unique(world.sites.flatMap(s=>s.residents.map(p=>p.id))))return null;
       if(!Array.isArray(world.routes)||!world.routes.every(route=>validRoute(route,world,ids))||!unique(world.routes.map(r=>r.id)))return null;
@@ -598,6 +600,7 @@
       saveIssue=!!saveMessage;
       world=restored || blank();
       if(selected && !world.communityLife && world.sites.some(s=>s.id===selected))world.activeId=selected;
+      if(world.sites.length&&root.EarthDayClock)world.dayClock||=root.EarthDayClock.start();
       root.EarthCommunityLife?.initialise(world,newSettlement);
       lastSeen=raw;lastGood=restored?goodText:null;
     }
@@ -812,6 +815,7 @@
       const site=newSettlement({id,name,region,point,water,names,old,offer});
       root.EarthAgency?.depart(current(),typeof departure==='function'?departure():departure);
       world.sites.push(site);world.activeId=id;
+      if(root.EarthDayClock)world.dayClock||=root.EarthDayClock.start();
       root.EarthCommunityLife?.founding(world,old,site,offer.volunteers||[],newSettlement);
       if(world.communityLife&&typeof governance?.residentBallots==='boolean')site.residentBallots=governance.residentBallots;
       const note=root.EarthCampaigns?.found(world,site,commission);
@@ -2169,6 +2173,13 @@
         const resetClock=previous>now+5000 && Math.abs(through-now)<5000;
         if(!resetClock)seconds=Math.min(seconds,Math.max(0,(through-previous)/1000));
       }
+      if(through!==undefined&&world.dayClock&&root.EarthDayClock){
+        const start=through-seconds*1000;
+        // A rate change reanchors the clock. Count pre-change work at normal
+        // speed and convert only the portion covered by the current anchor.
+        const cut=Math.min(through,Math.max(start,world.dayClock.at));
+        seconds=(cut-start+root.EarthDayClock.now(world,through)-root.EarthDayClock.now(world,cut))/1000;
+      }
       const completed=[],messages=[],changedSites=new Set();
       let changed=false;
       // A rehearsal can cover several sites in one call. Settle each second in
@@ -2439,7 +2450,7 @@
       }
       root.EarthRegionalWorld?.advance?.(world,newSettlement,'production');
       root.EarthPerformance?.finish('production',productionStarted);
-      world.productionSerial=expected+1;world.lastProductionAt=Date.now();
+      world.productionSerial=expected+1;world.lastProductionAt=root.EarthDayClock?.now(world)??Date.now();
       return complete('District production settled.',current(),false);
     }
     const commands={
@@ -2448,6 +2459,10 @@
         if(!site?.handline||site.id!==siteId||site.handline.castAt!==castAt)return reject('That cast has changed.');
         delete site.handline;
         return complete('Fishing line put away.',site,false);
+      }),
+      setWorldPace:guarded(choice=>{
+        if(!current()||!root.EarthDayClock?.change(world,choice))return reject('Choose a town and a simulation speed.');
+        return complete('World speed changed.',current(),false);
       }),
       production:guarded(runProduction),
       setPaidOrders:guarded(request=>{
