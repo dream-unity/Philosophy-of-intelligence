@@ -1,0 +1,24 @@
+name: Common Earth deployed game verification
+on:
+  push:
+    branches: [codex/common-earth-live-verification]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: after
+      - uses: actions/checkout@v4
+        with:
+          path: before
+          ref: b9c2e18ade56490cfc5dee4858990bf0cdc3f7e3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install playwright==1.56.0
+      - run: node after/qa/seed.cjs
+      - run: python after/qa/live.py
