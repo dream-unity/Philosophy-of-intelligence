@@ -231,8 +231,14 @@
       if(pantry)offer(self,'gather',85+traits.initiative/5+(profile.aptitudes?.stamina??50)/8-repeat('gather')+(ask==='help'?35:0),'The pantry has less than two weeks of meals. I can bring in one food.','garden');
       if(root.EarthProvisions?.volunteer(world,site,self))offer(self,'preserve',73+traits.patience/8-repeat('preserve'),'I can keep some of the surplus for a lean week.','market');
       for(const gap of gaps)if(!gap.coverId&&gap.personId!==self.id){
-        const oldVenue=workplace(root.EarthCareers?.catalog?.find(j=>j.label===gap.oldRole)?.venue,gap.oldRole),canCover=self.base.venue===oldVenue || traits.adaptability>=70;
-        if(canCover)offer(self,'cover',85+traits.adaptability/5-repeat('cover')+(ask==='help'?35:0),'I can cover '+gap.oldRole+' while '+(identity(site,gap.personId)?.name||'my colleague')+' moves on.',oldVenue,{target:gap.personId,gap});
+        const oldVenue=gap.venue||workplace(root.EarthCareers?.catalog?.find(j=>j.label===gap.oldRole)?.venue,gap.oldRole);
+        const canCover=self.base.venue===oldVenue||traits.adaptability>=70;
+        if(canCover){
+          if(gap.laneId&&self.profile.kind==='carrier'&&root.EarthCareers?.supplyLane?.(site,world,self.id)?.status==='staffed')continue;
+          const reason=gap.laneId?'I can take the supply run from lot '+(gap.from+1)+' to lot '+(gap.to+1)+' while the porter works elsewhere.':
+            'I can cover '+gap.oldRole+' while '+(identity(site,gap.personId)?.name||'my colleague')+' moves on.';
+          offer(self,'cover',85+traits.adaptability/5-repeat('cover')+(ask==='help'?35:0),reason,oldVenue,{target:gap.personId,gap});
+        }
       }
       if(row.contact>=3 || ask==='connect'){
         let other=null,best=-1;
@@ -255,7 +261,8 @@
     const meetingPlaces=1+Number(site.buildings?.some(b=>b.kind==='hall'));
     for(const o of offers){
       const p=o.self;
-      if(!p.free||o.partner&&!o.partner.free||o.kind==='gather'&&gathered||o.kind==='cover'&&covered.has(o.target)||o.kind==='visit'&&visits>=meetingPlaces)continue;
+      const coverKey=o.gap?.laneId?'lane/'+o.target:o.target;
+      if(!p.free||o.partner&&!o.partner.free||o.kind==='gather'&&gathered||o.kind==='cover'&&covered.has(coverKey)||o.kind==='visit'&&visits>=meetingPlaces)continue;
       let chosen=o.kind==='project'?null:line(week,o.kind,o.reason,o.venue,o.target);
       if(o.kind==='project'){
         const result=root.EarthLocalProjects.assign(site,world,all,projects,o,effects);
@@ -276,10 +283,12 @@
       }
       if(o.kind==='cover'){
         const map={farming:'food',food:'food',farm:'food',repair:'materials',repairs:'materials',trade:'funds',exchange:'funds'};
-        const key=map[o.gap.occupation];
-        const lost=key?-(root.EarthCareers?.weeklyAdjustment?.(site,world)?.[key]||0):0;
-        if(lost>0&&!restored.has(key)){effects[key]=(effects[key]||0)+1;restored.add(key);}
-        covered.add(o.target);
+        if(o.gap.laneId)chosen.laneId=o.gap.laneId;
+        else{
+          const key=map[o.gap.occupation],lost=key?-(root.EarthCareers?.weeklyAdjustment?.(site,world)?.[key]||0):0;
+          if(lost>0&&!restored.has(key)){effects[key]=(effects[key]||0)+1;restored.add(key);}
+        }
+        covered.add(coverKey);
       }
       if(o.kind==='gather'){gathered=true;effects.food=(effects.food||0)+1;}
       if(o.kind==='visit')visits++;
@@ -302,7 +311,14 @@
   function rates(site,world){return site.autonomy?.week===world?.week?{...site.autonomy.effects}:{};}
   function valid(site,week){
     const d=site.autonomy;if(d==null)return true;
-    const allowed=id=>knownId(site,id);
+    const allowed=id=>knownId(site,id),laneCover=new Set();
+    function validLane(h){
+      if(h.laneId==null)return true;
+      if(h.kind!=='cover'||h.target!==h.laneId||!/^carrier-[0-8]-[0-8]$/.test(h.laneId))return false;
+      const [,from,to]=h.laneId.split('-').map(Number),key=h.week+'/'+h.laneId;
+      if(Math.abs(from%3-to%3)+Math.abs(Math.floor(from/3)-Math.floor(to/3))!==1||laneCover.has(key))return false;
+      laneCover.add(key);return true;
+    }
     if(!dict(d)||!int(d.week,0,week)||!dict(d.people)||Object.keys(d.people).length>92||!dict(d.effects))return false;
     if(!Object.entries(d.effects).every(([k,v])=>k==='food'?int(v,1,8):['funds','materials'].includes(k)&&v===1))return false;
     if(root.EarthLocalProjects&&!root.EarthLocalProjects.valid(site,week))return false;
@@ -317,6 +333,7 @@
       (r.advice==null||dict(r.advice)&&has(adviceLabels,r.advice.action)&&typeof r.advice.accepted==='boolean'&&int(r.advice.week,1,week))&&
       Array.isArray(r.history)&&r.history.length<=4&&r.history.every((h,i)=>dict(h)&&int(h.week,1,d.week)&&(!i||h.week<r.history[i-1].week)&&has(labels,h.kind)&&
         typeof h.reason==='string'&&h.reason.length>0&&h.reason.length<=450&&venues.has(h.venue)&&(h.target==null||allowed(h.target)&&h.target!==id)&&
+        validLane(h)&&
         (h.civic==null||h.civic===true&&h.kind==='commitment'&&
           (h.jobId==null&&h.plot==null||typeof h.jobId==='string'&&h.jobId.length>0&&h.jobId.length<=512&&int(h.plot,0,8)))&&
         (h.kind!=='project'||['research','build','food','teach','hobby'].includes(h.projectKind)&&['plan','work','finish'].includes(h.phase)&&

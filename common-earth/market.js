@@ -204,7 +204,7 @@
       batch:book.batch?{...book.batch,cost:{...book.batch.cost}}:null,options:offers(world,site,book,terms),
       history:book.history.map(entry=>({...entry})),loaded:accounts.find(good=>inTruck(site,good))||null,nextRound:round(site,world.week+1,terms),populationMeals:Math.ceil(site.population/5)};
   }
-  function flowDetail(site,rows){
+  function flowDetail(site,rows,world){
     const parts=[];
     function add(good,amount,source){if(amount)parts.push({good,amount,source});}
     for(const [good,n] of Object.entries({funds:2,food:3,materials:1}))add(good,n,'Ordinary district activity');
@@ -216,7 +216,8 @@
     }
     const plan=root.CommonEarthSim?.marketPlan?.(site);
     add('funds',plan?.baseFunds||0,'Operating market fees');
-    const links=plan?root.CommonEarthSim?.productiveLinks?.(site,plan)||[]:[];
+    const placed=plan?root.CommonEarthSim?.productiveLinks?.(site,plan)||[]:[];
+    const links=root.EarthCareers?.laneWorker?placed.filter(link=>root.EarthCareers.laneWorker(site,world,link)):placed;
     for(const good of ['food','funds']){
       add(good,links.filter(l=>l.resource===good).length,'Neighbouring facilities');
     }

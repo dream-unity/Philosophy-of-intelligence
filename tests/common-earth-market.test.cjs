@@ -284,6 +284,14 @@ test('towns have their own supplier and visitor days and can make greater use of
   assert.ok(a.model().history[0].text.includes('Supplier delivery'));
 });
 
+test('accounts attribute neighbouring facility production to a staffed or covered route in the selected week',()=>{
+  const {api,s,w,env}=setup(),link={from:0,to:1,resource:'food'};
+  env.CommonEarthSim.productiveLinks=()=>[link];
+  env.EarthCareers={laneWorker:(site,world,route)=>site===s&&world.week===2&&route===link?'relief-worker':null};
+  const linked=()=>api.flowDetail(s,[],w).filter(r=>r.source==='Neighbouring facilities');
+  assert.equal(linked().length,0);w.week=2;assert.equal(linked()[0].amount,1);w.week=3;assert.equal(linked().length,0);
+});
+
 test('authorised truck freight remains one physical unit across loading, return, restocking and delivery',()=>{
   const {api,s,w,model,run,close}=setup();
   s.fleet={custody:{kind:'work',delivered:false,week:w.week}};

@@ -170,6 +170,32 @@ test('a queued named parcel delivery cannot pay out once its in-person visit has
   assert.ok(sim.act('courier:deliver:'+id,undefined,'work',()=>true).ok);
 });
 
+test('a legacy conversation control delivers its in-person answer and drops a question after the visit closes',async()=>{
+  const data=new Map(),storage={getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value)};
+  const sim=runtime.CommonEarthSim.create({storage});
+  assert(sim.found({lat:-6.16,lon:39.19,name:'Stone Town'}).ok);
+  const site=sim.active(),ref={residentId:site.residents[0].id};
+  const element=()=>({children:[],dataset:{},isConnected:true,append(...children){this.children.push(...children);},
+    addEventListener(){},setAttribute(){},replaceChildren(){}});
+  const fields={'street-actor':element(),'street-actor-role':element()};
+  const context=vm.createContext({document:{getElementById:id=>fields[id]}});
+  context.window=context;context.EarthAgency=runtime.EarthAgency;
+  vm.runInContext(fs.readFileSync(path.join(root,'agency-ui.js'),'utf8'),context);
+  const me=()=>runtime.EarthAgency.actorId(site),meeting=()=>contact(site,me(),ref.residentId);
+  const street={meeting},container=element();let version=1;
+  const panel=context.EarthAgencyUI.mount({sim,street:()=>street,version:()=>version,node:element,
+    button:(label,click)=>({...element(),label,click}),onResult:result=>result.ok,refresh(){},resetEncounter(){}});
+  panel.conversation(container,ref);
+  const row=container.children[0],reply=row.children[1],buttons=row.children[2].children;
+  await buttons.find(b=>b.dataset.talkTopic==='news').click();assert.match(reply.textContent,/Mira/);
+  const before=JSON.stringify(sim.state);
+  let unlock;runtime.navigator={locks:{request:(_key,run)=>new Promise(resolve=>{unlock=()=>resolve(run());})}};
+  try{
+    const wait=buttons.find(b=>b.dataset.talkTopic==='meal').click();version++;row.isConnected=false;unlock();await wait;
+    assert.equal(JSON.stringify(sim.state),before);
+  }finally{delete runtime.navigator;sim.destroy();}
+});
+
 test('five passing neighbours and an off-duty driver can take control at their actual position and release their own body',()=>{
   const sim=town(),s=sim.active(),agency=runtime.EarthAgency;
   const ids=Array.from(agency.playables(s),p=>p.id);

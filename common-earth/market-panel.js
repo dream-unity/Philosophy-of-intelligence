@@ -196,7 +196,7 @@
     function records(m){
       const box=el('div',null,'market-page');
       box.append(el('p','Weekly flow includes household use. One-off decisions, trades and paid deliveries enter the free store when they settle.','market-help'));
-      const flows=root.EarthMarket.flowDetail(sim.active(),m.rows),breakdown=el('details');
+      const flows=root.EarthMarket.flowDetail(sim.active(),m.rows,sim.state),breakdown=el('details');
       breakdown.append(el('summary','Sources and uses this week'));
       const list=el('ul');
       for(const row of m.rows){

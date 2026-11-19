@@ -72,3 +72,43 @@ test('large worlds keep every settlement’s real balances within one shared sto
   assert(JSON.stringify(ledger).length<60000);
   assert.deepEqual(plain(restore().lastWeek()),plain(ledger));
 });
+
+test('weekly previews independently normalize optional and older save data using its original JSON field keys', () => {
+  const local = vm.createContext({});
+  local.window = local;
+  vm.runInContext(fs.readFileSync(path.join(game, 'simulation.js'), 'utf8'), local);
+  const first = local.CommonEarthSim.create({storage: null});
+  assert(first.found({lat: -6.16, lon: 39.19, name: 'Stone Town'}).ok);
+  const saved = JSON.parse(JSON.stringify(first.state));
+  saved.sites[0].extras = JSON.parse('{"list":[{"stock":4}],"__proto__":{"legacyNote":"kept"}}');
+  const sim = local.CommonEarthSim.create({storage: null, snapshot: JSON.stringify(saved)});
+  first.destroy();
+  local.extras = sim.active().extras;
+  vm.runInContext(`
+    const calls=[];
+    extras.absent=undefined;
+    extras.series=[,undefined,NaN,-0,Infinity];
+    extras.unusual=Object.assign(Object.create({inherited:'outside the save'}),{own:'preserved'});
+    Object.defineProperty(extras,'note',{enumerable:true,get(){calls.push('getter');return 'once';}});
+    extras.date=new Date(0);
+    extras.custom={toJSON(key){calls.push(key);return 'under '+key;}};
+    extras.remove={toJSON(){return undefined;}};
+    if(typeof JSON.rawJSON==='function')extras.raw=JSON.rawJSON('123');
+    window.expected=JSON.stringify(JSON.parse(JSON.stringify(extras)));
+    calls.length=0;
+    window.EarthPurses={tick(_world,site){window.seen=site.extras;return [];}};
+  `, local);
+  sim.forecastNext();
+  assert.equal(JSON.stringify(local.seen), local.expected);
+  assert.deepEqual(Array.from(vm.runInContext('calls', local)), ['getter', 'custom']);
+  assert(Object.hasOwn(local.seen, '__proto__'));
+  assert.equal(local.seen.legacyNote, undefined);
+  assert.equal(local.seen.__proto__.legacyNote, 'kept');
+  assert.equal(Object.is(local.seen.series[3], -0), false);
+  assert.equal(Object.hasOwn(local.seen, 'absent'), false);
+  local.seen.list[0].stock=0;
+  assert.equal(sim.active().extras.list[0].stock, 4);
+  assert.equal(local.seen.unusual.inherited, undefined);
+  assert.equal(sim.active().extras.unusual.inherited, 'outside the save');
+  sim.destroy();
+});

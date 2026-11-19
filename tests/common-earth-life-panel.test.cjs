@@ -40,7 +40,7 @@ function documentFixture(){
   add('life-content','div',panel);add('life-feedback','p',panel);
   return {doc,panel,tabs};
 }
-function fixture(){
+function fixture(playAs){
   const {doc,panel,tabs}=documentFixture(),w=vm.createContext({document:doc,structuredClone});w.window=w;
   for(const file of ['shifts','construction','city','personas','careers','autonomy','agency','simulation','life-panel']){
     vm.runInContext(fs.readFileSync(path.join(game,file+'.js'),'utf8'),w,{filename:file+'.js'});
@@ -52,7 +52,7 @@ function fixture(){
   let nearby=null,travel=null,camera=0,listCalls=0;
   const personas=w.EarthPersonas;w.EarthPersonas={...personas,list(s){listCalls++;return personas.list(s);}};
   const street={getState:scene,meeting(ref){const id=ref.residentId||ref.npcId;return id===nearby?{...scene(),target:id,tx:11.6,ty:12.1}:null;}};
-  const results=[],ui=w.EarthLifePanel.mount(panel,{sim,street:()=>street,version:()=>camera,reviewWeek:()=>{},after:()=>ui.render(),
+  const results=[],ui=w.EarthLifePanel.mount(panel,{sim,playAs,street:()=>street,version:()=>camera,reviewWeek:()=>{},after:()=>ui.render(),
     onResult:r=>results.push(r),meet(ref,_name,callback){travel={ref,callback};return true;}});
   const content=doc.getElementById('life-content'),get=key=>content.querySelector('[data-life-control="'+key+'"]');
   function page(key){tabs.fire('click',tabs.querySelector('[data-life-page="'+key+'"]'));}
@@ -142,5 +142,35 @@ test('specialist hiring shows the actual reserved offer, qualified waiting list,
   for(const text of ['0 of 1 specialist post open',team.name+' · offer reserved',waiter.name+' (since week '+waiter.since+')',
     'Next hiring review · Week '+opening.nextReview,opening.reason,opening.service])assert(content.text().includes(text),text);
   assert(g.get('career-specialistRelief'));g.job('cook');assert(!content.text().includes('Temporary relief duty'));
+  sim.destroy();
+});
+
+test('Character lives lists an operating supply porter, switches from their actual scene position and keeps that person after a lane closes',()=>{
+  let g;const id='carrier-0-1';
+  g=fixture(selected=>{const pose=g.scene();return g.sim.changeActor(selected,{...pose,targetPose:{id:selected,x:8,y:6,mode:'walk'}});});
+  g.site.buildings=[{plot:0,kind:'workshop',id:'workshop',name:'Workshop'},{plot:1,kind:'garden',id:'garden',name:'Garden'}];
+  g.ui.open(id);const person=g.w.EarthPersonas.profile(g.site,id),profile=g.doc.getElementById('life-profile');
+  assert(g.doc.getElementById('life-person').children.some(o=>o.value===id));
+  assert(profile.text().includes('Outside work, '+person.name+' enjoys '));
+  const play=profile.querySelector('[data-life-control="play-character"]');assert.equal(play.textContent,'Play as '+person.name);
+  assert(play.fire('click').ok);assert.equal(g.w.EarthAgency.actorId(g.site),id);assert.deepEqual([g.site.agency.actorAt.x,g.site.agency.actorAt.y],[8,6]);
+  g.site.buildings=[];g.ui.open(id);assert(g.doc.getElementById('life-person').children.some(o=>o.value===id));
+  assert(!profile.querySelector('[data-life-control="play-character"]'));g.sim.destroy();
+});
+test('the porter’s Career page follows actual corridor staffing, the vacant run, and the named colleague covering it',()=>{
+  const g=fixture(),{sim,site,ui,w}=g,id='carrier-0-1',profile=g.doc.getElementById('life-profile');
+  site.buildings=[{plot:0,kind:'workshop',id:'works',name:'Workshop'},{plot:1,kind:'garden',id:'farm',name:'Garden'}];
+  ui.open(id);
+  const lane=()=>w.EarthCareers.view(sim.state,site,id).supplyLane;
+  assert.equal(lane().status,'staffed');assert(profile.text().includes(lane().description));assert.match(lane().description,/1 extra food/);
+  g.page('abilities');assert(!profile.text().includes(lane().description));
+  g.page('career');
+  (site.careers||={})[id]={jobId:'engineer',joinedWeek:1,revision:1};
+  sim.state.actionRevision++;ui.render();
+  assert.equal(lane().status,'vacant');assert(profile.text().includes(lane().description));
+  const cover=site.residents[0];
+  site.careers[id].departure={oldRole:'Supply porter',oldEmployer:'Neighbourhood supply team',coverId:cover.id,throughWeek:sim.state.week+1};
+  sim.state.actionRevision++;ui.render();
+  assert.equal(lane().status,'covered');assert.equal(lane().coverName,cover.name);assert(profile.text().includes(lane().description));
   sim.destroy();
 });

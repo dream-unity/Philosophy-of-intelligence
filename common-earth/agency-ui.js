@@ -76,10 +76,11 @@
           const expected=version();
           const speak=async()=>{
             // Movement can continue while another tab holds the world lock.
-            const liveMeeting=()=>version()===expected && street()===local && sim.state.activeId===site.id &&
-              agency.actorId(sim.active())===source && local.meeting(ref,true);
+            const current=()=>version()===expected && street()===local && sim.state.activeId===site.id &&
+              agency.actorId(sim.active())===source && row.isConnected;
+            const liveMeeting=()=>current() && local.meeting(ref,true);
             const result=await sim.perform('converse',id,topic,liveMeeting);
-            if(version()!==expected||street()!==local||!visible())return;
+            if(!current())return;
             if(result.changed||topic==='meal'&&result.ok){onResult(result);refresh();}
             else if(reply.isConnected)reply.textContent=result.message;
           };

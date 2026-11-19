@@ -272,8 +272,9 @@
         model=careers.view(sim.state,site,person.id,targetId);
       }
       const action=doc.activeElement?.dataset.lifeControl;
-      profileBox.replaceChildren(field('h3',person.name),field('p',[model.career,model.employer].filter(Boolean).join(' · '),'life-role'),
-        field('p',person.description),field('p','Strengths · '+person.strengths.map(title).join(', '),'life-muted'));
+      profileBox.replaceChildren(field('h3',person.name),field('p',[model.career,model.employer].filter(Boolean).join(' · '),'life-role'));
+      if(page==='career'&&model.supplyLane?.description)profileBox.append(field('p',model.supplyLane.description,'life-muted'));
+      profileBox.append(field('p',person.description),field('p','Strengths · '+person.strengths.map(title).join(', '),'life-muted'));
       if(person.interests?.length)profileBox.append(field('p','Interests · '+person.interests.join(', '),'life-muted'));
       const playable=root.EarthAgency.playables?.(site).some(p=>p.id===person.id)??(person.kind==='resident'||person.kind==='steward');
       if(playAs&&person.id!==root.EarthAgency.actorId(site)&&playable){

@@ -143,9 +143,9 @@
   function canFit(p,j){
     return bounds(p,j.skill).max+6>=j.requiredSkill && bounds(p,j.secondary).max>=j.secondMinimum;
   }
-  function consent(world,p,m,j,action,speaker){
+  function consent(world,site,p,m,j,action,speaker){
     if(!speaker||speaker===p.id)return '';
-    const playable=p.kind!=='carrier'&&!/^carrier-/.test(p.id);
+    const playable=root.EarthAgency?.canPlay?.(site,p.id)??(p.kind!=='carrier'&&!/^carrier-/.test(p.id));
     if(['withdraw','release','pause','pace','accept','resume','leaveCourse'].includes(action)){
       return playable?'Play as '+p.name+' to make this decision about their employment or study.':
         p.name+' manages this decision personally. Meet them to discuss a course, application or offer.';
@@ -177,15 +177,17 @@
     return best;
   }
   function coverFor(site,p,old,week){
-    const axis={food:'care',repair:'craft',exchange:'organisation'}[old.occupation];
+    const link=porterSlot(p.id)&&['origin','courier'].includes(old.id)?activeLane(site,p.id):null;
+    const occupation=link?.resource==='food'?'food':old.occupation;
+    const axis={food:'care',repair:'craft',exchange:'organisation'}[occupation];
     const assigned=new Set(Object.values(site.careers||{}).flatMap(m=>[m.application?.coverId,m.departure?.coverId]).filter(Boolean));
     let best=null,bestScore=-1;
     for(const other of people(site)){
-      if(other.id===p.id||assigned.has(other.id))continue;
+      if(other.id===p.id||assigned.has(other.id)||link&&porterSlot(other.id)&&!changedTrade(state(site,other.id))&&activeLane(site,other.id))continue;
       const m=state(site,other.id);
       if(m.application?.phase==='notice'||m.training?.pace==='intensive'&&!m.training.paused||m.specialistRelief?.week>=week||root.EarthPurses?.committed?.(site,other.id,week))continue;
       const post=get(jobs,m.jobId)||origin(other);
-      const score=skill(other,m,axis)+(post.occupation===old.occupation?25:0);
+      const score=skill(other,m,axis)+(post.occupation===occupation?25:0);
       if(score>bestScore){best=other;bestScore=score;}
     }
     return best;
@@ -297,7 +299,7 @@
     const speaker=context.speakerId??root.EarthAgency?.actorId(site)??id;
     const skills=Object.fromEntries(axes.map(k=>[k,skill(p,m,k)]));
     function add(action,text,detail,gate='',extra={}){
-      const reason=gate||consent(world,p,m,j,action,speaker);
+      const reason=gate||consent(world,site,p,m,j,action,speaker);
       choices.push({id:action,targetId:j.id,label:text,detail,available:!reason,reason,expectedRevision:revision,...extra});
     }
     if(j){
@@ -352,7 +354,7 @@
       skills,aptitude:Object.fromEntries(axes.map(k=>[k,aptitude(p,k)])),bounds:Object.fromEntries(axes.map(k=>[k,bounds(p,k)])),
       history:(m.history||[]).map(h=>({...h})),training:t?{...t,...coursePhase(jobs[t.targetId],t.credits)}:null,application:a?{...a}:null,
       qualifications:{...m.qualifications},portfolios:{...m.portfolios},references:{...m.references},latestReference:m.latestReference?{...m.latestReference}:null,agreedPlan:m.agreedPlan||null,
-      targetId:j?.id,opening:posts,qualified:j?qualified(p,m,j):false,missing:j?screening(p,m,j):[],
+      targetId:j?.id,opening:posts,supplyLane:porterSlot(id)?supplyLane(site,world,id):null,qualified:j?qualified(p,m,j):false,missing:j?screening(p,m,j):[],
       fits:j?canFit(p,j):false,stage:a?.phase==='deferred'&&t?'training':a?.phase||(t?'training':'employed'),
       status:status(world,p,m,current),choices,revision};
   }
@@ -517,15 +519,59 @@
     }
     return events;
   }
+  const porterSlot=id=>typeof id==='string'&&/^carrier-[0-8]-[0-8]$/.test(id);
+  const routeId=link=>'carrier-'+link.from+'-'+link.to;
+  const changedTrade=m=>Boolean(m?.jobId&&m.jobId!=='courier');
+  function previousLane(m,link){
+    const previous=m?.latestReference?.jobId;
+    return Boolean(m?.departure&&(previous==='origin'||previous==='courier'&&link||
+      !previous&&['Supply porter','Garden courier','Exchange porter'].includes(m.departure.oldRole)));
+  }
+  const operatingLinks=site=>Array.isArray(site?.buildings)?root.CommonEarthSim?.productiveLinks?.(site)||[]:[];
+  function activeLane(site,id,links){
+    return porterSlot(id)?(links||operatingLinks(site)).find(link=>routeId(link)===id)||null:null;
+  }
+  function laneWorker(site,world,link){
+    const id=routeId(link),m=memory(site,id);
+    if(!changedTrade(m))return id;
+    const week=world?.week??site.autonomy?.week??0;
+    if(previousLane(m,link)&&m.departure.throughWeek>=week&&m.departure.coverId)return m.departure.coverId;
+    if(site.autonomy?.week===week){
+      for(const [other,row] of Object.entries(site.autonomy.people||{})){
+        const today=row.history?.[0];
+        if(today?.week===week&&today.kind==='cover'&&today.laneId===id&&today.target===id)return other;
+      }
+    }
+    return null;
+  }
+  function supplyLane(site,world,id,link=activeLane(site,id)){
+    if(!link)return null;
+    const worker=laneWorker(site,world,link),coverId=worker&&worker!==id?worker:null;
+    const coverName=coverId?profile(site,coverId)?.name||null:null;
+    const label=(link.resource==='food'?'Garden supply run':'Market supply run')+' · lots '+(link.from+1)+' and '+(link.to+1);
+    const effect='1 extra '+(link.resource==='food'?'food':'fund')+' this week';
+    const status=coverId?'covered':worker?'staffed':'vacant';
+    const description=label+'. '+(coverId?(coverName||'A neighbour')+' covers this run and supplies '+effect+'.':
+      worker?(profile(site,id)?.name||'The local porter')+' staffs this run and supplies '+effect+'.':
+      'The porter now works elsewhere. The run needs cover to supply '+effect+'.');
+    return {...link,label,status,coverId,coverName,description};
+  }
   function coverage(site,world){
-    const gaps=[];
+    const gaps=[];let links;
     for(const [id,m] of Object.entries(site.careers||{})){
-      if(m.departure && world.week<=m.departure.throughWeek)gaps.push({personId:id,...m.departure});
+      const gap=m.departure,active=gap&&world.week<=gap.throughWeek,porter=porterSlot(id);
+      const link=porter&&changedTrade(m)?activeLane(site,id,links??=operatingLinks(site)):null;
+      if(active&&!(porter&&previousLane(m,link)))gaps.push({personId:id,...gap});
+      if(link){
+        const cover=laneWorker(site,world,link),venue=link.resource==='food'?'garden':'market';
+        gaps.push({personId:id,laneId:id,venue,oldRole:link.resource==='food'?'Garden courier':'Exchange porter',
+          occupation:link.resource==='food'?'food':'exchange',coverId:cover,from:link.from,to:link.to});
+      }
     }
     return gaps;
   }
   function weeklyAdjustment(site,world){
-    const delta={};
+    const delta={};let links;
     const add=(key,amount)=>{delta[key]=(delta[key]||0)+amount;};
     for(const [id,m] of Object.entries(site.careers||{})){
       const j=get(jobs,m.jobId),p=profile(site,id);if(!p)continue;
@@ -537,10 +583,15 @@
       if(m.relief?.week===world.week-1)add(replacementGoods[m.relief.occupation],1);
       const gap=m.departure;
       if(gap && world.week<=gap.throughWeek){
-        if(!gap.coverId)add(replacementGoods[gap.occupation],-1);
-        else{
+        const porter=porterSlot(id),link=porter?activeLane(site,id,links??=operatingLinks(site)):null;
+        const laneDeparture=porter&&previousLane(m,link);
+        // The link itself pays only when staffed. Its old employer must not
+        // also lose a generic exchange unit for the same vacant assignment.
+        if(!gap.coverId){if(!laneDeparture)add(replacementGoods[gap.occupation],-1);}
+        else if(!laneDeparture||link&&changedTrade(m)){
           const worker=profile(site,gap.coverId),coverJob=get(jobs,state(site,gap.coverId).jobId)||(worker&&origin(worker));
-          if(coverJob && coverJob.occupation!==gap.occupation)add(replacementGoods[coverJob.occupation],-1);
+          const occupation=laneDeparture&&link.resource==='food'?'food':gap.occupation;
+          if(coverJob && coverJob.occupation!==occupation)add(replacementGoods[coverJob.occupation],-1);
         }
       }
     }
@@ -580,5 +631,5 @@
     }
     return true;
   }
-  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,openings,specialistShift,coverCommitment,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
+  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,openings,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
 })(typeof window==='undefined'?globalThis:window);

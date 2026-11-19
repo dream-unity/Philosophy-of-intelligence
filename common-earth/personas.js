@@ -196,7 +196,7 @@
     const strengths=Object.freeze(axes.slice().sort((a,b)=>skills[b]-skills[a]).slice(0,2));
     const interests=Object.freeze([workInterest,hobbyName]);
     const intro=name+' '+custom+'.';
-    const description=intro+' '+name+' '+habit+' and spends free time on '+hobbyName+'.';
+    const description=intro+' '+name+' '+habit+'. Outside work, '+name+' enjoys '+hobbyName+'.';
     const outsideWork=key==='repairer'?'I enjoy '+hobbyName+'. I can work out a gear ratio in my head, but I have to learn a tune one phrase at a time.':saying;
     return Object.freeze({id,name,kind,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
       strengths,traits:temperament,aptitudes:Object.freeze(skills),bounds:Object.freeze(bounds),outsideWork});
@@ -208,24 +208,47 @@
     if(!result){result=makeProfile(reg,slot);reg.profiles.set(id,result);}
     return result;
   }
+  const porterSlots=new Set(baseSlots.filter(slot=>slot[2]==='carrier').map(slot=>slot[0]));
+  const isPorterId=id=>porterSlots.has(id);
+  function recordedPorters(site){
+    const recorded=new Set();
+    const add=id=>{if(isPorterId(id))recorded.add(id);};
+    const agency=site.agency,projects=site.autonomy?.projects;
+    for(const id of Array.isArray(agency?.porters)?agency.porters:[])add(id);
+    for(const [id,career] of Object.entries(site.careers||{})){
+      if(career?.jobId||career?.training||career?.application||career?.agreedPlan||career?.history?.length||
+        Object.keys(career?.qualifications||{}).length)add(id);
+      add(career?.application?.coverId);add(career?.departure?.coverId);
+    }
+    for(const [id,life] of Object.entries(site.autonomy?.people||{}))if(life?.history?.length||life?.pastime||life?.advice)add(id);
+    for(const [id,project] of Object.entries(projects?.owners||{})){
+      if(project?.progress||project?.volunteer||project?.finished)add(id);
+      add(project?.partnerId);add(project?.beneficiaryId);add(project?.volunteer?.from);
+    }
+    for(const result of projects?.completed||[]){add(result?.ownerId);add(result?.partnerId);add(result?.beneficiaryId);}
+    for(const id of Object.keys(site.purses?.people||{}))add(id);
+    for(const visit of agency?.visits||[]){add(visit?.from);add(visit?.to);}
+    for(const meal of agency?.meals||[]){add(meal?.from);add(meal?.to);}
+    for(const introduction of site.introductions?.rows||[]){add(introduction?.actorId);add(introduction?.guideId);add(introduction?.contactId);}
+    for(const crate of site.provisions?.crates||[]){add(crate?.by);add(crate?.sourceBy);}
+    for(const entry of site.fleet?.records||[]){add(entry?.actor);add(entry?.otherId);}
+    for(const id of Object.keys(site.fleet?.roster||{}))add(id);
+    return recorded;
+  }
   function retainsPorter(site,id){
-    if(typeof id!=='string'||!id.startsWith('carrier-')||registry(site)?.slots.get(id)?.kind!=='carrier')return false;
-    const career=site?.careers?.[id],owners=site?.autonomy?.projects?.owners,project=owners?.[id];
-    return Boolean(root.EarthCareers?.role(site,id)||career?.training||career?.application||career?.agreedPlan||
-      Object.keys(career?.qualifications||{}).length||project&&(!project.finished&&(project.progress||project.volunteer)||project.finished===site.autonomy.week)||
-      Object.values(owners||{}).some(p=>p.kind==='teach'&&!p.finished&&p.partnerId===id));
+    return Boolean(site&&isPorterId(id)&&recordedPorters(site).has(id));
+  }
+  function porterIds(site,links){
+    if(!site)return [];
+    const ids=recordedPorters(site);
+    const live=links||(Array.isArray(site.buildings)?root.CommonEarthSim?.productiveLinks?.(site):null)||[];
+    for(const link of live){const id='carrier-'+link.from+'-'+link.to;if(isPorterId(id))ids.add(id);}
+    return Array.from(ids).sort();
   }
   function list(site){
     if(!registry(site))return [];
-    const ids=new Set(['steward',...(site.residents||[]).map(p=>p.id),...walkerRoles.map((_,i)=>'walker-'+i),'driver']);
-    const links=root.CommonEarthSim?.productiveLinks && Array.isArray(site.buildings)?root.CommonEarthSim.productiveLinks(site):[];
-    for(const link of links)ids.add('carrier-'+link.from+'-'+link.to);
-    // A former porter stays reachable from study through the first application and new job.
-    const former=new Set([...Object.keys(site.careers||{}),...Object.keys(site.autonomy?.projects?.owners||{})]);
-    for(const id of former){
-      if(retainsPorter(site,id))ids.add(id);
-    }
-    return Array.from(ids,id=>profile(site,id)).filter(Boolean);
+    const ids=['steward',...(site.residents||[]).map(p=>p.id),...walkerRoles.map((_,i)=>'walker-'+i),'driver',...porterIds(site)];
+    return ids.map(id=>profile(site,id)).filter(Boolean);
   }
-  root.EarthPersonas=Object.freeze({axes,traits,profile,list,retainsPorter});
+  root.EarthPersonas=Object.freeze({axes,traits,profile,list,retainsPorter,porterIds,isPorterId});
 })(typeof window==='undefined'?globalThis:window);

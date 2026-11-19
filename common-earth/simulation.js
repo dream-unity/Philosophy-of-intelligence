@@ -159,6 +159,7 @@
     }
     return links;
   }
+  const staffedLink=(site,world,link)=>!root.EarthCareers?.laneWorker||Boolean(root.EarthCareers.laneWorker(site,world,link));
   function promiseBalance(person){
     const goods={...PROFILES[person.slot].goods};
     for(const [k,n] of Object.entries(person.promise?.advance || {}))goods[k]-=n;
@@ -181,7 +182,9 @@
       if(b.kind==='hall') result.wellbeing++;
       if(b.kind==='wetland') result.food++;
     }
-    for(const link of productiveLinks(site,markets))result[link.resource]++;
+    for(const link of productiveLinks(site,markets)){
+      if(staffedLink(site,world,link))result[link.resource]++;
+    }
     if(site.tech.includes('apprenticeship')) result.materials++;
     for(const practice of practices(site))for(const [k,v] of Object.entries(practice.rate))result[k]+=v;
     const district=cityDelta ?? root.EarthCityModel?.overview(site)?.weekly;
@@ -387,6 +390,41 @@
       saved+=s.highlights.length;total+=s.totalEvents;
     }
     return saved<=REVIEW_STORIES && review.totalEvents===total && review.omittedEvents===total-saved;
+  }
+  // The calendar needs an independent JSON-shaped working copy. Ordinary save
+  // records can be copied directly without building and parsing another full
+  // world string. Delegate unusual values to JSON with their original field key.
+  function nativeCalendarValue(value,key){
+    const holder=Object.create(null);
+    holder[key]=value;
+    const copy=JSON.parse(JSON.stringify(holder));
+    return Object.hasOwn(copy,key)?copy[key]:undefined;
+  }
+  function copyCalendarValue(value,key,depth){
+    if(value===null)return null;
+    const type=typeof value;
+    if(type==='string'||type==='boolean')return value;
+    if(type==='number')return Number.isFinite(value)?value||0:null;
+    if(type!=='object')return type==='bigint'||type==='function'?nativeCalendarValue(value,key):undefined;
+    if(depth>=40||'toJSON' in value||JSON.isRawJSON?.(value))return nativeCalendarValue(value,key);
+    if(Array.isArray(value)){
+      const copy=new Array(value.length);
+      for(let i=0;i<copy.length;i++)copy[i]=copyCalendarValue(value[i],i,depth+1)??null;
+      return copy;
+    }
+    const prototype=Object.getPrototypeOf(value);
+    if(prototype!==Object.prototype&&prototype!==null)return nativeCalendarValue(value,key);
+    const copy={};
+    for(const field of Object.keys(value)){
+      const child=copyCalendarValue(value[field],field,depth+1);
+      if(child===undefined)continue;
+      if(field==='__proto__')Object.defineProperty(copy,field,{value:child,writable:true,configurable:true,enumerable:true});
+      else copy[field]=child;
+    }
+    return copy;
+  }
+  function calendarCopy(world){
+    return copyCalendarValue({...world,journal:[],lastWeekReview:null},'',0);
   }
   // Opening a world and importing a save use the same migration and integrity
   // rules. Only the parsed copy is changed; the input remains recoverable.
@@ -1103,16 +1141,21 @@
       const delta=rateDifference(oldRate,newRate);
       const promises=site.residents.filter(p=>p.promise && PROFILES[p.slot].alternative===kind).map(p=>p.name);
       let pairing='';
-      if(kind==='garden' && around.some(n=>n.kind==='workshop'))pairing=' A neighbouring workshop adds 1 food.';
+      if(kind==='garden' && around.some(n=>n.kind==='workshop')){
+        const run=productiveLinks(builtSite).find(link=>link.to===plot);
+        pairing=run&&staffedLink(builtSite,world,run)?' A neighbouring workshop adds 1 food.':' The garden’s workshop run needs a porter to add its extra food.';
+      }
       if(kind==='market'){
         const shop=marketPlan(builtSite).markets.find(m=>m.plot===plot);
-        pairing=' This shop '+(shop.tier==='idle'?'has no remaining customer catchment':shop.tier==='full'?'serves a full catchment':'shares a catchment')+' and earns '+(shop.base+shop.depot)+' funds per week.'+
-          (shop.depot?' That includes 1 from the adjoining depot.':'');
+        const run=shop.depot&&productiveLinks(builtSite).find(link=>link.to===plot);
+        const supplied=Boolean(run&&staffedLink(builtSite,world,run));
+        pairing=' This shop '+(shop.tier==='idle'?'has no remaining customer catchment':shop.tier==='full'?'serves a full catchment':'shares a catchment')+' and earns '+(shop.base+Number(supplied))+' funds per week.'+
+          (supplied?' That includes 1 from the adjoining depot.':run?' The depot run needs a porter to earn its extra fund.':'');
       }
       if(kind==='workshop' || kind==='pier'){
         const unit=kind==='workshop'?'food':'funds';
-        const oldLinks=productiveLinks(site).filter(x=>x.resource===unit).length;
-        const newLinks=productiveLinks(builtSite).filter(x=>x.resource===unit).length;
+        const oldLinks=productiveLinks(site).filter(x=>x.resource===unit&&staffedLink(site,world,x)).length;
+        const newLinks=productiveLinks(builtSite).filter(x=>x.resource===unit&&staffedLink(builtSite,world,x)).length;
         const improved=newLinks-oldLinks;
         if(improved>0)pairing=' Shared access adds '+improved+' '+unit+' across '+(kind==='workshop'?'neighbouring gardens.':'operating markets.');
       }
@@ -1528,7 +1571,7 @@
       return {week:turn.week,sites:Array.from(reports.values()),highlights:events.map(e=>e.text),events,ratified};
     }
     function forecastNext(){
-      const copy=JSON.parse(JSON.stringify({...world,journal:[],lastWeekReview:null}));
+      const copy=calendarCopy(world);
       const {events,...forecast}=rollWeek(copy);
       return forecast;
     }
@@ -1563,7 +1606,7 @@
       if(!t||t.paused||personId!==root.EarthAgency?.actorId(site))return closed('Choose the person taking this course and resume their studies.');
       const key=[site.id,personId,world.week,world.actionRevision||0,world.workRevision||0,life.revision].join('/');
       if(termCache?.world===world&&termCache.key===key)return {...termCache.quote};
-      const turn=JSON.parse(JSON.stringify({...world,journal:[],lastWeekReview:null}));
+      const turn=calendarCopy(world);
       const learner=turn.sites.find(s=>s.id===site.id).careers[personId];
       let reason='',weeks=0;
       while(weeks<12){

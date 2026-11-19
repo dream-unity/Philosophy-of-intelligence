@@ -183,7 +183,7 @@
   function valid(site,week){
     const f=site.fleet;if(f===undefined)return true;
     if(!f||!whole(f.serial,0)||!f.roster||Array.isArray(f.roster)||typeof f.roster!=='object'||!Array.isArray(f.records)||f.records.length>8)return false;
-    const people=crew(site),known=id=>people.includes(id);
+    const people=crew(site),known=id=>people.includes(id)||Boolean(root.EarthAgency?.canPlay?.(site,id));
     if(!Object.entries(f.roster).every(([id,row])=>known(id)&&whole(row?.ready,2,week+3)&&(row.joined==null||whole(row.joined,1,week)&&whole(row.ready-row.joined,1,3))))return false;
     if(!f.records.every(e=>e&&known(e.actor)&&(e.otherId==null||known(e.otherId)&&e.otherId!==e.actor)&&whole(e.week,1,week)&&typeof e.text==='string'&&e.text.length<=400))return false;
     if(['servedWeek','parkedWeek','review','regularWeek'].some(k=>f[k]!==undefined&&!whole(f[k],1,week)))return false;

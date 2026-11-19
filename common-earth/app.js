@@ -190,7 +190,7 @@
       [/truck|dispatch/,'Dispatch'],[/stores|exchange/,'Trading'],[/stock check/,'Stock check'],[/job|work/,'Working'],[/council|vote/,'Council due'],
       [/promise/,'Promise due'],[/shift/,'Shared day'],[/booking|cooperative/,'Booking due'],[/offer|study|course|planning/,'Planning']];
     const label=state.hold?labels.find(([pattern])=>pattern.test(state.hold))?.[1]||'Waiting':duration;
-    put('scene-live-badge',label);show('scene-live-badge',state.enabled);
+    put('scene-live-badge',state.enabled?label:state.started?'Paused':'Manual');show('scene-live-badge',true);
     const opener=$('scene-open-live'),title=state.enabled?status+' Week '+state.nextWeek+' · '+duration:'Start or pause the shared game clock';
     if(opener&&opener.title!==title)opener.title=title;
     if(state.hold||streetHud.active()==='live')refreshLiveReview();
@@ -1110,6 +1110,16 @@
     add('Unpin',()=>changeBuildPlan(site.id,null,plan.kind));
   }
   function actionContext(){return [sim.state.activeId,group,visiting,peers,researchPage,councilPage].join('/');}
+  function addConversation(list,ref){
+    const id=ref.residentId||ref.npcId,site=sim.active(),person=site&&window.EarthAgency?.identity(site,id);
+    if(!person||id===window.EarthAgency.actorId(site))return;
+    if(!streetHud||!$('scene-topics')){agencyUI?.conversation(list,ref);return;}
+    const siteId=site.id,actor=window.EarthAgency.actorId(site);
+    list.append(button('Speak with '+person.name+' in Street view',()=>{
+      if(view!=='street'||sim.active()?.id!==siteId||window.EarthAgency.actorId(sim.active())!==actor)return;
+      if(streetHud.openTalk(ref))$('street-stage').scrollIntoView({block:'start',behavior:'instant'});
+    },'secondary-button'));
+  }
   function renderActions(workModel) {
     if(outcomeContext && outcomeContext!==actionContext()){
       show('action-outcome',false);put('action-outcome','');outcomeContext='';
@@ -1217,7 +1227,7 @@
         put('actions-heading',encounter.label);
         list.append(button('All residents',()=>showPeople(),'text-button'));
         if(lifePanel)list.append(button('View character life',()=>lifePanel.open(encounter.npcId),'text-button'));
-        agencyUI?.conversation(list,encounter);return;
+        addConversation(list,encounter);return;
       }
       const person=site.residents.find(r=>r.id===visiting);
       if(peers && window.EarthNeighbours){
@@ -1283,7 +1293,7 @@
       if(works)identity.append(works.residentSummary(person,model));
       bio.append(identity);list.append(bio);
       if(lifePanel)list.append(button('View character life',()=>lifePanel.open(person.id),'text-button'));
-      agencyUI?.conversation(list,{type:'resident',residentId:person.id});
+      addConversation(list,{type:'resident',residentId:person.id});
       const delivery=(sim.actions('work')||[]).find(a=>a.id==='courier:deliver:'+person.id);
       if(delivery)list.append(actionRow(delivery));
       for(const a of sim.actions(group).filter(a=>a.residentId===person.id||a.id.includes(':'+person.id)))list.append(actionRow(a));

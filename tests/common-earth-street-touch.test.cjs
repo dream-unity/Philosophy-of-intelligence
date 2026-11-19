@@ -1756,3 +1756,82 @@ test('dispatchers step onto open ground on every perimeter kerb before handing o
   }
   g.street.destroy();
 });
+
+test('playing the porter removes the separate courier body and on release they walk back to their supply lane',()=>{
+  const id='carrier-0-1',link={from:0,to:1,resource:'food'};
+  const g=surface(740,390,{lives:true,animated:true,deferFrames:true,links:()=>[link]});
+  const town={...site,buildings:[{id:'source',kind:'garden',plot:0,name:'Food garden'},
+    {id:'sink',kind:'market',plot:1,name:'Produce market'}]};
+  g.street.setSite(town);for(let i=0;i<30;i++)g.step();
+  const first=g.street.actorScene(id);
+  assert.equal(first.targetPose.mode,'walk');
+  assert(g.agency.playables(town).some(person=>person.id===id));
+  assert(g.agency.checkHandoff(town,id,first).ok);
+  assert(g.agency.change(town,id,first).ok);g.street.setSite(town);
+  g.at(first.targetPose.x,first.targetPose.y,.002);
+  assert.equal(g.street.activityOf(id).phase,'player');
+  assert(!g.street.localPeople().some(person=>person.npcId===id));
+  assert.equal(g.street.focusStop({type:'npc',npcId:id}),false);
+  assert(g.street.focusMarket());g.finish();
+  const dropped=g.street.getState(),next=g.street.actorScene('walker-1');
+  assert(g.agency.change(town,'walker-1',next).ok);g.street.setSite(town);
+  let previous=g.street.activityOf(id);
+  assert(Math.hypot(previous.x-dropped.x,previous.y-dropped.y)<.002);
+  let nearDepot=false,worked=false;
+  for(let i=0;i<1900;i++){
+    g.step();const current=g.street.activityOf(id);
+    assert(Math.hypot(current.x-previous.x,current.y-previous.y)<1.9,'the porter walks each leg, including rejoining');
+    if(Math.hypot(current.x-first.targetPose.x,current.y-first.targetPose.y)<3.1){
+      nearDepot=true;
+      if(current.phase==='prepare'||current.phase==='work'||current.phase==='handover')worked=true;
+    }
+    previous=current;
+    if(nearDepot&&worked)break;
+  }
+  assert(nearDepot&&worked,'returns to the corridor, then loads or hands over a real crate');
+  g.street.destroy();
+});
+
+test('a previously played porter remains a reachable neighbour when an operating supply corridor closes',()=>{
+  const id='carrier-0-1',link={from:0,to:1,resource:'food'};
+  const g=surface(740,390,{lives:true,deferFrames:true,links:town=>town.buildings.some(b=>b.kind==='garden')?[link]:[]});
+  const town={...site,buildings:[{id:'source',kind:'garden',plot:0,name:'Food garden'},
+    {id:'sink',kind:'market',plot:1,name:'Produce market'}]};
+  g.street.setSite(town);
+  const enter=g.street.actorScene(id);assert(g.agency.change(town,id,enter).ok);g.street.setSite(town);
+  const stale=g.street.snapshotView();
+  town.buildings=town.buildings.filter(b=>b.kind!=='garden');g.street.setSite(town);
+  assert.equal(g.street.getState().actor,id);assert(g.agency.canPlay(town,id));
+  assert(g.street.focusMarket());g.finish();
+  const dropped=g.street.getState();
+  assert(g.agency.change(town,'steward',g.street.actorScene('steward')).ok);g.street.setSite(town);
+  const body=g.street.actorScene(id);
+  assert.equal(body.targetPose.mode,'walk');assert(Math.hypot(body.targetPose.x-dropped.x,body.targetPose.y-dropped.y)<.002);
+  const ref=g.street.localPeople().find(p=>p.npcId===id);
+  assert(ref&&g.street.focusStop(ref));g.finish();assert.equal(g.street.meeting(ref,true).target,id);
+  assert(g.agency.change(town,id,g.street.actorScene(id)).ok);g.street.setSite(town);
+  assert.equal(g.street.restoreView(stale),false);
+  g.street.destroy();
+});
+
+test('the unattended truck keeps serving repeat rounds through a perimeter street blocked by a parked van',()=>{
+  const runtime=vm.createContext({});runtime.window=runtime;
+  vm.runInContext(readFileSync(path.join(gameRoot,'simulation.js'),'utf8'),runtime);
+  const g=surface(740,390,{lives:true,animated:true,deferFrames:true,links:runtime.CommonEarthSim.productiveLinks});
+  const town={...site,id:'geometry-0-3-false',lat:-36,lon:28,water:true,buildings:[
+    {id:'tools',kind:'workshop',plot:0,name:'Repair workshop'},{id:'field',kind:'garden',plot:1,name:'Food garden'}]};
+  assert.equal(runtime.CommonEarthSim.productiveLinks(town).length,1);
+  g.street.setSite(town);
+  const saved=g.street.snapshotView();
+  assert(g.street.restoreView({...saved,player:{x:21.42,y:4.86,dx:1,dy:0},van:{x:6,y:12.2,dx:0,dy:1}}));
+  let at=null,returns=0,left=false;const visits=new Set();
+  for(let i=0;i<13000&&returns<3;i++){
+    g.step();const stop=g.street.regularTruckStatus().stop;
+    if(stop)visits.add(stop);
+    if(stop==='Repair stop'&&at!==stop&&left)returns++;
+    if(stop&&stop!=='Repair stop')left=true;
+    at=stop;
+  }
+  assert.equal(visits.size,4);assert.equal(returns,3,'a repeated delivery round remains reachable');
+  g.street.destroy();
+});

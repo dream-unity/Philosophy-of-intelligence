@@ -11,21 +11,33 @@
   ];
   const reject=message=>({ok:false,message});
   const walkers=locals.map((_,i)=>'walker-'+i);
-  const streetActor=id=>id==='driver'||walkers.includes(id);
-  const canPlay=(site,id)=>id===founder.id||streetActor(id)||Boolean(site?.residents?.some(r=>r.id===id));
+  function porter(id){
+    if(root.EarthPersonas?.isPorterId)return root.EarthPersonas.isPorterId(id);
+    if(typeof id!=='string'||!/^carrier-[0-8]-[0-8]$/.test(id))return false;
+    const [,from,to]=id.split('-').map(Number);
+    return Math.abs(from%3-to%3)+Math.abs(Math.floor(from/3)-Math.floor(to/3))===1;
+  }
+  const streetActor=id=>id==='driver'||walkers.includes(id)||porter(id);
+  const links=site=>Array.isArray(site?.buildings)?root.CommonEarthSim?.productiveLinks?.(site)||[]:[];
+  const savedPorter=(site,id)=>Array.isArray(site?.agency?.porters)&&site.agency.porters.includes(id);
+  const linkId=link=>'carrier-'+link.from+'-'+link.to;
+  const canPlay=(site,id)=>id===founder.id||id==='driver'||walkers.includes(id)||Boolean(site?.residents?.some(r=>r.id===id))||
+    Boolean(site&&porter(id)&&(savedPorter(site,id)||root.EarthPersonas?.retainsPorter?.(site,id)||links(site).some(link=>linkId(link)===id)));
+
   const actorId=site=>canPlay(site,site?.agency?.actor)?site.agency.actor:founder.id;
   const actor=site=>{
     const id=actorId(site);return id===founder.id?null:site.residents.find(p=>p.id===id)||identity(site,id);
   };
   const point=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1&&p.x<=25&&p.y>=-1&&p.y<=25;
-  function identity(site,id){
+  function identity(site,id,activeLinks,present=false){
     if(!site)return null;
     const profile=root.EarthPersonas?.profile(site,id);
     const occupation=root.EarthCareers?.role(site,id);
-    if(/^carrier-[0-8]-[0-8]$/.test(id)){
+    if(porter(id)){
       const [,from,to]=id.split('-').map(Number);
-      const link=root.CommonEarthSim?.productiveLinks(site).find(l=>l.from===from&&l.to===to);
-      if(!link)return profile?{...profile,role:occupation||profile.originRole,available:root.EarthPersonas.retainsPorter(site,id)}:null;
+      const link=(activeLinks||links(site)).find(l=>l.from===from&&l.to===to);
+      if(!link)return {...profile,id,name:profile?.name||'Supply porter · lots '+(from+1)+' and '+(to+1),role:occupation||profile?.originRole||'Supply porter',
+        available:present||savedPorter(site,id)||Boolean(root.EarthPersonas?.retainsPorter?.(site,id))};
       const duty=link.resource==='food'?'Garden courier':'Exchange porter';
       return {...profile,id,name:profile?.name||duty+' · lots '+(from+1)+' and '+(to+1),role:occupation||duty,available:true,
         work:'I carry supplies between these lots. Keeping the two workplaces beside each other produces an extra '+(link.resource==='food'?'food.':'fund.')};
@@ -39,25 +51,28 @@
   }
   function playables(site){
     if(!site)return [];
-    return [founder.id,...site.residents.map(p=>p.id),...walkers,'driver'].map(id=>identity(site,id));
+    const routes=links(site),porters=root.EarthPersonas?.porterIds?.(site,routes)||[...new Set([...(site.agency?.porters||[]),...routes.map(linkId)])];
+    return [founder.id,...site.residents.map(p=>p.id),...walkers,'driver',...porters].map(id=>identity(site,id,routes,true));
   }
   function valid(site,week){
     const a=site.agency;
+    if(a?.porters!=null&&(!Array.isArray(a.porters)||a.porters.length>24||new Set(a.porters).size!==a.porters.length||!a.porters.every(porter)))return false;
     if(root.EarthDialogue && !root.EarthDialogue.valid(site,week))return false;
     if(a==null)return site.introductions===undefined;
     if(typeof a!=='object'||Array.isArray(a)||!canPlay(site,a.actor))return false;
     if(a.returningActor!=null && (a.actor!==founder.id || a.returningActor===founder.id || !canPlay(site,a.returningActor)))return false;
+    if(porter(a.actor)&&!savedPorter(site,a.actor)||porter(a.returningActor)&&!savedPorter(site,a.returningActor))return false;
     if(a.stewardPosition!=null&&!point(a.stewardPosition))return false;
     if(a.handoffSerial!=null&&(!Number.isSafeInteger(a.handoffSerial)||a.handoffSerial<1))return false;
     const stamped=p=>point(p)&&Number.isSafeInteger(p.serial)&&p.serial>=1&&p.serial<=a.handoffSerial;
     if(streetActor(a.actor)&&!a.actorAt)return false;
     if(a.actorAt!=null&&(!streetActor(a.actor)||a.actorAt.id!==a.actor||!stamped(a.actorAt)))return false;
     if(a.localPositions!=null&&(typeof a.localPositions!=='object'||Array.isArray(a.localPositions)||
-      !Object.entries(a.localPositions).every(([id,p])=>streetActor(id)&&stamped(p))))return false;
+      !Object.entries(a.localPositions).every(([id,p])=>streetActor(id)&&(!porter(id)||savedPorter(site,id))&&stamped(p))))return false;
     const knownRecipient=id=>id===founder.id||site.residents.some(p=>p.id===id)||id==='driver'||
-      /^walker-[0-4]$/.test(id)||/^carrier-[0-8]-[0-8]$/.test(id);
+      /^walker-[0-4]$/.test(id)||porter(id);
     return Array.isArray(a.meals)&&a.meals.length<=90&&a.meals.every(m=>m&&typeof m.to==='string'&&knownRecipient(m.to)&&m.to!==m.from&&
-      canPlay(site,m.from)&&Number.isSafeInteger(m.week)&&m.week>0&&m.week<=week);
+      canPlay(site,m.from)&&(!porter(m.from)||savedPorter(site,m.from))&&Number.isSafeInteger(m.week)&&m.week>0&&m.week<=week);
   }
   function ensure(site){return site.agency||={actor:founder.id,meals:[]};}
   function checkHandoff(site,id,scene){
@@ -91,6 +106,7 @@
     if(before)releaseAt(site,before,scene);
     else state.stewardPosition={x:scene.x,y:scene.y};
     delete state.returningActor;
+    if(porter(id)&&!savedPorter(site,id))(state.porters||=[]).push(id);
     state.actor=id;
     if(streetActor(id))state.actorAt={id,...position(site,scene.targetPose)};
     else delete state.actorAt;

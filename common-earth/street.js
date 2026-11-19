@@ -299,7 +299,11 @@
       if(!local||local===heldLocal)return;
       releaseLocal();heldLocal=local;local.since=visualTime;
     }
-    function populateLocals(){
+    function directoryPorters(site){
+      const personas=window.EarthPersonas;
+      return personas?.porterIds?.(site,state.links)||personas?.list?.(site)?.filter(p=>p.kind==='carrier').map(p=>p.id)||[];
+    }
+    function populateLocals(directory){
       const key=siteKey(state.site);
       if(localDistrict!==key){
         releaseLocal();locals.clear();localPaths.clear();trafficWaits.clear();offRoutePorters=[];localDistrict=key;
@@ -315,12 +319,17 @@
         if(person)locals.set(npcId,{type:'npc',npcId,label:person.name,role:person.role,index,ordinal,paused:0,since:null});
       }
       for(let i=0;i<5;i++)addLocal('walker-'+i,i);
-      state.links.forEach((link,index)=>addLocal('carrier-'+link.from+'-'+link.to,index));
+      state.links.forEach((link,index)=>{
+        const id='carrier-'+link.from+'-'+link.to;
+        addLocal(id,index);
+        const porter=locals.get(id);if(porter)porter.coat=link.resource==='food'?'#829967':'#ba926a';
+      });
       offRoutePorters=[];
-      for(const id of Object.keys(state.site.careers||{}).concat(Object.keys(state.site.autonomy?.projects?.owners||{}))){
-        if(!present.has(id)&&window.EarthPersonas?.retainsPorter?.(state.site,id)){
-          addLocal(id,null);offRoutePorters.push(id);
-        }
+      for(const id of directory||directoryPorters(state.site)){
+        if(present.has(id))continue;
+        addLocal(id,null);offRoutePorters.push(id);
+        const porter=locals.get(id);
+        if(porter&&!porter.coat)porter.coat=/garden|food|pantry/i.test(porter.role)?'#829967':'#ba926a';
       }
       addLocal('driver');
       addLocal('steward');
@@ -1804,7 +1813,7 @@
     function person(x,y,coat,angleX,angleY,walking,phase=0,player=false,look=null,seat=null) {
       if(player&&!look){
         const local=locals.get(playedId);
-        look=state.looks.get(playedId)||(local&&playedId!=='steward'?pedestrianLook(playedId==='driver'?'#859da7':walkerCoats[local.index]):null);
+        look=state.looks.get(playedId)||(local&&playedId!=='steward'?pedestrianLook(local.coat||(playedId==='driver'?'#859da7':walkerCoats[local.index])):null);
       }
       const heading=(Math.round(Math.atan2(angleY||0,angleX||0)/(Math.PI/4))+8)%8;
       const pose=walking&&!reduced ? 1+(Math.floor(phase/(Math.PI/2)+.5)%4+4)%4 : 0;
@@ -2144,8 +2153,9 @@
     }
     function refreshLocalRoutines(){
       const site=state.site;if(!site)return;
+      const directory=directoryPorters(site);
       if(offRoutePorters.some(id=>!window.EarthPersonas?.retainsPorter?.(site,id))||
-          Object.keys(site.careers||{}).concat(Object.keys(site.autonomy?.projects?.owners||{})).some(id=>!locals.has(id)&&window.EarthPersonas?.retainsPorter?.(site,id)))populateLocals();
+          directory.some(id=>!locals.has(id)))populateLocals(directory);
       for(const local of locals.values()){
         const id=local.npcId,career=window.EarthCareers?.work(site,id),intent=window.EarthAutonomy?.intent(site,id);
         const profile=window.EarthPersonas?.profile(site,id);
@@ -2190,6 +2200,12 @@
         if(wasDriver&&state.traffic&&dist(from,state.traffic)<.5){
           from.x=state.traffic.x+(state.traffic.dy||0)*.94;
           from.y=state.traffic.y-(state.traffic.dx||0)*.94;
+        }
+        if(wasPorter&&service&&newRelease){
+          // The former player walks back to their actual courier lane. Hold
+          // its work clock at this phase until their feet reach that spot.
+          const slot=local.index,link=state.links[slot],post=supplyDutyBody(link,slot,local);
+          if(post){local.serviceStop={x:post.x,y:post.y,label:'the supply run'};local.serviceClock=localTime(id);}
         }
         if((wasDriver||wasPorter)&&!local.serviceStop){
           const post=wasDriver&&newRelease&&state.traffic?
@@ -2258,6 +2274,12 @@
         if((nearTruck&&insideFootprint(body,hull)||playerCar&&insideFootprint(body,playerCar))&&heldLocal?.npcId!==id){
           // The previous safe pose remains current until the vehicle has passed.
           trafficWaits.set(id,(trafficWaits.get(id)||0)+dt);
+          if(people){
+            if(id.startsWith('home-')){
+              const resident=state.points.find(p=>p.residentId===id.slice(5));
+              if(resident)body=residentFigure(resident);
+            }else body=localPoint(id)||body;
+          }
         }
         if(nearTruck&&people)people.push(body);
       }
@@ -2268,8 +2290,10 @@
       for(const id of offRoutePorters)consider(id,routineBody(locals.get(id)));
       for(const worker of crew.values()){
         if(worker.residentId===playedId||worker.residentId===state.companion?.id)continue;
-        const body=builderPosition(worker);
-        if(worker.walkLength&&visualTime-worker.since<=.72+dt&&insideFootprint(body,hull))worker.since+=dt;
+        let body=builderPosition(worker);
+        if(worker.walkLength&&visualTime-worker.since<=.72+dt&&insideFootprint(body,hull)){
+          worker.since+=dt;body=builderPosition(worker);
+        }
         if(people&&Math.abs(body.x-q.x)<3.5&&Math.abs(body.y-q.y)<3.5)people.push(body);
       }
       for(const base of state.points){
@@ -2338,7 +2362,8 @@
           if(!traversable(goal,true,null,true))continue;
           // Different candidate stops have different destination anchors.
           dynamic.excluded=null;
-          const path=makeRoute(q,goal,true,dynamic,true);
+          let path=makeRoute(q,goal,true,dynamic,true);
+          if(!path.length)path=connectTruckToJunction(q,goal,dynamic);
           if(path.length){q.diversion={path,leg,goal,lane};return;}
         }
       }finally{trafficDetour=previous;truckDetourHulls=previousHulls;}
@@ -2485,8 +2510,12 @@
     }
     function carrierBody(link,index) {
       if(!link)return null;
-      const local=locals.get('carrier-'+link.from+'-'+link.to);
-      const scheduled=routineBody(local);if(scheduled)return scheduled;
+      const id='carrier-'+link.from+'-'+link.to;
+      if(id===playedId)return null;
+      const local=locals.get(id);
+      return routineBody(local)||supplyDutyBody(link,index,local);
+    }
+    function supplyDutyBody(link,index,local){
       const way=corridor(link);if(!way)return null;
       const tempo=local?.dwell?1.75/local.dwell:1;
       const t=((reduced&&!activity?2.3:localTime('carrier-'+link.from+'-'+link.to)*tempo)+index*3.9)%12;
@@ -3045,7 +3074,7 @@
       if(driver)addItem(driver.x,driver.y,driver.x+driver.y+.08,()=>activityFigure('driver',driver,'#859da7',driver.dx,driver.dy,driver.pace,driver.phase));
       for(const id of offRoutePorters){
         const body=routineBody(locals.get(id));
-        if(body)addItem(body.x,body.y,body.x+body.y+.08,()=>activityFigure(id,body,'#829967',body.dx,body.dy,body.pace,body.phase));
+        if(body)addItem(body.x,body.y,body.x+body.y+.08,()=>activityFigure(id,body,locals.get(id).coat||'#829967',body.dx,body.dy,body.pace,body.phase));
       }
       state.links.forEach((link,i)=>linkedWorker(link,i,addItem));
       const p=state.player,bodyX=seatedAt?.objectX??p.x,bodyY=seatedAt?.objectY??p.y;
@@ -3308,6 +3337,27 @@
       simplified.push(target);
       return simplified;
     }
+    function connectTruckToJunction(start,free,dynamic){
+      // Two opposite kerbs can leave a narrow continuous strip between
+      // lattice rows. Follow the strip to the next junction, then join the
+      // network there. Every proposed approach uses the same solid bounds.
+      const laneX=Math.round(start.x/BLOCK)*BLOCK,laneY=Math.round(start.y/BLOCK)*BLOCK;
+      for(const across of [true,false]){
+        const lane=across?laneY:laneX,position=across?start.y:start.x;
+        if(Math.abs(position-lane)>=HALF_ROAD)continue;
+        const along=across?start.x:start.y,junction=Math.floor(along/BLOCK)*BLOCK;
+        for(const end of [junction,junction+BLOCK,junction-BLOCK,junction+2*BLOCK]){
+          for(const side of [position,lane-.64,lane+.64,lane]){
+            const align=across?{x:start.x,y:side}:{x:side,y:start.y};
+            const cross=across?{x:end,y:side}:{x:side,y:end};
+            if(dist(cross,start)<.45||!traversable(cross,true,null,true)||!clearSegment(start,align,true,true)||!clearSegment(align,cross,true,true))continue;
+            const onward=makeRoute(cross,free,true,dynamic,true);
+            if(onward.length)return dist(start,align)<.001?[cross,...onward]:[align,cross,...onward];
+          }
+        }
+      }
+      return [];
+    }
     function routeAroundTraffic(start,target,bounds){
       // A moving obstacle must not enter either of the reusable static route masks.
       const obstacles=[bounds],hulls=[];
@@ -3332,25 +3382,7 @@
         const dynamic=drivingTruck?{pass:new Uint8Array(GRID_SIZE),edges:new Uint16Array(GRID_SIZE)}:null;
         const route=makeRoute(start,free,state.mode==='drive',dynamic);
         if(route.length||!drivingTruck)return route;
-        // Two opposite kerbs can leave a narrow continuous strip between
-        // lattice rows. Follow the strip to the next junction, then join the
-        // network there. Every proposed approach uses the same solid bounds.
-        const laneX=Math.round(start.x/BLOCK)*BLOCK,laneY=Math.round(start.y/BLOCK)*BLOCK;
-        for(const across of [true,false]){
-          const lane=across?laneY:laneX,position=across?start.y:start.x;
-          if(Math.abs(position-lane)>=HALF_ROAD)continue;
-          const along=across?start.x:start.y,junction=Math.floor(along/BLOCK)*BLOCK;
-          for(const end of [junction,junction+BLOCK]){
-            for(const side of [position,lane-.64,lane+.64,lane]){
-              const align=across?{x:start.x,y:side}:{x:side,y:start.y};
-              const cross=across?{x:end,y:side}:{x:side,y:end};
-              if(dist(cross,start)<.45||!traversable(cross,true)||!clearSegment(start,align,true)||!clearSegment(align,cross,true))continue;
-              const onward=makeRoute(cross,free,true,dynamic);
-              if(onward.length)return dist(start,align)<.001?[cross,...onward]:[align,cross,...onward];
-            }
-          }
-        }
-        return [];
+        return connectTruckToJunction(start,free,dynamic);
       }finally{trafficDetour=null;truckDetourHulls=null;}
     }
     function getState() {

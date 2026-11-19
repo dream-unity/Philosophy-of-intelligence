@@ -206,7 +206,7 @@
   function valid(site,week){
     const b=site.purses;if(b===undefined)return true;
     if(!obj(b)||!int(b.serial,1)||!int(b.household)||!obj(b.people)||!obj(b.tickets)||
-      Object.keys(b.people).length>site.residents.length+7||!Object.keys(b.people).length||Object.keys(b.tickets).length>openings)return false;
+      Object.keys(b.people).length>site.residents.length+7+24||!Object.keys(b.people).length||Object.keys(b.tickets).length>openings)return false;
     let used=0,maxDonated=0;
     for(const [id,p] of Object.entries(b.people)){
       if(!local(site,id)||!obj(p)||!int(p.earned)||p.earned%wage||p.earned/wage>week-(site.founded||1)+1||!int(p.balance,0,p.earned)||
