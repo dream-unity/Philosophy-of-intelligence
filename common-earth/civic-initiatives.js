@@ -32,7 +32,7 @@
       const worker=site.workforce?.members?.[p.id],resident=site.residents?.find(r=>r.id===p.id),career=site.careers?.[p.id];
       return p.id!==controlled && !alreadyWorked.has(p.id) && !assigned?.has(p.id) && !resident?.promise && site.shift?.residentId!==p.id &&
         !worker?.jobId && !worker?.preferredJobId && (!worker?.preference || worker.preference==='auto') &&
-        !career?.training && !career?.application && site.pursuits?.ticket?.maker!==p.name;
+        !career?.training && !career?.application && !(career?.specialistRelief?.week>=world.week) && site.pursuits?.ticket?.maker!==p.name;
     });
   }
   function reserve(world,site){

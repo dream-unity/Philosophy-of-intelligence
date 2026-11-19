@@ -2,9 +2,9 @@
    responsibilities, projects, helping a neighbour and their own development. */
 (function(root){
   'use strict';
-  const labels={routine:'Keep the usual shift',player:'Choose your own next step',commitment:'Keep an agreement',rest:'Take a quiet afternoon',gather:'Help stock the community pantry',cover:'Cover a departing colleague',visit:'Visit a neighbour',host:'Make time for a visitor',learn:'Study a new occupation',apply:'Put a career plan into practice',project:'Work on a shared project',preserve:'Pack a crate for lean weeks'};
+  const labels={routine:'Keep the usual shift',player:'Choose your own next step',commitment:'Keep an agreement',rest:'Take a quiet afternoon',gather:'Help stock the community pantry',cover:'Cover a departing colleague',visit:'Visit a neighbour',host:'Make time for a visitor',learn:'Study a new occupation',apply:'Put a career plan into practice',project:'Work on a shared project',preserve:'Pack a crate for lean weeks',wage:'Earn a personal market wage'};
   const adviceLabels={rest:'Suggest time to rest',learn:'Ask about trying a new occupation',help:'Suggest helping with a local shortage',connect:'Suggest catching up with a neighbour',project:'Ask about making time for their project'};
-  const actionGoal={rest:'Recover energy',gather:'Keep food within reach',preserve:'Keep a meal for a lean week',cover:'Keep a service staffed',visit:'Stay in touch',host:'Stay in touch',learn:'Explore work that suits me',apply:'Put learning to work',player:'Set my own direction',routine:'Keep a dependable routine',commitment:'See an agreement through'};
+  const actionGoal={rest:'Recover energy',gather:'Keep food within reach',preserve:'Keep a meal for a lean week',wage:'Earn a wage for my purse',cover:'Keep a service staffed',visit:'Stay in touch',host:'Stay in touch',learn:'Explore work that suits me',apply:'Put learning to work',player:'Set my own direction',routine:'Keep a dependable routine',commitment:'See an agreement through'};
   const venues=new Set(['market','garden','workshop','hall','bench','dock','home']);
   const int=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
   const clamp=(n,max)=>Math.max(0,Math.min(max,n));
@@ -27,6 +27,8 @@
     if(resident?.promise)return 'I gave my word. I want to see that promise through first.';
     if(site.shift?.residentId===person.id)return 'I already agreed to spend this shift together.';
     if(site.pursuits?.ticket?.maker===person.name)return 'I have a job waiting on the market board.';
+    const relief=root.EarthCareers?.specialistShift?.(site,person.id,world.week);
+    if(relief)return 'I agreed to cover the '+relief.label.toLowerCase()+' round at '+relief.employer+' this week.';
     const t=site.careers?.[person.id]?.training;
     if(t?.pace==='intensive'&&!t.paused)return 'I am keeping my intensive study timetable.';
     if(Object.values(site.careers||{}).some(c=>c.departure?.coverId===person.id&&c.departure.throughWeek>=world.week||c.application?.phase==='notice'&&c.application.coverId===person.id))
@@ -67,7 +69,7 @@
     if(person&&speaker===id && root.EarthCareers?.hobbyPractice){
       const axis=person.hobbyAxis||person.strengths?.[0]||'music';
       const offer=root.EarthCareers.hobbyPractice(world,site,id,axis,false);
-      const scheduled=row?.history?.[0],spent=row?.contribution?.week===world.week||scheduled?.week===world.week&&['project','learn','apply','gather','preserve','cover','visit','host'].includes(scheduled.kind);
+      const scheduled=row?.history?.[0],spent=root.EarthPurses?.committed(site,id,world.week)||row?.contribution?.week===world.week||scheduled?.week===world.week&&['project','learn','apply','gather','preserve','wage','cover','visit','host'].includes(scheduled.kind);
       const why=spent?'You already used your personal session this week.':offer.reason||'';
       choices.unshift({id:'hobbyPractice',label:'Practise '+axis+' for enjoyment',detail:'Use your own personal practice session. Skills grow within your individual range.',reason:why,available:!why&&offer.ok,expectedRevision:revision});
     }else if(person&&speaker&&root.EarthLocalProjects){
@@ -138,10 +140,11 @@
     const resident=site.residents?.find(r=>r.id===person.id),failed=resident?.lastMissed?.week>=week-2;
     const priorDuty=busy(site,person,world)||(assigned?.has(person.id)?'My crew is counting on me at an active construction site.':'');
     const civic=!priorDuty&&root.EarthCivicInitiatives?.commitment?.(site,world,person.id);
-    const duty=priorDuty||civic?.reason||'';
+    const duty=priorDuty||civic?.reason||'',relief=root.EarthCareers?.specialistShift?.(site,person.id,week);
     const base=person.id===controlled(site,world)?line(week,'player','I choose where to go and what to do.','home'):
-      duty?line(week,'commitment',duty,venues.has(civic?.venue)?civic.venue:venue):row.energy<2?line(week,'rest','I have worked several weeks without a proper break.','bench'):
+      duty?line(week,relief?'cover':'commitment',duty,relief?.venue||(venues.has(civic?.venue)?civic.venue:venue)):row.energy<2?line(week,'rest','I have worked several weeks without a proper break.','bench'):
       failed?line(week,'routine','After the missed promise I want a dependable shift.',venue):line(week,'routine','I am keeping my regular shift as '+(role||'a community member')+'.',venue);
+    if(relief&&base.kind==='cover')base.title='Cover the '+relief.label.toLowerCase()+' round at '+relief.employer;
     if(civic&&base.kind==='commitment'){
       base.civic=true;
       if(typeof civic.jobId==='string'&&int(civic.plot,0,8)){base.jobId=civic.jobId;base.plot=civic.plot;}
@@ -157,7 +160,9 @@
       const limits=person.profile.bounds;
       if(limits && (limits[job.skill].max+6<job.requiredSkill || limits[job.secondary].max<job.secondMinimum))continue;
       const horizon=Math.min(12,(job.trainingWeeks||0)/20)*(100-person.traits.patience)/100;
-      const value=ability+interest-horizon+(person.profile.interests?.some(i=>String(i).toLowerCase().includes(job.label.toLowerCase()))?4:0);
+      const qualified=site.careers?.[person.id]?.qualifications?.[job.id];
+      const full=root.EarthCareers?.openings?.(site,job.id)===0;
+      const value=ability+interest-horizon+(qualified?13:0)-(full?14:0)+(person.profile.interests?.some(i=>String(i).toLowerCase().includes(job.label.toLowerCase()))?4:0);
       if(value>score){score=value;best=job;}
     }
     // People content in a well-matched line of work generally keep it.
@@ -177,7 +182,8 @@
     const stage=cv.application?.phase;
     if(stage==='screening'||stage==='notice')return null;
     let action='';
-    if(stage==='offer')action='accept';
+    if(stage==='waiting'){if(!cv.opening?.relief.available)return null;action='specialistRelief';}
+    else if(stage==='offer')action='accept';
     else if(!cv.qualified && !cv.training)action='enroll';
     else if((cv.portfolios?.[job.id]||0)<Math.min(3,job.samples+Number((cv.references?.[job.id]||0)<0)))action='portfolio';
     else if((cv.skills?.[job.secondary]||0)<job.secondMinimum)action='support';
@@ -189,7 +195,7 @@
     if(!result?.ok)return null;
     person.row.path=job.id;
     const kind=['enroll','support','practice','portfolio'].includes(choice.id)?'learn':'apply';
-    const reason=choice.id==='enroll'?'I chose evening study for '+job.label.toLowerCase()+' because it uses '+job.skill+'.':
+    const reason=choice.id==='specialistRelief'?'I agreed to cover a '+job.label.toLowerCase()+' round at '+job.employer+' while I wait for a funded post.':choice.id==='enroll'?'I chose evening study for '+job.label.toLowerCase()+' because it uses '+job.skill+'.':
       ['support','practice'].includes(choice.id)?'I want practice in '+(choice.id==='support'?job.secondary:job.skill)+' for the '+job.label.toLowerCase()+' role.':
       choice.id==='portfolio'?'I am preparing a work sample for '+job.employer+'.':
       choice.id==='accept'?'The '+job.label.toLowerCase()+' offer fits the work I have prepared for.':'I am preparing for '+job.label.toLowerCase()+' work at '+job.employer+'.';
@@ -220,6 +226,8 @@
       const {row,traits,wasAdvised:ask,profile}=self;
       if(ask==='rest'&&row.energy<6){self.item=line(week,'rest','After our conversation I decided to take a break.','bench');self.free=false;continue;}
       const recent=row.history.slice(0,2),repeat=kind=>recent.filter(h=>h.kind===kind).length*25;
+      const wageOffer=pantry&&root.EarthPurses?.opportunity(world,site,self);
+      if(wageOffer)offer(self,'wage',wageOffer.score-repeat('wage'),wageOffer.reason,'market');
       if(pantry)offer(self,'gather',85+traits.initiative/5+(profile.aptitudes?.stamina??50)/8-repeat('gather')+(ask==='help'?35:0),'The pantry has less than two weeks of meals. I can bring in one food.','garden');
       if(root.EarthProvisions?.volunteer(world,site,self))offer(self,'preserve',73+traits.patience/8-repeat('preserve'),'I can keep some of the surplus for a lean week.','market');
       for(const gap of gaps)if(!gap.coverId&&gap.personId!==self.id){
@@ -254,6 +262,10 @@
         if(!result)continue;
         chosen=result.item;
         if(result.note)events.push(result.note);
+      }
+      if(o.kind==='wage'){
+        const work=root.EarthPurses?.workWeek(world,site,p);if(!work)continue;
+        chosen=line(week,'wage',work.reason,'market');
       }
       if(o.kind==='preserve'){
         chosen=root.EarthProvisions.putByCrew(world,site,p);if(!chosen)continue;

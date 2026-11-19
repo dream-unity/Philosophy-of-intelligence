@@ -1477,9 +1477,11 @@ test('a co-op truck returns from the Pantry between residents working along oppo
   assert(g.street.followTruckDelivery({x:15,y:24},()=>{arrived=true;}));
   for(let i=0;i<750&&g.street.getState().travelling;i++){
     g.step();
-    const {x,y}=g.street.getState();
-    for(const p of [{x:9.38,y:23.04},{x:pickup.x,y:pickup.y+1.14}])
-      assert(!(Math.abs(x-p.x)<.67&&Math.abs(y-p.y)<.67),'the truck keeps clear of each person');
+    const {x,y,dx,dy}=g.street.truckStatus().truck;
+    const heading=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*Math.PI/4;
+    const co=Math.abs(Math.cos(heading)),si=Math.abs(Math.sin(heading)),rx=.82*co+.32*si,ry=.82*si+.32*co;
+    for(const p of [{x:9.38,y:23.04},g.street.actorScene('driver').targetPose])
+      assert(!(Math.abs(x-p.x)<rx+.095&&Math.abs(y-p.y)<ry+.095),'the actual truck body keeps clear of each person');
   }
   assert.equal(arrived,true,'the return path considers both sides of the street');
   assert.equal(g.street.getState().travelling,false);
@@ -1664,21 +1666,93 @@ test('a truck departing a narrow kerb strip can reach the Repair stop without cr
 
 test('a truck keeps its depot destination while a pedestrian temporarily closes the remaining lane',()=>{
   const g=surface();
-  const anchor={x:9,y:24,dx:1,dy:0},pickup={x:12.14592,y:23.69};
+  const anchor={x:12,y:24,dx:1,dy:0},pickup={x:12,y:24};
   const town={...site,buildings:[{id:'work',kind:'workshop',plot:0,name:'Repair workshop'}],
     fleet:{custody:{actor:'steward',week:8,token:'depot-return',anchor,pickup}}};
   g.street.setSite(town);
   const shot=g.street.snapshotView();
-  assert(g.street.restoreView({...shot,player:{x:9.1,y:24.58,dx:1,dy:0}}));
-  const residents=[onCrew('working',10.14,23.04,null),{...onCrew('working',8.24,23.04,null),residentId:'r0',slot:0},
-    {...onCrew('working',13.7238,23.1463,null),residentId:'r2',slot:2}];
+  assert(g.street.restoreView({...shot,player:{x:12.1,y:24.58,dx:1,dy:0}}));
+  const residents=[onCrew('working',11.04,24,null),{...onCrew('working',12,23.53,null),residentId:'r0',slot:0},
+    {...onCrew('working',12.96,24,null),residentId:'r2',slot:2}];
   g.street.setConstruction({jobs:[],workers:residents});
   assert(g.street.boardServiceTruck());
   let arrived=false;
   assert(g.street.followTruckDelivery({x:15,y:24},()=>{arrived=true;}));
   for(let i=0;i<100;i++)g.step();
-  const stopped=g.street.getState();assert.equal(stopped.travelling,true);assert(stopped.x>10&&stopped.x<12);
+  const stopped=g.street.getState();assert.equal(stopped.travelling,true);assert(Math.abs(stopped.x-12)<.15);
   g.street.setConstruction({jobs:[],workers:[residents[0],residents[1],{...residents[2],x:15,y:18.75}]});
   g.finish();assert.equal(arrived,true);g.at(15,24);
+  g.street.destroy();
+});
+
+test('a northbound work truck clears the kerb light, resumes from a saved pose and drives to Repair',()=>{
+  const g=surface(),anchor={x:17.69,y:4.4502,dx:0,dy:1};
+  const town={...site,id:'site-1',lat:34.726,lon:135.5,water:false,
+    buildings:[{id:'b0',kind:'hall',name:'Assembly hall',plot:0},{id:'b1',kind:'workshop',name:'Repair workshop',plot:1}],
+    fleet:{custody:{actor:'steward',week:12,token:'goods',anchor,pickup:anchor}}};
+  g.street.setSite(town);
+  const saved=g.street.snapshotView();
+  assert(g.street.restoreView({...saved,player:{x:18.43,y:4.46,dx:-1,dy:0}}));
+  assert(g.street.boardServiceTruck());
+  const aboard=g.street.snapshotView();assert(g.street.restoreView(aboard),'the saved north-facing hull clears the post');
+  const post=[16.985,4.865,17.135,5.015];
+  const touched=()=>{
+    const {x,y,dx,dy}=g.street.truckStatus().truck;
+    const heading=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*Math.PI/4;
+    const co=Math.abs(Math.cos(heading)),si=Math.abs(Math.sin(heading)),rx=.82*co+.32*si,ry=.82*si+.32*co;
+    return x+rx>post[0]&&x-rx<post[2]&&y+ry>post[1]&&y-ry<post[3];
+  };
+  assert.equal(touched(),false);
+  let arrived=false;assert(g.street.followTruckDelivery({x:21,y:18},()=>{arrived=true;}));
+  for(let i=0;i<900&&g.street.getState().travelling;i++){
+    g.step();assert.equal(touched(),false,'the rotating truck body maintains clearance');
+  }
+  assert(arrived);g.at(21,18);g.street.destroy();
+});
+
+test('unattended deliveries bypass a van parked across a corner and keep working residents clear',async()=>{
+  const g=surface(740,390,{lives:true,animated:true,deferFrames:true});
+  const parked={x:6,y:12.2,dx:0,dy:-1};
+  const saved=g.street.snapshotView();
+  assert(g.street.restoreView({...saved,player:{x:21.42,y:4.86,dx:1,dy:0},van:parked}));
+  g.street.setConstruction({jobs:[],workers:[onCrew('working',18,7.5,null)]});
+  const seen=new Set();let leftRepair=false,returned=false;
+  for(let i=0;i<12000&&!returned;i++){
+    g.step();
+    const {x,y,dx,dy}=g.street.truckStatus().truck,proof=g.street.regularTruckStatus();
+    if(proof.stop){seen.add(proof.stop);if(leftRepair&&proof.stop==='Repair stop')returned=true;}
+    if(Math.hypot(x-21,y-18)>2)leftRepair=true;
+    const heading=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*Math.PI/4;
+    const co=Math.abs(Math.cos(heading)),si=Math.abs(Math.sin(heading)),rx=.82*co+.32*si,ry=.82*si+.32*co;
+    assert(!(Math.abs(x-18)<rx+.095&&Math.abs(y-7.5)<ry+.095),'the service truck leaves room for the working resident');
+    assert(!(Math.abs(x-parked.x)<rx+.335&&Math.abs(y-parked.y)<ry+.665),'the service truck leaves room for the parked van');
+  }
+  assert(returned,'the service truck rejoins its route after the obstruction');
+  assert(seen.has('Pantry stop')&&seen.has('Market exchange')&&seen.has('Assembly stop'));
+  g.street.destroy();
+});
+
+test('dispatchers step onto open ground on every perimeter kerb before handing over the truck',()=>{
+  const g=surface(740,390,{lives:true,deferFrames:true});
+  const pickups=[
+    {x:15.46584,y:24.74,dx:-1,dy:0},{x:8.2,y:-.74,dx:1,dy:0},
+    {x:24.74,y:19.2,dx:0,dy:1},{x:-.74,y:7.9,dx:0,dy:-1}
+  ];
+  for(const [i,pickup] of pickups.entries()){
+    const town={...site,id:'perimeter-'+i,buildings:[{id:'exchange',kind:'market',plot:0,name:'Exchange'}],
+      fleet:{custody:{actor:'steward',week:8,token:i+1,anchor:pickup,pickup}}};
+    g.street.setSite(town);
+    const dispatcher=g.street.actorScene('driver').targetPose;
+    assert.equal(dispatcher.mode,'walk');
+    const vertical=Boolean(pickup.dy),rx=vertical?.32:.82,ry=vertical?.82:.32;
+    assert(!(Math.abs(dispatcher.x-pickup.x)<rx+.095&&Math.abs(dispatcher.y-pickup.y)<ry+.095),
+      'the dispatcher leaves the cab before the player boards');
+    const old=g.street.snapshotView();
+    assert(g.street.restoreView({...old,player:{x:dispatcher.x,y:dispatcher.y,dx:1,dy:0}}));
+    assert(g.street.boardServiceTruck());
+    let arrived=false;
+    assert(g.street.followTruckDelivery({x:21,y:18},()=>{arrived=true;}));
+    g.finish();assert(arrived);
+  }
   g.street.destroy();
 });

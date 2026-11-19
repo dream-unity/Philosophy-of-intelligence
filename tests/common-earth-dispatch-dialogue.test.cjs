@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const dir=process.env.COMMON_EARTH_GAME_DIR||path.resolve(__dirname,'../common-earth');
 function district(){
   const c=vm.createContext({});c.window=c;
-  for(const name of ['personas','careers','local-projects','autonomy','dialogue','agency','market','fleet','simulation'])
+  for(const name of ['personas','careers','local-projects','autonomy','dialogue','agency','market','fleet','community-effects','simulation'])
     vm.runInContext(fs.readFileSync(path.join(dir,name+'.js'),'utf8'),c,{filename:name+'.js'});
   const sim=c.CommonEarthSim.create({storage:null});
   assert(sim.found({name:'Stone Town',lat:-6.16,lon:39.19,water:true}).ok);
@@ -70,6 +70,18 @@ test('the actual transport employee can check out finite stock, unload only once
   assert.equal(t.site.fleet.custody,undefined);t.read();
 });
 
+test('during a shortage each neighbour speaks for their own work, including two people on different garden runs',()=>{
+  const t=district();t.site.food=0;
+  t.site.buildings.push({kind:'workshop',plot:4},{kind:'garden',plot:3},{kind:'garden',plot:5});
+  const people=t.c.EarthPersonas.list(t.site).filter(p=>p.id!=='steward');
+  const words=people.map(p=>{
+    const result=t.talk(p.id,'news');assert(result.ok);return result.message.split(' · ')[1];
+  });
+  assert.equal(new Set(words).size,people.length);
+  assert.match(t.talk('carrier-4-3','news').message,/workshop on lot 5 to the garden on lot 4/);
+  assert.match(t.talk('carrier-4-5','news').message,/workshop on lot 5 to the garden on lot 6/);
+});
+
 test('ordinary employees can cancel a loaded run or let dispatch recover it, without losing reserved stock',()=>{
   const t=district();assert(t.play('driver').ok);
   assert(t.drive('checkout',t.depot).ok);
@@ -111,4 +123,27 @@ test('a named autonomous driver only takes real stock to a shortage and a stale 
   t.w.week++;assert(t.play('driver').ok);
   assert.equal(t.sim.regularTruckView().available,false);
   assert.equal(t.c.EarthFleet.closeWeek(t.w,t.site).length,0);t.read();
+});
+
+test('a visible work gesture, and a past supply contribution, belong to the people who actually performed them',()=>{
+  const t=district(),joiner='walker-1',farmer=t.site.residents[0].id,helper='walker-3';
+  const profile=t.c.EarthPersonas.profile(t.site,joiner),observed={id:joiner,label:'Checking measurements',phase:'work'};
+  assert.match(t.talk(joiner,'work',{activity:observed}).message,/I was checking measurements/);
+  assert.doesNotMatch(t.talk(farmer,'work',{activity:observed}).message,/I was checking measurements/);
+  assert.equal(t.talk(joiner,null).ok,false);
+  t.site.autonomy={week:1,people:{},effects:{},projects:{notes:0,assists:0,owners:{},completed:[{
+    ownerId:farmer,serial:2,kind:'food',variant:0,axis:'care',week:1,partnerId:helper,beneficiaryId:null,
+    result:'The pantry received 3 food using '+profile.name+'’s carrier.',delivered:3,input:{kind:'carrier',ownerId:joiner}
+  }]}};
+  const before=JSON.stringify(t.site);
+  for(const id of [joiner,farmer,helper]){
+    const history=t.c.EarthCommunityEffects.view(t.w,t.site,id);assert.equal(history.length,1);
+    assert.deepEqual(Array.from(history[0].people,p=>p.id).sort(),[farmer,helper,joiner].sort());
+    assert.match(history[0].result,/3 food/);
+  }
+  assert.equal(t.c.EarthCommunityEffects.view(t.w,t.site,'walker-0').length,0);assert.equal(JSON.stringify(t.site),before);t.read();
+  delete t.site.autonomy.projects.completed[0].input;
+  assert.equal(t.c.EarthCommunityEffects.view(t.w,t.site,joiner).length,0,'older anonymous equipment cannot identify its maker without a receipt');
+  t.site.autonomy.projects.completed[0].input={kind:'carrier',ownerId:'missing'};
+  assert.equal(t.c.CommonEarthSim.readSave(JSON.stringify(t.w)),null);
 });

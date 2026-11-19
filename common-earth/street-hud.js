@@ -475,6 +475,27 @@
       });
       box.append(more);
     }
+    function recentEffects(box,site,id){
+      const receipts=root.EarthCommunityEffects?.view(sim.state,site,id);
+      if(!receipts?.length)return;
+      const details=make('details'),list=make('div',null,'scene-more-projects');
+      details.id='scene-recent-effects';details.append(make('summary','Recent effects'),list);
+      details.addEventListener('toggle',()=>{
+        if(!details.open||!details.isConnected||list.children.length)return;
+        for(const row of receipts.slice(0,5)){
+          const card=info('Week '+row.week+' · '+row.title,row.result);
+          const people=make('div',null,'scene-links');
+          for(const person of row.people||[]){
+            if(root.EarthPersonas?.profile(site,person.id)){
+              people.append(press(person.name,()=>selectPurpose(person.id),false,'effect-person-'+person.id));
+            }else if(person.name)people.append(make('span',person.name));
+          }
+          if(people.children.length)card.append(people);
+          list.append(card);
+        }
+      });
+      box.append(details);
+    }
     function drawGoals(site,people){
       if(goalId&&!people.some(p=>p.id===goalId))goalId='';
       if(goalField)goalField.value=goalId;const box=$('scene-goal-detail');if(!box)return;box.replaceChildren();
@@ -493,7 +514,7 @@
           box.append(info('Next civic decision',goal.detail||overview?.objective));
           box.append(press(goal.label,()=>followGoal(goal),false,'next-goal'));
         }
-        localProjects(box,site,people,need.resource);
+        localProjects(box,site,people,need.resource);recentEffects(box,site,null);
         const buttons=make('div',null,'scene-links');
         buttons.append(press('Advance one week',()=>advance(),false,'advance-week'));
         const forecast=make('details'),summary=make('summary','Preview the next week'),results=make('div',null,'scene-action');
@@ -524,6 +545,15 @@
       if(plan)box.append(info(freshText(plan.goal||plan.label),freshText(plan.reason)));
       const moves=make('div',null,'scene-links');box.append(moves);
       if(plan&&Number.isFinite(plan.energy))box.append(make('p','Energy '+plan.energy+' / 8 · Need for company '+plan.contact+' / 8.','scene-muted'));
+      const purse=sim.purseView?.(p.id);
+      if(purse){
+        const entry=purse.entries?.[0],funds=info('Personal funds · '+purse.balance,entry?'Week '+entry.week+' · '+entry.text:'');
+        if(purse.shift?.clerkName)funds.append(make('small','Current paid errand · '+purse.shift.clerkName));
+        if(p.id===actorId())funds.append(press('Personal funds and shifts',()=>{
+          if(openTool('stores'))toolbox.get('stores')?.openPurse?.();
+        },false,'own-purse'));
+        box.append(funds);
+      }
       if(plan?.contribution){
         const gift=plan.contribution;
         box.append(press('Helped '+name(gift.ownerId)+' · Week '+gift.week,()=>selectPurpose(gift.ownerId),false,'contributed-to'));
@@ -580,6 +610,7 @@
         }
         actions.append(press('Find personal work',()=>personalWork(),false,'own-work'));
       }
+      recentEffects(box,site,p.id);
     }
     function render(force=false){
       const site=sim.active(),local=street();if(!site||!local)return;

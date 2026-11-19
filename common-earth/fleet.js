@@ -17,7 +17,7 @@
   function writable(site){return site.fleet||={serial:0,roster:{},records:[]};}
   const person=(site,id)=>root.EarthPersonas?.profile(site,id)?.name||site.residents.find(p=>p.id===id)?.name||'Community steward';
   const driver=site=>person(site,'driver');
-  function entry(f,week,actor,text){f.records.unshift({week,actor,text});f.records.length=Math.min(8,f.records.length);}
+  function entry(f,week,actor,text,otherId=null){f.records.unshift({week,actor,text,...(otherId&&otherId!==actor?{otherId}:{})});f.records.length=Math.min(8,f.records.length);}
   function instruction(site,id){
     const person=root.EarthPersonas?.profile(site,id),skills=site.careers?.[id]?.skills||{},reference=site.careers?.[id]?.latestReference;
     const routeReading=skills.organisation??person?.aptitudes?.organisation??50;
@@ -56,9 +56,11 @@
     if(!drop.ok)root.EarthMarket.freight(site,next.good,'return',world.week);
     delete f.custody;
     if(!drop.ok)return drop;
-    const receiver=site.residents.find(p=>p.slot===stops.indexOf(next))?.name||'the neighbourhood';
-    const message=order.driverName+' delivered 1 '+next.good+' from exchange stock to '+receiver+' at '+next.name+' to cover a shortage.';
-    f.servedWeek=world.week;f.regularWeek=world.week;f.serial++;entry(f,world.week,'driver',message);
+    const relevant={food:/grower|garden|baker|cook|seed/i,materials:/repair|carpent|engineer/i,funds:/convenor|trader|steward/i}[next.good];
+    const recipient=site.residents.find(p=>relevant.test(root.EarthCareers?.role(site,p.id)||p.role));
+    const message=order.driverName+' delivered 1 '+next.good+' from exchange stock at '+next.name+' to cover a shortage'+
+      (recipient?' for '+recipient.name+'’s crew.':'.');
+    f.servedWeek=world.week;f.regularWeek=world.week;f.serial++;entry(f,world.week,'driver',message,recipient?.id);
     return {ok:true,message};
   }
   function finishRegular(world,site,quote,scene){
@@ -160,7 +162,7 @@
         delete f.incident;world.effort--;site.trust=Math.min(100,site.trust+2);
         message=actorName+' helped the dispatch crew cover the missed work. The restriction is lifted and the community regained 2 trust.';break;
     }
-    entry(f,world.week,id,message);f.serial++;
+    entry(f,world.week,id,message,['take','return','repair'].includes(request.action)?'driver':null);f.serial++;
     return {ok:true,message,action:request.action};
   }
   function tick(world,site){
@@ -176,14 +178,14 @@
       message='The relief run ended. Dispatch brought the blue truck back to the market exchange.';
       delete f.custody;f.parkedWeek=world.week;
     }else message='Dispatch is waiting for '+person(site,held.actor)+' to return the truck. The regular driver is covering the exchange.';
-    entry(f,world.week,held.actor,message);return [message];
+    entry(f,world.week,held.actor,message,'driver');return [message];
   }
   function valid(site,week){
     const f=site.fleet;if(f===undefined)return true;
     if(!f||!whole(f.serial,0)||!f.roster||Array.isArray(f.roster)||typeof f.roster!=='object'||!Array.isArray(f.records)||f.records.length>8)return false;
     const people=crew(site),known=id=>people.includes(id);
     if(!Object.entries(f.roster).every(([id,row])=>known(id)&&whole(row?.ready,2,week+3)&&(row.joined==null||whole(row.joined,1,week)&&whole(row.ready-row.joined,1,3))))return false;
-    if(!f.records.every(e=>e&&known(e.actor)&&whole(e.week,1,week)&&typeof e.text==='string'&&e.text.length<=400))return false;
+    if(!f.records.every(e=>e&&known(e.actor)&&(e.otherId==null||known(e.otherId)&&e.otherId!==e.actor)&&whole(e.week,1,week)&&typeof e.text==='string'&&e.text.length<=400))return false;
     if(['servedWeek','parkedWeek','review','regularWeek'].some(k=>f[k]!==undefined&&!whole(f[k],1,week)))return false;
     if(f.incident&&(!known(f.incident.actor)||!whole(f.incident.week,1,week)))return false;
     const c=f.custody;

@@ -94,3 +94,29 @@ test('pausing or cancelling an autonomous worksite is respected on the next remo
   const closed=w.EarthCivicInitiatives.view(sim.state,origin).history.find(h=>h.id===initiative.id);
   assert.equal(closed.phase,'cancelled');assert(!origin.buildings.some(b=>b.id===job.id));assert(w.CommonEarthSim.readSave(JSON.stringify(sim.state)));sim.destroy();
 });
+
+test('two public worksites sharing a committee cannot spend the same volunteer shift twice',()=>{
+  const {sim,w,origin,other}=towns();let first;
+  for(let n=0;n<20&&!first;n++){
+    assert(sim.advance().ok);
+    first=origin.civicInitiatives?.history.find(p=>p.phase==='commissioned');
+  }
+  assert(first);
+  const kind=first.choiceId==='build:garden'?'hall':'garden',plot=(first.plot+1)%9;
+  assert(sim.visit(origin.id).ok);
+  assert(sim.act('build:'+kind,plot).ok);
+  const job=origin.construction.find(j=>j.plot===plot);assert(job);
+  const second=structuredClone(first);
+  Object.assign(second,{id:first.id+'-second',choiceId:'build:'+kind,title:job.name,plot,jobId:job.id});
+  delete second.works;
+  origin.civicInitiatives.history.push(second);
+  assert(w.CommonEarthSim.readSave(JSON.stringify(sim.state)),'a restored town can have simultaneous public contracts');
+  assert(sim.visit(other.id).ok);
+  for(let i=0;i<3;i++){
+    assert(sim.advance().ok);
+    const shifts=origin.civicInitiatives.history.flatMap(p=>p.works?.week===sim.state.week?p.works.people:[]);
+    assert(shifts.length>0);assert.equal(new Set(shifts).size,shifts.length,'a single person cannot work two contracts in one calendar shift');
+    assert(w.CommonEarthSim.readSave(JSON.stringify(sim.state)));
+  }
+  sim.destroy();
+});

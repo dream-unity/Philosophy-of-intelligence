@@ -150,6 +150,9 @@
       const active=world.sites.find(s=>s.shift),host=person(active,active.shift.residentId);
       reason=`Finish the shift with ${host?.name||'the resident'} in ${active.name} first.`;
     }
+    else if(site.purses?.tickets?.[residentId])reason=resident.name+' has a paid stock check in progress. They must finish or cancel it before hosting the day.';
+    else if(site.purses?.tickets?.[root.EarthAgency?.actorId(site)||site.agency?.actor||'steward'])
+      reason='Finish or cancel your paid stock check before accompanying a resident for the day.';
     else if(world.legacy?.term?.siteId===site.id && world.legacy.term.residentId===residentId){
       const term=world.legacy.term;
       reason=resident.name+' is chairing the council until week '+(term.start+4)+'. Plan a day with another resident or return after the handover.';

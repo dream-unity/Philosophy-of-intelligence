@@ -119,6 +119,7 @@
       if(project)return own(project,input.projectPhase)||project.work;
     }
     if(kind==='learn'||kind==='study'||input.training&&(!kind||kind==='routine'))return routines.study;
+    if(input.specialistId&&own(routines,input.specialistId))return routines[input.specialistId];
     if(kind==='cover'||kind==='commitment'&&input.civic===true)return own(routines,own(venues,input.venue))||routines.trader;
     if(['rest','visit','host','waiting','gather','preserve','apply','pickup','dropoff','delivery','dispatch','roadWait','build'].includes(kind))return routines[kind];
     const career=own(routines,input.careerId);

@@ -121,3 +121,26 @@ test('a learner can advance the quoted shared study calendar and read the result
   ui.open('walker-0');assert.equal(g.get('study-term'),undefined);
   sim.destroy();
 });
+test('specialist hiring shows the actual reserved offer, qualified waiting list, review and temporary service for the chosen employer',async()=>{
+  const g=fixture(),{w,site,sim,ui,content}=g,ids=[site.residents[0].id,'walker-0'],job=w.EarthCareers.catalog.find(j=>j.id==='nurse');
+  for(const id of ids){
+    const p=w.EarthPersonas.profile(site,id),skills={};
+    for(const axis of [job.skill,job.secondary])skills[axis]=p.bounds[axis].max;
+    (site.careers||={})[id]={revision:1,qualifications:{nurse:1},portfolios:{nurse:3},skills,references:{},history:[]};
+  }
+  assert(w.EarthCareers.valid(site,sim.state.week));
+  for(const id of ids){
+    const who={...g.scene(),targetPose:{id,x:11.5,y:12,mode:'walk'}};
+    const changed=sim.changeActor(id,who);assert(changed.ok,changed.message);ui.open(id);g.job('nurse');
+    assert(content.text().includes('1 of 1 specialist post open'));
+    const application=g.get('career-apply');assert(!application.disabled);await application.fire('click');assert(g.results.at(-1).ok,g.results.at(-1).message);
+  }
+  assert((await sim.perform('advance')).ok);assert((await sim.perform('advance')).ok);
+  const waiting=ids.find(id=>w.EarthCareers.view(sim.state,site,id,'nurse').stage==='waiting');assert(waiting);
+  ui.open(waiting);g.job('nurse');
+  const opening=w.EarthCareers.view(sim.state,site,waiting,'nurse').opening,team=opening.team[0],waiter=opening.waiters[0];
+  for(const text of ['0 of 1 specialist post open',team.name+' · offer reserved',waiter.name+' (since week '+waiter.since+')',
+    'Next hiring review · Week '+opening.nextReview,opening.reason,opening.service])assert(content.text().includes(text),text);
+  assert(g.get('career-specialistRelief'));g.job('cook');assert(!content.text().includes('Temporary relief duty'));
+  sim.destroy();
+});

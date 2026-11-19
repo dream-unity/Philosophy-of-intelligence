@@ -129,6 +129,24 @@
       }
       return list;
     }
+    function specialistOpening(opening){
+      const box=field('section',null,'life-term');
+      const {free,capacity,team,waiters}=opening;
+      box.append(field('h4',free+' of '+capacity+' specialist '+(capacity===1?'post':'posts')+' open'));
+      if(opening.reason)box.append(field('p',opening.reason));
+      if(team?.length){
+        const status={appointed:'in post',notice:'serving notice',offer:'offer reserved'};
+        box.append(field('p',team.map(p=>p.name+' · '+(status[p.status]||p.status)).join(' / '),'life-muted'));
+      }
+      if(waiters?.length)box.append(field('p','Waiting for a post · '+waiters.map(p=>p.name+' (since week '+p.since+')').join(', '),'life-muted'));
+      if(Number.isInteger(opening.nextReview))box.append(field('p','Next hiring review · Week '+opening.nextReview,'life-role'));
+      if(opening.relief){
+        box.append(field('h4','Temporary relief duty'));
+        if(opening.service)box.append(field('p',opening.service));
+        if(opening.relief.reason)box.append(field('p',opening.relief.reason,'life-muted'));
+      }
+      return box;
+    }
     function careerPage(site,person,model,job,ranked){
       const section=field('section',null,'life-section'),select=field('select');
       select.dataset.lifeControl='career-target';
@@ -178,6 +196,7 @@
       }else if(best)section.append(field('p','Strong fit for '+person.name+'’s '+best.skill+' and '+best.secondary+'.','life-muted'));
       if(model.stage!=='employed'&&model.status)section.append(field('p',model.status));
       if(model.training?.phaseDetail)section.append(field('p',model.training.phaseDetail,'life-muted'));
+      if(model.opening)section.append(specialistOpening(model.opening));
       section.append(offerRows(person,model.choices||[],'career',root.EarthAgency.actorId(site)));
       if(model.training&&!model.training.paused&&root.EarthAgency.actorId(site)===person.id&&sim.courseCalendar){
         const calendar=sim.courseCalendar(person.id),n=calendar.weeks;

@@ -238,6 +238,37 @@ test('the in-scene stores panel walks to the exchange, samples contact at commit
   assert.equal(h.snapshot().selectedCrate,null);assert.equal(h.snapshot().cratesOpen,true);
   atQuay=true;await oldPacking();assert.equal(s.food,13,'restoring the reference crate cannot replay a trip or transaction');
   h.restore({tab:'forged',packAt:'invalid',cratesOpen:'true'});assert.equal(h.snapshot().tab,'trade');assert.equal(h.snapshot().packAt,'market');
+  const ref={type:'resident',residentId:'clerk'},checkedRequest={...model(),marketSerial:model().serial,action:'check',good:'food',price:2};
+  let byClerk=false,claimed=0;
+  s.residents=[{id:'clerk',name:'Mara'}];
+  local.meeting=place=>place.type==='resident'&&place.residentId==='clerk'&&byClerk?{...pose(),target:'clerk'}:null;
+  sim.purseView=()=>({...checkedRequest,name:'Robin',balance:2,household:1,shift:{clerkName:'Mara',week:1,good:'food'},entries:[],
+    options:[{action:'check',good:'food',venue:ref,title:'Check stock with Mara',available:true,request:checkedRequest}]});
+  sim.perform=(kind,request,proof)=>new Promise(resolve=>{grant=()=>{
+    assert.equal(kind,'purseAction');assert.equal(request,checkedRequest,'preserve the full employer quote');
+    if(proof()?.target==='clerk'){claimed++;resolve({ok:true,message:'Checked stock with Mara.'});}
+    else resolve({ok:false,message:'Meet Mara at her inventory post.'});
+  };});
+  assert.equal(h.openPurse(),true);assert.equal(h.snapshot().tab,'purse');
+  assert.ok(content.querySelectorAll('p').some(p=>p.textContent.includes('1 fund pooled')));
+  ctl('purse-check-food').fire();assert.ok(content.querySelectorAll('p').some(p=>p.textContent==='Walking to Mara for the stock count.'));
+  byClerk=true;const errand=arrival();byClerk=false;grant();await errand;assert.equal(claimed,0);
+  ctl('purse-check-food').fire();byClerk=true;const second=arrival();grant();await second;assert.equal(claimed,1);
+  const savedPurse=h.snapshot();h.close();h.restore(savedPurse);assert.equal(h.snapshot().tab,'purse');assert.equal(claimed,1);
+  let price=2,offered=null;atCounter=false;
+  local.meeting=place=>place.type==='market'&&atCounter?pose():null;
+  sim.purseView=()=>({...checkedRequest,name:'Robin',balance:5,household:1,shift:null,entries:[],
+    options:[{action:'buy',good:'food',venue:{type:'market'},title:'Buy food for the town',available:true,request:{...checkedRequest,action:'buy',price}}]});
+  sim.perform=async(_command,request,proof)=>{
+    assert.ok(proof());offered=request.price;return {ok:offered===price,message:offered===price?'Food purchased.':'The shelf price changed.'};
+  };
+  h.openPurse();ctl('purse-buy-food').fire();const counterArrival=arrival;
+  price=3;w.actionRevision++;h.render();atCounter=true;await counterArrival();
+  assert.equal(offered,2,'an in-flight errand must keep its original quoted price across a UI refresh');
+  assert.ok(content.querySelectorAll('p').some(p=>p.textContent==='The shelf price changed.'));
+  atCounter=false;ctl('purse-buy-food').fire();const expiredArrival=arrival;w.week++;h.render();
+  assert.ok(content.querySelectorAll('p').some(p=>p.textContent.includes('The week changed during the journey')));
+  atCounter=true;offered=null;await expiredArrival();assert.equal(offered,null);
 });
 
 test('towns have their own supplier and visitor days and can make greater use of local trades without duplicating public output',()=>{
@@ -292,4 +323,29 @@ test('a playable street resident trades under their own name and a handoff inval
   const updated={...request,serial:sim.marketView().serial},stock=site.materials;
   ok(sim.changeActor('steward',pose(id)));no(sim.exchange(updated,pose('steward')));
   assert.equal(site.materials,stock);sim.destroy();
+});
+
+test('private wages, their safe return space and shelf gifts reconcile with the finite exchange',()=>{
+  const {api,s,w,model,run,close}=setup(),max=Number.MAX_SAFE_INTEGER;
+  assert.equal(api.privateTill(s),8);
+  no(api.personal(w,s,'reserveWage',null,1,'ira'));assert.equal(s.exchange,undefined);
+  ok(api.personal(w,s,'reserveWage',null,2,'ira'));s.purses={tickets:{ira:{week:w.week}}};
+  assert.equal(api.privateTill(s),6);assert.equal(model().wagesHeld,2);assert.equal(s.funds,20);
+  const initialFood=s.food,initialShelf=model().shelf.food,initialPrivate=api.privateTill(s),cash=s.funds;
+  s.funds=0;const quote=api.personalQuote(w,s,'food');
+  assert.ok(quote.available);assert.equal(model().options.find(o=>o.action==='buy'&&o.good==='food').available,false);
+  no(api.personal(w,s,'buyGift','food',quote.price+1,'ira'));
+  ok(api.personal(w,s,'buyGift','food',quote.price,'ira','household'));assert.equal(s.funds,0);
+  assert.equal(s.food,initialFood+1);assert.equal(model().shelf.food,initialShelf-1);assert.equal(api.privateTill(s),initialPrivate+quote.price);
+  assert.match(s.exchange.history[0].text,/Ira.*household food fund/);
+  s.funds=cash;s.exchange.till=max-2;s.fleet={custody:{kind:'work',delivered:false,week:w.week}};
+  ok(api.freight(s,'funds','load'));assert.equal(model().till,max-3);
+  assert.ok(api.valid(s,w.week));assert.equal(api.personalQuote(w,s,'food').available,false);no(run('buy','materials'));
+  s.exchange.till++;assert.equal(api.valid(s,w.week),false);s.exchange.till--;
+  close();assert.ok(model().till<=max-3);ok(api.freight(s,'funds','return'));
+  const paid=api.privateTill(s);s.exchange.serial=max;
+  no(api.personal(w,s,'returnWage',null,2,'steward'));
+  ok(api.personal(w,s,'returnWage',null,2,'ira'));delete s.purses.tickets.ira;
+  assert.equal(api.privateTill(s),paid+2);assert.equal(s.exchange.serial,max);assert.equal(model().wagesHeld,0);
+  assert.ok(api.valid(s,w.week));no(api.personal(w,s,'returnWage',null,2,'ira'));
 });

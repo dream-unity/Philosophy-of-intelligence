@@ -148,10 +148,16 @@
     if(force||key!==clockSignal){clockSignal=key;liveClock.update({force,discard});}
   }
   function liveReview(){
-    const site=sim.active(),scene=getStreet()?.getState();if(!site||!scene||!clockState().hold)return null;
+    const site=sim.active(),scene=getStreet()?.getState();if(!site||!scene)return null;
+    const hold=clockState().hold;if(!hold)return null;
     if(site.pursuits?.ticket)return {label:'Review personal work',run:()=>sceneWork()};
     if(site.handline||scene.mode==='boat')return {label:'Open waterfront controls',run:()=>streetHud.openTool('fishing')};
     if(site.fleet?.custody?.actor===scene.actor||scene.vehicle==='truck')return {label:'Review truck assignment',run:()=>streetHud.openTool('truck')};
+    if(site.purses?.tickets?.[scene.actor]){
+      return {label:'Review your paid stock check',run:()=>{
+        if(streetHud.openTool('stores'))localMarket?.openPurse?.();
+      }};
+    }
     const entry=upcomingDeadlines()[0];
     if(entry)return {label:'Review · '+entry.label,run:async()=>{
       if(entry.person&&(entry.group==='shift'||entry.group==='people')){
@@ -181,7 +187,7 @@
     const switcher=$('scene-live-switch'),pressed=String(state.enabled);
     if(switcher&&switcher.getAttribute('aria-pressed')!==pressed)switcher.setAttribute('aria-pressed',pressed);
     const labels=[[/conversation/,'Talking'],[/journey|vehicle/,'Travelling'],[/assignment/,'Building'],[/shore|water|handline|fish/,'Fishing'],
-      [/truck|dispatch/,'Dispatch'],[/stores|exchange/,'Trading'],[/job|work/,'Working'],[/council|vote/,'Council due'],
+      [/truck|dispatch/,'Dispatch'],[/stores|exchange/,'Trading'],[/stock check/,'Stock check'],[/job|work/,'Working'],[/council|vote/,'Council due'],
       [/promise/,'Promise due'],[/shift/,'Shared day'],[/booking|cooperative/,'Booking due'],[/offer|study|course|planning/,'Planning']];
     const label=state.hold?labels.find(([pattern])=>pattern.test(state.hold))?.[1]||'Waiting':duration;
     put('scene-live-badge',label);show('scene-live-badge',state.enabled);

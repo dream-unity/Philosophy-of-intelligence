@@ -20,6 +20,30 @@
     [/teacher/i,'A good day is when somebody explains the idea back to me in their own words.','If one learner can teach a neighbour, the knowledge travels further.'],
     [/musician/i,'I keep hearing one phrase I would like to play more cleanly. Practice is easier when somebody listens.','A performance gives neighbours a reason to come together after work.']
   ];
+  function pantryConcern(target,site){
+    const meals=Math.ceil(site.population/5),left=site.food;
+    if(/baker|cook/i.test(target.role))return 'I’m counting portions for the kitchen. We have '+left+' food to make '+meals+' portions. I’d be glad of another basket.';
+    if(/seed/i.test(target.role))return 'We need food now and seed for the next planting. With '+left+' food left, those are two different promises I have to think about.';
+    if(/grower|garden/i.test(target.role))return 'The next picking can’t come soon enough. The pantry has '+left+' food and our households need '+meals+'.';
+    if(/trader/i.test(target.role))return 'The public pantry has '+left+' food. I’m checking which crates can be bought from the stall before the next round.';
+    if(/steward|convenor/i.test(target.role))return 'We have '+meals+' portions to find and '+left+' food in store. I want to hear from the neighbours who need the next basket.';
+    if(/driver|courier|porter/i.test(target.role))return 'I’m watching what’s coming into the exchange. We have '+left+' food for '+meals+' portions, so a missed pickup matters.';
+    return 'I’m thinking about the next shared meal. We have '+left+' food for '+meals+' portions.';
+  }
+  function supplyRun(person){
+    const lane=/^carrier-([0-8])-([0-8])$/.exec(person.id);
+    if(!lane)return null;
+    const from=Number(lane[1])+1,to=Number(lane[2])+1;
+    if(person.role==='Garden courier')return {
+      news:'I carry tools from the workshop on lot '+from+' to the garden on lot '+to+'.',
+      purpose:'When the tools reach the growers on lot '+to+', our district can harvest one extra food each week.'
+    };
+    if(person.role==='Exchange porter')return {
+      news:'My run connects the depot on lot '+from+' with the market on lot '+to+'.',
+      purpose:'A staffed market on lot '+to+' earns one extra fund each week from the adjoining depot.'
+    };
+    return null;
+  }
   const known=(site,id)=>id==='steward'||site.residents.some(p=>p.id===id)||/^walker-[0-4]$|^driver$|^carrier-[0-8]-[0-8]$/.test(id);
   const pair=(site,from,to)=>site.agency?.visits?.find(v=>v.from===from&&v.to===to);
   const familiar=(site,a,b,week)=>[pair(site,a,b),pair(site,b,a)].some(v=>v&&v.week>=week-4);
@@ -31,12 +55,20 @@
     options.push(['meal','Share a meal · 1 food']);return options.map(([id,label])=>({id,label})).concat(introductions);
   };
   const lower=s=>s[0].toLowerCase()+s.slice(1);
+  const teaching={
+    stamina:'help someone learn to pace a longer walk',numeracy:'help someone check a calculation without me',
+    music:'teach a neighbour one difficult phrase',organisation:'show someone how I plan a week’s supplies',
+    care:'help someone learn to look after a neighbour',communication:'practise explaining a tricky idea with someone',
+    craft:'show a neighbour how to make a sound repair'
+  };
   function describe(site,world,target,speaker,topic,meeting){
+    if(typeof topic!=='string')return {ok:false,message:'Choose a current conversation topic.'};
     if(topic.startsWith('intro:'))return root.EarthIntroductions?.converse(site,world,target.id,speaker.id,topic,meeting)||null;
     const id=target.id,voice=voices.find(([re])=>re.test(target.role))||[null,'I enjoy taking time to get a piece of work right.','We share the work that keeps this neighbourhood going.'];
     const plan=root.EarthAutonomy?.view(site,world,id),project=plan?.project,career=site.careers?.[id],visit=pair(site,speaker.id,id);
     const course=career?.training&&root.EarthCareers?.catalog?.find(j=>j.id===career.training.targetId)?.label;
     const goal=project?.title||(course&&course+' training')||target.interests?.[0]||target.role;
+    const lane=supplyRun(target);
     const publicAgenda=site.civicInitiatives?.active;
     const vote=publicAgenda?.votes?.find(v=>v.personId===id);
     const heard=site.agency?.meals?.find(m=>m.to===id&&m.week===world.week);
@@ -46,7 +78,7 @@
     const make=words=>({ok:true,message:target.name+' · “'+words+'”'});
     function current(){
       if(project){
-        const title=lower(project.title),withWhom=partner?' '+partner+' is helping.':'';
+        const title=project.kind==='teach'&&teaching[project.axis]?teaching[project.axis]:lower(project.title),withWhom=partner?' '+partner+' is helping.':'';
         if(project.finishedWeek)return 'We finished the project “'+project.title+'”. '+(project.effect||voice[2]);
         const opening=project.phase==='Proposed'?'I’d like to ':project.phase==='Waiting'?'I’m waiting for a chance to ':'I’m trying to ';
         const next=project.next?.replace(/[.!?]+$/,'');
@@ -59,14 +91,17 @@
     }
     if(topic==='interests')return make(target.outsideWork||'I like '+goal+'.');
     if(topic==='work'){
+      const motion=meeting?.activity;
+      const observed=motion?.id===id&&typeof motion.label==='string'&&/^[A-Za-z]+ing\b/.test(motion.label)&&
+        ['prepare','work','handover','study','rest','social','travel'].includes(motion.phase)?'I was '+lower(motion.label)+'. ':'';
       const activity=current();
       if(employed?.application?.phase==='notice')return make('I work as '+employed.career.toLowerCase()+' at '+employed.employer+'. I’m serving notice through week '+employed.application.dueWeek+'. '+(employed.application.coverName?employed.application.coverName+' is taking the handover.':voice[2]));
-      return make((employed?'I work as '+employed.career.toLowerCase()+' at '+employed.employer+'. ':'')+(activity||voice[1]));
+      return make(observed+(employed?'I work as '+employed.career.toLowerCase()+' at '+employed.employer+'. ':'')+(activity||lane?.news||voice[1]));
     }
     if(topic==='purpose'){
       if(project)return make((partner?partner+' and I have agreed to work together. ':'')+(project.beneficiaryName&&project.beneficiaryId!==id?'I’m doing it with '+project.beneficiaryName+' in mind. ':'')+
         (project.why||voice[2])+(project.effect?' '+project.effect:''));
-      return make(voice[2]+' '+(site.construction?.[0]?'Right now the community has '+site.construction[0].name+' under construction.':urgentFood?'This week we need more food to cover the household share.':target.outsideWork||''));
+      return make((lane?.purpose||voice[2])+' '+(site.construction?.[0]?'Right now the community has '+site.construction[0].name+' under construction.':urgentFood?'This week we need more food to cover the household share.':target.outsideWork||''));
     }
     if(topic==='news'){
       let latest='';
@@ -74,19 +109,25 @@
       else if(heard)latest='I shared a meal with '+(root.EarthAgency.identity(site,heard.from)?.name||'a neighbour')+' this week.';
       else if(target.promise)latest='I’m counting on the promise due in week '+target.promise.dueWeek+'.';
       else if(site.fleet?.incident&&id==='driver')latest='The co-op missed a pickup when the truck was taken. I want to see that put right.';
+      else if(lane)latest=lane.news+' '+(urgentFood&&target.role==='Garden courier'?'The pantry holds '+site.food+' food, so the next harvest matters.':lane.purpose);
+      else if(urgentFood&&(/baker|grower|seed|cook|trader/i.test(target.role)||target.traits?.initiative>72))
+        latest=pantryConcern(target,site);
       else if(vote)latest=publicAgenda.leadId===id?'I proposed '+publicAgenda.title+' for '+publicAgenda.beneficiaryName+'. '+vote.reason:
         'We’re discussing '+publicAgenda.title+'. '+vote.reason;
       else if(id==='driver'&&site.fleet?.records?.[0]?.actor==='driver')latest=site.fleet.records[0].text;
       else if(current())latest=current();
       else if(career?.jobId&&career.history?.length)latest=career.history[0].text;
-      else if(urgentFood)latest='With only '+site.food+' food in the pantry I’m worried we won’t have enough for this week’s meals.';
+      else if(urgentFood)latest=pantryConcern(target,site);
       else if(site.issue&&/steward|convenor/i.test(target.role))latest='People have until week '+site.issue.deadline+' to vote on “'+site.issue.title+'”.';
       else if(site.pursuits?.cart&&/courier|porter|driver|carpenter/i.test(target.role))latest=site.pursuits.cart.builder+' built a handcart for our supply trips.';
       else if(visit&&visit.week<world.week)latest='I remember our week '+visit.week+' conversation about '+visit.subject+'.';
       else if(/baker|grower|trader/i.test(target.role))latest='I counted '+site.food+' food in the stores this week.';
       else if(/driver|courier/i.test(target.role))latest='I’m keeping an eye on which workplace is ready to receive the next load.';
       else if(target.interests?.[1])latest='When I’m off duty I’m looking forward to '+target.interests[1]+'.';
-      return make(voice[1]+(latest?' '+latest:''));
+      if(sent||heard||target.promise||vote||urgentFood||id==='driver'&&site.fleet?.incident)return make(latest+' '+voice[2]);
+      // Lead with the resident's live concern so the speech bubble changes as
+      // their life changes. Their own trade and temperament remain audible.
+      return make(latest?latest+' '+voice[1]:voice[1]);
     }
     if(topic==='listen'){
       if(visit?.week===world.week)return make('I remember, you made time for me earlier. '+(current()||voice[2]));

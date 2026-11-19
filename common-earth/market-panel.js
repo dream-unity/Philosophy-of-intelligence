@@ -5,6 +5,7 @@
   const title=s=>s.charAt(0).toUpperCase()+s.slice(1);
   function mount(section,{sim,street,version,meet,quayProof,meetQuay,onResult,after,work}){
     if(!section||!root.EarthMarket)return null;
+    const quantity=root.EarthMarket.quantity;
     const doc=section.ownerDocument,body=section.querySelector('[data-market-content]')||section;
     let generation=0,key='',busy=null,trip=null,feedback='',currentSite='',tab='trade',packAt='market',cratesOpen=false,selectedCrate=null;
     function el(tag,text,cls){
@@ -20,20 +21,36 @@
     doc.addEventListener('visibilitychange',()=>{if(doc.hidden)invalidate();});
     function area(name){tab=name;trip=null;generation++;key='';feedback='';render();}
     function show(message){feedback=message;key='';render();}
+    function travelMessage(kind,o,station,mode){
+      const moving=mode==='drive'?'Driving':'Walking',action=o.action;
+      if(kind==='purseAction'){
+        if(action==='check')return 'Walking to '+station+' for the stock count.';
+        if(action==='finish')return 'Returning to '+station+' to collect your pay.';
+        const purpose={start:'book your paid shift',cancel:'return the wage advance',buy:'buy '+o.good+' for the town',
+          donate:'add to the household food fund',household:'buy food with the household fund'};
+        return moving+' to '+station+' to '+(purpose[action]||'review your account')+'.';
+      }
+      if(kind==='provision')return moving+' to '+station+' to '+({pack:'pack a provision crate',open:'open the stored crate',
+        reserve:'reserve the crate for households',hold:'hold the crate in storage'}[action]||'handle the crate')+'.';
+      const purpose={buy:'buy '+o.good,sell:'sell '+o.good,hold:'set aside '+o.good,release:'release '+o.good,
+        fund:'commission the '+(o.good==='food'?'gleaning':'timber recovery')+' round',cancel:'recall the delivery crew'};
+      return moving+' to '+station+' to '+(purpose[action]||'review the offer')+'.';
+    }
     function transact(view,option,kind='exchange'){
       if(!option.available||busy||!visible())return;
-      const request={week:view.week,actorId:view.actorId,siteId:view.siteId,generation:view.generation,
+      const purse=kind==='purseAction',request=purse?option.request:{week:view.week,actorId:view.actorId,siteId:view.siteId,generation:view.generation,
         serial:view.serial,action:option.action};
       const provision=kind==='provision',quay=provision&&packAt==='quay';
       if(provision){if(option.crateId!=null)request.crateId=option.crateId;}
-      else{request.good=option.good;request.price=option.price;}
-      const local=street(),phase=generation,ref={type:'market'};
-      if(provision&&local.getState?.().mode&&local.getState().mode!=='walk'){
-        show('Come ashore or park and step out to handle a provision crate.');return;
+      else if(!purse){request.good=option.good;request.price=option.price;}
+      const local=street(),phase=generation,ref=purse?option.venue:{type:'market'};
+      if((provision||purse)&&local.getState?.().mode&&local.getState().mode!=='walk'){
+        show('Come ashore or park and step out '+(purse?'to handle personal work or funds.':'to handle a provision crate.'));return;
       }
-      const station=quay?'the waterfront quay':'the exchange counter';
+      const station=quay?'the waterfront quay':ref.type==='resident'?(view.shift?.clerkName||
+        sim.active().residents.find(p=>p.id===ref.residentId)?.name||'the shift clerk'):'the exchange counter';
       const position=()=>quay?quayProof?.():local.meeting(ref,true);
-      const pending={};trip=pending;
+      const pending={week:view.week,actorId:view.actorId};trip=pending;
       const present=()=>visible()&&phase===generation&&street()===local&&sim.active()?.id===view.siteId&&
         (sim.active()?.foundingRevision||0)===view.generation&&sim.state.week===view.week&&
         (root.EarthAgency?.actorId?.(sim.active())||'steward')===view.actorId;
@@ -53,7 +70,7 @@
       if(position()){commit();return;}
       const started=quay?meetQuay?.(commit):meet?.(ref,station,commit);
       if(started===false){trip=null;show('Reach '+station+' to complete this action.');}
-      else if(trip===pending)show('Travelling to '+station+' for '+(option.title||option.label).toLowerCase()+'.');
+      else if(trip===pending)show(travelMessage(kind,option,station,local.getState?.().mode));
     }
     function actionButton(model,o){
       const b=button(o.title,()=>transact(model,o));b.disabled=!o.available;b.dataset.marketAction=o.action+'-'+o.good;
@@ -74,8 +91,9 @@
     }
     function tradeshown(m){
       const result=el('div',null,'market-page');
-      result.append(el('p','Stall till · '+m.till+' funds. Buyers pay more when a shelf is low.','market-help'));
-      if(m.loaded)result.append(el('p','On the co-op truck · 1 '+m.loaded+' awaiting delivery. Its return space is reserved.','market-help'));
+      result.append(el('p','Stall till · '+quantity('funds',m.till)+'. Buyers pay more when a shelf is low.','market-help'));
+      if(m.wagesHeld)result.append(el('p',m.wagesHeld+' funds are held separately for promised wages.','market-help'));
+      if(m.loaded)result.append(el('p','On the co-op truck · '+quantity(m.loaded,1)+' awaiting delivery. Its return space is reserved.','market-help'));
       for(const good of ['food','materials']){
         const block=el('section',null,'market-good'),labels=el('div',null,'market-heading');
         labels.append(el('h4',title(good)),el('span',m.shelf[good]+'/'+m.capacity+' on shelf'));
@@ -93,7 +111,7 @@
         result.append(block);
       }
       const n=m.nextRound;
-      result.append(el('p','Next round · visitors seek up to '+n.demand+' '+n.customerGood+'. Suppliers offer up to '+n.supply+' '+n.supplyGood+' at '+n.wholesale+' funds each, subject to shelf space and cash.','market-help'));
+      result.append(el('p','Next round · visitors seek up to '+quantity(n.customerGood,n.demand)+'. Suppliers offer up to '+quantity(n.supplyGood,n.supply)+' at '+quantity('funds',n.wholesale)+' each, subject to shelf space and cash.','market-help'));
       return result;
     }
     function provisions(){
@@ -102,7 +120,7 @@
       group.addEventListener('toggle',()=>{if(group.isConnected)cratesOpen=group.open;});
       group.append(el('summary','Provision crates · '+model.used+'/'+model.capacity));
       const card=el('div',null,'market-page');
-      card.append(el('p',model.freshFood+' fresh food · '+model.materials+' materials · '+model.reservedFood+' sealed food reserved for households.','market-help'));
+      card.append(el('p',model.freshFood+' fresh food · '+quantity('materials',model.materials)+' · '+model.reservedFood+' sealed food reserved for households.','market-help'));
       if(model.lastRelief){
         const r=model.lastRelief;
         card.append(el('p','Week '+r.week+' · crates packed by '+r.contributors.join(', ')+' covered '+r.amount+' of the household shortfall of '+r.shortfall+' food.','market-help'));
@@ -147,11 +165,31 @@
       for(const op of m.options.filter(o=>o.action==='fund'||o.action==='cancel')){
         const card=el('section',null,'market-good');card.append(actionButton(m,op),el('p',op.detail,'market-help'));appendReason(card,op);box.append(card);
       }
-      box.append(el('h4','Project chest'),el('p',m.locked.materials+' materials · '+m.locked.funds+' funds · '+m.lockCapacity+' spaces. Held goods are protected from trade and spending.','market-help'));
+      box.append(el('h4','Project chest'),el('p',quantity('materials',m.locked.materials)+' · '+quantity('funds',m.locked.funds)+' · '+m.lockCapacity+' spaces. Held goods are protected from trade and spending.','market-help'));
       for(const good of ['materials','funds']){
         const row=el('div',null,'market-buttons');
         for(const o of m.options.filter(x=>x.good===good&&(x.action==='hold'||x.action==='release')))row.append(actionButton(m,o));
         box.append(row);
+      }
+      return box;
+    }
+    function pursePage(){
+      const p=sim.purseView?.(),box=el('div',null,'market-page');
+      if(!p)return box;
+      box.append(el('h4',p.name+'’s purse · '+quantity('funds',p.balance)),
+        el('p','Household food fund · '+quantity('funds',p.household)+' pooled to stock the district pantry.','market-help'));
+      if(p.shift)box.append(el('p','Shift from week '+p.shift.week+' · '+p.shift.clerkName+' · '+p.shift.good+' inventory.','market-help'));
+      for(const o of p.options||[]){
+        const card=el('section',null,'market-good'),b=button(o.title,()=>transact(p,o,'purseAction'));
+        b.dataset.marketAction='purse-'+o.action+'-'+(o.good||'');b.disabled=!o.available;
+        card.append(b);if(o.detail)card.append(el('p',o.detail,'market-help'));appendReason(card,o);box.append(card);
+      }
+      if(work&&!p.shift&&p.options?.length&&!p.options.some(o=>o.available))
+        box.append(button('Find paid work for the district treasury',()=>work('funds'),'text-button'));
+      if(p.entries?.length){
+        const list=el('ol');
+        for(const e of p.entries)list.append(el('li','Week '+e.week+' · '+e.text));
+        box.append(el('h4',p.name+'’s receipts'),list);
       }
       return box;
     }
@@ -169,16 +207,16 @@
       for(const [name,list] of [['Held in the district',m.held],['Confirmed deliveries',m.incoming],['Paid to active worksites',m.spent]]){
         if(!list.length)continue;
         box.append(el('h4',name));
-        const entries=el('ul');for(const row of list)entries.append(el('li',row.source+' · '+row.amount+' '+row.good+(row.due?' · week '+row.due:'')));
+        const entries=el('ul');for(const row of list)entries.append(el('li',row.source+' · '+quantity(row.good,row.amount)+(row.due?' · week '+row.due:'')));
         box.append(entries);
       }
       if(m.external.length){
         box.append(el('h4','Regional bookings'));
         const bookings=el('ul');
         for(const r of m.external){
-          const status=r.phase==='pledge'?'Balance due · '+r.balance+' '+r.good+' in week '+r.due:
+          const status=r.phase==='pledge'?'Balance due · '+quantity(r.good,r.balance)+' in week '+r.due:
             r.phase==='outbound'?'Goods due at the partner in week '+r.due:r.phase==='return'?'Return cargo due in week '+r.due:'Booking closed. The deposit goes to the partner.';
-          bookings.append(el('li',r.name+' · '+r.paid+' '+r.good+' paid. '+status));
+          bookings.append(el('li',r.name+' · '+quantity(r.good,r.paid)+' paid. '+status));
         }
         box.append(bookings);
       }
@@ -194,17 +232,26 @@
     function render(){
       const site=sim.active();if(!site||!visible())return;
       const siteId=identity(site);if(siteId!==currentSite){invalidate();currentSite=siteId;}
-      const stamp=[siteId,sim.state.week,sim.state.actionRevision||0,sim.state.workRevision||0,site.exchange?.serial||0,site.provisions?.serial||0,tab,feedback].join('|');
+      const actor=root.EarthAgency?.actorId?.(site)||'steward';
+      if(trip&&(trip.week!==sim.state.week||trip.actorId!==actor)){
+        feedback=trip.week!==sim.state.week?'The week changed during the journey. Choose a current offer.':
+          'The worker changed during the journey. Choose an offer for the current character.';
+        trip=null;key='';
+      }
+      const stamp=[siteId,sim.state.week,sim.state.actionRevision||0,sim.state.workRevision||0,site.exchange?.serial||0,site.provisions?.serial||0,
+        site.purses?.serial||0,actor,tab,feedback].join('|');
       if(stamp===key)return;
-      const m=sim.marketView?.()||root.EarthMarket.view(sim.state,site);
-      if(!m)return;
+      const m=tab==='purse'?null:sim.marketView?.()||root.EarthMarket.view(sim.state,site);
+      if(!m&&tab!=='purse')return;
       const focus=doc.activeElement?.dataset?.marketAction;
       const nav=el('div',null,'market-tabs');
-      for(const [id,label] of [['trade','Exchange'],['orders','Orders & reserves'],['records','Accounts']]){
+      const areas=[['trade','Exchange'],['orders','Orders & reserves'],['records','Accounts']];
+      if(sim.purseView)areas.splice(1,0,['purse','Personal funds']);
+      for(const [id,label] of areas){
         const b=button(label,()=>area(id),'text-button');
         b.dataset.marketAction='section-'+id;b.setAttribute('aria-pressed',String(id===tab));nav.append(b);
       }
-      const items=[stockTable(m),nav,tab==='trade'?tradeshown(m):tab==='orders'?orders(m):records(m)];
+      const items=tab==='purse'?[nav,pursePage()]:[stockTable(m),nav,tab==='trade'?tradeshown(m):tab==='orders'?orders(m):records(m)];
       if(feedback){const f=el('p',feedback,'market-feedback');f.setAttribute('role','status');items.push(f);}
       body.replaceChildren(...items);key=stamp;
       if(focus){const same=Array.from(body.querySelectorAll('[data-market-action]')).find(b=>!b.disabled&&b.dataset.marketAction===focus);same?.focus({preventScroll:true});}
@@ -214,13 +261,18 @@
       invalidate();
       const site=sim.active();if(!site)return false;
       currentSite=identity(site);
-      tab=['trade','orders','records'].includes(saved?.tab)?saved.tab:'trade';
+      tab=saved?.tab==='purse'&&sim.purseView?'purse':['trade','orders','records'].includes(saved?.tab)?saved.tab:'trade';
       packAt=saved?.packAt==='quay'&&quayProof&&meetQuay&&street()?.getState?.().waterfront?'quay':'market';
       cratesOpen=saved?.cratesOpen===true;
       if(saved?.selectedCrate!=null&&sim.provisionsView?.()?.crates?.some(c=>c.id===saved.selectedCrate))selectedCrate=saved.selectedCrate;
       render();return true;
     }
-    return {open:render,render,snapshot,restore,close:invalidate,invalidate};
+    function openPurse(){
+      const site=sim.active();if(!site||!sim.purseView)return false;
+      if(currentSite!==identity(site)){invalidate();currentSite=identity(site);}
+      area('purse');return true;
+    }
+    return {open:render,openPurse,render,snapshot,restore,close:invalidate,invalidate};
   }
   root.EarthMarketPanel=Object.freeze({mount});
 })(typeof window==='undefined'?globalThis:window);

@@ -52,7 +52,7 @@ function fixture(options={}){
   const {doc,host,stage}=sceneDocument();
   for(const id of options.omit||[])doc.getElementById(id)?.remove();
   const w=vm.createContext({document:doc,structuredClone,setTimeout(){return 1;},clearTimeout(){},...(options.now?{Date:class extends Date{static now(){return options.now();}}}:{})});w.window=w;
-  for(const file of ['shifts','construction','city','personas','careers','fisheries','market','provisions','local-projects','civic-initiatives','autonomy','social-introductions','dialogue','agency','simulation','street-hud']){
+  for(const file of ['shifts','construction','city','personas','careers','fisheries','market','purses','provisions','local-projects','civic-initiatives','autonomy','social-introductions','dialogue','agency','simulation','community-effects','street-hud']){
     const filename=path.join(game,file+'.js');if(fs.existsSync(filename))vm.runInContext(fs.readFileSync(filename,'utf8'),w,{filename});
   }
   const disk=new Map(),storage=options.storage||{getItem:key=>disk.get(key)??null,setItem:(key,value)=>disk.set(key,value)};
@@ -156,6 +156,33 @@ test('town needs and the controlled character’s own aim are reachable separate
   ui.render(true);assert.match(id('scene-goal-detail').content(),new RegExp('Received food from '+neighbor.name));
   assert.match(id('scene-goal-detail').content(),new RegExp('Helped '+neighbor.name));cmd('contributed-to').fire('click');assert.equal(id('scene-goal-person').value,neighbor.id);
   id('scene-open-goals').fire('click');assert.equal(id('scene-goal-person').value,'');assert(cmd('supply-town'));
+  ui.invalidate();sim.destroy();
+});
+test('recent effects open only for recorded outcomes, link the people involved, and keep outside observers separate from the worker’s own purse',async()=>{
+  const g=fixture(),{ui,sim,street,cmd,id}=g,site=sim.active(),neighbor=site.residents[0];
+  let purseVisits=0;
+  ui.registerTool('stores',{render(){},openPurse(){purseVisits++;}});
+  ui.selectPurpose('steward');
+  assert(!id('scene-recent-effects'));assert.match(id('scene-goal-detail').content(),/Personal funds · 0/);
+  cmd('own-purse').fire('click');assert.equal(ui.active(),'stores');assert.equal(purseVisits,1);
+  const desk=()=>({...street.getState(),target:'market',tx:9.2,ty:15});
+  const start=sim.purseView('steward').options.find(o=>o.action==='start');
+  assert(start.available,start.reason);
+  const accepted=await sim.perform('purseAction',start.request,desk);assert(accepted.ok,accepted.message);
+  g.w.navigator={locks:{request:(_key,run)=>run()}};assert.match(sim.liveWeekHold(),/stock check/);
+  const app=fs.readFileSync(path.join(game,'app.js'),'utf8'),reviewSource=app.slice(app.indexOf('  function liveReview()'),app.indexOf('  function refreshLiveReview()'));
+  const review=vm.runInNewContext(reviewSource+'\nliveReview',{sim,window:g.w,getStreet:()=>street,streetHud:ui,
+    localMarket:{openPurse(){purseVisits++;}},clockState:()=>({hold:sim.liveWeekHold()})});
+  const held=review();assert.match(held.label,/stock check/);await held.run();assert.equal(purseVisits,2);
+  ui.selectPurpose('steward');
+  assert(id('scene-goal-detail').content().includes(sim.purseView().entries[0].text));
+  ui.selectPurpose(neighbor.id);assert(!cmd('own-purse'));assert(!id('scene-goal-detail').content().includes(accepted.message));
+  neighbor.lastMissed={week:sim.state.week,revised:false};
+  ui.selectPurpose('');const history=id('scene-recent-effects');assert(history);assert(!history.open);
+  assert(!cmd('effect-person-'+neighbor.id));history.open=true;history.fire('toggle');
+  assert.match(history.content(),/promised delivery was missed/);cmd('effect-person-'+neighbor.id).fire('click');
+  assert.equal(id('scene-goal-person').value,neighbor.id);
+  assert(id('scene-recent-effects'));ui.selectPurpose('walker-0');assert(!id('scene-recent-effects'));
   ui.invalidate();sim.destroy();
 });
 test('switching characters during a shared day quotes the outcome inside the scene and an abandoned handoff cannot finish it',async()=>{

@@ -7,7 +7,9 @@
   const LEGACY='common-earth.world.v1',FIRST='original';
   const REGISTRY='common-earth.slots.v1.',DATA='common-earth.playthrough.v1.';
   const LAST='common-earth.last-world.v1',TAB='common-earth.tab-world.v1';
-  const FORMAT='common-earth-world',MAX_BYTES=4000000;
+  const FORMAT='common-earth-world',MAX_FILE_BYTES=16000000,MAX_VALUES=800000;
+  const SUMMARY_CACHE_BYTES=4000000;
+  const sizeMessage='Choose a Common Earth JSON file of 16 MB or less.';
   const validId=id=>id===FIRST || typeof id==='string' && /^[a-z0-9][a-z0-9-]{5,70}$/.test(id);
   const dataKey=id=>id===FIRST?LEGACY:DATA+id;
   const fail=message=>({ok:false,message});
@@ -53,25 +55,29 @@
       names:sites.slice(0,4).map(s=>cleanName(s?.name)).filter(Boolean)};
   }
   function safeShape(obj) {
-    // Apply modest depth and complexity bounds before any domain object is spread
-    // or normalised. Only inert JSON values pass into the simulation's reader.
-    const stack=[[obj,0]];let count=0;
-    while(stack.length){
-      const [v,depth]=stack.pop();
-      if(++count>200000||depth>40)return false;
-      if(v==null || typeof v!=='object')continue;
-      if(Array.isArray(v) && count+stack.length+v.length>200000)return false;
-      const keys=Object.keys(v);
-      if(count+stack.length+keys.length>200000)return false;
-      for(const k of keys){
-        if(k==='__proto__'||k==='prototype'||k==='constructor')return false;
-        stack.push([v[k],depth+1]);
+    // Keep only the current branch on the call stack, including in a large
+    // transport file. No domain object is spread until the whole tree passes.
+    let count=0;
+    function visit(value,depth){
+      if(++count>MAX_VALUES||depth>40)return false;
+      if(value===null||typeof value!=='object')return true;
+      if(Array.isArray(value)){
+        if(value.length>MAX_VALUES-count)return false;
+        for(const item of value)if(!visit(item,depth+1))return false;
+      }else{
+        for(const key of Object.keys(value)){
+          if(key==='__proto__'||key==='prototype'||key==='constructor'||!visit(value[key],depth+1))return false;
+        }
       }
+      return true;
     }
-    return true;
+    return visit(obj,0);
   }
   function checkFile(text) {
-    if(typeof text!=='string' || text.length>MAX_BYTES || bytes(text)>MAX_BYTES)return fail('Choose a Common Earth JSON file of 4 MB or less.');
+    // A UTF-16 code unit takes at most three UTF-8 bytes. Small inputs need
+    // no second, encoded copy to establish that they fit.
+    if(typeof text!=='string' || text.length>MAX_FILE_BYTES ||
+      (text.length>MAX_FILE_BYTES/3 && bytes(text)>MAX_FILE_BYTES))return fail(sizeMessage);
     let content;
     try{content=JSON.parse(text.replace(/^\uFEFF/,''));}catch(error){return fail('This file contains incomplete or invalid JSON.');}
     if(!content || typeof content!=='object' || Array.isArray(content) || !safeShape(content))return fail('This file has an unsupported structure.');
@@ -148,7 +154,7 @@
       return Array.from(slots.values()).sort((a,b)=>a.created-b.created||a.id.localeCompare(b.id));
     }
     function list() {
-      const nextCache=new Map(),budget={remaining:MAX_BYTES};
+      const nextCache=new Map(),budget={remaining:SUMMARY_CACHE_BYTES};
       const worlds=entries().map(meta=>{
         const s=backing(meta.id),selected=meta.id===id;
         const info=selected?summaryOf(engine.state):storedSummary(s,meta.id,nextCache,budget);
@@ -244,8 +250,8 @@
     function rollback(source,key,value) {
       try{if(source.getItem(key)===value)source.removeItem(key);}catch(error){/* An unregistered new payload cannot replace another world. */}
     }
-    function register(name,payload) {
-      const readyStore=access.write?durable:temp;
+    function register(name,payload,importFile=false) {
+      let readyStore=access.write?durable:temp;
       let slot;
       for(let i=0;i<12;i++){
         const candidate=identity();
@@ -254,10 +260,20 @@
       if(!slot)return fail('Could not allocate a separate save. Your current world is still open.');
       const label=uniqueName(name),meta=JSON.stringify({version:1,id:slot,name:label,created:Date.now()});
       const key=dataKey(slot),labelKey=REGISTRY+slot;
-      if(!put(readyStore,key,payload)){rollback(readyStore,key,payload);return fail('There is too little writable browser storage for this world. Your current world is still open.');}
-      if(!put(readyStore,labelKey,meta)){rollback(readyStore,labelKey,meta);rollback(readyStore,key,payload);return fail('The browser could not register the new world. Your current world is still open.');}
+      function writeRegistration(source){
+        if(!put(source,key,payload)){rollback(source,key,payload);return 'There is too little writable browser storage for this world. Your current world is still open.';}
+        if(!put(source,labelKey,meta)){rollback(source,labelKey,meta);rollback(source,key,payload);return 'The browser could not register the new world. Your current world is still open.';}
+        return '';
+      }
+      let issue=writeRegistration(readyStore);
+      if(issue && importFile && readyStore!==temp){
+        readyStore=temp;
+        issue=writeRegistration(readyStore);
+      }
+      if(issue)return fail(issue);
       const activated=activate(slot,true);
       if(!activated.ok){rollback(readyStore,labelKey,meta);rollback(readyStore,key,payload);}
+      else if(importFile && readyStore===temp)return ok(activated.message+' This imported world is in this tab only. Keep your file and export changes before closing the tab.',{id:slot,temporary:true});
       return activated;
     }
     function create(name){return serial(()=>register(name||'New world',createBlank()));}
@@ -302,7 +318,7 @@
       const request=review;
       return serial(()=>{
         if(!review || request!==review || token!==review.token)return fail('Review the selected file again before importing.');
-        const r=register(name||'Imported world',review.snapshot);
+        const r=register(name||'Imported world',review.snapshot,true);
         if(r.ok)review=null;
         return r;
       });
@@ -376,7 +392,7 @@
     transport.append(exportButton,pickFile,file);
     file.addEventListener('change',async()=>{
       clearReview();const ticket=revision,source=file.files?.[0];if(!source)return;
-      if(source.size>MAX_BYTES){setNote('Choose a Common Earth JSON file of 4 MB or less.',true);return;}
+      if(source.size>MAX_FILE_BYTES){setNote(sizeMessage,true);return;}
       try{
         const raw=await source.text();if(ticket!==revision)return;
         const prepared=book.prepareImport(raw);
@@ -438,5 +454,5 @@
     cleanup.refresh=refresh;
     return cleanup;
   }
-  window.EarthSaves=Object.freeze({open,maxBytes:MAX_BYTES});
+  window.EarthSaves=Object.freeze({open,maxBytes:MAX_FILE_BYTES});
 })();

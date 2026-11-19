@@ -106,6 +106,18 @@ test('elapsed jobs survive a save, settle once, and can be released without losi
   second.destroy();other.destroy();
 });
 
+test('an overfull store retains a reserved cart refund and a finished load until there is room',()=>{
+  const ctx=setup(),{sim}=ctx,s=sim.active(),max=Number.MAX_SAFE_INTEGER;
+  ok(start(ctx,sim,'cart'));s.materials=max-1;
+  const refund=request(ctx,sim,'release'),blocked=sim.pursue(refund);
+  assert.equal(blocked.ok,false);assert.match(blocked.message,/finish the handcart/);
+  assert.equal(s.materials,max-1);assert.equal(s.pursuits.ticket.kind,'cart');
+  s.materials=max-2;ok(sim.pursue(refund));assert.equal(s.materials,max);
+  ok(start(ctx,sim,'food'));ctx.tick(15_000);s.food=max-1;
+  assert.equal(collect(ctx,sim).ok,false);assert.equal(s.food,max-1);assert.equal(s.pursuits.ticket.kind,'food');
+  s.food=max-2;ok(collect(ctx,sim));assert.equal(s.food,max);assert.equal(s.pursuits.ticket,null);sim.destroy();
+});
+
 test('market collection and supplier handovers sample position under the save lock and keep a rejected job intact',async()=>{
   const ctx=setup(),{sim,world}=ctx,s=sim.active(),initial=s.funds;
   ok(start(ctx,sim,'funds'));

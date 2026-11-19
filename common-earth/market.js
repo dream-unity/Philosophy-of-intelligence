@@ -5,6 +5,10 @@
   'use strict';
   const goods=['food','materials'],accounts=['food','materials','funds'];
   const names={food:'Food',materials:'Materials',funds:'Funds'};
+  function quantity(good,n){
+    const unit=n===1?({funds:'fund',materials:'material'}[good]||good):good;
+    return n+' '+unit;
+  }
   const limit=Number.MAX_SAFE_INTEGER;
   const lockCapacity=6;
   const own=(o,k)=>o!=null && Object.hasOwn(o,k);
@@ -50,6 +54,47 @@
     const custody=site.fleet?.custody;
     return custody?.kind==='work' && !custody.delivered && custody.stock===good?1:0;
   }
+  function wagesHeld(site){
+    return root.EarthPurses?.escrow?.(site)??2*Object.keys(site.purses?.tickets||{}).length;
+  }
+  function privateTill(site){return site?.exchange?.till??8;}
+  function tillRoom(site,book){
+    return limit-book.till-inTruck(site,'funds')-wagesHeld(site);
+  }
+  function giftQuote(site,good,book,terms){
+    const ready=book.shelf[good],price=fair(good,ready,terms.target[good])+1;
+    const reason=ready===0?'The stall has sold its last unit. Fund the next supply round or collect your own.':
+      tillRoom(site,book)<price?'The stall till is full. Sell a unit before buying again.':
+      site[good]>=limit?'Make space in the district store.':'';
+    return {price,reason,available:!reason};
+  }
+  function personalQuote(world,site,good){
+    if(!world||!site||!goods.includes(good))return {price:0,reason:'Choose food or materials from the stall.',available:false};
+    return giftQuote(site,good,site.exchange||fresh(world.week),policy(site));
+  }
+  function personal(world,site,action,good,amount,id=site&&actorId(site),source='personal'){
+    if(!world||!site||!int(world.week,1)||!int(amount,1))return fail('Review the personal offer at the exchange.');
+    const book=site.exchange||fresh(world.week);
+    if(book.serial>=limit&&action!=='returnWage')return fail('The stall cannot record another receipt.');
+    const name=actorName(site,id);
+    let message;
+    if(action==='buyGift'){
+      const offer=personalQuote(world,site,good);
+      if(!offer.available||offer.price!==amount)return fail(offer.reason||'The shelf price has changed.');
+      book.shelf[good]--;site[good]++;book.till+=amount;
+      message=name+' supplied the district with '+quantity(good,1)+' from the stall using '+quantity('funds',amount)+' from '+
+        (source==='household'?'the household food fund.':'their personal purse.');
+    }else if(action==='reserveWage'){
+      if(amount!==2||book.till<amount)return fail('The stall needs two free funds to pay for this shift.');
+      book.till-=amount;message='The exchange set aside '+amount+' funds for '+name+'’s work.';
+    }else if(action==='returnWage'){
+      if(amount!==2||!site.purses?.tickets?.[id]||wagesHeld(site)<amount||tillRoom(site,book)<0)
+        return fail('Review the refundable shift held for this person.');
+      book.till+=amount;message=name+' returned an unfinished shift. The exchange recovered '+amount+' funds.';
+    }else return fail('Choose a personal transaction offered by the exchange.');
+    site.exchange=book;book.serial=Math.min(limit,book.serial+1);log(book,world.week,message);
+    return {ok:true,message};
+  }
   function canLoadFreight(site,good){
     if(!site||!accounts.includes(good)||site.fleet?.custody?.stock!=null)return false;
     const book=site.exchange||fresh(site.founded||1);
@@ -70,12 +115,12 @@
     let message;
     if(direction==='deliver'){
       site[good]++;delete custody.stock;
-      message='The co-op truck delivered 1 '+good+' from the stall into the community store.';
+      message='The co-op truck delivered '+quantity(good,1)+' from the stall into the community store.';
     }else{
       const change=direction==='load'?-1:1;
       if(good==='funds')book.till+=change;else book.shelf[good]+=change;
-      if(direction==='load'){custody.stock=good;message='Dispatch loaded 1 '+good+' from the stall into the co-op truck.';}
-      else{delete custody.stock;message='Dispatch returned 1 undelivered '+good+' to the stall.';}
+      if(direction==='load'){custody.stock=good;message='Dispatch loaded '+quantity(good,1)+' from the stall into the co-op truck.';}
+      else{delete custody.stock;message='Dispatch returned '+quantity(good,1)+' of undelivered cargo to the stall.';}
     }
     book.serial=Math.min(limit,book.serial+1);log(book,week,message);
     return {ok:true,message};
@@ -83,18 +128,18 @@
   function offers(world,site,book,terms){
     const options=[];
     for(const good of goods){
-      const ready=book.shelf[good],target=terms.target[good],ask=fair(good,ready,target)+1,bid=fair(good,ready+1,target);
-      options.push(offer('buy',good,'Buy 1 · '+ask+' funds',ready===0?'The stall has sold its last unit. Fund the next supply round or collect your own.':
-        site.funds<ask?'The treasury needs '+(ask-site.funds)+' more funds.':book.till>limit-ask-inTruck(site,'funds')?'The stall till is full. Sell a unit before buying again.':site[good]>=limit?'Make space in the district store.':'',ask));
-      options.push(offer('sell',good,'Sell 1 · '+bid+' funds',site[good]<1?'Bring one '+good+' from your district store.':
+      const ready=book.shelf[good],target=terms.target[good],quoted=giftQuote(site,good,book,terms),ask=quoted.price,bid=fair(good,ready+1,target);
+      options.push(offer('buy',good,'Buy 1 · '+quantity('funds',ask),quoted.reason||
+        (site.funds<ask?'The treasury is short by '+quantity('funds',ask-site.funds)+'.':''),ask));
+      options.push(offer('sell',good,'Sell 1 · '+quantity('funds',bid),site[good]<1?'Bring '+quantity(good,1)+' from your district store.':
         ready+inTruck(site,good)>=terms.capacity?'The stall shelf is full. Its next customer round can make room.':
         book.till<bid?'The stall needs customer funds or a purchase before it can pay.':
         site.funds>limit-bid?'Make space in the district treasury.':'',bid));
     }
     for(const good of ['funds','materials']){
-      options.push(offer('hold',good,'Set aside 1 '+good,site[good]<1?'No free '+good+' to set aside.':
+      options.push(offer('hold',good,'Set aside '+quantity(good,1),site[good]<1?'No free '+good+' to set aside.':
         book.locked.funds+book.locked.materials>=lockCapacity?'The six spaces in the project chest are occupied.':''));
-      options.push(offer('release',good,'Release 1 '+good,book.locked[good]<1?'No '+good+' set aside here.':
+      options.push(offer('release',good,'Release '+quantity(good,1),book.locked[good]<1?'No '+good+' set aside here.':
         site[good]>=limit?'The district store is full.':''));
     }
     if(book.batch){
@@ -104,9 +149,9 @@
         !room?'Spend or sell enough stock to make room for the refund.':'',0,'Recover the entire advance before the next weekly close.'));
     }else{
       for(const good of goods){
-        const p=plan(good,terms),missing=Object.entries(p.cost).filter(([k,n])=>n>site[k]).map(([k,n])=>(n-site[k])+' '+k);
+        const p=plan(good,terms),missing=Object.entries(p.cost).filter(([k,n])=>n>site[k]).map(([k,n])=>quantity(k,n-site[k]));
         options.push(offer('fund',good,p.title,missing.length?'Needs '+missing.join(' and ')+'.':'',p.amount,
-          'Advance '+Object.entries(p.cost).map(([k,n])=>n+' '+k).join(' and ')+'. Receive '+p.amount+' '+good+' in week '+(world.week+1)+'. '+p.source));
+          'Advance '+Object.entries(p.cost).map(([k,n])=>quantity(k,n)).join(' and ')+'. Receive '+quantity(good,p.amount)+' in week '+(world.week+1)+'. '+p.source));
       }
     }
     return options;
@@ -155,7 +200,7 @@
     return {siteId:site.id,generation:site.foundingRevision||0,actorId:actorId(site),week:world.week,serial:book.serial,
       rows:accounts.map(good=>({good,name:names[good],stock:site[good]+total(lots.held,good),held:total(lots.held,good),free:site[good],
         incoming:total(lots.incoming,good),flow:flow[good]??null})),...lots,
-      till:book.till,shelf:{...book.shelf},capacity:terms.capacity,target:{...terms.target},locked:{...book.locked},lockCapacity,
+      till:book.till,wagesHeld:wagesHeld(site),shelf:{...book.shelf},capacity:terms.capacity,target:{...terms.target},locked:{...book.locked},lockCapacity,
       batch:book.batch?{...book.batch,cost:{...book.batch.cost}}:null,options:offers(world,site,book,terms),
       history:book.history.map(entry=>({...entry})),loaded:accounts.find(good=>inTruck(site,good))||null,nextRound:round(site,world.week+1,terms),populationMeals:Math.ceil(site.population/5)};
   }
@@ -205,20 +250,20 @@
     switch(r.action){
       case 'buy':
         site.funds-=cost;site[good]++;book.shelf[good]--;book.till+=cost;
-        text=name+' bought 1 '+good+' from the stall for '+cost+' funds.';break;
+        text=name+' bought '+quantity(good,1)+' from the stall for '+quantity('funds',cost)+'.';break;
       case 'sell':
         site[good]--;site.funds+=cost;book.shelf[good]++;book.till-=cost;
-        text=name+' sold 1 '+good+' to the stall for '+cost+' funds.';break;
+        text=name+' sold '+quantity(good,1)+' to the stall for '+quantity('funds',cost)+'.';break;
       case 'hold':case 'release':{
         const units=r.action==='hold'?1:-1;
         site[good]-=units;book.locked[good]+=units;
-        text=name+(units===1?' set aside 1 '+good+' for a future project.':' released 1 '+good+' from the project chest.');break;
+        text=name+(units===1?' set aside '+quantity(good,1)+' for a future project.':' released '+quantity(good,1)+' from the project chest.');break;
       }
       case 'fund':{
         const p=plan(good,terms);
         for(const [k,n] of Object.entries(p.cost))site[k]-=n;
         book.batch={good,amount:p.amount,cost:p.cost,due:world.week+1};
-        text=name+' advanced '+Object.entries(p.cost).map(([k,n])=>n+' '+k).join(' and ')+' for '+p.amount+' '+good+' due in week '+book.batch.due+'.';break;
+        text=name+' advanced '+Object.entries(p.cost).map(([k,n])=>quantity(k,n)).join(' and ')+' for '+quantity(good,p.amount)+' due in week '+book.batch.due+'.';break;
       }
       case 'cancel':
         for(const [k,n] of Object.entries(book.batch.cost))site[k]+=n;
@@ -242,20 +287,21 @@
     // contractors with their own money; resident household meals use district food.
     const {customerGood,demand,supplyGood,supply,wholesale}=round(site,week,terms);
     const sold=Math.min(demand,b.shelf[customerGood]),unit=fair(customerGood,b.shelf[customerGood],terms.target[customerGood])+1;
-    const paid=Math.min(sold,Math.floor((limit-b.till-inTruck(site,'funds'))/unit));
+    const paid=Math.max(0,Math.min(sold,Math.floor(tillRoom(site,b)/unit)));
     b.till+=paid*unit;b.shelf[customerGood]-=paid;
     // Alternate suppliers. The contractor parks unsold produce or reclaimed
     // timber at their own depot unless the stall actually pays for the load.
     const restock=Math.max(0,Math.min(supply,terms.target[supplyGood]+1-b.shelf[supplyGood],
       terms.capacity-b.shelf[supplyGood]-inTruck(site,supplyGood),Math.floor(b.till/wholesale)));
     b.till-=restock*wholesale;b.shelf[supplyGood]+=restock;
-    if(paid||restock)log(b,week,'Visitor purchases · '+paid+' '+customerGood+' for '+paid*unit+' funds. Supplier delivery · '+restock+' '+supplyGood+' for '+restock*wholesale+' funds.');
+    if(paid||restock)log(b,week,'Visitor purchases · '+quantity(customerGood,paid)+' for '+quantity('funds',paid*unit)+'. Supplier delivery · '+
+      quantity(supplyGood,restock)+' for '+quantity('funds',restock*wholesale)+'.');
     return events;
   }
   function valid(site,week){
-    const b=site.exchange;if(b===undefined)return !accounts.some(good=>inTruck(site,good));
+    const b=site.exchange;if(b===undefined)return !wagesHeld(site)&&!accounts.some(good=>inTruck(site,good));
     if(!dict(b)||!int(b.serial,1)||!int(b.lastWeek,1,week)||!int(b.till)||!dict(b.shelf)||!dict(b.locked)||
-      !goods.every(k=>int(b.shelf[k],0,14-inTruck(site,k)))||b.till>limit-inTruck(site,'funds')||!['funds','materials'].every(k=>int(b.locked[k],0,lockCapacity))||
+      !goods.every(k=>int(b.shelf[k],0,14-inTruck(site,k)))||tillRoom(site,b)<0||!['funds','materials'].every(k=>int(b.locked[k],0,lockCapacity))||
       b.locked.materials+b.locked.funds>lockCapacity||!Array.isArray(b.history)||b.history.length>8)return false;
     if(!b.history.every(h=>dict(h)&&int(h.week,1,week)&&typeof h.text==='string'&&h.text.length>0&&h.text.length<=512))return false;
     if(b.batch!==undefined){
@@ -267,5 +313,5 @@
     }
     return true;
   }
-  root.EarthMarket=Object.freeze({view,flowDetail,run,tick,valid,canLoadFreight,freight});
+  root.EarthMarket=Object.freeze({view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,personalQuote,personal,quantity});
 })(typeof window==='undefined'?globalThis:window);

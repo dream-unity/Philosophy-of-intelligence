@@ -90,7 +90,9 @@
       return {ok:true,message:helper.name+(task.item?' contributed an extra unit to the load.':' prepared the parts.')+' Bring it to the market.'};
     }
     if(request.action==='release'){
-      if(task.price)site.materials=Math.min(Number.MAX_SAFE_INTEGER,site.materials+task.price);
+      if(task.price&&site.materials>Number.MAX_SAFE_INTEGER-task.price)
+        return nope('Make room for the '+task.price+' reserved materials, or finish the handcart.');
+      if(task.price)site.materials+=task.price;
       work.ticket=null;
       return {ok:true,message:'Job released.'+(task.price?' The reserved materials returned to the store.':'')};
     }
@@ -102,11 +104,13 @@
     if(secondsLeft(ticket,now)>0)return nope('This work is still in progress.');
     let message;
     if(task.item){
-      const before=site[task.item];
-      site[task.item]=Math.min(Number.MAX_SAFE_INTEGER,before+reward(site,ticket.kind)+(ticket.helper?1:0));
+      const units=reward(site,ticket.kind)+(ticket.helper?1:0);
+      if(site[task.item]>Number.MAX_SAFE_INTEGER-units)
+        return nope('Use or sell some '+task.item+' to make room for the full load of '+units+'. It will wait at the exchange.');
+      site[task.item]+=units;
       const contributor=site.residents.find(p=>p.id===ticket.helper);
       const handoff=contributor?' with '+contributor.name+'’s extra load':ticket.maker===actor?'':' after '+ticket.maker+' prepared the load';
-      message=actor+' brought in '+(site[task.item]-before)+' '+task.item+' for '+site.name+handoff+'.';
+      message=actor+' brought in '+units+' '+task.item+' for '+site.name+handoff+'.';
     }else if(ticket.kind==='cart'){
       work.cart={builder:ticket.maker,fixture:'flat'};
       message=ticket.maker+' built the community handcart. Every resident can now bring home one more unit per personal job.';

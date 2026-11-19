@@ -64,7 +64,7 @@
   function jobId(id,project){return id+'/'+project.serial;}
   function evidence(id,p){
     return {ownerId:id,serial:p.serial,kind:p.kind,variant:p.variant,axis:p.axis,week:p.finished,
-      partnerId:p.partnerId,beneficiaryId:p.beneficiaryId,result:p.result,...(p.delivered?{delivered:p.delivered}:{})};
+      partnerId:p.partnerId,beneficiaryId:p.beneficiaryId,result:p.result,...(p.input?{input:{...p.input}}:{}),...(p.delivered?{delivered:p.delivered}:{})};
   }
   function evidenceRows(store){
     if(store?.completed)return store.completed;
@@ -76,7 +76,8 @@
       const title=e.kind==='hobby'?hobbyTopics[e.axis][0]:e.kind==='teach'?'Teach '+e.axis:plans[e.kind].titles[e.variant];
       return {id:jobId(e.ownerId,e),kind:e.kind,axis:e.axis,week:e.week,title,result:e.result,ownerId:e.ownerId,
         ownerName:person(site,e.ownerId)?.name||null,partnerId:e.partnerId,partnerName:e.partnerId?person(site,e.partnerId)?.name||null:null,
-        beneficiaryId:e.beneficiaryId,beneficiaryName:e.beneficiaryId?person(site,e.beneficiaryId)?.name||null:null};
+        beneficiaryId:e.beneficiaryId,beneficiaryName:e.beneficiaryId?person(site,e.beneficiaryId)?.name||null:null,
+        input:e.input?{...e.input,ownerName:person(site,e.input.ownerId)?.name||null}:null};
     });
   }
   function latestHarvest(site,week){
@@ -92,6 +93,8 @@
     if(!owner||!helper||from===id)return {ok:false,reason:'Meet the person whose project you want to help.'};
     const current=site.autonomy?.projects,ephemeral=!ownerOf(site,id),p=ownerOf(site,id)||field(site,world,owner,null);
     if(p.finished)return {ok:false,reason:'This project is complete.'};
+    if(site.careers?.[id]?.specialistRelief?.week===world.week+1||site.careers?.[from]?.specialistRelief?.week===world.week+1)
+      return {ok:false,reason:'Next week already includes an agreed specialist relief round. We can plan another shared session after it.'};
     const existing=Object.values(current?.owners||{}).find(goal=>goal.volunteer?.from===from&&goal.volunteer.week===world.week);
     if(existing||p.volunteer?.week===world.week)return {ok:false,reason:'A shared session has already been agreed for next week.'};
     const block=resourceBlock(site,p,current||{notes:0,assists:0});
@@ -274,6 +277,7 @@
       lesson=root.EarthCareers.projectLesson(world,site,self.id,partner.id,p.axis,true,store.notes>0?3:2);
       if(!lesson.ok){p.blocked=lesson.reason;return null;}
       if(store.notes>0)noteMaker=useSupply(store,'notes');
+      if(noteMaker)p.input={kind:'field note',ownerId:noteMaker};
     }
     const noteId=jobId(self.id,p),stage=p.progress===0?'plan':p.progress+1===plan.total?'finish':'work';
     const action=p.kind==='hobby'?hobbyTopics[p.axis][p.progress+1]:plan.steps[p.progress],prior=p.progress;
@@ -292,6 +296,7 @@
       if(p.kind==='food'){
         const extra=store.assists>0?'carrier':store.notes>0?'note':null;
         const maker=extra&&person(site,useSupply(store,extra==='carrier'?'assists':'notes'));
+        if(maker)p.input={kind:extra==='carrier'?'carrier':'field note',ownerId:maker.id};
         const beneficiary=all.find(q=>q.id===p.beneficiaryId&&q.id!==selected(site,world)&&q.row.energy<3);
         if(beneficiary){
           beneficiary.row.energy=Math.min(8,beneficiary.row.energy+2);
@@ -334,10 +339,12 @@
       const shelf=store[kind+'From'];
       if(shelf!=null&&(!Array.isArray(shelf)||shelf.length!==store[kind]||shelf.some(id=>id!=null&&!person(site,id))))return false;
     }
+    const validInput=p=>p.input==null||Boolean(record(p.input)&&person(site,p.input.ownerId)&&
+      (p.kind==='food'&&['field note','carrier'].includes(p.input.kind)||p.kind==='teach'&&p.input.kind==='field note'));
     if(store.completed!=null){
       const ledger=store.completed,known=new Set();
       if(!Array.isArray(ledger)||ledger.length>16||!ledger.every((e,i)=>{
-        if(!record(e)||!person(site,e.ownerId)||!int(e.serial,1,Number.MAX_SAFE_INTEGER)||!own(plans,e.kind)||!int(e.variant,0,plans[e.kind].titles.length-1)||
+        if(!record(e)||!validInput(e)||!person(site,e.ownerId)||!int(e.serial,1,Number.MAX_SAFE_INTEGER)||!own(plans,e.kind)||!int(e.variant,0,plans[e.kind].titles.length-1)||
           !axes.includes(e.axis)||!int(e.week,1,week)||i&&e.week>ledger[i-1].week||e.delivered!=null&&(e.kind!=='food'||!int(e.delivered,1,3))||typeof e.result!=='string'||e.result.length>450||
           [e.partnerId,e.beneficiaryId].some(id=>id!=null&&(id===e.ownerId||!person(site,id))))return false;
         const key=jobId(e.ownerId,e);if(known.has(key))return false;known.add(key);return true;
@@ -345,7 +352,7 @@
     }
     const bookings=new Set();
     return Object.entries(store.owners).every(([id,p])=>{
-      if(!person(site,id)||!record(p)||!own(plans,p.kind)||!int(p.variant,0,plans[p.kind].titles.length-1)||!int(p.serial,1,Number.MAX_SAFE_INTEGER)||
+      if(!person(site,id)||!record(p)||!validInput(p)||p.input!=null&&!p.finished||!own(plans,p.kind)||!int(p.variant,0,plans[p.kind].titles.length-1)||!int(p.serial,1,Number.MAX_SAFE_INTEGER)||
         !int(p.started,1,week)||!int(p.progress,0,plans[p.kind].total)||!axes.includes(p.axis))return false;
       if([p.partnerId,p.beneficiaryId].some(q=>q!=null&&(q===id||!person(site,q))))return false;
       if(p.volunteer!=null){

@@ -104,9 +104,11 @@
     return Math.ceil(Math.max(0,length-.00001)/SPEED);
   }
 
-  function commitment(site,world,person) {
-    if(site.agency?.actor===person.id)return ['Under your control','Working and travelling with your direction.'];
+  function commitment(site,world,person,includePlayer=true) {
+    if(includePlayer&&site.agency?.actor===person.id)return ['Under your control','Working and travelling with your direction.'];
     if(site.shift?.residentId===person.id)return ['Resident companion','Spending the workday with you.'];
+    const relief=root.EarthCareers?.specialistShift?.(site,person.id,world?.week);
+    if(relief)return [relief.label+' · relief','Covering the booked round at '+relief.employer+'.','specialist',relief];
     const term=world?.legacy?.term;
     if(term?.siteId===site.id&&term.residentId===person.id)return ['Council steward','Serving an elected council term.','council'];
     const joint=site.neighbourWork?.active;
@@ -121,6 +123,11 @@
       if(strategy.active===school)return ['School lead','Staffing the district’s operating school.','school'];
     }
     return null;
+  }
+  function assignedDuty(site,world,id){
+    const person=site.residents?.find(p=>p.id===id);
+    if(!person)return null;
+    return commitment(site,world,person,false)?.[1]||null;
   }
   function localPriority(site,slot){
     if(slot===0&&site.food<Math.max(4,Math.ceil(site.population/5)))return 'Staying with the food crew while the pantry is low.';
@@ -180,7 +187,8 @@
     }
     return null;
   }
-  function dutyWorkplace(site,person,duty){
+  function dutyWorkplace(site,person,duty,relief){
+    if(duty==='specialist')return chosenPlace(site,person,relief.venue);
     return locateFacility(site,person,duty==='council'?['hall']:facilities[person.slot])||doorstep(person);
   }
   function workplace(site,person,occupation,preference) {
@@ -239,7 +247,7 @@
       const career=root.EarthCareers?.work(site,person.id),regular=regularWork(site,person,state,career);
       const occupation=regular.occupation,physicalDuty=duty?.[2]||null;
       const need=pref==='auto'?localPriority(site,roles.indexOf(occupation)):'';
-      const place=physicalDuty?dutyWorkplace(site,person,physicalDuty):regular.place;
+      const place=physicalDuty?dutyWorkplace(site,person,physicalDuty,duty[3]):regular.place;
       const usualRole=career?.label||person.role||customaryTitles[person.slot];
       const changedProfession=fixed&&(career||pref!==roles[person.slot]||pref==='exchange');
       let activity='usual',role=changedProfession?professions[occupation]:usualRole;
@@ -251,7 +259,7 @@
         if(physicalDuty==='council'&&place.type==='resident')reason='Chairing the council from their doorstep while no assembly hall is open.';
       }
       else if(state.rest){activity='resting';role='On a break';reason='Resting after a building shift ('+state.rest+' s).';}
-      return {person,state,occupation,career,usualRole,physicalDuty,heldJob,workplace:place,activity,role,reason,need,candidate:!heldJob&&!duty&&!state.rest&&(pref==='auto'||pref==='build'),job:null,route:[]};
+      return {person,state,occupation,career,usualRole,physicalDuty,specialistId:duty?.[3]?.id,heldJob,workplace:place,activity,role,reason,need,candidate:!heldJob&&!duty&&!state.rest&&(pref==='auto'||pref==='build'),job:null,route:[]};
     });
     function assign(w,j,reason){
       const path=itinerary(w.person,w.state,j);
@@ -388,7 +396,7 @@
     const {workers,teams}=allocate(site,world);
     return {preferences,jobs:queues(site).map(j=>jobView(j,teams.get(j.id))),workers:workers.map(w=>({
       residentId:w.person.id,name:w.person.name,slot:w.person.slot,role:w.role,reason:w.reason,preference:w.state.preference,
-      occupation:w.occupation,usualRole:w.usualRole,workplace:w.workplace,physicalDuty:w.physicalDuty,relief:w.relief||null,
+      occupation:w.occupation,usualRole:w.usualRole,workplace:w.workplace,physicalDuty:w.physicalDuty,specialistId:w.specialistId||null,relief:w.relief||null,
       preferredJobId:w.state.preferredJobId,jobId:(w.job||w.restJob)?.id||null,area:(w.job||w.restJob)?.scope||null,activity:w.activity,
       initiative:w.outing||null,
       x:w.state.position.x,y:w.state.position.y,travelling:Boolean(w.physicalDuty&&w.route.length)||['travelling','returning','commuting'].includes(w.activity),
@@ -546,7 +554,7 @@
       }
     }
   }
-  function personalOrders(site){return site.residents.some(p=>root.EarthCareers?.work(site,p.id)||root.EarthAutonomy?.intent(site,p.id));}
+  function personalOrders(site){return site.residents.some(p=>root.EarthCareers?.work(site,p.id)||site.careers?.[p.id]?.specialistRelief||root.EarthAutonomy?.intent(site,p.id));}
   function pendingMovement(site,world){
     const members=site.workforce?.members;
     if(!members&&!personalOrders(site)&&!site.strategy?.active&&!site.strategy?.studying&&world?.legacy?.term?.siteId!==site.id)return false;
@@ -554,7 +562,7 @@
       const s=members&&Object.hasOwn(members,p.id)?members[p.id]:fresh(p);
       if(s.jobId||s.rest||s.fatigue||s.route.length)return true;
       const duty=commitment(site,world,p);
-      if(duty)return Boolean(duty[2]&&distance(s.position,dutyWorkplace(site,p,duty[2]))>.001);
+      if(duty)return Boolean(duty[2]&&distance(s.position,dutyWorkplace(site,p,duty[2],duty[3]))>.001);
       const career=root.EarthCareers?.work(site,p.id),regular=regularWork(site,p,s,career);
       if(!localPriority(site,roles.indexOf(regular.occupation))&&initiative(site,world,p,s))return true;
       return Boolean((members||career)&&distance(s.position,regular.place)>.001);
@@ -642,5 +650,5 @@
     }
     return {ok:true,changed,completed};
   }
-  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,releaseFromShift,weeklyAdjustment,needsTime,clockOrders});
+  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,assignedDuty,releaseFromShift,weeklyAdjustment,needsTime,clockOrders});
 })(typeof window==='undefined'?globalThis:window);

@@ -336,6 +336,7 @@
     if(root.EarthAutonomy && !root.EarthAutonomy.valid(site,world.week))return false;
     if(root.EarthProvisions && !root.EarthProvisions.valid(site,world.week))return false;
     if(root.EarthMarket && !root.EarthMarket.valid(site,world.week))return false;
+    if(root.EarthPurses && !root.EarthPurses.valid(site,world.week))return false;
     if(root.EarthFleet && !root.EarthFleet.valid(site,world.week))return false;
     if(root.EarthCivicInitiatives && !root.EarthCivicInitiatives.valid(site,world.week))return false;
     if(root.EarthStrategy?.valid && !root.EarthStrategy.valid(site.strategy))return false;
@@ -1453,6 +1454,7 @@
         // An accepted handover changes who is available to help this week.
         // Forecast and play run these decisions on their own world snapshots.
         for(const note of root.EarthCareers?.tick(turn,site)||[])event(note,site);
+        for(const note of root.EarthPurses?.tick(turn,site)||[])event(note,site);
         for(const note of root.EarthMarket?.tick(turn,site)||[])event(note,site);
         for(const note of root.EarthFleet?.tick(turn,site)||[])event(note,site);
         for(const note of advanceCivicWorks(turn,site))event(note,site);
@@ -1534,6 +1536,8 @@
       for(const s of turn.sites){
         const inTown=' in '+s.name+'.';
         if(s.shift)return 'Finish the accompanied shift'+inTown;
+        const played=s.id===turn.activeId&&(root.EarthAgency?.actorId(s)||'steward');
+        if(played&&s.purses?.tickets?.[played])return 'Finish or cancel your paid market stock check'+inTown;
         const promise=s.residents.find(p=>p.promise?.dueWeek<=turn.week);
         if(promise)return 'A promise to '+promise.name+' is due'+inTown;
         if(s.issue?.deadline<=turn.week&&!s.mandate&&!root.EarthLegacy?.governs(turn,s))return 'A council vote is due'+inTown;
@@ -1709,19 +1713,28 @@
       return story;
     }
     function advanceCivicWorks(turn,site){
-      const messages=[];
-      for(const agreement of site.civicInitiatives?.history||[]){
+      if(!site.construction?.length || !site.civicInitiatives?.history?.length)return [];
+      const messages=[],promised=new Set();
+      for(const [owner,project] of Object.entries(site.autonomy?.projects?.owners||{})){
+        if(project.volunteer?.week===turn.week-1){promised.add(owner);promised.add(project.volunteer.from);}
+      }
+      // A volunteer can give one discretionary shift. Alternate the oldest
+      // unserved contracts first when a small district has two open sites.
+      const agreements=[...site.civicInitiatives.history].sort((a,b)=>(a.works?.week||a.closedWeek)-(b.works?.week||b.closedWeek));
+      for(const agreement of agreements){
         if(agreement.phase!=='commissioned'||agreement.closedWeek>=turn.week)continue;
         const job=site.construction?.find(j=>j.id===agreement.jobId);
         if(!job||job.paused)continue;
         const volunteers=agreement.votes.filter(v=>{
-          if(v.stance!=='support'||site.id===turn.activeId&&v.personId===(site.agency?.actor||'steward'))return false;
+          if(v.stance!=='support'||promised.has(v.personId)||site.id===turn.activeId&&v.personId===(site.agency?.actor||'steward'))return false;
+          if(root.EarthCareers?.specialistShift?.(site,v.personId,turn.week))return false;
           if(site.shift?.residentId===v.personId||site.careers?.[v.personId]?.training||site.careers?.[v.personId]?.application)return false;
           const worker=site.workforce?.members?.[v.personId];
           return (!worker?.jobId||worker.jobId===job.id)&&(!worker?.preference||['auto','build'].includes(worker.preference))&&
             !site.residents.some(r=>r.id===v.personId&&r.promise);
-        });
+        }).slice(0,Math.ceil((job.total-job.work)/4));
         if(!volunteers.length)continue;
+        for(const v of volunteers)promised.add(v.personId);
         // These named volunteers work their calendar shifts between visits.
         // Only their own public contract earns the shift, following any work already visible on the ground.
         const work=Math.min(job.total-job.work,volunteers.length*4);
@@ -1967,6 +1980,7 @@
       }),
       useTruck:guarded((request,guard)=>transact(root.EarthFleet,request,guard)),
       exchange:guarded((request,guard)=>transact(root.EarthMarket,request,guard)),
+      purseAction:guarded((request,guard)=>transact(root.EarthPurses,request,guard)),
       setBuildPlan:guarded(setBuildPlan),markPlanLot:guarded(markPlanLot),
       changeActor:guarded(changeActor),converse:guarded(converse),lifeAction:guarded(lifeAction),studyTerm:guarded(studyTerm),
       pursue:guarded(pursue),provision:guarded(provision),planCity:guarded(planCity),beginGoal:guarded(beginGoal),workConstruction:guarded(workConstruction),
@@ -1995,7 +2009,7 @@
     }
     return {
       ...commands,get state(){return world;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
-      buildPlanView,active:current,liveWeekHold,marketView,provisionsView,civicView:()=>root.EarthCivicInitiatives?.view(world,current()),truckView:()=>root.EarthFleet?.view(world,current()),regularTruckView:()=>root.EarthFleet?.regular(world,current()),handlineOffer,fishingOffer,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,courseCalendar,perform,sync,
+      buildPlanView,active:current,liveWeekHold,marketView,purseView:id=>root.EarthPurses?.view(world,current(),id),provisionsView,civicView:()=>root.EarthCivicInitiatives?.view(world,current()),truckView:()=>root.EarthFleet?.view(world,current()),regularTruckView:()=>root.EarthFleet?.regular(world,current()),handlineOffer,fishingOffer,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,courseCalendar,perform,sync,
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
       destroy(){closed=true;listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };

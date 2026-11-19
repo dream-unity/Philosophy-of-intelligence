@@ -273,8 +273,8 @@
     let evening=false, streetLights=[];
     const fingers=new Map(),pressed=new Set();
     let works=new Map(),workLots=new Map(),crew=new Map(),watchedJob=null,priorCrewView=null;
-    const roadEdges=new Uint16Array(GRID_SIZE),footEdges=new Uint16Array(GRID_SIZE);
-    const roadPassability=new Uint8Array(GRID_SIZE),footPassability=new Uint8Array(GRID_SIZE);
+    const roadEdges=new Uint16Array(GRID_SIZE),truckEdges=new Uint16Array(GRID_SIZE),footEdges=new Uint16Array(GRID_SIZE);
+    const roadPassability=new Uint8Array(GRID_SIZE),truckPassability=new Uint8Array(GRID_SIZE),footPassability=new Uint8Array(GRID_SIZE);
     const selectedCrew=new Set(),workBounds=new Set(),fixedDoors=new WeakMap();
     let worksiteAtlas=null,worksitePending=false;
     const reduced=typeof matchMedia==='function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -410,28 +410,68 @@
       if(state.mode!=='boat')return true;
       message('Return to shore to do that.');return false;
     }
-    let fixtures=[],seatedAt=null,parkedBounds=null,trafficDetour=null,footpathRevision=0;
+    let fixtures=[],seatedAt=null,parkedBounds=null,trafficDetour=null,truckDetourHulls=null,footpathRevision=0;
     // Each collision cell covers one district block. Long paths visit several
     // cells; a single step usually tests just the objects on the current block.
     const collisionSide=5,collisionBins=Array.from({length:25},()=>[]);
     const narrowEdges=new Uint8Array(GRID_SIZE);
     const trafficBins=Array.from({length:25},()=>[]);
-    const carRadius=.67;
-    function carHitsObject(a,b){
+    const carRadius=.67,truckHalfLength=.82,truckHalfWidth=.32;
+    const truckAlongX=[truckHalfLength,truckHalfWidth],truckAlongY=[truckHalfWidth,truckHalfLength];
+    const diagonalExtent=(truckHalfLength+truckHalfWidth)*Math.SQRT1_2;
+    const truckDiagonal=[diagonalExtent,diagonalExtent];
+    const octantSlope=Math.SQRT2-1;
+    function truckExtent(dx,dy){
+      const x=Math.abs(dx),y=Math.abs(dy);
+      if(y<=x*octantSlope)return truckAlongX;
+      if(x<=y*octantSlope)return truckAlongY;
+      return truckDiagonal;
+    }
+    function vehicleHitsFootprint(a,b,halfWidth,halfDepth){
       const x1=collisionCell(Math.min(a.x,b.x)),x2=collisionCell(Math.max(a.x,b.x));
       const y1=collisionCell(Math.min(a.y,b.y)),y2=collisionCell(Math.max(a.y,b.y));
       for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++){
-        if(trafficBins[y*collisionSide+x].some(box=>crossesBounds(a,b,box,carRadius)))return true;
+        if(trafficBins[y*collisionSide+x].some(box=>crossesBounds(a,b,box,halfWidth,halfDepth)))return true;
       }
       return false;
+    }
+    function carHitsObject(a,b,truck=drivingTruck){
+      if(!truck)return vehicleHitsFootprint(a,b,carRadius,carRadius);
+      // Use the projected footprint for the same eight headings as the
+      // transport atlas. Its broadside can clear a post even when its
+      // nose could not pass through the same gap.
+      const dx=b.x-a.x,dy=b.y-a.y;
+      const hasHeading=dx||dy||Number.isFinite(a.dx)&&Number.isFinite(a.dy)&&(a.dx||a.dy);
+      if(hasHeading){
+        const size=dx||dy?truckExtent(dx,dy):truckExtent(a.dx,a.dy);
+        return vehicleHitsFootprint(a,b,size[0],size[1]);
+      }
+      // An unheaded road node may serve either orientation. Each edge and
+      // each endpoint must still fit in the heading used to traverse it.
+      return vehicleHitsFootprint(a,b,truckHalfWidth,truckHalfLength)&&vehicleHitsFootprint(a,b,truckHalfLength,truckHalfWidth);
     }
     const collisionCell=n=>clamp(Math.floor(n/BLOCK),0,collisionSide-1);
     const footRadius=.095;
     const footprint=(x,y,w,d)=>[x-w/2,y-d/2,x+w/2,y+d/2];
+    function hitsTruckObstacles(a,b,boxes){
+      const dx=b.x-a.x,dy=b.y-a.y;
+      const hits=size=>boxes.some(box=>crossesBounds(a,b,box,size[0],size[1]));
+      if(dx||dy)return hits(truckExtent(dx,dy));
+      if(Number.isFinite(a.dx)&&Number.isFinite(a.dy)&&(a.dx||a.dy))return hits(truckExtent(a.dx,a.dy));
+      return hits(truckAlongX)&&hits(truckAlongY);
+    }
+    function occupiedNode(p,obstacles,truck){
+      if(!obstacles)return false;
+      return truck&&truckDetourHulls?hitsTruckObstacles(p,p,truckDetourHulls):obstacles.some(b=>insideFootprint(p,b));
+    }
+    function occupiedEdge(a,b,obstacles,truck){
+      if(!obstacles)return false;
+      return truck&&truckDetourHulls?hitsTruckObstacles(a,b,truckDetourHulls):obstacles.some(box=>obstructedByTraffic(a,b,box));
+    }
     function trafficBounds(q=state.traffic){
       if(!q)return null;
-      const vertical=Math.abs(q.dy)>Math.abs(q.dx);
-      return footprint(q.x,q.y,vertical?.64:1.64,vertical?1.64:.64);
+      const size=truckExtent(q.dx,q.dy);
+      return footprint(q.x,q.y,2*size[0],2*size[1]);
     }
     function trafficBarrier(){
       const box=drivingTruck?vanBounds(state.van):trafficBounds();
@@ -439,15 +479,27 @@
       if(state.mode==='walk')return box;
       // The moving van has a turning radius. Reserve room for its front as well
       // as its centre, including through a junction where the heading changes.
-      return [box[0]-.61,box[1]-.61,box[2]+.61,box[3]+.61];
+      const clearance=drivingTruck?truckHalfLength:.61;
+      return [box[0]-clearance,box[1]-clearance,box[2]+clearance,box[3]+clearance];
+    }
+    function blockedByVehicle(a,b,box){
+      if(!box)return false;
+      if(!drivingTruck)return obstructedByTraffic(a,b,box);
+      const size=truckExtent(b.x-a.x,b.y-a.y);
+      return crossesBounds(a,b,parkedBounds||vanBounds(state.van),size[0],size[1]);
     }
     function pedestrianBarrier(from,to){
       if(state.mode!=='drive')return null;
       return visitPedestrians(p=>{
         if(!p||Math.abs(to.x-p.x)>1.6||Math.abs(to.y-p.y)>1.6)return null;
         const bounds=footprint(p.x,p.y,1.34,1.34);
+        if(drivingTruck){
+          const size=truckExtent(to.x-from.x,to.y-from.y);
+          return crossesBounds(from,to,[p.x,p.y,p.x,p.y],size[0]+footRadius,size[1]+footRadius)?bounds:null;
+        }
         const turning={x:to.x,y:to.y,dx:to.x-from.x,dy:to.y-from.y};
-        const turnsIntoPerson=insideFootprint(p,vanBounds(turning))&&!insideFootprint(p,vanBounds(state.player));
+        const hull=drivingTruck?trafficBounds:vanBounds;
+        const turnsIntoPerson=insideFootprint(p,hull(turning))&&!insideFootprint(p,hull(state.player));
         return turnsIntoPerson||obstructedByTraffic(from,to,bounds)?bounds:null;
       });
     }
@@ -460,6 +512,10 @@
       for(const worker of crew.values()){
         if(worker.residentId===playedId||worker.residentId===state.companion?.id)continue;
         const block=obstructs(builderPosition(worker));if(block)return block;
+      }
+      for(const p of state.points){
+        if(p.type!=='resident'||p.residentId===playedId||p.residentId===state.companion?.id||crew.has(p.residentId))continue;
+        const block=obstructs(residentFigure(p));if(block)return block;
       }
       return null;
     }
@@ -494,7 +550,7 @@
     function indexFootprints(){
       for(const bin of collisionBins)bin.length=0;
       for(const bin of trafficBins)bin.length=0;
-      narrowEdges.fill(0);roadPassability.fill(0);roadEdges.fill(0);
+      narrowEdges.fill(0);roadPassability.fill(0);roadEdges.fill(0);truckPassability.fill(0);truckEdges.fill(0);
       function insert(bounds){
         const x1=collisionCell(bounds[0]-footRadius),x2=collisionCell(bounds[2]+footRadius);
         const y1=collisionCell(bounds[1]-footRadius),y2=collisionCell(bounds[3]+footRadius);
@@ -502,8 +558,8 @@
         // With all four corner nodes clear, a cell can only hide an obstacle
         // narrower than its spacing. Mark those exceptional edges once.
         const [left,top,right,bottom]=bounds;
-        for(let y=collisionCell(top-carRadius);y<=collisionCell(bottom+carRadius);y++){
-          for(let x=collisionCell(left-carRadius);x<=collisionCell(right+carRadius);x++)trafficBins[y*collisionSide+x].push(bounds);
+        for(let y=collisionCell(top-truckHalfLength);y<=collisionCell(bottom+truckHalfLength);y++){
+          for(let x=collisionCell(left-truckHalfLength);x<=collisionCell(right+truckHalfLength);x++)trafficBins[y*collisionSide+x].push(bounds);
         }
         if(Math.min(right-left,bottom-top)+2*footRadius>=STEP)return;
         const minX=Math.max(0,Math.floor((left-footRadius-GRID_ORIGIN)/STEP));
@@ -2097,15 +2153,17 @@
         const newRelease=released&&local.releaseSerial!==released.serial&&id!==playedId;
         if(!profile&&!career&&!local.scheduleKey&&!intent&&!newRelease)continue;
         const week=options.getWeek?.()??intent?.week??1;
+        const specialist=window.EarthCareers?.specialistShift?.(site,id,week);
         const voluntary=outingKinds.has(intent?.kind)||intent?.kind==='commitment'&&intent.civic===true;
         let outing=voluntary&&intent.week===week?intent:null;
+        if(specialist&&!outing)outing={kind:'cover',week,venue:specialist.venue,title:'Cover the '+specialist.label.toLowerCase()+' round at '+specialist.employer};
         const transition=id.startsWith('carrier-')&&local.index==null?(site.careers?.[id]?.application||site.careers?.[id]?.training):null;
         const course=site.careers?.[id]?.training;
         const studying=course?.targetId&&!course.paused,courseJob=studying&&window.EarthCareers?.catalog?.find(j=>j.id===course.targetId);
         if(!outing&&studying&&(id==='driver'||id.startsWith('carrier-'))){
           outing={kind:'learn',week,venue:courseJob?.venue||'hall',goal:courseJob?'Study for '+courseJob.label:'Attend a class'};
         }
-        const key=[state.fingerprint,career?.id,career?.venue,career?.label,transition?.targetId,course?.targetId,course?.paused,outing?.week,outing?.kind,outing?.venue,outing?.target,outing?.projectId,outing?.projectKind,outing?.phase,outing?.jobId,outing?.plot,outing?.civic&&outing.reason,
+        const key=[state.fingerprint,career?.id,career?.venue,career?.label,transition?.targetId,course?.targetId,course?.paused,outing?.week,outing?.kind,outing?.venue,outing?.target,outing?.projectId,outing?.projectKind,outing?.phase,outing?.jobId,outing?.plot,outing?.civic&&outing.reason,specialist?.id,
           released?.serial,id===playedId].join('|');
         if(key===local.scheduleKey)continue;
         if(id==='driver')footpathRevision++;
@@ -2155,7 +2213,7 @@
         const work=outing&&!service?outingPlace:duty,visit=outing&&!service?duty:outingPlace;
         const speed=.63+(profile?.aptitudes?.stamina??50)*.005;
         const jobSeries=activity?.plan({role:local.role,careerId:career?.id,occupation:career?.occupation,venue:atWork,destination:duty.label,training:Boolean(education&&!career),personality:profile});
-        const outingSeries=activity?.plan({role:local.role,kind:outing?.kind||breakKind,venue:outing?.venue||defaultVisit,
+        const outingSeries=activity?.plan({role:local.role,kind:outing?.kind||breakKind,venue:outing?.venue||defaultVisit,specialistId:specialist?.id,
           destination:outingPlace.label,civic:outing?.civic,goal:outing?.title||(outing?.civic?outing.reason:outing?.goal),projectKind:outing?.projectKind||(!outing&&pastime?'hobby':null),
           projectPhase:outing?.phase,axis:outing?.axis||profile?.hobbyAxis,personality:profile});
         local.plan={from,work,visit,service,rejoin,outing:outing&&!service,speed,dwell:service?0:meeting?60:11+(profile?.traits?.patience??50)*.22,
@@ -2192,8 +2250,8 @@
       return {...p,dx:p.dx*dir,dy:p.dy*dir,pace:moves?(across?.7:.55):0,
         coat:['#a9b99c','#c39c83','#8ca9ab','#c3a480','#9bad94'][i],phase:visualTime*(across?5:4)+offset};
     }
-    function crossingsNear(q,dt){
-      const hull=trafficBounds(q),playerCar=state.mode==='drive'?vanBounds(state.player):null,people=[];
+    function crossingsNear(q,dt,holdOnly=false){
+      const hull=trafficBounds(q),playerCar=state.mode==='drive'&&!drivingTruck?vanBounds(state.player):null,people=holdOnly?null:[];
       function consider(id,body){
         if(!body)return;
         const nearTruck=Math.abs(body.x-q.x)<=3.5&&Math.abs(body.y-q.y)<=3.5;
@@ -2201,19 +2259,33 @@
           // The previous safe pose remains current until the vehicle has passed.
           trafficWaits.set(id,(trafficWaits.get(id)||0)+dt);
         }
-        if(nearTruck)people.push(body);
+        if(nearTruck&&people)people.push(body);
       }
       for(let i=0;i<5;i++)consider('walker-'+i,streetWalker(i));
       consider('driver',routineBody(locals.get('driver')));
       if(playedId!=='steward')consider('steward',localPoint('steward'));
       state.links.forEach((link,i)=>consider('carrier-'+link.from+'-'+link.to,carrierBody(link,i)));
       for(const id of offRoutePorters)consider(id,routineBody(locals.get(id)));
+      for(const worker of crew.values()){
+        if(worker.residentId===playedId||worker.residentId===state.companion?.id)continue;
+        const body=builderPosition(worker);
+        if(worker.walkLength&&visualTime-worker.since<=.72+dt&&insideFootprint(body,hull))worker.since+=dt;
+        if(people&&Math.abs(body.x-q.x)<3.5&&Math.abs(body.y-q.y)<3.5)people.push(body);
+      }
+      for(const base of state.points){
+        if(base.type!=='resident'||base.residentId===playedId||base.residentId===state.companion?.id||crew.has(base.residentId))continue;
+        if(Math.abs(base.x-q.x)>4||Math.abs(base.y-q.y)>4)continue;
+        consider('home-'+base.residentId,residentFigure(base));
+      }
+      if(!people)return null;
+      if(state.companion&&state.mode==='walk'&&Math.abs(state.companion.x-q.x)<3.5&&Math.abs(state.companion.y-q.y)<3.5)people.push(state.companion);
+      if(state.mode==='walk'&&Math.abs(state.player.x-q.x)<3.5&&Math.abs(state.player.y-q.y)<3.5)people.push(state.player);
       return people;
     }
     function nextDelivery(q){for(let i=1;i<=SERVICE_LOOP.length;i++){const label=SERVICE_LOOP[(q.leg+i)%SERVICE_LOOP.length][2];if(label)return label;}return 'Market exchange';}
     function regularTruckStatus(){
       const q=state.traffic;if(!q||!state.site)return null;
-      const point=SERVICE_LOOP[q.leg],atStop=q.speed<.1&&q.distance<.03&&point[2]&&Math.hypot(q.x-point[0],q.y-point[1])<.85;
+      const point=SERVICE_LOOP[q.leg],atStop=!q.diversion&&q.speed<.1&&q.distance<.03&&point[2]&&Math.hypot(q.x-point[0],q.y-point[1])<.85;
       return {siteId:state.site.id,driverId:'driver',x:q.x,y:q.y,stop:atStop?point[2]:null,mode:'service',
         attended:playedId!=='driver'&&!drivingTruck&&state.mode!=='boat'&&!state.site.fleet?.custody&&
           !dispatchDriver&&!locals.get('driver')?.plan&&heldLocal?.npcId!=='driver'};
@@ -2238,6 +2310,60 @@
         checkRegularStop();schedule();
       });
     }
+    function publicVehicleBox(){
+      return state.mode==='drive'&&!drivingTruck?vanBounds(state.player):parkedBounds;
+    }
+    function serviceClear(q,to,people,van){
+      const size=truckExtent(to.dx,to.dy),rx=size[0],ry=size[1];
+      if(vehicleHitsFootprint(q,to,rx,ry)||van&&crossesBounds(q,to,van,rx,ry))return false;
+      for(const person of people){
+        const body=[person.x,person.y,person.x,person.y];
+        if(crossesBounds(q,to,body,rx+footRadius,ry+footRadius))return false;
+      }
+      return true;
+    }
+    function divertServiceTruck(q,people,van){
+      let leg=(q.leg+1)%SERVICE_LOOP.length;
+      while(!SERVICE_LOOP[leg][2])leg=(leg+1)%SERVICE_LOOP.length;
+      const node=SERVICE_LOOP[leg],next=SERVICE_LOOP[(leg+1)%SERVICE_LOOP.length];
+      const dx=Math.sign(next[0]-node[0]),dy=Math.sign(next[1]-node[1]);
+      const obstacles=people.map(p=>footprint(p.x,p.y,2*truckHalfLength,2*truckHalfLength));
+      if(van)obstacles.push([van[0]-truckHalfLength,van[1]-truckHalfLength,van[2]+truckHalfLength,van[3]+truckHalfLength]);
+      const previous=trafficDetour,previousHulls=truckDetourHulls;trafficDetour=obstacles;
+      truckDetourHulls=people.map(p=>footprint(p.x,p.y,2*footRadius,2*footRadius));if(van)truckDetourHulls.push(van);
+      try{
+        const dynamic={pass:new Uint8Array(GRID_SIZE),edges:new Uint16Array(GRID_SIZE)};
+        for(const lane of [.31,-.31,.74,-.74,0]){
+          const goal={x:node[0]-dy*lane,y:node[1]+dx*lane,dx,dy};
+          if(!traversable(goal,true,null,true))continue;
+          // Different candidate stops have different destination anchors.
+          dynamic.excluded=null;
+          const path=makeRoute(q,goal,true,dynamic,true);
+          if(path.length){q.diversion={path,leg,goal,lane};return;}
+        }
+      }finally{trafficDetour=previous;truckDetourHulls=previousHulls;}
+    }
+    function waitForStreet(q,dt,people,van){
+      q.yielding=true;q.speed=0;q.blocked=(q.blocked||0)+dt;
+      if(q.blocked<1.7)return;
+      q.blocked=0;divertServiceTruck(q,people,van);
+    }
+    function followServiceDiversion(q,dt,people,van){
+      const trip=q.diversion,target=trip.path[0],range=dist(q,target);
+      if(range>.001){
+        const dx=(target.x-q.x)/range,dy=(target.y-q.y)/range;
+        q.speed=Math.min(3.95,q.speed+dt*3.6);
+        const amount=Math.min(range,dt*q.speed),next={x:q.x+dx*amount,y:q.y+dy*amount,dx,dy};
+        if(!serviceClear(q,next,people,van)){waitForStreet(q,dt,people,van);return;}
+        Object.assign(q,next);q.yielding=false;q.blocked=0;
+        if(amount<range-.00001)return;
+      }
+      trip.path.shift();
+      if(!trip.path.length){
+        Object.assign(q,trip.goal,{leg:trip.leg,distance:0,lane:trip.lane,wait:locals.get('driver')?.dwell??1.75,speed:0,diversion:null});
+        checkRegularStop();
+      }
+    }
     function stepTraffic(dt){
       const q=state.traffic;if(!q)return;
       if(drivingTruck){Object.assign(q,actorPosition(state.player));return;}
@@ -2245,9 +2371,12 @@
       if(regularPending||regularQuote?.done&&q.leg===0&&q.distance<.03)return;
       const crossers=crossingsNear(q,dt);if(heldLocal?.npcId==='driver'||locals.get('driver')?.plan)return;
       if(q.wait>0){q.wait-=dt;return;}
+      const van=publicVehicleBox();
+      if(q.diversion){followServiceDiversion(q,dt,crossers,van);return;}
       const a=SERVICE_LOOP[q.leg],b=SERVICE_LOOP[(q.leg+1)%SERVICE_LOOP.length],dx=Math.sign(b[0]-a[0]),dy=Math.sign(b[1]-a[1]);
-      const inFront=p=>{const x=p.x-q.x,y=p.y-q.y,along=x*dx+y*dy;return along>-.2&&along<2.05&&Math.abs(x*dy-y*dx)<.68;};
-      q.yielding=inFront(state.player)||crossers.some(inFront);
+      const inFront=p=>{const x=p.x-q.x,y=p.y-q.y,along=x*dx+y*dy;return along>-.2&&along<2.05&&Math.abs(x*dy-y*dx)<truckHalfWidth+footRadius;};
+      q.yielding=crossers.some(inFront);
+      if(q.yielding&&q.speed<.06){waitForStreet(q,dt,crossers,van);return;}
       const wanted=q.yielding?0:3.95;q.speed+=clamp(wanted-q.speed,-dt*20,dt*3.6);
       const length=Math.abs(b[0]-a[0])+Math.abs(b[1]-a[1]),travel=q.distance+q.speed*dt;
       const turn=travel>=length,leg=turn?(q.leg+1)%SERVICE_LOOP.length:q.leg,distance=turn?0:travel;
@@ -2256,20 +2385,29 @@
       const middleX=node[0]+headingX*distance,middleY=node[1]+headingY*distance;
       const other=state.mode==='drive'?state.player:state.van;
       const vx=other.x-middleX,vy=other.y-middleY,along=vx*headingX+vy*headingY,across=-vx*headingY+vy*headingX;
-      const van=state.mode==='drive'?vanBounds(other):parkedBounds;
       let desired=.31;
       if(van&&along>-2.3&&along<3.7&&Math.abs(across-desired)<1.15){
         desired=across>.02?-.74:.74;
+        // Check the chosen side all the way past the parked vehicle. At
+        // perimeter streets the inner kerb often has a lamp after the van.
+        // Choose the outside lane before the truck enters that narrow gap.
+        if(q.avoidLeg!==leg||q.avoidX!==other.x||q.avoidY!==other.y||q.avoidDesired!==desired){
+          const end=Math.min(Math.abs(next[0]-node[0])+Math.abs(next[1]-node[1]),Math.max(distance,distance+along+4));
+          const size=truckExtent(headingX,headingY);
+          const clearLane=side=>{
+            const start={x:middleX-headingY*side,y:middleY+headingX*side};
+            const stop={x:node[0]+headingX*end-headingY*side,y:node[1]+headingY*end+headingX*side};
+            return !vehicleHitsFootprint(start,stop,size[0],size[1])&&!crossesBounds(start,stop,van,size[0],size[1]);
+          };
+          q.avoidLeg=leg;q.avoidX=other.x;q.avoidY=other.y;q.avoidDesired=desired;
+          q.avoidLane=!clearLane(desired)&&clearLane(-desired)?-desired:desired;
+        }
+        desired=q.avoidLane;
       }
       const previousLane=turn?.31:q.lane??.31,lane=previousLane+clamp(desired-previousLane,-dt*2.2,dt*2.2);
       const pose={dx:headingX,dy:headingY,x:middleX-headingY*lane,y:middleY+headingX*lane};
-      const truck=trafficBounds(pose);
-      if(van&&truck[0]<van[2]&&truck[2]>van[0]&&truck[1]<van[3]&&truck[3]>van[1]){
-        q.yielding=true;q.speed=0;return;
-      }
-      if(crossers.some(p=>insideFootprint(p,truck))||state.mode==='walk'&&Math.abs(pose.x-state.player.x)<1&&Math.abs(pose.y-state.player.y)<1&&insideFootprint(state.player,truck)){
-        q.yielding=true;q.speed=0;return;
-      }
+      if(!serviceClear(q,pose,crossers,van)){waitForStreet(q,dt,crossers,van);return;}
+      q.blocked=0;
       Object.assign(q,pose,{distance,leg,lane});
       if(turn){q.wait=b[2]?(locals.get('driver')?.dwell??1.75):.05;if(b[2]){q.speed=0;checkRegularStop();}}
     }
@@ -2470,11 +2608,11 @@
         const intent=w.initiative;
         const kind=w.activity==='resting'?'rest':job?'build':intent?.kind||'routine';
         const venue=job?.name||w.workplace?.label||'the district';
-        const key=[kind,w.role,venue,intent?.projectKind,intent?.phase,intent?.target,intent?.civic&&intent.reason,w.activity].join('|');
+        const key=[kind,w.role,w.specialistId,venue,intent?.projectKind,intent?.phase,intent?.target,intent?.civic&&intent.reason,w.activity].join('|');
         if(key===life.dutyKey)continue;
         life.dutyKey=key;life.venue=venue;life.place=w.workplace;life.start=visualTime;life.partner=intent?.target||null;
         life.travelling=w.travelling;life.atBreak=w.activity==='resting';
-        life.duty=activity.plan({role:w.role,kind,careerId:life.job?.id,occupation:w.occupation,venue:intent?.venue||w.workplace?.kind,civic:intent?.civic,
+        life.duty=activity.plan({role:w.role,kind,specialistId:w.specialistId,careerId:life.job?.id,occupation:w.occupation,venue:intent?.venue||w.workplace?.kind,civic:intent?.civic,
           projectKind:intent?.projectKind,projectPhase:intent?.phase,axis:intent?.axis,goal:intent?.title||(intent?.civic?intent.reason:intent?.goal),destination:venue});
       }
       if(!view?.jobs?.length&&!works.size&&!crew.size&&!view?.workers?.some(w=>w.travelling||w.physicalDuty||['returning','resting','working','commuting'].includes(w.activity)))return;
@@ -2785,7 +2923,7 @@
       }
     }
     function residentFigure(point) {
-      return {x:point.x+.47+(reduced?0:Math.sin(visualTime*.45+point.index)*.12),y:point.y-.21};
+      return {x:point.x+.47+(reduced?0:Math.sin((visualTime-(trafficWaits.get('home-'+point.residentId)||0))*.45+point.index)*.12),y:point.y-.21};
     }
     let idleScene=null;
     function clipIdleActors(){
@@ -2943,9 +3081,9 @@
         ctx.fillStyle='rgba(26,48,45,.94)';ctx.fillRect(x,y,textWidth,24);text(width/2,y+12,shortMessage,'#f0dfb8',Math.min(12,(textWidth-12)/Math.max(1,shortMessage.length)*1.75));
       }
     }
-    function traversable(p, driving=state.mode==='drive',van=parkedBounds) {
+    function traversable(p, driving=state.mode==='drive',van=parkedBounds,truck=drivingTruck,obstacles=trafficDetour) {
       if(p.x<-.78||p.y<-.78||p.x>SIDE+.78||p.y>SIDE+.78)return false;
-      if(driving)return road(p.x,p.y)&&!carHitsObject(p,p)&&!(trafficDetour?.some(bounds=>insideFootprint(p,bounds)));
+      if(driving)return road(p.x,p.y)&&!carHitsObject(p,p,truck)&&!occupiedNode(p,obstacles,truck);
       if(van&&insideFootprint(p,van)||trafficDetour?.some(bounds=>insideFootprint(p,bounds)))return false;
       const bin=collisionBins[collisionCell(p.y)*collisionSide+collisionCell(p.x)];
       return !bin.some(bounds=>insideFootprint(p,bounds)&&!(workBounds.has(bounds)&&insideFootprint(state.player,bounds)));
@@ -3015,10 +3153,10 @@
     }
     // A route segment must stay on the actual surface even where a tapped point
     // falls between lattice nodes. Clip it against each axis-aligned footprint.
-    function crossesBounds(a,b,bounds,margin=footRadius){
+    function crossesBounds(a,b,bounds,marginX=footRadius,marginY=marginX){
       const dx=b.x-a.x,dy=b.y-a.y;
       let [left,top,right,bottom]=bounds;
-      left-=margin;top-=margin;right+=margin;bottom+=margin;
+      left-=marginX;top-=marginY;right+=marginX;bottom+=marginY;
       if(Math.max(a.x,b.x)<=left||Math.min(a.x,b.x)>=right||
          Math.max(a.y,b.y)<=top||Math.min(a.y,b.y)>=bottom)return false;
       let enter=0,leave=1;
@@ -3041,7 +3179,7 @@
       }
       return crossesBounds(a,b,bounds);
     }
-    function clearSegment(a,b,driving=state.mode==='drive') {
+    function clearSegment(a,b,driving=state.mode==='drive',truck=drivingTruck,obstacles=trafficDetour) {
       const margin=driving?0:footRadius;
       const intersects=bounds=>{
         // A site may be commissioned under a player already standing on the bare lot.
@@ -3049,7 +3187,7 @@
         if(!driving&&workBounds.has(bounds)&&insideFootprint(state.player,bounds)&&insideFootprint(a,bounds))return false;
         return crossesBounds(a,b,bounds,margin);
       };
-      if(driving)return !OFF_ROAD.some(intersects)&&!carHitsObject(a,b)&&!(trafficDetour?.some(bounds=>obstructedByTraffic(a,b,bounds)));
+      if(driving)return !OFF_ROAD.some(intersects)&&!carHitsObject(a,b,truck)&&!occupiedEdge(a,b,obstacles,truck);
       if(parkedBounds&&intersects(parkedBounds)||trafficDetour?.some(bounds=>obstructedByTraffic(a,b,bounds)))return false;
       const x1=collisionCell(Math.min(a.x,b.x)),x2=collisionCell(Math.max(a.x,b.x));
       const y1=collisionCell(Math.min(a.y,b.y)),y2=collisionCell(Math.max(a.y,b.y));
@@ -3059,17 +3197,25 @@
       return true;
     }
     // A uniform lattice handles route finding. A heap keeps long street trips inexpensive.
-    function makeRoute(start,target,driving=state.mode==='drive',detour=null) {
-      if(clearSegment(start,target,driving))return [target];
+    function makeRoute(start,target,driving=state.mode==='drive',detour=null,truck=drivingTruck) {
+      if(clearSegment(start,target,driving,truck))return [target];
       const N=GRID_SIDE,origin=GRID_ORIGIN,count=GRID_SIZE;
-      const cost=new Float64Array(count).fill(Infinity),parent=new Int32Array(count).fill(-1),visited=new Uint8Array(count),heap=[];
       // Standing inside a newly fenced worksite grants temporary exit permission.
       // Those exceptional paths need their own mask so another trip cannot inherit the exit.
-      let pass=driving?roadPassability:footPassability;
-      let edges=driving?roadEdges:footEdges;
+      let pass=driving?(truck?truckPassability:roadPassability):footPassability;
+      let edges=driving?(truck?truckEdges:roadEdges):footEdges;
       if(detour){pass=detour.pass;edges=detour.edges;}
       else if(trafficDetour||!driving&&[...workBounds].some(bounds=>insideFootprint(start,bounds))){pass=new Uint8Array(count);edges=new Uint16Array(count);}
-      const valid=i=>{if(pass[i]===0)pass[i]=traversable(gridPoint(i),driving)?2:1;return pass[i]===2;};
+      const useTruck=driving&&truck;
+      function valid(i,staticOnly=false){
+        const mask=staticOnly?truckPassability:pass;
+        if(!mask[i]){
+          const p=gridPoint(i);
+          if(useTruck&&trafficDetour&&!staticOnly)mask[i]=valid(i,true)&&!occupiedNode(p,trafficDetour,true)?2:1;
+          else mask[i]=traversable(p,driving,parkedBounds,truck,staticOnly?null:trafficDetour)?2:1;
+        }
+        return mask[i]===2;
+      }
       function anchor(point,radius=1) {
         const cx=Math.round((point.x-origin)/STEP),cy=Math.round((point.y-origin)/STEP);
         let nearest=null,range=Infinity;
@@ -3079,14 +3225,14 @@
             if(!valid(i))continue;
             const p=gridPoint(i),d=dist(point,p);
             if(d>=range||!(neighbours(i,x,y)&255))continue;
-            if(clearSegment(point,p,driving)){nearest={i,via:null};range=d;continue;}
+            if(clearSegment(point,p,driving,truck)){nearest={i,via:null};range=d;continue;}
             if(radius===1)continue;
             // An aisle can fall between lattice columns. Follow its visible
             // straight side to a free corner before joining the walking grid.
             const bent=Math.abs(p.x-point.x)+Math.abs(p.y-point.y);
             if(bent>=range)continue;
             for(const via of [{x:point.x,y:p.y},{x:p.x,y:point.y}]){
-              if(clearSegment(point,via,driving)&&clearSegment(via,p,driving)){
+              if(clearSegment(point,via,driving,truck)&&clearSegment(via,p,driving,truck)){
                 nearest={i,via};range=bent;break;
               }
             }
@@ -3098,21 +3244,32 @@
       if(!first||!last)return [];
       const startI=first.i,goalI=last.i;
       if(detour?.excluded?.[startI])return [];
+      const cost=new Float64Array(count).fill(Infinity),parent=new Int32Array(count).fill(-1),visited=new Uint8Array(count),heap=[];
       const push=(i,rank)=>{const n={i,rank};let k=heap.length;heap.push(n);while(k>0){const a=(k-1)>>1;if(heap[a].rank<=rank)break;heap[k]=heap[a];k=a;}heap[k]=n;};
       const pop=()=>{const first=heap[0].i,last=heap.pop();if(heap.length){let k=0;while(k*2+1<heap.length){let j=k*2+1;if(j+1<heap.length&&heap[j+1].rank<heap[j].rank)j++;if(heap[j].rank>=last.rank)break;heap[k]=heap[j];k=j;}heap[k]=last;}return first;};
       const goalX=goalI%N,goalY=Math.floor(goalI/N);
-      function neighbours(i,px,py){
-        if(edges[i])return edges[i];
-        let mask=1<<8; // Eight edge bits, with an extra bit to mark even an isolated node as checked.
+      function neighbours(i,px,py,staticOnly=false){
+        const cache=staticOnly?truckEdges:edges;
+        if(cache[i])return cache[i];
+        const dynamicTruck=useTruck&&trafficDetour&&!staticOnly;
+        const staticMask=dynamicTruck?neighbours(i,px,py,true):255;
+        const from=useTruck?gridPoint(i):null;
+        let mask=1<<8;
         for(let d=0;d<GRID_NEIGHBOURS.length;d++){
+          const bit=1<<d;if(!(staticMask&bit))continue;
           const {dx,dy,offset}=GRID_NEIGHBOURS[d],nx=px+dx,ny=py+dy;
-          if(nx<0||ny<0||nx>=N||ny>=N||!valid(i+offset))continue;
-          if(dx&&dy&&(!valid(i+dx)||!valid(i+dy*N)))continue;
-          // A narrow post can lie entirely between two otherwise free grid nodes.
-          if(!driving&&(narrowEdges[i]&(1<<d)))continue;
-          mask|=1<<d;
+          if(nx<0||ny<0||nx>=N||ny>=N||!valid(i+offset,staticOnly))continue;
+          if(dx&&dy&&(!valid(i+dx,staticOnly)||!valid(i+dy*N,staticOnly)))continue;
+          if(!driving&&(narrowEdges[i]&bit))continue;
+          if(useTruck){
+            const to=gridPoint(i+offset);
+            // Each heading has a different wheelbase. Cache permanent road
+            // clearances, then test only changing obstacles on a later diversion.
+            if(dynamicTruck?occupiedEdge(from,to,trafficDetour,true):!clearSegment(from,to,true,true,null))continue;
+          }
+          mask|=bit;
         }
-        edges[i]=mask;return mask;
+        cache[i]=mask;return mask;
       }
       cost[startI]=0;push(startI,0);let reached=-1;
       while(heap.length){
@@ -3145,7 +3302,7 @@
       const simplified=[];
       let from=start;
       for(let i=1;i<raw.length;i++){
-        if(clearSegment(from,raw[i],driving))continue;
+        if(clearSegment(from,raw[i],driving,truck))continue;
         from=raw[i-1];simplified.push(from);
       }
       simplified.push(target);
@@ -3153,22 +3310,22 @@
     }
     function routeAroundTraffic(start,target,bounds){
       // A moving obstacle must not enter either of the reusable static route masks.
-      const obstacles=[bounds];
+      const obstacles=[bounds],hulls=[];
       if(drivingTruck){
         // At a crowded kerb the dispatcher and residents can stand on opposite
         // sides. Plan around everyone nearby so a detour cannot turn straight
         // back into the person who blocked the previous approach.
-        const parked=trafficBarrier();
+        const parked=trafficBarrier();hulls.push(vanBounds(state.van));
         if(parked&&!bounds.every((n,i)=>n===parked[i]))obstacles.push(parked);
         visitPedestrians(person=>{
           if(person&&Math.abs(person.x-start.x)<3.5&&Math.abs(person.y-start.y)<3.5){
-            const box=footprint(person.x,person.y,1.34,1.34);
+            const box=footprint(person.x,person.y,1.34,1.34);hulls.push(footprint(person.x,person.y,2*footRadius,2*footRadius));
             if(!bounds.every((n,i)=>n===box[i]))obstacles.push(box);
           }
           return null;
         });
       }
-      trafficDetour=obstacles;
+      trafficDetour=obstacles;truckDetourHulls=drivingTruck?hulls:null;
       try{
         const free=closestFree(target);
         if(!free)return [];
@@ -3194,7 +3351,7 @@
           }
         }
         return [];
-      }finally{trafficDetour=null;}
+      }finally{trafficDetour=null;truckDetourHulls=null;}
     }
     function getState() {
       const body=state.companion&&(state.mode!=='walk'?state.player:state.companion);
@@ -3378,7 +3535,7 @@
       let route=makeRoute(state.player,free);
       if(route.length){
         const bounds=trafficBarrier();
-        if(route.some((q,i)=>obstructedByTraffic(i?route[i-1]:state.player,q,bounds)))route=routeAroundTraffic(state.player,free,bounds);
+        if(route.some((q,i)=>blockedByVehicle(i?route[i-1]:state.player,q,bounds)))route=routeAroundTraffic(state.player,free,bounds);
       }
       if(!route.length){
         message(state.mode==='drive'?'Choose a connected street.':'That path is closed. Try another approach.');
@@ -3450,7 +3607,7 @@
       let candidate=add(p,px*length,py*length);
       const traffic=trafficBarrier();
       const free=state.mode==='boat'?point=>clearWater(p,point,embarked):
-        point=>traversable(point)&&clearSegment(p,point)&&!obstructedByTraffic(p,point,traffic)&&!pedestrianBarrier(p,point);
+        point=>traversable(point)&&clearSegment(p,point)&&!blockedByVehicle(p,point,traffic)&&!pedestrianBarrier(p,point);
       if(!free(candidate)){
         const a=add(p,px*length,0),b=add(p,0,py*length);
         if(free(a)&&Math.abs(px)>.08&&(!free(b)||Math.abs(px)>=Math.abs(py)))candidate=a;
@@ -3477,6 +3634,9 @@
     }
     function follow(dt) {
       const p=state.player;
+      // Sample this instant's pedestrian motion against the current controlled
+      // cab before either the driver or a waiting route can advance.
+      if(drivingTruck)crossingsNear(p,dt,true);
       p.moving=false;
       if(!state.placed&&pressed.size){let dx=0,dy=0;for(const dir of pressed){dx+=AXIS[dir][0];dy+=AXIS[dir][1];}stop();manual(dx,dy,dt*(state.mode==='boat'?BOAT_SPEED:state.mode==='drive'?DRIVE_SPEED:WALK_SPEED));}
       else if(!state.placed&&state.route.length){
@@ -3487,7 +3647,7 @@
           if(d<.001){state.route.shift();continue;}
           const dx=(q.x-p.x)/d,dy=(q.y-p.y)/d,step=Math.min(d,budget);
           const next={x:p.x+dx*step,y:p.y+dy*step};
-          const obstacle=traffic&&obstructedByTraffic(p,next,traffic)?traffic:pedestrianBarrier(p,next);
+          const obstacle=traffic&&blockedByVehicle(p,next,traffic)?traffic:pedestrianBarrier(p,next);
           if(obstacle){
             const detour=routeAroundTraffic(p,state.destination,obstacle);
             if(detour.length)state.route=detour;
@@ -3686,15 +3846,41 @@
       }
       dirty=true;if(announce){updateNearby();emitState();message('On foot beside the co-op truck.');}return true;
     }
+    function dispatchStand(pickup,truck){
+      const vertical=streetDistance(pickup.x)<streetDistance(pickup.y);
+      const dx=vertical?0:1,dy=vertical?1:0;
+      const hull=trafficBounds({...pickup,dx,dy});
+      let nearest=null,range=Infinity;
+      // The outside of a perimeter road may end immediately beside the
+      // cab. A nearest-ground correction can otherwise fold that nominal
+      // flank back into the truck. Try both kerbs and along the vehicle.
+      for(const side of [1,-1])for(const along of [0,.5,-.5,1,-1]){
+        const at=closestFree({x:pickup.x+dy*side*1.14+dx*along,y:pickup.y+dx*side*1.14+dy*along},false);
+        if(!at||insideFootprint(at,hull)||insideFootprint(at,trafficBounds(truck)))continue;
+        const d=dist(at,pickup);
+        if(d>1.72)continue;
+        if(!road(at.x,at.y))return at;
+        if(d<range){range=d;nearest=at;}
+      }
+      return nearest;
+    }
     function syncServiceTruck(){
       const q=state.traffic,hold=state.site?.fleet?.custody;
       const key=hold?[siteKey(state.site),hold.actor,hold.week,hold.token].join('/'):null;
       if(!q||key===fleetToken)return;
       if(drivingTruck&&(!hold||hold.actor!==playedId))releaseServiceTruck(false);
+      q.diversion=null;q.blocked=0;
       if(hold){
-        Object.assign(q,hold.anchor,{speed:0,wait:1.6});
-        const pickup=hold.pickup;
-        const out=closestFree(add(pickup,0,1.14),false)||closestFree(add(pickup,1.14,0),false);
+        const anchor=hold.anchor;
+        // Older order receipts store the position alone. A truck kept at
+        // the pickup retains its live heading. On reload, orient it along
+        // the saved road instead of borrowing a different stop's heading.
+        if(dist(q,anchor)>.01&&!Number.isFinite(anchor.dx)){
+          const vertical=streetDistance(anchor.x)<streetDistance(anchor.y);
+          Object.assign(q,vertical?{dx:0,dy:1}:{dx:1,dy:0});
+        }
+        Object.assign(q,anchor,{speed:0,wait:1.6});
+        const out=dispatchStand(hold.pickup,q);
         dispatchDriver=out?{...out,dx:0,dy:-1,pace:0,phase:0}:null;
       }else{
         if(fleetToken||state.site?.fleet?.parkedWeek){
@@ -3730,7 +3916,7 @@
       // occupies that saved point. Fresh snapshots retain strict validation.
       const legacy=snapshot.geometry===undefined;
       const inDistrict=p=>between(p.x,-.78,SIDE+.78)&&between(p.y,-.78,SIDE+.78);
-      if(!traversable(van,true)){
+      if(!traversable(van,true,null,false)){
         if(!legacy||!inDistrict(van)||!road(van.x,van.y))return false;
         const free=closestFree(van,true);
         if(!free||dist(van,free)>.92)return false;
@@ -3738,7 +3924,7 @@
       }
       if(mode==='boat'){
         if(!onWater(player,berth))return false;
-      }else if(!traversable(player,mode==='drive',mode==='walk'?vanBounds(van):null)){
+      }else if(!traversable(player,mode==='drive',mode==='walk'?vanBounds(van):null,restoredTruck)){
         if(!legacy||mode!=='walk'||!inDistrict(player))return false;
         const free=closestFree(player,false,vanBounds(van));
         if(!free||dist(player,free)>.8)return false;
@@ -3807,12 +3993,15 @@
       const body=person.companion?(state.mode==='walk'?person:state.player):worker?builderPosition(worker):person;
       if(dist(state.player,body)>=interactionRange())return null;
       if(state.mode==='walk'&&(person.npcId!=='driver'||locals.get('driver')?.plan)&&!clearSegment(state.player,body,false))return null;
+      const personId=person.npcId||person.residentId;
+      const activityBeforeGreeting=face?activityOf(personId):null;
       if(face&&state.mode==='walk'){
         if(person.type==='npc')holdLocal(person);
         const dx=body.x-state.player.x,dy=body.y-state.player.y,d=Math.hypot(dx,dy);
         if(d>.02){state.player.dx=dx/d;state.player.dy=dy/d;dirty=true;schedule();}
       }
-      return {actor:playedId,target:person.npcId||person.residentId,siteId:state.site.id,mode:state.mode,companion:person.companion?person.residentId:null,
+      return {actor:playedId,target:personId,siteId:state.site.id,mode:state.mode,companion:person.companion?person.residentId:null,
+        ...(activityBeforeGreeting?{activity:activityBeforeGreeting}:{}),
         x:state.player.x,y:state.player.y,tx:body.x,ty:body.y};
     }
     function focusMarket() {return focusStop({type:'market'});}

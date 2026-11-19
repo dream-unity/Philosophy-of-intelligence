@@ -93,7 +93,7 @@
     const tutor=profile(site,mentorId),pupil=profile(site,learnerId),week=world.week;
     if(!tutor||!pupil||mentorId===learnerId||!axes.includes(axis))return {ok:false,reason:'Find a mentor and a learner with a shared subject.'};
     const teacher=state(site,mentorId),student=state(site,learnerId),at=skill(pupil,student,axis),teaches=skill(tutor,teacher,axis);
-    if(teacher.lastPracticeWeek===week||student.lastPracticeWeek===week)return {ok:false,reason:'One of us already used this week’s personal practice session.'};
+    if(teacher.lastPracticeWeek===week||student.lastPracticeWeek===week||specialistShift(site,mentorId,week)||specialistShift(site,learnerId,week)||root.EarthPurses?.committed?.(site,mentorId,week)||root.EarthPurses?.committed?.(site,learnerId,week))return {ok:false,reason:'One of us already used this week’s personal practice session.'};
     if(at>=bounds(pupil,axis).max||teaches-at<4)return {ok:false,reason:'This learner needs a different subject or a more experienced mentor.'};
     if(!commit)return {ok:true};
     const m=ensure(site,mentorId),s=ensure(site,learnerId),raised=gain(pupil,s,axis,Math.min(amount,teaches-at,3));
@@ -107,7 +107,7 @@
   function hobbyPractice(world,site,id,axis,commit=false,witness=null){
     const p=profile(site,id),week=world.week;
     if(!p||!axes.includes(axis))return {ok:false,reason:'Choose an interest that belongs to this person.'};
-    if(state(site,id).lastPracticeWeek===week)return {ok:false,reason:'This week’s personal practice session is already used.'};
+    if(state(site,id).lastPracticeWeek===week||specialistShift(site,id,week)||root.EarthPurses?.committed?.(site,id,week))return {ok:false,reason:'This week’s personal practice session is already used.'};
     if(!commit)return {ok:true};
     const m=ensure(site,id),other=witness&&profile(site,witness);
     const raised=gain(p,m,axis,other?2:1);
@@ -152,6 +152,8 @@
     }
     if(action==='mentor')return playable?'Play as '+p.name+' and meet the mentor.':
       p.name+' arranges their own lessons. You can meet them to suggest practice or a work sample.';
+    if(action==='specialistRelief'&&(p.traits?.adaptability??50)<45&&!['waiting','screening'].includes(m.application?.phase))
+      return p.name+' wants to finish their own work. They would consider covering this employer while pursuing a post there.';
     if(action==='enroll' && m.application && m.application.phase!=='deferred' && m.application.targetId!==j.id)
       return p.name+' wants to hear back about their existing job application first.';
     if(action==='apply' && m.training && m.training.targetId!==j.id)return p.name+' wants to finish the course they already chose before pursuing a different employer.';
@@ -168,25 +170,99 @@
     for(const person of people(site)){
       if(person.id===p.id)continue;
       const other=state(site,person.id),score=skill(person,other,j.skill);
-      if(score<learner+3||other.lastPracticeWeek===week||other.training?.pace==='intensive'&&!other.training.paused)continue;
+      if(score<learner+3||other.lastPracticeWeek===week||other.specialistRelief?.week===week||root.EarthPurses?.committed?.(site,person.id,week)||other.training?.pace==='intensive'&&!other.training.paused)continue;
       const priority=score+(root.EarthIntroductions?.level(site,p.id,person.id,j.skill,week)||0);
       if(!best||priority>level||priority===level&&person.id<best.id){best=person;level=priority;}
     }
     return best;
   }
-  function coverFor(site,p,old){
+  function coverFor(site,p,old,week){
     const axis={food:'care',repair:'craft',exchange:'organisation'}[old.occupation];
     const assigned=new Set(Object.values(site.careers||{}).flatMap(m=>[m.application?.coverId,m.departure?.coverId]).filter(Boolean));
     let best=null,bestScore=-1;
     for(const other of people(site)){
       if(other.id===p.id||assigned.has(other.id))continue;
       const m=state(site,other.id);
-      if(m.application?.phase==='notice'||m.training?.pace==='intensive'&&!m.training.paused)continue;
+      if(m.application?.phase==='notice'||m.training?.pace==='intensive'&&!m.training.paused||m.specialistRelief?.week>=week||root.EarthPurses?.committed?.(site,other.id,week))continue;
       const post=get(jobs,m.jobId)||origin(other);
       const score=skill(other,m,axis)+(post.occupation===old.occupation?25:0);
       if(score>bestScore){best=other;bestScore=score;}
     }
     return best;
+  }
+  // Every established district shares the first specialist with its regional
+  // employer. Further posts need households to serve and actual working space.
+  const specialistSites={
+    nurse:['hall','care','an assembly hall or neighbourhood services precinct'],
+    police:['hall','transit','an assembly hall or transit precinct'],
+    teacher:['hall','care','an assembly hall or neighbourhood services precinct'],
+    musician:['hall','care','an assembly hall or neighbourhood services precinct'],
+    mathematician:['workshop','yard','a repair workshop or fabrication precinct'],
+    engineer:['workshop','yard','a repair workshop or fabrication precinct'],
+    geneticist:['garden','food','a community garden or food cooperative precinct']
+  };
+  function funded(site,j){
+    const rule=specialistSites[j.id];
+    const rooms=(site.buildings||[]).filter(b=>b.kind===rule[0]).length+(site.city?.precincts||[]).filter(p=>p.use===rule[1]).length;
+    return 1+Math.min(2,rooms,Math.floor((site.population||0)/18));
+  }
+  const reserves=(m,id)=>m.application?.targetId===id&&['offer','notice'].includes(m.application.phase);
+  function openings(site,targetId){
+    if(!Object.hasOwn(specialistSites,targetId))return null;
+    const capacity=funded(site,jobs[targetId]),used=Object.values(site.careers||{}).filter(m=>m.jobId===targetId||reserves(m,targetId)).length;
+    return Math.max(0,capacity-used);
+  }
+  function specialistShift(site,id,week){
+    const relief=memory(site,id)?.specialistRelief,j=get(jobs,relief?.targetId);
+    return j&&relief.week===week?{id:j.id,venue:j.venue,label:j.label,employer:j.employer,metric:j.metric,week}:null;
+  }
+  function onOtherDuty(site,id,m,week){
+    return m.training?.pace==='intensive'&&!m.training.paused||m.specialistRelief?.week===week||
+      coverCommitment(site,id,week)!=null;
+  }
+  function pressure(site,j){
+    if(j.metric==='food')return site.food<2*Math.ceil((site.population||1)/5);
+    if(j.metric==='materials')return site.materials<8||(site.construction||[]).some(c=>!c.paused);
+    return site[j.metric]<(j.metric==='wellbeing'?52:48);
+  }
+  const demonstrated=(p,m,j)=>skill(p,m,j.skill)+2*samples(m,j)+(employerReference(p,m,j)?.quality||0);
+  function opening(world,site,p,m,j,current){
+    if(!j||!Object.hasOwn(specialistSites,j.id))return null;
+    const team=[],waiters=[],capacity=funded(site,j),week=world.week;
+    let reliefTaken=null,staffed=0;
+    for(const [id,v] of Object.entries(site.careers||{})){
+      if(v.specialistRelief?.targetId===j.id&&v.specialistRelief.week===week+1)reliefTaken=id;
+      if(v.jobId===j.id||reserves(v,j.id)){
+        const appointed=v.jobId===j.id;
+        team.push({id,name:profile(site,id)?.name||id,status:appointed?'appointed':v.application.phase});
+        if(appointed&&!onOtherDuty(site,id,v,week+1))staffed++;
+      }
+      if(v.application?.targetId===j.id&&v.application.phase==='waiting')
+        waiters.push({id,name:profile(site,id)?.name||id,since:v.application.appliedWeek});
+    }
+    waiters.sort((a,b)=>a.since-b.since||demonstrated(profile(site,b.id),state(site,b.id),j)-demonstrated(profile(site,a.id),state(site,a.id),j)||a.id.localeCompare(b.id));
+    const free=Math.max(0,capacity-team.length),day=week+1,full=staffed>=capacity&&!pressure(site,j);
+    const nextRound=day+(j.interval-day%j.interval)%j.interval;
+    const life=site.autonomy?.people?.[p.id],today=life?.history?.[0];
+    const used=today?.week===week&&['project','learn','apply','gather','preserve','cover','wage','visit','host'].includes(today.kind);
+    const debt=used||life?.contribution?.week===week||m.lastPracticeWeek===week||m.specialistRelief?.week>=week||
+      root.EarthPurses?.committed?.(site,p.id,week);
+    const roster=site.workforce?.members?.[p.id],joint=Object.entries(site.autonomy?.projects?.owners||{}).some(([id,goal])=>
+      goal.volunteer?.week===week&&(goal.volunteer.from===p.id||id===p.id));
+    let reason='';
+    if(current.id===j.id)reason='This person already holds the regular post.';
+    else if(!qualified(p,m,j)||screening(p,m,j).length)reason='Finish the qualification and demonstrate the entry skills before covering an independent round.';
+    else if(debt||m.application?.phase==='notice'||onOtherDuty(site,p.id,m,day)||site.shift?.residentId===p.id||site.residents?.some(r=>r.id===p.id&&r.promise)||roster?.jobId||roster?.preferredJobId||roster?.preference&&roster.preference!=='auto'||joint||
+      root.EarthConstruction?.assignedDuty?.(site,world,p.id)||root.EarthCivicInitiatives?.commitment?.(site,world,p.id)||site.pursuits?.ticket?.maker===p.name)
+      reason='Another practice session, shift or promise already needs this person.';
+    else if(reliefTaken)reason=(profile(site,reliefTaken)?.name||'A colleague')+' already covers the next round.';
+    else if(full)reason='The funded team can cover its current workload.';
+    else if(day!==nextRound)reason='The next relief round is in week '+nextRound+'. Book it the week before.';
+    const rule=specialistSites[j.id],oldGood=replacementGoods[current.occupation];
+    const service='One qualified relief worker provides 1 '+j.metric+' on an uncovered or high-demand round. Their usual team gives up 1 '+oldGood+' for that week.';
+    return {capacity,free,team,waiters,reason:'The regional employer funds one district post. Each additional post needs another 18 residents and '+rule[2]+', up to three posts. A resignation or expired offer also frees a post.',
+      nextReview:m.application?.targetId===j.id&&['waiting','screening'].includes(m.application.phase)?m.application.dueWeek:null,
+      relief:{available:!reason,reason,metric:j.metric},service};
   }
   function coursePhase(j,credits){
     if(j.trainingWeeks<8)return {phase:'Work induction',phaseDetail:'Learn the daily rounds with the crew before applying.'};
@@ -204,6 +280,7 @@
   function status(world,p,m,current){
     const a=m.application,t=m.training,j=get(jobs,a?.targetId);
     if(a?.phase==='screening')return j.employer+' is reviewing the application for '+j.label+'. A decision is due in week '+a.dueWeek+'. '+current.employer+' still employs '+p.name+'.';
+    if(a?.phase==='waiting')return p.name+' met the '+j.label+' entry standard and is on the qualified waiting list. '+j.employer+' checks openings again in week '+a.dueWeek+'. Their current work and qualification continue.';
     if(a?.phase==='offer')return j.employer+' offered the '+j.label+' post. Accept by week '+a.dueWeek+' to begin notice at '+current.employer+'.';
     if(a?.phase==='notice')return p.name+' remains '+current.label+' until week '+a.dueWeek+', then starts at '+j.employer+'. '+(a.coverName?a.coverName+' will cover the old post.':'The former team still needs cover.');
     if(t){const target=jobs[t.targetId];return (t.paused?'Study paused at ':'Studying for '+target.label+' · ')+t.credits+'/'+target.trainingWeeks+' credits. '+(t.paused?'Completed credits are retained.':coursePhase(target,t.credits).phase+'. ')+(t.paused?'':t.pace==='intensive'?'Intensive study earns two credits per week and reduces working time.':'Evening study earns one credit each week after work.');
@@ -216,7 +293,7 @@
     const m=state(site,id),a=m.application,t=m.training,week=world.week;
     const current=get(jobs,m.jobId)||origin(p);
     const j=get(jobs,targetId||a?.targetId||t?.targetId||current.id);
-    const revision=m.revision||0,choices=[];
+    const revision=m.revision||0,choices=[],posts=opening(world,site,p,m,j,current);
     const speaker=context.speakerId??root.EarthAgency?.actorId(site)??id;
     const skills=Object.fromEntries(axes.map(k=>[k,skill(p,m,k)]));
     function add(action,text,detail,gate='',extra={}){
@@ -239,7 +316,8 @@
         }
         if(t.paused)add('leaveCourse','Leave the course','Your acquired skills stay. Leaving releases the place and clears these course credits.');
       }
-      const taken=m.lastPracticeWeek===week||site.autonomy?.people?.[id]?.contribution?.week===week?'This person already used their personal practice session this week.':'';
+      const taken=m.lastPracticeWeek===week||m.specialistRelief?.week===week||site.autonomy?.people?.[id]?.contribution?.week===week||root.EarthPurses?.committed?.(site,id,week)?'This person already used their personal practice session this week.':'';
+      if(posts&&!sameJob&&canStudy)add('specialistRelief','Cover a '+j.label.toLowerCase()+' round',posts.service,posts.relief.reason);
       const reference=employerReference(p,m,j);
       if(reference?.quality<0)add('relief','Take a relief shift for '+reference.employer,
         'Commit this week’s practice session to the former crew. They receive one '+replacementGoods[reference.occupation]+' next week and improve the reference by one point.',taken);
@@ -258,13 +336,13 @@
         add('apply','Apply to '+j.employer,'The employer reviews the application over two weeks. Current job and wages continue.',retry);
       }else if(active&&appHere){
         if(a.phase==='offer'){
-          const through=coverCommitment(site,id,week);
+          const through=Math.max(coverCommitment(site,id,week)||0,m.specialistRelief?.week>=week?m.specialistRelief.week:0);
           const committed=through?'The worker promised cover through week '+through+'. The offer can be reconsidered after that shift.':'';
           if(speaker===id)add('accept','Accept the offer','Start a notice period at '+current.employer+'. The new post begins after the handover.',committed);
           else add('discussOffer','Discuss the offer with '+p.name,'They weigh the offer against conditions at their current workplace and decide whether to give notice.',committed);
         }
         if(a.phase==='notice'){
-          const cover=context.matchPeople!==false&&!a.coverId?coverFor(site,p,current):null;
+          const cover=context.matchPeople!==false&&!a.coverId?coverFor(site,p,current,week):null;
           if(cover)add('handover','Arrange cover with '+cover.name,'They can take up the old duties through the first two weeks after departure. They may step away from their own trade.', '', {coverId:cover.id,coverName:cover.name});
           if(!a.releaseAsked&&a.dueWeek>week+1)add('release','Request an early release',current.employer+' can refuse if important work is uncovered. Leaving urgently without cover affects their future reference.');
         }else add('withdraw','Withdraw application','Keep the current job and all completed learning.');
@@ -274,7 +352,7 @@
       skills,aptitude:Object.fromEntries(axes.map(k=>[k,aptitude(p,k)])),bounds:Object.fromEntries(axes.map(k=>[k,bounds(p,k)])),
       history:(m.history||[]).map(h=>({...h})),training:t?{...t,...coursePhase(jobs[t.targetId],t.credits)}:null,application:a?{...a}:null,
       qualifications:{...m.qualifications},portfolios:{...m.portfolios},references:{...m.references},latestReference:m.latestReference?{...m.latestReference}:null,agreedPlan:m.agreedPlan||null,
-      targetId:j?.id,qualified:j?qualified(p,m,j):false,missing:j?screening(p,m,j):[],
+      targetId:j?.id,opening:posts,qualified:j?qualified(p,m,j):false,missing:j?screening(p,m,j):[],
       fits:j?canFit(p,j):false,stage:a?.phase==='deferred'&&t?'training':a?.phase||(t?'training':'employed'),
       status:status(world,p,m,current),choices,revision};
   }
@@ -314,6 +392,9 @@
         }
         message=p.name+' practised '+axis+who+' and gained '+raised+' skill ('+skill(p,m,axis)+'/'+bounds(p,axis).max+').';break;
       }
+      case 'specialistRelief':
+        m.lastPracticeWeek=week;m.specialistRelief={targetId,week:week+1,occupation:current.occupation};
+        message=p.name+' agreed to cover the '+j.label.toLowerCase()+' round at '+j.employer+' in week '+(week+1)+'. '+current.employer+' gives up 1 '+replacementGoods[current.occupation]+' to release them.';break;
       case 'relief':{
         const reference=employerReference(p,m,j);
         const quality=reference.quality+1;
@@ -326,7 +407,7 @@
         m.lastPracticeWeek=week;m.portfolios[targetId]=samples(m,j)+1;
         message=p.name+' prepared a '+j.label+' work sample ('+m.portfolios[targetId]+'/3).';break;
       case 'apply':
-        m.application={targetId,phase:'screening',dueWeek:week+2,autonomous};
+        m.application={targetId,phase:'screening',dueWeek:week+2,autonomous,...(Object.hasOwn(specialistSites,targetId)?{appliedWeek:week}:{})};
         message=j.employer+' received '+p.name+'’s application. Review in week '+(week+2)+'.';break;
       case 'withdraw':
         delete m.application;message=p.name+' withdrew the application and kept their old post.';break;
@@ -368,7 +449,7 @@
     gain(p,m,j.secondary,delta(Math.min(14,Math.ceil(j.trainingWeeks/7))));
   }
   function tick(world,site){
-    const week=world.week,events=[];
+    const week=world.week,events=[],panel=[];
     for(const [id,m] of Object.entries(site.careers||{})){
       const p=profile(site,id);if(!p)continue;
       if(m.processedWeek===week)continue;
@@ -386,7 +467,9 @@
           announce(p.name+' completed the '+j.label+' course. '+j.employer+' can now consider the qualification alongside skills and samples.');
         }
       }
-      if(a && a.phase==='screening' && week>=a.dueWeek){
+      if(a && ['screening','waiting'].includes(a.phase)&&week>=a.dueWeek&&Object.hasOwn(specialistSites,a.targetId)){
+        panel.push({id,p,m,a,j:jobs[a.targetId]});
+      }else if(a && a.phase==='screening' && week>=a.dueWeek){
         const j=jobs[a.targetId],missing=screening(p,m,j);
         if(missing.length){a.phase='deferred';a.dueWeek=week+1;a.reason=missing.join(', ')+'.';
           announce(j.employer+' deferred '+p.name+'’s application. Remaining requirements include '+a.reason);}
@@ -405,9 +488,32 @@
         m.jobId=target.id;m.joinedWeek=week;delete m.application;
         announce(p.name+' started as '+target.label+' at '+target.employer+'. '+prior.employer+(a.coverId?' handed the work to '+a.coverName+' and recorded a strong reference.':a.early?' is short-staffed after the early release and recorded a poor reference.':' accepted the full notice and needs temporary cover.'));
       }
+      if(m.specialistRelief&&week>m.specialistRelief.week){delete m.specialistRelief;changed=true;}
       if(m.relief && week>m.relief.week+1){delete m.relief;changed=true;}
       if(m.departure && week>m.departure.throughWeek){delete m.departure;changed=true;}
       if(changed){m.revision++;m.processedWeek=week;}
+    }
+    // Resolve expired reservations and actual handovers before awarding this
+    // week's seats. Earlier submissions take priority, with demonstrated
+    // skill, portfolio and a stable local ID deciding a simultaneous cohort.
+    const filed=a=>a.appliedWeek??Math.max(1,a.dueWeek-2);
+    const merit=r=>demonstrated(r.p,r.m,r.j);
+    panel.sort((a,b)=>filed(a.a)-filed(b.a)||merit(b)-merit(a)||a.id.localeCompare(b.id));
+    for(const {p,m,a,j} of panel){
+      const wasWaiting=a.phase==='waiting',missing=screening(p,m,j);
+      let text='';
+      if(missing.length){
+        a.phase='deferred';a.dueWeek=week+1;a.reason=missing.join(', ')+'.';
+        text=j.employer+' deferred '+p.name+'’s application. Remaining requirements include '+a.reason;
+      }else if(openings(site,j.id)>0){
+        a.phase='offer';a.dueWeek=week+3;delete a.reason;
+        text=j.employer+' reserved the '+j.label+' post for '+p.name+'. They have through week '+a.dueWeek+' to decide.';
+      }else{
+        a.appliedWeek=filed(a);a.phase='waiting';a.dueWeek=week+1;delete a.reason;
+        if(!wasWaiting)text=j.employer+' added '+p.name+' to the qualified waiting list. All funded posts are held. Next review in week '+a.dueWeek+'.';
+      }
+      if(text){note(m,week,text);events.push(text);}
+      m.revision++;m.processedWeek=week;
     }
     return events;
   }
@@ -423,7 +529,10 @@
     const add=(key,amount)=>{delta[key]=(delta[key]||0)+amount;};
     for(const [id,m] of Object.entries(site.careers||{})){
       const j=get(jobs,m.jobId),p=profile(site,id);if(!p)continue;
-      if(j && world.week>m.joinedWeek && (world.week-m.joinedWeek)%j.interval===0)add(j.metric,1);
+      if(j && world.week>m.joinedWeek && (world.week-m.joinedWeek)%j.interval===0&&(!Object.hasOwn(specialistSites,j.id)||!onOtherDuty(site,id,m,world.week)))add(j.metric,1);
+      if(m.specialistRelief?.week===world.week){
+        add(jobs[m.specialistRelief.targetId].metric,1);add(replacementGoods[m.specialistRelief.occupation],-1);
+      }
       if(m.reducedWorkWeek===world.week || m.training?.pace==='intensive'&&!m.training.paused)add(replacementGoods[(j||origin(p)).occupation],-1);
       if(m.relief?.week===world.week-1)add(replacementGoods[m.relief.occupation],1);
       const gap=m.departure;
@@ -442,13 +551,18 @@
     if(!record(site.careers))return false;
     const values=(map,keys,min,max)=>record(map)&&Object.entries(map).every(([k,n])=>keys.includes(k)&&int(n,min,max));
     const ids=catalog.map(j=>j.id);
-    const personOK=id=>safeId(id)&&Boolean(profile(site,id));
+    const personOK=id=>safeId(id)&&Boolean(profile(site,id)),reliefBookings=new Set();
     for(const [id,m] of Object.entries(site.careers)){
       if(!personOK(id)||!record(m)||!int(m.revision,1)||!values(m.skills,axes,0,100)||!values(m.qualifications,ids,1,week)||
         !values(m.portfolios,ids,0,3)||!values(m.references,[...ids,'origin'],-2,2)||!Array.isArray(m.history)||m.history.length>10||
         !m.history.every(h=>record(h)&&int(h.week,1,week)&&label(h.text)))return false;
       const owner=profile(site,id);
       if(Object.entries(m.skills).some(([axis,value])=>value<bounds(owner,axis).min||value>bounds(owner,axis).max))return false;
+      const relief=m.specialistRelief;
+      if(relief!==undefined&&(!record(relief)||!Object.hasOwn(specialistSites,relief.targetId)||!int(relief.week,2,week+1)||!Object.hasOwn(replacementGoods,relief.occupation)||(!int(m.lastPracticeWeek,relief.week-1,week))))return false;
+      if(relief){
+        const slot=relief.targetId+'/'+relief.week;if(reliefBookings.has(slot))return false;reliefBookings.add(slot);
+      }
       if(m.relief!==undefined && (!record(m.relief)||!int(m.relief.week,1,week)||!Object.hasOwn(replacementGoods,m.relief.occupation)))return false;
       if(m.agreedPlan!=null && !get(jobs,m.agreedPlan))return false;
       const ref=m.latestReference;
@@ -459,11 +573,12 @@
       if(['training','application','departure'].some(k=>m[k]!==undefined&&!record(m[k])))return false;
       if(t&&(!get(jobs,t.targetId)||!int(t.credits,0,jobs[t.targetId].trainingWeeks-1)||!int(t.startedWeek,1,week)||!int(t.lastWeek,t.startedWeek,week)||
         !['evening','intensive'].includes(t.pace)||typeof t.paused!=='boolean'||typeof t.autonomous!=='boolean'))return false;
-      if(a&&(!get(jobs,a.targetId)||!['screening','offer','notice','deferred'].includes(a.phase)||!int(a.dueWeek,1,week+8)||typeof a.autonomous!=='boolean'||
+      if(a&&(!get(jobs,a.targetId)||!['screening','offer','notice','deferred','waiting'].includes(a.phase)||!int(a.dueWeek,1,week+8)||typeof a.autonomous!=='boolean'||a.appliedWeek!=null&&!int(a.appliedWeek,1,week)||
+        a.phase==='waiting'&&(!Object.hasOwn(specialistSites,a.targetId)||!int(a.appliedWeek,1,week))||
         ['early','releaseAsked'].some(k=>a[k]!==undefined&&typeof a[k]!=='boolean')||a.phase==='deferred'&&!label(a.reason)||a.coverId!=null&&(!personOK(a.coverId)||a.coverId===id||!label(a.coverName))))return false;
       if(d&&(!label(d.oldRole)||!label(d.oldEmployer)||!Object.hasOwn(replacementGoods,d.occupation)||!int(d.throughWeek,1,week+2)||d.coverId!=null&&(!personOK(d.coverId)||d.coverId===id)))return false;
     }
     return true;
   }
-  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
+  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,openings,specialistShift,coverCommitment,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
 })(typeof window==='undefined'?globalThis:window);
