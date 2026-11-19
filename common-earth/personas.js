@@ -73,17 +73,21 @@
       if(Math.abs(from%3-to%3)+Math.abs(Math.floor(from/3)-Math.floor(to/3))===1)baseSlots.push(['carrier-'+from+'-'+to,'carrier','carrier']);
     }
   }
-  function hash(value){
-    let h=2166136261;
-    for(let i=0;i<value.length;i++)h=Math.imul(h^value.charCodeAt(i),16777619);
-    h=Math.imul(h^(h>>>16),0x85ebca6b);
-    h=Math.imul(h^(h>>>13),0xc2b2ae35);
+  const multiply=Math.imul;
+  function hashChars(value,h=2166136261){
+    for(let i=0;i<value.length;i++)h=multiply(h^value.charCodeAt(i),16777619);
+    return h;
+  }
+  function hash(value,prefix){
+    let h=hashChars(value,prefix);
+    h=multiply(h^(h>>>16),0x85ebca6b);
+    h=multiply(h^(h>>>13),0xc2b2ae35);
     return (h^(h>>>16))>>>0;
   }
   function shuffled(values,seed){
-    const items=values.slice();
+    const items=values.slice(),prefix=hashChars(seed+'#');
     for(let i=items.length-1;i>0;i--){
-      const j=hash(seed+'#'+i)%(i+1);
+      const j=hash(String(i),prefix)%(i+1);
       [items[i],items[j]]=[items[j],items[i]];
     }
     return items;
@@ -156,8 +160,9 @@
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
   function makeProfile(reg,slot){
     const {id,key,kind,ordinal,name}=slot;
-    const seed=reg.seed+'|'+id;
-    const roll=(tag,min,max)=>min+hash(seed+'|'+tag)%(max-min+1);
+    // Each inherited roll keeps its original seed bytes and terminal mixing.
+    const birthPrefix=hashChars(reg.seed+'|'+id+'|');
+    const roll=(tag,min,max)=>min+hash(tag,birthPrefix)%(max-min+1);
     const [job,lead,support,custom,workInterest]=work[key];
     const originRole=slot.originRole||job;
     let hobby=reg.pastimes[ordinal%reg.pastimes.length];
@@ -193,7 +198,7 @@
     const intro=name+' '+custom+'.';
     const description=intro+' '+name+' '+habit+' and spends free time on '+hobbyName+'.';
     const outsideWork=key==='repairer'?'I enjoy '+hobbyName+'. I can work out a gear ratio in my head, but I have to learn a tune one phrase at a time.':saying;
-    return Object.freeze({id,name,kind,role:originRole,originRole,home:reg.region,description,interests,
+    return Object.freeze({id,name,kind,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
       strengths,traits:temperament,aptitudes:Object.freeze(skills),bounds:Object.freeze(bounds),outsideWork});
   }
   function profile(site,id){
@@ -204,10 +209,11 @@
     return result;
   }
   function retainsPorter(site,id){
-    const career=site?.careers?.[id];
-    if(!career||registry(site)?.slots.get(id)?.kind!=='carrier')return false;
-    return Boolean(root.EarthCareers?.role(site,id)||career.training||career.application||career.agreedPlan||
-      Object.keys(career.qualifications||{}).length);
+    if(typeof id!=='string'||!id.startsWith('carrier-')||registry(site)?.slots.get(id)?.kind!=='carrier')return false;
+    const career=site?.careers?.[id],owners=site?.autonomy?.projects?.owners,project=owners?.[id];
+    return Boolean(root.EarthCareers?.role(site,id)||career?.training||career?.application||career?.agreedPlan||
+      Object.keys(career?.qualifications||{}).length||project&&(!project.finished&&(project.progress||project.volunteer)||project.finished===site.autonomy.week)||
+      Object.values(owners||{}).some(p=>p.kind==='teach'&&!p.finished&&p.partnerId===id));
   }
   function list(site){
     if(!registry(site))return [];
@@ -215,7 +221,8 @@
     const links=root.CommonEarthSim?.productiveLinks && Array.isArray(site.buildings)?root.CommonEarthSim.productiveLinks(site):[];
     for(const link of links)ids.add('carrier-'+link.from+'-'+link.to);
     // A former porter stays reachable from study through the first application and new job.
-    for(const id of Object.keys(site.careers||{})){
+    const former=new Set([...Object.keys(site.careers||{}),...Object.keys(site.autonomy?.projects?.owners||{})]);
+    for(const id of former){
       if(retainsPorter(site,id))ids.add(id);
     }
     return Array.from(ids,id=>profile(site,id)).filter(Boolean);

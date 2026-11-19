@@ -157,3 +157,22 @@ test('careers, legacy bonds, promises and outside-work replies refer to the same
   assert.equal(app.EarthPersonas.profile(different,id).name,'Taylor','importing another founder with the same ID must preserve their own name');
   assert.equal(app.EarthPersonas.profile(restored,id).name,who.name);
 });
+
+test('reopening a founding preserves the previously generated names and aptitude rolls',()=>{
+  const personas=runtime().EarthPersonas;
+  const site={id:'historic-harbour',foundingRevision:18,lat:-33.05,lon:-71.62,name:'Valparaíso',region:'Valparaíso 🌊',residents:[],buildings:[]};
+  const existing=[
+    ['steward','Rafael Lagos','craft',27,29,49],
+    ['walker-2','Matías Soto','organisation',88,26,48],
+    ['driver','Renata Flores','numeracy',69,33,59],
+    ['carrier-1-2','Pilar Díaz','music',53,68,98]
+  ];
+  for(const [id,name,hobby,sociability,music,ceiling] of existing){
+    const person=personas.profile(site,id);
+    assert.equal(person.name,name);
+    assert.equal(person.hobbyAxis,hobby);
+    assert.equal(person.traits.sociability,sociability);
+    assert.equal(person.aptitudes.music,music);
+    assert.equal(person.bounds.music.max,ceiling);
+  }
+});

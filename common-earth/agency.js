@@ -10,8 +10,13 @@
     {name:'Sana',role:'Market trader',work:'I meet the arriving crews. A market beside a pier can earn extra funds.'}
   ];
   const reject=message=>({ok:false,message});
-  const actor=site=>site?.residents?.find(r=>r.id===site.agency?.actor)||null;
-  const actorId=site=>actor(site)?.id||founder.id;
+  const walkers=locals.map((_,i)=>'walker-'+i);
+  const streetActor=id=>id==='driver'||walkers.includes(id);
+  const canPlay=(site,id)=>id===founder.id||streetActor(id)||Boolean(site?.residents?.some(r=>r.id===id));
+  const actorId=site=>canPlay(site,site?.agency?.actor)?site.agency.actor:founder.id;
+  const actor=site=>{
+    const id=actorId(site);return id===founder.id?null:site.residents.find(p=>p.id===id)||identity(site,id);
+  };
   const point=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1&&p.x<=25&&p.y>=-1&&p.y<=25;
   function identity(site,id){
     if(!site)return null;
@@ -32,27 +37,52 @@
     if(!profile&&!occupation&&(resident||initial===founder))return initial;
     return {...initial,...profile,id,role:occupation||profile?.originRole||initial.role};
   }
+  function playables(site){
+    if(!site)return [];
+    return [founder.id,...site.residents.map(p=>p.id),...walkers,'driver'].map(id=>identity(site,id));
+  }
   function valid(site,week){
     const a=site.agency;
-    if(a==null)return true;
-    if(typeof a!=='object'||Array.isArray(a)||!([founder.id,...site.residents.map(p=>p.id)].includes(a.actor)))return false;
-    if(a.returningActor!=null && (a.actor!==founder.id || !site.residents.some(p=>p.id===a.returningActor)))return false;
+    if(root.EarthDialogue && !root.EarthDialogue.valid(site,week))return false;
+    if(a==null)return site.introductions===undefined;
+    if(typeof a!=='object'||Array.isArray(a)||!canPlay(site,a.actor))return false;
+    if(a.returningActor!=null && (a.actor!==founder.id || a.returningActor===founder.id || !canPlay(site,a.returningActor)))return false;
     if(a.stewardPosition!=null&&!point(a.stewardPosition))return false;
+    if(a.handoffSerial!=null&&(!Number.isSafeInteger(a.handoffSerial)||a.handoffSerial<1))return false;
+    const stamped=p=>point(p)&&Number.isSafeInteger(p.serial)&&p.serial>=1&&p.serial<=a.handoffSerial;
+    if(streetActor(a.actor)&&!a.actorAt)return false;
+    if(a.actorAt!=null&&(!streetActor(a.actor)||a.actorAt.id!==a.actor||!stamped(a.actorAt)))return false;
+    if(a.localPositions!=null&&(typeof a.localPositions!=='object'||Array.isArray(a.localPositions)||
+      !Object.entries(a.localPositions).every(([id,p])=>streetActor(id)&&stamped(p))))return false;
     const knownRecipient=id=>id===founder.id||site.residents.some(p=>p.id===id)||id==='driver'||
       /^walker-[0-4]$/.test(id)||/^carrier-[0-8]-[0-8]$/.test(id);
     return Array.isArray(a.meals)&&a.meals.length<=90&&a.meals.every(m=>m&&typeof m.to==='string'&&knownRecipient(m.to)&&m.to!==m.from&&
-      (m.from===founder.id||site.residents.some(p=>p.id===m.from))&&Number.isSafeInteger(m.week)&&m.week>0&&m.week<=week);
+      canPlay(site,m.from)&&Number.isSafeInteger(m.week)&&m.week>0&&m.week<=week);
   }
   function ensure(site){return site.agency||={actor:founder.id,meals:[]};}
   function checkHandoff(site,id,scene){
     if(!site||!scene||scene.siteId!==site.id||scene.actor!==actorId(site))return reject('The character changed. Choose again.');
     if(scene.mode!=='walk'||!point(scene))return reject('Come ashore or step out of the van before changing characters.');
-    if(id!==founder.id&&!site.residents.some(r=>r.id===id))return reject('Choose someone from this community.');
+    if(!canPlay(site,id))return reject('Choose someone from this community.');
     if(actorId(site)===id)return {ok:true,message:'Already playing as '+identity(site,id).name+'.',unchanged:true};
+    if(streetActor(id)){
+      const incoming=scene.targetPose;
+      if(!incoming||incoming.id!==id||!point(incoming))return reject('The person’s position changed. Choose them again in Street view.');
+      if(incoming.mode!=='walk')return reject(id==='driver'?'The driver is aboard the truck. Take control when they are on foot.':'Wait until this neighbour is on foot.');
+    }
     return {ok:true};
+  }
+  function position(site,scene){
+    const state=ensure(site);
+    state.handoffSerial=(state.handoffSerial||0)+1;
+    return {x:scene.x,y:scene.y,serial:state.handoffSerial};
   }
   function releaseAt(site,person,scene){
     if(!scene||scene.siteId!==site.id||scene.actor!==person.id||scene.mode!=='walk'||!point(scene))return;
+    if(streetActor(person.id)){
+      const positions=ensure(site).localPositions||={};
+      positions[person.id]=position(site,scene);return;
+    }
     const x=Math.max(0,Math.min(24,scene.x)),y=Math.max(0,Math.min(24,scene.y));
     root.EarthConstruction?.releaseFromShift(site,{residentId:person.id},{residentId:person.id,x,y});
   }
@@ -62,18 +92,27 @@
     else state.stewardPosition={x:scene.x,y:scene.y};
     delete state.returningActor;
     state.actor=id;
+    if(streetActor(id))state.actorAt={id,...position(site,scene.targetPose)};
+    else delete state.actorAt;
     return {ok:true,message:'Playing as '+identity(site,id).name+'.'+(before?' '+before.name+' is choosing work again.':'')};
   }
   function depart(site,scene){
     const person=actor(site);
     // A shared shift or occupied vehicle stays paused at the same stop.
     if(!person||site.shift||scene?.siteId===site.id&&scene.mode!=='walk')return;
-    releaseAt(site,person,scene);
+    const current=scene?.siteId===site.id&&scene.actor===person.id&&scene.mode==='walk'&&point(scene);
+    if(streetActor(person.id)&&!current&&site.agency.actorAt){
+      const positions=site.agency.localPositions||={};
+      positions[person.id]=position(site,site.agency.actorAt);
+    }else releaseAt(site,person,scene);
     site.agency.returningActor=person.id;site.agency.actor=founder.id;
+    delete site.agency.actorAt;
   }
   function resume(site){
     if(!site.agency?.returningActor)return;
-    site.agency.actor=site.agency.returningActor;delete site.agency.returningActor;
+    const state=site.agency,id=state.returningActor;
+    state.actor=id;delete state.returningActor;
+    if(streetActor(id)&&state.localPositions?.[id])state.actorAt={id,...position(site,state.localPositions[id])};
   }
   function converse(site,world,targetId,topic,meeting){
     const week=world.week;
@@ -83,6 +122,10 @@
       Math.hypot(meeting.x-meeting.tx,meeting.y-meeting.ty)>1.56)return reject('Stand beside this neighbour on foot to talk.');
     const target=identity(site,targetId),speaker=identity(site,actorId(site));
     if(!target||target.available===false||targetId===speaker.id)return reject('Find another person nearby.');
+    if(topic!=='meal'&&root.EarthDialogue){
+      const answer=root.EarthDialogue.describe(site,world,target,speaker,topic,meeting);
+      if(answer)return answer;
+    }
     const resident=site.residents.find(r=>r.id===targetId);
     const received=site.agency?.meals?.find(m=>m.to===targetId&&m.week===week);
     const prior=site.agency?.meals?.find(m=>m.to===speaker.id&&m.week===week);
@@ -127,5 +170,8 @@
     }else return reject('Choose a conversation topic.');
     return {ok:true,message:prefix+'“'+words+'”'};
   }
-  root.EarthAgency=Object.freeze({actor,actorId,founder,identity,valid,checkHandoff,change,depart,resume,converse});
+  function topics(site,world,id){
+    return root.EarthDialogue?.topics(site,world,id)||[['news','How are things?'],['work','What are you working on?'],['interests','Outside work'],['meal','Share a meal · 1 food']].map(([id,label])=>({id,label}));
+  }
+  root.EarthAgency=Object.freeze({actor,actorId,canPlay,playables,founder,identity,valid,checkHandoff,change,depart,resume,converse,topics});
 })(typeof window==='undefined'?globalThis:window);

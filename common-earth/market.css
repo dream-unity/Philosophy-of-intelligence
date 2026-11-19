@@ -1,0 +1,25 @@
+#local-market .market-stock{width:100%;border-collapse:collapse;font-size:.78rem;line-height:1.3;font-variant-numeric:tabular-nums}
+#local-market .market-stock th,#local-market .market-stock td{padding:.32rem .18rem;text-align:right;border-bottom:1px solid #ffffff25}
+#local-market .market-stock th:first-child{text-align:left}
+#local-market .market-stock thead th{font-size:.72rem;letter-spacing:.01em}
+#local-market .market-tabs,#local-market .market-buttons,#local-market .market-heading{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+#local-market .market-tabs{margin:.65rem 0;border-bottom:1px solid #ffffff25}
+#local-market .market-tabs button{padding:.28rem .34rem}
+#local-market .market-tabs button[aria-pressed=true]{font-weight:700;text-decoration:underline;text-underline-offset:.24rem}
+#local-market .market-page{display:grid;gap:.55rem}
+#local-market .market-good{padding:.45rem 0;border-bottom:1px solid #ffffff25;display:grid;gap:.35rem}
+#local-market .market-heading{justify-content:space-between}
+#local-market .market-heading span,#local-market .market-help,#local-market .market-reason,#local-market .market-feedback,#local-market li{font-size:.8rem;line-height:1.45}
+#local-market h4,#local-market p,#local-market ul,#local-market ol{margin:0}
+#local-market ul,#local-market ol{padding-inline-start:1.2rem}
+#local-market li+li{margin-top:.4rem}
+#local-market .market-feedback{margin-top:.6rem;font-weight:600}
+
+#local-market .market-table-wrap{max-width:100%;overflow-x:auto}
+#local-market .market-page details>summary{cursor:pointer;font-size:.83rem;font-weight:600}
+#local-market .market-page details[open]>summary{margin-bottom:.4rem}
+
+#local-market .market-provisions{padding:.38rem 0;border-bottom:1px solid #ffffff25}
+#local-market .market-provisions label{display:grid;gap:.22rem;font-size:.78rem;font-weight:600}
+#local-market .market-provisions select{width:100%;max-width:100%;min-width:0}
+#local-market .market-provision-action{display:grid;gap:.2rem}

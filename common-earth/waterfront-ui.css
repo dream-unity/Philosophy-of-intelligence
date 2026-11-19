@@ -1,0 +1,8 @@
+.waterfront-panel { display:grid; gap:.5rem; color:var(--paper,#f0efdf); font:500 .87rem/1.45 var(--sans,system-ui); }
+.waterfront-pantry { color:#bce1c9; font-size:.85rem; }
+.waterfront-panel p { margin:0; }
+.waterfront-actions { display:flex; flex-wrap:wrap; gap:.4rem; }
+.waterfront-actions button { min-height:44px; min-width:44px; flex:1 1 115px; padding:.42rem .6rem; white-space:normal; }
+.waterfront-actions [data-fishing="line"] { border-color:#80af95; }
+.waterfront-result:not(:empty) { border-top:1px solid var(--line,#4c5b59); padding-top:.35rem; }
+.waterfront-result:empty,.waterfront-panel[hidden],.waterfront-actions [hidden] { display:none; }

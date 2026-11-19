@@ -9,47 +9,49 @@
     function update(){
       const site=sim.active();
       if(!site)return;
-      const people=[agency.identity(site,'steward'),...site.residents],key=JSON.stringify(people.map(p=>[p.id,p.name]));
+      const people=agency.playables?.(site)||[agency.identity(site,'steward'),...site.residents],key=JSON.stringify(people.map(p=>[p.id,p.name]));
       if(siteKey!==key){
         dismissReview();actorSelect.replaceChildren(...people.map(p=>option(p.id,p.name)));
         siteKey=key;
       }
-      const actor=agency.actor(site);
-      actorSelect.value=agency.actorId(site);
-      document.getElementById('actor-role-label').hidden=!actor;
-      if(!actor)return;
+      const id=agency.actorId(site),worker=site.residents.find(p=>p.id===id);
+      actorSelect.value=id;
+      document.getElementById('actor-role-label').hidden=!worker;
+      if(!worker)return;
       if(!roleSelect.options.length){
         const preferences=root.EarthConstruction?.view(site,sim.state).preferences||[];
         roleSelect.replaceChildren(...preferences.map(p=>option(p.id,p.label)));
       }
-      roleSelect.value=site.workforce?.members?.[actor.id]?.preference||'auto';
+      roleSelect.value=site.workforce?.members?.[worker.id]?.preference||'auto';
     }
     let review=null;
     function dismissReview(){review?.remove();review=null;}
-    async function switchTo(id,quote){
+    async function switchTo(id,quote,origin){
       if(changing)return;
       const local=street(),actor=agency.actorId(sim.active()),siteId=sim.state.activeId,expected=version();
-      if(!local)return;
+      const visible=()=>!origin||origin.current();
+      if(!local||!visible())return;
       changing=true;actorSelect.disabled=true;dismissReview();
       try{
-        const scene=()=>version()===expected&&street()===local&&siteId===sim.state.activeId&&actor===agency.actorId(sim.active())&&local.getState();
+        const scene=()=>visible()&&version()===expected&&street()===local&&siteId===sim.state.activeId&&actor===agency.actorId(sim.active())&&(local.actorScene?local.actorScene(id):local.getState());
         const result=await sim.perform('changeActor',id,scene,quote);
-        if(version()!==expected||street()!==local)return;
+        if(version()!==expected||street()!==local||!visible())return;
         if(result.finishQuote){
           review=node('div','actor-review');
-          const finish=button('Finish day and switch',()=>switchTo(id,result.finishQuote),'secondary-button');
-          const keep=button('Continue this day',()=>{dismissReview();actorSelect.focus();},'text-button');
+          const finish=button('Finish day and switch',()=>switchTo(id,result.finishQuote,origin),'secondary-button');
+          const keep=button('Continue this day',()=>{dismissReview();(origin?.returnFocus||actorSelect).focus({preventScroll:true});},'text-button');
           review.append(node('p','action-description',result.message),finish,keep);
-          actorSelect.closest('.actor-controls').append(review);finish.focus({preventScroll:true});
+          if(origin)origin.host.prepend(review);else actorSelect.closest('.actor-controls').append(review);
+          finish.focus({preventScroll:true});
         }else if(onResult(result)){
-          resetEncounter();local.setSite(sim.active());refresh();
+          resetEncounter();local.setSite(sim.active());refresh();origin?.switched?.(result);
         }
         update();
       }finally{changing=false;actorSelect.disabled=false;}
     }
     actorSelect.addEventListener('change',()=>switchTo(actorSelect.value));
     roleSelect.addEventListener('change',async()=>{
-      const site=sim.active(),id=site&&agency.actor(site)?.id,local=street(),expected=version();
+      const site=sim.active(),id=site?.residents.find(p=>p.id===agency.actorId(site))?.id,local=street(),expected=version();
       if(!id||!local)return;
       const stillPlaying=()=>version()===expected&&street()===local&&sim.state.activeId===site.id&&agency.actorId(sim.active())===id;
       roleSelect.disabled=true;
@@ -77,7 +79,7 @@
             const liveMeeting=()=>version()===expected && street()===local && sim.state.activeId===site.id &&
               agency.actorId(sim.active())===source && local.meeting(ref,true);
             const result=await sim.perform('converse',id,topic,liveMeeting);
-            if(version()!==expected||street()!==local)return;
+            if(version()!==expected||street()!==local||!visible())return;
             if(result.changed||topic==='meal'&&result.ok){onResult(result);refresh();}
             else if(reply.isConnected)reply.textContent=result.message;
           };
@@ -101,9 +103,9 @@
       }
       container.append(details);
     }
-    async function playAs(id){
-      await switchTo(id);
-      if(review)review.scrollIntoView({block:'center',behavior:'instant'});
+    async function playAs(id,origin){
+      await switchTo(id,undefined,origin);
+      if(review)review.scrollIntoView({block:origin?'nearest':'center',behavior:'instant'});
     }
     return {update,conversation,localsList,dismissReview,playAs};
   }

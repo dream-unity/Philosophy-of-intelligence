@@ -35,11 +35,11 @@
     onPickup:(person,arrive)=>meetResident(person,arrive),
     atMarket:()=>view==='street' && Boolean(street?.meeting({type:'market'})),
     captureScene:(action,model)=>{
-      const expected=arrivalVersion,local=street;
+      const expected=arrivalVersion,local=street,sceneEpoch=streetHud?.active()==='work'?streetHud.version():null;
       const venue=action==='collect'?{type:'market'}:
         action==='pickup'?{type:'resident',residentId:model.ticket.supplier.id}:null;
       return ()=>{
-        if(view!=='street'||!local||local!==street||arrivalVersion!==expected)return null;
+        if(view!=='street'||!local||local!==street||arrivalVersion!==expected||sceneEpoch!==null&&streetHud.version()!==sceneEpoch)return null;
         return venue?local.meeting(venue):local.getState();
       };
     },
@@ -59,12 +59,160 @@
     resetEncounter:()=>{arrivalVersion++;crewOrders?.cancel();cancelPlacement();street?.cancelTravel();encounter=null;visiting=null;peers=false;viewingShift=false;group='people';}
   });
   const lifePanel=window.EarthLifePanel?.mount($('character-lives'),{
-    sim,street:()=>view==='street'?street:null,version:()=>arrivalVersion,reviewWeek,
-    meet:meetForLife,playAs:id=>agencyUI?.playAs(id),onResult:presentResult,after:()=>{street?.setSite(sim.active());render();}
+    sim,street:()=>view==='street'?street:null,version:()=>arrivalVersion,reviewWeek:()=>streetHud?.active()==='life'?streetHud.previewWeek():reviewWeek(),
+    meet:meetForLife,playAs:sceneHandoff,onResult:presentResult,after:()=>{street?.setSite(sim.active());render();}
   });
   let lastOpening=null,arrivalVersion=0,commissioning=false,localWorkRate='',previewWorkRates='',goalWorkRates='',courseWorkRates='';
   let toastTimer, outcomeContext='', recordsPage='events',journalLimit=20,journalFilter='all';
+  const getStreet=()=>view==='street'?street:null;
+  const redrawStreet=()=>{if(view==='street')street?.setSite(sim.active());render();};
+  const sceneWork=resource=>{
+    if(streetHud?.openTool('work'))personalWork.open(resource);
+    else personalWork?.open(resource);
+  };
+  let liveClock=null,clockSignal='',decisionKey='',decisionHold='',rememberFrame=0;
+  const streetHud=window.EarthStreetHUD?.mount($('street-hud'),{
+    sim,getStreet,stageVersion:()=>arrivalVersion,meet:meetForLife,venue:atVenue,
+    after:redrawStreet,advance:advanceWeek,followGoal:followSceneGoal,changed:()=>{syncLiveClock();rememberStreetSoon();},personalWork:sceneWork,playAs:sceneHandoff,profile:id=>{if(streetHud.openTool('life'))lifePanel?.open(id);}
+  });
+  function sceneHandoff(id){
+    const pane=streetHud?.active();
+    if(pane!=='life'&&pane!=='goals')return agencyUI?.playAs(id);
+    const epoch=streetHud.version(),field=$(pane==='life'?'life-person':'scene-goal-person');
+    return agencyUI?.playAs(id,{host:$(pane==='life'?'life-profile':'scene-goal-detail'),returnFocus:field,
+      current:()=>!document.hidden&&streetHud.active()===pane&&streetHud.version()===epoch&&field.value===id,
+      switched:result=>{streetHud.notify(result.message);$('street-canvas').focus({preventScroll:true});}
+    });
+  }
+  const sceneContext={sim,getStreet,notify:(msg,error)=>streetHud?streetHud.notify(msg,error):notify(msg,error),close:()=>streetHud?.close(),
+    refresh:result=>{if(result)presentResult(result);redrawStreet();}};
+  const waterfrontUI=window.EarthWaterfrontUI?.mount($('scene-fishing'),sceneContext);
+  if(waterfrontUI)streetHud?.registerTool('fishing',{render:waterfrontUI.render,onScene:waterfrontUI.render,close:waterfrontUI.close});
+  const localMarket=window.EarthMarketPanel?.mount($('local-market'),{
+    sim,street:getStreet,version:()=>arrivalVersion+'/'+streetHud?.version(),meet:atVenue,quayProof,meetQuay,
+    onResult:presentResult,after:redrawStreet,work:sceneWork
+  });
+  if(localMarket)streetHud?.registerTool('stores',localMarket);
+  function attachSceneSection(id,section,module){
+    const host=$('scene-'+id),original=section?.parentElement,next=section?.nextSibling;
+    if(!module||!host||!original)return;
+    streetHud?.registerTool(id,{
+      render:()=>{if(section.parentElement!==host)host.append(section);module.render();},
+      close:()=>{
+        module.invalidate?.();
+        if(section.tagName==='DETAILS')section.open=false;
+        else if(id==='work'&&section.querySelector('details'))section.querySelector('details').open=false;
+        if(section.parentElement!==original)original.insertBefore(section,next?.parentElement===original?next:null);
+      }
+    });
+  }
+  attachSceneSection('work',$('personal-work'),personalWork);
+  attachSceneSection('life',$('character-lives'),lifePanel);
+  const truckPanel=window.EarthTruckPanel;
+  if(truckPanel&&streetHud){
+    let truckPosition='',quoteKey='',quote=null;
+    function renderTruck(force){
+      const site=sim.active(),scene=getStreet()?.truckStatus?.();if(!scene||!site)return;
+      const key=[site.id,site.foundingRevision||0,scene.actor,sim.state.week,sim.state.actionRevision].join('/');
+      if(key!==quoteKey){quoteKey=key;quote=sim.truckView();}
+      const near=(p,r)=>!!p&&Math.hypot(scene.x-p.x,scene.y-p.y)<=r;
+      const position=[key,scene.mode,scene.vehicle,scene.next,near(scene.truck,1.56),near(scene.truck,1.8),
+        near(quote?.depot,1.8),near(quote?.next,1.8)].join('/');
+      if(!force&&position===truckPosition)return;
+      truckPosition=position;
+      truckPanel.render($('scene-truck'),{...sceneContext,refresh:()=>{redrawStreet();if(streetHud.active()==='truck')renderTruck(true);}});
+    }
+    streetHud.registerTool('truck',{render:()=>renderTruck(true),onScene:()=>renderTruck(false),invalidate:()=>{quoteKey='';truckPosition='';}});
+  }
+  function clockState(){
+    const site=sim.active(),state=sim.state,local=getStreet()?.getState(),pane=streetHud?.active();
+    const key=[site?.id,site?.foundingRevision,state.week,state.actionRevision,sim.saveIssue].join('/');
+    if(decisionKey!==key){decisionKey=key;decisionHold=sim.liveWeekHold();}
+    const paneReasons={talk:'Finish the conversation.',stores:'Close the stores and exchange.',life:'Close character planning.',
+      work:'Close personal work.',truck:'Close co-op dispatch.',fishing:'Close the fishing controls.'};
+    const hold=document.hidden?'Return to this browser tab.':!local?'Return to Street view.':
+      document.body.hasAttribute('data-sheet-open')?'Close the open game sheet.':
+      paneReasons[pane]|| (local.placement||document.body.hasAttribute('data-crew-order')?'Finish or cancel the current building or crew assignment.':
+      local.mode==='boat'?'Return to shore.':local.mode==='drive'?'Park the vehicle and return to walking.':
+      local.travelling?'Wait for the current journey to finish.':
+      site.pursuits?.ticket?'Finish or release the active personal job.':
+      site.handline?'Land the current handline catch.':
+      site.fleet?.custody?.actor===local.actor?'Return the checked-out co-op truck.':
+      $('actions-panel')?.contains(document.activeElement)&&['build','work','research','council','routes'].includes(group)?'Return from the current community decision to the street.':decisionHold);
+    return {siteId:site?.id,generation:site?.foundingRevision||0,actorId:local?.actor||window.EarthAgency?.actorId(site),
+      week:state.week,actionRevision:state.actionRevision||0,hold:hold||''};
+  }
+  function syncLiveClock(force=false,discard=false){
+    if(!liveClock||!liveClock.enabled()&&!force)return;
+    const view=clockState(),key=[view.siteId,view.generation,view.actorId,view.week,view.hold,streetHud?.active()==='live'].join('/');
+    if(force||key!==clockSignal){clockSignal=key;liveClock.update({force,discard});}
+  }
+  function liveReview(){
+    const site=sim.active(),scene=getStreet()?.getState();if(!site||!scene||!clockState().hold)return null;
+    if(site.pursuits?.ticket)return {label:'Review personal work',run:()=>sceneWork()};
+    if(site.handline||scene.mode==='boat')return {label:'Open waterfront controls',run:()=>streetHud.openTool('fishing')};
+    if(site.fleet?.custody?.actor===scene.actor||scene.vehicle==='truck')return {label:'Review truck assignment',run:()=>streetHud.openTool('truck')};
+    const entry=upcomingDeadlines()[0];
+    if(entry)return {label:'Review · '+entry.label,run:async()=>{
+      if(entry.person&&(entry.group==='shift'||entry.group==='people')){
+        if(sim.active()?.id!==entry.site.id)await openSite(entry.site);
+        const p=sim.active()?.residents.find(r=>r.id===entry.person.id);
+        if(p){const ref={type:'resident',residentId:p.id};streetHud.openTalk(ref);meetForLife(ref,p.name,()=>streetHud.scene(street.getState()));}
+      }else{streetHud.close(false);revisitDeadline(entry);}
+    }};
+    for(const town of sim.state.sites){
+      const offer=Object.entries(town.careers||{}).find(([,life])=>life.application?.phase==='offer'&&!life.application?.autonomous);
+      if(offer)return {label:'Review the job offer',run:async()=>{
+        if(sim.active()?.id!==town.id)await openSite(town);
+        if(sim.active()?.id===town.id&&streetHud.openTool('life'))lifePanel.open(offer[0]);
+      }};
+    }
+    return null;
+  }
+  function refreshLiveReview(){
+    const path=streetHud?.active()==='live'&&liveReview();show('scene-live-review',!!path);if(path)put('scene-live-review',path.label);
+  }
+  function paintLiveClock(state){
+    const duration=Math.floor(state.seconds/60)+':'+String(state.seconds%60).padStart(2,'0');
+    const status=state.enabled?(state.hold?'Waiting · '+state.hold:state.pending?'Turning the shared calendar.':'The shared calendar is running.'):
+      state.started?'Paused by you. Resume when you are ready.':'Manual play. Start the clock to let weeks advance here.';
+    put('scene-live-status',status);put('scene-live-next','Week '+state.nextWeek+' · '+duration+' of Street time remaining');
+    put('scene-live-switch',state.enabled?'Pause live weeks':state.started?'Resume live weeks':'Start live weeks');
+    const switcher=$('scene-live-switch'),pressed=String(state.enabled);
+    if(switcher&&switcher.getAttribute('aria-pressed')!==pressed)switcher.setAttribute('aria-pressed',pressed);
+    const labels=[[/conversation/,'Talking'],[/journey|vehicle/,'Travelling'],[/assignment/,'Building'],[/shore|water|handline|fish/,'Fishing'],
+      [/truck|dispatch/,'Dispatch'],[/stores|exchange/,'Trading'],[/job|work/,'Working'],[/council|vote/,'Council due'],
+      [/promise/,'Promise due'],[/shift/,'Shared day'],[/booking|cooperative/,'Booking due'],[/offer|study|course|planning/,'Planning']];
+    const label=state.hold?labels.find(([pattern])=>pattern.test(state.hold))?.[1]||'Waiting':duration;
+    put('scene-live-badge',label);show('scene-live-badge',state.enabled);
+    const opener=$('scene-open-live'),title=state.enabled?status+' Week '+state.nextWeek+' · '+duration:'Start or pause the shared game clock';
+    if(opener&&opener.title!==title)opener.title=title;
+    if(state.hold||streetHud.active()==='live')refreshLiveReview();
+  }
+  async function commitLiveWeek(quote,guard){
+    if(advancing)return {ok:false,message:'Another calendar action is underway. A new interval will begin.'};
+    advancing=true;
+    try{
+      const result=await sim.perform('advance',{live:quote},guard);
+      if(result?.ok)lastAdvance=performance.now();
+      return result;
+    }finally{advancing=false;}
+  }
+  if(streetHud&&window.EarthLiveWeeks&&sim.liveWeekHold&&$('scene-live-switch')){
+    liveClock=window.EarthLiveWeeks.create({read:clockState,advance:commitLiveWeek,paint:paintLiveClock,
+      detail:()=>streetHud.active()==='live',notice:result=>{if(result?.ok)redrawStreet();if(result?.message)streetHud.notify(result.message);}});
+    streetHud.registerTool('live',{render:()=>{syncLiveClock(true);refreshLiveReview();}});
+    listen('scene-live-review','click',()=>liveReview()?.run());
+    listen('scene-live-switch','click',()=>{if(liveClock.enabled())liveClock.pause();else liveClock.start();rememberStreetSoon();});
+    document.addEventListener('visibilitychange',()=>syncLiveClock(true,!document.hidden));
+    document.addEventListener('earthsheetchange',()=>syncLiveClock());
+    document.addEventListener('focusin',()=>syncLiveClock());
+    window.addEventListener('pageshow',()=>syncLiveClock(true,true));
+  }
   function notify(message, error = false) {
+    if(message&&view==='street'&&streetHud&&(streetHud.active()||$('street-stage')?.contains(document.activeElement))){
+      streetHud.notify(message,error);return;
+    }
     const box = $('toast');
     if (!message || !box) return;
     clearTimeout(toastTimer);
@@ -378,6 +526,7 @@
     if(!results.length) $('place-results').append(node('p','empty-state','No match. Try another spelling or enter coordinates below.'));
   }
   function updateStreetInteract(state) {
+    streetHud?.scene(state);syncLiveClock();
     const aboard=state.mode==='boat',crewOrder=document.body.hasAttribute('data-crew-order');
     show('street-seat',state.mode==='walk' && !state.placement && !crewOrder);
     put('street-seat',state.seated?'Stand up':'Find a seat');
@@ -427,8 +576,8 @@
     if(next!=='street')crewOrders?.cancel();
     const changed=next!==view;
     if (next!=='world' && !sim.active()) return;
-    if(next!=='street' && view==='street') {arrivalVersion++;agencyUI?.dismissReview();cancelPlacement();street?.cancelTravel?.();}
-    view=next;
+    if(next!=='street' && view==='street') {arrivalVersion++;streetHud?.invalidate();street?.observePerson?.(null);agencyUI?.dismissReview();cancelPlacement();street?.cancelTravel?.();}
+    view=next;syncLiveClock();
     document.body.dataset.mapView=view;
     const isStreet=view==='street',isWorld=view==='world',isCity=view==='city';
     show('atlas-stage',isWorld);atlas.setActive?.(isWorld);show('street-stage',isStreet);show('street-controls',isStreet);show('street-actors',isStreet);show('city-stage',isCity);
@@ -440,7 +589,12 @@
     }
     if(isStreet) {
       if(!street) street=window.EarthStreet.mount($('street-canvas'),{
-        getWeek:()=>sim.state.week,onInteract:interactAt,onHandcart:()=>personalWork?.open(),onChooseCrewTarget:()=>crewOrders?.openTargets(),onAssignWorksite:id=>crewOrders?.assign(id),onCancelCrewSelection:()=>crewOrders?.cancel(),onPlace:point=>placeBuilding(point,true),onHint:text=>put('street-hint',text),
+        getWeek:()=>sim.state.week,getWorld:()=>sim.state,
+        getRegularRun:()=>sim.regularTruckView(),
+        onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
+        onObservation:seen=>streetHud?.setWatch(seen),onTruckInteract:()=>streetHud?.openTool('truck'),
+        onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},
+        onInteract:interactAt,onHandcart:()=>sceneWork(),onChooseCrewTarget:()=>crewOrders?.openTargets(),onAssignWorksite:id=>crewOrders?.assign(id),onCancelCrewSelection:()=>crewOrders?.cancel(),onPlace:point=>placeBuilding(point,true),onHint:text=>put('street-hint',text),
         onPlotPreview:plot=>{
           if(!placement)return;
           const preview=sim.previewBuild(placement.kind,plot);
@@ -454,8 +608,8 @@
           const vehicle=$('street-vehicle');
           if(vehicle) {
             vehicle.setAttribute('aria-pressed',String(driving));
-            vehicle.textContent=driving?'Leave van':'Use van';
-            vehicle.setAttribute('title',driving?'Leave the van':'Use the community van');
+            vehicle.textContent=state.vehicle==='truck'?'Co-op truck controls':driving?'Leave public van':'Use public van';
+            vehicle.setAttribute('title',state.vehicle==='truck'?'Open truck controls':driving?'Leave the public van':'Use the public van');
           }
           if(!state.placement && placement){placement=null;show('cancel-placement',false);renderActions();}
         }
@@ -733,13 +887,30 @@
     if(result?.ok && encounter?.type==='construction'&&!works.view().jobs.some(j=>j.id===encounter.jobId))encounter=null;
     street?.setSite(sim.active());render();
   }
+  function quayProof(){
+    const state=getStreet()?.getState();
+    return state?.waterfront&&state.mode==='walk'&&!state.seated&&!state.placement&&
+      state.x>=-.7&&state.x<=24.7&&state.y>=23.1&&state.y<=25.25?{...state,target:'quay'}:null;
+  }
+  function meetQuay(arrive){
+    const local=getStreet(),site=sim.active(),actor=window.EarthAgency?.actorId(site),week=sim.state.week;
+    if(!local||!site||local.getState().vehicle==='truck'||!local.getState().waterfront)return false;
+    const trip=++arrivalVersion;
+    if(quayProof()){local.cancelTravel?.();arrive();return true;}
+    const started=local.approachFishing('shore',()=>{
+      if(getStreet()===local&&sim.active()?.id===site.id&&window.EarthAgency?.actorId(sim.active())===actor&&
+        sim.state.week===week&&arrivalVersion===trip&&quayProof())arrive();
+    });
+    if(started){notify('Travelling to the quay.');followStreet();}
+    return started;
+  }
   function atVenue(venue, destination, act) {
-    if(street.getState().mode==='boat'){notify('Return to shore to reach '+destination+'.',true);return;}
+    if(street.getState().mode==='boat'){notify('Return to shore to reach '+destination+'.',true);return false;}
     const siteId=sim.state.activeId,week=sim.state.week,version=++arrivalVersion;
     if(street.atStop(venue)){
       street.cancelTravel?.();
       act(venue,false);
-      return;
+      return true;
     }
     notify('On the way to '+destination+'.');
     const routed=street.focusStop(venue,event=>{
@@ -749,6 +920,7 @@
     });
     if(routed)followStreet();
     else notify('Could not reach '+destination+'. Choose a new route on the district map.',true);
+    return routed;
   }
   function meetResident(person,act=interactAt) {
     if(!person)return;
@@ -812,7 +984,10 @@
   }
   function interactAt(event) {
     if(view!=='street'||!sim.active()||!['npc','resident','market','building','construction'].includes(event.type))return;
-    openEncounter(event);renderActions();focusActions();
+    openEncounter(event);
+    if((event.type==='npc'||event.type==='resident')&&streetHud?.openTalk(event))return;
+    if(event.type==='market'&&localMarket&&streetHud?.openTool('stores'))return;
+    renderActions();focusActions();
   }
   function visitShiftStop(stop,day) {
     atVenue(stop.venue,stop.venueName,async event=>{
@@ -1331,9 +1506,22 @@
     if(!focusTarget.matches('button,select,input,a[href]'))focusTarget.tabIndex=-1;
     focusTarget.focus({preventScroll:true});focusTarget.scrollIntoView({block:'nearest',behavior:'instant'});
   }
+  function followSceneGoal(guide) {
+    if(!guide)return;
+    const step=window.EarthLegacy?.prepareStep(sim,guide)||guide;
+    if(step.siteId&&step.siteId!==sim.state.activeId){followCharter(step);return;}
+    if(step.kind==='week'){streetHud?.previewWeek();return;}
+    const id=step.residentId||(step.page==='shift'?sim.active()?.shift?.residentId:null);
+    if(id&&streetHud){
+      const ref={type:'resident',residentId:id},person=sim.active()?.residents.find(p=>p.id===id);
+      if(person&&streetHud.openTalk(ref)){meetForLife(ref,person.name,()=>streetHud.scene(street.getState()));return;}
+    }
+    if(step.kind==='personalWork'){sceneWork(step.resource);return;}
+    streetHud?.close(false);followCharter(step);
+  }
   function nextObjective() {
     const step=window.EarthLegacy?.guidance(sim);
-    return step?{label:step.label,detail:step.detail,action:()=>followCharter(step)}:null;
+    return step?{...step,action:()=>followCharter(step)}:null;
   }
   const resourceLabels={funds:'Funds',materials:'Materials',food:'Food',population:'Residents',trust:'Trust',wellbeing:'Wellbeing'};
   function refreshSaveWarning() {
@@ -1343,6 +1531,7 @@
   }
   function refreshObjective(overview=sim.overview()) {
     const guide=nextObjective();
+    streetHud?.setObjective(guide,overview);
     put('objective',guide?.detail||overview.objective);
     if(guide)put('objective-action',guide.label);
     show('objective-action',!!guide);show('follow-objective',!!guide);
@@ -1358,7 +1547,7 @@
     show('settlement-status',!!site);$('advance-week').disabled=!site;$('street-view').disabled=!site;
     if($('city-view'))$('city-view').disabled=!site;
     if($('beacon-toggle'))$('beacon-toggle').disabled=!site;
-    refreshObjective(overview);
+    refreshObjective(overview);if(view==='street')streetHud?.render();syncLiveClock();
     if(preparedSurvey && !validPreparedSurvey(preparedSurvey))preparedSurvey=null;
     show('resume-founding',view==='street' && Boolean(preparedSurvey));
     if(preparedSurvey)put('resume-founding','Resume proposal for '+(preparedSurvey.name||preparedSurvey.point.name));
@@ -1597,15 +1786,18 @@
   $('week-summary')?.closest('details')?.addEventListener('toggle',renderForecast);
   for(const id of ['objective-action','follow-objective'])listen(id,'click',()=>nextObjective()?.action());
   listen('beacon-toggle','change',()=>{showBeacons=$('beacon-toggle').checked;markers();});
-  listen('street-wide','click',()=>{
-    const expanded=document.body.classList.toggle('street-expanded');
+  function setStreetExpanded(expanded,scroll=false){
+    document.body.classList.toggle('street-expanded',expanded);
     const control=$('street-wide');
     control.setAttribute('aria-pressed',String(expanded));
     control.title=expanded?'Restore street view':'Expand street view';
     requestAnimationFrame(()=>{
       street?.resize();
-      if(expanded)$('street-stage')?.scrollIntoView({block:'start',behavior:'instant'});
+      if(expanded&&scroll)$('street-stage')?.scrollIntoView({block:'start',behavior:'instant'});
     });
+  }
+  listen('street-wide','click',()=>{
+    setStreetExpanded(!document.body.classList.contains('street-expanded'),true);rememberStreetSoon();
   });
   // A shorter masthead after rotation can clip the map controls despite the panel still fitting.
   window.matchMedia('(orientation: portrait)').addEventListener?.('change',()=>requestAnimationFrame(()=>{
@@ -1666,7 +1858,7 @@
     else street?.interact();
   });
   listen('street-seat','click',()=>street?.useSeat());
-  listen('street-vehicle','click',()=>street?.toggleVehicle());
+  listen('street-vehicle','click',()=>street?.getState().vehicle==='truck'?streetHud?.openTool('truck'):street?.toggleVehicle());
   listen('street-boat','click',()=>street?.toggleBoat());
   let fishing=false;
   function fishingPosition(original){
@@ -1677,10 +1869,12 @@
     return scene;
   }
   listen('street-shoal','click',()=>{
+    if(waterfrontUI){streetHud?.openTool('fishing');waterfrontUI.act('shoal');return;}
     if(street?.getState().sailingToShoal)street.cancelTravel();
     else if(street?.approachFishing('shoal'))followStreet();
   });
   listen('street-handline','click',async()=>{
+    if(waterfrontUI){streetHud?.openTool('fishing');waterfrontUI.act('line');return;}
     const state=street?.getState();
     if(fishing || view!=='street' || !state || state.returning || state.boarding || state.placement || state.seated || document.body.hasAttribute('data-crew-order'))return;
     const offer=sim.handlineOffer(state);
@@ -1701,6 +1895,7 @@
     }finally{fishing=false;if(view==='street'&&street)updateStreetInteract(street.getState());}
   });
   listen('street-fish','click',async()=>{
+    if(waterfrontUI){streetHud?.openTool('fishing');waterfrontUI.act('net');return;}
     const state=street?.getState();
     if(fishing || state?.mode!=='boat' || state.returning || view!=='street')return;
     const offer=sim.fishingOffer();
@@ -1753,7 +1948,7 @@
   });
   listen('cancel-placement','click',()=>{cancelPlacement();renderActions();});
   listen('street-open-actions','click',event=>{
-    event.preventDefault();crewOrders?.cancel();
+    event.preventDefault();crewOrders?.cancel();streetHud?.close(false);renderActions();
     $('actions-panel').scrollIntoView({block:'start',behavior:'instant'});
     const tab=$('action-tabs').querySelector('[aria-pressed="true"]');
     tab?.focus({preventScroll:true});
@@ -1837,7 +2032,7 @@
     street?.discardTerrain();
     crewOrders?.cancel();
     if(notice.switched){
-      lifePanel?.invalidate();
+      liveClock?.reset();clockSignal=decisionKey='';streetHud?.invalidate();lifePanel?.invalidate();
       preparedSurvey=null;lastOpening=null;
       journalFilter='all';journalLimit=20;
       street?.destroy();street=null;city?.destroy();city=null;group='people';researchPage='eras';councilPage='agenda';
@@ -1852,6 +2047,10 @@
   });
   // A phone can discard a background tab. Resume its view without replaying any command.
   const viewKey='common-earth.tab-view.v1';
+  function rememberStreetSoon(){
+    if(rememberFrame||view!=='street'||document.body.dataset.gameReady!=='true')return;
+    rememberFrame=requestAnimationFrame(()=>{rememberFrame=0;if(view==='street')rememberView();});
+  }
   function rememberView() {
     try{
       const site=sim.active();
@@ -1861,6 +2060,10 @@
       const snapshot={slot:book?.current()?.id||'first',siteId:site.id,foundingRevision:site.foundingRevision,lat:site.lat,lon:site.lon,view,group,visiting,viewingShift,peers,
         researchPage,councilPage,worksiteId:encounter?.type==='construction'?encounter.jobId:null,point,foundingSponsor,preparedSurvey,foundName:$('found-name').value,commission:$('commission-at-founding').checked,atlas:atlas.getView(),street:street?.snapshotView?.(),city:city?.snapshotView?.(),
         reportOpen,planOpen,voyageStyle};
+      if(streetHud&&(view==='street'||liveClock?.enabled())){
+        snapshot.scene=streetHud.snapshot?.();
+        snapshot.expanded=view==='street'&&document.body.classList.contains('street-expanded');snapshot.liveWeeks=liveClock?.enabled()===true;
+      }
       sessionStorage.setItem(viewKey,JSON.stringify(snapshot));
     }catch{/* Browsing and world autosave work without tab storage. */}
   }
@@ -1895,7 +2098,14 @@
     if(window.EarthVoyages?.styles.some(style=>style.id===saved.voyageStyle))voyageStyle=saved.voyageStyle;
     planOpen=saved.planOpen===true;reportOpen=saved.reportOpen===true && !!sim.state.lastVoyage;
     setView(saved.view,false);
-    if(saved.view==='street' && saved.street && street?.restoreView?.(saved.street))renderActions();
+    if(saved.view==='street'){
+      if(sameActor&&streetHud?.matches?.(saved.scene)&&saved.expanded===true){
+        setStreetExpanded(true);street?.resize();
+      }
+      if(saved.street&&street?.restoreView?.(saved.street))renderActions();
+      if(sameActor)streetHud?.restore?.(saved.scene);
+    }
+    if(saved.liveWeeks===true&&(saved.view!=='street'||sameActor)&&streetHud?.matches?.(saved.scene))liveClock?.start();
     if(saved.view==='city' && saved.city)city?.restoreView?.(saved.city);
     return true;
   }

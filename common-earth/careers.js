@@ -65,9 +65,15 @@
   function note(m,week,text){
     m.history.unshift({week,text:text.slice(0,512)});m.history.length=Math.min(m.history.length,10);
   }
+  const fixedRanges=new WeakMap(),fullRange=Object.freeze({min:0,max:100});
   function bounds(p,axis){
-    const b=p.bounds?.[axis]||{};
+    const b=p.bounds?.[axis];if(!b||typeof b!=='object')return fullRange;
+    const cached=fixedRanges.get(b);if(cached)return cached;
     const min=int(b.min,0,100)?b.min:0,max=int(b.max,min,100)?b.max:100;
+    if(Object.isFrozen(b)){
+      const range=min===b.min&&max===b.max?b:Object.freeze({min,max});
+      fixedRanges.set(b,range);return range;
+    }
     return {min,max};
   }
   function aptitude(p,axis){
@@ -75,12 +81,40 @@
     return clamp(p.aptitudes?.[axis]??40,b.min,b.max);
   }
   function skill(p,m,axis){
-    return clamp(get(m.skills,axis)??aptitude(p,axis),bounds(p,axis).min,bounds(p,axis).max);
+    const b=bounds(p,axis);
+    return clamp(get(m.skills,axis)??p.aptitudes?.[axis]??40,b.min,b.max);
   }
   function gain(p,m,axis,amount){
     const old=skill(p,m,axis),next=clamp(old+amount,old,bounds(p,axis).max);
     if(next!==old)m.skills[axis]=next;
     return next-old;
+  }
+  function projectLesson(world,site,mentorId,learnerId,axis,commit=false,amount=2){
+    const tutor=profile(site,mentorId),pupil=profile(site,learnerId),week=world.week;
+    if(!tutor||!pupil||mentorId===learnerId||!axes.includes(axis))return {ok:false,reason:'Find a mentor and a learner with a shared subject.'};
+    const teacher=state(site,mentorId),student=state(site,learnerId),at=skill(pupil,student,axis),teaches=skill(tutor,teacher,axis);
+    if(teacher.lastPracticeWeek===week||student.lastPracticeWeek===week)return {ok:false,reason:'One of us already used this week’s personal practice session.'};
+    if(at>=bounds(pupil,axis).max||teaches-at<4)return {ok:false,reason:'This learner needs a different subject or a more experienced mentor.'};
+    if(!commit)return {ok:true};
+    const m=ensure(site,mentorId),s=ensure(site,learnerId),raised=gain(pupil,s,axis,Math.min(amount,teaches-at,3));
+    m.lastTeachingWeek=week;m.lastPracticeWeek=week;s.lastPracticeWeek=week;
+    gain(tutor,m,'communication',1);
+    note(m,week,'Taught '+pupil.name+' '+axis+' during a practical demonstration.');
+    note(s,week,'Gained '+raised+' '+axis+' through a practical demonstration with '+tutor.name+'.');
+    m.revision++;s.revision++;
+    return {ok:true,gain:raised};
+  }
+  function hobbyPractice(world,site,id,axis,commit=false,witness=null){
+    const p=profile(site,id),week=world.week;
+    if(!p||!axes.includes(axis))return {ok:false,reason:'Choose an interest that belongs to this person.'};
+    if(state(site,id).lastPracticeWeek===week)return {ok:false,reason:'This week’s personal practice session is already used.'};
+    if(!commit)return {ok:true};
+    const m=ensure(site,id),other=witness&&profile(site,witness);
+    const raised=gain(p,m,axis,other?2:1);
+    m.lastPracticeWeek=week;m.revision++;
+    note(m,week,'Practised '+axis+(other?' with feedback from '+other.name:' independently')+
+      (raised?' and gained '+raised+' skill point'+(raised===1?'':'s')+'.':'. The session was for enjoyment at the current skill ceiling.'));
+    return {ok:true,gain:raised};
   }
   function practicedGain(p,m,axis){
     const room=bounds(p,axis).max-skill(p,m,axis);
@@ -111,7 +145,7 @@
   }
   function consent(world,p,m,j,action,speaker){
     if(!speaker||speaker===p.id)return '';
-    const playable=p.kind==='resident'||p.kind==='steward'||p.id==='steward'||(!p.kind&&!/^(?:walker-|carrier-|driver$)/.test(p.id));
+    const playable=p.kind!=='carrier'&&!/^carrier-/.test(p.id);
     if(['withdraw','release','pause','pace','accept','resume','leaveCourse'].includes(action)){
       return playable?'Play as '+p.name+' to make this decision about their employment or study.':
         p.name+' manages this decision personally. Meet them to discuss a course, application or offer.';
@@ -130,12 +164,13 @@
   }
   function mentorFor(site,p,m,j,week){
     const learner=skill(p,m,j.skill);
-    let best=null,level=learner+3;
+    let best=null,level=-Infinity;
     for(const person of people(site)){
       if(person.id===p.id)continue;
       const other=state(site,person.id),score=skill(person,other,j.skill);
-      if(score<level||other.lastPracticeWeek===week||other.training?.pace==='intensive'&&!other.training.paused)continue;
-      if(!best||score>level||person.id<best.id){best=person;level=score;}
+      if(score<learner+3||other.lastPracticeWeek===week||other.training?.pace==='intensive'&&!other.training.paused)continue;
+      const priority=score+(root.EarthIntroductions?.level(site,p.id,person.id,j.skill,week)||0);
+      if(!best||priority>level||priority===level&&person.id<best.id){best=person;level=priority;}
     }
     return best;
   }
@@ -204,15 +239,19 @@
         }
         if(t.paused)add('leaveCourse','Leave the course','Your acquired skills stay. Leaving releases the place and clears these course credits.');
       }
-      const taken=m.lastPracticeWeek===week?'This person already used their personal practice session this week.':'';
+      const taken=m.lastPracticeWeek===week||site.autonomy?.people?.[id]?.contribution?.week===week?'This person already used their personal practice session this week.':'';
       const reference=employerReference(p,m,j);
       if(reference?.quality<0)add('relief','Take a relief shift for '+reference.employer,
         'Commit this week’s practice session to the former crew. They receive one '+replacementGoods[reference.occupation]+' next week and improve the reference by one point.',taken);
       const lastClass=axis=>skill(p,m,axis)>=bounds(p,axis).max?'At the upper end of this person’s '+axis+' range.':'';
       add('practice','Practise '+j.skill,'Build this skill through personal practice. Current '+skills[j.skill]+' of '+bounds(p,j.skill).max+'.',taken||lastClass(j.skill));
       add('support','Practise '+j.secondary,'Work on the second skill used by '+j.employer+'. Current '+skills[j.secondary]+' of '+bounds(p,j.secondary).max+'.',taken||lastClass(j.secondary));
-      const mentor=!taken&&!lastClass(j.skill)?mentorFor(site,p,m,j,week):null;
-      if(mentor)add('mentor','Learn '+j.skill+' with '+mentor.name,'Meet in person for a guided session. Both people commit their practice time.',taken,{mentorId:mentor.id,mentorName:mentor.name});
+      const mentor=context.matchPeople!==false&&!taken&&!lastClass(j.skill)?mentorFor(site,p,m,j,week):null;
+      if(mentor){
+        const introduction=root.EarthIntroductions?.level(site,id,mentor.id,j.skill,week)>0?
+          ' Your recent introduction gives this mentor priority when experience and availability are close.':'';
+        add('mentor','Learn '+j.skill+' with '+mentor.name,'Meet in person for a guided session. Both people commit their practice time.'+introduction,taken,{mentorId:mentor.id,mentorName:mentor.name});
+      }
       if(samples(m,j)<3)add('portfolio','Prepare a work sample','Earn one employer-reviewed '+j.skill+' sample. Each demonstrates two points toward the main skill requirement.',taken);
       if(!sameJob && !active){
         const retry=appHere&&a.phase==='deferred'&&a.dueWeek>week?'The panel will reopen in week '+a.dueWeek+'.':'';
@@ -225,7 +264,7 @@
           else add('discussOffer','Discuss the offer with '+p.name,'They weigh the offer against conditions at their current workplace and decide whether to give notice.',committed);
         }
         if(a.phase==='notice'){
-          const cover=!a.coverId?coverFor(site,p,current):null;
+          const cover=context.matchPeople!==false&&!a.coverId?coverFor(site,p,current):null;
           if(cover)add('handover','Arrange cover with '+cover.name,'They can take up the old duties through the first two weeks after departure. They may step away from their own trade.', '', {coverId:cover.id,coverName:cover.name});
           if(!a.releaseAsked&&a.dueWeek>week+1)add('release','Request an early release',current.employer+' can refuse if important work is uncovered. Leaving urgently without cover affects their future reference.');
         }else add('withdraw','Withdraw application','Keep the current job and all completed learning.');
@@ -243,7 +282,7 @@
     const p=profile(site,id),j=get(jobs,targetId),old=state(site,id);
     if(!p||!j||!world)return fail('Choose a known person and profession.');
     if((old.revision||0)!==expectedRevision)return fail('This career decision changed. Review the person’s current options.');
-    const info=view(world,site,id,targetId,context),option=info.choices.find(c=>c.id===action);
+    const info=view(world,site,id,targetId,{...context,matchPeople:action==='mentor'||action==='handover'}),option=info.choices.find(c=>c.id===action);
     if(!option||!option.available)return fail(option?.reason||'This choice is unavailable at the current career stage.');
     const week=world.week, speaker=context.speakerId??root.EarthAgency?.actorId(site)??id;
     const adopted=speaker!==id&&['enroll','apply'].includes(action),autonomous=Boolean(context.autonomous||adopted);
@@ -426,5 +465,5 @@
     }
     return true;
   }
-  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,view,role,work,command,tick,weeklyAdjustment,coverage,valid});
+  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
 })(typeof window==='undefined'?globalThis:window);

@@ -199,7 +199,7 @@
     if(lead.id!==person.id)door.x+=.45*(person.slot>lead.slot?1:-1);
     return door;
   }
-  const outings=new Set(['rest','visit','host','cover','gather','learn','apply']);
+  const outings=new Set(['rest','visit','host','cover','gather','learn','apply','project','preserve']);
   const workplaces={garden:['garden','wetland'],workshop:['workshop'],hall:['hall'],market:['market','pier'],dock:['fishingDock','pier'],pier:['pier','fishingDock']};
   function chosenPlace(site,person,venue,target,meeting){
     if(venue==='home'){
@@ -216,7 +216,7 @@
   }
   function initiative(site,world,person,state){
     const chosen=root.EarthAutonomy?.intent(site,person.id);
-    return state.preference==='auto' && chosen?.week===world?.week && outings.has(chosen?.kind) &&
+    return state.preference==='auto' && chosen?.week===world?.week && (outings.has(chosen?.kind)||chosen?.kind==='commitment'&&chosen.civic===true) &&
       (state.outingWeek!==chosen.week || state.outingLeft>0) ? chosen : null;
   }
   function regularWork(site,person,state,career){
@@ -299,7 +299,9 @@
       }
       const outing=!w.relief&&!w.need&&initiative(site,world,w.person,w.state);
       if(outing){
-        w.outing=outing;w.workplace=chosenPlace(site,w.person,outing.venue,outing.target,outing.kind);
+        const civicJob=outing.civic&&outing.jobId&&jobs.find(j=>j.id===outing.jobId&&j.plot===outing.plot);
+        w.outing=outing;w.workplace=civicJob?{type:'construction',jobId:civicJob.id,plot:civicJob.plot,label:civicJob.name,...station(civicJob,w.person.slot)}:
+          chosenPlace(site,w.person,outing.venue,outing.target,outing.kind);
         w.route=commuteRoute(w.state,w.workplace);w.activity=w.route.length?'commuting':'working';
         w.reason=outing.label+(w.route.length?' · going to ':' · at ')+w.workplace.label+'.';
         continue;
@@ -388,6 +390,7 @@
       residentId:w.person.id,name:w.person.name,slot:w.person.slot,role:w.role,reason:w.reason,preference:w.state.preference,
       occupation:w.occupation,usualRole:w.usualRole,workplace:w.workplace,physicalDuty:w.physicalDuty,relief:w.relief||null,
       preferredJobId:w.state.preferredJobId,jobId:(w.job||w.restJob)?.id||null,area:(w.job||w.restJob)?.scope||null,activity:w.activity,
+      initiative:w.outing||null,
       x:w.state.position.x,y:w.state.position.y,travelling:Boolean(w.physicalDuty&&w.route.length)||['travelling','returning','commuting'].includes(w.activity),
       travelLeft:travelSeconds(w.state.position,w.route),restLeft:w.state.rest,weeklyDelta:weeklyDelta(w),preferenceDelta:weeklyDelta(w,true)
     }))};

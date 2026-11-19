@@ -215,10 +215,12 @@
         box.append(field('h4','Week '+sim.state.week+' · '+intent.label),field('p',intent.reason||''));
         if(intent.goal)box.append(field('p',intent.goal,'life-muted'));
       }
-      if(actor!==person.id){
-        const suggestions=autonomy.guidance(site,sim.state,person.id);
-        box.append(field('h4','Discuss next week'),field('p','Meet '+person.name+' to offer advice. They decide how it fits their priorities.','life-muted'),
-          offerRows(person,suggestions.choices||[],'autonomy',actor));
+      const suggestions=autonomy.guidance(site,sim.state,person.id);
+      const possibilities=(suggestions?.choices||[]).filter(choice=>actor!==person.id||choice.id==='hobbyPractice');
+      if(possibilities.length){
+        box.append(field('h4',actor===person.id?'Personal projects':'Discuss next week'));
+        if(actor!==person.id)box.append(field('p','Meet '+person.name+' to offer advice or work together. They decide how it fits their priorities.','life-muted'));
+        box.append(offerRows(person,possibilities,'autonomy',actor));
       }
       const decisions=autonomy.history(site,person.id).map(row=>({week:row.week,text:row.label,detail:row.reason}));
       const events=(model.history||[]).map(row=>({week:row.week,text:row.text||row.label,detail:row.detail}));
@@ -254,7 +256,8 @@
       profileBox.replaceChildren(field('h3',person.name),field('p',[model.career,model.employer].filter(Boolean).join(' · '),'life-role'),
         field('p',person.description),field('p','Strengths · '+person.strengths.map(title).join(', '),'life-muted'));
       if(person.interests?.length)profileBox.append(field('p','Interests · '+person.interests.join(', '),'life-muted'));
-      if(playAs&&person.id!==root.EarthAgency.actorId(site)&&(person.kind==='resident'||person.kind==='steward')){
+      const playable=root.EarthAgency.playables?.(site).some(p=>p.id===person.id)??(person.kind==='resident'||person.kind==='steward');
+      if(playAs&&person.id!==root.EarthAgency.actorId(site)&&playable){
         const pick=control('Play as '+person.name,()=>{
           if(pick.isConnected&&personId===person.id)return playAs(person.id);
         },'play-character','text-button');

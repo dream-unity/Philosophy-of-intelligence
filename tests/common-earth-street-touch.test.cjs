@@ -18,7 +18,7 @@ const site = {
   buildings: [{ id: 'hall-1', kind: 'hall', name: 'Cooperative Hall', plot: 4 }]
 };
 
-function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false}={}) {
+function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onState, waterfront, getWeek, getRegularRun, onRegularArrival}={}) {
   const pointerEvents = new Map();
   let frame = null;
   let now = 100, timerId = 0;
@@ -63,16 +63,18 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
   };
   vm.runInNewContext(readFileSync(path.join(gameRoot,'fisheries.js'),'utf8'),runtime);
   if(links)runtime.window.CommonEarthSim={productiveLinks:typeof links==='function'?links:()=>links};
-  if(lives)for(const file of ['personas.js','careers.js','autonomy.js'])vm.runInNewContext(readFileSync(path.join(gameRoot,file),'utf8'),runtime);
+  if(waterfront)runtime.window.CommonEarthSim={...runtime.window.CommonEarthSim,waterfront};
+  if(lives)for(const file of ['personas.js','careers.js','autonomy.js','street-activity.js'])vm.runInNewContext(readFileSync(path.join(gameRoot,file),'utf8'),runtime);
   vm.runInNewContext(surroundingsScript, runtime);
   vm.runInNewContext(constructionScript, runtime);
   vm.runInNewContext(agencyScript,runtime);
   vm.runInNewContext(script, runtime);
-  const encounters = [], updates = [];
+  const encounters = [], updates = [], observations=[];
   const hints = [], handcarts = [];
   const placed = [], previews = [], assignments = [], targetLists = [];
   const street = runtime.window.EarthStreet.mount(canvas, {
-    onState: state => updates.push(state),
+    onObservation: current => observations.push(current),
+    onFishingMark,getWeek,getRegularRun,onRegularArrival,onState: state => {updates.push(state);onState?.(state);},
     onHandcart: () => handcarts.push(true),
     onInteract: event => encounters.push(event),
     onHint: text => hints.push(text),
@@ -150,7 +152,7 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
     street.setSite(active);
     return {active,stops:shifts.view(active,1).stops};
   }
-  return { street, sheet, host, updates, encounters, hints, handcarts, placed, previews, assignments, targetLists, interactionFrame, overviewFrame, pointer, tap, key, step, finish, drive, at };
+  return { agency:runtime.window.EarthAgency,street, sheet, host, updates, observations, encounters, hints, handcarts, placed, previews, assignments, targetLists, interactionFrame, overviewFrame, pointer, tap, key, step, finish, drive, at };
 }
 
 test('driving to successive taps preserves their screen coordinates on a tablet', () => {
@@ -1080,7 +1082,10 @@ test('a foot journey bends around a waiting delivery vehicle without boarding or
 test('the waterfront action walks to a playable quay and pilots the boat to its actual feeding ground',()=>{
   const g=surface(),active={...site,water:true};
   g.street.setSite(active);
-  assert(g.street.approachFishing('shore'));g.finish();
+  const visits=[];
+  assert(g.street.approachFishing('shore',scene=>visits.push(scene)));
+  assert.equal(visits.length,0);g.finish();
+  assert.equal(visits.length,1);assert.equal(visits[0].mode,'walk');
   assert.equal(g.street.getState().mode,'walk');
   assert(g.street.getState().y>=23.1);
   assert(g.street.toggleBoat());g.finish();
@@ -1090,7 +1095,8 @@ test('the waterfront action walks to a playable quay and pilots the boat to its 
   const p=g.street.getState();
   active.handline={x:p.x,y:p.y,mode:'boat',castAt:12345,food:2};
   g.street.setSite(active);
-  g.street.toggleBoat();g.finish();
+  assert(g.street.approachFishing('shore',scene=>visits.push(scene)));g.finish();
+  assert.equal(visits.length,2);assert.equal(visits[1].mode,'walk');assert(visits[1].y>=23.1);
   assert(g.street.approachFishing('line'));g.finish();
   assert.equal(g.street.getState().mode,'boat');
   assert(g.street.approachFishing('line'));g.finish();
@@ -1339,4 +1345,340 @@ test('a visitor and host reach the same park bench and a porter in training stay
   g.street.releaseMove('up');assert(together);assert(studying);
   assert(g.street.focusStop(person('carrier-0-1')));g.finish();
   assert.equal(g.street.meeting(person('carrier-0-1')).target,'carrier-0-1');
+});
+
+function fishingPanelFixture(point,coastal=false){
+  let now=10000,serial=0;const timers=new Map();
+  const runtime={structuredClone,Date:class extends Date{static now(){return now;}},setTimeout:(f,delay)=>{timers.set(++serial,{f,due:now+delay});return serial;},clearTimeout:id=>timers.delete(id)};
+  const pageEvents=new Map();runtime.addEventListener=(type,fn)=>pageEvents.set(type,fn);runtime.removeEventListener=(type,fn)=>{if(pageEvents.get(type)===fn)pageEvents.delete(type);};
+  runtime.window=runtime;if(coastal)runtime.EarthAtlas={nearOceanShore:()=>true};
+  vm.createContext(runtime);for(const f of ['fisheries','simulation','waterfront-ui'])vm.runInContext(readFileSync(path.join(gameRoot,f+'.js'),'utf8'),runtime);
+  const sim=runtime.CommonEarthSim.create({storage:null});assert(sim.found(point).ok);
+  const elements=[],doc={body:{hasAttribute:()=>false},createElement(tag){
+    const handlers=new Map(),el={tag,ownerDocument:doc,dataset:{},textContent:'',append(){},setAttribute(){},remove(){},addEventListener:(event,f)=>handlers.set(event,f),
+      click(){assert(!el.hidden&&!el.disabled,'available button: '+el.textContent);return handlers.get('click')();}};
+    elements.push(el);return el;
+  }};
+  const marks=[];let panel,markedCommand;
+  const g=surface(820,500,{getWeek:()=>sim.state.week,waterfront:runtime.CommonEarthSim.waterfront,onState:state=>panel?.render(state),
+    onFishingMark:mark=>{marks.push(mark);if(mark==='float')markedCommand=panel.act('line');if(mark==='shoal')markedCommand=panel.act('shoal');}});
+  g.street.setSite(sim.active());panel=runtime.EarthWaterfrontUI.mount(doc.createElement('section'),{sim,getStreet:()=>g.street,refresh:()=>g.street.setSite(sim.active())});panel.render();
+  const button=key=>elements.find(e=>e.dataset.fishing===key),part=cls=>elements.find(e=>e.className===cls);
+  return {g,sim,panel,button,part,marks,marked:()=>markedCommand,resumeAfter(ms){now+=ms;pageEvents.get('pageshow')({persisted:true});},wait(){now+=5000;for(const [id,t] of timers)if(t.due<=now){timers.delete(id);t.f();}},destroy(){panel.destroy();g.street.destroy();sim.destroy();}};
+}
+
+test('tablet fishing controls take an Ocean Anchorage from boarding to fish in the pantry and a second catch',async()=>{
+  const f=fishingPanelFixture({name:'Ocean Anchorage',lat:-18,lon:92,water:true}),{g,sim}=f;
+  const stock=sim.active().food;await f.button('boat').click();g.finish();assert.equal(g.street.getState().mode,'boat');
+  g.street.recenter();let p=g.street.getState();g.tap(g.interactionFrame()(p.x,p.y,-.44));assert.equal(f.marks.at(-1),'boat');
+  await f.button('line').click();assert.equal(sim.active().handline.food,1);assert.match(f.part('waterfront-status').textContent,/bite/);
+  assert(f.button('line').disabled);f.resumeAfter(10000);assert.match(f.button('line').textContent,/Reel in/);
+  p=g.street.getState();g.street.recenter();g.tap(g.interactionFrame()(p.x,p.y+1.1,-.42));assert.equal(f.marks.at(-1),'float');await f.marked();
+  assert.equal(sim.active().food,stock+1);assert.match(f.part('waterfront-result').textContent,/Landed 1 food/);assert.match(f.part('waterfront-pantry').textContent,new RegExp(stock+1));
+  await f.button('shoal').click();g.finish();assert.match(f.button('line').textContent,/2 food/);
+  await f.button('line').click();f.wait();await f.button('boat').click();g.finish();assert.equal(g.street.getState().mode,'walk');
+  await f.button('line').click();g.finish();assert.equal(g.street.getState().mode,'boat');assert.match(f.button('line').textContent,/Reel in/);
+  await f.button('line').click();assert.equal(sim.active().food,stock+3);assert.match(f.part('waterfront-result').textContent,/Landed 2 food/);f.destroy();
+});
+
+test('a coastal land save can fish on foot, retrieve a quay float from sea in one journey, and keep its pantry catch',async()=>{
+  const f=fishingPanelFixture({name:'Hobart',lat:-42.85,lon:147.295},true),{g,sim}=f,stock=sim.active().food;
+  assert.equal(sim.active().water,false);assert.equal(sim.active().coastal,true);
+  await f.button('line').click();g.finish();assert.equal(g.street.getState().mode,'walk');assert.match(f.button('line').textContent,/Cast line/);
+  await f.button('line').click();await f.button('boat').click();g.finish();f.wait();assert.equal(g.street.getState().mode,'boat');
+  await f.button('line').click();g.finish();assert.equal(g.street.getState().mode,'walk');assert.match(f.button('line').textContent,/Reel in/);
+  await f.button('line').click();assert.equal(sim.active().food,stock+1);f.destroy();
+});
+
+test('watching an autonomous research project shows walking, real work and return while the player stands still',()=>{
+  const g=surface(740,390,{animated:true,deferFrames:true,lives:true}),id='walker-1';
+  const town={...site,buildings:[{id:'labs',kind:'workshop',plot:7,name:'Records workshop'}],
+    autonomy:{people:{[id]:{history:[{week:2,kind:'project',projectKind:'research',projectId:'survey',phase:'work',title:'Survey the local springs',venue:'workshop'}]}}}};
+  g.street.setSite(town);
+  const avatar=g.street.getState(),origin=g.street.activityOf(id);
+  assert(g.street.observePerson(id));assert.equal(g.observations.at(-1).following,true);
+  const stages=new Set(),labels=new Set();let reached=false;
+  for(let i=0;i<2600;i++){
+    g.step();const seen=g.street.activityOf(id);
+    if(seen.goal==='Survey the local springs'){
+      stages.add(seen.phase);labels.add(seen.label);
+      if(seen.phase!=='travel'){assert(Math.hypot(seen.x-9,seen.y-17.04)<1.52);reached=true;}
+    }
+  }
+  assert(reached&&stages.has('travel')&&stages.has('work')&&labels.size>=3);
+  assert(Math.hypot(g.street.activityOf(id).x-origin.x,g.street.activityOf(id).y-origin.y)>1);
+  assert(g.observations.length>2&&g.observations.length<80);
+  g.at(avatar.x,avatar.y,0);assert.equal(g.encounters.length,0);
+  const before=g.street.activityOf(id);g.sheet(true);
+  for(let i=0;i<600;i++)g.step();
+  const after=g.street.activityOf(id);assert.equal(after.x,before.x);assert.equal(after.y,before.y);assert.equal(after.label,before.label);
+  g.sheet(false);g.street.move('left');assert.equal(g.observations.at(-1),null);
+  assert.equal(g.street.activityOf(id).following,false);assert.equal(g.street.observePerson('unknown'),false);
+});
+
+test('reduced-motion residents keep appointments and display distinct study actions without player movement',()=>{
+  const g=surface(390,355,{lives:true,deferFrames:true}),id='walker-0';
+  const town={...site,autonomy:{people:{[id]:{history:[{week:1,kind:'learn',venue:'hall'}]}}}};
+  g.street.setSite(town);const avatar=g.street.getState();
+  assert(g.street.observePerson(id));
+  const lessons=new Set();let travelled=false;
+  for(let i=0;i<1800;i++){
+    g.step();const who=g.street.activityOf(id);
+    if(who.phase==='study'){assert.equal(who.venue,'Cooperative Hall');lessons.add(who.label);}
+    if(who.phase==='travel')travelled=true;
+  }
+  assert(travelled&&lessons.size>=2);g.at(avatar.x,avatar.y,0);
+  g.street.recenter();assert.equal(g.observations.at(-1),null);
+});
+
+test('a distant neighbour keeps walking while approached, and an actual face-to-face stop still succeeds',()=>{
+  const g=surface(740,390,{lives:true,animated:true,deferFrames:true});
+  g.street.setSite({...site,autonomy:{people:{'walker-0':{history:[{week:1,kind:'learn',venue:'hall'}]}}}});
+  const ref={type:'npc',npcId:'walker-0'},before=g.street.activityOf(ref.npcId);
+  assert(Math.hypot(before.x-g.street.getState().x,before.y-g.street.getState().y)>5);
+  assert(g.street.focusStop(ref));
+  for(let i=0;i<25;i++)g.step();
+  const later=g.street.activityOf(ref.npcId);
+  assert(Math.hypot(later.x-before.x,later.y-before.y)>.25);
+  g.finish();assert.equal(g.encounters.at(-1).npcId,ref.npcId);
+  const proof=g.street.meeting(ref);assert(proof&&Math.hypot(proof.x-proof.tx,proof.y-proof.ty)<=1.56);
+});
+
+test('overlapping visitors can both be selected with a repeated touch in the district overview',()=>{
+  const g=surface(390,355,{lives:true,deferFrames:true});
+  const x=21.42,y=4.34;
+  const town={...site,autonomy:{people:{'walker-0':{history:[{week:1,kind:'visit',venue:'bench',target:'walker-4'}]},
+    'walker-4':{history:[{week:1,kind:'host',venue:'bench',target:'walker-0'}]}}}};
+  g.street.setSite(town);
+  const shot=g.street.snapshotView();assert(g.street.restoreView({...shot,player:{...shot.player,x,y:y+.52}}));
+  let a,b;
+  for(let i=0;i<2600;i++){
+    g.step();a=g.street.activityOf('walker-0');b=g.street.activityOf('walker-4');
+    if(a.phase==='social'&&b.phase==='social'&&Math.hypot(a.x-b.x,a.y-b.y)<.65)break;
+  }
+  assert(a.phase==='social'&&b.phase==='social');
+  g.street.toggleOverview();
+  const point=g.overviewFrame()((a.x+b.x)*.5,(a.y+b.y)*.5,.42);
+  g.tap(point);g.tap(point);
+  assert.deepEqual(new Set(g.encounters.map(e=>e.npcId)),new Set(['walker-0','walker-4']));
+});
+
+test('a co-op truck returns from the Pantry between residents working along opposite kerbs',()=>{
+  const g=surface();
+  const pickup={x:11.08284,y:23.46};
+  const anchor={x:9,y:24,dx:1,dy:0};
+  const town={...site,fleet:{custody:{actor:'steward',week:7,token:'delivery',anchor,pickup}}};
+  g.street.setSite(town);
+  const snapshot=g.street.snapshotView();
+  assert(g.street.restoreView({...snapshot,player:{x:9.1,y:24.58,dx:1,dy:0}}));
+  g.street.setConstruction({jobs:[],workers:[onCrew('working',9.38,23.04,null)]});
+  assert(g.street.boardServiceTruck());
+  let arrived=false;
+  assert(g.street.followTruckDelivery({x:15,y:24},()=>{arrived=true;}));
+  for(let i=0;i<750&&g.street.getState().travelling;i++){
+    g.step();
+    const {x,y}=g.street.getState();
+    for(const p of [{x:9.38,y:23.04},{x:pickup.x,y:pickup.y+1.14}])
+      assert(!(Math.abs(x-p.x)<.67&&Math.abs(y-p.y)<.67),'the truck keeps clear of each person');
+  }
+  assert.equal(arrived,true,'the return path considers both sides of the street');
+  assert.equal(g.street.getState().travelling,false);
+  g.at(15,24);
+  g.street.destroy();
+});
+
+test('a passing resident walks to a civic consultation and carries out the hall activity',()=>{
+  const g=surface(740,390,{lives:true,deferFrames:true});
+  const id='walker-1',reason='Hear neighbours about the proposed clinic.';
+  const town={...site,autonomy:{people:{[id]:{history:[{kind:'commitment',week:1,civic:true,venue:'hall',reason}]}}}};
+  g.street.setSite(town);
+  let worked=false,walked=false;
+  for(let i=0;i<2000&&!worked;i++){
+    g.step();
+    const body=g.street.activityOf(id);
+    if(body.goal!==reason||!body.venue.includes('Hall'))continue;
+    if(body.phase==='travel')walked=true;
+    else if(body.phase==='work'||body.phase==='prepare')worked=true;
+  }
+  assert(walked,'travels to the civic venue');
+  assert(worked,'acts on the current consultation there');
+  g.street.destroy();
+});
+
+test('all five passing residents take control at their own feet and resume from where they are released',()=>{
+  const g=surface(740,390,{lives:true,deferFrames:true}),town={...site};
+  g.street.setSite(town);
+  function change(id){
+    const scene=g.street.actorScene(id),target={...scene.targetPose};
+    assert(g.agency.checkHandoff(town,id,scene).ok);
+    assert(g.agency.change(town,id,scene).ok);
+    g.street.setSite(town);
+    g.at(target.x,target.y,.001);
+    return target;
+  }
+  let former=null,stale=null;
+  for(const id of ['walker-0','walker-1','walker-2','walker-3','walker-4','walker-0']){
+    change(id);
+    assert.equal(g.street.getState().actor,id);
+    assert.equal(g.street.activityOf(id).phase,'player');
+    assert(!g.street.localPeople().some(p=>p.npcId===id));
+    assert.equal(g.street.focusStop({type:'npc',npcId:id}),false);
+    if(former){
+      const released=g.street.activityOf(former.id);
+      assert(Math.hypot(released.x-former.x,released.y-former.y)<.002,'the former resident starts again at the handoff');
+      assert.notEqual(released.phase,'player');
+    }
+    if(id==='walker-0'){
+      if(stale)assert.equal(g.street.restoreView(stale),false,'a view from an earlier shift cannot overwrite the new handoff');
+      else stale=g.street.snapshotView();
+    }
+    assert(g.street.snapshotView().actorSerial>0);
+    g.street.focusMarket();g.finish();
+    former={id,...g.street.getState()};
+    g.street.setSite(town);
+    g.at(former.x,former.y,.001);
+    for(let i=0;i<5;i++)g.step();
+  }
+  g.street.destroy();
+});
+
+test('the driver can take control on foot but a driver aboard a co-op vehicle continues their delivery',()=>{
+  const g=surface(740,390,{lives:true,deferFrames:true}),town={...site};
+  g.street.setSite(town);
+  const aboard=g.street.actorScene('driver');
+  assert.equal(aboard.targetPose.mode,'drive');
+  assert.equal(g.agency.checkHandoff(town,'driver',aboard).ok,false);
+  town.careers={driver:{jobId:'nurse'}};
+  g.street.setSite(town);
+  for(let i=0;i<30;i++)g.step();
+  const foot=g.street.actorScene('driver');
+  assert.equal(foot.targetPose.mode,'walk');
+  assert(g.agency.checkHandoff(town,'driver',foot).ok);
+  assert(g.agency.change(town,'driver',foot).ok);
+  g.street.setSite(town);g.at(foot.targetPose.x,foot.targetPose.y,.001);
+  assert(!g.street.localPeople().some(p=>p.npcId==='driver'));
+  const truck=g.street.truckStatus().truck;
+  for(let i=0;i<200;i++)g.step();
+  assert.deepEqual(g.street.truckStatus().truck,truck,'dispatch waits while its driver is elsewhere');
+  g.street.focusMarket();g.finish();
+  const old=g.street.getState(),next=g.street.actorScene('walker-1');
+  assert(g.agency.change(town,'walker-1',next).ok);
+  g.street.setSite(town);
+  const released=g.street.activityOf('driver');
+  assert(Math.hypot(released.x-old.x,released.y-old.y)<.002);
+  assert.equal(g.street.actorScene('driver').targetPose.mode,'walk');
+  g.street.destroy();
+});
+
+test('urgent NPC freight arrives with a physical proof, returns to the depot and departs in the next week',async()=>{
+  const quote={available:true,done:false,week:1,serial:0,generation:0,marketRevision:0,siteId:site.id,
+    driverId:'driver',next:{name:'Pantry stop',x:9,y:24,good:'food'}};
+  const claims=[];
+  let reads=0;
+  const g=surface(740,390,{animated:true,lives:true,deferFrames:true,
+    getRegularRun:()=>{reads++;return {...quote};},
+    onRegularArrival:async(order,getProof)=>{
+      const proof=getProof();claims.push({order,proof});
+      assert(proof.attended);
+      assert.equal(proof.mode,'service');
+      assert.equal(proof.driverId,'driver');
+      assert.equal(proof.stop,order.next.name);
+      assert(Math.hypot(proof.x-order.next.x,proof.y-order.next.y)<.85);
+      quote.available=false;quote.done=true;quote.serial++;
+      return {ok:true};
+    }});
+  const saved=g.street.snapshotView();
+  assert(g.street.restoreView({...saved,player:{x:21.42,y:4.86,dx:1,dy:0}}));
+  for(let i=0;i<7500&&!claims.length;i++){g.step();if(i%50===0)await new Promise(setImmediate);}
+  assert.equal(claims.length,1);
+  for(let i=0;i<14500&&g.street.regularTruckStatus().stop!=='Market exchange';i++)g.step();
+  assert.equal(g.street.regularTruckStatus().stop,'Market exchange','the vehicle returns to its depot');
+  const parked={...g.street.truckStatus().truck};
+  for(let i=0;i<400;i++)g.step();
+  assert.deepEqual({...g.street.truckStatus().truck},parked);
+  assert.equal(claims.length,1);assert(reads<60,'demand was checked on arrivals, not every frame');
+  quote.week=2;quote.done=false;quote.available=true;quote.next={name:'Repair stop',x:21,y:18,good:'materials'};
+  g.street.setSite(site);
+  for(let i=0;i<14500&&claims.length<2;i++){g.step();if(i%50===0)await new Promise(setImmediate);}
+  assert.equal(claims.length,2);
+  g.street.destroy();
+});
+
+test('speech anchors follow the speaker’s actual head through camera zoom and a live handoff',()=>{
+  const g=surface(740,390,{lives:true,deferFrames:true}),id='walker-2';
+  const town={...site};g.street.setSite(town);
+  const scene=g.street.actorScene(id);
+  assert(g.agency.change(town,id,scene).ok);g.street.setSite(town);
+  for(const delta of [0,1]){
+    if(delta)g.street.zoomBy(1.36);
+    g.street.recenter();
+    const body=g.street.activityOf(id),expected=g.interactionFrame()(body.x,body.y,.84),actual=g.street.personAnchor(id);
+    assert.equal(actual.visible,true);
+    assert(Math.hypot(expected.x-8-actual.x,expected.y-12-actual.y)<.1);
+  }
+  assert.equal(g.street.personAnchor('missing-person'),null);
+  assert(g.street.personAnchor('driver'));
+  g.street.destroy();
+});
+
+test('a physically reached NPC freight stop transfers real stall stock into the pantry exactly once',async()=>{
+  const runtime=vm.createContext({});runtime.window=runtime;
+  for(const name of ['personas','careers','local-projects','autonomy','dialogue','agency','market','fleet','simulation']){
+    vm.runInContext(readFileSync(path.join(gameRoot,name+'.js'),'utf8'),runtime);
+  }
+  const sim=runtime.CommonEarthSim.create({storage:null});
+  assert(sim.found({name:'Stone Town',lat:-6.16,lon:39.19,water:true}).ok);
+  const town=sim.active();town.food=1;
+  const receipts=[];
+  const g=surface(740,390,{lives:true,deferFrames:true,getWeek:()=>sim.state.week,
+    getRegularRun:()=>sim.regularTruckView(),onRegularArrival:async(order,proof)=>{
+      const result=await sim.perform('regularTruck',order,proof);
+      receipts.push(result);return result;
+    }});
+  g.street.setSite(town);
+  const saved=g.street.snapshotView();
+  assert(g.street.restoreView({...saved,player:{x:21.42,y:4.86,dx:1,dy:0}}));
+  for(let i=0;i<7500&&!receipts.length;i++){g.step();if(i%50===0)await new Promise(setImmediate);}
+  assert.equal(receipts.length,1);assert.equal(receipts[0].ok,true);
+  assert.equal(sim.active().food,2);
+  assert.equal(sim.active().fleet.regularWeek,sim.state.week);
+  g.street.setSite(sim.active());for(let i=0;i<2000;i++)g.step();
+  assert.equal(receipts.length,1);assert.equal(sim.active().food,2);
+  g.street.destroy();sim.destroy();
+});
+
+test('a truck departing a narrow kerb strip can reach the Repair stop without crossing either pedestrian',()=>{
+  const g=surface();
+  const anchor={x:9.89784,y:23.69,dx:-1,dy:0};
+  const town={...site,buildings:[],fleet:{custody:{actor:'steward',week:14,token:'departure',anchor,pickup:anchor}}};
+  g.street.setSite(town);
+  const shot=g.street.snapshotView();
+  assert(g.street.restoreView({...shot,player:{x:9.94,y:24.30,dx:-1,dy:0}}));
+  g.street.setConstruction({jobs:[],workers:[onCrew('working',8.24,23.04,null)]});
+  assert(g.street.boardServiceTruck());
+  let arrived=false;
+  assert(g.street.followTruckDelivery({x:21,y:18},()=>{arrived=true;}),'the adjacent junction is connectable from this kerb');
+  g.finish();g.at(21,18);assert.equal(arrived,true);
+  g.street.destroy();
+});
+
+test('a truck keeps its depot destination while a pedestrian temporarily closes the remaining lane',()=>{
+  const g=surface();
+  const anchor={x:9,y:24,dx:1,dy:0},pickup={x:12.14592,y:23.69};
+  const town={...site,buildings:[{id:'work',kind:'workshop',plot:0,name:'Repair workshop'}],
+    fleet:{custody:{actor:'steward',week:8,token:'depot-return',anchor,pickup}}};
+  g.street.setSite(town);
+  const shot=g.street.snapshotView();
+  assert(g.street.restoreView({...shot,player:{x:9.1,y:24.58,dx:1,dy:0}}));
+  const residents=[onCrew('working',10.14,23.04,null),{...onCrew('working',8.24,23.04,null),residentId:'r0',slot:0},
+    {...onCrew('working',13.7238,23.1463,null),residentId:'r2',slot:2}];
+  g.street.setConstruction({jobs:[],workers:residents});
+  assert(g.street.boardServiceTruck());
+  let arrived=false;
+  assert(g.street.followTruckDelivery({x:15,y:24},()=>{arrived=true;}));
+  for(let i=0;i<100;i++)g.step();
+  const stopped=g.street.getState();assert.equal(stopped.travelling,true);assert(stopped.x>10&&stopped.x<12);
+  g.street.setConstruction({jobs:[],workers:[residents[0],residents[1],{...residents[2],x:15,y:18.75}]});
+  g.finish();assert.equal(arrived,true);g.at(15,24);
+  g.street.destroy();
 });

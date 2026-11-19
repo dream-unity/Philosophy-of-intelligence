@@ -118,7 +118,7 @@ test('the fishing controls distinguish underway, stopped, and ready to cast bene
   const fields=new Map(),field=id=>{if(!fields.has(id))fields.set(id,{});return fields.get(id);};
   const source=fs.readFileSync(path.join(directory,'app.js'),'utf8');
   const a=source.indexOf('  function updateStreetInteract(state)'),b=source.indexOf('  function cityController()',a);
-  Object.assign(g.context,{sim,document:{body:{hasAttribute:()=>false}},$:field,handlineDue:0,
+  Object.assign(g.context,{sim,streetHud:null,syncLiveClock:()=>{},document:{body:{hasAttribute:()=>false}},$:field,handlineDue:0,
     put:(id,content)=>{field(id).text=content;},show:(id,visible)=>{field(id).visible=visible;}});
   vm.runInContext(source.slice(a,b),g.context);
   const draw=scene=>g.context.updateStreetInteract(scene);
@@ -132,4 +132,12 @@ test('the fishing controls distinguish underway, stopped, and ready to cast bene
   const arrived={...berth,...mark};draw(arrived);
   assert.equal(field('street-shoal').visible,false);assert.equal(field('street-handline').disabled,false);
   assert.match(field('street-line-terms').text,/2 food/);ok(sim.useHandline(arrived,'cast',2));sim.destroy();
+});
+
+test('a reel input from an older catch cannot land a replacement float with the same food yield',()=>{
+  const g=setup(),sim=g.open();ok(sim.found(ocean));const p={...shore,siteId:sim.active().id};
+  ok(sim.useHandline(p,'cast',1));const first=sim.active().handline.castAt;g.time(5000);ok(sim.useHandline(p,'land',1,first));
+  ok(sim.useHandline(p,'cast',1));const second=sim.active().handline.castAt;g.time(5000);
+  const stock=sim.active().food;assert.equal(sim.useHandline(p,'land',1,first).ok,false);assert.equal(sim.active().food,stock);
+  ok(sim.useHandline(p,'land',1,second));assert.equal(sim.active().food,stock+1);sim.destroy();
 });

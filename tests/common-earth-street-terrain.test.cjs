@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const game = process.env.COMMON_EARTH_GAME_DIR || path.resolve(__dirname, '../common-earth');
 const source = readFileSync(path.join(game, 'street.js'), 'utf8');
 
-function waterfront(memory,{reduced=false,paintCost=1}={}) {
+function waterfront(memory,{reduced=false,paintCost=1,timed=false,bitmap=null}={}) {
   let frame, now=0, underlay, evenings=0, work=0, foregroundPaints=0;
   const paints=[],lampPaints=[];
   function element() {
@@ -43,6 +43,21 @@ function waterfront(memory,{reduced=false,paintCost=1}={}) {
     performance:{now:()=>work+=paintCost},devicePixelRatio:2,navigator:{deviceMemory:memory},matchMedia:()=>({matches:reduced}),
     requestAnimationFrame(fn){frame=fn;return 1;},cancelAnimationFrame(){frame=null;}
   };
+  if(bitmap)runtime.createImageBitmap=bitmap;
+  const timers=new Map();let nextTimer=1;
+  if(timed){
+    runtime.setTimeout=(fn,delay)=>{const id=nextTimer++;timers.set(id,{fn,due:now+delay});return id;};
+    runtime.clearTimeout=id=>timers.delete(id);
+  }
+  function wait(ms){
+    const end=now+ms;
+    for(;;){
+      const next=[...timers.entries()].sort((a,b)=>a[1].due-b[1].due)[0];
+      if(!next||next[1].due>end)break;
+      const [id,timer]=next;timers.delete(id);now=Math.max(now,timer.due);timer.fn();
+    }
+    now=end;
+  }
   vm.runInNewContext(source,runtime,{filename:'street.js'});
   const street=runtime.window.EarthStreet.mount(canvas);
   function draw(delta=100) {const next=frame;frame=null;assert.ok(next);next(now+=delta);}
@@ -51,7 +66,7 @@ function waterfront(memory,{reduced=false,paintCost=1}={}) {
     canvas.handlers.get(type)({type,pointerId:id,clientX:x,clientY:y,pointerType:'touch',button:0});
   }
   function hideTab(hidden){runtime.document.hidden=hidden;runtime.document.handlers.get('visibilitychange')({});}
-  return {hideTab,paintCount:()=>foregroundPaints,street,paints,lampPaints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
+  return {hideTab,wait,ground:()=>underlay.children.at(-1),paintCount:()=>foregroundPaints,street,paints,lampPaints,draw,visit,pointer,canvas,hasFrame:()=>Boolean(frame),evenings:()=>evenings,light:()=>evening.handlers.get('click')({})};
 }
 function site(id){return {id,name:id,lat:0,lon:12,water:true,residents:[],buildings:[]};}
 
@@ -202,4 +217,83 @@ test('a restored foreground or backdrop wakes the stationary reduced-motion dist
     assert.equal(g.hasFrame(),false);assert.deepEqual(g.street.snapshotView(),original);
   }
   g.street.destroy();assert.equal(backdrop.handlers.has('contextrestored'),false);
+});
+
+test('a stationary placement guide and fading notice repaint the moving actors and clear the expired text',()=>{
+  const g=waterfront(4),brush=g.canvas.getContext(),frames=[];
+  brush.clearRect=()=>frames.push({clipped:brush.clipped,notice:false});
+  brush.fillText=text=>{if(text.includes('Choose a marked')&&frames.length)frames.at(-1).notice=true;};
+  g.visit(site('working-harbour'));
+  g.street.setPlacement('garden');
+  for(let i=0;i<6;i++)g.draw();
+  assert(frames.at(-1).clipped,'the placement highlights are static between moving residents');
+  g.pointer('pointerdown',4,1,1);g.pointer('pointerup',4,1,1);
+  for(let i=0;i<42;i++)g.draw();
+  const live=frames.filter(frame=>frame.notice);
+  assert(live.length>5&&live.some(frame=>frame.clipped),'the instruction stays visible while people still move');
+  const cleared=frames[frames.findLastIndex(frame=>frame.notice)+1];
+  assert(cleared&&!cleared.clipped,'clearing the old text refreshes the foreground');
+  assert(frames.at(-1).clipped);
+  g.street.destroy();
+});
+
+test('terrain refinement leaves a complete district visible until the detailed floor is ready',()=>{
+  const g=waterfront(4,{timed:true}),low=g.visit(site('inlet'));
+  const width=low.width;
+  assert.equal(width,84*16);
+  g.wait(35);
+  assert.equal(g.ground(),low);
+  g.wait(100);g.draw(1);
+  const detailed=g.ground();
+  assert.notEqual(detailed,low);
+  assert(detailed.width>width);
+  assert.equal(low.width,1,'the opening buffer is released after the swap');
+  g.street.destroy();g.wait(300);
+});
+
+test('plot changes, community switches and backgrounding discard refinements prepared for old scenery',()=>{
+  const g=waterfront(4,{timed:true}),north=site('north-inlet'),south=site('south-inlet');
+  g.visit(north);g.wait(18);
+  north.buildings.push({id:'farm',kind:'garden',plot:1});g.visit(north);
+  g.wait(18);
+  const start=g.paints.length,low=g.visit(south),firstWidth=low.width;
+  g.wait(18);g.hideTab(true);g.wait(200);
+  assert.equal(g.ground(),low);
+  assert(g.paints.slice(start).every(p=>p.site===south.id));
+  g.hideTab(false);g.draw(1);g.wait(130);g.draw(1);
+  assert(g.ground().width>firstWidth);
+  assert(g.paints.slice(start).every(p=>p.site===south.id));
+  g.street.destroy();
+});
+
+test('a stale asynchronous terrain upload cannot replace the floor in another community',async()=>{
+  const pending=[],disposed=[];
+  const bitmap=()=>new Promise(resolve=>pending.push(()=>resolve({close:()=>disposed.push(true)})));
+  const g=waterfront(4,{timed:true,bitmap});
+  const low=g.visit(site('first-bay'));g.wait(16);
+  assert.equal(pending.length,1);
+  g.visit(site('second-bay'));const other=g.ground();g.wait(16);
+  assert.equal(pending.length,2);
+  pending.shift()();await Promise.resolve();
+  assert.equal(disposed.length,1);
+  assert.equal(g.ground(),other);
+  for(let i=0;i<8;i++){
+    assert.equal(pending.length,1);pending.shift()();await Promise.resolve();g.wait(13);
+  }
+  g.draw(1);assert.notEqual(g.ground(),low);assert(g.ground().width>84*16);
+  assert.equal(disposed.length,9);
+  g.street.destroy();
+});
+
+test('software evening lighting copies each small lamp footprint once and keeps working when readback is protected',()=>{
+  const g=waterfront(4),floor=g.visit(site('night-port')),brush=floor.getContext('2d'),reads=[];
+  brush.getImageData=(x,y,w,h)=>{reads.push([x,y,w,h]);return {width:w,height:h};};
+  g.light();g.draw();
+  assert(reads.length>0);
+  assert(reads.every(([, ,w,h])=>w<floor.width/8&&h<floor.height/8));
+  const first=reads.length;g.draw();g.draw();assert.equal(reads.length,first);
+  g.light();g.draw();
+  let denied=0;brush.getImageData=()=>{denied++;throw Error('protected origin');};
+  g.light();g.draw();assert.equal(denied,1);
+  assert(g.evenings()>=2);g.street.destroy();
 });
