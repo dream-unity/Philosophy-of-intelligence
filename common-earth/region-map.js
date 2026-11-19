@@ -120,12 +120,24 @@
       const workers=root.EarthConstruction?.view(preview.site,sim.state);
       if(workers)preview.scene.setConstruction(workers);
       preview.scene.resize();
+      const locals=root.EarthDistrictGrowth.members(preview.site);
+      // A district camera follows a local worker. Keep that choice between
+      // rounds so their journey remains continuous as accounts settle.
+      const index=Math.abs(Math.round(preview.site.lon*1000)+Math.round(preview.site.lat*1000));
+      const byTrade={food:'food',materials:'repair',funds:'exchange'}[preview.site.specialty];
+      const busy=locals.filter(person=>root.EarthDistrictGrowth.goal(preview.site,person).h?.activity===byTrade);
+      const choices=busy.length?busy:locals;
+      for(let i=0;i<choices.length;i++){
+        const person=choices[(index+i)%choices.length];
+        if(preview.scene.observePerson(person.id)){preview.following=person.name;break;}
+      }
+      if(!preview.following)preview.scene.toggleOverview();
     }
     const gridObserver=typeof IntersectionObserver==='undefined'?null:new IntersectionObserver(entries=>{
       for(const entry of entries){
         const preview=[...previews.values()].find(p=>p.button===entry.target);if(!preview)continue;
         if(entry.isIntersecting&&!preview.scene)startPreview(preview);
-        if(!entry.isIntersecting&&preview.scene){preview.scene.destroy();preview.scene=null;preview.stamp='';}
+        if(!entry.isIntersecting&&preview.scene){preview.scene.destroy();preview.scene=null;preview.stamp='';preview.following='';}
       }
     },{root:grid});
     function liveGrid(open){
@@ -141,10 +153,12 @@
           preview={scene:null,button,label,canvas,site};previews.set(site.id,preview);
           if(gridObserver)gridObserver.observe(button);else startPreview(preview);
         }
-        preview.site=site;preview.label.textContent=site.name+' · '+site.era;
+        preview.site=site;
+        const growth=root.EarthDistrictGrowth.report(site);
+        preview.label.textContent=site.name+' · '+site.era+' · '+growth.points+(growth.target?'/'+growth.target:'')+' growth';
         if(preview.scene&&preview.stamp!==stamp){
           preview.scene.setSite(structuredClone(site));const workers=root.EarthConstruction?.view(site,sim.state);if(workers)preview.scene.setConstruction(workers);
-          preview.scene.resize();preview.label.textContent=site.name+' · '+site.era;preview.stamp=stamp;
+          preview.scene.resize();preview.stamp=stamp;
         }
       }
     }

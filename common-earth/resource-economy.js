@@ -601,7 +601,7 @@
   }
   function collectDistrictLot(world,site,food){
     const store=ledger(world,site);
-    const candidates=localIds(site).filter(id=>Boolean(foodKey(id))===food&&standing(site,id,world.week)>0&&
+    const candidates=localIds(site).filter(id=>Boolean(foodKey(id))===food&&(food||!['water','herbs'].includes(id))&&standing(site,id,world.week)>0&&
       !closed(site,id,world.week)&&(store.bins[id]||0)<lotLimit);
     const id=candidates.sort((a,b)=>(store.bins[a]||0)-(store.bins[b]||0)||standing(site,b,world.week)-standing(site,a,world.week))[0];
     if(!id)return '';

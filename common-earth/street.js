@@ -5539,7 +5539,7 @@
       if(heldLocal&&!state.arrival)releaseLocal();
       observationView||={centreX,centreY,zoom,overviewZoom,cameraFollows,mode:state.mode};
       observedId=id;observationSignature=null;cameraFollows=false;
-      overviewZoom=null;zoom=Math.max(zoom,1.52);unit=baseUnit()*zoom;
+      overviewZoom=null;zoom=thumbnail?.92:Math.max(zoom,1.52);unit=baseUnit()*zoom;
       centreX=body.x;centreY=body.y;miniTick=-1;dirty=true;refreshObservation(true);schedule();return true;
     }
     function showNeighbourHelp(actor,target,kind,method){

@@ -67,7 +67,8 @@
       const product=1+Number(g.custom===traditions[Object.keys(trades).indexOf(kind)]&&g.round%3===0)+
         Number(craft>=65&&g.round%4===0)+Number(h.extension==='Kitchen garden'&&kind==='food'&&g.round%2===0);
       // Each local order supplies its own district and fulfils an outside order.
-      const why=p.name+' fulfilled a '+job.order+' for an outside customer. '+income+' personal funds. The district received '+product+' '+job.good+' and 1 fund in market dues.';
+      const output=job.good==='funds'&&product===1?'fund':job.good;
+      const why=p.name+' fulfilled a '+job.order+' for an outside customer and earned '+income+(income===1?' fund.':' funds.')+' The district received '+product+' '+output+' and 1 fund in market dues.';
       if(!pay(world,site,p,income,why))continue;
       site[job.good]+=product;site.funds++;wages+=income;counts[kind]++;
       h.points+=product;g.points+=product;h.last=why;h.activity=kind;

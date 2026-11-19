@@ -319,7 +319,7 @@
           const tier=site.tech.length,floor=root.EarthCivicInitiatives.reserve(world,site),held=root.EarthNeighbourErrands?.heldGoods?.(site,world.week)||{};
           ledgerBody.append(el('p','For the next era · trust '+site.trust+'/'+(45+tier*5)+' · food '+site.food+'/'+(floor.food+(held.food||0))+' · materials '+site.materials+'/'+(floor.materials+(held.materials||0)+[2,3,3][tier])+' · treasury '+site.funds+'/'+(floor.funds+(held.funds||0)+[5,7,9][tier])+'.'));
         }
-        ledgerBody.append(el('p',g.roads+' completed access roads · '+g.vehicle+' · '+g.custom+(site.growth?.institution?' · '+site.growth.institution:'')));
+        ledgerBody.append(el('p',g.roads+' completed access '+(g.roads===1?'road':'roads')+' · '+g.vehicle+' · '+g.custom+(site.growth?.institution?' · '+site.growth.institution:'')));
         ledgerBody.append(el('p','Members hold their home deed. Businesses buy a free commercial lot for 5 funds and 2 materials. Roads open more lots.'));
         if(last)for(const round of site.growth.history.slice(0,3))ledgerBody.append(el('p','Round '+round.round+' · paid '+round.wages+' in order income · pantry '+signed(round.food)+' · materials '+signed(round.materials)+' · treasury '+signed(round.funds)+'. '+round.events.join(' ')));
         else ledgerBody.append(el('p','Households settle paid orders every 24 seconds of visible play, including during personal activities.'));
