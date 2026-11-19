@@ -2551,8 +2551,16 @@
     // the Web Locks API. The direct commands retain synchronous compatibility.
     async function perform(command,...args){
       if(!Object.hasOwn(commands,command))return reject('Unknown game action.');
-      const expected=actionGeneration;
-      function run(){return expected!==actionGeneration?reject(conflict):commands[command](...args);}
+      const expected=actionGeneration,queuedWorld=world,production=world.productionSerial||0;
+      function run(){
+        if(expected!==actionGeneration){
+          // Targeted orders validate their own treasury, roster and treaty under
+          // the lock. A local household tick can safely settle ahead of them.
+          const targeted=command==='diplomacy'||command==='baseOrder';
+          if(!targeted||queuedWorld!==world||actionGeneration-expected!==(world.productionSerial||0)-production)return reject(conflict);
+        }
+        return commands[command](...args);
+      }
       if(!storage||!root.navigator?.locks?.request)return run();
       let entered=false;
       try{return await root.navigator.locks.request('civic-world:'+key,()=>{entered=true;return run();});}

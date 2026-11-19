@@ -500,3 +500,19 @@ test('a purchased time machine opens a historical branch while keeping the origi
   await book.select(source);assert.equal(sim.active().militaryBase.units.length,1);assert.equal(sim.active().militaryBase.missions.length,1);
   book.dispose();
 });
+
+test('queued diplomacy and base orders recheck after a local production round while another player choice still invalidates them',async()=>{
+  const run=region(),{ctx}=run;
+  const cells=new Map(),storage={getItem:k=>cells.get(k)??null,setItem:(k,v)=>cells.set(k,v)};
+  const sim=ctx.CommonEarthSim.create({storage});assert.ok(sim.found(place).ok);
+  let acquire;
+  ctx.navigator={locks:{request:(key,fn)=>new Promise(resolve=>{acquire=()=>resolve(fn());})}};
+  const home=sim.active(),rival=sim.state.communityLife.outposts[0];
+  const order=()=>sim.perform('baseOrder',{site:home.id,generation:home.foundingRevision||0,action:'enlist',type:'guard'});
+  const pending=order();run.elapse(25000);assert.ok(sim.production(sim.state.productionSerial||0,()=>true).ok);acquire();
+  assert.ok((await pending).ok);assert.equal(home.militaryBase.units.length,1);
+  const stale=order();assert.ok(sim.setWorldPace(4).ok);acquire();assert.equal((await stale).ok,false);
+  const treaty=sim.perform('diplomacy',{home:home.id,target:rival.id,action:'declare'});
+  run.elapse(25000);assert.ok(sim.production(sim.state.productionSerial||0,()=>true).ok);acquire();
+  assert.ok((await treaty).ok);sim.destroy();
+});
