@@ -94,3 +94,50 @@ if(process.argv.includes('--html')){
     console.log(report.replace(/<[^>]+>/g,''));
   }finally{rmSync(dir,{recursive:true,force:true});}
 }
+import {spawn} from 'node:child_process';
+import {createServer} from 'node:http';
+import {copyFileSync,existsSync} from 'node:fs';
+import {setTimeout as delay} from 'node:timers/promises';
+
+async function timeStreet(){
+  const clean=mkdtempSync(join(tmpdir(),'common-earth-fps-')),before=join(clean,'before'),build=process.cwd();
+  const older='c5415258fbf23c4ca817012d84aba8a079fb28e9';
+  execFileSync('git',['fetch','--depth=1','origin',older],{stdio:'ignore'});
+  execFileSync('git',['worktree','add','--detach',before,older],{stdio:'ignore'});
+  copyFileSync(join(build,'common-earth/tablet-benchmark.html'),join(before,'common-earth/tablet-benchmark.html'));
+  const types={html:'text/html',js:'text/javascript',webp:'image/webp',png:'image/png',jpg:'image/jpeg',svg:'image/svg+xml',css:'text/css',json:'application/json'};
+  const server=createServer((req,res)=>{
+    const u=new URL(req.url,'http://localhost'),parts=u.pathname.split('/').filter(Boolean),old=parts.shift()==='before';
+    const file=join(old?before:build,'common-earth',...parts);
+    if(!existsSync(file)){res.writeHead(404).end();return;}
+    res.setHeader('Content-type',types[file.split('.').pop()]||'application/octet-stream');
+    try{res.end(readFileSync(file));}catch{res.writeHead(404).end();}
+  });
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));
+  const chrome=spawn('google-chrome',['--headless','--no-first-run','--disable-dev-shm-usage','--user-data-dir='+join(clean,'chrome'),'--remote-debugging-port=0','--window-size=1363,1030','about:blank'],{stdio:['ignore','ignore','ignore']});
+  const debug=join(clean,'chrome/DevToolsActivePort');
+  let ws;
+  try{
+    for(let i=0;i<100&&!existsSync(debug);i++)await delay(100);
+    const port=readFileSync(debug,'utf8').split('\n')[0];
+    const tabs=await(await fetch('http://127.0.0.1:'+port+'/json/list')).json();
+    ws=new WebSocket(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);
+    await new Promise((r,e)=>{ws.onopen=r;ws.onerror=e;});
+    const pending=new Map();let id=0;
+    ws.onmessage=e=>{const m=JSON.parse(e.data),p=pending.get(m.id);if(p){pending.delete(m.id);if(m.error)p.reject(Error(m.error.message));else p.resolve(m.result);}};
+    const send=(method,params={})=>new Promise((resolve,reject)=>{pending.set(++id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
+    const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.text);return r.result.value;};
+    for(const version of ['before','current','current']){
+      await send('Page.navigate',{url:'http://127.0.0.1:'+server.address().port+'/'+version+'/tablet-benchmark.html'});
+      let ready=false;
+      for(let i=0;i<100&&!ready;i++){await delay(100);ready=await evaluate("document.querySelector('#status')?.textContent==='Ready.'");}
+      if(!ready)throw Error('benchmark did not start');
+      await evaluate("document.querySelector('#run').click()");
+      let report='';
+      for(let i=0;i<240&&!report;i++){await delay(250);report=await evaluate("document.querySelector('#report')?.innerText");}
+      if(!report)throw Error(await evaluate("document.querySelector('#status').textContent"));
+      console.log('Independent clean Chrome '+version+' '+report.replaceAll('\n',' | '));
+    }
+  }finally{ws?.close();chrome.kill();server.close();execFileSync('git',['worktree','remove','--force',before],{stdio:'ignore'});}
+}
+await timeStreet();
