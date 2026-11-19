@@ -235,7 +235,8 @@ test('the available crop limits baskets for the pantry, reserve bin and collabor
   assert.equal(t.s.resourceLedger.fields.grain.left,0);assert.equal(t.s.autonomy.projects.assists,1);
   assert.match(output.result.item.reason,/raw goods bin/);assert.ok(output.result.item.target);
   assert.equal(t.ctx.EarthResources.quickGather(t.w,t.s,owner).resource==='grain',false);
-  for(const id of ['grain','pulses','roots','fruit'])t.s.resourceLedger.fields[id]={week:2,left:0};
+  const sources=t.ctx.EarthResources.view(t.w,t.s,{till:8},32,owner).rows;
+  for(const {id,local} of sources)if(local&&t.ctx.EarthResources.isCrop(id))t.s.resourceLedger.fields[id]={week:2,left:0};
   assert.equal(t.ctx.EarthResources.quickGather(t.w,t.s,owner),null);
   const other='walker-0',empty=goal('food','care');t.s.autonomy.projects.owners[other]=empty;
   const waiting=workOn(t,other,2);assert.equal(waiting.result,null);assert.equal(empty.progress,0);

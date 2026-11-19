@@ -298,6 +298,8 @@
   function validSite(site,world,ids){
     if(!recordLike(site) || !shortName(site.id) || !shortName(site.name) || !geoPoint(site) || typeof site.water!=='boolean')return false;
     if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
+    if(root.EarthPersonas?.validBirthNames&&!root.EarthPersonas.validBirthNames(site.birthNames))return false;
+    if(site.workRotation!=null&&(!integer(site.workRotation,0,2)||site.birthNames==null))return false;
     if(site.coastal!=null && typeof site.coastal!=='boolean')return false;
     if(site.lakeShore!=null&&site.lakeShore!==''&&!shortName(site.lakeShore))return false;
     if(!['food','funds','materials'].includes(site.specialty))return false;
@@ -417,7 +419,7 @@
     const terms=name+' will release only surplus after meals, repair stores and outstanding promises. Each town can suspend its outgoing loads.';
     let reason='';
     if(!host||root.EarthCommunityLife?.residency?.(to,host.id)!=='member')reason=to.name+' needs a local delegate to consider the route.';
-    else if(!met&&(!ties||turn.charter==='voice'))reason=name+' wants a hearing in '+to.name+' before signing. Visit Neighbours and meet the host.';
+    else if(!met&&(!ties||turn.charter==='voice'))reason=name+' wants a hearing in '+to.name+' before signing. Open Towns and meet the host.';
     else if(to.trust<35)reason=name+' has paused freight agreements while residents rebuild trust (35 needed).';
     else if(from.trust<35)reason='Your assembly needs 35 trust to underwrite a new supply route.';
     else if(from.materials-1<freightReserve(turn,from,'materials'))reason='Opening the route would use material held for repairs or a promise. Keep '+freightReserve(turn,from,'materials')+' materials after paying the route crew.';
@@ -465,6 +467,12 @@
     // Forecasts follow the save format, including JSON's treatment of
     // optional fields. Historical reports need not travel into the next turn.
     return JSON.parse(JSON.stringify({...world,journal:[],lastWeekReview:null}));
+  }
+  function constructionDistricts(world){
+    // Background households take their regular shifts on the calendar. A
+    // commissioned worksite also has a physical crew, wherever the camera is.
+    const queued=world.communityLife?.outposts?.filter(site=>site.construction?.length);
+    return queued?.length?world.sites.concat(queued):world.sites;
   }
   // Opening a world and importing a save use the same migration and integrity
   // rules. Only the parsed copy is changed; the input remains recoverable.
@@ -593,15 +601,18 @@
       lastSyncWasWork=!!world.workRevision && world.workRevision>(prior.workRevision||0) &&
         world.actionRevision===prior.actionRevision && world.week===prior.week && !saveIssue;
       if(lastSyncWasWork){
-        const completed=[],updated=new Map(world.sites.map(site=>[site.id,site]));
-        for(const before of prior.sites){
+        const completed=[],sites=new Set();
+        const updated=new Map([...world.sites,...world.communityLife?.outposts||[]].map(site=>[site.id,site]));
+        for(const before of constructionDistricts(prior)){
           if(!before.construction?.length)continue;
+          sites.add(before.id);
           const after=updated.get(before.id);
           for(const job of before.construction||[]){
             if(after && !after.construction?.some(next=>next.id===job.id))completed.push({...job,siteId:before.id});
           }
         }
-        notify(true,{construction:true,completed});
+        for(const after of updated.values())if(after.construction?.length)sites.add(after.id);
+        notify(true,{construction:true,completed,sites:[...sites]});
       }else{actionGeneration++;notify(true);}
       return true;
     }
@@ -764,9 +775,9 @@
       const note=root.EarthCampaigns?.found(world,site,commission);
       return complete(name+' founded. '+(old?old.name+' transferred '+resources(offer.goods)+'. '+(world.communityLife?world.communityLife.profile.name+' founded the new district with '+offer.volunteers.map(v=>v.name).join(' and ')+' and four local members. ':'Two volunteers and four new members started the settlement. '):'')+({food:'Its growers produce 1 extra food each week.',materials:'Its salvage team recovers 1 extra material each week.',funds:'Its cooperative earns 1 extra fund each week.'})[site.specialty]+(note?' '+note:''),site);
     }
-    function newSettlement({id,name,region,point,water,names,old,offer}){
+    function newSettlement({id,name,region,point,water,names,old,offer},network=world){
       const specialty=water?'food':['food','materials','funds'][Math.abs(Math.round(point.lat*2+point.lon))%3];
-      const site={id,name,region,lat:point.lat,lon:point.lon,water,specialty,era:'Settlement',founded:world.week,foundingRevision:(world.actionRevision||0)+1,foundedBy:old?.id || null,routeLinks:0,
+      const site={id,name,region,lat:point.lat,lon:point.lon,water,specialty,era:'Settlement',founded:network.week,foundingRevision:(network.actionRevision||0)+1,foundedBy:old?.id || null,routeLinks:0,
         population:offer.newPopulation,funds:old?offer.goods.funds:16,food:old?offer.goods.food:12,materials:old?offer.goods.materials:8,trust:50,wellbeing:54,tech:[],buildings:[],construction:[],delivery:null,
         residents:PROFILES.map((p,slot)=>({id:id+'-p'+slot,slot,name:names[slot],role:p.role,value:p.value,bond:0,heard:false,promise:null,lastTalk:0,lastPromise:-10})),
         issue:null,pending:[],stats:{kept:0,missed:0,resolved:0,deliveries:0},issueIndex:-1,lastDeliveryWeek:0};
@@ -779,6 +790,7 @@
         if(typeof lake==='string'&&lake)site.lakeShore=lake;
         if(water&&!site.lakeShore&&/(?:\blakes?\b|\blac\b|\blago\b|reservoir|inland water|freshwater)/i.test(region))site.lakeShore=region;
       }
+      root.EarthPersonas?.allocateBirthNames?.(site,[...network.sites,...(network.communityLife?.outposts||[])]);
       root.EarthCityModel?.normalise(site);
       return site;
     }
@@ -1065,7 +1077,7 @@
         if(group!=='all' && group!==category)return;
         const {effort=1,goods={},gate='',...meta}=options || {};
         const away=meta.residentId&&root.EarthCommunityLife?.residency?.(site,meta.residentId)&&root.EarthCommunityLife.residency(site,meta.residentId)!=='member';
-        const reason=root.EarthCommunityLife?.visitReason?.(world,site)||(away?'This person is away or visiting. Check Neighbours for their membership.':'')||actionReason(site,effort,goods,gate);
+        const reason=root.EarthCommunityLife?.visitReason?.(world,site)||(away?'This person is away or visiting. Open Towns to check their membership.':'')||actionReason(site,effort,goods,gate);
         actions.push({id,group:category,label,description,cost:effort,goods,available:!reason,reason,blocker:!reason?null:gate?'prerequisite':world.effort<effort?'effort':'supplies',...meta,run});
       }
       if(group==='all'||group==='people')for(const p of site.residents){
@@ -1646,29 +1658,38 @@
     function rollWeek(turn){
       const events=[],transfers=[];
       const byId=new Map(turn.sites.map(site=>[site.id,site]));
+      // A crossing changes where the player is standing. An unseen district
+      // keeps the very same public accounts, residents and construction orders.
+      const districts=turn.communityLife?.outposts?.length?[...turn.sites,...turn.communityLife.outposts]:turn.sites;
       const metrics=METRICS;
       const opening=new Map(),reports=new Map();
-      for(const site of turn.sites){
+      for(const site of districts){
         opening.set(site.id,Object.fromEntries(metrics.map(k=>[k,site[k]])));
         reports.set(site.id,{id:site.id,name:site.name,production:{},forecast:'',
           promises:[],council:[],arrivals:[],departures:[],highlights:[],closing:{},delta:{}});
       }
       function event(text,site,type,logged=true){
+        if(!byId.has(site.id)){
+          // Local events can be read in the district itself without swamping the
+          // player's weekly report with each shift in every other community.
+          if(type||site.construction?.length&&text.includes(' on lot '))root.EarthCommunityLife?.recordWeek?.(site,turn.week,text);
+          return;
+        }
         const report=reports.get(site.id);
         report.highlights.push(text);
         if(type)report[type].push(text);
         events.push({site,text,type,logged});
       }
-      for(const site of turn.sites)for(const note of root.EarthFleet?.closeWeek(turn,site)||[])event(note,site,'arrivals');
-      for(const site of turn.sites){
+      for(const site of districts)for(const note of root.EarthFleet?.closeWeek(turn,site)||[])event(note,site,'arrivals');
+      for(const site of districts){
         const delivered=(person,why,calendar,by)=>fulfilled(site,person,why,calendar,by);
         for(const note of root.EarthNeighbourErrands?.closeDeliveries?.(site,turn,delivered)||[])event(note,site,'promises');
       }
       turn.week++;turn.effort=MAX_EFFORT;
       // A chair may cast the outgoing week's last ballot using the resources then in hand.
       const closingVotes=new Map();
-      for(const site of turn.sites)closeDeadlines(turn,site,event,closingVotes);
-      for(const site of turn.sites){
+      for(const site of districts)closeDeadlines(turn,site,event,closingVotes);
+      for(const site of districts){
         for(const note of root.EarthDialogue?.closeWeek?.(site,turn)||[])event(note,site,'promises');
         const previousExcess=Math.max(0,site.population-capacity(site));
         // An accepted handover changes who is available to help this week.
@@ -1704,7 +1725,7 @@
         }
       }
       const inbound=receiveCargo(turn,byId,event);
-      for(const site of turn.sites){
+      for(const site of districts){
         settleCouncil(turn,site,transfers,event);
         settleResidents(turn,site,event);
       }
@@ -1715,10 +1736,10 @@
       if(root.EarthPartners)for(const item of root.EarthPartners.tick(turn,{apply}) || []){
         const site=byId.get(item.siteId);if(site)event(item.text,site,item.type);
       }
-      for(const site of turn.sites)settleHouseholds(turn,site,reports.get(site.id),event);
-      if(root.EarthCommunityLife)for(const movement of root.EarthCommunityLife.tick(turn,newSettlement))event(movement.text,movement.site);
+      for(const site of districts)settleHouseholds(turn,site,reports.get(site.id),event);
+      if(root.EarthCommunityLife)for(const movement of root.EarthCommunityLife.tick(turn,spec=>newSettlement(spec,turn)))event(movement.text,movement.site);
       dispatchCargo(turn,byId,inbound,event);
-      for(const site of turn.sites){
+      for(const site of districts){
         if(!site.issue && (turn.week-site.founded-1)%4===0 && turn.week>site.founded){
           openIssue(turn,site);
           event('Council opened “'+site.issue.title+'”. Vote by the end of week '+site.issue.deadline+'.',site,'council');
@@ -1739,14 +1760,14 @@
         const site=byId.get(result.siteId);
         if(site)event(result.text,site);
       }
-      for(const site of turn.sites){
+      for(const site of districts){
         const report=reports.get(site.id),before=opening.get(site.id);
         if(site.provisions?.receipt)root.EarthProvisions?.reconcile(site,turn.week);
         for(const p of site.residents)if(p.promise?.dueWeek===turn.week)report.promises.push(p.name+' is due '+resources(promiseBalance(p))+' by the end of week '+turn.week+(p.promise.revised?' under the revised agreement.':'.'));
         if(site.issue?.deadline===turn.week)report.council.push('Final week to vote on “'+site.issue.title+'”.');
         for(const k of metrics){report.closing[k]=site[k];report.delta[k]=site[k]-before[k];}
       }
-      return {week:turn.week,sites:Array.from(reports.values()),highlights:events.map(e=>e.text),events,ratified};
+      return {week:turn.week,sites:turn.sites.map(site=>reports.get(site.id)),highlights:events.map(e=>e.text),events,ratified};
     }
     function forecastNext(){
       const copy=calendarCopy(world);
@@ -1964,7 +1985,7 @@
         const job=site.construction?.find(j=>j.id===agreement.jobId);
         if(!job||job.paused)continue;
         const volunteers=agreement.votes.filter(v=>{
-          if(v.stance!=='support'||promised.has(v.personId)||site.id===turn.activeId&&v.personId===(site.agency?.actor||'steward'))return false;
+          if(v.stance!=='support'||promised.has(v.personId)||root.EarthCommunityLife?.residency(site,v.personId)==='away'||site.id===turn.activeId&&v.personId===(site.agency?.actor||'steward'))return false;
           if(root.EarthCareers?.specialistShift?.(site,v.personId,turn.week))return false;
           if(site.shift?.residentId===v.personId||site.careers?.[v.personId]?.training||site.careers?.[v.personId]?.application)return false;
           const worker=site.workforce?.members?.[v.personId];
@@ -1998,11 +2019,11 @@
         const resetClock=previous>now+5000 && Math.abs(through-now)<5000;
         if(!resetClock)seconds=Math.min(seconds,Math.max(0,(through-previous)/1000));
       }
-      const completed=[],messages=[];
+      const completed=[],messages=[],changedSites=new Set();
       let changed=false;
       // A rehearsal can cover several sites in one call. Settle each second in
       // play order so visits, new workplaces and journal entries match live play.
-      let remaining=Math.round(seconds*1000),candidates=world.sites;
+      let remaining=Math.round(seconds*1000),candidates=constructionDistricts(world);
       while(remaining>0){
         const slice=Math.min(1000,remaining);
         const startingCount=completed.length;
@@ -2017,14 +2038,14 @@
             completed.push({...job,siteId:site.id,message});
             if(message)messages.push(message);
           });
-          if(step.changed){active=true;next?.push(site);}
+          if(step.changed){active=true;changedSites.add(site.id);next?.push(site);}
         }
         if(!active)break;
         changed=true;
         if(completed.length>startingCount){
           const victory=ratify(world);
           if(victory){record(victory);messages.push(victory);}
-          candidates=world.sites;
+          candidates=constructionDistricts(world);
         }else if(next){
           // In a multi-second rehearsal an idle district has no new input
           // between ticks. Recheck the entire network after any opening.
@@ -2034,7 +2055,7 @@
       }
       if(changed || completed.length){
         if(through!==undefined)world.constructionThrough=through;
-        const collision=save({construction:true,completed});
+        const collision=save({construction:true,completed,sites:[...changedSites]});
         if(collision)return collision;
       }
       return {ok:true,changed,completed,message:messages.join(' ')};
@@ -2105,7 +2126,7 @@
     }
     function planCity(precinctId,projectId,expectedJobId){
       const site=current(),model=root.EarthCityModel;
-      if(!site || !model)return reject('City planning is unavailable here.');
+      if(!site || !model)return reject('Neighbourhood projects are unavailable here.');
       if(projectId==='cancel' && expectedJobId!==undefined && site.city?.precincts?.[precinctId]?.jobId!==expectedJobId)
         return reject('The project here has changed. Inspect the current worksite before cancelling.');
       const result=model.apply(site,world,precinctId,projectId);
@@ -2182,7 +2203,7 @@
       }
       const domain=request.domain==='career'?root.EarthCareers:request.domain==='autonomy'?root.EarthAutonomy:request.domain==='civic'?root.EarthCivicInitiatives:null;
       if(!domain)return reject('This part of the character profile is unavailable. Reopen the game to load it again.');
-      const result=domain.command(world,site,personId,request.action,request.targetId,request.expectedRevision,scene,{speakerId:actorId,coverId:request.coverId});
+      const result=domain.command(world,site,personId,request.action,request.targetId,request.expectedRevision,scene,{speakerId:actorId,coverId:request.coverId,openingKey:request.openingKey});
       // A remembered refusal can be a real outcome even when no plan begins.
       if(!result.ok && !result.changed || result.unchanged)return result;
       const saved=complete(result.message,site);
@@ -2279,5 +2300,5 @@
       destroy(){closed=true;listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };
   }
-  root.CommonEarthSim={create,waterfront,lakeName,promiseBalance,freightReserve,readSave,migrateDetachedSave,marketPlan,productiveLinks,practices,charterFacts,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
+  root.CommonEarthSim={create,waterfront,lakeName,promiseBalance,freightReserve,readSave,migrateDetachedSave,constructionDistricts,marketPlan,productiveLinks,practices,charterFacts,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
 })(typeof window==='undefined'?globalThis:window);

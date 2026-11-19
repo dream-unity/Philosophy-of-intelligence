@@ -101,9 +101,10 @@
     [/refuse/i,'dock','Mark the next collection round','Clear the neighbourhood’s collection points on schedule'],
     [/./,'hall','Collect questions for the neighbourhood meeting','Hear a resident whose shift overlaps the meeting']
   ];
-  function plannedDuty(site,person,week,role=person.role||'Neighbour',preferredVenue=null){
+  function plannedDuty(site,person,week,role=person.role||'Neighbour',preferredVenue=null,assignment=null){
     const rule=roleDuties.find(([test])=>test.test(role));
-    const venue=preferredVenue?workplace(preferredVenue,role):rule[1],title=rule[2],goal=rule[3];
+    const focus=assignment||(person.originRole===role&&person.birthCommunityId===site.id?person.workFocus:null);
+    const venue=preferredVenue?workplace(preferredVenue,role):rule[1],title=focus?.duty||rule[2],goal=focus?.goal||rule[3];
     const metric=venue==='garden'?'We have '+(site.food||0)+' food set aside. ':venue==='workshop'?'The store has '+(site.materials||0)+' materials. ':'';
     return {...line(week,'routine',metric+'I want to '+goal[0].toLowerCase()+goal.slice(1)+'.',venue),title,activity:title,goal};
   }
@@ -115,7 +116,7 @@
     const byPerson=initialPlans.get(site)||new Map();
     if(byPerson.get(id)?.key===key)return byPerson.get(id).plan;
     const job=root.EarthCareers?.work?.(site,id),role=job?.label||p.role;
-    let item=plannedDuty(site,p,week,role,job?.venue);
+    let item=plannedDuty(site,p,week,role,job?.venue,job?.assignment);
     // Two neighbours already have a personal appointment when the first shift
     // opens. This is an intention only. No fee, skill or result is awarded.
     if(root.EarthDreams && !site.autonomy?.people?.[id]?.history?.length && week===(site.founded||week)&&
@@ -290,7 +291,7 @@
     const duty=priorDuty||civic?.reason||'',relief=root.EarthCareers?.specialistShift?.(site,person.id,week);
     const base=person.id===controlled(site,world)?line(week,'player','I choose where to go and what to do.','home'):
       duty?line(week,relief?'cover':'commitment',duty,relief?.venue||(venues.has(civic?.venue)?civic.venue:venue)):row.energy<2?line(week,'rest','I have worked several weeks without a proper break.','bench'):
-      failed?line(week,'routine','After the missed promise I want a dependable shift.',venue):plannedDuty(site,person,week,role,job?.venue);
+      failed?line(week,'routine','After the missed promise I want a dependable shift.',venue):plannedDuty(site,person,week,role,job?.venue,job?.assignment);
     if(relief&&base.kind==='cover')base.title='Cover the '+relief.label.toLowerCase()+' round at '+relief.employer;
     if(handover?.scope&&base.kind==='commitment'&&duty===handover.reason){
       base.venue=handover.venue;base.title=handover.title;base.handoverScope=handover.scope;base.handoverRole=handover.role;
@@ -307,57 +308,66 @@
       !failed&&!assigned?.has(person.id)&&!busy(site,person,world,true)&&!root.EarthCivicInitiatives?.commitment?.(site,world,person.id)?promise.by:null;
     return {id:person.id,name:person.name,profile:person,row,traits,slot:resident?.slot,duty,base,item:base,receivesFrom,free:base.kind==='routine'&&!failed,wasAdvised:row.advice?.accepted&&row.advice.week===week-1?row.advice.action:null};
   }
-  function bestJob(person,site){
-    const jobs=root.EarthCareers?.catalog||[],current=root.EarthCareers?.role?.(site,person.id)||person.profile.role;
-    let best=null,score=-Infinity,currentFit=0;
-    for(const job of jobs){
-      const ability=site.careers?.[person.id]?.skills?.[job.skill]??person.profile.aptitudes?.[job.skill]??40,interest=person.profile.strengths?.includes(job.skill)?9:0;
-      if(job.label.toLowerCase()===String(current||'').toLowerCase()){currentFit=ability+interest;continue;}
-      const limits=person.profile.bounds;
-      if(limits && ((limits[job.skill]?.max??100)+6<job.requiredSkill || (limits[job.secondary]?.max??100)<job.secondMinimum))continue;
-      const horizon=Math.min(12,(job.trainingWeeks||0)/20)*(100-person.traits.patience)/100;
-      const qualified=site.careers?.[person.id]?.qualifications?.[job.id];
-      const full=root.EarthCareers?.openings?.(site,job.id)===0;
-      const vacancy=root.EarthEmployers?.recorded(site,job.id)||0;
-      const value=ability+interest-horizon+(qualified?13:0)-(full?14:0)+Math.min(17,vacancy*9)+(person.profile.interests?.some(i=>String(i).toLowerCase().includes(job.label.toLowerCase()))?4:0);
-      if(value>score){score=value;best=job;}
-    }
-    // People content in a well-matched line of work generally keep it.
-    if(person.ambition?.researchRoute && person.ambition.researchRoute!==site.careers?.[person.id]?.jobId){
-      const research=jobs.find(j=>j.id===person.ambition.researchRoute);
-      if(research)return research;
-    }
-    const needed=person.wasAdvised==='learn'?45:Math.max(45,currentFit+2);
-    return score>=needed?best:null;
+  function bestJob(person,site,world){
+    const careers=root.EarthCareers,jobs=careers?.catalog||[];
+    if(!careers?.routes)return jobs[0]?{job:jobs[0]}:null;
+    const current=careers.role?.(site,person.id)||person.profile.role;
+    const routes=careers.routes(world,site,person.profile);
+    const research=person.ambition?.researchRoute&&routes.find(plan=>plan.job.id===person.ambition.researchRoute&&plan.attainable);
+    if(research&&research.job.label!==current)return research;
+    const same=routes.find(plan=>plan.job.label.toLowerCase()===String(current||'').toLowerCase());
+    const next=routes.find(plan=>plan.attainable&&plan!==same);
+    const margin=2+(100-person.traits.adaptability)/13-(person.traits.curiosity-50)/5;
+    return next&&next.score>=(person.wasAdvised==='learn'?45:Math.max(45,same?same.score+margin:45))?next:null;
   }
   function careerStep(world,site,person){
     const careers=root.EarthCareers,book=person.row.path;
     if(!careers?.command||!careers.view)return null;
-    const job=book?careers.catalog.find(j=>j.id===book):bestJob(person,site);if(!job)return null;
+    const path=book?null:bestJob(person,site,world);
+    let job=book?careers.catalog.find(j=>j.id===book):path?.job;if(!job)return null;
     const self={speakerId:person.id,autonomous:true};
     const cv=careers.view(world,site,person.id,job.id,{...self,matchPeople:site.careers?.[person.id]?.application?.phase==='notice'});if(!cv)return null;
-    // Player-led enrolment, applications and employment always retain their terms.
+    // An independently chosen course can change when another employer has a
+    // real vacancy. Commitments made by the current player keep their terms.
     if(cv.training && (!cv.training.autonomous || cv.training.paused) || cv.application&&!cv.application.autonomous ||
       !book && (site.careers?.[person.id]?.manualWeek>=world.week-12 || site.careers?.[person.id]?.joinedWeek>=world.week-52))return null;
     if(cv.careerId===job.id){delete person.row.path;return null;}
     const stage=cv.application?.phase;
     if(stage==='screening'||stage==='notice'&&cv.application.coverId)return null;
-    let action='';
+    let action='',choices=cv.choices;
     if(stage==='notice')action='handover';
-    else if(stage==='waiting'){if(!cv.opening?.relief.available)return null;action='specialistRelief';}
-    else if(stage==='offer')action=cv.choices.some(c=>c.id==='considerOffer')?'considerOffer':'accept';
+    else if(stage==='waiting'){
+      if(cv.opening?.relief.available)action='specialistRelief';
+      else{
+        const other=careers.waitingAlternative?.(world,site,person.profile);
+        if(!other||person.ambition?.researchRoute===job.id)return null;
+        job=other.job;action='followVacancy';
+        choices=careers.view(world,site,person.id,job.id,{...self,matchPeople:false}).choices;
+      }
+    }else if(stage==='offer')action=choices.some(c=>c.id==='considerOffer')?'considerOffer':'accept';
     else if(!cv.qualified && !cv.training)action='enroll';
-    else if((cv.portfolios?.[job.id]||0)<Math.min(3,job.samples+Number((cv.references?.[job.id]||0)<0)))action='portfolio';
-    else if((cv.skills?.[job.secondary]||0)<job.secondMinimum)action='support';
-    else if((cv.skills?.[job.skill]||0)+2*(cv.portfolios?.[job.id]||0)<job.requiredSkill+2*Number((cv.references?.[job.id]||0)<0))action='practice';
-    else if(cv.qualified && !cv.missing?.length)action='apply';
-    const choice=cv.choices.find(c=>c.id===action && c.available && (!c.targetId||c.targetId===job.id));
+    else{
+      const samples=cv.portfolios?.[job.id]||0;
+      const reference=cv.references?.[job.id]??cv.latestReference?.quality??0;
+      const required=Math.min(3,Math.max(job.samples>0?1:0,job.samples+(reference<0?1:reference===2?-1:0)));
+      const entry=job.requiredSkill+(reference<0?2:0);
+      const primary=cv.skills?.[job.skill]||0,limit=cv.bounds?.[job.skill]?.max??100;
+      if(samples<required)action='portfolio';
+      else if((cv.skills?.[job.secondary]||0)<job.secondMinimum)action='support';
+      else if(primary+2*samples<entry){
+        if(primary<limit)action='practice';
+        else if(samples<3)action='portfolio';
+        else if(reference<0)action='relief';
+      }else if(cv.qualified && !cv.missing?.length)action='apply';
+    }
+    const choice=choices.find(c=>c.id===action && c.available && (!c.targetId||c.targetId===job.id));
     if(!choice)return null;
-    const result=careers.command(world,site,person.id,choice.id,job.id,cv.revision,undefined,self);
+    const result=careers.command(world,site,person.id,choice.id,job.id,cv.revision,undefined,choice.openingKey?{...self,openingKey:choice.openingKey}:self);
     if(!result?.ok)return null;
     person.row.path=job.id;
     const kind=['enroll','support','practice','portfolio'].includes(choice.id)?'learn':'apply';
-    const reason=['considerOffer','handover'].includes(choice.id)?result.message:choice.id==='specialistRelief'?'I agreed to cover a '+job.label.toLowerCase()+' round at '+job.employer+' while I wait for a funded post.':choice.id==='enroll'?'I chose evening study for '+job.label.toLowerCase()+' because it uses '+job.skill+'.':
+    const reason=['considerOffer','handover','followVacancy','relief'].includes(choice.id)?result.message:choice.id==='specialistRelief'?'I agreed to cover a '+job.label.toLowerCase()+' round at '+job.employer+' while I wait for a funded post.':
+      choice.id==='enroll'?'I chose evening study for '+job.label.toLowerCase()+' because it uses '+job.skill+'.'+(path&&careers.rationale?' '+careers.rationale(path,site):''):
       ['support','practice'].includes(choice.id)?'I want practice in '+(choice.id==='support'?job.secondary:job.skill)+' for the '+job.label.toLowerCase()+' role.':
       choice.id==='portfolio'?'I am preparing a work sample for '+job.employer+'.':
       choice.id==='accept'?'The '+job.label.toLowerCase()+' offer fits the work I have prepared for.':'I am preparing for '+job.label.toLowerCase()+' work at '+job.employer+'.';
@@ -373,7 +383,7 @@
     const all=roster.map(p=>candidate(site,world,p,table,assigned)),week=world.week;
     const offers=[],effects={},events=[];
     const offer=(self,kind,score,reason,venue,extra={})=>offers.push({self,kind,score,reason,venue,...extra});
-    const openPaths=all.filter(p=>p.row.path && !p.row.proposed).length;
+    const openPaths=all.filter(p=>p.row.path&&!p.row.proposed&&site.careers?.[p.id]?.application?.phase!=='waiting').length;
     const studyPlaces=2+(root.EarthDreams?Math.min(4,Math.floor((site.population||0)/20)+(site.buildings||[]).filter(b=>b.kind==='hall').length):0);
     const pantry=site.food<2*Math.ceil(site.population/5),gaps=[...(root.EarthCareers?.coverage?.(site,world)||[]),...(root.EarthEmployers?.gaps(site,world)||[])];
     // Considering a real offer is a personal decision, not a request for an
@@ -397,6 +407,8 @@
     }
     const projects=root.EarthLocalProjects?.prepare(site,world,all);
     if(projects)offers.push(...projects.tasks);
+    offers.push(...(root.EarthCommunityLife?.welcomeOffers?.(world,site,all)||[]));
+    const availableMentors=all.filter(p=>p.free).map(p=>p.profile);
     for(const self of all.filter(p=>p.free)){
       const {row,traits,wasAdvised:ask,profile}=self;
       for(const agreement of root.EarthNeighbourErrands?.assignments?.(site,world,self.id)||[]){
@@ -407,6 +419,15 @@
       if(supply)offer(self,'marketSupply',supply.score,supply.reason,'market',{supply});
       if(ask==='rest'&&row.energy<6){self.item=line(week,'rest','After our conversation I decided to take a break.','bench');self.free=false;continue;}
       const recent=row.history.slice(0,2),repeat=kind=>recent.filter(h=>h.kind===kind).length*25;
+      const course=site.careers?.[self.id]?.training;
+      if(course?.autonomous&&!course.placement){
+        const placement=root.EarthCareers?.placement?.(world,site,self.id,course.targetId,availableMentors);
+        if(placement){
+          const job=root.EarthCareers.catalog.find(j=>j.id===course.targetId),partner=all.find(p=>p.id===placement.mentorId);
+          offer(self,'placement',116+traits.curiosity/8,'I arranged to work through a sample with '+partner.name+' at '+job.employer+'.',
+            workplace(job.venue,job.label),{partner,target:partner.id,job});
+        }
+      }
       if(row.dream&&root.EarthDreams&&(row.dream.completedWeek||week-row.dream.last>=13)){
         const next=root.EarthDreams.nextPlans(site,world,profile,row)[0];
         if(next)root.EarthDreams.chooseNext(site,world,profile,row,next.id);
@@ -417,7 +438,7 @@
         const affinity=(traits.patience+traits.curiosity)/12;
         offer(self,'dream',42+affinity+age-repeat('dream')/3+(ask==='dream'?45:0),self.ambition.quote,self.ambition.venue);
       }
-      const wageOffer=(pantry||self.ambition?.shortfall)&&root.EarthPurses?.opportunity(world,site,self);
+      const wageOffer=root.EarthPurses?.opportunity(world,site,self);
       if(wageOffer)offer(self,'wage',wageOffer.score-repeat('wage'),wageOffer.reason,'market');
       if(pantry){
         const source=root.EarthResources?.quickGather?root.EarthResources.quickGather(world,site,self.id):
@@ -459,8 +480,21 @@
       const p=o.self;
       const coverKey=o.gap?.opening?o.gap.opening+'/'+o.gap.openedWeek+'/'+o.target:o.gap?.laneId?'lane/'+o.target:o.target;
       const receiving=o.agreement?.ordinary&&o.partner?.receivesFrom===p.id&&o.partner.item===o.partner.base;
-      if(!p.free||o.partner&&!o.partner.free&&!receiving||o.kind==='gather'&&gathered||o.kind==='cover'&&covered.has(coverKey)||o.kind==='visit'&&visits>=meetingPlaces)continue;
+      if(!p.free||o.partner&&!o.partner.free&&!receiving||o.kind==='gather'&&gathered||o.kind==='cover'&&covered.has(coverKey)||['visit','welcome'].includes(o.kind)&&visits>=meetingPlaces)continue;
       let chosen=o.kind==='project'?null:line(week,o.kind,o.reason,o.venue,o.target);
+      if(o.kind==='welcome'){
+        const session=root.EarthCommunityLife.meetHousehold(world,site,o);if(!session)continue;
+        chosen=session.leader;o.partner.item=session.newcomer;o.partner.free=false;
+        if(session.done)effects.trust=(effects.trust||0)+1;
+        p.item=chosen;p.free=false;visits++;events.push(session.note);continue;
+      }
+      if(o.kind==='placement'){
+        const result=root.EarthCareers.attendPlacement(world,site,p.id,o.job.id,o.partner.id,true);
+        if(!result.ok)continue;
+        chosen={...line(week,'learn',o.reason,o.venue,o.partner.id),placementSide:'learner',placementJob:o.job.id,
+          title:'Practise '+o.job.label.toLowerCase()+' work with '+o.partner.name,activity:'Review a work sample together',goal:'Complete my supervised placement'};
+        if(events.length<2)events.push(result.message);
+      }
       if(o.kind==='project'){
         const result=root.EarthLocalProjects.assign(site,world,all,projects,o,effects);
         if(!result)continue;
@@ -474,8 +508,9 @@
         if(result.note)events.push(result.note);
       }
       if(o.kind==='marketSupply'){
-        const result=root.EarthMarket.resourceWork(world,site,p);if(!result)continue;
-        chosen={...line(week,'marketSupply',result.reason,'market'),title:result.title,goal:result.goal,activity:result.activity};
+        const result=root.EarthMarket.resourceWork(world,site,p,o.supply);if(!result)continue;
+        chosen={...line(week,'marketSupply',result.reason,result.venue||'market'),title:result.title,goal:result.goal,activity:result.activity,
+          ...(result.ware?{ware:result.ware}:{}),...(result.resource?{resource:result.resource}:{}),...(result.care?{patchCare:result.care}:{}),...(result.homePlot!=null?{homePlot:result.homePlot,homeStage:result.homeStage}:{})};
       }
       if(o.kind==='dream'){
         const result=root.EarthDreams.work(site,world,p.profile,p.row);
@@ -522,18 +557,20 @@
       }
       if(o.kind==='visit')visits++;
       if(o.partner){
-        o.partner.item=o.kind==='errand'?{...line(week,'commitment','I arranged to meet '+p.name+' and receive the work we agreed on.',o.venue,p.id),
+        o.partner.item=o.kind==='placement'?{...line(week,'commitment','I agreed to show '+p.name+' how we work at '+o.job.employer+'.',o.venue,p.id),
+          placementSide:'mentor',placementJob:o.job.id,title:'Supervise '+p.name+'’s work sample',activity:'Demonstrate the '+o.job.label.toLowerCase()+' round',goal:'Prepare a colleague for the work'}:
+          o.kind==='errand'?{...line(week,'commitment','I arranged to meet '+p.name+' and receive the work we agreed on.',o.venue,p.id),
           title:'Receive an agreed delivery from '+p.name,activity:'Check the agreed delivery',goal:'See our agreement through',errand:true,...(o.agreement.ordinary?{rowId:o.agreement.rowId,ordinary:true}:{})}:
           line(week,'host','I agreed to spend some time with '+p.name+'.',o.venue,p.id);
         o.partner.free=false;
       }
       p.item=chosen;p.free=false;
-      if(o.kind!=='project'&&o.kind!=='dream'&&events.length<2)events.push(p.name+' · '+labels[chosen.kind]+'. '+chosen.reason);
+      if(o.kind!=='project'&&o.kind!=='dream'&&o.kind!=='placement'&&events.length<2)events.push(p.name+' · '+labels[chosen.kind]+'. '+chosen.reason);
     }
     for(const p of all){
       const row=p.row,kind=p.item.kind;
       if(kind!=='player'){
-        row.energy=clamp(row.energy+(kind==='rest'?5:['visit','host'].includes(kind)?1:-1),8);
+        row.energy=clamp(row.energy+(kind==='rest'?5+(root.EarthResidentShops?.restBonus?.(site,p.id)||0):['visit','host'].includes(kind)?1:-1),8);
         row.contact=clamp(['visit','host'].includes(kind)?0:kind==='project'&&p.item.target?row.contact-2:row.contact+1,8);
       }
       row.history.unshift(p.item);row.history.length=Math.min(4,row.history.length);row.revision++;
@@ -541,7 +578,8 @@
     root.EarthLocalProjects?.releaseOffers(site,world,events);
     const d=data(site);d.people=table;d.week=week;d.effects=effects;
     if(root.EarthRelationships)for(const p of all){
-      if(p.item.target&&['visit','project','cover'].includes(p.item.kind))remember(site,week,p.id,p.item.target,p.item.kind);
+      if(p.item.placementSide==='learner')remember(site,week,p.id,p.item.target,'lesson');
+      if(p.item.target&&['visit','project','cover'].includes(p.item.kind))remember(site,week,p.id,p.item.target,p.item.householdSession===2?'lesson':p.item.kind);
     }
     return events;
   }
@@ -557,7 +595,7 @@
       laneCover.add(key);return true;
     }
     if(!dict(d)||!int(d.week,0,week)||!dict(d.people)||Object.keys(d.people).length>92||!dict(d.effects))return false;
-    if(!Object.entries(d.effects).every(([k,v])=>k==='food'?int(v,1,8):['funds','materials'].includes(k)&&v===1))return false;
+    if(!Object.entries(d.effects).every(([k,v])=>k==='food'?int(v,1,8):k==='trust'?int(v,1,2):['funds','materials'].includes(k)&&v===1))return false;
     if(root.EarthLocalProjects&&!root.EarthLocalProjects.valid(site,week))return false;
     if(d.landmarks!=null&&!root.EarthDreams?.validPlaces(site,week))return false;
     return Object.entries(d.people).every(([id,r])=>allowed(id)&&dict(r)&&int(r.energy,0,8)&&int(r.contact,0,8)&&int(r.revision,0,Number.MAX_SAFE_INTEGER)&&
@@ -574,11 +612,17 @@
       (r.advice==null||dict(r.advice)&&has(adviceLabels,r.advice.action)&&typeof r.advice.accepted==='boolean'&&int(r.advice.week,1,week))&&
       Array.isArray(r.history)&&r.history.length<=4&&r.history.every((h,i)=>dict(h)&&int(h.week,1,d.week)&&(!i||h.week<r.history[i-1].week)&&has(labels,h.kind)&&
         typeof h.reason==='string'&&h.reason.length>0&&h.reason.length<=450&&venues.has(h.venue)&&(h.target==null||allowed(h.target)&&h.target!==id)&&
+        (h.householdSession==null||int(h.householdSession,1,2)&&h.target&&['visit','host'].includes(h.kind))&&
         validLane(h)&&(h.kind!=='dream'||!!root.EarthDreams?.validIntent(h))&&
+        (h.placementJob==null&&h.placementSide==null||h.target&&root.EarthCareers?.catalog?.some(j=>j.id===h.placementJob&&workplace(j.venue,j.label)===h.venue)&&
+          (h.kind==='learn'&&h.placementSide==='learner'||h.kind==='commitment'&&h.placementSide==='mentor'))&&
         (h.handoverScope==null&&h.handoverRole==null||['admin','qualified'].includes(h.handoverScope)&&
           ['cover','commitment'].includes(h.kind)&&root.EarthCareers?.catalog?.some(j=>j.label===h.handoverRole&&root.EarthCareers.requiresCredential(j.id)))&&
         (h.kind!=='gather'||h.resource==null||!!root.EarthResources?.isCrop(h.resource)&&typeof h.title==='string'&&h.title.length<200)&&
-        (h.kind!=='marketSupply'||h.venue==='market'&&['prepare','sell'].includes(h.activity)&&typeof h.title==='string'&&h.title.length<200&&
+        (h.patchCare==null||h.activity==='tendPatch'&&['restPatch','dressSoil','irrigate'].includes(h.patchCare))&&
+        (h.ware==null||h.kind==='marketSupply'&&Object.hasOwn(root.EarthResidentShops?.products||{},h.ware))&&
+        (h.homePlot==null&&h.homeStage==null||h.kind==='marketSupply'&&['buildHome','deed'].includes(h.activity)&&int(h.homePlot,0,5)&&int(h.homeStage,1,3))&&
+        (h.kind!=='marketSupply'||(h.venue==='market'&&['prepare','sell','makeWare','stockStall','shop','deed'].includes(h.activity)||h.venue==='home'&&h.activity==='buildHome'&&h.homePlot!=null||['garden','workshop','dock'].includes(h.venue)&&h.activity==='tendPatch'&&root.EarthResources?.isResource?.(h.resource))&&typeof h.title==='string'&&h.title.length<200&&
           typeof h.goal==='string'&&h.goal.length<360)&&(h.errand==null||h.errand===true&&h.kind==='commitment')&&
         (h.ordinary==null||h.ordinary===true&&h.errand===true&&typeof h.rowId==='string'&&/^pledge:[012]:[1-9]\d*:[1-9]\d*$/.test(h.rowId)&&Number(h.rowId.split(':')[3])===h.week)&&
         (h.civic==null||h.civic===true&&h.kind==='commitment'&&

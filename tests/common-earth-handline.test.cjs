@@ -117,10 +117,11 @@ test('the fishing controls distinguish underway, stopped, and ready to cast bene
   const mark=g.context.EarthFisheries.shoal(site,sim.state.week);
   const fields=new Map(),field=id=>{if(!fields.has(id))fields.set(id,{});return fields.get(id);};
   const source=fs.readFileSync(path.join(directory,'app.js'),'utf8');
-  const a=source.indexOf('  function updateStreetInteract(state)'),b=source.indexOf('  function cityController()',a);
+  const handler=source.match(/^  function updateStreetInteract\(state\) \{[\s\S]*?^  \}/m);
+  assert.ok(handler,'the Street interaction handler is present');
   Object.assign(g.context,{sim,streetHud:null,syncLiveClock:()=>{},document:{body:{hasAttribute:()=>false}},$:field,handlineDue:0,
     put:(id,content)=>{field(id).text=content;},show:(id,visible)=>{field(id).visible=visible;}});
-  vm.runInContext(source.slice(a,b),g.context);
+  vm.runInContext(handler[0],g.context);
   const draw=scene=>g.context.updateStreetInteract(scene);
   draw(berth);assert.equal(field('street-shoal').text,'Sail to shoal');
   assert.equal(field('street-shoal').visible,true);assert.match(field('street-line-terms').text,/1 food/);

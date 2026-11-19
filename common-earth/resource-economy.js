@@ -16,11 +16,26 @@
     reed:{name:'Reed fibre',family:'Fibre & wood',place:'reed beds',unit:'bundles',capacity:7,renew:2,value:2},
     timber:{name:'Timber',family:'Fibre & wood',place:'coppice lots',unit:'loads',capacity:7,renew:1,value:3},
     salvage:{name:'Reclaimed boards',family:'Fibre & wood',place:'depot sorting yard',unit:'loads',capacity:6,renew:1,value:2},
+    millet:{name:'Millet',family:'Staples',place:'dryland grain plots',unit:'sacks',capacity:8,renew:2,value:2},
+    nuts:{name:'Orchard nuts',family:'Staples',place:'nut groves',unit:'sacks',capacity:5,renew:1,value:3},
+    shellfish:{name:'Shellfish',family:'Fresh food',place:'tidal shellfish beds',unit:'baskets',capacity:7,renew:1,value:3},
+    herbs:{name:'Kitchen herbs',family:'Seasonings',place:'sheltered herb beds',unit:'bunches',capacity:4,renew:2,value:2},
+    water:{name:'Fresh water',family:'Water',place:'district water tanks',unit:'casks',capacity:8,renew:2,value:2},
+    cloth:{name:'Reclaimed cloth',family:'Textiles',place:'textile sorting tables',unit:'rolls',capacity:5,renew:1,value:2},
+    flax:{name:'Flax fibre',family:'Textiles',place:'retted flax beds',unit:'bundles',capacity:6,renew:1,value:2},
     stone:{name:'Building stone',family:'Minerals',place:'local quarry',unit:'loads',capacity:18,renew:0,value:3},
     clay:{name:'Clay',family:'Minerals',place:'clay beds',unit:'loads',capacity:14,renew:0,value:2}
   };
-  const shelfLife={roots:9,fruit:5,berries:2,greens:3,mushrooms:3,kelp:2};
+  const living=id=>resources[id]?.renew>0&&!['cloth','salvage','water'].includes(id);
+  const soilBed=id=>living(id)&&!['kelp','reed','shellfish'].includes(id);
+  const compostLimit=8;
+  const shelfLife={herbs:3,shellfish:2,roots:9,fruit:5,berries:2,greens:3,mushrooms:3,kelp:2};
   const recipes=[
+    {id:'milletpot',name:'Cook a pot of millet',inputs:{millet:2},good:'food',yield:2},
+    {id:'roastnuts',name:'Shell and roast nuts',inputs:{nuts:2},good:'food',yield:2},
+    {id:'shellfishpot',name:'Prepare the shellfish catch',inputs:{shellfish:2},good:'food',yield:2},
+    {id:'broth',name:'Simmer a herb and pulse broth',inputs:{herbs:1,pulses:1,water:1},good:'food',yield:4},
+    {id:'milletstew',name:'Make millet and bean stew',inputs:{millet:1,pulses:1},good:'food',yield:3},
     {id:'porridge',name:'Mill & cook grain',inputs:{grain:2},good:'food',yield:2},
     {id:'pulsepot',name:'Cook a pot of pulses',inputs:{pulses:2},good:'food',yield:2},
     {id:'rootpot',name:'Roast the roots',inputs:{roots:2},good:'food',yield:2},
@@ -41,7 +56,7 @@
   ];
   const foodKey=id=>['Staples','Fresh food'].includes(resources[id].family);
   const idList=Object.keys(resources);
-  const actions=new Set(['gatherLot','buyLot','sellLot','makeBatch']);
+  const actions=new Set(['gatherLot','buyLot','sellLot','makeBatch','restPatch','dressSoil','irrigate','compostLot']);
   const own=(object,key)=>object!=null&&Object.hasOwn(object,key);
   const object=value=>value!=null&&typeof value==='object'&&!Array.isArray(value);
   const integer=(value,min,max)=>Number.isSafeInteger(value)&&value>=min&&value<=max;
@@ -71,16 +86,23 @@
     lake:{title:'Freshwater settlement',local:['reed','salvage'],food:'Handline catches, incoming staples and floating gardens when built'},
     lakeside:{title:'Lakeside settlement',local:['pulses','roots','reed','clay','stone','salvage'],food:'Lakeside allotments, bean plots and freshwater catches'},
     ocean:{title:'Marine settlement',local:['kelp','salvage'],food:'Seaweed lines, handline catches and incoming staples'},
-    coast:{title:'Coastal settlement',local:['pulses','roots','kelp','reed','stone','salvage'],food:'Allotments, shore harvests and handline catches'},
+    coast:{title:'Coastal settlement',local:['pulses','roots','kelp','reed','stone','salvage'],food:'Allotments, tidal shellfish beds, seaweed and handline catches'},
     cold:{title:'Cold inland settlement',local:['mushrooms','stone','salvage'],food:'Sheltered growing racks and supplied staples'},
-    woodland:{title:'Cool woodland settlement',local:['roots','berries','mushrooms','timber','stone','salvage'],food:'Root beds, berry patches and covered growing racks'},
-    dry:{title:'Dry inland settlement',local:['pulses','stone','clay','salvage'],food:'Dryland pulses and supplied staples'},
+    woodland:{title:'Cool woodland settlement',local:['roots','berries','mushrooms','timber','stone','salvage'],food:'Root beds, berry patches, nut groves and covered growing racks'},
+    dry:{title:'Dry inland settlement',local:['pulses','stone','clay','salvage'],food:'Millet, dryland pulses and supplied staples'},
     warm:{title:'Warm inland settlement',local:['roots','pulses','fruit','reed','timber','clay','salvage'],food:'Orchard rows, food beds and bean plots'},
-    mixed:{title:'Temperate inland settlement',local:['grain','pulses','roots','fruit','timber','stone','clay','salvage'],food:'Grain fields, orchards and allotments'}
+    mixed:{title:'Temperate inland settlement',local:['grain','pulses','roots','fruit','timber','stone','clay','salvage'],food:'Grain fields, fruit and nut orchards, bean plots and allotments'}
   };
-  function localIds(site){
-    const habitat=environment(site),ids=new Set(habitats[habitat].local);
-    if(foodBed(site)){ids.add('greens');ids.add('roots');}
+  function localIds(site,habitat=environment(site)){
+    const ids=new Set(habitats[habitat].local);
+    // Recovered textiles come from a working sorting yard. Growing fibre has its own water and climate requirements.
+    if(habitat==='dry'||habitat==='warm')ids.add('millet');
+    if(['mixed','woodland','warm'].includes(habitat))ids.add('nuts');
+    if(habitat==='coast'||habitat==='ocean'&&hasFacility(site,'fishingDock'))ids.add('shellfish');
+    if(!['dry','ocean'].includes(habitat)||wetBed(site))ids.add('water');
+    if(hasFacility(site,'workshop')||hasUse(site,'yard'))ids.add('cloth');
+    if(['mixed','lakeside','woodland'].includes(habitat)||wetBed(site)&&!site.water)ids.add('flax');
+    if(foodBed(site)){ids.add('greens');ids.add('roots');ids.add('herbs');}
     if(wetBed(site)){ids.add('reed');if(!site.water){ids.add('greens');ids.add('grain');}}
     if(hasUse(site,'yard')||hasFacility(site,'workshop'))ids.add('salvage');
     return [...ids];
@@ -89,7 +111,7 @@
     if(!site||!Number.isFinite(site.lat)||!Number.isFinite(site.lon))return {summary:''};
     const habitat=habitats[environment(site)],ids=localIds(site);
     const food=ids.filter(foodKey).map(id=>resources[id].name.toLowerCase());
-    const materials=ids.filter(id=>!foodKey(id)).map(id=>resources[id].name.toLowerCase());
+    const materials=ids.filter(id=>!foodKey(id)&&!['herbs','water'].includes(id)).map(id=>resources[id].name.toLowerCase());
     const fish=Boolean(root.CommonEarthSim?.waterfront?.(site)||site.water||site.coastal);
     if(fish)food.push('handline catches');
     return {habitat:habitat.title,food,materials,fish,
@@ -100,17 +122,26 @@
   function regrowth(site,id,index){
     const doc=resources[id];
     if(!doc.renew)return 0;
-    if(['mushrooms','salvage','kelp','timber','reed'].includes(id))return doc.renew;
+    if(id==='water')return environment(site)==='dry'?1:resources.water.renew;
+    if(['mushrooms','salvage','cloth','kelp','shellfish','timber','reed'].includes(id))return doc.renew;
     const sheltered=foodBed(site)&&['greens','roots'].includes(id);
-    if(index===3&&!sheltered)return id==='fruit'||id==='berries'?0:1;
-    if(index===2&&['grain','fruit','berries','roots'].includes(id))return doc.renew+1;
+    if(index===3&&!sheltered)return ['fruit','berries','nuts','herbs'].includes(id)?0:1;
+    if(index===2&&['grain','fruit','berries','nuts','roots','millet'].includes(id))return doc.renew+1;
     return doc.renew;
   }
   function fieldSize(site,id){
     const def=resources[id];
     return def.capacity+(foodKey(id)&&foodBed(site)?2:0)+(id==='salvage'&&hasFacility(site,'workshop')?2:0);
   }
-  function standing(site,id,week){
+  function localRate(site,id,week){
+    let rate=regrowth(site,id,seasonIndex(site,week));
+    if(!living(id)||!rate)return rate;
+    const field=site.resourceLedger?.fields[id],plan=site.resourceLedger?.care?.[id];
+    if(field?.pressureUntil>=week&&!(plan?.from<=week&&plan.through>=week))rate=Math.max(0,rate-1);
+    if(plan?.from<week&&week<=plan.through)rate++;
+    return rate;
+  }
+  function stockAt(site,id,week){
     const cap=fieldSize(site,id),old=site.resourceLedger?.fields[id];
     if(!old)return cap;
     let quantity=Math.min(old.left,cap);
@@ -118,12 +149,30 @@
       // At our maximum patch size, a full year of regrowth fills any
       // renewable patch. Bound iteration even for very old save files.
       const start=Math.max(old.week+1,week-51);
-      for(let turn=start;turn<=week&&quantity<cap;turn++)quantity+=regrowth(site,id,seasonIndex(site,turn));
+      for(let turn=start;turn<=week&&quantity<cap;turn++)quantity+=localRate(site,id,turn);
     }
     return Math.min(quantity,cap);
   }
+  function closed(site,id,week){
+    const plan=site.resourceLedger?.care?.[id];
+    return plan?.kind==='rest'&&plan.from<=week&&week<plan.reopens;
+  }
+  function standing(site,id,week){return closed(site,id,week)?0:stockAt(site,id,week);}
+  function removeAtSource(site,store,id,week,amount){
+    const old=store.fields[id]||{},left=Math.max(0,standing(site,id,week)-amount);
+    const field={week,left};
+    if(living(id)){
+      if(old.pressureUntil>=week)field.pressureUntil=old.pressureUntil;
+      if(old.stripped>=week-8)field.stripped=old.stripped;
+      if(!left){
+        if(old.stripped!=null&&old.stripped>=week-8&&old.stripped!==week)field.pressureUntil=Math.min(max,week+6);
+        field.stripped=week;
+      }
+    }
+    store.fields[id]=field;return left;
+  }
   function initialShelf(site){
-    const ids=localIds(site),shelf={grain:2,pulses:2,salvage:2,timber:1};
+    const ids=localIds(site),shelf={grain:2,pulses:2,salvage:2,timber:1,cloth:2,reed:1,water:1};
     for(const id of ids)shelf[id]=Math.max(shelf[id]||0,2);
     return shelf;
   }
@@ -194,13 +243,17 @@
     if(!Object.keys(losses.bins).length&&!Object.keys(losses.shelf).length)return '';
     store.serial=Math.min(max,store.serial+1);store.lastLoss={week:world.week,...losses};
     const notes=[];
+    const gardenWaste=Object.values(losses.bins).reduce((sum,n)=>sum+n,0);
+    const compost=Math.min(compostLimit-(store.compost||0),gardenWaste);
+    if(compost)store.compost=(store.compost||0)+compost;
     if(Object.keys(losses.bins).length)notes.push(amounts(losses.bins)+' passed their storage dates in the district bins');
     if(Object.keys(losses.shelf).length)notes.push(amounts(losses.shelf)+' spoiled at the merchant’s stall');
+    if(compost)notes.push(compost+' lot'+(compost===1?' was':'s were')+' recovered for the community compost store');
     return notes.join('. ')+'.';
   }
   function destination(site,id,actor){
-    if(id==='kelp'||id==='reed'&&site.water)return {ref:{type:'quay'},name:'the quay'};
-    const foods=foodKey(id),venue=foods?'garden':'workshop';
+    if(id==='kelp'||id==='shellfish'||id==='reed'&&site.water)return {ref:{type:'quay'},name:'the quay'};
+    const foods=foodKey(id)||id==='herbs'||id==='water',venue=foods?'garden':'workshop';
     const facility=(site.buildings||[]).filter(b=>b.kind===venue&&integer(b.plot,0,8)).sort((a,b)=>a.plot-b.plot)[0];
     if(facility)return {ref:{type:'workplace',venue,plot:facility.plot},name:facility.name||'the district '+venue};
     if(id==='salvage')return {ref:{type:'market'},name:'the depot counter'};
@@ -236,12 +289,34 @@
   function quote(action,good,title,reason,price,where,detail){
     return {action,good,title,available:!reason,reason,price,venue:where?.ref||{type:'market'},station:where?.name||'the exchange counter',detail};
   }
-  function collectQuote(site,world,book,id,actor){
-    const amount=Math.min(2,standing(site,id,world.week),lotLimit-(book.bins[id]||0));
-    const target=destination(site,id,actor),name=resources[id].name.toLowerCase();
-    const reason=(book.bins[id]||0)>=lotLimit?'All storage spaces for '+name+' are occupied. Use or sell a lot.':
+  function collectQuote(site,world,book,id,actor,target=destination(site,id,actor)){
+    const carry=2+(root.EarthResidentShops?.gatherBonus?.(site,actor,id,foodKey(id))||0);
+    const amount=Math.min(carry,standing(site,id,world.week),lotLimit-(book.bins[id]||0));
+    const name=resources[id].name.toLowerCase();
+    const reason=closed(site,id,world.week)?'The '+resources[id].place+' are resting. Collection reopens in week '+book.care[id].reopens+'.':
+      (book.bins[id]||0)>=lotLimit?'All storage spaces for '+name+' are occupied. Use or sell a lot.':
       amount===0?(resources[id].renew?'This source needs time to recover.':'This deposit is exhausted. Trade for further supplies.'):'';
     return quote('gatherLot',id,amount?'Collect '+amount+' '+name:'Collect '+name,reason,amount,target,'Collect at '+target.name+'. The goods stay in the district bins until used or sold.');
+  }
+  function careQuote(world,site,store,id,actor,action,where,knownLocal=false){
+    const doc=resources[id],plan=store.care?.[id],week=world.week;
+    if(action==='compostLot'){
+      if(!shelfLife[id])return null;
+      const reason=!(store.bins[id]>0)?'Bring a fresh lot into the district bin first.':
+        (store.compost||0)>=compostLimit?'The compost store is full. Dress a depleted bed first.':'';
+      return quote(action,id,'Compost one lot',reason,1,null,'One real lot of '+doc.name.toLowerCase()+' becomes one dressing for a growing bed.');
+    }
+    if(!living(id)||!knownLocal&&!localIds(site).includes(id)||action!=='restPatch'&&!soilBed(id))return null;
+    const rest=action==='restPatch',at=stockAt(site,id,week),cap=fieldSize(site,id);
+    const reason=plan?.through>=week?'Aftercare here runs through week '+plan.through+'.':
+      action==='dressSoil'&&!(store.compost>0)?'Dress the bed with one lot from the district compost store.':
+      action==='irrigate'&&!(store.bins.water>0)?'Collect or buy one real cask of fresh water for the district bins.':
+      at>=cap?'This patch is at full capacity.':'';
+    where||=destination(site,id,actor);
+    return quote(action,id,rest?'Rest this patch for three weeks':action==='irrigate'?'Water the growing beds':'Dress the soil with compost',reason,rest?0:1,where,
+      rest?'Crews and merchants leave the patch alone through week '+(week+2)+'. Collection resumes in week '+(week+3)+'. Recovery improves through week '+(week+6)+'.':
+      action==='irrigate'?'Use one cask from the district water bin. The beds stay open and recovery improves for three weeks.':
+      'Use one district compost. The patch stays open and recovery improves for four weeks.');
   }
   function tradeQuotes(site,world,store,book,id,room){
     const stock=store.bins[id]||0,ready=store.shelf[id]||0,meals=Math.ceil(site.population/5);
@@ -255,6 +330,20 @@
     return [quote('buyLot',id,'Buy 1 · '+ask+' funds',buyBlocked,ask),
       quote('sellLot',id,'Sell 1 · '+bid+' funds',sellBlocked,bid)];
   }
+  // Makers buy a single raw input at the counter. An empty district bin
+  // and an empty treasury cannot prevent a privately financed purchase.
+  function makerInput(world,site,id,room,commit=false){
+    if(!own(resources,id))return null;
+    const store=ledger(world,site),ready=store.shelf[id]||0;
+    const price=Math.max(1,resources[id].value-1+Number(ready<=1));
+    const reason=!ready?'The merchant has sold the last lot of '+resources[id].name.toLowerCase()+'.':
+      store.serial>=max||room<price?'The merchant cannot record this payment.':'';
+    if(commit&&!reason){
+      takeStock(store,'shelf',id,1,world.week);
+      store.serial++;site.resourceLedger=store;
+    }
+    return {price,reason,available:!reason,name:resources[id].name.toLowerCase(),stock:ready};
+  }
   function recipeQuote(site,store,recipe){
     const missing=Object.entries(recipe.inputs).filter(([id,n])=>(store.bins[id]||0)<n);
     const bonus=recipe.good==='materials'&&hasFacility(site,'workshop')?1:0;
@@ -265,25 +354,46 @@
       amounts(recipe.inputs)+' → '+output+' '+recipe.good+(bonus?' using workshop tools.':'.'));
   }
   function view(world,site,exchange,room,actor){
-    const store=ledger(world,site),habitat=environment(site),ids=localIds(site),local=new Set(ids);
-    const rows=[],options=[];
+    const store=ledger(world,site),habitat=environment(site),local=new Set(localIds(site,habitat)),rows=[];
     for(const id of idList){
-      const doc=resources[id],owned=store.bins[id]||0,shelf=store.shelf[id]||0;
-      if(!local.has(id)&&!owned&&!shelf)continue;
-      const harvest=local.has(id)?collectQuote(site,world,store,id,actor):null;
-      const row={id,name:doc.name,family:doc.family,unit:doc.unit,owned,shelf,local:local.has(id),
-        source:harvest?doc.place:'Regional trade',standing:harvest?standing(site,id,world.week):0,
-        cap:harvest?fieldSize(site,id):0,renew:harvest?regrowth(site,id,seasonIndex(site,world.week)):0,finite:doc.renew===0,storageWeeks:shelfLife[id]||null,binDate:oldestDate(store,'bins',id,world.week),stallDate:oldestDate(store,'shelf',id,world.week)};
-      rows.push(row);
-      if(harvest)options.push(harvest);
-      options.push(...tradeQuotes(site,world,store,exchange,id,room));
+      const doc=resources[id],owned=store.bins[id]||0,shelf=store.shelf[id]||0,here=local.has(id);
+      if(!here&&!own(store.bins,id)&&!own(store.shelf,id))continue;
+      rows.push({id,name:doc.name,family:doc.family,unit:doc.unit,owned,shelf,local:here,
+        source:here?doc.place:'Regional trade',standing:here?stockAt(site,id,world.week):0,
+        reopens:closed(site,id,world.week)?store.care[id].reopens:null,
+        caredThrough:store.care?.[id]?.through>=world.week?store.care[id].through:null,
+        pressureUntil:store.fields[id]?.pressureUntil>=world.week?store.fields[id].pressureUntil:null,
+        cap:here?fieldSize(site,id):0,renew:here?localRate(site,id,world.week+1):0,finite:doc.renew===0,
+        storageWeeks:shelfLife[id]||null,binDate:oldestDate(store,'bins',id,world.week),stallDate:oldestDate(store,'shelf',id,world.week)});
     }
-    const present=new Set(rows.map(row=>row.id));
-    const batches=recipes.filter(r=>Object.keys(r.inputs).every(k=>present.has(k))).map(r=>({...recipeQuote(site,store,r),inputs:Object.keys(r.inputs)}));
-    options.push(...batches);
+    let cachedOptions,cachedRecipes;
+    function batches(){
+      if(!cachedRecipes){
+        const present=new Set(rows.map(r=>r.id));
+        cachedRecipes=recipes.filter(r=>Object.keys(r.inputs).every(k=>present.has(k))).map(r=>({...recipeQuote(site,store,r),inputs:Object.keys(r.inputs)}));
+      }
+      return cachedRecipes;
+    }
+    function orders(){
+      if(cachedOptions)return cachedOptions;
+      cachedOptions=[];
+      for(const row of rows){
+        const id=row.id;
+        if(row.local){
+          const target=destination(site,id,actor);
+          cachedOptions.push(collectQuote(site,world,store,id,actor,target));
+          if(living(id))for(const action of ['restPatch','dressSoil','irrigate']){
+            const o=careQuote(world,site,store,id,actor,action,target,true);if(o)cachedOptions.push(o);
+          }
+        }
+        if(row.owned&&shelfLife[id])cachedOptions.push(careQuote(world,site,store,id,actor,'compostLot'));
+        cachedOptions.push(...tradeQuotes(site,world,store,exchange,id,room));
+      }
+      cachedOptions.push(...batches());return cachedOptions;
+    }
     return {habitat:habitats[habitat].title,foodSources:habitats[habitat].food,season:seasonLabels[seasonIndex(site,world.week)],
       fishing:Boolean(root.CommonEarthSim?.waterfront?.(site)||site.water||site.coastal),
-      serial:store.serial,rows,options,recipes:batches,binLimit:lotLimit,mealNeed:Math.ceil(site.population/5),
+      serial:store.serial,rows,get options(){return orders();},get recipes(){return batches();},binLimit:lotLimit,compost:store.compost||0,compostLimit,mealNeed:Math.ceil(site.population/5),
       shortage:Math.max(0,Math.ceil(site.population/5)-site.food),
       loss:store.lastLoss?.week===world.week&&Object.keys(store.lastLoss.bins).length?amounts(store.lastLoss.bins):null};
   }
@@ -298,6 +408,7 @@
       if(recipe)option=recipeQuote(site,store,recipe);
     }else if(own(resources,r.good)){
       if(r.action==='gatherLot'&&localIds(site).includes(r.good))option=collectQuote(site,world,store,r.good,actor);
+      if(['restPatch','dressSoil','irrigate','compostLot'].includes(r.action))option=careQuote(world,site,store,r.good,actor,r.action);
       if(r.action==='buyLot'||r.action==='sellLot')option=tradeQuotes(site,world,store,exchange,r.good,room).find(o=>o.action===r.action);
     }
     if(!option||!option.available||option.price!==r.price)return failed(option?.reason||'Review the available resource or batch first.');
@@ -308,10 +419,23 @@
     let message;
     const good=option.good,n=option.price;
     if(option.action==='gatherLot'){
-      const left=standing(site,good,world.week)-n;
-      store.fields[good]={week:world.week,left};
+      const left=removeAtSource(site,store,good,world.week,n);
       addStock(store,'bins',good,n,world.week);
       message=actorName+' collected '+n+' '+resources[good].name.toLowerCase()+' from the '+resources[good].place+'. '+left+' remain at the source.';
+    }else if(['restPatch','dressSoil','irrigate'].includes(option.action)){
+      const week=world.week,rest=option.action==='restPatch',watered=option.action==='irrigate',doc=resources[good];
+      // Materialise the old field before beginning a programme. Earlier weeks
+      // cannot borrow its recovery bonus when the next player inspects the patch.
+      const left=stockAt(site,good,week);
+      store.fields[good]={...store.fields[good],left,week};
+      const plan={kind:rest?'rest':watered?'water':'compost',from:week,through:Math.min(max,week+(rest?6:watered?3:4))};
+      if(rest)plan.reopens=Math.min(max,week+3);else if(watered)takeStock(store,'bins','water',1,week);else store.compost--;
+      (store.care||={})[good]=plan;
+      message=actorName+(rest?' marked the '+doc.place+' to rest. Collection reopens in week '+plan.reopens:
+        watered?' watered the '+doc.place+' with one cask of district water. The beds stay open':' dressed the '+doc.place+' with one lot of community compost. The beds stay open')+'. Aftercare runs through week '+plan.through+'.';
+    }else if(option.action==='compostLot'){
+      takeStock(store,'bins',good,1,world.week);store.compost=(store.compost||0)+1;
+      message=actorName+' turned one public lot of '+resources[good].name.toLowerCase()+' into compost. There are '+store.compost+' soil dressings.';
     }else if(option.action==='makeBatch'){
       for(const [key,count] of Object.entries(recipe.inputs))takeStock(store,'bins',key,count,world.week);
       site[recipe.good]+=n;
@@ -330,12 +454,21 @@
   function crewOpportunity(world,site,self,exchange,room){
     const store=site.resourceLedger;
     if(!self?.free||self.row?.energy<3||self.wasAdvised==='rest'||!store||store.serial>=max||store.crewWeek===world.week||
-       !Object.values(store.bins).some(n=>n>0)||
        root.EarthCommunityLife?.residency&&root.EarthCommunityLife.residency(site,self.id)!=='member')return null;
     const meals=Math.max(1,Math.ceil(site.population/5)),initiative=self.traits?.initiative??50;
     const pantryShort=site.food<2*meals;
-    if(!pantryShort&&site.funds>=7&&!expiringPublicLot(site,world.week))return null;
     const role=root.EarthCareers?.role?.(site,self.id)||self.profile?.originRole||self.profile?.role||'';
+    if(!pantryShort&&/grower|garden|seed keeper/i.test(role)&&(self.traits?.patience??50)>=50){
+      for(const [id,field] of Object.entries(store.fields)){
+        if(!living(id)||!(field.pressureUntil>=world.week)||store.care?.[id]?.through>=world.week)continue;
+        const act=soilBed(id)&&store.compost>0?'dressSoil':soilBed(id)&&store.bins.water>0?'irrigate':'restPatch',option=careQuote(world,site,store,id,self.id,act);
+        if(!option?.available)continue;
+        return {option,title:option.title+' at the '+resources[id].place,activity:'tendPatch',resource:id,care:act,venue:id==='kelp'||id==='shellfish'?'dock':foodKey(id)||id==='herbs'?'garden':'workshop',
+          goal:'Keep the next harvest possible',reason:'The '+resources[id].place+' have been stripped twice. We have '+site.food+' food for '+meals+
+            ' household shares. '+(act==='restPatch'?'I can leave this patch undisturbed while we draw on stores.' :act==='irrigate'?'I can spare a cask of water and keep the beds open.':'I can use a dressing of compost and leave the patch open.'),score:86+initiative/12};
+      }
+    }
+    if(!Object.values(store.bins).some(n=>n>0)||!pantryShort&&site.funds>=7&&!expiringPublicLot(site,world.week))return null;
     const atRisk=new Set(Object.entries(store.dates?.bins||{}).filter(([,lots])=>lots[0]?.until<=world.week+1).map(([id])=>id));
     if((pantryShort||atRisk.size&&site.food<6*meals)&&/cook|baker|garden|grower|seed keeper/i.test(role)){
       let best=null,priority=0;
@@ -381,7 +514,7 @@
     const result=execute(world,site,site.resourceLedger,exchange,self.id,actorName,plan.option,plan.recipe);
     if(!result.ok)return null;
     site.resourceLedger.crewWeek=world.week;
-    return {reason:plan.reason+' '+result.message,title:plan.title,goal:plan.goal,activity:plan.activity};
+    return {reason:plan.reason+' '+result.message,title:plan.title,goal:plan.goal,activity:plan.activity,venue:plan.venue,resource:plan.resource,care:plan.care};
   }
   function tick(world,site,exchange,room){
     const store=site.resourceLedger;
@@ -398,11 +531,11 @@
     }
     // A travelling supplier can deliver a missing staple or local output.
     // Purchase actually leaves the private till before goods reach the shelf.
-    const imported=turn%4===0,source=imported?['grain','pulses','timber','reed']:ids.filter(key=>standing(site,key,world.week)>0);
+    const imported=turn%4===0,source=imported?['grain','pulses','timber','reed','cloth','salvage','water']:ids.filter(key=>standing(site,key,world.week)>0);
     if(source.length){
       const id=source[(imported?Math.floor(turn/4):turn)%source.length],cost=Math.max(1,resources[id].value-1),ready=store.shelf[id]||0;
       if(ready<4&&exchange.till>=cost){
-        if(!imported)store.fields[id]={week:world.week,left:standing(site,id,world.week)-1};
+        if(!imported)removeAtSource(site,store,id,world.week,1);
         addStock(store,'shelf',id,1,world.week);exchange.till-=cost;
         bought='The merchant '+(imported?'imported ':'bought a local lot of ')+resources[id].name.toLowerCase()+' for '+cost+' fund'+(cost===1?'':'s')+'.';
       }
@@ -434,19 +567,23 @@
       });
     }
     const doc=resources[chosen.id];
-    return {...chosen,name:doc.name.toLowerCase(),place:doc.place,venue:chosen.id==='kelp'?'dock':'garden'};
+    return {...chosen,name:doc.name.toLowerCase(),place:doc.place,venue:['kelp','shellfish'].includes(chosen.id)?'dock':'garden'};
   }
   function harvestForProject(world,site,crop,wanted,mayStoreRaw){
     // All baskets, including those taken straight to households, leave the
     // same standing field that suppliers, visitors to the stall and players see.
-    const amount=Math.min(wanted,crop.available);
+    if(!integer(wanted,1,max)||!crop||!integer(crop.available,1,max))return {amount:0,stored:null};
     if(crop.id==='fish'){
+      const amount=Math.min(wanted,crop.available,root.EarthFisheries?.ground?.(site,world.week)?.available??crop.available);
       const taken=!root.EarthFisheries?.take||root.EarthFisheries.take(site,world.week,amount);
       return {amount:taken?amount:0,stored:null};
     }
+    if(!own(resources,crop.id)||!localIds(site).includes(crop.id))return {amount:0,stored:null};
+    const amount=Math.min(wanted,crop.available,standing(site,crop.id,world.week));
+    if(!amount)return {amount:0,stored:null};
     const store=ledger(world,site),stock=store.bins[crop.id]||0,meals=Math.max(1,Math.ceil(site.population/5));
     const stored=amount>=2&&mayStoreRaw&&site.food>=3*meals&&stock<Math.min(lotLimit,Math.max(2,meals))?crop:null;
-    store.fields[crop.id]={week:world.week,left:crop.available-amount};
+    removeAtSource(site,store,crop.id,world.week,amount);
     if(stored)addStock(store,'bins',crop.id,1,world.week);
     store.serial=Math.min(max,store.serial+1);site.resourceLedger=store;
     return {amount,stored};
@@ -469,7 +606,7 @@
   function projectShipment(site,ownerId){
     const p=site.autonomy?.projects?.owners?.[ownerId];
     if(!p?.carriedBy||p.finished!==site.autonomy.week||!p.delivered||p.kind!=='food')return null;
-    return {week:p.finished,crop:p.crop,sourceVenue:p.crop==='fish'||p.crop==='kelp'?'dock':'garden',
+    return {week:p.finished,crop:p.crop,sourceVenue:['fish','kelp','shellfish'].includes(p.crop)?'dock':'garden',
       venue:'pantry',carrierId:p.carriedBy,amount:p.delivered};
   }
   function useForPantry(world,site,owner){
@@ -507,7 +644,14 @@
         !Object.keys(loss.bins).length&&!Object.keys(loss.shelf).length||
         !['bins','shelf'].every(side=>Object.entries(loss[side]).every(([id,n])=>own(shelfLife,id)&&integer(n,1,side==='bins'?lotLimit:shelfLimit))))return false;
     }
-    return Object.entries(d.fields).every(([k,f])=>own(resources,k)&&object(f)&&integer(f.week,1,week)&&integer(f.left,0,resources[k].capacity+2));
+    if(d.compost!=null&&!integer(d.compost,0,compostLimit))return false;
+    if(d.care!=null&&(!object(d.care)||!Object.entries(d.care).every(([id,p])=>living(id)&&object(p)&&integer(p.from,1,week)&&
+      own(d.fields,id)&&p.from<=d.fields[id].week&&integer(p.through,p.from,max)&&
+      (p.kind==='rest'?p.reopens===Math.min(max,p.from+3)&&p.through===Math.min(max,p.from+6):
+        ['compost','water'].includes(p.kind)&&soilBed(id)&&p.reopens==null&&p.through===Math.min(max,p.from+(p.kind==='water'?3:4))))))return false;
+    return Object.entries(d.fields).every(([k,f])=>own(resources,k)&&object(f)&&integer(f.week,1,week)&&integer(f.left,0,resources[k].capacity+2)&&
+      (f.stripped==null||living(k)&&integer(f.stripped,1,f.week))&&
+      (f.pressureUntil==null||living(k)&&integer(f.pressureUntil,1,Math.min(max,f.week+6))));
   }
-  root.EarthResources=Object.freeze({survey,environment,view,run,tick,ageStores,expiringPublicLot,crewOpportunity,crewWork,projectCrop,quickGather,projectShipment,harvestForProject,useForPantry,valid,isCrop:id=>id==='fish'||own(resources,id)&&foodKey(id),isAction:action=>actions.has(action)});
+  root.EarthResources=Object.freeze({survey,environment,view,run,tick,makerInput,ageStores,expiringPublicLot,crewOpportunity,crewWork,projectCrop,quickGather,projectShipment,harvestForProject,useForPantry,valid,isResource:id=>own(resources,id),isCrop:id=>id==='fish'||own(resources,id)&&foodKey(id),isAction:action=>actions.has(action)});
 })(typeof window==='undefined'?globalThis:window);

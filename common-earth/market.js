@@ -314,13 +314,27 @@
     if(local)log(b,week,local);
     return events;
   }
-  function resourceOpportunity(world,site,self){
-    if(!site.resourceLedger||!root.EarthResources)return null;
+  function makerInput(world,site,id,confirm){
     const book=site.exchange||fresh(world.week);
-    if(book.serial>=limit)return null;
-    return root.EarthResources.crewOpportunity(world,site,self,book,tillRoom(site,book));
+    if(book.serial>=limit||!root.EarthResources?.makerInput)return null;
+    const room=tillRoom(site,book),offer=root.EarthResources.makerInput(world,site,id,room);
+    if(confirm===undefined)return offer;
+    if(!offer?.available||offer.price!==confirm)return null;
+    root.EarthResources.makerInput(world,site,id,room,true);
+    book.till+=confirm;book.serial++;site.exchange=book;
+    log(book,world.week,'A resident maker purchased one lot of '+offer.name+' from the stall for '+quantity('funds',confirm)+'.');
+    return offer;
   }
-  function resourceWork(world,site,self){
+  function resourceOpportunity(world,site,self){
+    const personal=root.EarthResidentShops?.opportunity?.(world,site,self);
+    if(!site.resourceLedger||!root.EarthResources)return personal||null;
+    const book=site.exchange||fresh(world.week);
+    if(book.serial>=limit)return personal||null;
+    const publicWork=root.EarthResources.crewOpportunity(world,site,self,book,tillRoom(site,book));
+    return personal&&personal.score>(publicWork?.score||0)?personal:publicWork;
+  }
+  function resourceWork(world,site,self,plan){
+    if(plan?.privateAction)return root.EarthResidentShops?.work?.(world,site,self,plan)||null;
     if(!site.resourceLedger||!root.EarthResources)return null;
     const book=site.exchange||fresh(world.week);
     if(book.serial>=limit)return null;
@@ -344,5 +358,5 @@
     }
     return true;
   }
-  root.EarthMarket=Object.freeze({view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,personalQuote,personal,quantity,resourceOpportunity,resourceWork});
+  root.EarthMarket=Object.freeze({view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,personalQuote,personal,quantity,makerInput,resourceOpportunity,resourceWork});
 })(typeof window==='undefined'?globalThis:window);

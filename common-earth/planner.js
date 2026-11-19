@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const dimensions={food:'Food',funds:'Funds',materials:'Materials',trust:'Trust',wellbeing:'Wellbeing',population:'Residents'};
-  const groups={work:'Work',people:'Relationships',build:'Construction',city:'City planning',council:'Council',research:'Research',routes:'Trade routes'};
+  const groups={work:'Work',people:'Relationships',build:'Construction',city:'Neighbourhood projects',council:'Council',research:'Research',routes:'Trade routes'};
   const idle='wait', cityMove='city-project', crewMove='crew-preference',cancelWork='worksite-cancel:';
   const pauseWork='worksite-pause:',resumeWork='worksite-resume:';
   const urbanMeasures={capacity:'Housing capacity',reachable:'Precincts within 15 minutes',pressure:'Precincts facing rent pressure',noise:'Precincts affected by industry'};

@@ -1,9 +1,9 @@
 (function(root){
   'use strict';
-  function mount(host,{sim,getStreet,atVenue,meet,playAs,arrive,refresh,notify}){
+  function mount(host,{sim,getStreet,atVenue,meet,playAs,arrive,watchTown,refresh,notify}){
     if(!host||!root.EarthCommunityLife)return null;
     const doc=host.ownerDocument;
-    let key='',timer=0,busy=false,lastResult='',resultWeek=0,resultSite='';
+    let key='',timer=0,busy=false,lastResult='',resultWeek=0,resultSite='',destinationId='';
     function resultText(message){lastResult=message;resultWeek=sim.state.week;resultSite=sim.active()?.id||'';}
     const path=root.EarthDistrictPath?.mount(doc.getElementById('district-crossing'),sim,choice=>choice==='cancel'?command('cancel'):command('routeChoice',choice),id=>command('arrive',id));
     function el(tag,content,css){
@@ -58,6 +58,45 @@
       }
       host.append(trip);
     }
+    function appendHouseholds(box,h){
+      if(!h?.newcomers&&!h?.completed?.length)return;
+      const pending=h.waiting?' '+h.waiting+' still considering a guide.':'';
+      box.append(el('p',h.newcomers+' recent arrival'+(h.newcomers===1?'':'s')+'. '+h.capacity+' shared meeting'+(h.capacity===1?'':'s')+' can fit into a week.'+pending));
+      for(const pair of h.active)box.append(el('p',pair.guideName+' walked the pantry route with '+pair.entrantName+'. They are arranging a workplace introduction.'));
+      for(const pair of h.completed.slice(-2))box.append(el('p',pair.entrantName+' finished both shifts with '+pair.guideName+' and can now guide a new arrival.'));
+    }
+    function destinations(v,site){
+      if(!v.neighbours.length)return;
+      const box=el('section',null,'district-destinations'),label=el('label','Nearby communities'),select=el('select'),facts=el('p'),actions=el('div',null,'district-options');
+      label.htmlFor=select.id='district-destination';
+      for(const place of v.neighbours){
+        const option=el('option',place.name+(place.home?' · home':'')+' · '+place.distance.toFixed(1)+' km');
+        option.value=place.id;select.append(option);
+      }
+      if(!v.neighbours.some(n=>n.id===destinationId))destinationId=v.neighbours[0].id;
+      select.value=destinationId;
+      const detail=el('details'),heading=el('summary','People, work and district stores');
+      detail.append(heading);
+      function showDistrict(){
+        destinationId=select.value;
+        const n=v.neighbours.find(n=>n.id===destinationId),target=[...sim.state.sites,...sim.state.communityLife.outposts].find(s=>s.id===destinationId);
+        if(!target||!n)return;
+        const m=root.EarthCommunityLife.districtProfile(sim.state,target);
+        actions.replaceChildren();
+        if(watchTown)actions.append(btn('Watch streets',()=>watchTown(n.id),'Watch '+n.name+' while your character stays in '+site.name+'.'));
+        if(v.viewId==='steward')actions.append(btn((n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
+        facts.textContent=m.population+' residents · '+m.freeBeds+' open housing places. '+m.works;
+        detail.replaceChildren(heading,el('p',n.host+' is looking for help '+n.need+'. Residents value '+n.lifestyle+'.'),
+          el('p',m.food+' food · '+m.materials+' materials · '+m.funds+' town funds.'));
+        if(m.pressure)detail.append(el('p',m.pressure+'. Households weigh these conditions against their local ties.'));
+        appendHouseholds(detail,m.households);
+        if(m.trade)detail.append(el('p',m.trade));
+        detail.append(el('p',m.census.summary));
+        if(m.origins.length>1)detail.append(el('p','Where households here began · '+m.origins.map(r=>r.label+' ('+r.count+')').join(', ')+'.'));
+        if(m.occupations.length)detail.append(el('p','Work among residents here · '+m.occupations.map(r=>r.label+' ('+r.count+')').join(', ')+'.'));
+      }
+      select.addEventListener('change',showDistrict);box.append(label,select,actions,facts,detail);host.append(box);showDistrict();
+    }
     function render(){
       const site=sim.active(),state=sim.state,c=state.communityLife;
       if(!site||!c||!c.journey)path?.hide();
@@ -68,9 +107,11 @@
       key=stamp;
       const v=root.EarthCommunityLife.view(state,site);
       host.replaceChildren();
+      if(!v.journey)destinations(v,site);
       const summary=el('div',null,'district-summary');
       summary.append(el('strong',v.original.name+' · '+(v.member?'at home':'visiting')),el('p','Home in '+v.home+'. '+v.atHomeText));
       if(v.census)summary.append(el('p',v.census.summary));
+      appendHouseholds(summary,v.households);
       host.append(summary);
       if(lastResult){const result=el('p',lastResult,'district-result');result.setAttribute('role','status');host.append(result);}
       if(v.journey){onRoute(v);return;}
@@ -83,6 +124,19 @@
         const duty=btn('Make my pantry round',()=>station('round',null,market,'the home exchange'));
         const helper=site.residents.find(p=>p.id===v.canCover&&!p.promise);
         buttons(summary,duty,...(helper?[btn('Ask '+helper.name+' to cover',()=>station('cover',helper.id,{type:'resident',residentId:helper.id},helper.name))]:[]));
+      }
+      if(v.hearing){
+        const h=v.hearing,box=row('Membership meeting · '+h.name,h.detail+' The council hears the matter in week '+h.due+'.');
+        const participants=[{id:h.id,name:h.name},...h.witnesses];
+        for(const person of participants){
+          const heard=h.heard.includes(person.id);
+          if(heard)box.append(el('p',person.name+' has been heard.'));
+          else if(asSelf&&v.member){
+            const ref=person.id==='steward'?market:site.residents.some(r=>r.id===person.id)?{type:'resident',residentId:person.id}:{type:'npc',npcId:person.id};
+            buttons(box,btn(person.id==='steward'?'Give my account at the exchange':'Hear '+person.name,()=>station('hearResident',person.id,ref,person.id==='steward'?'the exchange':person.name)));
+          }
+        }
+        host.append(box);
       }
       if(v.parcel){
         const p=v.parcel,box=row('Carrying a promise for '+p.name,p.amount+' '+p.good+' from '+p.source+' · Due in week '+p.due+' at '+p.place+'.');
@@ -103,8 +157,8 @@
         if(a.employer)box.append(el('p',a.employer.name+' has an opening after '+a.employer.former+' left. Your qualification fits the vacancy. The employer conducts its own interview.'));
         if(asSelf){
           const hostRef=a.hostType==='resident'?{type:'resident',residentId:a.hostId}:{type:'npc',npcId:a.hostId},met=a.checks[0].pass;
-          if(!met)buttons(box,btn('Meet '+a.host,()=>station('meet',null,hostRef,a.host)));
-          else if(!a.checks[1].pass||a.apprentice&&!a.checks.at(-1).pass)buttons(box,btn('Work the trial shift · 1 effort',()=>station('help',null,market,'the exchange')));
+          if(!met&&a.hostId)buttons(box,btn('Meet '+a.host,()=>station('meet',null,hostRef,a.host)));
+          else if(met&&a.needsTrial)buttons(box,btn('Work the trial shift · 1 effort',()=>station('help',null,market,'the exchange')));
           const apply=btn('Ask to join',()=>station('apply',null,hostRef,a.host));
           apply.disabled=!a.available;
           const group=btn('Ask to move together',()=>station('moveGroup',null,hostRef,a.host));
@@ -120,13 +174,8 @@
       }
       for(const visitor of v.visitors){
         const box=row(visitor.name+' · '+visitor.role,'Visiting until week '+visitor.inspects+'. '+(visitor.welcomed?'A household introduction is on the record.':'They are inspecting the exchange and housing.'));
+        if(visitor.motive)box.append(el('p',visitor.motive));
         if(asSelf&&v.member&&!visitor.welcomed)buttons(box,btn('Welcome '+visitor.name,()=>station('welcome',visitor.id,{type:'npc',npcId:visitor.id},visitor.name)));
-        host.append(box);
-      }
-      host.append(el('h4','Paths from '+v.region));
-      for(const n of v.neighbours){
-        const box=row(n.name+(n.home?' · home':''),n.distance.toFixed(1)+' km · '+n.lifestyle+'. '+n.host+' is looking for help '+n.need+'.');
-        if(asSelf)buttons(box,btn((n.distance>70?'Take transport to ':site.water?'Cross to ':'Walk to ')+n.name,()=>station('walkTrail',n.id,market,'the exchange path')));
         host.append(box);
       }
       if(v.member){
@@ -146,6 +195,7 @@
       }
       const history=el('details'),label=el('summary','Membership record');history.append(label);
       history.append(el('p','Your original character’s reliability is '+v.original.reliability+'. Each pantry round can strengthen or weaken trust at home.'));
+      if(v.lastHearing)history.append(el('p','Week '+v.lastHearing.week+' · '+v.lastHearing.text));
       if(v.purseSites.length)history.append(el('p','Local wage accounts · '+v.purseSites.map(p=>p.name+' '+p.balance).join(', ')+'.'));
       for(const vacancy of v.vacancies)history.append(el('p',vacancy.name+'’s former rota is one '+vacancy.good+' short per week through week '+vacancy.through+'.'));
       for(const entry of v.log)history.append(el('p','Week '+entry.week+' · '+entry.text));

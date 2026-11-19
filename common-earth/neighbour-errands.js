@@ -65,9 +65,13 @@
       reminder:'I’ve kept their copy of the minutes with mine.'}
   };
   const storyFor=row=>(row.variant==='followup'?followups:stories)[row.kind];
+  const outcomeFor=row=>row.unserved?'We walked the late route and recorded who was still waiting. There was too little food to put supper on their tables.':
+    storyFor(row)[row.method==='goods'?'goodsEffect':'timeEffect'];
   const limit=48,openStatus=new Set(['asked','agreed']);
   const appointments=new WeakMap(),empty=Object.freeze([]);
   const venues={supper:'market',bench:'workshop',meeting:'hall'};
+  const causes={shortage:'supper',spoilage:'supper',vacancy:'bench',construction:'bench',dispatch:'meeting',hearing:'meeting'};
+  const firstDue=row=>row.week+(row.origin==='neighbours'?3:2);
   const ownCalendar=(world,site)=>!world.communityLife||root.EarthCommunityLife?.isHome?.(world,site)!==false;
   const records=site=>site?.agency?.arrangements?.rows||[];
   function heldGoods(site,week){
@@ -94,8 +98,7 @@
     if(/convenor|steward|courier|porter|trader|teacher|driver/i.test(p.role))return 'meeting';
     return ['craft','numeracy'].includes(p.strengths?.[0])?'bench':p.strengths?.[0]==='care'?'supper':'meeting';
   }
-  function contactFor(site,owner,actor,story){
-    const list=root.EarthPersonas?.list(site)||site.residents;
+  function contactFor(site,owner,actor,story,list=root.EarthPersonas?.list(site)||site.residents){
     let best=null,score=-1;
     for(const profile of list){
       if(profile.id===owner.id||profile.id===actor.id||!member(site,profile.id)||!visible(site,profile.id))continue;
@@ -136,7 +139,7 @@
     if(reserve)lines.push('one portion I’m holding back until we replace the '+({roots:'root vegetables',fruit:'orchard fruit',greens:'leaf greens',kelp:'seaweed'}[damaged[0]]||damaged[0])+' that spoiled in week '+loss.week);
     const towns=world.sites?[...world.sites,...(world.communityLife?.outposts||[])]:[site];
     const timeHeld=towns.reduce((n,town)=>n+(ownCalendar(world,town)?
-      records(town).filter(r=>r!==row&&r.status==='agreed'&&r.workWeek==null&&r.dueWeek>=world.week&&r.method==='time').length:0),0);
+      records(town).filter(r=>r!==row&&r.origin!=='neighbours'&&r.status==='agreed'&&r.workWeek==null&&r.dueWeek>=world.week&&r.method==='time').length:0),0);
     const cautious=reliability(site,row.actorId,row.requesterId,world.week)<0||reliability(site,row.actorId,row.contactId,world.week)<0;
     return {floor,lines,stock:site[goods],cautious,goodsAvailable:!cautious&&site[goods]-story.amount>=floor,
       timeAvailable:world.effort>timeHeld,timeHeld};
@@ -162,12 +165,12 @@
   function rowsFor(site,world,actorId){
     return records(site).filter(row=>actorId==null||row.actorId===actorId).map(row=>{
       const story=storyFor(row),nextId=row.status==='asked'?row.contactId:row.status==='agreed'?row.requesterId:null;
-      const finished=row.status==='kept'?story[row.method==='goods'?'goodsEffect':'timeEffect']:
+      const finished=row.status==='kept'?outcomeFor(row):
         row.status==='missed'?'The agreed help did not arrive.':row.releaseCause==='requesterAway'?'The requester had left the community before the handover. The agreement was released.':
         row.status==='withdrawn'?'The enquiry closed before anyone committed.':'';
       const next=row.status==='agreed'&&row.workWeek!=null?name(site,row.actorId)+' has set out to meet '+name(site,row.requesterId)+' at the '+venues[row.kind]+'.':
         nextId?'Meet '+name(site,nextId)+(row.status==='asked'?' to hear what else is already promised.':' to carry out the agreement by week '+row.dueWeek+'.'):finished;
-      const dateHistory=row.dateDecision==='agreed'?' The requester moved the date from week '+(row.week+2)+' to week '+row.dueWeek+'.':
+      const dateHistory=row.dateDecision==='agreed'?' The requester moved the date from week '+firstDue(row)+' to week '+row.dueWeek+'.':
         row.dateDecision==='declined'?' The requester kept the original date, week '+row.dueWeek+'.':'';
       return {...row,title:story.title,reason:story.opening,nextId,next:next+dateHistory,outcome:finished};
     });
@@ -186,6 +189,144 @@
     }
     if(kind==='meeting'&&site.fleet?.incident)return 'The co-op missed a pickup. I’m trying to reach someone who works through the meeting. Do you have a moment?';
     return '';
+  }
+  function localNeeds(site,world){
+    const needs=[],week=world.week,servings=Math.ceil(site.population/5);
+    if(site.food<servings*2)needs.push(['shortage','We counted '+site.food+' food for a round that takes '+servings+'.']);
+    const loss=site.resourceLedger?.lastLoss;
+    if(loss?.week>=week-1&&Object.values(loss.bins||{}).some(n=>n>0))
+      needs.push(['spoilage','The kitchen lost part of its crop in week '+loss.week+'.']);
+    const vacancy=root.EarthCareers?.catalog?.find(j=>j.metric==='repair'&&site.employers?.[j.id]?.open?.length);
+    if(vacancy)needs.push(['vacancy',vacancy.employer+' was still trying to replace '+site.employers[vacancy.id].open[0].name+'.']);
+    const build=site.construction?.find(j=>j.name);
+    if(build)needs.push(['construction','The crew drawing materials for '+build.name+' also needed the repair cupboard.']);
+    if(site.fleet?.incident)needs.push(['dispatch','The usual truck pickup was missed in week '+site.fleet.incident.week+'.']);
+    if(site.issue?.deadline>=week)needs.push(['hearing','People had only until week '+site.issue.deadline+' to answer the notice. We wanted late workers heard at the next meeting.']);
+    return needs;
+  }
+  function timeConflict(site,world,p){
+    const id=p.id,career=site.careers?.[id];
+    return !member(site,id)||!visible(site,id)||site.shift?.residentId===id||site.purses?.tickets?.[id]||
+      site.workforce?.members?.[id]?.jobId||site.fleet?.custody?.actor===id||
+      career?.training?.pace==='intensive'&&!career.training.paused||career?.application?.phase==='notice'||
+      root.EarthCareers?.handoverDuty?.(site,id,world.week)||root.EarthCareers?.specialistShift?.(site,id,world.week)||
+      site.residents.some(r=>r.promise&&(r.id===id||r.promise.by===id));
+  }
+  function checkNeighbourOffer(site,world,row){
+    const helper=person(site,row.actorId),keeper=person(site,row.contactId),owner=person(site,row.requesterId);
+    if(!helper||!keeper||!owner||![helper,keeper,owner].every(p=>visible(site,p.id)&&member(site,p.id)))return '';
+    const refusal=timeConflict(site,world,helper)||timeConflict(site,world,owner);
+    const trust=root.EarthRelationships?.strength(site.autonomy?.people?.[helper.id],owner,world.week)||0;
+    const claim=priority(site,world,row),margin=claim.stock-claim.floor-stories[row.kind].amount;
+    const keeperTrust=root.EarthRelationships?.strength(site.autonomy?.people?.[keeper.id],helper,world.week)||0;
+    const authority=stories[row.kind].custodian.test(root.EarthCareers?.role?.(site,keeper.id)||keeper.role);
+    const supplyCleared=authority&&keeperTrust>=-1&&claim.goodsAvailable&&margin>=((keeper.traits?.patience??50)>65?2:1);
+    const tired=(site.autonomy?.people?.[helper.id]?.energy??5)<3;
+    if(trust<=-3||refusal||tired&&!supplyCleared){
+      row.status='withdrawn';row.finishedWeek=world.week;
+      row.reply=trust<=-3?'trust':refusal?'duty':'rest';
+      return helper.name+' declined the request from '+owner.name+'. '+declineText(row);
+    }
+    const axis=stories[row.kind].axis;
+    const skill=site.careers?.[helper.id]?.skills?.[axis]??helper.aptitudes?.[axis]??0;
+    const personalVisit=!tired&&(trust>=3||skill>=58&&(helper.traits?.patience??50)+(helper.traits?.sociability??50)>=110);
+    const grant=supplyCleared&&!personalVisit;
+    if(personalVisit&&supplyCleared)row.volunteered=true;
+    row.review={stock:claim.stock,floor:claim.floor,why:!authority?'authority':keeperTrust< -1?'trust':!supplyCleared?'reserve':grant?'release':'volunteer'};
+    row.method=grant?'goods':'time';row.agreedWeek=world.week;row.status='agreed';
+    return grant?keeper.name+' cleared '+count(stories[row.kind].amount,stories[row.kind].good)+' for '+helper.name+
+      ' to take to '+owner.name+' by week '+row.dueWeek+'.':
+      helper.name+' offered a personal work session to '+owner.name+(row.volunteered?' so the stores could keep their spare supplies.':' after '+keeper.name+' reviewed the other claims.')+' They arranged to meet by week '+row.dueWeek+'.';
+  }
+  function declineText(row){
+    return row.reply==='trust'?'Their earlier dealings made another commitment difficult.':
+      row.reply==='duty'?'Their existing appointments took precedence.':'The helper needed a week to rest.';
+  }
+  function reviseDelivery(site,world,row){
+    if(row.playerTerms||row.status!=='agreed'||row.method!=='goods'||row.workWeek!=null||row.agreedWeek>=world.week)return '';
+    const claim=priority(site,world,row);
+    if(claim.goodsAvailable)return '';
+    const helper=person(site,row.actorId),owner=person(site,row.requesterId);
+    if(!helper||!owner||timeConflict(site,world,helper)||timeConflict(site,world,owner)||
+      (site.autonomy?.people?.[helper.id]?.energy??5)<3)return '';
+    const keeper=name(site,row.contactId),bond=root.EarthRelationships?.strength(site.autonomy?.people?.[owner.id],helper,world.week)||0;
+    if(bond<0||(owner.traits?.adaptability??50)<48&&row.dueWeek>world.week)return '';
+    row.method='time';row.changedWeek=world.week;
+    return keeper+' could no longer spare '+count(stories[row.kind].amount,stories[row.kind].good)+'. '+owner.name+' accepted '+helper.name+
+      '’s offer to keep the appointment with their own time instead.';
+  }
+  function neighbourDecisions(site,world){
+    // The original resident never signs on the player's behalf. A temporary
+    // viewpoint also keeps control of their own reply while the player is there.
+    if(!world.communityLife||!root.EarthAutonomy||world.week<=site.founded+1||world.week>Number.MAX_SAFE_INTEGER-4)return '';
+    const rows=records(site),week=world.week,controlled=world.activeId===site.id?root.EarthAgency.actorId(site):null;
+    const pending=rows.find(r=>r.origin==='neighbours'&&active(r,week));
+    if(pending){
+      if(pending.week>=week||[pending.actorId,pending.requesterId,pending.contactId].includes(controlled))return '';
+      if(pending.status==='agreed')return reviseDelivery(site,world,pending);
+      return checkNeighbourOffer(site,world,pending);
+    }
+    if(rows.some(r=>r.origin==='neighbours'&&week-(r.finishedWeek||r.week)<5))return '';
+    const needs=localNeeds(site,world).filter(([cause])=>!rows.some(r=>r.cause===cause&&week-r.week<13));
+    if(!needs.length||rows.length>=limit&&rows.every(r=>openStatus.has(r.status)))return '';
+    const occupied=new Set(['steward',controlled]);
+    for(const r of rows)if(active(r,week)||r.week===week)for(const id of [r.actorId,r.requesterId,r.contactId])occupied.add(id);
+    const candidates=(root.EarthPersonas?.list(site)||[]).filter(p=>!occupied.has(p.id)&&!timeConflict(site,world,p)&&
+      (site.autonomy?.people?.[p.id]?.energy??5)>=2);
+    if(candidates.length<3)return '';
+    for(const [cause,detail] of needs){
+      const kind=causes[cause],story=stories[kind],recent=p=>rows.find(r=>r.requesterId===p.id&&r.kind===kind&&r.status==='kept');
+      const requesters=candidates.filter(p=>subjectOf({role:root.EarthCareers?.role?.(site,p.id)||p.role,strengths:p.strengths})===kind&&
+        week-(recent(p)?.finishedWeek??-100)>5);
+      requesters.sort((a,b)=>(b.traits?.initiative??50)-(a.traits?.initiative??50));
+      const owner=requesters[0];if(!owner)continue;
+      const helpers=candidates.filter(p=>p!==owner).map(p=>{
+        const trust=root.EarthRelationships?.strength(site.autonomy?.people?.[owner.id],p,week)||0;
+        const skill=site.careers?.[p.id]?.skills?.[story.axis]??p.aptitudes?.[story.axis]??40;
+        return {p,trust,score:skill+(p.traits?.sociability??50)/4+(p.traits?.initiative??50)/5+trust*5};
+      }).filter(o=>o.trust>-3).sort((a,b)=>b.score-a.score);
+      const helper=helpers[0]?.p;if(!helper)continue;
+      const keeper=contactFor(site,owner,helper,story,candidates);if(!keeper)continue;
+      const agency=site.agency||={actor:'steward',meals:[]},book=agency.arrangements||={serial:0,rows:[]};
+      if(book.serial>=Number.MAX_SAFE_INTEGER)return '';
+      if(book.rows.length>=limit)book.rows.splice(book.rows.findLastIndex(r=>!openStatus.has(r.status)),1);
+      const prior=recent(owner),row={id:++book.serial,kind,...(prior?{variant:'followup'}:{}),origin:'neighbours',cause,detail:detail.slice(0,256),
+        actorId:helper.id,requesterId:owner.id,contactId:keeper.id,week,dueWeek:week+3,status:'asked'};
+      book.rows.unshift(row);
+      return owner.name+' asked '+helper.name+' about “'+storyFor(row).title+'”. '+detail+' '+keeper.name+' will review what is already promised.';
+    }
+    return '';
+  }
+  function witness(site,world,id){
+    return records(site).find(r=>r.origin==='neighbours'&&[r.requesterId,r.actorId,r.contactId].includes(id)&&
+      (active(r,world.week)||r.finishedWeek>=world.week-2))||null;
+  }
+  function account(site,world,id,speaker,row){
+    if(!row||![row.actorId,row.requesterId,row.contactId].includes(id))return null;
+    const owner=name(site,row.requesterId),helper=name(site,row.actorId),keeper=name(site,row.contactId),story=storyFor(row);
+    const mine=id===row.requesterId,clerk=id===row.contactId;
+    const intro=mine?'I asked '+helper+' whether we could do something. '+row.detail+' ':
+      clerk?owner+' asked me to look over the other claims. ':'I took '+owner+'’s request to '+keeper+'. ';
+    let waiting='We’re waiting to hear what '+keeper+' can release.';
+    if(clerk&&row.status==='asked'){
+      const p=priority(site,world,row);
+      waiting='I counted '+count(p.stock,story.good)+'. '+(p.lines.length?'First I need '+p.lines.join(' and ')+'. ':'The usual commitments are covered. ')+
+        'I’ll check with '+helper+' before putting anything aside.';
+    }
+    const decision=row.status==='asked'?waiting:
+      row.status==='kept'?(mine?'They came back as agreed. ':clerk?'I heard back from '+owner+'. ':'We got there in week '+row.finishedWeek+'. ')+outcomeFor(row):
+      row.status==='agreed'?(row.method==='goods'?'We set aside '+count(story.amount,story.good)+' for the handover. ':
+        (row.volunteered?'We could have used the spare supplies. ':'The supplies had other claims. ')+(mine||clerk?helper+' offered their own time. ':'I offered my own time. '))+'We agreed on week '+row.dueWeek+' at the latest.':
+      row.status==='missed'?(mine?'I waited for the help until week '+row.dueWeek+'. It didn’t arrive.':
+        'The help never reached '+owner+' in time. We had counted on week '+row.dueWeek+'.'):
+      row.reply?declineText(row):'We let that arrangement go.';
+    const other=[clerk?row.actorId:mine?row.contactId:row.requesterId,row.actorId,row.contactId,row.requesterId]
+      .find(key=>key!==id&&key!==speaker&&visible(site,key)&&member(site,key));
+    const why=row.changedWeek?' We changed to a work session in week '+row.changedWeek+' when the spare stock was needed elsewhere.':
+      clerk&&row.review?.why==='authority'?' I could review their idea, but I couldn’t sign common supplies out for this.':
+      clerk&&row.review?.why==='trust'?' I wasn’t ready to put a public allocation against their name.':
+      clerk&&row.review?.why==='reserve'?' On the day we decided, there were '+count(row.review.stock,story.good)+' in store and '+row.review.floor+' already needed a place in my calculation.':'';
+    return {ok:true,message:name(site,id)+' · “'+intro+decision+why+'”',...(other?{followContact:other}:{})};
   }
   function greeting(site,world,actorId,targetId){
     const row=records(site).find(r=>r.actorId===actorId&&active(r,world.week)&&
@@ -299,35 +440,38 @@
     if(row.workWeek==null&&chosen==='goods'&&!p.goodsAvailable)return said(owner,terms(site,world,row)+(action==='finish'?' Talk to '+name(site,row.contactId)+' if you can offer your time instead.':''));
     if(row.workWeek==null&&chosen==='time'&&!p.timeAvailable)return said(owner,'There’s no unpromised civic effort left this week. We could try again after the next rota opens, or review the supplies.');
     if(action!=='finish'){
-      row.status='agreed';row.method=chosen;row.agreedWeek=world.week;
+      row.status='agreed';row.method=chosen;row.agreedWeek=world.week;delete row.volunteered;
+      if(row.origin==='neighbours'){row.playerTerms=true;delete row.changedWeek;delete row.review;}
       return said(owner,(chosen==='goods'?'I’ll put your name beside '+count(story.amount,story.good)+'. ':'I’ll pencil in one civic effort for your visit. ')+
         'Take that agreement back to '+name(site,row.requesterId)+' by the end of week '+row.dueWeek+'.',true);
     }
-    if(row.workWeek==null)pay(site,world,row);
+    if(row.workWeek==null)pay(site,world,row,false);
     finish(site,row,world.week);
-    return {...said(owner,story[chosen==='goods'?'goodsEffect':'timeEffect']+' I’ll remember who came back. We used '+costOf(row)+'.',true),
+    return {...said(owner,outcomeFor(row)+' I’ll remember who came back. We used '+costOf(row)+'.',true),
       neighbourHelp:{actorId:actor.id,targetId:owner.id,kind:row.kind,method:chosen}};
   }
   function costOf(row){
     const story=storyFor(row);
     return row.method==='goods'?count(story.amount,story.good):row.localSession?'one local work session':'one civic effort';
   }
-  function pay(site,world,row){
+  function pay(site,world,row,independent){
     const story=storyFor(row);
     if(row.method==='goods'){
       site[story.good]-=story.amount;
       if(story.good==='food')root.EarthProvisions?.reconcile?.(site,world.week);
-    }else if(ownCalendar(world,site))world.effort--;
-    else row.localSession=true;
+    }else{
+      if(ownCalendar(world,site)&&!(independent&&row.origin==='neighbours'))world.effort--;else row.localSession=true;
+      if(row.kind==='supper'&&site.food<Math.ceil(site.population/5))row.unserved=true;
+    }
   }
   function finish(site,row,week){
     const story=storyFor(row);
     row.status='kept';row.finishedWeek=week;appointments.delete(site);
     root.EarthAutonomy?.remember?.(site,week,row.actorId,row.requesterId,'kept');
     root.EarthAutonomy?.remember?.(site,week,row.actorId,row.contactId,'kept');
-    site[story.metric]=Math.min(100,site[story.metric]+1);
+    const metric=row.unserved?'trust':story.metric;site[metric]=Math.min(100,site[metric]+1);
     const resident=site.residents.find(r=>r.id===row.requesterId);if(resident)resident.bond=Math.min(10,resident.bond+1);
-    return name(site,row.actorId)+' met '+name(site,row.requesterId)+' for “'+story.title+'”. '+story[row.method==='goods'?'goodsEffect':'timeEffect'];
+    return name(site,row.actorId)+' met '+name(site,row.requesterId)+' for “'+story.title+'”. '+outcomeFor(row);
   }
   function promisedDelivery(site,person,week){
     const promise=person.promise;
@@ -374,7 +518,7 @@
     const row=records(site).find(r=>r.actorId===id&&r.status==='agreed'&&r.workWeek==null&&r.agreedWeek<world.week&&r.dueWeek>=world.week);
     if(!row||row.requesterId===controlled||!visible(site,row.requesterId)||!member(site,row.requesterId))return offers;
     const p=priority(site,world,row);
-    if(row.method==='goods'?!p.goodsAvailable:ownCalendar(world,site)&&!p.timeAvailable)return offers;
+    if(row.method==='goods'?!p.goodsAvailable:row.origin!=='neighbours'&&ownCalendar(world,site)&&!p.timeAvailable)return offers;
     const story=storyFor(row),title=story[row.method==='goods'?'useGoods':'useTime'];
     const partner=name(site,row.requesterId);
     offers.push({rowId:row.id,target:row.requesterId,score:world.week===row.dueWeek?126:105,venue:venues[row.kind],
@@ -387,7 +531,7 @@
     if(a.ordinary)return {item:{week:world.week,kind:'commitment',errand:true,ordinary:true,rowId,venue:a.venue,target:a.target,
       goal:a.goal,title:a.title,activity:a.activity,reason:a.reason},note:name(site,id)+' set out to '+a.title[0].toLowerCase()+a.title.slice(1)+'.'};
     const row=records(site).find(r=>r.id===rowId);
-    pay(site,world,row);row.workWeek=world.week;appointments.delete(site);
+    pay(site,world,row,true);row.workWeek=world.week;appointments.delete(site);
     return {item:{week:world.week,kind:'commitment',errand:true,rowId,venue:a.venue,target:a.target,goal:a.goal,title:a.title,activity:a.activity,reason:a.reason},
       note:name(site,id)+' set out for the '+a.venue+' to keep an agreement with '+name(site,row.requesterId)+'.'};
   }
@@ -484,6 +628,7 @@
       const resident=site.residents.find(p=>p.id===row.requesterId);if(resident)resident.bond=Math.max(0,resident.bond-1);
       events.push(name(site,row.requesterId)+' waited for '+name(site,row.actorId)+' to return for “'+storyFor(row).title+'”. The help did not arrive.'+(site.trust<metric?' Community trust fell by one.':''));
     }
+    const next=neighbourDecisions(site,world);if(next)events.push(next);
     return events;
   }
   function valid(site,week){
@@ -499,15 +644,26 @@
     const weeks=new Set(),owners=new Set(),actors=new Set();
     const named=id=>typeof id==='string'&&Boolean(root.EarthPersonas?.profile(site,id)||root.EarthAgency?.identity(site,id));
     return b.rows.every((r,i)=>{
-      if(!r||!bounded(r.id,b.serial)||i>0&&r.id>=b.rows[i-1].id||!Object.hasOwn(stories,r.kind)||r.variant!==undefined&&r.variant!=='followup'||!bounded(r.week,week)||r.dueWeek!==r.week+(r.dateDecision==='agreed'?3:2)||
+      if(!r||!bounded(r.id,b.serial)||i>0&&r.id>=b.rows[i-1].id||!Object.hasOwn(stories,r.kind)||r.variant!==undefined&&r.variant!=='followup'||!bounded(r.week,week)||r.dueWeek!==firstDue(r)+(r.dateDecision==='agreed'?1:0)||
         ![r.actorId,r.requesterId,r.contactId].every(named)||new Set([r.actorId,r.requesterId,r.contactId]).size!==3||
         !['asked','agreed','kept','missed','withdrawn'].includes(r.status))return false;
+      if(r.origin!==undefined||r.cause!==undefined||r.detail!==undefined||r.reply!==undefined){
+        if(r.origin!=='neighbours'||!Object.hasOwn(causes,r.cause)||causes[r.cause]!==r.kind||
+          [r.actorId,r.requesterId,r.contactId].includes('steward')||typeof r.detail!=='string'||!r.detail.length||r.detail.length>256||
+          r.reply!==undefined&&(r.status!=='withdrawn'||!['trust','duty','rest'].includes(r.reply)))return false;
+      }
+      if(r.volunteered!==undefined&&(r.volunteered!==true||r.origin!=='neighbours'||!r.agreedWeek||r.method!=='time'))return false;
+      if(r.review!==undefined&&(!r.review||r.origin!=='neighbours'||!r.agreedWeek||!Number.isSafeInteger(r.review.stock)||r.review.stock<0||
+        !Number.isSafeInteger(r.review.floor)||r.review.floor<0||!['authority','trust','reserve','volunteer','release'].includes(r.review.why)))return false;
+      if(r.changedWeek!==undefined&&(r.origin!=='neighbours'||r.method!=='time'||!bounded(r.changedWeek,Math.min(week,r.dueWeek))||r.changedWeek<=r.agreedWeek))return false;
+      if(r.playerTerms!==undefined&&(r.playerTerms!==true||r.origin!=='neighbours'||!r.agreedWeek))return false;
+      if(r.unserved!==undefined&&(r.unserved!==true||r.kind!=='supper'||r.method!=='time'||r.status!=='kept'&&r.workWeek==null))return false;
       if(r.releaseCause!==undefined&&(r.status!=='withdrawn'||r.releaseCause!=='requesterAway'||r.workWeek==null&&r.finishedWeek<=r.dueWeek))return false;
       const committed=['agreed','kept','missed'].includes(r.status)||r.releaseCause==='requesterAway',closed=!openStatus.has(r.status);
       if(committed?(!['goods','time'].includes(r.method)||!bounded(r.agreedWeek,Math.min(r.dueWeek,week))||r.agreedWeek<r.week):
         (r.method!==undefined||r.agreedWeek!==undefined))return false;
       if(r.dateDecision!==undefined||r.dateAskedWeek!==undefined){
-        if(!committed||!['agreed','declined'].includes(r.dateDecision)||!bounded(r.dateAskedWeek,Math.min(week,r.week+2))||r.dateAskedWeek<r.week+1)return false;
+        if(!committed||!['agreed','declined'].includes(r.dateDecision)||!bounded(r.dateAskedWeek,Math.min(week,firstDue(r)))||r.dateAskedWeek<firstDue(r)-1)return false;
       }
       if(r.workWeek!==undefined&&(!committed||r.actorId==='steward'||!bounded(r.workWeek,Math.min(week,r.dueWeek))||
         r.workWeek<=r.agreedWeek||!['agreed','kept','withdrawn'].includes(r.status)))return false;
@@ -523,5 +679,5 @@
       owners.add(r.requesterId);actors.add(r.actorId);return true;
     });
   }
-  root.EarthNeighbourErrands=Object.freeze({heldGoods,topics,converse,arrangements:rowsFor,greeting,reliability,assignment,assignments,work,working,finishAt,closeDeliveries,closeWeek,valid});
+  root.EarthNeighbourErrands=Object.freeze({heldGoods,topics,converse,arrangements:rowsFor,greeting,reliability,witness,account,assignment,assignments,work,working,finishAt,closeDeliveries,closeWeek,valid});
 })(typeof window==='undefined'?globalThis:window);

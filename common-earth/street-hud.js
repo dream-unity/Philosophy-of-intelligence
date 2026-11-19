@@ -11,7 +11,7 @@
     let pane=null,talkId=null,goalId='',identity='',revision=0,lastDraw='',listKey='',lastContact='',reply='',busy=false,opener=null;
     let goal=null,overview=null,stripKey='',civicKey='',civic=null,rangeTimer=0,noticeTimer=0,watching=null,speech=null,placementKey='';
     const talkTopics=new Set(),contactButtons=new Map(),transcript=[];
-    let pickPeople=[],lastPrompt='',spokenContact=null,spokenStore=false,invitation=null,nearSignature='',invitationWeek='';
+    let pickPeople=[],lastPrompt='',spokenContact=null,spokenStore=false,spokenMemory=null,invitation=null,nearSignature='',invitationWeek='';
     const invitationsSeen=new Set(),invitedBySite=new WeakMap();
     const present=(site,id)=>root.EarthCommunityLife?.present?.(site,id)!==false;
     const visitor=(site,id)=>root.EarthCommunityLife?.residency?.(site,id)==='visitor';
@@ -33,14 +33,36 @@
     function clearSpeech(){
       speech=null;show($('scene-speech'),false);
     }
-    function speakerWords(message,id){
-      const prefix=name(id)+' · ',spoken=String(message||'');
-      if(!spoken.startsWith(prefix))return '';
-      const full=spoken.substring(prefix.length).replace(/^[“"]|[”"]$/g,'').trim();
-      const sentence=full.match(/^.+?[.!?](?:\s|$)/u)?.[0].trim()||full;
-      if(sentence.length<=88)return sentence;
-      return sentence.slice(0,87).replace(/\s+\S*$/u,'').trimEnd()+'…';
+    function speechPages(full,limit){
+      let rest=full.trim();const pages=[];
+      while(rest.length>limit){
+        const piece=rest.slice(0,limit+1);
+        const pause=[...piece.matchAll(/[.!?][”’"]?\s+/gu)].at(-1);
+        const space=piece.lastIndexOf(' ');
+        const cut=pause&&pause.index>=limit*.45?pause.index+pause[0].trimEnd().length:space>0?space:limit;
+        pages.push(rest.slice(0,cut).trim());rest=rest.slice(cut).trim();
+      }
+      if(rest)pages.push(rest);return pages;
     }
+    function speechPage(index,announce){
+      if(!speech||speech.id!==talkId||index<0||index>=speech.pages.length)return;
+      speech.index=index;speech.position='';
+      const words=$('scene-speech-words'),last=index===speech.pages.length-1;
+      words?.setAttribute('aria-live',announce?'polite':'off');text(words,speech.pages[index]);
+      show($('scene-speech-kind'),speech.outcome);show($('scene-speech-pages'),speech.pages.length>1);
+      text($('scene-speech-count'),(index+1)+' / '+speech.pages.length);
+      const back=$('scene-speech-back'),next=$('scene-speech-next');
+      if(back){back.disabled=index===0;back.setAttribute('aria-label','Previous part of this reply');}
+      if(next){text(next,last?'Done':'Next');next.setAttribute('aria-label',last?'Close this speech bubble':'Next part of this reply');}
+    }
+    $('scene-speech-back')?.addEventListener('click',event=>{
+      event.stopPropagation?.();if(speech)speechPage(speech.index-1,true);tick();
+    });
+    $('scene-speech-next')?.addEventListener('click',event=>{
+      event.stopPropagation?.();if(!speech||speech.id!==talkId)return;
+      if(speech.index<speech.pages.length-1){speechPage(speech.index+1,true);tick();return;}
+      clearSpeech();if(doc.activeElement===$('scene-speech-next'))$('scene-close')?.focus({preventScroll:true});
+    });
     function faceToFaceLayout(meeting){
       const local=street();
       if(pane!=='talk'||!local?.personAnchor||!meeting){
@@ -66,16 +88,19 @@
       const bubble=$('scene-speech');if(!speech||!bubble)return;
       if(speech.id!==talkId||(root.performance?.now?.()??Date.now())>=speech.until){clearSpeech();return;}
       show(bubble,true);
-      const bw=bubble.offsetWidth||170,bh=bubble.offsetHeight||34;
+      const anchor=speech.outcome?{x:(head.x+self.x)/2,y:Math.min(head.y,self.y)}:speech.speaker===actorId()?self:head;
       const min=dock==='left'?size+15:8,max=dock==='right'?width-size-15:width-8;
-      const middle=Math.min(max-bw/2,Math.max(min+bw/2,head.x));
-      let x=Math.max(6,Math.min(width-bw-6,middle-bw/2)),y=Math.max(3,Math.min(height-bh-8,head.y-bh-9));
-      let direction='down',tip=Math.max(8,Math.min(bw-8,head.x-x));
-      if(head.y<bh+10){
+      const available=Math.max(112,Math.min(290,Math.floor(max-min)));
+      if(speech.width!==available){speech.width=available;bubble.style?.setProperty('--speech-width',available+'px');}
+      const bw=bubble.offsetWidth||170,bh=bubble.offsetHeight||34;
+      const middle=Math.min(max-bw/2,Math.max(min+bw/2,anchor.x));
+      let x=Math.max(6,Math.min(width-bw-6,middle-bw/2)),y=Math.max(3,Math.min(height-bh-8,anchor.y-bh-9));
+      let direction='down',tip=Math.max(8,Math.min(bw-8,anchor.x-x));
+      if(anchor.y<bh+10||dock==='top'&&y<54+size){
         const toRight=max-Math.max(head.x,self.x)>Math.min(head.x,self.x)-min;
         direction=toRight?'left':'right';
         x=Math.max(5,Math.min(width-bw-5,toRight?Math.max(head.x,self.x)+14:Math.min(head.x,self.x)-bw-14));
-        y=Math.max(4,Math.min(height-bh-5,head.y-bh/2));tip=Math.max(6,Math.min(bh-6,head.y-y));
+        y=Math.max(4,Math.min(height-bh-5,anchor.y-bh/2));tip=Math.max(6,Math.min(bh-6,anchor.y-y));
       }
       const position=[direction,Math.round(x),Math.round(y),Math.round(tip)].join('/');
       if(speech.position!==position){
@@ -84,10 +109,16 @@
       }
     }
     function beginSpeech(id,message){
-      const excerpt=speakerWords(message,id);if(!$('scene-speech')||!$('scene-speech-words')||!excerpt||id!==talkId||!contact()||!street()?.personAnchor)return;
+      if(!$('scene-speech')||!$('scene-speech-words')||!message||id!==talkId||!contact()||!street()?.personAnchor)return;
+      const line=String(message),speaker=[id,actorId()].find(who=>line.startsWith(name(who)+' · '));
+      const full=speaker?line.slice(name(speaker).length+3).replace(/^[“"]|[”"]$/g,''):line;
+      const stage=host.getBoundingClientRect(),hasControls=!!$('scene-speech-next');
+      const pages=speechPages(full,!hasControls?88:stage.width>700?138:90);
+      if(!pages.length){clearSpeech();return;}
       const local=street();
       if(!local.personAnchor(id)?.visible||!local.personAnchor(actorId())?.visible)local.recenter?.();
-      text($('scene-speech-words'),excerpt);speech={id,until:(root.performance?.now?.()??Date.now())+9000,position:''};tick();
+      speech={id,speaker,outcome:!speaker,pages,index:0,position:'',until:hasControls&&pages.length>1?Infinity:(root.performance?.now?.()??Date.now())+11000};
+      speechPage(0,false);tick();
     }
     function transcriptView(){
       const list=$('scene-transcript-lines'),details=$('scene-transcript');
@@ -100,7 +131,7 @@
       if(!transcript.length)details.open=false;
     }
     function replyWith(message,prompt=''){
-      spokenContact=null;spokenStore=false;
+      spokenContact=null;spokenStore=false;spokenMemory=null;
       if(!message){transcript.length=0;lastPrompt='';}
       else if(reply&&reply!==String(message)){
         transcript.push({prompt:lastPrompt,words:reply});if(transcript.length>4)transcript.shift();
@@ -164,7 +195,8 @@
       const previous=watching?.id;watching=observation;
       show($('scene-watching'),!!observation);
       if(observation){
-        text($('scene-watched-action'),[observation.name,observation.label,observation.venue].filter(Boolean).join(' · '));
+        const details=[observation.name,observation.label,observation.venue,observation.assignment].filter(Boolean);
+        text($('scene-watched-action'),[...new Set(details)].join(' · '));
         $('scene-meet-watched')?.setAttribute('aria-label','Walk to meet '+observation.name);
       }
       if(previous!==observation?.id)changed?.();
@@ -211,7 +243,7 @@
       for(const b of openers)b.setAttribute('aria-expanded',String(b.dataset.sceneOpen===(id==='goals'&&goalId?'person':id)));
       for(const p of panes)p.hidden=p.dataset.scenePane!==id;
       card.hidden=false;clearInvitation();show($('scene-notice'),false);
-      text($('scene-title'),({goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Community stores',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',live:'Live weeks'})[id]);
+      text($('scene-title'),({people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',live:'Live weeks'})[id]);
       render(true);tick();changed?.();if(focus)$('scene-title')?.focus({preventScroll:true});return true;
     }
     function openTalk(ref){
@@ -223,6 +255,17 @@
       }
       return openTool('talk');
     }
+    function meetPerson(id){
+      if(!id||id===actorId()||!present(sim.active(),id)||!openTalk(subjectRef(id)))return false;
+      if(!contact())return walkTo(id,()=>updateContact());
+      updateContact();return true;
+    }
+    function watchPerson(id){
+      const local=street();
+      if(!local?.observePerson?.(id)){notify('This resident is away from the street.');return false;}
+      const seen=local.activityOf(id);if(seen)setWatch(seen);
+      close(false);$('street-canvas').focus({preventScroll:true});return true;
+    }
     function openTalkChoices(refs){
       const site=sim.active(),choices=new Map();
       if(!site||!street())return false;
@@ -231,7 +274,7 @@
         if(id&&id!==actorId()&&present(site,id)&&root.EarthAgency.identity(site,id))choices.set(id,ref);
       }
       if(!choices.size)return false;
-      if(choices.size===1||!$('scene-nearby-people'))return openTalk(choices.values().next().value);
+      if(choices.size===1||!$('scene-nearby-people'))return meetPerson(choices.keys().next().value);
       pickPeople=[...choices.keys()];
       if(!openTool('talk')){pickPeople=[];return false;}
       $('scene-nearby-people')?.querySelector('button')?.focus({preventScroll:true});
@@ -319,12 +362,16 @@
       const local=street(),s=local.getState(),proof=contact(),near=!!proof;
       const key=[talkId,near,s.mode,s.vehicle,!!s.travelling,busy].join('/');
       if(key===lastContact)return proof;lastContact=key;
+      const justMet=near&&host.dataset.faceToFace!=='true';
       host.dataset.faceToFace=near?'true':'false';
       if(!near){clearSpeech();delete host.dataset.talkDock;placementKey='';}
       text($('scene-title'),pickPeople.length>1?'Choose a neighbour':'Talk with '+name(talkId));
       text($('scene-contact'),near?(proof.mode==='walk'?'Together on foot.':'Travelling together.'):
         s.mode==='boat'?'Out of earshot. Return to shore before meeting.':s.vehicle==='truck'?'Park the co-op truck through dispatch before walking over.':s.travelling?'On the way. Conversation opens when you reach '+name(talkId)+'.':'Out of earshot. Walk over to speak in person.');
       text($('scene-approach'),s.mode==='boat'?'Return to shore':s.vehicle==='truck'?'Open truck controls':'Walk to '+name(talkId));show($('scene-approach'),!near);
+      // Dock immediately on arrival. Otherwise a newly enabled option can
+      // move under a finger before the next periodic position update.
+      if(justMet)faceToFaceLayout(proof);
       for(const b of talkTopics)b.disabled=!near||busy;
       for(const [b,available] of contactButtons)b.disabled=!available||!near||busy;
       return proof;
@@ -342,7 +389,7 @@
         const result=await run(ctx);
         if(!ctx.current())return;
         if(result?.message){
-          replyWith(result.message,prompt);spokenContact=result.followContact||null;spokenStore=result.followStore===true;
+          replyWith(result.message,prompt);spokenContact=result.followContact||null;spokenStore=result.followStore===true;spokenMemory=result.followMemory||null;
           drawArrangement(sim.active(),talkId);
         }
         if(result?.ok&&result.neighbourHelp){
@@ -350,7 +397,7 @@
           ctx.local.showNeighbourHelp?.(cue.actorId,cue.targetId,cue.kind,cue.method);
         }
         if(result?.changed||before!==sim.state.actionRevision){after?.(result);render();}
-        if(speaker&&result?.ok)beginSpeech(speaker,result.message);else clearSpeech();
+        if(result?.message)beginSpeech(speaker||talkId,result.message);else clearSpeech();
       }catch{if(ctx.current())replyWith('The conversation could not be saved. Check your place and try again.');}
       finally{busy=false;lastContact='';updateContact();}
     }
@@ -414,7 +461,11 @@
       const from=actorId();
       const row=root.EarthDialogue?.arrangements?.(site,sim.state,from)?.find(r=>
         (r.status==='agreed'||r.status==='asked')&&r.dueWeek>=sim.state.week&&(r.requesterId===id||r.contactId===id));
-      area.replaceChildren();show(area,!!row||!!spokenContact||spokenStore);
+      area.replaceChildren();show(area,!!row||!!spokenContact||spokenStore||!!spokenMemory);
+      if(spokenMemory){
+        const note=spokenMemory,person=id;
+        area.append(press(note.label,()=>performTalk(c=>sim.perform('converse',person,note.id,c.proof),person,note.label),false,'remember-topic'));
+      }
       if(spokenStore)area.append(press('Check the stores and prices',()=>openTool('stores'),false,'conversation-stores'));
       if(spokenContact&&present(site,spokenContact)){
         const next=spokenContact;
@@ -556,8 +607,8 @@
     function selectPurpose(id,source){
       goalId=id||'';revision++;openTool('goals',source||openers.find(b=>b.dataset.sceneOpen===(goalId?'person':'goals')));if(goalField)goalField.value=goalId;
     }
-    function townNeed(site,civic){
-      const meals=Math.ceil(site.population/5),promised=site.residents.filter(r=>r.promise).sort((a,b)=>a.promise.dueWeek-b.promise.dueWeek)[0],plan=sim.buildPlanView?.();
+    function townNeed(site,civic,local=site===sim.active()){
+      const meals=Math.ceil(site.population/5),promised=site.residents.filter(r=>r.promise).sort((a,b)=>a.promise.dueWeek-b.promise.dueWeek)[0],plan=local&&sim.buildPlanView?.();
       if(site.food<meals)return {label:'Stock '+(meals-site.food)+' food',
         detail:'The pantry holds '+site.food+' food. Current households use '+meals+' in a week. A personal food job can add supplies today.',resource:'food'};
       if(promised)return {label:'Keep '+promised.name+'’s promise',detail:promised.name+' is counting on the agreement by week '+promised.promise.dueWeek+'.',person:promised.id};
@@ -581,11 +632,11 @@
       const vacant=Object.keys(site.employers||{}).find(key=>site.employers[key].open.length);
       const hiring=vacant&&root.EarthEmployers?.view?.(site,sim.state,vacant);
       if(hiring)return {label:'Recruit a '+hiring.role.toLowerCase(),detail:hiring.detail};
-      if(sim.state.charter&&site.tech?.length<3&&sim.actions&&(!sim.state.communityLife||root.EarthCommunityLife?.isHome?.(sim.state,site))){
+      if(local&&sim.state.charter&&site.tech?.length<3&&sim.actions&&(!sim.state.communityLife||root.EarthCommunityLife?.isHome?.(sim.state,site))){
         const research=sim.actions('research').find(r=>r.id.startsWith('research:'));
         if(research)return {label:research.label,detail:research.available?research.description:research.reason};
       }
-      if(overview?.charter&&!overview.charter.met)return {label:overview.charter.name,detail:overview.charter.text};
+      if(local&&overview?.charter&&!overview.charter.met)return {label:overview.charter.name,detail:overview.charter.text};
       return {label:'Meals for '+site.population,detail:'Keep '+site.population+' residents fed. They use '+meals+' food per week and the pantry currently holds '+site.food+'.',resource:'food'};
     }
     function updateStrip(site,who){
@@ -875,7 +926,8 @@
       if(openTool(saved.pane,null,false)&&saved.pane==='stores')toolbox.get('stores')?.restore?.(saved.store);
       return true;
     }
-    return {registerTool,openTool,openTalk,openTalkChoices,close,render,scene,invalidate,notify,setObjective,setWatch,
+    return {registerTool,openTool,openTalk,meetPerson,watchPerson,openTalkChoices,close,render,scene,invalidate,notify,setObjective,setWatch,
+      observeNeed:site=>townNeed(site,site.civicInitiatives,false),
       version:()=>revision,active:()=>pane,selectPurpose,previewWeek,snapshot,restore,matches};
   }
   root.EarthStreetHUD=Object.freeze({mount});

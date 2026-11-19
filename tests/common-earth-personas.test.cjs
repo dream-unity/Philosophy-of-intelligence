@@ -176,3 +176,77 @@ test('reopening a founding preserves the previously generated names and aptitude
     assert.equal(person.bounds.music.max,ceiling);
   }
 });
+test('three neighbouring districts reserve distinct native names, roles and future porter names across a save and founding',()=>{
+  const app=runtime();
+  vm.runInContext(fs.readFileSync(path.join(root,'community-life.js'),'utf8'),app);
+  vm.runInContext(fs.readFileSync(path.join(root,'autonomy.js'),'utf8'),app);
+  const sim=town(app),s=sim.active(),p=app.EarthPersonas;
+  const districts=()=>[...sim.state.sites,...sim.state.communityLife.outposts];
+  assert.equal(districts().length,3);assert.deepEqual(s.residents.map(v=>v.name).join('/'),'Mira/Idris/Sol');
+  function allLocals(sites){
+    const slots=['steward','driver',...Array.from({length:5},(_,i)=>'walker-'+i)];
+    for(let from=0;from<9;from++)for(let to=0;to<9;to++){
+      if(Math.abs(from%3-to%3)+Math.abs(Math.floor(from/3)-Math.floor(to/3))===1)slots.push('carrier-'+from+'-'+to);
+    }
+    return sites.flatMap(site=>[...slots,...site.residents.map(r=>r.id)].map(id=>p.birthProfile(site,id)));
+  }
+  const locals=allLocals(districts()),names=locals.map(v=>v.name);
+  assert.equal(new Set(names).size,names.length,'future route hires have reserved names too');
+  for(const slot of ['walker-0','walker-1','walker-2','walker-3','walker-4','driver']){
+    const workers=districts().map(d=>p.birthProfile(d,slot));
+    assert.equal(new Set(workers.map(worker=>worker.originRole)).size,1);
+    assert.equal(new Set(workers.map(worker=>worker.workFocus.duty)).size,3,'distinct responsibilities in '+workers[0].originRole);
+  }
+  const grower=p.profile(s,s.residents[0].id);
+  assert(grower.description.includes(grower.workFocus.label.toLowerCase()));assert.equal(app.EarthAutonomy.intent(s,grower.id).activity,grower.workFocus.duty);
+  const porter=p.birthProfile(s,'carrier-0-1');assert.match(porter.workFocus.duty,/lots 1 and 2/);
+  const saved=app.CommonEarthSim.readSave(JSON.stringify(sim.state));assert(saved);
+  const again=allLocals([...saved.sites,...saved.communityLife.outposts]);
+  assert.deepEqual(again.map(v=>[v.name,v.identityKey]),locals.map(v=>[v.name,v.identityKey]));
+  const moved=sim.found({name:'Another Coast',lat:0,lon:25});assert(moved.ok,moved.message);
+  const larger=allLocals(districts()),keys=larger.map(v=>v.name);
+  assert.equal(new Set(keys).size,keys.length);
+  const original=sim.state.communityLife.profile;
+  assert.equal(p.profile(sim.active(),'steward').name,original.name);assert.equal(p.profile(sim.active(),'steward').identityKey,original.identityKey);
+  assert(app.CommonEarthSim.readSave(JSON.stringify(sim.state)));sim.destroy();
+});
+
+test('allocating a nearby founding never rerolls an old district or identities already carried between communities',()=>{
+  const app=runtime(),p=app.EarthPersonas,legacy=copy(town(app).active());delete legacy.birthNames;
+  const prior=p.birthProfile(legacy,'driver'),existing=JSON.stringify(legacy);
+  assert.equal(prior.workFocus,undefined);
+  const remote={...copy(legacy),id:'near-one',lat:legacy.lat+.2};
+  p.allocateBirthNames(remote,[legacy]);assert(remote.birthNames);
+  assert.equal(JSON.stringify(legacy),existing);assert.deepEqual(copy(p.birthProfile(copy(legacy),'driver')),copy(prior));
+  const restarted=copy(legacy);delete restarted.birthNames;p.allocateBirthNames(restarted,[legacy,remote]);
+  assert.equal(restarted.birthNames,undefined);assert.deepEqual(copy(p.birthProfile(restarted,'driver')),copy(prior));
+  assert(!p.validBirthNames({'walker-1':'A','walker-2':'A'}));assert(!p.validBirthNames({'unknown-slot':'A'}));
+});
+test('new colleagues with the same title divide actual workplace responsibilities and keep them on reopening',()=>{
+  const app=runtime();
+  vm.runInContext(fs.readFileSync(path.join(root,'autonomy.js'),'utf8'),app);
+  const sim=town(app),site=sim.active(),ids=['walker-0','walker-1','walker-2'];
+  site.population=36;site.buildings=[{kind:'hall',plot:0},{kind:'hall',plot:2}];
+  assert.equal(app.EarthCareers.openings(site,'teacher'),3);
+  site.careers={};
+  for(const id of ids)site.careers[id]={revision:1,skills:{},qualifications:{teacher:1},portfolios:{teacher:2},references:{},history:[],
+    application:{targetId:'teacher',phase:'notice',autonomous:true,dueWeek:5}};
+  const week={week:5,activeId:site.id};app.EarthCareers.tick(week,site);
+  const appointments=ids.map(id=>app.EarthCareers.work(site,id));
+  assert(appointments.every(post=>post.label==='High-school teacher'));
+  assert.equal(new Set(appointments.map(post=>post.assignment.label)).size,3);
+  assert.equal(new Set(appointments.map(post=>post.assignment.duty)).size,3);
+  for(const id of ids){
+    const job=app.EarthCareers.work(site,id),plan=app.EarthAutonomy.intent(site,id);
+    assert.equal(plan.title,job.assignment.duty);assert.equal(plan.goal,job.assignment.goal);
+    assert.equal(app.EarthCareers.work(copy(site),id).assignment.label,job.assignment.label);
+    assert(app.EarthCareers.view(week,site,id).history[0].text.includes(job.assignment.label.toLowerCase()));
+  }
+  assert(app.EarthCareers.valid(site,5));
+  const practical=ids.find(id=>app.EarthCareers.work(site,id).assignment.axis==='craft');
+  const before=app.EarthCareers.view(week,site,practical).skills.craft;
+  for(let i=0;i<26;i++){week.week++;app.EarthCareers.tick(week,site);}
+  const after=app.EarthCareers.view(week,site,practical);
+  assert.equal(after.skills.craft,before+1);assert(after.history.some(row=>row.text.includes('practical lessons assignment developed craft')));
+  assert(app.EarthCareers.valid(site,31));sim.destroy();
+});

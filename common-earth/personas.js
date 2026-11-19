@@ -19,6 +19,98 @@
     'practice-nurse':['Practice nurse','care','organisation','arranges follow-up appointments around the hours each household can actually come to the clinic','continuity of care'],
     surveyor:['Building surveyor','numeracy','craft','measures each doorway twice and asks the people using it where a repair would make the greatest difference','accessible buildings']
   };
+  // A carpenter and a joiner can hold the same contract but take charge of
+  // different parts of a job. These responsibilities are in the biography,
+  // the weekly action and the person's comparison of possible careers.
+  const assignments={
+    steward:[
+      ['Civic accounts','Check the balances proposed for the meeting','Protect funds already promised to a household','numeracy'],
+      ['Household rota','Check who can attend the next collection','Make room for a household whose work shift changed','organisation'],
+      ['Assembly minutes','Check which decisions still need a named volunteer','Give a resident an answer to last week’s question','communication']],
+    grower:[
+      ['Seedling beds','Check which seedlings are ready to move','Keep the next planting alive through the change of season','care'],
+      ['Harvest allocation','Weigh the first picking for the kitchen','Send the ripest food to households that can use it today','numeracy'],
+      ['Shared beds','Check the watering rota against the planting beds','Keep the new beds growing when a gardener is away','organisation']],
+    repairer:[
+      ['Tool calibration','Measure the worn tool against a sound fitting','Let the next crew cut a replacement to the right size','numeracy'],
+      ['Spare parts','Sort serviceable parts from damaged stock','Give a broken tool a second working life','craft'],
+      ['Public fittings','Test a loose fitting from the assembly hall','Return the fitting before the hall opens','craft']],
+    convenor:[
+      ['Evening assembly','Collect questions from households on late shifts','Bring their requests to the next meeting','communication'],
+      ['Service timetable','Compare the meeting date with the collection rota','Make room for residents who would miss the vote','organisation'],
+      ['Neighbour mediation','Record both accounts of a shared-work disagreement','Give each neighbour a choice they can act on','care']],
+    baker:[
+      ['Bread ovens','Check which batch is ready for the oven','Have loaves ready for the first collection','craft'],
+      ['Kitchen orders','Set aside the portions promised to the late shift','Keep a household meal available after the counter closes','care'],
+      ['Starter care','Check the starter before the next mixing shift','Keep tomorrow’s bake on schedule','organisation']],
+    carpenter:[
+      ['Joinery','Check an opening against the finished frame','Fit the new frame with one cut to the stored timber','numeracy'],
+      ['Furniture repair','Test the loose joints in a chair from the hall','Keep a seat in use for the next neighbourhood meeting','craft'],
+      ['Workshop teaching','Set out sound offcuts for the next apprentice','Let the learner complete a fitting without wasting a full board','communication']],
+    seedkeeper:[
+      ['Seed returns','Match returned seed to the lending record','Keep a viable sample available for the next borrower','organisation'],
+      ['Germination checks','Sort a trial packet for the growing beds','Check a seed batch before another grower relies on it','care'],
+      ['Seed drying','Check the drying trays before storing the seed','Protect the next planting from damp stock','care']],
+    courier:[
+      ['Market collections','Check the collection slips against the parcels','Deliver the outgoing orders before the exchange closes','organisation'],
+      ['Household rounds','Sort parcels by the walking round','Reach the household at the far end before the next collection','stamina'],
+      ['Route timing','Time the collection between two streets','Give the exchange a pickup window it can keep','numeracy']],
+    trader:[
+      ['Produce counter','Compare the food shelf with buyer reservations','Set aside the stocks already promised for collection','numeracy'],
+      ['Customer orders','Ask which households still need a delivery','Find a buyer for the stock that will spoil first','communication'],
+      ['Bulk bookings','Compare standing orders with incoming cargo','Keep regular deliveries within the buyers’ agreed terms','organisation']],
+    driver:[
+      ['Return loads','Pair the outgoing manifest with a return pickup','Bring the empty truck back with a useful load','organisation'],
+      ['Vehicle checks','Check the truck before the next booked run','Avoid leaving a buyer waiting for a van that cannot run','craft'],
+      ['Loading order','Arrange cargo in the order customers will receive it','Unload the first crate without shifting the whole return load','organisation']],
+    'practice-nurse':[
+      ['Clinic appointments','Arrange follow-ups around household working hours','Keep an appointment within reach of someone on a shift','care'],
+      ['Neighbourhood visits','Check the return visits on the clinic rota','Keep a promised visit when local shifts change','organisation'],
+      ['Clinic liaison','Confirm a clinic appointment with the household representative','Ensure the family knows when someone will call','communication']],
+    surveyor:[
+      ['Building access','Check access measurements at the repair opening','Fit the change to the people who use the building','numeracy'],
+      ['Repair estimates','Check the timber estimate against the span measurements','Order the amount the workshop actually needs','craft'],
+      ['Survey records','Update measurements after the crew changes a frame','Keep future repairs consistent with what was actually built','organisation']],
+    engineer:[
+      ['Design estimates','Check a drawing against the workshop material list','Keep the repair within its timber allowance','numeracy'],
+      ['Maintenance design','Test how a fitting wears under use','Give the maintenance crew a repair they can repeat','craft'],
+      ['Works coordination','Mark which street needs the first repair','Leave access open while the next crew works','organisation']],
+    mathematician:[
+      ['Demand estimates','Compare the store count with the last forecast','Reduce shortages after an unusually busy week','numeracy'],
+      ['Workshop measurement','Check the measurement assumptions on a repair','Keep the builders from ordering the wrong span','craft'],
+      ['Research teaching','Review a learner’s assumptions with them','Help a neighbour explain when an estimate will fail','communication']],
+    police:[
+      ['Neighbour liaison','Hear separate accounts of a neighbourhood complaint','Agree a follow-up each household understands','communication'],
+      ['Meeting access','Check safe access to the public meeting','Leave the approach usable for residents with a late shift','organisation'],
+      ['Community follow-up','Return to a household after a mediated dispute','Learn whether the agreed repair actually happened','care']],
+    musician:[
+      ['Ensemble rehearsal','Practise the ensemble’s entrance cues','Help new players enter together at the next rehearsal','music'],
+      ['Neighbourhood concert','Fit a short programme to the hall booking','Have the set ready when late-shift neighbours arrive','organisation'],
+      ['Beginner rehearsals','Play a difficult phrase for a new musician','Let a learner join the next ensemble session','communication']],
+    teacher:[
+      ['Practical lessons','Set out workshop examples for the next lesson','Give learners a task they can check themselves','craft'],
+      ['Tutorials','Listen to a learner explain a difficult step','Find the part of the explanation that needs to change','communication'],
+      ['Attendance and access','Match tutorial times with household care shifts','Keep evening learners in the course','organisation']],
+    geneticist:[
+      ['Seed archive','Compare the seed return with the planting record','Keep track of which varieties grew well here','organisation'],
+      ['Field observations','Record differences among the trial beds','Give the growers observations from the same season','numeracy'],
+      ['Grower liaison','Ask growers how they tended the trial beds','Read the harvest alongside the conditions people observed','communication']],
+    cook:[
+      ['Pantry menu','Plan a menu around produce that will spoil first','Feed households before the short-life stock is lost','organisation'],
+      ['Meal service','Prepare portions for the next kitchen collection','Keep the early and late shifts equally supplied','craft'],
+      ['Household orders','Check who needs a meal collected on their behalf','Reach residents who cannot visit the kitchen','care']],
+    refuse:[
+      ['Collection route','Check which collection points need the next run','Clear shared bins before the busiest market shift','organisation'],
+      ['Material recovery','Sort reusable containers from the collection','Return sound material to the workshop','craft'],
+      ['Household collections','Review bins left behind on the last round','Arrange a collection a resident can actually use','communication']]
+  };
+  assignments.nurse=assignments['practice-nurse'];
+  assignments.gardener=assignments.grower;
+  const responsibilities=Object.fromEntries(Object.entries(assignments).map(([key,rows])=>
+    [key,Object.freeze(rows.map(([label,duty,goal,axis])=>Object.freeze({label,duty,goal,axis})))]));
+  const dutiesFor=key=>Object.hasOwn(responsibilities,key)?responsibilities[key]:null;
+  const validWorkFocus=focus=>focus!=null&&typeof focus==='object'&&axes.includes(focus.axis)&&
+    ['label','duty','goal'].every(key=>typeof focus[key]==='string'&&focus[key].length>0&&focus[key].length<=180);
   // An outside interest can reveal a very different ability from a person's day job.
   const pastimes=[
     ['music','singing in a small choir','I learn a new harmony by singing it beside someone who knows the part.'],
@@ -109,7 +201,7 @@
     // Forecasts, save checks and other tabs use detached site objects. Reuse only
     // immutable birth profiles; the live roster and jobs are looked up separately.
     const fingerprint=JSON.stringify([site.id,site.foundingRevision,site.lat,site.lon,region,
-      pupils.map(p=>[p.id,p.slot,p.name,p.role])]);
+      pupils.map(p=>[p.id,p.slot,p.name,p.role]),site.birthNames,site.workRotation]);
     const entry=foundings.get(fingerprint);
     if(entry){
       entry.seen=misses;
@@ -151,14 +243,68 @@
       names.add(candidate);
       return candidate;
     }
-    baseSlots.forEach(([id,key,kind],index)=>slots.set(id,{id,key,kind,ordinal:index,name:nextName(index)}));
+    baseSlots.forEach(([id,key,kind],index)=>{
+      const generated=nextName(index),name=site.birthNames&&Object.hasOwn(site.birthNames,id)?site.birthNames[id]:generated;
+      slots.set(id,{id,key,kind,ordinal:index,name});
+    });
     pupils.forEach((person,index)=>{
       const slot=Number.isInteger(person.slot)?person.slot:index;
       const key=['grower','repairer','convenor'][slot]||'steward';
       slots.set(person.id,{id:person.id,name:person.name,key,kind:'resident',ordinal:baseSlots.length+slot,originRole:person.role});
     });
-    return {seed,siteId:site.id,region,slots,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
+    return {seed,siteId:site.id,region,slots,hasAssignments:site.birthNames!=null,workRotation:site.workRotation,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
       musician:'walker-'+(hash(seed+'performer')%5)};
+  }
+  const families=names=>[...new Set(names.map(name=>name.slice(name.indexOf(' ')+1)))];
+  function allocateBirthNames(site,districts){
+    const existing=districts.find(s=>s.id===site.id);
+    if(existing){
+      // Restarting an existing district keeps its native workers, including
+      // those whose names were generated before names were reserved globally.
+      if(existing.birthNames)site.birthNames={...existing.birthNames};
+      if(existing.workRotation!=null)site.workRotation=existing.workRotation;
+      return;
+    }
+    const used=new Set();
+    for(const other of districts){
+      for(const slot of registry(other).slots.values())used.add(slot.name);
+      for(const g of Object.values(other.communityLife?.people||{}))if(g?.profile)used.add(g.profile.name);
+    }
+    const seed=site.id+'|'+site.lat+'|'+site.lon;
+    const local=nameBanks.find(([pattern])=>pattern.test(site.region||''))?.[1]||[];
+    const surnames=shuffled(families([...local,...generalNames]),seed+'family');
+    const middleNames=shuffled([...new Set([...local,...generalNames].map(n=>n.split(' ')[0]))],seed+'middle');
+    function reserve(original,id){
+      if(!used.has(original)){used.add(original);return original;}
+      const first=original.split(' ')[0],offset=hash(seed+'|'+id)%surnames.length;
+      for(let serial=0;;serial++){
+        const parts=[first];
+        for(let number=serial;number>0;number=Math.floor((number-1)/middleNames.length)){
+          parts.push(middleNames[(number-1)%middleNames.length]);
+        }
+        const given=parts.join(' ');
+        for(let i=0;i<surnames.length;i++){
+          const next=given+' '+surnames[(offset+i)%surnames.length];
+          if(!used.has(next)){used.add(next);return next;}
+        }
+      }
+    }
+    site.birthNames={};
+    site.workRotation=districts.filter(other=>other.region===site.region).length%3;
+    for(const member of site.residents)member.name=reserve(member.name,member.id);
+    const founding=makeRegistry(site,site.region,site.residents);
+    for(const [id] of baseSlots){
+      const original=founding.slots.get(id).name,newName=reserve(original,id);
+      if(newName!==original)site.birthNames[id]=newName;
+    }
+  }
+  const nameSlots=new Set(baseSlots.map(([id])=>id));
+  function validBirthNames(names){
+    if(names===undefined)return true;
+    if(!names||typeof names!=='object'||Array.isArray(names))return false;
+    const entries=Object.entries(names);
+    return entries.length<=nameSlots.size&&entries.every(([id,name])=>nameSlots.has(id)&&typeof name==='string'&&name.length>0&&name.length<=100)&&
+      new Set(Object.values(names)).size===entries.length;
   }
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
   function makeProfile(reg,slot){
@@ -209,6 +355,22 @@
     const outsideWork=key==='repairer'?'I enjoy '+hobbyName+'. I can work out a gear ratio in my head, but I have to learn a tune one phrase at a time.':saying;
     const person={id,name,kind,identityKey:identityKey(reg.siteId,id),birthCommunityId:reg.siteId,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
       strengths,traits:temperament,aptitudes:Object.freeze(skills),bounds:Object.freeze(bounds),outsideWork};
+    if(reg.hasAssignments){
+      let task;
+      if(key==='carrier'){
+        const [,from,to]=id.split('-').map(Number);
+        task=['Supply run '+(from+1)+' to '+(to+1),'Check the load for the run between lots '+(from+1)+' and '+(to+1),'Keep the next parcel on the agreed route','organisation'];
+      }else{
+        const options=assignments[key];
+        const index=reg.workRotation!=null?(hash(reg.region+'|'+key)+reg.workRotation)%options.length:roll('working-responsibility',0,options.length-1);
+        task=options[index];
+      }
+      if(task){
+        const [label,duty,goal,axis]=task;
+        person.workFocus=Object.freeze({label,duty,goal,axis});
+        person.description=description+' '+name+' took responsibility for '+label.toLowerCase()+' in their first team.';
+      }
+    }
     if(key==='practice-nurse')person.qualificationIds=Object.freeze(['practice-nurse','nurse']);
     if(key==='surveyor')person.qualificationIds=Object.freeze(['surveyor']);
     if(root.EarthDreams)person.ambitionId=root.EarthDreams.preference(person);
@@ -272,5 +434,5 @@
     const ids=['steward',...(site.residents||[]).map(p=>p.id),...walkerRoles.map((_,i)=>'walker-'+i),'driver',...porterIds(site)];
     return ids.filter(id=>root.EarthCommunityLife?.present?.(site,id)!==false).map(id=>profile(site,id)).filter(Boolean);
   }
-  root.EarthPersonas=Object.freeze({axes,traits,profile,birthProfile,householdProfile,identityKey,list,retainsPorter,porterIds,isPorterId});
+  root.EarthPersonas=Object.freeze({axes,traits,profile,birthProfile,householdProfile,identityKey,allocateBirthNames,validBirthNames,dutiesFor,validWorkFocus,list,retainsPorter,porterIds,isPorterId});
 })(typeof window==='undefined'?globalThis:window);

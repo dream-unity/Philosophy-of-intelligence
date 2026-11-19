@@ -283,3 +283,47 @@ test('one renewable lake ground supplies net crews and residents while an alread
   restored.destroy();sim.destroy();
   const sea=open({lat:-16,lon:88,name:'Open water',water:true});assert.equal(sea.c.EarthFisheries.ground(sea.s,1).capacity,22);sea.sim.destroy();
 });
+
+test('repeated stripping depresses growth; actual compost restores an open field or a three-week closure binds every extractor',()=>{
+  const t=open(),{s,w,c,sim}=t;
+  for(let i=0;i<3;i++)ok(t.act('gatherLot','fruit'));
+  w.week++;ok(t.act('gatherLot','fruit'));assert.equal(row(t,'fruit').pressureUntil,w.week+6);
+  assert.equal(row(t,'fruit').renew,1);
+  const expired=raw(w);expired.week+=6;
+  c.EarthResources.ageStores(expired,expired.sites[0]);assert.ok(expired.sites[0].resourceLedger.compost>0);
+  const before=row(t,'fruit').owned;ok(t.act('compostLot','fruit'));assert.equal(row(t,'fruit').owned,before-1);
+  assert.equal(s.resourceLedger.compost,1);ok(t.act('dressSoil','fruit'));assert.equal(s.resourceLedger.compost,0);
+  assert.equal(row(t,'fruit').renew,3);assert.equal(row(t,'fruit').reopens,null);w.week++;
+  assert.equal(row(t,'fruit').standing,3);ok(t.act('gatherLot','fruit'));assert.equal(row(t,'fruit').standing,1);
+  ok(t.act('gatherLot','timber'));const reviewed=c.EarthResources.projectCrop(w,s,'person','roots');
+  ok(t.act('gatherLot','roots'));const shelf=row(t,'roots').shelf,held=row(t,'roots').owned;
+  ok(t.act('restPatch','roots'));const start=w.week;
+  no(t.act('gatherLot','roots'));assert.notEqual(c.EarthResources.projectCrop(w,s,'person','roots')?.id,'roots');
+  assert.equal(c.EarthResources.harvestForProject(w,s,reviewed,1,true).amount,0,'an old project cannot harvest behind the closed gate');
+  assert.deepEqual([row(t,'roots').shelf,row(t,'roots').owned],[shelf,held]);
+  for(let i=1;i<=2;i++){w.week++;no(t.act('gatherLot','roots'));assert.equal(row(t,'roots').reopens,start+3);}
+  w.week++;ok(t.act('gatherLot','roots'));no(t.act('restPatch','roots'));
+  assert.equal(t.current().local.options.some(o=>o.good==='stone'&&o.action==='restPatch'),false);
+  assert.ok(c.CommonEarthSim.readSave(JSON.stringify(w)));sim.destroy();
+});
+
+test('a willing grower takes a real session to protect worn beds while the pantry can cover the temporary closure',()=>{
+  const t=open(),{s,w,c}=t;
+  for(let i=0;i<3;i++)ok(t.act('gatherLot','fruit'));
+  w.week++;ok(t.act('gatherLot','fruit'));s.food=18;
+  const self={free:true,id:s.residents[0].id,traits:{initiative:70,patience:75},row:{energy:5},profile:{role:'Grower'}};
+  const plan=c.EarthMarket.resourceOpportunity(w,s,self);assert.equal(plan.activity,'tendPatch');
+  const result=c.EarthMarket.resourceWork(w,s,self,plan);assert.equal(result.resource,'fruit');
+  assert.equal(row(t,'fruit').reopens,w.week+3);assert.equal(c.EarthMarket.resourceOpportunity(w,s,self),null);
+  assert.ok(c.CommonEarthSim.readSave(JSON.stringify(w)));t.sim.destroy();
+});
+
+test('dryland millet and traded water support irrigation while shellfish beds require a reachable coast or constructed marine dock',()=>{
+  const t=open({lat:24,lon:27,name:'Dryland'}),{sim,s,w,c}=t;
+  assert.equal(row(t,'millet').local,true);assert.equal(row(t,'water').local,false);assert.equal(row(t,'shellfish'),undefined);
+  ok(t.act('gatherLot','millet'));no(t.act('irrigate','millet'));ok(t.act('buyLot','water'));
+  const wallet=s.funds;ok(t.act('irrigate','millet'));assert.equal(row(t,'water').owned,0);assert.equal(s.funds,wallet);
+  assert.equal(row(t,'millet').renew,3);assert.equal(row(t,'millet').reopens,null);assert.ok(c.CommonEarthSim.readSave(JSON.stringify(w)));sim.destroy();
+  const sea=open({lat:-12,lon:80,name:'Open ocean',water:true});assert.equal(row(sea,'shellfish'),undefined);
+  sea.s.buildings.push({kind:'fishingDock',plot:3});assert.equal(row(sea,'shellfish').local,true);sea.sim.destroy();
+});

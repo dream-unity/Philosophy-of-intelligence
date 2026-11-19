@@ -88,11 +88,18 @@ body.street-expanded[data-map-view="street"] .scene-tools #street-open-actions {
 }
 .street-hud[data-talk-dock="top"] .scene-card { bottom:auto; top:54px; }
 .street-hud > .scene-speech:not([hidden]) {
-  position:absolute; left:0; top:0; z-index:5; margin:0; max-width:min(204px,47%); padding:6px 8px;
+  position:absolute; left:0; top:0; z-index:5; margin:0; max-width:min(var(--speech-width,290px),72%); padding:7px 10px; box-sizing:border-box;
   border:1px solid #504c36; border-radius:6px; background:#fff3cf; color:#252a22;
-  box-shadow:0 2px 5px #15231f38; pointer-events:none; font:560 12px/1.3 var(--sans,system-ui,sans-serif);
+  box-shadow:0 2px 5px #15231f38; pointer-events:none; font:550 .9rem/1.34 var(--sans,system-ui,sans-serif);
 }
-.scene-speech span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+#scene-speech-words { display:block; overflow-wrap:anywhere; }
+#scene-speech-kind { display:block; color:#485447; font-size:.78rem; font-weight:650; }
+#scene-speech-pages { display:flex; align-items:center; justify-content:space-between; gap:9px; margin-top:3px; pointer-events:auto; }
+#scene-speech-pages button { border:0; border-radius:3px; padding:2px 6px; min-height:32px; color:#273f36; background:transparent; font:650 .84rem/1.1 var(--sans,system-ui,sans-serif); text-decoration:underline; cursor:pointer; }
+#scene-speech-pages button:disabled { visibility:hidden; }
+#scene-speech-pages button:focus-visible { outline:2px solid #635322; }
+#scene-speech-count { font-size:.78rem; color:#465346; font-variant-numeric:tabular-nums; }
+@media (any-pointer:coarse){#scene-speech-pages button { min-height:44px; min-width:44px; }}
 .scene-speech::after { content:""; position:absolute; left:calc(var(--speech-tip,50%) - 4px); bottom:-5px; width:7px; height:7px; background:#fff3cf; border-right:1px solid #504c36; border-bottom:1px solid #504c36; transform:rotate(45deg); }
 @media (max-height:450px) and (orientation:landscape) {
   .street-hud[data-talk-dock="left"] .scene-card,.street-hud[data-talk-dock="right"] .scene-card { top:5px; bottom:5px; max-height:calc(100% - 10px); }

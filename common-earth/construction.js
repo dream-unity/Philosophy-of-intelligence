@@ -43,6 +43,12 @@
   const hasPreference=id=>preferences.some(p=>p.id===id);
   const table=scope=>scope==='city'?cityWork:streetWork;
 
+  function privateHomeSite(plot) {
+    if(!Number.isInteger(plot)||plot<0||plot>=6)return null;
+    const slot=plot%3,[bx,by]=root.EarthShifts?.district?.homes?.[slot]||homeBlocks[slot];
+    const x=bx*6+3+(plot<3?-1.80:1.80),y=by*6+3;
+    return {type:'privateHome',homePlot:plot,label:'Courtyard '+(plot+1),x,y:y+2.24,objectX:x,objectY:y+1.02};
+  }
   function streetPoint(job) {
     if(job.scope==='city')return point(...gateways[job.precinct]);
     return doorAt(job.plot%3,Math.floor(job.plot/3));
@@ -107,7 +113,7 @@
   function commitment(site,world,person,includePlayer=true) {
     if(root.EarthCommunityLife?.present?.(site,person.id)===false)return ['Away from the district','This resident is visiting or has moved to another community.','away'];
     if(root.EarthCommunityLife?.residency?.(site,person.id)==='visitor')return ['Inspecting the district','This visitor is meeting households before deciding where to live.','inspect'];
-    if(includePlayer&&site.agency?.actor===person.id)return ['Under your control','Working and travelling with your direction.'];
+    if(includePlayer&&(!world?.activeId||world.activeId===site.id)&&site.agency?.actor===person.id)return ['Under your control','Working and travelling with your direction.'];
     if(site.shift?.residentId===person.id)return ['Resident companion','Spending the workday with you.'];
     const relief=root.EarthCareers?.specialistShift?.(site,person.id,world?.week);
     if(relief)return [relief.label+' · relief','Covering the booked round at '+relief.employer+'.','specialist',relief];
@@ -231,21 +237,30 @@
   }
   function travelPlan(site,id,week){
     const tour=root.EarthCommunityLife?.travelIntent?.(site,id);if(!tour)return null;
-    const kind=tour.kind==='care'?'pantryCover':site.communityLife?.excursions?.[id]?'departure':'inspect';
+    const kind=tour.kind==='care'?'pantryCover':tour.kind==='freight'?'freight':site.communityLife?.excursions?.[id]?'departure':'inspect';
     return {...tour,week:week??tour.week,kind,label:tour.activity,agreedDuty:kind!=='inspect'};
   }
   function handoverDuty(intent){
     return (intent?.kind==='commitment'||intent?.kind==='cover')&&(intent.handoverScope==='admin'||intent.handoverScope==='qualified');
   }
-  function reservedHandover(site,world,person,state){
+  function placementDuty(intent){
+    return Boolean(intent?.placementJob&&intent.target&&
+      (intent.placementSide==='mentor'&&intent.kind==='commitment'||intent.placementSide==='learner'&&intent.kind==='learn'));
+  }
+  function placementStop(site,intent){
+    if(!site?.residents?.length||!placementDuty(intent))return null;
+    const place=chosenPlace(site,{...site.residents[0],slot:1},intent.venue);
+    return {...place,x:place.x+(intent.placementSide==='mentor'?-.28:.28)};
+  }
+  function reservedWork(site,world,person,state){
     const scheduled=site.autonomy?.people?.[person.id]?.history?.[0];
-    return state.preference==='auto'&&scheduled?.week===world?.week&&handoverDuty(scheduled)&&
+    return state.preference==='auto'&&scheduled?.week===world?.week&&(handoverDuty(scheduled)||placementDuty(scheduled))&&
       (state.outingWeek!==scheduled.week||state.outingLeft>0);
   }
   function initiative(site,world,person,state,tour=travelPlan(site,person.id,world?.week)){
     const chosen=tour||root.EarthAutonomy?.intent(site,person.id);
     const signed=chosen?.errand===true&&root.EarthNeighbourErrands?.working?.(site,world?.week)?.some(row=>row.actorId===person.id||row.targetId===person.id);
-    return state.preference==='auto' && chosen?.week===world?.week && (tour||outings.has(chosen?.kind)||chosen?.kind==='commitment'&&(chosen.civic===true||signed||handoverDuty(chosen))) &&
+    return state.preference==='auto' && chosen?.week===world?.week && (tour||outings.has(chosen?.kind)||chosen?.kind==='commitment'&&(chosen.civic===true||signed||handoverDuty(chosen)||placementDuty(chosen))) &&
       (signed||state.outingWeek!==chosen.week||state.outingLeft>0)?chosen:null;
   }
   function errandStop(site,row,id){
@@ -261,7 +276,7 @@
   }
   function harvestQuay(site,intent){
     const resource=foodResource(site,intent);
-    if(resource!=='fish'&&resource!=='kelp')return null;
+    if(resource!=='fish'&&resource!=='kelp'&&resource!=='shellfish')return null;
     const water=root.CommonEarthSim?.waterfront?.(site)||(site.water?'ocean':site.coastal?'coast':null);
     if(!water)return null;
     const x=site.buildings?.some(b=>b.kind==='fishingDock')?6.5:water==='ocean'?3:11.4;
@@ -291,7 +306,7 @@
     const workers=site.residents.map(person=>{
       const state=member(site,person),duty=commitment(site,world,person),pref=state.preference;
       const fixed=roles.includes(pref),tour=travelPlan(site,person.id,world?.week);
-      const handover=reservedHandover(site,world,person,state);
+      const handover=reservedWork(site,world,person,state);
       const heldJob=pref==='build'&&state.preferredJobId?orders.find(j=>j.id===state.preferredJobId&&j.paused):null;
       const career=root.EarthCareers?.work(site,person.id),regular=regularWork(site,person,state,career);
       const occupation=regular.occupation,physicalDuty=duty?.[2]||null;
@@ -362,7 +377,7 @@
         const deliver=shipment&&w.state.outingWeek===outing.week&&w.state.outingLeft<=3;
         w.outing=shipment?{...outing,shipmentPhase:deliver?'unload':'pickup',resource:shipment.crop,amount:shipment.amount}:outing;
         w.workplace=deliver?pantryStop():civicJob?{type:'construction',jobId:civicJob.id,plot:civicJob.plot,label:civicJob.name,...station(civicJob,w.person.slot)}:
-          row?errandStop(site,row,w.person.id):harvestQuay(site,outing)||chosenPlace(site,w.person,outing.venue,outing.target,outing.kind);
+          row?errandStop(site,row,w.person.id):(outing.activity==='buildHome'&&privateHomeSite(outing.homePlot))||placementStop(site,outing)||harvestQuay(site,outing)||chosenPlace(site,w.person,outing.venue,outing.target,outing.kind);
         w.route=commuteRoute(w.state,w.workplace);w.activity=w.route.length?'commuting':'working';
         w.reason=outing.label+(w.route.length?' · going to ':' · at ')+w.workplace.label+'.';
         continue;
@@ -452,6 +467,7 @@
       occupation:w.occupation,usualRole:w.usualRole,workplace:w.workplace,physicalDuty:w.physicalDuty,specialistId:w.specialistId||null,relief:w.relief||null,
       preferredJobId:w.state.preferredJobId,jobId:(w.job||w.restJob)?.id||null,area:(w.job||w.restJob)?.scope||null,activity:w.activity,
       initiative:w.outing||null,
+      completedOuting:!w.outing&&w.state.outingWeek===world?.week&&w.state.outingLeft===0,
       x:w.state.position.x,y:w.state.position.y,travelling:Boolean(w.physicalDuty&&w.route.length)||['travelling','returning','commuting'].includes(w.activity),
       travelLeft:travelSeconds(w.state.position,w.route),restLeft:w.state.rest,weeklyDelta:weeklyDelta(w),preferenceDelta:weeklyDelta(w,true)
     }))};
@@ -618,7 +634,7 @@
       if(duty)return Boolean(duty[2]&&duty[2]!=='away'&&distance(s.position,dutyWorkplace(site,p,duty[2],duty[3]))>.001);
       const career=root.EarthCareers?.work(site,p.id),regular=regularWork(site,p,s,career);
       const tour=travelPlan(site,p.id,world?.week);
-      if((tour||reservedHandover(site,world,p,s)||!localPriority(site,roles.indexOf(regular.occupation)))&&initiative(site,world,p,s,tour))return true;
+      if((tour||reservedWork(site,world,p,s)||!localPriority(site,roles.indexOf(regular.occupation)))&&initiative(site,world,p,s,tour))return true;
       return Boolean((members||career)&&distance(s.position,regular.place)>.001);
     });
   }
@@ -681,7 +697,7 @@
             if(state.outingWeek!==w.outing.week){
               state.outingWeek=w.outing.week;
               const patience=root.EarthPersonas?.profile(site,w.person.id)?.traits?.patience??50;
-              state.outingLeft=w.outing.shipmentPhase?6:w.outing.kind==='visit'||w.outing.kind==='host'?60:4+Math.round(patience*.08);
+              state.outingLeft=w.outing.shipmentPhase?6:w.outing.kind==='visit'||w.outing.kind==='host'||placementDuty(w.outing)?60:4+Math.round(patience*.08);
             }
             state.outingLeft=Math.max(0,state.outingLeft-1);stepped=true;
           }
@@ -704,5 +720,5 @@
     }
     return {ok:true,changed,completed};
   }
-  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,errandStop,travelPlan,handoverDuty,foodResource,harvestQuay,projectShipment,pantryStop,assignedDuty,releaseFromShift,weeklyAdjustment,needsTime,clockOrders});
+  root.EarthConstruction=Object.freeze({start,advance,preview,view,valid,cancel,setPreference,setPaused,workerRole,streetPoint,privateHomeSite,errandStop,placementStop,placementDuty,travelPlan,handoverDuty,foodResource,harvestQuay,projectShipment,pantryStop,assignedDuty,releaseFromShift,weeklyAdjustment,needsTime,clockOrders});
 })(typeof window==='undefined'?globalThis:window);

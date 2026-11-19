@@ -7,8 +7,9 @@
     let timer=null,last=null,orders=null,inFlight=false,closed=false,leftPage=false;
     const now=()=>Math.round(root.performance.timeOrigin+root.performance.now());
     const interval=1000,maxBatch=15*interval;
-    const hasWork=()=>sim.state.sites.some(site=>!sim.worksiteLoadIssue?.(site) && (root.EarthConstruction?.needsTime?.(site,sim.state)??site.construction?.length));
-    const workOrders=()=>JSON.stringify(sim.state.sites.map(site=>root.EarthConstruction?.clockOrders?.(site,sim.state)));
+    const districts=()=>root.CommonEarthSim?.constructionDistricts?.(sim.state)||sim.state.sites;
+    const hasWork=()=>districts().some(site=>!sim.worksiteLoadIssue?.(site) && (root.EarthConstruction?.needsTime?.(site,sim.state)??site.construction?.length));
+    const workOrders=()=>JSON.stringify(districts().map(site=>root.EarthConstruction?.clockOrders?.(site,sim.state)));
     function stopTimer(){
       if(timer!==null)root.clearTimeout(timer);
       timer=null;last=null;orders=null;

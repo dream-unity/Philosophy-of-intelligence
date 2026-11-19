@@ -15,6 +15,10 @@
     workshop: {sheet:'civic', slot:2, width:5.00, front:1.22}
   };
   const harbour = Object.fromEntries(Object.entries(civic).map(([kind,art])=>[kind,{...art,sheet:'harbour'}]));
+  // The roof lines in each atlas slot start at a different height. Keep a
+  // transparent filtering margin when submitting its visible rows.
+  const roofRows={temperate:[70,51,81],tropical:[95,132,134],civic:[101,92,116],timber:[74,71,154],harbour:[96,104,109],
+    coastal:[37,21,110],courtyard:[124,54,105],australian:[109,86,130],marine:[80,71,137]};
   const homes = new Map();
   for (const name of ['marine','coastal','temperate','timber','courtyard','australian','tropical']) {
     homes.set(name, [4.76,4.83,4.86].map((width,slot)=>({sheet:name,slot,width,front:1.16})));
@@ -86,7 +90,8 @@
     const scale = art.width*unit/inkWidth;
     const x = sx-cellWidth*.5*scale;
     const y = sy+art.front*unit-groundRow*scale;
-    ctx.drawImage(sheet.image,art.slot*cellWidth,0,cellWidth,cellHeight,x,y,cellWidth*scale,cellHeight*scale);
+    const top=roofRows[art.sheet][art.slot],left=3,w=354,h=461-top;
+    ctx.drawImage(sheet.image,art.slot*cellWidth+left,top,w,h,x+left*scale,y+top*scale,w*scale,h*scale);
     return true;
   }
 

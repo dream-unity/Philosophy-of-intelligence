@@ -7,7 +7,7 @@
     if(!section||!root.EarthMarket)return null;
     const quantity=root.EarthMarket.quantity;
     const doc=section.ownerDocument,body=section.querySelector('[data-market-content]')||section;
-    let generation=0,key='',busy=null,trip=null,feedback='',currentSite='',tab='trade',packAt='market',cratesOpen=false,selectedCrate=null,selectedResource=null;
+    let generation=0,key='',busy=null,trip=null,feedback='',currentSite='',tab='trade',packAt='market',cratesOpen=false,selectedCrate=null,selectedResource=null,selectedWare=null;
     const restricted=()=>root.EarthCommunityLife?.permission?.(sim.state,sim.active(),'exchange',[])||'';
     function el(tag,text,cls){
       const n=doc.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;
@@ -18,7 +18,7 @@
     }
     function visible(){return Boolean(!doc.hidden&&!section.closest('[hidden]')&&street());}
     function identity(site){return [site.id,site.foundingRevision||0,site.lat,site.lon].join('/');}
-    function invalidate(){generation++;key='';trip=null;busy=null;feedback='';currentSite='';tab='trade';packAt='market';cratesOpen=false;selectedCrate=null;selectedResource=null;}
+    function invalidate(){generation++;key='';trip=null;busy=null;feedback='';currentSite='';tab='trade';packAt='market';cratesOpen=false;selectedCrate=null;selectedResource=null;selectedWare=null;}
     doc.addEventListener('visibilitychange',()=>{if(doc.hidden)invalidate();});
     function area(name){tab=name;trip=null;generation++;key='';feedback='';render();}
     function show(message){feedback=message;key='';render();}
@@ -28,8 +28,8 @@
         if(action==='check')return 'Walking to '+station+' for the stock count.';
         if(action==='finish')return 'Returning to '+station+' to collect your pay.';
         const purpose={start:'book your paid shift',cancel:'return the wage advance',buy:'buy '+o.good+' for the town',
-          donate:'add to the household food fund',household:'buy food with the household fund'};
-        return moving+' to '+station+' to '+(purpose[action]||'review your account')+'.';
+          donate:'add to the household food fund',household:'buy food with the household fund',makeWare:'make and consign this piece',buyWare:'collect the owner’s offered piece'};
+        return moving+' to '+station+' to '+(purpose[action]||(action==='buildHome'?'work on your home':action==='buyHome'?'record your new deed':'review your account'))+'.';
       }
       if(kind==='provision')return moving+' to '+station+' to '+({pack:'pack a provision crate',open:'open the stored crate',
         reserve:'reserve the crate for households',hold:'hold the crate in storage'}[action]||'handle the crate')+'.';
@@ -49,13 +49,13 @@
       if(resource)request.resourceSerial=option.resourceSerial;
       if(provision){if(option.crateId!=null)request.crateId=option.crateId;}
       else if(!purse){request.good=option.good;request.price=option.price;}
-      const local=street(),phase=generation,ref=purse||resource?option.venue:{type:'market'},workplace=ref.type==='workplace';
+      const local=street(),phase=generation,ref=purse||resource?option.venue:{type:'market'},workplace=ref.type==='workplace',privateHome=ref.type==='privateHome';
       if((provision||purse||workplace)&&local.getState?.().mode&&local.getState().mode!=='walk'){
         show('Come ashore or park and step out '+(workplace?'to work at the '+ref.venue+'.':purse?'to handle personal work or funds.':'to handle a provision crate.'));return;
       }
-      const station=resource?option.station:quay?'the waterfront quay':ref.type==='resident'?(view.shift?.clerkName||
+      const station=privateHome?'courtyard '+(ref.plot+1):resource?option.station:quay?'the waterfront quay':ref.type==='resident'?(view.shift?.clerkName||
         sim.active().residents.find(p=>p.id===ref.residentId)?.name||'the shift clerk'):'the exchange counter';
-      const position=()=>quay?quayProof?.():workplace?local.venueProof?.(ref.venue,view.actorId):local.meeting(ref,true);
+      const position=()=>privateHome?local.privateHomeProof?.(ref.plot):quay?quayProof?.():workplace?local.venueProof?.(ref.venue,view.actorId):local.meeting(ref,true);
       const pending={week:view.week,actorId:view.actorId};trip=pending;
       const present=()=>visible()&&phase===generation&&street()===local&&sim.active()?.id===view.siteId&&
         (sim.active()?.foundingRevision||0)===view.generation&&sim.state.week===view.week&&
@@ -77,7 +77,7 @@
         }finally{if(busy===operation)busy=null;}
       }
       if(position()){commit();return;}
-      const started=quay?meetQuay?.(commit):workplace?local.focusVenue?.(ref.venue,view.actorId,commit):meet?.(ref,station,commit);
+      const started=privateHome?local.focusPrivateHome?.(ref.plot,commit):quay?meetQuay?.(commit):workplace?local.focusVenue?.(ref.venue,view.actorId,commit):meet?.(ref,station,commit);
       if(started===false){trip=null;show('Reach '+station+' to complete this action.');}
       else if(trip===pending)show(resource?'Travelling to '+station+' to '+option.title.toLowerCase()+'.':travelMessage(kind,option,station,local.getState?.().mode));
     }
@@ -129,6 +129,7 @@
       if(!local)return box;
       box.append(el('h4',local.habitat+' · '+local.season),
         el('p',local.foodSources+'. '+m.rows[0].free+' food ready for '+local.mealNeed+' household shares this week.','market-help'));
+      if(local.compost||local.loss)box.append(el('p','Compost store · '+(local.compost||0)+' of '+local.compostLimit+' soil dressings. Spoiled district produce can return to a growing bed.','market-help'));
       if(local.loss)box.append(el('p','Week '+m.week+' · '+local.loss+' spoiled in the district bins.','market-reason'));
       if(local.fishing){
         const last=sim.active()?.provisions?.landings,sea=el('section',null,'market-good');
@@ -159,9 +160,12 @@
       const titleBox=el('section',null,'market-resource-detail');
       titleBox.append(el('h4',current.name+' · '+current.family));
       const source=current.local?'Available at the '+current.source+' · '+current.standing+' of '+current.cap+' '+current.unit+'. '+
-        (current.finite?'The deposit is finite.':current.renew?'It recovers up to '+current.renew+' each week this season.':'It will regrow when the season changes.'):
+        (current.finite?'The deposit is finite.':current.renew?'It can recover up to '+current.renew+' next week.':'It will regrow when the season changes.'):
         'Regional suppliers carry this good. It has no local collection site.';
       titleBox.append(el('p',source+' '+current.owned+' of '+local.binLimit+' district storage spaces occupied.','market-help'));
+      if(current.reopens)titleBox.append(el('p','Closed for recovery until week '+current.reopens+'. District crews and local suppliers use another source.','market-reason'));
+      if(current.caredThrough)titleBox.append(el('p','Aftercare improves weekly recovery through week '+current.caredThrough+'.','market-help'));
+      else if(current.pressureUntil)titleBox.append(el('p','Repeated depletion has slowed regrowth through week '+current.pressureUntil+'. Rest the patch or dress suitable soil with compost.','market-reason'));
       if(current.storageWeeks){
         const bin=current.binDate?' Cook or sell the oldest district lot before week '+current.binDate+'.':'';
         const stall=current.stallDate?' The oldest stall lot keeps until the start of week '+current.stallDate+'.':'';
@@ -174,10 +178,16 @@
         if(op.reason)b.title=op.reason;row.append(b);return b;
       }
       const moves=local.options.filter(op=>op.good===current.id&&op.action!=='makeBatch');
-      for(const op of moves)addOption(actions,op);
+      const careActions=moves.filter(o=>['restPatch','dressSoil','irrigate','compostLot'].includes(o.action));
+      for(const op of moves.filter(o=>!careActions.includes(o)))addOption(actions,op);
       titleBox.append(actions);
       const collection=moves.find(o=>o.action==='gatherLot');
       if(collection)titleBox.append(el('p',collection.available?'Collection point · '+collection.station:collection.reason,'market-help'));
+      if(careActions.length){
+        const care=el('details'),summary=el('summary','Care for this resource');care.append(summary);
+        for(const op of careActions){const row=el('div',null,'market-provision-action');addOption(row,op);row.append(el('p',op.reason||op.detail,'market-help'));care.append(row);}
+        titleBox.append(care);
+      }
       const recipes=local.recipes.filter(op=>op.inputs?.includes(current.id));
       for(const op of recipes){
         const row=el('div',null,'market-recipe'),info=el('div');
@@ -248,13 +258,69 @@
       }
       return box;
     }
+    function shopsPage(){
+      const p=sim.purseView?.(),box=el('div',null,'market-page market-shops');
+      if(!p)return box;
+      box.append(el('h4','Resident shops'),el('p',p.name+' · '+quantity('funds',p.balance)+' in your purse. '+(p.stalls?.length||0)+' of '+p.stallCapacity+' stands occupied.','market-help'));
+      if(!p.stalls?.length)box.append(el('p','The exchange has room for its first maker. Residents can earn a wage, buy a raw lot and offer a finished piece here.','market-help'));
+      const action=(card,offer)=>{
+        const b=button(offer.title,()=>transact(p,offer,'purseAction'));
+        b.dataset.marketAction='purse-'+offer.action+'-'+offer.good+(offer.ownerId?'-'+offer.ownerId:'');
+        b.disabled=!offer.available||Boolean(restricted());card.append(b);
+        card.append(el('p',offer.detail,'market-help'));appendReason(card,offer);
+      };
+      for(const stall of p.stalls||[]){
+        const card=el('section',null,'market-good');
+        card.append(el('h4',stall.name+'’s '+stall.specialty));
+        if(!stall.wares.length)card.append(el('p','Sold out. The owner decides when to make more.','market-help'));
+        const offered=(p.options||[]).filter(o=>o.action==='buyWare'&&o.ownerId===stall.id);
+        if(stall.id===p.personId||!offered.length){
+          for(const w of stall.wares)card.append(el('p',w.name+' · '+quantity('funds',w.ask),'market-help'));
+        }else for(const o of offered)action(card,o);
+        if(stall.id===p.personId){
+          const terms=el('details');terms.append(el('summary','Manage the stand'));
+          for(const o of (p.options||[]).filter(o=>['markDown','foldStall'].includes(o.action)))action(terms,o);
+          card.append(terms);
+        }
+        box.append(card);
+      }
+      const recipes=(p.options||[]).filter(o=>o.action==='makeWare');
+      if(recipes.length){
+        const chosen=recipes.find(o=>o.good===selectedWare)||recipes.find(o=>o.available)||recipes[0];
+        selectedWare=chosen.good;
+        const card=el('section',null,'market-resource-detail'),label=el('label','Choose a piece to make'),select=el('select');
+        label.htmlFor='private-maker-piece';select.id='private-maker-piece';select.dataset.marketAction='maker-piece';
+        for(const recipe of recipes){
+          const opt=el('option',root.EarthResidentShops.products[recipe.good].name);opt.value=recipe.good;select.append(opt);
+        }
+        select.value=selectedWare;select.addEventListener('change',()=>{selectedWare=select.value;trip=null;generation++;key='';feedback='';render();});
+        card.append(el('h4',p.ownShop?'Work for your '+p.ownShop:'Open your own stand'),label,select);action(card,chosen);box.append(card);
+      }
+      if(p.homes){
+        const register=el('section',null,'market-resource-detail');register.append(el('h4','Courtyard homes'));
+        register.append(el('p',p.homes.length+' of '+p.homePlots+' serviced sites occupied. A completed home adds two housing places.','market-help'));
+        for(const home of p.homes)register.append(el('p','Plot '+(home.plot+1)+' · '+home.name+' · '+['','Foundations','Frame complete','Ready to live in'][home.stage]+
+          (home.price?' · Offered for '+quantity('funds',home.price):''),'market-help'));
+        for(const offer of (p.options||[]).filter(o=>o.good==='courtyardHome'))action(register,offer);
+        box.append(register);
+      }
+      if(p.items?.length){
+        const list=el('ul');
+        for(const item of p.items)list.append(el('li',item.name+' × '+item.count+'. '+item.use));
+        box.append(el('h4',p.name+'’s belongings'),list);
+      }
+      if(p.balance<2)box.append(button('Find paid work',()=>area('purse'),'text-button'));
+      return box;
+    }
     function pursePage(){
       const p=sim.purseView?.(),box=el('div',null,'market-page');
       if(!p)return box;
       box.append(el('h4',p.name+'’s purse · '+quantity('funds',p.balance)),
         el('p','Household food fund · '+quantity('funds',p.household)+' pooled to stock the district pantry.','market-help'));
+      if(p.items?.length)box.append(el('p','Personal belongings · '+p.items.map(i=>i.count+' '+i.name.toLowerCase()).join(', ')+'.','market-help'));
+      if(p.stalls)box.append(button('Visit resident shops',()=>area('shops'),'text-button'));
       if(p.shift)box.append(el('p','Shift from week '+p.shift.week+' · '+p.shift.clerkName+' · '+p.shift.good+' inventory.','market-help'));
-      for(const o of p.options||[]){
+      for(const o of (p.options||[]).filter(o=>!['buyWare','makeWare','markDown','foldStall'].includes(o.action)&&o.good!=='courtyardHome')){
         const card=el('section',null,'market-good'),b=button(o.title,()=>transact(p,o,'purseAction'));
         b.dataset.marketAction='purse-'+o.action+'-'+(o.good||'');b.disabled=!o.available||Boolean(restricted());
         card.append(b);if(o.detail)card.append(el('p',o.detail,'market-help'));appendReason(card,o);box.append(card);
@@ -316,42 +382,49 @@
       const stamp=[siteId,sim.state.week,sim.state.actionRevision||0,sim.state.workRevision||0,site.exchange?.serial||0,site.provisions?.serial||0,
         site.purses?.serial||0,site.resourceLedger?.serial||0,actor,tab,selectedResource,feedback].join('|');
       if(stamp===key)return;
-      const m=tab==='purse'?null:sim.marketView?.()||root.EarthMarket.view(sim.state,site);
-      if(!m&&tab!=='purse')return;
+      const m=['purse','shops'].includes(tab)?null:sim.marketView?.()||root.EarthMarket.view(sim.state,site);
+      if(!m&&!['purse','shops'].includes(tab))return;
       const focus=doc.activeElement?.dataset?.marketAction;
       const nav=el('div',null,'market-tabs');
       const areas=[['trade','Exchange'],['orders','Orders & reserves'],['records','Accounts']];
       if(sim.purseView)areas.splice(1,0,['purse','Personal funds']);
+      if(root.EarthResidentShops&&sim.purseView)areas.splice(1,0,['shops','Resident shops']);
       if(root.EarthResources)areas.splice(1,0,['resources','Local resources']);
       for(const [id,label] of areas){
         const b=button(label,()=>area(id),'text-button');
         b.dataset.marketAction='section-'+id;b.setAttribute('aria-pressed',String(id===tab));nav.append(b);
       }
-      const items=tab==='purse'?[nav,pursePage()]:[stockTable(m),nav,tab==='trade'?tradeshown(m):tab==='resources'?resourcePage(m):tab==='orders'?orders(m):records(m)];
+      const items=tab==='shops'?[nav,shopsPage()]:tab==='purse'?[nav,pursePage()]:[stockTable(m),nav,tab==='trade'?tradeshown(m):tab==='resources'?resourcePage(m):tab==='orders'?orders(m):records(m)];
       if(feedback&&tab!=='resources'){const f=el('p',feedback,'market-feedback');f.setAttribute('role','status');items.push(f);}
       const restriction=restricted();
       if(restriction)items.unshift(el('p',restriction,'market-feedback'));
       body.replaceChildren(...items);key=stamp;
       if(focus){const same=Array.from(body.querySelectorAll('[data-market-action]')).find(b=>!b.disabled&&b.dataset.marketAction===focus);same?.focus({preventScroll:true});}
     }
-    function snapshot(){return {tab,packAt,cratesOpen,selectedCrate,...(selectedResource?{selectedResource}:{})};}
+    function snapshot(){return {tab,packAt,cratesOpen,selectedCrate,...(selectedResource?{selectedResource}:{}),...(selectedWare?{selectedWare}:{})};}
     function restore(saved){
       invalidate();
       const site=sim.active();if(!site)return false;
       currentSite=identity(site);
-      tab=saved?.tab==='purse'&&sim.purseView?'purse':['trade','orders','records'].includes(saved?.tab)||saved?.tab==='resources'&&root.EarthResources?saved.tab:'trade';
+      tab=saved?.tab==='shops'&&root.EarthResidentShops&&sim.purseView?'shops':saved?.tab==='purse'&&sim.purseView?'purse':['trade','orders','records'].includes(saved?.tab)||saved?.tab==='resources'&&root.EarthResources?saved.tab:'trade';
+      selectedWare=typeof saved?.selectedWare==='string'?saved.selectedWare:null;
       selectedResource=typeof saved?.selectedResource==='string'?saved.selectedResource:null;
       packAt=saved?.packAt==='quay'&&quayProof&&meetQuay&&street()?.getState?.().waterfront?'quay':'market';
       cratesOpen=saved?.cratesOpen===true;
       if(saved?.selectedCrate!=null&&sim.provisionsView?.()?.crates?.some(c=>c.id===saved.selectedCrate))selectedCrate=saved.selectedCrate;
       render();return true;
     }
+    function openResources(id){
+      const site=sim.active();if(!site||!root.EarthResources)return false;
+      if(currentSite!==identity(site)){invalidate();currentSite=identity(site);}
+      selectedResource=typeof id==='string'?id:null;area('resources');return true;
+    }
     function openPurse(){
       const site=sim.active();if(!site||!sim.purseView)return false;
       if(currentSite!==identity(site)){invalidate();currentSite=identity(site);}
       area('purse');return true;
     }
-    return {open:render,openPurse,render,snapshot,restore,close:invalidate,invalidate};
+    return {open:render,openPurse,openResources,render,snapshot,restore,close:invalidate,invalidate};
   }
   root.EarthMarketPanel=Object.freeze({mount});
 })(typeof window==='undefined'?globalThis:window);

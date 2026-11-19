@@ -21,11 +21,11 @@
   // A literal below 0x8000 uses its own code unit. Higher literals use an
   // escape. A match stores length and backward distance in two code units.
   // The representation never sends an unpaired surrogate to browser storage.
-  function compress(text){
-    const dictionary=new Int32Array(65536),out=new Uint16Array(chunkSize),parts=[];
-    let filled=0,position=0,emitted=0;
+  function encodeBlock(text,dictionary){
+    const out=new Uint16Array(chunkSize),parts=[];
+    let filled=0,position=0;
     function emit(code){
-      out[filled++]=code;emitted++;
+      out[filled++]=code;
       if(filled===chunkSize){parts.push(fromUnits.apply(null,out));filled=0;}
     }
     function hash(i){
@@ -55,10 +55,64 @@
         emit(code&0x7fff);
       }
     }
-    if(emitted+35>=text.length)return text;
     if(filled)parts.push(fromUnits.apply(null,out.subarray(0,filled)));
-    const payload=parts.join('');
-    return marker+text.length.toString(36)+'.'+checksum(text).toString(36)+'.'+checksum(payload).toString(36)+'.'+payload;
+    return parts.join('');
+  }
+  // Each block starts with an empty match dictionary. Joining their encoded
+  // payloads therefore produces exactly the same stream format older readers
+  // already understand, including back-references within a block.
+  const blockMin=64*1024,blockMax=256*1024,modulus=65521;
+  const reusableSize=text=>text.length>=threshold*2&&text.length<=cacheLimit/2;
+  let lastBlocks=null;
+  function joinChecksum(sum,part,length){
+    const a=sum&65535;
+    const nextA=(a+(part&65535)-1+modulus)%modulus;
+    const nextB=((sum>>>16)+(part>>>16)+(length%modulus)*(a-1)+modulus)%modulus;
+    return (nextB*65536+nextA)>>>0;
+  }
+  function packedText(length,rawSum,payloadSum,payload){
+    return marker+length.toString(36)+'.'+rawSum.toString(36)+'.'+payloadSum.toString(36)+'.'+payload;
+  }
+  function compressWhole(text){
+    const payload=encodeBlock(text,new Int32Array(65536));
+    if(payload.length+35>=text.length)return text;
+    return packedText(text.length,checksum(text),checksum(payload),payload);
+  }
+  function compress(text){
+    if(!reusableSize(text)){lastBlocks=null;return compressWhole(text);}
+    const dictionary=new Int32Array(65536),parts=[],next=new Map();
+    let rawSum=1,packedSum=1,packedLength=0,boundary=0,used=false;
+    for(let start=0;start<text.length;){
+      let end=min(text.length,start+blockMax);
+      if(end<text.length){
+        // Prefer a district header so editing one local record does not move
+        // every later boundary. Arbitrary strings still have bounded blocks.
+        if(boundary>=0&&boundary<start+blockMin)boundary=text.indexOf(',"region":',start+blockMin);
+        if(boundary>=start+blockMin&&boundary<end)end=boundary;
+      }
+      const raw=text.slice(start,end);
+      let block=lastBlocks?.get(raw.length)?.find(item=>item.raw===raw);
+      if(!block){
+        if(used)dictionary.fill(0);
+        used=true;
+        const packed=encodeBlock(raw,dictionary);
+        block={raw,packed,rawSum:checksum(raw),packedSum:checksum(packed)};
+      }else{
+        // Keep slices of the current world only. Otherwise a single unchanged
+        // district could keep an entire older world string alive.
+        block={...block,raw};
+      }
+      const sameLength=next.get(raw.length);
+      if(sameLength)sameLength.push(block);else next.set(raw.length,[block]);
+      parts.push(block.packed);
+      packedLength+=block.packed.length;
+      rawSum=joinChecksum(rawSum,block.rawSum,raw.length);
+      packedSum=joinChecksum(packedSum,block.packedSum,block.packed.length);
+      start=end;
+    }
+    if(packedLength+35>=text.length){lastBlocks=null;return text;}
+    lastBlocks=next;
+    return packedText(text.length,rawSum,packedSum,parts.join(''));
   }
   function header(text){
     if(!text.startsWith(marker))return null;
@@ -80,8 +134,9 @@
         if(at===out.length)return null;
         out[at++]=code;continue;
       }
-      const next=packed.charCodeAt(++i);
-      if(!Number.isInteger(next)||next>=escape)return null;
+      if(++i===packed.length)return null;
+      const next=packed.charCodeAt(i);
+      if(next>=escape)return null;
       if(code===escape){
         if(at===out.length)return null;
         out[at++]=escape+next;continue;
@@ -107,6 +162,8 @@
   function remember(raw,packed){
     const units=raw.length+(raw===packed?0:packed.length);
     if(units>cacheLimit)return;
+    const existing=recent.findIndex(entry=>entry.raw===raw);
+    if(existing!==-1)cachedUnits-=recent.splice(existing,1)[0].units;
     recent.unshift({raw,packed,units});cachedUnits+=units;
     while(recent.length>2||cachedUnits>cacheLimit)cachedUnits-=recent.pop().units;
   }
@@ -144,7 +201,20 @@
         get length(){return native.length;},
         key:index=>native.key(index),
         getItem(k){const name=String(k),value=native.getItem(name);return payload(name)?unpack(value):value;},
-        setItem(k,value){const name=String(k),raw=String(value);native.setItem(name,payload(name)?prepare(raw):raw);},
+        setItem(k,value){
+          const name=String(k),raw=String(value);
+          if(!payload(name)){native.setItem(name,raw);return;}
+          const packed=prepare(raw);
+          try{native.setItem(name,packed);}
+          catch(error){
+            // A single dictionary can store a few percent more densely. A
+            // nearly full tablet keeps its existing save capacity and backup.
+            if(!reusableSize(raw))throw error;
+            const dense=compressWhole(raw);
+            if(dense.length>=packed.length)throw error;
+            native.setItem(name,dense);remember(raw,dense);
+          }
+        },
         removeItem:k=>native.removeItem(k)
       };
       // Some storage providers can read and write but cannot remove a backup.

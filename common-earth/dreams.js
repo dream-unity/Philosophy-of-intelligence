@@ -207,7 +207,10 @@
       }
       if(fee>wallet)blockers.push('Save '+(fee-wallet)+' more personal fund'+(fee-wallet===1?'':'s')+' for '+stage.supplier+'.');
     }
-    return {id:planId,title:plan.title,quote:plan.quote,reason:plan.quote,step:position,stages:plan.stages.length,progress,total,
+    const gift=row?.support;
+    const supportNote=gift?gift.name+' gave me '+gift.amount+' personal fund'+(gift.amount===1?'':'s')+' in week '+gift.week+
+      (position>gift.step?' and I have since finished that stage.':'. I still choose when to take the next step.'):'';
+    return {id:planId,title:plan.title,quote:plan.quote,reason:plan.quote,step:position,stages:plan.stages.length,progress,total,supportNote,
       progressText:finished?'Completed in week '+row.completedWeek:'Stage '+(position+1)+'/'+plan.stages.length+' · '+sessions+'/'+stage.sessions+' sessions',
       activity:stage.activity,axis:stage.axis,venue:stage.venue,fee,shortfall:Math.max(0,fee-wallet),supplier:stage.supplier||null,
       status:finished?'Achieved':blockers.length?'Waiting':row?'In progress':'Ready to begin',
@@ -216,6 +219,88 @@
         reason:life.onHold.reason,retained:plans[life.onHold.id].before[life.onHold.step]+life.onHold.sessions}:null,
       achievements:(life?.achievements||[]).map(e=>({id:e.id,week:e.week,place:e.place,earned:plans[e.id].earned})),
       blockers,completedWeek:row?.completedWeek||null,researchRoute:planId==='space'&&stage.experience?researchRoute(site,person):null};
+  }
+  const money=n=>n+' personal fund'+(n===1?'':'s');
+  const local=(site,p)=>p&&root.EarthCommunityLife?.present?.(site,p.id)!==false&&
+    (!root.EarthCommunityLife?.residency||root.EarthCommunityLife.residency(site,p.id)==='member');
+  function giftTerms(site,world,recipient,donor){
+    const row=record(site,recipient.id),stage=plans[row?.id]?.stages[row.step];
+    if(!row||!stage?.fee||row.sessions||row.support||donor.id===recipient.id||!local(site,recipient)||!local(site,donor))return null;
+    const saved=site.purses?.people?.[recipient.id]?.balance||0,amount=stage.fee-saved;
+    if(amount<1||!root.EarthPurses?.transferPerson)return null;
+    const goal=view(site,world,recipient.id,recipient,row);
+    const trust=root.EarthAutonomy?.bond?.(site,recipient.id,donor.id,world.week)||0;
+    const traits=recipient.traits||{},minimum=(traits.sociability??50)<45||(traits.initiative??50)>78?2:1;
+    const otherBlock=goal.blockers.length>1?goal.blockers[0]:'';
+    const refusal=otherBlock?'Let’s wait on the money. '+otherBlock:
+      trust<0?'I’d like us to keep an agreement together first. I don’t want money standing in for that.':
+      trust<minimum?(minimum===2?'I’d rather cover it myself until we’ve done some work together.':'I would rather we got to know each other before money changes hands.'):'';
+    const purse=site.purses?.people?.[donor.id]?.balance||0,own=record(site,donor.id);
+    const reserved=plans[own?.id]?.stages.slice(own.step).find(s=>s.fee)?.fee||0;
+    const buffer=Math.max(1,reserved),outgoing=donor.id==='steward'?'':purse-amount<buffer?
+      (reserved?'I’m keeping '+money(buffer)+' for my own plan.':'I want to keep something for my own expenses.'):
+      trust<2?'I haven’t decided to give my savings to someone I barely know.':'';
+    return {row,stage,amount,saved,goal,trust,refusal,outgoing,purse,topic:'dream-gift:'+row.id+':'+row.step+':'+amount+':'+world.week};
+  }
+  function supportTopics(site,world,recipient,donor){
+    if(!donor||world.activeId!==site.id||root.EarthCommunityLife?.isHome?.(world,site)===false)return [];
+    const offer=giftTerms(site,world,recipient,donor);if(!offer)return [];
+    const topics=[{id:'dream-help',label:'Would sharing the cost help?',context:true}];
+    if(!offer.refusal&&offer.purse>=offer.amount)topics.push({id:offer.topic,label:
+      (donor.id==='steward'?'Offer ':'Suggest '+donor.name+' give ')+money(offer.amount)+' toward '+offer.stage.supplier,context:true});
+    return topics;
+  }
+  function acceptGift(site,world,recipient,donor,offer){
+    if(offer.refusal||offer.outgoing)return null;
+    const paid=root.EarthPurses.transferPerson(world,site,donor.id,recipient.id,offer.amount,'Help with “'+offer.goal.title+'”');
+    if(!paid?.ok)return paid;
+    offer.row.support={week:world.week,step:offer.row.step,amount:offer.amount,name:donor.name,
+      donorId:donor.id,donorKey:donor.identityKey||root.EarthPersonas?.profile(site,donor.id)?.identityKey,siteId:site.id};
+    root.EarthAutonomy?.remember?.(site,world.week,donor.id,recipient.id,'support');
+    return {ok:true,changed:true,message:donor.name+' gave '+recipient.name+' '+money(offer.amount)+' toward '+offer.stage.supplier+
+      '. '+recipient.name+' keeps the money in their own purse and decides when to book.'};
+  }
+  function discussSupport(site,world,recipient,donor,topic,meeting){
+    const topics=supportTopics(site,world,recipient,donor);
+    if(!topics.some(t=>t.id===topic)||meeting?.mode!=='walk'||meeting.siteId!==site.id||meeting.actor!==donor.id||
+      meeting.target!==recipient.id||donor.id!==root.EarthAgency.actorId(site)||
+      ![meeting.x,meeting.y,meeting.tx,meeting.ty].every(Number.isFinite)||Math.hypot(meeting.x-meeting.tx,meeting.y-meeting.ty)>1.56)
+      return {ok:false,message:'Meet the resident again to check which stage and contribution they are considering.'};
+    const offer=giftTerms(site,world,recipient,donor);
+    const quote=(person,words)=>({ok:true,message:person.name+' · “'+words+'”'});
+    if(topic==='dream-help')return quote(recipient,offer.refusal||('I’ve saved '+money(offer.saved)+'. '+offer.stage.supplier[0].toUpperCase()+
+      offer.stage.supplier.slice(1)+' asks for '+offer.stage.fee+'. I’d welcome help with the remaining '+offer.amount+', if I can decide when I’m ready.'));
+    if(offer.outgoing)return quote(donor,offer.outgoing);
+    return acceptGift(site,world,recipient,donor,offer)||{ok:false,message:'That contribution is no longer available.'};
+  }
+  function considerSupport(site,world){
+    const accounts=site.purses?.people,lives=site.autonomy?.people;
+    if(!world.communityLife||!accounts||!lives||!root.EarthPurses?.transferPerson)return '';
+    const controlled=world.activeId===site.id?root.EarthAgency?.actorId?.(site):null,free=id=>id!==controlled&&id!=='steward';
+    for(const [id,life] of Object.entries(lives)){
+      const row=life.dream,stage=plans[row?.id]?.stages[row.step];
+      if(!stage?.fee||row.sessions||row.support||!free(id)||!life.ties?.some(t=>t.strength>=3)||(accounts[id]?.balance||0)>=stage.fee)continue;
+      const recipient=pick(site,id);if(!local(site,recipient))continue;
+      // Ask someone this person actually knows locally. No civic appropriation
+      // or gift from an absent original character is part of this decision.
+      for(const peer of root.EarthAutonomy?.contacts?.(site,id,world.week)||[]){
+        if(peer.strength<3||!peer.here||!free(peer.id)||!accounts[peer.id]?.balance)continue;
+        const donor=pick(site,peer.id);if(!local(site,donor))continue;
+        const offer=giftTerms(site,world,recipient,donor);
+        if(offer&&!offer.refusal&&!offer.outgoing&&offer.purse>=offer.amount){
+          const result=acceptGift(site,world,recipient,donor,offer);if(result?.ok)return result.message;
+        }
+      }
+    }
+    return '';
+  }
+  function supportLink(site,id){
+    const row=record(site,id),gift=row?.support;if(!gift)return null;
+    let donor=gift.siteId===site.id&&gift.donorId&&pick(site,gift.donorId);
+    if(!donor||!gift.donorKey||donor.identityKey!==gift.donorKey||!local(site,donor))
+      donor=gift.donorKey&&(root.EarthPersonas?.list(site)||[]).find(p=>p.identityKey===gift.donorKey&&local(site,p));
+    return {from:donor?.id||null,to:id,fromName:gift.name,amount:gift.amount,week:gift.week,title:plans[row.id].title,
+      detail:gift.name+' contributed '+money(gift.amount)+' toward '+plans[row.id].stages[gift.step].supplier+' in week '+gift.week+'.'};
   }
   function work(site,world,person,life){
     const goal=view(site,world,person.id,person,life.dream);
@@ -360,6 +445,16 @@
     const plan=plans[row.id];
     if(!integer(row.started,1,week)||!integer(row.checkpoint,row.started,week)||!integer(row.last,row.checkpoint,week)||
       !integer(row.step,0,plan.stages.length))return false;
+    if(row.support!==undefined){
+      const gift=row.support,fee=plan.stages[gift?.step]?.fee;
+      if(!gift||!fee||!integer(gift.step,0,row.step)||!integer(gift.week,row.started,week)||!integer(gift.amount,1,fee)||
+        typeof gift.name!=='string'||!gift.name.trim()||gift.name.length>128)return false;
+      if(gift.donorId!==undefined||gift.donorKey!==undefined||gift.siteId!==undefined){
+        if(typeof gift.donorId!=='string'||!gift.donorId.length||gift.donorId.length>512||
+          gift.donorKey!==undefined&&(typeof gift.donorKey!=='string'||!gift.donorKey.length||gift.donorKey.length>1040)||
+          typeof gift.siteId!=='string'||!gift.siteId.length||gift.siteId.length>512)return false;
+      }
+    }
     let earliest=row.started;
     for(let i=0;i<row.step;i++){
       const stage=plan.stages[i];
@@ -378,5 +473,5 @@
     return !!s&&integer(item.step,1,plan.stages.length)&&item.total===plan.stages.length&&item.venue===s.venue&&item.axis===s.axis&&
       item.activity===s.activity&&item.title===s.activity&&item.goal===plan.title;
   }
-  root.EarthDreams=Object.freeze({preference,view,work,landmarks,nextPlans,chooseNext,valid,validHistory,validPlaces,validIntent});
+  root.EarthDreams=Object.freeze({preference,view,work,landmarks,nextPlans,chooseNext,supportTopics,discussSupport,considerSupport,supportLink,valid,validHistory,validPlaces,validIntent});
 })(typeof window==='undefined'?globalThis:window);

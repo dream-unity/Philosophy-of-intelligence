@@ -771,12 +771,22 @@
       const all=[...beacons,...sites].map(s=>({...s,selected:selection && (s.id && selection.id ? s.id===selection.id :
         s.kind!=='partner' && selection.kind!=='partner' && Math.abs(s.lat-selection.lat)<.015 && Math.abs(wrap(s.lon-selection.lon))<.015)}));
       if(selection && selection.kind!=='partner' && !all.some(s=>s.selected))all.push({...selection,selected:true});
+      const current=sites.find(s=>s.active);
+      const hub=current&&project(current.lat,current.lon);
+      // At world scale neighbouring streets occupy the same pixel. Give each
+      // nearby town its own touch target and tether it to its true position.
       // Draw the selected point last so that it stays legible around busy ports.
       all.sort((a,b)=>Number(!!a.selected)-Number(!!b.selected));
       for(const s of all){
         const p=project(s.lat,s.lon);
         if(p.z<.025 || p.x< -12 || p.y< -12 || p.x>w+12 || p.y>h+12)continue;
         const active=s.selected||s.active;
+        if(s.nearbyRank&&hub&&hub.z>.025&&Math.hypot(p.x-hub.x,p.y-hub.y)<41){
+          const side=s.nearbyRank===1?-1:1;
+          const x=clamp(hub.x+side*33,13,w-13),y=clamp(hub.y+22,15,h-15);
+          ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(x,y);
+          ctx.strokeStyle='#a3c9ac';ctx.lineWidth=1.2;ctx.stroke();p.x=x;p.y=y;
+        }
         if(s.kind==='partner'){
           const nearHome=sites.some(home=>{
             const h=project(home.lat,home.lon);return h.z>0&&Math.hypot(h.x-p.x,h.y-p.y)<16;
@@ -797,11 +807,12 @@
         }
         const marker={...p,site:s,radius:active?8:6};
         markers.push(marker);occupied.push({x:p.x,y:p.y,w:13,h:13});
-        if(s.selected || s.active || hover?.id && hover.id===s.id){
+        if(s.selected || s.active || s.nearbyRank || hover?.id && hover.id===s.id){
           const n=String(s.name||s.label||'').trim();if(!n)continue;
           ctx.font='600 11px system-ui';ctx.textAlign='left';ctx.textBaseline='middle';
           const size=ctx.measureText(n).width+14;
-          const x=clamp(p.x+11,4,Math.max(4,w-size-4)),y=clamp(p.y-21,10,h-10);
+          const anchorX=s.nearbyRank===1?p.x-size-5:p.x+11;
+          const x=clamp(anchorX,4,Math.max(4,w-size-4)),y=clamp(p.y+(s.nearbyRank?16:-21),10,h-10);
           ctx.fillStyle='rgba(8,24,30,.88)';ctx.fillRect(x,y-9,size,19);
           ctx.strokeStyle='rgba(207,179,117,.62)';ctx.lineWidth=.7;ctx.strokeRect(x,y-9,size,19);
           ctx.fillStyle='#f5e6c5';ctx.fillText(n,x+7,y+.5);

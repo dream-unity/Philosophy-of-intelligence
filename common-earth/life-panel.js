@@ -64,6 +64,7 @@
       const request={domain,action:choice.id,targetId:domain==='career'?(choice.targetId||targetId):null,expectedRevision:choice.expectedRevision,
         actorId:actor,siteId:site.id,generation:site.foundingRevision||0,week};
       if(choice.coverId)request.coverId=choice.coverId;
+      if(choice.openingKey)request.openingKey=choice.openingKey;
       if(domain==='term'){request.weeks=choice.weeks;request.actionRevision=choice.actionRevision;}
       const current=()=>panel.open&&!doc.hidden&&street()&&personId===person.id&&generation===expectedGeneration&&sim.state.week===week&&
         sim.state.activeId===site.id&&(sim.active()?.foundingRevision||0)===request.generation&&root.EarthAgency.actorId(sim.active())===actor;
@@ -107,19 +108,10 @@
       if(!started){pendingTrip=null;note('Reach '+whom.name+' on foot to have this conversation.');}
       else if(pendingTrip===ticket)note('Walking to '+whom.name+' for '+choice.label.toLowerCase()+'.');
     }
-    function rankJobs(person,skills,jobs){
-      const compatible=jobs.filter(job=>person.bounds[job.skill]&&Number.isFinite(job.requiredSkill));
-      return compatible.sort((a,b)=>{
-        const attainable=job=>careers.fits(person,job);
-        const match=job=>(skills[job.skill]??person.aptitudes[job.skill])*2+(skills[job.secondary]??person.aptitudes[job.secondary]);
-        return Number(attainable(b))-Number(attainable(a))||
-          match(b)-match(a)||b.requiredSkill-a.requiredSkill||a.label.localeCompare(b.label);
-      });
-    }
     function offerRows(person,choices,domain,actor){
       const list=field('ul',null,'life-offers');
       for(const choice of choices){
-        const offActor=actor!==person.id,mentor=choice.id==='mentor'&&domain==='career';
+        const offActor=actor!==person.id,mentor=['mentor','placement'].includes(choice.id)&&domain==='career';
         const meetingId=offActor?person.id:mentor?choice.mentorId:null;
         const offMentor=offActor&&mentor;
         const label=offActor&&domain==='career'?'Propose · '+choice.label:choice.label;
@@ -198,14 +190,21 @@
           section.append(field('p','Still needed · '+model.missing.join(' · '),'life-muted'));
         }
       }
-      const best=ranked[0];
+      const best=ranked[0]?.job,selected=ranked.find(plan=>plan.job===job);
+      if(selected)section.append(field('p',careers.rationale(selected,site,false),'life-muted'));
       if(best&&best.id!==targetId){
-        const link=control('Compare '+best.label+' · strong fit in '+best.skill,()=>explore(best.id),'career-fit','text-button');
+        const link=control('Compare '+best.label,()=>explore(best.id),'career-fit','text-button');
         section.append(link);
-      }else if(best)section.append(field('p','Strong fit for '+person.name+'’s '+best.skill+' and '+best.secondary+'.','life-muted'));
+      }
+      const alternative=model.application?.phase==='waiting'&&careers.waitingAlternative(sim.state,site,person);
+      if(alternative&&alternative.job.id!==targetId)section.append(control('Explore the vacancy at '+alternative.job.employer,()=>explore(alternative.job.id),'compare-vacancy','text-button'));
       if(model.stage!=='employed'&&model.status)section.append(field('p',model.status));
       if(model.tenure)section.append(field('p',model.tenure.detail,'life-muted'));
       if(model.training?.phaseDetail)section.append(field('p',model.training.phaseDetail,'life-muted'));
+      if(model.training?.placement){
+        const visit=model.training.placement;
+        section.append(field('p',visit.name+(visit.format==='review'?' reviewed a '+visit.axis+' work sample':' supervised a '+visit.axis+' work session')+' in week '+visit.week+'.'+(visit.sample?' The signed sample is in the portfolio.':''),'life-muted'));
+      }
       if(model.opening)section.append(specialistOpening(model.opening));
       if(model.recruitment?.detail){
         section.append(field('p',model.recruitment.detail,'life-muted'));
@@ -299,13 +298,14 @@
       const person=people.find(p=>p.id===personId);if(!person)return;
       personField.value=person.id;
       let model=careers.view(sim.state,site,person.id,targetId);
-      const ranked=rankJobs(person,model.skills,careers.catalog);
+      const ranked=page==='career'?careers.routes(sim.state,site,person):[];
       if(!careers.catalog.some(j=>j.id===targetId)){
-        targetId=model.application?.targetId||model.training?.targetId||ranked[0]?.id||careers.catalog[0]?.id;
+        targetId=model.application?.targetId||model.training?.targetId||ranked[0]?.job.id||careers.catalog[0]?.id;
         model=careers.view(sim.state,site,person.id,targetId);
       }
       const action=doc.activeElement?.dataset.lifeControl;
       profileBox.replaceChildren(field('h3',displayName(person)),field('p',[model.career,model.employer].filter(Boolean).join(' · '),'life-role'));
+      if(model.assignment)profileBox.append(field('p',model.assignment.label+' · '+model.assignment.duty+'.','life-muted'));
       if(page==='career'&&model.supplyLane?.description)profileBox.append(field('p',model.supplyLane.description,'life-muted'));
       profileBox.append(field('p',person.description),field('p','Strengths · '+person.strengths.map(title).join(', '),'life-muted'));
       if(person.interests?.length)profileBox.append(field('p','Interests · '+person.interests.join(', '),'life-muted'));

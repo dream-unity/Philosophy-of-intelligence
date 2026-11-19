@@ -273,3 +273,48 @@ test('a missing precinct or salvage module cannot consume an almost-finished job
     r[module]=owner;ok(s.workConstruction(90));assert.equal(site.construction.length,0);
   }
 });
+
+test('an independent council’s paid worksite employs a physical crew before anyone visits, and two tabs cannot finish it twice',async()=>{
+  const context=vm.createContext({structuredClone,TextDecoder});context.window=context;
+  const html=fs.readFileSync(path.join(directory,'index.html'),'utf8');
+  for(const match of html.matchAll(/<script src="([\w-]+\.js)/g)){
+    vm.runInContext(fs.readFileSync(path.join(directory,match[1]),'utf8'),context,{filename:match[1]});
+    if(match[1]==='simulation.js')break;
+  }
+  const disk=storage(),open=()=>context.CommonEarthSim.create({storage:disk}),a=open();
+  ok(a.found({name:'Stone Town',region:'Zanzibar',lat:-6.1622,lon:39.1922}));
+  const homeId=a.state.activeId;
+  assert.deepEqual(Array.from(context.CommonEarthSim.constructionDistricts(a.state),s=>s.id),[homeId],'idle neighbours do not enter the physical construction loop');
+  let town,job;
+  for(let n=0;n<24&&!job;n++){
+    ok(a.advance());
+    for(const candidate of a.state.communityLife.outposts){
+      const staffed=context.EarthConstruction.view(candidate,a.state).jobs.find(j=>j.workers.length);
+      if(staffed){town=candidate;job=staffed;break;}
+    }
+  }
+  assert.ok(job,'an autonomous council commissioned a staffed worksite');
+  const {id,plot,kind}=job,treasury=town.funds,materials=town.materials;
+  const journalCount=()=>a.state.journal.filter(line=>line.siteId===town.id&&line.text.includes('opened on lot '+(plot+1))).length;
+  const beforeJournal=journalCount(),opening=JSON.stringify(town.workforce);
+  const b=open(),local=[],remote=[];
+  a.subscribe((_w,notice)=>local.push(notice));b.subscribe((_w,notice)=>remote.push(notice));
+  const start=1700000000000;
+  const first=ok(await a.perform('workConstruction',8,start));
+  assert.ok(first.changed);assert.notEqual(JSON.stringify(town.workforce),opening);
+  assert.ok(local.at(-1).sites.includes(town.id));
+  assert.equal(ok(await b.perform('workConstruction',8,start)).changed,false);
+  assert.ok(remote.at(-1).sites.includes(town.id));
+  const finished=ok(await a.perform('workConstruction',220,start+220000));
+  assert.equal(finished.completed.filter(j=>j.siteId===town.id&&j.id===id).length,1);
+  assert.ok(b.sync());
+  assert.ok(remote.at(-1).completed.some(j=>j.siteId===town.id&&j.id===id));
+  assert.equal(ok(await b.perform('workConstruction',220,start+220000)).changed,false);
+  assert.equal(a.state.activeId,homeId);assert.ok(!a.state.sites.some(s=>s.id===town.id));
+  assert.equal(town.buildings.filter(v=>v.kind===kind&&v.plot===plot).length,1);
+  assert.equal(town.funds,treasury);assert.equal(town.materials,materials);assert.equal(journalCount(),beforeJournal+1);
+  const reloaded=open(),saved=reloaded.state.communityLife.outposts.find(s=>s.id===town.id);
+  assert.ok(saved.buildings.some(v=>v.kind===kind&&v.plot===plot));
+  assert.ok(!context.CommonEarthSim.constructionDistricts(reloaded.state).some(s=>s.id===town.id&&!s.construction.length));
+  for(const sim of [a,b,reloaded])sim.destroy();
+});

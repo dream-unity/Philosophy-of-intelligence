@@ -16,7 +16,7 @@
   const ticket=(site,id)=>own(site.purses?.tickets,id);
   const escrow=site=>wage*Object.keys(site?.purses?.tickets||{}).length;
   const worked=(p,week)=>p?.lastWeek===week||p?.carriedWeek===week;
-  const committed=(site,id,week)=>Boolean(ticket(site,id)||worked(account(site,id),week));
+  const committed=(site,id,week)=>Boolean(ticket(site,id)||worked(account(site,id),week)||account(site,id)?.craftWeek===week);
   const book=site=>site.purses||={serial:0,household:0,people:{},tickets:{}};
   const named=(site,id)=>book(site).people[id]||=empty();
   const limitBook=b=>b.serial=Math.min(limit,b.serial+1);
@@ -34,6 +34,7 @@
   }
   function elsewhere(site,id,week){
     const row=site.autonomy?.people?.[id],career=site.careers?.[id];
+    if(account(site,id)?.craftWeek===week)return 'This resident has already filled this week’s personal making session.';
     if(root.EarthCareers?.specialistShift?.(site,id,week)||career?.specialistRelief?.week>=week)return 'A specialist relief shift already needs this person.';
     const coverThrough=root.EarthCareers?.coverCommitment?.(site,id,week);
     if(coverThrough!=null)return 'This person agreed to cover a colleague’s former duties through week '+coverThrough+'.';
@@ -66,6 +67,16 @@
     const result={week:world.week,actorId:current(site),siteId:site.id,generation:site.foundingRevision||0,serial:b?.serial||0,
       marketSerial:site.exchange?.serial||0,personId:id,name:name(site,id),balance:p.balance,lastWeek:p.lastWeek,household:b?.household||0,
       openings:free(site,world.week),entries:p.entries.map(e=>({...e,...(e.transfer?{transfer:{...e.transfer}}:{})})),shift:job?{...job,clerkName:name(site,job.clerkId)}:null,options:[]};
+    if(root.EarthResidentShops&&root.EarthResources&&root.EarthMarket?.makerInput){
+      const person=root.EarthPersonas?.profile?.(site,id)||site.residents?.find(p=>p.id===id)||{id,name:name(site,id)};
+      const market=root.EarthResidentShops.view(world,site,person,mine);
+      result.items=market.items;result.stalls=market.stalls;result.homes=market.homes;result.homePlots=market.homePlots;result.stallCapacity=market.capacity;result.ownShop=market.ownShop;
+      if(mine)for(const option of market.actions){
+        result.options.push({...option,venue:option.action==='buildHome'?{type:'privateHome',plot:option.plot}:{type:'market'},request:{action:option.action,good:option.good,price:option.price,
+          input:option.input,ask:option.ask,plot:option.plot,stage:option.stage,ownerId:option.ownerId,resourceSerial:site.resourceLedger?.serial||0,
+          week:world.week,actorId:id,siteId:site.id,generation:result.generation,serial:result.serial,marketSerial:result.marketSerial}});
+      }
+    }
     if(!mine)return result;
     const desk={type:'market'};
     function add(action,good,title,detail,reason,price,venue=desk,clerkId=job?.clerkId||null){
@@ -101,6 +112,11 @@
     return result;
   }
   function near(site,id,scene,venue){
+    if(venue.type==='privateHome'){
+      const expected=root.EarthConstruction?.privateHomeSite?.(venue.plot);
+      return !!expected&&scene?.siteId===site.id&&scene.actor===id&&scene.mode==='walk'&&scene.homePlot===venue.plot&&
+        [scene.x,scene.y,scene.tx,scene.ty].every(Number.isFinite)&&Math.hypot(scene.tx-expected.x,scene.ty-expected.y)<.25&&Math.hypot(scene.x-scene.tx,scene.y-scene.ty)<=1.56;
+    }
     const target=venue.type==='market'?'market':venue.residentId;
     return scene?.mode==='walk'&&scene.siteId===site.id&&scene.actor===id&&scene.target===target&&
       [scene.x,scene.y,scene.tx,scene.ty].every(Number.isFinite)&&Math.hypot(scene.x-scene.tx,scene.y-scene.ty)<=1.56;
@@ -142,14 +158,20 @@
       return fail('The worker, personal account or week changed. Check the current offer.');
     // Shelf purchases carry the exact exchange quote seen before walking over.
     // A fixed wage is already reserved, and a donation moves only personal funds.
-    if(['buy','household'].includes(request.action)&&request.marketSerial!==model.marketSerial)
+    if(['buy','household','makeWare','buildHome'].includes(request.action)&&request.marketSerial!==model.marketSerial)
       return fail('The market terms changed. Review the shelf and current price.');
-    const o=model.options.find(o=>o.action===request.action&&o.good===request.good);
+    const o=model.options.find(o=>o.action===request.action&&o.good===request.good&&o.ownerId===request.ownerId);
     if(!o||!o.available||o.request.price!==request.price||o.request.ticketSerial!==request.ticketSerial||o.request.clerkId!==request.clerkId)
       return fail(o?.reason||'Review the current work ticket and price.');
     if(model.serial>=limit&&!['check','finish','cancel'].includes(o.action))return fail('The personal account book is full.');
     if(!near(site,id,scene,o.venue))return fail(o.venue.type==='market'?'Stand at the exchange counter on foot.':'Meet the named resident in person for the stock count.');
     const job=ticket(site,id),week=world.week,good=o.good;
+    if(['makeWare','buyWare','markDown','foldStall'].includes(o.action)||o.good==='courtyardHome'){
+      if(request.resourceSerial!==o.request.resourceSerial||request.input!==o.input||request.ask!==o.ask||request.plot!==o.plot||request.stage!==o.stage)
+        return fail('The supply lot or asking price changed. Read the current terms.');
+      const p=root.EarthPersonas?.profile?.(site,id)||{id,name:name(site,id)};
+      return root.EarthResidentShops.action(world,site,p,o);
+    }
     if(['check','finish','cancel'].includes(o.action)&&(!job||!site.exchange||!valid(site,week)||!root.EarthMarket?.valid?.(site,week)))
       return fail('The exchange could not verify this worker’s reserved wage. Reopen the current ticket.');
     if(o.action==='start'){
@@ -175,6 +197,35 @@
     }
     return events;
   }
+  function noteDeed(world,site,id,message,record='deed'){return receipt(site,id,world.week,record,0,message);}
+  function workConflict(site,id,week){
+    return committed(site,id,week)?'This week’s personal working session is already booked.':elsewhere(site,id,week);
+  }
+  function canTransfer(site,from,to,n){
+    const payer=account(site,from),recipient=account(site,to);
+    return int(n,1,12)&&from!==to&&local(site,from)&&local(site,to)&&
+      (!root.EarthCommunityLife?.residency||[from,to].every(id=>root.EarthCommunityLife.residency(site,id)==='member'))&&
+      (payer?.balance||0)>=n&&(recipient?.balance||0)<=limit-n&&(recipient?.received||0)<=limit-n&&site.purses.serial<=limit-2;
+  }
+  function transferPerson(world,site,from,to,n,reason,product){
+    if(!int(world?.week,1)||typeof reason!=='string'||!reason.trim()||reason.length>460||
+      product!==undefined&&product!=='courtyardHome'&&!Object.hasOwn(root.EarthResidentShops?.products||{},product)||!canTransfer(site,from,to,n))
+      return fail('Both residents must be present and able to settle the agreed personal payment.');
+    const book=site.purses,payer=account(site,from),recipient=named(site,to);
+    const fromIdentity=root.EarthPersonas?.profile?.(site,from)?.identityKey,toIdentity=root.EarthPersonas?.profile?.(site,to)?.identityKey;
+    const pair={from,to,stamp:book.serial+1,...(fromIdentity&&toIdentity?{fromIdentity,toIdentity}:{}),...(product?{product}:{})};
+    payer.balance-=n;recipient.balance+=n;recipient.received=(recipient.received||0)+n;
+    receipt(site,from,world.week,product?'purchase':'give',-n,reason);payer.entries[0].pair=pair;
+    receipt(site,to,world.week,product?'sale':'receive',n,reason);recipient.entries[0].pair={...pair};
+    return {ok:true,message:reason};
+  }
+  function buyMakerInput(world,site,id,good,price,item){
+    const p=account(site,id);
+    if(!p||p.balance<price||!int(price,1,6)||site.purses.serial>=limit||
+      !root.EarthMarket?.makerInput(world,site,good,price))return fail('The supplier or personal purse cannot settle this purchase.');
+    p.balance-=price;
+    return {ok:true,message:receipt(site,id,world.week,'input',-price,name(site,id)+' paid '+funds(price,'personal')+' for the material to make a '+item.toLowerCase()+'.')};
+  }
   function dreamExpense(world,site,id,price,supplier){
     const p=account(site,id),ledger=site.purses;
     if(!p||!ledger||!int(price,1,4)||p.balance<price||ledger.serial>=limit||typeof supplier!=='string')return false;
@@ -184,7 +235,8 @@
   }
   function opportunity(world,site,self){
     if(root.EarthCommunityLife?.residency&&root.EarthCommunityLife.residency(site,self?.id)!=='member')return null;
-    if(!self?.free||!local(site,self.id)||site.id===world.activeId&&self.id===current(site)||self.wasAdvised==='rest'||self.row?.path||
+    if(!self?.free||!local(site,self.id)||site.id===world.activeId&&self.id===current(site)||self.wasAdvised==='rest'||
+      self.row?.path&&!(site.careers?.[self.id]?.application?.phase==='waiting'&&site.careers[self.id].application.targetId===self.row.path)||
       !root.EarthMarket?.personal||!root.EarthMarket.privateTill||committed(site,self.id,world.week)||elsewhere(site,self.id,world.week))return null;
     // Someone must still be able to walk in and take a funded booking themselves.
     if(free(site,world.week)<2)return null;
@@ -194,7 +246,11 @@
       return {score:75+traits.patience/8+(self.wasAdvised==='dream'?28:0),
         reason:'I want a paid stock check so I can put my own money toward '+self.ambition.supplier+'.',saving:true};
     }
-    if(site.food>=meals*2||balance>=8||fit<40||traits.initiative+traits.patience<85)return null;
+    if(site.food>=meals*2){
+      const why=root.EarthResidentShops?.savingReason?.(world,site,self);
+      return why?{score:76+traits.initiative/7,reason:why,saving:true}:null;
+    }
+    if(balance>=8||fit<40||traits.initiative+traits.patience<85)return null;
     return {score:83+fit/6+traits.initiative/9,reason:'The pantry holds less than two weeks of meals. The exchange has offered two funds for a stock count.'};
   }
   function workWeek(world,site,self){
@@ -235,24 +291,27 @@
     if(!world||!from||!to||from.id===to.id||!local(from,fromId)||!local(to,toId))return null;
     const origin=account(from,fromId);
     if(!origin)return null;
-    const pending=ticket(from,fromId),busy=worked(origin,world.week)||pending?.week===world.week;
+    const pending=ticket(from,fromId),busy=worked(origin,world.week)||origin.craftWeek===world.week||pending?.week===world.week;
     const prior=account(to,toId),fromNet=netTransfers(origin),toNet=netTransfers(prior);
     if(fromNet===null||toNet===null)return null;
-    if(!origin.balance&&(!busy||worked(prior,world.week))&&!pending)return null;
+    const goods=root.EarthResidentShops?.hasGoods?.(origin);
+    if(!goods&&!origin.balance&&(!busy||worked(prior,world.week))&&!pending)return null;
     if(pending){
       const result=refund(world,from,fromId,false);
       if(!result.ok)return null;
     }
     const amount=Math.min(origin.balance,limit-(prior?.balance||0));
-    if(!amount&&!busy)return null;
+    if(!amount&&!busy&&!goods)return null;
     const destination=named(to,toId);
     const link={from:from.id,fromId,to:to.id,toId,fromGeneration:from.foundingRevision||0,toGeneration:to.foundingRevision||0,
       fromRevision:from.purses.serial,toRevision:to.purses.serial};
     origin.balance-=amount;destination.balance+=amount;
     if(busy)destination.carriedWeek=world.week;
+    if(goods)root.EarthResidentShops.moveGoods(origin,destination);
     storeNet(origin,fromNet-BigInt(amount));storeNet(destination,toNet+BigInt(amount));
     const person=name(from,fromId),message=amount?person+' moved '+funds(amount,'personal')+' from '+from.name+' to '+to.name+'.'+
       (origin.balance?' The destination purse is full. '+funds(origin.balance,'personal')+' remain at '+from.name+'.':''):
+      goods?person+' packed their personal belongings for '+to.name+'.':
       person+' brought this week’s completed work record from '+from.name+' to '+to.name+'.';
     receipt(from,fromId,world.week,'moveOut',-amount,message);origin.entries[0].transfer={...link};
     receipt(to,toId,world.week,'moveIn',amount,message);destination.entries[0].transfer={...link};
@@ -270,10 +329,20 @@
         (e.action==='moveIn'?x.to===site.id&&x.toId===id&&x.toGeneration===(site.foundingRevision||0)&&e.amount>=0:
           x.from===site.id&&x.fromId===id&&x.fromGeneration===(site.foundingRevision||0)&&e.amount<=0);
     }
+    if(['give','receive','sale','purchase'].includes(e.action)){
+      const pair=e.pair,incoming=e.action==='receive'||e.action==='sale',sale=e.action==='sale'||e.action==='purchase';
+      return obj(pair)&&(pair.fromIdentity==null&&pair.toIdentity==null||
+        [pair.fromIdentity,pair.toIdentity].every(key=>typeof key==='string'&&key.startsWith('birth:')&&key.length<=1100)&&pair.fromIdentity!==pair.toIdentity)&&
+        pair.from!==pair.to&&local(site,pair.from)&&local(site,pair.to)&&int(pair.stamp,1,site.purses.serial)&&
+        (sale?pair.product==='courtyardHome'||Object.hasOwn(root.EarthResidentShops?.products||{},pair.product):pair.product===undefined)&&
+        (incoming?pair.to===id&&int(e.amount,1,12):pair.from===id&&int(-e.amount,1,12));
+    }
+    if(e.action==='input')return int(-e.amount,1,6);
     return e.action==='wage'?e.amount===wage:e.action==='donate'?e.amount===-1:e.action==='buy'?e.amount<0&&e.amount>=-6:e.action==='dream'?e.amount<0&&e.amount>=-4:
-      ['start','check','cancel','expired','household'].includes(e.action)&&e.amount===0;
+      ['start','check','cancel','expired','household','deed','listing'].includes(e.action)&&e.amount===0;
   }
   function valid(site,week){
+    if(root.EarthResidentShops&&!root.EarthResidentShops.validHomes(site,week))return false;
     const b=site.purses;if(b===undefined)return true;
     if(!obj(b)||!int(b.serial,1)||!int(b.household)||!obj(b.people)||!obj(b.tickets)||
       Object.keys(b.people).length>site.residents.length+7+24||!Object.keys(b.people).length||Object.keys(b.tickets).length>openings)return false;
@@ -281,16 +350,25 @@
     for(const [id,p] of Object.entries(b.people)){
       const net=netTransfers(p);
       if(!local(site,id)||!obj(p)||!int(p.earned)||p.earned%wage||p.earned/wage>week-(site.founded||1)+1||
-        net===null||!int(p.balance)||BigInt(p.balance)>BigInt(p.earned)+net||
+        net===null||!int(p.balance)||!int(p.received??0)||BigInt(p.balance)>BigInt(p.earned)+net+BigInt(p.received||0)||
+        root.EarthResidentShops&&!root.EarthResidentShops.validAccount(p,week)||
         p.carriedWeek!=null&&(!int(p.carriedWeek,site.founded||1,week)||p.netTransfers==null)||
         !int(p.lastWeek,p.earned?site.founded||1:0,p.earned?week:0)||!Array.isArray(p.entries)||!p.entries.length||p.entries.length>8)return false;
       if(p.lastWeek===week)used++;
       maxDonated+=BigInt(p.earned)+net-BigInt(p.balance);
-      let netAtEntry=net;
+      let netAtEntry=net+BigInt(p.received||0);
       for(let i=0;i<p.entries.length;i++){
         const entry=p.entries[i];
         if(!validEntry(entry,site,id,week,p,i,netAtEntry))return false;
-        if(entry.action==='moveIn'||entry.action==='moveOut')netAtEntry-=BigInt(entry.amount);
+        if(['moveIn','moveOut','receive','sale'].includes(entry.action))netAtEntry-=BigInt(entry.amount);
+        if(entry.pair){
+          const pair=entry.pair,other=account(site,id===pair.from?pair.to:pair.from)?.entries;
+          if(!other)return false;
+          const match=other.some(r=>r.pair?.stamp===pair.stamp&&r.pair.from===pair.from&&r.pair.to===pair.to&&
+            r.pair.product===pair.product&&r.pair.fromIdentity===pair.fromIdentity&&r.pair.toIdentity===pair.toIdentity&&r.week===entry.week&&r.amount===-entry.amount&&
+            r.action===({give:'receive',receive:'give',sale:'purchase',purchase:'sale'}[entry.action]));
+          if(!match&&(other.length<8||other[other.length-1].week<entry.week))return false;
+        }
       }
       // Fewer than eight receipts means we can see the full account history.
       if(p.entries.length<8&&netAtEntry!==0n)return false;
@@ -323,5 +401,5 @@
     }
     return true;
   }
-  root.EarthPurses=Object.freeze({view,run,tick,valid,escrow,committed,opportunity,workWeek,dreamExpense,moveBalance,validMoves});
+  root.EarthPurses=Object.freeze({view,run,tick,valid,escrow,committed,canTransfer,transferPerson,buyMakerInput,noteDeed,workConflict,opportunity,workWeek,dreamExpense,moveBalance,validMoves});
 })(typeof window==='undefined'?globalThis:window);

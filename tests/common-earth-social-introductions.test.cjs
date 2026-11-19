@@ -19,6 +19,31 @@ function ask(t){
   const reply=ok(to(t,guide,'intro:ask:care')),p=reply.introduction;
   assert.ok(p,reply.message);assert.equal(p.contactId,t.s.residents[2].id);return p;
 }
+test('a contact can decline a warm introduction after a broken agreement, and no later occupant inherits its cooperation',()=>{
+  const t=setup(),api=t.c.EarthIntroductions,ref=ask(t);
+  vm.runInContext(fs.readFileSync(path.join(base,'social-memory.js'),'utf8'),t.c);
+  assert(t.c.EarthAutonomy.remember(t.s,t.w.week,ref.contactId,'steward','missed'));
+  const decline=ok(to(t,ref.contactId,'intro:meet:'+ref.serial));
+  assert(decline.changed);assert.match(decline.message,/smaller promise/);
+  assert.equal(api.level(t.s,'steward',ref.contactId,ref.field,t.w.week),0);
+  assert.match(ok(to(t,ref.contactId,'intro:recall:'+ref.serial)).message,/agreement together first/);
+  assert(!to(t,ref.contactId,'intro:meet:'+ref.serial).ok);assert(t.c.CommonEarthSim.readSave(JSON.stringify(t.w)));
+  const row=t.s.introductions.rows[0],former=row.contactKey;
+  row.contactKey='a different person occupied this slot';
+  assert(!to(t,ref.contactId,'intro:recall:'+ref.serial).ok);
+  row.contactKey=former;t.sim.destroy();
+});
+test('an introduction can turn into peer practice when the learner has caught up by the meeting',()=>{
+  const t=setup(),p=ask(t),api=t.c.EarthIntroductions;
+  const profiles=t.c.EarthPersonas;
+  t.c.EarthPersonas={...profiles,profile(site,id){
+    const person=profiles.profile(site,id);
+    return id==='steward'?{...person,aptitudes:{...person.aptitudes,[p.field]:profiles.profile(site,p.contactId).aptitudes[p.field]}}:person;
+  }};
+  const met=ok(to(t,p.contactId,'intro:meet:'+p.serial));assert.match(met.message,/as peers/);
+  assert.equal(api.level(t.s,'steward',p.contactId,p.field,t.w.week),1);
+  assert(t.c.CommonEarthSim.readSave(JSON.stringify(t.w)));t.sim.destroy();
+});
 test('two distinct face-to-face meetings create one remembered introduction; saves and casual talk preserve it',()=>{
   const t=setup(),guide=t.s.residents[0].id,baseline=JSON.stringify(t.s);
   assert.equal(t.c.EarthIntroductions.pending(t.s,t.w,'steward'),null);

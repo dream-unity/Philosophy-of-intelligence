@@ -117,3 +117,21 @@ test('a restricted handover gives an administrative substitute only records work
   }
   assert.equal(plan({kind:'routine',careerId:'surveyor',handoverRole:'Nurse',handoverScope:'qualified'}).id,'surveyor');
 });
+
+test('supervised placements, regional consignments and private wares display the agreed task and the correct tools',()=>{
+  const pair={placementJob:'carpenter'},learner=plan({...pair,placementSide:'learner',kind:'learn'}),mentor=plan({...pair,placementSide:'mentor',kind:'commitment'});
+  assert(learner.steps.some(s=>s.phase==='study'&&s.prop==='slate'));assert(mentor.steps.some(s=>s.prop==='hammer'));
+  assert.equal(plan({...pair,placementSide:'mentor',kind:'rest'}).id,'rest');
+  const freight=plan({kind:'freight',good:'food',amount:4});assert(freight.steps.some(s=>s.label.includes('4 food')&&s.prop==='basket'));
+  context.EarthResidentShops={products:{apron:{shop:'clothing'},basket:{shop:'weaving'},crate:{shop:'joinery'},flute:{shop:'music'},drum:{shop:'music'}}};
+  for(const [ware,prop] of Object.entries({apron:'cloth',basket:'weaving',crate:'hammer',flute:'flute',drum:'drum'}))
+    assert(plan({kind:'marketSupply',activity:'makeWare',ware}).steps.some(s=>s.prop===prop),ware);
+  for(const [homeStage,id] of [[1,'house-footings'],[2,'house-frame'],[3,'house-finish']])
+    assert.equal(plan({kind:'marketSupply',activity:'buildHome',homeStage}).id,id);
+  assert.equal(plan({kind:'marketSupply',activity:'tendPatch',resource:'kelp',venue:'dock'}).id,'restore-water');
+  assert.equal(plan({kind:'marketSupply',activity:'tendPatch',resource:'timber'}).id,'restore-wood');
+  assert.equal(plan({kind:'marketSupply',activity:'tendPatch',resource:'herbs',patchCare:'irrigate'}).id,'water-bed');
+  assert.equal(plan({kind:'marketSupply',activity:'tendPatch',resource:'greens',patchCare:'restPatch'}).id,'rest-beds');
+  assert(plan({kind:'project',projectKind:'food',projectPhase:'plan',resource:'fish'}).steps.some(s=>s.prop==='rod'));
+  for(const good of ['millet','herbs','nuts','shellfish'])assert(context.EarthStreetActivity.harvestStep(good),good);
+});

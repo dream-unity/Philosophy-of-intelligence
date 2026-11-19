@@ -32,3 +32,9 @@ body[data-visiting-district] #character-lives,body[data-visiting-district] #pers
 @container street (max-width:430px){.trail-control,.trail-heading{padding:.38rem .5rem}.trail-buttons button{min-height:32px;max-width:49%;font-size:.76rem}.trail-pin{font-size:.68rem}.trail-note{font-size:.79rem}}
 
 body[data-district-crossing] :is(#street-controls,#street-actors,#actions-panel,#street-hud,#calendar-personal-work,#advance-week){display:none!important}
+
+.district-destinations{padding:0 0 .75rem;border-bottom:1px solid rgba(80,117,101,.32)}
+.district-destinations label{display:block;font-weight:700;margin-bottom:.25rem}
+.district-destinations select{display:block;width:100%;max-width:100%;min-height:2.55rem;font:inherit}
+.district-destinations .district-options button{flex:1 1 auto;min-height:2.6rem}
+.district-destinations details{margin-top:.45rem}

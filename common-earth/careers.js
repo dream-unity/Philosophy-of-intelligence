@@ -30,6 +30,41 @@
     job('practice-nurse','Practice nurse','Neighbourhood practice','care',72,'organisation',55,156,2,'exchange','hall','wellbeing',3,'Coordinate neighbourhood follow-up visits and community care.')
   ]);
   const jobs=Object.fromEntries(catalog.map(j=>[j.id,j]));
+  // A disposition changes how appealing a working day feels. It never counts
+  // toward a qualification or limits what a player can learn.
+  const workStyles={
+    gardener:['patience',true,'tending the same beds through a season'],
+    refuse:['patience',true,'keeping a collection round dependable'],
+    nurse:['adaptability',true,'adjusting the clinic round when a household needs help'],
+    police:['sociability',true,'hearing both neighbours out in person'],
+    mathematician:['sociability',false,'working through an estimate in quiet'],
+    engineer:['curiosity',true,'testing a different repair when the first one fails'],
+    geneticist:['patience',true,'following a seed trial across several plantings'],
+    musician:['adaptability',true,'adjusting a phrase to the rest of the ensemble'],
+    teacher:['sociability',true,'working out an explanation with a roomful of learners'],
+    cook:['initiative',true,'finding a meal that uses what comes in today'],
+    baker:['adaptability',false,'keeping the order of a familiar morning bake'],
+    carpenter:['patience',true,'working a joint until both pieces fit'],
+    driver:['initiative',true,'rerouting a collection when a delivery changes'],
+    courier:['sociability',false,'walking the stretches between calls alone'],
+    trader:['sociability',true,'negotiating with different buyers across the counter'],
+    grower:['curiosity',true,'trying a new planting alongside a familiar crop'],
+    repairer:['curiosity',true,'tracing a fault back to its cause'],
+    convenor:['sociability',true,'bringing different households into a decision'],
+    surveyor:['patience',true,'checking a site measurement before anyone orders timber'],
+    'practice-nurse':['patience',true,'following a household through successive visits']
+  };
+  // Fictional employers recognise a limited amount of supervised work in a
+  // related trade. Every change still has its own assessment and notice.
+  const relatedTrades={
+    gardener:['grower'], grower:['gardener'], refuse:['driver','courier'],
+    driver:['courier','refuse'], courier:['driver','refuse'], cook:['baker'], baker:['cook'],
+    carpenter:['repairer','surveyor'], repairer:['carpenter','engineer'],
+    engineer:['surveyor','mathematician','carpenter','repairer'],
+    surveyor:['engineer','carpenter','mathematician'], mathematician:['engineer','surveyor'],
+    teacher:['mathematician','musician','convenor'], convenor:['teacher','police'],
+    geneticist:['mathematician','grower']
+  };
   const jobLabels=new Map(catalog.map(j=>[j.label,j.id]));
   const nursingPosts=['nurse','practice-nurse'];
   const get=(map,key)=>map&&Object.hasOwn(map,key)?map[key]:undefined;
@@ -59,8 +94,10 @@
   const memory=(site,id)=>get(site?.careers,id);
   const role=(site,id)=>get(jobs,memory(site,id)?.jobId)?.label||null;
   function work(site,id){
-    const j=get(jobs,memory(site,id)?.jobId);
-    return j?{id:j.id,role:j.label,label:j.label,employer:j.employer,venue:j.venue,occupation:j.occupation,service:j.service}:null;
+    const m=memory(site,id),j=get(jobs,m?.jobId);
+    if(!j)return null;
+    const assignment=root.EarthPersonas?.dutiesFor?.(j.id)?.[m.dutyIndex];
+    return {id:j.id,role:j.label,label:j.label,employer:j.employer,venue:j.venue,occupation:j.occupation,service:j.service,...(assignment?{assignment}:{})};
   }
   const state=(site,id)=>memory(site,id)||{};
   function employment(site,p,m){
@@ -70,6 +107,22 @@
     // Previous credentials travel. A district employer hires separately, even
     // when the visitor brings precisely the trade the new district needs.
     return {...prior,id:'origin',label:p.role||prior.label,employer:'Independent neighbourhood rounds'};
+  }
+  function chooseDuty(site,world,p,m,j){
+    const options=root.EarthPersonas?.dutiesFor?.(j.id);if(!options)return;
+    const staffing=options.map(()=>0);
+    for(const colleague of people(site)){
+      if(colleague.id===p.id)continue;
+      const other=state(site,colleague.id);
+      if(other.application?.phase==='notice'&&other.application.dueWeek<=world.week||employment(site,colleague,other).id!==j.id)continue;
+      const index=other.jobId===j.id?other.dutyIndex:options.findIndex(v=>v.label===colleague.workFocus?.label);
+      if(Number.isInteger(index)&&index>=0&&index<staffing.length)staffing[index]++;
+    }
+    let best=0;
+    for(let index=1;index<options.length;index++){
+      if(staffing[index]<staffing[best]||staffing[index]===staffing[best]&&skill(p,m,options[index].axis)>skill(p,m,options[best].axis))best=index;
+    }
+    m.dutyIndex=best;return options[best];
   }
   function ensure(site,id){
     const book=site.careers??={};
@@ -123,9 +176,10 @@
     if(state(site,id).lastPracticeWeek===week||root.EarthAutonomy?.sessionSpent?.(site,id,week)||specialistShift(site,id,week)||root.EarthPurses?.committed?.(site,id,week))return {ok:false,reason:'This week’s personal practice session is already used.'};
     if(!commit)return {ok:true};
     const m=ensure(site,id),other=witness&&profile(site,witness);
-    const raised=gain(p,m,axis,other?2:1);
+    const instrument=axis==='music'&&root.EarthResidentShops?.instrument?.(site,id);
+    const raised=gain(p,m,axis,(other?2:1)+(instrument?1:0));
     m.lastPracticeWeek=week;m.revision++;
-    note(m,week,'Practised '+axis+(other?' with feedback from '+other.name:' independently')+
+    note(m,week,'Practised '+axis+(instrument?' on the '+instrument:'')+(other?' with feedback from '+other.name:' independently')+
       (raised?' and gained '+raised+' skill point'+(raised===1?'':'s')+'.':'. The session was for enjoyment at the current skill ceiling.'));
     return {ok:true,gain:raised};
   }
@@ -178,14 +232,85 @@
   function canFit(p,j){
     return bounds(p,j.skill).max+6>=j.requiredSkill && bounds(p,j.secondary).max>=j.secondMinimum;
   }
+  function recognisedStudy(world,site,p,m,j){
+    let best=null;
+    for(const id of relatedTrades[j.id]||[]){
+      const served=serviceWeeks(world,site,p.id,id);
+      if(served<8||!qualified(p,m,jobs[id]))continue;
+      const credits=Math.min(Math.floor(j.trainingWeeks/4),Math.floor(served/2));
+      if(credits>0&&(!best||credits>best.credits))best={sourceId:id,credits};
+    }
+    return best;
+  }
+  function outlook(world,site,p,m,j){
+    const leading=skill(p,m,j.skill),support=skill(p,m,j.secondary);
+    const [trait,high,activity]=workStyles[j.id],disposition=p.traits?.[trait]??50;
+    const affinity=high?disposition:100-disposition;
+    const vacancy=root.EarthEmployers?.recorded(site,j.id)||0;
+    const free=openings(site,j.id),qualifiedHere=qualified(p,m,j);
+    const studying=m.training?.targetId===j.id?m.training:null;
+    const recognition=!qualifiedHere&&!studying?recognisedStudy(world,site,p,m,j):null;
+    const weeks=qualifiedHere?0:Math.ceil((j.trainingWeeks-(studying?.credits??recognition?.credits??0))/(studying?.pace==='intensive'?2:1));
+    const attainable=canFit(p,j),underPressure=pressure(site,j);
+    const benefit=Math.min(18,vacancy*9)+(underPressure?4:0);
+    const horizon=Math.min(15,Math.sqrt(weeks))*(107-(p.traits?.patience??50))/100;
+    const skillFit=(leading*2+support)/3;
+    const experience=Math.min(7,Math.sqrt(serviceWeeks(world,site,p.id,j.id)));
+    const score=skillFit+(p.strengths?.includes(j.skill)?5:0)+(p.hobbyAxis===j.skill?3:0)+(p.workFocus?.axis===j.skill?2:0)+
+      (affinity-50)*0.16+benefit+(qualifiedHere?6:0)+experience-horizon-(free===0&&m.jobId!==j.id?14:0);
+    return {job:j,score,attainable,activity,affinity,weeks,recognition,vacancy,free,underPressure,incumbent:m.jobId===j.id};
+  }
+  function routes(world,site,p){
+    const m=state(site,p.id);
+    return catalog.map(j=>outlook(world,site,p,m,j)).sort((a,b)=>Number(b.attainable)-Number(a.attainable)||
+      b.score-a.score||a.job.id.localeCompare(b.job.id));
+  }
+  function rationale(plan,site,firstPerson=true){
+    if(!plan)return '';
+    const {job:j}=plan;
+    const worker=firstPerson?'I enjoy ':'The daily work includes ';
+    const style=plan.affinity>=58?worker+plan.activity+'.':'The daily work includes '+plan.activity+'.';
+    const opening=site.employers?.[j.id]?.open?.[0];
+    if(opening)return style+' '+j.employer+' needs someone to take over '+opening.name+'’s old round.';
+    if(plan.free===0&&!plan.incumbent)return style+' All funded posts are held. A qualified applicant can wait for an opening.';
+    if(plan.underPressure){
+      const need={food:'The pantry has '+site.food+' food for about '+Math.ceil((site.population||1)/5)+' meals a week.',
+        materials:'Repair crews are drawing on the '+site.materials+' materials in store.',funds:'The treasury has '+site.funds+' funds left for local work.',
+        wellbeing:'Households need the service more often while wellbeing is low.',trust:'Residents are asking for help to restore trust.'};
+      return style+' '+need[j.metric];
+    }
+    return style;
+  }
+  function waitingAlternative(world,site,p,m=state(site,p.id)){
+    const a=m.application;
+    if(a?.phase!=='waiting'||!a.autonomous||m.agreedPlan||m.training||m.specialistRelief?.week>=world.week||
+      !site.employers||world.week-a.appliedWeek<12+Math.round((p.traits?.patience??50)/4))return null;
+    const current=employment(site,p,m),waiting=get(jobs,a.targetId);
+    if(!waiting||openings(site,waiting.id)!==0)return null;
+    const previous=outlook(world,site,p,m,waiting);
+    const horizon=8+Math.round((p.traits?.adaptability??50)/3);
+    let best=null;
+    for(const [id,employer] of Object.entries(site.employers)){
+      const job=get(jobs,id);
+      if(!job||id===waiting.id||id===current.id||!employer.open?.length)continue;
+      const plan=outlook(world,site,p,m,job);
+      if(!plan.attainable||plan.free===0||plan.weeks>horizon||(!plan.weeks&&screening(p,m,job).length))continue;
+      if(plan.score<previous.score+3||best&&plan.score<=best.score)continue;
+      best=plan;
+    }
+    return best;
+  }
   function consent(world,site,p,m,j,action,speaker){
     if(!speaker||speaker===p.id)return '';
+    if(['apply','enroll','portfolio','practice','support','discussOffer','handover'].includes(action)&&
+      (root.EarthAutonomy?.bond?.(site,p.id,speaker,world.week)||0)<=-3)
+      return p.name+' remembers an agreement you missed. They want to rebuild trust before making another career plan with you.';
     const playable=root.EarthAgency?.canPlay?.(site,p.id)??(p.kind!=='carrier'&&!/^carrier-/.test(p.id));
     if(['withdraw','release','pause','pace','accept','resume','leaveCourse'].includes(action)){
       return playable?'Play as '+p.name+' to make this decision about their employment or study.':
         p.name+' manages this decision personally. Meet them to discuss a course, application or offer.';
     }
-    if(action==='mentor')return playable?'Play as '+p.name+' and meet the mentor.':
+    if(action==='mentor'||action==='placement')return playable?'Play as '+p.name+' and meet the mentor.':
       p.name+' arranges their own lessons. You can meet them to suggest practice or a work sample.';
     if(action==='specialistRelief'&&(p.traits?.adaptability??50)<45&&!['waiting','screening'].includes(m.application?.phase))
       return p.name+' wants to finish their own work. They would consider covering this employer while pursuing a post there.';
@@ -199,19 +324,75 @@
       return p.name+' wants to try '+j.skill+' first. Suggest practice or help them build a sample.';
     return '';
   }
-  function mentorFor(site,p,m,j,week){
-    const learner=skill(p,m,j.skill);
+  function mentorFor(world,site,p,m,j){
+    const learner=skill(p,m,j.skill),week=world.week;
     let best=null,level=-Infinity;
     for(const person of people(site)){
       if(person.id===p.id)continue;
       const other=state(site,person.id),score=skill(person,other,j.skill);
-      if(score<learner+3||other.lastPracticeWeek===week||other.specialistRelief?.week===week||root.EarthPurses?.committed?.(site,person.id,week)||other.training?.pace==='intensive'&&!other.training.paused)continue;
+      if(score<learner+3||other.training?.pace==='intensive'&&!other.training.paused||!freeForPlacement(world,site,person.id,other))continue;
       const tie=root.EarthAutonomy?.bond?.(site,p.id,person.id,week)||0;
       if(tie<0)continue;
       const priority=score+tie+(root.EarthIntroductions?.level(site,p.id,person.id,j.skill,week)||0);
       if(!best||priority>level||priority===level&&person.id<best.id){best=person;level=priority;}
     }
     return best;
+  }
+  function freeForPlacement(world,site,id,m){
+    const week=world.week,row=site.autonomy?.people?.[id],roster=site.workforce?.members?.[id];
+    return residentHere(site,id)&&m.lastPracticeWeek!==week&&!(m.specialistRelief?.week>=week)&&
+      !root.EarthAutonomy?.sessionSpent?.(site,id,week)&&!root.EarthPurses?.committed?.(site,id,week)&&
+      !coverCommitment(site,id,week)&&site.shift?.residentId!==id&&!site.residents?.some(r=>r.id===id&&r.promise)&&
+      !(site.pursuits?.ticket&&site.pursuits.ticket.maker===profile(site,id)?.name)&&
+      !roster?.jobId&&!roster?.preferredJobId&&(row?.energy??5)>=2&&
+      !root.EarthConstruction?.assignedDuty?.(site,world,id)&&!root.EarthCivicInitiatives?.commitment?.(site,world,id);
+  }
+  function placement(world,site,id,targetId,mentors=null){
+    const m=state(site,id),t=m.training,j=get(jobs,targetId);
+    if(!j||t?.targetId!==targetId||t.paused||t.placement||!t.credits||t.credits>=j.trainingWeeks||
+      j.trainingWeeks>=8&&coursePhase(j,t.credits).phase!=='Supervised placement')return null;
+    if(!freeForPlacement(world,site,id,m))return null;
+    const pupil=profile(site,id);
+    let best=null;
+    for(const tutor of mentors||people(site)){
+      if(tutor.id===id)continue;
+      const other=state(site,tutor.id),post=employment(site,tutor,other);
+      if(post.id!==j.id&&!(nursingPosts.includes(post.id)&&nursingPosts.includes(j.id)))continue;
+      if(requiresCredential(j.id)&&!canCoverPost(site,tutor.id,j.id))continue;
+      if(other.training?.pace==='intensive'&&!other.training.paused||!freeForPlacement(world,site,tutor.id,other))continue;
+      const tie=root.EarthAutonomy?.bond?.(site,tutor.id,id,world.week)||0;
+      if(tie<0||tie===0&&(tutor.traits?.sociability??50)+(tutor.traits?.patience??50)<82)continue;
+      const lead=skill(tutor,other,j.skill)-skill(pupil,m,j.skill),support=skill(tutor,other,j.secondary)-skill(pupil,m,j.secondary);
+      const axis=lead>=support?j.skill:j.secondary;
+      const growth=Math.max(0,Math.min(3,Math.max(lead,support),bounds(pupil,axis).max-skill(pupil,m,axis)));
+      const sample=samples(m,j)<3;
+      if(!sample&&!growth)continue;
+      const score=tie*4+growth*2+(tutor.traits?.patience??50)/10;
+      if(!best||score>best.score||score===best.score&&tutor.id<best.mentorId){
+        best={mentorId:tutor.id,mentorName:tutor.name,axis,growth,sample,score};
+      }
+    }
+    return best;
+  }
+  function attendPlacement(world,site,id,targetId,mentorId,scheduled=false){
+    const tutor=profile(site,mentorId),pupil=profile(site,id),j=get(jobs,targetId);
+    const agreed=tutor&&pupil&&placement(world,site,id,targetId,[tutor]);
+    if(!agreed)return fail('The worker, supervision or course timetable changed. Review this placement again.');
+    const week=world.week,m=ensure(site,id),other=ensure(site,mentorId);
+    const raised=gain(pupil,m,agreed.axis,agreed.growth);
+    m.lastPracticeWeek=week;other.lastPracticeWeek=week;other.lastTeachingWeek=week;
+    gain(tutor,other,'communication',1);
+    if(agreed.sample)m.portfolios[targetId]=samples(m,j)+1;
+    m.training.placement={week,name:tutor.name,axis:agreed.axis,sample:agreed.sample,format:scheduled?'placement':'review'};
+    const meeting=scheduled?tutor.name+' supervised '+pupil.name+' at '+j.employer+'. ':
+      tutor.name+' met '+pupil.name+' to review their work for '+j.employer+'. ';
+    const message=meeting+
+      (agreed.sample?'The employer signed a '+j.label.toLowerCase()+' work sample. ':'')+
+      (raised?pupil.name+' gained '+raised+' '+agreed.axis+'.':'The learner demonstrated their current skills.');
+    note(m,week,message);note(other,week,meeting.trim());
+    m.revision++;other.revision++;
+    if(!scheduled)root.EarthAutonomy?.remember?.(site,week,id,mentorId,'lesson');
+    return {ok:true,message,personId:id,revision:m.revision};
   }
   function coverFor(site,p,old,week,excludeId=null){
     const link=porterSlot(p.id)&&['origin','courier'].includes(old.id)?activeLane(site,p.id):null;
@@ -389,8 +570,12 @@
       const studied=t?.targetId===j.id,enrolled=t&&!studied,active=a&&a.phase!=='deferred',appHere=a?.targetId===j.id;
       const sameJob=j.id===current.id;
       const canStudy=qualified(p,m,j);
-      if(!canStudy&&!studied)add('enroll','Enrol in '+j.label+' training','Evening study keeps the current job. Complete '+j.trainingWeeks+' credits before employer assessment.',
-        enrolled?'Finish, pause and leave, or resume your current course first.':'');
+      if(!canStudy&&!studied){
+        const prior=recognisedStudy(world,site,p,m,j);
+        const detail=prior?j.employer+' recognises '+prior.credits+' credits from documented work as '+jobs[prior.sourceId].label+'. Complete the remaining '+(j.trainingWeeks-prior.credits)+' credits alongside the current job.':
+          'Evening study keeps the current job. Complete '+j.trainingWeeks+' credits before employer assessment.';
+        add('enroll','Enrol in '+j.label+' training',detail,enrolled?'Finish, pause and leave, or resume your current course first.':'');
+      }
       if(studied){
         if(t.paused)add('resume','Resume training','Carry on with the '+t.credits+' completed credits.');
         else{
@@ -400,6 +585,9 @@
           add('pause','Pause this course','Keep the completed credits and regain full working time.');
         }
         if(t.paused)add('leaveCourse','Leave the course','Your acquired skills stay. Leaving releases the place and clears these course credits.');
+        const supervisor=context.matchPeople!==false&&placement(world,site,id,j.id);
+        if(supervisor)add('placement','Review a work sample with '+supervisor.mentorName,'Bring a '+j.label.toLowerCase()+
+          ' work sample to a colleague who holds the post. The session uses the learner’s and supervisor’s time.','',{mentorId:supervisor.mentorId,mentorName:supervisor.mentorName});
       }
       const taken=m.lastPracticeWeek===week||root.EarthAutonomy?.sessionSpent?.(site,id,week)||m.specialistRelief?.week===week||site.autonomy?.people?.[id]?.contribution?.week===week||root.EarthPurses?.committed?.(site,id,week)?'This person already used their personal practice session this week.':'';
       if(posts&&!sameJob&&canStudy)add('specialistRelief','Cover a '+j.label.toLowerCase()+' round',posts.service,posts.relief.reason);
@@ -409,7 +597,7 @@
       const lastClass=axis=>skill(p,m,axis)>=bounds(p,axis).max?'At the upper end of this person’s '+axis+' range.':'';
       add('practice','Practise '+j.skill,'Build this skill through personal practice. Current '+skills[j.skill]+' of '+bounds(p,j.skill).max+'.',taken||lastClass(j.skill));
       add('support','Practise '+j.secondary,'Work on the second skill used by '+j.employer+'. Current '+skills[j.secondary]+' of '+bounds(p,j.secondary).max+'.',taken||lastClass(j.secondary));
-      const mentor=context.matchPeople!==false&&!taken&&!lastClass(j.skill)?mentorFor(site,p,m,j,week):null;
+      const mentor=context.matchPeople!==false&&!taken&&!lastClass(j.skill)?mentorFor(world,site,p,m,j):null;
       if(mentor){
         const introduction=root.EarthIntroductions?.level(site,id,mentor.id,j.skill,week)>0?
           ' Your recent introduction gives this mentor priority when experience and availability are close.':'';
@@ -437,11 +625,17 @@
           }
           if(!a.releaseAsked&&a.dueWeek>week+1)add('release','Request an early release',current.employer+' can refuse if important work is uncovered. Leaving urgently without cover affects their future reference.');
         }else add('withdraw','Withdraw application','Keep the current job and all completed learning.');
-      }else if(!sameJob && active)add('apply','Apply to '+j.employer,'Only one live job application is considered at a time.','Finish or withdraw the current application first.');
+      }else if(!sameJob && active){
+        if(a.phase==='waiting'&&speaker===id&&waitingAlternative(world,site,p,m)?.job.id===j.id){
+          const opening=site.employers[j.id].open[0];
+          add('followVacancy','Pursue the vacancy at '+j.employer,'Leave the '+jobs[a.targetId].label.toLowerCase()+' waiting list and '+(canStudy?'submit a fresh application':'start evening study')+' for '+opening.name+'’s former post. The previous qualification is retained.','',
+            {openingKey:opening.opened+'/'+opening.formerId});
+        }else add('apply','Apply to '+j.employer,'Only one live job application is considered at a time.','Finish or withdraw the current application first.');
+      }
     }
-    return {personId:id,name:p.name,career:current.label,careerId:current.id,employer:current.employer,
+    return {personId:id,name:p.name,career:current.label,careerId:current.id,employer:current.employer,assignment:work(site,id)?.assignment||(!m.jobId&&p.birthCommunityId===site.id?p.workFocus:null),
       skills,tenure:tenure(world,site,p,m,current),aptitude:Object.fromEntries(axes.map(k=>[k,aptitude(p,k)])),bounds:Object.fromEntries(axes.map(k=>[k,bounds(p,k)])),
-      history:(m.history||[]).map(h=>({...h})),training:t?{...t,...coursePhase(jobs[t.targetId],t.credits)}:null,application:a?{...a}:null,
+      history:(m.history||[]).map(h=>({...h})),training:t?{...t,...(t.recognised?{recognised:{...t.recognised}}:{}),...(t.placement?{placement:{...t.placement}}:{}),...coursePhase(jobs[t.targetId],t.credits)}:null,application:a?{...a}:null,
       recruitment:j?root.EarthEmployers?.view(site,world,j.id)||null:null,qualifications:{...m.qualifications},portfolios:{...m.portfolios},references:{...m.references},latestReference:m.latestReference?{...m.latestReference}:null,agreedPlan:m.agreedPlan||null,
       targetId:j?.id,opening:posts,supplyLane:porterSlot(id)?supplyLane(site,world,id):null,qualified:j?qualified(p,m,j):false,missing:j?screening(p,m,j):[],
       fits:j?canFit(p,j):false,stage:a?.phase==='deferred'&&t?'training':a?.phase||(t?'training':'employed'),
@@ -452,19 +646,36 @@
     if(!p||!j||!world)return fail('Choose a known person and profession.');
     if(!residentHere(site,id))return fail('A visitor manages their own employment. Meet a member of this community to discuss local work.');
     if((old.revision||0)!==expectedRevision)return fail('This career decision changed. Review the person’s current options.');
-    const info=view(world,site,id,targetId,{...context,matchPeople:action==='mentor'||action==='handover'}),option=info.choices.find(c=>c.id===action);
+    const info=view(world,site,id,targetId,{...context,matchPeople:['mentor','placement','handover'].includes(action)}),option=info.choices.find(c=>c.id===action);
     if(!option||!option.available)return fail(option?.reason||'This choice is unavailable at the current career stage.');
+    if(action==='followVacancy'&&context.openingKey!==option.openingKey)return fail('The vacancy changed. Review the named opening before leaving the waiting list.');
     const week=world.week, speaker=context.speakerId??root.EarthAgency?.actorId(site)??id;
     const adopted=speaker!==id&&['enroll','apply'].includes(action),autonomous=Boolean(context.autonomous||adopted);
-    if(action==='mentor' && (!proof||proof.actor!==id||proof.target!==option.mentorId||proof.siteId!==site.id||
+    if(['mentor','placement'].includes(action) && (!proof||proof.actor!==id||proof.target!==option.mentorId||proof.siteId!==site.id||
       proof.mode!=='walk'||![proof.x,proof.y,proof.tx,proof.ty].every(Number.isFinite)||Math.hypot(proof.x-proof.tx,proof.y-proof.ty)>1.56))return fail('Meet the named mentor on foot for this lesson.');
+    if(action==='placement')return attendPlacement(world,site,id,targetId,option.mentorId);
     if(action==='handover'&&context.coverId && context.coverId!==option.coverId)return fail('The proposed colleague’s availability changed.');
     const m=ensure(site,id),current=employment(site,p,m),a=m.application,t=m.training;
     let message;
     switch(action){
-      case 'enroll':
-        m.training={targetId,credits:0,startedWeek:week,lastWeek:week,pace:'evening',paused:false,autonomous};
-        message=p.name+' enrolled in '+j.label+' training and kept their post at '+current.employer+'.';break;
+      case 'followVacancy':{
+        const kept=jobs[a.targetId].label,former=site.employers[j.id].open[0].name;
+        delete m.application;
+        if(qualified(p,m,j)){
+          m.application={targetId,phase:'screening',dueWeek:week+2,autonomous,...(Object.hasOwn(specialistSites,targetId)?{appliedWeek:week}:{})};
+          message=p.name+' left the '+kept.toLowerCase()+' waiting list and applied to replace '+former+' at '+j.employer+'. Their qualification stays with them.';
+          break;
+        }
+        message=p.name+' left the '+kept.toLowerCase()+' waiting list to train for '+former+'’s former post. ';
+      }
+      // Employers recognise prior practice on either route into evening study.
+      case 'enroll':{
+        const prior=recognisedStudy(world,site,p,m,j);
+        m.training={targetId,credits:prior?.credits||0,startedWeek:week,lastWeek:week,pace:'evening',paused:false,autonomous};
+        if(prior)m.training.recognised=prior;
+        message=(message||'')+p.name+' enrolled in '+j.label+' training and kept their post at '+current.employer+'.'+
+          (prior?' '+j.employer+' recognised '+prior.credits+' credits for service as '+jobs[prior.sourceId].label+'.':'');break;
+      }
       case 'pace':
         t.pace=t.pace==='intensive'?'evening':'intensive';
         message=p.name+' agreed a new '+t.pace+' study timetable with '+current.employer+'.';break;
@@ -569,10 +780,13 @@
     let skillGrowth=0;
     if(weeks%13===0)skillGrowth+=gain(p,m,current.skill,1);
     if(weeks%26===0)skillGrowth+=gain(p,m,current.secondary,1);
+    const duty=weeks%26===0&&root.EarthPersonas?.dutiesFor?.(current.id)?.[m.dutyIndex];
+    const specialistGain=duty&&duty.axis!==current.skill&&duty.axis!==current.secondary?gain(p,m,duty.axis,1):0;
+    skillGrowth+=specialistGain;
     const inducted=weeks===(current.trainingWeeks>=52?8:2);
     const message=inducted?p.name+' finished the local induction at '+current.employer+' and can organise their own round.':
       weeks%26===0?p.name+' has completed '+weeks+' working weeks as '+current.label+'. '+(skillGrowth?
-        'Practising the job developed '+skillGrowth+' skill point'+(skillGrowth===1?'':'s')+'.':'Their demonstrated service continues at their current skill range.'):'';
+        'Practising the job developed '+skillGrowth+' skill point'+(skillGrowth===1?'':'s')+'.'+(specialistGain?' Their '+duty.label.toLowerCase()+' assignment developed '+duty.axis+'.':''):'Their demonstrated service continues at their current skill range.'):'';
     return {message};
   }
   function teach(p,m,j,oldCredits,newCredits){
@@ -626,11 +840,12 @@
         m.departure={oldRole:prior.label,oldEmployer:prior.employer,occupation:prior.occupation,coverId:a.coverId||null,throughWeek:week+1};
         if(part)m.departure.coverScope=part;
         if(root.EarthEmployers)moves.push({person:p,from:prior,to:target,appointed:!!m.jobId});
+        const duty=chooseDuty(site,world,p,m,target);
         m.jobId=target.id;m.joinedWeek=week;delete m.application;
         const outcome=fullCover?' handed the work to '+a.coverName+' and recorded a strong reference.':part==='admin'?
           ' has '+a.coverName+' handling '+supportTask(prior.id)+'. The professional round is still open. '+(a.early?'Early departure affected the reference.':'The employer recorded the full notice.'):
           a.early?' is short-staffed after the early release and recorded a poor reference.':' accepted the full notice and needs temporary cover.';
-        announce(p.name+' started as '+target.label+' at '+target.employer+'. '+prior.employer+outcome);
+        announce(p.name+' started as '+target.label+' at '+target.employer+'. '+prior.employer+outcome+(duty?' Their regular assignment is '+duty.label.toLowerCase()+'.':''));
       }
       const credited=clockService(world,site,p,m);
       if(credited){changed=true;if(credited.message)announce(credited.message);}
@@ -774,6 +989,7 @@
       const ref=m.latestReference;
       if(ref!==undefined && (!record(ref)||![...ids,'origin'].includes(ref.jobId)||!label(ref.employer)||!int(ref.quality,-2,2)||!int(ref.week,1,week)||m.references[ref.jobId]!==ref.quality))return false;
       if(m.jobId!=null && (!get(jobs,m.jobId)||!int(m.joinedWeek,1,week)))return false;
+      if(m.dutyIndex!=null&&!int(m.dutyIndex,0,2))return false;
       if(m.experience!=null && (!values(m.experience,ids,0,week)||Object.values(m.experience).reduce((sum,n)=>sum+n,0)>week))return false;
       if(['lastPracticeWeek','lastTeachingWeek','processedWeek','reducedWorkWeek','manualWeek'].some(k=>m[k]!=null&&!int(m[k],1,week)))return false;
       const t=m.training,a=m.application,d=m.departure;
@@ -781,6 +997,16 @@
       if(['training','application','departure'].some(k=>m[k]!==undefined&&!record(m[k])))return false;
       if(t&&(!get(jobs,t.targetId)||!int(t.credits,0,jobs[t.targetId].trainingWeeks-1)||!int(t.startedWeek,1,week)||!int(t.lastWeek,t.startedWeek,week)||
         !['evening','intensive'].includes(t.pace)||typeof t.paused!=='boolean'||typeof t.autonomous!=='boolean'))return false;
+      if(t?.recognised!==undefined){
+        const prior=t.recognised;
+        if(!record(prior)||!relatedTrades[t.targetId]?.includes(prior.sourceId)||
+          !int(prior.credits,1,Math.min(t.credits,Math.floor(jobs[t.targetId].trainingWeeks/4))))return false;
+      }
+      if(t?.placement!==undefined){
+        const visit=t.placement;
+        if(!record(visit)||!int(visit.week,t.startedWeek,week)||!label(visit.name)||visit.format!=null&&!['placement','review'].includes(visit.format)||
+          ![jobs[t.targetId].skill,jobs[t.targetId].secondary].includes(visit.axis)||typeof visit.sample!=='boolean')return false;
+      }
       if(a&&(!get(jobs,a.targetId)||!['screening','offer','notice','deferred','waiting'].includes(a.phase)||!int(a.dueWeek,1,week+8)||typeof a.autonomous!=='boolean'||a.appliedWeek!=null&&!int(a.appliedWeek,1,week)||
         a.phase==='waiting'&&(!Object.hasOwn(specialistSites,a.targetId)||!int(a.appliedWeek,1,week))||
         ['early','releaseAsked'].some(k=>a[k]!==undefined&&typeof a[k]!=='boolean')||a.phase==='deferred'&&!label(a.reason)||a.coverId!=null&&(!personOK(a.coverId)||a.coverId===id||!label(a.coverName))))return false;
@@ -788,5 +1014,5 @@
     }
     return true;
   }
-  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,canCoverPost,requiresCredential,handoverDuty,departureForMove,openings,serviceWeeks,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
+  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,routes,rationale,waitingAlternative,placement,attendPlacement,canCoverPost,requiresCredential,handoverDuty,departureForMove,openings,serviceWeeks,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
 })(typeof window==='undefined'?globalThis:window);

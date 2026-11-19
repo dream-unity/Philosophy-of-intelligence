@@ -23,6 +23,10 @@ test('background preview of a mixed saved world matches the foreground close and
   vm.runInContext(source,worker);
   worker.onmessage({data:{modules:core.map(urlFor),snapshot:original,sequence:7,count:1,week:sim.state.week,siteId:sim.state.activeId}});
   assert.equal(reply.sequence,7);assert.equal(JSON.stringify(reply.forecast.sites.map(x=>x.closing)),expected);
+  const distant=reply.sections.find(section=>section.key==='outposts'),after=JSON.parse(reply.after);
+  assert.equal(distant.ends.length,after.communityLife.outposts.length);
+  const first=JSON.parse(reply.after.slice(distant.start,distant.ends[0]));
+  assert.deepEqual(first,after.communityLife.outposts[0]);
   assert.equal(JSON.stringify(sim.state),original);sim.destroy();
 });
 test('two panels share one worker projection, stale replies are discarded and a changed world gets its own turn',async()=>{
@@ -114,4 +118,79 @@ test('older inland settlements send named lake shores to the worker and expire s
   c.EarthAtlas.nearLakeShore=(lat,lon)=>lat===inland.lat&&lon===inland.lon?'Lake Ladoga':lat===first.lat&&lon===first.lon?lake:'';
   assert.ok(sim.advance({usePrepared:true}).ok);assert.equal(sim.state,before,'discovering a second waterbody re-evaluates the ordinary calendar');
   preview.close();sim.destroy();ordinary.destroy();
+});
+
+test('an uninterrupted large world resumes the exact detached turn, and edited districts send a fresh snapshot',async()=>{
+  const c=runtime(),raw=eightDistricts(c),sim=c.CommonEarthSim.create({storage:null,snapshot:raw});
+  const ordinary=c.CommonEarthSim.create({storage:null,snapshot:raw}),worker=workerForGame(),sent=[];
+  const deliver=worker.postMessage.bind(worker);worker.postMessage=message=>{sent.push(message);deliver(message);};
+  const forecast=c.EarthForecastView.create(sim,{url:script,modules:core.map(urlFor),workerFactory:()=>worker});
+  for(let week=0;week<5;week++){
+    if(week===3){
+      sim.active().food+=7;ordinary.active().food+=7;
+    }
+    assert.equal(await forecast.prepareAdvance(),true);
+    const request=sent.at(-1);
+    if(!week||week===3)assert.equal(typeof request.snapshot,'string');
+    else{assert.equal(request.resume,sent.at(-2).sequence);assert.equal(request.snapshot,undefined);}
+    assert.ok(ordinary.advance().ok);assert.ok(sim.advance({usePrepared:true}).ok);
+    assert.equal(JSON.stringify(sim.state),JSON.stringify(ordinary.state));
+  }
+  forecast.close();sim.destroy();ordinary.destroy();
+});
+
+test('an asynchronous calendar close stays tied to the chosen world, never previews twice after a worker failure',async()=>{
+  const c=runtime(),sites=Array.from({length:8},(_,i)=>({id:'town'+i,water:true}));
+  const state={sites,activeId:'town0',week:3,actionRevision:4};let message,worker,ordinaryPreviews=0;
+  const sim={state,forecastNext(){ordinaryPreviews++;return {week:this.state.week+1};}};
+  const forecast=c.EarthForecastView.create(sim,{url:script,modules:core.map(urlFor),workerFactory:()=>worker={
+    postMessage:m=>message=m,terminate(){}}});
+  const preparing=forecast.prepareAdvance();
+  sim.state={...state,activeId:'town1'};
+  worker.onmessage({data:{sequence:message.sequence,forecast:{week:4}}});
+  assert.equal(await preparing,false);assert.equal(ordinaryPreviews,0);
+  const retry=forecast.prepareAdvance();
+  worker.onmessage({data:{sequence:message.sequence,unavailable:true}});
+  assert.equal(await retry,true);assert.equal(ordinaryPreviews,0);
+  assert.equal(await forecast.prepareAdvance(),true);assert.equal(ordinaryPreviews,0);
+  assert.equal((await forecast.read()).week,4);assert.equal(ordinaryPreviews,1);
+  forecast.close();
+});
+
+test('large saves reopen in separate input tasks and reach the identical district order and complete turn',async()=>{
+  const c=runtime(),raw=eightDistricts(c),sim=c.CommonEarthSim.create({storage:null,snapshot:raw});
+  const ordinary=c.CommonEarthSim.create({storage:null,snapshot:raw});
+  let jobs=0,t=0;c.performance={now(){return t+=4;}};
+  c.setTimeout=setTimeout;c.clearTimeout=clearTimeout;
+  c.scheduler={postTask(fn){jobs++;return new Promise(resolve=>setImmediate(()=>{fn();resolve();}));}};
+  const forecast=c.EarthForecastView.create(sim,{url:script,modules:core.map(urlFor),workerFactory:workerForGame});
+  assert.equal(await forecast.prepareAdvance(),true);
+  assert.ok(jobs>2,'eight district records were parsed over separate tasks');
+  assert.ok(sim.advance({usePrepared:true}).ok);assert.ok(ordinary.advance().ok);
+  assert.equal(JSON.stringify(sim.state),JSON.stringify(ordinary.state));
+  forecast.close();sim.destroy();ordinary.destroy();
+});
+
+test('the next shared week warms once after a close, while ordinary edits still wait for a quiet interval',async()=>{
+  const c=runtime(),sim=c.CommonEarthSim.create({storage:null,snapshot:eightDistricts(c)});
+  const forecast=c.EarthForecastView.create(sim,{url:script,modules:core.map(urlFor),workerFactory:workerForGame});
+  await forecast.prepareAdvance();assert.ok(sim.advance({usePrepared:true}).ok);
+  const timers=[],cleared=[];c.document={hidden:false};
+  c.setTimeout=(fn,delay)=>{timers.push({fn,delay});return timers.length;};c.clearTimeout=id=>cleared.push(id);
+  forecast.warm();forecast.warm();
+  assert.equal(timers.length,1);assert.ok(timers[0].delay<450,'a second manual close can use the previous worker result');
+  const site=sim.active();assert.ok(sim.setBuildPlan(site.id,'garden',site.buildPlan||null).ok);
+  forecast.warm();assert.equal(timers.length,2);assert.ok(timers[1].delay>=900);assert.deepEqual(cleared,[1]);
+  forecast.close();sim.destroy();
+});
+
+test('the worker threshold counts independent towns in the regional economy',async()=>{
+  const c=runtime(),state={week:3,activeId:'home',sites:[{id:'home',water:true}],
+    communityLife:{outposts:Array.from({length:7},(_,i)=>({id:'other-'+i,water:true}))}};
+  let sent,worker,forecasts=0;
+  const forecast=c.EarthForecastView.create({state,forecastNext(){forecasts++;}},{url:script,modules:core.map(urlFor),
+    workerFactory:()=>worker={postMessage:m=>sent=m,terminate(){}}});
+  const preparing=forecast.prepareAdvance();assert.ok(sent);assert.equal(forecasts,0);
+  worker.onmessage({data:{sequence:sent.sequence,forecast:{week:4}}});
+  assert.equal(await preparing,true);forecast.close();
 });

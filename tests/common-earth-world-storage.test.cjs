@@ -108,3 +108,30 @@ test('incompressible Unicode retains the exact plain payload and private tempora
   assert((await book.select(opened.id)).ok);assert.equal(JSON.parse(book.exportWorld().text).world.week,2);
   book.dispose();
 });
+
+test('edits in different districts and shifted record boundaries survive a cold reader and preserve the previous snapshot',()=>{
+  const codec=runtime().EarthWorldStorage,reader=runtime().EarthWorldStorage;
+  const sites=Array.from({length:28},(_,i)=>({id:'ward-'+i,region:'Ward '+i,
+    record:(passage+'🌱'+i).repeat(650),funds:20,goods:['cloth','timber']}));
+  const snapshots=[];
+  for(const i of [0,10,27,14,4]){
+    sites[i].record=sites[i].record.slice(17)+'🔧 an amended delivery window.';
+    sites[i].funds-=2;
+    const text=JSON.stringify({version:1,sites}),packed=codec.prepare(text);
+    assert.ok(packed.length<text.length/4);
+    assert.equal(reader.unpack(packed),text);
+    snapshots.push([packed,text]);
+  }
+  for(const [packed,text] of snapshots.reverse())assert.equal(runtime().EarthWorldStorage.unpack(packed),text);
+});
+
+test('a storage quota between the two encoding sizes saves with the denser compatible format',()=>{
+  const codec=runtime().EarthWorldStorage,reader=runtime().EarthWorldStorage;
+  const raw=JSON.stringify({version:1,sites:Array.from({length:36},(_,i)=>({id:'town-'+i,region:'Region '+i,
+    stock:(passage+' A carpenter inspected the same set of crates. ').repeat(320)}))});
+  const quick=codec.prepare(raw),limit=quick.length-1,store=storage(limit+key.length),adapter=codec.wrap(store);
+  adapter.setItem(key,raw);
+  const physical=store.getItem(key);
+  assert.ok(physical.length<=limit);assert.equal(reader.unpack(physical),raw);
+  assert.equal(codec.prepare(raw),physical);
+});

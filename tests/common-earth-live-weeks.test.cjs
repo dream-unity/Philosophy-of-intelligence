@@ -78,3 +78,12 @@ test('two saved tabs quoting the same week share one automatic advance, and a st
   const stale=b.perform('advance',quote,()=>true);queue.shift()();assert(!(await stale).ok);assert.equal(b.state.week,w+1);
   a.destroy();b.destroy();
 });
+
+test('a restored town runs by default while deliberate pauses survive older tab saves and newer stored preferences',()=>{
+  const {enabledOnReturn}=runtime(['live-weeks']).EarthLiveWeeks;
+  assert.equal(enabledOnReturn(null,undefined),true);
+  assert.equal(enabledOnReturn(null,true),true);
+  assert.equal(enabledOnReturn(null,false),false);
+  assert.equal(enabledOnReturn('manual',true),false);
+  assert.equal(enabledOnReturn('live',false),true);
+});

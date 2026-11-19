@@ -45,7 +45,15 @@
     return null;
   }
   const known=(site,id)=>id==='steward'||site.residents.some(p=>p.id===id)||/^walker-[0-4]$|^driver$|^carrier-[0-8]-[0-8]$/.test(id);
-  const pair=(site,from,to)=>site.agency?.visits?.find(v=>v.from===from&&v.to===to);
+  function samePerson(site,id,key,week){
+    if(key)return root.EarthPersonas?.profile(site,id)?.identityKey===key;
+    // Earlier entries identified neighbours by their street slot. A new
+    // arrival in that slot cannot inherit a meeting held before they came.
+    const guest=site.communityLife?.people?.[id];
+    return !guest?.originId||guest.since==null||guest.since<=week;
+  }
+  const pair=(site,from,to)=>site.agency?.visits?.find(v=>v.from===from&&v.to===to&&
+    samePerson(site,from,v.fromKey,v.week)&&samePerson(site,to,v.toKey,v.week));
   const familiar=(site,a,b,week)=>[pair(site,a,b),pair(site,b,a)].some(v=>v&&v.week>=week-4)||
     (root.EarthNeighbourErrands?.reliability?.(site,a,b,week)||0)>0;
   const topics=(site,world,id)=>{
@@ -53,9 +61,12 @@
     if(!target||root.EarthCommunityLife?.present?.(site,id)===false)return [];
     const visitor=root.EarthCommunityLife?.residency?.(site,id)==='visitor';
     const visiting=world.communityLife&&root.EarthCommunityLife?.isHome?.(world,site)===false;
+    const witnessed=root.EarthNeighbourErrands?.witness?.(site,world,id);
+    const account=witnessed?[{id:'agreement:'+witnessed.id,label:
+      witnessed.requesterId===id?'Who did you ask for help?':witnessed.contactId===id?'What could you set aside for them?':'What did you agree to do?',context:true}]:[];
     if(visiting&&!visitor)return [
       {id:'news',label:'How are things here?'},{id:'work',label:'What do you do here?'},{id:'purpose',label:'Who depends on your work?'},
-      {id:'interests',label:'What do you enjoy outside work?'},{id:'dream',label:'What are you hoping to do?'}
+      {id:'interests',label:'What do you enjoy outside work?'},{id:'dream',label:'What are you hoping to do?'},...account
     ];
     if(visitor)return [{id:'news',label:'How is your visit going?'},{id:'visit-fit',label:'What would make you stay?'},
       {id:'interests',label:'What do you miss from home?'},{id:'dream',label:'What do you hope to do?'}];
@@ -67,9 +78,12 @@
     if(root.EarthResources&&root.EarthMarket&&/baker|grower|trader|repairer|seed|carpenter|courier|porter|driver|cook|gardener/i.test(target.role))
       options.push(['supplies',/repairer|carpenter/i.test(target.role)?'Which materials would you keep back?':'What would you leave on the shelf?']);
     if(root.EarthAutonomy?.dream?.(site,world,id))options.splice(3,0,['dream','What are you hoping to do?']);
-    if(pair(site,actor,id))options.push(['followup','How did that turn out?']);
+    const previous=pair(site,actor,id);
+    if(previous)options.push(['followup',previous.thread?'How did “'+previous.subject+'” turn out?':'How did that turn out?']);
     const introductions=root.EarthIntroductions?.topics(site,world,id)||[];
-    options.push(['meal','Share a meal · 1 food']);return [...arrangements,...options.map(([id,label])=>({id,label})),...introductions];
+    const support=root.EarthDreams?.supportTopics?.(site,world,target,speaker)||[];
+    options.push(['meal','Share a meal · 1 food']);return [...arrangements,...account,...options.map(([id,label])=>
+      ({id,label,...(id==='followup'&&previous.week<world.week?{context:true}:{})})),...support,...introductions];
   };
   const lower=s=>s[0].toLowerCase()+s.slice(1);
   const teaching={
@@ -78,11 +92,84 @@
     care:'help someone learn to look after a neighbour',communication:'practise explaining a tricky idea with someone',
     craft:'show a neighbour how to make a sound repair'
   };
+  const needsPlan=new Set(['work','purpose','news','listen','followup']);
+  function personalThread(site,world,target,plan,career,kind){
+    const arrangement=root.EarthNeighbourErrands?.witness?.(site,world,target.id);
+    if(!kind&&arrangement&&['asked','agreed'].includes(arrangement.status)){
+      const row=root.EarthNeighbourErrands.arrangements(site,world,arrangement.actorId).find(r=>r.id===arrangement.id);
+      if(row)return {kind:'agreement',key:String(row.id),at:0,subject:row.title};
+    }
+    const job=career?.application?.targetId||career?.training?.targetId;
+    const title=job&&root.EarthCareers?.catalog?.find(j=>j.id===job)?.label;
+    if((!kind||kind==='career')&&title)return {kind:'career',key:job,at:career.training?.credits||0,subject:'the '+title.toLowerCase()+' post'};
+    const project=plan?.project,dream=plan?.dream;
+    if(project&&(kind==='project'||!kind&&(!dream||plan.kind==='project'||project.progress>0&&!project.finishedWeek)))
+      return {kind:'project',key:project.id,at:project.progress,subject:project.title};
+    if((!kind||kind==='dream')&&dream)return {kind:'dream',key:dream.id,at:dream.progress,subject:dream.title};
+    return null;
+  }
+  function rememberThread(site,world,target,speaker,visit,plan,career){
+    const point=visit.thread;if(!point)return null;
+    const heard='When we spoke in week '+visit.week;
+    const make=words=>({ok:true,message:target.name+' · “'+words+'”'});
+    if(point.kind==='agreement'){
+      const row=site.agency?.arrangements?.rows.find(r=>String(r.id)===point.key);
+      if(row)return root.EarthNeighbourErrands?.account?.(site,world,target.id,speaker.id,row)||null;
+    }
+    if(point.kind==='dream'){
+      const d=plan?.dream;
+      if(d?.id===point.key){
+        const next=d.earned?'I finished in week '+d.completedWeek+'. '+d.community:
+          d.progress>point.at?'I’ve done '+(d.progress-point.at)+' more practice '+(d.progress-point.at===1?'session':'sessions')+'. '+d.next:
+          'I haven’t moved past that stage. '+(d.blockers[0]||'Next I want to '+lower(d.activity)+'.');
+        return make(heard+' I told you about “'+visit.subject+'”. '+next+(d.supportNote?' '+d.supportNote:''));
+      }
+      const old=d?.achievements?.find(a=>a.id===point.key);
+      if(old)return make('You remembered “'+visit.subject+'”. I finished that in '+old.place+' in week '+old.week+'. '+(d.quote||''));
+      if(d?.onHold?.title===visit.subject)return make('I’ve kept the work I did on “'+visit.subject+'”. '+d.onHold.reason+' '+d.quote);
+    }
+    if(point.kind==='project'){
+      const p=plan?.project;
+      if(p?.id===point.key){
+        const work=p.finishedWeek?'We finished in week '+p.finishedWeek+'. '+p.effect:
+          p.progress>point.at?'We’ve done '+(p.progress-point.at)+' more of the steps. '+p.next:
+          'We’re at the same step. '+p.next;
+        return make(heard+' we discussed “'+visit.subject+'”. '+work);
+      }
+      const old=root.EarthLocalProjects?.completions?.(site)?.find(p=>p.id===point.key);
+      if(old)return {...make('You asked about “'+visit.subject+'” in week '+visit.week+'. We finished it in week '+old.week+'. '+old.result),
+        ...(old.beneficiaryId&&old.beneficiaryId!==speaker.id&&old.beneficiaryId!==target.id&&root.EarthCommunityLife?.present?.(site,old.beneficiaryId)!==false?{followContact:old.beneficiaryId}:{})};
+    }
+    if(point.kind==='career'){
+      if(career?.jobId===point.key)return make(heard+' I was trying for '+visit.subject+'. '+(career.joinedWeek?'I started in week '+career.joinedWeek+'. ':'I work there now. ')+(plan?.reason||''));
+      const a=career?.application;
+      if(a?.targetId===point.key)return make('I’m still trying for '+visit.subject+'. '+
+        (a.phase==='notice'?'My old crew still needs the handover. I’m due to move on in week '+a.dueWeek+'.':
+        a.phase==='offer'?'The employer has offered me a place. I need to decide whether the timing suits me.':
+        a.phase==='waiting'?'I qualified, but there isn’t an opening to step into.':
+        a.phase==='deferred'?'The employer asked me to come back. '+(a.reason||''):'They are reviewing my application in week '+a.dueWeek+'.'));
+      if(career?.training?.targetId===point.key){
+        const difference=career.training.credits-point.at;
+        return make(heard+' we discussed '+visit.subject+'. '+(career.training.paused?'I put the course on hold.':
+          difference>0?'I’ve earned '+difference+' more course '+(difference===1?'credit.':'credits.'):'I’m still working on the same part of the course.'));
+      }
+    }
+    return make(heard+' I mentioned '+visit.subject+'. My attention is on something else now. '+(plan?.reason||target.outsideWork||''));
+  }
   function describe(site,world,target,speaker,topic,meeting){
     if(typeof topic!=='string')return {ok:false,message:'Choose a current conversation topic.'};
+    const note=topic.startsWith('listen:')?topic:null;
+    if(note)topic='listen';
     if(root.EarthCommunityLife?.present?.(site,target.id)===false)return {ok:false,message:'This neighbour is away from the district.'};
     if(topic.startsWith('errand:'))return root.EarthNeighbourErrands?.converse(site,world,target,speaker,topic,meeting)||{ok:false,message:'That request has closed.'};
     if(topic.startsWith('intro:'))return root.EarthIntroductions?.converse(site,world,target.id,speaker.id,topic,meeting)||null;
+    if(topic.startsWith('agreement:')){
+      const row=root.EarthNeighbourErrands?.witness?.(site,world,target.id);
+      if(!row||topic!=='agreement:'+row.id)return {ok:false,message:'That discussion has moved on. Ask what this person is arranging now.'};
+      return root.EarthNeighbourErrands.account(site,world,target.id,speaker.id,row);
+    }
+    if(topic==='dream-help'||topic.startsWith('dream-gift:'))return root.EarthDreams?.discussSupport?.(site,world,target,speaker,topic,meeting)||
+      {ok:false,message:'The support offer is no longer available.'};
     const id=target.id,tradeVoice=voices.find(([re])=>re.test(target.role))||[null,'I enjoy taking time to get a piece of work right.','We share the work that keeps this neighbourhood going.'];
     const former=target.originRole&&target.originRole.toLowerCase()!==target.role.toLowerCase()&&!/^supply porter$/i.test(target.originRole);
     const oldVoice=former&&voices.find(([re])=>re.test(target.originRole));
@@ -91,7 +178,7 @@
     const offDuty=target.interests?.[1];
     const voice=former?[null,'I started out doing '+target.originRole.toLowerCase()+' work. '+(oldVoice?.[2]||target.outsideWork||tradeVoice[1]),tradeVoice[2]]:
       oldTown&&offDuty?[null,'I brought my interest in '+offDuty+' with me from '+oldTown.name+'.',tradeVoice[2]]:tradeVoice;
-    const plan=root.EarthAutonomy?.view(site,world,id),project=plan?.project,career=site.careers?.[id],visit=pair(site,speaker.id,id);
+    const plan=needsPlan.has(topic)?root.EarthAutonomy?.view(site,world,id):null,project=plan?.project,career=site.careers?.[id],visit=pair(site,speaker.id,id);
     const course=career?.training&&root.EarthCareers?.catalog?.find(j=>j.id===career.training.targetId)?.label;
     const goal=project?.title||(course&&course+' training')||target.interests?.[0]||target.role;
     const lane=supplyRun(target);
@@ -100,8 +187,15 @@
     const heard=site.agency?.meals?.find(m=>m.to===id&&m.week===world.week);
     const sent=site.agency?.meals?.find(m=>m.to===speaker.id&&m.from===id&&m.week===world.week);
     const partner=project?.partnerName&&project.partnerId!==id?project.partnerName:null;
-    const urgentFood=site.food<Math.ceil(site.population/5),employed=career&&root.EarthCareers?.view(world,site,id);
+    const urgentFood=site.food<Math.ceil(site.population/5);
     const make=words=>({ok:true,message:target.name+' · “'+words+'”'});
+    const canMakeNote=()=>!(world.communityLife&&root.EarthCommunityLife?.isHome?.(world,site)===false)&&
+      root.EarthCommunityLife?.residency?.(site,id)!=='visitor';
+    function noteOption(kind,key){
+      if(!canMakeNote()||visit?.week===world.week&&visit.thread?.kind===kind&&visit.thread.key===key)return {};
+      return {followMemory:{id:'listen:'+kind+':'+key,label:visit?.week===world.week?'Remember this instead':
+        kind==='dream'?'Remember this ambition':kind==='career'?'Remember this career plan':'Remember this project'}};
+    }
     function current(){
       if(project){
         const title=project.kind==='teach'&&teaching[project.axis]?teaching[project.axis]:lower(project.title),withWhom=partner?' '+partner+' is helping.':'';
@@ -119,7 +213,7 @@
         return opening+title+'.'+withWhom+(next?' Next I’ll '+lower(next)+'.':'');
       }
       if(plan&&['rest','visit','host','cover','gather','learn','apply','commitment'].includes(plan.kind))return plan.reason;
-      if(employed?.training)return 'I’m keeping up with '+goal+' alongside my work. I have completed '+employed.training.credits+' course credits.';
+      if(career?.training)return 'I’m keeping up with '+goal+' alongside my work. I have completed '+career.training.credits+' course credits.';
       return '';
     }
     const dream=()=>plan?.dream||root.EarthAutonomy?.dream?.(site,world,id);
@@ -130,7 +224,8 @@
         connection.strength>=3?'I know I can ask '+connection.name+' for help. ':'I’m getting to know '+connection.name+'. ';
       const memories={visit:'We made time to meet',listen:'One of us needed to be heard and the other stayed',meal:'We shared a meal',
         project:'We worked on a project together',lesson:'We stayed for a practical lesson',cover:'We arranged cover for a colleague',
-        kept:'The help we had agreed on arrived',missed:'The help we had agreed on never reached the person waiting for it'};
+        kept:'The help we had agreed on arrived',missed:'The help we had agreed on never reached the person waiting for it',
+        support:'One of us helped the other cover a fee for a personal ambition',office:'We made time to bring the handover records up to date'};
       return {...make(words+(memories[connection.kind]||'We worked together')+' in week '+connection.week+'.'),followContact:otherId};
     }
     if(topic==='truck'&&site.fleet?.incident){
@@ -162,20 +257,23 @@
       if(!d)return make(target.outsideWork||'I’m making time for '+goal+'.');
       const blocked=Array.isArray(d.blockers)?d.blockers[0]:null;
       const detail=typeof blocked==='string'?blocked:blocked?.reason||d.next;
-      return make([d.quote||('I’m working towards '+d.title+'.'),detail].filter(Boolean).join(' '));
+      return {...make([d.quote||('I’m working towards '+d.title+'.'),detail,d.supportNote].filter(Boolean).join(' ')),...noteOption('dream',d.id)};
     }
     if(root.EarthCommunityLife?.residency?.(site,id)==='visitor'&&['news','visit-fit'].includes(topic)){
       const fit=root.EarthCommunityLife?.visitorFit?.(world,site,id);
       if(fit){
-        const who=fit.ties?.[0]?.name;
-        if(topic==='news')return make('I’m here from '+fit.homeName+' for the week. People tell me they could use help '+fit.need+'. '+
-          (fit.known?'Someone has already taken the trouble to introduce me.':'I’d like to meet someone who lives with that work each day.'));
+        const who=fit.ties?.[0]?.name,friend=fit.contacts?.[0],concerned=fit.concerned||[];
+        if(topic==='news')return make('At home I do '+target.role.toLowerCase()+' work. I’ve come from '+fit.homeName+' to see if I could help '+fit.need+'. '+
+          (friend?'I already know '+friend+' here. We have some history together.':who?'I’ve also been thinking about '+who+' back home.':fit.known?'Someone here has already made an introduction.':
+            target.traits?.sociability>=60?'I’d like to meet the crew over a meal.':'I’d like to walk the round with someone before I decide.'));
         const welcome=!fit.space?'There isn’t a spare room here yet.':!fit.food?'The pantry would be stretched by another household.':
-          !fit.open?'The residents have paused invitations.':fit.skillMatch?'I know enough to help with '+fit.need+'.':
+          !fit.open?'The residents have paused invitations.':concerned.length>=2?concerned.slice(0,2).join(' and ')+' remember agreements we struggled with. They would like to work those out before I settle here.':
+          fit.skillMatch?'I know enough to help with '+fit.need+'.':
           'I’d need someone to show me how to help with '+fit.need+'.';
-        return make(welcome+' '+(who?who+' is still in '+fit.homeName+', and that matters to me. ':
+        return make(welcome+' '+(friend&&who?friend+' is here, but '+who+' is still in '+fit.homeName+'. That makes it a hard choice. ':
+          who?who+' is still in '+fit.homeName+', and that matters to me. ':
           fit.personalYes?'I can imagine a day of my own here. ':'I’m still deciding whether this daily life would suit me. ')+
-          'I’ll decide when my visit ends in week '+fit.reviewWeek+'.');
+          'The residents and I both decide when my visit ends in week '+fit.reviewWeek+'.');
       }
       if(topic==='news')return make('I’m finding out where I’d fit in. I know '+target.role.toLowerCase()+' work, and I’ve been asking who here could use a hand. '+(target.outsideWork||''));
       return make((target.traits?.sociability>=60?'I want people I can work alongside. ':'I need a place where I can have a quiet hour after work. ')+
@@ -183,12 +281,15 @@
     }
     if(topic==='interests')return make(target.outsideWork||'I like '+goal+'.');
     if(topic==='work'){
+      const employed=career&&root.EarthCareers?.view(world,site,id);
+      const occupation=career?.application?.targetId||career?.training?.targetId;
+      const bookmark=occupation?noteOption('career',occupation):project?noteOption('project',project.id):{};
       const motion=meeting?.activity;
       const observed=motion?.id===id&&typeof motion.label==='string'&&/^[A-Za-z]+ing\b/.test(motion.label)&&
         ['prepare','work','handover','study','rest','social','travel'].includes(motion.phase)?'I was '+lower(motion.label)+'. ':'';
       const activity=current();
-      if(employed?.application?.phase==='notice')return make('I work as '+employed.career.toLowerCase()+' at '+employed.employer+'. I’m serving notice through week '+employed.application.dueWeek+'. '+(employed.application.coverName?employed.application.coverName+' is taking the handover.':voice[2]));
-      return make(observed+(employed?'I work as '+employed.career.toLowerCase()+' at '+employed.employer+'. ':'')+(activity||lane?.news||voice[1]));
+      if(employed?.application?.phase==='notice')return {...make('I work as '+employed.career.toLowerCase()+' at '+employed.employer+'. I’m serving notice through week '+employed.application.dueWeek+'. '+(employed.application.coverName?employed.application.coverName+' is taking the handover.':voice[2])),...bookmark};
+      return {...make(observed+(employed?'I work as '+employed.career.toLowerCase()+' at '+employed.employer+'. ':'')+(activity||lane?.news||voice[1])),...bookmark};
     }
     if(topic==='purpose'){
       // Follow an evidenced link to hear the other side. A named beneficiary,
@@ -241,6 +342,8 @@
           'I brought '+(other===speaker.id?'you':peer)+' the supplies we agreed on in week '+r.week+'. ';
         return {...make(opening+aim),...(other!==speaker.id&&root.EarthCommunityLife?.present?.(site,other)!==false?{followContact:other}:{})};
       }
+      const witnessed=root.EarthNeighbourErrands?.witness?.(site,world,id);
+      if(witnessed&&!sent&&!heard&&!target.promise)return root.EarthNeighbourErrands.account(site,world,id,speaker.id,witnessed);
       if(sent)latest='It was good to share that meal with you.';
       else if(heard)latest='I shared a meal with '+(root.EarthAgency.identity(site,heard.from)?.name||'a neighbour')+' this week.';
       else if(target.promise)latest='I’m counting on the promise due in week '+target.promise.dueWeek+'.';
@@ -269,15 +372,26 @@
       return make(latest?latest+' '+voice[1]:voice[1]);
     }
     if(topic==='listen'){
-      if(visit?.week===world.week)return make('I remember, you made time for me earlier. '+(current()||voice[2]));
+      if(!canMakeNote())return {ok:false,message:'This resident decides their own commitments in this community.'};
+      const subject=personalThread(site,world,target,plan,career,note?.split(':')[1]),focus=subject?.subject||goal;
+      if(note&&(!subject||note!=='listen:'+subject.kind+':'+subject.key))return {ok:false,message:'Their plans have changed. Ask them about what they are doing now.'};
+      if(visit?.week===world.week&&(!note||subject.kind===visit.thread?.kind&&subject.key===visit.thread.key))
+        return make('I remember, you made time for me earlier. '+(current()||voice[2]));
       const a=site.agency||={actor:'steward',meals:[]};a.visits||=[];
       a.visits=a.visits.filter(v=>v.from!==speaker.id||v.to!==id);
-      a.visits.unshift({from:speaker.id,to:id,week:world.week,subject:String(goal).slice(0,100),food:site.food,role:target.role});
+      a.visits.unshift({from:speaker.id,to:id,...(speaker.identityKey?{fromKey:speaker.identityKey}:{}),...(target.identityKey?{toKey:target.identityKey}:{}),
+        week:world.week,subject:String(focus).slice(0,100),food:site.food,role:target.role,
+        ...(subject?{thread:{kind:subject.kind,key:subject.key,at:subject.at}}:{})});
       a.visits.length=Math.min(a.visits.length,128);
-      return {...make((target.traits?.sociability>=60?'I’m glad you asked. ':'I don’t usually bring this up first. ')+(current()||voice[2])+' Ask me about it next time.'),changed:true};
+      if(note&&visit?.week!==world.week)root.EarthAutonomy?.remember?.(site,world.week,speaker.id,id,'listen');
+      const words=subject?.kind==='dream'?(plan.dream.quote+' '+plan.dream.next):
+        subject?.kind==='agreement'?'I’d like you to remember “'+focus+'”. Some other people are counting on us.':
+        subject?.kind==='career'?'I’ve been thinking a lot about '+focus+'. It would change my day and the one my current crew has planned.':current()||voice[2];
+      return {...make((target.traits?.sociability>=60?'I’m glad you asked. ':'I don’t usually bring this up first. ')+words+' Ask me about it next time.'),changed:true};
     }
     if(topic==='followup'){
       if(!visit)return {ok:false,message:'Make time to listen first.'};
+      const update=rememberThread(site,world,target,speaker,visit,plan,career);if(update)return update;
       const changed=visit.role!==target.role?'My work has changed since then. I’m now a '+target.role.toLowerCase()+'.':
         project&&project.title===visit.subject?'We have completed '+project.progress+' of '+project.total+' steps. '+(project.next||''):
         visit.food!==site.food?'We had '+visit.food+' food then. There are '+site.food+' in the pantry today.':
@@ -296,16 +410,27 @@
       if(!v||typeof v.from!=='string'||typeof v.to!=='string'||!known(site,v.to)||v.from===v.to||
         !(root.EarthAgency?.canPlay?.(site,v.from)??(v.from==='steward'||site.residents.some(r=>r.id===v.from)))||!Number.isSafeInteger(v.week)||v.week<1||v.week>week||
         !Number.isSafeInteger(v.food)||v.food<0||typeof v.subject!=='string'||!v.subject.length||v.subject.length>100||
-        typeof v.role!=='string'||v.role.length>100)return false;
+        typeof v.role!=='string'||v.role.length>100||
+        [v.fromKey,v.toKey].some(key=>key!==undefined&&(typeof key!=='string'||!key.length||key.length>1040)))return false;
+      if(v.thread!==undefined){
+        const t=v.thread;
+        if(!t||!['dream','career','agreement','project'].includes(t.kind)||typeof t.key!=='string'||!t.key.length||t.key.length>520||
+          !Number.isSafeInteger(t.at)||t.at<0)return false;
+      }
       const key=v.from+'|'+v.to;if(seen.has(key))return false;seen.add(key);return true;
     });
   }
-  const reads=new Set(['news','work','purpose','interests','dream','visit-fit','supplies','truck','followup']);
+  const reads=new Set(['news','work','purpose','interests','dream','dream-help','visit-fit','supplies','truck','followup']);
   function readOnly(topic){
-    return typeof topic==='string'&&(reads.has(topic)||topic.startsWith('neighbour:')||
+    return typeof topic==='string'&&(reads.has(topic)||topic.startsWith('neighbour:')||/^agreement:[1-9][0-9]*$/.test(topic)||
       /^errand:(terms|recall):[0-9]+$/.test(topic)||/^errand:hear:(supper|bench|meeting)$/.test(topic)||/^intro:recall:[0-9]+$/.test(topic));
   }
   const arrangements=(site,world,actorId)=>root.EarthNeighbourErrands?.arrangements(site,world,actorId)||[];
-  const closeWeek=(site,world)=>root.EarthNeighbourErrands?.closeWeek(site,world)||[];
+  function closeWeek(site,world){
+    const notes=root.EarthNeighbourErrands?.closeWeek(site,world)||[];
+    const gift=root.EarthDreams?.considerSupport?.(site,world);
+    if(gift)notes.push(gift);
+    return notes;
+  }
   root.EarthDialogue=Object.freeze({describe,topics,familiar,valid,arrangements,closeWeek,readOnly});
 })(typeof window==='undefined'?globalThis:window);

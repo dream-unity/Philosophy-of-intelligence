@@ -327,3 +327,159 @@ test('a second tab cannot act as the village council after the original crosses 
   assert.equal(b.act('work:salvage').ok,false);assert.equal(b.active().materials,funds);assert.equal(rows.get(key),old);
   a.destroy();b.destroy();
 });
+test('an unseen district finances civic projects and retains its actual buildings and research on the first crossing',()=>{
+  const {sim,home,life,visit,saved}=fixture(),outpost=sim.state.communityLife.outposts[0];
+  for(let w=0;w<28;w++){
+    assert.equal(sim.state.activeId,home.id);
+    assert.ok(sim.advance().ok);
+    assert.equal(sim.state.sites.length,1);
+    assert.ok(!sim.state.lastWeekReview.sites.some(s=>s.id===outpost.id));
+  }
+  assert.ok(outpost.buildings.length>0);
+  assert.ok(outpost.civicInitiatives.history.some(h=>['built','adopted'].includes(h.phase)));
+  assert.ok(outpost.stats.resolved>0);
+  const before=life.districtProfile(sim.state,outpost),buildings=JSON.stringify(outpost.buildings);
+  saved();visit(outpost.id);
+  assert.equal(JSON.stringify(sim.active().buildings),buildings);
+  assert.deepEqual(Array.from(sim.active().tech),Array.from(before.research));
+  assert.equal(sim.active().funds,before.funds);assert.equal(sim.active().food,before.food);
+  assert.equal(sim.act('work:salvage').ok,false);saved();
+});
+test('a two-district consignment removes exactly the signed loads, then delivers the same goods once',()=>{
+  const {sim,life}=fixture(),w=sim.state,[farm,yard]=w.communityLife.outposts;
+  w.week=6;farm.food=100;farm.materials=1;yard.food=8;yard.materials=100;
+  const accounts=()=>[farm.food,farm.materials,yard.food,yard.materials];
+  const before=accounts(),households=farm.population+yard.population;
+  life.tick(w);const left=farm.communityLife.freight,right=yard.communityLife.freight;
+  assert.ok(left&&right);assert.ok(left.amount>=1);assert.equal(left.amount,right.amount);
+  assert.equal(left.good,'food');assert.equal(right.good,'materials');
+  assert.deepEqual(accounts(),[before[0]-left.amount,before[1],before[2],before[3]-right.amount]);
+  assert.equal(life.travelIntent(farm,left.signer).kind,'freight');
+  assert.equal(life.districtProfile(w,farm).trade.includes(yard.name),true);
+  assert.equal(life.valid(w,()=>true),true);
+  const damaged=structuredClone(w);damaged.communityLife.outposts[0].communityLife.freight.amount=9;
+  assert.equal(life.valid(damaged,()=>true),false);
+  w.week++;life.tick(w);
+  assert.deepEqual(accounts(),[before[0]-left.amount,before[1]+right.amount,before[2]+left.amount,before[3]-right.amount]);
+  assert.equal(farm.communityLife.freight,undefined);assert.equal(yard.communityLife.freight,undefined);
+  const arrived=accounts();life.tick(w);assert.deepEqual(accounts(),arrived);
+  assert.equal(farm.population+yard.population,households);
+});
+test('settling into a new household takes two observable shared sessions and records the real guide and local relationship',()=>{
+  const {sim,life,home,context,doAction,saved}=fixture();
+  let pairing,town;
+  for(let i=0;i<40&&!pairing;i++){
+    assert.ok(sim.advance().ok);
+    const guest=life.view(sim.state,home).visitors[0];
+    if(guest&&!guest.welcomed)doAction('welcome',guest.id,guest.id);
+    for(const s of [...sim.state.sites,...sim.state.communityLife.outposts]){
+      const pair=s.communityLife.settling?.find(p=>p.sessions===2&&p.last===sim.state.week);
+      if(pair){pairing=pair;town=s;break;}
+    }
+  }
+  assert.ok(pairing,'at least one newcomer and an established neighbour must both agree and attend');
+  const {entrant,guide,first,last}=pairing;assert.ok(first<last);
+  const host=town.autonomy.people[guide].history[0],newcomer=town.autonomy.people[entrant].history[0];
+  assert.equal(host.householdSession,2);assert.equal(host.target,entrant);
+  assert.equal(newcomer.householdSession,2);assert.equal(newcomer.target,guide);assert.equal(host.venue,newcomer.venue);
+  assert.ok(context.EarthAutonomy.bond(town,guide,entrant,last)>=2);
+  const model=life.districtProfile(sim.state,town);
+  assert.ok(model.households.completed.some(p=>p.guide===guide&&p.entrant===entrant));
+  assert.ok(model.origins.length>=2);
+  assert.equal(model.occupations.reduce((n,row)=>n+row.count,0),model.census.here);
+  const again=fixture(saved()),s=[...again.sim.state.sites,...again.sim.state.communityLife.outposts].find(s=>s.id===town.id);
+  assert.equal(again.life.districtProfile(again.sim.state,s).households.completed[0].sessions,2);
+});
+test('two independent grievances open a hearing with a chance to repair and an individual decision about leaving',()=>{
+  const {sim,context,life,home,doAction,saved}=fixture(),accused='walker-2',people=home.residents.slice(0,2);
+  for(const p of people)context.EarthAutonomy.remember(home,sim.state.week,p.id,accused,'missed');
+  assert.ok(sim.advance().ok);
+  const hearing=home.communityLife.hearing;
+  assert.ok(hearing);assert.equal(hearing.id,accused);assert.ok(hearing.witnesses.length>=2);
+  assert.equal(doAction('hearResident',accused,'market').ok,false);
+  assert.ok(doAction('hearResident',accused,accused).ok);
+  assert.equal(doAction('hearResident',accused,accused).ok,false);
+  const witness=hearing.witnesses[0];assert.ok(doAction('hearResident',witness.id,witness.id).ok);
+  saved();
+  // Both sides spoke. Keep the grievances current so the hearing remains contested.
+  while(sim.state.week<hearing.opened+4){
+    for(const p of people)context.EarthAutonomy.remember(home,sim.state.week,p.id,accused,'missed');
+    assert.ok(sim.advance().ok);saved();
+  }
+  assert.equal(home.communityLife.lastHearing.decision,'asked');
+  assert.equal(home.communityLife.lastHearing.id,accused);
+  assert.match(home.communityLife.lastHearing.text,/asked .* to consider leaving/);
+  const inspected=Object.values(home.communityLife.away).some(Boolean);
+  assert.ok(inspected||life.present(home,accused));
+  assert.equal(askedOutsideHome(),false);
+  function askedOutsideHome(){return Object.values(sim.state.communityLife.outposts).some(s=>s.communityLife.people[accused]?.status==='member'&&s.communityLife.people[accused]?.since===sim.state.week);}
+});
+test('a legacy twelve-person household roll gains its unrepresented people without using commuters or adding residents',()=>{
+  const {saved}=fixture(),old=JSON.parse(saved()),s=old.sites[0];
+  delete old.communityLife;delete s.communityLife;if(s.agency)delete s.agency.porters;
+  s.buildings=[{id:'garden',name:'Garden',kind:'garden',plot:0},{id:'bench',name:'Workshop',kind:'workshop',plot:1}];
+  const upgraded=fixture(JSON.stringify(old)),{home,sim,context,life}=upgraded;
+  const roll=life.census(sim.state,home);assert.equal(roll.total,12);assert.equal(roll.anonymous,0);assert.ok(roll.commuters>0);
+  const actual=context.EarthPersonas.list(home),people=Object.entries(home.communityLife.people);
+  assert.equal(actual.length,roll.active);assert.equal(new Set(actual.map(p=>p.identityKey)).size,actual.length);
+  assert.equal(people.filter(([,g])=>g.householdRole).length,2);
+  assert.equal(actual.filter(p=>life.commuting(home,p.id)).every(p=>!people.some(([id])=>id===p.id)),true);
+  const canonical=upgraded.saved();assert.equal(fixture(canonical).saved(),canonical);
+});
+test('successive breakaway groups survey different buildable country and choose their livelihood from named founders',()=>{
+  const {sim,life,home,saved}=fixture();
+  let circles=[];
+  for(let w=0;w<80&&circles.length<2;w++){
+    home.trust=8;home.wellbeing=20;home.food=22;home.materials=30;home.funds=20;
+    assert.ok(sim.advance().ok);
+    circles=sim.state.communityLife.outposts.filter(s=>s.id.startsWith('circle-'+home.id+'-'));
+  }
+  assert.ok(circles.length>=2,'the overburdened origin supported two independent groups');
+  const angular=x=>x*Math.PI/180;
+  const distance=(a,b)=>12742*Math.asin(Math.sqrt(Math.sin(angular(a.lat-b.lat)/2)**2+Math.cos(angular(a.lat))*Math.cos(angular(b.lat))*Math.sin(angular(a.lon-b.lon)/2)**2));
+  assert.ok(distance(circles[0],circles[1])>=10);
+  for(const settled of circles){
+    assert.ok(distance(home,settled)<=70);assert.ok(distance(home,settled)>=10);
+    assert.match(settled.communityLife.district,/-circle$/);
+    assert.ok(life.neighbours(sim.state,home).some(n=>n.id===settled.id&&n.need));
+    assert.ok(settled.communityLife.log.some(l=>l.text.includes('joint undertaking'))||settled.buildings.length);
+  }
+  saved();
+});
+test('a waiting list or deferred application allows an inspection while actual notice periods still reserve the worker',()=>{
+  const {sim,life,home}=fixture(),[chosen]=life.movingOptions(sim.state,home).filter(p=>p.eligible&&p.id.startsWith('walker-'));
+  assert.ok(chosen);
+  home.careers||={};
+  const row=home.careers[chosen.id]||={revision:0,skills:{},qualifications:{},portfolios:{},references:{},history:[]};
+  for(const phase of ['waiting','deferred','notice']){
+    row.application={phase,targetId:'nurse',dueWeek:sim.state.week+2};
+    const option=life.movingOptions(sim.state,home).find(p=>p.id===chosen.id);
+    assert.equal(option.eligible,phase!=='notice',phase);
+  }
+});
+test('a host that remembers two real grievances asks for a longer trial and hears the original applicant again',()=>{
+  const {sim,life,context,home,visit,doAction,saved}=fixture();
+  visit(life.neighbours(sim.state,home)[0].id);const site=sim.active(),host=life.hostFor(site);
+  const witnesses=site.residents.slice(0,2),remember=()=>{for(const w of witnesses)context.EarthAutonomy.remember(site,sim.state.week,w.id,'steward','missed');};
+  remember();
+  let admission=life.view(sim.state,site).admission,condition=admission.checks.find(c=>c.label==='Rebuild local confidence');
+  assert.ok(condition&&!condition.pass);assert.ok(witnesses.every(p=>condition.detail.includes(p.name)));
+  assert.ok(doAction('meet',null,host.id).ok);assert.ok(doAction('help',null,'market').ok);
+  sim.advance();remember();
+  assert.equal(doAction('apply',null,host.id).ok,false);
+  assert.ok(doAction('help',null,'market').ok);
+  sim.advance();remember();admission=life.view(sim.state,site).admission;
+  assert.ok(admission.needsTrial);assert.equal(admission.available,false);
+  assert.ok(doAction('help',null,'market').ok);
+  assert.equal(life.view(sim.state,site).admission.checks.find(c=>c.label==='Rebuild local confidence').pass,true);
+  assert.ok(doAction('apply',null,host.id).ok);saved();
+});
+test('districts negotiate different load sizes when material reserves and food needs value cargo differently',()=>{
+  const {sim,life}=fixture(),world=sim.state,[farm,yard]=world.communityLife.outposts;
+  world.week=6;farm.food=20;farm.materials=12;yard.food=4;yard.materials=22;
+  life.tick(world);const a=farm.communityLife.freight,b=yard.communityLife.freight;
+  assert.ok(a&&b);assert.equal(a.amount,2);assert.equal(a.expected,3);assert.equal(b.good,'materials');assert.equal(b.amount,3);
+  assert.equal(life.valid(world,()=>true),true);
+  assert.equal(farm.food,18);assert.equal(yard.materials,19);
+  world.week++;life.tick(world);assert.equal(yard.food,6);assert.equal(farm.materials,15);
+});

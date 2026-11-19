@@ -15,25 +15,24 @@ function followHousingGoal(valid = true) {
   const cityStep = {kind:'city', siteId:'town', precinct:3, project:'homes'};
   let selected = {precinct:0, project:'food'};
   const firstVisible = [], notices = [];
-  const city = {previewProject(precinct, project, reveal) {
+  const districtDesk = {project(precinct, project) {
     if (!valid) return false;
     selected = {precinct, project};
-    reveal();
+    firstVisible.push({...selected});
     return true;
   }};
   const screen = {
-    window:{}, sim:{state:{activeId:'town', sites:[{id:'town'}]}}, city,
-    cityController:()=>city, requestAnimationFrame(){},
-    setView(view) { if (view === 'city') firstVisible.push({...selected}); },
+    window:{}, sim:{state:{activeId:'town', sites:[{id:'town'} ]}}, districtDesk, view:'world',
+    setView(next) { assert.equal(next,'street'); },
     notify(message) { notices.push(message); }
   };
   return followCharter.runInNewContext(screen)(cityStep).then(()=>({firstVisible,notices}));
 }
 
-test('the first City proposal exposed by housing guidance is its requested precinct and project', async ()=>{
+test('the Street proposal exposed by housing guidance is its requested precinct and project', async ()=>{
   assert.deepEqual((await followHousingGoal()).firstVisible, [{precinct:3, project:'homes'}]);
 });
-test('a stale goal never exposes a prior purchasable City proposal', async ()=>{
+test('a stale goal never exposes a prior purchasable neighbourhood proposal', async ()=>{
   const result = await followHousingGoal(false);
   assert.deepEqual(result.firstVisible, []);
   assert.equal(result.notices.length, 1);

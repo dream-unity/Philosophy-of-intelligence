@@ -269,10 +269,32 @@ test('a real reply is physically anchored and the compact conversation shelf lea
   g.near('walker-0');ui.openTalk({npcId:'walker-0'});assert(bubble.hidden);assert.equal(host.dataset.talkDock,'bottom');
   assert(320-parseInt(host.style['--talk-size'])>146+18);
   await cmd('topic-work').fire('click');assert(!bubble.hidden);assert(bubble.style.transform.startsWith('translate('));
-  assert(bubble.content().trim().length<=88);assert(id('scene-reply').content().length>=bubble.content().length);
+  assert(id('scene-speech-words').content().trim().length<=90);assert(id('scene-reply').content().length>=id('scene-speech-words').content().length);
   g.near('walker-1');assert(bubble.hidden);
   ui.openTalk({npcId:'walker-1'});await cmd('topic-news').fire('click');assert(!bubble.hidden);ui.close();assert(bubble.hidden);
   sim.destroy();
+});
+test('a tablet reader can page through the entire spoken reply on the map, go back and close only the bubble',async()=>{
+  const g=fixture(),{ui,id,cmd,sim,street,w}=g,host=id('street-hud');
+  host.getBoundingClientRect=()=>({left:0,top:0,bottom:320,width:390,height:320});
+  street.personAnchor=()=>({x:198,y:145,visible:true});
+  const lines='I counted the empty bowls after the workshop closed. The person collecting flour had set a basket beside the back door. If we leave the lamps burning until the last carrier comes through, the people on that shift can tell us for themselves which portions they can carry.';
+  const original=w.EarthDialogue;
+  w.EarthDialogue={...original,describe(s,world,p,speaker,topic,m){
+    return topic==='news'?{ok:true,message:p.name+' · “'+lines+'”'}:original.describe(s,world,p,speaker,topic,m);
+  }};
+  try{
+    g.near('walker-0');ui.openTalk({npcId:'walker-0'});await cmd('topic-news').fire('click');
+    const bubble=id('scene-speech'),back=id('scene-speech-back'),next=id('scene-speech-next'),words=id('scene-speech-words');
+    assert(!bubble.hidden&&!id('scene-speech-pages').hidden);assert(back.disabled);
+    const read=[words.textContent];
+    while(next.textContent==='Next'){next.fire('click');read.push(words.textContent);assert(read.length<10);}
+    assert.equal(read.join(' '),lines);assert.equal(id('scene-talk-person').value,'walker-0');
+    assert.equal(id('scene-speech-count').textContent,read.length+' / '+read.length);
+    back.fire('click');assert.equal(words.textContent,read.at(-2));next.fire('click');next.fire('click');
+    assert(bubble.hidden);assert(!id('scene-card').hidden);assert(id('scene-reply').textContent.includes(lines));
+    await cmd('topic-meal').fire('click');assert(!id('scene-speech-kind').hidden);
+  }finally{ui.close();sim.destroy();}
 });
 test('the personal goal card states a project aim once while retaining different motives, status, next step and benefit',()=>{
   const g=fixture(),{ui,sim,w,id}=g,old=w.EarthAutonomy,q='Let two households share one collection box';

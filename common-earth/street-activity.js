@@ -53,7 +53,24 @@
       work('annotate-handover','Writing the outstanding jobs on the exchange rota','ledger','write'),hand('post-handover','Leaving the handover list at the exchange','book','place')),
     inspectHome:series('inspect-home','Assess the neighbourhood before moving',prepare('review-room','Reading the housing notice','book','read'),work('inspect-frontage','Looking over the shared frontage','slate','point'),hand('record-fit','Recording what would suit daily life','ledger','write')),
     dispute:series('dispute','Seek an emergency pantry collection',log,work('challenge-order','Checking the unfilled collection request','ledger','point'),record),
+    waterBed:series('water-bed','Water the growing bed',prepare('check-soil','Checking the soil around the plants','sample','reach'),work('water-bed','Watering the roots along the bed','wateringCan','pour'),hand('log-water','Recording the watering round','ledger','write')),
+    restBeds:series('rest-beds','Protect a resting patch',prepare('check-edge','Checking the boundaries of the patch','ruler','measure'),work('set-marker','Setting a resting-boundary stake','hammer','strike'),hand('post-rest','Recording when collection may resume','ledger','write')),
+    surveyFish:series('survey-fish','Select a shore fishing station',prepare('check-shore-map','Reading the shore-station map','book','read'),work('sound-line','Checking the line depth at the quay','rod','lift'),hand('mark-station','Marking the chosen station','slate','write')),
+    restoreBeds:series('restore-beds','Keep the growing ground productive',prepare('inspect-bed','Checking which part of the bed needs rest','slate','point'),work('spread-compost','Spreading compost across the recovering bed','trowel','tend'),hand('mark-rest','Marking the patch for recovery','slate','write')),
+    restoreWood:series('restore-wood','Care for the next cutting',prepare('inspect-stools','Inspecting the coppice stools','slate','point'),work('protect-regrowth','Protecting the new coppice shoots','trowel','tend'),hand('record-coppice','Recording the protected cutting boundary','ledger','write')),
+    restoreWater:series('restore-water','Protect the growing water',prepare('inspect-line','Inspecting the growing line','ledger','read'),work('mark-water','Marking the resting section of water','line','lift'),hand('record-water','Recording the protected water boundary','slate','write')),
     marketMeal:series('market-meal','Prepare meals for the shared store',prepare('check-lot','Checking the available food lot','ledger','read'),work('cook-lot','Preparing a batch of meals','cup','turn'),hand('pack-meals','Packing portions for the pantry','basket','place')),
+    makeWare:series('make-ware','Make goods for the stall',prepare('mark-cloth','Marking the cloth against the pattern','ruler','measure'),work('sew-ware','Stitching the cut pieces at the bench','cloth','stitch'),hand('fold-ware','Folding the finished piece for sale','cloth','place')),
+    weaveWare:series('weave-ware','Weave an item for the stall',prepare('dress-weave','Laying out the fibre strips','ruler','measure'),work('weave-body','Interlacing strips in the working frame','weaving','weave'),hand('bind-edge','Binding the finished edge','weaving','weave')),
+    fitWare:series('fit-ware','Build an item for the stall',measure,saw,hand('check-work','Checking the finished joints','ruler','measure')),
+    makeFlute:series('make-flute','Finish a practice flute',prepare('mark-holes','Marking the finger holes','ruler','measure'),work('test-flute','Testing the pitch of the finished flute','flute','play'),hand('wrap-flute','Wrapping the flute for sale','parcel','place')),
+    makeDrum:series('make-drum','Finish a frame drum',prepare('check-frame','Checking the drum frame','ruler','measure'),work('tighten-skin','Lacing the drumhead to the rim','drum','turn'),hand('test-drum','Tapping the head to test the tension','drum','play')),
+    houseFootings:series('house-footings','Lay a courtyard foundation',sketch,work('set-footings','Checking the foundation line','ruler','measure'),record),
+    houseFrame:series('house-frame','Build the timber frame',measure,work('fix-frame','Fixing a stud to the timber frame','hammer','strike'),record),
+    houseFinish:series('house-finish','Finish the courtyard home',parts,work('fit-door','Fitting the front-door hardware','wrench','turn'),hand('check-door','Checking the new door clearance','ruler','measure')),
+    deed:series('house-deed','Register a dwelling at the exchange',prepare('read-deed','Reading the title and agreed sale terms','book','read'),work('sign-deed','Signing the property record','ledger','write'),hand('file-deed','Handing over the signed papers','parcel','place')),
+    stockStall:series('stock-stall','Stock the private stall',prepare('check-price','Checking the stall inventory','ledger','read'),work('unpack-stock','Unpacking the stallholder’s own stock','crate','lift'),hand('display-stock','Arranging goods on the sales table','parcel','place')),
+    shop:series('shop','Buy something from a neighbour',prepare('inspect-ware','Inspecting the item at the stall','parcel','turn'),work('pay-maker','Counting payment for the stallholder','purse','pay'),hand('wrap-purchase','Packing the purchase to carry home','parcel','lift')),
     marketSale:series('market-sale','Release a surplus lot to the exchange',prepare('read-offer','Checking the exchange offer','ledger','read'),work('weigh-lot','Weighing the surplus lot','crate','lift'),hand('hand-over-lot','Handing the sold lot to the exchange','crate','place')),
     closedRoute:series('closed-route','Wait for the way to open',action('find-way','travel','Waiting for a clear approach','slate','read',4)),
     roadWait:series('road-wait','Keep the delivery route safe',action('give-way','travel','Waiting for the way to clear','none','sit',3)),
@@ -145,6 +162,9 @@
     });
   }
   const harvests={
+    millet:['Cutting ripe millet heads','sickle','cut'],nuts:['Gathering fallen orchard nuts','basket','reach'],
+    herbs:['Cutting kitchen herbs','sickle','cut'],shellfish:['Collecting mature shellfish in a shore basket','basket','reach'],
+    cloth:['Sorting the reusable cloth','cloth','place'],flax:['Gathering the retted flax fibre','weaving','weave'],
     timber:['Sawing a usable timber length','saw','saw'],stone:['Splitting a stone sample','pick','strike'],clay:['Lifting workable clay','trowel','tend'],
     reed:['Cutting a bundle of reeds','sickle','cut'],salvage:['Removing a reusable fitting','wrench','turn'],grain:['Cutting ripe grain','sickle','cut'],
     pulses:['Picking mature pods','basket','reach'],roots:['Lifting roots from the bed','trowel','tend'],fruit:['Picking ripe fruit','basket','lift'],
@@ -181,8 +201,35 @@
   const domains={food:'grower',repair:'repairer',exchange:'trader'};
   const venues={garden:'grower',workshop:'repairer',market:'trader',hall:'convenor',bench:'rest',dock:'porter',pier:'porter'};
   const own=(table,key)=>typeof key==='string'&&Object.hasOwn(table,key)?table[key]:null;
+  const demonstrations=new Map();
+  function placement(input){
+    const role=own(routines,input.placementJob);
+    if(!role||!['learner','mentor'].includes(input.placementSide))return null;
+    const id='placement-'+input.placementSide+'-'+role.id;
+    if(demonstrations.has(id))return demonstrations.get(id);
+    // The middle step is the trade itself for jobs such as carpentry where
+    // measuring the work before fitting the joint is also a work step.
+    const duty=role.steps[1]?.phase==='work'?role.steps[1]:role.steps.find(step=>step.phase==='work')||role.steps[0];
+    const routine=input.placementSide==='mentor'?series(id,role.goal,
+      prepare(id+'-brief','Going over the day’s task with the learner','slate','point'),
+      action(id+'-demonstrate','work',duty.label+' alongside the learner',duty.prop,duty.gesture,6),
+      hand(id+'-review','Reviewing the learner’s notes together','book','point')):
+      series(id,role.goal,prepare(id+'-brief','Checking the task sheet with the mentor','book','read'),
+        action(id+'-study','study','Recording the steps of the demonstration','slate','write',6),
+        hand(id+'-review','Showing the mentor the completed notes','slate','point'));
+    demonstrations.set(id,routine);return routine;
+  }
   function routine(input){
     const kind=input.kind;
+    if((kind==='learn'&&input.placementSide==='learner'||kind==='commitment'&&input.placementSide==='mentor')){
+      const demonstration=placement(input);if(demonstration)return demonstration;
+    }
+    if(kind==='freight'&&['food','materials'].includes(input.good)&&Number.isSafeInteger(input.amount)&&input.amount>0){
+      const cargo=input.amount+' '+input.good,prop=input.good==='food'?'basket':'crate';
+      return series('regional-freight','Prepare an inter-district consignment',log,
+        work('load-freight','Loading '+cargo+' for the neighbouring district',prop,'lift'),
+        hand('file-freight','Checking the consignment against the dispatch note','ledger','write'));
+    }
     if(kind==='commitment'||kind==='cover'){
       if(input.handoverScope==='admin')return /^(practice nurse|nurse)$/i.test(input.handoverRole)?routines.handoverAdmin:routines.handoverSchedule;
       if(input.handoverScope==='qualified'&&typeof input.handoverRole==='string'){
@@ -200,7 +247,19 @@
     if(kind==='pantryCover'||kind==='departure'||kind==='inspect'||kind==='inspectHome'||kind==='returnTruck'||kind==='dispute'||kind==='closedRoute')return routines[kind];
     if(kind==='gather'&&own(harvestPlans,input.resource))return harvestPlans[input.resource];
     if(kind==='wage')return routines.trader;
-    if(kind==='marketSupply')return input.activity==='sell'?routines.marketSale:routines.marketMeal;
+    if(kind==='marketSupply'){
+      if(input.activity==='tendPatch'){
+        if(input.patchCare==='irrigate')return routines.waterBed;
+        if(input.patchCare==='dressSoil')return routines.restoreBeds;
+        return input.resource==='timber'?routines.restoreWood:input.venue==='dock'?routines.restoreWater:routines.restBeds;
+      }
+      if(input.activity==='makeWare'){
+        const shop=root.EarthResidentShops?.products?.[input.ware]?.shop;
+        return shop==='weaving'?routines.weaveWare:shop==='joinery'?routines.fitWare:input.ware==='flute'?routines.makeFlute:input.ware==='drum'?routines.makeDrum:routines.makeWare;
+      }
+      if(input.activity==='buildHome')return input.homeStage===2?routines.houseFrame:input.homeStage===3?routines.houseFinish:routines.houseFootings;
+      return own({deed:routines.deed,stockStall:routines.stockStall,shop:routines.shop,sell:routines.marketSale},input.activity)||routines.marketMeal;
+    }
     if(kind==='commitment'&&input.errandKind){
       const promise=input.pledge,prop=own({food:'basket',materials:'crate',funds:'parcel'},promise?.good);
       if(prop&&Number.isSafeInteger(promise.amount)&&promise.amount>0){
@@ -219,6 +278,7 @@
         return own(hobbies,input.axis)||hobbies.craft;
       }
       const project=own(projects,input.projectKind);
+      if(input.projectKind==='food'&&input.resource==='fish'&&input.projectPhase==='plan')return routines.surveyFish;
       if(input.projectKind==='food'&&input.projectPhase==='work'&&own(harvestPlans,input.resource))return harvestPlans[input.resource];
       if(project)return own(project,input.projectPhase)||project.work;
     }
@@ -239,7 +299,7 @@
       pledged?chosen.steps[0].prop:loadedBasket?'basket':porter?'crate':courier?'parcel':'none',pledged||loadedBasket||porter||courier?'carry':'walk',0);
     const patience=input.personality?.traits?.patience??input.personality?.patience;
     const pace=Number.isFinite(patience)?1.12-.0024*Math.max(0,Math.min(100,patience)):1;
-    return Object.freeze({id:chosen.id,goal:input.goal||chosen.goal,venue,steps:chosen.steps,duration:chosen.duration/pace,pace,travel});
+    return Object.freeze({id:chosen.id,goal:input.goal||chosen.goal,assignment:input.assignment||null,venue,steps:chosen.steps,duration:chosen.duration/pace,pace,travel});
   }
   function stage(plan,seconds,moving=false){
     if(moving)return plan.travel;

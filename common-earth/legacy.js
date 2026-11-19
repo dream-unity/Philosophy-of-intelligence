@@ -52,7 +52,7 @@
     const related=partner.foundedBy===home.id||home.foundedBy===partner.id;
     if(!host)return weekStep(home,partner.name+' is waiting for a local delegate to take up the admissions rota before considering a freight agreement.');
     if(!met&&(!related||world.charter==='voice'))return neighboursStep(world,'Meet '+(host?.name||'the host')+' in '+partner.name,
-      'Introduce yourself in Neighbours. Return to '+home.name+' to propose a route that protects both towns’ reserves.');
+      'Introduce yourself in Towns. Return to '+home.name+' to propose a route that protects both towns’ reserves.');
     if(partner.trust<35||home.trust<35)return weekStep(home,'The councils require 35 trust in each town before committing supplies. '+home.name+' has '+home.trust+' and '+partner.name+' has '+partner.trust+'.');
     return {...groupStep(home,'routes','Review the proposed route to '+partner.name,'route:'+partner.id),detail:'The freight offer shows each council’s terms. Signing it keeps the two towns’ reserves separate.'};
   }
@@ -256,15 +256,15 @@
     if(!step)return null;
     const world=sim.state,site=world.sites.find(s=>s.id===step.siteId),home=homeDistrict(world);
     if(!site)return null;
-    if(world.communityLife?.journey)return neighboursStep(world,'Continue along the path','Complete the crossing or turn back in Neighbours before making a new local commitment.');
+    if(world.communityLife?.journey)return neighboursStep(world,'Continue along the path','Complete the crossing or turn back in Towns before making a new local commitment.');
     if(step.kind==='week'||step.kind==='neighbours')return step;
     if(home&&site.id!==home.id){
       const person=step.residentId&&personById(site,step.residentId);
       if(person?.promise?.by==='steward')return neighboursStep(world,'Carry your promise to '+person.name,
-        'Pack the balance at your home exchange in Neighbours, travel to '+site.name+', then bring it to '+person.name+' before week '+person.promise.dueWeek+' ends.');
+        'Pack the balance at your home exchange in Towns, travel to '+site.name+', then bring it to '+person.name+' before week '+person.promise.dueWeek+' ends.');
       return localHearing(world,site,'its own work and council business');
     }
-    if(home&&world.activeId!==home.id)return neighboursStep(world,'Return home to '+home.name,step.label+' is a decision in your home community. Take the path home in Neighbours.');
+    if(home&&world.activeId!==home.id)return neighboursStep(world,'Return home to '+home.name,step.label+' is a decision in your home community. Take the path home in Towns.');
     const self=site.agency?.actor;
     if(self && (step.kind==='resident'&&step.residentId===self || step.actionId==='courier:deliver:'+self)){
       const name=personById(site,self).name;
@@ -351,7 +351,7 @@
   function guidance(sim) {
     const world=sim.state,site=sim.active(),home=homeDistrict(world);
     if(!site)return null;
-    if(world.communityLife?.journey)return neighboursStep(world,'Continue along the path','Complete the crossing or turn back in Neighbours before making a new local commitment.');
+    if(world.communityLife?.journey)return neighboursStep(world,'Continue along the path','Complete the crossing or turn back in Towns before making a new local commitment.');
     // Bring an expiring commitment back into view even if the player has travelled.
     const due=world.sites.flatMap(s=>s.residents.filter(p=>p.promise?.dueWeek<=world.week&&(!home||s.id===home.id||p.promise.by==='steward')).map(p=>({s,p})));
     const urgent=due.map(({s,p})=>{

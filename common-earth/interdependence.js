@@ -63,10 +63,27 @@
       if(old?.coverId&&old.throughWeek>=world.week)link(old.coverId,person.id,'is covering a former post',old.oldEmployer+' needs cover through week '+old.throughWeek+'.',1);
       const appt=site.purses?.tickets?.[person.id];
       if(appt?.clerkId)link(appt.clerkId,person.id,'is verifying a stock check','The worker needs the count before the exchange releases their wage.',2);
+      const sponsorship=root.EarthDreams?.supportLink?.(site,person.id);
+      if(sponsorship?.from&&sponsorship.week>=world.week-8)
+        link(sponsorship.from,person.id,'helped fund a personal goal',sponsorship.detail,2);
+      for(const receipt of site.purses?.people?.[person.id]?.entries||[]){
+        const pair=receipt.pair;
+        if(!pair?.product||pair.from!==person.id||receipt.action!=='purchase'||receipt.week<world.week-4)continue;
+        if(!pair.fromIdentity||pair.fromIdentity!==person.identityKey||!pair.toIdentity||
+          pair.toIdentity!==root.EarthPersonas?.profile(site,pair.to)?.identityKey)continue;
+        link(pair.from,pair.to,pair.product==='courtyardHome'?'bought a home from':'bought from a neighbour','Week '+receipt.week+' · '+receipt.text,3);
+      }
+      const shift=site.autonomy?.people?.[person.id]?.history?.[0];
+      if(shift?.week===world.week&&shift.target){
+        if(shift.placementSide==='mentor')link(person.id,shift.target,'supervises a placement',shift.reason,1);
+        if(shift.householdSession&&shift.kind==='visit')link(person.id,shift.target,'is introducing a new resident',shift.reason,1);
+      }
       for(const a of orders(site,world,person.id)){
-        if(a.actorId!==person.id||!['agreed','asked'].includes(a.status))continue;
+        if(a.actorId!==person.id)continue;
         if(a.status==='agreed')link(person.id,a.requesterId,'accepted an errand',a.title+' · due week '+a.dueWeek,0);
-        else link(a.contactId,person.id,'has the missing information',a.title,2);
+        else if(a.status==='asked')link(a.contactId,person.id,'has the missing information',a.title,2);
+        else if(a.finishedWeek>=world.week-2&&['kept','missed'].includes(a.status))
+          link(person.id,a.requesterId,a.status==='kept'?'fulfilled an agreement':'missed an agreement',a.title+' · '+a.outcome,4);
       }
       const p=site.autonomy?.projects?.owners?.[person.id];
       if(p&&!p.finished){
@@ -90,6 +107,18 @@
         job.employer+' filled the vacancy in week '+hire.week+', after '+(hire.week-hire.opened)+' open weeks.',3);
     }
     return links.sort((a,b)=>a.priority-b.priority);
+  }
+  function perspectives(site,world,people,a,b){
+    const first=people.find(p=>p.id===a),second=people.find(p=>p.id===b);
+    if(!first||!second||a===b)return null;
+    const links=ties(site,world,people).filter(edge=>edge.from===a&&edge.to===b||edge.from===b&&edge.to===a);
+    const side=(person,peer)=>{
+      const plan=root.EarthAutonomy?.view(site,world,person.id);
+      const memory=root.EarthAutonomy?.contacts(site,person.id,world.week)?.find(m=>m.here&&m.id===peer.id);
+      return {name:person.name,role:root.EarthCareers?.role?.(site,person.id)||person.role,plan:plan?.goal,
+        reason:plan?.reason,dream:plan?.dream?.title,memory,depends:exchange(site,world,person.id).town};
+    };
+    return {first:side(first,second),second:side(second,first),links};
   }
   function maker(box){
     return function(tag,text,className){
@@ -243,5 +272,5 @@
       box.append(archive);
     }
   }
-  root.EarthInterdependence=Object.freeze({anchor,signings,ties,exchange,appendTown,appendPerson});
+  root.EarthInterdependence=Object.freeze({anchor,signings,ties,exchange,perspectives,appendTown,appendPerson});
 })(typeof window==='undefined'?globalThis:window);

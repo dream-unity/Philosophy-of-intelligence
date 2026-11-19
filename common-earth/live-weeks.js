@@ -56,5 +56,11 @@
     }
     return {start,pause,reset,update,enabled:()=>enabled,period};
   }
-  root.EarthLiveWeeks=Object.freeze({create,period});
+  // An established town with no older preference follows a newly founded
+  // town. An explicit pause in either generation of the controls is retained.
+  function enabledOnReturn(preference,previousTab){
+    if(preference==='live'||preference==='manual')return preference==='live';
+    return previousTab!==false;
+  }
+  root.EarthLiveWeeks=Object.freeze({create,period,enabledOnReturn});
 })(typeof window==='undefined'?globalThis:window);
