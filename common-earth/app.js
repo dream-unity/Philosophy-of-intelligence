@@ -145,6 +145,8 @@
       selectPlace(site,false);setView('street',false);redrawStreet();if(vehicle==='van')street?.arriveByVan();else if(street?.getState().vehicle==='van')street.toggleVehicle();streetHud?.close(false);
     }});
   if(districtPanel)streetHud?.registerTool('neighbours',districtPanel);
+  $('gate-resist')?.addEventListener('click',()=>districtPanel?.gate('resist'));
+  $('gate-withdraw')?.addEventListener('click',()=>districtPanel?.gate('withdraw'));
   const townCentre=window.EarthTownCentreUI?.mount($('town-centre'),sim,presentResult);
   function openTownCentre(siteId){
     const dialog=$('town-centre');
@@ -1825,7 +1827,15 @@
       agencyUI?.update();if(!visitingDistrict)lifePanel?.render();
       const actorField=$('street-actor');if(actorField){actorField.disabled=visitingDistrict;actorField.title=visitingDistrict?'This district chooses its own work and representation.':'';}
       const memberHint=$('district-membership-hint');
-      if(memberHint){memberHint.hidden=!visitingDistrict;if(visitingDistrict)memberHint.textContent='Visiting '+site.name+' · Review local membership';}
+      const watch=visitingDistrict&&site.communityLife?.border?.street;
+      const stopped=watch&&watch.phase!=='won';
+      if(memberHint){memberHint.hidden=!visitingDistrict||!!stopped;if(visitingDistrict)memberHint.textContent='Visiting '+site.name+' · Review local membership';}
+      show('street-gate',!!watch);
+      if(watch){
+        put('gate-status',window.EarthBorderConflict.streetStatus(watch));
+        show('gate-resist',watch.phase==='fight'&&!watch.resisting);
+        show('gate-withdraw',!!stopped);
+      }
     }
     put('action-budget',site ? state.effort+' civic effort · '+site.funds+' funds · '+site.materials+' materials · '+site.food+' food' : '');
     refreshSaveWarning();

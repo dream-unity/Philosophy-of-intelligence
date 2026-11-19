@@ -233,10 +233,17 @@
         const b=person.bounds[axis];
         const row=field('div');row.append(field('dt',title(axis)),field('dd',(model.skills[axis]??person.aptitudes[axis])+' · range '+b.min+'–'+b.max));skills.append(row);
       }
+      const combat=root.EarthBorderConflict;
+      if(combat){
+        const row=field('div');row.append(field('dt','Fighting'),field('dd',combat.fightingSkill(person)+' / 100'));skills.append(row);
+      }
       box.append(skills,field('h4','Temperament'));
       const traits=field('dl',null,'life-skills');
       for(const [key,value] of Object.entries(person.traits)){
         const row=field('div');row.append(field('dt',title(key)),field('dd',String(value)+' / 100'));traits.append(row);
+      }
+      if(combat&&person.traits.aggression==null){
+        const row=field('div');row.append(field('dt','Aggression'),field('dd',combat.disposition(person)+' / 100'));traits.append(row);
       }
       box.append(traits);return box;
     }

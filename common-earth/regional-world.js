@@ -304,7 +304,8 @@
       incorporated=nearestTown(geo,point(id),.54)?.site.id||null;
       geo.townJurisdictions.set(id,incorporated);
     }
-    return {parcel:lot,owner:lot?.owner||null,jurisdiction:(lot?.occupation&&lot.charter)||incorporated||lot?.charter||null,
+    const occupier=incorporated&&townFor(geo,incorporated)?.site.communityLife?.border?.occupiedBy;
+    return {parcel:lot,owner:lot?.owner||null,jurisdiction:(lot?.occupation&&lot.charter)||occupier||incorporated||lot?.charter||null,
       claims:Object.keys(lot?.claims||{})};
   }
   function localAgreement(r,a,b,id){
@@ -508,6 +509,10 @@
     const other=townFor(geo,otherId)?.site;if(!other)return;
     const home=town.site,k=pair(home.id,otherId),old=r.contacts[k],now=world.regionalWorld.step;
     if(old&&(old.step>=now-2||old.reviewWeek>world.week))return;
+    // Passing a surveyor cannot end a war. A parley can still negotiate a settlement.
+    const a=home.communityLife?.border,b=other.communityLife?.border;
+    if(a?.campaign?.against===other.id||b?.campaign?.against===home.id||
+      old?.terms==='disputed'&&(a?.foothold?.by===other.id||b?.foothold?.by===home.id))return;
     const lot=r.parcels[id],resource=terrainCell(geo,id).good;
     const pressure=(site)=>site[resource]<=(resource==='food'?Math.ceil(site.population/5)*2+2:5);
     const bothNeed=pressure(home)&&pressure(other),uses=lot?.uses||{},rivals=(uses[home.id]||0)+(uses[other.id]||0)>=2;
@@ -583,12 +588,16 @@
     const joint=host.trust>=50&&trust+Math.min(8,Math.floor(reach/12))>=59&&!pressure;
     const adopts=joint||host.trust>=30&&(trust+Number(longstanding)*6>=39||host.materials<floor.materials+1);
     const previous=localAgreement(r,site.id,host.id,id)?.terms||'disputed';
-    const offersPassage=adopts||!pressure&&host.trust>=45;
+    const occupier=site.communityLife?.border?.foothold?.by===host.id?host:
+      host.communityLife?.border?.foothold?.by===site.id?site:null;
+    const pressingClaim=occupier&&root.EarthBorderConflict?.quay(occupier)&&root.EarthBorderConflict.profile(occupier).expansionist&&
+      occupier.food>=reserve(world,occupier).food+2&&occupier.funds>=reserve(world,occupier).funds+2;
+    const offersPassage=!pressingClaim&&(adopts||!pressure&&host.trust>=45);
     const terms=joint?'joint':offersPassage?'passage':previous;
     const accepted=offersPassage&&host.materials<Number.MAX_SAFE_INTEGER&&host.funds<Number.MAX_SAFE_INTEGER;
     const detail=accepted?(terms==='joint'?'Both meetings opened the parcel to shared harvest and maintenance.':
       'The host accepted passage and retained the right to decide who may harvest.')+' The home crew transferred 1 material and 1 fund to the receiving community for upkeep.':
-      (pressure?host.name+' needs its reserve of '+good+' for local commitments. ':host.name+' asked for evidence of dependable cooperation. ')+'Access terms did not change.';
+      (pressingClaim?occupier.name+' is still pressing its claim on the town centre. ':pressure?host.name+' needs its reserve of '+good+' for local commitments. ':host.name+' asked for evidence of dependable cooperation. ')+'Access terms did not change.';
     if(accepted){site.trust=Math.min(100,site.trust+1);host.trust=Math.min(100,host.trust+1);host.materials++;host.funds++;trip.kit.materials--;trip.kit.funds--;}
     saveAgreement(r,k,{a:site.id,b:host.id,terms:accepted?terms:previous,trust,week:world.week,step:world.regionalWorld.step,
       cell:id,meetings:(old?.meetings||0)+1,reviewWeek:world.week+(accepted?5:1),detail});
