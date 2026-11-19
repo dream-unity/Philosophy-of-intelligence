@@ -53,6 +53,25 @@
     const orders = new Map();
     const people = root.EarthPersonas?.list(site) || site.residents || [];
     const owners = new Map(people.map(p=>[p.identityKey||p.id,p]));
+    const centre=site.centre;
+    if(centre){
+      const j=centre.project;
+      if(j){
+        const proposer=people.find(p=>p.name===j.proposer),future=centre.incoming?.key===j.buyer?centre.incoming?.name:null;
+        const participants=[participant(j.worker,'Contracted builder')];if(proposer)participants.push(participant(proposer.id,'Proposer'));
+        orders.set(j.id,{key:'order/'+j.id,kind:'Town Centre contract',title:(j.kind==='home'?'Two-room dwelling':j.kind==='shop'?'Cooperative store':'Repair workshop')+' · plot '+(j.plot+1),
+          status:['Materials reserved','Materials delivered','Frame completed'][j.stage],people:participants,
+          details:[j.reason,'Commissioned by '+j.proposer+'. Three funds in escrow for the builder. '+j.delivered+' of 4 materials on site.',future?'Reserved for '+future+'.':''].filter(Boolean)});
+      }
+      for(const plot of centre.plots.filter(d=>d.contract)){
+        const peopleAt=Object.entries(centre.rights).filter(([,id])=>id===plot.id).map(([k])=>owners.get(k)).filter(Boolean);
+        const builder=people.find(p=>p.name===plot.builder),sale=plot.lastSale;
+        entries.push({key:'order/'+plot.contract,kind:'Completed civic works',title:plot.title,status:'Opened in week '+plot.opened,
+          people:[...(builder?[participant(builder.id,'Built the property')]:[]),...peopleAt.map(p=>participant(p.id,'Lives here'))],
+          details:[plot.beds?plot.beds+' completed places · '+peopleAt.length+' named occupants.':(plot.sales||0)+' cooperative sales.',
+            sale?sale.clerkName+' sold provisions to '+sale.buyerName+' in week '+sale.week+'.':''].filter(Boolean)});
+      }
+    }
     for(const row of site.practice?.open||[]){
       if(!['housing','design'].includes(row.subject))continue;
       entries.push({key:'booking/'+row.actorKey,title:root.EarthPractice.tasks[row.subject].name,kind:'Agreed work',status:'Booked in week '+row.week,

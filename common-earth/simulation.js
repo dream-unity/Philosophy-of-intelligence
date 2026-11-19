@@ -378,6 +378,9 @@
     if(root.EarthAutonomy && !root.EarthAutonomy.valid(site,world.week))return false;
     if(root.EarthProvisions && !root.EarthProvisions.valid(site,world.week))return false;
     if(root.EarthMarket && !root.EarthMarket.valid(site,world.week))return false;
+    if(root.EarthTownCentre&&!root.EarthTownCentre.valid(site))return false;
+    if(root.EarthPopulationOffice&&!root.EarthPopulationOffice.validSite(site))return false;
+    if(root.EarthBoundaryAssembly&&!root.EarthBoundaryAssembly.validSite(site))return false;
     if(root.EarthDistrictGrowth&&!root.EarthDistrictGrowth.valid(site,world.week))return false;
     if(root.EarthPurses && !root.EarthPurses.valid(site,world.week))return false;
     if(root.EarthFleet && !root.EarthFleet.valid(site,world.week))return false;
@@ -507,6 +510,7 @@
       if(!Array.isArray(world.journal)||!world.journal.every(j=>recordLike(j)&&integer(j.week,1,world.week)&&typeof j.text==='string'))return null;
       if(world.charter!=null && !Object.hasOwn(CHARTERS,world.charter) || typeof world.completed!=='boolean')return null;
       if(!validReview(world.lastWeekReview,world,ids))return null;
+      if(root.EarthPopulationOffice&&!root.EarthPopulationOffice.validWorld(world))return null;
       if(root.EarthCommunityLife?.valid && !root.EarthCommunityLife.valid(world,validSite))return null;
       if(root.EarthRegionalWorld?.valid && !root.EarthRegionalWorld.valid(world))return null;
       if(root.EarthPurses?.validMoves && !root.EarthPurses.validMoves(world))return null;
@@ -870,6 +874,8 @@
       if(world.activeId!==id){
         const issue=world.communityLife&&root.EarthCommunityLife.journeyBlock(current());
         if(issue)return reject(issue);
+        const entry=world.communityLife&&root.EarthBoundaryAssembly?.encounter(world,current(),next,world.communityLife.profile);
+        if(entry&&!entry.allowed)return complete(entry.message,current(),false);
         root.EarthAgency?.depart(current(),typeof departure==='function'?departure():departure);
         if(world.communityLife)root.EarthCommunityLife.arrive(world,current(),next,newSettlement);
       }
@@ -1315,7 +1321,7 @@
     }
     function payForWork(site,label){
       const actor=signer(site);
-      const paid=root.EarthPurses?.productionReceipt(world,site,actor,1,label+' earned 1 personal fund.');
+      const paid=root.EarthMarket?.payWork(world,site,actor,label);
       const point=root.EarthDistrictGrowth?.contribute(world,site,actor);
       const restored=world.effort<MAX_EFFORT;
       if(restored)world.effort++;
@@ -1344,7 +1350,7 @@
       return complete(outcome+reward,site,true,root.EarthAgency?.actor(site));
     }
     function occupiedLot(site,plot){
-      return site.buildings.some(item=>item.plot===plot) || (site.construction||[]).some(job=>job.scope==='street'&&job.plot===plot);
+      return site.centre?.project?.streetPlot===plot||site.buildings.some(item=>item.plot===plot) || (site.construction||[]).some(job=>job.scope==='street'&&job.plot===plot);
     }
     function previewBuild(kind,plot) {
       const site=current(),b=BUILDINGS[kind];
@@ -1808,6 +1814,8 @@
       }
       for(const site of districts)settleHouseholds(turn,site,reports.get(site.id),event);
       if(root.EarthCommunityLife)for(const movement of root.EarthCommunityLife.tick(turn,spec=>newSettlement(spec,turn)))event(movement.text,movement.site);
+      root.EarthPopulationOffice?.advance(turn);
+      root.EarthBoundaryAssembly?.advance(turn);
       root.EarthRegionalWorld?.advance?.(turn,spec=>newSettlement(spec,turn),'calendar');
       dispatchCargo(turn,byId,inbound,event);
       for(const site of districts){
@@ -2352,6 +2360,8 @@
         const era=developRegionalCouncil(world,site);
         if(era)site.growth.history[0].events.push(era);
       }
+      root.EarthPopulationOffice?.advance(world);
+      root.EarthBoundaryAssembly?.advance(world);
       root.EarthRegionalWorld?.advance?.(world,newSettlement,'production');
       root.EarthPerformance?.finish('production',productionStarted);
       world.productionSerial=expected+1;world.lastProductionAt=Date.now();
@@ -2365,6 +2375,14 @@
         return complete('Fishing line put away.',site,false);
       }),
       production:guarded(runProduction),
+      townCentre:guarded(request=>{
+        const s=current();
+        if(!s||request?.siteId!==s.id||!root.EarthCommunityLife?.isHome(world,s)||request.revision!==s.centre?.revision)
+          return reject('The town, its membership or the offer has changed. Reopen the Town Centre.');
+        const result=request.action==='assist'?root.EarthTownCentre.assist(world,s,request):request.action==='pass'?root.EarthBoundaryAssembly.requestPass(world,s,request):root.EarthPopulationOffice.command(world,s,request);
+        if(!result.ok)return result;
+        const saved=complete(result.message,s);return saved.ok?result:saved;
+      }),
       regionalWork:guarded(request=>{
         const result=root.EarthRegionalWorld?.propose?.(world,current(),request);
         return result?.ok?complete(result.message,current()):result||reject('Regional work is unavailable.');

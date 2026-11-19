@@ -8,7 +8,16 @@
   const places=world=>[...(world?.sites||[]),...(world?.communityLife?.outposts||[])];
   const key=(i,j)=>i+','+j;
   const cell=(x,y)=>key(Math.round(x/cellSize),Math.round(y/cellSize));
-  const point=id=>{const [i,j]=id.split(',').map(Number);return {x:i*cellSize,y:j*cellSize};};
+  // Parcel keys are stable; a scan of a known field repeatedly decodes the same coordinates.
+  const parcelCoordinates=new Map();
+  function point(id){
+    let value=parcelCoordinates.get(id);
+    if(value)return value;
+    const cut=id.indexOf(',');
+    value=Object.freeze({x:Number(id.slice(0,cut))*cellSize,y:Number(id.slice(cut+1))*cellSize});
+    if(parcelCoordinates.size>=4096)parcelCoordinates.clear();
+    parcelCoordinates.set(id,value);return value;
+  }
   const inside=(geo,x,y)=>Number.isFinite(x)&&Number.isFinite(y)&&x>=geo.bounds.minX&&x<=geo.bounds.maxX&&y>=geo.bounds.minY&&y<=geo.bounds.maxY;
   const descriptors={
     water:{kind:'water',label:'Open water',good:'food',resource:'fish',facility:'landing',work:'fishing landing'},
@@ -61,7 +70,7 @@
       first:world.sites[0],lastSite:world.sites.at(-1),lastOutpost:outposts?.at(-1),siteCount:world.sites.length,outpostCount:outposts?.length||0,
       habitat:root.EarthResources?.environment?.(origin)||'mixed',
       tidal:!!(origin.coastal||origin.lakeShore||root.CommonEarthSim?.waterfront?.(origin)),
-      seed:Math.sin(origin.lat*7.31+origin.lon*5.53)*19,macro:new Map(),terrainCells:new Map(),dryEdges:new Map()};
+      seed:Math.sin(origin.lat*7.31+origin.lon*5.53)*19,macro:new Map(),terrainCells:new Map(),dryEdges:new Map(),townJurisdictions:new Map()};
     group.set(origin.id,g);return g;
   }
   function reconcileLocations(world){
@@ -245,7 +254,7 @@
   }
   function streetExtent(site){
     const growth=site.growth,rows=growth?.households||[],cached=streetsByTown.get(site);
-    if(cached&&cached.round===growth?.round&&cached.count===rows.length)return cached;
+    if(cached&&cached.round===growth?.round&&cached.count===rows.length&&cached.civic===site.centre?.revision)return cached;
     const plots=[],model=root.EarthDistrictGrowth;
     let radius=.52;
     function add(p){
@@ -258,7 +267,9 @@
       if(h.shop)add(h.shopSite||model?.shopPoint(site,h.businessPlot));
       if(h.build?.shop)add(model?.shopPoint(site,h.build.lot));
     }
-    const extent={round:growth?.round,count:rows.length,plots,radius};streetsByTown.set(site,extent);return extent;
+    for(const p of site.centre?.plots||[])add(p);
+    add(site.centre?.project?.point);
+    const extent={round:growth?.round,count:rows.length,civic:site.centre?.revision,plots,radius};streetsByTown.set(site,extent);return extent;
   }
   function streetFootprint(geo,x,y){
     let nearest=null,best=Infinity;
@@ -275,8 +286,16 @@
     return nearest;
   }
   function tenure(geo,r,id){
-    const p=point(id),lot=r?.parcels[id],incorporated=nearestTown(geo,p,.54);
-    return {parcel:lot,owner:lot?.owner||null,jurisdiction:incorporated?.site.id||lot?.charter||null,
+    const lot=r?.parcels[id];
+    // Geography is replaced on founding or relocation. Only the fixed town radius can
+    // be cached. Ownership, peripheral charters, claims and agreements remain live.
+    let incorporated=geo.townJurisdictions.get(id);
+    if(incorporated===undefined){
+      incorporated=nearestTown(geo,point(id),.54)?.site.id||null;
+      geo.townJurisdictions.set(id,incorporated);
+    }
+    const occupation=lot?.charter&&lot.claims?.[lot.charter]?.basis==='Occupation after a boundary conflict';
+    return {parcel:lot,owner:lot?.owner||null,jurisdiction:occupation?lot.charter:incorporated||lot?.charter||null,
       claims:Object.keys(lot?.claims||{})};
   }
   function localAgreement(r,a,b,id){
@@ -317,8 +336,8 @@
     const {claims}=tenure(geo,r,id);
     return claims.every(other=>other===siteId||localAgreement(r,siteId,other,id)?.terms==='joint');
   }
-  function nodeCost(geo,r,town,id,byWater){
-    if(!passage(geo,r,town.site.id,id))return Infinity;
+  function nodeCost(geo,r,town,id,byWater,knownOpen=false){
+    if(!knownOpen&&!passage(geo,r,town.site.id,id))return Infinity;
     const ground=terrainCell(geo,id);
     if(ground.kind==='water'&&!byWater)return Infinity;
     const cost=r?.parcels[id]?.trail?.level ? .65 : ground.kind==='rock'?2.1:ground.kind==='woodland'?1.35:ground.kind==='water'?1.25:1;
@@ -344,7 +363,20 @@
     const start=point(from),end=point(to);if(!inside(geo,end.x,end.y))return null;
     const byWater=mode!=='van'&&!!canSail(town,r),sailing=town.site.water,knownCells=r?.knowledge?.[town.site.id]||{},exploring=mode==='survey';
     const mapped=(id,p)=>knownCells[id]||dist(town,p)<=localRadius;
-    if((!exploring||mapped(to,end))&&!Number.isFinite(nodeCost(geo,r,town,to,byWater)))return null;
+    // A route search cannot change agreements, terrain or waymarks while it runs.
+    const costs=new Map(),disputes=new Set();
+    for(const meeting of Object.values(r?.contacts||{})){
+      if(meeting?.terms==='disputed')disputes.add(meeting.cell);
+    }
+    function travelCost(id){
+      let value=costs.get(id);
+      if(value!==undefined)return value;
+      // A boundary can close only through a current dispute or a recorded parcel agreement.
+      const open=!disputes.has(id)&&!r?.parcels[id]?.agreements;
+      value=nodeCost(geo,r,town,id,byWater,open);
+      costs.set(id,value);return value;
+    }
+    if((!exploring||mapped(to,end))&&!Number.isFinite(travelCost(to)))return null;
     const open=[{id:from,priority:dist(start,end)/cellSize}],cost=new Map([[from,0]]),parent=new Map(),done=new Set();
     const directions=[[1,0],[-1,0],[0,1],[0,-1]];
     // Binary heap, ordered by estimated total walking / sailing time.
@@ -377,7 +409,7 @@
         if(examined&&!byWater&&!dryEdge(geo,current,id))continue;
         // A scout can choose a bearing into unknown country. Its actual
         // conditions enter the community record when the crew reaches it.
-        const terrainCost=examined?nodeCost(geo,r,town,id,byWater):1.55;
+        const terrainCost=examined?travelCost(id):1.55;
         const next=cost.get(current)+terrainCost+(knownCells[id]?0:.1)+(sailing&&examined&&terrainCell(geo,id).kind!=='water'?.25:0);
         if(!Number.isFinite(next)||next>=(cost.get(id)??Infinity))continue;
         cost.set(id,next);parent.set(id,current);
@@ -593,6 +625,15 @@
     if(mode==='van'&&(from.water||to.water))return null;
     return pathTo(geo,regionFor(world,geo),town,cell(town.x,town.y),cell(dest.x,dest.y),mode);
   }
+  function occupy(world,from,to,id,signer){
+    const geo=geography(world,from),r=state(world,geo),lot=r.parcels[id]||={uses:{}};
+    lot.owner=from.id;lot.charter=from.id;lot.uses[from.id]=(lot.uses[from.id]||0)+1;
+    (lot.claims||={})[from.id]={week:world.week,by:signer.name,basis:'Occupation after a boundary conflict'};
+    const k=pair(from.id,to.id),old=r.contacts[k];
+    saveAgreement(r,k,{a:from.id,b:to.id,cell:id,terms:'disputed',trust:8,week:world.week,step:world.regionalWorld.step,
+      meetings:(old?.meetings||0)+1,detail:from.name+' occupied this parcel. '+to.name+' disputes the claim. The passage needs a new agreement.'});
+    reveal(world,r,geo,from.id,id);reveal(world,r,geo,to.id,id);r.mapRevision=(r.mapRevision||0)+1;
+  }
   function foundingGround(world,from,location){
     const geo=geography(world,from),town=townFor(geo,from.id),r=regionFor(world,geo),p=geo.project(location),id=cell(p.x,p.y);
     if(!inside(geo,p.x,p.y)||r?.parcels[id]?.owner||!buildingRights(geo,r,from.id,id))return null;
@@ -785,7 +826,7 @@
       }
       record(world,r,site,'Conditions changed before the founding group arrived. The households are bringing their supplies home.',trip);
     }else if(trip.kind==='build'&&!lot.work){
-      lot.owner=site.id;lot.uses[site.id]=visits+1;
+      lot.owner||=site.id;lot.uses[site.id]=visits+1;
       lot.work={x:p.x,y:p.y,resource:ground.resource,kind:ground.facility,label:ground.work,builder:trip.name,personId:trip.personId,week:world.week,level:1};
       trip.kit.materials=0;
       record(world,r,site,trip.name+' finished the '+ground.work+' at '+id+' using 3 materials. Subsequent crews can load two more units here. '+why,trip);
@@ -1035,6 +1076,7 @@
         destination,remainingKm:(run.path.length-1)*cellSize*(1-f),cargo:{[run.good]:run.amount},kit:{},
         detail:'The receiving community agreed to send '+run.expected+' units in exchange. Delivery is due in week '+run.due+'.'});
     }
+    if(root.EarthBoundaryAssembly)visible.push(...root.EarthBoundaryAssembly.travellers(world,site));
     return visible;
   }
   function ledger(world,site){
@@ -1134,5 +1176,5 @@
     }
     return true;
   }
-  root.EarthRegionalWorld={geography,polarProjection,streetKilometres,streetExtent,streetFootprint,reconcileLocations,terrain,known,surveyedCells,works,routes,travellers,inspect,ledger,residentRecord,fieldAccount,shareFieldReport,valid,propose,advance,tripLine,tripPosition,changeBranch,observeLeg,routeEffort,routeOpen,foundingGround,passageAgreement,crossingPath,remainingCrossing,shareCrossing};
+  root.EarthRegionalWorld={geography,pathPoint:point,occupy,polarProjection,streetKilometres,streetExtent,streetFootprint,reconcileLocations,terrain,known,surveyedCells,works,routes,travellers,inspect,ledger,residentRecord,fieldAccount,shareFieldReport,valid,propose,advance,tripLine,tripPosition,changeBranch,observeLeg,routeEffort,routeOpen,foundingGround,passageAgreement,crossingPath,remainingCrossing,shareCrossing};
 })(typeof window==='undefined'?globalThis:window);

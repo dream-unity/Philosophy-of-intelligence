@@ -22,6 +22,7 @@
     return Object.fromEntries(['funds','materials','food'].map(k=>[k,floor[k]+(held[k]||0)]));
   }
   function homePoint(site,plot){
+    const occupied=root.EarthTownCentre?.homePoint(site,site.growth?.households[plot]);if(occupied)return occupied;
     return site.growth?.households[plot]?.houseSite||{x:1.7+(plot%10)*2.2,y:-1.9-Math.floor(plot/10)*1.75};
   }
   function shopPoint(site,plot){
@@ -37,6 +38,7 @@
       const home=homePoint(site,h.plot);west=Math.min(west,home.x-.74);north=Math.min(north,home.y-.74);
       if(h.shop){const shop=shopPoint(site,h.businessPlot);west=Math.min(west,shop.x-.74);north=Math.min(north,shop.y-.74);}
     }
+    for(const p of [...(site?.centre?.plots||[]),site?.centre?.project?.point].filter(Boolean)){west=Math.min(west,p.x-.74);north=Math.min(north,p.y-.74);}
     return {west,north};
   }
   function housingPlaces(site){
@@ -59,7 +61,7 @@
     }
     for(const p of arrivals){
       const owner=key(p);
-      const plot=g.households.length,h={owner,name:p.name,plot,home:1,points:0,stock:0,shop:'',businessPlot:null,last:'Settled on residential lot '+(plot+1)};
+      const plot=g.households.length,h={owner,name:p.name,plot,home:!site.centre||site.centre.plots.some(d=>d.kind==='home'&&d.owner===owner)?1:0,points:0,stock:0,shop:'',businessPlot:null,last:site.centre?'Registered with the Town Centre.':'Settled on residential lot '+(plot+1)};
       let i=plot,spot=homePoint(site,i);
       while(land.has(pointKey(spot))){i++;spot=homePoint(site,i);}
       if(i!==plot)h.houseSite=spot;
@@ -203,7 +205,8 @@
   }
   function activeWork(site){
     const g=site.growth;if(!g)return [];
-    const rows=[];
+    const civic=site.centre?.project?.worker;
+    const rows=civic?[root.EarthTownCentre.projectWork(site,civic)]:[];
     for(const h of g.households){
       if(h.order)rows.push(root.EarthDistrictOrders.orderView(site,h.order));
       else if(h.build?.person)rows.push(buildingJob(site,h,h.build.person));
@@ -217,6 +220,7 @@
   function work(site,p){
     const id=typeof p==='string'?p:p?.id,g=site?.growth;
     if(!id||!g)return null;
+    const civic=root.EarthTownCentre?.projectWork(site,id);if(civic)return civic;
     const h=g.households.find(h=>h.order?.person===id||h.build?.person===id||h.purchase?.person===id);
     if(h?.order)return root.EarthDistrictOrders.orderView(site,h.order);
     if(h?.purchase)return shoppingJob(site,h);
@@ -239,6 +243,7 @@
     const at=closeWeek?(world.lastProductionAt||0):Date.now();
     const add=jobs.record,counts={food:0,repair:0,exchange:0},free=[],busy=new Set(),finished=new Set();
     g.round++;
+    root.EarthTownCentre?.beginRound(world,site,people,floor,at,closeWeek,transfers,events,appointments);
     let wages=0;
     const credit=(p,n,why)=>root.EarthPurses.productionReceipt(world,site,p.id,n,why);
     const goodsName=good=>good==='materials'?'Public building store':jobs.publicAccount;
@@ -339,7 +344,8 @@
       if(commercial&&cash>=7)for(let j=0;j<permits;j++){const candidate=(h.plot+j)%permits;if(!usedLots.has(candidate)){lot=candidate;break;}}
       const reserves=site.materials-floor.materials-(g.roads<g.households.length&&!g.road?3:0);
       const fromHome=Math.min(2,h.supplies||0),fromStore=2-fromHome;
-      const improvement=lot!==null||h.home<3&&cash>=5;
+      const ownsHome=!site.centre||site.centre.plots.some(d=>d.owner===h.owner&&d.kind==='home');
+      const improvement=lot!==null||ownsHome&&h.home<3&&cash>=5;
       if(improvement&&reserves>=fromStore&&(g.round+h.plot)%3===0){
         const shop=lot!==null?(p.hobbyAxis==='music'?'flute':trades[work].item):null,price=(shop?3:1)+fromStore;
         const extension=p.hobbyAxis==='music'?'Music room':work==='food'?'Kitchen garden':work==='repair'?'Home workshop':'Courtyard studio';
@@ -487,7 +493,7 @@
       (road.ids==null?road.at!=null||road.origins!=null:!Array.isArray(road.ids)||road.ids.length!==2||new Set(road.ids).size!==2||!road.ids.every(text)||!nat(road.at)||!origins(road.origins,road.ids))))return false;
     return g.households.every((h,i)=>{
       if(!h||!root.EarthDistrictOrders.validOrder(h.order,h)||!h.owner||typeof h.owner!=='string'||owners.has(h.owner)||typeof h.name!=='string'||h.plot!==i||
-        ![1,2,3].includes(h.home)||![h.trained,h.pantry,h.supplies,h.roadLot,h.marketLot,h.hires,h.businessFunds,h.saleSerial,h.restockedRound].every(n=>n==null||nat(n))||
+        ![0,1,2,3].includes(h.home)||![h.trained,h.pantry,h.supplies,h.roadLot,h.marketLot,h.hires,h.businessFunds,h.saleSerial,h.restockedRound].every(n=>n==null||nat(n))||
         h.activity!=null&&!['home','commitment','food','repair','exchange','road','shop','purchase'].includes(h.activity)||!nat(h.points)||!nat(h.stock)||h.stock>3||typeof h.last!=='string'||
         (h.shop?!Object.hasOwn(root.EarthResidentShops.products,h.shop)||!nat(h.businessPlot)||lots.has(h.businessPlot):h.businessPlot!==null))return false;
       if((h.shopInputs&&!Object.entries(h.shopInputs).every(([id,n])=>h.shop&&root.EarthResidentShops.products[h.shop].inputs.includes(id)&&nat(n)))||

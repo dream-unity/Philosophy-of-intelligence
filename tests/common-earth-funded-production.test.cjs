@@ -31,7 +31,10 @@ const accountNames={funds:'Community treasury',materials:'Public building store'
 function cashInRegion(world){
   const sites=[...world.sites,...world.communityLife.outposts];
   const regionalEscrow=Object.values(world.regionalWorld?.regions||{}).flatMap(r=>Object.values(r.trips)).reduce((n,t)=>n+t.kit.funds,0);
-  return sites.reduce((n,t)=>n+(t.growth?wealth(t):t.funds+(t.exchange?.till??8)),regionalEscrow);
+  return sites.reduce((n,t)=>{
+    const c=t.centre,deposit=c?.incoming?.disbursed?0:c?.incoming?.deposit||0;
+    return n+(t.growth?wealth(t):t.funds+(t.exchange?.till??8)+Object.values(t.purses?.people||{}).reduce((sum,p)=>sum+p.balance,0))+(c?.project?3:0)+(c?.expedition?.wages||0)+deposit;
+  },regionalEscrow);
 }
 
 test('calendar-only play opens funded livelihoods in new and existing unvisited settlements',()=>{
@@ -58,9 +61,10 @@ test('a rotating regional economy reconciles advances, wages, public stores and 
     let sales=0,roads=0,delivered=0,built=0;
     for(let i=0;i<50;i++){
       const beforeWealth=cashInRegion(g.sim.state);
+      const office=g.sim.state.populationOffice,savings=office.immigrantSavings||0,fees=office.searchFees||0;
       let external=0,capital=0;
       await g.step();
-      sites.forEach((site,index)=>{
+      [g.home,...g.sim.state.communityLife.outposts].filter(t=>t.growth?.round).forEach(site=>{
         const last=site.growth.history[0],rows=growth.transfers(last);
         // Regional expeditions booked after the local shift have a separate
         // manifest. The economic round reports only its own transactions.
@@ -72,6 +76,7 @@ test('a rotating regional economy reconciles advances, wages, public stores and 
         roads+=rows.filter(t=>t.reason==='Laid the road').length;
         built+=rows.filter(t=>t.reason==='Construction completed').length;
       });
+      external+=(office.immigrantSavings||0)-savings;capital+=(office.searchFees||0)-fees;
       assert.equal(cashInRegion(g.sim.state)-beforeWealth,external-capital,place.name+' regional cash including travel reserves, round '+i);
     }
     assert(delivered>30);assert(roads>0);assert(built>0);assert(sales>0);
@@ -143,7 +148,7 @@ test('a recurring market gathering combines actual consignments and an attained 
   for(let i=0;i<70&&!source;i++){
     await a.step();const towns=[a.home,...a.sim.state.communityLife.outposts];
     for(const t of towns){
-      const g=t.growth;
+      const g=t.growth;if(!g)continue;
       if(g.vehicle>0&&t.tech.length>0&&g.roads>0)advanced=true;
       const ongoing=g.households.filter(h=>h.order?.kind==='exchange'&&h.order.request===2);
       if(g.vehicle>0&&g.custom==='Market gathering'&&g.broker.parcel>=2&&ongoing.length){source=a.snapshot();district=t.id;}
@@ -163,10 +168,13 @@ test('a recurring market gathering combines actual consignments and an attained 
   // A duplicate world, worker, stocks, route and time. Only the shared practice
   // changes the size of the next offer, and both offers reserve real inventory.
   let checked=false;
-  for(const p of model.members(t)){
-    const h=t.growth.households.find(h=>h.owner===p.identityKey),h2=other.growth.households.find(v=>v.owner===p.identityKey);
-    if(!h||!h2||h.order||h2.order)continue;
-    const aRows=[],bRows=[],prepare=(g,s,rows)=>g.runtime.EarthDistrictOrders.prepare(g.sim.state,s,g.runtime.EarthDistrictGrowth.members(s),rows);
+  for(const p of [worker,...model.members(t).filter(v=>v.id!==worker.id)]){
+    const h=t.growth?.households.find(h=>h.owner===p.identityKey),h2=other.growth.households.find(v=>v.owner===p.identityKey);
+    if(!h||!h2)continue;
+    const aRows=[],bRows=[];
+    if(h.order)a.runtime.EarthDistrictOrders.cancel(t,h,aRows,'Carrier requests new terms');
+    if(h2.order)b.runtime.EarthDistrictOrders.cancel(other,h2,bRows,'Carrier requests new terms');
+    const prepare=(g,s,rows)=>g.runtime.EarthDistrictOrders.prepare(g.sim.state,s,g.runtime.EarthDistrictGrowth.members(s),rows);
     const quotes=prepare(a,t,aRows),otherQuotes=prepare(b,other,bRows);
     const broker=t.growth.broker.parcel,otherBroker=other.growth.broker.parcel;
     const ask=(g,s,h,offers,logs)=>g.runtime.EarthDistrictOrders.start(g.sim.state,s,p,h,{food:0,materials:0,funds:s.funds},offers,order.at,logs);
@@ -254,7 +262,7 @@ test('changing one remembered employment relationship changes a real hiring deci
     const prior=g.snapshot(),round=g.home.growth?.round||0;
     await g.step();
     for(const site of all(g)){
-      const picked=site.growth.households.find(h=>h.order?.kind==='retail'&&h.order.phase==='collect'&&h.order.stageRound===round+1);
+      const picked=site.growth?.households.find(h=>h.order?.kind==='retail'&&h.order.person!==h.order.employerId&&h.order.phase==='collect'&&h.order.stageRound===round+1);
       if(picked){before=prior;accepted={...picked.order};district=site.id;break;}
     }
   }
@@ -294,7 +302,7 @@ test('a willing title holder with a connected completed home adds a real housing
   let town,host;
   for(let i=0;i<120&&!host;i++){
     await g.step();
-    for(const t of [g.home,...g.sim.state.communityLife.outposts]){const room=t.growth.households.find(h=>h.guestRoom&&development.housingPlaces(t)>0);if(room){host=room;town=t;break;}}
+    for(const t of [g.home,...g.sim.state.communityLife.outposts]){const room=t.growth?.households.find(h=>h.guestRoom&&development.housingPlaces(t)>0);if(room){host=room;town=t;break;}}
   }
   assert(host);assert.equal(host.home,3);assert(host.access);
   const before=city.housingCapacity(town),present=development.housingPlaces(town),hostId=host.guestRoom;

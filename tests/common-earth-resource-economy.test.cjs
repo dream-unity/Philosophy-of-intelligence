@@ -113,7 +113,7 @@ test('imported products use merchant cash and stock, and a crew can choose an ac
 });
 
 test('visitors cannot withdraw, harvest, process or ship a foreign district’s goods before the admission council accepts them',()=>{
-  const t=open({lat:-18,lon:92,name:'Ocean Anchorage',water:true},['personas','community-life','partners','local-projects','careers','autonomy','purses']);
+  const t=open({lat:-18,lon:92,name:'Ocean Anchorage',water:true},['personas','community-life','partners','local-projects','careers','autonomy','purses','town-centre']);
   const {sim,c,w}=t,home=sim.active(),dest=w.communityLife.outposts[0];let time=123456;
   c.Date=class extends Date{static now(){return time;}};
   function travel(action,target,at,who='steward'){
@@ -139,10 +139,18 @@ test('visitors cannot withdraw, harvest, process or ship a foreign district’s 
   no(sim.act('route:'+home.id));assert.equal(JSON.stringify(dest),before);
   assert.deepEqual(raw(home.resourceLedger.bins),original);assert.equal(publicBalance.rows[0].free,dest.food);
   const host=dest.residents[2].id;no(travel('apply',null,host));
-  ok(travel('meet',null,host));ok(travel('help',null,'market'));ok(sim.advance());ok(travel('help',null,'market'));ok(travel('apply',null,host));
-  assert.equal(w.communityLife.homeId,dest.id);
+  ok(travel('meet',null,host));
+  function workTrial(){
+    const treasury=dest.funds,cash=home.purses.people.steward.balance;
+    ok(travel('help',null,'market'));no(travel('help',null,'market'));
+    assert.equal(dest.funds,treasury-2);assert.equal(home.purses.people.steward.balance,cash+2);
+  }
+  workTrial();ok(sim.advance());workTrial();
+  const treasury=dest.funds,combined=home.purses.people.steward.balance+dest.purses.people.steward.balance;
+  ok(travel('apply',null,host));no(travel('apply',null,host));
+  assert.equal(dest.funds,treasury+2);assert.equal(w.communityLife.homeId,dest.id);
   assert.equal(home.purses.people.steward.balance,0);assert.equal(home.purses.people.steward.earned,2);
-  assert.equal(dest.purses.people.steward.balance,4);assert.equal(dest.purses.people.steward.earned,0);
+  assert.equal(dest.purses.people.steward.balance,combined-2);assert.equal(dest.purses.people.steward.earned,0);
   assert.equal(dest.purses.people.steward.productionIncome,2);
   assert.ok(c.EarthPurses.validMoves(w));
   ok(t.act('gatherLot','salvage'));ok(t.act('makeBatch','reclaim'));

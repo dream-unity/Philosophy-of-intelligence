@@ -589,6 +589,7 @@
       return vehicleHitsFootprint(a,b,truckHalfWidth,truckHalfLength)&&vehicleHitsFootprint(a,b,truckHalfLength,truckHalfWidth);
     }
     const collisionCell=n=>clamp(Math.floor(n/BLOCK),0,collisionSide-1);
+    let walkingDiversion=null;
     const footRadius=.095;
     const footprint=(x,y,w,d)=>[x-w/2,y-d/2,x+w/2,y+d/2];
     function hitsTruckObstacles(a,b,boxes){
@@ -909,6 +910,18 @@
       if(!look){look=communityLook(t.site,who);remember(regionalLooks,key,look,48);}
       const p=renderRegion.localPoint(baseTown,actor.x,actor.y),dx=(actor.dx||0)-(actor.dy||0),dy=-(actor.dx||0)-(actor.dy||0);
       const norm=Math.hypot(dx,dy)||1,ax=dx/norm,ay=dy/norm,stationary=actor.phase==='working';
+      if(actor.kind==='fight'){
+        // Both figures share one rhythm. The opposing body gives ground as the
+        // first reaches forward. Their saved positions and the outcome stay fixed.
+        const step=actor.fightRow===1?.22:0;
+        const wave=reduced?0:Math.sin(visualTime*4.1+step);
+        const pulse=reduced?.35:Math.max(0,wave*-actor.fightSide)**2;
+        const shift=reduced?0:(pulse*.075-Math.max(0,wave*actor.fightSide)*.035);
+        p.x+=ax*shift;p.y+=ay*shift;
+        person(p.x,p.y,look.cloth[0],ax,ay,0,0,false,look);
+        activityGesture(p,{gesture:'spar',prop:'none'},look.cloth[0],ax,ay,null,look.skin[0],pulse);
+        return true;
+      }
       if(actor.mode==='van'){
         drawTransport({...p,dx:ax,dy:ay},0,false,true);return true;
       }
@@ -1292,6 +1305,7 @@
       for(let by=0;by<4;by++)for(let bx=0;bx<4;bx++){
         const block=[bx,by],cell=by*4+bx, p=centre(block), lot=state.lots.find(l=>sameBlock(l.block,block));
         const park=!lot&&!sameBlock(block,MARKET)&&!HOMES.some(home=>sameBlock(home,block));
+        if(s?.centre&&bx===3&&by===0)continue;
         const n=park?7:(!lot||lot.building)?1:2;
         for(let i=0;i<n;i++){
           const tx=park?p.x-1.7+noise(seed,cell*23+i,11)*3.4:p.x+(i%2?1:-1)*(1.37+noise(seed,cell,9)*.45);
@@ -2348,6 +2362,16 @@
         const rim=Math.max(.75,k*.025);
         ctx.fillStyle=fill;ctx.fillRect(px+rim,py+rim,Math.max(1,w*k-rim*2),Math.max(1,h*k-rim*2));
       }
+      if(step.gesture==='spar'){
+        const shoulder=x+side*.065*k,elbow=x+side*(.19+.07*t)*k;
+        const hand=x+side*(.23+.27*t)*k,elbowY=y-(.36+.12*t)*k,fistY=y-(.49+.07*t)*k;
+        stroke(x-side*.04*k,shoulderY,x+side*.09*k,y-.51*k,coat,.075);
+        ellipse(x+side*.10*k,y-.52*k,k*.047,k*.05,skin);
+        stroke(shoulder,shoulderY,elbow,elbowY,coat,.096);
+        stroke(elbow,elbowY,hand,fistY,skin,.065);
+        ellipse(hand,fistY,k*.049,k*.05,skin);
+        return;
+      }
       if(step.gesture==='sit'||step.gesture==='listen')return;
       stroke(x+side*.07*k,shoulderY,gripX,gripY,coat,.09);
       ellipse(gripX,gripY,k*.041,k*.042,skin);
@@ -2692,14 +2716,19 @@
     function refreshFrontages(site){
       const g=site?.growth;
       frontages.boxes.length=0;frontages.west=-.78;frontages.north=-.78;
-      if(!g)return;
+      if(!g&&!site?.centre)return;
       const add=(p,width,depth)=>{
         frontages.west=Math.min(frontages.west,p.x-.74);frontages.north=Math.min(frontages.north,p.y-.74);
         frontages.boxes.push(footprint(p.x,p.y,width,depth));
       };
-      for(const h of g.households){
+      if(site.centre){
+        add(window.EarthTownCentre.centrePoint,3.2,2.4);
+        for(const p of site.centre.plots)if(p.streetPlot==null&&!p.founding)add(p,1.04,.94);
+        if(site.centre.project)add(site.centre.project.point,.95,.72);
+      }
+      for(const h of g?.households||[]){
         const scale=homeScale(h),home=window.EarthDistrictGrowth.homePoint(site,h.plot);
-        add(home,2.54*scale,2.25*scale);
+        if(!site.centre)add(home,2.54*scale,2.25*scale);
         const work=growthWorksite(site,h,home);
         if(work){
           add({x:work.x-.01,y:work.y+.13},.72,.26);
@@ -3460,7 +3489,7 @@
       const built=removal?clamp((1-job.progress)/.72,0,1):job.progress;
       return {...job,x,y,gate,sign,vertical,removal,artKind,frame,built,scale:job.scope==='city'?.73:1,type:'construction',jobId:job.id,label:job.name};
     }
-    const vacant=lot=>Boolean(lot&&!lot.building&&!workLots.has(lot.plot));
+    const vacant=lot=>Boolean(lot&&!lot.building&&state.site?.centre?.project?.streetPlot!==lot.plot&&!workLots.has(lot.plot));
     function workTree(tree){
       const bx=Math.floor(tree.x/BLOCK),by=Math.floor(tree.y/BLOCK);
       return bx>=0&&bx<3&&by>=0&&by<3&&workLots.has(by*3+bx);
@@ -3615,6 +3644,11 @@
         const fallback=Math.abs(dx)/size<1.8&&dy/size> -2.2&&dy/size<1-Math.abs(dx)/size*.45;
         if(inside??fallback){depth=order;front=()=>({...describe(),objectX:pos.x,objectY:pos.y});}
       }
+      if(site.centre){
+        test(window.EarthTownCentre.centrePoint,'hall',0,.78,.35,()=>({assetId:'town-centre',assetName:'Town Centre',use:'centre',activity:'Housing register, recruitment, entry customs and civic decisions.'}));
+        for(const d of site.centre.plots)if(d.streetPlot==null)test(d,d.kind==='home'?'home':'market',d.id%3,.43,.34,()=>({assetId:'register-'+d.id,assetName:d.title,use:'dwelling',ownerKey:d.owner,activity:d.kind==='home'?d.beds+' completed residential places.':'Resident cooperative, serving the local district.'}));
+        const j=site.centre.project;if(j)test(j.point,'home',0,.4,.35,()=>({assetId:j.id,assetName:'Construction on plot '+(j.plot+1),use:'centre',activity:j.workerName+' · '+j.reason}));
+      }
       test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Market exchange',use:'market',
         activity:'Collect a parcel or bring finished work here for payment.'}));
       HOMES.forEach((block,i)=>test(centre(block),'home',i,1,.35,()=>{
@@ -3630,7 +3664,7 @@
       const growth=window.EarthDistrictGrowth;
       if(growth)for(const h of site.growth?.households||[]){
         const home=growth.homePoint(site,h.plot);
-        test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
+        if(!site.centre)test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
           assetName:h.name+'’s home',ownerKey:h.owner,activity:'Residential lot '+(h.plot+1)+'. '+(h.extension||'')}));
         if(h.shop)test(growth.shopPoint(site,h.businessPlot),'market',0,.36,.3,()=>{
           const item=window.EarthResidentShops?.products[h.shop];
@@ -4146,12 +4180,36 @@
       }
       HOMES.forEach((block,index)=>{const p=centre(block);addItem(p.x,p.y,blockDepth(p),()=>residence({...p,index}),buildingBounds);});
       for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item),buildingBounds);}
+      if(state.site.centre){
+        const civic=state.site.centre,at=window.EarthTownCentre.centrePoint;
+        addItem(at.x,at.y,at.x+at.y+.35,()=>{
+          if(!window.EarthTownArchitecture?.draw(ctx,state.site,'hall',0,...screen(at.x,at.y),unit*.78))
+            box(at.x-1.1,at.y-.9,2.2,1.8,.04,1.7,'#d4b987','#b39a73','#a58a68');
+          const [px,py]=screen(at.x,at.y+1.22);
+          ctx.save();ctx.font='600 12px system-ui';ctx.textAlign='center';ctx.fillStyle='#16352e';ctx.fillRect(px-40,py-12,80,17);ctx.fillStyle='#f5e8c8';ctx.fillText('Town Centre',px,py);ctx.restore();
+        },buildingBounds);
+        for(const d of civic.plots){
+          if(d.founding||d.streetPlot!=null)continue;
+          const art=d.kind==='home'?'home':'market';
+          addItem(d.x,d.y,d.x+d.y+.34,()=>{
+            if(!window.EarthTownArchitecture?.draw(ctx,state.site,art,d.id%3,...screen(d.x,d.y),unit*.43))
+              box(d.x-.4,d.y-.37,.8,.74,0,.63,'#cfaf89','#ad896a','#8a7966');
+          },buildingBounds);
+        }
+        const j=civic.project;
+        if(j){const {x,y}=j.point;addItem(x,y,x+y+.36,()=>{
+          rect(x-.52,y-.42,1.04,.84,.025,'#aa9677');
+          for(const dx of [-.42,.38])for(const dy of [-.31,.31])box(x+dx,y+dy,.09,.09,.02,.23+j.stage*.26,'#e3c48c','#ac8561','#8b6c4f');
+          if(j.delivered)box(x-.41,y-.30,.84,.64,.02,.20,'#b58c62','#997656','#806348');
+          if(j.stage>=2)line(x-.4,y+.3,.73,x+.4,y+.3,.73,'#dcb781',2);
+        },buildingBounds);}
+      }
       if(state.site.growth){
         const g=state.site.growth;
         for(const h of g.households){
           const {x,y}=window.EarthDistrictGrowth.homePoint(state.site,h.plot);
           if(h.plot<g.roads)rect(x-.17,y+.4,.34,Math.abs(y)-.4,.015,'#a69a83');
-          addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
+          if(!state.site.centre)addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
           const appointment=growthWorksite(state.site,h,{x,y});
           if(appointment){
             const {x:ax,y:ay}=appointment;
@@ -4412,7 +4470,16 @@
       let pass=driving?(truck?truckPassability:roadPassability):footPassability;
       let edges=driving?(truck?truckEdges:roadEdges):footEdges;
       if(detour){pass=detour.pass;edges=detour.edges;}
-      else if(trafficDetour||!driving&&[...workBounds].some(bounds=>insideFootprint(start,bounds))){pass=new Uint8Array(count);edges=new Uint16Array(count);}
+      else if(trafficDetour||!driving&&[...workBounds].some(bounds=>insideFootprint(start,bounds))){
+        // Workers dispatched together face the same vehicles and street layout. Reuse
+        // only collision masks. Each person still searches from their own location.
+        const ordinaryWalk=!driving&&trafficDetour&&![...workBounds].some(bounds=>insideFootprint(start,bounds)||insideFootprint(state.player,bounds));
+        if(ordinaryWalk){
+          const key=footpathRevision+'/'+trafficDetour.map(bounds=>bounds.join(',')).join('/');
+          if(walkingDiversion?.key!==key)walkingDiversion={key,pass:new Uint8Array(count),edges:new Uint16Array(count)};
+          pass=walkingDiversion.pass;edges=walkingDiversion.edges;
+        }else{pass=new Uint8Array(count);edges=new Uint16Array(count);}
+      }
       const useTruck=driving&&truck;
       function valid(i,staticOnly=false){
         const mask=staticOnly?truckPassability:pass;
@@ -5031,7 +5098,7 @@
       state.site=site||null;refreshGeography();state.seed=hash(`${site?.lat??0},${site?.lon??0},${site?.id||'district'}`);
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
-      const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
+      const nextFingerprint=JSON.stringify([nextKey,site?.centre?.plots.length,site?.centre?.project?.id,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
         site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
         landmarks.filter(mark=>mark.kind!=='balcony').map(mark=>mark.key),
         site?.residents?.map(r=>[r.id,r.name,window.EarthCommunityLife?.present(site,r.id)!==false])]);
@@ -5890,6 +5957,20 @@
         dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,slop:e.pointerType==='touch'?12:5};
       }else if(fingers.size===2)beginPinch();
     });
+    let lastGesturePaint=0;
+    function paintDelayedGesture(){
+      // If input arrives while the browser is withholding animation callbacks, redraw
+      // the camera at the new finger position. Movement and work keep their normal
+      // clocks. An expensive cold paint backs off before sampling again, so
+      // newly cached artwork can recover during this gesture.
+      if(!frameTimer||!visible||covered||!lastFrame)return;
+      const now=frameTimer.now(),interval=paintAverage<=10?20:Math.max(60,paintAverage*4);
+      if(now-lastFrame<65||now-lastGesturePaint<interval)return;
+      lastGesturePaint=now;
+      draw();
+      const cost=frameTimer.now()-now;
+      paintAverage=paintAverage*.87+Math.min(90,cost)*.13;
+    }
     listen(canvas,'pointermove',e=>{
       const p=coords(e,canvas);
       if(!fingers.has(e.pointerId)){
@@ -5905,14 +5986,14 @@
       if(pinch){
         const [a,b]=fingers.values(),distance=Math.hypot(a.x-b.x,a.y-b.y);
         zoom=clamp(pinch.zoom*distance/pinch.distance,minZoom(),2.15);unit=baseUnit()*zoom;
-        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;return;
+        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;if(e.pointerType==='touch')paintDelayedGesture();return;
       }
       if(dragging?.id!==e.pointerId)return;
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
       clearObservation(false);dragging.moved=true;cameraFollows=false;
       regionalFollow=null;overviewZoom=null;
-      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;
+      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;if(e.pointerType==='touch')paintDelayedGesture();
     });
     function endPointer(e) {
       if(!fingers.delete(e.pointerId))return;

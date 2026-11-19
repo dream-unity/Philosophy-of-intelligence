@@ -252,6 +252,11 @@
     const reception=root.EarthCommunityLife?.visitorReception?.(world,site,targetId);
     if(reception?.repels&&topic!=='visit-fit'){
       site.communityLife.visitorIncidents=Math.min(1000,(site.communityLife.visitorIncidents||0)+1);
+      const visitor=world.communityLife?.profile,origin=visitor&&root.EarthTownCentre?.towns(world).find(s=>s.id===world.communityLife.homeId);
+      if(site.centre&&origin&&origin!==site){
+        const actor=root.EarthPersonas.profile(site,targetId),words=target.name+' shoved '+visitor.name+' during a conversation without a council mandate.';
+        root.EarthBoundaryAssembly?.witness(world,site,origin,visitor,actor,false,'personal confrontation',words,-5);
+      }
       return {ok:true,changed:true,repelled:true,message:target.name+' shoves you back and ends the exchange. Speak to '+root.EarthCommunityLife.hostFor(site).name+' in Towns for an introduction.'};
     }
     if(reception?.private&&['interests','dream','purpose','followup','shadow'].includes(topic))return {ok:false,message:target.name+' · '+reception.greeting};

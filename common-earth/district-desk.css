@@ -35,7 +35,7 @@
 .observer-report { max-width:320px; }
 .observer-report strong { font-size:.95rem; }
 .observer-head button,.observer-dock button { flex:none; }
-body[data-observing-town] #street-stage > :not(#district-observer,#region-mini,#region-open,#region-inspector,#region-view),
+body[data-observing-town] #street-stage > :not(#town-population,#district-observer,#region-mini,#region-open,#region-inspector,#region-view),
 body[data-observing-town] :is(#actions-panel,#street-controls,#street-actors) { display:none!important; }
 body[data-observing-town] .workspace { grid-template-columns:minmax(0,1fr); }
 body[data-observing-town] .map-frame { width:100%; }
@@ -149,8 +149,8 @@ body[data-observing-town] .observer-dock { left:104px; max-width:calc(100% - 114
 #region-point-detail p {margin:6px 0;font-size:.88rem;}
 #region-point-detail button {margin:3px 4px 2px 0;}
 #region-point-detail button:disabled {opacity:.62;cursor:default;}
-body[data-region-roaming] :is(.street-stage-heading,#scene-watching,.scene-tools,.scene-strip,.observer-head,.observer-dock,#observer-goals),body[data-region-detail] .street-stage-heading {visibility:hidden;}
-body[data-region-roaming] #street-hud .scene-card {display:none;}
+body[data-region-roaming] :is(.street-stage-heading,#scene-watching,.observer-head,.observer-dock,#observer-goals),body[data-region-detail] .street-stage-heading {visibility:hidden;}
+#street-stage:has(.scene-card:not([hidden])) #region-inspector {visibility:hidden;}
 #street-stage:has(#region-view:not([hidden])) :is(#region-open,#region-inspector) {visibility:hidden;}
 #region-view nav label {display:flex;align-items:center;gap:5px;font-size:.83rem;}
 @container street (max-width:595px) {
@@ -184,3 +184,83 @@ body[data-region-roaming] #street-hud .scene-card {display:none;}
 
 #region-point-detail label {display:grid;gap:4px;margin-block:8px;color:#d6e2d1;font-size:.86rem;}
 #region-point-detail select {width:100%;min-height:44px;padding:5px;border:1px solid #829784;border-radius:4px;background:#1b352f;color:#f8efd5;}
+
+#town-population {
+  position:absolute; z-index:23; top:8px; right:8px; display:grid; gap:1px;
+  min-height:44px; max-width:min(40%,220px); padding:4px 10px;
+  text-align:right; font:600 .84rem/1.2 var(--sans,system-ui,sans-serif);
+  color:#ffedbe; background:#15302efa; border:1px solid #a9b89c; border-radius:5px; cursor:pointer;
+}
+#town-population[hidden] {display:none;}
+#population-town {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#d6e3d7;font-size:.78rem;}
+#population-count {font-variant-numeric:tabular-nums;}
+#street-stage:has(#town-population:not([hidden])) .scene-tools {
+  right:auto;left:8px;top:8px;max-width:calc(100% - min(40%,220px) - 24px);
+  overflow-x:auto;white-space:nowrap;scrollbar-width:thin;
+}
+#street-stage .scene-tools button {flex:none;}
+#street-stage .street-camera-tools {top:60px;bottom:auto;right:8px;}
+#street-stage:has(#town-population:not([hidden])) .street-stage-heading {top:65px;bottom:auto;left:8px;}
+#street-stage #observer-goals {top:65px;}
+#street-stage #region-inspector {top:60px;max-height:calc(100% - 190px);max-width:min(420px,calc(100% - 116px));}
+
+/* The regional map and status share the bottom row. A panel opens between
+   the two rows, leaving both the population control and camera tools usable. */
+#street-stage {--mini-room:calc(clamp(66px,7vw,90px) + 18px);}
+@container street (min-width:760px) {
+  #street-stage .street-hud {--mini-room:130px;}
+}
+#street-stage .street-hud .scene-strip {
+  top:auto;bottom:8px;left:var(--mini-room);right:8px;
+}
+#street-stage .scene-strip small {
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+}
+#street-stage > .district-tools {
+  display:grid;top:112px;bottom:auto;right:8px;transform:none;gap:4px;
+}
+#street-stage > .district-tools .icon-button:last-child {margin-top:0;}
+#street-stage .street-hud:not([data-talk-dock]) .scene-card {
+  top:60px;bottom:auto;right:108px;
+  width:min(355px,calc(100% - var(--mini-room) - 112px));
+  max-height:calc(100% - 126px);
+}
+@container street (max-width:475px) {
+  #street-stage .street-hud:not([data-talk-dock]) .scene-card {
+    right:60px;width:calc(100% - 70px);max-height:calc(100% - 182px);
+  }
+  #street-stage .street-camera-tools {flex-direction:column;}
+  #street-stage > .district-tools {top:158px;}
+}
+@media (max-height:535px) and (orientation:landscape) {
+  #street-stage .street-hud:has(.scene-card:not([hidden])) .scene-strip {
+    left:var(--mini-room);right:8px;bottom:8px;
+  }
+}
+@media (any-pointer:coarse) {
+  #street-stage :is(.street-camera-tools,.district-tools) .icon-button {width:44px;height:44px;}
+}
+.centre-sheet {width:min(620px,calc(100vw - 16px));max-height:min(82dvh,760px);color:#f4ecda;}
+.centre-sheet:popover-open {display:flex;flex-direction:column;}
+.centre-sheet .sheet-head {align-items:flex-start;}
+.centre-sheet .sheet-head h2 {margin:0 0 .35rem;}
+.centre-sheet .sheet-head label {display:flex;gap:.5rem;align-items:center;}
+.centre-sheet select,.centre-sheet input[type=number] {font:inherit;max-width:100%;min-height:40px;padding:.3rem .55rem;background:#18342f;color:#f6efd9;border:1px solid #718779;border-radius:4px;}
+#town-centre-tabs {display:flex;flex-wrap:wrap;gap:3px;padding:5px 12px;border-block-end:1px solid #526b5d;}
+#town-centre-tabs button,.centre-sheet .sheet-body button {font:550 .9rem/1.25 var(--sans,system-ui,sans-serif);min-height:44px;padding:6px 10px;background:#254139;color:#f9edd0;border:1px solid #789783;border-radius:4px;cursor:pointer;}
+#town-centre-tabs [aria-pressed=true] {background:#dcd0a8;color:#192e28;}
+.centre-sheet .sheet-body {min-height:0;overflow:auto;overscroll-behavior:contain;font:400 .96rem/1.45 var(--sans,system-ui,sans-serif);}
+.centre-sheet .sheet-body button {margin:2px 4px 2px 0;}
+.centre-sheet button:disabled {opacity:.6;cursor:default;}
+.centre-sheet p,.centre-sheet h3 {margin:.5rem 0;}
+.centre-sheet .sheet-body details {border-top:1px solid #4b6156;padding:3px 0;}
+.centre-sheet summary {display:list-item;cursor:pointer;padding:8px 0;color:#f3dfa8;}
+.centre-sheet label {display:grid;gap:4px;margin:.4rem 0;}
+.centre-sheet .centre-filter {display:flex;align-items:center;gap:8px;min-height:44px;}
+.centre-directory {margin:8px 0;}
+.centre-facts {display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:8px;margin:8px 0;}
+.centre-facts div {border-inline-start:2px solid #83a493;padding-inline:8px;}
+.centre-facts dt,.centre-sheet article small {font-size:.81rem;color:#d3dfd0;}
+.centre-facts dd {margin:0;font-variant-numeric:tabular-nums;}
+.centre-criterion fieldset {display:flex;align-items:center;flex-wrap:wrap;gap:6px;border:1px solid #587162;margin:8px 0;}
+.centre-criterion input {width:6em;}

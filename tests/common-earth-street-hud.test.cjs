@@ -335,7 +335,8 @@ test('a new runtime on the same saved town reopens the active ocean cast without
   assert.equal(market.snapshot().tab,'records');const stores=JSON.parse(JSON.stringify(b.ui.snapshot())),receipt=b.sim.marketView().history[0].text;
   b.sim.destroy();
   const c=fixture({...options,storage:a.storage}),reopened=markets(c);assert(c.ui.restore(stores));assert.equal(c.ui.active(),'stores');
-  assert.equal(reopened.snapshot().tab,'records');assert(c.id('local-market').content().includes(receipt));assert.equal(c.sim.marketView().history.length,1);
+  assert.equal(reopened.snapshot().tab,'records');assert(c.id('local-market').content().includes(receipt));assert.equal(c.sim.marketView().history.filter(r=>r.text===receipt).length,1);
+  assert(c.sim.marketView().history.some(r=>/paid .* one fund/i.test(r.text)));
   assert.equal(c.sim.active().provisions.receipt.units,1);assert.equal(c.sim.active().food,stock+2);assert(!c.sim.active().handline);c.sim.destroy();
 });
 test('a same-town reload resumes an actual observation; a talk reload restores only its listener and rechecks range before any new words',async()=>{

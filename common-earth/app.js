@@ -242,6 +242,22 @@
   let productionPending=false,productionPaint=0,paintDue=false,paintSince=0;
   const inspectionPointers=new Set(),meter=window.EarthPerformance;
   const producing=()=>!document.hidden&&!!sim.active();
+  const actionsPanel=$('actions-panel');
+  let actionsVisible=true,actionsDue=false;
+  function showCurrentActions(){
+    if(actionsDue)renderActions();
+  }
+  if(actionsPanel&&typeof IntersectionObserver==='function'){
+    new IntersectionObserver(entries=>{
+      const latest=entries[entries.length-1];if(!latest)return;
+      actionsVisible=latest.isIntersecting;
+      if(actionsVisible)showCurrentActions();
+    }).observe(actionsPanel);
+    // Tab navigation needs the current set of controls before the browser
+    // chooses a focus target, including when it scrolls a button into view.
+    document.addEventListener('keydown',e=>{if(e.key==='Tab')showCurrentActions();},true);
+    actionsPanel.addEventListener('focusin',showCurrentActions);
+  }
   function paintProduction(){
     clearTimeout(productionPaint);productionPaint=0;
     if(!paintDue||document.hidden)return;
@@ -251,7 +267,7 @@
     paintDue=false;
     const began=meter?.now();
     if(view==='street')street?.setSite(sim.active());
-    render();
+    render({production:true});
     if(meter)meter.finish('productionUI',began);
   }
   function queueProductionPaint(){
@@ -1337,6 +1353,7 @@
     },'secondary-button'));
   }
   function renderActions(workModel) {
+    actionsDue=false;
     if(outcomeContext && outcomeContext!==actionContext()){
       show('action-outcome',false);put('action-outcome','');outcomeContext='';
     }
@@ -1811,7 +1828,8 @@
     if(sheetOpen('journal-dialog'))renderRecords();
     if(view==='world'){inspect();markers();}
     const workModel=works?.view();
-    if(!options?.keepCrewEditor)renderActions(workModel);
+    if(options?.production&&!actionsVisible&&!actionsPanel?.contains(document.activeElement))actionsDue=true;
+    else if(!options?.keepCrewEditor)renderActions(workModel);
     renderForecast();planning?.render();
     show('goal-details',!!site && !!learning);learning?.render();
     refreshWorksites(workModel,true);

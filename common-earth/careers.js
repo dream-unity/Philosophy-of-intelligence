@@ -156,7 +156,12 @@
     return next-old;
   }
   function productionLesson(site,p,axis,week){
-    const m=ensure(site,p.id),raised=gain(p,m,axis,1);
+    const prior=state(site,p.id);
+    if(skill(p,prior,axis)>=bounds(p,axis).max)return;
+    const rate=p.background?.learningRate;
+    const raisedBy=rate!=null&&rate>=75?2:1;
+    if(rate!=null&&rate<25&&(week+(site.growth?.round||0))%2)return;
+    const m=ensure(site,p.id),raised=gain(p,m,axis,raisedBy);
     if(raised){m.revision++;note(m,week,'Improved '+axis+' through paid community work.');}
   }
   function projectLesson(world,site,mentorId,learnerId,axis,commit=false,amount=2){

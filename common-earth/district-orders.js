@@ -23,6 +23,11 @@
   }
   function commitment(world,site,p,appointments){
     if(!member(site,p.id))return 'Away from this district';
+    const housing=root.EarthTownCentre?.restriction(site,p);
+    if(housing)return housing;
+    if(p.background&&p.background.workEthic<25&&((site.growth?.round||0)+p.background.patience)%4<2)
+      return 'Chose personal time instead of taking this shift';
+    if(site.centre?.reliefShift===p.id)return 'Taking this shift to help a neighbour obtain relief';
     if(root.EarthPractice?.reserved?.(site,p.id,world.week))return 'Keeping a booked practice session';
     if(site.purses?.tickets?.[p.id])return 'A stock check is already booked';
     if(site.shift?.residentId===p.id||site.shift&&p.id===(site.agency?.actor||'steward'))return 'Working an accompanied shift';

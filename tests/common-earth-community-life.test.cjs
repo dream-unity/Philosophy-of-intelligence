@@ -24,7 +24,12 @@ function fixture(snapshot,location){
     const end=doAction('arrive',id);assert.ok(end.arrived,end.message);
   };
   const saved=()=>{const snap=JSON.stringify(sim.state);assert.ok(context.CommonEarthSim.readSave(snap),'Save must reopen at week '+sim.state.week);return snap;};
-  return {sim,life,anchor,home,context,doAction,visit,saved,wait:ms=>{clock+=ms;}};
+  function payForShift(site,id,wage=2){
+    assert.ok(site.funds>=wage);
+    assert.ok(context.EarthPurses.productionReceipt(sim.state,site,id,wage,'Paid for a completed shift.'));
+    site.funds-=wage;
+  }
+  return {sim,life,anchor,home,context,doAction,visit,saved,payForShift,wait:ms=>{clock+=ms;}};
 }
 test('a nearby crossing preserves one original character and its host retains authority',()=>{
   const {sim,life,anchor,home,context,visit,doAction,saved}=fixture();
@@ -200,8 +205,8 @@ test('a group proposal reaches every household; members inspect on their own dat
   assert.equal(sim.state.communityLife.cohorts.length,0);
 });
 test('when a founding delegate moves, a willing local can complete a two-week admissions handover',()=>{
-  const {sim,life,home,doAction,saved}=fixture();home.trust=24;
-  const leaving=home.residents[2].id;assert.ok(doAction('suggestVisit',leaving,leaving).ok);sim.advance();
+  const {sim,life,home,doAction,saved,payForShift}=fixture();home.trust=24;
+  const leaving=home.residents[2].id;payForShift(home,leaving);assert.ok(doAction('suggestVisit',leaving,leaving).ok);sim.advance();
   const current=life.hostFor(home);assert.notEqual(current.id,leaving);
   const to=sim.state.communityLife.outposts.find(s=>Object.values(s.communityLife.people).some(p=>p.visitSlot===leaving));to.food=20;to.trust=90;to.wellbeing=90;
   sim.advance();const training=home.communityLife.deputyTraining;assert.ok(training);assert.equal(training.ready,sim.state.week+2);
@@ -232,8 +237,8 @@ test('unvisited independent districts occupy their surveyed land and a visitor m
 });
 
 test('a local restart keeps the census, visitors, trained delegates and former members in their own homes',()=>{
-  const {sim,home,life,context,doAction,saved}=fixture();
-  home.trust=24;const id=home.residents[2].id;
+  const {sim,home,life,context,doAction,saved,payForShift}=fixture();
+  home.trust=24;const id=home.residents[2].id;payForShift(home,id);
   assert.ok(doAction('suggestVisit',id,id).ok);sim.advance();
   const destination=sim.state.communityLife.outposts.find(s=>Object.values(s.communityLife.people).some(p=>p.visitSlot===id));
   destination.trust=90;destination.food=20;destination.wellbeing=90;sim.advance();
@@ -297,11 +302,11 @@ test('the full fresh founding census has twelve distinct visible individuals and
   assert.equal(life.census(sim.state,home).represented,home.population);saved();
 });
 test('a regional shift worker enters the local household census only after taking up residence',()=>{
-  const {sim,home,context,life,doAction,saved}=fixture();home.trust=24;
+  const {sim,home,context,life,doAction,saved,payForShift}=fixture();home.trust=24;
   home.buildings=[{id:'g',kind:'garden',plot:0,name:'Garden'},{id:'w',kind:'workshop',plot:1,name:'Workshop'}];
   const lane=context.CommonEarthSim.productiveLinks(home)[0],id='carrier-'+lane.from+'-'+lane.to;
   const before=life.census(sim.state,home),option=life.movingOptions(sim.state,home).find(p=>p.id===id);
-  assert.ok(before.commuters>=1);assert.equal(before.represented,home.population);assert.ok(option?.eligible);
+  assert.ok(before.commuters>=1);assert.equal(before.represented,home.population);assert.ok(option?.eligible);payForShift(home,id);
   assert.ok(doAction('suggestVisit',id,id).ok);sim.advance();
   const dest=sim.state.communityLife.outposts.find(s=>Object.values(s.communityLife.people).some(g=>g.visitSlot===id));
   assert.ok(dest);const oldCount=home.population,newCount=dest.population;dest.food=24;dest.wellbeing=90;dest.trust=90;
@@ -309,7 +314,9 @@ test('a regional shift worker enters the local household census only after takin
   assert.equal(home.population,oldCount);assert.equal(dest.population,newCount+1);
   const roll=life.census(sim.state,dest);
   const travelling=context.EarthRegionalWorld.travellers(sim.state,dest).filter(p=>p.siteId===dest.id);
-  assert.equal(roll.away,travelling.length);
+  const visits=[...sim.state.sites,...sim.state.communityLife.outposts].flatMap(s=>Object.values(s.communityLife.people))
+    .filter(g=>g.status==='visitor'&&g.visitFrom===dest.id);
+  assert.equal(roll.away,travelling.length+visits.length);
   assert.equal(roll.here+roll.away,dest.population);saved();
 });
 test('a large historical population is retained without manufacturing retroactive personal records',()=>{
@@ -606,7 +613,9 @@ test('visible production settles all four settlements while the calendar waits, 
 
 test('a host may invite the original visitor to share a round while both communities keep their own authority',()=>{
   const {sim,home,context,life,visit,doAction,saved}=fixture();
-  visit(life.neighbours(sim.state,home)[0].id);const site=sim.active(),host=site.residents.find(p=>life.visitorReception(sim.state,site,p.id)?.private);assert(host);
+  const guarded=sim.state.communityLife.outposts.find(s=>s.centre.charter!=='closed'&&s.residents.some(p=>life.visitorReception(sim.state,s,p.id)?.private));
+  assert.ok(guarded);visit(guarded.id);
+  const site=sim.active(),host=site.residents.find(p=>life.visitorReception(sim.state,site,p.id)?.private);assert(host);
   const at=(actor,target)=>({siteId:site.id,actor,target,mode:'walk',x:9,y:8,tx:9.6,ty:8});
   assert.equal(sim.changeActor(host.id,at('steward',host.id)).ok,false);
   const denied=sim.converse(host.id,'shadow',at('steward',host.id));assert.equal(denied.ok,false);assert.match(denied.message,/introduces you/);
@@ -636,26 +645,21 @@ test('a driver can depart with a cast out, reopen the journey and arrive by van'
   assert.equal(resumed.sim.active().id,dest.id);
 });
 
-test('visitors can see the local mix before arrival and an introduction changes a hostile reception',()=>{
-  const {life,sim,home,visit,saved}=fixture();
-  const towns=sim.state.communityLife.outposts;
-  const profiles=towns.map(s=>life.communityCharacter(s));
+test('uninvited physical entry is refused and a recorded pass opens the same boundary',()=>{
+  const {life,context,sim,home,visit,doAction,wait,saved}=fixture(),world=sim.state,assembly=context.EarthBoundaryAssembly;
+  const towns=world.communityLife.outposts,profiles=towns.map(s=>life.communityCharacter(s));
   const hostile=towns.find(s=>life.communityCharacter(s).type.startsWith('Hostile'));
-  assert.ok(hostile,JSON.stringify(profiles));assert.ok(new Set(profiles.map(p=>p.type)).size>=2);
-  visit(hostile.id);
-  const site=sim.active(),host=life.hostFor(site);
-  const guard=site.residents.find(p=>life.visitorReception(sim.state,site,p.id)?.repels);
-  assert.ok(guard);const old=life.communityCharacter(site);
-  const proof={siteId:site.id,actor:'steward',target:guard.id,mode:'walk',x:1,y:1,tx:1,ty:1};
-  assert.ok(sim.converse(guard.id,'news',proof).repelled);
-  assert.ok(life.communityCharacter(site).reputation<old.reputation);
-  assert.ok(life.visitorReception(sim.state,site,host.id).greeting);
-  saved();
-  (site.communityLife.visits.steward||={}).met=sim.state.week;
-  assert.ok(!life.visitorReception(sim.state,site,guard.id).repels);
-  assert.equal(life.visitorReception(sim.state,home,home.residents[0].id),null);
+  assert.ok(hostile);assert.ok(new Set(profiles.map(p=>p.type)).size>=2);
+  const original=world.communityLife.profile,first=assembly.assessment(world,hostile,original,home.id);
+  assert.equal(first.access,false);assert.equal(assembly.reportView(home,hostile.id).confidence,0);
+  assert.ok(doAction('depart',hostile.id,'market').ok);wait(6500);
+  const refused=doAction('arrive',hostile.id);assert.match(refused.message,/struck|forced|refused/i);assert.equal(sim.active().id,home.id);
+  assert.ok(assembly.assessment(world,hostile,original,home.id).personal<first.personal);
+  assert.equal(assembly.reportView(home,hostile.id).confidence,0);saved();
+  const pass=sim.townCentre({siteId:home.id,revision:home.centre.revision,action:'pass',target:hostile.id});assert.ok(pass.ok,pass.message);
+  visit(hostile.id);assert.equal(life.residency(hostile,'steward'),'visitor');
+  const host=life.hostFor(hostile);assert.ok(doAction('meet',host.id,host.id).ok);saved();
 });
-
 test('at zero civic effort ordinary jobs pay the person playing, develop the town and reopen immediately',()=>{
   const {sim,home,context,saved}=fixture();
   const id=context.EarthAgency.actorId(home),before=home.food,wage=sim.purseView().balance;
@@ -671,4 +675,78 @@ test('at zero civic effort ordinary jobs pay the person playing, develop the tow
   assert.equal(next.purseView().balance,wage+6);const handover='courier:deliver:'+parcel.residentId;
   assert.ok(next.act(handover).ok);assert.equal(next.act(handover).ok,false);
   assert.equal(next.purseView().balance,wage+7);assert.ok(next.act('courier:pick').ok);
+});
+
+
+test('a signed invitation and personal savings survive restarting the home district',()=>{
+  const {sim,context,home,saved,payForShift,wait}=fixture();
+  payForShift(home,'steward',5);
+  const offer=context.EarthPopulationOffice.quote(sim.state,home,'random');
+  const invited=sim.townCentre({siteId:home.id,revision:home.centre.revision,action:'recruit',route:'random',price:0,deficit:offer.projected});
+  assert.ok(invited.ok,invited.message);
+  const identity=home.centre.incoming.key,population=home.population;
+  assert.ok(sim.manageSite(home.id,'restart').ok);
+  const fresh=sim.active();assert.equal(fresh.centre.incoming.key,identity);
+  assert.equal(context.EarthTownCentre.view(sim.state,fresh).population,population);assert.equal(fresh.purses.people.steward.balance,5);saved();
+  for(let i=0;i<2;i++){wait(24001);assert.ok(sim.production(sim.state.productionSerial||0,()=>true).ok);saved();}
+  assert.equal(fresh.population,population+1);assert.equal(fresh.centre.lastArrival.key,identity);
+  const entrant=context.EarthTownCentre.view(sim.state,fresh).residents.find(q=>q.key===identity);
+  assert.ok(entrant?.plot);assert.equal(fresh.centre.incoming,undefined);
+});
+
+test('a personal tenancy needs money and an offered dwelling and pays the receiving treasury once',()=>{
+  const {sim,context,life,home,doAction,saved,payForShift}=fixture();home.trust=24;
+  const mover=home.residents[2],town=sim.state.communityLife.outposts[0];
+  assert.ok(doAction('suggestVisit',mover.id,mover.id).ok);sim.advance();
+  const guest=Object.entries(town.communityLife.people).find(([,p])=>p.visitSlot===mover.id);
+  assert.ok(guest);const [slot]=guest;town.trust=90;town.wellbeing=90;town.food=24;
+  const offer=()=>life.visitorFit(sim.state,town,slot);
+  assert.equal(offer().housing.space,true);assert.equal(offer().housing.affordable,false);
+  payForShift(home,mover.id);assert.equal(offer().housing.affordable,true);
+  const lodging=town.centre.plots.find(p=>p.id===offer().housing.plot);
+  lodging.owner='an absent deed holder';
+  assert.equal(offer().housing.space,false);assert.equal(offer().localYes,false);
+  lodging.owner=null;
+  const opening=town.funds,week=sim.state.week;
+  sim.state.week++;life.tick(sim.state);
+  const resident=town.communityLife.people[slot];assert.equal(resident.status,'member');
+  assert.equal(town.centre.rights[resident.profile.identityKey],lodging.id);
+  assert.equal(town.funds,opening+2);assert.equal(home.purses.people[mover.id].balance,0);
+  assert.equal(town.communityLife.log.some(row=>row.week===week+1&&row.text.includes(mover.name)),true);saved();
+});
+
+
+test('a treasury restart honours a departing resident’s paid reservation in another town',()=>{
+  const {sim,home,context,wait,saved}=fixture(undefined,{name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
+  const step=()=>{wait(24001);assert.ok(sim.production(sim.state.productionSerial||0,()=>true).ok);};
+  let host;
+  for(let i=0;i<60&&!host;i++){
+    step();host=sim.state.communityLife.outposts.find(s=>s.centre.incoming?.from===home.id);
+  }
+  assert.ok(host,'A receiving council independently accepted a home resident’s application');
+  const hostId=host.id,{key,person,deposit}=host.centre.incoming,cash=home.purses.people[person].balance;
+  assert.equal(deposit,2);assert.equal(home.centre.departures[person],hostId);
+  assert.ok(sim.manageSite(home.id,'restart').ok);
+  const fresh=sim.active(),destination=sim.state.communityLife.outposts.find(s=>s.id===hostId);
+  assert.equal(destination.centre.incoming.key,key);assert.equal(fresh.centre.departures[person],hostId);
+  assert.equal(fresh.purses.people[person]?.balance||0,cash);
+  for(let i=0;i<60&&destination.centre.lastArrival?.key!==key;i++){step();saved();}
+  assert.equal(destination.centre.lastArrival?.key,key);assert.equal(fresh.centre.departures[person],undefined);
+  assert.equal(fresh.communityLife.away[person],hostId);
+  const entrant=context.EarthTownCentre.view(sim.state,destination).residents.find(q=>q.key===key);assert.ok(entrant?.plot);
+  assert.equal(entrant.cash,cash);
+});
+
+
+test('a restart preserves the resident and destination on a pending inspection itinerary',()=>{
+  const {sim,home,life,doAction,saved}=fixture();home.trust=24;
+  const traveller=home.residents[1];
+  assert.ok(doAction('suggestVisit',traveller.id,traveller.id).ok);
+  const {to,due}=home.communityLife.excursions[traveller.id];
+  const reset=sim.manageSite(home.id,'restart');assert.ok(reset.ok,reset.message);
+  const fresh=sim.active(),itinerary=fresh.communityLife.excursions[traveller.id];
+  assert.equal(itinerary.to,to);assert.equal(itinerary.due,due);assert.ok(life.present(fresh,traveller.id));saved();
+  assert.ok(sim.advance().ok);assert.equal(life.present(fresh,traveller.id),false);
+  const receiving=sim.state.communityLife.outposts.find(t=>t.id===to);
+  assert.ok(Object.values(receiving.communityLife.people).some(p=>p.visitSlot===traveller.id&&p.status==='visitor'));saved();
 });

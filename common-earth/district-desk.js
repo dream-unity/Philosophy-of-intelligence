@@ -13,7 +13,7 @@
     const near=()=>root.EarthCommunityLife.neighbours(sim.state,sim.active());
     let directoryKey='',atlasWorld=null,scene=null,watchedId=null,watchedFrom=null,sceneKey='',selectedId='',observedWeek=0;
     const observer=$('district-observer'),selector=$('observer-person'),canvas=$('observer-canvas');
-    let pointInspector=null;
+    let pointInspector=null,centreUI=null;
     const observerGoals=$('observer-goals');let observerGoalsKey='';
     function renderObservedGoals(){
       const world=sim.state,site=watchedId&&findTown(world,watchedId);
@@ -52,7 +52,7 @@
       // The Street renderer owns its own caches. Refresh with the town after a
       // calendar turn, a migration or physical construction completing.
       const works=(site.construction||[]).map(j=>[j.id,j.phase,j.workers?.length].join('/')).join('|');
-      const stamp=[site.id,world.week,world.actionRevision,site.foundingRevision,site.buildings.length,works].join(':');
+      const stamp=[site.id,world.week,world.actionRevision,world.productionSerial,site.centre?.revision,site.foundingRevision,site.buildings.length,works].join(':');
       if(!force&&sceneKey===stamp)return;
       sceneKey=stamp;observedWeek=world.week;
       const wanted=selectedId;
@@ -174,10 +174,20 @@
       if(pointInspector?.openGround())return findTown(world,world.communityLife?.homeId)||sim.active();
       return pointInspector?.town()||findTown(world,watchedId)||sim.active();
     }
+    const goalsCaption=$('scene-open-goals')?.querySelector('small');
+    const storesCaption=$('scene-open-stores')?.querySelector('small');
+    let captionTown='';
     function ribbon(){
       const site=sim.active(),shown=inspectedStores();
+      centreUI?.refresh();
       $('stores-ribbon').hidden=!site;
       if(!site){shutLedger();return;}
+      const label=shown.id!==site.id?site.name:'';
+      if(captionTown!==label){
+        captionTown=label;
+        if(goalsCaption)goalsCaption.textContent=label?label+' goals':'Town goals';
+        if(storesCaption)storesCaption.textContent=label?label+' stores':'Resources';
+      }
       const account=personalAccount(),person=root.EarthPersonas.profile(account.site,account.id);
       text('ribbon-caption',pointInspector?.openGround()?'Home stores':'Public stores');text('ribbon-town',shown.name);text('ribbon-person',person?.name||'Original resident');
       for(const key of ['food','materials','funds'])text('ribbon-'+key,String(shown[key]));
@@ -492,7 +502,15 @@
     }
     const getScene=()=>scene||street();
     const region=root.EarthRegionMap?.mount({sim,watch,getScene});
-    pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,buildingAction,
+    centreUI=root.EarthTownCentreUI?.mount({sim,currentTown:inspectedStores,notify,ledger:(s,p)=>openDevelopment(s,p?{personId:p}:{}),
+      focus(s,point){
+        enterStreet();region?.close();
+        const base=sim.active(),geo=root.EarthRegionalWorld.geography(sim.state,base),t=geo.towns.find(t=>t.site.id===s.id);
+        if(!t){watch(s.id);return;}
+        const at=root.EarthRegionalRender.regionalPoint(t,point.x,point.y);
+        getScene()?.inspectRegion?.(at.x,at.y,{zoom:1.45,picked:false});
+      }});
+    pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,buildingAction,centre:(s,page)=>centreUI?.open(s,page),
       returnStreet:()=>{close();street()?.recenter();},refresh:redraw,ledger:(town,personId)=>{openDevelopment(town,personId?{personId}:{});ledger.scrollIntoView({block:'nearest'});},contextChanged:ribbon});
     $('street-stage')?.addEventListener('earthregionalmeet',e=>hud.meetPerson(e.detail.id));
     return {chart:()=>region?.chart(),selectChart:id=>region?.selectChart(id),watch,inspectBuilding:building=>pointInspector?.inspectBuilding(building),close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},

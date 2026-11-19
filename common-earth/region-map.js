@@ -10,6 +10,7 @@
     const bound=(v,a,b)=>Math.max(a,Math.min(b,v)),previews=new Map(),cache=new WeakMap(),fingers=new Map();
     let geo=null,towns=[],base=null,camera={x:0,y:0},zoom=1,miniView,mainView,drag=null,pinch=null,
       fit=true,menuKey='',overlayId='',lastScene=null,animation=0,queued=0;
+    const dimensions=new WeakMap();
     const street=()=>getScene?.();
     function point(event,canvas){const r=canvas.getBoundingClientRect();return {x:event.clientX-r.left,y:event.clientY-r.top};}
     function refresh(){
@@ -38,7 +39,11 @@
       return {x:bound(p.x,geo.bounds.minX,geo.bounds.maxX),y:bound(p.y,geo.bounds.minY,geo.bounds.maxY)};
     }
     function project(canvas,miniature){
-      const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h||!geo)return null;
+      // Production changes several panels before this map draws. Reuse the
+      // last rendered CSS size so a painted map does not force page layout.
+      const size=dimensions.get(canvas);
+      const w=size?.width||canvas.clientWidth,h=size?.height||canvas.clientHeight;
+      if(!w||!h||!geo)return null;
       const b=geo.bounds;
       if(miniature)return paint.viewport((b.minX+b.maxX)/2,(b.minY+b.maxY)/2,w,h,w/(b.maxX-b.minX),h/(b.maxY-b.minY));
       const whole=paint.fit(geo,w,h);
@@ -243,6 +248,14 @@
     map.addEventListener('wheel',e=>{e.preventDefault();zoomBy(e.deltaY<0?1.2:1/1.2,point(e,map));},{passive:false});
     get('region-fit').onclick=()=>{liveGrid(false);fit=true;zoom=1;redraw();};
     get('region-close').onclick=()=>{close();mini.focus();};
+    const mapSizes=new ResizeObserver(entries=>{
+      for(const entry of entries){
+        if(!entry.contentRect)continue;
+        dimensions.set(entry.target,{width:Math.round(entry.contentRect.width),height:Math.round(entry.contentRect.height)});
+      }
+      nextPaint();
+    });
+    mapSizes.observe(small);mapSizes.observe(map);
     new ResizeObserver(nextPaint).observe(stage);
     let lastMini=0;
     function cameraMoved(){

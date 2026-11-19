@@ -2,7 +2,7 @@
    journey and proposal buttons can issue a command to the simulation. */
 (function(root){
   'use strict';
-  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,contextChanged}){
+  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,centre,contextChanged}){
     const doc=root.document,id=key=>doc.getElementById(key),host=id('region-inspector');
     if(!host)return null;
     const detail=id('region-point-detail'),toggle=id('region-inspect-point');
@@ -66,7 +66,8 @@
         const work=p&&root.EarthDistrictGrowth?.goal(view,p)?.h;
         const order=p&&root.EarthDialogue?.workOrder?.(view,event.personId)?.order;
         const actual=typeof event.activity==='string'?event.activity:event.activity?.label||event.activity?.activity;
-        line([p?.role||p?.originRole,actual||work?.last,goal?.reason].filter(Boolean).join(' · '));
+        const fighting=event.inTransit&&event.activity?.kind==='fight';
+        line([p?.role||p?.originRole,actual||work?.last,fighting?'':goal?.reason].filter(Boolean).join(' · '));
         if(order?.reason&&order.reason!==actual)line(order.reason);
         if(goal?.dream)line(goal.dream.title+' · '+goal.dream.next);
         if(event.inTransit){
@@ -101,6 +102,12 @@
       }
       if(view){
         line(view.era+' · '+view.population+' residents · '+view.food+' food · '+view.materials+' materials · '+view.funds+' public funds');
+        if(view.centre){
+          const profile=root.EarthBoundaryAssembly.character(view);
+          line(profile.summary);
+          action(event.use==='centre'?'Enter Town Centre':'Town Centre',()=>centre(view,event.use==='centre'?'recruitment':'housing'));
+          action('Entry customs and trust',()=>centre(view,'reception'));
+        }
         action('Development ledger',()=>ledger(view,event.personId));
         if(view.id!==local.id)action('Plan a visit',()=>{clear();returnStreet();travel(view.id);});
       }else if(read){
