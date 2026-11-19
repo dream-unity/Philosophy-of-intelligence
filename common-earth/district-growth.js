@@ -207,7 +207,8 @@
   }
   function activeWork(site){
     const g=site.growth;if(!g)return [];
-    const rows=[];
+    const cottage=root.EarthCouncilHomes?.work(site);
+    const rows=cottage?[cottage]:[];
     for(const h of g.households){
       if(h.order)rows.push(root.EarthDistrictOrders.orderView(site,h.order));
       else if(h.build?.person)rows.push(buildingJob(site,h,h.build.person));
@@ -221,6 +222,7 @@
   function work(site,p){
     const id=typeof p==='string'?p:p?.id,g=site?.growth;
     if(!id||!g)return null;
+    const cottage=root.EarthCouncilHomes?.work(site,id);if(cottage)return cottage;
     const h=g.households.find(h=>h.order?.person===id||h.build?.person===id||h.purchase?.person===id);
     if(h?.order)return root.EarthDistrictOrders.orderView(site,h.order);
     if(h?.purchase)return shoppingJob(site,h);
@@ -326,6 +328,7 @@
         delete g.road;events.push('A road crew member moved away. The district returned the reserved supplies and can put together a new crew.');
       }
     }
+    wages+=root.EarthCouncilHomes?.settle(world,site,{people,busy,played,floor,at,closeWeek,rows:transfers,events})||0;
     const usedLots=new Set();
     for(const h of g.households){
       if(h.shop)usedLots.add(h.businessPlot);

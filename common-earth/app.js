@@ -124,7 +124,7 @@
         });
       }else if(kind==='meet')streetHud.meetPerson(owner);
       else if(kind==='door'){
-        const door={type:'activityVenue',homeSlot:building.homeSlot,householdPlot:building.householdPlot};
+        const door={type:'activityVenue',homeSlot:building.homeSlot,householdPlot:building.householdPlot,cottagePlot:building.cottagePlot};
         atVenue(door,building.assetName,()=>districtDesk.inspectBuilding(building));
       }else if(kind==='shop'){if(streetHud.openTool('stores')&&!visitorScene('stores'))localMarket.openShop(building.plot);}
       else if(kind==='work'){selectGroup('work');focusActions();}

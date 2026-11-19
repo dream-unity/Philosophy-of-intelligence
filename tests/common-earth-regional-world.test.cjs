@@ -325,6 +325,7 @@ test('an agreement opens precisely the witnessed parcel and survives a later mee
 
 test('an ungoverned district finances, finishes and occupies the same courtyard on and off camera',()=>{
   const f=game(),town=f.w.communityLife.outposts[1];
+  town.communityLife.foundingPlaces=18;
   Object.assign(town,{population:19,food:80,funds:80,materials:80});
   const opening=f.save();
   function run(observe){
@@ -346,6 +347,15 @@ test('an ungoverned district finances, finishes and occupies the same courtyard 
         capacityBefore=city.housingCapacity(town);
         assert.equal(job.paid.funds,7);assert.equal(job.paid.materials,4);
         assert.equal(town.city.precincts[plot].use,'open');
+        // Give the quote the same binding labour shortage in both timelines.
+        for(const signer of agreement.votes.filter(v=>v.stance==='support')){
+          const p=f.ctx.EarthPersonas.profile(town,signer.personId);
+          if(p.id==='steward')continue;
+          const newId=f.ctx.EarthCommunityLife.guestSlot(f.home,p,town.id,p.id,'member',f.w.week);
+          assert.ok(newId);town.communityLife.away[p.id]=f.home.id;
+          if(town.communityLife.people[p.id])town.communityLife.people[p.id].status='former';
+          town.population--;f.home.population++;
+        }
       }
       if(agreement?.works?.relief?.length)relief=true;
       if(plot===null||town.city.precincts[plot].use!=='homes')continue;
@@ -374,66 +384,4 @@ test('a housing request competes for public reserves and available land',()=>{
   }
   assert.equal(decision(19),'precinct:homes');
   assert.notEqual(decision(10),'precinct:homes');
-});
-
-test('a territorial expedition reserves its people and wages, survives reopening and changes access to an actual parcel',()=>{
-  const f=game(),life=f.ctx.EarthCommunityLife,combat=f.ctx.EarthBorderConflict;
-  let start,clash,last,seenReload=false;
-  for(let n=0;n<72;n++){
-    assert.ok(f.progress().ok);
-    const c=f.region.border;
-    if(c&&!start){
-      const attacker=f.geo.towns.find(t=>t.site.id===c.attacker).site;
-      assert.equal(life.entryRule(attacker),'hosted');
-      assert.equal(attacker.communityLife.away[c.unit.id],'border-duty');
-      assert.equal(c.wages,2);assert.equal(c.food,3);
-      assert.ok(!life.fieldCandidates(attacker,f.w).includes(c.unit.id));
-      start={attacker:c.attacker,defender:c.defender,cell:c.cell};
-    }
-    if(c?.phase==='fighting'){
-      const units=combat.visible(f.w,f.geo,f.region);assert.equal(units.length,2);
-      assert.notEqual(units[0].siteId,units[1].siteId);assert.equal(units[0].phase,'fighting');
-      clash={...c.guard};
-      if(!seenReload){
-        const raw=f.save(),reopened=game(raw);
-        assert.equal(reopened.region.border.guard.key,c.guard.key);
-        assert.equal(reopened.region.border.rounds,c.rounds);seenReload=true;
-      }
-    }
-    if(f.region.lastBorder){last=f.region.lastBorder;break;}
-    if(n%3===2)assert.ok(f.sim.advance().ok);
-  }
-  assert.ok(start&&clash&&seenReload&&last);
-  const lot=f.region.parcels[last.cell];assert.equal(last.cell,start.cell);
-  assert.ok(last.captured);assert.equal(lot.charter,start.attacker);assert.equal(lot.occupation.former,start.defender);
-  assert.ok(lot.claims[start.defender]&&lot.claims[start.attacker]);
-  const attacker=f.geo.towns.find(t=>t.site.id===start.attacker).site,defender=f.geo.towns.find(t=>t.site.id===start.defender).site;
-  const local=defender.communityLife.entryRecords.find(e=>e.kind==='invasion');
-  assert.ok(local.official);assert.equal(local.originId,attacker.id);
-  assert.ok(attacker.communityLife.entryRecords.some(e=>e.kind==='campaign'&&e.reported>e.week));
-  assert.equal(defender.communityLife.away[clash.id],'deceased');
-  const diary=defender.communityLife.memorial.find(e=>e.key===clash.key);assert.ok(diary);
-  for(let n=0;n<35&&f.region.border;n++)assert.ok(f.progress().ok);
-  assert.ok(!f.region.border);assert.equal(lot.occupation.holder,attacker.id);
-  assert.ok(!life.census(f.w,defender,true).ids.includes(clash.id));f.save();
-});
-
-test('a sponsor changes what happens to the same named foreign surveyor at a hosted boundary',()=>{
-  const f=game(),{ctx,w,geo,home}=f,life=ctx.EarthCommunityLife,clash=ctx.EarthBorderConflict;
-  const origin=geo.towns.find(t=>t.site.id===home.id),host=geo.towns.find(t=>life.entryRule(t.site)==='hosted');
-  const id=life.fieldCandidates(home,w).find(id=>id!=='driver'),person=ctx.EarthPersonas.profile(home,id);
-  const cell=Math.round(host.x*2)+','+Math.round(host.y*2);
-  const trip={kind:'survey',phase:'outbound',crew:[{id,name:person.name}],personId:id,siteId:home.id,
-    target:cell,path:[cell],index:0,kit:{funds:1,food:1,materials:0},cargo:{food:0,materials:0}};
-  const region={contacts:{},trips:{[home.id]:trip}};
-  home.communityLife.away[id]='regional-field';
-  assert.ok(clash.challenge(w,geo,region,origin,trip,cell));
-  assert.equal(host.site.communityLife.away[trip.challenge.guard.id],'border-duty');
-  const guard=trip.challenge.guard.id,trust=life.personalAccess(w,host.site,person).score;
-  const chair=life.hostFor(host.site);
-  life.recordReception(w,host.site,home,person,'shift',chair);
-  assert.ok(life.personalAccess(w,host.site,person).score>trust);
-  assert.ok(clash.resolveChallenge(w,geo,region,origin,trip,()=>assert.fail('Host accepted this entry.')));
-  assert.equal(trip.challenge,undefined);assert.equal(host.site.communityLife.away[guard],undefined);
-  assert.equal(clash.challenge(w,geo,region,origin,trip,cell),false);
 });

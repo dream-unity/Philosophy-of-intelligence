@@ -8,7 +8,17 @@
   const places=world=>[...(world?.sites||[]),...(world?.communityLife?.outposts||[])];
   const key=(i,j)=>i+','+j;
   const cell=(x,y)=>key(Math.round(x/cellSize),Math.round(y/cellSize));
-  const point=id=>{const comma=id.indexOf(',');return {x:Number(id.slice(0,comma))*cellSize,y:Number(id.slice(comma+1))*cellSize};};
+  const coordinates=new Map();
+  function point(id){
+    let p=coordinates.get(id);
+    if(!p){
+      const comma=id.indexOf(',');
+      p=Object.freeze({x:Number(id.slice(0,comma))*cellSize,y:Number(id.slice(comma+1))*cellSize});
+      if(coordinates.size>=4096)coordinates.clear();
+      coordinates.set(id,p);
+    }
+    return p;
+  }
   const inside=(geo,x,y)=>Number.isFinite(x)&&Number.isFinite(y)&&x>=geo.bounds.minX&&x<=geo.bounds.maxX&&y>=geo.bounds.minY&&y<=geo.bounds.maxY;
   const descriptors={
     water:{kind:'water',label:'Open water',good:'food',resource:'fish',facility:'landing',work:'fishing landing'},
@@ -61,7 +71,7 @@
       first:world.sites[0],lastSite:world.sites.at(-1),lastOutpost:outposts?.at(-1),siteCount:world.sites.length,outpostCount:outposts?.length||0,
       habitat:root.EarthResources?.environment?.(origin)||'mixed',
       tidal:!!(origin.coastal||origin.lakeShore||root.CommonEarthSim?.waterfront?.(origin)),
-      seed:Math.sin(origin.lat*7.31+origin.lon*5.53)*19,macro:new Map(),terrainCells:new Map(),dryEdges:new Map()};
+      seed:Math.sin(origin.lat*7.31+origin.lon*5.53)*19,macro:new Map(),terrainCells:new Map(),dryEdges:new Map(),townJurisdictions:new Map()};
     group.set(origin.id,g);return g;
   }
   function reconcileLocations(world){
@@ -269,6 +279,8 @@
       if(h.shop)add(h.shopSite||model?.shopPoint(site,h.businessPlot));
       if(h.build?.shop)add(model?.shopPoint(site,h.build.lot));
     }
+    for(const h of site.civicLand?.homes||[])add(root.EarthCouncilHomes.plot(h.plot));
+    if(site.civicLand?.project)add(root.EarthCouncilHomes.plot(site.civicLand.project.plot));
     const extent={round:growth?.round,count:rows.length,plots,radius};streetsByTown.set(site,extent);return extent;
   }
   function streetFootprint(geo,x,y){
@@ -286,8 +298,13 @@
     return nearest;
   }
   function tenure(geo,r,id){
-    const p=point(id),lot=r?.parcels[id],incorporated=nearestTown(geo,p,.54);
-    return {parcel:lot,owner:lot?.owner||null,jurisdiction:lot?.charter||incorporated?.site.id||null,
+    const lot=r?.parcels[id];
+    let incorporated=geo.townJurisdictions.get(id);
+    if(incorporated===undefined){
+      incorporated=nearestTown(geo,point(id),.54)?.site.id||null;
+      geo.townJurisdictions.set(id,incorporated);
+    }
+    return {parcel:lot,owner:lot?.owner||null,jurisdiction:(lot?.occupation&&lot.charter)||incorporated||lot?.charter||null,
       claims:Object.keys(lot?.claims||{})};
   }
   function localAgreement(r,a,b,id){
@@ -306,7 +323,7 @@
   }
   function passage(geo,r,siteId,id){
     const {parcel,owner,jurisdiction,claims}=tenure(geo,r,id);
-    if(parcel?.occupation?.holder===siteId&&jurisdiction===siteId&&(!owner||owner===siteId))return true;
+    if(parcel?.occupation&&jurisdiction===siteId&&(!owner||owner===siteId))return true;
     for(const other of new Set([owner,jurisdiction,...claims])){
       if(!other||other===siteId)continue;
       const pact=localAgreement(r,siteId,other,id);
@@ -316,7 +333,7 @@
   }
   function harvestRights(geo,r,siteId,id){
     const {parcel,owner,jurisdiction,claims}=tenure(geo,r,id);
-    if(parcel?.occupation?.holder===siteId&&jurisdiction===siteId&&(!owner||owner===siteId))return true;
+    if(parcel?.occupation&&jurisdiction===siteId&&(!owner||owner===siteId))return true;
     for(const other of new Set([owner,jurisdiction,...claims])){
       if(!other||other===siteId)continue;
       const agreement=localAgreement(r,siteId,other,id);
@@ -327,12 +344,12 @@
   }
   function buildingRights(geo,r,siteId,id){
     if(!harvestRights(geo,r,siteId,id))return false;
-    const {parcel,claims}=tenure(geo,r,id);
-    if(parcel?.occupation?.holder===siteId&&parcel.charter===siteId)return true;
+    const {claims,parcel}=tenure(geo,r,id);
+    if(parcel?.occupation&&parcel.charter===siteId)return true;
     return claims.every(other=>other===siteId||localAgreement(r,siteId,other,id)?.terms==='joint');
   }
-  function nodeCost(geo,r,town,id,byWater){
-    if(!passage(geo,r,town.site.id,id))return Infinity;
+  function nodeCost(geo,r,town,id,byWater,knownOpen=false){
+    if(!knownOpen&&!passage(geo,r,town.site.id,id))return Infinity;
     const ground=terrainCell(geo,id);
     if(ground.kind==='water'&&!byWater)return Infinity;
     const cost=r?.parcels[id]?.trail?.level ? .65 : ground.kind==='rock'?2.1:ground.kind==='woodland'?1.35:ground.kind==='water'?1.25:1;
@@ -359,10 +376,12 @@
     const byWater=mode!=='van'&&!!canSail(town,r),sailing=town.site.water,knownCells=r?.knowledge?.[town.site.id]||{},exploring=mode==='survey';
     const mapped=(id,p)=>knownCells[id]||dist(town,p)<=localRadius;
     // Restrictions and terrain are fixed for this synchronous route search.
-    const prices=new Map();
+    const prices=new Map(),contested=new Set();
+    for(const meeting of Object.values(r?.contacts||{}))if(meeting.terms==='disputed')contested.add(meeting.cell);
     function price(id){
-      if(prices.has(id))return prices.get(id);
-      const cost=nodeCost(geo,r,town,id,byWater);
+      const cached=prices.get(id);if(cached!==undefined)return cached;
+      const knownOpen=!contested.has(id)&&!r?.parcels[id]?.agreements;
+      const cost=nodeCost(geo,r,town,id,byWater,knownOpen);
       prices.set(id,cost);return cost;
     }
     if((!exploring||mapped(to,end))&&!Number.isFinite(price(to)))return null;
@@ -461,7 +480,7 @@
     const authority=home&&home.site.id===world.activeId&&(root.EarthAgency?.actorId?.(actor)||'steward')==='steward'&&!world.communityLife?.journey;
     const summary=[ground.label+' · '+ground.resource+'.',knowledge.length?'Mapped by '+knowledge.map(v=>v.name).join(', ')+'.':'No community has recorded this ground.',
       owner?'The '+(parcel?.work?.label||'site')+' belongs to '+townName(owner)+'.':'',jurisdiction?'Local authority: '+townName(jurisdiction)+'.':'',
-      parcel?.occupation?townName(parcel.occupation.holder)+' took control from '+townName(parcel.occupation.former)+' in week '+parcel.occupation.week+'.':'',
+      parcel?.occupation?'Military occupation by '+townName(parcel.charter)+' since week '+parcel.occupation+'.':'',
       names.length?'Recorded use claims: '+names.join(', ')+'.':'',...agreements.map(a=>townName(a.a)+' and '+townName(a.b)+' recorded '+(a.terms==='joint'?'shared use':a.terms)+' for this parcel in week '+a.week+'.')].filter(Boolean).join(' ');
     const choices=Object.entries(titles).filter(([kind])=>
       kind==='parley'?!!(home&&counterpart(geo,r,home,id)):kind==='trail'?!!parcel?.traffic:true).map(([kind,title])=>{
@@ -706,7 +725,7 @@
     // unexamined bearing, but nobody knows its yield or builds sight unseen.
     const demand=site.food-floor.food<site.materials-floor.materials?'food':'materials';
     const capacity=root.EarthCityModel?.housingCapacity?.(site)||18;
-    const buildingHere=site.city?.precincts?.some(p=>p.target==='homes')||site.civicInitiatives?.active?.choiceId==='precinct:homes';
+    const buildingHere=site.civicLand?.project||site.city?.precincts?.some(p=>p.target==='homes')||site.civicInitiatives?.active?.choiceId==='precinct:homes';
     const approaching=site.population>=capacity&&!buildingHere&&site.population>=6&&world.week-(site.founded||1)>=4;
     const recent=(r.records||[]).find(n=>n.siteId===site.id&&n.personId);
     const rotation=(step+Math.abs(Math.round(town.x*3+town.y)))%5;
@@ -721,7 +740,7 @@
       }
       if(!lot?.trail&&lot?.traffic&&Object.keys(lot.traffic).length>1&&site.materials>=floor.materials+4)
         candidatesFor.push({kind:'trail',id,score:11-range,why:'Residents from different communities repeatedly use this passage'});
-      if(approaching&&!lot?.owner&&range>1.7)candidatesFor.push({kind:'found',id,score:17-range,why:'Families are looking for room beyond the existing housing'});
+      if(approaching&&world.week-site.founded>=2&&!site.civicLand?.project&&!lot?.owner&&range>1.7)candidatesFor.push({kind:'found',id,score:17-range,why:'Families are looking for room beyond the existing housing'});
       if(uses>=1&&!lot?.work&&site.materials>=floor.materials+5)candidatesFor.push({kind:'build',id,score:13-range+(ground.good===demand?2:0),why:'Repeated collections justify permanent facilities'});
       const available=availableYield(world,lot,ground);
       if(available>0)candidatesFor.push({kind:'gather',id,score:(ground.good===demand?10:6)-range+Number(!!lot?.work)*2+
@@ -803,8 +822,7 @@
         if(place){
           lot.uses[place.id]=1;lot.charter=place.id;
           saveRoute(r,site.id,place.id,trip.path,trip.name,world.week);
-          if(trip.injury)root.EarthBorderConflict?.rest(world,site,{...trip.crew[0],key:root.EarthPersonas.profile(site,trip.personId).identityKey,injury:trip.injury});
-    delete r.trips[site.id];(r.rest||={})[site.id]=world.regionalWorld.step;
+          delete r.trips[site.id];(r.rest||={})[site.id]=world.regionalWorld.step;
           record(world,r,site,trip.crew.map(c=>c.name).join(' and ')+' reached '+id+' and founded '+place.name+'. Their households and skills moved with them. '+site.name+' has '+site.population+' people on its remaining rota.',trip);
           return;
         }
@@ -850,11 +868,15 @@
     if(trip.kit.materials)result+=' '+trip.kit.materials+' unused materials were returned.';
     record(world,r,site,trip.name+' returned to '+site.name+'. The crew used '+trip.kit.food+' food on the journey.'+result+
       (paid?' '+paid+' reserved fund'+(paid===1?'':'s')+' paid the crew.':''),trip);
-    if(trip.injury)root.EarthBorderConflict?.rest(world,site,{...trip.crew[0],key:root.EarthPersonas.profile(site,trip.personId).identityKey,injury:trip.injury});
+    root.EarthBorderConflict?.homecoming(world,site,trip);
     delete r.trips[site.id];(r.rest||={})[site.id]=world.regionalWorld.step;
   }
   function moveTrip(world,geo,r,town,trip,makeSite){
-    if(trip.challenge&&root.EarthBorderConflict.resolveChallenge(world,geo,r,town,trip,homeward))return;
+    if(trip.checkpoint){
+      const host=geo.towns.find(t=>t.site.id===trip.checkpoint.host)?.site;
+      if(root.EarthBorderConflict.guardShift(world,host,town.site,trip))homeward(geo,r,town,trip);
+      return;
+    }
     if(trip.phase==='waiting'){homeward(geo,r,town,trip);return;}
     if(trip.phase==='working'){finishAt(world,geo,r,town,trip,makeSite);return;}
     const byWater=!!canSail(town,r),pace=town.site.growth?.vehicle>=1?5:3;
@@ -885,9 +907,21 @@
       const remaining=cost-(trip.legWork||0),used=Math.min(time,remaining);
       trip.legWork=(trip.legWork||0)+used;time-=used;
       if(trip.legWork+.00001<cost)break;
-      trip.legWork=0;trip.index++;if(current!==next){
+      trip.legWork=0;trip.index++;
+      if(current!==next){
         witness(world,geo,r,town,trip,next);
-        if(root.EarthBorderConflict?.challenge(world,geo,r,town,trip,next))return;
+        const hostId=trip.phase==='outbound'&&tenure(geo,r,next).jurisdiction;
+        if(hostId&&hostId!==town.site.id&&trip.kind!=='parley'){
+          const host=geo.towns.find(t=>t.site.id===hostId)?.site;
+          const agreement=localAgreement(r,town.site.id,hostId,next);
+          const invited=agreement&&['exchange','joint','passage'].includes(agreement.terms);
+          const visitor=root.EarthPersonas.profile(town.site,trip.personId);
+          const encounter=host&&visitor&&root.EarthBorderConflict?.entry(world,town.site,host,visitor,invited,next);
+          if(encounter){
+            trip.checkpoint=encounter;trip.detail=encounter.message;trip.activity='Fighting at the guarded boundary';
+            record(world,r,town.site,trip.detail,trip);return;
+          }
+        }
       }
     }
     if(trip.index!==trip.path.length-1)return;
@@ -913,7 +947,7 @@
       if(solitary&&!book.regions[site.id]?.trips[site.id]&&(cycle+book.step)%16!==0)continue;
       const geo=geography(world,site);if(groups.has(geo.origin.id))continue;groups.add(geo.origin.id);
       const r=state(world,geo);
-      root.EarthBorderConflict?.advance(world,geo,r,{record,agreement:saveAgreement,reveal});
+      root.EarthBorderConflict?.advance(world,geo,r);
       for(const town of geo.towns)scheduledJourneys(world,geo,r,town);
       for(const town of geo.towns){const trip=r.trips[town.site.id];if(trip)moveTrip(world,geo,r,town,trip,makeSite);}
       if(!solitary||(cycle+book.step)%16===0)for(const town of geo.towns)planning(world,geo,r,town);
@@ -1026,10 +1060,11 @@
     const geo=geography(world,site),r=geo&&regionFor(world,geo);
     const visible=Object.values(r?.trips||{}).flatMap(trip=>{
       const town=townFor(geo,trip.siteId);if(!town)return [];
-      if(trip.challenge){
-        const c=trip.challenge,at=point(c.cell),units=[[trip.crew[0],trip.siteId,-1],[c.guard,c.host,1]];
-        return units.map(([unit,siteId,side])=>({...at,x:at.x+side*.006,dx:-side,dy:0,mode:'walk',kind:'border',phase:'fighting',
-          personId:unit.id,name:unit.name,siteId,activity:trip.activity,destination:trip.destination,detail:trip.detail,remainingKm:0,kit:{},cargo:{}}));
+      if(trip.checkpoint){
+        const gate=trip.checkpoint,p=point(gate.cell);
+        return [[gate.visitor,town.site.id,-1],[gate.guard,gate.host,1]].map(([b,siteId,dx])=>({
+          x:p.x-dx*.005,y:p.y,dx,dy:0,name:b.name,personId:b.id,siteId,kind:'border',phase:'fighting',mode:'walk',
+          destination:trip.destination,activity:trip.activity,detail:trip.detail,remainingKm:0}));
       }
       const {x,y,dx,dy}=fieldPosition(world,geo,r,town,trip);
       return trip.crew.map((crew,i)=>({x:x+.024*i,y:y+.014*i,name:crew.name,personId:crew.id,siteId:trip.siteId,
@@ -1072,7 +1107,7 @@
         destination,remainingKm:(run.path.length-1)*cellSize*(1-f),cargo:{[run.good]:run.amount},kit:{},
         detail:'The receiving community agreed to send '+run.expected+' units in exchange. Delivery is due in week '+run.due+'.'});
     }
-    if(r?.border)visible.push(...root.EarthBorderConflict.visible(world,geo,r));
+    if(geo&&root.EarthBorderConflict)visible.push(...root.EarthBorderConflict.actors(world,geo));
     return visible;
   }
   function ledger(world,site){
@@ -1136,13 +1171,11 @@
     const all=new Map(sites.map(s=>[s.id,s]));
     for(const [origin,r] of Object.entries(b.regions)){
       if(!all.has(origin)||!object(r)||r.projection!=null&&r.projection!=='polar'||!['knowledge','parcels','routes','trips','contacts'].every(k=>object(r[k]))||!Array.isArray(r.records)||r.records.length>48)return false;
-      if((r.border||r.lastBorder)&&!root.EarthBorderConflict?.valid(world,geography(world,all.get(origin)),r))return false;
       for(const [id,map] of records(r,'knowledge'))if(!all.has(id)||!object(map)||!Object.entries(map).every(([c,w])=>coordinate(c)&&integer(w,1,world.week)))return false;
       for(const [id,p] of records(r,'parcels')){
         if(!coordinate(id)||!object(p)||!object(p.uses)||!Object.entries(p.uses).every(([s,n])=>all.has(s)&&integer(n,1))||
           p.stock!=null&&!integer(p.stock,0,8)||p.harvestWeek!=null&&!integer(p.harvestWeek,1,world.week)||
           p.owner!=null&&!all.has(p.owner)||p.charter!=null&&!all.has(p.charter)||
-          p.occupation!=null&&(!object(p.occupation)||p.occupation.holder!==p.charter||!all.has(p.occupation.former)||p.occupation.former===p.charter||!integer(p.occupation.week,1,world.week))||
           p.traffic!=null&&(!object(p.traffic)||!Object.entries(p.traffic).every(([s,n])=>all.has(s)&&integer(n,1,65535)))||
           p.claims!=null&&(!object(p.claims)||!Object.entries(p.claims).every(([s,c])=>all.has(s)&&object(c)&&integer(c.week,1,world.week)&&text(c.by)&&text(c.basis))))return false;
         if(p.agreements&&(!object(p.agreements)||!Object.entries(p.agreements).every(([k,a])=>object(a)&&all.has(a.a)&&all.has(a.b)&&a.a!==a.b&&k===pair(a.a,a.b)&&integer(a.week,1,world.week)&&['joint','exchange','passage','disputed'].includes(a.terms))))return false;
@@ -1160,6 +1193,12 @@
       if(r.rest&&(!object(r.rest)||!Object.entries(r.rest).every(([s,k])=>all.has(s)&&integer(k,0,b.step))))return false;
       for(const [s,t] of records(r,'trips')){
         const site=all.get(s);
+        if(t?.checkpoint){
+          const c=t.checkpoint,actor=p=>object(p)&&text(p.id)&&text(p.key)&&text(p.name)&&integer(p.resolve,0,100)&&integer(p.stamina,0,100)&&integer(p.energy,1,120);
+          if(!all.has(c.host)||!coordinate(c.cell)||!text(c.message)||!integer(c.round,0,9)||!actor(c.guard)||!actor(c.visitor)||
+            c.visitor.id!==t.personId||t.path?.[t.index]!==c.cell||t.phase!=='outbound')return false;
+        }
+        if(t?.trauma&&(!text(t.trauma.id)||!text(t.trauma.key)||typeof t.trauma.fatal!=='boolean'||!text(t.trauma.reason)))return false;
         if(!site||!object(t)||s!==t.siteId||!Object.hasOwn(titles,t.kind)||!coordinate(t.target)||!validPath(t.path)||
           t.targetPoint!=null&&(!object(t.targetPoint)||!Number.isFinite(t.targetPoint.x)||!Number.isFinite(t.targetPoint.y)||cell(t.targetPoint.x,t.targetPoint.y)!==t.target)||
           t.startPoint!=null&&(!object(t.startPoint)||!Number.isFinite(t.startPoint.x)||!Number.isFinite(t.startPoint.y)||cell(t.startPoint.x,t.startPoint.y)!==t.path[0])||
@@ -1169,7 +1208,6 @@
           !t.crew.every(p=>object(p)&&text(p.id)&&text(p.name)&&site.communityLife?.away?.[p.id]==='regional-field')||
           !object(t.kit)||!Object.keys(costs[t.kind]).every(k=>integer(t.kit[k],0,costs[t.kind][k]))||
           !object(t.cargo)||!['food','materials'].every(k=>integer(t.cargo[k],0,4))||
-          (t.challenge||t.injury!=null)&&!root.EarthBorderConflict?.challengeValid(world,geography(world,site),t)||
           t.legWork!=null&&(!Number.isFinite(t.legWork)||t.legWork<0||t.legWork>4.8))return false;
       }
     }

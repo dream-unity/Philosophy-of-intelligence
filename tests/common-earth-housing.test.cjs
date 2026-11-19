@@ -50,7 +50,7 @@ test('a retained private courtyard can be vacant while a resident lacks rights; 
   const {ctx,w,peer,home,life,housing,arrive,pay,save}=game(),id='walker-2',guest=arrive(id);
   // Restore a genuine historical census with unnamed households. They occupy
   // all eighteen founding places, including any vacated by the seller.
-  delete peer.foundingPlaces;peer.population=20;
+  delete peer.communityLife.foundingPlaces;peer.population=20;
   const owner=peer.residents[0].id;pay(peer,owner,1);
   peer.privateHomes=[{ownerId:owner,plot:0,stage:3,started:1,lastWork:8,cost:6}];w.week=9;w.communityLife.duty.due=11;
   const before=housing.view(w,peer);assert.equal(before.capacity,20);assert.equal(before.unmet,1);assert.equal(before.vacant,1);
@@ -64,7 +64,7 @@ test('a retained private courtyard can be vacant while a resident lacks rights; 
 });
 test('a visitor finances a vacant plot and waits for materials, professional availability and real construction before admission',()=>{
   const {ctx,w,peer,home,life,housing,arrive,pay,save}=game(),id='walker-2',guest=arrive(id);
-  peer.population=peer.foundingPlaces;pay(home,id,10);peer.materials=3;
+  peer.population=peer.communityLife.foundingPlaces;pay(home,id,10);peer.materials=3;
   let q=housing.quote(w,peer,home,id);assert.equal(q.kind,'finance');assert.equal(q.available,false);assert.match(q.reason,/materials/);
   peer.materials=20;q=housing.quote(w,peer,home,id);assert.ok(q.available,q.reason);
   const population=peer.population,openingCash=peer.funds,signed=life.acceptVisitor(w,peer,guest);assert.ok(signed.pending,signed.message);

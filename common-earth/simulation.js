@@ -303,6 +303,8 @@
     if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
     if(site.birthCoordinate!=null&&!geoPoint(site.birthCoordinate))return false;
     if(root.EarthPractice&&!root.EarthPractice.valid(site,world.week))return false;
+    if(root.EarthCouncilHomes&&!root.EarthCouncilHomes.valid(site,world.week))return false;
+    if(root.EarthBorderConflict&&!root.EarthBorderConflict.valid(site,world.week))return false;
     if(root.EarthHousing&&!root.EarthHousing.valid(site,world.week))return false;
     if(root.EarthTownCentre&&!root.EarthTownCentre.valid(world,site))return false;
     if(root.EarthPersonas?.validBirthNames&&!root.EarthPersonas.validBirthNames(site.birthNames))return false;
@@ -1072,8 +1074,6 @@
       // Only undeveloped public land can be offered. An agreed location stays
       // fixed throughout consultation, including when a competing use appears.
       const spare=capacity(site)-site.population;
-      // A town with recent arrivals or a hiring queue needs enough time to
-      // plan and finish homes before the next household comes to its gate.
       const recruiting=site.communityLife?.townCentre?.arrivals?.some(a=>turn.week-a.week<=6)||
         Object.values(site.employers||{}).some(job=>job.open?.length);
       const housingPressure=spare<=1||spare<=3&&recruiting||(root.EarthHousing?.need(turn,site)||0)>0;
@@ -2103,8 +2103,8 @@
         const relief=[];
         // A resident who has left town cannot fulfil a public building contract.
         // Offer their shift to an available local with an interest in the work.
-        const absent=authorised.filter(v=>root.EarthCommunityLife?.residency(site,v.personId)==='away');
-        if(absent.length&&volunteers.length<needed){
+        const absent=authorised.filter(v=>!available(v.personId));
+        if(absent.length&&volunteers.length<needed&&root.EarthCommunityLife){
           for(const person of root.EarthPersonas?.list(site)||[]){
             if(!available(person.id)||root.EarthCommunityLife.residency(site,person.id)!=='member'||
               root.EarthCommunityLife.commuting(site,person.id)||agreement.votes.some(v=>v.personId===person.id)||
@@ -2405,6 +2405,7 @@
       const productionStarted=root.EarthPerformance?.now();
       for(const site of [...world.sites,...world.communityLife.outposts]){
         root.EarthDistrictGrowth.settle(world,site);
+        root.EarthTownCentre?.productionReview(world,site);
         const era=developRegionalCouncil(world,site);
         if(era)site.growth.history[0].events.push(era);
       }

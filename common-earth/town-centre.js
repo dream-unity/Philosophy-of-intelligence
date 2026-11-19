@@ -5,9 +5,9 @@
 (function(root){
   'use strict';
   const axes=['numeracy','music','communication','care','craft','stamina','organisation'];
-  const temperament=['curiosity','sociability','patience','initiative','adaptability'];
+  const temperament=['curiosity','sociability','patience','initiative','adaptability','aggression'];
   const references=['workEthic','reliability','reputation','learningRate','aggression'];
-  const fields=[...temperament,...references,...axes,...axes.map(a=>a+'Potential')];
+  const fields=[...temperament.filter(t=>!references.includes(t)),...references,...axes,...axes.map(a=>a+'Potential')];
   const label=key=>({workEthic:'Work ethic',learningRate:'Learning rate'}[key]||
     (key.endsWith('Potential')?key.slice(0,-9)+' potential':key).replace(/^./,c=>c.toUpperCase()));
   const origins=[
@@ -69,7 +69,7 @@
     const slot=sourceSlots[roll('occupation',0,sourceSlots.length-1)];
     const birth=root.EarthPersonas.birthProfile(source,slot);
     const p={...birth,birthCommunityName:place,traits:{},aptitudes:{},bounds:{}};
-    for(const t of temperament)p.traits[t]=selected(t,birth.traits[t]);
+    for(const t of temperament)p.traits[t]=selected(t,t==='aggression'?root.EarthBorderConflict.disposition(birth):birth.traits[t]);
     for(const a of axes){
       const band=criteria[a]||[0,100],ceiling=criteria[a+'Potential']||[0,100];
       const high=Math.min(band[1],ceiling[1]);
@@ -79,7 +79,7 @@
       p.aptitudes[a]=skill;p.bounds[a]={min:skill,max};
     }
     const dossier={origin:place,cohort,index,serviceYears:roll('years',1,18),savings:roll('savings',2,12)};
-    for(const k of references)dossier[k]=selected(k,roll(k,18,94));
+    for(const k of references)dossier[k]=k==='aggression'?p.traits.aggression:selected(k,roll(k,18,94));
     const recordCode=roll('register',0,19);
     dossier.civicRecord=recordCode===0?'Completed restitution on a recorded theft conviction.':
       recordCode<5?'No court register was supplied with this application.':'No conviction is recorded in the supplied district register.';
@@ -127,6 +127,7 @@
     const pool=world.widerEarth||={seed:poolSeed(world),serial:0,cursors:{}};
     pool.cursors[person.externalHistory.cohort]=person.externalHistory.index;pool.serial++;
     site.population++;site.funds-=q.price;
+    pool.importedFunds=(pool.importedFunds||0)+saved;pool.fees=(pool.fees||0)+q.price;
     root.EarthHousing?.sync?.(world,site);
     const d=site.communityLife.townCentre||={serial:0,arrivals:[]};d.serial++;
     d.arrivals.unshift({week:world.week,number:d.serial,id,person:person.identityKey,name:person.name,route:q.route,price:q.price,criteria:q.criteria});
@@ -176,12 +177,17 @@
     }
     return invite(world,site,request);
   }
+  function newCottage(site){
+    const home=site.civicLand?.homes.at(-1),arrived=ledger(site)?.arrivals?.[0]?.week||0;
+    return home&&home.completed>arrived?home:null;
+  }
   function recruitmentPlan(world,site){
+    const cottage=newCottage(site);
     const vacancy=root.EarthCareers.catalog.find(job=>site.employers?.[job.id]?.open?.length);
     const precincts=site.city?.precincts||[],developed=precincts.some(p=>p.use==='homes');
     const broker=site.growth?.broker;
     const freight=broker?.parcel>0&&broker.cash>=3&&site.growth.history.some(round=>round.wages>0);
-    const reason=vacancy?vacancy.employer+' has an unfilled '+vacancy.label.toLowerCase()+' post.':
+    const reason=cottage?'Council cottage C'+(cottage.plot+1)+' opened with room for another resident.':vacancy?vacancy.employer+' has an unfilled '+vacancy.label.toLowerCase()+' post.':
       freight?'The freight exchange has '+broker.parcel+' uncollected parcels and '+broker.cash+' funds for delivery shifts.':
       developed?'The town has opened a residential precinct.':'';
     if(!reason)return {reason:'The employers reported no vacancy or funded freight backlog, and no new housing precinct requires settlers.'};
@@ -196,7 +202,7 @@
     const opening=precincts.some(p=>p.target==='homes'&&p.laborReady&&p.turns<=1);
     const canBridge=unhoused===1&&vacancy&&opening&&site.trust>=60&&site.food>=2*foodFloor;
     if(unhoused>0&&!canBridge)return {reason:reason+' Inviting another person would leave '+unhoused+' residents without housing rights.'};
-    const character=root.EarthCommunityLife.communityCharacter(site,world);
+    const character=root.EarthCommunityLife.communityCharacter(site);
     if(character.tally.forceful>character.tally.welcoming+character.tally.guarded&&!vacancy)
       return {reason:'The local majority requires a named employer vacancy before inviting an unfamiliar person from wider Earth.'};
     const criteria=vacancy?{[vacancy.skill]:[vacancy.requiredSkill,100],[vacancy.secondary]:[vacancy.secondMinimum,100]}:{};
@@ -205,9 +211,19 @@
     const terms=quote(world,site,targeted?'targeted':'random',targeted?criteria:{},unhoused);
     return {terms,reason:reason+(canBridge?' A completed housing crew is awaiting next week’s opening.':'')};
   }
+  function productionReview(world,site){
+    const round=site.growth?.round||0;
+    if(!round||round%6||!site.communityLife?.cluster||root.EarthCommunityLife.isHome(world,site))return;
+    const prior=ledger(site)?.review;
+    if(prior?.week===world.week||prior?.round===round)return;
+    const {terms,reason}=recruitmentPlan(world,site);
+    if(!terms?.ok)return;
+    const result=admit(world,site,terms);
+    if(result.ok)site.communityLife.townCentre.review={week:world.week,round,route:terms.route,reason};
+  }
   function tick(world,site){
     const age=world.week-site.founded;
-    if(!site.communityLife?.cluster||root.EarthCommunityLife.isHome(world,site)||age<8||age%8!==0||ledger(site)?.review?.week===world.week)return [];
+    if(!site.communityLife?.cluster||root.EarthCommunityLife.isHome(world,site)||(!newCottage(site)&&(age<8||age%8!==0))||ledger(site)?.review?.week===world.week)return [];
     const d=site.communityLife.townCentre||={serial:0,arrivals:[]};
     const {terms,reason}=recruitmentPlan(world,site);
     d.review={week:world.week,route:'deferred',reason};
@@ -219,6 +235,7 @@
   }
   function validPool(pool){
     if(!object(pool)||typeof pool.seed!=='string'||!/^[0-9a-z]{1,8}$/.test(pool.seed)||!int(pool.serial,1)||!object(pool.cursors))return false;
+    if(pool.importedFunds!=null&&!int(pool.importedFunds,0)||pool.fees!=null&&!int(pool.fees,0))return false;
     let sum=0;
     for(const [cohort,last] of Object.entries(pool.cursors)){
       if(!int(last,1)||cohort.length>fields.length*11)return false;
@@ -258,5 +275,5 @@
     }
     return true;
   }
-  root.EarthTownCentre=Object.freeze({fields,label,price,specification,quote,command,applications,authorised,tick,valid});
+  root.EarthTownCentre=Object.freeze({productionReview,fields,label,price,specification,quote,command,applications,authorised,tick,valid});
 })(typeof window==='undefined'?globalThis:window);

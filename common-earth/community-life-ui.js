@@ -92,7 +92,7 @@
         if(v.viewId==='steward'){
           const host=gate?.host||root.EarthCommunityLife.hostFor(target);
           const origin=sim.state.sites.find(t=>t.id===sim.state.communityLife.homeId);
-          const exposed=root.EarthBorderConflict&&root.EarthCommunityLife.entryRule(target)==='hosted'&&!root.EarthBorderConflict.hasPass(sim.state,target,sim.state.communityLife.profile,origin);
+          const exposed=root.EarthBorderConflict&&root.EarthBorderConflict.profile(target).closed&&!root.EarthBorderConflict.hasPass(sim.state,target,sim.state.communityLife.profile,origin);
           if(gate||exposed){
             const request=btn('Request a hosted visit',()=>station('requestEntry',n.id,{type:'market'},'the exchange desk'));
             request.disabled=gate?.pending||target.communityLife?.entryPass?.opens>sim.state.week||!host.id;actions.append(request);

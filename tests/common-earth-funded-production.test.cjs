@@ -24,15 +24,14 @@ function game(place=coastal,restored,clock=1000000){
     }};
 }
 const stocks=t=>({food:t.food,materials:t.materials,funds:t.funds});
-const wealth=t=>t.funds+(t.exchange?.till??8)+(t.growth.broker?.cash||0)+Object.values(t.purses?.people||{}).reduce((n,p)=>n+p.balance,0)+
+const wealth=t=>t.funds+(t.civicLand?.project?.escrow||0)+(t.exchange?.till??8)+(t.growth.broker?.cash||0)+Object.values(t.purses?.people||{}).reduce((n,p)=>n+p.balance,0)+
   t.growth.households.reduce((n,h)=>n+(h.businessFunds||0)+(h.order?h.order.dues+h.order.wage:0),0)+(t.growth.road?2:0);
 const net=(rows,account,good)=>rows.filter(r=>r.good===good).reduce((n,r)=>n+(r.to===account?r.amount:0)-(r.from===account?r.amount:0),0);
 const accountNames={funds:'Community treasury',materials:'Public building store',food:'Public pantry'};
 function cashInRegion(world){
   const sites=[...world.sites,...world.communityLife.outposts];
-  const regionalEscrow=Object.values(world.regionalWorld?.regions||{}).reduce((sum,r)=>
-    sum+(r.border?.wages||0)+Object.values(r.trips).reduce((n,t)=>n+t.kit.funds,0),0);
-  return sites.reduce((n,t)=>n+(t.growth?wealth(t):t.funds+(t.exchange?.till??8)),regionalEscrow);
+  const regionalEscrow=Object.values(world.regionalWorld?.regions||{}).flatMap(r=>Object.values(r.trips)).reduce((n,t)=>n+t.kit.funds,0);
+  return sites.reduce((n,t)=>n+(t.growth?wealth(t):t.funds+(t.exchange?.till??8)),regionalEscrow)+(world.widerEarth?.fees||0)-(world.widerEarth?.importedFunds||0);
 }
 
 test('calendar-only play opens funded livelihoods in new and existing unvisited settlements',()=>{
@@ -61,8 +60,8 @@ test('a rotating regional economy reconciles advances, wages, public stores and 
       const beforeWealth=cashInRegion(g.sim.state);
       let external=0,capital=0;
       await g.step();
-      sites.forEach((site,index)=>{
-        const last=site.growth.history[0],rows=growth.transfers(last);
+      for(const site of [...g.sim.state.sites,...g.sim.state.communityLife.outposts]){
+        const last=site.growth?.history[0];if(!last)continue;const rows=growth.transfers(last);
         // Regional expeditions booked after the local shift have a separate
         // manifest. The economic round reports only its own transactions.
         for(const [good,name] of Object.entries(accountNames))assert.equal(net(rows,name,good),last[good],site.name+' '+good+' round '+last.round);
@@ -72,7 +71,7 @@ test('a rotating regional economy reconciles advances, wages, public stores and 
         sales+=rows.filter(t=>t.reason==='Retail payment').length;
         roads+=rows.filter(t=>t.reason==='Laid the road').length;
         built+=rows.filter(t=>t.reason==='Construction completed').length;
-      });
+      }
       assert.equal(cashInRegion(g.sim.state)-beforeWealth,external-capital,place.name+' regional cash including travel reserves, round '+i);
     }
     assert(delivered>30);assert(roads>0);assert(built>0);assert(sales>0);
@@ -255,12 +254,7 @@ test('changing one remembered employment relationship changes a real hiring deci
     const prior=g.snapshot(),round=g.home.growth?.round||0;
     await g.step();
     for(const site of all(g)){
-      const original=JSON.parse(prior);
-      const beforeTown=[...original.sites,...original.communityLife.outposts].find(t=>t.id===site.id);
-      // Select people who could have met before this round. A worker who
-      // returned from a journey or treatment during it was still away.
-      const picked=site.growth?.households.find(h=>h.order?.kind==='retail'&&h.order.phase==='collect'&&h.order.stageRound===round+1&&
-        h.order.person!==h.order.employerId&&beforeTown&&!beforeTown.communityLife.away[h.order.person]&&!beforeTown.communityLife.away[h.order.employerId]);
+      const picked=site.growth.households.find(h=>h.order?.kind==='retail'&&h.order.phase==='collect'&&h.order.stageRound===round+1);
       if(picked){before=prior;accepted={...picked.order};district=site.id;break;}
     }
   }

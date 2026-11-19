@@ -89,10 +89,7 @@
           else if(p.externalHistory)line('Recruitment assessment · '+p.externalHistory.learningRate+'/100 learning rate.');
           else line('No current course attendance to judge learning pace.');
           if(career?.history?.length)line('Week '+career.history[0].week+' · '+career.history[0].text);
-          heading('Temperament and local testimony');
-          line('Current aggression '+root.EarthCommunityLife.aggression(view,p)+'/100'+(p.externalHistory?' · wider Earth reference '+p.externalHistory.aggression+'/100.':'.'));
-          const injury=view.communityLife?.recovery?.[p.id];
-          if(injury)line('Recovering from a border injury. Regular work reopens after '+Math.max(0,injury.until-w.regionalWorld.step)+' regional shifts.');
+          line('Current aggression '+root.EarthBorderConflict.force(view,p)+'/100'+(p.externalHistory?' · wider Earth reference '+p.externalHistory.aggression+'/100.':'.'));
           heading('Reliability and local testimony');
           if(p.externalHistory)line(p.externalHistory.origin+' reference · '+p.externalHistory.reliability+'/100 reliability and '+p.externalHistory.reputation+'/100 reputation. '+p.externalHistory.serviceYears+' years of work. '+p.externalHistory.record);
           const record=root.EarthCommunityLife.personalAccess(w,view,p);
@@ -141,25 +138,32 @@
         }
       }
       if(view){
+        if(event.kind==='town'&&openTownCentre)action('Inspect the Town Centre',()=>openTownCentre(view.id));
+        const march=geo?.towns.find(t=>{
+          const c=t.site.communityLife?.border?.campaign;
+          return c&&(t.site.id===view.id||c.against===view.id);
+        });
+        if(march)action('Observe the expedition',()=>{
+          const party=root.EarthBorderConflict.actors(w,geo).find(a=>a.siteId===march.site.id);
+          if(party){clear();street()?.inspectRegion?.(party.x,party.y,{zoom:1.5,picked:true});}
+        });
+        const border=view.communityLife?.border;
+        if(border?.campaign){
+          const c=border.campaign;
+          line('Boundary war · '+c.attacker.name+' · '+c.phase+' · parcel '+c.cell+(c.defender?' · opposing resident '+c.defender.name:''));
+        }
+        if(border?.records?.length)line('Boundary record · '+border.records[0].text);
         line(view.era+' · '+view.population+' residents · '+view.food+' food · '+view.materials+' materials · '+view.funds+' public funds');
         if(event.kind==='town'&&w.communityLife){
-          if(openTownCentre)action('Inspect the Town Centre',()=>openTownCentre(view.id));
-          const district=w.regionalWorld?.regions[geo?.origin.id],campaign=district?.border;
-          if(campaign&&[campaign.attacker,campaign.defender].includes(view.id)){
-            heading('Territorial campaign');
-            line(campaign.by+' authorised '+campaign.unit.name+' to contest parcel '+campaign.cell+'. '+(campaign.guard?
-              campaign.guard.name+' is defending it.':'The expedition is '+campaign.phase+'.'));
-            line(campaign.food+' provisions remain · '+campaign.wages+' funds reserved for wages');
-            action('Observe the expedition',()=>{
-              const position=root.EarthBorderConflict.visible(w,geo,district)[0];
-              if(position){clear();street()?.inspectRegion?.(position.x,position.y,{zoom:1.5,picked:true});}
-            });
-          }
-          const last=district?.lastBorder;
-          if(last&&[last.attacker,last.defender].includes(view.id))line('Week '+last.week+' · '+last.detail);
           const entry=communityEntry(w,view);
           heading('Entry and local divisions');
           line(entry.character.type+'. '+entry.character.detail);
+          const watch=entry.character.border;
+          if(watch){
+            line('Aggression '+watch.score+'/100 · '+watch.militant+' of '+watch.count+' residents strongly favour force · '+watch.opposed+' strongly oppose it.');
+            line(watch.expansionist?watch.chair+' and the gate assembly authorise boundary expeditions by the watch.':watch.closed?
+              watch.chair+' and the gate assembly authorise the watch to confront uninvited entries.':watch.chair+' receives disputes under the current entry articles.');
+          }
           line(entry.rule.label+' · '+entry.rule.terms+' '+entry.host+' receives applications.');
           line(entry.history);
           if(entry.decision)line('Week '+entry.decision.week+' · '+entry.decision.host+' recorded the latest change in the entry articles.');
