@@ -804,7 +804,7 @@
       if(!offer.available)return reject(offer.reason);
       const index=world.sites.length,water=Boolean(point.water),region=tidy(point.name || point.region) || (water?'Open water':'Earth');
       let serial=index+1;
-      while(world.sites.some(site=>site.id==='site-'+serial))serial++;
+      while(world.communityLife?.retired?.['site-'+serial]||world.sites.some(site=>site.id==='site-'+serial))serial++;
       const names=NAMES[index % NAMES.length],id='site-'+serial;
       let name=tidy(customName) || (region==='Earth'?'Earth':region)+(water?' Anchorage':' Commons');
       if(world.sites.some(s=>s.name===name))name+=' '+(index+1);
@@ -836,10 +836,9 @@
       root.EarthCityModel?.normalise(site);
       return site;
     }
-    function manageSite(id,action){
-      const index=world.sites.findIndex(site=>site.id===id);
-      if(index<0 || !['restart','delete'].includes(action))return reject('This community is unavailable.');
-      const site=world.sites[index];
+    function manageSite(id,action,generation){
+      const site=world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id);
+      if(!site||generation!=null&&generation!==site.foundingRevision||!['restart','delete'].includes(action))return reject('This community has changed. Open its controls again.');
       const next=structuredClone(world);
       next.routes=next.routes.filter(route=>route.from!==id && route.to!==id);
       next.journal=next.journal.filter(entry=>entry.siteId!==id);
@@ -855,19 +854,31 @@
         if(next.learningGoals.active?.siteId===id)next.learningGoals.active=null;
         next.learningGoals.history=next.learningGoals.history.filter(entry=>entry.siteId!==id);
       }
-      for(const other of next.sites){
+      for(const other of [...next.sites,...(next.communityLife?.outposts||[])]){
         if(other.foundedBy===id)other.foundedBy=null;
         if(other.issue?.targetId===id)other.issue=null;
         other.pending=other.pending.filter(entry=>entry.targetId!==id);
       }
-      if(action==='delete')next.sites.splice(index,1);
-      else next.sites[index]=newSettlement({id,name:site.name,region:site.region,point:site,water:site.water,names:site.residents.map(p=>p.name),old:null,offer:{newPopulation:12}});
-      if(next.communityLife&&action==='delete'&&!next.sites.length)delete next.communityLife;
-      if(next.communityLife&&action==='restart')root.EarthCommunityLife?.restart?.(next,site,next.sites[index]);
+      const district=next.sites.find(s=>s.id===id)||next.communityLife.outposts.find(s=>s.id===id);
+      if(action==='delete'){
+        if(next.communityLife){
+          if(next.sites.length+next.communityLife.outposts.length===1){
+            world=blank();return complete(site.name+' deleted.',null);
+          }
+          root.EarthCommunityLife.removeCommunity(next,district);
+          next.communityLife.outposts=next.communityLife.outposts.filter(s=>s.id!==id);
+        }
+        next.sites=next.sites.filter(s=>s.id!==id);
+      }else{
+        const fresh=newSettlement({id,name:site.name,region:site.region,point:site,water:site.water,names:site.residents.map(p=>p.name),old:null,offer:{newPopulation:12}},next);
+        const list=next.sites.includes(district)?next.sites:next.communityLife.outposts;
+        list[list.indexOf(district)]=fresh;
+        if(next.communityLife)root.EarthCommunityLife.restart(next,site,fresh);
+      }
       const validated=migrateDetachedSave(next);
       if(!validated)return reject('This community could not be changed safely.');
       world=validated;
-      return complete(site.name+(action==='delete'?' deleted.':' restarted.'),action==='restart'?world.sites[index]:null);
+      return complete(site.name+(action==='delete'?' deleted.':' restarted.'),action==='restart'?(world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id)):null);
     }
     function visit(id,departure){
       const next=world.sites.find(s=>s.id===id);
@@ -2444,6 +2455,10 @@
         if(!site||!root.EarthDistrictGrowth)return reject('Choose a community first.');
         const result=root.EarthDistrictGrowth.setPaidOrders(world,site,request);
         return result.ok&&!result.unchanged?complete(result.message,site):result;
+      }),
+      diplomacy:guarded(request=>{
+        const result=root.EarthBorderConflict?.diplomacy(world,request);
+        return result?.ok?complete(result.message,current()):result||reject('Diplomacy is unavailable.');
       }),
       regionalWork:guarded(request=>{
         const result=root.EarthRegionalWorld?.propose?.(world,current(),request);

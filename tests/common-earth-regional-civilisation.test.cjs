@@ -204,35 +204,37 @@ function cross(run,id){
   const end=travelAction(run,'arrive',id);assert.ok(end.arrived,end.message);
   return end;
 }
-test('an unintroduced arrival and a direct revisit face the watch, while a dated invitation grants entry',()=>{
+function exchange(run,gap=.75,mode='walk'){
+  const site=run.sim.active(),watch=site.communityLife.border.street;
+  return run.sim.communityLife({action:'streetContact',actor:'steward',site:site.id,week:run.w.week,
+    round:watch.round,target:watch.guard.key},{siteId:site.id,actor:'steward',mode,x:10,y:10,gx:10+gap,gy:10});
+}
+test('a visitor can fight, run, board a van or leave and an invitation prevents the encounter',()=>{
   const run=region(),{w,sim,watch}=run,home=sim.active();
-  assert.equal(watch.name,'Reed Quay');
-  assert.match(cross(run,watch.id).message,/attacking you/);
+  assert.match(cross(run,watch.id).message,/pursuing you/);
   const fight=watch.communityLife.border.street,guard=fight.guard;
   assert.equal(watch.communityLife.away[guard.id],'regional-watch');
-  assert.equal(sim.visit(home.id).ok,false);
-  assert.equal(travelAction(run,'meet',null).ok,false);
-  run.production();
-  const resumed=region(run.save()),savedWatch=resumed.sim.active().communityLife.border.street;
-  assert.equal(savedWatch.round,1);assert.equal(savedWatch.guard.energy,guard.energy);
-  assert.equal(travelAction(resumed,'resist','a different guard').ok,false);
+  run.production();assert.equal(fight.round,0);
+  assert.equal(exchange(run,2).ok,false);assert.equal(exchange(run,.6,'drive').ok,false);
+  const resumed=region(run.save());
   assert.ok(travelAction(resumed,'resist',guard.key).ok);
-  assert.equal(travelAction(resumed,'resist',guard.key).ok,false);
-  assert.ok(travelAction(run,'withdraw',guard.key).arrived);
-  assert.equal(sim.active(),home);assert.equal(watch.communityLife.away[guard.id],undefined);
-  assert.match(sim.visit(watch.id).message,/attacking you/);
-  for(let i=0;i<8&&watch.communityLife.border.street.phase==='fight';i++)run.production();
+  assert.ok(exchange(resumed).ok);assert.equal(exchange(resumed).ok,false);
+  assert.equal(resumed.sim.active().communityLife.border.street.round,1);
+  assert.ok(exchange(run,6).ok);assert.equal(watch.communityLife.border.street,undefined);
+  assert.equal(watch.communityLife.away[guard.id],undefined);assert.equal(sim.active(),watch);
+  assert.ok(sim.visit(home.id).ok);assert.ok(sim.visit(watch.id).ok);
+  assert.ok(exchange(run,7,'drive').ok);
+  assert.ok(sim.visit(home.id).ok);assert.ok(sim.visit(watch.id).ok);
+  for(let i=0;i<8&&watch.communityLife.border.street.phase==='fight';i++){run.elapse(3000);assert.ok(exchange(run).ok);}
   assert.equal(watch.communityLife.border.street.phase,'repelled');
   assert.equal(home.communityLife.border.health.steward.condition,'injured');
-  assert.equal(sim.act('work:forage').ok,false);
   assert.ok(travelAction(run,'withdraw',watch.communityLife.border.street.guard.key).arrived);
-  assert.ok(travelAction(run,'requestEntry',watch.id).ok);
-  run.week();
+  assert.ok(travelAction(run,'requestEntry',watch.id).ok);run.week();
   assert.ok(sim.visit(watch.id).ok);assert.equal(watch.communityLife.border.street,undefined);
   run.save();
 });
 
-test('an old save already inside Reed Quay starts one fight and a current save resumes the same exchange',()=>{
+test('an old save already inside a hostile town starts one fight and a current save resumes the same exchange',()=>{
   const run=region(),id=run.watch.id;
   cross(run,id);
   const old=JSON.parse(run.save()),c=old.sites.find(t=>t.id===id).communityLife;
@@ -268,7 +270,7 @@ test('a resident can die in a street fight and the same casualty is never counte
   cross(run,watch.id);
   const fight=watch.communityLife.border.street,guard=fight.guard,count=watch.population;
   assert.ok(travelAction(run,'resist',guard.key).ok);
-  for(let i=0;i<8&&fight.phase==='fight';i++)run.production();
+  for(let i=0;i<8&&fight.phase==='fight';i++){run.elapse(3000);assert.ok(exchange(run).ok);}
   const d=watch.communityLife.border;
   assert.equal(fight.phase,'won');assert.equal(d.health[guard.id].condition,'died');
   assert.equal(d.health[guard.id].key,guard.key);assert.equal(watch.population,count-1);
@@ -278,7 +280,7 @@ test('a resident can die in a street fight and the same casualty is never counte
   assert.ok(sim.visit(home.id).ok);assert.equal(watch.communityLife.away[guard.id],'deceased');
 });
 
-test('Reed Quay can follow an occupied boundary with a second expedition that takes the town centre',()=>{
+test('a town at war can follow an occupied boundary with a second expedition that takes the town centre',()=>{
   const run=region(),{sim,w,watch,ctx}=run,home=sim.active();
   let foothold=false,marchedOnCentre=false;
   for(let i=0;i<100&&!home.communityLife.border?.occupiedBy;i++){
@@ -307,5 +309,57 @@ test('established trading contacts do not turn every town into an ally, while ne
     for(let i=0;i<12&&!watch.communityLife.border?.campaign;i++)run.production();
     assert.equal(Boolean(watch.communityLife.border?.campaign),!truce);
     run.save();
+  }
+});
+
+
+test('opening declarations follow resident aggression and peace persists across reloads and removes the gate siege',()=>{
+  const first=region(),{sim,w,ctx,watch}=first,home=sim.active(),other=w.communityLife.outposts[0];
+  const wars=Object.values(w.communityLife.relations);
+  assert.equal(w.week,1);assert.equal(wars.length,3);assert.ok(wars.every(r=>r.from===watch.id&&r.state==='war'));
+  assert.ok([home,other,first.market].every(s=>s.communityLife.border.defence.stage===0));
+  const request=(action,target)=>sim.diplomacy({action,target:target.id,home:home.id});
+  assert.ok(request('declare',other).ok);assert.equal(request('declare',other).ok,false);
+  assert.ok(request('negotiate',other).ok);assert.ok(request('accept',other).ok);
+  const reopened=region(first.save());assert.equal(ctx.EarthBorderConflict.relation(reopened.w,home.id,other.id).state,'peace');
+  for(let i=0;i<18;i++)first.production();
+  assert.equal(home.communityLife.border.defence.stage,3);
+  assert.ok(home.communityLife.border.defence.builder);
+  assert.ok(request('negotiate',watch).ok);assert.ok(request('accept',watch).ok);
+  const c=watch.communityLife.border.campaign;
+  if(c?.against===home.id)assert.equal(c.phase,'return');
+  first.save();
+  const edited=JSON.parse(region().save());
+  delete edited.communityLife.relations;delete edited.communityLife.openingRoster;
+  const towns=[...edited.sites,...edited.communityLife.outposts],rival=towns[1];
+  for(const t of towns){
+    const src=ctx.EarthCommunityLife.lookup(w,t.id);
+    for(const p of ctx.EarthDistrictGrowth.members(t)){
+      const persisted=t.communityLife.people[p.id];
+      if(persisted)persisted.profile.traits.aggression=t===rival?95:10;
+      else t.communityLife.people[p.id]={profile:{...ctx.EarthPersonas.profile(src,p.id),traits:{...p.traits,aggression:t===rival?95:10}},
+        status:'member',originId:t.id,originSlot:p.id,originName:t.name,since:1};
+    }
+  }
+  const altered=region(JSON.stringify(edited));
+  assert.ok(Object.values(altered.w.communityLife.relations).every(r=>r.from===rival.id));
+  assert.equal(altered.ctx.EarthBorderConflict.hostile(altered.w,altered.watch),false);
+  assert.match(cross(altered,rival.id).message,/pursuing you/);
+});
+
+test('restart and delete target one district, keep other communities and reopen a mature save',()=>{
+  const run=region();
+  for(let i=0;i<16;i++){run.production();if(i%4===3)run.week();}
+  const base=run.save();
+  for(const id of [run.sim.active().id,run.market.id])for(const action of ['restart','delete']){
+    const game=region(base),{sim,ctx}=game,site=ctx.EarthCommunityLife.lookup(sim.state,id);
+    const other=game.watch,otherFunds=other.funds,identity=sim.state.communityLife.profile.identityKey;
+    const response=sim.manageSite(id,action,site.foundingRevision);assert.ok(response.ok,response.message);
+    const restored=region(JSON.stringify(sim.state)),survivor=restored.ctx.EarthCommunityLife.lookup(restored.w,id);
+    assert.equal(restored.w.communityLife.profile.identityKey,identity);
+    assert.equal(restored.ctx.EarthCommunityLife.lookup(restored.w,other.id).funds,otherFunds);
+    if(action==='delete')assert.equal(Boolean(survivor),false);
+    else{assert.equal(survivor.population,site.population);assert.equal(survivor.materials,8);assert.equal(survivor.funds,16);}
+    restored.production();restored.week();restored.save();
   }
 });

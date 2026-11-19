@@ -61,7 +61,7 @@ function check(frame){
         checkButtons([...shortcuts,...street],name+' street');
         get('street-gate').hidden=false;
         get('gate-status').textContent='Ruth Haddad is attacking you · Your energy 77 · Ruth Haddad’s energy 92';
-        checkButtons([get('gate-resist'),get('gate-withdraw'),...street],name+' gate');
+        checkButtons([get('gate-resist'),get('gate-run'),get('gate-withdraw'),...street],name+' gate');
         get('street-gate').hidden=true;
         // A wrapped goal must not stretch a one-line Atlas button to the height of two rows.
         if(shortcuts[0].offsetHeight>shortcuts[1].offsetHeight+8)errors.push(name+' stretched Atlas shortcut');
@@ -86,18 +86,65 @@ const page='<!doctype html><meta charset="utf-8"><title>Common Earth navigation 
   'result.textContent=JSON.stringify(r);result.dataset.layout=r.errors.length?"fail":"pass";}'+
   'catch(e){result.textContent=e.stack;result.dataset.layout="fail";}};frame.srcdoc='+
   json(markup.replace('</body>','<script>'+pathScript+'</script></body>'))+';</script>';
+// Use the production entry point and a private Chrome profile for the destructive
+// controls. Keep the actual save manager, action queue and modal event handlers.
+function seedWorld(){
+  const book=window.EarthSaves.open(),sim=book.sim;
+  window.EarthSaves={...window.EarthSaves,open:()=>book};
+  const founded=sim.found({name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
+  if(!founded.ok)throw Error(founded.message);
+  window.addEventListener('load',async()=>{
+    const result=document.getElementById('flow-result'),get=id=>document.getElementById(id);
+    const found=(parent,label)=>Array.from(parent.querySelectorAll('button')).find(b=>b.textContent===label);
+    const click=(button)=>{if(!button||button.disabled)throw Error('Expected an enabled control');button.click();};
+    const until=async(test,label)=>{
+      for(let i=0;i<100;i++){if(test())return;await new Promise(done=>setTimeout(done,20));}
+      throw Error(label);
+    };
+    try{
+      const home=sim.active(),other=sim.state.communityLife.outposts[0],id=other.id;
+      click(get('society-open'));
+      const row=()=>Array.from(get('site-list').children).find(b=>b.querySelector('strong')?.textContent===other.name);
+      click(found(row(),'Restart'));click(get('community-cancel'));
+      if(other!==window.EarthCommunityLife.lookup(sim.state,id))throw Error('Cancelled restart changed the town');
+      click(found(row(),'Restart'));const gen=other.foundingRevision;click(get('community-apply'));
+      await until(()=>window.EarthCommunityLife.lookup(sim.state,id)?.foundingRevision!==gen,'Restart did not reset this town');
+      click(found(row(),'Delete'));click(get('community-apply'));
+      await until(()=>!window.EarthCommunityLife.lookup(sim.state,id),'Delete did not remove this town');
+      if(sim.active().id!==home.id)throw Error('Deleting a neighbour moved the player');
+      click(get('society-town-centre'));
+      const dialog=get('town-centre'),foreign=dialog.querySelector('section select'),rival=sim.state.communityLife.outposts.at(-1);
+      foreign.value=rival.id;foreign.dispatchEvent(new Event('change'));
+      click(found(dialog,'Declare war'));
+      await until(()=>found(dialog,'Negotiate peace'),'Declaration did not reach the Town Centre');
+      click(found(dialog,'Negotiate peace'));await until(()=>found(dialog,'Accept ceasefire terms'),'No terms offered');
+      click(found(dialog,'Accept ceasefire terms'));await until(()=>found(dialog,'Declare war'),'Peace did not take effect');
+      if(window.EarthBorderConflict.relation(sim.state,home.id,rival.id)?.state!=='peace')throw Error('Treaty missing from world');
+      result.dataset.layout='pass';result.textContent='Community restart, deletion, opening-week declaration and peace verified.';
+    }catch(error){result.dataset.layout='fail';result.textContent=String(error.stack||error);}
+  });
+}
 if(process.argv.includes('--html')){
   process.stdout.write(page);
 }else{
   const dir=mkdtempSync(join(tmpdir(),'common-earth-navigation-'));
   try{
     const file=join(dir,'check.html');writeFileSync(file,page);
-    const output=execFileSync(process.env.CHROME_BIN||'google-chrome',[
-      '--headless','--disable-dev-shm-usage','--disable-gpu','--no-first-run',
-      '--user-data-dir='+join(dir,'profile'),'--dump-dom','--virtual-time-budget=3000',pathToFileURL(file).href
-    ],{maxBuffer:8*1024*1024,timeout:60000,stdio:['ignore','pipe','pipe']}).toString();
-    const report=output.match(/<pre id="result"[^>]*>([\s\S]*?)<\/pre>/)?.[0];
-    if(!report?.includes('data-layout="pass"'))throw new Error(report||'The layout check did not complete.');
-    console.log(report.replace(/<[^>]+>/g,''));
+    function run(file,resultId){
+      const output=execFileSync(process.env.CHROME_BIN||'google-chrome',[
+        '--headless','--disable-dev-shm-usage','--disable-gpu','--no-first-run','--allow-file-access-from-files',
+        '--user-data-dir='+join(dir,'profile'),'--dump-dom','--virtual-time-budget=4500',pathToFileURL(file).href
+      ],{maxBuffer:8*1024*1024,timeout:60000,stdio:['ignore','pipe','pipe']}).toString();
+      const report=output.match(new RegExp('<pre id="'+resultId+'"[^>]*>[\\s\\S]*?</pre>'))?.[0];
+      if(!report?.includes('data-layout="pass"'))throw new Error(report||'The browser check did not complete.');
+      console.log(report.replace(/<[^>]+>/g,''));
+    }
+    run(file,'result');
+    const fixture=join(dir,'seed.js'),flow=join(dir,'flow.html');
+    writeFileSync(fixture,'('+seedWorld.toString()+')();');
+    writeFileSync(flow,read('index.html').replace('<head>','<head><base href="'+game.href+'">')
+      .replace('<script src="app.js','<script src="'+pathToFileURL(fixture).href+'" defer></script><script src="app.js')
+      .replace('</body>','<pre id="flow-result">Waiting for the game</pre></body>'));
+    run(flow,'flow-result');
   }finally{rmSync(dir,{recursive:true,force:true});}
 }
