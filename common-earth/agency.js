@@ -309,5 +309,5 @@
   function topics(site,world,id){
     return root.EarthDialogue?.topics(site,world,id)||[['news','How are things?'],['work','What are you working on?'],['interests','Outside work'],['meal','Share a meal · 1 food']].map(([id,label])=>({id,label}));
   }
-  root.EarthAgency=Object.freeze({actor,actorId,canPlay,playables,founder,identity,valid,checkHandoff,change,originalAccounts,recall,validRecall,shadowPass,finishShadow,depart,resume,converse,topics});
+  root.EarthAgency=Object.freeze({actor,actorId,canPlay,playables,founder,identity,valid,checkHandoff,change,originalDistricts,originalAccounts,recall,validRecall,shadowPass,finishShadow,depart,resume,converse,topics});
 })(typeof window==='undefined'?globalThis:window);

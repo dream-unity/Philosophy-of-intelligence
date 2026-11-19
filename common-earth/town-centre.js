@@ -161,13 +161,25 @@
         balance:origin.purses?.people?.[guest.visitSlot]?.balance||0}];
     });
   }
-  function authorised(world,site){
-    return !!site&&world.activeId===site.id&&root.EarthCommunityLife.isHome(world,site)&&!world.communityLife.journey&&
-      (root.EarthAgency?.actorId(site)||'steward')==='steward';
+  function recruitmentBlock(world,site){
+    const life=world.communityLife;
+    if(!site||!life)return 'Found a home community to issue invitations.';
+    if(!root.EarthCommunityLife.isHome(world,site)){
+      const home=world.sites.find(t=>t.id===life.homeId)||life.outposts.find(t=>t.id===life.homeId);
+      return site.name+' decides on its own invitations. Your home Town Centre is in '+home.name+'.';
+    }
+    if(life.journey)return 'Finish your journey and return to '+site.name+' to issue invitations.';
+    if(world.activeId!==site.id)return 'Travel back to '+site.name+' through Towns to issue an invitation here.';
+    const actor=root.EarthAgency?.actorId(site)||'steward';
+    if(root.EarthCommunityLife.residency(site,actor)!=='member'||root.EarthCommunityLife.commuting(site,actor))return 'Choose a resident of '+site.name+' to sign the invitation.';
+    return '';
   }
+  function authorised(world,site){return !recruitmentBlock(world,site);}
   function command(world,site,request){
-    if(!authorised(world,site)||request.actor!=='steward'||request.site!==site.id||request.week!==world.week||
-      request.generation!==(site.foundingRevision||0))return fail('The home Town Centre and its current member must authorise recruitment.');
+    const blocked=recruitmentBlock(world,site);
+    if(blocked)return fail(blocked);
+    if(request.actor!==(root.EarthAgency?.actorId(site)||'steward')||request.site!==site.id||request.week!==world.week||
+      request.generation!==(site.foundingRevision||0))return fail('The signer, community or week changed. Review the invitation again.');
     if(request.route==='regional'){
       const guest=site.communityLife.people[request.id];
       if(guest?.status!=='visitor'||request.identity!==visitorKey(guest))return fail('This application is no longer current.');
@@ -275,5 +287,5 @@
     }
     return true;
   }
-  root.EarthTownCentre=Object.freeze({productionReview,fields,label,price,specification,quote,command,applications,authorised,tick,valid});
+  root.EarthTownCentre=Object.freeze({productionReview,fields,label,price,specification,quote,command,applications,authorised,recruitmentBlock,tick,valid});
 })(typeof window==='undefined'?globalThis:window);

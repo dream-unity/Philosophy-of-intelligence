@@ -38,7 +38,7 @@
     if(work.cart!=null && (!nameOK(work.cart.builder)||!Object.hasOwn(fittingNames,work.cart.fixture)))return false;
     const ticket=work.ticket;
     if(ticket==null)return true;
-    if(typeof ticket!=='object'||Array.isArray(ticket)||!Object.hasOwn(jobs,ticket.kind)||!nameOK(ticket.maker)||!integer(ticket.started)||!integer(ticket.started+jobs[ticket.kind].seconds*1000))return false;
+    if(typeof ticket!=='object'||Array.isArray(ticket)||!Object.hasOwn(jobs,ticket.kind)||!nameOK(ticket.maker)||ticket.makerId!=null&&!root.EarthAgency?.canPlay(site,ticket.makerId)||!integer(ticket.started)||!integer(ticket.started+jobs[ticket.kind].seconds*1000))return false;
     if(ticket.helper!=null && !site.residents.some(r=>r.id===ticket.helper))return false;
     if(ticket.kind==='cart' && work.cart)return false;
     if(['baskets','rack'].includes(ticket.kind) && (!work.cart || work.cart.fixture===ticket.kind))return false;
@@ -50,7 +50,7 @@
     if(kind==='cart' && cart)return null;
     if(['baskets','rack'].includes(kind) && (!cart||cart.fixture===kind))return null;
     const output=reward(site,kind),price=job.price||0,hold=root.EarthHousing?.workHold(site,actorId(site))||'';
-    const terms=job.item?'+'+output+' '+job.item:
+    const terms=job.item?'+'+output+(job.item==='funds'?' treasury funds':' community '+job.item):
       kind==='cart'?'2 materials · carry more on every personal job':
       kind==='baskets'?'Food loads carry 4 food':'Timber loads carry 4 materials';
     return {kind,label:job.label,seconds:job.seconds,terms,output,price,
@@ -76,7 +76,7 @@
       site.materials-=task.price;
       const book=site.pursuits??={serial:0,cart:null};
       book.serial++;
-      book.ticket={kind:task.kind,maker:actor,started:now};
+      book.ticket={kind:task.kind,maker:actor,makerId:request.actorId,started:now};
       return {ok:true,message:actor+' started '+task.label.toLowerCase()+'. Return in '+task.seconds+' seconds.'};
     }
     if(!ticket)return nope('There is no personal job awaiting collection.');
@@ -224,7 +224,7 @@
         body.append(progressLabel,collectButton,release);
         tick();restoreFocus();return;
       }
-      body.append(make('p',model.actor+' can take one job for '+site.name+'. Collect finished work to earn 1 personal fund, 1 development point and restore 1 civic effort (up to 4).'));
+      body.append(make('p',model.actor+' can take one job for '+site.name+'. Collect finished work for 1 development point and up to 1 civic effort. The exchange pays the worker 1 personal fund when its till can cover the wage.'));
       if(model.cart)body.append(make('p','Community handcart · made by '+model.cart.builder+' · '+fittingNames[model.cart.fixture]+'.','personal-cart'));
       const grid=make('div',null,'personal-work-grid');
       for(const task of model.choices){

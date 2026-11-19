@@ -46,6 +46,8 @@ function check(frame){
   }
   get('scene-store-summary').textContent='418 food · 414 materials · 2895 funds';
   get('scene-goal-summary').textContent='Shared apprenticeship';
+  get('stores-ribbon').hidden=false;
+  for(const [id,value] of Object.entries({'ribbon-town':'Reed Quay','ribbon-treasury-town':'Reed Quay','ribbon-food':'413','ribbon-materials':'412','ribbon-funds':'3001 funds','ribbon-person':'Hamish Juma','ribbon-balance':'0 funds'}))get(id).textContent=value;
   const shortcuts=[get('region-open'),get('region-mini')];
   const street=controls('.scene-tools button,.scene-strip button,#housing-bar button').filter(b=>!b.hidden);
   for(const [width,height] of sizes){
@@ -55,6 +57,7 @@ function check(frame){
       for(const wide of [true,false]){
         doc.body.classList.toggle('street-expanded',wide);
         const name=[width+'×'+height,size+'%',wide?'expanded':'standard'].join(' ');
+        checkButtons(controls('#stores-ribbon button'),name+' accounts');
         checkButtons([...shortcuts,...street],name+' street');
         // A wrapped goal must not stretch a one-line Atlas button to the height of two rows.
         if(shortcuts[0].offsetHeight>shortcuts[1].offsetHeight+8)errors.push(name+' stretched Atlas shortcut');

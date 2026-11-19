@@ -400,6 +400,7 @@
     const recorded=new Set();
     const add=id=>{if(isPorterId(id))recorded.add(id);};
     const agency=site.agency,projects=site.autonomy?.projects;
+    add(site.pursuits?.ticket?.makerId);
     for(const id of Array.isArray(agency?.porters)?agency.porters:[])add(id);
     for(const [id,career] of Object.entries(site.careers||{})){
       if(career?.jobId||career?.training||career?.application||career?.agreedPlan||career?.history?.length||

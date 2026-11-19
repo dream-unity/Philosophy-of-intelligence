@@ -638,12 +638,15 @@
     if(site.agency?.returningActor===id)delete site.agency.returningActor;
     if(site.agency?.actor===id){site.agency.actor='steward';delete site.agency.actorAt;}
   }
+  function freeGuestSlot(site){
+    const used=new Set([...(root.EarthPersonas?.porterIds(site)||[]),...(site.agency?.porters||[]),...Object.keys(site.communityLife?.people||{})]);
+    return guestSlots.find(id=>!used.has(id));
+  }
   function guestSlot(site,person,originId,originSlot,status,week){
     const c=local(site);
     const old=Object.entries(c.people).find(([,v])=>v.originId===originId&&v.originSlot===originSlot);
-    const used=new Set([...(root.EarthPersonas?.porterIds(site)||[]),...(site.agency?.porters||[]),...Object.keys(c.people)]);
     const returning=originId===site.id&&(walkIds.includes(originSlot)||originSlot==='driver'||site.residents.some(p=>p.id===originSlot)||guestSlots.includes(originSlot));
-    const id=returning?originSlot:old?.[0]||guestSlots.find(key=>!used.has(key));
+    const id=returning?originSlot:old?.[0]||freeGuestSlot(site);
     if(!id)return null;
     delete c.away[id];
     c.people[id]={profile:{...copy(person),id},status,originId,originSlot,originName:person.birthCommunityName||null,since:week};
@@ -1555,6 +1558,7 @@
   function run(world,site,req,scene,makeSite,finishPromise){
     const a=world.communityLife;
     if(!a||!site||!req||req.site!==site.id||req.week!==world.week)return fail('The place or week changed. Open Towns again.');
+    if(req.action==='townCentre')return root.EarthTownCentre?.command(world,site,req)||fail('The Town Centre is unavailable.');
     if(req.actor!==detachedView(world)||req.actor!=='steward')return fail('Return to '+a.profile.name+' before making a personal travel or membership decision.');
     const home=lookup(world,a.homeId),c=local(site),receipt=text=>({ok:true,message:writeLog(site,world.week,text)});
     const at=id=>scene?.siteId===site.id&&scene.actor==='steward'&&scene.mode==='walk'&&scene.target===id&&
@@ -1643,10 +1647,6 @@
     }
     if(a.journey)return fail('Finish the current crossing first.');
     if(req.action==='housingRelief')return root.EarthHousing?.setRelief(world,site,req)||fail('The housing register is unavailable.');
-    if(req.action==='townCentre'){
-      if(!isHome(world,site))return fail('Only the community you belong to can authorise recruitment.');
-      return root.EarthTownCentre?.command(world,site,req)||fail('The Town Centre is unavailable.');
-    }
     if(req.action==='hearResident'){
       const h=c.hearing;
       if(!isHome(world,site)||!h||world.week>=h.due)return fail('There is no current local membership hearing.');
@@ -1844,5 +1844,5 @@
       ['numeracy','music','communication','care','craft','stamina','organisation'].every(k=>int(p.aptitudes[k],0,100)&&int(p.bounds[k]?.min,0,p.aptitudes[k])&&int(p.bounds[k]?.max,p.aptitudes[k],100));
   }
   root.EarthCommunityLife=Object.freeze({initialise,restart,valid,present,profile,personLabel,census,commuting,residency,anchor,coverCandidate,isHome,neighbours,travelIntent,volunteers,founding,
-    nearLocation:pointNear,guestSlot,recordReception,closeLife,personalAccess,visitorReception,confrontation,entryAssessment,entryRestriction,hostedVisit,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,acceptVisitor,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
+    nearLocation:pointNear,guestSlot,freeGuestSlot,recordReception,closeLife,personalAccess,visitorReception,confrontation,entryAssessment,entryRestriction,hostedVisit,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,acceptVisitor,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
 })(typeof window==='undefined'?globalThis:window);
