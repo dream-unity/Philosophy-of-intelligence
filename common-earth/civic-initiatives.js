@@ -62,7 +62,7 @@
   function reservedChoice(site,c){
     const key=tag(c.id);
     if(c.kind!=='build')return false;
-    if(site.civicInitiatives?.history?.filter(h=>h.phase==='commissioned').length>=2)return true;
+    // Each commissioned structure keeps its own lot. Other vacant lots remain available.
     return site.buildPlan===key || site.buildPlanPlot!=null&&site.buildPlanPlot===c.plot ||
       (site.buildings||[]).some(b=>b.kind===key||b.plot===c.plot) || (site.construction||[]).some(j=>j.kind===key||j.scope==='street'&&j.plot===c.plot) ||
       (site.buildings?.length||0)+(site.construction||[]).filter(j=>j.scope==='street'&&j.type!=='demolish').length>=7;

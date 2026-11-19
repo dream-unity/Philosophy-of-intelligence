@@ -112,3 +112,21 @@ test('the same visitor receives different treatment with sponsored entry, and a 
   assert.ok(mixed.score<initial.score);assert.equal(mixed.expansionist,false);
   assert.equal(ctx.EarthCommunityLife.entryAssessment(w,watch).rule.label,'Hosted entry');
 });
+
+test('a resident turns earnings and a council advance into a working shop, then repays the town from sales',()=>{
+  const seed=region().save(),a=region(seed),b=region(seed),town=a.w.communityLife.outposts[0],ledger=a.ctx.EarthDistrictGrowth;
+  let owner=null,loan=0,repayment=0,receipt;
+  for(let i=0;i<80&&!repayment;i++){
+    for(const f of [a,b]){f.production();if(i%8===7)f.week();}
+    a.ctx.EarthHousing.view(a.w,town);
+    const rows=ledger.transfers(town.growth.history[0]);
+    for(const entry of rows){
+      if(!owner&&entry.reason==='Council financed part of the first commercial deed'){owner=entry.to;loan=entry.amount;}
+      if(owner&&entry.reason==='Retail payment'&&entry.to===owner)receipt=entry;
+      if(owner&&entry.reason==='Commercial deed repayment'&&entry.from===owner)repayment+=entry.amount;
+    }
+  }
+  assert.ok(owner&&loan>0&&receipt&&repayment,'a funded commercial deed, completed sale and repayment');
+  const shop=town.growth.households.find(h=>h.name===owner&&h.shop);
+  assert.ok(shop);assert.equal(shop.shopDebt,loan-repayment);assert.equal(a.save(),b.save());
+});
