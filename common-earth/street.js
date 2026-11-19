@@ -4961,9 +4961,9 @@
     function runFromWatch(){
       if(!pursuit||state.mode!=='walk')return false;
       const p=state.player,g=pursuit,angle=Math.atan2(p.y-g.y,p.x-g.x);
-      for(const turn of [0,.55,-.55,1,-1,1.6,-1.6,Math.PI]){
-        const end=closestFree(add(p,Math.cos(angle+turn)*8,Math.sin(angle+turn)*8),false);
-        if(end&&dist(g,end)>5&&navigate(end))return true;
+      for(const length of [12,9])for(const turn of [0,.55,-.55,1,-1,1.6,-1.6,2.2,-2.2,Math.PI]){
+        const end=closestFree(add(p,Math.cos(angle+turn)*length,Math.sin(angle+turn)*length),false);
+        if(end&&dist(g,end)>=8&&navigate(end)){g.running=true;return true;}
       }
       return false;
     }
@@ -5134,9 +5134,10 @@
       // cab before either the driver or a waiting route can advance.
       if(drivingTruck)crossingsNear(p,dt,true);
       p.moving=false;
-      if(!state.placed&&pressed.size){let dx=0,dy=0;for(const dir of pressed){dx+=AXIS[dir][0];dy+=AXIS[dir][1];}stop();manual(dx,dy,dt*(state.mode==='boat'?BOAT_SPEED:state.mode==='drive'?DRIVE_SPEED:WALK_SPEED));}
+      const speed=state.mode==='boat'?BOAT_SPEED:state.mode==='drive'?DRIVE_SPEED:pursuit?.running?5.5:WALK_SPEED;
+      if(!state.placed&&pressed.size){let dx=0,dy=0;for(const dir of pressed){dx+=AXIS[dir][0];dy+=AXIS[dir][1];}stop();manual(dx,dy,dt*speed);}
       else if(!state.placed&&state.route.length){
-        let budget=dt*(state.mode==='boat'?BOAT_SPEED:state.mode==='drive'?DRIVE_SPEED:WALK_SPEED);
+        let budget=dt*speed;
         const traffic=trafficBarrier();
         if(drivingTruck&&visualTime<truckWaitUntil)return;
         while(budget>.0001&&state.route.length){const q=state.route[0],d=dist(p,q);

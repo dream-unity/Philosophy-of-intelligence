@@ -381,3 +381,24 @@ test('the street keeps both fighters on the map and allows walking, running and 
   assert.equal(sim.active(),home);assert.equal(target.communityLife.border.street,undefined);
   street.destroy();sim.destroy();
 });
+
+test('one Run away tap can end a live pursuit from contact range without a hit',async()=>{
+  const {sim,world,streetAt,paint,wait}=fixture(false,null,{name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
+  const town=world.communityLife.outposts[1];
+  const command=(action,target,round,proof)=>sim.communityLife({action,target,round,actor:'steward',site:sim.active().id,week:world.week},proof);
+  const market={siteId:sim.active().id,actor:'steward',mode:'walk',target:'market',x:0,y:0,tx:0,ty:0};
+  assert.ok(command('depart',town.id,0,market).ok);wait(7000);assert.ok(command('arrive',town.id).arrived);
+  const scene=streetAt(town,false,{onStreetContact:(target,round,proof)=>command('streetContact',target,round,proof())});
+  const frame=async()=>{wait(35);paint();await Promise.resolve();};
+  const encounter=town.communityLife.border.street;
+  for(let i=0;i<40;i++){
+    await frame();const g=scene.fightProof();if(g&&Math.hypot(g.x-g.gx,g.y-g.gy)<=1)break;
+  }
+  const at=scene.fightProof();assert.ok(Math.hypot(at.x-at.gx,at.y-at.gy)<=1);
+  assert.ok(scene.runFromWatch());
+  for(let i=0;i<150&&town.communityLife.border.street;i++)await frame();
+  assert.equal(town.communityLife.border.street,undefined);
+  assert.equal(encounter.round,0);assert.equal(town.communityLife.away[encounter.guard.id],undefined);
+  assert.equal(sim.active().id,town.id);assert.equal(scene.getState().mode,'walk');
+  scene.destroy();sim.destroy();
+});
