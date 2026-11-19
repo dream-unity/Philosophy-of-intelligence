@@ -254,7 +254,9 @@
       const key=['grower','repairer','convenor'][slot]||'steward';
       slots.set(person.id,{id:person.id,name:person.name,key,kind:'resident',ordinal:baseSlots.length+slot,originRole:person.role});
     });
-    return {seed,siteId:site.id,region,slots,hasAssignments:site.birthNames!=null,workRotation:site.workRotation,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
+    const cohort=site.id.startsWith('near-')?Number(site.id.split('-').at(-1)):NaN;
+    const birthTemperament=Number.isInteger(cohort)?[36,90,48][(cohort+Math.floor((Math.abs(birth.lat)+1)/10))%3]:48;
+    return {seed,siteId:site.id,region,slots,birthTemperament,hasAssignments:site.birthNames!=null,workRotation:site.workRotation,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
       musician:'walker-'+(hash(seed+'performer')%5)};
   }
   const families=names=>[...new Set(names.map(name=>name.slice(name.indexOf(' ')+1)))];
@@ -356,7 +358,7 @@
     const intro=name+' '+custom+'.';
     const description=intro+' '+name+' '+habit+'. Outside work, '+name+' enjoys '+hobbyName+'.';
     const outsideWork=key==='repairer'?'I enjoy '+hobbyName+'. I can work out a gear ratio in my head, but I have to learn a tune one phrase at a time.':saying;
-    const person={id,name,kind,identityKey:identityKey(reg.siteId,id),birthCommunityId:reg.siteId,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
+    const person={id,name,kind,identityKey:identityKey(reg.siteId,id),birthCommunityId:reg.siteId,birthTemperament:reg.birthTemperament,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
       strengths,traits:temperament,aptitudes:Object.freeze(skills),bounds:Object.freeze(bounds),outsideWork};
     if(reg.hasAssignments){
       let task;

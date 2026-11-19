@@ -53,7 +53,7 @@
     let group=geoCache.get(world);if(!group){group=new Map();geoCache.set(world,group);}
     const cached=group.get(originId),outposts=world.communityLife?.outposts,atlasReady=!!root.EarthAtlas?.geographyLoaded;
     if(cached&&cached.atlasReady===atlasReady&&cached.surveys.every(t=>t.water===t.site.water&&t.coastal===t.site.coastal&&t.lake===t.site.lakeShore)&&cached.first===world.sites[0]&&cached.lastSite===world.sites.at(-1)&&cached.lastOutpost===outposts?.at(-1)&&cached.siteCount===world.sites.length&&cached.outpostCount===(outposts?.length||0))return cached;
-    const all=places(world),origin=all.find(s=>s.id===originId)||site;
+    const all=places(world),origin=all.find(s=>s.id===originId)||world.communityLife?.retired?.[originId]||site;
     const lonScale=kmPerDegree*Math.max(.01,Math.cos(origin.lat*Math.PI/180));
     let project=loc=>({x:(((loc.lon-origin.lon+540)%360)-180)*lonScale,y:(loc.lat-origin.lat)*kmPerDegree});
     let locate=(x,y)=>({lat:clamp(origin.lat+y/kmPerDegree,-89.99999,89.99999),lon:((origin.lon+x/lonScale+540)%360)-180});
@@ -590,7 +590,7 @@
     const previous=localAgreement(r,site.id,host.id,id)?.terms||'disputed';
     const occupier=site.communityLife?.border?.foothold?.by===host.id?host:
       host.communityLife?.border?.foothold?.by===site.id?site:null;
-    const pressingClaim=occupier&&root.EarthBorderConflict?.quay(occupier)&&root.EarthBorderConflict.profile(occupier).expansionist&&
+    const pressingClaim=occupier&&root.EarthBorderConflict?.relation(world,site.id,host.id)?.state==='war'&&
       occupier.food>=reserve(world,occupier).food+2&&occupier.funds>=reserve(world,occupier).funds+2;
     const offersPassage=!pressingClaim&&(adopts||!pressure&&host.trust>=45);
     const terms=joint?'joint':offersPassage?'passage':previous;
@@ -1178,7 +1178,7 @@
       b.productionWeek!=null&&!integer(b.productionWeek,1,world.week))return false;
     const all=new Map(sites.map(s=>[s.id,s]));
     for(const [origin,r] of Object.entries(b.regions)){
-      if(!all.has(origin)||!object(r)||r.projection!=null&&r.projection!=='polar'||!['knowledge','parcels','routes','trips','contacts'].every(k=>object(r[k]))||!Array.isArray(r.records)||r.records.length>48)return false;
+      if((!all.has(origin)&&!world.communityLife?.retired?.[origin])||!object(r)||r.projection!=null&&r.projection!=='polar'||!['knowledge','parcels','routes','trips','contacts'].every(k=>object(r[k]))||!Array.isArray(r.records)||r.records.length>48)return false;
       for(const [id,map] of records(r,'knowledge'))if(!all.has(id)||!object(map)||!Object.entries(map).every(([c,w])=>coordinate(c)&&integer(w,1,world.week)))return false;
       for(const [id,p] of records(r,'parcels')){
         if(!coordinate(id)||!object(p)||!object(p.uses)||!Object.entries(p.uses).every(([s,n])=>all.has(s)&&integer(n,1))||

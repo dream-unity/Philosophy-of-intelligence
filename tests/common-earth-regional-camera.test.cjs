@@ -358,7 +358,7 @@ test('an open Town Centre dialog stays visible above the observed street',()=>{
   if(observerMask)assert.ok(observerMask[1].split(',').map(s=>s.trim()).includes('dialog[open]'));
 });
 
-test('the playable street renders the gate fight and prevents walking or boarding the van through the guard',()=>{
+test('the street keeps both fighters on the map and allows walking, running and driving during pursuit',()=>{
   const {sim,world,home,streetAt,wait,paint}=fixture(false,null,{name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
   const target=world.communityLife.outposts.find(t=>t.name==='Reed Quay');
   const act=(action,id)=>sim.communityLife({site:sim.active().id,actor:'steward',week:world.week,action,target:id},
@@ -366,9 +366,17 @@ test('the playable street renders the gate fight and prevents walking or boardin
   assert.ok(act('depart',target.id).ok);wait(7000);assert.ok(act('arrive',target.id).arrived);
   const street=streetAt(target),watch=target.communityLife.border.street;
   const before=street.getState();paint();
-  assert.equal(street.move('right'),false);street.arriveByVan();paint();
-  assert.equal(street.getState().mode,'walk');assert.equal(street.getState().x,before.x);
+  assert.ok(street.fightProof());assert.notEqual(street.fightProof().gx,before.x);
+  assert.ok(street.move('left')||street.move('right'));assert.notDeepEqual([street.getState().x,street.getState().y],[before.x,before.y]);
+  const moving=street.getState();street.setSite(target);assert.equal(street.getState().x,moving.x);
   assert.ok(act('resist',watch.guard.key).ok);paint();
+  assert.ok(street.runFromWatch());street.setSite(target);paint();
+  street.cancelTravel();assert.ok(street.toggleVehicle());
+  for(let i=0;i<180&&street.getState().mode!=='drive';i++)paint();
+  assert.equal(street.getState().mode,'drive');const parked=street.getState();
+  assert.ok(street.move('left')||street.move('right')||street.move('down')||street.move('up'));
+  assert.notDeepEqual([street.getState().x,street.getState().y],[parked.x,parked.y]);
+  street.setSite(target);paint();assert.equal(street.getState().mode,'drive');
   assert.ok(act('withdraw',watch.guard.key).arrived);street.setSite(sim.active());paint();
   assert.equal(sim.active(),home);assert.equal(target.communityLife.border.street,undefined);
   street.destroy();sim.destroy();

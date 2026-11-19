@@ -92,14 +92,14 @@
         if(v.viewId==='steward'){
           const host=gate?.host||root.EarthCommunityLife.hostFor(target);
           const origin=sim.state.sites.find(t=>t.id===sim.state.communityLife.homeId);
-          const exposed=root.EarthBorderConflict&&root.EarthBorderConflict.profile(target).closed&&!root.EarthBorderConflict.hasPass(sim.state,target,sim.state.communityLife.profile,origin);
+          const exposed=root.EarthBorderConflict&&root.EarthBorderConflict.hostile(sim.state,target)&&!root.EarthBorderConflict.hasPass(sim.state,target,sim.state.communityLife.profile,origin);
           if(gate||exposed){
             const request=btn('Request a hosted visit',()=>station('requestEntry',n.id,{type:'market'},'the exchange desk'));
             request.disabled=gate?.pending||target.communityLife?.entryPass?.opens>sim.state.week||!host.id;actions.append(request);
           }
           if(!gate||gate.optional&&!gate.pending)actions.append(btn(exposed?'Enter without invitation':(getStreet()?.getState()?.vehicle==='van'?'Drive there':n.distance>70?'Take transport':site.water?'Cross by boat':'Walk there'),()=>station('walkTrail',n.id,{type:'market'},'the exchange path'),'Travel to '+n.name+'.'));
         }
-        const character=root.EarthCommunityLife.communityCharacter(target);
+        const character=root.EarthCommunityLife.communityCharacter(target,sim.state);
         facts.textContent=character.summary+'. '+m.population+' residents · '+m.freeBeds+' open housing places. '+m.works;
         detail.replaceChildren(heading,el('p',n.host+' is looking for help '+n.need+'. Residents value '+n.lifestyle+'.'),
           el('p',character.detail),el('p',m.food+' food · '+m.materials+' materials · '+m.funds+' town funds.'));
