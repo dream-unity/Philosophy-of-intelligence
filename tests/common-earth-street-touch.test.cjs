@@ -2397,3 +2397,39 @@ test('a resident coming from an outer row walks around the intervening home and 
   assert(Math.hypot(p.x-9.32,p.y-23.48)<.01,JSON.stringify(p));
   g.street.destroy();
 });
+
+test('the truck door parks a moving truck once, keeps its load, and lets the same driver re-enter after reload',async()=>{
+  const runtime=vm.createContext({});runtime.window=runtime;
+  for(const name of ['personas','careers','local-projects','autonomy','dialogue','agency','market','fleet','simulation','truck-panel']){
+    vm.runInContext(readFileSync(path.join(gameRoot,name+'.js'),'utf8'),runtime);
+  }
+  const sim=runtime.CommonEarthSim.create({storage:null});
+  assert(sim.found({name:'Stone Town',lat:-6.16,lon:39.19,water:false}).ok);
+  const town=sim.active(),g=surface(1024,650),street=g.street;
+  const depot=runtime.EarthFleet.depot;
+  const pose={...depot,siteId:town.id,actor:'steward',mode:'walk',targetPose:{id:'driver',mode:'walk',...depot}};
+  assert(sim.changeActor('driver',()=>pose).ok);
+  street.setSite(town);
+  const quote=sim.truckView(),truck=street.truckStatus().truck;
+  const saved=street.snapshotView();
+  assert(street.restoreView({...saved,player:{...truck,y:truck.y+.85}}));
+  assert(sim.useTruck({...quote,action:'checkout'},()=>street.truckStatus()).ok);
+  street.setSite(town);assert(street.boardServiceTruck());
+  assert(street.followTruckDelivery({x:18,y:21}));for(let i=0;i<8;i++)g.step();
+  assert(street.getState().travelling);
+  const at=street.truckStatus().truck,cargo=town.fleet.custody.stock,serial=town.fleet.serial;
+  const context={sim,getStreet:()=>street};
+  const exit=runtime.EarthTruckPanel.park(context),duplicate=runtime.EarthTruckPanel.park(context);
+  assert(await exit);assert.equal(await duplicate,false);
+  const walker=street.getState(),distance=Math.hypot(walker.x-at.x,walker.y-at.y);
+  assert.equal(walker.mode,'walk');assert.equal(walker.travelling,false);
+  assert(walker.nearTruckDoor&&distance>=1&&distance<=1.56);
+  assert.equal(town.fleet.serial,serial+1);assert.equal(town.fleet.custody.stock,cargo);
+  assert.deepEqual({...town.fleet.custody.anchor},{...at});
+  const reopened=runtime.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(sim.state)});
+  const again=surface(1024,650);
+  again.street.setSite(reopened.active());
+  assert(again.street.restoreView(street.snapshotView()));assert(again.street.getState().nearTruckDoor);
+  assert(again.street.boardServiceTruck());assert.equal(again.street.getState().vehicle,'truck');
+  again.street.destroy();reopened.destroy();street.destroy();sim.destroy();
+});

@@ -190,6 +190,12 @@
   attachSceneSection('work',$('personal-work'),personalWork);
   attachSceneSection('life',$('character-lives'),lifePanel);
   const truckPanel=window.EarthTruckPanel;
+  function useStreetVehicleDoor(){
+    const local=getStreet(),state=local?.getState();
+    if(state?.vehicle==='truck')return truckPanel.park(sceneContext);
+    if(state?.nearTruckDoor)return local.boardServiceTruck();
+    return local?.toggleVehicle();
+  }
   if(truckPanel&&streetHud){
     let truckPosition='',quoteKey='',quote=null;
     function renderTruck(force){
@@ -786,7 +792,7 @@
           return result;
         },
         onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
-        onObservation:seen=>streetHud?.setWatch(seen),onTruckInteract:()=>streetHud?.openTool('truck'),
+        onObservation:seen=>streetHud?.setWatch(seen),onTruckDoor:useStreetVehicleDoor,onTruckInteract:()=>streetHud?.openTool('truck'),
         onBuilding:building=>{streetHud?.close(false);districtDesk?.inspectBuilding(building);},
         onTalkChoices:people=>streetHud?.openTalkChoices?.(people),
         onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},
@@ -803,13 +809,16 @@
           put('street-location',state.mode==='boat'?'Harbour waters':state.nearby?.label||'Local district');
           const driving=state.mode==='drive';
           updateStreetInteract(state);
-          show('scene-van',state.mode!=='boat'&&state.vehicle!=='truck'&&!state.placement);
-          put('scene-van',driving?'Exit van':state.boardingVan?'Walking to van…':'Enter van');
+          const truck=state.vehicle==='truck',truckDoor=truck||state.nearTruckDoor;
+          const doorLabel=truck?'Exit truck':state.nearTruckDoor?'Re-enter truck':driving?'Exit van':state.boardingVan?'Walking to van…':'Enter van';
+          show('scene-van',truck||state.mode!=='boat'&&!state.placement);
+          $('scene-van')?.toggleAttribute('data-truck-door',truckDoor);
+          put('scene-van',doorLabel);
           const vehicle=$('street-vehicle');
           if(vehicle) {
             vehicle.setAttribute('aria-pressed',String(driving));
-            vehicle.textContent=state.vehicle==='truck'?'Co-op truck controls':driving?'Leave public van':'Use public van';
-            vehicle.setAttribute('title',state.vehicle==='truck'?'Open truck controls':driving?'Leave the public van':'Use the public van');
+            vehicle.textContent=truckDoor?doorLabel:driving?'Leave public van':'Use public van';
+            vehicle.setAttribute('title',truck?'Park here and step out of the co-op truck':state.nearTruckDoor?'Board your parked co-op truck':driving?'Leave the public van':'Use the public van');
           }
           if(!state.placement && placement){placement=null;show('cancel-placement',false);renderActions();}
         }
@@ -2116,8 +2125,8 @@
     else street?.interact();
   });
   listen('street-seat','click',()=>street?.useSeat());
-  listen('scene-van','click',()=>street?.toggleVehicle());
-  listen('street-vehicle','click',()=>street?.getState().vehicle==='truck'?streetHud?.openTool('truck'):street?.toggleVehicle());
+  listen('scene-van','click',useStreetVehicleDoor);
+  listen('street-vehicle','click',useStreetVehicleDoor);
   listen('street-boat','click',()=>street?.toggleBoat());
   let fishing=false;
   function fishingPosition(original){

@@ -296,7 +296,9 @@
         f.servedWeek=world.week;
         message=actorName+' delivered the co-op order to '+quote.next.name+'. Community stores received 1 '+quote.next.good+'.';break;
       case 'park':
-        f.custody.anchor={x:scene.x,y:scene.y};message=unreported?'The blue truck is parked. Dispatch still has no signed handover.':actorName+' parked the blue truck. Dispatch recorded this kerb for the next pickup.';break;
+        f.custody.anchor={x:scene.x,y:scene.y};
+        if(Number.isFinite(scene.truck.dx)&&Number.isFinite(scene.truck.dy))Object.assign(f.custody.anchor,{dx:scene.truck.dx,dy:scene.truck.dy});
+        message=unreported?'The blue truck is parked. Dispatch still has no signed handover.':actorName+' parked the blue truck. Dispatch recorded this kerb for the next pickup.';break;
       case 'return':
         if(f.custody.stock){
           const refund=root.EarthMarket?.freight(site,f.custody.stock,'return',world.week);

@@ -4568,7 +4568,7 @@
     function getState() {
       const body=state.companion&&(state.mode!=='walk'?state.player:state.companion);
       const companion=body?{residentId:state.companion.id,x:body.x,y:body.y}:null;
-      return {actor:playedId,mode:state.mode,boardingVan:state.arrival?.type==='vehicle',vehicle:state.mode==='drive'?(drivingTruck?'truck':'van'):null,seated:Boolean(seatedAt),waterfront:berths.length>0,boarding:state.arrival?.type==='board',returning:state.arrival?.type==='land',sailingToShoal:state.destination?.shoal===true,findingLine:state.destination?.fishingLine===true||state.arrival?.type==='fishingLine',findingQuay:state.arrival?.type==='fishingQuay',siteId:state.site?.id||null,plot:placingFocus,placement:state.placed,nearby:state.active?publicPoint(state.active):null,companion,x:state.player.x,y:state.player.y,travelling:state.route.length>0,zoom};
+      return {actor:playedId,mode:state.mode,nearTruckDoor:nearTruckDoor(),boardingVan:state.arrival?.type==='vehicle',vehicle:state.mode==='drive'?(drivingTruck?'truck':'van'):null,seated:Boolean(seatedAt),waterfront:berths.length>0,boarding:state.arrival?.type==='board',returning:state.arrival?.type==='land',sailingToShoal:state.destination?.shoal===true,findingLine:state.destination?.fishingLine===true||state.arrival?.type==='fishingLine',findingQuay:state.arrival?.type==='fishingQuay',siteId:state.site?.id||null,plot:placingFocus,placement:state.placed,nearby:state.active?publicPoint(state.active):null,companion,x:state.player.x,y:state.player.y,travelling:state.route.length>0,zoom};
     }
     function publicPoint(q) {
       if(!q)return null;
@@ -4628,7 +4628,7 @@
       const role=crew.get(next?.residentId)?.role || resident?.role;
       const key=[state.site?.id,playedId,next?.type,next?.npcId,next?.residentId,next?.plot,next?.jobId,
         next?.kind,next?.label,next?.doorstep,next?.atWork,next?.objectX,next?.objectY,role,shiftStop?.id,
-        Boolean(delivery),Boolean(seatedAt),state.placed,state.mode,state.companion?.id,fishingZone()].join('/');
+        Boolean(delivery),Boolean(seatedAt),state.placed,state.mode,nearTruckDoor(),state.companion?.id,fishingZone()].join('/');
       // Positions can change between two encounters with the same person.
       // Keep the live interaction target, and refresh the controls when their
       // meaning changes (including crossing from the quay into fishing water).
@@ -5130,22 +5130,42 @@
       if(!state.site||!stopPoint||state.mode==='boat')return false;
       return navigate(stopPoint,{type:'dispatchStop',x:stopPoint.x,y:stopPoint.y,onArrival},true);
     }
+    function nearTruckDoor(){
+      return Boolean(state.mode==='walk'&&state.traffic&&state.site?.fleet?.custody?.actor===playedId&&dist(state.player,state.traffic)<=1.56);
+    }
     function boardServiceTruck(){
       const q=state.traffic;
-      if(!q||state.site?.fleet?.custody?.actor!==playedId||state.mode!=='walk'||dist(state.player,q)>1.56)return false;
+      if(!nearTruckDoor())return false;
       clearObservation(false);standUp(false);releaseLocal();stop();pressed.clear();
       drivingTruck=true;state.mode='drive';Object.assign(state.player,actorPosition(q));
       setParkedVan();cameraFollows=true;dirty=true;updateNearby();emitState();message('Driving the blue co-op truck. Tap a road or choose the delivery stop.');return true;
     }
+    function serviceTruckDoor(){
+      if(!drivingTruck)return null;
+      const cab=state.player,hull=trafficBounds(cab),angle=Math.atan2(cab.dy,cab.dx);
+      // Try the two doors first, then the ends and corners on a tight kerb.
+      for(const turn of [2,-2,0,4,1,-1,3,-3]){
+        for(const distance of [1.12,1.48]){
+          const direction=angle+turn*Math.PI/4;
+          const out=add(cab,Math.cos(direction)*distance,Math.sin(direction)*distance);
+          if(!insideFootprint(out,hull)&&traversable(out,false)&&clearSegment(cab,out,false))return out;
+        }
+      }
+      return null;
+    }
     function releaseServiceTruck(announce=true){
       if(!drivingTruck)return false;
-      Object.assign(state.traffic,actorPosition(state.player));drivingTruck=false;state.mode='walk';stop();pressed.clear();setParkedVan();
-      const q=state.traffic,box=trafficBounds(q);
-      for(const [x,y] of [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,-1]]){
-        const out=closestFree(add(q,x*1.14,y*1.14),false);
-        if(out&&!insideFootprint(out,box)){Object.assign(state.player,out);break;}
+      let out=serviceTruckDoor();
+      if(!out&&!announce){
+        // A handover can revoke custody while the cab is boxed in.
+        const previous=trafficDetour;trafficDetour=[trafficBounds(state.player)];
+        try{out=closestFree(state.player,false)||closestFree(returnPoint(state.site),false);}
+        finally{trafficDetour=previous;}
       }
-      dirty=true;if(announce){updateNearby();emitState();message('On foot beside the co-op truck.');}return true;
+      if(!out){if(announce)message('Pull forward to give the truck door room.');return false;}
+      Object.assign(state.traffic,actorPosition(state.player));drivingTruck=false;state.mode='walk';stop();pressed.clear();setParkedVan();
+      Object.assign(state.player,out);dirty=true;
+      if(announce){updateNearby();emitState();message('On foot beside the co-op truck.');}return true;
     }
     function dispatchStand(pickup,truck,firstSide=1){
       const vertical=streetDistance(pickup.x)<streetDistance(pickup.y);
@@ -5931,7 +5951,7 @@
       }
       if(KEYS[k]){e.preventDefault();if(!e.repeat)holdMove(KEYS[k]);}
       else if(['e',' ','Enter','v','b','m','+','=','-','Home','Escape'].includes(k)){e.preventDefault();if(e.repeat)return;
-        if(k==='b')toggleBoat();else if(k==='v')toggleVehicle();else if(k==='m')toggleOverview();else if(k==='e'||k===' '||k==='Enter')interact();else if(k==='Home')recenter();else if(k==='Escape'){if(selectedCrew.size){setCrewSelection([]);options.onCancelCrewSelection?.();}else if(state.placed)setPlacement(null);else cancelTravel();}else zoomBy(k==='-'?1/1.2:1.2);}
+        if(k==='b')toggleBoat();else if(k==='v'){if((drivingTruck||nearTruckDoor())&&options.onTruckDoor)options.onTruckDoor();else toggleVehicle();}else if(k==='m')toggleOverview();else if(k==='e'||k===' '||k==='Enter')interact();else if(k==='Home')recenter();else if(k==='Escape'){if(selectedCrew.size){setCrewSelection([]);options.onCancelCrewSelection?.();}else if(state.placed)setPlacement(null);else cancelTravel();}else zoomBy(k==='-'?1/1.2:1.2);}
     });
     listen(canvas,'keyup',e=>{if(spectator)return;const dir=KEYS[e.key.length===1?e.key.toLowerCase():e.key];if(dir){releaseMove(dir);e.preventDefault();}});
     listen(canvas,'blur',()=>pressed.clear());
@@ -6225,7 +6245,7 @@
         if(traversable(q)&&clearSegment(p,q)){navigate(q);break;}
       }
     }
-    return {comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

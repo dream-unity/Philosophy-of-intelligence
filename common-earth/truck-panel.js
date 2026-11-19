@@ -1,6 +1,26 @@
 (function(root){
   'use strict';
   const pending=new WeakSet();
+  const parking=new WeakSet();
+  async function park(context){
+    const {sim,getStreet,notify}=context,street=getStreet(),offer=sim.truckView();
+    if(!street||parking.has(street)||!offer||street.getState().vehicle!=='truck')return false;
+    const {siteId,actorId,generation,week,serial}=offer;
+    const current=()=>getStreet()===street&&sim.active()?.id===siteId&&root.EarthAgency.actorId(sim.active())===actorId&&
+      (sim.active().foundingRevision||0)===generation&&street.getState().vehicle==='truck';
+    parking.add(street);
+    try{
+      street.cancelTravel();
+      if(!street.serviceTruckDoor()){notify?.('Pull forward to give the truck door room.',true);return false;}
+      const result=await sim.perform('useTruck',{siteId,actorId,generation,week,serial,action:'park'},
+        ()=>current()&&street.serviceTruckDoor()?street.truckStatus():null);
+      if(!current())return false;
+      if(!result.ok){notify?.(result.message,true);return false;}
+      const exited=street.releaseServiceTruck();
+      if(exited)notify?.('Truck parked. You can re-enter it here.');
+      return exited;
+    }finally{parking.delete(street);}
+  }
   function render(container,context){
     const {sim,getStreet,notify,refresh}=context,street=getStreet(),offer=sim.truckView(),scene=street?.truckStatus();
     const doc=container.ownerDocument;
@@ -27,12 +47,13 @@
     };
     async function transact(action){
       if(!current()||pending.has(container))return;
+      if(action==='park'){await park(context);if(visible())refresh?.();return;}
       pending.add(container);
       try{
         const result=await sim.perform('useTruck',{siteId,actorId,generation,week,serial:offer.serial,action},()=>current()?street.truckStatus():null);
         if(result.ok&&getStreet()===street&&sim.active()?.id===siteId&&root.EarthAgency.actorId(sim.active())===actorId){
           if(action==='checkout'||action==='take')street.boardServiceTruck();
-          else if(action==='park'||action==='return')street.releaseServiceTruck();
+          else if(action==='return')street.releaseServiceTruck();
         }
         if(visible())msg(result.message,!result.ok);
       }finally{pending.delete(container);if(visible())refresh?.();}
@@ -66,5 +87,5 @@
     const last=offer.history[0];
     if(last)container.append(el('small','Dispatch log · Week '+last.week+' · '+last.text));
   }
-  root.EarthTruckPanel=Object.freeze({render});
+  root.EarthTruckPanel=Object.freeze({render,park});
 })(typeof window==='undefined'?globalThis:window);

@@ -1227,6 +1227,7 @@
     }
     if(cmd==='found'&&(root.EarthAgency?.actorId(site)||'steward')!=='steward')return 'Return to '+a.profile.name+' to sign a founding proposal.';
     if(cmd==='beginGoal'&&args[0]!==a.homeId||cmd==='found'&&args[3]&&args[3]!==a.homeId)return 'Only your home community can sponsor that decision.';
+    if(cmd==='useTruck'&&args[0]?.action==='park'&&site.fleet?.custody?.actor===args[0].actorId)return '';
     if(isHome(world,site)||cmd==='changeActor'&&(args[0]==='steward'||root.EarthAgency?.shadowPass?.(site,world,args[0])))return '';
     if(['visit','advance','workConstruction','regularTruck','disputedTruck','neighbourAppointment','communityLife','reset'].includes(cmd))return '';
     if(cmd==='act'&&/^(?:work:|courier:)/.test(args[0]))return '';

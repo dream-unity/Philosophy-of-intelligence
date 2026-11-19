@@ -374,7 +374,7 @@
       text($('scene-title'),pickPeople.length>1?'Choose a neighbour':'Talk with '+name(talkId));
       const greeting=near&&root.EarthCommunityLife?.visitorReception?.(sim.state,sim.active(),talkId)?.greeting;
       text($('scene-contact'),greeting||(near?(proof.mode==='walk'?'Together on foot.':'Travelling together.'):
-        s.mode==='boat'?'Out of earshot. Return to shore before meeting.':s.vehicle==='truck'?'Park the co-op truck through dispatch before walking over.':s.travelling?'On the way. Conversation opens when you reach '+name(talkId)+'.':'Out of earshot. Walk over to speak in person.'));
+        s.mode==='boat'?'Out of earshot. Return to shore before meeting.':s.vehicle==='truck'?'Choose Exit truck to step out before walking over.':s.travelling?'On the way. Conversation opens when you reach '+name(talkId)+'.':'Out of earshot. Walk over to speak in person.'));
       text($('scene-approach'),s.mode==='boat'?'Return to shore':s.vehicle==='truck'?'Open truck controls':'Walk to '+name(talkId));show($('scene-approach'),!near);
       // Dock immediately on arrival. Otherwise a newly enabled option can
       // move under a finger before the next periodic position update.
