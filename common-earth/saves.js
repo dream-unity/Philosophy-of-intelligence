@@ -106,6 +106,19 @@
     const locks=options.locks!==undefined?options.locks:window.navigator?.locks;
     let engine,id,unsubscribe,review=null,closed=false,lastSaveMessage='';
     const identity=options.idGenerator || uid;
+    const chronicle=window.EarthTimeMachine?.create();
+    let recordedOrigin=null,recordedWeek=0;
+    function observeClock(state,notice){
+      if(!chronicle||!state.dayClock||!state.sites.length)return;
+      const origin=state.dayClock.origin;
+      if(origin!==recordedOrigin){
+        recordedOrigin=origin;recordedWeek=state.week;
+        void chronicle.capture(id,state,'origin','First recorded moment');
+      }else if(!notice.external&&state.week!==recordedWeek){
+        recordedWeek=state.week;
+        void chronicle.capture(id,state,'week','Opening of week '+state.week);
+      }
+    }
     function metadata(s,slot) {
       if(slot===FIRST)return {id:FIRST,name:'First world',created:0};
       let blob=get(s,REGISTRY+slot);
@@ -208,12 +221,13 @@
       preserveUnsaved();
       if(unsubscribe)unsubscribe();
       if(engine)engine.destroy();
-      id=slot;engine=next;
+      id=slot;engine=next;recordedOrigin=null;recordedWeek=0;
       lastSaveMessage=status().message;
       unsubscribe=next.subscribe((state,notice)=>{
         if(!notice.external && target===durable && !next.saveIssue)access.write=true;
-        inform(state,notice);
+        observeClock(state,notice);inform(state,notice);
       });
+      observeClock(next.state,{external:true});
       put(session,TAB,id);
       if(target===durable)put(durable,LAST,id);
       review=null;
@@ -232,7 +246,13 @@
     }
     sim.subscribe=fn=>{subscribers.add(fn);return ()=>subscribers.delete(fn);};
     sim.perform=async(...args)=>{
-      const scope=engine,result=await scope.perform(...args);
+      const scope=engine,source=id,request=args[1];let before;
+      if(chronicle&&args[0]==='baseOrder'&&request?.action==='dispatch'&&scope.state.dayClock){
+        scope.sync();
+        before=chronicle.snapshot(scope.state,'order','Before '+(window.EarthMilitaryBase.orders[request.order]||'an expedition').toLowerCase());
+      }
+      const result=await scope.perform(...args);
+      if(result.ok&&before)await chronicle.write(source,before);
       return scope===engine?result:fail('The action belongs to the previously open world.');
     };
     function serial(fn) {
@@ -302,6 +322,32 @@
       });
     }
     function select(slot){return serial(()=>validId(slot)?activate(slot,true):fail('Unknown saved world.'));}
+    function timeAccess(siteId){
+      return !!window.EarthCommunityLife?.lookup(engine.state,siteId)?.militaryBase?.tech.includes('time');
+    }
+    function moments(){
+      return chronicle?.list(id,engine.state.dayClock?.origin)||Promise.resolve([]);
+    }
+    async function markMoment(siteId){
+      const scope=engine;scope.sync();
+      if(!chronicle||!timeAccess(siteId))return fail('Research a time machine at this base first.');
+      const saved=await chronicle.capture(id,scope.state,'manual','Player checkpoint');
+      return saved&&scope===engine?ok('This moment is recorded.'):fail('The checkpoint could not be recorded.');
+    }
+    function rewind(siteId,selected){
+      const scope=engine,source=id,origin=engine.state.dayClock?.origin;
+      return serial(async()=>{
+        if(scope!==engine||!chronicle)return fail('Reopen the time machine in this world.');
+        scope.sync();
+        if(scope.hasDiverged||scope.newerSaveText||!timeAccess(siteId))return fail('Open a current base with a working time machine.');
+        const payload=await chronicle.restore(source,selected,origin);
+        if(!payload||scope!==engine)return fail('The recorded moment changed. Choose it again.');
+        scope.sync();
+        if(scope.hasDiverged||scope.newerSaveText||scope.state.dayClock?.origin!==origin||!timeAccess(siteId))return fail('The source timeline changed. Review the base again.');
+        const result=register(current().name+' · week '+selected.week+' branch',payload);
+        return result.ok?ok('Opened a new timeline at week '+selected.week+' · '+selected.label+'. The original is in Saved worlds.',{id:result.id}):result;
+      });
+    }
     function exportWorld(){
       const meta=current();
       engine.sync();
@@ -344,7 +390,7 @@
       window.removeEventListener?.('storage',onStore);
     }
     sim.destroy=dispose;
-    const book={sim,list,current,status,create,copy,select,exportWorld,prepareImport,confirmImport,
+    const book={sim,list,current,status,create,copy,select,moments,markMoment,rewind,get temporaryMoments(){return chronicle?.temporary;},exportWorld,prepareImport,confirmImport,
       cancelImport(){review=null;},watch(fn){views.add(fn);return ()=>views.delete(fn);},
       mount(el,options){return mount(el,book,options);},dispose};
     return book;

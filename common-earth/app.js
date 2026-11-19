@@ -118,7 +118,8 @@
   const districtDesk=streetHud&&window.EarthDistrictDesk?.mount({sim,hud:streetHud,street:getStreet,
     enterStreet:()=>{if(view!=='street')setView('street',false);},redraw:redrawStreet,notify,inspectWork:openWorksite,
     openTownCentre,buildingAction:(kind,building,owner)=>{
-      if(kind==='leisure'){nightlife?.open(building.venue,building.siteId||sim.active()?.id);}
+      if(kind==='militaryBase')baseUI?.open(building.siteId||sim.active()?.id);
+      else if(kind==='leisure'){nightlife?.open(building.venue,building.siteId||sim.active()?.id);}
       else if(kind==='townCentre'){
         openTownCentre(sim.active()?.id);
       }else if(kind==='meet')streetHud.meetPerson(owner);
@@ -148,7 +149,9 @@
   $('gate-run')?.addEventListener('click',()=>getStreet()?.runFromWatch());
   $('gate-withdraw')?.addEventListener('click',()=>districtPanel?.gate('withdraw'));
   const nightlife=window.EarthNightlifeUI?.mount({sim,street:getStreet,enterStreet:()=>{if(view!=='street')setView('street',false);},worldChanged:()=>syncLiveClock(true),notify});
-  const townCentre=window.EarthTownCentreUI?.mount($('town-centre'),sim,presentResult);
+  const baseUI=window.EarthBaseUI?.mount({book,sim,street:getStreet,enterStreet:()=>{if(view!=='street')setView('street',false);},notify});
+  listen('scene-open-base','click',()=>baseUI?.open(sim.active()?.id));
+  const townCentre=window.EarthTownCentreUI?.mount($('town-centre'),sim,presentResult,id=>{$('town-centre').close();baseUI?.open(id);});
   function openTownCentre(siteId){
     const dialog=$('town-centre');
     if(!dialog||!townCentre)return;
@@ -846,7 +849,7 @@
         },
         onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
         onObservation:seen=>streetHud?.setWatch(seen),onTruckDoor:useStreetVehicleDoor,onTruckInteract:()=>streetHud?.openTool('truck'),
-        onBuilding:building=>{streetHud?.close(false);if(building.use==='leisure')nightlife?.open(building.venue);else districtDesk?.inspectBuilding(building);},
+        onBuilding:building=>{streetHud?.close(false);if(building.use==='militaryBase')baseUI?.open(sim.active()?.id);else if(building.use==='leisure')nightlife?.open(building.venue);else districtDesk?.inspectBuilding(building);},
         onTalkChoices:people=>streetHud?.openTalkChoices?.(people),
         onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},
         onInteract:interactAt,onHandcart:()=>sceneWork(),onChooseCrewTarget:()=>crewOrders?.openTargets(),onAssignWorksite:id=>crewOrders?.assign(id),onCancelCrewSelection:()=>crewOrders?.cancel(),onPlace:point=>placeBuilding(point,true),onHint:text=>put('street-hint',text),

@@ -274,6 +274,7 @@
       plots.push(p);
       radius=Math.max(radius,(Math.max(Math.abs(p.x-p.y),Math.abs(p.x+p.y-24))+4)*streetKilometres);
     }
+    add(root.EarthMilitaryBase?.place);
     for(const h of rows){
       add(h.houseSite||model?.homePoint(site,h.plot));
       if(h.shop)add(h.shopSite||model?.shopPoint(site,h.businessPlot));
@@ -946,6 +947,7 @@
     if(mode==='calendar'&&book.productionWeek===world.week-1)return;
     if(mode==='production')book.productionWeek=world.week;
     book.week=world.week;book.step++;
+    root.EarthMilitaryBase?.advance(world);
     const groups=new Set();let distant=0;
     for(const site of places(world)){
       // Historical globe saves can have hundreds of solitary districts which
@@ -1116,6 +1118,7 @@
         destination,remainingKm:(run.path.length-1)*cellSize*(1-f),cargo:{[run.good]:run.amount},kit:{},
         detail:'The receiving community agreed to send '+run.expected+' units in exchange. Delivery is due in week '+run.due+'.'});
     }
+    if(geo&&root.EarthMilitaryBase)visible.push(...root.EarthMilitaryBase.actors(world,geo));
     if(geo&&root.EarthBorderConflict)visible.push(...root.EarthBorderConflict.actors(world,geo));
     return visible;
   }

@@ -98,6 +98,7 @@
     if(req.action==='cancel'&&r.offer){delete r.offer;return {ok:true,message:'Peace talks closed. The communities are still at war.'};}
     if(req.action!=='accept'||!r.offer)return {ok:false,message:'The diplomatic situation has changed.'};
     r.state='peace';r.week=world.week;delete r.offer;
+    root.EarthMilitaryBase?.peace(world,from,to);
     for(const [s,other] of [[from,to],[to,from]]){
       const campaign=s.communityLife.border?.campaign;
       if(campaign?.against===other.id){
@@ -573,5 +574,5 @@
       int(c.index,0,c.path.length-1)&&['march','fight','return'].includes(c.phase)&&int(c.round,0,12)&&int(c.began)&&actor(c.attacker)&&
       (c.partner==null||actor(c.partner))&&(c.support==null||actor(c.support))&&(c.defender==null?c.phase!=='fight':actor(c.defender));
   }
-  root.EarthBorderConflict=Object.freeze({disposition,fightingSkill,force,profile,advance,actors,combatants,entry,streetEntry,streetStatus,leaveStreet,hostile,openingWars,diplomacy,relation,streetContact,hasPass,guardShift,homecoming,retire,valid});
+  root.EarthBorderConflict=Object.freeze({disposition,fightingSkill,force,profile,advance,actors,combatants,entry,streetEntry,streetStatus,leaveStreet,hostile,openingWars,declare,diplomacy,relation,streetContact,hasPass,guardShift,homecoming,retire,valid});
 })(globalThis);

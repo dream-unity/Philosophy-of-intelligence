@@ -252,7 +252,15 @@
     let count=0;
     for(const t of people){
       if(!inView(v,t.x,t.y,.03))continue;
-      count++;if(drawPerson?.(t))continue;
+      count++;
+      if(t.kind==='military'&&root.EarthBaseArt){
+        const p=v.screen(t.x,t.y),size=mini?4:limit(v.sx*.022,6,25);
+        if(t.phase==='engaged'){
+          g.beginPath();g.arc(p.x,p.y,size*.8,0,Math.PI*2);g.strokeStyle='#ec815b';g.lineWidth=2;g.stroke();
+        }
+        root.EarthBaseArt.marker(g,p.x,p.y,size,t.unitKind);continue;
+      }
+      if(drawPerson?.(t))continue;
       const p=v.screen(t.x,t.y),r=mini?1.9:limit(v.sx*.0035,2.5,8);
       if(t.phase==='fighting'){
         // Two opponents stand closer together than one pixel on the minimap.
@@ -294,6 +302,10 @@
       for(let i=0;i<=24;i+=6){
         for(const [a,b] of [[[i,0],[i,24]],[[0,i],[24,i]]]){const z=proj(...a),d=proj(...b);g.moveTo(z.x,z.y);g.lineTo(d.x,d.y);}
       }g.stroke();
+      if(root.EarthMilitaryBase){
+        const at=root.EarthMilitaryBase.place,pt=proj(at.x,at.y);
+        g.fillStyle='#526763';g.fillRect(pt.x-scale*1.5,pt.y-scale,scale*3,scale*2);
+      }
       const homes=[];
       for(const h of s.growth?.households||[]){
         const home=root.EarthDistrictGrowth?.homePoint?.(s,h.plot)||{x:1.7+h.plot%10*2.2,y:-1.9-Math.floor(h.plot/10)*1.75};

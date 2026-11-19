@@ -416,3 +416,103 @@ test('overnight games use six seats, saved guests and paired scores, and release
   delete market.communityLife.away[visitor.id];
   elapse(clock.half);assert.equal(life.guests(w,market,clock.read(w)).length,0);
 });
+
+test('bases commission and train units against the selected treasury, and reject duplicate or unfunded orders',()=>{
+  const {sim,w,ctx,market,save}=region(),home=sim.active(),base=ctx.EarthMilitaryBase;
+  const order=q=>sim.baseOrder({site:market.id,generation:market.foundingRevision||0,...q});
+  const own=[home.food,home.materials,home.funds];
+  market.materials=0;
+  assert.equal(order({action:'enlist',type:'scout'}).ok,false);
+  assert.equal(market.militaryBase,undefined);
+  market.materials=30;market.funds=30;
+  const funds=market.funds;
+  assert.ok(order({action:'research',type:'armour'}).ok);
+  const b=market.militaryBase;assert.equal(b.units[0].type,'tank');assert.equal(market.funds,funds-7);
+  assert.equal(order({action:'research',type:'armour'}).ok,false);
+  assert.ok(order({action:'enlist',type:'guard'}).ok);
+  assert.equal(order({action:'enlist',type:'jet'}).ok,false);
+  assert.ok(order({action:'train',id:b.units[1].id}).ok);
+  assert.equal(b.units[1].grade,1);
+  assert.equal(order({action:'enlist',type:'guard',version:1}).ok,false);
+  assert.deepEqual([home.food,home.materials,home.funds],own);
+  assert.equal(base.ready(w,market).length,2);save();
+});
+
+test('mixed base expeditions travel, fight the selected town, return to service, and obey a ceasefire',()=>{
+  const run=region(),{sim,w,ctx,market,save}=run,home=sim.active(),base=ctx.EarthMilitaryBase;
+  home.materials=40;home.funds=60;
+  const order=q=>sim.baseOrder({site:home.id,generation:home.foundingRevision||0,...q});
+  for(const type of ['flight','armour'])assert.ok(order({action:'research',type}).ok);
+  const ids=home.militaryBase.units.map(u=>u.id);
+  assert.ok(order({action:'dispatch',order:'attack',ids,target:market.id}).ok);
+  assert.equal(ctx.EarthBorderConflict.relation(w,home.id,market.id).state,'war');
+  assert.equal(order({action:'dispatch',order:'scout',ids,target:market.id}).ok,false);
+  assert.equal(base.ready(w,home).length,0);
+  assert.ok(ctx.EarthRegionalWorld.travellers(w,home).some(a=>a.kind==='military'&&a.destination===market.name));
+  const reopened=region(save());assert.equal(reopened.sim.active().militaryBase.missions.length,1);
+  for(let i=0;i<25&&home.militaryBase.missions.length;i++)run.production();
+  assert.ok(home.militaryBase.log.some(e=>e.text.includes('captured the military base')));
+  assert.equal(market.communityLife.border.occupiedBy,home.id);assert.equal(base.ready(w,home).length,2);
+  assert.ok(order({action:'dispatch',order:'attack',ids,target:market.id}).ok);
+  for(const action of ['negotiate','accept'])assert.ok(sim.diplomacy({home:home.id,target:market.id,action}).ok);
+  assert.equal(market.communityLife.border.occupiedBy,undefined);
+  assert.equal(home.militaryBase.missions[0].phase,'returning');run.production();save();
+});
+
+test('a reinforcement changes defence until recalled; a restarted destination releases deployed assets',()=>{
+  const run=region(),{w,sim,ctx,market,save}=run,s=sim.active(),base=ctx.EarthMilitaryBase;
+  const order=q=>sim.baseOrder({site:s.id,generation:s.foundingRevision||0,...q});
+  if(ctx.EarthBorderConflict.relation(w,s.id,market.id)?.state==='war'){
+    for(const action of ['negotiate','accept'])assert.ok(sim.diplomacy({home:s.id,target:market.id,action}).ok);
+  }
+  assert.ok(order({action:'enlist',type:'engineer'}).ok);
+  const ids=[s.militaryBase.units[0].id];
+  assert.ok(order({action:'dispatch',target:market.id,order:'assist',ids}).ok);
+  for(let i=0;i<20&&s.militaryBase.missions[0]?.phase!=='stationed';i++)run.production();
+  const mission=s.militaryBase.missions[0];assert.equal(mission.phase,'stationed');
+  const before=base.defence(w,market);
+  assert.ok(order({action:'recall',id:mission.id}).ok);assert.equal(before-base.defence(w,market),5);
+  assert.ok(sim.manageSite(market.id,'restart',market.foundingRevision||0).ok);
+  assert.equal(sim.active().militaryBase.missions.length,0);
+  assert.ok(ctx.CommonEarthSim.readSave(JSON.stringify(sim.state)));
+});
+
+test('a purchased time machine opens a historical branch while keeping the original expedition and stores recoverable',async()=>{
+  const {ctx,elapse}=region();
+  for(const name of ['time-machine','saves'])vm.runInContext(fs.readFileSync(path.join(directory,name+'.js'),'utf8'),ctx,{filename:name+'.js'});
+  const mem=new Map(),storage={get length(){return mem.size;},key:i=>[...mem.keys()][i],getItem:k=>mem.get(k)??null,setItem:(k,v)=>mem.set(k,v),removeItem:k=>mem.delete(k)};
+  const book=ctx.EarthSaves.open({storage,session:null}),sim=book.sim;
+  assert.ok(sim.found(place).ok);
+  const source=book.current().id,s=sim.active(),target=sim.state.communityLife.outposts[0].id;
+  const order=q=>sim.perform('baseOrder',{site:s.id,generation:s.foundingRevision||0,...q});
+  const first=(await book.moments()).find(m=>m.kind==='origin');assert.ok(first);
+  assert.equal((await book.rewind(s.id,first)).ok,false);
+  s.materials=30;s.funds=30;
+  assert.ok((await order({action:'research',type:'time'})).ok);assert.ok((await order({action:'enlist',type:'guard'})).ok);
+  const funds=s.funds;assert.ok((await book.markMoment(s.id)).ok);
+  assert.ok((await order({action:'dispatch',order:'attack',ids:[s.militaryBase.units[0].id],target})).ok);
+  elapse(150000);
+  const beforeWar=(await book.moments()).find(m=>m.kind==='order');
+  assert.ok((await book.rewind(s.id,beforeWar)).ok);assert.notEqual(book.current().id,source);
+  assert.equal(sim.active().militaryBase.missions.length,0);assert.equal(sim.active().funds,funds);
+  assert.equal(ctx.EarthDayClock.read(sim.state).label,beforeWar.label);
+  assert.ok((await order({action:'enlist',type:'scout'})).ok);
+  await book.select(source);assert.equal(sim.active().militaryBase.units.length,1);assert.equal(sim.active().militaryBase.missions.length,1);
+  book.dispose();
+});
+
+test('queued diplomacy and base orders recheck after a local production round while another player choice still invalidates them',async()=>{
+  const run=region(),{ctx}=run;
+  const cells=new Map(),storage={getItem:k=>cells.get(k)??null,setItem:(k,v)=>cells.set(k,v)};
+  const sim=ctx.CommonEarthSim.create({storage});assert.ok(sim.found(place).ok);
+  let acquire;
+  ctx.navigator={locks:{request:(key,fn)=>new Promise(resolve=>{acquire=()=>resolve(fn());})}};
+  const home=sim.active(),rival=sim.state.communityLife.outposts[0];
+  const order=()=>sim.perform('baseOrder',{site:home.id,generation:home.foundingRevision||0,action:'enlist',type:'guard'});
+  const pending=order();run.elapse(25000);assert.ok(sim.production(sim.state.productionSerial||0,()=>true).ok);acquire();
+  assert.ok((await pending).ok);assert.equal(home.militaryBase.units.length,1);
+  const stale=order();assert.ok(sim.setWorldPace(4).ok);acquire();assert.equal((await stale).ok,false);
+  const treaty=sim.perform('diplomacy',{home:home.id,target:rival.id,action:'declare'});
+  run.elapse(25000);assert.ok(sim.production(sim.state.productionSerial||0,()=>true).ok);acquire();
+  assert.ok((await treaty).ok);sim.destroy();
+});

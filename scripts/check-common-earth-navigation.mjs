@@ -96,12 +96,23 @@ const page='<!doctype html><meta charset="utf-8"><title>Common Earth navigation 
 function seedWorld(){
   const book=window.EarthSaves.open(),sim=book.sim;
   window.EarthSaves={...window.EarthSaves,open:()=>book};
+  const perform=sim.perform.bind(sim);let lastCommand;
+  sim.perform=(command,...args)=>{
+    const promise=perform(command,...args);
+    if(['diplomacy','baseOrder','manageSite','setWorldPace'].includes(command))lastCommand=promise;
+    return promise;
+  };
   const founded=sim.found({name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
   if(!founded.ok)throw Error(founded.message);
   window.addEventListener('load',async()=>{
     const result=document.getElementById('flow-result'),get=id=>document.getElementById(id);
     const found=(parent,label)=>Array.from(parent.querySelectorAll('button')).find(b=>b.textContent===label);
     const click=(button)=>{if(!button||button.disabled)throw Error('Expected an enabled control');button.click();};
+    const commit=async(button)=>{
+      lastCommand=null;click(button);
+      if(!lastCommand)throw Error('Expected a game command from '+button.textContent);
+      const result=await lastCommand;if(!result.ok)throw Error(result.message);
+    };
     const until=async(test,label)=>{
       for(let i=0;i<100;i++){if(test())return;await new Promise(done=>setTimeout(done,20));}
       throw Error(label);
@@ -110,8 +121,8 @@ function seedWorld(){
       const home=sim.active(),other=sim.state.communityLife.outposts[0],id=other.id;
       click(get('world-time'));
       const clock=get('world-time-dialog');
-      click(found(clock,'12×'));await until(()=>get('time-rate').textContent==='12×','World speed did not change');
-      click(found(clock,'1×'));await until(()=>get('time-rate').textContent==='1×','Normal speed did not resume');
+      await commit(found(clock,'12×'));await until(()=>get('time-rate').textContent==='12×','World speed did not change');
+      await commit(found(clock,'1×'));await until(()=>get('time-rate').textContent==='1×','Normal speed did not resume');
       click(get('clock-venues'));
       for(const [type,name] of [['Night club','Afterglow'],['Café','The Reading Room'],['Video game store','Pixel Exchange']]){
         click(found(get('venue-choices'),type));
@@ -123,20 +134,30 @@ function seedWorld(){
       const row=()=>Array.from(get('site-list').children).find(b=>b.querySelector('strong')?.textContent===other.name);
       click(found(row(),'Restart'));click(get('community-cancel'));
       if(other!==window.EarthCommunityLife.lookup(sim.state,id))throw Error('Cancelled restart changed the town');
-      click(found(row(),'Restart'));const gen=other.foundingRevision;click(get('community-apply'));
+      click(found(row(),'Restart'));const gen=other.foundingRevision;await commit(get('community-apply'));
       await until(()=>window.EarthCommunityLife.lookup(sim.state,id)?.foundingRevision!==gen,'Restart did not reset this town');
-      click(found(row(),'Delete'));click(get('community-apply'));
+      click(found(row(),'Delete'));await commit(get('community-apply'));
       await until(()=>!window.EarthCommunityLife.lookup(sim.state,id),'Delete did not remove this town');
       if(sim.active().id!==home.id)throw Error('Deleting a neighbour moved the player');
       click(get('society-town-centre'));
       const dialog=get('town-centre'),foreign=dialog.querySelector('section select'),rival=sim.state.communityLife.outposts.at(-1);
       foreign.value=rival.id;foreign.dispatchEvent(new Event('change'));
-      click(found(dialog,'Declare war'));
+      await commit(found(dialog,'Declare war'));
       await until(()=>found(dialog,'Negotiate peace'),'Declaration did not reach the Town Centre');
-      click(found(dialog,'Negotiate peace'));await until(()=>found(dialog,'Accept ceasefire terms'),'No terms offered');
-      click(found(dialog,'Accept ceasefire terms'));await until(()=>found(dialog,'Declare war'),'Peace did not take effect');
+      await commit(found(dialog,'Negotiate peace'));await until(()=>found(dialog,'Accept ceasefire terms'),'No terms offered');
+      await commit(found(dialog,'Accept ceasefire terms'));await until(()=>found(dialog,'Declare war'),'Peace did not take effect');
       if(window.EarthBorderConflict.relation(sim.state,home.id,rival.id)?.state!=='peace')throw Error('Treaty missing from world');
-      result.dataset.layout='pass';result.textContent='World clock, all three venues, six stations, community restart, deletion and diplomacy verified.';
+      click(found(dialog,'Open military base'));
+      const base=get('military-base'),towns=base.querySelector('select');
+      if(towns.options.length!==sim.state.sites.length+sim.state.communityLife.outposts.length)throw Error('Town base is missing');
+      await commit(found(base,'Enlist guard'));
+      await until(()=>sim.active().militaryBase?.units.some(u=>u.type==='guard'),'Recruit did not spawn at the base');
+      click(found(base,'Operations'));
+      const guard=base.querySelector('fieldset input');click(guard);
+      const target=base.querySelector('[aria-label="Mission destination"]'),otherName=target.selectedOptions[0].textContent;
+      await commit(found(base,'Attack '+otherName));
+      await until(()=>sim.active().militaryBase?.missions[0]?.target===target.value,'Base deployment did not launch');
+      result.dataset.layout='pass';result.textContent='World clock, venues, community management, diplomacy, base recruitment and deployment verified.';
     }catch(error){result.dataset.layout='fail';result.textContent=String(error.stack||error);}
   });
 }
@@ -149,7 +170,7 @@ if(process.argv.includes('--html')){
     function run(file,resultId){
       const output=execFileSync(process.env.CHROME_BIN||'google-chrome',[
         '--headless','--disable-dev-shm-usage','--disable-gpu','--no-first-run','--allow-file-access-from-files',
-        '--user-data-dir='+join(dir,'profile'),'--dump-dom','--virtual-time-budget=4500',pathToFileURL(file).href
+        '--user-data-dir='+join(dir,'profile'),'--dump-dom','--virtual-time-budget=15000',pathToFileURL(file).href
       ],{maxBuffer:8*1024*1024,timeout:60000,stdio:['ignore','pipe','pipe']}).toString();
       const report=output.match(new RegExp('<pre id="'+resultId+'"[^>]*>[\\s\\S]*?</pre>'))?.[0];
       if(!report?.includes('data-layout="pass"'))throw new Error(report||'The browser check did not complete.');
