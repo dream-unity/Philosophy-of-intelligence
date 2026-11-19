@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="planner.css?v=19c8b546877b">
   <link rel="stylesheet" href="saves.css?v=9298f1cd041a">
   <link rel="stylesheet" href="goals.css?v=a8c0252a8404">
-  <link rel="stylesheet" href="community-life.css?v=4948d3722bea">
+  <link rel="stylesheet" href="community-life.css?v=5e4f9fee4042">
   <script src="performance-meter.js?v=f99e82ee12c0" defer></script>
   <script src="community-life.js?v=1d5654baf50b" defer></script>
   <script src="district-path.js?v=d98146b63902" defer></script>
@@ -196,11 +196,6 @@
           </section>
           <div id="street-hud" class="street-hud" aria-label="Street scene controls">
             <button type="button" id="district-membership-hint" hidden></button>
-            <div id="street-gate" hidden>
-              <strong id="gate-status" role="status"></strong>
-              <button type="button" id="gate-resist">Fight back</button>
-              <button type="button" id="gate-withdraw">Withdraw</button>
-            </div>
             <div id="scene-speech" class="scene-speech" role="group" aria-label="Conversation on the street" hidden>
               <small id="scene-speech-kind" hidden>Outcome</small>
               <span id="scene-speech-words" aria-atomic="true"></span>
@@ -271,6 +266,11 @@
           </div>
         </div>
         <div id="street-navigation" hidden>
+          <div id="street-gate" hidden>
+            <strong id="gate-status" role="status"></strong>
+            <button type="button" id="gate-resist">Fight back</button>
+            <button type="button" id="gate-withdraw">Withdraw</button>
+          </div>
           <div class="region-shortcuts" role="group" aria-label="Regional navigation">
             <button type="button" id="region-mini" aria-label="Inspect a location on the regional minimap"><canvas aria-hidden="true"></canvas></button>
             <button type="button" id="region-open" aria-label="Open regional atlas" title="Regional atlas" aria-controls="region-view">Atlas</button>
