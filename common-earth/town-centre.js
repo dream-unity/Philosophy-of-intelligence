@@ -5,9 +5,9 @@
 (function(root){
   'use strict';
   const axes=['numeracy','music','communication','care','craft','stamina','organisation'];
-  const temperament=['curiosity','sociability','patience','initiative','adaptability'];
+  const temperament=['curiosity','sociability','patience','initiative','adaptability','aggression'];
   const references=['workEthic','reliability','reputation','learningRate','aggression'];
-  const fields=[...temperament,...references,...axes,...axes.map(a=>a+'Potential')];
+  const fields=[...temperament.filter(t=>!references.includes(t)),...references,...axes,...axes.map(a=>a+'Potential')];
   const label=key=>({workEthic:'Work ethic',learningRate:'Learning rate'}[key]||
     (key.endsWith('Potential')?key.slice(0,-9)+' potential':key).replace(/^./,c=>c.toUpperCase()));
   const origins=[
@@ -69,7 +69,7 @@
     const slot=sourceSlots[roll('occupation',0,sourceSlots.length-1)];
     const birth=root.EarthPersonas.birthProfile(source,slot);
     const p={...birth,birthCommunityName:place,traits:{},aptitudes:{},bounds:{}};
-    for(const t of temperament)p.traits[t]=selected(t,birth.traits[t]);
+    for(const t of temperament)p.traits[t]=selected(t,t==='aggression'?root.EarthBorderConflict.disposition(birth):birth.traits[t]);
     for(const a of axes){
       const band=criteria[a]||[0,100],ceiling=criteria[a+'Potential']||[0,100];
       const high=Math.min(band[1],ceiling[1]);
@@ -79,7 +79,7 @@
       p.aptitudes[a]=skill;p.bounds[a]={min:skill,max};
     }
     const dossier={origin:place,cohort,index,serviceYears:roll('years',1,18),savings:roll('savings',2,12)};
-    for(const k of references)dossier[k]=selected(k,roll(k,18,94));
+    for(const k of references)dossier[k]=k==='aggression'?p.traits.aggression:selected(k,roll(k,18,94));
     const recordCode=roll('register',0,19);
     dossier.civicRecord=recordCode===0?'Completed restitution on a recorded theft conviction.':
       recordCode<5?'No court register was supplied with this application.':'No conviction is recorded in the supplied district register.';
@@ -176,12 +176,17 @@
     }
     return invite(world,site,request);
   }
+  function newCottage(site){
+    const home=site.civicLand?.homes.at(-1),arrived=ledger(site)?.arrivals?.[0]?.week||0;
+    return home&&home.completed>arrived?home:null;
+  }
   function recruitmentPlan(world,site){
+    const cottage=newCottage(site);
     const vacancy=root.EarthCareers.catalog.find(job=>site.employers?.[job.id]?.open?.length);
     const precincts=site.city?.precincts||[],developed=precincts.some(p=>p.use==='homes');
     const broker=site.growth?.broker;
     const freight=broker?.parcel>0&&broker.cash>=3&&site.growth.history.some(round=>round.wages>0);
-    const reason=vacancy?vacancy.employer+' has an unfilled '+vacancy.label.toLowerCase()+' post.':
+    const reason=cottage?'Council cottage C'+(cottage.plot+1)+' opened with room for another resident.':vacancy?vacancy.employer+' has an unfilled '+vacancy.label.toLowerCase()+' post.':
       freight?'The freight exchange has '+broker.parcel+' uncollected parcels and '+broker.cash+' funds for delivery shifts.':
       developed?'The town has opened a residential precinct.':'';
     if(!reason)return {reason:'The employers reported no vacancy or funded freight backlog, and no new housing precinct requires settlers.'};
@@ -207,7 +212,7 @@
   }
   function tick(world,site){
     const age=world.week-site.founded;
-    if(!site.communityLife?.cluster||root.EarthCommunityLife.isHome(world,site)||age<8||age%8!==0||ledger(site)?.review?.week===world.week)return [];
+    if(!site.communityLife?.cluster||root.EarthCommunityLife.isHome(world,site)||(!newCottage(site)&&(age<8||age%8!==0))||ledger(site)?.review?.week===world.week)return [];
     const d=site.communityLife.townCentre||={serial:0,arrivals:[]};
     const {terms,reason}=recruitmentPlan(world,site);
     d.review={week:world.week,route:'deferred',reason};

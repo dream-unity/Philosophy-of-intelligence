@@ -7,6 +7,7 @@
   const funds=(site,id)=>site.purses?.people?.[id]?.balance||0;
   const local=(site,id)=>root.EarthCommunityLife.present(site,id);
   const profile=(site,id)=>root.EarthPersonas.profile(site,id);
+  const foundation=site=>root.EarthCouncilHomes?.foundation(site)??18;
   const homeKey=(kind,n)=>kind+'-'+n;
   const blocks=[[1,3],[3,2],[3,3]];
   const integer=(n,low,high)=>Number.isSafeInteger(n)&&n>=low&&n<=high;
@@ -26,17 +27,26 @@
       homes.push({key,label,places,point,owner,ownerName,available,occupants:[],anonymous:0,reserved:[]});
     }
     const streets=site.growth?.households||[],baseBlocks=root.EarthShifts?.district.homes||blocks;
-    for(let index=0;index<18;index++){
+    for(let index=0;index<foundation(site);index++){
       const h=streets[index],block=baseBlocks[index%baseBlocks.length];
       const point=h?root.EarthDistrictGrowth.homePoint(site,index):{x:block[0]*6+3,y:block[1]*6+4};
       const label=h?'Street home on lot '+(index+1):'Founding block '+(index%3+1)+' · place '+(Math.floor(index/3)+1);
       add(homeKey('founding',index),label,1,point);
     }
-    for(const h of streets.slice(18)){
+    for(const h of streets.slice(foundation(site))){
       const point=root.EarthDistrictGrowth.homePoint(site,h.plot);
       if(h.home>=2)add(homeKey('property',h.plot),h.name+'’s home on lot '+(h.plot+1),1,point,h.owner,h.name,false);
       else if(h.build&&!h.build.shop)works.push({label:'Home on lot '+(h.plot+1),places:1,point,detail:h.last});
     }
+    for(const house of site.civicLand?.homes||[]){
+      const point=root.EarthCouncilHomes.plot(house.plot);
+      add(homeKey('cottage',house.plot),'Council cottage C'+(house.plot+1),house.places,point);
+    }
+    const project=site.civicLand?.project;
+    if(project)works.push({label:'Council cottage C'+(project.plot+1),places:2,point:root.EarthCouncilHomes.plot(project.plot),
+      detail:project.reason+' '+(site.civicLand.delay||(project.workerName||'Awaiting a worker')+' · '+(project.phase==='delivery'?'delivering three reserved materials':project.built+' of 2 building shifts complete')+' · '+project.escrow+' funds in escrow.')});
+    if(!project&&site.civicLand?.delay)works.push({label:'Proposed council cottage',places:0,
+      point:root.EarthCouncilHomes.plot(site.civicLand.homes.length),detail:site.civicLand.delay});
     const precincts=site.city?.precincts||[];
     if(precincts.some(p=>p.use==='homes'||p.target==='homes')){
       const records=root.EarthCityModel.overview(site).records;
@@ -54,7 +64,7 @@
       else works.push({label,places:2,point,detail:(person?.name||'Owner')+' · '+house.stage+' of 3 stages complete'});
     }
     for(const h of site.growth?.households||[]){
-      if(!h.guestRoom||!h.access||root.EarthCommunityLife.residency(site,h.guestRoom)!=='member')continue;
+      if(!h.guestRoom||!h.access)continue;
       const point=root.EarthDistrictGrowth.homePoint(site,h.plot);
       add(homeKey('guest',h.plot),h.name+'’s guest room, lot '+(h.plot+1),1,point,null,h.name);
     }
@@ -107,7 +117,7 @@
       const g=site.communityLife?.people?.[r.id];
       return Boolean(g?.profile.externalHistory)&&g.since===world.week&&!prior.has(r.key);
     };
-    for(const h of (site.growth?.households||[]).slice(0,18)){
+    for(const h of (site.growth?.households||[]).slice(0,foundation(site))){
       const occupant=residents.get(h.owner);
       if(occupant&&!later(occupant))allocate(occupant,byKey.get(homeKey('founding',h.plot)));
     }
@@ -141,12 +151,12 @@
       anonymousMissing:unplaced,namedMissing,reservations,vacant:homes.reduce((n,h)=>n+remaining(h),0),
       open:homes.reduce((n,h)=>n+(h.available?remaining(h):0),0)};
   }
-  const frontage=(site,h)=>h.plot<18||h.home>=2?'home':'lot';
-  const additionalPlaces=site=>(site.growth?.households||[]).slice(18).filter(h=>h.home>=2).length;
+  const frontage=(site,h)=>h.plot<foundation(site)||h.home>=2?'home':'lot';
+  const additionalPlaces=site=>(site.growth?.households||[]).slice(foundation(site)).filter(h=>h.home>=2).length;
   function need(world,site){
     // Every one of the 18 founding places is a public right. Most towns do
     // not need a full private-rights calculation to rule out homelessness.
-    const headroom=18-site.population;
+    const headroom=foundation(site)-site.population;
     if(headroom>=0&&(site.housing?.reservations?.length||0)<=headroom){
       const people=site.communityLife?.people||{};
       if(!Object.values(people).some(g=>g.profile?.externalHistory&&g.since===world.week)||
@@ -367,6 +377,8 @@
     return site.housing?.shifts?.week===world.week&&site.housing.shifts.workers.includes(id)?'Building a courtyard under a funded housing contract':'';
   }
   function workHold(site,id){
+    const health=site.communityLife?.border?.health?.[id];
+    if(health?.condition==='injured'&&health.key===profile(site,id)?.identityKey)return 'Recovering from an injury before taking an ordinary shift';
     const hardship=site.housing?.hardship?.find(r=>r.id===id);
     return hardship&&local(site,id)&&profile(site,id)?.identityKey===hardship.key?'Seeking shelter before taking another ordinary shift':'';
   }
@@ -387,7 +399,7 @@
       return house&&house.ownerId===c.id&&house.stage>=1&&house.stage<3&&c.wages===3-house.stage&&c.materials===c.wages&&
         guest?.profile?.identityKey===c.key&&guest.status==='visitor';
     })||new Set(h.contracts.map(c=>c.plot)).size!==h.contracts.length))return false;
-    return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property)-\d{1,4})$/.test(r.home))&&
+    return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage)-\d{1,4})$/.test(r.home))&&
       list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&
       !h.hardship.some(r=>h.rights.some(a=>r.key===a.key));
   }

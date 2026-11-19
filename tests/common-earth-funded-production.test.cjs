@@ -24,7 +24,7 @@ function game(place=coastal,restored,clock=1000000){
     }};
 }
 const stocks=t=>({food:t.food,materials:t.materials,funds:t.funds});
-const wealth=t=>t.funds+(t.exchange?.till??8)+(t.growth.broker?.cash||0)+Object.values(t.purses?.people||{}).reduce((n,p)=>n+p.balance,0)+
+const wealth=t=>t.funds+(t.civicLand?.project?.escrow||0)+(t.exchange?.till??8)+(t.growth.broker?.cash||0)+Object.values(t.purses?.people||{}).reduce((n,p)=>n+p.balance,0)+
   t.growth.households.reduce((n,h)=>n+(h.businessFunds||0)+(h.order?h.order.dues+h.order.wage:0),0)+(t.growth.road?2:0);
 const net=(rows,account,good)=>rows.filter(r=>r.good===good).reduce((n,r)=>n+(r.to===account?r.amount:0)-(r.from===account?r.amount:0),0);
 const accountNames={funds:'Community treasury',materials:'Public building store',food:'Public pantry'};

@@ -137,11 +137,23 @@
         }
       }
       if(view){
+        const border=view.communityLife?.border;
+        if(border?.campaign){
+          const c=border.campaign;
+          line('Boundary war · '+c.attacker.name+' · '+c.phase+' · parcel '+c.cell+(c.defender?' · opposing resident '+c.defender.name:''));
+        }
+        if(border?.records?.length)line('Boundary record · '+border.records[0].text);
         line(view.era+' · '+view.population+' residents · '+view.food+' food · '+view.materials+' materials · '+view.funds+' public funds');
         if(event.kind==='town'&&w.communityLife){
           const entry=communityEntry(w,view);
           heading('Entry and local divisions');
           line(entry.character.type+'. '+entry.character.detail);
+          const watch=entry.character.border;
+          if(watch){
+            line('Aggression '+watch.score+'/100 · '+watch.militant+' of '+watch.count+' residents strongly favour force · '+watch.opposed+' strongly oppose it.');
+            line(watch.expansionist?watch.chair+' and the gate assembly authorise boundary expeditions by the watch.':watch.closed?
+              watch.chair+' and the gate assembly authorise the watch to confront uninvited entries.':watch.chair+' receives disputes under the current entry articles.');
+          }
           line(entry.rule.label+' · '+entry.rule.terms+' '+entry.host+' receives applications.');
           line(entry.history);
           if(entry.decision)line('Week '+entry.decision.week+' · '+entry.decision.host+' recorded the latest change in the entry articles.');
