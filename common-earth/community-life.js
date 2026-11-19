@@ -1104,6 +1104,7 @@
   }
   function permission(world,site,cmd,args=[]){
     const a=world.communityLife;if(!a||!site)return '';
+    if(cmd==='production')return '';
     if(a.journey&&!['communityLife','reset','workConstruction'].includes(cmd))return 'You are on the road. Open Towns to arrive or turn back.';
     if(cmd==='manageSite'){
       if(args[0]!==a.homeId)return 'This district governs itself. Only members can alter their home community.';

@@ -318,6 +318,7 @@
   function mount(canvas, options={}) {
     if (!canvas || !canvas.getContext) throw new TypeError('EarthStreet needs a canvas.');
     const spectator=options.spectator===true;
+    const thumbnail=spectator&&options.thumbnail===true;
     if(spectator){
       // A second camera can read the regional clock without acquiring any
       // of the interaction, freight receipt or construction callbacks.
@@ -3251,6 +3252,7 @@
       }
       dirty=true;schedule();
     }
+    function northCameraLimit(){return state.site?.growth?-5-3.5*Math.ceil(state.site.growth.households.length/10):-3;}
     function frameCrewTargets(){
       clearObservation();
       if(!selectedCrew.size||!works.size||!width||!height)return false;
@@ -3708,6 +3710,22 @@
       }
       HOMES.forEach((block,index)=>{const p=centre(block);addItem(p.x,p.y,blockDepth(p),()=>residence({...p,index}),buildingBounds);});
       for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item),buildingBounds);}
+      if(state.site.growth){
+        const g=state.site.growth;
+        for(const h of g.households){
+          const x=1.7+(h.plot%10)*2.2,y=-1.9-Math.floor(h.plot/10)*1.75;
+          if(h.plot<g.roads)rect(x-.17,y+.4,.34,Math.abs(y)-.4,.015,'#a69a83');
+          addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*(.36+.055*h.home)),buildingBounds);
+          if(h.shop){
+            const sx=1.7+(h.businessPlot%10)*2.2,sy=-2.1-(Math.ceil(g.households.length/10)+Math.floor(h.businessPlot/10))*1.75;
+            addItem(sx,sy,sx+sy+.3,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'market',0,...screen(sx,sy),unit*.36),buildingBounds);
+          }
+        }
+        if(g.vehicle){
+          const x=16.7,y=22.95;
+          addItem(x,y,x+y+.2,()=>drawTransport({x,y,dx:1,dy:0},g.vehicle===1?2:g.vehicle===2?0:1),vehicleBounds);
+        }
+      }
       for(const mark of landmarks)addItem(mark.x,mark.y,mark.x+mark.y+.30,()=>paintAchievement(mark),furnitureBounds);
       for(const job of works.values()){
         addItem(job.x,job.y,blockDepth(job),()=>worksiteArt(job));
@@ -4797,7 +4815,7 @@
     function keepUnderPointer(anchor,point){
       const after=world(point.x,point.y);
       centreX=clamp(centreX+anchor.x-after.x,-3,SIDE+3);
-      centreY=clamp(centreY+anchor.y-after.y,-3,state.mode==='boat'?seaLimit:SIDE+3);
+      centreY=clamp(centreY+anchor.y-after.y,northCameraLimit(),state.mode==='boat'?seaLimit:SIDE+3);
       cameraFollows=false;
     }
     function zoomBy(factor,point) {
@@ -5086,7 +5104,7 @@
     }
     function resize() {
       const bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;
-      const w=Math.round(bounds.width),h=Math.round(bounds.height),ratio=Math.min(typeof devicePixelRatio==='number'?devicePixelRatio:1,2,Math.sqrt(2200000/(w*h)));
+      const w=Math.round(bounds.width),h=Math.round(bounds.height),ratio=Math.min(thumbnail?1:2,typeof devicePixelRatio==='number'?devicePixelRatio:1,2,Math.sqrt(2200000/(w*h)));
       if(width===w&&height===h&&ratio===fullPixelRatio&&canvas.width>1)return;
       width=w;height=h;fullPixelRatio=ratio;slowFrameCount=0;
       const motionRatio=Math.max(1,Math.sqrt(1050000/(w*h)));
@@ -5176,7 +5194,7 @@
       if(moving()||!visible&&autonomousMotion()||(!reduced&&(dragging||pinch||visible&&(watchedTravel||castStarted!==null)))){schedule();return;}
       if(visible&&(!reduced||autonomousMotion()||shortMessage&&visualTime<messageUntil)){
         // The idle service van and pedestrians can run at 12 fps; an input wakes the next paint immediately.
-        if(typeof setTimeout==='function')idleTimer=setTimeout(()=>{idleTimer=0;schedule();},reduced?800:70);
+        if(typeof setTimeout==='function')idleTimer=setTimeout(()=>{idleTimer=0;schedule();},reduced?800:thumbnail?200:70);
         else schedule();
       }
     }
@@ -5197,7 +5215,7 @@
       Object.assign(miniCanvas.style,{width:'100%',height:'100%',position:'static',display:'block',pointerEvents:'none'});miniButton.appendChild(miniCanvas);
       canvas.parentElement.appendChild(miniButton);listen(miniButton,'click',toggleOverview);cleanups.push(()=>miniButton.remove());
     }
-    addMapControls();
+    if(!thumbnail)addMapControls();
     function restoreStreetSurface(){
       clearStamps();idleScene=null;terrainSnapshot=null;backdropGradient=null;miniTick=-1;dirty=true;
     }
@@ -5262,7 +5280,7 @@
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
       clearObservation(false);dragging.moved=true;cameraFollows=false;
       centreX=clamp(dragging.x-(dx/unit+dy/(unit*TILT))/2,-3,SIDE+3);
-      centreY=clamp(dragging.y-(dy/(unit*TILT)-dx/unit)/2,-3,state.mode==='boat'?seaLimit:SIDE+3);dirty=true;
+      centreY=clamp(dragging.y-(dy/(unit*TILT)-dx/unit)/2,northCameraLimit(),state.mode==='boat'?seaLimit:SIDE+3);dirty=true;
     });
     function endPointer(e) {
       if(!fingers.delete(e.pointerId))return;

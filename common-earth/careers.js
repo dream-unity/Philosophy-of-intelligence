@@ -155,6 +155,10 @@
     if(next!==old)m.skills[axis]=next;
     return next-old;
   }
+  function productionLesson(site,p,axis,week){
+    const m=ensure(site,p.id),raised=gain(p,m,axis,1);
+    if(raised){m.revision++;note(m,week,'Improved '+axis+' through paid community work.');}
+  }
   function projectLesson(world,site,mentorId,learnerId,axis,commit=false,amount=2){
     const tutor=profile(site,mentorId),pupil=profile(site,learnerId),week=world.week;
     if(!tutor||!pupil||mentorId===learnerId||!axes.includes(axis))return {ok:false,reason:'Find a mentor and a learner with a shared subject.'};
@@ -1014,5 +1018,5 @@
     }
     return true;
   }
-  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,routes,rationale,waitingAlternative,placement,attendPlacement,canCoverPost,requiresCredential,handoverDuty,departureForMove,openings,serviceWeeks,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
+  root.EarthCareers=Object.freeze({productionLesson,axes:Object.freeze(axes),catalog,fits:canFit,routes,rationale,waitingAlternative,placement,attendPlacement,canCoverPost,requiresCredential,handoverDuty,departureForMove,openings,serviceWeeks,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
 })(typeof window==='undefined'?globalThis:window);

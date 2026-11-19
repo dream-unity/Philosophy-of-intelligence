@@ -599,6 +599,16 @@
     store.serial=Math.min(max,store.serial+1);site.resourceLedger=store;
     return {amount,stored};
   }
+  function collectDistrictLot(world,site,food){
+    const store=ledger(world,site);
+    const candidates=localIds(site).filter(id=>Boolean(foodKey(id))===food&&standing(site,id,world.week)>0&&
+      !closed(site,id,world.week)&&(store.bins[id]||0)<lotLimit);
+    const id=candidates.sort((a,b)=>(store.bins[a]||0)-(store.bins[b]||0)||standing(site,b,world.week)-standing(site,a,world.week))[0];
+    if(!id)return '';
+    removeAtSource(site,store,id,world.week,1);addStock(store,'bins',id,1,world.week);
+    store.serial++;site.resourceLedger=store;
+    return resources[id].name;
+  }
   function quickGather(world,site,owner,commit=false){
     if(root.EarthCommunityLife?.residency&&root.EarthCommunityLife.residency(site,owner)!=='member')return null;
     let crop=projectCrop(world,site,owner);
@@ -664,5 +674,5 @@
       (f.stripped==null||living(k)&&integer(f.stripped,1,f.week))&&
       (f.pressureUntil==null||living(k)&&integer(f.pressureUntil,1,Math.min(max,f.week+6))));
   }
-  root.EarthResources=Object.freeze({survey,environment,view,run,tick,makerInput,ageStores,expiringPublicLot,crewOpportunity,crewWork,projectCrop,quickGather,projectShipment,harvestForProject,useForPantry,valid,isResource:id=>own(resources,id),isCrop:id=>id==='fish'||own(resources,id)&&foodKey(id),isAction:action=>actions.has(action)});
+  root.EarthResources=Object.freeze({collectDistrictLot,survey,environment,view,run,tick,makerInput,ageStores,expiringPublicLot,crewOpportunity,crewWork,projectCrop,quickGather,projectShipment,harvestForProject,useForPantry,valid,isResource:id=>own(resources,id),isCrop:id=>id==='fish'||own(resources,id)&&foodKey(id),isAction:action=>actions.has(action)});
 })(typeof window==='undefined'?globalThis:window);

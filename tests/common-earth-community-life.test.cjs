@@ -564,3 +564,30 @@ test('all three unseen town councils can finance each era and old regions acquir
   assert(towns.slice(0,3).every(t=>t.era==='Stewardship'));
   saved();
 });
+
+test('visible production settles all four settlements while the calendar waits, with saved earnings, deeds and real purchases',async()=>{
+  const {sim,context,home,saved,wait}=fixture(undefined,{name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true});
+  const opening=sim.state.week,here=sim.state.activeId;
+  assert.equal((await sim.perform('production',0,()=>false)).ok,false);
+  for(let round=0;round<65;round++){
+    wait(24001);
+    assert.ok((await sim.perform('production',round,()=>true)).ok);
+    assert.equal((await sim.perform('production',round,()=>true)).ok,false);
+    assert.equal((await sim.perform('production',round+1,()=>true)).ok,false);
+    saved();
+  }
+  assert.equal(sim.state.activeId,here);assert.equal(sim.state.week,opening);
+  const restored=fixture(saved());
+  for(const town of [restored.home,...restored.sim.state.communityLife.outposts]){
+    const g=town.growth;
+    assert.equal(g.round,65);
+    assert.equal(new Set(g.households.map(h=>h.owner)).size,g.households.length);
+    assert.equal(new Set(g.households.filter(h=>h.shop).map(h=>h.businessPlot)).size,g.households.filter(h=>h.shop).length);
+    assert(g.sales>0);assert(g.roads>0);assert(g.custom);assert(g.vehicle>0);
+    assert(g.households.some(h=>h.home>1));assert(g.households.some(h=>h.shop));
+    assert(Object.values(town.purses.people).some(a=>a.productionIncome>0&&a.balance>0));
+    assert(Object.values(town.careers).some(c=>Object.keys(c.skills).length>0));
+    assert(town.tech.length>0);
+  }
+  assert(context.EarthDistrictGrowth.members(home).every(p=>context.EarthDistrictGrowth.goal(home,p).points>0));
+});

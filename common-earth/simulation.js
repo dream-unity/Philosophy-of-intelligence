@@ -373,6 +373,7 @@
     if(root.EarthAutonomy && !root.EarthAutonomy.valid(site,world.week))return false;
     if(root.EarthProvisions && !root.EarthProvisions.valid(site,world.week))return false;
     if(root.EarthMarket && !root.EarthMarket.valid(site,world.week))return false;
+    if(root.EarthDistrictGrowth&&!root.EarthDistrictGrowth.valid(site,world.week))return false;
     if(root.EarthPurses && !root.EarthPurses.valid(site,world.week))return false;
     if(root.EarthFleet && !root.EarthFleet.valid(site,world.week))return false;
     if(root.EarthCivicInitiatives && !root.EarthCivicInitiatives.valid(site,world.week))return false;
@@ -490,7 +491,7 @@
     try{
       if(!recordLike(saved)||saved.version!==VERSION||!integer(saved.week,1)||!integer(saved.effort,0,MAX_EFFORT)||!Array.isArray(saved.sites))return null;
       const world={...blank(),...saved},ids=new Set(world.sites.map(site=>site?.id));
-      if(['actionRevision','workRevision','constructionThrough'].some(key=>world[key]!=null && !integer(world[key])))return null;
+      if(['actionRevision','workRevision','constructionThrough','productionSerial','lastProductionAt'].some(key=>world[key]!=null && !integer(world[key])))return null;
       if(ids.size!==world.sites.length || !world.sites.every(site=>validSite(site,world,ids)))return null;
       if(!unique(world.sites.flatMap(s=>s.residents.map(p=>p.id))))return null;
       if(!Array.isArray(world.routes)||!world.routes.every(route=>validRoute(route,world,ids))||!unique(world.routes.map(r=>r.id)))return null;
@@ -613,7 +614,11 @@
         }
         for(const after of updated.values())if(after.construction?.length)sites.add(after.id);
         notify(true,{construction:true,completed,sites:[...sites]});
-      }else{actionGeneration++;notify(true);}
+      }else{
+        const productionOnly=world.week===prior.week&&world.activeId===prior.activeId&&
+          (world.productionSerial||0)>(prior.productionSerial||0)&&world.actionRevision-prior.actionRevision===world.productionSerial-(prior.productionSerial||0);
+        actionGeneration++;notify(true,{productionOnly});
+      }
       return true;
     }
     const conflict='Another tab updated this world. Review the current state and try again.';
@@ -1003,11 +1008,13 @@
     }
     function developRegionalCouncil(turn,site){
       const next=TECH[site.tech.length];
-      if(!next||!turn.communityLife||root.EarthCommunityLife.isHome(turn,site)||site.civicInitiatives?.active?.kind==='research')return '';
+      const progress=root.EarthDistrictGrowth?.report(site);
+      const byGrowth=progress&&progress.target>0&&progress.points>=progress.target;
+      if(!next||!turn.communityLife||!byGrowth&&root.EarthCommunityLife.isHome(turn,site)||site.civicInitiatives?.active?.kind==='research')return '';
       const level=site.tech.length,goal=[1,3,6][level];
       const floor=root.EarthCivicInitiatives?.reserve(turn,site)||{food:Math.ceil(site.population/5)*2,funds:6,materials:3};
       const held=root.EarthNeighbourErrands?.heldGoods?.(site,turn.week)||{};
-      if(site.stats.resolved<goal||site.trust<45+level*5||site.food<floor.food+(held.food||0)||
+      if(!byGrowth&&site.stats.resolved<goal||site.trust<45+level*5||site.food<floor.food+(held.food||0)||
         site.funds<next.funds+floor.funds+(held.funds||0)||site.materials<next.materials+floor.materials+(held.materials||0))return '';
       site.funds-=next.funds;site.materials-=next.materials;
       return adoptResearch(site,next);
@@ -1696,6 +1703,11 @@
         const delivered=(person,why,calendar,by)=>fulfilled(site,person,why,calendar,by);
         for(const note of root.EarthNeighbourErrands?.closeDeliveries?.(site,turn,delivered)||[])event(note,site,'promises');
       }
+      // Manual and fast-forwarded calendar weeks can settle an unattended
+      // shift too. A week already serviced by the visible clock is not paid twice.
+      if(turn.productionSerial&&root.EarthDistrictGrowth){
+        for(const site of districts)if(site.growth?.history[0]?.week!==turn.week)root.EarthDistrictGrowth.settle(turn,site);
+      }
       turn.week++;turn.effort=MAX_EFFORT;
       // A chair may cast the outgoing week's last ballot using the resources then in hand.
       const closingVotes=new Map();
@@ -2245,7 +2257,19 @@
       if(!result.ok)return result;
       const saved=complete(result.message,site);return saved.ok?result:saved;
     }
+    function runProduction(expected,eligible){
+      if(!current()||!world.communityLife||!root.EarthDistrictGrowth||typeof eligible!=='function'||!eligible()||
+        expected!==(world.productionSerial||0)||Date.now()-(world.lastProductionAt||0)<root.EarthDistrictGrowth.period)return reject('Production is already current.');
+      for(const site of [...world.sites,...world.communityLife.outposts]){
+        root.EarthDistrictGrowth.settle(world,site);
+        const era=developRegionalCouncil(world,site);
+        if(era)site.growth.history[0].events.push(era);
+      }
+      world.productionSerial=expected+1;world.lastProductionAt=Date.now();
+      return complete('District production settled.',current(),false);
+    }
     const commands={
+      production:guarded(runProduction),
       neighbourAppointment:guarded((quote,guard)=>{
         const site=current(),proof=typeof guard==='function'?guard():guard;
         const result=root.EarthNeighbourErrands?.finishAt?.(site,world,quote,proof,

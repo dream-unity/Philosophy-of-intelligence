@@ -276,7 +276,7 @@
       const defaultKey=add(own.site,own.id,'Current perspective');
       add(originalHome,'steward','Original resident');
       for(const p of people){
-        if(p.id==='steward')continue;
+        if(p.id==='steward'&&site.id===originalHome.id)continue;
         add(site,p.id);
       }
       if(!choices.has(accountChoice))accountChoice=defaultKey;
@@ -285,8 +285,13 @@
       options(field,[...choices].map(([key,val])=>[key,val.label]),accountChoice);
       field.addEventListener('change',()=>{accountChoice=field.value;ledgerStamp='';drawLedger();$('ledger-person')?.focus({preventScroll:true});});picker.append(field);
       const balance=town.purses?.people?.[id],goods=root.EarthResidentShops?.view(world,town,p,false);
-      const status=el('p',town.name+' · '+funds(balance?.balance||0)+' available · '+funds(balance?.earned||0)+' earned in stock-check wages.');
+      const status=el('p',town.name+' · '+funds(balance?.balance||0)+' available · '+funds(balance?.earned||0)+' from stock checks · '+funds(balance?.productionIncome||0)+' from production and road work.');
       ledgerBody.append(picker,status);
+      if(root.EarthDistrictGrowth){
+        const {h,points,rank,next}=root.EarthDistrictGrowth.goal(town,p);
+        ledgerBody.append(el('h3','Individual growth · Level '+(rank+1)),el('p',points+' / '+next+' contribution points · '+(next-points)+' to the next skill milestone.'));
+        if(h)ledgerBody.append(el('p','Residential deed '+(h.plot+1)+' · home grade '+h.home+(h.shop?' · commercial lot '+(h.businessPlot+1)+' · '+root.EarthResidentShops.products[h.shop].name+' shop · '+h.stock+' in stock':'')+(h.extension?' · '+h.extension:'')+' · personal stores '+(h.pantry||0)+' food, '+(h.supplies||0)+' materials. '+h.last));
+      }
       const possessions=el('div',null,'ledger-possessions');
       for(const item of goods?.items||[])possessions.append(el('span',item.name+' × '+item.count));
       if(goods?.ownShop)possessions.append(el('span','Business · '+goods.ownShop));
@@ -306,6 +311,19 @@
         site.exchange?.serial,site.purses?.serial,own.site.id,own.id,accountChoice].join('/');
       if(ledgerStamp===stamp)return;
       const prior=ledgerBody.scrollTop;ledgerStamp=stamp;ledgerBody.replaceChildren();
+      if(ledgerPage==='stock'&&root.EarthDistrictGrowth){
+        const g=root.EarthDistrictGrowth.report(site),last=site.growth?.history?.[0],signed=n=>(n>=0?'+':'')+n;
+        ledgerBody.append(el('h3',site.era+' · Community growth'),el('p',g.target?(g.points+' / '+g.target+' growth points toward '+g.next+' · '+Math.max(0,g.target-g.points)+' remaining.'):'Stewardship attained · '+g.points+' lifetime growth points.'));
+        if(g.target){
+          if(world.communityLife&&site.id!==world.communityLife.homeId)ledgerBody.append(el('p','Council route · '+site.stats.resolved+' / '+[1,3,6][site.tech.length]+' completed decisions can also qualify this town.'));
+          const tier=site.tech.length,floor=root.EarthCivicInitiatives.reserve(world,site),held=root.EarthNeighbourErrands?.heldGoods?.(site,world.week)||{};
+          ledgerBody.append(el('p','For the next era · trust '+site.trust+'/'+(45+tier*5)+' · food '+site.food+'/'+(floor.food+(held.food||0))+' · materials '+site.materials+'/'+(floor.materials+(held.materials||0)+[2,3,3][tier])+' · treasury '+site.funds+'/'+(floor.funds+(held.funds||0)+[5,7,9][tier])+'.'));
+        }
+        ledgerBody.append(el('p',g.roads+' completed access roads · '+g.vehicle+' · '+g.custom+(site.growth?.institution?' · '+site.growth.institution:'')));
+        ledgerBody.append(el('p','Members hold their home deed. Businesses buy a free commercial lot for 5 funds and 2 materials. Roads open more lots.'));
+        if(last)for(const round of site.growth.history.slice(0,3))ledgerBody.append(el('p','Round '+round.round+' · paid '+round.wages+' in order income · pantry '+signed(round.food)+' · materials '+signed(round.materials)+' · treasury '+signed(round.funds)+'. '+round.events.join(' ')));
+        else ledgerBody.append(el('p','Households settle paid orders every 24 seconds of visible play, including during personal activities.'));
+      }
       text('district-ledger-title',ledgerPage==='stock'?site.name+' · Resource inventory':'Personal accounts');
       if(ledgerPage==='stock')stockList(site,!watchedId&&(!world.communityLife||root.EarthCommunityLife.isHome(world,site)));
       else accounts(site);
@@ -371,6 +389,8 @@
         }
         entry(isMe?'My goals':'Goals',()=>hud.selectPurpose(p.id),'goals');
         row.append(title,activity);if(aim)row.append(el('small','Aim · '+aim));
+        const production=root.EarthDistrictGrowth?.goal(site,p)?.h;
+        if(production)row.append(el('small','Last contribution · '+production.last));
         row.append(links);peopleRows.push({id:p.id,activity});return row;
       });
       host.replaceChildren(...articles);refreshActivities();compareResidents();

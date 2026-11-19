@@ -216,6 +216,18 @@
     const view=clockState(),key=[view.siteId,view.generation,view.actorId,view.week,view.hold,streetHud?.active()==='live'].join('/');
     if(force||key!==clockSignal){clockSignal=key;liveClock.update({force,discard});}
   }
+  // The household economy has a separate clock so fishing, a pending vote or a
+  // street journey cannot freeze production in every other town.
+  let productionPending=false;
+  const producing=()=>!document.hidden&&!!sim.active();
+  setInterval(async()=>{
+    if(productionPending||!producing()||Date.now()-(sim.state.lastProductionAt||0)<window.EarthDistrictGrowth.period)return;
+    productionPending=true;
+    try{
+      const result=await sim.perform('production',sim.state.productionSerial||0,producing);
+      if(result.ok){if(view==='street')street?.setSite(sim.active());render();}
+    }finally{productionPending=false;}
+  },4000);
   function liveReview(){
     const site=sim.active(),scene=getStreet()?.getState();if(!site||!scene)return null;
     const hold=clockState().hold;if(!hold)return null;
@@ -2203,6 +2215,7 @@
       return;
     }
     if(!notice.external)return;
+    if(notice.productionOnly){if(view==='street')street?.setSite(sim.active());render();return;}
     arrivalVersion++;
     street?.discardTerrain();
     crewOrders?.cancel();
