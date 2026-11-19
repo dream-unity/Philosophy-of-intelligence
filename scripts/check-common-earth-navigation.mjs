@@ -127,6 +127,9 @@ async function timeStreet(){
     ws.onmessage=e=>{const m=JSON.parse(e.data),p=pending.get(m.id);if(p){pending.delete(m.id);if(m.error)p.reject(Error(m.error.message));else p.resolve(m.result);}};
     const send=(method,params={})=>new Promise((resolve,reject)=>{pending.set(++id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
     const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.text);return r.result.value;};
+    await send('Emulation.setCPUThrottlingRate',{rate:4});
+    await send('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:2,mobile:true});
+    await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
     for(const version of ['before','current','current']){
       await send('Page.navigate',{url:'http://127.0.0.1:'+server.address().port+'/'+version+'/tablet-benchmark.html'});
       let ready=false;
