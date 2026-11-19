@@ -5839,7 +5839,8 @@
       width=w;height=h;fullPixelRatio=ratio;slowFrameCount=0;
       const motionRatio=regionEnabled()?Math.max(.76,Math.sqrt(950000/(w*h))):Math.max(1,Math.sqrt(1050000/(w*h)));
       motionPixelRatio=terrainLayer&&motionRatio<ratio*.9 ? motionRatio : ratio;
-      const lower=Math.max(regionEnabled()?.65:1,Math.sqrt(600000/(w*h)));
+      // On a DPR-one tablet, a full-size backing store can still miss several frames.
+      const lower=regionEnabled()?Math.max(.68,Math.min(ratio*.80,Math.sqrt(600000/(w*h)))):Math.max(1,Math.sqrt(600000/(w*h)));
       limitedPixelRatio=terrainLayer&&lower<motionPixelRatio*.9 ? lower : motionPixelRatio;
       sizeForeground(ratio);
       if(state.placed||overviewZoom!==null)zoom=fitZoom();
@@ -5995,7 +5996,7 @@
     }
     listen(canvas,'pointerdown',e=>{
       if(covered||!state.site||e.button!==0||fingers.has(e.pointerId))return;
-      if(!fingers.size&&e.pointerType==='touch')meter?.begin(canvas);
+      if(!fingers.size&&e.pointerType==='touch'){meter?.begin(canvas);previousGestureAt=frameTimer?.now()||0;}
       state.hover=null;
       if(e.cancelable)e.preventDefault();
       if(e.pointerType!=='touch')canvas.focus({preventScroll:true});
@@ -6006,14 +6007,14 @@
         dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,slop:e.pointerType==='touch'?12:5};
       }else if(fingers.size===2)beginPinch();
     });
-    let lastGesturePaint=0;
+    let lastGesturePaint=0,previousGestureAt=0;
     function paintDelayedGesture(){
-      // If input arrives while the browser is withholding animation callbacks, redraw
-      // the camera at the new finger position. Movement and work keep their normal
-      // clocks. The pending animation frame still runs; expensive scenes wait for it.
-      if(!frameTimer||!visible||covered||!lastFrame||paintAverage>10)return;
-      const now=frameTimer.now();
-      if(now-lastFrame<65||now-lastGesturePaint<20)return;
+      if(!frameTimer||!visible||covered||!lastFrame)return;
+      const now=frameTimer.now(),gap=now-previousGestureAt;
+      previousGestureAt=now;
+      // Input and animation callbacks can arrive in the same batch after a long
+      // pause. Waiting for the next batch then adds an entire missed frame.
+      if(now-lastGesturePaint<32||gap<90&&(now-lastFrame<65||paintAverage>12))return;
       lastGesturePaint=now;
       draw();
       const cost=frameTimer.now()-now;
