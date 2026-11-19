@@ -803,7 +803,8 @@
         if(place){
           lot.uses[place.id]=1;lot.charter=place.id;
           saveRoute(r,site.id,place.id,trip.path,trip.name,world.week);
-          delete r.trips[site.id];(r.rest||={})[site.id]=world.regionalWorld.step;
+          if(trip.injury)root.EarthBorderConflict?.rest(world,site,{...trip.crew[0],key:root.EarthPersonas.profile(site,trip.personId).identityKey,injury:trip.injury});
+    delete r.trips[site.id];(r.rest||={})[site.id]=world.regionalWorld.step;
           record(world,r,site,trip.crew.map(c=>c.name).join(' and ')+' reached '+id+' and founded '+place.name+'. Their households and skills moved with them. '+site.name+' has '+site.population+' people on its remaining rota.',trip);
           return;
         }
@@ -849,9 +850,11 @@
     if(trip.kit.materials)result+=' '+trip.kit.materials+' unused materials were returned.';
     record(world,r,site,trip.name+' returned to '+site.name+'. The crew used '+trip.kit.food+' food on the journey.'+result+
       (paid?' '+paid+' reserved fund'+(paid===1?'':'s')+' paid the crew.':''),trip);
+    if(trip.injury)root.EarthBorderConflict?.rest(world,site,{...trip.crew[0],key:root.EarthPersonas.profile(site,trip.personId).identityKey,injury:trip.injury});
     delete r.trips[site.id];(r.rest||={})[site.id]=world.regionalWorld.step;
   }
   function moveTrip(world,geo,r,town,trip,makeSite){
+    if(trip.challenge&&root.EarthBorderConflict.resolveChallenge(world,geo,r,town,trip,homeward))return;
     if(trip.phase==='waiting'){homeward(geo,r,town,trip);return;}
     if(trip.phase==='working'){finishAt(world,geo,r,town,trip,makeSite);return;}
     const byWater=!!canSail(town,r),pace=town.site.growth?.vehicle>=1?5:3;
@@ -882,7 +885,10 @@
       const remaining=cost-(trip.legWork||0),used=Math.min(time,remaining);
       trip.legWork=(trip.legWork||0)+used;time-=used;
       if(trip.legWork+.00001<cost)break;
-      trip.legWork=0;trip.index++;if(current!==next)witness(world,geo,r,town,trip,next);
+      trip.legWork=0;trip.index++;if(current!==next){
+        witness(world,geo,r,town,trip,next);
+        if(root.EarthBorderConflict?.challenge(world,geo,r,town,trip,next))return;
+      }
     }
     if(trip.index!==trip.path.length-1)return;
     if(trip.phase==='returning'){finishHome(world,r,town,trip);return;}
@@ -1020,6 +1026,11 @@
     const geo=geography(world,site),r=geo&&regionFor(world,geo);
     const visible=Object.values(r?.trips||{}).flatMap(trip=>{
       const town=townFor(geo,trip.siteId);if(!town)return [];
+      if(trip.challenge){
+        const c=trip.challenge,at=point(c.cell),units=[[trip.crew[0],trip.siteId,-1],[c.guard,c.host,1]];
+        return units.map(([unit,siteId,side])=>({...at,x:at.x+side*.006,dx:-side,dy:0,mode:'walk',kind:'border',phase:'fighting',
+          personId:unit.id,name:unit.name,siteId,activity:trip.activity,destination:trip.destination,detail:trip.detail,remainingKm:0,kit:{},cargo:{}}));
+      }
       const {x,y,dx,dy}=fieldPosition(world,geo,r,town,trip);
       return trip.crew.map((crew,i)=>({x:x+.024*i,y:y+.014*i,name:crew.name,personId:crew.id,siteId:trip.siteId,
         destination:trip.destination,activity:trip.activity,detail:trip.detail,remainingKm:(trip.path.length-1-trip.index)*cellSize,
@@ -1158,6 +1169,7 @@
           !t.crew.every(p=>object(p)&&text(p.id)&&text(p.name)&&site.communityLife?.away?.[p.id]==='regional-field')||
           !object(t.kit)||!Object.keys(costs[t.kind]).every(k=>integer(t.kit[k],0,costs[t.kind][k]))||
           !object(t.cargo)||!['food','materials'].every(k=>integer(t.cargo[k],0,4))||
+          (t.challenge||t.injury!=null)&&!root.EarthBorderConflict?.challengeValid(world,geography(world,site),t)||
           t.legWork!=null&&(!Number.isFinite(t.legWork)||t.legWork<0||t.legWork>4.8))return false;
       }
     }

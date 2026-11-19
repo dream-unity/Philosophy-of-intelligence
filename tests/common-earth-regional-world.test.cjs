@@ -417,3 +417,23 @@ test('a territorial expedition reserves its people and wages, survives reopening
   assert.ok(!f.region.border);assert.equal(lot.occupation.holder,attacker.id);
   assert.ok(!life.census(f.w,defender,true).ids.includes(clash.id));f.save();
 });
+
+test('a sponsor changes what happens to the same named foreign surveyor at a hosted boundary',()=>{
+  const f=game(),{ctx,w,geo,home}=f,life=ctx.EarthCommunityLife,clash=ctx.EarthBorderConflict;
+  const origin=geo.towns.find(t=>t.site.id===home.id),host=geo.towns.find(t=>life.entryRule(t.site)==='hosted');
+  const id=life.fieldCandidates(home,w).find(id=>id!=='driver'),person=ctx.EarthPersonas.profile(home,id);
+  const cell=Math.round(host.x*2)+','+Math.round(host.y*2);
+  const trip={kind:'survey',phase:'outbound',crew:[{id,name:person.name}],personId:id,siteId:home.id,
+    target:cell,path:[cell],index:0,kit:{funds:1,food:1,materials:0},cargo:{food:0,materials:0}};
+  const region={contacts:{},trips:{[home.id]:trip}};
+  home.communityLife.away[id]='regional-field';
+  assert.ok(clash.challenge(w,geo,region,origin,trip,cell));
+  assert.equal(host.site.communityLife.away[trip.challenge.guard.id],'border-duty');
+  const guard=trip.challenge.guard.id,trust=life.personalAccess(w,host.site,person).score;
+  const chair=life.hostFor(host.site);
+  life.recordReception(w,host.site,home,person,'shift',chair);
+  assert.ok(life.personalAccess(w,host.site,person).score>trust);
+  assert.ok(clash.resolveChallenge(w,geo,region,origin,trip,()=>assert.fail('Host accepted this entry.')));
+  assert.equal(trip.challenge,undefined);assert.equal(host.site.communityLife.away[guard],undefined);
+  assert.equal(clash.challenge(w,geo,region,origin,trip,cell),false);
+});

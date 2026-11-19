@@ -118,6 +118,57 @@
       Number.isSafeInteger(g.week)&&g.week>=1&&g.week<=w.week&&Number.isSafeInteger(g.rounds)&&g.rounds>=0&&g.rounds<3&&
       g.guard&&typeof g.guard.name==='string'&&isUnit(entries(s).away[g.guard.id])&&profile(s,g.guard.id)?.identityKey===g.guard.key;
   }
+  function challenge(w,geo,r,home,trip,cell){
+    if(trip.phase!=='outbound'||trip.kind==='parley'||trip.crew.length!==1)return false;
+    const at=point(cell);
+    const gate=geo.towns.find(t=>t!==home&&Math.abs(t.x-at.x)<.56&&Math.abs(t.y-at.y)<.56&&
+      Math.hypot(t.x-at.x,t.y-at.y)<.56&&life().entryRule(t.site)==='hosted');
+    if(!gate)return false;
+    const host=gate.site,origin=home.site,guest=profile(origin,trip.personId);
+    const pact=r.contacts[[host.id,origin.id].sort().join('/')];
+    if(!guest||pact&&['joint','passage'].includes(pact.terms)||hasPass(w,host,guest,origin))return false;
+    const guard=volunteer(w,host,true,life().hostFor(host).id);
+    if(!guard||life().aggression(host,guard)<65)return false;
+    const watch=reservePerson(host,guard);
+    trip.challenge={host:host.id,cell,guard:watch,rounds:0};
+    trip.activity=watch.name+' is confronting '+guest.name+' at the boundary';
+    trip.detail='The patrol stopped this unauthorised '+trip.kind+' expedition before it could finish its work.';
+    witness(w,host,origin,guest,'breach',guard);
+    log(w,host,trip.activity+'.');return true;
+  }
+  function resolveChallenge(w,geo,r,home,trip,retreat){
+    const c=trip.challenge,host=town(geo,c.host)?.site,origin=home.site,visitor=profile(origin,trip.personId);
+    if(!host||!visitor)return false;
+    const watch=c.guard;
+    const leave=()=>{
+      release(host,watch);rest(w,host,watch);delete trip.challenge;retreat(geo,r,home,trip);
+    };
+    if(life().entryRule(host)!=='hosted'||hasPass(w,host,visitor,origin)){release(host,watch);delete trip.challenge;return true;}
+    c.rounds++;
+    const defies=life().aggression(origin,visitor)>=60||trip.kind==='build'&&visitor.traits.initiative>=65;
+    if(!defies){
+      trip.detail=visitor.name+' withdrew from the gate after '+watch.name+' struck them. The crew is returning with its original kit.';
+      trip.injury=4;log(w,origin,trip.detail);leave();return true;
+    }
+    watch.injury+=3;trip.injury=(trip.injury||0)+4;
+    trip.activity=visitor.name+' and '+watch.name+' are exchanging punches at the boundary';
+    if(c.rounds<3){log(w,host,trip.activity+'.');return true;}
+    if(watch.resolve>=78&&loss(w,origin,{id:visitor.id,key:visitor.identityKey,name:visitor.name},'Fatal injuries after an uninvited entry into '+host.name+'.')){
+      // Seized supplies and the unpaid wage stay at the location of the clash.
+      for(const good of ['food','materials','funds'])host[good]+=(trip.kit[good]||0)+(trip.cargo[good]||0);
+      log(w,host,watch.name+' held the boundary. '+visitor.name+' died and the patrol secured the expedition’s remaining supplies.');
+      release(host,watch);rest(w,host,watch);delete r.trips[origin.id];(r.rest||={})[origin.id]=w.regionalWorld.step;
+    }else{log(w,origin,visitor.name+' withdrew injured from '+host.name+'.');leave();}
+    return true;
+  }
+  function challengeValid(w,geo,trip){
+    if(trip.injury!=null&&(!Number.isInteger(trip.injury)||trip.injury<0||trip.injury>12))return false;
+    const c=trip.challenge;if(!c)return true;
+    const host=town(geo,c.host)?.site,u=c.guard;
+    return !!(host&&host.id!==trip.siteId&&trip.phase==='outbound'&&trip.crew.length===1&&c.cell===trip.path[trip.index]&&
+      Number.isInteger(c.rounds)&&c.rounds>=0&&c.rounds<3&&u&&isUnit(entries(host).away[u.id])&&profile(host,u.id)?.identityKey===u.key&&
+      typeof u.name==='string'&&Number.isInteger(u.resolve)&&u.resolve>=0&&u.resolve<=100&&u.injury===c.rounds*3);
+  }
   function consider(w,geo,r,attacker,hooks){
     const s=attacker.site,step=w.regionalWorld.step;
     if(s.population<5||life().entryRule(s)!=='hosted'||s.funds<3||s.food<4+Math.ceil(s.population/5))return;
@@ -271,5 +322,5 @@
       c.cell===c.route.at(-1)&&Array.isArray(c.costs)&&c.costs.length===c.route.length&&c.costs[0]===0&&c.costs.slice(1).every(n=>Number.isFinite(n)&&n>0&&n<=5)&&
       int(c.index,0,c.route.length-1)&&Number.isFinite(c.credit)&&c.credit>=0&&c.credit<=5&&int(c.started,1,step)&&int(c.rounds,0,4)&&int(c.food,0,3)&&c.wages===2);
   }
-  root.EarthBorderConflict=Object.freeze({advance,visible,valid,loss,intercept,endWatch,hasPass,watchValid});
+  root.EarthBorderConflict=Object.freeze({advance,visible,valid,loss,rest,intercept,endWatch,hasPass,watchValid,challenge,resolveChallenge,challengeValid});
 })(typeof window==='undefined'?globalThis:window);
