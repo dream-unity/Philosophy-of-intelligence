@@ -2,7 +2,7 @@
    journey and proposal buttons can issue a command to the simulation. */
 (function(root){
   'use strict';
-  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,contextChanged}){
+  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,openTownCentre,contextChanged}){
     const doc=root.document,id=key=>doc.getElementById(key),host=id('region-inspector');
     if(!host)return null;
     const detail=id('region-point-detail'),toggle=id('region-inspect-point');
@@ -89,6 +89,7 @@
           else if(p.externalHistory)line('Recruitment assessment · '+p.externalHistory.learningRate+'/100 learning rate.');
           else line('No current course attendance to judge learning pace.');
           if(career?.history?.length)line('Week '+career.history[0].week+' · '+career.history[0].text);
+          line('Current aggression '+root.EarthBorderConflict.force(view,p)+'/100'+(p.externalHistory?' · wider Earth reference '+p.externalHistory.aggression+'/100.':'.'));
           heading('Reliability and local testimony');
           if(p.externalHistory)line(p.externalHistory.origin+' reference · '+p.externalHistory.reliability+'/100 reliability and '+p.externalHistory.reputation+'/100 reputation. '+p.externalHistory.serviceYears+' years of work. '+p.externalHistory.record);
           const record=root.EarthCommunityLife.personalAccess(w,view,p);
@@ -127,7 +128,7 @@
           if(event.use==='market'){localAction('Visit the exchange','market');localAction('Open the Town Centre','townCentre');}
           if(event.use==='project')localAction('Visit this project','project');
           if(event.use==='market'||event.use==='project')localAction('See available jobs','work');
-        }
+        }else if(event.use==='market'&&openTownCentre)action('Inspect the Town Centre',()=>openTownCentre(view.id));
       }else if(event.kind==='asset'){
         const fleet=view&&event.assetId==='truck'&&root.EarthFleet?.assignment?.(w,view);
         line(typeof event.activity==='string'?event.activity:event.activity?.label);
@@ -137,6 +138,15 @@
         }
       }
       if(view){
+        if(event.kind==='town'&&openTownCentre)action('Inspect the Town Centre',()=>openTownCentre(view.id));
+        const march=geo?.towns.find(t=>{
+          const c=t.site.communityLife?.border?.campaign;
+          return c&&(t.site.id===view.id||c.against===view.id);
+        });
+        if(march)action('Observe the expedition',()=>{
+          const party=root.EarthBorderConflict.actors(w,geo).find(a=>a.siteId===march.site.id);
+          if(party){clear();street()?.inspectRegion?.(party.x,party.y,{zoom:1.5,picked:true});}
+        });
         const border=view.communityLife?.border;
         if(border?.campaign){
           const c=border.campaign;

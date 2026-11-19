@@ -325,6 +325,7 @@ test('an agreement opens precisely the witnessed parcel and survives a later mee
 
 test('an ungoverned district finances, finishes and occupies the same courtyard on and off camera',()=>{
   const f=game(),town=f.w.communityLife.outposts[1];
+  town.communityLife.foundingPlaces=18;
   Object.assign(town,{population:19,food:80,funds:80,materials:80});
   const opening=f.save();
   function run(observe){
@@ -346,6 +347,15 @@ test('an ungoverned district finances, finishes and occupies the same courtyard 
         capacityBefore=city.housingCapacity(town);
         assert.equal(job.paid.funds,7);assert.equal(job.paid.materials,4);
         assert.equal(town.city.precincts[plot].use,'open');
+        // Give the quote the same binding labour shortage in both timelines.
+        for(const signer of agreement.votes.filter(v=>v.stance==='support')){
+          const p=f.ctx.EarthPersonas.profile(town,signer.personId);
+          if(p.id==='steward')continue;
+          const newId=f.ctx.EarthCommunityLife.guestSlot(f.home,p,town.id,p.id,'member',f.w.week);
+          assert.ok(newId);town.communityLife.away[p.id]=f.home.id;
+          if(town.communityLife.people[p.id])town.communityLife.people[p.id].status='former';
+          town.population--;f.home.population++;
+        }
       }
       if(agreement?.works?.relief?.length)relief=true;
       if(plot===null||town.city.precincts[plot].use!=='homes')continue;
