@@ -72,8 +72,7 @@ body.street-expanded[data-map-view="street"] .scene-tools #street-open-actions {
 #scene-work #personal-work,#scene-life .character-lives { margin:0; border:0; background:transparent; }
 #scene-work #personal-work summary,#scene-life .character-lives > summary { display:none; }
 #scene-work .personal-work-body,#scene-life .life-body { padding:0; }
-#scene-open-live { flex-direction:column; row-gap:1px; }
-#scene-live-badge { font:600 10px/1 var(--mono,monospace); color:#c8dfd0; }
+.calendar-activities { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
 @container street (max-width:595px) {
   .street-stage-heading { max-width:calc(100% - 251px); }
 }

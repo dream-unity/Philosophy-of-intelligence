@@ -71,7 +71,7 @@
   <link rel="stylesheet" href="interdependence.css?v=7267ea86bac5">
   <script src="interdependence.js?v=ab414228947f" defer></script>
   <script src="life-panel.js?v=d695360b9219" defer></script>
-  <link rel="stylesheet" href="street-hud.css?v=54bcbbc9740c">
+  <link rel="stylesheet" href="street-hud.css?v=b4f759406f4a">
   <link rel="stylesheet" href="waterfront-ui.css?v=3a3d46c5584a">
   <link rel="stylesheet" href="market.css?v=aa3e99f33f6a">
   <script src="truck-panel.js?v=cf1036762750" defer></script>
@@ -79,13 +79,13 @@
   <script src="market-panel.js?v=1a333027e746" defer></script>
   <script src="live-weeks.js?v=d35bcaf1f17d" defer></script>
   <script src="community-effects.js?v=55ce1197edc0" defer></script>
-  <script src="street-hud.js?v=e6bccf3c0478" defer></script>
+  <script src="street-hud.js?v=e50c80180d8a" defer></script>
   <script src="forecast-view.js?v=9dbb031ce7ce" defer></script>
   <link rel="stylesheet" href="district-desk.css?v=607b94bd1693">
   <script src="region-settlement.js?v=1064e9f91a80" defer></script>
   <script src="region-map.js?v=68f48cd1dfc8" defer></script>
   <script src="district-desk.js?v=efd68bba0dc4" defer></script>
-  <script src="app.js?v=c11e749c9b76" defer></script>
+  <script src="app.js?v=0268e6122507" defer></script>
 </head>
 <body>
   <a class="skip" href="#play">Skip to game</a>
@@ -180,7 +180,7 @@
               <button type="button" id="scene-open-people" data-scene-open="people" aria-controls="scene-card" aria-expanded="false">People</button>
               <button type="button" id="scene-open-neighbours" data-scene-open="neighbours" aria-controls="scene-card" aria-expanded="false">Towns</button>
               <button type="button" id="scene-open-district" data-scene-open="district" aria-controls="scene-card" aria-expanded="false">Workplaces</button>
-              <button type="button" id="scene-open-live" data-scene-open="live" aria-controls="scene-card" aria-expanded="false"><span>Calendar</span><small id="scene-live-badge">Manual</small></button>
+              <button type="button" id="scene-open-live" data-scene-open="live" aria-controls="scene-card" aria-expanded="false">Calendar</button>
             </nav>
             <div class="scene-strip">
               <button type="button" id="scene-open-goals" data-scene-open="goals" aria-controls="scene-card" aria-expanded="false"><small>Town goals</small><span id="scene-goal-summary">Community needs</span></button>
@@ -230,7 +230,15 @@
                 <section id="scene-neighbours" data-scene-pane="neighbours" hidden></section>
                 <section id="scene-fishing" data-scene-pane="fishing" hidden></section>
                 <section id="scene-live" data-scene-pane="live" hidden>
-                  <p>Let every community move through one shared week for each two minutes of visible, idle Street play. You can see a neighbour or sit on a bench while the clock runs.</p>
+                  <h4>Activities</h4>
+                  <div class="calendar-activities" role="group" aria-label="Calendar activities">
+                    <button type="button" data-scene-open="talk">Conversation</button>
+                    <button type="button" data-scene-open="person">Personal goals</button>
+                    <button type="button" id="calendar-work" hidden>Personal work</button>
+                    <button type="button" id="calendar-study" hidden>Work and study</button>
+                    <button type="button" id="calendar-fishing" data-scene-open="fishing" hidden>Fishing</button>
+                  </div>
+                  <h4>Live weeks</h4>
                   <strong id="scene-live-next"></strong><p id="scene-live-status" role="status"></p>
                   <button type="button" id="scene-live-review" hidden>Review the pending decision</button>
                   <button type="button" id="scene-live-switch" aria-pressed="false">Start live weeks</button>

@@ -243,7 +243,7 @@
       for(const b of openers)b.setAttribute('aria-expanded',String(b.dataset.sceneOpen===(id==='goals'&&goalId?'person':id)));
       for(const p of panes)p.hidden=p.dataset.scenePane!==id;
       card.hidden=false;clearInvitation();show($('scene-notice'),false);
-      text($('scene-title'),({people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',original:'Original life',live:'Live weeks'})[id]);
+      text($('scene-title'),({people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',original:'Original life',live:'Calendar'})[id]);
       render(true);tick();changed?.();if(focus)$('scene-title')?.focus({preventScroll:true});return true;
     }
     function openTalk(ref){
@@ -894,6 +894,7 @@
       show($('scene-open-fishing'),!!state.waterfront&&toolbox.has('fishing'));
       show($('scene-open-truck'),toolbox.has('truck'));
       if(pane==='talk')updateContact();
+      if(pane==='live')toolbox.get('live')?.onScene?.(state);
       if(pane==='fishing')toolbox.get('fishing')?.onScene?.(state);
       if(pane==='truck')toolbox.get('truck')?.onScene?.(state);
     }

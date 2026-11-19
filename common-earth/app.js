@@ -205,7 +205,7 @@
       local.mode==='boat'?'Return to shore.':local.mode==='drive'?'Park the vehicle and return to walking.':
       local.travelling?'Wait for the current journey to finish.':
       site.pursuits?.ticket?'Finish or release the active personal job.':
-      site.handline?'Land the current handline catch.':
+      local.waterfront&&site.handline?'Reel in the line or choose another activity.':
       site.fleet?.custody?.actor===local.actor?'Return the checked-out co-op truck.':
       $('actions-panel')?.contains(document.activeElement)&&['build','work','research','council','routes'].includes(group)?'Return from the current community decision to the street.':decisionHold);
     return {siteId:site?.id,generation:site?.foundingRevision||0,actorId:local?.actor||window.EarthAgency?.actorId(site),
@@ -232,7 +232,6 @@
     const site=sim.active(),scene=getStreet()?.getState();if(!site||!scene)return null;
     const hold=clockState().hold;if(!hold)return null;
     if(site.pursuits?.ticket)return {label:'Review personal work',run:()=>sceneWork()};
-    if(site.handline||scene.mode==='boat')return {label:'Open waterfront controls',run:()=>streetHud.openTool('fishing')};
     if(site.fleet?.custody?.actor===scene.actor||scene.vehicle==='truck')return {label:'Review truck assignment',run:()=>streetHud.openTool('truck')};
     if(site.purses?.tickets?.[scene.actor]){
       return {label:'Review your paid stock check',run:()=>{
@@ -277,9 +276,6 @@
       [/truck|dispatch/,'Dispatch'],[/stores|exchange/,'Trading'],[/stock check/,'Stock check'],[/job|work/,'Working'],[/council|vote/,'Council due'],
       [/promise/,'Promise due'],[/shift/,'Shared day'],[/booking|cooperative/,'Booking due'],[/offer|study|course|planning/,'Planning']];
     const label=state.hold?labels.find(([pattern])=>pattern.test(state.hold))?.[1]||'Waiting':duration;
-    put('scene-live-badge',state.enabled?label:state.started?'Paused':'Manual');show('scene-live-badge',true);
-    const opener=$('scene-open-live'),title=state.enabled?status+' Week '+state.nextWeek+' · '+duration:'Start or pause the shared game clock';
-    if(opener&&opener.title!==title)opener.title=title;
     const observerClock=$('observer-clock');
     if(observerClock){
       const action=state.enabled?'Pause live weeks':state.started?'Resume live weeks':'Start live weeks';
@@ -300,7 +296,15 @@
   if(streetHud&&window.EarthLiveWeeks&&sim.liveWeekHold&&$('scene-live-switch')){
     liveClock=window.EarthLiveWeeks.create({read:clockState,advance:commitLiveWeek,paint:paintLiveClock,
       detail:()=>streetHud.active()==='live',notice:result=>{if(result?.ok)redrawStreet();if(result?.message)streetHud.notify(result.message);}});
-    streetHud.registerTool('live',{render:()=>{syncLiveClock(true);refreshLiveReview();}});
+    function calendarActivities(scene){
+      const site=sim.active(),member=site&&(!sim.state.communityLife||window.EarthCommunityLife.isHome(sim.state,site));
+      show('calendar-work',!!(member&&personalWork));
+      show('calendar-study',!!(member&&lifePanel));
+      show('calendar-fishing',!!(member&&waterfrontUI&&scene?.waterfront&&window.CommonEarthSim.waterfront(site)));
+    }
+    streetHud.registerTool('live',{render:scene=>{calendarActivities(scene);syncLiveClock(true);refreshLiveReview();},onScene:calendarActivities});
+    listen('calendar-work','click',()=>sceneWork());
+    listen('calendar-study','click',()=>{if(streetHud.openTool('life'))lifePanel.open();});
     listen('scene-live-review','click',()=>liveReview()?.run());
     listen('scene-hearing-switch','click',async()=>{
       const site=sim.active();if(!site)return;

@@ -442,3 +442,33 @@ test('the original strip opens its own street pane even while playing the founde
   assert.equal(g.id('scene-title').textContent,'Original life');assert.equal(opened,1);
   g.ui.invalidate();g.sim.destroy();
 });
+
+test('Calendar lists activities inside the panel and offers fishing only on a playable local waterfront',()=>{
+  const {ui,doc,sim,id,w}=fixture();
+  const app=fs.readFileSync(path.join(game,'app.js'),'utf8');
+  const start=app.indexOf('    function calendarActivities(scene)'),end=app.indexOf("    streetHud.registerTool('live'",start);
+  const town={lat:0,lon:18,water:false},world={communityLife:{}};
+  let member=true;
+  const activities=vm.runInNewContext(app.slice(start,end)+'\ncalendarActivities',{
+    sim:{active:()=>town,state:world},window:{CommonEarthSim:w.CommonEarthSim,EarthCommunityLife:{isHome:()=>member}},
+    personalWork:{},lifePanel:{},waterfrontUI:{},show:(key,visible)=>{id(key).hidden=!visible;}
+  });
+  const calendar=id('scene-live'),fishing=id('calendar-fishing');
+  assert.ok(calendar.querySelector('[data-scene-open="talk"]'));
+  assert.ok(calendar.querySelector('[data-scene-open="person"]'));
+  assert.equal(calendar.querySelector('#calendar-fishing'),fishing);
+  assert.equal(id('scene-open-live').children.length,0);
+  ui.registerTool('live',{render:activities,onScene:activities});
+  ui.registerTool('fishing',{render(){}});
+  id('scene-open-live').fire('click');
+  assert.equal(id('scene-title').textContent,'Calendar');
+  assert.ok(fishing.hidden);assert.equal(id('calendar-work').hidden,false);assert.equal(id('calendar-study').hidden,false);
+  for(const setting of [{coastal:true},{lakeShore:'Local lake'},{water:true}]){
+    Object.assign(town,{coastal:false,lakeShore:'',water:false},setting);ui.scene({waterfront:true});
+    assert.equal(fishing.hidden,false);
+  }
+  fishing.fire('click');assert.equal(ui.active(),'fishing');
+  id('scene-open-live').fire('click');ui.scene({waterfront:false});assert.ok(fishing.hidden);
+  member=false;ui.scene({waterfront:true});assert.ok(fishing.hidden);
+  sim.destroy();
+});
