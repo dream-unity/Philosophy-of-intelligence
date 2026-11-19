@@ -115,3 +115,6 @@ body[data-observing-town] :is(#settlement-status,#planning-details,#goal-details
 .atlas-more-streets { grid-column:1/-1; }
 .atlas-more-streets summary { color:#f0dda9; padding:6px; cursor:pointer; }
 .atlas-more-streets > div { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),1fr)); gap:8px; max-height:280px; overflow-y:auto; }
+
+#observer-clock { display:none; }
+body[data-observing-town] #observer-clock { display:inline-flex; align-items:center; }

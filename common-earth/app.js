@@ -204,6 +204,7 @@
     const key=[site?.id,site?.foundingRevision,state.week,state.actionRevision,sim.saveIssue].join('/');
     if(decisionKey!==key){decisionKey=key;decisionHold=sim.liveWeekHold();}
     const paneReasons={talk:'Finish the conversation.',stores:'Close the stores and exchange.',life:'Close character planning.',
+      original:'Finish reviewing your original character’s commitments.',precinct:'Finish reviewing the neighbourhood project.',
       work:'Close personal work.',truck:'Close co-op dispatch.',fishing:'Close the fishing controls.'};
     const hold=document.hidden?'Return to this browser tab.':!local?'Return to Street view.':
       document.body.hasAttribute('data-sheet-open')?'Close the open game sheet.':
@@ -274,6 +275,12 @@
     put('scene-live-badge',state.enabled?label:state.started?'Paused':'Manual');show('scene-live-badge',true);
     const opener=$('scene-open-live'),title=state.enabled?status+' Week '+state.nextWeek+' · '+duration:'Start or pause the shared game clock';
     if(opener&&opener.title!==title)opener.title=title;
+    const observerClock=$('observer-clock');
+    if(observerClock){
+      const action=state.enabled?'Pause live weeks':state.started?'Resume live weeks':'Start live weeks';
+      put('observer-clock',action+(state.enabled&&state.hold?' · '+label:''));
+      observerClock.title=status;observerClock.setAttribute('aria-pressed',String(state.enabled));
+    }
     if(state.hold||streetHud.active()==='live')refreshLiveReview();
   }
   async function commitLiveWeek(quote,guard){
@@ -296,10 +303,12 @@
       if(result.ok){render();syncLiveClock(true);}
       streetHud.notify(result.message);
     });
-    listen('scene-live-switch','click',()=>{
+    function toggleSharedClock(){
       if(liveClock.enabled())liveClock.pause();else liveClock.start();
       clockPreference(liveClock.enabled());rememberStreetSoon();
-    });
+    }
+    listen('scene-live-switch','click',toggleSharedClock);
+    listen('observer-clock','click',()=>{if(districtDesk?.observing())toggleSharedClock();});
     document.addEventListener('visibilitychange',()=>syncLiveClock(true,!document.hidden));
     document.addEventListener('earthsheetchange',()=>syncLiveClock());
     document.addEventListener('focusin',()=>syncLiveClock());
