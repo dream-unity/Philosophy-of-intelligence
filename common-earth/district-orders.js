@@ -23,6 +23,8 @@
   }
   function commitment(world,site,p,appointments){
     if(!member(site,p.id))return 'Away from this district';
+    const blocked=root.EarthHousing?.reason(site,p.id)||root.EarthBorders?.workBlock(world,site,p.id);
+    if(blocked)return blocked;
     if(root.EarthPractice?.reserved?.(site,p.id,world.week))return 'Keeping a booked practice session';
     if(site.purses?.tickets?.[p.id])return 'A stock check is already booked';
     if(site.shift?.residentId===p.id||site.shift&&p.id===(site.agency?.actor||'steward'))return 'Working an accompanied shift';

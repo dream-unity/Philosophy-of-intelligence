@@ -2,7 +2,7 @@
    journey and proposal buttons can issue a command to the simulation. */
 (function(root){
   'use strict';
-  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,contextChanged}){
+  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,townCentre,contextChanged}){
     const doc=root.document,id=key=>doc.getElementById(key),host=id('region-inspector');
     if(!host)return null;
     const detail=id('region-point-detail'),toggle=id('region-inspect-point');
@@ -101,6 +101,10 @@
       }
       if(view){
         line(view.era+' · '+view.population+' residents · '+view.food+' food · '+view.materials+' materials · '+view.funds+' public funds');
+        if(townCentre&&view.housing){
+          action('Town Centre',()=>townCentre(view,event.use==='townCentre'?'recruitment':'housing'));
+          action('Entry and reputation',()=>townCentre(view,'reception'));
+        }
         action('Development ledger',()=>ledger(view,event.personId));
         if(view.id!==local.id)action('Plan a visit',()=>{clear();returnStreet();travel(view.id);});
       }else if(read){

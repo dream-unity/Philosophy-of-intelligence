@@ -216,7 +216,7 @@
         for(const turn of [2.35,-2.35])g.lineTo(p.x+Math.cos(angle+turn)*r*1.2,p.y+Math.sin(angle+turn)*r*1.2);
         g.closePath();
       }else{g.beginPath();g.arc(p.x,p.y,r,0,7);}
-      g.fillStyle=t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
+      g.fillStyle=t.kind==='border'?'#ed8270':t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
       if(!mini&&v.sx>90){g.fillStyle='#343d35';g.fillRect(p.x-r*.5,p.y+r*.7,r,r);}
     }
     return count;
@@ -227,7 +227,7 @@
     if(small){
       const r=limit(2.1+Math.sqrt((s.growth?.households?.length||s.population||1))*.26,2,5);
       g.strokeStyle='#3d5850';g.lineWidth=1;g.fillStyle='#e6c891';g.beginPath();g.moveTo(p.x,p.y-r);g.lineTo(p.x+r,p.y);g.lineTo(p.x,p.y+r);g.lineTo(p.x-r,p.y);g.closePath();g.fill();g.stroke();
-      if(s.construction?.length||s.growth?.households.some(h=>h.build)){
+      if(s.housing?.project||s.construction?.length||s.growth?.households.some(h=>h.build)){
         g.strokeStyle='#594938';g.lineWidth=2.6;g.beginPath();g.moveTo(p.x+r-1,p.y-r+.5);g.lineTo(p.x+r+1.5,p.y-r-2);g.lineTo(p.x+r+4,p.y-r+.5);g.stroke();
         g.strokeStyle='#fbe6ac';g.lineWidth=1.3;g.stroke();
       }
@@ -241,10 +241,11 @@
       const homes=[];
       for(const h of s.growth?.households||[]){
         const home=root.EarthDistrictGrowth?.homePoint?.(s,h.plot)||{x:1.7+h.plot%10*2.2,y:-1.9-Math.floor(h.plot/10)*1.75};
-        homes.push([home.x,home.y]);
+        if(h.home)homes.push([home.x,home.y]);
         const shop=h.shop&&root.EarthDistrictGrowth?.shopPoint?.(s,h.businessPlot);
         if(shop)homes.push([shop.x,shop.y]);
       }
+      for(const b of root.EarthHousing?.structures(s)||[])homes.push([b.x,b.y]);
       const sites=[[9,21],[21,15],[21,21],[15,21],...(s.buildings||[]).map(b=>[3+6*(b.plot%3),3+6*Math.floor(b.plot/3)]),...homes];
       g.fillStyle='#b78360';for(const [x,y] of sites){const z=proj(x,y);g.fillRect(z.x-scale,z.y-scale*.72,scale*2,scale*1.3);}
     }

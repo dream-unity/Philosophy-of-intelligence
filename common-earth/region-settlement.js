@@ -36,7 +36,7 @@
     }});
     for(const home of houses){
       const col=home.plot%cols,row=Math.floor(home.plot/cols),hx=startX+col,hy=startY+row;
-      architecture(hx,hy,'home',(home.plot+home.home-1)%3,.20+.026*home.home);
+      if(home.home)architecture(hx,hy,'home',(home.plot+home.home-1)%3,.20+.026*home.home);
       if(home.shop){const [sx,sy]=shopDoor(home.businessPlot);architecture(sx,sy,'market',0,.23);}
     }
     architecture(startX+.25,marketY,'exchange',0,.44);

@@ -93,7 +93,9 @@
     for(let i=0;i<6;i++)if(site?.city?.precincts?.[i]?.use==='market')count++;
     return count;
   }
+  const precinctBeds=(site,i)=>terrainAt(site,i).id==='shelter'?8:6;
   function housingCapacity(site) {
+    if(site?.housing&&window.EarthHousing)return window.EarthHousing.summary(site).capacity;
     let capacity=18+(window.EarthResidentShops?.housingPlaces?.(site)||0)+(window.EarthDistrictGrowth?.housingPlaces?.(site)||0);
     for(let i=0;i<6;i++){
       if(site?.city?.precincts?.[i]?.use==='homes')capacity+=terrainAt(site,i).id==='shelter'?8:6;
@@ -104,6 +106,7 @@
     const weekly={...ZERO}, records=[];
     const centralHall=(site?.buildings||[]).some(b=>b.kind==='hall');
     let reachable=0,pressure=0,noise=0,capacity=18+(window.EarthResidentShops?.housingPlaces?.(site)||0)+(window.EarthDistrictGrowth?.housingPlaces?.(site)||0),developed=0;
+    if(site?.housing&&window.EarthHousing)capacity=window.EarthHousing.dwellings(site,[]).reduce((n,t)=>n+t.beds,0);
     state.forEach((p,i)=>{
       const around=ring(i), neighbours=around.map(j=>state[j].use), t=terrainAt(site,i);
       const transit=p.use==='transit' || neighbours.includes('transit');
@@ -307,6 +310,6 @@
     return {delta,notes,district};
   }
 
-  const Model=Object.freeze({valid,validWork,normalise,migrateWork,terms,preview,previewCrew,apply,finish,weekly,housingCapacity,marketCatchments,overview,projects:USES,options:BUILD_OPTIONS,flows,nameOf});
+  const Model=Object.freeze({valid,validWork,normalise,migrateWork,terms,preview,previewCrew,apply,finish,weekly,housingCapacity,precinctBeds,marketCatchments,overview,projects:USES,options:BUILD_OPTIONS,flows,nameOf});
   window.EarthCityModel=Model;
 })();

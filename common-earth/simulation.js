@@ -378,6 +378,8 @@
     if(root.EarthAutonomy && !root.EarthAutonomy.valid(site,world.week))return false;
     if(root.EarthProvisions && !root.EarthProvisions.valid(site,world.week))return false;
     if(root.EarthMarket && !root.EarthMarket.valid(site,world.week))return false;
+    if(root.EarthHousing&&!root.EarthHousing.valid(site))return false;
+    if(root.EarthBorders&&!root.EarthBorders.valid(site))return false;
     if(root.EarthDistrictGrowth&&!root.EarthDistrictGrowth.valid(site,world.week))return false;
     if(root.EarthPurses && !root.EarthPurses.valid(site,world.week))return false;
     if(root.EarthFleet && !root.EarthFleet.valid(site,world.week))return false;
@@ -509,6 +511,7 @@
       if(!validReview(world.lastWeekReview,world,ids))return null;
       if(root.EarthCommunityLife?.valid && !root.EarthCommunityLife.valid(world,validSite))return null;
       if(root.EarthRegionalWorld?.valid && !root.EarthRegionalWorld.valid(world))return null;
+      if(root.EarthTownCentre&&!root.EarthTownCentre.valid(world))return null;
       if(root.EarthPurses?.validMoves && !root.EarthPurses.validMoves(world))return null;
       if(root.EarthPartners?.valid && !root.EarthPartners.valid(world.partners,ids))return null;
       if(root.EarthLegacy?.valid && !root.EarthLegacy.valid(world))return null;
@@ -2352,6 +2355,7 @@
         const era=developRegionalCouncil(world,site);
         if(era)site.growth.history[0].events.push(era);
       }
+      root.EarthTownCentre?.decisions(world);
       root.EarthRegionalWorld?.advance?.(world,newSettlement,'production');
       root.EarthPerformance?.finish('production',productionStarted);
       world.productionSerial=expected+1;world.lastProductionAt=Date.now();
@@ -2365,6 +2369,11 @@
         return complete('Fishing line put away.',site,false);
       }),
       production:guarded(runProduction),
+      townCentre:guarded(request=>{
+        const site=current(),result=root.EarthTownCentre?.command(world,site,request);
+        if(!result?.ok)return result||reject('The Town Centre is unavailable.');
+        const saved=complete(result.message,site);return saved.ok?result:saved;
+      }),
       regionalWork:guarded(request=>{
         const result=root.EarthRegionalWorld?.propose?.(world,current(),request);
         return result?.ok?complete(result.message,current()):result||reject('Regional work is unavailable.');

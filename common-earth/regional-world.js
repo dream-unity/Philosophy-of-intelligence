@@ -258,6 +258,7 @@
       if(h.shop)add(h.shopSite||model?.shopPoint(site,h.businessPlot));
       if(h.build?.shop)add(model?.shopPoint(site,h.build.lot));
     }
+    if(site.housing){add(root.EarthHousing.centre);if(site.housing.serial)add(root.EarthHousing.newPlot(site.housing.serial-1));}
     const extent={round:growth?.round,count:rows.length,plots,radius};streetsByTown.set(site,extent);return extent;
   }
   function streetFootprint(geo,x,y){
@@ -882,6 +883,7 @@
       if(solitary&&!book.regions[site.id]?.trips[site.id]&&(cycle+book.step)%16!==0)continue;
       const geo=geography(world,site);if(groups.has(geo.origin.id))continue;groups.add(geo.origin.id);
       const r=state(world,geo);
+      root.EarthBorders?.advance(world,geo,r);
       for(const town of geo.towns)scheduledJourneys(world,geo,r,town);
       for(const town of geo.towns){const trip=r.trips[town.site.id];if(trip)moveTrip(world,geo,r,town,trip,makeSite);}
       if(!solitary||(cycle+book.step)%16===0)for(const town of geo.towns)planning(world,geo,r,town);
@@ -999,6 +1001,7 @@
         destination:trip.destination,activity:trip.activity,detail:trip.detail,remainingKm:(trip.path.length-1-trip.index)*cellSize,
         kind:trip.kind,phase:trip.phase,dx,dy,mode:terrain(geo,x,y).kind==='water'?'boat':'walk',kit:{...trip.kit},cargo:{...trip.cargo}}));
     });
+    if(geo&&root.EarthBorders)visible.push(...root.EarthBorders.actors(world,geo));
     const original=world.communityLife?.journey;
     const location=original?.path&&tripPosition(world,site,original);
     if(location){
@@ -1134,5 +1137,5 @@
     }
     return true;
   }
-  root.EarthRegionalWorld={geography,polarProjection,streetKilometres,streetExtent,streetFootprint,reconcileLocations,terrain,known,surveyedCells,works,routes,travellers,inspect,ledger,residentRecord,fieldAccount,shareFieldReport,valid,propose,advance,tripLine,tripPosition,changeBranch,observeLeg,routeEffort,routeOpen,foundingGround,passageAgreement,crossingPath,remainingCrossing,shareCrossing};
+  root.EarthRegionalWorld={borderAgreement:(r,pact)=>saveAgreement(r,pair(pact.a,pact.b),pact),geography,polarProjection,streetKilometres,streetExtent,streetFootprint,reconcileLocations,terrain,known,surveyedCells,works,routes,travellers,inspect,ledger,residentRecord,fieldAccount,shareFieldReport,valid,propose,advance,tripLine,tripPosition,changeBranch,observeLeg,routeEffort,routeOpen,foundingGround,passageAgreement,crossingPath,remainingCrossing,shareCrossing};
 })(typeof window==='undefined'?globalThis:window);

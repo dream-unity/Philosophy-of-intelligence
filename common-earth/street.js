@@ -916,7 +916,9 @@
       if(seated)skiff(p.x,p.y,'#829f99',false);
       const phase=visualTime*5+(hash(key)%157)/29;
       person(p.x,p.y,look.cloth[0],ax,ay,stationary||seated?0:.75,phase,false,look,seated);
-      if(actor.cargo?.materials||actor.cargo?.food){
+      if(actor.phase==='fighting'){
+        activityGesture(p,{prop:'none',gesture:'strike'},look.cloth[0],ax,ay,null,look.skin,.5+.5*Math.sin(visualTime*12));
+      }else if(actor.cargo?.materials||actor.cargo?.food){
         const x=p.x+ax*.16,y=p.y+ay*.16;box(x-.1,y-.11,.2,.22,.23,.16,'#b59365','#8e714a','#785f42');
       }else if(stationary){
         const resource=regionalModel.terrain(geo,actor.x,actor.y).resource;
@@ -2689,17 +2691,19 @@
       return h.build||site.growth.road?.lot===h.plot?add(home,.4,.5):null;
     }
     const frontages={boxes:[],west:-.78,north:-.78};
+    let civicBuildings=[];
     function refreshFrontages(site){
       const g=site?.growth;
       frontages.boxes.length=0;frontages.west=-.78;frontages.north=-.78;
-      if(!g)return;
+      civicBuildings=window.EarthHousing?.structures(site)||[];
       const add=(p,width,depth)=>{
         frontages.west=Math.min(frontages.west,p.x-.74);frontages.north=Math.min(frontages.north,p.y-.74);
         frontages.boxes.push(footprint(p.x,p.y,width,depth));
       };
-      for(const h of g.households){
+      for(const b of civicBuildings)add(b,b.art==='hall'?1.5:.94,b.art==='hall'?1.35:.8);
+      for(const h of g?.households||[]){
         const scale=homeScale(h),home=window.EarthDistrictGrowth.homePoint(site,h.plot);
-        add(home,2.54*scale,2.25*scale);
+        if(h.home)add(home,2.54*scale,2.25*scale);
         const work=growthWorksite(site,h,home);
         if(work){
           add({x:work.x-.01,y:work.y+.13},.72,.26);
@@ -3627,10 +3631,12 @@
         test(lot,b.kind,0,1,.35,()=>({assetId:b.id,assetName:b.name,use:'project',plot:lot.plot,buildingKind:b.kind,
           activity:'Plot '+(lot.plot+1)+'. '+(window.CommonEarthSim?.buildings?.[b.kind]?.info||'Completed district project.')}));
       }
+      for(const b of civicBuildings)test(b,b.art==='worksite'?'workshop':b.art,0,b.art==='hall'?.63:.42,.35,
+        ()=>({assetId:b.id,assetName:b.title,use:b.use,activity:b.info}));
       const growth=window.EarthDistrictGrowth;
       if(growth)for(const h of site.growth?.households||[]){
         const home=growth.homePoint(site,h.plot);
-        test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
+        if(h.home)test(home,'home',(h.plot+h.home-1)%3,homeScale(h),.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
           assetName:h.name+'’s home',ownerKey:h.owner,activity:'Residential lot '+(h.plot+1)+'. '+(h.extension||'')}));
         if(h.shop)test(growth.shopPoint(site,h.businessPlot),'market',0,.36,.3,()=>{
           const item=window.EarthResidentShops?.products[h.shop];
@@ -4146,12 +4152,22 @@
       }
       HOMES.forEach((block,index)=>{const p=centre(block);addItem(p.x,p.y,blockDepth(p),()=>residence({...p,index}),buildingBounds);});
       for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item),buildingBounds);}
+      for(const b of civicBuildings){
+        addItem(b.x,b.y,b.x+b.y+.35,()=>{
+          if(b.art==='worksite'){
+            box(b.x-.4,b.y-.26,.8,.52,0,.12,'#bea884','#99917b','#817357');
+            for(const dx of [-.38,.38])for(const dy of [-.23,.23])box(b.x+dx,b.y+dy,.07,.07,.1,.48,'#e0bf84','#ad945c','#8e754d');
+            line(b.x-.38,b.y+.23,.55,b.x+.38,b.y+.23,.55,'#d2a76d',2);
+          }else window.EarthTownArchitecture?.draw(ctx,state.site,b.art,0,...screen(b.x,b.y),unit*(b.art==='hall'?.63:.42));
+          if(b.use==='townCentre'&&unit>12){const [x,y]=screen(b.x,b.y);text(x,y+unit*.3,'Town Centre','#fff3cf',11,700);}
+        },buildingBounds);
+      }
       if(state.site.growth){
         const g=state.site.growth;
         for(const h of g.households){
           const {x,y}=window.EarthDistrictGrowth.homePoint(state.site,h.plot);
           if(h.plot<g.roads)rect(x-.17,y+.4,.34,Math.abs(y)-.4,.015,'#a69a83');
-          addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
+          if(h.home)addItem(x,y,x+y+.34,()=>window.EarthTownArchitecture?.draw(ctx,state.site,'home',(h.plot+h.home-1)%3,...screen(x,y),unit*homeScale(h)),buildingBounds);
           const appointment=growthWorksite(state.site,h,{x,y});
           if(appointment){
             const {x:ax,y:ay}=appointment;
@@ -5031,7 +5047,7 @@
       state.site=site||null;refreshGeography();state.seed=hash(`${site?.lat??0},${site?.lon??0},${site?.id||'district'}`);
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
-      const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
+      const nextFingerprint=JSON.stringify([nextKey,site?.housing?.titles.length,site?.housing?.project?.id,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
         site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
         landmarks.filter(mark=>mark.kind!=='balcony').map(mark=>mark.key),
         site?.residents?.map(r=>[r.id,r.name,window.EarthCommunityLife?.present(site,r.id)!==false])]);
@@ -5879,7 +5895,7 @@
     }
     listen(canvas,'pointerdown',e=>{
       if(covered||!state.site||e.button!==0||fingers.has(e.pointerId))return;
-      if(!fingers.size&&e.pointerType==='touch')meter?.begin(canvas);
+      if(!fingers.size)meter?.begin(canvas);
       state.hover=null;
       if(e.cancelable)e.preventDefault();
       if(e.pointerType!=='touch')canvas.focus({preventScroll:true});
@@ -5900,23 +5916,24 @@
         }
         return;
       }
-      if(e.pointerType==='touch')meter?.input(canvas,e);
+      meter?.input(canvas,e);
       fingers.set(e.pointerId,p);
       if(pinch){
         const [a,b]=fingers.values(),distance=Math.hypot(a.x-b.x,a.y-b.y);
         zoom=clamp(pinch.zoom*distance/pinch.distance,minZoom(),2.15);unit=baseUnit()*zoom;
-        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;return;
+        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;schedule();return;
       }
       if(dragging?.id!==e.pointerId)return;
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
-      clearObservation(false);dragging.moved=true;cameraFollows=false;
+      if(!dragging.moved&&observedId)clearObservation(false);
+      dragging.moved=true;cameraFollows=false;
       regionalFollow=null;overviewZoom=null;
-      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;
+      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;schedule();
     });
     function endPointer(e) {
       if(!fingers.delete(e.pointerId))return;
-      if(e.pointerType==='touch'){meter?.input(canvas,e);if(!fingers.size)meter?.end(canvas);}
+      meter?.input(canvas,e);if(!fingers.size)meter?.end(canvas);
       if(pinch){
         if(fingers.size>=2){beginPinch();return;}
         pinch=null;
@@ -5929,7 +5946,7 @@
       }
       if(dragging?.id!==e.pointerId)return;
       const gesture=dragging;dragging=null;
-      if(gesture.moved&&pixelRatio!==fullPixelRatio)dirty=true;
+      if(gesture.moved){dirty=true;schedule();}
       if(e.type!=='pointerup'||gesture.moved)return;
       const release=coords(e,canvas);
       if(Math.hypot(release.x-gesture.start.x,release.y-gesture.start.y)<gesture.slop)tap(gesture.start,gesture.device);

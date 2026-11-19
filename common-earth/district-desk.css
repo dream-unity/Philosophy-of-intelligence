@@ -184,3 +184,37 @@ body[data-region-roaming] #street-hud .scene-card {display:none;}
 
 #region-point-detail label {display:grid;gap:4px;margin-block:8px;color:#d6e2d1;font-size:.86rem;}
 #region-point-detail select {width:100%;min-height:44px;padding:5px;border:1px solid #829784;border-radius:4px;background:#1b352f;color:#f8efd5;}
+
+/* The population control has its own column outside the canvas stacking context. */
+#stores-ribbon { position:sticky; top:0; z-index:24; }
+#ribbon-population { flex:0 1 15rem; border-left:1px solid #526761; justify-content:center; text-align:center; line-height:1.3; color:#ffedbb; font-weight:650; min-height:44px; }
+#town-centre-dialog { color:#203934; background:#f7f5ec; border:1px solid #73867c; border-radius:8px; padding:0; width:min(46rem,95vw); max-height:90dvh; }
+#town-centre-dialog[open] { display:flex; flex-direction:column; }
+#town-centre-dialog::backdrop { background:#0b201dcc; }
+#town-centre-dialog header,#town-centre-tabs { flex:none; display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.75rem 1rem; background:#193b34; color:#fff1cd; }
+#town-centre-dialog h2 { margin:0; font:500 clamp(1.22rem,3vw,1.8rem)/1.2 var(--serif,Georgia,serif); }
+#town-centre-dialog h3 { margin:1rem 0 .35rem; font-size:1.12rem; }
+#town-centre-dialog button { min-height:42px; padding:.42rem .7rem; color:#163b31; background:#e6eadd; border:1px solid #94aa99; border-radius:.28rem; cursor:pointer; font:600 .88rem/1.25 var(--sans,system-ui); }
+#town-centre-dialog button:disabled { opacity:.55; cursor:default; }
+#town-centre-tabs { justify-content:start; padding:.4rem .75rem; overflow-x:auto; }
+#town-centre-tabs button { white-space:nowrap; background:transparent; color:#fff2d7; }
+#town-centre-tabs button[aria-pressed="true"] { background:#e9d79a; color:#1b362d; }
+#town-centre-body { overflow:auto; overscroll-behavior:contain; padding:.8rem 1rem 1.2rem; font:1rem/1.45 var(--sans,system-ui); min-height:0; }
+#town-centre-body p { margin:.42rem 0 .7rem; }
+#town-centre-body label { display:block; margin:.4rem 0; }
+#town-centre-body select,#town-centre-body input[type=number] { color:#193a30; background:white; padding:.38rem; border:1px solid #95a89b; border-radius:.22rem; font:inherit; }
+#town-centre-body select { display:block; width:100%; }
+#town-centre-body details { padding:.55rem 0; }
+#town-centre-body summary { cursor:pointer; font-weight:600; }
+#town-centre-status { margin:0; padding:.5rem 1rem; background:#e8e8c8; }
+#town-centre-status:empty { display:none; }
+.town-numbers { display:flex; flex-wrap:wrap; border-bottom:1px solid #bbc6b7; padding-bottom:.7rem; margin-bottom:.65rem; gap:.5rem 1.4rem; }
+.town-numbers div,.town-row small { display:block; }
+.town-numbers strong { display:block; font-size:1.45rem; font-variant-numeric:tabular-nums; }
+.town-numbers span,.town-row small { color:#465e53; font-size:.9rem; }
+.town-row { display:flex; align-items:center; flex-wrap:wrap; gap:.4rem; padding:.6rem 0; border-bottom:1px solid #ccd4c8; }
+.town-row>div { flex:1 1 14rem; }
+.town-row details { flex-basis:100%; }
+.town-criteria>div { display:grid; grid-template-columns:minmax(6rem,1fr) 4rem auto 4rem; align-items:center; gap:.4rem; margin:.3rem 0; }
+.town-filter { padding:.35rem 0; }
+@media(max-width:600px){#ribbon-population { flex:1.1; font-size:.79rem; padding:.35rem; } #town-centre-dialog { width:96vw; } #town-centre-tabs { gap:.3rem; } }

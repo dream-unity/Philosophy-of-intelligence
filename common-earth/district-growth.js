@@ -37,6 +37,10 @@
       const home=homePoint(site,h.plot);west=Math.min(west,home.x-.74);north=Math.min(north,home.y-.74);
       if(h.shop){const shop=shopPoint(site,h.businessPlot);west=Math.min(west,shop.x-.74);north=Math.min(north,shop.y-.74);}
     }
+    if(site?.housing){
+      west=Math.min(west,-4.65);
+      if(site.housing.serial)north=Math.min(north,root.EarthHousing.newPlot(site.housing.serial-1).y-.74);
+    }
     return {west,north};
   }
   function housingPlaces(site){
@@ -59,10 +63,14 @@
     }
     for(const p of arrivals){
       const owner=key(p);
-      const plot=g.households.length,h={owner,name:p.name,plot,home:1,points:0,stock:0,shop:'',businessPlot:null,last:'Settled on residential lot '+(plot+1)};
-      let i=plot,spot=homePoint(site,i);
+      const plot=g.households.length,title=site.housing?.titles.find(t=>t.kind==='family'&&t.owner===owner);
+      const home=site.housing?Number(!!title):1;
+      const h={owner,name:p.name,plot,home,points:0,stock:0,shop:'',businessPlot:null,last:'Settled on residential lot '+(plot+1)};
+      let i=title?.plot??plot,spot=homePoint(site,i);
       while(land.has(pointKey(spot))){i++;spot=homePoint(site,i);}
       if(i!==plot)h.houseSite=spot;
+      if(title)title.plot=plot;
+      if(!home)h.last='Registered at the Town Centre. Housing follows the residential roll.';
       g.households.push(h);land.add(pointKey(spot));
     }
     return g;
@@ -203,7 +211,8 @@
   }
   function activeWork(site){
     const g=site.growth;if(!g)return [];
-    const rows=[];
+    const civic=root.EarthHousing?.jobView(site);
+    const rows=civic?[civic]:[];
     for(const h of g.households){
       if(h.order)rows.push(root.EarthDistrictOrders.orderView(site,h.order));
       else if(h.build?.person)rows.push(buildingJob(site,h,h.build.person));
@@ -217,6 +226,7 @@
   function work(site,p){
     const id=typeof p==='string'?p:p?.id,g=site?.growth;
     if(!id||!g)return null;
+    if(root.EarthHousing?.reserved(site,id))return root.EarthHousing.jobView(site);
     const h=g.households.find(h=>h.order?.person===id||h.build?.person===id||h.purchase?.person===id);
     if(h?.order)return root.EarthDistrictOrders.orderView(site,h.order);
     if(h?.purchase)return shoppingJob(site,h);
@@ -320,6 +330,8 @@
         delete g.road;events.push('A road crew member moved away. The district returned the reserved supplies and can put together a new crew.');
       }
     }
+    root.EarthHousing?.production(world,site,people,busy,floor,at,closeWeek,transfers,events);
+    root.EarthHousing?.trade(world,site,people,busy,floor,transfers);
     const usedLots=new Set();
     for(const h of g.households){
       if(h.shop)usedLots.add(h.businessPlot);
@@ -339,8 +351,8 @@
       if(commercial&&cash>=7)for(let j=0;j<permits;j++){const candidate=(h.plot+j)%permits;if(!usedLots.has(candidate)){lot=candidate;break;}}
       const reserves=site.materials-floor.materials-(g.roads<g.households.length&&!g.road?3:0);
       const fromHome=Math.min(2,h.supplies||0),fromStore=2-fromHome;
-      const improvement=lot!==null||h.home<3&&cash>=5;
-      if(improvement&&reserves>=fromStore&&(g.round+h.plot)%3===0){
+      const improvement=lot!==null||h.home>0&&h.home<3&&cash>=5;
+      if(improvement&&reserves>=fromStore){
         const shop=lot!==null?(p.hobbyAxis==='music'?'flute':trades[work].item):null,price=(shop?3:1)+fromStore;
         const extension=p.hobbyAxis==='music'?'Music room':work==='food'?'Kitchen garden':work==='repair'?'Home workshop':'Courtyard studio';
         const id='property-'+g.round+'-'+h.plot;
@@ -384,6 +396,9 @@
     const capacity=Math.max(2,Math.ceil(people.length*.78))+g.vehicle;
     for(const p of free){
       const h=hOf(p);if(busy.has(p.id)||h.build)continue;
+      if(p.background&&p.background.workEthic<35&&(g.round+h.plot)%4!==0){
+        h.activity='home';h.last=p.name+' declined this shift and kept the time for personal plans.';continue;
+      }
       const intent=root.EarthAutonomy?.intent?.(site,p.id),rest=intent?.kind==='rest'&&(g.round+h.plot)%3===0;
       if(rest||onOrder>=capacity){h.activity='home';h.last=rest?'Resting at home between orders.':'The available orders are already staffed.';continue;}
       const o=jobs.start(world,site,p,h,floor,offers,at,transfers);
@@ -487,7 +502,7 @@
       (road.ids==null?road.at!=null||road.origins!=null:!Array.isArray(road.ids)||road.ids.length!==2||new Set(road.ids).size!==2||!road.ids.every(text)||!nat(road.at)||!origins(road.origins,road.ids))))return false;
     return g.households.every((h,i)=>{
       if(!h||!root.EarthDistrictOrders.validOrder(h.order,h)||!h.owner||typeof h.owner!=='string'||owners.has(h.owner)||typeof h.name!=='string'||h.plot!==i||
-        ![1,2,3].includes(h.home)||![h.trained,h.pantry,h.supplies,h.roadLot,h.marketLot,h.hires,h.businessFunds,h.saleSerial,h.restockedRound].every(n=>n==null||nat(n))||
+        ![0,1,2,3].includes(h.home)||![h.trained,h.pantry,h.supplies,h.roadLot,h.marketLot,h.hires,h.businessFunds,h.saleSerial,h.restockedRound].every(n=>n==null||nat(n))||
         h.activity!=null&&!['home','commitment','food','repair','exchange','road','shop','purchase'].includes(h.activity)||!nat(h.points)||!nat(h.stock)||h.stock>3||typeof h.last!=='string'||
         (h.shop?!Object.hasOwn(root.EarthResidentShops.products,h.shop)||!nat(h.businessPlot)||lots.has(h.businessPlot):h.businessPlot!==null))return false;
       if((h.shopInputs&&!Object.entries(h.shopInputs).every(([id,n])=>h.shop&&root.EarthResidentShops.products[h.shop].inputs.includes(id)&&nat(n)))||

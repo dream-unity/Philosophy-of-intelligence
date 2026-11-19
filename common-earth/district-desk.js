@@ -13,7 +13,7 @@
     const near=()=>root.EarthCommunityLife.neighbours(sim.state,sim.active());
     let directoryKey='',atlasWorld=null,scene=null,watchedId=null,watchedFrom=null,sceneKey='',selectedId='',observedWeek=0;
     const observer=$('district-observer'),selector=$('observer-person'),canvas=$('observer-canvas');
-    let pointInspector=null;
+    let pointInspector=null,townCentre=null;
     const observerGoals=$('observer-goals');let observerGoalsKey='';
     function renderObservedGoals(){
       const world=sim.state,site=watchedId&&findTown(world,watchedId);
@@ -139,7 +139,9 @@
         const watchButton=btn('See streets',()=>watch(town.id)),go=btn('Travel',()=>travel(town.id));
         watchButton.setAttribute('aria-label','See streets in '+town.name);go.setAttribute('aria-label','Travel to '+town.name);
         watchButton.dataset.districtCommand='watch-'+town.id;go.dataset.districtCommand='travel-'+town.id;
-        row.append(description,watchButton,go);return row;
+        row.append(description,watchButton,go);
+        if(site.housing&&townCentre)row.append(btn('Town Centre',()=>townCentre.show(site,'reception')));
+        return row;
       }
       host.replaceChildren(...rows.slice(0,4).map(districtRow));
       if(rows.length>4){
@@ -176,6 +178,7 @@
     }
     function ribbon(){
       const site=sim.active(),shown=inspectedStores();
+      townCentre?.refresh();
       $('stores-ribbon').hidden=!site;
       if(!site){shutLedger();return;}
       const account=personalAccount(),person=root.EarthPersonas.profile(account.site,account.id);
@@ -491,11 +494,20 @@
       return hud.openTool('precinct');
     }
     const getScene=()=>scene||street();
+    townCentre=root.EarthTownCentreUI?.mount({sim,inspected:inspectedStores,
+      focusPerson:(site,id)=>{if(!getScene()?.inspectRegionalPerson?.(id,site.id))watch(site.id,{person:id});},
+      focusPlot:(site,point)=>{
+        const geo=root.EarthRegionalWorld.geography(sim.state,site),town=geo.towns.find(t=>t.site.id===site.id);
+        if(!town)return;
+        enterStreet();if(watchedId&&watchedId!==site.id)close();
+        const p=root.EarthRegionalRender.regionalPoint(town,point.x,point.y);
+        getScene()?.inspectRegion?.(p.x,p.y,{zoom:.95,picked:true});
+      }});
     const region=root.EarthRegionMap?.mount({sim,watch,getScene});
-    pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,buildingAction,
+    pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,buildingAction,townCentre:(site,page)=>townCentre?.show(site,page),
       returnStreet:()=>{close();street()?.recenter();},refresh:redraw,ledger:(town,personId)=>{openDevelopment(town,personId?{personId}:{});ledger.scrollIntoView({block:'nearest'});},contextChanged:ribbon});
     $('street-stage')?.addEventListener('earthregionalmeet',e=>hud.meetPerson(e.detail.id));
-    return {chart:()=>region?.chart(),selectChart:id=>region?.selectChart(id),watch,inspectBuilding:building=>pointInspector?.inspectBuilding(building),close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},
+    return {chart:()=>region?.chart(),selectChart:id=>region?.selectChart(id),watch,inspectBuilding:building=>building.use==='townCentre'?townCentre?.show(inspectedStores(),'recruitment'):pointInspector?.inspectBuilding(building),close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},
       render(isAtlas){if(isAtlas)pointInspector?.clear();region?.refresh();if(watchedId)syncObserved();pointInspector?.redraw();ribbon();atlasDirectory(isAtlas);}};
   }
   root.EarthDistrictDesk=Object.freeze({mount});

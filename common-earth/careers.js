@@ -151,13 +151,19 @@
     return clamp(get(m.skills,axis)??p.aptitudes?.[axis]??40,b.min,b.max);
   }
   function gain(p,m,axis,amount){
+    // The external transcript supplies a measured learning rate. Carry partial
+    // practice credit so slower learners still benefit from repeated attempts.
+    if(p.background&&amount>0){
+      const total=(m.practiceCredit?.[axis]||0)+amount*(50+p.background.learning);
+      (m.practiceCredit||={})[axis]=total%100;amount=Math.floor(total/100);
+    }
     const old=skill(p,m,axis),next=clamp(old+amount,old,bounds(p,axis).max);
     if(next!==old)m.skills[axis]=next;
     return next-old;
   }
   function productionLesson(site,p,axis,week){
     const m=ensure(site,p.id),raised=gain(p,m,axis,1);
-    if(raised){m.revision++;note(m,week,'Improved '+axis+' through paid community work.');}
+    m.revision++;if(raised)note(m,week,'Improved '+axis+' through paid community work.');
   }
   function projectLesson(world,site,mentorId,learnerId,axis,commit=false,amount=2){
     const tutor=profile(site,mentorId),pupil=profile(site,learnerId),week=world.week;
