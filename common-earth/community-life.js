@@ -919,6 +919,7 @@
       water:point.water,names:['Housing delegate','Work delegate','Admission delegate'],old:null,offer:{newPopulation:0}});
     site.founded=world.week;site.specialty=purpose.goods;
     Object.assign(site,trip.kit);
+    if(root.EarthMarket)site.exchange=root.EarthMarket.foundingExchange(world.week);
     // Reserved street slots stay empty. Every household on this roll actually
     // came from the named crew, with its purse and qualifications.
     seedHouseholds(site,3,world.week);
@@ -964,6 +965,7 @@
       return writeLog(site,world.week,'The founders found no unoccupied site within travelling distance. Their reserved supplies returned to the stores.');
     }
     const newHome=makeSite({id,name,region:site.region,point,water:site.water,names:['Cass','Min','Rae'],old:null,offer:{newPopulation:3}});
+    if(root.EarthMarket)newHome.exchange=root.EarthMarket.foundingExchange(world.week);
     newHome.founded=world.week;newHome.specialty=purpose.goods;Object.assign(newHome,old.kit);seedHouseholds(newHome,newHome.population,world.week);
     Object.assign(local(newHome),{cluster:site.communityLife.cluster,district:purpose.district,foundingPlaces:3,habitat:root.EarthResources?.environment?.(newHome)||'mixed'});local(newHome).away.steward='elsewhere';
     const moved=old.members.map(personId=>movePerson(world,site,newHome,personId));

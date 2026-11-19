@@ -890,6 +890,15 @@
       }
       return remote.scene;
     }
+    let travellerStamp='',travellerTime=-1,regionalTravellers=[];
+    function sceneTravellers(){
+      const stamp=[regionWorld.week,regionWorld.productionSerial,regionWorld.actionRevision,regionWorld.regionalWorld?.step,state.site.id].join('/');
+      if(stamp!==travellerStamp||visualTime-travellerTime>=.065||visualTime<travellerTime){
+        regionalTravellers=regionalModel.travellers?.(regionWorld,state.site)||[];
+        travellerStamp=stamp;travellerTime=visualTime;
+      }
+      return regionalTravellers;
+    }
     function paintRegionalTowns(v){
       if(!v)return;
       const candidates=geo.towns.filter(t=>t!==baseTown&&detailVisible(t,v));
@@ -906,7 +915,7 @@
         const p=renderRegion.localPoint(detailed,v.x,v.y),scene=remoteScene(detailed);
         scene.paintAt(ctx,{x:p.x,y:p.y,unit,width,height,ratio:pixelRatio,time:visualTime,evening});
       }
-      visibleTravellers=renderRegion.actors(ctx,regionWorld,state.site,v,false,regionalActor)>0;
+      visibleTravellers=renderRegion.actors(ctx,regionWorld,state.site,v,false,regionalActor,sceneTravellers())>0;
       const moved=!lastRegionFrame||lastRegionFrame.x!==v.x||lastRegionFrame.y!==v.y||lastRegionFrame.sx!==v.sx||
         lastRegionFrame.w!==v.w||lastRegionFrame.h!==v.h;
       if(moved){
@@ -6025,14 +6034,14 @@
       if(pinch){
         const [a,b]=fingers.values(),distance=Math.hypot(a.x-b.x,a.y-b.y);
         zoom=clamp(pinch.zoom*distance/pinch.distance,minZoom(),2.15);unit=baseUnit()*zoom;
-        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;if(e.pointerType==='touch')paintDelayedGesture();return;
+        keepUnderPointer(pinch.anchor,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});dirty=true;schedule();if(e.pointerType==='touch')paintDelayedGesture();return;
       }
       if(dragging?.id!==e.pointerId)return;
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
       clearObservation(false);dragging.moved=true;cameraFollows=false;
       regionalFollow=null;overviewZoom=null;
-      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;if(e.pointerType==='touch')paintDelayedGesture();
+      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;schedule();if(e.pointerType==='touch')paintDelayedGesture();
     });
     function endPointer(e) {
       if(!fingers.delete(e.pointerId))return;

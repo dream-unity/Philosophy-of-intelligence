@@ -237,9 +237,8 @@
     }
     g.fill();
   }
-  function actors(g,world,base,v,mini,drawPerson){
+  function actors(g,world,base,v,mini,drawPerson,people=root.EarthRegionalWorld.travellers?.(world,base)||[]){
     let count=0;
-    const people=root.EarthRegionalWorld.travellers?.(world,base)||[];
     for(const t of people){
       if(!inView(v,t.x,t.y,.03))continue;
       count++;if(drawPerson?.(t))continue;
