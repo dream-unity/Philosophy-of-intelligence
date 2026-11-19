@@ -18,7 +18,7 @@ const site = {
   buildings: [{ id: 'hall-1', kind: 'hall', name: 'Cooperative Hall', plot: 4 }]
 };
 
-function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onStowLine, onState, waterfront, getWeek, getRegularRun, onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,landmarks,membership,visible=false,working,onNeighbourHelp,resources,spectator=false,getWorld,privateHousing=false,paidWork=false}={}) {
+function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onStowLine, onState, waterfront, getWeek, getRegularRun, onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,onBuilding,landmarks,membership,visible=false,working,onNeighbourHelp,resources,spectator=false,getWorld,privateHousing=false,paidWork=false}={}) {
   const pointerEvents = new Map();
   let frame = null;
   let now = 100, timerId = 0;
@@ -88,7 +88,7 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
   const placed = [], previews = [], assignments = [], targetLists = [];
   const street = runtime.window.EarthStreet.mount(canvas, {
     spectator,getWorld,onObservation: current => observations.push(current),
-    onFishingMark,onStowLine,getWeek,getRegularRun,onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,onNeighbourHelp,onState: state => {updates.push(state);onState?.(state);},
+    onFishingMark,onStowLine,getWeek,getRegularRun,onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,onBuilding,onNeighbourHelp,onState: state => {updates.push(state);onState?.(state);},
     onHandcart: () => handcarts.push(true),
     onInteract: event => encounters.push(event),
     onHint: text => hints.push(text),
@@ -2295,4 +2295,20 @@ test('the active resident reaches a privately owned new or old outlying shopfron
     assert(g.street.restoreView(saved));assert(g.street.shopProof(1));
     g.street.destroy();
   }
+});
+
+test('tapping a building inspects the premises while walking or driving, even when its resident is away',()=>{
+  const picks=[],g=surface(1024,600,{onBuilding:building=>picks.push(building),
+    membership:{present:(_site,id)=>id!=='r0'}});
+  g.street.recenter();
+  const home=g.interactionFrame()(9,21,1.4);
+  g.tap(home,'touch');
+  assert.equal(picks.at(-1)?.assetName,'Mira’s home');
+  assert.equal(g.street.getState().travelling,false);
+  const driving=g.drive();
+  g.tap(driving(15,21,1.5),'touch');
+  assert.equal(picks.at(-1)?.use,'market');
+  assert.equal(g.street.getState().mode,'drive');
+  assert.equal(g.street.getState().travelling,false);
+  g.street.destroy();
 });

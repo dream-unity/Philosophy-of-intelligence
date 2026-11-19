@@ -195,22 +195,17 @@ test('two calendar closes cannot satisfy a housing review when no worker staffed
   sim.destroy();
 });
 
-test('short reviews account for remaining effort and an empty resident shift that can still be refunded',()=>{
+test('a resident at zero effort can fund the work needed for a short review',()=>{
   const sim=fresh(),site=sim.active();
-  ok(sim.act('work:contract'));ok(sim.act('work:contract'));
-  assert.equal(sim.beginGoal(site.id,'voices','trust',1).ok,false);
-  ok(sim.act('work:contract'));
-  assert.equal(sim.beginGoal(site.id,'housing','trust',2).ok,false);
-  ok(sim.beginGoal(site.id,'housing','trust',3));sim.destroy();
-
-  const active=fresh(),home=active.active();
-  ok(active.act('work:contract'));ok(active.act('work:contract'));ok(active.beginShift(home.residents[1].id));
-  assert.equal(active.state.effort,1);ok(active.beginGoal(home.id,'housing','trust',2));
-  const guide=goals.nextStep(active);assert.equal(guide.page,'shift');assert.match(guide.detail,/one effort/i);
-  ok(active.finishShift());assert.equal(active.state.effort,2);
-  const city=goals.nextStep(active);ok(active.planCity(city.precinct,city.project));
-  ok(active.workConstruction(120));advances(active,2);assert.equal(review(active).aim.status,'Target reached');
-  active.destroy();
+  sim.state.effort=0;
+  ok(sim.beginShift(site.residents[1].id));ok(sim.finishShift());
+  assert.equal(sim.state.effort,0);
+  ok(sim.beginGoal(site.id,'housing','trust',2));
+  for(let effort=0;effort<2;effort++){
+    const guide=goals.nextStep(sim);assert.equal(guide.actionId,'work:contract');ok(sim.act(guide.actionId));
+  }
+  const city=goals.nextStep(sim);ok(sim.planCity(city.precinct,city.project));
+  ok(sim.workConstruction(120));advances(sim,2);assert.equal(review(sim).aim.status,'Target reached');sim.destroy();
 });
 
 test('a one-week housing review exposes a conflicting conversion for voluntary cancellation',()=>{
@@ -248,13 +243,12 @@ test('a short review may recover supplies from occupied projects before its fina
   sim.destroy();
 });
 
-test('a paid but completed street project cannot fund a two-week goal when every remaining effort is needed for commissioning',()=>{
+test('paid shifts can fund a two-week goal before its commissioning window closes',()=>{
   const sim=fresh(),site=sim.active();
   ok(sim.act('build:market',1));ok(sim.act('build:market',3));ok(sim.workConstruction(180));
   assert.equal(sim.state.effort,2);assert.ok(site.funds<7);
   const proposal=goals.preview(sim.state,site.id,'housing','trust',2);
-  assert.equal(proposal.ok,false);assert.match(proposal.message,/remaining effort covers only the commission/i);
-  ok(sim.beginGoal(site.id,'housing','trust',3));
+  ok(proposal);ok(sim.beginGoal(site.id,'housing','trust',2));
   let next;
   for(let n=0;n<20 && sim.state.learningGoals.active;n++){
     next=goals.nextStep(sim);
@@ -285,7 +279,7 @@ test('guidance protects threatened homes even when a new housing project still n
 test('at zero effort a resident can move into food growing and cover the final basket before the pantry review',()=>{
   const sim=game();ok(sim.found({name:'Estuary',lat:0,lon:1,water:false}));const site=sim.active();
   assert.equal(site.specialty,'materials');ok(sim.beginGoal(site.id,'food','trust',1));ok(sim.act('work:forage'));
-  for(let i=0;i<3;i++)ok(sim.act('work:contract'));
+  sim.state.effort=0;
   const initial=sim.forecastNext().sites[0].closing.food,report=goals.summary(sim.state).active;
   assert.equal(initial,report.aim.target-1);assert.equal(sim.state.effort,0);
   const guide=goals.nextStep(sim);assert.equal(guide.group,'build');assert.match(guide.actionId,/^work-role:/);
@@ -322,7 +316,7 @@ test('a bond review can be reached by spending a day with a resident who already
 test('delivery of a parcel already in hand can supply the final bond without effort',()=>{
   const sim=fresh(),site=sim.active(),p=site.residents[0];
   ok(sim.beginGoal(site.id,'bond:'+p.id,'trust',1));ok(sim.act('listen:'+p.id));
-  ok(sim.act('courier:pick'));ok(sim.act('work:contract'));ok(sim.act('work:contract'));
+  ok(sim.act('courier:pick'));sim.state.effort=0;
   assert.equal(sim.state.effort,0);const handover=goals.nextStep(sim);
   assert.equal(handover.actionId,'courier:deliver:'+p.id);ok(sim.act(handover.actionId));
   advances(sim,1);assert.equal(review(sim).aim.status,'Target reached');sim.destroy();
@@ -330,13 +324,13 @@ test('delivery of a parcel already in hand can supply the final bond without eff
 
 test('a short bond review distinguishes a single remaining hearing from a promise an existing worksite can still keep',()=>{
   const empty=fresh(),site=empty.active(),repairer=site.residents[1];
-  for(let i=0;i<3;i++)ok(empty.act('work:contract'));
+  empty.state.effort=1;
   const before=serialize(empty),blocked=goals.preview(empty.state,site.id,'bond:'+repairer.id,'trust',1);
-  assert.equal(blocked.ok,false);assert.match(blocked.message,/at least two weeks/);assert.equal(serialize(empty),before);
+  ok(blocked);assert.match(blocked.aim.hint,/parcel/);assert.equal(serialize(empty),before);
   empty.destroy();
 
   const staffed=fresh(),home=staffed.active(),person=home.residents[1];ok(staffed.act('build:workshop',0));
-  ok(staffed.act('work:contract'));ok(staffed.act('work:contract'));
+  staffed.state.effort=1;
   ok(staffed.beginGoal(home.id,'bond:'+person.id,'trust',1));
   ok(staffed.act(goals.nextStep(staffed).actionId));assert.equal(staffed.state.effort,0);
   const agreement=goals.nextStep(staffed);assert.equal(agreement.actionId,'promise:'+person.id);ok(staffed.act(agreement.actionId));
@@ -346,13 +340,13 @@ test('a short bond review distinguishes a single remaining hearing from a promis
 
 test('the zero-effort pantry preview gives a numerical shortfall and preserves uncertain funded openings',()=>{
   const empty=game();ok(empty.found({name:'Estuary',lat:0,lon:1,water:false}));const site=empty.active();
-  for(let i=0;i<4;i++)ok(empty.act('work:contract'));
+  empty.state.effort=0;
   const before=serialize(empty),blocked=goals.preview(empty.state,site.id,'food','trust',1);
-  assert.equal(blocked.ok,false);assert.match(blocked.message,/projects 12 food against a target of 16/);
+  ok(blocked);assert.match(blocked.aim.hint,/projects 12 food against a target of 16/);
   assert.equal(serialize(empty),before);ok(empty.beginGoal(site.id,'food','trust',2));empty.destroy();
 
   const farm=fresh(),home=farm.active();ok(farm.act('build:garden',0));
-  for(let i=0;i<3;i++)ok(farm.act('work:contract'));
+  farm.state.effort=0;
   const risk=goals.preview(farm.state,home.id,'food','trust',1);ok(risk);assert.match(risk.aim.hint,/Closing now projects/);
   ok(farm.beginGoal(home.id,'food','trust',1));assert.equal(goals.nextStep(farm).kind,'construction');
   ok(farm.workConstruction(120));advances(farm,1);assert.equal(review(farm).aim.status,'Target reached');

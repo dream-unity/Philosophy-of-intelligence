@@ -54,7 +54,8 @@ test('settlements share weekly effort and restore their exact active district, p
   assert.equal(sim.state.effort, 1);
   action(sim, 'work:forage');
   success(sim.visit(second.id));
-  assert.equal(sim.act('work:contract').ok, false);
+  action(sim, 'work:contract');
+  assert.equal(sim.state.effort, 3);
   const copy = create(store);
   assert.equal(snapshot(copy), snapshot(sim));
   assert.equal(copy.active().id, second.id);
@@ -254,12 +255,10 @@ test('market errands cannot be delivered to a different resident or duplicated b
   assert.equal(first.funds, before + 3);
   assert.equal(recipient.bond, 1);
   assert.equal(sim.act('courier:deliver:' + recipient.id).ok, false);
-  assert.equal(sim.act('courier:pick').ok, false);
   settle(sim, north);
   success(sim.visit(first.id));
-  assert.equal(sim.act('courier:pick').ok, false);
-  next(sim);
   action(sim, 'courier:pick');
+  assert.equal(sim.act('courier:pick').ok, false);
   assert.equal(first.delivery.residentId, other.id);
 });
 
@@ -449,6 +448,6 @@ test('two open tabs cannot spend the same shift or replace a completed choice wi
   success(await other.perform('act', 'work:contract'));
   assert.equal(primary.sync(), true);
   assert.equal(primary.active().id, site.id);
-  assert.equal(primary.state.effort, 2);
+  assert.equal(primary.state.effort, 4);
   assert.equal(snapshot(primary), snapshot(other));
 });

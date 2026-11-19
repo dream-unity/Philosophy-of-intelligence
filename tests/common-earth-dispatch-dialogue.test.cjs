@@ -104,7 +104,7 @@ test('taking the blue truck affects the original driver, the district treasury, 
   t.w.week++;t.c.EarthFleet.tick(t.w,t.site);
   assert.equal(t.site.funds,funds-1);assert.equal(t.site.fleet.custody,undefined);t.read();
   assert.equal(t.drive('enrol',t.depot).ok,false);const effort=t.w.effort;
-  assert(t.drive('repair',t.depot).ok);assert.equal(t.w.effort,effort-1);assert.equal(t.site.trust,trust-2);
+  assert(t.drive('repair',t.depot).ok);assert.equal(t.w.effort,Math.min(4,effort+1));assert.equal(t.site.trust,trust-2);
   assert(t.drive('enrol',t.depot).ok);const ready=t.site.fleet.roster.steward.ready;
   assert(ready>t.w.week);assert.equal(t.drive('checkout',t.depot).ok,false);
   t.w.week=ready;assert(t.drive('checkout',t.depot).ok);t.read();

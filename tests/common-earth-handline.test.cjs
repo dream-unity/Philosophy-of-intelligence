@@ -35,7 +35,7 @@ test('a shared handline feeds a depleted community without building a dock or sp
   assert.equal(sim.useHandline({...p,x:1},'land').ok,false);
   ok(await sim.perform('useHandline',p,'land'));
   assert.equal(sim.useHandline(p,'land').ok,false,'one catch can be collected only once');
-  assert.equal(sim.active().food,1);assert.equal(sim.state.effort,0);
+  assert.equal(sim.active().food,1);assert.equal(sim.state.effort,1);
   assert.equal(sim.handlineOffer(p).action,'cast');
   sim.destroy();
 });

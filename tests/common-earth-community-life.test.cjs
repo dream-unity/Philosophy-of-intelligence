@@ -32,7 +32,7 @@ test('a nearby crossing preserves one original character and its host retains au
   assert.equal(doAction('depart',n.id,'home').ok,false);
   visit(n.id);const there=sim.active();assert.equal(there.name,n.name);assert.equal(life.anchor(sim.state).homeId,home.id);
   assert.equal(context.EarthPersonas.profile(there,'steward').name,anchor.name);assert.equal(life.present(home,'steward'),false);
-  assert.equal(sim.act('work:salvage').ok,false);assert.equal(sim.manageSite(home.id,'restart').ok,false);
+  assert.ok(sim.act('work:salvage').ok);assert.equal(sim.manageSite(home.id,'restart').ok,false);
   assert.equal(sim.changeActor(there.residents[0].id,{siteId:there.id,actor:'steward',mode:'walk',x:1,y:1}).ok,false);
   assert.equal(sim.actions('build').every(a=>!a.available),true);
   assert.equal(doAction('apply',null,there.residents[2].id).ok,false);
@@ -50,7 +50,7 @@ test('the host assesses the personal introduction, labour trial, elapsed time an
   assert.equal(life.anchor(sim.state).homeId,target.id);assert.equal(life.anchor(sim.state).originId,home.id);
   assert.equal(context.EarthPersonas.profile(target,'steward').name,anchor.name);
   assert.ok(sim.act('work:salvage').ok);saved();
-  assert.ok(sim.visit(home.id).ok);assert.equal(sim.act('work:salvage').ok,false);saved();
+  assert.ok(sim.visit(home.id).ok);assert.ok(sim.act('work:salvage').ok);saved();
 });
 test('a named visitor inspects a real street and can independently refuse to move',()=>{
   const {sim,life,home,context,doAction,saved}=fixture();
@@ -149,7 +149,7 @@ test('a signer can physically honour an old promise after relocating with a parc
   visit(home.id);assert.equal(doAction('deliver',recipient.id,'market').ok,false);
   const delivered=doAction('deliver',recipient.id,recipient.id);assert.ok(delivered.ok,delivered.message);
   assert.equal(recipient.promise,null);assert.equal(home.stats.kept,1);assert.equal(sim.state.communityLife.parcel,undefined);
-  assert.equal(sim.act('work:salvage').ok,false);saved();
+  assert.ok(sim.act('work:salvage').ok);saved();
 });
 test('core delegates, the driver and an active supply-lane worker may choose to inspect; their original jobs are unavailable while away',()=>{
   for(const role of ['grower','repairer','convenor','driver','porter']){
@@ -335,7 +335,8 @@ test('a second tab cannot act as the village council after the original crosses 
   wait(6500);assert.ok(cmd('arrive',dest.id).ok);
   const funds=a.active().materials,old=rows.get(key);
   assert.equal(b.act('work:salvage').ok,false);b.sync();assert.equal(b.active().id,dest.id);
-  assert.equal(b.act('work:salvage').ok,false);assert.equal(b.active().materials,funds);assert.equal(rows.get(key),old);
+  assert.equal(b.act('build:hall').ok,false);assert.equal(b.active().materials,funds);assert.equal(rows.get(key),old);
+  assert.ok(b.act('work:salvage').ok);assert.equal(b.active().materials,funds+3);
   a.destroy();b.destroy();
 });
 test('an unseen district finances civic projects and retains its actual buildings and research on the first crossing',()=>{
@@ -354,7 +355,7 @@ test('an unseen district finances civic projects and retains its actual building
   assert.equal(JSON.stringify(sim.active().buildings),buildings);
   assert.deepEqual(Array.from(sim.active().tech),Array.from(before.research));
   assert.equal(sim.active().funds,before.funds);assert.equal(sim.active().food,before.food);
-  assert.equal(sim.act('work:salvage').ok,false);saved();
+  assert.ok(sim.act('work:salvage').ok);saved();
 });
 test('a two-district consignment removes exactly the signed loads, then delivers the same goods once',()=>{
   const {sim,life}=fixture(),w=sim.state,[farm,yard]=w.communityLife.outposts;
@@ -653,4 +654,21 @@ test('visitors can see the local mix before arrival and an introduction changes 
   (site.communityLife.visits.steward||={}).met=sim.state.week;
   assert.ok(!life.visitorReception(sim.state,site,guard.id).repels);
   assert.equal(life.visitorReception(sim.state,home,home.residents[0].id),null);
+});
+
+test('at zero civic effort ordinary jobs pay the person playing, develop the town and reopen immediately',()=>{
+  const {sim,home,context,saved}=fixture();
+  const id=context.EarthAgency.actorId(home),before=home.food,wage=sim.purseView().balance;
+  sim.state.effort=0;
+  for(const job of sim.actions('work')){assert.equal(job.cost,0);assert.ok(job.available,job.reason);}
+  const initial=home.growth?.points||0;
+  for(let n=0;n<6;n++)assert.ok(sim.act('work:forage').ok);
+  assert.equal(home.food,before+18);assert.equal(sim.purseView().balance,wage+6);assert.equal(sim.state.effort,4);
+  assert.equal(home.growth.points,initial+6);
+  assert.equal(context.EarthDistrictGrowth.goal(home,context.EarthPersonas.profile(home,id)).points,6);
+  const next=fixture(saved()).sim;assert.equal(next.purseView().balance,wage+6);
+  const parcel=next.actions('work').find(a=>a.id==='courier:pick');assert.ok(next.act(parcel.id).ok);
+  assert.equal(next.purseView().balance,wage+6);const handover='courier:deliver:'+parcel.residentId;
+  assert.ok(next.act(handover).ok);assert.equal(next.act(handover).ok,false);
+  assert.equal(next.purseView().balance,wage+7);assert.ok(next.act('courier:pick').ok);
 });

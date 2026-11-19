@@ -3234,6 +3234,7 @@
     }
     function locationLabel(q) {
       if(!q||q.type==='ground'||q.type==='plot')return;
+      if(q.type==='premises')q={...q,x:q.objectX,y:q.objectY,label:q.assetName};
       const person=q.type==='resident'&&state.site?.residents.find(r=>r.id===q.residentId);
       let label=q.type==='vehicle'?'Community van':q.label;
       if(person){
@@ -3547,6 +3548,44 @@
     }
     function projectContains(kind,index,dx,dy){
       return window.EarthTownArchitecture?.contains(state.site,kind,index,dx,dy,unit)??window.EarthTownProjects?.contains?.(state.site,kind,dx,dy,unit);
+    }
+    function buildingAt(sx,sy){
+      const site=state.site;
+      let front=null,depth=-Infinity;
+      function test(pos,art,index,scale,layer,describe){
+        const order=pos.x+pos.y+layer;
+        if(order<depth)return;
+        const [x,y]=screen(pos.x,pos.y),size=unit*scale,dx=sx-x,dy=sy-y;
+        if(Math.abs(dx)>size*4||dy< -size*6||dy>size*1.8)return;
+        const inside=window.EarthTownProjects?.contains(site,art,dx,dy,size)??
+          window.EarthTownArchitecture?.contains(site,art,index,dx,dy,size);
+        const fallback=Math.abs(dx)/size<1.8&&dy/size> -2.2&&dy/size<1-Math.abs(dx)/size*.45;
+        if(inside??fallback){depth=order;front=()=>({...describe(),objectX:pos.x,objectY:pos.y});}
+      }
+      test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Market exchange',use:'market',
+        activity:'Collect a parcel or bring finished work here for payment.'}));
+      HOMES.forEach((block,i)=>test(centre(block),'home',i,1,.35,()=>{
+        const person=site.residents[i];
+        return {assetId:'home-'+i,use:'home',homeSlot:i,assetName:person?person.name+'’s home':'District home',ownerId:person?.id,
+          activity:person?person.name+' lives here.':'A home in '+site.name+'.'};
+      }));
+      for(const lot of state.lots)if(lot.building){
+        const b=lot.building;
+        test(lot,b.kind,0,1,.35,()=>({assetId:b.id,assetName:b.name,use:'project',plot:lot.plot,buildingKind:b.kind,
+          activity:'Plot '+(lot.plot+1)+'. '+(window.CommonEarthSim?.buildings?.[b.kind]?.info||'Completed district project.')}));
+      }
+      const growth=window.EarthDistrictGrowth;
+      if(growth)for(const h of site.growth?.households||[]){
+        const home=growth.homePoint(site,h.plot);
+        test(home,'home',(h.plot+h.home-1)%3,.36+.055*h.home,.34,()=>({assetId:'household-'+h.plot,use:'home',householdPlot:h.plot,
+          assetName:h.name+'’s home',ownerKey:h.owner,activity:'Residential lot '+(h.plot+1)+'. '+(h.extension||'')}));
+        if(h.shop)test(growth.shopPoint(site,h.businessPlot),'market',0,.36,.3,()=>{
+          const item=window.EarthResidentShops?.products[h.shop];
+          return {assetId:'shop-'+h.businessPlot,use:'shop',plot:h.businessPlot,assetName:h.name+'’s '+(item?.shop||'local')+' shop',ownerKey:h.owner,
+            activity:(item?.name||h.shop)+' · '+h.stock+' in stock.'};
+        });
+      }
+      return front?{type:'premises',kind:'building',...front()}:null;
     }
     function hitWorksite(sx,sy,paintedOnly=false) {
       const ground=world(sx,sy);
@@ -4589,7 +4628,6 @@
         const notice=first?'Work in progress: '+first.name+'. Visit its marked worksite.':
           site?.delivery?'A parcel is out for delivery. Check Work for its recipient.':
           site?.food<5?'The pantry is running low. Glean produce in Personal work.':
-          site?.lastDeliveryWeek!==undefined&&site.lastDeliveryWeek===options.getWeek?.()?'This week’s parcel arrived. Earn supplies in Personal work.':
           'Visit the exchange for parcel work, or choose a job in Personal work.';
         message(point.label+' · '+notice);
       }
@@ -5138,6 +5176,11 @@
     function resolveStop(ref) {
       if(!ref)return null;
       if(ref.type==='activityVenue'){
+        if(Number.isInteger(ref.homeSlot)&&HOMES[ref.homeSlot])return {...ref,...entry(HOMES[ref.homeSlot])};
+        if(ref.householdPlot!=null){
+          const house=state.site.growth?.households[ref.householdPlot];
+          return house?{...ref,...add(window.EarthDistrictGrowth.homePoint(state.site,house.plot),0,.72)}:null;
+        }
         const point=ref.shopPlot!=null?shopDoor(ref.shopPlot):ref.homePlot!=null?window.EarthConstruction?.privateHomeSite?.(ref.homePlot):venuePoint(ref.venue,ref.personId);
         return point?{...ref,x:point.x,y:point.y}:null;
       }
@@ -5372,6 +5415,7 @@
       if(achievement)return {type:'achievement',x:achievement.x,y:achievement.y,label:achievement.label,mark:achievement};
       const job=hitWorksite(sx,sy);
       if(job)return workCard(job);
+      const premises=options.onBuilding||spectator||inset?buildingAt(sx,sy):null;
       let selected=null,best=Infinity,building=null,topDepth=-Infinity;
       for(const base of state.points){
         const q=shiftDoor(base)||base;
@@ -5383,6 +5427,7 @@
           score=Math.min(score,figureDistance(residentFigure(q),sx,sy));
         }
         if(score<best&&score<clamp(unit*.72,19,30)){best=score;selected=q;}
+        if(premises)continue;
         const lot=centre(q.block),depth=lot.x+lot.y;
         if(depth<topDepth)continue;
         const origin=screen(lot.x,lot.y),dx=sx-origin[0],dy=sy-origin[1];
@@ -5391,7 +5436,7 @@
         // Geometric fallback also keeps the procedural, pre-load art interactive.
         if(inside??(Math.abs(dx)<unit*1.4&&Math.abs(dy+unit*.96)<unit*.82)){building=q;topDepth=depth;}
       }
-      if(selected)return selected;
+      if(selected&&!premises)return selected;
       if(state.mode==='walk'){
         for(const q of fixtures){
           const tall=q.kind==='bench'?.35:.96;
@@ -5409,7 +5454,7 @@
           if(actor&&figureDistance(actor,sx,sy)<clamp(unit*.18,3,9))return {type:'pedestrian',x:actor.x,y:actor.y,label:'Passing neighbour'};
         }
       }
-      return building||{type:'ground',...w};
+      return premises||building||{type:'ground',...w};
     }
     function passingHint(point) {
       const recipient=state.site.residents.find(r=>r.id===state.site.delivery?.residentId);
@@ -5487,6 +5532,8 @@
         const berth=hitBerth(p.x,p.y);
         if(state.mode==='boat'){
           if(berth)return sail(embarked,true);
+          const premises=options.onBuilding&&buildingAt(p.x,p.y);
+          if(premises){options.onBuilding(premises);return;}
           // Boats sit below street level. Undo the surface elevation when unprojecting.
           return sail(world(p.x,p.y-.44*unit));
         }
@@ -5497,6 +5544,8 @@
         // All other taps on the road take precedence over broad venue hitboxes.
         const marked=hitWorksite(p.x,p.y,true);
         if(marked){choose(workCard(marked));return;}
+        const premises=options.onBuilding&&buildingAt(p.x,p.y);
+        if(premises){options.onBuilding(premises);return;}
         const ground=world(p.x,p.y);
         if(traversable(ground,true)){navigate(ground,null,false);return;}
         const worksite=hitWorksite(p.x,p.y);
@@ -5523,6 +5572,7 @@
         placeLot(q,device);return;
       }
       if(!q)return;
+      if(q.type==='premises'){options.onBuilding?.(q);return;}
       if(q.type==='people'){options.onTalkChoices(q.people);return;}
       if(options.onTalkChoices&&(q.type==='resident'||q.type==='npc')&&!q.doorstep){options.onTalkChoices([q]);return;}
       if(q.type==='achievement'){inspectAchievement(q.mark);return;}
@@ -6072,6 +6122,7 @@
       if(Math.hypot(sx-vx,sy-vy)<Math.max(13,unit*.79))choices.push({kind:'asset',assetId:'van',assetName:'Public van'});
       const berth=hitBerth(sx,sy);
       if(berth)choices.push({kind:'asset',assetId:berth.id,assetName:berth.label||'Moored boat'});
+      const building=buildingAt(sx,sy);if(building)choices.push(building);
       return choices.map(p=>({...p,siteId:state.site.id,siteName:state.site.name}));
     }
     if(inset){

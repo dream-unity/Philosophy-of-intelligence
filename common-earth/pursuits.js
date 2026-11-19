@@ -224,10 +224,11 @@
         body.append(progressLabel,collectButton,release);
         tick();restoreFocus();return;
       }
-      body.append(make('p',model.actor+' can take one job for '+site.name+'. Each takes a few seconds and uses no weekly effort.'));
+      body.append(make('p',model.actor+' can take one job for '+site.name+'. Collect finished work to earn 1 personal fund, 1 development point and restore 1 civic effort (up to 4).'));
       if(model.cart)body.append(make('p','Community handcart · made by '+model.cart.builder+' · '+fittingNames[model.cart.fixture]+'.','personal-cart'));
       const grid=make('div',null,'personal-work-grid');
       for(const task of model.choices){
+        if(!jobs[task.kind].item&&sim.state.communityLife&&!root.EarthCommunityLife.isHome(sim.state,site))continue;
         const button=control('', 'start',task.kind,model);
         button.append(make('strong',task.label),make('small',task.seconds+'s · '+task.terms));
         button.disabled=!task.available;

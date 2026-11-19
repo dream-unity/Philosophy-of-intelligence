@@ -4,7 +4,7 @@
   'use strict';
   const findTown=(world,id)=>world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id);
   const funds=n=>n+' '+(n===1?'fund':'funds');
-  function mount({sim,hud,street,enterStreet,travel,redraw,notify,inspectWork}){
+  function mount({sim,hud,street,enterStreet,travel,redraw,notify,inspectWork,buildingAction}){
     const doc=root.document,$=id=>doc.getElementById(id);
     const el=(tag,value,css)=>{const item=doc.createElement(tag);if(value!=null)item.textContent=value;if(css)item.className=css;return item;};
     function btn(label,run){const b=el('button',label);b.type='button';b.addEventListener('click',run);return b;}
@@ -492,10 +492,10 @@
     }
     const getScene=()=>scene||street();
     const region=root.EarthRegionMap?.mount({sim,watch,getScene});
-    pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,
+    pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,buildingAction,
       returnStreet:()=>{close();street()?.recenter();},refresh:redraw,ledger:(town,personId)=>{openDevelopment(town,personId?{personId}:{});ledger.scrollIntoView({block:'nearest'});},contextChanged:ribbon});
     $('street-stage')?.addEventListener('earthregionalmeet',e=>hud.meetPerson(e.detail.id));
-    return {chart:()=>region?.chart(),selectChart:id=>region?.selectChart(id),watch,close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},
+    return {chart:()=>region?.chart(),selectChart:id=>region?.selectChart(id),watch,inspectBuilding:building=>pointInspector?.inspectBuilding(building),close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},
       render(isAtlas){if(isAtlas)pointInspector?.clear();region?.refresh();if(watchedId)syncObserved();pointInspector?.redraw();ribbon();atlasDirectory(isAtlas);}};
   }
   root.EarthDistrictDesk=Object.freeze({mount});

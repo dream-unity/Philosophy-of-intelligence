@@ -219,7 +219,7 @@
   }
 
   function reclaimableShift(world) {
-    const home=homeDistrict(world),host=world.sites.find(s=>(!home||s.id===home.id)&&s.shift&&!s.shift.history.length);
+    const home=homeDistrict(world),host=world.sites.find(s=>(!home||s.id===home.id)&&s.shift&&s.shift.effortPaid!==false&&!s.shift.history.length);
     if(!host)return null;
     const person=personById(host,host.shift.residentId);
     return {kind:'group',group:'people',page:'shift',siteId:host.id,label:'Review your day with '+person.name,
@@ -302,8 +302,7 @@
         goods={...goods,materials:goods.materials+root.CommonEarthSim.freightReserve(world,site,'materials')};
     }else return step;
     const missing=Object.entries(goods).find(([key,n])=>site[key]<n);
-    // Paid civic shifts would spend the effort needed to finish this decision.
-    // A resident can take personal work before the calendar closes instead.
+    // Offer a personal job for the specific resource at the decision threshold.
     if(missing && root.EarthPursuits && world.effort===cost && Object.hasOwn(paidWork,missing[0])){
       const [resource,needed]=missing;
       return {kind:'personalWork',siteId:site.id,resource,label:'Earn '+resource+' for '+site.name,
@@ -343,7 +342,7 @@
     if(world.effort<cost){
       const shift=cost===world.effort+1 && reclaimableShift(world);
       if(shift)return {...shift,detail:step.label+' needs '+cost+' effort. '+shift.detail};
-      return weekStep(site,step.label+' needs '+cost+' effort. You have '+world.effort+' left. The next week restores four.');
+      return {...groupStep(site,'work','Take a paid shift','work:contract'),detail:step.label+' needs '+cost+' civic effort. Each completed job restores one.'};
     }
     return step;
   }

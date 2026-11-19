@@ -2,7 +2,7 @@
    journey and proposal buttons can issue a command to the simulation. */
 (function(root){
   'use strict';
-  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,contextChanged}){
+  function mount({sim,street,watch,travel,returnStreet,refresh,ledger,buildingAction,contextChanged}){
     const doc=root.document,id=key=>doc.getElementById(key),host=id('region-inspector');
     if(!host)return null;
     const detail=id('region-point-detail'),toggle=id('region-inspect-point');
@@ -35,10 +35,10 @@
       host.hidden=false;
       doc.body.toggleAttribute('data-region-roaming',inspectingOther);
       doc.body.toggleAttribute('data-region-detail',true);
-      const read=event.inspection&&event.inspectedAtWeek===w.week&&event.inspectedRevision===w.actionRevision?event.inspection:expanded?region?.inspect?.(w,base,event.x,event.y,chartId):null;
+      const read=event.inspection&&event.inspectedAtWeek===w.week&&event.inspectedRevision===w.actionRevision?event.inspection:expanded&&event.kind!=='building'?region?.inspect?.(w,base,event.x,event.y,chartId):null;
       id('region-anchor').textContent=(anchor?.name||'Original resident')+' · home in '+home.name;
       id('region-context-name').textContent=event.personName||event.assetName||view?.name||read?.label||event.terrain?.label||event.inspection?.label||'Open ground';
-      toggle.textContent=expanded?'Hide details':event.kind==='resident'?'Inspect resident':event.kind==='asset'?'Inspect assignment':view?'Inspect community':'Inspect ground';
+      toggle.textContent=expanded?'Hide details':event.kind==='resident'?'Inspect resident':event.kind==='building'?'Inspect building':event.kind==='asset'?'Inspect assignment':view?'Inspect community':'Inspect ground';
       toggle.setAttribute('aria-expanded',String(expanded));detail.hidden=!expanded;
       if(!expanded)return;
       const geo=region?.geography(w,base);
@@ -46,12 +46,12 @@
       const line=t=>{if(t)detail.append(element('p',t));};
       if(event.choices?.length>1){
         const label=element('label','At this point'),field=doc.createElement('select');
-        field.setAttribute('aria-label','Choose a person or vehicle at this point');
+        field.setAttribute('aria-label','Choose what to inspect at this point');
         event.choices.forEach((choice,index)=>{
           const name=choice.personName||choice.assetName||choice.activity?.label||choice.kind;
           const option=element('option',name+(choice.siteName?' · '+choice.siteName:''));
           option.value=String(index);option.selected=choice.siteId===event.siteId&&choice.kind===event.kind&&
-            (choice.kind==='asset'?choice.assetId===event.assetId:choice.personId===event.personId);field.append(option);
+            (choice.assetId?choice.assetId===event.assetId:choice.personId===event.personId);field.append(option);
         });
         field.addEventListener('change',()=>{
           const choice=event.choices[Number(field.value)];if(!choice||selection!==event)return;
@@ -78,6 +78,19 @@
         }
         else if(view.id===local.id)action('Meet in the street',()=>{clear();returnStreet();doc.getElementById('street-stage').dispatchEvent(new CustomEvent('earthregionalmeet',{detail:{id:event.personId}}));});
         else if(p)action('Follow '+p.name,()=>{if(!street()?.inspectRegionalPerson?.(p.id,view.id))watch(view.id,{person:p.id});});
+      }else if(view&&event.kind==='building'){
+        line(event.activity);
+        const owner=event.ownerId||(event.ownerKey&&root.EarthPersonas?.list(view).find(p=>(p.identityKey||p.id)===event.ownerKey)?.id);
+        const localAction=(label,kind)=>action(label,()=>{clear();buildingAction(kind,event,owner);});
+        if(view.id===local.id){
+          if(owner&&owner!==root.EarthAgency?.actorId(view)&&root.EarthCommunityLife?.present(view,owner)!==false)
+            localAction('Meet '+(root.EarthPersonas?.profile(view,owner)?.name||'the resident'),'meet');
+          if(event.use==='home')localAction('Go to the door','door');
+          if(event.use==='shop')localAction('Browse this shop','shop');
+          if(event.use==='market')localAction('Visit the exchange','market');
+          if(event.use==='project')localAction('Visit this project','project');
+          if(event.use==='market'||event.use==='project')localAction('See available jobs','work');
+        }
       }else if(event.kind==='asset'){
         const fleet=view&&event.assetId==='truck'&&root.EarthFleet?.assignment?.(w,view);
         line(typeof event.activity==='string'?event.activity:event.activity?.label);
@@ -122,6 +135,7 @@
     function inspect(event){
       const d=event.detail;if(!d||!Number.isFinite(d.x)||!Number.isFinite(d.y))return;
       const prior=selection?.siteId,changed=!selection||selection.siteId!==d.siteId||selection.kind!==d.kind;
+      if(!d.picked&&selection?.kind==='building'&&selection.siteId===d.siteId)return;
       if(!d.picked&&selection?.picked&&!changed&&Math.hypot(d.x-selection.x,d.y-selection.y)<.025)return;
       selection={...d,inspectedAtWeek:world().week,inspectedRevision:world().actionRevision};if(changed||d.picked){message='';expanded=!!d.picked;}
       redraw();if(prior!==selection?.siteId)contextChanged();
@@ -129,7 +143,10 @@
     id('street-stage').addEventListener('earthregionalinspect',inspect);
     toggle.addEventListener('click',()=>{expanded=!expanded;redraw();});
     id('region-return').addEventListener('click',()=>{clear();returnStreet();contextChanged();});
-    return {clear,redraw,town:activeTown,openGround:()=>!!selection&&!selection.siteId,roaming:()=>!!selection&&selection.siteId!==selection.originSiteId};
+    function inspectBuilding(building){
+      const siteId=sim.active()?.id;if(siteId)inspect({detail:{...building,picked:true,siteId,originSiteId:siteId,x:0,y:0}});
+    }
+    return {clear,redraw,inspectBuilding,town:activeTown,openGround:()=>!!selection&&!selection.siteId,roaming:()=>!!selection&&selection.siteId!==selection.originSiteId};
   }
   root.EarthRegionalInspector={mount};
 })(globalThis);

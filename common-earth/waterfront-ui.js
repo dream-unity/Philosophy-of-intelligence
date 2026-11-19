@@ -49,7 +49,7 @@
       shoalButton.disabled=busy||blocked||state.returning;
       setText(shoalButton,state.sailingToShoal?'Stop sailing':'Follow seabirds');
       const net=aboard&&site.buildings.some(b=>b.kind==='fishingDock')?sim.fishingOffer():null;
-      nets.hidden=!net;nets.disabled=acting||!net?.available;setText(nets,net?.available?'Set nets · 4 food':'Nets unavailable');nets.title=net?.reason||'Costs 1 weekly effort';
+      nets.hidden=!net;nets.disabled=acting||!net?.available;setText(nets,net?.available?'Set nets · 4 food':'Nets unavailable');nets.title=net?.reason||'Earn a wage on landing';
       boat.disabled=busy||blocked;setText(boat,state.boarding?'Cancel boarding':state.returning?'Cancel return':state.findingQuay||state.findingLine?'Stop journey':aboard?'Return to quay':'Board a boat');
     }
     function report(message,error=false){setText(result,message);notify?.(message,error);}

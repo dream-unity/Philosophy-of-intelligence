@@ -268,7 +268,7 @@ test('an outstanding parcel can fund a same-week promise without spending the fi
   snapshot.effort=1;snapshot.sites[0].funds=0;
   const sim=browser.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(snapshot)});
   const parcel=browser.EarthLegacy.guidance(sim);assert.match(parcel.actionId,/^courier:deliver:/);
-  success(sim.act(parcel.actionId));assert.equal(sim.state.effort,1);
+  success(sim.act(parcel.actionId));assert.equal(sim.state.effort,2);
   const promise=browser.EarthLegacy.guidance(sim);assert.equal(promise.actionId,'fulfil:'+p.id);
   success(sim.act(promise.actionId));assert.equal(sim.active().stats.kept,1);
   initial.destroy();sim.destroy();

@@ -67,40 +67,10 @@
     return Boolean(root.EarthAgency && person.bond<10 && (site.food>0 || root.EarthPursuits) &&
       !site.agency?.meals?.some(meal=>meal.week===world.week && meal.to===person.id));
   }
-  function oneWeekBond(world,site,person,effort,target) {
-    let maximum=person.bond+effort;
-    // Each new paid activity can add one bond; a kept promise adds two.
-    const canPromise=person.promise || world.week-person.lastPromise>=3;
-    const hearing=person.heard?0:1;
-    if(canPromise && effort>=hearing){
-      const type=['garden','workshop','hall'][person.slot];
-      if((site.construction || []).some(j=>j.scope==='street' && j.kind===type))maximum+=2;
-      else if(effort>hearing)maximum++;
-    }
-    if(site.delivery?.residentId===person.id)maximum++;
-    if(mealPossible(world,site,person))maximum++;
-    if(site.shift?.residentId===person.id)maximum++;
-    // Use a generous bound: any of these already-arranged decisions might name this resident.
-    maximum+=site.pending.filter(v=>v.week<=world.week+1).length;
-    if(site.commission?.phase==='trial')maximum++;
-    if(site.neighbourWork?.active)maximum++;
-    if(world.legacy?.term)maximum++;
-    if(maximum<target)return reject('The remaining effort and arranged activities cannot add '+(target-person.bond)+' bond with '+person.name+' before this weekly close. Choose at least two weeks for another conversation, promise or shared day.');
-    return null;
-  }
-
   function closingPantry(world,site) {
     const sim=root.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(world)});
     try{return sim.forecastNext().sites.find(s=>s.id===site.id).closing.food;}
     finally{sim.destroy();}
-  }
-
-  function hasFlexibleFood(world,site) {
-    if(world.sites.length>1 || world.voyage || world.legacy?.term || site.shift || site.mandate ||
-      site.neighbourWork?.active || site.strategy || site.commission?.phase==='trial' || site.pending.length)return true;
-    if((site.construction || []).some(j=>j.scope==='street' &&
-      ['garden','wetland','workshop'].includes(j.kind==='dismantle'?j.original?.kind:j.kind)))return true;
-    return site.city?.precincts.some(r=>r.target && ['food','water'].some(use=>use===r.use || use===r.target));
   }
 
   function preview(world,siteId,aimKey,guardKey,weeks) {
@@ -111,42 +81,33 @@
     if(!aim || !guard)return reject('Choose an aim and a safeguard available in this district.');
     if(aim.key===guard.key)return reject('Choose a different safeguard so you can follow two effects.');
     if(!integer(weeks,1,4))return reject('Choose a review in one to four weeks.');
-    const extraEffort=world.sites.some(s=>s.shift && !s.shift.history.length)?1:0;
-    const availableEffort=world.effort+extraEffort;
+    const availableEffort=world.effort;
     let hint=aim.hint;
     if(aim.target(aim.value)>aim.value){
       const pending=plannedCity(site,aimKey,weeks);
       if(pending && pending.retained<aim.target(aim.value)){
         const project=pending.model.projects[pending.rule.project];
         if(weeks<project.turns)return reject('Opening a '+pending.rule.name.toLowerCase()+' project takes at least two weeks and a crew to finish. Choose a longer review or set this goal once the scheduled opening is within a week.');
-        if(weeks===project.turns && availableEffort<project.effort)return reject('This review would require starting '+pending.rule.name.toLowerCase()+' this week. Starting the project costs '+project.effort+' effort. Choose at least '+(weeks+1)+' weeks or return after your effort refreshes.');
+        if(weeks===project.turns && availableEffort<project.effort)hint='Complete jobs to restore the '+(project.effort-availableEffort)+' civic effort needed to commission this week. '+hint;
         if(weeks===project.turns && (site.funds<project.funds || site.materials<project.materials)){
           const budget='Commissioning this week costs '+project.effort+' effort, '+project.funds+' funds and '+project.materials+' materials. You have '+site.funds+' funds and '+site.materials+' materials.';
-          const alternative=root.EarthPursuits || site.delivery || site.shift || world.voyage || site.construction?.length || pending.records.some(r=>r.target);
-          if(availableEffort===project.effort && !alternative)return reject(budget+' Your remaining effort covers only the commission. Choose a longer review so you can raise the supplies first.');
           hint=budget+' Include time to raise or release supplies before this week closes. '+hint;
         }
       }
       if(weeks===1 && aimKey.startsWith('bond:') && availableEffort<=1){
-        const person=site.residents.find(p=>aimKey==='bond:'+p.id);
-        const limit=oneWeekBond(world,site,person,availableEffort,aim.target(aim.value));
-        if(limit)return limit;
         hint='The review is at the next weekly close. You have '+world.effort+' effort left. A delivered parcel, a kept promise or a day spent together can also raise the bond. '+hint;
       }
       if(weeks===1 && aimKey==='food' && !availableEffort){
         const closing=closingPantry(world,site),target=aim.target(aim.value);
         if(closing<target){
-          const current=root.EarthConstruction?.weeklyAdjustment(site,world).food || 0;
-          // At most the repairer and exchange worker can add another food each.
-          if(!root.EarthPursuits && !hasFlexibleFood(world,site) && closing-current+2<target)return reject('Closing now projects '+closing+' food against a target of '+target+'. With no effort left, even moving the whole local crew to food cannot fill the gap. Choose a longer review or return after your effort refreshes.');
-          hint='Closing now projects '+closing+' food against a target of '+target+'. '+(root.EarthPursuits?'Personal work can bring in food before you advance, even with no effort left.':'There is no effort left for tending the beds. Check what staffed projects, incoming supplies or a move into food growing can deliver before review.');
+          hint='Closing now projects '+closing+' food against a target of '+target+'. Tend the beds before advancing to add 3 food per shift.';
         }
       }
       if(aimKey==='voices' && weeks===1){
         const unheard=site.residents.filter(p=>!p.heard).length;
         // A convenor can also hear one resident in a council session at the close.
         const sessions=world.legacy?.term?.slot===2?1:0;
-        if(unheard>availableEffort+sessions)return reject(unheard+' residents still need a hearing. Listening takes one effort each. Choose a longer review or return next week.');
+        if(unheard>availableEffort+sessions)hint='Complete jobs to restore civic effort for the remaining hearings. '+hint;
       }
     }
     return {ok:true,siteId:site.id,siteName:site.name,startWeek:world.week,dueWeek:world.week+weeks,
@@ -289,7 +250,8 @@
         if(work)return work;
       }
       const action=person.promise?'fulfil':!person.heard || person.lastTalk!==world.week?'listen':world.week-person.lastPromise>=3?'promise':null;
-      if(aim.key!=='voices' && (!action || !world.effort || site.delivery?.residentId===person.id)){
+      if(aim.key!=='voices' && (!action || (!world.effort&&action!=='promise') || site.delivery?.residentId===person.id ||
+          person.bond+1>=entry.aim.target&&mealPossible(world,site,person))){
         const alternative=bondActivity(sim,site,person);
         if(alternative)return alternative;
       }

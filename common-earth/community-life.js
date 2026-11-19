@@ -1229,6 +1229,11 @@
     if(cmd==='beginGoal'&&args[0]!==a.homeId||cmd==='found'&&args[3]&&args[3]!==a.homeId)return 'Only your home community can sponsor that decision.';
     if(isHome(world,site)||cmd==='changeActor'&&(args[0]==='steward'||root.EarthAgency?.shadowPass?.(site,world,args[0])))return '';
     if(['visit','advance','workConstruction','regularTruck','disputedTruck','neighbourAppointment','communityLife','reset'].includes(cmd))return '';
+    if(cmd==='act'&&/^(?:work:|courier:)/.test(args[0]))return '';
+    if(cmd==='pursue'){
+      const request=args[0],kind=request?.action==='start'?request.kind:site.pursuits?.ticket?.kind;
+      if(['food','materials','funds'].includes(kind))return '';
+    }
     if(cmd==='converse'&&['shadow','truck-testimony','truck-report'].includes(args[1]))return '';
     if(cmd==='converse'&&typeof args[1]==='string'&&args[1].startsWith('field:'))return '';
     if(cmd==='converse'&&(root.EarthDialogue?.readOnly?.(args[1])??['news','work','interests','purpose','dream','visit-fit','followup'].includes(args[1])))return '';
@@ -1430,8 +1435,7 @@
       const v=c.visits.steward;
       if(!v?.met||!at('market'))return fail('Meet the host first, then work a trial shift at the exchange.');
       if(v.lastShift===world.week)return fail('The host has recorded this week’s trial. Return next week if another is needed.');
-      if(!world.effort)return fail('A trial shift takes one effort. A new week renews your working time.');
-      v.help=true;v.shifts=(v.shifts||0)+1;v.lastShift=world.week;world.effort--;
+      v.help=true;v.shifts=(v.shifts||0)+1;v.lastShift=world.week;
       const good=kind(site).goods;site[good]=Math.min(Number.MAX_SAFE_INTEGER,site[good]+1);
       return receipt(a.profile.name+' completed a supervised shift '+kind(site).need+'. '+host.name+' recorded one '+good+' in local stores.');
     }

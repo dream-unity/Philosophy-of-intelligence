@@ -22,7 +22,7 @@
     workshop: {name:'Repair workshop', funds:6, materials:3, info:'Recovers 2 materials each week. Its tools also improve adjacent gardens.'},
     market: {name:'Neighbourhood market', funds:7, materials:3, info:'A full customer catchment earns 3 funds per week. A shared one earns 1, and a shop without customers earns 0. Outer exchanges, population and trading links expand demand. A depot adds 1 fund to an operating shop.'},
     hall: {name:'Assembly hall', funds:5, materials:2, info:'Adds 1 wellbeing each week and makes room for shared apprenticeships.'},
-    fishingDock: {name:'Fishing dock', funds:6, materials:4, info:'Build a shore station and fishing jetty. Once the crew opens the dock, board a boat to land 4 food for 1 effort, once per week.'},
+    fishingDock: {name:'Fishing dock', funds:6, materials:4, info:'Build a shore station and fishing jetty. Once the crew opens the dock, board a boat to land 4 food on the crew’s weekly outing.'},
     pier: {name:'Exchange depot', funds:6, materials:3, info:'One depot at either end raises a route’s base shipment limit from 2 to 4. An adjacent market earns 1 extra fund.'},
     wetland: {name:'Water commons', funds:5, materials:4, info:'Grows 1 food each week. Protects the district during a flood and supports slow repair.'}
   };
@@ -1126,9 +1126,9 @@
       if(!site)return actions;
       function add(category,id,label,description,options,run){
         if(group!=='all' && group!==category)return;
-        const {effort=1,goods={},gate='',...meta}=options || {};
+        const {effort=category==='work'?0:1,goods={},gate='',...meta}=options || {};
         const away=meta.residentId&&root.EarthCommunityLife?.residency?.(site,meta.residentId)&&root.EarthCommunityLife.residency(site,meta.residentId)!=='member';
-        const reason=root.EarthCommunityLife?.visitReason?.(world,site)||(away?'This person is away or visiting. Open Towns to check their membership.':'')||actionReason(site,effort,goods,gate);
+        const reason=(category!=='work'&&root.EarthCommunityLife?.visitReason?.(world,site))||(away?'This person is away or visiting. Open Towns to check their membership.':'')||actionReason(site,effort,goods,gate);
         actions.push({id,group:category,label,description,cost:effort,goods,available:!reason,reason,blocker:!reason?null:gate?'prerequisite':world.effort<effort?'effort':'supplies',...meta,run});
       }
       if(group==='all'||group==='people')for(const p of site.residents){
@@ -1242,12 +1242,14 @@
       if(!site.delivery){
         const next=site.stats.deliveries%site.residents.length;
         const order=site.residents.slice(next).concat(site.residents.slice(0,next));
-        const p=order.find(r=>r.id!==site.agency?.actor&&(root.EarthCommunityLife?.residency?.(site,r.id)||'member')==='member')||order[0];
-        const reward=p.bond<10?'3 funds and 1 bond':'3 funds. Your bond is already at 10';
-        add('work','courier:pick','Collect the market parcel','Carry the parcel to '+p.name+', the '+p.role.toLowerCase()+'. Delivery earns '+reward+'.',{residentId:p.id,venue:'market',gate:site.lastDeliveryWeek===world.week?'The next parcel arrives next week.':''},()=>{
-          site.delivery={residentId:p.id,week:world.week};
-          return 'Parcel collected. '+(site.shift?.residentId===p.id?p.name+' is with you and can take the parcel now.':'Choose Meet in People to find '+p.name+' in the district.');
-        });
+        const p=order.find(r=>r.id!==site.agency?.actor&&(root.EarthCommunityLife?.residency?.(site,r.id)||'member')==='member');
+        if(p){
+          const reward=p.bond<10?'3 funds and 1 bond':'3 funds. Your bond is already at 10';
+          add('work','courier:pick','Collect the market parcel','Carry the parcel to '+p.name+', the '+p.role.toLowerCase()+'. Delivery earns '+reward+'.',{residentId:p.id,venue:'market'},()=>{
+            site.delivery={residentId:p.id,week:world.week};
+            return 'Parcel collected. '+(site.shift?.residentId===p.id?p.name+' is with you and can take the parcel now.':'Choose Meet in People to find '+p.name+' in the district.');
+          });
+        }
       }else{
         const p=site.residents.find(r=>r.id===site.delivery.residentId);
         if(p)add('work','courier:deliver:'+p.id,'Deliver the parcel to '+p.name,(site.shift?.residentId===p.id?'Hand the parcel to '+p.name+' while you are together.':'Meet '+p.name+' in the district to hand over the market parcel.')+(p.bond<10?' +3 funds · +1 bond.':' +3 funds · bond already at 10.'),{effort:0,residentId:p.id,venue:'resident',gate:p.id===site.agency?.actor?'Switch characters to hand this parcel to '+p.name+'.':''},()=>{
@@ -1286,17 +1288,17 @@
       root.EarthProvisions?.credit(world,site,'catch',landed,root.EarthAgency?.actorId(site)||'steward');
       delete site.handline;
       if(food===2)site.shoalDrift=((site.shoalDrift||0)+1)%3;
-      return complete('Landed '+food+' food on the shared handline for '+site.name+'.'+(food===2?' The shoal scattered. Follow the birds to find it again.':''),site);
+      return complete('Landed '+food+' food on the shared handline for '+site.name+'.'+(food===2?' The shoal scattered. Follow the birds to find it again.':'')+payForWork(site,'Handline catch'),site);
     }
     function fishingOffer(){
-      const site=current(),food=4,effort=1;
+      const site=current(),food=4,effort=0;
       let reason='';
       if(!waterfront(site))reason='Fishing needs a community with a navigable waterfront.';
       else if(!has(site,'fishingDock')){
         reason=site.construction?.some(job=>job.kind==='fishingDock')?'The crew is still building the fishing dock.':'Build a fishing dock in Community actions → Build.';
-      }else if(site.lastFishingWeek===world.week)reason='This week’s catch is in. Fish again in week '+(world.week+1)+'.';
+      }
+      else if(site.lastFishingWeek===world.week)reason='The net crew has landed this week’s catch.';
       else if((root.EarthFisheries?.ground?.(site,world.week)?.available??food)<food)reason='The net crew needs four free fish in the local ground. Take a smaller handline catch or let the fish return next week.';
-      else if(world.effort<effort)reason='Fishing needs 1 effort. Advance the week to refresh.';
       else if(site.food>Number.MAX_SAFE_INTEGER-food)reason='The community food store is full.';
       return {available:!reason,reason,food,effort};
     }
@@ -1306,11 +1308,19 @@
       const offer=fishingOffer();
       if(!offer.available)return reject(offer.reason);
       if(root.EarthFisheries?.take&&!root.EarthFisheries.take(site,world.week,offer.food))return reject('The fishing ground changed before the nets were set.');
-      world.effort-=offer.effort;
       const landed=apply(site,{food:offer.food}).food;
       root.EarthProvisions?.credit(world,site,'catch',landed,root.EarthAgency?.actorId(site)||'steward');
       site.lastFishingWeek=world.week;
-      return complete('The fishing crew landed '+offer.food+' food for '+site.name+'.',site);
+      return complete('The fishing crew landed '+offer.food+' food for '+site.name+'.'+payForWork(site,'Net fishing'),site);
+    }
+    function payForWork(site,label){
+      const actor=signer(site);
+      const paid=root.EarthPurses?.productionReceipt(world,site,actor,1,label+' earned 1 personal fund.');
+      const point=root.EarthDistrictGrowth?.contribute(world,site,actor);
+      const restored=world.effort<MAX_EFFORT;
+      if(restored)world.effort++;
+      const awards=[paid&&'1 personal fund',point&&'1 development point',restored&&'1 civic effort'].filter(Boolean);
+      return awards.length?' Earned '+awards.join(' · ')+'.':'';
     }
     function act(id,plot,group='all',present){
       if(present&&!present())return reject('Meet again at the destination before completing this action.');
@@ -1330,7 +1340,8 @@
       world.effort-=a.cost;payment(site,a.goods);
       const outcome=a.run(plot);
       if(outcome?.ok===false){world.effort+=a.cost;apply(site,a.goods);return outcome;}
-      return complete(outcome,site,true,root.EarthAgency?.actor(site));
+      const reward=a.group==='work'&&a.id!=='courier:pick'?payForWork(site,a.label):'';
+      return complete(outcome+reward,site,true,root.EarthAgency?.actor(site));
     }
     function occupiedLot(site,plot){
       return site.buildings.some(item=>item.plot===plot) || (site.construction||[]).some(job=>job.scope==='street'&&job.plot===plot);
@@ -1379,7 +1390,7 @@
         service=improved?' Adds 2 units of cargo capacity on '+improved+' current route'+(improved===1?'':'s')+'.':
           partners.length || has(site,'pier')?' Existing route capacity stays the same.':' Future routes from this depot have a base capacity of 4 units.';
       }
-      if(kind==='fishingDock')service=' Board a waterfront boat and spend 1 effort to land 4 food once per week.';
+      if(kind==='fishingDock')service=' Board a waterfront boat and land 4 food on the crew’s weekly outing.';
       if(kind==='wetland')service=' Protects local homes and food during high water.';
       return {ok:true,available:!reason,reason,label:b.name,text:'Lot '+(plot+1)+' once open · '+forecast+'.'+pairing+service+effects,forecast,delta,goods,fulfilled:promises,neighbours:around};
     }
@@ -1434,7 +1445,6 @@
       if(kind==='start'){
         if((root.EarthCommunityLife?.residency?.(site,id)||'member')!=='member')return reject('This shift belongs to a district member.');
         if(id===site.agency?.actor)return reject('Choose another character to spend a day with this resident.');
-        if(world.effort<1)return reject('Starting a shift needs 1 effort. Advance the week to refresh.');
         const gate=domain.gate(world,site,id);
         if(!gate.available)return reject(gate.reason);
       }
@@ -1443,20 +1453,20 @@
       if(!result.ok)return reject(result.message);
       const shortfall=applyShiftResult(site,result);
       if(shortfall)return shortfall;
-      if(kind==='start')world.effort--;
       if(kind==='choose' && !site.shift.history.length){
         site.lastShiftWeek=world.week;
         site.residents.find(p=>p.id===site.shift.residentId).lastShiftWeek=world.week;
       }
       if(kind==='finish' && !site.shift.history.length){
-        world.effort=Math.min(MAX_EFFORT,world.effort+1);
+        if(site.shift.effortPaid!==false)world.effort=Math.min(MAX_EFFORT,world.effort+1);
         // Older saves marked the district and the host as busy as soon as the shift began.
         if(site.lastShiftWeek===world.week)delete site.lastShiftWeek;
         const host=site.residents.find(p=>p.id===site.shift.residentId);
         if(host.lastShiftWeek===world.week)delete host.lastShiftWeek;
-        result.message+=' Your 1 effort is available again.';
+        if(site.shift.effortPaid!==false)result.message+=' Your reserved effort was returned.';
       }
       if(kind==='finish'){
+        if(site.shift.history.length)result.message+=payForWork(site,'Completed resident shift');
         const actor=id?.siteId===site.id && id.residentId===site.shift.residentId?id:undefined;
         root.EarthConstruction?.releaseFromShift?.(site,site.shift,actor);
       }
@@ -2204,6 +2214,7 @@
       const produces=request?.action==='collect'&&site.pursuits?.ticket?.kind==='food',before=site.food;
       const result=root.EarthPursuits.run(site,request,scene);
       if(produces&&result.ok&&site.food>before)root.EarthProvisions?.credit(world,site,'harvest',site.food-before,request.actorId);
+      if(result.ok && request.action==='collect')result.message+=payForWork(site,'Personal work');
       return result.ok?complete(result.message,site,request.action==='collect'):result;
     }
     function provisionsView(){return root.EarthProvisions?.view(world,current())||null;}
@@ -2298,6 +2309,7 @@
       const scene=typeof guard==='function'?guard():guard;
       const result=domain.run(world,site,request,scene);
       if(!result.ok)return result;
+      if(domain===root.EarthFleet&&request.action==='repair')result.message+=payForWork(site,'Dispatch shift');
       const saved=complete(result.message,site);return saved.ok?result:saved;
     }
     function adoptProduction(next){
@@ -2373,6 +2385,7 @@
         const site=current(),result=root.EarthCommunityLife?.run(world,site,request,typeof proof==='function'?proof():proof,newSettlement,
           (person,parcel)=>fulfilled(site,person,'The original signer brought '+parcel.amount+' '+parcel.good+' from their home exchange.',world,'steward'));
         if(!result?.ok)return result||reject('Enter a district to meet its neighbours.');
+        if(request.action==='help')result.message+=payForWork(site,'Admission trial shift');
         const saved=complete(result.message,current(),request.action!=='routeChoice'||request.target==='inspect');
         return saved.ok?{...result,message:saved.message}:saved;
       }),

@@ -137,7 +137,7 @@ body[data-observing-town] .observer-dock { left:104px; max-width:calc(100% - 114
 #region-streets span { position:absolute; bottom:4px; left:4px; background:#142a27e8; color:#fff1cb; padding:4px 7px; border-radius:3px; }
 
 #region-open { position:absolute; z-index:19; bottom:67px; left:8px; width:clamp(66px,7vw,90px); min-height:40px; border:1px solid #aabd9e; border-radius:4px; background:#18342eee; color:#fff0cf; cursor:pointer; }
-#region-inspector { position:absolute; z-index:14; top:10px; left:10px; max-width:min(420px,calc(100% - 86px)); border:1px solid #829784; border-radius:5px; background:#142e2df7; color:#faefcf; padding:8px 10px; }
+#region-inspector { max-height:calc(100% - 22px); overflow:auto; position:absolute; z-index:14; top:10px; left:10px; max-width:min(420px,calc(100% - 86px)); border:1px solid #829784; border-radius:5px; background:#142e2df7; color:#faefcf; padding:8px 10px; }
 #region-inspector[hidden],#region-point-detail[hidden] {display:none;}
 #region-inspector header {display:flex;align-items:center;gap:12px;justify-content:space-between;}
 #region-inspector strong,#region-inspector small { display:block; }

@@ -67,6 +67,17 @@
     }
     return g;
   }
+  function contribute(world,site,id){
+    const p=root.EarthPersonas?.profile(site,id);
+    if(!p)return false;
+    const g=register(site, members(site));
+    g.points++;
+    const home=id==='steward'&&world.communityLife?world.sites.find(t=>t.id===world.communityLife.homeId):site;
+    if(home&&home!==site&&!resident(home,p))register(home,[p]);
+    const household=resident(site,p)||(home&&resident(home,p));
+    if(household)household.points++;
+    return true;
+  }
   function report(site){
     const g=site.growth,level=site.tech.length;
     return {points:g?.points||0,target:targets[level]||0,next:eras[level]||'',vehicle:vehicles[g?.vehicle||0],
@@ -497,5 +508,5 @@
     })&&g.history.every(h=>h&&validTransfers(h)&&nat(h.round)&&h.round<=g.round&&nat(h.week)&&h.week<=week&&nat(h.wages)&&
       [h.food,h.materials,h.funds].every(Number.isSafeInteger)&&Array.isArray(h.events)&&h.events.every(e=>typeof e==='string'));
   }
-  root.EarthDistrictGrowth={valid,period,due,settle,transfers,recordResearch,closeWeek:(world,site)=>settle(world,site,true),work,activeWork,homePoint,shopPoint,shopDoor,shopListings,buyShopStock,housingPlaces,extent,register,members,report,goal,vehicles};
+  root.EarthDistrictGrowth={contribute,valid,period,due,settle,transfers,recordResearch,closeWeek:(world,site)=>settle(world,site,true),work,activeWork,homePoint,shopPoint,shopDoor,shopListings,buyShopStock,housingPlaces,extent,register,members,report,goal,vehicles};
 })(globalThis);

@@ -142,7 +142,8 @@ test('visitors cannot withdraw, harvest, process or ship a foreign district’s 
   ok(travel('meet',null,host));ok(travel('help',null,'market'));ok(sim.advance());ok(travel('help',null,'market'));ok(travel('apply',null,host));
   assert.equal(w.communityLife.homeId,dest.id);
   assert.equal(home.purses.people.steward.balance,0);assert.equal(home.purses.people.steward.earned,2);
-  assert.equal(dest.purses.people.steward.balance,2);assert.equal(dest.purses.people.steward.earned,0);
+  assert.equal(dest.purses.people.steward.balance,4);assert.equal(dest.purses.people.steward.earned,0);
+  assert.equal(dest.purses.people.steward.productionIncome,2);
   assert.ok(c.EarthPurses.validMoves(w));
   ok(t.act('gatherLot','salvage'));ok(t.act('makeBatch','reclaim'));
   assert.deepEqual(raw(home.resourceLedger.bins),original,'the move grants authority over the new stores, not its neighbours');
@@ -263,7 +264,7 @@ test('one renewable lake ground supplies net crews and residents while an alread
   assert.deepEqual(raw(api.ground(s,1)),{available:12,capacity:12,recovery:3,name:'Freshwater fishing ground'});
   const food=s.food,effort=w.effort;ok(sim.useHandline(quay,'cast'));assert.equal(api.ground(s,1).available,11);
   const old=raw(w);delete old.sites[0].fishGround;
-  ok(sim.fish(s.id,()=>({...quay,mode:'boat'})));assert.equal(s.food,food+4);assert.equal(w.effort,effort-1);
+  ok(sim.fish(s.id,()=>({...quay,mode:'boat'})));assert.equal(s.food,food+4);assert.equal(w.effort,Math.min(4,effort+1));
   assert.equal(api.ground(s,1).available,7);no(sim.fish(s.id,()=>({...quay,mode:'boat'})));
   for(const id of ['walker-0','walker-1','walker-2','walker-3','walker-4','driver',s.residents[0].id]){
     const activity=c.EarthResources.quickGather(w,s,id,true);assert.equal(activity.resource,'fish');

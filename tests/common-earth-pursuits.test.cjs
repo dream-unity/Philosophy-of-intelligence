@@ -48,7 +48,7 @@ test('all three resource paths are payable from an empty, exhausted district and
     assert.equal(collect(ctx,sim).ok,false);
   }
   finish(ctx,sim,'food');
-  assert.equal(site.food,4);assert.equal(sim.state.effort,0);assert.equal(sim.state.week,1);
+  assert.equal(site.food,4);assert.equal(sim.state.effort,4);assert.equal(sim.state.week,1);
   const later=open();assert.equal(later.active().food,4);assert.equal(later.state.week,1);
   assert.equal(collect(ctx,later).ok,false);
   later.destroy();sim.destroy();
@@ -160,6 +160,7 @@ test('the zero-effort food commitment and the last-effort building deficit both 
 test('a one-point bond commitment can earn food and share it in person after the weekly effort runs out',()=>{
   const ctx=setup(),{sim,world}=ctx,s=sim.active(),p=s.residents[0];
   p.bond=9;p.heard=true;p.lastTalk=1;s.food=sim.state.effort=0;
+  s.delivery={residentId:s.residents[1].id,week:1};
   ok(sim.beginGoal(s.id,'bond:'+p.id,'trust',1));
   assert.equal(world.EarthGoals.nextStep(sim).kind,'personalWork');
   finish(ctx,sim,'food');const next=world.EarthGoals.nextStep(sim);

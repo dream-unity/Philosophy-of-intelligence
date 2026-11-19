@@ -73,7 +73,7 @@ test('a food deficit takes precedence over a much larger industrial surplus on a
       if(!repairer.promise)optional(sim,'promise:'+repairer.id);
       if(repairer.promise)optional(sim,'fulfil:'+repairer.id);
     }
-    while(sim.state.effort) {
+    for(let turn=0;turn<4 && sim.state.effort;turn++) {
       const vote=sim.actions('council').find(a=>a.available && a.id.startsWith('vote:') && !a.goods.food);
       if(vote){ok(sim.act(vote.id));continue;}
       if(industrial.food<12){ok(sim.act('work:forage'));continue;}

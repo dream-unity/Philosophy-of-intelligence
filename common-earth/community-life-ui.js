@@ -163,7 +163,7 @@
         if(asSelf){
           const hostRef=a.hostType==='resident'?{type:'resident',residentId:a.hostId}:{type:'npc',npcId:a.hostId},met=a.checks[0].pass;
           if(!met&&a.hostId)buttons(box,btn('Meet '+a.host,()=>station('meet',null,hostRef,a.host)));
-          else if(met&&a.needsTrial)buttons(box,btn('Work the trial shift · 1 effort',()=>station('help',null,market,'the exchange')));
+          else if(met&&a.needsTrial)buttons(box,btn('Work the trial shift',()=>station('help',null,market,'the exchange')));
           const apply=btn('Ask to join',()=>station('apply',null,hostRef,a.host));
           apply.disabled=!a.available;
           const group=btn('Ask to move together',()=>station('moveGroup',null,hostRef,a.host));

@@ -117,6 +117,18 @@
   $('district-membership-hint')?.addEventListener('click',()=>streetHud?.openTool('neighbours'));
   const districtDesk=streetHud&&window.EarthDistrictDesk?.mount({sim,hud:streetHud,street:getStreet,
     enterStreet:()=>{if(view!=='street')setView('street',false);},redraw:redrawStreet,notify,inspectWork:openWorksite,
+    buildingAction:(kind,building,owner)=>{
+      if(kind==='meet')streetHud.meetPerson(owner);
+      else if(kind==='door'){
+        const door={type:'activityVenue',homeSlot:building.homeSlot,householdPlot:building.householdPlot};
+        atVenue(door,building.assetName,()=>districtDesk.inspectBuilding(building));
+      }else if(kind==='shop'){if(streetHud.openTool('stores')&&!visitorScene('stores'))localMarket.openShop(building.plot);}
+      else if(kind==='work'){selectGroup('work');focusActions();}
+      else{
+        const venue=kind==='market'?{type:'market'}:{type:'building',plot:building.plot,kind:building.buildingKind,label:building.assetName};
+        atVenue(venue,kind==='market'?'the market exchange':building.assetName,event=>interactAt(event));
+      }
+    },
     travel:id=>{
       if(view!=='street')setView('street',false);
       if(streetHud.openTool('neighbours'))districtPanel?.travelTo(id);
@@ -166,7 +178,7 @@
     const host=$('scene-'+id),original=section?.parentElement,next=section?.nextSibling;
     if(!module||!host||!original)return;
     streetHud?.registerTool(id,{
-      render:()=>{if(visitorScene(id))return;if(section.parentElement!==host)host.append(section);module.render();},
+      render:()=>{if(id!=='work'&&visitorScene(id))return;if(section.parentElement!==host)host.append(section);module.render();},
       close:()=>{
         module.invalidate?.();
         if(section.tagName==='DETAILS')section.open=false;
@@ -335,7 +347,7 @@
       detail:()=>streetHud.active()==='live',notice:result=>{if(result?.ok)redrawStreet();if(result?.message)streetHud.notify(result.message);}});
     function calendarActivities(scene){
       const site=sim.active(),member=site&&(!sim.state.communityLife||window.EarthCommunityLife.isHome(sim.state,site));
-      show('calendar-work',!!(member&&personalWork));
+      show('calendar-work',!!(site&&personalWork));
       show('calendar-study',!!(member&&lifePanel));
       show('calendar-fishing',!!(member&&waterfrontUI&&scene?.waterfront&&window.CommonEarthSim.waterfront(site)));
     }
@@ -737,7 +749,7 @@
     if(hasNets && $('street-fish')){
       const offer=sim.fishingOffer();
       $('street-fish').disabled=!offer.available;
-      put('street-fishing-terms',offer.available?'Community nets: '+offer.food+' food for '+offer.effort+' weekly effort.':offer.reason);
+      put('street-fishing-terms',offer.available?'Community nets · '+offer.food+' food per catch.':offer.reason);
     }
     put('street-mode',aboard?'On the water':'On the ground');
     const label=crewOrder?'Choose worksite':
@@ -775,6 +787,7 @@
         },
         onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
         onObservation:seen=>streetHud?.setWatch(seen),onTruckInteract:()=>streetHud?.openTool('truck'),
+        onBuilding:building=>{streetHud?.close(false);districtDesk?.inspectBuilding(building);},
         onTalkChoices:people=>streetHud?.openTalkChoices?.(people),
         onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},
         onInteract:interactAt,onHandcart:()=>sceneWork(),onChooseCrewTarget:()=>crewOrders?.openTargets(),onAssignWorksite:id=>crewOrders?.assign(id),onCancelCrewSelection:()=>crewOrders?.cancel(),onPlace:point=>placeBuilding(point,true),onHint:text=>put('street-hint',text),
@@ -1218,7 +1231,8 @@
     call.setAttribute('aria-label',a.label);call.dataset.action=a.id;
     card.append(title,descriptor);
     const costs=[a.cost+' civic effort',...Object.entries(a.goods||{}).map(([key,value])=>value+' '+key)];
-    card.append(node('small','action-cost',costs.join(' · ')));
+    card.append(node('small','action-cost',a.group==='work'?
+      (a.id==='courier:pick'?'Paid on delivery':'On completion')+' · 1 personal fund · 1 development point · restore 1 civic effort (up to 4)':costs.join(' · ')));
     if(!a.available&&a.reason)card.append(node('small','action-reason',a.reason));
     card.append(call);
     const site=sim.active();
@@ -1342,7 +1356,7 @@
       tab.setAttribute('aria-pressed',String(active));tab.classList.toggle('active',active);
     }
     put('actions-heading',groups[group]);
-    if(sim.state.communityLife&&!window.EarthCommunityLife.isHome(sim.state,site)){
+    if(group!=='work'&&sim.state.communityLife&&!window.EarthCommunityLife.isHome(sim.state,site)){
       show('decision-context',false);
       put('actions-heading','Visiting '+site.name);
       list.append(node('p','action-description',site.residents[2].name+' and the residents govern this district. You can speak to people, inspect their goals, work a trial shift or apply to join.'),
@@ -1503,7 +1517,7 @@
       if(window.EarthShifts&&!day){
         const gate=window.EarthShifts.gate(sim.state,site,person.id);
         const card=node('article','action-card');
-        card.append(node('strong','action-label','A day with '+person.name),node('p','action-description','Spend 1 effort to join their six-hour round. Choose how to fit in paid work, care and their own plans.'));
+        card.append(node('strong','action-label','A day with '+person.name),node('p','action-description','Join their six-hour round. Choose how to fit in paid work, care and their own plans.'));
         const b=button('Spend a day together',()=>atVenue({type:'resident',residentId:person.id},person.name,async event=>{
           if(presentResult(await sim.perform('beginShift',person.id,liveVenue({type:'resident',residentId:person.id})))){
             encounter=event;viewingShift=true;street.setSite(sim.active());render();focusActions();
@@ -1600,17 +1614,8 @@
         },'secondary-button'));
       }
       const reclaim=availableActions.filter(a=>a.id.startsWith('reclaim:'));
-      const resting=group==='work' ? availableActions.filter(a=>a.blocker==='effort') : [];
       for(const action of availableActions){
-        if(!action.id.startsWith('reclaim:') && !resting.includes(action))list.append(actionRow(action));
-      }
-      if(resting.length){
-        const later=node('details','shift-guide');
-        later.dataset.worksiteDisclosure='weekly-jobs';
-        later.append(node('summary','','Weekly jobs · effort returns in week '+(sim.state.week+1)));
-        for(const action of resting)later.append(actionRow(action));
-        later.append(button('Preview next week',reviewWeek,'text-button'));
-        list.append(later);
+        if(!action.id.startsWith('reclaim:'))list.append(actionRow(action));
       }
       if(reclaim.length){
         const lots=node('details','shift-guide lot-review');lots.open=site.buildings.length===9;

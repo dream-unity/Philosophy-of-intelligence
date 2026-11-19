@@ -145,8 +145,8 @@ test('payday, cancelled work and a completed local commission cannot pay twice a
   for(let i=0;i<4;i++)ok(wages.sim.act('work:contract'));
   assert.equal(wages.sim.active().funds,opening+16);
   const paid=wages.load();
-  assert.equal(paid.act('work:contract').ok,false);
   assert.equal(paid.active().funds,opening+16);
+  ok(paid.act('work:contract'));assert.equal(paid.active().funds,opening+20);
 
   const builder=world();
   const site=builder.sim.active(),funds=site.funds,materials=site.materials;

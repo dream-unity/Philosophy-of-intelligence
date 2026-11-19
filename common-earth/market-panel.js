@@ -288,7 +288,7 @@
       if(neighbourhood.length){
         const shelves=el('section',null,'market-resource-detail');
         shelves.append(el('h4','Neighbourhood shops'));
-        for(const offer of neighbourhood){const owner=el('details');owner.append(el('summary',root.EarthResidentShops.products[offer.good].name+' · Lot '+(offer.plot+1)+' · '+offer.stock+' available'));action(owner,offer);shelves.append(owner);}
+        for(const offer of neighbourhood){const owner=el('details');owner.dataset.shopPlot=String(offer.plot);owner.append(el('summary',root.EarthResidentShops.products[offer.good].name+' · Lot '+(offer.plot+1)+' · '+offer.stock+' available'));action(owner,offer);shelves.append(owner);}
         box.append(shelves);
       }
       const recipes=(p.options||[]).filter(o=>o.action==='makeWare');
@@ -431,7 +431,12 @@
       if(currentSite!==identity(site)){invalidate();currentSite=identity(site);}
       area('purse');return true;
     }
-    return {open:render,openPurse,openResources,render,snapshot,restore,close:invalidate,invalidate};
+    function openShop(plot){
+      area('shops');
+      const shelf=body.querySelector('[data-shop-plot="'+plot+'"]');
+      if(shelf){shelf.open=true;shelf.scrollIntoView({block:'nearest'});}
+    }
+    return {open:render,openShop,openPurse,openResources,render,snapshot,restore,close:invalidate,invalidate};
   }
   root.EarthMarketPanel=Object.freeze({mount});
 })(typeof window==='undefined'?globalThis:window);

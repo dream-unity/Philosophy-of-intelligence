@@ -27,7 +27,7 @@ test('a crew must open the dock before a catch can reach the food ledger',async(
   assert.equal((await sim.perform('fish','different-site')).ok,false);
   ok(await catchFish());
   assert.equal(sim.active().food,before+4);
-  assert.equal(sim.state.effort,effort-1);
+  assert.equal(sim.state.effort,Math.min(4,effort+1));
   sim.destroy();sim=model.create({storage:durable});
   assert.equal(sim.active().food,before+4);
   assert.equal((await catchFish()).ok,false);

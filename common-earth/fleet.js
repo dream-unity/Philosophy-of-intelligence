@@ -235,8 +235,8 @@
       add('return','Return truck to dispatch',custody.kind==='theft'?'Report back at the market exchange. The original driver gets the vehicle back and you can make amends.':
         'Return it at the market exchange so the regular driver can resume deliveries.','','depot');
     }
-    if(suspended&&!custody)add('repair','Volunteer a dispatch shift','Give one civic effort to help the displaced crew. Dispatch restores access and the town regains 2 trust.',
-      world.effort<1?'Civic effort refreshes next week.':'','depot');
+    if(suspended&&!custody)add('repair','Volunteer a dispatch shift','Help the displaced crew complete a dispatch shift. Dispatch restores access and the town regains 2 trust.',
+      '','depot');
     return {actorId:id,siteId:site.id,generation:site.foundingRevision||0,week:world.week,serial:f.serial||0,owner:'Transport cooperative',
       driver:driver(site),role,induction,next,depot,custody,choices,incident:f.incident||null,history:f.records||[]};
   }
@@ -305,7 +305,7 @@
         delete f.custody;f.parkedWeek=world.week;
         message=(unreported?'Dispatch recovered the blue truck at the exchange. ':actorName+' returned the blue truck at the exchange. ')+quote.driver+' can resume the co-op route.';break;
       case 'repair':
-        delete f.incident;world.effort--;site.trust=Math.min(100,site.trust+2);
+        delete f.incident;site.trust=Math.min(100,site.trust+2);
         message=actorName+' helped the dispatch crew cover the missed work. The restriction is lifted and the community regained 2 trust.';break;
     }
     if(request.action!=='take')entry(f,world.week,unreported?'driver':id,message,['return','repair'].includes(request.action)?'driver':null);f.serial++;

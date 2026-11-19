@@ -159,14 +159,13 @@
     }
     else if(site.lastShiftWeek===world.week)reason='This district has already hosted a shift this week.';
     else if(resident.lastShiftWeek&&world.week-resident.lastShiftWeek<3)reason=`${resident.name} can host another shift in week ${resident.lastShiftWeek+3}.`;
-    else if(world.effort<1)reason='A resident shift needs 1 effort. Advance the week to refresh.';
     return {available:!reason,reason};
   }
   function start(world,site,residentId){
     const g=gate(world,site,residentId);if(!g.available)return reject(g.reason);
     const r=person(site,residentId),story=stories[r.slot],room=(site.buildings||[]).filter(b=>b.kind===story.craft).sort((a,b)=>a.plot-b.plot)[0];
     const reserve=integer(r.shiftMemory?.reserve,0,NEED)?r.shiftMemory.reserve:0;
-    const shift={v:1,week:world.week,residentId,time:0,reserve,at:home(residentId),stopId:null,history:[],venues:{earn:{type:'market'},care:home(site.residents[story.neighbour].id),meaning:room?{type:'building',plot:room.plot,kind:room.kind}:home(residentId)}};
+    const shift={v:1,effortPaid:false,week:world.week,residentId,time:0,reserve,at:home(residentId),stopId:null,history:[],venues:{earn:{type:'market'},care:home(site.residents[story.neighbour].id),meaning:room?{type:'building',plot:room.plot,kind:room.kind}:home(residentId)}};
     return {ok:true,shift,message:`You joined ${r.name} at 09:00. Plan the day together before 15:00.`};
   }
   function live(site,week){return Boolean(site?.shift&&site.shift.week===week&&shiftPerson(site));}
@@ -180,7 +179,7 @@
       guide:'The clock moves when you arrive or choose an activity. Finish by 15:00. After a completed visit, covering 2 household credits adds 1 wellbeing next week. A shortfall costs 1 wellbeing. Up to 2 spare credits carry into this resident’s next shift.',
       priorityStopId:story.priority,priorityLabel:`${r.name} asked to make time for “${story.stops[story.priority].name}”. ${r.bond<10?'Combining that visit with another builds 1 bond.':'Your bond is already at 10.'}`,
       stops,currentStopId:current?.id||null,choices:current?.choices||[],history,
-      finishLabel:shift.history.length?'Finish the day together':'Cancel day · recover 1 effort',canFinish:true};
+      finishLabel:shift.history.length?'Finish the day together':'Cancel day',canFinish:true};
   }
   function arrive(site,stopId,week){
     if(!live(site,week))return reject('There is no current resident shift.');

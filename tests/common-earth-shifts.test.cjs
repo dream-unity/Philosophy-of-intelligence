@@ -33,6 +33,7 @@ test('leaving an unworked day restores exactly the reserved effort once, includi
   ok(sim.arriveShift('earn'));
   ok(sim.act('work:contract'));
   const saved = snapshot(sim);
+  saved.effort=2;delete saved.sites[0].shift.effortPaid;
   // Releases before cancellable shifts recorded the hosting date when the day opened.
   saved.sites[0].lastShiftWeek = saved.week;
   saved.sites[0].residents[0].lastShiftWeek = saved.week;
@@ -48,7 +49,7 @@ test('leaving an unworked day restores exactly the reserved effort once, includi
   ok(restored.beginShift(id));
   ok(restored.act('work:contract'));
   ok(restored.finishShift());
-  assert.equal(restored.state.effort, effort);
+  assert.equal(restored.state.effort, Math.min(4,effort+2));
   assert.equal(restored.active().funds, funds + 4);
 });
 
@@ -70,7 +71,7 @@ test('activities for each resident can be completed in one day, recalled and set
     const mid = snapshot(sim);
     const finished = simulation(mid);
     ok(finished.finishShift());
-    assert.equal(finished.state.effort, effort - 1);
+    assert.equal(finished.state.effort, effort);
     assert.equal(finished.active().residents[slot].bond, 1);
     assert.equal(finished.active().residents[slot].shiftMemory.week, sim.state.week);
     assert.equal(finished.beginShift(resident.id).ok, false);
