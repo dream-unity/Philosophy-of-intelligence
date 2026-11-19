@@ -309,7 +309,7 @@
         delete g.road;events.push('A road crew member moved away. The district returned the reserved supplies and can put together a new crew.');
       }
     }
-    const usedLots=new Set(),hiring=new Set(g.households.filter(h=>h.order?.employer).map(h=>h.order.employer));
+    const usedLots=new Set();
     for(const h of g.households){
       if(h.shop)usedLots.add(h.businessPlot);
       if(h.build?.shop)usedLots.add(h.build.lot);
@@ -350,16 +350,6 @@
         if(credit(p,-amount,reason)){
           h.businessFunds=amount;
           add(transfers,p.name,p.name+'’s shop','funds',amount,p.id,'capital-'+h.plot,'Owner invested working capital');
-        }
-      }
-      if(h.shop&&!hiring.has(h.owner)&&h.stock<3&&(h.businessFunds<2||!h.businessFunds||h.stock===0&&(h.plot+g.round)%3===0)&&reserves>=1&&cash>=2&&((h.plot+g.round)%2===0||h.stock===0)){
-        const id='stock-'+g.round+'-'+h.plot,article=root.EarthResidentShops.products[h.shop].name;
-        const why=p.name+' bought a material from the district to make a '+article+'.';
-        if(credit(p,-1,why)){
-          site.materials--;site.funds++;h.stock++;h.restockedRound=g.round;act(p,'shop');h.last=why;workedOn(p,1);
-          add(transfers,p.name,jobs.publicAccount,'funds',1,p.id,id,'Bought workshop input');
-          publicMove(p.name,'materials',1,p,id,'Used in manufacture');
-          add(transfers,'Shop workbench',p.name,article,1,p.id,id,'Finished retail stock');continue;
         }
       }
       free.push(p);

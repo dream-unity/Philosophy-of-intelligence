@@ -184,13 +184,19 @@
     if(!order)return null;
     const good=order.resourceName||String(order.action).replace(/^(Collect|Deliver) /,'').split(' to ')[0];
     const pay=order.price+' personal fund'+(order.price===1?'':'s');
+    if(order.kind==='marketSupply'&&order.activity==='shop'){
+      const action='I reserved a '+good.toLowerCase()+' at '+order.source+' and I’m walking there to collect it.';
+      const terms='I pay '+(order.beneficiaryName||'the shopkeeper')+' '+pay+' from my own purse when I arrive.';
+      return {order,action,terms};
+    }
     if(order.phase==='build'){
       const action='I’m using the '+order.tool+' at '+order.destination+' to '+lower(order.action)+'.';
       const terms=order.price?order.payer+' reserved '+pay+' for my work on the site.':
         'I committed '+order.amount+' '+good+' from the household to do this work myself.';
       return {order,action,terms};
     }
-    const action=order.phase==='collect'?(order.resource==='fish'?'I’m taking the '+order.tool+' to '+order.source+' to land the catch.':
+    const action=order.phase==='collect'?(order.kind==='paidOrder'&&order.orderGood==='retail'?
+      'I’m using the '+order.tool+' at '+order.source+' to '+lower(order.action)+'.':order.resource==='fish'?'I’m taking the '+order.tool+' to '+order.source+' to land the catch.':
       'I’m going to '+order.source+' for '+good.toLowerCase()+'.'):'I have '+order.amount+' '+good.toLowerCase()+' to hand over at '+order.destination+'.';
     const terms=order.payer+' set aside '+pay+' for me. The payment clears when the goods reach '+(order.beneficiaryName||'the receiver')+'.';
     return {order,action,terms};

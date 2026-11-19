@@ -203,7 +203,10 @@ test('an independent shop buys a raw lot and hires a different resident who make
   });
   assert(story,'the named worker received an escrowed wage and the shop sold stock');
   assert(story.receipts.some(t=>t.reason==='Used the reserved input at the workbench'));
-  assert(story.receipts.some(t=>t.reason==='Reserved workshop input'));
+  const reserved=story.receipts.find(t=>t.reason==='Reserved workshop input');
+  const used=story.receipts.find(t=>t.reason==='Used the reserved input at the workbench');
+  assert.equal(reserved.good,used.good);assert.equal(reserved.amount,used.amount);
+  assert.equal(net(story.receipts,'Order escrow',reserved.good),0);
   assert(story.receipts.some(t=>t.reason==='Finished commissioned stock'));
   assert.equal(story.receipts.find(r=>r.reason==='Wage on delivery').amount,story.reserved);
   assert(g.runtime.CommonEarthSim.readSave(g.snapshot()));

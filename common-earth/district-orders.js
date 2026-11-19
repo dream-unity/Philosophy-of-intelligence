@@ -139,7 +139,7 @@
     let best=null;
     for(const opening of offers.openings){
       const {shop,employer,item,source,demand}=opening;
-      if(employer.id===p.id||offers.hired.has(shop.owner)||!demand)continue;
+      if(offers.hired.has(shop.owner)||!demand)continue;
       const proficiency=site.careers?.[p.id]?.skills?.[item.axis]??p.aptitudes?.[item.axis]??40;
       const threshold=item.threshold-(site.growth.custom==='Repair circle'&&shop.access&&item.axis==='craft'?4:0);
       if(proficiency<threshold)continue;
@@ -149,7 +149,7 @@
       if(familiarity<=-3)continue;
       const wage=proficiency>=65?2:1;
       if((shop.businessFunds||0)<wage+source.cost||source.cost+wage>4)continue;
-      const score=37+proficiency/4+Math.min(15,demand*3)+familiarity+
+      const score=37+Number(employer.id===p.id&&p.traits.initiative>=60)*2+proficiency/4+Math.min(15,demand*3)+familiarity+
         (p.hobbyAxis===item.axis?6:0)-shop.stock*8;
       if(!best||score>best.score)best={...opening,wage,score,familiarity};
     }
@@ -164,14 +164,16 @@
       employer:shop.owner,employerId:employer.id,employerName:employer.name,employerPlot:shop.businessPlot,input:source.id,
       start:h.lastStop||'home',request:1,cargo:0,phase:'collect',tool:item.shop==='weaving'?'weaving frame':item.shop==='joinery'?'joinery tools':item.shop==='music'?'tuning tools':'sewing tools',
       why:employer.name+' needs '+item.name.toLowerCase()+' for '+offer.demand+' interested household'+(offer.demand===1?'':'s')+'. My '+item.axis+' skill meets the job requirement. The shop reserved '+wage+' for my work.'};
-    if(offer.familiarity>0)o.why+=' We have kept agreements before.';
+    const independent=employer.id===p.id;
+    if(independent)o.why='I own this shop. '+offer.demand+' households could use a '+o.resourceName+'. My business bought the raw input and set aside '+wage+' for my time at the bench.';
+    else if(offer.familiarity>0)o.why+=' We have kept agreements before.';
     if(h.lastPoint)o.fromPoint={...h.lastPoint};
     setLeg(site,o,at);
     shop.businessFunds-=source.cost+wage;offers.hired.add(shop.owner);
     if(source.cost)changed(log,customer(o),'Exchange till',funds,source.cost,employer.id,o.id,'Bought the shop’s raw input');
-    changed(log,source.cost?'Exchange shelf':customer(o),escrow,source.name,1,employer.id,o.id,'Reserved workshop input');
-    changed(log,customer(o),escrow,funds,wage,employer.id,o.id,'Employer reserved the wage');
-    h.order=o;h.activity='shop';h.last=p.name+' accepted a private shift. '+o.why;return o;
+    changed(log,source.cost?'Exchange shelf':customer(o),escrow,source.id,1,employer.id,o.id,'Reserved workshop input');
+    changed(log,customer(o),escrow,funds,wage,employer.id,o.id,independent?'Owner reserved a making session':'Employer reserved the wage');
+    h.order=o;h.activity='shop';h.last=o.why;return o;
   }
   function start(world,site,p,h,floor,offers,at,log){
     const g=site.growth,b=supplier(site);
@@ -274,7 +276,9 @@
       changed(log,o.cargo?o.worker:escrow,carrier,o.resourceName,o.request,o.person,o.id,'Returned consignment');
     }else if(o.cargo){
       const good=label[o.kind];site[good]+=o.cargo;
-      changed(log,o.worker,stores[good],good,o.cargo,o.person,o.id,'Recovered undelivered goods');
+      const receiver=good==='food'?'Pantry preparation':'Building-store receiving';
+      changed(log,o.worker,receiver,o.resourceName,o.cargo,o.person,o.id,'Recovered the carrier’s load');
+      changed(log,receiver,stores[good],good,o.cargo,o.person,o.id,'Recovered undelivered goods');
     }
     h.last=why+'. The customer recovered the advance.';delete h.order;
   }
@@ -313,18 +317,25 @@
     changed(log,escrow,p.name,funds,earn,p.id,o.id,'Wage on delivery');
     if(o.dues){site.funds+=o.dues;changed(log,escrow,publicAccount,funds,o.dues,p.id,o.id,'Market due on delivery');}
     if(business){
-      business.stock++;business.restockedRound=site.growth.round;business.hires=(business.hires||0)+1;business.points++;site.growth.points++;
-      changed(log,p.name,who,o.resourceName,1,o.employerId,o.id,'Employer received commissioned stock');
+      business.stock++;business.restockedRound=site.growth.round;
+      if(o.person!==o.employerId){business.hires=(business.hires||0)+1;business.points++;site.growth.points++;}
+      changed(log,p.name,who,o.resourceName,1,o.employerId,o.id,o.person===o.employerId?'Owner stocked the shop':'Employer received commissioned stock');
       business.last=who+' paid '+p.name+' '+earn+' for making a '+o.resourceName+'.';
       if(member(site,o.employerId))root.EarthAutonomy?.remember?.(site,world.week,o.person,o.employerId,'paidShift');
     }else if(o.kind==='exchange'){
       if(receiving){
         const item=o.contents==='food'?'pantry':'supplies';receiving[item]=(receiving[item]||0)+o.cargo;
-        changed(log,p.name,o.recipientName,o.contents,o.cargo,o.recipientId,o.id,'Received the addressed consignment');
+        const doorstep=o.recipientName+'’s doorstep';
+        changed(log,p.name,doorstep,o.resourceName,o.cargo,p.id,o.id,'Opened the addressed consignment');
+        changed(log,doorstep,o.recipientName,o.contents,o.cargo,o.recipientId,o.id,'Received the addressed consignment');
       }else changed(log,p.name,'Receiving household',o.resourceName,o.cargo,p.id,o.id,'Delivered addressed consignment');
     }else{
       const local=publicUnits;
-      if(local){site[good]+=local;changed(log,p.name,stores[good],good,local,p.id,o.id,o.client==='public'?'Public order filled':'Growers’ in-kind share');}
+      if(local){
+        const receiver=good==='food'?'Pantry preparation':'Building-store receiving';
+        changed(log,p.name,receiver,o.resourceName,local,p.id,o.id,'Received raw lots for public use');
+        site[good]+=local;changed(log,receiver,stores[good],good,local,p.id,o.id,o.client==='public'?'Public order filled':'Growers’ in-kind share');
+      }
       if(o.cargo>local)changed(log,p.name,carrier,o.resourceName,o.cargo-local,p.id,o.id,'Export handed to buyer');
       if(o.resource==='fish'&&local)root.EarthProvisions?.credit?.(world,site,'catch',local,p.id);
     }

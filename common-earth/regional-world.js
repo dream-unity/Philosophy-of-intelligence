@@ -474,7 +474,7 @@
       (rivals&&bothNeed?14:0)+(old?.meetings>=2?3:0),0,100);
     const terms=(rivals&&bothNeed&&trust<48||Math.min(home.trust,other.trust)<25&&rivals)?'disputed':
       trust>=61&&!bothNeed?'joint':trust>=45&&home.specialty!==other.specialty?'exchange':'passage';
-    const previous=old?.terms;
+    const previous=localAgreement(r,home.id,otherId,id)?.terms;
     const detail=terms==='disputed'?'Both work parties depend on this '+terrainCell(geo,id).label.toLowerCase()+
       '. Access at this parcel is suspended while the district meetings consider their rival use.':
       terms==='joint'?'The councils allow one another to use this ground and add its adjoining survey marks to their maps.':
@@ -541,14 +541,15 @@
     const longstanding=(old?.meetings||0)>=3;
     const joint=host.trust>=50&&trust+Math.min(8,Math.floor(reach/12))>=59&&!pressure;
     const adopts=joint||host.trust>=30&&(trust+Number(longstanding)*6>=39||host.materials<floor.materials+1);
-    let terms=joint?'joint':adopts?'passage':old?.terms||'disputed';
-    if(terms==='disputed'&&!pressure&&host.trust>=45)terms='passage';
-    const accepted=terms!=='disputed'&&host.materials<Number.MAX_SAFE_INTEGER&&host.funds<Number.MAX_SAFE_INTEGER;
+    const previous=localAgreement(r,site.id,host.id,id)?.terms||'disputed';
+    const offersPassage=adopts||!pressure&&host.trust>=45;
+    const terms=joint?'joint':offersPassage?'passage':previous;
+    const accepted=offersPassage&&host.materials<Number.MAX_SAFE_INTEGER&&host.funds<Number.MAX_SAFE_INTEGER;
     const detail=accepted?(terms==='joint'?'Both meetings opened the parcel to shared harvest and maintenance.':
       'The host accepted passage and retained the right to decide who may harvest.')+' The home crew transferred 1 material and 1 fund to the receiving community for upkeep.':
       (pressure?host.name+' needs its reserve of '+good+' for local commitments. ':host.name+' asked for evidence of dependable cooperation. ')+'Access terms did not change.';
     if(accepted){site.trust=Math.min(100,site.trust+1);host.trust=Math.min(100,host.trust+1);host.materials++;host.funds++;trip.kit.materials--;trip.kit.funds--;}
-    saveAgreement(r,k,{a:site.id,b:host.id,terms:accepted?terms:localAgreement(r,site.id,host.id,id)?.terms||'disputed',trust,week:world.week,step:world.regionalWorld.step,
+    saveAgreement(r,k,{a:site.id,b:host.id,terms:accepted?terms:previous,trust,week:world.week,step:world.regionalWorld.step,
       cell:id,meetings:(old?.meetings||0)+1,reviewWeek:world.week+(accepted?5:1),detail});
     reveal(world,r,geo,host.id,id);reveal(world,r,geo,site.id,id);
     record(world,r,site,trip.name+' met '+host.name+' at the boundary. '+detail,trip);

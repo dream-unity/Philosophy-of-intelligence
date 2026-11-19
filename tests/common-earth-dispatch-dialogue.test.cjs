@@ -213,3 +213,14 @@ test('a worker describes the currently funded leg from the same order that suppl
   Object.assign(order,{phase:'deliver',action:'Deliver fish to Public pantry'});
   assert.match(t.talk(id,'work').message,/2 fish to hand over at Public pantry/);assert.equal(JSON.stringify(t.w),before);
 });
+
+test('a paid maker and a customer reserving the same item describe opposite cash flows',()=>{
+  const t=district(),id=t.site.residents[0].id,order={kind:'paidOrder',phase:'collect',orderGood:'retail',resource:'apron',resourceName:'work apron',
+    action:'Stitch a work apron',tool:'needle and thread',source:'the workbench',reason:'The shop needs a replacement.',price:2,payer:'The clothing shop',beneficiaryName:'Jian'};
+  t.c.EarthDistrictGrowth={work:(_site,p)=>p===id?order:null};
+  assert.match(t.talk(id,'work').message,/needle and thread at the workbench to stitch a work apron/);
+  assert.match(t.talk(id,'purpose').message,/clothing shop set aside 2 personal funds for me/);
+  Object.assign(order,{kind:'marketSupply',activity:'shop',action:'Collect work apron',tool:'personal purse',source:'Jian’s shop',reason:'I need an apron to gather food.',price:3});
+  const purchase=t.talk(id,'work').message;assert.match(purchase,/reserved a work apron at Jian’s shop/);
+  assert.match(purchase,/I pay Jian 3 personal funds from my own purse/);assert.doesNotMatch(purchase,/for me|payment clears/);
+});
