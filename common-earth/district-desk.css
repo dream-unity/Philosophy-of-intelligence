@@ -41,6 +41,7 @@ body[data-observing-town] .workspace { grid-template-columns:minmax(0,1fr); }
 body[data-observing-town] .map-frame { width:100%; }
 #district-observer .district-tools { top:40%; }
 @container street (min-width:596px) {
+  .street-hud:not([data-talk-dock="left"]) .scene-card { right:var(--street-camera-gutter); }
   .scene-tools button { min-height:40px; padding-inline:11px; font-size:.88rem; }
   .street-hud:not([data-talk-dock]) .scene-card {
     top:var(--street-tools-bottom,58px); bottom:auto;
@@ -148,6 +149,7 @@ body[data-observing-town] #observer-clock { display:inline-flex; align-items:cen
    gutter, including when the street is embedded beside the community panel. */
 #street-stage {
   --map-inset:8px;
+  --street-camera-gutter:calc(clamp(12px,1.6vw,28px) + 44px + 8px);
   --map-width:clamp(66px,15cqw,112px);
   --map-height:clamp(58px,10cqw,76px);
   --map-gutter:calc(var(--map-inset) + var(--map-width) + 8px);
@@ -234,7 +236,7 @@ body:not([data-region-roaming]):not([data-observing-town]) #street-stage:has(#sc
 }
 @container street (max-width:759px) {
   body[data-region-roaming] #region-inspector {
-    left:var(--map-gutter); right:60px; max-width:420px; max-height:calc(100% - 76px);
+    left:var(--map-gutter); right:var(--street-camera-gutter); max-width:420px; max-height:calc(100% - 76px);
   }
   body:not([data-region-roaming]) #region-inspector { top:58px; left:var(--map-gutter); max-width:calc(100% - var(--map-gutter) - 60px); max-height:calc(100% - 120px); }
 }
