@@ -129,6 +129,8 @@
     site.population++;site.funds-=q.price;
     root.EarthHousing?.sync?.(world,site);
     const d=site.communityLife.townCentre||={serial:0,arrivals:[]};d.serial++;
+    const host=root.EarthCommunityLife.hostFor(site);
+    if(host.id&&host.id!==id)root.EarthAutonomy?.remember(site,world.week,host.id,id,'visit');
     d.arrivals.unshift({week:world.week,number:d.serial,id,person:person.identityKey,name:person.name,route:q.route,price:q.price,criteria:q.criteria});
     d.arrivals.length=Math.min(8,d.arrivals.length);
     const text=person.name+' joined '+site.name+' from '+person.birthCommunityName+' with '+saved+' personal funds. '+

@@ -256,6 +256,14 @@
   // street journey cannot freeze production in every other town.
   let productionPending=false,productionPaint=0,paintDue=false,paintSince=0;
   const inspectionPointers=new Set(),meter=window.EarthPerformance;
+  let observerBackgroundDue=false;
+  document.addEventListener('earthobserverchange',()=>{
+    if(observerBackgroundDue&&!districtDesk?.observing()){
+      observerBackgroundDue=false;
+      if(view==='street')street?.setSite(sim.active());
+      render();
+    }
+  });
   const producing=()=>!document.hidden&&!!sim.active();
   function paintProduction(){
     clearTimeout(productionPaint);productionPaint=0;
@@ -265,8 +273,12 @@
     }
     paintDue=false;
     const began=meter?.now();
-    if(view==='street')street?.setSite(sim.active());
-    render();
+    if(districtDesk?.observing()){
+      districtDesk.render(false);townCentre?.refresh();observerBackgroundDue=true;
+    }else{
+      if(view==='street')street?.setSite(sim.active());
+      render();
+    }
     if(meter)meter.finish('productionUI',began);
   }
   function queueProductionPaint(){
@@ -2313,7 +2325,7 @@
       return;
     }
     if(!notice.external)return;
-    if(notice.productionOnly){if(view==='street')street?.setSite(sim.active());render();return;}
+    if(notice.productionOnly){queueProductionPaint();return;}
     arrivalVersion++;
     street?.discardTerrain();
     crewOrders?.cancel();

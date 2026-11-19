@@ -4174,7 +4174,7 @@
         idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);
         meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));return;
       }
-      watchedPath=observedRoute();updateGlanceCards();
+      watchedPath=observedRoute();if(!dragging?.moved&&!pinch)updateGlanceCards();
       const clipped=v&&(visibleTravellers||v.sx<140||geo.towns.some(t=>t!==baseTown&&detailVisible(t,v)))?false:clipIdleActors();
       try{drawScene(clipped);}finally{
         if(clipped)ctx.restore();
@@ -5896,7 +5896,8 @@
       const delta=lastFrame?now-lastFrame:36;
       const watch=Boolean(frameTimer && visible && !reduced && (state.route.length || pressed.size && state.player.moving || watchedTravel) && !dragging && !pinch &&
         pixelRatio===fullPixelRatio && (!deviceMemory || deviceMemory>2));
-      const interval=travelInterval(now,watch);
+      const regular=travelInterval(now,watch);
+      const interval=(dragging?.moved||pinch)&&paintAverage<12?15.5:regular;
       if(dirty||delta>=interval){
         const maxStep=state.route.length ? 1 : pressed.size ? 0.3 : autonomousMotion()?1:0.1;
         const elapsed=clamp(delta/1000,0,maxStep);
@@ -5986,7 +5987,7 @@
     }
     listen(canvas,'pointerdown',e=>{
       if(covered||!state.site||e.button!==0||fingers.has(e.pointerId))return;
-      if(!fingers.size&&e.pointerType==='touch')meter?.begin(canvas);
+      if(!fingers.size)meter?.begin(canvas);
       state.hover=null;
       if(e.cancelable)e.preventDefault();
       if(e.pointerType!=='touch')canvas.focus({preventScroll:true});
@@ -6020,7 +6021,7 @@
         }
         return;
       }
-      if(e.pointerType==='touch')meter?.input(canvas,e);
+      meter?.input(canvas,e);
       fingers.set(e.pointerId,p);
       if(pinch){
         const [a,b]=fingers.values(),distance=Math.hypot(a.x-b.x,a.y-b.y);
@@ -6030,13 +6031,14 @@
       if(dragging?.id!==e.pointerId)return;
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
-      clearObservation(false);dragging.moved=true;cameraFollows=false;
+      if(!dragging.moved&&observedId)clearObservation(false);
+      dragging.moved=true;cameraFollows=false;
       regionalFollow=null;overviewZoom=null;
-      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;if(e.pointerType==='touch')paintDelayedGesture();
+      boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;schedule();if(e.pointerType==='touch')paintDelayedGesture();
     });
     function endPointer(e) {
       if(!fingers.delete(e.pointerId))return;
-      if(e.pointerType==='touch'){meter?.input(canvas,e);if(!fingers.size)meter?.end(canvas);}
+      meter?.input(canvas,e);if(!fingers.size)meter?.end(canvas);
       if(pinch){
         if(fingers.size>=2){beginPinch();return;}
         pinch=null;
@@ -6049,7 +6051,7 @@
       }
       if(dragging?.id!==e.pointerId)return;
       const gesture=dragging;dragging=null;
-      if(gesture.moved&&pixelRatio!==fullPixelRatio)dirty=true;
+      if(gesture.moved){dirty=true;schedule();}
       if(e.type!=='pointerup'||gesture.moved)return;
       const release=coords(e,canvas);
       if(Math.hypot(release.x-gesture.start.x,release.y-gesture.start.y)<gesture.slop)tap(gesture.start,gesture.device);
