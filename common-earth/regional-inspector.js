@@ -148,6 +148,7 @@
           if(party){clear();street()?.inspectRegion?.(party.x,party.y,{zoom:1.5,picked:true});}
         });
         const border=view.communityLife?.border;
+        if(border?.occupiedBy)line('Town centre occupied by '+(root.EarthCommunityLife.lookup(w,border.occupiedBy)?.name||border.occupiedBy)+'.');
         if(border?.campaign){
           const c=border.campaign;
           line('Boundary war · '+c.attacker.name+' · '+c.phase+' · parcel '+c.cell+(c.defender?' · opposing resident '+c.defender.name:''));

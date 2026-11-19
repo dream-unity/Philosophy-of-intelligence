@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),test=require('node:test'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const dir=process.env.COMMON_EARTH_GAME_DIR||path.resolve(__dirname,'../common-earth');
 
-function fixture(water=false,snapshot=null){
+function fixture(water=false,snapshot=null,place=null){
   let milliseconds=100000;
   class GameDate extends Date{static now(){return milliseconds;}}
   const runtime=vm.createContext({console,structuredClone,Date:GameDate});runtime.window=runtime;
@@ -12,7 +12,7 @@ function fixture(water=false,snapshot=null){
   }
   load('regional-render');load('street');
   const sim=runtime.CommonEarthSim.create({storage:null,snapshot});
-  if(!sim.active())assert.ok(sim.found({name:water?'Open sea':'Port settlement',region:'Regional camera test',lat:water?-20:-6.16,lon:water?-140:39.19,water}).ok);
+  if(!sim.active())assert.ok(sim.found(place||{name:water?'Open sea':'Port settlement',region:'Regional camera test',lat:water?-20:-6.16,lon:water?-140:39.19,water}).ok);
   const w=1280,h=720,events=[],handlers=new Map();let frame;
   const noop=()=>{};
   const drawing=new Proxy({
@@ -356,4 +356,20 @@ test('an open Town Centre dialog stays visible above the observed street',()=>{
   // A hidden modal still makes the rest of the page inert in native browsers.
   const observerMask=css.match(/body\[data-observing-town\] #street-stage > :not\(([^)]*)\)/);
   if(observerMask)assert.ok(observerMask[1].split(',').map(s=>s.trim()).includes('dialog[open]'));
+});
+
+test('the playable street renders the gate fight and prevents walking or boarding the van through the guard',()=>{
+  const {sim,world,home,streetAt,wait,paint}=fixture(false,null,{name:'Stone Town',lat:-6.1622,lon:39.1922,coastal:true,water:false});
+  const target=world.communityLife.outposts.find(t=>t.name==='Reed Quay');
+  const act=(action,id)=>sim.communityLife({site:sim.active().id,actor:'steward',week:world.week,action,target:id},
+    {siteId:sim.active().id,actor:'steward',mode:'walk',target:'market',x:0,y:0,tx:0,ty:0});
+  assert.ok(act('depart',target.id).ok);wait(7000);assert.ok(act('arrive',target.id).arrived);
+  const street=streetAt(target),watch=target.communityLife.border.street;
+  const before=street.getState();paint();
+  assert.equal(street.move('right'),false);street.arriveByVan();paint();
+  assert.equal(street.getState().mode,'walk');assert.equal(street.getState().x,before.x);
+  assert.ok(act('resist',watch.guard.key).ok);paint();
+  assert.ok(act('withdraw',watch.guard.key).arrived);street.setSite(sim.active());paint();
+  assert.equal(sim.active(),home);assert.equal(target.communityLife.border.street,undefined);
+  street.destroy();sim.destroy();
 });

@@ -218,7 +218,10 @@
       host.append(history);
     }
     doc.addEventListener('visibilitychange',()=>{if(!doc.hidden){key='';render();}});
-    return {render,pantry(action,target){
+    return {render,gate(action){
+      const watch=sim.active()?.communityLife?.border?.street;
+      if(watch)return command(action,watch.guard?.key||null);
+    },pantry(action,target){
       if(action==='round')station('round',null,{type:'market'},'the pantry exchange');
       else if(action==='cover'){
         const helper=sim.active()?.residents.find(p=>p.id===target);

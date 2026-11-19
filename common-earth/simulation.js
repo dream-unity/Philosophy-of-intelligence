@@ -872,14 +872,19 @@
     function visit(id,departure){
       const next=world.sites.find(s=>s.id===id);
       if(!next)return reject('That settlement could not be found.');
+      let reception='';
       if(world.activeId!==id){
         const issue=world.communityLife&&root.EarthCommunityLife.journeyBlock(current());
         if(issue)return reject(issue);
         root.EarthAgency?.depart(current(),typeof departure==='function'?departure():departure);
-        if(world.communityLife)root.EarthCommunityLife.arrive(world,current(),next,newSettlement);
+        if(world.communityLife){
+          const result=root.EarthCommunityLife.arrive(world,current(),next,newSettlement);
+          if(result.refused)return {...complete(result.message,current(),false),arrived:false,refused:true};
+          reception=result.message;
+        }
       }
       if(!world.communityLife)root.EarthAgency?.resume(next);
-      world.activeId=id;return complete('Now in '+next.name+'.',next,false);
+      world.activeId=id;return complete(reception||'Now in '+next.name+'.',next,false);
     }
     function linkedCommunities(site){
       const linked=new Set();
