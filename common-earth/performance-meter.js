@@ -16,7 +16,7 @@
     if(!stream||!stream.count)return null;
     const n=Math.min(stream.count,stream.values.length);
     const values=Array.from(stream.values.subarray(0,n)).sort((a,b)=>a-b);
-    return {n,median:values[Math.floor((n-1)/2)],p95:values[Math.ceil(n*.95)-1],
+    return {n,slow:values.filter(v=>v>1000/30+.5).length,median:values[Math.floor((n-1)/2)],p95:values[Math.ceil(n*.95)-1],
       average:values.reduce((sum,v)=>sum+v,0)/n};
   }
   function scene(canvas){
@@ -44,7 +44,7 @@
   function input(canvas,event){
     const state=scene(canvas),at=now();
     const eventAt=event.timeStamp>0&&event.timeStamp<=at?event.timeStamp:at;
-    if(state.input===null)state.input=eventAt;
+    if(state.input===null){state.input=eventAt;state.device=event.pointerType;}
     if(event.type==='pointermove'){
       if(state.eventAt)record('events',at-state.eventAt);
       state.eventAt=at;record('delivery',at-eventAt);
@@ -55,7 +55,7 @@
     record('draw',at-started);
     if(moving&&state.last)record('frame',at-state.last);
     state.last=moving?at:0;
-    if(state.input!==null){record('input',at-state.input);state.input=null;}
+    if(state.input!==null){record(state.device==='touch'?'input':'pointer',at-state.input);state.input=null;}
   }
   function suspend(canvas){end(canvas);scenes.delete(canvas);}
   if(root.PerformanceObserver?.supportedEntryTypes?.includes('longtask')){
@@ -80,8 +80,8 @@
         if(nav.domContentLoadedEventEnd)items.push('Page ready '+millis(nav.domContentLoadedEventEnd-nav.startTime));
       }
       const frame=sample('frame');
-      items.push(frame?'Active motion '+(1000/frame.average).toFixed(1)+' FPS · p95 interval '+millis(frame.p95)+' ('+frame.n+' intervals)':'Drag the map to measure active motion.');
-      for(const [key,label] of [['host','Browser frame interval during drag'],['events','Drag event interval'],['delivery','Event delivery'],['longtask','Page long tasks'],['draw','Scene drawing'],['input','Touch to completed draw'],['path','Street pathfinding'],['open','World open'],['week','Week simulation'],['workerWeek','Worker week simulation'],['production','Production round'],['productionUI','Production interface refresh'],['workerProduction','Worker production round'],['save','World save']]){
+      items.push(frame?'Active motion '+(1000/frame.average).toFixed(1)+' FPS · p95 interval '+millis(frame.p95)+' ('+frame.n+' intervals, '+frame.slow+' over 34 ms)':'Drag the map to measure active motion.');
+      for(const [key,label] of [['host','Browser frame interval during drag'],['events','Drag event interval'],['delivery','Event delivery'],['longtask','Page long tasks'],['draw','Scene drawing'],['input','Touch to completed draw'],['pointer','Pointer to completed draw'],['path','Street pathfinding'],['open','World open'],['week','Week simulation'],['workerWeek','Worker week simulation'],['production','Production round'],['productionUI','Production interface refresh'],['workerProduction','Worker production round'],['save','World save']]){
         const value=sample(key);
         if(value)items.push(label+' '+millis(value.median)+' median · '+millis(value.p95)+' p95 ('+value.n+')');
       }
