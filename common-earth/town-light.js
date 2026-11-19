@@ -53,9 +53,9 @@
     ctx.beginPath(); ctx.moveTo(x - r, top - r); ctx.lineTo(x, top - 1.75 * r); ctx.lineTo(x + r, top - r); ctx.fill();
   }
 
-  function blueHour(ctx, width, height) {
+  function blueHour(ctx, width, height, depth=0) {
     // One translucent pass cools the whole diorama, including locally loaded art.
-    ctx.fillStyle = 'rgba(27,44,83,.43)';
+    ctx.fillStyle = 'rgba(16,28,62,'+(.43+.23*depth)+')';
     ctx.fillRect(0, 0, width, height);
   }
 

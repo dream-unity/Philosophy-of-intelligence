@@ -51,6 +51,10 @@
       work('sort-pantry','Sorting baskets for the households on the round','basket','reach'),hand('stage-pantry','Setting the round’s baskets at the counter','basket','place')),
     departure:series('departure','Prepare for a neighbourhood visit',prepare('review-handover','Checking the handover list','ledger','read'),
       work('annotate-handover','Writing the outstanding jobs on the exchange rota','ledger','write'),hand('post-handover','Leaving the handover list at the exchange','book','place')),
+    nightclub:series('nightclub','Dance with neighbours',action('dance','social','Dancing to the DJ’s set','none','dance',5),action('step','social','Trading dance steps','none','dance',4)),
+    cafe:series('cafe','Read over coffee',action('read','social','Reading at the café','book','read',6),action('coffee','social','Sipping coffee between chapters','cup','lift',4)),
+    arcade:series('arcade','Play a friendly head-to-head match',action('play','social','Competing at a game station','controller','buttons',6),action('rematch','social','Playing the return round','controller','buttons',4)),
+    soloArcade:series('soloArcade','Practise before the next match',action('warmup','social','Warming up at a game station','controller','buttons',5)),
     inspectHome:series('inspect-home','Assess the neighbourhood before moving',prepare('review-room','Reading the housing notice','book','read'),work('inspect-frontage','Looking over the shared frontage','slate','point'),hand('record-fit','Recording what would suit daily life','ledger','write')),
     dispute:series('dispute','Seek an emergency pantry collection',log,work('challenge-order','Checking the unfilled collection request','ledger','point'),record),
     waterBed:series('water-bed','Water the growing bed',prepare('check-soil','Checking the soil around the plants','sample','reach'),work('water-bed','Watering the roots along the bed','wateringCan','pour'),hand('log-water','Recording the watering round','ledger','write')),
@@ -220,6 +224,7 @@
     demonstrations.set(id,routine);return routine;
   }
   function routine(input){
+    if(['nightclub','cafe','arcade','soloArcade'].includes(input.kind))return routines[input.kind];
     const kind=input.kind;
     if((kind==='learn'&&input.placementSide==='learner'||kind==='commitment'&&input.placementSide==='mentor')){
       const demonstration=placement(input);if(demonstration)return demonstration;

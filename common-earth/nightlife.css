@@ -1,0 +1,34 @@
+.masthead {grid-template-columns:minmax(max-content,1fr) auto minmax(max-content,1fr) auto}
+.time-control {display:grid;grid-template-columns:auto auto;column-gap:.55rem;align-items:center;min-height:44px;background:#172e33;border:1px solid #526661;border-radius:.35rem;padding:.28rem .7rem;color:var(--paper);min-width:105px;text-align:left}
+.time-control span:first-child,.leisure-sheet small {font:600 .68rem/1.25 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--gold)}
+.time-control strong {font:600 .9rem/1.15 var(--sans);font-variant-numeric:tabular-nums;grid-row:2;white-space:nowrap}
+#time-rate {grid-column:2;grid-row:1/3;color:var(--teal);font:600 .86rem var(--mono)}
+.time-control[data-night] {background:#28243b;border-color:#796e94}
+.leisure-sheet {box-sizing:border-box;width:min(96vw,32rem);max-width:100%;max-height:89dvh;overflow:auto;background:#11272b;color:var(--paper);border:1px solid #617775;border-radius:.65rem;padding:clamp(.9rem,3vw,1.55rem);box-shadow:0 18px 80px #0008}
+.leisure-sheet::backdrop {background:#061115bb}
+.leisure-sheet header,.phase-actions,.speed-options,.venue-choices,.station-pads {display:flex;align-items:center;gap:.5rem}
+.leisure-sheet header {justify-content:space-between;margin-bottom:1rem}
+.leisure-sheet h2,.leisure-sheet h3 {margin:0;font:normal 2rem/1.15 var(--serif);letter-spacing:-.035em}
+.leisure-sheet h3 {font-size:1.65rem}
+.leisure-sheet button {min-height:44px;padding:.48rem .72rem;border:1px solid #526864;border-radius:.3rem;background:#193539;color:var(--paper);font:600 .88rem/1.2 var(--sans)}
+.leisure-sheet button[aria-pressed="true"],.leisure-sheet #station-play {background:var(--gold);color:#152627;border-color:var(--gold)}
+.leisure-sheet header button {min-width:44px;font-size:1.4rem}
+.leisure-sheet button:disabled {opacity:.55}
+#world-clock-reading {font:normal 1.65rem var(--serif);color:#f0d6a8}
+.speed-options button,.phase-actions button,.venue-choices button,.station-pads button {flex:1}
+.clock-note,.leisure-sheet p,.leisure-sheet li {font-size:.94rem;line-height:1.44}
+.clock-note,#venue-detail {color:var(--muted)}
+.venue-feature {display:grid;grid-template-columns:45% 1fr;align-items:center;gap:.75rem;border-block:1px solid var(--line);margin:.8rem 0}
+.venue-feature canvas {display:block;width:100%;height:auto}
+.venue-feature h3 {margin-top:.2rem}
+#venue-attendance ul {margin:.45rem 0 .85rem;padding-left:1.25rem}
+#venue-attendance h3,#station-room h3 {font-size:1.3rem}
+#station-room {margin-top:.8rem;padding:.8rem;background:#162c35;border:1px solid #44625f;border-radius:.3rem}
+.station-pads {margin:.7rem 0}
+.station-pads button {color:#b3dfd6;font-size:1.3rem}
+@media(max-width:860px){.masthead{grid-template-columns:1fr auto;gap:.25rem .55rem}.brand{grid-row:1;grid-column:1}.time-control{grid-row:1;grid-column:2;justify-self:end}.view-nav{grid-row:2;grid-column:1;justify-self:start}.tools-nav{grid-row:2;grid-column:2}.tools-nav button span{display:none}}
+@media(max-width:390px){.leisure-sheet{width:96vw}.venue-choices button{padding:.4rem}.venue-feature{grid-template-columns:39% 1fr}}
+
+#station-select {display:block;width:100%;min-height:44px;margin:.35rem 0 .65rem;padding:.45rem .7rem;background:#193539;color:var(--paper);border:1px solid #526864;border-radius:.3rem}
+
+@media(max-width:390px){.masthead{grid-template-columns:minmax(0,1fr) auto;column-gap:5px}.masthead .time-control{min-width:85px;column-gap:.25rem;padding-inline:.4rem}.masthead .brand{max-width:100%}.masthead .brand-mark{display:none}}

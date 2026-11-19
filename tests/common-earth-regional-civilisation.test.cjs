@@ -384,3 +384,35 @@ test('restart and delete target one district, keep other communities and reopen 
     restored.production();restored.week();restored.save();
   }
 });
+
+test('the regional clock gives each half-day ten real minutes and returns to normal after a targeted sunrise',async()=>{
+  const {ctx,sim,w,elapse,save}=region(),clock=ctx.EarthDayClock;
+  assert.equal(clock.read(w).label,'6:00 AM');
+  elapse(300000);assert.equal(clock.read(w).label,'12:00 PM');
+  elapse(299999);assert.equal(clock.read(w).night,false);
+  elapse(1);assert.equal(clock.read(w).label,'6:00 PM');assert.equal(clock.read(w).night,true);
+  const before=clock.now(w);
+  assert.ok((await sim.perform('setWorldPace',12)).ok);assert.equal(clock.now(w),before);
+  elapse(25000);assert.equal(clock.read(w).label,'12:00 AM');
+  assert.ok((await sim.perform('setWorldPace','sunrise')).ok);
+  elapse(9999);assert.equal(clock.read(w).rate,30);assert.equal(clock.read(w).night,true);
+  elapse(1);assert.equal(clock.read(w).rate,1);assert.equal(clock.read(w).label,'6:00 AM');
+  const fresh=JSON.parse(save());delete fresh.dayClock;
+  const reopened=region(JSON.stringify(fresh));assert.equal(reopened.ctx.EarthDayClock.read(reopened.w).label,'6:00 AM');
+  assert.equal(reopened.sim.active().id,sim.active().id);
+});
+test('overnight games use six seats, saved guests and paired scores, and release residents at sunrise',()=>{
+  const {ctx,w,market,elapse,save,production}=region(),life=ctx.EarthNightlife,clock=ctx.EarthDayClock;
+  elapse(clock.half);production();
+  const list=life.guests(w,market,clock.read(w)),tables=life.tables(w,market,clock.read(w));
+  assert.equal(tables.length,3);assert.ok(tables.some(t=>t.pair.length===2));
+  assert.ok(tables.every(t=>t.points.every(p=>p>=1&&p<=5)));
+  assert.equal(new Set(list.map(p=>p.id)).size,list.length);
+  assert.equal(new Set(list.map(p=>p.venue+'/'+p.seat)).size,list.length);
+  const persisted=JSON.parse(save()).communityLife.outposts.find(s=>s.id===market.id).nightlife;
+  assert.deepEqual(persisted,JSON.parse(JSON.stringify(market.nightlife)));
+  const visitor=list[0];market.communityLife.away[visitor.id]={week:w.week};
+  assert.ok(!life.guests(w,market,clock.read(w)).some(row=>row.id===visitor.id));
+  delete market.communityLife.away[visitor.id];
+  elapse(clock.half);assert.equal(life.guests(w,market,clock.read(w)).length,0);
+});

@@ -247,18 +247,21 @@
     return i<0?null:buildingJob(site,g.households.find(row=>row.owner===g.road.owners[i]),id);
   }
   const reachedWork=(at,job)=>!job||at<job.startedAt||at>=job.startedAt+job.travelMs+job.workMs;
-  function due(world,now=Date.now()){
+  function due(world,now=root.EarthDayClock?.now(world)??Date.now()){
     const elapsed=now-(world.lastProductionAt||0);
     return !world.lastProductionAt||elapsed<0||elapsed>=period;
   }
   function settle(world,site,closeWeek=false){
+    root.EarthNightlife?.prepare(world,site);
+    const clock=world.dayClock&&root.EarthDayClock?.read(world);
+    const eveningGuests=new Set(clock?.night?site.nightlife?.guests.map(r=>r.id):[]);
     const jobs=root.EarthDistrictOrders,people=members(site),g=register(site,people),floor=reserve(world,site);
     const start={food:site.food,materials:site.materials,funds:site.funds},events=[],transfers=[];
     const byOwner=new Map(g.households.map(h=>[h.owner,h])),present=new Map(people.map(p=>[key(p),p]));
     const hOf=p=>byOwner.get(key(p));
     const appointments=new Set((root.EarthNeighbourErrands?.working?.(site,world.week)||[]).flatMap(e=>[e.actorId,e.targetId]));
     const played=site.id===world.activeId?(root.EarthAgency?.actorId(site)||'steward'):null;
-    const at=closeWeek?(world.lastProductionAt||0):Date.now();
+    const at=closeWeek?(world.lastProductionAt||0):(root.EarthDayClock?.now(world)??Date.now());
     const add=jobs.record,counts={food:0,repair:0,exchange:0},free=[],busy=new Set(),finished=new Set();
     g.round++;
     let wages=0;
@@ -276,7 +279,8 @@
       }
       const onPaidCrew=g.road?.ids?.includes(p.id)||site.civicLand?.project?.worker===p.id;
       const ownTime=!closeWeek&&p.id===played&&!h.takePaidOrders&&!h.order&&!onPaidCrew;
-      const block=ownTime?'Choosing your own activity':jobs.commitment(world,site,p,appointments);
+      const block=ownTime?'Choosing your own activity':jobs.commitment(world,site,p,appointments)||
+        (eveningGuests.has(p.id)&&!work(site,p.id)?'Spending the evening at a town venue':'');
       if(block){
         if(h.order)jobs.cancel(site,h,transfers,block);
         delete h.purchase;

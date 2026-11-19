@@ -1588,7 +1588,7 @@
   }
   function permission(world,site,cmd,args=[]){
     const a=world.communityLife;if(!a||!site)return '';
-    if(['production','stowHandline','manageSite','diplomacy'].includes(cmd))return '';
+    if(['production','stowHandline','manageSite','diplomacy','setWorldPace'].includes(cmd))return '';
     if(cmd==='visit'&&args[0]!==site.id){
       const restriction=hostedVisit(world,lookup(world,args[0]));
       if(restriction&&!restriction.optional)return restriction.reason;

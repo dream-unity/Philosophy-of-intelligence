@@ -57,6 +57,11 @@ function check(frame){
       for(const wide of [true,false]){
         doc.body.classList.toggle('street-expanded',wide);
         const name=[width+'×'+height,size+'%',wide?'expanded':'standard'].join(' ');
+        if(!wide){
+          checkButtons([get('world-time')],name+' world clock');
+          const clock=get('world-time').getBoundingClientRect(),header=doc.querySelector('.masthead').getBoundingClientRect();
+          if(clock.left<header.left+header.width*.5||clock.right>header.right+1)errors.push(name+' world clock outside the upper right');
+        }
         checkButtons(controls('#stores-ribbon button'),name+' accounts');
         checkButtons([...shortcuts,...street],name+' street');
         get('street-gate').hidden=false;
@@ -103,6 +108,17 @@ function seedWorld(){
     };
     try{
       const home=sim.active(),other=sim.state.communityLife.outposts[0],id=other.id;
+      click(get('world-time'));
+      const clock=get('world-time-dialog');
+      click(found(clock,'12×'));await until(()=>get('time-rate').textContent==='12×','World speed did not change');
+      click(found(clock,'1×'));await until(()=>get('time-rate').textContent==='1×','Normal speed did not resume');
+      click(get('clock-venues'));
+      for(const [type,name] of [['Night club','Afterglow'],['Café','The Reading Room'],['Video game store','Pixel Exchange']]){
+        click(found(get('venue-choices'),type));
+        if(get('venue-name').textContent!==name)throw Error('Missing venue '+name);
+      }
+      if(get('venue-attendance').querySelectorAll('li').length!==3||get('station-select').options.length!==6)throw Error('Missing paired gaming stations');
+      click(get('leisure-dialog').querySelector('form button'));
       click(get('society-open'));
       const row=()=>Array.from(get('site-list').children).find(b=>b.querySelector('strong')?.textContent===other.name);
       click(found(row(),'Restart'));click(get('community-cancel'));
@@ -120,7 +136,7 @@ function seedWorld(){
       click(found(dialog,'Negotiate peace'));await until(()=>found(dialog,'Accept ceasefire terms'),'No terms offered');
       click(found(dialog,'Accept ceasefire terms'));await until(()=>found(dialog,'Declare war'),'Peace did not take effect');
       if(window.EarthBorderConflict.relation(sim.state,home.id,rival.id)?.state!=='peace')throw Error('Treaty missing from world');
-      result.dataset.layout='pass';result.textContent='Community restart, deletion, opening-week declaration and peace verified.';
+      result.dataset.layout='pass';result.textContent='World clock, all three venues, six stations, community restart, deletion and diplomacy verified.';
     }catch(error){result.dataset.layout='fail';result.textContent=String(error.stack||error);}
   });
 }

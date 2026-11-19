@@ -118,7 +118,8 @@
   const districtDesk=streetHud&&window.EarthDistrictDesk?.mount({sim,hud:streetHud,street:getStreet,
     enterStreet:()=>{if(view!=='street')setView('street',false);},redraw:redrawStreet,notify,inspectWork:openWorksite,
     openTownCentre,buildingAction:(kind,building,owner)=>{
-      if(kind==='townCentre'){
+      if(kind==='leisure'){nightlife?.open(building.venue,building.siteId||sim.active()?.id);}
+      else if(kind==='townCentre'){
         openTownCentre(sim.active()?.id);
       }else if(kind==='meet')streetHud.meetPerson(owner);
       else if(kind==='door'){
@@ -146,6 +147,7 @@
   $('gate-resist')?.addEventListener('click',()=>districtPanel?.gate('resist'));
   $('gate-run')?.addEventListener('click',()=>getStreet()?.runFromWatch());
   $('gate-withdraw')?.addEventListener('click',()=>districtPanel?.gate('withdraw'));
+  const nightlife=window.EarthNightlifeUI?.mount({sim,street:getStreet,enterStreet:()=>{if(view!=='street')setView('street',false);},worldChanged:()=>syncLiveClock(true),notify});
   const townCentre=window.EarthTownCentreUI?.mount($('town-centre'),sim,presentResult);
   function openTownCentre(siteId){
     const dialog=$('town-centre');
@@ -235,7 +237,7 @@
     const paneReasons={talk:'Finish the conversation.',stores:'Close the stores and exchange.',life:'Close character planning.',
       original:'Finish reviewing your original character’s commitments.',precinct:'Finish reviewing the neighbourhood project.',
       practice:'Finish the current practice decision.',work:'Close personal work.',truck:'Close co-op dispatch.',fishing:'Close the fishing controls.'};
-    const hold=document.hidden?'Return to this browser tab.':!local?'Return to Street view.':
+    const hold=$('leisure-dialog')?.open?'Finish your visit to the town venue.':document.hidden?'Return to this browser tab.':!local?'Return to Street view.':
       $('town-centre')?.open?'Finish your Town Centre decision.':
       document.body.hasAttribute('data-sheet-open')?'Close the open game sheet.':
       paneReasons[pane]|| (local.placement||document.body.hasAttribute('data-crew-order')?'Finish or cancel the current building or crew assignment.':
@@ -325,7 +327,7 @@
       const result=await sim.perform('production',serial,producing);
       if(result.ok)queueProductionPaint();
     }finally{productionPending=false;}
-  },4000);
+  },400);
   function liveReview(){
     const site=sim.active(),scene=getStreet()?.getState();if(!site||!scene)return null;
     const hold=clockState().hold;if(!hold)return null;
@@ -393,7 +395,7 @@
     }finally{advancing=false;}
   }
   if(streetHud&&window.EarthLiveWeeks&&sim.liveWeekHold&&$('scene-live-switch')){
-    liveClock=window.EarthLiveWeeks.create({read:clockState,advance:commitLiveWeek,paint:paintLiveClock,
+    liveClock=window.EarthLiveWeeks.create({now:()=>window.EarthDayClock?.now(sim.state)??performance.now(),rate:()=>window.EarthDayClock?.read(sim.state).rate||1,read:clockState,advance:commitLiveWeek,paint:paintLiveClock,
       detail:()=>streetHud.active()==='live',notice:result=>{if(result?.ok)redrawStreet();if(result?.message)streetHud.notify(result.message);}});
     function calendarActivities(scene){
       const site=sim.active(),member=site&&(!sim.state.communityLife||window.EarthCommunityLife.isHome(sim.state,site));
@@ -844,7 +846,7 @@
         },
         onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
         onObservation:seen=>streetHud?.setWatch(seen),onTruckDoor:useStreetVehicleDoor,onTruckInteract:()=>streetHud?.openTool('truck'),
-        onBuilding:building=>{streetHud?.close(false);districtDesk?.inspectBuilding(building);},
+        onBuilding:building=>{streetHud?.close(false);if(building.use==='leisure')nightlife?.open(building.venue);else districtDesk?.inspectBuilding(building);},
         onTalkChoices:people=>streetHud?.openTalkChoices?.(people),
         onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},
         onInteract:interactAt,onHandcart:()=>sceneWork(),onChooseCrewTarget:()=>crewOrders?.openTargets(),onAssignWorksite:id=>crewOrders?.assign(id),onCancelCrewSelection:()=>crewOrders?.cancel(),onPlace:point=>placeBuilding(point,true),onHint:text=>put('street-hint',text),
