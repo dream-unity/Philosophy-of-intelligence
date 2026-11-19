@@ -3,6 +3,8 @@
 .street-hud > :not([hidden]) { pointer-events:auto; }
 .street-hud [hidden] { display:none!important; }
 .scene-tools,.scene-strip,#scene-watching,#scene-notice,.scene-card { position:absolute; color:#f5efde; background:#172d2bef; border:1px solid #a6a88a; border-radius:5px; }
+#scene-van { position:absolute; left:10px; top:48%; min-height:44px; padding:6px 12px; background:#172d2bef; color:#f5efde; border:1px solid #a6a88a; border-radius:5px; }
+
 .scene-tools { right:10px; top:10px; display:flex; overflow:hidden; }
 .scene-tools button,.scene-tools #street-open-actions,.scene-strip button,#scene-watching button,#scene-notice button,.scene-card-head button {
   position:static; display:inline-flex; align-items:center; justify-content:center; height:auto;

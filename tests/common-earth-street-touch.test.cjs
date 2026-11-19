@@ -2232,3 +2232,17 @@ test('tablet movement stows a line and an arriving driver can steer and park',()
   assert.ok(g.street.toggleVehicle());assert.equal(g.street.getState().mode,'walk');
   g.street.destroy();
 });
+
+test('public van doors work after a round trip, including a repeated boarding request',()=>{
+  const g=surface(1024,640),other={...site,id:'harbour-neighbour'};
+  for(const destination of [other,site,other]){
+    g.street.setSite(destination);g.street.arriveByVan();
+    assert.equal(g.street.getState().vehicle,'van');
+    assert.ok(g.street.toggleVehicle());assert.equal(g.street.getState().mode,'walk');
+    assert.ok(g.street.snapshotView());assert.ok(g.street.focusMarket());g.finish();
+    assert.ok(g.street.toggleVehicle());
+    if(g.street.getState().boardingVan)assert.ok(g.street.toggleVehicle());
+    g.finish();assert.equal(g.street.getState().vehicle,'van');
+  }
+  g.street.destroy();
+});

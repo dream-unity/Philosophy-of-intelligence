@@ -125,7 +125,7 @@
     refresh:redrawStreet,notify:(message,error)=>streetHud?.notify(message,error),
     arrive:(site,vehicle)=>{
       arrivalVersion++;cancelPlacement();street?.cancelTravel?.();encounter=null;visiting=null;peers=false;viewingShift=false;group='people';
-      selectPlace(site,false);setView('street',false);redrawStreet();if(vehicle==='van')street?.arriveByVan();streetHud?.openTool('neighbours',null,false);
+      selectPlace(site,false);setView('street',false);redrawStreet();if(vehicle==='van')street?.arriveByVan();else if(street?.getState().vehicle==='van')street.toggleVehicle();streetHud?.close(false);
     }});
   if(districtPanel)streetHud?.registerTool('neighbours',districtPanel);
   const originalLife=window.EarthOriginalLife?.mount($('scene-original'),{sim,playAs:sceneHandoff,
@@ -735,6 +735,8 @@
           put('street-location',state.mode==='boat'?'Harbour waters':state.nearby?.label||'Local district');
           const driving=state.mode==='drive';
           updateStreetInteract(state);
+          show('scene-van',state.mode!=='boat'&&state.vehicle!=='truck'&&!state.placement);
+          put('scene-van',driving?'Exit van':state.boardingVan?'Walking to van…':'Enter van');
           const vehicle=$('street-vehicle');
           if(vehicle) {
             vehicle.setAttribute('aria-pressed',String(driving));
@@ -2050,6 +2052,7 @@
     else street?.interact();
   });
   listen('street-seat','click',()=>street?.useSeat());
+  listen('scene-van','click',()=>street?.toggleVehicle());
   listen('street-vehicle','click',()=>street?.getState().vehicle==='truck'?streetHud?.openTool('truck'):street?.toggleVehicle());
   listen('street-boat','click',()=>street?.toggleBoat());
   let fishing=false;

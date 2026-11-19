@@ -62,6 +62,7 @@
       const id=people.some(p=>p.id===wanted)?wanted:'';
       options(selector,[['','Whole town'],...people.map(p=>[p.id,p.name+' · '+(root.EarthCareers.role(copy,p.id)||p.role)])],id);
       text('observer-title',site.name+' · '+site.era);text('observer-from',home.name);
+      if($('observer-reception'))text('observer-reception',root.EarthCommunityLife.communityCharacter?.(site)?.summary||'');
       text('observer-town-goal',hud.observeNeed(site).label);
       if(id&&scene.observePerson(id))activity(scene.activityOf(id));
       else{
@@ -124,6 +125,8 @@
       function districtRow(town){
         const site=findTown(world,town.id),row=el('article',null,'atlas-district-row');
         const description=el('div');description.append(el('strong',town.name),el('small',town.distance.toFixed(1)+' km · '+site.population+' residents · '+(town.rooms?town.rooms+' open beds':'housing full')));
+        const character=root.EarthCommunityLife.communityCharacter?.(site);
+        if(character)description.append(el('small',character.summary));
         const watchButton=btn('See streets',()=>watch(town.id)),go=btn('Travel',()=>travel(town.id));
         watchButton.setAttribute('aria-label','See streets in '+town.name);go.setAttribute('aria-label','Travel to '+town.name);
         watchButton.dataset.districtCommand='watch-'+town.id;go.dataset.districtCommand='travel-'+town.id;

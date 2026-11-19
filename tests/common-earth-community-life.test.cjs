@@ -609,3 +609,23 @@ test('a driver can depart with a cast out, reopen the journey and arrive by van'
   assert.equal(result.arrived,true);assert.equal(result.vehicle,'van');
   assert.equal(resumed.sim.active().id,dest.id);
 });
+
+test('visitors can see the local mix before arrival and an introduction changes a hostile reception',()=>{
+  const {life,sim,home,visit,saved}=fixture();
+  const towns=sim.state.communityLife.outposts;
+  const profiles=towns.map(s=>life.communityCharacter(s));
+  const hostile=towns.find(s=>life.communityCharacter(s).type.startsWith('Hostile'));
+  assert.ok(hostile,JSON.stringify(profiles));assert.ok(new Set(profiles.map(p=>p.type)).size>=2);
+  visit(hostile.id);
+  const site=sim.active(),host=life.hostFor(site);
+  const guard=site.residents.find(p=>life.visitorReception(sim.state,site,p.id)?.repels);
+  assert.ok(guard);const old=life.communityCharacter(site);
+  const proof={siteId:site.id,actor:'steward',target:guard.id,mode:'walk',x:1,y:1,tx:1,ty:1};
+  assert.ok(sim.converse(guard.id,'news',proof).repelled);
+  assert.ok(life.communityCharacter(site).reputation<old.reputation);
+  assert.ok(life.visitorReception(sim.state,site,host.id).greeting);
+  saved();
+  (site.communityLife.visits.steward||={}).met=sim.state.week;
+  assert.ok(!life.visitorReception(sim.state,site,guard.id).repels);
+  assert.equal(life.visitorReception(sim.state,home,home.residents[0].id),null);
+});

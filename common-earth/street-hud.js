@@ -218,7 +218,7 @@
     }
     function close(restore=true){
       clearSpeech();delete host.dataset.talkDock;delete host.dataset.faceToFace;placementKey='';pickPeople=[];
-      const previous=pane;revision++;pane=null;clearTimer();lastDraw='';lastContact='';
+      const previous=pane;revision++;pane=null;if(previous==='talk')street()?.endConversation?.();clearTimer();lastDraw='';lastContact='';
       if(previous)toolbox.get(previous)?.close?.();
       for(const b of openers)b.setAttribute('aria-expanded','false');
       card.hidden=true;changed?.();
@@ -236,12 +236,15 @@
       if(!['goals','talk','stores'].includes(id)&&!toolbox.has(id))return false;
       if(pane!==id){
         clearSpeech();delete host.dataset.talkDock;placementKey='';
+        if(pane==='talk')street()?.endConversation?.();
         if(pane)toolbox.get(pane)?.close?.();
         revision++;pane=id;lastDraw='';lastContact='';scroll.scrollTop=0;
       }
       opener=source||openers.find(b=>b.dataset.sceneOpen===id)||opener;
       for(const b of openers)b.setAttribute('aria-expanded',String(b.dataset.sceneOpen===(id==='goals'&&goalId?'person':id)));
       for(const p of panes)p.hidden=p.dataset.scenePane!==id;
+      text($('scene-close'),id==='talk'?'End conversation':'✕');
+      $('scene-close')?.setAttribute('aria-label',id==='talk'?'End conversation':'Close street panel');
       card.hidden=false;clearInvitation();show($('scene-notice'),false);
       text($('scene-title'),({people:'People and their plans',district:'Workplaces',precinct:'Neighbourhood projects',goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Resources and exchange',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',original:'Original life',live:'Calendar'})[id]);
       render(true);tick();changed?.();if(focus)$('scene-title')?.focus({preventScroll:true});return true;
@@ -333,7 +336,7 @@
     }
     talkField?.addEventListener('change',()=>{
       revision++;pickPeople=[];talkId=talkField.value;lastDraw='';lastContact='';replyWith('');render(true);tick();changed?.();
-      if(talkId&&!contact()&&street()?.getState().mode==='walk')walkTo(talkId,()=>updateContact());
+      if(talkId&&!contact())walkTo(talkId,()=>updateContact());
     });
     goalField?.addEventListener('change',()=>{
       revision++;goalId=goalField.value;lastDraw='';
@@ -345,6 +348,9 @@
       if(!ref||!local)return false;
       if(local.getState().vehicle==='truck'){openTool('truck');return false;}
       if(local.getState().mode==='boat'){
+        if(local.comeAshore)return local.comeAshore(()=>{
+          if(scope===revision&&pane==='talk'&&talkId===id&&local===street())walkTo(id,onArrive);
+        });
         const moving=local.toggleBoat();
         notify(moving?'Returning to shore. Choose Walk to meet once ashore.':'Choose a berth to return to shore.');return false;
       }
@@ -366,8 +372,9 @@
       host.dataset.faceToFace=near?'true':'false';
       if(!near){clearSpeech();delete host.dataset.talkDock;placementKey='';}
       text($('scene-title'),pickPeople.length>1?'Choose a neighbour':'Talk with '+name(talkId));
-      text($('scene-contact'),near?(proof.mode==='walk'?'Together on foot.':'Travelling together.'):
-        s.mode==='boat'?'Out of earshot. Return to shore before meeting.':s.vehicle==='truck'?'Park the co-op truck through dispatch before walking over.':s.travelling?'On the way. Conversation opens when you reach '+name(talkId)+'.':'Out of earshot. Walk over to speak in person.');
+      const greeting=near&&root.EarthCommunityLife?.visitorReception?.(sim.state,sim.active(),talkId)?.greeting;
+      text($('scene-contact'),greeting||(near?(proof.mode==='walk'?'Together on foot.':'Travelling together.'):
+        s.mode==='boat'?'Out of earshot. Return to shore before meeting.':s.vehicle==='truck'?'Park the co-op truck through dispatch before walking over.':s.travelling?'On the way. Conversation opens when you reach '+name(talkId)+'.':'Out of earshot. Walk over to speak in person.'));
       text($('scene-approach'),s.mode==='boat'?'Return to shore':s.vehicle==='truck'?'Open truck controls':'Walk to '+name(talkId));show($('scene-approach'),!near);
       // Dock immediately on arrival. Otherwise a newly enabled option can
       // move under a finger before the next periodic position update.
@@ -397,6 +404,7 @@
           ctx.local.showNeighbourHelp?.(cue.actorId,cue.targetId,cue.kind,cue.method);
         }
         if(result?.changed||before!==sim.state.actionRevision){after?.(result);render();}
+        if(result?.repelled){const ref=subjectRef(talkId);close(false);ctx.local.stepBackFrom?.(ref);notify(result.message);return;}
         if(result?.message)beginSpeech(speaker||talkId,result.message);else clearSpeech();
       }catch{if(ctx.current())replyWith('The conversation could not be saved. Check your place and try again.');}
       finally{busy=false;lastContact='';updateContact();}
@@ -510,7 +518,7 @@
         const b=press(topic.label,()=>performTalk(c=>{
           // Inspecting another life does not need to queue behind a save in a
           // second tab. Both paths still recheck the real face-to-face meeting.
-          return root.EarthDialogue?.readOnly?.(topic.id)&&sim.converse?sim.converse(refId,topic.id,c.proof):sim.perform('converse',refId,topic.id,c.proof);
+          return !root.EarthCommunityLife?.visitorReception?.(sim.state,site,refId)?.repels&&root.EarthDialogue?.readOnly?.(topic.id)&&sim.converse?sim.converse(refId,topic.id,c.proof):sim.perform('converse',refId,topic.id,c.proof);
         },refId,topic.label),false,'topic-'+topic.id);
         talkTopics.add(b);
         const immediate=topic.context||['news','work','dream','visit-fit'].includes(topic.id)||topic.id.startsWith('intro:meet:');
