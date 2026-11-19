@@ -32,7 +32,7 @@ test('a nearby crossing preserves one original character and its host retains au
   assert.equal(doAction('depart',n.id,'home').ok,false);
   visit(n.id);const there=sim.active();assert.equal(there.name,n.name);assert.equal(life.anchor(sim.state).homeId,home.id);
   assert.equal(context.EarthPersonas.profile(there,'steward').name,anchor.name);assert.equal(life.present(home,'steward'),false);
-  assert.ok(sim.act('work:salvage').ok);assert.equal(sim.manageSite(home.id,'restart').ok,false);
+  assert.ok(sim.act('work:salvage').ok);assert.equal(sim.manageSite(there.id,'restart').ok,false);
   assert.equal(sim.changeActor(there.residents[0].id,{siteId:there.id,actor:'steward',mode:'walk',x:1,y:1}).ok,false);
   assert.equal(sim.actions('build').every(a=>!a.available),true);
   assert.equal(doAction('apply',null,there.residents[2].id).ok,false);
@@ -245,7 +245,6 @@ test('a local restart keeps the census, visitors, trained delegates and former m
   const emigrant=Object.entries(destination.communityLife.people).find(([,p])=>p.originSlot===id);
   assert.ok(emigrant);assert.equal(emigrant[1].status,'member');
   const population=home.population,visitors=life.view(sim.state,home).visitors.map(p=>p.id);
-  assert.equal(sim.manageSite(home.id,'delete').ok,false);
   assert.ok(sim.manageSite(home.id,'restart').ok);
   const fresh=sim.active();assert.equal(fresh.population,population);
   assert.equal(life.present(fresh,id),false);assert.ok(!context.EarthPersonas.list(fresh).some(p=>p.id===id));
@@ -810,12 +809,13 @@ test('the selected newcomer changes the same town’s reception and their recrui
 });
 
 
-test('a first uninvited physical entry is turned back while a later hosted crossing admits the original visitor',()=>{
+test('an aggressive inland town confronts an uninvited visitor in the street and honours a dated invitation',()=>{
   const {sim,home,life,context,doAction,wait,saved}=fixture(),w=sim.state,peer=w.communityLife.outposts[1];
   assert.ok(doAction('depart',peer.id,'market').ok);wait(6500);
-  const result=doAction('arrive',peer.id);assert.ok(result.refused);assert.equal(result.arrived,false);assert.equal(sim.active().id,home.id);
-  const actors=context.EarthRegionalWorld.travellers(w,home).filter(a=>a.phase==='fighting');
-  assert.ok(actors.some(p=>p.personId==='steward'&&p.name===w.communityLife.profile.name));assert.ok(actors.some(p=>p.siteId===peer.id&&p.fightSide===1));
+  const result=doAction('arrive',peer.id);assert.ok(result.arrived);assert.equal(sim.active(),peer);
+  const watch=peer.communityLife.border.street;
+  assert.equal(watch.phase,'fight');assert.equal(watch.visitor.key,w.communityLife.profile.identityKey);
+  assert.ok(doAction('withdraw',watch.guard.key).arrived);assert.equal(sim.active(),home);
   saved();assert.ok(doAction('requestEntry',peer.id,'market').ok);assert.ok(sim.advance().ok);
   assert.ok(doAction('depart',peer.id,'market').ok);wait(6500);assert.ok(doAction('arrive',peer.id).arrived);
   assert.equal(life.residency(peer,'steward'),'visitor');assert.equal(w.communityLife.homeId,home.id);saved();

@@ -146,6 +146,7 @@
     }});
   if(districtPanel)streetHud?.registerTool('neighbours',districtPanel);
   $('gate-resist')?.addEventListener('click',()=>districtPanel?.gate('resist'));
+  $('gate-run')?.addEventListener('click',()=>street?.runFromGuard());
   $('gate-withdraw')?.addEventListener('click',()=>districtPanel?.gate('withdraw'));
   const townCentre=window.EarthTownCentreUI?.mount($('town-centre'),sim,presentResult);
   function openTownCentre(siteId){
@@ -155,6 +156,7 @@
     townCentre.open(siteId);
     syncLiveClock();
   }
+  listen('society-town-centre','click',()=>{hideDialog('society-dialog');openTownCentre(sim.state.communityLife?.homeId);});
   listen('town-centre','close',()=>syncLiveClock());
   listen('scene-open-town-centre','click',()=>openTownCentre(sim.active()?.id));
   const practice=window.EarthPracticeUI?.mount($('scene-practice'),{sim,street:getStreet,redraw:redrawStreet,notify});
@@ -827,6 +829,15 @@
     if(isStreet) {
       if(!street) street=window.EarthStreet.mount($('street-canvas'),{
         getWeek:()=>sim.state.week,getWorld:()=>sim.state,
+        onStreetExchange:async(site,target,round,proof)=>{
+          if(view!=='street'||document.hidden||$('town-centre')?.open||sheetOpen('society-dialog')||districtDesk?.observing?.())return;
+          const result=await sim.perform('communityLife',{action:'streetExchange',site,target,round,actor:'steward',week:sim.state.week},proof);
+          if(result.ok&&sim.active()?.id===site)redrawStreet();
+        },
+        onEvade:async(site,guard,proof)=>{
+          const result=await sim.perform('communityLife',{action:'evade',site,target:guard,actor:'steward',week:sim.state.week},proof);
+          if(result.ok&&sim.active()?.id===site){redrawStreet();presentResult(result);}
+        },
         getRegularRun:()=>sim.regularTruckView(),
         getTruckDispute:()=>sim.truckDisputeView?.(),
         onTruckDispute:(quote,proof)=>sim.perform('disputedTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
@@ -1834,7 +1845,7 @@
       if(watch){
         put('gate-status',window.EarthBorderConflict.streetStatus(watch));
         show('gate-resist',watch.phase==='fight'&&!watch.resisting);
-        show('gate-withdraw',!!stopped);
+        show('gate-run',!!stopped);show('gate-withdraw',!!stopped);
       }
     }
     put('action-budget',site ? state.effort+' civic effort · '+site.funds+' funds · '+site.materials+' materials · '+site.food+' food' : '');
@@ -1876,6 +1887,8 @@
     const sheet=$(id);
     return !!sheet && (sheet.classList.contains('sheet-fallback') || (nativeSheets && sheet.matches(':popover-open')));
   }
+  let managementChoice=null,managing=false;
+  $('society-dialog')?.addEventListener('toggle',event=>{if(event.newState==='closed')managementChoice=null;});
   function renderSociety(){
     const state=sim.state;
     const sponsor=sim.active(),offer=sim.sponsorshipOffer();
@@ -1890,21 +1903,34 @@
       const row=node('div','community-entry');
       row.append(b);
       if(districtDesk&&s.id!==state.activeId)row.append(button('See streets',()=>{hideDialog('society-dialog');districtDesk.watch(s.id);},'secondary-button'));
-      if(homeId&&s.id!==homeId)return row;
       for(const action of ['restart','delete']){
-        if(action==='delete'&&homeId&&state.sites.length+(state.communityLife.outposts.length||0)>1)continue;
+        if(action==='restart'&&homeId&&s.id!==homeId&&!/^site-\d+$/.test(s.id)&&!s.communityLife?.formerHome)continue;
         const label=action==='restart'?'Restart':'Delete';
-        const control=button(label,async()=>{
-          const impact=action==='restart'?(homeId?'Start again here with founding supplies and the same member households.':'Start again here with founding supplies and 12 residents.'):'Remove this community from this world.';
-          if(!window.confirm(label+' '+s.name+'? '+impact+' Its progress, routes and linked agreements will be lost.'))return;
-          const result=await sim.perform('manageSite',s.id,action);
-          if(!presentResult(result))return;
-          street?.discardTerrain();
-          arrivalVersion++;crewOrders?.cancel();cancelPlacement();street?.cancelTravel?.();
-          visiting=null;encounter=null;viewingShift=false;lastOpening=null;
-          selected=sim.active()||start;setView('world',false);
-        },'text-button');
-        control.setAttribute('aria-label',label+' '+s.name);row.append(control);
+        const control=button(label,()=>{managementChoice={id:s.id,action,generation:s.foundingRevision||0};renderSociety();},'text-button');
+        control.setAttribute('aria-label',label+' '+s.name);control.disabled=managing;row.append(control);
+      }
+      const choice=managementChoice;
+      if(choice?.id===s.id&&choice.generation===(s.foundingRevision||0)){
+        const deleting=choice.action==='delete',label=deleting?'Delete':'Restart';
+        const next=[...state.sites,...(state.communityLife?.outposts||[])].filter(t=>t.id!==s.id);
+        const destination=next.find(t=>t.id===state.activeId)||next[0];
+        const impact=deleting?'Permanently remove '+s.name+' and its linked routes.'+
+          (homeId===s.id?(destination?' Your new home will be '+destination.name+'.':' You will return to the atlas to found a new community.'):''):
+          'Restart local work and stores in '+s.name+' with founding supplies. Member households keep their homes and personal savings.';
+        const question=node('div','community-confirm');question.append(node('p','',impact));
+        const confirm=button('Confirm '+choice.action,async()=>{
+          if(managing||managementChoice!==choice)return;
+          managing=true;confirm.disabled=true;
+          try{
+            const result=await sim.perform('manageSite',s.id,choice.action,choice.generation);
+            if(!result.ok){question.append(node('p','',result.message));presentResult(result);return;}
+            managementChoice=null;hideDialog('society-dialog');street?.discardTerrain();
+            arrivalVersion++;crewOrders?.cancel();cancelPlacement();street?.cancelTravel?.();
+            visiting=null;encounter=null;viewingShift=false;lastOpening=null;
+            selected=sim.active()||start;setView('world',false);presentResult(result);
+          }finally{managing=false;confirm.disabled=false;}
+        },'secondary-button');
+        question.append(confirm,button('Cancel',()=>{managementChoice=null;renderSociety();},'text-button'));row.append(question);
       }
       return row;
     }));
@@ -2358,6 +2384,7 @@
     street?.discardTerrain();
     crewOrders?.cancel();
     if(notice.switched){
+      managementChoice=null;
       forecastView?.close();
       forecastView=window.EarthForecastView?.create(sim);
       liveClock?.reset();clockSignal=decisionKey='';streetHud?.invalidate();lifePanel?.invalidate();

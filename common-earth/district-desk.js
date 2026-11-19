@@ -308,7 +308,7 @@
       text('district-ledger-title',site.name+' · Community funds');
       ledgerBody.append(el('h3','Treasury balance · '+funds(site.funds)),
         el('p',site.name+' uses this account for recruitment, public works and trade. Residents keep their work income in their personal purses.'));
-      if(openTownCentre)ledgerBody.append(btn('Open Town Centre recruitment',()=>openTownCentre(site.id)));
+      if(openTownCentre)ledgerBody.append(btn('Open Town Centre',()=>openTownCentre(site.id)));
       const arrivals=site.communityLife?.townCentre?.arrivals||[];
       if(arrivals.length){
         ledgerBody.append(el('h3','Recent recruitment payments'));

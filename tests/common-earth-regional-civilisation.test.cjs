@@ -198,6 +198,11 @@ function travelAction(run,action,target){
   return sim.communityLife({action,target,site:site.id,week:w.week,actor},
     {siteId:site.id,actor,mode:'walk',target:'market',x:0,y:0,tx:0,ty:0});
 }
+function exchange(run,distance=.7){
+  const {sim,w}=run,site=sim.active(),watch=site.communityLife.border.street;
+  return sim.communityLife({action:'streetExchange',actor:'steward',site:site.id,week:w.week,target:watch.guard.key,round:watch.round},
+    {siteId:site.id,actor:'steward',mode:'walk',distance});
+}
 function cross(run,id){
   const start=travelAction(run,'depart',id);assert.ok(start.ok,start.message);
   run.elapse(7000);
@@ -210,9 +215,12 @@ test('an unintroduced arrival and a direct revisit face the watch, while a dated
   assert.match(cross(run,watch.id).message,/attacking you/);
   const fight=watch.communityLife.border.street,guard=fight.guard;
   assert.equal(watch.communityLife.away[guard.id],'regional-watch');
-  assert.equal(sim.visit(home.id).ok,false);
+  const direct=region(run.save());assert.ok(direct.sim.visit(home.id).ok);
+  assert.equal(direct.w.sites.find(t=>t.id===watch.id).communityLife.border.street,undefined);
   assert.equal(travelAction(run,'meet',null).ok,false);
-  run.production();
+  run.production();assert.equal(fight.round,0);
+  assert.equal(exchange(run,2).ok,false);assert.equal(fight.round,0);
+  assert.ok(exchange(run).ok);
   const resumed=region(run.save()),savedWatch=resumed.sim.active().communityLife.border.street;
   assert.equal(savedWatch.round,1);assert.equal(savedWatch.guard.energy,guard.energy);
   assert.equal(travelAction(resumed,'resist','a different guard').ok,false);
@@ -221,7 +229,7 @@ test('an unintroduced arrival and a direct revisit face the watch, while a dated
   assert.ok(travelAction(run,'withdraw',guard.key).arrived);
   assert.equal(sim.active(),home);assert.equal(watch.communityLife.away[guard.id],undefined);
   assert.match(sim.visit(watch.id).message,/attacking you/);
-  for(let i=0;i<8&&watch.communityLife.border.street.phase==='fight';i++)run.production();
+  for(let i=0;i<8&&watch.communityLife.border.street.phase==='fight';i++)assert.ok(exchange(run).ok);
   assert.equal(watch.communityLife.border.street.phase,'repelled');
   assert.equal(home.communityLife.border.health.steward.condition,'injured');
   assert.equal(sim.act('work:forage').ok,false);
@@ -239,7 +247,7 @@ test('an old save already inside Reed Quay starts one fight and a current save r
   delete c.away[c.border.street.guard.id];delete c.border.street;delete c.people.steward.gateChecked;
   const next=region(JSON.stringify(old)),fight=next.sim.active().communityLife.border.street;
   assert.equal(fight.phase,'fight');assert.equal(fight.round,0);
-  next.production();
+  assert.ok(exchange(next).ok);
   const again=region(next.save());
   assert.deepEqual(JSON.parse(JSON.stringify(again.sim.active().communityLife.border.street)),JSON.parse(JSON.stringify(fight)));
 });
@@ -268,7 +276,7 @@ test('a resident can die in a street fight and the same casualty is never counte
   cross(run,watch.id);
   const fight=watch.communityLife.border.street,guard=fight.guard,count=watch.population;
   assert.ok(travelAction(run,'resist',guard.key).ok);
-  for(let i=0;i<8&&fight.phase==='fight';i++)run.production();
+  for(let i=0;i<8&&fight.phase==='fight';i++)assert.ok(exchange(run).ok);
   const d=watch.communityLife.border;
   assert.equal(fight.phase,'won');assert.equal(d.health[guard.id].condition,'died');
   assert.equal(d.health[guard.id].key,guard.key);assert.equal(watch.population,count-1);
@@ -308,4 +316,53 @@ test('established trading contacts do not turn every town into an ally, while ne
     assert.equal(Boolean(watch.communityLife.border?.campaign),!truce);
     run.save();
   }
+});
+
+test('founding-day diplomacy uses the residents, survives peace and resumes on a fresh declaration',()=>{
+  const run=region(),{w,ctx,sim}=run,home=sim.active(),conflict=ctx.EarthBorderConflict;
+  const leader=[home,...w.communityLife.outposts].sort((a,b)=>conflict.profile(b).score-conflict.profile(a).score)[0];
+  assert.equal(w.week,1);
+  assert.equal(Object.values(w.communityLife.diplomacy.pairs).filter(p=>p.war&&p.from===leader.id).length,3);
+  const decide=(action,to)=>sim.communityLife({action,site:w.activeId,week:w.week,home:home.id,target:to.id,
+    generation:home.foundingRevision,targetGeneration:to.foundingRevision});
+  assert.ok(decide('declareWar',run.market).ok);assert.equal(decide('declareWar',run.market).ok,false);
+  for(let i=0;i<16&&home.communityLife.border.defences.stage<4;i++)run.production();
+  assert.equal(home.communityLife.border.defences.stage,4);assert.ok(home.communityLife.border.defences.builder);
+  assert.ok(decide('peace',leader).ok);
+  const again=region(run.save());
+  assert.equal(again.ctx.EarthBorderConflict.relation(again.w,home.id,leader.id).war,false);
+  assert.equal(conflict.hasPass(w,leader,w.communityLife.profile,home),true);
+  assert.ok(decide('declareWar',leader).ok);assert.ok(conflict.relation(w,home.id,leader.id).war);
+});
+
+test('changing the founders and their location can put a different type of community above the regional average',()=>{
+  const first=region(),{ctx}=first,sim=ctx.CommonEarthSim.create({storage:null});
+  assert.ok(sim.found({...place,name:'Hill Valley',lon:40.2,coastal:false}).ok);
+  const w=sim.state,peers=w.communityLife.outposts,leader=peers.find(t=>Object.values(w.communityLife.diplomacy.pairs).every(p=>p.from===t.id));
+  assert.ok(leader);assert.notEqual(leader.communityLife.district,'works');
+  leader.name='Pine Hollow';assert.ok(ctx.EarthBorderConflict.hostile(w,leader));
+  const home=sim.active();assert.match(ctx.EarthBorderConflict.streetEntry(w,home,leader),/attacking you/);
+  ctx.EarthBorderConflict.leaveStreet(leader);
+  const quiet=peers.find(t=>!ctx.EarthBorderConflict.hostile(w,t));quiet.name='Reed Quay';
+  assert.equal(ctx.EarthBorderConflict.streetEntry(w,home,quiet),'');
+});
+
+test('management works while visiting and repeated reloads keep neighbouring households and survey coordinates',()=>{
+  const run=region(),{sim,w,watch,ctx}=run,home=sim.active();
+  for(let i=0;i<12;i++){run.production();if(i%3===2)run.week();}
+  cross(run,watch.id);
+  const position=ctx.EarthRegionalWorld.geography(w,home).towns.find(t=>t.site===watch);
+  const initial=home.foundingRevision;
+  assert.ok(sim.manageSite(home.id,'restart',initial).ok);
+  assert.equal(sim.active().id,watch.id);assert.equal(sim.state.sites.find(s=>s.id===home.id).funds,16);
+  assert.equal(sim.manageSite(home.id,'delete',initial).ok,false);
+  assert.ok(sim.manageSite(home.id,'delete').ok);
+  const copy=region(JSON.stringify(sim.state));copy.production();copy.save();
+  const active=copy.sim.active(),g=copy.ctx.EarthRegionalWorld.geography(copy.w,active);
+  assert.equal(copy.w.communityLife.homeId,watch.id);assert.equal(active.id,watch.id);
+  assert.equal(g.towns.length,3);assert.ok(g.towns.every(t=>t.site.id!==home.id));
+  assert.equal(g.towns.find(t=>t.site===active).x,position.x);
+  assert.ok(copy.sim.manageSite(run.market.id,'delete').ok);
+  const reopened=region(JSON.stringify(copy.sim.state));reopened.save();
+  assert.equal(reopened.ctx.EarthCommunityLife.lookup(reopened.w,run.market.id),undefined);
 });

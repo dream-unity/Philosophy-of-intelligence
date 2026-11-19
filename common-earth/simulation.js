@@ -300,6 +300,7 @@
   }
   function validSite(site,world,ids){
     if(!recordLike(site) || !shortName(site.id) || !shortName(site.name) || !geoPoint(site) || typeof site.water!=='boolean')return false;
+    if(site.foundingTemper!=null&&!integer(site.foundingTemper,0,100))return false;
     if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
     if(site.birthCoordinate!=null&&!geoPoint(site.birthCoordinate))return false;
     if(root.EarthPractice&&!root.EarthPractice.valid(site,world.week))return false;
@@ -804,7 +805,7 @@
       if(!offer.available)return reject(offer.reason);
       const index=world.sites.length,water=Boolean(point.water),region=tidy(point.name || point.region) || (water?'Open water':'Earth');
       let serial=index+1;
-      while(world.sites.some(site=>site.id==='site-'+serial))serial++;
+      while(world.sites.some(site=>site.id==='site-'+serial)||world.communityLife?.retiredTowns?.includes('site-'+serial))serial++;
       const names=NAMES[index % NAMES.length],id='site-'+serial;
       let name=tidy(customName) || (region==='Earth'?'Earth':region)+(water?' Anchorage':' Commons');
       if(world.sites.some(s=>s.name===name))name+=' '+(index+1);
@@ -823,6 +824,7 @@
         population:offer.newPopulation,funds:old?offer.goods.funds:16,food:old?offer.goods.food:12,materials:old?offer.goods.materials:8,trust:50,wellbeing:54,tech:[],buildings:[],construction:[],delivery:null,
         residents:PROFILES.map((p,slot)=>({id:id+'-p'+slot,slot,name:names[slot],role:p.role,value:p.value,bond:0,heard:false,promise:null,lastTalk:0,lastPromise:-10})),
         issue:null,pending:[],stats:{kept:0,missed:0,resolved:0,deliveries:0},issueIndex:-1,lastDeliveryWeek:0};
+      if(Number.isInteger(point.foundingTemper))site.foundingTemper=point.foundingTemper;
       if(!water){
         const coastal=point.coastal ?? root.EarthAtlas?.nearOceanShore?.(point.lat,point.lon);
         if(typeof coastal==='boolean')site.coastal=coastal;
@@ -836,11 +838,13 @@
       root.EarthCityModel?.normalise(site);
       return site;
     }
-    function manageSite(id,action){
-      const index=world.sites.findIndex(site=>site.id===id);
-      if(index<0 || !['restart','delete'].includes(action))return reject('This community is unavailable.');
-      const site=world.sites[index];
-      const next=structuredClone(world);
+    function manageSite(id,action,generation){
+      let next=structuredClone(world);
+      const bucket=next.sites.some(t=>t.id===id)?next.sites:next.communityLife?.outposts;
+      const index=bucket?.findIndex(t=>t.id===id)??-1;
+      if(index<0||!['restart','delete'].includes(action))return reject('This community is unavailable.');
+      const site=bucket[index];
+      if(generation!=null&&generation!==(site.foundingRevision||0))return reject('This community has changed. Open its controls again.');
       next.routes=next.routes.filter(route=>route.from!==id && route.to!==id);
       next.journal=next.journal.filter(entry=>entry.siteId!==id);
       next.lastWeekReview=null;
@@ -855,19 +859,26 @@
         if(next.learningGoals.active?.siteId===id)next.learningGoals.active=null;
         next.learningGoals.history=next.learningGoals.history.filter(entry=>entry.siteId!==id);
       }
-      for(const other of next.sites){
+      for(const other of [...next.sites,...(next.communityLife?.outposts||[])]){
         if(other.foundedBy===id)other.foundedBy=null;
         if(other.issue?.targetId===id)other.issue=null;
         other.pending=other.pending.filter(entry=>entry.targetId!==id);
       }
-      if(action==='delete')next.sites.splice(index,1);
-      else next.sites[index]=newSettlement({id,name:site.name,region:site.region,point:site,water:site.water,names:site.residents.map(p=>p.name),old:null,offer:{newPopulation:12}});
-      if(next.communityLife&&action==='delete'&&!next.sites.length)delete next.communityLife;
-      if(next.communityLife&&action==='restart')root.EarthCommunityLife?.restart?.(next,site,next.sites[index]);
+      if(action==='delete'){
+        if(next.communityLife)root.EarthCommunityLife.removeDistrict(next,site);
+        // Relocation may promote a surviving outpost into the playable roster.
+        next.sites=next.sites.filter(t=>t.id!==id);
+        if(next.communityLife)next.communityLife.outposts=next.communityLife.outposts.filter(t=>t.id!==id);
+        if(!next.sites.length)next={...blank(),actionRevision:world.actionRevision||0};
+      }else{
+        const fresh=newSettlement({id,name:site.name,region:site.region,point:site,water:site.water,names:site.residents.map(p=>p.name),old:null,offer:{newPopulation:12}},next);
+        bucket[index]=fresh;
+        if(next.communityLife)root.EarthCommunityLife.restart(next,site,fresh);
+      }
       const validated=migrateDetachedSave(next);
       if(!validated)return reject('This community could not be changed safely.');
       world=validated;
-      return complete(site.name+(action==='delete'?' deleted.':' restarted.'),action==='restart'?world.sites[index]:null);
+      return complete(site.name+(action==='delete'?' deleted.':' restarted.'),action==='restart'?root.EarthCommunityLife?.lookup(world,id)||world.sites[index]:null);
     }
     function visit(id,departure){
       const next=world.sites.find(s=>s.id===id);
@@ -2466,7 +2477,7 @@
           (person,parcel)=>fulfilled(site,person,'The original signer brought '+parcel.amount+' '+parcel.good+' from their home exchange.',world,'steward'));
         if(!result?.ok)return result||reject('Enter a district to meet its neighbours.');
         if(request.action==='help')result.message+=payForWork(site,'Admission trial shift');
-        const saved=complete(result.message,current(),request.action!=='routeChoice'||request.target==='inspect');
+        const saved=complete(result.message,current(),request.action!=='streetExchange'&&(request.action!=='routeChoice'||request.target==='inspect'));
         return saved.ok?{...result,message:saved.message}:saved;
       }),
       regularTruck:guarded((quote,guard)=>{

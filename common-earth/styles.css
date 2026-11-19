@@ -151,6 +151,12 @@ footer > span { font-family: var(--serif); font-style: italic; }
 .sheet-body label { color: var(--paper); display: block; }
 .search-wrap { display: flex; align-items: center; position: relative; margin-top: 5px; }.search-wrap > svg { position: absolute; left: 10px; width: 16px; color: var(--teal); }.search-wrap input { padding-left: 34px; }
 .quick-picks { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
+.community-entry { display:flex; flex-wrap:wrap; gap:3px; }
+.site-list .community-entry > button { flex:1 1 5rem; width:auto; min-height:44px; }
+.site-list .community-entry > .site-entry { flex:1 0 100%; }
+.community-confirm { flex:1 0 100%; box-sizing:border-box; border-left:3px solid #d9ad74; padding:.4rem .65rem; }
+.community-confirm p { margin:.25rem 0 .5rem; }
+.site-list .community-confirm button { display:inline-block; width:auto; min-height:44px; margin-right:.35rem; }
 .place-results, .site-list { display: grid; gap: 5px; }
 .place-results:not(:empty) { margin: 8px 0; }
 .coords-form { margin-top: 16px; padding-top: 1px; border-top: 1px solid var(--line); }.coord-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.coord-fields input { margin-top: 4px; }.coords-form .secondary { margin-top: 10px; }

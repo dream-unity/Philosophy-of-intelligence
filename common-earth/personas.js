@@ -202,7 +202,7 @@
     // immutable birth profiles; the live roster and jobs are looked up separately.
     const birth=site.birthCoordinate||site;
     const fingerprint=JSON.stringify([site.id,site.foundingRevision,birth.lat,birth.lon,region,
-      pupils.map(p=>[p.id,p.slot,p.name,p.role]),site.birthNames,site.workRotation]);
+      pupils.map(p=>[p.id,p.slot,p.name,p.role]),site.birthNames,site.workRotation,site.foundingTemper]);
     const entry=foundings.get(fingerprint);
     if(entry){
       entry.seen=misses;
@@ -254,7 +254,10 @@
       const key=['grower','repairer','convenor'][slot]||'steward';
       slots.set(person.id,{id:person.id,name:person.name,key,kind:'resident',ordinal:baseSlots.length+slot,originRole:person.role});
     });
-    return {seed,siteId:site.id,region,slots,hasAssignments:site.birthNames!=null,workRotation:site.workRotation,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
+    // Saves from before founding temperaments were stored used three fixed cohorts.
+    const legacy=/^near-.+-([012])$/.exec(site.id);
+    const foundingTemper=site.foundingTemper??(legacy?[36,93,48][Number(legacy[1])]:undefined);
+    return {seed,siteId:site.id,region,slots,foundingTemper,hasAssignments:site.birthNames!=null,workRotation:site.workRotation,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
       musician:'walker-'+(hash(seed+'performer')%5)};
   }
   const families=names=>[...new Set(names.map(name=>name.slice(name.indexOf(' ')+1)))];
@@ -321,7 +324,10 @@
     if(id===reg.musician||key==='repairer')hobby=pastimes[roll('musical-interest',0,2)];
     const [hobbyAxis,hobbyName,saying]=hobby;
     const [pattern,habit]=dispositions[roll('disposition',0,dispositions.length-1)];
-    const temperament=Object.freeze(Object.fromEntries(traits.map((trait,i)=>[trait,clamp(pattern[i]+roll(trait,-14,14),0,100)])));
+    const temperament=Object.fromEntries(traits.map((trait,i)=>[trait,clamp(pattern[i]+roll(trait,-14,14),0,100)]));
+    if(Number.isFinite(reg.foundingTemper))temperament.aggression=clamp(Math.round(reg.foundingTemper+
+      (temperament.initiative-temperament.patience)*.24+(50-temperament.sociability)*.36),0,100);
+    Object.freeze(temperament);
     const skills={},bounds={};
     for(const axis of axes){
       let skill=roll(axis+'base',16,57);

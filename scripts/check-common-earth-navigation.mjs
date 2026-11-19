@@ -61,7 +61,7 @@ function check(frame){
         checkButtons([...shortcuts,...street],name+' street');
         get('street-gate').hidden=false;
         get('gate-status').textContent='Ruth Haddad is attacking you · Your energy 77 · Ruth Haddad’s energy 92';
-        checkButtons([get('gate-resist'),get('gate-withdraw'),...street],name+' gate');
+        checkButtons([get('gate-resist'),get('gate-run'),get('gate-withdraw'),...street],name+' gate');
         get('street-gate').hidden=true;
         // A wrapped goal must not stretch a one-line Atlas button to the height of two rows.
         if(shortcuts[0].offsetHeight>shortcuts[1].offsetHeight+8)errors.push(name+' stretched Atlas shortcut');
