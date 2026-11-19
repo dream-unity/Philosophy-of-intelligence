@@ -56,6 +56,8 @@ function check(frame){
         doc.body.classList.toggle('street-expanded',wide);
         const name=[width+'×'+height,size+'%',wide?'expanded':'standard'].join(' ');
         checkButtons([...shortcuts,...street],name+' street');
+        // A wrapped goal must not stretch a one-line Atlas button to the height of two rows.
+        if(shortcuts[0].offsetHeight>shortcuts[1].offsetHeight+8)errors.push(name+' stretched Atlas shortcut');
         route.hidden=false;doc.body.toggleAttribute('data-district-crossing',true);
         checkButtons([...shortcuts,...menu.children],name+' journey');
         route.hidden=true;doc.body.removeAttribute('data-district-crossing');
