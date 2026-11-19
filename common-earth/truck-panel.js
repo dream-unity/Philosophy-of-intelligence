@@ -40,7 +40,9 @@
     const header=el('p',offer.owner+' · '+offer.role);container.append(header);
     container.append(el('p',held?held.kind==='theft'?'The regular pickup is overdue. Dispatch is tracking the missing truck.':
       'Assigned freight for '+offer.next.name+(held.delivered?' has been unloaded.':'.'):
-      offer.driver+' handles the blue truck. Its next scheduled stop is '+scene.next+'.'));
+      scene.status==='standby'?'Parked at the market exchange. '+(scene.reason||'Dispatch is waiting for an order.'):
+      scene.status==='returning'?'Returning to the market exchange. '+scene.reason:
+      offer.driver+' is assigned '+(scene.good?'one '+scene.good+' for ':'to ')+scene.next+'.'));
     if(!held||owner&&!riding){
       if(!near(scene.truck)||scene.mode!=='walk')container.append(button('Meet the blue truck',()=>approach('truck'),scene.mode==='boat'));
       if(owner&&scene.mode==='walk'&&near(scene.truck))container.append(button('Board your checked-out truck',()=>{

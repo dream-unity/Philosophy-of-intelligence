@@ -45,6 +45,17 @@
 
   const routines=Object.freeze({
     dispatch:series('dispatch','Keep the dispatch stop ready',log,work('check-dispatch-orders','Checking outstanding supply orders','ledger','write'),hand('file-dispatch-notes','Filing the dispatch notes','book','place')),
+    returnTruck:series('return-truck','Return the empty truck to dispatch',log),
+    inspect:series('inspect','Decide whether to settle here',prepare('read-listings','Reading the posted services','book','read'),work('compare-rota','Comparing the local work rota','ledger','write'),hand('note-fit','Making notes about life here','slate','write')),
+    pantryCover:series('pantry-cover','Cover the pantry round',prepare('read-pantry','Checking the household order and pantry tally','ledger','read'),
+      work('sort-pantry','Sorting baskets for the households on the round','basket','reach'),hand('stage-pantry','Setting the round’s baskets at the counter','basket','place')),
+    departure:series('departure','Prepare for a neighbourhood visit',prepare('review-handover','Checking the handover list','ledger','read'),
+      work('annotate-handover','Writing the outstanding jobs on the exchange rota','ledger','write'),hand('post-handover','Leaving the handover list at the exchange','book','place')),
+    inspectHome:series('inspect-home','Assess the neighbourhood before moving',prepare('review-room','Reading the housing notice','book','read'),work('inspect-frontage','Looking over the shared frontage','slate','point'),hand('record-fit','Recording what would suit daily life','ledger','write')),
+    dispute:series('dispute','Seek an emergency pantry collection',log,work('challenge-order','Checking the unfilled collection request','ledger','point'),record),
+    marketMeal:series('market-meal','Prepare meals for the shared store',prepare('check-lot','Checking the available food lot','ledger','read'),work('cook-lot','Preparing a batch of meals','cup','turn'),hand('pack-meals','Packing portions for the pantry','basket','place')),
+    marketSale:series('market-sale','Release a surplus lot to the exchange',prepare('read-offer','Checking the exchange offer','ledger','read'),work('weigh-lot','Weighing the surplus lot','crate','lift'),hand('hand-over-lot','Handing the sold lot to the exchange','crate','place')),
+    closedRoute:series('closed-route','Wait for the way to open',action('find-way','travel','Waiting for a clear approach','slate','read',4)),
     roadWait:series('road-wait','Keep the delivery route safe',action('give-way','travel','Waiting for the way to clear','none','sit',3)),
     gardener:series('gardener','Tend the garden',sort,sow,pack),
     grower:series('grower','Prepare a harvest',sow,gather,pack),
@@ -57,6 +68,12 @@
     engineer:series('engineer','Test a public works fitting',sketch,mend,measure),
     mathematician:series('mathematician','Check a calculation',prepare('write-question','Writing a problem','slate','write'),work('work-calculation','Working through a calculation','slate','write'),hand('check-proof','Checking the steps','book','point')),
     geneticist:series('geneticist','Catalogue seed samples',prepare('label-sample','Labelling a seed sample','ledger','write'),collect,record),
+    surveyor:series('surveyor','Survey the neighbourhood buildings',prepare('read-floor-plan','Reading the building survey plan','book','read'),
+      work('measure-frontage','Measuring the shared building frontage','ruler','measure'),hand('record-survey','Recording the frontage measurements','ledger','write')),
+    'practice-nurse':series('practice-nurse','Prepare the neighbourhood follow-up round',
+      prepare('review-home-round','Checking the household follow-up rota','ledger','read'),
+      work('pack-home-round','Packing the clinic supplies for the home-visit round','basket','place'),
+      hand('confirm-followup','Writing the next follow-up appointment','ledger','write')),
     nurse:series('nurse','Prepare the clinic for visitors',prepare('check-clinic','Checking the clinic list','ledger','read'),work('sort-clinic','Sorting clinic supplies','basket','reach'),hand('stock-clinic','Setting supplies out for the next visit','basket','place')),
     police:series('police','Review neighbourhood concerns',prepare('read-concerns','Reading residents’ concerns','ledger','read'),work('mark-location','Marking a location on a district map','slate','point'),record),
     musician:series('musician','Rehearse a piece',tune,play,work('repeat-passage','Repeating a difficult passage','instrument','play')),
@@ -98,9 +115,58 @@
   const finishPractice=series('practice-finish','Review the practice session',record,hand('store-practice-notes','Putting away practice notes','book','place'));
   const planMusic=series('music-plan','Choose a passage to practise',prepare('choose-piece','Choosing a passage from the score','book','read'),tune);
   const finishMusic=series('music-finish','Play the finished passage',play,hand('put-away-instrument','Putting the instrument away','instrument','place'));
+  // In a town with a visiting instructor or club shuttle the figure depicts
+  // the local meeting. A future ambition alone never puts a person in orbit.
+  const dreamSteps={
+    balcony:[['Measuring the kitchen doorway','slate','point'],['Showing a scale drawing','slate','point'],['Preparing balcony fittings','wrench','turn'],['Checking the balcony joinery','wrench','point']],
+    skydive:[['Matching club dates to shifts','ledger','read'],['Taking briefing notes','slate','write'],['Filling in the booking','ledger','write'],['Checking the shuttle departure board','book','read']],
+    space:[['Recording field measurements','slate','write'],['Showing repeatable field results','sample','point'],['Presenting research to the panel','slate','point'],['Working through a crew exercise','slate','write'],['Reporting the mission findings','book','point']],
+    ensemble:[['Marking difficult bars in the score','book','write'],['Rehearsing a complete tune','instrument','play'],['Trying the hall programme','instrument','play'],['Playing the neighbourhood set','instrument','play']],
+    orchard:[['Sketching the light around the beds','slate','write'],['Placing the nursery order','ledger','write'],['Tending the young fruit tree','trowel','tend'],['Weighing the first picking','basket','lift']],
+    archive:[['Writing an interview invitation','book','write'],['Recording a neighbourhood story','ledger','write'],['Handing over marked transcripts','parcel','place'],['Setting out the listening-room materials','book','place']],
+    toolroom:[['Recording tool requests','ledger','write'],['Checking bench dimensions','slate','point'],['Refurbishing shared tools','wrench','turn'],['Returning recovered fittings','crate','place']],
+    supper:[['Comparing shift endings','ledger','read'],['Preparing a trial supper','cup','turn'],['Marking collection shifts','slate','write'],['Laying out late-shift portions','basket','place']],
+    trail:[['Marking a stop on the walking map','slate','point'],['Timing the distance between benches','slate','write'],['Revising the newcomers’ guide','book','write'],['Leaving the walking guide at the exchange','book','place']]
+  };
+  const dreamRoutines={};
+  for(const [dream,steps] of Object.entries(dreamSteps)){
+    dreamRoutines[dream]=steps.map(([label,prop,gesture],index)=>{
+      const id=dream+'-'+(index+1);
+      const begin=prop==='instrument'?tune:prop==='wrench'?parts:prop==='trowel'?sort:prop==='basket'?prepare('set-baskets','Setting out the baskets','basket','place'):read;
+      return series(id,label,begin,action(id+'-work','work',label,prop,gesture,8),record);
+    });
+  }
+  const harvests={
+    timber:['Sawing a usable timber length','saw','saw'],stone:['Splitting a stone sample','pick','strike'],clay:['Lifting workable clay','trowel','tend'],
+    reed:['Cutting a bundle of reeds','sickle','cut'],salvage:['Removing a reusable fitting','wrench','turn'],grain:['Cutting ripe grain','sickle','cut'],
+    pulses:['Picking mature pods','basket','reach'],roots:['Lifting roots from the bed','trowel','tend'],fruit:['Picking ripe fruit','basket','lift'],
+    berries:['Gathering berries','basket','reach'],greens:['Cutting leafy greens','sickle','cut'],mushrooms:['Selecting mature mushrooms','basket','reach'],
+    kelp:['Lifting kelp from the growing line','line','lift'],fish:['Drawing in the handline catch','rod','lift']
+  };
+  const harvestPlans={};
+  for(const [resource,[label,prop,gesture]] of Object.entries(harvests)){
+    const id='harvest-'+resource;
+    const step=work(id,label,prop,gesture);
+    harvestPlans[resource]=series(id,label,prepare(id+'-check','Checking the '+resource+' collection','ledger','read'),step,
+      hand(id+'-pack','Packing collected '+resource,'basket','place'));
+  }
+  const harvestStep=id=>own(harvestPlans,id)?.steps[1]||null;
+  const favours={
+    supper:{goods:['Passing over a food basket','basket','place','Receiving portions for the late shift','basket','lift'],
+      time:['Taking the late collection list','ledger','read','Indicating the late pickup','slate','point']},
+    bench:{goods:['Passing over a replacement fitting','wrench','place','Checking the new fitting','wrench','turn'],
+      time:['Straightening the original hinge','hammer','strike','Holding the loose fitting','wrench','point']},
+    meeting:{goods:['Contributing the shared return fare','parcel','place','Recording the fare contribution','ledger','write'],
+      time:['Writing down a neighbour’s statement','ledger','write','Explaining the statement','none','speak']}
+  };
+  function favour(kind,method,recipient){
+    const row=own(favours,kind)&&own(favours[kind],method);if(!row)return null;
+    const offset=recipient?3:0,id='help-'+kind+'-'+method+(recipient?'-receive':'-offer');
+    return action(id,'social',row[offset],row[offset+1],row[offset+2],6);
+  }
   const roles={
     'seed keeper':'seedkeeper','garden courier':'porter','exchange porter':'porter','supply porter':'porter','foot courier':'courier',
-    'co-op delivery driver':'driver','high-school teacher':'teacher','police officer':'police','refuse collector':'refuse',
+    'co-op delivery driver':'driver','practice nurse':'practice-nurse','building surveyor':'surveyor','high-school teacher':'teacher','police officer':'police','refuse collector':'refuse',
     'market trader':'trader','exchange worker':'trader','community steward':'convenor','steward':'convenor',
     'council steward':'convenor','school lead':'teacher','builder':'build','dismantling crew':'build'
   };
@@ -109,6 +175,28 @@
   const own=(table,key)=>typeof key==='string'&&Object.hasOwn(table,key)?table[key]:null;
   function routine(input){
     const kind=input.kind;
+    if(input.shipmentPhase&&own(harvestPlans,input.resource)){
+      const crop=input.resource,id='basket-'+input.shipmentPhase+'-'+crop;
+      const moving=input.shipmentPhase==='unload';
+      const label=moving?'Handing '+crop+' to the shared pantry':'Lifting the settled '+crop+' basket';
+      return series(id,label,hand(id+'-handover',label,'basket',moving?'place':'lift'));
+    }
+    if(kind==='dream')return own(dreamRoutines,input.dreamId)?.[input.step-1]||own(hobbies,input.axis)||routines.study;
+    if(kind==='pantryCover'||kind==='departure'||kind==='inspect'||kind==='inspectHome'||kind==='returnTruck'||kind==='dispute'||kind==='closedRoute')return routines[kind];
+    if(kind==='gather'&&own(harvestPlans,input.resource))return harvestPlans[input.resource];
+    if(kind==='wage')return routines.trader;
+    if(kind==='marketSupply')return input.activity==='sell'?routines.marketSale:routines.marketMeal;
+    if(kind==='commitment'&&input.errandKind){
+      const promise=input.pledge,prop=own({food:'basket',materials:'crate',funds:'parcel'},promise?.good);
+      if(prop&&Number.isSafeInteger(promise.amount)&&promise.amount>0){
+        const goods=promise.amount+' promised '+promise.good,recipient=input.recipient;
+        const peer=input.peerName?' '+(recipient?'from ':'to ')+input.peerName:'';
+        const label=(recipient?'Receiving ':'Handing over ')+goods+peer,id='help-pledge-'+promise.good+(recipient?'-receive':'-offer');
+        return series(id,label,hand(id+'-handover',label,prop,recipient?'lift':'place'));
+      }
+      const stage=favour(input.errandKind,input.method,input.recipient);
+      if(stage)return series(stage.id,stage.label,stage);
+    }
     if(kind==='project'){
       if(input.projectKind==='hobby'){
         if(input.projectPhase==='plan')return input.axis==='music'?planMusic:planPractice;
@@ -116,6 +204,7 @@
         return own(hobbies,input.axis)||hobbies.craft;
       }
       const project=own(projects,input.projectKind);
+      if(input.projectKind==='food'&&input.projectPhase==='work'&&own(harvestPlans,input.resource))return harvestPlans[input.resource];
       if(project)return own(project,input.projectPhase)||project.work;
     }
     if(kind==='learn'||kind==='study'||input.training&&(!kind||kind==='routine'))return routines.study;
@@ -130,8 +219,9 @@
   function plan(input={}){
     const chosen=routine(input),venue=typeof input.venue==='string'?input.venue:'';
     const driver=chosen===routines.driver,porter=chosen===routines.porter,courier=chosen===routines.courier;
-    const travel=action(chosen.id+'-travel','travel',driver?'Driving the supply route':porter?'Carrying a supply crate':courier?'Carrying a parcel':'Walking to '+(input.destination||'the next stop'),
-      porter?'crate':courier?'parcel':'none',porter||courier?'carry':'walk',0);
+    const pledged=chosen.id.startsWith('help-pledge-')&&!input.recipient;
+    const loadedBasket=input.shipmentPhase==='unload',travel=action(chosen.id+'-travel','travel',pledged?'Carrying '+input.pledge.amount+' promised '+input.pledge.good+(input.peerName?' to '+input.peerName:''):loadedBasket?'Carrying '+input.resource+' to the shared pantry':chosen===routines.returnTruck?'Returning the empty truck to dispatch':driver?'Driving '+(input.destination?'to '+input.destination:'the supply route'):porter?'Carrying a supply crate':courier?'Carrying a parcel':'Walking to '+(input.destination||'the next stop'),
+      pledged?chosen.steps[0].prop:loadedBasket?'basket':porter?'crate':courier?'parcel':'none',pledged||loadedBasket||porter||courier?'carry':'walk',0);
     const patience=input.personality?.traits?.patience??input.personality?.patience;
     const pace=Number.isFinite(patience)?1.12-.0024*Math.max(0,Math.min(100,patience)):1;
     return Object.freeze({id:chosen.id,goal:input.goal||chosen.goal,venue,steps:chosen.steps,duration:chosen.duration/pace,pace,travel});
@@ -144,5 +234,5 @@
     }
     return plan.steps[0];
   }
-  root.EarthStreetActivity=Object.freeze({plan,stage});
+  root.EarthStreetActivity=Object.freeze({plan,stage,favour,harvestStep});
 })(typeof window==='undefined'?globalThis:window);

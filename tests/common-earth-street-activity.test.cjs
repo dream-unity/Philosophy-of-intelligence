@@ -72,3 +72,33 @@ test('a repairer’s personal music and mathematics sessions use the selected ho
   const dispatch=plan({role:'Co-op delivery driver',kind:'dispatch'});
   assert(dispatch.steps.every(s=>s.prop!=='crate'));
 });
+
+test('specific ambition stages have grounded tools and the shuttle meeting depicts the local departure',()=>{
+  const rehearsal=plan({kind:'dream',dreamId:'ensemble',step:2,venue:'bench'}),changes=plan({kind:'dream',dreamId:'balcony',step:3,venue:'workshop'});
+  assert(rehearsal.steps.some(s=>s.prop==='instrument'&&s.gesture==='play'));
+  assert(changes.steps.some(s=>s.prop==='wrench'&&s.gesture==='turn'));
+  const shuttle=plan({kind:'dream',dreamId:'skydive',step:4,venue:'market'});
+  assert(shuttle.steps.some(s=>s.label.includes('shuttle departure')));
+  assert.equal(context.EarthStreetActivity.favour('bench','time',false).gesture,'strike');
+  assert.equal(context.EarthStreetActivity.favour('supper','goods',true).prop,'basket');
+  assert.equal(context.EarthStreetActivity.favour('constructor','bad',true),null);
+});
+
+test('wood, stone, crops and kelp use the tool appropriate to the booked harvest',()=>{
+  for(const [id,prop] of Object.entries({timber:'saw',stone:'pick',grain:'sickle',kelp:'line',roots:'trowel',fruit:'basket'})){
+    assert.equal(context.EarthStreetActivity.harvestStep(id).prop,prop);
+    const mission=plan({kind:'project',projectKind:'food',projectPhase:'work',resource:id});
+    assert(mission.steps.some(step=>step.prop===prop));
+  }
+  assert.equal(context.EarthStreetActivity.harvestStep('constructor'),null);
+});
+
+test('a signed supply pledge carries the contract quantity in the right container and addresses its actual parties',()=>{
+  for(const [good,prop] of Object.entries({food:'basket',materials:'crate',funds:'parcel'})){
+    const row={ordinary:true,amount:3,good},outline={kind:'commitment',errandKind:'bench',method:'goods',pledge:row};
+    const helper=plan({...outline,peerName:'Mira'}),recipient=plan({...outline,recipient:true,peerName:'Idris'});
+    assert.equal(helper.travel.label,'Carrying 3 promised '+good+' to Mira');assert.equal(helper.travel.prop,prop);
+    assert.equal(stage(helper,2).label,'Handing over 3 promised '+good+' to Mira');
+    assert.equal(stage(recipient,2).label,'Receiving 3 promised '+good+' from Idris');assert.equal(recipient.travel.prop,'none');
+  }
+});

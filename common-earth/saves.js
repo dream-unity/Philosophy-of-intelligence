@@ -98,7 +98,8 @@
     try{return JSON.stringify(blank.state);}finally{blank.destroy();}
   }
   function open(options={}) {
-    const requested=options.storage!==undefined?options.storage:optionalStorage('localStorage');
+    const native=options.storage!==undefined?options.storage:optionalStorage('localStorage');
+    const requested=window.EarthWorldStorage?.wrap(native)||native;
     const session=options.session!==undefined?options.session:optionalStorage('sessionStorage');
     const access=probe(requested),durable=access.read?requested:null,temp=memory();
     const retained=new Set(),subscribers=new Set(),views=new Set();
@@ -197,7 +198,7 @@
       if(!target)return fail('That saved world is no longer on this device.');
       if(engine && slot===id)return ok('This world is already open.');
       let next;
-      try{next=window.CommonEarthSim.create({storage:target,key:dataKey(slot)});}
+      try{next=window.CommonEarthSim.create({storage:target,key:dataKey(slot),compressStorage:target!==temp});}
       catch(error){return fail('This world could not be opened. The previous world is still selected.');}
       preserveUnsaved();
       if(unsubscribe)unsubscribe();

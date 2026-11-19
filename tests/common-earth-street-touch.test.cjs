@@ -18,14 +18,17 @@ const site = {
   buildings: [{ id: 'hall-1', kind: 'hall', name: 'Cooperative Hall', plot: 4 }]
 };
 
-function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onState, waterfront, getWeek, getRegularRun, onRegularArrival}={}) {
+function surface(width = 820, height = 500, {animated=false, links=null, deferFrames=false, lives=false, onFishingMark, onState, waterfront, getWeek, getRegularRun, onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,landmarks,membership,visible=false,working,onNeighbourHelp,resources}={}) {
   const pointerEvents = new Map();
   let frame = null;
   let now = 100, timerId = 0;
   const timers = new Map();
+  const noop=()=>{};
+  const brush=new Proxy({measureText:label=>({width:String(label).length*6}),createLinearGradient:()=>({addColorStop:noop}),createRadialGradient:()=>({addColorStop:noop})},
+    {get:(obj,key)=>key in obj?obj[key]:noop});
   const canvas = {
     style: {},
-    getContext: () => ({}),
+    getContext: () => brush,
     getAttribute: () => null,
     setAttribute() {},
     removeAttribute() {},
@@ -47,14 +50,14 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
     window: { addEventListener() {}, removeEventListener() {} },
     document: {
       hidden: false,
-      body: { hasAttribute(name) { return name === 'data-sheet-open' && covered; } },
+      body: { dataset:{},hasAttribute(name) { return name === 'data-sheet-open' && covered; } },
       addEventListener(name, handler) { documentEvents.set(name, handler); },
       removeEventListener(name) { documentEvents.delete(name); }
     },
     // Offscreen rendering is suspended while the actual input and movement loop still run.
     IntersectionObserver: class {
       constructor(handler) { this.handler = handler; }
-      observe() { this.handler([{isIntersecting: false}]); }
+      observe() { this.handler([{isIntersecting: visible}]); }
       disconnect() {}
     },
     requestAnimationFrame(handler) { frame = handler; return 1; },
@@ -64,6 +67,10 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
   vm.runInNewContext(readFileSync(path.join(gameRoot,'fisheries.js'),'utf8'),runtime);
   if(links)runtime.window.CommonEarthSim={productiveLinks:typeof links==='function'?links:()=>links};
   if(waterfront)runtime.window.CommonEarthSim={...runtime.window.CommonEarthSim,waterfront};
+  if(landmarks)runtime.window.EarthDreams={landmarks};
+  if(membership)runtime.window.EarthCommunityLife=membership;
+  if(working)runtime.window.EarthNeighbourErrands={working};
+  if(resources)vm.runInNewContext(readFileSync(path.join(gameRoot,'resource-economy.js'),'utf8'),runtime);
   if(lives)for(const file of ['personas.js','careers.js','autonomy.js','street-activity.js'])vm.runInNewContext(readFileSync(path.join(gameRoot,file),'utf8'),runtime);
   vm.runInNewContext(surroundingsScript, runtime);
   vm.runInNewContext(constructionScript, runtime);
@@ -74,7 +81,7 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
   const placed = [], previews = [], assignments = [], targetLists = [];
   const street = runtime.window.EarthStreet.mount(canvas, {
     onObservation: current => observations.push(current),
-    onFishingMark,getWeek,getRegularRun,onRegularArrival,onState: state => {updates.push(state);onState?.(state);},
+    onFishingMark,getWeek,getRegularRun,onRegularArrival,getTruckDispute,onTruckDispute,onTalkChoices,onTruckInteract,onNeighbourHelp,onState: state => {updates.push(state);onState?.(state);},
     onHandcart: () => handcarts.push(true),
     onInteract: event => encounters.push(event),
     onHint: text => hints.push(text),
@@ -144,6 +151,10 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
     covered = open;
     documentEvents.get('earthsheetchange')?.({type:'earthsheetchange'});
   }
+  function crossing(open) {
+    runtime.document.body.dataset.districtCrossing=String(open);
+    documentEvents.get('earthdistrictcrossing')?.({type:'earthdistrictcrossing'});
+  }
   function host(residentId) {
     vm.runInNewContext(shiftScript,runtime);
     const active = { ...site, food:8, funds:12, materials:9, delivery:{residentId:'r1'} };
@@ -152,7 +163,7 @@ function surface(width = 820, height = 500, {animated=false, links=null, deferFr
     street.setSite(active);
     return {active,stops:shifts.view(active,1).stops};
   }
-  return { agency:runtime.window.EarthAgency,street, sheet, host, updates, observations, encounters, hints, handcarts, placed, previews, assignments, targetLists, interactionFrame, overviewFrame, pointer, tap, key, step, finish, drive, at };
+  return { agency:runtime.window.EarthAgency,resources:runtime.window.EarthResources,street, sheet, crossing, host, updates, observations, encounters, hints, handcarts, placed, previews, assignments, targetLists, interactionFrame, overviewFrame, pointer, tap, key, step, finish, drive, at };
 }
 
 test('driving to successive taps preserves their screen coordinates on a tablet', () => {
@@ -1834,4 +1845,241 @@ test('the unattended truck keeps serving repeat rounds through a perimeter stree
   }
   assert.equal(visits.size,4);assert.equal(returns,3,'a repeated delivery round remains reachable');
   g.street.destroy();
+});
+
+test('one shore-fishing instruction walks the character to the real quay and casts, leaving the bite for a touch to reel in',async()=>{
+  const f=fishingPanelFixture({name:'Hobart',lat:-42.85,lon:147.295},true);
+  const before=f.sim.active().food;
+  await f.button('quick').click();f.g.finish();await new Promise(resolve=>setImmediate(resolve));
+  const cast=f.sim.active().handline;
+  assert.ok(cast,'following the route reaches a legal fishing spot and casts there');
+  assert.equal(cast.mode,'walk');assert.equal(cast.x,f.g.street.getState().x);
+  assert.equal(f.sim.active().food,before,'casting alone cannot award a catch');
+  f.wait();await f.button('line').click();
+  assert.equal(f.sim.active().food,before+1);assert.equal(f.sim.active().handline,undefined);f.destroy();
+});
+
+test('a fully stocked district parks its interactive truck at the exchange until actual freight is booked',()=>{
+  const regular={available:false,done:false,week:1,siteId:site.id,reason:'The regular shops have enough supplies.'},inspections=[];
+  const g=surface(740,390,{lives:true,deferFrames:true,getRegularRun:()=>regular,onRegularArrival:()=>null,onTruckInteract:s=>inspections.push(s)});
+  const initial=g.street.truckStatus();assert.equal(initial.status,'standby');
+  assert(Math.hypot(initial.truck.x-15,initial.truck.y-24)<1);assert.equal(g.street.actorScene('driver').targetPose.mode,'walk');
+  for(let i=0;i<550;i++)g.step();
+  assert.deepEqual(g.street.truckStatus().truck,initial.truck);g.street.recenter();
+  g.tap(g.interactionFrame()(initial.truck.x-.7,initial.truck.y,.48));assert.equal(inspections.length,1);
+  g.street.destroy();
+});
+
+test('an independent contested pickup is proved at its cab and drives the real truck to the pantry',async()=>{
+  const town={...site,agency:{localPositions:{'walker-2':{x:6.1,y:5.2,serial:1}}}};
+  let action='take',serial=0,armed=false,g;
+  const observations=[];
+  const quote=()=>armed&&action?{siteId:town.id,generation:0,week:1,serial,actor:'walker-2',action,name:'Neighbour',destination:{x:9,y:24,name:'Pantry stop'}}:null;
+  g=surface(740,390,{lives:true,animated:true,deferFrames:true,getRegularRun:()=>({available:false,week:1,siteId:town.id,reason:'No load is available.'}),
+    onRegularArrival:()=>null,getTruckDispute:quote,onTruckDispute:(q,getProof)=>{
+      const proof=getProof();observations.push(proof);
+      if(q.action==='take'){
+        assert.equal(proof.emptyCab,true);assert.equal(proof.stopped,true);assert.equal(proof.mode,'walk');assert(Math.hypot(proof.x-proof.truck.x,proof.y-proof.truck.y)<=1.56);
+        town.fleet={serial:1,incident:{actor:q.actor,independent:true,week:1},custody:{kind:'theft',actor:q.actor,week:1,token:1,pickup:proof.truck,anchor:proof.truck,stop:0,delivered:false}};
+        action='park';serial++;
+      }else{
+        assert.equal(proof.mode,'drive');assert(Math.hypot(proof.truck.x-9,proof.truck.y-24)<1.2);
+        town.fleet.custody.anchor={...proof.truck};action=null;serial++;
+      }
+      g.street.setSite(town);return {ok:true};
+    }});
+  armed=true;g.street.setSite(town);
+  const initial=g.street.actorScene('walker-2').targetPose;assert(initial.x<9&&initial.y<9);
+  const saved=g.street.snapshotView();assert(g.street.restoreView({...saved,player:{x:21.42,y:4.86,dx:1,dy:0}}));
+  let sawOnFoot=false,sawDriving=false;
+  for(let i=0;i<12500&&observations.length<2;i++){
+    g.step();if(i%20===0){
+      const at=g.street.actorScene('walker-2').targetPose;
+      if(at.mode==='walk'&&Math.hypot(at.x-initial.x,at.y-initial.y)>1)sawOnFoot=true;
+      if(at.mode==='drive'&&at.x<14&&at.x>10)sawDriving=true;
+      await new Promise(setImmediate);
+    }
+  }
+  assert.equal(observations.length,2);assert(sawOnFoot&&sawDriving);
+  assert.equal(g.street.actorScene('walker-2').targetPose.mode,'walk');
+  g.street.destroy();
+});
+
+test('dream venues require the actual person, foot travel and arrival before a session can be proved',()=>{
+  const g=surface(740,390,{lives:true,deferFrames:true});
+  assert.equal(g.street.venueProof('unknown','r1'),null);
+  assert.equal(g.street.focusVenue('home','fake'),false);
+  assert.equal(g.street.venueProof('home','r1'),null);
+  const arrived=[];assert(g.street.focusVenue('home','r1',proof=>arrived.push(proof)));g.finish();
+  assert.equal(arrived.length,1);assert.equal(arrived[0].personId,'r1');assert.equal(arrived[0].venue,'home');assert.equal(arrived[0].mode,'walk');
+  assert(g.street.venueProof('home','r1'));assert(g.street.toggleVehicle());g.finish();assert.equal(g.street.venueProof('home','r1'),null);g.street.destroy();
+});
+
+test('negotiated favours show different roles for the actual two people, then clear when the player leaves',()=>{
+  const g=surface(740,390,{lives:true,deferFrames:true});
+  assert.equal(g.street.showNeighbourHelp('steward','r1','supper','goods'),false);
+  g.street.focusResident('r1');g.finish();
+  assert(g.street.showNeighbourHelp('steward','r1','supper','goods'));
+  assert.match(g.street.activityOf('steward').label,/Passing over/);
+  assert.match(g.street.activityOf('r1').label,/Receiving portions/);
+  assert.doesNotMatch(g.street.activityOf('r0').label,/Receiving portions/);
+  g.street.focusMarket();g.finish();assert.equal(g.street.activityOf('steward').phase,'player');g.street.destroy();
+});
+
+test('completed homes, fruit beds and programmes remain inspectable after their owners leave and across a district reload',()=>{
+  const credits=[
+    {personId:'r0',name:'Mira',id:'balcony',week:24,earned:'A kitchen balcony'},
+    {personId:'walker-3',name:'Jo',id:'orchard',week:68,earned:'First picking'},
+    {personId:'walker-1',name:'Hadi',id:'ensemble',week:19,earned:'First set'}
+  ];
+  const town={...site,buildings:[{kind:'garden',plot:3,id:'garden'},...site.buildings],credits};
+  const g=surface(740,390,{deferFrames:true,landmarks:s=>s.credits||[]});
+  assert.equal(g.street.focusAchievement('r0','balcony'),false);
+  g.street.setSite(town);
+  assert(g.street.focusAchievement('r0','balcony'));assert.match(g.hints.at(-1),/Kitchen balcony.*Mira · week 24/);
+  assert(g.street.focusAchievement('walker-3','orchard'));assert.match(g.hints.at(-1),/fruit garden.*Jo · week 68/);
+  assert(g.street.focusAchievement('walker-1','ensemble'));assert.match(g.hints.at(-1),/performance board.*Hadi · week 19/);
+  assert.equal(g.street.focusAchievement('r0','space'),false);
+  const other={...site,id:'inland',credits:[]};g.street.setSite(other);assert.equal(g.street.focusAchievement('r0','balcony'),false);
+  g.street.setSite(JSON.parse(JSON.stringify(town)));g.street.toggleOverview();
+  g.tap(g.overviewFrame()(9.30,22.53,1.12));assert.match(g.hints.at(-1),/Kitchen balcony.*Mira · week 24/);
+  g.street.destroy();
+});
+
+test('a signed errand waits for both named people to reach the same venue and perform the handover on foot',async()=>{
+  const town={...site,agency:{localPositions:{'walker-1':{x:6.1,y:5.1,serial:1},'walker-3':{x:18.7,y:11.4,serial:1}}}};
+  const row={siteId:town.id,generation:0,week:1,rowId:'task-1',actorId:'walker-1',targetId:'walker-3',kind:'bench',method:'time',venue:'workshop'};
+  const seen=[];let ready=false;
+  const g=surface(740,390,{animated:true,lives:true,visible:true,working:()=>ready?[row]:[],
+    onNeighbourHelp:(item,proof)=>{
+      const p=proof();assert.equal(item.rowId,row.rowId);assert(p);assert.equal(p.venue,'workshop');assert.equal(p.visible,true);
+      assert(Math.hypot(p.x-p.tx,p.y-p.ty)<=1.56);
+      assert.match(g.street.activityOf(row.actorId).label,/Straightening/);assert.match(g.street.activityOf(row.targetId).label,/Holding/);
+      seen.push(p);return {ok:true};
+    }});
+  ready=true;g.street.setSite(town);g.street.observePerson(row.actorId);assert.equal(g.street.neighbourHelpProof(row.actorId,row.targetId),null);
+  for(let i=0;i<2600&&!seen.length;i++){
+    g.step();if(i%25===0)await new Promise(setImmediate);
+  }
+  assert.equal(seen.length,1);assert.equal(g.street.neighbourHelpProof(row.targetId,row.actorId),null);
+  for(let i=0;i<120;i++)g.step();await new Promise(setImmediate);assert.equal(seen.length,1);
+  g.sheet(true);assert.equal(g.street.neighbourHelpProof(row.actorId,row.targetId),null);
+  g.street.destroy();
+});
+
+test('a founding household and the transport driver can leave and return without leaving selectable doubles',()=>{
+  const absent=new Set(),membership={present:(_site,id)=>!absent.has(id)};
+  const g=surface(740,390,{lives:true,deferFrames:true,membership,getRegularRun:()=>({available:false,siteId:site.id,reason:'No booked run'}),onRegularArrival:()=>null});
+  assert(g.street.actorScene('r0')&&g.street.actorScene('driver'));
+  absent.add('r0');absent.add('driver');g.street.setSite(site);
+  assert.equal(g.street.actorScene('r0'),null);assert.equal(g.street.focusResident('r0'),false);
+  assert.equal(g.street.actorScene('driver'),null);assert.equal(g.street.regularTruckStatus().attended,false);
+  const at=g.street.truckStatus().truck;for(let i=0;i<200;i++)g.step();assert.deepEqual(g.street.truckStatus().truck,at);
+  absent.clear();g.street.setSite(site);assert(g.street.actorScene('r0')&&g.street.actorScene('driver'));g.street.destroy();
+});
+
+test('only the named harvest carrier carries a settled crop from its real bed to the shared pantry and resumes their ordinary day',()=>{
+  const owner='walker-0',carrier='walker-1',history={week:7,kind:'project',projectKind:'food',phase:'finish',projectId:owner+'/1',
+    venue:'garden',goal:'Bring the gathered food to the pantry',title:'Bring the gathered food to the pantry'};
+  const town={...site,buildings:[{kind:'garden',plot:0,name:'Upland growing beds'}],food:9,
+    autonomy:{week:7,projects:{owners:{[owner]:{kind:'food',serial:1,crop:'roots',finished:7,delivered:2,carriedBy:carrier}}},
+      people:{[owner]:{history:[{...history,target:carrier}]},[carrier]:{history:[{...history,target:owner}]}}}};
+  const g=surface(740,390,{animated:true,deferFrames:true,lives:true,resources:true});
+  g.street.setSite(town);g.street.observePerson(carrier);
+  const stages=new Set();let unloaded=false,resumed=false,firstCarry=null,lastCarry=null;
+  for(let i=0;i<3400;i++){
+    g.step();const seen=g.street.activityOf(carrier),peer=g.street.activityOf(owner);
+    assert(!/Carrying roots to the shared pantry|Handing roots to the shared pantry/.test(peer.label));
+    if(seen.label==='Lifting the settled roots basket'){
+      stages.add('lift');assert(Math.hypot(seen.x-3,seen.y-5.04)<1.52);assert(!unloaded);
+    }
+    if(seen.label==='Carrying roots to the shared pantry'){
+      stages.add('carry');firstCarry||=seen;lastCarry=seen;assert(!unloaded);
+    }
+    if(seen.label==='Handing roots to the shared pantry'){
+      stages.add('unload');unloaded=true;assert(Math.hypot(seen.x-9.32,seen.y-23.48)<.15);
+    }else if(unloaded&&seen.phase==='work')resumed=true;
+  }
+  assert.deepEqual([...stages],['lift','carry','unload']);
+  assert(Math.hypot(lastCarry.x-firstCarry.x,lastCarry.y-firstCarry.y)>10);assert(resumed);
+  assert.equal(town.food,9);
+  g.street.setSite({...site,id:'another-district'});g.street.setSite(town);g.street.observePerson(carrier);
+  for(let i=0;i<1400;i++){g.step();assert.doesNotMatch(g.street.activityOf(carrier).label,/settled roots basket|roots to the shared pantry/);}
+  g.street.destroy();
+});
+
+test('the traversable path to another district pauses original Street input and invalidates origin interaction proofs',()=>{
+  const g=surface(740,390,{animated:true,lives:true,deferFrames:true});
+  g.street.focusMarket();g.finish();const before=g.street.getState(),ref={type:'market'};
+  assert(g.street.meeting(ref));g.crossing(true);
+  assert.equal(g.street.interact(),false);assert.equal(g.street.meeting(ref),null);assert.equal(g.street.atStop(ref),false);
+  assert.equal(g.street.venueProof('market','steward'),null);assert.equal(g.street.move('up'),false);
+  g.key('v');g.key('m');for(let i=0;i<120;i++)g.step();
+  const paused=g.street.getState();assert.equal(paused.mode,before.mode);assert.equal(paused.x,before.x);assert.equal(paused.y,before.y);assert.equal(paused.zoom,before.zoom);
+  g.crossing(false);assert(g.street.meeting(ref));g.street.destroy();
+});
+
+
+test('built gardens and workshops move local collection to the actual plot and release its stock only on arrival',()=>{
+  const town={...site,lat:46,lon:12,food:5,materials:8,funds:8,population:12,buildings:[
+    {kind:'garden',plot:0,name:'Upland growing beds',id:'beds'}, {kind:'workshop',plot:5,name:'Stone shed',id:'shed'}
+  ]};
+  const g=surface(740,390,{resources:true,lives:true}),world={week:1},book={till:8},actor='steward';
+  g.street.setSite(town);
+  for(const [id,place,number] of [['greens','garden',0],['stone','workshop',5]]){
+    const local=g.resources.view(world,town,book,100,actor),offer=local.options.find(o=>o.good===id&&o.action==='gatherLot');
+    assert.equal(offer.venue.venue,place);assert.equal(offer.venue.plot,number);
+    const order={action:offer.action,good:id,actorId:actor,price:offer.price,resourceSerial:local.serial};
+    assert.equal(g.resources.run(world,town,order,{siteId:town.id,actor,mode:'walk',venue:place,personId:actor,x:19,y:19,tx:19,ty:19},book,100,'Rae').ok,false);
+    let settled=false;
+    assert.ok(g.street.focusVenue(place,actor,()=>{
+      const proof=g.street.venueProof(place,actor);assert.ok(proof);
+      const arrived=g.resources.run(world,town,order,proof,book,100,'Rae');assert.equal(arrived.ok,true,arrived.message);
+      assert.ok(g.street.showResourceWork(actor,id));settled=true;
+    }));
+    g.finish();assert.equal(settled,true);assert.equal(town.resourceLedger.bins[id],2);
+    assert.equal(g.resources.run(world,town,order,g.street.venueProof(place,actor),book,100,'Rae').ok,false);
+  }
+  g.street.destroy();
+});
+
+test('a resident taking an emergency fish session casts at physical shore water even when the fishing co-op building is inland',()=>{
+  const id='walker-2',project={week:7,kind:'gather',resource:'fish',venue:'dock',title:'Fish for the pantry'};
+  const town={...site,water:true,buildings:[{kind:'fishingDock',plot:0,name:'Fish co-op'}],
+    autonomy:{week:7,people:{[id]:{history:[project]}}}};
+  const g=surface(740,390,{animated:true,deferFrames:true,lives:true,waterfront:s=>s?.water?'ocean':null});
+  g.street.setSite(town);g.street.observePerson(id);
+  let cast=null;
+  for(let i=0;i<2100&&!cast;i++){g.step();const seen=g.street.activityOf(id);if(seen.label==='Drawing in the handline catch')cast=seen;}
+  assert(cast);assert(cast.y>=23.1&&cast.y<=25.25);assert(Math.abs(cast.x-6.5)<1.48);assert.equal(cast.venue,'the fishing quay');
+  assert(!town.handline);g.street.destroy();
+});
+
+test('a lakeside settlement on dry land has a real accessible shore and boat, while a dry interior site has neither',()=>{
+  const lake={...site,id:'lake-edge',water:false,coastal:false},dry={...site,id:'upland',water:false,coastal:false};
+  const g=surface(740,390,{deferFrames:true,waterfront:s=>s?.id===lake.id?'lake':null});g.street.setSite(lake);
+  let arrival=null;assert(g.street.approachFishing('shore',()=>{arrival=g.street.getState();}));g.finish();
+  assert(arrival&&arrival.mode==='walk'&&arrival.y>=23.1);assert(g.street.toggleBoat());g.finish();assert.equal(g.street.getState().mode,'boat');
+  g.street.setSite(dry);assert.equal(g.street.approachFishing('shore'),false);assert.equal(g.street.toggleBoat(),false);g.street.destroy();
+});
+
+test('the twelve founding people remain individually observable, including the nurse and surveyor whose transport slots open later',()=>{
+  const roles=[['carrier-8-7','Nadia','Practice nurse'],['carrier-8-5','Owen','Building surveyor']];
+  const people=Object.fromEntries(roles.map(([id,name,role])=>[id,{status:'member',originId:site.id,originSlot:id,
+    householdRole:role,profile:{id,name,kind:'household',role,originRole:role,home:'Bay',hobbyAxis:'craft',traits:{patience:55,curiosity:40,sociability:51},aptitudes:{stamina:65}}}]));
+  const town={...site,agency:{porters:roles.map(r=>r[0])},communityLife:{people},buildings:[{kind:'hall',plot:4,name:'Clinic'},{kind:'workshop',plot:7,name:'Survey office'}]};
+  const membership={present:()=>true,residency:()=> 'member',profile:(s,id)=>s?.communityLife?.people?.[id]?.profile||null,travelIntent:()=>null};
+  const g=surface(740,390,{animated:true,deferFrames:true,lives:true,membership,
+    links:s=>s.open?[{from:8,to:7,resource:'materials'},{from:8,to:5,resource:'food'}]:[]});
+  g.street.setSite(town);const all=['steward',...town.residents.map(p=>p.id),'driver',...Array.from({length:5},(_,n)=>'walker-'+n),...roles.map(r=>r[0])];
+  assert.equal(new Set(all).size,12);for(const id of all)assert(g.street.actorScene(id),id);
+  for(const opened of [false,true]){
+    town.open=opened;if(opened)town.buildings=[...town.buildings,{kind:'market',plot:8,name:'Exchange'}];g.street.setSite(town);
+    const observed=new Set();g.street.observePerson(roles[0][0]);
+    for(let i=0;i<1800;i++){g.step();for(const [id,name] of roles){
+      const seen=g.street.activityOf(id);assert.equal(seen.name,name);
+      assert.doesNotMatch(seen.label,/Carrying a supply crate/);if(/clinic supplies|shared building frontage/.test(seen.label))observed.add(id);
+    }}
+    assert.equal(observed.size,2);for(const [id] of roles){assert(g.street.observePerson(id));assert(g.street.focusStop({type:'npc',npcId:id}));g.finish();}
+  }g.street.destroy();
 });

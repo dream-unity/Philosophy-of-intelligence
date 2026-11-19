@@ -38,7 +38,9 @@
     const plan=root.EarthAutonomy?.intent(site,'driver');
     const duty=site.careers?.driver?.jobId;
     const controlled=world.activeId===site.id&&(root.EarthAgency?.actorId(site)||'steward')==='driver';
-    const reason=f.servedWeek===week?'The week’s dispatch is complete.':f.custody?'The vehicle is checked out.':controlled?'The driver is under your control.':
+    const reason=f.servedWeek===week?'The week’s dispatch is complete.':f.custody?'The vehicle is checked out.':
+      root.EarthCommunityLife?.present?.(site,'driver')===false?'The transport driver has left the community.':
+      root.EarthCommunityLife?.residency?.(site,'driver')==='visitor'?'The visiting driver has no local dispatch agreement.':controlled?'The driver is under your control.':
       duty&&duty!=='driver'?'The founding driver now works in another occupation.':
       plan?.week===week&&!['routine','gather'].includes(plan.kind)?'The driver has a different commitment today.':
       !next?'The regular shops have enough supplies.':!root.EarthMarket?.canLoadFreight(site,next.good)?'The exchange has no spare '+next.good+' for this run.':'';
@@ -77,6 +79,52 @@
     if(!order?.available)return [];
     const result=moveRegularCargo(world,site,order);
     return result.ok?[result.message]:[];
+  }
+  function dispute(world,site){
+    if(!world||!site||world.activeId!==site.id)return null;
+    const f=data(site),held=f.custody,week=world.week;
+    const quote=(actor,action)=>({siteId:site.id,generation:site.foundingRevision||0,week,serial:f.serial||0,
+      actor,action,name:person(site,actor),destination:stops[0],reason:'The pantry is empty and the driver has no available relief load.'});
+    if(held){
+      if(f.incident?.independent&&held.kind==='theft'&&!within(held.anchor,stops[0],1.2))return quote(held.actor,'park');
+      return null;
+    }
+    if(f.incident||f.servedWeek===week||site.food>0||site.trust>24||week-(f.independentWeek??-100)<12||regular(world,site)?.available)return null;
+    // Scarcity alone is insufficient. A recent dispute, an empty dispatch
+    // rota and a resident willing to act immediately must coincide.
+    const controlled=root.EarthAgency?.actorId(site)||'steward';
+    let candidate=null,best=0;
+    for(const id of crew(site).filter(id=>id.startsWith('walker-'))){
+      const career=site.careers?.[id],reference=career?.latestReference,plan=root.EarthAutonomy?.intent(site,id);
+      if(!reference||reference.quality>=0||!whole(reference.week,Math.max(1,week-12),week)||
+        id===controlled||root.EarthCommunityLife?.present?.(site,id)===false||root.EarthCommunityLife?.travelIntent?.(site,id)||
+        career.jobId==='driver'||f.roster?.[id]||career.application||career.training||plan?.week===week&&!['routine','gather'].includes(plan.kind))continue;
+      const self=root.EarthPersonas?.profile(site,id),traits=self?.traits;if(!traits)continue;
+      const urgency=traits.initiative-traits.patience+Math.round((self.aptitudes?.care||0)/5);
+      if(urgency>=18&&urgency>best){candidate=id;best=urgency;}
+    }
+    return candidate?quote(candidate,'take'):null;
+  }
+  function finishDispute(world,site,quote,scene){
+    const offer=dispute(world,site);
+    if(!offer||!quote||['siteId','generation','week','serial','actor','action'].some(key=>quote[key]!==offer[key]))
+      return fail('The resident or dispatch has changed plans.');
+    if(!scene||scene.siteId!==site.id||scene.actor!==offer.actor||!location(scene)||!location(scene.truck)||scene.stopped!==true)
+      return fail('The worker and the stopped truck must be at the same kerb.');
+    if(offer.action==='park'){
+      if(scene.mode!=='drive'||!within(scene,scene.truck,.22)||!within(scene.truck,stops[0],1.2))return fail('The truck has yet to reach the pantry.');
+      const f=site.fleet;
+      f.custody.anchor={x:scene.truck.x,y:scene.truck.y};
+      const message=offer.name+' left the blue truck at the pantry to ask for an emergency collection. No food was available to unload.';
+      f.serial++;entry(f,world.week,offer.actor,message,'driver');return {ok:true,message};
+    }
+    if(scene.mode!=='walk'||scene.emptyCab!==true||!within(scene,scene.truck,1.56)||!within(scene.truck,depot,1.2))return fail('The co-op truck is occupied, moving or beyond the resident’s reach.');
+    const f=writable(site),pickup={x:scene.truck.x,y:scene.truck.y},trustLost=Math.min(4,site.trust);
+    site.trust-=trustLost;f.serial++;f.independentWeek=world.week;
+    f.custody={actor:offer.actor,token:f.serial,kind:'theft',week:world.week,stop:0,pickup,anchor:{...pickup},delivered:false};
+    f.incident={actor:offer.actor,week:world.week,independent:true};
+    const message=offer.name+' took the co-op truck without permission to press for an emergency pantry collection after a dispute at work. Dispatch lost its vehicle and community trust fell by '+trustLost+'.';
+    entry(f,world.week,offer.actor,message,'driver');return {ok:true,message};
   }
   function view(world,site){
     if(!world||!site)return null;
@@ -166,7 +214,13 @@
     return {ok:true,message,action:request.action};
   }
   function tick(world,site){
-    const f=site.fleet,held=f?.custody;if(!held||held.week>=world.week||f.review===world.week)return [];
+    const f=site.fleet,held=f?.custody;
+    if(!held&&f?.incident?.independent&&world.week>=f.incident.week+2&&site.food>0){
+      const actor=f.incident.actor,gain=Math.min(2,100-site.trust);
+      const message=person(site,actor)+' volunteered a dispatch shift after the truck was returned. The co-op lifted the restriction and the town regained '+gain+' trust.';
+      site.trust+=gain;delete f.incident;f.serial++;entry(f,world.week,actor,message,'driver');return [message];
+    }
+    if(!held||held.week>=world.week||f.review===world.week)return [];
     f.review=world.week;f.serial++;
     let message;
     if(held.kind==='theft'){
@@ -186,11 +240,12 @@
     const people=crew(site),known=id=>people.includes(id)||Boolean(root.EarthAgency?.canPlay?.(site,id));
     if(!Object.entries(f.roster).every(([id,row])=>known(id)&&whole(row?.ready,2,week+3)&&(row.joined==null||whole(row.joined,1,week)&&whole(row.ready-row.joined,1,3))))return false;
     if(!f.records.every(e=>e&&known(e.actor)&&(e.otherId==null||known(e.otherId)&&e.otherId!==e.actor)&&whole(e.week,1,week)&&typeof e.text==='string'&&e.text.length<=400))return false;
-    if(['servedWeek','parkedWeek','review','regularWeek'].some(k=>f[k]!==undefined&&!whole(f[k],1,week)))return false;
-    if(f.incident&&(!known(f.incident.actor)||!whole(f.incident.week,1,week)))return false;
+    if(['servedWeek','parkedWeek','review','regularWeek','independentWeek'].some(k=>f[k]!==undefined&&!whole(f[k],1,week)))return false;
+    if(f.incident&&(!known(f.incident.actor)||!whole(f.incident.week,1,week)||
+      f.incident.independent!=null&&(f.incident.independent!==true||f.independentWeek!==f.incident.week)))return false;
     const c=f.custody;
     return !c||known(c.actor)&&whole(c.week,1,week)&&whole(c.stop,0,stops.length-1)&&location(c.anchor)&&location(c.pickup)&&
       whole(c.token,1,f.serial)&&typeof c.delivered==='boolean'&&['work','theft'].includes(c.kind)&&(c.stock===undefined||c.kind==='work'&&!c.delivered&&c.stock===stops[c.stop].good)&&(c.kind!=='theft'||f.incident?.actor===c.actor&&!c.delivered);
   }
-  root.EarthFleet=Object.freeze({view,run,tick,valid,regular,finishRegular,closeWeek,depot,stops});
+  root.EarthFleet=Object.freeze({view,run,tick,valid,regular,finishRegular,closeWeek,dispute,finishDispute,depot,stops});
 })(typeof window==='undefined'?globalThis:window);

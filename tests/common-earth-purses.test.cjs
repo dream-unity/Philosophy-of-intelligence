@@ -290,3 +290,37 @@ test('the payroll scheduler leaves a resident hosting an accompanied day free to
   assert.ok(t.c.EarthPurses.opportunity(t.sim.state,t.sim.active(),candidate(other)));
   t.sim.destroy();
 });
+
+test('relocation carries the actual remaining purse, keeps both local wage books and the household pool, and preserves a same-week work limit',()=>{
+  const t=setup(),{sim,c}=t,origin=sim.active(),w=sim.state,api=c.EarthPurses;
+  earn(t);ok(act(t,'donate'));
+  ok(sim.found({name:'Garden Ward',lat:-36,lon:145,water:false}));const dest=sim.active();
+  const priorHouse=origin.purses.household,originTill=c.EarthMarket.privateTill(origin),destTill=c.EarthMarket.privateTill(dest);
+  const moved=api.moveBalance(w,origin,dest,'steward','steward');
+  assert.deepEqual([moved.moved,moved.kept,moved.worked],[1,0,true]);
+  assert.deepEqual([origin.purses.people.steward.earned,origin.purses.people.steward.balance,origin.purses.household],[2,0,priorHouse]);
+  assert.deepEqual([dest.purses.people.steward.earned,dest.purses.people.steward.balance,dest.purses.household],[0,1,0]);
+  assert.deepEqual([c.EarthMarket.privateTill(origin),c.EarthMarket.privateTill(dest)],[originTill,destTill]);
+  assert.deepEqual(JSON.parse(JSON.stringify(origin.purses.people.steward.entries[0].transfer)),JSON.parse(JSON.stringify(dest.purses.people.steward.entries[0].transfer)));
+  assert.equal(option(t,'start').available,false);assert.equal(sim.purseView().openings,2,'an incoming wage record does not occupy a job in the new district');
+  assert.equal(api.moveBalance(w,origin,dest,'steward','steward'),null,'retry cannot issue another receipt');
+  assert.ok(api.validMoves(w));assert.ok(c.CommonEarthSim.readSave(JSON.stringify(w)));
+  const forged=JSON.parse(JSON.stringify(w));forged.sites[1].purses.people.steward.entries[0].transfer.fromRevision++;
+  assert.equal(api.validMoves(forged),false);
+  ok(act(t,'donate'));assert.equal(dest.purses.household,1);assert.equal(origin.purses.household,1);
+  assert.ok(api.valid(dest,w.week));assert.ok(api.validMoves(w));
+  ok(sim.advance());assert.equal(option(t,'start').available,true);
+  earn(t);assert.equal(dest.purses.people.steward.earned,2);assert.equal(origin.purses.people.steward.earned,2);
+  const back=api.moveBalance(w,dest,origin,'steward','steward');assert.equal(back.moved,2);assert.equal(origin.purses.people.steward.balance,2);
+  assert.equal(origin.purses.people.steward.earned,2);assert.equal(dest.purses.people.steward.balance,0);assert.ok(api.validMoves(w));
+  assert.ok(c.CommonEarthSim.readSave(JSON.stringify(w)));sim.destroy();
+});
+test('a paid worker with an empty purse carries only the same-week work commitment; unrelated residents can still take the local opening',()=>{
+  const t=setup(),{sim,c}=t,from=sim.active();earn(t);ok(act(t,'donate'));ok(act(t,'donate'));
+  ok(sim.found({name:'North Bend',lat:36,lon:-104}));const to=sim.active();
+  const out=c.EarthPurses.moveBalance(sim.state,from,to,'steward','steward');assert.equal(out.moved,0);assert(out.worked);
+  assert.equal(c.EarthPurses.committed(to,'steward',sim.state.week),true);
+  assert.equal(c.EarthPurses.committed(to,to.residents[1].id,sim.state.week),false);
+  assert.equal(to.purses.people.steward.lastWeek,0);assert.equal(to.purses.people.steward.earned,0);
+  assert.ok(c.EarthPurses.validMoves(sim.state));assert.ok(c.CommonEarthSim.readSave(JSON.stringify(sim.state)));sim.destroy();
+});

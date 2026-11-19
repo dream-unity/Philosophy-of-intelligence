@@ -1,0 +1,30 @@
+.ties-anchor {
+  display: grid;
+  gap: .18rem;
+  margin: .55rem 0;
+  padding: .55rem .68rem;
+  border-inline-start: 3px solid #e8bd78;
+  background: #253b3d;
+}
+.ties-anchor small, .ties-board li small { color: #bbc9c4; }
+.ties-anchor span, .ties-board li span, .ties-row p { font-size: .84rem; line-height: 1.4; }
+.ties-anchor .ties-person { justify-self: start; }
+.ties-board ul { list-style: none; padding: 0; margin: .3rem 0; }
+.ties-board li { display: grid; gap: .12rem; padding: .47rem .2rem; border-block-end: 1px solid #486164; }
+.ties-board .ties-person, .ties-row .ties-person { justify-self: start; }
+.ties-now { color: #d3e5c1; }
+.ties-network { margin: .65rem 0; }
+.ties-row { display: grid; gap: .15rem; padding-block: .3rem; }
+.scene-card .ties-row p { margin: 0; }
+.ties-directions {
+  display: grid;
+  gap: .2rem;
+  margin: .25rem 0;
+  padding: .45rem .65rem;
+  border-inline-start: 2px solid #8fb99c;
+}
+.ties-directions dt { color: #bddac6; font-size: .82rem; font-weight: 650; }
+.ties-directions dd { margin: 0 0 .4rem; }
+.ties-directions dd:last-child { margin-bottom: 0; }
+.ties-memory ul { list-style: none; padding: 0; }
+.ties-memory li { display: grid; justify-items: start; gap: .2rem; padding-block: .35rem; }

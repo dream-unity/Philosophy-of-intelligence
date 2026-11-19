@@ -68,13 +68,14 @@
       const current=()=>panel.open&&!doc.hidden&&street()&&personId===person.id&&generation===expectedGeneration&&sim.state.week===week&&
         sim.state.activeId===site.id&&(sim.active()?.foundingRevision||0)===request.generation&&root.EarthAgency.actorId(sim.active())===actor;
       const ref=meetingId?approachId(site,meetingId):null;
+      const venue=domain==='autonomy'&&choice.id==='dreamPractice'?choice.venue:null;
       async function commit(){
         if(!current()||busy)return;
         pendingTrip=null;busy=true;content.setAttribute('aria-busy','true');
         const local=street(),trip=version();
         const guard=()=>{
           if(!current()||street()!==local||version()!==trip)return null;
-          return ref?local.meeting(ref,true):local.getState();
+          return venue?local.venueProof?.(venue,person.id):ref?local.meeting(ref,true):local.getState();
         };
         try{
           const result=await sim.perform(domain==='term'?'studyTerm':'lifeAction',person.id,request,guard);
@@ -90,6 +91,14 @@
         }catch{
           if(current())note('The decision could not be saved. Review the current choices and try again.');
         }finally{busy=false;content.removeAttribute('aria-busy');}
+      }
+      if(venue){
+        if(street().venueProof?.(venue,person.id))return commit();
+        const ticket={};pendingTrip=ticket;
+        const started=street().focusVenue?.(venue,person.id,()=>{if(pendingTrip===ticket)return commit();});
+        if(!started){pendingTrip=null;note('Reach the '+venue+' on foot to work on this stage.');}
+        else if(pendingTrip===ticket)note('Walking to the '+venue+' for '+choice.label.toLowerCase()+'.');
+        return;
       }
       if(!ref||street().meeting(ref)?.mode==='walk')return commit();
       const whom=personas.profile(site,meetingId);if(!whom)return;
@@ -195,8 +204,13 @@
         section.append(link);
       }else if(best)section.append(field('p','Strong fit for '+person.name+'’s '+best.skill+' and '+best.secondary+'.','life-muted'));
       if(model.stage!=='employed'&&model.status)section.append(field('p',model.status));
+      if(model.tenure)section.append(field('p',model.tenure.detail,'life-muted'));
       if(model.training?.phaseDetail)section.append(field('p',model.training.phaseDetail,'life-muted'));
       if(model.opening)section.append(specialistOpening(model.opening));
+      if(model.recruitment?.detail){
+        section.append(field('p',model.recruitment.detail,'life-muted'));
+        if(model.recruitment.applicants.length)section.append(field('p','Applicants · '+model.recruitment.applicants.join(', '),'life-muted'));
+      }
       section.append(offerRows(person,model.choices||[],'career',root.EarthAgency.actorId(site)));
       if(model.training&&!model.training.paused&&root.EarthAgency.actorId(site)===person.id&&sim.courseCalendar){
         const calendar=sim.courseCalendar(person.id),n=calendar.weeks;
@@ -234,8 +248,26 @@
         box.append(field('h4','Week '+sim.state.week+' · '+intent.label),field('p',intent.reason||''));
         if(intent.goal)box.append(field('p',intent.goal,'life-muted'));
       }
+      const ambition=intent?.dream;
+      if(ambition){
+        box.append(field('h4',ambition.title),field('p',ambition.quote),
+          field('p',ambition.progressText+' · '+ambition.next,'life-muted'),field('p',ambition.community,'life-muted'));
+        if(ambition.onHold)box.append(field('p',ambition.onHold.title+' is on hold. '+ambition.onHold.reason+' '+ambition.onHold.retained+' earned sessions are retained.','life-muted'));
+        if(ambition.achievements?.length){
+          for(const past of ambition.achievements)box.append(field('p',past.earned+' · '+past.place+', week '+past.week,'life-muted'));
+        }
+        if(ambition.blockers.length>1)box.append(field('p',ambition.blockers.slice(1).join(' '),'life-muted'));
+      }
+      const ties=autonomy.contacts?.(site,person.id,sim.state.week)||[];
+      if(ties.length){
+        box.append(field('h4','People I remember'));
+        for(const tie of ties.slice(0,3)){
+          const place=tie.here?'':' · lives elsewhere';
+          box.append(field('p',tie.name+' · '+tie.reason+' in week '+tie.week+place,'life-muted'));
+        }
+      }
       const suggestions=autonomy.guidance(site,sim.state,person.id);
-      const possibilities=(suggestions?.choices||[]).filter(choice=>actor!==person.id||choice.id==='hobbyPractice');
+      const possibilities=(suggestions?.choices||[]).filter(choice=>actor!==person.id||(choice.personal||['hobbyPractice','dreamPractice'].includes(choice.id)));
       if(possibilities.length){
         box.append(field('h4',actor===person.id?'Personal projects':'Discuss next week'));
         if(actor!==person.id)box.append(field('p','Meet '+person.name+' to offer advice or work together. They decide how it fits their priorities.','life-muted'));
@@ -259,7 +291,8 @@
       const stamp=[sim.state.week,sim.state.actionRevision||0,siteKey,personId,targetId,page].join('/');
       if(stamp===renderKey)return;
       const people=personas.list(site);
-      const directory=people.map(p=>({id:p.id,label:p.name+' · '+(careers.role(site,p.id)||p.originRole)}));
+      const displayName=p=>root.EarthCommunityLife?.personLabel?.(site,p.id,p.name)||p.name;
+      const directory=people.map(p=>({id:p.id,label:displayName(p)+' · '+(careers.role(site,p.id)||p.originRole)}));
       const newKey=JSON.stringify(directory);
       if(newKey!==personKey){selectOptions(personField,directory);personKey=newKey;}
       if(!people.some(p=>p.id===personId))choose(root.EarthAgency.actorId(site));
@@ -272,13 +305,13 @@
         model=careers.view(sim.state,site,person.id,targetId);
       }
       const action=doc.activeElement?.dataset.lifeControl;
-      profileBox.replaceChildren(field('h3',person.name),field('p',[model.career,model.employer].filter(Boolean).join(' · '),'life-role'));
+      profileBox.replaceChildren(field('h3',displayName(person)),field('p',[model.career,model.employer].filter(Boolean).join(' · '),'life-role'));
       if(page==='career'&&model.supplyLane?.description)profileBox.append(field('p',model.supplyLane.description,'life-muted'));
       profileBox.append(field('p',person.description),field('p','Strengths · '+person.strengths.map(title).join(', '),'life-muted'));
       if(person.interests?.length)profileBox.append(field('p','Interests · '+person.interests.join(', '),'life-muted'));
       const playable=root.EarthAgency.playables?.(site).some(p=>p.id===person.id)??(person.kind==='resident'||person.kind==='steward');
       if(playAs&&person.id!==root.EarthAgency.actorId(site)&&playable){
-        const pick=control('Play as '+person.name,()=>{
+        const pick=control('Play as '+displayName(person),()=>{
           if(pick.isConnected&&personId===person.id)return playAs(person.id);
         },'play-character','text-button');
         profileBox.append(pick);

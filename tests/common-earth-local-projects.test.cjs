@@ -1,12 +1,12 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),test=require('node:test'),vm=require('node:vm');
 const base=process.env.COMMON_EARTH_GAME_DIR||path.resolve(__dirname,'../common-earth');
-function town(place='Stone Town'){
+function town(place='Stone Town',point={lat:-6.16,lon:39.19},extra=[]){
   const ctx=vm.createContext({});ctx.window=ctx;
-  for(const f of ['personas','careers','local-projects','autonomy','agency','simulation'])
+  for(const f of [...extra,'personas','careers','local-projects','autonomy','agency','simulation'])
     vm.runInContext(fs.readFileSync(path.join(base,f+'.js'),'utf8'),ctx,{filename:f+'.js'});
   const sim=ctx.CommonEarthSim.create({storage:null});
-  assert(sim.found({name:place,lat:-6.16,lon:39.19}).ok);
+  assert(sim.found({name:place,...point}).ok);
   return {sim,s:sim.active(),w:sim.state,ctx,p:ctx.EarthLocalProjects,a:ctx.EarthAutonomy,c:ctx.EarthCareers};
 }
 const raw=x=>JSON.parse(JSON.stringify(x));
@@ -196,4 +196,49 @@ test('a played baker holds their own developing project, can reserve labour for 
   for(let i=0;i<15&&t.s.autonomy.projects.owners[id].progress===progress&&t.s.autonomy.projects.owners[id].serial===serial;i++)assert(t.sim.advance().ok);
   assert(t.s.autonomy.projects.owners[id].progress!==progress||t.s.autonomy.projects.owners[id].serial!==serial);
   assert.equal(t.s.agency.localPositions[id].x,4.3);assert(t.ctx.CommonEarthSim.readSave(JSON.stringify(t.w)));
+});
+
+
+test('freshwater crews book a real quay, respect a player’s float and credit their jointly landed fish exactly once',()=>{
+  const t=town('Lake Victoria',{water:true,lat:-3,lon:32},['resource-economy','provisions','fisheries']);
+  const owner='walker-3',g=goal('food','care');
+  t.s.autonomy={week:1,people:{},effects:{},projects:{notes:0,assists:0,owners:{[owner]:g}}};
+  assert.equal(workOn(t,owner,2).result.item.venue,'dock');assert.equal(g.crop,'fish');
+  let clock=33000;t.ctx.Date=class extends Date{static now(){return clock;}};
+  const quay={siteId:t.s.id,actor:'steward',mode:'walk',target:'quay',x:8,y:24};
+  assert.equal(t.sim.useHandline(quay,'cast').ok,true);
+  assert.equal(workOn(t,owner,3).result,null);assert.equal(g.progress,1);
+  assert.match(g.blocked,/handline|float/);assert.equal(t.s.provisions?.landings,undefined);
+  clock+=5500;assert.equal(t.sim.useHandline(quay,'land').ok,true);
+  assert.match(workOn(t,owner,4).result.item.activity,/fishing line/);
+  const finished=workOn(t,owner,5);assert.ok(finished.result);
+  assert.equal(finished.effects.food,2);assert.equal(g.caught,2);assert.ok(g.carriedBy);
+  assert.deepEqual(raw(t.p.latestHarvest(t.s,5)),{by:owner,amount:2,source:'catch'});
+  assert.deepEqual(raw(t.s.provisions.landings),{week:5,by:owner,amount:2,thisWeek:2,total:3});
+  t.s.autonomy.week=5;
+  assert.deepEqual(raw(t.ctx.EarthResources.projectShipment(t.s,owner)),{week:5,crop:'fish',sourceVenue:'dock',venue:'pantry',carrierId:g.partnerId,amount:2});
+  t.s.food+=finished.effects.food;t.ctx.EarthProvisions.credit(t.w,t.s,'catch',2,owner,true);
+  assert.equal(t.s.provisions.landings.total,3);assert.equal(t.p.valid(t.s,t.w.week),true);
+  t.s.autonomy.week++;assert.equal(t.ctx.EarthResources.projectShipment(t.s,owner),null);
+  t.sim.destroy();
+});
+
+test('the available crop limits baskets for the pantry, reserve bin and collaborators even with a tested carrier',()=>{
+  const t=town('Upland',{lat:46,lon:12},['resource-economy','provisions']);
+  const owner='walker-4',g=goal('food','care');
+  Object.assign(g,{crop:'grain',progress:2,lastWorked:1});
+  t.s.autonomy={week:1,people:{},effects:{},projects:{notes:0,assists:1,assistsFrom:['walker-1'],owners:{[owner]:g}}};
+  t.w.week=2;
+  t.s.resourceLedger={serial:1,lastWeek:2,bins:{},shelf:{},fields:{grain:{week:2,left:2}}};
+  const output=workOn(t,owner,2);
+  assert.equal(output.effects.food,1);assert.equal(t.s.resourceLedger.bins.grain,1);
+  assert.equal(t.s.resourceLedger.fields.grain.left,0);assert.equal(t.s.autonomy.projects.assists,1);
+  assert.match(output.result.item.reason,/raw goods bin/);assert.ok(output.result.item.target);
+  assert.equal(t.ctx.EarthResources.quickGather(t.w,t.s,owner).resource==='grain',false);
+  for(const id of ['grain','pulses','roots','fruit'])t.s.resourceLedger.fields[id]={week:2,left:0};
+  assert.equal(t.ctx.EarthResources.quickGather(t.w,t.s,owner),null);
+  const other='walker-0',empty=goal('food','care');t.s.autonomy.projects.owners[other]=empty;
+  const waiting=workOn(t,other,2);assert.equal(waiting.result,null);assert.equal(empty.progress,0);
+  assert.match(empty.blocked,/recover/);assert.ok(t.ctx.EarthResources.valid(t.s,2));
+  t.sim.destroy();
 });

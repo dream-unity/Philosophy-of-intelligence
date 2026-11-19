@@ -62,3 +62,26 @@ test('the gazetteer estuary ports keep their landing without reclassifying neigh
   assert.equal(api.nearOceanShore(-42.85,147.295),true);
   assert.equal(api.nearOceanShore(-42.849,147.295),false);
 });
+
+test('mapped inland shores support freshwater fishing on land, marine shoreline crops and dry inland resources remain distinct',async()=>{
+  const {api}=atlas(fs.readFileSync(path.join(dir,'earth-cells-v1.bin')));
+  assert.equal(api.nearLakeShore(43.66,-79.4),null);await api.ready();
+  const toronto={lat:43.69,lon:-79.41,name:'Toronto'},coast={lat:-4.05,lon:39.67,name:'Mombasa'},interior={lat:-24,lon:133,name:'Central Australia'};
+  assert.equal(api.locate(toronto.lat,toronto.lon).water,false);assert.equal(api.nearLakeShore(toronto.lat,toronto.lon),'Lake Ontario');
+  assert.equal(api.nearLakeShore(coast.lat,coast.lon),'');assert.equal(api.nearLakeShore(interior.lat,interior.lon),'');
+  const context=vm.createContext({Date,structuredClone});context.window=context;context.EarthAtlas=api;
+  for(const file of ['resource-economy','market','provisions','fisheries','simulation'])vm.runInContext(fs.readFileSync(path.join(dir,file+'.js'),'utf8'),context,{filename:file});
+  let clock=32000;context.Date=class extends Date{static now(){return clock;}};
+  const sim=context.CommonEarthSim.create({storage:null});assert.equal(sim.found(toronto).ok,true);
+  const lake=sim.active(),wc=context.CommonEarthSim.waterfront,e=context.EarthResources;
+  assert.equal(lake.water,false);assert.equal(lake.lakeShore,'Lake Ontario');assert.equal(wc(lake),'lake');
+  assert.equal(wc(coast),'coast');assert.equal(wc(interior),null);
+  assert.equal(e.environment(lake),'lakeside');assert.equal(e.environment(coast),'coast');assert.equal(e.environment(interior),'dry');
+  const resources=sim.marketView().local.rows;assert.equal(resources.find(r=>r.id==='reed').local,true);assert.ok(!resources.some(r=>r.id==='kelp'&&r.local));
+  const pose={siteId:lake.id,actor:'steward',mode:'walk',target:'quay',x:7,y:24},pantry=lake.food;
+  assert.equal(sim.useHandline(pose,'cast').ok,true);clock+=5000;assert.equal(sim.useHandline(pose,'land').ok,true);assert.equal(lake.food,pantry+1);
+  delete context.EarthAtlas;const offline=context.CommonEarthSim.readSave(JSON.stringify(sim.state));
+  assert.ok(offline);assert.equal(wc(offline.sites[0]),'lake');assert.equal(e.environment(offline.sites[0]),'lakeside');
+  assert.equal(context.CommonEarthSim.readSave(JSON.stringify({...offline,sites:[{...offline.sites[0],lakeShore:43}]})),null);
+  sim.destroy();
+});

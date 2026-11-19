@@ -37,12 +37,19 @@
     if(kept!==r.units){r.units=kept;d.serial++;}
     r.stock=site.food;
   }
-  function credit(world,site,source,n,by){
+  function landing(world,site,by,amount){
+    if(!site||!int(amount,1)||!actors(site,by))return;
+    const d=book(site),last=d.landings;
+    d.landings={week:world.week,by,amount,thisWeek:Math.min(Number.MAX_SAFE_INTEGER,(last?.week===world.week?last.thisWeek:0)+amount),
+      total:Math.min(Number.MAX_SAFE_INTEGER,(last?.total||0)+amount)};
+    d.serial++;
+  }
+  function credit(world,site,source,n,by,landedBeforeMeals=false){
     if(!site||!int(n,1)||!['catch','harvest'].includes(source)||!int(site.food,1)||(source==='catch'||by!=null)&&!actors(site,by))return;
     const d=book(site);
     const old=d.receipt?.source===source&&d.receipt?.by===(by||null)?traced(site,world.week,Math.max(0,site.food-n))||0:0;
     d.receipt={source,by:by||null,units:Math.min(portion*limit,n+old,site.food),stock:site.food,week:world.week};
-    d.serial++;
+    if(source==='catch'&&!landedBeforeMeals)landing(world,site,by,n);else d.serial++;
   }
   function provenance(site,crate){
     if(crate.source==='pantry')return 'Shared pantry food';
@@ -71,6 +78,7 @@
     return {siteId:site.id,generation:site.foundingRevision||0,actorId:actor(site),week:world.week,serial:d.serial,
       freshFood:site.food,materials:site.materials,capacity:capacity(site),used:crates.length,
       reservedFood:crates.reduce((n,c)=>n+(c.reserved?c.remaining:0),0),crates,options,
+      lastLanding:d.landings?{...d.landings,name:name(site,d.landings.by)}:null,
       lastRelief:d.lastRelief?{...d.lastRelief,contributors:d.lastRelief.contributors.map(id=>name(site,id))}:null};
   }
   function onSite(site,id,p){
@@ -92,6 +100,8 @@
   function run(world,site,request,scene){
     if(!site||!request||request.siteId!==site.id||request.actorId!==actor(site)||request.generation!==(site.foundingRevision||0)||request.week!==world.week||
       request.serial!==(site.provisions?.serial||0))return fail('The town, worker or preserving shelf changed. Review the current crates.');
+    const restricted=root.EarthCommunityLife?.permission?.(world,site,'provision',[request]);
+    if(restricted)return fail(restricted);
     if(!onSite(site,request.actorId,scene))return fail('Stand on foot at your district exchange or on its waterfront quay.');
     const d=site.provisions||fresh();
     if(request.action==='pack'){
@@ -126,6 +136,7 @@
   }
   function volunteer(world,site,p){
     const d=site.provisions||fresh(),need=Math.ceil(site.population/5);
+    if(root.EarthCommunityLife?.residency?.(site,p.id)&&root.EarthCommunityLife.residency(site,p.id)!=='member')return false;
     if(!p.free||p.row.energy<4||capacity(site)<2||d.autoWeek===world.week||packingBlock(site,d))return false;
     const promised=site.residents?.find(r=>r.slot===0)?.promise,foodFloor=Math.max(7,need*3)+(promised?Math.max(0,3-(promised.advance?.food||0)):0);
     const repair=site.residents?.find(r=>r.slot===1)?.promise;
@@ -153,9 +164,11 @@
     const r=d.receipt;
     if(r!=null&&(!record(r)||!['catch','harvest'].includes(r.source)||!int(r.units,1,portion*limit)||!int(r.stock,r.units)||
       !int(r.week,1,week)||r.source==='catch'&&!actors(site,r.by)||r.by!=null&&!actors(site,r.by)))return false;
+    const f=d.landings;
+    if(f!=null&&(!record(f)||!int(f.week,1,week)||!actors(site,f.by)||!int(f.amount,1)||!int(f.thisWeek,f.amount)||!int(f.total,f.thisWeek)))return false;
     const l=d.lastRelief;
     return l==null||record(l)&&int(l.week,1,week)&&int(l.amount,1,2*limit)&&int(l.shortfall,l.amount)&&Array.isArray(l.contributors)&&
       l.contributors.length>=1&&l.contributors.length<=Math.min(l.amount,limit)&&new Set(l.contributors).size===l.contributors.length&&l.contributors.every(id=>actors(site,id));
   }
-  root.EarthProvisions=Object.freeze({view,run,credit,traced,reconcile,relieve,volunteer,putByCrew,valid});
+  root.EarthProvisions=Object.freeze({view,run,credit,landing,traced,reconcile,relieve,volunteer,putByCrew,valid});
 })(typeof window==='undefined'?globalThis:window);

@@ -1,0 +1,34 @@
+#scene-neighbours h4{margin:.8rem 0 .3rem}
+#scene-neighbours p{margin:.28rem 0;line-height:1.4}
+.district-summary,.district-row,.district-journey{padding:.45rem 0 .65rem;border-bottom:1px solid rgba(80,117,101,.32)}
+.district-options{display:flex;flex-wrap:wrap;gap:.35rem;margin:.4rem 0}
+#scene-neighbours button{min-height:2.25rem}
+#scene-neighbours .district-checks{padding-left:1.15rem;margin:.4rem 0;font-size:.87rem}
+.district-result{font-weight:600}
+.district-track{position:relative;height:2.5rem;margin:.55rem .5rem .4rem;background:linear-gradient(transparent 70%,#a67b46 70% 77%,transparent 77%)}
+.district-track::before,.district-track::after{content:'';position:absolute;bottom:15%;width:.55rem;height:.55rem;border-radius:50%;background:#645e44}
+.district-track::after{right:0}
+.district-track span{display:block;position:absolute;bottom:28%;background:var(--forest,#345546);color:white;padding:.15rem .4rem;border-radius:.25rem;font-size:.8rem;animation:district-crossing var(--crossing-time) linear var(--crossing-elapsed) both}
+@keyframes district-crossing{from{left:0;transform:translateX(0)}to{left:100%;transform:translateX(-100%)}}
+@media(prefers-reduced-motion:reduce){.district-track span{animation:none;left:45%}}
+#district-membership-hint{align-self:flex-start;max-width:90%;padding:.32rem .65rem;border:1px solid #687969;border-radius:.35rem;background:#f3f4e8;color:#293c34;pointer-events:auto;font-weight:650}
+body[data-visiting-district] #character-lives,body[data-visiting-district] #personal-work,body[data-visiting-district] #city-panel .city-commission,body[data-visiting-district] #city-panel .city-manage-crew{display:none}
+.district-crossing{position:absolute;inset:0;z-index:8;display:grid;grid-template-rows:auto minmax(105px,1fr) auto;background:#50685b;color:#f6f4df;overflow:hidden;font-family:var(--sans,system-ui,sans-serif)}
+.district-crossing[hidden]{display:none}
+.trail-heading,.trail-control{background:#1c3533f5;padding:.6rem .8rem}
+.trail-heading{display:flex;justify-content:space-between;align-items:center;gap:.6rem}
+.trail-distance{white-space:nowrap;font-size:.83rem;font-variant-numeric:tabular-nums}
+.trail-landscape{position:relative;min-height:0;overflow:hidden}
+.trail-terrain{display:block;width:100%;height:100%}
+.trail-pin{position:absolute;transform:translate(-50%,-115%);border:1px solid #8c9d89;padding:.28rem .49rem;max-width:32%;border-radius:.35rem;background:#f3f1deed;color:#263d34;font:650 .78rem/1.1 var(--sans,system-ui,sans-serif)}
+.trail-pin[aria-pressed=true]{box-shadow:0 0 0 2px #d6b866}
+.trail-pin:disabled{opacity:.72}
+.trail-traveller{position:absolute;pointer-events:none;width:1.04rem;height:1.1rem;background:#bf5945;border:2px solid #433f32;border-radius:45% 45% 38% 38%;transform:translate(-50%,-100%);box-shadow:3px 3px 3px #32483a66;z-index:1}
+.trail-traveller::before{content:'';position:absolute;left:.15rem;top:-.48rem;width:.47rem;height:.53rem;background:#d5b48e;border:1px solid #433f32;border-radius:50%}
+.trail-note{margin:0 0 .4rem;font-size:.87rem;line-height:1.35}
+.trail-buttons{display:flex;gap:.35rem;flex-wrap:wrap}
+.trail-buttons button{min-height:36px;padding:.35rem .61rem;border:1px solid #98aa98;border-radius:.33rem;background:#e7ead9;color:#203d36;font:650 .81rem/1.12 var(--sans,system-ui,sans-serif)}
+.trail-buttons button:last-child{background:transparent;color:#eff1df}
+@container street (max-width:430px){.trail-control,.trail-heading{padding:.38rem .5rem}.trail-buttons button{min-height:32px;max-width:49%;font-size:.76rem}.trail-pin{font-size:.68rem}.trail-note{font-size:.79rem}}
+
+body[data-district-crossing] :is(#street-controls,#street-actors,#actions-panel,#street-hud,#calendar-personal-work,#advance-week){display:none!important}

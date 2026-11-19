@@ -54,7 +54,8 @@
     if(!active) {
       for(const p of PROJECTS) {
         const [first,second]=p.pair.map(i=>members[i]);
-        const gate=world.week<data.nextWeek?'They are taking a week before the next proposal.':
+        const away=[first,second].find(person=>globalThis.EarthCommunityLife?.present?.(site,person.id)===false);
+        const gate=away?away.name+' is away from the district. Choose partners who can meet here.':world.week<data.nextWeek?'They are taking a week before the next proposal.':
           !first.heard||!second.heard?'First listen to '+[first,second].filter(x=>!x.heard).map(x=>x.name).join(' and ')+'.':'';
         add('people','together:'+p.id,p.title,p.request,{
           gate,peerProject:true,effort:1

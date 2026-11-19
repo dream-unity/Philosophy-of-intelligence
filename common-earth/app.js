@@ -22,6 +22,8 @@
   const start = {name:'Stone Town',region:'Zanzibar, Tanzania',lat:-6.1622,lon:39.1922,water:false};
   const book=window.EarthSaves?.open();
   const sim=book?.sim||window.CommonEarthSim.create();
+  const forecastView=window.EarthForecastView?.create(sim);
+  const forecastDraws=new WeakMap();
   const savedWorlds=book && $('saved-worlds') ? book.mount($('saved-worlds'),{section:true}):null;
   const planning=window.EarthPlanner && $('planning-table') ? window.EarthPlanner.mount($('planning-table'),sim):null;
   const learning=window.EarthGoals && $('learning-goal') ? window.EarthGoals.mount($('learning-goal'),{sim,onResult:presentResult,onChange:render,onFollow:followCharter}):null;
@@ -71,9 +73,21 @@
     else personalWork?.open(resource);
   };
   let liveClock=null,clockSignal='',decisionKey='',decisionHold='',rememberFrame=0;
+  function clockPreference(value){
+    const key='common-earth.clock.v1.'+(book?.current()?.id||'first');
+    try{
+      if(value!=null)localStorage.setItem(key,value?'live':'manual');
+      return localStorage.getItem(key);
+    }catch{return null;}
+  }
   const streetHud=window.EarthStreetHUD?.mount($('street-hud'),{
     sim,getStreet,stageVersion:()=>arrivalVersion,meet:meetForLife,venue:atVenue,
-    after:redrawStreet,advance:advanceWeek,followGoal:followSceneGoal,changed:()=>{syncLiveClock();rememberStreetSoon();},personalWork:sceneWork,playAs:sceneHandoff,profile:id=>{if(streetHud.openTool('life'))lifePanel?.open(id);}
+    after:redrawStreet,advance:advanceWeek,readForecast,followGoal:followSceneGoal,changed:()=>{syncLiveClock();rememberStreetSoon();},personalWork:sceneWork,playAs:sceneHandoff,profile:id=>{if(streetHud.openTool('life'))lifePanel?.open(id);}
+  });
+  listen('scene-original-return','click',()=>{
+    const original=window.EarthInterdependence?.anchor(sim.state,sim.active());
+    if(original?.atHome)streetHud?.selectPurpose(original.id);
+    else streetHud?.openTool('neighbours');
   });
   function sceneHandoff(id){
     const pane=streetHud?.active();
@@ -86,18 +100,44 @@
   }
   const sceneContext={sim,getStreet,notify:(msg,error)=>streetHud?streetHud.notify(msg,error):notify(msg,error),close:()=>streetHud?.close(),
     refresh:result=>{if(result)presentResult(result);redrawStreet();}};
+  $('district-membership-hint')?.addEventListener('click',()=>streetHud?.openTool('neighbours'));
+  const districtPanel=window.EarthCommunityLifeUI?.mount($('scene-neighbours'),{sim,getStreet,atVenue,meet:meetForLife,playAs:id=>agencyUI?.playAs(id),
+    refresh:redrawStreet,notify:(message,error)=>streetHud?.notify(message,error),
+    arrive:site=>{
+      arrivalVersion++;cancelPlacement();street?.cancelTravel?.();encounter=null;visiting=null;peers=false;viewingShift=false;group='people';
+      selectPlace(site,false);setView('street',false);redrawStreet();streetHud?.openTool('neighbours',null,false);
+    }});
+  if(districtPanel)streetHud?.registerTool('neighbours',districtPanel);
+  function visitorScene(id){
+    const site=sim.active(),host=$('scene-'+id);if(!host)return false;
+    const reason=sim.state.communityLife&&window.EarthCommunityLife?.visitReason(sim.state,site);
+    let info=host.querySelector('[data-visitor-info]');
+    if(!reason){
+      info?.remove();
+      for(const child of host.querySelectorAll('[data-visitor-hidden]')){child.style.display='';delete child.dataset.visitorHidden;}
+      return false;
+    }
+    for(const child of host.children)if(child!==info&&!child.dataset.visitorHidden){child.style.display='none';child.dataset.visitorHidden='true';}
+    if(!info){info=node('article','district-row');info.dataset.visitorInfo='true';host.append(info);}
+    const details={stores:site.food+' food, '+site.materials+' materials and '+site.funds+' funds are held in local stores.',
+      truck:'The local co-op controls its truck and delivery shifts.',fishing:'Residents manage the catch and the shared pantry.',
+      work:'Local households assign their own work.',life:'You can speak to residents about their lives through Talk.'};
+    info.replaceChildren(node('strong','','Visiting '+site.name),node('p','',details[id]+' '+reason),
+      button('Meet the membership host',()=>streetHud.openTool('neighbours'),'secondary-button'));
+    return true;
+  }
   const waterfrontUI=window.EarthWaterfrontUI?.mount($('scene-fishing'),sceneContext);
-  if(waterfrontUI)streetHud?.registerTool('fishing',{render:waterfrontUI.render,onScene:waterfrontUI.render,close:waterfrontUI.close});
+  if(waterfrontUI)streetHud?.registerTool('fishing',{render:()=>{if(!visitorScene('fishing'))waterfrontUI.render();},onScene:()=>{if(!sim.state.communityLife||window.EarthCommunityLife.isHome(sim.state,sim.active()))waterfrontUI.render();},close:waterfrontUI.close});
   const localMarket=window.EarthMarketPanel?.mount($('local-market'),{
     sim,street:getStreet,version:()=>arrivalVersion+'/'+streetHud?.version(),meet:atVenue,quayProof,meetQuay,
-    onResult:presentResult,after:redrawStreet,work:sceneWork
+    onResult:presentResult,after:redrawStreet,work:sceneWork,openFishing:()=>streetHud?.openTool('fishing')
   });
-  if(localMarket)streetHud?.registerTool('stores',localMarket);
+  if(localMarket)streetHud?.registerTool('stores',{...localMarket,render:(...args)=>{if(!visitorScene('stores'))localMarket.render(...args);}});
   function attachSceneSection(id,section,module){
     const host=$('scene-'+id),original=section?.parentElement,next=section?.nextSibling;
     if(!module||!host||!original)return;
     streetHud?.registerTool(id,{
-      render:()=>{if(section.parentElement!==host)host.append(section);module.render();},
+      render:()=>{if(visitorScene(id))return;if(section.parentElement!==host)host.append(section);module.render();},
       close:()=>{
         module.invalidate?.();
         if(section.tagName==='DETAILS')section.open=false;
@@ -113,6 +153,8 @@
     let truckPosition='',quoteKey='',quote=null;
     function renderTruck(force){
       const site=sim.active(),scene=getStreet()?.truckStatus?.();if(!scene||!site)return;
+      if(sim.state.communityLife&&!window.EarthCommunityLife.isHome(sim.state,site)){if(force)visitorScene('truck');return;}
+      if(force)visitorScene('truck');
       const key=[site.id,site.foundingRevision||0,scene.actor,sim.state.week,sim.state.actionRevision].join('/');
       if(key!==quoteKey){quoteKey=key;quote=sim.truckView();}
       const near=(p,r)=>!!p&&Math.hypot(scene.x-p.x,scene.y-p.y)<=r;
@@ -177,6 +219,12 @@
   }
   function refreshLiveReview(){
     const path=streetHud?.active()==='live'&&liveReview();show('scene-live-review',!!path);if(path)put('scene-live-review',path.label);
+    const site=sim.active(),canSet=site&&sim.state.communityLife&&window.EarthCommunityLife.isHome(sim.state,site)&&!site.mandate&&!window.EarthLegacy?.governs(sim.state,site);
+    show('scene-hearing-switch',!!canSet);
+    if(canSet){
+      put('scene-hearing-switch',site.residentBallots?'Council votes at deadlines · switch to my vote':'Council waits for me · let residents vote');
+      $('scene-hearing-switch')?.setAttribute('aria-pressed',String(!!site.residentBallots));
+    }
   }
   function paintLiveClock(state){
     const duration=Math.floor(state.seconds/60)+':'+String(state.seconds%60).padStart(2,'0');
@@ -199,7 +247,7 @@
     if(advancing)return {ok:false,message:'Another calendar action is underway. A new interval will begin.'};
     advancing=true;
     try{
-      const result=await sim.perform('advance',{live:quote},guard);
+      const result=await sim.perform('advance',{live:quote,usePrepared:true},guard);
       if(result?.ok)lastAdvance=performance.now();
       return result;
     }finally{advancing=false;}
@@ -209,7 +257,16 @@
       detail:()=>streetHud.active()==='live',notice:result=>{if(result?.ok)redrawStreet();if(result?.message)streetHud.notify(result.message);}});
     streetHud.registerTool('live',{render:()=>{syncLiveClock(true);refreshLiveReview();}});
     listen('scene-live-review','click',()=>liveReview()?.run());
-    listen('scene-live-switch','click',()=>{if(liveClock.enabled())liveClock.pause();else liveClock.start();rememberStreetSoon();});
+    listen('scene-hearing-switch','click',async()=>{
+      const site=sim.active();if(!site)return;
+      const result=await sim.perform('act',site.residentBallots?'hearing:hold':'hearing:resident');
+      if(result.ok){render();syncLiveClock(true);}
+      streetHud.notify(result.message);
+    });
+    listen('scene-live-switch','click',()=>{
+      if(liveClock.enabled())liveClock.pause();else liveClock.start();
+      clockPreference(liveClock.enabled());rememberStreetSoon();
+    });
     document.addEventListener('visibilitychange',()=>syncLiveClock(true,!document.hidden));
     document.addEventListener('earthsheetchange',()=>syncLiveClock());
     document.addEventListener('focusin',()=>syncLiveClock());
@@ -244,12 +301,14 @@
   function coords(point) { return formatCoord(point.lat,'N','S')+'  ·  '+formatCoord(point.lon,'E','W'); }
   function known(point) {
     if(!point)return null;
-    return sim.state.sites.find(s=>{
-      if(s.id===point.id)return true;
-      const d=Math.PI/180;
-      const h=Math.sin((s.lat-point.lat)*d/2)**2+Math.cos(s.lat*d)*Math.cos(point.lat*d)*Math.sin((s.lon-point.lon)*d/2)**2;
-      return 12742*Math.asin(Math.sqrt(Math.min(1,h)))<10;
-    });
+    const sites=[...sim.state.sites,...(sim.state.communityLife?.outposts||[])];
+    if(point.id){const exact=sites.find(s=>s.id===point.id);if(exact)return exact;}
+    const d=Math.PI/180;let closest=null,range=10;
+    for(const site of sites){
+      const h=Math.sin((site.lat-point.lat)*d/2)**2+Math.cos(site.lat*d)*Math.cos(point.lat*d)*Math.sin((site.lon-point.lon)*d/2)**2;
+      const distance=12742*Math.asin(Math.sqrt(Math.min(1,h)));if(distance<range){range=distance;closest=site;}
+    }
+    return closest;
   }
   function hideDialog(id) {
     const el=$(id);
@@ -374,7 +433,8 @@
     el.append(button('Close plan',()=>{planOpen=false;renderVoyage();},'text-button'));
   }
   function markers() {
-    atlas.setSites(sim.state.sites.map(s=>({...s,active:s.id===sim.state.activeId})));
+    const sites=showBeacons?[...sim.state.sites,...(sim.state.communityLife?.outposts||[])]:sim.state.sites;
+    atlas.setSites(sites.map(s=>({...s,active:s.id===sim.state.activeId})));
     const partners=window.EarthPartners?.list(sim.state,sim.active())||[];
     atlas.setBeacons?.(showBeacons?partners:[]);
     const sitesById=new Map(sim.state.sites.map(s=>[s.id,s]));
@@ -474,7 +534,9 @@
       const offer=sim.foundingOffer?.(selected,foundingSponsor);
       show('prepare-founding',!site && Boolean(offer?.preparation));
       if(offer?.preparation)put('prepare-founding',offer.preparation.label);
-      put('found-terms',[offer?.reason,offer?.terms].filter(Boolean).join(' '));show('found-terms',!!sim.active()&&!site);
+      const localResources=!site&&window.EarthResources?.survey?.(selected)?.summary;
+      put('found-terms',[offer?.reason,offer?.terms,localResources].filter(Boolean).join(' '));
+      show('found-terms',!site&&Boolean(sim.active()||localResources));
       $('found-button').disabled=offer?(!site&&!offer.available):false;
     }
     if($('found-button')) {
@@ -547,9 +609,9 @@
     if(line){
       put('street-handline',line.label);
       put('street-line-terms',line.text);
-      $('street-handline').disabled=['sailing','wait','full'].includes(line.action);
+      $('street-handline').disabled=['sailing','wait','full','resting'].includes(line.action);
     }
-    show('street-shoal',aboard && (state.sailingToShoal || line?.action==='cast' && line.food===1));
+    show('street-shoal',aboard && (state.sailingToShoal || line?.action==='cast' && line.food===1 && line.shoalUseful!==false));
     put('street-shoal',state.sailingToShoal?'Stop sailing':'Sail to shoal');
     const due=line?.wait?sim.active().handline.castAt:0;
     if(due!==handlineDue){
@@ -597,8 +659,17 @@
       if(!street) street=window.EarthStreet.mount($('street-canvas'),{
         getWeek:()=>sim.state.week,getWorld:()=>sim.state,
         getRegularRun:()=>sim.regularTruckView(),
+        getTruckDispute:()=>sim.truckDisputeView?.(),
+        onTruckDispute:(quote,proof)=>sim.perform('disputedTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
+        onNeighbourHelp:async(quote,proof)=>{
+          const local=getStreet();
+          const result=await sim.perform('neighbourAppointment',quote,()=>!document.hidden&&getStreet()===local?(proof?proof():local?.neighbourHelpProof?.(quote.actorId,quote.targetId)):null);
+          if(result.ok&&getStreet()===local)redrawStreet();
+          return result;
+        },
         onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
         onObservation:seen=>streetHud?.setWatch(seen),onTruckInteract:()=>streetHud?.openTool('truck'),
+        onTalkChoices:people=>streetHud?.openTalkChoices?.(people),
         onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},
         onInteract:interactAt,onHandcart:()=>sceneWork(),onChooseCrewTarget:()=>crewOrders?.openTargets(),onAssignWorksite:id=>crewOrders?.assign(id),onCancelCrewSelection:()=>crewOrders?.cancel(),onPlace:point=>placeBuilding(point,true),onHint:text=>put('street-hint',text),
         onPlotPreview:plot=>{
@@ -623,11 +694,11 @@
       const current=sim.active();
       put('street-title',current.name);street.setSite(current);
       // Older land saves can resume directly in Street view before the globe
-      // opens. Classify their coast from the small geography index alone.
-      if(current.coastal==null && !window.CommonEarthSim.waterfront(current) &&
+      // opens. Classify the sea coast and freshwater shore from the small index.
+      if((current.coastal==null||current.lakeShore==null) && !window.CommonEarthSim.waterfront(current) &&
         window.EarthAtlas.nearOceanShore?.(current.lat,current.lon)===null){
         window.EarthAtlas.geographyReady().then(()=>{
-          if(view==='street'&&sim.active()===current&&window.CommonEarthSim.waterfront(current))street?.setSite(current);
+          if(view==='street'&&sim.active()===current&&window.CommonEarthSim.waterfront(current)){street?.setSite(current);render();}
         }).catch(()=>{ /* The atlas retries when next opened. */ });
       }
       requestAnimationFrame(()=>street.resize());
@@ -651,6 +722,12 @@
   }
   async function openSite(s,arrivalView='street') {
     if(!s) return;
+    if(sim.state.communityLife?.outposts?.some(p=>p.id===s.id)){
+      const entry=sim.state.sites.find(p=>p.id===s.communityLife?.cluster);
+      if(!window.EarthCommunityLife.neighbours(sim.state,sim.active()).some(p=>p.id===s.id)&&entry)await openSite(entry,'street');
+      hideDialog('places-dialog');hideDialog('society-dialog');setView('street',false);streetHud?.openTool('neighbours');
+      districtPanel?.travelTo(s.id);return;
+    }
     crewOrders?.cancel();
     const result=await sim.perform('visit',s.id,()=>street?.getState());
     if(result && !result.ok){presentResult(result);return;}
@@ -709,10 +786,15 @@
   }
   async function found() {
     if(known(selected)){openSite(known(selected));return;}
-    const result=await sim.perform('found',{...selected},$('found-name').value.trim()||undefined,$('commission-at-founding')?.checked?'accept':'later',foundingSponsor??sim.state.activeId,()=>street?.getState());
+    const firstHome=sim.state.sites.length===0;
+    const result=await sim.perform('found',{...selected},$('found-name').value.trim()||undefined,$('commission-at-founding')?.checked?'accept':'later',foundingSponsor??sim.state.activeId,()=>street?.getState(),{residentBallots:true});
     if(!presentResult(result))return;
     const site=sim.active();
-    if(site){preparedSurvey=null;selected={...site};group='people';viewingShift=false;visiting=null;peers=false;encounter=null;setView('street');}
+    if(site){
+      preparedSurvey=null;selected={...site};group='people';viewingShift=false;visiting=null;peers=false;encounter=null;
+      setView('street');
+      if(firstHome){clockPreference(true);liveClock?.start();rememberStreetSoon();}
+    }
   }
   function selectGroup(next) {
     if(!groups[next])return;
@@ -1149,6 +1231,14 @@
       tab.setAttribute('aria-pressed',String(active));tab.classList.toggle('active',active);
     }
     put('actions-heading',groups[group]);
+    if(sim.state.communityLife&&!window.EarthCommunityLife.isHome(sim.state,site)){
+      show('decision-context',false);
+      put('actions-heading','Visiting '+site.name);
+      list.append(node('p','action-description',site.residents[2].name+' and the residents govern this district. You can speak to people, inspect their goals, work a trial shift or apply to join.'),
+        button('Talk to a resident',()=>streetHud?.openTool('talk'),'secondary-button'),
+        button('Review membership and nearby paths',()=>streetHud?.openTool('neighbours'),'secondary-button'));
+      return;
+    }
     if(placement) {
       show('decision-context',false);
       put('actions-heading','Choose a plot');
@@ -1470,6 +1560,7 @@
   async function followCharter(step) {
     if(!step)return;
     step=window.EarthLegacy?.prepareStep(sim,step) || step;
+    if(step.kind==='neighbours'){if(view!=='street')setView('street');streetHud?.openTool('neighbours');return;}
     if(step.kind==='week'){
       const button=$('advance-week');
       button.focus({preventScroll:true});
@@ -1525,6 +1616,7 @@
   function followSceneGoal(guide) {
     if(!guide)return;
     const step=window.EarthLegacy?.prepareStep(sim,guide)||guide;
+    if(step.kind==='neighbours'){streetHud?.openTool('neighbours');return;}
     if(step.siteId&&step.siteId!==sim.state.activeId){followCharter(step);return;}
     if(step.kind==='week'){streetHud?.previewWeek();return;}
     const id=step.residentId||(step.page==='shift'?sim.active()?.shift?.residentId:null);
@@ -1553,8 +1645,16 @@
     show('objective-action',!!guide);show('follow-objective',!!guide);
   }
   function render(options) {
+    forecastView?.warm();
     const site=sim.active(), overview=sim.overview(), state=sim.state;
-    if(view==='street'){agencyUI?.update();lifePanel?.render();}
+    const visitingDistrict=Boolean(site&&state.communityLife&&!window.EarthCommunityLife.isHome(state,site));
+    if(visitingDistrict)document.body.dataset.visitingDistrict='true';else delete document.body.dataset.visitingDistrict;
+    if(view==='street'){
+      agencyUI?.update();if(!visitingDistrict)lifePanel?.render();
+      const actorField=$('street-actor');if(actorField){actorField.disabled=visitingDistrict;actorField.title=visitingDistrict?'This district chooses its own work and representation.':'';}
+      const memberHint=$('district-membership-hint');
+      if(memberHint){memberHint.hidden=!visitingDistrict;if(visitingDistrict)memberHint.textContent='Visiting '+site.name+' · Review local membership';}
+    }
     put('action-budget',site ? state.effort+' civic effort · '+site.funds+' funds · '+site.materials+' materials · '+site.food+' food' : '');
     refreshSaveWarning();
     put('week','Week '+state.week);put('effort',state.effort+' / '+window.CommonEarthSim.maxEffort);
@@ -1598,15 +1698,21 @@
     const state=sim.state;
     const sponsor=sim.active(),offer=sim.sponsorshipOffer();
     put('sponsor-summary',sponsor?(offer.reason || sponsor.name+' can send two volunteers and founding supplies.'):'Choose a place on Earth to begin.');
-    $('site-list').replaceChildren(...state.sites.map(s=>{
+    const homeId=state.communityLife?.homeId;
+    put('society-title',homeId?'Home and neighbouring communities':'Your communities');
+    const nearIds=new Set(state.communityLife?window.EarthCommunityLife.neighbours(state,sponsor).map(n=>n.id):[]);
+    const near=state.communityLife?.outposts.filter(s=>nearIds.has(s.id))||[];
+    $('site-list').replaceChildren(...[...state.sites,...near].map(s=>{
       const b=button('',()=>openSite(s),'site-entry');
-      b.append(node('strong','',s.name),node('small','',s.region+' · '+s.population+' residents'));
+      b.append(node('strong','',s.name),node('small','',(homeId?(s.id===homeId?'Your home · ':'Independent district · '):'')+s.region+' · '+s.population+' residents'));
       const row=node('div','community-entry');
       row.append(b);
+      if(homeId&&s.id!==homeId)return row;
       for(const action of ['restart','delete']){
+        if(action==='delete'&&homeId&&state.sites.length+(state.communityLife.outposts.length||0)>1)continue;
         const label=action==='restart'?'Restart':'Delete';
         const control=button(label,async()=>{
-          const impact=action==='restart'?'Start again here with founding supplies and 12 residents.':'Remove this community from this world.';
+          const impact=action==='restart'?(homeId?'Start again here with founding supplies and the same member households.':'Start again here with founding supplies and 12 residents.'):'Remove this community from this world.';
           if(!window.confirm(label+' '+s.name+'? '+impact+' Its progress, routes and linked agreements will be lost.'))return;
           const result=await sim.perform('manageSite',s.id,action);
           if(!presentResult(result))return;
@@ -1742,33 +1848,34 @@
       focusActions();
     }
   }
+  function readForecast(container,visible){
+    const token={};forecastDraws.set(container,token);
+    container.setAttribute('aria-busy','true');
+    if(!container.firstChild)container.append(node('p','scene-muted','Preparing the next week…'));
+    async function draw(){
+      if(forecastDraws.get(container)!==token||!visible())return;
+      try{
+        const forecast=forecastView?await forecastView.read():sim.forecastNext();
+        if(forecastDraws.get(container)!==token||!visible())return;
+        if(!forecast){requestAnimationFrame(draw);return;}
+        if(window.EarthForecastView)window.EarthForecastView.paint(container,forecast,sim.state.activeId);
+        else{
+          const local=forecast.sites.find(s=>s.id===sim.state.activeId);
+          container.replaceChildren(node('strong','','Week '+forecast.week+' in '+local.name),
+            ...local.highlights.map(note=>node('p','scene-muted',note)));
+        }
+      }catch{
+        if(forecastDraws.get(container)===token&&visible())container.replaceChildren(node('p','scene-muted','The preview could not load. Close and reopen it to try again.'));
+      }finally{if(forecastDraws.get(container)===token)container.removeAttribute('aria-busy');}
+    }
+    draw();
+  }
   function renderForecastValues() {
-    const summary=$('week-summary');
-    if(!sim.active()||!summary?.closest('details')?.open)return;
-    const forecast=sim.forecastNext();
+    const summary=$('week-summary'),details=summary?.closest('details');
+    if(!sim.active()||!details?.open)return;
     let results=summary.querySelector('.forecast-outcomes');
     if(!results){results=node('div','forecast-outcomes');summary.append(results);}
-    let heading=results.querySelector('strong');
-    if(!heading){heading=node('strong');results.prepend(heading);}
-    heading.textContent='If you advance to week '+forecast.week;
-    const sections=new Map(Array.from(results.querySelectorAll('.forecast-entry'),section=>[section.dataset.site,section]));
-    for(const site of forecast.sites){
-      let entry=sections.get(site.id);
-      if(!entry){
-        entry=node('section','forecast-entry');entry.dataset.site=site.id;
-        entry.append(node('h3'),node('p','forecast-net'),node('small','forecast-work'),node('div','forecast-highlights'));
-        results.append(entry);
-      }
-      sections.delete(site.id);
-      entry.querySelector('h3').textContent=site.name;
-      const signed=values=>Object.entries(values||{}).filter(([,n])=>n).map(([k,n])=>(n>0?'+':'')+n+' '+k).join(' · ');
-      entry.querySelector('.forecast-net').textContent=signed(site.delta)||'No net change';
-      const labour=entry.querySelector('.forecast-work'),change=signed(site.workforce);
-      labour.hidden=!change;labour.textContent=change?'Included from current occupations · '+change:'';
-      const highlights=entry.querySelector('.forecast-highlights');
-      highlights.replaceChildren(...site.highlights.map(text=>node('small','',text)));
-    }
-    for(const section of sections.values())section.remove();
+    readForecast(results,()=>details.open&&results.isConnected);
   }
   function renderForecast() {
     const el=$('week-summary'),site=sim.active();if(!el)return;
@@ -1854,7 +1961,7 @@
     if(advancing || now-lastAdvance<450 || !sim.active())return;
     advancing=true;
     try{
-      if(presentResult(await sim.perform('advance'))){
+      if(presentResult(await sim.perform('advance',{usePrepared:true}))){
         lastAdvance=performance.now();
         street?.cancelTravel?.();
         cancelPlacement();street?.setSite(sim.active());render();
@@ -2057,6 +2164,7 @@
     cancelPlacement();street?.cancelTravel?.();viewingShift=false;visiting=null;peers=false;encounter=null;
     if(notice.switched){
       setView('world');atlas.focus(selected.lat,selected.lon,1);put('action-outcome','');show('action-outcome',false);
+      if(sim.active()&&clockPreference()==='live')liveClock?.start();
     }else if(!sim.active()){selected=start;setView('world');}
     else {street?.setSite(sim.active());render();}
     if(notice.message)notify(notice.message);
@@ -2121,13 +2229,18 @@
       if(saved.street&&street?.restoreView?.(saved.street))renderActions();
       if(sameActor)streetHud?.restore?.(saved.scene);
     }
-    if(saved.liveWeeks===true&&(saved.view!=='street'||sameActor)&&streetHud?.matches?.(saved.scene))liveClock?.start();
+    const preference=clockPreference();
+    if(preference==='live'||preference!=='manual'&&saved.liveWeeks===true&&(saved.view!=='street'||sameActor)&&streetHud?.matches?.(saved.scene))liveClock?.start();
     if(saved.view==='city' && saved.city)city?.restoreView?.(saved.city);
     return true;
   }
   window.addEventListener('pagehide',()=>{rememberView();crewOrders?.cancel();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)rememberView();});
-  if(!restoreTab())setView('world',false);
+  const linkedStreet=window.location?.hash==='#street'&&!!sim.active();
+  if(!restoreTab()){
+    setView(linkedStreet?'street':'world',false);
+    if(sim.active()&&clockPreference()==='live')liveClock?.start();
+  }else if(linkedStreet&&view!=='street')setView('street',false);
   window.EarthConstructionClock?.start(sim);
   document.body.dataset.gameReady='true';
 })();

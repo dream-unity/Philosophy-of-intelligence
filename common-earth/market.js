@@ -201,6 +201,7 @@
       rows:accounts.map(good=>({good,name:names[good],stock:site[good]+total(lots.held,good),held:total(lots.held,good),free:site[good],
         incoming:total(lots.incoming,good),flow:flow[good]??null})),...lots,
       till:book.till,wagesHeld:wagesHeld(site),shelf:{...book.shelf},capacity:terms.capacity,target:{...terms.target},locked:{...book.locked},lockCapacity,
+      get local(){return root.EarthResources?.view(world,site,book,tillRoom(site,book),actorId(site))||null;},
       batch:book.batch?{...book.batch,cost:{...book.batch.cost}}:null,options:offers(world,site,book,terms),
       history:book.history.map(entry=>({...entry})),loaded:accounts.find(good=>inTruck(site,good))||null,nextRound:round(site,world.week+1,terms),populationMeals:Math.ceil(site.population/5)};
   }
@@ -242,8 +243,17 @@
   function run(world,site,r,scene){
     if(!site||!world||!r||r.siteId!==site.id||r.generation!==(site.foundingRevision||0)||r.week!==world.week||
       r.actorId!==actorId(site)||(site.exchange?.serial||0)!==r.serial)return fail('The town, worker, week or market changed. Review the current offer.');
+    const restricted=root.EarthCommunityLife?.permission?.(world,site,'exchange',[r]);
+    if(restricted)return fail(restricted);
+    const initial=site.exchange||fresh(world.week);
+    if(root.EarthResources?.isAction(r.action)){
+      if(initial.serial>=limit)return fail('The stall cannot record another receipt.');
+      const result=root.EarthResources.run(world,site,r,scene,initial,tillRoom(site,initial),actorName(site,r.actorId));
+      if(result.ok){site.exchange=initial;initial.serial++;log(initial,world.week,result.message);}
+      return result;
+    }
     if(!atExchange(site,r.actorId,scene))return fail('Return to the exchange counter to complete this transaction.');
-    const initial=site.exchange||fresh(world.week),terms=policy(site);
+    const terms=policy(site);
     const chosen=offers(world,site,initial,terms).find(x=>x.action===r.action&&x.good===r.good);
     if(!chosen||!chosen.available||chosen.price!==r.price||initial.serial>=limit)return fail(chosen?.reason||'The terms changed. Review the current offer.');
     const book=site.exchange??=initial,name=actorName(site,r.actorId),good=chosen.good,cost=chosen.price;
@@ -276,8 +286,11 @@
   }
   function tick(world,site){
     const b=site.exchange,week=world.week;
-    if(!b||b.lastWeek>=week)return [];
-    const terms=policy(site),events=[];b.lastWeek=week;b.serial=Math.min(limit,b.serial+1);
+    const spoilage=root.EarthResources?.ageStores(world,site),events=[];
+    if(spoilage&&Object.keys(site.resourceLedger.lastLoss.bins).length)events.push(spoilage);
+    if(!b||b.lastWeek>=week)return events;
+    const terms=policy(site);b.lastWeek=week;b.serial=Math.min(limit,b.serial+1);
+    if(spoilage)log(b,week,spoilage);
     if(b.batch&&b.batch.due<=week){
       const order=b.batch,delivered=Math.min(order.amount,limit-site[order.good]);
       site[order.good]+=delivered;order.amount-=delivered;
@@ -297,9 +310,26 @@
     b.till-=restock*wholesale;b.shelf[supplyGood]+=restock;
     if(paid||restock)log(b,week,'Visitor purchases · '+quantity(customerGood,paid)+' for '+quantity('funds',paid*unit)+'. Supplier delivery · '+
       quantity(supplyGood,restock)+' for '+quantity('funds',restock*wholesale)+'.');
+    const local=root.EarthResources?.tick(world,site,b,tillRoom(site,b));
+    if(local)log(b,week,local);
     return events;
   }
+  function resourceOpportunity(world,site,self){
+    if(!site.resourceLedger||!root.EarthResources)return null;
+    const book=site.exchange||fresh(world.week);
+    if(book.serial>=limit)return null;
+    return root.EarthResources.crewOpportunity(world,site,self,book,tillRoom(site,book));
+  }
+  function resourceWork(world,site,self){
+    if(!site.resourceLedger||!root.EarthResources)return null;
+    const book=site.exchange||fresh(world.week);
+    if(book.serial>=limit)return null;
+    const decision=root.EarthResources.crewWork(world,site,self,book,tillRoom(site,book),actorName(site,self.id));
+    if(decision){site.exchange=book;book.serial++;log(book,world.week,decision.reason);}
+    return decision;
+  }
   function valid(site,week){
+    if(root.EarthResources && !root.EarthResources.valid(site,week))return false;
     const b=site.exchange;if(b===undefined)return !wagesHeld(site)&&!accounts.some(good=>inTruck(site,good));
     if(!dict(b)||!int(b.serial,1)||!int(b.lastWeek,1,week)||!int(b.till)||!dict(b.shelf)||!dict(b.locked)||
       !goods.every(k=>int(b.shelf[k],0,14-inTruck(site,k)))||tillRoom(site,b)<0||!['funds','materials'].every(k=>int(b.locked[k],0,lockCapacity))||
@@ -314,5 +344,5 @@
     }
     return true;
   }
-  root.EarthMarket=Object.freeze({view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,personalQuote,personal,quantity});
+  root.EarthMarket=Object.freeze({view,flowDetail,run,tick,valid,canLoadFreight,freight,privateTill,personalQuote,personal,quantity,resourceOpportunity,resourceWork});
 })(typeof window==='undefined'?globalThis:window);

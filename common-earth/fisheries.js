@@ -20,10 +20,34 @@
   }
   // A clock correction must never strand a player at a float.
   function waitTime(cast,now){return now<cast.castAt?0:Math.max(0,cast.castAt+biteDelay-now);}
+  function ground(site,week){
+    const shore=root.CommonEarthSim?.waterfront?.(site);
+    if(!shore)return null;
+    const freshwater=shore==='lake'||Boolean(root.CommonEarthSim?.lakeName?.(site));
+    const habitat=site.buildings?.some(b=>b.kind==='wetland')||site.city?.precincts?.some(p=>p.use==='water');
+    const capacity=(freshwater?12:site.water?22:16)+(habitat?4:0);
+    const recovery=(freshwater?3:site.water?5:4)+(habitat?1:0);
+    const old=site.fishGround;
+    // Older floats already hold their promised catch. Reserve it once when
+    // the fishery ledger first opens, even if another crew fishes first.
+    const available=old?Math.min(capacity,old.left+Math.min(capacity,Math.max(0,week-old.week))*recovery):
+      Math.max(0,capacity-(site.handline?.food||0));
+    return {available,capacity,recovery,name:freshwater?'Freshwater fishing ground':site.water?'Open-water fishing ground':'Coastal fishing ground'};
+  }
+  function take(site,week,amount){
+    const source=ground(site,week);
+    if(!source||!Number.isSafeInteger(amount)||amount<0||source.available<amount)return false;
+    site.fishGround={week,left:source.available-amount};
+    const shore=root.CommonEarthSim.waterfront(site);
+    if(shore==='coast')site.coastal=true;
+    const lake=root.CommonEarthSim.lakeName?.(site);if(lake)site.lakeShore=lake;
+    return true;
+  }
   function offer(site,week,p,now){
     if(!site || site.id!==p?.siteId || !root.CommonEarthSim.waterfront(site))return null;
-    const cast=site.handline,place=zone(p.mode,p,shoal(site,week),cast);
-    if(p.sailingToShoal && !cast)return {action:'sailing',label:'Cast handline',text:'Sailing to the shoal… Cast when you reach the seabirds for 2 food.'};
+    const cast=site.handline,place=zone(p.mode,p,shoal(site,week),cast),source=ground(site,week);
+    if(!cast&&!source.available)return {action:'resting',label:'Ground recovering',text:'The local fishing ground is resting. Up to '+source.recovery+' food becomes available in week '+(week+1)+'.'};
+    if(p.sailingToShoal && !cast)return {action:'sailing',label:'Cast handline',text:'Sailing to the shoal… Cast when you reach the seabirds for '+Math.min(2,source.available)+' food.'};
     if(cast){
       if(place===5)return {action:'return',label:'Return to handline',text:cast.mode==='boat'?'Your float is on the water. Return to it to collect the catch.':'The handline is tied at the quay. Return to collect the catch.'};
       const wait=waitTime(cast,now);
@@ -33,10 +57,10 @@
     }
     if(!fishable(p))return {action:'shore',label:'Go shore fishing',text:'Walk to the quay to use the shared handline.'};
     const feeding=place===3;
-    const food=feeding?2:1;
+    const food=feeding?Math.min(2,source.available):1;
     if(site.food>Number.MAX_SAFE_INTEGER-food)return {action:'full',label:'Pantry full',text:'Use or send some food before landing another catch.'};
-    return {action:'cast',label:'Cast handline',food,text:feeding?'The seabirds mark a feeding shoal. A cast here brings in 2 food.':
-      p.mode==='boat'?'A cast here brings in 1 food. Fish beneath the seabirds for 2.':'A cast from the quay brings in 1 food. No weekly effort needed.'};
+    return {action:'cast',label:'Cast handline',food,shoalUseful:source.available>=2&&!feeding,text:feeding?'The seabirds mark a feeding shoal. A cast here brings in '+food+' food.':
+      p.mode==='boat'?'A cast here brings in 1 food.'+(source.available>=2?' Fish beneath the seabirds for 2.':' One fish remains in today’s ground.'):'A cast from the quay brings in 1 food. No weekly effort needed.'};
   }
-  root.EarthFisheries=Object.freeze({shoal,offer,zone,waitTime});
+  root.EarthFisheries=Object.freeze({shoal,offer,zone,waitTime,biteDelay,ground,take});
 })(typeof window==='undefined'?globalThis:window);

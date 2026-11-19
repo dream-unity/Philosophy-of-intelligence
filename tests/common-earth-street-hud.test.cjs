@@ -52,7 +52,7 @@ function fixture(options={}){
   const {doc,host,stage}=sceneDocument();
   for(const id of options.omit||[])doc.getElementById(id)?.remove();
   const w=vm.createContext({document:doc,structuredClone,setTimeout(){return 1;},clearTimeout(){},...(options.now?{Date:class extends Date{static now(){return options.now();}}}:{})});w.window=w;
-  for(const file of ['shifts','construction','city','personas','careers','fisheries','market','purses','provisions','local-projects','civic-initiatives','autonomy','social-introductions','dialogue','agency','simulation','community-effects','street-hud']){
+  for(const file of ['shifts','construction','city','personas','careers','fisheries','market','purses','provisions','local-projects','civic-initiatives','autonomy','social-introductions','neighbour-errands','dialogue','agency','simulation','community-effects','street-hud']){
     const filename=path.join(game,file+'.js');if(fs.existsSync(filename))vm.runInContext(fs.readFileSync(filename,'utf8'),w,{filename});
   }
   const disk=new Map(),storage=options.storage||{getItem:key=>disk.get(key)??null,setItem:(key,value)=>disk.set(key,value)};
@@ -337,4 +337,76 @@ test('new HUD code on earlier markup retains Fish, Talk, Goals and safe restorat
   g.near('walker-0');ui.openTalk({npcId:'walker-0'});await cmd('topic-news').fire('click');assert(!id('scene-reply').hidden);
   ui.selectPurpose('walker-0');cmd('watch').fire('click');assert(!id('scene-watching').hidden);
   const saved=ui.snapshot();ui.invalidate();assert(ui.restore(saved));assert.equal(g.watch(),'walker-0');sim.destroy();
+});
+
+test('tapping overlapping neighbours gives named choices, then follows the selected body instead of cycling',async()=>{
+  const g=fixture(),first='walker-0',second='walker-1';
+  g.w.EarthCommunityLife={personLabel:(_site,id,name)=>id===second?name+' · Bellhaven':name};
+  assert(g.ui.openTalkChoices([{type:'npc',npcId:first},{type:'npc',npcId:second},{type:'npc',npcId:second}]));
+  const picker=g.id('scene-nearby-people');assert(!picker.hidden);assert.equal(picker.querySelectorAll('button').length,2);
+  const other=g.cmd('choose-neighbour-'+second);assert.match(other.textContent,/Bellhaven · Carpenter/i);assert.match(g.id('scene-talk-person').content(),/Bellhaven · Carpenter/i);other.fire('click');
+  assert(picker.hidden);assert.equal(g.route(),second);assert(g.cmd('topic-news').disabled);
+  g.arrive();await g.cmd('topic-news').fire('click');const words=g.id('scene-reply').textContent;
+  await g.cmd('topic-work').fire('click');assert(!g.id('scene-transcript').hidden);
+  assert(g.id('scene-transcript-lines').content().includes(words));assert(g.id('scene-transcript-lines').content().includes('How are things?'));
+  g.ui.openTalk({npcId:first});assert(g.id('scene-transcript').hidden);g.ui.invalidate();g.sim.destroy();
+});
+test('an on-map agreement carries the player to both named speakers without moving the stock until the return',async()=>{
+  const g=fixture(),{sim,ui,cmd,id}=g,site=sim.active(),owner='walker-0',baseline=site.food,gestures=[];
+  g.street.showNeighbourHelp=(...pair)=>gestures.push(pair);
+  g.near(owner);ui.openTalk({npcId:owner});
+  await cmd('topic-errand:ask:supper').fire('click');
+  const row=site.agency.arrangements.rows[0];assert(!id('scene-agreement-route').hidden);assert(cmd('meet-agreement'));
+  cmd('meet-agreement').fire('click');assert.equal(g.route(),row.contactId);assert(cmd('topic-errand:terms:'+row.id).disabled);
+  g.arrive();await cmd('topic-errand:terms:'+row.id).fire('click');assert.match(id('scene-reply').textContent,/household round/);
+  await cmd('topic-errand:goods:'+row.id).fire('click');assert.equal(site.food,baseline);assert.equal(row.status,'agreed');
+  cmd('meet-agreement').fire('click');assert.equal(g.route(),owner);g.arrive();
+  await cmd('topic-errand:finish:'+row.id).fire('click');
+  assert.equal(site.food,baseline-2);assert.equal(row.status,'kept');assert.match(id('scene-reply').textContent,/late table/);
+  assert(id('scene-agreement-route').hidden);assert.deepEqual(gestures,[['steward',owner,'supper','goods']]);ui.invalidate();sim.destroy();
+});
+test('selecting an individual in the street directory walks over in one gesture and names their occupation',()=>{
+  const g=fixture();g.ui.openTool('talk');
+  const chooser=g.id('scene-talk-person'),candidate=chooser.children.find(o=>o.value==='walker-1');
+  assert.match(candidate.textContent,/Carpenter/);chooser.value='walker-1';chooser.fire('change');
+  assert.equal(g.route(),'walker-1');assert(g.cmd('topic-news').disabled);g.arrive();assert(!g.cmd('topic-news').disabled);
+  g.ui.invalidate();g.sim.destroy();
+});
+
+test('the original-character strip stays visible after a handoff, with an accessible consequence and the current person’s aim',()=>{
+  const g=fixture(),p='walker-0',name=g.w.EarthAgency.identity(g.sim.active(),p).name,original=g.w.EarthAgency.identity(g.sim.active(),'steward').name;
+  g.w.EarthInterdependence={anchor:()=>({name:original,status:'Late-table supper due week 3',nearest:{due:3},yours:g.w.EarthAgency.actorId(g.sim.active())==='steward'})};
+  assert(g.sim.changeActor(p,()=>({siteId:g.sim.active().id,actor:'steward',mode:'walk',x:7,y:8,targetPose:{id:p,x:9,y:8,mode:'walk'}})).ok);
+  g.ui.render();const btn=g.id('scene-original-return');assert(!btn.hidden);assert.match(btn.attributes['aria-label'],/Late-table supper/);
+  assert.match(g.id('scene-original-status').textContent,/Due week 3/);assert.equal(g.id('scene-person-label').textContent,name+'’s aim');
+  g.ui.invalidate();g.sim.destroy();
+});
+test('an in-person news reply needs no write lock while offers that change the world still acquire one',async()=>{
+  const g=fixture(),who='walker-0',locks=[];
+  g.w.navigator={locks:{request:(name,run)=>{locks.push(name);return Promise.resolve(run());}}};
+  g.near(who);g.ui.openTalk({npcId:who});await g.cmd('topic-news').fire('click');assert(g.id('scene-reply').textContent.length>20);
+  assert.equal(locks.length,0);await g.cmd('topic-listen').fire('click');assert.equal(locks.length,1);
+  g.ui.invalidate();g.sim.destroy();
+});
+test('a named contact with actual terms can initiate a conversation on approach without opening a panel or changing the save',async()=>{
+  const g=fixture(),site=g.sim.active(),owner='walker-0';
+  g.near(owner);g.ui.openTalk({npcId:owner});await g.cmd('topic-errand:ask:supper').fire('click');
+  const row=site.agency.arrangements.rows[0];g.ui.close(false);const before=JSON.stringify(g.sim.state);
+  g.near(row.contactId);assert.equal(g.ui.active(),null);assert.equal(JSON.stringify(g.sim.state),before);
+  assert(!g.id('scene-notice').hidden);const invitation=g.cmd('hear-neighbour');assert(invitation);invitation.fire('click');
+  assert.equal(g.ui.active(),'talk');assert.equal(g.id('scene-talk-person').value,row.contactId);assert.match(g.id('scene-reply').textContent,/household round/);
+  assert.equal(JSON.stringify(g.sim.state),before);g.ui.close(false);g.near(null);g.near(row.contactId);
+  assert(!g.cmd('hear-neighbour'));g.ui.invalidate();g.sim.destroy();
+});
+
+test('a local resident can raise a real food shortage unprompted, and hearing them leaves the choice and resources with the player',async()=>{
+  const g=fixture(),site=g.sim.active(),owner='walker-0',week=g.sim.state.week;
+  site.food=Math.ceil(site.population/5)-1;const before=JSON.stringify(g.sim.state);
+  g.near(owner);assert.match(g.id('scene-notice-text').textContent,/after the last shift/);
+  assert.equal(g.ui.active(),null);g.cmd('hear-neighbour').fire('click');
+  assert.match(g.id('scene-reply').textContent,/serving bowls/);
+  assert.match(g.cmd('topic-errand:ask:supper').textContent,/I’ll ask/);assert.equal(JSON.stringify(g.sim.state),before);
+  g.ui.close(false);g.near(null);g.near('walker-2');assert(!g.cmd('hear-neighbour'));
+  g.sim.state.week=week+1;g.near(null);g.near('walker-2');assert(g.cmd('hear-neighbour'));
+  g.ui.invalidate();g.sim.destroy();
 });

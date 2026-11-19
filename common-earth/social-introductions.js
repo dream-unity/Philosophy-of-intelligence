@@ -7,6 +7,7 @@
   const number=(v,min,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(v)&&v>=min&&v<=max;
   const known=(site,id)=>typeof id==='string'&&(root.EarthAgency?.canPlay?.(site,id)||/^carrier-[0-8]-[0-8]$/.test(id));
   const actor=site=>root.EarthAgency.actorId(site);
+  const local=(site,id)=>root.EarthCommunityLife?.present?.(site,id)!==false&&root.EarthCommunityLife?.residency?.(site,id)!=='visitor';
   const find=(site,id)=>root.EarthAgency.identity(site,id);
   const rows=site=>site?.introductions?.rows||[];
   const open=(row,week)=>row.status==='pending'&&week>=row.issuedWeek&&week<row.expiresWeek;
@@ -25,7 +26,7 @@
     const row=rows(site).find(r=>r.actorId===actorId&&open(r,world.week));
     if(!row)return null;
     const contact=find(site,row.contactId);
-    return contact&&contact.available!==false?info(row):null;
+    return contact&&contact.available!==false&&local(site,row.contactId)?info(row):null;
   }
   function fields(site,world,guide){
     const actual=root.EarthLocalProjects?.view(site,world,guide.id,root.EarthAutonomy?.intent(site,guide.id)),career=site.careers?.[guide.id];
@@ -52,7 +53,7 @@
     let best=null;
     for(const p of root.EarthPersonas?.list(site)||[]){
       // These neighbours keep a reachable local presence when worksites change.
-      if(!root.EarthAgency.canPlay(site,p.id)||p.id===learner.id||p.id===guide.id||strained(site,guide.id,p.id)||strained(site,learner.id,p.id))continue;
+      if(!local(site,p.id)||!root.EarthAgency.canPlay(site,p.id)||p.id===learner.id||p.id===guide.id||strained(site,guide.id,p.id)||strained(site,learner.id,p.id))continue;
       const project=finished.find(work=>work.ownerId===p.id||work.partnerId===p.id);
       const basis=project?'we worked on “'+project.title+'” together':acquaintance(site,guide.id,p.id);
       const value=skill(site,p,field);
@@ -65,7 +66,7 @@
   function topics(site,world,targetId){
     if(!site||world?.activeId!==site.id)return [];
     const from=actor(site),guide=find(site,targetId);
-    if(!guide||guide.available===false||from===targetId)return [];
+    if(!guide||guide.available===false||from===targetId||!local(site,from)||!local(site,targetId))return [];
     const options=[],mine=rows(site).filter(row=>row.actorId===from);
     const arrived=mine.find(row=>row.contactId===targetId&&open(row,world.week));
     if(arrived)options.push({id:'intro:meet:'+arrived.serial,label:'Say '+arrived.guideName+' sent me about '+arrived.field});
@@ -85,7 +86,7 @@
   function converse(site,world,to,from,topic,meeting){
     if(!closeEnough(site,world,from,to,meeting))return refusal('Stand beside the named neighbour on foot to discuss this introduction.');
     const listener=find(site,to),speaker=find(site,from),week=world.week;
-    if(!listener||listener.available===false||!speaker)return refusal('This neighbour is currently away.');
+    if(!listener||listener.available===false||!speaker||!local(site,to)||!local(site,from))return refusal('This neighbour is currently away.');
     const match=/^intro:(ask|meet|recall|withdraw):([a-z]+|[1-9][0-9]*)$/.exec(topic);
     if(!match)return refusal('Choose a current introduction topic.');
     const [,action,key]=match,book=site.introductions;

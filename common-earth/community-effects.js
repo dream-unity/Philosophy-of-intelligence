@@ -66,8 +66,24 @@
         (cover?cover+' agreed to cover that team through week '+old.throughWeek+'.':'The former team needed temporary cover through week '+old.throughWeek+'.');
       add(reference.week,'A workplace changed hands',text,[id,old.coverId]);
     }
+    for(const [jobId,listing] of Object.entries(site.employers||{})){
+      const hire=listing.lastHire,post=root.EarthCareers?.catalog?.find(j=>j.id===jobId);
+      if(hire&&post)add(hire.week,post.employer+' filled its vacancy',
+        hire.name+' took over '+hire.formerName+'’s post after '+(hire.week-hire.opened)+' open weeks. '+hire.covered+' relief rounds were staffed and '+hire.missed+' were missed.',
+        [hire.by,hire.formerId]);
+    }
+    for(const row of root.EarthDialogue?.arrangements?.(site,world)||[]){
+      if(row.status==='kept'||row.status==='missed')add(row.finishedWeek,row.title,row.outcome,[row.actorId,row.requesterId,row.contactId]);
+    }
     for(const p of site.residents){
-      if(p.lastMissed)add(p.lastMissed.week,'A promised delivery was missed',p.name+' was waiting for '+p.value.toLowerCase()+
+      for(const record of p.agreements||[]){
+        const who=person(record.by)||'The signer',by=record.deliveredBy&&person(record.deliveredBy);
+        const result=record.status==='missed'?who+' missed the date agreed with '+p.name+'. ' +p.name+' will ask for a new conversation before trusting another promise.':
+          by?by+' brought the agreed supplies to '+p.name+(record.deliveredBy!==record.by?' on behalf of '+who:'')+'.':
+          p.name+' accepted the outcome agreed with '+who+'.';
+        add(record.week,record.status==='missed'?'A promised delivery was missed':'An agreement was kept',result,[p.id,record.by,record.deliveredBy]);
+      }
+      if(p.lastMissed&&!p.agreements?.some(r=>r.status==='missed'&&r.week===p.lastMissed.week))add(p.lastMissed.week,'A promised delivery was missed',p.name+' was waiting for '+p.value.toLowerCase()+
         '. The '+(p.lastMissed.revised?'revised ':'')+'agreement expired before the supplies arrived.',[p.id]);
     }
     return entries.sort((a,b)=>b.week-a.week).slice(0,5);

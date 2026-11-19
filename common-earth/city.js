@@ -687,18 +687,23 @@
       const city=model.overview(site),r=city.records[select];
       const street=(site.construction||[]).filter(j=>j.scope==='street');
       const streetOrders=street.map(j=>[j.id,j.plot,j.kind,j.name,j.original?.kind]);
-      cityName.textContent=site.name;inspectLink.textContent='Inspect '+r.name+' ↘';
+      const inspectLabel='Inspect '+r.name+' ↘';
+      if(cityName.textContent!==site.name)cityName.textContent=site.name;
+      if(inspectLink.textContent!==inspectLabel)inspectLink.textContent=inspectLabel;
       // Form edits and repeated simulation notifications don't repaint an unchanged map.
       const revision=JSON.stringify([site.id,site.name,site.water,select,layer,site.buildings.map(b=>[b.plot,b.kind]),streetOrders,
         city.records.map(rec=>[rec.terrain.id,rec.use,rec.target,rec.laborReady,rec.minutes,rec.pressure,rec.disturbed])]);
       if(revision!==mapRevision){
         picture.dataset.setting=mapSetting(site);
-        picture.innerHTML=allMap(site,city,select,layer,street);mapRevision=revision;
-      }
-      fitPicture();
+        picture.innerHTML=allMap(site,city,select,layer,street);mapRevision=revision;fitPicture();
+      }else if(!observed)fitPicture();
       if(onMapFocus){onMapFocus=false;picture.querySelector('[data-city-precinct="'+select+'"]')?.focus({preventScroll:true});}
-      layerButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===layer)));
-      legend.textContent=layer==='access'?'Journey to central streets':layer==='impact'?'Rent, habitat and workshop noise':'Select a precinct to plan its use';
+      for(const b of layerButtons){
+        const pressed=String(b.dataset.layer===layer);
+        if(b.getAttribute('aria-pressed')!==pressed)b.setAttribute('aria-pressed',pressed);
+      }
+      const legendText=layer==='access'?'Journey to central streets':layer==='impact'?'Rent, habitat and workshop noise':'Select a precinct to plan its use';
+      if(legend.textContent!==legendText)legend.textContent=legendText;
       // Full app refreshes (including an unrelated worksite opening) must not
       // dismiss the native precinct picker or collapse a cancellation review.
       const available=model.options.filter(id=>id!==r.use);

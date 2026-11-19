@@ -64,7 +64,7 @@
   function jobId(id,project){return id+'/'+project.serial;}
   function evidence(id,p){
     return {ownerId:id,serial:p.serial,kind:p.kind,variant:p.variant,axis:p.axis,week:p.finished,
-      partnerId:p.partnerId,beneficiaryId:p.beneficiaryId,result:p.result,...(p.input?{input:{...p.input}}:{}),...(p.delivered?{delivered:p.delivered}:{})};
+      partnerId:p.partnerId,beneficiaryId:p.beneficiaryId,result:p.result,...(p.input?{input:{...p.input}}:{}),...(p.delivered?{delivered:p.delivered}:{}),...(p.caught?{caught:p.caught}:{}),...(p.carriedBy?{carriedBy:p.carriedBy}:{})};
   }
   function evidenceRows(store){
     if(store?.completed)return store.completed;
@@ -82,7 +82,7 @@
   }
   function latestHarvest(site,week){
     const e=site.autonomy?.projects?.completed?.find(e=>e.week===week&&e.kind==='food'&&e.delivered);
-    return e?{by:e.ownerId,amount:e.delivered}:null;
+    return e?{by:e.ownerId,amount:e.caught||e.delivered,...(e.caught?{source:'catch'}:{})}:null;
   }
   function ownerOf(site,id){
     const owners=site.autonomy?.projects?.owners;
@@ -146,6 +146,7 @@
   }
   function resourceBlock(site,p,store){
     const cost=needFor(p);
+    if(p.kind==='food'&&p.crop==='fish'&&site.handline&&!site.buildings?.some(b=>b.kind==='fishingDock'))return 'Someone is using the shared handline. I will wait for the float to be brought in.';
     if(p.progress===0 && cost && (site.materials||0)<cost+reserve(site))
       return 'Waiting for '+cost+' spare material'+(cost===1?'':'s')+' after the district repair reserve.';
     if(p.kind==='build'&&p.progress===0&&store.assists>=4)return 'Existing carriers can still take several loads. The crew is using those first.';
@@ -162,6 +163,12 @@
     if(p.kind==='build')return 'I can use my hands to solve a problem somebody else has on collection day. '+goal+'.';
     return site.food<2*Math.ceil(site.population/5)?'Our stores cover less than two weeks of meals. A second collection would help now.':'Some growers have a little left after the first collection. I want it to reach a neighbour.';
   }
+  function projectStep(p,plan,crop){
+    if(p.kind==='hobby')return hobbyTopics[p.axis][p.progress+1];
+    if(!crop)return plan.steps[p.progress];
+    if(crop.id==='fish')return ['Choose a station at the quay','Tend the fishing line at the shore station','Land the fish with a neighbour and take them to the pantry'][p.progress];
+    return ['Arrange a picking with the '+crop.place+' crew','Sort the '+crop.name+' at the '+crop.place,'Carry the '+crop.name+' to the pantry'][p.progress];
+  }
   function publicView(site,world,id,intent){
     let ownerId=id,p=ownerOf(site,id);
     if(intent?.kind==='project'&&intent.week===world.week){
@@ -176,11 +183,12 @@
     const plan=plans[p.kind],partner=p.partnerId&&person(site,p.partnerId),benefit=p.beneficiaryId&&person(site,p.beneficiaryId);
     const tracker=site.autonomy?.projects||{notes:0,assists:0};
     const blocked=p.blocked||(!p.finished&&resourceBlock(site,p,tracker))||null;
+    const crop=p.kind==='food'?root.EarthResources?.projectCrop(world,site,ownerId,p.crop):null;
     const title=p.kind==='teach'?'Teach '+p.axis+' through a practical example':p.kind==='hobby'?hobbyTopics[p.axis][0]:plan.titles[p.variant];
-    const step=p.kind==='hobby'?hobbyTopics[p.axis][p.progress+1]:plan.steps[p.progress];
+    const step=projectStep(p,plan,crop);
     const next=p.finished?'The work is complete. Its result is recorded in the district.':blocked||step+'.';
     return {id:jobId(ownerId,p),kind:p.kind,title,goal:p.kind==='teach'?'Help a neighbour practise '+p.axis:plan.goals[p.variant],
-      why:why(site,owner,p),venue:plan.venue,phase:p.finished?'Completed':p.volunteer?'Shared session agreed':blocked?'Waiting':p.progress?'In progress':'Proposed',
+      why:why(site,owner,p),venue:crop?.venue||plan.venue,phase:p.finished?'Completed':p.volunteer?'Shared session agreed':blocked?'Waiting':p.progress?'In progress':'Proposed',
       progress:p.progress,total:plan.total,ownerId,ownerName:owner.name,partnerId:partner?.id||null,partnerName:partner?.name||null,
       beneficiaryId:benefit?.id||null,beneficiaryName:benefit?.name||null,role:id===ownerId?'Organiser':p.kind==='teach'?'Learner':'Collaborator',
       axis:p.axis,next,effect:p.finished?p.result:plan.benefit,materialCost:plan.cost,finishedWeek:p.finished,
@@ -242,9 +250,17 @@
       const listening=root.EarthDialogue?.familiar?.(site,self.id,q.id,world.week)?6:0;
       return fit+q.traits.sociability/8+(q.id===p.partnerId?13:0)+trust+listening+(hash(q.id+'|'+world.week,order)%6);
     };
+    const laneWorkers=new Set();
+    if(p.kind==='food'&&p.progress===plans.food.total-1){
+      for(const link of root.CommonEarthSim?.productiveLinks?.(site)||[]){
+        if(link.resource!=='food')continue;
+        const worker=root.EarthCareers?.laneWorker?.(site,world,link);
+        if(worker)laneWorkers.add(worker);
+      }
+    }
     let best=null,highest=-Infinity;
     for(const q of willing){
-      const value=score(q);
+      const value=score(q)+(laneWorkers.has(q.id)?40:0);
       if(value>highest||value===highest&&q.id<best.id){best=q;highest=value;}
     }
     return best;
@@ -252,8 +268,16 @@
   function assign(site,world,all,work,option,effects){
     const {self,project:p}=option,plan=plans[p.kind],{store,places}=work;
     if(!self.free||p.finished||p.lastWorked===world.week)return null;
-    const slots=1+Number(site.buildings?.some(b=>b.kind===plan.venue));
-    if((places.get(plan.venue)||0)>=slots){p.blocked='The '+plan.venue+' work session is booked. I will try another week.';return null;}
+    const crop=p.kind==='food'?root.EarthResources?.projectCrop(world,site,self.id,p.crop):null;
+    const venue=crop?.venue||plan.venue;
+    if(p.kind==='food'&&root.EarthResources&&!crop){
+      p.blocked='The local food beds need time to recover before another picking.';return null;
+    }
+    if(crop?.id==='fish'&&site.handline&&!site.buildings?.some(b=>b.kind==='fishingDock')){
+      p.blocked='The shared float is in use. I will return to the quay when its catch is landed.';return null;
+    }
+    const slots=1+Number(site.buildings?.some(b=>b.kind===(venue==='dock'?'fishingDock':venue)));
+    if((places.get(venue)||0)>=slots){p.blocked='The '+venue+' work session is booked. I will try another week.';return null;}
     if(!p.progress&&plan.cost&&work.paid){p.blocked='Another team has the materials session this week. I will keep my plan.';return null;}
     const block=resourceBlock(site,p,store);if(block){p.blocked=block;return null;}
     const paired=needsPartner(p),invited=option.volunteer;
@@ -280,7 +304,8 @@
       if(noteMaker)p.input={kind:'field note',ownerId:noteMaker};
     }
     const noteId=jobId(self.id,p),stage=p.progress===0?'plan':p.progress+1===plan.total?'finish':'work';
-    const action=p.kind==='hobby'?hobbyTopics[p.axis][p.progress+1]:plan.steps[p.progress],prior=p.progress;
+    if(crop)p.crop=crop.id;
+    const action=projectStep(p,plan,crop),prior=p.progress;
     let note='';
     if(!p.progress && plan.cost){
       site.materials-=plan.cost;work.paid++;
@@ -294,17 +319,28 @@
       if(p.kind==='research'){const added=putSupplies(store,'notes',2,self.id);p.result='The co-op received '+added+' tested field note'+(added===1?'':'s')+'.';}
       if(p.kind==='build'){const added=putSupplies(store,'assists',3,self.id);p.result='A new carrier is ready for '+added+' shared load'+(added===1?'':'s')+'.';}
       if(p.kind==='food'){
-        const extra=store.assists>0?'carrier':store.notes>0?'note':null;
+        if(crop&&partner)p.carriedBy=partner.base.kind==='player'?self.id:partner.id;
+        const extra=crop&&crop.available<3?null:store.assists>0?'carrier':store.notes>0?'note':null;
         const maker=extra&&person(site,useSupply(store,extra==='carrier'?'assists':'notes'));
         if(maker)p.input={kind:extra==='carrier'?'carrier':'field note',ownerId:maker.id};
-        const beneficiary=all.find(q=>q.id===p.beneficiaryId&&q.id!==selected(site,world)&&q.row.energy<3);
+        const desired=extra?3:2;
+        const beneficiary=(!crop||crop.available>=2)&&all.find(q=>q.id===p.beneficiaryId&&q.id!==selected(site,world)&&q.row.energy<3);
+        const harvested=crop?root.EarthResources.harvestForProject(world,site,crop,desired,!beneficiary):{amount:desired,stored:null};
         if(beneficiary){
           beneficiary.row.energy=Math.min(8,beneficiary.row.energy+2);
           beneficiary.row.received={week:world.week,ownerId:self.id,kind:'food'};
         }
-        const food=(extra?3:2)-Number(Boolean(beneficiary));effects.food=(effects.food||0)+food;p.delivered=food;
-        p.result='The pantry received '+food+' food'+(extra==='carrier'?' using '+(maker?maker.name+'’s':'a shared')+' carrier':extra==='note'?' using '+(maker?maker.name+'’s':'a tested')+' field note':'')+'.'+
-          (beneficiary?' One further basket fed '+beneficiary.name+' and restored two energy.':'');
+        const ingredient=root.EarthResources?.useForPantry(world,site,self.id);
+        const raw=harvested.stored;
+        const food=harvested.amount+Number(Boolean(ingredient))-Number(Boolean(beneficiary))-Number(Boolean(raw));effects.food=(effects.food||0)+food;p.delivered=food;
+        if(crop?.id==='fish'){
+          p.caught=harvested.amount-Number(Boolean(beneficiary));
+          root.EarthProvisions?.landing?.(world,site,self.id,harvested.amount);
+        }
+        p.result='The pantry received '+food+' food'+(p.caught?' including '+p.caught+' from the shore catch':'')+(extra==='carrier'?' using '+(maker?maker.name+'’s':'a shared')+' carrier':extra==='note'?' using '+(maker?maker.name+'’s':'a tested')+' field note':'')+'.'+
+          (beneficiary?' One further basket fed '+beneficiary.name+' and restored two energy.':'')+
+          (ingredient?' The crew cooked one stored lot of '+ingredient.source+' into an extra household portion.':'')+
+          (raw?' With meals covered, one basket of '+raw.name+' went into the raw goods bin for later use or sale.':'');
       }
       if(p.kind==='teach'&&lesson)p.result=partner.name+' gained '+lesson.gain+' '+p.axis+' through supervised practice with '+self.name+
         (noteMaker?' using a field note from '+person(site,noteMaker).name:'')+'.';
@@ -314,11 +350,11 @@
       ledger.unshift(evidence(self.id,p));ledger.length=Math.min(16,ledger.length);
       note=self.name+(partner?' and '+partner.name:'')+' finished their project. '+p.result;
     }
-    places.set(plan.venue,(places.get(plan.venue)||0)+1);
+    places.set(venue,(places.get(venue)||0)+1);
     self.free=false;
     const label=p.kind==='teach'?'Teach '+p.axis:p.kind==='hobby'?hobbyTopics[p.axis][0]:plan.titles[p.variant];
     const who=partner?' with '+partner.name:'';
-    const item={week:world.week,kind:'project',reason:(action+who+'. '+(p.result||plan.goals[p.variant]+'.')).slice(0,450),venue:plan.venue,target:partner?.id||null,
+    const item={week:world.week,kind:'project',reason:(action+who+'. '+(p.result||plan.goals[p.variant]+'.')).slice(0,450),venue,target:partner?.id||null,
       projectId:noteId,projectKind:p.kind,axis:p.axis,phase:stage,activity:action,title:label,progress:p.progress,total:plan.total};
     if(partner){
       if(partner.base.kind!=='player')partner.item={...item,target:self.id,reason:('I agreed to '+(p.kind==='teach'?(prior?'demonstrate my practice':'learn '+p.axis):p.kind==='hobby'?'offer feedback':'work on this')+' with '+self.name+'. '+(p.result||action+'.')).slice(0,450)};
@@ -345,16 +381,18 @@
       const ledger=store.completed,known=new Set();
       if(!Array.isArray(ledger)||ledger.length>16||!ledger.every((e,i)=>{
         if(!record(e)||!validInput(e)||!person(site,e.ownerId)||!int(e.serial,1,Number.MAX_SAFE_INTEGER)||!own(plans,e.kind)||!int(e.variant,0,plans[e.kind].titles.length-1)||
-          !axes.includes(e.axis)||!int(e.week,1,week)||i&&e.week>ledger[i-1].week||e.delivered!=null&&(e.kind!=='food'||!int(e.delivered,1,3))||typeof e.result!=='string'||e.result.length>450||
-          [e.partnerId,e.beneficiaryId].some(id=>id!=null&&(id===e.ownerId||!person(site,id))))return false;
+          !axes.includes(e.axis)||!int(e.week,1,week)||i&&e.week>ledger[i-1].week||e.delivered!=null&&(e.kind!=='food'||!int(e.delivered,1,4))||e.caught!=null&&(e.kind!=='food'||!int(e.caught,1,e.delivered||0))||typeof e.result!=='string'||e.result.length>450||
+          [e.partnerId,e.beneficiaryId].some(id=>id!=null&&(id===e.ownerId||!person(site,id)))||
+          e.carriedBy!=null&&(e.kind!=='food'||!e.delivered||![e.ownerId,e.partnerId].includes(e.carriedBy)))return false;
         const key=jobId(e.ownerId,e);if(known.has(key))return false;known.add(key);return true;
       }))return false;
     }
     const bookings=new Set();
     return Object.entries(store.owners).every(([id,p])=>{
-      if(!person(site,id)||!record(p)||!validInput(p)||p.input!=null&&!p.finished||!own(plans,p.kind)||!int(p.variant,0,plans[p.kind].titles.length-1)||!int(p.serial,1,Number.MAX_SAFE_INTEGER)||
+      if(!person(site,id)||!record(p)||p.crop!=null&&(p.kind!=='food'||typeof p.crop!=='string'||p.crop.length>32||root.EarthResources?.isCrop&&!root.EarthResources.isCrop(p.crop))||!validInput(p)||p.input!=null&&!p.finished||!own(plans,p.kind)||!int(p.variant,0,plans[p.kind].titles.length-1)||!int(p.serial,1,Number.MAX_SAFE_INTEGER)||
         !int(p.started,1,week)||!int(p.progress,0,plans[p.kind].total)||!axes.includes(p.axis))return false;
-      if([p.partnerId,p.beneficiaryId].some(q=>q!=null&&(q===id||!person(site,q))))return false;
+      if([p.partnerId,p.beneficiaryId].some(q=>q!=null&&(q===id||!person(site,q)))||
+        p.carriedBy!=null&&(p.kind!=='food'||!p.crop||!p.delivered||!p.finished||![id,p.partnerId].includes(p.carriedBy)))return false;
       if(p.volunteer!=null){
         const booking=p.volunteer.from+'|'+p.volunteer.week;
         if(!record(p.volunteer)||!int(p.volunteer.week,p.started,week)||p.volunteer.from===id||
@@ -363,7 +401,7 @@
       }
       if((p.progress===0)!==(p.lastWorked==null)||p.lastWorked!=null&&!int(p.lastWorked,p.started,week))return false;
       if((p.progress===plans[p.kind].total)!==(p.finished!=null)||p.finished!=null&&(p.finished!==p.lastWorked||typeof p.result!=='string'||p.result.length>450)||
-        p.delivered!=null&&(p.kind!=='food'||!p.finished||!int(p.delivered,1,3)))return false;
+        p.delivered!=null&&(p.kind!=='food'||!p.finished||!int(p.delivered,1,4))||p.caught!=null&&(p.crop!=='fish'||!int(p.caught,1,p.delivered||0)))return false;
       return p.blocked==null||typeof p.blocked==='string'&&p.blocked.length<200;
     });
   }

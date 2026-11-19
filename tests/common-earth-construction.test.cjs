@@ -651,3 +651,39 @@ test('an accepted career changes the physical workplace, and a saved weekly outi
   assert.equal(nurse().occupation,'repair');
   assert.notEqual(nurse().workplace.type,'park');
 });
+
+test('a founding resident who accepts the harvest basket collects at the producer and makes one witnessed delivery before returning to work',()=>{
+  const vm=require('node:vm'),fs=require('node:fs'),runtime={};
+  for(const file of ['personas.js','careers.js','autonomy.js','resource-economy.js','construction.js'])
+    vm.runInNewContext(fs.readFileSync(path.join(game,file),'utf8'),runtime);
+  const crew=runtime.EarthConstruction,s=town(),id=s.residents[1].id,owner='walker-1',current={week:7};
+  const job={week:7,kind:'project',projectKind:'food',phase:'finish',projectId:owner+'/1',venue:'garden',title:'Share the harvest'};
+  s.buildings=[{id:'farm',plot:0,kind:'garden',name:'West beds'}];
+  s.autonomy={week:7,projects:{owners:{[owner]:{kind:'food',crop:'greens',finished:7,delivered:2,carriedBy:id}}},
+    people:{[id]:{history:[job]}}};
+  let picked=false,carried=false,delivered=false,loaded=null;
+  for(let n=0;n<50;n++){
+    ok(crew.advance(s,current,1));const worker=crew.view(s,current).workers[1];
+    if(worker.initiative?.shipmentPhase==='pickup'&&!worker.travelling){assert.equal(worker.workplace.plot,0);picked=true;}
+    if(worker.initiative?.shipmentPhase==='unload'&&worker.travelling){carried=true;loaded||=copy(s);}
+    if(worker.initiative?.shipmentPhase==='unload'&&!worker.travelling){assert.equal(worker.workplace.type,'pantry');delivered=true;}
+  }
+  assert(picked&&carried&&delivered);assert.equal(crew.view(s,current).workers[1].initiative,null);assert.equal(s.food,12);
+  assert(crew.valid(loaded));ok(crew.advance(loaded,current,50));
+  assert.equal(crew.view(loaded,current).workers[1].initiative,null);
+});
+
+test('a confirmed pantry relief and pre-departure handover take the founding worker to the exchange',()=>{
+  const vm=require('node:vm'),fs=require('node:fs'),runtime={};
+  const owner='person-0',other='person-1',s=town(),current={week:3};s.food=0;
+  s.communityLife={pantryCover:{id:owner,due:4,owner:other},excursions:{[other]:{due:4}}};
+  runtime.EarthCommunityLife={travelIntent:(site,id)=>id===owner?{week:4,kind:'care',venue:'market',activity:'Checking the household order and pantry tally'}:
+    id===other?{week:3,kind:'visit',venue:'market',activity:'Bringing the handover list to the exchange'}:null};
+  for(const file of ['personas.js','careers.js','autonomy.js','construction.js'])vm.runInNewContext(fs.readFileSync(path.join(game,file),'utf8'),runtime);
+  const crew=runtime.EarthConstruction;assert(crew.needsTime(s,current));let care=false,handover=false;
+  for(let i=0;i<20;i++){ok(crew.advance(s,current,1));const workers=crew.view(s,current).workers;
+    if(workers[0].initiative?.kind==='pantryCover'&&!workers[0].travelling){assert.equal(workers[0].workplace.type,'market');care=true;}
+    if(workers[1].initiative?.kind==='departure'&&!workers[1].travelling){assert.equal(workers[1].workplace.type,'market');handover=true;}
+  }
+  assert(care&&handover);assert.equal(s.food,0);
+});

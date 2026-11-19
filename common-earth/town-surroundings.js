@@ -22,7 +22,7 @@
     nursery: [1198, 866, 205, 141, 111.23, 100.72, 0.02782]
   };
   const backgroundColors = {
-    coast: ['#668e8d','#496872'], zanzibar: ['#598f88', '#395e65'], ocean: ['#497a7e', '#2f545f'],
+    lake: ['#91a6a0','#526f72'], coast: ['#668e8d','#496872'], zanzibar: ['#598f88', '#395e65'], ocean: ['#497a7e', '#2f545f'],
     temperate: ['#798a73', '#546957'], warm: ['#8a9478', '#65745b'],
     boreal: ['#778a84', '#506861']
   };
@@ -240,7 +240,7 @@
     }
   }
   function outskirts(g, project, unit, place, seed, plant) {
-    const port = place === 'zanzibar' || place==='coast', hot = place === 'warm';
+    const port = place === 'zanzibar' || place==='coast' || place==='lake', hot = place === 'warm';
     const features = [];
     if(port) {
       // Lower contrast and setbacks keep the occupied quarter visually distinct
@@ -248,7 +248,7 @@
       const sites=[[-4.9,.3],[-4.4,4.8],[-6.2,12.4],[-4.3,16.3],[-6.7,21.4],[-7.8,-3.6],[.1,-4.3],[4.4,-4.0],[10.8,-6.3],[17.3,-5.1],[21.0,-4.3],[27.7,-3.1],[29.0,4.3],[30.4,11.3],[28.8,16.5],[29.1,20.4]];
       for(let i=0;i<sites.length;i++){
         const x=sites[i][0]+jitter(seed,i)*.42, y=sites[i][1]+jitter(seed,i+62)*.47;
-        features.push({x,y, size:.74+jitter(seed,i+88)*.16, tile:(place==='coast'?'cottage':'coral')+((i+seed%3)%3), flip:false});
+        features.push({x,y, size:.74+jitter(seed,i+88)*.16, tile:(place==='zanzibar'?'coral':'cottage')+((i+seed%3)%3), flip:false});
       }
     } else {
       const sites=[[-4.75,4.0],[-5.3,10.0],[-4.3,19.9],[2.7,-4.8],[7.5,-5.1],[20.6,-4.2],[29.4,5.1],[28.8,13.8],[29.0,22.5],[3.3,29.4],[8.5,28.8],[19.5,29.7]];
@@ -290,7 +290,7 @@
   }
   function paint(g, project, unit, site, seed=0, plant=null) {
     if(!site) return;
-    const place=profile(site), sea=place==='ocean', port=place==='zanzibar'||place==='coast';
+    const place=profile(site), sea=place==='ocean', port=place==='zanzibar'||place==='coast'||place==='lake';
     g.save();
     if(sea || port) water(g,project,unit,sea,seed);
     if(!sea) {

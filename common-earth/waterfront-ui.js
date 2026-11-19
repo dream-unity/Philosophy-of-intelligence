@@ -9,11 +9,14 @@
     const card=node('section','waterfront-panel'),count=node('strong','waterfront-pantry'),status=node('p','waterfront-status'),
       result=node('p','waterfront-result'),buttons=node('div','waterfront-actions');
     status.id=(container.id||'waterfront')+'-conditions';status.setAttribute('role','status');result.setAttribute('role','status');card.setAttribute('aria-label','Waterfront fishing');
-    card.append(count,status,buttons,result);container.append(card);
+    const waiting=node('progress','waterfront-bite');waiting.max=root.EarthFisheries?.biteDelay||4500;
+    waiting.hidden=true;waiting.setAttribute('aria-label','Waiting for a bite');
+    card.append(count,status,waiting,buttons,result);container.append(card);
     function control(key){const b=node('button','secondary');b.type='button';b.dataset.fishing=key;b.addEventListener('click',()=>act(key));buttons.append(b);return b;}
-    const lineButton=control('line'),shoalButton=control('shoal'),nets=control('net'),boat=control('boat');
+    const quick=control('quick'),lineButton=control('line'),shoalButton=control('shoal'),nets=control('net'),boat=control('boat');
     lineButton.setAttribute('aria-describedby',status.id);
-    let busy='',due=null,timer=0,sceneKey=null,lastCast=null;
+    quick.textContent='Walk to quay & cast';quick.setAttribute('aria-describedby',status.id);
+    let busy='',due=null,timer=0,sceneKey=null,lastCast=null,trip=0;
     const setText=(el,value)=>{if(el.textContent!==value)el.textContent=value;};
     const crew=()=>doc.body?.hasAttribute('data-crew-order');
     function stopTimer(){if(timer)root.clearTimeout(timer);timer=0;due=null;}
@@ -21,7 +24,7 @@
       const key=offer?.action==='wait'?site.id+'/'+site.handline.castAt:null;
       if(key===due)return;
       stopTimer();if(key===null)return;
-      due=key;timer=root.setTimeout(()=>{timer=0;due=null;getStreet()?.refreshFishingFloat();render();},Math.max(1,offer.wait+20));
+      due=key;timer=root.setTimeout(()=>{timer=0;due=null;getStreet()?.refreshFishingFloat();render();},Math.max(1,Math.min(1000,offer.wait+20)));
     }
     function render(state=getStreet()?.getState()){
       const site=sim.active();
@@ -29,15 +32,20 @@
       const key=site.id+'/'+(site.foundingRevision||0)+'/'+site.lat+'/'+site.lon;
       if(sceneKey!==key || lastCast!==null && lastCast!==site.handline?.castAt){sceneKey=key;lastCast=null;setText(result,'');}
       card.hidden=false;
+      const restricted=root.EarthCommunityLife?.permission?.(sim.state,site,'useHandline',[])||'';
       const offer=sim.handlineOffer(state),aboard=state.mode==='boat',blocked=state.placement||crew();
       schedule(offer,site);
-      setText(count,'Community pantry · '+site.food+' food');
+      waiting.hidden=offer?.action!=='wait';
+      if(!waiting.hidden)waiting.value=Math.max(0,waiting.max-offer.wait);
+      const ground=root.EarthFisheries?.ground?.(site,sim.state.week);
+      setText(count,'Community pantry · '+site.food+' food'+(ground?' · '+ground.available+' fish in the local ground':''));
       const pending=state.boarding?'Walking to the mooring.':state.returning?'Returning to the quay.':state.findingLine?'Returning to the shared float.':state.findingQuay?'Walking to the fishing quay.':'';
-      setText(status,busy|| (blocked?'Finish or cancel the current map assignment to fish.':pending|| (state.seated?'Stand up to reach the quay.':offer?.text||'This fishing spot is unavailable.')));
-      const acting=busy||blocked||Boolean(pending);
-      lineButton.disabled=acting||!offer||['wait','full','sailing'].includes(offer.action);
+      setText(status,restricted||busy|| (blocked?'Finish or cancel the current map assignment to fish.':pending|| (state.seated?'Stand up to reach the quay.':offer?.text||'This fishing spot is unavailable.')));
+      const acting=busy||blocked||Boolean(pending)||Boolean(restricted);
+      quick.hidden=offer?.action!=='shore'||aboard||state.seated;quick.disabled=acting;
+      lineButton.disabled=acting||!offer||['wait','full','sailing','resting'].includes(offer.action);
       setText(lineButton,state.seated?'Stand up to fish':offer?.action==='land'?'Reel in · '+offer.food+' food':offer?.action==='cast'?'Cast line · '+offer.food+' food':offer?.label||'Cast line');
-      shoalButton.hidden=!aboard||!offer||!['sailing','cast'].includes(offer.action)||offer.food===2;
+      shoalButton.hidden=!aboard||!offer||!['sailing','cast'].includes(offer.action)||offer.food===2||offer.shoalUseful===false;
       shoalButton.disabled=busy||blocked||state.returning;
       setText(shoalButton,state.sailingToShoal?'Stop sailing':'Follow seabirds');
       const net=aboard&&site.buildings.some(b=>b.kind==='fishingDock')?sim.fishingOffer():null;
@@ -48,6 +56,21 @@
     async function act(key){
       const street=getStreet(),start=street?.getState(),site=sim.active();
       if(busy||!start||!site||!start.waterfront||site.id!==start.siteId||start.placement||crew())return false;
+      const restricted=root.EarthCommunityLife?.permission?.(sim.state,site,'useHandline',[])||'';
+      if(restricted&&key!=='boat'&&key!=='shoal'){report(restricted,true);return false;}
+      const journey=++trip;
+      if(key==='quick'){
+        if(sim.handlineOffer(start)?.action!=='shore'||start.seated||start.boarding||start.returning||start.findingQuay||start.findingLine)return false;
+        const generation=site.foundingRevision||0,week=sim.state.week;
+        const arrived=()=>{
+          const at=getStreet()===street&&street.getState();
+          if(journey!==trip||doc.hidden||!at||at.actor!==start.actor||at.siteId!==start.siteId||sim.state.week!==week||
+            (sim.active()?.foundingRevision||0)!==generation||sim.handlineOffer(at)?.action!=='cast')return;
+          act('line');
+        };
+        const ok=street.approachFishing('shore',arrived);
+        if(!ok)report('Choose another approach to the quay.',true);render();return ok;
+      }
       if(key==='boat'){
         if(start.findingQuay||start.findingLine){street.cancelTravel();render();return true;}
         const ok=street.toggleBoat();render();return ok;
@@ -84,7 +107,7 @@
         refresh?.(response);return response.ok;
       }finally{busy='';render();}
     }
-    function close(){stopTimer();}
+    function close(){trip++;stopTimer();}
     function resume(){
       if(doc.hidden){stopTimer();return;}
       // Browser back/forward caches pause timers. Use the saved cast's

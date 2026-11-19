@@ -23,3 +23,10 @@
 #local-market .market-provisions label{display:grid;gap:.22rem;font-size:.78rem;font-weight:600}
 #local-market .market-provisions select{width:100%;max-width:100%;min-width:0}
 #local-market .market-provision-action{display:grid;gap:.2rem}
+#local-market .market-resource-detail{border:1px solid #819c8b75;border-radius:.5rem;padding:.65rem;display:grid;gap:.42rem;background:#1526213b}
+#local-market .market-resources caption{text-align:left;padding:.4rem 0;font-weight:650}
+#local-market .market-resources .text-button{min-height:40px;text-align:left;white-space:normal;padding:.18rem .25rem}
+#local-market .market-resources .resource-selected{background:#7eae9328}
+#local-market .market-resources .resource-selected th{border-inline-start:3px solid #93c8a8}
+#local-market .market-recipe{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.42rem;border-top:1px solid #ffffff25;padding-top:.45rem}
+#local-market .market-resource-detail .market-buttons button,#local-market .market-recipe button{min-height:40px}

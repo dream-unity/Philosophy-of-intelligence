@@ -21,7 +21,8 @@
   const string=(v,max)=>typeof v==='string'&&v.length>0&&v.length<=max;
   const dict=v=>v&&typeof v==='object'&&!Array.isArray(v),goods=()=>({funds:0,materials:0});
   const tag=id=>typeof id==='string'?id.split(':')[1]:null;
-  const residents=site=>root.EarthPersonas?.list(site)||site.residents||[];
+  const residents=site=>(root.EarthPersonas?.list(site)||site.residents||[]).filter(person=>
+    !root.EarthCommunityLife?.residency||root.EarthCommunityLife.residency(site,person.id)==='member');
   const person=(site,id)=>root.EarthPersonas?.profile(site,id)||site.residents?.find(p=>p.id===id);
   const actor=(world,site)=>site.id===world.activeId?(root.EarthAgency?.actorId(site)||site.agency?.actor||'steward'):null;
   const state=site=>site.civicInitiatives||={version:1,week:0,serial:0,revision:0,nextWeek:0,active:null,history:[],testimony:[]};
@@ -221,13 +222,18 @@
     return {ok:true,changed:true,message:p.status};
   }
   function commitment(site,world,id){
-    const d=site?.civicInitiatives;if(!d||d.week!==world.week||actor(world,site)===id)return null;
+    if(actor(world,site)===id)return null;
+    const hearing=site.residentBallots&&!site.mandate&&site.issue?.deadline===world.week&&
+      root.EarthCommunityLife?.isHome?.(world,site)&&root.EarthCommunityLife.wasDelegate(site,id)&&
+      !root.EarthLegacy?.governs?.(world,site)&&root.EarthCommunityLife.present(site,id)?
+      {title:'Hear “'+site.issue.title+'”',reason:'I am taking the household estimates to the assembly for today’s vote on “'+site.issue.title+'”.',venue:'hall'}:null;
+    const d=site?.civicInitiatives;if(!d||d.week!==world.week)return hearing;
     const job=d.history.find(h=>h.works?.week===world.week && h.works.people.includes(id));
     if(job)return {reason:'I worked a construction shift on '+job.title+' at lot '+(job.plot+1)+'.',venue:policies[tag(job.choiceId)].venue,jobId:job.jobId,plot:job.plot};
-    const p=d.active||d.history[0];if(!p)return null;
+    const p=d.active||d.history[0];if(!p)return hearing;
     const pledged=p.contributions.some(c=>c.week===world.week&&c.personId===id);
     const attending=p.meetingWeek===world.week&&p.attendees.includes(id);
-    if(!attending&&!pledged && !(p.proposedWeek===world.week&&p.leadId===id))return null;
+    if(!attending&&!pledged && !(p.proposedWeek===world.week&&p.leadId===id))return hearing;
     return {reason:attending?'I am discussing the costs and beneficiaries of '+p.title+' with the committee.':pledged?'I committed a civic shift to '+p.title+'.':'I am presenting '+p.title+' to the town.',venue:'hall'};
   }
   function valid(site,week){
@@ -257,5 +263,5 @@
     return dict(d)&&d.version===1&&integer(d.week,0,week)&&integer(d.serial,0)&&integer(d.revision,0)&&integer(d.nextWeek,0,week+16)&&
       (d.active===null||proposal(d.active,true))&&Array.isArray(d.testimony)&&d.testimony.length<=3&&new Set(d.testimony.map(t=>t?.personId)).size===d.testimony.length&&d.testimony.every(t=>dict(t)&&site.residents.some(r=>r.id===t.personId)&&integer(t.week,1,d.week)&&string(t.proposalId,160)&&['support','dissent'].includes(t.stance))&&Array.isArray(d.history)&&d.history.length<=6&&d.history.every(h=>proposal(h,false))&&new Set([d.active?.id,...d.history.map(h=>h.id)].filter(Boolean)).size===d.history.length+Number(!!d.active);
   }
-  root.EarthCivicInitiatives=Object.freeze({tick,view,guidance,command,valid,commitment,hasTestimony});
+  root.EarthCivicInitiatives=Object.freeze({tick,view,guidance,command,valid,commitment,hasTestimony,reserve});
 })(typeof window==='undefined'?globalThis:window);

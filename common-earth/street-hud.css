@@ -100,3 +100,34 @@ body.street-expanded[data-map-view="street"] .scene-tools #street-open-actions {
 .scene-speech[data-tip="left"]::after,.scene-speech[data-tip="right"]::after { top:calc(var(--speech-tip,50%) - 4px); bottom:auto; }
 .scene-speech[data-tip="left"]::after { left:-5px; transform:rotate(135deg); }
 .scene-speech[data-tip="right"]::after { left:auto; right:-5px; transform:rotate(-45deg); }
+/* Keep the last spoken line and the immediately useful replies together on the
+   map. Less urgent subjects stay within the same, keyboard-accessible shelf. */
+#scene-talk-view { gap:6px; }
+#scene-talk-view > label { display:flex; align-items:center; gap:8px; }
+#scene-talk-person { flex:1; }
+#scene-talk-view p,#scene-talk-view button,#scene-talk-view select,#scene-talk-view summary {
+  font-size:.875rem; line-height:1.35;
+}
+#scene-topics { align-items:stretch; }
+#scene-topics > details { flex:1 1 100%; }
+#scene-topics > details > div { margin-top:5px; }
+#scene-topics button[data-dialogue-context="true"] { border-color:#d7bc7f; background:#384e40; color:#fff1ca; }
+#scene-agreement-route { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:4px 8px; padding:4px 0; }
+.scene-people-picker { display:flex; flex-wrap:wrap; gap:5px; }
+.scene-people-picker h4 { flex:1 1 100%; }
+#scene-transcript-lines { margin:7px 0 2px; padding-left:22px; }
+#scene-transcript-lines li+li { margin-top:8px; }
+#scene-transcript-lines strong { display:block; color:#e6d49c; font-weight:600; }
+.street-hud[data-face-to-face="true"] #scene-contact { font-size:.78rem; }
+.street-hud[data-talk-dock="bottom"] #scene-talk-view > label { order:4; }
+.street-hud[data-talk-dock="bottom"] #scene-talk-view > #scene-contact { order:4; }
+.street-hud[data-talk-dock="bottom"] #scene-talk-view > details { order:3; }
+.street-hud[data-talk-dock="bottom"] #scene-talk-view > #scene-transcript { order:2; }
+.street-hud[data-talk-dock="bottom"] #scene-talk-view > #scene-reply { order:0; }
+.street-hud[data-talk-dock="bottom"] #scene-talk-view > #scene-topics { order:1; }
+@media (any-pointer:coarse){
+  #scene-talk-view button,#scene-talk-person,#scene-talk-view summary { min-height:44px; }
+}
+.street-hud[data-picking-neighbour="true"] #scene-talk-view > :not(#scene-nearby-people) { display:none; }
+#scene-notice [data-street-invitation] { order:1; color:#ffe4a2; border-left:1px solid #617667; }
+#scene-notice #scene-dismiss-notice { order:2; }

@@ -25,7 +25,9 @@
     job('trader','Market trader','Market exchange','communication',48,'numeracy',38,12,1,'exchange','market','funds',2,'Arrange paid market bookings.'),
     job('grower','Grower','Food cooperative','care',43,'stamina',34,8,0,'food','garden','food',2,'Grow produce for shared stores.'),
     job('repairer','Repairer','Repair cooperative','craft',52,'organisation',35,26,1,'repair','workshop','materials',2,'Repair tools and reclaim usable parts.'),
-    job('convenor','Convenor','Community assembly','communication',50,'organisation',42,18,1,'exchange','hall','trust',3,'Bring neighbours together for decisions.')
+    job('convenor','Convenor','Community assembly','communication',50,'organisation',42,18,1,'exchange','hall','trust',3,'Bring neighbours together for decisions.'),
+    job('surveyor','Building surveyor','District survey office','numeracy',68,'craft',55,104,2,'repair','workshop','materials',3,'Measure proposed repairs before the workshop orders materials.'),
+    job('practice-nurse','Practice nurse','Neighbourhood practice','care',72,'organisation',55,156,2,'exchange','hall','wellbeing',3,'Coordinate neighbourhood follow-up visits and community care.')
   ]);
   const jobs=Object.fromEntries(catalog.map(j=>[j.id,j]));
   const get=(map,key)=>map&&Object.hasOwn(map,key)?map[key]:undefined;
@@ -41,7 +43,8 @@
     if(root.EarthPersonas)return root.EarthPersonas.profile(site,id);
     return root.EarthAgency?.identity(site,id)||site.residents?.find(r=>r.id===id)||null;
   }
-  const people=site=>root.EarthPersonas?.list(site)||site.residents||[];
+  const residentHere=(site,id)=>root.EarthCommunityLife?.present?.(site,id)!==false && root.EarthCommunityLife?.residency?.(site,id)!=='visitor';
+  const people=site=>(root.EarthPersonas?.list(site)||site.residents||[]).filter(p=>residentHere(site,p.id));
   function origin(p){
     const desc=p.originRole||p.role||'Neighbour';
     const matches=catalog.find(j=>j.label.toLowerCase()===desc.toLowerCase());
@@ -58,6 +61,14 @@
     return j?{id:j.id,role:j.label,label:j.label,employer:j.employer,venue:j.venue,occupation:j.occupation,service:j.service}:null;
   }
   const state=(site,id)=>memory(site,id)||{};
+  function employment(site,p,m){
+    const appointment=get(jobs,m.jobId);if(appointment)return appointment;
+    const prior=origin(p),guest=site.communityLife?.people?.[p.id];
+    if(!guest||guest.status==='anchor'||guest.originId===site.id)return prior;
+    // Previous credentials travel. A district employer hires separately, even
+    // when the visitor brings precisely the trade the new district needs.
+    return {...prior,id:'origin',label:p.role||prior.label,employer:'Independent neighbourhood rounds'};
+  }
   function ensure(site,id){
     const book=site.careers??={};
     return book[id]??={revision:0,skills:{},qualifications:{},portfolios:{},references:{},history:[]};
@@ -93,7 +104,7 @@
     const tutor=profile(site,mentorId),pupil=profile(site,learnerId),week=world.week;
     if(!tutor||!pupil||mentorId===learnerId||!axes.includes(axis))return {ok:false,reason:'Find a mentor and a learner with a shared subject.'};
     const teacher=state(site,mentorId),student=state(site,learnerId),at=skill(pupil,student,axis),teaches=skill(tutor,teacher,axis);
-    if(teacher.lastPracticeWeek===week||student.lastPracticeWeek===week||specialistShift(site,mentorId,week)||specialistShift(site,learnerId,week)||root.EarthPurses?.committed?.(site,mentorId,week)||root.EarthPurses?.committed?.(site,learnerId,week))return {ok:false,reason:'One of us already used this week’s personal practice session.'};
+    if(teacher.lastPracticeWeek===week||student.lastPracticeWeek===week||root.EarthAutonomy?.sessionSpent?.(site,mentorId,week)||root.EarthAutonomy?.sessionSpent?.(site,learnerId,week)||specialistShift(site,mentorId,week)||specialistShift(site,learnerId,week)||root.EarthPurses?.committed?.(site,mentorId,week)||root.EarthPurses?.committed?.(site,learnerId,week))return {ok:false,reason:'One of us already used this week’s personal practice session.'};
     if(at>=bounds(pupil,axis).max||teaches-at<4)return {ok:false,reason:'This learner needs a different subject or a more experienced mentor.'};
     if(!commit)return {ok:true};
     const m=ensure(site,mentorId),s=ensure(site,learnerId),raised=gain(pupil,s,axis,Math.min(amount,teaches-at,3));
@@ -101,13 +112,13 @@
     gain(tutor,m,'communication',1);
     note(m,week,'Taught '+pupil.name+' '+axis+' during a practical demonstration.');
     note(s,week,'Gained '+raised+' '+axis+' through a practical demonstration with '+tutor.name+'.');
-    m.revision++;s.revision++;
+    m.revision++;s.revision++;root.EarthAutonomy?.remember?.(site,week,mentorId,learnerId,'lesson');
     return {ok:true,gain:raised};
   }
   function hobbyPractice(world,site,id,axis,commit=false,witness=null){
     const p=profile(site,id),week=world.week;
     if(!p||!axes.includes(axis))return {ok:false,reason:'Choose an interest that belongs to this person.'};
-    if(state(site,id).lastPracticeWeek===week||specialistShift(site,id,week)||root.EarthPurses?.committed?.(site,id,week))return {ok:false,reason:'This week’s personal practice session is already used.'};
+    if(state(site,id).lastPracticeWeek===week||root.EarthAutonomy?.sessionSpent?.(site,id,week)||specialistShift(site,id,week)||root.EarthPurses?.committed?.(site,id,week))return {ok:false,reason:'This week’s personal practice session is already used.'};
     if(!commit)return {ok:true};
     const m=ensure(site,id),other=witness&&profile(site,witness);
     const raised=gain(p,m,axis,other?2:1);
@@ -121,7 +132,7 @@
     return Math.min(room,clamp(Math.ceil(room/15),1,4));
   }
   const samples=(m,j)=>get(m.portfolios,j.id)||0;
-  const qualified=(p,m,j)=>Boolean(get(m.qualifications,j.id)||origin(p).id===j.id);
+  const qualified=(p,m,j)=>Boolean(get(m.qualifications,j.id)||origin(p).id===j.id||p.qualificationIds?.includes(j.id));
   function employerReference(p,m,j){
     if(get(m.references,j.id)!=null)return {jobId:j.id,quality:m.references[j.id],employer:j.employer,occupation:j.occupation};
     if(!m.latestReference)return null;
@@ -139,6 +150,19 @@
     if(portfolio<evidenceNeeded)missing.push(evidenceNeeded+' work '+(evidenceNeeded===1?'sample':'samples')+' ('+portfolio+' ready)');
     if(ref<0 && skill(p,m,j.skill)+evidence<j.requiredSkill+2)missing.push('stronger evidence after the previous rushed departure');
     return missing;
+  }
+  function canCoverPost(site,id,jobId){
+    const p=profile(site,id),j=get(jobs,jobId),m=state(site,id);
+    if(!p||!j||!residentHere(site,id))return false;
+    if(Object.hasOwn(specialistSites,j.id))return (m.jobId===j.id||qualified(p,m,j))&&skill(p,m,j.skill)+2*samples(m,j)>=j.requiredSkill&&skill(p,m,j.secondary)>=j.secondMinimum;
+    return skill(p,m,j.skill)>=Math.min(55,j.requiredSkill)&&skill(p,m,j.secondary)>=j.secondMinimum;
+  }
+  function departureForMove(world,site,id){
+    const p=profile(site,id),m=state(site,id);if(!p||!root.EarthEmployers)return;
+    const guest=root.EarthCommunityLife?.profile?.(site,id);
+    const nativeHousehold=site.communityLife?.people?.[id]?.householdRole;
+    if(guest&&guest.kind!=='steward'&&!nativeHousehold&&!m.jobId)return;
+    root.EarthEmployers.open(world,site,p,get(jobs,m.jobId)||origin(p),!!m.jobId);
   }
   function canFit(p,j){
     return bounds(p,j.skill).max+6>=j.requiredSkill && bounds(p,j.secondary).max>=j.secondMinimum;
@@ -171,23 +195,33 @@
       if(person.id===p.id)continue;
       const other=state(site,person.id),score=skill(person,other,j.skill);
       if(score<learner+3||other.lastPracticeWeek===week||other.specialistRelief?.week===week||root.EarthPurses?.committed?.(site,person.id,week)||other.training?.pace==='intensive'&&!other.training.paused)continue;
-      const priority=score+(root.EarthIntroductions?.level(site,p.id,person.id,j.skill,week)||0);
+      const tie=root.EarthAutonomy?.bond?.(site,p.id,person.id,week)||0;
+      if(tie<0)continue;
+      const priority=score+tie+(root.EarthIntroductions?.level(site,p.id,person.id,j.skill,week)||0);
       if(!best||priority>level||priority===level&&person.id<best.id){best=person;level=priority;}
     }
     return best;
   }
-  function coverFor(site,p,old,week){
+  function coverFor(site,p,old,week,excludeId=null){
     const link=porterSlot(p.id)&&['origin','courier'].includes(old.id)?activeLane(site,p.id):null;
     const occupation=link?.resource==='food'?'food':old.occupation;
     const axis={food:'care',repair:'craft',exchange:'organisation'}[occupation];
     const assigned=new Set(Object.values(site.careers||{}).flatMap(m=>[m.application?.coverId,m.departure?.coverId]).filter(Boolean));
     let best=null,bestScore=-1;
     for(const other of people(site)){
-      if(other.id===p.id||assigned.has(other.id)||link&&porterSlot(other.id)&&!changedTrade(state(site,other.id))&&activeLane(site,other.id))continue;
+      if(other.id===p.id||other.id===excludeId||assigned.has(other.id)||link&&porterSlot(other.id)&&!changedTrade(state(site,other.id))&&activeLane(site,other.id))continue;
       const m=state(site,other.id);
       if(m.application?.phase==='notice'||m.training?.pace==='intensive'&&!m.training.paused||m.specialistRelief?.week>=week||root.EarthPurses?.committed?.(site,other.id,week))continue;
       const post=get(jobs,m.jobId)||origin(other);
-      const score=skill(other,m,axis)+(post.occupation===occupation?25:0);
+      const resident=site.residents?.find(r=>r.id===other.id),self=site.residents?.find(r=>r.id===p.id);
+      const oldTie=resident&&self?site.neighbourWork?.links?.[[resident.slot,self.slot].sort().join('-')]||0:0;
+      const bond=oldTie+(root.EarthAutonomy?.bond?.(site,other.id,p.id,week)||0);
+      const worker=site.workforce?.members?.[other.id],energy=site.autonomy?.people?.[other.id]?.energy??5;
+      if(bond<0||energy<2||resident?.promise||site.shift?.residentId===other.id||worker?.jobId||worker?.preferredJobId||
+        (post.occupation!==occupation&&(other.traits?.adaptability??50)<35))continue;
+      const recentMeal=site.agency?.meals?.some(row=>row.week>=week-3&&
+        (row.from===p.id&&row.to===other.id||row.to===p.id&&row.from===other.id));
+      const score=skill(other,m,axis)+(post.occupation===occupation?25:0)+bond*3+(recentMeal?8:0)+(other.traits?.sociability??50)/12;
       if(score>bestScore){best=other;bestScore=score;}
     }
     return best;
@@ -211,7 +245,7 @@
   const reserves=(m,id)=>m.application?.targetId===id&&['offer','notice'].includes(m.application.phase);
   function openings(site,targetId){
     if(!Object.hasOwn(specialistSites,targetId))return null;
-    const capacity=funded(site,jobs[targetId]),used=Object.values(site.careers||{}).filter(m=>m.jobId===targetId||reserves(m,targetId)).length;
+    const capacity=funded(site,jobs[targetId]),used=Object.entries(site.careers||{}).filter(([id,m])=>residentHere(site,id)&&(m.jobId===targetId||reserves(m,targetId))).length;
     return Math.max(0,capacity-used);
   }
   function specialistShift(site,id,week){
@@ -233,6 +267,7 @@
     const team=[],waiters=[],capacity=funded(site,j),week=world.week;
     let reliefTaken=null,staffed=0;
     for(const [id,v] of Object.entries(site.careers||{})){
+      if(!residentHere(site,id))continue;
       if(v.specialistRelief?.targetId===j.id&&v.specialistRelief.week===week+1)reliefTaken=id;
       if(v.jobId===j.id||reserves(v,j.id)){
         const appointed=v.jobId===j.id;
@@ -246,7 +281,7 @@
     const free=Math.max(0,capacity-team.length),day=week+1,full=staffed>=capacity&&!pressure(site,j);
     const nextRound=day+(j.interval-day%j.interval)%j.interval;
     const life=site.autonomy?.people?.[p.id],today=life?.history?.[0];
-    const used=today?.week===week&&['project','learn','apply','gather','preserve','cover','wage','visit','host'].includes(today.kind);
+    const used=today?.week===week&&(['project','dream','learn','apply','gather','preserve','cover','wage','visit','host','marketSupply'].includes(today.kind)||today.errand===true);
     const debt=used||life?.contribution?.week===week||m.lastPracticeWeek===week||m.specialistRelief?.week>=week||
       root.EarthPurses?.committed?.(site,p.id,week);
     const roster=site.workforce?.members?.[p.id],joint=Object.entries(site.autonomy?.projects?.owners||{}).some(([id,goal])=>
@@ -293,13 +328,15 @@
   function view(world,site,id,targetId,context={}){
     const p=profile(site,id);if(!p||!world)return null;
     const m=state(site,id),a=m.application,t=m.training,week=world.week;
-    const current=get(jobs,m.jobId)||origin(p);
+    const current=employment(site,p,m);
     const j=get(jobs,targetId||a?.targetId||t?.targetId||current.id);
     const revision=m.revision||0,choices=[],posts=opening(world,site,p,m,j,current);
     const speaker=context.speakerId??root.EarthAgency?.actorId(site)??id;
     const skills=Object.fromEntries(axes.map(k=>[k,skill(p,m,k)]));
     function add(action,text,detail,gate='',extra={}){
-      const reason=gate||consent(world,site,p,m,j,action,speaker);
+      const outside=residentHere(site,id)?!context.autonomous&&root.EarthCommunityLife?.visitReason?.(world,site):
+        'This resident manages their employment outside the district.';
+      const reason=outside||gate||consent(world,site,p,m,j,action,speaker);
       choices.push({id:action,targetId:j.id,label:text,detail,available:!reason,reason,expectedRevision:revision,...extra});
     }
     if(j){
@@ -318,7 +355,7 @@
         }
         if(t.paused)add('leaveCourse','Leave the course','Your acquired skills stay. Leaving releases the place and clears these course credits.');
       }
-      const taken=m.lastPracticeWeek===week||m.specialistRelief?.week===week||site.autonomy?.people?.[id]?.contribution?.week===week||root.EarthPurses?.committed?.(site,id,week)?'This person already used their personal practice session this week.':'';
+      const taken=m.lastPracticeWeek===week||root.EarthAutonomy?.sessionSpent?.(site,id,week)||m.specialistRelief?.week===week||site.autonomy?.people?.[id]?.contribution?.week===week||root.EarthPurses?.committed?.(site,id,week)?'This person already used their personal practice session this week.':'';
       if(posts&&!sameJob&&canStudy)add('specialistRelief','Cover a '+j.label.toLowerCase()+' round',posts.service,posts.relief.reason);
       const reference=employerReference(p,m,j);
       if(reference?.quality<0)add('relief','Take a relief shift for '+reference.employer,
@@ -340,20 +377,21 @@
         if(a.phase==='offer'){
           const through=Math.max(coverCommitment(site,id,week)||0,m.specialistRelief?.week>=week?m.specialistRelief.week:0);
           const committed=through?'The worker promised cover through week '+through+'. The offer can be reconsidered after that shift.':'';
+          if(context.autonomous&&speaker===id)add('considerOffer','Consider the employer’s offer','Decide whether the new duties fit current commitments and the former team’s resources.',committed);
           if(speaker===id)add('accept','Accept the offer','Start a notice period at '+current.employer+'. The new post begins after the handover.',committed);
           else add('discussOffer','Discuss the offer with '+p.name,'They weigh the offer against conditions at their current workplace and decide whether to give notice.',committed);
         }
         if(a.phase==='notice'){
-          const cover=context.matchPeople!==false&&!a.coverId?coverFor(site,p,current,week):null;
+          const cover=context.matchPeople!==false&&!a.coverId?coverFor(site,p,current,week,context.autonomous&&world.activeId===site.id?root.EarthAgency?.actorId(site)||'steward':null):null;
           if(cover)add('handover','Arrange cover with '+cover.name,'They can take up the old duties through the first two weeks after departure. They may step away from their own trade.', '', {coverId:cover.id,coverName:cover.name});
           if(!a.releaseAsked&&a.dueWeek>week+1)add('release','Request an early release',current.employer+' can refuse if important work is uncovered. Leaving urgently without cover affects their future reference.');
         }else add('withdraw','Withdraw application','Keep the current job and all completed learning.');
       }else if(!sameJob && active)add('apply','Apply to '+j.employer,'Only one live job application is considered at a time.','Finish or withdraw the current application first.');
     }
     return {personId:id,name:p.name,career:current.label,careerId:current.id,employer:current.employer,
-      skills,aptitude:Object.fromEntries(axes.map(k=>[k,aptitude(p,k)])),bounds:Object.fromEntries(axes.map(k=>[k,bounds(p,k)])),
+      skills,tenure:tenure(world,site,p,m,current),aptitude:Object.fromEntries(axes.map(k=>[k,aptitude(p,k)])),bounds:Object.fromEntries(axes.map(k=>[k,bounds(p,k)])),
       history:(m.history||[]).map(h=>({...h})),training:t?{...t,...coursePhase(jobs[t.targetId],t.credits)}:null,application:a?{...a}:null,
-      qualifications:{...m.qualifications},portfolios:{...m.portfolios},references:{...m.references},latestReference:m.latestReference?{...m.latestReference}:null,agreedPlan:m.agreedPlan||null,
+      recruitment:j?root.EarthEmployers?.view(site,world,j.id)||null:null,qualifications:{...m.qualifications},portfolios:{...m.portfolios},references:{...m.references},latestReference:m.latestReference?{...m.latestReference}:null,agreedPlan:m.agreedPlan||null,
       targetId:j?.id,opening:posts,supplyLane:porterSlot(id)?supplyLane(site,world,id):null,qualified:j?qualified(p,m,j):false,missing:j?screening(p,m,j):[],
       fits:j?canFit(p,j):false,stage:a?.phase==='deferred'&&t?'training':a?.phase||(t?'training':'employed'),
       status:status(world,p,m,current),choices,revision};
@@ -361,6 +399,7 @@
   function command(world,site,id,action,targetId,expectedRevision,proof,context={}){
     const p=profile(site,id),j=get(jobs,targetId),old=state(site,id);
     if(!p||!j||!world)return fail('Choose a known person and profession.');
+    if(!residentHere(site,id))return fail('A visitor manages their own employment. Meet a member of this community to discuss local work.');
     if((old.revision||0)!==expectedRevision)return fail('This career decision changed. Review the person’s current options.');
     const info=view(world,site,id,targetId,{...context,matchPeople:action==='mentor'||action==='handover'}),option=info.choices.find(c=>c.id===action);
     if(!option||!option.available)return fail(option?.reason||'This choice is unavailable at the current career stage.');
@@ -369,7 +408,7 @@
     if(action==='mentor' && (!proof||proof.actor!==id||proof.target!==option.mentorId||proof.siteId!==site.id||
       proof.mode!=='walk'||![proof.x,proof.y,proof.tx,proof.ty].every(Number.isFinite)||Math.hypot(proof.x-proof.tx,proof.y-proof.ty)>1.56))return fail('Meet the named mentor on foot for this lesson.');
     if(action==='handover'&&context.coverId && context.coverId!==option.coverId)return fail('The proposed colleague’s availability changed.');
-    const m=ensure(site,id),current=get(jobs,m.jobId)||origin(p),a=m.application,t=m.training;
+    const m=ensure(site,id),current=employment(site,p,m),a=m.application,t=m.training;
     let message;
     switch(action){
       case 'enroll':
@@ -390,7 +429,7 @@
         if(action==='mentor'){
           const guide=profile(site,option.mentorId),teacher=ensure(site,guide.id);
           teacher.lastTeachingWeek=week;teacher.lastPracticeWeek=week;gain(guide,teacher,'communication',1);
-          note(teacher,week,'Mentored '+p.name+' in '+axis+'.');teacher.revision++;who=' with '+guide.name;
+          note(teacher,week,'Mentored '+p.name+' in '+axis+'.');teacher.revision++;who=' with '+guide.name;root.EarthAutonomy?.remember?.(site,week,guide.id,p.id,'lesson');
         }
         message=p.name+' practised '+axis+who+' and gained '+raised+' skill ('+skill(p,m,axis)+'/'+bounds(p,axis).max+').';break;
       }
@@ -413,8 +452,10 @@
         message=j.employer+' received '+p.name+'’s application. Review in week '+(week+2)+'.';break;
       case 'withdraw':
         delete m.application;message=p.name+' withdrew the application and kept their old post.';break;
+      case 'considerOffer':
       case 'discussOffer':
-        if(site[replacementGoods[current.occupation]]<4 && (p.traits?.adaptability??50)<55 && j.occupation!==current.occupation){
+        if(site[replacementGoods[current.occupation]]<4 && (p.traits?.adaptability??50)<55 && j.occupation!==current.occupation &&
+          (action!=='considerOffer'||!coverFor(site,p,current,week))){
           delete m.agreedPlan;a.phase='deferred';a.dueWeek=week+1;a.reason=p.name+' chose to stay while the former crew rebuilds its '+replacementGoods[current.occupation]+' stores.';
           message=a.reason+' They can consider the new employer again from week '+a.dueWeek+'.';break;
         }
@@ -425,6 +466,7 @@
       case 'handover':
         a.coverId=option.coverId;a.coverName=option.coverName;delete a.releaseAsked;
         {const colleague=ensure(site,a.coverId);note(colleague,week,'Agreed to cover '+p.name+' at '+current.employer+'.');colleague.revision++;}
+        root.EarthAutonomy?.remember?.(site,week,p.id,option.coverId,'cover');
         message=option.coverName+' agreed to cover '+p.name+'’s duties at '+current.employer+' during the change.';break;
       case 'release':{
         const metric=replacementGoods[current.occupation];
@@ -444,6 +486,39 @@
     m.revision++;note(m,week,message);
     return {ok:true,message,personId:id,revision:m.revision};
   }
+  function serviceWeeks(world,site,id,jobId){
+    const m=state(site,id);
+    if(m.experience)return m.experience[jobId]||0;
+    // Earlier saves have an appointment date and no attendance ledger. Carry
+    // forward their existing tenure once, then count actual full working weeks.
+    return m.jobId===jobId&&int(m.joinedWeek,1,world.week)?world.week-m.joinedWeek:0;
+  }
+  function tenure(world,site,p,m,current){
+    if(!m.jobId)return null;
+    const weeks=serviceWeeks(world,site,p.id,current.id),induction=current.trainingWeeks>=52?8:2;
+    const next=weeks<induction?induction:weeks<26?26:weeks<52?52:Math.ceil((weeks+1)/26)*26;
+    const stage=weeks<induction?'Learning the local rota':weeks<26?'Independent shifts':weeks<52?'Experienced team member':'Experienced colleague';
+    return {weeks,stage,next,detail:stage+' · '+weeks+' credited working week'+(weeks===1?'':'s')+' in '+current.label.toLowerCase()+
+      '. Working in the post builds '+current.skill+' and '+current.secondary+' within the person’s own range.'};
+  }
+  function clockService(world,site,p,m){
+    const current=get(jobs,m.jobId),week=world.week;
+    if(!current||week<=m.joinedWeek)return null;
+    const imported=!m.experience;
+    if(imported)m.experience={[current.id]:Math.max(0,week-m.joinedWeek-1)};
+    if(onOtherDuty(site,p.id,m,week))return imported?{message:''}:null;
+    const weeks=(m.experience[current.id]||0)+1;m.experience[current.id]=weeks;
+    // Retained skill and service history travel with the person. The team
+    // stops counting attendance during intensive study or a borrowed shift.
+    let skillGrowth=0;
+    if(weeks%13===0)skillGrowth+=gain(p,m,current.skill,1);
+    if(weeks%26===0)skillGrowth+=gain(p,m,current.secondary,1);
+    const inducted=weeks===(current.trainingWeeks>=52?8:2);
+    const message=inducted?p.name+' finished the local induction at '+current.employer+' and can organise their own round.':
+      weeks%26===0?p.name+' has completed '+weeks+' working weeks as '+current.label+'. '+(skillGrowth?
+        'Practising the job developed '+skillGrowth+' skill point'+(skillGrowth===1?'':'s')+'.':'Their demonstrated service continues at their current skill range.'):'';
+    return {message};
+  }
   function teach(p,m,j,oldCredits,newCredits){
     // Practice occurs throughout the term. Each milestone is earned only once.
     const delta=n=>Math.floor(newCredits*n/j.trainingWeeks)-Math.floor(oldCredits*n/j.trainingWeeks);
@@ -451,13 +526,18 @@
     gain(p,m,j.secondary,delta(Math.min(14,Math.ceil(j.trainingWeeks/7))));
   }
   function tick(world,site){
-    const week=world.week,events=[],panel=[];
+    const week=world.week,events=[],panel=[],moves=[];
+    root.EarthEmployers?.review(world,site);
     for(const [id,m] of Object.entries(site.careers||{})){
-      const p=profile(site,id);if(!p)continue;
+      const p=profile(site,id);if(!p||!residentHere(site,id))continue;
       if(m.processedWeek===week)continue;
       const a=m.application,t=m.training;
       let changed=false;
       const announce=text=>{note(m,week,text);events.push(text);changed=true;};
+      if(a?.phase==='notice' && a.coverId && !residentHere(site,a.coverId)){
+        const oldName=a.coverName;delete a.coverId;delete a.coverName;
+        announce(oldName+' moved away before the handover. '+p.name+' needs another available colleague.');
+      }
       if(t && !t.paused && t.lastWeek<week){
         const j=jobs[t.targetId],credits=Math.min(j.trainingWeeks,t.credits+(t.pace==='intensive'?2:1));
         const priorPhase=coursePhase(j,t.credits).phase,newPhase=coursePhase(j,credits).phase;
@@ -481,15 +561,18 @@
         a.phase='deferred';a.dueWeek=week+1;a.reason='The previous offer expired.';
         announce(p.name+' let the offer expire. Their existing post continues.');
       }else if(a?.phase==='notice' && week>=a.dueWeek){
-        const prior=get(jobs,m.jobId)||origin(p),target=jobs[a.targetId];
+        const prior=employment(site,p,m),target=jobs[a.targetId];
         const reference=a.coverId?2:a.early?-2:1;
         m.references[prior.id]=reference;
         m.latestReference={jobId:prior.id,employer:prior.employer,quality:reference,week};
         if(m.agreedPlan===target.id)delete m.agreedPlan;
         m.departure={oldRole:prior.label,oldEmployer:prior.employer,occupation:prior.occupation,coverId:a.coverId||null,throughWeek:week+1};
+        if(root.EarthEmployers)moves.push({person:p,from:prior,to:target,appointed:!!m.jobId});
         m.jobId=target.id;m.joinedWeek=week;delete m.application;
         announce(p.name+' started as '+target.label+' at '+target.employer+'. '+prior.employer+(a.coverId?' handed the work to '+a.coverName+' and recorded a strong reference.':a.early?' is short-staffed after the early release and recorded a poor reference.':' accepted the full notice and needs temporary cover.'));
       }
+      const credited=clockService(world,site,p,m);
+      if(credited){changed=true;if(credited.message)announce(credited.message);}
       if(m.specialistRelief&&week>m.specialistRelief.week){delete m.specialistRelief;changed=true;}
       if(m.relief && week>m.relief.week+1){delete m.relief;changed=true;}
       if(m.departure && week>m.departure.throughWeek){delete m.departure;changed=true;}
@@ -498,6 +581,7 @@
     // Resolve expired reservations and actual handovers before awarding this
     // week's seats. Earlier submissions take priority, with demonstrated
     // skill, portfolio and a stable local ID deciding a simultaneous cohort.
+    if(moves.length)events.push(...root.EarthEmployers.transition(world,site,moves));
     const filed=a=>a.appliedWeek??Math.max(1,a.dueWeek-2);
     const merit=r=>demonstrated(r.p,r.m,r.j);
     panel.sort((a,b)=>filed(a.a)-filed(b.a)||merit(b)-merit(a)||a.id.localeCompare(b.id));
@@ -532,7 +616,8 @@
     return porterSlot(id)?(links||operatingLinks(site)).find(link=>routeId(link)===id)||null:null;
   }
   function laneWorker(site,world,link){
-    const id=routeId(link),m=memory(site,id);
+    const id=routeId(link),m=memory(site,id),guest=root.EarthCommunityLife?.profile?.(site,id);
+    if(!residentHere(site,id)||guest&&guest.kind!=='carrier'&&m?.jobId!=='courier')return null;
     if(!changedTrade(m))return id;
     const week=world?.week??site.autonomy?.week??0;
     if(previousLane(m,link)&&m.departure.throughWeek>=week&&m.departure.coverId)return m.departure.coverId;
@@ -559,6 +644,7 @@
   function coverage(site,world){
     const gaps=[];let links;
     for(const [id,m] of Object.entries(site.careers||{})){
+      if(!residentHere(site,id))continue;
       const gap=m.departure,active=gap&&world.week<=gap.throughWeek,porter=porterSlot(id);
       const link=porter&&changedTrade(m)?activeLane(site,id,links??=operatingLinks(site)):null;
       if(active&&!(porter&&previousLane(m,link)))gaps.push({personId:id,...gap});
@@ -571,10 +657,10 @@
     return gaps;
   }
   function weeklyAdjustment(site,world){
-    const delta={};let links;
+    const delta=root.EarthEmployers?.rates(site,world)||{};let links;
     const add=(key,amount)=>{delta[key]=(delta[key]||0)+amount;};
     for(const [id,m] of Object.entries(site.careers||{})){
-      const j=get(jobs,m.jobId),p=profile(site,id);if(!p)continue;
+      const j=get(jobs,m.jobId),p=profile(site,id);if(!p||!residentHere(site,id))continue;
       if(j && world.week>m.joinedWeek && (world.week-m.joinedWeek)%j.interval===0&&(!Object.hasOwn(specialistSites,j.id)||!onOtherDuty(site,id,m,world.week)))add(j.metric,1);
       if(m.specialistRelief?.week===world.week){
         add(jobs[m.specialistRelief.targetId].metric,1);add(replacementGoods[m.specialistRelief.occupation],-1);
@@ -598,6 +684,7 @@
     return delta;
   }
   function valid(site,week){
+    if(site.employers!==undefined&&!root.EarthEmployers?.valid(site,week))return false;
     if(site.careers===undefined)return true;
     if(!record(site.careers))return false;
     const values=(map,keys,min,max)=>record(map)&&Object.entries(map).every(([k,n])=>keys.includes(k)&&int(n,min,max));
@@ -619,6 +706,7 @@
       const ref=m.latestReference;
       if(ref!==undefined && (!record(ref)||![...ids,'origin'].includes(ref.jobId)||!label(ref.employer)||!int(ref.quality,-2,2)||!int(ref.week,1,week)||m.references[ref.jobId]!==ref.quality))return false;
       if(m.jobId!=null && (!get(jobs,m.jobId)||!int(m.joinedWeek,1,week)))return false;
+      if(m.experience!=null && (!values(m.experience,ids,0,week)||Object.values(m.experience).reduce((sum,n)=>sum+n,0)>week))return false;
       if(['lastPracticeWeek','lastTeachingWeek','processedWeek','reducedWorkWeek','manualWeek'].some(k=>m[k]!=null&&!int(m[k],1,week)))return false;
       const t=m.training,a=m.application,d=m.departure;
       if(['training','application','departure'].some(k=>m[k]!==undefined&&!record(m[k])))return false;
@@ -631,5 +719,5 @@
     }
     return true;
   }
-  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,openings,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
+  root.EarthCareers=Object.freeze({axes:Object.freeze(axes),catalog,fits:canFit,canCoverPost,departureForMove,openings,serviceWeeks,specialistShift,coverCommitment,laneWorker,supplyLane,view,role,work,command,projectLesson,hobbyPractice,tick,weeklyAdjustment,coverage,valid});
 })(typeof window==='undefined'?globalThis:window);

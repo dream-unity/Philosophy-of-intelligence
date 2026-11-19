@@ -147,3 +147,32 @@ test('a visible work gesture, and a past supply contribution, belong to the peop
   t.site.autonomy.projects.completed[0].input={kind:'carrier',ownerId:'missing'};
   assert.equal(t.c.CommonEarthSim.readSave(JSON.stringify(t.w)),null);
 });
+
+test('a worker in a recent dispute can take an unattended truck only during a failed emergency collection',()=>{
+  const runtime=vm.createContext({});
+  runtime.EarthAgency={actorId:()=> 'steward'};
+  runtime.EarthPersonas={profile:(_site,id)=>({id,name:id==='walker-2'?'Robin':id,traits:{initiative:80,patience:30},aptitudes:{care:70}})};
+  runtime.EarthAutonomy={intent:()=>({kind:'routine',week:8})};
+  runtime.EarthMarket={canLoadFreight:()=>false};
+  vm.runInContext(fs.readFileSync(path.join(dir,'fleet.js'),'utf8'),runtime);
+  const fleet=runtime.EarthFleet,world={week:8,activeId:'wharf'};
+  const site={id:'wharf',population:12,trust:20,food:0,materials:4,funds:4,residents:[],careers:{'walker-2':{jobId:'carpenter',latestReference:{quality:-1,week:6}}}};
+  const q=fleet.dispute(world,site),truck={x:15,y:23.69};
+  assert.equal(q.actor,'walker-2');
+  site.food=2;assert.equal(fleet.dispute(world,site),null);site.food=0;
+  site.trust=65;assert.equal(fleet.dispute(world,site),null);site.trust=20;
+  runtime.EarthMarket.canLoadFreight=()=>true;assert.equal(fleet.dispute(world,site),null);runtime.EarthMarket.canLoadFreight=()=>false;
+  const scene={siteId:site.id,actor:q.actor,x:15,y:22.8,truck,mode:'walk',stopped:true,emptyCab:true};
+  for(const patch of [{emptyCab:false},{x:4},{stopped:false},{actor:'steward'}])assert.equal(fleet.finishDispute(world,site,q,{...scene,...patch}).ok,false);
+  assert.equal(site.fleet,undefined);
+  assert(fleet.finishDispute(world,site,q,scene).ok);assert.equal(site.trust,16);assert.equal(site.food,0);
+  assert.equal(fleet.finishDispute(world,site,q,scene).ok,false);
+  const parked=fleet.dispute(world,site),pantry={x:9,y:23.69};
+  assert.equal(parked.action,'park');
+  assert.equal(fleet.finishDispute(world,site,parked,{...scene,mode:'drive'}).ok,false);
+  assert(fleet.finishDispute(world,site,parked,{...scene,mode:'drive',...pantry,truck:pantry}).ok);
+  assert.equal(fleet.dispute(world,site),null);assert.equal(site.food,0);assert(fleet.valid(site,world.week));
+  world.week++;fleet.tick(world,site);assert.equal(site.fleet.custody,undefined);assert.equal(site.funds,3);
+  world.week++;site.food=2;fleet.tick(world,site);assert.equal(site.fleet.incident,undefined);assert.equal(site.trust,18);
+  assert(fleet.valid(site,world.week));site.food=0;assert.equal(fleet.dispute(world,site),null,'a repaired relationship cannot immediately repeat the incident');
+});

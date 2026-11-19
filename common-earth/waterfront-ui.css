@@ -6,3 +6,6 @@
 .waterfront-actions [data-fishing="line"] { border-color:#80af95; }
 .waterfront-result:not(:empty) { border-top:1px solid var(--line,#4c5b59); padding-top:.35rem; }
 .waterfront-result:empty,.waterfront-panel[hidden],.waterfront-actions [hidden] { display:none; }
+.waterfront-bite{width:100%;height:.5rem;accent-color:#96d2b5}
+.waterfront-bite[hidden]{display:none}
+.waterfront-actions [data-fishing="quick"]{border-color:#80af95;font-weight:650}

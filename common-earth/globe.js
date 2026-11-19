@@ -183,6 +183,27 @@
     coastCells.set(key,coast);
     return coast;
   }
+  const lakeCells=new Map();
+  function nearLakeShore(lat,lon){
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90)return '';
+    if(!coastIndex)return null;
+    const x=Math.floor((wrap(lon)+180)/360*coastIndex.width),y=clamp(Math.floor((90-lat)/180*coastIndex.height),0,coastIndex.height-1);
+    const key=y*coastIndex.width+x;
+    if(lakeCells.has(key))return lakeCells.get(key);
+    const here=coastIndex.at(x,y);
+    // An open-sea cell cannot be a lake landing. For a land cell, check
+    // straight neighbours before diagonals so the nearest mapped lake wins.
+    let name=here>=COUNTRY_NAMES.length?LAKE_NAMES[here-COUNTRY_NAMES.length]||'Inland water':'';
+    if(here&&!name){
+      for(const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]){
+        const row=y+dy;if(row<0||row>=coastIndex.height)continue;
+        const cell=coastIndex.at((x+dx+coastIndex.width)%coastIndex.width,row);
+        if(cell>=COUNTRY_NAMES.length){name=LAKE_NAMES[cell-COUNTRY_NAMES.length]||'Inland water';break;}
+      }
+    }
+    lakeCells.set(key,name);
+    return name;
+  }
   function locate(lat,lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || !geo || window.EarthNavigation?.load) return null;
     lat=clamp(lat,-90,90); lon=wrap(lon);
@@ -1052,6 +1073,6 @@
       }
     };
   }
-  window.EarthAtlas={mount,locate,nearOceanShore,geographyReady,ready:surveyReady};
+  window.EarthAtlas={mount,locate,nearOceanShore,nearLakeShore,geographyReady,ready:surveyReady,get geographyLoaded(){return !!coastIndex;}};
 })();
 

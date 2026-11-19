@@ -15,7 +15,8 @@
   const account=(site,id)=>own(site.purses?.people,id);
   const ticket=(site,id)=>own(site.purses?.tickets,id);
   const escrow=site=>wage*Object.keys(site?.purses?.tickets||{}).length;
-  const committed=(site,id,week)=>Boolean(ticket(site,id)||account(site,id)?.lastWeek===week);
+  const worked=(p,week)=>p?.lastWeek===week||p?.carriedWeek===week;
+  const committed=(site,id,week)=>Boolean(ticket(site,id)||worked(account(site,id),week));
   const book=site=>site.purses||={serial:0,household:0,people:{},tickets:{}};
   const named=(site,id)=>book(site).people[id]||=empty();
   const limitBook=b=>b.serial=Math.min(limit,b.serial+1);
@@ -36,18 +37,19 @@
     if(root.EarthCareers?.specialistShift?.(site,id,week)||career?.specialistRelief?.week>=week)return 'A specialist relief shift already needs this person.';
     const coverThrough=root.EarthCareers?.coverCommitment?.(site,id,week);
     if(coverThrough!=null)return 'This person agreed to cover a colleague’s former duties through week '+coverThrough+'.';
-    if(career?.lastPracticeWeek===week||row?.pastime?.lastWeek===week||row?.contribution?.week===week)return 'The worker used this week’s personal work session.';
+    if(career?.lastPracticeWeek===week||row?.pastime?.lastWeek===week||row?.contribution?.week===week)return 'The worker committed this week’s personal work session to another activity.';
     if(site.shift?.residentId===id||site.shift&&id===current(site))return 'Finish the accompanied shift first.';
     if(career?.training?.pace==='intensive'&&!career.training.paused)return 'The intensive study timetable takes this person’s working time.';
     if(Object.values(site.autonomy?.projects?.owners||{}).some(goal=>goal.volunteer?.from===id&&goal.volunteer.week>=week-1))return 'This person promised a shared project session.';
     const recent=row?.history?.[0];
-    if(recent?.week===week&&['cover','project','learn','apply','gather','preserve','wage','relief','visit','host','commitment'].includes(recent.kind))
+    if(root.EarthAutonomy?.sessionSpent?.(site,id,week))return 'This person committed this week’s discretionary session elsewhere.';
+    if(recent?.week===week&&['cover','project','dream','learn','apply','gather','preserve','wage','relief','visit','host','commitment'].includes(recent.kind))
       return 'This person committed this week’s discretionary session elsewhere.';
     return '';
   }
   function clerk(site,id,good){
     const occupation=good==='food'?'food':'repair',foundingWork=['food','repair','exchange'];
-    const other=site.residents.filter(p=>p.id!==id);
+    const other=site.residents.filter(p=>p.id!==id&&(!root.EarthCommunityLife?.residency||root.EarthCommunityLife.residency(site,p.id)==='member'));
     return other.find(p=>(root.EarthCareers?.work(site,p.id)?.occupation||foundingWork[p.slot])===occupation)||
       other.find(p=>p.slot===2)||other[0];
   }
@@ -63,7 +65,7 @@
     const p=account(site,id)||empty(),b=site.purses,job=ticket(site,id),mine=site.id===world.activeId&&id===current(site),company=root.EarthMarket;
     const result={week:world.week,actorId:current(site),siteId:site.id,generation:site.foundingRevision||0,serial:b?.serial||0,
       marketSerial:site.exchange?.serial||0,personId:id,name:name(site,id),balance:p.balance,lastWeek:p.lastWeek,household:b?.household||0,
-      openings:free(site,world.week),entries:p.entries.map(e=>({...e})),shift:job?{...job,clerkName:name(site,job.clerkId)}:null,options:[]};
+      openings:free(site,world.week),entries:p.entries.map(e=>({...e,...(e.transfer?{transfer:{...e.transfer}}:{})})),shift:job?{...job,clerkName:name(site,job.clerkId)}:null,options:[]};
     if(!mine)return result;
     const desk={type:'market'};
     function add(action,good,title,detail,reason,price,venue=desk,clerkId=job?.clerkId||null){
@@ -74,7 +76,7 @@
     }
     if(!job){
       const work=assignment(world,site,id);
-      const why=p.lastWeek===world.week?'This person collected this week’s wage. Another person can take a remaining opening, or you can check next week.':elsewhere(site,id,world.week)||
+      const why=worked(p,world.week)?'This person collected this week’s wage. Another person can take a remaining opening, or you can check next week.':elsewhere(site,id,world.week)||
         (p.balance>limit-wage||p.earned>limit-wage?'The purse cannot receive another wage.':!work?'A local resident is needed to confirm the stock count.':
         paid(site,world.week)+Object.keys(b?.tickets||{}).length>=openings?'Both stock checks are booked. A cancellation reopens a place, and new shifts open next week.':
         !result.openings?'The exchange needs two funds in its own till. A shelf purchase or a visitor round can fund another shift.':'');
@@ -134,6 +136,7 @@
   }
   function run(world,site,request,scene){
     if(!world||!site||world.activeId!==site.id||request?.actorId!==current(site)||!local(site,request.actorId))return fail('Return to the town as the person who accepted the work.');
+    const denied=root.EarthCommunityLife?.permission?.(world,site,'purseAction',[request]);if(denied)return fail(denied);
     const id=request.actorId,model=view(world,site,id);
     if(request.week!==world.week||request.siteId!==site.id||request.generation!==model.generation||request.serial!==model.serial)
       return fail('The worker, personal account or week changed. Check the current offer.');
@@ -172,13 +175,25 @@
     }
     return events;
   }
+  function dreamExpense(world,site,id,price,supplier){
+    const p=account(site,id),ledger=site.purses;
+    if(!p||!ledger||!int(price,1,4)||p.balance<price||ledger.serial>=limit||typeof supplier!=='string')return false;
+    p.balance-=price;
+    receipt(site,id,world.week,'dream',-price,name(site,id)+' paid '+funds(price,'personal')+' to '+supplier+' for their ambition. Purse now '+p.balance+'.');
+    return true;
+  }
   function opportunity(world,site,self){
+    if(root.EarthCommunityLife?.residency&&root.EarthCommunityLife.residency(site,self?.id)!=='member')return null;
     if(!self?.free||!local(site,self.id)||site.id===world.activeId&&self.id===current(site)||self.wasAdvised==='rest'||self.row?.path||
       !root.EarthMarket?.personal||!root.EarthMarket.privateTill||committed(site,self.id,world.week)||elsewhere(site,self.id,world.week))return null;
     // Someone must still be able to walk in and take a funded booking themselves.
     if(free(site,world.week)<2)return null;
     const meals=Math.ceil(site.population/5);
     const balance=account(site,self.id)?.balance||0,fit=self.profile.aptitudes?.organisation??45,traits=self.traits;
+    if(self.ambition?.shortfall && site.food>=meals && self.ambition.blockers?.every(reason=>reason.startsWith('Save '))){
+      return {score:75+traits.patience/8+(self.wasAdvised==='dream'?28:0),
+        reason:'I want a paid stock check so I can put my own money toward '+self.ambition.supplier+'.',saving:true};
+    }
     if(site.food>=meals*2||balance>=8||fit<40||traits.initiative+traits.patience<85)return null;
     return {score:83+fit/6+traits.initiative/9,reason:'The pantry holds less than two weeks of meals. The exchange has offered two funds for a stock count.'};
   }
@@ -190,6 +205,7 @@
     const held=root.EarthMarket.personal(world,site,'reserveWage','food',wage,id);
     if(!held.ok)return null;
     let text=pay(world,site,id,'food',site.food,null);
+    if(o.saving)return {message:text,reason:o.reason+' '+text};
     const pocket=account(site,id),meal=quote(world,site,'food'),traits=self.traits;
     // Contributing is a choice. Patient savers keep a small reserve, while
     // more sociable workers are willing to pool a wage earlier in a shortage.
@@ -203,28 +219,109 @@
     }
     return {message:text,reason:text};
   }
+  // A person can carry the same money between districts many times. A signed
+  // net transfer preserves the local earnings record without recording that
+  // money as a second wage. Decimal storage handles unusually long histories.
+  function netTransfers(p){
+    const value=p?.netTransfers??0;
+    if(Number.isSafeInteger(value))return BigInt(value);
+    if(typeof value==='string'&&/^-?[1-9][0-9]{0,39}$/.test(value))return BigInt(value);
+    return null;
+  }
+  function storeNet(p,n){
+    p.netTransfers=n>=-BigInt(limit)&&n<=BigInt(limit)?Number(n):n.toString();
+  }
+  function moveBalance(world,from,to,fromId,toId){
+    if(!world||!from||!to||from.id===to.id||!local(from,fromId)||!local(to,toId))return null;
+    const origin=account(from,fromId);
+    if(!origin)return null;
+    const pending=ticket(from,fromId),busy=worked(origin,world.week)||pending?.week===world.week;
+    const prior=account(to,toId),fromNet=netTransfers(origin),toNet=netTransfers(prior);
+    if(fromNet===null||toNet===null)return null;
+    if(!origin.balance&&(!busy||worked(prior,world.week))&&!pending)return null;
+    if(pending){
+      const result=refund(world,from,fromId,false);
+      if(!result.ok)return null;
+    }
+    const amount=Math.min(origin.balance,limit-(prior?.balance||0));
+    if(!amount&&!busy)return null;
+    const destination=named(to,toId);
+    const link={from:from.id,fromId,to:to.id,toId,fromGeneration:from.foundingRevision||0,toGeneration:to.foundingRevision||0,
+      fromRevision:from.purses.serial,toRevision:to.purses.serial};
+    origin.balance-=amount;destination.balance+=amount;
+    if(busy)destination.carriedWeek=world.week;
+    storeNet(origin,fromNet-BigInt(amount));storeNet(destination,toNet+BigInt(amount));
+    const person=name(from,fromId),message=amount?person+' moved '+funds(amount,'personal')+' from '+from.name+' to '+to.name+'.'+
+      (origin.balance?' The destination purse is full. '+funds(origin.balance,'personal')+' remain at '+from.name+'.':''):
+      person+' brought this week’s completed work record from '+from.name+' to '+to.name+'.';
+    receipt(from,fromId,world.week,'moveOut',-amount,message);origin.entries[0].transfer={...link};
+    receipt(to,toId,world.week,'moveIn',amount,message);destination.entries[0].transfer={...link};
+    return {moved:amount,kept:origin.balance,worked:busy};
+  }
+  function validEntry(e,site,id,week,p,i,netAtEntry){
+    if(!obj(e)||!int(e.week,1,i?p.entries[i-1].week:week)||!int(e.balance)||
+      BigInt(e.balance)>BigInt(p.earned)+netAtEntry||!Number.isSafeInteger(e.amount)||
+      (i===0?e.balance!==p.balance:BigInt(e.balance)+BigInt(p.entries[i-1].amount)!==BigInt(p.entries[i-1].balance))||
+      typeof e.text!=='string'||e.text.length===0||e.text.length>650)return false;
+    if(e.action==='moveIn'||e.action==='moveOut'){
+      const x=e.transfer,word=s=>typeof s==='string'&&s.length>0&&s.length<=512;
+      return obj(x)&&[x.from,x.to,x.fromId,x.toId].every(word)&&x.from!==x.to&&int(x.fromRevision)&&int(x.toRevision)&&
+        int(x.fromGeneration)&&int(x.toGeneration)&&
+        (e.action==='moveIn'?x.to===site.id&&x.toId===id&&x.toGeneration===(site.foundingRevision||0)&&e.amount>=0:
+          x.from===site.id&&x.fromId===id&&x.fromGeneration===(site.foundingRevision||0)&&e.amount<=0);
+    }
+    return e.action==='wage'?e.amount===wage:e.action==='donate'?e.amount===-1:e.action==='buy'?e.amount<0&&e.amount>=-6:e.action==='dream'?e.amount<0&&e.amount>=-4:
+      ['start','check','cancel','expired','household'].includes(e.action)&&e.amount===0;
+  }
   function valid(site,week){
     const b=site.purses;if(b===undefined)return true;
     if(!obj(b)||!int(b.serial,1)||!int(b.household)||!obj(b.people)||!obj(b.tickets)||
       Object.keys(b.people).length>site.residents.length+7+24||!Object.keys(b.people).length||Object.keys(b.tickets).length>openings)return false;
-    let used=0,maxDonated=0;
+    let used=0,maxDonated=0n;
     for(const [id,p] of Object.entries(b.people)){
-      if(!local(site,id)||!obj(p)||!int(p.earned)||p.earned%wage||p.earned/wage>week-(site.founded||1)+1||!int(p.balance,0,p.earned)||
+      const net=netTransfers(p);
+      if(!local(site,id)||!obj(p)||!int(p.earned)||p.earned%wage||p.earned/wage>week-(site.founded||1)+1||
+        net===null||!int(p.balance)||BigInt(p.balance)>BigInt(p.earned)+net||
+        p.carriedWeek!=null&&(!int(p.carriedWeek,site.founded||1,week)||p.netTransfers==null)||
         !int(p.lastWeek,p.earned?site.founded||1:0,p.earned?week:0)||!Array.isArray(p.entries)||!p.entries.length||p.entries.length>8)return false;
       if(p.lastWeek===week)used++;
-      maxDonated+=p.earned-p.balance;
-      if(!p.entries.every((e,i)=>obj(e)&&int(e.week,1,i?p.entries[i-1].week:week)&&int(e.balance,0,p.earned)&&Number.isSafeInteger(e.amount)&&
-        (i===0?e.balance===p.balance:e.balance+p.entries[i-1].amount===p.entries[i-1].balance)&&typeof e.text==='string'&&e.text.length>0&&e.text.length<=650&&
-        (e.action==='wage'?e.amount===wage:e.action==='donate'?e.amount===-1:e.action==='buy'?e.amount<0&&e.amount>=-6:
-        ['start','check','cancel','expired','household'].includes(e.action)&&e.amount===0)))return false;
+      maxDonated+=BigInt(p.earned)+net-BigInt(p.balance);
+      let netAtEntry=net;
+      for(let i=0;i<p.entries.length;i++){
+        const entry=p.entries[i];
+        if(!validEntry(entry,site,id,week,p,i,netAtEntry))return false;
+        if(entry.action==='moveIn'||entry.action==='moveOut')netAtEntry-=BigInt(entry.amount);
+      }
+      // Fewer than eight receipts means we can see the full account history.
+      if(p.entries.length<8&&netAtEntry!==0n)return false;
     }
     const seen=new Set();
     for(const [id,j] of Object.entries(b.tickets)){
       if(!own(b.people,id)||!obj(j)||!int(j.week,site.founded||1,week)||!int(j.serial,1,b.serial)||seen.has(j.serial)||
-        !goods.includes(j.good)||!site.residents.some(p=>p.id===j.clerkId&&p.id!==id)||j.count!==null&&!int(j.count)||account(site,id).lastWeek>=j.week)return false;
+        !goods.includes(j.good)||!site.residents.some(p=>p.id===j.clerkId&&p.id!==id)||j.count!==null&&!int(j.count)||(account(site,id).lastWeek>=j.week||(account(site,id).carriedWeek||0)>=j.week))return false;
       if(j.week===week)used++;seen.add(j.serial);
     }
-    return used<=openings&&b.household<=maxDonated&&(!escrow(site)||Boolean(site.exchange)&&site.exchange.till<=limit-escrow(site));
+    return used<=openings&&BigInt(b.household)<=maxDonated&&(!escrow(site)||Boolean(site.exchange)&&site.exchange.till<=limit-escrow(site));
   }
-  root.EarthPurses=Object.freeze({view,run,tick,valid,escrow,committed,opportunity,workWeek});
+  function validMoves(world){
+    const districts=[...world.sites,...(world.communityLife?.outposts||[])];
+    const sites=new Map(districts.map(site=>[site.id,site]));
+    for(const site of districts)for(const pocket of Object.values(site.purses?.people||{})){
+      if(pocket.netTransfers==null)continue;
+      for(const receipt of pocket.entries){
+        if(receipt.action!=='moveIn'&&receipt.action!=='moveOut')continue;
+        const x=receipt.transfer,sent=receipt.action==='moveOut';if(!obj(x))return false;
+        const peer=sites.get(sent?x.to:x.from);
+        // A reset starts a new ledger in that place. Retained receipts at the
+        // other end still describe the earlier district and its old opening.
+        if(!peer||(peer.foundingRevision||0)!==(sent?x.toGeneration:x.fromGeneration))continue;
+        const entries=account(peer,sent?x.toId:x.fromId)?.entries||[];
+        const paired=entries.some(r=>r.action===(sent?'moveIn':'moveOut')&&r.week===receipt.week&&
+          r.amount===-receipt.amount&&r.transfer&&Object.keys(x).every(k=>r.transfer[k]===x[k]));
+        if(!paired&&(entries.length<8||entries[entries.length-1].week<receipt.week))return false;
+      }
+    }
+    return true;
+  }
+  root.EarthPurses=Object.freeze({view,run,tick,valid,escrow,committed,opportunity,workWeek,dreamExpense,moveBalance,validMoves});
 })(typeof window==='undefined'?globalThis:window);

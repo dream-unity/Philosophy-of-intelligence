@@ -2,7 +2,7 @@
    neighbours can change the range indicator, never the selected interlocutor. */
 (function(root){
   'use strict';
-  function mount(host,{sim,getStreet,stageVersion,meet,venue,after,advance,followGoal,personalWork,profile,playAs,changed}){
+  function mount(host,{sim,getStreet,stageVersion,meet,venue,after,advance,readForecast,followGoal,personalWork,profile,playAs,changed}){
     if(!host)return null;
     const doc=host.ownerDocument,$=id=>doc.getElementById(id);
     const card=$('scene-card');if(!card)return null;
@@ -10,9 +10,14 @@
     const openers=[...host.querySelectorAll('[data-scene-open]')],talkField=$('scene-talk-person'),goalField=$('scene-goal-person');
     let pane=null,talkId=null,goalId='',identity='',revision=0,lastDraw='',listKey='',lastContact='',reply='',busy=false,opener=null;
     let goal=null,overview=null,stripKey='',civicKey='',civic=null,rangeTimer=0,noticeTimer=0,watching=null,speech=null,placementKey='';
-    const talkTopics=new Set(),contactButtons=new Map();
+    const talkTopics=new Set(),contactButtons=new Map(),transcript=[];
+    let pickPeople=[],lastPrompt='',spokenContact=null,spokenStore=false,invitation=null,nearSignature='',invitationWeek='';
+    const invitationsSeen=new Set(),invitedBySite=new WeakMap();
+    const present=(site,id)=>root.EarthCommunityLife?.present?.(site,id)!==false;
+    const visitor=(site,id)=>root.EarthCommunityLife?.residency?.(site,id)==='visitor';
     const street=()=>getStreet(),actorId=()=>root.EarthAgency.actorId(sim.active());
     const name=id=>root.EarthAgency.identity(sim.active(),id)?.name||root.EarthPersonas?.profile(sim.active(),id)?.name||'Neighbour';
+    const personLabel=(site,id,realName)=>root.EarthCommunityLife?.personLabel?.(site,id,realName)||realName;
     function text(node,value){const s=String(value??'');if(node&&node.textContent!==s)node.textContent=s;}
     function show(node,on){if(node&&node.hidden===on)node.hidden=!on;}
     function make(tag,value,css){
@@ -36,9 +41,9 @@
       if(sentence.length<=88)return sentence;
       return sentence.slice(0,87).replace(/\s+\S*$/u,'').trimEnd()+'…';
     }
-    function faceToFaceLayout(){
+    function faceToFaceLayout(meeting){
       const local=street();
-      if(pane!=='talk'||!local?.personAnchor||!contact()){
+      if(pane!=='talk'||!local?.personAnchor||!meeting){
         clearSpeech();delete host.dataset.talkDock;placementKey='';return;
       }
       const stage=host.getBoundingClientRect();if(!stage.width||!stage.height)return;
@@ -49,7 +54,9 @@
       const below=height-Math.max(head.y,self.y)-Math.min(36,height*.09)-12;
       const above=Math.min(head.y,self.y)-70;
       let dock=right>=left?'right':'left',size=Math.min(315,Math.max(148,side-10));
-      if(!enoughWidth&&Math.max(above,below)>=88){
+      // Give the map its width during conversation. On a short landscape
+      // display the shelf moves aside only if it would cover the two speakers.
+      if(below>=Math.min(160,height*.34)||!enoughWidth&&Math.max(above,below)>=88){
         dock=below>=above?'bottom':'top';size=Math.max(88,Math.min(dock==='bottom'?below:above,height*.48,285));
       }
       const key=dock+'/'+Math.round(size/4)*4;
@@ -82,20 +89,66 @@
       if(!local.personAnchor(id)?.visible||!local.personAnchor(actorId())?.visible)local.recenter?.();
       text($('scene-speech-words'),excerpt);speech={id,until:(root.performance?.now?.()??Date.now())+9000,position:''};tick();
     }
-    function replyWith(message){
+    function transcriptView(){
+      const list=$('scene-transcript-lines'),details=$('scene-transcript');
+      if(!list||!details)return;
+      list.replaceChildren(...transcript.map(turn=>{
+        const entry=make('li');if(turn.prompt)entry.append(make('strong',turn.prompt));
+        entry.append(make('p',turn.words));return entry;
+      }));
+      show(details,transcript.length>0);
+      if(!transcript.length)details.open=false;
+    }
+    function replyWith(message,prompt=''){
+      spokenContact=null;spokenStore=false;
+      if(!message){transcript.length=0;lastPrompt='';}
+      else if(reply&&reply!==String(message)){
+        transcript.push({prompt:lastPrompt,words:reply});if(transcript.length>4)transcript.shift();
+      }
+      lastPrompt=prompt;transcriptView();
       reply=String(message||'');if(!reply)clearSpeech();text($('scene-reply'),reply);show($('scene-reply'),!!reply);
       if(reply&&$('scene-reply')){
         const row=$('scene-reply'),area=scroll.getBoundingClientRect(),rect=row.getBoundingClientRect();
         if(rect.top<area.top||rect.bottom>area.bottom)scroll.scrollTop+=rect.top-area.top-4;
       }
     }
+    function clearInvitation(){invitation?.remove();invitation=null;}
     function notify(message){
       if(!message||!street())return;
       if(pane==='talk'&&String(message)===reply)return;
-      clearTimeout(noticeTimer);text($('scene-notice-text'),message);show($('scene-notice'),true);
+      clearInvitation();clearTimeout(noticeTimer);text($('scene-notice-text'),message);show($('scene-notice'),true);
       noticeTimer=setTimeout(()=>show($('scene-notice'),false),6500);
     }
-    $('scene-dismiss-notice')?.addEventListener('click',()=>{clearTimeout(noticeTimer);show($('scene-notice'),false);});
+    $('scene-dismiss-notice')?.addEventListener('click',()=>{clearInvitation();clearTimeout(noticeTimer);show($('scene-notice'),false);});
+    function hearNeighbour(state){
+      const notice=$('scene-notice');
+      if(pane||watching||doc.hidden||!notice||state?.mode!=='walk'||state.travelling||state.placement||state.boarding)return;
+      const person=state.nearby?.npcId||state.nearby?.residentId,site=sim.active();
+      if(!site||!person){nearSignature='';return;}
+      const own=actorId(),week=sim.state.week,period=site.id+'/'+(site.foundingRevision||0)+'/'+week;
+      const key=period+'/'+own+'/'+person+'/'+(sim.state.actionRevision||0);
+      if(key===nearSignature)return;nearSignature=key;
+      if(period!==invitationWeek){invitationWeek=period;invitationsSeen.clear();}
+      if(!notice.hidden||person===own||!present(site,person)||sim.state.communityLife&&root.EarthCommunityLife?.isHome?.(sim.state,site)===false)return;
+      const resident=site.residents.find(r=>r.id===person),promise=resident?.promise;
+      const request=root.EarthNeighbourErrands?.greeting?.(site,sim.state,own,person)||
+        (promise?.by===own&&promise.dueWeek<=week+1?{key:'promise-'+promise.dueWeek,topic:'news',words:'I’ve kept time for the delivery we agreed on. Do you have a moment?'}:null);
+      const seen=own+'/'+person+'/'+request?.key;
+      if(!request||invitationsSeen.has(seen)||request.initiated&&invitedBySite.get(site)===week||!street()?.meeting(subjectRef(person)))return;
+      invitationsSeen.add(seen);if(request.initiated)invitedBySite.set(site,week);
+      const label=name(person);
+      notify(label+' · “'+request.words+'”');
+      invitation=press('Talk to '+label,()=>{
+        if(sim.active()?.id!==site.id||actorId()!==own||sim.state.week!==week||!present(site,person))return;
+        if(!openTalk(subjectRef(person)))return;
+        const hear=()=>{
+          const ctx=liveContext(),reply=sim.converse?.(person,request.topic,ctx.proof);
+          if(ctx.current()&&reply?.ok){replyWith(reply.message,'You stopped to listen');beginSpeech(person,reply.message);}
+        };
+        if(contact())hear();else walkTo(person,hear);
+      },false,'hear-neighbour');
+      invitation.dataset.streetInvitation='true';notice.append(invitation);
+    }
     function subjectRef(id){
       if(!id)return null;
       return sim.active()?.residents.some(p=>p.id===id)?{type:'resident',residentId:id}:{type:'npc',npcId:id};
@@ -126,13 +179,13 @@
     function tick(){
       clearTimer();
       if(!pane||doc.hidden||!street())return;
-      if(pane==='talk'){updateContact();faceToFaceLayout();}
+      if(pane==='talk'){const meeting=updateContact();faceToFaceLayout(meeting);}
       if(pane==='goals'&&goalId)updateActivity();
       if(pane==='truck')toolbox.get('truck')?.onScene?.(street().getState());
       if(pane==='talk'||pane==='truck'||pane==='goals'&&goalId)rangeTimer=setTimeout(tick,speech?180:450);
     }
     function close(restore=true){
-      clearSpeech();delete host.dataset.talkDock;placementKey='';
+      clearSpeech();delete host.dataset.talkDock;delete host.dataset.faceToFace;placementKey='';pickPeople=[];
       const previous=pane;revision++;pane=null;clearTimer();lastDraw='';lastContact='';
       if(previous)toolbox.get(previous)?.close?.();
       for(const b of openers)b.setAttribute('aria-expanded','false');
@@ -141,7 +194,7 @@
       opener=null;
     }
     function invalidate(){
-      close(false);listKey='';stripKey='';civicKey='';civic=null;identity='';talkId=null;goalId='';replyWith('');setWatch(null);clearTimeout(noticeTimer);show($('scene-notice'),false);
+      close(false);clearInvitation();nearSignature='';invitationsSeen.clear();listKey='';stripKey='';civicKey='';civic=null;identity='';talkId=null;goalId='';replyWith('');setWatch(null);clearTimeout(noticeTimer);show($('scene-notice'),false);
       for(const tool of toolbox.values())tool.invalidate?.();
     }
     function openTool(id,source=null,focus=true){
@@ -157,17 +210,47 @@
       opener=source||openers.find(b=>b.dataset.sceneOpen===id)||opener;
       for(const b of openers)b.setAttribute('aria-expanded',String(b.dataset.sceneOpen===(id==='goals'&&goalId?'person':id)));
       for(const p of panes)p.hidden=p.dataset.scenePane!==id;
-      card.hidden=false;show($('scene-notice'),false);
-      text($('scene-title'),({goals:'Goals and people',talk:'Street conversation',stores:'Community stores',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',live:'Live weeks'})[id]);
+      card.hidden=false;clearInvitation();show($('scene-notice'),false);
+      text($('scene-title'),({goals:'Goals and people',talk:'Street conversation',neighbours:'Neighbouring communities',stores:'Community stores',fishing:'Waterfront',truck:'Co-op truck',work:'Personal work',life:'Character lives',live:'Live weeks'})[id]);
       render(true);tick();changed?.();if(focus)$('scene-title')?.focus({preventScroll:true});return true;
     }
     function openTalk(ref){
       if(!street())return false;
+      pickPeople=[];
       const id=ref?.residentId||ref?.npcId;
       if(id&&id!==actorId()){
         if(talkId!==id){revision++;talkId=id;lastContact='';lastDraw='';replyWith('');}
       }
       return openTool('talk');
+    }
+    function openTalkChoices(refs){
+      const site=sim.active(),choices=new Map();
+      if(!site||!street())return false;
+      for(const ref of refs||[]){
+        const id=ref?.residentId||ref?.npcId;
+        if(id&&id!==actorId()&&present(site,id)&&root.EarthAgency.identity(site,id))choices.set(id,ref);
+      }
+      if(!choices.size)return false;
+      if(choices.size===1||!$('scene-nearby-people'))return openTalk(choices.values().next().value);
+      pickPeople=[...choices.keys()];
+      if(!openTool('talk')){pickPeople=[];return false;}
+      $('scene-nearby-people')?.querySelector('button')?.focus({preventScroll:true});
+      return true;
+    }
+    function drawPicker(){
+      const picker=$('scene-nearby-people');if(!picker)return;
+      host.dataset.pickingNeighbour=pickPeople.length>1?'true':'false';
+      picker.replaceChildren();show(picker,pickPeople.length>1);
+      if(pickPeople.length<=1)return;
+      picker.append(make('h4','Who did you mean?'));
+      for(const id of pickPeople){
+        const p=root.EarthAgency.identity(sim.active(),id);
+        if(!p||!present(sim.active(),id))continue;
+        picker.append(press(personLabel(sim.active(),id,p.name)+' · '+(root.EarthCareers?.role?.(sim.active(),id)||p.role),()=>{
+          pickPeople=[];openTalk(subjectRef(id));
+          if(!contact())walkTo(id,()=>updateContact());
+        },false,'choose-neighbour-'+id));
+      }
     }
     for(const b of openers)b.addEventListener('click',()=>{
       const id=b.dataset.sceneOpen;
@@ -187,16 +270,17 @@
     });
     function residents(){
       const s=sim.active(),people=root.EarthPersonas?.list(s)||s.residents;
-      const key=JSON.stringify(people.map(p=>[p.id,p.name]));
+      const labels=people.map(p=>personLabel(s,p.id,p.name)),key=JSON.stringify(people.map((p,i)=>[p.id,labels[i]]));
       if(key!==listKey){
-        listKey=key;goalField?.replaceChildren(option('','Community'),...people.map(p=>option(p.id,p.name)));
+        listKey=key;goalField?.replaceChildren(option('','Community'),...people.map((p,i)=>option(p.id,labels[i])));
       }
       return people;
     }
     function talkDirectory(people){
-      const possible=people.filter(p=>p.id!==actorId()),key=JSON.stringify(possible.map(p=>[p.id,p.name]));
+      const site=sim.active(),possible=people.filter(p=>p.id!==actorId()&&present(site,p.id)),roles=possible.map(p=>root.EarthCareers?.role?.(site,p.id)||p.role);
+      const labels=possible.map(p=>personLabel(site,p.id,p.name)),key=JSON.stringify(possible.map((p,i)=>[p.id,labels[i],roles[i],visitor(site,p.id)]));
       if(talkField&&talkField.dataset.people!==key){
-        talkField.dataset.people=key;talkField.replaceChildren(...possible.map(p=>option(p.id,p.name)));
+        talkField.dataset.people=key;talkField.replaceChildren(...possible.map((p,i)=>option(p.id,labels[i]+' · '+roles[i]+(visitor(site,p.id)?' · Visiting':''))));
       }
       if(!possible.some(p=>p.id===talkId)){
         const near=street().getState().nearby,id=near?.npcId||near?.residentId;
@@ -205,7 +289,8 @@
       if(talkField)talkField.value=talkId||'';
     }
     talkField?.addEventListener('change',()=>{
-      revision++;talkId=talkField.value;lastDraw='';lastContact='';replyWith('');render(true);tick();changed?.();
+      revision++;pickPeople=[];talkId=talkField.value;lastDraw='';lastContact='';replyWith('');render(true);tick();changed?.();
+      if(talkId&&!contact()&&street()?.getState().mode==='walk')walkTo(talkId,()=>updateContact());
     });
     goalField?.addEventListener('change',()=>{
       revision++;goalId=goalField.value;lastDraw='';
@@ -233,14 +318,16 @@
       if(pane!=='talk'||!talkId||!street())return;
       const local=street(),s=local.getState(),proof=contact(),near=!!proof;
       const key=[talkId,near,s.mode,s.vehicle,!!s.travelling,busy].join('/');
-      if(key===lastContact)return;lastContact=key;
+      if(key===lastContact)return proof;lastContact=key;
+      host.dataset.faceToFace=near?'true':'false';
       if(!near){clearSpeech();delete host.dataset.talkDock;placementKey='';}
-      text($('scene-title'),'Talk with '+name(talkId));
+      text($('scene-title'),pickPeople.length>1?'Choose a neighbour':'Talk with '+name(talkId));
       text($('scene-contact'),near?(proof.mode==='walk'?'Together on foot.':'Travelling together.'):
         s.mode==='boat'?'Out of earshot. Return to shore before meeting.':s.vehicle==='truck'?'Park the co-op truck through dispatch before walking over.':s.travelling?'On the way. Conversation opens when you reach '+name(talkId)+'.':'Out of earshot. Walk over to speak in person.');
       text($('scene-approach'),s.mode==='boat'?'Return to shore':s.vehicle==='truck'?'Open truck controls':'Walk to '+name(talkId));show($('scene-approach'),!near);
       for(const b of talkTopics)b.disabled=!near||busy;
       for(const [b,available] of contactButtons)b.disabled=!available||!near||busy;
+      return proof;
     }
     function liveContext(){
       const person=talkId,local=street(),s=sim.active(),actor=actorId(),scope=revision,view=stageVersion(),week=sim.state.week;
@@ -248,13 +335,20 @@
         (s.foundingRevision||0)===(sim.active()?.foundingRevision||0)&&person===talkId&&actor===actorId()&&view===stageVersion()&&week===sim.state.week;
       return {current,proof:()=>current()?local.meeting(subjectRef(person),true):null,local};
     }
-    async function performTalk(run,speaker){
+    async function performTalk(run,speaker,prompt){
       if(busy||pane!=='talk'||!street())return;
       const ctx=liveContext(),before=sim.state.actionRevision;busy=true;lastContact='';updateContact();
       try{
         const result=await run(ctx);
         if(!ctx.current())return;
-        if(result?.message)replyWith(result.message);
+        if(result?.message){
+          replyWith(result.message,prompt);spokenContact=result.followContact||null;spokenStore=result.followStore===true;
+          drawArrangement(sim.active(),talkId);
+        }
+        if(result?.ok&&result.neighbourHelp){
+          const cue=result.neighbourHelp;
+          ctx.local.showNeighbourHelp?.(cue.actorId,cue.targetId,cue.kind,cue.method);
+        }
         if(result?.changed||before!==sim.state.actionRevision){after?.(result);render();}
         if(speaker&&result?.ok)beginSpeech(speaker,result.message);else clearSpeech();
       }catch{if(ctx.current())replyWith('The conversation could not be saved. Check your place and try again.');}
@@ -315,17 +409,65 @@
         });
       },false,'meet-referral'));
     }
+    function drawArrangement(site,id){
+      const area=$('scene-agreement-route');if(!area)return;
+      const from=actorId();
+      const row=root.EarthDialogue?.arrangements?.(site,sim.state,from)?.find(r=>
+        (r.status==='agreed'||r.status==='asked')&&r.dueWeek>=sim.state.week&&(r.requesterId===id||r.contactId===id));
+      area.replaceChildren();show(area,!!row||!!spokenContact||spokenStore);
+      if(spokenStore)area.append(press('Check the stores and prices',()=>openTool('stores'),false,'conversation-stores'));
+      if(spokenContact&&present(site,spokenContact)){
+        const next=spokenContact;
+        area.append(press('Ask '+name(next)+' about their side',()=>{
+          openTalk(subjectRef(next));walkTo(next,()=>updateContact());
+        },false,'meet-other-perspective'));
+      }
+      if(!row)return;
+      area.append(make('small',row.title+' · '+(row.status==='agreed'?'Due week '+row.dueWeek:'Awaiting terms')+
+        (row.dateDecision==='agreed'?' · Moved from week '+(row.week+2):row.dateDecision==='declined'?' · Original date kept':'')));
+      if(row.nextId!==id&&present(site,row.nextId)){
+        area.append(press('Walk to '+name(row.nextId),()=>{
+          const who=row.nextId,verb=row.status==='asked'?'terms':'recall';
+          openTalk(subjectRef(who));
+          walkTo(who,()=>{
+            updateContact();
+            // Arriving from a named introduction is enough context for the
+            // neighbour to explain their side, just as the two meet on screen.
+            if(busy||!contact()||!sim.converse)return;
+            const ctx=liveContext(),greeting=sim.converse(who,'errand:'+verb+':'+row.id,ctx.proof);
+            if(ctx.current()&&greeting?.ok){
+              replyWith(greeting.message,verb==='terms'?'What has already been promised?':'Where did we leave this?');
+              beginSpeech(who,greeting.message);
+            }
+          });
+        },false,'meet-agreement'));
+      }else if(!present(site,row.nextId))area.append(make('p',name(row.nextId)+' is away from the district.'));
+    }
     function drawTalk(site){
       talkTopics.clear();contactButtons.clear();lastContact='';
       if(!talkId)return;
-      const person=site.residents.find(p=>p.id===talkId),refId=talkId,buttons=$('scene-topics'),actions=$('scene-person-actions');
-      if(!buttons)return;buttons.replaceChildren();actions?.replaceChildren();
+      const foreign=sim.state.communityLife&&root.EarthCommunityLife?.isHome?.(sim.state,site)===false;
+      const person=foreign?null:site.residents.find(p=>p.id===talkId),refId=talkId,buttons=$('scene-topics'),actions=$('scene-person-actions');
+      if(!buttons)return;drawPicker();
+      const formerMore=buttons.querySelector('details')?.open===true;
+      buttons.replaceChildren();actions?.replaceChildren();
       const topics=root.EarthAgency.topics?.(site,sim.state,talkId)||[
         {id:'news',label:'How are things?'},{id:'work',label:'What are you working on?'},{id:'interests',label:'Outside work'},{id:'meal',label:'Share a meal · 1 food'}];
+      const more=make('details'),extra=make('div',null,'scene-topic-list');
+      more.append(make('summary','More to discuss'),extra);more.open=formerMore;
       for(const topic of topics){
-        const b=press(topic.label,()=>performTalk(c=>sim.perform('converse',refId,topic.id,c.proof),refId),false,'topic-'+topic.id);
-        talkTopics.add(b);buttons.append(b);
+        const b=press(topic.label,()=>performTalk(c=>{
+          // Inspecting another life does not need to queue behind a save in a
+          // second tab. Both paths still recheck the real face-to-face meeting.
+          return root.EarthDialogue?.readOnly?.(topic.id)&&sim.converse?sim.converse(refId,topic.id,c.proof):sim.perform('converse',refId,topic.id,c.proof);
+        },refId,topic.label),false,'topic-'+topic.id);
+        talkTopics.add(b);
+        const immediate=topic.context||['news','work','dream','visit-fit'].includes(topic.id)||topic.id.startsWith('intro:meet:');
+        if(topic.context)b.dataset.dialogueContext='true';
+        (immediate?buttons:extra).append(b);
       }
+      if(extra.children.length)buttons.append(more);
+      drawArrangement(site,refId);
       show($('scene-commitments'),!!person);
       if(person&&actions){
         const offers=sim.actions('people').filter(a=>a.residentId===person.id);
@@ -334,14 +476,15 @@
         for(const a of offers)actions.append(actionRow(a,()=>performTalk(c=>sim.perform('act',a.id,undefined,a.group,()=>!!c.proof())),a.group));
         show($('scene-commitments'),offers.length>0);
       }
-      const plans=$('scene-advice-actions'),choices=root.EarthAutonomy?.guidance?.(site,sim.state,refId)?.choices||[];
-      plans?.replaceChildren();show($('scene-plans'),choices.length>0||!!profile);
+      const plans=$('scene-advice-actions'),choices=foreign||visitor(site,refId)?[]:root.EarthAutonomy?.guidance?.(site,sim.state,refId)?.choices||[];
+      plans?.replaceChildren();show($('scene-plans'),!foreign&&!visitor(site,refId)&&(choices.length>0||!!profile));
       for(const choice of choices){
         const r=lifeRequest(site,choice);
         plans?.append(actionRow(choice,()=>performTalk(c=>sim.perform('lifeAction',refId,r,c.proof)),'people'));
       }
       if(profile)plans?.append(press('Explore work, skills and study',()=>profile(refId),false,'open-life'));
       showReferral(site,refId);drawCivicDiscussion(site,refId);
+      if(foreign)show($('scene-civic-dialogue'),false);
       drawDay(site,person);updateContact();
     }
     function civicModel(site){
@@ -418,29 +561,52 @@
       if(site.food<meals)return {label:'Stock '+(meals-site.food)+' food',
         detail:'The pantry holds '+site.food+' food. Current households use '+meals+' in a week. A personal food job can add supplies today.',resource:'food'};
       if(promised)return {label:'Keep '+promised.name+'’s promise',detail:promised.name+' is counting on the agreement by week '+promised.promise.dueWeek+'.',person:promised.id};
+      const lot=root.EarthResources?.expiringPublicLot?.(site,sim.state.week);
+      if(lot)return {label:'Use the '+lot.label,detail:lot.amount+' '+lot.label+' in the public store will spoil at the start of week '+lot.until+'. Open Stores to check what the kitchen can prepare or what the market will buy.'};
       if(civic?.active){
         const p=civic.active;
-        return {label:p.title,detail:site.population+' residents use '+meals+' food per week. The pantry holds '+site.food+' as the community considers its proposal.'};
+        return {label:p.title,detail:[p.leadName&&p.leadName+' is organising '+p.title+'.',p.status||p.benefit].filter(Boolean).join(' ')||
+          'The residents are considering a shared proposal.'};
+      }
+      const job=site.construction?.find(j=>!j.paused);
+      if(job){
+        const progress=Math.round(100*job.work/job.total),verb=job.kind==='dismantle'?'Dismantle ':'Finish ';
+        return {label:verb+job.name,detail:job.name+' is '+progress+'% complete. The crew’s work on site determines when '+(job.kind==='dismantle'?'the plot can be reused.':'the community can start using it.')};
       }
       if(plan){
         const gap=plan.missing?.[0];
         return {label:plan.name,detail:gap?'The '+plan.name.toLowerCase()+' plan needs '+gap.amount+' more '+gap.key+' before work can start.':
           'The community has set aside a plan for '+plan.name.toLowerCase()+'. '+(plan.gate||'Review the lot and crew before commissioning.'),resource:gap?.key};
       }
+      const vacant=Object.keys(site.employers||{}).find(key=>site.employers[key].open.length);
+      const hiring=vacant&&root.EarthEmployers?.view?.(site,sim.state,vacant);
+      if(hiring)return {label:'Recruit a '+hiring.role.toLowerCase(),detail:hiring.detail};
+      if(sim.state.charter&&site.tech?.length<3&&sim.actions&&(!sim.state.communityLife||root.EarthCommunityLife?.isHome?.(sim.state,site))){
+        const research=sim.actions('research').find(r=>r.id.startsWith('research:'));
+        if(research)return {label:research.label,detail:research.available?research.description:research.reason};
+      }
+      if(overview?.charter&&!overview.charter.met)return {label:overview.charter.name,detail:overview.charter.text};
       return {label:'Meals for '+site.population,detail:'Keep '+site.population+' residents fed. They use '+meals+' food per week and the pantry currently holds '+site.food+'.',resource:'food'};
     }
     function updateStrip(site,who){
-      const key=[who,sim.state.week,sim.state.actionRevision||0,site.food,site.materials,site.funds,site.population].join('/');
+      const key=[who,sim.state.week,sim.state.actionRevision||0,site.construction?.[0]?.work||0,site.food,site.materials,site.funds,site.population].join('/');
       if(key===stripKey)return;stripKey=key;
       const town=townNeed(site,civicModel(site)),self=actorId(),plan=root.EarthAutonomy?.view(site,sim.state,self),person=root.EarthPersonas?.profile(site,self);
       const career=site.careers?.[self],aspiring=career?.application?.targetId||career?.training?.targetId;
       const job=aspiring&&root.EarthCareers?.catalog?.find(j=>j.id===aspiring);
       const own=plan?.personalHobby||plan?.ownProject||plan?.project;
-      const aim=job?(career.application?'Apply for ':'Study for ')+job.label:own?.title||
-        (person?.hobbyAxis?'Practise '+person.hobbyAxis:'Choose a personal project');
+      const obligation=root.EarthDialogue?.arrangements?.(site,sim.state,self)?.find(r=>r.status==='agreed'&&r.dueWeek>=sim.state.week);
+      const aim=obligation?obligation.title+' · week '+obligation.dueWeek:plan?.kind==='dream'&&plan.dream?plan.dream.title:job?(career.application?'Apply for ':'Study for ')+job.label:own?.title||
+        (plan?.dream?.title||(person?.hobbyAxis?'Practise '+person.hobbyAxis:'Choose a personal project'));
       text($('scene-goal-summary'),town.label);text($('scene-person-summary'),aim);
       const townButton=$('scene-open-goals'),personButton=$('scene-open-person');
-      if(townButton)townButton.title=town.detail;if(personButton)personButton.title=(person?.name||'Your character')+' · '+aim;
+      const anchor=root.EarthInterdependence?.anchor?.(sim.state,site),original=$('scene-original-return');
+      show(original,!!anchor&&(!anchor.yours||!anchor.atHome));
+      text($('scene-original-status'),anchor?.nearest?'Due week '+anchor.nearest.due:
+        anchor?.dutyWeek&&!anchor.roundCovered?'Pantry · week '+anchor.dutyWeek:anchor?.name||'');
+      if(original&&anchor){original.title=anchor.status;original.setAttribute('aria-label','Original character, '+anchor.name+'. '+anchor.status);}
+      text($('scene-person-label'),anchor&&!anchor.yours&&person?.name?person.name+'’s aim':'My aim');
+      if(townButton)townButton.title=[town.detail,typeof anchor==='string'?anchor:anchor?.status].filter(Boolean).join(' ');if(personButton)personButton.title=(person?.name||'Your character')+' · '+aim;
       text($('scene-store-summary'),site.food+' food · '+site.materials+' materials · '+site.funds+' funds');
     }
     function localProjects(box,site,people,resource){
@@ -497,20 +663,23 @@
       box.append(details);
     }
     function drawGoals(site,people){
+      const foreign=sim.state.communityLife&&root.EarthCommunityLife?.isHome?.(sim.state,site)===false;
       if(goalId&&!people.some(p=>p.id===goalId))goalId='';
       if(goalField)goalField.value=goalId;const box=$('scene-goal-detail');if(!box)return;box.replaceChildren();
       if(!goalId){
         const civic=civicModel(site),need=townNeed(site,civic);
         box.append(info(site.name+' · Week '+sim.state.week,need.detail));
+        root.EarthInterdependence?.appendTown?.(box,{site,world:sim.state,people,select:selectPurpose,openTool,activity:id=>street()?.activityOf?.(id)});
         const routes=make('div',null,'scene-links');
-        if(need.resource)routes.append(press(need.resource==='funds'?'Earn funds':'Supply '+need.resource,()=>personalWork(need.resource),false,'supply-town'));
-        routes.append(press('Open stores',()=>openTool('stores'),false,'open-stores'),press('Personal work',()=>personalWork(),false,'personal-work'));
+        if(!foreign&&need.resource)routes.append(press(need.resource==='funds'?'Earn funds':'Supply '+need.resource,()=>personalWork(need.resource),false,'supply-town'));
+        routes.append(press('Open stores',()=>openTool('stores'),false,'open-stores'));
+        if(!foreign)routes.append(press('Personal work',()=>personalWork(),false,'personal-work'));
         box.append(routes);
-        if(!sim.state.effort)box.append(make('p','Weekly civic effort is spent. Personal work can still bring food, materials or funds into these stores.','scene-muted'));
+        if(!foreign&&!sim.state.effort)box.append(make('p','Weekly civic effort is spent. Personal work can still bring food, materials or funds into these stores.','scene-muted'));
         if(need.person)box.append(press('Meet '+name(need.person),()=>{openTalk(subjectRef(need.person));walkTo(need.person,()=>updateContact());},false,'meet-promise'));
         if(overview?.forecast)box.append(make('p','Regular production · '+overview.forecast,'scene-muted'));
         civicProject(box,civic);
-        if(goal?.label){
+        if(!foreign&&goal?.label){
           box.append(info('Next civic decision',goal.detail||overview?.objective));
           box.append(press(goal.label,()=>followGoal(goal),false,'next-goal'));
         }
@@ -520,7 +689,9 @@
         const forecast=make('details'),summary=make('summary','Preview the next week'),results=make('div',null,'scene-action');
         forecast.id='scene-week-preview';forecast.append(summary,results);
         forecast.addEventListener('toggle',()=>{
-          if(!forecast.open||!forecast.isConnected||!sim.forecastNext)return;
+          if(!forecast.open||!forecast.isConnected)return;
+          if(readForecast){readForecast(results,()=>forecast.open&&forecast.isConnected);return;}
+          if(!sim.forecastNext)return;
           const next=sim.forecastNext();results.replaceChildren();
           for(const town of next.sites){
             const changes=Object.entries(town.delta||{}).filter(([,n])=>n).map(([k,n])=>(n>0?'+':'')+n+' '+k);
@@ -532,7 +703,7 @@
       const p=people.find(p=>p.id===goalId),plan=root.EarthAutonomy?.view(site,sim.state,p.id);
       const career=root.EarthCareers?.view(sim.state,site,p.id),job=root.EarthCareers?.catalog.find(r=>r.id===career?.careerId);
       const project=plan?.project;
-      box.append(info(p.name,career?[career.career,career.employer].join(' · '):p.originRole||p.role));
+      box.append(info(personLabel(site,p.id,p.name),career?[career.career,career.employer].join(' · '):p.originRole||p.role));
       const seen=new Set();
       function freshText(value){
         const parts=String(value||'').match(/[^.!?]+[.!?]*/gu)||[],fresh=[];
@@ -543,13 +714,37 @@
         return fresh.join(' ');
       }
       if(plan)box.append(info(freshText(plan.goal||plan.label),freshText(plan.reason)));
+      root.EarthInterdependence?.appendPerson?.(box,{site,world:sim.state,people,id:p.id,select:selectPurpose});
+      if(plan?.dream){
+        const d=plan.dream;
+        const ambition=info(d.title,[d.progressText,d.next].filter(Boolean).join(' '));
+        function visitResult(card,id,label){
+          if(!['balcony','orchard','ensemble'].includes(id)||!street()?.focusAchievement)return;
+          card.append(press(label,()=>{
+            if(street()?.focusAchievement(p.id,id)){close(false);$('street-canvas')?.focus({preventScroll:true});}
+            else notify('This achievement can’t be seen from the current street.');
+          },false,'see-achievement-'+id));
+        }
+        if(d.earned)visitResult(ambition,d.id,'See in Street');
+        box.append(ambition);
+        const earlier=(d.achievements||[]).filter(w=>w.id!==d.id);
+        if(earlier.length){
+          const log=make('details');log.append(make('summary','Earlier ambitions'));
+          for(const w of earlier){
+            const achievement=info(w.earned,'Week '+w.week+' · '+w.place);
+            if(w.place===site.name)visitResult(achievement,w.id,'See in Street');
+            log.append(achievement);
+          }
+          box.append(log);
+        }
+      }
       const moves=make('div',null,'scene-links');box.append(moves);
       if(plan&&Number.isFinite(plan.energy))box.append(make('p','Energy '+plan.energy+' / 8 · Need for company '+plan.contact+' / 8.','scene-muted'));
       const purse=sim.purseView?.(p.id);
       if(purse){
         const entry=purse.entries?.[0],funds=info('Personal funds · '+purse.balance,entry?'Week '+entry.week+' · '+entry.text:'');
         if(purse.shift?.clerkName)funds.append(make('small','Current paid errand · '+purse.shift.clerkName));
-        if(p.id===actorId())funds.append(press('Personal funds and shifts',()=>{
+        if(!foreign&&p.id===actorId())funds.append(press('Personal funds and shifts',()=>{
           if(openTool('stores'))toolbox.get('stores')?.openPurse?.();
         },false,'own-purse'));
         box.append(funds);
@@ -591,21 +786,33 @@
       if(p.id!==actorId()){
         actions.append(press('Meet '+p.name,()=>{openTalk(subjectRef(p.id));walkTo(p.id,()=>updateContact());},false,'meet'));
         const playable=root.EarthAgency.playables?.(site).some(person=>person.id===p.id)??(p.kind==='resident'||p.kind==='steward');
-        if(playAs&&playable)actions.append(press('Play as '+p.name,()=>playAs(p.id),false,'play-as'));
+        if(!foreign&&playAs&&playable&&!visitor(site,p.id)&&present(site,p.id))actions.append(press('Play as '+p.name,()=>playAs(p.id),false,'play-as'));
         if(street()?.observePerson)actions.append(press('Watch '+p.name,()=>{
           if(!street().observePerson(p.id)){notify('This person is unavailable to watch at the moment.');return;}
           const seen=street().activityOf(p.id);if(seen)setWatch(seen);
           close(false);$('street-canvas').focus({preventScroll:true});
         },false,'watch'));
-      }else{
-        const practice=root.EarthAutonomy?.guidance?.(site,sim.state,p.id)?.choices.find(row=>row.id==='hobbyPractice');
-        if(practice){
+      }else if(!foreign){
+        const personalChoices=root.EarthAutonomy?.guidance?.(site,sim.state,p.id)?.choices||[];
+        for(const practice of personalChoices.filter(row=>row.personal||['hobbyPractice','dreamPractice'].includes(row.id))){
           const proposal=lifeRequest(site,practice),scope=revision,local=street(),trip=stageVersion();
-          actions.append(actionRow(practice,async()=>{
-            const proof=()=>!doc.hidden&&pane==='goals'&&revision===scope&&goalId===p.id&&actorId()===p.id&&street()===local&&stageVersion()===trip?local.getState():null;
-            const result=await sim.perform('lifeAction',p.id,proposal,proof);
-            if(!proof())return;notify(result.message);
-            if(result.ok||result.changed){after?.(result);render();}
+          actions.append(actionRow(practice,()=>{
+            const current=()=>!doc.hidden&&pane==='goals'&&revision===scope&&goalId===p.id&&actorId()===p.id&&
+              street()===local&&stageVersion()===trip&&sim.state.week===proposal.week&&sim.active()?.id===proposal.siteId;
+            const destination=practice.id==='dreamPractice'?(practice.venue||plan?.dream?.venue):null;
+            const proof=()=>!current()?null:destination?local.venueProof?.(destination,p.id):local.getState();
+            const complete=async()=>{
+              if(!current())return;
+              const result=await sim.perform('lifeAction',p.id,proposal,proof);
+              if(!current())return;notify(result.message);
+              if(result.ok||result.changed){after?.(result);render();}
+            };
+            if(destination&&!proof()){
+              if(!local.focusVenue?.(destination,p.id,complete))notify('Walk to the '+destination+' on foot to take up this part of your plan.');
+              else notify('On your way to the '+destination+' for “'+practice.label+'”.');
+              return;
+            }
+            return complete();
           },'hobby'));
         }
         actions.append(press('Find personal work',()=>personalWork(),false,'own-work'));
@@ -632,13 +839,14 @@
     }
     function scene(state){
       if(!state)return;
+      if(!pane)hearNeighbour(state);
       show($('scene-open-fishing'),!!state.waterfront&&toolbox.has('fishing'));
       show($('scene-open-truck'),toolbox.has('truck'));
       if(pane==='talk')updateContact();
       if(pane==='fishing')toolbox.get('fishing')?.onScene?.(state);
       if(pane==='truck')toolbox.get('truck')?.onScene?.(state);
     }
-    const restorable=new Set(['goals','stores','talk','fishing','truck','live']);
+    const restorable=new Set(['goals','stores','talk','fishing','truck','live','neighbours']);
     function snapshot(){
       const site=sim.active();if(!site)return null;
       return {v:1,siteId:site.id,name:site.name,generation:site.foundingRevision||0,actor:actorId(),
@@ -667,7 +875,7 @@
       if(openTool(saved.pane,null,false)&&saved.pane==='stores')toolbox.get('stores')?.restore?.(saved.store);
       return true;
     }
-    return {registerTool,openTool,openTalk,close,render,scene,invalidate,notify,setObjective,setWatch,
+    return {registerTool,openTool,openTalk,openTalkChoices,close,render,scene,invalidate,notify,setObjective,setWatch,
       version:()=>revision,active:()=>pane,selectPurpose,previewWeek,snapshot,restore,matches};
   }
   root.EarthStreetHUD=Object.freeze({mount});

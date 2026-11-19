@@ -15,7 +15,9 @@
     courier:['Foot courier','stamina','communication','remembers which callers will need an extra minute to reach the door','walking routes'],
     trader:['Market trader','numeracy','communication','sets a small sample beside each price card and listens to what customers ask about it','fair pricing'],
     driver:['Co-op delivery driver','organisation','craft','keeps a pencilled route card and leaves space for the return loads that are easy to forget','route planning'],
-    carrier:['Supply porter','stamina','organisation','packs fragile goods on top and leaves a signed receipt at both ends of the run','packing and dispatch']
+    carrier:['Supply porter','stamina','organisation','packs fragile goods on top and leaves a signed receipt at both ends of the run','packing and dispatch'],
+    'practice-nurse':['Practice nurse','care','organisation','arranges follow-up appointments around the hours each household can actually come to the clinic','continuity of care'],
+    surveyor:['Building surveyor','numeracy','craft','measures each doorway twice and asks the people using it where a repair would make the greatest difference','accessible buildings']
   };
   // An outside interest can reveal a very different ability from a person's day job.
   const pastimes=[
@@ -93,6 +95,7 @@
     return items;
   }
   const registries=new WeakMap(),foundings=new Map();
+  const identityKey=(communityId,actorSlot)=>'birth:'+communityId.length+'/'+communityId+actorSlot;
   const cachedFoundings=96;
   const weakBuckets=typeof WeakRef==='function'?Array.from({length:256},()=>new Map()):null;
   let misses=0;
@@ -154,7 +157,7 @@
       const key=['grower','repairer','convenor'][slot]||'steward';
       slots.set(person.id,{id:person.id,name:person.name,key,kind:'resident',ordinal:baseSlots.length+slot,originRole:person.role});
     });
-    return {seed,region,slots,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
+    return {seed,siteId:site.id,region,slots,profiles:new Map(),pastimes:shuffled(pastimes,seed+'interests'),
       musician:'walker-'+(hash(seed+'performer')%5)};
   }
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
@@ -191,6 +194,12 @@
       setRange('organisation',41,60,70,91);
       setRange('music',10,26,55,66);
     }
+    if(key==='practice-nurse'){
+      setRange('care',74,86,88,99);setRange('organisation',56,71,76,93);
+    }
+    if(key==='surveyor'){
+      setRange('numeracy',70,83,86,97);setRange('craft',56,72,78,94);
+    }
     if(id===reg.musician)setRange('music',67,81,87,98);
     for(const axis of axes)Object.freeze(bounds[axis]);
     const strengths=Object.freeze(axes.slice().sort((a,b)=>skills[b]-skills[a]).slice(0,2));
@@ -198,15 +207,27 @@
     const intro=name+' '+custom+'.';
     const description=intro+' '+name+' '+habit+'. Outside work, '+name+' enjoys '+hobbyName+'.';
     const outsideWork=key==='repairer'?'I enjoy '+hobbyName+'. I can work out a gear ratio in my head, but I have to learn a tune one phrase at a time.':saying;
-    return Object.freeze({id,name,kind,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
-      strengths,traits:temperament,aptitudes:Object.freeze(skills),bounds:Object.freeze(bounds),outsideWork});
+    const person={id,name,kind,identityKey:identityKey(reg.siteId,id),birthCommunityId:reg.siteId,role:originRole,originRole,home:reg.region,description,interests,hobbyAxis,
+      strengths,traits:temperament,aptitudes:Object.freeze(skills),bounds:Object.freeze(bounds),outsideWork};
+    if(key==='practice-nurse')person.qualificationIds=Object.freeze(['practice-nurse','nurse']);
+    if(key==='surveyor')person.qualificationIds=Object.freeze(['surveyor']);
+    if(root.EarthDreams)person.ambitionId=root.EarthDreams.preference(person);
+    return Object.freeze(person);
   }
-  function profile(site,id){
+  function birthProfile(site,id){
     const reg=registry(site),slot=reg?.slots.get(id);
     if(!slot)return null;
     let result=reg.profiles.get(id);
     if(!result){result=makeProfile(reg,slot);reg.profiles.set(id,result);}
     return result;
+  }
+  function householdProfile(site,id,key){
+    const reg=registry(site),slot=reg?.slots.get(id);
+    if(slot?.kind!=='carrier'||!['practice-nurse','surveyor'].includes(key))return null;
+    return makeProfile(reg,{...slot,key,kind:'household'});
+  }
+  function profile(site,id){
+    return root.EarthCommunityLife?.profile?.(site,id)||birthProfile(site,id);
   }
   const porterSlots=new Set(baseSlots.filter(slot=>slot[2]==='carrier').map(slot=>slot[0]));
   const isPorterId=id=>porterSlots.has(id);
@@ -220,13 +241,14 @@
         Object.keys(career?.qualifications||{}).length)add(id);
       add(career?.application?.coverId);add(career?.departure?.coverId);
     }
-    for(const [id,life] of Object.entries(site.autonomy?.people||{}))if(life?.history?.length||life?.pastime||life?.advice)add(id);
+    for(const [id,life] of Object.entries(site.autonomy?.people||{}))if(life?.history?.length||life?.pastime||life?.advice||life?.ties?.length||life?.dream||life?.nextDream)add(id);
     for(const [id,project] of Object.entries(projects?.owners||{})){
       if(project?.progress||project?.volunteer||project?.finished)add(id);
       add(project?.partnerId);add(project?.beneficiaryId);add(project?.volunteer?.from);
     }
     for(const result of projects?.completed||[]){add(result?.ownerId);add(result?.partnerId);add(result?.beneficiaryId);}
     for(const id of Object.keys(site.purses?.people||{}))add(id);
+    for(const row of agency?.arrangements?.rows||[]){add(row.actorId);add(row.requesterId);add(row.contactId);}
     for(const visit of agency?.visits||[]){add(visit?.from);add(visit?.to);}
     for(const meal of agency?.meals||[]){add(meal?.from);add(meal?.to);}
     for(const introduction of site.introductions?.rows||[]){add(introduction?.actorId);add(introduction?.guideId);add(introduction?.contactId);}
@@ -248,7 +270,7 @@
   function list(site){
     if(!registry(site))return [];
     const ids=['steward',...(site.residents||[]).map(p=>p.id),...walkerRoles.map((_,i)=>'walker-'+i),'driver',...porterIds(site)];
-    return ids.map(id=>profile(site,id)).filter(Boolean);
+    return ids.filter(id=>root.EarthCommunityLife?.present?.(site,id)!==false).map(id=>profile(site,id)).filter(Boolean);
   }
-  root.EarthPersonas=Object.freeze({axes,traits,profile,list,retainsPorter,porterIds,isPorterId});
+  root.EarthPersonas=Object.freeze({axes,traits,profile,birthProfile,householdProfile,identityKey,list,retainsPorter,porterIds,isPorterId});
 })(typeof window==='undefined'?globalThis:window);

@@ -29,11 +29,21 @@
     const id=actorId(site);return id===founder.id?null:site.residents.find(p=>p.id===id)||identity(site,id);
   };
   const point=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1&&p.x<=25&&p.y>=-1&&p.y<=25;
+  const residentHere=(site,id)=>root.EarthCommunityLife?.present?.(site,id)!==false && root.EarthCommunityLife?.residency?.(site,id)!=='visitor';
   function identity(site,id,activeLinks,present=false){
     if(!site)return null;
     const profile=root.EarthPersonas?.profile(site,id);
     const occupation=root.EarthCareers?.role(site,id);
+    if(root.EarthCommunityLife?.present?.(site,id)===false)return profile?{...profile,id,role:occupation||profile.originRole,available:false}:null;
     if(porter(id)){
+      const guest=root.EarthCommunityLife?.profile?.(site,id);
+      if(guest){
+        const role=occupation||guest.role||guest.originRole||'Community member';
+        const visiting=root.EarthCommunityLife?.residency?.(site,id)==='visitor';
+        return {...guest,id,name:guest.name,role,available:true,
+          work:visiting?'I am visiting from '+guest.home+'. I am finding out how '+role.toLowerCase()+' work fits here.':
+            'My background is in '+(guest.originRole||role).toLowerCase()+' work in '+guest.home+'.'};
+      }
       const [,from,to]=id.split('-').map(Number);
       const link=(activeLinks||links(site)).find(l=>l.from===from&&l.to===to);
       if(!link)return {...profile,id,name:profile?.name||'Supply porter · lots '+(from+1)+' and '+(to+1),role:occupation||profile?.originRole||'Supply porter',
@@ -52,7 +62,11 @@
   function playables(site){
     if(!site)return [];
     const routes=links(site),porters=root.EarthPersonas?.porterIds?.(site,routes)||[...new Set([...(site.agency?.porters||[]),...routes.map(linkId)])];
-    return [founder.id,...site.residents.map(p=>p.id),...walkers,'driver',...porters].map(id=>identity(site,id,routes,true));
+    return [founder.id,...site.residents.map(p=>p.id),...walkers,'driver',...porters].filter(id=>residentHere(site,id)).map(id=>{
+      const person=identity(site,id,routes,true);
+      const displayName=root.EarthCommunityLife?.personLabel?.(site,id,person.name)||person.name;
+      return {...person,displayName};
+    });
   }
   function valid(site,week){
     const a=site.agency;
@@ -78,7 +92,7 @@
   function checkHandoff(site,id,scene){
     if(!site||!scene||scene.siteId!==site.id||scene.actor!==actorId(site))return reject('The character changed. Choose again.');
     if(scene.mode!=='walk'||!point(scene))return reject('Come ashore or step out of the van before changing characters.');
-    if(!canPlay(site,id))return reject('Choose someone from this community.');
+    if(!canPlay(site,id)||!residentHere(site,id))return reject('Choose a current community member. Visitors decide for themselves where to live.');
     if(actorId(site)===id)return {ok:true,message:'Already playing as '+identity(site,id).name+'.',unchanged:true};
     if(streetActor(id)){
       const incoming=scene.targetPose;
@@ -140,7 +154,10 @@
     if(!target||target.available===false||targetId===speaker.id)return reject('Find another person nearby.');
     if(topic!=='meal'&&root.EarthDialogue){
       const answer=root.EarthDialogue.describe(site,world,target,speaker,topic,meeting);
-      if(answer)return answer;
+      if(answer){
+        if(answer.ok&&answer.changed&&topic==='listen')root.EarthAutonomy?.remember?.(site,week,speaker.id,target.id,'listen');
+        return answer;
+      }
     }
     const resident=site.residents.find(r=>r.id===targetId);
     const received=site.agency?.meals?.find(m=>m.to===targetId&&m.week===week);
@@ -182,6 +199,7 @@
       if(resident)resident.bond=Math.min(10,resident.bond+1);
       state.meals=state.meals.filter(m=>m.week===week);
       state.meals.push({from:speaker.id,to:target.id,week});
+      root.EarthAutonomy?.remember?.(site,week,speaker.id,target.id,'meal');
       return {ok:true,changed:true,message:speaker.name+' shared food with '+target.name+'. The pantry used 1 food. '+target.name+' will remember your visit this week.'};
     }else return reject('Choose a conversation topic.');
     return {ok:true,message:prefix+'“'+words+'”'};

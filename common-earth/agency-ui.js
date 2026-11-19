@@ -9,9 +9,9 @@
     function update(){
       const site=sim.active();
       if(!site)return;
-      const people=agency.playables?.(site)||[agency.identity(site,'steward'),...site.residents],key=JSON.stringify(people.map(p=>[p.id,p.name]));
+      const people=agency.playables?.(site)||[agency.identity(site,'steward'),...site.residents],key=JSON.stringify(people.map(p=>[p.id,p.displayName||p.name]));
       if(siteKey!==key){
-        dismissReview();actorSelect.replaceChildren(...people.map(p=>option(p.id,p.name)));
+        dismissReview();actorSelect.replaceChildren(...people.map(p=>option(p.id,p.displayName||p.name)));
         siteKey=key;
       }
       const id=agency.actorId(site),worker=site.residents.find(p=>p.id===id);
