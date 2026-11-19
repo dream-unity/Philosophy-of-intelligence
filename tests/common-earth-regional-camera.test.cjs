@@ -427,3 +427,19 @@ test('each starting town has three walkable venue doors and residents physically
   }
   sim.destroy();
 });
+
+test('each land and floating base lies on its town frontage with a gate reachable from the original street',()=>{
+  for(const water of [false,true]){
+    const {sim,world,home,streetAt,paint,runtime}=fixture(water);
+    for(const town of [home,...world.communityLife.outposts]){
+      const geo=runtime.EarthRegionalWorld.geography(world,town),pin=geo.towns.find(t=>t.site.id===town.id);
+      const pt=runtime.EarthRegionalRender.regionalPoint(pin,27,12);
+      assert.equal(runtime.EarthRegionalWorld.streetFootprint(geo,pt.x,pt.y)?.site.id,town.id);
+      const scene=streetAt(town);let arrived=false;
+      assert.ok(scene.focusVenue('militaryBase','steward',()=>{arrived=true;}));
+      for(let i=0;i<1400&&!arrived;i++)paint();
+      assert.ok(arrived,town.name+' east gate');assert.ok(scene.venueProof('militaryBase','steward'));scene.destroy();
+    }
+    sim.destroy();
+  }
+});

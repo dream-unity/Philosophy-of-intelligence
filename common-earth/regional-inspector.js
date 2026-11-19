@@ -120,6 +120,7 @@
         line(event.activity);
         const owner=event.ownerId||(event.ownerKey&&root.EarthPersonas?.list(view).find(p=>(p.identityKey||p.id)===event.ownerKey)?.id);
         const localAction=(label,kind)=>action(label,()=>{clear();buildingAction(kind,event,owner);});
+        if(event.use==='militaryBase')action('Open military base',()=>{clear();buildingAction('militaryBase',{...event,siteId:view.id});});
         if(event.use==='leisure')action('Explore '+event.assetName,()=>{clear();buildingAction('leisure',{...event,siteId:view.id});});
         if(view.id===local.id){
           if(owner&&owner!==root.EarthAgency?.actorId(view)&&root.EarthCommunityLife?.present(view,owner)!==false)

@@ -301,6 +301,7 @@
   function validSite(site,world,ids){
     if(!recordLike(site) || !shortName(site.id) || !shortName(site.name) || !geoPoint(site) || typeof site.water!=='boolean')return false;
     if(site.foundingRevision!=null && !integer(site.foundingRevision,1))return false;
+    if(root.EarthMilitaryBase&&!root.EarthMilitaryBase.valid(site.militaryBase))return false;
     if(root.EarthNightlife&&!root.EarthNightlife.valid(site.nightlife))return false;
     if(site.birthCoordinate!=null&&!geoPoint(site.birthCoordinate))return false;
     if(root.EarthPractice&&!root.EarthPractice.valid(site,world.week))return false;
@@ -844,6 +845,7 @@
       const site=world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id);
       if(!site||generation!=null&&generation!==(site.foundingRevision||0)||!['restart','delete'].includes(action))return reject('This community has changed. Open its controls again.');
       const next=structuredClone(world);
+      root.EarthMilitaryBase?.detach(next,id);
       next.routes=next.routes.filter(route=>route.from!==id && route.to!==id);
       next.journal=next.journal.filter(entry=>entry.siteId!==id);
       next.lastWeekReview=null;
@@ -2470,6 +2472,10 @@
         if(!site||!root.EarthDistrictGrowth)return reject('Choose a community first.');
         const result=root.EarthDistrictGrowth.setPaidOrders(world,site,request);
         return result.ok&&!result.unchanged?complete(result.message,site):result;
+      }),
+      baseOrder:guarded(request=>{
+        const result=root.EarthMilitaryBase?.command(world,request);
+        return result?.ok?complete(result.message,root.EarthCommunityLife.lookup(world,request.site)):result||reject('The military base is unavailable.');
       }),
       diplomacy:guarded(request=>{
         const result=root.EarthBorderConflict?.diplomacy(world,request);

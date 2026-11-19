@@ -378,6 +378,7 @@
     const lightRig=window.EarthTownLight;
     let evening=false, streetLights=[],eveningCycle=null;
     const venues=window.EarthNightlife?.venues||[];
+    let baseSceneKey='',baseVisitors=[];
     const fingers=new Map(),pressed=new Set();
     let works=new Map(),workLots=new Map(),crew=new Map(),watchedJob=null,priorCrewView=null;
     const roadEdges=new Uint16Array(GRID_SIZE),truckEdges=new Uint16Array(GRID_SIZE),footEdges=new Uint16Array(GRID_SIZE);
@@ -2758,6 +2759,7 @@
     }
     const visitVenues=new Set(['bench','home','garden','workshop','market','hall','dock','pier']);
     function venuePoint(venue,id){
+      if(venue==='militaryBase'&&state.site&&window.EarthMilitaryBase)return window.EarthMilitaryBase.gate;
       const publicVenue=window.EarthNightlife?.find(venue);
       if(publicVenue&&state.site)return {x:publicVenue.x,y:publicVenue.y+2.52,label:publicVenue.name};
       if(!state.site||!visitVenues.has(venue)||window.EarthCommunityLife?.present(state.site,id)===false)return null;
@@ -3767,11 +3769,12 @@
         if(order<depth)return;
         const [x,y]=screen(pos.x,pos.y),size=unit*scale,dx=sx-x,dy=sy-y;
         if(Math.abs(dx)>size*4||dy< -size*6||dy>size*1.8)return;
-        const inside=window.EarthNightlife?.find(art)?undefined:window.EarthTownProjects?.contains(site,art,dx,dy,size)??
+        const inside=art==='militaryBase'?Math.abs(dx)/size<3.6&&dy/size> -3.1&&dy/size<2-Math.abs(dx)/size*.48:window.EarthNightlife?.find(art)?undefined:window.EarthTownProjects?.contains(site,art,dx,dy,size)??
           window.EarthTownArchitecture?.contains(site,art,index,dx,dy,size);
         const fallback=Math.abs(dx)/size<1.8&&dy/size> -2.2&&dy/size<1-Math.abs(dx)/size*.45;
         if(inside??fallback){depth=order;front=()=>({...describe(),objectX:pos.x,objectY:pos.y});}
       }
+      if(window.EarthMilitaryBase)test(window.EarthMilitaryBase.place,'militaryBase',0,1,.35,()=>({assetId:'militaryBase',use:'militaryBase',assetName:site.name+' military base',activity:'Troops, research and expeditions at the east gate.'}));
       for(const v of venues)test(v,v.id,0,1,.35,()=>({assetId:'leisure-'+v.id,venue:v.id,use:'leisure',assetName:v.sign+' · '+v.name,activity:v.detail}));
       test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Town Centre and market exchange',use:'market',
         activity:'Collect parcels, bring finished work for payment, or visit the Town Centre here.'}));
@@ -4327,6 +4330,29 @@
         if(fort>=3)addItem(12,.35,13,()=>{box(9.9,.25,4.62,.42,1.62,.25,'#bb9a68','#8d704e','#735d45');for(const x of [10.35,13.7])box(x,.33,.4,.18,0,1.6,'#aa8759','#846642','#694e35');});
       }
       const blockDepth=p=>p.x+p.y+.35;
+      if(window.EarthMilitaryBase){
+        const p=window.EarthMilitaryBase.place;
+        addItem(p.x,p.y,blockDepth(p),()=>{
+          const [x,y]=screen(p.x,p.y);
+          window.EarthBaseArt?.draw(ctx,x,y,unit,evening,state.site.water);
+          const world=options.getWorld?.();
+          if(world){
+            const stamp=[state.site.id,world.actionRevision,world.regionalWorld?.step,state.site.foundingRevision].join('/');
+            if(stamp!==baseSceneKey){
+              baseSceneKey=stamp;
+              baseVisitors=window.EarthMilitaryBase.incoming(world,state.site.id).filter(g=>g.mission.phase==='engaged'||g.mission.phase==='stationed').slice(0,3)
+                .map(g=>({kind:g.site.militaryBase.units.find(u=>g.mission.ids.includes(u.id))?.type,engaged:g.mission.phase==='engaged'}));
+            }
+            for(const [i,v] of baseVisitors.entries()){
+              const pulse=v.engaged&&!reduced?Math.sin(visualTime*2.7)*.16:0;
+              const [sx,sy]=screen(p.x-2.05+pulse,p.y-.65+i*.65,.09);
+              if(v.engaged)ellipse(sx,sy,unit*.44,unit*.19,'#dca45d55','#eac286',1);
+              window.EarthBaseArt?.marker(ctx,sx,sy,unit*.65,v.kind);
+            }
+          }
+          window.EarthBaseArt?.inventory(ctx,x,y,unit,window.EarthMilitaryBase.parked(state.site));
+        },buildingBounds);
+      }
       for(const v of venues)addItem(v.x,v.y,blockDepth(v),()=>{
         const [x,y]=screen(v.x,v.y);
         window.EarthNightlifeArt?.draw(ctx,v.id,x,y,unit,evening);

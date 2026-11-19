@@ -1,7 +1,7 @@
 /* Each Town Centre displays its own treasury and membership decisions. */
 (function(root){
   'use strict';
-  function mount(host,sim,onResult){
+  function mount(host,sim,onResult,openBase){
     const domain=root.EarthTownCentre;if(!host||!domain)return null;
     const doc=host.ownerDocument;
     const element=(tag,text)=>{const n=doc.createElement(tag);if(text!=null)n.textContent=text;return n;};
@@ -200,6 +200,7 @@
     appFold.addEventListener('toggle',()=>{if(appFold.open)applicantList(sim.state,current());});
     host.addEventListener('toggle',()=>refresh(true));
     place.addEventListener('change',()=>{selected=place.value;status.textContent='';criteria={};renderRanges();refresh(true);});
+    if(openBase)body.insertBefore(button('Open military base',()=>openBase(selected)),summary);
     function open(siteId){
       const next=siteId||sim.active()?.id||'';
       if(next!==selected){criteria={};status.textContent='';renderRanges();}

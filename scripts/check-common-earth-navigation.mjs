@@ -136,7 +136,17 @@ function seedWorld(){
       click(found(dialog,'Negotiate peace'));await until(()=>found(dialog,'Accept ceasefire terms'),'No terms offered');
       click(found(dialog,'Accept ceasefire terms'));await until(()=>found(dialog,'Declare war'),'Peace did not take effect');
       if(window.EarthBorderConflict.relation(sim.state,home.id,rival.id)?.state!=='peace')throw Error('Treaty missing from world');
-      result.dataset.layout='pass';result.textContent='World clock, all three venues, six stations, community restart, deletion and diplomacy verified.';
+      click(found(dialog,'Open military base'));
+      const base=get('military-base'),towns=base.querySelector('select');
+      if(towns.options.length!==sim.state.sites.length+sim.state.communityLife.outposts.length)throw Error('Town base is missing');
+      click(found(base,'Enlist guard'));
+      await until(()=>sim.active().militaryBase?.units.some(u=>u.type==='guard'),'Recruit did not spawn at the base');
+      click(found(base,'Operations'));
+      const guard=base.querySelector('fieldset input');click(guard);
+      const target=base.querySelector('[aria-label="Mission destination"]'),otherName=target.selectedOptions[0].textContent;
+      click(found(base,'Attack '+otherName));
+      await until(()=>sim.active().militaryBase?.missions[0]?.target===target.value,'Base deployment did not launch');
+      result.dataset.layout='pass';result.textContent='World clock, venues, community management, diplomacy, base recruitment and deployment verified.';
     }catch(error){result.dataset.layout='fail';result.textContent=String(error.stack||error);}
   });
 }

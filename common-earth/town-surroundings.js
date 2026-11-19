@@ -258,8 +258,9 @@
         const tile=i%4===0 ? (hot?'lath':'nursery') : i%5===0 ? 'barn' : cottage;
         features.push({x,y,size:.76+jitter(seed,i+92)*.17,tile,flip:false});
       }
-      allotment(g,project,unit,10.5,26.4,seed); allotment(g,project,unit,26.5,12.8,seed+44);
-      for (const [a,b] of [[[-1.65,1.1],[-1.65,9.7]],[[-1.74,14.1],[-1.74,23.1]],[[2.1,25.60],[8.7,25.60]],[[14.3,25.61],[22.6,25.61]],[[25.65,8.0],[25.65,14.5]]]) fence(g, project, unit, a, b, '#8a8c6f');
+      allotment(g,project,unit,10.5,26.4,seed); if(!window.EarthMilitaryBase)allotment(g,project,unit,26.5,12.8,seed+44);
+      const eastFence=window.EarthMilitaryBase?[[[25.65,8],[25.65,10.9]],[[25.65,13.1],[25.65,14.5]]]:[[[25.65,8],[25.65,14.5]]];
+      for (const [a,b] of [[[-1.65,1.1],[-1.65,9.7]],[[-1.74,14.1],[-1.74,23.1]],[[2.1,25.60],[8.7,25.60]],[[14.3,25.61],[22.6,25.61]],...eastFence]) fence(g, project, unit, a, b, '#8a8c6f');
     }
     if (plant) {
       const homes=features.slice();
@@ -279,6 +280,7 @@
     }
     features.sort((a,b) => a.x+a.y-b.x-b.y);
     for(const f of features) {
+      if(window.EarthMilitaryBase&&Math.abs(f.x-27)<3.3&&Math.abs(f.y-12)<3.5)continue;
       if(f.tree) {
         contact(g,project,unit,f.x+.36*f.size,f.y+.13*f.size,f.size*1.32,-.47,.21);
         g.save();g.translate(0,.48*unit);plant(f.x,f.y,f.size,f.variant,f.palm);g.restore();
