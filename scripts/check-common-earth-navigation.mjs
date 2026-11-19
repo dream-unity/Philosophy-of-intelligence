@@ -100,10 +100,13 @@ import {copyFileSync,existsSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 
 async function timeStreet(){
-  const clean=mkdtempSync(join(tmpdir(),'common-earth-fps-')),before=join(clean,'before'),build=process.cwd();
+  const clean=mkdtempSync(join(tmpdir(),'common-earth-fps-')),before=join(clean,'before'),build=join(clean,'after');
   const older='c5415258fbf23c4ca817012d84aba8a079fb28e9';
   execFileSync('git',['fetch','--depth=1','origin',older],{stdio:'ignore'});
   execFileSync('git',['worktree','add','--detach',before,older],{stdio:'ignore'});
+  const target='39fe6fd9d447f4075b5b54e564ae96d6d0de362a';
+  execFileSync('git',['fetch','--depth=1','origin',target],{stdio:'ignore'});
+  execFileSync('git',['worktree','add','--detach',build,target],{stdio:'ignore'});
   copyFileSync(join(build,'common-earth/tablet-benchmark.html'),join(before,'common-earth/tablet-benchmark.html'));
   const types={html:'text/html',js:'text/javascript',webp:'image/webp',png:'image/png',jpg:'image/jpeg',svg:'image/svg+xml',css:'text/css',json:'application/json'};
   const server=createServer((req,res)=>{
@@ -127,10 +130,12 @@ async function timeStreet(){
     ws.onmessage=e=>{const m=JSON.parse(e.data),p=pending.get(m.id);if(p){pending.delete(m.id);if(m.error)p.reject(Error(m.error.message));else p.resolve(m.result);}};
     const send=(method,params={})=>new Promise((resolve,reject)=>{pending.set(++id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
     const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.text);return r.result.value;};
-    await send('Emulation.setCPUThrottlingRate',{rate:4});
-    await send('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:2,mobile:true});
-    await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
-    for(const version of ['before','current','current']){
+    for(const [profile,version] of [['desktop','before'],['desktop','current'],['tablet','before'],['tablet','current'],['tablet','current']]){
+      if(profile==='tablet'){
+        await send('Emulation.setCPUThrottlingRate',{rate:4});
+        await send('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:2,mobile:true});
+        await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
+      }
       await send('Page.navigate',{url:'http://127.0.0.1:'+server.address().port+'/'+version+'/tablet-benchmark.html'});
       let ready=false;
       for(let i=0;i<100&&!ready;i++){await delay(100);ready=await evaluate("document.querySelector('#status')?.textContent==='Ready.'");}
@@ -139,7 +144,7 @@ async function timeStreet(){
       let report='';
       for(let i=0;i<240&&!report;i++){await delay(250);report=await evaluate("document.querySelector('#report')?.innerText");}
       if(!report)throw Error(await evaluate("document.querySelector('#status').textContent"));
-      console.log('Independent clean Chrome '+version+' '+report.replaceAll('\n',' | '));
+      console.log('Layered clean Chrome '+profile+' '+version+' '+report.replaceAll('\n',' | '));
     }
   }finally{ws?.close();chrome.kill();server.close();execFileSync('git',['worktree','remove','--force',before],{stdio:'ignore'});}
 }
