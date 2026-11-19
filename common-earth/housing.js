@@ -395,9 +395,12 @@
       difficulty.strain=help?Math.max(0,difficulty.strain-1):Math.min(20,difficulty.strain+1);
       difficulty.withoutMeals=!help&&site.food===0&&funds(site,row.id)===0?Math.min(20,(difficulty.withoutMeals||0)+1):0;
       const extended=difficulty.strain>=12&&difficulty.weeks>=16;
-      const ties=site.autonomy?.people?.[row.id]?.ties||[];
       const personalCrisis=!help&&extended&&difficulty.strain>=18&&site.wellbeing<=20&&site.trust<25&&
-        !ties.some(t=>t.strength>0)&&profile(site,row.id)?.traits.patience<38;
+        profile(site,row.id)?.traits.patience<38&&
+        // A sponsor's first introduction remains a memory. Ongoing support
+        // requires a present person with a sustained bond or recent contact.
+        !root.EarthRelationships.contacts(site,row.id,world.week).some(t=>
+          t.here&&t.strength>0&&(t.strength>=2||world.week-t.week<=2));
       const unsupported=difficulty.crisis!=null&&world.week-difficulty.crisis>=6&&difficulty.strain>=14;
       if((unsupported||extended&&(difficulty.withoutMeals>=8||personalCrisis))&&
         root.EarthCommunityLife.closeLife(world,site,row.id)){

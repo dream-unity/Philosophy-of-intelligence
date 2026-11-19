@@ -191,6 +191,9 @@
     const add=root.EarthDistrictOrders.record;
     add(rows,p.name,name,'funds',price,p.id,id,'Retail payment');
     add(rows,name,p.name,item.name,1,owner.id,id,'Shop purchase');
+    if(s.shopDebt>0&&site.funds<Number.MAX_SAFE_INTEGER&&root.EarthPurses.productionReceipt(world,site,owner.id,-1,name+' repaid one fund of the shop deed from a completed sale.')){
+      site.funds++;s.shopDebt--;add(rows,name,root.EarthDistrictOrders.publicAccount,'funds',1,owner.id,id,'Commercial deed repayment');
+    }
     if((s.businessFunds||0)<6&&root.EarthPurses.productionReceipt(world,site,owner.id,-1,name+' retained one fund of sale proceeds for the next shop shift.')){
       s.businessFunds=(s.businessFunds||0)+1;
       add(rows,name,name+'’s shop','funds',1,owner.id,id,'Reinvested retail proceeds');
@@ -364,17 +367,26 @@
       const wish=root.EarthAutonomy?.intent?.(site,p.id)?.goal||'';
       const commercial=(p.traits.initiative>=52||cash>=12||/business|market|shop/i.test(wish))&&!h.shop;
       let lot=null;
-      if(commercial&&cash>=7)for(let j=0;j<permits;j++){const candidate=(h.plot+j)%permits;if(!usedLots.has(candidate)){lot=candidate;break;}}
+      // A town with no trading frontage can extend part of the deed price to
+      // its first shopkeeper. The resident supplies equity and the labour.
+      const advance=commercial&&!usedLots.size&&cash>=4&&cash<7&&site.trust>=50&&site.funds-floor.funds>=7-cash?7-cash:0;
+      if(commercial&&cash+advance>=7)for(let j=0;j<permits;j++){const candidate=(h.plot+j)%permits;if(!usedLots.has(candidate)){lot=candidate;break;}}
       const reserves=site.materials-floor.materials-(g.roads<g.households.length&&!g.road?3:0);
       const fromHome=Math.min(2,h.supplies||0),fromStore=2-fromHome;
       const improvement=lot!==null||h.home<3&&cash>=5;
-      if(improvement&&reserves>=fromStore&&(g.round+h.plot)%3===0){
+      if(improvement&&reserves>=fromStore){
         const shop=lot!==null?(p.hobbyAxis==='music'?'flute':trades[work].item):null,price=(shop?3:1)+fromStore;
         const extension=p.hobbyAxis==='music'?'Music room':work==='food'?'Kitchen garden':work==='repair'?'Home workshop':'Courtyard studio';
         const id='property-'+g.round+'-'+h.plot;
-        const why=p.name+' paid '+price+' to the district and reserved 2 materials for '+(shop?'a commercial lot':'their '+extension.toLowerCase())+'.';
-        if(credit(p,-price,why)){
-          site.materials-=fromStore;h.supplies=(h.supplies||0)-fromHome;site.funds+=price;
+        const financed=shop?Math.min(advance,price-1):0;
+        const why=p.name+' paid '+(price-financed)+' personal funds and reserved 2 materials for '+(shop?'a commercial lot':'their '+extension.toLowerCase())+'.'+
+          (financed?' The council financed the remaining '+financed+' funds, repayable from sales.':'');
+        if(credit(p,financed-price,why)){
+          if(financed){
+            h.shopDebt=financed;
+            add(transfers,jobs.publicAccount,p.name,'funds',financed,p.id,id,'Council financed part of the first commercial deed');
+          }
+          site.materials-=fromStore;h.supplies=(h.supplies||0)-fromHome;site.funds+=price-financed;
           add(transfers,p.name,jobs.publicAccount,'funds',price,p.id,id,shop?'Commercial deed and building materials':'Home improvement and materials');
           publicMove('Property worksite','materials',fromStore,p,id,'Reserved at the building site');
           add(transfers,p.name,'Property worksite','materials',fromHome,p.id,id,'Owner supplied building materials');
@@ -524,7 +536,7 @@
       (road.ids==null?road.at!=null||road.origins!=null:!Array.isArray(road.ids)||road.ids.length!==2||new Set(road.ids).size!==2||!road.ids.every(text)||!nat(road.at)||!origins(road.origins,road.ids))))return false;
     return g.households.every((h,i)=>{
       if(!h||h.takePaidOrders!==undefined&&typeof h.takePaidOrders!=='boolean'||!root.EarthDistrictOrders.validOrder(h.order,h)||!h.owner||typeof h.owner!=='string'||owners.has(h.owner)||typeof h.name!=='string'||h.plot!==i||
-        ![1,2,3].includes(h.home)||![h.trained,h.pantry,h.supplies,h.roadLot,h.marketLot,h.hires,h.businessFunds,h.saleSerial,h.restockedRound].every(n=>n==null||nat(n))||
+        ![1,2,3].includes(h.home)||h.shopDebt!=null&&(!nat(h.shopDebt)||h.shopDebt>3)||![h.trained,h.pantry,h.supplies,h.roadLot,h.marketLot,h.hires,h.businessFunds,h.saleSerial,h.restockedRound].every(n=>n==null||nat(n))||
         h.activity!=null&&!['home','commitment','food','repair','exchange','road','shop','purchase'].includes(h.activity)||!nat(h.points)||!nat(h.stock)||h.stock>3||typeof h.last!=='string'||
         (h.shop?!Object.hasOwn(root.EarthResidentShops.products,h.shop)||!nat(h.businessPlot)||lots.has(h.businessPlot):h.businessPlot!==null))return false;
       if((h.shopInputs&&!Object.entries(h.shopInputs).every(([id,n])=>h.shop&&root.EarthResidentShops.products[h.shop].inputs.includes(id)&&nat(n)))||
