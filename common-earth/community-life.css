@@ -13,7 +13,7 @@
 @media(prefers-reduced-motion:reduce){.district-track span{animation:none;left:45%}}
 #district-membership-hint{align-self:flex-start;max-width:90%;padding:.32rem .65rem;border:1px solid #687969;border-radius:.35rem;background:#f3f4e8;color:#293c34;pointer-events:auto;font-weight:650}
 body[data-visiting-district] #character-lives,body[data-visiting-district] #personal-work,body[data-visiting-district] #city-panel .city-commission,body[data-visiting-district] #city-panel .city-manage-crew{display:none}
-.district-crossing{position:absolute;inset:0;z-index:8;display:grid;grid-template-rows:auto minmax(105px,1fr) auto;background:#50685b;color:#f6f4df;overflow:hidden;font-family:var(--sans,system-ui,sans-serif)}
+.district-crossing{position:absolute;inset:0;z-index:8;display:grid;grid-template-rows:auto minmax(105px,1fr) auto;background:#50685b;color:#f6f4df;overflow:auto;font-family:var(--sans,system-ui,sans-serif)}
 .district-crossing[hidden]{display:none}
 .trail-heading,.trail-control{background:#1c3533f5;padding:.6rem .8rem}
 .trail-heading{display:flex;justify-content:space-between;align-items:center;gap:.6rem}
@@ -30,6 +30,8 @@ body[data-visiting-district] #character-lives,body[data-visiting-district] #pers
 .trail-buttons button{min-height:36px;padding:.35rem .61rem;border:1px solid #98aa98;border-radius:.33rem;background:#e7ead9;color:#203d36;font:650 .81rem/1.12 var(--sans,system-ui,sans-serif)}
 .trail-buttons button:last-child{background:transparent;color:#eff1df}
 @container street (max-width:430px){.trail-control,.trail-heading{padding:.38rem .5rem}.trail-buttons button{min-height:32px;max-width:49%;font-size:.76rem}.trail-pin{font-size:.68rem}.trail-note{font-size:.79rem}}
+
+@media (any-pointer:coarse){.trail-buttons button{min-height:44px}}
 
 body[data-district-crossing] :is(#street-controls,#street-actors,#actions-panel,#street-hud,#calendar-personal-work,#advance-week){display:none!important}
 

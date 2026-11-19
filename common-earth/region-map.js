@@ -10,7 +10,7 @@
     const bound=(v,a,b)=>Math.max(a,Math.min(b,v)),previews=new Map(),cache=new WeakMap(),fingers=new Map();
     let geo=null,towns=[],base=null,camera={x:0,y:0},zoom=1,miniView,mainView,drag=null,pinch=null,
       fit=true,menuKey='',overlayId='',lastScene=null,animation=0,queued=0;
-    let visible=true;
+    let stageVisible=true,miniVisible=true,opener=null;
     const street=()=>getScene?.();
     function point(event,canvas){const r=canvas.getBoundingClientRect();return {x:event.clientX-r.left,y:event.clientY-r.top};}
     function refresh(){
@@ -51,34 +51,49 @@
     }
     function draw(canvas,miniature){
       const view=project(canvas,miniature);if(!view)return null;
-      const ratio=Math.min(root.devicePixelRatio||1,miniature?1.5:2);
+      const ratio=Math.min(root.devicePixelRatio||1,miniature?1.5:2,Math.sqrt(2200000/(view.w*view.h)));
       const pixW=Math.max(1,Math.round(view.w*ratio)),pixH=Math.max(1,Math.round(view.h*ratio));
       if(canvas.width!==pixW||canvas.height!==pixH){canvas.width=pixW;canvas.height=pixH;}
       const w=sim.state,g=canvas.getContext('2d');
       // Keep the map's terrain, plots and rights warm when only its camera
       // footprint or a person moving along a route needs to change.
-      const key=[w.week,w.productionSerial,w.actionRevision,w.workRevision,w.regionalWorld?.step,w.regionalWorld?.regions[geo.origin.id]?.mapRevision,menuKey,overlayId,pixW,pixH,view.x,view.y,view.sx,
+      const key=[w.week,w.productionSerial,w.actionRevision,w.workRevision,w.regionalWorld?.step,w.regionalWorld?.regions[geo.origin.id]?.mapRevision,menuKey,overlayId,pixW,pixH,ratio,view.sx,view.sy,
         ...towns.map(t=>[t.site.growth?.points,t.site.buildings?.length,t.site.population].join(','))].join('/');
-      let staticMap=cache.get(canvas);
-      const changed=!staticMap||staticMap.key!==key||staticMap.world!==w||staticMap.geo!==geo;
-      if(changed||staticMap.finish){
-        const tile=staticMap?.tile||document.createElement('canvas');
-        if(tile.width!==pixW||tile.height!==pixH){tile.width=pixW;tile.height=pixH;}
-        const ground=tile.getContext('2d');
-        ground.setTransform(ratio,0,0,ratio,0,0);
-        staticMap?.refinement?.cancel();
-        const layer={tile,key,world:w,geo};
-        if(changed)layer.refinement=paint.tileRefinement?.(
-          ()=>cache.get(canvas)===layer&&visible&&!document.hidden&&(miniature||!panel.hidden&&grid.hidden),
+      // Crop short pans from a slightly larger raster. Travellers and the
+      // street camera footprint still use the exact current projection.
+      const padX=miniature?0:Math.ceil(Math.min(view.w*.14,85)*ratio);
+      const padY=miniature?0:Math.ceil(Math.min(view.h*.14,60)*ratio);
+      let layer=cache.get(canvas);
+      let left=layer?padX+(view.x-layer.area.x)*view.sx*ratio:0;
+      let top=layer?padY+(layer.area.y-view.y)*view.sy*ratio:0;
+      const changed=!layer||layer.key!==key||layer.world!==w||layer.geo!==geo||
+        left<0||left>2*padX||top<0||top>2*padY;
+      if(changed){
+        layer?.refinement?.cancel();
+        const tile=layer?.tile||document.createElement('canvas');
+        const tw=pixW+2*padX,th=pixH+2*padY;
+        if(tile.width!==tw)tile.width=tw;
+        if(tile.height!==th)tile.height=th;
+        const area=paint.viewport(view.x,view.y,view.w+2*padX/ratio,view.h+2*padY/ratio,view.sx,view.sy);
+        layer={tile,key,world:w,geo,area};
+        cache.set(canvas,layer);left=padX;top=padY;
+        layer.refinement=paint.tileRefinement?.(
+          ()=>cache.get(canvas)===layer&&!document.hidden&&(miniature?miniVisible&&panel.hidden:stageVisible&&!panel.hidden&&grid.hidden),
           ()=>{layer.finish=true;nextPaint();}
         );
-        paint.soil(ground,geo,view,false,null,layer.refinement?.add);paint.routeLayer(ground,w,base,view,miniature);
-        paint.useLayer(ground,w,base,view,miniature);paint.explored(ground,geo,w,base,view,overlayId);
-        for(const t of towns)if(paint.inView(view,t.x,t.y,.8))paint.townPlan(ground,t,view,miniature);
-        staticMap=layer;cache.set(canvas,layer);
       }
-      staticMap.refinement?.wake();
-      g.setTransform(1,0,0,1,0,0);g.drawImage(staticMap.tile,0,0);
+      if(changed||layer.finish){
+        const {tile,area}=layer,ground=tile.getContext('2d');
+        ground.setTransform(ratio,0,0,ratio,0,0);
+        paint.soil(ground,geo,area,false,null,changed?layer.refinement?.add:null);
+        paint.routeLayer(ground,w,base,area,miniature);
+        paint.useLayer(ground,w,base,area,miniature);paint.explored(ground,geo,w,base,area,overlayId);
+        for(const t of towns)if(paint.inView(area,t.x,t.y,.8))paint.townPlan(ground,t,area,miniature);
+        layer.finish=false;
+      }
+      layer.refinement?.wake();
+      g.setTransform(1,0,0,1,0,0);
+      g.drawImage(layer.tile,left,top,pixW,pixH,0,0,pixW,pixH);
       g.setTransform(ratio,0,0,ratio,0,0);
       paint.actors(g,w,base,view,miniature);
       const sceneView=street()?.regionalCamera?.();
@@ -101,9 +116,9 @@
       return view;
     }
     function redraw(){
-      if(!geo||document.hidden||!visible)return;
-      miniView=draw(small,true);
-      if(panel.hidden||!grid.hidden)return;
+      if(!geo||document.hidden)return;
+      if(panel.hidden){if(miniVisible)miniView=draw(small,true);return;}
+      if(!stageVisible||!grid.hidden)return;
       mainView=draw(map,false);
       const pos=geo.locate(camera.x,camera.y);
       info.textContent='Week '+sim.state.week+' · '+towns.length+' communities · '+pos.lat.toFixed(3)+'°, '+pos.lon.toFixed(3)+'°';
@@ -118,16 +133,32 @@
       nextPaint();
     }
     function centre(p){if(!geo)return;fit=false;camera=clip(p);cameraChanged();}
-    function close(){
+    function close(restoreFocus=false){
+      if(panel.hidden)return;
       panel.hidden=true;drag=null;pinch=null;fingers.clear();
       cache.get(map)?.refinement?.cancel();cache.delete(map);
-      clearTimeout(animation);animation=0;liveGrid(false);
+      clearTimeout(animation);animation=0;liveGrid(false);nextPaint();
+      if(restoreFocus){
+        opener?.focus({preventScroll:true});
+        opener?.scrollIntoView?.({block:'nearest'});
+      }
+      opener=null;
     }
     function animate(){clearTimeout(animation);if(panel.hidden)return;redraw();animation=setTimeout(animate,900);}
-    function open(){if(!geo)return;panel.hidden=false;fit=true;liveGrid(false);animate();map.focus({preventScroll:true});}
+    function open(source){
+      if(!geo)return;
+      opener=source||get('region-open');panel.hidden=false;fit=true;liveGrid(false);
+      field.setAttribute('aria-label',sim.state.communityLife?.journey?'Centre the map on a community':'See community streets');
+      animate();map.focus({preventScroll:true});panel.scrollIntoView?.({block:'nearest'});
+    }
     function inspect(p,settings={}){
       if(!geo)return;
       const q=clip(p),scene=street();
+      if(sim.state.communityLife?.journey){
+        if(panel.hidden)open(mini);
+        if(!grid.hidden)liveGrid(false);
+        zoom=Math.max(zoom,2);centre(q);return;
+      }
       if(scene?.inspectRegion){
         close();scene.setExploration?.(overlayId);
         scene.inspectRegion(q.x,q.y,{zoom:Math.max(.46,scene.regionalCamera?.()?.zoom||.55),...settings});
@@ -175,7 +206,7 @@
       }
     },{root:grid});
     function liveGrid(open){
-      grid.hidden=!open;get('region-layout').textContent=open?'Regional terrain':'Live streets';
+      grid.hidden=!open;map.hidden=open;get('region-layout').textContent=open?'Regional terrain':'Live streets';
       if(!open){for(const {scene,button} of previews.values()){gridObserver?.unobserve(button);scene?.destroy();button.remove();}previews.clear();return;}
       for(const [id,preview] of previews){
         if(towns.some(t=>t.site.id===id))continue;
@@ -197,8 +228,11 @@
         if(preview.scene)syncPreview(preview);
       }
     }
-    get('region-layout').onclick=()=>liveGrid(grid.hidden);
-    get('region-open')?.addEventListener('click',open);
+    get('region-layout').onclick=()=>{
+      liveGrid(grid.hidden);
+      if(grid.hidden){nextPaint();map.focus({preventScroll:true});}
+    };
+    get('region-open')?.addEventListener('click',event=>open(event.currentTarget));
     function selectChart(id){
       overlayId=towns.some(t=>t.site.id===id)?id:'';
       if(overlay)overlay.value=overlayId;
@@ -208,7 +242,7 @@
     field.addEventListener('change',()=>{if(field.value)streets(field.value);});
     mini.addEventListener('click',e=>{
       if(!miniView)return;
-      if(e.detail===0){open();return;}
+      if(e.detail===0){open(mini);return;}
       const p=point(e,small);inspect(miniView.ground(p.x,p.y),{picked:true});
     });
     function zoomBy(factor,p){
@@ -266,42 +300,32 @@
     map.addEventListener('keydown',e=>{
       const dir={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]}[e.key];
       if(dir&&mainView){e.preventDefault();centre({x:camera.x+dir[0]*map.clientWidth/(8*mainView.sx),y:camera.y+dir[1]*map.clientHeight/(8*mainView.sy)});}
-      if(e.key==='Escape'){close();mini.focus();}if(e.key==='Enter'){e.preventDefault();inspect(camera,{picked:true});}
+      if(e.key==='Escape'){e.preventDefault();close(true);}if(e.key==='Enter'){e.preventDefault();inspect(camera,{picked:true});}
     });
     get('region-closer').onclick=()=>zoomBy(1.6);
     get('region-further').onclick=()=>zoomBy(1/1.6);
     map.addEventListener('wheel',e=>{e.preventDefault();zoomBy(e.deltaY<0?1.2:1/1.2,point(e,map));},{passive:false});
     get('region-fit').onclick=()=>{liveGrid(false);fit=true;zoom=1;redraw();};
-    get('region-close').onclick=()=>{close();mini.focus();};
+    get('region-close').onclick=()=>close(true);
     if(typeof IntersectionObserver!=='undefined'){
-      const visibility=new IntersectionObserver(([entry])=>{
-        visible=entry.isIntersecting;
-        if(visible)nextPaint();
+      const visibility=new IntersectionObserver(entries=>{
+        for(const entry of entries){
+          if(entry.target===stage)stageVisible=entry.isIntersecting;
+          if(entry.target===mini)miniVisible=entry.isIntersecting;
+        }
+        if(panel.hidden?miniVisible:stageVisible)nextPaint();
       });
-      visibility.observe(stage);
+      visibility.observe(stage);visibility.observe(mini);
     }
-    const tools=get('street-hud')?.querySelector('.scene-tools');
-    const tabs=get('street-hud')?.querySelector('.scene-strip');
-    const sizing=new ResizeObserver(()=>{
-      if(tools?.offsetHeight&&tabs?.offsetHeight){
-        const room=tools.offsetLeft-20;
-        stage.style.setProperty('--inspector-room',Math.max(0,room)+'px');
-        stage.toggleAttribute('data-stack-inspector',room<240);
-        stage.style.setProperty('--street-menu-height',(tools.offsetHeight+tabs.offsetHeight+18)+'px');
-        stage.style.setProperty('--street-tools-bottom',(tools.offsetTop+tools.offsetHeight+6)+'px');
-        stage.style.setProperty('--street-tabs-bottom',(tabs.offsetTop+tabs.offsetHeight+4)+'px');
-      }
-      nextPaint();
-    });
-    sizing.observe(stage);sizing.observe(map);
-    if(tools&&tabs){sizing.observe(tools);sizing.observe(tabs);}
+    const sizing=new ResizeObserver(nextPaint);
+    sizing.observe(stage);sizing.observe(map);sizing.observe(small);
     let lastMini=0;
     function cameraMoved(){
       const now=performance.now();
       if(panel.hidden&&now-lastMini>=60){lastMini=now;nextPaint();}
     }
     for(const event of ['earthregionalinspect','earthregionalcamera'])stage.addEventListener(event,cameraMoved,{passive:true});
-    setInterval(()=>{if(geo&&visible&&!document.hidden&&panel.hidden&&mini.offsetWidth)miniView=draw(small,true);},900);
+    setInterval(()=>{if(geo&&miniVisible&&!document.hidden&&panel.hidden&&mini.offsetWidth)miniView=draw(small,true);},900);
     return {refresh,close,open,selectChart,chart:()=>overlayId};
   }
   root.EarthRegionMap={mount};

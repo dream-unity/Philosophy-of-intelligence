@@ -360,7 +360,7 @@
     let width=0,height=0,unit=30,zoom=1,pixelRatio=1,centreX=state.player.x,centreY=state.player.y;
     let fullPixelRatio=1,motionPixelRatio=1,limitedPixelRatio=1,slowFrameCount=0;
     let frame=0,idleTimer=0,routeTimer=0,routeDelay=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
-    const crossingOpen=()=>typeof document!=='undefined'&&document.body?.dataset?.districtCrossing==='true';
+    const crossingOpen=()=>typeof document!=='undefined'&&document.body?.hasAttribute('data-district-crossing');
     const sheetOpen=()=>!spectator&&typeof document!=='undefined'&&(crossingOpen()||Boolean(document.body?.hasAttribute('data-sheet-open')));
     let covered=sheetOpen();
     let shortMessage='',messageUntil=0,cameraFollows=true;

@@ -103,7 +103,7 @@ function mountMap(f,scene){
   return {map,nodes};
 }
 
-test('the bottom-left minimap jumps to any point and preserves each community’s survey',()=>{
+test('the street minimap jumps to any point and preserves each community’s survey',()=>{
   const f=fixture(),{sim,world,home,geo,streetAt,events}=f,scene=streetAt(home);
   const {map,nodes}=mountMap(f,scene);map.refresh();
   const before=JSON.stringify([world.week,world.activeId,world.regionalWorld,scene.getState().x,scene.getState().y]);
@@ -123,13 +123,19 @@ test('the bottom-left minimap jumps to any point and preserves each community’
 test('a burst of tablet atlas inputs paints once per frame and still picks the final geographic coordinate',()=>{
   const f=fixture(),{runtime,geo,home}=f,frames=[];
   const scene=f.streetAt(home),original=runtime.EarthRegionalRender;
-  let landscapes=0;
-  runtime.EarthRegionalRender={...original,soil(...args){landscapes++;return original.soil(...args);}};
+  let landscapes=0,atlasFrames=0,miniFrames=0;
+  runtime.EarthRegionalRender={...original,
+    soil(...args){landscapes++;return original.soil(...args);},
+    actors(context,world,base,view,mini){
+      if(mini)miniFrames++;else atlasFrames++;
+      return original.actors(context,world,base,view,mini);
+    }
+  };
   runtime.requestAnimationFrame=fn=>{frames.push(fn);return 1;};
   runtime.setTimeout=()=>1;
   const {map,nodes}=mountMap(f,scene),land=nodes.get('region-land');
   map.refresh();map.open();
-  const opening=landscapes,before=JSON.stringify(f.world);
+  const opening=landscapes,painted=atlasFrames,miniAtOpen=miniFrames,before=JSON.stringify(f.world);
   function pointer(type,x,y){land.fire(type,{type,pointerId:1,button:0,clientX:x,clientY:y});}
   pointer('pointerdown',300,250);
   for(let x=301;x<=330;x++)pointer('pointermove',x,250);
@@ -137,7 +143,9 @@ test('a burst of tablet atlas inputs paints once per frame and still picks the f
   assert.equal(landscapes,opening);
   assert.equal(frames.length,1);
   frames.shift()();
-  assert.equal(landscapes,opening+1);
+  assert.equal(atlasFrames,painted+1,'the final camera and travellers were drawn');
+  assert.equal(miniFrames,miniAtOpen,'the covered minimap was not drawn');
+  assert.equal(landscapes,opening,'the 30-pixel pan stayed within the buffered terrain');
   pointer('pointerdown',390,250);pointer('pointerup',390,250);
   const camera=scene.regionalCamera(),fit=original.fit(geo,780,500);
   assert.ok(Math.abs(camera.x-(fit.x-30/fit.sx))<1e-8);

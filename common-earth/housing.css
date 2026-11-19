@@ -23,7 +23,7 @@ body[data-map-view="street"] #housing-bar:not([hidden]) {
 .housing-results article button {flex:none;}
 @media (any-pointer:coarse) {#housing-bar button,#housing-directory :is(button,select){min-height:44px;}}
 @media (any-pointer:coarse),(max-width:730px),(max-width:900px) and (orientation:portrait),(max-height:535px) and (orientation:landscape){
-  body.street-expanded[data-map-view="street"] .map-frame:has(#housing-bar:not([hidden])) {grid-template-rows:auto minmax(120px,1fr) auto;}
+  body.street-expanded[data-map-view="street"] .map-frame:has(#housing-bar:not([hidden])) {grid-template-rows:auto minmax(clamp(220px,38svh,320px),1fr);}
 }
 
 #town-centre {
