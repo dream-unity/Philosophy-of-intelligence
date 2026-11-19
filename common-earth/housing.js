@@ -458,7 +458,7 @@
       if(!c||!text(c.key)||!text(c.id)||!text(c.worker)||!integer(c.plot,0,5)||!integer(c.week,1,week))return false;
       const house=site.privateHomes?.find(v=>v.plot===c.plot),guest=site.communityLife?.people?.[c.id];
       return house&&house.ownerId===c.id&&house.stage>=1&&house.stage<3&&c.wages===3-house.stage&&c.materials===c.wages&&
-        guest?.profile?.identityKey===c.key&&(guest.status==='visitor'||c.id==='steward'&&guest.status==='anchor'&&guest.residence==='visitor');
+        guest?.profile?.identityKey===c.key&&(['visitor','member'].includes(guest.status)||c.id==='steward'&&guest.status==='anchor');
     })||new Set(h.contracts.map(c=>c.plot)).size!==h.contracts.length))return false;
     return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage)-\d{1,4})$/.test(r.home))&&
       list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.crisis==null||integer(r.crisis,1,week))&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&

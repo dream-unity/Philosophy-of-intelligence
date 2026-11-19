@@ -1183,7 +1183,7 @@
       for(const [id,p] of records(r,'parcels')){
         if(!coordinate(id)||!object(p)||!object(p.uses)||!Object.entries(p.uses).every(([s,n])=>all.has(s)&&integer(n,1))||
           p.stock!=null&&!integer(p.stock,0,8)||p.harvestWeek!=null&&!integer(p.harvestWeek,1,world.week)||
-          p.owner!=null&&!all.has(p.owner)||p.charter!=null&&!all.has(p.charter)||
+          p.owner!=null&&!all.has(p.owner)||p.charter!=null&&!all.has(p.charter)||p.occupiedFrom!=null&&!all.has(p.occupiedFrom)||
           p.traffic!=null&&(!object(p.traffic)||!Object.entries(p.traffic).every(([s,n])=>all.has(s)&&integer(n,1,65535)))||
           p.claims!=null&&(!object(p.claims)||!Object.entries(p.claims).every(([s,c])=>all.has(s)&&object(c)&&integer(c.week,1,world.week)&&text(c.by)&&text(c.basis))))return false;
         if(p.agreements&&(!object(p.agreements)||!Object.entries(p.agreements).every(([k,a])=>object(a)&&all.has(a.a)&&all.has(a.b)&&a.a!==a.b&&k===pair(a.a,a.b)&&integer(a.week,1,world.week)&&['joint','exchange','passage','disputed'].includes(a.terms))))return false;

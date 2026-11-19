@@ -4254,6 +4254,12 @@
         if(fort>=2)for(const [from,to] of [[.7,9.9],[14.5,23.3]]){
           for(let x=from;x<to;x+=1.5)addItem(x,.35,x+.7,()=>{const w=Math.min(1.47,to-x);box(x,.25,w,.35,0,1.22,'#cbba96','#a28f72','#80745f');box(x,.25,.34,.35,1.22,.25,'#ddc99c','#a58d6b','#806e55');});
         }
+        if(fort>=2)for(const [edge,vertical] of [[.25,true],[23.35,true],[23.35,false]]){
+          for(const [start,length] of [[.7,9.2],[14.5,8.8]]){
+            const x=vertical?edge:start,y=vertical?start:edge;
+            addItem(x,y,x+y+.4,()=>box(x,y,vertical?.34:length,vertical?length:.34,0,.82,'#cbba96','#a28f72','#80745f'));
+          }
+        }
         if(fort>=3)addItem(12,.35,13,()=>{box(9.9,.25,4.62,.42,1.62,.25,'#bb9a68','#8d704e','#735d45');for(const x of [10.35,13.7])box(x,.33,.4,.18,0,1.6,'#aa8759','#846642','#694e35');});
       }
       const blockDepth=p=>p.x+p.y+.35;
@@ -4384,7 +4390,8 @@
       const watch=!spectator&&state.site.communityLife?.border?.street;
       const fighting=watch?.phase==='fight'&&pursuit?.key===watch.guard.key;
       const striking=fighting&&state.mode==='walk'&&dist(pursuit,p)<=1&&clearSegment(pursuit,p,false);
-      const beat=striking?Math.max(0,1-Math.abs((pursuit.next-visualTime)-.08)*4):0;
+      const cycle=reduced?.4:(1+Math.sin(visualTime*5.7))*.5;
+      const beat=striking?cycle**3:0;
       if(fighting){
         const guard=watch.guard,g=pursuit,key=state.site.id+'/'+guard.key;
         let look=regionalLooks.get(key);
@@ -4399,8 +4406,9 @@
       addItem(v.x,v.y,(fighting&&state.mode==='drive'?1000:0)+v.x+v.y+.45,()=>vehicle(v,state.mode==='drive'&&!drivingTruck),vehicleBounds);
       if(!spectator&&state.mode==='walk')addItem(p.x,p.y,(watch?1000:0)+p.x+p.y+.075,()=>{
         const dx=striking&&!p.moving?-pursuit.dx:p.dx,dy=striking&&!p.moving?-pursuit.dy:p.dy;
-        const counter=striking&&watch.resisting?Math.max(0,1-Math.abs(pursuit.next-visualTime-1.8)*4):0;
-        const pose={x:p.x+dx*counter*.14,y:p.y+dy*counter*.14};
+        const counter=striking&&watch.resisting?(1-cycle)**3:0;
+        const lean=p.moving||reduced?0:.14*(counter-beat);
+        const pose={x:p.x+dx*lean,y:p.y+dy*lean};
         person(pose.x,pose.y,'#dbab68',dx,dy,p.moving?1:0,visualTime*11,true);
         if(striking)activityGesture(pose,{gesture:'spar',prop:'none'},heroLook.cloth[0],dx,dy,null,heroLook.skin[0],counter);
         wornKit(playedId,p,p.dx,p.dy,seatedAt);
@@ -4428,14 +4436,16 @@
         path([[cap[0],cap[1]-3.2],[cap[0]+3.7,cap[1]],[cap[0],cap[1]+3.2],[cap[0]-3.7,cap[1]]],'#f7cf86','#614f36',.9);
       }
       if(!state.placed){
-        if(observedId)observationBadge();else{paintGlances();if(state.hover)locationLabel(state.hover);drawAchievementPanel();}
+        if(observedId)observationBadge();else if(!fighting){paintGlances();if(state.hover)locationLabel(state.hover);drawAchievementPanel();}
       }
       if(fighting){
-        const tags=[[p,'You',-1,'#f8de9b'],[pursuit,watch.guard.name.split(' ')[0],1,'#ffc4aa']];
-        for(const [actor,label,side,ink] of tags){
-          const [x,y]=screen(actor.x,actor.y,1.14),half=ctx.measureText(label).width/2+6;
-          const tx=x+side*(half+3);ctx.fillStyle='#172d2c';ctx.fillRect(tx-half,y-8,half*2,16);
-          text(tx,y,label,ink,11);
+        const [px,py]=screen(p.x,p.y,1.22),[gx,gy]=screen(pursuit.x,pursuit.y,1.95);
+        const tags=[[px,py,'You','#ffe5a9'],[gx,Math.min(gy,py-22),watch.guard.name,'#ffc8ac']];
+        for(const [x,y,label,colour] of tags){
+          ctx.font='bold 13px system-ui';
+          const w=ctx.measureText(label).width+12;
+          ctx.fillStyle='#132627';ctx.fillRect(x-w/2,y-10,w,20);
+          text(x,y,label,colour,13);
         }
       }
       drawMini();
@@ -4932,7 +4942,7 @@
         const sites=offsets.map(([x,y])=>closestFree(add(p,x,y),false)).filter(Boolean);
         const at=sites.find(q=>dist(q,p)>1&&clearSegment(q,p,false))||sites[0];
         if(!at)return;
-        pursuit={...at,key:w.guard.key,path:[],plan:0,next:visualTime+2.8,dx:1,dy:0};
+        pursuit={...at,key:w.guard.key,path:[],plan:0,next:visualTime+4,dx:1,dy:0};
       }
       const g=pursuit,gap=dist(g,p);
       g.dx=(p.x-g.x)/(gap||1);g.dy=(p.y-g.y)/(gap||1);
@@ -4953,8 +4963,8 @@
         }
       }
       const contact=gap<=1&&canReach&&state.mode==='walk'&&visualTime>=g.next&&Date.now()>=(w.nextStrike||0);
-      if(!g.pending&&options.onStreetContact&&(gap>=5||contact)){
-        g.pending=true;g.next=visualTime+2.3;
+      if(!g.pending&&options.onStreetContact&&(gap>=5||state.mode==='drive'||contact)){
+        g.pending=true;g.next=visualTime+4;
         Promise.resolve(options.onStreetContact(w.guard.key,w.round,fightProof)).finally(()=>{g.pending=false;});
       }
     }
@@ -5325,9 +5335,12 @@
       }
       if(changedDistrict){
         pursuit=null;
-        if(!spectator&&site?.communityLife?.border?.street&&state.mode==='walk'&&!stored){
-          const curb=closestFree({x:state.van.x-2.4,y:state.van.y+.45},false);
-          if(curb)Object.assign(state.player,curb);
+        if(!spectator&&site?.communityLife?.border?.street?.phase==='fight'&&state.mode==='walk'){
+          if(!stored||dist(state.player,state.van)<1.6){
+            const curb=closestFree({x:13,y:24},false);
+            if(curb)Object.assign(state.player,curb);
+          }
+          zoom=Math.max(1.25,zoom);overviewZoom=null;unit=baseUnit()*zoom;
           cameraFollows=true;const focus=followTarget();centreX=focus.x;centreY=focus.y;
         }
       }

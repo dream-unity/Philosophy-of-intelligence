@@ -838,7 +838,7 @@
     }
     function manageSite(id,action,generation){
       const site=world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id);
-      if(!site||generation!=null&&generation!==site.foundingRevision||!['restart','delete'].includes(action))return reject('This community has changed. Open its controls again.');
+      if(!site||generation!=null&&generation!==(site.foundingRevision||0)||!['restart','delete'].includes(action))return reject('This community has changed. Open its controls again.');
       const next=structuredClone(world);
       next.routes=next.routes.filter(route=>route.from!==id && route.to!==id);
       next.journal=next.journal.filter(entry=>entry.siteId!==id);

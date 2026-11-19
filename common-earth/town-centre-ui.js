@@ -36,7 +36,14 @@
         status.textContent=result.message;onResult?.(result);
       }finally{refresh(true);}
     });
-    embassy.append(embassyTitle,labelled('Other community',foreign),relationText,decision,defence);
+    const cancelTalks=button('Cancel talks',async()=>{
+      const world=sim.state;cancelTalks.disabled=true;
+      try{
+        const result=await sim.perform('diplomacy',{home:world.communityLife.homeId,target:foreign.value,action:'cancel'});
+        status.textContent=result.message;onResult?.(result);
+      }finally{refresh(true);}
+    });
+    embassy.append(embassyTitle,labelled('Other community',foreign),relationText,decision,cancelTalks,defence);
     body.insertBefore(embassy,forms);
     let embassyKeys='';
     function showDiplomacy(world,towns,s){
@@ -52,9 +59,9 @@
       if(expected!==s.id&&s!==home)foreign.value=s.id;
       const other=others.find(t=>t.id===foreign.value)||others[0],r=root.EarthBorderConflict.relation(world,home.id,other.id);
       relationText.textContent=home.name+' and '+other.name+(r?.state==='war'?' are at war.':' are at peace.')+
-        (r?.offer?' Both councils can recall their watches and reopen passage at the current boundary.':'');
+        (r?.offer?' Both councils will recall their watches, return occupied parcels and reopen passage.':'');
       decision.textContent=r?.state==='war'?(r.offer?'Accept ceasefire terms':'Negotiate peace'):'Declare war';
-      decision.disabled=false;
+      decision.disabled=false;cancelTalks.hidden=!r?.offer;cancelTalks.disabled=false;
       const fort=s.communityLife.border?.defence;
       defence.textContent=fort?s.name+' · '+['Boundary walls and gate commissioned','Gateposts set','Boundary walls built','Walls and guarded gate completed'][fort.stage]+(fort.builder?' · '+fort.builder:''):'';
     }

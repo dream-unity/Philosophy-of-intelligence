@@ -828,7 +828,13 @@
         getWeek:()=>sim.state.week,getWorld:()=>sim.state,
         getRegularRun:()=>sim.regularTruckView(),
         getTruckDispute:()=>sim.truckDisputeView?.(),
-        onStreetContact:(target,round,proof)=>sim.perform('communityLife',{action:'streetContact',site:sim.state.activeId,actor:'steward',week:sim.state.week,target,round},()=>getStreet()&&!document.hidden&&!$('town-centre')?.open?proof():null),
+        onStreetContact:async(target,round,proof)=>{
+          const site=sim.state.activeId;
+          const result=await sim.perform('communityLife',{action:'streetContact',site,actor:'steward',week:sim.state.week,target,round},
+            ()=>view==='street'&&!document.hidden&&!document.body.hasAttribute('data-sheet-open')&&!$('town-centre')?.open?proof():null);
+          if(result.ok&&sim.state.activeId===site)redrawStreet();
+          return result;
+        },
         onTruckDispute:(quote,proof)=>sim.perform('disputedTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
         onNeighbourHelp:async(quote,proof)=>{
           const local=getStreet();
@@ -1909,7 +1915,7 @@
       for(const action of ['restart','delete']){
         const label=action==='restart'?'Restart':'Delete';
         const control=button(label,()=>{
-          pendingCommunity={id:s.id,action,generation:s.foundingRevision};
+          pendingCommunity={id:s.id,action,generation:s.foundingRevision||0};
           const successor=towns.find(t=>t.id!==s.id&&t.id===state.activeId)||towns.find(t=>t.id!==s.id);
           const impact=action==='restart'?'Restore founding supplies and restart local public works. Existing households keep their memberships.':
             'Permanently remove this town and its linked routes.'+(s.id===homeId?(successor?' Your character’s home will move to '+successor.name+'.':' This is the last town in this world.'):'');

@@ -93,8 +93,9 @@
     if(r?.state!=='war')return {ok:false,message:'These communities are at peace.'};
     if(req.action==='negotiate'){
       r.offer=true;
-      return {ok:true,message:to.name+' offers a ceasefire. Both watches will return home and reopen passage at the current boundary.'};
+      return {ok:true,message:to.name+' offers a ceasefire. Both watches will return home, restore occupied parcels and reopen passage.'};
     }
+    if(req.action==='cancel'&&r.offer){delete r.offer;return {ok:true,message:'Peace talks closed. The communities are still at war.'};}
     if(req.action!=='accept'||!r.offer)return {ok:false,message:'The diplomatic situation has changed.'};
     r.state='peace';r.week=world.week;delete r.offer;
     for(const [s,other] of [[from,to],[to,from]]){
@@ -103,12 +104,28 @@
         release(other,campaign.defender);release(other,campaign.support);
         campaign.phase='return';campaign.outcome='Peace signed. The watch is returning home.';
       }
-      if(s.communityLife.border?.occupiedBy===other.id)delete s.communityLife.border.occupiedBy;
+      if(s.id===world.activeId&&other.id===world.communityLife.homeId)leaveStreet(s);
     }
     const key=keyOf(from.id,to.id);
     for(const region of Object.values(world.regionalWorld?.regions||{})){
       if(region.contacts[key])Object.assign(region.contacts[key],{terms:'passage',week:world.week,detail:'Both councils signed peace and reopened passage.'});
-      for(const parcel of Object.values(region.parcels))if(parcel.agreements?.[key])parcel.agreements[key].terms='passage';
+      for(const parcel of Object.values(region.parcels)){
+        const agreement=parcel.agreements?.[key];if(!agreement)continue;
+        const former=parcel.charter===from.id?to:parcel.charter===to.id?from:null;
+        const border=former?.communityLife.border;
+        const earlierOccupation=agreement.terms==='disputed'&&!parcel.occupiedFrom&&
+          (border?.occupiedBy===parcel.charter||border?.foothold?.by===parcel.charter);
+        if(parcel.occupation&&former&&(parcel.occupiedFrom===former.id||earlierOccupation)){
+          parcel.charter=former.id;delete parcel.occupation;delete parcel.occupiedFrom;
+        }
+        agreement.terms='passage';agreement.week=world.week;
+      }
+      region.mapRevision=(region.mapRevision||0)+1;
+    }
+    for(const [site,rival] of [[from,to],[to,from]]){
+      const border=site.communityLife.border;
+      if(border?.occupiedBy===rival.id)delete border.occupiedBy;
+      if(border?.foothold?.by===rival.id)delete border.foothold;
     }
     const message=from.name+' and '+to.name+' signed peace and reopened passage.';
     record(world,from,to,message);record(world,to,from,message);
@@ -272,7 +289,7 @@
     for(const p of [c.defender,c.support])debrief(world,other,p,victory?23:17);
     if(victory){
       const parcel=r.parcels[c.cell]||={uses:{}};
-      parcel.charter=site.id;parcel.occupation=world.week;
+      parcel.charter=site.id;parcel.occupation=world.week;parcel.occupiedFrom=other.id;
       (parcel.claims||={})[other.id]||={week:world.week,by:other.name,basis:'Earlier jurisdiction retained on the record'};
       (parcel.claims)[site.id]={week:world.week,by:c.attacker.name,basis:'Occupied after the boundary dispute'};
       const k=keyOf(site.id,other.id);
@@ -416,7 +433,7 @@
     return rows;
   }
   function hasPass(world,site,guest,origin){
-    if(!origin||origin.id===site.id)return true;
+    if(!origin||origin.id===site.id||relation(world,origin.id,site.id)?.state==='peace')return true;
     return life().recognisedVisitor(world,site,origin,guest);
   }
   function entry(world,from,to,visitor,invited,atCell=null){
@@ -447,7 +464,7 @@
     const home=life().lookup(world,world.communityLife.homeId),guest=world.communityLife.profile;
     watch.guard=assign(site,local);
     watch.phase='fight';
-    watch.nextStrike=Date.now()+2800;
+    watch.nextStrike=Date.now()+4000;
     const message=local.name+' began pursuing '+guest.name+' on entering '+site.name+' without an introduction.';
     record(world,site,home,message,[local,guest]);record(world,home,site,message,[guest,local],false);
   }
@@ -498,13 +515,13 @@
        scene?.siteId!==site.id||scene.actor!=='steward'||!['walk','drive','boat'].includes(scene.mode)||
        ![scene.x,scene.y,scene.gx,scene.gy].every(Number.isFinite))return {ok:false,message:'The encounter has moved.'};
     const gap=Math.hypot(scene.x-scene.gx,scene.y-scene.gy);
-    if(gap>=5){
+    if(gap>=5||scene.mode==='drive'){
       const message='You escaped '+w.guard.name+' in '+site.name+'.';
       leaveStreet(site);life().recordWeek(site,world.week,message);
       return {ok:true,message};
     }
     if(gap>1||scene.mode!=='walk'||Date.now()<(w.nextStrike||0))return {ok:false,message:'Beyond reach.'};
-    streetRound(world,site,w);w.nextStrike=Date.now()+2300;
+    streetRound(world,site,w);w.nextStrike=Date.now()+4000;
     return {ok:true,message:streetStatus(w)};
   }
   function guardShift(world,host,origin,trip){

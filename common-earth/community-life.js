@@ -389,9 +389,7 @@
       const value=root.EarthBorderConflict.force(site,p);
       return value>=62?'forceful':value>=42?'guarded':'welcoming';
     }
-    const birth=p.birthCommunityId||site.communityLife?.people?.[p.id]?.originId||site.id;
-    const cohort=birth.match(/-(\d+)$/),regional=birth.startsWith('near-')&&cohort;
-    const baseline=p.externalHistory?.aggression??(regional?([36,75,51][Number(cohort[1])]??50):50);
+    const baseline=p.traits?.aggression??p.externalHistory?.aggression??p.birthTemperament??50;
     const traits=p.traits||{},resident=site.residents.find(r=>r.id===p.id);
     const ties=(site.agency?.meals||[]).filter(m=>m.from===p.id||m.to===p.id).length;
     const recent=site.autonomy?.people?.[p.id]?.history||[];
@@ -1519,6 +1517,7 @@
     if(a.cohorts)a.cohorts=a.cohorts.filter(row=>!linked(row));
     if(a.fieldNotes)a.fieldNotes=a.fieldNotes.filter(row=>row.sourceSite!==id);
     drop(a.relations,linked);
+    if(a.openingRoster)a.openingRoster=a.openingRoster.filter(town=>town!==id);
     for(const site of surviving){
       const c=local(site),b=c.border;
       if(b?.occupiedBy===id)delete b.occupiedBy;
@@ -1562,6 +1561,7 @@
         for(const key of ['uses','claims','traffic'])if(p[key])delete p[key][id];
         drop(p.agreements,linked);
         if(p.charter===id){delete p.charter;delete p.occupation;}
+        if(p.occupiedFrom===id||!p.occupation)delete p.occupiedFrom;
         if(p.owner===id){delete p.owner;delete p.work;}
         if(p.trail?.siteId===id)delete p.trail;
         else if(p.trail)p.trail.partners=p.trail.partners.filter(t=>t!==id);
@@ -1573,10 +1573,13 @@
     fresh.population=before.population;
     if(before.communityLife)fresh.communityLife=copy(before.communityLife);
     local(fresh);
-    if(before.birthCoordinate)fresh.birthCoordinate=copy(before.birthCoordinate);
+    for(const key of ['birthNames','birthCoordinate','workRotation'])if(before[key]!=null)fresh[key]=copy(before[key]);
     // Journeys, deeds and funded building contracts remain with their owners.
     for(const key of ['housing','privateHomes','civicLand'])if(before[key])fresh[key]=copy(before[key]);
-    if(fresh.civicLand?.project)fresh.growth={round:before.growth.round,points:0,roads:0,vehicle:0,custom:'',households:[],history:[],sales:0};
+    if(before.growth){
+      // Occupied and reserved household plots keep their occupants and work contracts.
+      fresh.growth=copy(before.growth);
+    }
     const roster=new Set([...(before.agency?.porters||[]),...Object.keys(before.purses?.people||{}).filter(id=>root.EarthPersonas?.isPorterId(id))]);
     if(roster.size)fresh.agency={actor:'steward',meals:[],porters:[...roster]};
     root.EarthPurses?.reopenSavings?.(world,before,fresh);
