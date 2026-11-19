@@ -303,7 +303,30 @@ footer > span { font-family: var(--serif); font-style: italic; }
 .street-camera-tools .icon-button[aria-pressed="true"] { background: #eedbb4; color: #233e38; border-color: #fff1d2; }
 .street-camera-tools .icon-button:hover, .district-tools .icon-button:hover { border-color: #fff1d2; }
 .district-overview { position: absolute; z-index: 1; left: 12px; bottom: 12px; width: 77px; height: 55px; padding: 0; border: 1px solid #b3b3919c; border-radius: 4px; background: #18332dec; box-shadow: 0 2px 6px #16241f30; }
-body.street-expanded[data-map-view="street"] .workspace { grid-template-columns: minmax(0,1fr); }
+/* Keep the street and Community actions side by side whenever both fit. */
+@media (min-width: 731px) and (max-width: 900px) and (orientation: portrait) {
+  body[data-map-view="street"]:not([data-observing-town]):not([data-district-crossing]) .workspace {
+    grid-template-columns: minmax(0, 1fr) clamp(255px, 30vw, 305px);
+  }
+  body[data-map-view="street"] .action-tabs { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+#compact-community-actions { display: none; }
+@media (max-width: 730px) {
+  #compact-community-actions {
+    display: block;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    max-width: 45%;
+    min-height: 44px;
+    padding: 5px 10px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    border-radius: 4px;
+    font: 600 .8rem/1.2 var(--sans);
+  }
+}
 body.street-expanded[data-map-view="street"] .street-stage { height: clamp(360px, 77svh, 1120px); }
 body.street-expanded[data-map-view="street"] #street-open-actions { display: inline-block; position: absolute; right: 12px; top: 12px; padding: 8px 11px; border: 1px solid #b3b3919c; border-radius: 4px; background: #18332ded; color: #f7ead0; text-decoration: none; font-size: 12px; }
 @media (pointer:coarse) { .street-camera-tools .icon-button { width: 44px; height: 44px; } }
