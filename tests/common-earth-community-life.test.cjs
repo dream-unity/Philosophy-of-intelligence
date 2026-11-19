@@ -604,10 +604,12 @@ test('visible production settles all four settlements while the calendar waits, 
 });
 
 test('a host may invite the original visitor to share a round while both communities keep their own authority',()=>{
-  const {sim,home,context,life,visit,saved}=fixture();
-  visit(life.neighbours(sim.state,home)[0].id);const site=sim.active(),host=site.residents[0];
+  const {sim,home,context,life,visit,doAction,saved}=fixture();
+  visit(life.neighbours(sim.state,home)[0].id);const site=sim.active(),host=site.residents.find(p=>life.visitorReception(sim.state,site,p.id)?.private);assert(host);
   const at=(actor,target)=>({siteId:site.id,actor,target,mode:'walk',x:9,y:8,tx:9.6,ty:8});
   assert.equal(sim.changeActor(host.id,at('steward',host.id)).ok,false);
+  const denied=sim.converse(host.id,'shadow',at('steward',host.id));assert.equal(denied.ok,false);assert.match(denied.message,/introduces you/);
+  const delegate=life.hostFor(site);assert(doAction('meet',delegate.id,delegate.id).ok);
   const agreed=sim.converse(host.id,'shadow',at('steward',host.id));assert(agreed.changed,agreed.message);
   assert(sim.changeActor(host.id,at('steward',host.id)).ok);assert.equal(life.anchor(sim.state).homeId,home.id);
   assert.equal(sim.manageSite(site.id,'restart').ok,false);assert(sim.actions('build').every(a=>!a.available));

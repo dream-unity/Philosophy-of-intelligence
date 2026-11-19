@@ -30,7 +30,7 @@ function fixture(water=false,snapshot=null){
   runtime.requestAnimationFrame=fn=>{frame=fn;return 1;};runtime.cancelAnimationFrame=noop;
   runtime.CustomEvent=class{constructor(type,args){this.type=type;Object.assign(this,args);}};
   const home=sim.active(),world=sim.state,geo=runtime.EarthRegionalWorld.geography(world,home),canvas=makeCanvas(true);
-  function streetAt(site,spectator=false){const scene=runtime.EarthStreet.mount(canvas,{spectator,getWorld:()=>world,getWeek:()=>world.week});
+  function streetAt(site,spectator=false,handlers={}){const scene=runtime.EarthStreet.mount(canvas,{spectator,getWorld:()=>world,getWeek:()=>world.week,...handlers});
     scene.setSite(spectator?structuredClone(site):site);return scene;}
   let now=0;
   const paint=()=>{const f=frame;frame=null;if(f)f(now+=35);};
@@ -131,4 +131,135 @@ test('a save made after real travel reopens in the host town and can be panned a
   const before=state();reopened.paint();reopened.swipe(s,0,0);
   assert.equal(reopened.events.filter(e=>e.type==='earthregionalinspect').at(-1).detail.siteId,first.home.id);
   assert.equal(state(),before);s.destroy();reopened.sim.destroy();
+});
+
+test('a street quay, its fishing water and its land approach agree with the regional surface',()=>{
+  const {sim,runtime,world,home}=fixture();
+  home.coastal=true;
+  const geo=runtime.EarthRegionalWorld.geography(world,home),t=geo.towns.find(t=>t.site===home);
+  function surface(x,y){
+    const at=runtime.EarthRegionalRender.regionalPoint(t,x,y);
+    const soil=runtime.EarthRegionalWorld.terrain(geo,at.x,at.y);
+    const local=runtime.EarthRegionalRender.localPoint(t,at.x,at.y);
+    assert.ok(Math.hypot(local.x-x,local.y-y)<.00001);
+    return soil.kind;
+  }
+  for(const x of [3,12,21]){
+    assert.ok(['meadow','woodland','rock'].includes(surface(x,23.95)));
+    assert.equal(surface(x,25.5),'shore');
+    assert.equal(surface(x,27.5),'water');
+  }
+  sim.destroy();
+});
+
+test('an outlying trading frontage belongs to its growing town while nearby unbuilt land remains open',()=>{
+  const {sim,runtime,home,world,streetAt,events}=fixture();
+  const g=runtime.EarthDistrictGrowth.register(home,runtime.EarthDistrictGrowth.members(home));
+  const holder=g.households[0],lot=32,address=runtime.EarthDistrictGrowth.shopPoint(home,lot);
+  Object.assign(holder,{shop:'weaving',businessPlot:lot,shopSite:address});
+  const t=runtime.EarthRegionalWorld.geography(world,home).towns.find(t=>t.site===home);
+  const s=streetAt(home);
+  const lookup=(x,y)=>{
+    const p=runtime.EarthRegionalRender.regionalPoint(t,x,y);s.inspectRegion(p.x,p.y);
+    return events.filter(e=>e.detail?.picked).at(-1).detail;
+  };
+  assert.ok(address.x<-4);
+  assert.equal(lookup(address.x,address.y).siteId,home.id);
+  assert.equal(lookup(address.x-2.1,address.y+1.5).siteId,null);
+  s.destroy();sim.destroy();
+});
+
+test('a local building proposal preserves free observation and cannot confirm a plot in another town',()=>{
+  const {sim,geo,home,streetAt,paint,touch,swipe,events}=fixture();
+  const placements=[],s=streetAt(home,false,{onPlace:q=>placements.push(q)});
+  const active=geo.towns.find(t=>t.site.id===home.id),neighbour=geo.towns.find(t=>t!==active);
+  s.setPlacement('garden');paint();assert.equal(s.getState().placement,'garden');
+  const original=[s.getState().x,s.getState().y,sim.state.week];
+  swipe(s,neighbour.x,neighbour.y);
+  assert.equal(events.filter(e=>e.type==='earthregionalinspect').at(-1).detail.siteId,neighbour.site.id);
+  assert.equal(s.interact(),false);
+  for(let i=0;i<2;i++){touch('pointerdown',640,382);touch('pointerup',640,382);}
+  assert.equal(placements.length,0);
+  s.zoomBy(.001);assert.ok(s.regionalCamera().zoom<.29);
+  assert.equal(s.getState().placement,'garden');
+  s.inspectRegion(active.x,active.y,{zoom:.55});paint();
+  assert.equal(s.interact(),true);assert.equal(placements.length,1);
+  assert.deepEqual([s.getState().x,s.getState().y,sim.state.week],original);
+  s.destroy();sim.destroy();
+});
+
+test('touching a neighbouring truck reports its actual assignment without moving the original or taking custody',()=>{
+  const {sim,runtime,world,geo,home,streetAt,paint,touch,events}=fixture();
+  const away=geo.towns.find(t=>t.site.id!==home.id),s=streetAt(home);
+  const before=JSON.stringify([world.week,world.activeId,away.site.fleet,home.fleet,s.getState().x,s.getState().y]);
+  const cab=runtime.EarthRegionalRender.regionalPoint(away,15,23.69);
+  s.inspectRegion(cab.x,cab.y,{zoom:1});paint();
+  const span=s.regionalCamera().footprint,unit=1280/(span.maxX-span.minX)*runtime.EarthRegionalRender.KM;
+  const y=720*.53-.44*unit;
+  touch('pointerdown',640,y);touch('pointerup',640,y);
+  const hit=events.filter(e=>e.detail?.picked).at(-1).detail;
+  const truck=(hit.choices||[hit]).find(c=>c.assetId==='truck');
+  assert.ok(truck);assert.equal(truck.siteId,away.site.id);
+  const expected=runtime.EarthFleet.assignment(world,away.site);
+  for(const field of ['owner','operator','destination','reason'])assert.equal(truck.assignment[field],expected[field]);
+  assert.equal(JSON.stringify([world.week,world.activeId,away.site.fleet,home.fleet,s.getState().x,s.getState().y]),before);
+  s.destroy();sim.destroy();
+});
+
+test('a regional surveyor remains individually selectable as the regional map zooms out around the field party',()=>{
+  const {sim,runtime,world,geo,home,streetAt,paint,touch,events,wait}=fixture();
+  home.food=40;home.materials=40;home.funds=50;
+  assert.ok(sim.regionalWork({kind:'survey',x:1.43,y:1.11,siteId:home.id,originId:geo.origin.id,week:world.week}).ok);
+  wait(3500);
+  const people=runtime.EarthRegionalWorld.travellers(world,home),surveyor=people.find(p=>p.siteId===home.id&&p.kind==='survey');
+  assert.ok(surveyor);
+  const s=streetAt(home),before=JSON.stringify([world.week,world.activeId,world.regionalWorld,s.getState().x,s.getState().y]);
+  s.inspectRegion(surveyor.x,surveyor.y,{zoom:.24});paint();
+  touch('pointerdown',640,720*.53-1);touch('pointerup',640,720*.53-1);
+  const hit=events.filter(e=>e.detail?.picked).at(-1).detail;
+  const seen=(hit.choices||[hit]).find(c=>c.personId===surveyor.personId&&c.inTransit);
+  assert.equal(seen.personName,surveyor.name);assert.equal(seen.activity.destination,surveyor.destination);
+  assert.equal(JSON.stringify([world.week,world.activeId,world.regionalWorld,s.getState().x,s.getState().y]),before);
+  s.destroy();sim.destroy();
+});
+
+test('one touch on overlapping founding travellers exposes both identities in the on-scene chooser',()=>{
+  const {sim,runtime,world,geo,home,streetAt,paint,touch,events,wait,load}=fixture();
+  home.food=50;home.materials=50;home.funds=60;
+  const p={x:2.11,y:.95},propose=kind=>sim.regionalWork({kind,...p,siteId:home.id,originId:geo.origin.id,week:world.week});
+  assert.ok(propose('survey').ok);
+  for(let i=0;i<40&&world.regionalWorld.regions[geo.origin.id].trips[home.id];i++){
+    wait(24100);assert.ok(sim.production(world.productionSerial||0,()=>true).ok);
+  }
+  const found=propose('found');assert.ok(found.ok,found.message);wait(3500);
+  const party=runtime.EarthRegionalWorld.travellers(world,home).filter(p=>p.siteId===home.id&&p.kind==='found');
+  assert.equal(party.length,2);
+  const street=streetAt(home),lead=party[0],centre={x:(lead.x+party[1].x)/2,y:(lead.y+party[1].y)/2};
+  street.inspectRegion(centre.x,centre.y,{zoom:.045});paint();
+  const before=JSON.stringify([world.week,world.activeId,world.regionalWorld,street.getState().x,street.getState().y]);
+  touch('pointerdown',640,720*.53);touch('pointerup',640,720*.53);
+  const hit=events.filter(e=>e.detail?.picked).at(-1).detail;
+  for(const traveller of party)assert.ok(hit.choices.some(c=>c.personName===traveller.name&&c.inTransit));
+  const nodes=new Map(),handler=()=>assert.fail('selecting a traveller triggered a command');
+  function node(tag){
+    return {tag,children:[],events:{},focus(){},setAttribute(){},
+      append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;},
+      querySelector(tag){if(this.tag===tag)return this;for(const n of this.children){const found=n.querySelector(tag);if(found)return found;}},
+      addEventListener(key,fn){this.events[key]=fn;}};
+  }
+  runtime.document.body.toggleAttribute=()=>{};
+  runtime.document.createElement=tag=>node(tag);
+  runtime.document.getElementById=id=>{if(!nodes.has(id))nodes.set(id,node('section'));return nodes.get(id);};
+  load('regional-inspector');
+  runtime.EarthRegionalInspector.mount({sim,street:()=>street,watch:handler,travel:handler,returnStreet:handler,
+    refresh:handler,ledger:handler,contextChanged:()=>{}});
+  nodes.get('street-stage').events.earthregionalinspect({detail:hit});
+  const panel=nodes.get('region-point-detail');
+  for(const traveller of party){
+    const field=panel.querySelector('select');field.value=String(hit.choices.findIndex(c=>c.personId===traveller.personId));field.events.change();
+    assert.equal(nodes.get('region-context-name').textContent,traveller.name);
+    assert.equal(panel.querySelector('select').children.length,hit.choices.length);
+  }
+  assert.equal(JSON.stringify([world.week,world.activeId,world.regionalWorld,street.getState().x,street.getState().y]),before);
+  street.destroy();sim.destroy();
 });

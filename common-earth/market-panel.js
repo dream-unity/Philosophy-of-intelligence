@@ -28,7 +28,7 @@
         if(action==='check')return 'Walking to '+station+' for the stock count.';
         if(action==='finish')return 'Returning to '+station+' to collect your pay.';
         const purpose={start:'book your paid shift',cancel:'return the wage advance',buy:'buy '+o.good+' for the town',
-          donate:'add to the household food fund',household:'buy food with the household fund',makeWare:'make and consign this piece',buyWare:'collect the owner’s offered piece'};
+          donate:'add to the household food fund',household:'buy food with the household fund',makeWare:'make and consign this piece',buyWare:'collect the owner’s offered piece',buyShopStock:'collect your purchase'};
         return moving+' to '+station+' to '+(purpose[action]||(action==='buildHome'?'work on your home':action==='buyHome'?'record your new deed':'review your account'))+'.';
       }
       if(kind==='provision')return moving+' to '+station+' to '+({pack:'pack a provision crate',open:'open the stored crate',
@@ -49,13 +49,13 @@
       if(resource)request.resourceSerial=option.resourceSerial;
       if(provision){if(option.crateId!=null)request.crateId=option.crateId;}
       else if(!purse){request.good=option.good;request.price=option.price;}
-      const local=street(),phase=generation,ref=purse||resource?option.venue:{type:'market'},workplace=ref.type==='workplace',privateHome=ref.type==='privateHome';
+      const local=street(),phase=generation,ref=purse||resource?option.venue:{type:'market'},workplace=ref.type==='workplace',privateHome=ref.type==='privateHome',districtShop=ref.type==='districtShop';
       if((provision||purse||workplace)&&local.getState?.().mode&&local.getState().mode!=='walk'){
         show('Come ashore or park and step out '+(workplace?'to work at the '+ref.venue+'.':purse?'to handle personal work or funds.':'to handle a provision crate.'));return;
       }
-      const station=privateHome?'courtyard '+(ref.plot+1):resource?option.station:quay?'the waterfront quay':ref.type==='resident'?(view.shift?.clerkName||
+      const station=districtShop?'commercial lot '+(ref.plot+1):privateHome?'courtyard '+(ref.plot+1):resource?option.station:quay?'the waterfront quay':ref.type==='resident'?(view.shift?.clerkName||
         sim.active().residents.find(p=>p.id===ref.residentId)?.name||'the shift clerk'):'the exchange counter';
-      const position=()=>privateHome?local.privateHomeProof?.(ref.plot):quay?quayProof?.():workplace?local.venueProof?.(ref.venue,view.actorId):local.meeting(ref,true);
+      const position=()=>districtShop?local.shopProof?.(ref.plot):privateHome?local.privateHomeProof?.(ref.plot):quay?quayProof?.():workplace?local.venueProof?.(ref.venue,view.actorId):local.meeting(ref,true);
       const pending={week:view.week,actorId:view.actorId};trip=pending;
       const present=()=>visible()&&phase===generation&&street()===local&&sim.active()?.id===view.siteId&&
         (sim.active()?.foundingRevision||0)===view.generation&&sim.state.week===view.week&&
@@ -77,7 +77,7 @@
         }finally{if(busy===operation)busy=null;}
       }
       if(position()){commit();return;}
-      const started=privateHome?local.focusPrivateHome?.(ref.plot,commit):quay?meetQuay?.(commit):workplace?local.focusVenue?.(ref.venue,view.actorId,commit):meet?.(ref,station,commit);
+      const started=districtShop?local.focusShop?.(ref.plot,commit):privateHome?local.focusPrivateHome?.(ref.plot,commit):quay?meetQuay?.(commit):workplace?local.focusVenue?.(ref.venue,view.actorId,commit):meet?.(ref,station,commit);
       if(started===false){trip=null;show('Reach '+station+' to complete this action.');}
       else if(trip===pending)show(resource?'Travelling to '+station+' to '+option.title.toLowerCase()+'.':travelMessage(kind,option,station,local.getState?.().mode));
     }
@@ -284,6 +284,13 @@
         }
         box.append(card);
       }
+      const neighbourhood=(p.options||[]).filter(o=>o.action==='buyShopStock');
+      if(neighbourhood.length){
+        const shelves=el('section',null,'market-resource-detail');
+        shelves.append(el('h4','Neighbourhood shops'));
+        for(const offer of neighbourhood){const owner=el('details');owner.append(el('summary',root.EarthResidentShops.products[offer.good].name+' · Lot '+(offer.plot+1)+' · '+offer.stock+' available'));action(owner,offer);shelves.append(owner);}
+        box.append(shelves);
+      }
       const recipes=(p.options||[]).filter(o=>o.action==='makeWare');
       if(recipes.length){
         const chosen=recipes.find(o=>o.good===selectedWare)||recipes.find(o=>o.available)||recipes[0];
@@ -320,7 +327,7 @@
       if(p.items?.length)box.append(el('p','Personal belongings · '+p.items.map(i=>i.count+' '+i.name.toLowerCase()).join(', ')+'.','market-help'));
       if(p.stalls)box.append(button('Visit resident shops',()=>area('shops'),'text-button'));
       if(p.shift)box.append(el('p','Shift from week '+p.shift.week+' · '+p.shift.clerkName+' · '+p.shift.good+' inventory.','market-help'));
-      for(const o of (p.options||[]).filter(o=>!['buyWare','makeWare','markDown','foldStall'].includes(o.action)&&o.good!=='courtyardHome')){
+      for(const o of (p.options||[]).filter(o=>!['buyWare','buyShopStock','makeWare','markDown','foldStall'].includes(o.action)&&o.good!=='courtyardHome')){
         const card=el('section',null,'market-good'),b=button(o.title,()=>transact(p,o,'purseAction'));
         b.dataset.marketAction='purse-'+o.action+'-'+(o.good||'');b.disabled=!o.available||Boolean(restricted());
         card.append(b);if(o.detail)card.append(el('p',o.detail,'market-help'));appendReason(card,o);box.append(card);
@@ -380,7 +387,7 @@
         trip=null;key='';
       }
       const stamp=[siteId,sim.state.week,sim.state.actionRevision||0,sim.state.workRevision||0,site.exchange?.serial||0,site.provisions?.serial||0,
-        site.purses?.serial||0,site.resourceLedger?.serial||0,actor,tab,selectedResource,feedback].join('|');
+        site.purses?.serial||0,site.resourceLedger?.serial||0,tab==='shops'&&site.growth?.round,actor,tab,selectedResource,feedback].join('|');
       if(stamp===key)return;
       const m=['purse','shops'].includes(tab)?null:sim.marketView?.()||root.EarthMarket.view(sim.state,site);
       if(!m&&!['purse','shops'].includes(tab))return;

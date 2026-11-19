@@ -94,7 +94,7 @@
     return count;
   }
   function housingCapacity(site) {
-    let capacity=18+(window.EarthResidentShops?.housingPlaces?.(site)||0);
+    let capacity=18+(window.EarthResidentShops?.housingPlaces?.(site)||0)+(window.EarthDistrictGrowth?.housingPlaces?.(site)||0);
     for(let i=0;i<6;i++){
       if(site?.city?.precincts?.[i]?.use==='homes')capacity+=terrainAt(site,i).id==='shelter'?8:6;
     }
@@ -103,7 +103,7 @@
   function overview(site, state = precincts(site)) {
     const weekly={...ZERO}, records=[];
     const centralHall=(site?.buildings||[]).some(b=>b.kind==='hall');
-    let reachable=0,pressure=0,noise=0,capacity=18+(window.EarthResidentShops?.housingPlaces?.(site)||0),developed=0;
+    let reachable=0,pressure=0,noise=0,capacity=18+(window.EarthResidentShops?.housingPlaces?.(site)||0)+(window.EarthDistrictGrowth?.housingPlaces?.(site)||0),developed=0;
     state.forEach((p,i)=>{
       const around=ring(i), neighbours=around.map(j=>state[j].use), t=terrainAt(site,i);
       const transit=p.use==='transit' || neighbours.includes('transit');

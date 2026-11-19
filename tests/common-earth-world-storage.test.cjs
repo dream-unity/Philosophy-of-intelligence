@@ -104,6 +104,18 @@ test('opening another saved world leaves the unselected first world on disk unti
   store.setItem(key,'broken');assert.equal(book.list().find(row=>row.id==='original').settlements,0);
   book.dispose();
 });
+test('an evicted compressed primary becomes the exact previous turn without recompression',()=>{
+  const writer=runtime(true),raw=largeWorld(writer),physical=writer.EarthWorldStorage.prepareDense(raw);
+  const store=storage();store.setItem(key,physical);
+  const c=runtime(true),sim=c.CommonEarthSim.create({storage:store});
+  assert.equal(sim.state.week,1);
+  for(let i=1;i<=3;i++)c.EarthWorldStorage.prepare((passage+i).repeat(7000));
+  assert(sim.advance().ok);
+  assert.equal(store.getItem(key+'.previous'),physical);
+  assert.equal(runtime().EarthWorldStorage.unpack(store.getItem(key+'.previous')),raw);
+  const cold=runtime(true).CommonEarthSim.create({storage:store});assert.equal(cold.state.week,2);
+  sim.destroy();cold.destroy();
+});
 test('incompressible Unicode retains the exact plain payload and private temporary worlds retain their listing after a switch',async()=>{
   const c=runtime(true),codec=c.EarthWorldStorage,parts=[];let value=13;
   for(let block=0;block<35;block++){

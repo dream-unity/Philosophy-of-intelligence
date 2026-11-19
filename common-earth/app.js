@@ -221,8 +221,39 @@
   }
   // The household economy has a separate clock so fishing, a pending vote or a
   // street journey cannot freeze production in every other town.
-  let productionPending=false;
+  let productionPending=false,productionPaint=0,paintDue=false,paintSince=0;
+  const inspectionPointers=new Set(),meter=window.EarthPerformance;
   const producing=()=>!document.hidden&&!!sim.active();
+  function paintProduction(){
+    clearTimeout(productionPaint);productionPaint=0;
+    if(!paintDue||document.hidden)return;
+    if(inspectionPointers.size&&performance.now()-paintSince<550){
+      productionPaint=setTimeout(paintProduction,100);return;
+    }
+    paintDue=false;
+    const began=meter?.now();
+    if(view==='street')street?.setSite(sim.active());
+    render();
+    if(meter)meter.finish('productionUI',began);
+  }
+  function queueProductionPaint(){
+    if(!paintDue){paintDue=true;paintSince=performance.now();}
+    if(inspectionPointers.size){
+      if(!productionPaint)productionPaint=setTimeout(paintProduction,100);
+    }else paintProduction();
+  }
+  document.addEventListener('pointerdown',event=>{
+    if(event.target?.matches?.('#street-canvas,#observer-canvas,#region-land'))inspectionPointers.add(event.pointerId);
+  },{capture:true,passive:true});
+  function releaseInspection(event){
+    if(!inspectionPointers.delete(event.pointerId)||inspectionPointers.size||!paintDue)return;
+    // Give the canvas its release frame before refreshing off-screen ledgers.
+    clearTimeout(productionPaint);productionPaint=setTimeout(paintProduction,36);
+  }
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(name,releaseInspection,{capture:true,passive:true});
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)inspectionPointers.clear();else if(paintDue)queueProductionPaint();
+  });
   setInterval(async()=>{
     if(productionPending||!producing()||!window.EarthDistrictGrowth.due(sim.state))return;
     productionPending=true;
@@ -230,7 +261,7 @@
       const serial=sim.state.productionSerial||0;
       if(forecastView?.prepareProduction&&!(await forecastView.prepareProduction(serial,producing)))return;
       const result=await sim.perform('production',serial,producing);
-      if(result.ok){if(view==='street')street?.setSite(sim.active());render();}
+      if(result.ok)queueProductionPaint();
     }finally{productionPending=false;}
   },4000);
   function liveReview(){
@@ -265,8 +296,9 @@
     const site=sim.active(),canSet=site&&sim.state.communityLife&&window.EarthCommunityLife.isHome(sim.state,site)&&!site.mandate&&!window.EarthLegacy?.governs(sim.state,site);
     show('scene-hearing-switch',!!canSet);
     if(canSet){
-      put('scene-hearing-switch',site.residentBallots?'Council votes at deadlines · switch to my vote':'Council waits for me · let residents vote');
-      $('scene-hearing-switch')?.setAttribute('aria-pressed',String(!!site.residentBallots));
+      const residentsVote=window.CommonEarthSim.residentHearing(sim.state,site);
+      put('scene-hearing-switch',residentsVote?'Council votes at deadlines · switch to my vote':'Council waits for me · let residents vote');
+      $('scene-hearing-switch')?.setAttribute('aria-pressed',String(residentsVote));
     }
   }
   function paintLiveClock(state){
@@ -313,7 +345,7 @@
     listen('scene-live-review','click',()=>liveReview()?.run());
     listen('scene-hearing-switch','click',async()=>{
       const site=sim.active();if(!site)return;
-      const result=await sim.perform('act',site.residentBallots?'hearing:hold':'hearing:resident');
+      const result=await sim.perform('act',window.CommonEarthSim.residentHearing(sim.state,site)?'hearing:hold':'hearing:resident');
       if(result.ok){render();syncLiveClock(true);}
       streetHud.notify(result.message);
     });
@@ -2286,7 +2318,7 @@
         partnerId:selected.partnerId,siteId:known(selected)?.id};
       const snapshot={slot:book?.current()?.id||'first',siteId:site.id,foundingRevision:site.foundingRevision,lat:site.lat,lon:site.lon,view,group,visiting,viewingShift,peers,
         researchPage,councilPage,worksiteId:encounter?.type==='construction'?encounter.jobId:null,point,foundingSponsor,preparedSurvey,foundName:$('found-name').value,commission:$('commission-at-founding').checked,atlas:atlas.getView(),street:street?.snapshotView?.(),
-        reportOpen,planOpen,voyageStyle};
+        reportOpen,planOpen,voyageStyle,exploration:districtDesk?.chart()};
       if(streetHud&&(view==='street'||liveClock?.enabled())){
         snapshot.scene=streetHud.snapshot?.();
         if(view==='street')snapshot.observer=districtDesk?.snapshot();
@@ -2332,6 +2364,7 @@
       }
       if(saved.street&&street?.restoreView?.(saved.street))renderActions();
       if(sameActor&&!districtDesk?.restore(saved.observer))streetHud?.restore?.(saved.scene);
+      if(typeof saved.exploration==='string')districtDesk?.selectChart(saved.exploration);
     }
     resumeClock(saved.liveWeeks);
     return true;

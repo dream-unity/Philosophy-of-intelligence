@@ -35,7 +35,7 @@
       }
       const pov=mine?original.name:root.EarthAgency.identity(site,actor)?.name||'another resident';
       const summary=row(original.name,'Home in '+original.homeName+'. Playing as '+pov+' in '+site.name+'.');
-      const accounts=world.sites.map(s=>({name:s.name,balance:s.purses?.people?.[original.id]?.balance||0})).filter(p=>p.balance);
+      const accounts=root.EarthAgency.originalAccounts(world);
       const balance=accounts.reduce((sum,p)=>sum+p.balance,0);
       summary.append(el('p','Personal purse · '+balance+' fund'+(balance===1?'':'s')+
         (accounts.length>1?' ('+accounts.map(p=>p.name+' '+p.balance).join(', ')+')':'')+'.'));

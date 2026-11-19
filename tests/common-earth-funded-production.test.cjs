@@ -208,3 +208,94 @@ test('an independent shop buys a raw lot and hires a different resident who make
   assert.equal(story.receipts.find(r=>r.reason==='Wage on delivery').amount,story.reserved);
   assert(g.runtime.CommonEarthSim.readSave(g.snapshot()));
 });
+
+test('a player can collect the same neighbourhood stock with their purse only after walking to the actual storefront',async()=>{
+  const g=game();
+  async function earnShift(){
+    for(const action of ['start','check','finish']){
+      const option=g.sim.purseView().options.find(o=>o.action===action&&o.available);assert(option,'available '+action);
+      const scene={siteId:g.home.id,actor:option.request.actorId,mode:'walk',target:option.venue.residentId||'market',x:15,y:23.4,tx:15,ty:23.4};
+      const result=await g.sim.perform('purseAction',option.request,()=>scene);assert(result.ok,result.message);
+    }
+  }
+  await earnShift();assert(g.sim.advance().ok);await earnShift();assert(g.sim.purseView().balance>=4);
+  let q;
+  // Every buyer, item and balance is supplied by ordinary simulation.
+  for(let i=0;i<90&&!q;i++){
+    if(i%6===5)assert(g.sim.advance().ok);
+    await g.step();
+    q=g.sim.purseView().options.find(o=>o.action==='buyShopStock'&&o.available);
+  }
+  assert(q,'the district has a stocked shop and the character can afford an item');
+  const s=g.home,actor=g.runtime.EarthPersonas.profile(s,q.request.actorId);
+  const shop=s.growth.households.find(h=>h.businessPlot===q.plot),buyer=s.purses.people[actor.id];
+  const original={stock:shop.stock,money:buyer.balance,serial:q.saleSerial,actor:g.sim.state.activeId};
+  const siteId=s.id,door=g.runtime.EarthDistrictGrowth.shopDoor(s,q.plot);
+  const proof={siteId,actor:actor.id,mode:'walk',shopPlot:q.plot,x:door.x,y:door.y,tx:door.x,ty:door.y};
+  const wrong={...proof,x:door.x+4};
+  assert.equal((await g.sim.perform('purseAction',q.request,()=>wrong)).ok,false);
+  assert.equal(shop.stock,original.stock);assert.equal(buyer.balance,original.money);
+  const done=await g.sim.perform('purseAction',q.request,()=>proof);assert(done.ok,done.message);
+  assert.equal(shop.stock,original.stock-1);assert.equal(buyer.balance,original.money-q.price);
+  assert.equal(buyer.belongings[q.good],1);assert.equal(shop.saleSerial,original.serial+1);
+  const receipt=s.growth.history[0],rows=g.runtime.EarthDistrictGrowth.transfers(receipt);
+  assert(rows.some(t=>t.from===actor.name&&t.to===shop.name&&t.good==='funds'&&t.amount===q.price));
+  assert.equal((await g.sim.perform('purseAction',q.request,()=>proof)).ok,false);
+  assert(g.runtime.CommonEarthSim.readSave(g.snapshot()));
+});
+
+test('changing one remembered employment relationship changes a real hiring decision and leaves the contract funds intact',async()=>{
+  const g=game(),all=s=>[s.home,...s.sim.state.communityLife.outposts];
+  let before,accepted,district;
+  for(let i=0;i<85&&!accepted;i++){
+    const prior=g.snapshot(),round=g.home.growth?.round||0;
+    await g.step();
+    for(const site of all(g)){
+      const picked=site.growth.households.find(h=>h.order?.kind==='retail'&&h.order.phase==='collect'&&h.order.stageRound===round+1);
+      if(picked){before=prior;accepted={...picked.order};district=site.id;break;}
+    }
+  }
+  assert(accepted);
+  const twin=game(coastal,before,accepted.at-24000),site=all(twin).find(t=>t.id===district);
+  const {person,employerId}=accepted;
+  assert(twin.runtime.EarthAutonomy.remember(site,twin.sim.state.week,person,employerId,'missed'));
+  assert(twin.runtime.EarthAutonomy.bond(site,person,employerId,twin.sim.state.week)<=-3);
+  await twin.step();
+  const counterpart=site.growth.households.find(h=>h.order?.person===person)?.order;
+  assert(!counterpart||counterpart.employerId!==employerId);
+  const summary=twin.runtime.EarthDistrictGrowth.transfers(site.growth.history[0]);
+  assert(!summary.some(e=>e.workId===accepted.id&&e.personId===employerId&&e.reason==='Employer reserved the wage'));
+  assert(twin.runtime.CommonEarthSim.readSave(twin.snapshot()));
+});
+
+test('earlier worksite records keep their paid materials and reconnect the title holder after importing',async()=>{
+  const g=game();let owner,site;
+  for(let i=0;i<65&&!owner;i++){
+    await g.step();
+    for(const t of [g.home,...g.sim.state.communityLife.outposts]){owner=t.growth.households.find(h=>h.build);if(owner){site=t;break;}}
+  }
+  assert(owner);const project=owner.build,person=project.person,siteId=site.id,ownerId=owner.owner;
+  delete project.person;delete project.at;delete project.origins;
+  const saved=g.snapshot(),twin=game(coastal,saved,g.sim.state.lastProductionAt);
+  const s=[twin.home,...twin.sim.state.communityLife.outposts].find(t=>t.id===siteId);
+  assert.deepEqual({...s.growth.households.find(h=>h.owner===ownerId).build},{...project});
+  await twin.step();const registered=s.growth.households.find(h=>h.owner===ownerId);
+  const rows=twin.runtime.EarthDistrictGrowth.transfers(s.growth.history[0]);
+  assert(registered.build?.person===person||rows.some(r=>r.workId===project.id&&r.reason==='Construction completed'&&r.personId===person));
+  assert(!rows.some(r=>r.workId===project.id&&r.reason==='Reserved at the building site'),'restoring a contract does not charge its inputs twice');
+  assert(twin.runtime.CommonEarthSim.readSave(twin.snapshot()));
+});
+
+test('a willing title holder with a connected completed home adds a real housing place',async()=>{
+  const g=game(),{EarthCityModel:city,EarthDistrictGrowth:development}=g.runtime;
+  let town,host;
+  for(let i=0;i<120&&!host;i++){
+    await g.step();
+    for(const t of [g.home,...g.sim.state.communityLife.outposts]){const room=t.growth.households.find(h=>h.guestRoom&&development.housingPlaces(t)>0);if(room){host=room;town=t;break;}}
+  }
+  assert(host);assert.equal(host.home,3);assert(host.access);
+  const before=city.housingCapacity(town),present=development.housingPlaces(town),hostId=host.guestRoom;
+  delete host.guestRoom;
+  assert.equal(development.housingPlaces(town),present-1);assert.equal(city.housingCapacity(town),before-1);
+  host.guestRoom=hostId;assert(g.runtime.CommonEarthSim.readSave(g.snapshot()));
+});

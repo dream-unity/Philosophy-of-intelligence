@@ -88,7 +88,7 @@
   // payloads therefore produces exactly the same stream format older readers
   // already understand, including back-references within a block.
   const blockMin=64*1024,blockMax=256*1024,modulus=65521;
-  const reusableSize=text=>text.length>=threshold*2&&text.length<=cacheLimit/2;
+  const reusableSize=text=>text.length>=threshold*2&&text.length<=cacheLimit;
   let lastBlocks=null;
   function joinChecksum(sum,part,length){
     const a=sum&65535;
@@ -104,36 +104,38 @@
     if(payload.length+35>=text.length)return text;
     return packedText(text.length,checksum(text),checksum(payload),payload);
   }
-  function compress(text){
-    if(!reusableSize(text)){lastBlocks=null;return compressWhole(text);}
-    const dictionary=new Int32Array(65536),parts=[],next=new Map();
+  function compress(text,dense=false){
+    if(!reusableSize(text)){lastBlocks=null;return compressWhole(text,dense);}
+    const dictionary=new Int32Array(65536),history=dense?new Uint16Array(distanceLimit):null,parts=[],next=new Map();
+    const mode=dense?'dense':'normal';
+    const minSize=text.length>4*1024*1024?256*1024:blockMin,maxSize=text.length>4*1024*1024?1024*1024:blockMax;
     let rawSum=1,packedSum=1,packedLength=0,boundary=0,used=false;
     for(let start=0;start<text.length;){
-      let end=min(text.length,start+blockMax);
+      let end=min(text.length,start+maxSize);
       if(end<text.length){
         // Prefer a district header so editing one local record does not move
         // every later boundary. Arbitrary strings still have bounded blocks.
-        if(boundary>=0&&boundary<start+blockMin)boundary=text.indexOf(',"region":',start+blockMin);
-        if(boundary>=start+blockMin&&boundary<end)end=boundary;
+        if(boundary>=0&&boundary<start+minSize)boundary=text.indexOf(',"region":',start+minSize);
+        if(boundary>=start+minSize&&boundary<end)end=boundary;
       }
       const raw=text.slice(start,end);
-      let block=lastBlocks?.get(raw.length)?.find(item=>item.raw===raw);
-      if(!block){
-        if(used)dictionary.fill(0);
+      const prior=lastBlocks?.get(raw.length)?.find(item=>item.raw===raw);
+      // Keep slices of the current source; each size mode can reuse the same
+      // district boundary and checksum. An edit only re-encodes affected blocks.
+      const block=prior?{...prior,raw}:{raw,rawSum:checksum(raw)};
+      if(!block[mode]){
+        if(used){dictionary.fill(0);if(history)history.fill(0);}
         used=true;
-        const packed=encodeBlock(raw,dictionary);
-        block={raw,packed,rawSum:checksum(raw),packedSum:checksum(packed)};
-      }else{
-        // Keep slices of the current world only. Otherwise a single unchanged
-        // district could keep an entire older world string alive.
-        block={...block,raw};
+        const packed=encodeBlock(raw,dictionary,history);
+        block[mode]={packed,sum:checksum(packed)};
       }
       const sameLength=next.get(raw.length);
       if(sameLength)sameLength.push(block);else next.set(raw.length,[block]);
-      parts.push(block.packed);
-      packedLength+=block.packed.length;
+      const encoded=block[mode];
+      parts.push(encoded.packed);
+      packedLength+=encoded.packed.length;
       rawSum=joinChecksum(rawSum,block.rawSum,raw.length);
-      packedSum=joinChecksum(packedSum,block.packedSum,block.packed.length);
+      packedSum=joinChecksum(packedSum,encoded.sum,encoded.packed.length);
       start=end;
     }
     if(packedLength+35>=text.length){lastBlocks=null;return text;}
@@ -202,15 +204,21 @@
     const packed=prepare(raw);
     if(typeof raw!=='string'||raw.length<threshold||raw.length>maxLength)return packed;
     if(recent.some(item=>item.raw===raw&&item.dense))return packed;
-    const alternative=compressWhole(raw,true);
+    const alternative=compress(raw,true);
     const best=alternative.length<packed.length?alternative:packed;
     remember(raw,best,true);
     return best;
   }
+  function tightest(raw,packed){
+    if(!reusableSize(raw)||recent.some(item=>item.raw===raw&&item.dense==='whole'))return packed;
+    const whole=compressWhole(raw,true);
+    const best=whole.length<packed.length?whole:packed;
+    remember(raw,best,'whole');return best;
+  }
   function prime(raw,packed,dense=false){
     if(typeof raw!=='string'||typeof packed!=='string'||raw.length<threshold)return false;
     const cached=recent.find(p=>p.raw===raw&&p.packed===packed);
-    if(cached){if(dense)cached.dense=true;return true;}
+    if(cached){if(dense&&!cached.dense)cached.dense=true;return true;}
     const h=header(packed);
     if(!h||h.length!==raw.length||h.hash!==checksum(raw)||h.packedHash!==checksum(packed.slice(h.start)))return false;
     remember(raw,packed,dense);return true;
@@ -233,21 +241,31 @@
     if(!entry){
       const keys=new Set();
       function payload(k){return standardKey(k)||keys.has(k);}
+      function writeWorld(name,raw){
+        const packed=prepare(raw);
+        try{native.setItem(name,packed);return packed;}
+        catch(error){
+          if(error?.name==='SecurityError')throw error;
+          const dense=prepareDense(raw);
+          if(dense.length<packed.length){
+            try{native.setItem(name,dense);return dense;}catch(retry){error=retry;}
+          }
+          // A single dictionary can recover the remaining block-boundary
+          // overhead when a save is right at the device's storage limit.
+          const whole=tightest(raw,dense);
+          if(whole.length>=dense.length)throw error;
+          native.setItem(name,whole);return whole;
+        }
+      }
       const adapter={
         get length(){return native.length;},
         key:index=>native.key(index),
+        writeWorld,
         getItem(k){const name=String(k),value=native.getItem(name);return payload(name)?unpack(value):value;},
         setItem(k,value){
           const name=String(k),raw=String(value);
           if(!payload(name)){native.setItem(name,raw);return;}
-          const packed=prepare(raw);
-          try{native.setItem(name,packed);}
-          catch(error){
-            // Try longer matches across district boundaries under quota pressure.
-            const dense=prepareDense(raw);
-            if(dense.length>=packed.length)throw error;
-            native.setItem(name,dense);
-          }
+          writeWorld(name,raw);
         },
         removeItem:k=>native.removeItem(k)
       };

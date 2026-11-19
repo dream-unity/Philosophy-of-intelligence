@@ -62,7 +62,9 @@ function eightDistricts(context){
   return JSON.stringify(world);
 }
 function workerForGame(Clock=Date){
-  const worker=vm.createContext({URL,Date:Clock,console,location:{href:script}});
+  // create() supplies a script URL when this helper is passed as a factory.
+  const clock=typeof Clock==='function'?Clock:Date;
+  const worker=vm.createContext({URL,Date:clock,console,location:{href:script}});
   const bridge={replies:[],terminate(){},postMessage(msg){setImmediate(()=>worker.onmessage({data:msg}));}};
   worker.postMessage=reply=>{bridge.replies.push(reply);bridge.onmessage({data:reply});};
   worker.importScripts=(...urls)=>{for(const url of urls){

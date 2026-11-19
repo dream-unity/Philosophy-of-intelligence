@@ -53,17 +53,17 @@
       const w=sim.state,g=canvas.getContext('2d');
       // Keep the map's terrain, plots and rights warm when only its camera
       // footprint or a person moving along a route needs to change.
-      const key=[geo.origin.id,w.week,w.productionSerial,w.actionRevision,w.workRevision,menuKey,overlayId,pixW,pixH,view.x,view.y,view.sx,
+      const key=[w.week,w.productionSerial,w.actionRevision,w.workRevision,w.regionalWorld?.step,w.regionalWorld?.regions[geo.origin.id]?.mapRevision,menuKey,overlayId,pixW,pixH,view.x,view.y,view.sx,
         ...towns.map(t=>[t.site.growth?.points,t.site.buildings?.length,t.site.population].join(','))].join('/');
       let staticMap=cache.get(canvas);
-      if(!staticMap||staticMap.key!==key||staticMap.world!==w){
+      if(!staticMap||staticMap.key!==key||staticMap.world!==w||staticMap.geo!==geo){
         const tile=staticMap?.tile||document.createElement('canvas');
         tile.width=pixW;tile.height=pixH;const ground=tile.getContext('2d');
         ground.setTransform(ratio,0,0,ratio,0,0);
         paint.soil(ground,geo,view,false);paint.routeLayer(ground,w,base,view,miniature);
         paint.useLayer(ground,w,base,view,miniature);paint.explored(ground,geo,w,base,view,overlayId);
         for(const t of towns)if(paint.inView(view,t.x,t.y,.8))paint.townPlan(ground,t,view,miniature);
-        staticMap={tile,key,world:w};cache.set(canvas,staticMap);
+        staticMap={tile,key,world:w,geo};cache.set(canvas,staticMap);
       }
       g.setTransform(1,0,0,1,0,0);g.drawImage(staticMap.tile,0,0);
       g.setTransform(ratio,0,0,ratio,0,0);
@@ -169,9 +169,12 @@
     }
     get('region-layout').onclick=()=>liveGrid(grid.hidden);
     get('region-open')?.addEventListener('click',open);
-    overlay?.addEventListener('change',()=>{
-      overlayId=overlay.value;street()?.setExploration?.(overlayId);redraw();
-    });
+    function selectChart(id){
+      overlayId=towns.some(t=>t.site.id===id)?id:'';
+      if(overlay)overlay.value=overlayId;
+      street()?.setExploration?.(overlayId);redraw();
+    }
+    overlay?.addEventListener('change',()=>selectChart(overlay.value));
     field.addEventListener('change',()=>{if(field.value)streets(field.value);});
     mini.addEventListener('click',e=>{
       if(!miniView)return;
@@ -248,7 +251,7 @@
     }
     for(const event of ['pointermove','pointerup','wheel','earthregionalinspect','earthregionalcamera'])stage.addEventListener(event,cameraMoved,{passive:true});
     setInterval(()=>{if(geo&&!document.hidden&&panel.hidden&&mini.offsetWidth)miniView=draw(small,true);},900);
-    return {refresh,close,open};
+    return {refresh,close,open,selectChart,chart:()=>overlayId};
   }
   root.EarthRegionMap={mount};
 })(typeof window==='undefined'?globalThis:window);

@@ -223,7 +223,8 @@
   }
   function commitment(site,world,id){
     if(actor(world,site)===id)return null;
-    const hearing=site.residentBallots&&!site.mandate&&site.issue?.deadline===world.week&&
+    const ballot=root.CommonEarthSim?.residentHearing?.(world,site)??Boolean(world.communityLife&&site.residentBallots!==false);
+    const hearing=ballot&&!site.mandate&&site.issue?.deadline===world.week&&
       root.EarthCommunityLife?.isHome?.(world,site)&&root.EarthCommunityLife.wasDelegate(site,id)&&
       !root.EarthLegacy?.governs?.(world,site)&&root.EarthCommunityLife.present(site,id)?
       {title:'Hear “'+site.issue.title+'”',reason:'I am taking the household estimates to the assembly for today’s vote on “'+site.issue.title+'”.',venue:'hall'}:null;

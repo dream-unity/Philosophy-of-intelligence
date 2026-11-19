@@ -608,7 +608,7 @@
         return {id,name:r.name.toLowerCase(),place:r.place,available:standing(site,id,world.week),
           venue:['kelp','shellfish'].includes(id)?'dock':good==='food'?'garden':'workshop'};
       });
-    if(good==='food'&&!site.handline){
+    if(good==='food'&&(!site.handline||hasFacility(site,'fishingDock'))){
       const stock=root.EarthFisheries?.ground?.(site,world.week);
       if(stock)sources.push({id:'fish',name:'fresh fish',place:stock.name.toLowerCase(),venue:'dock',available:stock.available});
     }

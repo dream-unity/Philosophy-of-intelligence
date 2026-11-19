@@ -1,7 +1,7 @@
 /* One north-up projection connects the street's isometric metres to the atlas. */
 (function(root){
   'use strict';
-  const KM=.013, TILT=.51;
+  const KM=root.EarthRegionalWorld?.streetKilometres||.013, TILT=.51;
   const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
   function regionalPoint(town,x,y){
     return {x:town.x+(x-y)*KM,y:town.y-(x+y-24)*KM};
@@ -191,16 +191,14 @@
   }
   function explored(g,geo,world,base,v,communityId){
     if(!communityId)return;
-    const step=geo.cellSize||.5,b=geo.bounds;
-    const x0=Math.round(Math.max(v.minX,b.minX)/step),x1=Math.round(Math.min(v.maxX,b.maxX)/step);
-    const y0=Math.round(Math.max(v.minY,b.minY)/step),y1=Math.round(Math.min(v.maxY,b.maxY)/step);
-    // Fill only surveyed ground so that unsurveyed ground remains visible.
-    // At continental zoom, query visible known cells directly when available.
-    const cells=(x1-x0+1)*(y1-y0+1),stride=Math.max(1,Math.ceil(Math.sqrt(cells/2400)));
+    const step=geo.cellSize,half=step/2;
+    // Draw each actual recorded survey and the town's original footprint.
+    // A single distant discovery remains visible at any regional extent.
+    const cells=root.EarthRegionalWorld.surveyedCells(world,base,communityId);
     g.fillStyle='rgba(248,205,95,.22)';g.beginPath();
-    for(let j=y0;j<=y1;j+=stride)for(let i=x0;i<=x1;i+=stride){
-      if(!root.EarthRegionalWorld.known(world,base,communityId,i*step,j*step))continue;
-      const p=v.screen((i-.5)*step,(j+stride-.5)*step);g.rect(p.x,p.y,v.sx*step*stride,v.sy*step*stride);
+    for(const at of cells){
+      if(!inView(v,at.x,at.y,half))continue;
+      const p=v.screen(at.x-half,at.y+half);g.rect(p.x,p.y,v.sx*step,v.sy*step);
     }
     g.fill();
   }
@@ -211,7 +209,14 @@
       if(!inView(v,t.x,t.y,.03))continue;
       count++;if(drawPerson?.(t))continue;
       const p=v.screen(t.x,t.y),r=mini?1.9:limit(v.sx*.0035,2.5,8);
-      g.beginPath();g.arc(p.x,p.y,r,0,7);g.fillStyle='#f9cc72';g.fill();g.strokeStyle='#5d4831';g.lineWidth=1;g.stroke();
+      const moving=t.phase!=='working'&&Math.hypot(t.dx||0,t.dy||0)>.001;
+      if(moving&&(mini||v.sx<95)){
+        const angle=Math.atan2(-t.dy*v.sy,t.dx*v.sx);
+        g.beginPath();g.moveTo(p.x+Math.cos(angle)*r*1.8,p.y+Math.sin(angle)*r*1.8);
+        for(const turn of [2.35,-2.35])g.lineTo(p.x+Math.cos(angle+turn)*r*1.2,p.y+Math.sin(angle+turn)*r*1.2);
+        g.closePath();
+      }else{g.beginPath();g.arc(p.x,p.y,r,0,7);}
+      g.fillStyle=t.mode==='boat'?'#bbdfd3':'#f9cc72';g.fill();g.strokeStyle='#51452f';g.lineWidth=1;g.stroke();
       if(!mini&&v.sx>90){g.fillStyle='#343d35';g.fillRect(p.x-r*.5,p.y+r*.7,r,r);}
     }
     return count;
@@ -222,6 +227,10 @@
     if(small){
       const r=limit(2.1+Math.sqrt((s.growth?.households?.length||s.population||1))*.26,2,5);
       g.strokeStyle='#3d5850';g.lineWidth=1;g.fillStyle='#e6c891';g.beginPath();g.moveTo(p.x,p.y-r);g.lineTo(p.x+r,p.y);g.lineTo(p.x,p.y+r);g.lineTo(p.x-r,p.y);g.closePath();g.fill();g.stroke();
+      if(s.construction?.length||s.growth?.households.some(h=>h.build)){
+        g.strokeStyle='#594938';g.lineWidth=2.6;g.beginPath();g.moveTo(p.x+r-1,p.y-r+.5);g.lineTo(p.x+r+1.5,p.y-r-2);g.lineTo(p.x+r+4,p.y-r+.5);g.stroke();
+        g.strokeStyle='#fbe6ac';g.lineWidth=1.3;g.stroke();
+      }
     }else{
       const corners=[[0,0],[24,0],[24,24],[0,24]].map(([x,y])=>proj(x,y));
       g.fillStyle=s.water?'#a79570':'#a6ae89';g.beginPath();corners.forEach((pt,i)=>i?g.lineTo(pt.x,pt.y):g.moveTo(pt.x,pt.y));g.closePath();g.fill();

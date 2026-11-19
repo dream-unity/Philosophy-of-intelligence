@@ -81,7 +81,7 @@
       }
       const frame=sample('frame');
       items.push(frame?'Active motion '+(1000/frame.average).toFixed(1)+' FPS · p95 interval '+millis(frame.p95)+' ('+frame.n+' intervals)':'Drag the map to measure active motion.');
-      for(const [key,label] of [['host','Browser frame interval during drag'],['events','Drag event interval'],['delivery','Event delivery'],['longtask','Page long tasks'],['draw','Scene drawing'],['input','Touch to completed draw'],['path','Street pathfinding'],['open','World open'],['week','Week simulation'],['workerWeek','Worker week simulation'],['production','Production round'],['workerProduction','Worker production round'],['save','World save']]){
+      for(const [key,label] of [['host','Browser frame interval during drag'],['events','Drag event interval'],['delivery','Event delivery'],['longtask','Page long tasks'],['draw','Scene drawing'],['input','Touch to completed draw'],['path','Street pathfinding'],['open','World open'],['week','Week simulation'],['workerWeek','Worker week simulation'],['production','Production round'],['productionUI','Production interface refresh'],['workerProduction','Worker production round'],['save','World save']]){
         const value=sample(key);
         if(value)items.push(label+' '+millis(value.median)+' median · '+millis(value.p95)+' p95 ('+value.n+')');
       }

@@ -30,6 +30,11 @@ test('both neighbourhoods use one stable surveyed coast; observer reads no clock
   assert.equal(R.geography(w,neighbour.site).origin.id,home.id);
   assert.equal(R.known(w,neighbour.site,neighbour.site.id,neighbour.x,neighbour.y),true);
   assert.equal(R.known(w,home,home.id,neighbour.x,neighbour.y),false);
+  for(const {site} of geo.towns){
+    const chart=new Set(R.surveyedCells(w,home,site.id).map(p=>p.x+','+p.y));
+    for(let x=-10;x<=10;x+=.5)for(let y=-10;y<=10;y+=.5)assert.equal(chart.has(x+','+y),R.known(w,home,site.id,x,y));
+    assert.equal(R.ledger(w,site).knownCells,chart.size);
+  }
   const t=geo.towns[0];assert.equal(R.terrain(geo,t.x-.25,t.y-.25).kind,'water');
   assert.notEqual(R.terrain(geo,t.x+.05,t.y+.05).kind,'water');
   for(const s of [home,neighbour.site])for(const [x,y] of [[1.2,3.8],[-9.6,9.9],[neighbour.x,neighbour.y]]){
@@ -51,6 +56,7 @@ test('an explicit survey dispatches an available real resident, then the same re
   assert.equal(trip.personId,key);assert.deepEqual(JSON.stringify(trip.path),JSON.stringify(outgoing.path));
   re.runToReturn();
   assert.equal(re.R.known(re.w,re.home,re.home.id,point.x,point.y),true);
+  assert.ok(re.R.surveyedCells(re.w,re.home,re.home.id).some(p=>p.x===1.5&&p.y===1));
   assert.ok(re.home.purses.people[key].balance>=openingCash+1);
   assert.ok(re.R.residentRecord(re.w,re.home,key).records.some(n=>n.text.includes('reserved fund')));
   const construction=re.propose('build',point.x,point.y);assert.ok(construction.ok,construction.message);
@@ -78,6 +84,10 @@ test('a crossing fork changes actual reachable waypoints without moving the trav
   assert.ok(R.travellers(w,home).some(p=>p.personId==='steward'&&p.destination===n.name));
   assert.ok(cmd('routeChoice','direct').ok);f.clock(6500);assert.ok(cmd('arrive',n.id).arrived);
   assert.ok(R.known(w,home,home.id,geo.towns[1].x,geo.towns[1].y));assert.equal(w.communityLife.homeId,home.id);
+  const traversals=new Map();
+  for(const id of trip.path)traversals.set(id,(traversals.get(id)||0)+1);
+  for(const [id,times] of traversals)assert.equal(f.region.parcels[id].traffic[home.id],times,
+    'inspecting a landmark and later arriving counts only the physical passages at '+id);
   assert.equal(ctx.EarthCommunityLife.residency(n,'steward'),'visitor');
 });
 test('two willing founders carry their own identities, skills, kit and homes to the surveyed point; observer retains citizenship',()=>{
@@ -188,6 +198,127 @@ test('coincident legacy settlement pins separate on viable ground, survive reord
     const town=first.geo.towns.find(t=>t.site.id===id);
     assert.deepEqual([town.site.population,town.site.funds,town.site.food,town.site.materials],[population,funds,food,materials]);
     assert.notEqual(first.R.terrain(first.geo,town.x,town.y).kind,'water');
+    const old=peers.find(p=>p.id===id),P=first.ctx.EarthPersonas;
+    for(const person of P.list(old)){
+      const firstBirth=P.birthProfile(town.site,person.id);
+      assert.equal(JSON.stringify(firstBirth),JSON.stringify(P.birthProfile(old,person.id)));
+      assert.equal(JSON.stringify(firstBirth),JSON.stringify(third.ctx.EarthPersonas.birthProfile(third.geo.towns.find(t=>t.site.id===id).site,person.id)));
+    }
   }
   const oldest=map(first)[0];assert.equal(oldest[1],peers[0].lon);assert.equal(oldest[2],peers[0].lat);
+});
+
+test('a field worker can give an observation to a traveller who can bring that one parcel to a foreign meeting',()=>{
+  const f=game(),{w,sim,home,geo,R,ctx}=f,point={x:1.43,y:1.11};
+  home.food=40;home.materials=40;home.funds=50;
+  assert(f.propose('survey',point.x,point.y).ok);const worker=f.region.trips[home.id].personId;
+  const pose=(target,tx=6)=>({siteId:sim.active().id,actor:ctx.EarthAgency.actorId(sim.active()),mode:'walk',target,x:6,y:6,tx,ty:6});
+  const topics=id=>ctx.EarthAgency.topics(sim.active(),w,id);
+  const act=(person,option,tx)=>sim.converse(person,option.id,()=>pose(person,tx));
+  f.runToReturn();
+  const receipt=R.fieldAccount(w,home,ctx.EarthPersonas.profile(home,worker));assert(receipt,JSON.stringify(R.ledger(w,home).records));
+  const ask=topics(worker).find(o=>o.id.startsWith('field:ask:')),copy=topics(worker).find(o=>o.id.startsWith('field:copy:'));assert(ask&&copy);
+  const foreign=geo.towns.find(t=>t.site.id!==home.id&&!R.known(w,home,t.site.id,point.x,point.y)).site;
+  const before=JSON.stringify(w);assert.match(act(worker,ask).message,/I was on that crew/);
+  assert.equal(JSON.stringify(w),before);assert.equal(act(worker,copy,13).ok,false);
+  assert(act(worker,copy).changed);assert(!R.known(w,home,foreign.id,point.x,point.y));
+  const localWitness=ctx.EarthPersonas.profile(home,worker).name;
+  const command=(action,target)=>sim.communityLife({site:sim.active().id,actor:'steward',week:w.week,action,target},pose('market'));
+  assert(command('depart',foreign.id).ok);f.clock(7000);assert(command('arrive',foreign.id).ok);
+  const delegate=ctx.EarthCommunityLife.hostFor(foreign).id;
+  const file=topics(delegate).find(o=>o.id.startsWith('field:file:'));assert(file);assert.match(file.label,new RegExp(localWitness));
+  const outsider=ctx.EarthPersonas.list(foreign).find(p=>p.id!==delegate&&p.id!=='steward');
+  assert(!topics(outsider.id).some(o=>o.id.startsWith('field:file:')));
+  const sharedBefore=Object.keys(f.region.knowledge[foreign.id]||{}).length;
+  assert(!act(delegate,file,12).ok);assert(!R.known(w,foreign,foreign.id,point.x,point.y));
+  assert(act(delegate,file).changed);assert(R.known(w,foreign,foreign.id,point.x,point.y));
+  assert.equal(Object.keys(f.region.knowledge[foreign.id]).length,sharedBefore+1);assert(!act(delegate,file).ok);
+  const again=game(f.save()),surviving=again.w.communityLife.fieldNotes;assert(surviving.some(n=>n.sourceName===localWitness));
+});
+
+test('a willing resident carries a field account away from a completed mutual visit only if the other person actually hosted them',()=>{
+  const f=game(),{home,w,sim,R,ctx}=f,point={x:1.43,y:1.11};
+  home.food=40;home.materials=40;home.funds=50;
+  assert(f.propose('survey',point.x,point.y).ok);const worker=f.region.trips[home.id].personId;f.runToReturn();assert(sim.advance().ok);
+  const reader=ctx.EarthPersonas.list(home).find(p=>p.id!==worker&&p.id!=='steward'&&p.traits.curiosity>=62&&home.autonomy.people[p.id]);
+  assert(reader);assert(R.fieldAccount(w,home,ctx.EarthPersonas.profile(home,worker)));const week=w.week;
+  const copy=JSON.stringify(w);
+  for(const arrived of [false,true]){
+    const test=game(copy),site=test.home;
+    site.autonomy.people[worker].history[0]={kind:'visit',week,venue:'garden',target:reader.id};
+    site.autonomy.people[reader.id].history[0]={kind:'host',week,venue:'garden',target:arrived?worker:'steward'};
+    test.w.week++;test.ctx.EarthDialogue.closeWeek(site,test.w);
+    const notes=test.w.communityLife.fieldNotes||[];
+    assert.equal(notes.some(n=>n.reader===reader.identityKey&&n.sourceKey===ctx.EarthPersonas.profile(home,worker).identityKey),arrived);
+    if(arrived){
+      const row=notes.find(n=>n.reader===reader.identityKey);assert.equal(row.week,test.w.week);
+      const current=notes.length;test.ctx.EarthDialogue.closeWeek(site,test.w);assert.equal(test.w.communityLife.fieldNotes.length,current);
+    }
+    test.sim.destroy();
+  }
+  sim.destroy();
+});
+
+test('an unbuilt field in the former town exclusion circle accepts work and the crew walks all the way to its surveyed point',()=>{
+  const f=game(),{w,home,R,geo}=f,spot={x:.22,y:.20};
+  home.funds=40;home.food=40;home.materials=40;
+  assert.equal(R.streetFootprint(geo,0,0).site.id,home.id);
+  assert.equal(R.streetFootprint(geo,spot.x,spot.y),null);
+  assert.equal(R.inspect(w,home,0,0).choices.find(c=>c.kind==='build').available,false);
+  assert.equal(R.inspect(w,home,spot.x,spot.y).choices.find(c=>c.kind==='build').available,true);
+  const order=f.propose('build',spot.x,spot.y);assert.ok(order.ok,order.message);
+  const person=()=>R.travellers(w,home).find(t=>t.siteId===home.id&&t.kind==='build');
+  assert.equal(person().x,0);assert.equal(person().y,0);
+  f.clock(1100);
+  const moving=person();assert.ok(moving.x>0&&moving.x<spot.x);assert.ok(moving.y>0&&moving.y<spot.y);
+  assert.ok(f.progress().ok);assert.equal(person().phase,'working');assert.equal(person().x,spot.x);assert.equal(person().y,spot.y);
+  assert.ok(f.progress().ok);assert.equal(person().phase,'returning');assert.equal(person().x,spot.x);assert.equal(person().y,spot.y);
+  f.runToReturn();assert.ok(R.works(w,home).some(p=>p.x===spot.x&&p.y===spot.y));f.save();
+});
+test('the poles and date line retain kilometre distances, source profiles and cell addresses across a reload',()=>{
+  for(const lat of [90,-90]){
+    const f=game(undefined,{name:'Polar research haven',lat,lon:179.99,water:true});
+    const expected=[[0,0],[-2.9,2.1],[4.9,-3.4],[3.2,5.6]];
+    function verify(R,w,base){
+      const geo=R.geography(w,base);
+      for(const [i,t] of geo.towns.entries()){
+        assert.ok(Math.hypot(t.x-expected[i][0],t.y-expected[i][1])<1e-7);
+        assert.ok(R.crossingPath(w,base,t.site));
+      }
+      for(const [x,y] of [[9.8,-9.8],[-8.9,8.3],[.01,.02]]){
+        const roundtrip=geo.project(geo.locate(x,y));assert.ok(Math.hypot(roundtrip.x-x,roundtrip.y-y)<1e-7);
+      }
+    }
+    verify(f.R,f.w,f.home);
+    const older=JSON.parse(f.save()),peers=older.communityLife.outposts;
+    for(let i=0;i<3;i++)Object.assign(peers[i],f.ctx.EarthCommunityLife.nearLocation(older.sites[0],i,true));
+    const historic=game(JSON.stringify(older));verify(historic.R,historic.w,historic.home);
+    for(const t of historic.geo.towns.slice(1)){
+      const old=peers.find(s=>s.id===t.site.id);
+      assert.equal(t.site.birthCoordinate.lat,old.lat);
+      assert.equal(JSON.stringify(historic.ctx.EarthPersonas.birthProfile(t.site,'walker-0')),JSON.stringify(f.ctx.EarthPersonas.birthProfile(old,'walker-0')));
+    }
+    assert.ok(f.progress().ok);const reopened=game(f.save());
+    verify(reopened.R,reopened.w,reopened.home);
+  }
+});
+test('an agreement opens precisely the witnessed parcel and survives a later meeting about a different property',()=>{
+  const f=game(),{w,home,R,geo}=f,peer=geo.towns[1].site;
+  home.trust=peer.trust=80;home.food=peer.food=45;home.materials=peer.materials=40;
+  R.shareCrossing(w,home,peer,'steward','Surveyor',['0,0']);
+  const r=f.region,k=[home.id,peer.id].sort().join('/');
+  for(const id of ['2,2','3,2']){
+    r.parcels[id]={uses:{[peer.id]:2},owner:peer.id};
+    r.knowledge[home.id][id]=w.week;
+  }
+  const canGather=(x)=>R.inspect(w,home,x,1).choices.find(c=>c.kind==='gather').available;
+  assert.equal(canGather(1),false);assert.equal(canGather(1.5),false);
+  R.shareCrossing(w,home,peer,'steward','Surveyor',['0,0','1,0','1,1','2,1','2,2']);
+  assert.equal(r.contacts[k].terms,'joint');
+  assert.equal(canGather(1),true);assert.equal(canGather(1.5),false);
+  w.regionalWorld.step+=3;home.trust=peer.trust=48;
+  R.shareCrossing(w,home,peer,'steward','Surveyor',['3,2']);
+  assert.equal(r.contacts[k].cell,'3,2');assert.notEqual(r.contacts[k].terms,'joint');
+  assert.equal(canGather(1),true);assert.equal(canGather(1.5),false);
+  const loaded=game(f.save());assert.ok(loaded.R.inspect(loaded.w,loaded.home,1,1).agreements.some(a=>a.terms==='joint'));
 });

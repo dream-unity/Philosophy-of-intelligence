@@ -495,7 +495,7 @@
     pointInspector=root.EarthRegionalInspector?.mount({sim,street:getScene,watch,travel,
       returnStreet:()=>{close();street()?.recenter();},refresh:redraw,ledger:(town,personId)=>{openDevelopment(town,personId?{personId}:{});ledger.scrollIntoView({block:'nearest'});},contextChanged:ribbon});
     $('street-stage')?.addEventListener('earthregionalmeet',e=>hud.meetPerson(e.detail.id));
-    return {watch,close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},
+    return {chart:()=>region?.chart(),selectChart:id=>region?.selectChart(id),watch,close(focus){region?.close();close(focus);},project,snapshot,restore,refreshWork,observing:()=>!!watchedId,setMarket:panel=>{marketPanel=panel;},
       render(isAtlas){if(isAtlas)pointInspector?.clear();region?.refresh();if(watchedId)syncObserved();pointInspector?.redraw();ribbon();atlasDirectory(isAtlas);}};
   }
   root.EarthDistrictDesk=Object.freeze({mount});

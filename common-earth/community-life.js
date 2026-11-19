@@ -113,8 +113,10 @@
       second:'communication',need:site.specialty==='materials'?'repairing shared equipment':site.specialty==='funds'?'coordinating the exchange':'feeding households',
       life:'neighbours who look after the shared stores',goods:site.specialty,purpose:'a reliable neighbourhood rota'};
   }
-  function pointNear(site,index){
+  function pointNear(site,index,legacy=false){
     const north=[2.1,-3.4,5.6][index],east=[-2.9,4.9,3.2][index],lat=cap(site.lat+north/111,-89.9,89.9);
+    if(!legacy&&Math.abs(site.lat)>85&&root.EarthRegionalWorld?.polarProjection)
+      return {...root.EarthRegionalWorld.polarProjection(site).locate(east,north),water:site.water,coastal:site.coastal};
     return {lat,lon:((site.lon+east/(111*Math.max(.08,Math.cos(lat*Math.PI/180)))+540)%360)-180,water:site.water,coastal:site.coastal};
   }
   function founderSurvey(world,site){
@@ -590,18 +592,18 @@
     a.due=world.week+3;a.siteId=world.communityLife.homeId;a.coveredBy=null;a.attended=false;
     return [writeLog(site,world.week,text)];
   }
-  function beginInspection(world,from,to,id,motive){
+  function beginInspection(world,from,to,id,motive,plan){
     const p=portable(from,id),old=local(from).people[id];
     if(!p||!present(from,id))return null;
     const regional=root.EarthRegionalWorld;
     if(regional&&!regional.passageAgreement(world,from,to))return null;
-    const path=regional?.crossingPath(world,from,to);if(path===null)return null;
+    const path=plan?.path||regional?.crossingPath(world,from,to);if(path===null)return null;
     const next=guestSlot(to,p,old?.originId||from.id,old?.originSlot||id,'visitor',world.week);
     if(!next||!local(to).people[next])return null;
     const guest=local(to).people[next];guest.visitFrom=from.id;guest.visitSlot=id;guest.inspects=world.week+1;
     if(motive)guest.motive=motive.slice(0,500);
     awaySlot(from,id,to.id);
-    if(path)regional.shareCrossing(world,from,to,id,p.name,path);
+    if(path)regional.shareCrossing(world,from,to,id,p.name,path,plan?.travelIndex);
     const text=p.name+' arrived from '+from.name+' to inspect '+to.name+'’s '+(kind(to).goods==='food'?'shared kitchen':'workplaces')+' and meet the households. '+p.name+' will decide after a week.';
     writeLog(from,world.week,p.name+' took a week away to inspect '+to.name+'.');writeLog(to,world.week,text);
     return text;
@@ -727,7 +729,8 @@
     Object.assign(local(newHome),{cluster:site.communityLife.cluster,district:purpose.district,habitat:root.EarthResources?.environment?.(newHome)||'mixed'});local(newHome).away.steward='elsewhere';
     const moved=old.members.map(personId=>movePerson(world,site,newHome,personId));
     world.communityLife.outposts.push(newHome);
-    if(old.path)root.EarthRegionalWorld?.shareCrossing(world,site,newHome,old.members[0],people[0].name,old.path);
+    const course=point===old.point?old.path:point.path;
+    if(course)root.EarthRegionalWorld?.shareCrossing(world,site,newHome,old.members[0],people[0].name,course,point===old.point?old.travelIndex:undefined);
     delete c.foundingPlan;c.lastExit=world.week;
     const text=moved.map(person=>person.name).join(' and ')+' joined three neighbouring households to found '+name+'. Their skills and interests shaped its first joint undertaking, '+purpose.purpose+'. They brought the food, repair stock and funds set aside for them. '+site.name+' has two fewer residents to cover its shifts.';
     writeLog(newHome,world.week,text,true);return writeLog(site,world.week,text);
@@ -805,13 +808,22 @@
     const c=site.communityLife;if(!c?.excursions)return;
     for(const [id,plan] of Object.entries(c.excursions)){
       if(plan.due>world.week)continue;
+      const name=root.EarthPersonas?.profile(site,id)?.name||'A resident',dest=lookup(world,plan.to);
+      const region=root.EarthRegionalWorld;
+      if(dest&&region){
+        const course=plan.path?region.remainingCrossing(world,site,plan.path,plan.travelIndex):region.crossingPath(world,site,dest);
+        if(course===null||!region.passageAgreement(world,site,dest)){
+          plan.due=world.week+1;
+          notify(site,writeLog(site,world.week,name+' is waiting for an accessible passage to '+dest.name+' before the agreed housing visit.'));continue;
+        }
+        if(course)plan.path=course;
+      }
       delete c.excursions[id];
       if(c.away[id]==='regional-visit')delete c.away[id];
-      const name=root.EarthPersonas?.profile(site,id)?.name||'A resident',dest=lookup(world,plan.to);
       if(!dest||!present(site,id)||!transferable(site,id,world)||room(dest)<1){
         notify(site,writeLog(site,world.week,name+' stayed after the handover or the destination’s housing changed.'));continue;
       }
-      const message=beginInspection(world,site,dest,id);
+      const message=beginInspection(world,site,dest,id,undefined,plan);
       if(message){notify(site,writeLog(site,world.week,name+' set off to inspect '+dest.name+'.'));notify(dest,message);}
     }
   }
@@ -1218,6 +1230,7 @@
     if(isHome(world,site)||cmd==='changeActor'&&(args[0]==='steward'||root.EarthAgency?.shadowPass?.(site,world,args[0])))return '';
     if(['visit','advance','workConstruction','regularTruck','disputedTruck','neighbourAppointment','communityLife','reset'].includes(cmd))return '';
     if(cmd==='converse'&&['shadow','truck-testimony','truck-report'].includes(args[1]))return '';
+    if(cmd==='converse'&&typeof args[1]==='string'&&args[1].startsWith('field:'))return '';
     if(cmd==='converse'&&(root.EarthDialogue?.readOnly?.(args[1])??['news','work','interests','purpose','dream','visit-fit','followup'].includes(args[1])))return '';
     return 'You are visiting '+site.name+'. Its residents decide here. Open Towns to meet the host, apply to join, or go home.';
   }
@@ -1332,7 +1345,7 @@
         writeLog(dest,world.week,a.profile.name+' inspected '+seen+' on the way from '+site.name+'.');
         const book=local(dest);book.pathVisits={week:world.week,seen:trip.seen.length,from:site.id};
       }
-      if(trip.path)root.EarthRegionalWorld?.shareCrossing(world,site,dest,'steward',a.profile.name,trip.path);
+      if(trip.path)root.EarthRegionalWorld?.shareCrossing(world,site,dest,'steward',a.profile.name,trip.path,trip.observed);
       a.journey=null;arrive(world,site,dest,makeSite);
       return {ok:true,arrived:true,vehicle:trip.vehicle,message:writeLog(dest,world.week,a.profile.name+' arrived in '+dest.name+(isHome(world,dest)?' and returned to their home.':' as a visitor. '+hostFor(dest).name+' speaks for the admissions meeting.'))};
     }
@@ -1438,6 +1451,7 @@
   function valid(world,validateSite){
     const a=world.communityLife;if(a==null)return true;
     if(world.communityLife&&root.EarthAgency?.validRecall&&!root.EarthAgency.validRecall(world.communityLife.viewpointHistory,world.week))return false;
+    if(root.EarthDialogue?.validFieldNotes&&!root.EarthDialogue.validFieldNotes(world))return false;
     if(!obj(a)||!Array.isArray(a.outposts)||!word(a.originId)||!word(a.originName)||!word(a.homeId)||!validProfile(a.profile,'steward')||
       !world.sites.some(s=>s.id===a.homeId)||!obj(a.duty)||!int(a.duty.due,world.week,world.week+3)||!int(a.duty.reliability,-6,6)||
       typeof a.duty.attended!=='boolean'||a.duty.coveredBy!=null&&!word(a.duty.coveredBy))return false;
@@ -1513,5 +1527,5 @@
       ['numeracy','music','communication','care','craft','stamina','organisation'].every(k=>int(p.aptitudes[k],0,100)&&int(p.bounds[k]?.min,0,p.aptitudes[k])&&int(p.bounds[k]?.max,p.aptitudes[k],100));
   }
   root.EarthCommunityLife=Object.freeze({initialise,restart,valid,present,profile,personLabel,census,commuting,residency,anchor,coverCandidate,isHome,neighbours,travelIntent,volunteers,founding,
-    visitorReception,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
+    nearLocation:pointNear,visitorReception,communityCharacter,view,districtProfile,welcomeOffers,meetHousehold,recordWeek:writeLog,movingOptions,householdOffer,hostFor,wasDelegate,visitorFit,routeProgress,trail,arrive,tick,workforce,permission,visitReason,journeyBlock,fieldCandidates:candidates,settleFieldCamp,run});
 })(typeof window==='undefined'?globalThis:window);

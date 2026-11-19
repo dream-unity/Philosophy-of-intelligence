@@ -21,8 +21,9 @@
     if(/repair|build|craft|survey|mechanic|carpent/i.test(role))return 'repair';
     return 'exchange';
   }
-  function commitment(world,site,p){
+  function commitment(world,site,p,appointments){
     if(!member(site,p.id))return 'Away from this district';
+    if(root.EarthPractice?.reserved?.(site,p.id,world.week))return 'Keeping a booked practice session';
     if(site.purses?.tickets?.[p.id])return 'A stock check is already booked';
     if(site.shift?.residentId===p.id||site.shift&&p.id===(site.agency?.actor||'steward'))return 'Working an accompanied shift';
     if(site.careers?.[p.id]?.training?.pace==='intensive'&&!site.careers[p.id].training.paused)return 'Attending an intensive course';
@@ -31,7 +32,7 @@
     if(site.communityLife?.freight?.signer===p.id)return 'Carrying a signed district shipment';
     if(site.communityLife?.excursions?.[p.id])return 'Travelling to another community';
     if(site.communityLife?.foundingPlan?.members?.includes(p.id))return 'Preparing an agreed relocation';
-    if(root.EarthNeighbourErrands?.working?.(site,world.week).some(e=>e.actorId===p.id||e.targetId===p.id))return 'Keeping an agreed appointment';
+    if(appointments?appointments.has(p.id):root.EarthNeighbourErrands?.working?.(site,world.week).some(e=>e.actorId===p.id||e.targetId===p.id))return 'Keeping an agreed appointment';
     return '';
   }
   function supplier(site){
@@ -113,7 +114,7 @@
     o.at=at;
     const {from,to}=endpoints(site,o);
     o.travelMs=movement(site,from,to);
-    o.workMs=o.phase==='deliver'?1300:o.kind==='retail'?6500:o.resource==='fish'?root.EarthFisheries.biteDelay:2100;
+    o.workMs=o.phase==='deliver'?1300:o.kind==='retail'?6500:o.resource==='fish'?root.EarthFisheries.biteDelay*o.request:o.kind==='repair'&&site.growth.custom==='Repair circle'?1450:2100;
   }
   function overview(site){
     const g=site.growth;
@@ -134,20 +135,23 @@
     }
     return best;
   }
-  function privateOffer(site,p,h,offers){
+  function privateOffer(world,site,p,offers){
     let best=null;
     for(const opening of offers.openings){
       const {shop,employer,item,source,demand}=opening;
       if(employer.id===p.id||offers.hired.has(shop.owner)||!demand)continue;
       const proficiency=site.careers?.[p.id]?.skills?.[item.axis]??p.aptitudes?.[item.axis]??40;
-      if(proficiency<item.threshold)continue;
-      const relation=site.autonomy?.people?.[p.id]?.relationships?.[employer.id];
-      const familiarity=typeof relation==='number'?relation:relation?.trust||0;
+      const threshold=item.threshold-(site.growth.custom==='Repair circle'&&shop.access&&item.axis==='craft'?4:0);
+      if(proficiency<threshold)continue;
+      const workerTrust=root.EarthAutonomy?.bond?.(site,p.id,employer.id,world.week)||0;
+      const employerTrust=root.EarthAutonomy?.bond?.(site,employer.id,p.id,world.week)||0;
+      const familiarity=Math.min(workerTrust,employerTrust);
+      if(familiarity<=-3)continue;
       const wage=proficiency>=65?2:1;
       if((shop.businessFunds||0)<wage+source.cost||source.cost+wage>4)continue;
-      const score=37+proficiency/4+Math.min(15,demand*3)+Math.max(-6,Math.min(8,familiarity/8))+
+      const score=37+proficiency/4+Math.min(15,demand*3)+familiarity+
         (p.hobbyAxis===item.axis?6:0)-shop.stock*8;
-      if(!best||score>best.score)best={...opening,wage,score};
+      if(!best||score>best.score)best={...opening,wage,score,familiarity};
     }
     return best;
   }
@@ -160,6 +164,7 @@
       employer:shop.owner,employerId:employer.id,employerName:employer.name,employerPlot:shop.businessPlot,input:source.id,
       start:h.lastStop||'home',request:1,cargo:0,phase:'collect',tool:item.shop==='weaving'?'weaving frame':item.shop==='joinery'?'joinery tools':item.shop==='music'?'tuning tools':'sewing tools',
       why:employer.name+' needs '+item.name.toLowerCase()+' for '+offer.demand+' interested household'+(offer.demand===1?'':'s')+'. My '+item.axis+' skill meets the job requirement. The shop reserved '+wage+' for my work.'};
+    if(offer.familiarity>0)o.why+=' We have kept agreements before.';
     if(h.lastPoint)o.fromPoint={...h.lastPoint};
     setLeg(site,o,at);
     shop.businessFunds-=source.cost+wage;offers.hired.add(shop.owner);
@@ -187,11 +192,14 @@
         if(!b.parcel||!offers.households.some(row=>row.p.id!==p.id))continue;
         field={id:'parcel',name:imported.parcel,place:'the exchange loading counter',venue:'market',available:b.parcel};
       }else{
-        const sources=offers.sources[kind].map(s=>({...s,available:s.available-(offers.held[s.id]||0)}))
-          .filter(s=>s.available>0&&!(s.id==='fish'&&offers.held.fish));
         const prefersFish=/fish|dock|harbour|shore/i.test(p.role||'')||(h.plot+g.round)%4===0;
-        sources.sort((a,b)=>(prefersFish&&b.id==='fish'?9:0)-(prefersFish&&a.id==='fish'?9:0)+b.available-a.available);
-        field=sources[0];
+        let highest=-1;
+        for(const source of offers.sources[kind]){
+          const held=offers.held[source.id]||0,available=source.available-held;
+          if(available<=0||source.id==='fish'&&held)continue;
+          const score=available+(source.id==='fish'&&prefersFish?9:0);
+          if(score>highest){highest=score;field={...source,available};}
+        }
         if(!field){
           const replacement=kind==='food'?'crate':'boards';
           if(b[replacement])field={id:replacement,name:imported[replacement],place:'the arriving freight consignment',venue:'market',available:b[replacement]};
@@ -203,7 +211,7 @@
       best.push({kind,good,score,client,wage,dues,field});
     }
     best.sort((a,b)=>b.score-a.score);
-    const chosen=best[0],opening=privateOffer(site,p,h,offers);
+    const chosen=best[0],opening=privateOffer(world,site,p,offers);
     if(opening&&(!chosen||opening.score>=chosen.score)){
       const hired=hire(world,site,p,h,opening,offers,at,log);if(hired)return hired;
     }
@@ -214,17 +222,22 @@
     const request=imported[field.id]?(kind==='exchange'&&customary?Math.min(2,b.parcel):1):Math.min(field.available,capacity);
     const order={id:g.round+'-'+h.plot,person:p.id,worker:p.name,plot:h.plot,stageRound:g.round,kind,client,wage,dues,resource:field.id,
       resourceName:field.name,source,sourceVenue:field.venue,destVenue:kind==='exchange'?'home':client==='broker'?'market':kind==='food'?'pantry':'workshop',
-      start:h.lastStop||'home',request,cargo:0,phase:'collect',tool:field.id==='fish'?'shared handline':kind==='exchange'?'delivery docket':kind==='food'?'harvest basket':'work tools',
+      start:h.lastStop||'home',request,cargo:0,phase:'collect',tool:field.id==='fish'?(site.buildings.some(b=>b.kind==='fishingDock')?'dock handline':'shared handline'):kind==='exchange'?'delivery docket':kind==='food'?'harvest basket':'work tools',
       why:client==='public'?'The '+site.name+' council ordered '+good+' for its '+(kind==='food'?'households':'building crews')+
         '. The available store holds '+site[good]+', below its '+needs[kind]+' target.':
         'The freight exchange has a paid '+(kind==='exchange'?'doorstep delivery':'order for '+field.name)+'. Its advance covers my '+wage+'-fund wage and the market due.'};
     if(kind==='exchange'){
       // A different household placed the order. Earning a fee requires
       // delivering the addressed goods while that household still lives here.
-      const candidates=offers.households.filter(row=>row.p.id!==p.id);
-      const stock=h=>Math.min(h.pantry||0,h.supplies||0)+(offers.deliveries[h.owner]||0);
-      candidates.sort((a,b)=>stock(a.h)-stock(b.h)||((a.h.plot+g.round)%candidates.length)-((b.h.plot+g.round)%candidates.length));
-      const receiver=candidates[0];if(!receiver)return null;
+      let receiver=null,least=Infinity,first=Infinity;
+      const peers=offers.households.length-1;
+      for(const row of offers.households){
+        if(row.p.id===p.id)continue;
+        const need=Math.min(row.h.pantry||0,row.h.supplies||0)+(offers.deliveries[row.h.owner]||0);
+        const turn=(row.h.plot+g.round)%peers;
+        if(need<least||need===least&&turn<first){least=need;first=turn;receiver=row;}
+      }
+      if(!receiver)return null;
       order.recipient=receiver.h.owner;order.recipientId=receiver.p.id;order.recipientName=receiver.p.name;
       order.recipientPlot=receiver.h.plot;order.contents=(receiver.h.pantry||0)<=(receiver.h.supplies||0)?'food':'materials';
       order.why=receiver.p.name+' is expecting '+request+' '+(order.contents==='food'?'meal':'supply')+' parcel'+(request===1?'':'s')+' at home.'+(request>1?' The Market gathering coordinates a combined delivery.':'')+' The freight exchange has set aside '+(wage+dues)+' funds for delivery and market dues.';
@@ -239,6 +252,11 @@
     offers.pending[kind]=(offers.pending[kind]||0)+1;
     changed(log,client==='public'?publicAccount:carrier,escrow,funds,wage+dues,p.id,order.id,'Funded '+field.name+' order');
     if(imported[field.id])changed(log,carrier,escrow,field.name,request,p.id,order.id,'Set aside the consignment');
+    const ambition=site.autonomy?.people?.[p.id]?.dream;
+    if(ambition&&!ambition.completedWeek&&order.why.length<213){
+      const dream=root.EarthDreams?.view?.(site,world,p.id,p,ambition);
+      if(dream?.shortfall)order.why+=(' I am saving '+dream.shortfall+' more funds for '+dream.supplier+'.').slice(0,86);
+    }
     h.order=order;h.activity=kind;h.last=p.name+' accepted the order. '+order.why;
     return order;
   }
@@ -249,7 +267,7 @@
     else if(o.client==='public')site.funds+=o.wage;else supplier(site).cash+=o.wage+o.dues;
     changed(log,escrow,customer(o),funds,o.wage+o.dues,o.person,o.id,'Returned advance');
     if(business){
-      if(o.cargo){business.stock++;changed(log,o.worker,customer(o),o.resourceName,1,o.person,o.id,'Recovered paid shop stock');}
+      if(o.cargo){business.stock++;business.restockedRound=site.growth.round;changed(log,o.worker,customer(o),o.resourceName,1,o.person,o.id,'Recovered paid shop stock');}
       else {const inputs=business.shopInputs||={};inputs[o.input]=(inputs[o.input]||0)+1;changed(log,escrow,customer(o),o.input,1,o.person,o.id,'Returned workshop input');}
     }else if(imported[o.resource]){
       supplier(site)[o.resource]+=o.request;
@@ -266,7 +284,7 @@
     if(o.kind==='retail'){
       changed(log,escrow,o.source,o.input,1,o.person,o.id,'Used the reserved input at the workbench');
     }else if(!imported[o.resource]){
-      const legal=o.resource!=='fish'||!site.handline;
+      const legal=o.resource!=='fish'||!site.handline||o.tool==='dock handline'&&site.buildings.some(b=>b.kind==='fishingDock');
       quantity=legal?sourceStocks.harvestForProject(world,site,{id:o.resource,available:o.request},o.request,false).amount:0;
     }
     if(!quantity){cancel(site,h,log,o.source+' is unavailable');return false;}
@@ -295,9 +313,10 @@
     changed(log,escrow,p.name,funds,earn,p.id,o.id,'Wage on delivery');
     if(o.dues){site.funds+=o.dues;changed(log,escrow,publicAccount,funds,o.dues,p.id,o.id,'Market due on delivery');}
     if(business){
-      business.stock++;business.hires=(business.hires||0)+1;business.points++;site.growth.points++;
+      business.stock++;business.restockedRound=site.growth.round;business.hires=(business.hires||0)+1;business.points++;site.growth.points++;
       changed(log,p.name,who,o.resourceName,1,o.employerId,o.id,'Employer received commissioned stock');
       business.last=who+' paid '+p.name+' '+earn+' for making a '+o.resourceName+'.';
+      if(member(site,o.employerId))root.EarthAutonomy?.remember?.(site,world.week,o.person,o.employerId,'paidShift');
     }else if(o.kind==='exchange'){
       if(receiving){
         const item=o.contents==='food'?'pantry':'supplies';receiving[item]=(receiving[item]||0)+o.cargo;

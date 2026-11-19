@@ -11,6 +11,9 @@
 (function (root) {
   'use strict';
   const VERSION = 1;
+  // Worlds from before local ballot preferences follow their resident council.
+  // An explicit request to wait for the original character's vote survives.
+  const residentHearing=(world,site)=>Boolean(world.communityLife&&site&&site.residentBallots!==false);
   const MAX_EFFORT = 4;
   const METRICS=['funds','food','materials','trust','wellbeing','population'];
   const REVIEW_STORIES=64;
@@ -532,6 +535,9 @@
     if(storage===undefined){ try { storage=root.localStorage; } catch(e){storage=null;} }
     const key=options.key || 'common-earth.world.v1';
     if(storage&&root.EarthWorldStorage&&options.compressStorage!==false)storage=root.EarthWorldStorage.wrap(storage,key);
+    const physicalStore=root.EarthWorldStorage?.nativeOf(storage);
+    const encoded=physicalStore&&physicalStore!==storage&&storage.writeWorld;
+    let primary=null;
     let world=blank(),saveIssue=!storage,saveMessage=!storage?'This browser cannot store the world between visits.':'';
     let lastSeen=null,lastGood=null,futureSave=null,unsavedAction=false,diverged=false;
     let actionGeneration=0,lastSyncWasWork=false,closed=false;
@@ -555,7 +561,18 @@
     }
     function storageRead(k){
       if(!storage)return null;
-      try{return storage.getItem(k);}catch(e){saveIssue=true;saveMessage='Browser storage is unavailable. Progress is in this tab only.';return undefined;}
+      try{
+        if(k===key&&encoded){
+          const physical=physicalStore.getItem(k);
+          if(primary?.physical!==physical)primary={physical,text:root.EarthWorldStorage.unpack(physical)};
+          return primary.text;
+        }
+        return storage.getItem(k);
+      }catch(e){saveIssue=true;saveMessage='Browser storage is unavailable. Progress is in this tab only.';return undefined;}
+    }
+    function writePrimary(text){
+      if(encoded)primary={physical:storage.writeWorld(key,text),text};
+      else storage.setItem(key,text);
     }
     function restore(raw,preserveSelection){
       const selected=preserveSelection && world.activeId;
@@ -648,11 +665,18 @@
         const saveStarted=root.EarthPerformance?.now();
         const text=preparedText??JSON.stringify(world);
         try{
+          // The preceding, verified turn may exceed the spare codec cache on a
+          // tablet. Its exact stored bytes can become the backup directly.
+          const previous=primary?.text===lastGood&&primary.physical!==lastGood?primary.physical:null;
+          const writeBackup=()=>{
+            if(previous!=null){try{physicalStore.setItem(backupKey,previous);return;}catch{/* Re-encode if space is tight. */}}
+            storage.setItem(backupKey,lastGood);
+          };
           let deferredBackup=false;
           if(lastGood && lastGood!==text && (!notice.construction || notice.completed?.length)){
-            try{storage.setItem(backupKey,lastGood);}catch(e){deferredBackup=true;}
+            try{writeBackup();}catch(e){deferredBackup=true;}
           }
-          try{storage.setItem(key,text);}
+          try{writePrimary(text);}
           catch(e){
             if(!storage.removeItem||!lastGood)throw e;
             const primary=storageRead(key);
@@ -660,16 +684,16 @@
               // A recovered backup can be the only complete turn on disk.
               // Repair the primary first, or leave the recovery copy in place.
               if(primary===undefined||primary!==lastSeen||storageRead(backupKey)!==lastGood)throw e;
-              storage.setItem(key,lastGood);
+              writePrimary(lastGood);
               if(storageRead(key)!==lastGood)throw e;
               lastSeen=lastGood;
             }
-            storage.removeItem(backupKey);storage.setItem(key,text);
+            storage.removeItem(backupKey);writePrimary(text);
           }
           if(deferredBackup){
             // Replacing a large legacy primary with its packed successor can
             // release the space needed to retain the preceding complete turn.
-            try{storage.setItem(backupKey,lastGood);}catch(e){/* The current turn is durable. */}
+            try{writeBackup();}catch(e){/* The current turn is durable. */}
           }
           lastSeen=text;lastGood=text;futureSave=null;saveIssue=false;saveMessage='';unsavedAction=false;
         }catch(e){if(!notice.construction)unsavedAction=true;saveIssue=true;saveMessage='This turn is in memory. Export it from Saved worlds to keep it for a later visit.';}
@@ -784,7 +808,7 @@
       root.EarthAgency?.depart(current(),typeof departure==='function'?departure():departure);
       world.sites.push(site);world.activeId=id;
       root.EarthCommunityLife?.founding(world,old,site,offer.volunteers||[],newSettlement);
-      if(world.communityLife&&governance?.residentBallots===true)site.residentBallots=true;
+      if(world.communityLife&&typeof governance?.residentBallots==='boolean')site.residentBallots=governance.residentBallots;
       const note=root.EarthCampaigns?.found(world,site,commission);
       return complete(name+' founded. '+(old?old.name+' transferred '+resources(offer.goods)+'. '+(world.communityLife?world.communityLife.profile.name+' founded the new district with '+offer.volunteers.map(v=>v.name).join(' and ')+' and four local members. ':'Two volunteers and four new members started the settlement. '):'')+({food:'Its growers produce 1 extra food each week.',materials:'Its salvage team recovers 1 extra material each week.',funds:'Its cooperative earns 1 extra fund each week.'})[site.specialty]+(note?' '+note:''),site);
     }
@@ -1190,7 +1214,7 @@
       }
       if(council && !delegated)mandateActions(world,site,add);
       if(council&&world.communityLife&&root.EarthCommunityLife.isHome(world,site)&&!site.mandate&&!delegated){
-        const enabled=site.residentBallots===true;
+        const enabled=residentHearing(world,site);
         add('council','hearing:'+(enabled?'hold':'resident'),enabled?'Pause for my council vote':'Let residents hold the vote',
           'At an unanswered deadline, the local delegates can vote using their own priorities. They protect household meals, promised supplies and project reserves.',
           {effort:0},()=>{site.residentBallots=!enabled;return enabled?'The calendar will pause for your next council vote.':'Local delegates may hold a vote at the deadline. You can still vote earlier.';});
@@ -1620,7 +1644,7 @@
         const vote=successorVote(turn,site,turn.legacy.term.slot,turn.week-1);
         if(vote){closingVotes.set(site.id,vote);return;}
       }
-      const localHearing=!site.mandate&&site.residentBallots&&turn.communityLife&&root.EarthCommunityLife.isHome(turn,site);
+      const localHearing=!site.mandate&&residentHearing(turn,site)&&root.EarthCommunityLife.isHome(turn,site);
       const decision=elected?'The elected council protected its minimum reserves. ':localHearing?residentVote(turn,site):delegatedVote(turn,site);
       if(site.issue){
         const q=QUESTIONS[site.issue.index];site.issue=null;
@@ -1821,7 +1845,7 @@
         if(played&&s.purses?.tickets?.[played])return 'Finish or cancel your paid market stock check'+inTown;
         const promise=s.residents.find(p=>p.promise?.dueWeek<=turn.week&&(!p.promise.by||p.promise.by==='steward'||p.promise.by===played));
         if(promise)return 'A promise to '+promise.name+' is due'+inTown;
-        if(s.issue?.deadline<=turn.week&&!s.mandate&&!s.residentBallots&&!root.EarthLegacy?.governs(turn,s))return 'A council vote is due'+inTown;
+        if(s.issue?.deadline<=turn.week&&!s.mandate&&!residentHearing(turn,s)&&!root.EarthLegacy?.governs(turn,s))return 'A council vote is due'+inTown;
         const project=s.neighbourWork?.active;
         if(project?.due<=turn.week&&project.phase==='offered')return 'Neighbours are waiting for a project decision'+inTown;
         for(const [id,life] of Object.entries(s.careers||{})){
@@ -2416,5 +2440,5 @@
       destroy(){closed=true;listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}
     };
   }
-  root.CommonEarthSim={create,waterfront,lakeName,promiseBalance,freightReserve,readSave,migrateDetachedSave,constructionDistricts,marketPlan,productiveLinks,practices,charterFacts,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
+  root.CommonEarthSim={create,residentHearing,waterfront,lakeName,promiseBalance,freightReserve,readSave,migrateDetachedSave,constructionDistricts,marketPlan,productiveLinks,practices,charterFacts,mandates:MANDATES,buildings:BUILDINGS,charters:CHARTERS,maxEffort:MAX_EFFORT};
 })(typeof window==='undefined'?globalThis:window);

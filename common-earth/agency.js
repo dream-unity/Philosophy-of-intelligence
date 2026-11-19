@@ -28,7 +28,12 @@
   const actor=site=>{
     const id=actorId(site);return id===founder.id?null:site.residents.find(p=>p.id===id)||identity(site,id);
   };
-  const point=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1&&p.x<=25&&p.y>=-1&&p.y<=25;
+  function point(p,site){
+    if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x>25||p.y>25)return false;
+    if(p.x>=-1&&p.y>=-1)return true;
+    const outskirts=root.EarthDistrictGrowth?.extent?.(site);
+    return !!outskirts&&p.x>=outskirts.west&&p.y>=outskirts.north&&(p.x>=-.78||p.y>=-.78);
+  }
   const residentHere=(site,id)=>root.EarthCommunityLife?.present?.(site,id)!==false && root.EarthCommunityLife?.residency?.(site,id)!=='visitor';
   function identity(site,id,activeLinks,present=false){
     if(!site)return null;
@@ -60,9 +65,9 @@
     return {...initial,...profile,id,role:occupation||profile?.originRole||initial.role};
   }
   function shadowPass(site,world,id){
-    const token=site?.agency?.shadow,who=site&&identity(site,id);
-    return !!(token&&who&&token.id===id&&token.key===who.identityKey&&token.week<=world.week&&world.week<=token.week+1&&
-      site.id===world.activeId&&residentHere(site,id));
+    const token=site?.agency?.shadow;
+    if(!token||token.id!==id||token.week>world.week||world.week>token.week+1||site.id!==world.activeId||!residentHere(site,id))return false;
+    return token.key===identity(site,id)?.identityKey;
   }
   function finishShadow(world,site){
     const token=site?.agency?.shadow;
@@ -70,7 +75,7 @@
     const state=site.agency;delete state.shadow;
     if(actorId(site)!==token.id)return null;
     const name=identity(site,token.id)?.name||'The resident';
-    if(state.actorAt)(state.localPositions||={})[token.id]={x:state.actorAt.x,y:state.actorAt.y,serial:state.actorAt.serial};
+    if(state.actorAt&&streetActor(token.id))(state.localPositions||={})[token.id]={x:state.actorAt.x,y:state.actorAt.y,serial:state.actorAt.serial};
     state.actor='steward';delete state.actorAt;delete state.returningActor;
     if(world.communityLife.viewpointHistory?.until==null&&world.communityLife.viewpointHistory){
       const record=world.communityLife.viewpointHistory;record.changes=changesSince(world,site,record.before);record.until=world.week;
@@ -96,11 +101,11 @@
     if(typeof a!=='object'||Array.isArray(a)||!canPlay(site,a.actor))return false;
     if(a.returningActor!=null && (a.actor!==founder.id || a.returningActor===founder.id || !canPlay(site,a.returningActor)))return false;
     if(porter(a.actor)&&!savedPorter(site,a.actor)||porter(a.returningActor)&&!savedPorter(site,a.returningActor))return false;
-    if(a.stewardPosition!=null&&!point(a.stewardPosition))return false;
+    if(a.stewardPosition!=null&&!point(a.stewardPosition,site))return false;
     if(a.handoffSerial!=null&&(!Number.isSafeInteger(a.handoffSerial)||a.handoffSerial<1))return false;
-    const stamped=p=>point(p)&&Number.isSafeInteger(p.serial)&&p.serial>=1&&p.serial<=a.handoffSerial;
+    const stamped=p=>point(p,site)&&Number.isSafeInteger(p.serial)&&p.serial>=1&&p.serial<=a.handoffSerial;
     if(streetActor(a.actor)&&!a.actorAt)return false;
-    if(a.actorAt!=null&&(!streetActor(a.actor)||a.actorAt.id!==a.actor||!stamped(a.actorAt)))return false;
+    if(a.actorAt!=null&&(a.actor===founder.id||a.actorAt.id!==a.actor||!stamped(a.actorAt)))return false;
     if(a.localPositions!=null&&(typeof a.localPositions!=='object'||Array.isArray(a.localPositions)||
       !Object.entries(a.localPositions).every(([id,p])=>streetActor(id)&&(!porter(id)||savedPorter(site,id))&&stamped(p))))return false;
     const knownRecipient=id=>id===founder.id||site.residents.some(p=>p.id===id)||id==='driver'||
@@ -111,13 +116,13 @@
   function ensure(site){return site.agency||={actor:founder.id,meals:[]};}
   function checkHandoff(site,id,scene){
     if(!site||!scene||scene.siteId!==site.id||scene.actor!==actorId(site))return reject('The character changed. Choose again.');
-    if(scene.mode!=='walk'||!point(scene))return reject('Come ashore or step out of the van before changing characters.');
+    if(scene.mode!=='walk'||!point(scene,site))return reject('Come ashore or step out of the van before changing characters.');
     const originalVisitor=id===founder.id&&site.communityLife?.people?.[id]?.status==='anchor'&&root.EarthCommunityLife?.present?.(site,id);
     if(!canPlay(site,id)||!residentHere(site,id)&&!originalVisitor)return reject('Choose a current community member. Visitors decide for themselves where to live.');
     if(actorId(site)===id)return {ok:true,message:'Already playing as '+identity(site,id).name+'.',unchanged:true};
-    if(streetActor(id)){
+    if(streetActor(id)||id!==founder.id&&scene.targetPose){
       const incoming=scene.targetPose;
-      if(!incoming||incoming.id!==id||!point(incoming))return reject('The person’s position changed. Choose them again in Street view.');
+      if(!incoming||incoming.id!==id||!point(incoming,site))return reject('The person’s position changed. Choose them again in Street view.');
       if(incoming.mode!=='walk')return reject(id==='driver'?'The driver is aboard the truck. Take control when they are on foot.':'Wait until this neighbour is on foot.');
     }
     return {ok:true};
@@ -128,7 +133,7 @@
     return {x:scene.x,y:scene.y,serial:state.handoffSerial};
   }
   function releaseAt(site,person,scene){
-    if(!scene||scene.siteId!==site.id||scene.actor!==person.id||scene.mode!=='walk'||!point(scene))return;
+    if(!scene||scene.siteId!==site.id||scene.actor!==person.id||scene.mode!=='walk'||!point(scene,site))return;
     if(streetActor(person.id)){
       const positions=ensure(site).localPositions||={};
       positions[person.id]=position(site,scene);return;
@@ -137,12 +142,19 @@
     root.EarthConstruction?.releaseFromShift(site,{residentId:person.id},{residentId:person.id,x,y});
   }
   const skillNames=['care','communication','craft','music','numeracy','organisation','stamina'];
+  function originalDistricts(world){
+    const a=world.communityLife;
+    return [...world.sites,...(a?.outposts||[])].filter(s=>s.id===a?.originId||s.id===a?.homeId||
+      s.communityLife?.people?.steward?.status==='anchor');
+  }
+  function originalAccounts(world){
+    return originalDistricts(world).map(s=>({name:s.name,balance:s.purses?.people?.steward?.balance||0})).filter(row=>row.balance);
+  }
   function originalState(world,site){
     const life=world?.communityLife;
     if(!life||!site)return null;
     const person=identity(site,'steward'),career=site.careers?.steward;
-    const accounts=world.sites.filter(s=>s.id===life.originId||s.communityLife?.people?.steward?.status==='anchor');
-    const cash=accounts.reduce((n,s)=>n+(s.purses?.people?.steward?.balance||0),0);
+    const cash=originalAccounts(world).reduce((n,account)=>Math.min(Number.MAX_SAFE_INTEGER,n+account.balance),0);
     return {week:world.week,place:site.id,home:life.homeId,cash,role:person?.role||'Steward',reliability:life.duty.reliability,
       skills:skillNames.map(k=>career?.skills?.[k]??person?.aptitudes?.[k]??0),
     };
@@ -150,12 +162,12 @@
   function changesSince(world,site,before){
     if(!before)return [];
     const now=originalState(world,site);if(!now)return [];
-    const rows=[],person=world.communityLife.profile.name,own=site.autonomy?.people?.steward;
+    const rows=[],person=world.communityLife.profile.name,own=site.autonomy?.people?.steward,accounts=originalDistricts(world);
     if(before.home!==now.home){
-      const home=world.sites.find(s=>s.id===now.home);if(home)rows.push('Accepted membership in '+home.name+'.');
+      const home=accounts.find(s=>s.id===now.home);if(home)rows.push('Accepted membership in '+home.name+'.');
     }
     if(before.role!==now.role)rows.push('Changed from '+before.role.toLowerCase()+' work to '+now.role.toLowerCase()+'.');
-    for(const town of world.sites){
+    for(const town of accounts){
       for(const target of town.residents){
         const receipt=target.agreements?.find(r=>r.by==='steward'&&r.week>before.week);
         if(receipt)rows.push((receipt.status==='kept'?'Kept':'Missed')+' the promise to '+target.name+' in '+town.name+' in week '+receipt.week+'.');
@@ -164,12 +176,17 @@
         rows.push((r.status==='kept'?'Kept':'Missed')+' the agreement with '+(identity(town,r.requesterId)?.name||'a neighbour')+' in week '+r.finishedWeek+'.');
     }
     if(before.reliability!==now.reliability){
-      const log=world.sites.flatMap(t=>t.communityLife?.log||[]).filter(e=>e.week>before.week&&e.text.includes(person)&&e.text.includes('pantry round')).sort((a,b)=>b.week-a.week)[0];
+      const log=accounts.flatMap(t=>t.communityLife?.log||[]).filter(e=>e.week>before.week&&e.text.includes(person)&&e.text.includes('pantry round')).sort((a,b)=>b.week-a.week)[0];
       if(log)rows.push(log.text);
     }
-    if(before.cash!==now.cash)rows.push('Personal funds went from '+before.cash+' to '+now.cash+'.');
+    if(before.cash!==now.cash){
+      const latest=accounts.flatMap(t=>t.purses?.people?.steward?.entries||[]).filter(e=>e.week>=before.week).sort((a,b)=>b.week-a.week)[0];
+      rows.push('Personal funds went from '+before.cash+' to '+now.cash+'.'+(latest?.text?' '+latest.text:''));
+    }
     const learned=skillNames.filter((k,i)=>now.skills[i]>before.skills[i]).map(k=>k+' +'+(now.skills[skillNames.indexOf(k)]-before.skills[skillNames.indexOf(k)]));
     if(learned.length)rows.push('Improved '+learned.join(', ')+'.');
+    const heard=world.communityLife.fieldNotes?.find(n=>n.reader===world.communityLife.profile.identityKey&&n.week>before.week);
+    if(heard)rows.push('Learned about parcel '+heard.cell+' from '+heard.from+'. The witness was '+heard.sourceName+'.');
     const progress=own?.history?.find(h=>h.week>before.week&&h.kind!=='player'&&h.kind!=='routine'&&h.kind!=='rest');
     if(progress&&rows.length<4)rows.push('Week '+progress.week+' · '+(progress.title||progress.reason));
     return [...new Set(rows)].slice(0,6);
@@ -202,7 +219,7 @@
     delete state.returningActor;
     if(porter(id)&&!savedPorter(site,id))(state.porters||=[]).push(id);
     state.actor=id;
-    if(streetActor(id))state.actorAt={id,...position(site,scene.targetPose)};
+    if(id!==founder.id&&scene.targetPose)state.actorAt={id,...position(site,scene.targetPose)};
     else delete state.actorAt;
     return {ok:true,message:'Playing as '+identity(site,id).name+'.'+(before?' '+before.name+' is choosing work again.':'')};
   }
@@ -210,7 +227,7 @@
     const person=actor(site);
     // A shared shift or occupied vehicle stays paused at the same stop.
     if(!person||site.shift||scene?.siteId===site.id&&scene.mode!=='walk')return;
-    const current=scene?.siteId===site.id&&scene.actor===person.id&&scene.mode==='walk'&&point(scene);
+    const current=scene?.siteId===site.id&&scene.actor===person.id&&scene.mode==='walk'&&point(scene,site);
     if(streetActor(person.id)&&!current&&site.agency.actorAt){
       const positions=site.agency.localPositions||={};
       positions[person.id]=position(site,site.agency.actorAt);
@@ -237,7 +254,7 @@
       site.communityLife.visitorIncidents=Math.min(1000,(site.communityLife.visitorIncidents||0)+1);
       return {ok:true,changed:true,repelled:true,message:target.name+' shoves you back and ends the exchange. Speak to '+root.EarthCommunityLife.hostFor(site).name+' in Towns for an introduction.'};
     }
-    if(reception?.private&&['interests','dream','purpose','followup'].includes(topic))return {ok:false,message:target.name+' · '+reception.greeting};
+    if(reception?.private&&['interests','dream','purpose','followup','shadow'].includes(topic))return {ok:false,message:target.name+' · '+reception.greeting};
     if(topic!=='meal'&&root.EarthDialogue){
       const answer=root.EarthDialogue.describe(site,world,target,speaker,topic,meeting);
       if(answer){
@@ -293,5 +310,5 @@
   function topics(site,world,id){
     return root.EarthDialogue?.topics(site,world,id)||[['news','How are things?'],['work','What are you working on?'],['interests','Outside work'],['meal','Share a meal · 1 food']].map(([id,label])=>({id,label}));
   }
-  root.EarthAgency=Object.freeze({actor,actorId,canPlay,playables,founder,identity,valid,checkHandoff,change,recall,validRecall,shadowPass,finishShadow,depart,resume,converse,topics});
+  root.EarthAgency=Object.freeze({actor,actorId,canPlay,playables,founder,identity,valid,checkHandoff,change,originalAccounts,recall,validRecall,shadowPass,finishShadow,depart,resume,converse,topics});
 })(typeof window==='undefined'?globalThis:window);

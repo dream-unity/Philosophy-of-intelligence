@@ -27,6 +27,7 @@
       const overlay=id('region-overlay')?.value;
       const chartId=town(overlay)?.id||home.id;
       const key=[event.kind,event.siteId,event.personId,event.assetId,event.activity?.label||event.activity?.activity||event.activity,
+        event.choices?.map(c=>[c.kind,c.siteId,c.personId||c.assetId].join(':')).join(','),
         Math.round(event.x*20),Math.round(event.y*20),expanded,chartId,w.week,w.actionRevision,w.productionSerial,pending,message].join('/');
       if(key===lastStamp)return;
       lastStamp=key;
@@ -43,6 +44,22 @@
       const geo=region?.geography(w,base);
       detail.replaceChildren();
       const line=t=>{if(t)detail.append(element('p',t));};
+      if(event.choices?.length>1){
+        const label=element('label','At this point'),field=doc.createElement('select');
+        field.setAttribute('aria-label','Choose a person or vehicle at this point');
+        event.choices.forEach((choice,index)=>{
+          const name=choice.personName||choice.assetName||choice.activity?.label||choice.kind;
+          const option=element('option',name+(choice.siteName?' · '+choice.siteName:''));
+          option.value=String(index);option.selected=choice.siteId===event.siteId&&choice.kind===event.kind&&
+            (choice.kind==='asset'?choice.assetId===event.assetId:choice.personId===event.personId);field.append(option);
+        });
+        field.addEventListener('change',()=>{
+          const choice=event.choices[Number(field.value)];if(!choice||selection!==event)return;
+          inspect({detail:{...event,personId:null,assetId:null,personName:'',assetName:'',inTransit:false,...choice,picked:true}});
+          detail.querySelector('select')?.focus({preventScroll:true});
+        });
+        label.append(field);detail.append(label);
+      }
       if(view&&event.kind==='resident'&&event.personId){
         const p=root.EarthPersonas.profile(view,event.personId);
         const goal=p&&root.EarthAutonomy?.view(view,w,event.personId);

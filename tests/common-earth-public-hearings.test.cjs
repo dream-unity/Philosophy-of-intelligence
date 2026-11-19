@@ -34,6 +34,24 @@ test('a resident-controlled clock keeps the original signer responsible and can 
   assert.match(sim.liveWeekHold(),/council vote/);assert.ok(sim.act('hearing:resident').ok);
   assert.doesNotMatch(sim.liveWeekHold(),/council vote/);sim.destroy();
 });
+test('at the same deadline an older world runs its local hearing while an explicit personal ballot still holds',async()=>{
+  const {sim,c}=game();const issue=reachHearing(sim),week=sim.state.week;
+  const saved=JSON.parse(JSON.stringify(sim.state));sim.destroy();
+  const home=saved.sites.find(s=>s.id===saved.activeId);delete home.residentBallots;
+  const automatic=c.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(saved)});
+  home.residentBallots=false;
+  const manual=c.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(saved)});
+  for(const [world,advances] of [[automatic,true],[manual,false]]){
+    const site=world.active(),live={siteId:site.id,generation:site.foundingRevision||0,actorId:'steward',week,actionRevision:world.state.actionRevision};
+    assert.equal(/council vote/.test(world.liveWeekHold()),!advances);
+    assert.equal((await world.perform('advance',{live},()=>true)).ok,advances);
+    assert.equal(world.state.week,advances?week+1:week);
+  }
+  assert(automatic.active().pending.some(choice=>choice.index===issue.index));
+  assert(automatic.state.journal.some(entry=>entry.week===week+1&&entry.text.includes(' backed “')));
+  assert.equal(manual.active().issue.title,issue.title);
+  automatic.destroy();manual.destroy();
+});
 test('a public hearing can let a proposal lapse when each choice would spend protected stock',()=>{
   const {sim,site}=game();const hearing=reachHearing(sim);
   site.food=1;site.funds=1;site.materials=1;

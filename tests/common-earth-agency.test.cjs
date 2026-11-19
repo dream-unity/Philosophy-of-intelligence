@@ -248,3 +248,11 @@ test('a released walker belongs to their original community and resumes at the s
   assert(runtime.CommonEarthSim.readSave(JSON.stringify(second.state)));
   const bad=JSON.parse(JSON.stringify(second.state));bad.sites[0].agency.actorAt.id='driver';assert.equal(runtime.CommonEarthSim.readSave(JSON.stringify(bad)),null);
 });
+
+test('switching to a household resident uses their present work position and waits while they operate a vehicle',()=>{
+  const sim=town(),site=sim.active(),id=site.residents[0].id,scene={siteId:site.id,actor:'steward',x:6,y:6,mode:'walk'};
+  assert.equal(sim.changeActor(id,{...scene,targetPose:{id,x:15,y:16,mode:'drive'}}).ok,false);
+  assert.ok(sim.changeActor(id,{...scene,targetPose:{id,x:15,y:16,mode:'walk'}}).ok);
+  assert.equal(site.agency.actorAt.id,id);assert.equal(site.agency.actorAt.x,15);assert.equal(site.agency.actorAt.y,16);
+  assert(runtime.CommonEarthSim.readSave(JSON.stringify(sim.state)));sim.destroy();
+});

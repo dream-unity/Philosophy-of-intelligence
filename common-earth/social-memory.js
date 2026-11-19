@@ -3,7 +3,7 @@
 (function(root){
   'use strict';
   const kinds=Object.freeze({
-    visit:[1,'made time to meet'],meal:[1,'shared a meal'],listen:[1,'listened and followed up'],
+    paidShift:[1,'settled a private work shift together'],visit:[1,'made time to meet'],meal:[1,'shared a meal'],listen:[1,'listened and followed up'],
     project:[2,'worked together on a project'],lesson:[2,'shared a practical lesson'],
     cover:[2,'covered a colleague’s work'],office:[2,'helped organise handover records'],kept:[2,'kept a promise'],missed:[-3,'missed a promised date'],
     support:[1,'helped with the personal cost of a neighbour’s ambition']

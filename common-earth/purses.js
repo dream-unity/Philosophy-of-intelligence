@@ -77,6 +77,14 @@
           week:world.week,actorId:id,siteId:site.id,generation:result.generation,serial:result.serial,marketSerial:result.marketSerial}});
       }
     }
+    if(mine&&site.growth){
+      const person=root.EarthPersonas?.profile?.(site,id)||site.residents?.find(p=>p.id===id);
+      for(const o of person&&root.EarthDistrictGrowth?.shopListings?.(site,person)||[]){
+        result.options.push({...o,venue:{type:'districtShop',plot:o.plot},request:{action:o.action,good:o.good,plot:o.plot,
+          price:o.price,saleSerial:o.saleSerial,ownerId:o.ownerId,week:world.week,actorId:id,siteId:site.id,generation:result.generation,
+          serial:result.serial,marketSerial:result.marketSerial}});
+      }
+    }
     if(!mine)return result;
     const desk={type:'market'};
     function add(action,good,title,detail,reason,price,venue=desk,clerkId=job?.clerkId||null){
@@ -112,6 +120,12 @@
     return result;
   }
   function near(site,id,scene,venue){
+    if(venue.type==='districtShop'){
+      const door=root.EarthDistrictGrowth.shopDoor(site,venue.plot);
+      return scene?.siteId===site.id&&scene.actor===id&&scene.mode==='walk'&&scene.shopPlot===venue.plot&&
+        [scene.tx,scene.ty,scene.x,scene.y].every(Number.isFinite)&&Math.hypot(scene.tx-door.x,scene.ty-door.y)<.25&&
+        Math.hypot(scene.x-door.x,scene.y-door.y)<=1.56;
+    }
     if(venue.type==='privateHome'){
       const expected=root.EarthConstruction?.privateHomeSite?.(venue.plot);
       return !!expected&&scene?.siteId===site.id&&scene.actor===id&&scene.mode==='walk'&&scene.homePlot===venue.plot&&
@@ -154,7 +168,7 @@
     if(!world||!site||world.activeId!==site.id||request?.actorId!==current(site)||!local(site,request.actorId))return fail('Return to the town as the person who accepted the work.');
     const denied=root.EarthCommunityLife?.permission?.(world,site,'purseAction',[request]);if(denied)return fail(denied);
     const id=request.actorId,model=view(world,site,id);
-    if(request.week!==world.week||request.siteId!==site.id||request.generation!==model.generation||request.serial!==model.serial)
+    if(request.week!==world.week||request.siteId!==site.id||request.generation!==model.generation||request.action!=='buyShopStock'&&request.serial!==model.serial)
       return fail('The worker, personal account or week changed. Check the current offer.');
     // Shelf purchases carry the exact exchange quote seen before walking over.
     // A fixed wage is already reserved, and a donation moves only personal funds.
@@ -164,8 +178,12 @@
     if(!o||!o.available||o.request.price!==request.price||o.request.ticketSerial!==request.ticketSerial||o.request.clerkId!==request.clerkId)
       return fail(o?.reason||'Review the current work ticket and price.');
     if(model.serial>=limit&&!['check','finish','cancel'].includes(o.action))return fail('The personal account book is full.');
-    if(!near(site,id,scene,o.venue))return fail(o.venue.type==='market'?'Stand at the exchange counter on foot.':'Meet the named resident in person for the stock count.');
+    if(!near(site,id,scene,o.venue))return fail(o.venue.type==='districtShop'?'Walk to the owner’s storefront to collect the item.':o.venue.type==='market'?'Stand at the exchange counter on foot.':'Meet the named resident in person for the stock count.');
     const job=ticket(site,id),week=world.week,good=o.good;
+    if(o.action==='buyShopStock'){
+      if(request.plot!==o.plot||request.saleSerial!==o.saleSerial)return fail('The shop has filled another order or moved. Check the current shelf.');
+      return root.EarthDistrictGrowth.buyShopStock(world,site,root.EarthPersonas.profile(site,id),o);
+    }
     if(['makeWare','buyWare','markDown','foldStall'].includes(o.action)||o.good==='courtyardHome'){
       if(request.resourceSerial!==o.request.resourceSerial||request.input!==o.input||request.ask!==o.ask||request.plot!==o.plot||request.stage!==o.stage)
         return fail('The supply lot or asking price changed. Read the current terms.');

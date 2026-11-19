@@ -238,8 +238,8 @@ test('larger file support preserves byte, value, depth, inert-key and simulation
   const storage=toggledStore();storage.writable=true;
   const book=open(storage);assert.equal(book.sim.found(town).ok,true);
   const prior=storage.getItem(savedKey),base=JSON.parse(prior),limit=runtime.EarthSaves.maxBytes;
-  assert.match(book.prepareImport(' '.repeat(limit+1)).message,/16 MB/);
-  assert.match(book.prepareImport('界'.repeat(Math.floor(limit/3)+1)).message,/16 MB/);
+  assert.match(book.prepareImport(' '.repeat(limit+1)).message,/32 MB/);
+  assert.match(book.prepareImport('界'.repeat(Math.floor(limit/3)+1)).message,/32 MB/);
   assert.match(book.prepareImport(JSON.stringify({...base,alignment:new Array(800000).fill(0)})).message,/unsupported structure/);
   let nested=0;for(let i=0;i<42;i++)nested=[nested];
   assert.match(book.prepareImport(JSON.stringify({...base,nested})).message,/unsupported structure/);

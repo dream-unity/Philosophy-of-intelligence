@@ -46,8 +46,8 @@
   function offer(site,week,p,now){
     if(!site || site.id!==p?.siteId || !root.CommonEarthSim.waterfront(site))return null;
     const cast=site.handline,place=zone(p.mode,p,shoal(site,week),cast),source=ground(site,week);
-    const reserved=!site.buildings?.some(b=>b.kind==='fishingDock')&&site.growth?.households?.find(h=>
-      h.order?.resource==='fish'&&h.order.phase==='collect'&&h.order.person!==p.actor);
+    const reserved=site.growth?.households?.find(h=>
+      h.order?.resource==='fish'&&h.order.phase==='collect'&&h.order.tool!=='dock handline'&&h.order.person!==p.actor);
     if(!cast&&reserved)return {action:'resting',label:'Handline booked',text:reserved.name+' booked the shared handline for a funded order. It is free as soon as the catch leaves the quay.'};
     if(!cast&&!source.available)return {action:'resting',label:'Ground recovering',text:'The local fishing ground is resting. Up to '+source.recovery+' food becomes available in week '+(week+1)+'.'};
     if(p.sailingToShoal && !cast)return {action:'sailing',label:'Cast handline',text:'Sailing to the shoal… Cast when you reach the seabirds for '+Math.min(2,source.available)+' food.'};

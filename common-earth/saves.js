@@ -7,9 +7,9 @@
   const LEGACY='common-earth.world.v1',FIRST='original';
   const REGISTRY='common-earth.slots.v1.',DATA='common-earth.playthrough.v1.';
   const LAST='common-earth.last-world.v1',TAB='common-earth.tab-world.v1';
-  const FORMAT='common-earth-world',MAX_FILE_BYTES=16000000,MAX_VALUES=800000;
+  const FORMAT='common-earth-world',MAX_FILE_BYTES=32000000,MAX_VALUES=800000;
   const SUMMARY_CACHE_BYTES=4000000;
-  const sizeMessage='Choose a Common Earth JSON file of 16 MB or less.';
+  const sizeMessage='Choose a Common Earth JSON file of 32 MB or less.';
   const validId=id=>id===FIRST || typeof id==='string' && /^[a-z0-9][a-z0-9-]{5,70}$/.test(id);
   const dataKey=id=>id===FIRST?LEGACY:DATA+id;
   const fail=message=>({ok:false,message});

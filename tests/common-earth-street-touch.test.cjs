@@ -2279,3 +2279,20 @@ test('public van doors work after a round trip, including a repeated boarding re
   }
   g.street.destroy();
 });
+
+test('the active resident reaches a privately owned new or old outlying shopfront, proves arrival and reloads in place',()=>{
+  for(const [name,spot] of [['west',{x:-1.9,y:3.9}],['north-old',{x:3.9,y:-7.35}]]){
+    const g=surface(1024,640,{animated:true,visible:true,lives:true,paidWork:true});
+    const h={owner:'tester/2',plot:0,home:1,name:'Shopkeeper',shop:'basket',businessPlot:1,shopSite:spot};
+    const town={...site,id:name,growth:{round:4,vehicle:0,roads:0,households:[h]}};
+    g.street.setSite(town);
+    assert.equal(g.street.shopProof(1),null);
+    const receipts=[];assert(g.street.focusShop(1,proof=>receipts.push(proof)),name+' has a connected public path');
+    g.finish();assert.equal(receipts.length,1,name+' arrival');
+    const proof=receipts[0];assert.equal(proof.shopPlot,1);assert.equal(proof.siteId,name);
+    assert(Math.hypot(proof.x-spot.x,proof.y-(spot.y+.53))<1.56);
+    const saved=g.street.snapshotView();
+    assert(g.street.restoreView(saved));assert(g.street.shopProof(1));
+    g.street.destroy();
+  }
+});

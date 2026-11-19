@@ -56,6 +56,91 @@
     samePerson(site,from,v.fromKey,v.week)&&samePerson(site,to,v.toKey,v.week));
   const familiar=(site,a,b,week)=>[pair(site,a,b),pair(site,b,a)].some(v=>v&&v.week>=week-4)||
     (root.EarthNeighbourErrands?.reliability?.(site,a,b,week)||0)>0;
+  function fieldNotes(world,site,p){
+    if(!world.regionalWorld||!p?.identityKey)return [];
+    const direct=root.EarthRegionalWorld?.fieldAccount?.(world,site,p),kept=world.communityLife?.fieldNotes||[];
+    return [...(direct?[direct]:[]),...kept.filter(n=>n.reader===p.identityKey&&(!direct||fieldKey(direct)!==fieldKey(n)))];
+  }
+  const fieldKey=n=>n.sourceKey+'/'+n.step+'/'+n.cell;
+  const fieldRef=n=>n.observed+':'+n.step+':'+n.cell+':'+encodeURIComponent(n.sourceKey);
+  function keepFieldNote(world,n,reader,source){
+    if(reader.identityKey===n.sourceKey)return false;
+    const notes=world.communityLife.fieldNotes||=[];
+    if(notes.some(k=>k.reader===reader.identityKey&&fieldKey(k)===fieldKey(n)))return false;
+    const {region,cell,observed,step,sourceKey,sourceName,sourceSite,words}=n;
+    notes.unshift({region,cell,observed,step,sourceKey,sourceName,sourceSite,words,reader:reader.identityKey,from:source.name,week:world.week});
+    const personal=notes.filter(x=>x.reader===reader.identityKey);
+    if(personal.length>6)notes.splice(notes.indexOf(personal.at(-1)),1);
+    if(notes.length>96)notes.pop();
+    return true;
+  }
+  function fieldTopics(world,site,target,speaker){
+    if(!world.communityLife||!world.regionalWorld)return [];
+    const offered=fieldNotes(world,site,target),held=fieldNotes(world,site,speaker),rows=[];
+    const knownBy=(notes,n)=>notes.some(p=>fieldKey(n)===fieldKey(p));
+    for(const n of offered.slice(0,2)){
+      rows.push({id:'field:ask:'+fieldRef(n),label:'What happened at the field parcel '+n.cell+'?',note:n,context:true});
+      if(!knownBy(held,n))rows.push({id:'field:copy:'+fieldRef(n),label:'Keep the named account of parcel '+n.cell,note:n});
+    }
+    const host=root.EarthCommunityLife?.hostFor?.(site)?.id===target.id;
+    for(const n of held){
+      const file=host&&root.EarthRegionalWorld?.shareFieldReport?.(world,site,n,speaker,target,false);
+      if(file)rows.push({id:'field:file:'+fieldRef(n),label:'Offer '+n.sourceName+'’s survey for the community map',note:n,context:true});
+      else if(!knownBy(offered,n))rows.push({id:'field:tell:'+fieldRef(n),label:'Share the field account of parcel '+n.cell,note:n});
+    }
+    return rows;
+  }
+  function fieldReply(world,site,target,speaker,topic,meeting){
+    const row=fieldTopics(world,site,target,speaker).find(o=>o.id===topic),verb=topic.split(':')[1];
+    if(!row||meeting?.actor!==speaker.id||meeting.target!==target.id||meeting.mode!=='walk')
+      return {ok:false,message:'The field account or the people at this meeting changed.'};
+    const n=row.note,said=(words,changed=false)=>({ok:true,message:target.name+' · “'+words+'”',changed});
+    if(verb==='ask'){
+      const direct=n.sourceKey===target.identityKey;
+      const words=direct&&n.words.startsWith(n.sourceName+' ')?'I '+n.words.slice(n.sourceName.length+1):n.words;
+      return said((direct?'I was on that crew in week '+n.observed+'. ':n.from+' gave me '+n.sourceName+'’s account from week '+n.observed+'. ')+words);
+    }
+    if(verb==='file'){
+      if((root.EarthAutonomy?.bond?.(site,target.id,speaker.id,world.week)||0)<-1)
+        return said('I remember our broken agreement. Ask the witness or another neighbour you trust to bring this account.');
+      if(!root.EarthRegionalWorld.shareFieldReport(world,site,n,speaker,target))return {ok:false,message:'The community already has this survey or the parcel is outside its region.'};
+    }
+    const reader=verb==='copy'?speaker:target,source=verb==='copy'?target:speaker;
+    keepFieldNote(world,n,reader,source);
+    return said(verb==='file'?'I entered parcel '+n.cell+' on our map in '+n.sourceName+'’s name. We can consider the ground at our next meeting.':
+      verb==='copy'?'Keep my name with that account. The observation was made by '+n.sourceName+' in week '+n.observed+'.':
+      'I’ll remember who saw it. '+n.sourceName+' was at '+n.cell+' in week '+n.observed+'.',true);
+  }
+  function validFieldNotes(world){
+    const list=world.communityLife?.fieldNotes;if(list===undefined)return true;
+    const small=s=>typeof s==='string'&&s.length>0&&s.length<=1600;
+    return Array.isArray(list)&&list.length<=96&&list.every(n=>n&&['region','cell','sourceKey','sourceName','sourceSite','words','reader','from'].every(k=>small(n[k]))&&
+      n.sourceKey!==n.reader&&Number.isSafeInteger(n.observed)&&n.observed>=1&&Number.isSafeInteger(n.week)&&n.week>=n.observed&&n.week<=world.week&&
+      Number.isSafeInteger(n.step)&&n.step>=0&&n.step<=world.regionalWorld?.step&&
+      !!world.regionalWorld?.regions?.[n.region]?.knowledge?.[n.sourceSite]?.[n.cell]);
+  }
+  function exchangeAtVisits(world,site){
+    if(!world.regionalWorld||!world.communityLife)return [];
+    const rows=site.autonomy?.people||{},week=world.week-1,notes=[];
+    for(const [id,row] of Object.entries(rows)){
+      const visit=row.history?.[0];if(visit?.kind!=='visit'||visit.week!==week)continue;
+      const host=rows[visit.target]?.history?.[0];
+      if(host?.kind!=='host'||host.target!==id||host.week!==week||host.venue!==visit.venue)continue;
+      const people=[id,visit.target].map(k=>root.EarthPersonas?.profile?.(site,k));
+      if(people.some(p=>!p?.identityKey))continue;
+      for(const [source,reader] of [people,[people[1],people[0]]]){
+        const trust=root.EarthAutonomy?.bond?.(site,reader.id,source.id,week)||0;
+        if(trust<0||trust<2&&reader.traits.curiosity<62)continue;
+        const known=fieldNotes(world,site,reader);
+        const n=fieldNotes(world,site,source).find(p=>!known.some(old=>fieldKey(old)===fieldKey(p)));
+        if(!n||!keepFieldNote(world,n,reader,source))continue;
+        const shared=root.EarthRegionalWorld?.shareFieldReport?.(world,site,n,source,reader);
+        notes.push(source.name+' shared '+n.sourceName+'’s field account of parcel '+n.cell+' with '+reader.name+' at their '+visit.venue+
+          ' meeting.'+(shared?' The community entered the parcel on its map.':''));
+      }
+    }
+    return notes;
+  }
   const topics=(site,world,id)=>{
     const actor=root.EarthAgency.actorId(site),speaker=root.EarthAgency.identity(site,actor),target=root.EarthAgency.identity(site,id);
     if(!target||root.EarthCommunityLife?.present?.(site,id)===false)return [];
@@ -64,7 +149,8 @@
     const witnessed=root.EarthNeighbourErrands?.witness?.(site,world,id);
     const account=witnessed?[{id:'agreement:'+witnessed.id,label:
       witnessed.requesterId===id?'Who did you ask for help?':witnessed.contactId===id?'What could you set aside for them?':'What did you agree to do?',context:true}]:[];
-    const incident=root.EarthFleet?.incidentTopics?.(world,site,id,actor)||[];
+    const incident=[...(root.EarthFleet?.incidentTopics?.(world,site,id,actor)||[]),
+      ...fieldTopics(world,site,target,speaker).map(({id,label,context})=>({id,label,context}))];
     if(visiting&&!visitor)return [
       ...(actor==='steward'?[{id:'shadow',label:'May I accompany you on your rounds?',context:true}]:[]),
       {id:'news',label:'How are things here?'},{id:'work',label:'What do you do here?'},{id:'purpose',label:'Who depends on your work?'},
@@ -195,6 +281,7 @@
   }
   function describe(site,world,target,speaker,topic,meeting){
     if(typeof topic!=='string')return {ok:false,message:'Choose a current conversation topic.'};
+    if(topic.startsWith('field:'))return fieldReply(world,site,target,speaker,topic,meeting);
     if(topic==='shadow'){
       const host=world.communityLife&&root.EarthCommunityLife?.isHome?.(world,site)===false;
       if(!host||world.activeId!==site.id||speaker.id!=='steward'||root.EarthAgency.actorId(site)!==speaker.id||
@@ -482,15 +569,16 @@
   }
   const reads=new Set(['news','work','purpose','interests','dream','dream-help','visit-fit','supplies','truck','followup']);
   function readOnly(topic){
-    return typeof topic==='string'&&(reads.has(topic)||topic.startsWith('neighbour:')||/^relay:terms:[0-2]:[1-9]\d*:[1-9]\d*$/.test(topic)||/^agreement:[1-9][0-9]*$/.test(topic)||
+    return typeof topic==='string'&&(reads.has(topic)||topic.startsWith('neighbour:')||topic.startsWith('field:ask:')||/^relay:terms:[0-2]:[1-9]\d*:[1-9]\d*$/.test(topic)||/^agreement:[1-9][0-9]*$/.test(topic)||
       /^errand:(terms|recall):[0-9]+$/.test(topic)||/^errand:hear:(supper|bench|meeting)$/.test(topic)||/^intro:recall:[0-9]+$/.test(topic));
   }
   const arrangements=(site,world,actorId)=>root.EarthNeighbourErrands?.arrangements(site,world,actorId)||[];
   function closeWeek(site,world){
     const notes=root.EarthNeighbourErrands?.closeWeek(site,world)||[];
+    notes.push(...exchangeAtVisits(world,site));
     const gift=root.EarthDreams?.considerSupport?.(site,world);
     if(gift)notes.push(gift);
     return notes;
   }
-  root.EarthDialogue=Object.freeze({describe,workOrder,topics,familiar,valid,arrangements,closeWeek,readOnly});
+  root.EarthDialogue=Object.freeze({describe,workOrder,topics,familiar,valid,validFieldNotes,arrangements,closeWeek,readOnly});
 })(typeof window==='undefined'?globalThis:window);
