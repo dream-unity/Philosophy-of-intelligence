@@ -36,7 +36,8 @@
     }
     const p=(id===truckId?b?.truck:u?.field)||yard(w,s,id);
     const r=p.route;if(!r)return {...copy(p),dx:p.dx??1,dy:p.dy??0,moving:false};
-    let left=travelled(r,time)/r.ms*r.length,from=p;
+    const elapsed=travelled(r,time);
+    let left=elapsed>=r.ms?Infinity:elapsed/r.ms*r.length,from=p;
     for(const to of r.points){
       const d=dist(from,to);
       if(d>0 && left<d){const f=left/d;return {x:from.x+(to.x-from.x)*f,y:from.y+(to.y-from.y)*f,dx:(to.x-from.x)/d,dy:(to.y-from.y)/d,moving:r.until==null||time<r.until};}
@@ -53,8 +54,13 @@
       Array.isArray(r.points)&&r.points.length>0&&r.points.length<=4097&&r.points.every(validPoint);
   }
   function valid(b){
+    if(b.lastDrop!=null&&(!Array.isArray(b.lastDrop)||!b.lastDrop.every(id=>b.units.some(u=>u.id===id))))return false;
     if(b.truck&&!validLocation(b.truck))return false;
-    if(b.units.some(u=>u.field&&!validLocation(u.field)||u.aboard!=null&&typeof u.aboard!=='boolean'))return false;
+    if(b.units.some(u=>u.field&&!validLocation(u.field)||u.aboard!=null&&typeof u.aboard!=='boolean'||
+      u.boarding!=null&&(u.boarding!==true||u.aboard||!u.field?.route)))return false;
+    if(b.departure!=null&&(!validPoint(b.departure.point)||!Number.isSafeInteger(b.departure.at)||b.departure.at<0||
+      !Array.isArray(b.departure.ids)||!b.departure.ids.length||!b.departure.ids.every(id=>b.units.some(u=>u.id===id&&(u.aboard||u.boarding)))||
+      !b.units.some(u=>u.id===b.departure.driver&&personnel(u))||!b.departure.ids.includes(b.departure.driver)))return false;
     return b.driver==null||b.units.some(u=>u.id===b.driver&&u.aboard&&personnel(u));
   }
   const manualMission=(b,id)=>b.missions.find(m=>m.manual&&m.ids.includes(id));
@@ -116,6 +122,7 @@
   function status(w,s,u){
     const b=s.militaryBase,p=position(w,s,u.id);
     if(u.aboard)return b.driver===u.id?'At the wheel of the military truck':personnel(u)?'Aboard the military truck':'Escorting the military truck';
+    if(u.boarding)return 'Walking to the military truck';
     if(p.moving)return 'On the move';
     if(!u.field)return 'At the east gate';
     const nearest=townAt(w,s,p);
@@ -125,10 +132,18 @@
     const rows=[],time=now(w);
     for(const s of root.EarthMilitaryBase.towns(w)){
       const b=s.militaryBase,g=geography(w,s);
+      const firing=new Map();
+      for(const m of b?.missions||[]){
+        if(m.fireAt==null)continue;
+        const t=lookup(w,m.target);if(!t)continue;
+        const tg=geography(w,t),target=project(tg,geo,regional(tg.project(t),27,12));
+        for(const id of m.ids)firing.set(id,{target,bullet:root.EarthMilitaryBase.shot(w,m,id,time).bullet});
+      }
       const add=(id,u)=>{
         const p=position(w,s,id,time),at=project(g,geo,p);
         const truck=id===truckId,kind=truck?'truck':u.type;
         rows.push({...at,dx:p.dx,dy:p.dy,moving:p.moving,kind:'field',unitKind:kind,fieldId:id,siteId:s.id,
+          fire:firing.get(id),selectable:!truck&&personnel(u)&&canBoard(w,b,u),
           name:truck?'Military truck':root.EarthMilitaryBase.units[kind].name+' '+u.id,
           passengers:truck?b?.units.filter(v=>v.aboard&&personnel(v)&&v.id!==b.driver).length||0:0,driver:truck?b?.driver:null});
       };
@@ -137,46 +152,155 @@
     }
     return rows;
   }
-  const actions=new Set(['moveField','stopField','accelerate','brake','board','drive','unload']);
+  function canBoard(w,b,u){
+    return !!u&&!u.aboard&&!u.boarding&&available(b,u.id)&&
+      !['engaged','stationed'].includes(manualMission(b,u.id)?.phase);
+  }
+  function boardUnit(u){
+    u.aboard=true;delete u.field;delete u.boarding;
+  }
+  function startTruck(w,s,b,from,point,target,time){
+    const points=dist(from,point)<.00001?[]:route(w,s,from,point,true);
+    const length=points.reduce((sum,p,i)=>sum+dist(i?points[i-1]:from,p),0);
+    b.truck={...copy(from),dx:from.dx,dy:from.dy,target};
+    if(length>.00001)b.truck.route={at:time,points,length,ms:Math.max(250,Math.min(24000,length*4200))};
+  }
+  function depart(w,s,b){
+    const trip=b.departure;
+    if(!trip||!trip.ids.every(id=>b.units.some(u=>u.id===id&&u.aboard)))return false;
+    const from=position(w,s,truckId);
+    b.driver=trip.driver;
+    startTruck(w,s,b,from,trip.point,trip.target,trip.at);
+    delete b.departure;return true;
+  }
+  function settleBoarding(w,s,departing=false){
+    const b=s.militaryBase;
+    if(!b?.units.some(u=>u.boarding))return 0;
+    const at=position(w,s,truckId);
+    let boarded=0;
+    for(const u of b.units){
+      if(!u.boarding)continue;
+      const p=position(w,s,u.id);
+      if(!p.moving&&!at.moving&&dist(p,at)<=pickup){
+        boardUnit(u);boarded++;
+      }else if(departing){
+        u.field=copy(p);delete u.boarding;
+      }
+    }
+    if(!departing)depart(w,s,b);
+    return boarded;
+  }
+  function callToTruck(w,s,b,ids,at){
+    if(at.moving)return {ok:false,message:'Stop the truck before calling units to board.'};
+    if(!Array.isArray(ids)||!ids.length)return {ok:false,message:'Choose at least one unit to board.'};
+    const wanted=new Set(ids),party=b.units.filter(u=>wanted.has(u.id));
+    if(party.length!==ids.length||party.some(u=>!canBoard(w,b,u)))return {ok:false,message:'The roster changed. Choose available units to board.'};
+    const time=now(w);
+    for(const u of party)walkToTruck(w,s,u,at,time);
+    const walking=party.filter(u=>u.boarding).length;
+    const summary=[];
+    if(party.length>walking)summary.push((party.length-walking)+' aboard');
+    if(walking)summary.push(walking+' walking to the truck');
+    return {ok:true,message:summary.join(' · ')+'.'};
+  }
+  function walkToTruck(w,s,u,at,time){
+    const p=position(w,s,u.id,time),distance=dist(p,at);
+    if(distance<=.025){boardUnit(u);return;}
+    const points=distance<=pickup?[copy(at)]:route(w,s,p,at,false);
+    const length=points.reduce((sum,to,i)=>sum+dist(i?points[i-1]:p,to),0);
+    u.field={...copy(p),route:{at:time,points,length,ms:Math.max(100,Math.min(14000,length*22000))}};
+    u.boarding=true;
+  }
+  function releaseAssignments(w,s,b,ids){
+    // Keep the on-map positions of soldiers who were travelling on town orders.
+    for(const m of [...b.missions]){
+      if(!m.ids.some(id=>ids.has(id)))continue;
+      if(!m.manual)for(const id of m.ids.filter(id=>ids.has(id))){
+        const u=b.units.find(v=>v.id===id);u.field=copy(position(w,s,id));
+      }
+      m.ids=m.ids.filter(id=>!ids.has(id));
+      if(m.delivered)m.delivered=m.delivered.filter(id=>!ids.has(id));
+      if(!m.ids.length)b.missions.splice(b.missions.indexOf(m),1);
+    }
+  }
+  function sendTruck(w,s,b,point,target,recall=false){
+    const time=now(w),at=position(w,s,truckId,time),soldiers=b.units.filter(personnel);
+    const candidates=recall?soldiers:soldiers.filter(u=>u.aboard||u.boarding||canBoard(w,b,u));
+    const driver=candidates.find(u=>u.id===b.driver)||candidates.find(u=>u.aboard)||candidates.find(u=>u.boarding)||
+      candidates.reduce((best,u)=>!best||dist(position(w,s,u.id),at)<dist(position(w,s,best.id),at)?u:best,null);
+    if(!driver)return {ok:false,message:'Enlist a guard at the military base to drive the truck.'};
+    const party=recall?soldiers:b.units.filter(u=>u.id===driver.id||u.boarding||u.aboard);
+    if(recall)releaseAssignments(w,s,b,new Set(party.map(u=>u.id)));
+    // A new recall stops even a stranded or moving truck at its actual position.
+    b.truck={...copy(at),dx:at.dx,dy:at.dy};
+    let last=time;
+    for(const u of party){
+      if(u.aboard)continue;
+      walkToTruck(w,s,u,at,time);
+      if(u.boarding)last=Math.max(last,Math.ceil(time+u.field.route.ms));
+    }
+    b.departure={ids:party.map(u=>u.id),driver:driver.id,at:last,point:copy(point),target};
+    const name=lookup(w,target)?.name||'the selected point';
+    const going=depart(w,s,b);
+    return {ok:true,message:going?'Driving to '+name+'.':'Picking up soldiers, then driving to '+name+'.'};
+  }
+  const actions=new Set(['moveField','stopField','driveTown','returnBase','board','boardParty','reboard','finishBoarding','drive','unload']);
   function command(w,s,b,q){
     const fail=message=>({ok:false,message}),ok=message=>({ok:true,message});
     const id=q.id,u=b.units.find(v=>v.id===id),truck=id===truckId,at=position(w,s,truckId);
     const mobile=u&&available(b,u.id)&&u.ready<=(w.regionalWorld?.step||0);
 
+    if(q.action==='returnBase')return sendTruck(w,s,b,yard(w,s,truckId),s.id,true);
+    if(q.action==='driveTown'){
+      const town=lookup(w,q.target);
+      if(!town)return fail('Choose a town to drive to.');
+      return sendTruck(w,s,b,town===s?yard(w,s,truckId):gate(w,s,town),town.id);
+    }
+    if(b.departure&&q.action!=='finishBoarding'&&q.action!=='stopField')return fail('The truck is gathering soldiers. Stop to change the pickup.');
+    if(b.departure&&q.action==='stopField'){
+      delete b.departure;for(const rider of b.units)if(rider.boarding){
+        rider.field=copy(position(w,s,rider.id));delete rider.boarding;
+      }
+      return ok('Pickup stopped.');
+    }
+    if(q.action==='reboard'){
+      if(at.moving)return fail('Wait for the truck to park.');
+      const party=b.units.filter(v=>b.lastDrop?.includes(v.id)&&!v.aboard&&!v.boarding);
+      if(!party.length)return fail('The dropped-off squad is already with the truck.');
+      releaseAssignments(w,s,b,new Set(party.map(v=>v.id)));
+      const time=now(w);for(const v of party)walkToTruck(w,s,v,at,time);
+      return ok('Squad called back to the truck.');
+    }
+    if(q.action==='boardParty')return callToTruck(w,s,b,q.ids,at);
+    if(q.action==='finishBoarding'){
+      const count=settleBoarding(w,s);
+      return count?ok(count+' boarded the military truck.'):fail('No units have arrived yet.');
+    }
     if(q.action==='board'||q.action==='drive'){
       if(!mobile||q.action==='drive'&&!personnel(u))return fail('An available enlisted soldier must take the wheel.');
       if(at.moving)return fail('Stop the military truck before boarding.');
       if(dist(position(w,s,id),at)>pickup)return fail('Bring the soldier and truck together before boarding.');
       if(u.aboard&&q.action==='board')return fail('This unit is already with the truck.');
       if(manualMission(b,id)?.phase==='stationed'||manualMission(b,id)?.phase==='engaged')return fail('End the assignment before boarding.');
-      u.aboard=true;delete u.field;
+      boardUnit(u);
       if(q.action==='drive')b.driver=id;
-      return ok(q.action==='drive'?'Soldier at the wheel. Tap a road or use the movement arrows.':personnel(u)?'Soldier aboard.':'Vehicle attached to the convoy.');
+      return ok(q.action==='drive'?'Soldier at the wheel. Choose a town and tap Drive.':personnel(u)?'Soldier aboard.':'Vehicle attached to the convoy.');
     }
     if(q.action==='unload'){
       if(at.moving)return fail('Stop the truck before unloading.');
       const riders=b.units.filter(v=>v.aboard&&(truck||v.id===id));
       if(!riders.length)return fail('Choose an occupied truck or a passenger.');
+      b.lastDrop=riders.map(v=>v.id);
       for(const [i,v] of riders.entries()){
-        v.field={x:at.x+.016*(1+i%4),y:at.y-.016*(1+Math.floor(i/4))};delete v.aboard;
+        v.field={x:at.x+.016*(1+i%6),y:at.y-.016*(1+Math.floor(i/6)%6)};delete v.aboard;
         if(b.driver===v.id)delete b.driver;
         const m=manualMission(b,v.id),t=m&&lookup(w,m.target);
         if(m?.phase==='awaiting'&&t&&dist(at,gate(w,s,t))<=arrival){m.delivered||=[];if(!m.delivered.includes(v.id))m.delivered.push(v.id);}
       }
       return ok('Unloaded '+riders.length+' at the truck’s current position.');
     }
-    if(truck&&!b.units.some(v=>v.id===b.driver&&v.aboard&&personnel(v)))return fail('Seat an enlisted soldier at the wheel first.');
+    if(truck&&!(q.action==='moveField'&&!q.steer)&&!b.units.some(v=>v.id===b.driver&&v.aboard&&personnel(v)))return fail('Seat an enlisted soldier at the wheel first.');
     if(!truck&&(!mobile||u.aboard||['engaged','stationed'].includes(manualMission(b,id)?.phase)))return fail('Choose a unit on foot and free to move.');
-    if(q.action==='accelerate'||q.action==='brake'){
-      const r=truck&&b.truck?.route;if(!r)return fail('Choose a road or set a destination first.');
-      const time=now(w),spent=Math.min(r.ms,travelled(r,time));
-      if(spent>=r.ms)return fail('The truck has reached its destination.');
-      r.spent=spent;r.at=time;
-      // Renew only from a held player control. Closing the game cannot finish a journey.
-      const pace=root.EarthDayClock?.read(w).rate||1;
-      r.until=q.action==='accelerate'?time+Math.round(1200*pace):time;
-      return ok(q.action==='accelerate'?'Driving. Release to brake.':'Parked on the route.');
-    }
     const a=truck?at:position(w,s,id);
     let destination;
     if(q.action==='moveField'){
@@ -187,6 +311,7 @@
     }
     const field={...copy(a),dx:a.dx,dy:a.dy};
     if(destination){
+      if(truck&&!q.steer)return sendTruck(w,s,b,destination,null);
       if(q.steer&&dist(a,destination)>.14)return fail('Steer one length of road at a time.');
       if(q.steer&&truck)destination=steerTruck(geography(w,s),a,destination);
       const points=q.steer?[destination]:route(w,s,a,destination,truck);
@@ -194,12 +319,14 @@
       if(length>.00001){
         const time=now(w);
         field.route={at:time,points:points.map(copy),length,ms:Math.max(100,Math.min(900000,length*(truck?6500:22000)))};
-        if(truck&&!q.steer){field.route.spent=0;field.route.until=time;}
       }
     }
-    if(truck)b.truck=field;else u.field=field;
-    return ok(destination?(truck?(q.steer?'Steering.':'Course set. Hold Drive to move the truck.'):'Moving to the selected point.'):'Stopped.');
+    if(truck){
+      if(q.steer&&field.route)settleBoarding(w,s,true);
+      b.truck=field;
+    }else{delete u.boarding;u.field=field;}
+    return ok(destination?(truck?'Steering.':'Moving to the selected point.'):'Stopped.');
   }
-  root.EarthBaseField={courseOpen:(w,b)=>!!b.truck?.route&&travelled(b.truck.route,now(w))<b.truck.route.ms,actions,personnel,gate,townAt,position,project,regional,valid,actors,status,moved,command,
+  root.EarthBaseField={releaseAssignments,courseOpen:(w,b)=>!!b.truck?.route&&travelled(b.truck.route,now(w))<b.truck.route.ms,actions,personnel,canBoard,settleBoarding,gate,townAt,position,project,regional,valid,actors,status,moved,command,
     arrived:(w,s,m,t)=>m.ids.every(id=>m.delivered?.includes(id)&&!s.militaryBase.units.find(u=>u.id===id)?.aboard&&dist(position(w,s,id),gate(w,s,t))<=arrival+.09)};
 })(globalThis);

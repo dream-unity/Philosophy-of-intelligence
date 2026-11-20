@@ -165,7 +165,8 @@
         if(!grid.hidden)liveGrid(false);
         zoom=Math.max(zoom,2);centre(q);return;
       }
-      if(scene?.fieldMapOrder?.(base.id,q)){close();nextPaint();return;}
+      const destination=settings.town||towns.find(t=>Math.hypot(t.x-q.x,t.y-q.y)<.4)?.site.id;
+      if(scene?.fieldMapOrder?.(base.id,q,destination)){close();nextPaint();return;}
       if(scene?.inspectRegion){
         close();scene.setExploration?.(overlayId);
         scene.inspectRegion(q.x,q.y,{zoom:Math.max(.46,scene.regionalCamera?.()?.zoom||.55),...settings});
@@ -177,7 +178,7 @@
     }
     function streets(id){
       const t=towns.find(t=>t.site.id===id);
-      if(t)inspect(t,{zoom:.56,picked:true});
+      if(t)inspect(t,{zoom:.56,picked:true,town:id});
       field.value='';
     }
     function syncPreview(preview){

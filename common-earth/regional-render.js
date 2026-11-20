@@ -252,6 +252,18 @@
     const art=root.EarthBaseArt;if(!art)return;
     const p=v.screen(a.x,a.y),pose={dx:a.dx-a.dy,dy:-a.dx-a.dy,walking:a.moving,driving:!!a.driver,
       passengers:a.passengers,phase:time*8+(Number(a.fieldId)||0),selected,night,mini};
+    if(a.fire){
+      const target=v.screen(a.fire.target.x,a.fire.target.y);
+      target.y-=size*.65;
+      const side=target.x<p.x?-1:1;pose.dx=side;pose.dy=0;pose.firing=true;
+      if(!mini&&a.fire.bullet!=null){
+        const start={x:p.x+side*size*.38,y:p.y-size*.49};
+        const t=a.fire.bullet,tail=Math.max(0,t-.12);
+        g.save();g.beginPath();g.moveTo(start.x+(target.x-start.x)*tail,start.y+(target.y-start.y)*tail);
+        g.lineTo(start.x+(target.x-start.x)*t,start.y+(target.y-start.y)*t);
+        g.strokeStyle='#ffda83';g.lineWidth=Math.max(2,size*.045);g.lineCap='round';g.stroke();g.restore();
+      }
+    }
     if(a.unitKind==='truck')art.truck?.(g,p.x,p.y,size,pose);
     else if(a.unitKind==='tank'||a.unitKind==='jet')art.marker(g,p.x,p.y,size,a.unitKind);
     else art.soldier?.(g,p.x,p.y,size,{id:a.fieldId,type:a.unitKind},pose);

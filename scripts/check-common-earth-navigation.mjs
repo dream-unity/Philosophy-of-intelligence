@@ -195,13 +195,21 @@ function seedWorld(){
       if(sim.active().militaryBase.missions[0].phase!=='awaiting')throw Error('Attack started before physical transport');
       click(found(base,'Find transport truck'));
       await until(()=>!get('field-controls').hidden,'Truck controls did not open on the street');
-      click(get('field-drive'));
-      await until(()=>!!sim.active().militaryBase.driver,'Soldier did not take the wheel');
+      const callSoldiers=get('field-roster-open'),rect=callSoldiers.getBoundingClientRect();
+      if(!rect.width||!callSoldiers.contains(document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2))){
+        throw Error('The truck boarding control is outside the playable street');
+      }
+      click(callSoldiers);
+      const roster=get('field-roster');
+      if(!roster.open||!get('field-call').disabled)throw Error('Choose soldiers before confirming boarding');
+      click(get('field-all'));click(get('field-call'));
+      await until(()=>sim.active().militaryBase.units[0].aboard,'Chosen soldier did not board');
       click(get('field-go'));
-      await until(()=>!!sim.active().militaryBase.truck?.route,'Driving did not produce a physical route');
-      click(get('field-power'));await until(()=>sim.active().militaryBase.truck.route.until>sim.active().militaryBase.truck.route.at,'Driver could not move the truck');
+      await until(()=>!!sim.active().militaryBase.driver&&!!sim.active().militaryBase.truck?.route,'Drive did not choose a driver and start a trip');
+      if(sim.active().militaryBase.truck.route.until!=null)throw Error('Truck still requires a held control');
       click(get('field-stop'));await until(()=>!sim.active().militaryBase.truck.route,'Truck did not stop');
       click(get('field-unload'));await until(()=>!sim.active().militaryBase.driver,'Soldier did not disembark');
+      click(get('field-return'));await until(()=>sim.active().militaryBase.truck?.target===home.id||sim.active().militaryBase.departure?.target===home.id,'Recall did not collect the squad for home');
       click(get('field-done'));
       result.dataset.layout='pass';result.textContent='Physical truck controls, guard boarding, movement, unloading, world clock, venues, community management, diplomacy, base recruitment and deployment verified.';
     }catch(error){result.dataset.layout='fail';result.textContent=String(error.stack||error);}
