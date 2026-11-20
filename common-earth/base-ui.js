@@ -36,7 +36,8 @@
       pending=true;
       try{
         const result=await sim.perform('baseOrder',{site:s.id,generation:s.foundingRevision||0,version:domain.view(s).version||0,...q});
-        status.textContent=result.message;if(result.ok&&q.action==='dispatch')picked.clear();
+        status.textContent=result.ok&&q.action==='returnBase'?'Recall ordered. Open the truck to see its location.':result.message;
+        if(result.ok&&q.action==='dispatch')picked.clear();
       }finally{pending=false;paint(true);}
     }
     function showTab(id){tab=id;status.textContent='';paint(true);if(tab==='time')loadMoments();}
@@ -56,7 +57,12 @@
       }
       content.append(el('h3','Recruit and commission'),list);
       const find=(id)=>{dialog.close();field?.select(s.id,id);};
-      buttonRow(content,'Military truck','Issued with every base. An enlisted soldier can drive the truck and carry the squad.',btn('Find truck on map',()=>find('truck'),'field-truck'));
+      const transport=el('div',null,'base-unit-controls');
+      transport.append(btn('Find truck on map',()=>find('truck'),'field-truck'));
+      const back=btn('Call back truck with all soldiers',()=>action({action:'returnBase'}),'return-base');
+      back.disabled=!b.units.some(root.EarthBaseField.personnel);transport.append(back);
+      const row=el('div');buttonRow(row,'Military truck','Choose a town and tap Drive. A soldier takes the wheel.',transport);
+      content.prepend(row);
       if(!b.units.length){content.append(el('p','New recruits gather beside the truck at the east gate.'));return;}
       const garrison=el('div');content.append(el('h3','Base roster'),garrison);
       const available=new Set(domain.ready(sim.state,s).map(u=>u.id));
@@ -96,7 +102,7 @@
         const t=other.find(t=>t.id===target),war=t&&root.EarthBorderConflict.relation(w,s.id,t.id)?.state==='war';
         note.textContent=order==='attack'?(war?'These communities are at war.':'Preparing this attack declares war on this town.'):
           order==='assist'?(war?'Negotiate peace before reinforcing this town.':'The group will stay at this base until recalled.'):'The group will report the town’s defence after you deliver it.';
-        note.textContent+=' Load the selected units, take the wheel and unload at the destination’s east gate.';
+        note.textContent+=' Board the selected units, choose the town, tap Drive and drop them off.';
         send.textContent='Prepare '+domain.orders[order].toLowerCase()+(t?' · '+t.name:'');send.disabled=!picked.size||!t||order==='assist'&&war;
       }
       targets.onchange=()=>{target=targets.value;review();};choice.onchange=()=>{order=choice.value;review();};

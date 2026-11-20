@@ -378,7 +378,7 @@
     const lightRig=window.EarthTownLight;
     let evening=false, streetLights=[],eveningCycle=null;
     const venues=window.EarthNightlife?.venues||[];
-    let fieldArea='',fieldTrack=false,fieldRows=[],fieldStamp='',fieldFrame=-1,fieldMoving=false;
+    let fieldArea='',fieldTrack=false,fieldRows=[],fieldStamp='',fieldFrame=-1,fieldMoving=false,fieldLabels=[];
     const fingers=new Map(),pressed=new Set();
     let works=new Map(),workLots=new Map(),crew=new Map(),watchedJob=null,priorCrewView=null;
     const roadEdges=new Uint16Array(GRID_SIZE),truckEdges=new Uint16Array(GRID_SIZE),footEdges=new Uint16Array(GRID_SIZE);
@@ -875,7 +875,7 @@
       const w=options.getWorld(),stamp=[geo.origin.id,w.actionRevision,w.regionalWorld?.step,w.productionSerial].join('/');
       if(fieldStamp!==stamp||fieldMoving&&Math.abs(visualTime-fieldFrame)>=.025){
         fieldRows=window.EarthBaseField.actors(w,geo);
-        fieldMoving=fieldRows.some(a=>a.moving);fieldStamp=stamp;fieldFrame=visualTime;
+        fieldMoving=fieldRows.some(a=>a.moving||a.fire);fieldStamp=stamp;fieldFrame=visualTime;
       }
       return fieldRows;
     }
@@ -897,6 +897,7 @@
       const w=options.getWorld(),s=window.EarthCommunityLife.lookup(w,selection.site);
       if(!s)return;
       fieldArea=s.id;refreshGeography();fieldRefresh();
+      fieldTrack=false;
       if(bring){zoom=1.35;unit=baseUnit()*zoom;followField();}
     }
     function trackField(){
@@ -912,13 +913,15 @@
     function drawField(v){
       if(!v)return;
       const sel=options.field?.selected(),taken=[];
+      const isSelected=a=>sel?.site===a.siteId&&(sel.ids?.includes(a.fieldId)||sel.id===a.fieldId);
+      fieldLabels=taken;
       const rows=fieldActors().filter(a=>renderRegion.inView(v,a.x,a.y,.08)).sort((a,b)=>b.y-a.y);
       for(const a of rows){
-        const selected=sel?.site===a.siteId&&sel.id===a.fieldId;
+        const selected=isSelected(a);
         renderRegion.fieldActor(ctx,a,v,Math.max(5,unit),selected,evening,visualTime,unit<8);
       }
-      for(const a of rows.sort((a,b)=>Number(b.siteId===sel?.site&&b.fieldId===sel?.id)-Number(a.siteId===sel?.site&&a.fieldId===sel?.id))){
-        const selected=sel?.site===a.siteId&&sel.id===a.fieldId;
+      for(const a of rows.sort((a,b)=>Number(isSelected(b))-Number(isSelected(a)))){
+        const selected=isSelected(a);
         if(unit<10&&!selected)continue;
         const p=v.screen(a.x,a.y),top=p.y-Math.max(7,unit)*(a.unitKind==='truck'?1.9:1.02);
         let y=top;
@@ -927,18 +930,66 @@
         for(let i=0;i<3&&overlaps();i++)y-=18;
         if(overlaps())continue;
         if(y!==top){ctx.strokeStyle='#dfce9f';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.x,y);ctx.lineTo(p.x,top);ctx.stroke();}
-        taken.push({x:left,y,w});ctx.fillStyle=selected?'#eac988':'#20372ff0';ctx.fillRect(left,y-15,w,16);
+        taken.push({x:left,y,w,a});ctx.fillStyle=selected?'#eac988':'#20372ff0';ctx.fillRect(left,y-15,w,16);
         ctx.fillStyle=selected?'#182720':'#f4eacb';ctx.textAlign='left';ctx.fillText(a.name,left+5,y-3);
       }
     }
+    function selectableFigures(){
+      const v=regionView();
+      if(!v||unit<8||!options.field?.selectParty||state.placed||selectedCrew.size||spectator)return [];
+      return fieldActors().filter(a=>a.selectable).map(a=>{
+        const p=v.screen(a.x,a.y);
+        return {site:a.siteId,id:a.fieldId,x:p.x,y:p.y-unit*.38};
+      }).filter(p=>p.x>=0&&p.x<=width&&p.y>=0&&p.y<=height);
+    }
+    function inSelection(p,start,end){
+      return p.x>=Math.min(start.x,end.x)-4&&p.x<=Math.max(start.x,end.x)+4&&
+        p.y>=Math.min(start.y,end.y)-6&&p.y<=Math.max(start.y,end.y)+6;
+    }
+    function finishBox(gesture,end){
+      const hits=gesture.figures.filter(p=>inSelection(p,gesture.start,end));
+      if(!hits.length)return;
+      // A truck carries its own town's roster. Prefer the current command, then the local base.
+      const site=[options.field.selected()?.site,state.site.id].find(id=>hits.some(p=>p.site===id))||hits[0].site;
+      options.field.selectParty(site,hits.filter(p=>p.site===site).map(p=>p.id));
+    }
+    function drawSelectionBox(){
+      if(!dragging?.box)return;
+      const {start,box}=dragging;
+      ctx.save();ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);
+      ctx.fillStyle='rgba(226,193,119,.18)';ctx.strokeStyle='#f5d994';ctx.lineWidth=2;
+      const w=box.x-start.x,h=box.y-start.y;
+      ctx.fillRect(start.x,start.y,w,h);ctx.strokeRect(start.x,start.y,w,h);ctx.restore();
+    }
     function fieldTap(v,p,at){
       if(!options.field||state.placed||spectator)return false;
-      const hit=fieldActors().map(a=>{
-        const pos=v.screen(a.x,a.y),truck=a.fieldId==='truck',top=pos.y-Math.max(7,unit)*(truck?1.35:.65);
-        return {a,d:Math.hypot(p.x-pos.x,p.y-clamp(p.y,top,pos.y))};
-      }).filter(h=>h.d<Math.max(7,Math.min(17,unit*.36))).sort((a,b)=>a.d-b.d)[0];
-      if(hit){options.field.select(hit.a.siteId,hit.a.fieldId);return true;}
-      return options.field.selected()?options.field.move(fieldArea||state.site.id,at):false;
+      const label=fieldLabels.find(r=>p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y-15&&p.y<=r.y+1);
+      let hit=label?.a;
+      if(!hit){
+        // Soldiers have priority where a figure overlaps the truck. The cab and bed
+        // both count as truck body, including side-on headings at full zoom.
+        const rows=fieldActors(),radius=Math.max(8,Math.min(18,unit*.36));
+        let best=Infinity,vehicle=null;
+        for(const a of rows){
+          const pos=v.screen(a.x,a.y),dx=p.x-pos.x,dy=p.y-pos.y;
+          if(a.fieldId==='truck'){
+            const angle=Math.round(Math.atan2(-a.dx-a.dy,a.dx-a.dy)/(Math.PI/4))*Math.PI/4;
+            const half=unit<8?8:unit*(1.28*Math.abs(Math.cos(angle)-Math.sin(angle))+.51*Math.abs(Math.cos(angle)+Math.sin(angle)));
+            const depth=unit<8?4:unit*.51*(1.28*Math.abs(Math.cos(angle)+Math.sin(angle))+.51*Math.abs(Math.cos(angle)-Math.sin(angle)));
+            if(Math.abs(dx)<=half+3&&dy>=-depth-unit*1.1&&dy<=depth+3)vehicle=a;
+          }else{
+            const distance=Math.hypot(dx,dy-clamp(dy,-unit*.78,0));
+            if(distance<radius&&distance<best){best=distance;hit=a;}
+          }
+        }
+        hit||=vehicle;
+      }
+      if(hit){options.field.tapActor(hit.siteId,hit.fieldId);return true;}
+      if(!options.field.selected())return false;
+      if(unit<8&&options.field.selected().id==='truck'){
+        const t=regionalModel.streetFootprint(geo,at.x,at.y);if(t)return options.field.travelTo(t.site.id);
+      }
+      return options.field.move(fieldArea||state.site.id,at);
     }
     function releaseRegionalScene(){if(remote){remote.scene.destroy();remote=null;}regionalFollow=null;}
     function detailVisible(t,v){
@@ -4352,13 +4403,14 @@
       }
       trackField();const v=regionView();
       if(v&&!localDetail(v)){
-        idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);drawField(v);
+        idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);drawField(v);drawSelectionBox();
         meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));return;
       }
       watchedPath=observedRoute();if(!dragging?.moved&&!pinch)updateGlanceCards();
-      const clipped=v&&(fieldMoving&&fieldActors().some(a=>a.moving&&renderRegion.inView(v,a.x,a.y,.08))||visibleTravellers||v.sx<140||geo.towns.some(t=>t!==baseTown&&detailVisible(t,v)))?false:clipIdleActors();
+      const clipped=dragging?.box||v&&(fieldMoving&&fieldActors().some(a=>(a.moving||a.fire)&&renderRegion.inView(v,a.x,a.y,.08))||visibleTravellers||v.sx<140||geo.towns.some(t=>t!==baseTown&&detailVisible(t,v)))?false:clipIdleActors();
       try{drawScene(clipped);drawField(v);}finally{
         if(clipped)ctx.restore();
+        drawSelectionBox();
         meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));
       }
     }
@@ -6310,6 +6362,7 @@
     canvas.style.touchAction='none';if(oldTab===null)canvas.tabIndex=0;
     if(!oldLabel)canvas.setAttribute('aria-label',spectator?'Observe this district. Tap a resident to follow them, drag to pan or pinch to zoom.':'District streets. Tap to walk, drag to look around, or use the arrow keys. E interacts. V boards the van.');
     function beginPinch() {
+      fieldTrack=false;idleScene=null;dirty=true;schedule();
       clearObservation(false);regionalFollow=null;
       const [a,b]=fingers.values();
       const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
@@ -6326,7 +6379,7 @@
       fingers.set(e.pointerId,p);
       try{canvas.setPointerCapture(e.pointerId);}catch{}
       if(fingers.size===1){
-        dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,slop:e.pointerType==='touch'?12:5};
+        dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,slop:e.pointerType==='touch'?12:5,figures:e.shiftKey?[]:selectableFigures()};
       }else if(fingers.size===2)beginPinch();
     });
     let lastGesturePaint=0,previousGestureAt=0;
@@ -6366,6 +6419,11 @@
       if(!dragging.moved&&observedId)clearObservation(false);
       dragging.moved=true;cameraFollows=false;fieldTrack=false;
       regionalFollow=null;overviewZoom=null;
+      const figures=dragging.figures;
+      if(figures?.length&&(dragging.box||options.field.selected()||figures.some(f=>
+        Math.hypot(f.x-dragging.start.x,f.y-dragging.start.y)<64||inSelection(f,dragging.start,p)))){
+        centreX=dragging.x;centreY=dragging.y;dragging.box=p;idleScene=null;dirty=true;schedule();return;
+      }
       boundCamera(dragging.x-(dx/unit+dy/(unit*TILT))/2,dragging.y-(dy/(unit*TILT)-dx/unit)/2,true);dirty=true;schedule();if(e.pointerType==='touch')paintDelayedGesture();
     });
     function endPointer(e) {
@@ -6383,7 +6441,10 @@
       }
       if(dragging?.id!==e.pointerId)return;
       const gesture=dragging;dragging=null;
-      if(gesture.moved){dirty=true;schedule();}
+      if(gesture.moved){
+        if(gesture.box){idleScene=null;if(e.type==='pointerup')finishBox(gesture,coords(e,canvas));}
+        dirty=true;schedule();
+      }
       if(e.type!=='pointerup'||gesture.moved)return;
       const release=coords(e,canvas);
       if(Math.hypot(release.x-gesture.start.x,release.y-gesture.start.y)<gesture.slop)tap(gesture.start,gesture.device);
@@ -6410,7 +6471,7 @@
     });
     listen(canvas,'keyup',e=>{if(spectator)return;const dir=KEYS[e.key.length===1?e.key.toLowerCase():e.key];if(dir){releaseMove(dir);e.preventDefault();}});
     listen(canvas,'blur',()=>{pressed.clear();options.field?.release();});
-    if(typeof window!=='undefined')listen(window,'blur',()=>{pressed.clear();fingers.clear();dragging=null;pinch=null;if(pixelRatio!==fullPixelRatio)dirty=true;});
+    if(typeof window!=='undefined')listen(window,'blur',()=>{pressed.clear();fingers.clear();dragging=null;pinch=null;idleScene=null;dirty=true;schedule();});
     function updateCover(){
       const next=sheetOpen();
       if(next===covered)return;
@@ -6705,7 +6766,7 @@
         if(traversable(q)&&clearSegment(p,q)){navigate(q);break;}
       }
     }
-    return {showField,fieldRefresh,fieldView,followField,fieldMapOrder:(area,p)=>options.field?.selected()&&options.field.move(area,p),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {showField,fieldRefresh,fieldView,followField,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&options.field.selected().id==='truck'?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();
