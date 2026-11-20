@@ -481,6 +481,11 @@
     else if(el.open) el.close();
   }
   const stackedMap=matchMedia('(max-width: 730px), (max-width: 900px) and (orientation: portrait)');
+  function scrollToStreet(){
+    const stage=$('street-stage');
+    const target=matchMedia('(max-width: 730px)').matches?stage:stage.closest('.workspace');
+    target.scrollIntoView({block:'start',behavior:'instant'});
+  }
   function focusActions() {
     if(view!=='street')return;
     const heading=$('actions-heading');
@@ -892,7 +897,10 @@
       requestAnimationFrame(()=>street.resize());
     } else requestAnimationFrame(()=>atlas.resize());
     render();
-    if(changed && scrollToMap && stackedMap.matches) $(isStreet?'street-stage':'atlas-stage').scrollIntoView({block:'start',behavior:'instant'});
+    if(changed && scrollToMap && stackedMap.matches){
+      if(isStreet)scrollToStreet();
+      else $('atlas-stage').scrollIntoView({block:'start',behavior:'instant'});
+    }
   }
   async function resumePartner(home,partnerId) {
     if(home.id!==sim.state.activeId){
@@ -933,7 +941,7 @@
     selectPlace(destination,false);
     hideDialog('places-dialog');hideDialog('society-dialog');
     setView(arrivalView);
-    if(sameStreet && stackedMap.matches)$('street-stage').scrollIntoView({block:'start',behavior:'instant'});
+    if(sameStreet && stackedMap.matches)scrollToStreet();
   }
   function validPreparedSurvey(draft){
     const p=draft?.point,sponsor=sim.state.sites.find(s=>s.id===draft?.sponsorId);
@@ -2123,7 +2131,7 @@
     control.title=expanded?'Restore street view':'Expand street view';
     requestAnimationFrame(()=>{
       street?.resize();
-      if(expanded&&scroll)$('street-stage')?.scrollIntoView({block:'start',behavior:'instant'});
+      if(expanded&&scroll)scrollToStreet();
     });
   }
   listen('street-wide','click',()=>{
@@ -2137,7 +2145,7 @@
     const frame=panel.getBoundingClientRect();
     const visible=Math.min(frame.bottom,innerHeight)-Math.max(frame.top,0);
     if(frame.height<=innerHeight && visible>=frame.height*.82 && visible<frame.height-1){
-      $('street-stage').scrollIntoView({block:'start',behavior:'instant'});
+      scrollToStreet();
     }
   }));
   listen('world-view','click',()=>preparedSurvey?resumeFounding():setView('world'));
@@ -2295,19 +2303,21 @@
     const b=e.target.closest('[data-move]');if(b&&e.detail===0)street?.move(b.dataset.move);
   });
   listen('cancel-placement','click',()=>{cancelPlacement();renderActions();});
-  listen('street-open-actions','click',event=>{
-    event.preventDefault();crewOrders?.cancel();streetHud?.close(false);renderActions();
+  function openCommunityActions(){
+    crewOrders?.cancel();streetHud?.close(false);renderActions();
     $('actions-panel').scrollIntoView({block:'start',behavior:'instant'});
     const tab=$('action-tabs').querySelector('[aria-pressed="true"]');
     tab?.focus({preventScroll:true});
-  });
+  }
+  listen('street-open-actions','click',openCommunityActions);
+  listen('compact-community-actions','click',openCommunityActions);
   listen('street-works','click',()=>{
     const jobs=works?.view().jobs||[];
     if(jobs.length===1)openWorksite(jobs[0].id);
     else if(jobs.length||sim.worksiteLoadIssue?.(sim.active())){selectGroup('build');focusActions();}
   });
   listen('back-to-street','click',()=>{
-    $('street-stage').scrollIntoView({block:'start',behavior:'instant'});
+    scrollToStreet();
     $('street-canvas').focus({preventScroll:true});
   });
   listen('map-survey','click',()=>{

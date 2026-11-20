@@ -41,6 +41,7 @@ function check(frame){
     const b=doc.createElement('button');b.textContent=text;menu.append(b);
   }
   doc.body.dataset.mapView='street';get('atlas-stage').hidden=true;
+  get('site-inspector').hidden=true;get('actions-panel').hidden=false;
   for(const id of ['street-stage','street-controls','street-navigation','region-mini','scene-original-return','housing-bar']){
     if(get(id))get(id).hidden=false;
   }
@@ -57,6 +58,21 @@ function check(frame){
       for(const wide of [true,false]){
         doc.body.classList.toggle('street-expanded',wide);
         const name=[width+'×'+height,size+'%',wide?'expanded':'standard'].join(' ');
+        frame.contentWindow.scrollTo({top:0,left:0,behavior:'instant'});
+        const panel=get('actions-panel'),tabs=controls('#action-tabs button'),map=doc.querySelector('.map-frame');
+        const bounds=map.getBoundingClientRect(),side=panel.getBoundingClientRect();
+        if(width>730){
+          if(side.left<bounds.right || Math.abs(side.top-bounds.top)>1 || side.right>width+1){
+            errors.push(name+' Community actions must start at the upper right of the map');
+          }
+          if(get('compact-community-actions').offsetWidth)errors.push(name+' unexpected compact shortcut');
+        }else{
+          const shortcut=get('compact-community-actions'),box=shortcut.getBoundingClientRect(),stage=get('street-stage').getBoundingClientRect();
+          if(box.left<stage.left+stage.width/2 || box.right>stage.right || box.top-stage.top>12)errors.push(name+' misplaced Community actions shortcut');
+          checkButtons([shortcut],name+' compact actions');
+        }
+        if(tabs.map(b=>b.dataset.group).join('/')!=='people/build/work/council/research/routes')errors.push(name+' action tabs changed');
+        checkButtons(tabs,name+' action tabs');
         if(!wide){
           checkButtons([get('world-time')],name+' world clock');
           const clock=get('world-time').getBoundingClientRect(),header=doc.querySelector('.masthead').getBoundingClientRect();
@@ -119,6 +135,21 @@ function seedWorld(){
     };
     try{
       const home=sim.active(),other=sim.state.communityLife.outposts[0],id=other.id;
+      click(get('street-view'));
+      if(get('street-wide').getAttribute('aria-pressed')!=='true')click(get('street-wide'));
+      const groupTabs=get('action-tabs'),panel=get('actions-panel');
+      if(matchMedia('(min-width: 731px)').matches){
+        await until(()=>panel.getBoundingClientRect().top>=-1 && groupTabs.getBoundingClientRect().bottom<=innerHeight,
+          'Expanding hid the Community actions header or tabs');
+      }else{
+        click(get('compact-community-actions'));
+        if(!groupTabs.contains(document.activeElement))throw Error('The compact shortcut did not reach the action tabs');
+      }
+      click(found(groupTabs,'Build'));
+      if(get('actions-heading').textContent!=='Build')throw Error('The Build tab did not open');
+      click(found(groupTabs,'People'));
+      click(get('street-wide'));
+      click(get('world-view'));
       click(get('world-time'));
       const clock=get('world-time-dialog');
       await commit(found(clock,'12×'));await until(()=>get('time-rate').textContent==='12×','World speed did not change');
@@ -147,7 +178,11 @@ function seedWorld(){
       await commit(found(dialog,'Negotiate peace'));await until(()=>found(dialog,'Accept ceasefire terms'),'No terms offered');
       await commit(found(dialog,'Accept ceasefire terms'));await until(()=>found(dialog,'Declare war'),'Peace did not take effect');
       if(window.EarthBorderConflict.relation(sim.state,home.id,rival.id)?.state!=='peace')throw Error('Treaty missing from world');
-      click(found(dialog,'Open military base'));
+      const baseLink=found(dialog,'Open military base');
+      if(get('scene-district').lastElementChild!==get('scene-open-base') || baseLink!==dialog.querySelector('.town-centre-body').lastElementChild){
+        throw Error('Base links displaced existing town controls');
+      }
+      click(baseLink);
       const base=get('military-base'),towns=base.querySelector('select');
       if(towns.options.length!==sim.state.sites.length+sim.state.communityLife.outposts.length)throw Error('Town base is missing');
       await commit(found(base,'Enlist guard'));
