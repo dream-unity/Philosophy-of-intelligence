@@ -9,6 +9,8 @@
     const put=(id,value)=>{const e=$(id);if(e.textContent!==value)e.textContent=value;};
     const lookup=id=>root.EarthCommunityLife.lookup(sim.state,id);
     let selected='nightclub',townId='',renderKey='',phaseKey='',match=null,atDoor=false,onTrip=0;
+    const select=$('station-select');
+    let cabinet=null,session=null;
     const pads=['◆','●','▲'],padNames=['Diamond','Circle','Triangle'];
     const currentTown=()=>lookup(townId);
     const player=()=>root.EarthAgency?.actorId(sim.active())||'steward';
@@ -24,9 +26,9 @@
     function open(kind='nightclub',siteId=sim.active()?.id){
       const site=lookup(siteId);if(!site)return;
       if(clockDialog.open)clockDialog.close();
+      cabinet?.close();
       selected=life.find(kind)?.id||'nightclub';townId=site.id;match=null;renderKey='';
       $('station-play').hidden=false;$('station-pads').hidden=true;$('station-select').disabled=false;
-      atDoor=site.id===sim.active()?.id&&!!street()?.venueProof(selected,player());
       if(!room.open)room.showModal();paint();
     }
     function choose(id){open(id,townId);}
@@ -45,10 +47,24 @@
       }))notify('Return to the street on foot to visit '+venue.name+'.',true);
       else if(!room.open)notify('Walking to '+venue.sign+'.');
     });
+    function doorProof(site,venue){
+      const who=player(),proof=street()?.venueProof(venue,who);
+      return proof?.siteId===site.id&&proof.actor===who;
+    }
+    function stationChoice(){
+      const tetris=select.value==='0';
+      put('station-game',tetris?'Tetris':'Signal Match');
+      put('station-play',tetris?'Play Tetris':'Play a round');
+      if(!match)put('station-prompt',tetris?'Fit falling pieces into complete horizontal lines to clear them.':
+        'Match five symbols. You have four seconds for each one. Choose a resident to challenge or an open station to play solo.');
+    }
+    select.addEventListener('change',()=>{match=null;stationChoice();});
     function paint(){
       const site=currentTown();if(!site){room.close();return;}
       const w=sim.state,c=clock.read(w),v=life.find(selected);
       const self=site.id===w.activeId;
+      atDoor=self&&doorProof(site,selected);
+      if(cabinet?.active&&(!atDoor||session.actor!==player()||session.generation!==(site.foundingRevision||0)))cabinet?.close();
       const key=[site.id,selected,c.night,Math.floor(c.time/25000),atDoor,self,w.actionRevision,w.workRevision,w.week].join('|');
       if(key===renderKey)return;renderKey=key;
       const list=life.guests(w,site,c).filter(r=>r.venue===selected);
@@ -60,26 +76,27 @@
       const people=$('venue-attendance'),ul=doc.createElement('ul');
       people.replaceChildren(make('h3',selected==='arcade'?'Station floor':c.night?'Tonight’s company':'Daytime'));
       if(selected==='arcade'){
-        for(const [i,table] of life.tables(w,site,c).entries()){
+        for(const table of life.tables(w,site,c)){
           const names=table.pair.map(r=>root.EarthPersonas.profile(site,r.id)?.name);
           const text=names.length===2?names.join(' vs ')+(c.time%clock.day-clock.half>=25000?' · '+table.points.join(' – '):' · warm-up'):
             names.length?names[0]+' · solo practice':'Open for play';
-          ul.append(make('li','Stations '+(2*i+1)+' & '+(2*i+2)+' · '+text));
+          const label=table.seats.length===1?'Station '+(table.seats[0]+1):'Stations '+table.seats.map(n=>n+1).join(' & ');
+          ul.append(make('li',label+(table.seats[0]===0?' · Tetris':' · Signal Match')+' · '+text));
         }
         people.append(ul);
-        const select=$('station-select'),old=select.value;
+        const old=select.value;
         select.replaceChildren(...Array.from({length:6},(_,i)=>{
-          const r=list.find(row=>row.seat===i),option=make('option','Station '+(i+1)+' · '+(r?root.EarthPersonas.profile(site,r.id).name:'Solo'));
+          const r=list.find(row=>row.seat===i),option=make('option','Station '+(i+1)+(i===0?' · Tetris':' · Signal Match')+' · '+(r?root.EarthPersonas.profile(site,r.id).name:'Solo'));
           option.value=String(i);return option;
         }));
-        select.value=old||String(list[0]?.seat||0);
+        select.value=old||'0';
+        stationChoice();
       }else{
         people.append(make('p',guests.length?guests.map(p=>p.name).join(' · '):
           c.night?'The room is open. Guests arrive when their work is finished.':selected==='cafe'?'The reading terrace is open. The evening reading group meets after sunset.':'The dance floor opens at 6:00 PM.'));
       }
       $('venue-walk').hidden=!self||atDoor;put('venue-walk','Walk to '+v.sign);
       $('station-room').hidden=selected!=='arcade'||!atDoor||!self;
-      if(selected==='arcade'&&!match)put('station-prompt','Match five symbols. You have four seconds for each one. Choose a resident to challenge or an open station to play solo.');
     }
     function nextSignal(){
       if(!match)return;
@@ -101,12 +118,19 @@
     }
     $('station-pads').hidden=true;
     $('station-play').addEventListener('click',()=>{
-      const site=currentTown();if(!site||site.id!==sim.active()?.id||!street()?.venueProof('arcade',player()))return;
+      const site=currentTown();if(selected!=='arcade'||!site||site.id!==sim.active()?.id||!doorProof(site,'arcade'))return;
+      if(select.value==='0'){
+        const actor=player();
+        session={actor,generation:site.foundingRevision||0};
+        cabinet??=root.EarthTetrisUI.mount(doc);
+        cabinet.open(root.EarthAgency.identity(site,actor).name);
+        return;
+      }
       const c=clock.read(sim.state),other=life.guests(sim.state,site,c).find(r=>r.venue==='arcade'&&r.seat===Number($('station-select').value));
       const rival=other?{name:root.EarthPersonas.profile(site,other.id).name,points:life.score(other.key,Math.floor(c.time/25000))}:null;
       match={turn:0,points:0,rival};$('station-select').disabled=true;$('station-play').hidden=true;$('station-pads').hidden=false;nextSignal();
     });
-    room.addEventListener('close',()=>{match=null;$('station-play').hidden=false;$('station-pads').hidden=true;});
+    room.addEventListener('close',()=>{if(room.open)return;cabinet?.close();match=null;$('station-play').hidden=false;$('station-pads').hidden=true;});
     function tick(){
       const w=sim.state,active=sim.active(),c=clock.read(w);
       $('world-time').disabled=!active;$('venue-directory').disabled=!active;
