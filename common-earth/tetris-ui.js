@@ -3,7 +3,7 @@
   const {Game,width,height,rotations}=root.EarthTetris;
   const colors={I:'#70d4dc',J:'#78a7f5',L:'#efa364',O:'#f0ce69',S:'#88d5a2',T:'#c496df',Z:'#f08b91'};
   const keys={ArrowLeft:'left',ArrowRight:'right',ArrowDown:'down',ArrowUp:'clockwise',
-    x:'clockwise',z:'counterclockwise',' ':'drop',c:'hold'};
+    x:'clockwise',z:'counterclockwise',' ':'drop',Shift:'hold'};
   const repeats=new Set(['left','right','down']);
   function tile(ctx,x,y,size,type,ghost=false){
     const left=x*size,top=y*size;
