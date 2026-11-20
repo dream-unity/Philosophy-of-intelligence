@@ -99,6 +99,9 @@
       g.drawImage(layer.tile,left,top,pixW,pixH,0,0,pixW,pixH);
       g.setTransform(ratio,0,0,ratio,0,0);
       paint.actors(g,w,base,view,miniature);
+      for(const a of root.EarthBaseField?.actors(w,geo)||[]){
+        if(paint.inView(view,a.x,a.y,.05))paint.fieldActor(g,a,view,miniature?4:Math.max(7,Math.min(18,view.sx*.013)),false,false,0,true);
+      }
       const sceneView=street()?.regionalCamera?.();
       if(sceneView&&sceneView.originId===geo.origin.id){
         const rect=sceneView.footprint,p=view.screen(rect.minX,rect.maxY);
@@ -162,6 +165,7 @@
         if(!grid.hidden)liveGrid(false);
         zoom=Math.max(zoom,2);centre(q);return;
       }
+      if(scene?.fieldMapOrder?.(base.id,q)){close();nextPaint();return;}
       if(scene?.inspectRegion){
         close();scene.setExploration?.(overlayId);
         scene.inspectRegion(q.x,q.y,{zoom:Math.max(.46,scene.regionalCamera?.()?.zoom||.55),...settings});

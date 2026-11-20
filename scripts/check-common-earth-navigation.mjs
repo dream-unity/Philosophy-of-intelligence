@@ -190,9 +190,20 @@ function seedWorld(){
       click(found(base,'Operations'));
       const guard=base.querySelector('fieldset input');click(guard);
       const target=base.querySelector('[aria-label="Mission destination"]'),otherName=target.selectedOptions[0].textContent;
-      await commit(found(base,'Attack '+otherName));
+      await commit(found(base,'Prepare attack · '+otherName));
       await until(()=>sim.active().militaryBase?.missions[0]?.target===target.value,'Base deployment did not launch');
-      result.dataset.layout='pass';result.textContent='World clock, venues, community management, diplomacy, base recruitment and deployment verified.';
+      if(sim.active().militaryBase.missions[0].phase!=='awaiting')throw Error('Attack started before physical transport');
+      click(found(base,'Find transport truck'));
+      await until(()=>!get('field-controls').hidden,'Truck controls did not open on the street');
+      click(get('field-drive'));
+      await until(()=>!!sim.active().militaryBase.driver,'Soldier did not take the wheel');
+      click(get('field-go'));
+      await until(()=>!!sim.active().militaryBase.truck?.route,'Driving did not produce a physical route');
+      click(get('field-power'));await until(()=>sim.active().militaryBase.truck.route.until>sim.active().militaryBase.truck.route.at,'Driver could not move the truck');
+      click(get('field-stop'));await until(()=>!sim.active().militaryBase.truck.route,'Truck did not stop');
+      click(get('field-unload'));await until(()=>!sim.active().militaryBase.driver,'Soldier did not disembark');
+      click(get('field-done'));
+      result.dataset.layout='pass';result.textContent='Physical truck controls, guard boarding, movement, unloading, world clock, venues, community management, diplomacy, base recruitment and deployment verified.';
     }catch(error){result.dataset.layout='fail';result.textContent=String(error.stack||error);}
   });
 }
