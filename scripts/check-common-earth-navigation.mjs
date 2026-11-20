@@ -111,6 +111,13 @@ const page='<!doctype html><meta charset="utf-8"><title>Common Earth navigation 
 // controls. Keep the actual save manager, action queue and modal event handlers.
 function seedWorld(){
   const book=window.EarthSaves.open(),sim=book.sim;
+  let street;
+  const streetModule=window.EarthStreet;
+  window.EarthStreet={...streetModule,mount(canvas,options){
+    const scene=streetModule.mount(canvas,options);
+    if(canvas.id==='street-canvas')street=scene;
+    return scene;
+  }};
   window.EarthSaves={...window.EarthSaves,open:()=>book};
   const perform=sim.perform.bind(sim);let lastCommand;
   sim.perform=(command,...args)=>{
@@ -159,8 +166,33 @@ function seedWorld(){
         click(found(get('venue-choices'),type));
         if(get('venue-name').textContent!==name)throw Error('Missing venue '+name);
       }
-      if(get('venue-attendance').querySelectorAll('li').length!==3||get('station-select').options.length!==6)throw Error('Missing paired gaming stations');
+      if(get('venue-attendance').querySelectorAll('li').length!==4||get('station-select').options.length!==6)throw Error('Missing gaming stations');
+      if(!get('station-select').options[0].textContent.includes('Tetris')||get('station-play').textContent!=='Play Tetris')throw Error('Station 1 must launch Tetris');
+      if(!get('station-room').hidden)throw Error('Arcade opened before arrival');
       click(get('leisure-dialog').querySelector('form button'));
+      click(get('street-view'));
+      const snapshot=street.snapshotView(),arcade=window.EarthNightlife.find('arcade');
+      if(!street.restoreView({...snapshot,player:{...snapshot.player,x:arcade.x,y:arcade.y+2.52}}))throw Error('Could not restore a visit to Pixel Exchange');
+      click(get('venue-directory'));click(found(get('venue-choices'),'Video game store'));
+      if(get('station-room').hidden)throw Error('Arcade unavailable at the door');
+      click(get('station-play'));
+      const cabinet=get('tetris-dialog'),board=get('tetris-board');
+      const person=window.EarthAgency.identity(home,window.EarthAgency.actorId(home)).name;
+      if(!cabinet.open||get('tetris-player').textContent!=='Playing as '+person)throw Error('Tetris did not open for the controlled Sim');
+      const before=board.getAttribute('aria-label');
+      board.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true}));
+      if(board.getAttribute('aria-label')===before)throw Error('The keyboard did not move the active piece');
+      click(found(cabinet,'Hold'));if(!found(cabinet,'Hold').disabled)throw Error('Held piece missing');
+      click(found(cabinet,'Drop'));if(Number(get('tetris-score').textContent)<=0)throw Error('The drop button did not play a piece');
+      click(get('tetris-pause'));if(get('tetris-overlay').hidden||!found(cabinet,'Drop').disabled)throw Error('Tetris did not pause');
+      click(get('tetris-continue'));
+      for(let i=0;i<30&&get('tetris-overlay').hidden;i++)click(found(cabinet,'Drop'));
+      if(get('tetris-status').textContent!=='Game over')throw Error('The stack did not top out');
+      click(get('tetris-continue'));if(get('tetris-score').textContent!=='0')throw Error('A new round did not start');
+      click(found(cabinet,'Leave'));
+      const station=get('station-select');station.value='1';station.dispatchEvent(new Event('change'));
+      click(get('station-play'));if(get('station-pads').hidden||cabinet.open)throw Error('Station 2 must launch Signal Match');
+      click(get('leisure-dialog').querySelector('form button'));click(get('world-view'));
       click(get('society-open'));
       const row=()=>Array.from(get('site-list').children).find(b=>b.querySelector('strong')?.textContent===other.name);
       click(found(row(),'Restart'));click(get('community-cancel'));

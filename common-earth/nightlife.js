@@ -5,7 +5,7 @@
   const venues=[
     {id:'nightclub',name:'Night club',sign:'Afterglow',x:21,y:2.35,detail:'A mirror ball turns above the open dance floor.'},
     {id:'cafe',name:'Café',sign:'The Reading Room',x:3,y:20.35,detail:'An espresso counter, shelves of books and reading tables on the terrace.'},
-    {id:'arcade',name:'Video game store',sign:'Pixel Exchange',x:21,y:8.35,detail:'Six gaming stations host head-to-head rounds of Signal Match.'}
+    {id:'arcade',name:'Video game store',sign:'Pixel Exchange',x:21,y:8.35,detail:'Play Tetris at Station 1 or Signal Match at Stations 2–6.'}
   ];
   const find=id=>venues.find(v=>v.id===id);
   function hash(s){
@@ -66,9 +66,9 @@
   function score(key,round){return 1+hash(key+'/'+round)%5;}
   function tables(world,site,clock){
     const list=guests(world,site,clock),arcade=list.filter(r=>r.venue==='arcade'),round=Math.floor(clock.time/25000);
-    return Array.from({length:3},(_,i)=>{
-      const pair=arcade.filter(r=>Math.floor(r.seat/2)===i).sort((a,b)=>a.seat-b.seat);
-      return {pair,round,points:pair.map(r=>score(r.key,round))};
+    return [[0],[1],[2,3],[4,5]].map(seats=>{
+      const pair=arcade.filter(r=>seats.includes(r.seat)).sort((a,b)=>a.seat-b.seat);
+      return {seats,pair,round,points:seats[0]===0?[]:pair.map(r=>score(r.key,round))};
     });
   }
   function valid(s){

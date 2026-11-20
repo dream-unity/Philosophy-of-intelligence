@@ -405,7 +405,9 @@ test('overnight games use six seats, saved guests and paired scores, and release
   const {ctx,w,market,elapse,save,production}=region(),life=ctx.EarthNightlife,clock=ctx.EarthDayClock;
   elapse(clock.half);production();
   const list=life.guests(w,market,clock.read(w)),tables=life.tables(w,market,clock.read(w));
-  assert.equal(tables.length,3);assert.ok(tables.some(t=>t.pair.length===2));
+  assert.deepEqual(Array.from(tables,t=>Array.from(t.seats)),[[0],[1],[2,3],[4,5]]);
+  assert.equal(tables[0].points.length,0);
+  for(const table of tables)assert.ok(table.pair.every(guest=>table.seats.includes(guest.seat)));
   assert.ok(tables.every(t=>t.points.every(p=>p>=1&&p<=5)));
   assert.equal(new Set(list.map(p=>p.id)).size,list.length);
   assert.equal(new Set(list.map(p=>p.venue+'/'+p.seat)).size,list.length);
