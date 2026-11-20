@@ -535,6 +535,7 @@
       }
       if(!ids.has(world.activeId))world.activeId=world.sites[0]?.id ?? null;
       root.EarthRegionalWorld?.reconcileLocations?.(world);
+      root.EarthMilitaryBase?.restoreField?.(world);
       return world;
     }catch(e){return null;}
   }
@@ -2475,7 +2476,7 @@
       }),
       baseOrder:guarded(request=>{
         const result=root.EarthMilitaryBase?.command(world,request);
-        return result?.ok?complete(result.message,root.EarthCommunityLife.lookup(world,request.site)):result||reject('The military base is unavailable.');
+        return result?.ok?complete(result.message,root.EarthCommunityLife.lookup(world,request.site),!root.EarthBaseField?.actions.has(request.action)):result||reject('The military base is unavailable.');
       }),
       diplomacy:guarded(request=>{
         const result=root.EarthBorderConflict?.diplomacy(world,request);

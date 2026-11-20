@@ -11,3 +11,19 @@
 .base-unit{display:flex;align-items:center;gap:.65rem;min-height:44px}.base-unit input{width:1.1rem;height:1.1rem}
 .base-status:empty{display:none}.base-status{padding:.5rem .7rem;border-left:3px solid var(--gold)}
 @media(max-width:465px){.base-tabs{grid-template-columns:1fr 1fr}.base-hero{grid-template-columns:39% 1fr}.base-section button{overflow-wrap:anywhere}}
+
+.base-unit-controls,.field-buttons {display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+#field-controls:not([hidden]) {display:grid;gap:5px;padding:8px 10px;background:#162c2e;color:var(--paper);border-bottom:1px solid var(--line);font-size:.85rem}
+#field-controls header {display:flex;align-items:center;justify-content:space-between;gap:8px}
+#field-controls :is(button,select) {min-height:36px;max-width:100%;padding:4px 8px;border:1px solid #71877d;border-radius:4px;color:var(--paper);background:#233c36}
+#field-controls [hidden] {display:none!important}
+#field-status:empty {display:none}
+@media(any-pointer:coarse){#field-controls :is(button,select){min-height:44px}}
+@media (any-pointer:coarse), (max-width:730px), (max-width:900px) and (orientation:portrait), (max-height:535px) and (orientation:landscape){
+  body.street-expanded[data-map-view="street"] .map-frame:has(#field-controls:not([hidden])) {grid-template-rows:auto minmax(clamp(220px,38svh,320px),1fr)}
+  body.street-expanded[data-map-view="street"] .map-frame:has(#field-controls:not([hidden])):has(#housing-bar:not([hidden])) {grid-template-rows:auto auto minmax(clamp(220px,38svh,320px),1fr)}
+}
+
+#field-power {touch-action:none;user-select:none}
+
+body[data-field-command] :is(#scene-van,.street-stage-heading,#street-seat,#street-interact,#street-vehicle) {display:none}

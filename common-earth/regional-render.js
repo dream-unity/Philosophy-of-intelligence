@@ -248,10 +248,18 @@
     }
     g.fill();
   }
+  function fieldActor(g,a,v,size,selected=false,night=false,time=0,mini=false){
+    const art=root.EarthBaseArt;if(!art)return;
+    const p=v.screen(a.x,a.y),pose={dx:a.dx-a.dy,dy:-a.dx-a.dy,walking:a.moving,driving:!!a.driver,
+      passengers:a.passengers,phase:time*8+(Number(a.fieldId)||0),selected,night,mini};
+    if(a.unitKind==='truck')art.truck?.(g,p.x,p.y,size,pose);
+    else if(a.unitKind==='tank'||a.unitKind==='jet')art.marker(g,p.x,p.y,size,a.unitKind);
+    else art.soldier?.(g,p.x,p.y,size,{id:a.fieldId,type:a.unitKind},pose);
+  }
   function actors(g,world,base,v,mini,drawPerson,people=root.EarthRegionalWorld.travellers?.(world,base)||[]){
     let count=0;
     for(const t of people){
-      if(!inView(v,t.x,t.y,.03))continue;
+      if(t.kind==='military'&&root.EarthBaseField||!inView(v,t.x,t.y,.03))continue;
       count++;
       if(t.kind==='military'&&root.EarthBaseArt){
         const p=v.screen(t.x,t.y),size=mini?4:limit(v.sx*.022,6,25);
@@ -332,5 +340,5 @@
       const y=p.y+Math.max(8,scale*15*v.sy/v.sx)+9;g.fillStyle='#20392fe8';g.fillRect(p.x-w/2,y-9,w,18);g.fillStyle='#f5e6cb';g.fillText(s.name,p.x,y);
     }
   }
-  root.EarthRegionalRender={KM,TILT,regionalPoint,localPoint,viewport,fit,soil,tileRefinement,inView,routeLayer,useLayer,explored,actors,townPlan};
+  root.EarthRegionalRender={KM,TILT,regionalPoint,localPoint,viewport,fit,soil,tileRefinement,inView,fieldActor,routeLayer,useLayer,explored,actors,townPlan};
 })(typeof window==='undefined'?globalThis:window);

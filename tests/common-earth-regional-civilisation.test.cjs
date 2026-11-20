@@ -438,43 +438,109 @@ test('bases commission and train units against the selected treasury, and reject
   assert.equal(base.ready(w,market).length,2);save();
 });
 
-test('mixed base expeditions travel, fight the selected town, return to service, and obey a ceasefire',()=>{
-  const run=region(),{sim,w,ctx,market,save}=run,home=sim.active(),base=ctx.EarthMilitaryBase;
-  home.materials=40;home.funds=60;
+function driveCourse(run,order,base){
+  const field=run.ctx.EarthBaseField;
+  for(let i=0;i<1000&&field.courseOpen(run.w,base);i++){
+    assert.ok(order({action:'accelerate',id:'truck'}).ok);run.elapse(1100);
+  }
+  assert.equal(field.courseOpen(run.w,base),false);
+}
+test('guards and a free truck exist on the map and a player attack waits for physical delivery',()=>{
+  const run=region(),{sim,w,ctx,market,save}=run,home=sim.active(),base=ctx.EarthMilitaryBase,field=ctx.EarthBaseField;
   const order=q=>sim.baseOrder({site:home.id,generation:home.foundingRevision||0,...q});
+  home.materials=40;home.funds=60;
+  const geo=ctx.EarthRegionalWorld.geography(w,home),before=field.actors(w,geo);
+  assert.equal(before.filter(a=>a.unitKind==='truck').length,base.towns(w).length);
+  assert.equal(order({action:'moveField',id:'truck',area:home.id,point:{x:0,y:0}}).ok,false);
   for(const type of ['flight','armour'])assert.ok(order({action:'research',type}).ok);
-  const ids=home.militaryBase.units.map(u=>u.id);
+  for(const type of ['guard','guard','scout'])assert.ok(order({action:'enlist',type}).ok);
+  const b=home.militaryBase,ids=b.units.map(u=>u.id),driver=ids[2],start=field.position(w,home,driver);
+  const guards=field.actors(w,geo).filter(a=>a.siteId===home.id&&a.unitKind==='guard');
+  assert.equal(guards.length,2);assert.notEqual(guards[0].x,guards[1].x);
   assert.ok(order({action:'dispatch',order:'attack',ids,target:market.id}).ok);
-  assert.equal(ctx.EarthBorderConflict.relation(w,home.id,market.id).state,'war');
   assert.equal(order({action:'dispatch',order:'scout',ids,target:market.id}).ok,false);
-  assert.equal(base.ready(w,home).length,0);
-  assert.ok(ctx.EarthRegionalWorld.travellers(w,home).some(a=>a.kind==='military'&&a.destination===market.name));
-  const reopened=region(save());assert.equal(reopened.sim.active().militaryBase.missions.length,1);
-  for(let i=0;i<25&&home.militaryBase.missions.length;i++)run.production();
-  assert.ok(home.militaryBase.log.some(e=>e.text.includes('captured the military base')));
-  assert.equal(market.communityLife.border.occupiedBy,home.id);assert.equal(base.ready(w,home).length,2);
+  assert.equal(ctx.EarthBorderConflict.relation(w,home.id,market.id).state,'war');
+  for(let i=0;i<7;i++)run.production();
+  assert.equal(b.missions[0].phase,'awaiting');assert.deepEqual(field.position(w,home,driver),start);
+  assert.equal(market.communityLife.border.occupiedBy,undefined);
+  assert.equal(order({action:'drive',id:ids[0]}).ok,false);
+  assert.equal(order({action:'drive',id:999}).ok,false);
+  assert.ok(order({action:'drive',id:driver}).ok);
+  for(const id of ids.filter(id=>id!==driver))assert.ok(order({action:'board',id}).ok);
+  const destination=field.gate(w,home,market),truckStart=field.position(w,home,'truck');
+  const short={x:truckStart.x+.02,y:truckStart.y};
+  assert.ok(order({action:'moveField',id:'truck',area:home.id,point:short,steer:true}).ok);
+  run.elapse(60);
+  assert.ok(order({action:'stopField',id:'truck'}).ok);
+  const stopped=field.position(w,home,'truck');assert.ok(stopped.x>truckStart.x&&stopped.x<short.x);
+  assert.ok(order({action:'moveField',id:'truck',area:home.id,point:destination}).ok);
+  run.elapse(100000);assert.equal(field.position(w,home,'truck').moving,false);assert.equal(field.position(w,home,'truck').x,stopped.x);
+  assert.ok(order({action:'accelerate',id:'truck'}).ok);
+  assert.equal(order({action:'unload',id:'truck'}).ok,false);
+  run.elapse(600);
+  const halfway=field.position(w,home,'truck');assert.ok(halfway.moving);
+  assert.deepEqual(field.position(w,home,driver),halfway);
+  const reopened=region(save());assert.equal(reopened.sim.active().militaryBase.driver,driver);
+  assert.ok(reopened.sim.active().militaryBase.truck.route);assert.equal(b.missions[0].phase,'awaiting');
+  assert.ok(order({action:'brake',id:'truck'}).ok);const parked=field.position(w,home,'truck');run.elapse(50000);assert.equal(field.position(w,home,'truck').x,parked.x);
+  driveCourse(run,order,b);
+  assert.ok(order({action:'unload',id:'truck'}).ok);assert.equal(b.driver,undefined);
+  assert.equal(b.missions[0].phase,'engaged');assert.equal(b.units.filter(u=>u.aboard).length,0);
+  run.production();
+  assert.ok(b.log.some(e=>e.text.includes('captured the military base')));
+  assert.equal(market.communityLife.border.occupiedBy,home.id);assert.equal(base.ready(w,home).length,5);
+  assert.ok(Math.hypot(field.position(w,home,driver).x-destination.x,field.position(w,home,driver).y-destination.y)<.12);
   assert.ok(order({action:'dispatch',order:'attack',ids,target:market.id}).ok);
   for(const action of ['negotiate','accept'])assert.ok(sim.diplomacy({home:home.id,target:market.id,action}).ok);
-  assert.equal(market.communityLife.border.occupiedBy,undefined);
-  assert.equal(home.militaryBase.missions[0].phase,'returning');run.production();save();
+  assert.equal(b.missions.length,0);save();
 });
 
-test('a reinforcement changes defence until recalled; a restarted destination releases deployed assets',()=>{
-  const run=region(),{w,sim,ctx,market,save}=run,s=sim.active(),base=ctx.EarthMilitaryBase;
+test('on-foot orders persist, a distant soldier cannot board, reinforcement waits for unloading, and recall holds position',()=>{
+  const run=region(),{w,sim,ctx,market,save}=run,s=sim.active(),base=ctx.EarthMilitaryBase,field=ctx.EarthBaseField;
   const order=q=>sim.baseOrder({site:s.id,generation:s.foundingRevision||0,...q});
   if(ctx.EarthBorderConflict.relation(w,s.id,market.id)?.state==='war'){
     for(const action of ['negotiate','accept'])assert.ok(sim.diplomacy({home:s.id,target:market.id,action}).ok);
   }
-  assert.ok(order({action:'enlist',type:'engineer'}).ok);
-  const ids=[s.militaryBase.units[0].id];
-  assert.ok(order({action:'dispatch',target:market.id,order:'assist',ids}).ok);
-  for(let i=0;i<20&&s.militaryBase.missions[0]?.phase!=='stationed';i++)run.production();
+  assert.ok(order({action:'enlist',type:'engineer'}).ok);const id=s.militaryBase.units[0].id;
+  const point=field.gate(w,s,market);
+  assert.ok(order({action:'moveField',id,area:s.id,point}).ok);
+  run.elapse(s.militaryBase.units[0].field.route.ms+1);
+  assert.equal(order({action:'board',id}).ok,false);
+  assert.ok(order({action:'moveField',id,area:s.id,point:field.gate(w,s)}).ok);
+  run.elapse(s.militaryBase.units[0].field.route.ms+1);
+  assert.ok(order({action:'dispatch',target:market.id,order:'assist',ids:[id]}).ok);
+  assert.ok(order({action:'drive',id}).ok);
+  assert.ok(order({action:'moveField',id:'truck',area:s.id,point}).ok);
+  driveCourse(run,order,s.militaryBase);assert.ok(order({action:'unload',id:'truck'}).ok);
   const mission=s.militaryBase.missions[0];assert.equal(mission.phase,'stationed');
-  const before=base.defence(w,market);
+  const before=base.defence(w,market),where=field.position(w,s,id);
   assert.ok(order({action:'recall',id:mission.id}).ok);assert.equal(before-base.defence(w,market),5);
-  assert.ok(sim.manageSite(market.id,'restart',market.foundingRevision||0).ok);
-  assert.equal(sim.active().militaryBase.missions.length,0);
-  assert.ok(ctx.CommonEarthSim.readSave(JSON.stringify(sim.state)));
+  assert.deepEqual(field.position(w,s,id),where);
+  assert.ok(order({action:'dispatch',target:market.id,order:'assist',ids:[id]}).ok);
+  assert.ok(sim.manageSite(market.id,'restart',market.foundingRevision||0).ok);assert.equal(sim.active().militaryBase.missions.length,0);save();
+});
+
+test('an older player expedition reopens in the field and a driver who leaves the game cannot finish a trip',()=>{
+  const run=region(),{sim,w,ctx,market}=run,s=sim.active(),base=ctx.EarthMilitaryBase,field=ctx.EarthBaseField;
+  const order=q=>sim.baseOrder({site:s.id,generation:s.foundingRevision||0,...q});
+  assert.ok(order({action:'enlist',type:'guard'}).ok);const b=s.militaryBase,id=b.units[0].id;
+  assert.ok(base.command(w,{site:s.id,generation:s.foundingRevision||0,action:'dispatch',target:market.id,order:'scout',ids:[id]},true).ok);
+  const legacy=JSON.parse(JSON.stringify(w)),old=legacy.sites.find(t=>t.id===s.id).militaryBase;
+  delete old.missions[0].automatic;old.autonomous=false;
+  const restored=region(JSON.stringify(legacy)),home=restored.sim.active(),rebuilt=home.militaryBase;
+  assert.equal(rebuilt.missions[0].phase,'awaiting');assert.ok(rebuilt.units[0].field);
+  const from=restored.ctx.EarthBaseField.position(restored.w,home,id);
+  for(let i=0;i<4;i++)restored.production();
+  assert.deepEqual(restored.ctx.EarthBaseField.position(restored.w,home,id),from);
+  assert.equal(restored.ctx.EarthBaseField.actors(restored.w,restored.ctx.EarthRegionalWorld.geography(restored.w,home))
+    .filter(a=>a.siteId===home.id&&a.fieldId===id).length,1);restored.save();
+  assert.ok(order({action:'takeField',id}).ok);
+  assert.ok(order({action:'drive',id}).ok);
+  assert.ok(order({action:'moveField',id:'truck',area:s.id,point:field.gate(w,s,market)}).ok);
+  assert.ok(order({action:'accelerate',id:'truck'}).ok);
+  run.elapse(2000);const stopped=field.position(w,s,'truck');assert.equal(stopped.moving,false);
+  run.elapse(3600000);assert.deepEqual(field.position(w,s,'truck'),stopped);
+  assert.ok(field.courseOpen(w,b));assert.equal(b.driver,id);
 });
 
 test('a purchased time machine opens a historical branch while keeping the original expedition and stores recoverable',async()=>{

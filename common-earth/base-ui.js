@@ -1,6 +1,6 @@
 (function(root){
   'use strict';
-  function mount({book,sim,street,enterStreet,notify}){
+  function mount({book,sim,street,enterStreet,field,notify}){
     const domain=root.EarthMilitaryBase,doc=root.document,dialog=doc.getElementById('military-base');
     if(!domain||!dialog)return null;
     const host=doc.getElementById('base-interface');
@@ -55,15 +55,20 @@
         a.disabled=!domain.affordable(sim.state,s,u.cost);buttonRow(list,u.name,cost(u.cost)+' · '+u.detail,a);
       }
       content.append(el('h3','Recruit and commission'),list);
-      if(!b.units.length){content.append(el('p','New units appear in this base’s courtyard.'));return;}
+      const find=(id)=>{dialog.close();field?.select(s.id,id);};
+      buttonRow(content,'Military truck','Issued with every base. An enlisted soldier can drive the truck and carry the squad.',btn('Find truck on map',()=>find('truck'),'field-truck'));
+      if(!b.units.length){content.append(el('p','New recruits gather beside the truck at the east gate.'));return;}
       const garrison=el('div');content.append(el('h3','Base roster'),garrison);
       const available=new Set(domain.ready(sim.state,s).map(u=>u.id));
       for(const u of b.units){
         const free=available.has(u.id),mission=b.missions.find(m=>m.ids.includes(u.id));
-        const state=mission?domain.orders[mission.order]+' · '+mission.phase:u.ready>(sim.state.regionalWorld?.step||0)?'Recovering':'Ready at the base';
+        const state=mission?domain.orders[mission.order]+' · '+(mission.phase==='awaiting'?'awaiting manual transport':mission.phase):u.ready>(sim.state.regionalWorld?.step||0)?'Recovering':root.EarthBaseField.status(sim.state,s,u);
         const drill=btn(u.grade===3?'Fully trained':'Drill',()=>action({action:'train',id:u.id}),'train-'+u.id);
         drill.disabled=!free||u.grade>=3||!domain.affordable(sim.state,s,{food:1,funds:2});
-        buttonRow(garrison,unitName(u),state+' · Level '+u.grade+(u.grade<3?' · Drill costs 1 food and 2 funds':''),drill);
+        const controls=el('div',null,'base-unit-controls');
+        const locate=btn(mission&&!mission.manual?'Take field command':'Select on map',()=>find(u.id),'field-'+u.id);
+        controls.append(locate,drill);drill.disabled||=!!u.aboard||!!u.field&&root.EarthBaseField.moved(sim.state,s,u.id);
+        buttonRow(garrison,unitName(u),state+' · Level '+u.grade+(u.grade<3?' · Drill costs 1 food and 2 funds':''),controls);
       }
     }
     function lab(s,b){
@@ -89,23 +94,25 @@
       const note=el('p'),send=btn('',()=>action({action:'dispatch',order,target,ids:[...picked]}),'dispatch');
       function review(){
         const t=other.find(t=>t.id===target),war=t&&root.EarthBorderConflict.relation(w,s.id,t.id)?.state==='war';
-        note.textContent=order==='attack'?(war?'These communities are at war.':'Sending an attack declares war on this town.'):
-          order==='assist'?(war?'Negotiate peace before reinforcing this town.':'The group will stay at this base until recalled.'):'The group will report the town’s defence and return.';
-        send.textContent=domain.orders[order]+(t?' '+t.name:'');send.disabled=!picked.size||!t||order==='assist'&&war;
+        note.textContent=order==='attack'?(war?'These communities are at war.':'Preparing this attack declares war on this town.'):
+          order==='assist'?(war?'Negotiate peace before reinforcing this town.':'The group will stay at this base until recalled.'):'The group will report the town’s defence after you deliver it.';
+        note.textContent+=' Load the selected units, take the wheel and unload at the destination’s east gate.';
+        send.textContent='Prepare '+domain.orders[order].toLowerCase()+(t?' · '+t.name:'');send.disabled=!picked.size||!t||order==='assist'&&war;
       }
       targets.onchange=()=>{target=targets.value;review();};choice.onchange=()=>{order=choice.value;review();};
       const label=(name,node)=>{const wrap=el('label',name,'base-field');wrap.append(node);return wrap;};
       content.append(group,label('Destination',targets),label('Orders',choice),note,send);review();
       if(b.missions.length)content.append(el('h3','Active expeditions'));
       for(const m of b.missions){
-        const dest=domain.towns(w).find(t=>t.id===m.target),back=btn('Recall',()=>action({action:'recall',id:m.id}),'recall-'+m.id);
+        const dest=domain.towns(w).find(t=>t.id===m.target),back=btn(m.manual?'End assignment':'Recall',()=>action({action:'recall',id:m.id}),'recall-'+m.id);
         back.disabled=m.phase==='returning';
-        buttonRow(content,domain.orders[m.order]+' · '+(dest?.name||'Former town'),m.ids.map(id=>unitName(roster(b,id))).join(', ')+' · '+m.phase,back);
+        buttonRow(content,domain.orders[m.order]+' · '+(dest?.name||'Former town'),m.ids.map(id=>unitName(roster(b,id))).join(', ')+' · '+(m.phase==='awaiting'?'Awaiting manual transport':m.phase),back);
+        if(m.manual&&m.phase==='awaiting')content.append(btn('Find transport truck',()=>{dialog.close();field?.select(s.id,'truck',true,m.target);},'transport-'+m.id));
       }
       const incoming=domain.incoming(w,s.id);
       if(incoming.length){
         content.append(el('h3','Incoming groups'));
-        for(const {site,mission:m} of incoming)content.append(el('p',site.name+' · '+domain.orders[m.order]+' · '+m.ids.length+' deployed · '+m.phase));
+        for(const {site,mission:m} of incoming)content.append(el('p',site.name+' · '+domain.orders[m.order]+' · '+m.ids.length+' units · '+m.phase));
       }
       const auto=s.militaryBase?b.autonomous:s.id!==w.communityLife.homeId;
       buttonRow(content,'Base command',auto?'The council may spend surplus stores and deploy units.':'You direct spending and deployments.',

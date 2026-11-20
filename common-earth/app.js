@@ -149,7 +149,8 @@
   $('gate-run')?.addEventListener('click',()=>getStreet()?.runFromWatch());
   $('gate-withdraw')?.addEventListener('click',()=>districtPanel?.gate('withdraw'));
   const nightlife=window.EarthNightlifeUI?.mount({sim,street:getStreet,enterStreet:()=>{if(view!=='street')setView('street',false);},worldChanged:()=>syncLiveClock(true),notify});
-  const baseUI=window.EarthBaseUI?.mount({book,sim,street:getStreet,enterStreet:()=>{if(view!=='street')setView('street',false);},notify});
+  const fieldUI=window.EarthBaseFieldUI?.mount({sim,book,street:getStreet,enterStreet:()=>{if(view!=='street')setView('street',false);streetHud?.close(false);},notify});
+  const baseUI=window.EarthBaseUI?.mount({book,sim,field:fieldUI,street:getStreet,enterStreet:()=>{if(view!=='street')setView('street',false);},notify});
   listen('scene-open-base','click',()=>baseUI?.open(sim.active()?.id));
   const townCentre=window.EarthTownCentreUI?.mount($('town-centre'),sim,presentResult,id=>{$('town-centre').close();baseUI?.open(id);});
   function openTownCentre(siteId){
@@ -211,6 +212,7 @@
   attachSceneSection('life',$('character-lives'),lifePanel);
   const truckPanel=window.EarthTruckPanel;
   function useStreetVehicleDoor(){
+    if(fieldUI?.vehicle())return;
     const local=getStreet(),state=local?.getState();
     if(state?.vehicle==='truck')return truckPanel.park(sceneContext);
     if(state?.nearTruckDoor)return local.boardServiceTruck();
@@ -827,7 +829,7 @@
     document.body.dataset.mapView=view;
     const isStreet=view==='street',isWorld=view==='world';
     show('atlas-stage',isWorld);atlas.setActive?.(isWorld);show('street-stage',isStreet);show('street-navigation',isStreet);show('street-controls',isStreet);show('street-actors',isStreet);
-    show('site-inspector',isWorld);show('actions-panel',isStreet);
+    show('site-inspector',isWorld);show('actions-panel',isStreet);if(!isStreet)fieldUI?.clear();
     for(const [id,isActive] of [['world-view',isWorld],['street-view',isStreet]]) {
       if(!$(id))continue;
       $(id).setAttribute('aria-pressed',String(isActive));
@@ -835,6 +837,7 @@
     }
     if(isStreet) {
       if(!street) street=window.EarthStreet.mount($('street-canvas'),{
+        field:fieldUI,
         getWeek:()=>sim.state.week,getWorld:()=>sim.state,
         getRegularRun:()=>sim.regularTruckView(),
         getTruckDispute:()=>sim.truckDisputeView?.(),

@@ -59,7 +59,7 @@
   const strength=(b,u)=>units[u.type].power+u.grade+(b.tech.includes('doctrine')?1:0);
   function defence(w,s){
     let n=2+2*(s.communityLife?.border?.defence?.stage||0);
-    for(const u of ready(w,s))n+=strength(view(s),u)+(u.type==='guard'?1:0);
+    for(const u of ready(w,s))if(!u.aboard&&(!u.field||!root.EarthBaseField.moved(w,s,u.id)))n+=strength(view(s),u)+(u.type==='guard'?1:0);
     for(const ally of towns(w))for(const m of ally.militaryBase?.missions||[]){
       if(m.target!==s.id||m.phase!=='stationed')continue;
       const b=ally.militaryBase;
@@ -78,7 +78,19 @@
     const b=view(s);
     if(q.version!=null&&q.version!==(b.version||0))return fail('The base roster has changed. Review your order.');
     let message;
-    if(q.action==='enlist'){
+    const field=root.EarthBaseField;
+    if(field?.actions.has(q.action)){
+      const result=field.command(w,s,b,q);if(!result.ok)return result;
+      s.militaryBase=b;b.version=(b.version||0)+1;b.autonomous=false;
+      if(q.action==='unload')settle(w,s);
+      return result;
+    }else if(q.action==='takeField'){
+      const u=b.units.find(v=>v.id===q.id),m=u&&b.missions.find(m=>!m.manual&&m.ids.includes(u.id));
+      if(!m)return fail('This unit is already available for field orders.');
+      const p=field.position(w,s,u.id);u.field={x:p.x,y:p.y,dx:p.dx,dy:p.dy};
+      m.ids=m.ids.filter(id=>id!==u.id);if(!m.ids.length)b.missions.splice(b.missions.indexOf(m),1);
+      message=units[u.type].name+' '+u.id+' holds position under your command.';
+    }else if(q.action==='enlist'){
       const u=Object.hasOwn(units,q.type)&&units[q.type];if(!u||u.tech&&!b.tech.includes(u.tech))return fail('Research this vehicle at the base first.');
       if(!pay(w,s,u.cost))return fail('The district has insufficient available stores for this unit.');
       const recruit=enlisted(b,q.type);message=u.name+' '+recruit.id+' is ready at '+s.name+' military base.';
@@ -88,28 +100,35 @@
       b.tech.push(q.type);if(r.first)enlisted(b,r.first);
       message=s.name+' completed '+r.name+'.'+(r.first?' Its first '+units[r.first].name.toLowerCase()+' is ready.':'');
     }else if(q.action==='train'){
-      const u=ready(w,s).find(u=>u.id===q.id);if(!u||u.grade>=3)return fail('Choose an available unit below training level three.');
+      const u=ready(w,s).find(u=>u.id===q.id);if(!u||u.grade>=3||u.aboard||u.field&&field.moved(w,s,u.id))return fail('Choose an available unit below training level three.');
       if(!pay(w,s,{food:1,funds:2}))return fail('A drill costs 1 food and 2 funds.');
       u.grade++;message=units[u.type].name+' '+u.id+' reached training level '+u.grade+'.';
     }else if(q.action==='dispatch'){
       const t=root.EarthCommunityLife.lookup(w,q.target);
       if(!t||t===s||!Object.hasOwn(orders,q.order)||!Array.isArray(q.ids)||!q.ids.length)return fail('Choose a mission, units and another town.');
       const ids=new Set(q.ids),party=ready(w,s).filter(u=>ids.has(u.id));
+      if(automatic&&party.some(u=>u.aboard||u.field&&field.moved(w,s,u.id)))return fail('The expedition needs units at the base.');
       if(ids.size!==q.ids.length||party.length!==ids.size)return fail('One of the selected units is already on duty.');
       const war=root.EarthBorderConflict.relation(w,s.id,t.id)?.state==='war';
       if(q.order==='assist'&&war)return fail('A ceasefire is needed before these communities can reinforce each other.');
       if(q.order==='attack'&&!war){root.EarthBorderConflict.declare(w,s,t);root.EarthBorderConflict.relation(w,s.id,t.id).explicit=true;}
-      const geo=root.EarthRegionalWorld.geography(w,s),a=geo?.towns.find(p=>p.site.id===s.id),z=geo?.towns.find(p=>p.site.id===t.id);
-      const km=a&&z?Math.hypot(z.x-a.x,z.y-a.y):12;
-      const pace=Math.min(...party.map(u=>units[u.type].pace));
-      const path=a&&z&&!party.every(u=>u.type==='jet')?root.EarthRegionalWorld.crossingPath(w,s,t):null;
-      const distance=path?.length>1?(path.length-1)*geo.cellSize:km;
-      const duration=Math.max(1,Math.ceil(Math.min(18,Math.max(2,distance*1.5))/pace));
-      b.missions.push({...(path?.length>1?{path}:{}),id:++b.serial,order:q.order,target:t.id,ids:[...ids],phase:'outbound',start:step(w),duration});
-      message=s.name+' sent '+party.length+' '+(party.length===1?'unit':'units')+' to '+t.name+' · '+orders[q.order]+'.';
+      if(!automatic){
+        b.missions.push({id:++b.serial,order:q.order,target:t.id,ids:[...ids],manual:true,phase:'awaiting',start:step(w),duration:1});
+        message=orders[q.order]+' order prepared. Load the units, drive the military truck to '+t.name+' and unload near its east gate.';
+      }else{
+        const geo=root.EarthRegionalWorld.geography(w,s),a=geo?.towns.find(p=>p.site.id===s.id),z=geo?.towns.find(p=>p.site.id===t.id);
+        const km=a&&z?Math.hypot(z.x-a.x,z.y-a.y):12;
+        const pace=Math.min(...party.map(u=>units[u.type].pace));
+        const path=a&&z&&!party.every(u=>u.type==='jet')?root.EarthRegionalWorld.crossingPath(w,s,t):null;
+        const distance=path?.length>1?(path.length-1)*geo.cellSize:km;
+        const duration=Math.max(1,Math.ceil(Math.min(18,Math.max(2,distance*1.5))/pace));
+        b.missions.push({...(path?.length>1?{path}:{}),id:++b.serial,automatic:true,order:q.order,target:t.id,ids:[...ids],phase:'outbound',start:step(w),duration});
+        message=s.name+' sent '+party.length+' '+(party.length===1?'unit':'units')+' to '+t.name+' · '+orders[q.order]+'.';
+      }
     }else if(q.action==='recall'){
       const m=b.missions.find(m=>m.id===q.id);if(!m||m.phase==='returning')return fail('This group is already home or returning.');
-      recall(w,m);message='The group is returning to '+s.name+'.';
+      if(m.manual){b.missions.splice(b.missions.indexOf(m),1);message='Assignment ended. The units hold their current positions.';}
+      else{recall(w,m);message='The group is returning to '+s.name+'.';}
     }else if(q.action==='autonomy'){
       if(typeof q.enabled!=='boolean')return fail('Choose who directs this base.');
       b.autonomous=q.enabled;message=s.name+' base is under '+(q.enabled?'town':'player')+' command.';
@@ -122,7 +141,7 @@
   function finish(w,s,t,b,m){
     const party=b.units.filter(u=>m.ids.includes(u.id));
     if(m.order==='assist'){m.phase='stationed';entry(w,t,s.name+' reinforcements are defending '+t.name+'.');}
-    else if(m.order==='scout'){entry(w,s,'Reconnaissance at '+t.name+' reported defence '+defence(w,t)+' and '+ready(w,t).length+' available units.');recall(w,m);}
+    else if(m.order==='scout'){entry(w,s,'Reconnaissance at '+t.name+' reported defence '+defence(w,t)+' and '+ready(w,t).length+' available units.');if(!m.manual)recall(w,m);}
     else{
       const attacking=party.reduce((n,u)=>n+strength(b,u),0),defending=defence(w,t),won=attacking>defending;
       const text=won?s.name+' captured the military base at '+t.name+' ('+attacking+' against '+defending+').':
@@ -133,14 +152,18 @@
       }
       entry(w,s,text);entry(w,t,text);
       m.recovery=won||party.some(u=>u.type==='medic')?0:2;
-      recall(w,m);
+      if(!m.manual)recall(w,m);
+    }
+    if(m.manual&&m.order!=='assist'){
+      for(const u of party)u.ready=step(w)+(m.recovery||0);
+      b.missions.splice(b.missions.indexOf(m),1);
     }
     b.version=(b.version||0)+1;
   }
   function incoming(w,id){
     const groups=[];
     for(const site of towns(w))for(const mission of site.militaryBase?.missions||[]){
-      if(mission.target===id&&mission.phase!=='returning')groups.push({site,mission});
+      if(mission.target===id&&mission.phase!=='returning'&&mission.phase!=='awaiting')groups.push({site,mission});
     }
     return groups;
   }
@@ -148,6 +171,14 @@
     const b=s.militaryBase;if(!b)return;
     for(const m of [...b.missions]){
       const t=root.EarthCommunityLife.lookup(w,m.target),war=t&&root.EarthBorderConflict.relation(w,s.id,t.id)?.state==='war';
+      if(m.manual){
+        if(!t||m.order==='attack'&&!war||m.order==='assist'&&war){b.missions.splice(b.missions.indexOf(m),1);b.version++;continue;}
+        if(m.phase==='awaiting'&&root.EarthBaseField.arrived(w,s,m,t)){
+          if(m.order==='attack'){m.phase='engaged';m.battleAt=step(w);b.version++;entry(w,t,s.name+' unloaded at the east gate.');}
+          else finish(w,s,t,b,m);
+        }else if(m.phase==='engaged'&&step(w)>m.battleAt)finish(w,s,t,b,m);
+        continue;
+      }
       if((!t||m.order==='attack'&&!war||m.order==='assist'&&war)&&m.phase!=='returning'){recall(w,m);b.version=(b.version||0)+1;}
       if(m.phase==='engaged'){
         if(step(w)>m.battleAt)finish(w,s,t,b,m);
@@ -190,8 +221,11 @@
     }
   }
   function peace(w,a,b){
-    for(const [s,t] of [[a,b],[b,a]])for(const m of s.militaryBase?.missions||[]){
-      if(m.order==='attack'&&m.target===t.id&&m.phase!=='returning'){recall(w,m);s.militaryBase.version++;}
+    for(const [s,t] of [[a,b],[b,a]])for(const m of [...(s.militaryBase?.missions||[])]){
+      if(m.order==='attack'&&m.target===t.id&&m.phase!=='returning'){
+        if(m.manual)s.militaryBase.missions.splice(s.militaryBase.missions.indexOf(m),1);else recall(w,m);
+        s.militaryBase.version++;
+      }
     }
   }
   function detach(w,id){
@@ -210,33 +244,53 @@
       ids.add(u.id);
     }
     for(const m of b.missions){
-      if(!m||!n(m.id)||!m.id||m.id>b.serial||ids.has(m.id)||missions.has(m.id)||!str(m.target)||!Object.hasOwn(orders,m.order)||!['outbound','returning','stationed','engaged'].includes(m.phase)||
+      if(!m||!n(m.id)||!m.id||m.id>b.serial||ids.has(m.id)||missions.has(m.id)||!str(m.target)||!Object.hasOwn(orders,m.order)||!(m.manual?['awaiting','stationed','engaged']:['outbound','returning','stationed','engaged']).includes(m.phase)||m.manual!=null&&typeof m.manual!=='boolean'||m.delivered!=null&&(!Array.isArray(m.delivered)||!Array.isArray(m.ids)||m.delivered.length>m.ids.length||!m.delivered.every(id=>m.ids.includes(id)))||
         m.phase==='engaged'&&(m.order!=='attack'||!n(m.battleAt))||m.path!=null&&(!Array.isArray(m.path)||m.path.length<2||m.path.length>4097||!m.path.every(c=>typeof c==='string'&&/^-?\d{1,5},-?\d{1,5}$/.test(c)))||
         !n(m.start)||!n(m.duration)||!m.duration||m.progress!=null&&(!Number.isFinite(m.progress)||m.progress<0||m.progress>1)||
         m.recovery!=null&&(!n(m.recovery)||m.recovery>2)||!Array.isArray(m.ids)||!m.ids.length||
         !m.ids.every(id=>ids.has(id)&&!busy.has(id)&&busy.add(id)))return false;
       missions.add(m.id);
     }
-    return b.log.length<=12&&b.log.every(e=>e&&n(e.week)&&n(e.step)&&str(e.text));
+    return (!root.EarthBaseField||root.EarthBaseField.valid(b))&&b.log.length<=12&&b.log.every(e=>e&&n(e.week)&&n(e.step)&&str(e.text));
+  }
+  function missionPoint(w,s,m){
+    const g=root.EarthRegionalWorld.geography(w,s),t=root.EarthCommunityLife.lookup(w,m.target);
+    if(!t)return root.EarthBaseField.gate(w,s);
+    const a=g.project(s),z=g.project(t),start=root.EarthBaseField.gate(w,s),end=root.EarthBaseField.gate(w,s,t);
+    const time=root.EarthDayClock?.now(w)??Date.now(),partial=w.lastProductionAt?Math.max(0,Math.min(.98,(time-w.lastProductionAt)/root.EarthDistrictGrowth.period)):0;
+    const f=m.phase==='stationed'||m.phase==='engaged'?1:m.phase==='outbound'?fraction(w,m,step(w)+partial):(m.progress??1)*(1-fraction(w,m,step(w)+partial));
+    const route=m.path&&root.EarthRegionalWorld.tripPosition(w,s,{from:s.id,to:t.id,path:m.path},f);
+    return {x:route?route.x+(start.x-a.x)*(1-f)+(end.x-z.x)*f:start.x+(end.x-start.x)*f,
+      y:route?route.y+(start.y-a.y)*(1-f)+(end.y-z.y)*f:start.y+(end.y-start.y)*f,
+      dx:z.x-a.x,dy:z.y-a.y,moving:m.phase==='outbound'||m.phase==='returning'};
   }
   function actors(w,geo){
     const rows=[];
     for(const a of geo.towns){
       const b=a.site.militaryBase;if(!b)continue;
       for(const m of b.missions){
+        if(m.manual)continue;
         const z=geo.towns.find(t=>t.site.id===m.target);if(!z)continue;
-        const time=root.EarthDayClock?.now(w)??Date.now(),partial=w.lastProductionAt?Math.max(0,Math.min(.98,(time-w.lastProductionAt)/root.EarthDistrictGrowth.period)):0;
-        const f=m.phase==='stationed'||m.phase==='engaged'?1:m.phase==='outbound'?fraction(w,m,step(w)+partial):(m.progress??1)*(1-fraction(w,m,step(w)+partial));
         const unit=b.units.filter(u=>m.ids.includes(u.id)).sort((a,b)=>units[b.type].power-units[a.type].power)[0];
-        const start=root.EarthRegionalRender?.regionalPoint?.(a,place.x,place.y)||a,end=root.EarthRegionalRender?.regionalPoint?.(z,place.x,place.y)||z;
-        const route=m.path&&root.EarthRegionalWorld.tripPosition(w,a.site,{from:a.site.id,to:z.site.id,path:m.path},f);
-        const x=route?route.x+(start.x-a.x)*(1-f)+(end.x-z.x)*f:start.x+(end.x-start.x)*f;
-        const y=route?route.y+(start.y-a.y)*(1-f)+(end.y-z.y)*f:start.y+(end.y-start.y)*f;
-        rows.push({x,y,dx:z.x-a.x,dy:z.y-a.y,kind:'military',unitKind:unit.type,siteId:a.site.id,
+        rows.push({...missionPoint(w,a.site,m),kind:'military',unitKind:unit.type,siteId:a.site.id,
           name:a.site.name+' · '+units[unit.type].name,activity:orders[m.order],destination:z.site.name,detail:m.ids.length+' deployed · '+m.phase,phase:m.phase});
       }
     }
     return rows;
   }
-  root.EarthMilitaryBase=Object.freeze({place,gate,units,research,orders,towns,view,ready,parked,incoming,balance,affordable,defence,command,advance,peace,detach,valid,actors});
+  function restoreField(w){
+    const field=root.EarthBaseField;if(!field)return;
+    for(const s of towns(w)){
+      const b=s.militaryBase;if(!b||b.autonomous)continue;
+      for(const m of [...b.missions]){
+        if(m.manual||m.automatic)continue;
+        const t=root.EarthCommunityLife.lookup(w,m.target);if(!t)continue;
+        const p=missionPoint(w,s,m);
+        m.ids.forEach((id,i)=>{b.units.find(u=>u.id===id).field={x:p.x+.009*(i%4),y:p.y-.009*Math.floor(i/4)};});
+        if(m.phase==='returning'){b.missions.splice(b.missions.indexOf(m),1);continue;}
+        m.manual=true;if(m.phase==='outbound')m.phase='awaiting';else m.delivered=[...m.ids];
+      }
+    }
+  }
+  root.EarthMilitaryBase=Object.freeze({place,gate,units,research,orders,towns,view,ready,parked,incoming,balance,affordable,defence,command,advance,peace,detach,valid,actors,missionPoint,restoreField});
 })(globalThis);
