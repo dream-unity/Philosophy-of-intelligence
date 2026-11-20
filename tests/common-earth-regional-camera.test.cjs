@@ -497,8 +497,6 @@ test('tapping and double-tapping deployed soldiers preserves the destination cha
   const order=q=>sim.baseOrder({site:home.id,generation:home.foundingRevision,...q});
   for(let i=0;i<2;i++)assert.ok(order({action:'enlist',type:'guard'}).ok);
   for(const u of home.militaryBase.units)assert.ok(order({action:'board',id:u.id}).ok);
-  assert.ok(order({action:'driveTown',target:town.id}).ok);
-  assert.ok(order({action:'unload',id:'truck'}).ok);
   let sel={site:home.id,id:'truck',ids:['truck']},nearby,chosen,viewport;
   const anchors=new Map(),sprite=draw.fieldActor;
   draw.fieldActor=(ctx,a,v,size,...rest)=>{
@@ -512,6 +510,11 @@ test('tapping and double-tapping deployed soldiers preserves the destination cha
     selectNearby:(site,id)=>{nearby=Array.from(field.nearby(world,home,id),u=>u.id);sel={site,id,ids:nearby};map.showField(sel,false);},
     pickTarget:(site,o)=>{chosen={site,...o};return true;},move:()=>true}});
   map.showField(sel);paint();
+  assert.equal(map.regionalCamera().originId,home.id);
+  assert.ok(order({action:'driveTown',target:town.id}).ok);
+  assert.ok(order({action:'unload',id:'truck'}).ok);
+  // An immediate order after drop-off must already use the destination chart before the next paint.
+  map.fieldRefresh();assert.equal(map.regionalCamera().originId,town.id);paint();
   const before=map.regionalCamera();assert.equal(before.originId,town.id);
   const tap=(x,y)=>{touch('pointerdown',x,y);touch('pointerup',x,y);paint();};
   const g=anchors.get(1),guardY=g.y-g.size*.45;

@@ -271,7 +271,39 @@
     const going=depart(w,s,b);
     return {ok:true,message:going?(target?'Parked at ':'Driving to ')+name+'.':'Picking up soldiers, then driving to '+name+'.'};
   }
-  const actions=new Set(['moveField','stopField','driveTown','returnBase','board','boardParty','reboard','finishBoarding','drive','unload']);
+  function travelFrom(start,points,time,pace){
+    const field={...copy(start),dx:start.dx,dy:start.dy};
+    const length=points.reduce((sum,p,i)=>sum+dist(p,i?points[i-1]:start),0);
+    if(length>.00001)field.route={at:time,points:points.map(copy),length,ms:Math.max(100,Math.min(900000,length*pace))};
+    return field;
+  }
+  function marchParty(w,s,b,q){
+    const ids=new Set(Array.isArray(q.ids)?q.ids:[]);
+    const party=b.units.filter(u=>ids.has(u.id));
+    if(!party.length||party.length!==q.ids.length||party.some(u=>!canSelect(w,b,u)))
+      return {ok:false,message:'Select soldiers who are ready and on foot.'};
+    const area=lookup(w,q.area),g=area&&geography(w,area),p=q.point;
+    if(!g||!validPoint(p)||p.x<g.bounds.minX||p.x>g.bounds.maxX||p.y<g.bounds.minY||p.y>g.bounds.maxY)
+      return {ok:false,message:'Choose a point on the regional map.'};
+
+    const home=geography(w,s),time=now(w),columns=Math.ceil(Math.sqrt(party.length)),rows=Math.ceil(party.length/columns);
+    const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+    const orders=party.map((u,i)=>{
+      const start=position(w,s,u.id,time),row=Math.floor(i/columns);
+      const width=Math.min(columns,party.length-row*columns);
+      const end={x:clamp(p.x+(i%columns-(width-1)/2)*km,g.bounds.minX,g.bounds.maxX),
+        y:clamp(p.y+((rows-1)/2-row)*km,g.bounds.minY,g.bounds.maxY)};
+      const from=project(home,g,start);
+      const points=dist(from,end)>.00001?route(w,area,from,end,false).map(point=>project(g,home,point)):[];
+      return travelFrom(start,points,time,22000);
+    });
+    // A move replaces these soldiers' current field duties. Troops preparing to board keep their travel orders.
+    const engaged=new Set(b.missions.filter(m=>m.phase!=='awaiting').flatMap(m=>m.ids.filter(id=>ids.has(id))));
+    releaseAssignments(w,s,b,engaged);
+    party.forEach((u,i)=>{u.field=orders[i];});
+    return {ok:true,message:party.length===1?'Soldier ordered to march.':party.length+' soldiers ordered to march.'};
+  }
+  const actions=new Set(['marchParty','moveField','stopField','driveTown','returnBase','board','boardParty','reboard','finishBoarding','drive','unload']);
   function command(w,s,b,q){
     const fail=message=>({ok:false,message}),ok=message=>({ok:true,message});
     const id=q.id,u=b.units.find(v=>v.id===id),truck=id===truckId,at=position(w,s,truckId);
@@ -289,6 +321,7 @@
       }
       return sendTruck(w,s,b,town===s?yard(w,s,truckId):gate(w,s,town),town.id);
     }
+    if(q.action==='marchParty')return marchParty(w,s,b,q);
     if(b.departure&&q.action!=='finishBoarding'&&q.action!=='stopField')return fail('The truck is gathering soldiers. Stop to change the pickup.');
     if(b.departure&&q.action==='stopField'){
       delete b.departure;for(const rider of b.units)if(rider.boarding){
@@ -342,17 +375,13 @@
       destination=project(g,geography(w,s),q.point);
       if(!q.steer&&(q.point.x<g.bounds.minX||q.point.x>g.bounds.maxX||q.point.y<g.bounds.minY||q.point.y>g.bounds.maxY)&&dist(a,destination)>1)return fail('Choose a point on the regional map.');
     }
-    const field={...copy(a),dx:a.dx,dy:a.dy};
+    let field={...copy(a),dx:a.dx,dy:a.dy};
     if(destination){
       if(truck&&!q.steer)return sendTruck(w,s,b,destination,null);
       if(q.steer&&dist(a,destination)>.14)return fail('Steer one length of road at a time.');
       if(q.steer&&truck)destination=steerTruck(geography(w,s),a,destination);
       const points=q.steer?[destination]:route(w,s,a,destination,truck);
-      const length=points.reduce((sum,p,i)=>sum+dist(p,i?points[i-1]:a),0);
-      if(length>.00001){
-        const time=now(w);
-        field.route={at:time,points:points.map(copy),length,ms:Math.max(100,Math.min(900000,length*(truck?6500:22000)))};
-      }
+      field=travelFrom(a,points,now(w),truck?6500:22000);
     }
     if(truck){
       if(q.steer&&field.route)settleBoarding(w,s,true);
