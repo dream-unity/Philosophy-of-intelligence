@@ -33,5 +33,6 @@ body[data-field-command] :is(#scene-van,.street-stage-heading,#street-seat,#stre
 
 #field-quick:not([hidden]) {position:absolute;z-index:3;inset:8px auto auto 8px;max-width:calc(60% - 12px);display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;padding:4px 8px;border:1px solid #71877d;border-radius:4px;background:#162c2ef5;color:var(--paper);font-size:.9rem}
 #field-quick button {min-height:44px;padding:5px 10px;color:#192c29;background:var(--gold);border:1px solid var(--gold);border-radius:4px;font:inherit;font-weight:600}
+#field-quick #field-quick-deselect {color:var(--paper);background:transparent;border-color:#71877d}
 #field-quick button:disabled {opacity:.75}
 #field-roster-list {max-height:48dvh;overflow:auto;border-block:1px solid var(--line);margin:.4rem 0 .8rem}

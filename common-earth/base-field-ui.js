@@ -15,9 +15,13 @@
     const quick=get('field-quick'),roster=get('field-roster');
     function run(q,after,key=ctx()){
       busy=busy.then(async()=>{
-        if(!current(key))return;
-        const s=ready(),result=await sim.perform('baseOrder',{site:s.id,generation:key.generation,version:domain.view(s).version||0,...q});
-        if(!current(key))return;
+        const s=root.EarthCommunityLife.lookup(sim.state,key.site);
+        // Deselecting changes the panel, but an issued march still belongs to its original roster.
+        if(q.action==='marchParty'){
+          if(!s||key.slot!==book.current().id||key.generation!==(s.foundingRevision||0))return;
+        }else if(!current(key))return;
+        const result=await sim.perform('baseOrder',{site:s.id,generation:key.generation,version:domain.view(s).version||0,...q});
+        if(!current(key)){if(result.ok)street()?.fieldRefresh?.();return;}
         get('field-status').textContent=result.ok&&['driveTown','returnBase','reboard','boardParty','attackHere'].includes(q.action)?'':result.message;
         if(result.ok)after?.(result);else if(q.steer)release(false);
         stamp='';render();street()?.fieldRefresh?.();
@@ -86,7 +90,7 @@
       get('field-selection').textContent=truck?title+' · '+riders.length+' aboard':title;
       const destination=target?.name||'the selected point';
       let detail=truck?(at.moving?'Driving to '+destination:b.departure?'Picking up '+incoming.length+' for '+destination:
-        place?'Parked at '+place.name:'Parked between towns'):group?'Tap the truck to board, or tap a target in town.':field.status(sim.state,s,u);
+        place?'Parked at '+place.name:'Parked between towns'):group?'Tap the map to march. Tap your truck to board.':field.status(sim.state,s,u);
       if(truck&&!at.moving&&!b.departure&&incoming.length)detail+=' · '+incoming.length+' coming to board';
       if(chosen)detail+=' · Target: '+chosen.name;
       if(battle)detail+=' · Attacking '+(combat.objective?.name||towns.find(t=>t.id===combat.target)?.name+' base')+' · '+battle.health+' / '+combat.defence;
@@ -114,10 +118,17 @@
       if(canAttack){attack.textContent='Attack '+(chosen?.name||enemy.name);attack.dataset.town=enemy.id;}
       if(truck&&!b.units.some(field.personnel))get('field-detail').textContent=detail+' · Enlist a guard to drive.';
     }
+    function march(areaId,point,site,objective){
+      selection.targetSite=site;selection.objective=objective;
+      stamp='';render();
+      run({action:'marchParty',ids:[...selection.ids],area:areaId,point});
+      return true;
+    }
     function move(areaId,point,steer=false){
       const s=ready();if(!s)return false;
       const b=domain.view(s),id=selection.id;
-      if(selection.ids.length>1){get('field-status').textContent='Tap a soldier, building or citizen to choose a target, or tap your truck to board.';return true;}
+      const u=b.units.find(unit=>unit.id===id);
+      if(!steer&&(selection.ids.length>1||field.canSelect(sim.state,b,u)))return march(areaId,point);
       if(id==='truck'&&steer&&!b.driver||b.units.find(u=>u.id===id)?.aboard){
         get('field-status').textContent=id==='truck'?'Choose a town and tap Drive. A soldier will take the wheel.':'Select the truck to drive, or disembark to walk.';return true;
       }
@@ -142,7 +153,7 @@
     function travelTo(town){
       run({action:'driveTown',id:selection.id,target:town},()=>street()?.followField?.());return true;
     }
-    get('field-done').onclick=()=>clear(false);
+    get('field-done').onclick=get('field-quick-deselect').onclick=()=>{street()?.finishGroundTap?.();clear(false);};
     get('field-go').onclick=()=>travelTo(area.value);
     get('field-return').onclick=()=>run({action:'returnBase'},()=>street()?.followField?.());
     get('field-reboard').onclick=()=>run({action:'reboard'});
@@ -179,15 +190,15 @@
       const s=root.EarthCommunityLife.lookup(sim.state,site);
       if(s)selectParty(site,field.nearby(sim.state,s,id).map(u=>u.id),bring);
     }
-    function pickTarget(site,objective){
+    function pickTarget(site,objective,areaId,point){
       if(!selection||selection.site===site||selection.id==='truck')return false;
       const s=ready(),t=root.EarthCommunityLife.lookup(sim.state,site);
-      if(!domain.attackParty(sim.state,s,t,objective).some(u=>selection.ids.includes(u.id)))return false;
-      if(!domain.targetAvailable(sim.state,s,t,objective)){
-        get('field-status').textContent='This target is no longer available.';return true;
-      }
-      selection.targetSite=site;selection.objective=objective.kind==='building'&&objective.id==='militaryBase'?undefined:objective;
-      stamp='';get('field-status').textContent='';render();street()?.fieldRefresh?.();return true;
+      const base=s?.militaryBase;
+      if(!base||!t||!field.canSelect(sim.state,base,base.units.find(u=>u.id===selection.id)))return false;
+      // Approaching a target and authorizing an attack are separate player orders.
+      const target=domain.targetAvailable(sim.state,s,t,objective);
+      const chosen=objective.kind==='building'&&objective.id==='militaryBase'?undefined:objective;
+      return march(areaId,point,target?t.id:undefined,target?chosen:undefined);
     }
     function selectParty(site,ids,bring=false){
       const s=root.EarthCommunityLife.lookup(sim.state,site),b=s&&domain.view(s);

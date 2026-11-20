@@ -880,7 +880,11 @@
       }
       return fieldRows;
     }
-    function fieldRefresh(){fieldStamp='';idleScene=null;dirty=true;schedule();}
+    function fieldRefresh(){
+      fieldStamp='';idleScene=null;dirty=true;
+      // A pickup can finish between paints. Keep the tracked truck's chart current before the next order.
+      trackField();schedule();
+    }
     function fieldView(area,p){
       fieldArea=area;fieldTrack=false;refreshGeography();
       return inspectRegion(p.x,p.y,{zoom:1.15,picked:false});
@@ -898,7 +902,7 @@
         const town=field.townAt(w,owner,field.position(w,owner,sel.id));
         fieldArea=town?.id||owner.id;refreshGeography();
       }
-      fieldTrack=true;cameraFollows=false;fieldRefresh();trackField();
+      fieldTrack=true;cameraFollows=false;fieldRefresh();
     }
     function showField(selection,bring=true){
       cancelFieldTap();
@@ -913,8 +917,7 @@
       if(!s)return;
       // A canvas tap keeps the chart and camera on the figures under the finger.
       if(!fieldArea)fieldArea=geo?.origin.id||state.site.id;
-      refreshGeography();fieldRefresh();
-      fieldTrack=false;
+      fieldTrack=false;refreshGeography();fieldRefresh();
       if(bring){zoom=1.35;unit=baseUnit()*zoom;followField();}
     }
     function trackField(){
@@ -1009,6 +1012,9 @@
       if(first&&alive&&!covered&&first.site===siteKey(state.site)&&first.chart===geo?.origin.id&&first.selection===options.field?.selected())
         tap(first.point,'touch',false,first.actor);
     }
+    function finishGroundTap(){
+      if(pendingFieldTap&&!pendingFieldTap.actor&&selectedActor()?.selectable)commitFieldTap();
+    }
     function deferFieldTap(point){
       const first={point,actor:fieldHit(point),time:Date.now(),site:siteKey(state.site),chart:geo?.origin.id,selection:options.field?.selected()};
       pendingFieldTap=first;
@@ -1049,7 +1055,7 @@
         const site=window.EarthCommunityLife.lookup(w,hit.siteId);
         if(sel&&site&&sel.site!==site.id&&sel.id!=='truck'&&hit.fieldId!=='truck'&&options.field.pickTarget){
           lastGuardTap=null;
-          if(options.field.pickTarget(site.id,{kind:'unit',id:hit.fieldId,name:hit.name,x:0,y:0,generation:site.foundingRevision||0}))return true;
+          if(options.field.pickTarget(site.id,{kind:'unit',id:hit.fieldId,name:hit.name,x:0,y:0,generation:site.foundingRevision||0},fieldArea||state.site.id,{x:hit.x,y:hit.y}))return true;
         }
         const time=Date.now(),last=lastGuardTap;
         lastGuardTap=device!=='touch'&&hit.selectable?{time,site:hit.siteId,id:hit.fieldId,x:p.x,y:p.y}:null;
@@ -1069,10 +1075,10 @@
           if(pick.kind==='resident'){
             const person=window.EarthPersonas?.profile(site,pick.personId);
             if(person&&options.field.pickTarget(site.id,{kind:'resident',id:pick.personId,key:person.identityKey,name:pick.personName,
-              x:pick.activity.x,y:pick.activity.y,generation}))return true;
+              x:pick.activity.x,y:pick.activity.y,generation},fieldArea||state.site.id,at))return true;
           }
           if(pick.kind==='building'&&options.field.pickTarget(site.id,{kind:'building',id:pick.assetId,name:pick.assetName,
-            x:pick.objectX,y:pick.objectY,generation}))return true;
+            x:pick.objectX,y:pick.objectY,generation},fieldArea||state.site.id,at))return true;
         }
       }
       if(!options.field.selected())return false;
@@ -6875,7 +6881,7 @@
         if(traversable(q)&&clearSegment(p,q)){navigate(q);break;}
       }
     }
-    return {showField,fieldRefresh,fieldView,followField,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {showField,fieldRefresh,fieldView,followField,finishGroundTap,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

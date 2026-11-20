@@ -712,3 +712,43 @@ test('a tank and jet can be sent directly to another base without moving the tru
   }
   assert.equal(field.townAt(w,s,field.position(w,s,'truck')).id,s.id);
 });
+
+test('seven dropped soldiers march together, redirect in motion, and finish their orders after a reload',()=>{
+  const run=region(),{sim,ctx,w}=run,home=sim.active(),field=ctx.EarthBaseField,regions=ctx.EarthRegionalWorld;
+  home.food=home.materials=home.funds=100;
+  const order=q=>sim.baseOrder({site:home.id,generation:home.foundingRevision,...q});
+  const ids=[1,2,3,4,5,6,7];
+  for(const id of ids){assert.ok(order({action:'enlist',type:'guard'}).ok);assert.ok(order({action:'board',id}).ok);}
+  assert.ok(sim.found({name:'Northern port',lat:53,lon:18,region:'North',water:false}).ok);
+  const town=sim.active();
+  assert.ok(order({action:'driveTown',target:town.id}).ok);
+  assert.ok(order({action:'unload',id:'truck'}).ok);
+  const march=(party,point)=>order({action:'marchParty',ids:party,area:town.id,point});
+  const b=home.militaryBase,local=regions.geography(w,town),origin=regions.geography(w,home);
+  const location=(id,time)=>field.project(origin,local,field.position(w,home,id,time));
+  const truck=location('truck'),before=ids.map(id=>location(id)),point={x:truck.x+.17,y:truck.y+.14};
+  assert.ok(order({action:'attackHere',target:town.id,ids}).ok);
+  const snapshot=JSON.stringify(b);
+  for(const bad of [[1,99],[2,2],[]])assert.equal(march(bad,point).ok,false);
+  assert.equal(march(ids,{x:NaN,y:2}).ok,false);assert.equal(JSON.stringify(b),snapshot);
+  assert.ok(march(ids,point).ok);assert.equal(b.missions.length,0);
+  const routes=b.units.map(u=>u.field.route);
+  assert.ok(routes.every(r=>r&&r.at===routes[0].at));
+  assert.equal(new Set(routes.map(r=>JSON.stringify(r.points.at(-1)))).size,7);
+  run.elapse(400);
+  assert.ok(ids.every((id,i)=>Math.hypot(location(id).x-before[i].x,location(id).y-before[i].y)>.0001));
+  const subset=[2,5],keep=JSON.stringify(b.units[0].field),redirect={x:point.x-.2,y:point.y-.05};
+  const underway=subset.map(id=>location(id));assert.ok(march(subset,redirect).ok);
+  assert.equal(JSON.stringify(b.units[0].field),keep);
+  for(const [i,id] of subset.entries())assert.ok(Math.hypot(location(id).x-underway[i].x,location(id).y-underway[i].y)<1e-6);
+  const saved=region(run.save()),base=saved.ctx.EarthCommunityLife.lookup(saved.w,home.id);
+  const restored=saved.ctx.EarthBaseField,geo=saved.ctx.EarthRegionalWorld;
+  saved.elapse(950000);
+  for(const id of ids){
+    const p=restored.position(saved.w,base,id),q=restored.project(geo.geography(saved.w,base),geo.geography(saved.w,saved.sim.active()),p);
+    const dest=subset.includes(id)?redirect:point;
+    assert.ok(Math.hypot(q.x-dest.x,q.y-dest.y)<.022);
+    assert.equal(p.moving,false);
+  }
+  assert.deepEqual(location('truck'),truck);
+});
