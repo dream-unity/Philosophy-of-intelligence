@@ -30,9 +30,9 @@
       if(stop&&selection)run({action:'stopField',id:selection.id});
       return true;
     }
-    function clear(){
+    function clear(bring=true){
       if(!selection)return;
-      release();clearTimeout(refreshTimer);if(roster.open)roster.close();quick.hidden=true;delete doc.body.dataset.fieldCommand;selection=null;stamp='';bar.hidden=true;street()?.showField?.(null);
+      release();clearTimeout(refreshTimer);if(roster.open)roster.close();quick.hidden=true;delete doc.body.dataset.fieldCommand;selection=null;stamp='';bar.hidden=true;street()?.showField?.(null,bring);
     }
     function select(site,id,bring=true,destination='',ids=[id]){
       const s=root.EarthCommunityLife.lookup(sim.state,site),b=s&&domain.view(s);
@@ -121,7 +121,7 @@
       if(id==='truck'&&steer&&!b.driver||b.units.find(u=>u.id===id)?.aboard){
         get('field-status').textContent=id==='truck'?'Choose a town and tap Drive. A soldier will take the wheel.':'Select the truck to drive, or disembark to walk.';return true;
       }
-      run({action:'moveField',id,area:areaId,point,steer},()=>street()?.followField?.());return true;
+      run({action:'moveField',id,area:areaId,point,steer},steer?()=>street()?.followField?.():undefined);return true;
     }
     function steer(direction,hold){
       if(!selection)return false;
@@ -142,7 +142,7 @@
     function travelTo(town){
       run({action:'driveTown',id:selection.id,target:town},()=>street()?.followField?.());return true;
     }
-    get('field-done').onclick=clear;
+    get('field-done').onclick=()=>clear(false);
     get('field-go').onclick=()=>travelTo(area.value);
     get('field-return').onclick=()=>run({action:'returnBase'},()=>street()?.followField?.());
     get('field-reboard').onclick=()=>run({action:'reboard'});
@@ -150,7 +150,7 @@
       const target=get('field-attack').dataset.town;
       run({action:'attackHere',target,objective:selection.objective,...(selection.id==='truck'?{}:{ids:selection.ids})});
     };
-    get('field-nearby').onclick=()=>selectNearby(selection.site,selection.id,true);
+    get('field-nearby').onclick=()=>selectNearby(selection.site,selection.id);
     get('field-cease').onclick=()=>{
       const s=ready(),id=selection.id,t=field.townAt(sim.state,s,pointOf(s,id));
       const ids=id==='truck'?domain.view(s).missions.filter(m=>m.fireAt!=null&&m.target===t?.id).flatMap(m=>m.ids):selection.ids;
@@ -164,11 +164,12 @@
     function tapActor(site,id){
       if(id==='truck'&&selection?.site===site&&selection.id!=='truck'&&
           !get('field-board').hidden&&!get('field-board').disabled){boardSelected();return;}
-      if(selection?.site===site&&id!=='truck'&&selection.id!=='truck'){
+      if(selection?.site===site&&selection.ids.length===1&&selection.id===id){clear(false);return;}
+      if(selection?.site===site&&selection.ids.length>1&&id!=='truck'){
         const s=ready(),b=domain.view(s),u=b.units.find(u=>u.id===id);
         const existing=selection.ids;
         if(field.canSelect(sim.state,b,u)&&field.nearby(sim.state,s,selection.id).some(v=>v.id===id)){
-          const ids=existing.includes(id)?existing.length>1?existing.filter(v=>v!==id):existing:[...existing,id];
+          const ids=existing.includes(id)?existing.filter(v=>v!==id):[...existing,id];
           selectParty(site,ids);return;
         }
       }

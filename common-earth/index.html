@@ -74,7 +74,7 @@
   <script src="regional-render.js?v=bd209e55f84d" defer></script>
   <script src="base-art.js?v=619326e18201" defer></script>
   <script src="nightlife-art.js?v=932adedd1587" defer></script>
-  <script src="street.js?v=55f6d25fb7c7" defer></script>
+  <script src="street.js?v=1accb5234b1f" defer></script>
   <script id="earth-opening-places" type="application/json" data-src="navigation.js?v=7d28e171f3e4">[{"place":{"name":"Melbourne","region":"Australia","locality":"Victoria","lat":-37.8181,"lon":144.9731,"water":false,"kind":"place","caption":"Victoria, Australia"},"featured":true,"story":{"place":"Melbourne","title":"Who gets the last delivery?","brief":"Where the Yarra meets Port Phillip, imagine a neighbourhood delivery co-op with one van left on its roster. Market traders need stock. A cook needs the van to collect food for the evening meal.","question":"Which promise would you make first, and who would hear about the delay?","label":"Fictional starting brief"}},{"place":{"name":"Mombasa","region":"Kenya","locality":"Coast","lat":-4.0381,"lon":39.688,"water":false,"kind":"place","caption":"Kenya"},"featured":true,"story":{"place":"Mombasa","title":"A timetable the harbour can trust","brief":"At this Indian Ocean port, imagine a repair crew and a group of growers sharing one unloading slot. A fixed schedule protects one group. A flexible schedule could give both a turn, if someone keeps everyone informed.","question":"Who should be able to change a shared schedule, and how will the others know?","label":"Fictional starting brief"}},{"place":{"name":"Valparaíso","region":"Chile","locality":"Valparaíso","lat":-33.0458,"lon":-71.623,"water":false,"kind":"place","caption":"Chile"},"featured":true,"story":{"place":"Valparaíso","title":"The cost of the hill","brief":"In this Pacific port, the hills rise behind the waterfront. Imagine a community kitchen choosing between a cheap depot below and a smaller site closer to hillside residents.","question":"Whose walking time belongs in the cost of a building?","label":"Fictional starting brief"}},{"place":{"name":"Rotterdam","region":"Netherlands","locality":"Zuid-Holland","lat":51.9219,"lon":4.478,"water":false,"kind":"place","caption":"Netherlands"},"featured":true,"story":{"place":"Rotterdam","title":"A quiet berth","brief":"In the Rhine–Meuse delta, imagine two neighbours debating a new exchange. Night deliveries would keep a repair workshop supplied. Daytime hours would protect the sleep of nearby residents.","question":"Can an agreement protect a neighbour who never buys or sells anything?","label":"Fictional starting brief"}},{"place":{"name":"Suva","region":"Fiji","locality":"Central","lat":-18.133,"lon":178.4417,"water":false,"kind":"place","caption":"Fiji"},"featured":true,"story":{"place":"Suva","title":"Room for the return trip","brief":"On Viti Levu, imagine a co-op booking cargo space for a visiting island community. The outbound load pays well. Reserving space on the return trip would give visitors a say in what travels back.","question":"What makes an exchange reciprocal when one side owns the vessel?","label":"Fictional starting brief"}},{"place":{"name":"Reykjavík","region":"Iceland","locality":"Suðurnes","lat":64.15,"lon":-21.95,"water":false,"kind":"place","caption":"Iceland"},"featured":true,"story":{"place":"Reykjavík","title":"A light left on","brief":"At this North Atlantic harbour, imagine a heated workshop with a spare room. Reserving it for repairs earns regular income. Keeping it open gives neighbours a place to meet during the long winter evenings.","question":"How would you decide what an empty room is worth?","label":"Fictional starting brief"}},{"place":{"name":"Stone Town","lat":-6.1622,"lon":39.1922},"featured":false,"story":{"place":"Stone Town","title":"An address everyone can use","brief":"On the waterfront of Zanzibar’s Stone Town, imagine a co-op sharing one storeroom. Traders need space for stock. Neighbours want a place to collect shared tools.","question":"Who should hold a key, and who should decide when the arrangement changes?","label":"Fictional starting brief"}}]</script>
   <script src="navigation-entry.js?v=9ddf1a6cfc76" defer></script>
   <script src="planner.js?v=f6445a2685e9" defer></script>
@@ -101,7 +101,7 @@
   <link rel="stylesheet" href="district-desk.css?v=2766bb6835ce">
   <script src="region-settlement.js?v=1064e9f91a80" defer></script>
   <script src="region-map.js?v=ae960adf9a37" defer></script>
-  <script src="regional-inspector.js?v=3b330621e3cf" defer></script>
+  <script src="regional-inspector.js?v=77c4e6653f23" defer></script>
   <script src="development-ledger.js?v=0cf73ec5e983" defer></script>
   <script src="practice-ui.js?v=b888b9cf2d0d" defer></script>
   <link rel="stylesheet" href="housing.css?v=8c6a15bfb78c">
@@ -110,7 +110,7 @@
   <script src="district-desk.js?v=6d44bce7d3e9" defer></script>
   <link rel="stylesheet" href="nightlife.css?v=4e2ea5d5396b">
   <link rel="stylesheet" href="base.css?v=d71faa2d93b6">
-  <script src="base-field-ui.js?v=44570b9e08f7" defer></script>
+  <script src="base-field-ui.js?v=9628420f59aa" defer></script>
   <script src="base-ui.js?v=e227ece260ee" defer></script>
   <script src="nightlife-ui.js?v=fa2024b4d09b" defer></script>
   <script src="app.js?v=ade1bc79d7a9" defer></script>
@@ -208,17 +208,17 @@
         </div>
         <section id="atlas-districts" aria-labelledby="atlas-districts-title" hidden><h3 id="atlas-districts-title">Nearby streets</h3><div id="atlas-district-list"></div></section>
         <section id="field-controls" aria-label="Military field controls" hidden>
-          <header><strong id="field-name"></strong><button type="button" id="field-done">Done</button></header>
+          <header><strong id="field-name"></strong><button type="button" id="field-done">Deselect</button></header>
           <div class="field-buttons">
             <select id="field-town" aria-label="Destination town"></select><button type="button" id="field-go">Drive</button>
             <button type="button" id="field-stop" hidden>Stop</button>
             <button type="button" id="field-return">Return to base with soldiers</button>
             <button type="button" id="field-truck" hidden>Find truck</button>
           </div>
-          <div id="field-detail"></div><span role="status" id="field-status"></span>
+          <div id="field-detail"></div><small>Drag to pan. To select a group, tap once, then drag on the second touch.</small><span role="status" id="field-status"></span>
         </section>
         <div id="street-stage" class="stage street-stage" hidden>
-          <canvas id="street-canvas" tabindex="0" aria-label="Drag to inspect the region. Pinch to zoom. Arrow keys move your character, E interacts, V enters or exits your vehicle. Tap a moored boat to board, then tap water to sail. The movement and boat buttons also work with a keyboard.">Use the street controls and community panel to explore.</canvas>
+          <canvas id="street-canvas" tabindex="0" aria-label="Drag to pan. Tap once, then drag on the second touch to select soldiers. Pinch to zoom. Arrow keys move your character, E interacts, V enters or exits your vehicle. Tap a moored boat to board, then tap water to sail. The movement and boat buttons also work with a keyboard.">Use the street controls and community panel to explore.</canvas>
           <div id="field-quick" hidden>
             <strong id="field-selection"></strong>
             <button type="button" id="field-board">Board truck</button>

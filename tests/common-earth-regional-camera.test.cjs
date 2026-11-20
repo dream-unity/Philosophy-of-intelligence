@@ -43,7 +43,16 @@ function fixture(water=false,snapshot=null,place=null){
       touch('pointerdown',a,b);touch('pointermove',a+dx/n,b+dy/n);touch('pointerup',a+dx/n,b+dy/n);paint();
     }
   }
-  return {sim,world,home,geo,touch,swipe,paint,streetAt,events,runtime,makeCanvas,load,wait:ms=>{milliseconds+=ms;}};
+  const timers=new Map();let serial=0;
+  function enableTimers(){
+    runtime.setTimeout=(fn,ms)=>{const id=++serial;timers.set(id,{fn,due:milliseconds+ms});return id;};
+    runtime.clearTimeout=id=>timers.delete(id);
+  }
+  function wait(ms){
+    milliseconds+=ms;
+    for(const [id,t] of [...timers])if(t.due<=milliseconds&&timers.delete(id))t.fn();
+  }
+  return {sim,world,home,geo,touch,swipe,paint,streetAt,events,runtime,makeCanvas,load,wait,enableTimers};
 }
 
 test('tablet drags cross rural ground and reach another rendered district without moving a person or passing a week',()=>{
@@ -444,35 +453,45 @@ test('each land and floating base lies on its town frontage with a gate reachabl
   }
 });
 
-test('a tablet drag selects two visible soldiers and a tap on the truck bed targets their transport',()=>{
-  const {sim,world,home,runtime,streetAt,paint,touch}=fixture();
+test('one touch pans across soldiers, a second-touch drag selects, and the truck still accepts a tap',()=>{
+  const {sim,world,home,runtime,streetAt,paint,touch,wait,enableTimers}=fixture();
+  enableTimers();
   for(let i=0;i<3;i++)assert.ok(sim.baseOrder({site:home.id,generation:home.foundingRevision,action:'enlist',type:'guard'}).ok);
-  let selection=null,hit=null;
-  const anchors=new Map(),render=runtime.EarthRegionalRender;
-  const draw=render.fieldActor;
+  let selection=null,hit=null,moves=0;
+  const anchors=new Map(),render=runtime.EarthRegionalRender,draw=render.fieldActor;
   render.fieldActor=(ctx,a,v,size,...args)=>{
     if(a.siteId===home.id)anchors.set(a.fieldId,{...v.screen(a.x,a.y),size});
     draw(ctx,a,v,size,...args);
   };
   const street=streetAt(home,false,{field:{selected:()=>selection,
     selectParty:(site,ids)=>{selection={site,id:ids[0],ids:Array.from(ids)};},
-    tapActor:(site,id)=>{hit={site,id};}
+    tapActor:(site,id)=>{hit={site,id};},move:()=>{moves++;return true;}
   }});
   const truck=runtime.EarthBaseField.position(world,home,'truck');
-  street.inspectRegion(truck.x,truck.y,{zoom:1.35});paint();
+  const frame=()=>{street.inspectRegion(truck.x,truck.y,{zoom:1.35});paint();};
+  frame();
   const [a,b]=[anchors.get(1),anchors.get(2)],camera=street.regionalCamera();
   const start={x:a.x-4,y:a.y-a.size*.9},end={x:b.x+4,y:b.y+2};
-  touch('pointerdown',end.x,end.y);touch('pointermove',start.x,start.y);touch('pointercancel',start.x,start.y);
-  assert.equal(selection,null);
-  touch('pointerdown',start.x,start.y);touch('pointermove',end.x,end.y);paint();touch('pointerup',end.x,end.y);
+  const press=(type,p,id)=>touch(type,p.x,p.y,id);
+  const first=()=>{press('pointerdown',start);press('pointerup',start);wait(90);};
+  const swipe=(a,b)=>{press('pointerdown',a);press('pointermove',b);press('pointerup',b);paint();};
+  swipe(start,end);assert.equal(selection,null);assert.notEqual(street.regionalCamera().x,camera.x);
+  frame();first();press('pointerdown',start);press('pointermove',end);press('pointercancel',end);wait(500);
+  assert.equal(hit,null);assert.equal(selection,null);assert.deepEqual(street.regionalCamera(),camera);
+  first();swipe(start,end);
   assert.deepEqual(selection,{site:home.id,id:1,ids:[1,2]});assert.deepEqual(street.regionalCamera(),camera);
-  const p=anchors.get('truck'),x=p.x-p.size*1.15,y=p.y-p.size*.54;
-  touch('pointerdown',x,y);touch('pointerup',x,y);
+  swipe(start,end);assert.notEqual(street.regionalCamera().x,camera.x);
+  frame();first();press('pointerdown',start);press('pointerdown',end,2);
+  press('pointermove',{x:end.x+60,y:end.y},2);press('pointerup',end,2);press('pointerup',start);wait(500);
+  assert.equal(hit,null);assert.equal(moves,0);assert.deepEqual(selection.ids,[1,2]);
+  frame();const p=anchors.get('truck'),bed={x:p.x-p.size*1.15,y:p.y-p.size*.54};
+  press('pointerdown',bed);press('pointerup',bed);wait(400);
   assert.deepEqual(hit,{site:home.id,id:'truck'});street.destroy();sim.destroy();
 });
 
 test('tapping and double-tapping deployed soldiers preserves the destination chart and allows a building target',()=>{
-  const {sim,world,home,streetAt,touch,paint,runtime}=fixture();
+  const {sim,world,home,streetAt,touch,paint,runtime,wait,enableTimers}=fixture();
+  enableTimers();
   assert.ok(sim.found({name:'Northern port',region:'North',lat:53,lon:18,water:false}).ok);
   const town=sim.active(),field=runtime.EarthBaseField,draw=runtime.EarthRegionalRender;
   const order=q=>sim.baseOrder({site:home.id,generation:home.foundingRevision,...q});
@@ -486,20 +505,30 @@ test('tapping and double-tapping deployed soldiers preserves the destination cha
     if(a.siteId===home.id){anchors.set(a.fieldId,{...v.screen(a.x,a.y),size});viewport=v;}
     return sprite(ctx,a,v,size,...rest);
   };
+  assert.ok(sim.baseOrder({site:town.id,generation:town.foundingRevision,action:'enlist',type:'guard'}).ok);
   const map=streetAt(home,false,{field:{selected:()=>sel,
-    tapActor:(site,id)=>{sel={site,id,ids:[id]};map.showField(sel,false);},
+    selectParty:()=>{},
+    tapActor:(site,id)=>{sel=sel?.id===id?null:{site,id,ids:[id]};map.showField(sel,false);},
     selectNearby:(site,id)=>{nearby=Array.from(field.nearby(world,home,id),u=>u.id);sel={site,id,ids:nearby};map.showField(sel,false);},
     pickTarget:(site,o)=>{chosen={site,...o};return true;},move:()=>true}});
   map.showField(sel);paint();
   const before=map.regionalCamera();assert.equal(before.originId,town.id);
   const tap=(x,y)=>{touch('pointerdown',x,y);touch('pointerup',x,y);paint();};
-  const g=anchors.get(1);tap(g.x,g.y-g.size*.45);
-  assert.equal(sel.id,1);assert.deepEqual(map.regionalCamera(),before);
-  tap(g.x+2,g.y-g.size*.45);assert.deepEqual(nearby,[1,2]);
+  const g=anchors.get(1),guardY=g.y-g.size*.45;
+  // The enemy guard stands behind a label that crosses our deployed guard's body.
+  const enemy=town.militaryBase.units[0];
+  enemy.field=viewport.ground(g.x,guardY+g.size*1.02+8);
+  map.fieldRefresh();paint();
+  tap(g.x,guardY);wait(400);
+  assert.equal(sel.site,home.id);assert.equal(sel.id,1);assert.deepEqual(map.regionalCamera(),before);
+  tap(g.x,g.y-g.size*.45);wait(400);paint();
+  assert.equal(sel,null);assert.deepEqual(map.regionalCamera(),before);
+  map.setSite(home);paint();assert.deepEqual(map.regionalCamera(),before);
+  tap(g.x,g.y-g.size*.45);wait(80);tap(g.x+2,g.y-g.size*.45);assert.deepEqual(nearby,[1,2]);
   assert.deepEqual(map.regionalCamera(),before);
   const geo=runtime.EarthRegionalWorld.geography(world,town),pin=geo.towns.find(p=>p.site.id===town.id);
   const pos=draw.regionalPoint(pin,27,12),pt=viewport.screen(pos.x,pos.y);
-  tap(pt.x,pt.y-g.size*1.4);
+  tap(pt.x,pt.y-g.size*1.4);wait(400);
   assert.equal(chosen?.site,town.id);assert.equal(chosen.kind,'building');assert.equal(chosen.id,'militaryBase');
   assert.deepEqual(sel.ids,[1,2]);map.destroy();sim.destroy();
 });
