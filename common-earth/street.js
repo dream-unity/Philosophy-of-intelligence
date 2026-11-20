@@ -890,13 +890,23 @@
       const id=s?.militaryBase?.units.find(u=>u.id===sel.id)?.aboard?'truck':sel.id;
       return fieldActors().find(a=>a.siteId===sel.site&&a.fieldId===id);
     }
-    function followField(){fieldTrack=true;cameraFollows=false;fieldRefresh();}
+    function followField(){
+      const sel=options.field?.selected(),w=options.getWorld(),field=window.EarthBaseField;
+      const owner=sel&&window.EarthCommunityLife.lookup(w,sel.site);
+      if(owner){
+        const town=field.townAt(w,owner,field.position(w,owner,sel.id));
+        fieldArea=town?.id||owner.id;refreshGeography();
+      }
+      fieldTrack=true;cameraFollows=false;fieldRefresh();trackField();
+    }
     function showField(selection,bring=true){
       if(!selection){fieldArea='';fieldTrack=false;refreshGeography();recenter();return;}
       stop();clearObservation(false);regionalFollow=null;overviewZoom=null;cameraFollows=false;
       const w=options.getWorld(),s=window.EarthCommunityLife.lookup(w,selection.site);
       if(!s)return;
-      fieldArea=s.id;refreshGeography();fieldRefresh();
+      // A canvas tap keeps the chart and camera on the figures under the finger.
+      if(!fieldArea)fieldArea=geo?.origin.id||state.site.id;
+      refreshGeography();fieldRefresh();
       fieldTrack=false;
       if(bring){zoom=1.35;unit=baseUnit()*zoom;followField();}
     }
@@ -913,11 +923,30 @@
     function drawField(v){
       if(!v)return;
       const sel=options.field?.selected(),taken=[];
+      if(sel?.objective){
+        const o=sel.objective,t=geo.towns.find(t=>t.site.id===sel.targetSite);
+        let point;
+        if(o.kind==='unit')point=fieldActors().find(a=>a.siteId===sel.targetSite&&a.fieldId===o.id);
+        else if(t){
+          const live=o.kind==='resident'&&(t===baseTown?activityOf(o.id):remote?.id===t.site.id&&remote.scene.activityOf(o.id));
+          point=renderRegion.regionalPoint(t,live?.x??o.x,live?.y??o.y);
+        }
+        if(point&&renderRegion.inView(v,point.x,point.y,.06)){
+          const p=v.screen(point.x,point.y),r=Math.max(8,unit*(o.kind==='building'?1.25:.36));
+          ctx.save();ctx.strokeStyle='#ffad85';ctx.lineWidth=3;ctx.beginPath();
+          ctx.ellipse(p.x,p.y,r,Math.max(4,r*.45),0,0,Math.PI*2);ctx.stroke();ctx.restore();
+        }
+      }
       const isSelected=a=>sel?.site===a.siteId&&(sel.ids?.includes(a.fieldId)||sel.id===a.fieldId);
       fieldLabels=taken;
       const rows=fieldActors().filter(a=>renderRegion.inView(v,a.x,a.y,.08)).sort((a,b)=>b.y-a.y);
       for(const a of rows){
         const selected=isSelected(a);
+        if(a.fire?.resident){
+          const {town,id}=a.fire.resident,t=geo.towns.find(t=>t.site.id===town);
+          const current=t&&(t===baseTown?activityOf(id):remote?.id===town&&remote.scene.activityOf(id));
+          if(current)a.fire.target=renderRegion.regionalPoint(t,current.x,current.y);
+        }
         renderRegion.fieldActor(ctx,a,v,Math.max(5,unit),selected,evening,visualTime,unit<8);
       }
       for(const a of rows.sort((a,b)=>Number(isSelected(b))-Number(isSelected(a)))){
@@ -961,7 +990,8 @@
       const w=box.x-start.x,h=box.y-start.y;
       ctx.fillRect(start.x,start.y,w,h);ctx.strokeRect(start.x,start.y,w,h);ctx.restore();
     }
-    function fieldTap(v,p,at){
+    let lastGuardTap=null;
+    function fieldTap(v,p,at,device){
       if(!options.field||state.placed||spectator)return false;
       const label=fieldLabels.find(r=>p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y-15&&p.y<=r.y+1);
       let hit=label?.a;
@@ -984,10 +1014,42 @@
         }
         hit||=vehicle;
       }
-      if(hit){options.field.tapActor(hit.siteId,hit.fieldId);return true;}
+      const sel=options.field.selected(),w=options.getWorld();
+      if(hit){
+        const site=window.EarthCommunityLife.lookup(w,hit.siteId);
+        if(sel&&site&&sel.site!==site.id&&sel.id!=='truck'&&hit.fieldId!=='truck'&&options.field.pickTarget){
+          lastGuardTap=null;
+          options.field.pickTarget?.(site.id,{kind:'unit',id:hit.fieldId,name:hit.name,x:0,y:0,generation:site.foundingRevision||0});
+          return true;
+        }
+        const time=Date.now(),last=lastGuardTap;
+        lastGuardTap=hit.selectable?{time,site:hit.siteId,id:hit.fieldId,x:p.x,y:p.y}:null;
+        if(lastGuardTap&&last&&sel?.site===hit.siteId&&last.site===hit.siteId&&last.id===hit.fieldId&&time-last.time<=480&&Math.hypot(p.x-last.x,p.y-last.y)<=24){
+          lastGuardTap=null;options.field.selectNearby?.(hit.siteId,hit.fieldId);return true;
+        }
+        options.field.tapActor(hit.siteId,hit.fieldId);return true;
+      }
+      lastGuardTap=null;
+      if(sel&&sel.id!=='truck'&&unit>=3.25&&options.field.pickTarget){
+        const town=remote&&geo.towns.find(t=>t.site.id===remote.id&&detailVisible(t,v)&&t.site.id!==sel.site);
+        const picks=town?remote.scene.regionalPicks(p.x,p.y,device):[];
+        if(baseTown.site.id!==sel.site&&detailVisible(baseTown,v))picks.push(...regionalPicks(p.x,p.y,device));
+        for(const pick of picks){
+          const site=window.EarthCommunityLife.lookup(w,pick.siteId),generation=site?.foundingRevision||0;
+          if(pick.kind==='resident'){
+            const person=window.EarthPersonas?.profile(site,pick.personId);
+            if(person&&options.field.pickTarget(site.id,{kind:'resident',id:pick.personId,key:person.identityKey,name:pick.personName,
+              x:pick.activity.x,y:pick.activity.y,generation}))return true;
+          }
+          if(pick.kind==='building'&&options.field.pickTarget(site.id,{kind:'building',id:pick.assetId,name:pick.assetName,
+            x:pick.objectX,y:pick.objectY,generation}))return true;
+        }
+      }
       if(!options.field.selected())return false;
-      if(unit<8&&options.field.selected().id==='truck'){
-        const t=regionalModel.streetFootprint(geo,at.x,at.y);if(t)return options.field.travelTo(t.site.id);
+      const vehicle=selectedActor();
+      if(vehicle&&['truck','tank','jet'].includes(vehicle.unitKind)){
+        const to=townAt(at),from=townAt(vehicle);
+        if(to&&(unit<8||from?.site.id!==to.site.id))return options.field.travelTo(to.site.id);
       }
       return options.field.move(fieldArea||state.site.id,at);
     }
@@ -3930,6 +3992,11 @@
             activity:(item?.name||h.shop)+' · '+h.stock+' in stock.'};
         });
       }
+      for(const h of site.privateHomes||[]){
+        const lot=window.EarthConstruction?.privateHomeSite(h.plot);
+        if(lot&&h.stage>0)test({x:lot.objectX,y:lot.objectY},'home',0,.55,.35,()=>({
+          assetId:'private-'+h.plot,use:'home',assetName:lot.label,ownerId:h.ownerId}));
+      }
       for(const court of frontages.courtyards)test(court,'home',court.precinct%3,.73,.34,()=>({
         assetId:'courtyard-'+court.precinct,use:'courtyard',assetName:court.name+' courtyards',
         activity:court.beds+' completed housing places. The population directory lists their occupants.'
@@ -6048,7 +6115,7 @@
       const v=regionView();
       if(v){
         const at=v.ground(p.x,p.y),b=geo.bounds;
-        if(fieldTap(v,p,at))return;
+        if(fieldTap(v,p,at,device))return;
         if(at.x<b.minX||at.x>b.maxX||at.y<b.minY||at.y>b.maxY)return;
         const t=townAt(at),home=t===baseTown,occupied=regionalModel.streetFootprint(geo,at.x,at.y);
         if(state.placed&&home&&unit>=3.25){
@@ -6420,7 +6487,7 @@
       dragging.moved=true;cameraFollows=false;fieldTrack=false;
       regionalFollow=null;overviewZoom=null;
       const figures=dragging.figures;
-      if(figures?.length&&(dragging.box||options.field.selected()||figures.some(f=>
+      if(figures?.length&&(dragging.box||figures.some(f=>
         Math.hypot(f.x-dragging.start.x,f.y-dragging.start.y)<64||inSelection(f,dragging.start,p)))){
         centreX=dragging.x;centreY=dragging.y;dragging.box=p;idleScene=null;dirty=true;schedule();return;
       }
@@ -6766,7 +6833,7 @@
         if(traversable(q)&&clearSegment(p,q)){navigate(q);break;}
       }
     }
-    return {showField,fieldRefresh,fieldView,followField,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&options.field.selected().id==='truck'?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {showField,fieldRefresh,fieldView,followField,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

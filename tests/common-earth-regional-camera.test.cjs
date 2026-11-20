@@ -470,3 +470,36 @@ test('a tablet drag selects two visible soldiers and a tap on the truck bed targ
   touch('pointerdown',x,y);touch('pointerup',x,y);
   assert.deepEqual(hit,{site:home.id,id:'truck'});street.destroy();sim.destroy();
 });
+
+test('tapping and double-tapping deployed soldiers preserves the destination chart and allows a building target',()=>{
+  const {sim,world,home,streetAt,touch,paint,runtime}=fixture();
+  assert.ok(sim.found({name:'Northern port',region:'North',lat:53,lon:18,water:false}).ok);
+  const town=sim.active(),field=runtime.EarthBaseField,draw=runtime.EarthRegionalRender;
+  const order=q=>sim.baseOrder({site:home.id,generation:home.foundingRevision,...q});
+  for(let i=0;i<2;i++)assert.ok(order({action:'enlist',type:'guard'}).ok);
+  for(const u of home.militaryBase.units)assert.ok(order({action:'board',id:u.id}).ok);
+  assert.ok(order({action:'driveTown',target:town.id}).ok);
+  assert.ok(order({action:'unload',id:'truck'}).ok);
+  let sel={site:home.id,id:'truck',ids:['truck']},nearby,chosen,viewport;
+  const anchors=new Map(),sprite=draw.fieldActor;
+  draw.fieldActor=(ctx,a,v,size,...rest)=>{
+    if(a.siteId===home.id){anchors.set(a.fieldId,{...v.screen(a.x,a.y),size});viewport=v;}
+    return sprite(ctx,a,v,size,...rest);
+  };
+  const map=streetAt(home,false,{field:{selected:()=>sel,
+    tapActor:(site,id)=>{sel={site,id,ids:[id]};map.showField(sel,false);},
+    selectNearby:(site,id)=>{nearby=Array.from(field.nearby(world,home,id),u=>u.id);sel={site,id,ids:nearby};map.showField(sel,false);},
+    pickTarget:(site,o)=>{chosen={site,...o};return true;},move:()=>true}});
+  map.showField(sel);paint();
+  const before=map.regionalCamera();assert.equal(before.originId,town.id);
+  const tap=(x,y)=>{touch('pointerdown',x,y);touch('pointerup',x,y);paint();};
+  const g=anchors.get(1);tap(g.x,g.y-g.size*.45);
+  assert.equal(sel.id,1);assert.deepEqual(map.regionalCamera(),before);
+  tap(g.x+2,g.y-g.size*.45);assert.deepEqual(nearby,[1,2]);
+  assert.deepEqual(map.regionalCamera(),before);
+  const geo=runtime.EarthRegionalWorld.geography(world,town),pin=geo.towns.find(p=>p.site.id===town.id);
+  const pos=draw.regionalPoint(pin,27,12),pt=viewport.screen(pos.x,pos.y);
+  tap(pt.x,pt.y-g.size*1.4);
+  assert.equal(chosen?.site,town.id);assert.equal(chosen.kind,'building');assert.equal(chosen.id,'militaryBase');
+  assert.deepEqual(sel.ids,[1,2]);map.destroy();sim.destroy();
+});
