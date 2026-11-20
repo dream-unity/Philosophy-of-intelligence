@@ -30,9 +30,9 @@
       if(stop&&selection)run({action:'stopField',id:selection.id});
       return true;
     }
-    function clear(){
+    function clear(bring=true){
       if(!selection)return;
-      release();clearTimeout(refreshTimer);if(roster.open)roster.close();quick.hidden=true;delete doc.body.dataset.fieldCommand;selection=null;stamp='';bar.hidden=true;street()?.showField?.(null);
+      release();clearTimeout(refreshTimer);if(roster.open)roster.close();quick.hidden=true;delete doc.body.dataset.fieldCommand;selection=null;stamp='';bar.hidden=true;street()?.showField?.(null,bring);
     }
     function select(site,id,bring=true,destination='',ids=[id]){
       const s=root.EarthCommunityLife.lookup(sim.state,site),b=s&&domain.view(s);
@@ -51,7 +51,7 @@
       get('field-status').textContent='';
       street()?.showField?.(selection,bring);
       const rect=bar.getBoundingClientRect();
-      if(rect.top<0||stage.getBoundingClientRect().top+120>root.innerHeight)bar.scrollIntoView({block:'start',behavior:'instant'});
+      if(bring&&(rect.top<0||stage.getBoundingClientRect().top+120>root.innerHeight))bar.scrollIntoView({block:'start',behavior:'instant'});
       if(bring)get('street-canvas')?.focus({preventScroll:true});
     }
     function render(){
@@ -61,57 +61,67 @@
          doc.body.hasAttribute('data-district-crossing')||doc.body.hasAttribute('data-observing-town')){clear();return;}
       bar.hidden=false;quick.hidden=false;doc.body.dataset.fieldCommand='';
       const towns=domain.towns(sim.state),truck=id==='truck',at=pointOf(s,'truck'),p=pointOf(s,id);
-      const group=selection.ids.length>1;
+      const group=selection.ids.length>1,vehicle=truck||!field.personnel(u)&&!u?.aboard;
       const riders=b.units.filter(v=>v.aboard),incoming=b.units.filter(v=>v.boarding);
       const place=field.townAt(sim.state,s,p),local=place&&place.id!==s.id?place:null;
-      const combat=b.missions.find(m=>m.fireAt!=null&&m.target===local?.id);
+      const combat=b.missions.find(m=>m.fireAt!=null&&(truck?m.target===local?.id:m.ids.some(id=>selection.ids.includes(id))));
+      const chosen=selection.objective;
+      const enemy=selection.targetSite?towns.find(t=>t.id===selection.targetSite):local;
+      const nearby=field.nearby(sim.state,s,id);
+      const canSelectNearby=nearby.some(v=>!selection.ids.includes(v.id));
       const battle=combat&&domain.battle(sim.state,s,combat);
       const target=towns.find(t=>t.id===(b.departure?.target||b.truck?.target));
       const again=truck&&b.units.some(v=>b.lastDrop?.includes(v.id)&&!v.aboard&&!v.boarding);
-      const canAttack=local&&!at.moving&&!b.departure&&domain.attackParty(sim.state,s,local)
-        .some(v=>truck||selection.ids.includes(v.id));
+      const eligible=enemy?domain.attackParty(sim.state,s,enemy,chosen):[];
+      const canAttack=enemy&&domain.targetAvailable(sim.state,s,enemy,chosen)&&eligible.some(v=>(truck||selection.ids.includes(v.id))&&
+        !b.missions.some(m=>m.fireAt!=null&&m.target===enemy.id&&m.ids.includes(v.id)&&
+          m.objective?.kind===chosen?.kind&&m.objective?.id===chosen?.id));
       clearTimeout(refreshTimer);
       if(at.moving||p.moving||incoming.length||battle)refreshTimer=setTimeout(render,250);
       const key=[s.id,id,b.version,sim.state.regionalWorld?.step,p.moving,at.moving,place?.id,battle?.health,
-        canAttack,towns.map(t=>t.id+t.name)].join('/');
+        chosen?.name,canSelectNearby,canAttack,towns.map(t=>t.id+t.name)].join('/');
       if(key===stamp)return;stamp=key;
       const title=truck?'Military truck':group?selection.ids.length+' soldiers selected':name(u);
       get('field-name').textContent=title+' · '+s.name;
       get('field-selection').textContent=truck?title+' · '+riders.length+' aboard':title;
       const destination=target?.name||'the selected point';
       let detail=truck?(at.moving?'Driving to '+destination:b.departure?'Picking up '+incoming.length+' for '+destination:
-        place?'Parked at '+place.name:'Parked between towns'):group?'Tap the truck to board this group.':field.status(sim.state,s,u);
+        place?'Parked at '+place.name:'Parked between towns'):group?'Tap the truck to board, or tap a target in town.':field.status(sim.state,s,u);
       if(truck&&!at.moving&&!b.departure&&incoming.length)detail+=' · '+incoming.length+' coming to board';
-      if(battle)detail+=' · '+local.name+' base defence '+battle.health+' / '+combat.defence;
-      else if(local&&b.log[0]?.text&&/captured the military base|repelled the attack/.test(b.log[0].text))detail+=' · '+b.log[0].text;
+      if(chosen)detail+=' · Target: '+chosen.name;
+      if(battle)detail+=' · Attacking '+(combat.objective?.name||towns.find(t=>t.id===combat.target)?.name+' base')+' · '+battle.health+' / '+combat.defence;
+      else if(b.log[0]?.text&&/ captured | repelled | withdrew injured| was disabled/.test(b.log[0].text))detail+=' · '+b.log[0].text;
       get('field-detail').textContent=detail;
       const old=area.value;
       area.replaceChildren(...towns.map(t=>{const o=el('option',t.name);o.value=t.id;return o;}));
       area.value=towns.some(t=>t.id===old)?old:(b.missions.find(m=>m.manual&&m.phase==='awaiting')?.target||target?.id||towns.find(t=>t.id!==s.id)?.id||s.id);
-      area.hidden=!truck;get('field-go').hidden=!truck;get('field-go').disabled=!b.units.some(field.personnel);
+      area.hidden=!vehicle;get('field-go').hidden=!vehicle;get('field-go').disabled=truck?!b.units.some(field.personnel):u.ready>(sim.state.regionalWorld?.step||0);
+      get('field-go').textContent=u?.type==='jet'?'Fly':'Drive';
+      get('field-nearby').hidden=!canSelectNearby;
+      get('field-cease').hidden=!combat;
       get('field-return').hidden=!truck;get('field-return').disabled=!b.units.some(field.personnel);
       get('field-truck').hidden=truck;
       get('field-stop').hidden=group||!(p.moving||truck&&b.departure);
       get('field-board').hidden=truck||(!group&&u.aboard);
       get('field-board').textContent=group?'Board '+selection.ids.length+' soldiers':u?.boarding?'Walking to truck':'Board truck';
-      get('field-board').disabled=at.moving||!!b.departure||(!truck&&!field.canBoard(sim.state,b,u));
+      get('field-board').disabled=at.moving||!!b.departure||(!truck&&selection.ids.some(i=>!field.canBoard(sim.state,b,b.units.find(v=>v.id===i))));
       get('field-roster-open').hidden=!truck||at.moving||!!b.departure||again||
         !b.units.some(v=>field.personnel(v)&&field.canBoard(sim.state,b,v));
       get('field-reboard').hidden=!again||at.moving||!!b.departure;
       get('field-unload').hidden=at.moving||!!b.departure||(truck?!riders.length:group||!u.aboard);
       get('field-unload').textContent=truck?'Drop off':'Disembark';
       const attack=get('field-attack');attack.hidden=!canAttack;
-      if(canAttack){attack.textContent='Attack '+local.name;attack.dataset.town=local.id;}
+      if(canAttack){attack.textContent='Attack '+(chosen?.name||enemy.name);attack.dataset.town=enemy.id;}
       if(truck&&!b.units.some(field.personnel))get('field-detail').textContent=detail+' · Enlist a guard to drive.';
     }
     function move(areaId,point,steer=false){
       const s=ready();if(!s)return false;
       const b=domain.view(s),id=selection.id;
-      if(selection.ids.length>1){get('field-status').textContent='Tap the military truck to board the selected soldiers.';return true;}
+      if(selection.ids.length>1){get('field-status').textContent='Tap a soldier, building or citizen to choose a target, or tap your truck to board.';return true;}
       if(id==='truck'&&steer&&!b.driver||b.units.find(u=>u.id===id)?.aboard){
         get('field-status').textContent=id==='truck'?'Choose a town and tap Drive. A soldier will take the wheel.':'Select the truck to drive, or disembark to walk.';return true;
       }
-      run({action:'moveField',id,area:areaId,point,steer},()=>street()?.followField?.());return true;
+      run({action:'moveField',id,area:areaId,point,steer},steer?()=>street()?.followField?.():undefined);return true;
     }
     function steer(direction,hold){
       if(!selection)return false;
@@ -130,15 +140,21 @@
       if(hold){held=direction;pressedAt=performance.now();}step();return true;
     }
     function travelTo(town){
-      run({action:'driveTown',target:town},()=>street()?.followField?.());return true;
+      run({action:'driveTown',id:selection.id,target:town},()=>street()?.followField?.());return true;
     }
-    get('field-done').onclick=clear;
+    get('field-done').onclick=()=>clear(false);
     get('field-go').onclick=()=>travelTo(area.value);
     get('field-return').onclick=()=>run({action:'returnBase'},()=>street()?.followField?.());
     get('field-reboard').onclick=()=>run({action:'reboard'});
     get('field-attack').onclick=()=>{
       const target=get('field-attack').dataset.town;
-      run({action:'attackHere',target,...(selection.id==='truck'?{}:{ids:selection.ids})});
+      run({action:'attackHere',target,objective:selection.objective,...(selection.id==='truck'?{}:{ids:selection.ids})});
+    };
+    get('field-nearby').onclick=()=>selectNearby(selection.site,selection.id);
+    get('field-cease').onclick=()=>{
+      const s=ready(),id=selection.id,t=field.townAt(sim.state,s,pointOf(s,id));
+      const ids=id==='truck'?domain.view(s).missions.filter(m=>m.fireAt!=null&&m.target===t?.id).flatMap(m=>m.ids):selection.ids;
+      run({action:'stopAttack',ids});
     };
     get('field-stop').onclick=()=>{release(false);run({action:'stopField',id:selection.id});};
     function boardSelected(){
@@ -148,13 +164,36 @@
     function tapActor(site,id){
       if(id==='truck'&&selection?.site===site&&selection.id!=='truck'&&
           !get('field-board').hidden&&!get('field-board').disabled){boardSelected();return;}
+      if(selection?.site===site&&selection.ids.length===1&&selection.id===id){clear(false);return;}
+      if(selection?.site===site&&selection.ids.length>1&&id!=='truck'){
+        const s=ready(),b=domain.view(s),u=b.units.find(u=>u.id===id);
+        const existing=selection.ids;
+        if(field.canSelect(sim.state,b,u)&&field.nearby(sim.state,s,selection.id).some(v=>v.id===id)){
+          const ids=existing.includes(id)?existing.filter(v=>v!==id):[...existing,id];
+          selectParty(site,ids);return;
+        }
+      }
       select(site,id,false);
     }
-    function selectParty(site,ids){
+    function selectNearby(site,id,bring=false){
+      const s=root.EarthCommunityLife.lookup(sim.state,site);
+      if(s)selectParty(site,field.nearby(sim.state,s,id).map(u=>u.id),bring);
+    }
+    function pickTarget(site,objective){
+      if(!selection||selection.site===site||selection.id==='truck')return false;
+      const s=ready(),t=root.EarthCommunityLife.lookup(sim.state,site);
+      if(!domain.attackParty(sim.state,s,t,objective).some(u=>selection.ids.includes(u.id)))return false;
+      if(!domain.targetAvailable(sim.state,s,t,objective)){
+        get('field-status').textContent='This target is no longer available.';return true;
+      }
+      selection.targetSite=site;selection.objective=objective.kind==='building'&&objective.id==='militaryBase'?undefined:objective;
+      stamp='';get('field-status').textContent='';render();street()?.fieldRefresh?.();return true;
+    }
+    function selectParty(site,ids,bring=false){
       const s=root.EarthCommunityLife.lookup(sim.state,site),b=s&&domain.view(s);
       if(!b)return;
-      const wanted=new Set(ids),party=b.units.filter(u=>wanted.has(u.id)&&field.personnel(u)&&field.canBoard(sim.state,b,u));
-      if(party.length)select(site,party[0].id,false,'',party.map(u=>u.id));
+      const wanted=new Set(ids),party=b.units.filter(u=>wanted.has(u.id)&&field.canSelect(sim.state,b,u));
+      if(party.length)select(site,party[0].id,bring,'',party.map(u=>u.id));
     }
     get('field-board').onclick=boardSelected;
     const list=get('field-roster-list'),all=get('field-all'),call=get('field-call');
@@ -212,7 +251,7 @@
       const id=selection.id!=='truck'?'field-board':!get('field-reboard').hidden?'field-reboard':!get('field-unload').hidden?'field-unload':'field-roster-open';
       const b=get(id);if(!b.hidden&&!b.disabled)b.click();return true;
     }
-    return {select,selectParty,tapActor,travelTo,clear,render,move,steer,release,vehicle,releaseDirection:dir=>{if(held===dir)release(performance.now()-pressedAt>130);},selected:()=>selection};
+    return {select,selectParty,selectNearby,pickTarget,tapActor,travelTo,clear,render,move,steer,release,vehicle,releaseDirection:dir=>{if(held===dir)release(performance.now()-pressedAt>130);},selected:()=>selection};
   }
   root.EarthBaseFieldUI={mount};
 })(globalThis);

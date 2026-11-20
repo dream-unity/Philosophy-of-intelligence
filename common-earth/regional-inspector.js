@@ -33,6 +33,7 @@
       const local=sim.active(),view=activeTown(),event=selection,w=world(),region=root.EarthRegionalWorld;
       const anchor=root.EarthCommunityLife?.anchor(w),home=town(anchor?.homeId)||local;
       const base=town(event.originSiteId)||local;
+      const chart=town(event.chartSiteId)||base;
       const inspectingOther=event.siteId!==base.id;
       const overlay=id('region-overlay')?.value;
       const chartId=town(overlay)?.id||home.id;
@@ -45,13 +46,13 @@
       host.hidden=false;
       doc.body.toggleAttribute('data-region-roaming',inspectingOther);
       doc.body.toggleAttribute('data-region-detail',true);
-      const read=event.inspection&&event.inspectedAtWeek===w.week&&event.inspectedRevision===w.actionRevision?event.inspection:expanded&&event.kind!=='building'?region?.inspect?.(w,base,event.x,event.y,chartId):null;
+      const read=event.inspection&&event.inspectedAtWeek===w.week&&event.inspectedRevision===w.actionRevision?event.inspection:expanded&&event.kind!=='building'?region?.inspect?.(w,chart,event.x,event.y,chartId):null;
       id('region-anchor').textContent=(anchor?.name||'Original resident')+' · home in '+home.name;
       id('region-context-name').textContent=event.personName||event.assetName||view?.name||read?.label||event.terrain?.label||event.inspection?.label||'Open ground';
       toggle.textContent=expanded?'Hide details':event.kind==='resident'?'Inspect resident':event.kind==='building'?'Inspect building':event.kind==='asset'?'Inspect assignment':view?'Inspect community':'Inspect ground';
       toggle.setAttribute('aria-expanded',String(expanded));detail.hidden=!expanded;
       if(!expanded)return;
-      const geo=region?.geography(w,base);
+      const geo=region?.geography(w,chart);
       detail.replaceChildren();
       const line=t=>{if(t)detail.append(element('p',t));};
       const heading=t=>detail.append(element('h4',t));
@@ -188,7 +189,7 @@
         if(view.id!==local.id)action('Plan a visit',()=>{clear();returnStreet();travel(view.id);});
       }else if(read){
         line(read.summary);
-        const known=region.known(w,base,chartId,event.x,event.y);
+        const known=region.known(w,chart,chartId,event.x,event.y);
         line((town(chartId)?.name||home.name)+(known?' has surveyed this ground.':' has no survey of this ground.'));
         if(read.uses?.length)line('Recorded use · '+read.uses.map(u=>u.name+' ('+u.count+')').join(', '));
         if(read.knowledge?.length)line('First surveyed · '+read.knowledge.map(k=>k.name+' in week '+k.week).join(', '));

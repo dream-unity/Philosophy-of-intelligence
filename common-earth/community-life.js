@@ -1654,6 +1654,23 @@
     if(target==='pause')trip.hold=progress;
     else if(target!=='direct'&&Number.isInteger(target))trip.stop=target;
   }
+  function finishCrossing(world,site,dest,trip,makeSite){
+    const a=world.communityLife;
+    if(!world.sites.some(s=>s.id===dest.id)){
+      a.outposts=a.outposts.filter(s=>s.id!==dest.id);world.sites.push(dest);
+    }
+    if(trip.seen?.length){
+      const route=trail(world,trip),seen=trip.seen.map(i=>route.landmarks[i].label).join(', ');
+      writeLog(dest,world.week,a.profile.name+' inspected '+seen+' on the way from '+site.name+'.');
+      const book=local(dest);book.pathVisits={week:world.week,seen:trip.seen.length,from:site.id};
+    }
+    if(trip.path)root.EarthRegionalWorld?.shareCrossing(world,site,dest,'steward',a.profile.name,trip.path,trip.observed);
+    carryReceptionReport(world,site,dest,a.profile.name);
+    a.journey=null;
+    const result=arrive(world,site,dest,makeSite);
+    if(result.refused)return {ok:true,...result};
+    return {ok:true,arrived:true,vehicle:trip.vehicle,message:writeLog(dest,world.week,a.profile.name+' arrived in '+dest.name+(isHome(world,dest)?' and returned to their home.':' as a visitor. '+(result.message||hostFor(dest).name+' speaks for the admissions meeting.')))};
+  }
   function run(world,site,req,scene,makeSite,finishPromise){
     const a=world.communityLife;
     if(!a||!site||!req||req.site!==site.id||req.week!==world.week)return fail('The place or week changed. Open Towns again.');
@@ -1691,7 +1708,7 @@
       return receipt(restriction.host.name+' agreed to receive '+a.profile.name+' at '+dest.name+' between weeks '+(world.week+1)+' and '+(world.week+3)+'.');
     }
     const driving=req.action==='driveTrail';
-    if(driving||req.action==='depart'||req.action==='walkTrail'){
+    if(driving||req.action==='rideTrail'||req.action==='depart'||req.action==='walkTrail'){
       if(a.journey)return fail('A journey is already under way.');
       if(driving && !(scene?.siteId===site.id&&scene.actor===req.actor&&scene.mode==='drive'&&scene.vehicle==='van'))return fail('Board the public van to drive to another town.');
       if(!driving&&!at('market'))return fail('Walk to the exchange path to start the crossing.');
@@ -1708,7 +1725,10 @@
       a.journey={from:site.id,to:dest.id,start,finish:start+(driving?Math.round(duration*.45):duration),km};
       root.EarthBorderConflict?.leaveStreet(site);
       if(path)Object.assign(a.journey,{path,baseDuration:duration});
-      if(driving)Object.assign(a.journey,{vehicle:'van',interactive:true,via:'commons',seen:[]});
+      if(driving||req.action==='rideTrail'){
+        if(driving)a.journey.vehicle='van';
+        return finishCrossing(world,site,lookup(world,dest.id),a.journey,makeSite);
+      }
       if(req.action==='walkTrail')Object.assign(a.journey,{interactive:true,via:'commons',stop:0,seen:[]});
       return {ok:true,message:a.profile.name+' set out for '+dest.name+'.',journey:true};
     }
@@ -1747,20 +1767,7 @@
       if(routeProgress(trip)<.999)return fail('Continue along the path to reach the destination.');
       const dest=lookup(world,trip.to);
       if(!dest)return fail('The destination is no longer available.');
-      if(!world.sites.some(s=>s.id===dest.id)){
-        a.outposts=a.outposts.filter(s=>s.id!==dest.id);world.sites.push(dest);
-      }
-      if(trip.seen?.length){
-        const route=trail(world,trip),seen=trip.seen.map(i=>route.landmarks[i].label).join(', ');
-        writeLog(dest,world.week,a.profile.name+' inspected '+seen+' on the way from '+site.name+'.');
-        const book=local(dest);book.pathVisits={week:world.week,seen:trip.seen.length,from:site.id};
-      }
-      if(trip.path)root.EarthRegionalWorld?.shareCrossing(world,site,dest,'steward',a.profile.name,trip.path,trip.observed);
-      carryReceptionReport(world,site,dest,a.profile.name);
-      a.journey=null;
-      const result=arrive(world,site,dest,makeSite);
-      if(result.refused)return {ok:true,...result};
-      return {ok:true,arrived:true,vehicle:trip.vehicle,message:writeLog(dest,world.week,a.profile.name+' arrived in '+dest.name+(isHome(world,dest)?' and returned to their home.':' as a visitor. '+(result.message||hostFor(dest).name+' speaks for the admissions meeting.')))};
+      return finishCrossing(world,site,dest,trip,makeSite);
     }
     if(a.journey)return fail('Finish the current crossing first.');
     if(req.action==='housingRelief')return root.EarthHousing?.setRelief(world,site,req)||fail('The housing register is unavailable.');

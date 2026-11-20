@@ -625,7 +625,7 @@ test('a host may invite the original visitor to share a round while both communi
   const recap=context.EarthAgency.recall(sim.state,site);assert.equal(recap.active,false);saved();
 });
 
-test('a driver can depart with a cast out, reopen the journey and arrive by van',()=>{
+test('a van trip arrives immediately, stows the fishing line and reopens at its destination',()=>{
   const {sim,life,home,saved}=fixture(),dest=life.neighbours(sim.state,home)[0];
   const request={site:home.id,actor:'steward',week:sim.state.week,action:'driveTrail',target:dest.id};
   const driver={siteId:home.id,actor:'steward',mode:'drive',vehicle:'van'};
@@ -633,13 +633,12 @@ test('a driver can depart with a cast out, reopen the journey and arrive by van'
   const food=home.food;
   assert.equal(sim.communityLife(request,{...driver,vehicle:'truck'}).ok,false);
   assert.ok(home.handline);
-  assert.ok(sim.communityLife(request,driver).ok);
+  const result=sim.communityLife(request,driver);
+  assert.equal(result.arrived,true);assert.equal(result.vehicle,'van');
+  assert.equal(sim.state.communityLife.journey,null);
   assert.equal(home.handline,undefined);
   assert.equal(home.food,food);
   const resumed=fixture(saved());
-  resumed.wait(7000);
-  const result=resumed.doAction('arrive',dest.id);
-  assert.equal(result.arrived,true);assert.equal(result.vehicle,'van');
   assert.equal(resumed.sim.active().id,dest.id);
 });
 

@@ -205,10 +205,13 @@ function seedWorld(){
       click(get('field-all'));click(get('field-call'));
       await until(()=>sim.active().militaryBase.units[0].aboard,'Chosen soldier did not board');
       click(get('field-go'));
-      await until(()=>!!sim.active().militaryBase.driver&&!!sim.active().militaryBase.truck?.route,'Drive did not choose a driver and start a trip');
-      if(sim.active().militaryBase.truck.route.until!=null)throw Error('Truck still requires a held control');
-      click(get('field-stop'));await until(()=>!sim.active().militaryBase.truck.route,'Truck did not stop');
+      await until(()=>sim.active().militaryBase.truck?.target===target.value&&!!sim.active().militaryBase.driver,'Truck did not arrive at the selected base');
+      if(sim.active().militaryBase.truck.route)throw Error('Named town still requires regional travel');
       click(get('field-unload'));await until(()=>!sim.active().militaryBase.driver,'Soldier did not disembark');
+      await until(()=>!get('field-nearby').hidden,'Nearby soldiers missing after drop-off');
+      click(get('field-nearby'));
+      await until(()=>!get('field-truck').hidden,'Nearby soldier was not selected');
+      click(get('field-truck'));await until(()=>!get('field-return').hidden,'Truck commands did not reopen');
       click(get('field-return'));await until(()=>sim.active().militaryBase.truck?.target===home.id||sim.active().militaryBase.departure?.target===home.id,'Recall did not collect the squad for home');
       click(get('field-done'));
       result.dataset.layout='pass';result.textContent='Physical truck controls, guard boarding, movement, unloading, world clock, venues, community management, diplomacy, base recruitment and deployment verified.';

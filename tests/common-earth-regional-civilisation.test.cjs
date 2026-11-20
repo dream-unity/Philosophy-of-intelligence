@@ -481,7 +481,7 @@ test('guards and a free truck exist on the map and a player attack waits for phy
   assert.ok(reopened.sim.active().militaryBase.truck.route);assert.equal(b.missions[0].phase,'awaiting');
   assert.ok(order({action:'stopField',id:'truck'}).ok);const parked=field.position(w,home,'truck');run.elapse(50000);assert.equal(field.position(w,home,'truck').x,parked.x);
   assert.ok(order({action:'driveTown',target:market.id}).ok);
-  driveCourse(run,order,b);
+  assert.equal(b.truck.route,undefined);
   assert.ok(order({action:'unload',id:'truck'}).ok);assert.equal(b.driver,undefined);
   assert.equal(b.missions[0].phase,'engaged');assert.equal(b.units.filter(u=>u.aboard).length,0);
   run.production();
@@ -540,7 +540,7 @@ test('an older player expedition reopens in the field and an old braked truck ca
   run.elapse(2000);const stopped=field.position(w,s,'truck');assert.equal(stopped.moving,false);
   assert.ok(field.courseOpen(w,b));assert.equal(b.driver,id);
   assert.ok(order({action:'driveTown',target:market.id}).ok);
-  driveCourse(run,order,b);assert.equal(field.townAt(w,s,field.position(w,s,'truck')).id,market.id);
+  assert.equal(b.truck.route,undefined);assert.equal(field.townAt(w,s,field.position(w,s,'truck')).id,market.id);
 });
 
 test('a purchased time machine opens a historical branch while keeping the original expedition and stores recoverable',async()=>{
@@ -630,8 +630,8 @@ test('one tap drives the selected party, on-foot bullets change the town battle,
   assert.ok(order({action:'driveTown',target:market.id}).ok);
   run.elapse(2000);base.advance(w);
   assert.ok(b.driver);assert.equal(b.units.filter(u=>u.aboard).length,4);
-  assert.equal(b.truck.route.until,undefined);
-  run.elapse(b.truck.route.ms+1);assert.equal(field.townAt(w,s,field.position(w,s,'truck')).id,market.id);
+  assert.equal(b.truck.route,undefined);
+  assert.equal(field.townAt(w,s,field.position(w,s,'truck')).id,market.id);
   assert.equal(order({action:'attackHere',target:market.id}).ok,false);
   assert.ok(order({action:'unload',id:'truck'}).ok);
   assert.ok(order({action:'attackHere',target:market.id}).ok);
@@ -669,4 +669,46 @@ test('recall stops an old stranded truck, recalls assigned soldiers from the fie
   assert.equal(field.position(w,s,2).x,before.x);assert.equal(field.position(w,s,2).y,before.y);
   run.elapse(15500);base.advance(w);assert.ok(b.driver);assert.equal(b.units.filter(u=>u.aboard).length,2);
   run.elapse(25000);assert.equal(field.townAt(w,s,field.position(w,s,'truck')).id,s.id);run.save();
+});
+
+test('a small squad keeps firing past three volleys and can split off to attack an individual target',()=>{
+  const r=region(),{sim,w,ctx,market}=r,s=sim.active(),field=ctx.EarthBaseField,base=ctx.EarthMilitaryBase;
+  function order(site,q){return sim.baseOrder({site:site.id,generation:site.foundingRevision,...q});}
+  for(const t of [s,market]){
+    t.food=t.materials=t.funds=100;
+    for(let i=0;i<(t===s?4:10);i++)assert.ok(order(t,{action:'enlist',type:'guard'}).ok);
+  }
+  const b=s.militaryBase,gate=field.gate(w,s,market);
+  for(const u of b.units)u.field={...gate};
+  const attack=(ids,objective)=>order(s,{action:'attackHere',target:market.id,ids,objective});
+  assert.ok(attack([1,2,3,4]).ok);
+  const first=b.missions[0];r.elapse(3900);
+  assert.ok(base.battle(w,s,first).health>0);assert.equal(base.battle(w,s,first).done,false);
+  assert.ok(base.shot(w,first,1).hits>3);
+  const target=(kind,id,name)=>({kind,id,name,x:15,y:12,generation:market.foundingRevision||0});
+  const building=target('building','exchange','Town Centre'),victim=market.residents[0],person=ctx.EarthPersonas.profile(market,victim.id);
+  const citizen={...target('resident',victim.id,victim.name),key:person.identityKey};
+  assert.ok(attack([2],building).ok);
+  assert.ok(attack([3],citizen).ok);
+  assert.ok(attack([4],target('unit',1,'Guard 1')).ok);
+  assert.deepEqual(Array.from(first.ids),[1]);
+  assert.equal(field.nearby(w,s,1).length,4);
+  assert.ok(order(s,{action:'stopAttack',ids:[1]}).ok);assert.equal(b.missions.length,3);
+  const resumed=region(r.save()),home=resumed.sim.active(),town=resumed.ctx.EarthCommunityLife.lookup(resumed.w,market.id);
+  resumed.elapse(15000);resumed.ctx.EarthMilitaryBase.advance(resumed.w);
+  assert.equal(home.militaryBase.missions.length,0);
+  assert.ok(town.militaryBase.captures.some(c=>c.id==='exchange'&&c.by===home.id));
+  assert.ok(town.militaryBase.units[0].ready>(resumed.w.regionalWorld?.step||0));
+  assert.equal(town.communityLife.border.health[person.id].condition,'injured');
+  assert.equal(town.communityLife.border.occupiedBy,undefined);resumed.save();
+});
+test('a tank and jet can be sent directly to another base without moving the truck',()=>{
+  const {sim,w,ctx,market}=region(),s=sim.active(),field=ctx.EarthBaseField;
+  s.food=s.funds=s.materials=100;
+  for(const type of ['armour','flight'])assert.ok(sim.baseOrder({site:s.id,generation:s.foundingRevision,action:'research',type}).ok);
+  for(const u of s.militaryBase.units){
+    assert.ok(sim.baseOrder({site:s.id,generation:s.foundingRevision,action:'driveTown',target:market.id,id:u.id}).ok);
+    assert.equal(field.townAt(w,s,field.position(w,s,u.id)).id,market.id);
+  }
+  assert.equal(field.townAt(w,s,field.position(w,s,'truck')).id,s.id);
 });
