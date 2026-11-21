@@ -204,21 +204,24 @@
 }
 .troll-siege-bar {
   position: absolute;
-  left: 0.7rem;
-  right: 0.7rem;
+  left: 0.65rem;
+  right: auto;
   bottom: 0.75rem;
   z-index: 6;
-  max-width: 26.5rem;
+  box-sizing: border-box;
+  width: min(calc(100% - 1.3rem), 26.5rem);
+  max-width: calc(100% - 1.3rem);
   background: rgba(24, 13, 17, 0.94);
   border: 1px solid #b54538;
   border-left: 4px solid #eb4a34;
   border-radius: 6px;
-  padding: 0.48rem 0.68rem;
+  padding: 0.5rem 0.7rem;
   color: #f7eae4;
   display: grid;
   gap: 0.3rem;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
   pointer-events: auto;
+  overflow: hidden;
 }
 .troll-siege-bar[hidden] {
   display: none;
@@ -227,11 +230,11 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
 }
 .troll-siege-head strong {
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   color: #ffd9ce;
   letter-spacing: 0.01em;
 }
@@ -245,25 +248,36 @@
   line-height: 1.35;
   color: #e6d1c8;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .troll-siege-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.4rem;
   margin-top: 0.1rem;
 }
 .troll-siege-actions button {
   min-height: 32px;
-  padding: 0.28rem 0.68rem;
-  font-size: 0.76rem;
+  padding: 0.28rem 0.62rem;
+  font-size: 0.75rem;
   font-weight: 600;
   border-radius: 4px;
   cursor: pointer;
+}
+.troll-siege-actions .troll-track-btn {
+  background: #22353d;
+  color: #e3f4fa;
+  border: 1px solid #4e7e91;
 }
 .troll-siege-actions .troll-rally-btn {
   background: #3b2024;
   color: #fde8e1;
   border: 1px solid #964a42;
+}
+.troll-siege-actions .troll-repair-btn {
+  background: #274133;
+  color: #dff7e6;
+  border: 1px solid #599c75;
 }
 .troll-siege-actions .troll-dragon-btn {
   background: #f0be67;
@@ -271,12 +285,20 @@
   border: 1px solid #f0be67;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 680px) {
   .dragon-hero { grid-template-columns: 1fr; }
   .troll-siege-bar {
     left: 0.45rem;
-    right: 0.45rem;
-    bottom: 5.1rem;
-    padding: 0.48rem 0.62rem;
+    right: 6rem;
+    width: auto;
+    max-width: calc(100% - 6.45rem);
+    bottom: 0.5rem;
+    padding: 0.38rem 0.52rem;
+    gap: 0.18rem;
   }
+  .troll-siege-head strong { font-size: 0.74rem; }
+  .troll-siege-head span { font-size: 0.66rem; }
+  .troll-siege-detail { font-size: 0.68rem; line-height: 1.25; }
+  .troll-siege-actions { gap: 0.28rem; }
+  .troll-siege-actions button { min-height: 28px; padding: 0.2rem 0.46rem; font-size: 0.69rem; }
 }

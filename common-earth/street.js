@@ -892,8 +892,9 @@
         return;
       }
       if(!geo||!baseTown){
-        centreX=clamp(x,-4-expand,Math.max(SIDE+3,45+expand));
-        centreY=clamp(y,Math.min(northCameraLimit(),-4-expand),SIDE+4+expand);
+        const pad=trackedTrollId?120:0;
+        centreX=clamp(x,-4-expand-pad,Math.max(SIDE+3,45+expand)+pad);
+        centreY=clamp(y,Math.min(northCameraLimit(),-4-expand)-pad,SIDE+4+expand+pad);
         return;
       }
       const p=renderRegion.regionalPoint(baseTown,x,y),b=geo.bounds;
@@ -4675,6 +4676,7 @@
       if(v&&!localDetail(v)){
         dragonTargets=[];
         idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);drawField(v);
+        drawRegionalTrolls(v);
         if(embarked){
           routeRibbon();fishMarks();pilotedBoat(embarked);fishingNet();drawFishingFloat();
           if(unit<4){
@@ -4697,41 +4699,201 @@
     const buildingBounds=[4.2,6.5,2.5],treeBounds=[2,3.65,.35],furnitureBounds=[1.5,2.6,.7];
     const bodyBounds=[1.05,1.6,.68],waterWorkBounds=[3.25,1.6,2.5],vehicleBounds=[2.4,2.5,1.5],trollBounds=[4.5,6.8,2.0];
     const actorBounds=id=>shoreFishers.has(id)?waterWorkBounds:bodyBounds;
+
+    let trackedTrollId=null,trollShake=0,lastTrollHudPing=0;
+    const trollFx=[];
+    const downedSims=new Map();
+
+    function spawnTrollBurst(x,y,kind,label){
+      const count=kind==='footstep'?5:kind==='simStrike'?12:16;
+      for(let i=0;i<count;i++){
+        const a=(i/count)*Math.PI*2+Math.random()*0.45;
+        const spd=kind==='footstep'?(0.6+Math.random()*0.9):(1.4+Math.random()*2.8);
+        trollFx.push({
+          kind:'particle',x,y,z:kind==='footstep'?0.1:0.55+Math.random()*0.6,
+          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,vz:kind==='footstep'?0.6+Math.random()*0.5:1.6+Math.random()*2.2,
+          age:0,life:kind==='footstep'?0.55:0.75+Math.random()*0.35,
+          color:kind==='simStrike'?(i%2?'#ff3b2f':'#ffd4a8'):kind==='footstep'?'#9b8e78':(i%3===0?'#ff6e2a':i%3===1?'#4d4642':'#c49c6e'),
+          size:kind==='footstep'?0.18:0.14+Math.random()*0.14
+        });
+      }
+      if(kind!=='footstep'){
+        trollFx.push({
+          kind:'ring',x,y,age:0,life:0.58,
+          maxR:kind==='breach'?3.8:kind==='buildingStrike'?2.9:2.2,
+          color:kind==='simStrike'?'#ff2d20':'#ff7c2e'
+        });
+      }
+      if(label){
+        trollFx.push({
+          kind:'callout',x,y,z:2.1,age:0,life:1.35,text:label,
+          color:kind==='simStrike'||kind==='breach'?'#ff5c4a':'#ffd27a'
+        });
+      }
+      if(trollFx.length>140)trollFx.splice(0,trollFx.length-140);
+    }
+
+    function collectLiveSims(){
+      const sims=[];
+      if(!state.site)return sims;
+      for(let i=0;i<5;i++){
+        const id='walker-'+i;
+        if((downedSims.get(id)||0)>visualTime)continue;
+        const w=streetWalker(i);
+        if(w&&Number.isFinite(w.x)&&Number.isFinite(w.y)){
+          sims.push({id,name:'Town Sim '+(i+1),x:w.x,y:w.y,isPlayer:false,downed:false});
+        }
+      }
+      for(const q of state.points){
+        if(q.type!=='resident')continue;
+        if((downedSims.get(q.residentId)||0)>visualTime)continue;
+        const fig=residentFigure(q);
+        if(fig&&Number.isFinite(fig.x)&&Number.isFinite(fig.y)){
+          sims.push({id:q.residentId,name:q.label||'Resident',x:fig.x,y:fig.y,isPlayer:false,downed:false});
+        }
+      }
+      const st=localPoint('steward');
+      if(st&&playedId!=='steward'&&(downedSims.get('steward')||0)<=visualTime){
+        sims.push({id:'steward',name:'Community Steward',x:st.x,y:st.y,isPlayer:false,downed:false});
+      }
+      if(!spectator&&state.mode==='walk'&&Number.isFinite(state.player.x)&&Number.isFinite(state.player.y)){
+        sims.push({id:'player',name:'Your Sim',x:state.player.x,y:state.player.y,isPlayer:true,downed:false});
+      }
+      return sims;
+    }
+
+    function stepTrollsInStreet(dt){
+      const w=options.getWorld?.();
+      if(!w||!state.site||!window.EarthGiantTrolls)return;
+      const sims=collectLiveSims();
+      const events=window.EarthGiantTrolls.stepLive(w,state.site,dt,{sims});
+      let changed=false;
+      for(const ev of events){
+        if(ev.type==='footstep'){
+          spawnTrollBurst(ev.x,ev.y,'footstep');
+        }else if(ev.type==='breach'){
+          spawnTrollBurst(ev.x,ev.y,'breach','TROLL BREACH!');
+          trollShake=Math.max(trollShake,0.55);
+          message(ev.message);
+          changed=true;
+        }else if(ev.type==='simStrike'){
+          spawnTrollBurst(ev.x,ev.y,'simStrike',ev.isPlayer?'SLAMMED!':'SIM SMASHED!');
+          trollShake=Math.max(trollShake,0.48);
+          if(ev.isPlayer){
+            const dx=state.player.x-ev.troll.x,dy=state.player.y-ev.troll.y,d=Math.hypot(dx,dy)||1;
+            const pushed={x:state.player.x+(dx/d)*1.6,y:state.player.y+(dy/d)*1.6};
+            if(traversable(pushed)){state.player.x=pushed.x;state.player.y=pushed.y;}
+            message(ev.message);
+          }else if(ev.simId){
+            downedSims.set(ev.simId,visualTime+18);
+          }
+          changed=true;
+        }else if(ev.type==='buildingStrike'){
+          spawnTrollBurst(ev.x,ev.y,'buildingStrike',ev.justRuined?'RUINED!':`-${ev.damage} HP`);
+          trollShake=Math.max(trollShake,ev.justRuined?0.62:0.34);
+          if(ev.justRuined)message(ev.message);
+          changed=true;
+        }else if(ev.type==='slam'){
+          spawnTrollBurst(ev.x,ev.y,'buildingStrike');
+          trollShake=Math.max(trollShake,0.22);
+        }
+      }
+      if(trollShake>0)trollShake=Math.max(0,trollShake-dt*1.9);
+      for(let i=trollFx.length-1;i>=0;i--){
+        const fx=trollFx[i];
+        fx.age+=dt;
+        if(fx.age>=fx.life){trollFx.splice(i,1);continue;}
+        if(fx.kind==='particle'){
+          fx.x+=fx.vx*dt;fx.y+=fx.vy*dt;fx.z=Math.max(0,fx.z+fx.vz*dt);fx.vz-=6.2*dt;
+        }else if(fx.kind==='callout'){
+          fx.z+=dt*1.35;
+        }
+      }
+      if(trackedTrollId&&!dragging&&!pinch){
+        const localTrolls=window.EarthGiantTrolls.trollsForSite(w,state.site.id);
+        const tr=localTrolls.find(t=>t.id===trackedTrollId)||localTrolls[0];
+        if(tr){
+          trackedTrollId=tr.id;
+          const rate=reduced?1:1-Math.exp(-dt*5.5);
+          centreX+=(tr.x-centreX)*rate;centreY+=(tr.y-centreY)*rate;
+          dirty=true;
+        }else{
+          trackedTrollId=null;
+        }
+      }
+      if(changed||visualTime-lastTrollHudPing>=0.55){
+        lastTrollHudPing=visualTime;
+        options.onTrollUpdate?.(changed);
+      }
+    }
+
     function drawGiantTroll(troll){
       const [sx,sy]=screen(troll.x,troll.y,0);
       const scaleH=clamp((troll.heightMeters||21)/21,0.88,1.18);
       const s=unit*scaleH;
       const phase=troll.swingPhase||0;
-      const stride=troll.state==='marching'?Math.sin(phase):Math.sin(phase*0.5)*0.25;
-      const slam=troll.state==='besieging'?Math.max(0,Math.sin(phase*1.4)):0;
-      const bob=Math.abs(stride)*s*0.12;
+      const atkPhase=troll.attackPhase||'march';
+      const prog=clamp(troll.attackProgress||0,0,1);
+      const moving=atkPhase==='march'||atkPhase==='chase';
+      const stride=moving?Math.sin(phase):0;
+      const bob=moving?Math.abs(stride)*s*0.14:0;
       const skin=troll.skin||'#2d3532';
       const accent=troll.accent||'#556358';
       const eye=troll.eye||'#ff2814';
       const hpFrac=clamp((troll.hp||0)/Math.max(1,troll.maxHp||540),0,1);
 
+      // Determine horizontal facing direction toward target (screen X = x - y)
+      const faceScreenX=(troll.facingX||0)-(troll.facingY||0);
+      const faceDir=faceScreenX<-0.06?-1:1;
+
+      // Aggressive torso lean + overhead war-club smash curve (windup -> strike -> recover)
+      let torsoTilt=moving?0.09:0;
+      let clubAngle=-0.38;
+      let impactFlash=0;
+      if(atkPhase==='march'){
+        clubAngle=-0.52+Math.sin(phase)*0.14; // Heavy rested carry on shoulder while marching
+      }else if(atkPhase==='chase'){
+        torsoTilt=0.16;
+        clubAngle=-0.78+Math.sin(phase*1.2)*0.18; // Charging forward with club cocked
+      }else if(atkPhase==='windup'){
+        torsoTilt=-0.14*prog;
+        clubAngle=-0.78-prog*1.65; // Reared HIGH overhead before smash!
+      }else if(atkPhase==='strike'){
+        const snap=Math.min(1,prog*2.6);
+        torsoTilt=0.28*snap;
+        clubAngle=-2.43+snap*3.18; // VIOLENT downward slam straight onto target!
+        impactFlash=Math.max(0,1-prog*1.2);
+      }else if(atkPhase==='recover'){
+        torsoTilt=0.22*(1-prog);
+        clubAngle=0.75-prog*1.28; // Heaving monolith club back up from crater
+      }
+
       ctx.save();
       ctx.translate(sx,sy);
 
-      const miasmaGrad=ctx.createRadialGradient(0,s*0.08,s*0.18,0,s*0.08,s*1.65);
-      miasmaGrad.addColorStop(0,'rgba(12,6,14,0.68)');
-      miasmaGrad.addColorStop(0.58,'rgba(36,12,18,0.34)');
+      const miasmaGrad=ctx.createRadialGradient(0,s*0.08,s*0.18,0,s*0.08,s*1.75);
+      miasmaGrad.addColorStop(0,'rgba(12,6,14,0.72)');
+      miasmaGrad.addColorStop(0.58,'rgba(44,12,18,0.38)');
       miasmaGrad.addColorStop(1,'rgba(12,6,14,0)');
       ctx.fillStyle=miasmaGrad;
       ctx.beginPath();
-      ctx.ellipse(0,s*0.08,s*1.65,s*0.86,0,0,Math.PI*2);
+      ctx.ellipse(0,s*0.08,s*1.75,s*0.92,0,0,Math.PI*2);
       ctx.fill();
 
-      if(slam>0.65){
-        const r=s*(1.0+(slam-0.65)*2.6);
-        ctx.strokeStyle=`rgba(255,92,42,${(1-slam)*1.4})`;
-        ctx.lineWidth=Math.max(1.5,s*0.08);
+      if(impactFlash>0.05){
+        const r=s*(1.15+(1-impactFlash)*2.5);
+        ctx.strokeStyle=`rgba(255,96,38,${impactFlash*0.95})`;
+        ctx.lineWidth=Math.max(2,s*0.1);
         ctx.beginPath();
-        ctx.ellipse(0,s*0.12,r,r*0.52,0,0,Math.PI*2);
+        ctx.ellipse(faceDir*s*0.75,s*0.12,r,r*0.52,0,0,Math.PI*2);
         ctx.stroke();
       }
 
-      const legLShift=stride*s*0.24, legRShift=-stride*s*0.24;
+      // Draw body oriented horizontally toward victim
+      ctx.save();
+      ctx.scale(faceDir,1);
+
+      const legLShift=stride*s*0.28, legRShift=-stride*s*0.28;
       ctx.fillStyle='#1d2221';
       ctx.strokeStyle='#101414';
       ctx.lineWidth=Math.max(1.2,s*0.04);
@@ -4743,8 +4905,11 @@
       ctx.fill();ctx.stroke();
 
       ctx.save();
-      ctx.translate(0,-bob);
+      ctx.translate(0,-bob-s*1.1);
+      ctx.rotate(torsoTilt);
+      ctx.translate(0,s*1.1);
 
+      // Left muscular arm
       ctx.fillStyle=skin;
       ctx.beginPath();
       ctx.moveTo(-s*0.92,-s*2.95);
@@ -4754,6 +4919,7 @@
       ctx.closePath();
       ctx.fill();ctx.stroke();
 
+      // Massive hunched torso
       const bodyGrad=ctx.createLinearGradient(-s*1.0,-s*3.5,s*1.0,-s*0.9);
       bodyGrad.addColorStop(0,accent);
       bodyGrad.addColorStop(0.55,skin);
@@ -4767,6 +4933,7 @@
       ctx.closePath();
       ctx.fill();ctx.stroke();
 
+      // Jagged dorsal obsidian spines
       ctx.fillStyle='#191e20';
       const spines=[[-0.78,-3.18,-1.08,-3.72,-0.45,-3.38],[-0.28,-3.44,-0.38,-4.08,0.02,-3.52],[0.36,-3.38,0.68,-3.96,0.72,-3.18]];
       for(const [x1,y1,x2,y2,x3,y3] of spines){
@@ -4775,6 +4942,7 @@
         ctx.closePath();ctx.fill();
       }
 
+      // Chest scar/bark ridges
       ctx.strokeStyle='rgba(154,174,142,0.34)';
       ctx.lineWidth=Math.max(1.2,s*0.055);
       ctx.beginPath();
@@ -4782,9 +4950,9 @@
       ctx.moveTo(-s*0.42,-s*2.02);ctx.quadraticCurveTo(0,-s*1.82,s*0.42,-s*2.02);
       ctx.stroke();
 
-      const clubAngle=-0.45+Math.sin(phase*1.4)*0.65+(troll.state==='besieging'?0.35:0);
+      // Right smashing arm + Obsidian Monolith War-Club
       ctx.save();
-      ctx.translate(s*0.86,-s*2.72);
+      ctx.translate(s*0.86,-s*2.78);
       ctx.rotate(clubAngle);
       ctx.fillStyle=skin;
       ctx.beginPath();
@@ -4792,26 +4960,27 @@
       ctx.fill();ctx.stroke();
       ctx.save();
       ctx.translate(s*0.08,s*1.12);
-      ctx.rotate(-0.55);
+      ctx.rotate(-0.35);
       ctx.fillStyle='#1f2126';
       ctx.strokeStyle='#0d0e11';
       ctx.beginPath();
       ctx.moveTo(-s*0.14,0);
-      ctx.lineTo(-s*0.36,s*2.25);
-      ctx.lineTo(s*0.38,s*2.32);
+      ctx.lineTo(-s*0.38,s*2.32);
+      ctx.lineTo(s*0.40,s*2.38);
       ctx.lineTo(s*0.16,0);
       ctx.closePath();
       ctx.fill();ctx.stroke();
       ctx.fillStyle='#6d5a48';
-      ctx.fillRect(-s*0.30,s*1.45,s*0.62,s*0.14);
-      ctx.fillRect(-s*0.34,s*1.92,s*0.70,s*0.14);
-      ctx.fillStyle='#ff4824';
-      ctx.globalAlpha=0.72;
-      ctx.fillRect(-s*0.18,s*1.64,s*0.36,s*0.16);
+      ctx.fillRect(-s*0.32,s*1.48,s*0.64,s*0.14);
+      ctx.fillRect(-s*0.36,s*1.95,s*0.72,s*0.14);
+      ctx.fillStyle=atkPhase==='windup'||atkPhase==='strike'?'#ff6e1f':'#ff4824';
+      ctx.globalAlpha=atkPhase==='windup'||atkPhase==='strike'?0.98:0.7;
+      ctx.fillRect(-s*0.20,s*1.66,s*0.40,s*0.20);
       ctx.globalAlpha=1;
       ctx.restore();
       ctx.restore();
 
+      // Brutish horned head
       ctx.fillStyle=accent;
       ctx.beginPath();
       ctx.ellipse(0,-s*3.42,s*0.56,s*0.52,0,0,Math.PI*2);
@@ -4827,7 +4996,7 @@
       ctx.fillRect(-s*0.38,-s*3.58,s*0.76,s*0.14);
       ctx.fillStyle=eye;
       ctx.shadowColor=eye;
-      ctx.shadowBlur=Math.max(4,s*0.28);
+      ctx.shadowBlur=Math.max(5,s*(atkPhase==='windup'||atkPhase==='strike'?0.45:0.28));
       ctx.beginPath();
       ctx.ellipse(-s*0.20,-s*3.44,s*0.11,s*0.07,0.18,0,Math.PI*2);
       ctx.ellipse(s*0.20,-s*3.44,s*0.11,s*0.07,-0.18,0,Math.PI*2);
@@ -4844,27 +5013,219 @@
       ctx.moveTo(s*0.22,-s*3.04);ctx.lineTo(s*0.14,-s*3.26);ctx.lineTo(s*0.08,-s*3.04);
       ctx.fill();
 
-      const barW=clamp(s*2.35,66,118);
+      ctx.restore(); // torsoTilt
+      ctx.restore(); // faceDir
+
+      // Unflipped overhead HP bar + live action status tag
+      const km=window.EarthGiantTrolls?.distanceKm?.(troll)??troll.distanceKm??0;
+      const statusText=troll.state==='approaching'
+        ? `Marching · ${km.toFixed(2)} km`
+        : troll.targetName
+          ? (troll.targetKind==='sim'?`Hunting ${troll.targetName}`:`Smashing ${troll.targetName}`)
+          : 'Attacking!';
+      const barW=clamp(s*2.55,82,138);
       const barH=Math.max(6,s*0.18);
-      const barY=-s*4.92;
-      ctx.fillStyle='rgba(14,10,14,0.88)';
-      ctx.strokeStyle='rgba(255,90,62,0.75)';
+      const barY=-s*4.96-bob;
+      ctx.fillStyle='rgba(14,10,14,0.9)';
+      ctx.strokeStyle='rgba(255,90,62,0.82)';
       ctx.lineWidth=1.2;
       ctx.beginPath();
-      ctx.roundRect(-barW/2-3,barY-16,barW+6,barH+20,4);
+      ctx.roundRect(-barW/2-4,barY-25,barW+8,barH+30,4);
       ctx.fill();ctx.stroke();
 
       ctx.font='700 10.5px system-ui,sans-serif';
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillStyle='#ffd6cc';
-      ctx.fillText(`${troll.name} · ${troll.heightMeters||21}m`,0,barY-7);
+      ctx.fillText(`${troll.name} · ${troll.heightMeters||21}m`,0,barY-16);
+      ctx.font='600 9px system-ui,sans-serif';
+      ctx.fillStyle='#ff9a7a';
+      ctx.fillText(statusText,0,barY-5,barW+2);
 
       ctx.fillStyle='#2a1214';
-      ctx.fillRect(-barW/2,barY+1,barW,barH-2);
+      ctx.fillRect(-barW/2,barY+2,barW,barH-2);
       ctx.fillStyle=hpFrac>0.4?'#e03c28':'#ff7a2e';
-      ctx.fillRect(-barW/2,barY+1,barW*hpFrac,barH-2);
+      ctx.fillRect(-barW/2,barY+2,barW*hpFrac,barH-2);
 
       ctx.restore();
+    }
+
+    function drawTrollBuildingDamage(){
+      const dmgMap=state.site?.trollDamage;
+      if(!dmgMap)return;
+      for(const rec of Object.values(dmgMap)){
+        if(!rec||(!rec.ruined&&rec.hp>=rec.maxHp))continue;
+        const [sx,sy]=screen(rec.x,rec.y,0.3);
+        if(sx<-90||sx>width+90||sy<-90||sy>height+90)continue;
+        const pct=clamp(rec.hp/Math.max(1,rec.maxHp),0,1);
+        ctx.save();
+        // Scorch / rubble footprint
+        ctx.fillStyle=rec.ruined?'rgba(24,18,16,0.72)':'rgba(32,18,14,0.42)';
+        ctx.beginPath();
+        ctx.ellipse(sx,sy+unit*0.25,unit*1.35,unit*0.72,0,0,Math.PI*2);
+        ctx.fill();
+        // Animated rising smoke & flames on burning/ruined buildings
+        if(rec.burning||rec.ruined){
+          for(let k=0;k<4;k++){
+            const t=(visualTime*1.2+k*0.27)%1;
+            const px=sx+Math.sin(visualTime*2.3+k*2.1)*unit*0.42+(k-1.5)*unit*0.28;
+            const py=sy-t*unit*1.9;
+            ctx.fillStyle=`rgba(36,28,28,${(1-t)*0.52})`;
+            ctx.beginPath();
+            ctx.arc(px,py,unit*(0.24+t*0.38),0,Math.PI*2);
+            ctx.fill();
+            if(t<0.45){
+              ctx.fillStyle=k%2?`rgba(255,112,32,${(0.45-t)*1.8})`:`rgba(255,204,72,${(0.45-t)*1.6})`;
+              ctx.beginPath();
+              ctx.arc(px,sy-t*unit*0.95,unit*(0.22-t*0.25),0,Math.PI*2);
+              ctx.fill();
+            }
+          }
+        }
+        // Structural integrity bar or RUINED badge
+        const bw=clamp(unit*1.85,54,88);
+        const by=sy-unit*1.95;
+        ctx.fillStyle='rgba(18,12,14,0.88)';
+        ctx.strokeStyle=rec.ruined?'#d93829':'#f0a442';
+        ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.roundRect(sx-bw/2-3,by-12,bw+6,rec.ruined?16:20,3);
+        ctx.fill();ctx.stroke();
+        ctx.font='700 9px system-ui,sans-serif';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        if(rec.ruined){
+          ctx.fillStyle='#ff7c6e';
+          ctx.fillText('RUINED',sx,by-4);
+        }else{
+          ctx.fillStyle='#ffe3b8';
+          ctx.fillText(`${rec.hp}/${rec.maxHp}`,sx,by-6);
+          ctx.fillStyle='#2a1514';
+          ctx.fillRect(sx-bw/2,by+1,bw,4);
+          ctx.fillStyle=pct>0.45?'#f0a442':'#e63d2b';
+          ctx.fillRect(sx-bw/2,by+1,bw*pct,4);
+        }
+        ctx.restore();
+      }
+    }
+
+    function drawTrollFx(){
+      if(!trollFx.length)return;
+      ctx.save();
+      for(const fx of trollFx){
+        const frac=clamp(fx.age/fx.life,0,1);
+        const [sx,sy]=screen(fx.x,fx.y,fx.z||0);
+        if(fx.kind==='particle'){
+          ctx.globalAlpha=Math.max(0,1-frac);
+          ctx.fillStyle=fx.color;
+          ctx.beginPath();
+          ctx.arc(sx,sy,Math.max(2,unit*fx.size*(1-frac*0.4)),0,Math.PI*2);
+          ctx.fill();
+        }else if(fx.kind==='ring'){
+          const r=unit*(0.45+frac*fx.maxR);
+          ctx.globalAlpha=Math.max(0,1-frac);
+          ctx.strokeStyle=fx.color;
+          ctx.lineWidth=Math.max(1.5,3.2*(1-frac));
+          ctx.beginPath();
+          ctx.ellipse(sx,sy,r,r*0.52,0,0,Math.PI*2);
+          ctx.stroke();
+        }else if(fx.kind==='callout'){
+          ctx.globalAlpha=Math.max(0,1-Math.max(0,(frac-0.35)/0.65));
+          ctx.font='800 12px system-ui,sans-serif';
+          ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillStyle='rgba(12,6,8,0.85)';
+          ctx.fillText(fx.text,sx+1,sy+1);
+          ctx.fillStyle=fx.color;
+          ctx.fillText(fx.text,sx,sy);
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawRegionalTrolls(v){
+      const w=options.getWorld?.();
+      if(!w||!state.site||!baseTown||!window.EarthGiantTrolls)return;
+      const localTrolls=window.EarthGiantTrolls.trollsForSite(w,state.site.id);
+      if(!localTrolls.length)return;
+      ctx.save();
+      const townPos=v.screen(baseTown.x,baseTown.y);
+      for(const t of localTrolls){
+        const rp=renderRegion.regionalPoint(baseTown,t.x,t.y);
+        const p=v.screen(rp.x,rp.y);
+        const km=window.EarthGiantTrolls.distanceKm(t);
+        // Dashed crimson march path from approaching giant troll straight into town
+        ctx.strokeStyle='rgba(235,68,48,0.72)';
+        ctx.lineWidth=2;
+        ctx.setLineDash([6,5]);
+        ctx.beginPath();
+        ctx.moveTo(p.x,p.y);ctx.lineTo(townPos.x,townPos.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if(unit>=5){
+          drawGiantTroll(t);
+        }else{
+          // Pulsing crimson titan beacon when zoomed far out on regional overview
+          const pulse=1+Math.sin(visualTime*5)*0.22;
+          ctx.fillStyle='rgba(235,54,38,0.34)';
+          ctx.beginPath();ctx.arc(p.x,p.y,15*pulse,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#241316';
+          ctx.strokeStyle='#ff4834';
+          ctx.lineWidth=2.2;
+          ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.fill();ctx.stroke();
+          ctx.fillStyle='#ff583d';
+          ctx.beginPath();
+          ctx.moveTo(p.x-5,p.y-2);ctx.lineTo(p.x-7,p.y-8);ctx.lineTo(p.x-2,p.y-4);
+          ctx.moveTo(p.x+5,p.y-2);ctx.lineTo(p.x+7,p.y-8);ctx.lineTo(p.x+2,p.y-4);
+          ctx.fill();
+          const tag=t.state==='approaching'?`${t.name} · ${km.toFixed(2)} km`:`${t.name} · ATTACKING`;
+          ctx.font='700 11px system-ui,sans-serif';
+          const tw=ctx.measureText(tag).width+14;
+          ctx.fillStyle='rgba(20,10,13,0.92)';
+          ctx.strokeStyle='#e04834';
+          ctx.lineWidth=1.2;
+          ctx.beginPath();ctx.roundRect(p.x-tw/2,p.y-30,tw,18,4);ctx.fill();ctx.stroke();
+          ctx.fillStyle='#ffd9ce';ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText(tag,p.x,p.y-21);
+        }
+      }
+      if(unit>=5)drawTrollFx();
+      ctx.restore();
+    }
+
+    function drawTrollEdgeIndicators(){
+      const w=options.getWorld?.();
+      if(!w||!state.site||!window.EarthGiantTrolls)return;
+      const localTrolls=window.EarthGiantTrolls.trollsForSite(w,state.site.id);
+      if(!localTrolls.length)return;
+      ctx.save();
+      for(let idx=0;idx<localTrolls.length;idx++){
+        const t=localTrolls[idx];
+        const [sx,sy]=screen(t.x,t.y,0);
+        if(sx>28&&sx<width-28&&sy>28&&sy<height-28)continue;
+        const km=window.EarthGiantTrolls.distanceKm(t);
+        const label=t.state==='approaching'?`${t.name} · ${km.toFixed(2)} km`:`${t.name} · ATTACKING`;
+        ctx.font='700 10.5px system-ui,sans-serif';
+        const tw=ctx.measureText(label).width+24;
+        const cx=width*0.5,cy=height*0.5;
+        const ang=Math.atan2(sy-cy,sx-cx);
+        const leftPad=16+tw*0.5,rightPad=64+tw*0.5,padY=62;
+        const maxDx=Math.max(40,width*0.5-Math.max(leftPad,rightPad)),maxDy=Math.max(40,height*0.5-padY);
+        const cos=Math.cos(ang),sin=Math.sin(ang);
+        const scaleEdge=Math.min(Math.abs(cos)>0.001?maxDx/Math.abs(cos):1e9,Math.abs(sin)>0.001?maxDy/Math.abs(sin):1e9);
+        const ex=clamp(cx+cos*scaleEdge,leftPad,Math.max(leftPad,width-rightPad));
+        const ey=clamp(cy+sin*scaleEdge+(idx*28-14),66,Math.max(66,height-115));
+        ctx.fillStyle='rgba(28,12,16,0.93)';
+        ctx.strokeStyle='#eb4a34';
+        ctx.lineWidth=1.4;
+        ctx.beginPath();ctx.roundRect(ex-tw/2,ey-11,tw,22,5);ctx.fill();ctx.stroke();
+        // Directional arrowhead pointing toward troll
+        ctx.save();
+        ctx.translate(ex-tw/2+11,ey);
+        ctx.rotate(ang);
+        ctx.fillStyle='#ff5c42';
+        ctx.beginPath();ctx.moveTo(5,0);ctx.lineTo(-4,-4);ctx.lineTo(-4,4);ctx.closePath();ctx.fill();
+        ctx.restore();
+        ctx.fillStyle='#ffd9ce';ctx.textAlign='left';ctx.textBaseline='middle';
+        ctx.fillText(label,ex-tw/2+19,ey);
+      }
       ctx.restore();
     }
     function drawScene(repaint,dragons=streetDragons()) {
@@ -5093,6 +5454,7 @@
         addItem(steward.x,steward.y,steward.x+steward.y+.08,()=>activityFigure('steward',steward,'#dbab68',walk?.dx??0,walk?.dy??1,walk?.pace??0,walk?.phase??0,heroLook),actorBounds('steward'));
       }
       for(let i=0;i<5;i++){
+        if((downedSims.get('walker-'+i)||0)>visualTime)continue;
         const w=streetWalker(i);if(!w)continue;
         addItem(w.x,w.y,w.x+w.y+(i<3?.01:.09),()=>activityFigure('walker-'+i,w,w.coat,w.dx,w.dy,w.pace,w.phase),actorBounds('walker-'+i));
       }
@@ -5153,7 +5515,16 @@
       for(const troll of localTrolls){
         addItem(troll.x,troll.y,troll.x+troll.y+.65,()=>drawGiantTroll(troll),trollBounds);
       }
+      if(trollShake>0.01&&!reduced){
+        const amp=trollShake*trollShake*7;
+        ctx.save();
+        ctx.translate((Math.random()-0.5)*amp,(Math.random()-0.5)*amp);
+      }
       list.sort((a,b)=>a.depth-b.depth).forEach(d=>d.draw());
+      drawTrollBuildingDamage();
+      drawTrollFx();
+      if(trollShake>0.01&&!reduced)ctx.restore();
+      drawTrollEdgeIndicators();
       if(state.site.handline)drawFishingFloat();
       if(evening){
         const world=options.getWorld?.(),clock=window.EarthDayClock;
@@ -5936,7 +6307,7 @@
       }
       if(heldLocal&&state.arrival?.npcId!==heldLocal.npcId&&p.moving&&dist(p,heldLocal)>interactionRange()+.1)releaseLocal();
       followCompanion(dt);stepTraffic(dt);
-      if(state.site&&window.EarthGiantTrolls){const w=options.getWorld?.();if(w)window.EarthGiantTrolls.stepLive(w,state.site,dt);}
+      stepTrollsInStreet(dt);
       if(workingErrands.length)checkSignedErrands();
       const checkPassingNeighbour=visible&&!reduced&&state.mode==='walk'&&locals.size&&visualTime-lastLocalCheck>=.4;
       if(p.moving||checkPassingNeighbour){lastLocalCheck=visualTime;updateNearby();}
@@ -6388,7 +6759,23 @@
       else {overviewZoom=zoom;zoom=fitZoom();unit=baseUnit()*zoom;centreX=12;centreY=12;cameraFollows=false;}
       miniTick=-1;dirty=true;schedule();
     }
-    function recenter() {cancelFieldTap();fieldArea='';fieldTrack=false;refreshGeography();regionalFollow=null;clearObservation();exitOverview();if(geo&&zoom<.38){zoom=1;unit=baseUnit()*zoom;}cameraFollows=true;const target=followTarget();centreX=target.x;centreY=target.y;miniTick=-1;dirty=true;schedule();}
+    function focusTroll(trollId){
+      const w=options.getWorld?.();
+      if(!w||!state.site||!window.EarthGiantTrolls)return false;
+      const local=window.EarthGiantTrolls.trollsForSite(w,state.site.id);
+      const t=trollId?local.find(item=>item.id===trollId):local[0];
+      if(!t)return false;
+      cancelFieldTap();clearObservation();overviewZoom=null;cameraFollows=false;
+      trackedTrollId=t.id;
+      const km=window.EarthGiantTrolls.distanceKm(t);
+      zoom=km>0.12?Math.max(minZoom(),0.62):Math.max(zoom,0.95);
+      unit=baseUnit()*zoom;
+      centreX=t.x;centreY=t.y;
+      miniTick=-1;dirty=true;schedule();
+      return true;
+    }
+    function isTrackingTroll(){return Boolean(trackedTrollId);}
+    function recenter() {trackedTrollId=null;cancelFieldTap();fieldArea='';fieldTrack=false;refreshGeography();regionalFollow=null;clearObservation();exitOverview();if(geo&&zoom<.38){zoom=1;unit=baseUnit()*zoom;}cameraFollows=true;const target=followTarget();centreX=target.x;centreY=target.y;miniTick=-1;dirty=true;schedule();}
     function drawMini() {
       if(!miniCanvas||!miniButton)return;
       miniButton.hidden=Boolean(state.placed);if(state.placed||Math.floor(visualTime*6)===miniTick)return;
@@ -6413,6 +6800,13 @@
       }
       if(p){
         g.fillStyle=observedId?'#c9edc1':'#fff0bf';g.strokeStyle='#523e2b';g.lineWidth=.8;g.beginPath();g.arc(p[0],p[1],2.55,0,Math.PI*2);g.fill();g.stroke();
+      }
+      const miniTrolls=state.site?window.EarthGiantTrolls?.trollsForSite?.(options.getWorld?.(),state.site.id)||[]:[];
+      for(const t of miniTrolls){
+        const raw=xy(t.x,t.y);
+        const mx=clamp(raw[0],4,w-4),my=clamp(raw[1],4,h-4);
+        g.fillStyle='#ff3c2a';g.strokeStyle='#fff0d8';g.lineWidth=.8;
+        g.beginPath();g.arc(mx,my,2.6,0,Math.PI*2);g.fill();g.stroke();
       }
       g.font='600 6.5px system-ui,sans-serif';g.textAlign='right';g.fillStyle='#c5d3bd';g.fillText('N',w-4,8);line([w-12,10],[w-9,8],'#c5d3bd',.9);
       miniButton.setAttribute('aria-pressed',String(overviewZoom!==null));miniButton.title=overviewZoom===null?'Show whole district':'Return to street scale';
@@ -7000,7 +7394,7 @@
       const dx=p.x-dragging.start.x,dy=p.y-dragging.start.y;
       if(!dragging.moved&&Math.hypot(dx,dy)<dragging.slop)return;
       if(!dragging.moved&&observedId)clearObservation(false);
-      dragging.moved=true;cameraFollows=false;fieldTrack=false;
+      dragging.moved=true;cameraFollows=false;fieldTrack=false;trackedTrollId=null;
       regionalFollow=null;overviewZoom=null;
       const figures=dragging.figures;
       const selectBox=dragging.device==='touch'?dragging.secondTouch:
@@ -7354,7 +7748,7 @@
         if(traversable(q)&&clearSegment(p,q)){navigate(q);break;}
       }
     }
-    return {showField,fieldRefresh,fieldView,followField,finishGroundTap,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {showField,fieldRefresh,fieldView,followField,finishGroundTap,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy,focusTroll,isTrackingTroll};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

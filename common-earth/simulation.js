@@ -2556,6 +2556,8 @@
           res=gt.attackTroll(world,site,req.trollId,{source:'dragonFire',damage:req.damage,dragonName:req.dragonName,wizardName:req.wizardName});
         }else if(req?.action==='wizardThunder'){
           res=gt.attackTroll(world,site,req.trollId,{source:'wizardThunder',damage:req.damage,dragonName:req.dragonName,wizardName:req.wizardName});
+        }else if(req?.action==='repairBuildings'){
+          res=gt.repairBuildings(world,site);
         }else{
           res=reject('Choose a defense action against the Giant Trolls.');
         }

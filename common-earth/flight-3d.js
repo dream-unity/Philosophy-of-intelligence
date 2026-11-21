@@ -2571,7 +2571,7 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
     }
   }
 
-  // 13b. Colossal Building-Sized Giant Trolls from Shadowfell Darklands (Active from Start of Every Game!)
+  // 13b. Colossal Building-Sized Giant Trolls from Shadowfell Darklands (Marching from ~1 km out!)
   if (worldState && window.EarthGiantTrolls) {
     window.EarthGiantTrolls.ensure(worldState);
   }
@@ -2579,25 +2579,25 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
     ? window.EarthGiantTrolls.trollsForSite(worldState, site.id)
     : [];
   const trollSlots = [
-    { x: -56, z: -48 },
-    { x: 58, z: -44 },
-    { x: 6, z: -68 },
-    { x: -64, z: 18 }
+    { x: -640, z: -760 },
+    { x: 660, z: -740 },
+    { x: 0, z: -980 },
+    { x: -820, z: -560 }
   ];
+  const townBuildings = targets.filter(t => t && t.kind === 'building' && !t.isForeign);
   for (let idx = 0; idx < activeLocalTrolls.length; idx++) {
     const spec = activeLocalTrolls[idx];
     const fallback = trollSlots[idx % trollSlots.length];
-    let tx = Number.isFinite(spec.worldX) ? spec.worldX : fallback.x;
-    let tz = Number.isFinite(spec.worldZ) ? spec.worldZ : fallback.z;
-    if (Math.hypot(tx, tz) < 34) {
-      tx = fallback.x;
-      tz = fallback.z;
-    }
+    const mapped = window.EarthGiantTrolls?.toWorld3D?.(spec.x, spec.y);
+    let tx = Number.isFinite(mapped?.x) ? mapped.x : (Number.isFinite(spec.worldX) ? spec.worldX : fallback.x);
+    let tz = Number.isFinite(mapped?.z) ? mapped.z : (Number.isFinite(spec.worldZ) ? spec.worldZ : fallback.z);
     if (hasWater) tz = Math.min(tz, shoreZ - 26);
+    tx = Math.max(-1040, Math.min(1040, tx));
+    tz = Math.max(hasWater ? -1320 : -1040, Math.min(hasWater ? shoreZ - 26 : 1040, tz));
     const ty = Math.max(0, terrainHeightAt(tx, tz));
     const rig = buildGiantTroll3D(spec);
     rig.root.position.set(tx, ty, tz);
-    rig.root.lookAt(0, ty, -8);
+    rig.root.lookAt(0, ty, 0);
     worldGroup.add(rig.root);
 
     const trollEntry = {
@@ -2612,8 +2612,8 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
       name: `${spec.name} (${spec.heightMeters || 21}m Giant Troll)`,
       shortName: spec.name,
       heightMeters: spec.heightMeters || 21,
-      mx: tx / scale + 12,
-      my: tz / scale + 12,
+      mx: spec.x,
+      my: spec.y,
       x: tx,
       y: ty + (rig.heightM * 0.52),
       z: tz,
@@ -2633,8 +2633,11 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
       barSprite: rig.barSprite,
       updateHpBar: rig.updateHpBar,
       stompPhase: idx * 1.7,
-      goalX: (idx % 2 === 0 ? -18 : 18),
-      goalZ: -8 + (idx % 3) * 8,
+      attackPhase: spec.state === 'approaching' ? 'march' : 'chase',
+      attackTimer: 0,
+      targetBuilding: null,
+      goalX: 0,
+      goalZ: 0,
       specRef: spec
     };
     giantTrolls.push(trollEntry);
@@ -2643,6 +2646,7 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
   }
   if (giantTrolls.length > 0) {
     landmarks.unshift({
+      id: 'giant-troll-lead',
       name: `Giant Troll: ${giantTrolls[0].shortName} (${giantTrolls[0].heightMeters}m)`,
       x: giantTrolls[0].x,
       y: giantTrolls[0].y + 8,
@@ -2707,6 +2711,7 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
     foreignCommunities,
     borderIntruders,
     giantTrolls,
+    townBuildings,
     thermals,
     thermalMeshes,
     clouds,
@@ -4076,30 +4081,126 @@ function launch(options = {}) {
         continue;
       }
       if (u.isTroll) {
-        u.stompPhase = (u.stompPhase || 0) + dt * 1.9;
+        // Pick nearest standing 3D town building so the Giant Troll NEVER stands idle!
+        const bList = world3D.townBuildings || [];
+        if (!u.targetBuilding || u.targetBuilding.dead) {
+          let bestB = null, bestD = Infinity;
+          for (const b of bList) {
+            if (!b || b.dead) continue;
+            const d = Math.hypot(b.x - u.x, b.z - u.z);
+            if (d < bestD) { bestD = d; bestB = b; }
+          }
+          u.targetBuilding = bestB || bList[0] || null;
+        }
+        u.goalX = u.targetBuilding ? u.targetBuilding.x : 0;
+        u.goalZ = u.targetBuilding ? u.targetBuilding.z : 0;
+
         const dx = u.goalX - u.x;
         const dz = u.goalZ - u.z;
         const dGoal = Math.hypot(dx, dz);
-        if (dGoal > 12) {
-          const speed = 2.6;
-          u.x += (dx / dGoal) * speed * dt;
-          u.z += (dz / dGoal) * speed * dt;
+        const reachDist = (u.targetBuilding?.radius || 6.5) + 7.2;
+        const distFromTown = Math.hypot(u.x, u.z);
+
+        let clubX = -0.35;
+        let torsoPitch = 0;
+        if (dGoal > reachDist && u.attackPhase !== 'windup' && u.attackPhase !== 'strike') {
+          // Slow ominous march from 1 km out (~16.5 m/s) slowing to hunting charge inside town
+          const speed = distFromTown > 68 ? 16.5 : 8.5;
+          u.x += (dx / Math.max(0.01, dGoal)) * speed * dt;
+          u.z += (dz / Math.max(0.01, dGoal)) * speed * dt;
+          u.attackPhase = distFromTown > 68 ? 'march' : 'chase';
+          u.stompPhase = (u.stompPhase || 0) + dt * (distFromTown > 68 ? 2.1 : 2.9);
+          clubX = -0.45 + Math.sin(u.stompPhase) * 0.2;
+          torsoPitch = 0.08;
+        } else {
+          // Relentless overhead club smash cycle against town buildings!
+          if (u.attackPhase === 'march' || u.attackPhase === 'chase') {
+            u.attackPhase = 'windup';
+            u.attackTimer = 0;
+          }
+          u.attackTimer = (u.attackTimer || 0) + dt;
+          if (u.attackPhase === 'windup') {
+            const p = Math.min(1, u.attackTimer / 0.45);
+            clubX = -0.45 - p * 1.95; // Lift monolith club HIGH overhead
+            torsoPitch = -0.14 * p;
+            if (u.attackTimer >= 0.45) {
+              u.attackPhase = 'strike';
+              u.attackTimer = 0;
+              // Deal real structural smash damage to the 3D town building!
+              const tb = u.targetBuilding;
+              if (tb && !tb.dead) {
+                tb.hp = Math.max(0, (tb.hp ?? 100) - 38);
+                if (tb.blaze) tb.blaze.visible = true;
+                for (let k = 0; k < 10; k++) {
+                  particles.spawn(k % 2 ? 'fire' : 'smoke',
+                    tb.x + (Math.random() - 0.5) * 6,
+                    tb.y + 1 + Math.random() * 4,
+                    tb.z + (Math.random() - 0.5) * 6,
+                    (Math.random() - 0.5) * 14,
+                    4 + Math.random() * 10,
+                    (Math.random() - 0.5) * 14,
+                    { baseScale: 2.8, grow: 1.8, maxLife: 1.1 }
+                  );
+                }
+                if (tb.hp <= 0) {
+                  tb.dead = true;
+                  if (tb.mesh) {
+                    tb.mesh.scale.y = 0.32;
+                    tb.mesh.position.y -= 1.2;
+                  }
+                  u.targetBuilding = null; // Immediately move to the next standing building!
+                }
+              }
+            }
+          } else if (u.attackPhase === 'strike') {
+            const p = Math.min(1, u.attackTimer / 0.25);
+            clubX = -2.4 + Math.min(1, p * 2.5) * 3.2; // VIOLENT downward smash!
+            torsoPitch = 0.24 * Math.min(1, p * 2.5);
+            if (u.attackTimer >= 0.25) {
+              u.attackPhase = 'recover';
+              u.attackTimer = 0;
+            }
+          } else {
+            const p = Math.min(1, u.attackTimer / 0.48);
+            clubX = 0.8 - p * 1.25;
+            torsoPitch = 0.24 * (1 - p);
+            if (u.attackTimer >= 0.48) {
+              u.attackPhase = dGoal > reachDist + 2 ? 'chase' : 'windup';
+              u.attackTimer = 0;
+            }
+          }
         }
+
         const uy = Math.max(0, world3D.terrainHeightAt(u.x, u.z));
         u.y = uy + (u.heightMeters || 21) * 0.52;
         u.mesh.position.set(u.x, uy, u.z);
         u.mesh.lookAt(u.goalX, uy, u.goalZ);
-        const stride = Math.sin(u.stompPhase);
+        const stride = Math.sin(u.stompPhase || 0);
+        const movingNow = u.attackPhase === 'march' || u.attackPhase === 'chase';
         if (u.legL && u.legR) {
-          u.legL.rotation.x = dGoal > 12 ? stride * 0.42 : stride * 0.12;
-          u.legR.rotation.x = dGoal > 12 ? -stride * 0.42 : -stride * 0.12;
+          u.legL.rotation.x = movingNow ? stride * 0.46 : 0.08;
+          u.legR.rotation.x = movingNow ? -stride * 0.46 : -0.08;
         }
         if (u.upper) {
-          u.upper.rotation.z = stride * 0.06;
-          u.upper.position.y = (7.4 * (u.heightMeters || 21) / 21) + Math.abs(stride) * 0.55;
+          u.upper.rotation.x = torsoPitch;
+          u.upper.rotation.z = movingNow ? stride * 0.07 : 0;
+          u.upper.position.y = (7.4 * (u.heightMeters || 21) / 21) + (movingNow ? Math.abs(stride) * 0.6 : 0);
         }
-        if (u.armL) u.armL.rotation.x = -stride * 0.35;
-        if (u.armR) u.armR.rotation.x = -0.35 + Math.sin(u.stompPhase * 1.35) * 0.85;
+        if (u.armL) u.armL.rotation.x = movingNow ? -stride * 0.35 : -0.25;
+        if (u.armR) u.armR.rotation.x = clubX;
+
+        // Keep compass waypoint synced to lead living Giant Troll!
+        if (world3D.landmarks[0]?.id === 'giant-troll-lead' && u === world3D.giantTrolls.find(t => !t.dead)) {
+          world3D.landmarks[0].x = u.x;
+          world3D.landmarks[0].y = u.y + 8;
+          world3D.landmarks[0].z = u.z;
+          world3D.landmarks[0].name = `Giant Troll: ${u.shortName} (${Math.round(distFromTown)}m from town)`;
+        }
+        // Sync world position back to specRef
+        if (u.specRef) {
+          u.specRef.worldX = Math.round(u.x);
+          u.specRef.worldZ = Math.round(u.z);
+        }
         continue;
       }
       u.patrolAngle += u.patrolSpeed * dt;

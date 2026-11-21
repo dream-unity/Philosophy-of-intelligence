@@ -157,9 +157,23 @@
   const openDragonStable=()=>dragonUI?.open(sim.active()?.id);
   listen('scene-open-dragon','click',openDragonStable);
   listen('street-dragon-stable','click',openDragonStable);
+  listen('troll-track-btn','click',()=>{
+    if(!street)return;
+    if(street.isTrackingTroll?.()){
+      street.recenter();
+    }else{
+      street.focusTroll?.();
+    }
+    const site=sim.active();if(site)renderTrollSiege(site);
+  });
   listen('troll-rally-btn','click',async()=>{
     const site=sim.active();if(!site)return;
     const res=await sim.perform('trollAction',{siteId:site.id,action:'militiaStrike'});
+    presentResult(res);redrawStreet();render();
+  });
+  listen('troll-repair-btn','click',async()=>{
+    const site=sim.active();if(!site)return;
+    const res=await sim.perform('trollAction',{siteId:site.id,action:'repairBuildings'});
     presentResult(res);redrawStreet();render();
   });
   listen('troll-dragon-btn','click',()=>{
@@ -893,6 +907,20 @@
         onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
         onObservation:seen=>streetHud?.setWatch(seen),onTruckDoor:useStreetVehicleDoor,onTruckInteract:()=>streetHud?.openTool('truck'),
         onDragon:target=>dragonUI?.mountDragon(target),
+        onTrollUpdate:changed=>{
+          const cur=sim.active();
+          if(view==='street'&&cur){
+            renderTrollSiege(cur);
+            if(changed){
+              const popVal=$('resource-strip')?.querySelector('[data-metric="population"] strong');
+              if(popVal)popVal.textContent=String(cur.population);
+              const wbVal=$('resource-strip')?.querySelector('[data-metric="wellbeing"] strong');
+              if(wbVal)wbVal.textContent=String(cur.wellbeing);
+              const matVal=$('resource-strip')?.querySelector('[data-metric="materials"] strong');
+              if(matVal)matVal.textContent=String(cur.materials);
+            }
+          }
+        },
         onBuilding:building=>{streetHud?.close(false);if(building.use==='militaryBase')baseUI?.open(sim.active()?.id);else if(building.use==='dragonStable'||building.buildingKind==='dragonStable')dragonUI?.open(sim.active()?.id);else if(building.use==='leisure')nightlife?.open(building.venue);else districtDesk?.inspectBuilding(building);},
         onTalkChoices:people=>streetHud?.openTalkChoices?.(people),
         onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},
@@ -1898,15 +1926,41 @@
     const info=window.EarthGiantTrolls.summary(sim.state,site.id);
     if(!info||info.totalAlive<=0){bar.hidden=true;return;}
     bar.hidden=false;
-    put('troll-siege-title',`${info.communityName} · Giant Troll Siege (Wave ${info.wave})`);
-    put('troll-siege-counts',`${info.localCount} here · ${info.elsewhereCount} attacking other lands · ${info.totalSlain} slain`);
     const lead=info.local[0];
-    const otherText=info.elsewhere.length?` Also attacking ${[...new Set(info.elsewhere.map(t=>t.targetSiteName))].slice(0,2).join(' & ')}.`:'';
-    put('troll-siege-detail',lead
-      ? `${lead.name} (${lead.heightMeters}m tall, ${lead.hp}/${lead.maxHp} HP) & darklands titans are hunting human Sims in ${site.name}!${otherText}`
-      : `Colossal building-sized Giant Trolls are hunting human Sims across neighbouring lands!${otherText}`);
+    const tracking=Boolean(street?.isTrackingTroll?.());
+    const phaseTag=info.attackingCount>0
+      ? 'UNDER ATTACK'
+      : (info.nearestKm!=null?`${info.nearestKm.toFixed(2)} km out`:`Wave ${info.wave}`);
+    put('troll-siege-title',`${info.communityName} · ${phaseTag} (Wave ${info.wave})`);
+    const bldStat=(info.damagedBuildings||info.ruinedBuildings)
+      ? ` · ${info.ruinedBuildings} ruined, ${info.damagedBuildings} burning`
+      : '';
+    put('troll-siege-counts',`${info.localCount} here · ${info.elsewhereCount} other lands · ${info.totalSlain} slain${bldStat}`);
+    const otherText=info.elsewhere.length?` Also marching on ${[...new Set(info.elsewhere.map(t=>t.targetSiteName))].slice(0,2).join(' & ')}.`:'';
+    if(lead){
+      const km=window.EarthGiantTrolls.distanceKm(lead);
+      if(lead.state==='approaching'){
+        put('troll-siege-detail',`${lead.name} (${lead.heightMeters}m, ${lead.hp}/${lead.maxHp} HP) & darklands titans are marching slowly in from ${km.toFixed(2)} km out!${otherText}`);
+      }else{
+        const victim=lead.targetName?` smashing ${lead.targetName}`:` attacking ${site.name}`;
+        put('troll-siege-detail',`${lead.name} (${lead.heightMeters}m, ${lead.hp}/${lead.maxHp} HP) is relentlessly${victim}!${otherText}`);
+      }
+    }else{
+      put('troll-siege-detail',`Colossal building-sized Giant Trolls are hunting human Sims across neighbouring lands!${otherText}`);
+    }
+    const trackBtn=$('troll-track-btn');
+    if(trackBtn){
+      trackBtn.hidden=!lead;
+      trackBtn.textContent=tracking?'Back to Town':(lead?.state==='approaching'?`Track Troll (${window.EarthGiantTrolls.distanceKm(lead).toFixed(2)} km)`:'Focus Troll');
+    }
     const rallyBtn=$('troll-rally-btn');
     if(rallyBtn)rallyBtn.hidden=!lead;
+    const repairBtn=$('troll-repair-btn');
+    if(repairBtn){
+      const broken=(info.damagedBuildings||0)+(info.ruinedBuildings||0);
+      repairBtn.hidden=broken<=0;
+      if(broken>0)repairBtn.textContent=`Repair Buildings (${broken})`;
+    }
     const dragBtn=$('troll-dragon-btn');
     if(dragBtn){
       const DS=window.EarthDragonStable;

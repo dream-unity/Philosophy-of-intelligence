@@ -174,10 +174,14 @@
           make('small', `${trollSummary.localCount} attacking ${site.name} · ${trollSummary.elsewhereCount} attacking other lands · ${trollSummary.totalSlain} slain`)
         );
         siegeSec.append(head);
-        siegeSec.append(make('p', 'Colossal building-sized Giant Trolls are relentlessly hunting human Sims across every community. Ordinary weapons barely dent their dark hide — Enchanted Dragonfire and originating-community Wizard Staff Thunder shatter them!'));
+        siegeSec.append(make('p', 'Colossal building-sized Giant Trolls march from 1 km out and relentlessly smash buildings and human Sims across every community. Ordinary weapons barely dent their dark hide — Enchanted Dragonfire and originating-community Wizard Staff Thunder shatter them!'));
         for (const t of trollSummary.local) {
           const row = make('div', null, 'troll-row');
-          row.append(make('small', `${t.name} · ${t.title} (${t.heightMeters}m) — ${t.hp}/${t.maxHp} HP`));
+          const km = root.EarthGiantTrolls?.distanceKm?.(t) ?? t.distanceKm ?? 0;
+          const phaseLabel = t.state === 'approaching'
+            ? `Marching in · ${km.toFixed(2)} km out`
+            : (t.targetName ? `Smashing ${t.targetName}` : 'Attacking community');
+          row.append(make('small', `${t.name} · ${t.title} (${t.heightMeters}m) · ${phaseLabel} — ${t.hp}/${t.maxHp} HP`));
           const bar = make('div', null, 'dragon-meter troll-meter');
           const fill = doc.createElement('i');
           fill.style.width = `${Math.max(4, Math.round((t.hp / Math.max(1, t.maxHp)) * 100))}%`;
