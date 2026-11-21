@@ -396,7 +396,537 @@
       notes.push(hungry + ' is hungry at the Dragon Stable. Assign stable workers to keep the larder stocked.');
     }
 
+    // 3. Autonomous Homeland Defense — Dragons act instinctively on their own free will
+    //    WITHOUT needing a Wizard rider whenever Giant Trolls or enemy intruders threaten their community!
+    const autoDefense = autonomousDefend(world, site, { dtWeeks });
+    for (const note of autoDefense.messages) notes.push(note);
+
     return notes;
+  }
+
+  // Runtime autonomous flight & combat state for 2D Street View (WeakMap keeps save JSON 100% clean)
+  const runtimeState = new WeakMap();
+
+  function getRuntimeMap(site) {
+    if (!site) return new Map();
+    let map = runtimeState.get(site);
+    if (!map) {
+      map = new Map();
+      runtimeState.set(site, map);
+    }
+    return map;
+  }
+
+  /**
+   * Scans ALL active threats encroaching on or attacking `site`.
+   * Strictly defensive homeland scan — NEVER targets peaceful or foreign communities' lands.
+   */
+  function findHomelandThreats(world, site, sceneContext = {}) {
+    if (!site) return [];
+    const threats = [];
+
+    // 1. Giant Trolls marching on or attacking this community (intercept aggressively up to ~1.25 km out!)
+    const localTrolls = (world && root.EarthGiantTrolls?.trollsForSite)
+      ? root.EarthGiantTrolls.trollsForSite(world, site.id)
+      : [];
+    for (const t of localTrolls) {
+      if (!t || t.state === 'slain' || t.hp <= 0) continue;
+      const km = root.EarthGiantTrolls?.distanceKm?.(t) ?? t.distanceKm ?? 0;
+      if (km <= 1.25 || t.state !== 'approaching') {
+        threats.push({
+          id: t.id,
+          kind: 'troll',
+          isTroll: true,
+          name: t.name,
+          x: Number.isFinite(t.x) ? t.x : 12,
+          y: Number.isFinite(t.y) ? t.y : 12,
+          hp: t.hp,
+          maxHp: t.maxHp,
+          km,
+          priority: (t.state !== 'approaching' ? 0 : 25) + km * 30,
+          ref: t
+        });
+      }
+    }
+
+    // 2. Hostile street border encounter actively fighting in this community
+    const streetFight = site.communityLife?.border?.street;
+    if (streetFight && streetFight.phase === 'fight') {
+      const gx = Number.isFinite(sceneContext?.pursuit?.x) ? sceneContext.pursuit.x : 12;
+      const gy = Number.isFinite(sceneContext?.pursuit?.y) ? sceneContext.pursuit.y : 12;
+      threats.push({
+        id: 'border-street-' + (streetFight.guard?.key || 'raider'),
+        kind: 'borderStreet',
+        isTroll: false,
+        name: streetFight.guard?.name || 'Hostile Border Intruder',
+        x: gx,
+        y: gy,
+        hp: streetFight.hp ?? 100,
+        maxHp: 100,
+        km: 0,
+        priority: 2,
+        ref: streetFight
+      });
+    }
+
+    // 3. Rival war campaigns actively marching on or fighting at this community
+    if (world) {
+      const allTowns = [
+        ...(world.sites || []),
+        ...(world.communityLife?.outposts || [])
+      ];
+      for (const other of allTowns) {
+        if (!other || other.id === site.id) continue;
+        const camp = other.communityLife?.border?.campaign;
+        if (camp && camp.against === site.id && camp.phase !== 'return' && (camp.strength || 0) > 0) {
+          const prog = clamp(camp.progress || 0, 0, 1);
+          const distUnits = camp.phase === 'fight' ? 6 : 14 + (1 - prog) * 28;
+          threats.push({
+            id: 'campaign-' + other.id,
+            kind: 'campaign',
+            isTroll: false,
+            name: (other.name || 'Hostile') + ' War Party',
+            x: 12 + Math.cos(camp.seed || 1.2) * distUnits,
+            y: Math.max(-18, 12 - Math.abs(Math.sin(camp.seed || 1.2)) * distUnits),
+            hp: Math.max(40, (camp.strength || 1) * 45),
+            maxHp: Math.max(40, (camp.initial || camp.strength || 1) * 45),
+            km: Number((distUnits * 0.013).toFixed(2)),
+            priority: camp.phase === 'fight' ? 4 : 18,
+            attackerSite: other,
+            ref: camp
+          });
+        }
+      }
+    }
+
+    // 4. Live hostile enemy units / soldiers / trucks passed in from Street View or Field
+    if (Array.isArray(sceneContext?.enemies)) {
+      for (const en of sceneContext.enemies) {
+        if (!en || en.dead || !Number.isFinite(en.x) || !Number.isFinite(en.y)) continue;
+        // Strictly ignore anything that explicitly belongs to a foreign community's own land (not intruding here)
+        if (en.foreignLand === true) continue;
+        threats.push({
+          id: en.id || ('enemy-' + threats.length),
+          kind: en.kind || 'intruder',
+          isTroll: Boolean(en.isTroll),
+          name: en.name || 'Enemy Intruder',
+          x: en.x,
+          y: en.y,
+          hp: en.hp ?? 100,
+          maxHp: en.maxHp ?? 100,
+          km: Math.hypot(en.x - 12, en.y - 12) * 0.013,
+          priority: 3 + Math.hypot(en.x - 12, en.y - 12) * 0.25,
+          ref: en
+        });
+      }
+    }
+
+    threats.sort((a, b) => a.priority - b.priority);
+    return threats;
+  }
+
+  /**
+   * Weekly / Simulation-Turn Autonomous Dragon Homeland Defense (NO WIZARD REQUIRED).
+   * Every dragon spiritually bound to `site` instinctively takes flight on its own free will
+   * to aggressively blast Giant Trolls and enemy intruders attacking `site`.
+   * Strictly refuses offensive attacks against foreign communities' lands.
+   */
+  function autonomousDefend(world, site, options = {}) {
+    const out = { defended: false, blasts: 0, trollsSlain: 0, campaignsRouted: 0, messages: [] };
+    if (!world || !site || !hasStable(site)) return out;
+    const ds = ensure(site);
+    const defenders = ds.dragons.filter(d => d && (!d.homeSiteId || d.homeSiteId === site.id));
+    if (!defenders.length) return out;
+
+    const threats = findHomelandThreats(world, site, options.sceneContext);
+    if (!threats.length) return out;
+
+    const week = world.week || 1;
+    for (let i = 0; i < defenders.length; i++) {
+      const dragon = defenders[i];
+      const liveThreats = findHomelandThreats(world, site, options.sceneContext);
+      if (!liveThreats.length) break;
+
+      // Distribute across threats while focusing the highest-priority breach first
+      const target = liveThreats[i % liveThreats.length] || liveThreats[0];
+      const lineage = LINEAGES.find(l => l.id === dragon.lineage);
+      const speedBonus = lineage?.speedBonus || 1.06;
+      const hungerFactor = dragon.hunger > 15 ? 1.0 : 0.78; // Adrenaline lets even hungry dragons fiercely defend home!
+
+      dragon.hunger = clamp(dragon.hunger - 3, 0, 100);
+      dragon.blasts = (dragon.blasts || 0) + 1;
+      dragon.autonomousBlasts = (dragon.autonomousBlasts || 0) + 1;
+      ds.defenses = (ds.defenses || 0) + 1;
+      ds.autonomousDefenses = (ds.autonomousDefenses || 0) + 1;
+      out.defended = true;
+      out.blasts++;
+
+      if (target.kind === 'troll' && root.EarthGiantTrolls) {
+        // Relentless multi-pass autonomous fire volley during the turn (115–145 raw -> 190–240 damage after 1.65x multiplier!)
+        const rawDmg = Math.round((115 + (speedBonus - 1) * 200) * hungerFactor);
+        const res = root.EarthGiantTrolls.attackTroll(world, site, target.id, {
+          source: 'dragonFire',
+          damage: rawDmg,
+          dragonName: dragon.name,
+          autonomous: true
+        });
+        if (res?.ok) {
+          if (res.killed) {
+            dragon.autonomousKills = (dragon.autonomousKills || 0) + 1;
+            out.trollsSlain++;
+          }
+          record(site, world, res.message);
+          out.messages.push(res.message);
+        }
+      } else if (target.kind === 'campaign' && target.ref) {
+        const camp = target.ref;
+        const loss = Math.max(2, Math.ceil((camp.strength || 2) * 0.55));
+        camp.strength = Math.max(0, (camp.strength || 0) - loss);
+        camp.casualties = (camp.casualties || 0) + loss;
+        const routed = camp.strength <= 1;
+        if (routed) {
+          camp.phase = 'return';
+          camp.progress = Math.max(0.15, 1 - (camp.progress || 0.5));
+          camp.outcome = 'burned back by ' + site.name + '\'s guardian dragons';
+          dragon.autonomousKills = (dragon.autonomousKills || 0) + 1;
+          out.campaignsRouted++;
+        }
+        site.wellbeing = clamp((site.wellbeing || 50) + 1, 0, 100);
+        const msg = routed
+          ? dragon.name + ' instinctively scrambled without a rider and incinerated the ' + target.name + ' with blazing dragonfire, routing them from ' + site.name + '!'
+          : dragon.name + ' acted on its own free will, swooping down to scorch the encroaching ' + target.name + ' (-' + loss + ' hostile fighters) defending ' + site.name + '!';
+        record(site, world, msg);
+        out.messages.push(msg);
+      } else if (target.kind === 'borderStreet' && target.ref) {
+        const sf = target.ref;
+        sf.phase = 'repelled';
+        sf.hp = 0;
+        if (site.communityLife?.border) delete site.communityLife.border.street;
+        dragon.autonomousKills = (dragon.autonomousKills || 0) + 1;
+        const msg = dragon.name + ' instinctively dove from the skies and drove off ' + target.name + ' with a ferocious blast of dragonfire!';
+        record(site, world, msg);
+        out.messages.push(msg);
+      } else {
+        const msg = dragon.name + ' instinctively intercepted ' + target.name + ' at ' + site.name + '\'s perimeter and unleashed blazing dragonfire!';
+        record(site, world, msg);
+        out.messages.push(msg);
+      }
+    }
+
+    if (out.defended) {
+      ds.lastDefenseWeek = week;
+    }
+    return out;
+  }
+
+  /**
+   * Real-Time Continuous Autonomous Dragon Defender AI (2D Street View & Unit-Testable in Node).
+   * Dragons fly on their own agency — ZERO Wizard needed — immediately scrambling whenever
+   * Giant Trolls or hostile intruders approach or enter the community, pursuing them aggressively,
+   * circling overhead, and blasting continuous roaring dragonfire until every enemy is destroyed.
+   */
+  function stepAutonomousDefenders(world, site, dt = 0.016, sceneContext = {}) {
+    const empty = { poses: [], events: [], defendingCount: 0 };
+    if (!site || !hasStable(site)) return empty;
+    const ds = ensure(site);
+    const defenders = ds.dragons.filter(d => d && (!d.homeSiteId || d.homeSiteId === site.id));
+    if (!defenders.length) return empty;
+
+    const stable = stableLocation(site) || { x: 12, y: 12 };
+    const step = clamp(dt || 0.016, 0.001, 0.25);
+    const visualTime = Number.isFinite(sceneContext.time) ? sceneContext.time : ((site._dragonClock || 0) + step);
+    site._dragonClock = visualTime;
+
+    const map = getRuntimeMap(site);
+    const threats = findHomelandThreats(world, site, sceneContext);
+    const events = [];
+    const poses = [];
+    let defendingCount = 0;
+    const TILT = 0.51;
+
+    for (let i = 0; i < defenders.length; i++) {
+      const dragon = defenders[i];
+      const lineage = LINEAGES.find(l => l.id === dragon.lineage);
+      const speedBonus = lineage?.speedBonus || 1.06;
+      const ring = i % 3;
+
+      let st = map.get(dragon.id);
+      if (!st) {
+        const initT = visualTime * (0.38 + ring * 0.07) + i * 2.1;
+        const rx = 6.5 + ring * 3.2;
+        const ry = 5.5 + ring * 2.6;
+        st = {
+          x: stable.x + Math.cos(initT) * rx,
+          y: stable.y + Math.sin(initT) * ry,
+          z: (3.2 + ring * 0.9) * 0.62,
+          angle: 0,
+          orbitAngle: i * 2.05,
+          fireTimer: 0,
+          fireCooldown: 0.15 + (i % 3) * 0.18,
+          state: 'patrol',
+          targetId: null,
+          targetKind: null,
+          targetName: null,
+          fireTarget: null,
+          announcedTargetId: null
+        };
+        map.set(dragon.id, st);
+      }
+
+      if (st.fireTimer > 0) st.fireTimer = Math.max(0, st.fireTimer - step);
+      if (st.fireCooldown > 0) st.fireCooldown = Math.max(0, st.fireCooldown - step);
+
+      // Re-scan active threats (an earlier dragon in this same step may have just slain one!)
+      const activeThreats = threats.filter(th => {
+        if (th.kind === 'troll') return th.ref && th.ref.state !== 'slain' && th.ref.hp > 0;
+        if (th.kind === 'campaign') return th.ref && th.ref.phase !== 'return' && (th.ref.strength || 0) > 0;
+        if (th.kind === 'borderStreet') return site.communityLife?.border?.street?.phase === 'fight';
+        return !th.ref?.dead && (th.ref?.hp == null || th.ref.hp > 0);
+      });
+
+      if (activeThreats.length > 0) {
+        defendingCount++;
+        // Pick target: keep locked target if still alive, otherwise spread dragons aggressively across all threats
+        let target = activeThreats.find(th => th.id === st.targetId) || activeThreats[i % activeThreats.length] || activeThreats[0];
+        st.targetId = target.id;
+        st.targetKind = target.kind;
+        st.targetName = target.name;
+
+        const tx = target.x;
+        const ty = target.y;
+        const dxToTarget = tx - st.x;
+        const dyToTarget = ty - st.y;
+        const distToTarget = Math.hypot(dxToTarget, dyToTarget);
+
+        const attackRange = target.kind === 'troll' ? 7.8 : 6.4;
+        const orbitRadius = target.kind === 'troll' ? 3.8 + (i % 2) * 1.1 : 3.2 + (i % 2) * 0.8;
+        const swoopSpeed = 14.5 * speedBonus;
+
+        if (st.announcedTargetId !== target.id) {
+          st.announcedTargetId = target.id;
+          events.push({
+            type: 'dragonIntercept',
+            dragon,
+            target,
+            x: st.x,
+            y: st.y,
+            tx,
+            ty,
+            message: dragon.name + ' sensed ' + target.name + ' threatening ' + site.name + ' and scrambled autonomously to attack!'
+          });
+        }
+
+        let moveDx = 0;
+        let moveDy = 0;
+        if (distToTarget > attackRange) {
+          // AGGRESSIVE INTERCEPT SWOOP straight toward the intruder!
+          st.state = 'intercept';
+          const stepDist = Math.min(distToTarget - orbitRadius * 0.8, swoopSpeed * step);
+          const nx = dxToTarget / Math.max(0.001, distToTarget);
+          const ny = dyToTarget / Math.max(0.001, distToTarget);
+          st.x += nx * stepDist;
+          st.y += ny * stepDist;
+          st.z += (2.55 - st.z) * Math.min(1, step * 4.2);
+          moveDx = nx;
+          moveDy = ny;
+          st.orbitAngle = Math.atan2(st.y - ty, st.x - tx);
+        } else {
+          // AGGRESSIVE COMBAT ORBIT & CONTINUOUS DRAGONFIRE ASSAULT!
+          st.state = 'attack';
+          const orbitSpeed = (2.15 + (i % 2) * 0.35) * (i % 2 === 0 ? 1 : -1);
+          st.orbitAngle += orbitSpeed * step;
+          const desiredX = tx + Math.cos(st.orbitAngle) * orbitRadius;
+          const desiredY = ty + Math.sin(st.orbitAngle) * orbitRadius;
+          const pull = Math.min(1, step * 6.5);
+          const prevX = st.x;
+          const prevY = st.y;
+          st.x += (desiredX - st.x) * pull;
+          st.y += (desiredY - st.y) * pull;
+          st.z += ((2.15 + Math.sin(visualTime * 4.5 + i) * 0.25) - st.z) * Math.min(1, step * 5.0);
+          moveDx = st.x - prevX;
+          moveDy = st.y - prevY;
+
+          // Unleash blazing dragonfire relentlessly every 0.92s until target is completely destroyed!
+          if (st.fireCooldown <= 0) {
+            st.fireCooldown = 0.92;
+            st.fireTimer = 0.62;
+            st.fireTarget = { x: tx, y: ty, name: target.name, id: target.id };
+
+            const hungerFactor = dragon.hunger > 15 ? 1.0 : 0.78;
+            dragon.hunger = clamp(dragon.hunger - 1.5, 0, 100);
+            dragon.blasts = (dragon.blasts || 0) + 1;
+            dragon.autonomousBlasts = (dragon.autonomousBlasts || 0) + 1;
+            ds.defenses = (ds.defenses || 0) + 1;
+            ds.autonomousDefenses = (ds.autonomousDefenses || 0) + 1;
+
+            let dealt = 0;
+            let killed = false;
+            let msg = '';
+
+            if (target.kind === 'troll' && root.EarthGiantTrolls) {
+              const rawDmg = Math.round(78 * speedBonus * hungerFactor);
+              const hit = root.EarthGiantTrolls.attackTroll(world, site, target.id, {
+                source: 'dragonFire',
+                damage: rawDmg,
+                dragonName: dragon.name,
+                autonomous: true
+              });
+              if (hit?.ok) {
+                dealt = hit.dealt;
+                killed = Boolean(hit.killed);
+                msg = hit.message;
+                if (killed) {
+                  dragon.autonomousKills = (dragon.autonomousKills || 0) + 1;
+                  record(site, world, msg);
+                  st.targetId = null;
+                  st.announcedTargetId = null;
+                }
+              }
+            } else if (target.kind === 'campaign' && target.ref) {
+              const camp = target.ref;
+              const loss = Math.max(1, Math.ceil((camp.strength || 1) * 0.4));
+              camp.strength = Math.max(0, (camp.strength || 0) - loss);
+              camp.casualties = (camp.casualties || 0) + loss;
+              dealt = loss * 45;
+              if (camp.strength <= 1) {
+                camp.phase = 'return';
+                camp.outcome = 'incinerated and routed by ' + dragon.name;
+                killed = true;
+                dragon.autonomousKills = (dragon.autonomousKills || 0) + 1;
+                st.targetId = null;
+                st.announcedTargetId = null;
+              }
+              msg = killed
+                ? dragon.name + ' autonomously torched and routed the ' + target.name + '!'
+                : dragon.name + ' blasted fire onto the ' + target.name + ' (-' + loss + ' hostile fighters)!';
+              if (killed) record(site, world, msg);
+            } else if (target.kind === 'borderStreet' && target.ref) {
+              const sf = target.ref;
+              sf.hp = Math.max(0, (sf.hp ?? 100) - 55);
+              dealt = 55;
+              if (sf.hp <= 0) {
+                sf.phase = 'repelled';
+                if (site.communityLife?.border) delete site.communityLife.border.street;
+                killed = true;
+                dragon.autonomousKills = (dragon.autonomousKills || 0) + 1;
+                st.targetId = null;
+                st.announcedTargetId = null;
+              }
+              msg = killed
+                ? dragon.name + ' autonomously scorched and drove off ' + target.name + '!'
+                : dragon.name + ' blasted ' + target.name + ' with protective dragonfire (-55 HP)!';
+              if (killed) record(site, world, msg);
+            } else {
+              dealt = Math.round(95 * speedBonus * hungerFactor);
+              const res = sceneContext.onEnemyHit?.(target, dealt, dragon);
+              killed = Boolean(res?.killed);
+              if (killed) {
+                dragon.autonomousKills = (dragon.autonomousKills || 0) + 1;
+                st.targetId = null;
+                st.announcedTargetId = null;
+              }
+              msg = res?.message || (
+                killed
+                  ? dragon.name + ' autonomously incinerated ' + target.name + ' defending ' + site.name + '!'
+                  : dragon.name + ' blasted ' + target.name + ' with autonomous dragonfire (-' + dealt + ' HP)!'
+              );
+              if (killed) record(site, world, msg);
+            }
+
+            events.push({
+              type: 'dragonFire',
+              dragon,
+              target,
+              x: st.x,
+              y: st.y,
+              z: st.z,
+              tx,
+              ty,
+              dealt,
+              killed,
+              message: msg
+            });
+          }
+        }
+
+        // Aim dragon head straight at the target while blasting or swooping!
+        const aimDx = st.state === 'attack' ? (tx - st.x) : moveDx;
+        const aimDy = st.state === 'attack' ? (ty - st.y) : moveDy;
+        if (Math.hypot(aimDx, aimDy) > 0.001) {
+          st.angle = Math.atan2((aimDx + aimDy) * TILT, aimDx - aimDy);
+        }
+        if (st.fireTimer > 0) {
+          st.fireTarget = { x: tx, y: ty, name: target.name, id: target.id };
+        }
+      } else {
+        // Peaceful sanctuary patrol above the Dragon Stable when homeland is safe
+        st.state = 'patrol';
+        st.targetId = null;
+        st.targetKind = null;
+        st.targetName = null;
+        st.announcedTargetId = null;
+        st.fireTarget = null;
+        const patrolT = visualTime * (0.38 + ring * 0.07) + i * 2.1;
+        const rx = 6.5 + ring * 3.2;
+        const ry = 5.5 + ring * 2.6;
+        const goalX = stable.x + Math.cos(patrolT) * rx;
+        const goalY = stable.y + Math.sin(patrolT) * ry;
+        const goalZ = (3.2 + ring * 0.9 + Math.sin(patrolT * 1.6) * 0.55) * 0.62;
+        const prevX = st.x;
+        const prevY = st.y;
+        const blend = Math.min(1, step * 3.2);
+        st.x += (goalX - st.x) * blend;
+        st.y += (goalY - st.y) * blend;
+        st.z += (goalZ - st.z) * blend;
+        const dx = Math.hypot(st.x - prevX, st.y - prevY) > 0.002 ? (st.x - prevX) : (-Math.sin(patrolT) * rx);
+        const dy = Math.hypot(st.x - prevX, st.y - prevY) > 0.002 ? (st.y - prevY) : (Math.cos(patrolT) * ry);
+        st.angle = Math.atan2((dx + dy) * TILT, dx - dy);
+      }
+
+      poses.push({
+        dragon,
+        x: st.x,
+        y: st.y,
+        z: st.z,
+        angle: st.angle,
+        size: st.state !== 'patrol' ? 1.08 : 0.95,
+        depth: st.x + st.y + 9.5,
+        state: st.state,
+        defending: st.state !== 'patrol',
+        breathingFire: st.fireTimer > 0,
+        fireTarget: st.fireTimer > 0 ? st.fireTarget : null,
+        targetName: st.targetName
+      });
+    }
+
+    return { poses, events, defendingCount };
+  }
+
+  function getAutonomousPoses(site) {
+    if (!site || !hasStable(site)) return [];
+    const ds = ensure(site);
+    const map = runtimeState.get(site);
+    if (!map || !map.size) return [];
+    const poses = [];
+    for (const dragon of ds.dragons) {
+      const st = map.get(dragon.id);
+      if (!st) continue;
+      poses.push({
+        dragon,
+        x: st.x,
+        y: st.y,
+        z: st.z,
+        angle: st.angle,
+        size: st.state !== 'patrol' ? 1.08 : 0.95,
+        depth: st.x + st.y + 9.5,
+        state: st.state,
+        defending: st.state !== 'patrol',
+        breathingFire: st.fireTimer > 0,
+        fireTarget: st.fireTimer > 0 ? st.fireTarget : null,
+        targetName: st.targetName
+      });
+    }
+    return poses;
   }
 
   /**
@@ -535,8 +1065,11 @@
     if (wizard) wizard.flights = (wizard.flights || 0) + 1;
   }
 
-  function valid(site) {
-    const ds = site?.dragonStable;
+  function valid(siteOrStable) {
+    if (siteOrStable == null) return true;
+    const ds = (typeof siteOrStable === 'object' && !Array.isArray(siteOrStable) && Array.isArray(siteOrStable.dragons))
+      ? siteOrStable
+      : siteOrStable?.dragonStable;
     if (ds == null) return true;
     if (typeof ds !== 'object' || Array.isArray(ds)) return false;
     if (!Array.isArray(ds.dragons) || !Array.isArray(ds.wizards) || !Array.isArray(ds.workers)) return false;
@@ -558,6 +1091,10 @@
     wizardPowerStatus,
     canEnterCommunity,
     canFlyDragon,
+    findHomelandThreats,
+    autonomousDefend,
+    stepAutonomousDefenders,
+    getAutonomousPoses,
     trainWizard,
     createNewWizard,
     summonDragon,

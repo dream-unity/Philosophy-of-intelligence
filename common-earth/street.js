@@ -4580,11 +4580,19 @@
       if(!roster?.length||!window.EarthDragonArt)return [];
       const stable=window.EarthDragonStable.stableLocation(state.site);
       if(!stable)return [];
+      const autoPoses=window.EarthDragonStable.getAutonomousPoses?.(state.site)||[];
+      const anyDefending=autoPoses.some(p=>p.defending);
       const poses=[];
-      for(const spot of [...state.lots.filter(l=>l.building?.kind==='dragonStable'),
-                          ...(state.site.freeBuildings||[]).filter(b=>b.kind==='dragonStable')]){
-        poses.push({dragon:roster[0],x:spot.x+1.14,y:spot.y+.80,z:1.12,
-          size:.42,angle:.4,depth:spot.x+spot.y+.351});
+      if(!anyDefending){
+        for(const spot of [...state.lots.filter(l=>l.building?.kind==='dragonStable'),
+                            ...(state.site.freeBuildings||[]).filter(b=>b.kind==='dragonStable')]){
+          poses.push({dragon:roster[0],x:spot.x+1.14,y:spot.y+.80,z:1.12,
+            size:.42,angle:.4,depth:spot.x+spot.y+.351,breathingFire:false,defending:false});
+        }
+      }
+      if(autoPoses.length){
+        for(const ap of autoPoses)poses.push(ap);
+        return poses;
       }
       roster.forEach((dragon,i)=>{
         const ring=i%3,t=visualTime*(.38+ring*.07)+i*2.1;
@@ -4592,7 +4600,7 @@
         const x=stable.x+Math.cos(t)*rx,y=stable.y+Math.sin(t)*ry;
         const dx=-Math.sin(t)*rx,dy=Math.cos(t)*ry;
         poses.push({dragon,x,y,z:(3.2+ring*.9+Math.sin(t*1.6)*.55)*.62,
-          angle:Math.atan2((dx+dy)*TILT,dx-dy),size:.95,depth:x+y+9});
+          angle:Math.atan2((dx+dy)*TILT,dx-dy),size:.95,depth:x+y+9,breathingFire:false,defending:false});
       });
       return poses;
     }
@@ -4762,42 +4770,141 @@
       return sims;
     }
 
+    function spawnDragonFireBurst(x,y,z,tx,ty,dragon,dealt,killed){
+      const fireCol=dragon?.fire||'#ff882b';
+      trollFx.push({
+        kind:'fireBeam',x,y,z:z||2.2,tx,ty,tz:0.95,
+        age:0,life:0.58,color:fireCol
+      });
+      const count=killed?22:14;
+      for(let i=0;i<count;i++){
+        const a=(i/count)*Math.PI*2+Math.random()*0.5;
+        const spd=1.6+Math.random()*(killed?4.2:2.8);
+        trollFx.push({
+          kind:'particle',x:tx+(Math.random()-0.5)*0.9,y:ty+(Math.random()-0.5)*0.9,z:0.45+Math.random()*0.9,
+          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,vz:1.8+Math.random()*3.0,
+          age:0,life:0.65+Math.random()*0.4,
+          color:i%3===0?'#fff7cc':i%3===1?fireCol:'#e62e14',
+          size:killed?0.24+Math.random()*0.18:0.17+Math.random()*0.14
+        });
+      }
+      trollFx.push({
+        kind:'ring',x:tx,y:ty,age:0,life:0.55,
+        maxR:killed?4.4:2.8,color:killed?'#ffe07a':fireCol
+      });
+      trollFx.push({
+        kind:'callout',x:tx,y:ty,z:2.65,age:0,life:1.45,
+        text:killed?`SLAIN BY ${(dragon?.name||'DRAGON').toUpperCase()}!`:`-${dealt||120} DRAGONFIRE!`,
+        color:killed?'#fff1a8':'#ffb84d'
+      });
+      if(trollFx.length>180)trollFx.splice(0,trollFx.length-180);
+    }
+
+    function collectHostileStreetEnemies(w){
+      const list=[];
+      if(!w||!state.site||!baseTown||!window.EarthBorderConflict)return list;
+      const rows=fieldActors();
+      for(const a of rows){
+        if(!a||!a.siteId||a.siteId===state.site.id)continue;
+        const rel=window.EarthBorderConflict.relation?.(w,state.site.id,a.siteId);
+        if(rel?.state!=='war')continue;
+        const lp=renderRegion.localPoint(baseTown,a.x,a.y);
+        if(!lp||!Number.isFinite(lp.x)||!Number.isFinite(lp.y))continue;
+        // Only intercept hostile enemy units encroaching near/inside OUR homeland (never cross into their land!)
+        if(Math.hypot(lp.x-12,lp.y-12)>52)continue;
+        list.push({
+          id:`field-${a.siteId}-${a.fieldId}`,
+          kind:'fieldEnemy',
+          name:a.label||'Enemy Intruder',
+          x:lp.x,y:lp.y,
+          hp:a.hp??100,maxHp:100,
+          siteId:a.siteId,fieldId:a.fieldId,
+          ref:a
+        });
+      }
+      return list;
+    }
+
     function stepTrollsInStreet(dt){
       const w=options.getWorld?.();
-      if(!w||!state.site||!window.EarthGiantTrolls)return;
-      const sims=collectLiveSims();
-      const events=window.EarthGiantTrolls.stepLive(w,state.site,dt,{sims});
+      if(!w||!state.site)return;
       let changed=false;
-      for(const ev of events){
-        if(ev.type==='footstep'){
-          spawnTrollBurst(ev.x,ev.y,'footstep');
-        }else if(ev.type==='breach'){
-          spawnTrollBurst(ev.x,ev.y,'breach','TROLL BREACH!');
-          trollShake=Math.max(trollShake,0.55);
-          message(ev.message);
-          changed=true;
-        }else if(ev.type==='simStrike'){
-          spawnTrollBurst(ev.x,ev.y,'simStrike',ev.isPlayer?'SLAMMED!':'SIM SMASHED!');
-          trollShake=Math.max(trollShake,0.48);
-          if(ev.isPlayer){
-            const dx=state.player.x-ev.troll.x,dy=state.player.y-ev.troll.y,d=Math.hypot(dx,dy)||1;
-            const pushed={x:state.player.x+(dx/d)*1.6,y:state.player.y+(dy/d)*1.6};
-            if(traversable(pushed)){state.player.x=pushed.x;state.player.y=pushed.y;}
+      if(window.EarthGiantTrolls){
+        const sims=collectLiveSims();
+        const events=window.EarthGiantTrolls.stepLive(w,state.site,dt,{sims});
+        for(const ev of events){
+          if(ev.type==='footstep'){
+            spawnTrollBurst(ev.x,ev.y,'footstep');
+          }else if(ev.type==='breach'){
+            spawnTrollBurst(ev.x,ev.y,'breach','TROLL BREACH!');
+            trollShake=Math.max(trollShake,0.55);
             message(ev.message);
-          }else if(ev.simId){
-            downedSims.set(ev.simId,visualTime+18);
+            changed=true;
+          }else if(ev.type==='simStrike'){
+            spawnTrollBurst(ev.x,ev.y,'simStrike',ev.isPlayer?'SLAMMED!':'SIM SMASHED!');
+            trollShake=Math.max(trollShake,0.48);
+            if(ev.isPlayer){
+              const dx=state.player.x-ev.troll.x,dy=state.player.y-ev.troll.y,d=Math.hypot(dx,dy)||1;
+              const pushed={x:state.player.x+(dx/d)*1.6,y:state.player.y+(dy/d)*1.6};
+              if(traversable(pushed)){state.player.x=pushed.x;state.player.y=pushed.y;}
+              message(ev.message);
+            }else if(ev.simId){
+              downedSims.set(ev.simId,visualTime+18);
+            }
+            changed=true;
+          }else if(ev.type==='buildingStrike'){
+            spawnTrollBurst(ev.x,ev.y,'buildingStrike',ev.justRuined?'RUINED!':`-${ev.damage} HP`);
+            trollShake=Math.max(trollShake,ev.justRuined?0.62:0.34);
+            if(ev.justRuined)message(ev.message);
+            changed=true;
+          }else if(ev.type==='slam'){
+            spawnTrollBurst(ev.x,ev.y,'buildingStrike');
+            trollShake=Math.max(trollShake,0.22);
           }
-          changed=true;
-        }else if(ev.type==='buildingStrike'){
-          spawnTrollBurst(ev.x,ev.y,'buildingStrike',ev.justRuined?'RUINED!':`-${ev.damage} HP`);
-          trollShake=Math.max(trollShake,ev.justRuined?0.62:0.34);
-          if(ev.justRuined)message(ev.message);
-          changed=true;
-        }else if(ev.type==='slam'){
-          spawnTrollBurst(ev.x,ev.y,'buildingStrike');
-          trollShake=Math.max(trollShake,0.22);
         }
       }
+
+      // Autonomous Guardian Dragons: instinctively scramble WITHOUT a Wizard rider to incinerate
+      // Giant Trolls and ANY enemy intruders attacking this community!
+      if(window.EarthDragonStable?.stepAutonomousDefenders&&state.site.dragonStable?.dragons?.length){
+        const hostileEnemies=collectHostileStreetEnemies(w);
+        const autoRes=window.EarthDragonStable.stepAutonomousDefenders(w,state.site,dt,{
+          time:visualTime,
+          pursuit,
+          enemies:hostileEnemies,
+          onEnemyHit:(target,dmg,dragon)=>{
+            const owner=window.EarthCommunityLife?.lookup?.(w,target.ref?.siteId);
+            const mb=owner?.militaryBase;
+            if(mb?.units){
+              const u=mb.units.find(x=>x.id===target.ref?.fieldId);
+              if(u){
+                u.hp=Math.max(0,(u.hp??100)-dmg);
+                if(u.hp<=0){
+                  mb.units=mb.units.filter(x=>x.id!==u.id);
+                  fieldStamp='';
+                  return {killed:true,message:`${dragon.name} autonomously incinerated encroaching ${target.name}!`};
+                }
+              }
+            }
+            return {killed:false};
+          }
+        });
+        for(const ev of autoRes.events){
+          if(ev.type==='dragonIntercept'){
+            trollFx.push({
+              kind:'callout',x:ev.x,y:ev.y,z:3.0,age:0,life:1.35,
+              text:`${ev.dragon.name} DEFENDING!`,color:'#ffe38c'
+            });
+            changed=true;
+          }else if(ev.type==='dragonFire'){
+            spawnDragonFireBurst(ev.x,ev.y,ev.z,ev.tx,ev.ty,ev.dragon,ev.dealt,ev.killed);
+            trollShake=Math.max(trollShake,ev.killed?0.45:0.18);
+            if(ev.killed)message(ev.message);
+            changed=true;
+          }
+        }
+      }
+
       if(trollShake>0)trollShake=Math.max(0,trollShake-dt*1.9);
       for(let i=trollFx.length-1;i>=0;i--){
         const fx=trollFx[i];
@@ -4809,7 +4916,7 @@
           fx.z+=dt*1.35;
         }
       }
-      if(trackedTrollId&&!dragging&&!pinch){
+      if(trackedTrollId&&!dragging&&!pinch&&window.EarthGiantTrolls){
         const localTrolls=window.EarthGiantTrolls.trollsForSite(w,state.site.id);
         const tr=localTrolls.find(t=>t.id===trackedTrollId)||localTrolls[0];
         if(tr){
@@ -5112,6 +5219,42 @@
       ctx.save();
       for(const fx of trollFx){
         const frac=clamp(fx.age/fx.life,0,1);
+        if(fx.kind==='fireBeam'){
+          const [sx,sy]=screen(fx.x,fx.y,fx.z||2.2);
+          const [ex,ey]=screen(fx.tx,fx.ty,fx.tz||0.95);
+          const alpha=Math.max(0,1-frac*0.88);
+          const dx=ex-sx,dy=ey-sy,len=Math.hypot(dx,dy)||1;
+          const nx=-dy/len,ny=dx/len;
+          const w1=Math.max(2.5,unit*0.18),w2=Math.max(12,unit*0.92)*(0.85+0.25*Math.sin(visualTime*28));
+          ctx.save();
+          ctx.globalAlpha=alpha;
+          const grad=ctx.createLinearGradient(sx,sy,ex,ey);
+          grad.addColorStop(0,'#fffce6');
+          grad.addColorStop(0.28,'#ffcf54');
+          grad.addColorStop(0.68,fx.color||'#ff6e20');
+          grad.addColorStop(1,'rgba(210,32,12,0.18)');
+          ctx.fillStyle=grad;
+          ctx.beginPath();
+          ctx.moveTo(sx+nx*w1,sy+ny*w1);
+          ctx.lineTo(ex+nx*w2,ey+ny*w2);
+          ctx.lineTo(ex-nx*w2,ey-ny*w2);
+          ctx.lineTo(sx-nx*w1,sy-ny*w1);
+          ctx.closePath();
+          ctx.fill();
+          // White-hot inner flame core
+          ctx.strokeStyle='#fffbe0';
+          ctx.lineWidth=Math.max(2,unit*0.20*(1-frac*0.4));
+          ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+          // Impact fireball glow on the enemy
+          const ig=ctx.createRadialGradient(ex,ey,0,ex,ey,Math.max(14,unit*1.25));
+          ig.addColorStop(0,'rgba(255,250,210,0.92)');
+          ig.addColorStop(0.45,'rgba(255,132,36,0.68)');
+          ig.addColorStop(1,'rgba(220,36,12,0)');
+          ctx.fillStyle=ig;
+          ctx.beginPath();ctx.arc(ex,ey,Math.max(14,unit*1.25),0,Math.PI*2);ctx.fill();
+          ctx.restore();
+          continue;
+        }
         const [sx,sy]=screen(fx.x,fx.y,fx.z||0);
         if(fx.kind==='particle'){
           ctx.globalAlpha=Math.max(0,1-frac);
@@ -5184,6 +5327,27 @@
           ctx.beginPath();ctx.roundRect(p.x-tw/2,p.y-30,tw,18,4);ctx.fill();ctx.stroke();
           ctx.fillStyle='#ffd9ce';ctx.textAlign='center';ctx.textBaseline='middle';
           ctx.fillText(tag,p.x,p.y-21);
+        }
+      }
+      // Also render autonomous defending dragons flying out to burn approaching trolls on regional map
+      const autoDragons=window.EarthDragonStable?.getAutonomousPoses?.(state.site)||[];
+      for(const pose of autoDragons){
+        if(!pose.defending)continue;
+        if(unit>=5){
+          const [sx,sy]=screen(pose.x,pose.y,pose.z);
+          window.EarthDragonArt?.drawEnchantedDragon(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,pose.dragon,false,Boolean(pose.breathingFire));
+        }else{
+          const drp=renderRegion.regionalPoint(baseTown,pose.x,pose.y);
+          const dp=v.screen(drp.x,drp.y);
+          if(pose.breathingFire&&pose.fireTarget){
+            const trp=renderRegion.regionalPoint(baseTown,pose.fireTarget.x,pose.fireTarget.y);
+            const tp=v.screen(trp.x,trp.y);
+            ctx.strokeStyle='#ff9a2e';ctx.lineWidth=3.5;
+            ctx.beginPath();ctx.moveTo(dp.x,dp.y);ctx.lineTo(tp.x,tp.y);ctx.stroke();
+          }
+          ctx.fillStyle=pose.dragon.scale||'#e6b85c';
+          ctx.strokeStyle='#fff3b8';ctx.lineWidth=1.8;
+          ctx.beginPath();ctx.arc(dp.x,dp.y,6.5,0,Math.PI*2);ctx.fill();ctx.stroke();
         }
       }
       if(unit>=5)drawTrollFx();
@@ -5377,8 +5541,26 @@
       for(const pose of dragons){
         addItem(pose.x,pose.y,pose.depth,()=>{
           const [sx,sy]=screen(pose.x,pose.y,pose.z);
-          window.EarthDragonArt.drawEnchantedDragon(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,pose.dragon,false);
-        },[2,pose.z+2,2]);
+          window.EarthDragonArt.drawEnchantedDragon(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,pose.dragon,false,Boolean(pose.breathingFire));
+          if(pose.defending&&unit>=9){
+            const tag=pose.breathingFire
+              ? `${pose.dragon.name} · BLAZING FIRE`
+              : `${pose.dragon.name} · INTERCEPTING`;
+            ctx.save();
+            ctx.font='700 10px system-ui,sans-serif';
+            const tw=ctx.measureText(tag).width+12;
+            const bx=clamp(sx-tw/2,8,Math.max(8,width-tw-8));
+            const by=clamp(sy-unit*pose.size*1.18-16,8,Math.max(8,height-28));
+            ctx.fillStyle='rgba(24,14,10,0.88)';
+            ctx.strokeStyle=pose.breathingFire?'#ff9830':'#f0cf72';
+            ctx.lineWidth=1.2;
+            ctx.beginPath();ctx.roundRect(bx,by,tw,17,4);ctx.fill();ctx.stroke();
+            ctx.fillStyle=pose.breathingFire?'#ffe9a8':'#f6e5b8';
+            ctx.textAlign='center';ctx.textBaseline='middle';
+            ctx.fillText(tag,bx+tw/2,by+8.5);
+            ctx.restore();
+          }
+        },[4.5,pose.z+4.5,4.5]);
       }
       if(state.site.growth){
         const g=state.site.growth;
@@ -7185,7 +7367,15 @@
       unit=baseUnit()*zoom;backdropGradient=null;terrainSnapshot=null;dirty=true;schedule();
     }
     function moving(){return Boolean(pressed.size||state.route.length);}
-    function autonomousMotion(){return Boolean(!spectator&&visible&&state.site?.communityLife?.border?.street?.phase==='fight'||activity&&state.site&&!state.placed&&(locals.size||residentActivities.size));}
+    function autonomousMotion(){
+      const w=options.getWorld?.();
+      const hasLocalTrolls=Boolean(w&&state.site&&window.EarthGiantTrolls?.trollsForSite?.(w,state.site.id)?.length);
+      const hasDragons=Boolean(state.site?.dragonStable?.dragons?.length);
+      return Boolean(
+        !spectator&&visible&&(state.site?.communityLife?.border?.street?.phase==='fight'||hasLocalTrolls||hasDragons)||
+        activity&&state.site&&!state.placed&&(locals.size||residentActivities.size)
+      );
+    }
     function activeMotion(){return Boolean(moving()||dragging?.moved||pinch||watchedTravel&&!reduced);}
     function cancelIdle(){if(idleTimer){clearTimeout(idleTimer);idleTimer=0;}}
     function cancelRouteTimer(){if(routeTimer){clearTimeout(routeTimer);routeTimer=0;}}

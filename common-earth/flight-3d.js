@@ -1089,13 +1089,15 @@ function buildEnchantedDragon(palette = {}, rider = {}, textures = null) {
     }
   }
 
-  // 7. Ultra-Detailed 3D Wizard Rider on Ornate Dragon Saddle
+  // 7. Ultra-Detailed 3D Wizard Rider on Ornate Dragon Saddle (hidden for unmounted autonomous dragons)
   const wizardGroup = new THREE.Group();
   wizardGroup.position.set(0, 0.68, -0.32);
+  if (rider === null) wizardGroup.visible = false;
+  const riderObj = rider || {};
 
   const leatherMat = new THREE.MeshStandardMaterial({ color: 0x5c3620, roughness: 0.62, metalness: 0.18 });
   const robeMat = new THREE.MeshStandardMaterial({
-    color: rider.robeColor ? new THREE.Color(rider.robeColor) : new THREE.Color(0xffffff),
+    color: riderObj.robeColor ? new THREE.Color(riderObj.robeColor) : new THREE.Color(0xffffff),
     map: textures?.robeMap || null,
     roughness: 0.58,
     metalness: 0.14
@@ -3090,6 +3092,39 @@ function launch(options = {}) {
   const flyer = mode === 'jet' ? buildFighterJet() : buildEnchantedDragon(dragon, wizard, textures);
   scene.add(flyer.root);
 
+  // Spawn Autonomous Unmounted 3D Companion Guardian Dragons from the Dragon Stable (NO Wizard required!)
+  // They fly on their own free will and aggressively blast fire at Giant Trolls and border intruders!
+  const autonomousDragons = [];
+  const stableRoster = (site?.dragonStable?.dragons || []).filter(d =>
+    d && (!d.homeSiteId || !site?.id || d.homeSiteId === site.id) && (mode === 'jet' || d.id !== dragon.id)
+  );
+  const maxCompanions = isSoftwareGl ? 2 : 4;
+  for (let i = 0; i < Math.min(maxCompanions, stableRoster.length); i++) {
+    const spec = stableRoster[i];
+    const rig = buildEnchantedDragon(spec, null, textures);
+    const initAng = (i / Math.max(1, stableRoster.length)) * Math.PI * 2 + 0.8;
+    const initX = Math.cos(initAng) * 44;
+    const initZ = Math.sin(initAng) * 44;
+    const initY = 26 + i * 5;
+    rig.root.position.set(initX, initY, initZ);
+    scene.add(rig.root);
+    autonomousDragons.push({
+      spec,
+      rig,
+      x: initX,
+      y: initY,
+      z: initZ,
+      yaw: initAng,
+      pitch: 0,
+      roll: 0,
+      orbitAngle: initAng,
+      flapPhase: i * 1.7,
+      fireTimer: 0,
+      fireCooldown: 0.4 + i * 0.35,
+      target: null
+    });
+  }
+
   // Wingtip Luminous Arcane Trail Ribbons (Dragon mode — subtle streaming sky trails!)
   const trailCount = 24;
   const wingTrailMeshes = [];
@@ -4306,6 +4341,144 @@ function launch(options = {}) {
         const stride = Math.sin(elapsed * 10 + i) * 0.5;
         u.legL.rotation.x = stride;
         u.legR.rotation.x = -stride;
+      }
+    }
+
+    // Autonomous 3D Companion Guardian Dragons: fly on their own agency (unmounted, NO Wizard needed!)
+    // Aggressively hunt and blast volumetric dragonfire onto Giant Trolls and homeland intruders!
+    const live3DIntruders = world3D.borderIntruders.filter(u => u && !u.dead);
+    for (let i = 0; i < autonomousDragons.length; i++) {
+      const ad = autonomousDragons[i];
+      if (ad.fireTimer > 0) ad.fireTimer = Math.max(0, ad.fireTimer - dt);
+      if (ad.fireCooldown > 0) ad.fireCooldown = Math.max(0, ad.fireCooldown - dt);
+
+      // Re-pick target if dead or unset, distributing aggressively across threats
+      if (!ad.target || ad.target.dead) {
+        ad.target = live3DIntruders.length ? live3DIntruders[i % live3DIntruders.length] : null;
+      }
+
+      let desiredYaw = ad.yaw;
+      let desiredPitch = 0;
+      let desiredRoll = 0;
+      const wingMult = ad.target ? 1.55 : 1.0;
+
+      if (ad.target) {
+        const t = ad.target;
+        const dx = t.x - ad.x;
+        const dz = t.z - ad.z;
+        const horiz = Math.hypot(dx, dz);
+        const attackAlt = Math.max(16, (t.y || 8) + (t.isTroll ? 12 : 10));
+        const orbitR = t.isTroll ? 28 + (i % 2) * 8 : 22 + (i % 2) * 6;
+
+        if (horiz > orbitR + 18) {
+          // Aggressive fast dive/intercept toward the intruder!
+          const swoopSpd = 64;
+          ad.x += (dx / Math.max(0.01, horiz)) * swoopSpd * dt;
+          ad.z += (dz / Math.max(0.01, horiz)) * swoopSpd * dt;
+          ad.y += (attackAlt - ad.y) * Math.min(1, dt * 2.5);
+          desiredYaw = Math.atan2(-dx, -dz);
+          desiredPitch = Math.max(-0.4, Math.min(0.3, (attackAlt - ad.y) * 0.025));
+          desiredRoll = Math.sin(elapsed * 2 + i) * 0.28;
+          ad.orbitAngle = Math.atan2(ad.z - t.z, ad.x - t.x);
+        } else {
+          // Close aggressive attack orbit + continuous roaring volumetric dragonfire!
+          const dir = i % 2 === 0 ? 1 : -1;
+          ad.orbitAngle += dir * 1.18 * dt;
+          const gx = t.x + Math.cos(ad.orbitAngle) * orbitR;
+          const gz = t.z + Math.sin(ad.orbitAngle) * orbitR;
+          ad.x += (gx - ad.x) * Math.min(1, dt * 3.8);
+          ad.z += (gz - ad.z) * Math.min(1, dt * 3.8);
+          ad.y += ((attackAlt + Math.sin(elapsed * 2.4 + i) * 2.5) - ad.y) * Math.min(1, dt * 3.0);
+
+          // Aim head/body toward target when breathing fire, else along orbit tangent
+          const aimDx = t.x - ad.x;
+          const aimDy = (t.y || 8) - ad.y;
+          const aimDz = t.z - ad.z;
+          const aimHoriz = Math.max(0.01, Math.hypot(aimDx, aimDz));
+          desiredYaw = Math.atan2(-aimDx, -aimDz);
+          desiredPitch = Math.max(-0.55, Math.min(0.25, Math.atan2(aimDy, aimHoriz)));
+          desiredRoll = -dir * 0.34;
+
+          if (ad.fireCooldown <= 0) {
+            ad.fireCooldown = 1.18;
+            ad.fireTimer = 0.72;
+            const dmg = t.isTroll ? 128 : 58;
+            const res = applyProtectiveRepel(t, dmg, 'fire');
+            if (t.isTroll && options.world && site && window.EarthGiantTrolls) {
+              const hit = window.EarthGiantTrolls.attackTroll(options.world, site, t.trollId || t.id, {
+                source: 'dragonFire',
+                damage: 78,
+                dragonName: ad.spec.name,
+                autonomous: true
+              });
+              if (hit?.ok && hit.killed) {
+                showBanner(`${ad.spec.name} (Autonomous) incinerated ${t.shortName}!`);
+              }
+            } else if (res.repelled) {
+              showBanner(`${ad.spec.name} (Autonomous) burned away ${t.name}!`);
+            }
+          }
+        }
+      } else {
+        // Peaceful sanctuary patrol strictly above home community (never enters foreign lands!)
+        ad.orbitAngle += 0.32 * dt;
+        const r = 46 + i * 16;
+        const gx = Math.cos(ad.orbitAngle) * r;
+        const gz = Math.sin(ad.orbitAngle) * r;
+        const gy = 30 + i * 6 + Math.sin(elapsed * 0.9 + i) * 3.5;
+        const vx = gx - ad.x;
+        const vz = gz - ad.z;
+        ad.x += vx * Math.min(1, dt * 2.2);
+        ad.z += vz * Math.min(1, dt * 2.2);
+        ad.y += (gy - ad.y) * Math.min(1, dt * 2.0);
+        desiredYaw = Math.atan2(-vx, -vz);
+        desiredRoll = -0.22;
+      }
+
+      // Smooth angular interpolation
+      let yawDiff = desiredYaw - ad.yaw;
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      ad.yaw += yawDiff * Math.min(1, dt * 5.2);
+      ad.pitch += (desiredPitch - ad.pitch) * Math.min(1, dt * 5.0);
+      ad.roll += (desiredRoll - ad.roll) * Math.min(1, dt * 4.5);
+
+      const rig = ad.rig;
+      rig.root.position.set(ad.x, Math.max(world3D.terrainHeightAt(ad.x, ad.z) + 5, ad.y), ad.z);
+      rig.root.rotation.order = 'YXZ';
+      rig.root.rotation.set(ad.pitch, ad.yaw, ad.roll);
+
+      ad.flapPhase += dt * 5.8 * wingMult;
+      const flap = Math.sin(ad.flapPhase);
+      const flapLag = Math.sin(ad.flapPhase - 0.85);
+      rig.leftWing.shoulder.rotation.z = flap * 0.56 - 0.1;
+      rig.rightWing.shoulder.rotation.z = -flap * 0.56 + 0.1;
+      rig.leftWing.elbow.rotation.z = flapLag * 0.44;
+      rig.rightWing.elbow.rotation.z = -flapLag * 0.44;
+      for (let ti = 0; ti < rig.tailSegments.length; ti++) {
+        rig.tailSegments[ti].rotation.y = Math.sin(elapsed * 4.2 - ti * 0.55 + i) * 0.18;
+      }
+
+      const firingNow = ad.fireTimer > 0;
+      rig.jawPivot.rotation.x = firingNow ? 0.56 : 0.04;
+      rig.fireCone.visible = firingNow;
+      rig.fireConeOuter.visible = firingNow;
+      rig.fireConeInner.visible = firingNow;
+      rig.fireConeUniforms.uTime.value = elapsed + i * 1.3;
+      rig.fireConeUniforms.uIntensity.value = firingNow ? 1.0 : 0.0;
+      rig.magmaMat.emissiveIntensity = firingNow ? 3.2 : 0.5;
+      if (firingNow && ad.target && Math.random() < 0.65) {
+        rig.root.updateMatrixWorld(true);
+        rig.mouthAnchor.getWorldPosition(_v1);
+        const fdx = ad.target.x - _v1.x, fdy = (ad.target.y || 8) - _v1.y, fdz = ad.target.z - _v1.z;
+        const flen = Math.max(0.01, Math.hypot(fdx, fdy, fdz));
+        particles.spawn('fire',
+          _v1.x + (fdx / flen) * 3.5, _v1.y + (fdy / flen) * 3.5, _v1.z + (fdz / flen) * 3.5,
+          (fdx / flen) * 76 + (Math.random() - 0.5) * 8,
+          (fdy / flen) * 76 + (Math.random() - 0.5) * 8,
+          (fdz / flen) * 76 + (Math.random() - 0.5) * 8,
+          { baseScale: 2.1, grow: 2.0, maxLife: 0.45, startColor: 0xfff8d4, endColor: 0xd41c08, opacity: 0.8 }
+        );
       }
     }
 

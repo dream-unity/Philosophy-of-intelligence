@@ -157,9 +157,9 @@
       }
       const intro = make('div');
       intro.append(
-        make('small', built ? 'Sacred Sanctuary · Spiritual Protectors of ' + site.name : 'Not Yet Built'),
+        make('small', built ? 'Sacred Sanctuary · Autonomous Spiritual Protectors of ' + site.name : 'Not Yet Built'),
         make('h3', site.name + ' Dragon Stable'),
-        make('p', 'Dragons are deeply spiritual protectors bound to the soul of ' + site.name + '. They refuse offensive war and will never enter another community\'s lands — soaring freely over home skies, open seas, mountains, and sky-sanctuaries while Wizards channel protective staff thunder only within their originating homeland.')
+        make('p', 'Dragons are deeply spiritual protectors with their own free will and agency bound to the soul of ' + site.name + '. They instinctively scramble on their own — even without a Wizard rider — to aggressively blast Giant Trolls and enemy intruders with continuous dragonfire, while strictly refusing offensive war against other communities.')
       );
       hero.append(preview, intro);
       body.append(hero);
@@ -194,19 +194,23 @@
           siegeSec.append(make('small', `Also besieging across the lands: ${otherTargets}`));
         }
         const siegeActions = make('div', null, 'dragon-actions');
-        if (built && ds.dragons.length && ds.wizards.length && trollSummary.local.length) {
-          const leadD = ds.dragons[0];
-          const leadW = actorIsWizard ? actorId : ds.wizards[0].id;
-          siegeActions.append(
-            btn(`Fly ${leadD.name} vs Giant Trolls`, () => mountDragon({ siteId: site.id, dragonId: leadD.id }, leadW), 'primary-gold'),
-            btn('Strike Giant Troll with Staff Thunder', () => runCmd('dragonAction', {
-              siteId: site.id,
-              action: 'strikeThunder',
-              riderId: leadW,
-              dragonId: leadD.id,
-              target: { kind: 'troll', isTroll: true, trollId: trollSummary.local[0].id, name: trollSummary.local[0].name }
-            }), 'fire-action')
-          );
+        if (built && ds.dragons.length && trollSummary.local.length) {
+          if (ds.wizards.length) {
+            const leadD = ds.dragons[0];
+            const leadW = actorIsWizard ? actorId : ds.wizards[0].id;
+            siegeActions.append(
+              btn(`Fly ${leadD.name} vs Giant Trolls`, () => mountDragon({ siteId: site.id, dragonId: leadD.id }, leadW), 'primary-gold'),
+              btn('Strike Giant Troll with Staff Thunder', () => runCmd('dragonAction', {
+                siteId: site.id,
+                action: 'strikeThunder',
+                riderId: leadW,
+                dragonId: leadD.id,
+                target: { kind: 'troll', isTroll: true, trollId: trollSummary.local[0].id, name: trollSummary.local[0].name }
+              }), 'fire-action')
+            );
+          } else {
+            siegeSec.append(make('small', `${ds.dragons.length} Enchanted Dragon${ds.dragons.length > 1 ? 's are' : ' is'} actively patrolling & blasting Giant Trolls autonomously — no Wizard rider required!`));
+          }
         } else if (trollSummary.local.length) {
           siegeActions.append(
             btn('Rally Town Defenders (Chip Damage)', () => runCmd('trollAction', { siteId: site.id, action: 'militiaStrike', trollId: trollSummary.local[0].id }))
@@ -250,13 +254,18 @@
           label.append(riderSelect);
           secDragons.append(label);
         }
+        const livePoses = DS.getAutonomousPoses?.(site) || [];
         for (const d of ds.dragons) {
           const card = make('article', null, 'dragon-card');
           const head = make('div', null, 'dragon-card-head');
           const homeLabel = d.homeSiteName || site.name;
+          const pose = livePoses.find(p => p.dragon?.id === d.id);
+          const guardStatus = pose?.defending
+            ? `Autonomous Attack: ${pose.targetName || 'Intruder'}!`
+            : 'Autonomous Guardian (No Rider Needed)';
           head.append(
             make('strong', `${d.name} · ${d.lineageTitle}`),
-            make('small', `Protector of ${homeLabel} · Nourishment ${Math.round(d.hunger)}% · Flights ${d.flights || 0} · Sky-Fire ${d.blasts || 0}`)
+            make('small', `${guardStatus} · Protector of ${homeLabel} · Nourishment ${Math.round(d.hunger)}% · Fire Blasts ${d.blasts || 0} · Auto Kills ${d.autonomousKills || 0}`)
           );
           const meter = make('div', null, 'dragon-meter');
           const fill = doc.createElement('i');

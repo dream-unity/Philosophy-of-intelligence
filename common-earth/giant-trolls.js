@@ -691,8 +691,12 @@
       site.funds = (site.funds || 0) + 3;
       const slayer = opts.wizardName && opts.dragonName
         ? opts.wizardName + ' and ' + opts.dragonName
-        : opts.attackerName || (site.name + ' defenders');
-      const msg = 'Colossal Victory! ' + slayer + ' slew ' + troll.name + ' the Giant Troll (' + troll.heightMeters + 'm) defending ' + site.name + '! (+3 funds, +4 trust)';
+        : opts.autonomous && opts.dragonName
+          ? opts.dragonName + ' (acting on its own free will)'
+          : opts.dragonName || opts.attackerName || (site.name + ' defenders');
+      const msg = opts.autonomous && opts.dragonName
+        ? 'Colossal Victory! ' + opts.dragonName + ' instinctively swooped down and incinerated ' + troll.name + ' the Giant Troll (' + troll.heightMeters + 'm) defending ' + site.name + '! (+3 funds, +4 trust)'
+        : 'Colossal Victory! ' + slayer + ' slew ' + troll.name + ' the Giant Troll (' + troll.heightMeters + 'm) defending ' + site.name + '! (+3 funds, +4 trust)';
       record(horde, world.week || 1, msg);
       return { ok: true, troll, dealt, killed: true, hp: 0, maxHp: troll.maxHp, message: msg };
     }
@@ -701,6 +705,8 @@
     let msg;
     if (source === 'wizardThunder') {
       msg = (opts.wizardName || 'Wizard') + '\'s Protective Staff Thunder shattered ' + troll.name + '\'s dark hide for ' + dealt + ' damage! (' + troll.hp + '/' + troll.maxHp + ' HP · ' + pct + '%)';
+    } else if (source === 'dragonFire' && opts.autonomous) {
+      msg = (opts.dragonName || 'Dragon') + ' acted on its own free will and blasted ' + troll.name + ' with blazing dragonfire for ' + dealt + ' damage! (' + troll.hp + '/' + troll.maxHp + ' HP)';
     } else if (source === 'dragonFire') {
       msg = (opts.dragonName || 'Dragon') + '\'s enchanted dragonfire seared ' + troll.name + ' for ' + dealt + ' damage and halted dark regeneration! (' + troll.hp + '/' + troll.maxHp + ' HP)';
     } else if (source === 'jet') {
@@ -765,21 +771,25 @@
       const soldiers = target.militaryBase?.units?.filter(u => u.type === 'soldier')?.length || 0;
       const fort = target.communityLife?.border?.defence?.stage || 0;
 
-      if (dragons > 0 && wizards > 0) {
-        const autoDmg = Math.min(85, 38 + dragons * 18 + wizards * 12);
+      // Dragons instinctively defend their home community on their own free will — NO Wizard required!
+      if (dragons > 0) {
+        const autoDmg = Math.min(240, 85 + dragons * 48 + wizards * 18);
         troll.hp = Math.max(0, troll.hp - autoDmg);
         troll.burnedWeek = week;
         if (troll.hp <= 0) {
           troll.state = 'slain';
           horde.community.totalSlain = (horde.community.totalSlain || 0) + 1;
-          const slayNote = target.name + '\'s guardian dragons and wizards slew ' + troll.name + ' the Giant Troll during the weekly siege!';
+          const leadName = target.dragonStable.dragons[0]?.name || 'Guardian dragons';
+          const slayNote = wizards > 0
+            ? target.name + '\'s guardian dragons and wizards incinerated ' + troll.name + ' the Giant Troll during the weekly siege!'
+            : leadName + ' and ' + target.name + '\'s autonomous guardian dragons fiercely incinerated ' + troll.name + ' the Giant Troll without needing a rider!';
           record(horde, week, slayNote);
           reports.push({ site: target, text: slayNote });
           continue;
         }
       }
 
-      const mitigation = Math.min(0.65, dragons * 0.22 + soldiers * 0.06 + fort * 0.12);
+      const mitigation = Math.min(0.75, dragons * 0.28 + soldiers * 0.06 + fort * 0.12);
       const pop = target.population || 0;
       let killedHumans = 0;
       if (pop > 2) {

@@ -223,6 +223,101 @@ test('Giant Trolls are hard to kill with militia, but Dragons and originating-co
   assert.ok(sim.state.trollHorde.community.totalSlain >= 1);
 });
 
+test('Dragons act on their own free will WITHOUT any Wizard rider to aggressively intercept and incinerate Giant Trolls', async () => {
+  const ctx = loadSimEnv();
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Mombasa', region: 'Kenya', lat: -4.0381, lon: 39.688, water: false });
+  const site = sim.active();
+  site.funds = 200;
+  site.materials = 100;
+  site.food = 100;
+
+  assert.equal((await sim.perform('buildFreeBuilding', { siteId: site.id, kind: 'dragonStable' })).ok, true);
+  assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'solar', name: 'Aurelia' })).ok, true);
+  assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'solstice', name: 'Pyralis' })).ok, true);
+
+  const ds = ctx.EarthDragonStable.ensure(site);
+  assert.equal(ds.wizards.length, 0, 'Confirm ZERO Wizards exist — dragons must defend purely on their own agency');
+  assert.equal(ds.dragons.length, 2);
+
+  const localTrolls = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
+  assert.ok(localTrolls.length >= 2);
+
+  // Step real-time autonomous defender AI: dragons must scramble out, blast fire continuously, and SLAY both trolls!
+  let fireEvents = 0;
+  let interceptEvents = 0;
+  let sawBreathingPose = false;
+  for (let step = 0; step < 120; step++) {
+    const res = ctx.EarthDragonStable.stepAutonomousDefenders(sim.state, site, 0.25, { time: step * 0.25 });
+    if (res.poses.some(p => p.breathingFire && p.defending)) sawBreathingPose = true;
+    for (const ev of res.events) {
+      if (ev.type === 'dragonIntercept') interceptEvents++;
+      if (ev.type === 'dragonFire') fireEvents++;
+    }
+    if (ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length === 0) break;
+  }
+
+  assert.ok(interceptEvents >= 2, `Expected dragons to scramble autonomously, got ${interceptEvents}`);
+  assert.ok(fireEvents >= 6, `Expected relentless autonomous fire blasts, got ${fireEvents}`);
+  assert.equal(sawBreathingPose, true, 'Defending dragons must expose breathingFire=true pose for rendering');
+  assert.equal(ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length, 0, 'Autonomous dragons must completely destroy invading Giant Trolls without any Wizard');
+  assert.ok(ds.dragons.some(d => (d.autonomousKills || 0) >= 1), 'Dragon stats must record autonomous kills');
+  assert.ok((ds.autonomousDefenses || 0) >= 6);
+  assert.equal(ctx.EarthDragonStable.valid(site.dragonStable), true, 'Save validation must pass after autonomous combat');
+});
+
+test('Autonomous dragons aggressively torch and repel hostile rival war expeditions & border intruders without attacking peaceful foreign communities', async () => {
+  const ctx = loadSimEnv();
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Lamu', region: 'Kenya', lat: -2.2717, lon: 40.902, water: false });
+  const site = sim.active();
+  site.funds = 200;
+  site.materials = 100;
+  site.food = 100;
+
+  // Clear trolls so this test isolates rival border intruders & foreign communities
+  for (const t of sim.state.trollHorde.trolls) { t.hp = 0; t.state = 'slain'; }
+
+  assert.equal((await sim.perform('buildFreeBuilding', { siteId: site.id, kind: 'dragonStable' })).ok, true);
+  assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'tempest', name: 'Vaelor' })).ok, true);
+  const ds = ctx.EarthDragonStable.ensure(site);
+  assert.equal(ds.wizards.length, 0);
+
+  // Add a peaceful neighbouring community — dragons MUST NOT attack it!
+  const peaceful = { id: 'peaceful-neighbour', name: 'Kilwa', population: 20, communityLife: { border: {} } };
+  sim.state.sites.push(peaceful);
+  const peacefulCheck = ctx.EarthDragonStable.autonomousDefend(sim.state, site);
+  assert.equal(peacefulCheck.defended, false, 'Dragons must never attack peaceful foreign communities');
+
+  // Now launch a hostile rival war expedition marching against our community + a hostile street fighter
+  const raiderSite = {
+    id: 'hostile-raider',
+    name: 'Iron Ridge',
+    population: 18,
+    communityLife: {
+      border: {
+        campaign: { against: site.id, phase: 'fight', strength: 4, initial: 4, progress: 1, casualties: 0, seed: 0.9 }
+      }
+    }
+  };
+  sim.state.sites.push(raiderSite);
+  site.communityLife ||= {};
+  site.communityLife.border ||= {};
+  site.communityLife.border.street = { phase: 'fight', hp: 100, guard: { key: 'raider-1', name: 'Iron Ridge Raider' } };
+
+  // Autonomous weekly defense (via tick) + real-time defense must scorch & rout BOTH threats with ZERO Wizards!
+  const def1 = ctx.EarthDragonStable.autonomousDefend(sim.state, site);
+  assert.equal(def1.defended, true);
+  assert.ok(def1.blasts >= 1);
+
+  for (let i = 0; i < 40; i++) {
+    ctx.EarthDragonStable.stepAutonomousDefenders(sim.state, site, 0.25, { time: i * 0.25 });
+  }
+  assert.equal(site.communityLife.border.street, undefined, 'Autonomous dragon must drive off hostile street border intruder');
+  assert.equal(raiderSite.communityLife.border.campaign.phase, 'return', 'Autonomous dragon must burn back and rout invading rival war campaign');
+  assert.equal(peaceful.population, 20, 'Peaceful foreign community remains completely untouched');
+});
+
 test('Saves containing trollHorde validate cleanly and index.html loads updated giant troll assets with valid SHA-256 hashes', async () => {
   const ctx = loadSimEnv();
   const sim = ctx.CommonEarthSim.create({ storage: null });
@@ -230,7 +325,7 @@ test('Saves containing trollHorde validate cleanly and index.html loads updated 
   assert.equal(ctx.EarthGiantTrolls.valid(sim.state.trollHorde), true);
 
   const html = fs.readFileSync(path.join(ROOT, 'common-earth/index.html'), 'utf8');
-  for (const asset of ['dragon.css', 'giant-trolls.js', 'simulation.js', 'street.js', 'dragon-ui.js', 'flight-3d.js', 'app.js']) {
+  for (const asset of ['dragon.css', 'dragon-stable.js', 'giant-trolls.js', 'simulation.js', 'street.js', 'dragon-ui.js', 'flight-3d.js', 'app.js']) {
     const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'common-earth', asset))).digest('hex').slice(0, 12);
     assert.ok(html.includes(`${asset}?v=${hash}`), `Expected ${asset}?v=${hash} in common-earth/index.html`);
   }
