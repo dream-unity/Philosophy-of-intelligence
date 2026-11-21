@@ -357,5 +357,91 @@ test('map mounting uses the played wizard, accepts a chosen rider, and enforces 
   site.dragonStable.wizards = [];
   await ui.mountDragon(target);
   assert.match(notices.at(-1),/Train a Wizard/);
+  dragon.hunger = 90;
+  site.dragonStable.wizards.push(wizard);
+  ctx.EarthDragonStable.releaseDragon(sim.state,site,dragon.id);
+  await ui.mountDragon(target,wizard.id);
+  assert.match(notices.at(-1),/Exploring in the wild/);
   assert.equal(launches.length,3);
+});
+
+test('a released dragon forages for itself, can choose home and can leave again after a save reload', async () => {
+  const ctx = loadCommonEarthEnv();
+  let now = 1800000000000;
+  ctx.Date = class extends Date { static now() { return now; } };
+  let sim = ctx.CommonEarthSim.create({storage:null});
+  sim.found({name:'Stone Town',lat:-6.16,lon:39.19,water:false},'Dragon Quay');
+  const ds = ctx.EarthDragonStable;
+  const site = sim.active();
+  site.funds = site.food = site.materials = 70;
+  const action = (name, data={}) => sim.perform('dragonAction',{siteId:site.id,action:name,...data});
+  assert.ok((await sim.perform('buildFreeBuilding',{siteId:site.id,kind:'dragonStable'})).ok);
+  assert.ok((await action('summon',{name:'Aurelia'})).ok);
+  assert.ok((await action('trainWizard',{personId:'steward'})).ok);
+  const id = site.dragonStable.dragons[0].id;
+  const ref = {dragonId:id};
+  const dragon = () => sim.active().dragonStable.dragons[0];
+  const legacy = JSON.stringify(sim.state);
+  assert.ok(ctx.CommonEarthSim.readSave(legacy));
+  assert.ok(ds.canFlyDragon(site,'steward',id).ok);
+  assert.equal((await action('release',{...ref,siteId:'missing'})).ok,false);
+  assert.ok((await action('release',ref)).ok);
+  assert.equal((await action('release',ref)).ok,false);
+  assert.equal((await action('feed',ref)).ok,false);
+  assert.equal((await action('blastFire',{...ref,riderId:'steward'})).ok,false);
+  assert.equal((await action('recordFlight',{...ref,riderId:'steward'})).ok,false);
+  assert.equal(ds.canFlyDragon(site,'steward',id).ok,false);
+  const lifted = ds.wildPose(dragon(),now);
+  const moving = ds.wildPose(dragon(),now+7000);
+  assert.ok(Math.hypot(lifted.x-moving.x,lifted.y-moving.y)>1);
+
+  const saved = JSON.stringify(sim.state), restored = ctx.CommonEarthSim.readSave(saved);
+  assert.ok(restored);
+  sim.destroy(); sim = ctx.CommonEarthSim.create({snapshot:saved,storage:null});
+  assert.deepEqual(ds.wildPose(dragon(),now+7000),moving);
+  const corrupted=JSON.parse(saved);
+  corrupted.sites[0].dragonStable.dragons[0].freedom.activity='invalid';
+  assert.equal(ctx.CommonEarthSim.readSave(JSON.stringify(corrupted)),null);
+  const beforeForecast=JSON.stringify(dragon());
+  sim.forecastNext();
+  assert.equal(JSON.stringify(dragon()),beforeForecast);
+
+  dragon().hunger=28;
+  const initialStock=sim.active().dragonStable.foodStock;
+  const activities=new Set();
+  let foraged=false;
+  for (let i=0; i<180 && ds.away(dragon()); i++) {
+    const old=dragon().hunger;
+    now+=13000;
+    const result=await sim.perform('production',sim.state.productionSerial||0,()=>true);
+    assert.ok(result.ok,result.message);
+    foraged ||= dragon().hunger>old;
+    activities.add(dragon().freedom.activity);
+  }
+  assert.ok(foraged,'The dragon gathered food without a keeper');
+  assert.ok(activities.has('forage') && activities.has('return') && activities.has('home'));
+  assert.equal(sim.active().dragonStable.foodStock,initialStock);
+  assert.ok(ds.canFlyDragon(sim.active(),'steward',id).ok);
+  assert.ok(sim.active().dragonStable.log.some(e=>e.text.includes('chose to settle back')));
+  for(let i=0;i<100 && !ds.away(dragon());i++){
+    const r=await sim.perform('advance');assert.ok(r.ok,r.message);
+  }
+  assert.ok(ds.away(dragon()),'A returned dragon can later leave on its own');
+  assert.equal(dragon().id,id);
+  sim.destroy();
+});
+
+test('dragons without a standing stable can continue to live wild and never return to a missing perch',()=>{
+  const ctx=loadCommonEarthEnv(),ds=ctx.EarthDragonStable;
+  const site={id:'hill',freeBuildings:[{kind:'dragonStable',x:12,y:3}],food:20,funds:20};
+  const world={week:1};
+  const dragon=ds.summonDragon(world,site,'solar','Alba').dragon;
+  ds.releaseDragon(world,site,dragon.id);
+  site.freeBuildings=[];
+  for(let week=2;week<35;week++){
+    world.week=week;
+    ds.tick(world,site,1);
+    assert.ok(ds.away(dragon));
+    assert.notEqual(dragon.freedom.activity,'return');
+  }
 });

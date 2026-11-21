@@ -8,7 +8,7 @@
     const dialog = doc.getElementById('dragon-stable-dialog');
     const body = doc.getElementById('dragon-stable-body');
     const picker = doc.getElementById('dragon-rider-dialog');
-    let mounting = false;
+    let mounting = false, flight = null;
     if (!dialog || !body || !root.EarthDragonStable) return null;
 
     const DS = root.EarthDragonStable;
@@ -25,6 +25,7 @@
       return b;
     };
 
+    const updateCards = new Map();
     let activeSiteId = '';
     let selectedLineage = DS.LINEAGES[0].id;
     let selectedTargetKind = 'fun';
@@ -66,6 +67,7 @@
       const ds = DS.ensure(site);
       const dragon = ds.dragons.find(d => d.id === target.dragonId);
       if (!dragon) { flightMessage('This dragon is no longer in the stable.', true); return; }
+      if (DS.away(dragon)) { flightMessage(dragon.name + ' · ' + DS.lifeDescription(dragon)); return; }
       const actor = activeActorId(site);
       if (!riderId && DS.isWizard(site, actor)) riderId = actor;
       if (!riderId && ds.wizards.length === 1) riderId = ds.wizards[0].id;
@@ -88,17 +90,28 @@
           await import(doc.getElementById('flight-engine').src);
           if (doc.hidden || (sheet && !sheet.open) || root.EarthFlight3D.isOpen()) return;
         }
+        const current = root.EarthCommunityLife.lookup(sim.state,site.id);
+        const ready = DS.canFlyDragon(current,wizard.id,dragon.id);
+        if (!ready.ok) { flightMessage(ready.reason,true); return; }
         const launched = root.EarthFlight3D.launch({
-          mode: 'dragon', site, world: sim.state, dragon, wizard, origin: target,
+          mode: 'dragon', site:current, world:sim.state, dragon:ready.dragon, wizard:ready.wizard, origin:target,
           evening: Boolean(root.EarthDayClock?.read?.(sim.state)?.night),
           onFireHit: hit => sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.()),
           onExit: stats => {
+            flight = null;
+            const current = root.EarthCommunityLife.lookup(sim.state,site.id);
+            const riding = current?.dragonStable?.dragons.find(d=>d.id===dragon.id);
+            if (!riding || DS.away(riding)) {
+              notify(dragon.name + ' has left to live in the wild.');
+              return;
+            }
             sim.perform('dragonAction', { siteId: site.id, action: 'recordFlight', riderId: wizard.id, dragonId: dragon.id, stats }).then(() => onUpdated?.());
             notify(wizard.name + ' and ' + dragon.name + ' returned from flight (' + Math.round(stats.distanceFlown) + ' m flown).');
             doc.getElementById('street-canvas')?.focus({preventScroll:true});
           }
         });
         if (!launched) { flightMessage('Dragon flight could not start on this device.', true); return; }
+        flight = {siteId:site.id, dragonId:dragon.id};
         if (picker.open) picker.close();
         if (dialog.open) dialog.close();
         enterStreet?.();
@@ -120,6 +133,7 @@
       const actorName = root.EarthAgency?.identity?.(site, actorId)?.name || actorId;
       const actorIsWizard = DS.isWizard(site, actorId);
 
+      updateCards.clear();
       body.replaceChildren();
       dialog.querySelector('[data-mount-status]')?.remove();
 
@@ -129,13 +143,13 @@
       preview.width = 240; preview.height = 156;
       const ctx = preview.getContext('2d');
       if (ctx && root.EarthDragonArt) {
-        root.EarthDragonArt.drawStable(ctx, 120, 96, 30, false, performance.now() / 1000, Math.max(1, ds.dragons.length));
+        root.EarthDragonArt.drawStable(ctx, 120, 96, 30, false, performance.now() / 1000, ds.dragons.filter(d=>!DS.away(d)).length);
       }
       const intro = make('div');
       intro.append(
         make('small', built ? 'Sanctuary Active · Unrestricted Sky Access' : 'Not Yet Built'),
         make('h3', site.name + ' Dragon Stable'),
-        make('p', 'Raise magical enchanted dragons, train Wizards to fly them anywhere across the 3D sky, assign keepers to replenish dragon food, and command dragonfire against enemies, buildings, or mid-flight for fun.')
+        make('p', 'Raise dragons, train wizard riders, and assign stable keepers. Release a dragon to let it choose where to go and whether to come home.')
       );
       hero.append(preview, intro);
       body.append(hero);
@@ -181,6 +195,7 @@
             make('strong', `${d.name} · ${d.lineageTitle}`),
             make('small', `Nourishment ${Math.round(d.hunger)}% · Flights ${d.flights || 0} · Fire Blasts ${d.blasts || 0}`)
           );
+          const residence = make('p', DS.lifeDescription(d));
           const meter = make('div', null, 'dragon-meter');
           const fill = doc.createElement('i');
           fill.style.width = `${Math.max(4, Math.round(d.hunger))}%`;
@@ -205,8 +220,29 @@
             runCmd('dragonAction', { siteId: site.id, action: 'blastFire', riderId: riderId || actorId, dragonId: d.id, target });
           }, 'fire-action');
 
-          actions.append(flyBtn, feedBtn, funFireBtn, strikeBtn);
-          card.append(head, meter, actions);
+          const release = btn('Release ' + d.name + ' into the wild', () =>
+            runCmd('dragonAction', {siteId:site.id, action:'release', dragonId:d.id}));
+          const find = btn('Find ' + d.name + ' on the map', () => {
+            if (dialog.open) dialog.close();
+            enterStreet?.();
+            if (street?.()?.findWildDragon?.(site.id,d.id)) {
+              const canvas = doc.getElementById('street-canvas');
+              canvas?.scrollIntoView({block:'center'});
+              canvas?.focus({preventScroll:true});
+            } else notify(d.name + ' has moved. Check the stable for the latest sighting.');
+          });
+          const sync = dragon => {
+            residence.textContent = DS.lifeDescription(dragon);
+            head.lastChild.textContent = 'Nourishment '+Math.round(dragon.hunger)+'% · Flights '+(dragon.flights||0)+' · Fire Blasts '+(dragon.blasts||0);
+            fill.style.width = Math.max(4,Math.round(dragon.hunger))+'%';
+            const wild = DS.away(dragon);
+            for (const control of [flyBtn,feedBtn,funFireBtn,strikeBtn,release]) control.hidden = wild;
+            find.hidden = !wild;
+          };
+          updateCards.set(d.id,sync);
+          actions.append(flyBtn, release, find, feedBtn, funFireBtn, strikeBtn);
+          sync(d);
+          card.append(head, residence, meter, actions);
           secDragons.append(card);
         }
       }
@@ -323,6 +359,15 @@
       if (!dialog.open) dialog.showModal();
     }
 
+    sim.subscribe?.(() => {
+      if (flight) {
+        const site = root.EarthCommunityLife.lookup(sim.state,flight.siteId);
+        const d = site?.dragonStable?.dragons.find(d=>d.id===flight.dragonId);
+        if (!d || DS.away(d)) root.EarthFlight3D?.close();
+      }
+      if (!dialog.open) return;
+      for (const dragon of currentSite()?.dragonStable?.dragons || []) updateCards.get(dragon.id)?.(dragon);
+    });
     return { open, render, mountDragon };
   }
 

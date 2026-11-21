@@ -388,7 +388,7 @@
       !site.freeBuildings.every(fb=>recordLike(fb)&&shortName(fb.id)&&Object.hasOwn(BUILDINGS,fb.kind)&&Number.isFinite(fb.x)&&Number.isFinite(fb.y))))return false;
     if(site.playerHouses!=null&&(!Array.isArray(site.playerHouses)||site.playerHouses.length>200||
       !site.playerHouses.every(ph=>recordLike(ph)&&shortName(ph.id)&&Number.isFinite(ph.x)&&Number.isFinite(ph.y)&&integer(ph.places,1,24))))return false;
-    if(root.EarthDragonStable&&!root.EarthDragonStable.valid(site.dragonStable))return false;
+    if(root.EarthDragonStable&&!root.EarthDragonStable.valid(site))return false;
     if(root.EarthNightlife?.validCafe&&!root.EarthNightlife.validCafe(site.cafeState))return false;
     if(root.EarthPursuits && !root.EarthPursuits.valid(site))return false;
     if(site.lastFishingWeek!=null && !integer(site.lastFishingWeek,0,world.week))return false;
@@ -1893,7 +1893,7 @@
       for(const site of districts){
         for(const note of root.EarthTownCentre?.tick(turn,site)||[])event(note,site,'arrivals');
         for(const note of root.EarthHousing?.tick(turn,site)||[])event(note,site);
-        if(root.EarthDragonStable&&root.EarthDragonStable.hasStable(site)){
+        if(root.EarthDragonStable&&(site.dragonStable?.dragons?.length||root.EarthDragonStable.hasStable(site))){
           for(const note of root.EarthDragonStable.tick(turn,site,1)||[])event(note,site);
         }
       }
@@ -2474,6 +2474,7 @@
       const productionStarted=root.EarthPerformance?.now();
       for(const site of [...world.sites,...world.communityLife.outposts]){
         root.EarthDistrictGrowth.settle(world,site);
+        root.EarthDragonStable?.decideFreely(world,site,expected+1);
         root.EarthTownCentre?.productionReview(world,site);
         const era=developRegionalCouncil(world,site);
         if(era)site.growth.history[0].events.push(era);
@@ -2519,18 +2520,19 @@
         return res.ok?complete(res.message,site):res;
       }),
       dragonAction:guarded(req=>{
-        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        const site=req?.siteId ? root.EarthCommunityLife?.lookup?.(world,req.siteId) : current();
         const ds=root.EarthDragonStable;
         if(!site||!ds)return reject('Dragon Stable is unavailable.');
         let res;
         if(req?.action==='summon')res=ds.summonDragon(world,site,req.lineageId,req.name);
+        else if(req?.action==='release')res=ds.releaseDragon(world,site,req.dragonId);
         else if(req?.action==='trainWizard')res=ds.trainWizard(world,site,req.personId);
         else if(req?.action==='createWizard')res=ds.createNewWizard(world,site,req.name);
         else if(req?.action==='assignWorker')res=ds.assignWorker(world,site,req.personId);
         else if(req?.action==='replenishFood')res=ds.replenishLarder(world,site,req.amount||4);
         else if(req?.action==='feed')res=ds.feedDragon(world,site,req.dragonId);
         else if(req?.action==='blastFire')res=ds.blastFire(world,site,req.riderId||req.actorId,req.dragonId,req.target||{kind:req.kind||'fun',name:req.name,id:req.id,siteId:req.targetSiteId});
-        else if(req?.action==='recordFlight'){ds.recordFlight(world,site,req.riderId||req.actorId,req.dragonId,req.stats||{maxAltitude:req.maxAltitude,distanceFlown:req.distance});res={ok:true,message:'Flight logged.'};}
+        else if(req?.action==='recordFlight')res=ds.recordFlight(world,site,req.riderId||req.actorId,req.dragonId,req.stats||{maxAltitude:req.maxAltitude,distanceFlown:req.distance})?{ok:true,message:'Flight logged.'}:reject('This dragon and rider are unavailable.');
         else if(req?.action==='tick'){ds.tick(world,site,req.stepCount||1);res={ok:true,message:'Dragon stable updated.'};}
         else res=reject('Choose a Dragon Stable action.');
         return res?.ok?complete(res.message,site,req?.action!=='recordFlight'&&req?.action!=='tick'):(res||reject('Dragon action failed.'));
