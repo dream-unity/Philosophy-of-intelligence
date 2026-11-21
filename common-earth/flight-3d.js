@@ -2932,6 +2932,10 @@ function createOverlayDom() {
       <div class="flight-reticle-ring"></div>
       <div class="flight-reticle-dot"></div>
     </div>
+    <div class="flight-touch-stick" id="f3d-touch-stick" hidden aria-hidden="true">
+      <div class="flight-touch-stick-deadzone"></div>
+      <div class="flight-touch-stick-knob" id="f3d-touch-knob"></div>
+    </div>
     <div class="flight-target-banner" id="f3d-target" hidden></div>
     <div class="flight-banner" id="f3d-banner" hidden></div>
 
@@ -2944,11 +2948,12 @@ function createOverlayDom() {
           <button type="button" class="flight-btn" id="f3d-btn-hover">Hover (X)</button>
           <button type="button" class="flight-btn" id="f3d-btn-land">Land / Perch (G)</button>
           <button type="button" class="flight-btn" id="f3d-btn-roll">Roll (R)</button>
+          <button type="button" class="flight-btn" id="f3d-btn-feel" title="Cycle touch & steering sensitivity (B)">Feel: Smooth (B)</button>
           <button type="button" class="flight-btn fire-btn" id="f3d-btn-fire">Blast Fire (F)</button>
           <button type="button" class="flight-btn thunder-btn" id="f3d-btn-thunder">Protective Thunder (Z)</button>
         </div>
         <div class="flight-keys-hint" id="f3d-keys-hint">
-          Z Protective Staff Thunder · F Dragonfire · Drag Sky · W/S Pitch · A/D Bank · Space Flap · Shift Dash · G Perch · N Waypoint · H Hide
+          Drag Gently to Glide & Bank · B Sensitivity · Z Protective Thunder · F Dragonfire · W/S Pitch · A/D Bank · Space Flap · Shift Dash · G Perch
         </div>
       </div>
     </div>
@@ -3248,12 +3253,38 @@ function launch(options = {}) {
   const btnHover = document.getElementById('f3d-btn-hover');
   const btnLand = document.getElementById('f3d-btn-land');
   const btnRoll = document.getElementById('f3d-btn-roll');
+  const btnFeel = document.getElementById('f3d-btn-feel');
   const btnFire = document.getElementById('f3d-btn-fire');
   const btnThunder = document.getElementById('f3d-btn-thunder');
   const btnCam = document.getElementById('f3d-camera-btn');
   const btnSky = document.getElementById('f3d-sky-btn');
   const btnLaunch = document.getElementById('f3d-launch-btn');
   const btnExit = document.getElementById('f3d-exit-btn');
+  const elTouchStick = document.getElementById('f3d-touch-stick');
+  const elTouchKnob = document.getElementById('f3d-touch-knob');
+
+  const FEEL_PRESETS = [
+    { id: 'smooth', label: 'Smooth', sensitivity: 0.78, expo: 0.55 },
+    { id: 'standard', label: 'Standard', sensitivity: 1.0, expo: 0.48 },
+    { id: 'agile', label: 'Agile', sensitivity: 1.25, expo: 0.36 }
+  ];
+  let feelIndex = 0;
+  try {
+    const savedFeel = window.localStorage?.getItem('common-earth-flight-feel');
+    const foundIdx = FEEL_PRESETS.findIndex(f => f.id === savedFeel);
+    if (foundIdx >= 0) feelIndex = foundIdx;
+  } catch {}
+  function syncFeelButton() {
+    if (!btnFeel) return;
+    btnFeel.textContent = `Feel: ${FEEL_PRESETS[feelIndex].label} (B)`;
+  }
+  function cycleFeelPreset() {
+    feelIndex = (feelIndex + 1) % FEEL_PRESETS.length;
+    syncFeelButton();
+    try { window.localStorage?.setItem('common-earth-flight-feel', FEEL_PRESETS[feelIndex].id); } catch {}
+    showBanner(`Flight Sensitivity: ${FEEL_PRESETS[feelIndex].label} — drag gently anywhere in the sky to glide smoothly.`, 2.4);
+  }
+  syncFeelButton();
 
   applySkyPreset(skyIndex);
 
@@ -3704,7 +3735,7 @@ function launch(options = {}) {
     if (destroyed) return;
     audio.ensureStarted();
     const k = e.key.toLowerCase();
-    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'w', 'a', 's', 'd', 'q', 'e', 'f', 'x', 'r', 'v', 't', 'g', 'h', 'n', 'z', 'shift'].includes(k)) {
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'w', 'a', 's', 'd', 'q', 'e', 'f', 'x', 'r', 'v', 't', 'g', 'h', 'n', 'z', 'b', 'shift'].includes(k)) {
       e.preventDefault();
     }
     if (k === 'escape') { e.preventDefault(); close(); return; }
@@ -3713,6 +3744,7 @@ function launch(options = {}) {
     if (k === 'h') { toggleDock(); return; }
     if (k === 'g') { toggleLandPerch(); return; }
     if (k === 'n') { cycleWaypoint(); return; }
+    if (k === 'b') { cycleFeelPreset(); return; }
     if (k === 'z' && mode === 'dragon') { triggerThunderStrike(); return; }
     if (k === 'r') { touchState.rollPulse = true; return; }
     if ((k === ' ' || k === 'shift') && !keys.has(k) && mode === 'dragon') audio.playWingFlap(k === 'shift');
@@ -3726,33 +3758,82 @@ function launch(options = {}) {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
   }
 
-  // Smooth mouse/touch drag-anywhere sky steering + tap to breathe protective/joyful dragonfire
-  let steering = null, touchYaw = 0, touchPitch = 0, tapFire = false;
+  // Ergonomic floating analog touch/trackpad sky steering with deadzone, non-linear precision curve & floating origin follow
+  const STICK_DEADZONE = 14;
+  function currentStickRadius() {
+    return Math.max(105, Math.min(165, Math.min(window.innerWidth, window.innerHeight) * 0.22));
+  }
+  let steering = null;
+  let touchSteerTargetX = 0, touchSteerTargetY = 0;
+  let touchSteerSmoothX = 0, touchSteerSmoothY = 0;
+  let tapFire = false;
+
+  function renderTouchStickVisual(cx, cy, radius, knobDx, knobDy, visible) {
+    if (!elTouchStick || !elTouchKnob) return;
+    elTouchStick.hidden = !visible;
+    if (!visible) return;
+    const visualR = Math.min(radius, 84);
+    elTouchStick.style.width = `${visualR * 2}px`;
+    elTouchStick.style.height = `${visualR * 2}px`;
+    elTouchStick.style.left = `${cx}px`;
+    elTouchStick.style.top = `${cy}px`;
+    const scale = visualR / Math.max(1, radius);
+    elTouchKnob.style.transform = `translate(calc(-50% + ${(knobDx * scale).toFixed(1)}px), calc(-50% + ${(-knobDy * scale).toFixed(1)}px))`;
+  }
+
   const onCanvasDown = e => {
     audio.ensureStarted();
     if (steering || e.button !== 0) return;
-    steering = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+    const radius = currentStickRadius();
+    steering = { id: e.pointerId, x: e.clientX, y: e.clientY, radius, moved: false, startedAt: performance.now() };
+    touchSteerTargetX = 0;
+    touchSteerTargetY = 0;
     try { activeCanvas.setPointerCapture?.(e.pointerId); } catch {}
   };
   const onCanvasMove = e => {
     if (steering?.id !== e.pointerId) return;
-    const dx = e.clientX - steering.x, dy = steering.y - e.clientY;
-    if (!steering.moved && Math.hypot(dx, dy) < 9) return;
+    const dx = e.clientX - steering.x;
+    const dy = steering.y - e.clientY; // Upward drag = positive climb
+    const dist = Math.hypot(dx, dy);
+    if (!steering.moved && dist < STICK_DEADZONE) return;
     steering.moved = true;
-    touchYaw = Math.max(-1, Math.min(1, dx / 72));
-    touchPitch = Math.max(-1, Math.min(1, dy / 72));
+
+    const preset = FEEL_PRESETS[feelIndex] || FEEL_PRESETS[0];
+    const shaped = typeof Physics.shapeControlInput === 'function'
+      ? Physics.shapeControlInput(dx, dy, {
+          deadzone: STICK_DEADZONE,
+          radius: steering.radius,
+          expo: preset.expo,
+          sensitivity: preset.sensitivity
+        })
+      : { x: Math.max(-1, Math.min(1, dx / steering.radius)), y: Math.max(-1, Math.min(1, dy / steering.radius)), clampedDx: dx, clampedDy: dy, excessX: 0, excessY: 0 };
+
+    // Floating-origin pull: if finger drags beyond stick rim, smoothly glide anchor behind it so reversing is instant
+    if (Math.abs(shaped.excessX) > 0.01 || Math.abs(shaped.excessY) > 0.01) {
+      steering.x += shaped.excessX * 0.85;
+      steering.y -= shaped.excessY * 0.85;
+    }
+
+    touchSteerTargetX = shaped.x;
+    touchSteerTargetY = shaped.y;
+    renderTouchStickVisual(steering.x, steering.y, steering.radius, shaped.clampedDx, shaped.clampedDy, true);
   };
   const onCanvasUp = e => {
     if (steering?.id !== e.pointerId) return;
-    const wasTap = e.type === 'pointerup' && !steering.moved;
+    const elapsedTap = performance.now() - (steering.startedAt || 0);
+    const wasTap = e.type === 'pointerup' && !steering.moved && elapsedTap < 300;
     steering = null;
-    touchYaw = touchPitch = 0;
+    touchSteerTargetX = 0;
+    touchSteerTargetY = 0;
+    renderTouchStickVisual(0, 0, 120, 0, 0, false);
     if (wasTap) tapFire = true;
   };
   const releaseInputs = () => {
     keys.clear();
     steering = null;
-    touchYaw = touchPitch = 0;
+    touchSteerTargetX = touchSteerTargetY = 0;
+    touchSteerSmoothX = touchSteerSmoothY = 0;
+    renderTouchStickVisual(0, 0, 120, 0, 0, false);
     tapFire = touchState.fire = touchState.flap = touchState.dash = touchState.hover = touchState.rollPulse = false;
   };
 
@@ -3816,6 +3897,7 @@ function launch(options = {}) {
   btnThunder.addEventListener('click', onThunderClick);
   overlay.addEventListener('cancel', onCancel);
   btnRoll.addEventListener('click', onRollClick);
+  btnFeel?.addEventListener('click', cycleFeelPreset);
   const unbindFlap = bindHold(btnFlap, 'flap', true);
   const unbindDash = bindHold(btnDash, 'dash', true);
   const unbindHover = bindHold(btnHover, 'hover');
@@ -3868,11 +3950,22 @@ function launch(options = {}) {
     const fire = keys.has('f') || touchState.fire || tapFire;
     tapFire = false;
 
+    // Smooth low-pass filter on touch/trackpad steering for glassy-fluid sky control
+    const steerFilter = 1 - Math.exp(-10.5 * dt);
+    touchSteerSmoothX += (touchSteerTargetX - touchSteerSmoothX) * steerFilter;
+    touchSteerSmoothY += (touchSteerTargetY - touchSteerSmoothY) * steerFilter;
+    if (Math.abs(touchSteerSmoothX) < 0.002 && touchSteerTargetX === 0) touchSteerSmoothX = 0;
+    if (Math.abs(touchSteerSmoothY) < 0.002 && touchSteerTargetY === 0) touchSteerSmoothY = 0;
+
+    const feelScale = (FEEL_PRESETS[feelIndex] || FEEL_PRESETS[0]).sensitivity;
+    const keyScale = mode === 'dragon' ? Math.min(1.0, feelScale) : 1.0;
+
     const autoRotate = mode === 'jet' && !flightState.airborne && flightState.speed >= 24 && (boost || pitchUp);
     const controls = {
-      pitch: ((pitchUp || autoRotate) ? 1 : 0) - (pitchDown && !autoRotate ? 1 : 0) + touchPitch,
-      roll: (rollLeft ? 1 : 0) - (rollRight ? 1 : 0) - touchYaw * 0.65,
-      yaw: (yawRight ? 1 : 0) - (yawLeft ? 1 : 0) + touchYaw * 0.85,
+      pitch: (((pitchUp || autoRotate) ? 1 : 0) - (pitchDown && !autoRotate ? 1 : 0)) * keyScale + touchSteerSmoothY * 0.86,
+      // Horizontal touch drives coordinated bank-to-turn cleanly (no runaway double-stacked roll + yaw!)
+      roll: ((rollLeft ? 1 : 0) - (rollRight ? 1 : 0)) * keyScale - touchSteerSmoothX,
+      yaw: ((yawRight ? 1 : 0) - (yawLeft ? 1 : 0)) * keyScale + touchSteerSmoothX * (mode === 'dragon' ? 0.18 : 0.45),
       flap,
       boost,
       dash,
@@ -3923,7 +4016,7 @@ function launch(options = {}) {
       flyer.rightWing.shoulder.rotation.x = Math.cos(flightState.wingPhase) * flapAmp * 0.16;
 
       // Sinuous neck leans dynamically into turns & lunges forward when roaring fire
-      const turnLean = Math.max(-0.35, Math.min(0.35, -flightState.roll * 0.35));
+      const turnLean = Math.max(-0.35, Math.min(0.35, flightState.roll * 0.35));
       flyer.neckBase.rotation.y = turnLean * 0.65;
       flyer.neckUpper.rotation.y = turnLean * 0.75;
       flyer.headGroup.rotation.x = flightState.firing ? 0.14 : Math.sin(elapsed * 2.4) * 0.05;
@@ -4334,18 +4427,25 @@ function launch(options = {}) {
     const shakeAmt = camShake * camShake * 0.42;
 
     if (camMode === 0) {
-      // Heroic Chase Cam framing Dragon, sweeping wings, Wizard & panoramic vista ahead
-      const dist = mode === 'jet' ? 15.5 : 14.2;
-      const up = mode === 'jet' ? 4.4 : 4.6;
+      // Silky-smooth aerodynamic Chase Cam with gentle turn look-ahead & damped flight-path trailing
+      const dist = mode === 'jet' ? 15.5 : 14.6;
+      const up = mode === 'jet' ? 4.4 : 4.7;
+      const rightX = Math.cos(flightState.yaw);
+      const rightZ = -Math.sin(flightState.yaw);
+      const turnLead = mode === 'dragon' ? -Math.sin(flightState.roll) * 4.4 : -Math.sin(flightState.roll) * 2.5;
       const groundAtCam = world3D.terrainHeightAt(flightState.x - fwd.x * dist, flightState.z - fwd.z * dist);
       _v2.set(
-        flightState.x - fwd.x * dist,
-        Math.max(groundAtCam + 2.8, flightState.y - fwd.y * dist + up),
-        flightState.z - fwd.z * dist
+        flightState.x - fwd.x * dist - rightX * turnLead * 0.32,
+        Math.max(groundAtCam + 2.8, flightState.y - fwd.y * dist * 0.88 + up),
+        flightState.z - fwd.z * dist - rightZ * turnLead * 0.32
       );
-      camPos.lerp(_v2, 1 - Math.exp(-7.2 * dt));
-      _v3.set(flightState.x + fwd.x * 20, flightState.y + fwd.y * 20 + 0.8, flightState.z + fwd.z * 20);
-      camLook.lerp(_v3, 1 - Math.exp(-9.5 * dt));
+      camPos.lerp(_v2, 1 - Math.exp(-5.4 * dt));
+      _v3.set(
+        flightState.x + fwd.x * 22 + rightX * turnLead,
+        flightState.y + fwd.y * 20 + 0.9,
+        flightState.z + fwd.z * 22 + rightZ * turnLead
+      );
+      camLook.lerp(_v3, 1 - Math.exp(-7.2 * dt));
       camera.position.copy(camPos);
       if (shakeAmt > 0.001) camera.position.x += (Math.random() - 0.5) * shakeAmt;
       camera.lookAt(camLook);
@@ -4485,6 +4585,8 @@ function launch(options = {}) {
       btnWaypoint.removeEventListener('click', cycleWaypoint);
       btnThunder.removeEventListener('click', onThunderClick);
       btnRoll.removeEventListener('click', onRollClick);
+      btnFeel?.removeEventListener('click', cycleFeelPreset);
+      renderTouchStickVisual(0, 0, 120, 0, 0, false);
       unbindFlap();
       unbindDash();
       unbindHover();

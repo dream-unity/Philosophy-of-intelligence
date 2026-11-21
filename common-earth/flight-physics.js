@@ -240,12 +240,18 @@
       flapImpulseUp: 8.2,
       flapCooldown: 0.32,
       skyDashBoost: 24.0,
-      pitchRate: 2.1,
-      rollRate: 2.7,
-      yawRate: 1.35,
-      turnBankFactor: 1.65,
-      maxPitch: 80 * DEG,
-      maxRoll: 165 * DEG,
+      pitchRate: 1.15,
+      rollRate: 1.75,
+      yawRate: 0.48,
+      maxBankAngle: 48 * DEG,
+      turnBankFactor: 1.08,
+      maxPitch: 58 * DEG,
+      maxRoll: 64 * DEG,
+      pitchAutoTrim: 0.55,
+      dihedralLevelRate: 3.8,
+      inputSmoothRate: 12.0,
+      angularDamping: 9.0,
+      velocityBlendRate: 6.4,
       canHover: true,
       hoverDrag: 3.4,
       runwayRequired: false,
@@ -292,6 +298,12 @@
       yaw: Number.isFinite(options.yaw) ? options.yaw : 0, // 0 = -Z (North)
       pitch: Number.isFinite(options.pitch) ? options.pitch : 0,
       roll: Number.isFinite(options.roll) ? options.roll : 0,
+      pitchVel: 0,
+      rollVel: 0,
+      yawVel: 0,
+      smoothPitchIn: 0,
+      smoothRollIn: 0,
+      smoothYawIn: 0,
       speed: Number.isFinite(options.speed) ? options.speed : (startAirborne ? profile.cruiseSpeed : 0),
       vx: 0,
       vy: 0,
@@ -315,6 +327,55 @@
       maxAltitudeReached: startAirborne ? 24 : 0.9,
       fireBlasts: 0,
       targetsHit: 0
+    };
+  }
+
+  /**
+   * Ergonomic non-linear touch/trackpad flight stick response shaper.
+   * Applies a clean radial deadzone (zero jump at onset), cubic-blended precision
+   * curve for fine adjustments near centre, sensitivity scaling, and floating-origin
+   * excess offset so reversing steering direction never suffers dead travel.
+   */
+  function shapeControlInput(dx, dy, options = {}) {
+    const deadzone = Math.max(0, Number.isFinite(options.deadzone) ? options.deadzone : 14);
+    const radius = Math.max(deadzone + 24, Number.isFinite(options.radius) ? options.radius : 132);
+    const expo = clamp(Number.isFinite(options.expo) ? options.expo : 0.52, 0, 0.92);
+    const sensitivity = clamp(Number.isFinite(options.sensitivity) ? options.sensitivity : 1.0, 0.35, 1.6);
+    const maxMag = clamp(Number.isFinite(options.maxMagnitude) ? options.maxMagnitude : 1.0, 0.25, 1.0);
+
+    const rawDx = Number.isFinite(dx) ? dx : 0;
+    const rawDy = Number.isFinite(dy) ? dy : 0;
+    const dist = Math.hypot(rawDx, rawDy);
+    if (dist <= deadzone || dist < 1e-6) {
+      return {
+        x: 0,
+        y: 0,
+        magnitude: 0,
+        clampedDx: rawDx,
+        clampedDy: rawDy,
+        excessX: 0,
+        excessY: 0
+      };
+    }
+
+    const ux = rawDx / dist;
+    const uy = rawDy / dist;
+    const activeSpan = radius - deadzone;
+    const norm = clamp((dist - deadzone) / activeSpan, 0, 1);
+    // Smooth aerodynamic precision curve: fine controllable micro-adjustments near center, progressive authority toward rim
+    const curved = norm * (1 - expo) + (norm * norm) * expo;
+    const scaled = clamp(curved * sensitivity, 0, maxMag);
+
+    const clampedDist = Math.min(dist, radius);
+    const excessDist = Math.max(0, dist - radius);
+    return {
+      x: ux * scaled,
+      y: uy * scaled,
+      magnitude: scaled,
+      clampedDx: ux * clampedDist,
+      clampedDy: uy * clampedDist,
+      excessX: ux * excessDist,
+      excessY: uy * excessDist
     };
   }
 
@@ -422,28 +483,55 @@
       // Airborne 6-DOF Aerodynamic Envelope
       state.hovering = hoverReq;
 
-      // Pitch control
-      const pitchTargetDelta = cPitch * p.pitchRate * h;
-      state.pitch = clamp(state.pitch + pitchTargetDelta, -p.maxPitch, p.maxPitch);
-
-      // Roll control (or barrel roll flourish)
-      if (state.barrelRollTimer > 0) {
-        state.barrelRollTimer = Math.max(0, state.barrelRollTimer - h);
-        state.roll += state.barrelRollDir * (Math.PI * 2 / 0.72) * h;
-        if (state.barrelRollTimer === 0) state.roll = 0;
-      } else if (Math.abs(cRoll) > 0.01) {
-        state.roll = clamp(state.roll + cRoll * p.rollRate * h, -p.maxRoll, p.maxRoll);
-      } else {
-        // Gentle dihedral self-leveling when hands off roll
-        state.roll = lerp(state.roll, 0, clamp(h * (state.kind === 'dragon' ? 2.4 : 1.35), 0, 1));
-      }
-
-      // Coordinated banked turn + manual yaw rudder
-      const bankTurn = -Math.sin(state.roll) * p.turnBankFactor * clamp(state.speed / p.cruiseSpeed, 0.35, 1.55);
-      state.yaw += (bankTurn - cYaw * p.yawRate) * h;
-
       if (state.kind === 'dragon') {
-        // Wing-flap aerodynamic thrust & Sky-Dash surge
+        // Intelligent Fly-by-Wire Dragon Aerodynamics:
+        // 1. Actuator input smoothing (eliminates harsh touch/key jitter)
+        const inAlpha = 1 - Math.exp(-(p.inputSmoothRate || 8.5) * h);
+        state.smoothPitchIn = lerp(state.smoothPitchIn || 0, cPitch, inAlpha);
+        state.smoothRollIn = lerp(state.smoothRollIn || 0, cRoll, inAlpha);
+        state.smoothYawIn = lerp(state.smoothYawIn || 0, cYaw, inAlpha);
+
+        // 2. Speed-adaptive aerodynamic control authority (graceful & steady at high speed, nimble when slow)
+        const speedAuth = clamp(0.70 + 0.30 * (p.cruiseSpeed / Math.max(14, state.speed)), 0.62, 1.12);
+        const dampAlpha = 1 - Math.exp(-(p.angularDamping || 6.4) * h);
+
+        // 3. Smooth damped pitch rate + soft envelope cushion + gentle hands-off horizon auto-trim
+        let desiredPitchVel = state.smoothPitchIn * p.pitchRate * speedAuth;
+        // Soft cushion as nose approaches max climb or dive angle
+        const pitchRatio = Math.abs(state.pitch) / Math.max(0.1, p.maxPitch);
+        if (pitchRatio > 0.72 && Math.sign(desiredPitchVel) === Math.sign(state.pitch)) {
+          desiredPitchVel *= clamp(1 - (pitchRatio - 0.72) / 0.28, 0.12, 1);
+        }
+        // Gentle longitudinal stability eases nose smoothly back toward level glide when hands-off
+        if (Math.abs(cPitch) < 0.02 && !state.hovering && Math.abs(state.pitch) > 0.01) {
+          desiredPitchVel += -state.pitch * (p.pitchAutoTrim || 0.55);
+        }
+        state.pitchVel = lerp(state.pitchVel || 0, desiredPitchVel, dampAlpha);
+        state.pitch = clamp(state.pitch + state.pitchVel * h, -p.maxPitch, p.maxPitch);
+
+        // 4. Target-bank aerodynamic attitude control (wings glide into natural bank angle, never flipping upside down)
+        if (state.barrelRollTimer > 0) {
+          state.barrelRollTimer = Math.max(0, state.barrelRollTimer - h);
+          state.roll += state.barrelRollDir * (Math.PI * 2 / 0.72) * h;
+          state.rollVel = 0;
+          if (state.barrelRollTimer === 0) state.roll = 0;
+        } else {
+          const maxBank = p.maxBankAngle || (48 * DEG);
+          const targetRoll = clamp(state.smoothRollIn * maxBank * speedAuth, -p.maxRoll, p.maxRoll);
+          const rollStiff = Math.abs(cRoll) > 0.02 ? (p.rollRate * 2.55) : (p.dihedralLevelRate || 3.6);
+          const desiredRollVel = (targetRoll - state.roll) * rollStiff;
+          state.rollVel = lerp(state.rollVel || 0, desiredRollVel, dampAlpha);
+          state.roll = clamp(state.roll + state.rollVel * h, -p.maxRoll, p.maxRoll);
+        }
+
+        // 5. Coordinated banked turn (horizontal lift vector drives sweeping arcs in exact harmony with bank angle)
+        // In Three.js YXZ: roll < 0 drops right wing -> yaw decreases (turns right toward +X); roll > 0 drops left wing -> yaw increases (turns left toward -X)
+        const turnSpeedScale = clamp(state.speed / p.cruiseSpeed, 0.45, 1.25);
+        const targetYawVel = Math.sin(state.roll) * p.turnBankFactor * turnSpeedScale - state.smoothYawIn * p.yawRate;
+        state.yawVel = lerp(state.yawVel || 0, targetYawVel, 1 - Math.exp(-8.0 * h));
+        state.yaw += state.yawVel * h;
+
+        // 6. Wing-flap aerodynamic thrust & Sky-Dash surge
         if ((flap || boost || dash) && state.flapTimer <= 0) {
           state.flapTimer = p.flapCooldown;
           state.flapPulse = 1.0;
@@ -455,13 +543,13 @@
           state.stamina = Math.min(100, state.stamina + 5.5 * h);
         }
 
-        // Energy conservation: diving converts altitude into exhilarating airspeed!
+        // 7. Energy conservation: diving converts altitude into exhilarating airspeed!
         const diveAccel = -Math.sin(state.pitch) * p.gravity * 1.22;
         const drag = p.dragCoeff * state.speed * state.speed + (brake ? 18 : 0);
         const glideThrust = state.hovering ? 0 : (dash ? 28.0 : boost ? 16.5 : 6.0);
         if (state.hovering) {
           state.speed = lerp(state.speed, p.minSpeed, clamp(h * p.hoverDrag, 0, 1));
-          state.pitch = lerp(state.pitch, 0.08, clamp(h * 3, 0, 1));
+          state.pitch = lerp(state.pitch, 0.06, clamp(h * 3, 0, 1));
         } else {
           state.speed = clamp(state.speed + (glideThrust + diveAccel - drag) * h, p.minSpeed, p.maxSpeed);
         }
@@ -473,9 +561,14 @@
           ? (flap || boost ? 5.5 : brake ? -5.0 : 0) + thermalLift * 0.4
           : fwd.y * state.speed + (liftFactor - 1.0) * 3.8 + state.flapPulse * 2.6 + thermalLift;
 
-        state.vx = fwd.x * state.speed;
-        state.vz = fwd.z * state.speed;
-        state.vy = lerp(state.vy, netVertical, clamp(h * 4.8, 0, 1));
+        // 8. Fluid air-mass momentum (velocity vector glides smoothly through turns instead of snapping rigidly)
+        const targetVx = fwd.x * state.speed;
+        const targetVz = fwd.z * state.speed;
+        const horizInit = Math.hypot(state.vx || 0, state.vz || 0) < 0.05;
+        const velBlend = horizInit ? 1 : (1 - Math.exp(-(p.velocityBlendRate || 5.8) * h));
+        state.vx = lerp(state.vx || 0, targetVx, velBlend);
+        state.vz = lerp(state.vz || 0, targetVz, velBlend);
+        state.vy = lerp(state.vy, netVertical, clamp(h * 4.5, 0, 1));
         state.stalling = !state.hovering && state.speed < p.stallSpeed && state.pitch > 0.35;
         if (state.stalling) {
           state.pitch = lerp(state.pitch, -0.18, clamp(h * 2.4, 0, 1));
@@ -485,6 +578,22 @@
         const beatRate = state.hovering ? 7.8 : (state.flapPulse > 0.15 ? 9.2 : (state.pitch < -0.18 ? 1.1 : 3.2));
         state.wingPhase += beatRate * h;
       } else {
+        // Fighter Jet aerodynamics (crisp aerobatic roll/pitch envelope)
+        const pitchTargetDelta = cPitch * p.pitchRate * h;
+        state.pitch = clamp(state.pitch + pitchTargetDelta, -p.maxPitch, p.maxPitch);
+
+        if (state.barrelRollTimer > 0) {
+          state.barrelRollTimer = Math.max(0, state.barrelRollTimer - h);
+          state.roll += state.barrelRollDir * (Math.PI * 2 / 0.72) * h;
+          if (state.barrelRollTimer === 0) state.roll = 0;
+        } else if (Math.abs(cRoll) > 0.01) {
+          state.roll = clamp(state.roll + cRoll * p.rollRate * h, -p.maxRoll, p.maxRoll);
+        } else {
+          state.roll = lerp(state.roll, 0, clamp(h * 1.35, 0, 1));
+        }
+
+        const bankTurn = Math.sin(state.roll) * p.turnBankFactor * clamp(state.speed / p.cruiseSpeed, 0.35, 1.55);
+        state.yaw += (bankTurn - cYaw * p.yawRate) * h;
         // Fighter Jet aerodynamics
         if (boost) state.throttle = clamp(state.throttle + h * 1.1, 0.2, 1.4);
         else if (brake) state.throttle = clamp(state.throttle - h * 1.2, 0.15, 1.4);
@@ -643,6 +752,7 @@
     militaryBaseLayout,
     isLandClearForBuilding,
     createFlightState,
+    shapeControlInput,
     forwardVector,
     stepFlight,
     findTargetsInFireCone,

@@ -600,6 +600,59 @@ test('Spiritual Protectors: Wizard full power only in originating community, pro
   assert.equal(launches[0].teleportBaseId, undefined);
 });
 
+test('EarthFlightPhysics: smooth touch sensitivity shaping and intelligent fly-by-wire dragon aerodynamics', () => {
+  const FP = require('../common-earth/flight-physics.js');
+
+  // 1. Radial deadzone suppresses accidental micro-jitter cleanly with zero jump at onset
+  const insideDz = FP.shapeControlInput(9, -6, { deadzone: 14, radius: 132, expo: 0.55, sensitivity: 0.78 });
+  assert.equal(insideDz.x, 0);
+  assert.equal(insideDz.y, 0);
+  assert.equal(insideDz.magnitude, 0);
+
+  // 2. Precision curve keeps small & mid drags fine and controllable instead of snapping wildly
+  const gentle = FP.shapeControlInput(40, 0, { deadzone: 14, radius: 132, expo: 0.55, sensitivity: 0.78 });
+  assert.ok(gentle.x > 0.06 && gentle.x < 0.16, `Gentle 40px drag must stay subtle yet responsive (${gentle.x.toFixed(3)})`);
+  const medium = FP.shapeControlInput(72, 0, { deadzone: 14, radius: 132, expo: 0.55, sensitivity: 0.78 });
+  assert.ok(medium.x > gentle.x && medium.x < 0.36, `Old 72px drag that used to slam 100% must now be smooth (${medium.x.toFixed(3)})`);
+
+  // 3. Dragging past stick radius produces floating-origin excess pull while keeping output bounded
+  const pastRim = FP.shapeControlInput(180, 0, { deadzone: 14, radius: 132, expo: 0.55, sensitivity: 0.78 });
+  assert.ok(pastRim.excessX > 40, 'Exceeding stick radius reports excess displacement for floating origin');
+  assert.ok(pastRim.x <= 0.80 && pastRim.x > 0.70, `Smooth sensitivity caps full deflection cleanly (${pastRim.x.toFixed(3)})`);
+
+  // 4. Sustained full steering input banks smoothly without EVER flipping upside down
+  const dragon = FP.createFlightState('dragon', { x: 0, y: 45, z: 0, speed: 28, yaw: 0, pitch: 0 });
+  for (let i = 0; i < 120; i++) {
+    FP.stepFlight(dragon, { roll: -1.0, yaw: 0.18, pitch: 0 }, 1 / 60);
+  }
+  assert.ok(dragon.roll < 0 && dragon.yaw < 0, 'Banking right (roll < 0) turns smoothly right (yaw < 0) in harmony');
+  assert.ok(Math.abs(dragon.roll) <= 65 * Math.PI / 180, `Dragon must stay in natural upright bank envelope, got ${(dragon.roll * 180 / Math.PI).toFixed(1)}°`);
+  assert.ok(Math.abs(dragon.roll) >= 32 * Math.PI / 180, 'Dragon banks visibly into sweeping turns');
+
+  // 5. Releasing touch input smoothly levels wings via dihedral stability without overshoot
+  const bankBeforeRelease = Math.abs(dragon.roll);
+  for (let i = 0; i < 90; i++) {
+    FP.stepFlight(dragon, { roll: 0, yaw: 0, pitch: 0 }, 1 / 60);
+  }
+  assert.ok(Math.abs(dragon.roll) < bankBeforeRelease * 0.25, `Wings must self-level smoothly when hands-off (${(dragon.roll * 180 / Math.PI).toFixed(1)}°)`);
+
+  // 6. Brief gentle touch adjustment turns a modest, controllable angle in the right direction (no violent swinging)
+  const calm = FP.createFlightState('dragon', { x: 0, y: 45, z: 0, speed: 28, yaw: 0, pitch: 0 });
+  for (let i = 0; i < 30; i++) {
+    FP.stepFlight(calm, { roll: -gentle.x, yaw: gentle.x * 0.18, pitch: 0 }, 1 / 60);
+  }
+  assert.ok(calm.yaw < 0, 'Rightward gentle drag turns heading smoothly right');
+  const turnedDeg = Math.abs(calm.yaw) * 180 / Math.PI;
+  assert.ok(turnedDeg > 0.8 && turnedDeg < 12, `Brief gentle touch turns smoothly by a few degrees (${turnedDeg.toFixed(2)}°), never wildly whipping`);
+
+  // 7. Gentle hands-off longitudinal pitch trim settles nose smoothly back toward level glide
+  const pitched = FP.createFlightState('dragon', { x: 0, y: 60, z: 0, speed: 30, yaw: 0, pitch: 0.45 });
+  for (let i = 0; i < 120; i++) {
+    FP.stepFlight(pitched, { roll: 0, yaw: 0, pitch: 0 }, 1 / 60);
+  }
+  assert.ok(pitched.pitch < 0.28 && pitched.pitch > 0, `Hands-off pitch gently self-trims toward horizon glide (${(pitched.pitch * 180 / Math.PI).toFixed(1)}°)`);
+});
+
 
 
 
