@@ -472,40 +472,14 @@
         if(row.activity.textContent!==text)row.activity.textContent=text;
       }
     }
-    let peopleFilter='',peopleSearch=null,peopleCount=null;
-    const peopleFilterHost=$('scene-people-filter');
-    if(peopleFilterHost){
-      const label=el('label','Filter residents');
-      peopleSearch=el('input');peopleSearch.id='scene-people-search';peopleSearch.type='search';
-      peopleSearch.placeholder='Name, role or aim';peopleSearch.autocomplete='off';
-      label.append(peopleSearch);
-      peopleCount=el('small');peopleCount.id='scene-people-count';
-      peopleFilterHost.replaceChildren(label,peopleCount);
-      peopleSearch.addEventListener('input',e=>{peopleFilter=e.target.value;applyPeopleFilter();});
-    }
-    function applyPeopleFilter(){
-      const q=peopleFilter.trim().toLocaleLowerCase(),countEl=peopleCount||$('scene-people-count');
-      let shown=0;
-      for(const row of peopleRows){
-        const match=!q||row.search.includes(q);
-        row.el.hidden=!match;
-        if(match)shown++;
-      }
-      if(countEl){
-        countEl.textContent=q?(shown+' of '+peopleRows.length+' matching residents'):(peopleRows.length+' residents in this community');
-      }
-    }
     function people(){
       clearInterval(peopleTimer);
       const site=sim.active(),world=sim.state,me=root.EarthAgency.actorId(site),host=$('scene-resident-list');
       const rows=root.EarthPersonas.list(site),focus=doc.activeElement?.dataset.personCommand;
-      const searchBox=peopleSearch||$('scene-people-search');
-      if(searchBox&&searchBox.value!==peopleFilter)searchBox.value=peopleFilter;
       peopleRows=[];
       const articles=rows.map(p=>{
         const row=el('article',null,'resident-directory-row'),isMe=p.id===me;
-        const role=root.EarthCareers.role(site,p.id)||p.role;
-        const title=el('header');title.append(el('strong',p.name),el('span',role));
+        const title=el('header');title.append(el('strong',p.name),el('span',root.EarthCareers.role(site,p.id)||p.role));
         const plan=root.EarthAutonomy.view(site,world,p.id);
         const activity=el('p',null,'resident-activity'),aim=plan?.dream?.title||plan?.goal;
         const links=el('div',null,'directory-actions');
@@ -518,11 +492,9 @@
         row.append(title,activity);if(aim)row.append(el('small','Aim · '+aim));
         const production=root.EarthDistrictGrowth?.goal(site,p)?.h;
         if(production)row.append(el('small','Last contribution · '+production.last));
-        row.append(links);
-        const search=[p.name,role,aim||''].join(' ').toLocaleLowerCase();
-        peopleRows.push({id:p.id,activity,el:row,search});return row;
+        row.append(links);peopleRows.push({id:p.id,activity});return row;
       });
-      host.replaceChildren(...articles);applyPeopleFilter();refreshActivities();compareResidents();
+      host.replaceChildren(...articles);refreshActivities();compareResidents();
       if(focus)Array.from(host.querySelectorAll('button')).find(b=>b.dataset.personCommand===focus)?.focus({preventScroll:true});
       peopleTimer=setInterval(()=>{if(!doc.hidden&&hud.active()==='people')refreshActivities();},900);
     }

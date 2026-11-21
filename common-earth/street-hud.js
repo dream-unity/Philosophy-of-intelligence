@@ -146,20 +146,11 @@
       }
     }
     function clearInvitation(){invitation?.remove();invitation=null;}
-    function scheduleNoticeHide(ms){
-      clearTimeout(noticeTimer);
-      noticeTimer=setTimeout(()=>{
-        const notice=$('scene-notice');
-        if(!notice||notice.hidden)return;
-        if(doc.activeElement&&notice.contains(doc.activeElement)){scheduleNoticeHide(3000);return;}
-        clearInvitation();show(notice,false);
-      },ms);
-    }
-    function notify(message,duration=6500){
+    function notify(message){
       if(!message||!street())return;
       if(pane==='talk'&&String(message)===reply)return;
-      clearInvitation();text($('scene-notice-text'),message);show($('scene-notice'),true);
-      scheduleNoticeHide(duration);
+      clearInvitation();clearTimeout(noticeTimer);text($('scene-notice-text'),message);show($('scene-notice'),true);
+      noticeTimer=setTimeout(()=>show($('scene-notice'),false),6500);
     }
     $('scene-dismiss-notice')?.addEventListener('click',()=>{clearInvitation();clearTimeout(noticeTimer);show($('scene-notice'),false);});
     function hearNeighbour(state){
@@ -179,7 +170,7 @@
       if(!request||invitationsSeen.has(seen)||request.initiated&&invitedBySite.get(site)===week||!street()?.meeting(subjectRef(person)))return;
       invitationsSeen.add(seen);if(request.initiated)invitedBySite.set(site,week);
       const label=name(person);
-      notify(label+' · “'+request.words+'”',14000);
+      notify(label+' · “'+request.words+'”');
       invitation=press('Talk to '+label,()=>{
         if(sim.active()?.id!==site.id||actorId()!==own||sim.state.week!==week||!present(site,person))return;
         if(!openTalk(subjectRef(person)))return;
@@ -673,39 +664,8 @@
       if(local&&overview?.charter&&!overview.charter.met)return {label:overview.charter.name,detail:overview.charter.text};
       return {label:'Meals for '+site.population,detail:'Keep '+site.population+' residents fed. They use '+meals+' food per week and the pantry currently holds '+site.food+'.',resource:'food'};
     }
-    function townDigest(site,civic){
-      const items=[],week=sim.state.week,meals=Math.ceil(site.population/5);
-      if(site.food<meals){
-        items.push({id:'food',level:'urgent',text:'Food short by '+(meals-site.food)+' for week '+week+' meals.',action:'Supply food',run:()=>personalWork('food')});
-      }
-      const lot=root.EarthResources?.expiringPublicLot?.(site,week);
-      if(lot){
-        items.push({id:'spoilage',level:'urgent',text:lot.amount+' '+lot.label+' spoils at the start of week '+lot.until+'.',action:'Inspect '+lot.label,run:()=>{if(openTool('stores'))toolbox.get('stores')?.openResources?.(lot.id);}});
-      }
-      const due=site.residents.filter(r=>r.promise&&r.promise.dueWeek<=week+1).sort((a,b)=>a.promise.dueWeek-b.promise.dueWeek);
-      for(const r of due.slice(0,2)){
-        items.push({id:'promise-'+r.id,level:r.promise.dueWeek<=week?'urgent':'notice',text:'Promise to '+r.name+' due week '+r.promise.dueWeek+'.',action:'Meet '+r.name,run:()=>{openTalk(subjectRef(r.id));walkTo(r.id,()=>updateContact());}});
-      }
-      if(site.issue&&!root.EarthLegacy?.governs?.(sim.state,site)){
-        items.push({id:'council',level:site.issue.deadline<=week?'urgent':'notice',text:'Council vote “'+site.issue.title+'” closes week '+site.issue.deadline+'.',action:'Open Council',run:()=>followGoal?.({group:'council'})});
-      }
-      const unhoused=root.EarthHousing?.need?.(sim.state,site)||0;
-      if(unhoused>0){
-        items.push({id:'housing',level:'notice',text:unhoused+' '+(unhoused===1?'resident needs':'residents need')+' completed housing.'});
-      }
-      const wars=Object.values(sim.state.communityLife?.relations||{}).filter(r=>r.state==='war'&&(r.from===site.id||r.to===site.id));
-      if(wars.length){
-        items.push({id:'conflict',level:'urgent',text:wars.length+' active '+(wars.length===1?'conflict':'conflicts')+' · review diplomacy at Town Centre.',action:'Town Centre',run:()=>$('scene-open-town-centre')?.click()});
-      }
-      if(civic?.active&&!items.some(i=>i.id==='council')){
-        items.push({id:'civic',level:'notice',text:'Shared proposal active: '+civic.active.title+'.'});
-      }
-      return items;
-    }
     function updateStrip(site,who){
-      const jobs=(site.construction||[]).map(j=>j.work+(j.paused?'p':'')).join(',');
-      const key=[who,sim.state.week,sim.state.actionRevision||0,site.civicInitiatives?.revision||0,site.resourceLedger?.serial||0,
-        site.purses?.serial||0,site.agency?.arrangements?.serial||0,jobs,site.food,site.materials,site.funds,site.population].join('/');
+      const key=[who,sim.state.week,sim.state.actionRevision||0,site.construction?.[0]?.work||0,site.food,site.materials,site.funds,site.population].join('/');
       if(key===stripKey)return;stripKey=key;
       const town=townNeed(site,civicModel(site)),self=actorId(),plan=root.EarthAutonomy?.view(site,sim.state,self),person=root.EarthPersonas?.profile(site,self);
       const career=site.careers?.[self],aspiring=career?.application?.targetId||career?.training?.targetId;
@@ -791,22 +751,6 @@
         routes.append(press('Open stores',()=>openTool('stores'),false,'open-stores'));
         if(!foreign)routes.append(press('Personal work',()=>personalWork(),false,'personal-work'));
         box.append(routes);
-        if(!foreign){
-          const digest=townDigest(site,civic);
-          if(digest.length){
-            const panel=make('section',null,'scene-digest');
-            panel.append(make('h4','Attention this week ('+digest.length+')'));
-            const list=make('ul');
-            for(const entry of digest){
-              const li=make('li',null,entry.level==='urgent'?'digest-urgent':'digest-notice');
-              li.append(make('span',entry.text));
-              if(entry.action&&entry.run)li.append(press(entry.action,entry.run,false,'digest-'+entry.id));
-              list.append(li);
-            }
-            panel.append(list);
-            box.append(panel);
-          }
-        }
         if(!foreign&&!sim.state.effort)box.append(make('p','Weekly civic effort is spent. Personal work can still bring food, materials or funds into these stores.','scene-muted'));
         if(need.person)box.append(press('Meet '+name(need.person),()=>{openTalk(subjectRef(need.person));walkTo(need.person,()=>updateContact());},false,'meet-promise'));
         if(overview?.forecast)box.append(make('p','Regular production · '+overview.forecast,'scene-muted'));
@@ -1014,7 +958,6 @@
     }
     return {registerTool,openTool,openTalk,meetPerson,watchPerson,openTalkChoices,close,render,scene,invalidate,notify,setObjective,setWatch,
       observeNeed:site=>townNeed(site,site.civicInitiatives,false),
-      observeDigest:site=>townDigest(site,civicModel(site)),
       version:()=>revision,active:()=>pane,selectPurpose,previewWeek,snapshot,restore,matches};
   }
   root.EarthStreetHUD=Object.freeze({mount});

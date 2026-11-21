@@ -161,7 +161,7 @@ footer > span { font-family: var(--serif); font-style: italic; }
 .coords-form { margin-top: 16px; padding-top: 1px; border-top: 1px solid var(--line); }.coord-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.coord-fields input { margin-top: 4px; }.coords-form .secondary { margin-top: 10px; }
 .journal-list { list-style: none; margin: 0; padding: 0; }.journal-list li { position: relative; margin: 0 0 0 5px; padding: 0 0 15px 17px; border-left: 1px solid #526561; }.journal-list li:last-child { border-color: transparent; padding-bottom: 3px; }.journal-list li::before { position: absolute; top: 4px; left: -4px; width: 7px; height: 7px; content: ""; background: var(--gold-dark); transform: rotate(45deg); }.journal-list strong, .journal-list time { color: var(--gold); font-size: 10px; font-family: var(--mono); }
 .guide section + section { padding-top: 4px; margin-top: 12px; border-top: 1px solid var(--line); }.guide h3 { margin: 6px 0 4px; }.guide p { margin: 0; }.guide b { color: var(--paper); }
-.toast { position: fixed; z-index: 20; left: 50%; top: max(72px, calc(env(safe-area-inset-top) + 14px)); bottom: auto; transform: translateX(-50%); max-width: min(92vw, 560px); width: max-content; background: #eee6cf; color: #172a2c; border: 1px solid #9b8c65; border-radius: 4px; padding: 10px 16px; box-shadow: 0 8px 28px #0007; font-size: 13px; font-weight: 550; pointer-events: none; }
+.toast { position: fixed; z-index: 9; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: min(92vw, 560px); width: max-content; background: #eee6cf; color: #172a2c; border-radius: 4px; padding: 11px 16px; box-shadow: 0 6px 28px #0006; font-size: 13px; font-weight: 550; pointer-events: none; }
 .toast:empty { display: none; }
 .no-script { padding: 14px; background: var(--gold); color: var(--night); }
 @media (min-width: 1600px) { .stage { height: min(70vh, 880px); }.selection-copy { font-size: 15px; }.parent-link { font-size: 9px; }.action-tabs button { font-size: 12px; } }
@@ -668,17 +668,3 @@ body[data-crew-order] .street-stage-heading > :not(#crew-order-hud) { display: n
   .build-plan .text-button, .actions-list .plan-link, .actor-controls select,
   #personal-work summary, #build-plan-survey summary { min-height: 44px; }
 }
-.journal-tools { display:grid; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--line); }
-.journal-cats { display:flex; flex-wrap:wrap; gap:5px; }
-.journal-cats button { min-height:32px; padding:4px 9px; border:1px solid #3c5657; border-radius:3px; background:#102327; color:var(--muted); font:600 11.5px/1.2 var(--sans); cursor:pointer; }
-.journal-cats button:hover { border-color:#8d805f; color:var(--paper); }
-.journal-cats button[aria-pressed="true"] { border-color:var(--gold); background:#2b3f39; color:var(--gold); }
-.journal-count { display:block; color:var(--teal); font:550 11px/1.3 var(--mono); }
-.journal-count:empty { display:none; }
-.diplomacy-overview { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 10px; }
-#town-centre .diplomacy-chip { min-height:34px; padding:5px 10px; border:1px solid #486461; border-radius:4px; background:#132b2f; color:var(--paper); font:600 12px/1.25 var(--sans); cursor:pointer; }
-#town-centre .diplomacy-chip[aria-pressed="true"] { border-color:var(--gold); background:#273e39; color:#ffe6a7; }
-#town-centre .diplomacy-chip.is-war { border-color:#b4655c; background:#361e20; color:#f9cbc3; }
-#town-centre .diplomacy-chip.is-war[aria-pressed="true"] { border-color:#e58b7f; background:#4b262a; }
-#town-centre .diplomacy-chip.is-offer { border-color:#c29f58; background:#322c1d; color:#ffe9b0; }
-

@@ -144,13 +144,13 @@
       if(!entry || physical!==entry.physical){
         let world=null;
         try{if(physical)world=JSON.parse(window.EarthWorldStorage?.unpack(physical)??physical);}catch{/* An unreadable world still has a registry entry. */}
-        entry={physical,summary:summaryOf(world),sizeBytes:physical?physical.length:0};
+        entry={physical,summary:summaryOf(world)};
       }
       if((physical?.length||0)<=budget.remaining){
         budget.remaining-=physical?.length||0;
         nextCache.set(slot,entry);
       }
-      return {...entry.summary,sizeBytes:entry.sizeBytes,names:[...entry.summary.names]};
+      return {...entry.summary,names:[...entry.summary.names]};
     }
     function entries(){
       const slots=new Map([[FIRST,{id:FIRST,name:'First world',created:0}]]);
@@ -171,7 +171,7 @@
       const nextCache=new Map(),budget={remaining:SUMMARY_CACHE_BYTES};
       const worlds=entries().map(meta=>{
         const s=backing(meta.id),selected=meta.id===id;
-        const info=selected?{...summaryOf(engine.state),sizeBytes:(get(window.EarthWorldStorage?.nativeOf(s)||s,dataKey(meta.id))?.length||0)}:storedSummary(s,meta.id,nextCache,budget);
+        const info=selected?summaryOf(engine.state):storedSummary(s,meta.id,nextCache,budget);
         return {...meta,...info,selected,temporary:!durable||s===temp};
       });
       headers=nextCache;
@@ -264,9 +264,9 @@
         return fail('The local saved-world collection is unavailable.');
       });
     }
-    function uniqueName(input,ignoreId=null) {
+    function uniqueName(input) {
       const original=cleanName(input)||'Untitled world';
-      const used=new Set(entries().filter(m=>m.id!==ignoreId).map(m=>m.name.toLocaleLowerCase()));
+      const used=new Set(entries().map(m=>m.name.toLocaleLowerCase()));
       let n=1,label=original;
       while(used.has(label.toLocaleLowerCase())){
         const suffix=' ('+(++n)+')';
@@ -322,49 +322,6 @@
       });
     }
     function select(slot){return serial(()=>validId(slot)?activate(slot,true):fail('Unknown saved world.'));}
-    function rename(slot,nextName){
-      return serial(()=>{
-        if(slot===FIRST)return fail('The first world keeps its original name.');
-        if(!validId(slot))return fail('Unknown saved world.');
-        const source=availableStore(slot),meta=source&&metadata(source,slot);
-        if(!meta)return fail('That saved world is no longer on this device.');
-        const cleaned=cleanName(nextName);
-        if(!cleaned)return fail('Enter a name for this world.');
-        const label=uniqueName(cleaned,slot);
-        const updated=JSON.stringify({version:1,id:slot,name:label,created:meta.created});
-        if(!put(source,REGISTRY+slot,updated))return fail('The browser could not rename this world.');
-        notifyViews();
-        return ok('Renamed world to '+label+'.',{id:slot,name:label});
-      });
-    }
-    function remove(slot){
-      return serial(()=>{
-        if(slot===FIRST)return fail('The first world cannot be removed.');
-        if(!validId(slot))return fail('Unknown saved world.');
-        const source=availableStore(slot),meta=source&&metadata(source,slot);
-        if(!meta)return fail('That saved world is no longer on this device.');
-        if(slot===id){
-          const fallback=activate(FIRST,true);
-          if(!fallback.ok)return fail('Could not switch away before removing this world.');
-        }
-        for(const store of [durable,temp]){
-          if(!store)continue;
-          try{store.removeItem(REGISTRY+slot);}catch(error){/* Continue cleanup. */}
-          try{store.removeItem(dataKey(slot));}catch(error){/* Continue cleanup. */}
-          const nativeStore=window.EarthWorldStorage?.nativeOf?.(store);
-          if(nativeStore&&nativeStore!==store){
-            try{nativeStore.removeItem(REGISTRY+slot);}catch(error){/* Continue cleanup. */}
-            try{nativeStore.removeItem(dataKey(slot));}catch(error){/* Continue cleanup. */}
-          }
-        }
-        retained.delete(slot);headers.delete(slot);
-        void chronicle?.clearSlot?.(slot);
-        if(get(durable,LAST)===slot)put(durable,LAST,id);
-        if(get(session,TAB)===slot)put(session,TAB,id);
-        notifyViews();
-        return ok('Removed '+meta.name+'.',{id:slot});
-      });
-    }
     function timeAccess(siteId){
       return !!window.EarthCommunityLife?.lookup(engine.state,siteId)?.militaryBase?.tech.includes('time');
     }
@@ -433,7 +390,7 @@
       window.removeEventListener?.('storage',onStore);
     }
     sim.destroy=dispose;
-    const book={sim,list,current,status,create,copy,select,rename,remove,moments,markMoment,rewind,get temporaryMoments(){return chronicle?.temporary;},exportWorld,prepareImport,confirmImport,
+    const book={sim,list,current,status,create,copy,select,moments,markMoment,rewind,get temporaryMoments(){return chronicle?.temporary;},exportWorld,prepareImport,confirmImport,
       cancelImport(){review=null;},watch(fn){views.add(fn);return ()=>views.delete(fn);},
       mount(el,options){return mount(el,book,options);},dispose};
     return book;
@@ -455,39 +412,8 @@
     const setNote=(text,error=false)=>{notice.textContent=text;notice.hidden=!text;notice.classList.toggle('warning',error);};
     let work=false,revision=0,lastId=null,displayed='';
     const review=node('section',null,'save-review');review.hidden=true;
-    const manage=node('section',null,'save-review');manage.hidden=true;
-    function clearManage(){manage.replaceChildren();manage.hidden=true;}
     function clearReview(){
       revision++;book.cancelImport();review.replaceChildren();review.hidden=true;
-    }
-    function openRename(slot){
-      clearReview();clearManage();
-      const title=node('h4','Rename '+slot.name);
-      const label=node('label','New world name','save-label'),input=node('input');
-      input.type='text';input.maxLength=64;input.value=slot.name;input.autocomplete='off';label.append(input);
-      const row=node('div',null,'save-buttons');
-      const save=()=>run(async()=>{
-        const r=await book.rename(slot.id,input.value);
-        if(r.ok)clearManage();
-        return r;
-      });
-      input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save();}});
-      row.append(button('Save name',save),button('Cancel',()=>{clearManage();setNote('');}));
-      manage.replaceChildren(title,label,row);manage.hidden=false;input.focus();input.select();
-    }
-    function openDelete(slot){
-      clearReview();clearManage();
-      const title=node('h4','Remove '+slot.name+'?');
-      const detail=node('p','This deletes the local copy of '+slot.name+' (week '+slot.week+') from this browser. Export a JSON copy first if you want a backup.');
-      const row=node('div',null,'save-buttons');
-      const confirmBtn=button('Remove world',()=>run(async()=>{
-        const r=await book.remove(slot.id);
-        if(r.ok)clearManage();
-        return r;
-      }));
-      confirmBtn.classList.add('save-danger');
-      row.append(confirmBtn,button('Cancel',()=>{clearManage();setNote('');}));
-      manage.replaceChildren(title,detail,row);manage.hidden=false;confirmBtn.focus();
     }
     async function run(fn){
       if(work)return;
@@ -518,7 +444,7 @@
     });
     transport.append(exportButton,pickFile,file);
     file.addEventListener('change',async()=>{
-      clearReview();clearManage();const ticket=revision,source=file.files?.[0];if(!source)return;
+      clearReview();const ticket=revision,source=file.files?.[0];if(!source)return;
       if(source.size>MAX_FILE_BYTES){setNote(sizeMessage,true);return;}
       try{
         const raw=await source.text();if(ticket!==revision)return;
@@ -540,44 +466,31 @@
         review.append(label,row);review.hidden=false;setNote('Review the file before adding a separate world.');input.focus();
       }catch(error){setNote('The browser could not read that file.',true);}
     });
-    function sizeLabel(n){
-      if(!n)return '';
-      return n<1024?' · <1 KB':' · '+Math.round(n/1024)+' KB';
-    }
     function refresh() {
       if(work || details && !details.open || section && el.closest?.('[hidden]'))return;
       const slots=book.list(),current=slots.find(slot=>slot.selected),status=book.status();
-      if(lastId!==null && current.id!==lastId){clearReview();clearManage();}
+      if(lastId!==null && current.id!==lastId)clearReview();
       lastId=current.id;
-      const totalKb=Math.round(slots.reduce((sum,s)=>sum+(s.sizeBytes||0),0)/1024);
-      const statusText=status.message+(slots.length>1||totalKb?' ('+slots.length+' '+(slots.length===1?'world':'worlds')+(totalKb?' · '+totalKb+' KB':'')+')':'');
-      if(statusLine.textContent!==statusText)statusLine.textContent=statusText;
+      if(statusLine.textContent!==status.message)statusLine.textContent=status.message;
       // Construction and personal jobs can save while this sheet has focus.
       // Keep the same controls until a value shown in the list actually changes.
-      const signature=JSON.stringify(slots.map(slot=>[slot.id,slot.name,slot.week,slot.settlements,slot.temporary,slot.selected,Math.round((slot.sizeBytes||0)/1024)]));
+      const signature=JSON.stringify(slots.map(slot=>[slot.id,slot.name,slot.week,slot.settlements,slot.temporary,slot.selected]));
       if(displayed===signature)return;
       displayed=signature;
       list.replaceChildren();
       for(const slot of slots){
         const li=node('li'),info=node('div'),title=node('strong',slot.name),meta=node('small',
-          'Week '+slot.week+' · '+slot.settlements+' '+(slot.settlements===1?'community':'communities')+(slot.temporary?' · tab only':'')+sizeLabel(slot.sizeBytes));
+          'Week '+slot.week+' · '+slot.settlements+' '+(slot.settlements===1?'community':'communities')+(slot.temporary?' · tab only':''));
         info.append(title,meta);li.append(info);
-        const actions=node('div',null,'save-item-actions');
-        if(slot.selected){const currentLabel=node('span','Open','save-current');currentLabel.setAttribute('aria-label','Current world');actions.append(currentLabel);}
+        if(slot.selected){const currentLabel=node('span','Open','save-current');currentLabel.setAttribute('aria-label','Current world');li.append(currentLabel);}
         else {
           const select=button('Open',()=>run(()=>book.select(slot.id)));
-          select.setAttribute('aria-label','Open '+slot.name);actions.append(select);
+          select.setAttribute('aria-label','Open '+slot.name);li.append(select);
         }
-        if(slot.id!==FIRST){
-          const ren=button('Rename',()=>openRename(slot));ren.classList.add('save-mini');ren.setAttribute('aria-label','Rename '+slot.name);
-          const del=button('Delete',()=>openDelete(slot));del.classList.add('save-mini','save-danger');del.setAttribute('aria-label','Delete '+slot.name);
-          actions.append(ren,del);
-        }
-        li.append(actions);
         list.append(li);
       }
     }
-    body.append(statusLine,list,manage,nameLabel,createRow,transport,review,notice);
+    body.append(statusLine,list,nameLabel,createRow,transport,review,notice);
     if(details){
       details.append(node('summary','Saved worlds'),body);
       details.addEventListener('toggle',refresh);
@@ -590,7 +503,7 @@
     }
     const off=book.watch(refreshVisible);
     if(section)refreshVisible();
-    function cleanup(){off();clearReview();clearManage();el.replaceChildren();}
+    function cleanup(){off();clearReview();el.replaceChildren();}
     cleanup.refresh=refresh;
     return cleanup;
   }

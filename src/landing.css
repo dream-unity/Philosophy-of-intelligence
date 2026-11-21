@@ -213,3 +213,188 @@ body:not([data-view="journey"]) .home-game-nav,
   .home-game-nav { height: 58px; }
 }
 @media print { .home-game-nav { display: none; } }
+
+/* Top-right "Download app" icon button on the front home page */
+.home-download-nav {
+  position: relative;
+  z-index: 5;
+  width: min(100%, 1800px);
+  margin-inline: auto;
+}
+body:not([data-view="journey"]) .home-download-nav,
+body.pwa-standalone .home-download-nav,
+.opening-practice .home-download-nav { display: none; }
+.download-app-btn {
+  position: absolute;
+  z-index: 5;
+  inset-block-start: clamp(10px, 1.5vw, 22px);
+  inset-inline-end: clamp(12px, 2.4vw, 42px);
+  display: inline-flex;
+  align-items: center;
+  gap: .5em;
+  min-height: 44px;
+  padding: .4em .95em;
+  border: 1px solid #796f59;
+  border-radius: 2px;
+  background: #efe8d9;
+  box-shadow: inset 0 0 0 2px #efe8d9, inset 0 0 0 3px #b5aa93, 0 1px 2px rgb(48 43 35 / 8%);
+  color: #302b23;
+  font: 600 clamp(13px, 1.02vw, 15px)/1.15 Georgia, "Palatino Linotype", serif;
+  letter-spacing: .02em;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.download-app-btn:hover {
+  background: #e5ddc9;
+  border-color: #5b523f;
+  color: #1c1914;
+}
+.download-app-btn:active {
+  transform: translateY(1px);
+}
+.download-app-btn:focus-visible {
+  outline: 3px solid #244b40;
+  outline-offset: 3px;
+}
+.download-app-btn svg {
+  width: 1.25em;
+  height: 1.25em;
+  flex: none;
+}
+@media screen and (max-width: 740px) {
+  .home-download-nav {
+    height: 58px;
+  }
+  .download-app-btn {
+    inset-block-start: 10px;
+    inset-inline-end: 12px;
+    min-height: 42px;
+    padding: .35em .8em;
+    font-size: 13px;
+  }
+}
+@media print {
+  .home-download-nav,
+  .offline-indicator,
+  .pwa-install-dialog { display: none; }
+}
+
+/* Install guidance modal */
+.pwa-install-dialog {
+  width: min(calc(100% - 28px), 440px);
+  margin: auto;
+  padding: 24px 24px 22px;
+  border: 1px solid #796f59;
+  border-radius: 3px;
+  background: #f3ede0;
+  box-shadow: inset 0 0 0 3px #f3ede0, inset 0 0 0 4px #c2b79f, 0 18px 44px rgb(48 43 35 / 26%);
+  color: #302b23;
+  font-family: Georgia, "Palatino Linotype", serif;
+}
+.pwa-install-dialog::backdrop {
+  background: rgb(42 37 29 / 48%);
+}
+.pwa-install-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.pwa-install-dialog-head h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #2b271f;
+}
+.pwa-install-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #9d927b;
+  border-radius: 2px;
+  background: #efe8d9;
+  color: #302b23;
+  font: 400 22px/1 Georgia, serif;
+  cursor: pointer;
+}
+.pwa-install-close:hover { background: #e5ddc9; }
+.pwa-install-close:focus-visible { outline: 3px solid #244b40; outline-offset: 2px; }
+.pwa-install-lead {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #464034;
+}
+.pwa-install-steps {
+  margin: 0 0 18px;
+  padding-left: 20px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #302b23;
+}
+.pwa-install-steps li { margin-bottom: 6px; }
+.pwa-install-steps li:last-child { margin-bottom: 0; }
+.pwa-install-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.pwa-install-primary,
+.pwa-install-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 8px 16px;
+  border-radius: 2px;
+  font: 600 14px/1.2 Georgia, serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pwa-install-primary {
+  border: 1px solid #302b23;
+  background: #302b23;
+  color: #f6f1e6;
+}
+.pwa-install-primary:hover { background: #1f1c16; }
+.pwa-install-secondary {
+  border: 1px solid #796f59;
+  background: #efe8d9;
+  color: #302b23;
+}
+.pwa-install-secondary:hover { background: #e5ddc9; }
+.pwa-install-primary:focus-visible,
+.pwa-install-secondary:focus-visible { outline: 3px solid #244b40; outline-offset: 2px; }
+.pwa-install-note {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #cfc5b0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #5d5748;
+}
+
+/* Subtle offline status notice */
+.offline-indicator {
+  position: fixed;
+  z-index: 40;
+  inset-block-end: max(14px, env(safe-area-inset-bottom, 0px));
+  inset-inline-end: max(14px, env(safe-area-inset-right, 0px));
+  max-width: calc(100vw - 28px);
+  padding: 9px 14px;
+  border: 1px solid #796f59;
+  border-radius: 2px;
+  background: #efe8d9;
+  box-shadow: inset 0 0 0 2px #efe8d9, inset 0 0 0 3px #b5aa93, 0 4px 14px rgb(48 43 35 / 14%);
+  color: #302b23;
+  font: 600 13px/1.35 Georgia, serif;
+}
+.offline-indicator[hidden] { display: none; }
+

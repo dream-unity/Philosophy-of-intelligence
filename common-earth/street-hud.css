@@ -137,11 +137,3 @@ body.street-expanded[data-map-view="street"] .scene-tools #street-open-actions {
 .street-hud[data-picking-neighbour="true"] #scene-talk-view > :not(#scene-nearby-people) { display:none; }
 #scene-notice [data-street-invitation] { order:1; color:#ffe4a2; border-left:1px solid #617667; }
 #scene-notice #scene-dismiss-notice { order:2; }
-.scene-digest { border:1px solid #6a7d6d; border-radius:4px; padding:7px 8px; background:#142829; display:grid; gap:6px; }
-.scene-digest ul { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
-.scene-digest li { display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap; padding-left:8px; border-left:2px solid #729287; font-size:12px; }
-.scene-digest li.digest-urgent { border-left-color:#e5b96d; color:#fff2cf; }
-.scene-digest li button { min-height:28px; padding:3px 7px; font-size:11.5px; }
-.people-filter-wrap { display:grid; gap:4px; }
-.people-filter-wrap small { font-size:11px; color:#b8cfc2; }
-

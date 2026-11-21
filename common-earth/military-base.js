@@ -32,15 +32,12 @@
   function affordable(w,s,cost){const free=balance(w,s);return goods.every(k=>free[k]>=(cost[k]||0));}
   function pay(w,s,cost){
     if(!affordable(w,s,cost))return false;
-    if((cost.funds||0)>0){
-      const present=p=>root.EarthCommunityLife.present(s,p.id);
-      let suppliers=s.residents.filter(present);
-      if(!suppliers.length&&root.EarthPersonas?.list)suppliers=root.EarthPersonas.list(s).filter(present);
-      const offset=(view(s).version||0)%Math.max(1,suppliers.length);
-      for(let i=0;i<suppliers.length;i++){
-        const p=suppliers[(i+offset)%suppliers.length];
-        if(root.EarthPurses.productionReceipt(w,s,p.id,cost.funds,'Military base procurement and training contract.'))break;
-      }
+    // Procurement pays a local contractor. Materials and provisions are consumed.
+    const suppliers=s.residents.filter(p=>root.EarthCommunityLife.present(s,p.id));
+    const offset=(view(s).version||0)%Math.max(1,suppliers.length);
+    for(let i=0;i<suppliers.length;i++){
+      const p=suppliers[(i+offset)%suppliers.length];
+      if(root.EarthPurses.productionReceipt(w,s,p.id,cost.funds,'Military base procurement and training contract.'))break;
     }
     for(const k of goods)s[k]-=cost[k]||0;
     return true;
@@ -358,26 +355,19 @@
   }
   function peace(w,a,b){
     for(const [s,t] of [[a,b],[b,a]])if(s.militaryBase?.captures){
-      const before=s.militaryBase.captures.length;
       s.militaryBase.captures=s.militaryBase.captures.filter(c=>c.by!==t.id);
-      if(s.militaryBase.captures.length!==before)s.militaryBase.version=(s.militaryBase.version||0)+1;
     }
     for(const [s,t] of [[a,b],[b,a]])for(const m of [...(s.militaryBase?.missions||[])]){
       if(m.order==='attack'&&m.target===t.id&&m.phase!=='returning'){
         if(m.manual)s.militaryBase.missions.splice(s.militaryBase.missions.indexOf(m),1);else recall(w,m);
-        s.militaryBase.version=(s.militaryBase.version||0)+1;
+        s.militaryBase.version++;
       }
     }
   }
   function detach(w,id){
     for(const s of towns(w))if(s.militaryBase){
-      const b=s.militaryBase;
-      if(b.captures){
-        const before=b.captures.length;
-        b.captures=b.captures.filter(c=>c.by!==id);
-        if(b.captures.length!==before)b.version=(b.version||0)+1;
-      }
-      if(b.missions.some(m=>m.target===id)){b.missions=b.missions.filter(m=>m.target!==id);b.version=(b.version||0)+1;}
+      const b=s.militaryBase;if(b.captures)b.captures=b.captures.filter(c=>c.by!==id);
+      if(b.missions.some(m=>m.target===id)){b.missions=b.missions.filter(m=>m.target!==id);b.version++;}
     }
   }
   function valid(b){

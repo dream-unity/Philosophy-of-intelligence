@@ -35,8 +35,8 @@ export function buildOfflineHtml(source, { fromDirectory = projectRoot, rootDire
   // File downloads are already local in this edition. Inline the same modules
   // in dependency order and omit the online request scheduler and preloads.
   assertDocumentResources(source, { fromDirectory, rootDirectory, allowOnlinePlayer: true });
-  source = source.replace(/<!--[\s\S]*?-->|[ \t]*<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|[ \t]*<template\b[^>]*\b(?:data-online-only|data-local-assets)\b[^>]*>[\s\S]*?<\/template\s*>/gi, block => {
-    const tag = block.match(/^[ \t]*<(?:script|template)\b[^>]*>/i)?.[0];
+  source = source.replace(/<!--[\s\S]*?-->|[ \t]*<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|[ \t]*<template\b[^>]*\b(?:data-online-only|data-local-assets)\b[^>]*>[\s\S]*?<\/template\s*>|[ \t]*<(nav|dialog|aside)\b[^>]*\bdata-online-only\b[^>]*>[\s\S]*?<\/\1\s*>|[ \t]*<link\b[^>]*\bdata-online-only\b[^>]*>/gi, block => {
+    const tag = block.match(/^[ \t]*<(?:script|template|nav|dialog|aside|link)\b[^>]*>/i)?.[0];
     if (!tag) return block;
     const attrs = attributes(tag.trimStart());
     if (Object.hasOwn(attrs, 'data-online-only')) return '';

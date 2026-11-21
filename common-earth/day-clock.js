@@ -7,7 +7,7 @@
   function elapsed(clock,now){
     const wall=Math.max(0,now-clock.at);
     if(clock.until==null)return clock.elapsed+wall*clock.rate;
-    const fast=Math.max(0,Math.min(wall,(clock.until-clock.elapsed)/clock.rate));
+    const fast=Math.min(wall,(clock.until-clock.elapsed)/clock.rate);
     return clock.elapsed+fast*clock.rate+wall-fast;
   }
   function now(world,at=Date.now()){

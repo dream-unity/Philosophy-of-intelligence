@@ -106,16 +106,22 @@ export function assertScriptSyntax(source, filename) {
   catch (error) { throw new Error(`Invalid script ${filename}: ${error.message}`); }
 }
 
-export function assertNoNetworkCode(source, filename) {
+export function assertNoNetworkCode(source, filename, { allowServiceWorker = false } = {}) {
   const forbidden = [
     /\bfetch\s*\(/,
     /\b(?:XMLHttpRequest|WebSocket|EventSource)\b/,
     /\bimportScripts\s*\(/,
     /\bimport\s*\(/,
     /\bnew\s+(?:Worker|SharedWorker)\s*\(/,
-    /\bserviceWorker\s*\.\s*register\s*\(/,
     /\bcreateElement\s*\(\s*['"](?:script|iframe|link)['"]\s*\)/
   ];
+  if (!allowServiceWorker) {
+    forbidden.push(/\bserviceWorker\s*\.\s*register\s*\(/);
+  } else {
+    for (const match of source.matchAll(/\bserviceWorker\s*\.\s*register\s*\(\s*([^,\)]+)/g)) {
+      invariant(/^['"]\.\/sw\.js['"]$/.test(match[1].trim()), `${filename} may only register ./sw.js.`);
+    }
+  }
   for (const pattern of forbidden) {
     invariant(!pattern.test(source), `${filename} contains an unreviewed runtime loading/network API: ${pattern}`);
   }
@@ -236,7 +242,8 @@ export function checkProject() {
   for (const script of scripts) {
     if (script.attributes.src) continue;
     assertScriptSyntax(script.body, 'index.html inline script');
-    assertNoNetworkCode(script.body, 'index.html inline script');
+    const isPwaBootstrap = script.attributes.id === 'pwa-bootstrap' && Object.hasOwn(script.attributes, 'data-online-only');
+    assertNoNetworkCode(script.body, 'index.html inline script', { allowServiceWorker: isPwaBootstrap });
   }
   const icon = readFileSync(resolve(projectRoot, 'icon.svg'), 'utf8');
   assertInertSvg(icon, 'icon.svg');

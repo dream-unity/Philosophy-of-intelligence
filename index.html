@@ -4,8 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ebe4d5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Philosophy">
   <meta name="description" content="Philosophy of Intelligence is a geometric apprenticeship in relational reasoning. Build one connection at a time, from Circle to Sphere, with a gentle optional breath guide.">
   <title>Philosophy of Intelligence</title>
+  <link rel="manifest" href="manifest.webmanifest" data-online-only>
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png" data-online-only>
   <template id="hero-preload" data-online-only><link rel="preload" as="image" href="assets/intelligence-portals.webp?v=c25c6a3be51b" fetchpriority="high"></template>
   <script data-online-only>
     if (/^#(?:practice|studio)(?:\/|$)/.test(location.hash)) {
@@ -25,7 +31,7 @@
   <template id="practice-base-style" data-local-assets>
     <link rel="stylesheet" href="src/training.css?v=ed1797f23180">
   </template>
-  <link rel="stylesheet" href="src/landing.css?v=86f946574655">
+  <link rel="stylesheet" href="src/landing.css?v=befe7b2d39b5">
 
   <template id="practice-styles" data-local-assets>
     <link rel="stylesheet" href="src/psiduction.css?v=f8a0b894f174">
@@ -61,6 +67,17 @@
   </header>
 
   <main id="main" tabindex="-1">
+    <nav class="home-download-nav" aria-label="Download app" data-online-only>
+      <button type="button" id="download-app-button" class="download-app-btn" aria-label="Download app">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <rect x="4" y="2.5" width="16" height="19" rx="2" />
+          <path d="M12 6.5v7.5" />
+          <path d="M8.75 11.25 12 14.5l3.25-3.25" />
+          <path d="M8.5 17.75h7" />
+        </svg>
+        <span>Download app</span>
+      </button>
+    </nav>
     <section id="view-journey" class="view journey-view">
       <div class="portal-page">
         <div class="portal-hero">
@@ -383,6 +400,182 @@
       window.addEventListener('hashchange', handleRoute);
       retry.addEventListener('click', start);
       handleRoute();
+    })();
+  </script>
+  <dialog id="pwa-install-dialog" class="pwa-install-dialog" aria-labelledby="pwa-install-title" data-online-only>
+    <div class="pwa-install-dialog-head">
+      <h2 id="pwa-install-title">Install Philosophy of Intelligence</h2>
+      <button type="button" id="pwa-install-close" class="pwa-install-close" aria-label="Close install dialog">×</button>
+    </div>
+    <p id="pwa-install-lead" class="pwa-install-lead">Install Philosophy of Intelligence on your device for full offline practice — shapes, relational models, breath guide, and your private archive.</p>
+    <ol id="pwa-install-steps" class="pwa-install-steps">
+      <li>Open your browser menu or look for the install icon in the address bar.</li>
+      <li>Choose <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</li>
+      <li>Launch Philosophy of Intelligence directly from your home screen or desktop, even offline.</li>
+    </ol>
+    <div class="pwa-install-actions">
+      <button type="button" id="pwa-install-confirm" class="pwa-install-primary" hidden>Install app now</button>
+      <a class="pwa-install-secondary" href="dist/Philosophy-of-Intelligence-Offline.html" download="Philosophy-of-Intelligence-Offline.html">Download offline HTML copy</a>
+    </div>
+    <p class="pwa-install-note">Includes Philosophy of Intelligence practice, theory, and archive only. Your saved notes stay private on this device.</p>
+  </dialog>
+  <aside id="offline-indicator" class="offline-indicator" role="status" aria-live="polite" hidden data-online-only>Offline — saved app active on this device.</aside>
+  <script id="pwa-bootstrap" data-online-only>
+    (() => {
+      const downloadBtn = document.getElementById('download-app-button');
+      const dialog = document.getElementById('pwa-install-dialog');
+      const closeBtn = document.getElementById('pwa-install-close');
+      const confirmBtn = document.getElementById('pwa-install-confirm');
+      const stepsEl = document.getElementById('pwa-install-steps');
+      const leadEl = document.getElementById('pwa-install-lead');
+      const offlineBadge = document.getElementById('offline-indicator');
+
+      let deferredPrompt = null;
+
+      function isStandaloneMode() {
+        const mediaStandalone = typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
+        return Boolean(mediaStandalone || window.navigator.standalone === true);
+      }
+
+      function detectPlatform() {
+        const ua = navigator.userAgent || '';
+        const isIos = /iPad|iPhone|iPod/i.test(ua) || (/Macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1);
+        if (isIos) return 'ios';
+        if (/Android/i.test(ua)) return 'android';
+        return 'desktop';
+      }
+
+      function syncStandaloneState() {
+        const standalone = isStandaloneMode();
+        document.body.classList.toggle('pwa-standalone', standalone);
+        if (downloadBtn) downloadBtn.hidden = standalone;
+      }
+
+      function syncOnlineState() {
+        if (!offlineBadge) return;
+        offlineBadge.hidden = navigator.onLine !== false;
+      }
+
+      function populateInstallGuide() {
+        if (!stepsEl || !leadEl) return;
+        const platform = detectPlatform();
+        const items = platform === 'ios'
+          ? [
+              'Tap the Share icon at the bottom or top of Safari.',
+              'Scroll down and tap "Add to Home Screen".',
+              'Tap "Add" to keep Philosophy of Intelligence on your home screen for offline use.'
+            ]
+          : platform === 'android'
+            ? [
+                'Tap the browser menu icon in the top-right corner.',
+                'Choose "Install app" or "Add to Home screen".',
+                'Confirm to launch Philosophy of Intelligence as a standalone offline app.'
+              ]
+            : [
+                'Click the install icon in your browser address bar, or open the browser menu.',
+                'Choose "Install Philosophy of Intelligence" (or "Add to Dock" in Safari).',
+                'Or use the button below to save a self-contained single-file offline copy.'
+              ];
+        stepsEl.textContent = '';
+        for (const text of items) {
+          const li = document.createElement('li');
+          li.textContent = text;
+          stepsEl.appendChild(li);
+        }
+        if (confirmBtn) confirmBtn.hidden = !deferredPrompt;
+      }
+
+      function openInstallDialog() {
+        populateInstallGuide();
+        if (dialog && typeof dialog.showModal === 'function') {
+          if (!dialog.open) dialog.showModal();
+        } else if (dialog) {
+          dialog.setAttribute('open', '');
+        }
+      }
+
+      function closeInstallDialog() {
+        if (!dialog) return;
+        if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+        else dialog.removeAttribute('open');
+      }
+
+      async function triggerNativeInstall() {
+        if (!deferredPrompt) {
+          openInstallDialog();
+          return;
+        }
+        const promptEvent = deferredPrompt;
+        deferredPrompt = null;
+        if (confirmBtn) confirmBtn.hidden = true;
+        try {
+          await promptEvent.prompt();
+          const outcome = await promptEvent.userChoice;
+          if (outcome && outcome.outcome === 'accepted') {
+            closeInstallDialog();
+            document.body.classList.add('pwa-standalone');
+            if (downloadBtn) downloadBtn.hidden = true;
+          }
+        } catch {
+          openInstallDialog();
+        }
+      }
+
+      window.addEventListener('beforeinstallprompt', event => {
+        event.preventDefault();
+        deferredPrompt = event;
+        if (confirmBtn) confirmBtn.hidden = false;
+        syncStandaloneState();
+      });
+
+      window.addEventListener('appinstalled', () => {
+        deferredPrompt = null;
+        closeInstallDialog();
+        document.body.classList.add('pwa-standalone');
+        if (downloadBtn) downloadBtn.hidden = true;
+      });
+
+      if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+          if (deferredPrompt) {
+            triggerNativeInstall();
+          } else {
+            openInstallDialog();
+          }
+        });
+      }
+
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', triggerNativeInstall);
+      }
+
+      if (closeBtn) {
+        closeBtn.addEventListener('click', closeInstallDialog);
+      }
+
+      if (dialog) {
+        dialog.addEventListener('click', event => {
+          if (event.target === dialog) closeInstallDialog();
+        });
+      }
+
+      window.addEventListener('online', syncOnlineState);
+      window.addEventListener('offline', syncOnlineState);
+      if (typeof window.matchMedia === 'function') {
+        const standaloneQuery = window.matchMedia('(display-mode: standalone)');
+        if (typeof standaloneQuery.addEventListener === 'function') {
+          standaloneQuery.addEventListener('change', syncStandaloneState);
+        }
+      }
+
+      syncStandaloneState();
+      syncOnlineState();
+
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+        });
+      }
     })();
   </script>
 </body>
