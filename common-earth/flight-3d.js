@@ -4,10 +4,10 @@
    Continuous Terrain & Distant Landmarks, Volumetric Additive Dragonfire,
    PBR Scale/Wing/Robe/Masonry Procedural Textures, Multi-Segment Animated
    Dragon & Wizard Anatomy, Procedural Web Audio, and Unrestricted Free Flight. */
-import { createCanvasFlightRenderer } from './flight-canvas.mjs';
-import * as THREE from './vendor/three-flight-r187.mjs';
+import { createCanvasFlightRenderer } from './flight-canvas.mjs?v=173369c7aae9';
+import * as THREE from './vendor/three-flight-r187.mjs?v=2cbcae6acc05';
 
-const Physics = window.EarthFlightPhysics;
+let Physics = window.EarthFlightPhysics;
 
 // Reusable scratch objects (zero GC allocations inside the render loop)
 const _v1 = new THREE.Vector3();
@@ -1969,18 +1969,19 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
   };
 
   for (const b of site?.buildings || []) {
-    if (b.kind === 'dragonStable') continue;
+    if (!b || b.kind === 'dragonStable' || !Number.isFinite(b.plot)) continue;
     const mx = (b.plot % 3) * 6 + 3;
     const my = Math.floor(b.plot / 3) * 6 + 3;
     const [wc, rc] = kindPalette[b.kind] || [0xd4c8ae, 0x736658];
     addBuilding3D(b.id || ('lot-' + b.plot), b.name || b.kind, mx, my, 8.6, 5.4, 8.2, wc, rc, 'building');
   }
   for (const fb of site?.freeBuildings || []) {
-    if (fb.kind === 'dragonStable') continue;
+    if (!fb || fb.kind === 'dragonStable' || !Number.isFinite(fb.x) || !Number.isFinite(fb.y)) continue;
     const [wc, rc] = kindPalette[fb.kind] || [0xd4c8ae, 0x736658];
     addBuilding3D(fb.id, fb.name || fb.kind, fb.x, fb.y, 8.4, 5.4, 8.0, wc, rc, 'building');
   }
   for (const h of site?.playerHouses || []) {
+    if (!h || !Number.isFinite(h.x) || !Number.isFinite(h.y)) continue;
     addBuilding3D(h.id, h.name || 'Community House', h.x, h.y, 7.4, 5.6, 7.0, 0xe8d9be, 0xa35a43, 'building');
   }
 
@@ -2517,10 +2518,17 @@ function bearingArrow(relDeg) {
 
 function launch(options = {}) {
   if (activeSession) close();
+  Physics = window.EarthFlightPhysics || Physics;
   if (!Physics) return false;
 
   const overlay = createOverlayDom();
-  const canvas = document.getElementById('flight-3d-canvas');
+  // Always mount a fresh <canvas> so a previously lost WebGL or locked 2D context can never block re-launching!
+  const oldCanvas = document.getElementById('flight-3d-canvas');
+  const canvas = document.createElement('canvas');
+  canvas.id = 'flight-3d-canvas';
+  canvas.tabIndex = 0;
+  if (oldCanvas && oldCanvas.parentNode) oldCanvas.parentNode.replaceChild(canvas, oldCanvas);
+  else overlay.prepend(canvas);
 
   const mode = options.mode === 'jet' ? 'jet' : 'dragon';
   const site = options.site || { name: options.siteName || 'Town', water: false, coastal: options.hasWaterfront !== false, territoryLevel: options.territoryLevel || 0 };
@@ -2537,43 +2545,64 @@ function launch(options = {}) {
   const wizard = options.wizard || { name: options.pilotName || 'Skyweaver' };
   const startEvening = Boolean(options.evening);
 
-  // Renderer & Software-WebGL Detection (strictly cost & pacing only — same full scene!)
-  const probeCanvas = document.createElement('canvas');
-  const probeGl = probeCanvas.getContext('webgl2');
-  const isSoftwareGl = !probeGl || detectSoftwareGl(probeGl);
-  if (probeGl) probeGl.getExtension('WEBGL_lose_context')?.loseContext();
-
-  const attributes = { antialias: !isSoftwareGl, alpha: false, powerPreference: 'high-performance' };
-  const gl = canvas.getContext('webgl2', attributes);
-  const renderer = gl
-    ? new THREE.WebGLRenderer({ canvas, context: gl, antialias: !isSoftwareGl, powerPreference: 'high-performance' })
-    : createCanvasFlightRenderer(canvas);
+  // Acquire WebGL2 directly on the flight canvas (Three.js r187 requires WebGL2; otherwise fall back cleanly to Canvas 2D)
+  let gl = null;
+  let isSoftwareGl = false;
+  let renderer = null;
+  const glAttrs = { antialias: true, alpha: false, powerPreference: 'high-performance' };
+  try {
+    gl = canvas.getContext('webgl2', glAttrs);
+    if (gl) {
+      isSoftwareGl = detectSoftwareGl(gl);
+      renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: !isSoftwareGl, powerPreference: 'high-performance' });
+    }
+  } catch (err) {
+    console.warn('WebGL flight renderer unavailable, falling back to Canvas 2D:', err);
+    gl = null;
+    renderer = null;
+  }
+  if (!renderer) {
+    // Fresh canvas in case WebGL touched the previous canvas before throwing
+    const fallbackCanvas = document.createElement('canvas');
+    fallbackCanvas.id = 'flight-3d-canvas';
+    fallbackCanvas.tabIndex = 0;
+    canvas.parentNode?.replaceChild(fallbackCanvas, canvas);
+    isSoftwareGl = true;
+    renderer = createCanvasFlightRenderer(fallbackCanvas);
+  }
+  const activeCanvas = document.getElementById('flight-3d-canvas') || canvas;
 
   let maxAniso = 4;
-  if (gl) {
+  if (gl && renderer.capabilities) {
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = !isSoftwareGl;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    maxAniso = renderer.capabilities.getMaxAnisotropy();
+    maxAniso = renderer.capabilities.getMaxAnisotropy?.() || 4;
   }
   renderer.setSize(window.innerWidth, window.innerHeight, false);
 
   const textures = createProceduralTextures(maxAniso);
   const scene = new THREE.Scene();
+  scene.background = new THREE.Color(SKY_PRESETS[0].horizon);
   scene.fog = new THREE.FogExp2(SKY_PRESETS[0].fog, SKY_PRESETS[0].fogDensity);
 
-  // Mandatory Studio Environment Reflections via RoomEnvironment + PMREMGenerator
+  // Studio Environment Reflections via RoomEnvironment + PMREMGenerator (gracefully optional on older mobile GPUs)
   let environment = null;
-  if (gl) {
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const room = new THREE.RoomEnvironment();
-    environment = pmrem.fromScene(room, 0.04);
-    scene.environment = environment.texture;
-    room.dispose();
-    pmrem.dispose();
+  if (gl && typeof THREE.PMREMGenerator === 'function' && typeof THREE.RoomEnvironment === 'function') {
+    try {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const room = new THREE.RoomEnvironment();
+      environment = pmrem.fromScene(room, 0.04);
+      scene.environment = environment.texture;
+      room.dispose();
+      pmrem.dispose();
+    } catch (envErr) {
+      console.warn('Skipping PMREM environment on this GPU:', envErr);
+      environment = null;
+    }
   }
 
   // Atmospheric Sky Dome
@@ -2646,6 +2675,7 @@ function launch(options = {}) {
     world3D.oceanObj.uniforms.uFogColor.value.setHex(p.fog);
     world3D.oceanObj.uniforms.uFogDensity.value = p.fogDensity;
 
+    scene.background?.setHex(p.horizon);
     scene.fog.color.setHex(p.fog);
     scene.fog.density = p.fogDensity;
     hemi.color.setHex(p.hemiSky);
@@ -2654,7 +2684,7 @@ function launch(options = {}) {
     sun.color.setHex(p.sunColor);
     sun.intensity = p.sunIntensity;
     sun.position.set(p.sunDir[0] * 280, Math.max(40, p.sunDir[1] * 280), p.sunDir[2] * 280);
-    if (gl) renderer.toneMappingExposure = p.exposure;
+    if (gl && renderer) renderer.toneMappingExposure = p.exposure;
     for (const cm of world3D.cloudMaterials) cm.color.setHex(p.cloudColor);
     for (const wm of world3D.windowMaterials) wm.emissiveIntensity = p.windowGlow;
     if (btnSky) btnSky.textContent = `${p.label.split(' ')[0]} (T)`;
@@ -2901,7 +2931,7 @@ function launch(options = {}) {
     audio.ensureStarted();
     if (steering || e.button !== 0) return;
     steering = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
-    canvas.setPointerCapture(e.pointerId);
+    try { activeCanvas.setPointerCapture?.(e.pointerId); } catch {}
   };
   const onCanvasMove = e => {
     if (steering?.id !== e.pointerId) return;
@@ -2969,9 +2999,9 @@ function launch(options = {}) {
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('resize', onResize);
-  canvas.addEventListener('pointerdown', onCanvasDown);
-  canvas.addEventListener('pointermove', onCanvasMove);
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, onCanvasUp);
+  activeCanvas.addEventListener('pointerdown', onCanvasDown);
+  activeCanvas.addEventListener('pointermove', onCanvasMove);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) activeCanvas.addEventListener(type, onCanvasUp);
   window.addEventListener('blur', releaseInputs);
   btnCam.addEventListener('click', onCamClick);
   btnSky.addEventListener('click', onSkyClick);
@@ -3353,9 +3383,20 @@ function launch(options = {}) {
         elRes.textContent = `${Math.round(flightState.fireEnergy)}%`;
         elRes.dataset.warn = flightState.stalling ? 'true' : 'false';
       }
-      // Update Sky Compass & Destination Waypoint Indicator
+      // Update Sky Compass & Destination Waypoint Indicator (safe fallback if compassBearing helper unavailable)
       const wp = world3D.landmarks[wpIndex] || world3D.landmarks[0];
-      const nav = Physics.compassBearing(flightState, wp);
+      const nav = typeof Physics.compassBearing === 'function'
+        ? Physics.compassBearing(flightState, wp)
+        : (() => {
+            const headingDeg = (((-flightState.yaw * 180 / Math.PI) % 360) + 360) % 360;
+            if (!wp) return { headingDeg, relativeDeg: 0, distance: 0 };
+            const dx = wp.x - flightState.x, dz = wp.z - flightState.z;
+            const tDeg = (((Math.atan2(dx, -dz) * 180 / Math.PI) % 360) + 360) % 360;
+            let rel = tDeg - headingDeg;
+            while (rel > 180) rel -= 360;
+            while (rel < -180) rel += 360;
+            return { headingDeg, relativeDeg: rel, distance: Math.hypot(dx, dz) };
+          })();
       const degStr = String(Math.round(nav.headingDeg) % 360).padStart(3, '0');
       elHeading.textContent = `${cardinalLabel(nav.headingDeg)} ${degStr}°`;
       if (wp) {
@@ -3405,9 +3446,9 @@ function launch(options = {}) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', onResize);
-      canvas.removeEventListener('pointerdown', onCanvasDown);
-      canvas.removeEventListener('pointermove', onCanvasMove);
-      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, onCanvasUp);
+      activeCanvas.removeEventListener('pointerdown', onCanvasDown);
+      activeCanvas.removeEventListener('pointermove', onCanvasMove);
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) activeCanvas.removeEventListener(type, onCanvasUp);
       window.removeEventListener('blur', releaseInputs);
       btnCam.removeEventListener('click', onCamClick);
       btnSky.removeEventListener('click', onSkyClick);
@@ -3432,7 +3473,9 @@ function launch(options = {}) {
       environment?.dispose();
       renderer.dispose?.();
       overlay.removeEventListener('cancel', onCancel);
-      overlay.close();
+      if (overlay.open) {
+        try { overlay.close(); } catch { overlay.removeAttribute('open'); }
+      }
       overlay.hidden = true;
       document.body.removeAttribute('data-flight-3d');
       document.dispatchEvent(new Event('earthsheetchange'));
@@ -3447,10 +3490,12 @@ function launch(options = {}) {
   };
 
   overlay.hidden = false;
-  overlay.showModal();
+  if (!overlay.open) {
+    try { overlay.showModal(); } catch { overlay.setAttribute('open', ''); }
+  }
   document.body.setAttribute('data-flight-3d', 'open');
   document.dispatchEvent(new Event('earthsheetchange'));
-  canvas.focus({ preventScroll: true });
+  activeCanvas.focus({ preventScroll: true });
   rafId = requestAnimationFrame(stepFrame);
   return true;
 }

@@ -405,19 +405,39 @@
 }
 
 @media (max-width: 520px) {
+  .flight-telemetry {
+    overflow: hidden;
+  }
+  #f3d-cam-label {
+    display: none;
+  }
+  .flight-telemetry-kicker {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .flight-gauges {
-    grid-template-columns: repeat(2, minmax(56px, 1fr));
-    gap: 4px 8px;
+    grid-template-columns: repeat(2, minmax(52px, 1fr));
+    gap: 3px 8px;
   }
   .flight-top-actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    justify-content: end;
     gap: 4px;
   }
   .flight-btn {
-    min-height: 34px;
-    padding: 5px 8px;
-    font-size: 0.74rem;
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+  }
+  .flight-banner {
+    top: 156px;
+  }
+  .flight-dock {
+    padding: 6px 8px;
+  }
+  .flight-action-pad {
+    gap: 5px;
   }
 }
 

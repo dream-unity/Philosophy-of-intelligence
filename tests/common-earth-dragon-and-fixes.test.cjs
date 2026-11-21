@@ -401,3 +401,73 @@ test('EarthFlightPhysics: Sky-Dash surge, terrain-aware landing/perching anywher
   assert.ok(Math.abs(Math.abs(south.relativeDeg) - 180) < 1.0, `South target is directly behind (${south.relativeDeg})`);
 });
 
+test('Flight 3D cache-busting hashes & Canvas 2D fallback renderer resilience', async () => {
+  const crypto = require('node:crypto');
+  const sha12 = relPath => crypto.createHash('sha256').update(fs.readFileSync(path.resolve(__dirname, '..', 'common-earth', relPath))).digest('hex').slice(0, 12);
+
+  // 1. Verify common-earth/index.html has up-to-date ?v= hashes for all flight/dragon assets
+  const html = fs.readFileSync(path.resolve(__dirname, '..', 'common-earth/index.html'), 'utf8');
+  for (const file of ['flight-3d.css', 'flight-physics.js', 'dragon-art.js', 'dragon-ui.js', 'flight-3d.js']) {
+    const expected = `${file}?v=${sha12(file)}`;
+    assert.ok(html.includes(expected), `common-earth/index.html must reference ${expected} to prevent stale cached modules`);
+  }
+
+  // 2. Verify flight-3d.js imports vendor/three-flight-r187.mjs & flight-canvas.mjs with exact SHA-256 ?v= hashes
+  const flightSrc = fs.readFileSync(path.resolve(__dirname, '..', 'common-earth/flight-3d.js'), 'utf8');
+  for (const dep of ['flight-canvas.mjs', 'vendor/three-flight-r187.mjs']) {
+    const expected = `./${dep}?v=${sha12(dep)}`;
+    assert.ok(flightSrc.includes(expected), `flight-3d.js must import ${expected} so browsers never load a stale Three.js vendor bundle`);
+  }
+
+  // 3. Verify Canvas 2D fallback renderer never crashes on null scene.background, ShaderMaterial, BackSide sky domes, or InstancedMesh
+  const { pathToFileURL } = require('node:url');
+  const { createCanvasFlightRenderer } = await import(pathToFileURL(path.resolve(__dirname, '..', 'common-earth/flight-canvas.mjs')).href);
+  const calls = [];
+  const fakeCtx = {
+    fillStyle: '', strokeStyle: '', lineWidth: 1,
+    fillRect: (...a) => calls.push(['fillRect', ...a]),
+    beginPath: () => {}, moveTo: () => {}, lineTo: () => {}, closePath: () => {},
+    fill: () => calls.push(['fill']), stroke: () => {}
+  };
+  const fakeCanvas = { width: 320, height: 240, getContext: () => fakeCtx };
+  const renderer = createCanvasFlightRenderer(fakeCanvas);
+  renderer.setSize(320, 240);
+  const ident = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  const fakeCamera = {
+    near: 0.5,
+    far: 2000,
+    updateMatrixWorld: () => {},
+    matrixWorldInverse: { elements: ident },
+    projectionMatrix: { elements: [1.5,0,0,0, 0,1.5,0,0, 0,0,-1,-1, 0,0,-1,0] }
+  };
+  const makePos = arr => ({ count: arr.length / 3, getX: i => arr[i*3], getY: i => arr[i*3+1], getZ: i => arr[i*3+2] });
+  const makeMesh = (mat, arr, extra = {}) => ({
+    isMesh: true, visible: true, renderOrder: 0,
+    material: { visible: true, side: 0, opacity: 1, ...mat },
+    geometry: {
+      attributes: { position: makePos(arr) },
+      boundingSphere: { center: { x: 0, y: 0, z: -6 }, radius: 4 }
+    },
+    modelViewMatrix: { elements: [...ident], multiplyMatrices() { return this; } },
+    matrixWorld: { elements: ident, getMaxScaleOnAxis: () => 1 },
+    ...extra
+  });
+  const objects = [
+    // BackSide sky dome ShaderMaterial (no .color) — must be skipped cleanly
+    makeMesh({ isShaderMaterial: true, side: 1, uniforms: { uZenith: { value: { getStyle: () => '#123456' } } } }, [0,0,-5, 1,0,-5, 0,1,-5]),
+    // InstancedMesh — must be skipped cleanly
+    makeMesh({ color: { r: 0.4, g: 0.6, b: 0.3, getHex: () => 0x66994d } }, [0,0,-5, 1,0,-5, 0,1,-5], { isInstancedMesh: true }),
+    // Ocean ShaderMaterial with uDeepColor uniform (no .color)
+    makeMesh({ isShaderMaterial: true, side: 2, uniforms: { uDeepColor: { value: { r: 0.1, g: 0.3, b: 0.5, getHex: () => 0x1a4d80 } } } }, [-2,-1,-6, 2,-1,-6, 0,2,-6])
+  ];
+  const fakeScene = {
+    background: null,
+    updateMatrixWorld: () => {},
+    traverseVisible: cb => { for (const o of objects) cb(o); }
+  };
+  assert.doesNotThrow(() => renderer.render(fakeScene, fakeCamera), 'Canvas 2D fallback renders safely with null background, ShaderMaterial & InstancedMesh');
+  assert.ok(calls.some(c => c[0] === 'fillRect'), 'Canvas 2D fallback cleared the sky background');
+  assert.ok(calls.some(c => c[0] === 'fill'), 'Canvas 2D fallback rasterized visible triangles from ShaderMaterial meshes');
+});
+
+

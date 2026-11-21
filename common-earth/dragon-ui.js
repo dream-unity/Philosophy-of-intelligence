@@ -85,7 +85,21 @@
         if (!root.EarthFlight3D) {
           const sheet = picker.open ? picker : dialog.open ? dialog : null;
           flightMessage('Preparing dragon flight…');
-          await import(doc.getElementById('flight-engine').src);
+          const engineEl = doc.getElementById('flight-engine');
+          const engineSrc = engineEl?.src || new URL('flight-3d.js', root.location?.href || 'http://localhost/common-earth/').href;
+          try {
+            await import(engineSrc);
+          } catch (firstErr) {
+            console.warn('Initial flight module load failed, retrying fresh:', firstErr);
+          }
+          if (!root.EarthFlight3D) {
+            const sep = engineSrc.includes('?') ? '&' : '?';
+            await import(engineSrc + sep + 'retry=' + Date.now());
+          }
+          if (!root.EarthFlight3D) {
+            flightMessage('Dragon flight engine could not load. Please refresh and try again.', true);
+            return;
+          }
           if (doc.hidden || (sheet && !sheet.open) || root.EarthFlight3D.isOpen()) return;
         }
         const launched = root.EarthFlight3D.launch({
@@ -102,7 +116,7 @@
         if (picker.open) picker.close();
         if (dialog.open) dialog.close();
         enterStreet?.();
-        doc.getElementById('flight-3d-canvas').focus({preventScroll:true});
+        doc.getElementById('flight-3d-canvas')?.focus({preventScroll:true});
       } catch (error) {
         console.error('Dragon flight could not start', error);
         flightMessage('Dragon flight could not start. Try mounting again.', true);
