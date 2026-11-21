@@ -874,6 +874,7 @@
         },
         onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
         onObservation:seen=>streetHud?.setWatch(seen),onTruckDoor:useStreetVehicleDoor,onTruckInteract:()=>streetHud?.openTool('truck'),
+        onDragon:target=>dragonUI?.mountDragon(target),
         onBuilding:building=>{streetHud?.close(false);if(building.use==='militaryBase')baseUI?.open(sim.active()?.id);else if(building.use==='dragonStable'||building.buildingKind==='dragonStable')dragonUI?.open(sim.active()?.id);else if(building.use==='leisure')nightlife?.open(building.venue);else districtDesk?.inspectBuilding(building);},
         onTalkChoices:people=>streetHud?.openTalkChoices?.(people),
         onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},

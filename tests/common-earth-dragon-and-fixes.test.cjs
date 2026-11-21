@@ -327,3 +327,35 @@ test('Player Houses, Unlimited Resident Importing, Territory Expansion, Freeform
   const loaded = ctx.CommonEarthSim.readSave(snapshot);
   assert.ok(loaded && loaded.sites?.length >= 1, 'Open-ocean boat coordinates and all new state serialize & validate cleanly');
 });
+
+test('map mounting uses the played wizard, accepts a chosen rider, and enforces training and nourishment', async () => {
+  const ctx = loadCommonEarthEnv();
+  const sim = ctx.CommonEarthSim.create();
+  sim.found({name:'Stone Town',lat:-6.16,lon:39.19,water:false},'Dragon Quay');
+  const site = sim.active();
+  const wizard = {id:site.residents[0].id,name:'Rider',title:'Skyweaver'};
+  const dragon = {id:'dragon-1',name:'Aurelia',hunger:90};
+  site.dragonStable = {built:true,dragons:[dragon],wizards:[wizard],workers:[]};
+  const launches = [], notices = [];
+  ctx.EarthFlight3D = {isOpen:()=>false,launch:opts=>{launches.push(opts);return true;}};
+  const element = {open:false,focus(){}};
+  ctx.document = {getElementById:()=>element};
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../common-earth/dragon-ui.js'),'utf8'),ctx);
+  const ui = ctx.EarthDragonUI.mount({sim,notify:msg=>notices.push(msg)});
+  const target = {siteId:site.id,dragonId:dragon.id};
+  await ui.mountDragon(target);
+  assert.equal(launches[0].wizard.id,wizard.id);
+  assert.equal(launches[0].dragon.id,dragon.id);
+  site.dragonStable.wizards.push({id:'steward',name:'Player',title:'Windbinder'});
+  await ui.mountDragon(target);
+  assert.equal(launches[1].wizard.id,'steward');
+  await ui.mountDragon(target,wizard.id);
+  assert.equal(launches[2].wizard.id,wizard.id);
+  dragon.hunger = 2;
+  await ui.mountDragon(target);
+  assert.match(notices.at(-1),/hungry/);
+  site.dragonStable.wizards = [];
+  await ui.mountDragon(target);
+  assert.match(notices.at(-1),/Train a Wizard/);
+  assert.equal(launches.length,3);
+});

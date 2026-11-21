@@ -361,7 +361,7 @@
     let fullPixelRatio=1,motionPixelRatio=1,limitedPixelRatio=1,slowFrameCount=0;
     let frame=0,idleTimer=0,routeTimer=0,routeDelay=0,lastFrame=0,visualTime=0,dirty=true,alive=true,visible=true;
     const crossingOpen=()=>typeof document!=='undefined'&&document.body?.hasAttribute('data-district-crossing');
-    const sheetOpen=()=>!spectator&&typeof document!=='undefined'&&(crossingOpen()||Boolean(document.body?.hasAttribute('data-sheet-open')));
+    const sheetOpen=()=>!spectator&&typeof document!=='undefined'&&(crossingOpen()||Boolean(document.body?.hasAttribute('data-sheet-open')||document.body?.hasAttribute('data-flight-3d')));
     let covered=sheetOpen();
     let shortMessage='',messageUntil=0,cameraFollows=true;
     let priorPlacementView=null,overviewZoom=null,placingFocus=0,previewedPlot=null,dragging=null,pinch=null,groundCache=null;
@@ -4168,7 +4168,7 @@
     function finishedProject(item){
       if(item.kind==='dragonStable'&&window.EarthDragonArt){
         const [sx,sy]=screen(item.x,item.y);
-        window.EarthDragonArt.drawStable(ctx,sx,sy,unit,evening,visualTime,state.site?.dragonStable?.dragons?.length||0);
+        window.EarthDragonArt.drawStable(ctx,sx,sy,unit,evening,visualTime,0);
         return;
       }
       if(item.kind==='house'&&window.EarthTownArchitecture?.draw(ctx,state.site,'home',(item.plot||0)%3,...screen(item.x,item.y),unit*.92))return;
@@ -4511,8 +4511,43 @@
         path([[x,top+31],[x,y-2]],null,'#e1c892',1.25);
       }
     }
+    let dragonTargets=[];
+    function streetDragons(){
+      const roster=state.site?.dragonStable?.dragons;
+      if(!roster?.length||!window.EarthDragonArt)return [];
+      const stable=window.EarthDragonStable.stableLocation(state.site);
+      if(!stable)return [];
+      const poses=[];
+      for(const spot of [...state.lots.filter(l=>l.building?.kind==='dragonStable'),
+                          ...(state.site.freeBuildings||[]).filter(b=>b.kind==='dragonStable')]){
+        poses.push({dragon:roster[0],x:spot.x+1.14,y:spot.y+.80,z:1.12,
+          size:.42,angle:.4,depth:spot.x+spot.y+.351});
+      }
+      roster.forEach((dragon,i)=>{
+        const ring=i%3,t=visualTime*(.38+ring*.07)+i*2.1;
+        const rx=6.5+ring*3.2,ry=5.5+ring*2.6;
+        const x=stable.x+Math.cos(t)*rx,y=stable.y+Math.sin(t)*ry;
+        const dx=-Math.sin(t)*rx,dy=Math.cos(t)*ry;
+        poses.push({dragon,x,y,z:(3.2+ring*.9+Math.sin(t*1.6)*.55)*.62,
+          angle:Math.atan2((dx+dy)*TILT,dx-dy),size:.95,depth:x+y+9});
+      });
+      return poses;
+    }
+    function dragonAt(p,device){
+      let best=null,score=Infinity;
+      for(const target of dragonTargets){
+        const radius=Math.max(device==='touch'?21:9,target.size*1.7);
+        const distance=Math.hypot(p.x-target.sx,p.y-target.sy)/radius;
+        if(distance<=1&&distance<score){best=target;score=distance;}
+      }
+      return best;
+    }
+    function mountTarget(p,device){
+      if(!options.onDragon||state.placed||selectedCrew.size)return null;
+      return dragonAt(p,device)||remote?.scene.dragonAt(p,device);
+    }
     let idleScene=null;
-    function clipIdleActors(){
+    function clipIdleActors(dragons){
       if(!terrainLayer || dirty || activeMotion() || watchedPath || !state.site || castStarted!==null){
         idleScene=null;return false;
       }
@@ -4531,6 +4566,7 @@
         const r=Math.ceil((x+halfWidth*unit)*pixelRatio)+2,b=Math.ceil((y+below*unit)*pixelRatio)+2;
         if(r>0 && l<canvas.width && b>0 && t<canvas.height)areas.push([l,t,r-l,b-t]);
       }
+      for(const d of dragons)include(d,d.size*1.8,d.z+d.size*1.8,Math.max(0,d.size*1.8-d.z));
       for(let i=0;i<5;i++)include(streetWalker(i),.75,1.3,.5);
       for(const id of shoreFishers){const p=personBody(id);if(p?.y>=23.1)include(p,3.1,1.45,2.32);}
       for(const q of state.points)if(q.type==='resident')include(residentFigure(q),.85,1.3,.5);
@@ -4574,12 +4610,14 @@
       }
       trackField();const v=regionView();
       if(v&&!localDetail(v)){
+        dragonTargets=[];
         idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);drawField(v);drawSelectionBox();
         meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));return;
       }
       watchedPath=observedRoute();if(!dragging?.moved&&!pinch)updateGlanceCards();
-      const clipped=dragging?.box||v&&(fieldMoving&&fieldActors().some(a=>(a.moving||a.fire)&&renderRegion.inView(v,a.x,a.y,.08))||visibleTravellers||v.sx<140||geo.towns.some(t=>t!==baseTown&&detailVisible(t,v)))?false:clipIdleActors();
-      try{drawScene(clipped);drawField(v);}finally{
+      const dragons=streetDragons();
+      const clipped=dragging?.box||v&&(fieldMoving&&fieldActors().some(a=>(a.moving||a.fire)&&renderRegion.inView(v,a.x,a.y,.08))||visibleTravellers||v.sx<140||geo.towns.some(t=>t!==baseTown&&detailVisible(t,v)))?false:clipIdleActors(dragons);
+      try{drawScene(clipped,dragons);drawField(v);}finally{
         if(clipped)ctx.restore();
         drawSelectionBox();
         meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));
@@ -4588,7 +4626,11 @@
     const buildingBounds=[4.2,6.5,2.5],treeBounds=[2,3.65,.35],furnitureBounds=[1.5,2.6,.7];
     const bodyBounds=[1.05,1.6,.68],waterWorkBounds=[3.25,1.6,2.5],vehicleBounds=[2.4,2.5,1.5];
     const actorBounds=id=>shoreFishers.has(id)?waterWorkBounds:bodyBounds;
-    function drawScene(repaint) {
+    function drawScene(repaint,dragons=streetDragons()) {
+      dragonTargets=dragons.map(pose=>{
+        const [sx,sy]=screen(pose.x,pose.y,pose.z);
+        return {siteId:state.site.id,dragonId:pose.dragon.id,x:pose.x,y:pose.y,sx,sy,size:unit*pose.size};
+      });
       stampFrame++;
       ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);ctx.lineJoin='round';ctx.lineCap='round';
       if(inset)cachedGround();
@@ -4706,19 +4748,11 @@
           }
         },buildingBounds);
       }
-      // Render enchanted dragons soaring smoothly over the settlement when stabled
-      const dragons=state.site.dragonStable?.dragons||[];
-      if(dragons.length&&window.EarthDragonArt?.drawEnchantedDragon){
-        const anchor=window.EarthDragonStable?.stableLocation?.(state.site)||{x:12,y:12};
-        dragons.slice(0,3).forEach((d,idx)=>{
-          const t=visualTime*(.38+idx*.07)+idx*2.1;
-          const dx=anchor.x+Math.cos(t)*(6.5+idx*3.2),dy=anchor.y+Math.sin(t)*(5.5+idx*2.6);
-          const alt=3.2+idx*.9+Math.sin(t*1.6)*.55;
-          addItem(dx,dy,dx+dy+9,()=>{
-            const [sx,sy]=screen(dx,dy,0);
-            window.EarthDragonArt.drawEnchantedDragon(ctx,sx,sy-alt*unit*.62,unit*.95,visualTime+idx*1.4,d.lineage||d.lineageId,Math.cos(t)>=0);
-          },[5,8,4]);
-        });
+      for(const pose of dragons){
+        addItem(pose.x,pose.y,pose.depth,()=>{
+          const [sx,sy]=screen(pose.x,pose.y,pose.z);
+          window.EarthDragonArt.drawEnchantedDragon(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,pose.dragon,false);
+        },[2,pose.z+2,2]);
       }
       if(state.site.growth){
         const g=state.site.growth;
@@ -6640,7 +6674,7 @@
         if(secondTouch)cancelFieldTap();else if(first)commitFieldTap();
         const figures=e.shiftKey?[]:selectableFigures();
         dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,
-          slop:touch?12:5,figures,secondTouch};
+          slop:touch?12:5,figures,secondTouch,dragon:mountTarget(p,e.pointerType)};
       }else if(fingers.size===2)beginPinch();
     });
     let lastGesturePaint=0,previousGestureAt=0;
@@ -6710,6 +6744,7 @@
       if(e.type!=='pointerup'||gesture.moved)return;
       const release=coords(e,canvas);
       if(Math.hypot(release.x-gesture.start.x,release.y-gesture.start.y)>=gesture.slop)return;
+      if(gesture.dragon){options.onDragon(gesture.dragon);return;}
       // Delay the first military tap so a selection gesture cannot also move or board a unit.
       if(gesture.device==='touch'&&gesture.figures?.length&&!gesture.secondTouch)deferFieldTap(gesture.start);
       else tap(gesture.start,gesture.device,gesture.secondTouch);
@@ -7006,8 +7041,8 @@
     }
     if(inset){
       let last=0;
-      return Object.freeze({setSite,setConstruction,activityOf,regionalPicks,destroy,
-        hideTile(){if(terrainLayer)terrainLayer.groundSurface.style.visibility='hidden';},
+      return Object.freeze({setSite,setConstruction,activityOf,regionalPicks,dragonAt,destroy,
+        hideTile(){dragonTargets=[];if(terrainLayer)terrainLayer.groundSurface.style.visibility='hidden';},
         paintAt(context,v){
           if(terrainLayer)terrainLayer.groundSurface.style.visibility='';
           ctx=context;width=v.width;height=v.height;pixelRatio=v.ratio;unit=v.unit;zoom=unit/baseUnit();evening=v.evening;
