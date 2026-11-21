@@ -535,3 +535,32 @@ test('tapping and double-tapping deployed soldiers preserves the destination cha
   assert.equal(chosen?.site,town.id);assert.equal(chosen.kind,'building');assert.equal(chosen.id,'militaryBase');
   assert.deepEqual(sel.ids,[1,2]);map.destroy();sim.destroy();
 });
+
+test('a touch mounts the dragon under the finger on the perch or in flight, while swipes and cancelled taps stay on the map',()=>{
+  const {home,runtime,streetAt,paint,touch,sim}=fixture();
+  home.freeBuildings=[{id:'stable',kind:'dragonStable',x:15,y:21}];
+  home.dragonStable={built:true,dragons:[{id:'gold'},{id:'emerald'}]};
+  const painted=[],mounted=[];
+  runtime.EarthDragonArt={drawStable(){},drawEnchantedDragon(ctx,x,y,size,angle,time,dragon){
+    painted.push({x,y,size,id:dragon.id});
+  }};
+  const scene=streetAt(home,false,{onDragon:target=>mounted.push(target)});
+  paint();
+  const perch=painted.filter(d=>d.id==='gold').sort((a,b)=>a.size-b.size)[0];
+  const flying=painted.find(d=>d.id==='emerald');
+  assert.ok(perch&&flying&&perch.size<flying.size);
+  for(const d of [perch,flying]){
+    touch('pointerdown',d.x,d.y);
+    paint(); // The dragon can advance between contact and release.
+    touch('pointerup',d.x,d.y);
+    assert.equal(mounted.at(-1).dragonId,d.id);
+    assert.equal(mounted.at(-1).siteId,home.id);
+  }
+  touch('pointerdown',perch.x,perch.y);
+  touch('pointercancel',perch.x,perch.y);
+  touch('pointerdown',perch.x,perch.y);
+  touch('pointermove',perch.x+85,perch.y);
+  touch('pointerup',perch.x+85,perch.y);
+  assert.equal(mounted.length,2);
+  scene.destroy();sim.destroy();
+});

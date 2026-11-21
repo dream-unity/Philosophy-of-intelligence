@@ -1,7 +1,7 @@
 /* Interactive Three.js 3D Aerodynamic Flight Engine for Enchanted Dragons
    (ridden by Wizards) and Military Fighter Jets (with long-runway takeoff). */
-import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createCanvasFlightRenderer } from './flight-canvas.mjs';
+import * as THREE from './vendor/three-flight-r187.mjs';
 
 const Physics = window.EarthFlightPhysics;
 
@@ -44,7 +44,7 @@ function makeToonNoiseTexture(baseHex, accentHex, size = 128) {
  * Builds a high-craft composite 3D Enchanted Dragon with articulated wings,
  * undulating tail, glowing dorsal crystals, opening jaw, and Wizard rider.
  */
-function buildEnchantedDragon(palette = {}) {
+function buildEnchantedDragon(palette = {}, rider = {}) {
   const root = new THREE.Group();
   const scaleCol = new THREE.Color(palette.scale || '#4b9be0');
   const accentCol = new THREE.Color(palette.accent || '#a8f0ff');
@@ -275,7 +275,7 @@ function buildEnchantedDragon(palette = {}) {
   );
   wizardGroup.add(saddle);
 
-  const robeMat = new THREE.MeshStandardMaterial({ color: 0x352e78, roughness: 0.5, metalness: 0.15 });
+  const robeMat = new THREE.MeshStandardMaterial({ color: rider.robeColor || 0x352e78, roughness: 0.5, metalness: 0.15 });
   const robe = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.92, 10), robeMat);
   robe.position.set(0, 0.48, 0);
   wizardGroup.add(robe);
@@ -439,7 +439,7 @@ function buildFighterJet() {
  * roads, buildings, Dragon Stable, expanded outer walls, Military Airbase +
  * very long runway, endless ocean, coastal piers, hills, thermals & targets.
  */
-function buildTownWorld(scene, site, evening) {
+function buildTownWorld(scene, site, evening, textured) {
   const worldGroup = new THREE.Group();
   const targets = [];
   const thermals = [];
@@ -451,29 +451,31 @@ function buildTownWorld(scene, site, evening) {
   const bounds = Physics.perimeterBounds(territoryLevel, hasWater);
 
   // Endless 3D Ocean plane (deep below land or full south/surrounding expanse)
-  const oceanTex = makeToonNoiseTexture(evening ? '#163547' : '#266d7e', evening ? '#2a5670' : '#4fb5b8');
-  oceanTex.repeat.set(80, 80);
+  const oceanTex = textured && makeToonNoiseTexture(evening ? '#163547' : '#266d7e', evening ? '#2a5670' : '#4fb5b8');
+  if (oceanTex) oceanTex.repeat.set(80, 80);
   const ocean = new THREE.Mesh(
     new THREE.PlaneGeometry(3600, 3600),
     new THREE.MeshStandardMaterial({
-      map: oceanTex,
+      map: oceanTex || null, color: textured ? '#ffffff' : evening ? '#163547' : '#266d7e',
       roughness: 0.25,
       metalness: 0.35
     })
   );
+  ocean.renderOrder = -3;
   ocean.rotation.x = -Math.PI / 2;
   ocean.position.y = -0.35;
   worldGroup.add(ocean);
 
   // Landmass (for coastal towns, ocean starts cleanly south of y = 25.25 -> z = 13.25 * scale)
-  const grassTex = makeToonNoiseTexture(evening ? '#2f4536' : '#658559', evening ? '#3d5744' : '#85a66e');
-  grassTex.repeat.set(42, 42);
-  const landMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.88, metalness: 0.04 });
+  const grassTex = textured && makeToonNoiseTexture(evening ? '#2f4536' : '#658559', evening ? '#3d5744' : '#85a66e');
+  if (grassTex) grassTex.repeat.set(42, 42);
+  const landMat = new THREE.MeshStandardMaterial({ map: grassTex || null, color: textured ? '#ffffff' : evening ? '#2f4536' : '#658559', roughness: 0.88, metalness: 0.04 });
 
   if (!site?.water) {
     const landDepth = hasWater ? 1400 : 2800;
     const landGeo = new THREE.PlaneGeometry(2800, landDepth);
     const land = new THREE.Mesh(landGeo, landMat);
+    land.renderOrder = -2;
     land.rotation.x = -Math.PI / 2;
     const shoreZ = (25.3 - 12) * scale;
     land.position.set(0, 0, hasWater ? shoreZ - landDepth / 2 : 0);
@@ -519,11 +521,13 @@ function buildTownWorld(scene, site, evening) {
     const pH = to3D(12, r);
     const hRoad = new THREE.Mesh(new THREE.BoxGeometry(26 * scale, 0.12, 1.75 * scale), roadMat);
     hRoad.position.set(pH.x, 0.06, pH.z);
+    hRoad.renderOrder = -1;
     worldGroup.add(hRoad);
 
     const pV = to3D(r, 12);
     const vRoad = new THREE.Mesh(new THREE.BoxGeometry(1.75 * scale, 0.12, 26 * scale), roadMat);
     vRoad.position.set(pV.x, 0.06, pV.z);
+    vRoad.renderOrder = -1;
     worldGroup.add(vRoad);
   }
 
@@ -857,7 +861,7 @@ let activeSession = null;
 function createOverlayDom() {
   let el = document.getElementById('flight-3d-overlay');
   if (el) return el;
-  el = document.createElement('section');
+  el = document.createElement('dialog');
   el.id = 'flight-3d-overlay';
   el.setAttribute('aria-label', '3D Aerodynamic Flight Mode');
   el.hidden = true;
@@ -891,7 +895,7 @@ function createOverlayDom() {
     <div class="flight-banner" id="f3d-banner" hidden></div>
     <div class="flight-hud-bottom">
       <div class="flight-keys-hint" id="f3d-keys-hint">
-        W/S Pitch · A/D Bank &amp; Turn · Q/E Yaw · Space/Shift Flap/Boost · X Hover/Brake · F Blast Fire · R Barrel Roll · V Camera · Esc Exit
+        Drag the sky to steer · W/S Pitch · A/D Bank &amp; Turn · Q/E Yaw · Space/Shift Flap/Boost · X Hover/Brake · F Blast Fire · R Barrel Roll · V Camera · Esc Exit
       </div>
       <div class="flight-action-pad">
         <button type="button" class="flight-btn" id="f3d-btn-flap">Wing Flap (Space)</button>
@@ -911,8 +915,6 @@ function launch(options = {}) {
 
   const overlay = createOverlayDom();
   const canvas = document.getElementById('flight-3d-canvas');
-  overlay.hidden = false;
-  document.body.setAttribute('data-flight-3d', 'open');
 
   const mode = options.mode === 'jet' ? 'jet' : 'dragon';
   const site = options.site || { name: options.siteName || 'Town', water: false, coastal: options.hasWaterfront !== false, territoryLevel: options.territoryLevel || 0 };
@@ -930,22 +932,32 @@ function launch(options = {}) {
   const evening = Boolean(options.evening);
 
   // Renderer & Software WebGL adaptation
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  const gl = renderer.getContext();
-  const isSoftwareGl = detectSoftwareGl(gl);
-  renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+  const attributes = {antialias:true, alpha:false, powerPreference:'high-performance'};
+  const gl = canvas.getContext('webgl2', attributes);
+  const renderer = gl ? new THREE.WebGLRenderer({canvas, context:gl, ...attributes}) : createCanvasFlightRenderer(canvas);
+  const isSoftwareGl = !gl || detectSoftwareGl(gl);
+  if (gl) {
+    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = evening ? 0.92 : 1.08;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+  }
   renderer.setSize(window.innerWidth, window.innerHeight, false);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = evening ? 0.92 : 1.08;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
   const skyColor = evening ? 0x19253d : 0x7cb7d4;
   scene.background = new THREE.Color(skyColor);
   scene.fog = new THREE.FogExp2(evening ? 0x1a2a42 : 0x8ec4db, 0.00145);
 
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  let environment;
+  if (gl) {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const room = new THREE.RoomEnvironment();
+    environment = pmrem.fromScene(room, 0.04);
+    scene.environment = environment.texture;
+    room.dispose();
+    pmrem.dispose();
+  }
 
   const hemi = new THREE.HemisphereLight(evening ? 0x627ab0 : 0xdaf0ff, evening ? 0x202d28 : 0x5c7450, evening ? 0.8 : 1.15);
   scene.add(hemi);
@@ -954,24 +966,27 @@ function launch(options = {}) {
   scene.add(sun);
 
   const camera = new THREE.PerspectiveCamera(62, window.innerWidth / Math.max(1, window.innerHeight), 0.5, 2200);
-  const world3D = buildTownWorld(scene, site, evening);
+  const world3D = buildTownWorld(scene, site, evening, Boolean(gl));
   const particles = createParticlePool(scene, isSoftwareGl ? 44 : 84);
 
   // Build Flyer (Enchanted Dragon + Wizard OR Fighter Jet)
-  const flyer = mode === 'jet' ? buildFighterJet() : buildEnchantedDragon(dragon);
+  const flyer = mode === 'jet' ? buildFighterJet() : buildEnchantedDragon(dragon, wizard);
   scene.add(flyer.root);
 
   // Dynamic point light for dragonfire / afterburner glow
   const fireLight = new THREE.PointLight(0xff842b, 0, 48, 1.5);
   scene.add(fireLight);
 
+  const origin = options.origin;
+  const dragonStart = Number.isFinite(origin?.x) && Number.isFinite(origin?.y)
+    ? world3D.to3D(origin.x, origin.y) : world3D.stablePerch3D;
   const startFromGround = mode === 'jet' && options.runwayTakeoff !== false;
   const flightState = Physics.createFlightState({
     kind: mode,
     airborne: !startFromGround,
-    x: startFromGround ? world3D.runwayStart3D.x : world3D.stablePerch3D.x,
+    x: startFromGround ? world3D.runwayStart3D.x : dragonStart.x,
     y: startFromGround ? 0.95 : 28,
-    z: startFromGround ? world3D.runwayStart3D.z : world3D.stablePerch3D.z + 24,
+    z: startFromGround ? world3D.runwayStart3D.z : dragonStart.z,
     yaw: 0, // Facing North along runway or over town
     pitch: startFromGround ? 0 : -0.04,
     speed: startFromGround ? 0 : (mode === 'jet' ? 54 : 28)
@@ -1015,7 +1030,7 @@ function launch(options = {}) {
   showBanner(
     mode === 'jet'
       ? 'Cleared for takeoff on the Military Base runway! Hold Shift/Space for afterburner and pull S/↑ to lift off.'
-      : `${wizard.name} mounted ${dragon.name}! Soar freely anywhere — press F to blast enchanted fire mid-flight or at targets below!`,
+      : `${wizard.name} mounted ${dragon.name}. Drag left or right to turn, up to climb, or down to dive.`,
     4.5
   );
 
@@ -1089,7 +1104,7 @@ function launch(options = {}) {
     if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'w', 'a', 's', 'd', 'q', 'e', 'f', 'x', 'r', 'v', 'shift'].includes(k)) {
       e.preventDefault();
     }
-    if (k === 'escape') { close(); return; }
+    if (k === 'escape') { e.preventDefault(); close(); return; }
     if (k === 'v') { camMode = (camMode + 1) % camModes.length; elCamLabel.textContent = camModes[camMode]; return; }
     if (k === 'r') { touchState.rollPulse = true; return; }
     keys.add(k);
@@ -1104,9 +1119,32 @@ function launch(options = {}) {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
   }
 
-  // Click on canvas also blasts fire!
-  const onCanvasDown = () => { touchState.fire = true; };
-  const onCanvasUp = () => { touchState.fire = false; };
+  let steering = null, touchYaw = 0, touchPitch = 0, tapFire = false;
+  const onCanvasDown = e => {
+    if (steering || e.button !== 0) return;
+    steering = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+    canvas.setPointerCapture(e.pointerId);
+  };
+  const onCanvasMove = e => {
+    if (steering?.id !== e.pointerId) return;
+    const dx = e.clientX - steering.x, dy = steering.y - e.clientY;
+    if (!steering.moved && Math.hypot(dx, dy) < 7) return;
+    steering.moved = true;
+    touchYaw = Math.max(-1, Math.min(1, dx / 65));
+    touchPitch = Math.max(-1, Math.min(1, dy / 65));
+  };
+  const onCanvasUp = e => {
+    if (steering?.id !== e.pointerId) return;
+    if (e.type === 'pointerup' && !steering.moved) tapFire = true;
+    steering = null;
+    touchYaw = touchPitch = 0;
+  };
+  const releaseInputs = () => {
+    keys.clear();
+    steering = null;
+    touchYaw = touchPitch = 0;
+    tapFire = touchState.fire = touchState.flap = touchState.hover = touchState.rollPulse = false;
+  };
   const onCamClick = () => { camMode = (camMode + 1) % camModes.length; elCamLabel.textContent = camModes[camMode]; };
   const onLaunchClick = () => {
     if (mode === 'jet') {
@@ -1125,6 +1163,7 @@ function launch(options = {}) {
     }
   };
   const onExitClick = () => close();
+  const onCancel = event => { event.preventDefault(); close(); };
   const bindHold = (btn, prop) => {
     const down = e => { e.preventDefault(); touchState[prop] = true; btn.dataset.active = 'true'; };
     const up = () => { touchState[prop] = false; btn.dataset.active = 'false'; };
@@ -1145,15 +1184,18 @@ function launch(options = {}) {
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('resize', onResize);
   canvas.addEventListener('pointerdown', onCanvasDown);
-  window.addEventListener('pointerup', onCanvasUp);
+  canvas.addEventListener('pointermove', onCanvasMove);
+  for (const type of ['pointerup','pointercancel','lostpointercapture']) canvas.addEventListener(type, onCanvasUp);
+  window.addEventListener('blur', releaseInputs);
   btnCam.addEventListener('click', onCamClick);
   btnLaunch.addEventListener('click', onLaunchClick);
   btnExit.addEventListener('click', onExitClick);
+  overlay.addEventListener('cancel', onCancel);
   btnRoll.addEventListener('click', onRollClick);
   const unbindFlap = bindHold(btnFlap, 'flap');
   const unbindHover = bindHold(btnHover, 'hover');
   const unbindFire = bindHold(btnFire, 'fire');
-  canvas.focus({ preventScroll: true });
+
 
   function stepFrame(now) {
     if (destroyed) return;
@@ -1170,13 +1212,14 @@ function launch(options = {}) {
     const yawRight = keys.has('e');
     const boost = keys.has('shift') || keys.has(' ') || touchState.flap;
     const hover = keys.has('x') || keys.has('c') || touchState.hover;
-    const fire = keys.has('f') || touchState.fire;
+    const fire = keys.has('f') || touchState.fire || tapFire;
+    tapFire = false;
 
     const autoRotate = mode === 'jet' && !flightState.airborne && flightState.speed >= 24 && (boost || pitchUp);
     const controls = {
-      pitch: ((pitchUp || autoRotate) ? 1 : 0) - (pitchDown && !autoRotate ? 1 : 0),
+      pitch: ((pitchUp || autoRotate) ? 1 : 0) - (pitchDown && !autoRotate ? 1 : 0) + touchPitch,
       roll: (rollLeft ? 1 : 0) - (rollRight ? 1 : 0),
-      yaw: (yawRight ? 1 : 0) - (yawLeft ? 1 : 0),
+      yaw: (yawRight ? 1 : 0) - (yawLeft ? 1 : 0) + touchYaw,
       flap: boost,
       boost,
       brake: mode === 'jet' ? hover : keys.has('c'),
@@ -1357,7 +1400,9 @@ function launch(options = {}) {
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onCanvasDown);
-      window.removeEventListener('pointerup', onCanvasUp);
+      canvas.removeEventListener('pointermove', onCanvasMove);
+      for (const type of ['pointerup','pointercancel','lostpointercapture']) canvas.removeEventListener(type, onCanvasUp);
+      window.removeEventListener('blur', releaseInputs);
       btnCam.removeEventListener('click', onCamClick);
       btnLaunch.removeEventListener('click', onLaunchClick);
       btnExit.removeEventListener('click', onExitClick);
@@ -1372,10 +1417,13 @@ function launch(options = {}) {
           else obj.material.dispose();
         }
       });
-      pmrem.dispose();
-      renderer.dispose();
+      environment?.dispose();
+      renderer.dispose?.();
+      overlay.removeEventListener('cancel', onCancel);
+      overlay.close();
       overlay.hidden = true;
       document.body.removeAttribute('data-flight-3d');
+      document.dispatchEvent(new Event('earthsheetchange'));
       options.onExit?.({
         mode,
         distanceFlown: flightState.distanceFlown,
@@ -1386,6 +1434,11 @@ function launch(options = {}) {
     }
   };
 
+  overlay.hidden = false;
+  overlay.showModal();
+  document.body.setAttribute('data-flight-3d', 'open');
+  document.dispatchEvent(new Event('earthsheetchange'));
+  canvas.focus({ preventScroll: true });
   rafId = requestAnimationFrame(stepFrame);
   return true;
 }

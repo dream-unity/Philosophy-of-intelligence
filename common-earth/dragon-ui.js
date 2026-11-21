@@ -7,6 +7,8 @@
     const doc = root.document;
     const dialog = doc.getElementById('dragon-stable-dialog');
     const body = doc.getElementById('dragon-stable-body');
+    const picker = doc.getElementById('dragon-rider-dialog');
+    let mounting = false;
     if (!dialog || !body || !root.EarthDragonStable) return null;
 
     const DS = root.EarthDragonStable;
@@ -43,29 +45,70 @@
       return res;
     }
 
-    function launch3DFlight(site, dragon, wizard) {
-      if (!root.EarthFlight3D) {
-        notify('3D Flight Engine is still loading. Try again in a moment.', true);
+    function flightMessage(message, error = false) {
+      const sheet = picker.open ? picker : dialog.open ? dialog : null;
+      if (!sheet) { notify(message, error); return; }
+      let status = sheet.querySelector('[data-mount-status]');
+      if (!status) {
+        status = make('p');
+        status.dataset.mountStatus = '';
+        status.setAttribute('role', 'status');
+        sheet.querySelector('header').after(status);
+      }
+      status.textContent = message;
+      status.scrollIntoView({block:'nearest'});
+    }
+
+    async function mountDragon(target, riderId) {
+      if (mounting || root.EarthFlight3D?.isOpen()) return;
+      const site = root.EarthCommunityLife.lookup(sim.state, target.siteId);
+      if (!site) { flightMessage('This town is no longer available.', true); return; }
+      const ds = DS.ensure(site);
+      const dragon = ds.dragons.find(d => d.id === target.dragonId);
+      if (!dragon) { flightMessage('This dragon is no longer in the stable.', true); return; }
+      const actor = activeActorId(site);
+      if (!riderId && DS.isWizard(site, actor)) riderId = actor;
+      if (!riderId && ds.wizards.length === 1) riderId = ds.wizards[0].id;
+      if (!riderId && ds.wizards.length > 1) {
+        doc.getElementById('dragon-rider-title').textContent = 'Who will ride ' + dragon.name + '?';
+        const choices = doc.getElementById('dragon-rider-options');
+        choices.replaceChildren(...ds.wizards.map(w => btn(w.name + ' · ' + w.title, () => mountDragon(target, w.id))));
+        picker.querySelector('[data-mount-status]')?.remove();
+        if (!picker.open) picker.showModal();
         return;
       }
-      dialog.close();
-      enterStreet?.();
-      const clock = root.EarthDayClock?.read?.(sim.state);
-      root.EarthFlight3D.launch({
-        mode: 'dragon',
-        site,
-        world: sim.state,
-        dragon,
-        wizard,
-        evening: Boolean(clock?.night),
-        onFireHit: hit => {
-          sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.());
-        },
-        onExit: stats => {
-          sim.perform('dragonAction', { siteId: site.id, action: 'recordFlight', riderId: wizard.id, dragonId: dragon.id, stats }).then(() => onUpdated?.());
-          notify(`${wizard.name} and ${dragon.name} returned from flight (${Math.round(stats.distanceFlown)}m flown, ${stats.fireBlasts} fire blasts).`);
+      const check = DS.canFlyDragon(site, riderId, dragon.id);
+      if (!check.ok) { flightMessage(check.reason, true); return; }
+      const wizard = check.wizard;
+      mounting = true;
+      try {
+        if (!root.EarthFlight3D) {
+          const sheet = picker.open ? picker : dialog.open ? dialog : null;
+          flightMessage('Preparing dragon flight…');
+          await import(doc.getElementById('flight-engine').src);
+          if (doc.hidden || (sheet && !sheet.open) || root.EarthFlight3D.isOpen()) return;
         }
-      });
+        const launched = root.EarthFlight3D.launch({
+          mode: 'dragon', site, world: sim.state, dragon, wizard, origin: target,
+          evening: Boolean(root.EarthDayClock?.read?.(sim.state)?.night),
+          onFireHit: hit => sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.()),
+          onExit: stats => {
+            sim.perform('dragonAction', { siteId: site.id, action: 'recordFlight', riderId: wizard.id, dragonId: dragon.id, stats }).then(() => onUpdated?.());
+            notify(wizard.name + ' and ' + dragon.name + ' returned from flight (' + Math.round(stats.distanceFlown) + ' m flown).');
+            doc.getElementById('street-canvas')?.focus({preventScroll:true});
+          }
+        });
+        if (!launched) { flightMessage('Dragon flight could not start on this device.', true); return; }
+        if (picker.open) picker.close();
+        if (dialog.open) dialog.close();
+        enterStreet?.();
+        doc.getElementById('flight-3d-canvas').focus({preventScroll:true});
+      } catch (error) {
+        console.error('Dragon flight could not start', error);
+        flightMessage('Dragon flight could not start. Try mounting again.', true);
+      } finally {
+        mounting = false;
+      }
     }
 
     function render() {
@@ -78,6 +121,7 @@
       const actorIsWizard = DS.isWizard(site, actorId);
 
       body.replaceChildren();
+      dialog.querySelector('[data-mount-status]')?.remove();
 
       // Hero preview with live 2D Dragon Stable & Enchanted Dragon illustration
       const hero = make('div', null, 'dragon-hero');
@@ -117,6 +161,19 @@
       if (!ds.dragons.length) {
         secDragons.append(make('p', 'No dragons are stabled yet. Summon your first enchanted dragon below!'));
       } else {
+        let riderSelect;
+        if (ds.wizards.length > 1) {
+          const label = make('label', 'Wizard rider ');
+          riderSelect = make('select');
+          for (const w of ds.wizards) {
+            const option = make('option', w.name + ' · ' + w.title);
+            option.value = w.id;
+            option.selected = w.id === actorId || w.residentId === actorId;
+            riderSelect.append(option);
+          }
+          label.append(riderSelect);
+          secDragons.append(label);
+        }
         for (const d of ds.dragons) {
           const card = make('article', null, 'dragon-card');
           const head = make('div', null, 'dragon-card-head');
@@ -130,26 +187,9 @@
           meter.append(fill);
 
           const actions = make('div', null, 'dragon-actions');
-          const canFly = DS.canFlyDragon(site, actorId, d.id);
-          const flyLabel = actorIsWizard
-            ? `Mount & Fly ${d.name} (3D Sky)`
-            : ds.wizards.length
-              ? `Fly as ${ds.wizards[0].name} (Wizard)`
-              : 'Train a Wizard to Fly';
-          const flyBtn = btn(flyLabel, () => {
-            if (actorIsWizard) {
-              const check = DS.canFlyDragon(site, actorId, d.id);
-              if (!check.ok) { notify(check.reason, true); return; }
-              launch3DFlight(site, check.dragon, check.wizard);
-            } else if (ds.wizards.length) {
-              const wiz = ds.wizards[0];
-              const check = DS.canFlyDragon(site, wiz.id, d.id);
-              if (!check.ok) { notify(check.reason, true); return; }
-              launch3DFlight(site, check.dragon, check.wizard);
-            } else {
-              notify(canFly.reason, true);
-            }
-          }, 'primary-gold');
+          const flyBtn = btn('Mount & Fly ' + d.name, () => mountDragon(
+            { siteId: site.id, dragonId: d.id }, riderSelect?.value
+          ), 'primary-gold');
 
           const feedBtn = btn(`Feed ${d.name}`, () => runCmd('dragonAction', { siteId: site.id, action: 'feed', dragonId: d.id }));
           const funFireBtn = btn('Blast Fire (Mid-Flight Fun)', () => {
@@ -283,7 +323,7 @@
       if (!dialog.open) dialog.showModal();
     }
 
-    return { open, render };
+    return { open, render, mountDragon };
   }
 
   root.EarthDragonUI = Object.freeze({ mount });
