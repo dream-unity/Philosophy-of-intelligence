@@ -95,7 +95,7 @@
   }
   function domesticCapacity(site){
     return (window.EarthCouncilHomes?.foundation(site)??18)+(window.EarthCouncilHomes?.places(site)||0)+(window.EarthResidentShops?.housingPlaces?.(site)||0)+
-      (window.EarthDistrictGrowth?.housingPlaces?.(site)||0)+(window.EarthHousing?.additionalPlaces?.(site)||0)+(window.EarthFreeLand?.housingCapacityBonus?.(site)||0);
+      (window.EarthDistrictGrowth?.housingPlaces?.(site)||0)+(window.EarthHousing?.additionalPlaces?.(site)||0);
   }
   function housingCapacity(site) {
     let capacity=domesticCapacity(site);

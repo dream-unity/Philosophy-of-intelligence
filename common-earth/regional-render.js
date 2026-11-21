@@ -265,18 +265,7 @@
       }
     }
     if(a.unitKind==='truck')art.truck?.(g,p.x,p.y,size,pose);
-    else if(a.unitKind==='jet'){
-      const lift=mini?0:size*0.95;
-      if(!mini){
-        g.save();g.fillStyle='rgba(20,30,26,.28)';g.beginPath();g.ellipse(p.x+lift*0.55,p.y+lift*0.25,size*0.52,size*0.22,0,0,Math.PI*2);g.fill();
-        if(a.moving){
-          g.strokeStyle='rgba(244,248,252,.55)';g.lineWidth=Math.max(1.5,size*0.06);
-          g.beginPath();g.moveTo(p.x,p.y-lift);g.lineTo(p.x-(a.dx||0)*size*2.2,p.y-lift+(a.dy||0)*size*1.4);g.stroke();
-        }
-        g.restore();
-      }
-      art.marker(g,p.x,p.y-lift,size*(mini?1:1.18),a.unitKind);
-    }else if(a.unitKind==='tank')art.marker(g,p.x,p.y,size,a.unitKind);
+    else if(a.unitKind==='tank'||a.unitKind==='jet')art.marker(g,p.x,p.y,size,a.unitKind);
     else art.soldier?.(g,p.x,p.y,size,{id:a.fieldId,type:a.unitKind},pose);
   }
   function actors(g,world,base,v,mini,drawPerson,people=root.EarthRegionalWorld.travellers?.(world,base)||[]){
@@ -285,14 +274,11 @@
       if(t.kind==='military'&&root.EarthBaseField||!inView(v,t.x,t.y,.03))continue;
       count++;
       if(t.kind==='military'&&root.EarthBaseArt){
-        const p=v.screen(t.x,t.y),size=mini?4:limit(v.sx*.022,6,25),lift=t.unitKind==='jet'&&!mini?size*0.9:0;
+        const p=v.screen(t.x,t.y),size=mini?4:limit(v.sx*.022,6,25);
         if(t.phase==='engaged'){
           g.beginPath();g.arc(p.x,p.y,size*.8,0,Math.PI*2);g.strokeStyle='#ec815b';g.lineWidth=2;g.stroke();
         }
-        if(lift){
-          g.fillStyle='rgba(20,30,26,.28)';g.beginPath();g.ellipse(p.x+lift*.5,p.y+lift*.22,size*.48,size*.2,0,0,Math.PI*2);g.fill();
-        }
-        root.EarthBaseArt.marker(g,p.x,p.y-lift,size,t.unitKind);continue;
+        root.EarthBaseArt.marker(g,p.x,p.y,size,t.unitKind);continue;
       }
       if(drawPerson?.(t))continue;
       const p=v.screen(t.x,t.y),r=mini?1.9:limit(v.sx*.0035,2.5,8);
@@ -338,13 +324,7 @@
       }g.stroke();
       if(root.EarthMilitaryBase){
         const at=root.EarthMilitaryBase.place,pt=proj(at.x,at.y);
-        g.fillStyle='#526763';g.fillRect(pt.x-scale*1.8,pt.y-scale*1.2,scale*3.6,scale*2.4);
-        const rw=root.EarthMilitaryBase.runway;
-        if(rw){
-          const r0=proj(rw.x,rw.yStart),r1=proj(rw.x,rw.yEnd);
-          g.strokeStyle='#3c4347';g.lineWidth=Math.max(2,scale*rw.width*.65);
-          g.beginPath();g.moveTo(r0.x,r0.y);g.lineTo(r1.x,r1.y);g.stroke();
-        }
+        g.fillStyle='#526763';g.fillRect(pt.x-scale*1.5,pt.y-scale,scale*3,scale*2);
       }
       const homes=[];
       for(const h of s.growth?.households||[]){

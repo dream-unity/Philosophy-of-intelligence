@@ -24,7 +24,9 @@
     hall: {name:'Assembly hall', funds:5, materials:2, info:'Adds 1 wellbeing each week and makes room for shared apprenticeships.'},
     fishingDock: {name:'Fishing dock', funds:6, materials:4, info:'Build a shore station and fishing jetty. Once the crew opens the dock, board a boat to land 4 food on the crew’s weekly outing.'},
     pier: {name:'Exchange depot', funds:6, materials:3, info:'One depot at either end raises a route’s base shipment limit from 2 to 4. An adjacent market earns 1 extra fund.'},
-    wetland: {name:'Water commons', funds:5, materials:4, info:'Grows 1 food each week. Protects the district during a flood and supports slow repair.'}
+    wetland: {name:'Water commons', funds:5, materials:4, info:'Grows 1 food each week. Protects the district during a flood and supports slow repair.'},
+    dragonStable: {name:'Dragon Stable', funds:8, materials:5, info:'Raise enchanted dragons, train Wizards to fly them freely anywhere in 3D, blast fire at enemies or buildings, and assign keepers to replenish dragon food.'},
+    house: {name:'Community House', funds:4, materials:3, info:'Adds 4 permanent residential places so you can build neighbourhoods and import as many residents as you wish.'}
   };
   const PROFILES = [
     {role:'Grower', value:'Food security', quotes:['“There is enough ground to grow food. What we lack is a way to share the harvest.”','“People tell you when the shelves are empty. They rarely tell you when they start skipping a meal.”'],
@@ -199,11 +201,17 @@
     result[site.specialty]++;
     const markets=marketPlan(site);
     result.funds+=markets.baseFunds;
-    for(const b of site.buildings) {
+    for(const b of [...site.buildings,...(site.freeBuildings||[])]) {
       if(b.kind==='garden') result.food+=3;
       if(b.kind==='workshop') result.materials+=2;
       if(b.kind==='hall') result.wellbeing++;
       if(b.kind==='wetland') result.food++;
+      if(b.kind==='market'&&b.free) result.funds+=2;
+      if(b.kind==='dragonStable') result.wellbeing++;
+    }
+    if((site.territoryLevel||0)>0){
+      result.materials+=site.territoryLevel;
+      result.funds+=site.territoryLevel;
     }
     for(const link of productiveLinks(site,markets)){
       if(staffedLink(site,world,link))result[link.resource]++;
@@ -213,7 +221,7 @@
     const district=cityDelta ?? root.EarthCityModel?.overview(site)?.weekly;
     const lifeServices=world && root.EarthCareers?.weeklyAdjustment(site,world);
     const localInitiatives=world && root.EarthAutonomy?.rates(site,world);
-    for(const contribution of [district,root.EarthStrategy?.rates(site),workforce??root.EarthConstruction?.weeklyAdjustment(site,world),lifeServices,localInitiatives,world&&root.EarthCommunityLife?.workforce?.(world,site),root.EarthFreeLand?.rates?.(site)]){
+    for(const contribution of [district,root.EarthStrategy?.rates(site),workforce??root.EarthConstruction?.weeklyAdjustment(site,world),lifeServices,localInitiatives,world&&root.EarthCommunityLife?.workforce?.(world,site)]){
       for(const [k,v] of Object.entries(contribution || {}))result[k]=(result[k] || 0)+v;
     }
     return result;
@@ -374,8 +382,15 @@
         !Number.isFinite(line.x)||!Number.isFinite(line.y))return false;
       if(line.mode==='walk'){
         if(line.food!==1||line.x<-.7||line.x>24.7||line.y<23.1||line.y>25.25)return false;
-      }else if(line.mode!=='boat'||line.x<-165||line.x>190||line.y<26.5||line.y>200)return false;
+      }else if(line.mode!=='boat'||Math.abs(line.x)>2500||line.y<-2500||line.y>2500)return false;
     }
+    if(site.territoryLevel!=null&&!integer(site.territoryLevel,0,20))return false;
+    if(site.freeBuildings!=null&&(!Array.isArray(site.freeBuildings)||site.freeBuildings.length>200||
+      !site.freeBuildings.every(fb=>recordLike(fb)&&shortName(fb.id)&&Object.hasOwn(BUILDINGS,fb.kind)&&Number.isFinite(fb.x)&&Number.isFinite(fb.y))))return false;
+    if(site.playerHouses!=null&&(!Array.isArray(site.playerHouses)||site.playerHouses.length>200||
+      !site.playerHouses.every(ph=>recordLike(ph)&&shortName(ph.id)&&Number.isFinite(ph.x)&&Number.isFinite(ph.y)&&integer(ph.places,1,24))))return false;
+    if(root.EarthDragonStable&&!root.EarthDragonStable.valid(site.dragonStable))return false;
+    if(root.EarthNightlife?.validCafe&&!root.EarthNightlife.validCafe(site.cafeState))return false;
     if(root.EarthPursuits && !root.EarthPursuits.valid(site))return false;
     if(site.lastFishingWeek!=null && !integer(site.lastFishingWeek,0,world.week))return false;
     if(site.lastAidWeek!=null && !integer(site.lastAidWeek,0,world.week))return false;
@@ -389,8 +404,6 @@
     if(root.EarthPurses && !root.EarthPurses.valid(site,world.week))return false;
     if(root.EarthFleet && !root.EarthFleet.valid(site,world.week))return false;
     if(root.EarthCivicInitiatives && !root.EarthCivicInitiatives.valid(site,world.week))return false;
-    if(root.EarthFreeLand?.valid && !root.EarthFreeLand.valid(site,world.week))return false;
-    if(root.EarthReadingRoom?.valid && !root.EarthReadingRoom.valid(site,world.week))return false;
     if(root.EarthStrategy?.valid && !root.EarthStrategy.valid(site.strategy))return false;
     if(root.EarthCityModel?.valid && !root.EarthCityModel.valid(site.city))return false;
     if(root.EarthNeighbours?.valid && !root.EarthNeighbours.valid(site))return false;
@@ -1247,6 +1260,14 @@
           return order.ok?order.message:order;
         });
       }
+      if(group==='all'||group==='build'){
+        const lvl=site.territoryLevel||0;
+        const expCost={funds:6+lvl*2,materials:4+lvl*2};
+        add('build','territory:expand','Expand Territory (Level '+(lvl+1)+')','Push perimeter walls outward by +6 units in every direction to unlock open buildable land, +1 material/week, and +1 fund/week for greater population and research.',{effort:1,goods:expCost,gate:lvl>=12?'Maximum territory expansion reached.':''},()=>{
+          site.territoryLevel=lvl+1;
+          return site.name+' expanded its territory to Level '+site.territoryLevel+'. Perimeter walls moved outward, opening fresh land for houses, Dragon Stables, and workshops.';
+        });
+      }
       const nextTech=TECH[site.tech.length];
       if(nextTech&&(group==='all'||group==='research')){
         const gate=researchGate(world,site,nextTech);
@@ -1871,6 +1892,9 @@
       for(const site of districts){
         for(const note of root.EarthTownCentre?.tick(turn,site)||[])event(note,site,'arrivals');
         for(const note of root.EarthHousing?.tick(turn,site)||[])event(note,site);
+        if(root.EarthDragonStable&&root.EarthDragonStable.hasStable(site)){
+          for(const note of root.EarthDragonStable.tick(turn,site,1)||[])event(note,site);
+        }
       }
       root.EarthRegionalWorld?.advance?.(turn,spec=>newSettlement(spec,turn),'calendar');
       dispatchCargo(turn,byId,inbound,event);
@@ -2103,6 +2127,7 @@
       const partners=site.residents.filter(person=>person.promise && PROFILES[person.slot].alternative===job.kind);
       const name=BUILDINGS[job.kind].name;
       site.buildings.push({id:job.id,kind:job.kind,plot:job.plot,name,partners:partners.map(person=>person.id)});
+      if(job.kind==='dragonStable')root.EarthDragonStable?.ensure?.(site);
       let story=name+' opened on lot '+(job.plot+1)+'.';
       for(const person of partners)story+=' '+fulfilled(site,person,'The completed project met the need they raised.',turn);
       return story;
@@ -2469,6 +2494,179 @@
         if(!current()||!root.EarthDayClock?.change(world,choice))return reject('Choose a town and a simulation speed.');
         return complete('World speed changed.',current(),false);
       }),
+      cafeSit:guarded(req=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        if(!site||!root.EarthNightlife?.sitAtCafe)return reject('The Reading Room is unavailable.');
+        const res=root.EarthNightlife.sitAtCafe(world,site,req?.actorId,req?.sit!==false);
+        return res.ok?complete(res.message,site,false):res;
+      }),
+      cafeBook:guarded(req=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        if(!site||!root.EarthNightlife?.selectBook)return reject('The Reading Room bookshelf is unavailable.');
+        const res=root.EarthNightlife.selectBook(world,site,req?.bookId,req?.page||0);
+        return res.ok?complete(res.message,site,false):res;
+      }),
+      orderCafeCoffee:guarded(req=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        if(!site||!root.EarthNightlife?.orderCoffee)return reject('The espresso counter is unavailable.');
+        const res=root.EarthNightlife.orderCoffee(world,site,req?.actorId,req?.drinkId||req?.coffeeId);
+        return res.ok?complete(res.message,site):res;
+      }),
+      drinkCafeCoffee:guarded(req=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        if(!site||!root.EarthNightlife?.drinkCoffee)return reject('The espresso counter is unavailable.');
+        const res=root.EarthNightlife.drinkCoffee(world,site,req?.actorId);
+        return res.ok?complete(res.message,site):res;
+      }),
+      dragonAction:guarded(req=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        const ds=root.EarthDragonStable;
+        if(!site||!ds)return reject('Dragon Stable is unavailable.');
+        let res;
+        if(req?.action==='summon')res=ds.summonDragon(world,site,req.lineageId,req.name);
+        else if(req?.action==='trainWizard')res=ds.trainWizard(world,site,req.personId);
+        else if(req?.action==='createWizard')res=ds.createNewWizard(world,site,req.name);
+        else if(req?.action==='assignWorker')res=ds.assignWorker(world,site,req.personId);
+        else if(req?.action==='replenishFood')res=ds.replenishLarder(world,site,req.amount||4);
+        else if(req?.action==='feed')res=ds.feedDragon(world,site,req.dragonId);
+        else if(req?.action==='blastFire')res=ds.blastFire(world,site,req.riderId||req.actorId,req.dragonId,req.target||{kind:req.kind||'fun',name:req.name,id:req.id,siteId:req.targetSiteId});
+        else if(req?.action==='recordFlight'){ds.recordFlight(world,site,req.riderId||req.actorId,req.dragonId,req.stats||{maxAltitude:req.maxAltitude,distanceFlown:req.distance});res={ok:true,message:'Flight logged.'};}
+        else if(req?.action==='tick'){ds.tick(world,site,req.stepCount||1);res={ok:true,message:'Dragon stable updated.'};}
+        else res=reject('Choose a Dragon Stable action.');
+        return res?.ok?complete(res.message,site,req?.action!=='recordFlight'&&req?.action!=='tick'):(res||reject('Dragon action failed.'));
+      }),
+      expandTerritory:guarded(req=>{
+        const id=typeof req==='object'&&req!==null?req.siteId:req;
+        const site=root.EarthCommunityLife?.lookup?.(world,id)||current();
+        if(!site)return reject('Choose a community first.');
+        const lvl=site.territoryLevel||0;
+        if(lvl>=12)return reject('Maximum territory expansion reached.');
+        const cost={funds:6+lvl*2,materials:4+lvl*2};
+        if(!affordable(site,cost))return reject('Expanding territory to Level '+(lvl+1)+' requires '+resources(cost)+'.');
+        payment(site,cost);
+        site.territoryLevel=lvl+1;
+        return complete(site.name+' expanded its territory to Level '+site.territoryLevel+'. Perimeter walls moved outward (+6 units), unlocking new open land, +1 material/week, and +1 fund/week.',site);
+      }),
+      buildPlayerHouse:guarded((req={})=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        if(!site)return reject('Choose a community first.');
+        const places=Math.max(2,Math.min(12,Math.floor(Number(req.places)||4)));
+        const cost={funds:Math.max(3,Math.ceil(places)),materials:Math.max(2,Math.ceil(places*.75))};
+        if(!affordable(site,cost))return reject('Building a house ('+places+' places) requires '+resources(cost)+'.');
+        const hasWater=Boolean(waterfront(site));
+        const lvl=site.territoryLevel||0;
+        const fp=root.EarthFlightPhysics;
+        const existingSolids=[
+          ...(site.freeBuildings||[]).map(fb=>[fb.x-1.7,fb.y-1.7,fb.x+1.7,fb.y+1.7]),
+          ...(site.playerHouses||[]).map(ph=>[ph.x-1.5,ph.y-1.5,ph.x+1.5,ph.y+1.5])
+        ];
+        const opts={territoryLevel:lvl,hasWaterfront:hasWater,fortStage:site.communityLife?.border?.defence?.stage||0,existingSolids};
+        let tx=Number(req.x),ty=Number(req.y);
+        if(!Number.isFinite(tx)||!Number.isFinite(ty)){
+          // Auto-find clear empty land inside the community/expanded perimeter
+          const b=fp?.perimeterBounds?.(lvl,hasWater)||{minX:-2.4,maxX:26.4,minY:-2.4,maxY:25.15};
+          let found=null;
+          const candidates=[];
+          for(let y=b.minY+2.4;y<=b.maxY-2.4;y+=3.4){
+            for(let x=b.minX+2.4;x<=b.maxX-2.4;x+=3.4){
+              candidates.push([x,y]);
+            }
+          }
+          // Prefer open land near perimeter expansion & open strips first
+          for(const [cx,cy] of candidates){
+            const check=fp?fp.isLandClearForBuilding(cx,cy,1.4,1.4,opts):{ok:true};
+            if(check.ok){found={x:Number(cx.toFixed(2)),y:Number(cy.toFixed(2))};break;}
+          }
+          if(!found)return reject('No open land left inside the perimeter. Expand territory first to unlock more land for houses!');
+          tx=found.x;ty=found.y;
+        }else if(fp){
+          const check=fp.isLandClearForBuilding(tx,ty,1.4,1.4,opts);
+          if(!check.ok)return reject(check.reason);
+        }
+        payment(site,cost);
+        site.playerHouses||=[];
+        const num=site.playerHouses.length+1;
+        const name=tidy(req.name,42)||('Community House #'+num);
+        const house={id:'ph-'+Date.now().toString(36)+'-'+num,name,x:Number(tx.toFixed(2)),y:Number(ty.toFixed(2)),places,style:req.style||'cottage',builtWeek:world.week};
+        site.playerHouses.push(house);
+        root.EarthHousing?.sync?.(world,site);
+        return complete('Built '+name+' ('+places+' residential places) on open land. Total housing capacity is now '+capacity(site)+'.',site);
+      }),
+      buildFreeBuilding:guarded((req={})=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        if(!site)return reject('Choose a community first.');
+        const kind=req.kind;
+        if(!Object.hasOwn(BUILDINGS,kind))return reject('Choose a valid building type.');
+        if(kind==='house')return commands.buildPlayerHouse(req);
+        const def=BUILDINGS[kind];
+        const cost={funds:def.funds,materials:def.materials};
+        if(!affordable(site,cost))return reject('Building '+def.name+' requires '+resources(cost)+'.');
+        const hasWater=Boolean(waterfront(site));
+        const lvl=site.territoryLevel||0;
+        const fp=root.EarthFlightPhysics;
+        const existingSolids=[
+          ...(site.freeBuildings||[]).map(fb=>[fb.x-1.8,fb.y-1.8,fb.x+1.8,fb.y+1.8]),
+          ...(site.playerHouses||[]).map(ph=>[ph.x-1.5,ph.y-1.5,ph.x+1.5,ph.y+1.5])
+        ];
+        const opts={territoryLevel:lvl,hasWaterfront:hasWater,fortStage:site.communityLife?.border?.defence?.stage||0,existingSolids};
+        let tx=Number(req.x),ty=Number(req.y);
+        if(!Number.isFinite(tx)||!Number.isFinite(ty)){
+          const b=fp?.perimeterBounds?.(lvl,hasWater)||{minX:-2.4,maxX:26.4,minY:-2.4,maxY:25.15};
+          let found=null;
+          for(let y=b.minY+2.6;y<=b.maxY-2.6&&!found;y+=3.6){
+            for(let x=b.minX+2.6;x<=b.maxX-2.6;x+=3.6){
+              const check=fp?fp.isLandClearForBuilding(x,y,1.65,1.65,opts):{ok:true};
+              if(check.ok){found={x:Number(x.toFixed(2)),y:Number(y.toFixed(2))};break;}
+            }
+          }
+          if(!found)return reject('No open land available inside the perimeter. Expand territory first to build more facilities!');
+          tx=found.x;ty=found.y;
+        }else if(fp){
+          const check=fp.isLandClearForBuilding(tx,ty,1.65,1.65,opts);
+          if(!check.ok)return reject(check.reason);
+        }
+        payment(site,cost);
+        site.freeBuildings||=[];
+        const num=site.freeBuildings.length+1;
+        const entry={id:'fb-'+kind+'-'+Date.now().toString(36)+'-'+num,kind,name:def.name,x:Number(tx.toFixed(2)),y:Number(ty.toFixed(2)),free:true,builtWeek:world.week};
+        site.freeBuildings.push(entry);
+        if(kind==='dragonStable'&&root.EarthDragonStable){
+          root.EarthDragonStable.ensure(site);
+        }
+        return complete('Built '+def.name+' on open land at ('+entry.x+', '+entry.y+').',site);
+      }),
+      importResident:guarded((req={})=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        if(!site)return reject('Choose a community first.');
+        const cap=capacity(site);
+        if(site.population>=cap)return reject('All '+cap+' housing places are full. Build a new Community House first to import more residents!');
+        const count=Math.max(1,Math.min(cap-site.population,Math.floor(Number(req.count)||1)));
+        const firstNames=['Amara','Bram','Celine','Dario','Esme','Farid','Greta','Hassan','Isla','Jorah','Kira','Mateo','Nadia','Omar','Priya','Rowan','Sora','Tarek','Uma','Yusuf'];
+        const lastNames=['Bello','Chen','Diallo','Ferreira','Gomez','Haddad','Ito','Kowalski','Mensah','Nasser','Okafor','Patel','Reyes','Silva','Tavares','Vance'];
+        const added=[];
+        const cl=site.communityLife||={people:{},away:{},visits:{},log:[]};
+        for(let i=0;i<count;i++){
+          const idx=site.population+i;
+          const fullName=tidy(req.name,36)||(firstNames[idx%firstNames.length]+' '+lastNames[(idx*3+1)%lastNames.length]);
+          const id='settler-'+(Object.keys(cl.people).length+1+i)+'-'+Date.now().toString(36).slice(-3);
+          const aptitudes={care:54,craft:56,organisation:52,communication:55,numeracy:50,stamina:58,music:48};
+          const bounds=Object.fromEntries(Object.entries(aptitudes).map(([k,v])=>[k,{min:Math.max(15,v-15),max:Math.min(95,v+25)}]));
+          const role=tidy(req.role,36)||'Community Settler';
+          cl.people[id]={
+            profile:{
+              id,name:fullName,identityKey:site.id+'/'+id,birthCommunityName:site.name,
+              role,originRole:role,description:'Invited into '+site.name+' to live in newly built housing and contribute to community life.',
+              aptitudes,bounds,
+              traits:{sociability:60,patience:56,curiosity:62,initiative:58,aggression:25}
+            },
+            status:'member',originId:site.id,originSlot:id,originName:site.name,since:world.week
+          };
+          added.push(fullName);
+        }
+        site.population+=count;
+        root.EarthHousing?.sync?.(world,site);
+        return complete('Welcomed '+added.join(', ')+' into '+site.name+' (Population '+site.population+'/'+cap+').',site);
+      }),
       production:guarded(runProduction),
       setPaidOrders:guarded(request=>{
         const site=current();
@@ -2479,21 +2677,6 @@
       baseOrder:guarded(request=>{
         const result=root.EarthMilitaryBase?.command(world,request);
         return result?.ok?complete(result.message,root.EarthCommunityLife.lookup(world,request.site),!root.EarthBaseField?.actions.has(request.action)):result||reject('The military base is unavailable.');
-      }),
-      jetStrike:guarded(request=>{
-        const site=current();
-        const result=root.EarthMilitaryBase?.jetStrike?.(world,site,request);
-        return result?.ok?complete(result.message,site,false):result||reject('Fighter jet strike is unavailable.');
-      }),
-      cafeAction:guarded(request=>{
-        const site=current();
-        const result=root.EarthReadingRoom?.command?.(world,site,request);
-        return result?.ok?complete(result.message,site,false):result||reject('The Reading Room is unavailable.');
-      }),
-      freeLand:guarded(request=>{
-        const site=current();
-        const result=root.EarthFreeLand?.command?.(world,site,request);
-        return result?.ok?complete(result.message,site,true):result||reject('Free-land building is unavailable.');
       }),
       diplomacy:guarded(request=>{
         const result=root.EarthBorderConflict?.diplomacy(world,request);
@@ -2590,8 +2773,6 @@
     return {
       ...commands,get state(){return world;},get savedUnits(){return lastGood?.length||0;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get newerSaveText(){return futureSave;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
       buildPlanView,active:current,liveWeekHold,marketView,purseView:id=>root.EarthPurses?.view(world,current(),id),provisionsView,civicView:()=>root.EarthCivicInitiatives?.view(world,current()),truckView:()=>root.EarthFleet?.view(world,current()),regularTruckView:()=>root.EarthFleet?.regular(world,current()),handlineOffer,fishingOffer,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,courseCalendar,perform,sync,
-      cafeView:()=>root.EarthReadingRoom?.view?.(world,current()),
-      freeLandView:()=>root.EarthFreeLand?.view?.(current()),
       truckDisputeView:()=>root.EarthFleet?.dispute?.(world,current()),
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
       destroy(){closed=true;listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}

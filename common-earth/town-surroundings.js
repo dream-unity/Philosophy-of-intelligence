@@ -239,46 +239,60 @@
       }
     }
   }
-  function outskirts(g, project, unit, place, seed, plant, site=null) {
+  function outskirts(g, project, unit, place, seed, plant, site) {
     const port = place === 'zanzibar' || place==='coast' || place==='lake', hot = place === 'warm';
     const features = [];
     if(port) {
       // Lower contrast and setbacks keep the occupied quarter visually distinct
       // from the market, residents' homes and projects that the player can visit.
-      const sites=[[-8.2,.3],[-7.8,4.8],[-9.0,12.4],[-7.8,16.3],[-9.2,21.4],[-9.5,-7.6],[.1,-8.3],[4.4,-8.0],[10.8,-9.3],[17.3,-8.5],[21.0,-8.3]];
+      const sites=[[-6.2,.3],[-5.8,5.2],[-6.6,12.4],[-5.8,16.8],[-6.7,21.4],[-7.8,-4.6],[.1,-5.5],[4.4,-5.2],[10.8,-6.6],[17.3,-5.8],[21.0,-5.3],[28.4,-4.4],[28.8,21.8]];
       for(let i=0;i<sites.length;i++){
         const x=sites[i][0]+jitter(seed,i)*.42, y=sites[i][1]+jitter(seed,i+62)*.47;
         features.push({x,y, size:.74+jitter(seed,i+88)*.16, tile:(place==='zanzibar'?'coral':'cottage')+((i+seed%3)%3), flip:false});
       }
     } else {
-      const sites=[[-8.2,4.0],[-8.6,10.0],[-7.9,19.9],[2.7,-8.5],[7.5,-8.8],[20.6,-8.2],[3.3,33.4],[8.5,32.8],[19.5,33.7]];
+      const sites=[[-6.0,4.0],[-6.3,10.0],[-5.8,19.9],[2.7,-5.8],[7.5,-6.1],[20.6,-5.4],[3.3,30.2],[8.5,29.8],[19.5,30.4]];
       for(let i=0;i<sites.length;i++){
         const x=sites[i][0]+jitter(seed,i)*.67, y=sites[i][1]+jitter(seed,i+39)*.57;
         const cottage='cottage'+(place==='boreal' ? (i%2 ? 0 : 2) : i%3);
         const tile=i%4===0 ? (hot?'lath':'nursery') : i%5===0 ? 'barn' : cottage;
         features.push({x,y,size:.76+jitter(seed,i+92)*.17,tile,flip:false});
       }
-      allotment(g,project,unit,10.5,31.6,seed);
+      allotment(g,project,unit,10.5,27.2,seed);
     }
     if (plant) {
       const homes=features.slice();
       for(let i=0;i<homes.length;i++) {
         const house=homes[i], dx=i%2 ? -2.15 : 2.16, dy=i%3 ? 1.06 : 2.24;
         const x=house.x+dx, y=house.y+dy;
-        if ((x<-6.5 || x>27.0 || y<-6.5 || y>30.5) && (!port || y<24)) {
+        if ((x<-3.2 || x>27.4 || y<-3.2 || y>27.4) && (!port || y<24)) {
           features.push({x,y,tree:true,size:.75+jitter(seed,441+i)*.47,variant:i%4,palm:(place==='zanzibar' || hot) && i%3!==0});
         }
       }
+      if (!port) {
+        // Orchard rows have a human scale near the south edge.
+        for(let row=0;row<2;row++) for(let j=0;j<4;j++) {
+          features.push({x:13.65+j*1.18,y:27.4+row*1.17+j*.024,size:.58+jitter(seed,j+164)*.14,tree:true,variant:1,palm:false});
+        }
+      }
     }
-    const freeBounds=site&&window.EarthFreeLand?.territoryBounds?.(site);
-    const freeBuildings=site&&window.EarthFreeLand?.buildingsOf?.(site)||[];
+    const baseLayout=window.EarthFlightPhysics?.militaryBaseLayout?.(site?.territoryLevel||0);
+    const excl=baseLayout?.exclusionBox||[28.3,-2.1,43.8,25.3];
+    const pBounds=window.EarthFlightPhysics?.perimeterBounds?.(site?.territoryLevel||0,port);
+    const blockedByPlayer=(x,y)=>{
+      for(const fb of site?.freeBuildings||[])if(Math.hypot(x-fb.x,y-fb.y)<3.8)return true;
+      for(const ph of site?.playerHouses||[])if(Math.hypot(x-ph.x,y-ph.y)<3.6)return true;
+      return false;
+    };
     features.sort((a,b) => a.x+a.y-b.x-b.y);
     for(const f of features) {
-      // Strictly keep the Military Base compound, access road, and entire 24-unit runway clear!
-      if(window.EarthMilitaryBase&&f.x>=24.2&&f.x<=43.5&&f.y>=-4.5&&f.y<=28.5)continue;
-      // Keep surveyed empty buildable territory inside the perimeter walls clear of decorative clutter!
-      if(freeBounds&&f.x>=freeBounds.minX-1.5&&f.x<=freeBounds.maxX+1.5&&f.y>=freeBounds.minY-1.5&&f.y<=freeBounds.maxY+1.5)continue;
-      if(freeBuildings.some(b=>Math.abs(f.x-b.x)<3.2&&Math.abs(f.y-b.y)<3.2))continue;
+      // Strictly keep every surrounding cottage & tree outside the Military Airbase, runway, and approach road
+      if(window.EarthMilitaryBase&&f.x>=excl[0]-1.2&&f.x<=excl[2]+1.2&&f.y>=excl[1]-1.2&&f.y<=excl[3]+1.2)continue;
+      // Keep approach corridor from East Gate to Military Base clear
+      if(window.EarthMilitaryBase&&f.x>=24.0&&f.x<=excl[0]+1.0&&Math.abs(f.y-12)<2.8)continue;
+      // Keep clear of perimeter wall lines & expanded buildable territory
+      if(pBounds&&(f.x>pBounds.minX-1.6&&f.x<pBounds.maxX+1.6&&f.y>pBounds.minY-1.6&&f.y<pBounds.maxY+1.6))continue;
+      if(blockedByPlayer(f.x,f.y))continue;
       if(f.tree) {
         contact(g,project,unit,f.x+.36*f.size,f.y+.13*f.size,f.size*1.32,-.47,.21);
         g.save();g.translate(0,.48*unit);plant(f.x,f.y,f.size,f.variant,f.palm);g.restore();

@@ -2,9 +2,11 @@
    from this district's stores and advance even when nobody is watching it. */
 (function(root){
   'use strict';
-  const place={x:32.2,y:12},gate={x:24.35,y:12,label:'Military base gate'};
-  const compound=Object.freeze({x1:29.2,y1:8.6,x2:35.2,y2:15.4});
-  const runway=Object.freeze({x:37.6,yStart:0,yEnd:24,width:2.8,length:24,heading:0});
+  const place={x:35.5,y:12},gate={x:31.6,y:12,label:'Military base gate'};
+  function layoutFor(site){
+    if(root.EarthFlightPhysics?.militaryBaseLayout)return root.EarthFlightPhysics.militaryBaseLayout(site?.territoryLevel||0);
+    return {place,gate,runway:{x:41.1,y:11.5,startY:.5,endY:22.5,width:2.6,length:22,box:[39.8,.5,42.4,22.5]},solids:[]};
+  }
   const goods=['food','materials','funds'];
   const unit=(name,food,materials,funds,power,pace,detail,tech=null)=>({name,cost:{food,materials,funds},power,pace,detail,tech});
   const units={
@@ -34,11 +36,11 @@
   function affordable(w,s,cost){const free=balance(w,s);return goods.every(k=>free[k]>=(cost[k]||0));}
   function pay(w,s,cost){
     if(!affordable(w,s,cost))return false;
-    // Procurement pays a local contractor. Materials and provisions are consumed.
-    const suppliers=s.residents.filter(p=>root.EarthCommunityLife.present(s,p.id));
-    const offset=(view(s).version||0)%Math.max(1,suppliers.length);
-    for(let i=0;i<suppliers.length;i++){
-      const p=suppliers[(i+offset)%suppliers.length];
+    // Procurement pays a local contractor (including any present resident or steward fallback).
+    const allPresent=[...(s.residents||[]),...(root.EarthDistrictGrowth?.members?.(s)||[])].filter((p,i,arr)=>p&&root.EarthCommunityLife.present(s,p.id)&&arr.findIndex(x=>x.id===p.id)===i);
+    const offset=(view(s).version||0)%Math.max(1,allPresent.length);
+    for(let i=0;i<allPresent.length;i++){
+      const p=allPresent[(i+offset)%allPresent.length];
       if(root.EarthPurses.productionReceipt(w,s,p.id,cost.funds,'Military base procurement and training contract.'))break;
     }
     for(const k of goods)s[k]-=cost[k]||0;
@@ -60,7 +62,7 @@
   }
   const strength=(b,u)=>units[u.type].power+u.grade+(b.tech.includes('doctrine')?1:0);
   function defence(w,s){
-    let n=2+2*(s.communityLife?.border?.defence?.stage||0)+(root.EarthFreeLand?.defenceBonus?.(s)||0);
+    let n=2+2*(s.communityLife?.border?.defence?.stage||0);
     for(const u of ready(w,s))if(!u.aboard&&(!u.field||!root.EarthBaseField.moved(w,s,u.id)))n+=strength(view(s),u)+(u.type==='guard'?1:0);
     for(const ally of towns(w))for(const m of ally.militaryBase?.missions||[]){
       if(m.target!==s.id||m.phase!=='stationed')continue;
@@ -237,6 +239,32 @@
       const m=b.missions.find(m=>m.id===q.id);if(!m||m.phase==='returning')return fail('This group is already home or returning.');
       if(m.manual){b.missions.splice(b.missions.indexOf(m),1);message='Assignment ended. The units hold their current positions.';}
       else{recall(w,m);message='The group is returning to '+s.name+'.';}
+    }else if(q.action==='jetStrike'){
+      const jetUnit=b.units.find(u=>u.type==='jet'&&(q.jetId==null||u.id===q.jetId));
+      if(!jetUnit)return fail('Commission a Fighter Jet at the military airbase first.');
+      const targetName=String(q.targetName||'target').slice(0,120);
+      const targetKind=q.targetKind||'target';
+      if(targetKind==='building'&&q.buildingId&&q.targetSiteId){
+        const tSite=root.EarthCommunityLife.lookup(w,q.targetSiteId)||s;
+        if(tSite.id!==s.id&&root.EarthBorderConflict?.relation?.(w,s.id,tSite.id)?.state!=='war'){
+          root.EarthBorderConflict?.declare?.(w,s,tSite);
+        }
+        if(tSite.buildings){
+          const bld=tSite.buildings.find(item=>item.id===q.buildingId);
+          if(bld){
+            bld.damage=Math.min(100,(bld.damage||0)+45);
+            if(bld.damage>=100)tSite.buildings=tSite.buildings.filter(item=>item.id!==q.buildingId);
+          }
+        }
+        if(tSite.freeBuildings){
+          const fb=tSite.freeBuildings.find(item=>item.id===q.buildingId);
+          if(fb){
+            fb.damage=Math.min(100,(fb.damage||0)+45);
+            if(fb.damage>=100)tSite.freeBuildings=tSite.freeBuildings.filter(item=>item.id!==q.buildingId);
+          }
+        }
+      }
+      message='Fighter jet '+jetUnit.id+' launched from the runway and struck '+targetName+'.';
     }else if(q.action==='autonomy'){
       if(typeof q.enabled!=='boolean')return fail('Choose who directs this base.');
       b.autonomous=q.enabled;message=s.name+' base is under '+(q.enabled?'town':'player')+' command.';
@@ -357,19 +385,26 @@
   }
   function peace(w,a,b){
     for(const [s,t] of [[a,b],[b,a]])if(s.militaryBase?.captures){
+      const before=s.militaryBase.captures.length;
       s.militaryBase.captures=s.militaryBase.captures.filter(c=>c.by!==t.id);
+      if(s.militaryBase.captures.length!==before)s.militaryBase.version=(s.militaryBase.version||0)+1;
     }
     for(const [s,t] of [[a,b],[b,a]])for(const m of [...(s.militaryBase?.missions||[])]){
       if(m.order==='attack'&&m.target===t.id&&m.phase!=='returning'){
         if(m.manual)s.militaryBase.missions.splice(s.militaryBase.missions.indexOf(m),1);else recall(w,m);
-        s.militaryBase.version++;
+        s.militaryBase.version=(s.militaryBase.version||0)+1;
       }
     }
   }
   function detach(w,id){
     for(const s of towns(w))if(s.militaryBase){
-      const b=s.militaryBase;if(b.captures)b.captures=b.captures.filter(c=>c.by!==id);
-      if(b.missions.some(m=>m.target===id)){b.missions=b.missions.filter(m=>m.target!==id);b.version++;}
+      const b=s.militaryBase;
+      if(b.captures){
+        const before=b.captures.length;
+        b.captures=b.captures.filter(c=>c.by!==id);
+        if(b.captures.length!==before)b.version=(b.version||0)+1;
+      }
+      if(b.missions.some(m=>m.target===id)){b.missions=b.missions.filter(m=>m.target!==id);b.version=(b.version||0)+1;}
     }
   }
   function valid(b){
@@ -434,45 +469,5 @@
       }
     }
   }
-  function jetStrike(w,s,req={}){
-    if(!s)return fail('No community is open.');
-    const b=s.militaryBase;
-    if(!b||!b.units.some(u=>u.type==='jet'))return fail('Build or research a fighter jet at the Military Base first.');
-    const x=Number(req.x),y=Number(req.y);
-    if(!Number.isFinite(x)||!Number.isFinite(y)||Math.abs(x)>400||Math.abs(y)>400)return fail('Choose valid strike coordinates.');
-    const label=typeof req.targetLabel==='string'&&req.targetLabel.trim()?req.targetLabel.trim().slice(0,80):'coordinates ('+Math.round(x)+', '+Math.round(y)+')';
-    // Check if an active hostile street raid or rival target is struck.
-    const border=s.communityLife?.border;
-    let effect='';
-    if(req.targetSiteId){
-      const target=root.EarthCommunityLife?.lookup?.(w,req.targetSiteId);
-      if(target&&target.id!==s.id){
-        if(target.communityLife?.border?.defence?.stage>0){
-          target.communityLife.border.defence.stage=Math.max(0,target.communityLife.border.defence.stage-1);
-          effect=' Fortifications at '+target.name+' damaged.';
-        }else if(target.militaryBase?.units?.length){
-          const hit=target.militaryBase.units.pop();
-          target.militaryBase.version=(target.militaryBase.version||0)+1;
-          effect=' Destroyed rival '+units[hit.type].name+' at '+target.name+'.';
-        }else{
-          target.materials=Math.max(0,(target.materials||0)-2);
-          effect=' Struck supply stores at '+target.name+'.';
-        }
-        entry(w,s,'Fighter jet launched an air-to-ground strike on '+target.name+'.'+effect);
-        return ok('Air strike hit '+target.name+'.'+effect);
-      }
-    }
-    if(border?.street&&border.street.from&&border.street.from!==s.id){
-      root.EarthBorderConflict?.leaveStreet?.(s);
-      effect=' Hostile raiding party dispersed from the perimeter.';
-    }else if(border?.foothold?.by&&border.foothold.by!==s.id){
-      delete border.foothold;
-      effect=' Enemy foothold cleared by air support.';
-    }
-    const text='Fighter jet struck '+label+'.'+effect;
-    entry(w,s,text);
-    b.version=(b.version||0)+1;
-    return ok(text);
-  }
-  root.EarthMilitaryBase=Object.freeze({place,gate,compound,runway,units,research,orders,towns,view,ready,parked,attackParty,targetAvailable,battle,shot,incoming,balance,affordable,defence,command,jetStrike,advance,peace,detach,valid,actors,missionPoint,restoreField});
+  root.EarthMilitaryBase=Object.freeze({place,gate,layoutFor,units,research,orders,towns,view,ready,parked,attackParty,targetAvailable,battle,shot,incoming,balance,affordable,defence,command,advance,peace,detach,valid,actors,missionPoint,restoreField});
 })(globalThis);

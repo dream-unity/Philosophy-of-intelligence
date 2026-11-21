@@ -39,9 +39,18 @@
     return {polygon,face,line,floor,box,disc,glow};
   }
 
-  function jet(p,x,y,z,s=1){
-    const point=(u,v,h)=>[x+u*s,y+v*s,z+h*s],plane=(v,col)=>p.face(v.map(a=>point(...a)),col);
-    p.disc(x+.055*s,y,z,.63*s,.19*s,'rgba(30,43,47,.27)');
+  function jet(p,x,y,z,s=1,airborne=false){
+    const lift=airborne?1.35:0;
+    const point=(u,v,h)=>[x+u*s,y+v*s,z+(h+lift)*s],plane=(v,col)=>p.face(v.map(a=>point(...a)),col);
+    // Ground shadow stays on z=0 while airborne jet climbs high above it
+    p.disc(x+(airborne?.55:.055)*s,y+(airborne?.45:0)*s,z,(airborne?.46:.63)*s,(airborne?.14:.19)*s,airborne?'rgba(20,30,36,.18)':'rgba(30,43,47,.27)');
+    if(airborne){
+      // Twin condensation trails & glowing afterburner exhaust
+      p.line([x-.18*s,y+.45*s,z+(lift+.13)*s],[x-.26*s,y+1.85*s,z+(lift+.08)*s],'rgba(235,246,252,.45)',.055*s);
+      p.line([x+.18*s,y+.45*s,z+(lift+.13)*s],[x+.26*s,y+1.85*s,z+(lift+.08)*s],'rgba(235,246,252,.45)',.055*s);
+      p.glow(x,y+.54*s,z+(lift+.13)*s,.32*s,'255,152,64');
+      plane([[-.08,.48,.13],[.08,.48,.13],[0,.92,.13]],'#ffbe55');
+    }
     // A broad delta silhouette, pearl paint and amber tail bands.
     plane([[0,-.52,.105],[-.15,-.13,.11],[-.55,.31,.08],[-.14,.25,.13],[-.12,.48,.13],[.14,.47,.13],[.15,.25,.13],[.55,.30,.08],[.14,-.13,.11]],'#718792');
     plane([[0,-.63,.14],[-.115,-.04,.18],[-.10,.38,.16],[0,.5,.12],[.12,.34,.15],[.1,-.04,.18]],'#c9d6d6');
@@ -462,6 +471,70 @@
     else soldier(c,0,0,1,{type:id},{mini:true});
     c.restore();
   }
+  function drawRunway(c,project,unit,layout,night=false){
+    if(!layout?.runway||!(unit>0))return;
+    const rw=layout.runway,b=layout.place;
+    const x0=rw.x-rw.width/2,x1=rw.x+rw.width/2,y0=rw.startY,y1=rw.endY;
+    const poly=(pts,fill,stroke,w=0)=>{
+      c.beginPath();
+      for(let i=0;i<pts.length;i++){const p=project(...pts[i]);if(i)c.lineTo(p[0],p[1]);else c.moveTo(p[0],p[1]);}
+      c.closePath();
+      if(fill){c.fillStyle=fill;c.fill();}
+      if(stroke){c.strokeStyle=stroke;c.lineWidth=w;c.stroke();}
+    };
+    const seg=(a,bPt,col,w)=>{
+      const p0=project(...a),p1=project(...bPt);
+      c.beginPath();c.moveTo(p0[0],p0[1]);c.lineTo(p1[0],p1[1]);
+      c.strokeStyle=col;c.lineWidth=w;c.stroke();
+    };
+    c.save();c.lineCap='butt';
+    // Concrete shoulder apron around the full runway
+    poly([[x0-.55,y0-.6,-.06],[x1+.55,y0-.6,-.06],[x1+.55,y1+.6,-.06],[x0-.55,y1+.6,-.06]],night?'#4b5659':'#7b847a');
+    // Paved taxiway connecting airbase apron (east side of compound) to the runway
+    poly([[b.x+1.7,b.y-1.0,-.03],[x0+.15,b.y-1.0,-.03],[x0+.15,b.y+1.0,-.03],[b.x+1.7,b.y+1.0,-.03]],night?'#424d52':'#576062');
+    seg([b.x+1.8,b.y,0],[x0+.1,b.y,0],'#dfc06e',Math.max(1.2,unit*.05));
+    // Paved approach road from East Gate (town ring road) across to Military Base gate
+    poly([[24.7,b.y-1.1,-.03],[b.x-1.8,b.y-1.1,-.03],[b.x-1.8,b.y+1.1,-.03],[24.7,b.y+1.1,-.03]],night?'#454f54':'#626a68');
+    seg([24.9,b.y,0],[b.x-2.4,b.y,0],'#d9d2b5',Math.max(1,unit*.04));
+    // Main long dark asphalt runway strip
+    poly([[x0,y0,-.02],[x1,y0,-.02],[x1,y1,-.02],[x0,y1,-.02]],night?'#293238':'#394347','#aeb5a9',Math.max(1,unit*.045));
+    // Edge stripes
+    seg([x0+.16,y0+.2,0],[x0+.16,y1-.2,0],'rgba(235,233,218,.78)',Math.max(.8,unit*.032));
+    seg([x1-.16,y0+.2,0],[x1-.16,y1-.2,0],'rgba(235,233,218,.78)',Math.max(.8,unit*.032));
+    // Threshold piano keys at both ends
+    for(const ty of [y0+.35,y1-1.35]){
+      for(let i=0;i<5;i++){
+        const kx=x0+.32+i*((rw.width-.64)/4);
+        seg([kx,ty,0],[kx,ty+1.0,0],'#efeadd',Math.max(1.2,unit*.07));
+      }
+    }
+    // White dashed centerline running the full length
+    for(let y=y0+2.0;y<y1-2.0;y+=1.65){
+      seg([rw.x,y,0],[rw.x,Math.min(y1-2.0,y+.95),0],'#f2efe2',Math.max(1.1,unit*.055));
+    }
+    // Runway edge approach lights & glowing beacons
+    for(let y=y0+.8;y<=y1-.8;y+=2.4){
+      for(const lx of [x0-.22,x1+.22]){
+        const [sx,sy]=project(lx,y,.06);
+        c.beginPath();c.arc(sx,sy,Math.max(1.6,unit*.065),0,Math.PI*2);
+        c.fillStyle=y<y0+2.5?'#64f2a6':y>y1-2.5?'#ff6e5a':(night?'#ffdf8e':'#d4c280');
+        c.fill();
+      }
+    }
+    // Windsock mast beside mid-runway
+    const [wx0,wy0]=project(x1+.9,rw.y,0),[wx1,wy1]=project(x1+.9,rw.y,1.3);
+    c.beginPath();c.moveTo(wx0,wy0);c.lineTo(wx1,wy1);c.strokeStyle='#b9c1b9';c.lineWidth=Math.max(1.2,unit*.05);c.stroke();
+    c.beginPath();c.moveTo(wx1,wy1);c.lineTo(wx1+unit*.45,wy1+unit*.12);c.lineTo(wx1+unit*.42,wy1+unit*.24);c.lineTo(wx1,wy1+unit*.14);c.closePath();
+    c.fillStyle='#eb6b38';c.fill();
+    c.restore();
+  }
+  function airborneJet(c,sx,sy,size,heading=0){
+    if(!(size>0))return;
+    c.save();c.translate(sx,sy);c.scale(size,size);c.lineCap='round';c.lineJoin='round';
+    const p=brushes(c);
+    jet(p,0,0,0,1,true);
+    c.restore();
+  }
   function inventory(ctx,sx,sy,unit,types){
     for(const kind of types){
       if(kind!=='jet'&&kind!=='tank')continue;
@@ -469,177 +542,5 @@
       marker(ctx,sx+(x-y)*unit,sy+((x+y)*.51-.11)*unit,unit*(air?.93:.87),kind);
     }
   }
-  function drawAirfield(ctx,screen,unit,state={}){
-    const rw=root.EarthMilitaryBase?.runway||{x:37.6,yStart:0,yEnd:24,width:2.8};
-    const comp=root.EarthMilitaryBase?.compound||{x1:29.2,y1:8.6,x2:35.2,y2:15.4};
-    const hw=rw.width/2,night=!!state.night,time=state.time||0;
-    const poly=(pts,fill,stroke,lw=1)=>{
-      ctx.beginPath();
-      pts.forEach(([x,y,z=0],i)=>{const p=screen(x,y,z);if(i)ctx.lineTo(p.x,p.y);else ctx.moveTo(p.x,p.y);});
-      ctx.closePath();
-      if(fill){ctx.fillStyle=fill;ctx.fill();}
-      if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke();}
-    };
-    const line=(a,b,color,w,dash)=>{
-      const pa=screen(a[0],a[1],a[2]||0),pb=screen(b[0],b[1],b[2]||0);
-      ctx.save();if(dash)ctx.setLineDash(dash);
-      ctx.strokeStyle=color;ctx.lineWidth=w;ctx.lineCap='butt';
-      ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke();ctx.restore();
-    };
-    // 1. Paved military access road from town east gate (24.35, 12) to base entrance (29.2, 12)
-    poly([[24.6,10.95],[29.5,10.95],[29.5,13.05],[24.6,13.05]],'#6d7169');
-    line([24.9,12],[29.1,12],'rgba(235,222,188,.55)',Math.max(1,unit*.045),[unit*.25,unit*.25]);
-    // 2. Concrete perimeter clearance pad around base compound & airfield apron
-    poly([[comp.x1-.5,comp.y1-.5],[rw.x+hw+1.1,comp.y1-.5],[rw.x+hw+1.1,comp.y2+.5],[comp.x1-.5,comp.y2+.5]],'#7f877f');
-    // 3. Taxiways connecting base apron to runway north, center, and south hold pads
-    poly([[34.4,10.8],[rw.x-hw+.15,10.8],[rw.x-hw+.15,13.2],[34.4,13.2]],'#545c5c');
-    line([34.5,12],[rw.x-hw+.05,12],'#d8ba68',Math.max(1.2,unit*.055));
-    poly([[34.8,20.2],[rw.x-hw+.15,20.2],[rw.x-hw+.15,22.4],[34.8,22.4]],'#545c5c');
-    line([35.0,21.3],[rw.x-hw+.05,21.3],'#d8ba68',Math.max(1.2,unit*.055));
-    // 4. Long Runway shoulder & tarmac (y = -1.2 to 25.2)
-    poly([[rw.x-hw-.45,rw.yStart-1.2],[rw.x+hw+.45,rw.yStart-1.2],[rw.x+hw+.45,rw.yEnd+1.2],[rw.x-hw-.45,rw.yEnd+1.2]],'#6b726e');
-    poly([[rw.x-hw,rw.yStart],[rw.x+hw,rw.yStart],[rw.x+hw,rw.yEnd],[rw.x-hw,rw.yEnd]],'#3c4347','#8b938e',Math.max(1,unit*.04));
-    // Blast pad yellow chevrons at north & south thresholds
-    for(const endY of [rw.yStart-.6,rw.yEnd+.6]){
-      line([rw.x-hw*.7,endY],[rw.x,endY+(endY<rw.yStart?.35:-.35)],'#d4b65c',Math.max(1.2,unit*.05));
-      line([rw.x+hw*.7,endY],[rw.x,endY+(endY<rw.yStart?.35:-.35)],'#d4b65c',Math.max(1.2,unit*.05));
-    }
-    // Threshold zebra stripes (north y=0.6..2.0, south y=22.0..23.4)
-    for(const y0 of [rw.yStart+.5,rw.yEnd-2.1]){
-      for(let i=-3;i<=3;i++){
-        if(i===0)continue;
-        const sx=rw.x+i*(hw*.26);
-        line([sx,y0],[sx,y0+1.55],'rgba(244,240,228,.85)',Math.max(1.4,unit*.06));
-      }
-    }
-    // Side edge lines & dashed white centerline along full 24-unit runway
-    line([rw.x-hw+.16,rw.yStart+.2],[rw.x-hw+.16,rw.yEnd-.2],'rgba(240,236,225,.7)',Math.max(1,unit*.035));
-    line([rw.x+hw-.16,rw.yStart+.2],[rw.x+hw-.16,rw.yEnd-.2],'rgba(240,236,225,.7)',Math.max(1,unit*.035));
-    for(let y=rw.yStart+2.6;y<rw.yEnd-2.8;y+=2.0){
-      line([rw.x,y],[rw.x,Math.min(rw.yEnd-2.6,y+1.1)],'rgba(248,244,232,.9)',Math.max(1.6,unit*.07));
-    }
-    // Runway edge lights (warm white along flanks, red/green at thresholds)
-    for(let y=rw.yStart;y<=rw.yEnd;y+=2.4){
-      const end=y<=rw.yStart+.5||y>=rw.yEnd-.5;
-      for(const sx of [rw.x-hw-.22,rw.x+hw+.22]){
-        const lp=screen(sx,y,.08);
-        ctx.fillStyle=end?(y<12?'#65e095':'#ef6d5b'):(night?'#ffeaad':'#d4d9cf');
-        ctx.beginPath();ctx.arc(lp.x,lp.y,Math.max(1.6,unit*(night?.09:.055)),0,Math.PI*2);ctx.fill();
-        if(night){
-          ctx.fillStyle=end?'rgba(239,109,91,.28)':'rgba(255,232,165,.24)';
-          ctx.beginPath();ctx.arc(lp.x,lp.y,Math.max(3.8,unit*.22),0,Math.PI*2);ctx.fill();
-        }
-      }
-    }
-    // Windsock pole beside runway midpoint
-    const poleBase=screen(rw.x-hw-.95,8.2,0),poleTop=screen(rw.x-hw-.95,8.2,1.1);
-    ctx.strokeStyle='#c9cfc6';ctx.lineWidth=Math.max(1.2,unit*.045);
-    ctx.beginPath();ctx.moveTo(poleBase.x,poleBase.y);ctx.lineTo(poleTop.x,poleTop.y);ctx.stroke();
-    const flutter=Math.sin(time*4)*.12*unit;
-    ctx.fillStyle='#e06b42';
-    ctx.beginPath();ctx.moveTo(poleTop.x,poleTop.y);ctx.lineTo(poleTop.x+unit*.42,poleTop.y-unit*.06+flutter);ctx.lineTo(poleTop.x+unit*.38,poleTop.y+unit*.12+flutter);ctx.lineTo(poleTop.x,poleTop.y+unit*.11);ctx.closePath();ctx.fill();
-    // Parked fighter jet ready on south runway hold pad if the base owns a jet and none is airborne
-    if(state.hasJet&&!state.jetAirborne){
-      drawFlyingJet(ctx,screen,unit,{x:rw.x,y:rw.yEnd-2.8,z:0,heading:-Math.PI/2,bank:0,throttle:0,trail:[]},time);
-    }
-  }
-
-  function drawFlyingJet(ctx,screen,unit,jetState,time=0){
-    const z=Math.max(0,jetState.z||0);
-    const heading=jetState.heading??-Math.PI/2;
-    const bank=jetState.bank||0;
-    const throttle=jetState.throttle||0;
-    // 1. Wingtip contrails in world space when flying high
-    if(Array.isArray(jetState.trail)&&jetState.trail.length>1){
-      ctx.save();
-      ctx.lineCap='round';
-      for(let i=1;i<jetState.trail.length;i++){
-        const a=jetState.trail[i-1],b=jetState.trail[i];
-        const pa=screen(a.x,a.y,a.z),pb=screen(b.x,b.y,b.z);
-        const alpha=(i/jetState.trail.length)*0.48;
-        ctx.strokeStyle='rgba(244,248,252,'+alpha.toFixed(3)+')';
-        ctx.lineWidth=Math.max(1.2,unit*(0.05+0.12*(1-i/jetState.trail.length)));
-        ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke();
-      }
-      ctx.restore();
-    }
-    // 2. Ground shadow offset proportionally by altitude z (clearly communicates high flight!)
-    const shadowPos=screen(jetState.x+z*0.58,jetState.y+z*0.42,0);
-    const pos=screen(jetState.x,jetState.y,z);
-    // Compute screen-space forward direction from world heading
-    const ahead=screen(jetState.x+Math.cos(heading),jetState.y+Math.sin(heading),z);
-    const ang=Math.atan2(ahead.y-pos.y,ahead.x-pos.x);
-    const airScale=1+Math.min(0.45,z*0.065);
-    const s=Math.max(14,unit*1.12*airScale);
-
-    // Draw ground shadow
-    ctx.save();
-    ctx.translate(shadowPos.x,shadowPos.y);
-    ctx.rotate(ang);
-    ctx.scale(Math.max(0.55,1-z*0.05),Math.max(0.42,0.75-z*0.04));
-    ctx.fillStyle='rgba(16,24,22,'+Math.max(0.14,0.34-z*0.025).toFixed(3)+')';
-    ctx.beginPath();
-    ctx.moveTo(s*0.95,0);ctx.lineTo(s*0.18,-s*0.18);ctx.lineTo(-s*0.28,-s*0.78);ctx.lineTo(-s*0.56,-s*0.72);
-    ctx.lineTo(-s*0.36,-s*0.18);ctx.lineTo(-s*0.82,-s*0.32);ctx.lineTo(-s*0.92,-s*0.12);ctx.lineTo(-s*0.92,s*0.12);
-    ctx.lineTo(-s*0.82,s*0.32);ctx.lineTo(-s*0.36,s*0.18);ctx.lineTo(-s*0.56,s*0.72);ctx.lineTo(-s*0.28,s*0.78);
-    ctx.lineTo(s*0.18,s*0.18);ctx.closePath();ctx.fill();
-    ctx.restore();
-
-    // Draw elevated jet body
-    ctx.save();
-    ctx.translate(pos.x,pos.y);
-    ctx.rotate(ang);
-    const bankSquash=1-Math.min(0.32,Math.abs(bank)*0.35);
-    ctx.scale(1,bankSquash);
-
-    // Twin afterburner exhaust cones when thrusting
-    if(throttle>0.15){
-      const flicker=0.82+Math.sin(time*48)*0.18;
-      const flame=s*(0.35+throttle*0.58)*flicker;
-      for(const ey of [-s*0.10,s*0.10]){
-        ctx.fillStyle='rgba(255,136,42,.82)';
-        ctx.beginPath();ctx.moveTo(-s*0.84,ey-s*0.055);ctx.lineTo(-s*0.84-flame,ey);ctx.lineTo(-s*0.84,ey+s*0.055);ctx.closePath();ctx.fill();
-        ctx.fillStyle='rgba(170,235,255,.92)';
-        ctx.beginPath();ctx.moveTo(-s*0.84,ey-s*0.028);ctx.lineTo(-s*0.84-flame*0.52,ey);ctx.lineTo(-s*0.84,ey+s*0.028);ctx.closePath();ctx.fill();
-      }
-    }
-    // Swept main wings
-    ctx.fillStyle='#6c7c85';
-    ctx.strokeStyle='#2c3940';
-    ctx.lineWidth=Math.max(1,s*0.028);
-    ctx.beginPath();
-    ctx.moveTo(s*0.24,-s*0.14);ctx.lineTo(-s*0.22,-s*0.86);ctx.lineTo(-s*0.52,-s*0.80);ctx.lineTo(-s*0.36,-s*0.14);
-    ctx.lineTo(-s*0.36,s*0.14);ctx.lineTo(-s*0.52,s*0.80);ctx.lineTo(-s*0.22,s*0.86);ctx.lineTo(s*0.24,s*0.14);
-    ctx.closePath();ctx.fill();ctx.stroke();
-    // Wingtop roundel stripes
-    ctx.fillStyle='#d9b968';
-    ctx.fillRect(-s*0.38,-s*0.58,s*0.12,s*0.06);
-    ctx.fillRect(-s*0.38,s*0.52,s*0.12,s*0.06);
-    // Horizontal stabilizers
-    ctx.fillStyle='#5c6c75';
-    ctx.beginPath();
-    ctx.moveTo(-s*0.52,-s*0.13);ctx.lineTo(-s*0.78,-s*0.38);ctx.lineTo(-s*0.92,-s*0.32);ctx.lineTo(-s*0.84,-s*0.12);
-    ctx.lineTo(-s*0.84,s*0.12);ctx.lineTo(-s*0.92,s*0.32);ctx.lineTo(-s*0.78,s*0.38);ctx.lineTo(-s*0.52,s*0.13);
-    ctx.closePath();ctx.fill();ctx.stroke();
-    // Main supersonic fuselage
-    ctx.fillStyle='#8c9ba3';
-    ctx.beginPath();
-    ctx.moveTo(s*1.04,0);ctx.lineTo(s*0.42,-s*0.15);ctx.lineTo(-s*0.86,-s*0.16);ctx.lineTo(-s*0.90,0);
-    ctx.lineTo(-s*0.86,s*0.16);ctx.lineTo(s*0.42,s*0.15);ctx.closePath();ctx.fill();ctx.stroke();
-    // Dorsal highlight spine
-    ctx.fillStyle='#b8c5cb';
-    ctx.beginPath();ctx.moveTo(s*0.96,0);ctx.lineTo(s*0.38,-s*0.055);ctx.lineTo(-s*0.78,-s*0.055);ctx.lineTo(-s*0.78,s*0.02);ctx.closePath();ctx.fill();
-    // Bubble cockpit canopy with sky glint
-    ctx.fillStyle='#244b5e';
-    ctx.beginPath();ctx.ellipse(s*0.34,0,s*0.24,s*0.075,0,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#99dce8';
-    ctx.beginPath();ctx.ellipse(s*0.38,-s*0.02,s*0.13,s*0.028,0,0,Math.PI*2);ctx.fill();
-    // Vertical twin tail fins
-    ctx.fillStyle='#46565e';
-    ctx.fillRect(-s*0.82,-s*0.11,s*0.26,s*0.045);
-    ctx.fillRect(-s*0.82,s*0.065,s*0.26,s*0.045);
-    ctx.restore();
-  }
-
-  root.EarthBaseArt=Object.freeze({draw,drawAirfield,drawFlyingJet,marker,inventory,soldier,truck});
+  root.EarthBaseArt=Object.freeze({draw,drawRunway,airborneJet,marker,inventory,soldier,truck});
 })(globalThis);

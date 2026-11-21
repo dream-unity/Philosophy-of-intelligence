@@ -68,8 +68,14 @@
       const point=root.EarthDistrictGrowth.homePoint(site,h.plot);
       add(homeKey('guest',h.plot),h.name+'’s guest room, lot '+(h.plot+1),1,point,null,h.name,root.EarthCommunityLife.residency(site,h.guestRoom)==='member');
     }
-    for(const fh of root.EarthFreeLand?.housingPlaces?.(site)||[]){
-      add(fh.id,fh.label,fh.beds,{x:fh.x,y:fh.y},null,fh.ownerLabel,true);
+    for(let i=0;i<(site.playerHouses||[]).length;i++){
+      const ph=site.playerHouses[i];
+      add(homeKey('player',i),ph.name||('Community House #'+(i+1)),ph.places||4,{x:ph.x,y:ph.y});
+    }
+    for(const b of (site.buildings||[])){
+      if(b.kind!=='house')continue;
+      const point=root.EarthConstruction?.streetPoint?.({scope:'street',plot:b.plot})||{x:12,y:12};
+      add(homeKey('lothouse',b.plot),b.name||('Community House on lot '+(b.plot+1)),4,point);
     }
     return {homes,works};
   }
@@ -160,7 +166,9 @@
       open:homes.reduce((n,h)=>n+(h.available?remaining(h):0),0)};
   }
   const frontage=(site,h)=>h.plot<foundation(site)||h.home>=2?'home':'lot';
-  const additionalPlaces=site=>(site.growth?.households||[]).slice(foundation(site)).filter(h=>h.home>=2).length;
+  const additionalPlaces=site=>(site.growth?.households||[]).slice(foundation(site)).filter(h=>h.home>=2).length+
+    (site.playerHouses||[]).reduce((n,h)=>n+(h.places||4),0)+
+    (site.buildings||[]).filter(b=>b.kind==='house').length*4;
   function need(world,site){
     // Every one of the 18 founding places is a public right. Most towns do
     // not need a full private-rights calculation to rule out homelessness.
@@ -455,7 +463,7 @@
     if(h.losses!=null&&(!list(h.losses,r=>r&&text(r.key)&&text(r.id)&&text(r.name)&&text(r.text)&&integer(r.week,1,week))||h.losses.length>16))return false;
     if(h.reservations!=null&&!list(h.reservations,r=>r&&text(r.key)&&text(r.id)&&text(r.home)))return false;
     if(h.relief!=null&&!['reserve','emergency','private'].includes(h.relief))return false;
-    if(h.leases!=null&&(!Array.isArray(h.leases)||h.leases.length>64||new Set(h.leases.map(l=>l?.tenant)).size!==h.leases.length||
+    if(h.leases!=null&&(!Array.isArray(h.leases)||h.leases.length>512||new Set(h.leases.map(l=>l?.tenant)).size!==h.leases.length||
       h.leases.some(l=>!l||!text(l.tenant)||!text(l.owner)||l.tenant===l.owner||!/^private-[0-5]$/.test(l.home)||!integer(l.through,1,week+3))))return false;
     if(h.contracts!=null&&(!list(h.contracts,c=>{
       if(!c||!text(c.key)||!text(c.id)||!text(c.worker)||!integer(c.plot,0,5)||!integer(c.week,1,week))return false;
@@ -463,7 +471,7 @@
       return house&&house.ownerId===c.id&&house.stage>=1&&house.stage<3&&c.wages===3-house.stage&&c.materials===c.wages&&
         guest?.profile?.identityKey===c.key&&(['visitor','member'].includes(guest.status)||c.id==='steward'&&guest.status==='anchor');
     })||new Set(h.contracts.map(c=>c.plot)).size!==h.contracts.length))return false;
-    return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage|free)-\d{1,5})$/.test(r.home))&&
+    return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage|player|lothouse)-\d{1,4})$/.test(r.home))&&
       list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.crisis==null||integer(r.crisis,1,week))&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&
       !h.hardship.some(r=>h.rights.some(a=>r.key===a.key));
   }

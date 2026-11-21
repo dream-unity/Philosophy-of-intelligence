@@ -486,9 +486,9 @@
     }
     let berths=[], embarked=null;
     const landing=berth=>({x:berth.dockX,y:SIDE+.53});
-    // A clear channel runs along the outer ends of the jetties. Beyond it,
-    // boats have full liberty to sail across the open ocean.
-    const channelY=29.25, seaLimit=180, seaWest=-150, seaEast=175;
+    // A clear channel runs along the outer ends of the jetties. Inside it, each
+    // boat follows its own narrow slip so that it cannot sail through a pier.
+    const channelY=29.25, seaLimit=2200, seaSpan=2200;
     const mooredHulls=new Map();
     function otherHulls(berth){
       if(mooredHulls.has(berth))return mooredHulls.get(berth);
@@ -500,8 +500,18 @@
       mooredHulls.set(berth,obstacles);return obstacles;
     }
     function onWater(p,berth){
-      if(!berth||p.x<seaWest||p.x>seaEast||p.y>seaLimit)return false;
-      if(p.y<channelY&&(Math.abs(p.x-berth.x)>.35||p.y<berth.y-.03))return false;
+      if(!berth||!Number.isFinite(p.x)||!Number.isFinite(p.y))return false;
+      if(p.x<-seaSpan||p.x>SIDE+seaSpan||p.y>seaLimit)return false;
+      const oceanSite=Boolean(state.site?.water);
+      if(oceanSite){
+        // Ocean settlements float in open water: boats can sail anywhere outside the central platform.
+        const inPlatform=p.x>-1.5&&p.x<SIDE+1.5&&p.y>-1.5&&p.y<channelY;
+        if(inPlatform&&(Math.abs(p.x-berth.x)>.35||p.y<berth.y-.03))return false;
+        if(p.y<-seaSpan)return false;
+      }else{
+        // Coastal settlements: full liberty anywhere south of the jetty channel across the entire open ocean.
+        if(p.y<channelY&&(Math.abs(p.x-berth.x)>.35||p.y<berth.y-.03))return false;
+      }
       return !otherHulls(berth).some(r=>p.x>r[0]&&p.x<r[2]&&p.y>r[1]&&p.y<r[3]);
     }
     function clearWater(a,b,berth){
@@ -551,12 +561,10 @@
       message('Return to shore to do that.');return false;
     }
     let fixtures=[],seatedAt=null,parkedBounds=null,trafficDetour=null,truckDetourHulls=null,footpathRevision=0;
-    let jet=null,ordnance=[],explosions=[],craters=[];
-    let freeBuildKind=null,freeBuildHover=null,jetAimWorld=null;
-    // Each collision cell covers one district block. Solids beyond [0..SIDE]
-    // (perimeter walls, military compound, and expanded free-land buildings)
-    // live in extraSolids so collision stays airtight everywhere.
-    const collisionSide=5,collisionBins=Array.from({length:25},()=>[]),extraSolids=[];
+    // Each collision cell covers one district block. Long paths visit several
+    // cells; a single step usually tests just the objects on the current block.
+    const collisionSide=5,collisionBins=Array.from({length:25},()=>[]);
+    let outerSolids=[];
     const narrowEdges=new Uint8Array(GRID_SIZE);
     const trafficBins=Array.from({length:25},()=>[]);
     const carRadius=.67,truckHalfLength=.82,truckHalfWidth=.32;
@@ -571,12 +579,13 @@
       return truckDiagonal;
     }
     function vehicleHitsFootprint(a,b,halfWidth,halfDepth){
+      if(outerSolids.some(box=>crossesBounds(a,b,box,halfWidth,halfDepth)))return true;
       const x1=collisionCell(Math.min(a.x,b.x)),x2=collisionCell(Math.max(a.x,b.x));
       const y1=collisionCell(Math.min(a.y,b.y)),y2=collisionCell(Math.max(a.y,b.y));
       for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++){
         if(trafficBins[y*collisionSide+x].some(box=>crossesBounds(a,b,box,halfWidth,halfDepth)))return true;
       }
-      return extraSolids.some(box=>crossesBounds(a,b,box,halfWidth,halfDepth));
+      return false;
     }
     function carHitsObject(a,b,truck=drivingTruck){
       if(!truck)return vehicleHitsFootprint(a,b,carRadius,carRadius);
@@ -696,11 +705,11 @@
     function indexFootprints(){
       for(const bin of collisionBins)bin.length=0;
       for(const bin of trafficBins)bin.length=0;
-      extraSolids.length=0;
+      outerSolids=[];
       narrowEdges.fill(0);roadPassability.fill(0);roadEdges.fill(0);truckPassability.fill(0);truckEdges.fill(0);
       function insert(bounds){
         const [left,top,right,bottom]=bounds;
-        if(left<0||right>SIDE||top<0||bottom>SIDE)extraSolids.push(bounds);
+        if(left<-0.5||top<-0.5||right>SIDE+0.5||bottom>SIDE+0.5)outerSolids.push(bounds);
         const x1=collisionCell(left-footRadius),x2=collisionCell(right+footRadius);
         const y1=collisionCell(top-footRadius),y2=collisionCell(bottom+footRadius);
         for(let by=y1;by<=y2;by++)for(let bx=x1;bx<=x2;bx++)collisionBins[by*collisionSide+bx].push(bounds);
@@ -826,13 +835,16 @@
       return Math.min(.29,.92*renderRegion.KM/baseUnit()*Math.min(width/(b.maxX-b.minX),height/(TILT*(b.maxY-b.minY))));
     }
     function boundCamera(x,y,frameRegion=false){
-      if(state.mode==='jet'){centreX=clamp(x,-160,185);centreY=clamp(y,-120,185);return;}
-      if(state.mode==='boat'){centreX=clamp(x,seaWest,seaEast);centreY=clamp(y,northCameraLimit(),seaLimit);return;}
-      const tb=window.EarthFreeLand?.territoryBounds?.(state.site);
+      const expand=(state.site?.territoryLevel||0)*6;
+      if(state.mode==='boat'){
+        centreX=clamp(x,-seaSpan,SIDE+seaSpan);
+        centreY=clamp(y,state.site?.water?-seaSpan:northCameraLimit(),seaLimit);
+        return;
+      }
       if(!geo||!baseTown){
-        const minX=Math.min(-8,tb?tb.minX-4:-8),maxX=Math.max(SIDE+18,tb?tb.maxX+6:SIDE+18);
-        const minY=Math.min(northCameraLimit(),tb?tb.minY-4:-8),maxY=Math.max(SIDE+8,tb?tb.maxY+6:SIDE+8);
-        centreX=clamp(x,minX,maxX);centreY=clamp(y,minY,maxY);return;
+        centreX=clamp(x,-4-expand,Math.max(SIDE+3,45+expand));
+        centreY=clamp(y,Math.min(northCameraLimit(),-4-expand),SIDE+4+expand);
+        return;
       }
       const p=renderRegion.regionalPoint(baseTown,x,y),b=geo.bounds;
       let east=clamp(p.x,b.minX,b.maxX),north=clamp(p.y,b.minY,b.maxY);
@@ -1208,10 +1220,8 @@
       regionalEvent(at,true,{kind:'resident',siteId:t.site.id,siteName:t.site.name,personId:id,personName:seen.name,activity:seen});return true;
     }
     function followTarget() {
-      if(state.mode==='jet'&&jet)return {x:jet.x,y:jet.y};
       if(spectator||state.placed)return {x:SIDE/2,y:SIDE/2};
       const p=state.player;
-      if(state.mode==='boat'&&p.y>30.5)return {x:p.x,y:p.y};
       // Leave a little more of the town in front of the camera at the outer kerbs.
       // Bound the shift in screen space so a narrow phone still frames the player.
       const x=(p.x-SIDE/2)*.28, y=(p.y-SIDE/2)*.28;
@@ -1595,16 +1605,25 @@
           solid(prop,1.03,.81);addFixture('board',prop.x,prop.y,.65,'Park noticeboard');
         }else solid(prop,.15,.15);
       }
-      // Solid perimeter walls (well outside roads and parked vans)
-      for(const seg of wallSegments(s))state.solids.push([seg.x,seg.y,seg.x+seg.w,seg.y+seg.d]);
-      // Solid military base compound (well clear of town walls and dwellings)
-      const baseBox=window.EarthMilitaryBase?.compound;
-      if(baseBox)state.solids.push([baseBox.x1,baseBox.y1,baseBox.x2,baseBox.y2]);
-      // Solid custom buildings placed on empty land
-      for(const fb of s.freeLand?.buildings||[]){
-        const spec=window.EarthFreeLand?.byKind?.(fb.kind);
-        const hw=spec?.halfW||1.4,hd=spec?.halfH||1.3;
-        state.solids.push([fb.x-hw,fb.y-hd,fb.x+hw,fb.y+hd]);
+      // Solid boundaries for outer perimeter walls, relocated Military Airbase,
+      // open-land buildings (including Dragon Stable), and player-built houses.
+      const FP=window.EarthFlightPhysics;
+      const fortStage=s.communityLife?.border?.defence?.stage||0;
+      const tLevel=s.territoryLevel||0;
+      if(FP&&fortStage>0){
+        for(const seg of FP.perimeterWallSegments(fortStage,tLevel,Boolean(berths.length))){
+          if(seg.box)state.solids.push(seg.box);
+        }
+      }
+      if(FP&&window.EarthMilitaryBase){
+        const baseLayout=window.EarthMilitaryBase.layoutFor?.(s)||FP.militaryBaseLayout(tLevel);
+        for(const box of (baseLayout.solids||[]))state.solids.push(box);
+      }
+      for(const fb of (s.freeBuildings||[])){
+        if(Number.isFinite(fb.x)&&Number.isFinite(fb.y))solid({x:fb.x,y:fb.y},3.2,3.0);
+      }
+      for(const ph of (s.playerHouses||[])){
+        if(Number.isFinite(ph.x)&&Number.isFinite(ph.y))solid({x:ph.x,y:ph.y},2.6,2.4);
       }
       updateWorkBounds();
       // A fishing station also adds a landing outside its own street parcel.
@@ -1612,41 +1631,6 @@
       if(groundCache?.site===siteKey(s) && groundCache.water===Boolean(s.water) && groundCache.coast===coastSite(s) && groundCache.dock===dock)invalidateParcels(state.lots.filter(lot=>lot.building?.kind!==before[lot.plot]).map(lot=>lot.plot));
       else clearGround();
       dirty=true;
-    }
-    function wallSegments(s){
-      const fort=s?.communityLife?.border?.defence?.stage||0;
-      if(!fort)return [];
-      const wb=window.EarthFreeLand?.wallBounds?.(s)||{west:-6,north:-6,east:26.5,south:s?.water?25.25:30,waterfront:Boolean(s?.water||coastSite(s))};
-      const t=.42,segs=[];
-      // North gate piers (always present from defence stage 1)
-      segs.push({x:9.1,y:wb.north-.06,w:.55,d:.55,h:1.85,tower:true});
-      segs.push({x:14.35,y:wb.north-.06,w:.55,d:.55,h:1.85,tower:true});
-      if(fort>=2){
-        // North wall (wide 5.2-unit north gateway at x=9.4..14.6)
-        if(wb.west<9.1)segs.push({x:wb.west,y:wb.north,w:9.1-wb.west,d:t,h:1.25,crenel:true});
-        if(wb.east>14.9)segs.push({x:14.9,y:wb.north,w:wb.east-14.9,d:t,h:1.25,crenel:true});
-        // West wall (wide west gateway at y=9.4..14.6)
-        if(wb.north<9.4)segs.push({x:wb.west,y:wb.north+t,w:t,d:9.4-(wb.north+t),h:1.15});
-        if(wb.south>14.6)segs.push({x:wb.west,y:14.6,w:t,d:wb.south-14.6,h:1.15});
-        // East wall (wide east gateway to military airfield at y=9.4..14.6)
-        if(wb.north<9.4)segs.push({x:wb.east-t,y:wb.north+t,w:t,d:9.4-(wb.north+t),h:1.15});
-        if(wb.south>14.6)segs.push({x:wb.east-t,y:14.6,w:t,d:wb.south-14.6,h:1.15});
-        // South perimeter: low waterfront stone quay parapet with open dock gaps,
-        // or full setback inland south wall with south gateway
-        if(wb.waterfront){
-          const gaps=[[3.3,6.1],[10.3,13.7],[17.3,20.7]];
-          let cursor=wb.west;
-          for(const [g1,g2] of gaps){
-            if(g1>cursor+.4)segs.push({x:cursor,y:wb.south,w:g1-cursor,d:.34,h:.46,quay:true});
-            cursor=Math.max(cursor,g2);
-          }
-          if(wb.east>cursor+.4)segs.push({x:cursor,y:wb.south,w:wb.east-cursor,d:.34,h:.46,quay:true});
-        }else{
-          if(wb.west<9.4)segs.push({x:wb.west,y:wb.south-t,w:9.4-wb.west,d:t,h:1.15});
-          if(wb.east>14.6)segs.push({x:14.6,y:wb.south-t,w:wb.east-14.6,d:t,h:1.15});
-        }
-      }
-      return segs;
     }
     function landscape() {
       // The same exchange opens onto a working waterfront or an inland green belt.
@@ -1949,12 +1933,6 @@
         for(let k=0;k<3;k++)sphere(x+.06+k*.064,y+.12,.19,.055,.05,i%2?'#91aa74':'#d1a365');
       }
       const x=p.x+1.83,y=p.y+.5;
-      const [signX,signY]=screen(x+.32,y,1.3);
-      const size=Math.max(7,Math.min(14,unit*.28));
-      ctx.save();ctx.font='600 '+size+'px system-ui,sans-serif';
-      const width=ctx.measureText('Town Centre').width+size*.9;
-      ctx.fillStyle='#233b39';ctx.fillRect(signX-width/2,signY-size*.72,width,size*1.44);
-      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ffedc6';ctx.fillText('Town Centre',signX,signY);ctx.restore();
       if(furniture(3,x+.22,y))return;
       for(const off of [0,.61])line(x+off,y,.02,x+off,y,.99,'#6b6c54',Math.max(.9,unit*.054));
       poly([[x-.07,y,.43],[x+.69,y,.43],[x+.69,y,1.06],[x-.07,y,1.06]],'#a38e66','#69755e',Math.max(.65,unit*.035));
@@ -3039,7 +3017,10 @@
     }
     const visitVenues=new Set(['bench','home','garden','workshop','market','hall','dock','pier']);
     function venuePoint(venue,id){
-      if(venue==='militaryBase'&&state.site&&window.EarthMilitaryBase)return window.EarthMilitaryBase.gate;
+      if(venue==='militaryBase'&&state.site&&window.EarthMilitaryBase){
+        const layout=window.EarthMilitaryBase.layoutFor?.(state.site);
+        return layout?.gate||window.EarthMilitaryBase.gate;
+      }
       const publicVenue=window.EarthNightlife?.find(venue);
       if(publicVenue&&state.site)return {x:publicVenue.x,y:publicVenue.y+2.52,label:publicVenue.name};
       if(!state.site||!visitVenues.has(venue)||window.EarthCommunityLife?.present(state.site,id)===false)return null;
@@ -3765,6 +3746,12 @@
       text(x+w/2,y+h*.51,label,'#fff3d9',size);
     }
     function lotOverlay() {
+      const FP=window.EarthFlightPhysics;
+      const tLevel=state.site?.territoryLevel||0;
+      if(FP){
+        const bounds=FP.perimeterBounds(tLevel,Boolean(berths.length));
+        rect(bounds.minX,bounds.minY,bounds.maxX-bounds.minX,bounds.maxY-bounds.minY,.02,'rgba(116,214,158,.08)','rgba(116,214,158,.55)',1.6);
+      }
       for(const lot of state.lots){if(!vacant(lot))continue;
         const chosen=(state.hover?.plot??placingFocus)===lot.plot, c=chosen?'#fce0a5':'#edbf7c';
         rect(lot.x-1.61,lot.y-1.61,3.22,3.22,.03,chosen?'rgba(246,207,132,.58)':'rgba(247,205,131,.25)',c,chosen?2.4:1.3);
@@ -4055,9 +4042,9 @@
         if(inside??fallback){depth=order;front=()=>({...describe(),objectX:pos.x,objectY:pos.y});}
       }
       if(window.EarthMilitaryBase){
-        const desc=()=>({assetId:'militaryBase',use:'militaryBase',assetName:site.name+' military base',activity:'Troops, research and expeditions at the east gate.'});
-        test(window.EarthMilitaryBase.place,'militaryBase',0,1,.35,desc);
-        test({x:27.6,y:12},'militaryBase',0,1,.34,desc);
+        const baseLayout=window.EarthMilitaryBase.layoutFor?.(site);
+        const basePlace=baseLayout?.place||window.EarthMilitaryBase.place;
+        test(basePlace,'militaryBase',0,1.25,.35,()=>({assetId:'militaryBase',use:'militaryBase',assetName:site.name+' Military Airbase & Runway',activity:'Troops, long fighter runway, 3D jet takeoff, research and expeditions.'}));
       }
       for(const v of venues)test(v,v.id,0,1,.35,()=>({assetId:'leisure-'+v.id,venue:v.id,use:'leisure',assetName:v.sign+' · '+v.name,activity:v.detail}));
       test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Town Centre and market exchange',use:'market',
@@ -4073,8 +4060,19 @@
         activity:project.reason+' '+(project.workerName||'The council')+' · '+['delivering materials','assembling the frame','fitting out'][project.stage]+'.'}));
       for(const lot of state.lots)if(lot.building){
         const b=lot.building;
-        test(lot,b.kind,0,1,.35,()=>({assetId:b.id,assetName:b.name,use:'project',plot:lot.plot,buildingKind:b.kind,
+        test(lot,b.kind,0,1,.35,()=>({assetId:b.id,assetName:b.name,use:b.kind==='dragonStable'?'dragonStable':'project',plot:lot.plot,buildingKind:b.kind,
           activity:'Plot '+(lot.plot+1)+'. '+(window.CommonEarthSim?.buildings?.[b.kind]?.info||'Completed district project.')}));
+      }
+      for(const fb of (site.freeBuildings||[])){
+        if(!Number.isFinite(fb.x)||!Number.isFinite(fb.y))continue;
+        test({x:fb.x,y:fb.y},fb.kind,0,1,.35,()=>({assetId:fb.id,assetName:fb.name||fb.kind,use:fb.kind==='dragonStable'?'dragonStable':'project',buildingKind:fb.kind,
+          activity:fb.kind==='dragonStable'?'Enchanted Dragon Stable · Summon dragons, train Wizards, replenish food & launch 3D Flight!':(window.CommonEarthSim?.buildings?.[fb.kind]?.info||'Open-land community building.')}));
+      }
+      for(let i=0;i<(site.playerHouses||[]).length;i++){
+        const ph=site.playerHouses[i];
+        if(!Number.isFinite(ph.x)||!Number.isFinite(ph.y))continue;
+        test({x:ph.x,y:ph.y},'home',i%3,.82,.35,()=>({assetId:ph.id||('player-house-'+i),assetName:ph.name||('Community House #'+(i+1)),use:'home',
+          activity:'Player-built house providing '+(ph.places||4)+' residential places for imported community members.'}));
       }
       const growth=window.EarthDistrictGrowth;
       for(const h of site.civicLand?.homes||[]){
@@ -4101,13 +4099,6 @@
         assetId:'courtyard-'+court.precinct,use:'courtyard',assetName:court.name+' courtyards',
         activity:court.beds+' completed housing places. The population directory lists their occupants.'
       }));
-      for(const fb of site.freeLand?.buildings||[]){
-        const spec=window.EarthFreeLand?.byKind?.(fb.kind);
-        test({x:fb.x,y:fb.y},spec?.category==='housing'?'home':'market',0,.68,.34,()=>({
-          assetId:fb.id,use:'freeBuilding',freeId:fb.id,assetName:spec?.name||'Community building',
-          activity:spec?.note||'Built on empty land.'
-        }));
-      }
       return front?{type:'premises',kind:'building',...front()}:null;
     }
     function hitWorksite(sx,sy,paintedOnly=false) {
@@ -4139,11 +4130,7 @@
       }
       dirty=true;schedule();
     }
-    function northCameraLimit(){
-      const growthMin=state.site?.growth?-5-3.5*Math.ceil(state.site.growth.households.length/10):-3;
-      const freeMin=window.EarthFreeLand?.territoryBounds?.(state.site)?.minY;
-      return Math.min(growthMin,freeMin!=null?freeMin-3:-8);
-    }
+    function northCameraLimit(){return state.site?.growth?-5-3.5*Math.ceil(state.site.growth.households.length/10):-3;}
     function frameCrewTargets(){
       clearObservation();
       if(!selectedCrew.size||!works.size||!width||!height)return false;
@@ -4179,6 +4166,12 @@
       miniTick=-1;dirty=true;schedule();return true;
     }
     function finishedProject(item){
+      if(item.kind==='dragonStable'&&window.EarthDragonArt){
+        const [sx,sy]=screen(item.x,item.y);
+        window.EarthDragonArt.drawStable(ctx,sx,sy,unit,evening,visualTime,state.site?.dragonStable?.dragons?.length||0);
+        return;
+      }
+      if(item.kind==='house'&&window.EarthTownArchitecture?.draw(ctx,state.site,'home',(item.plot||0)%3,...screen(item.x,item.y),unit*.92))return;
       if(!window.EarthTownProjects?.draw(ctx,state.site,item.kind,screen,item.x,item.y,unit))civic(item);
     }
     function assembledWalls(job){
@@ -4602,70 +4595,6 @@
       else{const view=regionView();paintTerrainLayer(view);paintRegionalTowns(view);}
       if(!state.site)return;
       if(state.placed){lotOverlay();showConnections();}routeRibbon();fishMarks();
-      // Open-ocean swells, navigation buoys & distance markers beyond the harbour
-      if(state.site.water||coastSite(state.site)){
-        const wMinX=Math.floor((centreX-26)/14)*14,wMaxX=centreX+26;
-        const wMinY=Math.max(32,Math.floor((centreY-22)/12)*12),wMaxY=Math.min(seaLimit-2,centreY+24);
-        for(let wy=wMinY;wy<=wMaxY;wy+=12){
-          for(let wx=wMinX;wx<=wMaxX;wx+=14){
-            const ox=wx+Math.sin(wy*.31)*3,oy=wy+Math.cos(wx*.27)*2;
-            const drift=Math.sin(visualTime*1.3+ox*.2+oy*.15)*.45;
-            line(ox-1.8+drift,oy,-.44,ox+1.8+drift,oy-.45,-.44,'rgba(216,241,232,.26)',Math.max(1,unit*.045));
-            line(ox-1.1-drift*.6,oy+1.2,-.44,ox+1.2-drift*.6,oy+.9,-.44,'rgba(175,222,216,.18)',Math.max(.8,unit*.032));
-            if(Math.abs(wx)%28===0&&wy%24===8){
-              const bp=screen(ox,oy,-.42);
-              if(bp[0]>-30&&bp[0]<width+30&&bp[1]>-30&&bp[1]<height+30){
-                const bob=Math.sin(visualTime*2.4+ox)*.06*unit;
-                ctx.fillStyle='#c9593e';ctx.beginPath();ctx.arc(bp[0],bp[1]-unit*.14+bob,Math.max(2.5,unit*.11),0,Math.PI*2);ctx.fill();
-                ctx.strokeStyle='#f5e6c8';ctx.lineWidth=Math.max(.8,unit*.03);ctx.beginPath();ctx.moveTo(bp[0],bp[1]-unit*.14+bob);ctx.lineTo(bp[0],bp[1]-unit*.36+bob);ctx.stroke();
-              }
-            }
-          }
-        }
-      }
-      // Surveyed expanded territory outline & empty-land grid when free-building
-      if(window.EarthFreeLand&&state.site){
-        const tb=window.EarthFreeLand.territoryBounds(state.site);
-        const tier=state.site.freeLand?.tier||0;
-        if(freeBuildKind||tier>0){
-          ctx.save();
-          ctx.setLineDash([Math.max(4,unit*.22),Math.max(3,unit*.16)]);
-          poly([[tb.minX,tb.minY,.02],[tb.maxX,tb.minY,.02],[tb.maxX,tb.maxY,.02],[tb.minX,tb.maxY,.02]],
-            freeBuildKind?'rgba(143,214,162,.06)':null,freeBuildKind?'rgba(167,232,181,.55)':'rgba(218,197,148,.32)',Math.max(1.2,unit*.055));
-          ctx.restore();
-        }
-      }
-      // Persistent blast craters on the ground
-      for(const c of craters){
-        const cp=screen(c.x,c.y,.02);
-        if(cp[0]<-60||cp[0]>width+60||cp[1]<-60||cp[1]>height+60)continue;
-        ellipse(cp[0],cp[1],unit*.78,unit*.38,'rgba(28,24,20,.65)','rgba(85,68,52,.45)');
-        ellipse(cp[0],cp[1],unit*.44,unit*.21,'rgba(14,12,10,.78)');
-      }
-      // Military airfield: long 24-unit paved runway, taxiways, apron, windsock & parked jet
-      if(window.EarthMilitaryBase&&window.EarthBaseArt?.drawAirfield){
-        const hasJet=Boolean(state.site.militaryBase?.units?.some(u=>u.type==='jet'));
-        window.EarthBaseArt.drawAirfield(ctx,(x,y,z=0)=>{const pt=screen(x,y,z);return {x:pt[0],y:pt[1]};},unit,{
-          evening,water:state.site.water,hasJet,jetAirborne:Boolean(jet),time:visualTime
-        });
-      }
-      // Live free-land building placement ghost footprint
-      if(freeBuildKind&&freeBuildHover&&window.EarthFreeLand){
-        const spec=window.EarthFreeLand.byKind(freeBuildKind);
-        if(spec){
-          const check=window.EarthFreeLand.canPlace(state.site,freeBuildKind,freeBuildHover.x,freeBuildHover.y);
-          const w=spec.halfW*2,d=spec.halfH*2;
-          const x1=freeBuildHover.x-spec.halfW,y1=freeBuildHover.y-spec.halfH;
-          rect(x1,y1,w,d,.04,check.ok?'rgba(84,214,132,.32)':'rgba(232,88,74,.34)',check.ok?'#7bf0a5':'#ff8d80',Math.max(1.6,unit*.07));
-          const lbl=screen(freeBuildHover.x,freeBuildHover.y,.45);
-          const caption=check.ok?`${spec.name} · Click to build`:check.reason;
-          ctx.font='600 12px system-ui,sans-serif';
-          const tw=ctx.measureText(caption).width+16;
-          ctx.fillStyle=check.ok?'rgba(16,44,34,.92)':'rgba(66,22,22,.92)';
-          ctx.fillRect(lbl[0]-tw/2,lbl[1]-24,tw,22);
-          text(lbl[0],lbl[1]-13,caption,check.ok?'#c9ffd9':'#ffd1cb',12);
-        }
-      }
       const list=[];
       const addItem=(x,y,depth,draw,bounds)=>{
         const p=screen(x,y);
@@ -4678,98 +4607,55 @@
         }
         list.push({depth,draw});
       };
-      // Setback solid perimeter walls well outside roads, vehicles and dwellings.
+      // The two visible facades meet in front of the centre. Doorstep residents
+      // are in front of the facade even when they stand left of its front corner.
+      const FP=window.EarthFlightPhysics;
+      const tLevel=state.site.territoryLevel||0;
+      if(FP&&tLevel>0&&!state.site.water){
+        const tb=FP.perimeterBounds(tLevel,Boolean(berths.length));
+        rect(tb.minX,tb.minY,tb.maxX-tb.minX,tb.maxY-tb.minY,.004,'rgba(128,158,108,.18)','rgba(186,204,154,.45)',1.1);
+      }
       const fort=state.site.communityLife?.border?.defence?.stage||0;
-      if(fort){
-        const wb=window.EarthFreeLand?.wallBounds?.(state.site)||{west:-6,north:-6,east:26.5,south:state.site.water?25.25:30};
-        for(const seg of wallSegments(state.site)){
-          const horiz=seg.w>=seg.d;
-          const step=seg.tower?Math.max(seg.w,seg.d):2.2;
-          const count=Math.max(1,Math.ceil((horiz?seg.w:seg.d)/step));
-          for(let i=0;i<count;i++){
-            const sx=horiz?seg.x+i*step:seg.x,sy=horiz?seg.y:seg.y+i*step;
-            const sw=horiz?Math.min(step,seg.x+seg.w-sx):seg.w;
-            const sd=horiz?seg.d:Math.min(step,seg.y+seg.d-sy);
-            addItem(sx+sw/2,sy+sd/2,sx+sw/2+sy+sd/2+.38,()=>{
-              const topC=seg.quay?'#d4c7a9':seg.tower?'#dac79a':'#cbba96';
-              const leftC=seg.quay?'#afa288':seg.tower?'#a8906e':'#a28f72';
-              const rightC=seg.quay?'#8a7f6a':seg.tower?'#826f56':'#80745f';
-              box(sx,sy,sw,sd,0,seg.h,topC,leftC,rightC);
-              if(seg.crenel&&sw>=.7)box(sx+.1,sy,Math.min(.42,sw*.45),sd,seg.h,.26,'#ddc99c','#a58d6b','#806e55');
-              if(seg.tower)box(sx-.06,sy-.06,sw+.12,sd+.12,seg.h,.22,'#e2d1a8','#b09772','#8a755a');
-            },buildingBounds);
-          }
-        }
-        if(fort>=3)addItem(12,wb.north+.25,12+wb.north+.85,()=>{
-          box(9.1,wb.north-.06,5.8,.55,1.72,.28,'#bb9a68','#8d704e','#735d45');
-        },buildingBounds);
-      }
-      // Custom buildings constructed on empty land
-      function drawFreeBuilding(fb){
-        const {x,y,kind}=fb;
-        const spec=window.EarthFreeLand?.byKind?.(kind);
-        const hw=spec?.halfW||1.4,hd=spec?.halfH||1.3,w=hw*2,d=hd*2;
-        if(kind==='cottage'||kind==='townhouse'||kind==='apartment'){
-          const stories=kind==='apartment'?3:kind==='townhouse'?2:1;
-          const roofH=kind==='apartment'?2.45:kind==='townhouse'?1.65:1.05;
-          rect(x-hw-.15,y-hd-.15,w+.3,d+.3,.018,'rgba(176,166,142,.72)');
-          const wallTop=kind==='apartment'?'#d8cfc1':kind==='townhouse'?'#e5d3b7':'#eadbc2';
-          const wallL=kind==='apartment'?'#b7aea0':kind==='townhouse'?'#c7ad8d':'#d2bd9d';
-          const wallR=kind==='apartment'?'#968d80':kind==='townhouse'?'#a58c6d':'#b09b7c';
-          box(x-hw*.88,y-hd*.84,w*.88,d*.84,.02,roofH,wallTop,wallL,wallR);
-          const roofC=kind==='apartment'?'#5c7078':kind==='townhouse'?'#9b5d47':'#866047';
-          const roofL=kind==='apartment'?'#465860':kind==='townhouse'?'#7d4836':'#6c4c37';
-          const roofR=kind==='apartment'?'#35444b':kind==='townhouse'?'#633829':'#533a2a';
-          box(x-hw*.94,y-hd*.9,w*.94,d*.9,roofH+.02,kind==='apartment'?.18:.36,roofC,roofL,roofR);
-          // Warm lit windows across stories
-          const winC=evening?'#ffd885':'#3e5c63';
-          for(let s=0;s<stories;s++){
-            const wz=.35+s*.68;
-            for(const ox of [-.34,.22]){
-              const p1=screen(x+ox*hw,y+hd*.85,wz);
-              ctx.fillStyle=winC;ctx.fillRect(p1[0]-unit*.1,p1[1]-unit*.11,unit*.2,unit*.18);
+      if(fort&&FP){
+        const wallSegs=FP.perimeterWallSegments(fort,tLevel,Boolean(berths.length));
+        for(const seg of wallSegs){
+          const x1=seg.x,y1=seg.y,w=seg.w,d=seg.d,z0=seg.z||0,h=seg.h||1.18,cx=x1+w/2,cy=y1+d/2;
+          addItem(cx,cy,cx+cy+.45,()=>{
+            box(x1,y1,w,d,z0,h,'#d3c29c','#a79272','#82725b');
+            if(seg.kind==='post'||seg.kind==='tower'){
+              box(x1-.06,y1-.06,w+.12,d+.12,z0+h,.22,'#e2d1a8','#b59e7a','#8d7a60');
+            }else if(seg.kind==='wall'&&Math.max(w,d)>2){
+              const horiz=w>d,steps=Math.max(2,Math.floor(Math.max(w,d)/1.8));
+              for(let i=0;i<steps;i++){
+                const mx=horiz?x1+i*(w/steps)+.2:x1,my=horiz?y1:y1+i*(d/steps)+.2;
+                box(mx,my,horiz?.48:w,horiz?d:.48,z0+h,.22,'#dfd0a7','#b09a78','#8b785f');
+              }
             }
-          }
-        }else if(kind==='orchard'){
-          rect(x-hw,y-hd,w,d,.02,'#7b9558','#5d7441',1);
-          for(const ox of [-.75,.05,.8])for(const oy of [-.55,.55])plant(x+ox,y+oy,.62,Math.abs(Math.round(ox*7+oy*3))%4,false);
-        }else if(kind==='foundry'){
-          rect(x-hw,y-hd,w,d,.02,'#8d8677');
-          box(x-hw*.88,y-hd*.8,w*.88,d*.8,.02,1.15,'#b89e7c','#8c765a','#6e5b44');
-          box(x-hw*.92,y-hd*.84,w*.92,d*.84,1.17,.22,'#5e6c6f','#475356','#353f42');
-          box(x+hw*.45,y-hd*.55,.42,.42,1.35,.95,'#87604c','#6a4938','#52382b');
-        }else if(kind==='bazaar'){
-          rect(x-hw,y-hd,w,d,.02,'#c7b79a');
-          box(x-hw*.82,y-hd*.72,w*.82,d*.72,.02,.78,'#d6b27c','#ad8a58','#8c6e44');
-          box(x-hw*.9,y-hd*.8,w*.9,d*.8,.80,.26,'#c86342','#9c4b31','#783823');
-        }else if(kind==='researchLab'){
-          rect(x-hw,y-hd,w,d,.02,'#b8c2be');
-          box(x-hw*.86,y-hd*.82,w*.86,d*.82,.02,1.25,'#dce6e4','#aebdba','#8c9c9a');
-          box(x-hw*.55,y-hd*.52,w*.55,d*.52,1.27,.55,'#88c7d4','#5f9aa8','#487b87');
-        }else if(kind==='solarGrid'){
-          rect(x-hw,y-hd,w,d,.02,'#939b8f');
-          for(const row of [-.55,.28])box(x-hw*.82,y+row*hd,w*.82,d*.36,.12,.22,'#2a5c8a','#1d4163','#15314a');
-        }else if(kind==='park'){
-          rect(x-hw,y-hd,w,d,.02,'#6e9b63','#527a49',1);
-          const fp=screen(x,y,.08);
-          ellipse(fp[0],fp[1],unit*.48,unit*.24,'#69a9b5','#d9cfb8');
-          plant(x-hw*.55,y-hd*.45,.66,0,false);plant(x+hw*.55,y+hd*.42,.62,2,false);
-        }else if(kind==='watchtower'){
-          rect(x-hw,y-hd,w,d,.02,'#9b9381');
-          box(x-hw*.68,y-hd*.68,w*.68,d*.68,.02,2.15,'#cbb994','#9e8b6a','#7b6c52');
-          box(x-hw*.82,y-hd*.82,w*.82,d*.82,2.17,.36,'#decba2','#ad9672','#897558');
+          },[Math.max(3,w+1),3,2]);
         }
-      }
-      for(const fb of state.site.freeLand?.buildings||[]){
-        addItem(fb.x,fb.y,fb.x+fb.y+.36,()=>drawFreeBuilding(fb),buildingBounds);
       }
       const blockDepth=p=>p.x+p.y+.35;
       if(window.EarthMilitaryBase){
-        const p=window.EarthMilitaryBase.place;
+        const layout=window.EarthMilitaryBase.layoutFor?.(state.site)||(FP?FP.militaryBaseLayout(tLevel):{place:window.EarthMilitaryBase.place,gate:window.EarthMilitaryBase.gate});
+        const p=layout.place;
+        // Draw the very long paved military airfield runway underneath aircraft and structures
+        if(layout.runway&&window.EarthBaseArt?.drawRunway){
+          window.EarthBaseArt.drawRunway(ctx,screen,unit,layout,evening);
+        }
         addItem(p.x,p.y,blockDepth(p),()=>{
           const [x,y]=screen(p.x,p.y);
           window.EarthBaseArt?.draw(ctx,x,y,unit,evening,state.site.water);
-        },buildingBounds);
+        },[6,7,3]);
+        // Render an airborne fighter jet soaring high over the airfield when commissioned
+        const jets=(state.site.militaryBase?.units||[]).filter(u=>u.type==='jet');
+        if(jets.length&&window.EarthBaseArt?.airborneJet){
+          const t=visualTime*.55;
+          const jx=p.x+5.6+Math.cos(t)*8.5,jy=p.y+Math.sin(t)*10.5,jz=4.6+Math.sin(t*1.7)*.9;
+          addItem(jx,jy,jx+jy+8,()=>{
+            const [sx,sy]=screen(jx,jy,0);
+            window.EarthBaseArt.airborneJet(ctx,sx,sy,unit,jz,t+Math.PI/2,evening);
+          },[5,8,4]);
+        }
       }
       for(const v of venues)addItem(v.x,v.y,blockDepth(v),()=>{
         const [x,y]=screen(v.x,v.y);
@@ -4807,6 +4693,33 @@
         },buildingBounds);
       }
       for(const lot of state.lots)if(lot.building){const item={...lot,kind:lot.building.kind};addItem(lot.x,lot.y,blockDepth(lot),()=>finishedProject(item),buildingBounds);}
+      for(const fb of (state.site.freeBuildings||[])){
+        if(!Number.isFinite(fb.x)||!Number.isFinite(fb.y))continue;
+        addItem(fb.x,fb.y,fb.x+fb.y+.35,()=>finishedProject({x:fb.x,y:fb.y,kind:fb.kind,plot:0}),buildingBounds);
+      }
+      for(let i=0;i<(state.site.playerHouses||[]).length;i++){
+        const ph=state.site.playerHouses[i];
+        if(!Number.isFinite(ph.x)||!Number.isFinite(ph.y))continue;
+        addItem(ph.x,ph.y,ph.x+ph.y+.35,()=>{
+          if(!window.EarthTownArchitecture?.draw(ctx,state.site,'home',i%3,...screen(ph.x,ph.y),unit*.82)){
+            residence({x:ph.x,y:ph.y,index:i%3});
+          }
+        },buildingBounds);
+      }
+      // Render enchanted dragons soaring smoothly over the settlement when stabled
+      const dragons=state.site.dragonStable?.dragons||[];
+      if(dragons.length&&window.EarthDragonArt?.drawEnchantedDragon){
+        const anchor=window.EarthDragonStable?.stableLocation?.(state.site)||{x:12,y:12};
+        dragons.slice(0,3).forEach((d,idx)=>{
+          const t=visualTime*(.38+idx*.07)+idx*2.1;
+          const dx=anchor.x+Math.cos(t)*(6.5+idx*3.2),dy=anchor.y+Math.sin(t)*(5.5+idx*2.6);
+          const alt=3.2+idx*.9+Math.sin(t*1.6)*.55;
+          addItem(dx,dy,dx+dy+9,()=>{
+            const [sx,sy]=screen(dx,dy,0);
+            window.EarthDragonArt.drawEnchantedDragon(ctx,sx,sy-alt*unit*.62,unit*.95,visualTime+idx*1.4,d.lineage||d.lineageId,Math.cos(t)>=0);
+          },[5,8,4]);
+        });
+      }
       if(state.site.growth){
         const g=state.site.growth;
         for(const h of state.site.civicLand?.homes||[]){
@@ -4931,13 +4844,6 @@
         person(pose.x,pose.y,'#dbab68',dx,dy,p.moving?1:0,visualTime*11,true);
         if(striking)activityGesture(pose,{gesture:'spar',prop:'none'},heroLook.cloth[0],dx,dy,null,heroLook.skin[0],counter);
         wornKit(playedId,p,p.dx,p.dy,seatedAt);
-        if(seatedAt?.kind==='cafe'&&state.site.cafe?.currentDrink?.sipsLeft>0){
-          const cup=screen(seatedAt.objectX+.22,seatedAt.objectY+.05,.44);
-          ctx.fillStyle='#f6efe0';ctx.fillRect(cup[0]-3,cup[1]-4,6,5);
-          ctx.strokeStyle='rgba(255,248,232,.68)';ctx.lineWidth=1.1;
-          const sw=Math.sin(visualTime*3.4)*2.2;
-          ctx.beginPath();ctx.moveTo(cup[0],cup[1]-5);ctx.quadraticCurveTo(cup[0]+sw,cup[1]-10,cup[0]-sw*.6,cup[1]-15);ctx.stroke();
-        }
         if(neighbourHelp)activityGesture(p,neighbourHelp.actorStep,'#dbab68',p.dx,p.dy,null);
         else if(resourceWork)activityGesture(p,resourceWork.step,'#dbab68',p.dx,p.dy,null);
       });
@@ -4946,46 +4852,6 @@
       }
       list.sort((a,b)=>a.depth-b.depth).forEach(d=>d.draw());
       if(state.site.handline)drawFishingFloat();
-      // High-altitude fighter jet, air-to-ground ordnance, explosions & targeting reticle (always above rooftops)
-      const ptScreen=(x,y,z=0)=>{const pt=screen(x,y,z);return {x:pt[0],y:pt[1]};};
-      if(jet&&window.EarthBaseArt?.drawFlyingJet){
-        window.EarthBaseArt.drawFlyingJet(ctx,ptScreen,unit,jet,visualTime);
-      }
-      for(const m of ordnance){
-        const cur=screen(m.x,m.y,m.z),prev=screen(m.px,m.py,m.pz),tgt=screen(m.tx,m.ty,.05);
-        ellipse(tgt[0],tgt[1],unit*.48,unit*.24,'rgba(255,105,60,.16)','rgba(255,120,70,.72)');
-        ctx.strokeStyle='rgba(255,210,120,.88)';ctx.lineWidth=Math.max(2,unit*.08);
-        ctx.beginPath();ctx.moveTo(prev[0],prev[1]);ctx.lineTo(cur[0],cur[1]);ctx.stroke();
-        ctx.fillStyle='#fff6d6';ctx.beginPath();ctx.arc(cur[0],cur[1],Math.max(2.6,unit*.11),0,Math.PI*2);ctx.fill();
-      }
-      for(const ex of explosions){
-        const k=clamp(ex.age/ex.duration,0,1),ep=screen(ex.x,ex.y,.15+k*1.2),gp=screen(ex.x,ex.y,.05);
-        const radius=unit*(.45+k*1.85);
-        ctx.save();
-        // Expanding ground shockwave ring
-        ctx.strokeStyle=`rgba(255,205,130,${(1-k)*.75})`;ctx.lineWidth=Math.max(1.5,unit*.08*(1-k));
-        ctx.beginPath();ctx.ellipse(gp[0],gp[1],radius*1.1,radius*.52,0,0,Math.PI*2);ctx.stroke();
-        // Rising smoke plume
-        ctx.fillStyle=`rgba(54,48,44,${(1-k)*.55})`;
-        ctx.beginPath();ctx.arc(ep[0]+Math.sin(ex.seed)*radius*.2,ep[1]-radius*.35,radius*.72,0,Math.PI*2);ctx.fill();
-        // Fireball core
-        if(k<.68){
-          const fk=1-k/.68;
-          ctx.fillStyle=`rgba(255,118,36,${fk*.9})`;
-          ctx.beginPath();ctx.arc(gp[0],gp[1]-radius*.2,radius*.62*fk+.2*unit,0,Math.PI*2);ctx.fill();
-          ctx.fillStyle=`rgba(255,244,180,${fk*.95})`;
-          ctx.beginPath();ctx.arc(gp[0],gp[1]-radius*.18,radius*.32*fk,0,Math.PI*2);ctx.fill();
-        }
-        ctx.restore();
-      }
-      if(state.mode==='jet'&&jet?.strikeMode&&jetAimWorld){
-        const ap=screen(jetAimWorld.x,jetAimWorld.y,.08);
-        ctx.save();
-        ctx.strokeStyle='#ff7c52';ctx.lineWidth=1.8;
-        ctx.beginPath();ctx.ellipse(ap[0],ap[1],Math.max(14,unit*.68),Math.max(7,unit*.34),0,0,Math.PI*2);ctx.stroke();
-        ctx.beginPath();ctx.moveTo(ap[0]-18,ap[1]);ctx.lineTo(ap[0]+18,ap[1]);ctx.moveTo(ap[0],ap[1]-10);ctx.lineTo(ap[0],ap[1]+10);ctx.stroke();
-        ctx.restore();
-      }
       if(evening){
         const world=options.getWorld?.(),clock=window.EarthDayClock;
         const time=clock&&world?.dayClock?(clock.now(world)-world.dayClock.origin)%clock.day:0;
@@ -5026,19 +4892,18 @@
       }
     }
     function traversable(p, driving=state.mode==='drive',van=parkedBounds,truck=drivingTruck,obstacles=trafficDetour) {
+      const expand=(state.site?.territoryLevel||0)*6;
       if(driving){
         if(p.x>SIDE+.78||p.y>SIDE+.78||p.x<-.78||p.y<-.78)return false;
         return road(p.x,p.y)&&!carHitsObject(p,p,truck)&&!occupiedNode(p,obstacles,truck);
       }
-      const tb=window.EarthFreeLand?.territoryBounds?.(state.site);
-      const minX=Math.min(-.78,frontages.west,tb?tb.minX:-.78);
-      const minY=Math.min(-.78,frontages.north,tb?tb.minY:-.78);
-      const maxX=Math.max(SIDE+.78,tb?tb.maxX:SIDE+.78);
-      const maxY=Math.max(SIDE+.78,tb?tb.maxY:SIDE+.78);
-      const airfieldLane=p.x>maxX&&p.x<=36.5&&p.y>=10.6&&p.y<=13.4;
-      if(!airfieldLane&&(p.x<minX||p.x>maxX||p.y<minY||p.y>maxY))return false;
+      const maxX=Math.max(SIDE+.78,34+expand);
+      const maxY=SIDE+.78+(berths.length?0:6.8+expand);
+      const minX=Math.min(-.78,frontages.west,-7.2-expand);
+      const minY=Math.min(-.78,frontages.north,-7.2-expand);
+      if(p.x>maxX||p.y>maxY||p.x<minX||p.y<minY)return false;
       if(van&&insideFootprint(p,van)||trafficDetour?.some(bounds=>insideFootprint(p,bounds)))return false;
-      if(extraSolids.some(bounds=>insideFootprint(p,bounds)))return false;
+      if(outerSolids.some(bounds=>insideFootprint(p,bounds)))return false;
       const bin=collisionBins[collisionCell(p.y)*collisionSide+collisionCell(p.x)];
       return !bin.some(bounds=>insideFootprint(p,bounds)&&!(workBounds.has(bounds)&&insideFootprint(state.player,bounds)));
     }
@@ -5143,7 +5008,7 @@
       };
       if(driving)return !OFF_ROAD.some(intersects)&&!carHitsObject(a,b,truck)&&!occupiedEdge(a,b,obstacles,truck);
       if(parkedBounds&&intersects(parkedBounds)||trafficDetour?.some(bounds=>obstructedByTraffic(a,b,bounds)))return false;
-      if(extraSolids.some(intersects))return false;
+      if(outerSolids.some(intersects))return false;
       const x1=collisionCell(Math.min(a.x,b.x)),x2=collisionCell(Math.max(a.x,b.x));
       const y1=collisionCell(Math.min(a.y,b.y)),y2=collisionCell(Math.max(a.y,b.y));
       for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++){
@@ -5158,16 +5023,16 @@
     } : planRoute;
     function planRoute(start,target,driving=state.mode==='drive',detour=null,truck=drivingTruck) {
       if(clearSegment(start,target,driving,truck))return [target];
-      // The fixed central lattice meets every serviced outer lot at a road.
-      // Join its frontage before searching the centre, even in an old district
-      // whose shops sit beyond several existing residential rows.
-      if(!driving&&[start,target].some(p=>p.x<-.78||p.y<-.78)){
+      // The fixed central lattice meets every serviced outer lot, expanded territory
+      // parcel, and the east gate approach to the Military Airbase at a road curb.
+      const outsideCore=p=>p.x<-.78||p.y<-.78||p.x>SIDE+.78||p.y>SIDE+.78;
+      if(!driving&&[start,target].some(outsideCore)){
         const approaches=p=>{
-          if(p.x>=-.78&&p.y>=-.78)return [[p]];
-          const west=p.x<-.78;
+          if(!outsideCore(p))return [[p]];
+          const west=p.x<-.78,east=p.x>SIDE+.78,north=p.y<-.78;
           return [0,.72,-.72,1,-1].map(offset=>{
-            const corner=west?{x:p.x,y:p.y+offset}:{x:p.x+offset,y:p.y};
-            const curb=west?{x:0,y:clamp(corner.y,0,SIDE)}:{x:clamp(corner.x,0,SIDE),y:0};
+            const corner=west||east?{x:p.x,y:p.y+offset}:{x:p.x+offset,y:p.y};
+            const curb=west?{x:0,y:clamp(corner.y,0,SIDE)}:east?{x:SIDE,y:clamp(corner.y,0,SIDE)}:north?{x:clamp(corner.x,0,SIDE),y:0}:{x:clamp(corner.x,0,SIDE),y:SIDE};
             return [p,corner,curb];
           }).filter(leg=>leg.every((v,i)=>traversable(v,false)&&(!i||clearSegment(leg[i-1],v,false))));
         };
@@ -5348,9 +5213,7 @@
     function getState() {
       const body=state.companion&&(state.mode!=='walk'?state.player:state.companion);
       const companion=body?{residentId:state.companion.id,x:body.x,y:body.y}:null;
-      const hasJet=Boolean(state.site?.militaryBase?.units?.some(u=>u.type==='jet'));
-      const offshoreDist=state.mode==='boat'?Math.max(0,Math.round(Math.hypot(state.player.x-12,Math.max(0,state.player.y-25)))):0;
-      return {actor:playedId,mode:state.mode,nearTruckDoor:nearTruckDoor(),boardingVan:state.arrival?.type==='vehicle',vehicle:state.mode==='drive'?(drivingTruck?'truck':'van'):null,seated:Boolean(seatedAt),seatKind:seatedAt?.kind||null,waterfront:berths.length>0,offshoreDist,hasJet,jet:jet?{phase:jet.phase,altitude:Math.round(jet.z*10)/10,speed:Math.round(jet.speed),strikeMode:jet.strikeMode}:null,freeBuild:freeBuildKind,boarding:state.arrival?.type==='board',returning:state.arrival?.type==='land',sailingToShoal:state.destination?.shoal===true,findingLine:state.destination?.fishingLine===true||state.arrival?.type==='fishingLine',findingQuay:state.arrival?.type==='fishingQuay',siteId:state.site?.id||null,plot:placingFocus,placement:state.placed,nearby:state.active?publicPoint(state.active):null,companion,x:state.player.x,y:state.player.y,travelling:state.route.length>0,zoom};
+      return {actor:playedId,mode:state.mode,nearTruckDoor:nearTruckDoor(),boardingVan:state.arrival?.type==='vehicle',vehicle:state.mode==='drive'?(drivingTruck?'truck':'van'):null,seated:Boolean(seatedAt),waterfront:berths.length>0,boarding:state.arrival?.type==='board',returning:state.arrival?.type==='land',sailingToShoal:state.destination?.shoal===true,findingLine:state.destination?.fishingLine===true||state.arrival?.type==='fishingLine',findingQuay:state.arrival?.type==='fishingQuay',siteId:state.site?.id||null,plot:placingFocus,placement:state.placed,nearby:state.active?publicPoint(state.active):null,companion,x:state.player.x,y:state.player.y,travelling:state.route.length>0,zoom};
     }
     function publicPoint(q) {
       if(!q)return null;
@@ -5474,174 +5337,6 @@
       const seats=fixtures.filter(q=>q.kind==='bench').sort((a,b)=>dist(state.player,a)-dist(state.player,b));
       for(const seat of seats)if(useFixture(seat))return true;
       return false;
-    }
-    function sitAtCafe(){
-      if(!state.site)return false;
-      if(jet)return false;
-      if(state.mode==='boat'&&embarked){embarked=null;clearCatch();}
-      if(state.mode==='drive'){state.van={...state.player};drivingTruck=false;setParkedVan();}
-      stop();pressed.clear();state.mode='walk';putAwayLine();
-      const seat={kind:'cafe',label:'The Reading Room terrace',x:3.0,y:22.45,objectX:3.0,objectY:22.35};
-      Object.assign(state.player,{x:seat.x,y:seat.y,dx:0,dy:-1,moving:false});
-      seatedAt=seat;state.hintKey=null;cameraFollows=true;centreX=seat.x;centreY=seat.y;
-      dirty=true;updateNearby();message('Seated at The Reading Room terrace. Enjoy a book and coffee.');emitState();
-      return true;
-    }
-    function setFreeBuild(kind){
-      freeBuildKind=kind||null;freeBuildHover=null;
-      if(freeBuildKind){
-        if(state.placed)setPlacement(null);
-        if(jet)landJet();
-        const spec=window.EarthFreeLand?.byKind?.(freeBuildKind);
-        message(spec?`Placing ${spec.name} · Click empty land to build (Esc to cancel).`:'Click empty land to build.');
-      }
-      dirty=true;emitState();schedule();
-      return Boolean(freeBuildKind);
-    }
-    function returnToHarbour(){
-      if(state.mode!=='boat'||!embarked)return false;
-      message('Charting course back to harbour.');
-      return sail(embarked,true);
-    }
-    function enterJet(){
-      if(!state.site)return false;
-      const hasJet=Boolean(state.site.militaryBase?.units?.some(u=>u.type==='jet'));
-      if(!hasJet){message('Build a fighter jet at the Military Base first.');return false;}
-      if(jet){message('Already airborne.');return true;}
-      if(state.mode==='drive'){state.van={...state.player};drivingTruck=false;setParkedVan();}
-      if(state.mode==='boat'){embarked=null;clearCatch();}
-      freeBuildKind=null;freeBuildHover=null;standUp(false);stop();pressed.clear();putAwayLine();
-      const rw=window.EarthMilitaryBase?.runway||{x:37.6,yStart:0,yEnd:24};
-      state.mode='jet';
-      jet={x:rw.x,y:rw.yEnd-2.4,z:0,heading:-Math.PI/2,speed:0,targetSpeed:13.8,bank:0,throttle:1,phase:'takeoff',waypoint:null,strikeMode:false,trail:[],cooldown:0};
-      Object.assign(state.player,{x:jet.x,y:jet.y,dx:0,dy:-1,moving:true});
-      if(zoom>.88){zoom=.78;unit=baseUnit()*zoom;}
-      cameraFollows=true;centreX=jet.x;centreY=jet.y-2;lastFrame=0;dirty=true;
-      message('Taking off down the runway! Fly with WASD/arrows or tap anywhere. Space fires a strike.');
-      emitState();schedule();
-      return true;
-    }
-    function landJet(){
-      if(!jet||state.mode!=='jet')return false;
-      jet.phase='landing';jet.waypoint=null;jet.strikeMode=false;
-      message('Aligning on final approach for the airfield runway.');
-      dirty=true;emitState();schedule();
-      return true;
-    }
-    function toggleJetStrikeMode(){
-      if(!jet||state.mode!=='jet')return false;
-      jet.strikeMode=!jet.strikeMode;
-      message(jet.strikeMode?'Strike targeting active · Click any point to launch missile!':'Free flight steering · Click to fly or press Space to strike.');
-      dirty=true;emitState();schedule();
-      return jet.strikeMode;
-    }
-    function fireJetStrike(target){
-      if(!jet||state.mode!=='jet')return false;
-      if(jet.z<1.1){message('Gain altitude before firing ordnance.');return false;}
-      if(jet.cooldown>0)return false;
-      const tx=target?target.x:jet.x+Math.cos(jet.heading)*9;
-      const ty=target?target.y:jet.y+Math.sin(jet.heading)*9;
-      const d=Math.max(1,Math.hypot(tx-jet.x,ty-jet.y));
-      const flightTime=clamp(d/26,.24,.95);
-      ordnance.push({x:jet.x,y:jet.y,z:jet.z-.25,px:jet.x,py:jet.y,pz:jet.z-.25,sx:jet.x,sy:jet.y,sz:jet.z-.25,tx,ty,t:0,duration:flightTime});
-      jet.cooldown=.38;
-      message('Missile away!');
-      dirty=true;schedule();
-      return true;
-    }
-    function stepJet(dt){
-      if(jet){
-        jet.cooldown=Math.max(0,(jet.cooldown||0)-dt);
-        const rw=window.EarthMilitaryBase?.runway||{x:37.6,yStart:0,yEnd:24};
-        if(jet.phase==='takeoff'){
-          jet.throttle=1;jet.heading=-Math.PI/2;jet.bank=0;
-          jet.speed=Math.min(13.8,jet.speed+dt*7.6);
-          jet.y-=jet.speed*dt;
-          if(jet.speed>=6.8){jet.z=Math.min(5.6,jet.z+dt*2.9);}
-          if(jet.z>=5.5&&jet.y<=rw.yStart+1){jet.phase='airborne';message('Airborne at cruise altitude! Fly freely or press Space to strike.');emitState();}
-        }else if(jet.phase==='landing'){
-          const approachY=rw.yEnd+4.5,touchY=rw.yEnd-2.4;
-          const target=jet.y>rw.yEnd+1&&Math.abs(jet.x-rw.x)>1.2?{x:rw.x,y:approachY}:{x:rw.x,y:touchY};
-          const dx=target.x-jet.x,dy=target.y-jet.y,d=Math.hypot(dx,dy);
-          const desired=Math.atan2(dy,dx);
-          let diff=desired-jet.heading;
-          while(diff>Math.PI)diff-=Math.PI*2;
-          while(diff<-Math.PI)diff+=Math.PI*2;
-          jet.heading+=clamp(diff,-dt*2.8,dt*2.8);
-          jet.bank=clamp(diff*1.5,-1,1);
-          jet.speed=d<10?Math.max(3.6,d*1.1):11.5;
-          jet.throttle=d<6?.15:.55;
-          jet.x+=Math.cos(jet.heading)*jet.speed*dt;
-          jet.y+=Math.sin(jet.heading)*jet.speed*dt;
-          const targetZ=d<12?clamp((d-1.2)/10.8*5.4,0,5.6):5.4;
-          jet.z+=(targetZ-jet.z)*Math.min(1,dt*3.2);
-          if(Math.hypot(jet.x-rw.x,jet.y-touchY)<1.6&&jet.z<.35){
-            jet=null;state.mode='walk';
-            Object.assign(state.player,{x:35.6,y:12.0,dx:-1,dy:0,moving:false});
-            cameraFollows=true;updateNearby();message('Landed safely at the military airfield.');emitState();
-          }
-        }else{
-          // Airborne free flight
-          let desired=null;
-          if(pressed.size){
-            let kx=0,ky=0;for(const dir of pressed){kx+=AXIS[dir][0];ky+=AXIS[dir][1];}
-            if(kx||ky){desired=Math.atan2(ky,kx);jet.waypoint=null;}
-          }else if(jet.waypoint){
-            const wx=jet.waypoint.x-jet.x,wy=jet.waypoint.y-jet.y;
-            if(Math.hypot(wx,wy)<2.2)jet.waypoint=null;
-            else desired=Math.atan2(wy,wx);
-          }
-          if(desired!==null){
-            let diff=desired-jet.heading;
-            while(diff>Math.PI)diff-=Math.PI*2;
-            while(diff<-Math.PI)diff+=Math.PI*2;
-            const turn=clamp(diff,-dt*3.1,dt*3.1);
-            jet.heading+=turn;
-            jet.bank+=(clamp(diff*1.6,-1,1)-jet.bank)*Math.min(1,dt*6);
-            jet.throttle=1;
-            jet.speed+=(14.5-jet.speed)*Math.min(1,dt*3);
-          }else{
-            // Smooth gentle loiter turn at altitude
-            jet.heading+=dt*.42;
-            jet.bank+=(.32-jet.bank)*Math.min(1,dt*3);
-            jet.throttle=.68;
-            jet.speed+=(10.5-jet.speed)*Math.min(1,dt*2.5);
-          }
-          jet.x=clamp(jet.x+Math.cos(jet.heading)*jet.speed*dt,-145,170);
-          jet.y=clamp(jet.y+Math.sin(jet.heading)*jet.speed*dt,-110,170);
-          jet.z=5.6+Math.sin(visualTime*2.1)*.12;
-        }
-        if(jet){
-          Object.assign(state.player,{x:jet.x,y:jet.y,dx:Math.cos(jet.heading),dy:Math.sin(jet.heading),moving:true});
-          if(jet.z>1.2){
-            const last=jet.trail[jet.trail.length-1];
-            if(!last||Math.hypot(jet.x-last.x,jet.y-last.y)>.65){
-              jet.trail.push({x:jet.x,y:jet.y,z:jet.z});
-              if(jet.trail.length>28)jet.trail.shift();
-            }
-          }
-        }
-      }
-      for(let i=ordnance.length-1;i>=0;i--){
-        const m=ordnance[i];
-        m.px=m.x;m.py=m.y;m.pz=m.z;
-        m.t+=dt/m.duration;
-        const k=clamp(m.t,0,1);
-        m.x=m.sx+(m.tx-m.sx)*k;
-        m.y=m.sy+(m.ty-m.sy)*k;
-        m.z=m.sz*(1-k);
-        if(k>=1){
-          ordnance.splice(i,1);
-          explosions.push({x:m.tx,y:m.ty,age:0,duration:1.35,seed:Math.random()*6.28});
-          craters.push({x:m.tx,y:m.ty});
-          if(craters.length>24)craters.shift();
-          options.onJetStrike?.({x:Math.round(m.tx*10)/10,y:Math.round(m.ty*10)/10});
-        }
-      }
-      for(let i=explosions.length-1;i>=0;i--){
-        explosions[i].age+=dt;
-        if(explosions[i].age>=explosions[i].duration)explosions.splice(i,1);
-      }
     }
     function choose(point) {
       if(!point)return;
@@ -5872,21 +5567,18 @@
       if(overviewZoom!==null)exitOverview();
       if(pressed.has(direction))return true;
       if(!moving())lastFrame=0;
-      if(state.mode==='jet'){pressed.add(direction);dirty=true;schedule();return true;}
       stop();pressed.add(direction);const v=AXIS[direction];manual(v[0],v[1],state.mode==='drive'?.45:.28);dirty=true;updateNearby();emitState();return true;
     }
-    function releaseMove(direction){if(options.field?.selected()){options.field.releaseDirection(direction);return;}if(pressed.delete(direction) && (berths.length||state.mode==='jet'))emitState();}
+    function releaseMove(direction){if(options.field?.selected()){options.field.releaseDirection(direction);return;}if(pressed.delete(direction) && berths.length)emitState();}
     function move(direction) {
       if(!covered&&options.field?.steer(direction,false))return true;
       clearObservation();
       if(covered||!AXIS[direction]||!state.site)return false;
       if(state.placed){cyclePlot(direction==='left'||direction==='up'?-1:1);return true;}
       if(overviewZoom!==null)exitOverview();
-      if(state.mode==='jet'&&jet){const v=AXIS[direction];jet.waypoint={x:jet.x+v[0]*14,y:jet.y+v[1]*14};dirty=true;schedule();return true;}
       stop();const v=AXIS[direction];const result=manual(v[0],v[1],state.mode==='drive'?.80:.48);dirty=true;updateNearby();emitState();return result;
     }
     function follow(dt) {
-      if(jet||ordnance.length||explosions.length)stepJet(dt);
       const p=state.player;
       if(neighbourHelp&&(visualTime>=neighbourHelp.until||state.mode!=='walk'||neighbourHelp.actor!==playedId||state.site?.id!==neighbourHelp.siteId||state.route.length||pressed.size)){
         neighbourHelp=null;dirty=true;
@@ -5897,14 +5589,6 @@
       // Sample this instant's pedestrian motion against the current controlled
       // cab before either the driver or a waiting route can advance.
       if(drivingTruck)crossingsNear(p,dt,true);
-      if(state.mode==='jet'){
-        followCompanion(dt);stepTraffic(dt);
-        if((observedId||cameraFollows)&&!dragging&&!pinch){
-          const target=followTarget(),rate=reduced?1:1-Math.exp(-dt*6.2);
-          centreX+=(target.x-centreX)*rate;centreY+=(target.y-centreY)*rate;
-        }
-        return;
-      }
       p.moving=false;
       const speed=state.mode==='boat'?BOAT_SPEED:state.mode==='drive'?DRIVE_SPEED:pursuit?.running?5.5:WALK_SPEED;
       if(!state.placed&&pressed.size){let dx=0,dy=0;for(const dir of pressed){dx+=AXIS[dir][0];dy+=AXIS[dir][1];}stop();manual(dx,dy,dt*speed);}
@@ -6006,19 +5690,20 @@
       if(!state.site||(!kind&&!state.placed))return;
       if(kind){
         if(!shoreOnly())return;
-        const empty=state.lots.filter(vacant);if(!empty.length){message('Every plot is in use.');return;}
+        const empty=state.lots.filter(vacant);
         if(!state.placed)priorPlacementView={zoom,overviewZoom,centreX,centreY,cameraFollows};
         overviewZoom=null;
         stop();clearInput();
-        placingFocus=empty.find(l=>l.plot===preferredPlot)?.plot??empty[0].plot;cameraFollows=false;centreX=12;centreY=12;
+        placingFocus=empty.find(l=>l.plot===preferredPlot)?.plot??(empty[0]?.plot??0);cameraFollows=false;centreX=12;centreY=12;
         zoom=fitZoom();
+        if(!empty.length)message('Central lots are full — tap any clear empty land inside the green perimeter to build freely!');
       }else if(priorPlacementView){
         ({zoom,overviewZoom,centreX,centreY,cameraFollows}=priorPlacementView);
         if(overviewZoom!==null)zoom=fitZoom();
         priorPlacementView=null;
       }
       unit=baseUnit()*zoom;state.placed=kind||null;state.hover=null;previewedPlot=null;miniTick=-1;dirty=true;emitState();
-      if(kind)options.onPlotPreview?.(placingFocus);
+      if(kind&&state.lots.some(vacant))options.onPlotPreview?.(placingFocus);
     }
     function setSite(site) {
       const previous=state.site,previousKey=siteKey(previous),nextKey=siteKey(site);
@@ -6047,6 +5732,7 @@
       landmarks=townAchievements(site,site?window.EarthDreams?.landmarks?.(site)||[]:[]);
       if(inspectedLandmark)inspectedLandmark=landmarks.find(mark=>mark.key===inspectedLandmark.key)||null;
       const nextFingerprint=JSON.stringify([nextKey,site?.water,coastSite(site),site?.buildings,site?.pursuits?.cart?.fixture,Boolean(site?.growth?.vehicle),
+        site?.territoryLevel||0,site?.communityLife?.border?.defence?.stage||0,(site?.freeBuildings||[]).map(b=>[b.id,b.kind,b.x,b.y]),(site?.playerHouses||[]).map(h=>[h.id,h.x,h.y]),
         site?.civicLand?.homes.length,site?.civicLand?.project?.plot,site?.city?.precincts.map(p=>p.use==='homes'),site?.growth?.road?.lot,site?.growth?.households.map(h=>[h.plot,h.home,h.houseSite,h.shop,h.businessPlot,h.shopSite,h.build?.shop?h.build.lot:Boolean(h.build)]),
         landmarks.filter(mark=>mark.kind!=='balcony').map(mark=>mark.key),
         site?.residents?.map(r=>[r.id,r.name,window.EarthCommunityLife?.present(site,r.id)!==false])]);
@@ -6280,10 +5966,15 @@
       }
       if(!camera||typeof camera.cameraFollows!=='boolean'||!between(camera.zoom,geo?.bounds?1e-6:.29,2.15)||
         !Number.isFinite(camera.centreX)||!Number.isFinite(camera.centreY))return false;
-      if(geo&&baseTown){
+      if(geo&&baseTown&&mode!=='boat'){
         const p=renderRegion.regionalPoint(baseTown,camera.centreX,camera.centreY),b=geo.bounds;
         if(!between(p.x,b.minX-.00001,b.maxX+.00001)||!between(p.y,b.minY-.00001,b.maxY+.00001))return false;
-      }else if(!between(camera.centreX,Math.min(-3,frontages.west),SIDE+3)||!between(camera.centreY,Math.min(-3,frontages.north),mode==='boat'?seaLimit:SIDE+3))return false;
+      }else if(mode==='boat'){
+        if(!between(camera.centreX,-seaSpan,SIDE+seaSpan)||!between(camera.centreY,state.site?.water?-seaSpan:Math.min(-3,frontages.north),seaLimit))return false;
+      }else{
+        const exp=(state.site?.territoryLevel||0)*6;
+        if(!between(camera.centreX,Math.min(-4-exp,frontages.west),Math.max(SIDE+3,45+exp))||!between(camera.centreY,Math.min(-4-exp,frontages.north),SIDE+4+exp))return false;
+      }
       if(camera.overviewZoom!==null&&(!between(camera.overviewZoom,geo?.bounds?1e-6:.29,2.15)||camera.cameraFollows))return false;
       // Resume the player's position, never an unconfirmed activity or an old arrival callback.
       stop();clearInput();priorPlacementView=null;state.placed=null;previewedPlot=null;state.active=null;state.hover=null;
@@ -6636,21 +6327,6 @@
         inspectedLandmark=null;landmarkPanel=null;dirty=true;
         if(closed){schedule();return;}
       }
-      if(freeBuildKind){
-        const pt=world(p.x,p.y);
-        const rx=Math.round(pt.x*2)/2,ry=Math.round(pt.y*2)/2;
-        const check=window.EarthFreeLand?.canPlace?.(state.site,freeBuildKind,rx,ry);
-        if(!check?.ok){message(check?.reason||'Cannot build here.');return;}
-        options.onFreePlace?.({kind:freeBuildKind,x:rx,y:ry});
-        return;
-      }
-      if(state.mode==='jet'&&jet){
-        const pt=world(p.x,p.y);
-        if(jet.strikeMode){fireJetStrike(pt);return;}
-        jet.waypoint={x:clamp(pt.x,-140,165),y:clamp(pt.y,-105,165)};
-        cameraFollows=true;dirty=true;schedule();
-        return;
-      }
       if(selectedCrew.size){
         const work=hitWorksite(p.x,p.y);
         if(work)options.onAssignWorksite?.(work.id);
@@ -6711,8 +6387,23 @@
         if(!regionalModel.streetFootprint(geo,at.x,at.y)){regionalEvent(at,true);return;}
       }
       if(state.placed){
-        if(!q){message('Choose a marked, vacant plot.');return;}
-        placeLot(q,device);return;
+        if(q){placeLot(q,device);return;}
+        if(options.onPlaceFree){
+          const pt=world(p.x,p.y);
+          const FP=window.EarthFlightPhysics;
+          const check=FP?FP.isLandClearForBuilding(pt.x,pt.y,1.65,1.55,{
+            territoryLevel:state.site?.territoryLevel||0,
+            hasWaterfront:Boolean(berths.length),
+            fortStage:state.site?.communityLife?.border?.defence?.stage||0,
+            existingSolids:state.solids
+          }):{clear:true};
+          if(check.clear){
+            options.onPlaceFree({kind:state.placed,x:Math.round(pt.x*10)/10,y:Math.round(pt.y*10)/10});
+            return;
+          }
+          message(check.reason||'That ground is occupied. Tap clear empty land or expand territory.');return;
+        }
+        message('Choose a marked, vacant plot or clear open land.');return;
       }
       if(!q)return;
       if(q.type==='premises'){options.onBuilding?.(q);return;}
@@ -6780,7 +6471,7 @@
       if(state.placed||overviewZoom!==null)zoom=fitZoom();
       unit=baseUnit()*zoom;backdropGradient=null;terrainSnapshot=null;dirty=true;schedule();
     }
-    function moving(){return Boolean(pressed.size||state.route.length||jet||ordnance.length||explosions.length);}
+    function moving(){return Boolean(pressed.size||state.route.length);}
     function autonomousMotion(){return Boolean(!spectator&&visible&&state.site?.communityLife?.border?.street?.phase==='fight'||activity&&state.site&&!state.placed&&(locals.size||residentActivities.size));}
     function activeMotion(){return Boolean(moving()||dragging?.moved||pinch||watchedTravel&&!reduced);}
     function cancelIdle(){if(idleTimer){clearTimeout(idleTimer);idleTimer=0;}}
@@ -6969,15 +6660,6 @@
     listen(canvas,'pointermove',e=>{
       const p=coords(e,canvas);
       if(!fingers.has(e.pointerId)){
-        if(freeBuildKind){
-          const pt=world(p.x,p.y);
-          freeBuildHover={x:Math.round(pt.x*2)/2,y:Math.round(pt.y*2)/2};
-          dirty=true;schedule();return;
-        }
-        if(state.mode==='jet'&&jet?.strikeMode){
-          jetAimWorld=world(p.x,p.y);
-          dirty=true;schedule();return;
-        }
         if(e.pointerType!=='touch'){
           const target=selectedCrew.size?hitWorksite(p.x,p.y):hit(p.x,p.y);
           const next=target?.type==='ground'?null:target;
@@ -7048,14 +6730,6 @@
         e.preventDefault();return;
       }
       if(options.field?.selected()&&['v','e','Escape'].includes(k)){e.preventDefault();if(!e.repeat){if(k==='Escape')options.field.clear(false);else options.field.vehicle();}return;}
-      if(state.mode==='jet'&&jet){
-        if(KEYS[k]){e.preventDefault();if(!e.repeat)holdMove(KEYS[k]);return;}
-        if(k===' '||k==='f'){e.preventDefault();if(!e.repeat)fireJetStrike();return;}
-        if(k==='l'){e.preventDefault();if(!e.repeat)landJet();return;}
-        if(k==='t'){e.preventDefault();if(!e.repeat)toggleJetStrikeMode();return;}
-        if(k==='Escape'){e.preventDefault();landJet();return;}
-      }
-      if(freeBuildKind&&k==='Escape'){e.preventDefault();setFreeBuild(null);return;}
       if(KEYS[k]){e.preventDefault();if(!e.repeat)holdMove(KEYS[k]);}
       else if(['e',' ','Enter','v','b','m','+','=','-','Home','Escape'].includes(k)){e.preventDefault();if(e.repeat)return;
         if(k==='b')toggleBoat();else if(k==='v'){if((drivingTruck||nearTruckDoor())&&options.onTruckDoor)options.onTruckDoor();else toggleVehicle();}else if(k==='m')toggleOverview();else if(k==='e'||k===' '||k==='Enter')interact();else if(k==='Home')recenter();else if(k==='Escape'){if(selectedCrew.size){setCrewSelection([]);options.onCancelCrewSelection?.();}else if(state.placed)setPlacement(null);else cancelTravel();}else zoomBy(k==='-'?1/1.2:1.2);}
@@ -7357,7 +7031,7 @@
         if(traversable(q)&&clearSegment(p,q)){navigate(q);break;}
       }
     }
-    return {showField,fieldRefresh,fieldView,followField,finishGroundTap,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),returnToHarbour,sitAtCafe,enterJet,landJet,fireJetStrike,toggleJetStrikeMode,setFreeBuild,endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {showField,fieldRefresh,fieldView,followField,finishGroundTap,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

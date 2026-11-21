@@ -12,8 +12,8 @@
     {id:'usual',label:'Usual weekly duty'}, {id:'food',label:'Help grow food'},
     {id:'repair',label:'Help with repairs'}, {id:'exchange',label:'Help at the exchange'}
   ].map(Object.freeze));
-  const streetWork = {garden:22,workshop:39,market:35,hall:31,pier:44,fishingDock:41,wetland:32};
-  const dismantleWork={garden:14,workshop:23,market:21,hall:19,pier:26,fishingDock:24,wetland:18};
+  const streetWork = {garden:22,workshop:39,market:35,hall:31,pier:44,fishingDock:41,wetland:32,dragonStable:36,house:24};
+  const dismantleWork={garden:14,workshop:23,market:21,hall:19,pier:26,fishingDock:24,wetland:18,dragonStable:20,house:14};
   const cityWork = {food:35,homes:55,yard:58,market:42,transit:62,care:39,water:41,open:20};
   const stages = {
     growing:['Preparing ground','Laying beds','Planting'],

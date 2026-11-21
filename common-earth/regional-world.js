@@ -266,21 +266,24 @@
   }
   function streetExtent(site){
     const growth=site.growth,rows=growth?.households||[],cached=streetsByTown.get(site);
-    if(cached&&cached.round===growth?.round&&cached.count===rows.length)return cached;
+    const tLevel=site.territoryLevel||0,extraCount=(site.freeBuildings?.length||0)+(site.playerHouses?.length||0);
+    if(cached&&cached.round===growth?.round&&cached.count===rows.length&&cached.tLevel===tLevel&&cached.extraCount===extraCount)return cached;
     const plots=[],model=root.EarthDistrictGrowth;
     let radius=.52;
     function add(p){
       if(!p)return;
       plots.push(p);
-      radius=Math.max(radius,(Math.max(Math.abs(p.x-p.y),Math.abs(p.x+p.y-24))+4)*streetKilometres);
+      radius=Math.max(radius,(Math.max(Math.abs(p.x-p.y),Math.abs(p.x+p.y-24))+5)*streetKilometres);
     }
-    add(root.EarthMilitaryBase?.place);
-    if(root.EarthMilitaryBase){
-      add({x:27,y:12});
-      add({x:29.5,y:12});
-      if(root.EarthMilitaryBase.runway)add({x:root.EarthMilitaryBase.runway.x,y:12});
+    const mbLayout=root.EarthMilitaryBase?.layoutFor?.(site);
+    add(mbLayout?.place||root.EarthMilitaryBase?.place);
+    if(mbLayout?.runway){
+      add({x:mbLayout.runway.x,y:mbLayout.runway.startY});
+      add({x:mbLayout.runway.x,y:mbLayout.runway.y});
+      add({x:mbLayout.runway.x,y:mbLayout.runway.endY});
     }
-    for(const fb of site.freeLand?.buildings||[])add({x:fb.x,y:fb.y});
+    for(const fb of site.freeBuildings||[])add({x:fb.x,y:fb.y});
+    for(const ph of site.playerHouses||[])add({x:ph.x,y:ph.y});
     for(const h of rows){
       add(h.houseSite||model?.homePoint(site,h.plot));
       if(h.shop)add(h.shopSite||model?.shopPoint(site,h.businessPlot));
@@ -288,18 +291,19 @@
     }
     for(const h of site.civicLand?.homes||[])add(root.EarthCouncilHomes.plot(h.plot));
     if(site.civicLand?.project)add(root.EarthCouncilHomes.plot(site.civicLand.project.plot));
-    const extent={round:growth?.round,count:rows.length,freeCount:site.freeLand?.buildings?.length||0,plots,radius};streetsByTown.set(site,extent);return extent;
+    const extent={round:growth?.round,count:rows.length,tLevel,extraCount,plots,radius};streetsByTown.set(site,extent);return extent;
   }
   function streetFootprint(geo,x,y){
     let nearest=null,best=Infinity;
     for(const t of geo.towns){
-      const {radius,plots}=streetExtent(t.site),dx=x-t.x,dy=y-t.y;
+      const {radius,plots,tLevel}=streetExtent(t.site),dx=x-t.x,dy=y-t.y;
       if(Math.abs(dx)>radius||Math.abs(dy)>radius)continue;
       const sx=12+(dx-dy)/(2*streetKilometres),sy=12-(dx+dy)/(2*streetKilometres);
-      // Streets, their roads and the occupied buildings beyond them have a
+      // Streets, their roads, expanded perimeter grounds, and occupied buildings have a
       // physical footprint. The town's jurisdiction can extend beyond it.
-      const streets=sx>=-.87&&sx<=24.87&&sy>=-.87&&sy<=24.87;
-      if(!streets&&!plots.some(p=>Math.abs(sx-p.x)<=1.25&&Math.abs(sy-p.y)<=1.25))continue;
+      const expand=(tLevel||0)*6;
+      const streets=sx>=-7.5-expand&&sx<=27.5+expand&&sy>=-7.5-expand&&sy<=25.2+(t.site.waterfront?0:2.3+expand);
+      if(!streets&&!plots.some(p=>Math.abs(sx-p.x)<=2.2&&Math.abs(sy-p.y)<=2.2))continue;
       const d=dx*dx+dy*dy;if(d<best){best=d;nearest=t;}
     }
     return nearest;

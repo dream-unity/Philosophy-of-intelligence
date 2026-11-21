@@ -62,24 +62,49 @@
       const back=btn('Call back truck with all soldiers',()=>action({action:'returnBase'}),'return-base');
       back.disabled=!b.units.some(root.EarthBaseField.personnel);transport.append(back);
       const row=el('div');buttonRow(row,'Military truck','Choose a town and tap Drive. A soldier takes the wheel.',transport);
-      const hasJet=b.units.some(u=>u.type==='jet');
-      const airControls=el('div',null,'base-unit-controls');
-      if(hasJet&&s.id===sim.active()?.id){
-        const flyBtn=btn('Fly fighter jet',()=>{
-          dialog.close();enterStreet();
-          const sc=street();
-          if(!sc?.enterJet?.())notify('Unable to launch fighter jet right now.',true);
-          else notify('Cleared for takeoff on Runway 09/27. Steer freely with WASD/Arrows or click; press Space or Attack to strike any target.');
-        },'fly-jet');
-        flyBtn.className='action-button';
-        airControls.append(flyBtn);
-      }else if(!b.tech.includes('flight')){
-        airControls.append(btn('Research flight',()=>showTab('research'),'go-flight'));
-      }
-      buttonRow(row,'Airfield & 24-unit runway',hasJet
-        ?'Fighter jet fueled on the south runway threshold. Take off, fly high over the region, and launch air-to-ground strikes anywhere.'
-        :'Dedicated paved runway east of the hangar. Research Flight to commission your first fighter jet.',airControls);
       content.prepend(row);
+      const jets=b.units.filter(u=>u.type==='jet');
+      const jetControls=el('div',null,'base-unit-controls');
+      const flyJetBtn=btn(jets.length?'Fly Fighter Jet (3D Runway Takeoff)':'Research Flight to Fly Jets',()=>{
+        if(!jets.length){showTab('research');return;}
+        const firstJet=jets[0];
+        if(!root.EarthFlight3D){notify('3D flight engine is loading.',true);return;}
+        dialog.close();
+        root.EarthFlight3D.launch({
+          mode:'jet',
+          site:s,
+          world:sim.state,
+          jet:firstJet,
+          runwayTakeoff:true,
+          onFireAttack:(payload)=>{
+            if(payload?.hit){
+              sim.perform('baseOrder',{
+                site:s.id,
+                generation:s.foundingRevision||0,
+                version:domain.view(s).version||0,
+                action:'jetStrike',
+                jetId:firstJet.id,
+                targetName:payload.hit.label||'Target',
+                targetKind:payload.hit.kind||'target',
+                buildingId:payload.hit.buildingId||null,
+                targetSiteId:s.id
+              });
+            }
+          }
+        });
+      },'fly-jet-3d');
+      if(jets.length)flyJetBtn.className='primary-gold';
+      jetControls.append(flyJetBtn);
+      const jetRow=el('div');
+      buttonRow(
+        jetRow,
+        'Airfield & Long Runway ('+jets.length+' fighter jet'+(jets.length===1?'':'s')+')',
+        jets.length
+          ?'Accelerate down the 22-unit paved runway, climb into full 3D airspace, and attack any target or building you choose.'
+          :'Complete Flight Research in the Research tab to commission a fighter jet on the long runway.',
+        jetControls
+      );
+      content.prepend(jetRow);
       if(!b.units.length){content.append(el('p','New recruits gather beside the truck at the east gate.'));return;}
       const garrison=el('div');content.append(el('h3','Base roster'),garrison);
       const available=new Set(domain.ready(sim.state,s).map(u=>u.id));
@@ -89,6 +114,21 @@
         const drill=btn(u.grade===3?'Fully trained':'Drill',()=>action({action:'train',id:u.id}),'train-'+u.id);
         drill.disabled=!free||u.grade>=3||!domain.affordable(sim.state,s,{food:1,funds:2});
         const controls=el('div',null,'base-unit-controls');
+        if(u.type==='jet'){
+          const pilot=btn('Fly in 3D',()=>{
+            if(!root.EarthFlight3D)return;
+            dialog.close();
+            root.EarthFlight3D.launch({
+              mode:'jet',site:s,world:sim.state,jet:u,runwayTakeoff:true,
+              onFireAttack:(payload)=>{
+                if(payload?.hit){
+                  sim.perform('baseOrder',{site:s.id,generation:s.foundingRevision||0,version:domain.view(s).version||0,action:'jetStrike',jetId:u.id,targetName:payload.hit.label||'Target',targetKind:payload.hit.kind||'target',buildingId:payload.hit.buildingId||null,targetSiteId:s.id});
+                }
+              }
+            });
+          },'fly-jet-'+u.id);
+          controls.append(pilot);
+        }
         const locate=btn(mission&&!mission.manual?'Take field command':'Select on map',()=>find(u.id),'field-'+u.id);
         controls.append(locate,drill);drill.disabled||=!!u.aboard||!!u.field&&root.EarthBaseField.moved(sim.state,s,u.id);
         buttonRow(garrison,unitName(u),state+' · Level '+u.grade+(u.grade<3?' · Drill costs 1 food and 2 funds':''),controls);

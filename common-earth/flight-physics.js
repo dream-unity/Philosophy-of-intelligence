@@ -1,0 +1,584 @@
+/* Pure aerodynamic flight physics & spatial solid-boundary geometry.
+   Shared by Common Earth street view, 3D flight engine, and node:test suites. */
+(function (root) {
+  'use strict';
+
+  const DEG = Math.PI / 180;
+  const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  /* ── Solid Boundary & Layout Geometry ────────────────────────────── */
+
+  function rectOverlaps(a, b, pad = 0) {
+    return a[0] - pad < b[2] && a[2] + pad > b[0] && a[1] - pad < b[3] && a[3] + pad > b[1];
+  }
+
+  function pointInRect(p, r, pad = 0) {
+    return p.x >= r[0] - pad && p.x <= r[2] + pad && p.y >= r[1] - pad && p.y <= r[3] + pad;
+  }
+
+  function resolveCircleRect(p, radius, r) {
+    const cx = clamp(p.x, r[0], r[2]);
+    const cy = clamp(p.y, r[1], r[3]);
+    const dx = p.x - cx;
+    const dy = p.y - cy;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= radius * radius) return { hit: false, x: p.x, y: p.y };
+    if (d2 > 1e-8) {
+      const d = Math.sqrt(d2);
+      const push = radius - d;
+      return { hit: true, x: p.x + (dx / d) * push, y: p.y + (dy / d) * push };
+    }
+    // Centre is inside rect: push out via nearest edge.
+    const left = Math.abs(p.x - r[0]);
+    const right = Math.abs(r[2] - p.x);
+    const top = Math.abs(p.y - r[1]);
+    const bottom = Math.abs(r[3] - p.y);
+    const m = Math.min(left, right, top, bottom);
+    if (m === left) return { hit: true, x: r[0] - radius, y: p.y };
+    if (m === right) return { hit: true, x: r[2] + radius, y: p.y };
+    if (m === top) return { hit: true, x: p.x, y: r[1] - radius };
+    return { hit: true, x: p.x, y: r[3] + radius };
+  }
+
+  /**
+   * Computes perimeter wall segments WELL OUTSIDE the town roads & parking bays.
+   * Roads sit on x/y = 0..24 with HALF_ROAD = 0.87 (so road edge is -0.87..24.87).
+   * Walls sit beyond -2.35 and +26.35 (expanding further with territoryLevel),
+   * never overlapping Exchange St, parked vans, waterfront piers, or the Military Base.
+   */
+  function perimeterBounds(territoryLevel = 0, hasWaterfront = false) {
+    const expand = Math.max(0, Math.floor(Number(territoryLevel) || 0)) * 6;
+    return {
+      minX: -7.5 - expand,
+      maxX: 27.5 + expand,
+      minY: -7.5 - expand,
+      maxY: hasWaterfront ? 25.15 : 27.5 + expand,
+      expand,
+      hasWaterfront: Boolean(hasWaterfront)
+    };
+  }
+
+  function perimeterWallSegments(stage, territoryLevel = 0, hasWaterfront = false) {
+    if (!stage || stage <= 0) return [];
+    const b = perimeterBounds(territoryLevel, hasWaterfront);
+    const thick = 0.44;
+    const gateHalf = 2.4; // Wide 4.8-unit road gateways so vans & trucks pass freely
+    const midX = 12;
+    const midY = 12;
+    const segments = [];
+
+    // Gateposts on north entrance (always present from stage >= 1)
+    segments.push({
+      id: 'north-post-west', kind: 'post',
+      x: midX - gateHalf - 0.52, y: b.minY - thick * 0.5,
+      w: 0.52, d: 0.52, h: 1.85,
+      box: [midX - gateHalf - 0.52, b.minY - thick * 0.5, midX - gateHalf, b.minY + thick * 0.5 + 0.08]
+    });
+    segments.push({
+      id: 'north-post-east', kind: 'post',
+      x: midX + gateHalf, y: b.minY - thick * 0.5,
+      w: 0.52, d: 0.52, h: 1.85,
+      box: [midX + gateHalf, b.minY - thick * 0.5, midX + gateHalf + 0.52, b.minY + thick * 0.5 + 0.08]
+    });
+
+    if (stage >= 2) {
+      // North wall (left and right of North Gate)
+      const nwLen = (midX - gateHalf - 0.52) - b.minX;
+      const neStart = midX + gateHalf + 0.52;
+      const neLen = b.maxX - neStart;
+      if (nwLen > 0.4) segments.push({ id: 'north-west', kind: 'wall', x: b.minX, y: b.minY - thick * 0.5, w: nwLen, d: thick, h: 1.25, box: [b.minX, b.minY - thick * 0.5, b.minX + nwLen, b.minY + thick * 0.5] });
+      if (neLen > 0.4) segments.push({ id: 'north-east', kind: 'wall', x: neStart, y: b.minY - thick * 0.5, w: neLen, d: thick, h: 1.25, box: [neStart, b.minY - thick * 0.5, neStart + neLen, b.minY + thick * 0.5] });
+
+      // West wall (north and south of West Gate at y = 12)
+      const wnLen = (midY - gateHalf) - b.minY;
+      const wsStart = midY + gateHalf;
+      const wsEnd = hasWaterfront ? 24.95 : b.maxY;
+      const wsLen = wsEnd - wsStart;
+      if (wnLen > 0.4) segments.push({ id: 'west-north', kind: 'wall', x: b.minX - thick * 0.5, y: b.minY, w: thick, d: wnLen, h: 1.05, box: [b.minX - thick * 0.5, b.minY, b.minX + thick * 0.5, b.minY + wnLen] });
+      if (wsLen > 0.4) segments.push({ id: 'west-south', kind: 'wall', x: b.minX - thick * 0.5, y: wsStart, w: thick, d: wsLen, h: 1.05, box: [b.minX - thick * 0.5, wsStart, b.minX + thick * 0.5, wsStart + wsLen] });
+
+      // East wall (north and south of East Gate at y = 12, cleanly separated from Military Base!)
+      const enLen = (midY - gateHalf) - b.minY;
+      const esStart = midY + gateHalf;
+      const esEnd = hasWaterfront ? 24.95 : b.maxY;
+      const esLen = esEnd - esStart;
+      if (enLen > 0.4) segments.push({ id: 'east-north', kind: 'wall', x: b.maxX - thick * 0.5, y: b.minY, w: thick, d: enLen, h: 1.05, box: [b.maxX - thick * 0.5, b.minY, b.maxX + thick * 0.5, b.minY + enLen] });
+      if (esLen > 0.4) segments.push({ id: 'east-south', kind: 'wall', x: b.maxX - thick * 0.5, y: esStart, w: thick, d: esLen, h: 1.05, box: [b.maxX - thick * 0.5, esStart, b.maxX + thick * 0.5, esStart + esLen] });
+
+      // South wall ONLY on inland sites (never blocks waterfront piers, quay, or Exchange St!)
+      if (!hasWaterfront) {
+        const swLen = (midX - gateHalf) - b.minX;
+        const seStart = midX + gateHalf;
+        const seLen = b.maxX - seStart;
+        if (swLen > 0.4) segments.push({ id: 'south-west', kind: 'wall', x: b.minX, y: b.maxY - thick * 0.5, w: swLen, d: thick, h: 1.05, box: [b.minX, b.maxY - thick * 0.5, b.minX + swLen, b.maxY + thick * 0.5] });
+        if (seLen > 0.4) segments.push({ id: 'south-east', kind: 'wall', x: seStart, y: b.maxY - thick * 0.5, w: seLen, d: thick, h: 1.05, box: [seStart, b.maxY - thick * 0.5, seStart + seLen, b.maxY + thick * 0.5] });
+      }
+    }
+
+    if (stage >= 3) {
+      // Overhead North Gate lintel (non-blocking overhead arch; gateposts are the solid boxes)
+      segments.push({
+        id: 'north-lintel', kind: 'arch',
+        x: midX - gateHalf - 0.52, y: b.minY - thick * 0.5,
+        w: gateHalf * 2 + 1.04, d: 0.52, z: 1.65, h: 0.30,
+        box: null
+      });
+    }
+
+    return segments;
+  }
+
+  /**
+   * Dedicated Military Airbase + Long Runway layout, cleanly separated from
+   * perimeter walls and surrounding houses regardless of territory expansion.
+   */
+  function militaryBaseLayout(territoryLevel = 0) {
+    const expand = Math.max(0, Math.floor(Number(territoryLevel) || 0)) * 6;
+    const baseX = 35.5 + expand;
+    const baseY = 12;
+    // Very long paved runway running North-South along the east side of the airbase
+    const runwayX = baseX + 5.6;
+    const runwayWidth = 2.6;
+    const runwayStartY = 0.5;
+    const runwayLength = 22.0; // Long enough for realistic jet takeoff roll & climb
+    const compoundBox = [baseX - 3.6, baseY - 3.6, baseX + 3.4, baseY + 3.6];
+    const runwayBox = [runwayX - runwayWidth / 2, runwayStartY, runwayX + runwayWidth / 2, runwayStartY + runwayLength];
+    const exclusionBox = [baseX - 5.2, runwayStartY - 2.6, runwayX + runwayWidth / 2 + 3.4, runwayStartY + runwayLength + 2.8];
+    return {
+      place: { x: baseX, y: baseY },
+      gate: { x: baseX - 3.9, y: baseY },
+      apron: { x: baseX + 2.2, y: baseY },
+      runway: {
+        x: runwayX,
+        y: runwayStartY + runwayLength / 2,
+        startY: runwayStartY,
+        endY: runwayStartY + runwayLength,
+        width: runwayWidth,
+        length: runwayLength,
+        takeoffStart: { x: runwayX, y: runwayStartY + runwayLength - 1.6 },
+        takeoffEnd: { x: runwayX, y: runwayStartY + 1.6 },
+        box: runwayBox
+      },
+      solids: [
+        // Hangar solid
+        [baseX - 2.35, baseY - 2.65, baseX + 0.55, baseY - 0.15],
+        // Control tower + radar lab solid
+        [baseX + 0.75, baseY - 2.75, baseX + 2.95, baseY + 0.85],
+        // Perimeter north & south walls of airbase
+        [baseX - 3.4, baseY - 3.45, baseX + 3.2, baseY - 3.05],
+        [baseX - 3.4, baseY + 3.05, baseX + 3.2, baseY + 3.45]
+      ],
+      compoundBox,
+      exclusionBox
+    };
+  }
+
+  /**
+   * Validates whether an arbitrary open-land building footprint at (x, y) is clear
+   * of all solid obstacles, roads, walls, waterfront, and military airbase/runway.
+   */
+  function isLandClearForBuilding(x, y, halfW, halfD, options = {}) {
+    const {
+      territoryLevel = 0,
+      hasWaterfront = false,
+      solids = options.existingSolids || [],
+      excludeRoads = true
+    } = options;
+    const fail = reason => ({ ok: false, clear: false, reason });
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return fail('Invalid coordinates.');
+    const bounds = perimeterBounds(territoryLevel, hasWaterfront);
+    const margin = 0.75;
+    if (x - halfW < bounds.minX + margin || x + halfW > bounds.maxX - margin ||
+        y - halfD < bounds.minY + margin || y + halfD > (hasWaterfront ? 24.4 : bounds.maxY - margin)) {
+      return fail('Outside cleared territory bounds. Expand territory to build farther out.');
+    }
+    const candidate = [x - halfW, y - halfD, x + halfW, y + halfD];
+
+    // Never overlap the Military Airbase or its long runway
+    const mil = militaryBaseLayout(territoryLevel);
+    if (rectOverlaps(candidate, mil.exclusionBox, 0.3)) {
+      return fail('Too close to the Military Airbase and runway.');
+    }
+
+    // Never overlap main district road lanes inside [0..24]
+    if (excludeRoads) {
+      const roadHalf = 1.02;
+      for (let r = 0; r <= 24; r += 6) {
+        if (x + halfW > -0.9 && x - halfW < 24.9 && y - halfD < r + roadHalf && y + halfD > r - roadHalf) {
+          return fail('Cannot build on top of a street.');
+        }
+        if (y + halfD > -0.9 && y - halfD < 24.9 && x - halfW < r + roadHalf && x + halfW > r - roadHalf) {
+          return fail('Cannot build on top of a street.');
+        }
+      }
+    }
+
+    // Never overlap existing solids (buildings, walls, venues, parked vehicles, houses)
+    for (const box of solids) {
+      if (box && rectOverlaps(candidate, box, 0.25)) {
+        return fail('Overlaps an existing building, wall, or obstacle.');
+      }
+    }
+
+    return { ok: true, clear: true, reason: '' };
+  }
+
+  /* ── Aerodynamic 6-DOF Flight Physics (Dragon & Fighter Jet) ────── */
+
+  const PROFILES = Object.freeze({
+    dragon: Object.freeze({
+      kind: 'dragon',
+      minSpeed: 2.5,
+      stallSpeed: 9.0,
+      cruiseSpeed: 26.0,
+      maxSpeed: 68.0,
+      gravity: 15.5,
+      liftCoeff: 0.045,
+      dragCoeff: 0.0085,
+      flapImpulseForward: 9.5,
+      flapImpulseUp: 7.4,
+      flapCooldown: 0.36,
+      pitchRate: 1.95,
+      rollRate: 2.55,
+      yawRate: 1.15,
+      turnBankFactor: 1.55,
+      maxPitch: 78 * DEG,
+      maxRoll: 165 * DEG,
+      canHover: true,
+      hoverDrag: 3.2,
+      runwayRequired: false,
+      fireRange: 82,
+      fireConeRadius: 7.5
+    }),
+    jet: Object.freeze({
+      kind: 'jet',
+      minSpeed: 0,
+      takeoffSpeed: 18.0,
+      stallSpeed: 16.0,
+      cruiseSpeed: 54.0,
+      maxSpeed: 125.0,
+      gravity: 19.5,
+      liftCoeff: 0.028,
+      dragCoeff: 0.0046,
+      thrustAccel: 42.0,
+      afterburnerMultiplier: 1.65,
+      pitchRate: 2.05,
+      rollRate: 3.1,
+      yawRate: 0.95,
+      turnBankFactor: 1.4,
+      maxPitch: 82 * DEG,
+      maxRoll: 175 * DEG,
+      canHover: false,
+      runwayRequired: true,
+      fireRange: 145,
+      fireConeRadius: 6.0
+    })
+  });
+
+  function createFlightState(kindOrOptions = {}, extraOptions) {
+    const options = typeof kindOrOptions === 'string'
+      ? { ...(extraOptions || {}), kind: kindOrOptions }
+      : (kindOrOptions || {});
+    const kind = options.kind === 'jet' ? 'jet' : 'dragon';
+    const profile = PROFILES[kind];
+    const startAirborne = options.airborne ?? (kind === 'dragon');
+    return {
+      kind,
+      x: Number.isFinite(options.x) ? options.x : (kind === 'jet' ? 39.1 : 12),
+      y: Number.isFinite(options.y) ? options.y : (startAirborne ? 24 : 0.9),
+      z: Number.isFinite(options.z) ? options.z : (kind === 'jet' ? 20.5 : 12),
+      yaw: Number.isFinite(options.yaw) ? options.yaw : 0, // 0 = -Z (North)
+      pitch: Number.isFinite(options.pitch) ? options.pitch : 0,
+      roll: Number.isFinite(options.roll) ? options.roll : 0,
+      speed: Number.isFinite(options.speed) ? options.speed : (startAirborne ? profile.cruiseSpeed : 0),
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      throttle: startAirborne ? 0.65 : 0.0,
+      afterburner: false,
+      airborne: startAirborne,
+      hovering: false,
+      stalling: false,
+      wingPhase: 0,
+      flapPulse: 0,
+      flapTimer: 0,
+      barrelRollTimer: 0,
+      barrelRollDir: 1,
+      firing: false,
+      fireEnergy: 100,
+      stamina: 100,
+      gForce: 1.0,
+      thermalLift: 0,
+      distanceFlown: 0,
+      maxAltitudeReached: startAirborne ? 24 : 0.9,
+      fireBlasts: 0,
+      targetsHit: 0
+    };
+  }
+
+  function forwardVector(yaw, pitch) {
+    const cp = Math.cos(pitch);
+    return {
+      x: -Math.sin(yaw) * cp,
+      y: Math.sin(pitch),
+      z: -Math.cos(yaw) * cp
+    };
+  }
+
+  /**
+   * Advances aerodynamic state by dt seconds (pure, deterministic).
+   * controls = { pitch (-1..1), roll (-1..1), yaw (-1..1), flap (bool),
+   *              boost (bool), brake (bool), hover (bool), fire (bool),
+   *              barrelRoll (bool), throttleDelta (-1..1) }
+   * thermals = [{ x, z, radius, strength, maxAlt }]
+   */
+  function stepFlight(state, controls = {}, dt = 1 / 60, thermals = []) {
+    const h = clamp(Number(dt) || 0, 0.001, 0.08);
+    const p = PROFILES[state.kind] || PROFILES.dragon;
+    const cPitch = clamp(Number(controls.pitch) || 0, -1, 1);
+    const cRoll = clamp(Number(controls.roll) || 0, -1, 1);
+    const cYaw = clamp(Number(controls.yaw) || 0, -1, 1);
+    const boost = Boolean(controls.boost);
+    const brake = Boolean(controls.brake);
+    const flap = Boolean(controls.flap);
+    const hoverReq = Boolean(controls.hover) && p.canHover;
+
+    if (controls.barrelRoll && state.airborne && state.barrelRollTimer <= 0) {
+      state.barrelRollTimer = 0.72;
+      state.barrelRollDir = cRoll < 0 ? -1 : 1;
+    }
+
+    // Flap cooldown & decay
+    if (state.flapTimer > 0) state.flapTimer = Math.max(0, state.flapTimer - h);
+    state.flapPulse = Math.max(0, state.flapPulse - h * 2.4);
+
+    // Check thermal updrafts (for gliding dragons & jets)
+    let thermalLift = 0;
+    for (const th of thermals) {
+      const dx = state.x - th.x;
+      const dz = state.z - th.z;
+      const r = th.radius || 12;
+      if (dx * dx + dz * dz <= r * r && state.y <= (th.maxAlt || 120)) {
+        const falloff = 1 - Math.sqrt(dx * dx + dz * dz) / r;
+        thermalLift = Math.max(thermalLift, (th.strength || 12) * (0.45 + 0.55 * falloff));
+      }
+    }
+    state.thermalLift = thermalLift;
+
+    // Ground roll (jet runway takeoff or dragon perched launch)
+    if (!state.airborne) {
+      if (state.kind === 'jet') {
+        if (boost) state.throttle = clamp(state.throttle + h * 0.9, 0, 1.35);
+        else if (brake) state.throttle = clamp(state.throttle - h * 1.1, 0, 1.35);
+        else if (Math.abs(controls.throttleDelta || 0) > 0) {
+          state.throttle = clamp(state.throttle + controls.throttleDelta * h * 0.7, 0, 1.35);
+        }
+        state.afterburner = state.throttle > 1.02 || boost;
+        const accel = state.throttle * p.thrustAccel * (state.afterburner ? p.afterburnerMultiplier : 1) - state.speed * 0.14;
+        state.speed = clamp(state.speed + accel * h, 0, p.maxSpeed);
+        // Ground steering with yaw/roll
+        state.yaw -= (cYaw + cRoll * 0.6) * 0.85 * h * clamp(state.speed / 12, 0.2, 1);
+        state.roll = lerp(state.roll, 0, clamp(h * 8, 0, 1));
+        const fwd = forwardVector(state.yaw, 0);
+        state.vx = fwd.x * state.speed;
+        state.vz = fwd.z * state.speed;
+        state.vy = 0;
+        state.x += state.vx * h;
+        state.z += state.vz * h;
+        state.y = 0.9;
+        // Rotation & liftoff once reaching takeoffSpeed!
+        if (state.speed >= p.takeoffSpeed && (cPitch > 0.1 || state.speed >= p.takeoffSpeed * 1.25)) {
+          state.pitch = clamp(state.pitch + Math.max(0.35, cPitch) * 1.1 * h, 0.12, 0.45);
+          state.airborne = true;
+          state.y = 1.6;
+          state.vy = Math.sin(state.pitch) * state.speed;
+        }
+      } else {
+        // Dragon instant leap into sky on flap, boost, or pitch up
+        if (flap || boost || cPitch > 0.15) {
+          state.airborne = true;
+          state.speed = Math.max(state.speed, 16);
+          state.pitch = 0.28;
+          state.vy = 8.5;
+          state.y = Math.max(state.y, 2.2);
+          state.flapPulse = 1.0;
+          state.flapTimer = p.flapCooldown;
+        } else {
+          state.speed = Math.max(0, state.speed - 12 * h);
+          state.yaw -= (cYaw + cRoll) * 1.6 * h;
+          state.roll = lerp(state.roll, 0, clamp(h * 8, 0, 1));
+          state.pitch = lerp(state.pitch, 0, clamp(h * 8, 0, 1));
+        }
+      }
+    } else {
+      // Airborne 6-DOF Aerodynamic Envelope
+      state.hovering = hoverReq;
+
+      // Pitch control
+      const pitchTargetDelta = cPitch * p.pitchRate * h;
+      state.pitch = clamp(state.pitch + pitchTargetDelta, -p.maxPitch, p.maxPitch);
+
+      // Roll control (or barrel roll flourish)
+      if (state.barrelRollTimer > 0) {
+        state.barrelRollTimer = Math.max(0, state.barrelRollTimer - h);
+        state.roll += state.barrelRollDir * (Math.PI * 2 / 0.72) * h;
+        if (state.barrelRollTimer === 0) state.roll = 0;
+      } else if (Math.abs(cRoll) > 0.01) {
+        state.roll = clamp(state.roll + cRoll * p.rollRate * h, -p.maxRoll, p.maxRoll);
+      } else {
+        // Gentle dihedral self-leveling when hands off roll
+        state.roll = lerp(state.roll, 0, clamp(h * (state.kind === 'dragon' ? 2.4 : 1.35), 0, 1));
+      }
+
+      // Coordinated banked turn + manual yaw rudder
+      const bankTurn = -Math.sin(state.roll) * p.turnBankFactor * clamp(state.speed / p.cruiseSpeed, 0.35, 1.55);
+      state.yaw += (bankTurn - cYaw * p.yawRate) * h;
+
+      if (state.kind === 'dragon') {
+        // Wing-flap aerodynamic thrust & lift surge
+        if ((flap || boost) && state.flapTimer <= 0) {
+          state.flapTimer = p.flapCooldown;
+          state.flapPulse = 1.0;
+          state.speed = clamp(state.speed + p.flapImpulseForward, p.minSpeed, p.maxSpeed);
+          state.vy += p.flapImpulseUp;
+          state.stamina = Math.max(8, state.stamina - 1.2);
+        } else {
+          state.stamina = Math.min(100, state.stamina + 4.5 * h);
+        }
+
+        // Energy conservation: diving converts altitude into exhilarating airspeed!
+        const diveAccel = -Math.sin(state.pitch) * p.gravity * 1.15;
+        const drag = p.dragCoeff * state.speed * state.speed + (brake ? 18 : 0);
+        const glideThrust = state.hovering ? 0 : (boost ? 14.5 : 5.2);
+        if (state.hovering) {
+          state.speed = lerp(state.speed, p.minSpeed, clamp(h * p.hoverDrag, 0, 1));
+          state.pitch = lerp(state.pitch, 0.08, clamp(h * 3, 0, 1));
+        } else {
+          state.speed = clamp(state.speed + (glideThrust + diveAccel - drag) * h, p.minSpeed, p.maxSpeed);
+        }
+
+        const fwd = forwardVector(state.yaw, state.pitch);
+        // Lift vs gravity
+        const liftFactor = state.hovering ? 1.02 : clamp((state.speed * state.speed) * p.liftCoeff / p.gravity, 0.22, 1.85);
+        const netVertical = state.hovering
+          ? (flap || boost ? 5.5 : brake ? -5.0 : 0) + thermalLift * 0.4
+          : fwd.y * state.speed + (liftFactor - 1.0) * 3.8 + state.flapPulse * 2.6 + thermalLift;
+
+        state.vx = fwd.x * state.speed;
+        state.vz = fwd.z * state.speed;
+        state.vy = lerp(state.vy, netVertical, clamp(h * 4.8, 0, 1));
+        state.stalling = !state.hovering && state.speed < p.stallSpeed && state.pitch > 0.35;
+        if (state.stalling) {
+          state.pitch = lerp(state.pitch, -0.18, clamp(h * 2.4, 0, 1));
+        }
+
+        // Dynamic wingbeat frequency (faster on flaps/hover, graceful slow glide in dives)
+        const beatRate = state.hovering ? 7.8 : (state.flapPulse > 0.15 ? 9.2 : (state.pitch < -0.18 ? 1.1 : 3.2));
+        state.wingPhase += beatRate * h;
+      } else {
+        // Fighter Jet aerodynamics
+        if (boost) state.throttle = clamp(state.throttle + h * 1.1, 0.2, 1.4);
+        else if (brake) state.throttle = clamp(state.throttle - h * 1.2, 0.15, 1.4);
+        else state.throttle = lerp(state.throttle, 0.72, clamp(h * 0.35, 0, 1));
+        state.afterburner = state.throttle > 1.02 || boost;
+
+        const thrust = state.throttle * p.thrustAccel * (state.afterburner ? p.afterburnerMultiplier : 1);
+        const diveAccel = -Math.sin(state.pitch) * p.gravity;
+        const drag = p.dragCoeff * state.speed * state.speed + (brake ? 24 : 0);
+        state.speed = clamp(state.speed + (thrust + diveAccel - drag) * h, p.stallSpeed * 0.75, p.maxSpeed);
+
+        const fwd = forwardVector(state.yaw, state.pitch);
+        state.stalling = state.speed < p.stallSpeed;
+        const sink = state.stalling ? -6.5 : 0;
+        state.vx = fwd.x * state.speed;
+        state.vz = fwd.z * state.speed;
+        state.vy = fwd.y * state.speed + sink + thermalLift * 0.25;
+      }
+
+      // Integrate 3D position — ZERO horizontal or altitude cap (unrestricted flight!)
+      const prevX = state.x, prevY = state.y, prevZ = state.z;
+      state.x += state.vx * h;
+      state.y += state.vy * h;
+      state.z += state.vz * h;
+
+      // Soft ground floor & landing detection
+      if (state.y <= 0.95) {
+        state.y = 0.95;
+        if (state.pitch < 0) state.pitch = 0;
+        if (brake || state.hovering || state.speed < p.stallSpeed * 0.9) {
+          state.airborne = false;
+          state.vy = 0;
+          state.roll = 0;
+          state.pitch = 0;
+          state.hovering = false;
+        } else {
+          // Skim/bounce safely above terrain or ocean surface
+          state.vy = Math.max(0, state.vy);
+        }
+      }
+
+      const stepDist = Math.hypot(state.x - prevX, state.y - prevY, state.z - prevZ);
+      state.distanceFlown += stepDist;
+      if (state.y > state.maxAltitudeReached) state.maxAltitudeReached = state.y;
+
+      // Apparent G-load for telemetry & subtle camera feel
+      state.gForce = clamp(1.0 + Math.abs(cPitch) * (state.speed / p.cruiseSpeed) * 2.2 + Math.abs(Math.sin(state.roll)) * 1.1, 0.2, 9.0);
+    }
+
+    // Fire Breath (Dragon) or Weapons (Jet)
+    state.firing = Boolean(controls.fire);
+    if (state.firing) {
+      state.fireEnergy = Math.max(0, state.fireEnergy - 22 * h);
+    } else {
+      state.fireEnergy = Math.min(100, state.fireEnergy + 30 * h);
+    }
+
+    return state;
+  }
+
+  /**
+   * Computes which targets lie inside the forward fire-breath cone or jet firing ray.
+   * targets = [{ id, kind, name, x, y, z, radius, hp }]
+   */
+  function findTargetsInFireCone(state, targets = []) {
+    const p = PROFILES[state.kind] || PROFILES.dragon;
+    const fwd = forwardVector(state.yaw, state.pitch);
+    const hits = [];
+    for (const t of targets) {
+      if (!t || (t.hp != null && t.hp <= 0)) continue;
+      const dx = t.x - state.x;
+      const dy = (t.y || 1.2) - state.y;
+      const dz = t.z - state.z;
+      const dist = Math.hypot(dx, dy, dz);
+      if (dist < 0.5 || dist > p.fireRange) continue;
+      const along = dx * fwd.x + dy * fwd.y + dz * fwd.z;
+      if (along <= 0) continue;
+      const perpSq = Math.max(0, dist * dist - along * along);
+      const coneR = p.fireConeRadius * (0.45 + 0.75 * (along / p.fireRange)) + (t.radius || 2.0);
+      if (perpSq <= coneR * coneR) {
+        hits.push({ target: t, distance: dist, along });
+      }
+    }
+    hits.sort((a, b) => a.distance - b.distance);
+    return hits;
+  }
+
+  const api = Object.freeze({
+    PROFILES,
+    rectOverlaps,
+    pointInRect,
+    resolveCircleRect,
+    perimeterBounds,
+    perimeterWallSegments,
+    militaryBaseLayout,
+    isLandClearForBuilding,
+    createFlightState,
+    forwardVector,
+    stepFlight,
+    findTargetsInFireCone
+  });
+
+  root.EarthFlightPhysics = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof window === 'undefined' ? globalThis : window);

@@ -397,7 +397,7 @@
     return root.EarthCommunityLife?.profile?.(site,id)||birthProfile(site,id);
   }
   const porterSlots=new Set(baseSlots.filter(slot=>slot[2]==='carrier').map(slot=>slot[0]));
-  const isPorterId=id=>porterSlots.has(id)||typeof id==='string'&&/^citizen-[1-9]\d{0,2}$/.test(id);
+  const isPorterId=id=>porterSlots.has(id);
   function recordedPorters(site){
     const recorded=new Set();
     const add=id=>{if(isPorterId(id))recorded.add(id);};

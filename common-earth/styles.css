@@ -121,7 +121,7 @@ input::placeholder { color: #a3b2ae; opacity: 1; }input:focus { border-color: va
 .move-pad { display: grid; grid-template: repeat(2, 33px) / repeat(3, 33px); gap: 2px; flex: 0 0 auto; }
 .move-pad button { padding: 0; background: #1e3539; border: 1px solid #465b5a; font-size: 16px; }
 .move-pad button:first-child { grid-column: 2; }.move-pad button:nth-child(2) { grid-column: 1; }
-.street-buttons { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: 5px; max-width: 160px; }
+.street-buttons { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: 5px; max-width: 440px; }
 .street-buttons button { min-height: 33px; padding: 7px 9px; font-size: 11px; }
 .action-panel { padding: 17px clamp(12px, 1.3vw, 22px); scroll-margin-top: 12px; }
 .action-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; padding: 14px 0; border-bottom: 1px solid var(--line); }
