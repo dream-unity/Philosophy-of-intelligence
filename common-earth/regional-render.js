@@ -111,8 +111,8 @@
     if(fields.size>100){const oldest=fields.keys().next().value;fields.get(oldest).width=1;fields.delete(oldest);}
     return tile;
   }
-  function soil(g,geo,v,detail=true,atlas=null,prepare=null){
-    const b=geo.bounds;
+  function soil(g,geo,v,detail=true,atlas=null,prepare=null,openSea=false){
+    const b=openSea?v:geo.bounds;
     g.fillStyle='#263f42';g.fillRect(0,0,v.w,v.h);
     // Fixed dyadic tiles have stable world edges. Limit tile count even on
     // extremely wide displays and retain recently crossed tiles in the LRU.
