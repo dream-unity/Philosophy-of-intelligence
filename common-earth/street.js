@@ -486,48 +486,43 @@
     }
     let berths=[], embarked=null;
     const landing=berth=>({x:berth.dockX,y:SIDE+.53});
-    // A clear channel runs along the outer ends of the jetties. Inside it, each
-    // boat follows its own narrow slip so that it cannot sail through a pier.
-    const channelY=29.25, seaLimit=2200, seaSpan=2200;
-    const mooredHulls=new Map();
-    function otherHulls(berth){
-      if(mooredHulls.has(berth))return mooredHulls.get(berth);
+    const chartCoordinate=n=>Number.isSafeInteger(Math.round(n*1000));
+    const mooringObstacles=new Map();
+    function waterObstacles(berth){
+      if(mooringObstacles.has(berth))return mooringObstacles.get(berth);
       const room=berth.large?1.47:berth.art==='lateen'?1.36:1.10;
-      const obstacles=berths.filter(other=>other!==berth).map(other=>{
+      const obstacles=[[-1.5,-1.5,SIDE+1.5,SIDE+1.5]];
+      for(const other of berths){
+        obstacles.push([other.dockX-.65,other.dockStart-.35,other.dockX+.65,other.dockStart+other.dockLength+.35]);
+        if(other===berth)continue;
         const width=(other.large||other.art==='lateen'?1.35:1)+room,depth=(other.large?.45:.35)+room;
-        return [other.x-width,other.y-depth,other.x+width,other.y+depth];
-      });
-      mooredHulls.set(berth,obstacles);return obstacles;
+        obstacles.push([other.x-width,other.y-depth,other.x+width,other.y+depth]);
+      }
+      mooringObstacles.set(berth,obstacles);return obstacles;
+    }
+    function wetGround(x,y){
+      if(geo&&baseTown)return regionalModel.sailingWater(geo,baseTown,x,y);
+      return state.site?.water||y>SIDE+1.5;
     }
     function onWater(p,berth){
-      if(!berth||!Number.isFinite(p.x)||!Number.isFinite(p.y))return false;
-      if(p.x<-seaSpan||p.x>SIDE+seaSpan||p.y>seaLimit)return false;
-      const oceanSite=Boolean(state.site?.water);
-      if(oceanSite){
-        // Ocean settlements float in open water: boats can sail anywhere outside the central platform.
-        const inPlatform=p.x>-1.5&&p.x<SIDE+1.5&&p.y>-1.5&&p.y<channelY;
-        if(inPlatform&&(Math.abs(p.x-berth.x)>.35||p.y<berth.y-.03))return false;
-        if(p.y<-seaSpan)return false;
-      }else{
-        // Coastal settlements: full liberty anywhere south of the jetty channel across the entire open ocean.
-        if(p.y<channelY&&(Math.abs(p.x-berth.x)>.35||p.y<berth.y-.03))return false;
-      }
-      return !otherHulls(berth).some(r=>p.x>r[0]&&p.x<r[2]&&p.y>r[1]&&p.y<r[3]);
+      return berth&&chartCoordinate(p.x)&&chartCoordinate(p.y)&&wetGround(p.x,p.y)&&
+        !waterObstacles(berth).some(r=>p.x>r[0]&&p.x<r[2]&&p.y>r[1]&&p.y<r[3]);
     }
     function clearWater(a,b,berth){
-      if(!onWater(a,berth)||!onWater(b,berth))return false;
-      if((a.y<channelY)!==(b.y<channelY)){
-        const crossX=a.x+(b.x-a.x)*(channelY-a.y)/(b.y-a.y);
-        if(Math.abs(crossX-berth.x)>.351)return false;
+      if(!onWater(b,berth)||waterObstacles(berth).some(r=>crossesBounds(a,b,r,0)))return false;
+      if(!geo)return true;
+      const steps=Math.min(4096,Math.ceil(dist(a,b)/1.25));
+      for(let i=1;i<steps;i++){
+        const t=i/steps;
+        if(!wetGround(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t))return false;
       }
-      return !otherHulls(berth).some(bounds=>crossesBounds(a,b,bounds,0));
+      return true;
     }
-    function waterDetour(start,target,berth){
-      // Sail around moored hulls using their four visible corners and the
-      // mouth of our own slip. The district contains at most five boats.
-      const points=[start,target,{x:berth.x,y:channelY}];
-      for(const [left,top,right,bottom] of otherHulls(berth)){
-        for(const x of [left-.04,right+.04])for(const y of [Math.max(channelY,top-.04),bottom+.04]){
+    function harbourRoute(start,target,berth){
+      if(clearWater(start,target,berth))return [target];
+      const points=[start,target];
+      for(const [left,top,right,bottom] of waterObstacles(berth)){
+        for(const x of [left-.05,right+.05])for(const y of [top-.05,bottom+.05]){
           if(onWater({x,y},berth))points.push({x,y});
         }
       }
@@ -550,8 +545,64 @@
       for(let i=1;i>0;i=parent[i])legs.push(points[i]);
       return legs.reverse();
     }
+    // Join the exact slip and destination to a water-only lattice when a
+    // headland or island blocks the direct leg. Verify each connecting leg.
+    function coastalRoute(start,target,berth,step){
+      const open=[],best=new Map(),dry=new Set();
+      function enqueue(i,j,previous){
+        const key=i+','+j,prior=best.get(key);
+        if(dry.has(key))return;
+        const point=prior?.point||{x:start.x+i*step,y:start.y+j*step};
+        const cost=previous?previous.cost+dist(previous.point,point):0;
+        if(prior&&cost>=prior.cost)return;
+        if(!prior&&!onWater(point,berth)){dry.add(key);return;}
+        if(previous&&!clearWater(previous.point,point,berth))return;
+        const distance=dist(point,target),node={i,j,key,point,cost,distance,rank:cost+distance,previous};
+        best.set(key,node);
+        // Cheapest estimate at the end, ready to pop without scanning the frontier.
+        let lo=0,hi=open.length;
+        while(lo<hi){
+          const mid=(lo+hi)>>>1;
+          if(open[mid].rank>node.rank)lo=mid+1;else hi=mid;
+        }
+        open.splice(lo,0,node);
+      }
+      enqueue(0,0,null);
+      for(let count=0;open.length&&count<6000;){
+        const node=open.pop();
+        if(best.get(node.key)!==node)continue;
+        count++;
+        if(node.distance<=step*2&&clearWater(node.point,target,berth)){
+          const path=[target];
+          for(let n=node;n.previous;n=n.previous)path.push(n.point);
+          return path.reverse();
+        }
+        for(const {dx,dy} of GRID_NEIGHBOURS)enqueue(node.i+dx,node.j+dy,node);
+      }
+      return [];
+    }
+    function sailingRoute(start,target,berth){
+      if(clearWater(start,target,berth))return [target];
+      const nearQuay=p=>p.x>=-4&&p.x<=29&&p.y>=-4&&p.y<=39;
+      if(nearQuay(start)||nearQuay(target)){
+        const local=harbourRoute(start,target,berth);
+        if(local.length)return local;
+      }
+      if(!geo)return [];
+      const mouth={x:berth.x,y:35};
+      const out=nearQuay(start)?harbourRoute(start,mouth,berth):[];
+      const back=nearQuay(target)?harbourRoute(mouth,target,berth):[];
+      const a=out.at(-1)||start,b=back.length?mouth:target;
+      if(clearWater(a,b,berth))return [...out,b,...back];
+      const step=clamp(dist(a,b)/32,2,14);
+      for(const spacing of [step,step/2]){
+        const legs=coastalRoute(a,b,berth,spacing);
+        if(legs.length)return [...out,...legs,...back];
+      }
+      return [];
+    }
     function refreshBerths(site){
-      mooredHulls.clear();
+      mooringObstacles.clear();
       const waterfront=window.CommonEarthSim?.waterfront?.(site) ?? (site?.water?'ocean':window.EarthTownSurroundings?.profile(site));
       berths=waterfront==='ocean'?oceanBerths:waterfront==='zanzibar'?stoneTownBerths:waterfront==='coast'||waterfront==='lake'?coastBerths:[];
       if(berths.length&&site?.buildings?.some(b=>b.kind==='fishingDock'))berths=[...berths,fishingBerth];
@@ -837,8 +888,7 @@
     function boundCamera(x,y,frameRegion=false){
       const expand=(state.site?.territoryLevel||0)*6;
       if(state.mode==='boat'){
-        centreX=clamp(x,-seaSpan,SIDE+seaSpan);
-        centreY=clamp(y,state.site?.water?-seaSpan:northCameraLimit(),seaLimit);
+        if(chartCoordinate(x)&&chartCoordinate(y)){centreX=x;centreY=y;}
         return;
       }
       if(!geo||!baseTown){
@@ -1171,7 +1221,7 @@
       const moved=!lastRegionFrame||lastRegionFrame.x!==v.x||lastRegionFrame.y!==v.y||lastRegionFrame.sx!==v.sx||
         lastRegionFrame.w!==v.w||lastRegionFrame.h!==v.h;
       if(moved){
-        if(!regionalFollow)regionalEvent(v);
+        if(!regionalFollow&&!embarked)regionalEvent(v);
         if(typeof CustomEvent==='function')canvas.dispatchEvent?.(new CustomEvent('earthregionalcamera',{bubbles:true}));
       }
       lastRegionFrame=v;
@@ -2485,7 +2535,7 @@
 
     function regionalBackdrop(v,surface,brush){
       const survey=regionWorld.regionalWorld;
-      const stamp=[geo.origin.id,regionWorld.week,regionWorld.productionSerial,regionWorld.actionRevision,regionWorld.workRevision,survey?.step,survey?.regions[geo.origin.id]?.mapRevision,exploration,Boolean(plantingAtlas)].join('/');
+      const stamp=[geo.origin.id,regionWorld.week,regionWorld.productionSerial,regionWorld.actionRevision,regionWorld.workRevision,survey?.step,survey?.regions[geo.origin.id]?.mapRevision,exploration,Boolean(plantingAtlas),state.mode==='boat'].join('/');
       let cached=terrainSnapshot,scale=1,left=0,top=0;
       if(cached?.regional){
         scale=v.sx/cached.sx;
@@ -2555,7 +2605,7 @@
     }
     function background(v,prepare) {
       if(v){
-        renderRegion.soil(ctx,geo,v,true,plantingAtlas,prepare);
+        renderRegion.soil(ctx,geo,v,true,plantingAtlas,prepare,state.mode==='boat');
         renderRegion.routeLayer(ctx,regionWorld,state.site,v,false);
         renderRegion.useLayer(ctx,regionWorld,state.site,v,false);
         renderRegion.explored(ctx,geo,regionWorld,state.site,v,exploration);return;
@@ -4638,7 +4688,15 @@
       trackField();const v=regionView();
       if(v&&!localDetail(v)){
         dragonTargets=[];
-        idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);drawField(v);drawSelectionBox();
+        idleScene=null;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);paintTerrainLayer(v);paintRegionalTowns(v);drawField(v);
+        if(embarked){
+          routeRibbon();fishMarks();pilotedBoat(embarked);fishingNet();drawFishingFloat();
+          if(unit<4){
+            const [x,y]=screen(state.player.x,state.player.y,-.44);
+            ellipse(x,y,5,5,null,'#fff0b6');
+          }
+        }
+        drawSelectionBox();
         meter?.painted(canvas,started,activeMotion()||Boolean(regionalFollow));return;
       }
       watchedPath=observedRoute();if(!dragging?.moved&&!pinch)updateGlanceCards();
@@ -5406,6 +5464,7 @@
         const berth=berths.find(b=>b.id===point.berthId);
         if(!berth)return;
         const boarding=point.type==='board';
+        if(boarding){fieldTrack=false;regionalFollow=null;}
         if(boarding&&state.mode==='drive')state.van={...state.player};
         stop();pressed.clear();state.mode=boarding?'boat':'walk';embarked=boarding?berth:null;
         clearCatch();setParkedVan();
@@ -5518,23 +5577,18 @@
     }
     function sail(target,returning=false,castAt,onArrival){
       const p=state.player;
-      stop();pressed.clear();state.hover=null;dirty=true;
       if(!onWater(target,embarked)){
-        message('Tap the open water beyond the moorings, or choose Return to shore.');emitState();return false;
+        message('Choose open water to sail, or return to the quay.');return false;
       }
-      let path=[];
-      if(Math.abs(p.x-target.x)>.001 && (p.y<channelY||target.y<channelY)){
-        path.push({x:p.x,y:Math.max(channelY,p.y)},{x:target.x,y:Math.max(channelY,target.y)});
-      }
-      path.push({x:target.x,y:target.y});
-      if(path.some((q,i)=>!clearWater(i?path[i-1]:p,q,embarked)))path=waterDetour(p,target,embarked);
-      if(!path.length){message('The moored boats block that approach. Choose open water.');emitState();return false;}
+      const path=sailingRoute(p,{x:target.x,y:target.y},embarked);
+      if(!path.length){message('No water route found from here. Try a waypoint along the coast.');return false;}
+      stop();pressed.clear();state.hover=null;dirty=true;
       if(!target.fishingLine&&!target.shoal&&castAt==null)putAwayLine();
       state.route=path;state.destination=path[path.length-1];
       if(target.shoal)state.destination.shoal=true;
       if(target.fishingLine)state.destination.fishingLine=true;
       state.arrival=returning?{type:'land',berthId:embarked.id,castAt,onArrival}:null;
-      lastFrame=0;cameraFollows=true;emitState();return true;
+      lastFrame=0;overviewZoom=null;regionalFollow=null;fieldTrack=false;cameraFollows=true;emitState();return true;
     }
     function toggleBoat(berth,castAt){
       if(drivingTruck){message('Park the co-op truck before boarding.');options.onTruckInteract?.();return false;}
@@ -5621,7 +5675,7 @@
       const oldX=p.x,oldY=p.y;p.x=candidate.x;p.y=candidate.y;p.dx=p.x-oldX;p.dy=p.y-oldY;p.moving=true;cameraFollows=true;return true;
     }
     function holdMove(direction) {
-      if(!covered&&options.field?.steer(direction,true))return true;
+      if(!covered&&!embarked&&options.field?.steer(direction,true))return true;
       clearObservation();
       if(covered||!AXIS[direction]||!state.site)return false;
       if(state.placed){cyclePlot(direction==='left'||direction==='up'?-1:1);return true;}
@@ -5630,9 +5684,9 @@
       if(!moving())lastFrame=0;
       stop();pressed.add(direction);const v=AXIS[direction];manual(v[0],v[1],state.mode==='drive'?.45:.28);dirty=true;updateNearby();emitState();return true;
     }
-    function releaseMove(direction){if(options.field?.selected()){options.field.releaseDirection(direction);return;}if(pressed.delete(direction) && berths.length)emitState();}
+    function releaseMove(direction){if(!embarked&&options.field?.selected()){options.field.releaseDirection(direction);return;}if(pressed.delete(direction) && berths.length)emitState();}
     function move(direction) {
-      if(!covered&&options.field?.steer(direction,false))return true;
+      if(!covered&&!embarked&&options.field?.steer(direction,false))return true;
       clearObservation();
       if(covered||!AXIS[direction]||!state.site)return false;
       if(state.placed){cyclePlot(direction==='left'||direction==='up'?-1:1);return true;}
@@ -5661,6 +5715,7 @@
           if(d<.001){state.route.shift();continue;}
           const dx=(q.x-p.x)/d,dy=(q.y-p.y)/d,step=Math.min(d,budget);
           const next={x:p.x+dx*step,y:p.y+dy*step};
+          if(embarked&&!clearWater(p,next,embarked)){stop();message('The shore blocks this course. Choose another point on the water.');break;}
           if(state.mode==='walk'&&!clearSegment(p,next,false)){
             const free=closestFree(state.destination,false),route=free&&makeRoute(p,free,false);
             if(route?.length){state.route=route;state.destination=free;}
@@ -5992,7 +6047,7 @@
     function snapshotView() {
       if(!state.site)return null;
       const camera=priorPlacementView||observationView||{zoom,overviewZoom,centreX,centreY,cameraFollows};
-      return {v:1,geometry:2,site:siteKey(state.site),actor:playedId,...(playedSerial?{actorSerial:playedSerial}:{}),mode:state.mode,...(seatedAt?{seat:{x:seatedAt.x,y:seatedAt.y}}:{}),berth:embarked?.id,player:actorPosition(state.player),
+      return {v:1,geometry:embarked?3:2,site:siteKey(state.site),actor:playedId,...(playedSerial?{actorSerial:playedSerial}:{}),mode:state.mode,...(seatedAt?{seat:{x:seatedAt.x,y:seatedAt.y}}:{}),berth:embarked?.id,player:actorPosition(state.player),
         van:actorPosition(state.mode==='drive'&&!drivingTruck?state.player:state.van),...(drivingTruck?{vehicle:'truck'}:{}),camera:{...camera}};
     }
     function restoreView(snapshot) {
@@ -6018,7 +6073,16 @@
         van={...van,...free};if(mode==='drive')player={...player,...free};
       }
       if(mode==='boat'){
-        if(!onWater(player,berth))return false;
+        if(!berth)return false;
+        if(!onWater(player,berth)){
+          // An older chart treated inland points beyond the quay as open sea.
+          // Keep the saved crew aboard at its own berth if the coast now intersects it.
+          const oldChart=snapshot.geometry==null||snapshot.geometry<=2;
+          const offshore=player.y>=29.25||state.site.water&&(player.x<=-1.5||player.x>=SIDE+1.5||player.y<=-1.5);
+          if(!oldChart||!offshore||wetGround(player.x,player.y)||
+            !between(player.x,-2200,SIDE+2200)||!between(player.y,-2200,2200))return false;
+          player={...player,x:berth.x,y:berth.y};
+        }
       }else if(!traversable(player,mode==='drive',mode==='walk'?vanBounds(van):null,restoredTruck)){
         if(!legacy||mode!=='walk'||(!inDistrict(player)&&!frontages.boxes.some(box=>insideFootprint(player,box))))return false;
         const free=closestFree(player,false,vanBounds(van));
@@ -6031,7 +6095,7 @@
         const p=renderRegion.regionalPoint(baseTown,camera.centreX,camera.centreY),b=geo.bounds;
         if(!between(p.x,b.minX-.00001,b.maxX+.00001)||!between(p.y,b.minY-.00001,b.maxY+.00001))return false;
       }else if(mode==='boat'){
-        if(!between(camera.centreX,-seaSpan,SIDE+seaSpan)||!between(camera.centreY,state.site?.water?-seaSpan:Math.min(-3,frontages.north),seaLimit))return false;
+        if(!chartCoordinate(camera.centreX)||!chartCoordinate(camera.centreY))return false;
       }else{
         const exp=(state.site?.territoryLevel||0)*6;
         if(!between(camera.centreX,Math.min(-4-exp,frontages.west),Math.max(SIDE+3,45+exp))||!between(camera.centreY,Math.min(-4-exp,frontages.north),SIDE+4+exp))return false;
@@ -6042,7 +6106,10 @@
       standUp(false);clearCatch();drivingTruck=restoredTruck;state.mode=mode;embarked=mode==='boat'?berth:null;state.player=actorPosition(player);state.van=actorPosition(van);if(drivingTruck)Object.assign(state.traffic,actorPosition(player));setParkedVan();clearTrafficSpawn();restoreSeat(snapshot.seat);
       state.companion=null;prepareCompanion();
       overviewZoom=camera.overviewZoom;zoom=overviewZoom===null?Math.max(minZoom(),camera.zoom):fitZoom();unit=baseUnit()*zoom;
-      centreX=camera.centreX;centreY=camera.centreY;cameraFollows=camera.cameraFollows;
+      cameraFollows=camera.cameraFollows;
+      if(mode==='boat'&&player!==snapshot.player&&cameraFollows){
+        centreX=player.x;centreY=player.y;
+      }else{centreX=camera.centreX;centreY=camera.centreY;}
       lastFrame=0;miniTick=-1;shortMessage='';dirty=true;updateNearby();emitState();return true;
     }
     function resolveStop(ref) {
@@ -6344,8 +6411,34 @@
       const closest=doors.reduce((a,b)=>dist(point,a)<dist(point,b)?a:b);
       return `Nearest resident: ${closest.label}. ${closest.atWork?'Tap their figure':'Tap their doorstep marker'} to meet.`;
     }
+    function hitFloat(p){
+      const cast=state.site.handline;
+      if(!cast||!options.onFishingMark)return false;
+      const [x,y]=screen(cast.x,cast.mode==='boat'?cast.y+1.1:25.75,-.42);
+      return Math.hypot(p.x-x,p.y-y+unit*.1)<=clamp(unit*.44,unit<4?4:12,24);
+    }
+    function steerByTap(p){
+      if(hitFloat(p)){options.onFishingMark('float');return;}
+      if(options.onFishingMark){
+        const mark=feedingGround();
+        if(mark){
+          const [x,y]=screen(mark.x,mark.y,-.44);
+          if(Math.abs(p.x-x)<=unit*.86&&p.y>=y-unit*1.35&&p.y<=y+unit*.16){options.onFishingMark('shoal');return;}
+        }
+        const [x,y]=screen(state.player.x,state.player.y,-.44);
+        if(Math.hypot(p.x-x,p.y-y+unit*.12)<Math.max(unit<4?5:12,unit*.52)){options.onFishingMark('boat');return;}
+      }
+      if(hitBerth(p.x,p.y))return sail(embarked,true);
+      const target=world(p.x,p.y-.44*unit);
+      if(!onWater(target,embarked)&&options.onBuilding&&unit>=3.25){
+        const premises=buildingAt(p.x,p.y);
+        if(premises){options.onBuilding(premises);return;}
+      }
+      return sail(target);
+    }
     function tap(p,device,doubleTouch=false,fieldActor) {
       if(!state.site)return;
+      if(embarked&&!spectator&&!state.placed)return steerByTap(p);
       const v=regionView();
       if(v){
         const at=v.ground(p.x,p.y),b=geo.bounds;
@@ -6395,28 +6488,8 @@
         return;
       }
       if(!state.placed&&berths.length){
-        if(options.onFishingMark){
-          const cast=state.site.handline;
-          if(cast){
-            const [x,y]=screen(cast.x,cast.mode==='boat'?cast.y+1.1:25.75,-.42);
-            if(Math.hypot(p.x-x,p.y-y+unit*.1)<=Math.max(12,Math.min(24,unit*.44))){options.onFishingMark('float');return;}
-          }
-          if(state.mode==='boat'){
-            const mark=feedingGround();
-            if(mark){const [x,y]=screen(mark.x,mark.y,-.44);
-              if(Math.abs(p.x-x)<=unit*.86 && p.y>=y-unit*1.35 && p.y<=y+unit*.16){options.onFishingMark('shoal');return;}}
-            const [x,y]=screen(state.player.x,state.player.y,-.44);
-            if(Math.hypot(p.x-x,p.y-y+unit*.12)<Math.max(12,unit*.52)){options.onFishingMark('boat');return;}
-          }
-        }
+        if(hitFloat(p)){options.onFishingMark('float');return;}
         const berth=hitBerth(p.x,p.y);
-        if(state.mode==='boat'){
-          if(berth)return sail(embarked,true);
-          const premises=options.onBuilding&&buildingAt(p.x,p.y);
-          if(premises){options.onBuilding(premises);return;}
-          // Boats sit below street level. Undo the surface elevation when unprojecting.
-          return sail(world(p.x,p.y-.44*unit));
-        }
         if(berth)return toggleBoat(berth);
       }
       if(!state.placed&&state.mode==='drive'){
@@ -6699,9 +6772,9 @@
         const secondTouch=!!(touch&&first&&Date.now()-first.time<=doubleTouchMs&&
           Math.hypot(p.x-first.point.x,p.y-first.point.y)<=30);
         if(secondTouch)cancelFieldTap();else if(first)commitFieldTap();
-        const figures=e.shiftKey?[]:selectableFigures();
+        const figures=e.shiftKey||embarked?[]:selectableFigures();
         dragging={id:e.pointerId,start:p,x:centreX,y:centreY,moved:false,device:e.pointerType,
-          slop:touch?12:5,figures,secondTouch,dragon:mountTarget(p,e.pointerType)};
+          slop:touch?12:5,figures,secondTouch,dragon:!embarked&&mountTarget(p,e.pointerType)};
       }else if(fingers.size===2)beginPinch();
     });
     let lastGesturePaint=0,previousGestureAt=0;
@@ -6782,7 +6855,7 @@
     listen(canvas,'keydown',e=>{
       if(covered||!state.site||e.ctrlKey||e.metaKey||e.altKey)return;const k=e.key.length===1?e.key.toLowerCase():e.key;
       const v=regionView(),dirs={ArrowLeft:[-.3,0],ArrowRight:[.3,0],ArrowUp:[0,.3],ArrowDown:[0,-.3]};
-      if(!options.field?.selected()&&v&&dirs[k]&&(spectator||e.shiftKey||!townAt(v)||townAt(v)!==baseTown)){
+      if(!options.field?.selected()&&v&&dirs[k]&&(spectator||e.shiftKey||!embarked&&townAt(v)!==baseTown)){
         const [dx,dy]=dirs[k];e.preventDefault();
         inspectRegion(v.x+dx*(v.maxX-v.minX),v.y+dy*(v.maxY-v.minY),{picked:false});return;
       }

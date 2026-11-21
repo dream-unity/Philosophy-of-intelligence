@@ -76,7 +76,7 @@ test('coastal land communities retain their quay and saved line when offline',()
 
 test('landlocked saves cannot import a fishing line and invalid offshore coordinates cannot grant food',()=>{
   const g=setup(),sim=g.open();ok(sim.found(ocean));const id=sim.active().id;
-  for(const bad of [{x:90,y:33,mode:'boat'},{x:8,y:9,mode:'boat'},{x:8,y:39,mode:'walk'}]){
+  for(const bad of [{x:Infinity,y:33,mode:'boat'},{x:8,y:9,mode:'boat'},{x:8,y:39,mode:'walk'}]){
     assert.equal(sim.useHandline({...bad,siteId:id},'cast').ok,false);
   }
   const p={...shore,siteId:id};ok(sim.useHandline(p,'cast'));

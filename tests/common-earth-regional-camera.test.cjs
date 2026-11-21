@@ -33,7 +33,8 @@ function fixture(water=false,snapshot=null,place=null){
   function streetAt(site,spectator=false,handlers={}){const scene=runtime.EarthStreet.mount(canvas,{spectator,getWorld:()=>world,getWeek:()=>world.week,...handlers});
     scene.setSite(spectator?structuredClone(site):site);return scene;}
   let now=0;
-  const paint=()=>{const f=frame;frame=null;if(f)f(now+=35);};
+  const paint=(elapsed=35)=>{const f=frame;frame=null;if(f)f(now+=elapsed);};
+  const key=(type,key)=>handlers.get(type)?.({key,preventDefault:noop});
   const touch=(type,x,y,id=1)=>handlers.get(type)?.({type,clientX:x,clientY:y,pointerType:'touch',pointerId:id,button:0,preventDefault:noop});
   function swipe(scene,px,py){
     const view=scene.regionalCamera(),foot=view.footprint,dx=(view.x-px)*w/(foot.maxX-foot.minX),dy=(py-view.y)*h/(foot.maxY-foot.minY);
@@ -52,7 +53,7 @@ function fixture(water=false,snapshot=null,place=null){
     milliseconds+=ms;
     for(const [id,t] of [...timers])if(t.due<=milliseconds&&timers.delete(id))t.fn();
   }
-  return {sim,world,home,geo,touch,swipe,paint,streetAt,events,runtime,makeCanvas,load,wait,enableTimers};
+  return {sim,world,home,geo,touch,swipe,paint,key,streetAt,events,runtime,drawing,makeCanvas,load,wait,enableTimers};
 }
 
 test('tablet drags cross rural ground and reach another rendered district without moving a person or passing a week',()=>{
@@ -72,6 +73,93 @@ test('tablet drags cross rural ground and reach another rendered district withou
     assert.ok(Math.hypot(s.regionalCamera().x-target.x,s.regionalCamera().y-target.y)<.001);
     assert.equal(invariants(),before);s.destroy();sim.destroy();
   }
+});
+
+test('a boarded Stone Town boat takes touch and arrow commands beyond town, rounds dry land and returns to its quay',()=>{
+  const {sim,home,geo,touch,key,paint,streetAt,events,runtime}=fixture();
+  const scene=streetAt(home),render=runtime.EarthRegionalRender,model=runtime.EarthRegionalWorld;
+  const town=geo.towns.find(t=>t.site.id===home.id);
+  function finish(check){
+    for(let i=0;i<220&&scene.getState().travelling;i++){paint(1000);check?.(scene.getState());}
+    assert.equal(scene.getState().travelling,false);
+  }
+  function tapWater(x,y){
+    const v=scene.regionalCamera(),sx=1280/(v.footprint.maxX-v.footprint.minX),sy=720/(v.footprint.maxY-v.footprint.minY);
+    const at=render.regionalPoint(town,x,y);
+    const px=640+(at.x-v.x)*sx,py=720*.53-(at.y-v.y)*sy+.44*sx*render.KM;
+    touch('pointerdown',px,py);touch('pointerup',px,py);
+  }
+  assert.ok(scene.toggleBoat());finish();assert.equal(scene.getState().mode,'boat');
+  scene.zoomBy(.045);
+  const start=scene.getState(),end={x:100,y:-20};
+  assert.ok(model.sailingWater(geo,town,end.x,end.y));
+  assert.ok(Array.from({length:49},(_,i)=>(i+1)/50).some(t=>
+    !model.sailingWater(geo,town,start.x+(end.x-start.x)*t,start.y+(end.y-start.y)*t)));
+  tapWater(end.x,end.y);assert.ok(scene.getState().travelling);
+  tapWater(5,10);assert.ok(scene.getState().travelling,'accidentally tapping land preserves the course');
+  const wet=p=>assert.ok(model.sailingWater(geo,town,p.x,p.y),'the hull stayed in water');
+  finish(wet);
+  assert.ok(Math.hypot(scene.getState().x-end.x,scene.getState().y-end.y)<.001);
+  const before=scene.getState();
+  key('keydown','ArrowLeft');paint();key('keyup','ArrowLeft');
+  assert.ok(Math.hypot(scene.getState().x-before.x,scene.getState().y-before.y)>.1);
+  assert.equal(events.some(e=>e.type==='earthregionalinspect'&&e.detail.picked),false);
+  assert.ok(sim.useHandline(scene.getState(),'cast').ok);
+  assert.ok(scene.toggleBoat());finish(p=>{if(p.mode==='boat')wet(p);});
+  assert.equal(scene.getState().mode,'walk');assert.equal(scene.getState().y,24.53);
+  const dry={x:0,y:100},legacy=scene.snapshotView();
+  assert.equal(model.sailingWater(geo,town,dry.x,dry.y),false);
+  assert.ok(scene.restoreView({...legacy,geometry:2,mode:'boat',berth:'harbour-lateen',
+    player:{...legacy.player,...dry},camera:{...legacy.camera,centreX:dry.x,centreY:dry.y,cameraFollows:true}}));
+  assert.equal(scene.getState().x,start.x,'saved boat is afloat at its berth when an old position is on land');
+  scene.destroy();sim.destroy();
+});
+
+test('the built fishing skiff responds to a touch offshore, changes course at sea, and sets its nets there',()=>{
+  const {sim,home,streetAt,paint,touch}=fixture(true);
+  home.buildings.push({id:'fishing-jetty',kind:'fishingDock',name:'Fishing dock',plot:0});
+  const scene=streetAt(home);
+  function tap(x,y){
+    const {centreX,centreY,zoom}=scene.snapshotView().camera,unit=37*zoom;
+    const px=640+(x-y-centreX+centreY)*unit,py=720*.53+(x+y-centreX-centreY)*unit*.51+.44*unit;
+    touch('pointerdown',px,py);touch('pointerup',px,py);
+  }
+  function finish(){
+    for(let n=0;n<180&&scene.getState().travelling;n++)paint(1000);
+    assert.equal(scene.getState().travelling,false);
+  }
+  scene.zoomBy(.5);tap(8,27.9);finish();
+  assert.equal(scene.snapshotView().berth,'fishing');
+  scene.zoomBy(.12);tap(4,77);paint(1000);
+  assert.ok(scene.getState().travelling);
+  tap(-32,59);finish();
+  assert.ok(Math.hypot(scene.getState().x+32,scene.getState().y-59)<.001);
+  const food=home.food;
+  assert.ok(sim.fish(home.id,scene.getState).ok);assert.equal(home.food,food+4);
+  assert.ok(scene.toggleBoat());finish();assert.equal(scene.getState().mode,'walk');
+  scene.destroy();sim.destroy();
+});
+
+test('offshore positions, the sailing camera and a fishing float survive reloading beyond the original chart',()=>{
+  const {sim,home,streetAt,paint,runtime,geo,drawing}=fixture(true);
+  const fills=new Set();drawing.fill=()=>fills.add(drawing.fillStyle);
+  const scene=streetAt(home),snapshot=scene.snapshotView();
+  const at={x:-3000,y:-3200};
+  const town=geo.towns.find(t=>t.site.id===home.id);
+  assert.equal(runtime.EarthRegionalWorld.sailingWater(geo,town,at.x,at.y),true);
+  const offshore={...snapshot,mode:'boat',berth:'quay-0',player:{...snapshot.player,...at},
+    camera:{...snapshot.camera,centreX:at.x,centreY:at.y}};
+  assert.ok(scene.restoreView(offshore));paint();
+  assert.ok(fills.has('rgba(34,65,63,.34)'),'the occupied hull was painted offshore');
+  assert.equal(sim.handlineOffer(scene.getState()).action,'cast');
+  assert.ok(sim.useHandline(scene.getState(),'cast').ok);
+  scene.refreshFishingFloat();paint();assert.ok(fills.has('#c94d38'),'the offshore float was painted');
+  const saved=JSON.stringify(sim.state),view=scene.snapshotView();scene.destroy();sim.destroy();
+  const loaded=fixture(true,saved),resumed=loaded.streetAt(loaded.home);
+  assert.ok(resumed.restoreView(view));assert.equal(resumed.getState().y,at.y);
+  loaded.wait(5000);
+  assert.ok(loaded.sim.useHandline(resumed.getState(),'land').ok);
+  resumed.destroy();loaded.sim.destroy();
 });
 
 test('the neighbouring observation surface uses the same region bounds, arbitrary inspection and two-finger geographic zoom',()=>{
