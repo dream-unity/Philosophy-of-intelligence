@@ -1166,7 +1166,13 @@
     function releaseRegionalScene(){if(remote){remote.scene.destroy();remote=null;}regionalFollow=null;}
     function detailVisible(t,v){
       if(unit<3.25)return false;
-      return renderRegion.inView(v,t.x,t.y,regionalModel.streetExtent(t.site).radius);
+      if(renderRegion.inView(v,t.x,t.y,regionalModel.streetExtent(t.site).radius))return true;
+      return (t.site.dragonStable?.dragons||[]).some(d=>{
+        if(!window.EarthDragonStable.away(d))return false;
+        const pose=window.EarthDragonStable.wildPose(d,window.EarthDayClock?.now(regionWorld)??Date.now());
+        const at=renderRegion.regionalPoint(t,pose.x,pose.y);
+        return renderRegion.inView(v,at.x,at.y,.1);
+      });
     }
     function localDetail(v){return !v||detailVisible(baseTown,v);}
     function remoteScene(t){
@@ -4566,14 +4572,21 @@
       const roster=state.site?.dragonStable?.dragons;
       if(!roster?.length||!window.EarthDragonArt)return [];
       const stable=window.EarthDragonStable.stableLocation(state.site);
-      if(!stable)return [];
+      const DS=window.EarthDragonStable;
+      const residents=roster.filter(d=>!DS.away(d));
       const poses=[];
+      const now=window.EarthDayClock?.now(options.getWorld?.())??Date.now();
+      for(const dragon of roster){
+        const pose=DS.wildPose(dragon,now);
+        if(pose)poses.push({...pose,dragon,size:.95,depth:pose.x+pose.y+pose.z+3});
+      }
+      if(!stable||!residents.length)return poses;
       for(const spot of [...state.lots.filter(l=>l.building?.kind==='dragonStable'),
                           ...(state.site.freeBuildings||[]).filter(b=>b.kind==='dragonStable')]){
-        poses.push({dragon:roster[0],x:spot.x+1.14,y:spot.y+.80,z:1.12,
+        poses.push({dragon:residents[0],x:spot.x+1.14,y:spot.y+.80,z:1.12,
           size:.42,angle:.4,depth:spot.x+spot.y+.351});
       }
-      roster.forEach((dragon,i)=>{
+      residents.forEach((dragon,i)=>{
         const ring=i%3,t=visualTime*(.38+ring*.07)+i*2.1;
         const rx=6.5+ring*3.2,ry=5.5+ring*2.6;
         const x=stable.x+Math.cos(t)*rx,y=stable.y+Math.sin(t)*ry;
@@ -4582,6 +4595,20 @@
           angle:Math.atan2((dx+dy)*TILT,dx-dy),size:.95,depth:x+y+9});
       });
       return poses;
+    }
+    function findWildDragon(siteId,dragonId){
+      refreshGeography();
+      const town=geo?.towns.find(t=>t.site.id===siteId);
+      const site=town?.site||(state.site?.id===siteId?state.site:null);
+      const dragon=site?.dragonStable?.dragons?.find(d=>d.id===dragonId);
+      const pose=dragon&&window.EarthDragonStable.wildPose(dragon,window.EarthDayClock?.now(options.getWorld?.())??Date.now());
+      if(!pose)return false;
+      if(town){
+        const at=renderRegion.regionalPoint(town,pose.x,pose.y);
+        return inspectRegion(at.x,at.y,{zoom:1,picked:false});
+      }
+      clearObservation(false);cameraFollows=false;centreX=pose.x;centreY=pose.y;dirty=true;schedule();
+      return true;
     }
     function dragonAt(p,device){
       let best=null,score=Infinity;
@@ -7139,7 +7166,7 @@
         if(traversable(q)&&clearSegment(p,q)){navigate(q);break;}
       }
     }
-    return {showField,fieldRefresh,fieldView,followField,finishGroundTap,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
+    return {findWildDragon,showField,fieldRefresh,fieldView,followField,finishGroundTap,fieldMapOrder:(area,p,town)=>options.field?.selected()&&(town&&['truck','tank','jet'].includes(selectedActor()?.unitKind)?options.field.travelTo(town):options.field.move(area,p)),runFromWatch,fightProof,comeAshore:onArrival=>state.mode==='boat'&&sail(embarked,true,undefined,onArrival),endConversation,stepBackFrom,arriveByVan,observedRoute,regionalCamera,inspectRegion,setExploration,inspectRegionalPerson,focusPrivateHome,privateHomeProof,focusShop,shopProof,truckStatus,regularTruckStatus,hailTruck,boardServiceTruck,serviceTruckDoor,releaseServiceTruck,followTruckDelivery,actorScene,personAnchor,meeting,localPeople,observePerson,activityOf,showNeighbourHelp,neighbourHelpProof,showResourceWork,focusAchievement,setSite,useSeat,standUp,discardTerrain,setConstruction,setCrewSelection,frameCrewTargets,focusWorksite,setPlacement,move,holdMove,releaseMove,toggleOverview,interact,toggleBoat,approachFishing,refreshFishingFloat,showCatch,toggleVehicle,cancelTravel,resize,destroy,focusMarket,focusResident,focusStop,atStop,focusVenue,venueProof,getState,snapshotView,restoreView,recenter,zoomBy};
   }
   window.EarthStreet=Object.freeze({mount,portrait});
 })();

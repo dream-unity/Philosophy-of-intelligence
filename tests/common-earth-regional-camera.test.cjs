@@ -652,3 +652,31 @@ test('a touch mounts the dragon under the finger on the perch or in flight, whil
   assert.equal(mounted.length,2);
   scene.destroy();sim.destroy();
 });
+
+test('find a released dragon at its wild location and tap it without duplicating it at the stable',()=>{
+  const {home,world,runtime,streetAt,paint,touch,wait,sim}=fixture();
+  const ds=runtime.EarthDragonStable;
+  home.freeBuildings=[{id:'stable',kind:'dragonStable',x:15,y:21}];
+  home.funds=home.food=20;
+  const dragon=ds.summonDragon(world,home,'solar','Aurelia').dragon;
+  const painted=[],tapped=[];
+  runtime.EarthDragonArt={drawStable(){},drawEnchantedDragon(ctx,x,y,size,angle,time,d,rider){
+    painted.push({x,y,id:d.id,rider});
+  }};
+  const scene=streetAt(home,false,{onDragon:target=>tapped.push(target)});
+  assert.equal(scene.findWildDragon(home.id,dragon.id),false);
+  ds.releaseDragon(world,home,dragon.id);
+  wait(15000);
+  assert.ok(scene.findWildDragon(home.id,dragon.id));
+  paint();
+  const shapes=painted.filter(d=>d.id===dragon.id);
+  assert.equal(shapes.length,1);
+  const sprite=shapes[0];
+  assert.equal(sprite.rider,false);
+  assert.ok(Math.abs(sprite.x-640)<100 && Math.abs(sprite.y-360)<220);
+  touch('pointerdown',sprite.x,sprite.y);
+  touch('pointerup',sprite.x,sprite.y);
+  assert.equal(tapped.at(-1)?.dragonId,dragon.id);
+  assert.equal(scene.findWildDragon(home.id,'missing'),false);
+  scene.destroy();sim.destroy();
+});

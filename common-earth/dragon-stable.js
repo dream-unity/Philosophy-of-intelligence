@@ -79,6 +79,130 @@
     }
   }
 
+  // A dragon acquires this history only when released. Untouched saves keep their original residents.
+  const activities = ['roam', 'forage', 'rest', 'return', 'home'];
+  const directions = ['north', 'west', 'south', 'east'];
+  function away(dragon) {
+    return Boolean(dragon?.freedom && dragon.freedom.activity !== 'home');
+  }
+
+  function lifeDescription(dragon) {
+    const life = dragon.freedom;
+    if (!life) return 'Living at the stable';
+    if (life.activity === 'home') return 'Home by choice · free to leave again';
+    if (life.activity === 'return') return 'Flying back to the stable by choice';
+    const action = {roam:'Exploring', forage:'Foraging', rest:'Resting'}[life.activity];
+    return action + ' in the wild, ' + directions[life.range] + ' of town';
+  }
+
+  // The saved stream gives each dragon its own successive decisions. Looking at one
+  // or previewing a week cannot change what it chooses in the actual world.
+  function drawChoice(life) {
+    life.seed = (Math.imul(life.seed,1664525) + 1013904223) >>> 0;
+    return life.seed / 4294967296;
+  }
+
+  const clockTime = world => root.EarthDayClock?.now(world) ?? Date.now();
+  function wildPose(dragon, now) {
+    const life = dragon.freedom;
+    if (!away(dragon)) return null;
+    const seconds = Math.max(0, (now - life.since) / 1000);
+    const progress = Math.min(1, seconds / 12);
+    const blend = progress * progress * (3 - 2 * progress);
+    const phase = seconds * .23 + life.roaming * Math.PI * 2;
+    const radius = {roam:4.5, forage:1.8, rest:.15, return:0}[life.activity];
+    const x = life.fromX + (life.toX - life.fromX) * blend + blend * Math.cos(phase) * radius;
+    const y = life.fromY + (life.toY - life.fromY) * blend + blend * Math.sin(phase) * radius;
+    const dx = progress < 1 ? life.toX - life.fromX : -Math.sin(phase);
+    const dy = progress < 1 ? life.toY - life.fromY : Math.cos(phase);
+    const z = (life.activity === 'rest' ? .4 : life.activity === 'return' ? 1.2 : 3.2) * blend + (1-blend)*2.5;
+    return {x,y,z,angle:Math.atan2((dx+dy)*.51,dx-dy)};
+  }
+
+  function chooseDestination(site, life, activity, from, now) {
+    const stable = stableLocation(site);
+    life.activity = activity;
+    life.since = now;
+    life.fromX = from.x; life.fromY = from.y;
+    if (activity === 'return') {
+      life.toX = stable.x; life.toY = stable.y;
+    } else {
+      life.range = Math.floor(drawChoice(life) * directions.length);
+      const bounds = root.EarthFlightPhysics?.perimeterBounds(site.territoryLevel||0, false);
+      const outer = 4 + 6*drawChoice(life), along = 3 + 18*drawChoice(life);
+      const low = (bounds?.minX ?? -7.5) - outer, high = (bounds?.maxX ?? 27.5) + outer;
+      life.toX = [along,low,along,high][life.range];
+      life.toY = [low,along,high,along][life.range];
+    }
+  }
+
+  function releaseDragon(world, site, dragonId) {
+    const dragon = site?.dragonStable?.dragons?.find(d=>d.id === dragonId);
+    if (!dragon) return {ok:false,message:'Choose a dragon living at this stable.'};
+    if (away(dragon)) return {ok:false,message:dragon.name+' is already free.'};
+    const from = stableLocation(site) || {x:12,y:12};
+    if (!dragon.freedom) {
+      let seed = 2166136261;
+      for (const c of [site.id,dragon.id,dragon.name,dragon.raisedWeek].join('/')) {
+        seed = Math.imul(seed ^ c.charCodeAt(0),16777619) >>> 0;
+      }
+      dragon.freedom = {seed};
+      dragon.freedom.roaming = drawChoice(dragon.freedom);
+    }
+    const life = dragon.freedom;
+    life.lastWeek = world.week;
+    life.nextRound = (world.productionSerial || 0) + 4;
+    life.excursions = 0;
+    chooseDestination(site, life, 'roam', from, clockTime(world));
+    const message = dragon.name+' left the stable to live freely in the wild.';
+    record(site,world,message);
+    return {ok:true,message};
+  }
+
+  function decideFreely(world, site, round) {
+    const notes = [];
+    for (const dragon of site.dragonStable?.dragons || []) {
+      const life = dragon.freedom;
+      if (!life) continue;
+      const newWeek = world.week > life.lastWeek;
+      if (!newWeek && (round < life.nextRound || life.activity === 'home')) continue;
+      const now = clockTime(world);
+      const from = wildPose(dragon,now);
+      const stable = stableLocation(site);
+      if (life.activity === 'return' && stable && !newWeek && now < life.since+12000) continue;
+      let note;
+      life.lastWeek = world.week;
+      life.nextRound = round + 3 + Math.floor(drawChoice(life)*4);
+      if (life.activity === 'return' && stable) {
+        life.activity = 'home';
+        note = dragon.name+' chose to settle back at the stable.';
+      } else if (life.activity === 'home') {
+        // Reconsider home at a week boundary, when the player is back from flight.
+        if (stable && drawChoice(life) >= .07 + .28*life.roaming) continue;
+        life.excursions = 0;
+        chooseDestination(site,life,'roam',stable || {x:12,y:12},now);
+        note = dragon.name+' chose to leave the stable and explore again.';
+      } else {
+        dragon.hunger = clamp(dragon.hunger + (life.activity === 'forage' ? 32 : -8),0,100);
+        const lowFood = dragon.hunger < 42;
+        const company = (site.dragonStable.workers?.length > 0 || dragon.flights > 0);
+        const chanceHome = .05 + .20*(1-life.roaming) + (company ? .12 : 0) +
+          (lowFood && site.dragonStable.foodStock > 0 ? .14 : 0);
+        if (stable && life.excursions > 0 && drawChoice(life) < chanceHome) {
+          chooseDestination(site,life,'return',from,now);
+          life.nextRound = round+1;
+          note = dragon.name+' chose to fly home '+(lowFood?'for a meal.':company?'for familiar company.':'to rest at the stable.');
+        } else {
+          const activity = lowFood ? 'forage' : ['roam','forage','rest'][Math.floor(drawChoice(life)*3)];
+          chooseDestination(site,life,activity,from,now);
+          life.excursions++;
+        }
+      }
+      if (note) { record(site,world,note); notes.push(note); }
+    }
+    return notes;
+  }
+
   function isWizard(site, actorId) {
     if (!site?.dragonStable?.wizards?.length || !actorId) return false;
     return site.dragonStable.wizards.some(w => w.id === actorId || w.residentId === actorId);
@@ -89,10 +213,11 @@
       return { ok: false, reason: 'Build a Dragon Stable first.' };
     }
     const ds = ensure(site);
-    const dragon = dragonId ? ds.dragons.find(d => d.id === dragonId) : ds.dragons[0];
+    const dragon = dragonId ? ds.dragons.find(d => d.id === dragonId) : ds.dragons.find(d=>!away(d));
     if (!dragon) {
       return { ok: false, reason: 'Summon a dragon at the Dragon Stable before flying.' };
     }
+    if (away(dragon)) return {ok:false,reason:dragon.name+' is free. '+lifeDescription(dragon)+'.'};
     if (!isWizard(site, actorId)) {
       return {
         ok: false,
@@ -241,6 +366,7 @@
     const ds = ensure(site);
     const dragon = ds.dragons.find(d => d.id === dragonId);
     if (!dragon) return { ok: false, message: 'Dragon not found.' };
+    if (away(dragon)) return {ok:false,message:dragon.name+' is finding food in the wild.'};
     if (dragon.hunger >= 98) return { ok: false, message: dragon.name + ' is already well fed.' };
     if (ds.foodStock < FEED_FOOD_COST) {
       if ((site.food || 0) >= FEED_FOOD_COST) {
@@ -266,19 +392,20 @@
    *   and feed hungry dragons!
    */
   function tick(world, site, dtWeeks = 1) {
-    if (!hasStable(site)) return [];
+    if (!hasStable(site) && !site?.dragonStable?.dragons?.some(d=>d.freedom)) return [];
     const ds = ensure(site);
-    const notes = [];
+    const notes = decideFreely(world,site,world.productionSerial || 0);
+    const residents = ds.dragons.filter(d=>!away(d));
 
     // 1. Dragons expend nourishment over time
-    for (const d of ds.dragons) {
+    for (const d of residents) {
       d.hunger = clamp(d.hunger - Math.round(18 * dtWeeks), 0, 100);
       d.firePower = clamp((d.firePower ?? 100) + Math.round(15 * dtWeeks), 0, 100);
     }
 
     // 2. Stable workers replenish the larder regularly & feed hungry dragons
-    if (ds.workers.length > 0) {
-      const targetStock = Math.min(LARDER_MAX, 8 + ds.dragons.length * 4);
+    if (ds.workers.length > 0 && residents.length) {
+      const targetStock = Math.min(LARDER_MAX, 8 + residents.length * 4);
       let replenishedTotal = 0;
       for (const w of ds.workers) {
         if (ds.foodStock < targetStock) {
@@ -301,15 +428,15 @@
       }
 
       // Workers automatically feed any dragon below 70% nourishment
-      for (const d of ds.dragons) {
+      for (const d of residents) {
         if (d.hunger < 70 && ds.foodStock >= FEED_FOOD_COST) {
           const keeper = ds.workers[0];
           const res = feedDragon(world, site, d.id, keeper.name);
           if (res.ok) notes.push(res.message);
         }
       }
-    } else if (ds.dragons.some(d => d.hunger < 35)) {
-      const hungry = ds.dragons.filter(d => d.hunger < 35).map(d => d.name).join(', ');
+    } else if (residents.some(d => d.hunger < 35)) {
+      const hungry = residents.filter(d => d.hunger < 35).map(d => d.name).join(', ');
       notes.push(hungry + ' is hungry at the Dragon Stable. Assign stable workers to keep the larder stocked.');
     }
 
@@ -388,22 +515,32 @@
     if (!ds) return;
     const dragon = ds.dragons.find(d => d.id === dragonId);
     const wizard = ds.wizards.find(w => w.id === actorId || w.residentId === actorId);
-    if (dragon) {
-      dragon.flights = (dragon.flights || 0) + 1;
-      dragon.hunger = clamp(dragon.hunger - clamp(Math.round((stats.distanceFlown || 0) / 140), 2, 16), 0, 100);
-    }
-    if (wizard) wizard.flights = (wizard.flights || 0) + 1;
+    if (!dragon || away(dragon) || !wizard) return false;
+    dragon.flights = (dragon.flights || 0) + 1;
+    dragon.hunger = clamp(dragon.hunger - clamp(Math.round((stats.distanceFlown || 0) / 140), 2, 16), 0, 100);
+    wizard.flights = (wizard.flights || 0) + 1;
+    return true;
+  }
+
+  function validFreedom(life) {
+    if (life === undefined) return true;
+    return life && activities.includes(life.activity) && Number.isInteger(life.range) && life.range>=0 && life.range<4 &&
+      Number.isInteger(life.seed) && life.seed>=0 && life.seed<=0xffffffff &&
+      Number.isFinite(life.roaming) && life.roaming>=0 && life.roaming<1 &&
+      [life.since,life.nextRound,life.lastWeek,life.excursions].every(n=>Number.isSafeInteger(n) && n>=0) &&
+      [life.fromX,life.fromY,life.toX,life.toY].every(Number.isFinite);
   }
 
   function valid(site) {
     const ds = site?.dragonStable;
     if (ds == null) return true;
     if (typeof ds !== 'object' || Array.isArray(ds)) return false;
-    if (!Array.isArray(ds.dragons) || !Array.isArray(ds.wizards) || !Array.isArray(ds.workers)) return false;
-    if (!Number.isFinite(ds.foodStock) || ds.foodStock < 0 || ds.foodStock > LARDER_MAX * 2) return false;
-    return ds.dragons.every(d => d && typeof d.id === 'string' && typeof d.name === 'string' && Number.isFinite(d.hunger)) &&
-      ds.wizards.every(w => w && typeof w.id === 'string' && typeof w.name === 'string') &&
-      ds.workers.every(w => w && typeof w.id === 'string' && typeof w.name === 'string');
+    const {dragons = [], wizards = [], workers = [], foodStock = 12} = ds;
+    if (![dragons,wizards,workers].every(Array.isArray)) return false;
+    if (!Number.isFinite(foodStock) || foodStock < 0 || foodStock > LARDER_MAX * 2) return false;
+    return dragons.every(d => d && typeof d.id === 'string' && typeof d.name === 'string' && Number.isFinite(d.hunger) && validFreedom(d.freedom)) &&
+      wizards.every(w => w && typeof w.id === 'string' && typeof w.name === 'string') &&
+      workers.every(w => w && typeof w.id === 'string' && typeof w.name === 'string');
   }
 
   const api = Object.freeze({
@@ -414,6 +551,7 @@
     hasStable,
     stableLocation,
     ensure,
+    away, lifeDescription, wildPose, releaseDragon, decideFreely,
     isWizard,
     canFlyDragon,
     trainWizard,
