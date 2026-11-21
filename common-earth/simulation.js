@@ -381,7 +381,7 @@
         !Number.isFinite(line.x)||!Number.isFinite(line.y))return false;
       if(line.mode==='walk'){
         if(line.food!==1||line.x<-.7||line.x>24.7||line.y<23.1||line.y>25.25)return false;
-      }else if(line.mode!=='boat'||Math.abs(line.x)>2500||line.y<-2500||line.y>2500)return false;
+      }else if(line.mode!=='boat'||![line.x,line.y].every(n=>Number.isSafeInteger(Math.round(n*1000))))return false;
     }
     if(site.territoryLevel!=null&&!integer(site.territoryLevel,0,20))return false;
     if(site.freeBuildings!=null&&(!Array.isArray(site.freeBuildings)||site.freeBuildings.length>200||
@@ -1350,11 +1350,11 @@
       return site?actionsAndRules(group,site).map(({run,...view})=>view):[];
     }
     function handlineOffer(position){
-      return root.EarthFisheries?.offer(current(),world.week,position,Date.now())||null;
+      return root.EarthFisheries?.offer(current(),world.week,position,Date.now(),world)||null;
     }
     function useHandline(evidence,expected,expectedFood,expectedCastAt){
       const position=typeof evidence==='function'?evidence():evidence;
-      const site=current(),now=Date.now(),offer=root.EarthFisheries?.offer(site,world.week,position,now);
+      const site=current(),now=Date.now(),offer=root.EarthFisheries?.offer(site,world.week,position,now,world);
       if(!offer || offer.action!==expected || !['cast','land'].includes(expected))return reject(offer?.text||'Return to the fishing spot.');
       if(expected==='land'&&expectedCastAt!==undefined&&site.handline?.castAt!==expectedCastAt)return reject('This is a different cast. Check the float before reeling in.');
       if(expectedFood!=null && expectedFood!==offer.food)return reject('The shoal has moved. Check the catch here before casting.');

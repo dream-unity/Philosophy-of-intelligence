@@ -6,8 +6,12 @@
   const inRange=(value,low,high)=>Number.isFinite(value)&&value>=low&&value<=high;
   const within=(a,b,radius)=>(a.x-b.x)**2+(a.y-b.y)**2<=radius**2;
   const nearShore=p=>p?.mode==='walk' && inRange(p.y,23.1,25.25) && inRange(p.x,-.7,24.7);
-  function fishable(p){
-    return nearShore(p) || p?.mode==='boat' && inRange(p.x,-.65,24.65) && inRange(p.y,26.5,39.01);
+  function fishable(p,site,world){
+    if(nearShore(p))return true;
+    if(p?.mode!=='boat'||![p.x,p.y].every(n=>Number.isSafeInteger(Math.round(n*1000))))return false;
+    const model=root.EarthRegionalWorld,geo=world&&model?.geography(world,site);
+    if(geo)return model.sailingWater(geo,geo.project(site),p.x,p.y);
+    return site.water ? p.x<-1.5||p.x>25.5||p.y<-1.5||p.y>25.5 : p.y>25.5;
   }
   function shoal(site,week){
     const station=(Math.abs(Math.round(site.lat*11+site.lon*7)+week)+(site.shoalDrift||0))%3;
@@ -43,7 +47,7 @@
     const lake=root.CommonEarthSim.lakeName?.(site);if(lake)site.lakeShore=lake;
     return true;
   }
-  function offer(site,week,p,now){
+  function offer(site,week,p,now,world){
     if(!site || site.id!==p?.siteId || !root.CommonEarthSim.waterfront(site))return null;
     const cast=site.handline,place=zone(p.mode,p,shoal(site,week),cast),source=ground(site,week);
     const reserved=site.growth?.households?.find(h=>
@@ -58,7 +62,7 @@
       if(site.food>Number.MAX_SAFE_INTEGER-cast.food)return {action:'full',label:'Pantry full',text:'Use or send some food before landing this catch.'};
       return {action:'land',label:'Land catch',text:'The float has dipped. Bring in '+cast.food+' food for the community.',food:cast.food};
     }
-    if(!fishable(p))return {action:'shore',label:'Go shore fishing',text:'Walk to the quay to use the shared handline.'};
+    if(!fishable(p,site,world))return {action:'shore',label:'Go shore fishing',text:'Walk to the quay to use the shared handline.'};
     const feeding=place===3;
     const food=feeding?Math.min(2,source.available):1;
     if(site.food>Number.MAX_SAFE_INTEGER-food)return {action:'full',label:'Pantry full',text:'Use or send some food before landing another catch.'};

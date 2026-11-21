@@ -184,6 +184,17 @@
     }
     return {...descriptor,height};
   }
+  const waterSurface={};
+  function sailingWater(geo,town,x,y){
+    // The detailed quay replaces the survey raster at the waterfront.
+    if(x>=-1.5&&x<=25.5&&y>25.5&&y<=39)return true;
+    const east=town.x+(x-y)*streetKilometres,north=town.y-(x+y-24)*streetKilometres;
+    for(const other of geo.towns){
+      const dx=east-other.x,dy=north-other.y;
+      if(Math.abs(dx)+Math.abs(dy)<=27*streetKilometres)return false;
+    }
+    return terrain(geo,east,north,waterSurface).kind==='water';
+  }
   function terrainCell(geo,id){
     if(!geo.terrainCells.has(id)){const p=point(id);geo.terrainCells.set(id,terrain(geo,p.x,p.y));}
     return geo.terrainCells.get(id);
@@ -1235,5 +1246,5 @@
     }
     return true;
   }
-  root.EarthRegionalWorld={geography,polarProjection,streetKilometres,streetExtent,streetFootprint,reconcileLocations,terrain,known,surveyedCells,works,routes,travellers,inspect,ledger,residentRecord,fieldAccount,shareFieldReport,valid,propose,advance,tripLine,tripPosition,changeBranch,observeLeg,routeEffort,routeOpen,foundingGround,passageAgreement,crossingPath,remainingCrossing,shareCrossing};
+  root.EarthRegionalWorld={geography,polarProjection,streetKilometres,streetExtent,streetFootprint,reconcileLocations,terrain,sailingWater,known,surveyedCells,works,routes,travellers,inspect,ledger,residentRecord,fieldAccount,shareFieldReport,valid,propose,advance,tripLine,tripPosition,changeBranch,observeLeg,routeEffort,routeOpen,foundingGround,passageAgreement,crossingPath,remainingCrossing,shareCrossing};
 })(typeof window==='undefined'?globalThis:window);
