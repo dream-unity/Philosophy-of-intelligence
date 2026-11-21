@@ -239,48 +239,46 @@
       }
     }
   }
-  function outskirts(g, project, unit, place, seed, plant) {
+  function outskirts(g, project, unit, place, seed, plant, site=null) {
     const port = place === 'zanzibar' || place==='coast' || place==='lake', hot = place === 'warm';
     const features = [];
     if(port) {
       // Lower contrast and setbacks keep the occupied quarter visually distinct
       // from the market, residents' homes and projects that the player can visit.
-      const sites=[[-4.9,.3],[-4.4,4.8],[-6.2,12.4],[-4.3,16.3],[-6.7,21.4],[-7.8,-3.6],[.1,-4.3],[4.4,-4.0],[10.8,-6.3],[17.3,-5.1],[21.0,-4.3],[27.7,-3.1],[29.0,4.3],[30.4,11.3],[28.8,16.5],[29.1,20.4]];
+      const sites=[[-8.2,.3],[-7.8,4.8],[-9.0,12.4],[-7.8,16.3],[-9.2,21.4],[-9.5,-7.6],[.1,-8.3],[4.4,-8.0],[10.8,-9.3],[17.3,-8.5],[21.0,-8.3]];
       for(let i=0;i<sites.length;i++){
         const x=sites[i][0]+jitter(seed,i)*.42, y=sites[i][1]+jitter(seed,i+62)*.47;
         features.push({x,y, size:.74+jitter(seed,i+88)*.16, tile:(place==='zanzibar'?'coral':'cottage')+((i+seed%3)%3), flip:false});
       }
     } else {
-      const sites=[[-4.75,4.0],[-5.3,10.0],[-4.3,19.9],[2.7,-4.8],[7.5,-5.1],[20.6,-4.2],[29.4,5.1],[28.8,13.8],[29.0,22.5],[3.3,29.4],[8.5,28.8],[19.5,29.7]];
+      const sites=[[-8.2,4.0],[-8.6,10.0],[-7.9,19.9],[2.7,-8.5],[7.5,-8.8],[20.6,-8.2],[3.3,33.4],[8.5,32.8],[19.5,33.7]];
       for(let i=0;i<sites.length;i++){
         const x=sites[i][0]+jitter(seed,i)*.67, y=sites[i][1]+jitter(seed,i+39)*.57;
         const cottage='cottage'+(place==='boreal' ? (i%2 ? 0 : 2) : i%3);
         const tile=i%4===0 ? (hot?'lath':'nursery') : i%5===0 ? 'barn' : cottage;
         features.push({x,y,size:.76+jitter(seed,i+92)*.17,tile,flip:false});
       }
-      allotment(g,project,unit,10.5,26.4,seed); if(!window.EarthMilitaryBase)allotment(g,project,unit,26.5,12.8,seed+44);
-      const eastFence=window.EarthMilitaryBase?[[[25.65,8],[25.65,10.9]],[[25.65,13.1],[25.65,14.5]]]:[[[25.65,8],[25.65,14.5]]];
-      for (const [a,b] of [[[-1.65,1.1],[-1.65,9.7]],[[-1.74,14.1],[-1.74,23.1]],[[2.1,25.60],[8.7,25.60]],[[14.3,25.61],[22.6,25.61]],...eastFence]) fence(g, project, unit, a, b, '#8a8c6f');
+      allotment(g,project,unit,10.5,31.6,seed);
     }
     if (plant) {
       const homes=features.slice();
       for(let i=0;i<homes.length;i++) {
         const house=homes[i], dx=i%2 ? -2.15 : 2.16, dy=i%3 ? 1.06 : 2.24;
         const x=house.x+dx, y=house.y+dy;
-        if ((x<-1.9 || x>26.0 || y<-1.9 || y>26.0) && (!port || y<24)) {
+        if ((x<-6.5 || x>27.0 || y<-6.5 || y>30.5) && (!port || y<24)) {
           features.push({x,y,tree:true,size:.75+jitter(seed,441+i)*.47,variant:i%4,palm:(place==='zanzibar' || hot) && i%3!==0});
         }
       }
-      if (!port) {
-        // Orchard rows have a human scale near the first street you can walk.
-        for(let row=0;row<2;row++) for(let j=0;j<4;j++) {
-          features.push({x:13.65+j*1.18,y:26.81+row*1.17+j*.024,size:.58+jitter(seed,j+164)*.14,tree:true,variant:1,palm:false});
-        }
-      }
     }
+    const freeBounds=site&&window.EarthFreeLand?.territoryBounds?.(site);
+    const freeBuildings=site&&window.EarthFreeLand?.buildingsOf?.(site)||[];
     features.sort((a,b) => a.x+a.y-b.x-b.y);
     for(const f of features) {
-      if(window.EarthMilitaryBase&&Math.abs(f.x-27)<3.3&&Math.abs(f.y-12)<3.5)continue;
+      // Strictly keep the Military Base compound, access road, and entire 24-unit runway clear!
+      if(window.EarthMilitaryBase&&f.x>=24.2&&f.x<=43.5&&f.y>=-4.5&&f.y<=28.5)continue;
+      // Keep surveyed empty buildable territory inside the perimeter walls clear of decorative clutter!
+      if(freeBounds&&f.x>=freeBounds.minX-1.5&&f.x<=freeBounds.maxX+1.5&&f.y>=freeBounds.minY-1.5&&f.y<=freeBounds.maxY+1.5)continue;
+      if(freeBuildings.some(b=>Math.abs(f.x-b.x)<3.2&&Math.abs(f.y-b.y)<3.2))continue;
       if(f.tree) {
         contact(g,project,unit,f.x+.36*f.size,f.y+.13*f.size,f.size*1.32,-.47,.21);
         g.save();g.translate(0,.48*unit);plant(f.x,f.y,f.size,f.variant,f.palm);g.restore();
@@ -297,7 +295,7 @@
     if(sea || port) water(g,project,unit,sea,seed);
     if(!sea) {
       terrain(g,project,port?'estuary':'land');
-      outskirts(g,project,unit,place,seed,plant);
+      outskirts(g,project,unit,place,seed,plant,site);
     }
     if(port) {
       seawall(g,project,unit);

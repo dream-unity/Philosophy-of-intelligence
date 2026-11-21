@@ -2,7 +2,9 @@
    from this district's stores and advance even when nobody is watching it. */
 (function(root){
   'use strict';
-  const place={x:27,y:12},gate={x:24.35,y:12,label:'Military base gate'};
+  const place={x:32.2,y:12},gate={x:24.35,y:12,label:'Military base gate'};
+  const compound=Object.freeze({x1:29.2,y1:8.6,x2:35.2,y2:15.4});
+  const runway=Object.freeze({x:37.6,yStart:0,yEnd:24,width:2.8,length:24,heading:0});
   const goods=['food','materials','funds'];
   const unit=(name,food,materials,funds,power,pace,detail,tech=null)=>({name,cost:{food,materials,funds},power,pace,detail,tech});
   const units={
@@ -58,7 +60,7 @@
   }
   const strength=(b,u)=>units[u.type].power+u.grade+(b.tech.includes('doctrine')?1:0);
   function defence(w,s){
-    let n=2+2*(s.communityLife?.border?.defence?.stage||0);
+    let n=2+2*(s.communityLife?.border?.defence?.stage||0)+(root.EarthFreeLand?.defenceBonus?.(s)||0);
     for(const u of ready(w,s))if(!u.aboard&&(!u.field||!root.EarthBaseField.moved(w,s,u.id)))n+=strength(view(s),u)+(u.type==='guard'?1:0);
     for(const ally of towns(w))for(const m of ally.militaryBase?.missions||[]){
       if(m.target!==s.id||m.phase!=='stationed')continue;
@@ -432,5 +434,45 @@
       }
     }
   }
-  root.EarthMilitaryBase=Object.freeze({place,gate,units,research,orders,towns,view,ready,parked,attackParty,targetAvailable,battle,shot,incoming,balance,affordable,defence,command,advance,peace,detach,valid,actors,missionPoint,restoreField});
+  function jetStrike(w,s,req={}){
+    if(!s)return fail('No community is open.');
+    const b=s.militaryBase;
+    if(!b||!b.units.some(u=>u.type==='jet'))return fail('Build or research a fighter jet at the Military Base first.');
+    const x=Number(req.x),y=Number(req.y);
+    if(!Number.isFinite(x)||!Number.isFinite(y)||Math.abs(x)>400||Math.abs(y)>400)return fail('Choose valid strike coordinates.');
+    const label=typeof req.targetLabel==='string'&&req.targetLabel.trim()?req.targetLabel.trim().slice(0,80):'coordinates ('+Math.round(x)+', '+Math.round(y)+')';
+    // Check if an active hostile street raid or rival target is struck.
+    const border=s.communityLife?.border;
+    let effect='';
+    if(req.targetSiteId){
+      const target=root.EarthCommunityLife?.lookup?.(w,req.targetSiteId);
+      if(target&&target.id!==s.id){
+        if(target.communityLife?.border?.defence?.stage>0){
+          target.communityLife.border.defence.stage=Math.max(0,target.communityLife.border.defence.stage-1);
+          effect=' Fortifications at '+target.name+' damaged.';
+        }else if(target.militaryBase?.units?.length){
+          const hit=target.militaryBase.units.pop();
+          target.militaryBase.version=(target.militaryBase.version||0)+1;
+          effect=' Destroyed rival '+units[hit.type].name+' at '+target.name+'.';
+        }else{
+          target.materials=Math.max(0,(target.materials||0)-2);
+          effect=' Struck supply stores at '+target.name+'.';
+        }
+        entry(w,s,'Fighter jet launched an air-to-ground strike on '+target.name+'.'+effect);
+        return ok('Air strike hit '+target.name+'.'+effect);
+      }
+    }
+    if(border?.street&&border.street.from&&border.street.from!==s.id){
+      root.EarthBorderConflict?.leaveStreet?.(s);
+      effect=' Hostile raiding party dispersed from the perimeter.';
+    }else if(border?.foothold?.by&&border.foothold.by!==s.id){
+      delete border.foothold;
+      effect=' Enemy foothold cleared by air support.';
+    }
+    const text='Fighter jet struck '+label+'.'+effect;
+    entry(w,s,text);
+    b.version=(b.version||0)+1;
+    return ok(text);
+  }
+  root.EarthMilitaryBase=Object.freeze({place,gate,compound,runway,units,research,orders,towns,view,ready,parked,attackParty,targetAvailable,battle,shot,incoming,balance,affordable,defence,command,jetStrike,advance,peace,detach,valid,actors,missionPoint,restoreField});
 })(globalThis);

@@ -4,10 +4,36 @@
 .street-hud [hidden] { display:none!important; }
 #scene-watching,#scene-notice,.scene-card { position:absolute; }
 .scene-tools,.scene-strip,#scene-watching,#scene-notice,.scene-card { color:#f5efde; background:#172d2bef; border:1px solid #a6a88a; border-radius:5px; }
-#scene-van { position:absolute; z-index:4; left:10px; top:48%; min-height:44px; padding:6px 12px; background:#172d2bef; color:#f5efde; border:1px solid #a6a88a; border-radius:5px; }
-
-body[data-district-crossing] #scene-van { display:none; }
+#scene-van { position:absolute; z-index:4; left:10px; top:48%; min-height:44px; padding:6px 12px; background:#172d2bef; color:#f5efde; border:1px solid #a6a88a; border-radius:5px; cursor:pointer; }
+#scene-free-build,#scene-jet,#scene-harbour { position:absolute; z-index:4; left:10px; min-height:40px; padding:6px 12px; background:#172d2bef; color:#f5efde; border:1px solid #a6a88a; border-radius:5px; font:600 12.5px/1.2 var(--sans,system-ui,sans-serif); cursor:pointer; }
+#scene-free-build { top:calc(48% + 52px); border-color:#88c79b; color:#d9ffe4; }
+#scene-jet { top:calc(48% + 100px); border-color:#e2b870; color:#ffe9bc; }
+#scene-harbour { top:48%; border-color:#7bc5cf; color:#d8f8fc; }
+body[data-district-crossing] :is(#scene-van,#scene-free-build,#scene-jet,#scene-harbour,#jet-hud,#free-build-banner) { display:none; }
 #scene-van[data-truck-door] { left:auto; top:auto; right:10px; bottom:62px; z-index:15; }
+.scene-banner { position:absolute; z-index:5; left:50%; top:14px; transform:translateX(-50%); display:flex; align-items:center; gap:10px; padding:7px 12px; background:#132f28f5; border:1px solid #82d9a0; border-radius:6px; color:#e5ffec; font:600 13px/1.3 var(--sans,system-ui,sans-serif); box-shadow:0 6px 20px #0006; }
+.scene-banner button { min-height:32px; padding:4px 10px; border:1px solid #7aa18a; border-radius:4px; background:#23473c; color:#f5efde; cursor:pointer; }
+.jet-hud { position:absolute; z-index:5; left:50%; bottom:16px; transform:translateX(-50%); display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:8px 12px; background:#102327f2; border:1px solid #e4bc72; border-radius:8px; color:#f7efda; box-shadow:0 8px 28px #0008; max-width:calc(100% - 24px); }
+.jet-telemetry { display:grid; gap:2px; padding-right:8px; border-right:1px solid #486465; }
+.jet-telemetry strong { font:700 13px/1.15 var(--sans,system-ui,sans-serif); color:#ffdfa0; }
+.jet-telemetry span { font:500 11.5px/1.15 var(--mono,monospace); color:#bcd7d2; }
+.jet-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.jet-actions button { min-height:36px; padding:5px 11px; border:1px solid #6c8885; border-radius:5px; background:#1d3c40; color:#f6efde; font:600 12.5px/1.2 var(--sans,system-ui,sans-serif); cursor:pointer; }
+#jet-strike-btn { background:#b3472c; border-color:#f08867; color:#fff5eb; }
+#jet-aim-btn[aria-pressed="true"] { background:#e7b964; color:#152526; border-color:#f7d58b; }
+.free-build-sheet { width:min(96vw,44rem); }
+.fb-section { display:grid; gap:10px; margin-bottom:16px; padding-top:12px; border-top:1px solid #355050; }
+.fb-expand { background:#163135; border:1px solid #4d6b69; border-radius:8px; padding:12px; border-top:1px solid #4d6b69; }
+.fb-row { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; align-items:center; font-size:.9rem; color:#d2e3dc; }
+.fb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; }
+.fb-card { display:grid; gap:6px; padding:10px; background:#163034; border:1px solid #415d5d; border-radius:6px; align-content:space-between; }
+.fb-card p { margin:0; font-size:.85rem; color:#d2e1da; }
+.fb-card small { font-size:.78rem; color:#e5cb94; }
+.fb-card-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.fb-card-actions button { flex:1 1 auto; min-height:36px; font-size:.82rem; padding:5px 8px; }
+.leisure-sheet button.fb-primary { background:var(--gold,#e6be74); color:#152627; border-color:var(--gold,#e6be74); }
+.fb-built-list { display:grid; gap:6px; }
+.fb-built-row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 10px; background:#163034; border:1px solid #3e5858; border-radius:5px; font-size:.86rem; }
 
 .scene-tools button,.scene-tools #street-open-actions,.scene-strip button,#scene-watching button,#scene-notice button,.scene-card-head button {
   position:static; display:inline-flex; align-items:center; justify-content:center; height:auto;

@@ -68,6 +68,9 @@
       const point=root.EarthDistrictGrowth.homePoint(site,h.plot);
       add(homeKey('guest',h.plot),h.name+'’s guest room, lot '+(h.plot+1),1,point,null,h.name,root.EarthCommunityLife.residency(site,h.guestRoom)==='member');
     }
+    for(const fh of root.EarthFreeLand?.housingPlaces?.(site)||[]){
+      add(fh.id,fh.label,fh.beds,{x:fh.x,y:fh.y},null,fh.ownerLabel,true);
+    }
     return {homes,works};
   }
   const remaining=h=>h.places-h.occupants.length-h.anonymous-h.reserved.length;
@@ -445,7 +448,7 @@
     const h=site.housing;
     if(h==null)return true;
     const text=s=>typeof s==='string'&&s.length>0&&s.length<=1100;
-    const list=(a,check)=>Array.isArray(a)&&a.length<=64&&a.every(check)&&new Set(a.map(r=>r.key)).size===a.length;
+    const list=(a,check)=>Array.isArray(a)&&a.length<=512&&a.every(check)&&new Set(a.map(r=>r.key)).size===a.length;
     if(h.shifts!=null&&(!integer(h.shifts?.week,1,week)||!Array.isArray(h.shifts.workers)||h.shifts.workers.length>6||!h.shifts.workers.every(text)||new Set(h.shifts.workers).size!==h.shifts.workers.length))return false;
     if(h.support!=null&&(!Array.isArray(h.support)||h.support.length>16||!h.support.every(r=>r&&text(r.key)&&text(r.text)&&integer(r.week,1,week))))return false;
     if(h.care!=null&&!list(h.care,r=>r&&text(r.id)&&text(r.key)&&text(r.person)&&integer(r.week,1,week)&&integer(r.round,0,site.growth?.round||0)))return false;
@@ -460,7 +463,7 @@
       return house&&house.ownerId===c.id&&house.stage>=1&&house.stage<3&&c.wages===3-house.stage&&c.materials===c.wages&&
         guest?.profile?.identityKey===c.key&&(['visitor','member'].includes(guest.status)||c.id==='steward'&&guest.status==='anchor');
     })||new Set(h.contracts.map(c=>c.plot)).size!==h.contracts.length))return false;
-    return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage)-\d{1,4})$/.test(r.home))&&
+    return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage|free)-\d{1,5})$/.test(r.home))&&
       list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.crisis==null||integer(r.crisis,1,week))&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&
       !h.hardship.some(r=>h.rights.some(a=>r.key===a.key));
   }

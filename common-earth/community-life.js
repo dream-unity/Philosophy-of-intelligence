@@ -78,6 +78,7 @@
   const linkId=(a,b)=>'carrier-'+a+'-'+b;
   const guestSlots=[];
   for(let a=0;a<9;a++)for(let b=0;b<9;b++)if(Math.abs(a%3-b%3)+Math.abs(Math.floor(a/3)-Math.floor(b/3))===1)guestSlots.push(linkId(a,b));
+  const isGuestSlot=id=>guestSlots.includes(id)||typeof id==='string'&&/^citizen-[1-9]\d{0,2}$/.test(id);
   const local=site=>site.communityLife||=( {people:{},away:{},visits:{},log:[]} );
   const stores=world=>[...world.sites,...(world.communityLife?.outposts||[])];
   const lookup=(world,id)=>world.sites.find(s=>s.id===id)||world.communityLife?.outposts.find(s=>s.id===id);
@@ -656,18 +657,26 @@
   }
   function freeGuestSlot(site){
     const used=new Set([...(root.EarthPersonas?.porterIds(site)||[]),...(site.agency?.porters||[]),...Object.keys(site.communityLife?.people||{})]);
-    return guestSlots.find(id=>!used.has(id));
+    const classic=guestSlots.find(id=>!used.has(id));
+    if(classic)return classic;
+    const expanded=(site.freeLand?.buildings?.length||0)>0||(site.freeLand?.tier||0)>0;
+    if(!expanded)return null;
+    for(let n=1;n<=400;n++){
+      const extra='citizen-'+n;
+      if(!used.has(extra))return extra;
+    }
+    return null;
   }
   function guestSlot(site,person,originId,originSlot,status,week){
     const c=local(site);
     const old=Object.entries(c.people).find(([,v])=>v.originId===originId&&v.originSlot===originSlot);
-    const returning=originId===site.id&&(walkIds.includes(originSlot)||originSlot==='driver'||site.residents.some(p=>p.id===originSlot)||guestSlots.includes(originSlot));
+    const returning=originId===site.id&&(walkIds.includes(originSlot)||originSlot==='driver'||site.residents.some(p=>p.id===originSlot)||isGuestSlot(originSlot));
     const id=returning?originSlot:old?.[0]||freeGuestSlot(site);
     if(!id)return null;
     delete c.away[id];
     c.people[id]={profile:{...copy(person),id},status,originId,originSlot,originName:person.birthCommunityName||null,since:week};
     const agency=site.agency||={actor:'steward',meals:[]};
-    if(guestSlots.includes(id)&&!(agency.porters||=[]).includes(id))agency.porters.push(id);
+    if(isGuestSlot(id)&&!(agency.porters||=[]).includes(id))agency.porters.push(id);
     return id;
   }
   function departureReason(site,id,world,atGate=false){
@@ -1588,7 +1597,7 @@
   }
   function permission(world,site,cmd,args=[]){
     const a=world.communityLife;if(!a||!site)return '';
-    if(['production','stowHandline','manageSite','diplomacy','setWorldPace','baseOrder'].includes(cmd))return '';
+    if(['production','stowHandline','manageSite','diplomacy','setWorldPace','baseOrder','cafeAction','jetStrike'].includes(cmd))return '';
     if(cmd==='visit'&&args[0]!==site.id){
       const restriction=hostedVisit(world,lookup(world,args[0]));
       if(restriction&&!restriction.optional)return restriction.reason;
@@ -1927,9 +1936,9 @@
             e.relays.every(r=>obj(r)&&ids.has(r.to)&&r.to!==s.id&&r.to!==e.originId&&word(r.carrier)&&int(r.week,e.reported,world.week))))))return false;
       if(c.visitorIncidents!=null&&!int(c.visitorIncidents,0,1000))return false;
       if(c.cluster!=null&&!word(c.cluster)||c.district!=null&&![...land,...water,...founderPurposes].some(d=>d.district===c.district)||c.strain!=null&&!int(c.strain)||c.lastExit!=null&&!int(c.lastExit,1,world.week))return false;
-      if(!Object.entries(c.away).every(([id,dest])=>(id==='steward'||id==='driver'||walkIds.includes(id)||guestSlots.includes(id)||s.residents.some(r=>r.id===id))&&word(dest)))return false;
+      if(!Object.entries(c.away).every(([id,dest])=>(id==='steward'||id==='driver'||walkIds.includes(id)||isGuestSlot(id)||s.residents.some(r=>r.id===id))&&word(dest)))return false;
       for(const [id,p] of Object.entries(c.people)){
-        if(!obj(p)||!validProfile(p.profile,id)||id==='steward'&&p.status!=='anchor'||id!=='steward'&&(!(guestSlots.includes(id)||(walkIds.includes(id)||id==='driver'||s.residents.some(r=>r.id===id))&&p.originId===s.id&&p.originSlot===id)||!['visitor','member','former'].includes(p.status)||!word(p.originId)||!word(p.originSlot)||!int(p.since,1,world.week)))return false;
+        if(!obj(p)||!validProfile(p.profile,id)||id==='steward'&&p.status!=='anchor'||id!=='steward'&&(!(isGuestSlot(id)||(walkIds.includes(id)||id==='driver'||s.residents.some(r=>r.id===id))&&p.originId===s.id&&p.originSlot===id)||!['visitor','member','former'].includes(p.status)||!word(p.originId)||!word(p.originSlot)||!int(p.since,1,world.week)))return false;
         if(p.status==='visitor'&&(!ids.has(p.visitFrom)||!word(p.visitSlot)||!int(p.inspects,p.since+1,p.since+1)))return false;
       }
       if(c.freight){

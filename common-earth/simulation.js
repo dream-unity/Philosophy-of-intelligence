@@ -213,7 +213,7 @@
     const district=cityDelta ?? root.EarthCityModel?.overview(site)?.weekly;
     const lifeServices=world && root.EarthCareers?.weeklyAdjustment(site,world);
     const localInitiatives=world && root.EarthAutonomy?.rates(site,world);
-    for(const contribution of [district,root.EarthStrategy?.rates(site),workforce??root.EarthConstruction?.weeklyAdjustment(site,world),lifeServices,localInitiatives,world&&root.EarthCommunityLife?.workforce?.(world,site)]){
+    for(const contribution of [district,root.EarthStrategy?.rates(site),workforce??root.EarthConstruction?.weeklyAdjustment(site,world),lifeServices,localInitiatives,world&&root.EarthCommunityLife?.workforce?.(world,site),root.EarthFreeLand?.rates?.(site)]){
       for(const [k,v] of Object.entries(contribution || {}))result[k]=(result[k] || 0)+v;
     }
     return result;
@@ -374,7 +374,7 @@
         !Number.isFinite(line.x)||!Number.isFinite(line.y))return false;
       if(line.mode==='walk'){
         if(line.food!==1||line.x<-.7||line.x>24.7||line.y<23.1||line.y>25.25)return false;
-      }else if(line.mode!=='boat'||line.x<-.65||line.x>24.65||line.y<26.5||line.y>39.01)return false;
+      }else if(line.mode!=='boat'||line.x<-165||line.x>190||line.y<26.5||line.y>200)return false;
     }
     if(root.EarthPursuits && !root.EarthPursuits.valid(site))return false;
     if(site.lastFishingWeek!=null && !integer(site.lastFishingWeek,0,world.week))return false;
@@ -389,6 +389,8 @@
     if(root.EarthPurses && !root.EarthPurses.valid(site,world.week))return false;
     if(root.EarthFleet && !root.EarthFleet.valid(site,world.week))return false;
     if(root.EarthCivicInitiatives && !root.EarthCivicInitiatives.valid(site,world.week))return false;
+    if(root.EarthFreeLand?.valid && !root.EarthFreeLand.valid(site,world.week))return false;
+    if(root.EarthReadingRoom?.valid && !root.EarthReadingRoom.valid(site,world.week))return false;
     if(root.EarthStrategy?.valid && !root.EarthStrategy.valid(site.strategy))return false;
     if(root.EarthCityModel?.valid && !root.EarthCityModel.valid(site.city))return false;
     if(root.EarthNeighbours?.valid && !root.EarthNeighbours.valid(site))return false;
@@ -2478,6 +2480,21 @@
         const result=root.EarthMilitaryBase?.command(world,request);
         return result?.ok?complete(result.message,root.EarthCommunityLife.lookup(world,request.site),!root.EarthBaseField?.actions.has(request.action)):result||reject('The military base is unavailable.');
       }),
+      jetStrike:guarded(request=>{
+        const site=current();
+        const result=root.EarthMilitaryBase?.jetStrike?.(world,site,request);
+        return result?.ok?complete(result.message,site,false):result||reject('Fighter jet strike is unavailable.');
+      }),
+      cafeAction:guarded(request=>{
+        const site=current();
+        const result=root.EarthReadingRoom?.command?.(world,site,request);
+        return result?.ok?complete(result.message,site,false):result||reject('The Reading Room is unavailable.');
+      }),
+      freeLand:guarded(request=>{
+        const site=current();
+        const result=root.EarthFreeLand?.command?.(world,site,request);
+        return result?.ok?complete(result.message,site,true):result||reject('Free-land building is unavailable.');
+      }),
       diplomacy:guarded(request=>{
         const result=root.EarthBorderConflict?.diplomacy(world,request);
         return result?.ok?complete(result.message,current()):result||reject('Diplomacy is unavailable.');
@@ -2573,6 +2590,8 @@
     return {
       ...commands,get state(){return world;},get savedUnits(){return lastGood?.length||0;},get saveIssue(){return saveIssue;},get saveMessage(){return saveMessage;},get newerSaveText(){return futureSave;},get hasUnsavedChoice(){return unsavedAction;},get hasDiverged(){return diverged;},
       buildPlanView,active:current,liveWeekHold,marketView,purseView:id=>root.EarthPurses?.view(world,current(),id),provisionsView,civicView:()=>root.EarthCivicInitiatives?.view(world,current()),truckView:()=>root.EarthFleet?.view(world,current()),regularTruckView:()=>root.EarthFleet?.regular(world,current()),handlineOffer,fishingOffer,constructionView,worksiteLoadIssue,previewCancelConstruction,lastWeek:()=>world.lastWeekReview,actions,overview,foundingOffer,sponsorshipOffer,previewBuild,previewReclaim,forecast,forecastNext,courseCalendar,perform,sync,
+      cafeView:()=>root.EarthReadingRoom?.view?.(world,current()),
+      freeLandView:()=>root.EarthFreeLand?.view?.(current()),
       truckDisputeView:()=>root.EarthFleet?.dispute?.(world,current()),
       subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
       destroy(){closed=true;listeners.clear();if(root.removeEventListener)root.removeEventListener('storage',onStorage);}

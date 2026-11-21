@@ -275,6 +275,12 @@
       radius=Math.max(radius,(Math.max(Math.abs(p.x-p.y),Math.abs(p.x+p.y-24))+4)*streetKilometres);
     }
     add(root.EarthMilitaryBase?.place);
+    if(root.EarthMilitaryBase){
+      add({x:27,y:12});
+      add({x:29.5,y:12});
+      if(root.EarthMilitaryBase.runway)add({x:root.EarthMilitaryBase.runway.x,y:12});
+    }
+    for(const fb of site.freeLand?.buildings||[])add({x:fb.x,y:fb.y});
     for(const h of rows){
       add(h.houseSite||model?.homePoint(site,h.plot));
       if(h.shop)add(h.shopSite||model?.shopPoint(site,h.businessPlot));
@@ -282,7 +288,7 @@
     }
     for(const h of site.civicLand?.homes||[])add(root.EarthCouncilHomes.plot(h.plot));
     if(site.civicLand?.project)add(root.EarthCouncilHomes.plot(site.civicLand.project.plot));
-    const extent={round:growth?.round,count:rows.length,plots,radius};streetsByTown.set(site,extent);return extent;
+    const extent={round:growth?.round,count:rows.length,freeCount:site.freeLand?.buildings?.length||0,plots,radius};streetsByTown.set(site,extent);return extent;
   }
   function streetFootprint(geo,x,y){
     let nearest=null,best=Infinity;

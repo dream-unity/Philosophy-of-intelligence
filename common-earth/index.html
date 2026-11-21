@@ -64,6 +64,8 @@
   <script src="border-conflict.js?v=9bbdf1f40b91" defer></script>
   <script src="housing.js?v=fd3408a94b6f" defer></script>
   <script src="town-centre.js?v=c4a657bd876b" defer></script>
+  <script src="reading-room.js" defer></script>
+  <script src="free-land.js" defer></script>
   <script src="simulation.js?v=a2944d75f15f" defer></script>
   <script src="globe.js?v=e5ac0830781f" data-atlas-version="f3924fe3de33" defer></script>
   <script src="town-architecture.js?v=057b827537b1" defer></script>
@@ -211,6 +213,10 @@
       <header><div><small>Military base · East gate</small><h2 id="base-title">Base command</h2></div><form method="dialog"><button aria-label="Close military base">×</button></form></header>
       <div id="base-interface"></div>
     </dialog>
+    <dialog id="free-build-dialog" class="leisure-sheet free-build-sheet" aria-labelledby="free-build-title">
+      <header><div><small id="free-build-tier">Territory · Open Land</small><h2 id="free-build-title">Build &amp; Expand Territory</h2></div><form method="dialog"><button aria-label="Close build and territory sheet">×</button></form></header>
+      <div id="free-build-body"></div>
+    </dialog>
     <dialog id="field-roster" class="leisure-sheet" aria-labelledby="field-roster-title">
       <header><h2 id="field-roster-title">Call soldiers to board</h2><form method="dialog"><button aria-label="Close soldier roster">×</button></form></header>
       <p id="field-roster-town"></p>
@@ -259,6 +265,18 @@
           </div>
           <button type="button" id="compact-community-actions" class="secondary" aria-controls="actions-panel">Community actions</button>
           <button id="scene-van" type="button" hidden>Enter van</button>
+          <button id="scene-free-build" type="button" hidden>Build / Expand</button>
+          <button id="scene-jet" type="button" hidden>Fly jet</button>
+          <button id="scene-harbour" type="button" hidden>Return to harbour</button>
+          <div id="free-build-banner" class="scene-banner" hidden><strong id="free-build-banner-text"></strong><button type="button" id="free-build-cancel">Cancel</button></div>
+          <div id="jet-hud" class="jet-hud" hidden>
+            <div class="jet-telemetry"><strong id="jet-phase">Airborne</strong><span id="jet-stats">Alt 560 m · 14 kt</span></div>
+            <div class="jet-actions">
+              <button type="button" id="jet-strike-btn">Fire strike (Space)</button>
+              <button type="button" id="jet-aim-btn" aria-pressed="false">Click-to-strike</button>
+              <button type="button" id="jet-land-btn">Land</button>
+            </div>
+          </div>
           <div class="street-camera-tools" role="group" aria-label="Street appearance">
             <button id="street-evening" type="button" class="icon-button" aria-label="World clock and simulation speed" aria-haspopup="dialog" title="World clock"><svg aria-hidden="true"><use href="#i-evening"/></svg></button>
             <button id="street-wide" type="button" class="icon-button" aria-label="Expanded street view" aria-pressed="false" title="Expand street view"><svg aria-hidden="true"><use href="#i-expand"/></svg></button>
@@ -315,6 +333,7 @@
                   <button type="button" data-scene-open="practice">Practice and decisions</button>
                   <button type="button" id="scene-open-projects" data-scene-open="precinct">Neighbourhood projects</button>
                   <button type="button" id="street-open-actions">Community actions</button>
+                  <button type="button" id="scene-open-free-build" aria-haspopup="dialog" aria-controls="free-build-dialog">Build houses &amp; expand territory</button>
                   <button type="button" id="scene-open-base" aria-haspopup="dialog" aria-controls="military-base">Military base</button>
                 </section>
                 <section id="scene-practice" data-scene-pane="practice" hidden></section>

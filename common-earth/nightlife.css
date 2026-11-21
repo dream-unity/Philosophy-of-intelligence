@@ -67,3 +67,26 @@
   .tetris-pad {grid-column:2;align-self:end}
   .tetris-sheet .tetris-keys {display:none}
 }
+.venue-actions {display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.35rem}
+.station-timer {height:6px;width:100%;border-radius:3px;background:#0b1c22;border:1px solid #3c5654;overflow:hidden;margin:.45rem 0}
+.station-timer > span {display:block;height:100%;width:100%;background:var(--gold);transition:width 60ms linear}
+.tetris-callout {min-height:1.25rem;margin:.35rem 0 0;color:var(--gold);font:600 .82rem/1.3 var(--mono);letter-spacing:.03em}
+
+.reading-room-panel {display:flex;flex-direction:column;gap:.85rem;margin-top:.75rem}
+.rr-seat-bar,.rr-cup,.rr-menu-item,.rr-book-card {display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.65rem .75rem;border:1px solid #425c5a;border-radius:.38rem;background:#162d32}
+.rr-seat-bar p,.rr-cup p,.rr-menu-item p,.rr-book-card p {margin:.2rem 0 0;font-size:.86rem;color:var(--muted)}
+.rr-cup {border-color:#c69f62;background:#1e3030}
+.rr-notice {margin:0;padding:.5rem .7rem;border-radius:.32rem;background:#1e373a;border-left:3px solid var(--gold);color:#f3dfb6;font-size:.88rem}
+.rr-section {display:flex;flex-direction:column;gap:.5rem}
+.rr-section-head {display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:.4rem}
+.rr-section h3 {font-size:1.25rem;margin:0}
+.rr-menu,.rr-shelf {display:flex;flex-direction:column;gap:.45rem}
+.rr-menu-item button,.rr-book-card button,.rr-seat-bar button,.rr-cup button {flex:0 0 auto;white-space:nowrap}
+.leisure-sheet button.rr-primary {background:var(--gold);color:#152627;border-color:var(--gold)}
+.rr-reader {padding:.95rem 1rem;border:1px solid #7d735a;border-radius:.45rem;background:#1c292b;display:flex;flex-direction:column;gap:.6rem}
+.rr-reader-head,.rr-reader-nav {display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.rr-byline {margin:0;color:var(--gold);font-size:.82rem;font-family:var(--mono)}
+.rr-page-text {margin:0;padding:.75rem .85rem;border-radius:.32rem;background:#f4ead6;color:#1e2321;font:normal 1rem/1.65 var(--serif);letter-spacing:.005em}
+@media(max-width:520px){.rr-seat-bar,.rr-cup,.rr-menu-item,.rr-book-card{flex-direction:column;align-items:stretch}}
+
+

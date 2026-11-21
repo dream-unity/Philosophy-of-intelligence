@@ -62,6 +62,23 @@
       const back=btn('Call back truck with all soldiers',()=>action({action:'returnBase'}),'return-base');
       back.disabled=!b.units.some(root.EarthBaseField.personnel);transport.append(back);
       const row=el('div');buttonRow(row,'Military truck','Choose a town and tap Drive. A soldier takes the wheel.',transport);
+      const hasJet=b.units.some(u=>u.type==='jet');
+      const airControls=el('div',null,'base-unit-controls');
+      if(hasJet&&s.id===sim.active()?.id){
+        const flyBtn=btn('Fly fighter jet',()=>{
+          dialog.close();enterStreet();
+          const sc=street();
+          if(!sc?.enterJet?.())notify('Unable to launch fighter jet right now.',true);
+          else notify('Cleared for takeoff on Runway 09/27. Steer freely with WASD/Arrows or click; press Space or Attack to strike any target.');
+        },'fly-jet');
+        flyBtn.className='action-button';
+        airControls.append(flyBtn);
+      }else if(!b.tech.includes('flight')){
+        airControls.append(btn('Research flight',()=>showTab('research'),'go-flight'));
+      }
+      buttonRow(row,'Airfield & 24-unit runway',hasJet
+        ?'Fighter jet fueled on the south runway threshold. Take off, fly high over the region, and launch air-to-ground strikes anywhere.'
+        :'Dedicated paved runway east of the hangar. Research Flight to commission your first fighter jet.',airControls);
       content.prepend(row);
       if(!b.units.length){content.append(el('p','New recruits gather beside the truck at the east gate.'));return;}
       const garrison=el('div');content.append(el('h3','Base roster'),garrison);

@@ -9,9 +9,24 @@
     const put=(id,value)=>{const e=$(id);if(e.textContent!==value)e.textContent=value;};
     const lookup=id=>root.EarthCommunityLife.lookup(sim.state,id);
     let selected='nightclub',townId='',renderKey='',phaseKey='',match=null,atDoor=false,onTrip=0;
+    let activeBookId='',activeBookPage=0,cafeBusy=false,cafeNotice='';
+    const readingPanel=doc.createElement('section');
+    readingPanel.id='reading-room-panel';
+    readingPanel.className='reading-room-panel';
+    readingPanel.hidden=true;
+    $('station-room')?.parentNode?.insertBefore(readingPanel,$('station-room'));
     const select=$('station-select');
     let cabinet=null,session=null;
     const pads=['◆','●','▲'],padNames=['Diamond','Circle','Triangle'];
+    const bestKey='common-earth.signal-best.v1';
+    let roundTimer=0,barTimer=0,nextTimer=0;
+    function readBest(){try{const n=Number(root.localStorage?.getItem(bestKey));return Number.isSafeInteger(n)&&n>0&&n<=5?n:0;}catch{return 0;}}
+    function saveBest(points){const prev=readBest();if(points>prev){try{root.localStorage?.setItem(bestKey,String(points));}catch{/* Ignore storage errors. */}}}
+    function clearMatchTimers(){
+      clearTimeout(roundTimer);clearInterval(barTimer);clearTimeout(nextTimer);
+      roundTimer=0;barTimer=0;nextTimer=0;
+      const meter=$('station-timer');if(meter)meter.hidden=true;
+    }
     const currentTown=()=>lookup(townId);
     const player=()=>root.EarthAgency?.actorId(sim.active())||'steward';
     function showClock(){if(sim.active()&&!clockDialog.open){clockDialog.showModal();tick();}}
@@ -26,8 +41,8 @@
     function open(kind='nightclub',siteId=sim.active()?.id){
       const site=lookup(siteId);if(!site)return;
       if(clockDialog.open)clockDialog.close();
-      cabinet?.close();
-      selected=life.find(kind)?.id||'nightclub';townId=site.id;match=null;renderKey='';
+      cabinet?.close();clearMatchTimers();
+      selected=life.find(kind)?.id||'nightclub';townId=site.id;match=null;renderKey='';cafeNotice='';
       $('station-play').hidden=false;$('station-pads').hidden=true;$('station-select').disabled=false;
       if(!room.open)room.showModal();paint();
     }
@@ -35,6 +50,10 @@
     for(const v of life.venues)$('venue-choices').append(button(v.name,()=>choose(v.id)));
     $('venue-directory').addEventListener('click',()=>open());
     $('clock-venues').addEventListener('click',()=>open());
+    $('venue-phase')?.addEventListener('click',()=>{
+      const c=clock.read(sim.state);
+      pace(c.night?'sunrise':'sunset');
+    });
     $('venue-walk').addEventListener('click',()=>{
       const site=currentTown(),venue=life.find(selected),trip=++onTrip;
       if(!site||site.id!==sim.active()?.id)return;
@@ -55,17 +74,148 @@
       const tetris=select.value==='0';
       put('station-game',tetris?'Tetris':'Signal Match');
       put('station-play',tetris?'Play Tetris':'Play a round');
-      if(!match)put('station-prompt',tetris?'Fit falling pieces into complete horizontal lines to clear them.':
-        'Match five symbols. You have four seconds for each one. Choose a resident to challenge or an open station to play solo.');
+      if(!match){
+        const best=readBest();
+        put('station-prompt',tetris?'Fit falling pieces into complete horizontal lines to clear them.':
+          'Match five symbols within four seconds each (keys 1, 2, 3 or buttons). Choose a resident to challenge or an open station to play solo.'+(best?' Best: '+best+'/5.':''));
+      }
     }
-    select.addEventListener('change',()=>{match=null;stationChoice();});
+    select.addEventListener('change',()=>{clearMatchTimers();match=null;$('station-select').disabled=false;$('station-pads').hidden=true;$('station-play').hidden=false;stationChoice();});
+    async function runCafeAction(req){
+      if(cafeBusy)return;
+      cafeBusy=true;
+      try{
+        const res=await sim.perform('cafeAction',req);
+        cafeNotice=res.message||'';
+        if(res.ok){worldChanged();}
+        renderKey='';paint();
+      }finally{cafeBusy=false;}
+    }
+    function paintReadingRoom(site,self){
+      const rr=root.EarthReadingRoom;
+      if(!rr){readingPanel.hidden=true;return;}
+      readingPanel.hidden=false;
+      const view=rr.view(sim.state,site);
+      const sc=street(),st=sc?.getState?.();
+      const seatedAtCafe=Boolean(self&&st?.seated&&st?.seatKind==='cafe');
+      readingPanel.replaceChildren();
+
+      // 1. Terrace Seating Row
+      const seatBar=doc.createElement('div');seatBar.className='rr-seat-bar';
+      const seatCopy=doc.createElement('div');
+      seatCopy.append(make('strong',seatedAtCafe?'Seated on the Reading Room terrace':'Take a seat in The Reading Room'),
+        make('p',seatedAtCafe?'You are seated at a terrace reading table. Order a drink or open a book below.':'Pull up a chair at the terrace reading tables to read or enjoy coffee.'));
+      const seatBtn=button(seatedAtCafe?'Stand up':'Sit at reading table',()=>{
+        if(!self)return;
+        enterStreet();
+        const cur=street();
+        if(!cur)return;
+        if(seatedAtCafe){cur.toggleSeat?.();cafeNotice='Stood up from the reading terrace.';}
+        else{
+          const ok=cur.sitAtCafe?.();
+          cafeNotice=ok?'Seated at a Reading Room terrace table.':'Returning to street to sit at the terrace.';
+        }
+        renderKey='';paint();
+      });
+      seatBtn.disabled=!self;
+      seatBtn.dataset.cafeAction='seat';
+      seatBar.append(seatCopy,seatBtn);
+      readingPanel.append(seatBar);
+
+      if(cafeNotice){
+        const notice=make('p',cafeNotice);notice.className='rr-notice';notice.setAttribute('role','status');
+        readingPanel.append(notice);
+      }
+
+      // 2. Active Coffee Cup & Espresso Counter
+      const counter=doc.createElement('div');counter.className='rr-section';
+      const head=doc.createElement('div');head.className='rr-section-head';
+      head.append(make('h3','Espresso & Tea Counter'),
+        make('small','Purse: '+view.purseBalance+' · Town funds: '+view.communityFunds));
+      counter.append(head);
+
+      if(view.currentDrink){
+        const d=view.currentDrink;
+        const cup=doc.createElement('div');cup.className='rr-cup';
+        const pips='●'.repeat(d.sipsLeft)+'○'.repeat(Math.max(0,(d.maxSips||3)-d.sipsLeft));
+        const info=doc.createElement('div');
+        info.append(make('strong',d.name+' · '+pips),make('p',d.sipsLeft+' '+(d.sipsLeft===1?'sip':'sips')+' remaining in your cup.'));
+        const sipBtn=button('Take a sip',()=>runCafeAction({action:'sip'}));
+        sipBtn.className='rr-primary';
+        sipBtn.dataset.cafeAction='sip';
+        cup.append(info,sipBtn);
+        counter.append(cup);
+      }
+
+      const menuGrid=doc.createElement('div');menuGrid.className='rr-menu';
+      for(const item of view.menu){
+        const card=doc.createElement('div');card.className='rr-menu-item';
+        const meta=doc.createElement('div');
+        meta.append(make('strong',item.name),make('p',item.note+(item.wellbeing?' (+'+item.wellbeing+' wellbeing)':'')+''));
+        const orderBtn=button('Order · '+item.price+(item.price===1?' fund':' funds'),()=>runCafeAction({action:'order',drinkId:item.id}));
+        orderBtn.disabled=!self||(view.purseBalance<item.price&&view.communityFunds<item.price);
+        orderBtn.dataset.cafeDrink=item.id;
+        card.append(meta,orderBtn);
+        menuGrid.append(card);
+      }
+      counter.append(menuGrid);
+      readingPanel.append(counter);
+
+      // 3. Reading Room Library (6 Books) + Interactive Book Reader
+      const lib=doc.createElement('div');lib.className='rr-section';
+      const activeBook=activeBookId?rr.byBook(activeBookId):null;
+      if(activeBook){
+        const pageIdx=Math.max(0,Math.min(activeBook.pages.length-1,activeBookPage));
+        const reader=doc.createElement('article');reader.className='rr-reader';
+        const top=doc.createElement('div');top.className='rr-reader-head';
+        const backBtn=button('← Back to shelf',()=>{activeBookId='';renderKey='';paint();});
+        backBtn.dataset.cafeAction='back-shelf';
+        top.append(backBtn,make('small','Page '+(pageIdx+1)+' of '+activeBook.pages.length));
+        const titleEl=make('h3',activeBook.title);
+        const byline=make('p',activeBook.author+' · '+activeBook.topic);byline.className='rr-byline';
+        const pageBody=make('p',activeBook.pages[pageIdx]);pageBody.className='rr-page-text';
+        const nav=doc.createElement('div');nav.className='rr-reader-nav';
+        const prevBtn=button('Previous page',()=>{
+          if(pageIdx>0){activeBookPage=pageIdx-1;runCafeAction({action:'bookmark',bookId:activeBook.id,page:activeBookPage});}
+        });
+        prevBtn.disabled=pageIdx===0;
+        const nextBtn=button(pageIdx<activeBook.pages.length-1?'Next page':'Finish book',()=>{
+          if(pageIdx<activeBook.pages.length-1){activeBookPage=pageIdx+1;runCafeAction({action:'bookmark',bookId:activeBook.id,page:activeBookPage});}
+          else{cafeNotice='Finished reading “'+activeBook.title+'”.';activeBookId='';renderKey='';paint();}
+        });
+        nextBtn.className='rr-primary';
+        nav.append(prevBtn,nextBtn);
+        reader.append(top,titleEl,byline,pageBody,nav);
+        lib.append(reader);
+      }else{
+        lib.append(make('h3','Library Shelf ('+view.books.length+' books)'));
+        const shelf=doc.createElement('div');shelf.className='rr-shelf';
+        for(const book of view.books){
+          const savedPage=view.bookmarks[book.id]||0;
+          const row=doc.createElement('div');row.className='rr-book-card';
+          const text=doc.createElement('div');
+          text.append(make('strong',book.title),make('p',book.author+' · '+book.topic+(savedPage?' · Bookmarked p.'+(savedPage+1):' · '+book.pages.length+' pages')));
+          const readBtn=button(savedPage?'Continue':'Read',()=>{
+            activeBookId=book.id;activeBookPage=savedPage;
+            if(self&&!seatedAtCafe)street()?.sitAtCafe?.();
+            renderKey='';paint();
+          });
+          readBtn.dataset.cafeBook=book.id;
+          row.append(text,readBtn);
+          shelf.append(row);
+        }
+        lib.append(shelf);
+      }
+      readingPanel.append(lib);
+    }
     function paint(){
       const site=currentTown();if(!site){room.close();return;}
       const w=sim.state,c=clock.read(w),v=life.find(selected);
       const self=site.id===w.activeId;
       atDoor=self&&doorProof(site,selected);
       if(cabinet?.active&&(!atDoor||session.actor!==player()||session.generation!==(site.foundingRevision||0)))cabinet?.close();
-      const key=[site.id,selected,c.night,Math.floor(c.time/25000),atDoor,self,w.actionRevision,w.workRevision,w.week].join('|');
+      const seatedKey=street()?.getState?.()?.seated?street()?.getState?.()?.seatKind||'1':'0';
+      const key=[site.id,selected,c.night,Math.floor(c.time/25000),atDoor,self,w.actionRevision,w.workRevision,w.week,activeBookId,activeBookPage,seatedKey,site.cafe?.orders||0,site.cafe?.currentDrink?.sipsLeft||0].join('|');
       if(key===renderKey)return;renderKey=key;
       const list=life.guests(w,site,c).filter(r=>r.venue===selected);
       const guests=list.map(r=>root.EarthPersonas.profile(site,r.id));
@@ -74,7 +224,7 @@
       const ctx=$('venue-portrait').getContext('2d');
       if(ctx){ctx.clearRect(0,0,520,330);root.EarthNightlifeArt?.draw(ctx,selected,260,224,71,c.night);}
       const people=$('venue-attendance'),ul=doc.createElement('ul');
-      people.replaceChildren(make('h3',selected==='arcade'?'Station floor':c.night?'Tonight’s company':'Daytime'));
+      people.replaceChildren(make('h3',selected==='arcade'?'Station floor':c.night?'Tonight’s company':selected==='cafe'?'Open all day':'Daytime'));
       if(selected==='arcade'){
         for(const table of life.tables(w,site,c)){
           const names=table.pair.map(r=>root.EarthPersonas.profile(site,r.id)?.name);
@@ -93,29 +243,69 @@
         stationChoice();
       }else{
         people.append(make('p',guests.length?guests.map(p=>p.name).join(' · '):
-          c.night?'The room is open. Guests arrive when their work is finished.':selected==='cafe'?'The reading terrace is open. The evening reading group meets after sunset.':'The dance floor opens at 6:00 PM.'));
+          c.night?'The room is open. Guests arrive when their work is finished.':selected==='cafe'?'The espresso counter, library shelves, and terrace tables are open. Sit down, order a drink, or read a book.':'The dance floor opens at 6:00 PM.'));
       }
-      $('venue-walk').hidden=!self||atDoor;put('venue-walk','Walk to '+v.sign);
+      if(selected==='cafe')paintReadingRoom(site,self);
+      else readingPanel.hidden=true;
+      $('venue-walk').hidden=!self||atDoor||selected==='cafe';put('venue-walk','Walk to '+v.sign);
+      const phaseBtn=$('venue-phase');
+      if(phaseBtn){
+        const showPhase=self&&!c.night&&selected==='nightclub';
+        phaseBtn.hidden=!showPhase;
+        if(showPhase)put('venue-phase','Run to sunset (6:00 PM)');
+      }
       $('station-room').hidden=selected!=='arcade'||!atDoor||!self;
     }
+    function setPadsDisabled(disabled){
+      for(const b of [...$('station-pads').children])b.disabled=disabled;
+    }
     function nextSignal(){
+      clearMatchTimers();
       if(!match)return;
-      if(match.turn===5){
+      if(match.turn>=5){
+        saveBest(match.points);
         $('station-select').disabled=false;
         const rival=match.rival,result=rival?(match.points>rival.points?'You won':match.points===rival.points?'Draw':rival.name+' won'):'Round complete';
-        put('station-prompt',result+' · You '+match.points+'/5'+(rival?' · '+rival.name+' '+rival.points+'/5':'')+'.');
-        $('station-pads').hidden=true;$('station-play').hidden=false;return;
+        const best=readBest();
+        put('station-prompt',result+' · You '+match.points+'/5'+(rival?' · '+rival.name+' '+rival.points+'/5':'')+(best?' · Best '+best+'/5':'')+'.');
+        $('station-pads').hidden=true;$('station-play').hidden=false;match=null;return;
       }
+      match.locked=false;
       match.symbol=Math.floor(Math.random()*pads.length);match.start=performance.now();
-      put('station-prompt',(match.rival?'Playing '+match.rival.name+' · ':'Solo · ')+'Round '+(match.turn+1)+'/5 · Match '+padNames[match.symbol]+' '+pads[match.symbol]);
+      setPadsDisabled(false);
+      put('station-prompt',(match.rival?'Playing '+match.rival.name+' · ':'Solo · ')+'Round '+(match.turn+1)+'/5 · Score '+match.points+' · Match '+padNames[match.symbol]+' '+pads[match.symbol]);
+      const meter=$('station-timer'),bar=$('station-timer-bar');
+      if(meter&&bar){
+        meter.hidden=false;bar.style.width='100%';
+        barTimer=root.setInterval(()=>{
+          if(!match||match.locked)return;
+          const pct=Math.max(0,100-(performance.now()-match.start)/40);
+          bar.style.width=pct.toFixed(1)+'%';
+        },60);
+      }
+      roundTimer=root.setTimeout(()=>resolveSignal(-1,true),4000);
+    }
+    function resolveSignal(index,timedOut=false){
+      if(!match||match.locked||match.turn>=5)return;
+      match.locked=true;clearMatchTimers();setPadsDisabled(true);
+      const hit=!timedOut&&index===match.symbol&&performance.now()-match.start<=4000;
+      if(hit)match.points++;
+      const feedback=hit?'Matched '+padNames[match.symbol]+' '+pads[match.symbol]+'!':
+        timedOut?'Time’s up · needed '+padNames[match.symbol]+' '+pads[match.symbol]+'.':
+        'Missed · needed '+padNames[match.symbol]+' '+pads[match.symbol]+'.';
+      match.turn++;
+      put('station-prompt',feedback+' Score '+match.points+'/'+match.turn+'.');
+      nextTimer=root.setTimeout(()=>nextSignal(),match.turn>=5?650:520);
     }
     for(let i=0;i<pads.length;i++){
-      const b=button(pads[i],()=>{
-        if(!match||match.turn>=5)return;
-        if(i===match.symbol&&performance.now()-match.start<=4000)match.points++;
-        match.turn++;nextSignal();
-      });b.setAttribute('aria-label',padNames[i]);$('station-pads').append(b);
+      const b=button((i+1)+' '+pads[i],()=>resolveSignal(i,false));
+      b.setAttribute('aria-label',(i+1)+' · '+padNames[i]);$('station-pads').append(b);
     }
+    room.addEventListener('keydown',e=>{
+      if(!match||match.locked||e.ctrlKey||e.metaKey||e.altKey)return;
+      const idx=['1','2','3'].indexOf(e.key);
+      if(idx!==-1){e.preventDefault();resolveSignal(idx,false);}
+    });
     $('station-pads').hidden=true;
     $('station-play').addEventListener('click',()=>{
       const site=currentTown();if(selected!=='arcade'||!site||site.id!==sim.active()?.id||!doorProof(site,'arcade'))return;
@@ -128,9 +318,9 @@
       }
       const c=clock.read(sim.state),other=life.guests(sim.state,site,c).find(r=>r.venue==='arcade'&&r.seat===Number($('station-select').value));
       const rival=other?{name:root.EarthPersonas.profile(site,other.id).name,points:life.score(other.key,Math.floor(c.time/25000))}:null;
-      match={turn:0,points:0,rival};$('station-select').disabled=true;$('station-play').hidden=true;$('station-pads').hidden=false;nextSignal();
+      match={turn:0,points:0,rival,locked:false};$('station-select').disabled=true;$('station-play').hidden=true;$('station-pads').hidden=false;nextSignal();
     });
-    room.addEventListener('close',()=>{if(room.open)return;cabinet?.close();match=null;$('station-play').hidden=false;$('station-pads').hidden=true;});
+    room.addEventListener('close',()=>{if(room.open)return;clearMatchTimers();cabinet?.close();match=null;$('station-select').disabled=false;$('station-play').hidden=false;$('station-pads').hidden=true;});
     function tick(){
       const w=sim.state,active=sim.active(),c=clock.read(w);
       $('world-time').disabled=!active;$('venue-directory').disabled=!active;

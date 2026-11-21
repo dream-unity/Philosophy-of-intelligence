@@ -242,7 +242,7 @@
     const paneReasons={talk:'Finish the conversation.',stores:'Close the stores and exchange.',life:'Close character planning.',
       original:'Finish reviewing your original character’s commitments.',precinct:'Finish reviewing the neighbourhood project.',
       practice:'Finish the current practice decision.',work:'Close personal work.',truck:'Close co-op dispatch.',fishing:'Close the fishing controls.'};
-    const hold=$('leisure-dialog')?.open?'Finish your visit to the town venue.':document.hidden?'Return to this browser tab.':!local?'Return to Street view.':
+    const hold=$('leisure-dialog')?.open?'Finish your visit to the town venue.':$('free-build-dialog')?.open?'Finish planning your territory build.':document.hidden?'Return to this browser tab.':!local?'Return to Street view.':
       $('town-centre')?.open?'Finish your Town Centre decision.':
       document.body.hasAttribute('data-sheet-open')?'Close the open game sheet.':
       paneReasons[pane]|| (local.placement||document.body.hasAttribute('data-crew-order')?'Finish or cancel the current building or crew assignment.':
@@ -779,14 +779,14 @@
   }
   function updateStreetInteract(state) {
     streetHud?.scene(state);syncLiveClock();
-    const aboard=state.mode==='boat',crewOrder=document.body.hasAttribute('data-crew-order');
+    const aboard=state.mode==='boat',flying=state.mode==='jet',crewOrder=document.body.hasAttribute('data-crew-order');
     show('street-seat',state.mode==='walk' && !state.placement && !crewOrder);
     put('street-seat',state.seated?'Stand up':'Find a seat');
-    show('street-interact',!aboard);
-    show('street-vehicle',!aboard);
-    show('street-boat',state.waterfront && !state.placement && !crewOrder);
+    show('street-interact',!aboard && !flying);
+    show('street-vehicle',!aboard && !flying);
+    show('street-boat',state.waterfront && !flying && !state.placement && !crewOrder);
     put('street-boat',state.boarding?'Cancel boarding':state.returning?'Cancel return':aboard?'Return to shore':'Board boat');
-    const canFish=state.waterfront && !state.returning && !state.boarding && !state.placement && !crewOrder && !state.seated;
+    const canFish=state.waterfront && !flying && !state.returning && !state.boarding && !state.placement && !crewOrder && !state.seated;
     const line=canFish?sim.handlineOffer?.(state):null;
     show('street-handline',!!line);
     show('street-line-terms',!!line);
@@ -813,10 +813,115 @@
       $('street-fish').disabled=!offer.available;
       put('street-fishing-terms',offer.available?'Community nets · '+offer.food+' food per catch.':offer.reason);
     }
-    put('street-mode',aboard?'On the water':'On the ground');
+    put('street-mode',flying?'In the air · Fighter jet':aboard?(state.offshoreDist>18?`Open ocean · ${state.offshoreDist} nm offshore`:'On the water'):'On the ground');
     const label=crewOrder?'Choose worksite':
       state.placement?'Commission on plot '+(state.plot+1):state.travelling?(state.mode==='drive'?'Brake':'Stop walking'):'Interact';
     put('street-interact',label);
+    // Floating stage controls for free-land building, fighter jet cockpit, and open-ocean harbour return
+    const activeSite=sim.active(),isHomeTown=activeSite&&window.EarthCommunityLife?.isHome?.(sim.state,activeSite)!==false;
+    show('scene-free-build',Boolean(isHomeTown && !flying && !aboard && !state.placement && !crewOrder && !state.freeBuild));
+    show('scene-jet',Boolean(isHomeTown && state.hasJet && !flying && !state.placement && !crewOrder && !state.freeBuild));
+    show('scene-harbour',Boolean(aboard && !state.returning));
+    show('free-build-banner',Boolean(state.freeBuild));
+    if(state.freeBuild){
+      const spec=window.EarthFreeLand?.byKind?.(state.freeBuild);
+      put('free-build-banner-text',spec?`Placing ${spec.name} · Tap empty land to construct`:'Tap empty land to construct');
+    }
+    show('jet-hud',Boolean(flying && state.jet));
+    if(flying && state.jet){
+      const phaseLabel=state.jet.phase==='takeoff'?'Takeoff climb':state.jet.phase==='landing'?'Final approach':'Airborne · Free flight';
+      put('jet-phase',phaseLabel);
+      put('jet-stats',`Alt ${Math.round(state.jet.altitude*100)} m · ${state.jet.speed*28} kt`);
+      $('jet-aim-btn')?.setAttribute('aria-pressed',String(Boolean(state.jet.strikeMode)));
+      put('jet-aim-btn',state.jet.strikeMode?'Targeting: ON (Click target)':'Click-to-strike');
+    }
+  }
+  function renderFreeBuildDialog(){
+    const box=$('free-build-body'),site=sim.active();
+    if(!box||!site||!window.EarthFreeLand)return;
+    const model=sim.freeLandView?sim.freeLandView():window.EarthFreeLand.view(site);
+    if(!model)return;
+    const tierName=model.currentTier?.name||'Founding District';
+    put('free-build-tier',`${site.name} · ${tierName} (Tier ${model.tier}/${model.maxTier})`);
+    const parts=[];
+    // Territory expansion banner
+    const expCard=node('section','fb-section fb-expand');
+    const expHead=node('div','fb-row');
+    expHead.append(
+      node('div','',`${tierName} · ${Math.round(model.bounds.maxX-model.bounds.minX)}×${Math.round(model.bounds.maxY-model.bounds.minY)} surveyed district`),
+      node('strong','',`${model.buildings.length} custom buildings · +${model.housingBonus} housing places`)
+    );
+    expCard.append(expHead);
+    if(model.nextTier){
+      const nt=model.nextTier;
+      const costText=`Costs ${nt.materials} materials and ${nt.funds} funds — pushes perimeter walls outward for vast empty land.`;
+      expCard.append(node('p','',`Next expansion: ${nt.name}. ${costText}`));
+      const expBtn=button(model.canExpand?`Expand territory to ${nt.name}`:`Need ${nt.materials} materials & ${nt.funds} funds`,async()=>{
+        const res=await sim.perform('freeLand',{action:'expand'});
+        if(presentResult(res)){street?.setSite(sim.active());render();renderFreeBuildDialog();}
+      },'fb-primary');
+      expBtn.disabled=!model.canExpand;
+      expCard.append(expBtn);
+    }else{
+      expCard.append(node('p','','Territory expanded to maximum frontier! Build freely across all empty land.'));
+    }
+    parts.push(expCard);
+    // Buildable catalog grouped by category
+    const groups=[['housing','Houses & Living Quarters (Expand population without limits)'],['production','Food, Resources & Industry'],['civic','Research, Energy & Defence']];
+    for(const [cat,title] of groups){
+      const sec=node('section','fb-section');
+      sec.append(node('h3','',title));
+      const grid=node('div','fb-grid');
+      for(const item of model.catalog.filter(c=>c.category===cat)){
+        const affordable=(site.materials||0)>=item.materials&&(site.funds||0)>=item.funds;
+        const card=node('article','fb-card');
+        card.append(node('strong','',item.name),node('p','',item.note));
+        const meta=`Cost: ${item.materials} materials · ${item.funds} funds`+(item.housing?` · +${item.housing} beds`:'');
+        card.append(node('small','',meta));
+        const btns=node('div','fb-card-actions');
+        const placeMapBtn=button('Place on map',()=>{
+          $('free-build-dialog')?.close();
+          if(view!=='street')setView('street',false);
+          street?.setFreeBuild?.(item.kind);
+        },'fb-primary');
+        placeMapBtn.disabled=!affordable;
+        const quickBtn=button('Quick-build on empty land',async()=>{
+          const spot=window.EarthFreeLand.suggestSpot(sim.active(),item.kind);
+          if(!spot){notify('No open land fits that footprint yet — expand your territory first!',true);return;}
+          const res=await sim.perform('freeLand',{action:'place',kind:item.kind,x:spot.x,y:spot.y});
+          if(presentResult(res)){street?.setSite(sim.active());render();renderFreeBuildDialog();}
+        },'');
+        quickBtn.disabled=!affordable;
+        btns.append(placeMapBtn,quickBtn);
+        card.append(btns);
+        grid.append(card);
+      }
+      sec.append(grid);
+      parts.push(sec);
+    }
+    // Placed buildings list with Reclaim button
+    if(model.buildings.length){
+      const builtSec=node('section','fb-section');
+      builtSec.append(node('h3','',`Constructed on empty land (${model.buildings.length})`));
+      const ul=node('div','fb-built-list');
+      for(const b of model.buildings){
+        const row=node('div','fb-built-row');
+        row.append(node('span','',`${b.spec?.name||b.kind} at (${b.x}, ${b.y})`),button('Reclaim',async()=>{
+          const res=await sim.perform('freeLand',{action:'reclaim',id:b.id});
+          if(presentResult(res)){street?.setSite(sim.active());render();renderFreeBuildDialog();}
+        },''));
+        ul.append(row);
+      }
+      builtSec.append(ul);
+      parts.push(builtSec);
+    }
+    box.replaceChildren(...parts);
+  }
+  function openFreeBuildDialog(){
+    const dlg=$('free-build-dialog');
+    if(!dlg||!sim.active())return;
+    renderFreeBuildDialog();
+    if(!dlg.open)dlg.showModal();
   }
   function setView(next,scrollToMap=true) {
     districtDesk?.close();
@@ -861,6 +966,14 @@
         onTalkChoices:people=>streetHud?.openTalkChoices?.(people),
         onFishingMark:kind=>{if(streetHud?.openTool('fishing')){if(kind==='float')waterfrontUI?.act('line');else if(kind==='shoal')waterfrontUI?.act('shoal');}},
         onInteract:interactAt,onHandcart:()=>sceneWork(),onChooseCrewTarget:()=>crewOrders?.openTargets(),onAssignWorksite:id=>crewOrders?.assign(id),onCancelCrewSelection:()=>crewOrders?.cancel(),onPlace:point=>placeBuilding(point,true),onHint:text=>put('street-hint',text),
+        onFreePlace:async pt=>{
+          const res=await sim.perform('freeLand',{action:'place',kind:pt.kind,x:pt.x,y:pt.y});
+          if(presentResult(res)){street?.setSite(sim.active());render();}
+        },
+        onJetStrike:async pt=>{
+          const res=await sim.perform('jetStrike',{x:pt.x,y:pt.y});
+          if(res?.ok&&res.notice){notify(res.notice);render();}
+        },
         onPlotPreview:plot=>{
           if(!placement)return;
           const preview=sim.previewBuild(placement.kind,plot);
@@ -870,12 +983,12 @@
         onStowLine:(id,castAt)=>sim.stowHandline(id,castAt),
         onState:state=>{
           districtPanel?.render();
-          put('street-location',state.mode==='boat'?'Harbour waters':state.nearby?.label||'Local district');
+          put('street-location',state.mode==='jet'?'Airspace · Fighter jet':state.mode==='boat'?(state.offshoreDist>18?`Open ocean (${state.offshoreDist} nm)`:'Harbour waters'):state.nearby?.label||'Local district');
           const driving=state.mode==='drive';
           updateStreetInteract(state);
           const truck=state.vehicle==='truck',truckDoor=truck||state.nearTruckDoor;
           const doorLabel=truck?'Exit truck':state.nearTruckDoor?'Re-enter truck':driving?'Exit van':state.boardingVan?'Walking to van…':'Enter van';
-          show('scene-van',truck||state.mode!=='boat'&&!state.placement);
+          show('scene-van',truck||state.mode!=='boat'&&state.mode!=='jet'&&!state.placement&&!state.freeBuild);
           $('scene-van')?.toggleAttribute('data-truck-door',truckDoor);
           put('scene-van',doorLabel);
           const vehicle=$('street-vehicle');
@@ -1604,6 +1717,7 @@
     } else {
       const actions=sim.actions(group);
       if(works && group==='build'){
+        if(window.EarthFreeLand)list.append(button('Build houses & expand territory on empty land',openFreeBuildDialog,'action-button'));
         if(districtDesk)list.append(button('Neighbourhood projects',()=>streetHud.openTool('precinct'),'secondary-button'));
         const model=workModel||works.view();
         works.jobList(list,model);
@@ -2217,6 +2331,14 @@
   });
   listen('street-seat','click',()=>street?.useSeat());
   listen('scene-van','click',useStreetVehicleDoor);
+  listen('scene-free-build','click',openFreeBuildDialog);
+  listen('scene-open-free-build','click',()=>{streetHud?.close(false);openFreeBuildDialog();});
+  listen('free-build-cancel','click',()=>street?.setFreeBuild?.(null));
+  listen('scene-jet','click',()=>street?.enterJet?.());
+  listen('jet-strike-btn','click',()=>street?.fireJetStrike?.());
+  listen('jet-aim-btn','click',()=>street?.toggleJetStrikeMode?.());
+  listen('jet-land-btn','click',()=>street?.landJet?.());
+  listen('scene-harbour','click',()=>street?.returnToHarbour?.());
   listen('street-vehicle','click',useStreetVehicleDoor);
   listen('street-boat','click',()=>street?.toggleBoat());
   let fishing=false;
