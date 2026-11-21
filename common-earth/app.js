@@ -611,12 +611,12 @@
     select.value=voyageStyle;select.addEventListener('change',()=>{voyageStyle=select.value;renderVoyage();el.querySelector('select')?.focus();});
     label.append(select);el.append(label,node('p','',plan.description),node('p','voyage-stats',plan.distance.toLocaleString()+' km · '+plan.legs+' stages · aim for '+plan.targetDays+' expedition days.'),
       node('small','voyage-note',plan.note));
-    const startTrip=button('Depart · 1 effort, '+plan.cost.funds+' funds, '+plan.cost.food+' food',async()=>{
+    const startTrip=button('Depart · '+plan.cost.funds+' funds, '+plan.cost.food+' food',async()=>{
       if(presentResult(await sim.perform('beginVoyage',target,voyageStyle))) {reportOpen=false;render();atlas.focus(site.lat,site.lon,1.15);}
     },'primary');
-    startTrip.disabled=sim.state.effort<1||site.funds<plan.cost.funds||site.food<plan.cost.food;
+    startTrip.disabled=site.funds<plan.cost.funds||site.food<plan.cost.food;
     el.append(startTrip);
-    if(startTrip.disabled)el.append(node('p','voyage-note','Earn the listed resources or advance the week for more effort.'));
+    if(startTrip.disabled)el.append(node('p','voyage-note','Gather the listed funds and food to depart.'));
     el.append(button('Close plan',()=>{planOpen=false;renderVoyage();},'text-button'));
   }
   function markers() {
@@ -1336,13 +1336,13 @@
     if(a.venue==='market')label=street?.atStop({type:'market'})?'Collect parcel':'Go & collect';
     if(a.venue==='resident')label=(sim.active()?.shift?.residentId===a.residentId||street?.atStop({type:'resident',residentId:a.residentId}))?'Hand over parcel':'Go & deliver';
     const resourceGate=!a.available && a.blocker==='supplies';
-    const call=button(a.available?label:(a.blocker==='effort'?'Needs effort':resourceGate?'Needs supplies':'Locked'),event=>requestAction(a,event.detail===0&&!event.pointerType),'action-button');
+    const call=button(a.available?label:(resourceGate?'Needs supplies':'Locked'),event=>requestAction(a,event.detail===0&&!event.pointerType),'action-button');
     call.disabled=!a.available;
     call.setAttribute('aria-label',a.label);call.dataset.action=a.id;
     card.append(title,descriptor);
-    const costs=[a.cost+' civic effort',...Object.entries(a.goods||{}).map(([key,value])=>value+' '+key)];
-    card.append(node('small','action-cost',a.group==='work'?
-      (a.id==='courier:pick'?'Paid on delivery':'On completion')+' · 1 personal fund · 1 development point · restore 1 civic effort (up to 4)':costs.join(' · ')));
+    const costs=Object.entries(a.goods||{}).map(([key,value])=>value+' '+key);
+    if(a.group==='work'||costs.length)card.append(node('small','action-cost',a.group==='work'?
+      (a.id==='courier:pick'?'Paid on delivery':'On completion')+' · 1 personal fund · 1 development point':costs.join(' · ')));
     if(!a.available&&a.reason)card.append(node('small','action-reason',a.reason));
     card.append(call);
     const site=sim.active();
@@ -1406,12 +1406,12 @@
     panel.hidden=!plan;
     if(!plan){lastPlanKey='';surveySite='';surveyRevision='';$('build-plan-survey').open=false;return;}
     surveyPlan();
-    const key=JSON.stringify([site.id,plan,sim.state.effort===0]);
+    const key=JSON.stringify([site.id,plan]);
     if(lastPlanKey===key)return;
     lastPlanKey=key;
     put('build-plan-name','Building plan · '+plan.name+(plan.plot!=null?' · Lot '+(plan.plot+1):''));
     const terms=Object.entries(plan.goods).map(([k,n])=>Math.min(site[k],n)+'/'+n+' '+k).join(' · ');
-    put('build-plan-status',terms+' · 1 civic effort'+(plan.gate?' · '+plan.gate:plan.occupied?' · Marked lot now occupied. Compare lots to choose another.':''));
+    put('build-plan-status',terms+(plan.gate?' · '+plan.gate:plan.occupied?' · Marked lot now occupied. Compare lots to choose another.':''));
     const steps=$('build-plan-steps');steps.replaceChildren();
     const add=(label,act)=>steps.append(button(label,act,'text-button'));
     if(plan.gate){
@@ -1422,7 +1422,6 @@
       add(plan.plot!=null && !plan.occupied?'Review lot '+(plan.plot+1):'Choose a plot',()=>{selectGroup('build');const action=sim.actions('build').find(a=>a.kind===plan.kind);if(action)requestAction(action);});
     }else{
       for(const gap of plan.missing)add((gap.key==='funds'?'Earn ':'Recover ')+gap.amount+' '+gap.key,()=>personalWork?.open(gap.key));
-      if(!sim.state.effort)add('Review next week',reviewWeek);
     }
     add('Unpin',()=>changeBuildPlan(site.id,null,plan.kind));
   }
@@ -1479,7 +1478,7 @@
       show('decision-context',false);
       put('actions-heading','Choose a plot');
       list.append(node('p','action-description',placement.label+' · Tap a vacant plot to preview, then tap it again to commission. Choosing a plot below commissions it immediately.'),
-        node('p','action-cost',[placement.cost+' effort',...Object.entries(placement.goods||{}).map(([key,value])=>value+' '+key)].join(' · ')));
+        node('p','action-cost',Object.entries(placement.goods||{}).map(([key,value])=>value+' '+key).join(' · ')));
       works?.proposal(list,placement,street?.getState().plot);
       const grid=node('div','quick-picks');
       for(let plot=0;plot<9;plot++){
@@ -1573,7 +1572,7 @@
           for(const resident of site.residents.filter(p=>!p.heard)){
             const action=actions.find(a=>a.id==='listen:'+resident.id);
             if(!action)continue;
-            const intro=button('Listen to '+resident.name+' · '+action.cost+' effort',()=>meetResident(resident,async(_event,travelled)=>{
+            const intro=button('Listen to '+resident.name,()=>meetResident(resident,async(_event,travelled)=>{
               await applyAction(action);
               if(travelled)focusActions();
             }),'secondary-button');
@@ -1894,10 +1893,10 @@
         show('gate-withdraw',!!stopped);
       }
     }
-    put('action-budget',site ? state.effort+' civic effort · '+site.funds+' funds · '+site.materials+' materials · '+site.food+' food' : '');
+    put('action-budget',site ? site.funds+' funds · '+site.materials+' materials · '+site.food+' food' : '');
     refreshSaveWarning();
-    put('week','Week '+state.week);put('effort',state.effort+' / '+window.CommonEarthSim.maxEffort);
-    show('calendar-personal-work',Boolean(site && !state.effort && personalWork));
+    put('week','Week '+state.week);
+    show('calendar-personal-work',Boolean(site && personalWork));
     put('era',overview.era||site?.era||'');put('forecast',overview.forecast);
     show('settlement-status',!!site);$('advance-week').disabled=!site;$('street-view').disabled=!site;
     districtDesk?.render(view==='world');

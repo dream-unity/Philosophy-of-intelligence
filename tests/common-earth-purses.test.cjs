@@ -46,7 +46,7 @@ test('a bankrupt town can earn a private wage through the three physical stops w
   reload(t);assert.equal(t.sim.purseView().shift.clerkId,clerk);assert.equal(t.sim.purseView().shift.count,null);
   ok(act(t,'check'));assert.equal(t.sim.purseView().shift.count,0);reload(t);const paid=option(t,'finish').request;
   ok(act(t,'finish'));no(t.sim.purseAction(paid,market));assert.deepEqual(wealth(t),totals);
-  assert.equal(t.sim.active().funds,0);assert.equal(t.sim.state.effort,0);assert.equal(t.sim.purseView().balance,2);
+  assert.equal(t.sim.active().funds,0);assert.equal(t.sim.purseView().balance,2);
   assert.match(t.sim.purseView().entries[0].text,/paid 2 personal funds/);assert(!option(t,'start').available);
   const career=t.c.EarthCareers.view(t.sim.state,t.sim.active(),'steward','nurse');
   assert.equal(career.choices.find(o=>o.id==='practice').available,false);

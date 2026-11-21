@@ -195,15 +195,11 @@ test('two calendar closes cannot satisfy a housing review when no worker staffed
   sim.destroy();
 });
 
-test('a resident at zero effort can fund the work needed for a short review',()=>{
+test('a resident with the building supplies can commission a short review project immediately',()=>{
   const sim=fresh(),site=sim.active();
-  sim.state.effort=0;
   ok(sim.beginShift(site.residents[1].id));ok(sim.finishShift());
-  assert.equal(sim.state.effort,0);
   ok(sim.beginGoal(site.id,'housing','trust',2));
-  for(let effort=0;effort<2;effort++){
-    const guide=goals.nextStep(sim);assert.equal(guide.actionId,'work:contract');ok(sim.act(guide.actionId));
-  }
+  assert.equal(goals.nextStep(sim).kind,'city');
   const city=goals.nextStep(sim);ok(sim.planCity(city.precinct,city.project));
   ok(sim.workConstruction(120));advances(sim,2);assert.equal(review(sim).aim.status,'Target reached');sim.destroy();
 });
@@ -228,7 +224,7 @@ test('a one-week housing review exposes a conflicting conversion for voluntary c
 test('a short review may recover supplies from occupied projects before its final commissioning window closes',()=>{
   const sim=fresh(),site=sim.active();
   ok(sim.planCity(0,'food'));ok(sim.planCity(1,'water'));
-  assert.equal(sim.state.effort,2);assert.equal(site.materials,2);
+  assert.equal(site.materials,2);
   ok(sim.beginGoal(site.id,'housing','trust',2));
   for(let n=0;n<2;n++){
     const before=serialize(sim),review=goals.nextStep(sim);
@@ -236,7 +232,7 @@ test('a short review may recover supplies from occupied projects before its fina
     assert.equal(review.kind,'city');assert.equal(review.project,'cancel');
     ok(sim.planCity(review.precinct,review.project));
   }
-  assert.equal(sim.state.effort,2);assert.equal(site.materials,4);
+  assert.equal(site.materials,4);
   const homes=goals.nextStep(sim);assert.equal(homes.project,'homes');
   ok(sim.planCity(homes.precinct,homes.project));ok(sim.workConstruction(120));advances(sim,2);
   assert.equal(review(sim).aim.status,'Target reached');
@@ -246,7 +242,7 @@ test('a short review may recover supplies from occupied projects before its fina
 test('paid shifts can fund a two-week goal before its commissioning window closes',()=>{
   const sim=fresh(),site=sim.active();
   ok(sim.act('build:market',1));ok(sim.act('build:market',3));ok(sim.workConstruction(180));
-  assert.equal(sim.state.effort,2);assert.ok(site.funds<7);
+  assert.ok(site.funds<7);
   const proposal=goals.preview(sim.state,site.id,'housing','trust',2);
   ok(proposal);ok(sim.beginGoal(site.id,'housing','trust',2));
   let next;
@@ -322,7 +318,7 @@ test('delivery of a parcel already in hand can supply the final bond without eff
   advances(sim,1);assert.equal(review(sim).aim.status,'Target reached');sim.destroy();
 });
 
-test('a short bond review distinguishes a single remaining hearing from a promise an existing worksite can still keep',()=>{
+test('a short bond review offers a hearing and recognises a promise an existing worksite can still keep',()=>{
   const empty=fresh(),site=empty.active(),repairer=site.residents[1];
   empty.state.effort=1;
   const before=serialize(empty),blocked=goals.preview(empty.state,site.id,'bond:'+repairer.id,'trust',1);
@@ -332,7 +328,7 @@ test('a short bond review distinguishes a single remaining hearing from a promis
   const staffed=fresh(),home=staffed.active(),person=home.residents[1];ok(staffed.act('build:workshop',0));
   staffed.state.effort=1;
   ok(staffed.beginGoal(home.id,'bond:'+person.id,'trust',1));
-  ok(staffed.act(goals.nextStep(staffed).actionId));assert.equal(staffed.state.effort,0);
+  ok(staffed.act(goals.nextStep(staffed).actionId));
   const agreement=goals.nextStep(staffed);assert.equal(agreement.actionId,'promise:'+person.id);ok(staffed.act(agreement.actionId));
   assert.equal(goals.nextStep(staffed).kind,'construction');ok(staffed.workConstruction(120));advances(staffed,1);
   assert.equal(review(staffed).aim.status,'Target reached');staffed.destroy();

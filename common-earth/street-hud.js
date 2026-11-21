@@ -428,7 +428,7 @@
       box.append(b);
       if(row.description||row.detail)box.append(make('p',row.description||row.detail));
       if(row.reason&&!row.available)box.append(make('small',row.reason));
-      else if(row.cost!=null||row.terms)box.append(make('small',row.terms||[row.cost+' effort',...Object.entries(row.goods||{}).map(([k,n])=>n+' '+k)].join(' · ')));
+      else if(row.terms||Object.keys(row.goods||{}).length)box.append(make('small',row.terms||civicGoods(row.goods)));
       return box;
     }
     function drawDay(site,person){
@@ -603,7 +603,7 @@
         details.append(make('summary','Votes, evidence and costs'),rows);
         details.addEventListener('toggle',()=>{
           if(!details.open||!details.isConnected||rows.children.length)return;
-          const budget=[civicGoods(p.goods),p.effort?p.effort+' civic effort':''].filter(Boolean).join(' · ');
+          const budget=civicGoods(p.goods);
           if(budget)rows.append(make('p','Proposal cost · '+budget));
           const pledged=[civicGoods(p.pledged),p.labour?p.labour+' labour':''].filter(Boolean).join(' · ');
           if(pledged)rows.append(make('p','Contributed so far · '+pledged));
@@ -751,7 +751,6 @@
         routes.append(press('Open stores',()=>openTool('stores'),false,'open-stores'));
         if(!foreign)routes.append(press('Personal work',()=>personalWork(),false,'personal-work'));
         box.append(routes);
-        if(!foreign&&!sim.state.effort)box.append(make('p','Weekly civic effort is spent. Personal work can still bring food, materials or funds into these stores.','scene-muted'));
         if(need.person)box.append(press('Meet '+name(need.person),()=>{openTalk(subjectRef(need.person));walkTo(need.person,()=>updateContact());},false,'meet-promise'));
         if(overview?.forecast)box.append(make('p','Regular production · '+overview.forecast,'scene-muted'));
         civicProject(box,civic);

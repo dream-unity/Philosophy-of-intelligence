@@ -28,9 +28,9 @@ test('the pictured lot nine is paid once, builds in active time and keeps the re
   ok(s.act('listen:'+person.id));ok(s.act('promise:'+person.id));
   ok(s.act('build:garden',7));ok(s.workConstruction(120));
   const before=s.forecastNext().sites[0].production;
-  const treasury=site.funds,stock=site.materials,effort=s.state.effort;
+  const treasury=site.funds,stock=site.materials;
   ok(s.act('build:workshop',8));
-  assert.equal(site.funds,treasury-6);assert.equal(site.materials,stock-3);assert.equal(s.state.effort,effort-1);
+  assert.equal(site.funds,treasury-6);assert.equal(site.materials,stock-3);
   assert.equal(site.stats.kept,0);assert.equal(site.buildings.length,1);
   assert.equal(s.previewBuild('workshop',8).available,false);
   const first=site.construction[0];assert.equal(first.work,0);
@@ -56,10 +56,10 @@ test('withdrawn builders pause work through calendar changes, and cancellation r
   for(const p of site.residents)ok(s.setWorkPreference(p.id,'usual'));
   const progress=job.work;
   ok(s.advance());ok(s.workConstruction(90));assert.equal(job.work,progress);assert.equal(site.buildings.length,0);
-  const quote=s.previewCancelConstruction(job.id),funds=site.funds,materials=site.materials,effort=s.state.effort;
+  const quote=s.previewCancelConstruction(job.id),funds=site.funds,materials=site.materials;
   assert(quote.available);ok(s.cancelConstruction(job.id));
   assert.equal(site.funds,funds+quote.refund.funds);assert.equal(site.materials,materials+quote.refund.materials);
-  assert.equal(s.state.effort,effort);assert.equal(s.cancelConstruction(job.id).ok,false);
+  assert.equal(s.cancelConstruction(job.id).ok,false);
   assert(s.previewBuild('workshop',2).available);
   ok(s.act('build:workshop',2));assert.notEqual(site.construction[0].id,job.id);
   assert.equal(s.cancelConstruction(job.id).ok,false);
@@ -221,12 +221,12 @@ test('pausing one lot retains precisely its work and budget while a second lot a
   const [hold,other]=site.construction;
   ok(s.assignBuilders([site.residents[1].id],hold.id));ok(s.workConstruction(12));
   const retained=hold.work,weekly=s.forecastNext().sites[0];assert(retained>0);assert(weekly.workforce.materials<0);
-  const funds=site.funds,materials=site.materials,effort=s.state.effort;
+  const funds=site.funds,materials=site.materials;
   ok(await s.perform('setConstructionPaused',hold.id,true));
   const revision=s.state.actionRevision;
   ok(await s.perform('setConstructionPaused',hold.id,true));assert.equal(s.state.actionRevision,revision);
   assert.equal(s.assignBuilders([site.residents[0].id],hold.id).ok,false);
-  assert.equal(site.funds,funds);assert.equal(site.materials,materials);assert.equal(s.state.effort,effort);
+  assert.equal(site.funds,funds);assert.equal(site.materials,materials);
   const resume=runtime.CommonEarthSim.create({storage:disk});
   const paused=resume.constructionView().jobs.find(j=>j.id===hold.id);
   assert.equal(paused.paused,true);assert.equal(paused.work,retained);assert.equal(paused.etaSeconds,null);
@@ -252,7 +252,7 @@ test('finishing a shift uses the visible companion position only when the reside
   ok(s.workConstruction(1));assert.notEqual(JSON.stringify(site.workforce.members[host.id].position),JSON.stringify({x:12,y:18.5}));
 });
 
-test('an exhausted street order counter stays readable and cannot consume the final effort',()=>{
+test('an exhausted street order counter stays readable and cannot consume building supplies',()=>{
   const s=found(),site=s.active();site.projectSerial=Number.MAX_SAFE_INTEGER;
   const before=JSON.stringify(s.state);
   assert.equal(s.act('build:workshop',8).ok,false);assert.equal(JSON.stringify(s.state),before);

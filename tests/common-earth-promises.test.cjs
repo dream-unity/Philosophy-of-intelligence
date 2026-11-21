@@ -35,9 +35,7 @@ function negotiate(sim, slot) {
   assert.match(firstOffer.reason, /bond of 2/);
   success(sim.advance());
   success(ask(sim, 'listen', slot));
-  const before = sim.state.effort;
   success(ask(sim, 'revise', slot));
-  assert.equal(sim.state.effort, before - 1);
   assert.equal(personAt(sim, slot).promise.dueWeek, oldDate + 1);
   return oldDate + 1;
 }

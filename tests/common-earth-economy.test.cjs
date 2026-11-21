@@ -65,8 +65,7 @@ test('actual opening and replacement of housing change crowding at the opening w
   const plot=city.overview(site).records.find(r=>r.terrain.id==='shelter').id;
   for(let tries=0;!city.preview(site,sim.state,plot,'homes').available;tries++){
     assert(tries<10);
-    if(sim.state.effort)ok(sim.act(site.materials<4?'work:salvage':'work:contract'));
-    else close(sim);
+    ok(sim.act(site.materials<4?'work:salvage':'work:contract'));
   }
   ok(sim.planCity(plot,'homes'));
   finishCrewWork(sim);
@@ -201,7 +200,7 @@ test('a forfeited diplomatic deposit transfers once and its outstanding balance 
   assert.equal(get(load()).standing,-1);
 });
 
-test('returning an unused shift effort cannot give two different projects the same identity',()=>{
+test('ending an unused shift cannot give two different projects the same identity',()=>{
   const {sim,load}=world(),site=sim.active();
   ok(sim.beginShift(site.residents[0].id));
   ok(sim.act('build:garden',0));
@@ -216,13 +215,13 @@ test('districts wait independently for actual builders and their earliest openin
   const {sim,load}=world(),site=sim.active(),city=browser.EarthCityModel;
   for(const p of site.residents)ok(sim.setWorkPreference(p.id,'usual'));
   const i=city.overview(site).records.find(r=>r.terrain.id==='shelter').id;
-  const before=[site.funds,site.materials,sim.state.effort];
+  const before=[site.funds,site.materials];
   const offered=city.preview(site,sim.state,i,'homes',true);
   assert.equal(offered.available,true);
   assert.equal(offered.crew.workers.length,0);
   assert.equal(offered.crew.etaSeconds,null);
   ok(sim.planCity(i,'homes'));
-  assert.deepEqual([site.funds,site.materials,sim.state.effort],[before[0]-7,before[1]-4,before[2]-2]);
+  assert.deepEqual([site.funds,site.materials],[before[0]-7,before[1]-4]);
   const id=site.city.precincts[i].jobId;
   ok(sim.workConstruction(120));
   assert.equal(site.construction[0].work,0);

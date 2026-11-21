@@ -527,8 +527,8 @@
       const q=model.preview(site,world,parcel,use,true);
       box.append(pLabel,el('p',q.purpose||q.reason));
       if(!q.ok)return;
-      const {effort,funds:money,materials}=q.cost;
-      box.append(el('p',q.people),el('strong',q.forecast),el('p',effort+' civic effort · '+funds(money)+' · '+materials+' materials. Earliest opening in week '+q.week+'.'));
+      const {funds:money,materials}=q.cost;
+      box.append(el('p',q.people),el('strong',q.forecast),el('p',funds(money)+' · '+materials+' materials. Earliest opening in week '+q.week+'.'));
       if(!q.available)box.append(el('p',q.reason));
       const target=use,index=parcel,week=world.week,revision=world.actionRevision,job=btn('Commission '+q.title,async()=>{
         if(pending||!job.isConnected||hud.active()!=='precinct'||sim.active()?.id!==site.id||target!==use||index!==parcel||week!==sim.state.week||revision!==sim.state.actionRevision)return;

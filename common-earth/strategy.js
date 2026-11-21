@@ -124,7 +124,7 @@
   function rotationText(s,week) {
     const n=rotationsThisWeek(s,week);
     if(!n)return 'One free crew move this week. Each extra food crew yields 2 food, each repair crew 1 material and each exchange crew 1 fund per week.';
-    if(n===1)return 'The free weekly move is used. A second move costs 1 effort and 2 funds. The next weekly move is free.';
+    if(n===1)return 'The free weekly move is used. A second move costs 2 funds. The next weekly move is free.';
     return 'Both moves are used. The next free rotation opens next week.';
   }
   function studyGate(site,id) {
@@ -167,7 +167,7 @@
           ' '+SCHOOLS[s.active].name+(staffed(hypothetical,SCHOOLS[s.active])?' will operate.':' will be unstaffed.'):'';
         add('research','strategy:move:'+old.id+':'+next.id,'Move one crew from '+old.name.split(' ')[0].toLowerCase()+' to '+next.name.split(' ')[0].toLowerCase(),
           (delta||'No change in weekly output')+' per week with this roster.'+effect,
-          {strategyKind:'roster',fromRole:old.id,toRole:next.id,effort:used===1?1:0,goods:used===1?{funds:2}:{},
+          {strategyKind:'roster',fromRole:old.id,toRole:next.id,goods:used===1?{funds:2}:{},
             gate:used>=2?'The next free crew move is available next week.':''},
           ()=>{
             const d=write(site);d.crew[from]--;d.crew[to]++;
@@ -188,19 +188,19 @@
         const gate=studyGate(site,id);
         add('research','strategy:schedule:'+id,'Staff '+school.name.toLowerCase()+' next week',
           'The current practice operates for this weekly turn. Then '+school.name.toLowerCase()+' takes its place. '+school.effect,
-          {...meta,effort:0,gate},()=>{
+          {...meta,gate},()=>{
             const d=write(site);d.pending={id,week:world.week+1};
             return keep(d,world.week,'Scheduled '+school.name.toLowerCase()+' to take over at the end of the advance to week '+d.pending.week+'.');
           });
         add('research','strategy:activate:'+id,'Switch to '+school.name.toLowerCase()+' today',
-          'Spend 1 effort and 2 funds to change the operating school immediately. '+school.effect,
-          {...meta,effort:1,goods:{funds:2},gate},()=>{const d=write(site);return keep(d,world.week,switchSchool(site,d,id));});
+          'Spend 2 funds to change the operating school immediately. '+school.effect,
+          {...meta,goods:{funds:2},gate},()=>{const d=write(site);return keep(d,world.week,switchSchool(site,d,id));});
         continue;
       }
       if(s.studying===id){
         add('research','strategy:pause','Pause '+school.name.toLowerCase(),
           'Return study time to regular production. Completed lessons and the original study fee are kept.',
-          {...meta,effort:0},()=>{
+          {...meta},()=>{
             const d=write(site);d.studying=null;
             return keep(d,world.week,'Paused '+school.name.toLowerCase()+' at '+d.projects[id].lessons+' of 3 lessons.');
           });
@@ -209,7 +209,7 @@
       const existing=s.projects[id],gate=s.studying?'Pause or finish '+SCHOOLS[s.studying].name.toLowerCase()+' before starting another study.':studyGate(site,id);
       const text=(existing?'Continue with '+existing.lessons+' of 3 lessons already complete. ':'Research with '+person.name+'. ')+school.effect+' '+lessonText(site,id);
       add('research','strategy:study:'+id,(existing?'Resume ':'Study ')+school.name.toLowerCase(),text,
-        {...meta,effort:existing?0:1,goods:existing?{}:{...STUDY_COST},gate},()=>{
+        {...meta,goods:existing?{}:{...STUDY_COST},gate},()=>{
           const d=write(site);d.studying=id;
           if(!d.projects[id])d.projects[id]={lessons:0,guest:null};
           return keep(d,world.week,person.name+' is leading '+school.name.toLowerCase()+'. '+lessonText(site,id));
@@ -217,7 +217,7 @@
     }
     if(s.pending){
       add('research','strategy:hold','Keep the current operating school','Cancel the scheduled change to '+SCHOOLS[s.pending.id].name.toLowerCase()+'.',
-        {strategyKind:'study',school:s.pending.id,effort:0},()=>{
+        {strategyKind:'study',school:s.pending.id},()=>{
           const d=write(site);d.pending=null;return keep(d,world.week,'The scheduled school change was withdrawn.');
         });
     }
@@ -232,7 +232,7 @@
       const gate=!staffed(other,school)?other.name+' needs a staffed '+school.name.toLowerCase()+' facility to offer a lesson.':'';
       add('research','strategy:guest:'+other.id,'Invite '+teacher.name+' from '+other.name,
         'A teaching exchange along the existing trade route adds one lesson now. The partner receives a 1-fund honorarium, and both mentors gain up to 1 bond.',
-        {strategyKind:'exchange',school:id,targetId:other.id,effort:1,goods:{funds:1},gate},
+        {strategyKind:'exchange',school:id,targetId:other.id,goods:{funds:1},gate},
         ()=>{
           const d=write(site),project=d.projects[id];project.guest=other.id;project.lessons++;
           addStock(other,'funds',1);

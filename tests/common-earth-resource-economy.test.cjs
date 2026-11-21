@@ -262,9 +262,9 @@ test('one renewable lake ground supplies net crews and residents while an alread
   s.buildings.push({kind:'fishingDock',id:'first-dock',name:'Fishing station',plot:0});
   const api=c.EarthFisheries,quay={siteId:s.id,actor:'steward',mode:'walk',target:'quay',x:8,y:24};
   assert.deepEqual(raw(api.ground(s,1)),{available:12,capacity:12,recovery:3,name:'Freshwater fishing ground'});
-  const food=s.food,effort=w.effort;ok(sim.useHandline(quay,'cast'));assert.equal(api.ground(s,1).available,11);
+  const food=s.food;ok(sim.useHandline(quay,'cast'));assert.equal(api.ground(s,1).available,11);
   const old=raw(w);delete old.sites[0].fishGround;
-  ok(sim.fish(s.id,()=>({...quay,mode:'boat'})));assert.equal(s.food,food+4);assert.equal(w.effort,Math.min(4,effort+1));
+  ok(sim.fish(s.id,()=>({...quay,mode:'boat'})));assert.equal(s.food,food+4);
   assert.equal(api.ground(s,1).available,7);no(sim.fish(s.id,()=>({...quay,mode:'boat'})));
   for(const id of ['walker-0','walker-1','walker-2','walker-3','walker-4','driver',s.residents[0].id]){
     const activity=c.EarthResources.quickGather(w,s,id,true);assert.equal(activity.resource,'fish');

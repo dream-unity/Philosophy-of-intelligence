@@ -165,7 +165,7 @@
     const g=gate(world,site,residentId);if(!g.available)return reject(g.reason);
     const r=person(site,residentId),story=stories[r.slot],room=(site.buildings||[]).filter(b=>b.kind===story.craft).sort((a,b)=>a.plot-b.plot)[0];
     const reserve=integer(r.shiftMemory?.reserve,0,NEED)?r.shiftMemory.reserve:0;
-    const shift={v:1,effortPaid:false,week:world.week,residentId,time:0,reserve,at:home(residentId),stopId:null,history:[],venues:{earn:{type:'market'},care:home(site.residents[story.neighbour].id),meaning:room?{type:'building',plot:room.plot,kind:room.kind}:home(residentId)}};
+    const shift={v:1,week:world.week,residentId,time:0,reserve,at:home(residentId),stopId:null,history:[],venues:{earn:{type:'market'},care:home(site.residents[story.neighbour].id),meaning:room?{type:'building',plot:room.plot,kind:room.kind}:home(residentId)}};
     return {ok:true,shift,message:`You joined ${r.name} at 09:00. Plan the day together before 15:00.`};
   }
   function live(site,week){return Boolean(site?.shift&&site.shift.week===week&&shiftPerson(site));}

@@ -70,7 +70,7 @@ test('outlook and parcel delivery choose other people and make an explicit hando
   assert.equal(step.residentId,b.id);
   assert.equal(JSON.stringify(sim.state),before);
   sim.state.effort=0;
-  assert.equal(runtime.EarthLegacy.guidance(sim).actionId,'work:contract');
+  assert.equal(runtime.EarthLegacy.guidance(sim).actionId,'listen:'+b.id);
   assert.equal(runtime.EarthLegacy.prepareStep(sim,{kind:'resident',residentId:a.id,siteId:s.id}).kind,'actor');
   sim.state.effort=1;
   assert.ok(sim.act('courier:pick').ok);

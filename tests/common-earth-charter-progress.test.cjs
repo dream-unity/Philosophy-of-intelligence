@@ -15,7 +15,6 @@ function step(s,id){
     const action=s.actions().find(a=>a.id===id);
     assert.ok(action,id);
     if(action.available){success(s.act(id));if(id.startsWith('build:'))success(s.workConstruction(300));return;}
-    if(s.state.effort<action.cost){success(s.advance());continue;}
     const missing=Object.entries(action.goods).find(([key,quantity])=>s.active()[key]<quantity);
     assert.ok(missing,id+': '+action.reason);
     step(s,'work:'+({funds:'contract',materials:'salvage',food:'forage'}[missing[0]]));
@@ -55,7 +54,7 @@ test('one unheard resident in Lisbon is the exact next guide target, and hearing
   for(let i=0;i<20&&!s.foundingOffer(end).available;i++){
     const offer=s.foundingOffer(end);
     const low=Object.entries(offer.goods).find(([k,n])=>first[k]<n);
-    if(!s.state.effort||!low)success(s.advance());
+    if(!low)success(s.advance());
     else step(s,'work:'+({funds:'contract',materials:'salvage',food:'forage'}[low[0]]));
   }
   success(s.found(end));const lisbon=s.active();step(s,'route:'+first.id);
@@ -126,8 +125,6 @@ for(const charter of ['care','voice','craft']){
     }
     assert.equal(settlements,2);
     assert.ok(s.state.completed,'all steps should end in ratification');
-    const succession=browser.EarthLegacy.guidance(s);
-    if(s.state.effort===0){assert.equal(succession.kind,'week');success(s.advance());}
     assert.equal(browser.EarthLegacy.guidance(s).page,'legacy');
     assert.ok(browser.CommonEarthSim.readSave(JSON.stringify(s.state)));
   });
@@ -268,7 +265,7 @@ test('an outstanding parcel can fund a same-week promise without spending the fi
   snapshot.effort=1;snapshot.sites[0].funds=0;
   const sim=browser.CommonEarthSim.create({storage:null,snapshot:JSON.stringify(snapshot)});
   const parcel=browser.EarthLegacy.guidance(sim);assert.match(parcel.actionId,/^courier:deliver:/);
-  success(sim.act(parcel.actionId));assert.equal(sim.state.effort,2);
+  success(sim.act(parcel.actionId));
   const promise=browser.EarthLegacy.guidance(sim);assert.equal(promise.actionId,'fulfil:'+p.id);
   success(sim.act(promise.actionId));assert.equal(sim.active().stats.kept,1);
   initial.destroy();sim.destroy();
@@ -281,7 +278,6 @@ test('a full district points to its existing clearance or lets the player reclai
   for(let plot=0;plot<9;plot++){
     while(site.funds<5)step(s,'work:contract');
     while(site.materials<3)step(s,'work:salvage');
-    if(!s.state.effort)success(s.advance());
     success(s.act('build:garden',plot));
   }
   const reserved=JSON.stringify(s.state),full=browser.EarthLegacy.guidance(s);
@@ -295,7 +291,6 @@ test('a full district points to its existing clearance or lets the player reclai
   for(const p of site.residents)success(s.setWorkPreference(p.id,'build'));
   success(s.workConstruction(1000));assert.equal(site.buildings.length,9);assert.equal(site.construction.length,0);
   const initial=browser.EarthLegacy.charterProgress(s.state).next;assert.equal(initial.inspectReclaim,true);
-  if(!s.state.effort)success(s.advance());
   const lot=site.buildings[0];success(s.reclaim(lot.plot,lot.id));
   const clear=site.construction.find(j=>j.kind==='dismantle');assert.ok(clear);
   assert.equal(s.previewBuild('workshop',lot.plot).available,false);
@@ -320,7 +315,7 @@ test('a nearly funded charter project can draw on an already commissioned cleara
   assert.match(guide.label,/Resume work/);assert.match(guide.detail,/recovered materials/i);
   success(sim.workConstruction(120));assert.equal(sim.active().materials,2);
   success(sim.setConstructionPaused(clear.id,false));
-  success(sim.workConstruction(120));assert.equal(sim.state.effort,1);
+  success(sim.workConstruction(120));
   const next=browser.EarthLegacy.guidance(sim);assert.equal(next.actionId,'build:workshop');
   success(sim.act(next.actionId));original.destroy();sim.destroy();
 });

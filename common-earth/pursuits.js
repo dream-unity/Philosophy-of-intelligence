@@ -132,7 +132,7 @@
     };
     const details=make('details'),heading=make('summary'),body=make('div',null,'personal-work-body');
     details.append(heading,body);container.append(details);
-    let timer=null,screenKey='',exhaustedKey='',running=false,drawn=null,worldVersion=0,visibilityVersion=0;
+    let timer=null,screenKey='',running=false,drawn=null,worldVersion=0,visibilityVersion=0;
     let progressLabel=null,collectButton=null,requestedResource=null;
     function stopTimer(){
       if(timer!==null)root.clearTimeout(timer);
@@ -195,9 +195,8 @@
       const site=sim.active(),model=view(site);
       if(!model){container.hidden=true;stopTimer();return;}
       container.hidden=false;
-      const noEffort=!sim.state.effort;
       model.worldVersion=worldVersion;
-      const stateKey=JSON.stringify([site.id,site.name,model.generation,model.serial,model.ticket?.kind,model.ticket?.started,model.ticket?.helper,model.actorId,model.actor,model.cart,site.materials>=2,noEffort,sim.state.week]);
+      const stateKey=JSON.stringify([site.id,site.name,model.generation,model.serial,model.ticket?.kind,model.ticket?.started,model.ticket?.helper,model.actorId,model.actor,model.cart,site.materials>=2,sim.state.week]);
       if(stateKey===screenKey){if(model.ticket && timer===null)tick();return;}
       const priorFocus=body.contains(doc.activeElement)?doc.activeElement.dataset.pursuit:null;
       function restoreFocus(){
@@ -206,10 +205,8 @@
         (previous||body.querySelector('button:not(:disabled)')||heading).focus({preventScroll:true});
       }
       screenKey=stateKey;stopTimer();drawn=model;
-      const switchKey=site.id+'/'+model.generation+'/'+sim.state.week;
-      if(noEffort && exhaustedKey!==switchKey){details.open=true;exhaustedKey=switchKey;}
       body.replaceChildren();progressLabel=collectButton=null;
-      heading.textContent=noEffort?'Personal work · available without effort':'Personal work · earn or make';
+      heading.textContent='Personal work · earn or make';
       if(model.ticket){
         const ticket=model.ticket;
         body.append(make('p',ticket.maker+' · '+ticket.label));
@@ -224,7 +221,7 @@
         body.append(progressLabel,collectButton,release);
         tick();restoreFocus();return;
       }
-      body.append(make('p',model.actor+' can take one job for '+site.name+'. Collect finished work for 1 development point and up to 1 civic effort. The exchange pays the worker 1 personal fund when its till can cover the wage.'));
+      body.append(make('p',model.actor+' can take one job for '+site.name+'. Collect finished work for 1 development point. The exchange pays the worker 1 personal fund when its till can cover the wage.'));
       if(model.cart)body.append(make('p','Community handcart · made by '+model.cart.builder+' · '+fittingNames[model.cart.fixture]+'.','personal-cart'));
       const grid=make('div',null,'personal-work-grid');
       for(const task of model.choices){
@@ -246,7 +243,7 @@
     }
     sim.subscribe((_world,notice)=>{
       if(notice.switched){
-        worldVersion++;screenKey='';exhaustedKey='';drawn=null;requestedResource=null;stopTimer();
+        worldVersion++;screenKey='';drawn=null;requestedResource=null;stopTimer();
       }
     });
     details.addEventListener('toggle',tick);
