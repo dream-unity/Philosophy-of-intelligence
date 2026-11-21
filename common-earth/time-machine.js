@@ -82,7 +82,24 @@
       }
       const raw=JSON.stringify(w);return root.CommonEarthSim.readSave(raw)?raw:null;
     }
-    return {capture,snapshot,write,list,restore,get temporary(){return temporary;}};
+    async function clearSlot(slot){
+      if(typeof slot!=='string'||!slot)return false;
+      const keys=[...buckets,...Object.keys(slots).map(kind=>kind+'-head')].map(k=>key(slot,k));
+      for(const k of keys)memory.delete(k);
+      const db=await database();
+      if(db){
+        await new Promise(resolve=>{
+          try{
+            const tx=db.transaction(['moments','titles'],'readwrite');
+            const moments=tx.objectStore('moments'),titles=tx.objectStore('titles');
+            for(const k of keys){moments.delete(k);titles.delete(k);}
+            tx.oncomplete=()=>resolve(true);tx.onabort=tx.onerror=()=>resolve(true);
+          }catch{resolve(true);}
+        });
+      }
+      return true;
+    }
+    return {capture,snapshot,write,list,restore,clearSlot,get temporary(){return temporary;}};
   }
   root.EarthTimeMachine={create};
 })(globalThis);

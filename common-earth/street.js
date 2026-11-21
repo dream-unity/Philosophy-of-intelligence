@@ -3795,6 +3795,7 @@
       ctx.fill();ctx.strokeStyle='#d4c49e';ctx.lineWidth=1;ctx.stroke();
       text(x+w/2,y+h*.51,label,'#fff3d9',size);
     }
+    let placementCursor=null;
     function lotOverlay() {
       const FP=window.EarthFlightPhysics;
       const tLevel=state.site?.territoryLevel||0;
@@ -3805,6 +3806,15 @@
       for(const lot of state.lots){if(!vacant(lot))continue;
         const chosen=(state.hover?.plot??placingFocus)===lot.plot, c=chosen?'#fce0a5':'#edbf7c';
         rect(lot.x-1.61,lot.y-1.61,3.22,3.22,.03,chosen?'rgba(246,207,132,.58)':'rgba(247,205,131,.25)',c,chosen?2.4:1.3);
+      }
+      if(placementCursor&&!state.hover&&options.onPlaceFree){
+        const check=FP?FP.isLandClearForBuilding(placementCursor.x,placementCursor.y,1.65,1.55,{
+          territoryLevel:tLevel,hasWaterfront:Boolean(berths.length),
+          fortStage:state.site?.communityLife?.border?.defence?.stage||0,existingSolids:state.solids
+        }):{clear:true};
+        rect(placementCursor.x-1.6,placementCursor.y-1.5,3.2,3.0,.035,
+          check.clear?'rgba(108,224,156,.34)':'rgba(232,102,90,.32)',
+          check.clear?'#7ef0ad':'#f27d72',2.1);
       }
     }
     function linkedLots(focus) {
@@ -4094,7 +4104,9 @@
       if(window.EarthMilitaryBase){
         const baseLayout=window.EarthMilitaryBase.layoutFor?.(site);
         const basePlace=baseLayout?.place||window.EarthMilitaryBase.place;
-        test(basePlace,'militaryBase',0,1.25,.35,()=>({assetId:'militaryBase',use:'militaryBase',assetName:site.name+' Military Airbase & Runway',activity:'Troops, long fighter runway, 3D jet takeoff, research and expeditions.'}));
+        const describeBase=()=>({assetId:'militaryBase',use:'militaryBase',assetName:site.name+' Military Airbase & Runway',activity:'Troops, long fighter runway, 3D jet takeoff, research and expeditions.'});
+        test(basePlace,'militaryBase',0,1.25,.35,describeBase);
+        test({x:27,y:12},'militaryBase',0,1.0,.34,describeBase);
       }
       for(const v of venues)test(v,v.id,0,1,.35,()=>({assetId:'leisure-'+v.id,venue:v.id,use:'leisure',assetName:v.sign+' · '+v.name,activity:v.detail}));
       test(centre(MARKET),'exchange',0,1,.35,()=>({assetId:'exchange',assetName:'Town Centre and market exchange',use:'market',
@@ -4760,6 +4772,30 @@
       for(const v of venues)addItem(v.x,v.y,blockDepth(v),()=>{
         const [x,y]=screen(v.x,v.y);
         window.EarthNightlifeArt?.draw(ctx,v.id,x,y,unit,evening);
+        if(v.id==='cafe'&&state.site?.cafeState?.seated){
+          // Draw the seated patron at The Reading Room terrace table with an open book & steaming cup
+          const [tx,ty]=screen(v.x-.42,v.y+.66,.22);
+          ellipse(tx,ty,unit*.17,unit*.11,'#547888','#1c3036');
+          ellipse(tx,ty-unit*.22,unit*.10,unit*.10,'#e2b993','#5f4430');
+          // Open book pages on the terrace table
+          ctx.save();
+          ctx.fillStyle='#f6ebd0';ctx.strokeStyle='#7a5c3a';ctx.lineWidth=1;
+          ctx.fillRect(tx+unit*.10,ty-unit*.05,unit*.22,unit*.13);
+          ctx.strokeRect(tx+unit*.10,ty-unit*.05,unit*.22,unit*.13);
+          ctx.beginPath();ctx.moveTo(tx+unit*.21,ty-unit*.05);ctx.lineTo(tx+unit*.21,ty+unit*.08);ctx.stroke();
+          // Steaming coffee cup when a drink has been ordered
+          if(state.site.cafeState.cup&&state.site.cafeState.cup.sipsLeft>0){
+            ellipse(tx+unit*.37,ty+unit*.01,unit*.065,unit*.05,'#f4eee1','#6b482e');
+            ellipse(tx+unit*.37,ty-unit*.005,unit*.04,unit*.028,'#4f2d18');
+            if(!reduced){
+              const wisp=Math.sin(visualTime*3.2)*unit*.03;
+              ctx.strokeStyle='rgba(255,250,240,.65)';ctx.lineWidth=1.2;
+              ctx.beginPath();ctx.moveTo(tx+unit*.37,ty-unit*.06);
+              ctx.quadraticCurveTo(tx+unit*.37+wisp,ty-unit*.16,tx+unit*.37-wisp,ty-unit*.26);ctx.stroke();
+            }
+          }
+          ctx.restore();
+        }
         if(evening&&v.id==='nightclub'&&!reduced){
           for(let i=0;i<3;i++){
             const t=visualTime*.72+i*2.09;
@@ -6770,7 +6806,10 @@
         if(e.pointerType!=='touch'){
           const target=selectedCrew.size?hitWorksite(p.x,p.y):hit(p.x,p.y);
           const next=target?.type==='ground'?null:target;
-          if(state.hover!==next){state.hover=next;dirty=true;schedule();}
+          const nextCursor=state.placed&&!next?world(p.x,p.y):null;
+          const cursorChanged=Boolean(placementCursor)!==Boolean(nextCursor)||
+            (placementCursor&&nextCursor&&(Math.abs(placementCursor.x-nextCursor.x)>.08||Math.abs(placementCursor.y-nextCursor.y)>.08));
+          if(state.hover!==next||cursorChanged){state.hover=next;placementCursor=nextCursor;dirty=true;schedule();}
         }
         return;
       }
@@ -6823,7 +6862,7 @@
       else tap(gesture.start,gesture.device,gesture.secondTouch);
     }
     for(const event of ['pointerup','pointercancel','lostpointercapture'])listen(canvas,event,endPointer);
-    listen(canvas,'pointerleave',()=>{if(state.hover){state.hover=null;dirty=true;}});
+    listen(canvas,'pointerleave',()=>{if(state.hover||placementCursor){state.hover=null;placementCursor=null;dirty=true;}});
     listen(canvas,'wheel',e=>{if(covered||!state.site)return;e.preventDefault();zoomBy(Math.exp(-clamp(e.deltaY,-150,150)*.0033),coords(e,canvas));},{passive:false});
     listen(canvas,'keydown',e=>{
       if(covered||!state.site||e.ctrlKey||e.metaKey||e.altKey)return;const k=e.key.length===1?e.key.toLowerCase():e.key;

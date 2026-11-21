@@ -279,18 +279,22 @@
     const baseLayout=window.EarthFlightPhysics?.militaryBaseLayout?.(site?.territoryLevel||0);
     const excl=baseLayout?.exclusionBox||[28.3,-2.1,43.8,25.3];
     const pBounds=window.EarthFlightPhysics?.perimeterBounds?.(site?.territoryLevel||0,port);
+    const freeBounds=site&&window.EarthFreeLand?.territoryBounds?.(site);
+    const freeBuildings=site&&window.EarthFreeLand?.buildingsOf?.(site)||[];
     const blockedByPlayer=(x,y)=>{
+      for(const fb of freeBuildings)if(Math.hypot(x-fb.x,y-fb.y)<3.6)return true;
       for(const fb of site?.freeBuildings||[])if(Math.hypot(x-fb.x,y-fb.y)<3.8)return true;
       for(const ph of site?.playerHouses||[])if(Math.hypot(x-ph.x,y-ph.y)<3.6)return true;
       return false;
     };
     features.sort((a,b) => a.x+a.y-b.x-b.y);
     for(const f of features) {
-      // Strictly keep every surrounding cottage & tree outside the Military Airbase, runway, and approach road
+      // Strictly keep every surrounding cottage & tree outside the Military Airbase, 24-unit runway, and approach road
+      if(window.EarthMilitaryBase&&f.x>=24.2&&f.x<=43.8&&f.y>=-4.5&&f.y<=28.5)continue;
       if(window.EarthMilitaryBase&&f.x>=excl[0]-1.2&&f.x<=excl[2]+1.2&&f.y>=excl[1]-1.2&&f.y<=excl[3]+1.2)continue;
-      // Keep approach corridor from East Gate to Military Base clear
       if(window.EarthMilitaryBase&&f.x>=24.0&&f.x<=excl[0]+1.0&&Math.abs(f.y-12)<2.8)continue;
-      // Keep clear of perimeter wall lines & expanded buildable territory
+      // Keep clear of perimeter wall lines & surveyed empty buildable territory
+      if(freeBounds&&f.x>=freeBounds.minX-1.5&&f.x<=freeBounds.maxX+1.5&&f.y>=freeBounds.minY-1.5&&f.y<=freeBounds.maxY+1.5)continue;
       if(pBounds&&(f.x>pBounds.minX-1.6&&f.x<pBounds.maxX+1.6&&f.y>pBounds.minY-1.6&&f.y<pBounds.maxY+1.6))continue;
       if(blockedByPlayer(f.x,f.y))continue;
       if(f.tree) {

@@ -176,7 +176,7 @@
   function blow(world,site,actor){
     // Older saved patrols used stamina as their only fighting aptitude.
     const {experience,fatigue}=service(world,site,actor);
-    return Math.round(((actor.skill??actor.stamina)+actor.resolve)/13+Math.min(7,experience)-fatigue*.08);
+    return Math.max(0,Math.round(((actor.skill??actor.stamina)+actor.resolve)/13+Math.min(7,experience)-fatigue*.08));
   }
   function assign(site,p){
     site.communityLife.away[p.id]=borderDuty;
@@ -493,8 +493,8 @@
     watch.round++;
     visitor.energy-=13+blow(world,site,guard);
     if(watch.resisting)guard.energy-=20+blow(world,home,visitor);
-    if(visitor.energy>0&&guard.energy>0)return;
-    const won=guard.energy<=0&&(visitor.energy>0||guard.energy<visitor.energy);
+    if(visitor.energy>0&&guard.energy>0&&watch.round<12)return;
+    const won=guard.energy<visitor.energy&&(guard.energy<=0||watch.round>=12);
     let message;
     if(won){
       const fatal=watch.resisting&&retire(world,site,guard.id,'Died fighting '+visitor.name+' at the gate.');
@@ -533,7 +533,7 @@
     visitor.energy-=15+blow(world,host,guard);
     guard.energy-=9+blow(world,origin,visitor);
     const withdrew=visitor.resolve<58&&visitor.energy<65&&guard.resolve<83;
-    if(!withdrew&&visitor.energy>0&&guard.energy>0)return false;
+    if(!withdrew&&visitor.energy>0&&guard.energy>0&&gate.round<12)return false;
     const guestSurvived=visitor.energy>0||guard.resolve<78;
     const reason=(withdrew?'Withdrew injured':guestSurvived?'Was injured':'Was fatally injured')+' during the boundary fight at '+gate.cell+'.';
     trip.trauma={id:visitor.id,key:visitor.key,fatal:!guestSurvived,reason};

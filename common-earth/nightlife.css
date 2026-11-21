@@ -67,3 +67,34 @@
   .tetris-pad {grid-column:2;align-self:end}
   .tetris-sheet .tetris-keys {display:none}
 }
+
+#venue-phase {margin:.25rem 0 0;font:600 .78rem/1.3 var(--mono);color:#9cd6c8;letter-spacing:.04em}
+#station-timer {height:6px;margin:.45rem 0 .2rem;border-radius:999px;background:#0b1c22;overflow:hidden;border:1px solid #355459}
+#station-timer-bar {height:100%;width:100%;background:linear-gradient(90deg,#68d7b8,var(--gold));transition:width 80ms linear}
+#tetris-callout {min-height:1.1rem;margin:.2rem 0 .4rem;font:600 .8rem/1.25 var(--mono);color:var(--gold);letter-spacing:.05em}
+
+#cafe-room {display:grid;gap:.85rem;margin-top:.85rem}
+.cafe-panel {padding:.85rem 1rem;background:#152e33;border:1px solid #44625f;border-radius:.45rem}
+.cafe-panel h3 {margin:0 0 .35rem;font-size:1.3rem}
+.cafe-panel p {margin:.25rem 0 .55rem;color:var(--muted)}
+.cafe-seat-bar,.cafe-cup-box,.cafe-drink-row {display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+.cafe-seat-bar strong,.cafe-cup-box strong,.cafe-drink-row strong {display:block;color:var(--paper);font-size:.96rem}
+.cafe-seat-bar p,.cafe-cup-box p,.cafe-drink-row p {margin:.15rem 0 0;font-size:.86rem}
+.leisure-sheet button.primary-gold {background:var(--gold);color:#152627;border-color:var(--gold);font-weight:700}
+.cafe-book-shelf {display:grid;grid-template-columns:repeat(auto-fill,minmax(12.5rem,1fr));gap:.45rem;margin:.6rem 0}
+.cafe-book-btn {display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:.15rem;padding:.55rem .7rem !important;background:#19373d !important;border:1px solid #4b6d6a !important}
+.cafe-book-btn[aria-pressed="true"] {background:#f0c97e !important;color:#142527 !important;border-color:#f0c97e !important}
+.cafe-book-btn strong {font-size:.9rem;line-height:1.25}
+.cafe-book-btn small {font-size:.66rem;opacity:.88;color:inherit !important;text-transform:none;letter-spacing:.02em}
+.cafe-reader {margin-top:.75rem;padding:1rem 1.15rem;background:#f4ecda;color:#1e2625;border:1px solid #cdb88c;border-radius:.45rem;box-shadow:inset 0 1px 0 #fff9ea}
+.cafe-reader h4 {margin:0 0 .2rem;font:600 1.25rem/1.2 var(--serif);color:#162524}
+.cafe-reader .reader-author {font:600 .72rem/1.3 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:#6b573b;margin-bottom:.65rem}
+.cafe-reader p {color:#222c2b !important;font:400 .98rem/1.62 var(--serif);margin:0 0 .85rem}
+.cafe-reader-nav {display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding-top:.55rem;border-top:1px solid #d7c7a6}
+.cafe-reader-nav span {font:600 .78rem var(--mono);color:#5c4b34}
+.cafe-reader-nav button {background:#213d40;color:#f5efe2;border-color:#35595c;min-height:38px;padding:.35rem .75rem}
+.cafe-cup-box {margin:.55rem 0 .7rem;padding:.7rem .85rem;background:#203c3c;border:1px solid #7aa690;border-radius:.4rem}
+.cafe-menu {display:grid;gap:.45rem}
+.cafe-drink-row {padding:.55rem .7rem;background:#10252a;border:1px solid #355050;border-radius:.38rem}
+.cafe-drink-row button {white-space:nowrap}
+

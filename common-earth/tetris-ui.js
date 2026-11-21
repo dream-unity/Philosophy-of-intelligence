@@ -41,6 +41,8 @@
     for(let x=1;x<width;x++){bg.moveTo(x*size+.5,0);bg.lineTo(x*size+.5,grid.height);}
     for(let y=1;y<height;y++){bg.moveTo(0,y*size+.5);bg.lineTo(grid.width,y*size+.5);}
     bg.stroke();
+    let bestScore=0,lastLines=0;
+    try{bestScore=Number(root.localStorage?.getItem('common-earth.tetris-best')||0)||0;}catch{}
     function paint(){
       ctx.drawImage(grid,0,0);
       game.board.forEach((row,y)=>row.forEach((type,x)=>{if(type)tile(ctx,x,y,size,type);}));
@@ -49,8 +51,20 @@
         for(const [x,y] of cells)tile(ctx,game.x+x,landing+y,size,game.type,true);
         for(const [x,y] of cells)tile(ctx,game.x+x,game.y+y,size,game.type);
       }
+      if(game.score>bestScore){
+        bestScore=game.score;
+        try{root.localStorage?.setItem('common-earth.tetris-best',String(bestScore));}catch{}
+      }
+      const cleared=game.lines-lastLines;
+      if(cleared>0){
+        const callout=get('callout');
+        if(callout)callout.textContent=['','Single line!','Double!','Triple!','TETRIS!'][Math.min(4,cleared)]||'Cleared '+cleared+' lines!';
+      }else if(game.lines===0&&lastLines>0){
+        const callout=get('callout');if(callout)callout.textContent='';
+      }
+      lastLines=game.lines;
       board.setAttribute('aria-label','Tetris playfield · '+(game.over?'Game over':game.type+' piece, column '+(game.x+1)));
-      get('score').textContent=game.score;get('lines').textContent=game.lines;get('level').textContent=game.level;
+      get('score').textContent=game.score;if(get('best'))get('best').textContent=bestScore;get('lines').textContent=game.lines;get('level').textContent=game.level;
       preview(get('next'),game.next,'Next piece');preview(get('held'),game.held,'Held piece');
       const stopped=paused||game.over;
       get('overlay').hidden=!stopped;

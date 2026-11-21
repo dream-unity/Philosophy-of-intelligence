@@ -144,13 +144,13 @@
       if(!entry || physical!==entry.physical){
         let world=null;
         try{if(physical)world=JSON.parse(window.EarthWorldStorage?.unpack(physical)??physical);}catch{/* An unreadable world still has a registry entry. */}
-        entry={physical,summary:summaryOf(world)};
+        entry={physical,summary:summaryOf(world),sizeBytes:physical?bytes(physical):0};
       }
       if((physical?.length||0)<=budget.remaining){
         budget.remaining-=physical?.length||0;
         nextCache.set(slot,entry);
       }
-      return {...entry.summary,names:[...entry.summary.names]};
+      return {...entry.summary,sizeBytes:entry.sizeBytes,names:[...entry.summary.names]};
     }
     function entries(){
       const slots=new Map([[FIRST,{id:FIRST,name:'First world',created:0}]]);
@@ -171,7 +171,7 @@
       const nextCache=new Map(),budget={remaining:SUMMARY_CACHE_BYTES};
       const worlds=entries().map(meta=>{
         const s=backing(meta.id),selected=meta.id===id;
-        const info=selected?summaryOf(engine.state):storedSummary(s,meta.id,nextCache,budget);
+        const info=selected?{...summaryOf(engine.state),sizeBytes:bytes(JSON.stringify(engine.state))}:storedSummary(s,meta.id,nextCache,budget);
         return {...meta,...info,selected,temporary:!durable||s===temp};
       });
       headers=nextCache;
@@ -264,9 +264,9 @@
         return fail('The local saved-world collection is unavailable.');
       });
     }
-    function uniqueName(input) {
+    function uniqueName(input,ignoreSlot=null) {
       const original=cleanName(input)||'Untitled world';
-      const used=new Set(entries().map(m=>m.name.toLocaleLowerCase()));
+      const used=new Set(entries().filter(m=>m.id!==ignoreSlot).map(m=>m.name.toLocaleLowerCase()));
       let n=1,label=original;
       while(used.has(label.toLocaleLowerCase())){
         const suffix=' ('+(++n)+')';
@@ -322,6 +322,48 @@
       });
     }
     function select(slot){return serial(()=>validId(slot)?activate(slot,true):fail('Unknown saved world.'));}
+    function rename(slot,nextName){
+      return serial(()=>{
+        if(slot===FIRST)return fail('The first world keeps its original name.');
+        if(!validId(slot))return fail('Unknown saved world.');
+        const cleaned=cleanName(nextName);
+        if(!cleaned)return fail('Enter a name for this saved world.');
+        const source=availableStore(slot),meta=metadata(source,slot);
+        if(!source||!meta)return fail('That saved world is no longer on this device.');
+        const label=uniqueName(cleaned,slot);
+        const updated=JSON.stringify({version:1,id:slot,name:label,created:meta.created});
+        if(!put(source,REGISTRY+slot,updated))return fail('Could not rename this saved world in browser storage.');
+        notifyViews();
+        return ok('Renamed world to '+label+'.',{id:slot,name:label});
+      });
+    }
+    function remove(slot){
+      return serial(async()=>{
+        if(slot===FIRST)return fail('The first world cannot be removed.');
+        if(!validId(slot))return fail('Unknown saved world.');
+        const source=availableStore(slot),meta=metadata(source,slot);
+        if(!source||!meta)return fail('That saved world is no longer on this device.');
+        if(slot===id){
+          const switched=activate(FIRST,true);
+          if(!switched.ok)return switched;
+        }
+        for(const store of [durable,temp]){
+          if(!store)continue;
+          try{store.removeItem(REGISTRY+slot);}catch{}
+          try{store.removeItem(dataKey(slot));}catch{}
+          const nat=window.EarthWorldStorage?.nativeOf?.(store);
+          if(nat&&nat!==store){
+            try{nat.removeItem(REGISTRY+slot);}catch{}
+            try{nat.removeItem(dataKey(slot));}catch{}
+          }
+        }
+        retained.delete(slot);
+        headers.delete(slot);
+        await chronicle?.clearSlot?.(slot);
+        notifyViews();
+        return ok('Removed '+meta.name+'.',{id:slot});
+      });
+    }
     function timeAccess(siteId){
       return !!window.EarthCommunityLife?.lookup(engine.state,siteId)?.militaryBase?.tech.includes('time');
     }
@@ -390,7 +432,7 @@
       window.removeEventListener?.('storage',onStore);
     }
     sim.destroy=dispose;
-    const book={sim,list,current,status,create,copy,select,moments,markMoment,rewind,get temporaryMoments(){return chronicle?.temporary;},exportWorld,prepareImport,confirmImport,
+    const book={sim,list,current,status,create,copy,select,rename,remove,moments,markMoment,rewind,get temporaryMoments(){return chronicle?.temporary;},exportWorld,prepareImport,confirmImport,
       cancelImport(){review=null;},watch(fn){views.add(fn);return ()=>views.delete(fn);},
       mount(el,options){return mount(el,book,options);},dispose};
     return book;

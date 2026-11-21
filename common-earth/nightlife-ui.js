@@ -70,6 +70,7 @@
       const list=life.guests(w,site,c).filter(r=>r.venue===selected);
       const guests=list.map(r=>root.EarthPersonas.profile(site,r.id));
       put('leisure-town',site.name);put('venue-type',v.name);put('venue-name',v.sign);put('venue-detail',v.detail);
+      if($('venue-phase'))put('venue-phase',selected==='cafe'?'Open all day · Books & espresso served now':c.night?'Evening session · '+c.label:'Daytime hours · '+c.label);
       for(const [i,b] of [...$('venue-choices').children].entries())b.setAttribute('aria-pressed',String(life.venues[i].id===selected));
       const ctx=$('venue-portrait').getContext('2d');
       if(ctx){ctx.clearRect(0,0,520,330);root.EarthNightlifeArt?.draw(ctx,selected,260,224,71,c.night);}
@@ -215,16 +216,27 @@
       coffeePanel.append(menu);
       host.append(coffeePanel);
     }
+    function updateStationTimer(){
+      const bar=$('station-timer-bar'),wrap=$('station-timer');
+      if(!wrap||!bar)return;
+      if(!match||match.turn>=5){wrap.hidden=true;return;}
+      wrap.hidden=false;
+      const pct=Math.max(0,Math.min(100,100*(1-(performance.now()-match.start)/4000)));
+      bar.style.width=pct.toFixed(1)+'%';
+    }
     function nextSignal(){
       if(!match)return;
       if(match.turn===5){
         $('station-select').disabled=false;
         const rival=match.rival,result=rival?(match.points>rival.points?'You won':match.points===rival.points?'Draw':rival.name+' won'):'Round complete';
         put('station-prompt',result+' · You '+match.points+'/5'+(rival?' · '+rival.name+' '+rival.points+'/5':'')+'.');
-        $('station-pads').hidden=true;$('station-play').hidden=false;return;
+        $('station-pads').hidden=true;$('station-play').hidden=false;
+        if($('station-timer'))$('station-timer').hidden=true;
+        return;
       }
       match.symbol=Math.floor(Math.random()*pads.length);match.start=performance.now();
       put('station-prompt',(match.rival?'Playing '+match.rival.name+' · ':'Solo · ')+'Round '+(match.turn+1)+'/5 · Match '+padNames[match.symbol]+' '+pads[match.symbol]);
+      updateStationTimer();
     }
     for(let i=0;i<pads.length;i++){
       const b=button(pads[i],()=>{
@@ -259,7 +271,7 @@
       }
       const phase=[active?.id,w.dayClock?.origin,c.cycle,c.night,c.rate].join('/');
       if(phase!==phaseKey){phaseKey=phase;doc.dispatchEvent(new Event('earthdaychange'));}
-      if(room.open)paint();
+      if(room.open){paint();updateStationTimer();}
     }
     const timer=root.setInterval(()=>{if(!doc.hidden)tick();},400);
     doc.addEventListener('visibilitychange',()=>{if(!doc.hidden)tick();});tick();

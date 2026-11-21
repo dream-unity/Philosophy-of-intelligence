@@ -658,8 +658,10 @@
     const used=new Set([...(root.EarthPersonas?.porterIds(site)||[]),...(site.agency?.porters||[]),...Object.keys(site.communityLife?.people||{})]);
     const fixed=guestSlots.find(id=>!used.has(id));
     if(fixed)return fixed;
-    for(let n=1;n<=500;n++){
-      const dyn='settler-'+n;
+    const expanded=(site?.freeLand?.buildings?.length||0)>0||(site?.freeLand?.tier||0)>0||(site?.playerHouses?.length||0)>0||(site?.territoryLevel||0)>0;
+    if(!expanded)return null;
+    for(let n=1;n<=400;n++){
+      const dyn='citizen-'+n;
       if(!used.has(dyn))return dyn;
     }
     return null;
@@ -1933,7 +1935,7 @@
             e.relays.every(r=>obj(r)&&ids.has(r.to)&&r.to!==s.id&&r.to!==e.originId&&word(r.carrier)&&int(r.week,e.reported,world.week))))))return false;
       if(c.visitorIncidents!=null&&!int(c.visitorIncidents,0,1000))return false;
       if(c.cluster!=null&&!word(c.cluster)||c.district!=null&&![...land,...water,...founderPurposes].some(d=>d.district===c.district)||c.strain!=null&&!int(c.strain)||c.lastExit!=null&&!int(c.lastExit,1,world.week))return false;
-      const isSettler=id=>/^settler-\d+(?:-[a-z0-9]+)?$/.test(id);
+      const isSettler=id=>/^(?:settler|citizen)-\d+(?:-[a-z0-9]+)?$/.test(id);
       if(!Object.entries(c.away).every(([id,dest])=>(id==='steward'||id==='driver'||walkIds.includes(id)||guestSlots.includes(id)||isSettler(id)||s.residents.some(r=>r.id===id))&&word(dest)))return false;
       for(const [id,p] of Object.entries(c.people)){
         if(!obj(p)||!validProfile(p.profile,id)||id==='steward'&&p.status!=='anchor'||id!=='steward'&&(!(guestSlots.includes(id)||isSettler(id)||(walkIds.includes(id)||id==='driver'||s.residents.some(r=>r.id===id))&&p.originId===s.id&&p.originSlot===id)||!['visitor','member','former'].includes(p.status)||!word(p.originId)||!word(p.originSlot)||!int(p.since,1,world.week)))return false;

@@ -24,8 +24,13 @@
   }
   function supplier(site,kind){
     const slot=kind==='food'||kind==='baskets'?0:kind==='funds'?2:1;
-    const preferred=site.residents[slot];
-    return preferred?.id===actorId(site)?site.residents[(slot+1)%site.residents.length]:preferred;
+    const actor=actorId(site);
+    const list=site.residents||[];
+    const preferred=list[slot];
+    if(preferred&&preferred.id!==actor)return preferred;
+    const others=list.filter(r=>r&&r.id!==actor);
+    if(!others.length)return null;
+    return others[slot%others.length];
   }
   function secondsLeft(ticket,now){
     const duration=ticket.helper?Math.min(4,jobs[ticket.kind].seconds):jobs[ticket.kind].seconds;

@@ -528,12 +528,228 @@
     c.fillStyle='#eb6b38';c.fill();
     c.restore();
   }
-  function airborneJet(c,sx,sy,size,heading=0){
-    if(!(size>0))return;
-    c.save();c.translate(sx,sy);c.scale(size,size);c.lineCap='round';c.lineJoin='round';
-    const p=brushes(c);
-    jet(p,0,0,0,1,true);
+  function airborneJet(c,sx,sy,unit,altitude=4.6,heading=0,night=false){
+    if(!(unit>0))return;
+    const alt=Math.max(1.8,altitude);
+    const liftY=alt*unit*0.68;
+    const shadowX=sx+alt*unit*0.38,shadowY=sy+alt*unit*0.18;
+    // Project heading into isometric screen angle
+    const screenAngle=Math.atan2(Math.sin(heading)*0.55+Math.cos(heading)*0.45,Math.cos(heading)-Math.sin(heading));
+    const scale=Math.max(0.55,unit*0.042);
+
+    // 1. Ground shadow cast far beneath the high-flying jet
+    c.save();
+    c.translate(shadowX,shadowY);
+    c.rotate(screenAngle);
+    c.scale(scale*0.82,scale*0.42);
+    c.fillStyle=night?'rgba(6,14,18,0.22)':'rgba(18,32,36,0.24)';
+    c.beginPath();
+    c.moveTo(22,0);c.lineTo(4,-5);c.lineTo(-8,-22);c.lineTo(-14,-20);c.lineTo(-10,-5);
+    c.lineTo(-18,-10);c.lineTo(-21,-8);c.lineTo(-17,0);c.lineTo(-21,8);c.lineTo(-18,10);
+    c.lineTo(-10,5);c.lineTo(-14,20);c.lineTo(-8,22);c.lineTo(4,5);c.closePath();
+    c.fill();
     c.restore();
+
+    // 2. High-altitude fighter jet body, contrails, and twin afterburners
+    c.save();
+    c.translate(sx,sy-liftY);
+    c.rotate(screenAngle);
+    c.scale(scale,scale);
+    c.lineCap='round';c.lineJoin='round';
+
+    // Wingtip contrails trailing behind
+    const trailGrad=c.createLinearGradient(-12,0,-68,0);
+    trailGrad.addColorStop(0,night?'rgba(210,235,255,0.42)':'rgba(255,255,255,0.52)');
+    trailGrad.addColorStop(1,'rgba(255,255,255,0)');
+    c.strokeStyle=trailGrad;c.lineWidth=2.6;
+    c.beginPath();c.moveTo(-12,-21);c.lineTo(-68,-21);c.moveTo(-12,21);c.lineTo(-68,21);c.stroke();
+
+    // Twin supersonic afterburner flames
+    c.fillStyle='#ff8a36';
+    c.beginPath();c.moveTo(-16,-3.2);c.lineTo(-31,-2.2);c.lineTo(-16,-1.1);c.closePath();c.fill();
+    c.beginPath();c.moveTo(-16,1.1);c.lineTo(-31,2.2);c.lineTo(-16,3.2);c.closePath();c.fill();
+    c.fillStyle='#fff2b2';
+    c.beginPath();c.moveTo(-16,-2.6);c.lineTo(-24,-2.1);c.lineTo(-16,-1.6);c.closePath();c.fill();
+    c.beginPath();c.moveTo(-16,1.6);c.lineTo(-24,2.1);c.lineTo(-16,2.6);c.closePath();c.fill();
+
+    // Swept delta wings
+    c.fillStyle=night?'#6e8392':'#8da1ae';
+    c.strokeStyle='#2c3b44';c.lineWidth=1.1;
+    c.beginPath();
+    c.moveTo(6,-3.5);c.lineTo(-9,-22);c.lineTo(-15,-20.5);c.lineTo(-11,-4);
+    c.lineTo(-11,4);c.lineTo(-15,20.5);c.lineTo(-9,22);c.lineTo(6,3.5);c.closePath();
+    c.fill();c.stroke();
+
+    // Tailplanes
+    c.fillStyle=night?'#5e717e':'#7b909d';
+    c.beginPath();
+    c.moveTo(-11,-3);c.lineTo(-19,-11);c.lineTo(-22,-9);c.lineTo(-17,-2);
+    c.lineTo(-17,2);c.lineTo(-22,9);c.lineTo(-19,11);c.lineTo(-11,3);c.closePath();
+    c.fill();c.stroke();
+
+    // Sleek fuselage & nose cone
+    c.fillStyle=night?'#95aab7':'#c2d1d9';
+    c.beginPath();
+    c.moveTo(24,0);c.lineTo(13,-3.6);c.lineTo(-17,-3.6);c.lineTo(-17,3.6);c.lineTo(13,3.6);c.closePath();
+    c.fill();c.stroke();
+
+    // Gold/cyan tactical stripe & cockpit canopy
+    c.fillStyle='#e5c16c';c.fillRect(-5,-14,2.4,28);
+    c.fillStyle=night?'#6ee3ff':'#2f5b72';
+    c.beginPath();c.ellipse(9,0,6.2,2.1,0,0,Math.PI*2);c.fill();
+    c.fillStyle='rgba(255,255,255,0.55)';
+    c.beginPath();c.ellipse(10.5,-0.5,2.8,0.8,0,0,Math.PI*2);c.fill();
+
+    c.restore();
+  }
+  function drawAirfield(ctx,screen,unit,state={}){
+    const rw=root.EarthMilitaryBase?.runway||{x:37.6,yStart:0,yEnd:24,width:2.8};
+    const comp=root.EarthMilitaryBase?.compound||{x1:29.2,y1:8.6,x2:35.2,y2:15.4};
+    const hw=rw.width/2,night=Boolean(state.night||state.evening),time=state.time||0;
+    const poly=(pts,fill,stroke,lw=1)=>{
+      ctx.beginPath();
+      pts.forEach(([x,y,z=0],i)=>{const p=screen(x,y,z);if(i)ctx.lineTo(p.x,p.y);else ctx.moveTo(p.x,p.y);});
+      ctx.closePath();
+      if(fill){ctx.fillStyle=fill;ctx.fill();}
+      if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke();}
+    };
+    const line=(a,b,color,w,dash)=>{
+      const pa=screen(a[0],a[1],a[2]||0),pb=screen(b[0],b[1],b[2]||0);
+      ctx.save();if(dash)ctx.setLineDash(dash);
+      ctx.strokeStyle=color;ctx.lineWidth=w;ctx.lineCap='butt';
+      ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke();ctx.restore();
+    };
+    // 1. Paved military access road from town east gate (24.6, 12) to base entrance (29.5, 12)
+    poly([[24.6,10.95],[29.5,10.95],[29.5,13.05],[24.6,13.05]],'#6d7169');
+    line([24.9,12],[29.1,12],'rgba(235,222,188,.55)',Math.max(1,unit*.045),[Math.max(4,unit*.25),Math.max(4,unit*.25)]);
+    // 2. Concrete perimeter clearance pad around base compound & airfield apron
+    poly([[comp.x1-.5,comp.y1-.5],[rw.x+hw+1.1,comp.y1-.5],[rw.x+hw+1.1,comp.y2+.5],[comp.x1-.5,comp.y2+.5]],'#7f877f');
+    // 3. Taxiways connecting base apron to runway center and south hold pad
+    poly([[34.4,10.8],[rw.x-hw+.15,10.8],[rw.x-hw+.15,13.2],[34.4,13.2]],'#545c5c');
+    line([34.5,12],[rw.x-hw+.05,12],'#d8ba68',Math.max(1.2,unit*.055));
+    poly([[34.8,20.2],[rw.x-hw+.15,20.2],[rw.x-hw+.15,22.4],[34.8,22.4]],'#545c5c');
+    line([35.0,21.3],[rw.x-hw+.05,21.3],'#d8ba68',Math.max(1.2,unit*.055));
+    // 4. Long 24-unit Runway shoulder & dark asphalt tarmac
+    poly([[rw.x-hw-.45,rw.yStart-1.2],[rw.x+hw+.45,rw.yStart-1.2],[rw.x+hw+.45,rw.yEnd+1.2],[rw.x-hw-.45,rw.yEnd+1.2]],'#6b726e');
+    poly([[rw.x-hw,rw.yStart],[rw.x+hw,rw.yStart],[rw.x+hw,rw.yEnd],[rw.x-hw,rw.yEnd]],'#3c4347','#8b938e',Math.max(1,unit*.04));
+    // Blast pad yellow chevrons at north & south thresholds
+    for(const endY of [rw.yStart-.6,rw.yEnd+.6]){
+      line([rw.x-hw*.7,endY],[rw.x,endY+(endY<rw.yStart?.35:-.35)],'#d4b65c',Math.max(1.2,unit*.05));
+      line([rw.x+hw*.7,endY],[rw.x,endY+(endY<rw.yStart?.35:-.35)],'#d4b65c',Math.max(1.2,unit*.05));
+    }
+    // Threshold zebra stripes
+    for(const y0 of [rw.yStart+.5,rw.yEnd-2.1]){
+      for(let i=-3;i<=3;i++){
+        if(i===0)continue;
+        const sx=rw.x+i*(hw*.26);
+        line([sx,y0],[sx,y0+1.55],'rgba(244,240,228,.85)',Math.max(1.4,unit*.06));
+      }
+    }
+    // Side edge lines & dashed white centerline along full 24-unit runway
+    line([rw.x-hw+.16,rw.yStart+.2],[rw.x-hw+.16,rw.yEnd-.2],'rgba(240,236,225,.7)',Math.max(1,unit*.035));
+    line([rw.x+hw-.16,rw.yStart+.2],[rw.x+hw-.16,rw.yEnd-.2],'rgba(240,236,225,.7)',Math.max(1,unit*.035));
+    for(let y=rw.yStart+2.6;y<rw.yEnd-2.8;y+=2.0){
+      line([rw.x,y],[rw.x,Math.min(rw.yEnd-2.6,y+1.1)],'rgba(248,244,232,.9)',Math.max(1.6,unit*.07));
+    }
+    // Runway edge lights
+    for(let y=rw.yStart;y<=rw.yEnd;y+=2.4){
+      const end=y<=rw.yStart+.5||y>=rw.yEnd-.5;
+      for(const sx of [rw.x-hw-.22,rw.x+hw+.22]){
+        const lp=screen(sx,y,.08);
+        ctx.fillStyle=end?(y<12?'#65e095':'#ef6d5b'):(night?'#ffeaad':'#d4d9cf');
+        ctx.beginPath();ctx.arc(lp.x,lp.y,Math.max(1.6,unit*(night?.09:.055)),0,Math.PI*2);ctx.fill();
+        if(night){
+          ctx.fillStyle=end?'rgba(239,109,91,.28)':'rgba(255,232,165,.24)';
+          ctx.beginPath();ctx.arc(lp.x,lp.y,Math.max(3.8,unit*.22),0,Math.PI*2);ctx.fill();
+        }
+      }
+    }
+    // Windsock pole beside runway midpoint
+    const poleBase=screen(rw.x-hw-.95,8.2,0),poleTop=screen(rw.x-hw-.95,8.2,1.1);
+    ctx.strokeStyle='#c9cfc6';ctx.lineWidth=Math.max(1.2,unit*.045);
+    ctx.beginPath();ctx.moveTo(poleBase.x,poleBase.y);ctx.lineTo(poleTop.x,poleTop.y);ctx.stroke();
+    const flutter=Math.sin(time*4)*.12*unit;
+    ctx.fillStyle='#e06b42';
+    ctx.beginPath();ctx.moveTo(poleTop.x,poleTop.y);ctx.lineTo(poleTop.x+unit*.42,poleTop.y-unit*.06+flutter);ctx.lineTo(poleTop.x+unit*.38,poleTop.y+unit*.12+flutter);ctx.lineTo(poleTop.x,poleTop.y+unit*.11);ctx.closePath();ctx.fill();
+    // Parked fighter jet ready on south runway hold pad when owned and none is airborne
+    if(state.hasJet&&!state.jetAirborne){
+      drawFlyingJet(ctx,screen,unit,{x:rw.x,y:rw.yEnd-2.8,z:0,heading:-Math.PI/2,bank:0,throttle:0,trail:[]},time);
+    }
+  }
+  function drawFlyingJet(ctx,screen,unit,jetState,time=0){
+    const z=Math.max(0,jetState.z||0);
+    const heading=jetState.heading??-Math.PI/2;
+    const bank=jetState.bank||0;
+    const throttle=jetState.throttle||0;
+    if(Array.isArray(jetState.trail)&&jetState.trail.length>1){
+      ctx.save();ctx.lineCap='round';
+      for(let i=1;i<jetState.trail.length;i++){
+        const a=jetState.trail[i-1],b=jetState.trail[i];
+        const pa=screen(a.x,a.y,a.z),pb=screen(b.x,b.y,b.z);
+        const alpha=(i/jetState.trail.length)*0.48;
+        ctx.strokeStyle='rgba(244,248,252,'+alpha.toFixed(3)+')';
+        ctx.lineWidth=Math.max(1.2,unit*(0.05+0.12*(1-i/jetState.trail.length)));
+        ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke();
+      }
+      ctx.restore();
+    }
+    const shadowPos=screen(jetState.x+z*0.58,jetState.y+z*0.42,0);
+    const pos=screen(jetState.x,jetState.y,z);
+    const ahead=screen(jetState.x+Math.cos(heading),jetState.y+Math.sin(heading),z);
+    const ang=Math.atan2(ahead.y-pos.y,ahead.x-pos.x);
+    const airScale=1+Math.min(0.45,z*0.065);
+    const s=Math.max(14,unit*1.12*airScale);
+
+    ctx.save();
+    ctx.translate(shadowPos.x,shadowPos.y);
+    ctx.rotate(ang);
+    ctx.scale(Math.max(0.55,1-z*0.05),Math.max(0.42,0.75-z*0.04));
+    ctx.fillStyle='rgba(16,24,22,'+Math.max(0.14,0.34-z*0.025).toFixed(3)+')';
+    ctx.beginPath();
+    ctx.moveTo(s*0.95,0);ctx.lineTo(s*0.18,-s*0.18);ctx.lineTo(-s*0.28,-s*0.78);ctx.lineTo(-s*0.56,-s*0.72);
+    ctx.lineTo(-s*0.36,-s*0.18);ctx.lineTo(-s*0.82,-s*0.32);ctx.lineTo(-s*0.92,-s*0.12);ctx.lineTo(-s*0.92,s*0.12);
+    ctx.lineTo(-s*0.82,s*0.32);ctx.lineTo(-s*0.36,s*0.18);ctx.lineTo(-s*0.56,s*0.72);ctx.lineTo(-s*0.28,s*0.78);
+    ctx.lineTo(s*0.18,s*0.18);ctx.closePath();ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(pos.x,pos.y);
+    ctx.rotate(ang);
+    ctx.scale(1,1-Math.min(0.32,Math.abs(bank)*0.35));
+    if(throttle>0.15){
+      const flicker=0.82+Math.sin(time*48)*0.18;
+      const flame=s*(0.35+throttle*0.58)*flicker;
+      for(const ey of [-s*0.10,s*0.10]){
+        ctx.fillStyle='rgba(255,136,42,.82)';
+        ctx.beginPath();ctx.moveTo(-s*0.84,ey-s*0.055);ctx.lineTo(-s*0.84-flame,ey);ctx.lineTo(-s*0.84,ey+s*0.055);ctx.closePath();ctx.fill();
+        ctx.fillStyle='rgba(170,235,255,.92)';
+        ctx.beginPath();ctx.moveTo(-s*0.84,ey-s*0.028);ctx.lineTo(-s*0.84-flame*0.52,ey);ctx.lineTo(-s*0.84,ey+s*0.028);ctx.closePath();ctx.fill();
+      }
+    }
+    ctx.fillStyle='#6c7c85';ctx.strokeStyle='#2c3940';ctx.lineWidth=Math.max(1,s*0.028);
+    ctx.beginPath();
+    ctx.moveTo(s*0.24,-s*0.14);ctx.lineTo(-s*0.22,-s*0.86);ctx.lineTo(-s*0.52,-s*0.80);ctx.lineTo(-s*0.36,-s*0.14);
+    ctx.lineTo(-s*0.36,s*0.14);ctx.lineTo(-s*0.52,s*0.80);ctx.lineTo(-s*0.22,s*0.86);ctx.lineTo(s*0.24,s*0.14);
+    ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#d9b968';
+    ctx.fillRect(-s*0.38,-s*0.58,s*0.12,s*0.06);
+    ctx.fillRect(-s*0.38,s*0.52,s*0.12,s*0.06);
+    ctx.fillStyle='#5c6c75';
+    ctx.beginPath();
+    ctx.moveTo(-s*0.52,-s*0.13);ctx.lineTo(-s*0.78,-s*0.38);ctx.lineTo(-s*0.92,-s*0.32);ctx.lineTo(-s*0.84,-s*0.12);
+    ctx.lineTo(-s*0.84,s*0.12);ctx.lineTo(-s*0.92,s*0.32);ctx.lineTo(-s*0.78,s*0.38);ctx.lineTo(-s*0.52,s*0.13);
+    ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#8c9ba3';
+    ctx.beginPath();
+    ctx.moveTo(s*1.04,0);ctx.lineTo(s*0.42,-s*0.15);ctx.lineTo(-s*0.86,-s*0.16);ctx.lineTo(-s*0.90,0);
+    ctx.lineTo(-s*0.86,s*0.16);ctx.lineTo(s*0.42,s*0.15);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#b8c5cb';
+    ctx.beginPath();ctx.moveTo(s*0.76,0);ctx.lineTo(s*0.32,-s*0.06);ctx.lineTo(-s*0.72,-s*0.06);ctx.lineTo(-s*0.72,s*0.06);ctx.lineTo(s*0.32,s*0.06);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#2a5f78';
+    ctx.beginPath();ctx.ellipse(s*0.36,0,s*0.24,s*0.085,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#8adbf2';
+    ctx.beginPath();ctx.ellipse(s*0.40,-s*0.025,s*0.11,s*0.032,0,0,Math.PI*2);ctx.fill();
+    ctx.restore();
   }
   function inventory(ctx,sx,sy,unit,types){
     for(const kind of types){
@@ -542,5 +758,5 @@
       marker(ctx,sx+(x-y)*unit,sy+((x+y)*.51-.11)*unit,unit*(air?.93:.87),kind);
     }
   }
-  root.EarthBaseArt=Object.freeze({draw,drawRunway,airborneJet,marker,inventory,soldier,truck});
+  root.EarthBaseArt=Object.freeze({draw,drawRunway,drawAirfield,drawFlyingJet,airborneJet,marker,inventory,soldier,truck});
 })(globalThis);

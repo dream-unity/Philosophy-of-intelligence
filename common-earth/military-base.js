@@ -37,7 +37,7 @@
   function pay(w,s,cost){
     if(!affordable(w,s,cost))return false;
     // Procurement pays a local contractor (including any present resident or steward fallback).
-    const allPresent=[...(s.residents||[]),...(root.EarthDistrictGrowth?.members?.(s)||[])].filter((p,i,arr)=>p&&root.EarthCommunityLife.present(s,p.id)&&arr.findIndex(x=>x.id===p.id)===i);
+    const allPresent=[...(s.residents||[]),...(root.EarthDistrictGrowth?.members?.(s)||[]),...(root.EarthPersonas?.list?.(s)||[])].filter((p,i,arr)=>p&&root.EarthCommunityLife.present(s,p.id)&&arr.findIndex(x=>x.id===p.id)===i);
     const offset=(view(s).version||0)%Math.max(1,allPresent.length);
     for(let i=0;i<allPresent.length;i++){
       const p=allPresent[(i+offset)%allPresent.length];

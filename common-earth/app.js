@@ -2035,7 +2035,19 @@
       filter.replaceChildren(...choices.map(([id,name])=>{const o=node('option','',name);o.value=id;return o;}));
     }
     filter.value=journalFilter;
-    const entries=sim.state.journal.filter(e=>journalFilter==='all'||e.siteId===journalFilter);
+    const query=($('journal-search')?.value||'').trim().toLowerCase();
+    const cat=journalCategory||'all';
+    const matchesCat=text=>{
+      if(cat==='all')return true;
+      const t=String(text||'').toLowerCase();
+      if(cat==='build')return /build|house|built|construct|plot|territo|wall|stable|runway/.test(t);
+      if(cat==='trade')return /trade|fund|market|coffee|price|shipment|route|merchant/.test(t);
+      if(cat==='military')return /base|jet|tank|guard|scout|strike|mission|dragon|expedition/.test(t);
+      if(cat==='people')return /resident|import|arrived|joined|promise|book|cafe|council/.test(t);
+      return true;
+    };
+    const entries=sim.state.journal.filter(e=>(journalFilter==='all'||e.siteId===journalFilter)&&matchesCat(e.text)&&(!query||String(e.text||'').toLowerCase().includes(query)));
+    if($('journal-count'))$('journal-count').textContent=entries.length+' event'+(entries.length===1?'':'s');
     $('journal-list').replaceChildren(...entries.slice(0,journalLimit).map(entry=>{
       const e=node('li','journal-entry');
       const place=sim.state.sites.find(s=>s.id===entry.siteId);
@@ -2044,6 +2056,15 @@
     if(!entries.length)$('journal-list').append(node('li','empty-state','No events recorded here yet.'));
     show('earlier-events',entries.length>journalLimit);
   }
+  let journalCategory='all';
+  listen('journal-search','input',()=>{journalLimit=20;renderRecords();});
+  listen('journal-categories','click',e=>{
+    const b=e.target.closest('[data-journal-cat]');
+    if(!b)return;
+    journalCategory=b.dataset.journalCat;
+    for(const btn of controls($('journal-categories'),'[data-journal-cat]'))btn.setAttribute('aria-pressed',String(btn===b));
+    journalLimit=20;renderRecords();
+  });
   listen('records-views','click',e=>{
     const b=e.target.closest('[data-records]');if(b){recordsPage=b.dataset.records;renderRecords();}
   });

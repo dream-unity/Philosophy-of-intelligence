@@ -77,6 +77,9 @@
       const point=root.EarthConstruction?.streetPoint?.({scope:'street',plot:b.plot})||{x:12,y:12};
       add(homeKey('lothouse',b.plot),b.name||('Community House on lot '+(b.plot+1)),4,point);
     }
+    for(const fh of root.EarthFreeLand?.housingPlaces?.(site)||[]){
+      add(fh.key,fh.label,fh.places,fh.point);
+    }
     return {homes,works};
   }
   const remaining=h=>h.places-h.occupants.length-h.anonymous-h.reserved.length;
@@ -471,7 +474,7 @@
       return house&&house.ownerId===c.id&&house.stage>=1&&house.stage<3&&c.wages===3-house.stage&&c.materials===c.wages&&
         guest?.profile?.identityKey===c.key&&(['visitor','member'].includes(guest.status)||c.id==='steward'&&guest.status==='anchor');
     })||new Set(h.contracts.map(c=>c.plot)).size!==h.contracts.length))return false;
-    return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage|player|lothouse)-\d{1,4})$/.test(r.home))&&
+    return integer(h.week,0,week)&&list(h.rights,r=>r&&text(r.key)&&typeof r.home==='string'&&/^(founding-(?:[0-9]|1[0-7])|precinct-[0-5]|private-[0-5]|(?:guest|property|cottage|player|lothouse|free)-\d{1,5})$/.test(r.home))&&
       list(h.hardship,r=>r&&text(r.id)&&text(r.key)&&integer(r.weeks,0,week)&&integer(r.strain,0,20)&&(r.crisis==null||integer(r.crisis,1,week))&&(r.withoutMeals==null||integer(r.withoutMeals,0,20))&&typeof r.help==='string'&&r.help.length<=650)&&
       !h.hardship.some(r=>h.rights.some(a=>r.key===a.key));
   }

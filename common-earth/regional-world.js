@@ -277,7 +277,8 @@
   }
   function streetExtent(site){
     const growth=site.growth,rows=growth?.households||[],cached=streetsByTown.get(site);
-    const tLevel=site.territoryLevel||0,extraCount=(site.freeBuildings?.length||0)+(site.playerHouses?.length||0);
+    const tLevel=Math.max(site.territoryLevel||0,site.freeLand?.tier||0);
+    const extraCount=(site.freeBuildings?.length||0)+(site.playerHouses?.length||0)+(site.freeLand?.buildings?.length||0);
     if(cached&&cached.round===growth?.round&&cached.count===rows.length&&cached.tLevel===tLevel&&cached.extraCount===extraCount)return cached;
     const plots=[],model=root.EarthDistrictGrowth;
     let radius=.52;
@@ -287,12 +288,17 @@
       radius=Math.max(radius,(Math.max(Math.abs(p.x-p.y),Math.abs(p.x+p.y-24))+5)*streetKilometres);
     }
     const mbLayout=root.EarthMilitaryBase?.layoutFor?.(site);
-    add(mbLayout?.place||root.EarthMilitaryBase?.place);
-    if(mbLayout?.runway){
-      add({x:mbLayout.runway.x,y:mbLayout.runway.startY});
-      add({x:mbLayout.runway.x,y:mbLayout.runway.y});
-      add({x:mbLayout.runway.x,y:mbLayout.runway.endY});
+    add({x:27,y:12});
+    if(tLevel>0){
+      add(mbLayout?.place||root.EarthMilitaryBase?.place);
+      const rw=mbLayout?.runway||root.EarthMilitaryBase?.runway;
+      if(rw){
+        add({x:rw.x,y:rw.yStart??rw.startY??0});
+        add({x:rw.x,y:12});
+        add({x:rw.x,y:rw.yEnd??rw.endY??24});
+      }
     }
+    for(const fb of site.freeLand?.buildings||[])add({x:fb.x,y:fb.y});
     for(const fb of site.freeBuildings||[])add({x:fb.x,y:fb.y});
     for(const ph of site.playerHouses||[])add({x:ph.x,y:ph.y});
     for(const h of rows){
@@ -310,11 +316,11 @@
       const {radius,plots,tLevel}=streetExtent(t.site),dx=x-t.x,dy=y-t.y;
       if(Math.abs(dx)>radius||Math.abs(dy)>radius)continue;
       const sx=12+(dx-dy)/(2*streetKilometres),sy=12-(dx+dy)/(2*streetKilometres);
-      // Streets, their roads, expanded perimeter grounds, and occupied buildings have a
-      // physical footprint. The town's jurisdiction can extend beyond it.
       const expand=(tLevel||0)*6;
-      const streets=sx>=-7.5-expand&&sx<=27.5+expand&&sy>=-7.5-expand&&sy<=25.2+(t.site.waterfront?0:2.3+expand);
-      if(!streets&&!plots.some(p=>Math.abs(sx-p.x)<=2.2&&Math.abs(sy-p.y)<=2.2))continue;
+      const streets=tLevel>0
+        ? sx>=-7.5-expand&&sx<=27.5+expand&&sy>=-7.5-expand&&sy<=25.2+(t.site.waterfront?0:2.3+expand)
+        : sx>=-1.8&&sx<=25.8&&sy>=-1.8&&sy<=25.2;
+      if(!streets&&!plots.some(p=>Math.abs(sx-p.x)<=1.8&&Math.abs(sy-p.y)<=1.8))continue;
       const d=dx*dx+dy*dy;if(d<best){best=d;nearest=t;}
     }
     return nearest;

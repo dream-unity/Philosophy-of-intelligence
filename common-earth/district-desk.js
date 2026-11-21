@@ -472,10 +472,30 @@
         if(row.activity.textContent!==text)row.activity.textContent=text;
       }
     }
+    let peopleQuery='';
+    const peopleFilterHost=$('scene-people-filter');
+    let peopleSearch=null,peopleCount=null;
+    if(peopleFilterHost){
+      peopleSearch=doc.createElement('input');
+      peopleSearch.id='scene-people-search';
+      peopleSearch.type='search';
+      peopleSearch.placeholder='Filter residents by name or role';
+      peopleSearch.autocomplete='off';
+      peopleSearch.setAttribute('aria-label','Filter residents by name or role');
+      peopleCount=el('small',null,'people-count');
+      peopleCount.id='scene-people-count';
+      peopleSearch.addEventListener('input',()=>{peopleQuery=peopleSearch.value.trim().toLowerCase();people();});
+      peopleFilterHost.replaceChildren(peopleSearch,peopleCount);
+    }
     function people(){
       clearInterval(peopleTimer);
       const site=sim.active(),world=sim.state,me=root.EarthAgency.actorId(site),host=$('scene-resident-list');
-      const rows=root.EarthPersonas.list(site),focus=doc.activeElement?.dataset.personCommand;
+      const allRows=root.EarthPersonas.list(site),focus=doc.activeElement?.dataset.personCommand;
+      const rows=peopleQuery?allRows.filter(p=>{
+        const role=(root.EarthCareers.role(site,p.id)||p.role||'').toLowerCase();
+        return p.name.toLowerCase().includes(peopleQuery)||role.includes(peopleQuery);
+      }):allRows;
+      if(peopleCount)peopleCount.textContent=peopleQuery?rows.length+' of '+allRows.length+' residents':allRows.length+' residents';
       peopleRows=[];
       const articles=rows.map(p=>{
         const row=el('article',null,'resident-directory-row'),isMe=p.id===me;
