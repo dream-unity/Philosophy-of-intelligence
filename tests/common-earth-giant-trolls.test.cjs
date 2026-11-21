@@ -318,6 +318,33 @@ test('Autonomous dragons aggressively torch and repel hostile rival war expediti
   assert.equal(peaceful.population, 20, 'Peaceful foreign community remains completely untouched');
 });
 
+test('Every community starts with a pre-built Dragon Stable at founding so players can summon a protector dragon immediately before Giant Trolls arrive', async () => {
+  const ctx = loadSimEnv();
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Stone Town', region: 'Zanzibar', lat: -6.1622, lon: 39.1922, water: false });
+  const site = sim.active();
+
+  // Dragon Stable must already exist right at community founding without calling buildFreeBuilding
+  assert.equal(ctx.EarthDragonStable.hasStable(site), true, 'Newly founded community must start with a Dragon Stable');
+  assert.equal(site.dragonStable.built, true, 'Starting dragonStable state must be marked built');
+  const stableEntry = (site.freeBuildings || []).find(fb => fb.kind === 'dragonStable');
+  assert.ok(stableEntry, 'Starting Dragon Stable must be placed in site.freeBuildings');
+  assert.ok(Number.isFinite(stableEntry.x) && Number.isFinite(stableEntry.y), 'Starting Dragon Stable must have valid coordinates');
+
+  // With default starting resources alone (no resource cheats, no Wizards), player can IMMEDIATELY summon a protector dragon on Week 1!
+  const summoned = await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'solar', name: 'Dawnwing' });
+  assert.equal(summoned.ok, true, `Player must be able to summon a dragon immediately at game start: ${summoned.message}`);
+  assert.equal(site.dragonStable.dragons.length, 1);
+  assert.equal(site.dragonStable.dragons[0].name, 'Dawnwing');
+
+  // The summoned dragon autonomously scrambles & kills approaching Giant Trolls with zero Wizards
+  for (let step = 0; step < 120; step++) {
+    ctx.EarthDragonStable.stepAutonomousDefenders(sim.state, site, 0.25, { time: step * 0.25 });
+    if (ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length === 0) break;
+  }
+  assert.equal(ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length, 0, 'Day-one dragon must intercept and destroy approaching Giant Trolls before they destroy the community');
+});
+
 test('Saves containing trollHorde validate cleanly and index.html loads updated giant troll assets with valid SHA-256 hashes', async () => {
   const ctx = loadSimEnv();
   const sim = ctx.CommonEarthSim.create({ storage: null });
@@ -333,3 +360,4 @@ test('Saves containing trollHorde validate cleanly and index.html loads updated 
   assert.ok(html.includes('id="troll-track-btn"'));
   assert.ok(html.includes('id="troll-repair-btn"'));
 });
+

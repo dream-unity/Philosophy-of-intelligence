@@ -1967,7 +1967,9 @@
       const ds=DS?.hasStable?.(site)?DS.ensure(site):null;
       dragBtn.textContent=(ds&&ds.dragons.length&&ds.wizards.length)
         ? `Mount ${ds.dragons[0].name} & Wizard vs Trolls`
-        : 'Dragon Stable (Best vs Trolls)';
+        : (ds&&ds.dragons.length)
+          ? `Dragon Stable (${ds.dragons.length} Defending)`
+          : (ds ? 'Summon Dragon at Stable (Best vs Trolls)' : 'Dragon Stable (Best vs Trolls)');
     }
   }
   function render(options) {

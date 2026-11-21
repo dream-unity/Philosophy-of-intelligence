@@ -239,7 +239,7 @@
       secDragons.append(make('h3', `Enchanted Dragons (${ds.dragons.length})`));
 
       if (!ds.dragons.length) {
-        secDragons.append(make('p', 'No dragons are stabled yet. Summon your first enchanted dragon below!'));
+        secDragons.append(make('p', 'Your Dragon Stable is ready from day one — summon a protector dragon below right away so it can intercept approaching Giant Trolls on its own!'));
       } else {
         let riderSelect;
         if (ds.wizards.length > 1) {

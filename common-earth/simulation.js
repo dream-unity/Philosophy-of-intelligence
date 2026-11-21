@@ -511,6 +511,52 @@
     if(!raw)return null;
     try{return JSON.parse(raw)?.version>VERSION?raw:null;}catch{return null;}
   }
+  function attachStartingDragonStable(site,week=1){
+    if(!site)return;
+    if(site.freeBuildings?.some(fb=>fb?.kind==='dragonStable')||site.buildings?.some(b=>b?.kind==='dragonStable')){
+      if(root.EarthDragonStable?.ensure){
+        const ds=root.EarthDragonStable.ensure(site);
+        if(ds)ds.built=true;
+      }
+      return;
+    }
+    const hasWater=Boolean(waterfront(site));
+    const lvl=site.territoryLevel||0;
+    const fp=root.EarthFlightPhysics;
+    const existingSolids=[
+      ...(site.freeBuildings||[]).map(fb=>[fb.x-1.8,fb.y-1.8,fb.x+1.8,fb.y+1.8]),
+      ...(site.playerHouses||[]).map(ph=>[ph.x-1.5,ph.y-1.5,ph.x+1.5,ph.y+1.5])
+    ];
+    const opts={territoryLevel:lvl,hasWaterfront:hasWater,fortStage:site.communityLife?.border?.defence?.stage||0,existingSolids};
+    let sx=-4.8,sy=6.2;
+    if(fp?.isLandClearForBuilding&&!fp.isLandClearForBuilding(sx,sy,1.65,1.65,opts).ok){
+      const b=fp.perimeterBounds?.(lvl,hasWater)||{minX:-7.5,maxX:27.5,minY:-7.5,maxY:25.15};
+      let found=null;
+      for(let y=b.minY+2.6;y<=b.maxY-2.6&&!found;y+=3.6){
+        for(let x=b.minX+2.6;x<=b.maxX-2.6;x+=3.6){
+          if(fp.isLandClearForBuilding(x,y,1.65,1.65,opts).ok){
+            found={x:Number(x.toFixed(2)),y:Number(y.toFixed(2))};
+            break;
+          }
+        }
+      }
+      if(found){sx=found.x;sy=found.y;}
+    }
+    site.freeBuildings||=[];
+    site.freeBuildings.push({
+      id:'fb-dragonStable-0',
+      kind:'dragonStable',
+      name:BUILDINGS.dragonStable.name,
+      x:sx,
+      y:sy,
+      free:true,
+      builtWeek:Math.max(1,Number(week)||1)
+    });
+    if(root.EarthDragonStable?.ensure){
+      const ds=root.EarthDragonStable.ensure(site);
+      if(ds)ds.built=true;
+    }
+  }
   // The caller owns this detached JSON document. Opening a stored string,
   // reviewing an import and validating a proposed reset share these migrations.
   function migrateDetachedSave(saved){
@@ -560,6 +606,9 @@
       }
       root.EarthRegionalWorld?.reconcileLocations?.(world);
       root.EarthMilitaryBase?.restoreField?.(world);
+      for(const site of [...world.sites,...(world.communityLife?.outposts||[])]){
+        attachStartingDragonStable(site,world.week);
+      }
       if(world.sites.length)root.EarthGiantTrolls?.ensure?.(world);
       return world;
     }catch(e){return null;}
@@ -863,6 +912,7 @@
       }
       root.EarthPersonas?.allocateBirthNames?.(site,[...network.sites,...(network.communityLife?.outposts||[])]);
       root.EarthCityModel?.normalise(site);
+      attachStartingDragonStable(site,network.week);
       return site;
     }
     function manageSite(id,action,generation){
