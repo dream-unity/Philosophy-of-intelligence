@@ -180,10 +180,6 @@
         return {...step,detail:[detail,step.detail].filter(Boolean).join(' ')};
       }
       const task=brief.test===tools?'salvage':brief.test===caretaker?'contract':'forage';
-      if(!sim.state.effort && root.EarthPursuits){
-        const resource=task==='salvage'?'materials':task==='contract'?'funds':'food';
-        return {kind:'personalWork',siteId,resource,label:'Earn '+resource+' before the trial review',detail:detail+' Personal work can add to the stores this week.'};
-      }
       const work=sim.actions('work',siteId).find(a=>a.id==='work:'+task);
       return group('work',work.id,work.label,detail);
     }
@@ -192,10 +188,7 @@
       // A pantry that looks full in Street view can still miss its review.
       const numeric=[tools,caretaker,stocked].includes(brief.test);
       const projected=numeric?projectedSupport(sim,site):undefined;
-      if(!(projected??state.conditionMet)){
-        const backing=prepareBacking();
-        if(sim.state.effort || ['construction','personalWork'].includes(backing.kind))return backing;
-      }
+      if(!(projected??state.conditionMet))return prepareBacking();
       return {kind:'week',siteId,label:'Review the next week',detail:state.title+' is due for review in week '+saved.due+'. '+state.support};
     }
     if(state.phase==='ready' && !state.conditionMet)return prepareBacking();
@@ -252,10 +245,10 @@
     const state=summary(world,site),b=briefs[state.key];
     const addAction=(id,title,description,opts,run)=>add('council','commission:'+id,title,description,{campaign:true,...opts},run);
     if(state.phase==='offered'||state.phase==='declined'){
-      addAction('accept','Take the local commission',b.title+' · Hear '+state.requesters+' and try one practical approach. You choose when to bring it back to Council.',{effort:0},()=>{
+      addAction('accept','Take the local commission',b.title+' · Hear '+state.requesters+' and try one practical approach. You choose when to bring it back to Council.',{},()=>{
         site.commission={key:state.key,phase:'active'};return 'You took up “'+b.title+'”. '+state.milestones[0].detail;
       });
-      if(state.phase==='offered')addAction('decline','Set this commission aside','Continue building freely. You can take up the commission here at any time.',{effort:0},()=>{
+      if(state.phase==='offered')addAction('decline','Set this commission aside','Continue building freely. You can take up the commission here at any time.',{},()=>{
         site.commission={key:state.key,phase:'declined'};return 'Your community set aside “'+b.title+'”. It can reopen the commission in Council.';
       });
       return;
@@ -266,12 +259,12 @@
       const ally=site.residents[t.ally].name;
       const bounded=['trust','wellbeing'].includes(t.resource);
       const terms=t.terms+' Next week’s review brings '+(bounded?'up to ':'')+t.amount+' '+t.resource+' and up to 1 bond with '+ally+'. '+b.support+' Meeting it adds up to 2 trust.';
-      addAction('pilot:'+t.id,t.name,terms,{effort:1,goods:t.cost,gate:gate?'First '+gate.toLowerCase()+'.':''},()=>{
+      addAction('pilot:'+t.id,t.name,terms,{goods:t.cost,gate:gate?'First '+gate.toLowerCase()+'.':''},()=>{
         site.commission={key:state.key,phase:'trial',choice:t.id,due:world.week+1};
         return 'The community chose “'+t.name+'”. Its first handover is reviewed in week '+site.commission.due+'. '+b.support;
       });
     }
-    addAction('pause','Set the commission aside','Return to this decision later. Neighbours remember the work you have already done.',{effort:0},()=>{
+    addAction('pause','Set the commission aside','Return to this decision later. Neighbours remember the work you have already done.',{},()=>{
       site.commission={key:state.key,phase:'declined'};return 'The commission was set aside. Completed work still counts when you return.';
     });
   }

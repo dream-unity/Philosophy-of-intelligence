@@ -126,7 +126,7 @@
       const state=view(world,d),p=get(world,site,d.key),days=p.weeks,deposit=depositFor(state);
       const opt=(verb,title,description,terms,run)=>add('routes','partner:'+d.key+':'+verb,title,description,{partner:true,partnerId:d.key,...terms},()=>run(write(world,d)));
       if(!state.met){
-        opt('meet','Meet '+d.delegate,'Take one effort to hear the '+d.role+' speak for '+d.name+'. “'+d.voice+'”',{},s=>{
+        opt('meet','Meet '+d.delegate,'Hear the '+d.role+' speak for '+d.name+'. “'+d.voice+'”',{},s=>{
           s.met=true;return log(s,world.week,d.delegate+' of '+d.name+' opened talks. “'+d.voice+'” The group offers '+d.exportGood+' and uses '+d.importGood+'.');
         });continue;
       }
@@ -138,7 +138,7 @@
             s.agreement={...pact,phase:'outbound',paid:pact.paid+pact.balance,balance:0,due:world.week+pact.days};
             return log(s,world.week,site.name+' dispatched '+qty(s.agreement.paid,d.importGood)+' to '+d.name+'. The reserved return is due in week '+(world.week+2*pact.days)+'.');
           });
-          opt('release','Release the booking','Give up the deposit and lose one standing. Members regain their reserved '+d.exportGood+'.',{effort:0},s=>release(world,d,s));
+          opt('release','Release the booking','Give up the deposit and lose one standing. Members regain their reserved '+d.exportGood+'.',{},s=>release(world,d,s));
         }
         continue;
       }
@@ -168,14 +168,14 @@
       if(o){
         if(o.kind==='bulk')fixed(4,4,'sign','Sign the larger booking');
         else {fixed(2,3,'sign','Take the smaller guaranteed booking');flexible();}
-        opt('decline','Leave the offer open for another time','Close these talks without cost or loss of standing. A new proposal can be made next week.',{effort:0},s=>{
+        opt('decline','Leave the offer open for another time','Close these talks without cost or loss of standing. A new proposal can be made next week.',{},s=>{
           s.offer=null;s.cooldown=world.week+1;return log(s,world.week,'The talks ended without a booking. '+d.delegate+' will hear a new proposal next week.');
         });continue;
       }
       fixed(2,3,'book','Book a guaranteed return');
       flexible();
       flexible(true);
-      opt('ask','Propose a larger exchange','Ask for '+qty(4,d.exportGood)+' against '+qty(4,d.importGood)+'. The delegate weighs standing and uncommitted stock before consenting. A conversation costs one effort.',{},s=>{
+      opt('ask','Propose a larger exchange','Ask for '+qty(4,d.exportGood)+' against '+qty(4,d.importGood)+'. The delegate weighs standing and uncommitted stock before consenting.',{},s=>{
         const policy=discretionary(d,s,world.week);
         const trusted=s.standing>=2,plenty=s.stock-policy.reserve>=4;
         const approved=trusted&&plenty;

@@ -26,7 +26,7 @@ function snapshot(sim) {
   return JSON.parse(JSON.stringify(sim.state));
 }
 
-test('leaving an unworked day restores exactly the reserved effort once, including earlier saves', () => {
+test('leaving an unworked day frees the resident and district, including earlier saves', () => {
   const sim = simulation();
   const id = sim.active().residents[0].id;
   ok(sim.beginShift(id));
@@ -39,17 +39,16 @@ test('leaving an unworked day restores exactly the reserved effort once, includi
   saved.sites[0].residents[0].lastShiftWeek = saved.week;
   const restored = simulation(saved);
   const funds = restored.active().funds;
-  const effort = restored.state.effort;
   ok(restored.finishShift());
-  assert.equal(restored.state.effort, effort + 1);
+  assert.equal(restored.state.effort, undefined);
   assert.equal(restored.active().funds, funds);
   assert.equal(restored.finishShift().ok, false);
-  assert.equal(restored.state.effort, effort + 1);
+  assert.equal(restored.state.effort, undefined);
   assert.equal(runtime.EarthShifts.gate(restored.state, restored.active(), id).available, true);
   ok(restored.beginShift(id));
   ok(restored.act('work:contract'));
   ok(restored.finishShift());
-  assert.equal(restored.state.effort, Math.min(4,effort+2));
+  assert.equal(restored.state.effort, undefined);
   assert.equal(restored.active().funds, funds + 4);
 });
 

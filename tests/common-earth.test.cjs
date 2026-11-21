@@ -41,7 +41,7 @@ function supplies(sim, name) {
       (cargo, shipment) => cargo + (shipment.good === name ? shipment.amount : 0), 0), 0);
 }
 
-test('settlements share weekly effort and restore their exact active district, promises and construction', () => {
+test('settlements restore their exact active district, promises and construction', () => {
   const store = memory(), sim = create(store);
   const first = settle(sim), grower = first.residents[0];
   action(sim, 'listen:' + grower.id);
@@ -49,18 +49,14 @@ test('settlements share weekly effort and restore their exact active district, p
   action(sim, 'build:workshop', 4);
   const second = settle(sim, north);
   assert.equal(second.water, true);
-  assert.equal(sim.state.effort, 1);
   success(sim.visit(first.id));
-  assert.equal(sim.state.effort, 1);
   action(sim, 'work:forage');
   success(sim.visit(second.id));
   action(sim, 'work:contract');
-  assert.equal(sim.state.effort, 3);
   const copy = create(store);
   assert.equal(snapshot(copy), snapshot(sim));
   assert.equal(copy.active().id, second.id);
   next(copy);
-  assert.equal(copy.state.effort, 4);
   success(copy.visit(first.id));
   assert.equal(copy.active().construction[0].plot, 4);
   assert.equal(copy.active().buildings.length, 0);
@@ -270,10 +266,6 @@ function invest(sim, id, plot) {
     const item = sim.actions().find(option => option.id === id);
     assert.ok(item, 'unlisted action: ' + id);
     if (item.available) return action(sim, id, plot);
-    if (sim.state.effort < item.cost || sim.state.effort === 0) {
-      next(sim);
-      continue;
-    }
     const shortage = Object.entries(item.goods).find(([key, n]) => sim.active()[key] < n);
     assert.ok(shortage, id + ' was blocked: ' + item.reason);
     action(sim, shifts[shortage[0]]);
@@ -309,7 +301,6 @@ for (const charter of ['care', 'voice', 'craft']) {
     // Prepare founding supplies, then establish the partner and its link.
     while (home.funds < 6) invest(sim, 'work:contract');
     while (home.materials < 2) invest(sim, 'work:salvage');
-    if (!sim.state.effort) next(sim);
     const partner = settle(sim, north);
     invest(sim, 'route:' + home.id);
     success(sim.visit(home.id));
@@ -448,6 +439,5 @@ test('two open tabs cannot spend the same shift or replace a completed choice wi
   success(await other.perform('act', 'work:contract'));
   assert.equal(primary.sync(), true);
   assert.equal(primary.active().id, site.id);
-  assert.equal(primary.state.effort, 4);
   assert.equal(snapshot(primary), snapshot(other));
 });

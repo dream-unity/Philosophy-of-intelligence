@@ -16,7 +16,7 @@ test('a pinned plan survives an empty treasury, a reload and an unsuccessful com
   assert.ok(sim.setBuildPlan(district.id,'garden',null).ok);
   assert.deepEqual(sim.buildPlanView().missing,[{key:'funds',amount:5},{key:'materials',amount:3}]);
   assert.equal(sim.act('build:garden',1).ok,false);
-  assert.equal(sim.state.week,1);assert.equal(sim.state.effort,0);
+  assert.equal(sim.state.week,1);assert.equal(Object.hasOwn(sim.state,'effort'),false);
   assert.equal(sim.setBuildPlan(district.id,null,'workshop').ok,false);
   const saved=JSON.stringify(sim.state);sim.destroy();sim=model.create({storage:null,snapshot:saved});
   assert.equal(sim.buildPlanView().kind,'garden');
@@ -67,4 +67,33 @@ test('marking a lot costs nothing and leaves the lot available until commissione
   assert.ok(sim.act('build:garden',1).ok);
   assert.equal(place.buildPlanPlot,undefined);
   assert.equal(sim.buildPlanView(),null);sim.destroy();
+});
+
+test('an exhausted coastal save can commission a hall, a fishing dock and further projects in the same week',()=>{
+  const original=model.create({storage:null});
+  assert.ok(original.found({lat:-6.1622,lon:39.1922,coastal:true}).ok);
+  const saved=structuredClone(original.state);
+  original.destroy();
+  saved.effort=0;
+  Object.assign(saved.sites[0],{funds:26,materials:15});
+  const sim=model.create({storage:null,snapshot:JSON.stringify(saved)});
+  const site=sim.active();
+  for(const [plot,kind] of ['hall','fishingDock','garden','garden','garden'].entries()){
+    assert.ok(sim.setBuildPlan(site.id,kind,null).ok);
+    assert.ok(sim.buildPlanView().ready);
+    const action=sim.actions('build').find(a=>a.id==='build:'+kind);
+    assert.ok(action.available,action.reason);
+    assert.ok(sim.previewBuild(kind,plot).available);
+    assert.ok(sim.act(action.id,plot).ok);
+  }
+  assert.equal(sim.state.week,saved.week);
+  assert.equal(site.construction.length,5);
+  assert.deepEqual([site.funds,site.materials],[0,0]);
+  const blocked=sim.actions('build').find(a=>a.id==='build:hall');
+  assert.equal(blocked.blocker,'supplies');
+  assert.equal(sim.act(blocked.id,5).ok,false);
+  const restored=model.readSave(JSON.stringify(sim.state));
+  assert.equal(restored.sites[0].construction.length,5);
+  assert.equal(Object.hasOwn(restored,'effort'),false);
+  sim.destroy();
 });

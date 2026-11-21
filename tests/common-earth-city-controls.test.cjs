@@ -53,15 +53,15 @@ test('a housing shortcut exposes only its selected proposal and a retired commis
   const site=sim.active(),target=w.EarthCityModel.overview(site).records.find(r=>r.terrain.id==='shelter').id;
   assert(ui.project((target+1)%6,'food'));const original=pick();
   assert.equal(panel.querySelectorAll('select')[1].value,'food');
-  const funds=site.funds,effort=sim.state.effort,materials=site.materials;
+  const funds=site.funds,materials=site.materials;
   assert(ui.project(target,'homes'));
   const controls=panel.querySelectorAll('select');
   assert.deepEqual(controls.map(c=>c.value),[String(target),'homes']);
   assert(!panel.contains(original));
-  await original.click();assert.equal(site.construction.length,0);assert.equal(site.funds,funds);assert.equal(sim.state.effort,effort);
+  await original.click();assert.equal(site.construction.length,0);assert.equal(site.funds,funds);
   const reviewed=pick();await reviewed.click();await reviewed.click();await original.click();
   assert.equal(site.construction.length,1);assert.equal(site.construction[0].precinct,target);assert.equal(site.construction[0].kind,'homes');
-  assert.equal(site.funds,funds-7);assert.equal(site.materials,materials-4);assert.equal(sim.state.effort,effort-2);
+  assert.equal(site.funds,funds-7);assert.equal(site.materials,materials-4);
   sim.destroy();
 });
 

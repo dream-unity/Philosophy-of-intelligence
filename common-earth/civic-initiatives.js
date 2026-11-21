@@ -1,7 +1,6 @@
 /* Residents propose, debate and authorise a defined expense. Pledges are votes
    over existing public money. Only the core simulation pays the bill, starts a
-   real construction contract or adopts a technology. The project chest and
-   the player's weekly effort are outside this budget. */
+   real construction contract or adopts a technology. The project chest is outside this budget. */
 (function(root){
   'use strict';
   const policies={
@@ -123,7 +122,7 @@
     const p={id:site.id+'-civic-'+(++ledger.serial),title:c.label,choiceId:c.id,kind:c.kind,plot:c.kind==='research'?null:c.plot,phase:'consultation',
       leadId:lead.id,leadName:lead.name,beneficiaryId:beneficiary.id,beneficiaryName:beneficiary.name,benefit:policy.benefit,reason:why,
       proposedWeek:world.week,decisionWeek:world.week+2,reviewWeek:world.week+2,goods:{funds:c.goods.funds||0,materials:c.goods.materials||0},
-      pledged:goods(),labour:0,effort:c.effort,contributions:[],meetingWeek:0,attendees:[],votes:[lead,beneficiary,critic].filter(Boolean).map(v=>({personId:v.id,name:v.name,stance:'abstain',reason:'Considering the terms.'})),
+      pledged:goods(),contributions:[],meetingWeek:0,attendees:[],votes:[lead,beneficiary,critic].filter(Boolean).map(v=>({personId:v.id,name:v.name,stance:'abstain',reason:'Considering the terms.'})),
       evidence:relevant?{id:relevant.id,title:relevant.title,ownerId:relevant.ownerId,ownerName:relevant.ownerName,week:relevant.week}:null,
       status:'Discuss the proposal before week '+(world.week+2)+'. The quoted goods remain in the treasury.'};
     refreshVotes(world,site,p);ledger.active=p;return p;
@@ -144,10 +143,10 @@
     const count=id=>p.contributions.filter(c=>c.personId===id).length;
     people.sort((a,b)=>count(a.id)-count(b.id));
     for(const who of people.slice(0,2)){
-      const funds=Number(p.pledged.funds<p.goods.funds),materials=Number(p.pledged.materials<p.goods.materials),labour=Number(p.labour<p.effort);
-      if(!funds&&!materials&&!labour)break;
-      p.contributions.push({personId:who.id,name:who.name,week:world.week,funds,materials,labour});
-      p.pledged.funds+=funds;p.pledged.materials+=materials;p.labour+=labour;
+      const funds=Number(p.pledged.funds<p.goods.funds),materials=Number(p.pledged.materials<p.goods.materials);
+      if(!funds&&!materials)break;
+      p.contributions.push({personId:who.id,name:who.name,week:world.week,funds,materials});
+      p.pledged.funds+=funds;p.pledged.materials+=materials;
     }
   }
   function finish(world,site,ledger,p,phase,status,jobId=null){
@@ -191,7 +190,7 @@
     const choice=choices.find(c=>c.id===p.choiceId&&(c.kind==='research'||c.plot===p.plot));
     if(world.week-p.proposedWeek>=14)return finish(world,site,d,p,'withdrawn',p.leadName+' withdrew '+p.title+' after the town could not agree the promised site and budget. No goods were spent.');
     hear(world,site,p,available,d);
-    if(!choice?.available||reservedChoice(site,choice)||choice.effort!==p.effort||choice.goods.funds!==p.goods.funds||choice.goods.materials!==p.goods.materials){
+    if(!choice?.available||reservedChoice(site,choice)||choice.goods.funds!==p.goods.funds||choice.goods.materials!==p.goods.materials){
       p.phase='blocked';p.status=choice?.reason||'The original lot, gates or price changed. The town will review the same proposal next week.';p.reviewWeek=world.week+1;return [];
     }
     const support=new Set(p.votes.filter(v=>v.stance==='support').map(v=>v.personId));
@@ -199,7 +198,7 @@
     const reserveReason=safeToSpend(world,site,p),yes=support.size;
     if(reserveReason||yes<2||p.meetingWeek!==world.week){p.phase='blocked';p.status=reserveReason||(p.meetingWeek!==world.week?'Two available committee members must meet before a decision.':'A second citizen must support the proposal before work starts.');p.reviewWeek=world.week+1;return [];}
     p.phase='pledging';contribute(world,site,p,available);
-    if(p.pledged.funds<p.goods.funds || p.pledged.materials<p.goods.materials || p.labour<p.effort){p.status='Residents authorised '+p.pledged.funds+' of '+p.goods.funds+' funds and '+p.pledged.materials+' of '+p.goods.materials+' materials; '+p.labour+' of '+p.effort+' civic shifts committed.';p.reviewWeek=world.week+1;return [];}
+    if(p.pledged.funds<p.goods.funds || p.pledged.materials<p.goods.materials){p.status='Residents authorised '+p.pledged.funds+' of '+p.goods.funds+' funds and '+p.pledged.materials+' of '+p.goods.materials+' materials.';p.reviewWeek=world.week+1;return [];}
     const result=hooks.enact(world,site,choice,p);
     if(!result?.ok){p.phase='blocked';p.reviewWeek=world.week+1;p.status=result?.message||'Conditions changed before the contract could be signed.';return [];}
     const building=choice.kind!=='research',jobId=building?(result.jobId||site.construction?.find(j=>j.kind===tag(choice.id)&&j.plot===p.plot)?.id):null;
@@ -243,7 +242,7 @@
     const pledged=p.contributions.some(c=>c.week===world.week&&c.personId===id);
     const attending=p.meetingWeek===world.week&&p.attendees.includes(id);
     if(!attending&&!pledged && !(p.proposedWeek===world.week&&p.leadId===id))return hearing;
-    return {reason:attending?'I am discussing the costs and beneficiaries of '+p.title+' with the committee.':pledged?'I committed a civic shift to '+p.title+'.':'I am presenting '+p.title+' to the town.',venue:'hall'};
+    return {reason:attending?'I am discussing the costs and beneficiaries of '+p.title+' with the committee.':pledged?'I helped authorise supplies for '+p.title+'.':'I am presenting '+p.title+' to the town.',venue:'hall'};
   }
   function valid(site,week){
     const d=site.civicInitiatives;if(d==null)return true;
@@ -256,7 +255,7 @@
       if(!Object.hasOwn(policies,subject)||!['research','build','precinct'].includes(p.kind)||
         p.choiceId!==p.kind+':'+subject||(p.kind==='precinct')!==(subject==='homes')||
         !(active?activePhases:closedPhases).includes(p.phase)||!actorId(p.leadId)||!actorId(p.beneficiaryId)||p.leadId===p.beneficiaryId||!string(p.leadName,120)||!string(p.beneficiaryName,120)||!string(p.reason,600)||!string(p.benefit,600)||!string(p.status,1800)||
-        !integer(p.proposedWeek,1,week)||p.decisionWeek!==p.proposedWeek+2||!integer(p.reviewWeek,p.decisionWeek,week+16)||!cost(p.goods)||!cost(p.pledged)||!integer(p.effort,1,12)||!integer(p.labour,0,p.effort)||
+        !integer(p.proposedWeek,1,week)||p.decisionWeek!==p.proposedWeek+2||!integer(p.reviewWeek,p.decisionWeek,week+16)||!cost(p.goods)||!cost(p.pledged)||
         !(p.kind==='precinct'?integer(p.plot,0,5):p.kind==='build'?integer(p.plot,0,8):p.plot===null)||!Array.isArray(p.votes)||p.votes.length<2||p.votes.length>3||new Set(p.votes.map(v=>v?.personId)).size!==p.votes.length||
         !integer(p.meetingWeek,0,week)||!Array.isArray(p.attendees)||p.attendees.length>3||new Set(p.attendees).size!==p.attendees.length||!p.attendees.every(id=>p.votes.some(v=>v.personId===id))||
         !p.votes.every(v=>member(v)&&['support','dissent','abstain'].includes(v.stance)&&string(v.reason,1000))||!Array.isArray(p.contributions)||p.contributions.length>30)return false;
@@ -272,12 +271,12 @@
           !crew.every(id=>actorId(id)&&(supports(id)||relief.some(r=>r.personId===id))))return false;
       }
       if(!active && (!integer(p.closedWeek,p.proposedWeek,week)||p.jobId!=null&&!string(p.jobId,160)))return false;
-      const total=goods();let work=0;const counted=new Set();
+      const total=goods(),counted=new Set();
       for(const c of p.contributions){const key=c?.week+'/'+c?.personId;
-        if(!member(c)||!integer(c.week,p.decisionWeek,week)||!integer(c.labour,0,1)||!integer(c.funds,0,1)||!integer(c.materials,0,1)||counted.has(key))return false;
-        counted.add(key);total.funds+=c.funds;total.materials+=c.materials;work+=c.labour;
+        if(!member(c)||!integer(c.week,p.decisionWeek,week)||!integer(c.funds,0,1)||!integer(c.materials,0,1)||counted.has(key))return false;
+        counted.add(key);total.funds+=c.funds;total.materials+=c.materials;
       }
-      return work===p.labour&&total.funds===p.pledged.funds&&total.materials===p.pledged.materials&&total.funds<=p.goods.funds&&total.materials<=p.goods.materials;
+      return total.funds===p.pledged.funds&&total.materials===p.pledged.materials&&total.funds<=p.goods.funds&&total.materials<=p.goods.materials;
     }
     return dict(d)&&d.version===1&&integer(d.week,0,week)&&integer(d.serial,0)&&integer(d.revision,0)&&integer(d.nextWeek,0,week+16)&&
       (d.active===null||proposal(d.active,true))&&Array.isArray(d.testimony)&&d.testimony.length<=3&&new Set(d.testimony.map(t=>t?.personId)).size===d.testimony.length&&d.testimony.every(t=>dict(t)&&site.residents.some(r=>r.id===t.personId)&&integer(t.week,1,d.week)&&string(t.proposalId,160)&&['support','dissent'].includes(t.stance))&&Array.isArray(d.history)&&d.history.length<=6&&d.history.every(h=>proposal(h,false))&&new Set([d.active?.id,...d.history.map(h=>h.id)].filter(Boolean)).size===d.history.length+Number(!!d.active);

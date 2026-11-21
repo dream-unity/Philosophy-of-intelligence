@@ -31,8 +31,8 @@ function occupied(){
   // The same address can possess a different market tier if undo reorders these buildings.
   return raw;
 }
-test('dismantling takes the last effort, reserves its lot and can be undone before work reaches it',()=>{
-  const raw=occupied();raw.effort=1;
+test('dismantling reserves its lot and can be undone before work reaches it',()=>{
+  const raw=occupied();raw.effort=0;
   const sim=load(raw),s=sim.active();
   for(const p of s.residents)ok(sim.setWorkPreference(p.id,'usual'));
   const original=copy(s.buildings),money=s.materials,trust=s.trust,bonds=s.residents.map(p=>p.bond),prior=JSON.stringify(sim.state);
@@ -40,7 +40,7 @@ test('dismantling takes the last effort, reserves its lot and can be undone befo
   assert.equal(quote.recovered,1);assert.equal(quote.available,true);assert.equal(quote.crew.workers.length,0);
   assert.equal(JSON.stringify(sim.state),prior);
   ok(sim.act('reclaim:old-workshop'));
-  assert.equal(sim.state.effort,0);assert.equal(s.buildings.some(b=>b.plot===3),false);
+  assert.equal(s.buildings.some(b=>b.plot===3),false);
   const job=s.construction[0];
   assert.equal(job.kind,'dismantle');same(job.original,original[1]);
   assert.notEqual(job.id,job.original.id);
@@ -50,7 +50,7 @@ test('dismantling takes the last effort, reserves its lot and can be undone befo
   assert.equal(sim.previewCancelConstruction(job.id).available,true);
   const restored=load(sim.state);
   ok(restored.cancelConstruction(job.id));
-  assert.equal(restored.state.effort,0);assert.equal(restored.active().dismantleOrders,undefined);
+  assert.equal(restored.active().dismantleOrders,undefined);
   same(restored.active().buildings,original);same(restored.active().residents.map(p=>p.bond),bonds);
   assert.equal(restored.cancelConstruction(job.id).ok,false);
 });

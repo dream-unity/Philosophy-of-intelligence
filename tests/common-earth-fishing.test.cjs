@@ -23,11 +23,10 @@ test('a crew must open the dock before a catch can reach the food ledger',async(
   assert.equal((await catchFish()).ok,false);
   assert.equal((await sim.perform('act','build:fishingDock',3)).ok,false);
   ok(await sim.perform('workConstruction',180));
-  const before=sim.active().food,effort=sim.state.effort;
+  const before=sim.active().food;
   assert.equal((await sim.perform('fish','different-site')).ok,false);
   ok(await catchFish());
   assert.equal(sim.active().food,before+4);
-  assert.equal(sim.state.effort,Math.min(4,effort+1));
   sim.destroy();sim=model.create({storage:durable});
   assert.equal(sim.active().food,before+4);
   assert.equal((await catchFish()).ok,false);

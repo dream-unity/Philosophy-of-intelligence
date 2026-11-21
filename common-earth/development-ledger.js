@@ -49,7 +49,7 @@
       }
       const spent = ['commissioned','built','adopted'].includes(proposal.phase);
       details.push((spent?'Public funds spent and materials used · ':'Quoted cost · ')+goods(proposal.goods));
-      if (!proposal.closedWeek) details.push('Authorised by residents · '+goods(proposal.pledged)+' · '+proposal.labour+' of '+proposal.effort+' shifts pledged · next review week '+proposal.reviewWeek);
+      if (!proposal.closedWeek) details.push('Authorised by residents · '+goods(proposal.pledged)+' · next review week '+proposal.reviewWeek);
       entries.push({key:'civic/'+proposal.id, title:proposal.title, kind:'Council', status:titleCase(proposal.phase), details, people,
         related:[proposal.jobId && 'site/'+proposal.jobId, proposal.evidence && 'project/'+proposal.evidence.id].filter(Boolean)});
     }

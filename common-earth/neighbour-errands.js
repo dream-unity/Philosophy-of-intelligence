@@ -72,7 +72,6 @@
   const venues={supper:'market',bench:'workshop',meeting:'hall'};
   const causes={shortage:'supper',spoilage:'supper',vacancy:'bench',construction:'bench',dispatch:'meeting',hearing:'meeting'};
   const firstDue=row=>row.week+(row.origin==='neighbours'?3:2);
-  const ownCalendar=(world,site)=>!world.communityLife||root.EarthCommunityLife?.isHome?.(world,site)!==false;
   const records=site=>site?.agency?.arrangements?.rows||[];
   function heldGoods(site,week){
     const held={food:0,materials:0,funds:0};
@@ -137,12 +136,8 @@
     if(outstanding)lines.push(count(outstanding,goods)+' promised to '+promised.name);
     if(committed)lines.push(count(committed,goods)+' already offered to other neighbours');
     if(reserve)lines.push('one portion I’m holding back until we replace the '+({roots:'root vegetables',fruit:'orchard fruit',greens:'leaf greens',kelp:'seaweed'}[damaged[0]]||damaged[0])+' that spoiled in week '+loss.week);
-    const towns=world.sites?[...world.sites,...(world.communityLife?.outposts||[])]:[site];
-    const timeHeld=towns.reduce((n,town)=>n+(ownCalendar(world,town)?
-      records(town).filter(r=>r!==row&&r.origin!=='neighbours'&&r.status==='agreed'&&r.workWeek==null&&r.dueWeek>=world.week&&r.method==='time').length:0),0);
     const cautious=reliability(site,row.actorId,row.requesterId,world.week)<0||reliability(site,row.actorId,row.contactId,world.week)<0;
-    return {floor,lines,stock:site[goods],cautious,goodsAvailable:!cautious&&site[goods]-story.amount>=floor,
-      timeAvailable:world.effort>timeHeld,timeHeld};
+    return {floor,lines,stock:site[goods],cautious,goodsAvailable:!cautious&&site[goods]-story.amount>=floor};
   }
   function calendarNote(site,row){
     const claim=site.residents.find(r=>r.promise?.by===row.actorId&&r.promise.dueWeek<=row.dueWeek);
@@ -158,9 +153,7 @@
     const floor=p.lines.length?'From that I need '+p.lines.join(' and ')+'. ':'I haven’t promised any of it elsewhere. ';
     const goods=p.cautious?'Last time the help never arrived. I’d like to see you give the time yourself before I put our supplies against your name again.':p.goodsAvailable?'I could let '+owner+' have '+count(story.amount,story.good)+' if you come back while it is still free.':
       'I can’t release '+count(story.amount,story.good)+' today.';
-    const time=p.timeAvailable?' There is room on the rota if you’d prefer to give your time.':
-      ' The spare time on this week’s rota has already been spoken for.';
-    return stock+floor+goods+time+calendarNote(site,row);
+    return stock+floor+goods+' You can also give your time.'+calendarNote(site,row);
   }
   function rowsFor(site,world,actorId){
     return records(site).filter(row=>actorId==null||row.actorId===actorId).map(row=>{
@@ -438,29 +431,27 @@
     }
     const chosen=action==='finish'?row.method:action,p=priority(site,world,row);
     if(row.workWeek==null&&chosen==='goods'&&!p.goodsAvailable)return said(owner,terms(site,world,row)+(action==='finish'?' Talk to '+name(site,row.contactId)+' if you can offer your time instead.':''));
-    if(row.workWeek==null&&chosen==='time'&&!p.timeAvailable)return said(owner,'There’s no unpromised civic effort left this week. We could try again after the next rota opens, or review the supplies.');
     if(action!=='finish'){
       row.status='agreed';row.method=chosen;row.agreedWeek=world.week;delete row.volunteered;
       if(row.origin==='neighbours'){row.playerTerms=true;delete row.changedWeek;delete row.review;}
-      return said(owner,(chosen==='goods'?'I’ll put your name beside '+count(story.amount,story.good)+'. ':'I’ll pencil in one civic effort for your visit. ')+
+      return said(owner,(chosen==='goods'?'I’ll put your name beside '+count(story.amount,story.good)+'. ':'I’ll put you down for the visit. ')+
         'Take that agreement back to '+name(site,row.requesterId)+' by the end of week '+row.dueWeek+'.',true);
     }
-    if(row.workWeek==null)pay(site,world,row,false);
+    if(row.workWeek==null)pay(site,world,row);
     finish(site,row,world.week);
     return {...said(owner,outcomeFor(row)+' I’ll remember who came back. We used '+costOf(row)+'.',true),
       neighbourHelp:{actorId:actor.id,targetId:owner.id,kind:row.kind,method:chosen}};
   }
   function costOf(row){
     const story=storyFor(row);
-    return row.method==='goods'?count(story.amount,story.good):row.localSession?'one local work session':'one civic effort';
+    return row.method==='goods'?count(story.amount,story.good):'one local work session';
   }
-  function pay(site,world,row,independent){
+  function pay(site,world,row){
     const story=storyFor(row);
     if(row.method==='goods'){
       site[story.good]-=story.amount;
       if(story.good==='food')root.EarthProvisions?.reconcile?.(site,world.week);
     }else{
-      if(ownCalendar(world,site)&&!(independent&&row.origin==='neighbours'))world.effort--;else row.localSession=true;
       if(row.kind==='supper'&&site.food<Math.ceil(site.population/5))row.unserved=true;
     }
   }
@@ -594,7 +585,7 @@
     const row=records(site).find(r=>r.actorId===id&&r.status==='agreed'&&r.workWeek==null&&r.agreedWeek<world.week&&r.dueWeek>=world.week);
     if(!row||row.requesterId===controlled||!visible(site,row.requesterId)||!member(site,row.requesterId))return offers;
     const p=priority(site,world,row);
-    if(row.method==='goods'?!p.goodsAvailable:row.origin!=='neighbours'&&ownCalendar(world,site)&&!p.timeAvailable)return offers;
+    if(row.method==='goods'&&!p.goodsAvailable)return offers;
     const story=storyFor(row),title=story[row.method==='goods'?'useGoods':'useTime'];
     const partner=name(site,row.requesterId);
     offers.push({rowId:row.id,target:row.requesterId,score:world.week===row.dueWeek?126:105,venue:venues[row.kind],
@@ -607,7 +598,9 @@
     if(a.ordinary)return {item:{week:world.week,kind:'commitment',errand:true,ordinary:true,rowId,venue:a.venue,target:a.target,
       goal:a.goal,title:a.title,activity:a.activity,reason:a.reason},note:name(site,id)+' set out to '+a.title[0].toLowerCase()+a.title.slice(1)+'.'};
     const row=records(site).find(r=>r.id===rowId);
-    pay(site,world,row,true);row.workWeek=world.week;appointments.delete(site);
+    pay(site,world,row);row.workWeek=world.week;
+    if(row.method==='time')row.localSession=true;
+    appointments.delete(site);
     return {item:{week:world.week,kind:'commitment',errand:true,rowId,venue:a.venue,target:a.target,goal:a.goal,title:a.title,activity:a.activity,reason:a.reason},
       note:name(site,id)+' set out for the '+a.venue+' to keep an agreement with '+name(site,row.requesterId)+'.'};
   }

@@ -45,8 +45,7 @@
     const closed={...site,buildings:site.buildings.filter(b=>b.plot!==plot)};
     const staff=withCrew?root.EarthConstruction.preview(closed,world,spec,site):null;
     if(staff&&!staff.ok)return reject(staff.reason||'This lot cannot accept the order.');
-    const reason=world.effort<1?'Requires 1 effort. Advance the week to refresh.':'';
-    return {ok:true,available:!reason,reason,buildingId:spec.original.id,label:spec.original.name,
+    return {ok:true,available:true,reason:'',buildingId:spec.original.id,label:spec.original.name,
       recovered:spec.recovered,partners:[...(spec.original.partners||[])],crew:staff?.job||null};
   }
 
@@ -92,7 +91,7 @@
     if(!root.EarthConstruction.cancel(site,job.id))return reject('This dismantling order is no longer active.');
     site.buildings.splice(position,0,job.original);
     release(site,job.plot);
-    return {ok:true,message:job.original.name+' reopened on lot '+(job.plot+1)+'. The original effort was spent.'};
+    return {ok:true,message:job.original.name+' reopened on lot '+(job.plot+1)+'.'};
   }
 
   function finish(site,job){
