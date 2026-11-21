@@ -1889,12 +1889,6 @@
         for(let k=0;k<3;k++)sphere(x+.06+k*.064,y+.12,.19,.055,.05,i%2?'#91aa74':'#d1a365');
       }
       const x=p.x+1.83,y=p.y+.5;
-      const [signX,signY]=screen(x+.32,y,1.3);
-      const size=Math.max(7,Math.min(14,unit*.28));
-      ctx.save();ctx.font='600 '+size+'px system-ui,sans-serif';
-      const width=ctx.measureText('Town Centre').width+size*.9;
-      ctx.fillStyle='#233b39';ctx.fillRect(signX-width/2,signY-size*.72,width,size*1.44);
-      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ffedc6';ctx.fillText('Town Centre',signX,signY);ctx.restore();
       if(furniture(3,x+.22,y))return;
       for(const off of [0,.61])line(x+off,y,.02,x+off,y,.99,'#6b6c54',Math.max(.9,unit*.054));
       poly([[x-.07,y,.43],[x+.69,y,.43],[x+.69,y,1.06],[x-.07,y,1.06]],'#a38e66','#69755e',Math.max(.65,unit*.035));

@@ -23,9 +23,16 @@
     return job.base+1+(job.fixture===cart.fixture?1:0);
   }
   function supplier(site,kind){
+    const residents=site.residents||[],actor=actorId(site);
+    if(!residents.length)return null;
     const slot=kind==='food'||kind==='baskets'?0:kind==='funds'?2:1;
-    const preferred=site.residents[slot];
-    return preferred?.id===actorId(site)?site.residents[(slot+1)%site.residents.length]:preferred;
+    const preferred=residents[slot];
+    if(preferred&&preferred.id!==actor)return preferred;
+    for(let i=1;i<residents.length;i++){
+      const candidate=residents[(slot+i)%residents.length];
+      if(candidate&&candidate.id!==actor)return candidate;
+    }
+    return null;
   }
   function secondsLeft(ticket,now){
     const duration=ticket.helper?Math.min(4,jobs[ticket.kind].seconds):jobs[ticket.kind].seconds;

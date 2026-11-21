@@ -79,7 +79,7 @@
       return {ok:true,week:sim.state.week,name:end.name,openBuildings:end.buildings.length,ongoing:end.construction?.length || 0,site:Object.fromEntries(Object.keys(dimensions).map(k=>[k,end[k]])),
         city:cityModel()?.overview(end),
         links:globalThis.EarthNeighbours?.summary(end).links||[],
-        people:people.map(p=>{const endPerson=end.residents.find(r=>r.id===p.id);return {...p,bond:endPerson.bond,promise:endPerson.promise?.dueWeek||null};}),
+        people:people.map(p=>{const endPerson=end.residents.find(r=>r.id===p.id);return {...p,bond:endPerson?endPerson.bond:null,promise:endPerson?.promise?.dueWeek||null};}),
         sites:sim.state.sites.map(s=>({id:s.id,name:s.name,food:s.food,trust:s.trust,wellbeing:s.wellbeing})), effects};
     } finally {sim.destroy();}
   }
@@ -132,34 +132,38 @@
           }
           if(move.id===crewMove){
             const {jobs,workers,preferences}=virtual.constructionView();
-            const person=dropdown('Resident'),role=dropdown('Work preference');
             const worker=workers.find(w=>w.residentId===move.residentId) || workers.find(w=>!w.jobId && w.slot===1) || workers[0];
-            move.residentId=worker.residentId;
-            move.preference ||= jobs.length?'build':'food';
-            for(const w of workers){
-              const o=el('option',w.name+' · '+w.role);o.value=w.residentId;person.select.append(o);
-            }
-            for(const pref of preferences){
-              const o=el('option',pref.label);o.value=pref.id;role.select.append(o);
-            }
-            person.select.value=move.residentId;role.select.value=move.preference;
-            person.select.dataset.control='worker-'+index+'-'+i;role.select.dataset.control='role-'+index+'-'+i;
-            person.select.addEventListener('change',()=>{move.residentId=person.select.value;draw(person.select.dataset.control);});
-            role.select.addEventListener('change',()=>{move.preference=role.select.value;move.jobId=null;draw(role.select.dataset.control);});
-            box.append(person.label,role.label);
-            if(move.preference==='build' && jobs.length){
-              const site=dropdown('Worksite');
-              const any=el('option','Any available site');any.value='';site.select.append(any);
-              for(const job of jobs){
-                const place=job.scope==='street'?'Lot '+(job.plot+1):'Precinct '+(job.precinct+1);
-                const o=el('option',job.name+' · '+place);o.value=job.id;site.select.append(o);
+            if(!worker){
+              box.append(el('p','No residents are available for work assignments in this plan.','action-reason'));
+            }else{
+              const person=dropdown('Resident'),role=dropdown('Work preference');
+              move.residentId=worker.residentId;
+              move.preference ||= jobs.length?'build':'food';
+              for(const w of workers){
+                const o=el('option',w.name+' · '+w.role);o.value=w.residentId;person.select.append(o);
               }
-              if(!jobs.some(j=>j.id===move.jobId))move.jobId=null;
-              site.select.value=move.jobId || '';site.select.dataset.control='job-'+index+'-'+i;
-              site.select.addEventListener('change',()=>{move.jobId=site.select.value || null;draw(site.select.dataset.control);});
-              box.append(site.label);
-            }else move.jobId=null;
-            box.append(el('p','Residents travel to their new work and finish existing commitments. The time you allow before the week closes affects their contribution.','plan-consequence'));
+              for(const pref of preferences){
+                const o=el('option',pref.label);o.value=pref.id;role.select.append(o);
+              }
+              person.select.value=move.residentId;role.select.value=move.preference;
+              person.select.dataset.control='worker-'+index+'-'+i;role.select.dataset.control='role-'+index+'-'+i;
+              person.select.addEventListener('change',()=>{move.residentId=person.select.value;draw(person.select.dataset.control);});
+              role.select.addEventListener('change',()=>{move.preference=role.select.value;move.jobId=null;draw(role.select.dataset.control);});
+              box.append(person.label,role.label);
+              if(move.preference==='build' && jobs.length){
+                const site=dropdown('Worksite');
+                const any=el('option','Any available site');any.value='';site.select.append(any);
+                for(const job of jobs){
+                  const place=job.scope==='street'?'Lot '+(job.plot+1):'Precinct '+(job.precinct+1);
+                  const o=el('option',job.name+' · '+place);o.value=job.id;site.select.append(o);
+                }
+                if(!jobs.some(j=>j.id===move.jobId))move.jobId=null;
+                site.select.value=move.jobId || '';site.select.dataset.control='job-'+index+'-'+i;
+                site.select.addEventListener('change',()=>{move.jobId=site.select.value || null;draw(site.select.dataset.control);});
+                box.append(site.label);
+              }else move.jobId=null;
+              box.append(el('p','Residents travel to their new work and finish existing commitments. The time you allow before the week closes affects their contribution.','plan-consequence'));
+            }
           }
           if(move.id===cityMove) {
             const available=urbanOptions(virtual);
@@ -212,7 +216,10 @@
       clock.select.value=workSeconds;clock.select.dataset.control='work-time';
       clock.select.addEventListener('change',()=>{workSeconds=Number(clock.select.value);draw('work-time');});
       const refresh=btn('Use current district conditions',()=>{capture();draw('refresh');});refresh.dataset.control='refresh';
-      root.append(el('p','Compare two plans from the same moment in '+home.name+', week '+state.week+'. Choose how long the game stays visible before each calendar advance. Only staffed projects make progress during that time.','plan-intro'),h.label,clock.label,refresh);
+      const copyBranch=btn('Copy Plan A → B',()=>{plans[1]=plans[0].map(m=>({...m}));draw('copy-branch');});copyBranch.dataset.control='copy-branch';
+      const swapBranch=btn('Swap A ↔ B',()=>{[plans[0],plans[1]]=[plans[1],plans[0]];draw('swap-branch');});swapBranch.dataset.control='swap-branch';
+      const toolbar=el('div',null,'plan-toolbar');toolbar.append(refresh,copyBranch,swapBranch);
+      root.append(el('p','Compare two plans from the same moment in '+home.name+', week '+state.week+'. Choose how long the game stays visible before each calendar advance. Only staffed projects make progress during that time.','plan-intro'),h.label,clock.label,toolbar);
       drawBranch(0,controls);drawBranch(1,controls);root.append(controls);
       const keys=plans.map(plan=>JSON.stringify([horizon,workSeconds,plan]));
       for(const key of previousResults.keys())if(!keys.includes(key))previousResults.delete(key);
@@ -249,7 +256,7 @@
         }
         for(const p of a.people){
           const orig=home.residents.find(r=>r.id===p.id),other=b.people.find(r=>r.id===p.id);
-          if(p.bond!==orig.bond||p.bond!==other.bond)row(p.name+' · bond',orig.bond,p.bond,other.bond);
+          if(orig&&other&&(p.bond!==orig.bond||p.bond!==other.bond))row(p.name+' · bond',orig.bond,p.bond??'Away',other.bond??'Away');
         }
         const baseSites=new Map(state.sites.map(s=>[s.id,s])),otherSites=new Map(b.sites.map(s=>[s.id,s]));
         for(const dest of a.sites){

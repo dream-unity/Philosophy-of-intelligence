@@ -106,8 +106,12 @@
       if(m.loaded)result.append(el('p','On the co-op truck · '+quantity(m.loaded,1)+' awaiting delivery. Its return space is reserved.','market-help'));
       for(const good of ['food','materials']){
         const block=el('section',null,'market-good'),labels=el('div',null,'market-heading');
-        labels.append(el('h4',title(good)),el('span',m.shelf[good]+'/'+m.capacity+' on shelf'));
-        block.append(labels);
+        const stock=m.shelf[good],cap=Math.max(1,m.capacity);
+        const signal=stock<=1?{label:'Low stock · strong sell price',cls:'signal-high'}:
+          stock>=cap-1?{label:'Well stocked · buyer’s market',cls:'signal-low'}:
+          {label:'Steady prices',cls:'signal-fair'};
+        labels.append(el('h4',title(good)),el('span',stock+'/'+m.capacity+' on shelf'));
+        block.append(labels,el('small',signal.label,'market-signal '+signal.cls));
         const options=m.options.filter(o=>o.good===good&&['buy','sell'].includes(o.action));
         const row=el('div',null,'market-buttons');
         for(const o of options)row.append(actionButton(m,o));
@@ -129,6 +133,24 @@
       if(!local)return box;
       box.append(el('h4',local.habitat+' · '+local.season),
         el('p',local.foodSources+'. '+m.rows[0].free+' food ready for '+local.mealNeed+' household shares this week.','market-help'));
+      const expiring=local.rows.filter(r=>r.owned>0&&r.binDate&&r.binDate<=m.week+1);
+      if(expiring.length){
+        const alert=el('section',null,'market-spoilage-alert');
+        alert.setAttribute('role','status');
+        alert.append(el('strong','Perishable lots expiring soon'),
+          el('p',expiring.map(r=>r.owned+' '+r.name.toLowerCase()+' before week '+r.binDate).join(' · ')+'. Cook or sell before the week turns.','market-help'));
+        const picks=el('div',null,'market-buttons');
+        for(const r of expiring){
+          const jump=button('Inspect '+r.name,()=>{
+            selectedResource=r.id;trip=null;generation++;key='';feedback='';render();
+            body.querySelector('.market-resource-detail')?.scrollIntoView?.({block:'nearest',behavior:'instant'});
+          });
+          jump.dataset.marketAction='inspect-expiring-'+r.id;
+          picks.append(jump);
+        }
+        alert.append(picks);
+        box.append(alert);
+      }
       if(local.compost||local.loss)box.append(el('p','Compost store · '+(local.compost||0)+' of '+local.compostLimit+' soil dressings. Spoiled district produce can return to a growing bed.','market-help'));
       if(local.loss)box.append(el('p','Week '+m.week+' · '+local.loss+' spoiled in the district bins.','market-reason'));
       if(local.fishing){

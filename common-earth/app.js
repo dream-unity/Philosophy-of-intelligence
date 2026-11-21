@@ -65,7 +65,7 @@
     meet:meetForLife,playAs:sceneHandoff,onResult:presentResult,after:()=>{street?.setSite(sim.active());render();}
   });
   let lastOpening=null,arrivalVersion=0,commissioning=false,localWorkRate='',previewWorkRates='',goalWorkRates='',courseWorkRates='';
-  let toastTimer, outcomeContext='', recordsPage='events',journalLimit=20,journalFilter='all';
+  let toastTimer, outcomeContext='', recordsPage='events',journalLimit=20,journalFilter='all',journalQuery='',journalCategory='all';
   const getStreet=()=>view==='street'?street:null;
   const redrawStreet=()=>{if(view==='street')street?.setSite(sim.active());render();};
   const sceneWork=resource=>{
@@ -2002,13 +2002,29 @@
       filter.replaceChildren(...choices.map(([id,name])=>{const o=node('option','',name);o.value=id;return o;}));
     }
     filter.value=journalFilter;
-    const entries=sim.state.journal.filter(e=>journalFilter==='all'||e.siteId===journalFilter);
+    const catMatchers={
+      people:/\b(resident|promise|bond|conversation|joined|arrived|married|career|study|dream|ambition|hobby|helped|shared a meal|visit|neighbour|visitor|shift)\b/i,
+      economy:/\b(food|materials|funds|market|exchange|trade|sold|bought|purse|wage|shop|crate|harvest|fish|catch|route|shipment|delivery|parcel|spoiled|bin|stall)\b/i,
+      council:/\b(council|vote|charter|proposal|decision|commission|hearing|steward|delegate|policy|civic)\b/i,
+      build:/\b(built|build|worksite|construction|dismantl|plot|cottage|home|precinct|clinic|school|workshop|garden|wetland|dock|handcart|repair|opened)\b/i,
+      conflict:/\b(war|peace|ceasefire|border|boundary|watch|military|base|guard|scout|tank|jet|attack|defend|captured|occupied|injured|died|expedition|diplomacy)\b/i
+    };
+    const q=journalQuery.trim().toLocaleLowerCase();
+    for(const b of controls($('journal-categories'),'[data-journal-cat]'))b.setAttribute('aria-pressed',String(b.dataset.journalCat===journalCategory));
+    const entries=sim.state.journal.filter(e=>{
+      if(journalFilter!=='all'&&e.siteId!==journalFilter)return false;
+      if(journalCategory!=='all'&&!catMatchers[journalCategory]?.test(e.text||''))return false;
+      if(q&&!String(e.text||'').toLocaleLowerCase().includes(q)&&!('week '+e.week).includes(q))return false;
+      return true;
+    });
+    const total=sim.state.journal.length,filtered=journalFilter!=='all'||journalCategory!=='all'||!!q;
+    put('journal-count',total?(filtered?(entries.length+' of '+total+' matching events'):(total+' recorded '+(total===1?'event':'events'))):'');
     $('journal-list').replaceChildren(...entries.slice(0,journalLimit).map(entry=>{
       const e=node('li','journal-entry');
       const place=sim.state.sites.find(s=>s.id===entry.siteId);
       e.append(node('small','','Week '+entry.week+(place&&sim.state.sites.length>1?' · '+place.name:'')),node('p','',entry.text));return e;
     }));
-    if(!entries.length)$('journal-list').append(node('li','empty-state','No events recorded here yet.'));
+    if(!entries.length)$('journal-list').append(node('li','empty-state',filtered?'No recorded events match this filter.':'No events recorded here yet.'));
     show('earlier-events',entries.length>journalLimit);
   }
   listen('records-views','click',e=>{
@@ -2023,6 +2039,12 @@
     recordsPage='saves';$('journal-open').click();
   });
   listen('journal-filter','change',()=>{journalFilter=$('journal-filter').value;journalLimit=20;renderRecords();});
+  listen('journal-search','input',()=>{journalQuery=$('journal-search').value;journalLimit=30;renderRecords();});
+  listen('journal-categories','click',e=>{
+    const b=e.target.closest('[data-journal-cat]');
+    if(!b)return;
+    journalCategory=b.dataset.journalCat;journalLimit=30;renderRecords();
+  });
   listen('earlier-events','click',()=>{journalLimit+=30;renderRecords();});
   listen('week-review-open','click',()=>{recordsPage='review';if(!nativeSheets&&sheetOpen('journal-dialog'))renderRecords();});
   function upcomingDeadlines() {
@@ -2483,6 +2505,26 @@
     setView(linkedStreet?'street':'world',false);
     resumeClock();
   }else if(linkedStreet&&view!=='street')setView('street',false);
+  document.addEventListener('keydown',e=>{
+    if(e.ctrlKey||e.metaKey||e.altKey||e.defaultPrevented)return;
+    const tag=e.target?.tagName;
+    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||e.target?.isContentEditable)return;
+    if(document.querySelector('dialog[open]')||document.body.hasAttribute('data-sheet-open'))return;
+    if(e.key==='?'){e.preventDefault();$('help-open')?.click();return;}
+    const k=e.key.length===1?e.key.toLowerCase():e.key;
+    if(e.shiftKey&&k==='m'&&sim.active()){e.preventDefault();setView(view==='street'?'world':'street');return;}
+    if(e.shiftKey)return;
+    if(k==='c'){e.preventDefault();$('journal-open')?.click();return;}
+    if(!sim.active()||view!=='street')return;
+    const tabKeys={'1':'people','2':'build','3':'work','4':'council','5':'research','6':'routes'};
+    if(tabKeys[k]){e.preventDefault();selectGroup(tabKeys[k]);return;}
+    if(k==='g'){e.preventDefault();$('scene-open-goals')?.click();return;}
+    if(k==='t'){e.preventDefault();streetHud?.active()==='talk'?streetHud.close():streetHud?.openTool('talk');return;}
+    if(k==='r'){e.preventDefault();$('scene-open-stores')?.click();return;}
+    if(k==='f'){e.preventDefault();$('street-wide')?.click();return;}
+    if(k==='n'){e.preventDefault();$('venue-directory')?.click();return;}
+    if(k==='k'){e.preventDefault();$('world-time')?.click();return;}
+  });
   window.EarthConstructionClock?.start(sim);
   document.body.dataset.gameReady='true';
 })();

@@ -26,7 +26,7 @@
     let townId='',tab='roster',key='',pending=false,target='',order='attack',picked=new Set(),known=[],ticket=0,slotId='';
     const site=()=>root.EarthCommunityLife.lookup(sim.state,townId);
     const roster=(b,id)=>b.units.find(u=>u.id===id);
-    const unitName=u=>domain.units[u.type].name+' '+u.id;
+    const unitName=u=>u&&domain.units[u.type]?domain.units[u.type].name+' '+u.id:'Unit';
     function buttonRow(list,name,detail,action){
       const row=el('div',null,'base-row'),copy=el('div');copy.append(el('strong',name),el('p',detail));row.append(copy,action);list.append(row);
     }
@@ -88,10 +88,20 @@
       const available=domain.ready(w,s),ids=new Set(available.map(u=>u.id));
       picked=new Set([...picked].filter(id=>ids.has(id)));
       const group=el('fieldset');group.append(el('legend','Select the units to deploy'));
+      const boxes=[];
       for(const u of available){
         const line=el('label',null,'base-unit'),check=el('input');check.type='checkbox';check.checked=picked.has(u.id);
         check.dataset.key='pick-'+u.id;check.onchange=()=>{if(check.checked)picked.add(u.id);else picked.delete(u.id);review();};
+        boxes.push({id:u.id,check});
         line.append(check,doc.createTextNode(unitName(u)+' · Level '+u.grade));group.append(line);
+      }
+      if(available.length>=2){
+        const quick=el('div',null,'base-unit-controls');
+        quick.append(
+          btn('Select all ready',()=>{for(const b of boxes){picked.add(b.id);b.check.checked=true;}review();},'pick-all'),
+          btn('Clear selection',()=>{picked.clear();for(const b of boxes)b.check.checked=false;review();},'pick-none')
+        );
+        group.append(quick);
       }
       if(!available.length)group.append(el('p','Enlist a unit in the barracks to send your first expedition.'));
       const other=towns.filter(t=>t.id!==s.id),targets=select('Mission destination'),choice=select('Mission order');
@@ -112,7 +122,8 @@
       for(const m of b.missions){
         const dest=domain.towns(w).find(t=>t.id===m.target),back=btn(m.manual?'End assignment':'Recall',()=>action({action:'recall',id:m.id}),'recall-'+m.id);
         back.disabled=m.phase==='returning';
-        buttonRow(content,domain.orders[m.order]+' · '+(dest?.name||'Former town'),m.ids.map(id=>unitName(roster(b,id))).join(', ')+' · '+(m.phase==='awaiting'?'Awaiting manual transport':m.phase),back);
+        const unitList=m.ids.map(id=>roster(b,id)).filter(Boolean).map(unitName).join(', ')||(m.ids.length+' units');
+        buttonRow(content,domain.orders[m.order]+' · '+(dest?.name||'Former town'),unitList+' · '+(m.phase==='awaiting'?'Awaiting manual transport':m.phase),back);
         if(m.manual&&m.phase==='awaiting')content.append(btn('Find transport truck',()=>{dialog.close();field?.select(s.id,'truck',true,m.target);},'transport-'+m.id));
       }
       const incoming=domain.incoming(w,s.id);

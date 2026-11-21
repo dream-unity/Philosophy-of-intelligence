@@ -3,7 +3,9 @@
   const {Game,width,height,rotations}=root.EarthTetris;
   const colors={I:'#70d4dc',J:'#78a7f5',L:'#efa364',O:'#f0ce69',S:'#88d5a2',T:'#c496df',Z:'#f08b91'};
   const keys={ArrowLeft:'left',ArrowRight:'right',ArrowDown:'down',ArrowUp:'clockwise',
-    x:'clockwise',z:'counterclockwise',' ':'drop',Shift:'hold'};
+    x:'clockwise',z:'counterclockwise',' ':'drop',Shift:'hold',c:'hold'};
+  const bestKey='common-earth.tetris-best.v1';
+  const clearNames=['','Single!','Double!','Triple!','Tetris!'];
   const repeats=new Set(['left','right','down']);
   function tile(ctx,x,y,size,type,ghost=false){
     const left=x*size,top=y*size;
@@ -32,7 +34,15 @@
     const get=id=>doc.getElementById('tetris-'+id),dialog=get('dialog'),board=get('board');
     const pad=dialog.querySelector('.tetris-pad'),controls=[...pad.querySelectorAll('button')];
     const ctx=board.getContext('2d'),size=board.width/width;
-    let game=null,paused=false,last=0,timer=0,repeatTimer=0,repeatPointer=null;
+    let game=null,paused=false,last=0,timer=0,repeatTimer=0,repeatPointer=null,calloutTimer=0,bestScore=0;
+    function loadBest(){try{const n=Number(root.localStorage?.getItem(bestKey));return Number.isSafeInteger(n)&&n>0?n:0;}catch{return 0;}}
+    function saveBest(n){if(n>bestScore){bestScore=n;try{root.localStorage?.setItem(bestKey,String(n));}catch{/* Ignore storage errors. */}}}
+    function flashCallout(message){
+      const el=get('callout');if(!el)return;
+      clearTimeout(calloutTimer);el.textContent=message;
+      if(message)calloutTimer=setTimeout(()=>{if(el.textContent===message)el.textContent='';},2200);
+    }
+    bestScore=loadBest();
     // Draw the empty well once. Only piece movement or a player action redraws the board.
     const grid=doc.createElement('canvas');grid.width=board.width;grid.height=board.height;
     const bg=grid.getContext('2d');
@@ -49,8 +59,10 @@
         for(const [x,y] of cells)tile(ctx,game.x+x,landing+y,size,game.type,true);
         for(const [x,y] of cells)tile(ctx,game.x+x,game.y+y,size,game.type);
       }
+      saveBest(game.score);
       board.setAttribute('aria-label','Tetris playfield · '+(game.over?'Game over':game.type+' piece, column '+(game.x+1)));
       get('score').textContent=game.score;get('lines').textContent=game.lines;get('level').textContent=game.level;
+      const bestEl=get('best');if(bestEl)bestEl.textContent=bestScore;
       preview(get('next'),game.next,'Next piece');preview(get('held'),game.held,'Held piece');
       const stopped=paused||game.over;
       get('overlay').hidden=!stopped;
@@ -80,7 +92,7 @@
       },Math.ceil(game.wait));
     }
     function start(){
-      stopRepeat();game=new Game();paused=false;last=performance.now();
+      stopRepeat();flashCallout('');bestScore=loadBest();game=new Game();paused=false;last=performance.now();
       paint();board.focus({preventScroll:true});schedule();
     }
     function pause(){
@@ -93,7 +105,14 @@
     }
     function play(action){
       if(!game||!dialog.open||game.over||paused)return;
-      advance();game.act(action);paint();schedule();
+      const prevLines=game.lines,prevLevel=game.level;
+      advance();game.act(action);
+      const cleared=game.lines-prevLines;
+      if(cleared>0){
+        const label=clearNames[Math.min(4,cleared)]||(cleared+' lines!');
+        flashCallout(label+(game.level>prevLevel?' · Level '+game.level:''));
+      }
+      paint();schedule();
       if(game.over){stopRepeat();get('continue').focus({preventScroll:true});}
     }
     get('pause').addEventListener('click',pause);
@@ -136,7 +155,7 @@
     root.addEventListener('blur',()=>{if(dialog.open)pause();});
     dialog.addEventListener('close',()=>{
       if(dialog.open)return;
-      stopRepeat();clearTimeout(timer);game=null;paused=false;
+      stopRepeat();clearTimeout(timer);clearTimeout(calloutTimer);game=null;paused=false;
     });
     return {
       open(name){get('player').textContent='Playing as '+name;dialog.showModal();start();},

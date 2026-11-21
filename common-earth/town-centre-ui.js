@@ -25,7 +25,8 @@
     let selected='',expected='',busy=false,criteria={},districts='',lastLedger='',lastWorld=null,lastWeek=0;
     let blind=null,search=null,quotedWorld=null,quoteStamp='',rosterFull=false;
     const current=()=>[...sim.state.sites,...(sim.state.communityLife?.outposts||[])].find(s=>s.id===selected)||sim.active();
-    const embassy=element('section'),embassyTitle=element('h3'),foreign=element('select'),relationText=element('p'),defence=element('p');
+    const embassy=element('section'),embassyTitle=element('h3'),diplomacyList=element('div'),foreign=element('select'),relationText=element('p'),defence=element('p');
+    diplomacyList.className='diplomacy-overview';diplomacyList.setAttribute('role','group');diplomacyList.setAttribute('aria-label','Relations with neighbouring communities');
     const decision=button('Declare war',async()=>{
       const world=sim.state,home=world.communityLife?.homeId;
       const target=foreign.value,relation=root.EarthBorderConflict.relation(world,home,target);
@@ -43,9 +44,9 @@
         status.textContent=result.message;onResult?.(result);
       }finally{refresh(true);}
     });
-    embassy.append(embassyTitle,labelled('Other community',foreign),relationText,decision,cancelTalks,defence);
+    embassy.append(embassyTitle,diplomacyList,labelled('Other community',foreign),relationText,decision,cancelTalks,defence);
     body.insertBefore(embassy,forms);
-    let embassyKeys='';
+    let embassyKeys='',overviewKey='';
     function showDiplomacy(world,towns,s){
       const home=towns.find(t=>t.id===world.communityLife?.homeId);
       embassy.hidden=!home||!root.EarthBorderConflict||towns.length<2;if(embassy.hidden)return;
@@ -58,6 +59,22 @@
       }
       if(expected!==s.id&&s!==home)foreign.value=s.id;
       const other=others.find(t=>t.id===foreign.value)||others[0],r=root.EarthBorderConflict.relation(world,home.id,other.id);
+      const rows=others.map(t=>{
+        const rel=root.EarthBorderConflict.relation(world,home.id,t.id);
+        const occupied=t.communityLife?.border?.occupiedBy===home.id?'Occupied':home.communityLife?.border?.occupiedBy===t.id?'Occupying home':'';
+        const state=occupied||(rel?.state==='war'?(rel.offer?'Ceasefire offered':'At war'):'Peace');
+        return {id:t.id,name:t.name,state,war:rel?.state==='war',offer:!!rel?.offer,active:t.id===other.id};
+      });
+      const nextOverview=JSON.stringify(rows);
+      if(overviewKey!==nextOverview){
+        overviewKey=nextOverview;
+        diplomacyList.replaceChildren(...rows.map(item=>{
+          const b=button(item.name+' · '+item.state,()=>{foreign.value=item.id;refresh(true);});
+          b.className='diplomacy-chip'+(item.war?' is-war':'')+(item.offer?' is-offer':'');
+          b.setAttribute('aria-pressed',String(item.active));
+          return b;
+        }));
+      }
       relationText.textContent=home.name+' and '+other.name+(r?.state==='war'?' are at war.':' are at peace.')+
         (r?.offer?' Both councils will recall their watches, return occupied parcels and reopen passage.':'');
       decision.textContent=r?.state==='war'?(r.offer?'Accept ceasefire terms':'Negotiate peace'):'Declare war';

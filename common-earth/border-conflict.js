@@ -176,7 +176,7 @@
   function blow(world,site,actor){
     // Older saved patrols used stamina as their only fighting aptitude.
     const {experience,fatigue}=service(world,site,actor);
-    return Math.round(((actor.skill??actor.stamina)+actor.resolve)/13+Math.min(7,experience)-fatigue*.08);
+    return Math.max(0,Math.round(((actor.skill??actor.stamina)+actor.resolve)/13+Math.min(7,experience)-fatigue*.08));
   }
   function assign(site,p){
     site.communityLife.away[p.id]=borderDuty;
@@ -370,8 +370,8 @@
     // A less committed watch can accept withdrawal. The most militant
     // expeditions continue the fight unless the councils negotiate passage.
     const retreat=b.resolve<58&&b.energy<42&&a.resolve<83;
-    if(a.energy>0&&b.energy>0&&!retreat&&!(a.resolve<65&&a.energy<32))return;
-    const victory=b.energy<=0&&a.energy<=0?a.energy>b.energy||a.energy===b.energy&&originalA>=originalB:b.energy<=0||retreat;
+    if(c.round<12&&a.energy>0&&b.energy>0&&!retreat&&!(a.resolve<65&&a.energy<32))return;
+    const victory=b.energy<=0&&a.energy<=0||a.energy>0&&b.energy>0&&!retreat&&c.round>=12?a.energy>b.energy||a.energy===b.energy&&originalA>=originalB:b.energy<=0||retreat;
     const loser=victory?b:a,losingTown=victory?other:site;
     const winner=victory?a:b,exposure=Math.max(0,-loser.energy)+Math.max(0,winner.energy)*.4+service(world,losingTown,loser).fatigue*.3;
     const death=loser.energy<=0&&exposure>=15&&Math.max(winner.resolve,loser.resolve)>=75&&retire(world,losingTown,loser.id,'Died in the boundary fight at '+c.cell+'.');
@@ -493,8 +493,8 @@
     watch.round++;
     visitor.energy-=13+blow(world,site,guard);
     if(watch.resisting)guard.energy-=20+blow(world,home,visitor);
-    if(visitor.energy>0&&guard.energy>0)return;
-    const won=guard.energy<=0&&(visitor.energy>0||guard.energy<visitor.energy);
+    if(watch.round<12&&visitor.energy>0&&guard.energy>0)return;
+    const won=guard.energy<=0&&(visitor.energy>0||guard.energy<visitor.energy)||watch.round>=12&&visitor.energy>guard.energy;
     let message;
     if(won){
       const fatal=watch.resisting&&retire(world,site,guard.id,'Died fighting '+visitor.name+' at the gate.');
