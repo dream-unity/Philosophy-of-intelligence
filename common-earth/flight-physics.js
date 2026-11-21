@@ -594,6 +594,105 @@
     return { headingDeg, targetDeg, relativeDeg: rel, distance };
   }
 
+  /**
+   * Pure autonomous hunting/pursuit & circling autopilot for the Dragon + Wizard.
+   * - Chases moving targets (soldiers, vehicles) relentlessly until destroyed.
+   * - Circles/orbits stationary targets (buildings, towers, bases) at optimal
+   *   strafing height while pouring continuous dragonfire & staff thunder down
+   *   until HP reaches 0!
+   * Returns aerodynamic control inputs + { shouldFire, shouldThunder, mode, horizDist }.
+   */
+  function computeHuntAutopilot(state, target, dt = 1 / 60) {
+    if (!state || !target || (target.hp != null && target.hp <= 0)) {
+      return { pitch: 0, roll: 0, yaw: 0, flap: false, dash: false, boost: false, hover: false, shouldFire: false, shouldThunder: false, mode: 'idle', horizDist: 0 };
+    }
+    const tx = target.x + (target.vx || 0) * 0.45;
+    const tz = target.z + (target.vz || 0) * 0.45;
+    const ty = target.y || 2.0;
+
+    const dx = tx - state.x;
+    const dz = tz - state.z;
+    const horizDist = Math.hypot(dx, dz);
+    const isMoving = Boolean(target.isUnit || target.kind === 'soldier' || target.kind === 'unit' || target.kind === 'vehicle' || Math.hypot(target.vx || 0, target.vz || 0) > 0.25);
+
+    // Optimal attack altitude & circling radius
+    const orbitRadius = isMoving ? 18 : Math.max(26, (target.radius || 6) * 2.8);
+    const attackAlt = isMoving ? Math.max(15, ty + 14) : Math.max(22, ty + 18);
+
+    // Determine desired 3D aim point:
+    // - Far (> orbitRadius * 1.55): Dive / pursue straight at target!
+    // - Close (<= orbitRadius * 1.55): Circle/orbit around buildings or sweep tightly across soldiers while keeping jaws angled toward target!
+    let aimX = tx;
+    let aimZ = tz;
+    let huntMode = 'pursue';
+
+    if (horizDist < orbitRadius * 1.45) {
+      huntMode = 'circle';
+      // Tangential orbit vector (counter-clockwise sweep) blended with inward pull to maintain orbitRadius
+      const nx = horizDist > 0.01 ? dx / horizDist : 0;
+      const nz = horizDist > 0.01 ? dz / horizDist : -1;
+      // Tangent perpendicular to radial vector
+      const tangX = -nz;
+      const tangZ = nx;
+      const radialErr = clamp((horizDist - orbitRadius) / orbitRadius, -0.85, 0.85);
+      // Aim slightly ahead on the circular path so dragon banks gracefully around target
+      const blendRadial = isMoving ? 0.62 : (0.36 + radialErr * 0.55);
+      const blendTang = isMoving ? 0.55 : 0.78;
+      aimX = state.x + (nx * blendRadial + tangX * blendTang) * 34;
+      aimZ = state.z + (nz * blendRadial + tangZ * blendTang) * 34;
+    }
+
+    // Desired yaw toward aim point (yaw=0 faces -Z, yaw=+PI/2 faces -X)
+    const desiredYaw = Math.atan2(-(aimX - state.x), -(aimZ - state.z));
+    let yawDiff = desiredYaw - state.yaw;
+    while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+
+    // Bearing directly to target (for firing fire-cone & thunder)
+    const directYaw = Math.atan2(-dx, -dz);
+    let directYawDiff = directYaw - state.yaw;
+    while (directYawDiff > Math.PI) directYawDiff -= Math.PI * 2;
+    while (directYawDiff < -Math.PI) directYawDiff += Math.PI * 2;
+
+    // Desired altitude control via smooth pitch
+    const altErr = attackAlt - state.y;
+    const desiredPitch = clamp(altErr * 0.032 - (huntMode === 'pursue' && horizDist < 75 ? 0.14 : 0.06), -0.52, 0.48);
+    const pitchErr = desiredPitch - state.pitch;
+
+    // Bank into turn cleanly + rudder yaw assist
+    const desiredRoll = clamp(-yawDiff * 1.15, -0.95, 0.95);
+    const rollErr = desiredRoll - state.roll;
+
+    const pitch = clamp(pitchErr * 2.4, -1, 1);
+    const roll = clamp(rollErr * 2.2, -1, 1);
+    const yaw = clamp(-yawDiff * 2.0, -1, 1);
+
+    const dash = horizDist > 95;
+    const flap = state.y < attackAlt - 3 || state.speed < 24 || !state.airborne;
+    const hover = false;
+
+    // Blaze fire whenever within dragonfire range (95m) and either facing target or sweeping tightly over it!
+    const shouldFire = horizDist <= 96 && (Math.abs(directYawDiff) < 0.78 || horizDist < orbitRadius * 1.6);
+    // Call down sky-to-ground staff thunder whenever within 135m of victim!
+    const shouldThunder = horizDist <= 135;
+
+    void dt;
+    return {
+      pitch,
+      roll,
+      yaw,
+      flap,
+      dash,
+      boost: flap || dash,
+      hover,
+      shouldFire,
+      shouldThunder,
+      mode: huntMode,
+      horizDist,
+      directYawDiff
+    };
+  }
+
   const api = Object.freeze({
     PROFILES,
     rectOverlaps,
@@ -607,7 +706,8 @@
     forwardVector,
     stepFlight,
     findTargetsInFireCone,
-    compassBearing
+    compassBearing,
+    computeHuntAutopilot
   });
 
   root.EarthFlightPhysics = api;

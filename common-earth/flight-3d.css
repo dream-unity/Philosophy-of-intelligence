@@ -228,6 +228,62 @@
   background: #2b738f;
   border-color: #bdf4ff;
 }
+.flight-btn.thunder-btn {
+  background: #193b6b;
+  color: #e8fcff;
+  border-color: #66e6ff;
+}
+.flight-btn.thunder-btn:hover,
+.flight-btn.thunder-btn[data-active="true"] {
+  background: #225496;
+  border-color: #b8f7ff;
+}
+.flight-btn.teleport-btn {
+  background: #47256b;
+  color: #f6ebff;
+  border-color: #c88cff;
+}
+.flight-btn.teleport-btn:hover,
+.flight-btn.teleport-btn[data-active="true"] {
+  background: #613394;
+  border-color: #e6c6ff;
+}
+
+/* Active One-Tap / Click-to-Hunt Victim Indicator Chip */
+.flight-hunt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(34, 14, 16, 0.9);
+  border: 1px solid rgba(255, 112, 76, 0.85);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font: 700 0.72rem/1.2 var(--mono, ui-monospace, monospace);
+  color: #ffe3c7;
+  box-shadow: 0 4px 16px rgba(18, 4, 6, 0.45);
+  max-width: min(92vw, 420px);
+}
+.flight-hunt-chip[hidden] {
+  display: none;
+}
+.flight-hunt-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flight-hunt-stop {
+  background: rgba(186, 59, 28, 0.92);
+  color: #fff6ea;
+  border: 1px solid rgba(255, 184, 142, 0.75);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: 700 0.68rem/1.15 var(--sans, system-ui, sans-serif);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.flight-hunt-stop:hover {
+  background: #e44f24;
+}
 
 /* Subtle center aiming reticle */
 .flight-reticle {
@@ -283,7 +339,7 @@
 .flight-banner {
   position: absolute;
   left: 50%;
-  top: 76px;
+  top: 96px;
   transform: translateX(-50%);
   z-index: 4;
   pointer-events: none;
@@ -387,7 +443,7 @@
     padding: 6px 10px;
   }
   .flight-banner {
-    top: 108px;
+    top: 146px;
     font-size: 0.76rem;
     padding: 5px 12px;
   }
@@ -431,7 +487,7 @@
     font-size: 0.72rem;
   }
   .flight-banner {
-    top: 156px;
+    top: 196px;
   }
   .flight-dock {
     padding: 6px 8px;

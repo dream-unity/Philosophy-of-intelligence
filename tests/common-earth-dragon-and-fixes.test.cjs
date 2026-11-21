@@ -407,7 +407,7 @@ test('Flight 3D cache-busting hashes & Canvas 2D fallback renderer resilience', 
 
   // 1. Verify common-earth/index.html has up-to-date ?v= hashes for all flight/dragon assets
   const html = fs.readFileSync(path.resolve(__dirname, '..', 'common-earth/index.html'), 'utf8');
-  for (const file of ['flight-3d.css', 'flight-physics.js', 'dragon-art.js', 'dragon-ui.js', 'flight-3d.js']) {
+  for (const file of ['flight-3d.css', 'flight-physics.js', 'dragon-stable.js', 'simulation.js', 'dragon-art.js', 'dragon-ui.js', 'flight-3d.js']) {
     const expected = `${file}?v=${sha12(file)}`;
     assert.ok(html.includes(expected), `common-earth/index.html must reference ${expected} to prevent stale cached modules`);
   }
@@ -469,5 +469,147 @@ test('Flight 3D cache-busting hashes & Canvas 2D fallback renderer resilience', 
   assert.ok(calls.some(c => c[0] === 'fillRect'), 'Canvas 2D fallback cleared the sky background');
   assert.ok(calls.some(c => c[0] === 'fill'), 'Canvas 2D fallback rasterized visible triangles from ShaderMaterial meshes');
 });
+
+test('EarthFlightPhysics.computeHuntAutopilot: chases moving enemies, circles stationary buildings, and stops on destruction', () => {
+  const FP = require('../common-earth/flight-physics.js');
+
+  // 1. Chasing a moving enemy soldier across the battlefield
+  const hunter = FP.createFlightState('dragon', { x: 0, y: 38, z: 0, yaw: 0, pitch: 0, speed: 30 });
+  const soldier = { id: 'enemy-s1', isUnit: true, x: 45, y: 2, z: -135, vx: 6, vz: -4, radius: 4, hp: 100 };
+  const initialDist = Math.hypot(soldier.x - hunter.x, soldier.z - hunter.z);
+  let sawPursue = false;
+  let sawFire = false;
+  let sawThunder = false;
+  for (let i = 0; i < 65; i++) {
+    const cmd = FP.computeHuntAutopilot(hunter, soldier, 0.05);
+    if (cmd.mode === 'pursue') sawPursue = true;
+    if (cmd.shouldFire) sawFire = true;
+    if (cmd.shouldThunder) sawThunder = true;
+    FP.stepFlight(hunter, cmd, 0.05);
+    soldier.x += soldier.vx * 0.05;
+    soldier.z += soldier.vz * 0.05;
+  }
+  const finalDist = Math.hypot(soldier.x - hunter.x, soldier.z - hunter.z);
+  assert.equal(sawPursue, true, 'Autopilot enters pursue mode for a fleeing moving enemy');
+  assert.ok(finalDist < initialDist * 0.55, `Dragon closes distance on moving soldier (${initialDist.toFixed(1)} -> ${finalDist.toFixed(1)})`);
+  assert.equal(sawFire, true, 'Autopilot blazes dragonfire once inside strike range');
+  assert.equal(sawThunder, true, 'Autopilot triggers wizard staff thunder strike inside range');
+
+  // 2. Circling a stationary enemy building while continuously blazing fire & thunder
+  const orbiter = FP.createFlightState('dragon', { x: 38, y: 30, z: 0, yaw: 0, pitch: 0, speed: 32 });
+  const fortress = { id: 'enemy-hq', isUnit: false, x: 0, y: 8, z: 0, vx: 0, vz: 0, radius: 10, hp: 100 };
+  let sawCircle = false;
+  let circleFire = false;
+  let circleThunder = false;
+  let minAlt = Infinity;
+  const startYaw = orbiter.yaw;
+  for (let i = 0; i < 50; i++) {
+    const cmd = FP.computeHuntAutopilot(orbiter, fortress, 0.05);
+    if (cmd.mode === 'circle') sawCircle = true;
+    if (cmd.shouldFire) circleFire = true;
+    if (cmd.shouldThunder) circleThunder = true;
+    FP.stepFlight(orbiter, cmd, 0.05);
+    if (orbiter.y < minAlt) minAlt = orbiter.y;
+  }
+  assert.equal(sawCircle, true, 'Autopilot enters circling/orbit mode around stationary buildings');
+  assert.equal(circleFire, true, 'Autopilot continually blazes fire while circling building');
+  assert.equal(circleThunder, true, 'Autopilot calls down wizard thunder strikes while circling building');
+  assert.ok(minAlt > fortress.y + 8, `Dragon stays safely above building roofline while orbiting (minAlt=${minAlt.toFixed(1)})`);
+  assert.ok(Math.abs(orbiter.yaw - startYaw) > 0.35, 'Dragon turns continuously to orbit around the building');
+
+  // 3. Returns idle once target is completely destroyed
+  const deadCmd = FP.computeHuntAutopilot(orbiter, { ...fortress, hp: 0 }, 0.05);
+  assert.equal(deadCmd.mode, 'idle');
+  assert.equal(deadCmd.shouldFire, false);
+  assert.equal(deadCmd.shouldThunder, false);
+});
+
+test('Wizard War-Enemy Teleport, Staff Sky-to-Ground Thunder Strike, Lethal Fire Kills, and Raid Launch', async () => {
+  const ctx = loadCommonEarthEnv();
+  const sim = ctx.CommonEarthSim.create();
+  sim.found({ name: 'Stone Town', lat: -6.1622, lon: 39.1922, water: false }, 'Stone Town');
+  const site = sim.active();
+  site.funds = 150;
+  site.materials = 80;
+  site.food = 80;
+
+  // Build Dragon Stable, summon dragon, train steward as Wizard
+  assert.equal((await sim.perform('buildFreeBuilding', { siteId: site.id, kind: 'dragonStable' })).ok, true);
+  assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'obsidian', name: 'Vaelor' })).ok, true);
+  assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'trainWizard', personId: 'steward' })).ok, true);
+  const dragon = site.dragonStable.dragons[0];
+
+  // Ensure a neighbouring settlement exists and declare explicit war on it
+  const others = [...(sim.state.sites || []), ...(sim.state.communityLife?.outposts || [])].filter(s => s.id !== site.id);
+  assert.ok(others.length > 0, 'World has at least one neighbouring settlement');
+  const enemyTown = others[0];
+  enemyTown.militaryBase = enemyTown.militaryBase || { built: true, units: [] };
+  enemyTown.militaryBase.units.push({ id: 'enemy-guard-1', name: 'Guard 1', hp: 100 });
+  enemyTown.militaryBase.units.push({ id: 'enemy-guard-2', name: 'Guard 2', hp: 100 });
+  const warRes = ctx.EarthBorderConflict.diplomacy(sim.state, { home: site.id, target: enemyTown.id, action: 'declare' });
+  assert.equal(warRes.ok || ctx.EarthBorderConflict.relation(sim.state, site.id, enemyTown.id)?.state === 'war', true);
+
+  // enemyBasesAtWar prioritizes war enemies first with atWar: true
+  const bases = ctx.EarthDragonStable.enemyBasesAtWar(sim.state, site);
+  assert.ok(bases.length >= 4, 'Lists war enemy bases plus frontier rival outposts');
+  const warEntry = bases.find(b => b.siteId === enemyTown.id);
+  assert.ok(warEntry && warEntry.atWar === true, 'War enemy settlement is flagged atWar: true');
+  assert.equal(bases[0].atWar, true, 'War enemies are prioritized ahead of non-war outposts');
+
+  // Arcane Teleport to War Enemy Base
+  const tp = await sim.perform('dragonAction', {
+    siteId: site.id,
+    action: 'teleportEnemyBase',
+    riderId: 'steward',
+    dragonId: dragon.id,
+    base: { siteId: enemyTown.id }
+  });
+  assert.equal(tp.ok, true, tp.message);
+  assert.ok(tp.message.includes(enemyTown.name), `Teleport message mentions war-enemy base (${tp.message})`);
+  assert.equal(site.dragonStable.teleports, 1);
+  assert.equal(site.dragonStable.wizards[0].teleports, 1);
+
+  // Wizard Staff Sky-to-Ground Thunder Strike kills an enemy soldier
+  const unitsBefore = enemyTown.militaryBase.units.length;
+  const th = await sim.perform('dragonAction', {
+    siteId: site.id,
+    action: 'strikeThunder',
+    riderId: 'steward',
+    dragonId: dragon.id,
+    target: { id: 'enemy-guard-1', kind: 'enemy', name: 'Enemy Rifleman', siteId: enemyTown.id, killed: true, hp: 0 }
+  });
+  assert.equal(th.ok, true, th.message);
+  assert.equal(site.dragonStable.thunderStrikes, 1);
+  assert.equal(site.dragonStable.kills, 1);
+  assert.equal(dragon.kills, 1);
+  assert.equal(enemyTown.militaryBase.units.length, unitsBefore - 1, 'Thunder strike eliminates enemy soldier from war base garrison');
+
+  // Lethal blazing dragonfire kills another enemy unit
+  const bf = await sim.perform('dragonAction', {
+    siteId: site.id,
+    action: 'blastFire',
+    riderId: 'steward',
+    dragonId: dragon.id,
+    target: { id: 'enemy-guard-2', kind: 'enemy', name: 'Enemy Guard', siteId: enemyTown.id, lethal: true, killed: true, hp: 0 }
+  });
+  assert.equal(bf.ok, true, bf.message);
+  assert.equal(site.dragonStable.kills, 2);
+  assert.equal(dragon.kills, 2);
+
+  // Verify DragonUI mountDragon forwards teleport raid options & callbacks cleanly
+  const launches = [];
+  ctx.EarthFlight3D = { isOpen: () => false, launch: opts => { launches.push(opts); return true; } };
+  const dummyEl = { open: false, focus() {} };
+  ctx.document = { getElementById: () => dummyEl };
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../common-earth/dragon-ui.js'), 'utf8'), ctx);
+  const ui = ctx.EarthDragonUI.mount({ sim, notify: () => {} });
+  await ui.mountDragon({ siteId: site.id, dragonId: dragon.id }, 'steward', { teleportBaseId: warEntry.id, autoTeleportEnemy: true });
+  assert.equal(launches.length, 1);
+  assert.equal(launches[0].teleportBaseId, warEntry.id);
+  assert.equal(launches[0].autoTeleportEnemy, true);
+  assert.equal(typeof launches[0].onThunderStrike, 'function');
+  assert.equal(typeof launches[0].onTeleportBase, 'function');
+});
+
 
 

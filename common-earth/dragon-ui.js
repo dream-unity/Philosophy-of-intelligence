@@ -59,7 +59,7 @@
       status.scrollIntoView({block:'nearest'});
     }
 
-    async function mountDragon(target, riderId) {
+    async function mountDragon(target, riderId, launchExtras = {}) {
       if (mounting || root.EarthFlight3D?.isOpen()) return;
       const site = root.EarthCommunityLife.lookup(sim.state, target.siteId);
       if (!site) { flightMessage('This town is no longer available.', true); return; }
@@ -72,7 +72,7 @@
       if (!riderId && ds.wizards.length > 1) {
         doc.getElementById('dragon-rider-title').textContent = 'Who will ride ' + dragon.name + '?';
         const choices = doc.getElementById('dragon-rider-options');
-        choices.replaceChildren(...ds.wizards.map(w => btn(w.name + ' · ' + w.title, () => mountDragon(target, w.id))));
+        choices.replaceChildren(...ds.wizards.map(w => btn(w.name + ' · ' + w.title, () => mountDragon(target, w.id, launchExtras))));
         picker.querySelector('[data-mount-status]')?.remove();
         if (!picker.open) picker.showModal();
         return;
@@ -105,10 +105,15 @@
         const launched = root.EarthFlight3D.launch({
           mode: 'dragon', site, world: sim.state, dragon, wizard, origin: target,
           evening: Boolean(root.EarthDayClock?.read?.(sim.state)?.night),
+          teleportBaseId: launchExtras.teleportBaseId || null,
+          autoTeleportEnemy: Boolean(launchExtras.autoTeleportEnemy),
           onFireHit: hit => sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.()),
+          onThunderStrike: hit => sim.perform('dragonAction', { siteId: site.id, action: 'strikeThunder', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.()),
+          onTeleportBase: base => sim.perform('dragonAction', { siteId: site.id, action: 'teleportEnemyBase', riderId: wizard.id, dragonId: dragon.id, base }).then(() => onUpdated?.()),
           onExit: stats => {
             sim.perform('dragonAction', { siteId: site.id, action: 'recordFlight', riderId: wizard.id, dragonId: dragon.id, stats }).then(() => onUpdated?.());
-            notify(wizard.name + ' and ' + dragon.name + ' returned from flight (' + Math.round(stats.distanceFlown) + ' m flown).');
+            const killNote = stats.kills ? ` · ${stats.kills} enemies defeated` : '';
+            notify(wizard.name + ' and ' + dragon.name + ' returned from flight (' + Math.round(stats.distanceFlown) + ' m flown' + killNote + ').');
             doc.getElementById('street-canvas')?.focus({preventScroll:true});
           }
         });
@@ -197,12 +202,15 @@
           label.append(riderSelect);
           secDragons.append(label);
         }
+        const enemyBases = DS.enemyBasesAtWar?.(sim.state, site) || [];
+        const primaryEnemy = enemyBases[0] || null;
         for (const d of ds.dragons) {
           const card = make('article', null, 'dragon-card');
           const head = make('div', null, 'dragon-card-head');
+          const killsText = d.kills ? ` · Enemies Defeated ${d.kills}` : '';
           head.append(
             make('strong', `${d.name} · ${d.lineageTitle}`),
-            make('small', `Nourishment ${Math.round(d.hunger)}% · Flights ${d.flights || 0} · Fire Blasts ${d.blasts || 0}`)
+            make('small', `Nourishment ${Math.round(d.hunger)}% · Flights ${d.flights || 0} · Fire Blasts ${d.blasts || 0}${killsText}`)
           );
           const meter = make('div', null, 'dragon-meter');
           const fill = doc.createElement('i');
@@ -213,6 +221,15 @@
           const flyBtn = btn('Mount & Fly ' + d.name, () => mountDragon(
             { siteId: site.id, dragonId: d.id }, riderSelect?.value
           ), 'primary-gold');
+
+          const raidLabel = primaryEnemy
+            ? (primaryEnemy.atWar ? `Teleport & Raid ${primaryEnemy.townName} [WAR]` : `Teleport & Raid ${primaryEnemy.name}`)
+            : 'Teleport & Raid Enemy Base';
+          const raidBtn = btn(raidLabel, () => mountDragon(
+            { siteId: site.id, dragonId: d.id },
+            riderSelect?.value,
+            { autoTeleportEnemy: true, teleportBaseId: primaryEnemy?.id || null }
+          ), 'fire-action');
 
           const feedBtn = btn(`Feed ${d.name}`, () => runCmd('dragonAction', { siteId: site.id, action: 'feed', dragonId: d.id }));
           const funFireBtn = btn('Blast Fire (Mid-Flight Fun)', () => {
@@ -228,7 +245,7 @@
             runCmd('dragonAction', { siteId: site.id, action: 'blastFire', riderId: riderId || actorId, dragonId: d.id, target });
           }, 'fire-action');
 
-          actions.append(flyBtn, feedBtn, funFireBtn, strikeBtn);
+          actions.append(flyBtn, raidBtn, feedBtn, funFireBtn, strikeBtn);
           card.append(head, meter, actions);
           secDragons.append(card);
         }

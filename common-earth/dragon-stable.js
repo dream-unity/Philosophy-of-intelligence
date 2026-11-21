@@ -367,18 +367,140 @@
       return { ok: true, kind: 'building', dragon, wizard, damaged: damagedLabel, message: msg };
     }
 
-    // Enemy / unit / person fire attack
+    // Enemy / unit / person / soldier fire attack — lethal devastation!
     const targetSite = (target.siteId && root.EarthCommunityLife?.lookup?.(world, target.siteId)) || null;
     if (targetSite?.militaryBase?.units?.length) {
       const unit = targetSite.militaryBase.units.find(u => u.id === target.id) || targetSite.militaryBase.units[0];
       if (unit) {
-        unit.hp = Math.max(0, (unit.hp || 100) - 60);
+        unit.hp = Math.max(0, (unit.hp ?? 100) - (target.lethal ? 100 : 65));
         if (unit.hp <= 0) {
           targetSite.militaryBase.units = targetSite.militaryBase.units.filter(u => u.id !== unit.id);
         }
       }
     }
-    const msg = wizard.name + ' and ' + dragon.name + ' blasted a torrent of enchanted dragonfire onto ' + targetName + '!';
+    if (target.killed || target.hp === 0) {
+      dragon.kills = (dragon.kills || 0) + 1;
+      ds.kills = (ds.kills || 0) + 1;
+    }
+    const verb = (target.killed || target.hp === 0) ? 'incinerated' : 'blasted a torrent of enchanted dragonfire onto';
+    const msg = wizard.name + ' and ' + dragon.name + ' ' + verb + ' ' + targetName + '!';
+    record(site, world, msg);
+    return { ok: true, kind, dragon, wizard, message: msg };
+  }
+
+  /**
+   * Lists enemy bases the community is currently at war with (prioritized first),
+   * followed by hostile neighbouring settlements and fortified rival outposts.
+   */
+  function enemyBasesAtWar(world, site) {
+    if (!world || !site) return [];
+    const conflict = root.EarthBorderConflict;
+    const allTowns = [
+      ...(world.sites || []),
+      ...(world.communityLife?.outposts || [])
+    ].filter(other => other && other.id !== site.id);
+
+    const warBases = [];
+    const rivalBases = [];
+    for (const other of allTowns) {
+      const rel = conflict?.relation?.(world, site.id, other.id);
+      const isAtWar = rel?.state === 'war';
+      const isHostile = Boolean(conflict?.hostile?.(world, other));
+      const units = other.militaryBase?.units?.length || 0;
+      const buildings = (other.buildings?.length || 0) + (other.freeBuildings?.length || 0) + 4;
+      const entry = {
+        id: 'war-base-' + other.id,
+        siteId: other.id,
+        name: other.name + (isAtWar ? ' Enemy Base' : ' Fortified Base'),
+        townName: other.name,
+        atWar: isAtWar,
+        hostile: isHostile,
+        units: Math.max(units, isAtWar ? 6 : 4),
+        buildings,
+        population: other.population || 10
+      };
+      if (isAtWar) warBases.push(entry);
+      else if (isHostile) rivalBases.push(entry);
+    }
+
+    // Always include the three regional rival military fortifications as additional raid targets
+    const outposts = [
+      { id: 'enemy-north', siteId: null, name: 'Rival Outpost Bastion', townName: 'Northern Frontier', atWar: false, hostile: true, units: 5, buildings: 3, population: 5 },
+      { id: 'enemy-west', siteId: null, name: 'Raider Camp Fortress', townName: 'Western Ridge', atWar: false, hostile: true, units: 5, buildings: 3, population: 5 },
+      { id: 'enemy-east', siteId: null, name: 'Eastern Citadel Outpost', townName: 'Eastern Frontier', atWar: false, hostile: true, units: 5, buildings: 3, population: 5 }
+    ];
+
+    return [...warBases, ...rivalBases, ...outposts];
+  }
+
+  /**
+   * Wizard Arcane Teleport: warps Wizard + Dragon directly above an enemy base.
+   */
+  function teleportToEnemyBase(world, site, actorId, dragonId, baseInfo = {}) {
+    const check = canFlyDragon(site, actorId, dragonId);
+    if (!check.ok) return { ok: false, message: check.reason };
+    const ds = ensure(site);
+    const { dragon, wizard } = check;
+    const bases = enemyBasesAtWar(world, site);
+    const chosen = (baseInfo.siteId && bases.find(b => b.siteId === baseInfo.siteId))
+      || (baseInfo.id && bases.find(b => b.id === baseInfo.id))
+      || bases[0]
+      || { id: 'enemy-north', name: 'Rival Outpost Bastion', atWar: false };
+
+    wizard.teleports = (wizard.teleports || 0) + 1;
+    ds.teleports = (ds.teleports || 0) + 1;
+    const msg = wizard.name + ' opened an arcane rift atop ' + dragon.name + ' and teleported directly above ' + chosen.name + '!';
+    record(site, world, msg);
+    return { ok: true, dragon, wizard, destination: chosen, message: msg };
+  }
+
+  /**
+   * Wizard Staff Sky-to-Ground Thunder Strike:
+   * Channels lightning upward from the Wizard's staff into the sky and brings a
+   * devastating thunderbolt crashing down onto whoever or whatever the target is!
+   */
+  function strikeThunder(world, site, actorId, dragonId, target = {}) {
+    const check = canFlyDragon(site, actorId, dragonId);
+    if (!check.ok) return { ok: false, message: check.reason };
+    const ds = ensure(site);
+    const { dragon, wizard } = check;
+    const kind = target?.kind || 'enemy';
+    const targetName = target?.name || 'enemy forces';
+
+    wizard.thunderStrikes = (wizard.thunderStrikes || 0) + 1;
+    ds.thunderStrikes = (ds.thunderStrikes || 0) + 1;
+    ds.attacks = (ds.attacks || 0) + 1;
+
+    const targetSite = (target.siteId && root.EarthCommunityLife?.lookup?.(world, target.siteId)) || null;
+    if (targetSite) {
+      if (kind === 'building') {
+        const b = targetSite.buildings?.find(item => item.id === target.id || item.name === targetName);
+        const fb = targetSite.freeBuildings?.find(item => item.id === target.id || item.name === targetName);
+        const struct = b || fb;
+        if (struct) {
+          struct.hp = clamp((struct.hp ?? 100) - 70, 0, 100);
+          struct.scorched = true;
+          if (struct.hp <= 0) {
+            if (b) targetSite.buildings = targetSite.buildings.filter(item => item !== b);
+            if (fb) targetSite.freeBuildings = targetSite.freeBuildings.filter(item => item !== fb);
+          }
+        }
+      } else if (targetSite.militaryBase?.units?.length) {
+        const unit = targetSite.militaryBase.units.find(u => u.id === target.id) || targetSite.militaryBase.units[0];
+        if (unit) {
+          unit.hp = Math.max(0, (unit.hp ?? 100) - 100);
+          if (unit.hp <= 0) {
+            targetSite.militaryBase.units = targetSite.militaryBase.units.filter(u => u.id !== unit.id);
+          }
+        }
+      }
+    }
+    if (target.killed || target.hp === 0) {
+      dragon.kills = (dragon.kills || 0) + 1;
+      ds.kills = (ds.kills || 0) + 1;
+    }
+
+    const msg = wizard.name + ' raised his staff to the heavens and called down a shattering thunderbolt onto ' + targetName + '!';
     record(site, world, msg);
     return { ok: true, kind, dragon, wizard, message: msg };
   }
@@ -424,6 +546,9 @@
     feedDragon,
     tick,
     blastFire,
+    enemyBasesAtWar,
+    teleportToEnemyBase,
+    strikeThunder,
     recordFlight,
     valid
   });
