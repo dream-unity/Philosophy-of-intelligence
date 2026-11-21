@@ -16,23 +16,31 @@
   });
 
   const ARCHETYPES = Object.freeze([
-    { name: 'Gloomcrusher', title: 'Dreadspire Giant Troll', heightMeters: 21, maxHp: 540, armor: 0.45, weapon: 'Obsidian Monolith Club', skin: '#333b37', accent: '#62705d', eye: '#ff2b1a' },
-    { name: 'Nightmaw', title: 'Abyssal Colossus Troll', heightMeters: 23, maxHp: 620, armor: 0.48, weapon: 'Shattered Pillar Maul', skin: '#2a2f36', accent: '#545f69', eye: '#ff4219' },
-    { name: 'Ashbone', title: 'Darklands Ravager Troll', heightMeters: 19, maxHp: 490, armor: 0.42, weapon: 'Charred Oak Greatclub', skin: '#3c3631', accent: '#6b6052', eye: '#ff341f' },
-    { name: 'Mirejaw', title: 'Shadowfen Behemoth Troll', heightMeters: 22, maxHp: 580, armor: 0.46, weapon: 'Cragstone Boulder Hammer', skin: '#2b3a34', accent: '#4d6658', eye: '#ff2814' },
-    { name: 'Blightfist', title: 'Ironbark Siege Troll', heightMeters: 20, maxHp: 520, armor: 0.44, weapon: 'Ruin-Beam War Club', skin: '#35313c', accent: '#5f566b', eye: '#ff4824' },
-    { name: 'Grimspire', title: 'Umbral Monolith Troll', heightMeters: 24, maxHp: 660, armor: 0.50, weapon: 'Basalt Spire Crusher', skin: '#262b2d', accent: '#4f5a5d', eye: '#ff1f14' }
+    { name: 'Gloomcrusher', title: 'Dreadspire Giant Troll', heightMeters: 21, maxHp: 1350, armor: 0.60, weapon: 'Obsidian Monolith Club', skin: '#333b37', accent: '#62705d', eye: '#ff2b1a' },
+    { name: 'Nightmaw', title: 'Abyssal Colossus Troll', heightMeters: 23, maxHp: 1560, armor: 0.64, weapon: 'Shattered Pillar Maul', skin: '#2a2f36', accent: '#545f69', eye: '#ff4219' },
+    { name: 'Ashbone', title: 'Darklands Ravager Troll', heightMeters: 19, maxHp: 1250, armor: 0.58, weapon: 'Charred Oak Greatclub', skin: '#3c3631', accent: '#6b6052', eye: '#ff341f' },
+    { name: 'Mirejaw', title: 'Shadowfen Behemoth Troll', heightMeters: 22, maxHp: 1460, armor: 0.62, weapon: 'Cragstone Boulder Hammer', skin: '#2b3a34', accent: '#4d6658', eye: '#ff2814' },
+    { name: 'Blightfist', title: 'Ironbark Siege Troll', heightMeters: 20, maxHp: 1320, armor: 0.60, weapon: 'Ruin-Beam War Club', skin: '#35313c', accent: '#5f566b', eye: '#ff4824' },
+    { name: 'Grimspire', title: 'Umbral Monolith Troll', heightMeters: 24, maxHp: 1680, armor: 0.68, weapon: 'Basalt Spire Crusher', skin: '#262b2d', accent: '#4f5a5d', eye: '#ff1f14' }
   ]);
 
-  // Damage multipliers: tough against ordinary human weapons, vulnerable to Dragons & Wizards
+  // Damage multipliers: heavily armored against ordinary weapons; require sustained Dragonfire & Wizard Thunder
   const SOURCE_MULTIPLIER = Object.freeze({
-    militia: 0.32,
-    soldier: 0.38,
-    gun: 0.32,
-    jet: 0.78,
-    dragonFire: 1.65,
-    wizardThunder: 2.40
+    militia: 0.22,
+    soldier: 0.28,
+    gun: 0.24,
+    jet: 0.58,
+    dragonFire: 1.25,
+    wizardThunder: 1.85
   });
+
+  // Wave configuration: every wave brings at least 10 colossal Giant Trolls, escalating across frequent waves
+  const MIN_TROLLS_PER_WAVE = 10;
+  const MAX_CONCURRENT_LOCAL_TROLLS = 40;
+  const WAVE_INTERVAL_SEC = 55;
+  const CLEAR_WAVE_DELAY_SEC = 6;
+  const LIVE_REGEN_PER_SEC = 4.5;
+  const BURN_SUPPRESS_SEC = 4.0;
 
   // Scale aligned with regional-render.js (1 street unit = 0.013 km = 13 meters)
   const STREET_KM = 0.013;
@@ -162,16 +170,19 @@
   function makeTroll(horde, targetSite, slotIndex, week, wave) {
     horde.serial = (horde.serial || 0) + 1;
     const arch = ARCHETYPES[(horde.serial - 1) % ARCHETYPES.length];
-    const waveScale = 1 + Math.min(0.45, Math.max(0, wave - 1) * 0.08);
+    const waveScale = 1 + Math.min(1.5, Math.max(0, wave - 1) * 0.14);
     const maxHp = Math.round(arch.maxHp * waveScale);
 
-    // Always spawn ~1.0 km out from the community on inland northern/western/eastern approaches
+    // Always spawn ~1.0 km out from the community across a wide inland northern/western/eastern arc
     // (keeping y < 0 so coastal settlements never spawn trolls underwater in the southern ocean).
-    const approachAngles = [-2.36, -0.78, -1.58, -2.66, -0.48];
+    const approachAngles = [
+      -2.68, -2.46, -2.24, -2.02, -1.80, -1.58,
+      -1.36, -1.14, -0.92, -0.70, -0.50, -0.36
+    ];
     const baseAngle = approachAngles[slotIndex % approachAngles.length];
-    const angleJitter = (((horde.serial * 29) % 11) - 5) * 0.03;
-    const angle = baseAngle + angleJitter;
-    const distJitter = (((horde.serial * 17) % 7) - 3) * 1.1; // ±3.3 units (~±43m) around 1.00 km
+    const angleJitter = (((horde.serial * 29) % 11) - 5) * 0.022;
+    const angle = clamp(baseAngle + angleJitter, -2.78, -0.32);
+    const distJitter = (((horde.serial * 17) % 9) - 4) * 1.15; // ±4.6 units (~±60m) around 1.00 km
     const radius = SPAWN_RADIUS_UNITS + distJitter;
 
     const sx = Number((TOWN_CENTER_X + Math.cos(angle) * radius).toFixed(2));
@@ -210,14 +221,69 @@
       worldZ: p3.z,
       distanceKm: distanceKm({ x: sx, y: sy }),
       swingPhase: (horde.serial * 1.1) % (Math.PI * 2),
-      stepDustTimer: 0.4,
+      stepDustTimer: 0.4 + (slotIndex % 5) * 0.14,
       burnedWeek: -10,
+      burnSuppressTimer: 0,
       humansKilled: 0,
       buildingsSmashed: 0,
       strikesLanded: 0,
       wave,
       spawnedWeek: week || 1
     };
+  }
+
+  function waveSizeFor(wave) {
+    const w = Math.max(1, Math.floor(Number(wave) || 1));
+    return Math.max(MIN_TROLLS_PER_WAVE, MIN_TROLLS_PER_WAVE + Math.min(8, (w - 1) * 2));
+  }
+
+  /**
+   * Launches a full Giant Troll wave (ALWAYS >= 10 trolls!) marching from ~1 km out
+   * toward the target community, plus pressure on neighbouring human lands.
+   */
+  function spawnWave(world, targetSite, opts = {}) {
+    if (!world || !targetSite) return { wave: 1, spawned: [], count: 0, message: '' };
+    const horde = world.trollHorde;
+    if (!horde) return { wave: 1, spawned: [], count: 0, message: '' };
+
+    const communities = allHumanCommunities(world);
+    const others = communities.filter(s => s.id !== targetSite.id && (s.population || 0) > 0);
+    const week = world.week || 1;
+    const wave = opts.wave != null ? Math.max(1, Math.floor(opts.wave)) : ((horde.community.wave || 0) + 1);
+    horde.community.wave = wave;
+    horde.community.wavesSpawned = (horde.community.wavesSpawned || 0) + 1;
+    horde.community.lastWaveWeek = week;
+
+    const count = Math.max(MIN_TROLLS_PER_WAVE, Number(opts.count) || waveSizeFor(wave));
+    const spawned = [];
+    for (let slot = 0; slot < count; slot++) {
+      const t = makeTroll(horde, { ...targetSite, _isPlayer: true }, slot, week, wave);
+      horde.trolls.push(t);
+      spawned.push(t);
+    }
+
+    // Simultaneously send Giant Trolls against neighbouring human lands
+    const elsewhereAlive = activeTrolls(world).filter(t => t.targetSiteId !== targetSite.id);
+    if (others.length > 0 && elsewhereAlive.length < Math.min(4, others.length * 2)) {
+      const dispatchCount = Math.min(2, others.length);
+      for (let j = 0; j < dispatchCount; j++) {
+        const victim = others[(wave + j) % others.length];
+        const ot = makeTroll(horde, { ...victim, _isPlayer: false }, count + j, week, wave);
+        horde.trolls.push(ot);
+        spawned.push(ot);
+      }
+    } else if (others.length === 0 && elsewhereAlive.length === 0) {
+      const ot = makeTroll(horde, { id: 'frontier-lands', name: 'Neighbouring Human Lands', _isPlayer: false }, count, week, wave);
+      horde.trolls.push(ot);
+      spawned.push(ot);
+    }
+
+    horde.community.attacksLaunched = (horde.community.attacksLaunched || 0) + spawned.length;
+    const msg = wave === 1
+      ? 'WAVE 1! ' + count + ' colossal ' + COMMUNITY.name + ' Giant Trolls emerged from the darkness 1 km outside ' + targetSite.name + ' and began marching in!'
+      : 'WAVE ' + wave + '! ' + count + ' more towering ' + COMMUNITY.name + ' Giant Trolls emerged 1 km outside ' + targetSite.name + ' to overwhelm the lands!';
+    record(horde, week, msg);
+    return { wave, spawned, count, message: msg };
   }
 
   function ensure(world) {
@@ -227,7 +293,12 @@
       world.trollHorde = {
         community: {
           ...COMMUNITY,
-          wave: 1,
+          wave: 0,
+          wavesSpawned: 0,
+          lastWaveWeek: world.week || 1,
+          liveElapsed: 0,
+          nextWaveAt: WAVE_INTERVAL_SEC,
+          clearDelay: 0,
           totalSlain: 0,
           humansLost: 0,
           buildingsRuined: 0,
@@ -240,32 +311,20 @@
       };
     }
     const horde = world.trollHorde;
-    horde.community ||= { ...COMMUNITY, wave: 1, totalSlain: 0, humansLost: 0, buildingsRuined: 0, attacksLaunched: 0, spawnedWeek: world.week || 1 };
+    horde.community ||= { ...COMMUNITY, wave: 1, wavesSpawned: 0, lastWaveWeek: world.week || 1, liveElapsed: 0, nextWaveAt: WAVE_INTERVAL_SEC, clearDelay: 0, totalSlain: 0, humansLost: 0, buildingsRuined: 0, attacksLaunched: 0, spawnedWeek: world.week || 1 };
     horde.community.buildingsRuined ||= 0;
+    if (!Number.isFinite(horde.community.liveElapsed)) horde.community.liveElapsed = 0;
+    if (!Number.isFinite(horde.community.nextWaveAt)) horde.community.nextWaveAt = horde.community.liveElapsed + WAVE_INTERVAL_SEC;
+    if (!Number.isFinite(horde.community.clearDelay)) horde.community.clearDelay = 0;
+    if (!Number.isFinite(horde.community.wavesSpawned)) horde.community.wavesSpawned = horde.community.wave || 0;
     horde.trolls ||= [];
     horde.log ||= [];
 
-    // Immediately launch attacks from 1 km out at the start of every game once a community exists
+    // Immediately launch Wave 1 (>= 10 Giant Trolls!) from 1 km out at the start of every game
     if (communities.length > 0 && horde.trolls.length === 0) {
       const active = communities.find(s => s.id === world.activeId) || communities[0];
-      const others = communities.filter(s => s.id !== active.id);
-      // 2 colossal building-sized Giant Trolls start ~1 km out marching slowly toward the player's community
-      horde.trolls.push(makeTroll(horde, { ...active, _isPlayer: true }, 0, world.week || 1, 1));
-      horde.trolls.push(makeTroll(horde, { ...active, _isPlayer: true }, 1, world.week || 1, 1));
-      // Simultaneously dispatch Giant Trolls against neighbouring / other human communities across the lands
-      if (others.length > 0) {
-        horde.trolls.push(makeTroll(horde, { ...others[0], _isPlayer: false }, 2, world.week || 1, 1));
-        if (others.length > 1) {
-          horde.trolls.push(makeTroll(horde, { ...others[1], _isPlayer: false }, 3, world.week || 1, 1));
-        }
-      } else {
-        horde.trolls.push(makeTroll(horde, { id: 'frontier-lands', name: 'Neighbouring Human Lands', _isPlayer: false }, 2, world.week || 1, 1));
-      }
-      horde.community.attacksLaunched += horde.trolls.length;
-      record(horde, world.week || 1,
-        'From the darkness 1 km outside the lands, the ' + COMMUNITY.name + ' Giant Trolls emerged! Building-sized titans are marching slowly toward ' +
-        active.name + ' and neighbouring human communities!'
-      );
+      spawnWave(world, active, { wave: 1 });
+      horde.community.nextWaveAt = (horde.community.liveElapsed || 0) + WAVE_INTERVAL_SEC;
     }
     return horde;
   }
@@ -464,11 +523,38 @@
   function stepLive(world, site, dt, sceneContext) {
     if (!world || !site) return [];
     const horde = ensure(world);
-    const local = trollsForSite(world, site.id);
-    if (!local.length) return [];
-
     const events = [];
     const step = clamp(dt || 0.016, 0.001, 0.25);
+
+    // Continuous escalating wave spawner: launch fresh waves (>= 10 Giant Trolls each!) on schedule
+    // OR swiftly after the current wave is wiped out so the onslaught never stops!
+    horde.community.liveElapsed = (horde.community.liveElapsed || 0) + step;
+    let local = trollsForSite(world, site.id);
+    if (local.length === 0) {
+      horde.community.clearDelay = (horde.community.clearDelay || 0) + step;
+      if (horde.community.clearDelay >= CLEAR_WAVE_DELAY_SEC) {
+        horde.community.clearDelay = 0;
+        const wres = spawnWave(world, site);
+        horde.community.nextWaveAt = horde.community.liveElapsed + WAVE_INTERVAL_SEC;
+        events.push({ type: 'waveSpawn', wave: wres.wave, count: wres.count, message: wres.message });
+        local = trollsForSite(world, site.id);
+      }
+    } else {
+      horde.community.clearDelay = 0;
+      if (horde.community.liveElapsed >= (horde.community.nextWaveAt || WAVE_INTERVAL_SEC)) {
+        if (local.length + MIN_TROLLS_PER_WAVE <= MAX_CONCURRENT_LOCAL_TROLLS) {
+          const wres = spawnWave(world, site);
+          horde.community.nextWaveAt = horde.community.liveElapsed + WAVE_INTERVAL_SEC;
+          events.push({ type: 'waveSpawn', wave: wres.wave, count: wres.count, message: wres.message });
+          local = trollsForSite(world, site.id);
+        } else {
+          // Wait briefly while horde is at peak concurrency, then try again
+          horde.community.nextWaveAt = horde.community.liveElapsed + 12;
+        }
+      }
+    }
+    if (!local.length) return events;
+
     const buildings = (sceneContext?.buildings && sceneContext.buildings.length)
       ? sceneContext.buildings
       : collectCommunityBuildings(site);
@@ -485,6 +571,12 @@
 
     for (let i = 0; i < local.length; i++) {
       const t = local[i];
+      // Dark-hide live regeneration unless actively seared by Enchanted Dragonfire
+      if ((t.burnSuppressTimer || 0) > 0) {
+        t.burnSuppressTimer = Math.max(0, t.burnSuppressTimer - step);
+      } else if (t.hp > 0 && t.hp < t.maxHp) {
+        t.hp = Math.min(t.maxHp, Number((t.hp + LIVE_REGEN_PER_SEC * step).toFixed(1)));
+      }
       const km = distanceKm(t);
       t.distanceKm = km;
 
@@ -669,17 +761,23 @@
     }
 
     const source = opts.source || 'militia';
-    const mult = SOURCE_MULTIPLIER[source] ?? 0.35;
+    const mult = SOURCE_MULTIPLIER[source] ?? 0.25;
     const raw = Number.isFinite(opts.damage) ? opts.damage : (
       source === 'wizardThunder' ? 92
         : source === 'dragonFire' ? 72
           : source === 'jet' ? 80
             : 75
     );
-    const dealt = Math.max(12, Math.round(raw * mult));
-    troll.hp = Math.max(0, troll.hp - dealt);
+    // Colossal dark-hide armor further dampens non-arcane attacks and reduces heavy hits
+    const armor = clamp(Number.isFinite(troll.armor) ? troll.armor : 0.60, 0.2, 0.8);
+    const armorFactor = (source === 'dragonFire' || source === 'wizardThunder')
+      ? (1 - armor * 0.18)
+      : (1 - armor * 0.45);
+    const dealt = Math.max(8, Math.round(raw * mult * armorFactor));
+    troll.hp = Math.max(0, Math.round(troll.hp - dealt));
     if (source === 'dragonFire') {
       troll.burnedWeek = world.week || 1;
+      troll.burnSuppressTimer = BURN_SUPPRESS_SEC;
     }
 
     const killed = troll.hp <= 0;
@@ -730,7 +828,7 @@
 
     for (const troll of activeTrolls(world)) {
       if ((troll.burnedWeek ?? -10) < week - 1 && troll.hp < troll.maxHp) {
-        troll.hp = Math.min(troll.maxHp, troll.hp + 30);
+        troll.hp = Math.min(troll.maxHp, Math.round(troll.hp + 65));
       }
 
       let target = byId.get(troll.targetSiteId);
@@ -771,10 +869,10 @@
       const soldiers = target.militaryBase?.units?.filter(u => u.type === 'soldier')?.length || 0;
       const fort = target.communityLife?.border?.defence?.stage || 0;
 
-      // Dragons instinctively defend their home community on their own free will — NO Wizard required!
+      // Dragons instinctively defend their home community from inside the walls — NO Wizard required!
       if (dragons > 0) {
-        const autoDmg = Math.min(240, 85 + dragons * 48 + wizards * 18);
-        troll.hp = Math.max(0, troll.hp - autoDmg);
+        const autoDmg = Math.min(260, 75 + dragons * 40 + wizards * 18);
+        troll.hp = Math.max(0, Math.round(troll.hp - autoDmg));
         troll.burnedWeek = week;
         if (troll.hp <= 0) {
           troll.state = 'slain';
@@ -782,7 +880,7 @@
           const leadName = target.dragonStable.dragons[0]?.name || 'Guardian dragons';
           const slayNote = wizards > 0
             ? target.name + '\'s guardian dragons and wizards incinerated ' + troll.name + ' the Giant Troll during the weekly siege!'
-            : leadName + ' and ' + target.name + '\'s autonomous guardian dragons fiercely incinerated ' + troll.name + ' the Giant Troll without needing a rider!';
+            : leadName + ' and ' + target.name + '\'s autonomous guardian dragons fiercely incinerated ' + troll.name + ' the Giant Troll from inside the walls!';
           record(horde, week, slayNote);
           reports.push({ site: target, text: slayNote });
           continue;
@@ -835,19 +933,21 @@
     const otherSites = communities.filter(s => s.id !== activeSite?.id && (s.population || 0) > 0);
     const localAlive = alive.filter(t => t.targetSiteId === activeSite?.id);
 
-    // Continually reinforce from 1 km out so Giant Trolls never cease marching on human lands
-    if (activeSite && localAlive.length < 2 && (localAlive.length === 0 || week % 2 === 0)) {
-      horde.community.wave = (horde.community.wave || 1) + (localAlive.length === 0 ? 1 : 0);
-      const fresh = makeTroll(horde, { ...activeSite, _isPlayer: true }, localAlive.length, week, horde.community.wave);
-      horde.trolls.push(fresh);
-      horde.community.attacksLaunched = (horde.community.attacksLaunched || 0) + 1;
-      const arriveNote = 'Darkness stirs 1 km out! A massive ' + fresh.heightMeters + 'm Giant Troll — ' + fresh.name + ' — began marching from ' + COMMUNITY.name + ' toward ' + activeSite.name + '!';
-      record(horde, week, arriveNote);
-      reports.push({ site: activeSite, text: arriveNote });
+    // Relentless multi-wave reinforcement: spawn a FULL wave (>= 10 Giant Trolls!) every 2 weeks
+    // or immediately whenever fewer than 5 trolls remain against the community
+    const weeksSinceWave = week - (horde.community.lastWaveWeek || 1);
+    const shouldLaunchWave = activeSite && (
+      localAlive.length < 5 ||
+      (weeksSinceWave >= 2 && localAlive.length + MIN_TROLLS_PER_WAVE <= MAX_CONCURRENT_LOCAL_TROLLS)
+    );
+    if (shouldLaunchWave) {
+      const wres = spawnWave(world, activeSite);
+      horde.community.nextWaveAt = (horde.community.liveElapsed || 0) + WAVE_INTERVAL_SEC;
+      reports.push({ site: activeSite, text: wres.message });
     }
 
-    const otherAlive = alive.filter(t => t.targetSiteId !== activeSite?.id);
-    if (otherSites.length > 0 && otherAlive.length < Math.min(2, otherSites.length)) {
+    const otherAlive = activeTrolls(world).filter(t => t.targetSiteId !== activeSite?.id);
+    if (otherSites.length > 0 && otherAlive.length < Math.min(4, otherSites.length * 2)) {
       const victim = otherSites[(week + horde.serial) % otherSites.length];
       const freshOther = makeTroll(horde, { ...victim, _isPlayer: false }, 2, week, horde.community.wave || 1);
       horde.trolls.push(freshOther);
@@ -858,8 +958,8 @@
     }
 
     const slain = horde.trolls.filter(t => t.state === 'slain');
-    if (slain.length > 18) {
-      const keepSlain = new Set(slain.slice(-18).map(t => t.id));
+    if (slain.length > 24) {
+      const keepSlain = new Set(slain.slice(-24).map(t => t.id));
       horde.trolls = horde.trolls.filter(t => t.state !== 'slain' || keepSlain.has(t.id));
     }
 
@@ -880,8 +980,12 @@
     COMMUNITY,
     ARCHETYPES,
     SOURCE_MULTIPLIER,
+    MIN_TROLLS_PER_WAVE,
+    WAVE_INTERVAL_SEC,
     STREET_KM,
     SPAWN_DISTANCE_KM,
+    waveSizeFor,
+    spawnWave,
     distanceKm,
     toWorld3D,
     collectCommunityBuildings,

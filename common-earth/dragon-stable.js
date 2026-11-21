@@ -525,11 +525,36 @@
     return threats;
   }
 
+  function wallBoundsForSite(site) {
+    const lvl = site?.territoryLevel || 0;
+    const hasWater = Boolean(site?.water || site?.coastal || root.CommonEarthSim?.waterfront?.(site));
+    if (root.EarthFlightPhysics?.communityWallBounds2D) {
+      return root.EarthFlightPhysics.communityWallBounds2D(lvl, hasWater, 0.85);
+    }
+    const expand = Math.max(0, Math.floor(Number(lvl) || 0)) * 6;
+    return {
+      minX: -6.65 - expand,
+      maxX: 26.65 + expand,
+      minY: -6.65 - expand,
+      maxY: (hasWater ? 25.15 : 27.5 + expand) - 0.85,
+      wallMinX: -7.5 - expand,
+      wallMaxX: 27.5 + expand,
+      wallMinY: -7.5 - expand,
+      wallMaxY: hasWater ? 25.15 : 27.5 + expand,
+      hasWaterfront: hasWater
+    };
+  }
+
+  function distanceOutsideWalls(x, y, walls) {
+    const cx = clamp(x, walls.minX, walls.maxX);
+    const cy = clamp(y, walls.minY, walls.maxY);
+    return Math.hypot(x - cx, y - cy);
+  }
+
   /**
    * Weekly / Simulation-Turn Autonomous Dragon Homeland Defense (NO WIZARD REQUIRED).
-   * Every dragon spiritually bound to `site` instinctively takes flight on its own free will
-   * to aggressively blast Giant Trolls and enemy intruders attacking `site`.
-   * Strictly refuses offensive attacks against foreign communities' lands.
+   * Every dragon spiritually bound to `site` stays strictly inside the community walls
+   * and aggressively blasts Giant Trolls and enemy intruders that reach or breach the walls.
    */
   function autonomousDefend(world, site, options = {}) {
     const out = { defended: false, blasts: 0, trollsSlain: 0, campaignsRouted: 0, messages: [] };
@@ -538,13 +563,15 @@
     const defenders = ds.dragons.filter(d => d && (!d.homeSiteId || d.homeSiteId === site.id));
     if (!defenders.length) return out;
 
-    const threats = findHomelandThreats(world, site, options.sceneContext);
+    const walls = wallBoundsForSite(site);
+    const inWallRange = th => th.kind === 'borderStreet' || th.kind === 'campaign' || th.ref?.state !== 'approaching' || distanceOutsideWalls(th.x, th.y, walls) <= 9.2;
+    const threats = findHomelandThreats(world, site, options.sceneContext).filter(inWallRange);
     if (!threats.length) return out;
 
     const week = world.week || 1;
     for (let i = 0; i < defenders.length; i++) {
       const dragon = defenders[i];
-      const liveThreats = findHomelandThreats(world, site, options.sceneContext);
+      const liveThreats = findHomelandThreats(world, site, options.sceneContext).filter(inWallRange);
       if (!liveThreats.length) break;
 
       // Distribute across threats while focusing the highest-priority breach first
@@ -633,6 +660,7 @@
     if (!defenders.length) return empty;
 
     const stable = stableLocation(site) || { x: 12, y: 12 };
+    const walls = wallBoundsForSite(site);
     const step = clamp(dt || 0.016, 0.001, 0.25);
     const visualTime = Number.isFinite(sceneContext.time) ? sceneContext.time : ((site._dragonClock || 0) + step);
     site._dragonClock = visualTime;
@@ -653,11 +681,11 @@
       let st = map.get(dragon.id);
       if (!st) {
         const initT = visualTime * (0.38 + ring * 0.07) + i * 2.1;
-        const rx = 6.5 + ring * 3.2;
-        const ry = 5.5 + ring * 2.6;
+        const rx = 5.2 + ring * 2.2;
+        const ry = 4.6 + ring * 2.0;
         st = {
-          x: stable.x + Math.cos(initT) * rx,
-          y: stable.y + Math.sin(initT) * ry,
+          x: clamp(stable.x + Math.cos(initT) * rx, walls.minX, walls.maxX),
+          y: clamp(stable.y + Math.sin(initT) * ry, walls.minY, walls.maxY),
           z: (3.2 + ring * 0.9) * 0.62,
           angle: 0,
           orbitAngle: i * 2.05,
@@ -686,23 +714,31 @@
 
       if (activeThreats.length > 0) {
         defendingCount++;
-        // Pick target: keep locked target if still alive, otherwise spread dragons aggressively across all threats
-        let target = activeThreats.find(th => th.id === st.targetId) || activeThreats[i % activeThreats.length] || activeThreats[0];
+        // Prioritize threats already inside or at the community walls; spread dragons across threats
+        const nearWallThreats = activeThreats.filter(th => distanceOutsideWalls(th.x, th.y, walls) <= 9.2 || th.kind === 'borderStreet');
+        const pool = nearWallThreats.length ? nearWallThreats : activeThreats;
+        let target = pool.find(th => th.id === st.targetId) || pool[i % pool.length] || pool[0];
         st.targetId = target.id;
         st.targetKind = target.kind;
         st.targetName = target.name;
 
         const tx = target.x;
         const ty = target.y;
-        const dxToTarget = tx - st.x;
-        const dyToTarget = ty - st.y;
-        const distToTarget = Math.hypot(dxToTarget, dyToTarget);
+        // Dragons NEVER fly outside the community perimeter walls: clamp flight destination inside walls!
+        const wallAnchorX = clamp(tx, walls.minX, walls.maxX);
+        const wallAnchorY = clamp(ty, walls.minY, walls.maxY);
+        const targetOutsideWalls = Math.hypot(tx - wallAnchorX, ty - wallAnchorY) > 0.05;
 
-        const attackRange = target.kind === 'troll' ? 7.8 : 6.4;
-        const orbitRadius = target.kind === 'troll' ? 3.8 + (i % 2) * 1.1 : 3.2 + (i % 2) * 0.8;
+        const dxToAnchor = wallAnchorX - st.x;
+        const dyToAnchor = wallAnchorY - st.y;
+        const distToAnchor = Math.hypot(dxToAnchor, dyToAnchor);
+        const distToTarget = Math.hypot(tx - st.x, ty - st.y);
+
+        const attackRange = target.kind === 'troll' ? 9.2 : 7.4;
+        const orbitRadius = target.kind === 'troll' ? 3.4 + (i % 2) * 1.0 : 3.0 + (i % 2) * 0.8;
         const swoopSpeed = 14.5 * speedBonus;
 
-        if (st.announcedTargetId !== target.id) {
+        if (st.announcedTargetId !== target.id && distToTarget <= attackRange + 6) {
           st.announcedTargetId = target.id;
           events.push({
             type: 'dragonIntercept',
@@ -712,41 +748,57 @@
             y: st.y,
             tx,
             ty,
-            message: dragon.name + ' sensed ' + target.name + ' threatening ' + site.name + ' and scrambled autonomously to attack!'
+            message: dragon.name + ' took position along ' + site.name + '\'s inner walls to incinerate ' + target.name + '!'
           });
         }
 
         let moveDx = 0;
         let moveDy = 0;
-        if (distToTarget > attackRange) {
-          // AGGRESSIVE INTERCEPT SWOOP straight toward the intruder!
-          st.state = 'intercept';
-          const stepDist = Math.min(distToTarget - orbitRadius * 0.8, swoopSpeed * step);
-          const nx = dxToTarget / Math.max(0.001, distToTarget);
-          const ny = dyToTarget / Math.max(0.001, distToTarget);
-          st.x += nx * stepDist;
-          st.y += ny * stepDist;
-          st.z += (2.55 - st.z) * Math.min(1, step * 4.2);
-          moveDx = nx;
-          moveDy = ny;
-          st.orbitAngle = Math.atan2(st.y - ty, st.x - tx);
+        const canFireFromWalls = distToTarget <= attackRange;
+
+        if (!canFireFromWalls) {
+          // Swoop strictly INSIDE the walls to the inner wall parapet nearest the incoming threat & wait on guard
+          st.state = distToAnchor > 2.2 ? 'intercept' : 'guard';
+          const guardSpread = ((i % 5) - 2) * 2.1;
+          const guardX = clamp(wallAnchorX + (Math.abs(wallAnchorY - walls.minY) < 1.5 || Math.abs(wallAnchorY - walls.maxY) < 1.5 ? guardSpread : 0), walls.minX, walls.maxX);
+          const guardY = clamp(wallAnchorY + (Math.abs(wallAnchorX - walls.minX) < 1.5 || Math.abs(wallAnchorX - walls.maxX) < 1.5 ? guardSpread : 0), walls.minY, walls.maxY);
+          const gx = guardX - st.x;
+          const gy = guardY - st.y;
+          const gDist = Math.hypot(gx, gy);
+          if (gDist > 0.35) {
+            const stepDist = Math.min(gDist, swoopSpeed * step);
+            st.x += (gx / gDist) * stepDist;
+            st.y += (gy / gDist) * stepDist;
+            moveDx = gx / gDist;
+            moveDy = gy / gDist;
+          } else {
+            // Hover on alert along the inner wall facing outward toward the approaching threat
+            st.orbitAngle += 1.4 * step;
+            st.x = clamp(guardX + Math.cos(st.orbitAngle) * 0.65, walls.minX, walls.maxX);
+            st.y = clamp(guardY + Math.sin(st.orbitAngle) * 0.65, walls.minY, walls.maxY);
+            moveDx = tx - st.x;
+            moveDy = ty - st.y;
+          }
+          st.z += ((2.65 + Math.sin(visualTime * 3.0 + i) * 0.25) - st.z) * Math.min(1, step * 4.2);
         } else {
-          // AGGRESSIVE COMBAT ORBIT & CONTINUOUS DRAGONFIRE ASSAULT!
+          // AGGRESSIVE COMBAT ORBIT (STRICTLY INSIDE WALLS) & CONTINUOUS DRAGONFIRE ASSAULT!
           st.state = 'attack';
           const orbitSpeed = (2.15 + (i % 2) * 0.35) * (i % 2 === 0 ? 1 : -1);
           st.orbitAngle += orbitSpeed * step;
-          const desiredX = tx + Math.cos(st.orbitAngle) * orbitRadius;
-          const desiredY = ty + Math.sin(st.orbitAngle) * orbitRadius;
+          const rawDesiredX = (targetOutsideWalls ? wallAnchorX : tx) + Math.cos(st.orbitAngle) * (targetOutsideWalls ? 1.8 : orbitRadius);
+          const rawDesiredY = (targetOutsideWalls ? wallAnchorY : ty) + Math.sin(st.orbitAngle) * (targetOutsideWalls ? 1.8 : orbitRadius);
+          const desiredX = clamp(rawDesiredX, walls.minX, walls.maxX);
+          const desiredY = clamp(rawDesiredY, walls.minY, walls.maxY);
           const pull = Math.min(1, step * 6.5);
           const prevX = st.x;
           const prevY = st.y;
-          st.x += (desiredX - st.x) * pull;
-          st.y += (desiredY - st.y) * pull;
+          st.x = clamp(st.x + (desiredX - st.x) * pull, walls.minX, walls.maxX);
+          st.y = clamp(st.y + (desiredY - st.y) * pull, walls.minY, walls.maxY);
           st.z += ((2.15 + Math.sin(visualTime * 4.5 + i) * 0.25) - st.z) * Math.min(1, step * 5.0);
           moveDx = st.x - prevX;
           moveDy = st.y - prevY;
 
-          // Unleash blazing dragonfire relentlessly every 0.92s until target is completely destroyed!
+          // Unleash blazing dragonfire relentlessly every 0.92s while enemy is within wall fire range!
           if (st.fireCooldown <= 0) {
             st.fireCooldown = 0.92;
             st.fireTimer = 0.62;
@@ -859,7 +911,7 @@
           st.fireTarget = { x: tx, y: ty, name: target.name, id: target.id };
         }
       } else {
-        // Peaceful sanctuary patrol above the Dragon Stable when homeland is safe
+        // Peaceful sanctuary patrol strictly INSIDE the community walls when homeland is safe
         st.state = 'patrol';
         st.targetId = null;
         st.targetKind = null;
@@ -867,21 +919,27 @@
         st.announcedTargetId = null;
         st.fireTarget = null;
         const patrolT = visualTime * (0.38 + ring * 0.07) + i * 2.1;
-        const rx = 6.5 + ring * 3.2;
-        const ry = 5.5 + ring * 2.6;
-        const goalX = stable.x + Math.cos(patrolT) * rx;
-        const goalY = stable.y + Math.sin(patrolT) * ry;
+        const rx = 6.5 + ring * 2.6;
+        const ry = 5.5 + ring * 2.2;
+        const patrolCenterX = clamp(12, walls.minX + 3, walls.maxX - 3);
+        const patrolCenterY = clamp(12, walls.minY + 3, walls.maxY - 3);
+        const goalX = clamp(patrolCenterX + Math.cos(patrolT) * rx, walls.minX, walls.maxX);
+        const goalY = clamp(patrolCenterY + Math.sin(patrolT) * ry, walls.minY, walls.maxY);
         const goalZ = (3.2 + ring * 0.9 + Math.sin(patrolT * 1.6) * 0.55) * 0.62;
         const prevX = st.x;
         const prevY = st.y;
         const blend = Math.min(1, step * 3.2);
-        st.x += (goalX - st.x) * blend;
-        st.y += (goalY - st.y) * blend;
+        st.x = clamp(st.x + (goalX - st.x) * blend, walls.minX, walls.maxX);
+        st.y = clamp(st.y + (goalY - st.y) * blend, walls.minY, walls.maxY);
         st.z += (goalZ - st.z) * blend;
         const dx = Math.hypot(st.x - prevX, st.y - prevY) > 0.002 ? (st.x - prevX) : (-Math.sin(patrolT) * rx);
         const dy = Math.hypot(st.x - prevX, st.y - prevY) > 0.002 ? (st.y - prevY) : (Math.cos(patrolT) * ry);
         st.angle = Math.atan2((dx + dy) * TILT, dx - dy);
       }
+
+      // Final hard invariant: dragons may NEVER leave the walls of the community
+      st.x = clamp(st.x, walls.minX, walls.maxX);
+      st.y = clamp(st.y, walls.minY, walls.maxY);
 
       poses.push({
         dragon,
@@ -1086,6 +1144,7 @@
     WIZARD_COST,
     hasStable,
     stableLocation,
+    wallBoundsForSite,
     ensure,
     isWizard,
     wizardPowerStatus,

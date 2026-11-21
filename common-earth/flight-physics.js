@@ -59,6 +59,60 @@
     };
   }
 
+  /**
+   * Strict interior flight bounds inside the community perimeter walls (2D street units).
+   * Dragons are spiritually bound inside these walls and may never travel outside them.
+   */
+  function communityWallBounds2D(territoryLevel = 0, hasWaterfront = false, margin = 0.85) {
+    const b = perimeterBounds(territoryLevel, hasWaterfront);
+    const pad = Math.max(0.2, Number(margin) || 0.85);
+    return {
+      minX: Number((b.minX + pad).toFixed(3)),
+      maxX: Number((b.maxX - pad).toFixed(3)),
+      minY: Number((b.minY + pad).toFixed(3)),
+      maxY: Number((b.maxY - pad).toFixed(3)),
+      wallMinX: b.minX,
+      wallMaxX: b.maxX,
+      wallMinY: b.minY,
+      wallMaxY: b.maxY,
+      hasWaterfront: b.hasWaterfront
+    };
+  }
+
+  function clampPointToCommunityWalls2D(x, y, territoryLevel = 0, hasWaterfront = false, margin = 0.85) {
+    const wb = communityWallBounds2D(territoryLevel, hasWaterfront, margin);
+    const cx = clamp(Number.isFinite(x) ? x : 12, wb.minX, wb.maxX);
+    const cy = clamp(Number.isFinite(y) ? y : 12, wb.minY, wb.maxY);
+    const clamped = Math.abs(cx - x) > 1e-6 || Math.abs(cy - y) > 1e-6;
+    return { x: cx, y: cy, clamped, bounds: wb };
+  }
+
+  /**
+   * Strict 3D interior flight bounds matching flight-3d.js town scale (3.2m per street unit,
+   * centered at street (12, 12) -> 3D (0, 0)).
+   */
+  function communityWallBounds3D(territoryLevel = 0, hasWaterfront = false, marginMeters = 3.0) {
+    const b = perimeterBounds(territoryLevel, hasWaterfront);
+    const scale = 3.2;
+    const pad = Math.max(0.5, Number(marginMeters) || 3.0);
+    const wallMinX = (b.minX - 12) * scale;
+    const wallMaxX = (b.maxX - 12) * scale;
+    const wallMinZ = (b.minY - 12) * scale;
+    const wallMaxZ = (b.maxY - 12) * scale;
+    return {
+      minX: Number((wallMinX + pad).toFixed(2)),
+      maxX: Number((wallMaxX - pad).toFixed(2)),
+      minZ: Number((wallMinZ + pad).toFixed(2)),
+      maxZ: Number((wallMaxZ - pad).toFixed(2)),
+      wallMinX: Number(wallMinX.toFixed(2)),
+      wallMaxX: Number(wallMaxX.toFixed(2)),
+      wallMinZ: Number(wallMinZ.toFixed(2)),
+      wallMaxZ: Number(wallMaxZ.toFixed(2)),
+      centerX: Number((((wallMinX + wallMaxX) * 0.5)).toFixed(2)),
+      centerZ: Number((((wallMinZ + wallMaxZ) * 0.5)).toFixed(2))
+    };
+  }
+
   function perimeterWallSegments(stage, territoryLevel = 0, hasWaterfront = false) {
     if (!stage || stage <= 0) return [];
     const b = perimeterBounds(territoryLevel, hasWaterfront);
@@ -742,12 +796,55 @@
     return { refused: false, community: null, distance: Infinity };
   }
 
+  /**
+   * Strict Community Wall Boundary Enforcement for 3D Dragons:
+   * Dragons are never permitted to travel outside the walls of their community.
+   * Fighter jets are unaffected.
+   */
+  function enforceCommunityWallBoundary3D(state, wallBounds3D, dt = 1 / 60) {
+    if (!state || state.kind !== 'dragon' || !wallBounds3D) {
+      return { blocked: false, edge: null };
+    }
+    const { minX, maxX, minZ, maxZ } = wallBounds3D;
+    if (![minX, maxX, minZ, maxZ].every(Number.isFinite)) {
+      return { blocked: false, edge: null };
+    }
+    let edge = null;
+    if (state.x < minX) { state.x = minX; edge = 'west'; }
+    else if (state.x > maxX) { state.x = maxX; edge = 'east'; }
+    if (state.z < minZ) { state.z = minZ; edge = edge ? edge + '-north' : 'north'; }
+    else if (state.z > maxZ) { state.z = maxZ; edge = edge ? edge + '-south' : 'south'; }
+    if (!edge) return { blocked: false, edge: null };
+
+    // Smoothly turn the dragon inward toward the center of the community and cancel outward velocity
+    const cx = Number.isFinite(wallBounds3D.centerX) ? wallBounds3D.centerX : (minX + maxX) * 0.5;
+    const cz = Number.isFinite(wallBounds3D.centerZ) ? wallBounds3D.centerZ : (minZ + maxZ) * 0.5;
+    const inX = cx - state.x;
+    const inZ = cz - state.z;
+    const inwardYaw = Math.atan2(-inX, -inZ);
+    let diff = inwardYaw - state.yaw;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    state.yaw += diff * Math.min(1, 0.42 + dt * 5.5);
+    state.roll = clamp(-diff * 0.45, -0.65, 0.65);
+    state.pitch = clamp(Math.max(state.pitch, 0.04), -0.35, 0.42);
+    state.speed = Math.max(14, (state.speed || 20) * 0.88);
+    if (edge.includes('west') && state.vx < 0) state.vx = Math.abs(state.vx) * 0.35;
+    if (edge.includes('east') && state.vx > 0) state.vx = -Math.abs(state.vx) * 0.35;
+    if (edge.includes('north') && state.vz < 0) state.vz = Math.abs(state.vz) * 0.35;
+    if (edge.includes('south') && state.vz > 0) state.vz = -Math.abs(state.vz) * 0.35;
+    return { blocked: true, edge };
+  }
+
   const api = Object.freeze({
     PROFILES,
     rectOverlaps,
     pointInRect,
     resolveCircleRect,
     perimeterBounds,
+    communityWallBounds2D,
+    clampPointToCommunityWalls2D,
+    communityWallBounds3D,
     perimeterWallSegments,
     militaryBaseLayout,
     isLandClearForBuilding,
@@ -757,7 +854,8 @@
     stepFlight,
     findTargetsInFireCone,
     compassBearing,
-    enforceSacredSanctuaryBoundary
+    enforceSacredSanctuaryBoundary,
+    enforceCommunityWallBoundary3D
   });
 
   root.EarthFlightPhysics = api;

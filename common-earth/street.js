@@ -4860,6 +4860,10 @@
           }else if(ev.type==='slam'){
             spawnTrollBurst(ev.x,ev.y,'buildingStrike');
             trollShake=Math.max(trollShake,0.22);
+          }else if(ev.type==='waveSpawn'){
+            trollShake=Math.max(trollShake,0.46);
+            if(ev.message)message(ev.message);
+            changed=true;
           }
         }
       }
@@ -5545,7 +5549,9 @@
           if(pose.defending&&unit>=9){
             const tag=pose.breathingFire
               ? `${pose.dragon.name} · BLAZING FIRE`
-              : `${pose.dragon.name} · INTERCEPTING`;
+              : (pose.state==='guard'
+                ? `${pose.dragon.name} · GUARDING WALL`
+                : `${pose.dragon.name} · DEFENDING`);
             ctx.save();
             ctx.font='700 10px system-ui,sans-serif';
             const tw=ctx.measureText(tag).width+12;

@@ -53,17 +53,18 @@ test('Shadowfell Darklands Giant Trolls spawn ~1 km outside the community at gam
   assert.equal(horde.community.name, 'Shadowfell Darklands');
 
   const summary = ctx.EarthGiantTrolls.summary(sim.state, site.id);
-  assert.ok(summary.localCount >= 2, 'At least 2 colossal Giant Trolls march on player from turn 1');
+  assert.ok(summary.localCount >= 10, `Every wave must spawn at least 10 Giant Trolls (got ${summary.localCount})`);
   assert.ok(summary.elsewhereCount >= 1, 'Giant Trolls simultaneously attack other human communities');
   assert.equal(summary.attackingCount, 0, 'No Giant Troll starts inside the community at turn 1');
   assert.equal(summary.approachingCount, summary.localCount);
-  assert.ok(summary.nearestKm >= 0.90 && summary.nearestKm <= 1.15, `Expected ~1.0 km starting distance, got ${summary.nearestKm}`);
+  assert.ok(summary.nearestKm >= 0.85 && summary.nearestKm <= 1.20, `Expected ~1.0 km starting distance, got ${summary.nearestKm}`);
   for (const t of summary.local) {
     assert.ok(t.heightMeters >= 19 && t.heightMeters <= 24);
-    assert.ok(t.maxHp >= 490);
+    assert.ok(t.maxHp >= 1250, `Giant Trolls must be very difficult to kill (expected maxHp >= 1250, got ${t.maxHp})`);
+    assert.ok((t.armor || 0) >= 0.55, `Expected heavy dark-hide armor >= 0.55, got ${t.armor}`);
     assert.equal(t.state, 'approaching');
     const km = ctx.EarthGiantTrolls.distanceKm(t);
-    assert.ok(km >= 0.90 && km <= 1.15, `Expected troll ${t.name} ~1 km out, got ${km} km`);
+    assert.ok(km >= 0.85 && km <= 1.25, `Expected troll ${t.name} ~1 km out, got ${km} km`);
     assert.ok(t.y < 0, 'Trolls approach from inland wilderness, never spawning inside town or ocean');
   }
 });
@@ -162,9 +163,48 @@ test('Giant Trolls continually attack human Sims across multiple communities and
   sim.state.week += 1;
   ctx.EarthGiantTrolls.tick(sim.state);
   const postWave = ctx.EarthGiantTrolls.summary(sim.state, site.id);
-  assert.ok(postWave.localCount >= 1);
+  assert.ok(postWave.localCount >= 10, `Reinforcing wave must spawn at least 10 local Giant Trolls (got ${postWave.localCount})`);
   assert.ok(postWave.elsewhereCount >= 1);
   assert.ok(postWave.nearestKm >= 0.85, 'Reinforcing wave spawns ~1 km out from the community');
+});
+
+test('Multiple escalating waves of 10+ Giant Trolls spawn automatically during live play and weekly ticks', async () => {
+  const ctx = loadSimEnv();
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Rotterdam', region: 'Netherlands', lat: 51.9219, lon: 4.478, water: false });
+  const site = sim.active();
+
+  assert.equal(ctx.EarthGiantTrolls.MIN_TROLLS_PER_WAVE, 10);
+  assert.ok(ctx.EarthGiantTrolls.waveSizeFor(1) >= 10);
+  assert.ok(ctx.EarthGiantTrolls.waveSizeFor(2) >= 12);
+  assert.ok(ctx.EarthGiantTrolls.waveSizeFor(3) >= 14);
+
+  const w1Count = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length;
+  assert.ok(w1Count >= 10, `Wave 1 must have >= 10 local trolls, got ${w1Count}`);
+
+  // Step live timer past WAVE_INTERVAL_SEC (55s) so Wave 2 automatically arrives!
+  let waveSpawnEvents = [];
+  for (let i = 0; i < 240; i++) {
+    const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.25);
+    for (const ev of evs) if (ev.type === 'waveSpawn') waveSpawnEvents.push(ev);
+  }
+  assert.ok(waveSpawnEvents.length >= 1, 'Live play must automatically spawn Wave 2 after interval');
+  assert.ok(waveSpawnEvents[0].count >= 10, `Wave 2 must spawn >= 10 trolls, got ${waveSpawnEvents[0].count}`);
+  assert.ok(sim.state.trollHorde.community.wave >= 2);
+  assert.ok(ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length >= 20, 'Wave 1 + Wave 2 must stack >= 20 active trolls');
+
+  // Clear all current trolls and step 7 seconds — next wave must launch rapidly!
+  for (const t of sim.state.trollHorde.trolls) { t.hp = 0; t.state = 'slain'; }
+  const beforeClearWave = sim.state.trollHorde.community.wave;
+  let clearWaveSpawned = null;
+  for (let i = 0; i < 36; i++) {
+    const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.25);
+    const found = evs.find(e => e.type === 'waveSpawn');
+    if (found) { clearWaveSpawned = found; break; }
+  }
+  assert.ok(clearWaveSpawned, 'Clearing a wave must trigger the next wave quickly');
+  assert.ok(clearWaveSpawned.count >= 10, 'Post-clear wave must also have >= 10 Giant Trolls');
+  assert.ok(sim.state.trollHorde.community.wave > beforeClearWave);
 });
 
 test('Giant Trolls are hard to kill with militia, but Dragons and originating-community Wizards devastate and slay them', async () => {
@@ -178,12 +218,18 @@ test('Giant Trolls are hard to kill with militia, but Dragons and originating-co
 
   const targetTroll = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id)[0];
   const startHp = targetTroll.hp;
+  assert.ok(startHp >= 1250, `Expected tough Giant Troll HP >= 1250, got ${startHp}`);
 
   const militiaRes = await sim.perform('trollAction', { siteId: site.id, action: 'militiaStrike', trollId: targetTroll.id });
   assert.equal(militiaRes.ok, true);
   const militiaDmg = startHp - targetTroll.hp;
-  assert.ok(militiaDmg > 0 && militiaDmg <= 45);
-  assert.ok(targetTroll.hp > startHp * 0.85);
+  assert.ok(militiaDmg > 0 && militiaDmg <= 25, `Militia should only deal chip damage against armored trolls (got ${militiaDmg})`);
+  assert.ok(targetTroll.hp > startHp * 0.96, 'Militia must barely dent a Giant Troll');
+
+  // Verify live dark regeneration heals an unburned wounded troll
+  const hpBeforeRegen = targetTroll.hp;
+  for (let i = 0; i < 12; i++) ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.25);
+  assert.ok(targetTroll.hp > hpBeforeRegen, 'Unburned wounded Giant Troll must regenerate HP in live play');
 
   assert.equal((await sim.perform('buildFreeBuilding', { siteId: site.id, kind: 'dragonStable' })).ok, true);
   assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'solar-gold', name: 'Aurelia' })).ok, true);
@@ -200,7 +246,7 @@ test('Giant Trolls are hard to kill with militia, but Dragons and originating-co
   });
   assert.equal(fireRes.ok, true);
   const fireDmg = hpBeforeFire - targetTroll.hp;
-  assert.ok(fireDmg >= militiaDmg * 3);
+  assert.ok(fireDmg >= militiaDmg * 4, `Dragonfire (${fireDmg}) must hit far harder than militia (${militiaDmg})`);
 
   const hpBeforeThunder = targetTroll.hp;
   const thunderRes = await sim.perform('dragonAction', {
@@ -210,20 +256,22 @@ test('Giant Trolls are hard to kill with militia, but Dragons and originating-co
   assert.equal(thunderRes.ok, true);
   assert.ok(hpBeforeThunder - targetTroll.hp >= fireDmg);
 
+  // Tough trolls must take sustained arcane bombardment (more than 4 strikes total) to slay!
   let guard = 0;
-  while (targetTroll.hp > 0 && guard < 6) {
+  while (targetTroll.hp > 0 && guard < 18) {
     await sim.perform('dragonAction', {
       siteId: site.id, action: 'strikeThunder', riderId: wizard.id, dragonId: dragon.id,
       target: { kind: 'troll', isTroll: true, trollId: targetTroll.id, name: targetTroll.name }
     });
     guard++;
   }
+  assert.ok(guard >= 4, `Expected tough troll to require sustained strikes (>=4 more thunder strikes, took ${guard})`);
   assert.equal(targetTroll.hp, 0);
   assert.equal(targetTroll.state, 'slain');
   assert.ok(sim.state.trollHorde.community.totalSlain >= 1);
 });
 
-test('Dragons act on their own free will WITHOUT any Wizard rider to aggressively intercept and incinerate Giant Trolls', async () => {
+test('Dragons NEVER travel outside community walls in 2D or 3D, yet autonomously incinerate Giant Trolls once they approach the walls', async () => {
   const ctx = loadSimEnv();
   const sim = ctx.CommonEarthSim.create({ storage: null });
   await sim.perform('found', { name: 'Mombasa', region: 'Kenya', lat: -4.0381, lon: 39.688, water: false });
@@ -232,38 +280,69 @@ test('Dragons act on their own free will WITHOUT any Wizard rider to aggressivel
   site.materials = 100;
   site.food = 100;
 
-  assert.equal((await sim.perform('buildFreeBuilding', { siteId: site.id, kind: 'dragonStable' })).ok, true);
   assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'solar', name: 'Aurelia' })).ok, true);
   assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'solstice', name: 'Pyralis' })).ok, true);
 
   const ds = ctx.EarthDragonStable.ensure(site);
-  assert.equal(ds.wizards.length, 0, 'Confirm ZERO Wizards exist — dragons must defend purely on their own agency');
+  assert.equal(ds.wizards.length, 0, 'Confirm ZERO Wizards exist — dragons defend purely on their own agency');
   assert.equal(ds.dragons.length, 2);
 
-  const localTrolls = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
-  assert.ok(localTrolls.length >= 2);
+  const walls = ctx.EarthDragonStable.wallBoundsForSite(site);
+  assert.ok(walls && Number.isFinite(walls.minX) && Number.isFinite(walls.maxX));
 
-  // Step real-time autonomous defender AI: dragons must scramble out, blast fire continuously, and SLAY both trolls!
-  let fireEvents = 0;
-  let interceptEvents = 0;
-  let sawBreathingPose = false;
-  for (let step = 0; step < 120; step++) {
+  // Phase 1: Trolls are 1 km out. Dragons must hold inner-wall guard and NEVER leave the walls!
+  let sawGuardState = false;
+  for (let step = 0; step < 30; step++) {
     const res = ctx.EarthDragonStable.stepAutonomousDefenders(sim.state, site, 0.25, { time: step * 0.25 });
-    if (res.poses.some(p => p.breathingFire && p.defending)) sawBreathingPose = true;
+    for (const p of res.poses) {
+      assert.ok(p.x >= walls.minX - 0.01 && p.x <= walls.maxX + 0.01, `Dragon x=${p.x} escaped wall bounds [${walls.minX}, ${walls.maxX}]`);
+      assert.ok(p.y >= walls.minY - 0.01 && p.y <= walls.maxY + 0.01, `Dragon y=${p.y} escaped wall bounds [${walls.minY}, ${walls.maxY}]`);
+      if (p.state === 'guard') sawGuardState = true;
+    }
+  }
+  assert.equal(sawGuardState, true, 'Dragons must hold guard inside the walls while trolls march from 1 km out');
+
+  // Phase 2: Bring two lead trolls right up to the community perimeter breach; dragons incinerate them strictly from inside the walls!
+  const localTrolls = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
+  const leadA = localTrolls[0];
+  const leadB = localTrolls[1];
+  leadA.x = 6; leadA.y = -4.5; leadA.state = 'attacking';
+  leadB.x = 16; leadB.y = -4.0; leadB.state = 'attacking';
+
+  let fireEvents = 0;
+  let sawBreathingPose = false;
+  for (let step = 0; step < 260; step++) {
+    const res = ctx.EarthDragonStable.stepAutonomousDefenders(sim.state, site, 0.25, { time: (30 + step) * 0.25 });
+    for (const p of res.poses) {
+      assert.ok(p.x >= walls.minX - 0.01 && p.x <= walls.maxX + 0.01, `Combat dragon x=${p.x} escaped walls [${walls.minX}, ${walls.maxX}]`);
+      assert.ok(p.y >= walls.minY - 0.01 && p.y <= walls.maxY + 0.01, `Combat dragon y=${p.y} escaped walls [${walls.minY}, ${walls.maxY}]`);
+      if (p.breathingFire && p.defending) sawBreathingPose = true;
+    }
     for (const ev of res.events) {
-      if (ev.type === 'dragonIntercept') interceptEvents++;
       if (ev.type === 'dragonFire') fireEvents++;
     }
-    if (ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length === 0) break;
+    if (leadA.hp <= 0 && leadB.hp <= 0) break;
   }
 
-  assert.ok(interceptEvents >= 2, `Expected dragons to scramble autonomously, got ${interceptEvents}`);
-  assert.ok(fireEvents >= 6, `Expected relentless autonomous fire blasts, got ${fireEvents}`);
+  assert.ok(fireEvents >= 10, `Expected sustained autonomous fire blasts against tough trolls, got ${fireEvents}`);
   assert.equal(sawBreathingPose, true, 'Defending dragons must expose breathingFire=true pose for rendering');
-  assert.equal(ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length, 0, 'Autonomous dragons must completely destroy invading Giant Trolls without any Wizard');
+  assert.equal(leadA.hp, 0, 'Autonomous wall-defending dragons must kill breaching Giant Troll A');
+  assert.equal(leadB.hp, 0, 'Autonomous wall-defending dragons must kill breaching Giant Troll B');
   assert.ok(ds.dragons.some(d => (d.autonomousKills || 0) >= 1), 'Dragon stats must record autonomous kills');
-  assert.ok((ds.autonomousDefenses || 0) >= 6);
   assert.equal(ctx.EarthDragonStable.valid(site.dragonStable), true, 'Save validation must pass after autonomous combat');
+
+  // Phase 3: Verify 3D Flight Physics strict community wall boundary for Dragons (and unrestricted flight for Fighter Jets!)
+  const wb3D = ctx.EarthFlightPhysics.communityWallBounds3D(0, false, 3.0);
+  const dragon3D = ctx.EarthFlightPhysics.createFlightState({ kind: 'dragon', airborne: true, x: wb3D.maxX + 40, y: 30, z: wb3D.minZ - 35, yaw: 0, speed: 32 });
+  const wallRes = ctx.EarthFlightPhysics.enforceCommunityWallBoundary3D(dragon3D, wb3D, 1 / 60);
+  assert.equal(wallRes.blocked, true, '3D Dragon attempting to fly outside community walls must be blocked');
+  assert.ok(dragon3D.x >= wb3D.minX && dragon3D.x <= wb3D.maxX, '3D Dragon x must be clamped strictly inside walls');
+  assert.ok(dragon3D.z >= wb3D.minZ && dragon3D.z <= wb3D.maxZ, '3D Dragon z must be clamped strictly inside walls');
+
+  const jet3D = ctx.EarthFlightPhysics.createFlightState({ kind: 'jet', airborne: true, x: wb3D.maxX + 200, y: 60, z: wb3D.minZ - 200, yaw: 0, speed: 90 });
+  const jetRes = ctx.EarthFlightPhysics.enforceCommunityWallBoundary3D(jet3D, wb3D, 1 / 60);
+  assert.equal(jetRes.blocked, false, 'Fighter Jets must remain unrestricted outside community walls');
+  assert.equal(jet3D.x, wb3D.maxX + 200);
 });
 
 test('Autonomous dragons aggressively torch and repel hostile rival war expeditions & border intruders without attacking peaceful foreign communities', async () => {
@@ -337,12 +416,19 @@ test('Every community starts with a pre-built Dragon Stable at founding so playe
   assert.equal(site.dragonStable.dragons.length, 1);
   assert.equal(site.dragonStable.dragons[0].name, 'Dawnwing');
 
-  // The summoned dragon autonomously scrambles & kills approaching Giant Trolls with zero Wizards
-  for (let step = 0; step < 120; step++) {
-    ctx.EarthDragonStable.stepAutonomousDefenders(sim.state, site, 0.25, { time: step * 0.25 });
-    if (ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length === 0) break;
+  // The summoned dragon stays strictly inside the community walls and kills a breaching Giant Troll with zero Wizards
+  const walls = ctx.EarthDragonStable.wallBoundsForSite(site);
+  const leadTroll = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id)[0];
+  leadTroll.x = 10; leadTroll.y = -4.2; leadTroll.state = 'attacking';
+  for (let step = 0; step < 260; step++) {
+    const res = ctx.EarthDragonStable.stepAutonomousDefenders(sim.state, site, 0.25, { time: step * 0.25 });
+    for (const p of res.poses) {
+      assert.ok(p.x >= walls.minX - 0.01 && p.x <= walls.maxX + 0.01);
+      assert.ok(p.y >= walls.minY - 0.01 && p.y <= walls.maxY + 0.01);
+    }
+    if (leadTroll.hp <= 0) break;
   }
-  assert.equal(ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id).length, 0, 'Day-one dragon must intercept and destroy approaching Giant Trolls before they destroy the community');
+  assert.equal(leadTroll.hp, 0, 'Day-one dragon must destroy breaching Giant Troll from inside the community walls');
 });
 
 test('Saves containing trollHorde validate cleanly and index.html loads updated giant troll assets with valid SHA-256 hashes', async () => {

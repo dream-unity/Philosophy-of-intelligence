@@ -1747,6 +1747,14 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
   const isIsland = Boolean(site?.water);
   const territoryLevel = site?.territoryLevel || 0;
   const shoreZ = (25.3 - 12) * scale;
+  const wallPhys = Physics || window.EarthFlightPhysics;
+  const wallBounds3D = wallPhys?.communityWallBounds3D
+    ? wallPhys.communityWallBounds3D(territoryLevel, hasWater, 3.0)
+    : {
+      minX: -59.4, maxX: 65.8, minZ: -59.4, maxZ: 65.8,
+      wallMinX: -62.4, wallMaxX: 68.8, wallMinZ: -62.4, wallMaxZ: 68.8,
+      centerX: 3.2, centerZ: 3.2
+    };
 
   // 1. Discoverable Distant Islands & Iconic Scenic Landmarks (radius up to 1,100m — zero flight cap!)
   const distantIslands = [
@@ -2706,6 +2714,49 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
     clouds.push({ grp: cGrp, speed: 0.75 + (i % 4) * 0.35 });
   }
 
+  // 15b. Luminous Golden Community Wall Ward (visible in Dragon mode to mark the strict wall perimeter!)
+  const wallWardGroup = new THREE.Group();
+  const wSpanX = Math.max(20, wallBounds3D.wallMaxX - wallBounds3D.wallMinX);
+  const wSpanZ = Math.max(20, wallBounds3D.wallMaxZ - wallBounds3D.wallMinZ);
+  const wMidX = (wallBounds3D.wallMinX + wallBounds3D.wallMaxX) * 0.5;
+  const wMidZ = (wallBounds3D.wallMinZ + wallBounds3D.wallMaxZ) * 0.5;
+  const wallWardMat = new THREE.MeshBasicMaterial({
+    color: 0xf6cf68,
+    transparent: true,
+    opacity: 0.12,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const wallWardRailMat = new THREE.MeshBasicMaterial({
+    color: 0xffe9a6,
+    transparent: true,
+    opacity: 0.34,
+    depthWrite: false
+  });
+  const wardH = 26;
+  const nPlane = new THREE.Mesh(new THREE.PlaneGeometry(wSpanX, wardH), wallWardMat);
+  nPlane.position.set(wMidX, wardH * 0.5, wallBounds3D.wallMinZ);
+  const sPlane = new THREE.Mesh(new THREE.PlaneGeometry(wSpanX, wardH), wallWardMat);
+  sPlane.position.set(wMidX, wardH * 0.5, wallBounds3D.wallMaxZ);
+  const wPlane = new THREE.Mesh(new THREE.PlaneGeometry(wSpanZ, wardH), wallWardMat);
+  wPlane.rotation.y = Math.PI / 2;
+  wPlane.position.set(wallBounds3D.wallMinX, wardH * 0.5, wMidZ);
+  const ePlane = new THREE.Mesh(new THREE.PlaneGeometry(wSpanZ, wardH), wallWardMat);
+  ePlane.rotation.y = Math.PI / 2;
+  ePlane.position.set(wallBounds3D.wallMaxX, wardH * 0.5, wMidZ);
+  const railH = 1.0;
+  const nRail = new THREE.Mesh(new THREE.BoxGeometry(wSpanX, railH, 0.5), wallWardRailMat);
+  nRail.position.set(wMidX, wardH, wallBounds3D.wallMinZ);
+  const sRail = new THREE.Mesh(new THREE.BoxGeometry(wSpanX, railH, 0.5), wallWardRailMat);
+  sRail.position.set(wMidX, wardH, wallBounds3D.wallMaxZ);
+  const wRail = new THREE.Mesh(new THREE.BoxGeometry(0.5, railH, wSpanZ), wallWardRailMat);
+  wRail.position.set(wallBounds3D.wallMinX, wardH, wMidZ);
+  const eRail = new THREE.Mesh(new THREE.BoxGeometry(0.5, railH, wSpanZ), wallWardRailMat);
+  eRail.position.set(wallBounds3D.wallMaxX, wardH, wMidZ);
+  wallWardGroup.add(nPlane, sPlane, wPlane, ePlane, nRail, sRail, wRail, eRail);
+  worldGroup.add(wallWardGroup);
+  const wallWard = { group: wallWardGroup, mat: wallWardMat, railMat: wallWardRailMat, pulse: 0 };
+
   scene.add(worldGroup);
   return {
     worldGroup,
@@ -2727,6 +2778,8 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
     animatedBirds,
     landmarks,
     terrainHeightAt,
+    wallBounds3D,
+    wallWard,
     scale,
     to3D,
     runwayStart3D: { x: rwPos.x, y: 0.95, z: rwPos.z + rwL * 0.44 },
@@ -3092,19 +3145,39 @@ function launch(options = {}) {
   const flyer = mode === 'jet' ? buildFighterJet() : buildEnchantedDragon(dragon, wizard, textures);
   scene.add(flyer.root);
 
+  // Show the Sanctuary Wall Ward only in Dragon mode (Fighter Jets remain unrestricted!)
+  if (world3D.wallWard?.group) {
+    world3D.wallWard.group.visible = mode === 'dragon';
+  }
+  const wb3D = world3D.wallBounds3D;
+  const clampInWalls3D = (x, z, pad = 6) => ({
+    x: Math.max(wb3D.minX + pad, Math.min(wb3D.maxX - pad, x)),
+    z: Math.max(wb3D.minZ + pad, Math.min(wb3D.maxZ - pad, z))
+  });
+
   // Spawn Autonomous Unmounted 3D Companion Guardian Dragons from the Dragon Stable (NO Wizard required!)
-  // They fly on their own free will and aggressively blast fire at Giant Trolls and border intruders!
+  // They fly on their own free will strictly INSIDE the community walls and blast fire at Giant Trolls & intruders!
   const autonomousDragons = [];
   const stableRoster = (site?.dragonStable?.dragons || []).filter(d =>
     d && (!d.homeSiteId || !site?.id || d.homeSiteId === site.id) && (mode === 'jet' || d.id !== dragon.id)
   );
   const maxCompanions = isSoftwareGl ? 2 : 4;
+  const maxCompanionR = Math.max(14, Math.min(
+    (wb3D.maxX - wb3D.minX) * 0.34,
+    (wb3D.maxZ - wb3D.minZ) * 0.34,
+    34
+  ));
   for (let i = 0; i < Math.min(maxCompanions, stableRoster.length); i++) {
     const spec = stableRoster[i];
     const rig = buildEnchantedDragon(spec, null, textures);
     const initAng = (i / Math.max(1, stableRoster.length)) * Math.PI * 2 + 0.8;
-    const initX = Math.cos(initAng) * 44;
-    const initZ = Math.sin(initAng) * 44;
+    const clampedInit = clampInWalls3D(
+      wb3D.centerX + Math.cos(initAng) * maxCompanionR,
+      wb3D.centerZ + Math.sin(initAng) * maxCompanionR,
+      6
+    );
+    const initX = clampedInit.x;
+    const initZ = clampedInit.z;
     const initY = 26 + i * 5;
     rig.root.position.set(initX, initY, initZ);
     scene.add(rig.root);
@@ -3239,16 +3312,17 @@ function launch(options = {}) {
   }
 
   const origin = options.origin;
-  const dragonStart = Number.isFinite(origin?.x) && Number.isFinite(origin?.y)
+  const dragonStartRaw = Number.isFinite(origin?.x) && Number.isFinite(origin?.y)
     ? world3D.to3D(origin.x, origin.y) : world3D.stablePerch3D;
+  const dragonStart = clampInWalls3D(dragonStartRaw.x + 8, dragonStartRaw.z + 18, 6);
   const startFromGround = mode === 'jet' && options.runwayTakeoff !== false;
-  // Panoramic Launch Angle: frames Stone Town, gleaming turquoise Ocean + sailboats, Dragon Citadel, Alpine Peaks & Floating Sky-Sanctuary!
+  // Panoramic Launch Angle inside community walls: frames Stone Town, Dragon Citadel & approaches!
   const flightState = Physics.createFlightState({
     kind: mode,
     airborne: !startFromGround,
-    x: startFromGround ? world3D.runwayStart3D.x : dragonStart.x - 14,
+    x: startFromGround ? world3D.runwayStart3D.x : dragonStart.x,
     y: startFromGround ? 0.95 : 34,
-    z: startFromGround ? world3D.runwayStart3D.z : dragonStart.z + 34,
+    z: startFromGround ? world3D.runwayStart3D.z : dragonStart.z,
     yaw: startFromGround ? 0 : -0.78,
     pitch: startFromGround ? 0 : -0.04,
     speed: startFromGround ? 0 : (mode === 'jet' ? 54 : 30)
@@ -3883,11 +3957,12 @@ function launch(options = {}) {
       flightState.throttle = 0.9;
       showBanner('Positioned on the Military Base runway. Hold Shift/Space to accelerate and climb!');
     } else {
+      const safeLaunch = clampInWalls3D(world3D.stablePerch3D.x + 8, world3D.stablePerch3D.z + 18, 6);
       Object.assign(flightState, Physics.createFlightState({
         kind: 'dragon', airborne: true,
-        x: world3D.stablePerch3D.x, y: 34, z: world3D.stablePerch3D.z + 24, yaw: 0, speed: 30
+        x: safeLaunch.x, y: 34, z: safeLaunch.z, yaw: 0, speed: 30
       }));
-      showBanner(`${dragon.name} soared above the Dragon Sanctuary Citadel!`);
+      showBanner(`${dragon.name} soared above the Dragon Sanctuary inside ${site?.name || 'the community'}'s walls!`);
     }
   };
   const onExitClick = () => close();
@@ -4013,7 +4088,21 @@ function launch(options = {}) {
 
     Physics.stepFlight(flightState, controls, dt, world3D.thermals, world3D.terrainHeightAt);
 
-    // Dragons are spiritually bound to their home community and refuse to enter the lands of another community!
+    // Strict Community Wall Boundary: dragons NEVER travel outside the walls of their community!
+    if (mode === 'dragon' && typeof Physics.enforceCommunityWallBoundary3D === 'function' && world3D.wallBounds3D) {
+      const wallCheck = Physics.enforceCommunityWallBoundary3D(flightState, world3D.wallBounds3D, dt);
+      if (wallCheck.blocked) {
+        flightState.borderRefusals = (flightState.borderRefusals || 0) + 1;
+        if (world3D.wallWard) world3D.wallWard.pulse = 1.0;
+        if (elapsed - lastRefusalToast > 2.4) {
+          lastRefusalToast = elapsed;
+          audio.playSanctuaryWard();
+          showBanner(`${dragon.name} stays within ${site?.name || 'the community'}'s walls — dragons cannot travel outside the community perimeter.`, 3.2);
+        }
+      }
+    }
+
+    // Dragons are also spiritually bound to their home community and refuse to enter the lands of another community!
     if (mode === 'dragon' && typeof Physics.enforceSacredSanctuaryBoundary === 'function') {
       const refusal = Physics.enforceSacredSanctuaryBoundary(flightState, world3D.foreignCommunities, dt);
       if (refusal.refused && refusal.community) {
@@ -4176,6 +4265,20 @@ function launch(options = {}) {
       const bf = Math.sin(elapsed * 7.5 + bd.phase) * 0.48;
       bd.lw.rotation.z = bf;
       bd.rw.rotation.z = -bf;
+    }
+
+    // Animate Community Wall Sanctuary Ward (flares softly when dragon nears or touches wall perimeter)
+    if (world3D.wallWard && mode === 'dragon') {
+      if (world3D.wallWard.pulse > 0) world3D.wallWard.pulse = Math.max(0, world3D.wallWard.pulse - dt * 1.5);
+      const distToWall = Math.min(
+        Math.abs(flightState.x - wb3D.minX),
+        Math.abs(wb3D.maxX - flightState.x),
+        Math.abs(flightState.z - wb3D.minZ),
+        Math.abs(wb3D.maxZ - flightState.z)
+      );
+      const nearWall = Math.max(0, 1 - distToWall / 22);
+      world3D.wallWard.mat.opacity = 0.05 + nearWall * 0.16 + world3D.wallWard.pulse * 0.32;
+      world3D.wallWard.railMat.opacity = 0.18 + nearWall * 0.34 + world3D.wallWard.pulse * 0.45;
     }
 
     // Animate Peaceful Neighbouring Community Spiritual Boundary Wards
@@ -4345,74 +4448,91 @@ function launch(options = {}) {
     }
 
     // Autonomous 3D Companion Guardian Dragons: fly on their own agency (unmounted, NO Wizard needed!)
-    // Aggressively hunt and blast volumetric dragonfire onto Giant Trolls and homeland intruders!
+    // STRICTLY INSIDE the community walls — they guard the inner parapet and blast fire when Giant Trolls or intruders close in!
     const live3DIntruders = world3D.borderIntruders.filter(u => u && !u.dead);
+    const sorted3DIntruders = live3DIntruders.slice().sort((a, b) =>
+      Math.hypot(a.x - wb3D.centerX, a.z - wb3D.centerZ) - Math.hypot(b.x - wb3D.centerX, b.z - wb3D.centerZ)
+    );
+    const WALL_FIRE_RANGE_3D = 62;
     for (let i = 0; i < autonomousDragons.length; i++) {
       const ad = autonomousDragons[i];
       if (ad.fireTimer > 0) ad.fireTimer = Math.max(0, ad.fireTimer - dt);
       if (ad.fireCooldown > 0) ad.fireCooldown = Math.max(0, ad.fireCooldown - dt);
 
-      // Re-pick target if dead or unset, distributing aggressively across threats
+      // Re-pick target if dead or unset, prioritizing closest threats to the community walls
       if (!ad.target || ad.target.dead) {
-        ad.target = live3DIntruders.length ? live3DIntruders[i % live3DIntruders.length] : null;
+        ad.target = sorted3DIntruders.length ? sorted3DIntruders[i % sorted3DIntruders.length] : null;
       }
 
       let desiredYaw = ad.yaw;
       let desiredPitch = 0;
       let desiredRoll = 0;
-      const wingMult = ad.target ? 1.55 : 1.0;
+      const wingMult = ad.target ? 1.5 : 1.0;
 
       if (ad.target) {
         const t = ad.target;
-        const dx = t.x - ad.x;
-        const dz = t.z - ad.z;
-        const horiz = Math.hypot(dx, dz);
         const attackAlt = Math.max(16, (t.y || 8) + (t.isTroll ? 12 : 10));
-        const orbitR = t.isTroll ? 28 + (i % 2) * 8 : 22 + (i % 2) * 6;
+        const orbitR = t.isTroll ? 22 + (i % 2) * 6 : 18 + (i % 2) * 5;
+        // Anchor point strictly inside the community walls closest to the incoming threat
+        const wallAnchor = clampInWalls3D(t.x, t.z, 5);
+        const targetDistFromWall = Math.hypot(t.x - wallAnchor.x, t.z - wallAnchor.z);
+        const horiz = Math.hypot(t.x - ad.x, t.z - ad.z);
 
-        if (horiz > orbitR + 18) {
-          // Aggressive fast dive/intercept toward the intruder!
-          const swoopSpd = 64;
-          ad.x += (dx / Math.max(0.01, horiz)) * swoopSpd * dt;
-          ad.z += (dz / Math.max(0.01, horiz)) * swoopSpd * dt;
-          ad.y += (attackAlt - ad.y) * Math.min(1, dt * 2.5);
-          desiredYaw = Math.atan2(-dx, -dz);
-          desiredPitch = Math.max(-0.4, Math.min(0.3, (attackAlt - ad.y) * 0.025));
-          desiredRoll = Math.sin(elapsed * 2 + i) * 0.28;
-          ad.orbitAngle = Math.atan2(ad.z - t.z, ad.x - t.x);
+        if (targetDistFromWall > WALL_FIRE_RANGE_3D * 0.72) {
+          // Threat is still marching outside wall range — hold vigilant inner-wall parapet patrol!
+          ad.orbitAngle += (i % 2 === 0 ? 1 : -1) * 0.72 * dt;
+          const guardGoal = clampInWalls3D(
+            wallAnchor.x + Math.cos(ad.orbitAngle) * 14,
+            wallAnchor.z + Math.sin(ad.orbitAngle) * 14,
+            5
+          );
+          const gdx = guardGoal.x - ad.x;
+          const gdz = guardGoal.z - ad.z;
+          const gd = Math.hypot(gdx, gdz);
+          if (gd > 1.5) {
+            const spd = Math.min(48, gd * 2.2);
+            ad.x += (gdx / gd) * spd * dt;
+            ad.z += (gdz / gd) * spd * dt;
+          }
+          ad.y += ((attackAlt + Math.sin(elapsed * 2.1 + i) * 2.2) - ad.y) * Math.min(1, dt * 2.6);
+          desiredYaw = Math.atan2(-(t.x - ad.x), -(t.z - ad.z));
+          desiredPitch = 0.04;
+          desiredRoll = Math.sin(elapsed * 1.6 + i) * 0.16;
         } else {
-          // Close aggressive attack orbit + continuous roaring volumetric dragonfire!
+          // Threat is at or inside the walls — aggressive close orbit strictly inside walls + roaring dragonfire!
           const dir = i % 2 === 0 ? 1 : -1;
-          ad.orbitAngle += dir * 1.18 * dt;
-          const gx = t.x + Math.cos(ad.orbitAngle) * orbitR;
-          const gz = t.z + Math.sin(ad.orbitAngle) * orbitR;
-          ad.x += (gx - ad.x) * Math.min(1, dt * 3.8);
-          ad.z += (gz - ad.z) * Math.min(1, dt * 3.8);
+          ad.orbitAngle += dir * 1.14 * dt;
+          const orbGoal = clampInWalls3D(
+            wallAnchor.x + Math.cos(ad.orbitAngle) * orbitR,
+            wallAnchor.z + Math.sin(ad.orbitAngle) * orbitR,
+            5
+          );
+          ad.x += (orbGoal.x - ad.x) * Math.min(1, dt * 3.6);
+          ad.z += (orbGoal.z - ad.z) * Math.min(1, dt * 3.6);
           ad.y += ((attackAlt + Math.sin(elapsed * 2.4 + i) * 2.5) - ad.y) * Math.min(1, dt * 3.0);
 
-          // Aim head/body toward target when breathing fire, else along orbit tangent
           const aimDx = t.x - ad.x;
           const aimDy = (t.y || 8) - ad.y;
           const aimDz = t.z - ad.z;
           const aimHoriz = Math.max(0.01, Math.hypot(aimDx, aimDz));
           desiredYaw = Math.atan2(-aimDx, -aimDz);
           desiredPitch = Math.max(-0.55, Math.min(0.25, Math.atan2(aimDy, aimHoriz)));
-          desiredRoll = -dir * 0.34;
+          desiredRoll = -dir * 0.32;
 
-          if (ad.fireCooldown <= 0) {
-            ad.fireCooldown = 1.18;
+          if (horiz <= WALL_FIRE_RANGE_3D && ad.fireCooldown <= 0) {
+            ad.fireCooldown = 1.24;
             ad.fireTimer = 0.72;
-            const dmg = t.isTroll ? 128 : 58;
+            const dmg = t.isTroll ? 95 : 58;
             const res = applyProtectiveRepel(t, dmg, 'fire');
             if (t.isTroll && options.world && site && window.EarthGiantTrolls) {
               const hit = window.EarthGiantTrolls.attackTroll(options.world, site, t.trollId || t.id, {
                 source: 'dragonFire',
-                damage: 78,
+                damage: 74,
                 dragonName: ad.spec.name,
                 autonomous: true
               });
               if (hit?.ok && hit.killed) {
-                showBanner(`${ad.spec.name} (Autonomous) incinerated ${t.shortName}!`);
+                showBanner(`${ad.spec.name} (Autonomous) incinerated ${t.shortName} from the walls!`);
               }
             } else if (res.repelled) {
               showBanner(`${ad.spec.name} (Autonomous) burned away ${t.name}!`);
@@ -4420,20 +4540,28 @@ function launch(options = {}) {
           }
         }
       } else {
-        // Peaceful sanctuary patrol strictly above home community (never enters foreign lands!)
-        ad.orbitAngle += 0.32 * dt;
-        const r = 46 + i * 16;
-        const gx = Math.cos(ad.orbitAngle) * r;
-        const gz = Math.sin(ad.orbitAngle) * r;
-        const gy = 30 + i * 6 + Math.sin(elapsed * 0.9 + i) * 3.5;
-        const vx = gx - ad.x;
-        const vz = gz - ad.z;
+        // Peaceful sanctuary patrol strictly inside the community walls
+        ad.orbitAngle += 0.34 * dt;
+        const r = Math.min(maxCompanionR, 24 + i * 6);
+        const pGoal = clampInWalls3D(
+          wb3D.centerX + Math.cos(ad.orbitAngle) * r,
+          wb3D.centerZ + Math.sin(ad.orbitAngle) * r,
+          5
+        );
+        const vx = pGoal.x - ad.x;
+        const vz = pGoal.z - ad.z;
         ad.x += vx * Math.min(1, dt * 2.2);
         ad.z += vz * Math.min(1, dt * 2.2);
+        const gy = 30 + i * 5 + Math.sin(elapsed * 0.9 + i) * 3.0;
         ad.y += (gy - ad.y) * Math.min(1, dt * 2.0);
         desiredYaw = Math.atan2(-vx, -vz);
         desiredRoll = -0.22;
       }
+
+      // Final hard invariant: companion dragons NEVER travel outside the community walls!
+      const clampedAd = clampInWalls3D(ad.x, ad.z, 3);
+      ad.x = clampedAd.x;
+      ad.z = clampedAd.z;
 
       // Smooth angular interpolation
       let yawDiff = desiredYaw - ad.yaw;

@@ -159,7 +159,7 @@
       intro.append(
         make('small', built ? 'Sacred Sanctuary · Autonomous Spiritual Protectors of ' + site.name : 'Not Yet Built'),
         make('h3', site.name + ' Dragon Stable'),
-        make('p', 'Dragons are deeply spiritual protectors with their own free will and agency bound to the soul of ' + site.name + '. They instinctively scramble on their own — even without a Wizard rider — to aggressively blast Giant Trolls and enemy intruders with continuous dragonfire, while strictly refusing offensive war against other communities.')
+        make('p', 'Dragons are deeply spiritual protectors with their own free will and agency bound strictly inside the walls of ' + site.name + '. They never leave the community walls, instinctively guarding the inner perimeter and blasting Giant Trolls and enemy intruders with dragonfire even without a Wizard rider.')
       );
       hero.append(preview, intro);
       body.append(hero);
@@ -174,8 +174,10 @@
           make('small', `${trollSummary.localCount} attacking ${site.name} · ${trollSummary.elsewhereCount} attacking other lands · ${trollSummary.totalSlain} slain`)
         );
         siegeSec.append(head);
-        siegeSec.append(make('p', 'Colossal building-sized Giant Trolls march from 1 km out and relentlessly smash buildings and human Sims across every community. Ordinary weapons barely dent their dark hide — Enchanted Dragonfire and originating-community Wizard Staff Thunder shatter them!'));
-        for (const t of trollSummary.local) {
+        siegeSec.append(make('p', 'Relentless waves of 10+ heavily armoured building-sized Giant Trolls march from 1 km out to destroy buildings and human Sims. Their dark hide shrugs off ordinary weapons and regenerates unless burned — Enchanted Dragonfire from your walls and originating-community Wizard Staff Thunder break them!'));
+        const MAX_TROLL_ROWS = 4;
+        const shownTrolls = trollSummary.local.slice(0, MAX_TROLL_ROWS);
+        for (const t of shownTrolls) {
           const row = make('div', null, 'troll-row');
           const km = root.EarthGiantTrolls?.distanceKm?.(t) ?? t.distanceKm ?? 0;
           const phaseLabel = t.state === 'approaching'
@@ -188,6 +190,10 @@
           bar.append(fill);
           row.append(bar);
           siegeSec.append(row);
+        }
+        if (trollSummary.local.length > MAX_TROLL_ROWS) {
+          const extra = trollSummary.local.length - MAX_TROLL_ROWS;
+          siegeSec.append(make('small', `+ ${extra} more Giant Trolls advancing in Wave ${trollSummary.wave} (${trollSummary.local.length} active at ${site.name})`));
         }
         if (trollSummary.elsewhere.length) {
           const otherTargets = [...new Set(trollSummary.elsewhere.map(t => t.targetSiteName))].join(', ');
