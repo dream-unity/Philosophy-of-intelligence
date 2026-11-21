@@ -81,33 +81,25 @@
     if(!aim || !guard)return reject('Choose an aim and a safeguard available in this district.');
     if(aim.key===guard.key)return reject('Choose a different safeguard so you can follow two effects.');
     if(!integer(weeks,1,4))return reject('Choose a review in one to four weeks.');
-    const availableEffort=world.effort;
     let hint=aim.hint;
     if(aim.target(aim.value)>aim.value){
       const pending=plannedCity(site,aimKey,weeks);
       if(pending && pending.retained<aim.target(aim.value)){
         const project=pending.model.projects[pending.rule.project];
         if(weeks<project.turns)return reject('Opening a '+pending.rule.name.toLowerCase()+' project takes at least two weeks and a crew to finish. Choose a longer review or set this goal once the scheduled opening is within a week.');
-        if(weeks===project.turns && availableEffort<project.effort)hint='Complete jobs to restore the '+(project.effort-availableEffort)+' civic effort needed to commission this week. '+hint;
         if(weeks===project.turns && (site.funds<project.funds || site.materials<project.materials)){
-          const budget='Commissioning this week costs '+project.effort+' effort, '+project.funds+' funds and '+project.materials+' materials. You have '+site.funds+' funds and '+site.materials+' materials.';
+          const budget='Commissioning this week costs '+project.funds+' funds and '+project.materials+' materials. You have '+site.funds+' funds and '+site.materials+' materials.';
           hint=budget+' Include time to raise or release supplies before this week closes. '+hint;
         }
       }
-      if(weeks===1 && aimKey.startsWith('bond:') && availableEffort<=1){
-        hint='The review is at the next weekly close. You have '+world.effort+' effort left. A delivered parcel, a kept promise or a day spent together can also raise the bond. '+hint;
+      if(weeks===1 && aimKey.startsWith('bond:')){
+        hint='The review is at the next weekly close. A delivered parcel, a kept promise or a day spent together can also raise the bond. '+hint;
       }
-      if(weeks===1 && aimKey==='food' && !availableEffort){
+      if(weeks===1 && aimKey==='food'){
         const closing=closingPantry(world,site),target=aim.target(aim.value);
         if(closing<target){
           hint='Closing now projects '+closing+' food against a target of '+target+'. Tend the beds before advancing to add 3 food per shift.';
         }
-      }
-      if(aimKey==='voices' && weeks===1){
-        const unheard=site.residents.filter(p=>!p.heard).length;
-        // A convenor can also hear one resident in a council session at the close.
-        const sessions=world.legacy?.term?.slot===2?1:0;
-        if(unheard>availableEffort+sessions)hint='Complete jobs to restore civic effort for the remaining hearings. '+hint;
       }
     }
     return {ok:true,siteId:site.id,siteName:site.name,startWeek:world.week,dueWeek:world.week+weeks,
@@ -156,7 +148,7 @@
     return {kind:'group',group:'build',siteId:site.id,actionId:'work-role:'+worker.residentId,
       label:onTheWay?'Check '+worker.name+'’s journey to work':'Review food growing with '+worker.name,
       detail:onTheWay?'A resident is on the way to food work. Keep the game visible until they arrive, then check the closing pantry again.':
-        'The closing pantry is '+shortfall+' food below target. In Crew and work preferences, Food growing moves one weekly contribution from the resident’s customary trade to food once they reach work. Changing a preference uses no effort.'};
+        'The closing pantry is '+shortfall+' food below target. In Crew and work preferences, Food growing moves one weekly contribution from the resident’s customary trade to food once they reach work.'};
   }
 
   function bondActivity(sim,site,person) {
@@ -174,7 +166,7 @@
       if(site.food<1)return {kind:'personalWork',siteId,resource:'food',label:'Gather food for a shared meal',
         detail:'Collect some food in Personal work, then meet '+person.name+' to share one food and build your bond.'};
       return {kind:'resident',siteId,group:'people',residentId:person.id,page:'meal',label:'Share a meal with '+person.name,
-        detail:'Meet '+person.name+' in person and share one food from the pantry. A meal adds one bond and uses no weekly effort.'};
+        detail:'Meet '+person.name+' in person and share one food from the pantry. A meal adds one bond.'};
     }
     if(days?.gate(sim.state,site,person.id).available)return {kind:'resident',group:'people',siteId,residentId:person.id,page:'startShift',
       label:'Spend a day with '+person.name,detail:'Choose Spend a day together. Complete the visit they request and one other stop, then finish the day. That adds one bond.'};
@@ -234,12 +226,10 @@
       const foodWork=root.EarthLegacy?.constructionStep(world,site,j=>j.scope==='street' && j.kind==='garden' ||
         j.scope==='city' && ['food','water'].includes(j.kind) && root.EarthCityModel.overview(site).records[j.precinct].turns<=dueWeek-world.week);
       if(foodWork)return {...foodWork,detail:foodWork.detail+' Once it opens, the next weekly harvest can help stock the pantry. You can also tend the food beds now.'};
-      if(!world.effort && Number.isFinite(closingFood)){
+      if(aim.value<entry.aim.target && Number.isFinite(closingFood)){
         const crew=foodCrewStep(sim,site,entry.aim.target-closingFood);
         if(crew)return crew;
       }
-      if(!world.effort && root.EarthPursuits)return {kind:'personalWork',siteId,resource:'food',label:'Glean produce for '+site.name,
-        detail:'Collect a produce load in Personal work, then check the closing pantry. You can repeat the job before the review.'};
       step={kind:'group',siteId,group:'work',actionId:'work:forage',label:'Tend the food beds in '+site.name,
         detail:aim.value>=entry.aim.target?'Household needs and deliveries are projected to bring the pantry below target at review.':aim.hint};
     }else{
@@ -250,7 +240,7 @@
         if(work)return work;
       }
       const action=person.promise?'fulfil':!person.heard || person.lastTalk!==world.week?'listen':world.week-person.lastPromise>=3?'promise':null;
-      if(aim.key!=='voices' && (!action || (!world.effort&&action!=='promise') || site.delivery?.residentId===person.id ||
+      if(aim.key!=='voices' && (!action || site.delivery?.residentId===person.id ||
           person.bond+1>=entry.aim.target&&mealPossible(world,site,person))){
         const alternative=bondActivity(sim,site,person);
         if(alternative)return alternative;
@@ -387,7 +377,7 @@
       const opts=options(site);
       if(site.id!==draftSite){draftSite=site.id;aimKey='food';guardKey='trust';horizon=2;composing=false;}
       const guide=book.active?nextStep(sim):null;
-      const signature=JSON.stringify([site.id,site.name,state.week,state.effort,site.funds,site.materials,site.city?.precincts,book,guide,opts.aims.map(m=>m.value),opts.guards.map(m=>m.value),composing]);
+      const signature=JSON.stringify([site.id,site.name,state.week,site.funds,site.materials,site.city?.precincts,book,guide,opts.aims.map(m=>m.value),opts.guards.map(m=>m.value),composing]);
       if(signature===lastSignature)return;
       lastSignature=signature;
       const focused=container.contains(document.activeElement)?document.activeElement.dataset.goalControl:null;

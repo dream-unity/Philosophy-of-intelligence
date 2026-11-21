@@ -58,7 +58,7 @@
         const gate=away?away.name+' is away from the district. Choose partners who can meet here.':world.week<data.nextWeek?'They are taking a week before the next proposal.':
           !first.heard||!second.heard?'First listen to '+[first,second].filter(x=>!x.heard).map(x=>x.name).join(' and ')+'.':'';
         add('people','together:'+p.id,p.title,p.request,{
-          gate,peerProject:true,effort:1
+          gate,peerProject:true
         },()=>{
           const d=writable(site);
           d.active={kind:p.id,phase:'offered',due:world.week+1};
@@ -76,24 +76,24 @@
       const limited=pilotOutput(p), signed=handoverWeek(data,p);
       const options=[
         {id:'lead',label:strained?'Let '+first.name+' run a smaller job alone':'Give one person the lead',
-          desc:strained?second.name+' is holding back supplies after the last disagreement. '+first.name+' can take on '+outcome(limited)+' alone, with no extra effort or expense.':
-            first.name+' will take the keys. '+outcome(p.yield)+' with no extra effort or expense. '+second.name+' will have less say.',
-          effort:0,duration:1,limited:strained},
-        {id:'rota',label:'Pay for a shared rota',desc:'Spend 3 funds and one effort. Both neighbours share the decision and the shift. They deliver '+p.yield+' '+p.value+' in two weeks.',effort:1,goods:{funds:3},duration:2},
-        {id:'pilot',label:'Try a small joint pilot',desc:'Use one effort and one material. Expect '+outcome(limited)+'. Both neighbours can revise the design together.',effort:1,goods:{materials:1},duration:1}
+          desc:strained?second.name+' is holding back supplies after the last disagreement. '+first.name+' can take on '+outcome(limited)+' alone, with no extra expense.':
+            first.name+' will take the keys. '+outcome(p.yield)+' with no extra expense. '+second.name+' will have less say.',
+          duration:1,limited:strained},
+        {id:'rota',label:'Pay for a shared rota',desc:'Spend 3 funds. Both neighbours share the decision and the shift. They deliver '+p.yield+' '+p.value+' in two weeks.',goods:{funds:3},duration:2},
+        {id:'pilot',label:'Try a small joint pilot',desc:'Use one material. Expect '+outcome(limited)+'. Both neighbours can revise the design together.',goods:{materials:1},duration:1}
       ];
       if(strained) options.push({
-        id:'repair',label:'Meet to repair the working agreement',effort:1,duration:1,
-        desc:'Give both neighbours one effort to write a '+p.handover+'. No stock is needed. They deliver no goods this week, and can try the written terms on their next job.'
+        id:'repair',label:'Meet to repair the working agreement',duration:1,
+        desc:'Bring both neighbours together to write a '+p.handover+'. No stock is needed. They deliver no goods this week, and can try the written terms on their next job.'
       });
       if(signed) options.push({
-        id:'reuse',label:'Use the '+p.handover,effort:trusted?0:1,duration:1,established:trusted,
+        id:'reuse',label:'Use the '+p.handover,duration:1,established:trusted,
         desc:'They signed these terms in week '+signed+'. '+p.terms+' '+
-          (trusted?'Both trust the handover. No extra effort or stock is needed for a repeat covering '+outcome(p.yield-1)+'.':
-            'They will try a small repeat with one effort and no new stock, covering '+outcome(limited)+'.')+
+          (trusted?'Both trust the handover. No extra stock is needed for a repeat covering '+outcome(p.yield-1)+'.':
+            'They will try a small repeat with no new stock, covering '+outcome(limited)+'.')+
           ' After one use, both must review the terms to sign them again.'
       });
-      for(const o of options) add('people','agreement:'+o.id,o.label,o.desc,{peerProject:true,effort:o.effort,goods:o.goods||{}},()=>{
+      for(const o of options) add('people','agreement:'+o.id,o.label,o.desc,{peerProject:true,goods:o.goods||{}},()=>{
         const d=writable(site);
         d.active={...d.active,phase:'working',agreement:o.id,due:world.week+o.duration,followed:false};
         // Store the scope they actually accepted. Previously saved projects
@@ -106,7 +106,7 @@
       });
     } else if(!active.followed && active.agreement!=='repair') {
       add('people','agreement:check','Check who is doing the unseen work',
-        second.name+' can help the group '+p.repair+'. A check-in costs one effort. It protects the relationship when one person leads, or adds one unit to a joint result. Both sign a '+p.handover+' for a future repeat.',
+        second.name+' can help the group '+p.repair+'. It protects the relationship when one person leads, or adds one unit to a joint result. Both sign a '+p.handover+' for a future repeat.',
         {peerProject:true},()=>{writable(site).active.followed=true;return second.name+' described the extra work. '+p.terms+' They will test and sign those terms when this job finishes.';});
     }
   }

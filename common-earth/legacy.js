@@ -218,14 +218,6 @@
       next:world.completed?null:unfinished?.action||null,summary:world.completed?'Your network has ratified its charter.':unfinished?.detail||''};
   }
 
-  function reclaimableShift(world) {
-    const home=homeDistrict(world),host=world.sites.find(s=>(!home||s.id===home.id)&&s.shift&&s.shift.effortPaid!==false&&!s.shift.history.length);
-    if(!host)return null;
-    const person=personById(host,host.shift.residentId);
-    return {kind:'group',group:'people',page:'shift',siteId:host.id,label:'Review your day with '+person.name,
-      detail:'You have not completed a visit together. Ending the shift now returns its one effort immediately.'};
-  }
-
   function reservedSupplies(sim,site,goods,step) {
     const choices=[],jobs=site.construction || [],model=root.EarthCityModel;
     for(const r of model?.overview(site).records || []){
@@ -246,7 +238,7 @@
     if(!useful.length || gaps.some(([key,need])=>site[key]+useful.reduce((n,c)=>n+(c.refund[key]||0),0)<need))return null;
     const covers=c=>gaps.every(([key,need])=>site[key]+(c.refund[key]||0)>=need);
     const chosen=useful.sort((a,b)=>Number(covers(b))-Number(covers(a)) || a.progress-b.progress)[0];
-    return {...chosen.review,detail:step.label+' needs the remaining effort this week. Cancelling this project would return '+chosen.refund.funds+' funds and '+chosen.refund.materials+' materials.'+
+    return {...chosen.review,detail:step.label+' needs supplies this week. Cancelling this project would return '+chosen.refund.funds+' funds and '+chosen.refund.materials+' materials.'+
       (!covers(chosen)?' A further release would also be needed.':'')+' Review the trade-off before deciding.'};
   }
 
@@ -271,18 +263,17 @@
       return {kind:'actor',siteId:site.id,label:'Choose someone to meet '+name,
         detail:'You are playing as '+name+'. Switch to the steward or another neighbour to meet '+name+' in person.'};
     }
-    let cost, goods;
+    let goods;
     if(step.kind==='atlas'){
       const offer=sim.sponsorshipOffer(site.id);
       if(offer.available)return step;
-      cost=offer.effort;
       goods=Object.fromEntries(Object.entries(offer.goods).map(([k,n])=>[k,n+(offer.reserves[k]||0)]));
     }else if(step.kind==='city'){
       const proposal=root.EarthCityModel?.preview(site,world,step.precinct,step.project);
       if(!proposal?.ok || proposal.available)return step;
       if(root.EarthCityModel.overview(site).works>=2)return constructionStep(world,site,job=>job.scope==='city') ||
         weekStep(site,'Both precinct work sites are occupied. Advance to the scheduled opening or review a cancellation.');
-      cost=proposal.cost.effort;goods={funds:proposal.cost.funds,materials:proposal.cost.materials};
+      goods={funds:proposal.cost.funds,materials:proposal.cost.materials};
     }else if(step.inspectVote || step.inspectPilot || step.actionId){
       const actions=sim.actions(step.group,site.id);
       const choicePrefix=step.inspectVote?'vote:':step.inspectPilot?'commission:pilot:':null;
@@ -290,27 +281,21 @@
         ? actions.find(a=>a.id.startsWith(choicePrefix)&&a.available)||actions.find(a=>a.id.startsWith(choicePrefix))
         : actions.find(a=>a.id===step.actionId);
       if(!action)return step;
-      if(!action.available && root.EarthPursuits && !world.effort){
+      if(!action.available && root.EarthPursuits){
         const resource=Object.keys(paidWork).find(key=>paidWork[key]===action.id);
         if(resource)return {kind:'personalWork',siteId:site.id,resource,label:'Earn '+resource+' in '+site.name,
           detail:step.detail+' Personal work can supply '+resource+' before the next weekly close.'};
       }
       // A vote is the player's choice. Show the options together when any is actionable.
       if(action.available)return step;
-      cost=action.cost;goods=action.goods;
+      goods=action.goods;
       if(home&&action.targetId&&action.id==='route:'+action.targetId&&goods.materials)
         goods={...goods,materials:goods.materials+root.CommonEarthSim.freightReserve(world,site,'materials')};
     }else return step;
     const missing=Object.entries(goods).find(([key,n])=>site[key]<n);
-    // Offer a personal job for the specific resource at the decision threshold.
-    if(missing && root.EarthPursuits && world.effort===cost && Object.hasOwn(paidWork,missing[0])){
-      const [resource,needed]=missing;
-      return {kind:'personalWork',siteId:site.id,resource,label:'Earn '+resource+' for '+site.name,
-        detail:step.label+' needs '+needed+' '+resource+'. Personal work can earn the remaining '+(needed-site[resource])+' while keeping the effort for the decision.'};
-    }
-    if(missing && world.effort>0){
+    if(missing){
       const [key,needed]=missing;
-      if(key==='materials' && world.effort>=cost){
+      if(key==='materials'){
         const clearances=(site.construction || []).filter(j=>j.scope==='street' && j.kind==='dismantle');
         if(site.materials+clearances.reduce((sum,j)=>sum+(j.recovered||0),0)>=needed){
           const job=constructionStep(world,site,j=>j.scope==='street' && j.kind==='dismantle' && j.recovered>0);
@@ -319,10 +304,10 @@
       }
       if(key==='funds' && site.delivery){
         const handover=sim.actions('work',site.id).find(a=>a.id==='courier:deliver:'+site.delivery.residentId && a.available);
-        if(handover)return {...groupStep(site,'work',handover.label,handover.id),detail:'Hand over the parcel already collected. The delivery earns 3 funds and uses no effort.'};
+        if(handover)return {...groupStep(site,'work',handover.label,handover.id),detail:'Hand over the parcel already collected. The delivery earns 3 funds.'};
       }
       const promised=step.actionId?.startsWith('fulfil:') && personById(site,step.actionId.slice('fulfil:'.length));
-      if(world.effort===cost && (step.startByWeek===world.week || promised?.promise?.dueWeek<=world.week)){
+      if(step.startByWeek===world.week || promised?.promise?.dueWeek<=world.week){
         const released=reservedSupplies(sim,site,goods,step);
         if(released)return released;
         const p=promised;
@@ -332,17 +317,12 @@
           const kind=['garden','workshop','hall'][p.slot];
           const build=sim.actions('build',site.id).find(a=>a.kind===kind && a.available);
           if(build)return {...groupStep(site,'build','Plan a '+build.label.toLowerCase()+' for '+p.name,build.id),
-            detail:'There is one effort left. You can commission this project now and let a crew finish it before advancing the week to keep the promise.'};
+            detail:'You can commission this project now and let a crew finish it before advancing the week to keep the promise.'};
         }
       }
       const work=sim.actions('work',site.id).find(a=>a.id===paidWork[key]&&a.available);
       if(work)return {...groupStep(site,'work',work.label+' in '+site.name,work.id),
         detail:step.label+'. You have '+site[key]+' of the '+needed+' '+key+' needed. '+work.description};
-    }
-    if(world.effort<cost){
-      const shift=cost===world.effort+1 && reclaimableShift(world);
-      if(shift)return {...shift,detail:step.label+' needs '+cost+' effort. '+shift.detail};
-      return {...groupStep(site,'work','Take a paid shift','work:contract'),detail:step.label+' needs '+cost+' civic effort. Each completed job restores one.'};
     }
     return step;
   }
@@ -357,10 +337,9 @@
       if(home&&s.id!==home.id)return {rank:0,step:prepareStep(sim,meetStep(s,p,'Carry your promise to','fulfil'))};
       const building=buildingPromiseStep(world,s,p);
       if(building)return {rank:0,step:building};
-      if(!world.effort && !reclaimableShift(world))return null;
       const delivery=meetStep(s,p,'Review the promise to','fulfil');
       const step=prepareStep(sim,{...delivery,detail:p.name+'’s promise is due by the end of this week.'});
-      // If several dates coincide, give the last effort to a promise it can still keep.
+      // If several dates coincide, prioritise a promise that can still be kept.
       const rank=step.actionId===delivery.actionId?1:step.actionId?.startsWith('revise:')?2:3;
       return {rank,step};
     }).filter(Boolean).sort((a,b)=>a.rank-b.rank)[0];
@@ -383,7 +362,6 @@
           term.person+' has chaired '+term.siteName+' for '+term.decisions.length+' of '+WEEKS+' weeks. The handover review is due in week '+due+'.');
       }
       if(!last){
-        if(!world.effort)return reclaimableShift(world) || weekStep(site,'Your charter was ratified. Electing a resident takes one effort, available again next week.');
         const heard=site.residents.filter(p=>p.heard);
         if(!heard.length)return {...meetStep(site,neighboursFirst(site)[0]),detail:'Hear a local resident before offering them the council chair.'};
         if(heard.every(p=>p.id===site.shift?.residentId))return {kind:'group',group:'people',page:'shift',siteId:site.id,
@@ -533,7 +511,7 @@
       const office = OFFICES[person.slot];
       add('council','legacy:start:'+person.id,'Elect '+person.name+' as '+office.name.toLowerCase(),
         office.brief+' For the next four weeks '+person.name+' will also choose this council’s votes. Keeps 2 funds and 2 materials in reserve, and at least 6 food for local households.',
-        {legacy:true,effort:1,gate:site.shift?.residentId===person.id?'Finish your day with '+person.name+' first, or elect another resident.':
+        {legacy:true,gate:site.shift?.residentId===person.id?'Finish your day with '+person.name+' first, or elect another resident.':
           !residentHere(site,person)?person.name+' is away or visiting and cannot chair this meeting.':
           person.heard?'':'Hear '+person.name+' in People before offering the chair.'},() => {
           world.legacy ||= {version:1,term:null,history:[]};

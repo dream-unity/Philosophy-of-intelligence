@@ -48,7 +48,7 @@ test('all three resource paths are payable from an empty, exhausted district and
     assert.equal(collect(ctx,sim).ok,false);
   }
   finish(ctx,sim,'food');
-  assert.equal(site.food,4);assert.equal(sim.state.effort,4);assert.equal(sim.state.week,1);
+  assert.equal(site.food,4);assert.equal(sim.state.week,1);
   const later=open();assert.equal(later.active().food,4);assert.equal(later.state.week,1);
   assert.equal(collect(ctx,later).ok,false);
   later.destroy();sim.destroy();
@@ -143,17 +143,17 @@ test('market collection and supplier handovers sample position under the save lo
   sim.destroy();
 });
 
-test('the zero-effort food commitment and the last-effort building deficit both point to executable personal work',()=>{
+test('food and building goals with empty stores point to work that supplies them',()=>{
   const ctx=setup(),{sim,world}=ctx,s=sim.active();
   sim.state.effort=0;s.food=s.funds=s.materials=0;
   ok(sim.beginGoal(s.id,'food','trust',1));const advice=world.EarthGoals.nextStep(sim);
-  assert.equal(advice.kind,'personalWork');assert.equal(advice.resource,'food');
+  assert.equal(advice.actionId,'work:forage');
   while(world.EarthGoals.nextStep(sim).kind!=='week' && s.food<16)finish(ctx,sim,'food');
   assert.equal(world.EarthGoals.nextStep(sim).kind,'week');
   ok(sim.advance());assert.match(world.EarthGoals.summary(sim.state).history[0].aim.status,/Target reached/);
   sim.state.effort=2;s.funds=s.materials=0;
   ok(sim.beginGoal(s.id,'housing','trust',2));const next=world.EarthGoals.nextStep(sim);
-  assert.equal(next.kind,'personalWork');assert.ok(['funds','materials'].includes(next.resource));
+  assert.equal(next.actionId,'work:contract');
   sim.destroy();
 });
 
@@ -177,7 +177,7 @@ test('a commission checks reserves after household consumption and offers a usab
   s.food=8;s.population=35;s.specialty='materials';sim.state.effort=0;
   assert.equal(world.EarthCampaigns.summary(sim.state,s).conditionMet,true);
   assert.equal(sim.forecastNext().sites[0].commissionSupported,false);
-  const guide=world.EarthLegacy.guidance(sim);assert.equal(guide.kind,'personalWork');assert.equal(guide.resource,'food');
+  const guide=world.EarthLegacy.guidance(sim);assert.equal(guide.actionId,'work:forage');
   while(!sim.forecastNext().sites[0].commissionSupported && s.food<24)finish(ctx,sim,'food');
   assert.equal(world.EarthLegacy.guidance(sim).kind,'week');
   ok(sim.advance());assert.equal(s.commission.supported,true);sim.destroy();

@@ -38,10 +38,10 @@ test('late supper weighs the household round and an existing promise against car
   const prior=JSON.stringify(world),terms=act(row,'terms');assert(terms.ok);
   assert.match(terms.message,/3 food for the household round/);assert.match(terms.message,new RegExp('promised to '+owner.name));
   assert.equal(JSON.stringify(world),prior);
-  assert(!act(row,'goods').changed);assert.equal(row.status,'asked');assert.equal(world.effort,4);
-  assert(act(row,'time').changed);assert.equal(row.status,'agreed');assert.equal(world.effort,4);
+  assert(!act(row,'goods').changed);assert.equal(row.status,'asked');
+  assert(act(row,'time').changed);assert.equal(row.status,'agreed');
   assert.equal(act(row,'finish',row.contactId).ok,false);
-  assert(act(row,'finish',row.requesterId).changed);assert.equal(site.food,6);assert.equal(world.effort,3);
+  assert(act(row,'finish',row.requesterId).changed);assert.equal(site.food,6);
   assert.equal(site.trust,baseTrust);assert.equal(site.wellbeing,baseWellbeing+1);assert.equal(row.status,'kept');
   assert.equal(act(row,'finish',row.requesterId).ok,false);assert.match(g.talk(row.requesterId,'news').message,/collection round/);
   const [report]=g.dialogue.arrangements(site,world,'steward');assert.equal(report.nextId,null);assert.match(report.outcome,/collection round/);
@@ -74,15 +74,15 @@ test('closing a rota penalises a missed promise once, leaves unanswered enquirie
   assert.equal(g.dialogue.closeWeek(site,world).length,0);g.switchTo('steward');assert.match(g.talk(owner.id,'news').message,/didn’t come back/);g.saved();
 });
 
-test('two signed errands cannot promise the same spare unit or the same last civic effort',()=>{
+test('two signed errands can offer time when the same supplies are already promised',()=>{
   const g=setup(),{site,world,ask,act}=g;
-  site.food=5;world.effort=1;
+  site.food=5;
   const a=ask('walker-0');assert(act(a,'goods').changed);
   g.switchTo('walker-3');const b=ask(site.residents[0].id);assert.equal(b.kind,'supper');
   assert.match(act(b,'terms').message,/2 food already offered to other neighbours/);
   assert.equal(act(b,'goods').changed,undefined);assert(act(b,'time').changed);
-  g.switchTo('steward');assert.equal(act(a,'time').changed,undefined);assert(act(a,'finish',a.requesterId).changed);
-  assert.equal(site.food,3);assert.equal(world.effort,1);g.saved();
+  g.switchTo('steward');assert(act(a,'time').changed);assert(act(a,'finish',a.requesterId).changed);
+  assert.equal(site.food,5);g.saved();
 });
 
 test('visitors and people away can discuss their own situation without acquiring spending authority or signing referrals',()=>{

@@ -13,7 +13,6 @@
     const rows=[];
     for(const precinct of model.overview(site).records){
       const location=precinct.id, projects=[];
-      // Active crews can be recalled even with no effort left this week.
       const options=precinct.target?['cancel']:model.options;
       for(const id of options){
         if(id===precinct.use)continue;
@@ -113,7 +112,7 @@
           for(const [key,name] of Object.entries(groups)) {
             const list=available.filter(a=>a.group===key);if(!list.length)continue;
             const optgroup=el('optgroup');optgroup.label=name;
-            for(const a of list){const o=el('option',a.cost==null?a.label:a.label+' · '+a.cost+' effort');o.value=a.id;optgroup.append(o);}
+            for(const a of list){const o=el('option',a.label);o.value=a.id;optgroup.append(o);}
             select.append(optgroup);
           }
           if(!available.some(a=>a.id===move.id))move.id=idle;
@@ -164,7 +163,7 @@
           if(move.id===cityMove) {
             const available=urbanOptions(virtual);
             if(!available.length) {
-              box.append(el('p','No precinct project is affordable with the resources and effort left in this plan.','action-reason'));
+              box.append(el('p','No precinct project is affordable with the resources left in this plan.','action-reason'));
             } else {
               const area=dropdown('Precinct'),proposal=dropdown('Project');
               for(const row of available){const o=el('option',row.precinct.name);o.value=row.location;area.select.append(o);}
@@ -173,7 +172,7 @@
               const selected=row.projects.find(p=>p.id===move.project)||row.projects[0];move.project=selected.id;
               for(const p of row.projects){
                 const c=p.preview.cost;
-                const o=el('option',p.preview.title+' · '+c.effort+' effort, '+c.funds+' funds, '+c.materials+' materials');
+                const o=el('option',p.preview.title+' · '+c.funds+' funds, '+c.materials+' materials');
                 o.value=p.id;proposal.select.append(o);
               }
               proposal.select.value=move.project;

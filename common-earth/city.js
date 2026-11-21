@@ -20,21 +20,21 @@
   ];
   const USES = {
     open:{name:'Common ground', afloat:'Open deck', category:'Public land', icon:'open', color:'#72957a',
-      funds:0, materials:0, effort:1, turns:1, people:'Neighbours who want to decide on a different use.', purpose:'Reopen this precinct and recover one material after work finishes.'},
+      funds:0, materials:0, turns:1, people:'Neighbours who want to decide on a different use.', purpose:'Reopen this precinct and recover one material after work finishes.'},
     homes:{name:'Courtyard homes', afloat:'Floating courtyards', category:'Housing', icon:'home', color:'#d1a278',
-      funds:7, materials:4, effort:2, turns:2, people:'Households seeking a stable home near work and services.', purpose:'Adds room for six residents, or eight on sheltered ground. Protected homes beside a market prevent pressure on local rents.'},
+      funds:7, materials:4, turns:2, people:'Households seeking a stable home near work and services.', purpose:'Adds room for six residents, or eight on sheltered ground. Protected homes beside a market prevent pressure on local rents.'},
     food:{name:'Food cooperative', afloat:'Sea farm', category:'Food', icon:'food', color:'#abc980',
-      funds:4, materials:3, effort:1, turns:1, people:'Households relying on the community pantry.', purpose:'Produces two food each week. Productive ground and a neighbouring water garden each add one.'},
+      funds:4, materials:3, turns:1, people:'Households relying on the community pantry.', purpose:'Produces two food each week. Productive ground and a neighbouring water garden each add one.'},
     yard:{name:'Fabrication yard', afloat:'Repair pontoons', category:'Industry', icon:'yard', color:'#ba9278',
-      funds:6, materials:3, effort:2, turns:2, people:'Apprentices and residents who maintain shared equipment.', purpose:'Produces two materials each week, plus one at a freight site. Nearby homes can lose wellbeing from noise.'},
+      funds:6, materials:3, turns:2, people:'Apprentices and residents who maintain shared equipment.', purpose:'Produces two materials each week, plus one at a freight site. Nearby homes can lose wellbeing from noise.'},
     market:{name:'Market exchange', afloat:'Floating exchange', category:'Trade', icon:'market', color:'#e1b66d',
-      funds:6, materials:3, effort:2, turns:1, people:'Small traders, customers and households on fixed incomes.', purpose:'Earns three funds each week, plus passing trade, and opens demand for another full-yield shop in the central district. Nearby homes, services or a central hall protect residents from rent pressure.'},
+      funds:6, materials:3, turns:1, people:'Small traders, customers and households on fixed incomes.', purpose:'Earns three funds each week, plus passing trade, and opens demand for another full-yield shop in the central district. Nearby homes, services or a central hall protect residents from rent pressure.'},
     transit:{name:'Transit cooperative', afloat:'Ferry cooperative', category:'Mobility', icon:'transit', color:'#83beb9',
-      funds:6, materials:3, effort:2, turns:2, people:'Residents who lose part of each day travelling to work or care.', purpose:'Reduces journeys in this precinct and both neighbours by nine minutes. A connected market earns an extra fund.'},
+      funds:6, materials:3, turns:2, people:'Residents who lose part of each day travelling to work or care.', purpose:'Reduces journeys in this precinct and both neighbours by nine minutes. A connected market earns an extra fund.'},
     care:{name:'Neighbourhood services', afloat:'Community services deck', category:'Care', icon:'care', color:'#c9b6cb',
-      funds:5, materials:2, effort:1, turns:1, people:'Carers, children and residents who struggle to reach services.', purpose:'Adds one wellbeing per week, or two within a twelve-minute trip. It also protects neighbouring markets from rent pressure.'},
+      funds:5, materials:2, turns:1, people:'Carers, children and residents who struggle to reach services.', purpose:'Adds one wellbeing per week, or two within a twelve-minute trip. It also protects neighbouring markets from rent pressure.'},
     water:{name:'Water garden', afloat:'Living breakwater', category:'Ecology', icon:'water', color:'#88b6a3',
-      funds:4, materials:3, effort:1, turns:1, people:'Residents downstream, food growers and those living beside workshops.', purpose:'Produces one food, or two on water-sensitive sites. Buffers nearby industry and improves neighbouring food cooperatives.'}
+      funds:4, materials:3, turns:1, people:'Residents downstream, food growers and those living beside workshops.', purpose:'Produces one food, or two on water-sensitive sites. Buffers nearby industry and improves neighbouring food cooperatives.'}
   };
   const BUILD_OPTIONS = ['homes','food','yard','market','transit','care','water','open'];
   const ZERO = {food:0, funds:0, materials:0, wellbeing:0, trust:0};
@@ -213,18 +213,17 @@
     if(project==='cancel') {
       if(!p.target)return bad('There is no construction to cancel here.');
       const target=USES[p.target];
-      return {ok:true,available:true,reason:'',cancel:true,cost:{effort:0,funds:0,materials:0},turns:0,
+      return {ok:true,available:true,reason:'',cancel:true,cost:{funds:0,materials:0},turns:0,
         title:'Cancel construction',recovery:{funds:Math.floor(target.funds/2),materials:Math.floor(target.materials/2)},
-        forecast:'The current use continues. Half the original funds and materials are recovered, rounded down. Work already done and the original effort are lost.'};
+        forecast:'The current use continues. Half the original funds and materials are recovered, rounded down.'};
     }
     if(!isUse(project))return bad('Choose a land use.');
-    const spec=USES[project],cost={funds:spec.funds,materials:spec.materials,effort:spec.effort};
+    const spec=USES[project],cost={funds:spec.funds,materials:spec.materials};
     if(p.target)return bad('A crew is already working here. Finish or cancel its job first.');
     if(p.use===project)return bad('This precinct already has that use.');
     let reason='';
     if(!Number.isSafeInteger((site.city?.serial||0)+1))reason=noProjectNumber;
     else if(state.filter(row=>row.target).length>=2)reason='Two precinct projects are already commissioned. Open or cancel one before starting another.';
-    else if(world.effort<cost.effort)reason='Needs '+cost.effort+' effort. Advance the week to refresh it.';
     else if(site.funds<cost.funds || site.materials<cost.materials)reason='The treasury needs '+cost.funds+' funds and '+cost.materials+' materials for this project.';
     else if(!window.EarthConstruction)reason='The construction roster is unavailable.';
     return {ok:true,available:!reason,reason,cost,turns:spec.turns,title:nameOf(site,project),people:spec.people,
@@ -262,9 +261,8 @@
     return {...quote,available:!reason,reason,old:nameOf(site,p.use),forecast,rate,beds,reach,risk,noise,localFunds,concurrent,capacityNote,accessNote,crowdingNote,
       record:r,siteName:record.name,purpose:spec.purpose,completedView:after,crew:staffing?.job||null};
   }
-  function apply(site,world,index,project,committeeEffort) {
-    const budget=committeeEffort==null?world:{...world,effort:committeeEffort};
-    const p=preview(site,budget,index,project);
+  function apply(site,world,index,project) {
+    const p=preview(site,world,index,project);
     if(!p.ok||!p.available)return {ok:false,message:p.reason};
     normalise(site);
     const row=site.city.precincts[index],ground=terrainAt(site,index),name=site.water?ground.sea:ground.land;
@@ -277,7 +275,6 @@
     }
     const order=book(site,world,index,project);
     if(!order.ok)return order;
-    if(committeeEffort==null)world.effort-=p.cost.effort;
     site.funds-=p.cost.funds;site.materials-=p.cost.materials;
     row.turns=p.turns;
     return {ok:true,jobId:row.jobId,message:p.title+' commissioned at '+name+'. Opens once the crew finishes and week '+p.week+' begins. '+p.forecast};

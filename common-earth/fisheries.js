@@ -63,7 +63,7 @@
     const food=feeding?Math.min(2,source.available):1;
     if(site.food>Number.MAX_SAFE_INTEGER-food)return {action:'full',label:'Pantry full',text:'Use or send some food before landing another catch.'};
     return {action:'cast',label:'Cast handline',food,shoalUseful:source.available>=2&&!feeding,text:feeding?'The seabirds mark a feeding shoal. A cast here brings in '+food+' food.':
-      p.mode==='boat'?'A cast here brings in 1 food.'+(source.available>=2?' Fish beneath the seabirds for 2.':' One fish remains in today’s ground.'):'A cast from the quay brings in 1 food. No weekly effort needed.'};
+      p.mode==='boat'?'A cast here brings in 1 food.'+(source.available>=2?' Fish beneath the seabirds for 2.':' One fish remains in today’s ground.'):'A cast from the quay brings in 1 food.'};
   }
   root.EarthFisheries=Object.freeze({shoal,offer,zone,waitTime,biteDelay,ground,take});
 })(typeof window==='undefined'?globalThis:window);

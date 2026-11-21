@@ -665,14 +665,13 @@ test('visitors can see the local mix before arrival and an introduction changes 
   assert.equal(life.visitorReception(sim.state,home,home.residents[0].id),null);
 });
 
-test('at zero civic effort ordinary jobs pay the person playing, develop the town and reopen immediately',()=>{
+test('ordinary jobs pay the person playing, develop the town and reopen immediately',()=>{
   const {sim,home,context,saved}=fixture();
   const id=context.EarthAgency.actorId(home),before=home.food,wage=sim.purseView().balance;
-  sim.state.effort=0;
-  for(const job of sim.actions('work')){assert.equal(job.cost,0);assert.ok(job.available,job.reason);}
+  for(const job of sim.actions('work')){assert.equal(Object.hasOwn(job,'cost'),false);assert.ok(job.available,job.reason);}
   const initial=home.growth?.points||0;
   for(let n=0;n<6;n++)assert.ok(sim.act('work:forage').ok);
-  assert.equal(home.food,before+18);assert.equal(sim.purseView().balance,wage+6);assert.equal(sim.state.effort,4);
+  assert.equal(home.food,before+18);assert.equal(sim.purseView().balance,wage+6);
   assert.equal(home.growth.points,initial+6);
   assert.equal(context.EarthDistrictGrowth.goal(home,context.EarthPersonas.profile(home,id)).points,6);
   const next=fixture(saved()).sim;assert.equal(next.purseView().balance,wage+6);

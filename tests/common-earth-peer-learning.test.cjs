@@ -41,7 +41,7 @@ test('the same pair starts with neutral terms, then its prior handling of shared
   assert.match(option(a,'agreement:lead').description,/holding back supplies/);
   assert.equal(option(a,'agreement:reuse'),undefined);
   const repeat=option(b,'agreement:reuse');
-  assert.equal(repeat.cost,1);assert.equal(Object.keys(repeat.goods).length,0);
+  assert.equal(Object.keys(repeat.goods).length,0);
   assert.match(repeat.description,/week 2/);
   ok(a.act('agreement:lead'));ok(b.act('agreement:lead'));
   assert.equal(settle(a),3);assert.equal(settle(b),5);
@@ -53,12 +53,12 @@ test('a trusted pair can reuse its signed working method once without organiser 
   assert.equal(pair(sim).status,'trusted collaborators');
   nextMeeting(sim);
   const offer=option(sim,'agreement:reuse');
-  assert.equal(offer.cost,0);assert.equal(Object.keys(offer.goods).length,0);
+  assert.equal(Object.keys(offer.goods).length,0);
   assert.match(offer.description,/4 materials/);
   const before=JSON.stringify(sim.state);
   const rehearsal=env.EarthPlanner.project(sim.state,[{id:'agreement:reuse'}],1);
   assert.equal(rehearsal.ok,true);assert.equal(JSON.stringify(sim.state),before);
-  const effort=sim.state.effort;ok(sim.act(offer.id));assert.equal(sim.state.effort,effort);
+  ok(sim.act(offer.id));
   const raw=JSON.stringify(sim.state),restored=open(raw);assert.equal(JSON.stringify(restored.state),raw);
   assert.equal(settle(restored),4);assert.equal(rehearsal.site.materials,restored.active().materials);
   nextMeeting(restored);assert.equal(option(restored,'agreement:reuse'),undefined);
@@ -70,7 +70,7 @@ test('a strained pair can repair a disagreement with time alone and try the resu
   assert.equal(pair(sim).strength,-3);
   nextMeeting(sim);
   const repair=option(sim,'agreement:repair');
-  assert.equal(repair.cost,1);assert.equal(Object.keys(repair.goods).length,0);
+  assert.equal(Object.keys(repair.goods).length,0);
   const before=sim.active().neighbourWork.completed,materials=sim.active().materials;
   ok(sim.act(repair.id));assert.equal(sim.active().materials,materials);
   assert.equal(option(sim,'agreement:check'),undefined);
@@ -78,7 +78,7 @@ test('a strained pair can repair a disagreement with time alone and try the resu
   assert.equal(sim.active().neighbourWork.completed,before);
   assert.equal(pair(sim).strength,-1);assert.equal(pair(sim).handoverWeek,sim.state.week);
   nextMeeting(sim);
-  const repeat=option(sim,'agreement:reuse');assert.equal(repeat.cost,1);assert.match(repeat.description,/3 materials/);
+  const repeat=option(sim,'agreement:reuse');assert.match(repeat.description,/3 materials/);
   ok(sim.act(repeat.id));ok(sim.act('agreement:check'));assert.equal(settle(sim),4);
   assert.equal(pair(sim).status,'ready to try again');
   assert.equal(pair(sim).handoverWeek,sim.state.week);

@@ -24,7 +24,6 @@ function spend(sim,id) {
     const option=sim.actions().find(a=>a.id===id);
     assert.ok(option,id+' missing');
     if(option.available) return ok(sim.act(id));
-    if(sim.state.effort<option.cost || sim.state.effort===0){ok(sim.advance());continue;}
     const lack=Object.entries(option.goods).find(([k,v])=>sim.active()[k]<v);
     assert.ok(lack,id+' blocked: '+option.reason);
     ok(sim.act(shifts[lack[0]]));
@@ -54,7 +53,6 @@ function olderRatifiedWorld() {
   for(let i=0;i<16;i++) {
     const offer=sim.foundingOffer(target);
     if(offer.available) break;
-    if(!sim.state.effort){ok(sim.advance());continue;}
     const need=Object.entries(offer.goods).find(([k,v])=>home[k]<v);
     assert.ok(need,offer.reason);
     spend(sim,'work:'+({funds:'contract',food:'forage',materials:'salvage'}[need[0]]));
@@ -68,7 +66,6 @@ function olderRatifiedWorld() {
   spend(sim,'research:stewardship');
   while(home.food<6)spend(sim,'work:forage');
   assert.equal(sim.state.completed,true);
-  if(!sim.state.effort)ok(sim.advance());
   established=store.getItem('test');
   assert.equal(JSON.parse(established).legacy,undefined);
   return established;
@@ -163,7 +160,6 @@ for(const affordable of [false,true]){
 
 test('a shift host finishes the day before accepting the chair, while other residents can still work with the player',()=>{
   const sim=getGame(memory(olderRatifiedWorld())),site=sim.active(),[chair,host]=site.residents;
-  if(sim.state.effort<3)ok(sim.advance());
   ok(sim.beginShift(chair.id));
   const blocked=sim.actions('council').find(a=>a.id==='legacy:start:'+chair.id);
   assert.equal(blocked.available,false);assert.match(blocked.reason,/finish your day/i);
