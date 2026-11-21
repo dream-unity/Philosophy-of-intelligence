@@ -1532,8 +1532,8 @@ function createVolumetricParticles(scene, textures, count = 160) {
 function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
   const worldGroup = new THREE.Group();
   const targets = [];
-  const enemyBases = [];
-  const enemyUnits = [];
+  const foreignCommunities = [];
+  const borderIntruders = [];
   const thermals = [];
   const landmarks = [];
   const windowMaterials = [];
@@ -1825,33 +1825,61 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
   worldGroup.add(keepGroup);
   landmarks.push({ id: 'snow-keep', name: 'Highland Snow Citadel', x: keepX, y: keepY + 32, z: keepZ });
 
-  // (F) Real Neighbouring Settlements from world.sites so you can soar to other towns!
-  if (worldState?.sites?.length > 1) {
-    let idx = 0;
-    for (const other of worldState.sites) {
-      if (!other || other.id === site?.id) continue;
-      idx++;
-      const angle = idx * 1.9 + 0.55;
-      const dist = 540 + idx * 120;
-      const nx = Math.cos(angle) * dist;
-      const nz = Math.min(hasWater ? shoreZ - 80 : 600, Math.sin(angle) * dist - 140);
-      const ny = Math.max(0, terrainHeightAt(nx, nz));
-      const nGroup = new THREE.Group();
-      nGroup.position.set(nx, ny, nz);
-      for (let b = 0; b < 6; b++) {
-        const ba = (b / 6) * Math.PI * 2;
-        const bh = 6 + (b % 3) * 2.5;
-        const house = new THREE.Mesh(new THREE.BoxGeometry(8, bh, 7), keepStone);
-        house.position.set(Math.cos(ba) * 18, bh / 2, Math.sin(ba) * 18);
-        const hRoof = new THREE.Mesh(new THREE.ConeGeometry(6.2, 4.5, 4), new THREE.MeshStandardMaterial({ color: 0xa6583d, roughness: 0.72 }));
-        hRoof.rotation.y = Math.PI / 4;
-        hRoof.position.set(Math.cos(ba) * 18, bh + 2.25, Math.sin(ba) * 18);
-        nGroup.add(house, hRoof);
-      }
-      worldGroup.add(nGroup);
-      landmarks.push({ id: 'site-' + other.id, name: other.name || 'Neighbouring Town', x: nx, y: ny + 26, z: nz });
-      if (idx >= 3) break;
+  // (F) Neighbouring Communities — Protected by Sacred Spiritual Borders (Dragons refuse to enter another community's lands!)
+  const otherTowns = [
+    ...(worldState?.sites || []),
+    ...(worldState?.communityLife?.outposts || [])
+  ].filter(other => other && other.id !== site?.id);
+  const communitySpecs = otherTowns.length
+    ? otherTowns.slice(0, 4).map((other, i) => ({ id: other.id, name: other.name || `Neighbouring Community ${i + 1}` }))
+    : [
+        { id: 'neighbour-north', name: 'Northern Valley Commons' },
+        { id: 'neighbour-west', name: 'Westridge Harbour' }
+      ];
+  const neighbourSlots = [
+    { x: -240, z: -210 },
+    { x: 265, z: -220 },
+    { x: -390, z: -120 },
+    { x: 410, z: -135 }
+  ];
+  for (let i = 0; i < communitySpecs.length && i < neighbourSlots.length; i++) {
+    const spec = communitySpecs[i];
+    const slot = neighbourSlots[i];
+    const nx = slot.x;
+    const nz = hasWater ? Math.min(slot.z, shoreZ - 110) : slot.z;
+    const ny = Math.max(0, terrainHeightAt(nx, nz));
+    const nGroup = new THREE.Group();
+    nGroup.position.set(nx, ny, nz);
+    for (let b = 0; b < 6; b++) {
+      const ba = (b / 6) * Math.PI * 2;
+      const bh = 6 + (b % 3) * 2.5;
+      const house = new THREE.Mesh(new THREE.BoxGeometry(8, bh, 7), keepStone);
+      house.position.set(Math.cos(ba) * 18, bh / 2, Math.sin(ba) * 18);
+      const hRoof = new THREE.Mesh(new THREE.ConeGeometry(6.2, 4.5, 4), new THREE.MeshStandardMaterial({ color: 0xa6583d, roughness: 0.72 }));
+      hRoof.rotation.y = Math.PI / 4;
+      hRoof.position.set(Math.cos(ba) * 18, bh + 2.25, Math.sin(ba) * 18);
+      nGroup.add(house, hRoof);
     }
+    // Serene emerald-gold spiritual border ring marking another community's sovereign land
+    const boundaryRadius = 72;
+    const wardMat = new THREE.MeshBasicMaterial({ color: 0x5eead4, transparent: true, opacity: 0.24, depthWrite: false, side: THREE.DoubleSide });
+    const wardRing = new THREE.Mesh(new THREE.TorusGeometry(boundaryRadius, 0.55, 8, 42), wardMat);
+    wardRing.rotation.x = Math.PI / 2;
+    wardRing.position.y = 4.5;
+    nGroup.add(wardRing);
+    worldGroup.add(nGroup);
+
+    foreignCommunities.push({
+      id: spec.id,
+      name: spec.name,
+      x: nx,
+      y: ny,
+      z: nz,
+      radius: boundaryRadius,
+      wardRing,
+      wardMat,
+      pulse: 0
+    });
   }
 
   // 5. District Road Grid (0..24) — cleanly elevated Y=+0.08 to prevent any Z-fighting
@@ -2259,295 +2287,90 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
     }
   }
 
-  // 13. Populated 3D Enemy Bases (Communities AT WAR prioritized first + Fortified Rival Outposts)
-  const soldierBodyMat = new THREE.MeshStandardMaterial({ color: 0x4b332c, roughness: 0.78 });
-  const soldierHelmetMat = new THREE.MeshStandardMaterial({ color: 0x2c3430, roughness: 0.55, metalness: 0.35 });
-  const soldierSkinMat = new THREE.MeshStandardMaterial({ color: 0xd8a882, roughness: 0.7 });
-  const soldierGunMat = new THREE.MeshStandardMaterial({ color: 0x222628, roughness: 0.4, metalness: 0.7 });
-  const truckHullMat = new THREE.MeshStandardMaterial({ color: 0x4d5a42, roughness: 0.65, metalness: 0.25 });
-  const truckWheelMat = new THREE.MeshStandardMaterial({ color: 0x1c1e20, roughness: 0.85 });
-  const enemyBannerMat = new THREE.MeshStandardMaterial({ color: 0xc92a22, emissive: 0x5c110c, emissiveIntensity: 0.45, roughness: 0.55 });
-  const enemyPadMat = new THREE.MeshStandardMaterial({ color: 0x5c5750, roughness: 0.9 });
+  // 13. Homeland Border Defense — Dragons are purely spiritual protectors of their home community
+  //     and NEVER mount offensive raids. Only when an active war threatens the homeland do encroaching
+  //     border raiders appear near the home perimeter to be repelled by protective dragonfire & thunder.
+  const activeWarEnemies = (worldState?.sites || []).filter(s => {
+    if (!s || s.id === site.id) return false;
+    const pairKey = [site.id, s.id].sort().join(':');
+    const rel = worldState?.diplomacy?.[pairKey] || site?.relations?.[s.id];
+    return rel?.status === 'war' || rel === 'war' || rel?.atWar === true;
+  });
 
-  function addEnemyStructure(base, id, name, wx, wz, w, h, d, wallColor, roofColor) {
-    const wy = Math.max(0, terrainHeightAt(wx, wz));
-    const grp = new THREE.Group();
-    grp.position.set(wx, wy, wz);
+  if (activeWarEnemies.length > 0) {
+    const intruderBodyMat = new THREE.MeshStandardMaterial({ color: 0x4b332c, roughness: 0.78 });
+    const intruderHelmMat = new THREE.MeshStandardMaterial({ color: 0x2c3430, roughness: 0.55, metalness: 0.35 });
+    const intruderSkinMat = new THREE.MeshStandardMaterial({ color: 0xd8a882, roughness: 0.7 });
+    const intruderMarkMat = new THREE.MeshStandardMaterial({ color: 0xc92a22, emissive: 0x5c110c, emissiveIntensity: 0.45, roughness: 0.55 });
+    const raiderOrigin = activeWarEnemies[0];
+    const perimeterSlots = [
+      { x: -72, z: -86 },
+      { x: 0, z: -98 },
+      { x: 74, z: -84 },
+      { x: -88, z: -26 }
+    ];
+    for (let idx = 0; idx < perimeterSlots.length; idx++) {
+      const slot = perimeterSlots[idx];
+      const ix = slot.x;
+      const iz = hasWater ? Math.min(slot.z, shoreZ - 24) : slot.z;
+      const iy = Math.max(0, terrainHeightAt(ix, iz));
+      const grp = new THREE.Group();
+      grp.position.set(ix, iy, iz);
 
-    const plinth = new THREE.Mesh(
-      new THREE.BoxGeometry(w + 1.0, 0.5, d + 1.0),
-      new THREE.MeshStandardMaterial({ color: 0x7a7066, roughness: 0.88 })
-    );
-    plinth.position.y = 0.25;
-    grp.add(plinth);
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.35, 0.55), intruderBodyMat.clone());
+      torso.position.y = 1.65;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 8, 7), intruderSkinMat);
+      head.position.y = 2.62;
+      const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.41, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.58), intruderHelmMat);
+      helmet.position.y = 2.70;
+      const legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.05, 0.30), intruderHelmMat);
+      legL.position.set(-0.22, 0.55, 0);
+      const legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.05, 0.30), intruderHelmMat);
+      legR.position.set(0.22, 0.55, 0);
+      const capMarker = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), intruderMarkMat);
+      capMarker.position.y = 3.55;
+      const blaze = new THREE.Mesh(
+        new THREE.ConeGeometry(1.15, 2.8, 7),
+        new THREE.MeshBasicMaterial({ color: 0xff7a22, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      blaze.position.y = 1.8;
+      blaze.visible = false;
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: wallColor, map: textures.stoneMap, roughness: 0.78 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), bodyMat);
-    body.position.y = h / 2 + 0.45;
-    grp.add(body);
+      grp.add(torso, head, helmet, legL, legR, capMarker, blaze);
+      worldGroup.add(grp);
 
-    const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(Math.max(w, d) * 0.76, h * 0.48, 4),
-      new THREE.MeshStandardMaterial({ color: roofColor, map: textures.roofMap, roughness: 0.65 })
-    );
-    roof.rotation.y = Math.PI / 4;
-    roof.position.y = h + 0.45 + h * 0.24;
-    grp.add(roof);
-
-    // Hostile crimson war banner atop enemy fortification
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 4.4, 6), soldierGunMat);
-    pole.position.set(w * 0.34, h + 2.4, d * 0.34);
-    const flag = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.3, 0.12), enemyBannerMat);
-    flag.position.set(w * 0.34 + 1.3, h + 3.8, d * 0.34);
-    grp.add(pole, flag);
-
-    const blaze = new THREE.Mesh(
-      new THREE.ConeGeometry(Math.max(w, d) * 0.55, h * 1.25, 8),
-      new THREE.MeshBasicMaterial({ color: 0xff7422, transparent: true, opacity: 0.88, blending: THREE.AdditiveBlending, depthWrite: false })
-    );
-    blaze.position.y = h + 1.6;
-    blaze.visible = false;
-    grp.add(blaze);
-
-    worldGroup.add(grp);
-    targets.push({
-      id,
-      kind: 'building',
-      enemy: true,
-      isUnit: false,
-      siteId: base.siteId || null,
-      baseId: base.id,
-      name,
-      mx: wx / scale + 12,
-      my: wz / scale + 12,
-      x: wx,
-      y: wy + h * 0.55,
-      z: wz,
-      radius: Math.max(w, d) * 0.72,
-      hp: 100,
-      maxHp: 100,
-      dead: false,
-      mesh: grp,
-      body,
-      blaze
-    });
-  }
-
-  function addEnemySoldier(base, idx, cx, cz, patrolRadius, angle) {
-    const sx = cx + Math.cos(angle) * patrolRadius;
-    const sz = cz + Math.sin(angle) * patrolRadius;
-    const sy = Math.max(0, terrainHeightAt(sx, sz));
-    const grp = new THREE.Group();
-    grp.position.set(sx, sy, sz);
-
-    const torsoMat = soldierBodyMat.clone();
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.35, 0.55), torsoMat);
-    torso.position.y = 1.65;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 8, 7), soldierSkinMat);
-    head.position.y = 2.62;
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.41, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.58), soldierHelmetMat);
-    helmet.position.y = 2.70;
-    const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 1.45), soldierGunMat);
-    rifle.position.set(0.44, 1.72, -0.45);
-    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.05, 0.30), soldierHelmetMat);
-    legL.position.set(-0.22, 0.55, 0);
-    const legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.05, 0.30), soldierHelmetMat);
-    legR.position.set(0.22, 0.55, 0);
-
-    // Tall crimson war-marker beacon overhead (subtle visible silhouette from the sky!)
-    const capFlag = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), enemyBannerMat);
-    capFlag.position.y = 3.55;
-
-    const blaze = new THREE.Mesh(
-      new THREE.ConeGeometry(1.15, 2.8, 7),
-      new THREE.MeshBasicMaterial({ color: 0xff7a22, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
-    );
-    blaze.position.y = 1.8;
-    blaze.visible = false;
-
-    grp.add(torso, head, helmet, rifle, legL, legR, capFlag, blaze);
-    worldGroup.add(grp);
-
-    const targetEntry = {
-      id: `${base.id}-soldier-${idx}`,
-      kind: 'soldier',
-      enemy: true,
-      isUnit: true,
-      siteId: base.siteId || null,
-      baseId: base.id,
-      name: `${base.townName || base.name} Soldier #${idx + 1}`,
-      mx: sx / scale + 12,
-      my: sz / scale + 12,
-      x: sx,
-      y: sy + 1.8,
-      z: sz,
-      vx: 0,
-      vz: 0,
-      radius: 2.6,
-      hp: 45,
-      maxHp: 45,
-      dead: false,
-      deathTimer: 0,
-      mesh: grp,
-      body: torso,
-      blaze,
-      legL,
-      legR,
-      homeX: cx,
-      homeZ: cz,
-      patrolRadius,
-      patrolAngle: angle,
-      patrolSpeed: 0.28 + (idx % 3) * 0.08,
-      moveSpeed: 6.5 + (idx % 3) * 1.1
-    };
-    targets.push(targetEntry);
-    enemyUnits.push(targetEntry);
-  }
-
-  function addEnemyTruck(base, idx, cx, cz, orbitRadius, angle) {
-    const tx = cx + Math.cos(angle) * orbitRadius;
-    const tz = cz + Math.sin(angle) * orbitRadius;
-    const ty = Math.max(0, terrainHeightAt(tx, tz));
-    const grp = new THREE.Group();
-    grp.position.set(tx, ty, tz);
-
-    const hullMat = truckHullMat.clone();
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, 4.2), hullMat);
-    bed.position.set(0, 1.5, 0.7);
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.7, 2.0), hullMat);
-    cab.position.set(0, 1.6, -2.1);
-    const beacon = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.45, 0.9), enemyBannerMat);
-    beacon.position.set(0, 2.7, -2.1);
-    grp.add(bed, cab, beacon);
-
-    for (const [wx, wz] of [[-1.3, -1.9], [1.3, -1.9], [-1.3, 1.8], [1.3, 1.8]]) {
-      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.45, 8), truckWheelMat);
-      wh.rotation.z = Math.PI / 2;
-      wh.position.set(wx, 0.62, wz);
-      grp.add(wh);
+      const entry = {
+        id: `border-intruder-${idx}`,
+        kind: 'intruder',
+        isIntruder: true,
+        enemy: true,
+        isUnit: true,
+        siteId: site.id,
+        name: `${raiderOrigin.name || 'Hostile'} Border Intruder #${idx + 1}`,
+        mx: ix / scale + 12,
+        my: iz / scale + 12,
+        x: ix,
+        y: iy + 1.8,
+        z: iz,
+        radius: 3.0,
+        hp: 45,
+        maxHp: 45,
+        dead: false,
+        deathTimer: 0,
+        mesh: grp,
+        body: torso,
+        blaze,
+        legL,
+        legR,
+        homeX: ix,
+        homeZ: iz,
+        patrolRadius: 11 + (idx % 2) * 5,
+        patrolAngle: idx * 1.4,
+        patrolSpeed: 0.32 + (idx % 2) * 0.08
+      };
+      borderIntruders.push(entry);
+      targets.push(entry);
     }
-
-    const blaze = new THREE.Mesh(
-      new THREE.ConeGeometry(2.4, 4.6, 8),
-      new THREE.MeshBasicMaterial({ color: 0xff7422, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
-    );
-    blaze.position.y = 2.8;
-    blaze.visible = false;
-    grp.add(blaze);
-
-    worldGroup.add(grp);
-    const targetEntry = {
-      id: `${base.id}-truck-${idx}`,
-      kind: 'vehicle',
-      enemy: true,
-      isUnit: true,
-      siteId: base.siteId || null,
-      baseId: base.id,
-      name: `${base.townName || base.name} Armored Truck`,
-      mx: tx / scale + 12,
-      my: tz / scale + 12,
-      x: tx,
-      y: ty + 1.8,
-      z: tz,
-      vx: 0,
-      vz: 0,
-      radius: 4.2,
-      hp: 75,
-      maxHp: 75,
-      dead: false,
-      deathTimer: 0,
-      mesh: grp,
-      body: bed,
-      blaze,
-      homeX: cx,
-      homeZ: cz,
-      patrolRadius: orbitRadius,
-      patrolAngle: angle,
-      patrolSpeed: 0.16,
-      moveSpeed: 9.5
-    };
-    targets.push(targetEntry);
-    enemyUnits.push(targetEntry);
-  }
-
-  function buildEnemyBaseCompound(baseSpec, bx, bz) {
-    const by = Math.max(0, terrainHeightAt(bx, bz));
-    const base = {
-      id: baseSpec.id,
-      siteId: baseSpec.siteId || null,
-      name: baseSpec.name,
-      townName: baseSpec.townName || baseSpec.name,
-      atWar: Boolean(baseSpec.atWar),
-      x: bx,
-      y: by,
-      z: bz,
-      radius: 44
-    };
-    enemyBases.push(base);
-
-    // Fortified dirt/stone compound pad + defensive perimeter berm walls
-    const compoundPad = new THREE.Mesh(new THREE.CylinderGeometry(36, 40, 0.45, 16), enemyPadMat);
-    compoundPad.position.set(bx, by + 0.15, bz);
-    worldGroup.add(compoundPad);
-
-    const wallRingMat = new THREE.MeshStandardMaterial({ color: 0x6f6258, map: textures.stoneMap, roughness: 0.88 });
-    for (let w = 0; w < 6; w++) {
-      const a = (w / 6) * Math.PI * 2 + 0.25;
-      const wallSeg = new THREE.Mesh(new THREE.BoxGeometry(16, 3.6, 2.2), wallRingMat);
-      const wx = bx + Math.cos(a) * 33;
-      const wz = bz + Math.sin(a) * 33;
-      wallSeg.position.set(wx, Math.max(0, terrainHeightAt(wx, wz)) + 1.8, wz);
-      wallSeg.rotation.y = -a + Math.PI / 2;
-      worldGroup.add(wallSeg);
-    }
-
-    // Core Enemy Military Buildings
-    addEnemyStructure(base, `${base.id}-hq`, `${base.name} Command HQ`, bx, bz - 4, 11.5, 10.5, 10.5, 0x8e564a, 0x4d221c);
-    addEnemyStructure(base, `${base.id}-barracks`, `${base.name} Barracks`, bx - 17, bz + 8, 9.6, 6.2, 8.2, 0x845d50, 0x4a2922);
-    addEnemyStructure(base, `${base.id}-tower`, `${base.name} Watchtower`, bx + 17, bz - 11, 5.6, 13.4, 5.6, 0x7b5e54, 0x3f1e1a);
-    addEnemyStructure(base, `${base.id}-depot`, `${base.name} Munitions Depot`, bx + 15, bz + 12, 8.4, 5.4, 7.6, 0x75594c, 0x5c261c);
-
-    // Patrol Trucks & Squad of Animated Enemy Soldiers!
-    const soldierCount = base.atWar ? 7 : 5;
-    for (let s = 0; s < soldierCount; s++) {
-      const a = (s / soldierCount) * Math.PI * 2;
-      addEnemySoldier(base, s, bx, bz, 18 + (s % 2) * 8, a);
-    }
-    addEnemyTruck(base, 0, bx, bz, 26, 0.7);
-    if (base.atWar) addEnemyTruck(base, 1, bx, bz, 29, 3.85);
-
-    landmarks.push({
-      id: base.id,
-      name: base.atWar ? `[WAR] ${base.name}` : base.name,
-      x: bx,
-      y: by + 28,
-      z: bz,
-      isEnemyBase: true,
-      atWar: base.atWar
-    });
-  }
-
-  const rawEnemyBases = window.EarthDragonStable?.enemyBasesAtWar?.(worldState, site) || [
-    { id: 'enemy-north', siteId: null, name: 'Rival Outpost Bastion', townName: 'Northern Frontier', atWar: false },
-    { id: 'enemy-west', siteId: null, name: 'Raider Camp Fortress', townName: 'Western Ridge', atWar: false },
-    { id: 'enemy-east', siteId: null, name: 'Eastern Citadel Outpost', townName: 'Eastern Frontier', atWar: false }
-  ];
-
-  // Place war-enemy bases & rival outposts on solid land rings outside town (never underwater!)
-  const enemySlots = [
-    { x: 0, z: -210 },
-    { x: -230, z: -125 },
-    { x: 245, z: -145 },
-    { x: -175, z: -330 },
-    { x: 195, z: -345 },
-    { x: -340, z: -245 }
-  ];
-  let slotIdx = 0;
-  for (const bSpec of rawEnemyBases) {
-    if (slotIdx >= enemySlots.length) break;
-    const sl = enemySlots[slotIdx++];
-    const safeZ = hasWater ? Math.min(sl.z, shoreZ - 95) : sl.z;
-    buildEnemyBaseCompound(bSpec, sl.x, safeZ);
   }
 
   // 14. Golden Thermal Updraft Sky-Rings (Soar through for lift & speed!)
@@ -2604,8 +2427,8 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
   return {
     worldGroup,
     targets,
-    enemyBases,
-    enemyUnits,
+    foreignCommunities,
+    borderIntruders,
     thermals,
     thermalMeshes,
     clouds,
@@ -2703,7 +2526,7 @@ function createFlightAudio() {
     } catch {}
   }
 
-  function playTeleportWarp() {
+  function playSanctuaryWard() {
     if (!ctx || muted) return;
     try {
       const now = ctx.currentTime;
@@ -2712,22 +2535,20 @@ function createFlightAudio() {
       const g = ctx.createGain();
       osc1.type = 'sine';
       osc2.type = 'triangle';
-      osc1.frequency.setValueAtTime(220, now);
-      osc1.frequency.exponentialRampToValueAtTime(920, now + 0.24);
-      osc1.frequency.exponentialRampToValueAtTime(320, now + 0.62);
-      osc2.frequency.setValueAtTime(440, now);
-      osc2.frequency.exponentialRampToValueAtTime(1380, now + 0.28);
-      osc2.frequency.exponentialRampToValueAtTime(480, now + 0.62);
+      osc1.frequency.setValueAtTime(396, now);
+      osc1.frequency.exponentialRampToValueAtTime(528, now + 0.38);
+      osc2.frequency.setValueAtTime(594, now);
+      osc2.frequency.exponentialRampToValueAtTime(792, now + 0.38);
       g.gain.setValueAtTime(0.001, now);
-      g.gain.linearRampToValueAtTime(0.32, now + 0.08);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 0.68);
+      g.gain.linearRampToValueAtTime(0.22, now + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
       osc1.connect(g);
       osc2.connect(g);
       g.connect(master);
       osc1.start(now);
       osc2.start(now);
-      osc1.stop(now + 0.7);
-      osc2.stop(now + 0.7);
+      osc1.stop(now + 0.58);
+      osc2.stop(now + 0.58);
     } catch {}
   }
 
@@ -2769,30 +2590,12 @@ function createFlightAudio() {
     } catch {}
   }
 
-  function playTargetLock() {
-    if (!ctx || muted) return;
-    try {
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(520, now);
-      osc.frequency.setValueAtTime(780, now + 0.06);
-      g.gain.setValueAtTime(0.001, now);
-      g.gain.linearRampToValueAtTime(0.22, now + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-      osc.connect(g).connect(master);
-      osc.start(now);
-      osc.stop(now + 0.2);
-    } catch {}
-  }
-
   function dispose() {
     try { ctx?.close(); } catch {}
     ctx = null;
   }
 
-  return { ensureStarted, playWingFlap, playTeleportWarp, playThunderStrike, playTargetLock, update, dispose };
+  return { ensureStarted, playWingFlap, playSanctuaryWard, playThunderStrike, update, dispose };
 }
 
 /* ── Main Flight3D Controller ──────────────────────────────────────── */
@@ -2832,10 +2635,6 @@ function createOverlayDom() {
             <span class="flight-waypoint-dist" id="f3d-wp-dist">420 m</span>
           </button>
         </div>
-        <div class="flight-hunt-chip" id="f3d-hunt-chip" hidden>
-          <span id="f3d-hunt-text">HUNTING: Target</span>
-          <button type="button" class="flight-hunt-stop" id="f3d-hunt-stop">Stop</button>
-        </div>
       </div>
 
       <div class="flight-top-actions">
@@ -2863,11 +2662,10 @@ function createOverlayDom() {
           <button type="button" class="flight-btn" id="f3d-btn-land">Land / Perch (G)</button>
           <button type="button" class="flight-btn" id="f3d-btn-roll">Roll (R)</button>
           <button type="button" class="flight-btn fire-btn" id="f3d-btn-fire">Blast Fire (F)</button>
-          <button type="button" class="flight-btn thunder-btn" id="f3d-btn-thunder">Thunder (Z)</button>
-          <button type="button" class="flight-btn teleport-btn" id="f3d-btn-teleport">Teleport: Enemy Base (B)</button>
+          <button type="button" class="flight-btn thunder-btn" id="f3d-btn-thunder">Protective Thunder (Z)</button>
         </div>
         <div class="flight-keys-hint" id="f3d-keys-hint">
-          Tap/Click Enemy to Hunt · B Teleport Enemy Base · Z Staff Thunder · F Fire · Drag Sky · W/S Pitch · A/D Bank · Space Flap · Shift Dash · H Hide
+          Z Protective Staff Thunder · F Dragonfire · Drag Sky · W/S Pitch · A/D Bank · Space Flap · Shift Dash · G Perch · N Waypoint · H Hide
         </div>
       </div>
     </div>
@@ -3030,28 +2828,7 @@ function launch(options = {}) {
   const fireLight = new THREE.PointLight(0xff8a2b, 0, 72, 1.4);
   scene.add(fireLight);
 
-  // Arcane Teleport Rift Portal VFX (sleek translucent counter-rotating rune rings + subtle energy shimmer)
-  const portalGroup = new THREE.Group();
-  portalGroup.visible = false;
-  const portalRingMat1 = new THREE.MeshBasicMaterial({ color: 0x7c3aed, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide });
-  const portalRingMat2 = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.68, depthWrite: false, side: THREE.DoubleSide });
-  const portalRingMat3 = new THREE.MeshBasicMaterial({ color: 0xf5c451, transparent: true, opacity: 0.64, depthWrite: false, side: THREE.DoubleSide });
-  const portalCoreMat = new THREE.MeshBasicMaterial({ color: 0x6d28d9, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
-  const portalRingA = new THREE.Mesh(new THREE.TorusGeometry(5.6, 0.14, 8, 32), portalRingMat1);
-  const portalRingB = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.10, 8, 28), portalRingMat2);
-  portalRingB.rotation.x = Math.PI / 3;
-  const portalRingC = new THREE.Mesh(new THREE.TorusGeometry(3.0, 0.08, 8, 24), portalRingMat3);
-  portalRingC.rotation.y = Math.PI / 3;
-  const portalCore = new THREE.Mesh(
-    new THREE.RingGeometry(0.4, 4.4, 28),
-    portalCoreMat
-  );
-  portalGroup.add(portalRingA, portalRingB, portalRingC, portalCore);
-  scene.add(portalGroup);
-  const portalLight = new THREE.PointLight(0x9b5cff, 0, 70, 1.8);
-  scene.add(portalLight);
-
-  // Wizard Staff Sky-to-Ground Thunder & Lightning Strike VFX System
+  // Wizard Staff Protective Sky-to-Ground Thunder & Lightning VFX System
   const thunderGroup = new THREE.Group();
   thunderGroup.visible = false;
   const boltCoreMat = new THREE.MeshBasicMaterial({ color: 0xf0fdff, transparent: true, opacity: 0.98, depthWrite: false });
@@ -3101,22 +2878,6 @@ function launch(options = {}) {
     }
     groundBoltMeshes = [];
   }
-
-  // 3D Target Hunt Lock Beacon (spinning crimson-gold ring + vertical sky beam around hunted victim!)
-  const huntBeacon = new THREE.Group();
-  huntBeacon.visible = false;
-  const huntRingMat = new THREE.MeshBasicMaterial({ color: 0xff4632, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const huntRingOuter = new THREE.Mesh(new THREE.TorusGeometry(6.5, 0.34, 8, 28), huntRingMat);
-  huntRingOuter.rotation.x = Math.PI / 2;
-  const huntRingInner = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.24, 8, 22), new THREE.MeshBasicMaterial({ color: 0xffcf54, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
-  huntRingInner.rotation.x = Math.PI / 2;
-  const huntPillar = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.65, 2.2, 42, 12, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xff5a36, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
-  );
-  huntPillar.position.y = 21;
-  huntBeacon.add(huntRingOuter, huntRingInner, huntPillar);
-  scene.add(huntBeacon);
 
   // Apply Time-of-Day Preset helper (Live switchable with T!)
   let skyIndex = startEvening ? 2 : 0;
@@ -3169,10 +2930,16 @@ function launch(options = {}) {
     pitch: startFromGround ? 0 : -0.04,
     speed: startFromGround ? 0 : (mode === 'jet' ? 54 : 30)
   });
-  flightState.kills = 0;
   flightState.thunderStrikes = 0;
-  flightState.teleports = 0;
+  flightState.borderRefusals = 0;
   if (startFromGround) flightState.throttle = 0.9;
+
+  // Determine whether the Wizard is in their originating community (full spiritual resonance)
+  const wizardPower = window.EarthDragonStable?.wizardPowerStatus?.(options.worldState || options.world || null, site, wizard.id) || {
+    fullPower: !wizard.homeSiteId || !site?.id || wizard.homeSiteId === site.id,
+    originSiteName: wizard.homeSiteName || site?.name || 'their homeland',
+    reason: ''
+  };
 
   // Bind HUD DOM elements
   const elKicker = document.getElementById('f3d-kicker');
@@ -3188,9 +2955,6 @@ function launch(options = {}) {
   const elWpArrow = document.getElementById('f3d-wp-arrow');
   const elWpName = document.getElementById('f3d-wp-name');
   const elWpDist = document.getElementById('f3d-wp-dist');
-  const elHuntChip = document.getElementById('f3d-hunt-chip');
-  const elHuntText = document.getElementById('f3d-hunt-text');
-  const btnHuntStop = document.getElementById('f3d-hunt-stop');
   const elReticle = document.getElementById('f3d-reticle');
   const elTarget = document.getElementById('f3d-target');
   const elBanner = document.getElementById('f3d-banner');
@@ -3203,7 +2967,6 @@ function launch(options = {}) {
   const btnRoll = document.getElementById('f3d-btn-roll');
   const btnFire = document.getElementById('f3d-btn-fire');
   const btnThunder = document.getElementById('f3d-btn-thunder');
-  const btnTeleport = document.getElementById('f3d-btn-teleport');
   const btnCam = document.getElementById('f3d-camera-btn');
   const btnSky = document.getElementById('f3d-sky-btn');
   const btnLaunch = document.getElementById('f3d-launch-btn');
@@ -3211,7 +2974,7 @@ function launch(options = {}) {
 
   applySkyPreset(skyIndex);
 
-  elKicker.textContent = mode === 'jet' ? 'Military Airbase · Jet' : 'Dragon · Wizard Flight';
+  elKicker.textContent = mode === 'jet' ? 'Military Airbase · Jet' : `Guardian of ${site?.name || 'Homeland'}`;
   elTitle.textContent = mode === 'jet' ? (options.craftName || 'Interceptor Squadron') : `${dragon.name} · ${wizard.name}`;
   elResLabel.textContent = mode === 'jet' ? 'Throttle' : 'Fire';
   btnFlap.textContent = mode === 'jet' ? 'Thrust (Space)' : 'Wing Flap (Space)';
@@ -3219,17 +2982,12 @@ function launch(options = {}) {
   btnHover.textContent = mode === 'jet' ? 'Airbrake (X)' : 'Hover (X)';
   btnLand.hidden = mode === 'jet';
   btnThunder.hidden = mode === 'jet';
-  btnTeleport.hidden = mode === 'jet';
+  btnThunder.textContent = wizardPower.fullPower ? 'Protective Thunder (Z)' : 'Staff Ward (Homeland Only)';
   btnFire.textContent = mode === 'jet' ? 'Missiles (F)' : 'Blast Fire (F)';
   btnLaunch.textContent = mode === 'jet' ? 'Runway' : 'Citadel';
-  const hasWarBase = world3D.enemyBases.some(b => b.atWar);
-  if (mode === 'dragon') {
-    btnTeleport.textContent = hasWarBase ? 'Teleport: War Base (B)' : 'Teleport: Enemy Base (B)';
-  }
 
-  // Destination Waypoint Index (start pointing at War Enemy Base if at war, else Floating Sky-Sanctuary Arch!)
-  let wpIndex = world3D.landmarks.findIndex(l => l.atWar);
-  if (wpIndex < 0) wpIndex = world3D.landmarks.findIndex(l => l.id === 'sky-arch');
+  // Destination Waypoint Index (start pointing at the Floating Sky-Sanctuary Arch!)
+  let wpIndex = world3D.landmarks.findIndex(l => l.id === 'sky-arch');
   if (wpIndex < 0) wpIndex = 0;
 
   let bannerTimer = 0;
@@ -3241,7 +2999,7 @@ function launch(options = {}) {
   showBanner(
     mode === 'jet'
       ? 'Cleared for runway takeoff! Hold Shift/Space for afterburner and pull S/↓ to climb.'
-      : `${wizard.name} & ${dragon.name} are airborne! Soar anywhere across sea, peaks & sky-islands.`,
+      : `${wizard.name} & ${dragon.name} soar to protect ${site?.name || 'the homeland'} — press Z for Protective Staff Thunder.`,
     3.6
   );
 
@@ -3318,11 +3076,7 @@ function launch(options = {}) {
     showBanner(`Compass locked onto ${wp.name} — follow the arrow to explore!`, 2.6);
   }
 
-  let portalTimer = 0;
-  let teleportBaseCursor = -1;
-  let huntTarget = null;
-  let huntModeLabel = 'pursue';
-  let huntThunderCooldown = 0;
+  let lastRefusalToast = -10;
   const thunderState = {
     active: false,
     t: 0,
@@ -3334,170 +3088,86 @@ function launch(options = {}) {
     strikeZ: 0
   };
 
-  function cancelHunt(quiet = false) {
-    if (!huntTarget) return;
-    huntTarget = null;
-    huntBeacon.visible = false;
-    elHuntChip.hidden = true;
-    if (!quiet) showBanner('Manual flight restored. Tap any enemy or building to hunt again.', 2.0);
-  }
-
-  function applyTargetDamage(t, dmg, source = 'fire') {
-    if (!t || t.dead) return { killed: false, hp: 0 };
+  function applyProtectiveRepel(t, dmg, source = 'fire') {
+    if (!t || t.dead) return { repelled: false, hp: 0 };
     t.hp = Math.max(0, t.hp - dmg);
     flightState.targetsHit++;
     if (t.blaze) t.blaze.visible = true;
     if (t.body?.material?.color) {
-      t.body.material.color.lerp(_col.setHex(source === 'thunder' ? 0x263242 : 0x281e1a), 0.36);
+      t.body.material.color.lerp(_col.setHex(source === 'thunder' ? 0x263242 : 0x281e1a), 0.34);
     }
 
-    const justKilled = t.hp <= 0 && !t.dead;
-    if (justKilled) {
+    const justRepelled = t.hp <= 0 && !t.dead;
+    if (justRepelled) {
       t.dead = true;
-      flightState.kills = (flightState.kills || 0) + 1;
       if (t.isUnit) {
-        t.vx = 0;
-        t.vz = 0;
-        t.deathTimer = 3.6;
+        t.deathTimer = 3.2;
         t.mesh.rotation.z = Math.PI / 2;
         const gy = Math.max(0, world3D.terrainHeightAt(t.x, t.z));
         t.mesh.position.y = gy + 0.45;
       } else if (t.mesh) {
-        // Collapse destroyed building into smoldering charred rubble!
         t.mesh.scale.y = 0.24;
       }
     }
 
-    // Layered impact explosion (fire OR electric-cyan thunder sparks + flames + billowing smoke)
-    const burstCount = justKilled ? 16 : 10;
+    const burstCount = justRepelled ? 14 : 9;
     for (let i = 0; i < burstCount; i++) {
       particles.spawn('fire',
-        t.x + (Math.random() - 0.5) * (t.isUnit ? 3.2 : 6.0),
-        t.y + 0.8 + Math.random() * 3.0,
-        t.z + (Math.random() - 0.5) * (t.isUnit ? 3.2 : 6.0),
-        (Math.random() - 0.5) * 16,
-        6 + Math.random() * 14,
-        (Math.random() - 0.5) * 16,
+        t.x + (Math.random() - 0.5) * 3.4,
+        t.y + 0.8 + Math.random() * 2.6,
+        t.z + (Math.random() - 0.5) * 3.4,
+        (Math.random() - 0.5) * 14,
+        6 + Math.random() * 12,
+        (Math.random() - 0.5) * 14,
         {
-          baseScale: justKilled ? 3.2 : 2.4,
-          grow: 2.6,
-          maxLife: 0.9,
+          baseScale: justRepelled ? 2.8 : 2.1,
+          grow: 2.3,
+          maxLife: 0.85,
           startColor: source === 'thunder' ? 0xd8fdff : 0xfff4bd,
           endColor: source === 'thunder' ? 0x2299ff : 0xd9260a
         }
       );
     }
-    for (let i = 0; i < (justKilled ? 14 : 8); i++) {
+    for (let i = 0; i < (justRepelled ? 12 : 7); i++) {
       particles.spawn('spark',
         t.x + (Math.random() - 0.5) * 3,
         t.y + 1.8,
         t.z + (Math.random() - 0.5) * 3,
-        (Math.random() - 0.5) * 28,
-        10 + Math.random() * 22,
-        (Math.random() - 0.5) * 28,
+        (Math.random() - 0.5) * 24,
+        10 + Math.random() * 18,
+        (Math.random() - 0.5) * 24,
         {
-          baseScale: source === 'thunder' ? 1.15 : 0.85,
-          grow: 0.35,
-          maxLife: 1.05,
-          rise: -7,
+          baseScale: source === 'thunder' ? 1.1 : 0.82,
+          grow: 0.32,
+          maxLife: 0.95,
+          rise: -6,
           startColor: source === 'thunder' ? 0xffffff : 0xfff2c2,
           endColor: source === 'thunder' ? 0x38d8ff : 0xff6e1a
         }
       );
     }
-    for (let i = 0; i < (justKilled ? 7 : 4); i++) {
+    for (let i = 0; i < (justRepelled ? 6 : 3); i++) {
       particles.spawn('smoke',
-        t.x + (Math.random() - 0.5) * 4,
-        t.y + 2.8,
-        t.z + (Math.random() - 0.5) * 4,
-        (Math.random() - 0.5) * 4.5,
-        5 + Math.random() * 6,
-        (Math.random() - 0.5) * 4.5,
-        { baseScale: 3.4, grow: 2.5, maxLife: 1.9, opacity: 0.52 }
+        t.x + (Math.random() - 0.5) * 3.5,
+        t.y + 2.4,
+        t.z + (Math.random() - 0.5) * 3.5,
+        (Math.random() - 0.5) * 4,
+        5 + Math.random() * 5,
+        (Math.random() - 0.5) * 4,
+        { baseScale: 3.0, grow: 2.2, maxLife: 1.7, opacity: 0.48 }
       );
     }
-    return { killed: justKilled, hp: t.hp };
+    return { repelled: justRepelled, hp: t.hp };
   }
 
-  function teleportToEnemyBase(requestedIdOrSiteId = null) {
-    if (mode !== 'dragon' || !world3D.enemyBases.length) return null;
-    audio.ensureStarted();
-    let chosen = null;
-    if (requestedIdOrSiteId) {
-      chosen = world3D.enemyBases.find(b => b.id === requestedIdOrSiteId || b.siteId === requestedIdOrSiteId);
-    }
-    if (!chosen) {
-      teleportBaseCursor = (teleportBaseCursor + 1) % world3D.enemyBases.length;
-      chosen = world3D.enemyBases[teleportBaseCursor];
-    } else {
-      teleportBaseCursor = world3D.enemyBases.indexOf(chosen);
-    }
-
-    cancelHunt(true);
-    const arriveX = chosen.x;
-    const arriveY = Math.max(chosen.y + 34, 38);
-    const arriveZ = chosen.z + 56;
-    flightState.x = arriveX;
-    flightState.y = arriveY;
-    flightState.z = arriveZ;
-    flightState.yaw = 0; // Facing directly north (-Z) over the enemy base!
-    flightState.pitch = -0.22;
-    flightState.roll = 0;
-    flightState.speed = 32;
-    flightState.vy = 0;
-    flightState.airborne = true;
-    flightState.hovering = false;
-    flightState.teleports = (flightState.teleports || 0) + 1;
-
-    // Snap chase camera smoothly behind arrival so enemy base fills the frame immediately
-    const fwdArr = Physics.forwardVector(flightState.yaw, flightState.pitch);
-    camPos.set(arriveX - fwdArr.x * 14.5, arriveY + 4.8, arriveZ - fwdArr.z * 14.5);
-    camLook.set(chosen.x, chosen.y + 4, chosen.z);
-
-    // Ignite Arcane Rift Portal VFX behind arrival so dragon emerges cleanly facing the enemy base
-    portalGroup.position.set(arriveX - fwdArr.x * 6.5, arriveY + 1.2, arriveZ - fwdArr.z * 6.5);
-    portalGroup.scale.setScalar(0.95);
-    portalGroup.visible = true;
-    portalTimer = 0.95;
-    portalLight.position.set(arriveX, arriveY + 2, arriveZ);
-    portalLight.intensity = 5.5;
-    hudTimer = 0.1;
-
-    for (let i = 0; i < 22; i++) {
-      const a = (i / 22) * Math.PI * 2;
-      particles.spawn('spark',
-        arriveX + Math.cos(a) * 6,
-        arriveY + (Math.random() - 0.5) * 6,
-        arriveZ + Math.sin(a) * 6,
-        Math.cos(a) * 18,
-        (Math.random() - 0.5) * 12,
-        Math.sin(a) * 18,
-        { baseScale: 1.2, grow: 0.4, maxLife: 0.95, startColor: 0xe6c8ff, endColor: 0x4ae8ff, rise: 1.5 }
-      );
-    }
-
-    // Lock compass waypoint onto this enemy base
-    const lmIdx = world3D.landmarks.findIndex(l => l.id === chosen.id);
-    if (lmIdx >= 0) wpIndex = lmIdx;
-
-    audio.playTeleportWarp();
-    camShake = Math.min(1.0, camShake + 0.36);
-    const warTag = chosen.atWar ? ' [AT WAR]' : '';
-    showBanner(`Arcane Rift! Teleported above ${chosen.name}${warTag} — tap any enemy or building to hunt & destroy!`, 4.0);
-    options.onTeleportBase?.({ id: chosen.id, siteId: chosen.siteId, name: chosen.name, atWar: chosen.atWar });
-    return chosen;
-  }
-
-  function resolveThunderTarget(explicitTarget = null) {
-    if (explicitTarget && !explicitTarget.dead && explicitTarget.hp > 0) return explicitTarget;
-    if (huntTarget && !huntTarget.dead && huntTarget.hp > 0) return huntTarget;
-    const cone = Physics.findTargetsInFireCone(flightState, world3D.targets);
+  function resolveProtectiveThunderTarget(explicitTarget = null) {
+    if (explicitTarget && explicitTarget.isIntruder && !explicitTarget.dead && explicitTarget.hp > 0) return explicitTarget;
+    const cone = Physics.findTargetsInFireCone(flightState, world3D.borderIntruders);
     if (cone[0]?.target && !cone[0].target.dead) return cone[0].target;
-    // Nearest living enemy within 170m
     let best = null;
-    let bestDist = 170;
-    for (const t of world3D.targets) {
-      if (!t || t.dead || t.hp <= 0 || !t.enemy) continue;
+    let bestDist = 190;
+    for (const t of world3D.borderIntruders) {
+      if (!t || t.dead || t.hp <= 0) continue;
       const d = Math.hypot(t.x - flightState.x, t.z - flightState.z);
       if (d < bestDist) { bestDist = d; best = t; }
     }
@@ -3507,17 +3177,37 @@ function launch(options = {}) {
   function triggerThunderStrike(explicitTarget = null) {
     if (mode !== 'dragon') return false;
     audio.ensureStarted();
-    const victim = resolveThunderTarget(explicitTarget);
+
+    // Wizard abilities reach full power ONLY inside the community from which the Wizard originates!
+    if (!wizardPower.fullPower) {
+      audio.playSanctuaryWard();
+      showBanner(
+        `${wizard.name}'s Staff Thunder only reaches full power in ${wizardPower.homeSiteName || 'their originating community'}.`,
+        3.4
+      );
+      return false;
+    }
+
+    const intruder = resolveProtectiveThunderTarget(explicitTarget);
     let sx, sy, sz;
-    if (victim) {
-      sx = victim.x;
-      sy = Math.max(0, world3D.terrainHeightAt(victim.x, victim.z)) + 0.5;
-      sz = victim.z;
+    if (intruder) {
+      sx = intruder.x;
+      sy = Math.max(0, world3D.terrainHeightAt(intruder.x, intruder.z)) + 0.5;
+      sz = intruder.z;
     } else {
       const fwd = Physics.forwardVector(flightState.yaw, flightState.pitch);
-      sx = flightState.x + fwd.x * 62;
-      sz = flightState.z + fwd.z * 62;
+      sx = flightState.x + fwd.x * 58;
+      sz = flightState.z + fwd.z * 58;
       sy = Math.max(0, world3D.terrainHeightAt(sx, sz)) + 0.5;
+    }
+
+    // Refuse casting thunder into another community's lands
+    const foreignHit = world3D.foreignCommunities.find(c => Math.hypot(sx - c.x, sz - c.z) <= c.radius + 14);
+    if (foreignHit) {
+      foreignHit.pulse = 1.0;
+      audio.playSanctuaryWard();
+      showBanner(`Protective Staff Thunder guards ${site.name} alone — it will not strike ${foreignHit.name}.`, 3.4);
+      return false;
     }
 
     clearThunderBolts();
@@ -3525,7 +3215,7 @@ function launch(options = {}) {
     if (flyer.staffHead) flyer.staffHead.getWorldPosition(_v1);
     else _v1.set(flightState.x, flightState.y + 2.2, flightState.z);
 
-    // Phase 1: Shoot jagged electric-cyan lightning bolt UPWARD from Wizard's staff into the sky!
+    // Phase 1: Shoot jagged electric-cyan protective bolt UPWARD from Wizard's staff into the sky!
     _v2.set(_v1.x + (sx - _v1.x) * 0.25, _v1.y + 165, _v1.z + (sz - _v1.z) * 0.25);
     staffSkyBoltMesh = buildJaggedBoltMesh(_v1, _v2, 0.42, 10, 8.5, boltGlowMat);
     thunderGroup.add(staffSkyBoltMesh);
@@ -3540,7 +3230,6 @@ function launch(options = {}) {
     thunderLight.position.copy(_v1);
     thunderLight.intensity = 18;
 
-    // Electric discharge sparks bursting off the Wizard's staff tip
     for (let i = 0; i < 12; i++) {
       particles.spawn('spark',
         _v1.x, _v1.y, _v1.z,
@@ -3554,7 +3243,7 @@ function launch(options = {}) {
     thunderState.active = true;
     thunderState.t = 0;
     thunderState.impactDone = false;
-    thunderState.target = victim;
+    thunderState.target = intruder;
     thunderState.strikeX = sx;
     thunderState.strikeY = sy;
     thunderState.strikeZ = sz;
@@ -3566,7 +3255,7 @@ function launch(options = {}) {
     const sx = thunderState.strikeX;
     const sy = thunderState.strikeY;
     const sz = thunderState.strikeZ;
-    // Phase 2: Massive sky-to-ground thunderbolt + forked branches crash BACK DOWN onto the victim!
+    // Phase 2: Massive protective sky-to-ground thunderbolt + forked branches crash down to defend the homeland!
     const skyTop = new THREE.Vector3(sx + (Math.random() - 0.5) * 14, sy + 162, sz + (Math.random() - 0.5) * 14);
     const groundHit = new THREE.Vector3(sx, sy, sz);
     const mainBolt = buildJaggedBoltMesh(skyTop, groundHit, 0.85, 12, 13.5, boltCoreMat);
@@ -3580,205 +3269,120 @@ function launch(options = {}) {
     thunderLight.position.set(sx, sy + 12, sz);
     thunderLight.intensity = 9.0;
     shockwaveMat.opacity = 0.86;
-    camShake = Math.min(1.0, camShake + 0.65);
+    camShake = Math.min(1.0, camShake + 0.58);
     audio.playThunderStrike();
 
-    // Direct lethal strike + 18m AoE thunder splash across ALL enemies & buildings at impact!
-    const struck = [];
+    // Repel any encroaching homeland border intruders near the strike (never harms home buildings or foreign communities!)
+    const repelled = [];
     const primary = thunderState.target;
-    if (primary && !primary.dead && primary.hp > 0) {
-      const res = applyTargetDamage(primary, primary.isUnit ? 100 : 75, 'thunder');
-      struck.push({ target: primary, ...res });
+    if (primary && primary.isIntruder && !primary.dead && primary.hp > 0) {
+      const res = applyProtectiveRepel(primary, 100, 'thunder');
+      repelled.push({ target: primary, ...res });
     }
-    for (const t of world3D.targets) {
+    for (const t of world3D.borderIntruders) {
       if (!t || t === primary || t.dead || t.hp <= 0) continue;
-      const dist = Math.hypot(t.x - sx, t.z - sz);
-      if (dist <= 18 + (t.radius || 2)) {
-        const res = applyTargetDamage(t, t.isUnit ? 100 : 55, 'thunder');
-        struck.push({ target: t, ...res });
+      if (Math.hypot(t.x - sx, t.z - sz) <= 22 + (t.radius || 2)) {
+        const res = applyProtectiveRepel(t, 100, 'thunder');
+        repelled.push({ target: t, ...res });
       }
     }
 
-    if (struck.length > 0) {
-      const kills = struck.filter(s => s.killed);
-      const first = struck[0].target;
-      const msg = kills.length > 1
-        ? `${wizard.name}'s Staff Thunder obliterated ${kills.length} targets at once!`
-        : kills.length === 1
-          ? `${wizard.name}'s Staff Thunder destroyed ${kills[0].target.name}!`
-          : `${wizard.name}'s Staff Thunder blasted ${first.name} (${first.hp}% HP)!`;
-      showBanner(msg, 3.0);
-      for (const s of struck) {
-        const t = s.target;
-        const payload = {
-          kind: t.isUnit ? 'enemy' : 'building',
-          id: t.id,
-          name: t.name,
-          siteId: t.siteId || null,
-          x: t.mx,
-          y: t.my,
-          hp: t.hp,
-          killed: s.killed
-        };
-        options.onThunderStrike?.(payload);
+    if (repelled.length > 0) {
+      const msg = repelled.length > 1
+        ? `${wizard.name}'s Protective Staff Thunder repelled ${repelled.length} border intruders from ${site.name}!`
+        : `${wizard.name}'s Protective Staff Thunder drove back ${repelled[0].target.name} from ${site.name}'s borders!`;
+      showBanner(msg, 3.2);
+      for (const s of repelled) {
+        options.onThunderStrike?.({
+          kind: 'defense',
+          defensive: true,
+          intruder: true,
+          id: s.target.id,
+          name: s.target.name,
+          repelled: s.repelled
+        });
       }
     } else {
-      showBanner(`${wizard.name} raised the Arcane Staff and called thunder down from the heavens!`, 2.6);
-      options.onThunderStrike?.({ kind: 'enemy', name: 'the battlefield', killed: false });
+      showBanner(`${wizard.name} raised the Arcane Staff and cast a Protective Thunder Ward across ${site.name}'s homeland!`, 3.0);
+      options.onThunderStrike?.({
+        kind: 'ward',
+        defensive: true,
+        name: `${site.name} homeland perimeter`
+      });
     }
   }
 
   function triggerFireBlast(coneHitsList) {
     flightState.fireBlasts++;
-    camShake = Math.min(1.0, camShake + 0.30);
+    camShake = Math.min(1.0, camShake + 0.26);
 
-    // Sweeping lethal fire damages EVERY living target in the fire cone + locked hunt victim within range!
     const hitTargets = new Set();
+    const allowTarget = t => {
+      if (!t || t.dead || t.hp <= 0) return false;
+      // Spiritual dragons ONLY use protective fire against encroaching border intruders — never offensive attacks!
+      return mode === 'dragon' ? Boolean(t.isIntruder) : true;
+    };
     if (Array.isArray(coneHitsList)) {
       for (const h of coneHitsList) {
-        if (h?.target && !h.target.dead && h.target.hp > 0) hitTargets.add(h.target);
+        if (allowTarget(h?.target)) hitTargets.add(h.target);
       }
-    } else if (coneHitsList?.target && !coneHitsList.target.dead) {
+    } else if (allowTarget(coneHitsList?.target)) {
       hitTargets.add(coneHitsList.target);
     }
 
-    if (huntTarget && !huntTarget.dead && huntTarget.hp > 0) {
-      const hd = Math.hypot(huntTarget.x - flightState.x, huntTarget.z - flightState.z);
-      if (hd <= 98) hitTargets.add(huntTarget);
-    }
-
-    // Sweeping splash along dragonfire path catches nearby soldiers/enemies in the inferno!
-    const fwd = Physics.forwardVector(flightState.yaw, flightState.pitch);
-    const sweepX = flightState.x + fwd.x * 28;
-    const sweepZ = flightState.z + fwd.z * 28;
-    for (const t of world3D.targets) {
-      if (!t || t.dead || t.hp <= 0 || !t.isUnit) continue;
-      if (Math.hypot(t.x - sweepX, t.z - sweepZ) <= 22) hitTargets.add(t);
+    if (mode === 'dragon' && world3D.borderIntruders.length > 0) {
+      const fwd = Physics.forwardVector(flightState.yaw, flightState.pitch);
+      const sweepX = flightState.x + fwd.x * 26;
+      const sweepZ = flightState.z + fwd.z * 26;
+      for (const t of world3D.borderIntruders) {
+        if (!t || t.dead || t.hp <= 0) continue;
+        if (Math.hypot(t.x - sweepX, t.z - sweepZ) <= 22) hitTargets.add(t);
+      }
     }
 
     if (hitTargets.size > 0) {
       const list = Array.from(hitTargets);
-      let killCount = 0;
+      let repelledCount = 0;
       let lastStruck = null;
       for (const t of list) {
-        const dmg = t.isUnit ? 65 : (mode === 'jet' ? 50 : 45);
-        const res = applyTargetDamage(t, dmg, 'fire');
-        if (res.killed) killCount++;
+        const dmg = mode === 'jet' ? 50 : 65;
+        const res = applyProtectiveRepel(t, dmg, 'fire');
+        if (res.repelled) repelledCount++;
         lastStruck = { target: t, ...res };
-        const payload = {
-          kind: (t.isUnit || t.kind === 'enemy') ? 'enemy' : 'building',
-          id: t.id,
-          name: t.name,
-          siteId: t.siteId || null,
-          x: t.mx,
-          y: t.my,
-          hp: t.hp,
-          killed: res.killed,
-          lethal: t.isUnit
-        };
+        const payload = mode === 'dragon'
+          ? { kind: 'defense', defensive: true, intruder: true, id: t.id, name: t.name, repelled: res.repelled }
+          : { kind: t.isUnit ? 'enemy' : 'building', id: t.id, name: t.name, x: t.mx, y: t.my, hp: t.hp, killed: res.repelled };
         options.onFireHit?.(payload);
         options.onFireAttack?.(payload);
       }
-      if (killCount > 1) {
-        showBanner(`${dragon.name}'s blazing fire incinerated ${killCount} enemies in its path!`, 2.8);
-      } else if (killCount === 1) {
-        const deadOne = list.find(t => t.dead) || lastStruck.target;
-        showBanner(`${dragon.name}'s dragonfire completely destroyed ${deadOne.name}!`, 2.8);
-      } else if (lastStruck) {
+      if (mode === 'dragon') {
         showBanner(
-          mode === 'jet'
-            ? `Direct hit! ${lastStruck.target.name} struck (${lastStruck.hp}% HP)!`
-            : `${dragon.name} roasted ${lastStruck.target.name} (${lastStruck.hp}% HP)!`,
-          2.6
+          repelledCount > 0
+            ? `${dragon.name}'s protective flame drove ${repelledCount > 1 ? `${repelledCount} intruders` : lastStruck.target.name} away from ${site.name}!`
+            : `${dragon.name}'s protective flame held ${lastStruck.target.name} back from ${site.name}!`,
+          2.8
         );
+      } else if (lastStruck) {
+        showBanner(`Direct hit! ${lastStruck.target.name} struck (${lastStruck.hp}% HP)!`, 2.6);
       }
     } else if (elapsed - lastFunToast > 3.8) {
       lastFunToast = elapsed;
       showBanner(
         mode === 'jet'
           ? 'Autocannon & ordnance fired across the open sky!'
-          : `${dragon.name} roared and unleashed a blazing river of enchanted fire across the sky!`,
-        2.5
+          : `${dragon.name} roared with spiritual joy and painted golden-ember fire across ${site.name}'s sky!`,
+        2.6
       );
       options.onFireHit?.({ kind: 'fun' });
       options.onFireAttack?.({ kind: 'fun' });
     }
   }
 
-  function lockHuntTarget(victim) {
-    if (mode !== 'dragon' || !victim || victim.dead || victim.hp <= 0) return false;
-    huntTarget = victim;
-    huntThunderCooldown = 0.25;
-    huntBeacon.visible = true;
-    elHuntChip.hidden = false;
-    elHuntText.textContent = `HUNTING: ${victim.name} · ${Math.round(victim.hp)}% HP`;
-    audio.playTargetLock();
-    showBanner(`Locked onto ${victim.name}! ${dragon.name} & ${wizard.name} are hunting it down with fire & thunder!`, 3.2);
-    // Unleash an immediate Staff Thunder Strike right as the player clicks/taps the victim!
-    if (!thunderState.active) triggerThunderStrike(victim);
-    return true;
-  }
-
-  function pickTargetAtScreenPoint(clientX, clientY, isTouch = false) {
-    const rect = activeCanvas.getBoundingClientRect();
-    const w = Math.max(1, rect.width);
-    const h = Math.max(1, rect.height);
-    const lx = clientX - rect.left;
-    const ly = clientY - rect.top;
-
-    camera.updateMatrixWorld();
-    let best = null;
-    let bestScore = Infinity;
-
-    for (const t of world3D.targets) {
-      if (!t || t.dead || t.hp <= 0) continue;
-      _v4.set(t.x, t.y, t.z).project(camera);
-      if (_v4.z < -1 || _v4.z > 1) continue; // Behind camera or past far clip
-      const sx = (_v4.x * 0.5 + 0.5) * w;
-      const sy = (-_v4.y * 0.5 + 0.5) * h;
-      const pxDist = Math.hypot(sx - lx, sy - ly);
-      const hitRadius = (isTouch ? 74 : 54) + Math.min(36, (t.radius || 4) * 2.4);
-      if (pxDist <= hitRadius) {
-        const worldDist = Math.hypot(t.x - flightState.x, t.z - flightState.z);
-        if (worldDist > 380) continue;
-        // Slight preference for hostile enemy targets when overlapping friendly structures
-        const score = pxDist - (t.enemy ? 14 : 0) + worldDist * 0.04;
-        if (score < bestScore) {
-          bestScore = score;
-          best = t;
-        }
-      }
-    }
-    if (best) return best;
-
-    // Fallback: cast ray from tap screen coords onto ground plane (y = 2) and pick nearest enemy within 36m
-    const ndcX = (lx / w) * 2 - 1;
-    const ndcY = -(ly / h) * 2 + 1;
-    _v4.set(ndcX, ndcY, 0.5).unproject(camera).sub(camera.position).normalize();
-    if (_v4.y < -0.04) {
-      const tHit = (2.0 - camera.position.y) / _v4.y;
-      if (tHit > 2 && tHit < 420) {
-        const gx = camera.position.x + _v4.x * tHit;
-        const gz = camera.position.z + _v4.z * tHit;
-        let nearDist = 36;
-        for (const t of world3D.targets) {
-          if (!t || t.dead || t.hp <= 0) continue;
-          const d = Math.hypot(t.x - gx, t.z - gz);
-          if (d < nearDist) {
-            nearDist = d;
-            best = t;
-          }
-        }
-      }
-    }
-    return best;
-  }
-
   function onKeyDown(e) {
     if (destroyed) return;
     audio.ensureStarted();
     const k = e.key.toLowerCase();
-    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'w', 'a', 's', 'd', 'q', 'e', 'f', 'x', 'r', 'v', 't', 'g', 'h', 'n', 'b', 'z', 'shift'].includes(k)) {
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'w', 'a', 's', 'd', 'q', 'e', 'f', 'x', 'r', 'v', 't', 'g', 'h', 'n', 'z', 'shift'].includes(k)) {
       e.preventDefault();
     }
     if (k === 'escape') { e.preventDefault(); close(); return; }
@@ -3787,12 +3391,8 @@ function launch(options = {}) {
     if (k === 'h') { toggleDock(); return; }
     if (k === 'g') { toggleLandPerch(); return; }
     if (k === 'n') { cycleWaypoint(); return; }
-    if (k === 'b' && mode === 'dragon') { teleportToEnemyBase(); return; }
     if (k === 'z' && mode === 'dragon') { triggerThunderStrike(); return; }
     if (k === 'r') { touchState.rollPulse = true; return; }
-    if (['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
-      cancelHunt(true);
-    }
     if ((k === ' ' || k === 'shift') && !keys.has(k) && mode === 'dragon') audio.playWingFlap(k === 'shift');
     keys.add(k);
   }
@@ -3804,12 +3404,12 @@ function launch(options = {}) {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
   }
 
-  // Smooth mouse/touch drag-anywhere sky steering — TAP or CLICK any enemy/building to HUNT & DESTROY!
+  // Smooth mouse/touch drag-anywhere sky steering + tap to breathe protective/joyful dragonfire
   let steering = null, touchYaw = 0, touchPitch = 0, tapFire = false;
   const onCanvasDown = e => {
     audio.ensureStarted();
     if (steering || e.button !== 0) return;
-    steering = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, pointerType: e.pointerType || 'mouse' };
+    steering = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
     try { activeCanvas.setPointerCapture?.(e.pointerId); } catch {}
   };
   const onCanvasMove = e => {
@@ -3817,27 +3417,15 @@ function launch(options = {}) {
     const dx = e.clientX - steering.x, dy = steering.y - e.clientY;
     if (!steering.moved && Math.hypot(dx, dy) < 9) return;
     steering.moved = true;
-    if (huntTarget) cancelHunt(true);
     touchYaw = Math.max(-1, Math.min(1, dx / 72));
     touchPitch = Math.max(-1, Math.min(1, dy / 72));
   };
   const onCanvasUp = e => {
     if (steering?.id !== e.pointerId) return;
     const wasTap = e.type === 'pointerup' && !steering.moved;
-    const isTouch = steering.pointerType === 'touch';
     steering = null;
     touchYaw = touchPitch = 0;
-    if (wasTap) {
-      if (mode === 'dragon') {
-        const picked = pickTargetAtScreenPoint(e.clientX, e.clientY, isTouch);
-        if (picked) {
-          lockHuntTarget(picked);
-          tapFire = true;
-          return;
-        }
-      }
-      tapFire = true;
-    }
+    if (wasTap) tapFire = true;
   };
   const releaseInputs = () => {
     keys.clear();
@@ -3849,7 +3437,6 @@ function launch(options = {}) {
   const onCamClick = () => { camMode = (camMode + 1) % camModes.length; elCamLabel.textContent = camModes[camMode]; };
   const onSkyClick = () => { applySkyPreset(skyIndex + 1); showBanner(`Atmosphere: ${SKY_PRESETS[skyIndex].label}`, 2.0); };
   const onLaunchClick = () => {
-    cancelHunt(true);
     if (mode === 'jet') {
       Object.assign(flightState, Physics.createFlightState({
         kind: 'jet', airborne: false,
@@ -3868,8 +3455,6 @@ function launch(options = {}) {
   const onExitClick = () => close();
   const onCancel = event => { event.preventDefault(); close(); };
   const onThunderClick = () => { audio.ensureStarted(); triggerThunderStrike(); };
-  const onTeleportClick = () => { audio.ensureStarted(); teleportToEnemyBase(); };
-  const onHuntStopClick = () => cancelHunt(false);
   const bindHold = (btn, prop, playFlapSound = false) => {
     const down = e => {
       e.preventDefault();
@@ -3907,8 +3492,6 @@ function launch(options = {}) {
   btnLand.addEventListener('click', toggleLandPerch);
   btnWaypoint.addEventListener('click', cycleWaypoint);
   btnThunder.addEventListener('click', onThunderClick);
-  btnTeleport.addEventListener('click', onTeleportClick);
-  btnHuntStop.addEventListener('click', onHuntStopClick);
   overlay.addEventListener('cancel', onCancel);
   btnRoll.addEventListener('click', onRollClick);
   const unbindFlap = bindHold(btnFlap, 'flap', true);
@@ -3963,53 +3546,36 @@ function launch(options = {}) {
     const fire = keys.has('f') || touchState.fire || tapFire;
     tapFire = false;
 
-    // Autonomous Click/Tap-to-Hunt Pursuit & Circling Autopilot!
-    let autoControls = null;
-    if (mode === 'dragon' && huntTarget) {
-      if (huntTarget.dead || huntTarget.hp <= 0) {
-        const slainName = huntTarget.name;
-        cancelHunt(true);
-        showBanner(`${slainName} COMPLETELY DESTROYED! Tap any enemy or building to hunt next.`, 3.2);
-      } else if (typeof Physics.computeHuntAutopilot === 'function') {
-        autoControls = Physics.computeHuntAutopilot(flightState, huntTarget, dt);
-        huntModeLabel = autoControls.mode || 'pursue';
-        huntThunderCooldown -= dt;
-        if (autoControls.shouldThunder && huntThunderCooldown <= 0 && !thunderState.active) {
-          huntThunderCooldown = 1.65;
-          triggerThunderStrike(huntTarget);
-        }
-      }
-    }
-
     const autoRotate = mode === 'jet' && !flightState.airborne && flightState.speed >= 24 && (boost || pitchUp);
-    const controls = autoControls
-      ? {
-          pitch: autoControls.pitch,
-          roll: autoControls.roll,
-          yaw: autoControls.yaw,
-          flap: autoControls.flap || flap,
-          boost: autoControls.boost || boost,
-          dash: autoControls.dash || dash,
-          brake: false,
-          hover: false,
-          fire: autoControls.shouldFire || fire,
-          barrelRoll: touchState.rollPulse
-        }
-      : {
-          pitch: ((pitchUp || autoRotate) ? 1 : 0) - (pitchDown && !autoRotate ? 1 : 0) + touchPitch,
-          roll: (rollLeft ? 1 : 0) - (rollRight ? 1 : 0) - touchYaw * 0.65,
-          yaw: (yawRight ? 1 : 0) - (yawLeft ? 1 : 0) + touchYaw * 0.85,
-          flap,
-          boost,
-          dash,
-          brake: mode === 'jet' ? hover : keys.has('c'),
-          hover: mode === 'dragon' ? hover : false,
-          fire,
-          barrelRoll: touchState.rollPulse
-        };
+    const controls = {
+      pitch: ((pitchUp || autoRotate) ? 1 : 0) - (pitchDown && !autoRotate ? 1 : 0) + touchPitch,
+      roll: (rollLeft ? 1 : 0) - (rollRight ? 1 : 0) - touchYaw * 0.65,
+      yaw: (yawRight ? 1 : 0) - (yawLeft ? 1 : 0) + touchYaw * 0.85,
+      flap,
+      boost,
+      dash,
+      brake: mode === 'jet' ? hover : keys.has('c'),
+      hover: mode === 'dragon' ? hover : false,
+      fire,
+      barrelRoll: touchState.rollPulse
+    };
     touchState.rollPulse = false;
 
     Physics.stepFlight(flightState, controls, dt, world3D.thermals, world3D.terrainHeightAt);
+
+    // Dragons are spiritually bound to their home community and refuse to enter the lands of another community!
+    if (mode === 'dragon' && typeof Physics.enforceSacredSanctuaryBoundary === 'function') {
+      const refusal = Physics.enforceSacredSanctuaryBoundary(flightState, world3D.foreignCommunities, dt);
+      if (refusal.refused && refusal.community) {
+        flightState.borderRefusals = (flightState.borderRefusals || 0) + 1;
+        refusal.community.pulse = 1.0;
+        if (elapsed - lastRefusalToast > 2.8) {
+          lastRefusalToast = elapsed;
+          audio.playSanctuaryWard();
+          showBanner(`${dragon.name} senses the soul of ${refusal.community.name} and refuses to enter another community's lands.`, 3.4);
+        }
+      }
+    }
 
     // Sync 3D Flyer Transform
     flyer.root.position.set(flightState.x, flightState.y, flightState.z);
@@ -4162,9 +3728,22 @@ function launch(options = {}) {
       bd.rw.rotation.z = -bf;
     }
 
-    // Animate Enemy Base Soldiers & Armored Patrol Trucks (patrolling, fleeing dragon dives, burning when slain!)
-    for (let i = 0; i < world3D.enemyUnits.length; i++) {
-      const u = world3D.enemyUnits[i];
+    // Animate Peaceful Neighbouring Community Spiritual Boundary Wards
+    for (const comm of world3D.foreignCommunities) {
+      if (comm.pulse > 0) comm.pulse = Math.max(0, comm.pulse - dt * 1.4);
+      if (comm.wardMat) {
+        const dist = Math.hypot(flightState.x - comm.x, flightState.z - comm.z);
+        const proximity = Math.max(0, 1 - Math.max(0, dist - comm.radius) / 90);
+        comm.wardMat.opacity = 0.16 + proximity * 0.34 + comm.pulse * 0.42;
+      }
+      if (comm.wardRing) {
+        comm.wardRing.position.y = 4.5 + Math.sin(elapsed * 1.8) * 0.7 + comm.pulse * 4.0;
+      }
+    }
+
+    // Animate Homeland Border Intruders (only present if defending homeland during active war)
+    for (let i = 0; i < world3D.borderIntruders.length; i++) {
+      const u = world3D.borderIntruders[i];
       if (u.dead) {
         if (u.deathTimer > 0) {
           u.deathTimer -= dt;
@@ -4173,68 +3752,20 @@ function launch(options = {}) {
         }
         continue;
       }
-      const dxD = u.x - flightState.x;
-      const dzD = u.z - flightState.z;
-      const distD = Math.hypot(dxD, dzD);
-      const prevX = u.x, prevZ = u.z;
-
-      if (distD < 88 && flightState.y < 90) {
-        // Panic & scatter away from diving dragon while staying near base terrain!
-        const inv = 1 / Math.max(1, distD);
-        const fleeX = dxD * inv;
-        const fleeZ = dzD * inv;
-        u.x += fleeX * u.moveSpeed * 1.35 * dt;
-        u.z += fleeZ * u.moveSpeed * 1.35 * dt;
-        // Soft leash so units stay within 72m of their compound
-        const fromHome = Math.hypot(u.x - u.homeX, u.z - u.homeZ);
-        if (fromHome > 72) {
-          u.x = u.homeX + ((u.x - u.homeX) / fromHome) * 72;
-          u.z = u.homeZ + ((u.z - u.homeZ) / fromHome) * 72;
-        }
-      } else {
-        u.patrolAngle += u.patrolSpeed * dt;
-        const tgtX = u.homeX + Math.cos(u.patrolAngle) * u.patrolRadius;
-        const tgtZ = u.homeZ + Math.sin(u.patrolAngle) * u.patrolRadius;
-        const step = Math.min(1, dt * 1.8);
-        u.x += (tgtX - u.x) * step;
-        u.z += (tgtZ - u.z) * step;
-      }
-
-      u.vx = (u.x - prevX) / Math.max(0.008, dt);
-      u.vz = (u.z - prevZ) / Math.max(0.008, dt);
+      u.patrolAngle += u.patrolSpeed * dt;
+      u.x = u.homeX + Math.cos(u.patrolAngle) * u.patrolRadius;
+      u.z = u.homeZ + Math.sin(u.patrolAngle) * u.patrolRadius;
       const uy = Math.max(0, world3D.terrainHeightAt(u.x, u.z));
       u.y = uy + 1.8;
       u.mesh.position.set(u.x, uy, u.z);
-      if (Math.hypot(u.vx, u.vz) > 0.2) {
-        u.mesh.rotation.y = Math.atan2(-u.vx, -u.vz);
-      }
       if (u.legL && u.legR) {
-        const stride = Math.sin(elapsed * 11 + i) * 0.55;
+        const stride = Math.sin(elapsed * 10 + i) * 0.5;
         u.legL.rotation.x = stride;
         u.legR.rotation.x = -stride;
       }
     }
 
-    // Animate Arcane Teleport Rift Portal VFX
-    if (portalTimer > 0) {
-      portalTimer -= dt;
-      const frac = Math.max(0, portalTimer / 0.95);
-      portalRingA.rotation.z += dt * 4.5;
-      portalRingB.rotation.x += dt * 5.2;
-      portalRingC.rotation.y -= dt * 6.0;
-      portalGroup.scale.setScalar(0.85 + (1 - frac) * 0.55);
-      portalRingMat1.opacity = frac * 0.72;
-      portalRingMat2.opacity = frac * 0.68;
-      portalRingMat3.opacity = frac * 0.64;
-      portalCoreMat.opacity = frac * 0.22;
-      portalLight.intensity = frac * 5.5;
-      if (portalTimer <= 0) {
-        portalGroup.visible = false;
-        portalLight.intensity = 0;
-      }
-    }
-
-    // Animate 2-Phase Wizard Staff Sky-to-Ground Thunder Strike VFX
+    // Animate 2-Phase Wizard Staff Protective Sky-to-Ground Thunder VFX
     if (thunderState.active) {
       thunderState.t += dt;
       const tt = thunderState.t;
@@ -4263,26 +3794,16 @@ function launch(options = {}) {
       }
     }
 
-    // Animate 3D Target Hunt Beacon around locked victim
-    if (huntTarget && !huntTarget.dead && huntTarget.hp > 0) {
-      const by = Math.max(0, world3D.terrainHeightAt(huntTarget.x, huntTarget.z));
-      huntBeacon.position.set(huntTarget.x, by + 0.6, huntTarget.z);
-      huntRingOuter.rotation.z += dt * 2.8;
-      huntRingInner.rotation.z -= dt * 3.6;
-      const rScale = Math.max(0.65, (huntTarget.radius || 4) / 5.5);
-      huntBeacon.scale.set(rScale, 1, rScale);
-      huntBeacon.visible = true;
-    } else {
-      huntBeacon.visible = false;
-    }
-
-    // Target lock detection along forward fire cone
-    const coneHits = Physics.findTargetsInFireCone(flightState, world3D.targets);
+    // Defensive lock indicator (only highlights encroaching homeland intruders for dragon, or targets for jet)
+    const activeTargets = mode === 'dragon' ? world3D.borderIntruders : world3D.targets;
+    const coneHits = Physics.findTargetsInFireCone(flightState, activeTargets);
     const locked = coneHits[0] || null;
-    elReticle.dataset.locked = (locked || huntTarget) ? 'true' : 'false';
+    elReticle.dataset.locked = locked ? 'true' : 'false';
     if (locked) {
       elTarget.hidden = false;
-      elTarget.textContent = `Target: ${locked.target.name} · ${Math.round(locked.distance)}m (${Math.round(locked.target.hp)}% HP)`;
+      elTarget.textContent = mode === 'dragon'
+        ? `Homeland Intruder: ${locked.target.name} · ${Math.round(locked.distance)}m`
+        : `Target: ${locked.target.name} · ${Math.round(locked.distance)}m (${Math.round(locked.target.hp)}% HP)`;
     } else {
       elTarget.hidden = true;
     }
@@ -4452,13 +3973,6 @@ function launch(options = {}) {
           : `${Math.round(nav.distance)} m`;
       }
       btnLand.textContent = flightState.airborne ? 'Land / Perch (G)' : 'Take Off (G)';
-      if (huntTarget && !huntTarget.dead && huntTarget.hp > 0) {
-        elHuntChip.hidden = false;
-        const verb = huntModeLabel === 'circle' ? 'CIRCLING' : 'CHASING';
-        elHuntText.textContent = `${verb}: ${huntTarget.name} · ${Math.round(huntTarget.hp)}% HP`;
-      } else {
-        elHuntChip.hidden = true;
-      }
     }
 
     if (bannerTimer > 0) {
@@ -4486,23 +4000,16 @@ function launch(options = {}) {
       elCamLabel.textContent = camModes[camMode];
     },
     triggerFire: () => {
-      const hits = Physics.findTargetsInFireCone(flightState, world3D.targets);
+      const activeTargets = mode === 'dragon' ? world3D.borderIntruders : world3D.targets;
+      const hits = Physics.findTargetsInFireCone(flightState, activeTargets);
       triggerFireBlast(hits);
     },
-    teleportToEnemyBase: id => teleportToEnemyBase(id),
     triggerThunder: targetId => {
-      const t = targetId ? world3D.targets.find(item => item.id === targetId) : null;
+      const t = targetId ? world3D.borderIntruders.find(item => item.id === targetId) : null;
       return triggerThunderStrike(t);
     },
-    lockHuntTarget: targetIdOrObj => {
-      const t = typeof targetIdOrObj === 'string'
-        ? world3D.targets.find(item => item.id === targetIdOrObj)
-        : targetIdOrObj;
-      return lockHuntTarget(t);
-    },
-    getHuntState: () => huntTarget ? { id: huntTarget.id, name: huntTarget.name, hp: huntTarget.hp, mode: huntModeLabel, dead: Boolean(huntTarget.dead) } : null,
-    getEnemyBases: () => world3D.enemyBases.map(b => ({ id: b.id, siteId: b.siteId, name: b.name, atWar: b.atWar, x: b.x, y: b.y, z: b.z })),
-    getTargets: () => world3D.targets.map(t => ({ id: t.id, name: t.name, kind: t.kind, enemy: Boolean(t.enemy), isUnit: Boolean(t.isUnit), hp: t.hp, dead: Boolean(t.dead), x: t.x, y: t.y, z: t.z })),
+    getForeignCommunities: () => world3D.foreignCommunities.map(c => ({ id: c.id, name: c.name, x: c.x, y: c.y, z: c.z, radius: c.radius })),
+    getTargets: () => world3D.targets.map(t => ({ id: t.id, name: t.name, kind: t.kind, isIntruder: Boolean(t.isIntruder), hp: t.hp, dead: Boolean(t.dead), x: t.x, y: t.y, z: t.z })),
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -4525,8 +4032,6 @@ function launch(options = {}) {
       btnLand.removeEventListener('click', toggleLandPerch);
       btnWaypoint.removeEventListener('click', cycleWaypoint);
       btnThunder.removeEventListener('click', onThunderClick);
-      btnTeleport.removeEventListener('click', onTeleportClick);
-      btnHuntStop.removeEventListener('click', onHuntStopClick);
       btnRoll.removeEventListener('click', onRollClick);
       unbindFlap();
       unbindDash();
@@ -4555,9 +4060,8 @@ function launch(options = {}) {
         maxAltitudeReached: flightState.maxAltitudeReached,
         fireBlasts: flightState.fireBlasts,
         targetsHit: flightState.targetsHit,
-        kills: flightState.kills || 0,
         thunderStrikes: flightState.thunderStrikes || 0,
-        teleports: flightState.teleports || 0
+        borderRefusals: flightState.borderRefusals || 0
       });
     }
   };
@@ -4569,9 +4073,6 @@ function launch(options = {}) {
   document.body.setAttribute('data-flight-3d', 'open');
   document.dispatchEvent(new Event('earthsheetchange'));
   activeCanvas.focus({ preventScroll: true });
-  if (mode === 'dragon' && (options.teleportBaseId || options.autoTeleportEnemy)) {
-    teleportToEnemyBase(options.teleportBaseId || null);
-  }
   rafId = requestAnimationFrame(stepFrame);
   return true;
 }
@@ -4600,10 +4101,8 @@ function getTelemetry() {
     airborne: s.airborne,
     fireBlasts: s.fireBlasts,
     targetsHit: s.targetsHit,
-    kills: s.kills || 0,
     thunderStrikes: s.thunderStrikes || 0,
-    teleports: s.teleports || 0,
-    huntTarget: activeSession.getHuntState?.() || null,
+    borderRefusals: s.borderRefusals || 0,
     distanceFlown: s.distanceFlown,
     isSoftwareGl: activeSession.isSoftwareGl
   };
@@ -4617,20 +4116,12 @@ function setCameraMode(idx) {
   activeSession?.setCameraMode?.(idx);
 }
 
-function teleportToEnemyBase(baseId) {
-  return activeSession?.teleportToEnemyBase?.(baseId) || null;
-}
-
 function triggerThunder(targetId) {
   return activeSession?.triggerThunder?.(targetId) || false;
 }
 
-function lockHuntTarget(targetIdOrObj) {
-  return activeSession?.lockHuntTarget?.(targetIdOrObj) || false;
-}
-
-function getEnemyBases() {
-  return activeSession?.getEnemyBases?.() || [];
+function getForeignCommunities() {
+  return activeSession?.getForeignCommunities?.() || [];
 }
 
 function getTargets() {
@@ -4644,9 +4135,7 @@ window.EarthFlight3D = Object.freeze({
   getTelemetry,
   setSkyPreset,
   setCameraMode,
-  teleportToEnemyBase,
   triggerThunder,
-  lockHuntTarget,
-  getEnemyBases,
+  getForeignCommunities,
   getTargets
 });

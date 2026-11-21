@@ -219,11 +219,13 @@ test('Dragon Stable: Wizard-only dragon flight, stable workers replenishing drag
   const allowed = ctx.EarthDragonStable.canFlyDragon(site, 'steward', dragon.id);
   assert.equal(allowed.ok, true, 'Trained Wizard is cleared to fly the dragon');
 
-  // Blast fire mid-flight for fun AND attack a building/enemy
+  // Joyful mid-flight sky-fire and protective homeland defense succeed; offensive war attacks are refused
   const funFire = await sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: 'steward', dragonId: dragon.id, target: { kind: 'fun' } });
   assert.equal(funFire.ok, true, funFire.message);
-  const atkFire = await sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: 'steward', dragonId: dragon.id, target: { kind: 'enemy', name: 'Rival Watchtower' } });
-  assert.equal(atkFire.ok, true, atkFire.message);
+  const offensiveFire = await sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: 'steward', dragonId: dragon.id, target: { kind: 'enemy', name: 'Rival Watchtower' } });
+  assert.equal(offensiveFire.ok, false, 'Spiritual dragons refuse offensive war attacks');
+  const defFire = await sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: 'steward', dragonId: dragon.id, target: { kind: 'defense', defensive: true, intruder: true, name: 'Border Intruder' } });
+  assert.equal(defFire.ok, true, defFire.message);
   assert.equal(dragon.blasts, 2);
 
   // Assign a resident worker to replenish food & feed hungry dragons regularly
@@ -470,61 +472,32 @@ test('Flight 3D cache-busting hashes & Canvas 2D fallback renderer resilience', 
   assert.ok(calls.some(c => c[0] === 'fill'), 'Canvas 2D fallback rasterized visible triangles from ShaderMaterial meshes');
 });
 
-test('EarthFlightPhysics.computeHuntAutopilot: chases moving enemies, circles stationary buildings, and stops on destruction', () => {
+test('EarthFlightPhysics.enforceSacredSanctuaryBoundary: free homeland flight and refusal to enter any foreign community', () => {
   const FP = require('../common-earth/flight-physics.js');
+  assert.equal(FP.computeHuntAutopilot, undefined, 'Offensive hunt autopilot has been removed');
 
-  // 1. Chasing a moving enemy soldier across the battlefield
-  const hunter = FP.createFlightState('dragon', { x: 0, y: 38, z: 0, yaw: 0, pitch: 0, speed: 30 });
-  const soldier = { id: 'enemy-s1', isUnit: true, x: 45, y: 2, z: -135, vx: 6, vz: -4, radius: 4, hp: 100 };
-  const initialDist = Math.hypot(soldier.x - hunter.x, soldier.z - hunter.z);
-  let sawPursue = false;
-  let sawFire = false;
-  let sawThunder = false;
-  for (let i = 0; i < 65; i++) {
-    const cmd = FP.computeHuntAutopilot(hunter, soldier, 0.05);
-    if (cmd.mode === 'pursue') sawPursue = true;
-    if (cmd.shouldFire) sawFire = true;
-    if (cmd.shouldThunder) sawThunder = true;
-    FP.stepFlight(hunter, cmd, 0.05);
-    soldier.x += soldier.vx * 0.05;
-    soldier.z += soldier.vz * 0.05;
-  }
-  const finalDist = Math.hypot(soldier.x - hunter.x, soldier.z - hunter.z);
-  assert.equal(sawPursue, true, 'Autopilot enters pursue mode for a fleeing moving enemy');
-  assert.ok(finalDist < initialDist * 0.55, `Dragon closes distance on moving soldier (${initialDist.toFixed(1)} -> ${finalDist.toFixed(1)})`);
-  assert.equal(sawFire, true, 'Autopilot blazes dragonfire once inside strike range');
-  assert.equal(sawThunder, true, 'Autopilot triggers wizard staff thunder strike inside range');
+  const foreignCommunities = [
+    { id: 'neigh-1', name: 'Mombasa Harbour', x: 0, z: -260, radius: 60 },
+    { id: 'neigh-2', name: 'Kilwa Ridge', x: 280, z: -120, radius: 55 }
+  ];
 
-  // 2. Circling a stationary enemy building while continuously blazing fire & thunder
-  const orbiter = FP.createFlightState('dragon', { x: 38, y: 30, z: 0, yaw: 0, pitch: 0, speed: 32 });
-  const fortress = { id: 'enemy-hq', isUnit: false, x: 0, y: 8, z: 0, vx: 0, vz: 0, radius: 10, hp: 100 };
-  let sawCircle = false;
-  let circleFire = false;
-  let circleThunder = false;
-  let minAlt = Infinity;
-  const startYaw = orbiter.yaw;
-  for (let i = 0; i < 50; i++) {
-    const cmd = FP.computeHuntAutopilot(orbiter, fortress, 0.05);
-    if (cmd.mode === 'circle') sawCircle = true;
-    if (cmd.shouldFire) circleFire = true;
-    if (cmd.shouldThunder) circleThunder = true;
-    FP.stepFlight(orbiter, cmd, 0.05);
-    if (orbiter.y < minAlt) minAlt = orbiter.y;
-  }
-  assert.equal(sawCircle, true, 'Autopilot enters circling/orbit mode around stationary buildings');
-  assert.equal(circleFire, true, 'Autopilot continually blazes fire while circling building');
-  assert.equal(circleThunder, true, 'Autopilot calls down wizard thunder strikes while circling building');
-  assert.ok(minAlt > fortress.y + 8, `Dragon stays safely above building roofline while orbiting (minAlt=${minAlt.toFixed(1)})`);
-  assert.ok(Math.abs(orbiter.yaw - startYaw) > 0.35, 'Dragon turns continuously to orbit around the building');
+  // 1. Flying freely over home territory & ocean is never blocked
+  const homeDragon = FP.createFlightState('dragon', { x: 20, y: 40, z: 30, yaw: 0, pitch: 0, speed: 32 });
+  const homeCheck = FP.enforceSacredSanctuaryBoundary(homeDragon, foreignCommunities, 0.05);
+  assert.equal(homeCheck.refused, false, 'Dragon flies freely within home skies');
+  assert.equal(homeCheck.community, null);
 
-  // 3. Returns idle once target is completely destroyed
-  const deadCmd = FP.computeHuntAutopilot(orbiter, { ...fortress, hp: 0 }, 0.05);
-  assert.equal(deadCmd.mode, 'idle');
-  assert.equal(deadCmd.shouldFire, false);
-  assert.equal(deadCmd.shouldThunder, false);
+  // 2. Approaching / crossing into a different community's lands triggers spiritual refusal & turns dragon outward
+  const trespasser = FP.createFlightState('dragon', { x: 0, y: 42, z: -210, yaw: 0, pitch: 0, speed: 34 });
+  const res = FP.enforceSacredSanctuaryBoundary(trespasser, foreignCommunities, 0.05);
+  assert.equal(res.refused, true, 'Dragon refuses to enter a different community');
+  assert.equal(res.community.name, 'Mombasa Harbour');
+  const distAfter = Math.hypot(trespasser.x - 0, trespasser.z - (-260));
+  assert.ok(distAfter >= 60 + 2.0, `Dragon is kept outside the foreign community boundary (dist=${distAfter.toFixed(1)})`);
+  assert.ok(Math.abs(trespasser.yaw) > 0.3, `Dragon turns smoothly outward away from foreign community (yaw=${trespasser.yaw.toFixed(2)})`);
 });
 
-test('Wizard War-Enemy Teleport, Staff Sky-to-Ground Thunder Strike, Lethal Fire Kills, and Raid Launch', async () => {
+test('Spiritual Protectors: Wizard full power only in originating community, protective Staff Thunder, and refusal of offensive war or foreign lands', async () => {
   const ctx = loadCommonEarthEnv();
   const sim = ctx.CommonEarthSim.create();
   sim.found({ name: 'Stone Town', lat: -6.1622, lon: 39.1922, water: false }, 'Stone Town');
@@ -533,83 +506,100 @@ test('Wizard War-Enemy Teleport, Staff Sky-to-Ground Thunder Strike, Lethal Fire
   site.materials = 80;
   site.food = 80;
 
+  assert.equal(ctx.EarthDragonStable.teleportToEnemyBase, undefined, 'Offensive enemy-base teleport is removed');
+  assert.equal(ctx.EarthDragonStable.enemyBasesAtWar, undefined, 'Offensive enemy-base raid list is removed');
+
   // Build Dragon Stable, summon dragon, train steward as Wizard
   assert.equal((await sim.perform('buildFreeBuilding', { siteId: site.id, kind: 'dragonStable' })).ok, true);
   assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'summon', lineageId: 'obsidian', name: 'Vaelor' })).ok, true);
   assert.equal((await sim.perform('dragonAction', { siteId: site.id, action: 'trainWizard', personId: 'steward' })).ok, true);
   const dragon = site.dragonStable.dragons[0];
+  const wizard = site.dragonStable.wizards[0];
 
-  // Ensure a neighbouring settlement exists and declare explicit war on it
-  const others = [...(sim.state.sites || []), ...(sim.state.communityLife?.outposts || [])].filter(s => s.id !== site.id);
-  assert.ok(others.length > 0, 'World has at least one neighbouring settlement');
-  const enemyTown = others[0];
-  enemyTown.militaryBase = enemyTown.militaryBase || { built: true, units: [] };
-  enemyTown.militaryBase.units.push({ id: 'enemy-guard-1', name: 'Guard 1', hp: 100 });
-  enemyTown.militaryBase.units.push({ id: 'enemy-guard-2', name: 'Guard 2', hp: 100 });
-  const warRes = ctx.EarthBorderConflict.diplomacy(sim.state, { home: site.id, target: enemyTown.id, action: 'declare' });
-  assert.equal(warRes.ok || ctx.EarthBorderConflict.relation(sim.state, site.id, enemyTown.id)?.state === 'war', true);
+  assert.equal(dragon.homeSiteId, site.id, 'Dragon remembers its originating community');
+  assert.equal(wizard.homeSiteId, site.id, 'Wizard remembers their originating community');
 
-  // enemyBasesAtWar prioritizes war enemies first with atWar: true
-  const bases = ctx.EarthDragonStable.enemyBasesAtWar(sim.state, site);
-  assert.ok(bases.length >= 4, 'Lists war enemy bases plus frontier rival outposts');
-  const warEntry = bases.find(b => b.siteId === enemyTown.id);
-  assert.ok(warEntry && warEntry.atWar === true, 'War enemy settlement is flagged atWar: true');
-  assert.equal(bases[0].atWar, true, 'War enemies are prioritized ahead of non-war outposts');
+  // Create/pick a second different community
+  const otherSite = {
+    id: 'foreign-town-1',
+    name: 'Lamu Commons',
+    dragonStable: { built: true, dragons: [dragon], wizards: [wizard], workers: [], foodStock: 10, thunderStrikes: 0, fireBlasts: 0 }
+  };
 
-  // Arcane Teleport to War Enemy Base
-  const tp = await sim.perform('dragonAction', {
-    siteId: site.id,
-    action: 'teleportEnemyBase',
-    riderId: 'steward',
-    dragonId: dragon.id,
-    base: { siteId: enemyTown.id }
-  });
-  assert.equal(tp.ok, true, tp.message);
-  assert.ok(tp.message.includes(enemyTown.name), `Teleport message mentions war-enemy base (${tp.message})`);
-  assert.equal(site.dragonStable.teleports, 1);
-  assert.equal(site.dragonStable.wizards[0].teleports, 1);
+  // 1. Wizard abilities are ONLY fully enabled in their originating community
+  const homePower = ctx.EarthDragonStable.wizardPowerStatus(sim.state, site, 'steward');
+  assert.equal(homePower.fullPower, true);
+  assert.equal(homePower.resonance, 100);
 
-  // Wizard Staff Sky-to-Ground Thunder Strike kills an enemy soldier
-  const unitsBefore = enemyTown.militaryBase.units.length;
-  const th = await sim.perform('dragonAction', {
+  const foreignPower = ctx.EarthDragonStable.wizardPowerStatus(sim.state, otherSite, 'steward');
+  assert.equal(foreignPower.fullPower, false, 'Wizard power is diminished outside their originating community');
+  assert.ok(foreignPower.resonance < 50);
+
+  // 2. Dragons strictly refuse to enter the lands of a different community
+  assert.equal(ctx.EarthDragonStable.canEnterCommunity(site, dragon, site.id).ok, true);
+  const enterForeign = ctx.EarthDragonStable.canEnterCommunity(site, dragon, otherSite.id);
+  assert.equal(enterForeign.ok, false, 'Dragon refuses to enter another community');
+  assert.equal(enterForeign.refused, true);
+  assert.equal(ctx.EarthDragonStable.canFlyDragon(otherSite, 'steward', dragon.id).ok, false, 'Dragon & Wizard cannot mount flight in a foreign community');
+
+  // 3. Protective Staff Thunder works in originating community for homeland defense & perimeter wards
+  const wardRes = await sim.perform('dragonAction', {
     siteId: site.id,
     action: 'strikeThunder',
     riderId: 'steward',
     dragonId: dragon.id,
-    target: { id: 'enemy-guard-1', kind: 'enemy', name: 'Enemy Rifleman', siteId: enemyTown.id, killed: true, hp: 0 }
+    target: { kind: 'ward', defensive: true, name: `${site.name} homeland perimeter` }
   });
-  assert.equal(th.ok, true, th.message);
+  assert.equal(wardRes.ok, true, wardRes.message);
   assert.equal(site.dragonStable.thunderStrikes, 1);
-  assert.equal(site.dragonStable.kills, 1);
-  assert.equal(dragon.kills, 1);
-  assert.equal(enemyTown.militaryBase.units.length, unitsBefore - 1, 'Thunder strike eliminates enemy soldier from war base garrison');
 
-  // Lethal blazing dragonfire kills another enemy unit
-  const bf = await sim.perform('dragonAction', {
+  const defendRes = await sim.perform('dragonAction', {
+    siteId: site.id,
+    action: 'strikeThunder',
+    riderId: 'steward',
+    dragonId: dragon.id,
+    target: { kind: 'defense', defensive: true, intruder: true, name: 'Border Intruder #1' }
+  });
+  assert.equal(defendRes.ok, true, defendRes.message);
+  assert.equal(site.dragonStable.thunderStrikes, 2);
+
+  // 4. Offensive thunder & offensive fire against another community are strictly REFUSED
+  const offThunder = await sim.perform('dragonAction', {
+    siteId: site.id,
+    action: 'strikeThunder',
+    riderId: 'steward',
+    dragonId: dragon.id,
+    target: { kind: 'enemy', offensive: true, siteId: otherSite.id, name: 'Lamu Garrison' }
+  });
+  assert.equal(offThunder.ok, false, 'Protective thunder refuses offensive strikes on another community');
+
+  const offFire = await sim.perform('dragonAction', {
     siteId: site.id,
     action: 'blastFire',
     riderId: 'steward',
     dragonId: dragon.id,
-    target: { id: 'enemy-guard-2', kind: 'enemy', name: 'Enemy Guard', siteId: enemyTown.id, lethal: true, killed: true, hp: 0 }
+    target: { kind: 'building', siteId: otherSite.id, name: 'Lamu Granary' }
   });
-  assert.equal(bf.ok, true, bf.message);
-  assert.equal(site.dragonStable.kills, 2);
-  assert.equal(dragon.kills, 2);
+  assert.equal(offFire.ok, false, 'Dragonfire refuses offensive strikes on foreign buildings');
 
-  // Verify DragonUI mountDragon forwards teleport raid options & callbacks cleanly
+  // 5. Away from originating community, Wizard cannot call full Staff Thunder
+  const awayThunder = ctx.EarthDragonStable.strikeThunder(sim.state, otherSite, 'steward', dragon.id, { kind: 'ward', defensive: true });
+  assert.equal(awayThunder.ok, false, 'Wizard cannot invoke full Staff Thunder away from their originating community');
+
+  // 6. DragonUI launches protective flight with onThunderStrike and NO offensive teleport hooks
   const launches = [];
   ctx.EarthFlight3D = { isOpen: () => false, launch: opts => { launches.push(opts); return true; } };
   const dummyEl = { open: false, focus() {} };
   ctx.document = { getElementById: () => dummyEl };
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../common-earth/dragon-ui.js'), 'utf8'), ctx);
   const ui = ctx.EarthDragonUI.mount({ sim, notify: () => {} });
-  await ui.mountDragon({ siteId: site.id, dragonId: dragon.id }, 'steward', { teleportBaseId: warEntry.id, autoTeleportEnemy: true });
+  await ui.mountDragon({ siteId: site.id, dragonId: dragon.id }, 'steward');
   assert.equal(launches.length, 1);
-  assert.equal(launches[0].teleportBaseId, warEntry.id);
-  assert.equal(launches[0].autoTeleportEnemy, true);
   assert.equal(typeof launches[0].onThunderStrike, 'function');
-  assert.equal(typeof launches[0].onTeleportBase, 'function');
+  assert.equal(launches[0].onTeleportBase, undefined);
+  assert.equal(launches[0].teleportBaseId, undefined);
 });
+
 
 
 

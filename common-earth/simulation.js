@@ -2529,9 +2529,8 @@
         else if(req?.action==='assignWorker')res=ds.assignWorker(world,site,req.personId);
         else if(req?.action==='replenishFood')res=ds.replenishLarder(world,site,req.amount||4);
         else if(req?.action==='feed')res=ds.feedDragon(world,site,req.dragonId);
-        else if(req?.action==='blastFire')res=ds.blastFire(world,site,req.riderId||req.actorId,req.dragonId,req.target||{kind:req.kind||'fun',name:req.name,id:req.id,siteId:req.targetSiteId});
-        else if(req?.action==='teleportEnemyBase')res=ds.teleportToEnemyBase(world,site,req.riderId||req.actorId,req.dragonId,req.base||req.destination||{id:req.baseId,siteId:req.targetSiteId});
-        else if(req?.action==='strikeThunder')res=ds.strikeThunder(world,site,req.riderId||req.actorId,req.dragonId,req.target||{kind:req.kind||'enemy',name:req.name,id:req.id,siteId:req.targetSiteId});
+        else if(req?.action==='blastFire')res=ds.blastFire(world,site,req.riderId||req.actorId,req.dragonId,req.target||{kind:req.kind||'fun',name:req.name,id:req.id,siteId:req.targetSiteId,defensive:req.defensive,intruder:req.intruder});
+        else if(req?.action==='strikeThunder')res=ds.strikeThunder(world,site,req.riderId||req.actorId,req.dragonId,req.target||{kind:req.kind||'defense',name:req.name,id:req.id,siteId:req.targetSiteId,intruder:req.intruder,offensive:req.offensive});
         else if(req?.action==='recordFlight'){ds.recordFlight(world,site,req.riderId||req.actorId,req.dragonId,req.stats||{maxAltitude:req.maxAltitude,distanceFlown:req.distance});res={ok:true,message:'Flight logged.'};}
         else if(req?.action==='tick'){ds.tick(world,site,req.stepCount||1);res={ok:true,message:'Dragon stable updated.'};}
         else res=reject('Choose a Dragon Stable action.');

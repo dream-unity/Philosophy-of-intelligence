@@ -93,10 +93,23 @@
     if (!dragon) {
       return { ok: false, reason: 'Summon a dragon at the Dragon Stable before flying.' };
     }
+    if (dragon.homeSiteId && dragon.homeSiteId !== site.id) {
+      return {
+        ok: false,
+        reason: dragon.name + ' is spiritually bound to the soul of ' + (dragon.homeSiteName || 'its home community') + ' and refuses to fly in another community.'
+      };
+    }
     if (!isWizard(site, actorId)) {
       return {
         ok: false,
         reason: 'Only a Wizard can fly a dragon. Train a Wizard at the Dragon Stable or switch to a Wizard first.'
+      };
+    }
+    const wizard = ds.wizards.find(w => w.id === actorId || w.residentId === actorId);
+    if (wizard?.homeSiteId && wizard.homeSiteId !== site.id) {
+      return {
+        ok: false,
+        reason: wizard.name + '\'s wizardry is bound to ' + (wizard.homeSiteName || 'their originating community') + '; full abilities are only enabled in their home land.'
       };
     }
     if (dragon.hunger <= 5) {
@@ -105,7 +118,71 @@
         reason: dragon.name + ' is too hungry to take off. Feed ' + dragon.name + ' from the Dragon Stable larder first.'
       };
     }
-    return { ok: true, dragon, wizard: ds.wizards.find(w => w.id === actorId || w.residentId === actorId) };
+    return { ok: true, dragon, wizard };
+  }
+
+  function findWizardAcrossWorld(world, site, actorId) {
+    if (!actorId) return null;
+    const local = site?.dragonStable?.wizards?.find(w => w.id === actorId || w.residentId === actorId);
+    if (local) return { wizard: local, originSite: site };
+    const allTowns = [
+      ...(world?.sites || []),
+      ...(world?.communityLife?.outposts || [])
+    ];
+    for (const s of allTowns) {
+      const found = s?.dragonStable?.wizards?.find(w => w.id === actorId || w.residentId === actorId);
+      if (found) return { wizard: found, originSite: s };
+    }
+    return null;
+  }
+
+  /**
+   * Returns a Wizard's spiritual resonance status in the given community.
+   * Wizards' abilities are only fully enabled while in the community from which they originate.
+   */
+  function wizardPowerStatus(world, site, actorId) {
+    const found = findWizardAcrossWorld(world, site, actorId);
+    if (!found) {
+      return {
+        isWizard: false,
+        inOriginCommunity: false,
+        fullPower: false,
+        resonance: 0,
+        originSiteId: null,
+        originSiteName: null,
+        wizard: null,
+        reason: 'Only a trained Wizard can channel the Arcane Staff.'
+      };
+    }
+    const { wizard, originSite } = found;
+    const originId = wizard.homeSiteId || originSite?.id || site?.id || null;
+    const originName = wizard.homeSiteName || originSite?.name || site?.name || 'their home community';
+    const inOrigin = Boolean(site && originId && site.id === originId);
+    return {
+      isWizard: true,
+      inOriginCommunity: inOrigin,
+      fullPower: inOrigin,
+      resonance: inOrigin ? 100 : 25,
+      originSiteId: originId,
+      originSiteName: originName,
+      wizard,
+      reason: inOrigin
+        ? wizard.name + ' is attuned to the soul of ' + originName + ' (full Wizard abilities enabled).'
+        : wizard.name + '\'s arcane staff draws power from the soul of ' + originName + '; full abilities are only enabled while in their originating community.'
+    };
+  }
+
+  function canEnterCommunity(site, dragon, targetSiteId) {
+    const homeId = dragon?.homeSiteId || site?.id;
+    const homeName = dragon?.homeSiteName || site?.name || 'their home community';
+    if (targetSiteId && homeId && targetSiteId !== homeId) {
+      return {
+        ok: false,
+        refused: true,
+        reason: (dragon?.name || 'The dragon') + ' is a deeply spiritual protector bound to the soul of ' + homeName + ' and refuses to enter the lands of another community.'
+      };
+    }
+    return { ok: true, refused: false };
   }
 
   function trainWizard(world, site, residentId, customName) {
@@ -128,12 +205,14 @@
       residentId: targetId,
       name,
       title,
+      homeSiteId: site.id,
+      homeSiteName: site.name,
       trainedWeek: world?.week || 1,
       flights: 0,
       robeColor: ['#3b367d', '#24526e', '#5d2f6e', '#265c52'][ds.wizards.length % 4]
     };
     ds.wizards.push(wizard);
-    const msg = name + ' was initiated as a Wizard (' + title + ') at the Dragon Stable and can now mount and fly dragons.';
+    const msg = name + ' was initiated as a Wizard (' + title + ') of ' + site.name + ', attuned to protect their originating homeland.';
     record(site, world, msg);
     return { ok: true, wizard, message: msg };
   }
@@ -155,13 +234,15 @@
       residentId: wizId,
       name,
       title,
+      homeSiteId: site.id,
+      homeSiteName: site.name,
       trainedWeek: world?.week || 1,
       flights: 0,
       robeColor: ['#3b367d', '#24526e', '#5d2f6e', '#265c52'][ds.wizards.length % 4],
       stableBorn: true
     };
     ds.wizards.push(wizard);
-    const msg = name + ' joined the Dragon Stable as a trained ' + title + ' Wizard.';
+    const msg = name + ' joined ' + site.name + '\'s Dragon Stable as a ' + title + ' Wizard, bound to defend this homeland.';
     record(site, world, msg);
     return { ok: true, wizard, message: msg };
   }
@@ -186,6 +267,8 @@
       name,
       lineage: lineage.id,
       lineageTitle: lineage.title,
+      homeSiteId: site.id,
+      homeSiteName: site.name,
       scale: lineage.scale,
       accent: lineage.accent,
       wing: lineage.wing,
@@ -198,7 +281,7 @@
       raisedWeek: world?.week || 1
     };
     ds.dragons.push(dragon);
-    const msg = name + ' (' + lineage.title + ') hatched at the Dragon Stable, shimmering with enchanted scales.';
+    const msg = name + ' (' + lineage.title + ') hatched at ' + site.name + '\'s Dragon Stable, spiritually bound as a protector of these lands.';
     record(site, world, msg);
     return { ok: true, dragon, message: msg };
   }
@@ -317,192 +400,98 @@
   }
 
   /**
-   * Dragon Fire-Breath Attack OR Mid-Flight Joyful Fire Blast!
-   * target = { kind: 'fun' | 'building' | 'enemy' | 'person' | 'unit', name?, id?, siteId?, x?, y? }
+   * Enchanted Dragonfire — Strictly Spiritual Sky-Joy OR Protective Homeland Defense!
+   * Dragons are deeply spiritual beings bound to the soul of their home land:
+   * - They NEVER participate in offensive war or attack foreign communities/buildings.
+   * - They unleash joyful fire arcs in the sky (`kind: 'fun'`) and defend their own
+   *   homeland against encroaching invaders (`kind: 'defense'` / `defensive: true`).
    */
   function blastFire(world, site, actorId, dragonId, target = { kind: 'fun' }) {
     const check = canFlyDragon(site, actorId, dragonId);
     if (!check.ok) return { ok: false, message: check.reason };
+    const power = wizardPowerStatus(world, site, actorId);
+    if (!power.fullPower) return { ok: false, restricted: true, message: power.reason };
+
     const ds = ensure(site);
     const { dragon, wizard } = check;
     const kind = target?.kind || 'fun';
 
-    dragon.hunger = clamp(dragon.hunger - (kind === 'fun' ? 4 : 8), 0, 100);
-    dragon.blasts = (dragon.blasts || 0) + 1;
+    // Refuse crossing into another community's lands
+    if (target?.siteId && target.siteId !== site.id) {
+      const borderCheck = canEnterCommunity(site, dragon, target.siteId);
+      return { ok: false, refused: true, message: borderCheck.reason };
+    }
 
     if (kind === 'fun') {
+      dragon.hunger = clamp(dragon.hunger - 4, 0, 100);
+      dragon.blasts = (dragon.blasts || 0) + 1;
       ds.funBlasts = (ds.funBlasts || 0) + 1;
       site.wellbeing = clamp((site.wellbeing || 50) + 1, 0, 100);
-      const msg = wizard.name + ' and ' + dragon.name + ' unleashed a dazzling arc of enchanted dragonfire across the sky just for the joy of flight!';
+      const msg = wizard.name + ' and ' + dragon.name + ' unleashed a luminous arc of spiritual dragonfire across the skies of ' + site.name + '!';
       record(site, world, msg);
       return { ok: true, kind: 'fun', dragon, wizard, message: msg };
     }
 
-    ds.attacks = (ds.attacks || 0) + 1;
-    const targetName = target.name || (kind === 'building' ? 'a structure' : 'the target');
-
-    if (kind === 'building') {
-      const targetSite = (target.siteId && root.EarthCommunityLife?.lookup?.(world, target.siteId)) || site;
-      let damagedLabel = targetName;
-      // Can scorch/damage a building in targetSite
-      const b = targetSite.buildings?.find(item => item.id === target.id || item.name === targetName);
-      const fb = targetSite.freeBuildings?.find(item => item.id === target.id || item.name === targetName);
-      const struct = b || fb;
-      if (struct) {
-        struct.hp = clamp((struct.hp ?? 100) - 45, 0, 100);
-        struct.scorched = true;
-        damagedLabel = struct.name || targetName;
-        if (struct.hp <= 0) {
-          if (b) targetSite.buildings = targetSite.buildings.filter(item => item !== b);
-          if (fb) targetSite.freeBuildings = targetSite.freeBuildings.filter(item => item !== fb);
-          damagedLabel += ' (destroyed by dragonfire!)';
-        } else {
-          damagedLabel += ' (scorched · ' + struct.hp + '% integrity)';
-        }
-      }
-      ds.scorched.unshift({ week: world?.week || 1, x: target.x ?? 12, y: target.y ?? 12, label: damagedLabel });
-      if (ds.scorched.length > 20) ds.scorched.length = 20;
-      const msg = wizard.name + ' commanded ' + dragon.name + ' to blast enchanted fire onto ' + damagedLabel + '!';
-      record(site, world, msg);
-      return { ok: true, kind: 'building', dragon, wizard, damaged: damagedLabel, message: msg };
+    // Only allow protective homeland defense against active invaders/intruders
+    const isDefensive = kind === 'defense' || Boolean(target?.defensive || target?.intruder);
+    if (!isDefensive || kind === 'building') {
+      const msg = dragon.name + ' is a deeply spiritual protector bound to the soul of ' + site.name + ' and refuses to participate in offensive war.';
+      return { ok: false, refused: true, message: msg };
     }
 
-    // Enemy / unit / person / soldier fire attack — lethal devastation!
-    const targetSite = (target.siteId && root.EarthCommunityLife?.lookup?.(world, target.siteId)) || null;
-    if (targetSite?.militaryBase?.units?.length) {
-      const unit = targetSite.militaryBase.units.find(u => u.id === target.id) || targetSite.militaryBase.units[0];
-      if (unit) {
-        unit.hp = Math.max(0, (unit.hp ?? 100) - (target.lethal ? 100 : 65));
-        if (unit.hp <= 0) {
-          targetSite.militaryBase.units = targetSite.militaryBase.units.filter(u => u.id !== unit.id);
-        }
-      }
-    }
-    if (target.killed || target.hp === 0) {
-      dragon.kills = (dragon.kills || 0) + 1;
-      ds.kills = (ds.kills || 0) + 1;
-    }
-    const verb = (target.killed || target.hp === 0) ? 'incinerated' : 'blasted a torrent of enchanted dragonfire onto';
-    const msg = wizard.name + ' and ' + dragon.name + ' ' + verb + ' ' + targetName + '!';
+    dragon.hunger = clamp(dragon.hunger - 6, 0, 100);
+    dragon.blasts = (dragon.blasts || 0) + 1;
+    ds.defenses = (ds.defenses || 0) + 1;
+    const targetName = target.name || 'encroaching invaders';
+    const msg = wizard.name + ' and ' + dragon.name + ' defended ' + site.name + ', repelling ' + targetName + ' with protective dragonfire!';
     record(site, world, msg);
-    return { ok: true, kind, dragon, wizard, message: msg };
+    return { ok: true, kind: 'defense', dragon, wizard, message: msg };
   }
 
   /**
-   * Lists enemy bases the community is currently at war with (prioritized first),
-   * followed by hostile neighbouring settlements and fortified rival outposts.
-   */
-  function enemyBasesAtWar(world, site) {
-    if (!world || !site) return [];
-    const conflict = root.EarthBorderConflict;
-    const allTowns = [
-      ...(world.sites || []),
-      ...(world.communityLife?.outposts || [])
-    ].filter(other => other && other.id !== site.id);
-
-    const warBases = [];
-    const rivalBases = [];
-    for (const other of allTowns) {
-      const rel = conflict?.relation?.(world, site.id, other.id);
-      const isAtWar = rel?.state === 'war';
-      const isHostile = Boolean(conflict?.hostile?.(world, other));
-      const units = other.militaryBase?.units?.length || 0;
-      const buildings = (other.buildings?.length || 0) + (other.freeBuildings?.length || 0) + 4;
-      const entry = {
-        id: 'war-base-' + other.id,
-        siteId: other.id,
-        name: other.name + (isAtWar ? ' Enemy Base' : ' Fortified Base'),
-        townName: other.name,
-        atWar: isAtWar,
-        hostile: isHostile,
-        units: Math.max(units, isAtWar ? 6 : 4),
-        buildings,
-        population: other.population || 10
-      };
-      if (isAtWar) warBases.push(entry);
-      else if (isHostile) rivalBases.push(entry);
-    }
-
-    // Always include the three regional rival military fortifications as additional raid targets
-    const outposts = [
-      { id: 'enemy-north', siteId: null, name: 'Rival Outpost Bastion', townName: 'Northern Frontier', atWar: false, hostile: true, units: 5, buildings: 3, population: 5 },
-      { id: 'enemy-west', siteId: null, name: 'Raider Camp Fortress', townName: 'Western Ridge', atWar: false, hostile: true, units: 5, buildings: 3, population: 5 },
-      { id: 'enemy-east', siteId: null, name: 'Eastern Citadel Outpost', townName: 'Eastern Frontier', atWar: false, hostile: true, units: 5, buildings: 3, population: 5 }
-    ];
-
-    return [...warBases, ...rivalBases, ...outposts];
-  }
-
-  /**
-   * Wizard Arcane Teleport: warps Wizard + Dragon directly above an enemy base.
-   */
-  function teleportToEnemyBase(world, site, actorId, dragonId, baseInfo = {}) {
-    const check = canFlyDragon(site, actorId, dragonId);
-    if (!check.ok) return { ok: false, message: check.reason };
-    const ds = ensure(site);
-    const { dragon, wizard } = check;
-    const bases = enemyBasesAtWar(world, site);
-    const chosen = (baseInfo.siteId && bases.find(b => b.siteId === baseInfo.siteId))
-      || (baseInfo.id && bases.find(b => b.id === baseInfo.id))
-      || bases[0]
-      || { id: 'enemy-north', name: 'Rival Outpost Bastion', atWar: false };
-
-    wizard.teleports = (wizard.teleports || 0) + 1;
-    ds.teleports = (ds.teleports || 0) + 1;
-    const msg = wizard.name + ' opened an arcane rift atop ' + dragon.name + ' and teleported directly above ' + chosen.name + '!';
-    record(site, world, msg);
-    return { ok: true, dragon, wizard, destination: chosen, message: msg };
-  }
-
-  /**
-   * Wizard Staff Sky-to-Ground Thunder Strike:
-   * Channels lightning upward from the Wizard's staff into the sky and brings a
-   * devastating thunderbolt crashing down onto whoever or whatever the target is!
+   * Wizard Staff Sky-to-Ground Thunder Strike — Protective Homeland Measure Only!
+   * - Requires the Wizard to be in their originating community (full spiritual resonance).
+   * - Channels lightning skyward from the Wizard's staff and crashes down to repel
+   *   active invaders or reinforce the protective perimeter ward of their home land.
+   * - Refuses offensive strikes against other communities.
    */
   function strikeThunder(world, site, actorId, dragonId, target = {}) {
-    const check = canFlyDragon(site, actorId, dragonId);
-    if (!check.ok) return { ok: false, message: check.reason };
+    const power = wizardPowerStatus(world, site, actorId);
+    if (!power.isWizard) return { ok: false, message: power.reason };
+    if (!power.fullPower) return { ok: false, restricted: true, message: power.reason };
+
     const ds = ensure(site);
-    const { dragon, wizard } = check;
-    const kind = target?.kind || 'enemy';
-    const targetName = target?.name || 'enemy forces';
+    const wizard = power.wizard;
+    const dragon = dragonId ? ds.dragons.find(d => d.id === dragonId) : ds.dragons[0];
+
+    if (target?.siteId && target.siteId !== site.id) {
+      return {
+        ok: false,
+        refused: true,
+        message: wizard.name + '\'s protective staff thunder is bound to the soul of ' + site.name + ' and will not strike another community in offensive war.'
+      };
+    }
+    if (target?.offensive === true || target?.kind === 'building') {
+      return {
+        ok: false,
+        refused: true,
+        message: 'Staff thunder is a sacred protective measure for defending ' + site.name + ', never an instrument of offensive war.'
+      };
+    }
 
     wizard.thunderStrikes = (wizard.thunderStrikes || 0) + 1;
     ds.thunderStrikes = (ds.thunderStrikes || 0) + 1;
-    ds.attacks = (ds.attacks || 0) + 1;
+    ds.defenses = (ds.defenses || 0) + 1;
+    site.wellbeing = clamp((site.wellbeing || 50) + 1, 0, 100);
 
-    const targetSite = (target.siteId && root.EarthCommunityLife?.lookup?.(world, target.siteId)) || null;
-    if (targetSite) {
-      if (kind === 'building') {
-        const b = targetSite.buildings?.find(item => item.id === target.id || item.name === targetName);
-        const fb = targetSite.freeBuildings?.find(item => item.id === target.id || item.name === targetName);
-        const struct = b || fb;
-        if (struct) {
-          struct.hp = clamp((struct.hp ?? 100) - 70, 0, 100);
-          struct.scorched = true;
-          if (struct.hp <= 0) {
-            if (b) targetSite.buildings = targetSite.buildings.filter(item => item !== b);
-            if (fb) targetSite.freeBuildings = targetSite.freeBuildings.filter(item => item !== fb);
-          }
-        }
-      } else if (targetSite.militaryBase?.units?.length) {
-        const unit = targetSite.militaryBase.units.find(u => u.id === target.id) || targetSite.militaryBase.units[0];
-        if (unit) {
-          unit.hp = Math.max(0, (unit.hp ?? 100) - 100);
-          if (unit.hp <= 0) {
-            targetSite.militaryBase.units = targetSite.militaryBase.units.filter(u => u.id !== unit.id);
-          }
-        }
-      }
-    }
-    if (target.killed || target.hp === 0) {
-      dragon.kills = (dragon.kills || 0) + 1;
-      ds.kills = (ds.kills || 0) + 1;
-    }
-
-    const msg = wizard.name + ' raised his staff to the heavens and called down a shattering thunderbolt onto ' + targetName + '!';
+    const repelledName = target?.intruder && target?.name
+      ? target.name
+      : 'the perimeter of ' + site.name;
+    const msg = target?.intruder
+      ? wizard.name + ' raised the arcane staff to the sky and called down protective thunder to repel ' + repelledName + ' from ' + site.name + '!'
+      : wizard.name + ' raised the arcane staff skyward and called down a protective thunder ward safeguarding ' + site.name + '!';
     record(site, world, msg);
-    return { ok: true, kind, dragon, wizard, message: msg };
+    return { ok: true, kind: 'defense', dragon, wizard, message: msg };
   }
 
   function recordFlight(world, site, actorId, dragonId, stats = {}) {
@@ -537,6 +526,8 @@
     stableLocation,
     ensure,
     isWizard,
+    wizardPowerStatus,
+    canEnterCommunity,
     canFlyDragon,
     trainWizard,
     createNewWizard,
@@ -546,8 +537,6 @@
     feedDragon,
     tick,
     blastFire,
-    enemyBasesAtWar,
-    teleportToEnemyBase,
     strikeThunder,
     recordFlight,
     valid

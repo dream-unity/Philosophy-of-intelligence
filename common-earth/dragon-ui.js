@@ -59,7 +59,7 @@
       status.scrollIntoView({block:'nearest'});
     }
 
-    async function mountDragon(target, riderId, launchExtras = {}) {
+    async function mountDragon(target, riderId) {
       if (mounting || root.EarthFlight3D?.isOpen()) return;
       const site = root.EarthCommunityLife.lookup(sim.state, target.siteId);
       if (!site) { flightMessage('This town is no longer available.', true); return; }
@@ -72,7 +72,7 @@
       if (!riderId && ds.wizards.length > 1) {
         doc.getElementById('dragon-rider-title').textContent = 'Who will ride ' + dragon.name + '?';
         const choices = doc.getElementById('dragon-rider-options');
-        choices.replaceChildren(...ds.wizards.map(w => btn(w.name + ' · ' + w.title, () => mountDragon(target, w.id, launchExtras))));
+        choices.replaceChildren(...ds.wizards.map(w => btn(w.name + ' · ' + w.title, () => mountDragon(target, w.id))));
         picker.querySelector('[data-mount-status]')?.remove();
         if (!picker.open) picker.showModal();
         return;
@@ -105,15 +105,11 @@
         const launched = root.EarthFlight3D.launch({
           mode: 'dragon', site, world: sim.state, dragon, wizard, origin: target,
           evening: Boolean(root.EarthDayClock?.read?.(sim.state)?.night),
-          teleportBaseId: launchExtras.teleportBaseId || null,
-          autoTeleportEnemy: Boolean(launchExtras.autoTeleportEnemy),
           onFireHit: hit => sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.()),
           onThunderStrike: hit => sim.perform('dragonAction', { siteId: site.id, action: 'strikeThunder', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.()),
-          onTeleportBase: base => sim.perform('dragonAction', { siteId: site.id, action: 'teleportEnemyBase', riderId: wizard.id, dragonId: dragon.id, base }).then(() => onUpdated?.()),
           onExit: stats => {
             sim.perform('dragonAction', { siteId: site.id, action: 'recordFlight', riderId: wizard.id, dragonId: dragon.id, stats }).then(() => onUpdated?.());
-            const killNote = stats.kills ? ` · ${stats.kills} enemies defeated` : '';
-            notify(wizard.name + ' and ' + dragon.name + ' returned from flight (' + Math.round(stats.distanceFlown) + ' m flown' + killNote + ').');
+            notify(wizard.name + ' and ' + dragon.name + ' returned from guarding ' + site.name + ' (' + Math.round(stats.distanceFlown) + ' m flown).');
             doc.getElementById('street-canvas')?.focus({preventScroll:true});
           }
         });
@@ -161,9 +157,9 @@
       }
       const intro = make('div');
       intro.append(
-        make('small', built ? 'Sanctuary Active · Unrestricted 3D Sky Exploration' : 'Not Yet Built'),
+        make('small', built ? 'Sacred Sanctuary · Spiritual Protectors of ' + site.name : 'Not Yet Built'),
         make('h3', site.name + ' Dragon Stable'),
-        make('p', 'Raise magical enchanted dragons, train Wizards to fly them anywhere across the 3D world — over town, open ocean, mountain peaks, volcano calderas, floating sky-islands, and neighbouring settlements — and command volumetric dragonfire.')
+        make('p', 'Dragons are deeply spiritual protectors bound to the soul of ' + site.name + '. They refuse offensive war and will never enter another community\'s lands — soaring freely over home skies, open seas, mountains, and sky-sanctuaries while Wizards channel protective staff thunder only within their originating homeland.')
       );
       hero.append(preview, intro);
       body.append(hero);
@@ -202,15 +198,13 @@
           label.append(riderSelect);
           secDragons.append(label);
         }
-        const enemyBases = DS.enemyBasesAtWar?.(sim.state, site) || [];
-        const primaryEnemy = enemyBases[0] || null;
         for (const d of ds.dragons) {
           const card = make('article', null, 'dragon-card');
           const head = make('div', null, 'dragon-card-head');
-          const killsText = d.kills ? ` · Enemies Defeated ${d.kills}` : '';
+          const homeLabel = d.homeSiteName || site.name;
           head.append(
             make('strong', `${d.name} · ${d.lineageTitle}`),
-            make('small', `Nourishment ${Math.round(d.hunger)}% · Flights ${d.flights || 0} · Fire Blasts ${d.blasts || 0}${killsText}`)
+            make('small', `Protector of ${homeLabel} · Nourishment ${Math.round(d.hunger)}% · Flights ${d.flights || 0} · Sky-Fire ${d.blasts || 0}`)
           );
           const meter = make('div', null, 'dragon-meter');
           const fill = doc.createElement('i');
@@ -222,30 +216,18 @@
             { siteId: site.id, dragonId: d.id }, riderSelect?.value
           ), 'primary-gold');
 
-          const raidLabel = primaryEnemy
-            ? (primaryEnemy.atWar ? `Teleport & Raid ${primaryEnemy.townName} [WAR]` : `Teleport & Raid ${primaryEnemy.name}`)
-            : 'Teleport & Raid Enemy Base';
-          const raidBtn = btn(raidLabel, () => mountDragon(
-            { siteId: site.id, dragonId: d.id },
-            riderSelect?.value,
-            { autoTeleportEnemy: true, teleportBaseId: primaryEnemy?.id || null }
-          ), 'fire-action');
+          const thunderBtn = btn('Protective Thunder Ward', () => {
+            const riderId = riderSelect?.value || (actorIsWizard ? actorId : ds.wizards[0]?.id);
+            runCmd('dragonAction', { siteId: site.id, action: 'strikeThunder', riderId: riderId || actorId, dragonId: d.id, target: { kind: 'defense', name: site.name + ' Perimeter' } });
+          });
 
           const feedBtn = btn(`Feed ${d.name}`, () => runCmd('dragonAction', { siteId: site.id, action: 'feed', dragonId: d.id }));
-          const funFireBtn = btn('Blast Fire (Mid-Flight Fun)', () => {
-            const riderId = actorIsWizard ? actorId : ds.wizards[0]?.id;
+          const funFireBtn = btn('Joyful Sky-Fire', () => {
+            const riderId = riderSelect?.value || (actorIsWizard ? actorId : ds.wizards[0]?.id);
             runCmd('dragonAction', { siteId: site.id, action: 'blastFire', riderId: riderId || actorId, dragonId: d.id, target: { kind: 'fun' } });
           }, 'fire-action');
 
-          const strikeBtn = btn('Fire Attack Target', () => {
-            const riderId = actorIsWizard ? actorId : ds.wizards[0]?.id;
-            const target = selectedTargetKind === 'building'
-              ? { kind: 'building', name: site.buildings?.[0]?.name || 'Rival Structure', id: site.buildings?.[0]?.id }
-              : { kind: 'enemy', name: 'Rival Outpost Watch' };
-            runCmd('dragonAction', { siteId: site.id, action: 'blastFire', riderId: riderId || actorId, dragonId: d.id, target });
-          }, 'fire-action');
-
-          actions.append(flyBtn, raidBtn, feedBtn, funFireBtn, strikeBtn);
+          actions.append(flyBtn, thunderBtn, feedBtn, funFireBtn);
           card.append(head, meter, actions);
           secDragons.append(card);
         }
@@ -253,7 +235,7 @@
 
       // Summon new Enchanted Dragon form
       const summonBox = make('div', null, 'dragon-card');
-      summonBox.append(make('strong', `Raise a New Enchanted Dragon (${DS.DRAGON_COST.funds} funds · ${DS.DRAGON_COST.food} food)`));
+      summonBox.append(make('strong', `Raise a New Protector Dragon (${DS.DRAGON_COST.funds} funds · ${DS.DRAGON_COST.food} food)`));
       const row = make('div', null, 'dragon-form-row');
       const lineageSel = doc.createElement('select');
       lineageSel.setAttribute('aria-label', 'Dragon lineage');
@@ -267,32 +249,27 @@
       const nameInput = doc.createElement('input');
       nameInput.placeholder = 'Optional dragon name';
       nameInput.maxLength = 32;
-      const targetSel = doc.createElement('select');
-      targetSel.setAttribute('aria-label', 'Fire attack target');
-      for (const [val, label] of [['enemy', 'Target: Enemy Watch'], ['building', 'Target: Building']]) {
-        const o = make('option', label); o.value = val; targetSel.append(o);
-      }
-      targetSel.value = selectedTargetKind === 'building' ? 'building' : 'enemy';
-      targetSel.addEventListener('change', () => { selectedTargetKind = targetSel.value; });
       row.append(lineageSel, nameInput, btn('Summon Enchanted Dragon', () => runCmd('dragonAction', { siteId: site.id, action: 'summon', lineageId: lineageSel.value, name: nameInput.value }), 'primary-gold'));
       summonBox.append(row);
-      const targetRow = make('div', null, 'dragon-form-row');
-      targetRow.append(make('small', 'Default fire-attack target:'), targetSel);
-      summonBox.append(targetRow);
       secDragons.append(summonBox);
       body.append(secDragons);
 
-      // Section 2: Wizards (Created & Trained from the Dragon Stable — Only Wizards can fly Dragons!)
+      // Section 2: Wizards (Homeland-Bound Guardians — Full Abilities Enabled Only in Originating Community)
       const secWiz = make('section', null, 'dragon-grid');
-      secWiz.append(make('h3', `Wizards (${ds.wizards.length}) · Required to Fly Dragons`));
+      secWiz.append(make('h3', `Wizards (${ds.wizards.length}) · Homeland Resonance & Protective Staff`));
       const wizCard = make('div', null, 'dragon-card');
-      wizCard.append(make('p', actorIsWizard
-        ? `You are currently playing as ${actorName}, a trained Wizard cleared to fly any dragon.`
-        : `Active character (${actorName}) is not a Wizard yet. Only Wizards trained at the Dragon Stable can fly dragons.`));
+      const actorPower = DS.wizardPowerStatus?.(sim.state, site, actorId);
+      wizCard.append(make('p', actorPower?.fullPower
+        ? `${actorName} is attuned to the soul of ${site.name}: full Wizard abilities (Dragon Flight & Protective Staff Thunder) are enabled here.`
+        : actorIsWizard
+          ? actorPower.reason
+          : `Active character (${actorName}) is not a Wizard yet. Train a Wizard of ${site.name} to fly dragons and channel protective staff thunder within this homeland.`));
       if (ds.wizards.length) {
         const ul = doc.createElement('ul');
         for (const w of ds.wizards) {
-          ul.append(make('li', `${w.name} — ${w.title} (${w.flights || 0} flights)`));
+          const originName = w.homeSiteName || site.name;
+          const status = (!w.homeSiteId || w.homeSiteId === site.id) ? 'Full Homeland Resonance' : `Origin: ${originName} (Diminished Away)`;
+          ul.append(make('li', `${w.name} — ${w.title} · ${status} (${w.flights || 0} flights · ${w.thunderStrikes || 0} thunder wards)`));
         }
         wizCard.append(ul);
       }
