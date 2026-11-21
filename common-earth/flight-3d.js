@@ -1527,6 +1527,203 @@ function createVolumetricParticles(scene, textures, count = 160) {
   return { spawn, update };
 }
 
+/* ── Colossal Building-Sized 3D Giant Troll Sculptor (19–24m Tall) ── */
+
+function buildGiantTroll3D(trollSpec) {
+  const heightM = Math.max(18, Number(trollSpec?.heightMeters) || 21);
+  const s = heightM / 21;
+  const root = new THREE.Group();
+
+  const skinColor = new THREE.Color(trollSpec?.skin || '#2e3633');
+  const accentColor = new THREE.Color(trollSpec?.accent || '#536156');
+  const eyeColor = new THREE.Color(trollSpec?.eye || '#ff2814');
+
+  const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.9, metalness: 0.08 });
+  const armorMat = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.82, metalness: 0.16 });
+  const obsidianMat = new THREE.MeshStandardMaterial({ color: 0x171a1e, roughness: 0.55, metalness: 0.42 });
+  const ironMat = new THREE.MeshStandardMaterial({ color: 0x5c4c3e, roughness: 0.5, metalness: 0.65 });
+  const tuskMat = new THREE.MeshStandardMaterial({ color: 0xe6dec5, roughness: 0.45, metalness: 0.06 });
+  const eyeMat = new THREE.MeshStandardMaterial({
+    color: eyeColor,
+    emissive: eyeColor,
+    emissiveIntensity: 3.4,
+    roughness: 0.2
+  });
+  const runeMat = new THREE.MeshStandardMaterial({
+    color: 0xff4c1e,
+    emissive: 0xff3b14,
+    emissiveIntensity: 2.2,
+    roughness: 0.3
+  });
+
+  const miasma = new THREE.Mesh(
+    new THREE.RingGeometry(3.2 * s, 7.8 * s, 28),
+    new THREE.MeshBasicMaterial({ color: 0x22080d, transparent: true, opacity: 0.52, side: THREE.DoubleSide, depthWrite: false })
+  );
+  miasma.rotation.x = -Math.PI / 2;
+  miasma.position.y = 0.18;
+  root.add(miasma);
+
+  const makeLeg = side => {
+    const hip = new THREE.Group();
+    hip.position.set(side * 2.15 * s, 7.4 * s, 0);
+    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(1.45 * s, 1.25 * s, 4.0 * s, 8), skinMat);
+    thigh.position.y = -2.0 * s;
+    const shin = new THREE.Mesh(new THREE.CylinderGeometry(1.3 * s, 1.55 * s, 3.6 * s, 8), armorMat);
+    shin.position.y = -5.5 * s;
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(2.8 * s, 1.25 * s, 4.1 * s), obsidianMat);
+    foot.position.set(0, -6.8 * s, 0.75 * s);
+    hip.add(thigh, shin, foot);
+    return hip;
+  };
+  const legL = makeLeg(-1);
+  const legR = makeLeg(1);
+  root.add(legL, legR);
+
+  const upper = new THREE.Group();
+  upper.position.set(0, 7.4 * s, 0);
+  root.add(upper);
+
+  const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(3.4 * s, 3.0 * s, 2.6 * s, 9), obsidianMat);
+  pelvis.position.y = 0.9 * s;
+  upper.add(pelvis);
+
+  const torso = new THREE.Mesh(new THREE.DodecahedronGeometry(4.5 * s, 1), skinMat);
+  torso.scale.set(1.18, 1.24, 0.92);
+  torso.position.set(0, 5.4 * s, 0.35 * s);
+  upper.add(torso);
+
+  const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(6.8 * s, 3.4 * s, 2.2 * s), armorMat);
+  chestPlate.position.set(0, 6.2 * s, 3.2 * s);
+  chestPlate.rotation.x = 0.16;
+  upper.add(chestPlate);
+
+  for (const side of [-1, 1]) {
+    const pauldron = new THREE.Mesh(new THREE.DodecahedronGeometry(2.35 * s, 0), armorMat);
+    pauldron.position.set(side * 4.8 * s, 8.6 * s, 0.4 * s);
+    pauldron.scale.set(1.2, 0.95, 1.1);
+    upper.add(pauldron);
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const sp = new THREE.Mesh(new THREE.ConeGeometry((0.72 - i * 0.06) * s, (3.2 - i * 0.25) * s, 5), obsidianMat);
+    sp.position.set((i % 2 === 0 ? 0 : (i === 1 ? -1.4 : 1.4)) * s, (10.2 - i * 1.1) * s, (-2.6 - i * 0.35) * s);
+    sp.rotation.x = -0.72;
+    upper.add(sp);
+  }
+
+  const headGrp = new THREE.Group();
+  headGrp.position.set(0, 10.6 * s, 2.1 * s);
+  const skull = new THREE.Mesh(new THREE.DodecahedronGeometry(2.15 * s, 1), armorMat);
+  skull.scale.set(1.06, 0.98, 1.12);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(3.5 * s, 0.72 * s, 1.5 * s), obsidianMat);
+  brow.position.set(0, 0.72 * s, 1.62 * s);
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(2.85 * s, 1.15 * s, 2.1 * s), skinMat);
+  jaw.position.set(0, -1.05 * s, 1.35 * s);
+  headGrp.add(skull, brow, jaw);
+
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.42 * s, 8, 6), eyeMat);
+    eye.position.set(side * 0.85 * s, 0.22 * s, 1.98 * s);
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.48 * s, 3.2 * s, 6), obsidianMat);
+    horn.position.set(side * 1.75 * s, 1.85 * s, 0.35 * s);
+    horn.rotation.z = -side * 0.52;
+    horn.rotation.x = 0.22;
+    const tusk = new THREE.Mesh(new THREE.ConeGeometry(0.24 * s, 1.35 * s, 5), tuskMat);
+    tusk.position.set(side * 0.92 * s, -0.42 * s, 2.35 * s);
+    tusk.rotation.x = 0.32;
+    headGrp.add(eye, horn, tusk);
+  }
+  upper.add(headGrp);
+
+  const armL = new THREE.Group();
+  armL.position.set(-5.3 * s, 8.2 * s, 0.3 * s);
+  const armLUpper = new THREE.Mesh(new THREE.CylinderGeometry(1.35 * s, 1.18 * s, 5.2 * s, 8), skinMat);
+  armLUpper.position.y = -2.4 * s;
+  const armLFore = new THREE.Mesh(new THREE.CylinderGeometry(1.15 * s, 1.38 * s, 5.2 * s, 8), armorMat);
+  armLFore.position.set(-0.2 * s, -6.8 * s, 0.8 * s);
+  armLFore.rotation.x = -0.25;
+  const fistL = new THREE.Mesh(new THREE.DodecahedronGeometry(1.75 * s, 0), obsidianMat);
+  fistL.position.set(-0.3 * s, -9.4 * s, 1.5 * s);
+  armL.add(armLUpper, armLFore, fistL);
+  upper.add(armL);
+
+  const armR = new THREE.Group();
+  armR.position.set(5.3 * s, 8.2 * s, 0.3 * s);
+  const armRUpper = new THREE.Mesh(new THREE.CylinderGeometry(1.35 * s, 1.18 * s, 5.2 * s, 8), skinMat);
+  armRUpper.position.y = -2.4 * s;
+  const armRFore = new THREE.Mesh(new THREE.CylinderGeometry(1.15 * s, 1.38 * s, 5.2 * s, 8), armorMat);
+  armRFore.position.set(0.2 * s, -6.6 * s, 1.1 * s);
+  armRFore.rotation.x = -0.35;
+  const fistR = new THREE.Mesh(new THREE.DodecahedronGeometry(1.75 * s, 0), obsidianMat);
+  fistR.position.set(0.25 * s, -9.1 * s, 2.0 * s);
+
+  const club = new THREE.Group();
+  club.position.set(0.25 * s, -8.9 * s, 2.2 * s);
+  club.rotation.x = Math.PI * 0.44;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.95 * s, 0.58 * s, 7.0 * s, 7), ironMat);
+  shaft.position.y = 3.2 * s;
+  const headClub = new THREE.Mesh(new THREE.CylinderGeometry(2.15 * s, 1.15 * s, 8.4 * s, 7), obsidianMat);
+  headClub.position.y = 10.6 * s;
+  const bandA = new THREE.Mesh(new THREE.TorusGeometry(1.78 * s, 0.28 * s, 6, 12), ironMat);
+  bandA.rotation.x = Math.PI / 2;
+  bandA.position.y = 9.2 * s;
+  const bandB = new THREE.Mesh(new THREE.TorusGeometry(2.08 * s, 0.28 * s, 6, 12), runeMat);
+  bandB.rotation.x = Math.PI / 2;
+  bandB.position.y = 12.6 * s;
+  club.add(shaft, headClub, bandA, bandB);
+  armR.add(armRUpper, armRFore, fistR, club);
+  upper.add(armR);
+
+  const blaze = new THREE.Mesh(
+    new THREE.ConeGeometry(5.6 * s, 14.5 * s, 9),
+    new THREE.MeshBasicMaterial({ color: 0xff6b1a, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  blaze.position.y = 11.5 * s;
+  blaze.visible = false;
+  root.add(blaze);
+
+  const barCanvas = document.createElement('canvas');
+  barCanvas.width = 256;
+  barCanvas.height = 68;
+  const bctx = barCanvas.getContext('2d');
+  const barTex = new THREE.CanvasTexture(barCanvas);
+  const barSprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: barTex, transparent: true, depthTest: false, depthWrite: false })
+  );
+  barSprite.position.set(0, (heightM + 5.8), 0);
+  barSprite.scale.set(17.5, 4.6, 1);
+  root.add(barSprite);
+
+  const labelTitle = `${trollSpec?.name || 'Giant Troll'} · ${heightM}m`;
+  function updateHpBar(hp, maxHp) {
+    if (!bctx) return;
+    const pct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+    bctx.clearRect(0, 0, 256, 68);
+    bctx.fillStyle = 'rgba(14, 10, 14, 0.88)';
+    bctx.strokeStyle = 'rgba(255, 86, 56, 0.92)';
+    bctx.lineWidth = 3;
+    bctx.fillRect(6, 6, 244, 56);
+    bctx.strokeRect(6, 6, 244, 56);
+    bctx.font = '700 18px system-ui, sans-serif';
+    bctx.textAlign = 'center';
+    bctx.textBaseline = 'middle';
+    bctx.fillStyle = '#ffe0d6';
+    bctx.fillText(labelTitle, 128, 24);
+    bctx.fillStyle = '#2d1215';
+    bctx.fillRect(18, 39, 220, 14);
+    bctx.fillStyle = pct > 0.38 ? '#e53824' : '#ff7b24';
+    bctx.fillRect(18, 39, Math.round(220 * pct), 14);
+    bctx.font = '700 11px system-ui, sans-serif';
+    bctx.fillStyle = '#ffffff';
+    bctx.fillText(`${Math.max(0, Math.round(hp))} / ${Math.round(maxHp)} HP`, 128, 46);
+    barTex.needsUpdate = true;
+  }
+  updateHpBar(trollSpec?.hp ?? 540, trollSpec?.maxHp ?? 540);
+
+  return { root, upper, legL, legR, armL, armR, blaze, barSprite, updateHpBar, heightM };
+}
+
 /* ── Panoramic Living 3D World Builder (Town + Mountains + Ocean + Distant Realms) ── */
 
 function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
@@ -1534,6 +1731,7 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
   const targets = [];
   const foreignCommunities = [];
   const borderIntruders = [];
+  const giantTrolls = [];
   const thermals = [];
   const landmarks = [];
   const windowMaterials = [];
@@ -2373,6 +2571,85 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
     }
   }
 
+  // 13b. Colossal Building-Sized Giant Trolls from Shadowfell Darklands (Active from Start of Every Game!)
+  if (worldState && window.EarthGiantTrolls) {
+    window.EarthGiantTrolls.ensure(worldState);
+  }
+  const activeLocalTrolls = (worldState && site && window.EarthGiantTrolls)
+    ? window.EarthGiantTrolls.trollsForSite(worldState, site.id)
+    : [];
+  const trollSlots = [
+    { x: -56, z: -48 },
+    { x: 58, z: -44 },
+    { x: 6, z: -68 },
+    { x: -64, z: 18 }
+  ];
+  for (let idx = 0; idx < activeLocalTrolls.length; idx++) {
+    const spec = activeLocalTrolls[idx];
+    const fallback = trollSlots[idx % trollSlots.length];
+    let tx = Number.isFinite(spec.worldX) ? spec.worldX : fallback.x;
+    let tz = Number.isFinite(spec.worldZ) ? spec.worldZ : fallback.z;
+    if (Math.hypot(tx, tz) < 34) {
+      tx = fallback.x;
+      tz = fallback.z;
+    }
+    if (hasWater) tz = Math.min(tz, shoreZ - 26);
+    const ty = Math.max(0, terrainHeightAt(tx, tz));
+    const rig = buildGiantTroll3D(spec);
+    rig.root.position.set(tx, ty, tz);
+    rig.root.lookAt(0, ty, -8);
+    worldGroup.add(rig.root);
+
+    const trollEntry = {
+      id: spec.id,
+      trollId: spec.id,
+      kind: 'troll',
+      isTroll: true,
+      isIntruder: true,
+      enemy: true,
+      isUnit: true,
+      siteId: site?.id || '',
+      name: `${spec.name} (${spec.heightMeters || 21}m Giant Troll)`,
+      shortName: spec.name,
+      heightMeters: spec.heightMeters || 21,
+      mx: tx / scale + 12,
+      my: tz / scale + 12,
+      x: tx,
+      y: ty + (rig.heightM * 0.52),
+      z: tz,
+      radius: 8.5,
+      hp: spec.hp,
+      maxHp: spec.maxHp,
+      dead: false,
+      deathTimer: 0,
+      toppleProgress: 0,
+      mesh: rig.root,
+      upper: rig.upper,
+      legL: rig.legL,
+      legR: rig.legR,
+      armL: rig.armL,
+      armR: rig.armR,
+      blaze: rig.blaze,
+      barSprite: rig.barSprite,
+      updateHpBar: rig.updateHpBar,
+      stompPhase: idx * 1.7,
+      goalX: (idx % 2 === 0 ? -18 : 18),
+      goalZ: -8 + (idx % 3) * 8,
+      specRef: spec
+    };
+    giantTrolls.push(trollEntry);
+    borderIntruders.push(trollEntry);
+    targets.push(trollEntry);
+  }
+  if (giantTrolls.length > 0) {
+    landmarks.unshift({
+      name: `Giant Troll: ${giantTrolls[0].shortName} (${giantTrolls[0].heightMeters}m)`,
+      x: giantTrolls[0].x,
+      y: giantTrolls[0].y + 8,
+      z: giantTrolls[0].z
+    });
+  }
+
   // 14. Golden Thermal Updraft Sky-Rings (Soar through for lift & speed!)
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xffe696, transparent: true, opacity: 0.56, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   const thermalSpecs = [
@@ -2429,6 +2706,7 @@ function buildTownWorld(scene, site, worldState, textures, isSoftwareGl) {
     targets,
     foreignCommunities,
     borderIntruders,
+    giantTrolls,
     thermals,
     thermalMeshes,
     clouds,
@@ -3097,10 +3375,15 @@ function launch(options = {}) {
       t.body.material.color.lerp(_col.setHex(source === 'thunder' ? 0x263242 : 0x281e1a), 0.34);
     }
 
+    t.updateHpBar?.(t.hp, t.maxHp);
     const justRepelled = t.hp <= 0 && !t.dead;
     if (justRepelled) {
       t.dead = true;
-      if (t.isUnit) {
+      if (t.isTroll) {
+        t.deathTimer = 4.6;
+        t.toppleProgress = 0;
+        if (t.barSprite) t.barSprite.visible = false;
+      } else if (t.isUnit) {
         t.deathTimer = 3.2;
         t.mesh.rotation.z = Math.PI / 2;
         const gy = Math.max(0, world3D.terrainHeightAt(t.x, t.z));
@@ -3110,51 +3393,52 @@ function launch(options = {}) {
       }
     }
 
-    const burstCount = justRepelled ? 14 : 9;
+    const spread = t.isTroll ? 7.5 : 3.4;
+    const burstCount = justRepelled ? (t.isTroll ? 24 : 14) : (t.isTroll ? 14 : 9);
     for (let i = 0; i < burstCount; i++) {
       particles.spawn('fire',
-        t.x + (Math.random() - 0.5) * 3.4,
-        t.y + 0.8 + Math.random() * 2.6,
-        t.z + (Math.random() - 0.5) * 3.4,
-        (Math.random() - 0.5) * 14,
-        6 + Math.random() * 12,
-        (Math.random() - 0.5) * 14,
+        t.x + (Math.random() - 0.5) * spread,
+        t.y + (Math.random() - 0.2) * (t.isTroll ? 9 : 2.6),
+        t.z + (Math.random() - 0.5) * spread,
+        (Math.random() - 0.5) * (t.isTroll ? 22 : 14),
+        6 + Math.random() * (t.isTroll ? 20 : 12),
+        (Math.random() - 0.5) * (t.isTroll ? 22 : 14),
         {
-          baseScale: justRepelled ? 2.8 : 2.1,
-          grow: 2.3,
-          maxLife: 0.85,
+          baseScale: justRepelled ? (t.isTroll ? 5.2 : 2.8) : (t.isTroll ? 3.4 : 2.1),
+          grow: t.isTroll ? 3.2 : 2.3,
+          maxLife: t.isTroll ? 1.15 : 0.85,
           startColor: source === 'thunder' ? 0xd8fdff : 0xfff4bd,
           endColor: source === 'thunder' ? 0x2299ff : 0xd9260a
         }
       );
     }
-    for (let i = 0; i < (justRepelled ? 12 : 7); i++) {
+    for (let i = 0; i < (justRepelled ? (t.isTroll ? 20 : 12) : 7); i++) {
       particles.spawn('spark',
-        t.x + (Math.random() - 0.5) * 3,
-        t.y + 1.8,
-        t.z + (Math.random() - 0.5) * 3,
-        (Math.random() - 0.5) * 24,
-        10 + Math.random() * 18,
-        (Math.random() - 0.5) * 24,
+        t.x + (Math.random() - 0.5) * spread,
+        t.y + (t.isTroll ? 4.0 : 1.8),
+        t.z + (Math.random() - 0.5) * spread,
+        (Math.random() - 0.5) * 28,
+        10 + Math.random() * 22,
+        (Math.random() - 0.5) * 28,
         {
-          baseScale: source === 'thunder' ? 1.1 : 0.82,
-          grow: 0.32,
-          maxLife: 0.95,
+          baseScale: source === 'thunder' ? 1.35 : 0.92,
+          grow: 0.35,
+          maxLife: 1.05,
           rise: -6,
           startColor: source === 'thunder' ? 0xffffff : 0xfff2c2,
           endColor: source === 'thunder' ? 0x38d8ff : 0xff6e1a
         }
       );
     }
-    for (let i = 0; i < (justRepelled ? 6 : 3); i++) {
+    for (let i = 0; i < (justRepelled ? (t.isTroll ? 12 : 6) : 3); i++) {
       particles.spawn('smoke',
-        t.x + (Math.random() - 0.5) * 3.5,
-        t.y + 2.4,
-        t.z + (Math.random() - 0.5) * 3.5,
-        (Math.random() - 0.5) * 4,
-        5 + Math.random() * 5,
-        (Math.random() - 0.5) * 4,
-        { baseScale: 3.0, grow: 2.2, maxLife: 1.7, opacity: 0.48 }
+        t.x + (Math.random() - 0.5) * spread,
+        t.y + (t.isTroll ? 5.5 : 2.4),
+        t.z + (Math.random() - 0.5) * spread,
+        (Math.random() - 0.5) * 6,
+        6 + Math.random() * 7,
+        (Math.random() - 0.5) * 6,
+        { baseScale: t.isTroll ? 5.4 : 3.0, grow: 2.8, maxLife: 2.0, opacity: 0.52 }
       );
     }
     return { repelled: justRepelled, hp: t.hp };
@@ -3164,6 +3448,14 @@ function launch(options = {}) {
     if (explicitTarget && explicitTarget.isIntruder && !explicitTarget.dead && explicitTarget.hp > 0) return explicitTarget;
     const cone = Physics.findTargetsInFireCone(flightState, world3D.borderIntruders);
     if (cone[0]?.target && !cone[0].target.dead) return cone[0].target;
+    let bestTroll = null;
+    let bestTrollDist = 290;
+    for (const t of world3D.giantTrolls) {
+      if (!t || t.dead || t.hp <= 0) continue;
+      const d = Math.hypot(t.x - flightState.x, t.z - flightState.z);
+      if (d < bestTrollDist) { bestTrollDist = d; bestTroll = t; }
+    }
+    if (bestTroll) return bestTroll;
     let best = null;
     let bestDist = 190;
     for (const t of world3D.borderIntruders) {
@@ -3272,33 +3564,43 @@ function launch(options = {}) {
     camShake = Math.min(1.0, camShake + 0.58);
     audio.playThunderStrike();
 
-    // Repel any encroaching homeland border intruders near the strike (never harms home buildings or foreign communities!)
+    // Repel encroaching homeland border intruders & shatter invading building-sized Giant Trolls!
     const repelled = [];
     const primary = thunderState.target;
     if (primary && primary.isIntruder && !primary.dead && primary.hp > 0) {
-      const res = applyProtectiveRepel(primary, 100, 'thunder');
-      repelled.push({ target: primary, ...res });
+      const dmg = primary.isTroll ? 220 : 100;
+      const res = applyProtectiveRepel(primary, dmg, 'thunder');
+      repelled.push({ target: primary, damage: dmg, ...res });
     }
     for (const t of world3D.borderIntruders) {
       if (!t || t === primary || t.dead || t.hp <= 0) continue;
-      if (Math.hypot(t.x - sx, t.z - sz) <= 22 + (t.radius || 2)) {
-        const res = applyProtectiveRepel(t, 100, 'thunder');
-        repelled.push({ target: t, ...res });
+      if (Math.hypot(t.x - sx, t.z - sz) <= 24 + (t.radius || 2)) {
+        const dmg = t.isTroll ? 190 : 100;
+        const res = applyProtectiveRepel(t, dmg, 'thunder');
+        repelled.push({ target: t, damage: dmg, ...res });
       }
     }
 
     if (repelled.length > 0) {
-      const msg = repelled.length > 1
-        ? `${wizard.name}'s Protective Staff Thunder repelled ${repelled.length} border intruders from ${site.name}!`
-        : `${wizard.name}'s Protective Staff Thunder drove back ${repelled[0].target.name} from ${site.name}'s borders!`;
-      showBanner(msg, 3.2);
+      const first = repelled[0];
+      const msg = first.target.isTroll
+        ? (first.repelled
+          ? `COLOSSAL VICTORY! ${wizard.name}'s Protective Staff Thunder shattered ${first.target.name} to the ground!`
+          : `${wizard.name}'s Protective Staff Thunder blasted ${first.target.name} (${Math.round(first.hp)}/${Math.round(first.target.maxHp)} HP)!`)
+        : (repelled.length > 1
+          ? `${wizard.name}'s Protective Staff Thunder repelled ${repelled.length} border intruders from ${site.name}!`
+          : `${wizard.name}'s Protective Staff Thunder drove back ${first.target.name} from ${site.name}'s borders!`);
+      showBanner(msg, 3.4);
       for (const s of repelled) {
         options.onThunderStrike?.({
-          kind: 'defense',
+          kind: s.target.isTroll ? 'troll' : 'defense',
+          isTroll: Boolean(s.target.isTroll),
+          trollId: s.target.trollId || null,
           defensive: true,
           intruder: true,
           id: s.target.id,
           name: s.target.name,
+          damage: s.damage,
           repelled: s.repelled
         });
       }
@@ -3319,7 +3621,6 @@ function launch(options = {}) {
     const hitTargets = new Set();
     const allowTarget = t => {
       if (!t || t.dead || t.hp <= 0) return false;
-      // Spiritual dragons ONLY use protective fire against encroaching border intruders — never offensive attacks!
       return mode === 'dragon' ? Boolean(t.isIntruder) : true;
     };
     if (Array.isArray(coneHitsList)) {
@@ -3332,11 +3633,12 @@ function launch(options = {}) {
 
     if (mode === 'dragon' && world3D.borderIntruders.length > 0) {
       const fwd = Physics.forwardVector(flightState.yaw, flightState.pitch);
-      const sweepX = flightState.x + fwd.x * 26;
-      const sweepZ = flightState.z + fwd.z * 26;
+      const sweepX = flightState.x + fwd.x * 32;
+      const sweepZ = flightState.z + fwd.z * 32;
       for (const t of world3D.borderIntruders) {
         if (!t || t.dead || t.hp <= 0) continue;
-        if (Math.hypot(t.x - sweepX, t.z - sweepZ) <= 22) hitTargets.add(t);
+        const reach = t.isTroll ? 36 : 22;
+        if (Math.hypot(t.x - sweepX, t.z - sweepZ) <= reach) hitTargets.add(t);
       }
     }
 
@@ -3345,25 +3647,40 @@ function launch(options = {}) {
       let repelledCount = 0;
       let lastStruck = null;
       for (const t of list) {
-        const dmg = mode === 'jet' ? 50 : 65;
+        const dmg = t.isTroll ? (mode === 'jet' ? 62 : 118) : (mode === 'jet' ? 50 : 65);
         const res = applyProtectiveRepel(t, dmg, 'fire');
         if (res.repelled) repelledCount++;
         lastStruck = { target: t, ...res };
         const payload = mode === 'dragon'
-          ? { kind: 'defense', defensive: true, intruder: true, id: t.id, name: t.name, repelled: res.repelled }
-          : { kind: t.isUnit ? 'enemy' : 'building', id: t.id, name: t.name, x: t.mx, y: t.my, hp: t.hp, killed: res.repelled };
+          ? {
+            kind: t.isTroll ? 'troll' : 'defense',
+            isTroll: Boolean(t.isTroll),
+            trollId: t.trollId || null,
+            defensive: true,
+            intruder: true,
+            id: t.id,
+            name: t.name,
+            damage: dmg,
+            repelled: res.repelled
+          }
+          : { kind: t.isTroll ? 'troll' : (t.isUnit ? 'enemy' : 'building'), isTroll: Boolean(t.isTroll), trollId: t.trollId || null, id: t.id, name: t.name, x: t.mx, y: t.my, hp: t.hp, killed: res.repelled };
         options.onFireHit?.(payload);
         options.onFireAttack?.(payload);
       }
       if (mode === 'dragon') {
+        const isTrollHit = Boolean(lastStruck?.target?.isTroll);
         showBanner(
           repelledCount > 0
-            ? `${dragon.name}'s protective flame drove ${repelledCount > 1 ? `${repelledCount} intruders` : lastStruck.target.name} away from ${site.name}!`
-            : `${dragon.name}'s protective flame held ${lastStruck.target.name} back from ${site.name}!`,
-          2.8
+            ? (isTrollHit
+              ? `COLOSSAL VICTORY! ${dragon.name}'s enchanted dragonfire slew ${lastStruck.target.name}!`
+              : `${dragon.name}'s protective flame drove ${repelledCount > 1 ? `${repelledCount} intruders` : lastStruck.target.name} away from ${site.name}!`)
+            : (isTrollHit
+              ? `${dragon.name}'s enchanted dragonfire seared ${lastStruck.target.name} (${Math.round(lastStruck.hp)}/${Math.round(lastStruck.target.maxHp)} HP)!`
+              : `${dragon.name}'s protective flame held ${lastStruck.target.name} back from ${site.name}!`),
+          3.0
         );
       } else if (lastStruck) {
-        showBanner(`Direct hit! ${lastStruck.target.name} struck (${lastStruck.hp}% HP)!`, 2.6);
+        showBanner(`Direct hit! ${lastStruck.target.name} struck (${Math.round(lastStruck.hp)}/${Math.round(lastStruck.target.maxHp)} HP)!`, 2.6);
       }
     } else if (elapsed - lastFunToast > 3.8) {
       lastFunToast = elapsed;
@@ -3741,15 +4058,48 @@ function launch(options = {}) {
       }
     }
 
-    // Animate Homeland Border Intruders (only present if defending homeland during active war)
+    // Animate Homeland Border Intruders & Colossal Building-Sized Giant Trolls
     for (let i = 0; i < world3D.borderIntruders.length; i++) {
       const u = world3D.borderIntruders[i];
       if (u.dead) {
         if (u.deathTimer > 0) {
           u.deathTimer -= dt;
-          u.mesh.position.y -= dt * 0.35;
+          if (u.isTroll) {
+            u.toppleProgress = Math.min(1, (u.toppleProgress || 0) + dt * 0.72);
+            u.mesh.rotation.x = -u.toppleProgress * (Math.PI * 0.48);
+            if (u.deathTimer < 1.2) u.mesh.position.y -= dt * 2.4;
+          } else {
+            u.mesh.position.y -= dt * 0.35;
+          }
           if (u.deathTimer <= 0) u.mesh.visible = false;
         }
+        continue;
+      }
+      if (u.isTroll) {
+        u.stompPhase = (u.stompPhase || 0) + dt * 1.9;
+        const dx = u.goalX - u.x;
+        const dz = u.goalZ - u.z;
+        const dGoal = Math.hypot(dx, dz);
+        if (dGoal > 12) {
+          const speed = 2.6;
+          u.x += (dx / dGoal) * speed * dt;
+          u.z += (dz / dGoal) * speed * dt;
+        }
+        const uy = Math.max(0, world3D.terrainHeightAt(u.x, u.z));
+        u.y = uy + (u.heightMeters || 21) * 0.52;
+        u.mesh.position.set(u.x, uy, u.z);
+        u.mesh.lookAt(u.goalX, uy, u.goalZ);
+        const stride = Math.sin(u.stompPhase);
+        if (u.legL && u.legR) {
+          u.legL.rotation.x = dGoal > 12 ? stride * 0.42 : stride * 0.12;
+          u.legR.rotation.x = dGoal > 12 ? -stride * 0.42 : -stride * 0.12;
+        }
+        if (u.upper) {
+          u.upper.rotation.z = stride * 0.06;
+          u.upper.position.y = (7.4 * (u.heightMeters || 21) / 21) + Math.abs(stride) * 0.55;
+        }
+        if (u.armL) u.armL.rotation.x = -stride * 0.35;
+        if (u.armR) u.armR.rotation.x = -0.35 + Math.sin(u.stompPhase * 1.35) * 0.85;
         continue;
       }
       u.patrolAngle += u.patrolSpeed * dt;
@@ -4009,7 +4359,8 @@ function launch(options = {}) {
       return triggerThunderStrike(t);
     },
     getForeignCommunities: () => world3D.foreignCommunities.map(c => ({ id: c.id, name: c.name, x: c.x, y: c.y, z: c.z, radius: c.radius })),
-    getTargets: () => world3D.targets.map(t => ({ id: t.id, name: t.name, kind: t.kind, isIntruder: Boolean(t.isIntruder), hp: t.hp, dead: Boolean(t.dead), x: t.x, y: t.y, z: t.z })),
+    getGiantTrolls: () => world3D.giantTrolls.map(t => ({ id: t.id, name: t.name, heightMeters: t.heightMeters, hp: t.hp, maxHp: t.maxHp, dead: Boolean(t.dead), x: t.x, y: t.y, z: t.z })),
+    getTargets: () => world3D.targets.map(t => ({ id: t.id, name: t.name, kind: t.kind, isTroll: Boolean(t.isTroll), isIntruder: Boolean(t.isIntruder), hp: t.hp, maxHp: t.maxHp, dead: Boolean(t.dead), x: t.x, y: t.y, z: t.z })),
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -4124,6 +4475,10 @@ function getForeignCommunities() {
   return activeSession?.getForeignCommunities?.() || [];
 }
 
+function getGiantTrolls() {
+  return activeSession?.getGiantTrolls?.() || [];
+}
+
 function getTargets() {
   return activeSession?.getTargets?.() || [];
 }
@@ -4137,5 +4492,6 @@ window.EarthFlight3D = Object.freeze({
   setCameraMode,
   triggerThunder,
   getForeignCommunities,
+  getGiantTrolls,
   getTargets
 });

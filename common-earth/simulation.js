@@ -537,6 +537,7 @@
       if(root.EarthPartners?.valid && !root.EarthPartners.valid(world.partners,ids))return null;
       if(root.EarthLegacy?.valid && !root.EarthLegacy.valid(world))return null;
       if(root.EarthGoals?.valid && !root.EarthGoals.valid(world.learningGoals,world))return null;
+      if(root.EarthGiantTrolls?.valid && !root.EarthGiantTrolls.valid(world.trollHorde))return null;
       if(world.voyage!=null){
         const v=world.voyage;
         if(!geoPoint(v.origin)||!ids.has(v.origin.id)||!geoPoint(v.target)||!integer(v.legs,1)||!integer(v.leg,0,v.legs-1)||!Array.isArray(v.itinerary))return null;
@@ -559,6 +560,7 @@
       }
       root.EarthRegionalWorld?.reconcileLocations?.(world);
       root.EarthMilitaryBase?.restoreField?.(world);
+      if(world.sites.length)root.EarthGiantTrolls?.ensure?.(world);
       return world;
     }catch(e){return null;}
   }
@@ -840,6 +842,7 @@
       if(root.EarthDayClock)world.dayClock||=root.EarthDayClock.start();
       root.EarthCommunityLife?.founding(world,old,site,offer.volunteers||[],newSettlement);
       if(world.communityLife&&typeof governance?.residentBallots==='boolean')site.residentBallots=governance.residentBallots;
+      root.EarthGiantTrolls?.ensure?.(world);
       const note=root.EarthCampaigns?.found(world,site,commission);
       return complete(name+' founded. '+(old?old.name+' transferred '+resources(offer.goods)+'. '+(world.communityLife?world.communityLife.profile.name+' founded the new district with '+offer.volunteers.map(v=>v.name).join(' and ')+' and four local members. ':'Two volunteers and four new members started the settlement. '):'')+({food:'Its growers produce 1 extra food each week.',materials:'Its salvage team recovers 1 extra material each week.',funds:'Its cooperative earns 1 extra fund each week.'})[site.specialty]+(note?' '+note:''),site);
     }
@@ -1897,6 +1900,9 @@
           for(const note of root.EarthDragonStable.tick(turn,site,1)||[])event(note,site);
         }
       }
+      if(root.EarthGiantTrolls){
+        for(const report of root.EarthGiantTrolls.tick(turn)||[])event(report.text,report.site);
+      }
       root.EarthRegionalWorld?.advance?.(turn,spec=>newSettlement(spec,turn),'calendar');
       dispatchCargo(turn,byId,inbound,event);
       for(const site of districts){
@@ -2535,6 +2541,25 @@
         else if(req?.action==='tick'){ds.tick(world,site,req.stepCount||1);res={ok:true,message:'Dragon stable updated.'};}
         else res=reject('Choose a Dragon Stable action.');
         return res?.ok?complete(res.message,site,req?.action!=='recordFlight'&&req?.action!=='tick'):(res||reject('Dragon action failed.'));
+      }),
+      trollAction:guarded(req=>{
+        const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
+        const gt=root.EarthGiantTrolls;
+        if(!site||!gt)return reject('Giant Troll defense is unavailable.');
+        gt.ensure(world);
+        let res;
+        if(req?.action==='militiaStrike'||req?.action==='soldierStrike'){
+          res=gt.attackTroll(world,site,req.trollId,{source:req.action==='soldierStrike'?'soldier':'militia',damage:req.damage,attackerName:req.attackerName});
+        }else if(req?.action==='jetStrike'){
+          res=gt.attackTroll(world,site,req.trollId,{source:'jet',damage:req.damage,attackerName:'Airbase Fighter Jet'});
+        }else if(req?.action==='dragonFire'){
+          res=gt.attackTroll(world,site,req.trollId,{source:'dragonFire',damage:req.damage,dragonName:req.dragonName,wizardName:req.wizardName});
+        }else if(req?.action==='wizardThunder'){
+          res=gt.attackTroll(world,site,req.trollId,{source:'wizardThunder',damage:req.damage,dragonName:req.dragonName,wizardName:req.wizardName});
+        }else{
+          res=reject('Choose a defense action against the Giant Trolls.');
+        }
+        return res?.ok?complete(res.message,site):(res||reject('Giant Troll defense failed.'));
       }),
       expandTerritory:guarded(req=>{
         const id=typeof req==='object'&&req!==null?req.siteId:req;

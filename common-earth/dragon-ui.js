@@ -164,6 +164,54 @@
       hero.append(preview, intro);
       body.append(hero);
 
+      // Live Shadowfell Darklands Giant Troll Siege Status
+      const trollSummary = root.EarthGiantTrolls?.summary?.(sim.state, site.id);
+      if (trollSummary && trollSummary.totalAlive > 0) {
+        const siegeSec = make('section', null, 'dragon-card troll-card');
+        const head = make('div', null, 'dragon-card-head');
+        head.append(
+          make('strong', `${trollSummary.communityName} Siege · Wave ${trollSummary.wave}`),
+          make('small', `${trollSummary.localCount} attacking ${site.name} · ${trollSummary.elsewhereCount} attacking other lands · ${trollSummary.totalSlain} slain`)
+        );
+        siegeSec.append(head);
+        siegeSec.append(make('p', 'Colossal building-sized Giant Trolls are relentlessly hunting human Sims across every community. Ordinary weapons barely dent their dark hide — Enchanted Dragonfire and originating-community Wizard Staff Thunder shatter them!'));
+        for (const t of trollSummary.local) {
+          const row = make('div', null, 'troll-row');
+          row.append(make('small', `${t.name} · ${t.title} (${t.heightMeters}m) — ${t.hp}/${t.maxHp} HP`));
+          const bar = make('div', null, 'dragon-meter troll-meter');
+          const fill = doc.createElement('i');
+          fill.style.width = `${Math.max(4, Math.round((t.hp / Math.max(1, t.maxHp)) * 100))}%`;
+          bar.append(fill);
+          row.append(bar);
+          siegeSec.append(row);
+        }
+        if (trollSummary.elsewhere.length) {
+          const otherTargets = [...new Set(trollSummary.elsewhere.map(t => t.targetSiteName))].join(', ');
+          siegeSec.append(make('small', `Also besieging across the lands: ${otherTargets}`));
+        }
+        const siegeActions = make('div', null, 'dragon-actions');
+        if (built && ds.dragons.length && ds.wizards.length && trollSummary.local.length) {
+          const leadD = ds.dragons[0];
+          const leadW = actorIsWizard ? actorId : ds.wizards[0].id;
+          siegeActions.append(
+            btn(`Fly ${leadD.name} vs Giant Trolls`, () => mountDragon({ siteId: site.id, dragonId: leadD.id }, leadW), 'primary-gold'),
+            btn('Strike Giant Troll with Staff Thunder', () => runCmd('dragonAction', {
+              siteId: site.id,
+              action: 'strikeThunder',
+              riderId: leadW,
+              dragonId: leadD.id,
+              target: { kind: 'troll', isTroll: true, trollId: trollSummary.local[0].id, name: trollSummary.local[0].name }
+            }), 'fire-action')
+          );
+        } else if (trollSummary.local.length) {
+          siegeActions.append(
+            btn('Rally Town Defenders (Chip Damage)', () => runCmd('trollAction', { siteId: site.id, action: 'militiaStrike', trollId: trollSummary.local[0].id }))
+          );
+        }
+        siegeSec.append(siegeActions);
+        body.append(siegeSec);
+      }
+
       if (!built) {
         const card = make('section', null, 'dragon-card');
         card.append(

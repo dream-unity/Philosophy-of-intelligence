@@ -157,6 +157,24 @@
   const openDragonStable=()=>dragonUI?.open(sim.active()?.id);
   listen('scene-open-dragon','click',openDragonStable);
   listen('street-dragon-stable','click',openDragonStable);
+  listen('troll-rally-btn','click',async()=>{
+    const site=sim.active();if(!site)return;
+    const res=await sim.perform('trollAction',{siteId:site.id,action:'militiaStrike'});
+    presentResult(res);redrawStreet();render();
+  });
+  listen('troll-dragon-btn','click',()=>{
+    const site=sim.active();if(!site||!dragonUI)return;
+    const DS=window.EarthDragonStable;
+    const built=DS?.hasStable?.(site);
+    const ds=built?DS.ensure(site):null;
+    if(ds&&ds.dragons.length&&ds.wizards.length){
+      const actorId=window.EarthAgency?.actorId?.(site)||'steward';
+      const riderId=DS.isWizard(site,actorId)?actorId:ds.wizards[0].id;
+      dragonUI.mountDragon({siteId:site.id,dragonId:ds.dragons[0].id},riderId);
+    }else{
+      dragonUI.open(site.id);
+    }
+  });
   async function runQuickCommunityAction(cmd){
     const site=sim.active();if(!site)return;
     const res=await sim.perform(cmd,{siteId:site.id});
@@ -1872,6 +1890,32 @@
     if(guide)put('objective-action',guide.label);
     show('objective-action',!!guide);show('follow-objective',!!guide);
   }
+  function renderTrollSiege(site){
+    const bar=$('troll-siege-bar');
+    if(!bar)return;
+    if(!site||!window.EarthGiantTrolls){bar.hidden=true;return;}
+    window.EarthGiantTrolls.ensure(sim.state);
+    const info=window.EarthGiantTrolls.summary(sim.state,site.id);
+    if(!info||info.totalAlive<=0){bar.hidden=true;return;}
+    bar.hidden=false;
+    put('troll-siege-title',`${info.communityName} · Giant Troll Siege (Wave ${info.wave})`);
+    put('troll-siege-counts',`${info.localCount} here · ${info.elsewhereCount} attacking other lands · ${info.totalSlain} slain`);
+    const lead=info.local[0];
+    const otherText=info.elsewhere.length?` Also attacking ${[...new Set(info.elsewhere.map(t=>t.targetSiteName))].slice(0,2).join(' & ')}.`:'';
+    put('troll-siege-detail',lead
+      ? `${lead.name} (${lead.heightMeters}m tall, ${lead.hp}/${lead.maxHp} HP) & darklands titans are hunting human Sims in ${site.name}!${otherText}`
+      : `Colossal building-sized Giant Trolls are hunting human Sims across neighbouring lands!${otherText}`);
+    const rallyBtn=$('troll-rally-btn');
+    if(rallyBtn)rallyBtn.hidden=!lead;
+    const dragBtn=$('troll-dragon-btn');
+    if(dragBtn){
+      const DS=window.EarthDragonStable;
+      const ds=DS?.hasStable?.(site)?DS.ensure(site):null;
+      dragBtn.textContent=(ds&&ds.dragons.length&&ds.wizards.length)
+        ? `Mount ${ds.dragons[0].name} & Wizard vs Trolls`
+        : 'Dragon Stable (Best vs Trolls)';
+    }
+  }
   function render(options) {
     townCentre?.refresh();
     forecastView?.warm();
@@ -1892,6 +1936,9 @@
         show('gate-resist',watch.phase==='fight'&&!watch.resisting);
         show('gate-withdraw',!!stopped);
       }
+      renderTrollSiege(site);
+    } else {
+      show('troll-siege-bar',false);
     }
     put('action-budget',site ? site.funds+' funds · '+site.materials+' materials · '+site.food+' food' : '');
     refreshSaveWarning();

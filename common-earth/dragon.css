@@ -187,6 +187,96 @@
   gap: 0.65rem;
   flex-wrap: wrap;
 }
+/* Shadowfell Giant Troll Siege HUD bar & cards */
+.troll-card {
+  background: #231418;
+  border-color: #9e3d33;
+}
+.troll-card strong {
+  color: #ffd8cc;
+}
+.troll-row {
+  display: grid;
+  gap: 0.25rem;
+}
+.troll-meter > i {
+  background: linear-gradient(90deg, #d93626, #ff8133);
+}
+.troll-siege-bar {
+  position: absolute;
+  left: 0.7rem;
+  right: 0.7rem;
+  bottom: 0.75rem;
+  z-index: 6;
+  max-width: 26.5rem;
+  background: rgba(24, 13, 17, 0.94);
+  border: 1px solid #b54538;
+  border-left: 4px solid #eb4a34;
+  border-radius: 6px;
+  padding: 0.48rem 0.68rem;
+  color: #f7eae4;
+  display: grid;
+  gap: 0.3rem;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
+  pointer-events: auto;
+}
+.troll-siege-bar[hidden] {
+  display: none;
+}
+.troll-siege-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.troll-siege-head strong {
+  font-size: 0.84rem;
+  color: #ffd9ce;
+  letter-spacing: 0.01em;
+}
+.troll-siege-head span {
+  font-size: 0.72rem;
+  color: #f0a896;
+  font-weight: 600;
+}
+.troll-siege-detail {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: #e6d1c8;
+  margin: 0;
+}
+.troll-siege-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.1rem;
+}
+.troll-siege-actions button {
+  min-height: 32px;
+  padding: 0.28rem 0.68rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.troll-siege-actions .troll-rally-btn {
+  background: #3b2024;
+  color: #fde8e1;
+  border: 1px solid #964a42;
+}
+.troll-siege-actions .troll-dragon-btn {
+  background: #f0be67;
+  color: #162221;
+  border: 1px solid #f0be67;
+}
+
 @media (max-width: 560px) {
   .dragon-hero { grid-template-columns: 1fr; }
+  .troll-siege-bar {
+    left: 0.45rem;
+    right: 0.45rem;
+    bottom: 5.1rem;
+    padding: 0.48rem 0.62rem;
+  }
 }

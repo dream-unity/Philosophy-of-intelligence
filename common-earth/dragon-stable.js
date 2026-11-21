@@ -432,8 +432,9 @@
       return { ok: true, kind: 'fun', dragon, wizard, message: msg };
     }
 
-    // Only allow protective homeland defense against active invaders/intruders
-    const isDefensive = kind === 'defense' || Boolean(target?.defensive || target?.intruder);
+    // Only allow protective homeland defense against active invaders/intruders or invading Giant Trolls
+    const isTroll = Boolean(target?.isTroll || target?.trollId || kind === 'troll');
+    const isDefensive = isTroll || kind === 'defense' || Boolean(target?.defensive || target?.intruder);
     if (!isDefensive || kind === 'building') {
       const msg = dragon.name + ' is a deeply spiritual protector bound to the soul of ' + site.name + ' and refuses to participate in offensive war.';
       return { ok: false, refused: true, message: msg };
@@ -442,6 +443,18 @@
     dragon.hunger = clamp(dragon.hunger - 6, 0, 100);
     dragon.blasts = (dragon.blasts || 0) + 1;
     ds.defenses = (ds.defenses || 0) + 1;
+    if (isTroll && root.EarthGiantTrolls) {
+      const trollHit = root.EarthGiantTrolls.attackTroll(world, site, target?.trollId || target?.id, {
+        source: 'dragonFire',
+        damage: target?.damage,
+        dragonName: dragon.name,
+        wizardName: wizard.name
+      });
+      if (trollHit?.ok) {
+        record(site, world, trollHit.message);
+        return { ok: true, kind: 'defense', isTroll: true, trollResult: trollHit, dragon, wizard, message: trollHit.message };
+      }
+    }
     const targetName = target.name || 'encroaching invaders';
     const msg = wizard.name + ' and ' + dragon.name + ' defended ' + site.name + ', repelling ' + targetName + ' with protective dragonfire!';
     record(site, world, msg);
@@ -483,6 +496,22 @@
     ds.thunderStrikes = (ds.thunderStrikes || 0) + 1;
     ds.defenses = (ds.defenses || 0) + 1;
     site.wellbeing = clamp((site.wellbeing || 50) + 1, 0, 100);
+
+    // If colossal Giant Trolls are currently besieging our homeland, protective staff thunder smites them!
+    const localTrolls = root.EarthGiantTrolls?.trollsForSite?.(world, site.id) || [];
+    const targetTrollId = target?.trollId || (target?.isTroll ? target.id : null) || localTrolls[0]?.id;
+    if (targetTrollId && root.EarthGiantTrolls && (target?.isTroll || target?.kind === 'troll' || localTrolls.length > 0)) {
+      const trollHit = root.EarthGiantTrolls.attackTroll(world, site, targetTrollId, {
+        source: 'wizardThunder',
+        damage: target?.damage,
+        dragonName: dragon?.name,
+        wizardName: wizard.name
+      });
+      if (trollHit?.ok) {
+        record(site, world, trollHit.message);
+        return { ok: true, kind: 'defense', isTroll: true, trollResult: trollHit, dragon, wizard, message: trollHit.message };
+      }
+    }
 
     const repelledName = target?.intruder && target?.name
       ? target.name
