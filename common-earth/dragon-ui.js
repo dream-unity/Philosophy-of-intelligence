@@ -123,19 +123,28 @@
       body.replaceChildren();
       dialog.querySelector('[data-mount-status]')?.remove();
 
-      // Hero preview with live 2D Dragon Stable & Enchanted Dragon illustration
+      // Hero preview with painterly Dragon Sanctuary Citadel & Enchanted Dragon illustration
       const hero = make('div', null, 'dragon-hero');
       const preview = doc.createElement('canvas');
-      preview.width = 240; preview.height = 156;
+      preview.width = 280; preview.height = 176;
       const ctx = preview.getContext('2d');
       if (ctx && root.EarthDragonArt) {
-        root.EarthDragonArt.drawStable(ctx, 120, 96, 30, false, performance.now() / 1000, Math.max(1, ds.dragons.length));
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, preview.height);
+        skyGrad.addColorStop(0, '#1c445c');
+        skyGrad.addColorStop(0.55, '#4b808e');
+        skyGrad.addColorStop(0.78, '#c9b48c');
+        skyGrad.addColorStop(1, '#587852');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, preview.width, preview.height);
+        root.EarthDragonArt.drawStable(ctx, 140, 114, 34, false, performance.now() / 1000, Math.max(1, ds.dragons.length));
+        const leadDragon = ds.dragons[0] || { scale: '#e2a83c', accent: '#fff0b8', wing: '#a84e24', aura: '#ffcf66', fire: '#ff8a24' };
+        root.EarthDragonArt.drawEnchantedDragon(ctx, 64, 46, 17, -0.22, performance.now() / 1000, leadDragon, true, false);
       }
       const intro = make('div');
       intro.append(
-        make('small', built ? 'Sanctuary Active · Unrestricted Sky Access' : 'Not Yet Built'),
+        make('small', built ? 'Sanctuary Active · Unrestricted 3D Sky Exploration' : 'Not Yet Built'),
         make('h3', site.name + ' Dragon Stable'),
-        make('p', 'Raise magical enchanted dragons, train Wizards to fly them anywhere across the 3D sky, assign keepers to replenish dragon food, and command dragonfire against enemies, buildings, or mid-flight for fun.')
+        make('p', 'Raise magical enchanted dragons, train Wizards to fly them anywhere across the 3D world — over town, open ocean, mountain peaks, volcano calderas, floating sky-islands, and neighbouring settlements — and command volumetric dragonfire.')
       );
       hero.append(preview, intro);
       body.append(hero);

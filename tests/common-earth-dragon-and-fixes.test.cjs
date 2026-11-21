@@ -359,3 +359,45 @@ test('map mounting uses the played wizard, accepts a chosen rider, and enforces 
   assert.match(notices.at(-1),/Train a Wizard/);
   assert.equal(launches.length,3);
 });
+
+test('EarthFlightPhysics: Sky-Dash surge, terrain-aware landing/perching anywhere, and compassBearing navigation', () => {
+  const FP = require('../common-earth/flight-physics.js');
+
+  // 1. Sky-Dash surges dragon speed above normal cruise
+  const cruiseDragon = FP.createFlightState('dragon', { x: 0, y: 60, z: 0, speed: 30, pitch: 0 });
+  const dashDragon = FP.createFlightState('dragon', { x: 0, y: 60, z: 0, speed: 30, pitch: 0 });
+  for (let i = 0; i < 40; i++) {
+    FP.stepFlight(cruiseDragon, { throttle: 1 }, 0.05);
+    FP.stepFlight(dashDragon, { throttle: 1, dash: true }, 0.05);
+  }
+  assert.ok(dashDragon.speed > cruiseDragon.speed + 8, `Sky-Dash speed (${dashDragon.speed.toFixed(1)}) exceeds normal cruise (${cruiseDragon.speed.toFixed(1)})`);
+
+  // 2. Terrain-aware landing/perching on an elevated mountain peak & taking back off
+  const mountainHeight = (x, z) => (Math.hypot(x - 200, z + 300) < 40 ? 48 : 0);
+  const perched = FP.createFlightState('dragon', { x: 200, y: 50, z: -300, speed: 6, pitch: -0.15 });
+  for (let i = 0; i < 40; i++) {
+    FP.stepFlight(perched, { throttle: 0, hover: true, groundHeightAt: mountainHeight }, 0.05);
+  }
+  assert.ok(perched.y >= 48 + 1.2, `Dragon respects elevated terrain floor (y=${perched.y.toFixed(1)})`);
+
+  // Take off cleanly with flap + climb
+  for (let i = 0; i < 40; i++) {
+    FP.stepFlight(perched, { throttle: 0.9, flap: i === 0 || i === 18, pitch: 0.45, groundHeightAt: mountainHeight }, 0.05);
+  }
+  assert.equal(perched.airborne, true, 'Dragon takes off cleanly from elevated perch');
+  assert.ok(perched.y > 58, `Dragon climbs high above mountain perch (y=${perched.y.toFixed(1)})`);
+
+  // 3. Compass bearing calculation wraps cleanly and reports accurate cardinal headings & distances
+  const nav = FP.createFlightState('dragon', { x: 0, y: 50, z: 0, yaw: 0, pitch: 0 }); // facing -Z (North)
+  const north = FP.compassBearing(nav, { x: 0, z: -100 });
+  assert.ok(Math.abs(north.relativeDeg) < 0.5, `Target due North has ~0 relative bearing (${north.relativeDeg})`);
+  assert.ok(Math.abs(north.distance - 100) < 0.5, 'Accurate distance to North target');
+
+  const east = FP.compassBearing(nav, { x: 100, z: 0 });
+  assert.ok(Math.abs(east.relativeDeg - 90) < 1.0 || Math.abs(east.relativeDeg + 90) < 1.0, `East target is orthogonal (${east.relativeDeg})`);
+  assert.ok(Math.abs(east.distance - 100) < 0.5, 'Accurate distance to East target');
+
+  const south = FP.compassBearing(nav, { x: 0, z: 100 });
+  assert.ok(Math.abs(Math.abs(south.relativeDeg) - 180) < 1.0, `South target is directly behind (${south.relativeDeg})`);
+});
+

@@ -230,26 +230,27 @@
     dragon: Object.freeze({
       kind: 'dragon',
       minSpeed: 2.5,
-      stallSpeed: 9.0,
-      cruiseSpeed: 26.0,
-      maxSpeed: 68.0,
+      stallSpeed: 8.5,
+      cruiseSpeed: 28.0,
+      maxSpeed: 86.0,
       gravity: 15.5,
-      liftCoeff: 0.045,
-      dragCoeff: 0.0085,
-      flapImpulseForward: 9.5,
-      flapImpulseUp: 7.4,
-      flapCooldown: 0.36,
-      pitchRate: 1.95,
-      rollRate: 2.55,
-      yawRate: 1.15,
-      turnBankFactor: 1.55,
-      maxPitch: 78 * DEG,
+      liftCoeff: 0.048,
+      dragCoeff: 0.0072,
+      flapImpulseForward: 11.2,
+      flapImpulseUp: 8.2,
+      flapCooldown: 0.32,
+      skyDashBoost: 24.0,
+      pitchRate: 2.1,
+      rollRate: 2.7,
+      yawRate: 1.35,
+      turnBankFactor: 1.65,
+      maxPitch: 80 * DEG,
       maxRoll: 165 * DEG,
       canHover: true,
-      hoverDrag: 3.2,
+      hoverDrag: 3.4,
       runwayRequired: false,
-      fireRange: 82,
-      fireConeRadius: 7.5
+      fireRange: 105,
+      fireConeRadius: 8.5
     }),
     jet: Object.freeze({
       kind: 'jet',
@@ -333,16 +334,20 @@
    *              barrelRoll (bool), throttleDelta (-1..1) }
    * thermals = [{ x, z, radius, strength, maxAlt }]
    */
-  function stepFlight(state, controls = {}, dt = 1 / 60, thermals = []) {
+  function stepFlight(state, controls = {}, dt = 1 / 60, thermals = [], groundHeightAt = null) {
     const h = clamp(Number(dt) || 0, 0.001, 0.08);
     const p = PROFILES[state.kind] || PROFILES.dragon;
     const cPitch = clamp(Number(controls.pitch) || 0, -1, 1);
     const cRoll = clamp(Number(controls.roll) || 0, -1, 1);
     const cYaw = clamp(Number(controls.yaw) || 0, -1, 1);
     const boost = Boolean(controls.boost);
+    const dash = Boolean(controls.dash);
     const brake = Boolean(controls.brake);
     const flap = Boolean(controls.flap);
     const hoverReq = Boolean(controls.hover) && p.canHover;
+    const floorY = typeof groundHeightAt === 'function'
+      ? Math.max(0.95, Number(groundHeightAt(state.x, state.z)) + 1.05)
+      : 0.95;
 
     if (controls.barrelRoll && state.airborne && state.barrelRollTimer <= 0) {
       state.barrelRollTimer = 0.72;
@@ -395,20 +400,22 @@
           state.vy = Math.sin(state.pitch) * state.speed;
         }
       } else {
-        // Dragon instant leap into sky on flap, boost, or pitch up
-        if (flap || boost || cPitch > 0.15) {
+        // Dragon instant leap into sky on flap, boost, dash, or pitch up
+        if (flap || boost || dash || cPitch > 0.15) {
           state.airborne = true;
-          state.speed = Math.max(state.speed, 16);
-          state.pitch = 0.28;
-          state.vy = 8.5;
-          state.y = Math.max(state.y, 2.2);
+          state.speed = Math.max(state.speed, dash ? 36 : 20);
+          state.pitch = 0.30;
+          state.vy = 10.5;
+          state.y = Math.max(state.y, floorY + 1.6);
           state.flapPulse = 1.0;
           state.flapTimer = p.flapCooldown;
         } else {
-          state.speed = Math.max(0, state.speed - 12 * h);
-          state.yaw -= (cYaw + cRoll) * 1.6 * h;
+          // Grounded perched dragon can walk/turn slowly anywhere on land/peaks
+          state.speed = Math.max(0, state.speed - 14 * h);
+          state.yaw -= (cYaw + cRoll) * 1.8 * h;
           state.roll = lerp(state.roll, 0, clamp(h * 8, 0, 1));
           state.pitch = lerp(state.pitch, 0, clamp(h * 8, 0, 1));
+          state.y = lerp(state.y, floorY, clamp(h * 8, 0, 1));
         }
       }
     } else {
@@ -436,21 +443,22 @@
       state.yaw += (bankTurn - cYaw * p.yawRate) * h;
 
       if (state.kind === 'dragon') {
-        // Wing-flap aerodynamic thrust & lift surge
-        if ((flap || boost) && state.flapTimer <= 0) {
+        // Wing-flap aerodynamic thrust & Sky-Dash surge
+        if ((flap || boost || dash) && state.flapTimer <= 0) {
           state.flapTimer = p.flapCooldown;
           state.flapPulse = 1.0;
-          state.speed = clamp(state.speed + p.flapImpulseForward, p.minSpeed, p.maxSpeed);
-          state.vy += p.flapImpulseUp;
-          state.stamina = Math.max(8, state.stamina - 1.2);
+          const surge = dash ? (p.skyDashBoost || 22) : p.flapImpulseForward;
+          state.speed = clamp(state.speed + surge, p.minSpeed, p.maxSpeed);
+          state.vy += dash ? p.flapImpulseUp * 0.55 : p.flapImpulseUp;
+          state.stamina = Math.max(8, state.stamina - (dash ? 2.2 : 1.0));
         } else {
-          state.stamina = Math.min(100, state.stamina + 4.5 * h);
+          state.stamina = Math.min(100, state.stamina + 5.5 * h);
         }
 
         // Energy conservation: diving converts altitude into exhilarating airspeed!
-        const diveAccel = -Math.sin(state.pitch) * p.gravity * 1.15;
+        const diveAccel = -Math.sin(state.pitch) * p.gravity * 1.22;
         const drag = p.dragCoeff * state.speed * state.speed + (brake ? 18 : 0);
-        const glideThrust = state.hovering ? 0 : (boost ? 14.5 : 5.2);
+        const glideThrust = state.hovering ? 0 : (dash ? 28.0 : boost ? 16.5 : 6.0);
         if (state.hovering) {
           state.speed = lerp(state.speed, p.minSpeed, clamp(h * p.hoverDrag, 0, 1));
           state.pitch = lerp(state.pitch, 0.08, clamp(h * 3, 0, 1));
@@ -502,9 +510,12 @@
       state.y += state.vy * h;
       state.z += state.vz * h;
 
-      // Soft ground floor & landing detection
-      if (state.y <= 0.95) {
-        state.y = 0.95;
+      // Soft terrain floor & landing anywhere detection
+      const nextFloor = typeof groundHeightAt === 'function'
+        ? Math.max(0.95, Number(groundHeightAt(state.x, state.z)) + 1.05)
+        : 0.95;
+      if (state.y <= nextFloor) {
+        state.y = nextFloor;
         if (state.pitch < 0) state.pitch = 0;
         if (brake || state.hovering || state.speed < p.stallSpeed * 0.9) {
           state.airborne = false;
@@ -564,6 +575,25 @@
     return hits;
   }
 
+  /**
+   * Computes compass heading (0..360° where 0=North/-Z, 90=East/+X) and
+   * relative bearing (-180..+180°) + horizontal distance to any 3D landmark.
+   */
+  function compassBearing(state, target) {
+    const headingRad = -state.yaw;
+    const headingDeg = ((headingRad * 180 / Math.PI) % 360 + 360) % 360;
+    if (!target) return { headingDeg, distance: 0, relativeDeg: 0 };
+    const dx = target.x - state.x;
+    const dz = target.z - state.z;
+    const distance = Math.hypot(dx, dz);
+    // Bearing from -Z clockwise toward +X
+    const targetDeg = ((Math.atan2(dx, -dz) * 180 / Math.PI) % 360 + 360) % 360;
+    let rel = targetDeg - headingDeg;
+    while (rel > 180) rel -= 360;
+    while (rel < -180) rel += 360;
+    return { headingDeg, targetDeg, relativeDeg: rel, distance };
+  }
+
   const api = Object.freeze({
     PROFILES,
     rectOverlaps,
@@ -576,7 +606,8 @@
     createFlightState,
     forwardVector,
     stepFlight,
-    findTargetsInFireCone
+    findTargetsInFireCone,
+    compassBearing
   });
 
   root.EarthFlightPhysics = api;
