@@ -1,147 +1,101 @@
-/* Shadowfell Darklands — Enemy Giant Troll Community.
-   Colossal building-sized trolls rising from the darkness of the lands about 1 km
-   out from every human community from the start of every game, marching slowly
-   inward and relentlessly attacking human Sims and buildings without stopping.
-   Difficult to kill with ordinary weapons; especially vulnerable to Enchanted
-   Dragons and originating-community Wizards' Staff Thunder. */
+/* Undead Zombie Horde — Realistic Zombie Outbreak Engine:
+   - Waves of 10+ realistic undead zombies shamble out of the dark enchanted woods from game start.
+   - Authentic zombie behaviour: drawn relentlessly to EVERYTHING that moves — hunting & biting
+     villagers/Sims, lunging at and biting Majestic Wolves, feeding on downed victims, and
+     clawing/pounding village houses to reach the people hiding inside.
+   - At night, every zombie howls continuously without ever stopping (synced with EarthNightAudio).
+   - Preserves window.EarthGiantTrolls API & save compatibility while 100% zombie-themed. */
 (function (root) {
   'use strict';
 
-  const COMMUNITY = Object.freeze({
-    id: 'troll-darklands',
-    name: 'Shadowfell Darklands',
-    title: 'Enemy Giant Troll Community',
-    region: 'The Darkness of the Lands',
-    lore: 'Towering building-sized trolls risen from the dark reaches of the lands, marching from 1 km out to smash every building and erase all human Sims.'
-  });
-
-  const ARCHETYPES = Object.freeze([
-    { name: 'Gloomcrusher', title: 'Dreadspire Giant Troll', heightMeters: 21, maxHp: 1350, armor: 0.60, weapon: 'Obsidian Monolith Club', skin: '#333b37', accent: '#62705d', eye: '#ff2b1a' },
-    { name: 'Nightmaw', title: 'Abyssal Colossus Troll', heightMeters: 23, maxHp: 1560, armor: 0.64, weapon: 'Shattered Pillar Maul', skin: '#2a2f36', accent: '#545f69', eye: '#ff4219' },
-    { name: 'Ashbone', title: 'Darklands Ravager Troll', heightMeters: 19, maxHp: 1250, armor: 0.58, weapon: 'Charred Oak Greatclub', skin: '#3c3631', accent: '#6b6052', eye: '#ff341f' },
-    { name: 'Mirejaw', title: 'Shadowfen Behemoth Troll', heightMeters: 22, maxHp: 1460, armor: 0.62, weapon: 'Cragstone Boulder Hammer', skin: '#2b3a34', accent: '#4d6658', eye: '#ff2814' },
-    { name: 'Blightfist', title: 'Ironbark Siege Troll', heightMeters: 20, maxHp: 1320, armor: 0.60, weapon: 'Ruin-Beam War Club', skin: '#35313c', accent: '#5f566b', eye: '#ff4824' },
-    { name: 'Grimspire', title: 'Umbral Monolith Troll', heightMeters: 24, maxHp: 1680, armor: 0.68, weapon: 'Basalt Spire Crusher', skin: '#262b2d', accent: '#4f5a5d', eye: '#ff1f14' }
-  ]);
-
-  // Damage multipliers: heavily armored against ordinary weapons; require sustained Dragonfire & Wizard Thunder
-  const SOURCE_MULTIPLIER = Object.freeze({
-    militia: 0.22,
-    soldier: 0.28,
-    gun: 0.24,
-    jet: 0.58,
-    dragonFire: 1.25,
-    wizardThunder: 1.85
-  });
-
-  // Wave configuration: every wave brings at least 10 colossal Giant Trolls, escalating across frequent waves
-  const MIN_TROLLS_PER_WAVE = 10;
-  const MAX_CONCURRENT_LOCAL_TROLLS = 40;
-  const WAVE_INTERVAL_SEC = 55;
-  const CLEAR_WAVE_DELAY_SEC = 6;
-  const LIVE_REGEN_PER_SEC = 4.5;
-  const BURN_SUPPRESS_SEC = 4.0;
-
-  // Scale aligned with regional-render.js (1 street unit = 0.013 km = 13 meters)
-  const STREET_KM = 0.013;
+  const STREET_KM = 0.013; // 1 street unit = 13.0 meters
   const TOWN_CENTER_X = 12;
   const TOWN_CENTER_Y = 12;
-  const TOWN_PERIMETER_UNITS = 13.5; // ~175m from center
-  const SPAWN_DISTANCE_KM = 1.0;
-  const SPAWN_RADIUS_UNITS = TOWN_PERIMETER_UNITS + SPAWN_DISTANCE_KM / STREET_KM; // ~90.4 street units (~1.00 km from perimeter)
-
-  // Slow, ominous heavy lumbering approach (~1.35 street units/sec < human WALK_SPEED 3.15)
-  const APPROACH_SPEED = 1.35;
-  const HUNT_SPEED = 1.68;
-
-  // Relentless overhead club smash timings (windup -> strike -> recover -> repeat immediately)
+  const TOWN_PERIMETER_UNITS = 19.5; // Community wall edge (~254m from center)
+  // Spawn zombies in the dark outer woods (~125-175m outside territory walls) so they shamble in toward the 100m wolf line!
+  const SPAWN_RADIUS_UNITS = 31.0; // ~11.5 units (~150m) beyond the walls!
+  const APPROACH_SPEED = 1.65; // Shamble speed (~21 m/s scaled to game time so they arrive steadily)
+  const HUNT_SPEED = 2.45; // Lunge/lurch speed when locking onto moving villagers or wolves
   const WINDUP_SEC = 0.42;
-  const STRIKE_SEC = 0.24;
-  const RECOVER_SEC = 0.46;
-
+  const BITE_SEC = 0.30;
+  const FEED_SEC = 0.78;
+  const RECOVER_SEC = 0.45;
+  const MIN_ZOMBIES_PER_WAVE = 10;
+  const MAX_CONCURRENT_LOCAL_ZOMBIES = 40;
+  const WAVE_INTERVAL_SEC = 55;
+  const CLEAR_WAVE_DELAY_SEC = 6;
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
-  function distanceKm(troll) {
-    if (!troll || !Number.isFinite(troll.x) || !Number.isFinite(troll.y)) return 0;
-    const r = Math.hypot(troll.x - TOWN_CENTER_X, troll.y - TOWN_CENTER_Y);
-    return Math.max(0, Number(((r - TOWN_PERIMETER_UNITS) * STREET_KM).toFixed(3)));
-  }
+  const ARCHETYPES = Object.freeze([
+    { name: 'Shambler', title: 'Decayed Shambler', skin: '#8d9886', cloth: '#4a4e49', accent: '#6b7566', blood: '#6e1c1a', heightMeters: 1.78, maxHp: 420, armor: 0.36, speedMul: 0.96 },
+    { name: 'Biter', title: 'Ravenous Biter', skin: '#959d8d', cloth: '#54463e', accent: '#757d6e', blood: '#821c1c', heightMeters: 1.72, maxHp: 390, armor: 0.32, speedMul: 1.18 },
+    { name: 'Stalker', title: 'Forest Stalker', skin: '#7e897b', cloth: '#39423d', accent: '#5d685b', blood: '#731919', heightMeters: 1.84, maxHp: 460, armor: 0.40, speedMul: 1.10 },
+    { name: 'Walker', title: 'Bloated Walker', skin: '#9ba18b', cloth: '#4b5059', accent: '#797f6c', blood: '#7b221e', heightMeters: 1.90, maxHp: 580, armor: 0.48, speedMul: 0.84 },
+    { name: 'Infected', title: 'Frenzied Infected', skin: '#899282', cloth: '#5c3c3a', accent: '#687161', blood: '#941a1a', heightMeters: 1.74, maxHp: 370, armor: 0.28, speedMul: 1.32 },
+    { name: 'Husk', title: 'Hollow Corpse', skin: '#9fa498', cloth: '#3c3e45', accent: '#7e8478', blood: '#661818', heightMeters: 1.81, maxHp: 480, armor: 0.42, speedMul: 0.98 }
+  ]);
 
-  function toWorld3D(x, y) {
-    const dx = x - TOWN_CENTER_X;
-    const dy = y - TOWN_CENTER_Y;
-    const r = Math.hypot(dx, dy);
-    if (r <= 0.001) return { x: 0, z: 0 };
-    // Inside town (r <= 16), align 1:1 with flight-3d.js town scale (3.2m/unit).
-    // Beyond town edge, each street unit maps to 13m so ~90 units = ~1018m (1.0 km).
-    const r3d = r <= 16 ? r * 3.2 : 16 * 3.2 + (r - 16) * 13.0;
-    return {
-      x: Math.round((dx / r) * r3d),
-      z: Math.round((dy / r) * r3d)
-    };
-  }
+  const SOURCE_MULTIPLIER = Object.freeze({
+    militia: 0.30,
+    soldier: 0.38,
+    gun: 0.34,
+    jet: 0.65,
+    wolfBite: 1.55,
+    dragonFire: 1.55,
+    wizardThunder: 1.55
+  });
 
   function allHumanCommunities(world) {
     if (!world) return [];
-    const seen = new Set();
-    const list = [];
-    for (const s of [...(world.sites || []), ...(world.communityLife?.outposts || [])]) {
-      if (!s || !s.id || seen.has(s.id) || s.id === COMMUNITY.id) continue;
-      seen.add(s.id);
-      list.push(s);
-    }
-    return list;
+    return [
+      ...(world.sites || []),
+      ...(world.communityLife?.outposts || [])
+    ].filter(s => s && s.id);
+  }
+
+  function toWorld3D(x, y) {
+    return {
+      x: Number(((x - TOWN_CENTER_X) * 3.2).toFixed(2)),
+      z: Number(((y - TOWN_CENTER_Y) * 3.2).toFixed(2))
+    };
+  }
+
+  function distanceKm(entity) {
+    if (!entity || !Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return 0;
+    const radial = Math.hypot(entity.x - TOWN_CENTER_X, entity.y - TOWN_CENTER_Y);
+    const outsideUnits = Math.max(0, radial - TOWN_PERIMETER_UNITS);
+    return Number((outsideUnits * STREET_KM).toFixed(2));
   }
 
   function collectCommunityBuildings(site) {
-    if (!site) return [];
-    const list = [
-      { id: 'market', name: 'Market Exchange', x: 15, y: 21, maxHp: 240 },
-      { id: 'cafe', name: 'The Reading Room', x: 3, y: 20.35, maxHp: 170 },
-      { id: 'nightclub', name: 'Afterglow Club', x: 21, y: 2.35, maxHp: 170 },
-      { id: 'arcade', name: 'Pixel Exchange', x: 21, y: 8.35, maxHp: 170 },
-      { id: 'home-0', name: 'Founding Residence North', x: 9, y: 21, maxHp: 165 },
-      { id: 'home-1', name: 'Founding Residence East', x: 21, y: 15, maxHp: 165 },
-      { id: 'home-2', name: 'Founding Residence South', x: 21, y: 21, maxHp: 165 }
+    const list = [];
+    if (!site) return list;
+    const fixed = [
+      { id: 'market', name: 'Village Hall & Market', x: 15, y: 15, maxHp: 220 },
+      { id: 'home-nw', name: 'North Forest Cottage', x: 9, y: 9, maxHp: 170 },
+      { id: 'home-sw', name: 'West Timber Cabin', x: 9, y: 15, maxHp: 170 },
+      { id: 'home-ne', name: 'East Woodland Home', x: 15, y: 9, maxHp: 170 }
     ];
+    for (const f of fixed) list.push(f);
     for (const b of site.buildings || []) {
-      if (!b || !Number.isFinite(b.plot)) continue;
-      const mx = (b.plot % 3) * 6 + 3;
-      const my = Math.floor(b.plot / 3) * 6 + 3;
+      const plot = Number.isInteger(b.plot) ? b.plot : 0;
       list.push({
-        id: b.id || ('plot-' + b.plot),
-        name: b.name || (b.kind === 'dragonStable' ? 'Dragon Stable' : b.kind || 'Community Building'),
-        x: mx,
-        y: my,
-        maxHp: b.kind === 'dragonStable' ? 300 : 185
+        id: b.id || ('lot-' + plot),
+        name: b.name || b.kind || 'Village Shelter',
+        x: (plot % 3) * 6 + 3,
+        y: Math.floor(plot / 3) * 6 + 3,
+        maxHp: 185
       });
     }
     for (const fb of site.freeBuildings || []) {
       if (!fb || !Number.isFinite(fb.x) || !Number.isFinite(fb.y)) continue;
       list.push({
-        id: fb.id || ('free-' + Math.round(fb.x) + '-' + Math.round(fb.y)),
-        name: fb.name || (fb.kind === 'dragonStable' ? 'Dragon Stable' : fb.kind || 'District Building'),
+        id: fb.id || ('fb-' + fb.kind),
+        name: fb.name || (fb.kind === 'dragonStable' ? 'Giant Wolf Cave' : fb.kind) || 'Outpost Cabin',
         x: fb.x,
         y: fb.y,
-        maxHp: fb.kind === 'dragonStable' ? 300 : 180
+        maxHp: fb.kind === 'dragonStable' ? 320 : 175
       });
-    }
-    for (let i = 0; i < (site.playerHouses || []).length; i++) {
-      const h = site.playerHouses[i];
-      if (!h || !Number.isFinite(h.x) || !Number.isFinite(h.y)) continue;
-      list.push({
-        id: h.id || ('house-' + i),
-        name: h.name || ('Community House ' + (i + 1)),
-        x: h.x,
-        y: h.y,
-        maxHp: 160
-      });
-    }
-    if (site.militaryBase?.built) {
-      const layout = root.EarthMilitaryBase?.layoutFor?.(site);
-      const px = layout?.place?.x ?? 27.5;
-      const py = layout?.place?.y ?? 10;
-      list.push({ id: 'military-base', name: 'Military Airbase', x: px, y: py, maxHp: 280 });
     }
     return list;
   }
@@ -167,22 +121,21 @@
     return { damaged, ruined, totalAffected: damaged + ruined, entries };
   }
 
-  function makeTroll(horde, targetSite, slotIndex, week, wave) {
+  function makeZombie(horde, targetSite, slotIndex, week, wave) {
     horde.serial = (horde.serial || 0) + 1;
     const arch = ARCHETYPES[(horde.serial - 1) % ARCHETYPES.length];
-    const waveScale = 1 + Math.min(1.5, Math.max(0, wave - 1) * 0.14);
+    const waveScale = 1 + Math.min(1.4, Math.max(0, wave - 1) * 0.14);
     const maxHp = Math.round(arch.maxHp * waveScale);
 
-    // Always spawn ~1.0 km out from the community across a wide inland northern/western/eastern arc
-    // (keeping y < 0 so coastal settlements never spawn trolls underwater in the southern ocean).
+    // Spawn in the dark outer enchanted forest surrounding the community (y < 14 so coastal sites stay on dry land)
     const approachAngles = [
-      -2.68, -2.46, -2.24, -2.02, -1.80, -1.58,
-      -1.36, -1.14, -0.92, -0.70, -0.50, -0.36
+      -2.72, -2.50, -2.28, -2.06, -1.84, -1.62,
+      -1.40, -1.18, -0.96, -0.74, -0.52, -0.34
     ];
     const baseAngle = approachAngles[slotIndex % approachAngles.length];
-    const angleJitter = (((horde.serial * 29) % 11) - 5) * 0.022;
-    const angle = clamp(baseAngle + angleJitter, -2.78, -0.32);
-    const distJitter = (((horde.serial * 17) % 9) - 4) * 1.15; // ±4.6 units (~±60m) around 1.00 km
+    const angleJitter = (((horde.serial * 29) % 11) - 5) * 0.025;
+    const angle = clamp(baseAngle + angleJitter, -2.82, -0.28);
+    const distJitter = (((horde.serial * 17) % 9) - 4) * 1.1;
     const radius = SPAWN_RADIUS_UNITS + distJitter;
 
     const sx = Number((TOWN_CENTER_X + Math.cos(angle) * radius).toFixed(2));
@@ -190,25 +143,30 @@
     const p3 = toWorld3D(sx, sy);
 
     return {
-      id: 'troll-' + horde.serial,
-      name: arch.name + (horde.serial > ARCHETYPES.length ? ' ' + Math.ceil(horde.serial / ARCHETYPES.length) : ''),
+      id: 'zombie-' + horde.serial,
+      species: 'zombie',
+      name: arch.name + ' #' + horde.serial,
       title: arch.title,
-      weapon: arch.weapon,
       skin: arch.skin,
+      cloth: arch.cloth,
       accent: arch.accent,
-      eye: arch.eye,
+      blood: arch.blood,
+      eye: '#c6d69c',
       heightMeters: arch.heightMeters,
       armor: arch.armor,
+      speedMul: arch.speedMul,
       hp: maxHp,
       maxHp,
-      state: 'approaching', // 'approaching' | 'hunting' | 'attacking' | 'slain'
-      attackPhase: 'march', // 'march' | 'chase' | 'windup' | 'strike' | 'recover'
+      state: 'approaching', // 'approaching' | 'hunting' | 'attacking' | 'feeding' | 'slain'
+      attackPhase: 'march', // 'march' | 'chase' | 'windup' | 'strike' | 'feed' | 'recover'
       attackTimer: 0,
       attackProgress: 0,
+      howling: false,
+      howlPhase: (horde.serial * 0.9) % (Math.PI * 2),
       targetSiteId: targetSite.id,
-      targetSiteName: targetSite.name || 'Human Settlement',
+      targetSiteName: targetSite.name || 'Forest Village',
       isPlayerTarget: Boolean(targetSite._isPlayer),
-      targetKind: null, // 'sim' | 'building'
+      targetKind: null, // 'sim' | 'wolf' | 'building'
       targetId: null,
       targetName: null,
       targetX: TOWN_CENTER_X,
@@ -220,10 +178,8 @@
       worldX: p3.x,
       worldZ: p3.z,
       distanceKm: distanceKm({ x: sx, y: sy }),
-      swingPhase: (horde.serial * 1.1) % (Math.PI * 2),
+      swingPhase: (horde.serial * 1.3) % (Math.PI * 2),
       stepDustTimer: 0.4 + (slotIndex % 5) * 0.14,
-      burnedWeek: -10,
-      burnSuppressTimer: 0,
       humansKilled: 0,
       buildingsSmashed: 0,
       strikesLanded: 0,
@@ -234,13 +190,9 @@
 
   function waveSizeFor(wave) {
     const w = Math.max(1, Math.floor(Number(wave) || 1));
-    return Math.max(MIN_TROLLS_PER_WAVE, MIN_TROLLS_PER_WAVE + Math.min(8, (w - 1) * 2));
+    return Math.max(MIN_ZOMBIES_PER_WAVE, MIN_ZOMBIES_PER_WAVE + Math.min(8, (w - 1) * 2));
   }
 
-  /**
-   * Launches a full Giant Troll wave (ALWAYS >= 10 trolls!) marching from ~1 km out
-   * toward the target community, plus pressure on neighbouring human lands.
-   */
   function spawnWave(world, targetSite, opts = {}) {
     if (!world || !targetSite) return { wave: 1, spawned: [], count: 0, message: '' };
     const horde = world.trollHorde;
@@ -254,34 +206,24 @@
     horde.community.wavesSpawned = (horde.community.wavesSpawned || 0) + 1;
     horde.community.lastWaveWeek = week;
 
-    const count = Math.max(MIN_TROLLS_PER_WAVE, Number(opts.count) || waveSizeFor(wave));
+    const count = Math.max(MIN_ZOMBIES_PER_WAVE, Number(opts.count) || waveSizeFor(wave));
     const spawned = [];
     for (let slot = 0; slot < count; slot++) {
-      const t = makeTroll(horde, { ...targetSite, _isPlayer: true }, slot, week, wave);
-      horde.trolls.push(t);
-      spawned.push(t);
+      const z = makeZombie(horde, { ...targetSite, _isPlayer: true }, slot, week, wave);
+      horde.trolls.push(z);
+      spawned.push(z);
     }
 
-    // Simultaneously send Giant Trolls against neighbouring human lands
-    const elsewhereAlive = activeTrolls(world).filter(t => t.targetSiteId !== targetSite.id);
-    if (others.length > 0 && elsewhereAlive.length < Math.min(4, others.length * 2)) {
-      const dispatchCount = Math.min(2, others.length);
-      for (let j = 0; j < dispatchCount; j++) {
-        const victim = others[(wave + j) % others.length];
-        const ot = makeTroll(horde, { ...victim, _isPlayer: false }, count + j, week, wave);
-        horde.trolls.push(ot);
-        spawned.push(ot);
+    if (others.length) {
+      const otherCount = Math.min(others.length, 2);
+      for (let i = 0; i < otherCount; i++) {
+        const other = others[(wave + i - 1) % others.length];
+        if (!other) continue;
+        horde.trolls.push(makeZombie(horde, other, count + i, week, wave));
       }
-    } else if (others.length === 0 && elsewhereAlive.length === 0) {
-      const ot = makeTroll(horde, { id: 'frontier-lands', name: 'Neighbouring Human Lands', _isPlayer: false }, count, week, wave);
-      horde.trolls.push(ot);
-      spawned.push(ot);
     }
 
-    horde.community.attacksLaunched = (horde.community.attacksLaunched || 0) + spawned.length;
-    const msg = wave === 1
-      ? 'WAVE 1! ' + count + ' colossal ' + COMMUNITY.name + ' Giant Trolls emerged from the darkness 1 km outside ' + targetSite.name + ' and began marching in!'
-      : 'WAVE ' + wave + '! ' + count + ' more towering ' + COMMUNITY.name + ' Giant Trolls emerged 1 km outside ' + targetSite.name + ' to overwhelm the lands!';
+    const msg = 'ZOMBIE WAVE ' + wave + '! ' + count + ' ravenous zombies emerged from the dark woods hunting villagers and wolves around ' + targetSite.name + '!';
     record(horde, week, msg);
     return { wave, spawned, count, message: msg };
   }
@@ -292,39 +234,70 @@
     if (!world.trollHorde) {
       world.trollHorde = {
         community: {
-          ...COMMUNITY,
+          id: 'undead-horde',
+          name: 'Undead Plague Horde',
+          origin: 'The Dark Woods',
+          hostileToAllHumans: true,
           wave: 0,
           wavesSpawned: 0,
-          lastWaveWeek: world.week || 1,
-          liveElapsed: 0,
-          nextWaveAt: WAVE_INTERVAL_SEC,
-          clearDelay: 0,
+          lastWaveWeek: 0,
           totalSlain: 0,
           humansLost: 0,
+          buildingsDamaged: 0,
           buildingsRuined: 0,
-          attacksLaunched: 0,
-          spawnedWeek: world.week || 1
+          waveElapsedSec: 0,
+          clearDelaySec: 0
         },
         serial: 0,
         trolls: [],
         log: []
       };
     }
+
     const horde = world.trollHorde;
-    horde.community ||= { ...COMMUNITY, wave: 1, wavesSpawned: 0, lastWaveWeek: world.week || 1, liveElapsed: 0, nextWaveAt: WAVE_INTERVAL_SEC, clearDelay: 0, totalSlain: 0, humansLost: 0, buildingsRuined: 0, attacksLaunched: 0, spawnedWeek: world.week || 1 };
-    horde.community.buildingsRuined ||= 0;
-    if (!Number.isFinite(horde.community.liveElapsed)) horde.community.liveElapsed = 0;
-    if (!Number.isFinite(horde.community.nextWaveAt)) horde.community.nextWaveAt = horde.community.liveElapsed + WAVE_INTERVAL_SEC;
-    if (!Number.isFinite(horde.community.clearDelay)) horde.community.clearDelay = 0;
-    if (!Number.isFinite(horde.community.wavesSpawned)) horde.community.wavesSpawned = horde.community.wave || 0;
+    horde.community ||= {
+      id: 'undead-horde',
+      name: 'Undead Plague Horde',
+      origin: 'The Dark Woods',
+      hostileToAllHumans: true,
+      wave: 0,
+      wavesSpawned: 0,
+      lastWaveWeek: 0,
+      totalSlain: 0,
+      humansLost: 0,
+      buildingsDamaged: 0,
+      buildingsRuined: 0,
+      waveElapsedSec: 0,
+      clearDelaySec: 0
+    };
+    horde.community.name = 'Undead Plague Horde';
+    horde.community.origin = 'The Dark Woods';
     horde.trolls ||= [];
     horde.log ||= [];
+    if (!Number.isSafeInteger(horde.serial)) horde.serial = horde.trolls.length;
 
-    // Immediately launch Wave 1 (>= 10 Giant Trolls!) from 1 km out at the start of every game
-    if (communities.length > 0 && horde.trolls.length === 0) {
-      const active = communities.find(s => s.id === world.activeId) || communities[0];
-      spawnWave(world, active, { wave: 1 });
-      horde.community.nextWaveAt = (horde.community.liveElapsed || 0) + WAVE_INTERVAL_SEC;
+    // Migrate any legacy giant-troll records cleanly to realistic zombies
+    for (let i = 0; i < horde.trolls.length; i++) {
+      const z = horde.trolls[i];
+      if (!z || z.species === 'zombie') continue;
+      const arch = ARCHETYPES[i % ARCHETYPES.length];
+      z.species = 'zombie';
+      z.name = arch.name + ' #' + (i + 1);
+      z.title = arch.title;
+      z.skin = arch.skin;
+      z.cloth = arch.cloth;
+      z.accent = arch.accent;
+      z.blood = arch.blood;
+      z.heightMeters = arch.heightMeters;
+      z.speedMul = arch.speedMul;
+      z.maxHp = Math.min(z.maxHp || arch.maxHp, arch.maxHp + 180);
+      z.hp = Math.min(z.hp || z.maxHp, z.maxHp);
+    }
+
+    const playerSite = communities.find(s => s.id === world.activeSiteId) || world.sites?.[0] || communities[0];
+    const alive = horde.trolls.filter(t => t && t.state !== 'slain' && t.hp > 0);
+    if (playerSite && alive.length === 0) {
+      spawnWave(world, playerSite, { wave: Math.max(1, (horde.community.wave || 0) + 1) });
     }
     return horde;
   }
@@ -332,230 +305,237 @@
   function record(horde, week, text) {
     if (!horde) return;
     horde.log.unshift({ week: week || 1, text });
-    if (horde.log.length > 36) horde.log.length = 36;
+    if (horde.log.length > 28) horde.log.length = 28;
   }
 
   function activeTrolls(world) {
     const horde = world?.trollHorde;
-    if (!horde?.trolls) return [];
+    if (!horde?.trolls?.length) return [];
     return horde.trolls.filter(t => t && t.state !== 'slain' && t.hp > 0);
   }
 
   function trollsForSite(world, siteId) {
-    if (!siteId) return [];
+    if (!world || !siteId) return [];
     return activeTrolls(world).filter(t => t.targetSiteId === siteId);
   }
 
-  function summary(world, siteId) {
-    const horde = world?.trollHorde;
-    const allAlive = activeTrolls(world);
-    const local = siteId ? allAlive.filter(t => t.targetSiteId === siteId) : [];
-    const elsewhere = siteId ? allAlive.filter(t => t.targetSiteId !== siteId) : allAlive;
-    const site = siteId ? allHumanCommunities(world).find(s => s.id === siteId) : null;
-    const approachingLocal = local.filter(t => t.state === 'approaching');
-    const attackingLocal = local.filter(t => t.state !== 'approaching');
-    const nearestKm = local.length
-      ? Math.min(...local.map(t => distanceKm(t)))
-      : null;
-    const dmg = buildingDamageSummary(site);
-    return {
-      communityName: COMMUNITY.name,
-      wave: horde?.community?.wave || 1,
-      totalSlain: horde?.community?.totalSlain || 0,
-      humansLost: horde?.community?.humansLost || 0,
-      buildingsRuined: horde?.community?.buildingsRuined || 0,
-      localCount: local.length,
-      approachingCount: approachingLocal.length,
-      attackingCount: attackingLocal.length,
-      nearestKm,
-      damagedBuildings: dmg.damaged,
-      ruinedBuildings: dmg.ruined,
-      elsewhereCount: elsewhere.length,
-      totalAlive: allAlive.length,
-      local,
-      elsewhere,
-      recentLog: horde?.log?.[0]?.text || ''
-    };
-  }
-
-  function pickTargetForTroll(troll, site, buildings, sims) {
-    const dmgMap = ensureDamageMap(site);
+  /**
+   * Authentic Zombie Target Selection:
+   * Drawn relentlessly to ANYTHING moving — exposed human villagers/Sims, roaming Majestic Wolves,
+   * and village houses/shelters (to claw inside and eat the villagers)!
+   */
+  function pickTargetForZombie(zombie, site, buildings, sims, wolves) {
+    const dmgMap = site?.trollDamage || {};
     let best = null;
     let bestScore = Infinity;
 
-    // 1. Scan ALL living human Sims — any Sim the troll comes across becomes an immediate priority target!
-    for (const s of sims) {
+    // 1. Moving villagers / human Sims (strongest living scent within 12 units!)
+    for (const s of sims || []) {
       if (!s || s.downed || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
-      // Only hunt Sims inside or near the community land
-      if (s.y > 25.4) continue;
-      const d = Math.hypot(s.x - troll.x, s.y - troll.y);
-      const isCurrent = troll.targetKind === 'sim' && troll.targetId === s.id;
-      // Strong hunter priority when a human Sim is within 7.5 street units (~100m)
-      let score = d <= 7.5 ? d * 0.52 : d * 0.95;
-      if (isCurrent) score -= 1.8;
+      const d = Math.hypot(s.x - zombie.x, s.y - zombie.y);
+      if (d > 13.5) continue;
+      const score = d * 0.72; // Zombies crave living human flesh above buildings
       if (score < bestScore) {
         bestScore = score;
-        best = { kind: 'sim', id: s.id, name: s.name || 'Human Sim', x: s.x, y: s.y, isPlayer: Boolean(s.isPlayer) };
+        best = {
+          kind: 'sim',
+          id: s.id || s.name || 'villager',
+          name: s.name || 'Villager',
+          x: s.x,
+          y: s.y,
+          isPlayer: Boolean(s.isPlayer)
+        };
       }
     }
 
-    // 2. Scan ALL standing community buildings — smash everything in the community relentlessly!
-    for (const b of buildings) {
-      const rec = dmgMap[b.id];
-      if (rec && rec.ruined) continue;
-      const d = Math.hypot(b.x - troll.x, b.y - troll.y);
-      const isCurrent = troll.targetKind === 'building' && troll.targetId === b.id;
-      let score = d;
-      if (isCurrent) score -= 2.2;
+    // 2. Moving Majestic Wolves (zombies lunge & bite wolves too — they try to eat anything moving!)
+    for (const w of wolves || []) {
+      if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) continue;
+      if (w.state === 'retreat') continue;
+      const d = Math.hypot(w.x - zombie.x, w.y - zombie.y);
+      if (d > 10.5) continue;
+      const score = d * 0.78;
       if (score < bestScore) {
         bestScore = score;
-        best = { kind: 'building', id: b.id, name: b.name, x: b.x, y: b.y, maxHp: b.maxHp };
+        best = {
+          kind: 'wolf',
+          id: w.wolf?.id || w.dragon?.id || w.id,
+          name: w.wolf?.name || w.dragon?.name || 'Wolf',
+          x: w.x,
+          y: w.y
+        };
       }
     }
 
-    // 3. Even if all buildings are ruined and no active Sims were passed, never stop — keep smashing the heart of town!
-    if (!best && buildings.length > 0) {
-      const fallback = buildings[(Math.floor(troll.strikesLanded || 0)) % buildings.length];
-      best = { kind: 'building', id: fallback.id, name: fallback.name, x: fallback.x, y: fallback.y, maxHp: fallback.maxHp, rubble: true };
+    // 3. Standing village buildings (zombies claw and pound doors/walls to break in and eat villagers!)
+    const standing = (buildings || []).filter(b => !dmgMap[b.id]?.ruined);
+    const pool = standing.length ? standing : (buildings || []);
+    for (const b of pool) {
+      if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
+      const d = Math.hypot(b.x - zombie.x, b.y - zombie.y);
+      const score = d + 1.8;
+      if (score < bestScore) {
+        bestScore = score;
+        best = {
+          kind: 'building',
+          id: b.id,
+          name: b.name,
+          x: b.x,
+          y: b.y,
+          maxHp: b.maxHp || 180
+        };
+      }
     }
     return best;
   }
 
-  function executeTrollStrike(world, horde, site, troll, target, events) {
+  function executeZombieBite(world, horde, site, zombie, target, events) {
     const week = world.week || 1;
-    troll.strikesLanded = (troll.strikesLanded || 0) + 1;
+    zombie.strikesLanded = (zombie.strikesLanded || 0) + 1;
 
-    if (target.kind === 'sim') {
-      const isPlayer = Boolean(target.isPlayer);
-      const pop = site.population || 0;
-      const floor = site.id === world.activeId ? 1 : 0;
-      const killed = !isPlayer && pop > floor;
-      if (killed) {
-        site.population = Math.max(floor, pop - 1);
-        troll.humansKilled = (troll.humansKilled || 0) + 1;
-        horde.community.humansLost = (horde.community.humansLost || 0) + 1;
+    if (target.kind === 'wolf' && root.EarthDragonStable?.damageWolf) {
+      const dmg = 18 + ((zombie.strikesLanded * 5) % 12);
+      const hit = root.EarthDragonStable.damageWolf(world, site, target.id, dmg, zombie.name);
+      if (hit?.ok) {
+        zombie.hp = Math.min(zombie.maxHp, zombie.hp + 14);
+        events.push({
+          type: 'wolfStrike',
+          troll: zombie,
+          zombie,
+          wolfId: target.id,
+          wolfName: target.name,
+          damage: hit.dealt,
+          x: target.x,
+          y: target.y,
+          message: hit.message
+        });
       }
-      site.wellbeing = clamp((site.wellbeing || 50) - (isPlayer ? 2 : 1), 0, 100);
-      const msg = isPlayer
-        ? troll.name + ' (' + troll.heightMeters + 'm Giant Troll) slammed ' + target.name + ' with its ' + troll.weapon + '!'
-        : troll.name + ' (' + troll.heightMeters + 'm Giant Troll) hunted down and smashed ' + target.name + ' in ' + site.name + '!';
-      record(horde, week, msg);
-      events.push({
-        type: 'simStrike',
-        troll,
-        simId: target.id,
-        simName: target.name,
-        x: target.x,
-        y: target.y,
-        isPlayer,
-        killed,
-        message: msg
-      });
       return;
     }
 
-    // Building strike — real structural destruction!
-    const dmgMap = ensureDamageMap(site);
-    const maxHp = target.maxHp || 180;
-    const rec = dmgMap[target.id] || (dmgMap[target.id] = {
+    if (target.kind === 'sim') {
+      if (target.isPlayer) {
+        site.wellbeing = clamp((site.wellbeing || 50) - 2, 0, 100);
+        const msg = zombie.name + ' lunged and bit you! Retreat behind the wolf pack!';
+        record(horde, week, msg);
+        events.push({
+          type: 'simStrike',
+          troll: zombie,
+          zombie,
+          simId: target.id,
+          simName: target.name,
+          isPlayer: true,
+          x: target.x,
+          y: target.y,
+          message: msg
+        });
+      } else {
+        zombie.humansKilled = (zombie.humansKilled || 0) + 1;
+        zombie.hp = Math.min(zombie.maxHp, zombie.hp + 26); // Zombies feed on bitten villagers
+        horde.community.humansLost = (horde.community.humansLost || 0) + 1;
+        if ((site.population || 0) > 1) site.population = Math.max(1, site.population - 1);
+        site.wellbeing = clamp((site.wellbeing || 50) - 2, 0, 100);
+        const msg = zombie.name + ' caught and bit ' + target.name + ' in ' + site.name + '!';
+        record(horde, week, msg);
+        events.push({
+          type: 'simStrike',
+          troll: zombie,
+          zombie,
+          simId: target.id,
+          simName: target.name,
+          isPlayer: false,
+          x: target.x,
+          y: target.y,
+          message: msg
+        });
+      }
+      return;
+    }
+
+    // Clawing & pounding village buildings to reach the people inside
+    const map = ensureDamageMap(site);
+    const rec = map[target.id] || (map[target.id] = {
       id: target.id,
       name: target.name,
       x: target.x,
       y: target.y,
-      hp: maxHp,
-      maxHp,
-      burning: false,
-      ruined: false
+      hp: target.maxHp || 180,
+      maxHp: target.maxHp || 180,
+      ruined: false,
+      burning: false
     });
-    const smashDmg = 34 + Math.round(Math.max(0, (troll.heightMeters || 21) - 19) * 3);
+    const dmg = 26 + ((zombie.strikesLanded * 7) % 14);
     const wasRuined = Boolean(rec.ruined);
-    rec.hp = Math.max(0, rec.hp - smashDmg);
-    rec.burning = true;
-    const justRuined = !wasRuined && rec.hp <= 0;
-    if (justRuined) {
+    rec.hp = Math.max(0, rec.hp - dmg);
+    rec.burning = rec.hp < rec.maxHp * 0.72;
+    horde.community.buildingsDamaged = (horde.community.buildingsDamaged || 0) + 1;
+    let justRuined = false;
+    if (rec.hp <= 0 && !wasRuined) {
       rec.ruined = true;
-      troll.buildingsSmashed = (troll.buildingsSmashed || 0) + 1;
+      justRuined = true;
+      zombie.buildingsSmashed = (zombie.buildingsSmashed || 0) + 1;
       horde.community.buildingsRuined = (horde.community.buildingsRuined || 0) + 1;
-      if ((site.materials || 0) > 0) site.materials = Math.max(0, site.materials - 1);
-      site.wellbeing = clamp((site.wellbeing || 50) - 2, 0, 100);
-      site.trust = clamp((site.trust || 50) - 1, 0, 100);
-      const ruinMsg = troll.name + ' smashed ' + rec.name + ' into smoking ruins in ' + site.name + '!';
-      record(horde, week, ruinMsg);
-      // Immediately clear lock so the troll storms straight onto the next building or Sim!
-      troll.targetId = null;
-      troll.targetKind = null;
-      events.push({
-        type: 'buildingStrike',
-        troll,
-        buildingId: rec.id,
-        buildingName: rec.name,
-        x: rec.x,
-        y: rec.y,
-        damage: smashDmg,
-        hp: 0,
-        maxHp: rec.maxHp,
-        ruined: true,
-        justRuined: true,
-        message: ruinMsg
-      });
-      return;
+      site.materials = Math.max(0, (site.materials || 0) - 2);
+      site.wellbeing = clamp((site.wellbeing || 50) - 3, 0, 100);
     }
-
-    if ((troll.strikesLanded % 3) === 0 && (site.materials || 0) > 1) {
-      site.materials = Math.max(1, site.materials - 1);
-    }
+    const msg = justRuined
+      ? zombie.name + ' broke down ' + rec.name + ' in ' + site.name + ' hunting the villagers inside!'
+      : zombie.name + ' clawed at ' + rec.name + ' (-' + dmg + ' HP · ' + rec.hp + '/' + rec.maxHp + ' HP)!';
+    if (justRuined) record(horde, week, msg);
     events.push({
       type: 'buildingStrike',
-      troll,
+      troll: zombie,
+      zombie,
       buildingId: rec.id,
       buildingName: rec.name,
-      x: rec.x,
-      y: rec.y,
-      damage: smashDmg,
+      damage: dmg,
       hp: rec.hp,
       maxHp: rec.maxHp,
-      ruined: Boolean(rec.ruined),
-      justRuined: false,
-      message: troll.name + ' battered ' + rec.name + ' (-' + smashDmg + ' HP)!'
+      justRuined,
+      x: rec.x,
+      y: rec.y,
+      message: msg
     });
   }
 
-  function stepLive(world, site, dt, sceneContext) {
-    if (!world || !site) return [];
-    const horde = ensure(world);
+  /**
+   * Real-Time Live Simulation Step for the Zombie Horde:
+   * - Spawns escalating waves of 10+ zombies continuously.
+   * - Shambling horde emerges from the dark enchanted woods and relentlessly hunts
+   *   moving villagers, roaming Majestic Wolves, and village homes.
+   * - Continuously howls throughout the night (isNight === true).
+   */
+  function stepLive(world, site, dt = 0.016, sceneContext = {}) {
     const events = [];
+    if (!world || !site) return events;
+    const horde = ensure(world);
     const step = clamp(dt || 0.016, 0.001, 0.25);
+    const isNight = Boolean(sceneContext.isNight);
 
-    // Continuous escalating wave spawner: launch fresh waves (>= 10 Giant Trolls each!) on schedule
-    // OR swiftly after the current wave is wiped out so the onslaught never stops!
-    horde.community.liveElapsed = (horde.community.liveElapsed || 0) + step;
     let local = trollsForSite(world, site.id);
+    horde.community.waveElapsedSec = (horde.community.waveElapsedSec || 0) + step;
     if (local.length === 0) {
-      horde.community.clearDelay = (horde.community.clearDelay || 0) + step;
-      if (horde.community.clearDelay >= CLEAR_WAVE_DELAY_SEC) {
-        horde.community.clearDelay = 0;
-        const wres = spawnWave(world, site);
-        horde.community.nextWaveAt = horde.community.liveElapsed + WAVE_INTERVAL_SEC;
-        events.push({ type: 'waveSpawn', wave: wres.wave, count: wres.count, message: wres.message });
+      horde.community.clearDelaySec = (horde.community.clearDelaySec || 0) + step;
+      if (horde.community.clearDelaySec >= CLEAR_WAVE_DELAY_SEC) {
+        horde.community.clearDelaySec = 0;
+        horde.community.waveElapsedSec = 0;
+        const spawnedWave = spawnWave(world, site);
+        events.push({ type: 'waveSpawn', wave: spawnedWave.wave, count: spawnedWave.count, message: spawnedWave.message });
         local = trollsForSite(world, site.id);
       }
     } else {
-      horde.community.clearDelay = 0;
-      if (horde.community.liveElapsed >= (horde.community.nextWaveAt || WAVE_INTERVAL_SEC)) {
-        if (local.length + MIN_TROLLS_PER_WAVE <= MAX_CONCURRENT_LOCAL_TROLLS) {
-          const wres = spawnWave(world, site);
-          horde.community.nextWaveAt = horde.community.liveElapsed + WAVE_INTERVAL_SEC;
-          events.push({ type: 'waveSpawn', wave: wres.wave, count: wres.count, message: wres.message });
-          local = trollsForSite(world, site.id);
-        } else {
-          // Wait briefly while horde is at peak concurrency, then try again
-          horde.community.nextWaveAt = horde.community.liveElapsed + 12;
-        }
+      horde.community.clearDelaySec = 0;
+      if (horde.community.waveElapsedSec >= WAVE_INTERVAL_SEC && local.length + MIN_ZOMBIES_PER_WAVE <= MAX_CONCURRENT_LOCAL_ZOMBIES) {
+        horde.community.waveElapsedSec = 0;
+        const spawnedWave = spawnWave(world, site);
+        events.push({ type: 'waveSpawn', wave: spawnedWave.wave, count: spawnedWave.count, message: spawnedWave.message });
+        local = trollsForSite(world, site.id);
       }
     }
+
     if (!local.length) return events;
 
-    const buildings = (sceneContext?.buildings && sceneContext.buildings.length)
+    const buildings = Array.isArray(sceneContext?.buildings) && sceneContext.buildings.length
       ? sceneContext.buildings
       : collectCommunityBuildings(site);
     const sims = Array.isArray(sceneContext?.sims)
@@ -568,164 +548,169 @@
           isPlayer: false,
           downed: false
         }));
+    const wolves = Array.isArray(sceneContext?.wolves)
+      ? sceneContext.wolves
+      : (root.EarthDragonStable?.getAutonomousPoses?.(site) || []);
+
+    const nightSpeedBoost = isNight ? 1.18 : 1.0;
 
     for (let i = 0; i < local.length; i++) {
-      const t = local[i];
-      // Dark-hide live regeneration unless actively seared by Enchanted Dragonfire
-      if ((t.burnSuppressTimer || 0) > 0) {
-        t.burnSuppressTimer = Math.max(0, t.burnSuppressTimer - step);
-      } else if (t.hp > 0 && t.hp < t.maxHp) {
-        t.hp = Math.min(t.maxHp, Number((t.hp + LIVE_REGEN_PER_SEC * step).toFixed(1)));
+      const z = local[i];
+      const spdMul = (z.speedMul || 1.0) * nightSpeedBoost;
+
+      // Continuous nighttime howling (never stops during night!)
+      z.howling = isNight;
+      if (isNight) {
+        z.howlPhase = ((z.howlPhase || 0) + step * (2.6 + (i % 4) * 0.45)) % (Math.PI * 2);
       }
-      const km = distanceKm(t);
-      t.distanceKm = km;
 
-      // PHASE 1: Long slow march from ~1 km out until reaching the community perimeter
-      if (t.state === 'approaching' && km > 0.025) {
-        const entryTarget = pickTargetForTroll(t, site, buildings, sims) || { x: TOWN_CENTER_X, y: TOWN_CENTER_Y, name: site.name, kind: 'building', id: 'market' };
-        const dx = entryTarget.x - t.x;
-        const dy = entryTarget.y - t.y;
+      const km = distanceKm(z);
+      z.distanceKm = km;
+
+      // Check if a roaming Majestic Wolf or exposed villager is already right next to an approaching zombie!
+      const nearbyPrey = pickTargetForZombie(z, site, [], sims, wolves);
+
+      // PHASE 1: Shambling emergence from the outer dark enchanted forest toward the village
+      if (z.state === 'approaching' && km > 0.025 && !nearbyPrey) {
+        const entryTarget = pickTargetForZombie(z, site, buildings, sims, wolves) || { x: TOWN_CENTER_X, y: TOWN_CENTER_Y, name: site.name, kind: 'building', id: 'market' };
+        const dx = entryTarget.x - z.x;
+        const dy = entryTarget.y - z.y;
         const dist = Math.hypot(dx, dy) || 1;
-        t.facingX = Number((dx / dist).toFixed(3));
-        t.facingY = Number((dy / dist).toFixed(3));
-        t.targetKind = entryTarget.kind;
-        t.targetId = entryTarget.id;
-        t.targetName = entryTarget.name;
-        t.targetX = entryTarget.x;
-        t.targetY = entryTarget.y;
-        t.attackPhase = 'march';
-        t.attackProgress = 0;
+        z.facingX = Number((dx / dist).toFixed(3));
+        z.facingY = Number((dy / dist).toFixed(3));
+        z.targetKind = entryTarget.kind;
+        z.targetId = entryTarget.id;
+        z.targetName = entryTarget.name;
+        z.targetX = entryTarget.x;
+        z.targetY = entryTarget.y;
+        z.attackPhase = 'march';
+        z.attackProgress = 0;
 
-        // Heavy deliberate walk from 1 km out
-        t.x = Number((t.x + (dx / dist) * APPROACH_SPEED * step).toFixed(3));
-        t.y = Number((t.y + (dy / dist) * APPROACH_SPEED * step).toFixed(3));
-        t.swingPhase = ((t.swingPhase || 0) + step * 2.15) % (Math.PI * 2);
-        t.stepDustTimer = (t.stepDustTimer || 0.6) - step;
-        if (t.stepDustTimer <= 0) {
-          t.stepDustTimer = 0.72;
-          events.push({ type: 'footstep', troll: t, x: t.x, y: t.y });
-        }
+        // Uneven zombie shamble with slight erratic sway
+        const sway = Math.sin((z.swingPhase || 0) * 1.6) * 0.14;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        z.x = Number((z.x + (nx - ny * sway) * APPROACH_SPEED * spdMul * step).toFixed(3));
+        z.y = Number((z.y + (ny + nx * sway) * APPROACH_SPEED * spdMul * step).toFixed(3));
+        z.swingPhase = ((z.swingPhase || 0) + step * 3.4 * spdMul) % (Math.PI * 2);
 
-        t.distanceKm = distanceKm(t);
-        const p3 = toWorld3D(t.x, t.y);
-        t.worldX = p3.x;
-        t.worldZ = p3.z;
+        z.distanceKm = distanceKm(z);
+        const p3 = toWorld3D(z.x, z.y);
+        z.worldX = p3.x;
+        z.worldZ = p3.z;
 
-        if (t.distanceKm <= 0.025) {
-          t.state = 'hunting';
-          t.attackPhase = 'chase';
-          const breachMsg = 'BREACH! ' + t.name + ' (' + t.heightMeters + 'm Giant Troll) reached ' + site.name + ' and began smashing buildings and hunting Sims!';
+        if (z.distanceKm <= 0.025) {
+          z.state = 'hunting';
+          z.attackPhase = 'chase';
+          const breachMsg = 'BREACH! ' + z.name + ' shambled into ' + site.name + ' hunting villagers!';
           record(horde, world.week || 1, breachMsg);
-          events.push({ type: 'breach', troll: t, x: t.x, y: t.y, message: breachMsg });
+          events.push({ type: 'breach', troll: z, zombie: z, x: z.x, y: z.y, message: breachMsg });
         }
         continue;
       }
 
-      // Ensure transitioned trolls never stay stuck in 'approaching' once at perimeter
-      if (t.state === 'approaching') {
-        t.state = 'hunting';
-        t.attackPhase = 'chase';
+      if (z.state === 'approaching' && !nearbyPrey) {
+        z.state = 'hunting';
+        z.attackPhase = 'chase';
       }
 
-      // PHASE 2: Relentless hunting & merciless smashing of Sims and Buildings
-      const target = pickTargetForTroll(t, site, buildings, sims);
+      // PHASE 2: Relentless hunting, lunging, biting & feeding on villagers, wolves, and shelters!
+      const target = nearbyPrey || pickTargetForZombie(z, site, buildings, sims, wolves);
       if (!target) continue;
 
-      t.targetKind = target.kind;
-      t.targetId = target.id;
-      t.targetName = target.name;
-      t.targetX = target.x;
-      t.targetY = target.y;
+      z.targetKind = target.kind;
+      z.targetId = target.id;
+      z.targetName = target.name;
+      z.targetX = target.x;
+      z.targetY = target.y;
 
-      const dx = target.x - t.x;
-      const dy = target.y - t.y;
+      const dx = target.x - z.x;
+      const dy = target.y - z.y;
       const dist = Math.hypot(dx, dy);
       if (dist > 0.05) {
-        t.facingX = Number((dx / dist).toFixed(3));
-        t.facingY = Number((dy / dist).toFixed(3));
+        z.facingX = Number((dx / dist).toFixed(3));
+        z.facingY = Number((dy / dist).toFixed(3));
       }
 
-      const contactRange = target.kind === 'sim' ? 1.75 : 2.55;
+      const contactRange = target.kind === 'building' ? 2.1 : 1.45;
 
-      // Active windup -> strike -> recover attack cycle
-      if (t.attackPhase === 'windup' || t.attackPhase === 'strike' || t.attackPhase === 'recover') {
-        t.state = 'attacking';
-        // Keep lunging slightly closer during windup if a Sim tries to run
-        if (t.attackPhase === 'windup' && dist > contactRange * 0.85) {
-          const lunge = HUNT_SPEED * 0.45 * step;
-          t.x = Number((t.x + (dx / Math.max(0.01, dist)) * lunge).toFixed(3));
-          t.y = Number((t.y + (dy / Math.max(0.01, dist)) * lunge).toFixed(3));
+      if (z.attackPhase === 'windup' || z.attackPhase === 'strike' || z.attackPhase === 'feed' || z.attackPhase === 'recover') {
+        z.state = z.attackPhase === 'feed' ? 'feeding' : 'attacking';
+        if (z.attackPhase === 'windup' && dist > contactRange * 0.8) {
+          const lunge = HUNT_SPEED * 0.65 * spdMul * step;
+          z.x = Number((z.x + (dx / Math.max(0.01, dist)) * lunge).toFixed(3));
+          z.y = Number((z.y + (dy / Math.max(0.01, dist)) * lunge).toFixed(3));
         }
 
-        t.attackTimer = (t.attackTimer || 0) + step;
-        if (t.attackPhase === 'windup') {
-          t.attackProgress = clamp(t.attackTimer / WINDUP_SEC, 0, 1);
-          if (t.attackTimer >= WINDUP_SEC) {
-            t.attackPhase = 'strike';
-            t.attackTimer = 0;
-            t.attackProgress = 0;
-            // Land the devastating slam if target is still in strike reach (generous splash radius for 22m club!)
-            const strikeReach = target.kind === 'sim' ? 3.1 : 3.6;
-            if (dist <= strikeReach) {
-              executeTrollStrike(world, horde, site, t, target, events);
+        z.attackTimer = (z.attackTimer || 0) + step;
+        if (z.attackPhase === 'windup') {
+          z.attackProgress = clamp(z.attackTimer / WINDUP_SEC, 0, 1);
+          if (z.attackTimer >= WINDUP_SEC) {
+            z.attackPhase = 'strike';
+            z.attackTimer = 0;
+            z.attackProgress = 0;
+            const biteReach = target.kind === 'building' ? 2.8 : 2.35;
+            if (dist <= biteReach) {
+              executeZombieBite(world, horde, site, z, target, events);
+              z._justBitLiving = target.kind === 'sim' || target.kind === 'wolf';
             } else {
-              events.push({ type: 'slam', troll: t, x: t.x + t.facingX * 1.4, y: t.y + t.facingY * 1.4 });
+              z._justBitLiving = false;
             }
           }
-        } else if (t.attackPhase === 'strike') {
-          t.attackProgress = clamp(t.attackTimer / STRIKE_SEC, 0, 1);
-          if (t.attackTimer >= STRIKE_SEC) {
-            t.attackPhase = 'recover';
-            t.attackTimer = 0;
-            t.attackProgress = 0;
+        } else if (z.attackPhase === 'strike') {
+          z.attackProgress = clamp(z.attackTimer / BITE_SEC, 0, 1);
+          if (z.attackTimer >= BITE_SEC) {
+            z.attackPhase = z._justBitLiving ? 'feed' : 'recover';
+            z.attackTimer = 0;
+            z.attackProgress = 0;
           }
-        } else if (t.attackPhase === 'recover') {
-          t.attackProgress = clamp(t.attackTimer / RECOVER_SEC, 0, 1);
-          if (t.attackTimer >= RECOVER_SEC) {
-            // Immediately continue smashing or chase the next victim — NEVER pause idly!
-            const nextTarget = pickTargetForTroll(t, site, buildings, sims);
-            const nextDist = nextTarget ? Math.hypot(nextTarget.x - t.x, nextTarget.y - t.y) : Infinity;
-            const nextRange = nextTarget?.kind === 'sim' ? 1.75 : 2.55;
+        } else if (z.attackPhase === 'feed') {
+          // Brief hunched feeding frenzy after biting a villager/wolf
+          z.attackProgress = clamp(z.attackTimer / FEED_SEC, 0, 1);
+          if (z.attackTimer >= FEED_SEC) {
+            z.attackPhase = 'recover';
+            z.attackTimer = 0;
+            z.attackProgress = 0;
+          }
+        } else if (z.attackPhase === 'recover') {
+          z.attackProgress = clamp(z.attackTimer / RECOVER_SEC, 0, 1);
+          if (z.attackTimer >= RECOVER_SEC) {
+            const nextTarget = pickTargetForZombie(z, site, buildings, sims, wolves);
+            const nextDist = nextTarget ? Math.hypot(nextTarget.x - z.x, nextTarget.y - z.y) : Infinity;
+            const nextRange = nextTarget?.kind === 'building' ? 2.1 : 1.45;
             if (nextTarget && nextDist <= nextRange + 0.4) {
-              t.attackPhase = 'windup';
-              t.attackTimer = 0;
-              t.attackProgress = 0;
+              z.attackPhase = 'windup';
+              z.attackTimer = 0;
+              z.attackProgress = 0;
             } else {
-              t.state = 'hunting';
-              t.attackPhase = 'chase';
-              t.attackTimer = 0;
-              t.attackProgress = 0;
+              z.state = 'hunting';
+              z.attackPhase = 'chase';
+              z.attackTimer = 0;
+              z.attackProgress = 0;
             }
           }
         }
       } else if (dist > contactRange) {
-        // Charge straight at the Sim or building!
-        t.state = 'hunting';
-        t.attackPhase = 'chase';
-        t.attackProgress = 0;
-        const moveDist = Math.min(dist - contactRange * 0.7, HUNT_SPEED * step);
+        z.state = 'hunting';
+        z.attackPhase = 'chase';
+        z.attackProgress = 0;
+        const moveDist = Math.min(dist - contactRange * 0.65, HUNT_SPEED * spdMul * step);
         if (moveDist > 0) {
-          t.x = Number((t.x + (dx / dist) * moveDist).toFixed(3));
-          t.y = Number((t.y + (dy / dist) * moveDist).toFixed(3));
+          z.x = Number((z.x + (dx / dist) * moveDist).toFixed(3));
+          z.y = Number((z.y + (dy / dist) * moveDist).toFixed(3));
         }
-        t.swingPhase = ((t.swingPhase || 0) + step * 3.1) % (Math.PI * 2);
-        t.stepDustTimer = (t.stepDustTimer || 0.5) - step;
-        if (t.stepDustTimer <= 0) {
-          t.stepDustTimer = 0.52;
-          events.push({ type: 'footstep', troll: t, x: t.x, y: t.y });
-        }
+        z.swingPhase = ((z.swingPhase || 0) + step * 4.6 * spdMul) % (Math.PI * 2);
       } else {
-        // Reached melee contact — start overhead war-club smash IMMEDIATELY!
-        t.state = 'attacking';
-        t.attackPhase = 'windup';
-        t.attackTimer = 0;
-        t.attackProgress = 0;
+        z.state = 'attacking';
+        z.attackPhase = 'windup';
+        z.attackTimer = 0;
+        z.attackProgress = 0;
       }
 
-      t.distanceKm = distanceKm(t);
-      const p3 = toWorld3D(t.x, t.y);
-      t.worldX = p3.x;
-      t.worldZ = p3.z;
+      z.distanceKm = distanceKm(z);
+      const p3 = toWorld3D(z.x, z.y);
+      z.worldX = p3.x;
+      z.worldZ = p3.z;
     }
     return events;
   }
@@ -733,9 +718,9 @@
   function repairBuildings(world, site) {
     if (!world || !site) return { ok: false, message: 'No active community.' };
     const map = site.trollDamage;
-    if (!map) return { ok: false, message: 'All buildings in ' + site.name + ' are intact.' };
+    if (!map) return { ok: false, message: 'All village homes in ' + site.name + ' are intact.' };
     const broken = Object.values(map).filter(e => e && (e.ruined || e.hp < e.maxHp));
-    if (!broken.length) return { ok: false, message: 'All buildings in ' + site.name + ' are intact.' };
+    if (!broken.length) return { ok: false, message: 'All village homes in ' + site.name + ' are intact.' };
 
     const matCost = Math.min(site.materials || 0, Math.min(3, broken.length));
     if (matCost > 0) site.materials = Math.max(0, (site.materials || 0) - matCost);
@@ -744,76 +729,56 @@
       e.burning = false;
       e.ruined = false;
     }
-    const msg = site.name + ' crews repaired ' + broken.length + ' troll-damaged building' + (broken.length > 1 ? 's' : '') + (matCost > 0 ? ' (-' + matCost + ' materials).' : '.');
+    const msg = site.name + ' villagers barricaded and repaired ' + broken.length + ' zombie-damaged building' + (broken.length > 1 ? 's' : '') + (matCost > 0 ? ' (-' + matCost + ' materials).' : '.');
     record(ensure(world), world.week || 1, msg);
     return { ok: true, repaired: broken.length, message: msg };
   }
 
-  function attackTroll(world, site, trollId, opts = {}) {
-    if (!world || !site) return { ok: false, message: 'No active community under siege.' };
+  function attackTroll(world, site, zombieId, opts = {}) {
+    if (!world || !site) return { ok: false, message: 'No active community under attack.' };
     const horde = ensure(world);
     const local = trollsForSite(world, site.id);
-    const troll = trollId
-      ? horde.trolls.find(t => t.id === trollId && t.state !== 'slain' && t.hp > 0)
+    const zombie = zombieId
+      ? horde.trolls.find(t => t.id === zombieId && t.state !== 'slain' && t.hp > 0)
       : local[0];
-    if (!troll) {
-      return { ok: false, message: 'No living Giant Troll is currently attacking ' + site.name + '.' };
+    if (!zombie) {
+      return { ok: false, message: 'No active zombie is currently threatening ' + site.name + '.' };
     }
 
     const source = opts.source || 'militia';
-    const mult = SOURCE_MULTIPLIER[source] ?? 0.25;
+    const mult = SOURCE_MULTIPLIER[source] ?? 0.30;
     const raw = Number.isFinite(opts.damage) ? opts.damage : (
-      source === 'wizardThunder' ? 92
-        : source === 'dragonFire' ? 72
-          : source === 'jet' ? 80
-            : 75
+      (source === 'wolfBite' || source === 'dragonFire') ? 92
+        : source === 'jet' ? 80
+          : 68
     );
-    // Colossal dark-hide armor further dampens non-arcane attacks and reduces heavy hits
-    const armor = clamp(Number.isFinite(troll.armor) ? troll.armor : 0.60, 0.2, 0.8);
-    const armorFactor = (source === 'dragonFire' || source === 'wizardThunder')
-      ? (1 - armor * 0.18)
-      : (1 - armor * 0.45);
+    const armor = clamp(Number.isFinite(zombie.armor) ? zombie.armor : 0.36, 0.15, 0.7);
+    const armorFactor = (source === 'wolfBite' || source === 'dragonFire')
+      ? (1 - armor * 0.16)
+      : (1 - armor * 0.42);
     const dealt = Math.max(8, Math.round(raw * mult * armorFactor));
-    troll.hp = Math.max(0, Math.round(troll.hp - dealt));
-    if (source === 'dragonFire') {
-      troll.burnedWeek = world.week || 1;
-      troll.burnSuppressTimer = BURN_SUPPRESS_SEC;
-    }
+    zombie.hp = Math.max(0, Math.round(zombie.hp - dealt));
 
-    const killed = troll.hp <= 0;
+    const killed = zombie.hp <= 0;
     if (killed) {
-      troll.state = 'slain';
+      zombie.state = 'slain';
       horde.community.totalSlain = (horde.community.totalSlain || 0) + 1;
-      site.trust = clamp((site.trust || 50) + 4, 0, 100);
-      site.wellbeing = clamp((site.wellbeing || 50) + 4, 0, 100);
-      site.funds = (site.funds || 0) + 3;
-      const slayer = opts.wizardName && opts.dragonName
-        ? opts.wizardName + ' and ' + opts.dragonName
-        : opts.autonomous && opts.dragonName
-          ? opts.dragonName + ' (acting on its own free will)'
-          : opts.dragonName || opts.attackerName || (site.name + ' defenders');
-      const msg = opts.autonomous && opts.dragonName
-        ? 'Colossal Victory! ' + opts.dragonName + ' instinctively swooped down and incinerated ' + troll.name + ' the Giant Troll (' + troll.heightMeters + 'm) defending ' + site.name + '! (+3 funds, +4 trust)'
-        : 'Colossal Victory! ' + slayer + ' slew ' + troll.name + ' the Giant Troll (' + troll.heightMeters + 'm) defending ' + site.name + '! (+3 funds, +4 trust)';
+      site.trust = clamp((site.trust || 50) + 2, 0, 100);
+      site.wellbeing = clamp((site.wellbeing || 50) + 2, 0, 100);
+      site.funds = (site.funds || 0) + 2;
+      const slayer = opts.wolfName || opts.dragonName || opts.attackerName || (site.name + ' villagers');
+      const msg = (source === 'wolfBite' || source === 'dragonFire')
+        ? slayer + ' tore down ' + zombie.name + ' defending ' + site.name + '! (+2 funds)'
+        : slayer + ' put down ' + zombie.name + ' defending ' + site.name + '! (+2 funds)';
       record(horde, world.week || 1, msg);
-      return { ok: true, troll, dealt, killed: true, hp: 0, maxHp: troll.maxHp, message: msg };
+      return { ok: true, troll: zombie, zombie, dealt, killed: true, hp: 0, maxHp: zombie.maxHp, message: msg };
     }
 
-    const pct = Math.ceil((troll.hp / troll.maxHp) * 100);
-    let msg;
-    if (source === 'wizardThunder') {
-      msg = (opts.wizardName || 'Wizard') + '\'s Protective Staff Thunder shattered ' + troll.name + '\'s dark hide for ' + dealt + ' damage! (' + troll.hp + '/' + troll.maxHp + ' HP · ' + pct + '%)';
-    } else if (source === 'dragonFire' && opts.autonomous) {
-      msg = (opts.dragonName || 'Dragon') + ' acted on its own free will and blasted ' + troll.name + ' with blazing dragonfire for ' + dealt + ' damage! (' + troll.hp + '/' + troll.maxHp + ' HP)';
-    } else if (source === 'dragonFire') {
-      msg = (opts.dragonName || 'Dragon') + '\'s enchanted dragonfire seared ' + troll.name + ' for ' + dealt + ' damage and halted dark regeneration! (' + troll.hp + '/' + troll.maxHp + ' HP)';
-    } else if (source === 'jet') {
-      msg = 'Fighter jet ordnance struck ' + troll.name + ' for ' + dealt + ' damage! (' + troll.hp + '/' + troll.maxHp + ' HP)';
-    } else {
-      msg = site.name + ' defenders struck ' + troll.name + ', dealing only ' + dealt + ' damage against its colossal dark hide (' + troll.hp + '/' + troll.maxHp + ' HP). Dragons & Wizards are far more effective!';
-    }
+    const msg = (source === 'wolfBite' || source === 'dragonFire')
+      ? (opts.wolfName || opts.dragonName || 'Wolf') + ' savagely bit ' + zombie.name + ' for ' + dealt + ' damage! (' + zombie.hp + '/' + zombie.maxHp + ' HP)'
+      : site.name + ' villagers struck ' + zombie.name + ' for ' + dealt + ' damage (' + zombie.hp + '/' + zombie.maxHp + ' HP). Majestic Wolves are far stronger against zombies!';
     record(horde, world.week || 1, msg);
-    return { ok: true, troll, dealt, killed: false, hp: troll.hp, maxHp: troll.maxHp, message: msg };
+    return { ok: true, troll: zombie, zombie, dealt, killed: false, hp: zombie.hp, maxHp: zombie.maxHp, message: msg };
   }
 
   function tick(world) {
@@ -826,149 +791,91 @@
     const reports = [];
     const week = world.week || 1;
 
-    for (const troll of activeTrolls(world)) {
-      if ((troll.burnedWeek ?? -10) < week - 1 && troll.hp < troll.maxHp) {
-        troll.hp = Math.min(troll.maxHp, Math.round(troll.hp + 65));
-      }
-
-      let target = byId.get(troll.targetSiteId);
+    for (const z of activeTrolls(world)) {
+      let target = byId.get(z.targetSiteId);
       if (!target || (target.population || 0) <= 0) {
         target = communities.find(s => (s.population || 0) > 1) || communities[0];
         if (target) {
-          troll.targetSiteId = target.id;
-          troll.targetSiteName = target.name;
+          z.targetSiteId = target.id;
+          z.targetSiteName = target.name;
         }
       }
       if (!target) continue;
 
-      // Advance approaching trolls inward by ~0.55 km per weekly turn until they reach the community!
-      const kmNow = distanceKm(troll);
-      if (troll.state === 'approaching' && kmNow > 0.03) {
-        const dx = TOWN_CENTER_X - troll.x;
-        const dy = TOWN_CENTER_Y - troll.y;
+      const kmNow = distanceKm(z);
+      if (z.state === 'approaching' && kmNow > 0.03) {
+        const dx = TOWN_CENTER_X - z.x;
+        const dy = TOWN_CENTER_Y - z.y;
         const dist = Math.hypot(dx, dy) || 1;
-        const stepUnits = Math.min(Math.max(0, dist - (TOWN_PERIMETER_UNITS - 1.5)), 0.55 / STREET_KM);
-        troll.x = Number((troll.x + (dx / dist) * stepUnits).toFixed(2));
-        troll.y = Number((troll.y + (dy / dist) * stepUnits).toFixed(2));
-        troll.distanceKm = distanceKm(troll);
-        const p3 = toWorld3D(troll.x, troll.y);
-        troll.worldX = p3.x;
-        troll.worldZ = p3.z;
-        if (troll.distanceKm > 0.03) {
-          const marchNote = troll.name + ' (' + troll.heightMeters + 'm Giant Troll) closed to ' + troll.distanceKm.toFixed(2) + ' km outside ' + target.name + '!';
-          record(horde, week, marchNote);
-          reports.push({ site: target, text: marchNote });
-          continue;
-        }
-        troll.state = 'hunting';
-        troll.attackPhase = 'chase';
+        const stepUnits = Math.min(Math.max(0, dist - (TOWN_PERIMETER_UNITS - 1.5)), 0.14 / STREET_KM);
+        z.x = Number((z.x + (dx / dist) * stepUnits).toFixed(2));
+        z.y = Number((z.y + (dy / dist) * stepUnits).toFixed(2));
+        z.distanceKm = distanceKm(z);
+        const p3 = toWorld3D(z.x, z.y);
+        z.worldX = p3.x;
+        z.worldZ = p3.z;
+        if (z.distanceKm > 0.03) continue;
       }
 
-      const dragons = target.dragonStable?.dragons?.length || 0;
-      const wizards = target.dragonStable?.wizards?.length || 0;
-      const soldiers = target.militaryBase?.units?.filter(u => u.type === 'soldier')?.length || 0;
-      const fort = target.communityLife?.border?.defence?.stage || 0;
-
-      // Dragons instinctively defend their home community from inside the walls — NO Wizard required!
-      if (dragons > 0) {
-        const autoDmg = Math.min(260, 75 + dragons * 40 + wizards * 18);
-        troll.hp = Math.max(0, Math.round(troll.hp - autoDmg));
-        troll.burnedWeek = week;
-        if (troll.hp <= 0) {
-          troll.state = 'slain';
-          horde.community.totalSlain = (horde.community.totalSlain || 0) + 1;
-          const leadName = target.dragonStable.dragons[0]?.name || 'Guardian dragons';
-          const slayNote = wizards > 0
-            ? target.name + '\'s guardian dragons and wizards incinerated ' + troll.name + ' the Giant Troll during the weekly siege!'
-            : leadName + ' and ' + target.name + '\'s autonomous guardian dragons fiercely incinerated ' + troll.name + ' the Giant Troll from inside the walls!';
-          record(horde, week, slayNote);
-          reports.push({ site: target, text: slayNote });
-          continue;
-        }
+      z.state = 'attacking';
+      const loss = target.population > 2 ? 1 : 0;
+      if (loss > 0) {
+        target.population = Math.max(1, target.population - loss);
+        z.humansKilled = (z.humansKilled || 0) + loss;
+        horde.community.humansLost = (horde.community.humansLost || 0) + loss;
       }
-
-      const mitigation = Math.min(0.75, dragons * 0.28 + soldiers * 0.06 + fort * 0.12);
-      const pop = target.population || 0;
-      let killedHumans = 0;
-      if (pop > 2) {
-        const rawCasualties = mitigation >= 0.45 ? 1 : (troll.heightMeters >= 22 ? 2 : 1);
-        const floor = target.id === world.activeId ? 1 : 0;
-        killedHumans = Math.max(0, Math.min(rawCasualties, pop - floor));
-      } else if (pop > 0 && target.id !== world.activeId) {
-        killedHumans = 1;
-      }
-
-      if (killedHumans > 0) {
-        target.population = Math.max(0, pop - killedHumans);
-        troll.humansKilled = (troll.humansKilled || 0) + killedHumans;
-        horde.community.humansLost = (horde.community.humansLost || 0) + killedHumans;
-      }
-      // Also smash a community building during weekly siege
-      const blds = collectCommunityBuildings(target);
-      const dmgMap = ensureDamageMap(target);
-      const standing = blds.find(b => !dmgMap[b.id]?.ruined);
-      if (standing) {
-        const rec = dmgMap[standing.id] || (dmgMap[standing.id] = { id: standing.id, name: standing.name, x: standing.x, y: standing.y, hp: standing.maxHp, maxHp: standing.maxHp, burning: false, ruined: false });
-        rec.hp = Math.max(0, rec.hp - 55);
-        rec.burning = true;
-        if (rec.hp <= 0 && !rec.ruined) {
-          rec.ruined = true;
-          troll.buildingsSmashed = (troll.buildingsSmashed || 0) + 1;
-          horde.community.buildingsRuined = (horde.community.buildingsRuined || 0) + 1;
-        }
-      }
-      if ((target.materials || 0) > 1) target.materials = Math.max(1, target.materials - 1);
-      target.wellbeing = clamp((target.wellbeing || 50) - (mitigation >= 0.4 ? 1 : 3), 0, 100);
-      troll.state = 'attacking';
-
-      const note = killedHumans > 0
-        ? troll.name + ' (' + troll.heightMeters + 'm Giant Troll of ' + COMMUNITY.name + ') smashed through ' + target.name + ', killing ' + killedHumans + ' human Sim' + (killedHumans > 1 ? 's' : '') + '! (' + troll.hp + '/' + troll.maxHp + ' HP)'
-        : troll.name + ' (' + troll.heightMeters + 'm Giant Troll) battered buildings in ' + target.name + '! (' + troll.hp + '/' + troll.maxHp + ' HP)';
+      target.wellbeing = clamp((target.wellbeing || 50) - 2, 0, 100);
+      const note = z.name + ' attacked ' + target.name + (loss ? ' (-' + loss + ' villager)' : '') + '!';
       record(horde, week, note);
       reports.push({ site: target, text: note });
     }
 
-    const alive = activeTrolls(world);
-    const activeSite = byId.get(world.activeId) || communities[0];
-    const otherSites = communities.filter(s => s.id !== activeSite?.id && (s.population || 0) > 0);
-    const localAlive = alive.filter(t => t.targetSiteId === activeSite?.id);
-
-    // Relentless multi-wave reinforcement: spawn a FULL wave (>= 10 Giant Trolls!) every 2 weeks
-    // or immediately whenever fewer than 5 trolls remain against the community
-    const weeksSinceWave = week - (horde.community.lastWaveWeek || 1);
-    const shouldLaunchWave = activeSite && (
-      localAlive.length < 5 ||
-      (weeksSinceWave >= 2 && localAlive.length + MIN_TROLLS_PER_WAVE <= MAX_CONCURRENT_LOCAL_TROLLS)
-    );
-    if (shouldLaunchWave) {
-      const wres = spawnWave(world, activeSite);
-      horde.community.nextWaveAt = (horde.community.liveElapsed || 0) + WAVE_INTERVAL_SEC;
-      reports.push({ site: activeSite, text: wres.message });
-    }
-
-    const otherAlive = activeTrolls(world).filter(t => t.targetSiteId !== activeSite?.id);
-    if (otherSites.length > 0 && otherAlive.length < Math.min(4, otherSites.length * 2)) {
-      const victim = otherSites[(week + horde.serial) % otherSites.length];
-      const freshOther = makeTroll(horde, { ...victim, _isPlayer: false }, 2, week, horde.community.wave || 1);
-      horde.trolls.push(freshOther);
-      horde.community.attacksLaunched = (horde.community.attacksLaunched || 0) + 1;
-      const otherNote = COMMUNITY.name + ' dispatched ' + freshOther.name + ' (' + freshOther.heightMeters + 'm Giant Troll) from 1 km out to hunt human Sims in ' + victim.name + '!';
-      record(horde, week, otherNote);
-      reports.push({ site: victim, text: otherNote });
-    }
-
-    const slain = horde.trolls.filter(t => t.state === 'slain');
-    if (slain.length > 24) {
-      const keepSlain = new Set(slain.slice(-24).map(t => t.id));
-      horde.trolls = horde.trolls.filter(t => t.state !== 'slain' || keepSlain.has(t.id));
+    // Spawn a fresh wave of 10+ zombies every 2 weeks or when local count drops below 5
+    const playerSite = communities.find(s => s.id === world.activeSiteId) || world.sites?.[0] || communities[0];
+    if (playerSite) {
+      const localCount = trollsForSite(world, playerSite.id).length;
+      const weeksSinceWave = week - (horde.community.lastWaveWeek || 0);
+      if ((localCount < 5 || weeksSinceWave >= 2) && localCount + MIN_ZOMBIES_PER_WAVE <= MAX_CONCURRENT_LOCAL_ZOMBIES) {
+        const waveRes = spawnWave(world, playerSite);
+        reports.push({ site: playerSite, text: waveRes.message });
+      }
     }
 
     return reports;
   }
 
+  function summary(world, siteId) {
+    const horde = world?.trollHorde;
+    const alive = activeTrolls(world);
+    const local = alive.filter(t => t.targetSiteId === siteId);
+    const elsewhere = alive.filter(t => t.targetSiteId !== siteId);
+    const approaching = local.filter(t => t.state === 'approaching');
+    const attacking = local.filter(t => t.state !== 'approaching');
+    const nearestKm = local.length ? Math.min(...local.map(t => distanceKm(t))) : 0;
+    const howlingCount = local.filter(t => t.howling).length;
+    return {
+      communityName: horde?.community?.name || 'Undead Plague Horde',
+      wave: horde?.community?.wave || 1,
+      totalAlive: alive.length,
+      localCount: local.length,
+      approachingCount: approaching.length,
+      attackingCount: attacking.length,
+      howlingCount,
+      nearestKm,
+      elsewhereCount: elsewhere.length,
+      totalSlain: horde?.community?.totalSlain || 0,
+      humansLost: horde?.community?.humansLost || 0,
+      buildingsRuined: horde?.community?.buildingsRuined || 0,
+      local,
+      elsewhere,
+      log: horde?.log || []
+    };
+  }
+
   function valid(horde) {
     if (horde == null) return true;
     if (typeof horde !== 'object' || Array.isArray(horde)) return false;
+    if (!horde.community || typeof horde.community.name !== 'string') return false;
     if (!Array.isArray(horde.trolls)) return false;
     return horde.trolls.every(t =>
       t && typeof t.id === 'string' && typeof t.name === 'string' &&
@@ -977,30 +884,32 @@
   }
 
   const api = Object.freeze({
-    COMMUNITY,
     ARCHETYPES,
     SOURCE_MULTIPLIER,
-    MIN_TROLLS_PER_WAVE,
-    WAVE_INTERVAL_SEC,
     STREET_KM,
-    SPAWN_DISTANCE_KM,
+    MIN_TROLLS_PER_WAVE: MIN_ZOMBIES_PER_WAVE,
+    MIN_ZOMBIES_PER_WAVE,
+    WAVE_INTERVAL_SEC,
     waveSizeFor,
     spawnWave,
-    distanceKm,
-    toWorld3D,
-    collectCommunityBuildings,
-    buildingDamageSummary,
-    repairBuildings,
     ensure,
     activeTrolls,
     trollsForSite,
-    summary,
+    activeZombies: activeTrolls,
+    zombiesForSite: trollsForSite,
+    distanceKm,
+    toWorld3D,
+    buildingDamageSummary,
     stepLive,
+    repairBuildings,
     attackTroll,
+    attackZombie: attackTroll,
     tick,
+    summary,
     valid
   });
 
   root.EarthGiantTrolls = api;
+  root.EarthZombies = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);

@@ -24,7 +24,7 @@
     fishingDock: {name:'Fishing dock', funds:6, materials:4, info:'Build a shore station and fishing jetty. Once the crew opens the dock, board a boat to land 4 food on the crew’s weekly outing.'},
     pier: {name:'Exchange depot', funds:6, materials:3, info:'One depot at either end raises a route’s base shipment limit from 2 to 4. An adjacent market earns 1 extra fund.'},
     wetland: {name:'Water commons', funds:5, materials:4, info:'Grows 1 food each week. Protects the district during a flood and supports slow repair.'},
-    dragonStable: {name:'Dragon Stable', funds:8, materials:5, info:'Raise enchanted dragons, train Wizards to fly them freely anywhere in 3D, blast fire at enemies or buildings, and assign keepers to replenish dragon food.'},
+    dragonStable: {name:'Giant Wolf Cave', funds:8, materials:5, info:'Giant woodland cavern sheltering Majestic Wolves that roam the enchanted forest up to 100m outside your territory, protecting villagers from zombies and howling at the full moon.'},
     house: {name:'Community House', funds:4, materials:3, info:'Adds 4 permanent residential places so you can build neighbourhoods and import as many residents as you wish.'}
   };
   const PROFILES = [
@@ -554,7 +554,10 @@
     });
     if(root.EarthDragonStable?.ensure){
       const ds=root.EarthDragonStable.ensure(site);
-      if(ds)ds.built=true;
+      if(ds){
+        ds.built=true;
+        if(root.EarthDragonStable.ensureStarterPack)root.EarthDragonStable.ensureStarterPack(site,week);
+      }
     }
   }
   // The caller owns this detached JSON document. Opening a stored string,
@@ -1324,7 +1327,7 @@
         const expCost={funds:6+lvl*2,materials:4+lvl*2};
         add('build','territory:expand','Expand Territory (Level '+(lvl+1)+')','Push perimeter walls outward by +6 units in every direction to unlock open buildable land, +1 material/week, and +1 fund/week for greater population and research.',{goods:expCost,gate:lvl>=12?'Maximum territory expansion reached.':''},()=>{
           site.territoryLevel=lvl+1;
-          return site.name+' expanded its territory to Level '+site.territoryLevel+'. Perimeter walls moved outward, opening fresh land for houses, Dragon Stables, and workshops.';
+          return site.name+' expanded its enchanted forest territory to Level '+site.territoryLevel+'. Perimeter boundaries moved outward, extending your wolves\' 100m outer patrol radius.';
         });
       }
       const nextTech=TECH[site.tech.length];
@@ -2577,41 +2580,35 @@
       dragonAction:guarded(req=>{
         const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
         const ds=root.EarthDragonStable;
-        if(!site||!ds)return reject('Dragon Stable is unavailable.');
+        if(!site||!ds)return reject('Giant Wolf Cave is unavailable.');
         let res;
-        if(req?.action==='summon')res=ds.summonDragon(world,site,req.lineageId,req.name);
-        else if(req?.action==='trainWizard')res=ds.trainWizard(world,site,req.personId);
-        else if(req?.action==='createWizard')res=ds.createNewWizard(world,site,req.name);
+        if(req?.action==='summon'||req?.action==='callWolf')res=ds.summonDragon(world,site,req.lineageId,req.name);
         else if(req?.action==='assignWorker')res=ds.assignWorker(world,site,req.personId);
         else if(req?.action==='replenishFood')res=ds.replenishLarder(world,site,req.amount||4);
         else if(req?.action==='feed')res=ds.feedDragon(world,site,req.dragonId);
-        else if(req?.action==='blastFire')res=ds.blastFire(world,site,req.riderId||req.actorId,req.dragonId,req.target||{kind:req.kind||'fun',name:req.name,id:req.id,siteId:req.targetSiteId,defensive:req.defensive,intruder:req.intruder});
-        else if(req?.action==='strikeThunder')res=ds.strikeThunder(world,site,req.riderId||req.actorId,req.dragonId,req.target||{kind:req.kind||'defense',name:req.name,id:req.id,siteId:req.targetSiteId,intruder:req.intruder,offensive:req.offensive});
-        else if(req?.action==='recordFlight'){ds.recordFlight(world,site,req.riderId||req.actorId,req.dragonId,req.stats||{maxAltitude:req.maxAltitude,distanceFlown:req.distance});res={ok:true,message:'Flight logged.'};}
-        else if(req?.action==='tick'){ds.tick(world,site,req.stepCount||1);res={ok:true,message:'Dragon stable updated.'};}
-        else res=reject('Choose a Dragon Stable action.');
-        return res?.ok?complete(res.message,site,req?.action!=='recordFlight'&&req?.action!=='tick'):(res||reject('Dragon action failed.'));
+        else if(req?.action==='howl')res=ds.packHowl(world,site,req.dragonId);
+        else if(req?.action==='tick'){ds.tick(world,site,req.stepCount||1);res={ok:true,message:'Wolf Cave updated.'};}
+        else res=reject('Choose a Wolf Cave action.');
+        return res?.ok?complete(res.message,site,req?.action!=='tick'):(res||reject('Wolf Cave action failed.'));
       }),
       trollAction:guarded(req=>{
         const site=root.EarthCommunityLife?.lookup?.(world,req?.siteId)||current();
         const gt=root.EarthGiantTrolls;
-        if(!site||!gt)return reject('Giant Troll defense is unavailable.');
+        if(!site||!gt)return reject('Zombie defense is unavailable.');
         gt.ensure(world);
         let res;
         if(req?.action==='militiaStrike'||req?.action==='soldierStrike'){
           res=gt.attackTroll(world,site,req.trollId,{source:req.action==='soldierStrike'?'soldier':'militia',damage:req.damage,attackerName:req.attackerName});
         }else if(req?.action==='jetStrike'){
           res=gt.attackTroll(world,site,req.trollId,{source:'jet',damage:req.damage,attackerName:'Airbase Fighter Jet'});
-        }else if(req?.action==='dragonFire'){
-          res=gt.attackTroll(world,site,req.trollId,{source:'dragonFire',damage:req.damage,dragonName:req.dragonName,wizardName:req.wizardName});
-        }else if(req?.action==='wizardThunder'){
-          res=gt.attackTroll(world,site,req.trollId,{source:'wizardThunder',damage:req.damage,dragonName:req.dragonName,wizardName:req.wizardName});
+        }else if(req?.action==='wolfBite'||req?.action==='dragonFire'){
+          res=gt.attackTroll(world,site,req.trollId,{source:'wolfBite',damage:req.damage,wolfName:req.wolfName||req.dragonName});
         }else if(req?.action==='repairBuildings'){
           res=gt.repairBuildings(world,site);
         }else{
-          res=reject('Choose a defense action against the Giant Trolls.');
+          res=reject('Choose a defense action against the Zombie Horde.');
         }
-        return res?.ok?complete(res.message,site):(res||reject('Giant Troll defense failed.'));
+        return res?.ok?complete(res.message,site):(res||reject('Zombie defense failed.'));
       }),
       expandTerritory:guarded(req=>{
         const id=typeof req==='object'&&req!==null?req.siteId:req;

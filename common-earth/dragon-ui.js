@@ -1,5 +1,6 @@
-/* Dragon Stable UI dialog: manage enchanted dragons, train/switch Wizards,
-   assign feeding workers, replenish food larder, fire attacks & 3D flight launch. */
+/* Giant Wolf Cave UI dialog: manage the Majestic Wolf Pack, call new wolves,
+   assign cave keepers to stock provisions, trigger Full Moon pack howls,
+   and track the approaching Undead Plague Horde (Zombies). */
 (function (root) {
   'use strict';
 
@@ -7,11 +8,9 @@
     const doc = root.document;
     const dialog = doc.getElementById('dragon-stable-dialog');
     const body = doc.getElementById('dragon-stable-body');
-    const picker = doc.getElementById('dragon-rider-dialog');
-    let mounting = false;
     if (!dialog || !body || !root.EarthDragonStable) return null;
 
-    const DS = root.EarthDragonStable;
+    const WC = root.EarthDragonStable;
     const make = (tag, text, cls) => {
       const e = doc.createElement(tag);
       if (text != null) e.textContent = text;
@@ -26,15 +25,10 @@
     };
 
     let activeSiteId = '';
-    let selectedLineage = DS.LINEAGES[0].id;
-    let selectedTargetKind = 'fun';
+    let selectedLineage = WC.LINEAGES[0].id;
 
     function currentSite() {
       return root.EarthCommunityLife?.lookup?.(sim.state, activeSiteId) || sim.active();
-    }
-
-    function activeActorId(site) {
-      return root.EarthAgency?.actorId?.(site) || 'steward';
     }
 
     async function runCmd(cmd, ...args) {
@@ -45,181 +39,108 @@
       return res;
     }
 
-    function flightMessage(message, error = false) {
-      const sheet = picker.open ? picker : dialog.open ? dialog : null;
-      if (!sheet) { notify(message, error); return; }
-      let status = sheet.querySelector('[data-mount-status]');
-      if (!status) {
-        status = make('p');
-        status.dataset.mountStatus = '';
-        status.setAttribute('role', 'status');
-        sheet.querySelector('header').after(status);
-      }
-      status.textContent = message;
-      status.scrollIntoView({block:'nearest'});
-    }
-
-    async function mountDragon(target, riderId) {
-      if (mounting || root.EarthFlight3D?.isOpen()) return;
-      const site = root.EarthCommunityLife.lookup(sim.state, target.siteId);
-      if (!site) { flightMessage('This town is no longer available.', true); return; }
-      const ds = DS.ensure(site);
-      const dragon = ds.dragons.find(d => d.id === target.dragonId);
-      if (!dragon) { flightMessage('This dragon is no longer in the stable.', true); return; }
-      const actor = activeActorId(site);
-      if (!riderId && DS.isWizard(site, actor)) riderId = actor;
-      if (!riderId && ds.wizards.length === 1) riderId = ds.wizards[0].id;
-      if (!riderId && ds.wizards.length > 1) {
-        doc.getElementById('dragon-rider-title').textContent = 'Who will ride ' + dragon.name + '?';
-        const choices = doc.getElementById('dragon-rider-options');
-        choices.replaceChildren(...ds.wizards.map(w => btn(w.name + ' · ' + w.title, () => mountDragon(target, w.id))));
-        picker.querySelector('[data-mount-status]')?.remove();
-        if (!picker.open) picker.showModal();
-        return;
-      }
-      const check = DS.canFlyDragon(site, riderId, dragon.id);
-      if (!check.ok) { flightMessage(check.reason, true); return; }
-      const wizard = check.wizard;
-      mounting = true;
-      try {
-        if (!root.EarthFlight3D) {
-          const sheet = picker.open ? picker : dialog.open ? dialog : null;
-          flightMessage('Preparing dragon flight…');
-          const engineEl = doc.getElementById('flight-engine');
-          const engineSrc = engineEl?.src || new URL('flight-3d.js', root.location?.href || 'http://localhost/common-earth/').href;
-          try {
-            await import(engineSrc);
-          } catch (firstErr) {
-            console.warn('Initial flight module load failed, retrying fresh:', firstErr);
-          }
-          if (!root.EarthFlight3D) {
-            const sep = engineSrc.includes('?') ? '&' : '?';
-            await import(engineSrc + sep + 'retry=' + Date.now());
-          }
-          if (!root.EarthFlight3D) {
-            flightMessage('Dragon flight engine could not load. Please refresh and try again.', true);
-            return;
-          }
-          if (doc.hidden || (sheet && !sheet.open) || root.EarthFlight3D.isOpen()) return;
-        }
-        const launched = root.EarthFlight3D.launch({
-          mode: 'dragon', site, world: sim.state, dragon, wizard, origin: target,
-          evening: Boolean(root.EarthDayClock?.read?.(sim.state)?.night),
-          onFireHit: hit => sim.perform('dragonAction', { siteId: site.id, action: 'blastFire', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.()),
-          onThunderStrike: hit => sim.perform('dragonAction', { siteId: site.id, action: 'strikeThunder', riderId: wizard.id, dragonId: dragon.id, target: hit }).then(() => onUpdated?.()),
-          onExit: stats => {
-            sim.perform('dragonAction', { siteId: site.id, action: 'recordFlight', riderId: wizard.id, dragonId: dragon.id, stats }).then(() => onUpdated?.());
-            notify(wizard.name + ' and ' + dragon.name + ' returned from guarding ' + site.name + ' (' + Math.round(stats.distanceFlown) + ' m flown).');
-            doc.getElementById('street-canvas')?.focus({preventScroll:true});
-          }
-        });
-        if (!launched) { flightMessage('Dragon flight could not start on this device.', true); return; }
-        if (picker.open) picker.close();
-        if (dialog.open) dialog.close();
-        enterStreet?.();
-        doc.getElementById('flight-3d-canvas')?.focus({preventScroll:true});
-      } catch (error) {
-        console.error('Dragon flight could not start', error);
-        flightMessage('Dragon flight could not start. Try mounting again.', true);
-      } finally {
-        mounting = false;
-      }
-    }
-
     function render() {
       const site = currentSite();
       if (!site) { dialog.close(); return; }
-      const built = DS.hasStable(site);
-      const ds = DS.ensure(site);
-      const actorId = activeActorId(site);
-      const actorName = root.EarthAgency?.identity?.(site, actorId)?.name || actorId;
-      const actorIsWizard = DS.isWizard(site, actorId);
+      const built = WC.hasStable(site);
+      const ds = WC.ensure(site);
+      const isNight = Boolean(root.EarthDayClock?.read?.(sim.state)?.night);
 
       body.replaceChildren();
-      dialog.querySelector('[data-mount-status]')?.remove();
 
-      // Hero preview with painterly Dragon Sanctuary Citadel & Enchanted Dragon illustration
+      // Hero preview with moonlit Enchanted Forest, Giant Wolf Cave & Howling Majestic Wolf
       const hero = make('div', null, 'dragon-hero');
       const preview = doc.createElement('canvas');
-      preview.width = 280; preview.height = 176;
+      preview.width = 280;
+      preview.height = 176;
       const ctx = preview.getContext('2d');
       if (ctx && root.EarthDragonArt) {
         const skyGrad = ctx.createLinearGradient(0, 0, 0, preview.height);
-        skyGrad.addColorStop(0, '#1c445c');
-        skyGrad.addColorStop(0.55, '#4b808e');
-        skyGrad.addColorStop(0.78, '#c9b48c');
-        skyGrad.addColorStop(1, '#587852');
+        skyGrad.addColorStop(0, '#091627');
+        skyGrad.addColorStop(0.52, '#173042');
+        skyGrad.addColorStop(0.76, '#1f4437');
+        skyGrad.addColorStop(1, '#1a3529');
         ctx.fillStyle = skyGrad;
         ctx.fillRect(0, 0, preview.width, preview.height);
-        root.EarthDragonArt.drawStable(ctx, 140, 114, 34, false, performance.now() / 1000, Math.max(1, ds.dragons.length));
-        const leadDragon = ds.dragons[0] || { scale: '#e2a83c', accent: '#fff0b8', wing: '#a84e24', aura: '#ffcf66', fire: '#ff8a24' };
-        root.EarthDragonArt.drawEnchantedDragon(ctx, 64, 46, 17, -0.22, performance.now() / 1000, leadDragon, true, false);
+
+        // Radiant Full Moon in preview sky
+        const mg = ctx.createRadialGradient(232, 34, 4, 232, 34, 42);
+        mg.addColorStop(0, 'rgba(240,248,255,0.96)');
+        mg.addColorStop(0.35, 'rgba(196,226,255,0.45)');
+        mg.addColorStop(1, 'rgba(120,170,220,0)');
+        ctx.fillStyle = mg;
+        ctx.beginPath();
+        ctx.arc(232, 34, 42, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f2f7ff';
+        ctx.beginPath();
+        ctx.arc(232, 34, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        const now = performance.now() / 1000;
+        const drawCave = root.EarthDragonArt.drawWolfCave || root.EarthDragonArt.drawStable;
+        const drawWolf = root.EarthDragonArt.drawMajesticWolf || root.EarthDragonArt.drawEnchantedDragon;
+        drawCave(ctx, 148, 126, 33, true, now, Math.max(1, ds.dragons.length));
+        const leadWolf = ds.dragons[0] || {
+          coat: '#c6d1db', ruff: '#f2f6fb', under: '#8a98a6', eyes: '#8ff5ff', aura: '#d8eeff'
+        };
+        drawWolf(ctx, 64, 134, 24, 0, now, leadWolf, true, false, 0);
       }
+
       const intro = make('div');
       intro.append(
-        make('small', built ? 'Sacred Sanctuary · Autonomous Spiritual Protectors of ' + site.name : 'Not Yet Built'),
-        make('h3', site.name + ' Dragon Stable'),
-        make('p', 'Dragons are deeply spiritual protectors with their own free will and agency bound strictly inside the walls of ' + site.name + '. They never leave the community walls, instinctively guarding the inner perimeter and blasting Giant Trolls and enemy intruders with dragonfire even without a Wizard rider.')
+        make('small', built ? `Enchanted Forest Sanctuary · Pack Territory (${WC.MAX_OUTSIDE_METERS}m Border)` : 'Not Yet Carved'),
+        make('h3', `${site.name} Giant Wolf Cave`),
+        make('p', `Majestic Wolves shelter in this mossy woodland cave and roam the enchanted forest freely to hunt and tear down Zombies attacking ${site.name}. They patrol up to exactly ${WC.MAX_OUTSIDE_METERS} meters outside your community's territory — never further — and gather under every Full Moon to howl together in chorus.`)
       );
       hero.append(preview, intro);
       body.append(hero);
 
-      // Live Shadowfell Darklands Giant Troll Siege Status
-      const trollSummary = root.EarthGiantTrolls?.summary?.(sim.state, site.id);
-      if (trollSummary && trollSummary.totalAlive > 0) {
+      // Live Undead Plague Horde (Zombie Outbreak) Status
+      const zombieSummary = root.EarthGiantTrolls?.summary?.(sim.state, site.id);
+      if (zombieSummary && zombieSummary.totalAlive > 0) {
         const siegeSec = make('section', null, 'dragon-card troll-card');
         const head = make('div', null, 'dragon-card-head');
         head.append(
-          make('strong', `${trollSummary.communityName} Siege · Wave ${trollSummary.wave}`),
-          make('small', `${trollSummary.localCount} attacking ${site.name} · ${trollSummary.elsewhereCount} attacking other lands · ${trollSummary.totalSlain} slain`)
+          make('strong', `${zombieSummary.communityName} · Wave ${zombieSummary.wave}`),
+          make('small', `${zombieSummary.localCount} stalking ${site.name} · ${zombieSummary.elsewhereCount} elsewhere · ${zombieSummary.totalSlain} eliminated`)
         );
         siegeSec.append(head);
-        siegeSec.append(make('p', 'Relentless waves of 10+ heavily armoured building-sized Giant Trolls march from 1 km out to destroy buildings and human Sims. Their dark hide shrugs off ordinary weapons and regenerates unless burned — Enchanted Dragonfire from your walls and originating-community Wizard Staff Thunder break them!'));
-        const MAX_TROLL_ROWS = 4;
-        const shownTrolls = trollSummary.local.slice(0, MAX_TROLL_ROWS);
-        for (const t of shownTrolls) {
+        siegeSec.append(make('p', isNight
+          ? 'Full Moon Night: the undead zombies howl without stopping and surge faster through the enchanted forest, trying to devour villagers, shelters, and roaming wolves alike!'
+          : 'Waves of 10+ relentless zombies emerge from the dark woods hunting anything that moves — villagers, roaming wolves, and village shelters.'));
+        const MAX_ROWS = 4;
+        const shown = zombieSummary.local.slice(0, MAX_ROWS);
+        for (const z of shown) {
           const row = make('div', null, 'troll-row');
-          const km = root.EarthGiantTrolls?.distanceKm?.(t) ?? t.distanceKm ?? 0;
-          const phaseLabel = t.state === 'approaching'
-            ? `Marching in · ${km.toFixed(2)} km out`
-            : (t.targetName ? `Smashing ${t.targetName}` : 'Attacking community');
-          row.append(make('small', `${t.name} · ${t.title} (${t.heightMeters}m) · ${phaseLabel} — ${t.hp}/${t.maxHp} HP`));
+          const distM = Math.round((root.EarthGiantTrolls?.distanceKm?.(z) ?? z.distanceKm ?? 0) * 1000);
+          const phaseLabel = z.attackPhase === 'feed'
+            ? `Devouring ${z.targetName || 'prey'}`
+            : z.state === 'approaching'
+              ? `Shambling in · ${distM}m out`
+              : (z.targetName ? `Lunging at ${z.targetName}` : 'Hunting villagers');
+          const howlNote = z.howling ? ' · HOWLING' : '';
+          row.append(make('small', `${z.name} · ${z.title} · ${phaseLabel}${howlNote} — ${z.hp}/${z.maxHp} HP`));
           const bar = make('div', null, 'dragon-meter troll-meter');
           const fill = doc.createElement('i');
-          fill.style.width = `${Math.max(4, Math.round((t.hp / Math.max(1, t.maxHp)) * 100))}%`;
+          fill.style.width = `${Math.max(4, Math.round((z.hp / Math.max(1, z.maxHp)) * 100))}%`;
           bar.append(fill);
           row.append(bar);
           siegeSec.append(row);
         }
-        if (trollSummary.local.length > MAX_TROLL_ROWS) {
-          const extra = trollSummary.local.length - MAX_TROLL_ROWS;
-          siegeSec.append(make('small', `+ ${extra} more Giant Trolls advancing in Wave ${trollSummary.wave} (${trollSummary.local.length} active at ${site.name})`));
+        if (zombieSummary.local.length > MAX_ROWS) {
+          const extra = zombieSummary.local.length - MAX_ROWS;
+          siegeSec.append(make('small', `+ ${extra} more zombies shambling in Wave ${zombieSummary.wave} (${zombieSummary.local.length} active at ${site.name})`));
         }
-        if (trollSummary.elsewhere.length) {
-          const otherTargets = [...new Set(trollSummary.elsewhere.map(t => t.targetSiteName))].join(', ');
-          siegeSec.append(make('small', `Also besieging across the lands: ${otherTargets}`));
+        if (zombieSummary.elsewhere.length) {
+          const otherTargets = [...new Set(zombieSummary.elsewhere.map(z => z.targetSiteName))].join(', ');
+          siegeSec.append(make('small', `Also swarming neighbouring communities: ${otherTargets}`));
         }
         const siegeActions = make('div', null, 'dragon-actions');
-        if (built && ds.dragons.length && trollSummary.local.length) {
-          if (ds.wizards.length) {
-            const leadD = ds.dragons[0];
-            const leadW = actorIsWizard ? actorId : ds.wizards[0].id;
-            siegeActions.append(
-              btn(`Fly ${leadD.name} vs Giant Trolls`, () => mountDragon({ siteId: site.id, dragonId: leadD.id }, leadW), 'primary-gold'),
-              btn('Strike Giant Troll with Staff Thunder', () => runCmd('dragonAction', {
-                siteId: site.id,
-                action: 'strikeThunder',
-                riderId: leadW,
-                dragonId: leadD.id,
-                target: { kind: 'troll', isTroll: true, trollId: trollSummary.local[0].id, name: trollSummary.local[0].name }
-              }), 'fire-action')
-            );
-          } else {
-            siegeSec.append(make('small', `${ds.dragons.length} Enchanted Dragon${ds.dragons.length > 1 ? 's are' : ' is'} actively patrolling & blasting Giant Trolls autonomously — no Wizard rider required!`));
-          }
-        } else if (trollSummary.local.length) {
+        if (zombieSummary.local.length) {
           siegeActions.append(
-            btn('Rally Town Defenders (Chip Damage)', () => runCmd('trollAction', { siteId: site.id, action: 'militiaStrike', trollId: trollSummary.local[0].id }))
+            btn('Fight Back (Villager Defense)', () => runCmd('trollAction', { siteId: site.id, action: 'militiaStrike', trollId: zombieSummary.local[0].id })),
+            btn('Pack Howl at the Moon', () => runCmd('dragonAction', { siteId: site.id, action: 'howl' }), 'primary-gold')
           );
         }
         siegeSec.append(siegeActions);
@@ -229,84 +150,76 @@
       if (!built) {
         const card = make('section', null, 'dragon-card');
         card.append(
-          make('strong', 'Build the Dragon Stable'),
-          make('p', 'Commission a Dragon Stable on open land (8 funds · 5 materials) so you can summon enchanted dragons and train Wizards.'),
+          make('strong', 'Carve the Giant Wolf Cave'),
+          make('p', 'Carve a Giant Wolf Cave on woodland soil (8 funds · 5 materials) so Majestic Wolves can shelter here and defend your enchanted forest.'),
           make('div', null, 'dragon-actions')
         );
         card.lastChild.append(
-          btn('Build Dragon Stable Now (8 funds · 5 materials)', () => runCmd('buildFreeBuilding', { siteId: site.id, kind: 'dragonStable' }), 'primary-gold')
+          btn('Carve Giant Wolf Cave (8 funds · 5 materials)', () => runCmd('buildFreeBuilding', { siteId: site.id, kind: 'dragonStable' }), 'primary-gold')
         );
         body.append(card);
         return;
       }
 
-      // Section 1: Enchanted Dragons & 3D Aerodynamic Flight
-      const secDragons = make('section', null, 'dragon-grid');
-      secDragons.append(make('h3', `Enchanted Dragons (${ds.dragons.length})`));
+      // Section 1: Majestic Wolf Pack
+      const secWolves = make('section', null, 'dragon-grid');
+      secWolves.append(make('h3', `Majestic Wolf Pack (${ds.dragons.length}) · Max ${WC.MAX_OUTSIDE_METERS}m Outside Territory`));
 
       if (!ds.dragons.length) {
-        secDragons.append(make('p', 'Your Dragon Stable is ready from day one — summon a protector dragon below right away so it can intercept approaching Giant Trolls on its own!'));
+        secWolves.append(make('p', 'Your Giant Wolf Cave is ready — call a Majestic Wolf below so the pack can patrol the enchanted forest and tear down approaching zombies!'));
       } else {
-        let riderSelect;
-        if (ds.wizards.length > 1) {
-          const label = make('label', 'Wizard rider ');
-          riderSelect = make('select');
-          for (const w of ds.wizards) {
-            const option = make('option', w.name + ' · ' + w.title);
-            option.value = w.id;
-            option.selected = w.id === actorId || w.residentId === actorId;
-            riderSelect.append(option);
-          }
-          label.append(riderSelect);
-          secDragons.append(label);
-        }
-        const livePoses = DS.getAutonomousPoses?.(site) || [];
-        for (const d of ds.dragons) {
+        const livePoses = WC.getAutonomousPoses?.(site) || [];
+        for (const w of ds.dragons) {
           const card = make('article', null, 'dragon-card');
           const head = make('div', null, 'dragon-card-head');
-          const homeLabel = d.homeSiteName || site.name;
-          const pose = livePoses.find(p => p.dragon?.id === d.id);
-          const guardStatus = pose?.defending
-            ? `Autonomous Attack: ${pose.targetName || 'Intruder'}!`
-            : 'Autonomous Guardian (No Rider Needed)';
+          const pose = livePoses.find(p => p.wolf?.id === w.id || p.dragon?.id === w.id);
+          const distOutsideM = pose ? Math.round(pose.outsideMeters || 0) : 0;
+          const status = pose?.howling
+            ? 'Howling at the Full Moon'
+            : pose?.biting
+              ? `Biting ${pose.targetName || 'Zombie'}!`
+              : pose?.state === 'guard'
+                ? `Holding ${WC.MAX_OUTSIDE_METERS}m Border`
+                : pose?.defending
+                  ? `Hunting ${pose.targetName || 'Zombie'}`
+                  : 'Roaming Enchanted Forest';
+          const hp = Math.round(w.hp ?? w.maxHp ?? 280);
+          const maxHp = Math.round(w.maxHp ?? 280);
           head.append(
-            make('strong', `${d.name} · ${d.lineageTitle}`),
-            make('small', `${guardStatus} · Protector of ${homeLabel} · Nourishment ${Math.round(d.hunger)}% · Fire Blasts ${d.blasts || 0} · Auto Kills ${d.autonomousKills || 0}`)
+            make('strong', `${w.name} · ${w.lineageTitle}`),
+            make('small', `${status} · Border: ${distOutsideM}m / ${WC.MAX_OUTSIDE_METERS}m · HP ${hp}/${maxHp} · Nourishment ${Math.round(w.hunger)}% · Zombies Slain ${w.autonomousKills || 0}`)
           );
-          const meter = make('div', null, 'dragon-meter');
-          const fill = doc.createElement('i');
-          fill.style.width = `${Math.max(4, Math.round(d.hunger))}%`;
-          meter.append(fill);
+
+          const hpMeter = make('div', null, 'dragon-meter wolf-hp-meter');
+          const hpFill = doc.createElement('i');
+          hpFill.style.width = `${Math.max(4, Math.round((hp / Math.max(1, maxHp)) * 100))}%`;
+          hpMeter.append(hpFill);
+
+          const hungerMeter = make('div', null, 'dragon-meter');
+          const hungerFill = doc.createElement('i');
+          hungerFill.style.width = `${Math.max(4, Math.round(w.hunger))}%`;
+          hungerMeter.append(hungerFill);
 
           const actions = make('div', null, 'dragon-actions');
-          const flyBtn = btn('Mount & Fly ' + d.name, () => mountDragon(
-            { siteId: site.id, dragonId: d.id }, riderSelect?.value
-          ), 'primary-gold');
-
-          const thunderBtn = btn('Protective Thunder Ward', () => {
-            const riderId = riderSelect?.value || (actorIsWizard ? actorId : ds.wizards[0]?.id);
-            runCmd('dragonAction', { siteId: site.id, action: 'strikeThunder', riderId: riderId || actorId, dragonId: d.id, target: { kind: 'defense', name: site.name + ' Perimeter' } });
-          });
-
-          const feedBtn = btn(`Feed ${d.name}`, () => runCmd('dragonAction', { siteId: site.id, action: 'feed', dragonId: d.id }));
-          const funFireBtn = btn('Joyful Sky-Fire', () => {
-            const riderId = riderSelect?.value || (actorIsWizard ? actorId : ds.wizards[0]?.id);
-            runCmd('dragonAction', { siteId: site.id, action: 'blastFire', riderId: riderId || actorId, dragonId: d.id, target: { kind: 'fun' } });
-          }, 'fire-action');
-
-          actions.append(flyBtn, thunderBtn, feedBtn, funFireBtn);
-          card.append(head, meter, actions);
-          secDragons.append(card);
+          actions.append(
+            btn(`Feed & Heal ${w.name}`, () => runCmd('dragonAction', { siteId: site.id, action: 'feed', dragonId: w.id })),
+            btn(`Howl with ${w.name}`, () => {
+              root.EarthNightAudio?.triggerWolfHowl?.(1.0);
+              runCmd('dragonAction', { siteId: site.id, action: 'howl', dragonId: w.id });
+            }, 'primary-gold')
+          );
+          card.append(head, hpMeter, hungerMeter, actions);
+          secWolves.append(card);
         }
       }
 
-      // Summon new Enchanted Dragon form
-      const summonBox = make('div', null, 'dragon-card');
-      summonBox.append(make('strong', `Raise a New Protector Dragon (${DS.DRAGON_COST.funds} funds · ${DS.DRAGON_COST.food} food)`));
+      // Call a new Majestic Wolf form
+      const callBox = make('div', null, 'dragon-card');
+      callBox.append(make('strong', `Call a New Majestic Wolf to the Cave (${WC.WOLF_COST.funds} funds · ${WC.WOLF_COST.food} food)`));
       const row = make('div', null, 'dragon-form-row');
       const lineageSel = doc.createElement('select');
-      lineageSel.setAttribute('aria-label', 'Dragon lineage');
-      for (const l of DS.LINEAGES) {
+      lineageSel.setAttribute('aria-label', 'Wolf bloodline');
+      for (const l of WC.LINEAGES) {
         const opt = make('option', `${l.title} (Speed ×${l.speedBonus})`);
         opt.value = l.id;
         lineageSel.append(opt);
@@ -314,83 +227,59 @@
       lineageSel.value = selectedLineage;
       lineageSel.addEventListener('change', () => { selectedLineage = lineageSel.value; });
       const nameInput = doc.createElement('input');
-      nameInput.placeholder = 'Optional dragon name';
+      nameInput.placeholder = 'Optional wolf name';
       nameInput.maxLength = 32;
-      row.append(lineageSel, nameInput, btn('Summon Enchanted Dragon', () => runCmd('dragonAction', { siteId: site.id, action: 'summon', lineageId: lineageSel.value, name: nameInput.value }), 'primary-gold'));
-      summonBox.append(row);
-      secDragons.append(summonBox);
-      body.append(secDragons);
+      row.append(
+        lineageSel,
+        nameInput,
+        btn('Call Majestic Wolf', () => runCmd('dragonAction', { siteId: site.id, action: 'summon', lineageId: lineageSel.value, name: nameInput.value }), 'primary-gold')
+      );
+      callBox.append(row);
+      secWolves.append(callBox);
+      body.append(secWolves);
 
-      // Section 2: Wizards (Homeland-Bound Guardians — Full Abilities Enabled Only in Originating Community)
-      const secWiz = make('section', null, 'dragon-grid');
-      secWiz.append(make('h3', `Wizards (${ds.wizards.length}) · Homeland Resonance & Protective Staff`));
-      const wizCard = make('div', null, 'dragon-card');
-      const actorPower = DS.wizardPowerStatus?.(sim.state, site, actorId);
-      wizCard.append(make('p', actorPower?.fullPower
-        ? `${actorName} is attuned to the soul of ${site.name}: full Wizard abilities (Dragon Flight & Protective Staff Thunder) are enabled here.`
-        : actorIsWizard
-          ? actorPower.reason
-          : `Active character (${actorName}) is not a Wizard yet. Train a Wizard of ${site.name} to fly dragons and channel protective staff thunder within this homeland.`));
-      if (ds.wizards.length) {
-        const ul = doc.createElement('ul');
-        for (const w of ds.wizards) {
-          const originName = w.homeSiteName || site.name;
-          const status = (!w.homeSiteId || w.homeSiteId === site.id) ? 'Full Homeland Resonance' : `Origin: ${originName} (Diminished Away)`;
-          ul.append(make('li', `${w.name} — ${w.title} · ${status} (${w.flights || 0} flights · ${w.thunderStrikes || 0} thunder wards)`));
-        }
-        wizCard.append(ul);
-      }
-      const wizActions = make('div', null, 'dragon-actions');
-      if (!actorIsWizard) {
-        wizActions.append(btn(`Train ${actorName} as Wizard (${DS.WIZARD_COST.funds} funds)`, () => runCmd('dragonAction', { siteId: site.id, action: 'trainWizard', personId: actorId }), 'primary-gold'));
-      }
-      wizActions.append(btn(`Create New Wizard at Stable (${DS.WIZARD_COST.funds} funds)`, () => runCmd('dragonAction', { siteId: site.id, action: 'createWizard', name: '' })));
-      wizCard.append(wizActions);
-      secWiz.append(wizCard);
-      body.append(secWiz);
-
-      // Section 3: Larder & Stable Workers (Regularly Replenish Dragon Food)
+      // Section 2: Cave Keepers & Provisions
       const secCare = make('section', null, 'dragon-grid');
-      secCare.append(make('h3', 'Dragon Food Larder & Stable Workers'));
+      secCare.append(make('h3', 'Cave Provisions & Forest Keepers'));
       const careCard = make('div', null, 'dragon-card');
       careCard.append(
-        make('strong', `Stable Food Stock: ${ds.foodStock} / ${DS.LARDER_MAX} rations`),
-        make('p', 'Dragons must be fed regularly. Assign residents to work at the Dragon Stable so they automatically replenish the larder and feed hungry dragons.')
+        make('strong', `Cave Provisions: ${ds.foodStock} / ${WC.LARDER_MAX} rations`),
+        make('p', 'Well-fed wolves recover rapidly after fighting zombies. Assign villagers to tend the Giant Wolf Cave so they automatically stock provisions and care for the pack.')
       );
       const larderMeter = make('div', null, 'dragon-meter');
       const larderFill = doc.createElement('i');
-      larderFill.style.width = `${Math.round((ds.foodStock / DS.LARDER_MAX) * 100)}%`;
+      larderFill.style.width = `${Math.round((ds.foodStock / WC.LARDER_MAX) * 100)}%`;
       larderMeter.append(larderFill);
       careCard.append(larderMeter);
 
       const workersText = ds.workers.length
-        ? 'Active stable workers: ' + ds.workers.map(w => `${w.name} (${w.mealsReplenished || 0} stocked)`).join(', ')
-        : 'No workers assigned yet. Assign a resident below!';
+        ? 'Active cave keepers: ' + ds.workers.map(w => `${w.name} (${w.mealsReplenished || 0} stocked)`).join(', ')
+        : 'No cave keepers assigned yet. Assign a villager below.';
       careCard.append(make('p', workersText));
 
       const workerRow = make('div', null, 'dragon-form-row');
       const peopleSel = doc.createElement('select');
-      peopleSel.setAttribute('aria-label', 'Choose resident to assign to Dragon Stable');
+      peopleSel.setAttribute('aria-label', 'Choose resident to tend the Giant Wolf Cave');
       const roster = root.EarthPersonas?.list?.(site) || site.residents || [];
       for (const p of roster) {
         const assigned = ds.workers.some(w => w.id === p.id);
-        const opt = make('option', p.name + (assigned ? ' (Working here · Remove)' : ''));
+        const opt = make('option', p.name + (assigned ? ' (Tending cave · Remove)' : ''));
         opt.value = p.id;
         peopleSel.append(opt);
       }
       workerRow.append(
         peopleSel,
-        btn('Assign / Toggle Worker', () => runCmd('dragonAction', { siteId: site.id, action: 'assignWorker', personId: peopleSel.value })),
-        btn('Replenish Food (+6)', () => runCmd('dragonAction', { siteId: site.id, action: 'replenishFood', amount: 6 }))
+        btn('Assign / Toggle Keeper', () => runCmd('dragonAction', { siteId: site.id, action: 'assignWorker', personId: peopleSel.value })),
+        btn('Stock Provisions (+6)', () => runCmd('dragonAction', { siteId: site.id, action: 'replenishFood', amount: 6 }))
       );
       careCard.append(workerRow);
       secCare.append(careCard);
       body.append(secCare);
 
-      // Recent Dragon Stable Log
+      // Recent Pack Chronicle
       if (ds.log.length) {
         const logBox = make('details');
-        logBox.append(make('summary', `Dragon Stable Chronicle (${ds.log.length})`));
+        logBox.append(make('summary', `Giant Wolf Cave Chronicle (${ds.log.length})`));
         const ul = doc.createElement('ul');
         for (const entry of ds.log.slice(0, 8)) {
           ul.append(make('li', `Week ${entry.week} · ${entry.text}`));
@@ -405,6 +294,11 @@
       if (!currentSite()) return;
       render();
       if (!dialog.open) dialog.showModal();
+    }
+
+    // Legacy compatibility shim: clicking a wolf opens the Giant Wolf Cave panel
+    function mountDragon(target) {
+      open(target?.siteId || sim.active()?.id);
     }
 
     return { open, render, mountDragon };

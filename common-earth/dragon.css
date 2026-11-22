@@ -200,7 +200,27 @@
   gap: 0.25rem;
 }
 .troll-meter > i {
-  background: linear-gradient(90deg, #d93626, #ff8133);
+  background: linear-gradient(90deg, #b83428, #e66828);
+}
+.wolf-hp-meter > i {
+  background: linear-gradient(90deg, #49c497, #9af0d0);
+}
+.night-quick-btn {
+  min-height: 36px;
+  padding: 0.25rem 0.62rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(16, 30, 42, 0.9);
+  color: #e2f1ff;
+  border: 1px solid rgba(152, 198, 232, 0.5);
+  cursor: pointer;
+}
+.night-quick-btn[aria-pressed="true"] {
+  background: rgba(34, 58, 86, 0.94);
+  border-color: #b4dcff;
+  color: #f4faff;
 }
 .troll-siege-bar {
   position: absolute;

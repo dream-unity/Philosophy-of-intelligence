@@ -79,12 +79,86 @@
     };
   }
 
+  const METERS_PER_STREET_UNIT = 13;
+  const MAX_WOLF_OUTSIDE_METERS = 100;
+  const MAX_WOLF_OUTSIDE_UNITS = MAX_WOLF_OUTSIDE_METERS / METERS_PER_STREET_UNIT;
+
   function clampPointToCommunityWalls2D(x, y, territoryLevel = 0, hasWaterfront = false, margin = 0.85) {
     const wb = communityWallBounds2D(territoryLevel, hasWaterfront, margin);
     const cx = clamp(Number.isFinite(x) ? x : 12, wb.minX, wb.maxX);
     const cy = clamp(Number.isFinite(y) ? y : 12, wb.minY, wb.maxY);
     const clamped = Math.abs(cx - x) > 1e-6 || Math.abs(cy - y) > 1e-6;
     return { x: cx, y: cy, clamped, bounds: wb };
+  }
+
+  /**
+   * Returns the exact Euclidean distance in meters that (x, y) lies outside the
+   * community's perimeter territory bounds (0 when inside community territory).
+   */
+  function distanceOutsideTerritoryMeters(x, y, territoryLevel = 0, hasWaterfront = false) {
+    const b = perimeterBounds(territoryLevel, hasWaterfront);
+    const px = Number.isFinite(x) ? x : 12;
+    const py = Number.isFinite(y) ? y : 12;
+    const cx = clamp(px, b.minX, b.maxX);
+    const cy = clamp(py, b.minY, b.maxY);
+    return Math.hypot(px - cx, py - cy) * METERS_PER_STREET_UNIT;
+  }
+
+  /**
+   * Returns the wolf roaming bounds: full community territory PLUS maximally
+   * 100 meters (no more, no less) outside the community's territory boundary.
+   */
+  function wolfTerritoryBounds2D(territoryLevel = 0, hasWaterfront = false) {
+    const b = perimeterBounds(territoryLevel, hasWaterfront);
+    return {
+      minX: b.minX - MAX_WOLF_OUTSIDE_UNITS,
+      maxX: b.maxX + MAX_WOLF_OUTSIDE_UNITS,
+      minY: b.minY - MAX_WOLF_OUTSIDE_UNITS,
+      maxY: hasWaterfront ? b.maxY : b.maxY + MAX_WOLF_OUTSIDE_UNITS,
+      territoryMinX: b.minX,
+      territoryMaxX: b.maxX,
+      territoryMinY: b.minY,
+      territoryMaxY: b.maxY,
+      maxOutsideMeters: MAX_WOLF_OUTSIDE_METERS,
+      maxOutsideUnits: MAX_WOLF_OUTSIDE_UNITS,
+      metersPerUnit: METERS_PER_STREET_UNIT,
+      hasWaterfront: b.hasWaterfront
+    };
+  }
+
+  /**
+   * Strictly clamps a wolf's (x, y) position so it can travel freely inside community
+   * territory and maximally 100.0 meters outside the community territory perimeter
+   * in any direction (Euclidean distance to territory rectangle <= 100.0 m).
+   */
+  function clampPointToWolfTerritory2D(x, y, territoryLevel = 0, hasWaterfront = false) {
+    const b = perimeterBounds(territoryLevel, hasWaterfront);
+    let px = Number.isFinite(x) ? x : 12;
+    let py = Number.isFinite(y) ? y : 12;
+    let clamped = false;
+    if (hasWaterfront && py > b.maxY) {
+      py = b.maxY;
+      clamped = true;
+    }
+    const cx = clamp(px, b.minX, b.maxX);
+    const cy = clamp(py, b.minY, b.maxY);
+    const dx = px - cx;
+    const dy = py - cy;
+    const distUnits = Math.hypot(dx, dy);
+    if (distUnits > MAX_WOLF_OUTSIDE_UNITS) {
+      const scale = MAX_WOLF_OUTSIDE_UNITS / distUnits;
+      px = cx + dx * scale;
+      py = cy + dy * scale;
+      clamped = true;
+    }
+    const outsideMeters = Math.min(MAX_WOLF_OUTSIDE_METERS, Math.hypot(px - cx, py - cy) * METERS_PER_STREET_UNIT);
+    return {
+      x: px,
+      y: py,
+      clamped,
+      outsideMeters: Number(outsideMeters.toFixed(3)),
+      bounds: wolfTerritoryBounds2D(territoryLevel, hasWaterfront)
+    };
   }
 
   /**
@@ -838,12 +912,18 @@
 
   const api = Object.freeze({
     PROFILES,
+    METERS_PER_STREET_UNIT,
+    MAX_WOLF_OUTSIDE_METERS,
+    MAX_WOLF_OUTSIDE_UNITS,
     rectOverlaps,
     pointInRect,
     resolveCircleRect,
     perimeterBounds,
     communityWallBounds2D,
     clampPointToCommunityWalls2D,
+    distanceOutsideTerritoryMeters,
+    wolfTerritoryBounds2D,
+    clampPointToWolfTerritory2D,
     communityWallBounds3D,
     perimeterWallSegments,
     militaryBaseLayout,

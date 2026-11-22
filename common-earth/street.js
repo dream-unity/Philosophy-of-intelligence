@@ -1639,15 +1639,26 @@
       for(let by=0;by<4;by++)for(let bx=0;bx<4;bx++){
         const block=[bx,by],cell=by*4+bx, p=centre(block), lot=state.lots.find(l=>sameBlock(l.block,block));
         const park=!lot&&!sameBlock(block,MARKET)&&!HOMES.some(home=>sameBlock(home,block));
-        const n=park?7:(!lot||lot.building)?1:2;
+        const n=park?9:(!lot||lot.building)?3:5;
         for(let i=0;i<n;i++){
-          const tx=park?p.x-1.7+noise(seed,cell*23+i,11)*3.4:p.x+(i%2?1:-1)*(1.37+noise(seed,cell,9)*.45);
-          const ty=park?p.y-1.66+noise(seed,cell*37+i,23)*3.2:p.y-1.5+noise(seed,cell*29+i,33)*.62;
-          if(park&&(Math.abs(tx-p.x)<.55||venues.some(v=>Math.abs(tx-v.x)<1.98&&Math.abs(ty-v.y)<1.68)))continue;
-          state.trees.push({x:tx,y:ty,size:(park?.86:.70)+noise(seed,cell+i*11,2)*.47,index:Math.floor(noise(seed,cell,i)*4),palm:Math.abs(s?.lat??40)<27&&i%3===0});
+          const tx=park?p.x-1.8+noise(seed,cell*23+i,11)*3.6:p.x+(i%2?1:-1)*(1.38+noise(seed,cell+i*7,9)*.52);
+          const ty=park?p.y-1.75+noise(seed,cell*37+i,23)*3.4:p.y-1.65+noise(seed,cell*29+i,33)*3.2;
+          if(park&&(Math.abs(tx-p.x)<.52||venues.some(v=>Math.abs(tx-v.x)<1.98&&Math.abs(ty-v.y)<1.68)))continue;
+          if(!park&&lot?.building&&Math.abs(tx-p.x)<1.25&&Math.abs(ty-p.y)<1.25)continue;
+          state.trees.push({x:tx,y:ty,size:(park?1.08:.92)+noise(seed,cell+i*11,2)*.52,index:Math.floor(noise(seed,cell,i)*4),palm:false});
         }
         if(park){state.decor.push({type:'bench',x:p.x+.42,y:p.y+.85});if(bx===3&&by===0)state.decor.push({type:'kiosk',x:p.x+(venues.length?-1.92:.07),y:p.y+(venues.length?1.26:-.4)});}
         if(bx%2===by%2)state.decor.push({type:'lamp',x:p.x+2.06,y:p.y+1.94});
+      }
+      // Ancient Enchanted Forest perimeter ring surrounding the village glades and Giant Wolf Cave
+      for(let ring=0;ring<38;ring++){
+        const ang=(ring/38)*Math.PI*2;
+        const rad=15.6+noise(seed,ring,401)*3.4;
+        const rx=12+Math.cos(ang)*rad;
+        const ry=12+Math.sin(ang)*rad;
+        if(berths.length&&ry>24.8)continue;
+        if((s.freeBuildings||[]).some(fb=>Math.hypot(rx-fb.x,ry-fb.y)<2.9))continue;
+        state.trees.push({x:rx,y:ry,size:1.12+noise(seed,ring,409)*.58,index:ring%4,palm:false});
       }
       for(const prop of state.decor){
         if(prop.type==='bench'){
@@ -2107,25 +2118,23 @@
       }
     }
     function openingGround(){
-      // Draw the real parcel, road and quay outlines before submitting the
-      // detailed landscape. Refinement paints into a separate complete floor.
+      // Lush Enchanted Forest woodland floor & mossy glade clearing
       const site=state.site,water=Boolean(site?.water),shore=Boolean(berths.length),cold=Math.abs(site?.lat||0)>57;
-      const palette=window.EarthTownSurroundings?.background?.(site);
-      const soil=cold?'#9ea998':water?'#a49270':'#8d9a71';
-      rect(-10,-10,46,shore?35.2:47,-.49,palette?.[1]||soil);
-      if(shore)rect(-10,25.2,46,17,-.46,coastSite(site)==='lake'?'#779896':'#678f91');
-      box(-1.31,-1.31,26.62,26.62,-.43,.40,water?'#9a8b72':'#73746b','#8a816c','#776d5a');
+      const soil=cold?'#3c5646':water?'#476953':'#2f5038';
+      rect(-10,-10,46,shore?35.2:47,-.49,soil);
+      if(shore)rect(-10,25.2,46,17,-.46,coastSite(site)==='lake'?'#3a6168':'#315862');
+      box(-1.31,-1.31,26.62,26.62,-.43,.40,water?'#4a604b':'#3d5940','#314a35','#253a2a');
       for(let by=0;by<4;by++)for(let bx=0;bx<4;bx++){
         const block=[bx,by],p=centre(block),lot=state.lots.find(item=>sameBlock(item.block,block));
         const occupied=sameBlock(block,MARKET)||HOMES.some(home=>sameBlock(home,block))||Boolean(lot?.building||lot&&workLots.has(lot.plot));
-        poly(plazaOutline(p.x,p.y,BLOCK/2-HALF_ROAD,.31).map(([x,y])=>[x,y,.075]),water?'#b4a07f':'#bcae94');
-        poly(plazaOutline(p.x,p.y,1.72,.19).map(([x,y])=>[x,y,.085]),occupied?water?'#aa9274':'#b5a68f':soil);
+        poly(plazaOutline(p.x,p.y,BLOCK/2-HALF_ROAD,.31).map(([x,y])=>[x,y,.075]),water?'#556e52':'#466646');
+        poly(plazaOutline(p.x,p.y,1.72,.19).map(([x,y])=>[x,y,.085]),occupied?water?'#5c7253':'#4d6b49':'#365a3c');
       }
-      streetName(15,24.44,'EXCHANGE ST','x');streetName(6.4,9,'GARDEN WALK','y');
+      streetName(15,24.44,'MOSSGLADE PATH','x');streetName(6.4,9,'FERNWOOD TRAIL','y');
     }
     function ground(repairAreas,pass=null,preview=false) {
-      // Both paths paint distant scenery and the shoreline before the foundation.
-      // Four parcel rows follow, with street markings and tree shadows on top.
+      // Enchanted Forest community ground: mossy trails, emerald woodland glades,
+      // wild ferns, bioluminescent mushrooms, and ancient forest roots.
       requestPlantingAtlas();
       if(preview){openingGround();return;}
       const s=state.site,water=Boolean(s?.water);
@@ -2136,19 +2145,20 @@
       if((pass===null||pass===1)&&(water||!surroundings))landscape();
       if(pass===null||pass===2){
         const top=-1.26,end=SIDE+1.26,span=end-top;
-        // The sea wall and the low foundation stand below the usable quay and streets.
-        box(top-.08,top-.08,span+.16,span+.16,-.44,.40,water?'#8f816b':'#998e71',water?'#7a715e':'#8a816c',water?'#5d625b':'#766e5c');
-        groundSurface([[top,top],[end,top],[end,end],[top,end]],water?5:zanzibar?1:2,water?3.8:zanzibar?2.45:3.1,water?'#9a8b72':zanzibar?'#8e8b77':'#70726a',0);
-        if(zanzibar) {
-          // The broad quay carries deliveries, while the smaller lanes have hand-laid stone setts.
-          groundSurface([[top,SIDE-.89],[end,SIDE-.89],[end,end],[top,end]],2,3.1,'#70726a',.002);
-          groundSurface([[12-.89,top],[12+.89,top],[12+.89,end],[12-.89,end]],2,3.1,'#70726a',.002);
+        // Rich enchanted woodland loam & mossy earth foundation replacing urban asphalt
+        box(top-.08,top-.08,span+.16,span+.16,-.44,.40,water?'#485c47':'#3c563f',water?'#354736':'#2d4531',water?'#243528':'#213525');
+        groundSurface([[top,top],[end,top],[end,end],[top,end]],4,3.6,water?'#4c6449':cold?'#455f4d':'#3c573f',0);
+        // Subtle moss-dappled forest trails connecting glades
+        for(const axis of [0,1,2,3,4]){
+          const lane=axis*BLOCK;
+          rect(top,lane-.42,span,.84,.006,'rgba(92,108,74,0.34)');
+          rect(lane-.42,top,.84,span,.006,'rgba(92,108,74,0.34)');
         }
         if (water || zanzibar) {
           for(let j=0;j<46;j++) {
             const a=top+j*span/46;
-            line(a,end+.053,-.35,a-.025,end+.053,-.055,'rgba(54,62,54,.42)',Math.max(.55,unit*.024));
-            if(water && j%6===2)box(a,end+.04,.14,.12,-.55,.60,'#ac9776','#756d58','#5e604f');
+            line(a,end+.053,-.35,a-.025,end+.053,-.055,'rgba(32,52,38,.45)',Math.max(.55,unit*.024));
+            if(water && j%6===2)box(a,end+.04,.14,.12,-.55,.60,'#5d7356','#3f543d','#2d3f2e');
           }
         }
       }
@@ -2156,8 +2166,6 @@
         if(pass!==null&&pass!==by+3)continue;
         const block=[bx,by],p=centre(block);
         if(repairAreas){
-          // A parcel includes its gutter and both far crossings. Only submit
-          // its paving, plants, kerbs and drains if their bounds touch a repair.
           const [x,y]=screen(p.x,p.y);
           if(!repairAreas.some(a=>x+7*unit>=a.left && x-7*unit<=a.right &&
               y+4*unit>=a.top && y-4*unit<=a.bottom))continue;
@@ -2167,89 +2175,66 @@
         const hard=marketBlock||home||['market','hall','workshop','pier','fishingDock'].includes(lot?.building?.kind);
         const park=!lot && !home && !marketBlock;
         const kerb=plazaOutline(p.x,p.y,BLOCK/2-HALF_ROAD,.31), interior=plazaOutline(p.x,p.y,1.75,.22);
-        // Preserve the bevel and narrow contact shadow even when the raster has not arrived.
-        poly(kerb.map(([x,y])=>[x+.035,y+.012,-.01]),water?'#756e5e':'#4b524c');
-        poly(kerb.map(([x,y])=>[x,y,.04]),water?'#93876d':'#b5aa92');
-        groundSurface(kerb,water?5:0,water?3.2:3.0,water?'#b6a17f':zanzibar?'#d2c0a1':'#bcae94',.075);
-        if(!preview)kerbStones(kerb,water);
+        // Soft mossy earth edge instead of hard concrete kerb
+        poly(kerb.map(([x,y])=>[x+.035,y+.012,-.01]),'#223526');
+        poly(kerb.map(([x,y])=>[x,y,.04]),'#436144');
+        groundSurface(kerb,4,3.4,water?'#4e6d50':'#456947',.075);
         if(lot&&workLots.has(lot.plot)){
-          groundSurface(interior,water?5:3,2.5,water?'#a48d6a':'#ad9473',.079);
+          groundSurface(interior,3,2.5,'#6b6649',.079);
         }else if(hard) {
-          const finish=water?5:marketBlock?1:0;
           const vessel=water && (home || marketBlock || ['market','hall','workshop'].includes(lot?.building?.kind));
           if(vessel)occupiedBerth(p,cell);
-          else groundSurface(interior,finish,marketBlock?2.72:2.2,water?'#b3a283':marketBlock?'#9b947d':'#c4b596',.078);
+          else groundSurface(interior,4,2.8,marketBlock?'#556f4f':'#4a6a48',.078);
           if(home && !water && plantingAtlas) {
-            const species=zanzibar&&cell!==15 ? 1 : cold ? 3 : 0;
-            shrub(p.x-1.38,p.y+1.26,species,.87);
-            if(cell%2)shrub(p.x-1.64,p.y+.89,cold?3:0,.56);
+            const species=cold ? 3 : 0;
+            shrub(p.x-1.38,p.y+1.26,species,.96);
+            shrub(p.x+1.36,p.y-1.18,species,.82);
+            if(cell%2)shrub(p.x-1.64,p.y+.89,cold?3:0,.68);
           }
           if(!water && (marketBlock||lot?.building?.kind==='market')) {
-            // A stone sett apron leads the player to the same market entrance used by the simulation.
-            for(const side of [-1,1])line(p.x+side*.94,p.y+1.35,.082,p.x+side*.94,p.y+2.0,.082,'rgba(225,209,173,.57)',Math.max(.8,unit*.041));
             const inset=screen(p.x,p.y+1.76,.084);
-            ellipse(...inset,unit*.28,unit*.122,'rgba(108,104,81,.42)','#c9bd98');
-            for(let ray=0;ray<8;ray++){
-              const a=ray*Math.PI/4;
-              path([inset,[inset[0]+Math.cos(a)*unit*.23,inset[1]+Math.sin(a)*unit*.091]],null,'rgba(218,200,154,.78)',Math.max(.55,unit*.021));
-            }
+            ellipse(...inset,unit*.32,unit*.14,'rgba(44,74,52,.45)','#8ab886');
           }
         } else if(water && lot && !lot.building) {
           emptyBerth(p,cell);
         } else {
-          // Verge and meadow meet the pavement at a built edge.
-          poly(interior.map(([x,y])=>[x,y,.083]),water?'#827a58':'#918c68');
-          groundSurface(plazaOutline(p.x,p.y,1.69,.19),4,3.4, cold?'#95a18b':'#8f9b70',.085);
+          // Enchanted emerald woodland glade with moss patches & soft fairy-ring mushrooms
+          poly(interior.map(([x,y])=>[x,y,.083]),'#2e4d34');
+          groundSurface(plazaOutline(p.x,p.y,1.69,.19),4,3.4,cold?'#456652':'#38603f',.085);
           const patch=Math.floor(noise(state.seed,cell,183)*5);
-          if(!water && !park && !lot?.building && patch===2) {
-            // An open sandy lot and recovering meadow read differently from an established park.
-            const inside=plazaOutline(p.x,p.y,1.67,.19);
-            ctx.save();ctx.globalAlpha=zanzibar?.72:.42;groundSurface(inside,3,2.7,'#ab9876',.087);ctx.restore();
-          } else if(patch===0)poly(interior.map(([x,y])=>[x,y,.088]),'rgba(216,181,107,.14)');
-          else if(patch===4)poly(interior.map(([x,y])=>[x,y,.088]),'rgba(61,96,68,.14)');
-          if(cold)poly(interior.map(([x,y])=>[x,y,.088]),'rgba(184,211,194,.17)');
+          if(patch===0)poly(interior.map(([x,y])=>[x,y,.088]),'rgba(108,186,128,.16)');
+          else if(patch===4)poly(interior.map(([x,y])=>[x,y,.088]),'rgba(32,76,56,.22)');
           if(park) {
             const route=[[p.x-.57,p.y-1.69],[p.x-.27,p.y-1.69],[p.x+.05,p.y-.81],[p.x-.13,p.y+.38],[p.x+.44,p.y+1.69],[p.x+.13,p.y+1.69],[p.x-.48,p.y+.4],[p.x-.26,p.y-.8]];
-            groundSurface(route,3,2,'#b3a17e',.09);
+            groundSurface(route,3,2,'#6f6c51',.09);
           }
           if(!lot?.building)wildParcel(p,cell);
           if(!preview)parkPlanting(p,cell,water);
-          if(lot&&!lot.building)for(const xx of [-1,1])for(const yy of [-1,1]){
-            const x=p.x+xx*1.50,y=p.y+yy*1.50;
-            line(x,y,.091,x-xx*.18,y,.091,'#d4c7a0',Math.max(.65,unit*.032));
-            line(x,y,.091,x,y-yy*.18,.091,'#d4c7a0',Math.max(.65,unit*.032));
+          // Bioluminescent enchanted forest mushrooms & clover tufts in every open glade
+          for(let m=0;m<5;m++){
+            const ma=noise(state.seed,cell*17+m,31)*Math.PI*2;
+            const mr=0.55+noise(state.seed,cell*19+m,73)*1.05;
+            const mp=screen(p.x+Math.cos(ma)*mr,p.y+Math.sin(ma)*mr,.095);
+            ellipse(mp[0],mp[1],Math.max(2,unit*.08),Math.max(1.2,unit*.045),m%2?'rgba(148,242,196,0.52)':'rgba(210,242,148,0.44)');
           }
         }
-        // Crossing bars stop at the road gutter; remaining corners stay quiet and legible.
-        if((!zanzibar && (bx+by)%2===0) || marketBlock || zanzibar && bx===1 && by%2===0)for(let j=0;j<5;j++) {
-          const f=1.12+j*.15;
-          if(bx<3)rect((bx+1)*BLOCK-.63,by*BLOCK+f,1.26,.075,.014,water?'#c8baa0':'#c9c7b5');
-          if(by<3)rect(bx*BLOCK+f,(by+1)*BLOCK-.63,.075,1.26,.014,water?'#c8baa0':'#c9c7b5');
+        // Soft mossy stepping-stone trail markers instead of urban crosswalks
+        if((bx+by)%2===0 || marketBlock){
+          for(let j=0;j<3;j++){
+            const f=1.22+j*.32;
+            if(bx<3)ellipse(...screen((bx+1)*BLOCK,by*BLOCK+f,.02),Math.max(2,unit*.11),Math.max(1.2,unit*.055),'rgba(116,136,102,0.55)');
+            if(by<3)ellipse(...screen(bx*BLOCK+f,(by+1)*BLOCK,.02),Math.max(2,unit*.11),Math.max(1.2,unit*.055),'rgba(116,136,102,0.55)');
+          }
         }
-        drain(bx*BLOCK+.71,by*BLOCK+2.04,false,water);
-        drain(bx*BLOCK+3.78,by*BLOCK+.72,true,water);
       }
       if(pass!==null&&pass!==7)return;
-      // Market and garden streets are through routes. Residential lanes use a quieter shared surface.
-      for(const axis of [1,2,4])for(let j=0;j<4;j++)for(let k=0;k<2;k++) {
-        const a=j*BLOCK+2.36+k*1.09,b=axis*BLOCK;
-        const paint=water?'rgba(225,213,175,.48)':'rgba(232,216,164,.68)';
-        if(!zanzibar||axis===4)rect(a,b-.022,.39,.044,.016,paint);
-        if(!zanzibar||axis===2)rect(b-.022,a,.044,.39,.016,paint);
-      }
       for(const tree of state.trees){
         if(workTree(tree))continue;
-        const lot=state.lots.find(record=>record.block[0]===Math.floor(tree.x/BLOCK)&&record.block[1]===Math.floor(tree.y/BLOCK));
-        if(!lot || lot.building){
-          const foot=screen(tree.x,tree.y,.091);
-          ellipse(...foot,unit*.205,unit*.097,water?'#796e51':'#8a8063');
-          ellipse(...foot,unit*.14,unit*.063,'#655f43');
-        }
         const contact=screen(tree.x,tree.y,.086);
-        ellipse(contact[0],contact[1],unit*tree.size*.143,unit*tree.size*.056,'rgba(49,48,32,.22)');
+        ellipse(contact[0],contact[1],unit*tree.size*.19,unit*tree.size*.085,'rgba(18,38,24,.30)');
         castTree(tree);
       }
-      streetName(15,24.44,'EXCHANGE ST','x');streetName(6.4,9,'GARDEN WALK','y');streetName(8.9,12.43,'COMMONS RD','x');
+      streetName(15,24.44,'MOSSGLADE PATH','x');streetName(6.4,9,'FERNWOOD TRAIL','y');streetName(8.9,12.43,'MOONWOOD WAY','x');
     }
     function discardTerrain(){
       releaseRecentTerrain();clearGround();dirty=true;schedule();
@@ -4129,7 +4114,7 @@
       for(const fb of (site.freeBuildings||[])){
         if(!Number.isFinite(fb.x)||!Number.isFinite(fb.y))continue;
         test({x:fb.x,y:fb.y},fb.kind,0,1,.35,()=>({assetId:fb.id,assetName:fb.name||fb.kind,use:fb.kind==='dragonStable'?'dragonStable':'project',buildingKind:fb.kind,
-          activity:fb.kind==='dragonStable'?'Enchanted Dragon Stable · Summon dragons, train Wizards, replenish food & launch 3D Flight!':(window.CommonEarthSim?.buildings?.[fb.kind]?.info||'Open-land community building.')}));
+          activity:fb.kind==='dragonStable'?'Giant Wolf Cave · Shelter Majestic Wolves that roam the enchanted forest up to 100m outside territory and protect villagers from zombies!':(window.CommonEarthSim?.buildings?.[fb.kind]?.info||'Open-land community building.')}));
       }
       for(let i=0;i<(site.playerHouses||[]).length;i++){
         const ph=site.playerHouses[i];
@@ -4581,26 +4566,19 @@
       const stable=window.EarthDragonStable.stableLocation(state.site);
       if(!stable)return [];
       const autoPoses=window.EarthDragonStable.getAutonomousPoses?.(state.site)||[];
-      const anyDefending=autoPoses.some(p=>p.defending);
-      const poses=[];
-      if(!anyDefending){
-        for(const spot of [...state.lots.filter(l=>l.building?.kind==='dragonStable'),
-                            ...(state.site.freeBuildings||[]).filter(b=>b.kind==='dragonStable')]){
-          poses.push({dragon:roster[0],x:spot.x+1.14,y:spot.y+.80,z:1.12,
-            size:.42,angle:.4,depth:spot.x+spot.y+.351,breathingFire:false,defending:false});
-        }
-      }
       if(autoPoses.length){
-        for(const ap of autoPoses)poses.push(ap);
-        return poses;
+        return autoPoses;
       }
-      roster.forEach((dragon,i)=>{
-        const ring=i%3,t=visualTime*(.38+ring*.07)+i*2.1;
-        const rx=6.5+ring*3.2,ry=5.5+ring*2.6;
-        const x=stable.x+Math.cos(t)*rx,y=stable.y+Math.sin(t)*ry;
+      const poses=[];
+      roster.forEach((wolf,i)=>{
+        const ring=i%3,t=visualTime*(.28+ring*.06)+i*2.1;
+        const rx=5.2+ring*2.4,ry=4.4+ring*2.1;
+        const rawX=stable.x+Math.cos(t)*rx,rawY=stable.y+Math.sin(t)*ry;
+        const clamped=window.EarthDragonStable.clampWolfPosition?.(state.site,rawX,rawY)||{x:rawX,y:rawY};
         const dx=-Math.sin(t)*rx,dy=Math.cos(t)*ry;
-        poses.push({dragon,x,y,z:(3.2+ring*.9+Math.sin(t*1.6)*.55)*.62,
-          angle:Math.atan2((dx+dy)*TILT,dx-dy),size:.95,depth:x+y+9,breathingFire:false,defending:false});
+        poses.push({wolf,dragon:wolf,x:clamped.x,y:clamped.y,z:0,
+          angle:Math.atan2((dx+dy)*TILT,dx-dy),size:.82,depth:clamped.x+clamped.y+0.42,
+          howling:evening,biting:false,defending:false,stridePhase:t*6});
       });
       return poses;
     }
@@ -4770,32 +4748,29 @@
       return sims;
     }
 
-    function spawnDragonFireBurst(x,y,z,tx,ty,dragon,dealt,killed){
-      const fireCol=dragon?.fire||'#ff882b';
-      trollFx.push({
-        kind:'fireBeam',x,y,z:z||2.2,tx,ty,tz:0.95,
-        age:0,life:0.58,color:fireCol
-      });
-      const count=killed?22:14;
+    function spawnDragonFireBurst(x,y,z,tx,ty,wolf,dealt,killed){
+      // Silver moon-fang wolf lunge slash FX
+      const slashCol=wolf?.aura||'#d8eeff';
+      const count=killed?18:10;
       for(let i=0;i<count;i++){
-        const a=(i/count)*Math.PI*2+Math.random()*0.5;
-        const spd=1.6+Math.random()*(killed?4.2:2.8);
+        const a=(i/count)*Math.PI*2+Math.random()*0.4;
+        const spd=1.4+Math.random()*(killed?3.6:2.2);
         trollFx.push({
-          kind:'particle',x:tx+(Math.random()-0.5)*0.9,y:ty+(Math.random()-0.5)*0.9,z:0.45+Math.random()*0.9,
-          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,vz:1.8+Math.random()*3.0,
-          age:0,life:0.65+Math.random()*0.4,
-          color:i%3===0?'#fff7cc':i%3===1?fireCol:'#e62e14',
-          size:killed?0.24+Math.random()*0.18:0.17+Math.random()*0.14
+          kind:'particle',x:tx+(Math.random()-0.5)*0.6,y:ty+(Math.random()-0.5)*0.6,z:0.35+Math.random()*0.6,
+          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,vz:1.4+Math.random()*2.2,
+          age:0,life:0.55+Math.random()*0.3,
+          color:i%3===0?'#ffffff':i%3===1?slashCol:'#b32828',
+          size:killed?0.19+Math.random()*0.13:0.13+Math.random()*0.1
         });
       }
       trollFx.push({
-        kind:'ring',x:tx,y:ty,age:0,life:0.55,
-        maxR:killed?4.4:2.8,color:killed?'#ffe07a':fireCol
+        kind:'ring',x:tx,y:ty,age:0,life:0.46,
+        maxR:killed?2.6:1.7,color:killed?'#d4f0ff':'#a9d6f5'
       });
       trollFx.push({
-        kind:'callout',x:tx,y:ty,z:2.65,age:0,life:1.45,
-        text:killed?`SLAIN BY ${(dragon?.name||'DRAGON').toUpperCase()}!`:`-${dealt||120} DRAGONFIRE!`,
-        color:killed?'#fff1a8':'#ffb84d'
+        kind:'callout',x:tx,y:ty,z:1.95,age:0,life:1.25,
+        text:killed?`TORN DOWN BY ${(wolf?.name||'WOLF').toUpperCase()}!`:`-${dealt||88} WOLF BITE!`,
+        color:killed?'#d8f4ff':'#bfe6ff'
       });
       if(trollFx.length>180)trollFx.splice(0,trollFx.length-180);
     }
@@ -4829,54 +4804,64 @@
       const w=options.getWorld?.();
       if(!w||!state.site)return;
       let changed=false;
+      const wolfPosesBefore=window.EarthDragonStable?.getAutonomousPoses?.(state.site)||[];
       if(window.EarthGiantTrolls){
         const sims=collectLiveSims();
-        const events=window.EarthGiantTrolls.stepLive(w,state.site,dt,{sims});
+        const events=window.EarthGiantTrolls.stepLive(w,state.site,dt,{
+          sims,
+          wolves:wolfPosesBefore,
+          isNight:evening
+        });
         for(const ev of events){
           if(ev.type==='footstep'){
             spawnTrollBurst(ev.x,ev.y,'footstep');
           }else if(ev.type==='breach'){
-            spawnTrollBurst(ev.x,ev.y,'breach','TROLL BREACH!');
-            trollShake=Math.max(trollShake,0.55);
+            spawnTrollBurst(ev.x,ev.y,'breach','ZOMBIE BREACH!');
+            trollShake=Math.max(trollShake,0.34);
             message(ev.message);
             changed=true;
           }else if(ev.type==='simStrike'){
-            spawnTrollBurst(ev.x,ev.y,'simStrike',ev.isPlayer?'SLAMMED!':'SIM SMASHED!');
-            trollShake=Math.max(trollShake,0.48);
+            spawnTrollBurst(ev.x,ev.y,'simStrike',ev.isPlayer?'BITTEN!':'VILLAGER BITTEN!');
+            trollShake=Math.max(trollShake,0.32);
             if(ev.isPlayer){
               const dx=state.player.x-ev.troll.x,dy=state.player.y-ev.troll.y,d=Math.hypot(dx,dy)||1;
-              const pushed={x:state.player.x+(dx/d)*1.6,y:state.player.y+(dy/d)*1.6};
+              const pushed={x:state.player.x+(dx/d)*1.2,y:state.player.y+(dy/d)*1.2};
               if(traversable(pushed)){state.player.x=pushed.x;state.player.y=pushed.y;}
               message(ev.message);
             }else if(ev.simId){
               downedSims.set(ev.simId,visualTime+18);
             }
             changed=true;
+          }else if(ev.type==='wolfStrike'){
+            spawnTrollBurst(ev.x,ev.y,'simStrike',`${(ev.wolfName||'WOLF').toUpperCase()} BITTEN!`);
+            trollShake=Math.max(trollShake,0.22);
+            changed=true;
           }else if(ev.type==='buildingStrike'){
-            spawnTrollBurst(ev.x,ev.y,'buildingStrike',ev.justRuined?'RUINED!':`-${ev.damage} HP`);
-            trollShake=Math.max(trollShake,ev.justRuined?0.62:0.34);
+            spawnTrollBurst(ev.x,ev.y,'buildingStrike',ev.justRuined?'OVERRUN!':`-${ev.damage} HP`);
+            trollShake=Math.max(trollShake,ev.justRuined?0.42:0.18);
             if(ev.justRuined)message(ev.message);
             changed=true;
           }else if(ev.type==='slam'){
             spawnTrollBurst(ev.x,ev.y,'buildingStrike');
-            trollShake=Math.max(trollShake,0.22);
           }else if(ev.type==='waveSpawn'){
-            trollShake=Math.max(trollShake,0.46);
+            trollShake=Math.max(trollShake,0.32);
             if(ev.message)message(ev.message);
             changed=true;
           }
         }
       }
 
-      // Autonomous Guardian Dragons: instinctively scramble WITHOUT a Wizard rider to incinerate
-      // Giant Trolls and ANY enemy intruders attacking this community!
+      // Autonomous Majestic Wolf Pack: roam the enchanted forest (max 100m outside territory),
+      // hunt & bite Zombies, and howl together at the Full Moon every night!
+      let howlingWolves=0;
       if(window.EarthDragonStable?.stepAutonomousDefenders&&state.site.dragonStable?.dragons?.length){
         const hostileEnemies=collectHostileStreetEnemies(w);
         const autoRes=window.EarthDragonStable.stepAutonomousDefenders(w,state.site,dt,{
           time:visualTime,
+          isNight:evening,
           pursuit,
           enemies:hostileEnemies,
-          onEnemyHit:(target,dmg,dragon)=>{
+          onEnemyHit:(target,dmg,wolf)=>{
             const owner=window.EarthCommunityLife?.lookup?.(w,target.ref?.siteId);
             const mb=owner?.militaryBase;
             if(mb?.units){
@@ -4886,30 +4871,43 @@
                 if(u.hp<=0){
                   mb.units=mb.units.filter(x=>x.id!==u.id);
                   fieldStamp='';
-                  return {killed:true,message:`${dragon.name} autonomously incinerated encroaching ${target.name}!`};
+                  return {killed:true,message:`${wolf.name} tore down encroaching ${target.name}!`};
                 }
               }
             }
             return {killed:false};
           }
         });
+        howlingWolves=autoRes.howlingCount||0;
         for(const ev of autoRes.events){
-          if(ev.type==='dragonIntercept'){
+          if(ev.type==='wolfIntercept'||ev.type==='dragonIntercept'){
             trollFx.push({
-              kind:'callout',x:ev.x,y:ev.y,z:3.0,age:0,life:1.35,
-              text:`${ev.dragon.name} DEFENDING!`,color:'#ffe38c'
+              kind:'callout',x:ev.x,y:ev.y,z:1.8,age:0,life:1.25,
+              text:`${(ev.wolf||ev.dragon).name} HUNTING!`,color:'#d6f2ff'
             });
             changed=true;
-          }else if(ev.type==='dragonFire'){
-            spawnDragonFireBurst(ev.x,ev.y,ev.z,ev.tx,ev.ty,ev.dragon,ev.dealt,ev.killed);
-            trollShake=Math.max(trollShake,ev.killed?0.45:0.18);
+          }else if(ev.type==='wolfBite'||ev.type==='dragonFire'){
+            spawnDragonFireBurst(ev.x,ev.y,0.4,ev.tx,ev.ty,ev.wolf||ev.dragon,ev.dealt,ev.killed);
+            trollShake=Math.max(trollShake,ev.killed?0.26:0.12);
             if(ev.killed)message(ev.message);
             changed=true;
           }
         }
       }
 
-      if(trollShake>0)trollShake=Math.max(0,trollShake-dt*1.9);
+      // Drive continuous nighttime Zombie howling + Full Moon Wolf Pack chorus audio
+      if(window.EarthNightAudio?.setNightState){
+        const localZombies=window.EarthGiantTrolls?.trollsForSite?.(w,state.site.id)||[];
+        const wolfCount=state.site.dragonStable?.dragons?.length||0;
+        window.EarthNightAudio.setNightState({
+          isNight:evening,
+          zombieCount:localZombies.length,
+          wolfCount,
+          howlingWolves:evening?Math.max(howlingWolves,wolfCount>0?1:0):0
+        });
+      }
+
+      if(trollShake>0)trollShake=Math.max(0,trollShake-dt*2.1);
       for(let i=trollFx.length-1;i>=0;i--){
         const fx=trollFx[i];
         fx.age+=dt;
@@ -4938,224 +4936,221 @@
       }
     }
 
-    function drawGiantTroll(troll){
-      const [sx,sy]=screen(troll.x,troll.y,0);
-      const scaleH=clamp((troll.heightMeters||21)/21,0.88,1.18);
-      const s=unit*scaleH;
-      const phase=troll.swingPhase||0;
-      const atkPhase=troll.attackPhase||'march';
-      const prog=clamp(troll.attackProgress||0,0,1);
+    function drawGiantTroll(zombie){
+      // Realistic human-sized undead Zombie with hunched shamble, pale decayed skin,
+      // tattered blood-stained clothes, outstretched grasping arms, biting/feeding poses,
+      // and eerie continuous nighttime howling mist.
+      const [sx,sy]=screen(zombie.x,zombie.y,0);
+      const scaleH=clamp((zombie.heightMeters||1.8)/1.8,0.92,1.08);
+      const s=unit*0.48*scaleH;
+      const phase=zombie.swingPhase||0;
+      const atkPhase=zombie.attackPhase||'march';
+      const prog=clamp(zombie.attackProgress||0,0,1);
       const moving=atkPhase==='march'||atkPhase==='chase';
-      const stride=moving?Math.sin(phase):0;
-      const bob=moving?Math.abs(stride)*s*0.14:0;
-      const skin=troll.skin||'#2d3532';
-      const accent=troll.accent||'#556358';
-      const eye=troll.eye||'#ff2814';
-      const hpFrac=clamp((troll.hp||0)/Math.max(1,troll.maxHp||540),0,1);
+      const limp=moving?Math.sin(phase):0;
+      const limpDrag=moving?Math.max(0,Math.sin(phase+0.8)):0;
+      const bob=moving?Math.abs(limp)*s*0.12:0;
+      const skin=zombie.skin||'#7b8473';
+      const cloth=zombie.cloth||'#3c4246';
+      const pants=zombie.pants||'#2c2c2b';
+      const blood=zombie.blood||'#6e1818';
+      const hpFrac=clamp((zombie.hp||0)/Math.max(1,zombie.maxHp||420),0,1);
 
-      // Determine horizontal facing direction toward target (screen X = x - y)
-      const faceScreenX=(troll.facingX||0)-(troll.facingY||0);
+      const faceScreenX=(zombie.facingX||0)-(zombie.facingY||0);
       const faceDir=faceScreenX<-0.06?-1:1;
 
-      // Aggressive torso lean + overhead war-club smash curve (windup -> strike -> recover)
-      let torsoTilt=moving?0.09:0;
-      let clubAngle=-0.38;
-      let impactFlash=0;
-      if(atkPhase==='march'){
-        clubAngle=-0.52+Math.sin(phase)*0.14; // Heavy rested carry on shoulder while marching
-      }else if(atkPhase==='chase'){
-        torsoTilt=0.16;
-        clubAngle=-0.78+Math.sin(phase*1.2)*0.18; // Charging forward with club cocked
-      }else if(atkPhase==='windup'){
-        torsoTilt=-0.14*prog;
-        clubAngle=-0.78-prog*1.65; // Reared HIGH overhead before smash!
+      let torsoTilt=moving?0.24+limpDrag*0.09:0.20;
+      let armReach=0.12+Math.sin(phase*1.1)*0.12;
+      let crouchDrop=0;
+      let biteFlash=0;
+      if(atkPhase==='windup'){
+        torsoTilt=0.34+prog*0.12;
+        armReach=-0.32*prog;
       }else if(atkPhase==='strike'){
-        const snap=Math.min(1,prog*2.6);
-        torsoTilt=0.28*snap;
-        clubAngle=-2.43+snap*3.18; // VIOLENT downward slam straight onto target!
-        impactFlash=Math.max(0,1-prog*1.2);
+        const snap=Math.min(1,prog*2.8);
+        torsoTilt=0.46*snap;
+        armReach=0.58*snap;
+        biteFlash=Math.max(0,1-prog*1.3);
+      }else if(atkPhase==='feed'){
+        torsoTilt=0.62+Math.sin(visualTime*9)*0.08;
+        crouchDrop=s*0.46;
+        armReach=0.35;
       }else if(atkPhase==='recover'){
-        torsoTilt=0.22*(1-prog);
-        clubAngle=0.75-prog*1.28; // Heaving monolith club back up from crater
+        torsoTilt=0.32*(1-prog)+0.18;
+        armReach=0.2*(1-prog);
       }
+      const isHowling=Boolean(zombie.howling);
 
       ctx.save();
       ctx.translate(sx,sy);
 
-      const miasmaGrad=ctx.createRadialGradient(0,s*0.08,s*0.18,0,s*0.08,s*1.75);
-      miasmaGrad.addColorStop(0,'rgba(12,6,14,0.72)');
-      miasmaGrad.addColorStop(0.58,'rgba(44,12,18,0.38)');
-      miasmaGrad.addColorStop(1,'rgba(12,6,14,0)');
-      ctx.fillStyle=miasmaGrad;
+      // Soft ground shadow
+      ctx.fillStyle='rgba(10,14,10,0.44)';
       ctx.beginPath();
-      ctx.ellipse(0,s*0.08,s*1.75,s*0.92,0,0,Math.PI*2);
+      ctx.ellipse(0,s*0.06,s*0.62,s*0.26,0,0,Math.PI*2);
       ctx.fill();
 
-      if(impactFlash>0.05){
-        const r=s*(1.15+(1-impactFlash)*2.5);
-        ctx.strokeStyle=`rgba(255,96,38,${impactFlash*0.95})`;
-        ctx.lineWidth=Math.max(2,s*0.1);
+      // Blood lunge splash when biting
+      if(biteFlash>0.06){
+        ctx.strokeStyle=`rgba(190,28,24,${biteFlash*0.85})`;
+        ctx.lineWidth=Math.max(1.5,s*0.12);
         ctx.beginPath();
-        ctx.ellipse(faceDir*s*0.75,s*0.12,r,r*0.52,0,0,Math.PI*2);
+        ctx.arc(faceDir*s*0.65,-s*0.95,s*(0.55+(1-biteFlash)*0.7),-0.6,0.9);
         ctx.stroke();
       }
 
-      // Draw body oriented horizontally toward victim
       ctx.save();
       ctx.scale(faceDir,1);
+      ctx.translate(0,crouchDrop);
 
-      const legLShift=stride*s*0.28, legRShift=-stride*s*0.28;
-      ctx.fillStyle='#1d2221';
-      ctx.strokeStyle='#101414';
-      ctx.lineWidth=Math.max(1.2,s*0.04);
+      // Uneven dragging zombie legs (tattered dark trousers + mud/blood stains)
+      const legL=limp*s*0.24, legR=-limp*s*0.14;
+      ctx.strokeStyle='#181a18';
+      ctx.lineWidth=Math.max(1,s*0.055);
+      // Back dragging leg
+      ctx.fillStyle=pants;
       ctx.beginPath();
-      ctx.roundRect(-s*0.64,-s*1.18+legLShift*0.35,s*0.52,s*1.26,s*0.16);
+      ctx.roundRect(-s*0.28+legR*0.5,-s*0.96,s*0.24,s*0.98,s*0.08);
       ctx.fill();ctx.stroke();
+      // Front limping leg
+      ctx.fillStyle='#353736';
       ctx.beginPath();
-      ctx.roundRect(s*0.14,-s*1.18+legRShift*0.35,s*0.52,s*1.26,s*0.16);
+      ctx.roundRect(s*0.04+legL*0.65,-s*0.98,s*0.24,s*1.0,s*0.08);
       ctx.fill();ctx.stroke();
 
+      // Hunched decayed torso
       ctx.save();
-      ctx.translate(0,-bob-s*1.1);
+      ctx.translate(0,-s*0.92-bob);
       ctx.rotate(torsoTilt);
-      ctx.translate(0,s*1.1);
 
-      // Left muscular arm
+      // Back outstretched grasping arm
+      ctx.save();
+      ctx.translate(s*0.12,-s*0.72);
+      ctx.rotate(-0.22+armReach*0.7);
+      ctx.fillStyle=cloth;
+      ctx.fillRect(0,-s*0.09,s*0.44,s*0.18);
       ctx.fillStyle=skin;
+      ctx.fillRect(s*0.40,-s*0.075,s*0.38,s*0.14);
+      // Curved fingers
+      ctx.strokeStyle=skin;
+      ctx.lineWidth=Math.max(1,s*0.045);
       ctx.beginPath();
-      ctx.moveTo(-s*0.92,-s*2.95);
-      ctx.quadraticCurveTo(-s*1.48,-s*2.25,-s*1.26,-s*1.12+legRShift*0.25);
-      ctx.lineTo(-s*0.84,-s*1.08+legRShift*0.25);
-      ctx.quadraticCurveTo(-s*0.96,-s*1.95,-s*0.58,-s*2.62);
-      ctx.closePath();
-      ctx.fill();ctx.stroke();
-
-      // Massive hunched torso
-      const bodyGrad=ctx.createLinearGradient(-s*1.0,-s*3.5,s*1.0,-s*0.9);
-      bodyGrad.addColorStop(0,accent);
-      bodyGrad.addColorStop(0.55,skin);
-      bodyGrad.addColorStop(1,'#181c1c');
-      ctx.fillStyle=bodyGrad;
-      ctx.beginPath();
-      ctx.moveTo(-s*0.72,-s*1.05);
-      ctx.quadraticCurveTo(-s*1.18,-s*2.15,-s*0.98,-s*3.18);
-      ctx.quadraticCurveTo(0,-s*3.75,s*1.04,-s*3.12);
-      ctx.quadraticCurveTo(s*1.14,-s*2.05,s*0.72,-s*1.05);
-      ctx.closePath();
-      ctx.fill();ctx.stroke();
-
-      // Jagged dorsal obsidian spines
-      ctx.fillStyle='#191e20';
-      const spines=[[-0.78,-3.18,-1.08,-3.72,-0.45,-3.38],[-0.28,-3.44,-0.38,-4.08,0.02,-3.52],[0.36,-3.38,0.68,-3.96,0.72,-3.18]];
-      for(const [x1,y1,x2,y2,x3,y3] of spines){
-        ctx.beginPath();
-        ctx.moveTo(s*x1,s*y1);ctx.lineTo(s*x2,s*y2);ctx.lineTo(s*x3,s*y3);
-        ctx.closePath();ctx.fill();
-      }
-
-      // Chest scar/bark ridges
-      ctx.strokeStyle='rgba(154,174,142,0.34)';
-      ctx.lineWidth=Math.max(1.2,s*0.055);
-      ctx.beginPath();
-      ctx.moveTo(-s*0.52,-s*2.55);ctx.quadraticCurveTo(0,-s*2.25,s*0.52,-s*2.55);
-      ctx.moveTo(-s*0.42,-s*2.02);ctx.quadraticCurveTo(0,-s*1.82,s*0.42,-s*2.02);
+      ctx.moveTo(s*0.78,-s*0.04);ctx.lineTo(s*0.89,s*0.02);
+      ctx.moveTo(s*0.78,s*0.03);ctx.lineTo(s*0.87,s*0.09);
       ctx.stroke();
+      ctx.restore();
 
-      // Right smashing arm + Obsidian Monolith War-Club
-      ctx.save();
-      ctx.translate(s*0.86,-s*2.78);
-      ctx.rotate(clubAngle);
-      ctx.fillStyle=skin;
+      // Tattered jacket/shirt with torn hem & bloodstain
+      ctx.fillStyle=cloth;
+      ctx.strokeStyle='#1a1e1c';
+      ctx.lineWidth=Math.max(1,s*0.05);
       ctx.beginPath();
-      ctx.roundRect(-s*0.22,-s*0.15,s*0.52,s*1.42,s*0.18);
-      ctx.fill();ctx.stroke();
-      ctx.save();
-      ctx.translate(s*0.08,s*1.12);
-      ctx.rotate(-0.35);
-      ctx.fillStyle='#1f2126';
-      ctx.strokeStyle='#0d0e11';
-      ctx.beginPath();
-      ctx.moveTo(-s*0.14,0);
-      ctx.lineTo(-s*0.38,s*2.32);
-      ctx.lineTo(s*0.40,s*2.38);
-      ctx.lineTo(s*0.16,0);
+      ctx.moveTo(-s*0.30,s*0.06);
+      ctx.lineTo(-s*0.34,-s*0.86);
+      ctx.quadraticCurveTo(0,-s*0.98,s*0.34,-s*0.82);
+      ctx.lineTo(s*0.28,s*0.04);
+      ctx.lineTo(s*0.12,-s*0.05);
+      ctx.lineTo(-s*0.04,s*0.08);
+      ctx.lineTo(-s*0.18,-s*0.03);
       ctx.closePath();
       ctx.fill();ctx.stroke();
-      ctx.fillStyle='#6d5a48';
-      ctx.fillRect(-s*0.32,s*1.48,s*0.64,s*0.14);
-      ctx.fillRect(-s*0.36,s*1.95,s*0.72,s*0.14);
-      ctx.fillStyle=atkPhase==='windup'||atkPhase==='strike'?'#ff6e1f':'#ff4824';
-      ctx.globalAlpha=atkPhase==='windup'||atkPhase==='strike'?0.98:0.7;
-      ctx.fillRect(-s*0.20,s*1.66,s*0.40,s*0.20);
-      ctx.globalAlpha=1;
-      ctx.restore();
-      ctx.restore();
 
-      // Brutish horned head
-      ctx.fillStyle=accent;
+      // Realistic dark dried bloodstains across chest/collar
+      ctx.fillStyle=blood;
+      ctx.globalAlpha=0.72;
       ctx.beginPath();
-      ctx.ellipse(0,-s*3.42,s*0.56,s*0.52,0,0,Math.PI*2);
+      ctx.ellipse(s*0.10,-s*0.58,s*0.16,s*0.22,0.2,0,Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha=1;
+
+      // Pale decayed head (tilts upward when howling at night, lolls forward when shambling)
+      ctx.save();
+      ctx.translate(s*0.10,-s*1.12);
+      ctx.rotate(isHowling?-0.52+Math.sin(visualTime*7+(zombie.howlPhase||0))*0.08:0.14);
+      ctx.fillStyle=skin;
+      ctx.strokeStyle='#222821';
+      ctx.lineWidth=Math.max(0.9,s*0.05);
+      ctx.beginPath();
+      ctx.ellipse(0,0,s*0.24,s*0.27,0,0,Math.PI*2);
       ctx.fill();ctx.stroke();
 
-      ctx.fillStyle='#17191c';
+      // Sparse unkempt hair
+      ctx.fillStyle='#2b2926';
       ctx.beginPath();
-      ctx.moveTo(-s*0.42,-s*3.66);ctx.quadraticCurveTo(-s*0.95,-s*4.15,-s*0.68,-s*4.52);ctx.quadraticCurveTo(-s*0.52,-s*4.05,-s*0.22,-s*3.84);ctx.closePath();ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(s*0.42,-s*3.66);ctx.quadraticCurveTo(s*0.95,-s*4.15,s*0.68,-s*4.52);ctx.quadraticCurveTo(s*0.52,-s*4.05,s*0.22,-s*3.84);ctx.closePath();ctx.fill();
+      ctx.arc(-s*0.04,-s*0.08,s*0.23,Math.PI*0.9,Math.PI*2.05);
+      ctx.fill();
 
-      ctx.fillStyle='#121515';
-      ctx.fillRect(-s*0.38,-s*3.58,s*0.76,s*0.14);
-      ctx.fillStyle=eye;
-      ctx.shadowColor=eye;
-      ctx.shadowBlur=Math.max(5,s*(atkPhase==='windup'||atkPhase==='strike'?0.45:0.28));
+      // Hollow sunken dark eye socket + pale clouded cataract eye
+      ctx.fillStyle='#191c18';
       ctx.beginPath();
-      ctx.ellipse(-s*0.20,-s*3.44,s*0.11,s*0.07,0.18,0,Math.PI*2);
-      ctx.ellipse(s*0.20,-s*3.44,s*0.11,s*0.07,-0.18,0,Math.PI*2);
+      ctx.ellipse(s*0.11,-s*0.04,s*0.075,s*0.06,0,0,Math.PI*2);
       ctx.fill();
-      ctx.shadowBlur=0;
+      ctx.fillStyle='#cdd6be';
+      ctx.beginPath();
+      ctx.arc(s*0.12,-s*0.04,s*0.025,0,Math.PI*2);
+      ctx.fill();
 
-      ctx.fillStyle='#160d0e';
+      // Slack open blood-stained jaw (wider when howling or biting!)
+      ctx.fillStyle='#2a0c0e';
+      const jawOpen=isHowling||atkPhase==='strike'||atkPhase==='feed'?0.13:0.065;
       ctx.beginPath();
-      ctx.roundRect(-s*0.28,-s*3.20,s*0.56,s*0.20,s*0.06);
+      ctx.ellipse(s*0.13,s*0.11,s*0.09,s*jawOpen,0.12,0,Math.PI*2);
       ctx.fill();
-      ctx.fillStyle='#e8dfc8';
+      ctx.fillStyle=blood;
+      ctx.fillRect(s*0.06,s*0.16,s*0.11,s*0.08);
+
+      // Eerie cold breath / continuous night-howl mist escaping open mouth
+      if(isHowling){
+        const pulse=(visualTime*1.8+(zombie.howlPhase||0))%1;
+        ctx.strokeStyle=`rgba(196,220,206,${(1-pulse)*0.55})`;
+        ctx.lineWidth=Math.max(1,s*0.045);
+        ctx.beginPath();
+        ctx.arc(s*0.24+pulse*s*0.35,s*0.02-pulse*s*0.45,s*(0.16+pulse*0.42),-0.9,0.7);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Front grasping tattered arm reaching for villagers/wolves
+      ctx.save();
+      ctx.translate(-s*0.06,-s*0.66);
+      ctx.rotate(0.06+armReach);
+      ctx.fillStyle=cloth;
+      ctx.fillRect(0,-s*0.10,s*0.46,s*0.20);
+      ctx.fillStyle=skin;
+      ctx.fillRect(s*0.44,-s*0.08,s*0.40,s*0.15);
+      // Blood-tipped grasping claws
+      ctx.strokeStyle=blood;
+      ctx.lineWidth=Math.max(1,s*0.045);
       ctx.beginPath();
-      ctx.moveTo(-s*0.22,-s*3.04);ctx.lineTo(-s*0.14,-s*3.26);ctx.lineTo(-s*0.08,-s*3.04);
-      ctx.moveTo(s*0.22,-s*3.04);ctx.lineTo(s*0.14,-s*3.26);ctx.lineTo(s*0.08,-s*3.04);
-      ctx.fill();
+      ctx.moveTo(s*0.84,-s*0.04);ctx.lineTo(s*0.96,s*0.03);
+      ctx.moveTo(s*0.84,s*0.03);ctx.lineTo(s*0.94,s*0.10);
+      ctx.stroke();
+      ctx.restore();
 
       ctx.restore(); // torsoTilt
       ctx.restore(); // faceDir
 
-      // Unflipped overhead HP bar + live action status tag
-      const km=window.EarthGiantTrolls?.distanceKm?.(troll)??troll.distanceKm??0;
-      const statusText=troll.state==='approaching'
-        ? `Marching · ${km.toFixed(2)} km`
-        : troll.targetName
-          ? (troll.targetKind==='sim'?`Hunting ${troll.targetName}`:`Smashing ${troll.targetName}`)
-          : 'Attacking!';
-      const barW=clamp(s*2.55,82,138);
-      const barH=Math.max(6,s*0.18);
-      const barY=-s*4.96-bob;
-      ctx.fillStyle='rgba(14,10,14,0.9)';
-      ctx.strokeStyle='rgba(255,90,62,0.82)';
-      ctx.lineWidth=1.2;
-      ctx.beginPath();
-      ctx.roundRect(-barW/2-4,barY-25,barW+8,barH+30,4);
-      ctx.fill();ctx.stroke();
-
-      ctx.font='700 10.5px system-ui,sans-serif';
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillStyle='#ffd6cc';
-      ctx.fillText(`${troll.name} · ${troll.heightMeters||21}m`,0,barY-16);
-      ctx.font='600 9px system-ui,sans-serif';
-      ctx.fillStyle='#ff9a7a';
-      ctx.fillText(statusText,0,barY-5,barW+2);
-
+      // Compact, crisp HP bar + status tag (clean even with 10+ zombies on screen)
+      const barW=clamp(s*2.6,34,64);
+      const barH=Math.max(4,s*0.16);
+      const barY=-s*2.65-bob+crouchDrop;
+      ctx.fillStyle='rgba(16,14,15,0.82)';
+      ctx.fillRect(-barW/2-1,barY-1,barW+2,barH+2);
       ctx.fillStyle='#2a1214';
-      ctx.fillRect(-barW/2,barY+2,barW,barH-2);
-      ctx.fillStyle=hpFrac>0.4?'#e03c28':'#ff7a2e';
-      ctx.fillRect(-barW/2,barY+2,barW*hpFrac,barH-2);
+      ctx.fillRect(-barW/2,barY,barW,barH);
+      ctx.fillStyle=hpFrac>0.4?'#b83428':'#e66828';
+      ctx.fillRect(-barW/2,barY,barW*hpFrac,barH);
+      if(unit>=12){
+        ctx.font='700 9.5px system-ui,sans-serif';
+        ctx.textAlign='center';ctx.textBaseline='bottom';
+        ctx.fillStyle=isHowling?'#d6eed8':'#f2d2ca';
+        const shortTag=isHowling
+          ? `${zombie.name} · HOWLING`
+          : atkPhase==='feed'
+            ? `${zombie.name} · EATING`
+            : zombie.name;
+        ctx.fillText(shortTag,0,barY-3);
+      }
 
       ctx.restore();
     }
@@ -5333,25 +5328,20 @@
           ctx.fillText(tag,p.x,p.y-21);
         }
       }
-      // Also render autonomous defending dragons flying out to burn approaching trolls on regional map
-      const autoDragons=window.EarthDragonStable?.getAutonomousPoses?.(state.site)||[];
-      for(const pose of autoDragons){
-        if(!pose.defending)continue;
+      // Render Majestic Wolves roaming & defending the enchanted forest on regional map
+      const autoWolves=window.EarthDragonStable?.getAutonomousPoses?.(state.site)||[];
+      for(const pose of autoWolves){
+        const wolf=pose.wolf||pose.dragon;
         if(unit>=5){
-          const [sx,sy]=screen(pose.x,pose.y,pose.z);
-          window.EarthDragonArt?.drawEnchantedDragon(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,pose.dragon,false,Boolean(pose.breathingFire));
+          const [sx,sy]=screen(pose.x,pose.y,0);
+          const drawWolf=window.EarthDragonArt?.drawMajesticWolf||window.EarthDragonArt?.drawEnchantedDragon;
+          drawWolf?.(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,wolf,Boolean(pose.howling),Boolean(pose.biting),pose.stridePhase||0);
         }else{
           const drp=renderRegion.regionalPoint(baseTown,pose.x,pose.y);
           const dp=v.screen(drp.x,drp.y);
-          if(pose.breathingFire&&pose.fireTarget){
-            const trp=renderRegion.regionalPoint(baseTown,pose.fireTarget.x,pose.fireTarget.y);
-            const tp=v.screen(trp.x,trp.y);
-            ctx.strokeStyle='#ff9a2e';ctx.lineWidth=3.5;
-            ctx.beginPath();ctx.moveTo(dp.x,dp.y);ctx.lineTo(tp.x,tp.y);ctx.stroke();
-          }
-          ctx.fillStyle=pose.dragon.scale||'#e6b85c';
-          ctx.strokeStyle='#fff3b8';ctx.lineWidth=1.8;
-          ctx.beginPath();ctx.arc(dp.x,dp.y,6.5,0,Math.PI*2);ctx.fill();ctx.stroke();
+          ctx.fillStyle=wolf.coat||'#c6d1db';
+          ctx.strokeStyle='#e8f5ff';ctx.lineWidth=1.8;
+          ctx.beginPath();ctx.arc(dp.x,dp.y,5.5,0,Math.PI*2);ctx.fill();ctx.stroke();
         }
       }
       if(unit>=5)drawTrollFx();
@@ -5363,37 +5353,43 @@
       if(!w||!state.site||!window.EarthGiantTrolls)return;
       const localTrolls=window.EarthGiantTrolls.trollsForSite(w,state.site.id);
       if(!localTrolls.length)return;
-      ctx.save();
-      for(let idx=0;idx<localTrolls.length;idx++){
-        const t=localTrolls[idx];
+      const offscreen=[];
+      for(const t of localTrolls){
         const [sx,sy]=screen(t.x,t.y,0);
         if(sx>28&&sx<width-28&&sy>28&&sy<height-28)continue;
-        const km=window.EarthGiantTrolls.distanceKm(t);
-        const label=t.state==='approaching'?`${t.name} · ${km.toFixed(2)} km`:`${t.name} · ATTACKING`;
-        ctx.font='700 10.5px system-ui,sans-serif';
-        const tw=ctx.measureText(label).width+24;
-        const cx=width*0.5,cy=height*0.5;
-        const ang=Math.atan2(sy-cy,sx-cx);
-        const leftPad=16+tw*0.5,rightPad=64+tw*0.5,padY=62;
-        const maxDx=Math.max(40,width*0.5-Math.max(leftPad,rightPad)),maxDy=Math.max(40,height*0.5-padY);
-        const cos=Math.cos(ang),sin=Math.sin(ang);
-        const scaleEdge=Math.min(Math.abs(cos)>0.001?maxDx/Math.abs(cos):1e9,Math.abs(sin)>0.001?maxDy/Math.abs(sin):1e9);
-        const ex=clamp(cx+cos*scaleEdge,leftPad,Math.max(leftPad,width-rightPad));
-        const ey=clamp(cy+sin*scaleEdge+(idx*28-14),66,Math.max(66,height-115));
-        ctx.fillStyle='rgba(28,12,16,0.93)';
-        ctx.strokeStyle='#eb4a34';
-        ctx.lineWidth=1.4;
-        ctx.beginPath();ctx.roundRect(ex-tw/2,ey-11,tw,22,5);ctx.fill();ctx.stroke();
-        // Directional arrowhead pointing toward troll
-        ctx.save();
-        ctx.translate(ex-tw/2+11,ey);
-        ctx.rotate(ang);
-        ctx.fillStyle='#ff5c42';
-        ctx.beginPath();ctx.moveTo(5,0);ctx.lineTo(-4,-4);ctx.lineTo(-4,4);ctx.closePath();ctx.fill();
-        ctx.restore();
-        ctx.fillStyle='#ffd9ce';ctx.textAlign='left';ctx.textBaseline='middle';
-        ctx.fillText(label,ex-tw/2+19,ey);
+        offscreen.push({t,sx,sy,dist:Math.hypot(sx-width*0.5,sy-height*0.5)});
       }
+      if(!offscreen.length)return;
+      offscreen.sort((a,b)=>a.dist-b.dist);
+      const lead=offscreen[0];
+      const extra=offscreen.length-1;
+      const distM=Math.round(window.EarthGiantTrolls.distanceKm(lead.t)*1000);
+      const label=extra>0
+        ? `${offscreen.length} Zombies · ${distM}m`
+        : `${lead.t.name} · ${distM}m`;
+      ctx.save();
+      ctx.font='700 10.5px system-ui,sans-serif';
+      const tw=ctx.measureText(label).width+24;
+      const cx=width*0.5,cy=height*0.5;
+      const ang=Math.atan2(lead.sy-cy,lead.sx-cx);
+      const leftPad=16+tw*0.5,rightPad=64+tw*0.5,padY=72;
+      const maxDx=Math.max(40,width*0.5-Math.max(leftPad,rightPad)),maxDy=Math.max(40,height*0.5-padY);
+      const cos=Math.cos(ang),sin=Math.sin(ang);
+      const scaleEdge=Math.min(Math.abs(cos)>0.001?maxDx/Math.abs(cos):1e9,Math.abs(sin)>0.001?maxDy/Math.abs(sin):1e9);
+      const ex=clamp(cx+cos*scaleEdge,leftPad,Math.max(leftPad,width-rightPad));
+      const ey=clamp(cy+sin*scaleEdge,68,Math.max(68,height-135));
+      ctx.fillStyle='rgba(26,12,16,0.9)';
+      ctx.strokeStyle='#d64b3a';
+      ctx.lineWidth=1.3;
+      ctx.beginPath();ctx.roundRect(ex-tw/2,ey-11,tw,22,5);ctx.fill();ctx.stroke();
+      ctx.save();
+      ctx.translate(ex-tw/2+11,ey);
+      ctx.rotate(ang);
+      ctx.fillStyle='#ff5c42';
+      ctx.beginPath();ctx.moveTo(5,0);ctx.lineTo(-4,-4);ctx.lineTo(-4,4);ctx.closePath();ctx.fill();
+      ctx.restore();
+      ctx.fillStyle='#ffd9ce';ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.fillText(label,ex-tw/2+19,ey);
       ctx.restore();
     }
     function drawScene(repaint,dragons=streetDragons()) {
@@ -5543,30 +5539,41 @@
         },buildingBounds);
       }
       for(const pose of dragons){
+        const wolf=pose.wolf||pose.dragon;
         addItem(pose.x,pose.y,pose.depth,()=>{
-          const [sx,sy]=screen(pose.x,pose.y,pose.z);
-          window.EarthDragonArt.drawEnchantedDragon(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,pose.dragon,false,Boolean(pose.breathingFire));
-          if(pose.defending&&unit>=9){
-            const tag=pose.breathingFire
-              ? `${pose.dragon.name} · BLAZING FIRE`
-              : (pose.state==='guard'
-                ? `${pose.dragon.name} · GUARDING WALL`
-                : `${pose.dragon.name} · DEFENDING`);
+          const [sx,sy]=screen(pose.x,pose.y,0);
+          const drawWolf=window.EarthDragonArt?.drawMajesticWolf||window.EarthDragonArt?.drawEnchantedDragon;
+          drawWolf?.(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,wolf,Boolean(pose.howling),Boolean(pose.biting),pose.stridePhase||0);
+          if(unit>=8){
+            const tag=pose.howling
+              ? `${wolf.name} · HOWLING AT MOON`
+              : pose.biting
+                ? `${wolf.name} · BITING ZOMBIE`
+                : pose.state==='guard'
+                  ? `${wolf.name} · 100m BORDER`
+                  : pose.defending
+                    ? `${wolf.name} · HUNTING`
+                    : `${wolf.name} · WOLF PACK`;
             ctx.save();
-            ctx.font='700 10px system-ui,sans-serif';
+            ctx.font='700 9.5px system-ui,sans-serif';
             const tw=ctx.measureText(tag).width+12;
             const bx=clamp(sx-tw/2,8,Math.max(8,width-tw-8));
-            const by=clamp(sy-unit*pose.size*1.18-16,8,Math.max(8,height-28));
-            ctx.fillStyle='rgba(24,14,10,0.88)';
-            ctx.strokeStyle=pose.breathingFire?'#ff9830':'#f0cf72';
-            ctx.lineWidth=1.2;
-            ctx.beginPath();ctx.roundRect(bx,by,tw,17,4);ctx.fill();ctx.stroke();
-            ctx.fillStyle=pose.breathingFire?'#ffe9a8':'#f6e5b8';
+            const by=clamp(sy-unit*pose.size*1.28-16,8,Math.max(8,height-28));
+            ctx.fillStyle='rgba(12,24,30,0.86)';
+            ctx.strokeStyle=pose.howling?'#a8dcff':pose.biting?'#8ff5d4':'#8cb49c';
+            ctx.lineWidth=1.1;
+            ctx.beginPath();ctx.roundRect(bx,by,tw,16,4);ctx.fill();ctx.stroke();
+            ctx.fillStyle=pose.howling?'#e2f5ff':'#d8f2e6';
             ctx.textAlign='center';ctx.textBaseline='middle';
-            ctx.fillText(tag,bx+tw/2,by+8.5);
+            ctx.fillText(tag,bx+tw/2,by+8);
+            const whp=wolf.hp??wolf.maxHp??280,wmax=wolf.maxHp??280;
+            if(whp<wmax){
+              ctx.fillStyle='#102420';ctx.fillRect(bx+3,by+17,tw-6,3);
+              ctx.fillStyle='#6ce5b0';ctx.fillRect(bx+3,by+17,(tw-6)*clamp(whp/Math.max(1,wmax),0,1),3);
+            }
             ctx.restore();
           }
-        },[4.5,pose.z+4.5,4.5]);
+        },[3.5,3.5,3.5]);
       }
       if(state.site.growth){
         const g=state.site.growth;
@@ -5714,11 +5721,30 @@
       if(trollShake>0.01&&!reduced)ctx.restore();
       drawTrollEdgeIndicators();
       if(state.site.handline)drawFishingFloat();
+      // Enchanted Forest floating fireflies & woodland shimmer
+      if(!reduced&&unit>=6){
+        ctx.save();
+        for(let f=0;f<26;f++){
+          const fx=noise(state.seed,f,901)*28-2+Math.sin(visualTime*0.55+f*1.7)*0.9;
+          const fy=noise(state.seed,f,907)*28-2+Math.cos(visualTime*0.48+f*2.3)*0.9;
+          const fz=0.45+0.45*Math.sin(visualTime*1.3+f*3.1);
+          const [px,py]=screen(fx,fy,fz);
+          if(px<-12||px>width+12||py<-12||py>height+12)continue;
+          const pulse=0.35+0.65*(0.5+0.5*Math.sin(visualTime*2.8+f*4.2));
+          const r=Math.max(2,unit*0.095)*(evening?1.35:0.95);
+          const g=ctx.createRadialGradient(px,py,0,px,py,r*2.6);
+          g.addColorStop(0,evening?`rgba(182,255,210,${pulse*0.92})`:`rgba(245,255,176,${pulse*0.62})`);
+          g.addColorStop(1,'rgba(140,240,180,0)');
+          ctx.fillStyle=g;
+          ctx.beginPath();ctx.arc(px,py,r*2.6,0,Math.PI*2);ctx.fill();
+        }
+        ctx.restore();
+      }
       if(evening){
         const world=options.getWorld?.(),clock=window.EarthDayClock;
         const time=clock&&world?.dayClock?(clock.now(world)-world.dayClock.origin)%clock.day:0;
-        const depth=time?Math.max(0,-Math.sin(time*Math.PI/(clock.half))):0;
-        lightRig?.blueHour(ctx,width,height,depth);
+        const depth=time?Math.max(0,-Math.sin(time*Math.PI/(clock.half))):0.85;
+        lightRig?.blueHour(ctx,width,height,Math.max(0.45,depth),visualTime);
       }
       if(!state.placed)for(const job of works.values())workMark(job);
       if(state.placed)lotNumbers();else for(const base of state.points){

@@ -178,16 +178,52 @@
   });
   listen('troll-dragon-btn','click',()=>{
     const site=sim.active();if(!site||!dragonUI)return;
-    const DS=window.EarthDragonStable;
-    const built=DS?.hasStable?.(site);
-    const ds=built?DS.ensure(site):null;
-    if(ds&&ds.dragons.length&&ds.wizards.length){
-      const actorId=window.EarthAgency?.actorId?.(site)||'steward';
-      const riderId=DS.isWizard(site,actorId)?actorId:ds.wizards[0].id;
-      dragonUI.mountDragon({siteId:site.id,dragonId:ds.dragons[0].id},riderId);
-    }else{
-      dragonUI.open(site.id);
+    dragonUI.open(site.id);
+  });
+  function syncNightAudioControls(){
+    const nightBtn=$('street-night-toggle');
+    if(nightBtn&&window.EarthDayClock){
+      const isNight=Boolean(window.EarthDayClock.read(sim.state).night);
+      nightBtn.setAttribute('aria-pressed',String(isNight));
+      nightBtn.textContent=isNight?'Full Moon · Day':'Full Moon Night';
+      nightBtn.title=isNight?'Return to enchanted forest daylight':'Jump to Full Moon Night (wolves & zombies howl)';
     }
+    const audioBtn=$('street-audio-toggle');
+    if(audioBtn&&window.EarthNightAudio){
+      const muted=window.EarthNightAudio.isMuted();
+      audioBtn.setAttribute('aria-pressed',String(!muted));
+      audioBtn.textContent=muted?'Howls Muted':'Howl Audio On';
+      audioBtn.title=muted?'Unmute nighttime wolf & zombie howling':'Mute nighttime howling sound';
+    }
+  }
+  listen('street-night-toggle','click',()=>{
+    const clock=window.EarthDayClock;
+    if(!clock||!sim.state)return;
+    const now=Date.now();
+    const old=sim.state.dayClock||clock.start(now);
+    const cur=clock.read(sim.state,now);
+    const nextElapsed=cur.night
+      ? (cur.cycle+1)*clock.day+Math.floor(clock.half*0.25)
+      : cur.cycle*clock.day+clock.half+Math.floor(clock.half*0.48);
+    sim.state.dayClock={origin:old.origin,at:now,elapsed:nextElapsed,rate:1};
+    const updated=clock.read(sim.state,now);
+    put('day-indicator',updated.phase);
+    put('day-time',updated.label);
+    put('time-rate',updated.rate+'×');
+    window.EarthNightAudio?.unlock?.();
+    if(!cur.night){
+      window.EarthNightAudio?.triggerWolfHowl?.(0.95);
+      window.EarthNightAudio?.triggerZombieHowl?.(0.85);
+    }
+    syncLiveClock(true);
+    syncNightAudioControls();
+    redrawStreet();
+    render();
+  });
+  listen('street-audio-toggle','click',()=>{
+    if(!window.EarthNightAudio)return;
+    window.EarthNightAudio.toggleMute();
+    syncNightAudioControls();
   });
   async function runQuickCommunityAction(cmd){
     const site=sim.active();if(!site)return;
@@ -906,7 +942,7 @@
         },
         onRegularArrival:(quote,proof)=>sim.perform('regularTruck',quote,()=>view==='street'&&!document.hidden?proof():null),
         onObservation:seen=>streetHud?.setWatch(seen),onTruckDoor:useStreetVehicleDoor,onTruckInteract:()=>streetHud?.openTool('truck'),
-        onDragon:target=>dragonUI?.mountDragon(target),
+        onDragon:target=>dragonUI?.open(target?.siteId||sim.active()?.id),
         onTrollUpdate:changed=>{
           const cur=sim.active();
           if(view==='street'&&cur){
@@ -1919,6 +1955,7 @@
     show('objective-action',!!guide);show('follow-objective',!!guide);
   }
   function renderTrollSiege(site){
+    syncNightAudioControls();
     const bar=$('troll-siege-bar');
     if(!bar)return;
     if(!site||!window.EarthGiantTrolls){bar.hidden=true;return;}
@@ -1928,30 +1965,31 @@
     bar.hidden=false;
     const lead=info.local[0];
     const tracking=Boolean(street?.isTrackingTroll?.());
+    const isNight=Boolean(window.EarthDayClock?.read?.(sim.state)?.night);
     const phaseTag=info.attackingCount>0
-      ? 'UNDER ATTACK'
-      : (info.nearestKm!=null?`${info.nearestKm.toFixed(2)} km out`:`Wave ${info.wave}`);
+      ? (isNight?'FULL MOON SIEGE · HOWLING':'ZOMBIE ATTACK')
+      : (info.nearestKm!=null?`${Math.round(info.nearestKm*1000)}m out`:`Wave ${info.wave}`);
     put('troll-siege-title',`${info.communityName} · ${phaseTag} (Wave ${info.wave})`);
     const bldStat=(info.damagedBuildings||info.ruinedBuildings)
-      ? ` · ${info.ruinedBuildings} ruined, ${info.damagedBuildings} burning`
+      ? ` · ${info.ruinedBuildings} overrun, ${info.damagedBuildings} damaged`
       : '';
-    put('troll-siege-counts',`${info.localCount} here · ${info.elsewhereCount} other lands · ${info.totalSlain} slain${bldStat}`);
-    const otherText=info.elsewhere.length?` Also marching on ${[...new Set(info.elsewhere.map(t=>t.targetSiteName))].slice(0,2).join(' & ')}.`:'';
+    put('troll-siege-counts',`${info.localCount} zombies here · ${info.elsewhereCount} other lands · ${info.totalSlain} slain${bldStat}`);
+    const otherText=info.elsewhere.length?` Also swarming ${[...new Set(info.elsewhere.map(t=>t.targetSiteName))].slice(0,2).join(' & ')}.`:'';
     if(lead){
-      const km=window.EarthGiantTrolls.distanceKm(lead);
+      const distM=Math.round(window.EarthGiantTrolls.distanceKm(lead)*1000);
       if(lead.state==='approaching'){
-        put('troll-siege-detail',`${lead.name} (${lead.heightMeters}m, ${lead.hp}/${lead.maxHp} HP) & darklands titans are marching slowly in from ${km.toFixed(2)} km out!${otherText}`);
+        put('troll-siege-detail',`${lead.name} (${lead.hp}/${lead.maxHp} HP) & ${Math.max(1,info.localCount-1)} undead zombies are shambling out of the dark woods (${distM}m away)${isNight?', howling nonstop under the Full Moon':''}!${otherText}`);
       }else{
-        const victim=lead.targetName?` smashing ${lead.targetName}`:` attacking ${site.name}`;
-        put('troll-siege-detail',`${lead.name} (${lead.heightMeters}m, ${lead.hp}/${lead.maxHp} HP) is relentlessly${victim}!${otherText}`);
+        const victim=lead.targetName?` trying to devour ${lead.targetName}`:` hunting ${site.name}`;
+        put('troll-siege-detail',`${lead.name} (${lead.hp}/${lead.maxHp} HP) is lunging and${victim}${isNight?' while howling nonstop':''}!${otherText}`);
       }
     }else{
-      put('troll-siege-detail',`Colossal building-sized Giant Trolls are hunting human Sims across neighbouring lands!${otherText}`);
+      put('troll-siege-detail',`Undead zombies are stalking villagers across neighbouring enchanted forests!${otherText}`);
     }
     const trackBtn=$('troll-track-btn');
     if(trackBtn){
       trackBtn.hidden=!lead;
-      trackBtn.textContent=tracking?'Back to Town':(lead?.state==='approaching'?`Track Troll (${window.EarthGiantTrolls.distanceKm(lead).toFixed(2)} km)`:'Focus Troll');
+      trackBtn.textContent=tracking?'Back to Forest':(lead?.state==='approaching'?`Track Zombie (${Math.round(window.EarthGiantTrolls.distanceKm(lead)*1000)}m)`:'Focus Zombie');
     }
     const rallyBtn=$('troll-rally-btn');
     if(rallyBtn)rallyBtn.hidden=!lead;
@@ -1959,17 +1997,16 @@
     if(repairBtn){
       const broken=(info.damagedBuildings||0)+(info.ruinedBuildings||0);
       repairBtn.hidden=broken<=0;
-      if(broken>0)repairBtn.textContent=`Repair Buildings (${broken})`;
+      if(broken>0)repairBtn.textContent=`Repair Shelters (${broken})`;
     }
     const dragBtn=$('troll-dragon-btn');
     if(dragBtn){
-      const DS=window.EarthDragonStable;
-      const ds=DS?.hasStable?.(site)?DS.ensure(site):null;
-      dragBtn.textContent=(ds&&ds.dragons.length&&ds.wizards.length)
-        ? `Mount ${ds.dragons[0].name} & Wizard vs Trolls`
-        : (ds&&ds.dragons.length)
-          ? `Dragon Stable (${ds.dragons.length} Defending)`
-          : (ds ? 'Summon Dragon at Stable (Best vs Trolls)' : 'Dragon Stable (Best vs Trolls)');
+      const WC=window.EarthDragonStable;
+      const ds=WC?.hasStable?.(site)?WC.ensure(site):null;
+      const wolves=ds?.dragons?.length||0;
+      dragBtn.textContent=wolves
+        ? `Giant Wolf Cave (${wolves} Wolves)`
+        : 'Giant Wolf Cave (Call Wolves)';
     }
   }
   function render(options) {
