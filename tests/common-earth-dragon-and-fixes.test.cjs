@@ -110,8 +110,9 @@ test('EarthFlightPhysics: perimeter walls sit outside all roads & parking bays, 
       assert.equal(FP.rectOverlaps(seg.box, roadBox), false, `Wall segment ${seg.id} must not overlap roads/parking bays`);
     }
   }
-  // Coastal waterfront (south side, y > 24.87) must remain open for docks & boats
-  assert.equal(wallSegs.some(s => s.id.startsWith('south-')), false, 'Waterfront south side remains open');
+  // All 4 sides (North, South, East, West) encircle the community with 4 tall gates while staying outside roadBox!
+  assert.equal(wallSegs.filter(s => s.kind === 'gate').length, 4, 'Community perimeter has 4 tall gates (one per side)');
+  assert.equal(wallSegs.some(s => s.id.startsWith('south-')), true, 'South wall completes the 4-sided enclosure cleanly outside Exchange St');
 
   // Expanded territory pushes perimeter walls further outward
   const b0 = FP.perimeterBounds(0, true);

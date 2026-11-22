@@ -675,10 +675,10 @@
     const fortStage = site.communityLife?.border?.defence?.stage || 0;
     const { lvl: tLevel, hasWater } = territoryParams(site);
     const solidSet = FP?.collectSolidObstacles
-      ? FP.collectSolidObstacles(site, sceneContext?.solids)
+      ? FP.collectSolidObstacles(site, sceneContext?.solids, { forKind: 'wolf', isMember: true })
       : { walls: [], buildings: [], all: [] };
     const gateways = FP?.perimeterGateways
-      ? FP.perimeterGateways(fortStage, tLevel, hasWater, site)
+      ? FP.perimeterGateways(fortStage, tLevel, hasWater, site, { forKind: 'wolf' })
       : [];
     const WOLF_RADIUS = 0.36;
 

@@ -187,72 +187,123 @@
     };
   }
 
+  const WALL_HEIGHT = 3.20;
+  const POST_HEIGHT = 3.65;
+  const GATE_HEIGHT = 3.10;
+  const ZOMBIE_STACK_REQUIRED = 4;
+  const ZOMBIE_TIER_HEIGHT = 0.78;
+
   function perimeterWallSegments(stage, territoryLevel = 0, hasWaterfront = false) {
-    if (!stage || stage <= 0) return [];
+    // Explicit -1 disables walls; otherwise EVERY community starts encircled by tall walls + 4 gates!
+    if (stage === -1) return [];
     const b = perimeterBounds(territoryLevel, hasWaterfront);
     const thick = 0.44;
-    const gateHalf = 2.4; // Wide 4.8-unit road gateways so vans & trucks pass freely
+    const postSize = 0.48;
+    const gateHalf = 2.4; // 4.8-unit wide road/pack gateways so Sims, vans, and wolves pass cleanly
     const midX = 12;
     const midY = 12;
     const segments = [];
 
-    // Gateposts on north entrance (always present from stage >= 1)
-    segments.push({
-      id: 'north-post-west', kind: 'post',
-      x: midX - gateHalf - 0.52, y: b.minY - thick * 0.5,
-      w: 0.52, d: 0.52, h: 1.85,
-      box: [midX - gateHalf - 0.52, b.minY - thick * 0.5, midX - gateHalf, b.minY + thick * 0.5 + 0.08]
-    });
-    segments.push({
-      id: 'north-post-east', kind: 'post',
-      x: midX + gateHalf, y: b.minY - thick * 0.5,
-      w: 0.52, d: 0.52, h: 1.85,
-      box: [midX + gateHalf, b.minY - thick * 0.5, midX + gateHalf + 0.52, b.minY + thick * 0.5 + 0.08]
-    });
-
-    if (stage >= 2) {
-      // North wall (left and right of North Gate)
-      const nwLen = (midX - gateHalf - 0.52) - b.minX;
-      const neStart = midX + gateHalf + 0.52;
+    const addHorizontalSide = (side, yLine) => {
+      const postLeftX = midX - gateHalf - postSize;
+      const postRightX = midX + gateHalf;
+      const nwLen = postLeftX - b.minX;
+      const neStart = postRightX + postSize;
       const neLen = b.maxX - neStart;
-      if (nwLen > 0.4) segments.push({ id: 'north-west', kind: 'wall', x: b.minX, y: b.minY - thick * 0.5, w: nwLen, d: thick, h: 1.25, box: [b.minX, b.minY - thick * 0.5, b.minX + nwLen, b.minY + thick * 0.5] });
-      if (neLen > 0.4) segments.push({ id: 'north-east', kind: 'wall', x: neStart, y: b.minY - thick * 0.5, w: neLen, d: thick, h: 1.25, box: [neStart, b.minY - thick * 0.5, neStart + neLen, b.minY + thick * 0.5] });
+      const outNy = side === 'north' ? -1 : 1;
 
-      // West wall (north and south of West Gate at y = 12)
-      const wnLen = (midY - gateHalf) - b.minY;
-      const wsStart = midY + gateHalf;
-      const wsEnd = hasWaterfront ? 24.95 : b.maxY;
-      const wsLen = wsEnd - wsStart;
-      if (wnLen > 0.4) segments.push({ id: 'west-north', kind: 'wall', x: b.minX - thick * 0.5, y: b.minY, w: thick, d: wnLen, h: 1.05, box: [b.minX - thick * 0.5, b.minY, b.minX + thick * 0.5, b.minY + wnLen] });
-      if (wsLen > 0.4) segments.push({ id: 'west-south', kind: 'wall', x: b.minX - thick * 0.5, y: wsStart, w: thick, d: wsLen, h: 1.05, box: [b.minX - thick * 0.5, wsStart, b.minX + thick * 0.5, wsStart + wsLen] });
-
-      // East wall (north and south of East Gate at y = 12, cleanly separated from Military Base!)
-      const enLen = (midY - gateHalf) - b.minY;
-      const esStart = midY + gateHalf;
-      const esEnd = hasWaterfront ? 24.95 : b.maxY;
-      const esLen = esEnd - esStart;
-      if (enLen > 0.4) segments.push({ id: 'east-north', kind: 'wall', x: b.maxX - thick * 0.5, y: b.minY, w: thick, d: enLen, h: 1.05, box: [b.maxX - thick * 0.5, b.minY, b.maxX + thick * 0.5, b.minY + enLen] });
-      if (esLen > 0.4) segments.push({ id: 'east-south', kind: 'wall', x: b.maxX - thick * 0.5, y: esStart, w: thick, d: esLen, h: 1.05, box: [b.maxX - thick * 0.5, esStart, b.maxX + thick * 0.5, esStart + esLen] });
-
-      // South wall ONLY on inland sites (never blocks waterfront piers, quay, or Exchange St!)
-      if (!hasWaterfront) {
-        const swLen = (midX - gateHalf) - b.minX;
-        const seStart = midX + gateHalf;
-        const seLen = b.maxX - seStart;
-        if (swLen > 0.4) segments.push({ id: 'south-west', kind: 'wall', x: b.minX, y: b.maxY - thick * 0.5, w: swLen, d: thick, h: 1.05, box: [b.minX, b.maxY - thick * 0.5, b.minX + swLen, b.maxY + thick * 0.5] });
-        if (seLen > 0.4) segments.push({ id: 'south-east', kind: 'wall', x: seStart, y: b.maxY - thick * 0.5, w: seLen, d: thick, h: 1.05, box: [seStart, b.maxY - thick * 0.5, seStart + seLen, b.maxY + thick * 0.5] });
+      if (nwLen > 0.4) {
+        segments.push({
+          id: side + '-west', kind: 'wall', side, outNx: 0, outNy,
+          x: b.minX, y: yLine - thick * 0.5, w: nwLen, d: thick, h: WALL_HEIGHT,
+          box: [b.minX, yLine - thick * 0.5, b.minX + nwLen, yLine + thick * 0.5]
+        });
       }
-    }
-
-    if (stage >= 3) {
-      // Overhead North Gate lintel (non-blocking overhead arch; gateposts are the solid boxes)
+      if (neLen > 0.4) {
+        segments.push({
+          id: side + '-east', kind: 'wall', side, outNx: 0, outNy,
+          x: neStart, y: yLine - thick * 0.5, w: neLen, d: thick, h: WALL_HEIGHT,
+          box: [neStart, yLine - thick * 0.5, neStart + neLen, yLine + thick * 0.5]
+        });
+      }
+      // Flanking tall stone gateposts
       segments.push({
-        id: 'north-lintel', kind: 'arch',
-        x: midX - gateHalf - 0.52, y: b.minY - thick * 0.5,
-        w: gateHalf * 2 + 1.04, d: 0.52, z: 1.65, h: 0.30,
+        id: side + '-post-west', kind: 'post', side, outNx: 0, outNy,
+        x: postLeftX, y: yLine - postSize * 0.5, w: postSize, d: postSize, h: POST_HEIGHT,
+        box: [postLeftX, yLine - postSize * 0.5, postLeftX + postSize, yLine + postSize * 0.5]
+      });
+      segments.push({
+        id: side + '-post-east', kind: 'post', side, outNx: 0, outNy,
+        x: postRightX, y: yLine - postSize * 0.5, w: postSize, d: postSize, h: POST_HEIGHT,
+        box: [postRightX, yLine - postSize * 0.5, postRightX + postSize, yLine + postSize * 0.5]
+      });
+      // Tall fortified iron-bound gate spanning the entrance (always kept closed except for community members/wolves!)
+      segments.push({
+        id: 'gate-' + side, kind: 'gate', side, outNx: 0, outNy,
+        x: midX - gateHalf, y: yLine - 0.20, w: gateHalf * 2, d: 0.40, h: GATE_HEIGHT,
+        cx: midX, cy: yLine, gateHalf,
+        box: [midX - gateHalf, yLine - 0.20, midX + gateHalf, yLine + 0.20]
+      });
+      // Overhead stone gatehouse arch lintel
+      segments.push({
+        id: side + '-lintel', kind: 'arch', side,
+        x: postLeftX, y: yLine - postSize * 0.5,
+        w: gateHalf * 2 + postSize * 2, d: postSize, z: GATE_HEIGHT + 0.04, h: 0.34,
         box: null
       });
-    }
+    };
+
+    const addVerticalSide = (side, xLine) => {
+      const postTopY = midY - gateHalf - postSize;
+      const postBotY = midY + gateHalf;
+      const topLen = postTopY - b.minY;
+      const botStart = postBotY + postSize;
+      const botLen = b.maxY - botStart;
+      const outNx = side === 'west' ? -1 : 1;
+
+      if (topLen > 0.4) {
+        segments.push({
+          id: side + '-north', kind: 'wall', side, outNx, outNy: 0,
+          x: xLine - thick * 0.5, y: b.minY, w: thick, d: topLen, h: WALL_HEIGHT,
+          box: [xLine - thick * 0.5, b.minY, xLine + thick * 0.5, b.minY + topLen]
+        });
+      }
+      if (botLen > 0.4) {
+        segments.push({
+          id: side + '-south', kind: 'wall', side, outNx, outNy: 0,
+          x: xLine - thick * 0.5, y: botStart, w: thick, d: botLen, h: WALL_HEIGHT,
+          box: [xLine - thick * 0.5, botStart, xLine + thick * 0.5, botStart + botLen]
+        });
+      }
+      segments.push({
+        id: side + '-post-north', kind: 'post', side, outNx, outNy: 0,
+        x: xLine - postSize * 0.5, y: postTopY, w: postSize, d: postSize, h: POST_HEIGHT,
+        box: [xLine - postSize * 0.5, postTopY, xLine + postSize * 0.5, postTopY + postSize]
+      });
+      segments.push({
+        id: side + '-post-south', kind: 'post', side, outNx, outNy: 0,
+        x: xLine - postSize * 0.5, y: postBotY, w: postSize, d: postSize, h: POST_HEIGHT,
+        box: [xLine - postSize * 0.5, postBotY, xLine + postSize * 0.5, postBotY + postSize]
+      });
+      segments.push({
+        id: 'gate-' + side, kind: 'gate', side, outNx, outNy: 0,
+        x: xLine - 0.20, y: midY - gateHalf, w: 0.40, d: gateHalf * 2, h: GATE_HEIGHT,
+        cx: xLine, cy: midY, gateHalf,
+        box: [xLine - 0.20, midY - gateHalf, xLine + 0.20, midY + gateHalf]
+      });
+      segments.push({
+        id: side + '-lintel', kind: 'arch', side,
+        x: xLine - postSize * 0.5, y: postTopY,
+        w: postSize, d: gateHalf * 2 + postSize * 2, z: GATE_HEIGHT + 0.04, h: 0.34,
+        box: null
+      });
+    };
+
+    // Complete 4-sided tall perimeter wall with 4 fortified gates (North, South, West, East)
+    addHorizontalSide('north', b.minY);
+    addHorizontalSide('south', b.maxY);
+    addVerticalSide('west', b.minX);
+    addVerticalSide('east', b.maxX);
 
     return segments;
   }
@@ -304,30 +355,140 @@
   }
 
   /**
-   * Returns all currently passable openings through the community perimeter walls:
-   * the built road gateways PLUS any wall segment that has been smashed down into rubble.
+   * Returns true ONLY if `entity` is an authorized member of `site` (its residents/Sims,
+   * the player belonging to that community, or that community's Majestic Wolves).
+   * Zombies and non-member outsiders are NEVER permitted through intact community gates.
    */
-  function perimeterGateways(stage, territoryLevel = 0, hasWaterfront = false, site = null) {
-    if (!stage || stage < 2) return [];
-    const b = perimeterBounds(territoryLevel, hasWaterfront);
-    const gates = [
-      { id: 'north-gate', x: 12, y: b.minY },
-      { id: 'west-gate', x: b.minX, y: 12 },
-      { id: 'east-gate', x: b.maxX, y: 12 }
-    ];
-    if (!hasWaterfront) {
-      gates.push({ id: 'south-gate', x: 12, y: b.maxY });
+  function canEntityUseCommunityGate(entity, site) {
+    if (!entity || !site) return false;
+    const kind = String(entity.kind || entity.type || '').toLowerCase();
+    if (kind === 'zombie' || kind === 'troll' || kind === 'enemy' || kind === 'outsider' || entity.hostile) {
+      return false;
     }
-    if (site) {
-      for (const seg of perimeterWallSegments(stage, territoryLevel, hasWaterfront)) {
-        if (seg.box && isWallDestroyed(site, seg.id)) {
+    if (entity.homeSiteId && site.id && entity.homeSiteId !== site.id) {
+      return false;
+    }
+    if (entity.isHome === false) return false;
+    if (kind === 'wolf' || kind === 'dragon') {
+      if (entity.id && Array.isArray(site.dragonStable?.dragons)) {
+        const match = site.dragonStable.dragons.find(w => w && w.id === entity.id);
+        if (match && match.homeSiteId && site.id && match.homeSiteId !== site.id) return false;
+      }
+      return true;
+    }
+    if (kind === 'sim' || kind === 'resident' || kind === 'player' || kind === 'member' || kind === 'vehicle') {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Returns all 4 fortified community gates (North, South, West, East) with their live open/destroyed status.
+   */
+  function perimeterGates(territoryLevel = 0, hasWaterfront = false, site = null) {
+    const segs = perimeterWallSegments(2, territoryLevel, hasWaterfront).filter(s => s.kind === 'gate');
+    const rt = site?._gateRuntime || {};
+    return segs.map(seg => {
+      const destroyed = Boolean(site && isWallDestroyed(site, seg.id));
+      const state = rt[seg.id] || { open: 0, isOpen: false, activePassers: 0 };
+      return {
+        ...seg,
+        destroyed,
+        open: destroyed ? 1 : clamp(Number(state.open) || 0, 0, 1),
+        isOpen: destroyed || Boolean(state.isOpen),
+        activePassers: Number(state.activePassers) || 0
+      };
+    });
+  }
+
+  /**
+   * Updates all 4 community gates so they start CLOSED, open smoothly ONLY when an authorized
+   * member (resident Sim, community player, or community Majestic Wolf) approaches to enter/exit,
+   * and immediately close shut the moment they finish passing through.
+   */
+  function updateCommunityGates(site, entities = [], dt = 0.016) {
+    if (!site) return {};
+    const tLevel = site.territoryLevel || 0;
+    const hasWater = Boolean(site.water || site.coastal || root.CommonEarthSim?.waterfront?.(site));
+    const gates = perimeterWallSegments(2, tLevel, hasWater).filter(s => s.kind === 'gate');
+    const rt = site._gateRuntime || (site._gateRuntime = {});
+    const step = clamp(Number(dt) || 0.016, 0.001, 0.25);
+
+    for (const g of gates) {
+      const rec = rt[g.id] || (rt[g.id] = { id: g.id, side: g.side, open: 0, isOpen: false, activePassers: 0 });
+      if (isWallDestroyed(site, g.id)) {
+        rec.open = 1;
+        rec.isOpen = true;
+        rec.destroyed = true;
+        rec.activePassers = 0;
+        continue;
+      }
+      rec.destroyed = false;
+      const horiz = g.side === 'north' || g.side === 'south';
+      const triggerNormal = 2.45;
+      const triggerAlong = (g.gateHalf || 2.4) + 0.65;
+      let passers = 0;
+      for (let i = 0; i < entities.length; i++) {
+        const ent = entities[i];
+        if (!canEntityUseCommunityGate(ent, site)) continue;
+        const ex = Number(ent.x);
+        const ey = Number(ent.y);
+        if (!Number.isFinite(ex) || !Number.isFinite(ey)) continue;
+        const dNorm = horiz ? Math.abs(ey - g.cy) : Math.abs(ex - g.cx);
+        const dAlong = horiz ? Math.abs(ex - g.cx) : Math.abs(ey - g.cy);
+        if (dNorm <= triggerNormal && dAlong <= triggerAlong) {
+          passers++;
+        }
+      }
+      rec.activePassers = passers;
+      if (passers > 0) {
+        rec.open = Math.min(1, rec.open + step * 5.8);
+        rec.isOpen = true;
+      } else {
+        // Immediately swing closed once authorized community members finish entering/exiting!
+        rec.open = Math.max(0, rec.open - step * 5.2);
+        if (rec.open <= 0.02) {
+          rec.open = 0;
+          rec.isOpen = false;
+        } else {
+          rec.isOpen = true;
+        }
+      }
+    }
+    return rt;
+  }
+
+  /**
+   * Returns currently passable openings through the community perimeter walls:
+   * - For authorized community members/wolves (`forKind !== 'zombie'`): all 4 gates + any smashed wall breaches.
+   * - For zombies/outsiders (`forKind === 'zombie'`): ONLY destroyed gates or smashed wall breaches!
+   */
+  function perimeterGateways(stage, territoryLevel = 0, hasWaterfront = false, site = null, options = {}) {
+    if (stage === -1) return [];
+    const forZombie = options?.forKind === 'zombie' || options?.forKind === 'outsider';
+    const segs = perimeterWallSegments(stage, territoryLevel, hasWaterfront);
+    const gates = [];
+    for (const seg of segs) {
+      if (seg.kind === 'gate') {
+        const breached = Boolean(site && isWallDestroyed(site, seg.id));
+        if (!forZombie || breached) {
           gates.push({
-            id: 'breach-' + seg.id,
-            x: seg.x + seg.w * 0.5,
-            y: seg.y + seg.d * 0.5,
-            breach: true
+            id: seg.id,
+            side: seg.side,
+            x: seg.cx,
+            y: seg.cy,
+            gate: true,
+            breach: breached
           });
         }
+      } else if (seg.box && site && isWallDestroyed(site, seg.id)) {
+        gates.push({
+          id: 'breach-' + seg.id,
+          side: seg.side,
+          x: seg.x + seg.w * 0.5,
+          y: seg.y + seg.d * 0.5,
+          breach: true
+        });
       }
     }
     return gates;
@@ -335,12 +496,14 @@
 
   /**
    * Authoritative solid-object registry for a community:
-   * - EVERY intact perimeter wall segment & gatepost (until actually destroyed!)
+   * - EVERY intact tall perimeter wall segment & gatepost (until actually destroyed!)
+   * - For zombies & non-members: ALL 4 intact community gates are ALWAYS solid (cannot pass until destroyed!)
+   * - For authorized community members & wolves (`options.forKind === 'member' | 'wolf' | 'resident' | 'player'`):
+   *   intact gates open automatically as they pass and close immediately behind them.
    * - EVERY standing building (Market, core Homes, plot buildings, freeBuildings incl. Giant Wolf Cave,
    *   playerHouses, Military Airbase structures, plus any scene-provided extra solid boxes).
-   * Nobody (zombies, wolves, Sims, or player) may pass through any solid obstacle in this list.
    */
-  function collectSolidObstacles(site, extraSolids = null) {
+  function collectSolidObstacles(site, extraSolids = null, options = {}) {
     const walls = [];
     const buildings = [];
     if (!site) return { walls, buildings, all: [] };
@@ -348,24 +511,33 @@
     const fortStage = site.communityLife?.border?.defence?.stage || 0;
     const tLevel = site.territoryLevel || 0;
     const hasWater = Boolean(site.water || site.coastal || root.CommonEarthSim?.waterfront?.(site));
+    const forKind = String(options?.forKind || 'zombie').toLowerCase();
+    const isAuthorizedMember = (forKind === 'member' || forKind === 'wolf' || forKind === 'resident' || forKind === 'player')
+      && options?.isMember !== false;
 
-    // 1. Intact perimeter walls & gateposts (solid until smashed to 0 HP!)
-    if (fortStage > 0) {
-      for (const seg of perimeterWallSegments(fortStage, tLevel, hasWater)) {
-        if (!seg.box) continue;
-        if (isWallDestroyed(site, seg.id)) continue;
-        const ob = {
-          id: 'wall-' + seg.id,
-          wallId: seg.id,
-          kind: seg.kind === 'post' ? 'post' : 'wall',
-          name: seg.kind === 'post' ? 'Stone Gatepost' : 'Community Perimeter Wall',
-          box: seg.box,
-          cx: (seg.box[0] + seg.box[2]) * 0.5,
-          cy: (seg.box[1] + seg.box[3]) * 0.5,
-          maxHp: seg.kind === 'post' ? 210 : 260
-        };
-        walls.push(ob);
-      }
+    // 1. Intact perimeter walls, tall gateposts, and (for zombies/non-members) all 4 fortified gates!
+    for (const seg of perimeterWallSegments(fortStage, tLevel, hasWater)) {
+      if (!seg.box) continue;
+      if (isWallDestroyed(site, seg.id)) continue;
+      if (seg.kind === 'gate' && isAuthorizedMember) continue;
+      const sideLabel = seg.side ? (seg.side[0].toUpperCase() + seg.side.slice(1)) : '';
+      const ob = {
+        id: 'wall-' + seg.id,
+        wallId: seg.id,
+        kind: seg.kind === 'gate' ? 'gate' : (seg.kind === 'post' ? 'post' : 'wall'),
+        side: seg.side || null,
+        outNx: seg.outNx || 0,
+        outNy: seg.outNy || 0,
+        h: seg.h || WALL_HEIGHT,
+        name: seg.kind === 'gate'
+          ? (sideLabel + ' Community Gate')
+          : (seg.kind === 'post' ? 'Stone Gatepost' : (sideLabel + ' Perimeter Wall')),
+        box: seg.box,
+        cx: (seg.box[0] + seg.box[2]) * 0.5,
+        cy: (seg.box[1] + seg.box[3]) * 0.5,
+        maxHp: seg.kind === 'gate' ? 240 : (seg.kind === 'post' ? 260 : 300)
+      };
+      walls.push(ob);
     }
 
     const addBox = (id, name, cx, cy, w, d, maxHp = 180) => {
@@ -433,13 +605,17 @@
     }
 
     // 7. Optional extra scene solids (venues, benches, parked vans, props from street.js)
+    const gateBoxes = isAuthorizedMember
+      ? perimeterWallSegments(fortStage, tLevel, hasWater).filter(s => s.kind === 'gate' && s.box).map(s => s.box)
+      : [];
     if (Array.isArray(extraSolids)) {
       for (let i = 0; i < extraSolids.length; i++) {
         const b = extraSolids[i];
         if (!Array.isArray(b) || b.length < 4) continue;
-        // Skip boxes already covered by walls or buildings (exact match)
+        // Skip boxes already covered by walls, buildings, or member-passable community gates
         const dup = walls.some(w => Math.abs(w.box[0] - b[0]) < 0.02 && Math.abs(w.box[1] - b[1]) < 0.02 && Math.abs(w.box[2] - b[2]) < 0.02 && Math.abs(w.box[3] - b[3]) < 0.02)
-          || buildings.some(o => Math.abs(o.box[0] - b[0]) < 0.02 && Math.abs(o.box[1] - b[1]) < 0.02 && Math.abs(o.box[2] - b[2]) < 0.02 && Math.abs(o.box[3] - b[3]) < 0.02);
+          || buildings.some(o => Math.abs(o.box[0] - b[0]) < 0.02 && Math.abs(o.box[1] - b[1]) < 0.02 && Math.abs(o.box[2] - b[2]) < 0.02 && Math.abs(o.box[3] - b[3]) < 0.02)
+          || gateBoxes.some(gb => Math.abs(gb[0] - b[0]) < 0.02 && Math.abs(gb[1] - b[1]) < 0.02 && Math.abs(gb[2] - b[2]) < 0.02 && Math.abs(gb[3] - b[3]) < 0.02);
         if (dup) continue;
         buildings.push({
           id: 'solid-' + i,
@@ -487,8 +663,9 @@
             y = res.y;
             movedAny = true;
             if (!hitAny) hitAny = ob;
-            if ((ob.kind === 'wall' || ob.kind === 'post') && !hitWall) hitWall = ob;
-            if (ob.kind !== 'wall' && ob.kind !== 'post' && !hitBuilding) hitBuilding = ob;
+            const isBarrier = ob.kind === 'wall' || ob.kind === 'post' || ob.kind === 'gate';
+            if (isBarrier && !hitWall) hitWall = ob;
+            if (!isBarrier && !hitBuilding) hitBuilding = ob;
           }
         }
         if (!movedAny) break;
@@ -1235,6 +1412,11 @@
     METERS_PER_STREET_UNIT,
     MAX_WOLF_OUTSIDE_METERS,
     MAX_WOLF_OUTSIDE_UNITS,
+    WALL_HEIGHT,
+    POST_HEIGHT,
+    GATE_HEIGHT,
+    ZOMBIE_STACK_REQUIRED,
+    ZOMBIE_TIER_HEIGHT,
     rectOverlaps,
     pointInRect,
     resolveCircleRect,
@@ -1246,6 +1428,9 @@
     clampPointToWolfTerritory2D,
     communityWallBounds3D,
     perimeterWallSegments,
+    perimeterGates,
+    canEntityUseCommunityGate,
+    updateCommunityGates,
     isWallDestroyed,
     segmentIntersectsBox,
     perimeterGateways,

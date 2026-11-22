@@ -1672,9 +1672,15 @@
       const FP=window.EarthFlightPhysics;
       const fortStage=s.communityLife?.border?.defence?.stage||0;
       const tLevel=s.territoryLevel||0;
-      if(FP&&fortStage>0){
+      const worldRef=options.getWorld?.();
+      const isHomeCommunity=!worldRef?.communityLife||window.EarthCommunityLife?.isHome?.(worldRef,s)!==false;
+      if(FP){
         for(const seg of FP.perimeterWallSegments(fortStage,tLevel,Boolean(berths.length))){
-          if(seg.box&&!FP.isWallDestroyed?.(s,seg.id))state.solids.push(seg.box);
+          if(!seg.box||FP.isWallDestroyed?.(s,seg.id))continue;
+          // Intact walls & tall gateposts are ALWAYS solid to everyone;
+          // intact gates are ALSO solid to non-members/outsiders (only members & wolves of this community pass through!).
+          if(seg.kind==='gate'&&isHomeCommunity)continue;
+          state.solids.push(seg.box);
         }
       }
       if(FP&&window.EarthMilitaryBase){
@@ -4837,15 +4843,22 @@
             trollShake=Math.max(trollShake,0.34);
             message(ev.message);
             changed=true;
-          }else if(ev.type==='wallStrike'){
-            spawnTrollBurst(ev.x,ev.y,'wallStrike',`WALL -${ev.damage}`);
+          }else if(ev.type==='wallStrike'||ev.type==='gateStrike'){
+            const lbl=ev.type==='gateStrike'?`GATE -${ev.damage}`:`WALL -${ev.damage}`;
+            spawnTrollBurst(ev.x,ev.y,'wallStrike',lbl);
             trollShake=Math.max(trollShake,0.16);
             changed=true;
-          }else if(ev.type==='wallBreach'){
-            spawnTrollBurst(ev.x,ev.y,'wallBreach','WALL DESTROYED!');
+          }else if(ev.type==='wallBreach'||ev.type==='gateBreach'){
+            const lbl=ev.type==='gateBreach'?'GATE DESTROYED!':'WALL DESTROYED!';
+            spawnTrollBurst(ev.x,ev.y,'wallBreach',lbl);
             trollShake=Math.max(trollShake,0.45);
             message(ev.message);
             wallBreached=true;
+            changed=true;
+          }else if(ev.type==='wallClimb'){
+            spawnTrollBurst(ev.x,ev.y,'breach','4-ZOMBIE WALL CLIMB!');
+            trollShake=Math.max(trollShake,0.30);
+            message(ev.message);
             changed=true;
           }else if(ev.type==='simStrike'){
             spawnTrollBurst(ev.x,ev.y,'simStrike',ev.isPlayer?'BITTEN!':'VILLAGER BITTEN!');
@@ -4924,6 +4937,31 @@
         }
       }
 
+      // Update all 4 community perimeter gates: open ONLY for members & Majestic Wolves of THIS community,
+      // and immediately close shut once they finish entering/exiting (zombies can NEVER open them!).
+      if(window.EarthFlightPhysics?.updateCommunityGates){
+        const isHomeMember=!w.communityLife||window.EarthCommunityLife?.isHome?.(w,state.site)!==false;
+        const gateUsers=[];
+        if(state.player){
+          gateUsers.push({
+            kind:'player',
+            x:state.player.x,
+            y:state.player.y,
+            isHome:isHomeMember,
+            homeSiteId:isHomeMember?state.site.id:'visitor'
+          });
+        }
+        for(const sim of collectLiveSims()){
+          if(!sim.isPlayer)gateUsers.push({kind:'sim',id:sim.id,x:sim.x,y:sim.y,homeSiteId:state.site.id});
+        }
+        const liveWolves=window.EarthDragonStable?.getAutonomousPoses?.(state.site)||[];
+        for(const wp of liveWolves){
+          const wObj=wp.wolf||wp.dragon;
+          gateUsers.push({kind:'wolf',id:wObj?.id,x:wp.x,y:wp.y,homeSiteId:wObj?.homeSiteId||state.site.id});
+        }
+        window.EarthFlightPhysics.updateCommunityGates(state.site,gateUsers,dt);
+      }
+
       // Drive continuous nighttime Zombie howling + Full Moon Wolf Pack chorus audio
       if(window.EarthNightAudio?.setNightState){
         const localZombies=window.EarthGiantTrolls?.trollsForSite?.(w,state.site.id)||[];
@@ -4971,16 +5009,20 @@
       // TWO bent outstretched arms with bloody grasping claws, crooked decaying skull with
       // sunken eye sockets, milky dead eyes, blood-dripping snapping jaw with jagged teeth,
       // violent lunge/bite/wall-bash/feeding poses, and eerie continuous night howling mist.
-      const [sx,sy]=screen(zombie.x,zombie.y,0);
+      const zElev=Math.max(0,zombie.z||0);
+      const [sx,sy]=screen(zombie.x,zombie.y,zElev);
+      const [gx,gy]=zElev>0.02?screen(zombie.x,zombie.y,0):[sx,sy];
       const scaleH=clamp((zombie.heightMeters||1.8)/1.8,0.94,1.08);
       const s=unit*0.66*scaleH;
       const phase=zombie.swingPhase||0;
       const atkPhase=zombie.attackPhase||'march';
       const prog=clamp(zombie.attackProgress||0,0,1);
-      const moving=atkPhase==='march'||atkPhase==='chase';
+      const isLadder=zombie.climbState==='ladder';
+      const isVaulting=zombie.climbState==='vaulting';
+      const moving=atkPhase==='march'||atkPhase==='chase'||isVaulting;
       const limp=moving?Math.sin(phase):0;
       const limpDrag=moving?Math.max(0,Math.sin(phase+0.85)):0;
-      const bob=moving?Math.abs(limp)*s*0.07:0;
+      const bob=moving&&!isLadder?Math.abs(limp)*s*0.07:0;
       const skin=zombie.skin||'#8c997e';
       const skinDark='#57634d';
       const cloth=zombie.cloth||'#4c524b';
@@ -4995,7 +5037,10 @@
       let armReach=0.18+Math.sin(phase*1.2)*0.16;
       let crouchDrop=0;
       let biteFlash=0;
-      if(atkPhase==='windup'){
+      if(isLadder||isVaulting){
+        torsoTilt=isVaulting?0.12:-0.08;
+        armReach=-0.95+(isVaulting?Math.sin(phase*1.8)*0.32:0);
+      }else if(atkPhase==='windup'){
         torsoTilt=0.22-prog*0.14;
         armReach=-0.45*prog;
       }else if(atkPhase==='strike'){
@@ -5018,11 +5063,14 @@
       ctx.lineJoin='round';
       ctx.lineCap='round';
 
-      // Ground contact shadow directly beneath feet (y = 0)
-      ctx.fillStyle='rgba(10,14,10,0.40)';
-      ctx.beginPath();
-      ctx.ellipse(0,0,s*0.48,s*0.17,0,0,Math.PI*2);
-      ctx.fill();
+      // Ground contact shadow projected at z = 0 (softens cleanly when stacked on another zombie's shoulders!)
+      if(zElev<0.15||isVaulting){
+        const shadAlpha=clamp(0.40-zElev*0.08,0.12,0.40);
+        ctx.fillStyle=`rgba(10,14,10,${shadAlpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.ellipse(gx-sx,gy-sy,s*0.48,s*0.17,0,0,Math.PI*2);
+        ctx.fill();
+      }
 
       // Sharp claw/bite swipe flash when lunging at living prey or bashing a wall
       if(biteFlash>0.06){
@@ -5203,16 +5251,22 @@
         ctx.font='700 9.5px system-ui,sans-serif';
         ctx.textAlign='center';ctx.textBaseline='bottom';
         ctx.fillStyle=isHowling?'#d6eed8':'#f4d4cc';
-        const shortTag=zombie.targetKind==='wall'
-          ? `${zombie.name} · SMASHING WALL`
-          : atkPhase==='feed'
-            ? `${zombie.name} · EATING`
-            : atkPhase==='strike'||atkPhase==='windup'
-              ? `${zombie.name} · BITING`
-              : isHowling
-                ? `${zombie.name} · HOWLING`
-                : zombie.name;
-        ctx.fillText(shortTag,0,barY-3);
+        const shortTag=isVaulting
+          ? `${zombie.name} · CLIMBING WALL!`
+          : isLadder
+            ? (zombie.stackTier===3?`4-ZOMBIE STACK (${zombie.stackTier+1}/4)`:'')
+            : zombie.targetKind==='gate'
+              ? `${zombie.name} · SMASHING GATE`
+              : zombie.targetKind==='wall'
+                ? `${zombie.name} · SMASHING WALL`
+                : atkPhase==='feed'
+                  ? `${zombie.name} · EATING`
+                  : atkPhase==='strike'||atkPhase==='windup'
+                    ? `${zombie.name} · BITING`
+                    : isHowling
+                      ? `${zombie.name} · HOWLING`
+                      : zombie.name;
+        if(shortTag)ctx.fillText(shortTag,0,barY-3);
       }
 
       ctx.restore();
@@ -5221,8 +5275,8 @@
     function drawTrollBuildingDamage(){
       const dmgMap=state.site?.trollDamage;
       if(!dmgMap)return;
-      for(const rec of Object.values(dmgMap)){
-        if(!rec||(!rec.ruined&&rec.hp>=rec.maxHp))continue;
+      for(const [key,rec] of Object.entries(dmgMap)){
+        if(!rec||key.startsWith('wall-')||(!rec.ruined&&rec.hp>=rec.maxHp))continue;
         const [sx,sy]=screen(rec.x,rec.y,0.3);
         if(sx<-90||sx>width+90||sy<-90||sy>height+90)continue;
         const pct=clamp(rec.hp/Math.max(1,rec.maxHp),0,1);
@@ -5495,14 +5549,26 @@
         rect(tb.minX,tb.minY,tb.maxX-tb.minX,tb.maxY-tb.minY,.004,'rgba(128,158,108,.18)','rgba(186,204,154,.45)',1.1);
       }
       const fort=state.site.communityLife?.border?.defence?.stage||0;
-      if(fort&&FP){
+      if(FP){
         const wallSegs=FP.perimeterWallSegments(fort,tLevel,Boolean(berths.length));
         for(const seg of wallSegs){
-          const x1=seg.x,y1=seg.y,w=seg.w,d=seg.d,z0=seg.z||0,h=seg.h||1.18,cx=x1+w/2,cy=y1+d/2;
+          const x1=seg.x,y1=seg.y,w=seg.w,d=seg.d,z0=seg.z||0,h=seg.h||(FP.WALL_HEIGHT||3.20),cx=x1+w/2,cy=y1+d/2;
           const wallRec=state.site.trollDamage?.['wall-'+seg.id];
           const ruined=Boolean(wallRec?.ruined);
-          addItem(cx,cy,cx+cy+(ruined?.12:.45),()=>{
+          const depthBoost=seg.kind==='arch'?.62:(ruined?.12:.45);
+          addItem(cx,cy,cx+cy+depthBoost,()=>{
             if(ruined){
+              if(seg.kind==='gate'){
+                // Shattered timber & twisted iron wreckage marking a breached community gate!
+                const horiz=w>d;
+                for(let i=0;i<4;i++){
+                  const frac=(i+0.5)/4;
+                  const rx=horiz?x1+w*frac-0.36:x1-0.06;
+                  const ry=horiz?y1-0.06:y1+d*frac-0.36;
+                  box(rx,ry,horiz?0.72:w*1.1,horiz?d*1.1:0.72,0,0.10+(i%2)*0.07,'#5b412c','#3e2c1d','#2d2015');
+                }
+                return;
+              }
               // Smashed stone rubble piles marking a passable wall breach!
               const horiz=w>d;
               const stones=Math.max(2,Math.min(6,Math.floor(Math.max(w,d)/1.4)));
@@ -5510,34 +5576,79 @@
                 const frac=(i+0.5)/stones;
                 const rx=horiz?x1+w*frac-0.24:x1+0.04;
                 const ry=horiz?y1+0.04:y1+d*frac-0.24;
-                box(rx,ry,horiz?0.48:w*0.82,horiz?d*0.82:0.48,0,0.12+(i%2)*0.09,'#9f8f74','#7a6c56','#5e5343');
+                box(rx,ry,horiz?0.48:w*0.82,horiz?d*0.82:0.48,0,0.14+(i%2)*0.11,'#9f8f74','#7a6c56','#5e5343');
               }
               return;
             }
             const damaged=Boolean(wallRec&&wallRec.hp<wallRec.maxHp);
-            const topCol=damaged?'#baa784':'#d3c29c';
-            const leftCol=damaged?'#8f7b5d':'#a79272';
-            const rightCol=damaged?'#6e5e4a':'#82725b';
-            box(x1,y1,w,d,z0,h,topCol,leftCol,rightCol);
-            if(seg.kind==='post'||seg.kind==='tower'){
-              box(x1-.06,y1-.06,w+.12,d+.12,z0+h,.22,'#e2d1a8','#b59e7a','#8d7a60');
-            }else if(seg.kind==='wall'&&Math.max(w,d)>2){
-              const horiz=w>d,steps=Math.max(2,Math.floor(Math.max(w,d)/1.8));
-              for(let i=0;i<steps;i++){
-                const mx=horiz?x1+i*(w/steps)+.2:x1,my=horiz?y1:y1+i*(d/steps)+.2;
-                box(mx,my,horiz?.48:w,horiz?d:.48,z0+h,.22,'#dfd0a7','#b09a78','#8b785f');
+            if(seg.kind==='gate'){
+              // Tall iron-bound double timber gate doors — always kept CLOSED except while community members/wolves pass!
+              const gateOpen=clamp(state.site._gateRuntime?.[seg.id]?.open||0,0,1);
+              const horiz=w>d;
+              const woodTop=damaged?'#6b4730':'#785438';
+              const woodLeft=damaged?'#4d3120':'#593d28';
+              const woodRight=damaged?'#382316':'#422c1d';
+              if(horiz){
+                const half=w*0.5;
+                const leafW=Math.max(0.32,half*(1-gateOpen*0.84));
+                box(x1,y1,leafW,d,0,h,woodTop,woodLeft,woodRight);
+                box(x1+w-leafW,y1,leafW,d,0,h,woodTop,woodLeft,woodRight);
+                // Heavy wrought-iron horizontal brace bands across the tall doors
+                for(const bz of [0.55,1.55,2.55]){
+                  box(x1,y1-0.02,leafW,d+0.04,bz,0.16,'#3c444d','#282e35','#1d2228');
+                  box(x1+w-leafW,y1-0.02,leafW,d+0.04,bz,0.16,'#3c444d','#282e35','#1d2228');
+                }
+                if(gateOpen<0.15){
+                  // Central iron lock bar sealing the closed gate against zombies
+                  box(cx-0.18,y1-0.04,0.36,d+0.08,1.35,0.42,'#d9b466','#9f7e3e','#6e5628');
+                }
+              }else{
+                const half=d*0.5;
+                const leafD=Math.max(0.32,half*(1-gateOpen*0.84));
+                box(x1,y1,w,leafD,0,h,woodTop,woodLeft,woodRight);
+                box(x1,y1+d-leafD,w,leafD,0,h,woodTop,woodLeft,woodRight);
+                for(const bz of [0.55,1.55,2.55]){
+                  box(x1-0.02,y1,w+0.04,leafD,bz,0.16,'#3c444d','#282e35','#1d2228');
+                  box(x1-0.02,y1+d-leafD,w+0.04,leafD,bz,0.16,'#3c444d','#282e35','#1d2228');
+                }
+                if(gateOpen<0.15){
+                  box(x1-0.04,cy-0.18,w+0.08,0.36,1.35,0.42,'#d9b466','#9f7e3e','#6e5628');
+                }
+              }
+            }else{
+              const topCol=damaged?'#baa784':'#d3c29c';
+              const leftCol=damaged?'#8f7b5d':'#a79272';
+              const rightCol=damaged?'#6e5e4a':'#82725b';
+              box(x1,y1,w,d,z0,h,topCol,leftCol,rightCol);
+              if(seg.kind==='post'||seg.kind==='tower'){
+                box(x1-.08,y1-.08,w+.16,d+.16,z0+h,.28,'#e2d1a8','#b59e7a','#8d7a60');
+              }else if(seg.kind==='wall'&&Math.max(w,d)>2){
+                // Stone reinforcement band at mid-height + tall crenellated battlements on top!
+                box(x1-0.02,y1-0.02,w+0.04,d+0.04,z0+h*0.52,0.14,'#c2b18d','#968265','#74654f');
+                const horiz=w>d,steps=Math.max(2,Math.floor(Math.max(w,d)/1.8));
+                for(let i=0;i<steps;i++){
+                  const mx=horiz?x1+i*(w/steps)+.2:x1,my=horiz?y1:y1+i*(d/steps)+.2;
+                  box(mx,my,horiz?.50:w,horiz?d:.50,z0+h,.28,'#dfd0a7','#b09a78','#8b785f');
+                }
               }
             }
             if(damaged&&unit>=8){
-              const [wx,wy]=screen(wallRec.x||cx,wallRec.y||cy,h+0.45);
-              const bw=48,pct=clamp(wallRec.hp/Math.max(1,wallRec.maxHp),0,1);
+              const [wx,wy]=screen(wallRec.x||cx,wallRec.y||cy,h+0.62);
+              const bw=58,pct=clamp(wallRec.hp/Math.max(1,wallRec.maxHp),0,1);
               ctx.save();
-              ctx.fillStyle='rgba(20,14,12,0.84)';ctx.fillRect(wx-bw/2-1,wy-3,bw+2,6);
-              ctx.fillStyle='#3b1a16';ctx.fillRect(wx-bw/2,wy-2,bw,4);
-              ctx.fillStyle=pct>0.45?'#e8b85a':'#e64833';ctx.fillRect(wx-bw/2,wy-2,bw*pct,4);
+              ctx.fillStyle='rgba(18,12,14,0.88)';
+              ctx.strokeStyle=pct>0.45?'#e8b85a':'#e64833';
+              ctx.lineWidth=1;
+              ctx.beginPath();ctx.roundRect(wx-bw/2-3,wy-13,bw+6,19,3);ctx.fill();ctx.stroke();
+              ctx.font='700 8.5px system-ui,sans-serif';
+              ctx.textAlign='center';ctx.textBaseline='middle';
+              ctx.fillStyle='#ffe3b8';
+              ctx.fillText(`${seg.kind==='gate'?'GATE':'WALL'} ${wallRec.hp}/${wallRec.maxHp}`,wx,wy-6);
+              ctx.fillStyle='#3b1a16';ctx.fillRect(wx-bw/2,wy,bw,4);
+              ctx.fillStyle=pct>0.45?'#e8b85a':'#e64833';ctx.fillRect(wx-bw/2,wy,bw*pct,4);
               ctx.restore();
             }
-          },[Math.max(3,w+1),3,2]);
+          },[Math.max(3,w+1.5),Math.max(3,d+1.5),h+1.5]);
         }
       }
       const blockDepth=p=>p.x+p.y+.35;
@@ -5806,7 +5917,8 @@
       }
       const localTrolls=window.EarthGiantTrolls?.trollsForSite?.(options.getWorld?.(),state.site.id)||[];
       for(const troll of localTrolls){
-        addItem(troll.x,troll.y,troll.x+troll.y+.65,()=>drawGiantTroll(troll),trollBounds);
+        const zDepth=(troll.z||0)*0.45;
+        addItem(troll.x,troll.y,troll.x+troll.y+.65+zDepth,()=>drawGiantTroll(troll),[2.5,2.5,4.8]);
       }
       if(trollShake>0.01&&!reduced){
         const amp=trollShake*trollShake*7;
