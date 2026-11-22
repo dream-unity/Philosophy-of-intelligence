@@ -306,7 +306,7 @@ test('Walls and all buildings are 100% solid: neither zombies nor wolves can pas
   assert.ok(movedSteps >= 5, 'Expected wolf to run on the ground across multiple steps');
 });
 
-test('Zombies blocked by a solid perimeter wall stop, bash it until destroyed, then breach through the rubble and fiercely bite wolves', async () => {
+test('Zombies cannot put even a dint in community walls (0 wall damage, 0 breaches), while fiercely biting Majestic Wolves', async () => {
   const ctx = loadSimEnv();
   const FP = ctx.EarthFlightPhysics;
   const sim = ctx.CommonEarthSim.create({ storage: null });
@@ -316,12 +316,13 @@ test('Zombies blocked by a solid perimeter wall stop, bash it until destroyed, t
   site.communityLife.border ||= {};
   site.communityLife.border.defence = { stage: 2 };
 
-  const solids = FP.collectSolidObstacles(site);
+  const solids = FP.collectSolidObstacles(site, null, { forKind: 'zombie' });
   const nwWall = solids.walls.find(w => w.wallId === 'north-west');
-  assert.ok(nwWall);
+  assert.ok(nwWall && nwWall.indestructible === true);
   const wallMinY = nwWall.box[1];
   const wallMaxY = nwWall.box[3];
 
+  // Single zombie outside the tall wall CANNOT put even a dint in the wall and CANNOT pass through!
   const zombies = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
   for (let i = 1; i < zombies.length; i++) { zombies[i].hp = 0; zombies[i].state = 'slain'; }
   const z = zombies[0];
@@ -331,32 +332,26 @@ test('Zombies blocked by a solid perimeter wall stop, bash it until destroyed, t
   z.attackPhase = 'chase';
 
   const insideSim = [{ id: 'sim-inside', name: 'Nadia', x: 2.0, y: wallMaxY + 2.5, downed: false }];
-  let wallStrikes = 0;
-  let wallBreached = false;
-  let crossedAfterBreach = false;
+  let wallDamageEvents = 0;
 
   for (let step = 0; step < 120; step++) {
     const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.2, { sims: insideSim, wolves: [], isNight: false });
     for (const ev of evs) {
-      if (ev.type === 'wallStrike') wallStrikes++;
-      if (ev.type === 'wallBreach') wallBreached = true;
+      if (ev.type === 'wallStrike' || ev.type === 'wallBreach' || ev.type === 'gateStrike' || ev.type === 'gateBreach') {
+        wallDamageEvents++;
+      }
     }
-    if (!FP.isWallDestroyed(site, 'north-west')) {
-      assert.ok(z.y <= wallMinY - 0.28, `Zombie passed through intact wall before destroying it! (y=${z.y.toFixed(2)}, wallMinY=${wallMinY})`);
-    } else if (z.y > wallMaxY) {
-      crossedAfterBreach = true;
-      break;
-    }
+    assert.ok(z.y <= wallMinY - 0.28, `Zombie passed through indestructible solid wall! (y=${z.y.toFixed(2)}, wallMinY=${wallMinY})`);
+    assert.equal(FP.isWallDestroyed(site, 'north-west'), false, 'Zombies must NEVER destroy community walls');
   }
-  assert.ok(wallStrikes >= 3, `Zombie must repeatedly smash the blocking solid wall (got ${wallStrikes} strikes)`);
-  assert.equal(wallBreached, true, 'Zombie must destroy the blocking perimeter wall into rubble');
-  assert.equal(FP.isWallDestroyed(site, 'north-west'), true, 'Destroyed wall must be recorded as ruined');
-  assert.equal(crossedAfterBreach, true, 'Zombie must cross through the smashed wall breach ONLY after destroying it');
+  assert.equal(wallDamageEvents, 0, 'Zombies must NEVER emit wall/gate strike or breach events');
+  const wallDamageRecords = Object.keys(site.trollDamage || {}).filter(k => k.startsWith('wall-'));
+  assert.equal(wallDamageRecords.length, 0, 'Zombies must NOT put even a single dint in perimeter walls or gates');
 
-  // Verify hyper-aggressive zombie bite deals substantial damage (>= 40 HP) to a Majestic Wolf!
+  // Verify hyper-aggressive zombie bite deals substantial damage (>= 40 HP) to a Majestic Wolf on the same side!
   const wolf = site.dragonStable.dragons[0];
   const hpBefore = wolf.hp;
-  z.x = 12; z.y = 12; z._wallTarget = null; z.attackPhase = 'chase'; z.attackTimer = 0;
+  z.x = 12; z.y = 12; z._wallTarget = null; z.climbState = null; z.attackPhase = 'chase'; z.attackTimer = 0;
   const mockWolf = [{ wolf, dragon: wolf, x: 12.6, y: 12.1 }];
   let biteDmg = 0;
   for (let i = 0; i < 40; i++) {
@@ -368,11 +363,10 @@ test('Zombies blocked by a solid perimeter wall stop, bash it until destroyed, t
   assert.equal(wolf.hp, hpBefore - biteDmg);
 });
 
-test('Every community starts encircled by tall 4-sided walls and 4 auto-closing member-only gates that block zombies until destroyed', async () => {
+test('Every community starts encircled by tall 4-sided indestructible walls and 4 auto-closing gates with a permanent protective magical shield upon opening', async () => {
   const ctx = loadSimEnv();
   const FP = ctx.EarthFlightPhysics;
   const sim = ctx.CommonEarthSim.create({ storage: null });
-  // Even a waterfront community at Week 1 start (before building border upgrades) has all 4 tall walls + 4 tall gates!
   await sim.perform('found', { name: 'Stone Town', region: 'Zanzibar', lat: -6.1622, lon: 39.1922, water: true });
   const site = sim.active();
 
@@ -390,16 +384,18 @@ test('Every community starts encircled by tall 4-sided walls and 4 auto-closing 
     assert.ok(g.h >= 3.0, `Tall gate ${g.id} must be >= 3.0 units high (got ${g.h})`);
     assert.equal(g.open, 0, `Gate ${g.id} must start closed`);
     assert.equal(g.isOpen, false, `Gate ${g.id} must start closed`);
+    assert.equal(g.shieldActive, false, 'Shield curtain activates upon gate opening');
   }
 
-  // Only members of THIS community (its Sims, home player, and its Majestic Wolves) can use the 4 gates
+  // Only members of THIS community (its Sims, home player, and its Majestic Wolves) can enter/exit the 4 gates
   const wolf = site.dragonStable.dragons[0];
-  assert.equal(FP.canEntityUseCommunityGate({ kind: 'sim', id: 's1', homeSiteId: site.id }, site), true);
-  assert.equal(FP.canEntityUseCommunityGate({ kind: 'player', isHome: true, homeSiteId: site.id }, site), true);
-  assert.equal(FP.canEntityUseCommunityGate({ kind: 'wolf', id: wolf.id, homeSiteId: site.id }, site), true);
-  assert.equal(FP.canEntityUseCommunityGate({ kind: 'zombie', id: 'z1' }, site), false, 'Zombies must NEVER use community gates');
-  assert.equal(FP.canEntityUseCommunityGate({ kind: 'sim', id: 'outsider', homeSiteId: 'other-town' }, site), false, 'Non-members from other communities cannot use gates');
-  assert.equal(FP.canEntityUseCommunityGate({ kind: 'wolf', id: 'other-wolf', homeSiteId: 'other-town' }, site), false, 'Wolves from other communities cannot use gates');
+  assert.equal(FP.canEntityCrossGateEntrance({ kind: 'sim', id: 's1', homeSiteId: site.id }, site, 'gate-north'), true);
+  assert.equal(FP.canEntityCrossGateEntrance({ kind: 'player', isHome: true, homeSiteId: site.id }, site, 'gate-north'), true);
+  assert.equal(FP.canEntityCrossGateEntrance({ kind: 'wolf', id: wolf.id, homeSiteId: site.id }, site, 'gate-north'), true);
+  assert.equal(FP.canEntityCrossGateEntrance({ kind: 'zombie', id: 'z1' }, site, 'gate-north'), false, 'Zombies must NEVER cross any gate entrance');
+  assert.equal(FP.canEntityCrossGateEntrance({ kind: 'enemy', id: 'e1' }, site, 'gate-north'), false, 'Enemies must NEVER cross any gate entrance');
+  assert.equal(FP.canEntityCrossGateEntrance({ kind: 'sim', id: 'outsider', homeSiteId: 'other-town' }, site, 'gate-north'), false, 'Non-members from other communities cannot cross gates');
+  assert.equal(FP.canEntityCrossGateEntrance({ kind: 'wolf', id: 'other-wolf', homeSiteId: 'other-town' }, site, 'gate-north'), false, 'Wolves from other communities cannot cross gates');
 
   const northGate = gates.find(g => g.id === 'gate-north');
   // Zombies approaching the North Gate NEVER open it!
@@ -408,48 +404,55 @@ test('Every community starts encircled by tall 4-sided walls and 4 auto-closing 
   }
   assert.equal(site._gateRuntime['gate-north'].open, 0, 'Closed gate must stay shut when zombies stand right at it');
 
-  // Authorized wolf from THIS community approaches -> gate swings open; once wolf passes -> gate closes shut immediately!
-  for (let i = 0; i < 10; i++) {
+  // Authorized wolf from THIS community approaches -> gate swings WIDE OPEN AND permanent protective magical shield stretches across!
+  for (let i = 0; i < 12; i++) {
     FP.updateCommunityGates(site, [{ kind: 'wolf', id: wolf.id, homeSiteId: site.id, x: northGate.cx, y: northGate.cy + 0.4 }], 0.1);
   }
-  assert.ok(site._gateRuntime['gate-north'].open >= 0.9, 'Community gate must open for its own Majestic Wolf');
+  assert.ok(site._gateRuntime['gate-north'].open >= 0.95, 'Community gate must swing open for its own Majestic Wolf');
+  assert.equal(site._gateRuntime['gate-north'].shieldActive, true, 'Protective magical shield must permanently stretch across the gate entrance upon opening');
+
+  // EVEN WHILE THE NORTH GATE IS WIDE OPEN (open === 1), zombies & enemies are 100% blocked and repelled by the magical shield!
+  assert.equal(FP.perimeterGateways(2, 0, true, site, { forKind: 'zombie' }).length, 0, 'Zombies have ZERO passable ground gateways');
+  assert.equal(FP.perimeterGateways(2, 0, true, site, { forKind: 'enemy' }).length, 0, 'Enemies have ZERO passable ground gateways');
+  const zombieSolidsWhileOpen = FP.collectSolidObstacles(site, null, { forKind: 'zombie' });
+  assert.ok(zombieSolidsWhileOpen.walls.some(w => w.wallId === 'gate-north' && w.shielded), 'Open gate MUST remain a 100% solid magical shield barrier to zombies');
+
+  const zombies = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
+  for (let i = 1; i < zombies.length; i++) { zombies[i].hp = 0; zombies[i].state = 'slain'; }
+  const z = zombies[0];
+  z.x = northGate.cx;
+  z.y = northGate.box[1] - 0.7;
+  z.state = 'hunting';
+  z.attackPhase = 'chase';
+  const simInside = [{ id: 'inside-1', name: 'Amina', x: northGate.cx, y: northGate.box[3] + 2.5, downed: false }];
+  let shieldRepels = 0;
+  let sawOpenGateShieldRepel = false;
+  for (let step = 0; step < 30; step++) {
+    // Keep the North Gate held WIDE OPEN by the community wolf standing in the gateway while the zombie tries to rush in!
+    FP.updateCommunityGates(site, [{ kind: 'wolf', id: wolf.id, homeSiteId: site.id, x: northGate.cx, y: northGate.cy + 0.3 }], 0.1);
+    const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.15, { sims: simInside, wolves: [], isNight: false });
+    for (const ev of evs) {
+      if (ev.type === 'gateShieldRepel') {
+        shieldRepels++;
+        if (ev.gateOpen) sawOpenGateShieldRepel = true;
+      }
+      assert.notEqual(ev.type, 'gateStrike', 'Zombies must NEVER damage gates');
+      assert.notEqual(ev.type, 'gateBreach', 'Zombies must NEVER destroy gates');
+    }
+    assert.ok(z.y <= northGate.box[1] - 0.25, `Zombie entered through OPEN magically-shielded gate! (y=${z.y.toFixed(2)}, gateMinY=${northGate.box[1]})`);
+  }
+  assert.ok(shieldRepels >= 1, 'Protective magical shield must repel zombies attempting to enter the open gate');
+  assert.equal(sawOpenGateShieldRepel, true, 'Shield repel must trigger specifically while the gate is open');
+
+  // Once the authorized wolf moves away, the gate immediately closes shut again!
   for (let i = 0; i < 15; i++) {
     FP.updateCommunityGates(site, [{ kind: 'wolf', id: wolf.id, homeSiteId: site.id, x: northGate.cx, y: northGate.cy - 6.0 }], 0.1);
   }
   assert.equal(site._gateRuntime['gate-north'].open, 0, 'Gate must immediately close shut after member/wolf passes through');
   assert.equal(site._gateRuntime['gate-north'].isOpen, false);
-
-  // Zombie charging North Gate is blocked until it smashes the gate down (`gateStrike` -> `gateBreach`)!
-  const zombies = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
-  for (let i = 1; i < zombies.length; i++) { zombies[i].hp = 0; zombies[i].state = 'slain'; }
-  const z = zombies[0];
-  z.x = northGate.cx;
-  z.y = northGate.box[1] - 1.1;
-  z.state = 'hunting';
-  z.attackPhase = 'chase';
-  const simInside = [{ id: 'inside-1', name: 'Amina', x: northGate.cx, y: northGate.box[3] + 2.5, downed: false }];
-  let gateStrikes = 0;
-  let gateBreached = false;
-  let enteredAfterGateBreach = false;
-  for (let step = 0; step < 120; step++) {
-    const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.2, { sims: simInside, wolves: [], isNight: false });
-    for (const ev of evs) {
-      if (ev.type === 'gateStrike') gateStrikes++;
-      if (ev.type === 'gateBreach') gateBreached = true;
-    }
-    if (!FP.isWallDestroyed(site, 'gate-north')) {
-      assert.ok(z.y <= northGate.box[1] - 0.28, `Zombie walked through intact closed gate! (y=${z.y.toFixed(2)}, gateMinY=${northGate.box[1]})`);
-    } else if (z.y > northGate.box[3]) {
-      enteredAfterGateBreach = true;
-      break;
-    }
-  }
-  assert.ok(gateStrikes >= 3, `Zombie must smash closed gate repeatedly (got ${gateStrikes})`);
-  assert.equal(gateBreached, true, 'Zombie must breach closed gate to enter');
-  assert.equal(enteredAfterGateBreach, true, 'Zombie crosses gate ONLY after destroying it');
 });
 
-test('Zombies can ONLY climb over intact tall walls when 4 zombies stack on each others shoulders one after another', async () => {
+test('Zombies can ONLY jump over walls by climbing atop no less than 3 other zombies shoulders (difficult yet achievable, collapsible by wolves)', async () => {
   const ctx = loadSimEnv();
   const FP = ctx.EarthFlightPhysics;
   const sim = ctx.CommonEarthSim.create({ storage: null });
@@ -463,7 +466,7 @@ test('Zombies can ONLY climb over intact tall walls when 4 zombies stack on each
   const wallMaxY = nwWall.box[3];
   const simInside = [{ id: 'prey-1', name: 'Tessa', x: 2.0, y: wallMaxY + 4.0, downed: false }];
 
-  // PART A: 3 zombies (fewer than 4) at the intact tall wall CANNOT climb over!
+  // PART A: 3 zombies total (only 2 other zombies beneath — LESS than 3 other zombies!) CANNOT climb over and do ZERO wall damage!
   const horde = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
   for (let i = 0; i < horde.length; i++) {
     horde[i].hp = i < 3 ? 420 : 0;
@@ -475,25 +478,21 @@ test('Zombies can ONLY climb over intact tall walls when 4 zombies stack on each
       horde[i]._wallTarget = null;
     }
   }
-  // Give the wall huge HP temporarily so we test pure climbing without wall destruction
-  site.trollDamage ||= {};
-  site.trollDamage['wall-north-west'] = {
-    id: 'wall-north-west', wallId: 'north-west', kind: 'wall', name: 'North Perimeter Wall',
-    x: 2.0, y: wallMinY, hp: 50000, maxHp: 50000, ruined: false
-  };
   let climbsWithThree = 0;
-  for (let s = 0; s < 40; s++) {
+  for (let s = 0; s < 70; s++) {
     const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.15, { sims: simInside, wolves: [], isNight: false });
     climbsWithThree += evs.filter(e => e.type === 'wallClimb').length;
   }
-  assert.equal(climbsWithThree, 0, '3 zombies MUST NOT be able to climb over the tall wall');
+  assert.equal(climbsWithThree, 0, '3 zombies total (only 2 other zombies beneath) MUST NOT be able to climb over the wall');
   for (let i = 0; i < 3; i++) {
-    assert.equal(horde[i].z || 0, 0, 'With < 4 zombies, no zombie should stack upward');
-    assert.ok(horde[i].y <= wallMinY - 0.25, 'With < 4 zombies, all must remain outside intact wall');
+    assert.equal(horde[i].z || 0, 0, 'With < 4 total zombies, no zombie should stack upward');
+    assert.ok(horde[i].y <= wallMinY - 0.25, 'With < 4 total zombies, all must remain outside intact wall');
   }
+  assert.equal(Object.keys(site.trollDamage || {}).filter(k => k.startsWith('wall-')).length, 0, 'Zero wall dints while gathering');
 
-  // PART B: 5 zombies gather at the intact tall wall -> 4 zombies stack on each other's shoulders (tiers 0..3) and the 5th climbs over!
-  for (let i = 0; i < 5; i++) {
+  // PART B: 4 zombies total (3 OTHER zombies forming the base shoulder ladder + 1 climber standing atop their shoulders)
+  // Difficult (takes >= 6s incl. assembly, stabilization & mid-climb wobble slip), yet reliably achievable!
+  for (let i = 0; i < 4; i++) {
     horde[i].hp = 420;
     horde[i].state = 'hunting';
     horde[i].attackPhase = 'chase';
@@ -502,22 +501,31 @@ test('Zombies can ONLY climb over intact tall walls when 4 zombies stack on each
     horde[i].z = 0;
     horde[i].climbState = null;
     horde[i].climbedOverWall = false;
+    horde[i].stackStability = 0;
+    horde[i]._wallTarget = null;
   }
-  let sawFourStack = false;
+  let sawThreeBaseLadder = false;
+  let sawMidClimbSlip = false;
   let climbEvent = null;
   let peakVaultZ = 0;
-  for (let s = 0; s < 90; s++) {
-    const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.12, { sims: simInside, wolves: [], isNight: false });
-    const liveFive = horde.slice(0, 5);
-    const ladder = liveFive.filter(z => z.climbState === 'ladder');
-    if (ladder.length === 4) {
+  let elapsedSec = 0;
+  for (let s = 0; s < 160; s++) {
+    const dt = 0.12;
+    elapsedSec += dt;
+    const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, dt, { sims: simInside, wolves: [], isNight: false });
+    const liveFour = horde.slice(0, 4);
+    const ladder = liveFour.filter(z => z.climbState === 'ladder');
+    if (ladder.length === 3) {
       const tiers = ladder.map(z => z.stackTier).sort((a, b) => a - b);
-      if (tiers.join(',') === '0,1,2,3' && ladder.some(z => z.z >= 2.2)) {
-        sawFourStack = true;
+      if (tiers.join(',') === '0,1,2' && ladder.some(z => z.z >= 1.55)) {
+        sawThreeBaseLadder = true;
       }
     }
-    for (const z of liveFive) {
-      if (z.climbState === 'vaulting' && (z.z || 0) > peakVaultZ) peakVaultZ = z.z;
+    for (const z of liveFour) {
+      if (z.climbState === 'vaulting') {
+        if ((z.z || 0) > peakVaultZ) peakVaultZ = z.z;
+        if (z.climbSlipping) sawMidClimbSlip = true;
+      }
     }
     const found = evs.find(e => e.type === 'wallClimb');
     if (found) {
@@ -525,22 +533,41 @@ test('Zombies can ONLY climb over intact tall walls when 4 zombies stack on each
       break;
     }
   }
-  assert.equal(sawFourStack, true, '4 zombies must form a 4-tier shoulder stack (tiers 0, 1, 2, 3) against the tall wall');
-  assert.ok(peakVaultZ >= 3.0, `Climbing zombie must scale above the tall wall parapet (peakZ=${peakVaultZ.toFixed(2)})`);
-  assert.ok(climbEvent && climbEvent.stackSize === 4, 'Climbing zombie must emit wallClimb event with stackSize === 4');
-  assert.ok(climbEvent.zombie.y > wallMaxY, 'Climber must land INSIDE the community after scaling the 4-zombie stack');
+  assert.equal(sawThreeBaseLadder, true, 'No less than 3 other zombies must stack vertically (tiers 0, 1, 2) as the base shoulder ladder');
+  assert.equal(sawMidClimbSlip, true, 'Difficult wall climb must exhibit realistic mid-climb balance wobble/slip');
+  assert.ok(elapsedSec >= 6.0, `Climbing over the tall wall must be genuinely difficult and not instant (took ${elapsedSec.toFixed(1)}s)`);
+  assert.ok(peakVaultZ >= 3.2, `Climber must leap above the 3.20 tall wall parapet (peakZ=${peakVaultZ.toFixed(2)})`);
+  assert.ok(climbEvent && climbEvent.baseStackSize === 3 && climbEvent.stackSize === 4, 'wallClimb event must report 3 base zombies + 1 climber (4 total)');
+  assert.ok(climbEvent.zombie.y > wallMaxY, 'Climber must land INSIDE the community after jumping over the wall');
   assert.equal(climbEvent.zombie.z, 0, 'Climber must land back on ground level (z === 0) inside the community');
 
-  // PART C: Killing 1 zombie in the 4-zombie stack collapses the ladder immediately so remaining 3 drop to ground!
-  const remainingLadder = horde.slice(0, 5).filter(z => z.climbState === 'ladder');
-  assert.equal(remainingLadder.length, 4);
-  remainingLadder[0].hp = 0;
-  remainingLadder[0].state = 'slain';
-  ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.12, { sims: simInside, wolves: [], isNight: false });
-  for (let k = 1; k < remainingLadder.length; k++) {
-    assert.equal(remainingLadder[k].climbState, null, 'Stack must collapse when fewer than 4 zombies remain');
-    assert.equal(remainingLadder[k].z, 0, 'Collapsed ladder zombies must drop back to z === 0');
+  // PART C: Disrupting/striking a base zombie during a climb collapses the stack immediately!
+  for (let i = 0; i < 4; i++) {
+    horde[i].hp = 420;
+    horde[i].state = 'hunting';
+    horde[i].attackPhase = 'chase';
+    horde[i].x = 2.5 + i * 0.2;
+    horde[i].y = wallMinY - 0.6;
+    horde[i].z = 0;
+    horde[i].climbState = null;
+    horde[i]._wallTarget = null;
+    horde[i].stackStability = 0;
   }
+  let vaultingZombie = null;
+  for (let s = 0; s < 80; s++) {
+    ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.12, { sims: simInside, wolves: [], isNight: false });
+    vaultingZombie = horde.slice(0, 4).find(z => z.climbState === 'vaulting' && z.climbProgress > 0.15 && z.climbProgress < 0.6);
+    if (vaultingZombie) break;
+  }
+  assert.ok(vaultingZombie, '4th zombie should begin climbing atop the 3-zombie shoulder stack');
+  const baseLadder = horde.slice(0, 4).filter(z => z.climbState === 'ladder');
+  assert.equal(baseLadder.length, 3);
+  // Majestic Wolf bites one of the 3 base ladder zombies -> entire stack collapses!
+  ctx.EarthGiantTrolls.attackTroll(sim.state, site, baseLadder[0].id, { source: 'wolfBite', wolfName: 'Fenrir' });
+  ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.12, { sims: simInside, wolves: [], isNight: false });
+  assert.ok(vaultingZombie.climbState !== 'vaulting' && vaultingZombie.climbState !== 'ladder', 'Disrupting a base zombie must immediately collapse the climber');
+  assert.equal(vaultingZombie.z, 0, 'Collapsed climber must tumble back to z === 0');
+  assert.equal(vaultingZombie.stackTier, -1, 'Collapsed climber must reset stackTier to -1');
 });
 
 test('index.html loads all updated enchanted forest, wolf, zombie, and night-audio assets with valid SHA-256 hashes and zero dragon/wizard labels', () => {

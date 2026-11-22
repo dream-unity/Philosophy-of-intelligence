@@ -190,8 +190,9 @@
   const WALL_HEIGHT = 3.20;
   const POST_HEIGHT = 3.65;
   const GATE_HEIGHT = 3.10;
-  const ZOMBIE_STACK_REQUIRED = 4;
-  const ZOMBIE_TIER_HEIGHT = 0.78;
+  const ZOMBIE_BASE_STACK_MIN = 3; // No less than 3 other zombies forming the vertical shoulder ladder
+  const ZOMBIE_STACK_REQUIRED = 4; // 3 base zombies + 1 climbing zombie standing atop their shoulders = 4 total
+  const ZOMBIE_TIER_HEIGHT = 0.82;
 
   function perimeterWallSegments(stage, territoryLevel = 0, hasWaterfront = false) {
     // Explicit -1 disables walls; otherwise EVERY community starts encircled by tall walls + 4 gates!
@@ -309,12 +310,11 @@
   }
 
   /**
-   * Returns true if a perimeter wall segment has been smashed down into passable rubble.
+   * Community perimeter walls and fortified gates are completely indestructible to zombies
+   * (zombies cannot even put a dint in them — they must climb over via a 3-other-zombie shoulder stack).
    */
   function isWallDestroyed(site, wallId) {
-    if (!site || !wallId) return false;
-    const key = String(wallId).startsWith('wall-') ? String(wallId) : ('wall-' + wallId);
-    return Boolean(site.trollDamage?.[key]?.ruined);
+    return false;
   }
 
   /**
@@ -383,19 +383,52 @@
   }
 
   /**
-   * Returns all 4 fortified community gates (North, South, West, East) with their live open/destroyed status.
+   * Returns true ONLY if `entity` is allowed to pass through the gate entrance (including through
+   * the permanent protective magical shield that stretches across every gate entrance upon opening).
+   * Even when a gate is wide open (`open === 1`), zombies, enemies, and outsiders are strictly blocked.
+   */
+  function canEntityCrossGateEntrance(entity, site, gateId) {
+    return canEntityUseCommunityGate(entity, site);
+  }
+
+  /**
+   * Pulses the protective magical shield on a gate entrance when an enemy or zombie collides with it.
+   */
+  function triggerGateShieldFlash(site, gateId, intensity = 1) {
+    if (!site || !gateId) return;
+    const rt = site._gateRuntime || (site._gateRuntime = {});
+    const key = String(gateId).startsWith('gate-') ? String(gateId) : ('gate-' + String(gateId).replace(/^wall-/, ''));
+    const rec = rt[key] || (rt[key] = {
+      id: key,
+      side: key.replace(/^gate-/, ''),
+      open: 0,
+      isOpen: false,
+      activePassers: 0,
+      shieldActive: false,
+      shieldFlash: 0
+    });
+    rec.shieldFlash = Math.min(1.5, Math.max(rec.shieldFlash || 0, clamp(Number(intensity) || 1, 0.2, 1.5)));
+  }
+
+  /**
+   * Returns all 4 fortified community gates (North, South, West, East) with their live open
+   * and protective magical shield status.
    */
   function perimeterGates(territoryLevel = 0, hasWaterfront = false, site = null) {
     const segs = perimeterWallSegments(2, territoryLevel, hasWaterfront).filter(s => s.kind === 'gate');
     const rt = site?._gateRuntime || {};
     return segs.map(seg => {
-      const destroyed = Boolean(site && isWallDestroyed(site, seg.id));
-      const state = rt[seg.id] || { open: 0, isOpen: false, activePassers: 0 };
+      const state = rt[seg.id] || { open: 0, isOpen: false, activePassers: 0, shieldActive: false, shieldFlash: 0 };
+      const openVal = clamp(Number(state.open) || 0, 0, 1);
+      const isOpen = openVal > 0.02 || Boolean(state.isOpen);
       return {
         ...seg,
-        destroyed,
-        open: destroyed ? 1 : clamp(Number(state.open) || 0, 0, 1),
-        isOpen: destroyed || Boolean(state.isOpen),
+        destroyed: false,
+        indestructible: true,
+        open: openVal,
+        isOpen,
+        shieldActive: isOpen, // Protective magical shield permanently stretches across every gate upon opening
+        shieldFlash: clamp(Number(state.shieldFlash) || 0, 0, 1.5),
         activePassers: Number(state.activePassers) || 0
       };
     });
@@ -404,7 +437,8 @@
   /**
    * Updates all 4 community gates so they start CLOSED, open smoothly ONLY when an authorized
    * member (resident Sim, community player, or community Majestic Wolf) approaches to enter/exit,
-   * and immediately close shut the moment they finish passing through.
+   * activate a permanent protective magical shield across the open entrance to block ALL enemies/zombies,
+   * and immediately close shut the moment authorized members finish passing through.
    */
   function updateCommunityGates(site, entities = [], dt = 0.016) {
     if (!site) return {};
@@ -415,15 +449,17 @@
     const step = clamp(Number(dt) || 0.016, 0.001, 0.25);
 
     for (const g of gates) {
-      const rec = rt[g.id] || (rt[g.id] = { id: g.id, side: g.side, open: 0, isOpen: false, activePassers: 0 });
-      if (isWallDestroyed(site, g.id)) {
-        rec.open = 1;
-        rec.isOpen = true;
-        rec.destroyed = true;
-        rec.activePassers = 0;
-        continue;
-      }
+      const rec = rt[g.id] || (rt[g.id] = {
+        id: g.id,
+        side: g.side,
+        open: 0,
+        isOpen: false,
+        activePassers: 0,
+        shieldActive: false,
+        shieldFlash: 0
+      });
       rec.destroyed = false;
+      rec.shieldFlash = Math.max(0, (rec.shieldFlash || 0) - step * 2.2);
       const horiz = g.side === 'north' || g.side === 'south';
       const triggerNormal = 2.45;
       const triggerAlong = (g.gateHalf || 2.4) + 0.65;
@@ -454,40 +490,34 @@
           rec.isOpen = true;
         }
       }
+      // Permanent protective magical shield stretches across the gate entrance whenever it opens
+      rec.shieldActive = rec.open > 0.02;
     }
     return rt;
   }
 
   /**
    * Returns currently passable openings through the community perimeter walls:
-   * - For authorized community members/wolves (`forKind !== 'zombie'`): all 4 gates + any smashed wall breaches.
-   * - For zombies/outsiders (`forKind === 'zombie'`): ONLY destroyed gates or smashed wall breaches!
+   * - For authorized community members/wolves (`forKind !== 'zombie' && forKind !== 'enemy' && forKind !== 'outsider'`): all 4 gates.
+   * - For zombies, enemies, and outsiders: ZERO ground gateways (every gate entrance is sealed by
+   *   a closed gate or permanent protective magical shield upon opening, and walls are indestructible!).
    */
   function perimeterGateways(stage, territoryLevel = 0, hasWaterfront = false, site = null, options = {}) {
     if (stage === -1) return [];
-    const forZombie = options?.forKind === 'zombie' || options?.forKind === 'outsider';
+    const kind = String(options?.forKind || '').toLowerCase();
+    const blocked = kind === 'zombie' || kind === 'enemy' || kind === 'outsider' || options?.isMember === false;
+    if (blocked) return [];
     const segs = perimeterWallSegments(stage, territoryLevel, hasWaterfront);
     const gates = [];
     for (const seg of segs) {
       if (seg.kind === 'gate') {
-        const breached = Boolean(site && isWallDestroyed(site, seg.id));
-        if (!forZombie || breached) {
-          gates.push({
-            id: seg.id,
-            side: seg.side,
-            x: seg.cx,
-            y: seg.cy,
-            gate: true,
-            breach: breached
-          });
-        }
-      } else if (seg.box && site && isWallDestroyed(site, seg.id)) {
         gates.push({
-          id: 'breach-' + seg.id,
+          id: seg.id,
           side: seg.side,
-          x: seg.x + seg.w * 0.5,
-          y: seg.y + seg.d * 0.5,
-          breach: true
+          x: seg.cx,
+          y: seg.cy,
+          gate: true,
+          breach: false
         });
       }
     }
@@ -496,10 +526,11 @@
 
   /**
    * Authoritative solid-object registry for a community:
-   * - EVERY intact tall perimeter wall segment & gatepost (until actually destroyed!)
-   * - For zombies & non-members: ALL 4 intact community gates are ALWAYS solid (cannot pass until destroyed!)
+   * - EVERY tall perimeter wall segment & gatepost (completely solid & indestructible to zombies!)
+   * - For zombies, enemies & non-members: ALL 4 community gate entrances are ALWAYS 100% SOLID
+   *   (EVEN WHEN THE GATE DOORS ARE OPEN!) due to the permanent protective magical shield across each gate!
    * - For authorized community members & wolves (`options.forKind === 'member' | 'wolf' | 'resident' | 'player'`):
-   *   intact gates open automatically as they pass and close immediately behind them.
+   *   may pass through their own community's 4 gates while walls, posts & buildings remain 100% solid.
    * - EVERY standing building (Market, core Homes, plot buildings, freeBuildings incl. Giant Wolf Cave,
    *   playerHouses, Military Airbase structures, plus any scene-provided extra solid boxes).
    */
@@ -515,10 +546,10 @@
     const isAuthorizedMember = (forKind === 'member' || forKind === 'wolf' || forKind === 'resident' || forKind === 'player')
       && options?.isMember !== false;
 
-    // 1. Intact perimeter walls, tall gateposts, and (for zombies/non-members) all 4 fortified gates!
+    // 1. Indestructible perimeter walls, tall gateposts, and (for ALL enemies/zombies/outsiders)
+    //    all 4 magically-shielded gate entrances — solid whether the gate is closed OR wide open!
     for (const seg of perimeterWallSegments(fortStage, tLevel, hasWater)) {
       if (!seg.box) continue;
-      if (isWallDestroyed(site, seg.id)) continue;
       if (seg.kind === 'gate' && isAuthorizedMember) continue;
       const sideLabel = seg.side ? (seg.side[0].toUpperCase() + seg.side.slice(1)) : '';
       const ob = {
@@ -529,13 +560,15 @@
         outNx: seg.outNx || 0,
         outNy: seg.outNy || 0,
         h: seg.h || WALL_HEIGHT,
+        indestructible: true,
+        shielded: seg.kind === 'gate',
         name: seg.kind === 'gate'
-          ? (sideLabel + ' Community Gate')
+          ? (sideLabel + ' Shielded Gate')
           : (seg.kind === 'post' ? 'Stone Gatepost' : (sideLabel + ' Perimeter Wall')),
         box: seg.box,
         cx: (seg.box[0] + seg.box[2]) * 0.5,
         cy: (seg.box[1] + seg.box[3]) * 0.5,
-        maxHp: seg.kind === 'gate' ? 240 : (seg.kind === 'post' ? 260 : 300)
+        maxHp: Infinity
       };
       walls.push(ob);
     }
@@ -1415,6 +1448,7 @@
     WALL_HEIGHT,
     POST_HEIGHT,
     GATE_HEIGHT,
+    ZOMBIE_BASE_STACK_MIN,
     ZOMBIE_STACK_REQUIRED,
     ZOMBIE_TIER_HEIGHT,
     rectOverlaps,
@@ -1430,6 +1464,8 @@
     perimeterWallSegments,
     perimeterGates,
     canEntityUseCommunityGate,
+    canEntityCrossGateEntrance,
+    triggerGateShieldFlash,
     updateCommunityGates,
     isWallDestroyed,
     segmentIntersectsBox,

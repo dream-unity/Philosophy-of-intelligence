@@ -435,54 +435,9 @@
     const week = world.week || 1;
     zombie.strikesLanded = (zombie.strikesLanded || 0) + 1;
 
-    if (target.kind === 'wall' || target.kind === 'gate') {
-      const isGate = target.kind === 'gate' || String(target.wallId || target.id || '').includes('gate-');
-      const map = ensureDamageMap(site);
-      const rec = map[target.id] || (map[target.id] = {
-        id: target.id,
-        wallId: target.wallId || target.id.replace(/^wall-/, ''),
-        kind: isGate ? 'gate' : 'wall',
-        name: target.name || (isGate ? 'Community Gate' : 'Community Perimeter Wall'),
-        x: target.x,
-        y: target.y,
-        hp: target.maxHp || (isGate ? 240 : 300),
-        maxHp: target.maxHp || (isGate ? 240 : 300),
-        ruined: false,
-        burning: false
-      });
-      const dmg = 38 + ((zombie.strikesLanded * 7) % 18);
-      const wasRuined = Boolean(rec.ruined);
-      rec.hp = Math.max(0, rec.hp - dmg);
-      rec.burning = rec.hp < rec.maxHp * 0.55;
-      let justDestroyed = false;
-      if (rec.hp <= 0 && !wasRuined) {
-        rec.ruined = true;
-        justDestroyed = true;
-        zombie.buildingsSmashed = (zombie.buildingsSmashed || 0) + 1;
-        horde.community.buildingsRuined = (horde.community.buildingsRuined || 0) + 1;
-        site.wellbeing = clamp((site.wellbeing || 50) - 3, 0, 100);
-        zombie._wallTarget = null;
-      }
-      const msg = justDestroyed
-        ? (isGate ? 'GATE BREACHED! ' : 'WALL BREACHED! ') + zombie.name + ' smashed through ' + rec.name + ' in ' + site.name + '!'
-        : zombie.name + ' slammed against ' + rec.name + ' (-' + dmg + ' HP · ' + rec.hp + '/' + rec.maxHp + ' HP)!';
-      if (justDestroyed) record(horde, week, msg);
-      events.push({
-        type: justDestroyed ? (isGate ? 'gateBreach' : 'wallBreach') : (isGate ? 'gateStrike' : 'wallStrike'),
-        troll: zombie,
-        zombie,
-        wallId: rec.wallId,
-        isGate,
-        buildingId: rec.id,
-        buildingName: rec.name,
-        damage: dmg,
-        hp: rec.hp,
-        maxHp: rec.maxHp,
-        justRuined: justDestroyed,
-        x: target.x,
-        y: target.y,
-        message: msg
-      });
+    // Community perimeter walls and fortified gates are 100% INDESTRUCTIBLE to zombies!
+    // Zombies cannot put even a single dint in them — they can only enter by climbing atop 3+ other zombies' shoulders.
+    if (target.kind === 'wall' || target.kind === 'gate' || target.kind === 'post') {
       return;
     }
 
@@ -651,30 +606,55 @@
       : { walls: [], buildings: [], all: [] };
     const nightSpeedBoost = isNight ? 1.22 : 1.0;
 
-    const STACK_REQUIRED = FP?.ZOMBIE_STACK_REQUIRED || 4;
-    const TIER_H = FP?.ZOMBIE_TIER_HEIGHT || 0.78;
+    const BASE_STACK_MIN = FP?.ZOMBIE_BASE_STACK_MIN || 3; // No less than 3 other zombies forming the vertical shoulder ladder
+    const TOTAL_CLIMB_REQUIRED = BASE_STACK_MIN + 1;       // 3 base zombies + 1 climbing zombie = 4 zombies total
+    const TIER_H = FP?.ZOMBIE_TIER_HEIGHT || 0.82;
     const DEFAULT_WALL_H = FP?.WALL_HEIGHT || 3.20;
-    const VAULT_DURATION_SEC = 1.65;
+    const VAULT_DURATION_SEC = 5.2; // Difficult, arduous ascent & parapet leap (~8.5s total incl. stack assembly!)
 
-    const makeBarrierTarget = (z, wallOb) => {
-      const cp = closestPointOnBox(z.x, z.y, wallOb.box);
+    // Helper: pick the closest solid wall segment (`kind === 'wall'`) on the same side when a zombie
+    // hits a gatepost or gets repelled by a magically-shielded gate entrance!
+    const nearestClimbableWall = (z, preferredSide = null) => {
+      const wallsOnly = solidSet.walls.filter(w => w && w.kind === 'wall' && w.box);
+      if (!wallsOnly.length) return null;
+      const sameSide = preferredSide ? wallsOnly.filter(w => w.side === preferredSide) : wallsOnly;
+      const pool = sameSide.length ? sameSide : wallsOnly;
+      let best = null;
+      let bestDist = Infinity;
+      for (const wOb of pool) {
+        const cp = closestPointOnBox(z.x, z.y, wOb.box);
+        const d = Math.hypot(cp.x - z.x, cp.y - z.y);
+        if (d < bestDist) {
+          bestDist = d;
+          best = wOb;
+        }
+      }
+      return best;
+    };
+
+    const makeWallClimbTarget = (z, wallOb) => {
+      const targetWall = (wallOb && wallOb.kind === 'wall')
+        ? wallOb
+        : nearestClimbableWall(z, wallOb?.side || null);
+      if (!targetWall) return null;
+      const cp = closestPointOnBox(z.x, z.y, targetWall.box);
       return {
-        kind: wallOb.kind === 'gate' ? 'gate' : 'wall',
-        id: wallOb.id,
-        wallId: wallOb.wallId,
-        side: wallOb.side || null,
-        outNx: wallOb.outNx || 0,
-        outNy: wallOb.outNy || 0,
-        h: wallOb.h || DEFAULT_WALL_H,
-        name: wallOb.name,
+        kind: 'wall',
+        id: targetWall.id,
+        wallId: targetWall.wallId,
+        side: targetWall.side || null,
+        outNx: targetWall.outNx || 0,
+        outNy: targetWall.outNy || 0,
+        h: targetWall.h || DEFAULT_WALL_H,
+        name: targetWall.name,
         x: cp.x,
         y: cp.y,
-        box: wallOb.box,
-        maxHp: wallOb.maxHp || (wallOb.kind === 'gate' ? 240 : 300)
+        box: targetWall.box,
+        indestructible: true
       };
     };
 
-    const isOutsideBarrier = (z, wt) => {
+    const isOutsideWall = (z, wt) => {
       if (!wt || !wt.box) return false;
       const cx = (wt.box[0] + wt.box[2]) * 0.5;
       const cy = (wt.box[1] + wt.box[3]) * 0.5;
@@ -683,71 +663,144 @@
       return false;
     };
 
-    // ── 4-ZOMBIE SHOULDER-STACK CLIMBING ENGINE ──────────────────────────────────
-    // Zombies may ONLY climb over an intact tall wall if 4 zombies in total are stacked
-    // one upon another's shoulders (tiers 0, 1, 2, 3) against the outer face of that wall!
-    // Fewer than 4 zombies at the wall -> ZERO climbing (must bash wall/gate instead).
+    // Repel any zombie trying to pass through ANY gate entrance (closed OR open — permanent magical shield!)
+    const handleGateShieldRepel = (z, gateOb) => {
+      if (!gateOb || gateOb.kind !== 'gate') return;
+      const nx = gateOb.outNx || 0;
+      const ny = gateOb.outNy || 0;
+      // Push cleanly back outside the shielded gate plane
+      const pushX = z.x + nx * 0.42;
+      const pushY = z.y + ny * 0.42;
+      z.x = Number(pushX.toFixed(3));
+      z.y = Number(pushY.toFixed(3));
+      FP?.triggerGateShieldFlash?.(site, gateOb.wallId || gateOb.id, 1.0);
+      z._shieldRepelCooldown = (z._shieldRepelCooldown || 0);
+      if (z._shieldRepelCooldown <= 0) {
+        z._shieldRepelCooldown = 1.4;
+        const gOpen = Boolean(site._gateRuntime?.[gateOb.wallId]?.isOpen);
+        const msg = 'GATE SHIELD! ' + z.name + ' was repelled by the protective magical barrier at ' + (gateOb.name || 'the community gate') + '!';
+        events.push({
+          type: 'gateShieldRepel',
+          troll: z,
+          zombie: z,
+          gateId: gateOb.wallId,
+          side: gateOb.side,
+          gateOpen: gOpen,
+          x: gateOb.cx,
+          y: gateOb.cy,
+          message: msg
+        });
+      }
+      // Redirect zombie away from the magically-shielded gate toward an outer wall segment to try stacking
+      const wallT = makeWallClimbTarget(z, gateOb);
+      if (wallT) {
+        z._wallTarget = wallT;
+        z.state = 'gathering';
+        z.attackPhase = 'gather';
+        z.attackTimer = 0;
+        z.attackProgress = 0;
+      }
+    };
+
+    // Decay disruption & shield-repel timers
+    for (const z of local) {
+      if (z._stackDisrupted > 0) z._stackDisrupted = Math.max(0, z._stackDisrupted - step);
+      if (z._shieldRepelCooldown > 0) z._shieldRepelCooldown = Math.max(0, z._shieldRepelCooldown - step);
+    }
+
+    // ── DIFFICULT 3-OTHER-ZOMBIE SHOULDER-STACK CLIMBING ENGINE ──────────────────
+    // Community walls and gates are 100% INDESTRUCTIBLE to zombies (0 damage, 0 dints).
+    // Zombies may ONLY get over the walls by climbing on top of and standing on the shoulders
+    // of NO LESS THAN 3 OTHER ZOMBIES (3 base ladder zombies + 1 climber = 4 zombies total!).
+    // Fewer than 4 zombies -> ZERO climbing; they gather outside and wait for reinforcements.
     const liveById = new Map();
     for (const z of local) liveById.set(z.id, z);
 
-    // 1. Advance zombies currently climbing up and vaulting over a 4-zombie stack
+    // 1. Advance climbers currently scrambling up the 3-zombie shoulder stack & leaping over the wall
     const activeVaultWallKeys = new Set();
+    const activeBaseLadderIds = new Set();
     for (const z of local) {
       if (z.climbState !== 'vaulting' || !z._climbMeta) continue;
       const m = z._climbMeta;
-      // If wall was destroyed while climbing, drop immediately to ground
-      if (FP?.isWallDestroyed?.(site, m.wallId)) {
-        z.climbState = null;
-        z._climbMeta = null;
-        z.climbProgress = 0;
-        z.z = 0;
-        z.stackTier = -1;
-        z.stackCount = 0;
-        continue;
-      }
-      // Before reaching the parapet crest (progress < 0.56), all 4 stack zombies MUST still be alive!
-      if ((z.climbProgress || 0) < 0.56) {
-        const aliveStack = (m.stackIds || []).filter(id => liveById.has(id)).length;
-        if (aliveStack < STACK_REQUIRED) {
+      // Before the climber leaps over the parapet (progress < 0.74), ALL 3 base ladder zombies MUST
+      // remain alive, undisrupted, and holding steady on the outer wall!
+      if ((z.climbProgress || 0) < 0.74) {
+        const intactBase = (m.baseStackIds || []).filter(id => {
+          const bz = liveById.get(id);
+          return bz && !(bz._stackDisrupted > 0);
+        });
+        if (intactBase.length < BASE_STACK_MIN) {
+          // Stack collapsed! Climber tumbles back to the ground!
           z.climbState = null;
           z._climbMeta = null;
           z.climbProgress = 0;
+          z.climbSlipping = false;
           z.z = 0;
           z.stackTier = -1;
           z.stackCount = 0;
+          z.stackStability = 0;
           continue;
         }
+        for (const id of intactBase) activeBaseLadderIds.add(id);
       }
+
       activeVaultWallKeys.add(m.wallKey);
       z.howling = isNight;
       if (isNight) z.howlPhase = ((z.howlPhase || 0) + step * 3.0) % (Math.PI * 2);
-      z.climbProgress = clamp((z.climbProgress || 0) + step / VAULT_DURATION_SEC, 0, 1);
+
+      // Authentic difficulty: brief balance slip-back once per climb when stepping onto the 3rd zombie's shoulders!
+      if (m.slipTimer > 0) {
+        m.slipTimer = Math.max(0, m.slipTimer - step);
+        z.climbSlipping = m.slipTimer > 0;
+        z.climbProgress = clamp((z.climbProgress || 0) - step * 0.14, 0.18, 1);
+      } else {
+        z.climbSlipping = false;
+        // Slower strain near the top when pulling up onto the 3rd zombie's shoulders & parapet
+        const strainMul = (z.climbProgress || 0) > 0.35 && (z.climbProgress || 0) < 0.72 ? 0.82 : 1.0;
+        z.climbProgress = clamp((z.climbProgress || 0) + (step * strainMul) / VAULT_DURATION_SEC, 0, 1);
+        if (!m.slippedOnce && z.climbProgress >= 0.44 && z.climbProgress < 0.65) {
+          m.slippedOnce = true;
+          m.slipTimer = 0.48;
+          z.climbSlipping = true;
+        }
+      }
+
       const p = z.climbProgress;
-      const crestZ = (m.wallH || DEFAULT_WALL_H) + 0.24;
-      z.stackCount = STACK_REQUIRED;
-      z.stackTier = STACK_REQUIRED; // Climbing atop all 4 zombies' shoulders!
+      const shouldersTopZ = BASE_STACK_MIN * TIER_H; // Standing atop the 3rd zombie's shoulders (~2.46)
+      const crestZ = (m.wallH || DEFAULT_WALL_H) + 0.30; // Jumping over the 3.20 tall parapet (~3.50)
+      z.stackCount = TOTAL_CLIMB_REQUIRED;
+      z.stackTier = BASE_STACK_MIN; // Standing on top of the 3 other zombies!
       z.state = 'climbing';
-      z.attackPhase = 'climb';
+      z.attackPhase = z.climbSlipping ? 'slip' : 'climb';
       z.facingX = Number((-m.outNx).toFixed(3));
       z.facingY = Number((-m.outNy).toFixed(3));
 
-      if (p < 0.56) {
-        const t = p / 0.56;
+      if (p < 0.54) {
+        // Laboriously climbing up the backs of zombies #1, #2, #3 onto zombie #3's shoulders
+        const t = p / 0.54;
         z.x = Number(m.outerX.toFixed(3));
         z.y = Number(m.outerY.toFixed(3));
-        z.z = Number((t * crestZ).toFixed(3));
-      } else if (p < 0.78) {
-        const t = (p - 0.56) / 0.22;
+        z.z = Number((t * shouldersTopZ).toFixed(3));
+      } else if (p < 0.74) {
+        // Standing atop the 3rd zombie's shoulders and heaving/jumping upward to clear the tall parapet!
+        const t = (p - 0.54) / 0.20;
+        z.x = Number(m.outerX.toFixed(3));
+        z.y = Number(m.outerY.toFixed(3));
+        z.z = Number((shouldersTopZ + (crestZ - shouldersTopZ) * t).toFixed(3));
+      } else if (p < 0.88) {
+        // Leaping horizontally over the stone parapet
+        const t = (p - 0.74) / 0.14;
         z.x = Number((m.outerX + (m.innerX - m.outerX) * t).toFixed(3));
         z.y = Number((m.outerY + (m.innerY - m.outerY) * t).toFixed(3));
         z.z = Number(crestZ.toFixed(3));
       } else {
-        const t = (p - 0.78) / 0.22;
+        // Dropping down inside the community walls!
+        const t = (p - 0.88) / 0.12;
         z.x = Number(m.innerX.toFixed(3));
         z.y = Number(m.innerY.toFixed(3));
         z.z = Number((crestZ * (1 - t) * (1 - t)).toFixed(3));
       }
-      z.swingPhase = ((z.swingPhase || 0) + step * 8.0) % (Math.PI * 2);
+      z.swingPhase = ((z.swingPhase || 0) + step * 7.5) % (Math.PI * 2);
       z.distanceKm = distanceKm(z);
       const p3 = toWorld3D(z.x, z.y);
       z.worldX = p3.x;
@@ -760,13 +813,15 @@
         z.climbState = null;
         z._climbMeta = null;
         z.climbProgress = 0;
+        z.climbSlipping = false;
         z.stackTier = -1;
         z.stackCount = 0;
+        z.stackStability = 0;
         z._wallTarget = null;
         z.climbedOverWall = true;
         z.state = 'hunting';
         z.attackPhase = 'chase';
-        const climbMsg = 'WALL CLIMBED! ' + z.name + ' climbed atop a 4-zombie shoulder stack over the ' + (m.side || 'perimeter') + ' wall of ' + site.name + '!';
+        const climbMsg = 'WALL CLIMBED! ' + z.name + ' stood atop 3 other zombies\' shoulders and jumped over the ' + (m.side || 'perimeter') + ' wall of ' + site.name + '!';
         record(horde, world.week || 1, climbMsg);
         events.push({
           type: 'wallClimb',
@@ -774,7 +829,8 @@
           zombie: z,
           wallId: m.wallId,
           side: m.side,
-          stackSize: STACK_REQUIRED,
+          baseStackSize: BASE_STACK_MIN,
+          stackSize: TOTAL_CLIMB_REQUIRED,
           x: z.x,
           y: z.y,
           message: climbMsg
@@ -782,18 +838,27 @@
       }
     }
 
-    // 2. Cluster outer-wall blocked zombies along intact walls (`kind === 'wall'`) and assemble 4-zombie stacks
+    // 2. Gather blocked outer-wall zombies per intact wall segment and build difficult 3-zombie base stacks
     const wallCandidates = [];
     for (const z of local) {
       if (z.climbState === 'vaulting') continue;
-      const wt = z._wallTarget;
-      if (wt && wt.kind === 'wall' && !FP?.isWallDestroyed?.(site, wt.wallId || wt.id) && isOutsideBarrier(z, wt)) {
-        wallCandidates.push(z);
-      } else if (z.climbState === 'ladder') {
-        // No longer braced on an intact outer wall — drop safely to ground
+      if (z._stackDisrupted > 0) {
+        // Knocked off balance by wolf bite/attack — collapse back to ground!
         z.climbState = null;
         z.stackTier = -1;
         z.stackCount = 0;
+        z.stackStability = 0;
+        z.z = 0;
+        continue;
+      }
+      const wt = z._wallTarget;
+      if (wt && wt.kind === 'wall' && isOutsideWall(z, wt)) {
+        wallCandidates.push(z);
+      } else if (z.climbState === 'ladder' || z.climbState === 'gathering') {
+        z.climbState = null;
+        z.stackTier = -1;
+        z.stackCount = 0;
+        z.stackStability = 0;
         z.z = 0;
       }
     }
@@ -808,7 +873,8 @@
       for (const other of wallCandidates) {
         if (assigned.has(other.id)) continue;
         if (other._wallTarget.wallId !== z._wallTarget.wallId) continue;
-        if (Math.hypot(other.x - z.x, other.y - z.y) <= 5.5) {
+        // Zombies on the same outer wall segment rally together within 9.0 units to form a climb stack
+        if (Math.hypot(other.x - z.x, other.y - z.y) <= 9.0) {
           group.push(other);
           assigned.add(other.id);
         }
@@ -817,88 +883,130 @@
     }
 
     for (const group of clusters) {
-      if (group.length < STACK_REQUIRED) {
-        // STRICT RULE: Fewer than 4 zombies CANNOT form a climbing ladder or climb over!
-        for (const z of group) {
-          if (z.climbState === 'ladder') z.climbState = null;
-          z.stackTier = -1;
-          z.stackCount = 0;
-          z.z = 0;
-        }
-        continue;
-      }
-      // 4 or more zombies gathered at the outer face of this intact tall wall!
       const lead = group[0];
       const wt = lead._wallTarget;
       const wallBox = wt.box;
       const outNx = wt.outNx || 0;
       const outNy = wt.outNy || 0;
       const horiz = Math.abs(outNy) > 0.5;
-      // Anchor point pressed squarely against the outer wall face
       let avgCoord = 0;
-      for (let k = 0; k < STACK_REQUIRED; k++) avgCoord += horiz ? group[k].x : group[k].y;
-      avgCoord /= STACK_REQUIRED;
+      const sampleN = Math.min(group.length, TOTAL_CLIMB_REQUIRED);
+      for (let k = 0; k < sampleN; k++) avgCoord += horiz ? group[k].x : group[k].y;
+      avgCoord /= Math.max(1, sampleN);
       const anchorAlong = horiz
-        ? clamp(avgCoord, wallBox[0] + 0.5, wallBox[2] - 0.5)
-        : clamp(avgCoord, wallBox[1] + 0.5, wallBox[3] - 0.5);
+        ? clamp(avgCoord, wallBox[0] + 0.65, wallBox[2] - 0.65)
+        : clamp(avgCoord, wallBox[1] + 0.65, wallBox[3] - 0.65);
       const outerX = horiz ? anchorAlong : (outNx < 0 ? wallBox[0] - ZOMBIE_RADIUS - 0.08 : wallBox[2] + ZOMBIE_RADIUS + 0.08);
       const outerY = horiz ? (outNy < 0 ? wallBox[1] - ZOMBIE_RADIUS - 0.08 : wallBox[3] + ZOMBIE_RADIUS + 0.08) : anchorAlong;
-      const innerX = horiz ? anchorAlong : (outNx < 0 ? wallBox[2] + ZOMBIE_RADIUS + 0.55 : wallBox[0] - ZOMBIE_RADIUS - 0.55);
-      const innerY = horiz ? (outNy < 0 ? wallBox[3] + ZOMBIE_RADIUS + 0.55 : wallBox[1] - ZOMBIE_RADIUS - 0.55) : anchorAlong;
+      const innerX = horiz ? anchorAlong : (outNx < 0 ? wallBox[2] + ZOMBIE_RADIUS + 0.58 : wallBox[0] - ZOMBIE_RADIUS - 0.58);
+      const innerY = horiz ? (outNy < 0 ? wallBox[3] + ZOMBIE_RADIUS + 0.58 : wallBox[1] - ZOMBIE_RADIUS - 0.58) : anchorAlong;
       const wallKey = wt.wallId + ':' + Math.round(anchorAlong);
 
-      // Assemble the 4-zombie shoulder stack (Tiers 0, 1, 2, 3 — 4 zombies in total standing one after another!)
-      const ladder = group.slice(0, STACK_REQUIRED);
-      let ladderReady = true;
-      for (let tier = 0; tier < STACK_REQUIRED; tier++) {
+      // STRICT RULE: Must have NO LESS THAN 3 OTHER ZOMBIES to stand on (so >= 4 zombies total,
+      // OR 3 base zombies actively holding up a vaulting 4th zombie!). Fewer than 4 total -> CANNOT climb!
+      const hasActiveVaultOnWall = activeVaultWallKeys.has(wallKey);
+      if (group.length < TOTAL_CLIMB_REQUIRED && !(hasActiveVaultOnWall && group.length >= BASE_STACK_MIN)) {
+        for (const z of group) {
+          z.climbState = 'gathering';
+          z.stackTier = -1;
+          z.stackCount = group.length;
+          z.stackStability = 0;
+          z.z = 0;
+          z.state = 'gathering';
+          z.attackPhase = 'gather';
+          z.facingX = Number((-outNx).toFixed(3));
+          z.facingY = Number((-outNy).toFixed(3));
+          z.howling = isNight;
+          if (isNight) z.howlPhase = ((z.howlPhase || 0) + step * 2.6) % (Math.PI * 2);
+          // Rally slowly toward the outer wall gathering spot (never damaging the wall!)
+          const ddx = outerX - z.x;
+          const ddy = outerY - z.y;
+          const dd = Math.hypot(ddx, ddy);
+          if (dd > 0.32) {
+            const mv = Math.min(dd, APPROACH_SPEED * 0.9 * nightSpeedBoost * step);
+            z.x = Number((z.x + (ddx / dd) * mv).toFixed(3));
+            z.y = Number((z.y + (ddy / dd) * mv).toFixed(3));
+            z.swingPhase = ((z.swingPhase || 0) + mv * 2.3) % (Math.PI * 2);
+          }
+          z.distanceKm = distanceKm(z);
+          const p3 = toWorld3D(z.x, z.y);
+          z.worldX = p3.x;
+          z.worldZ = p3.z;
+        }
+        continue;
+      }
+
+      // 3 base zombies brace one upon another's shoulders (tiers 0, 1, 2 = 3 OTHER zombies!)
+      const ladder = group.slice(0, BASE_STACK_MIN);
+      let allAlignedAndHoisted = true;
+      for (let tier = 0; tier < BASE_STACK_MIN; tier++) {
         const lz = ladder[tier];
         lz.climbState = 'ladder';
         lz.stackTier = tier;
-        lz.stackCount = STACK_REQUIRED;
+        lz.stackCount = BASE_STACK_MIN;
         lz.state = 'climbing';
         lz.attackPhase = 'stack';
         lz.howling = isNight;
         if (isNight) lz.howlPhase = ((lz.howlPhase || 0) + step * 2.6) % (Math.PI * 2);
         lz.facingX = Number((-outNx).toFixed(3));
         lz.facingY = Number((-outNy).toFixed(3));
-        // Move horizontally into vertical column alignment against the outer wall
+
+        // Pull into tight vertical alignment against the outer stone wall
         const ddx = outerX - lz.x;
         const ddy = outerY - lz.y;
         const dd = Math.hypot(ddx, ddy);
         if (dd > 0.03) {
-          const mv = Math.min(dd, 4.2 * step);
+          const mv = Math.min(dd, 2.8 * step);
           lz.x = Number((lz.x + (ddx / dd) * mv).toFixed(3));
           lz.y = Number((lz.y + (ddy / dd) * mv).toFixed(3));
         }
-        // Climb smoothly onto the shoulders of the zombie directly beneath (tier * 0.78)
-        const targetZ = tier * TIER_H;
+
+        // Sequential difficult hoisting: tier 1 waits for tier 0 to brace; tier 2 waits for tier 1!
+        const prevReady = tier === 0
+          ? true
+          : (Math.hypot(outerX - ladder[tier - 1].x, outerY - ladder[tier - 1].y) <= 0.45 && (ladder[tier - 1].z || 0) >= (tier - 1) * TIER_H - 0.08);
+        const targetZ = prevReady ? tier * TIER_H : 0;
         const curZ = lz.z || 0;
+        const hoistSpeed = tier === 1 ? 1.25 : 1.12;
         if (curZ < targetZ) {
-          lz.z = Number(Math.min(targetZ, curZ + step * 2.8).toFixed(3));
+          lz.z = Number(Math.min(targetZ, curZ + step * hoistSpeed).toFixed(3));
         } else {
-          lz.z = Number(Math.max(targetZ, curZ - step * 3.5).toFixed(3));
+          lz.z = Number(Math.max(targetZ, curZ - step * 3.0).toFixed(3));
         }
-        if (dd > 0.55 || lz.z < targetZ - 0.14) ladderReady = false;
+        if (dd > 0.42 || lz.z < tier * TIER_H - 0.08) allAlignedAndHoisted = false;
         lz.distanceKm = distanceKm(lz);
         const p3 = toWorld3D(lz.x, lz.y);
         lz.worldX = p3.x;
         lz.worldZ = p3.z;
       }
 
-      // 5th+ zombies climb one after another over the shoulders of the 4 stacked zombies!
-      const climbers = group.slice(STACK_REQUIRED);
+      // Stabilization check: even once all 3 base zombies are stacked, balancing takes ~1.8s of unsteady strain!
+      const baseAnchor = ladder[0];
+      if (allAlignedAndHoisted) {
+        baseAnchor.stackStability = clamp((baseAnchor.stackStability || 0) + step * 0.56, 0, 1);
+      } else {
+        baseAnchor.stackStability = Math.max(0, (baseAnchor.stackStability || 0) - step * 0.7);
+      }
+      const stability = baseAnchor.stackStability || 0;
+      for (const lz of ladder) lz.stackStability = stability;
+      const ladderReady = allAlignedAndHoisted && stability >= 0.99;
+
+      // 4th+ zombies climb onto & stand atop the 3 other zombies' shoulders one at a time to jump over!
+      const climbers = group.slice(BASE_STACK_MIN);
       for (const cz of climbers) {
         cz.climbState = null;
         cz.stackTier = -1;
-        cz.stackCount = STACK_REQUIRED;
+        cz.stackCount = BASE_STACK_MIN;
+        cz.stackStability = stability;
         cz.z = 0;
         const distToStack = Math.hypot(outerX - cz.x, outerY - cz.y);
-        if (ladderReady && distToStack <= 1.45 && !activeVaultWallKeys.has(wallKey)) {
+        if (ladderReady && distToStack <= 1.35 && !activeVaultWallKeys.has(wallKey)) {
           activeVaultWallKeys.add(wallKey);
           cz.climbState = 'vaulting';
           cz.climbProgress = 0;
-          cz.stackTier = STACK_REQUIRED;
-          cz.stackCount = STACK_REQUIRED;
+          cz.climbSlipping = false;
+          cz.stackTier = BASE_STACK_MIN;
+          cz.stackCount = TOTAL_CLIMB_REQUIRED;
           cz._climbMeta = {
             wallKey,
             wallId: wt.wallId,
@@ -910,14 +1018,17 @@
             outerY,
             innerX,
             innerY,
-            stackIds: ladder.map(m => m.id)
+            slippedOnce: false,
+            slipTimer: 0,
+            baseStackIds: ladder.map(m => m.id)
           };
-        } else if (distToStack > 0.55) {
-          // Walk directly to the base of the 4-zombie shoulder stack to climb next
-          const mv = Math.min(distToStack, HUNT_SPEED * nightSpeedBoost * step);
+        } else if (distToStack > 0.45) {
+          const mv = Math.min(distToStack, HUNT_SPEED * 0.85 * nightSpeedBoost * step);
           cz.x = Number((cz.x + ((outerX - cz.x) / distToStack) * mv).toFixed(3));
           cz.y = Number((cz.y + ((outerY - cz.y) / distToStack) * mv).toFixed(3));
-          cz.swingPhase = ((cz.swingPhase || 0) + mv * 2.5) % (Math.PI * 2);
+          cz.swingPhase = ((cz.swingPhase || 0) + mv * 2.4) % (Math.PI * 2);
+          cz.climbState = 'queue';
+        } else {
           cz.climbState = 'queue';
         }
       }
@@ -946,10 +1057,21 @@
 
     for (let i = 0; i < local.length; i++) {
       const z = local[i];
-      // Zombies actively bracing the 4-zombie ladder, queued at its base, or vaulting over the wall are handled above!
-      if (z.climbState === 'ladder' || z.climbState === 'vaulting' || z.climbState === 'queue') {
+      // Zombies actively bracing the 3-zombie base ladder, gathering at an outer wall, queued, or climbing over are handled above!
+      if (z.climbState === 'ladder' || z.climbState === 'vaulting' || z.climbState === 'queue' || z.climbState === 'gathering') {
         if (z.climbState === 'queue') z.climbState = null;
-        continue;
+        // If a living wolf or Sim walks right beside a gathering zombie on the SAME side of the wall, break off to bite it!
+        if (z.climbState === 'gathering') {
+          const closePrey = pickTargetForZombie(z, site, [], sims, wolves);
+          if (closePrey && Math.hypot(closePrey.x - z.x, closePrey.y - z.y) <= 3.6 && !wallBetween(z.x, z.y, closePrey.x, closePrey.y)) {
+            z.climbState = null;
+            z._wallTarget = null;
+          } else {
+            continue;
+          }
+        } else {
+          continue;
+        }
       }
       z.z = 0;
       z.stackTier = -1;
@@ -961,12 +1083,6 @@
       z.howling = isNight;
       if (isNight) {
         z.howlPhase = ((z.howlPhase || 0) + step * (2.6 + (i % 4) * 0.45)) % (Math.PI * 2);
-      }
-
-      // Drop stale wall/gate target if that barrier was already smashed down into rubble
-      if (z._wallTarget && FP?.isWallDestroyed?.(site, z._wallTarget.wallId || z._wallTarget.id)) {
-        z._wallTarget = null;
-        solidSet = FP.collectSolidObstacles(site, sceneContext?.solids, { forKind: 'zombie' });
       }
 
       const km = distanceKm(z);
@@ -993,7 +1109,7 @@
         z.attackPhase = 'march';
         z.attackProgress = 0;
 
-        // Uneven zombie shamble with slight erratic sway — strictly colliding against ALL solid walls & buildings!
+        // Uneven zombie shamble with slight erratic sway — strictly colliding against ALL solid walls, shielded gates & buildings!
         const sway = Math.sin((z.swingPhase || 0) * 1.6) * 0.14;
         const nx = dx / dist;
         const ny = dy / dist;
@@ -1003,12 +1119,16 @@
         z.swingPhase = ((z.swingPhase || 0) + Math.max(0.01, mRes.moved) * 2.1) % (Math.PI * 2);
 
         if (mRes.hitWall) {
-          // Blocked by a SOLID intact tall wall or closed community gate — bash it or stack 4 zombies to climb!
-          z._wallTarget = makeBarrierTarget(z, mRes.hitWall);
-          z.state = 'attacking';
-          z.attackPhase = 'windup';
-          z.attackTimer = 0;
-          z.attackProgress = 0;
+          if (mRes.hitWall.kind === 'gate') {
+            handleGateShieldRepel(z, mRes.hitWall);
+          } else {
+            // Indestructible wall — NEVER attack/dent it! Gather to climb with 3+ other zombies!
+            z._wallTarget = makeWallClimbTarget(z, mRes.hitWall);
+            z.state = 'gathering';
+            z.attackPhase = 'gather';
+            z.attackTimer = 0;
+            z.attackProgress = 0;
+          }
         }
 
         z.distanceKm = distanceKm(z);
@@ -1031,17 +1151,31 @@
         z.attackPhase = 'chase';
       }
 
-      // PHASE 2: Hyper-aggressive hunting, wall-smashing, lunging, biting & feeding on ALL living life!
-      // If a living Sim or Wolf is right beside the zombie on the SAME side of any wall, bite the living prey first!
+      // PHASE 2: Hyper-aggressive hunting, lunging, biting & feeding on living Sims, Majestic Wolves, and interior village shelters!
+      // If blocked outside the indestructible perimeter walls, rally to a wall climb spot instead of hitting walls/gates!
       let target = null;
       if (reachablePrey && Math.hypot(reachablePrey.x - z.x, reachablePrey.y - z.y) <= 4.5) {
         target = reachablePrey;
         z._wallTarget = null;
       } else if (z._wallTarget) {
+        // Walk toward the assigned outer wall climb segment so it joins the gathering cluster
         const cp = closestPointOnBox(z.x, z.y, z._wallTarget.box);
         z._wallTarget.x = cp.x;
         z._wallTarget.y = cp.y;
-        target = z._wallTarget;
+        const dWall = Math.hypot(cp.x - z.x, cp.y - z.y);
+        if (dWall > 0.75) {
+          const mv = Math.min(dWall, APPROACH_SPEED * spdMul * step);
+          const mRes = moveZombie(z, z.x + ((cp.x - z.x) / dWall) * mv, z.y + ((cp.y - z.y) / dWall) * mv);
+          z.swingPhase = ((z.swingPhase || 0) + Math.max(0.01, mRes.moved) * 2.2) % (Math.PI * 2);
+          if (mRes.hitWall?.kind === 'gate') handleGateShieldRepel(z, mRes.hitWall);
+        }
+        z.state = 'gathering';
+        z.attackPhase = 'gather';
+        z.distanceKm = distanceKm(z);
+        const p3 = toWorld3D(z.x, z.y);
+        z.worldX = p3.x;
+        z.worldZ = p3.z;
+        continue;
       } else {
         target = reachablePrey || nearbyPrey || pickTargetForZombie(z, site, buildings, sims, wolves);
       }
@@ -1053,7 +1187,7 @@
       z.targetX = target.x;
       z.targetY = target.y;
 
-      // Compute exact surface distance for solid buildings & walls so zombies never clip inside solid objects
+      // Compute exact surface distance for solid buildings so zombies never clip inside solid objects
       const aimPt = target.box ? closestPointOnBox(z.x, z.y, target.box) : { x: target.x, y: target.y };
       const dx = aimPt.x - z.x;
       const dy = aimPt.y - z.y;
@@ -1063,8 +1197,10 @@
         z.facingY = Number((dy / dist).toFixed(3));
       }
 
-      const contactRange = (target.kind === 'wall' || target.kind === 'gate' || target.kind === 'building') ? 0.95 : 1.75;
-      const blockedNow = (target.kind === 'sim' || target.kind === 'wolf') ? wallBetween(z.x, z.y, target.x, target.y) : null;
+      const contactRange = target.kind === 'building' ? 0.95 : 1.75;
+      const blockedNow = (target.kind === 'sim' || target.kind === 'wolf' || target.kind === 'building')
+        ? wallBetween(z.x, z.y, aimPt.x, aimPt.y)
+        : null;
 
       if (z.attackPhase === 'windup' || z.attackPhase === 'strike' || z.attackPhase === 'feed' || z.attackPhase === 'recover') {
         z.state = z.attackPhase === 'feed' ? 'feeding' : 'attacking';
@@ -1075,8 +1211,12 @@
             z.x + (dx / Math.max(0.01, dist)) * lunge,
             z.y + (dy / Math.max(0.01, dist)) * lunge
           );
-          if (mRes.hitWall && target.kind !== 'wall' && target.kind !== 'gate') {
-            z._wallTarget = makeBarrierTarget(z, mRes.hitWall);
+          if (mRes.hitWall) {
+            if (mRes.hitWall.kind === 'gate') handleGateShieldRepel(z, mRes.hitWall);
+            else z._wallTarget = makeWallClimbTarget(z, mRes.hitWall);
+            z.attackPhase = 'gather';
+            z.attackTimer = 0;
+            z.attackProgress = 0;
           }
         }
 
@@ -1089,15 +1229,11 @@
             z.attackProgress = 0;
             const liveAim = target.box ? closestPointOnBox(z.x, z.y, target.box) : { x: target.x, y: target.y };
             const strikeDist = Math.hypot(liveAim.x - z.x, liveAim.y - z.y);
-            const biteReach = (target.kind === 'wall' || target.kind === 'gate' || target.kind === 'building') ? 1.45 : 2.45;
-            const strikeWallBlock = (target.kind === 'sim' || target.kind === 'wolf') ? wallBetween(z.x, z.y, target.x, target.y) : null;
+            const biteReach = target.kind === 'building' ? 1.45 : 2.45;
+            const strikeWallBlock = wallBetween(z.x, z.y, liveAim.x, liveAim.y);
             if (strikeDist <= biteReach && !strikeWallBlock) {
               executeZombieBite(world, horde, site, z, target, events);
               z._justBitLiving = target.kind === 'sim' || target.kind === 'wolf';
-              // Refresh solid obstacle set immediately if a wall or gate was just breached!
-              if ((target.kind === 'wall' || target.kind === 'gate') && FP?.isWallDestroyed?.(site, target.wallId || target.id)) {
-                solidSet = FP.collectSolidObstacles(site, sceneContext?.solids, { forKind: 'zombie' });
-              }
             } else {
               z._justBitLiving = false;
             }
@@ -1119,11 +1255,12 @@
         } else if (z.attackPhase === 'recover') {
           z.attackProgress = clamp(z.attackTimer / RECOVER_SEC, 0, 1);
           if (z.attackTimer >= RECOVER_SEC) {
-            const nextTarget = z._wallTarget || pickTargetForZombie(z, site, buildings, sims, wolves);
+            const nextTarget = pickTargetForZombie(z, site, buildings, sims, wolves);
             const nextAim = nextTarget?.box ? closestPointOnBox(z.x, z.y, nextTarget.box) : nextTarget;
             const nextDist = nextAim ? Math.hypot(nextAim.x - z.x, nextAim.y - z.y) : Infinity;
-            const nextRange = (nextTarget?.kind === 'wall' || nextTarget?.kind === 'gate' || nextTarget?.kind === 'building') ? 1.15 : 1.95;
-            if (nextTarget && nextDist <= nextRange) {
+            const nextRange = nextTarget?.kind === 'building' ? 1.15 : 1.95;
+            const nextBlocked = nextAim ? wallBetween(z.x, z.y, nextAim.x, nextAim.y) : null;
+            if (nextTarget && nextDist <= nextRange && !nextBlocked) {
               z.attackPhase = 'windup';
               z.attackTimer = 0;
               z.attackProgress = 0;
@@ -1146,14 +1283,18 @@
         z.swingPhase = ((z.swingPhase || 0) + Math.max(0.01, mRes.moved) * 2.6) % (Math.PI * 2);
 
         if (mRes.hitWall) {
-          // Stopped squarely by an intact SOLID tall wall or closed community gate!
-          z._wallTarget = makeBarrierTarget(z, mRes.hitWall);
-          z.state = 'attacking';
-          z.attackPhase = 'windup';
-          z.attackTimer = 0;
-          z.attackProgress = 0;
+          if (mRes.hitWall.kind === 'gate') {
+            handleGateShieldRepel(z, mRes.hitWall);
+          } else {
+            // Indestructible perimeter wall — NEVER attack or dent it! Gather outside to build a 3-zombie shoulder stack!
+            z._wallTarget = makeWallClimbTarget(z, mRes.hitWall);
+            z.state = 'gathering';
+            z.attackPhase = 'gather';
+            z.attackTimer = 0;
+            z.attackProgress = 0;
+          }
         } else if (mRes.hitBuilding && target.kind === 'building' && mRes.hitBuilding.id === target.id) {
-          // Reached the exterior wall of the targeted solid building — claw it!
+          // Reached the exterior wall of an interior village building — claw it!
           z.state = 'attacking';
           z.attackPhase = 'windup';
           z.attackTimer = 0;
@@ -1217,6 +1358,17 @@
       : (1 - armor * 0.42);
     const dealt = Math.max(8, Math.round(raw * mult * armorFactor));
     zombie.hp = Math.max(0, Math.round(zombie.hp - dealt));
+    // Striking a zombie that is bracing or climbing a shoulder stack disrupts and collapses the stack!
+    if (zombie.climbState === 'ladder' || zombie.climbState === 'vaulting') {
+      zombie._stackDisrupted = 1.6;
+      zombie.climbState = null;
+      zombie._climbMeta = null;
+      zombie.climbProgress = 0;
+      zombie.climbSlipping = false;
+      zombie.z = 0;
+      zombie.stackTier = -1;
+      zombie.stackStability = 0;
+    }
 
     const killed = zombie.hp <= 0;
     if (killed) {

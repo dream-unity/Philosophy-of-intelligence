@@ -4843,20 +4843,12 @@
             trollShake=Math.max(trollShake,0.34);
             message(ev.message);
             changed=true;
-          }else if(ev.type==='wallStrike'||ev.type==='gateStrike'){
-            const lbl=ev.type==='gateStrike'?`GATE -${ev.damage}`:`WALL -${ev.damage}`;
-            spawnTrollBurst(ev.x,ev.y,'wallStrike',lbl);
-            trollShake=Math.max(trollShake,0.16);
-            changed=true;
-          }else if(ev.type==='wallBreach'||ev.type==='gateBreach'){
-            const lbl=ev.type==='gateBreach'?'GATE DESTROYED!':'WALL DESTROYED!';
-            spawnTrollBurst(ev.x,ev.y,'wallBreach',lbl);
-            trollShake=Math.max(trollShake,0.45);
-            message(ev.message);
-            wallBreached=true;
+          }else if(ev.type==='gateShieldRepel'){
+            spawnTrollBurst(ev.x,ev.y,'breach','MAGICAL SHIELD!');
+            trollShake=Math.max(trollShake,0.12);
             changed=true;
           }else if(ev.type==='wallClimb'){
-            spawnTrollBurst(ev.x,ev.y,'breach','4-ZOMBIE WALL CLIMB!');
+            spawnTrollBurst(ev.x,ev.y,'breach','WALL CLIMBED!');
             trollShake=Math.max(trollShake,0.30);
             message(ev.message);
             changed=true;
@@ -5057,9 +5049,13 @@
         armReach=0.25*(1-prog);
       }
       const isHowling=Boolean(zombie.howling);
+      // Visible unsteady balance sway when stacked on shoulders or slipping during a difficult climb!
+      const stackWobble=(isLadder||isVaulting)
+        ? Math.sin(visualTime*(zombie.climbSlipping?19:6.2)+(zombie.stackTier||0)*1.7)*s*(zombie.climbSlipping?0.13:((zombie.stackTier||0)*0.032))
+        : 0;
 
       ctx.save();
-      ctx.translate(sx,sy);
+      ctx.translate(sx+stackWobble,sy);
       ctx.lineJoin='round';
       ctx.lineCap='round';
 
@@ -5252,20 +5248,18 @@
         ctx.textAlign='center';ctx.textBaseline='bottom';
         ctx.fillStyle=isHowling?'#d6eed8':'#f4d4cc';
         const shortTag=isVaulting
-          ? `${zombie.name} · CLIMBING WALL!`
+          ? (zombie.climbSlipping?`${zombie.name} · SLIPPING!`:`${zombie.name} · CLIMBING WALL!`)
           : isLadder
-            ? (zombie.stackTier===3?`4-ZOMBIE STACK (${zombie.stackTier+1}/4)`:'')
-            : zombie.targetKind==='gate'
-              ? `${zombie.name} · SMASHING GATE`
-              : zombie.targetKind==='wall'
-                ? `${zombie.name} · SMASHING WALL`
-                : atkPhase==='feed'
-                  ? `${zombie.name} · EATING`
-                  : atkPhase==='strike'||atkPhase==='windup'
-                    ? `${zombie.name} · BITING`
-                    : isHowling
-                      ? `${zombie.name} · HOWLING`
-                      : zombie.name;
+            ? (zombie.stackTier===2?`3-ZOMBIE STACK (${Math.round((zombie.stackStability||0)*100)}%)`:'')
+            : zombie.climbState==='gathering'
+              ? `${zombie.name} · GATHERING (${Math.min(4,zombie.stackCount||1)}/4)`
+              : atkPhase==='feed'
+                ? `${zombie.name} · EATING`
+                : atkPhase==='strike'||atkPhase==='windup'
+                  ? `${zombie.name} · BITING`
+                  : isHowling
+                    ? `${zombie.name} · HOWLING`
+                    : zombie.name;
         if(shortTag)ctx.fillText(shortTag,0,barY-3);
       }
 
@@ -5553,54 +5547,31 @@
         const wallSegs=FP.perimeterWallSegments(fort,tLevel,Boolean(berths.length));
         for(const seg of wallSegs){
           const x1=seg.x,y1=seg.y,w=seg.w,d=seg.d,z0=seg.z||0,h=seg.h||(FP.WALL_HEIGHT||3.20),cx=x1+w/2,cy=y1+d/2;
-          const wallRec=state.site.trollDamage?.['wall-'+seg.id];
-          const ruined=Boolean(wallRec?.ruined);
-          const depthBoost=seg.kind==='arch'?.62:(ruined?.12:.45);
+          const depthBoost=seg.kind==='arch'?.62:.45;
           addItem(cx,cy,cx+cy+depthBoost,()=>{
-            if(ruined){
-              if(seg.kind==='gate'){
-                // Shattered timber & twisted iron wreckage marking a breached community gate!
-                const horiz=w>d;
-                for(let i=0;i<4;i++){
-                  const frac=(i+0.5)/4;
-                  const rx=horiz?x1+w*frac-0.36:x1-0.06;
-                  const ry=horiz?y1-0.06:y1+d*frac-0.36;
-                  box(rx,ry,horiz?0.72:w*1.1,horiz?d*1.1:0.72,0,0.10+(i%2)*0.07,'#5b412c','#3e2c1d','#2d2015');
-                }
-                return;
-              }
-              // Smashed stone rubble piles marking a passable wall breach!
-              const horiz=w>d;
-              const stones=Math.max(2,Math.min(6,Math.floor(Math.max(w,d)/1.4)));
-              for(let i=0;i<stones;i++){
-                const frac=(i+0.5)/stones;
-                const rx=horiz?x1+w*frac-0.24:x1+0.04;
-                const ry=horiz?y1+0.04:y1+d*frac-0.24;
-                box(rx,ry,horiz?0.48:w*0.82,horiz?d*0.82:0.48,0,0.14+(i%2)*0.11,'#9f8f74','#7a6c56','#5e5343');
-              }
-              return;
-            }
-            const damaged=Boolean(wallRec&&wallRec.hp<wallRec.maxHp);
             if(seg.kind==='gate'){
               // Tall iron-bound double timber gate doors — always kept CLOSED except while community members/wolves pass!
-              const gateOpen=clamp(state.site._gateRuntime?.[seg.id]?.open||0,0,1);
+              // Upon opening, a permanent PROTECTIVE MAGICAL SHIELD stretches across the entire gate entrance,
+              // blocking ALL enemies and zombies while allowing ONLY members & wolves of this community to pass!
+              const gRt=state.site._gateRuntime?.[seg.id];
+              const gateOpen=clamp(gRt?.open||0,0,1);
+              const shieldFlash=clamp(gRt?.shieldFlash||0,0,1.5);
               const horiz=w>d;
-              const woodTop=damaged?'#6b4730':'#785438';
-              const woodLeft=damaged?'#4d3120':'#593d28';
-              const woodRight=damaged?'#382316':'#422c1d';
+              const woodTop='#785438';
+              const woodLeft='#593d28';
+              const woodRight='#422c1d';
               if(horiz){
                 const half=w*0.5;
                 const leafW=Math.max(0.32,half*(1-gateOpen*0.84));
                 box(x1,y1,leafW,d,0,h,woodTop,woodLeft,woodRight);
                 box(x1+w-leafW,y1,leafW,d,0,h,woodTop,woodLeft,woodRight);
-                // Heavy wrought-iron horizontal brace bands across the tall doors
                 for(const bz of [0.55,1.55,2.55]){
                   box(x1,y1-0.02,leafW,d+0.04,bz,0.16,'#3c444d','#282e35','#1d2228');
                   box(x1+w-leafW,y1-0.02,leafW,d+0.04,bz,0.16,'#3c444d','#282e35','#1d2228');
                 }
                 if(gateOpen<0.15){
-                  // Central iron lock bar sealing the closed gate against zombies
-                  box(cx-0.18,y1-0.04,0.36,d+0.08,1.35,0.42,'#d9b466','#9f7e3e','#6e5628');
+                  // Central enchanted ward lock bar sealing the closed gate
+                  box(cx-0.18,y1-0.04,0.36,d+0.08,1.35,0.42,'#7cf4e8','#3cb9c8','#1e798c');
                 }
               }else{
                 const half=d*0.5;
@@ -5612,13 +5583,63 @@
                   box(x1-0.02,y1+d-leafD,w+0.04,leafD,bz,0.16,'#3c444d','#282e35','#1d2228');
                 }
                 if(gateOpen<0.15){
-                  box(x1-0.04,cy-0.18,w+0.08,0.36,1.35,0.42,'#d9b466','#9f7e3e','#6e5628');
+                  box(x1-0.04,cy-0.18,w+0.08,0.36,1.35,0.42,'#7cf4e8','#3cb9c8','#1e798c');
                 }
               }
+
+              // Protective Magical Shield curtain stretching permanently across the gate entrance upon opening (or flashing on enemy repel!)
+              if(gateOpen>0.03||shieldFlash>0.05){
+                const sx1=horiz?x1+0.26:cx;
+                const sy1=horiz?cy:y1+0.26;
+                const sx2=horiz?x1+w-0.26:cx;
+                const sy2=horiz?cy:y1+d-0.26;
+                const bl=screen(sx1,sy1,0.02);
+                const br=screen(sx2,sy2,0.02);
+                const tr=screen(sx2,sy2,h);
+                const tl=screen(sx1,sy1,h);
+                const pulse=0.5+0.5*Math.sin(visualTime*5.2+(horiz?1.1:2.4));
+                const strength=clamp(Math.max(gateOpen,shieldFlash),0,1.25);
+                ctx.save();
+                // Shimmering translucent cyan-gold protective ward sheet
+                const grad=ctx.createLinearGradient(bl[0],bl[1],tl[0],tl[1]);
+                grad.addColorStop(0,`rgba(64,235,230,${(0.24+pulse*0.10+shieldFlash*0.26)*Math.min(1,strength)})`);
+                grad.addColorStop(0.5,`rgba(128,255,220,${(0.30+pulse*0.14+shieldFlash*0.30)*Math.min(1,strength)})`);
+                grad.addColorStop(1,`rgba(220,248,168,${(0.20+pulse*0.10+shieldFlash*0.24)*Math.min(1,strength)})`);
+                ctx.fillStyle=grad;
+                ctx.beginPath();
+                ctx.moveTo(bl[0],bl[1]);ctx.lineTo(br[0],br[1]);ctx.lineTo(tr[0],tr[1]);ctx.lineTo(tl[0],tl[1]);
+                ctx.closePath();
+                ctx.fill();
+                // Glowing perimeter frame & horizontal arcane energy bands
+                ctx.strokeStyle=`rgba(148,255,244,${clamp(0.65+pulse*0.25+shieldFlash*0.35,0,1)})`;
+                ctx.lineWidth=Math.max(1.4,unit*0.045);
+                ctx.stroke();
+                ctx.lineWidth=Math.max(1.0,unit*0.025);
+                for(let r=1;r<=4;r++){
+                  const frac=r/5;
+                  const pL=screen(sx1,sy1,h*frac);
+                  const pR=screen(sx2,sy2,h*frac);
+                  ctx.strokeStyle=`rgba(182,255,248,${(0.32+0.20*Math.sin(visualTime*6+r))*Math.min(1,strength)})`;
+                  ctx.beginPath();ctx.moveTo(pL[0],pL[1]);ctx.lineTo(pR[0],pR[1]);ctx.stroke();
+                }
+                // Central diamond arcane sigil (flares bright gold-cyan when repelling a zombie/enemy!)
+                const midPt=screen(cx,cy,h*0.52);
+                const sigR=Math.max(4,unit*(0.38+shieldFlash*0.28));
+                ctx.strokeStyle=shieldFlash>0.12?'rgba(255,242,158,0.95)':'rgba(196,255,248,0.82)';
+                ctx.lineWidth=Math.max(1.3,unit*0.04);
+                ctx.beginPath();
+                ctx.moveTo(midPt[0],midPt[1]-sigR);
+                ctx.lineTo(midPt[0]+sigR*0.65,midPt[1]);
+                ctx.lineTo(midPt[0],midPt[1]+sigR);
+                ctx.lineTo(midPt[0]-sigR*0.65,midPt[1]);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.restore();
+              }
             }else{
-              const topCol=damaged?'#baa784':'#d3c29c';
-              const leftCol=damaged?'#8f7b5d':'#a79272';
-              const rightCol=damaged?'#6e5e4a':'#82725b';
+              const topCol='#d3c29c';
+              const leftCol='#a79272';
+              const rightCol='#82725b';
               box(x1,y1,w,d,z0,h,topCol,leftCol,rightCol);
               if(seg.kind==='post'||seg.kind==='tower'){
                 box(x1-.08,y1-.08,w+.16,d+.16,z0+h,.28,'#e2d1a8','#b59e7a','#8d7a60');
@@ -5631,22 +5652,6 @@
                   box(mx,my,horiz?.50:w,horiz?d:.50,z0+h,.28,'#dfd0a7','#b09a78','#8b785f');
                 }
               }
-            }
-            if(damaged&&unit>=8){
-              const [wx,wy]=screen(wallRec.x||cx,wallRec.y||cy,h+0.62);
-              const bw=58,pct=clamp(wallRec.hp/Math.max(1,wallRec.maxHp),0,1);
-              ctx.save();
-              ctx.fillStyle='rgba(18,12,14,0.88)';
-              ctx.strokeStyle=pct>0.45?'#e8b85a':'#e64833';
-              ctx.lineWidth=1;
-              ctx.beginPath();ctx.roundRect(wx-bw/2-3,wy-13,bw+6,19,3);ctx.fill();ctx.stroke();
-              ctx.font='700 8.5px system-ui,sans-serif';
-              ctx.textAlign='center';ctx.textBaseline='middle';
-              ctx.fillStyle='#ffe3b8';
-              ctx.fillText(`${seg.kind==='gate'?'GATE':'WALL'} ${wallRec.hp}/${wallRec.maxHp}`,wx,wy-6);
-              ctx.fillStyle='#3b1a16';ctx.fillRect(wx-bw/2,wy,bw,4);
-              ctx.fillStyle=pct>0.45?'#e8b85a':'#e64833';ctx.fillRect(wx-bw/2,wy,bw*pct,4);
-              ctx.restore();
             }
           },[Math.max(3,w+1.5),Math.max(3,d+1.5),h+1.5]);
         }
