@@ -1963,33 +1963,43 @@
     const info=window.EarthGiantTrolls.summary(sim.state,site.id);
     if(!info||info.totalAlive<=0){bar.hidden=true;return;}
     bar.hidden=false;
-    const lead=info.local[0];
+    const lead=info.nearestZombie||info.local[0];
     const tracking=Boolean(street?.isTrackingTroll?.());
     const isNight=Boolean(window.EarthDayClock?.read?.(sim.state)?.night);
+    const etaSec=info.nearestEtaSec||0;
+    const etaTag=etaSec>=60?`ETA ~${Math.floor(etaSec/60)}m ${String(etaSec%60).padStart(2,'0')}s`:(etaSec>5?`ETA ~${etaSec}s`:'');
+    const distTag=info.nearestKm>=1?`${info.nearestKm.toFixed(2)} km`:`${Math.round((info.nearestKm||0)*1000)}m`;
     const phaseTag=info.attackingCount>0
       ? (isNight?'FULL MOON SIEGE · HOWLING':'ZOMBIE ATTACK')
-      : (info.nearestKm!=null?`${Math.round(info.nearestKm*1000)}m out`:`Wave ${info.wave}`);
+      : (info.nearestKm!=null?`${distTag} out${etaTag?' · '+etaTag:''}`:`Wave ${info.wave}`);
     put('troll-siege-title',`${info.communityName} · ${phaseTag} (Wave ${info.wave})`);
     const bldStat=(info.damagedBuildings||info.ruinedBuildings)
       ? ` · ${info.ruinedBuildings} overrun, ${info.damagedBuildings} damaged`
       : '';
-    put('troll-siege-counts',`${info.localCount} zombies here · ${info.elsewhereCount} other lands · ${info.totalSlain} slain${bldStat}`);
-    const otherText=info.elsewhere.length?` Also swarming ${[...new Set(info.elsewhere.map(t=>t.targetSiteName))].slice(0,2).join(' & ')}.`:'';
+    const otherLandNames=[...new Set(info.elsewhere.map(t=>t.targetSiteName))];
+    const otherLandCount=otherLandNames.length;
+    const otherCountStr=info.elsewhereCount>0
+      ? ` · ${info.elsewhereCount} across ${otherLandCount} other ${otherLandCount===1?'community':'communities'}`
+      : '';
+    put('troll-siege-counts',`${info.localCount} zombies here${otherCountStr} · ${info.totalSlain} slain${bldStat}`);
+    const otherText=otherLandNames.length?` Also marching on ${otherLandNames.slice(0,2).join(' & ')}${otherLandNames.length>2?' + '+(otherLandNames.length-2)+' more':''} (all equally walled & wolf-guarded).`:'';
     if(lead){
-      const distM=Math.round(window.EarthGiantTrolls.distanceKm(lead)*1000);
+      const km=window.EarthGiantTrolls.distanceKm(lead,site);
+      const distStr=km>=1?`${km.toFixed(2)} km`:`${Math.round(km*1000)}m`;
       if(lead.state==='approaching'){
-        put('troll-siege-detail',`${lead.name} (${lead.hp}/${lead.maxHp} HP) & ${Math.max(1,info.localCount-1)} undead zombies are shambling out of the dark woods (${distM}m away)${isNight?', howling nonstop under the Full Moon':''}!${otherText}`);
+        put('troll-siege-detail',`${info.localCount} undead zombies (${lead.name} vanguard) are marching out of the dark woods (${distStr} away${etaTag?', '+etaTag:''})${isNight?', howling nonstop under the Full Moon':''}!${otherText}`);
       }else{
         const victim=lead.targetName?` trying to devour ${lead.targetName}`:` hunting ${site.name}`;
-        put('troll-siege-detail',`${lead.name} (${lead.hp}/${lead.maxHp} HP) is lunging and${victim}${isNight?' while howling nonstop':''}!${otherText}`);
+        put('troll-siege-detail',`${lead.name} (${lead.hp}/${lead.maxHp} HP) & ${Math.max(1,info.localCount-1)} zombies are${victim}${isNight?' while howling nonstop':''}!${otherText}`);
       }
     }else{
-      put('troll-siege-detail',`Undead zombies are stalking villagers across neighbouring enchanted forests!${otherText}`);
+      put('troll-siege-detail',`Undead hordes are marching on neighbouring enchanted forests!${otherText}`);
     }
     const trackBtn=$('troll-track-btn');
     if(trackBtn){
       trackBtn.hidden=!lead;
-      trackBtn.textContent=tracking?'Back to Forest':(lead?.state==='approaching'?`Track Zombie (${Math.round(window.EarthGiantTrolls.distanceKm(lead)*1000)}m)`:'Focus Zombie');
+      const btnDist=lead?(window.EarthGiantTrolls.distanceKm(lead,site)>=1?`${window.EarthGiantTrolls.distanceKm(lead,site).toFixed(2)}km`:`${Math.round(window.EarthGiantTrolls.distanceKm(lead,site)*1000)}m`):'';
+      trackBtn.textContent=tracking?'Back to Forest':(lead?.state==='approaching'?`Track Horde (${btnDist})`:'Focus Zombie');
     }
     const rallyBtn=$('troll-rally-btn');
     if(rallyBtn)rallyBtn.hidden=!lead;

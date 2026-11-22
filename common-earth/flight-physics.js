@@ -516,6 +516,9 @@
           side: seg.side,
           x: seg.cx,
           y: seg.cy,
+          outNx: seg.outNx || 0,
+          outNy: seg.outNy || 0,
+          box: seg.box,
           gate: true,
           breach: false
         });

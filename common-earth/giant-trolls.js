@@ -11,20 +11,26 @@
   const STREET_KM = 0.013; // 1 street unit = 13.0 meters
   const TOWN_CENTER_X = 12;
   const TOWN_CENTER_Y = 12;
-  const TOWN_PERIMETER_UNITS = 19.5; // Community wall edge (~254m from center)
-  // Spawn zombies in the dark outer woods (~125-175m outside territory walls) so they shamble in toward the 100m wolf line!
-  const SPAWN_RADIUS_UNITS = 31.0; // ~11.5 units (~150m) beyond the walls!
-  const APPROACH_SPEED = 2.05; // Relentless approaching shamble
-  const HUNT_SPEED = 3.25; // Frantic rabid lurch/sprint when locking onto living Sims or Wolves
+  const TOWN_PERIMETER_UNITS = 18.8; // Base community wall half-span (~244m from center)
+  // Strict 5-minute (300s) minimum wall arrival guarantee:
+  // Even the fastest archetype (Infected, speedMul=1.32) under permanent night boost (1.22) with sway (<=1.01)
+  // moves at most 0.25 * 1.32 * 1.22 * 1.01 = 0.4066 units/sec -> 121.98 units in 300s.
+  // Spawning strictly >= 128.0 units outside the community wall perimeter guarantees >= 313s (> 5m 00s)!
+  const MIN_WALL_ARRIVAL_SEC = 300;
+  const MIN_WALL_CLEARANCE_UNITS = 128.0;
+  const MAX_WALL_CLEARANCE_UNITS = 166.0;
+  const SPAWN_RADIUS_UNITS = 148.0;
+  const APPROACH_SPEED = 0.25; // Relentless undead shamble across the outer dark woods (~3.25 m/s)
+  const HUNT_SPEED = 3.25; // Frantic rabid lurch/sprint when locking onto close living Sims or Wolves
   const ZOMBIE_RADIUS = 0.34;
   const WINDUP_SEC = 0.22;
   const BITE_SEC = 0.22;
   const FEED_SEC = 0.50;
   const RECOVER_SEC = 0.28;
-  const MIN_ZOMBIES_PER_WAVE = 10;
-  const MAX_CONCURRENT_LOCAL_ZOMBIES = 40;
-  const WAVE_INTERVAL_SEC = 55;
-  const CLEAR_WAVE_DELAY_SEC = 6;
+  const MIN_ZOMBIES_PER_WAVE = 220;
+  const MAX_CONCURRENT_LOCAL_ZOMBIES = 500;
+  const WAVE_INTERVAL_SEC = 210;
+  const CLEAR_WAVE_DELAY_SEC = 8;
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
   const ARCHETYPES = Object.freeze([
@@ -48,24 +54,97 @@
 
   function allHumanCommunities(world) {
     if (!world) return [];
-    return [
-      ...(world.sites || []),
-      ...(world.communityLife?.outposts || [])
-    ].filter(s => s && s.id);
+    const seen = new Set();
+    const out = [];
+    for (const s of [...(world.sites || []), ...(world.communityLife?.outposts || [])]) {
+      if (!s || !s.id || seen.has(s.id)) continue;
+      seen.add(s.id);
+      out.push(s);
+    }
+    return out;
+  }
+
+  function sitePerimeterRect(site) {
+    const tLevel = site?.territoryLevel || 0;
+    const hasWater = Boolean(site?.water || site?.coastal || root.CommonEarthSim?.waterfront?.(site));
+    if (root.EarthFlightPhysics?.perimeterBounds) {
+      return root.EarthFlightPhysics.perimeterBounds(tLevel, hasWater);
+    }
+    const expand = Math.max(0, Number(tLevel) || 0) * 6;
+    return {
+      minX: -6.8 - expand,
+      maxX: 30.8 + expand,
+      minY: -6.8 - expand,
+      maxY: hasWater ? 24.4 : 30.8 + expand,
+      hasWaterfront: hasWater
+    };
+  }
+
+  const round2 = n => Math.round(n * 100) * 0.01;
+  const round3 = n => Math.round(n * 1000) * 0.001;
+
+  function distanceOutsideRectUnits(x, y, b) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+    const cx = x < b.minX ? b.minX : (x > b.maxX ? b.maxX : x);
+    const cy = y < b.minY ? b.minY : (y > b.maxY ? b.maxY : y);
+    return Math.hypot(x - cx, y - cy);
+  }
+
+  function distanceOutsidePerimeterUnits(x, y, site = null) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+    return distanceOutsideRectUnits(x, y, sitePerimeterRect(site));
   }
 
   function toWorld3D(x, y) {
     return {
-      x: Number(((x - TOWN_CENTER_X) * 3.2).toFixed(2)),
-      z: Number(((y - TOWN_CENTER_Y) * 3.2).toFixed(2))
+      x: round2((x - TOWN_CENTER_X) * 3.2),
+      z: round2((y - TOWN_CENTER_Y) * 3.2)
     };
   }
 
-  function distanceKm(entity) {
+  function distanceKm(entity, site = null) {
     if (!entity || !Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return 0;
-    const radial = Math.hypot(entity.x - TOWN_CENTER_X, entity.y - TOWN_CENTER_Y);
-    const outsideUnits = Math.max(0, radial - TOWN_PERIMETER_UNITS);
-    return Number((outsideUnits * STREET_KM).toFixed(2));
+    const outsideUnits = distanceOutsidePerimeterUnits(entity.x, entity.y, site);
+    return round2(outsideUnits * STREET_KM);
+  }
+
+  function etaSecondsFor(entity, site = null, isNight = false) {
+    if (!entity || entity.state === 'slain') return 0;
+    const outsideUnits = distanceOutsidePerimeterUnits(entity.x, entity.y, site);
+    if (outsideUnits <= 0.6) return 0;
+    const spd = APPROACH_SPEED * (entity.speedMul || 1.0) * (isNight ? 1.22 : 1.0);
+    return Math.max(0, Math.round(outsideUnits / Math.max(0.05, spd)));
+  }
+
+  /**
+   * Ensures EVERY community (both player sites and all neighbouring outposts) has
+   * the exact same core protections as the primary player:
+   * - Tall 4-sided indestructible perimeter walls + 4 auto-closing magically-shielded member gates
+   * - Starting Giant Wolf Cave (dragonStable)
+   * - Starter Majestic Wolf Pack (Fenrir & Luna guardians)
+   */
+  function ensureCommunityProtections(site, week = 1) {
+    if (!site || !site.id) return;
+    if (site.communityLife?.border?.defence && site.communityLife.border.defence.stage === -1) {
+      site.communityLife.border.defence.stage = 0;
+    }
+    site.freeBuildings ||= [];
+    if (!site.freeBuildings.some(b => b && b.kind === 'dragonStable')) {
+      site.freeBuildings.push({
+        id: 'cave-start-' + site.id,
+        kind: 'dragonStable',
+        name: 'Giant Wolf Cave',
+        x: -4.8,
+        y: 6.2,
+        builtWeek: week || 1
+      });
+    }
+    if (root.EarthDragonStable?.ensure) {
+      root.EarthDragonStable.ensure(site);
+    }
+    if (root.EarthDragonStable?.ensureStarterPack) {
+      root.EarthDragonStable.ensureStarterPack(site, week || 1);
+    }
   }
 
   function collectCommunityBuildings(site) {
@@ -162,19 +241,41 @@
     const waveScale = 1 + Math.min(1.4, Math.max(0, wave - 1) * 0.14);
     const maxHp = Math.round(arch.maxHp * waveScale);
 
-    // Spawn in the dark outer enchanted forest surrounding the community (y < 14 so coastal sites stay on dry land)
-    const approachAngles = [
-      -2.72, -2.50, -2.28, -2.06, -1.84, -1.62,
-      -1.40, -1.18, -0.96, -0.74, -0.52, -0.34
-    ];
-    const baseAngle = approachAngles[slotIndex % approachAngles.length];
-    const angleJitter = (((horde.serial * 29) % 11) - 5) * 0.025;
-    const angle = clamp(baseAngle + angleJitter, -2.82, -0.28);
-    const distJitter = (((horde.serial * 17) % 9) - 4) * 1.1;
-    const radius = SPAWN_RADIUS_UNITS + distJitter;
+    // Spawn strictly >= MIN_WALL_CLEARANCE_UNITS (128..166 street-units, ~1.66-2.16 km) OUTSIDE
+    // the target community's perimeter walls so NO zombie can reach any community wall in < 5 minutes!
+    const rect = sitePerimeterRect(targetSite);
+    const hasWater = Boolean(rect.hasWaterfront);
+    const goldenAngle = ((slotIndex * 2.3999632297) + (wave * 0.71)) % (Math.PI * 2);
+    const angle = hasWater
+      ? (-2.92 + (goldenAngle / (Math.PI * 2)) * 2.70) // Dry-land north/west/east arcs for coastal communities
+      : (goldenAngle - Math.PI);                        // Full 360° surrounding forest for inland communities
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
 
-    const sx = Number((TOWN_CENTER_X + Math.cos(angle) * radius).toFixed(2));
-    const sy = Number((TOWN_CENTER_Y + Math.sin(angle) * radius).toFixed(2));
+    // Compute exact ray distance from town center (12, 12) to the rectangular wall perimeter
+    const txBound = Math.abs(cosA) > 1e-4
+      ? ((cosA > 0 ? rect.maxX : rect.minX) - TOWN_CENTER_X) / cosA
+      : 1e6;
+    const tyBound = Math.abs(sinA) > 1e-4
+      ? ((sinA > 0 ? rect.maxY : rect.minY) - TOWN_CENTER_Y) / sinA
+      : 1e6;
+    const wallRayDist = Math.min(Math.max(12, txBound), Math.max(12, tyBound));
+
+    // Spread the 220+ zombie horde into deep approaching forest columns (128..166 units beyond the walls)
+    const depthFrac = ((horde.serial * 37 + slotIndex * 13) % 100) / 100;
+    const desiredClearance = MIN_WALL_CLEARANCE_UNITS + 2.5 + depthFrac * (MAX_WALL_CLEARANCE_UNITS - MIN_WALL_CLEARANCE_UNITS - 2.5);
+    let radius = wallRayDist + desiredClearance;
+    let sx = TOWN_CENTER_X + cosA * radius;
+    let sy = TOWN_CENTER_Y + sinA * radius;
+    // Guarantee strict Euclidean clearance >= MIN_WALL_CLEARANCE_UNITS even near diagonal corners
+    const actualClearance = distanceOutsidePerimeterUnits(sx, sy, targetSite);
+    if (actualClearance < MIN_WALL_CLEARANCE_UNITS + 1.0) {
+      radius += (MIN_WALL_CLEARANCE_UNITS + 1.5 - actualClearance);
+      sx = TOWN_CENTER_X + cosA * radius;
+      sy = TOWN_CENTER_Y + sinA * radius;
+    }
+    sx = Number(sx.toFixed(2));
+    sy = Number(sy.toFixed(2));
     const p3 = toWorld3D(sx, sy);
 
     return {
@@ -206,8 +307,8 @@
       targetName: null,
       targetX: TOWN_CENTER_X,
       targetY: TOWN_CENTER_Y,
-      facingX: Number((-Math.cos(angle)).toFixed(3)),
-      facingY: Number((-Math.sin(angle)).toFixed(3)),
+      facingX: Number((-cosA).toFixed(3)),
+      facingY: Number((-sinA).toFixed(3)),
       x: sx,
       y: sy,
       z: 0,
@@ -218,7 +319,7 @@
       climbedOverWall: false,
       worldX: p3.x,
       worldZ: p3.z,
-      distanceKm: distanceKm({ x: sx, y: sy }),
+      distanceKm: distanceKm({ x: sx, y: sy }, targetSite),
       swingPhase: (horde.serial * 1.3) % (Math.PI * 2),
       stepDustTimer: 0.4 + (slotIndex % 5) * 0.14,
       humansKilled: 0,
@@ -231,42 +332,63 @@
 
   function waveSizeFor(wave) {
     const w = Math.max(1, Math.floor(Number(wave) || 1));
-    return Math.max(MIN_ZOMBIES_PER_WAVE, MIN_ZOMBIES_PER_WAVE + Math.min(8, (w - 1) * 2));
+    return Math.max(MIN_ZOMBIES_PER_WAVE, MIN_ZOMBIES_PER_WAVE + Math.min(180, (w - 1) * 60));
   }
 
   function spawnWave(world, targetSite, opts = {}) {
-    if (!world || !targetSite) return { wave: 1, spawned: [], count: 0, message: '' };
+    if (!world || !targetSite) return { wave: 1, spawned: [], count: 0, totalSpawned: 0, communitiesTargeted: 0, message: '' };
     const horde = world.trollHorde;
-    if (!horde) return { wave: 1, spawned: [], count: 0, message: '' };
+    if (!horde) return { wave: 1, spawned: [], count: 0, totalSpawned: 0, communitiesTargeted: 0, message: '' };
 
     const communities = allHumanCommunities(world);
-    const others = communities.filter(s => s.id !== targetSite.id && (s.population || 0) > 0);
+    const targets = opts.singleSiteOnly
+      ? [targetSite]
+      : (communities.length ? communities : [targetSite]);
     const week = world.week || 1;
     const wave = opts.wave != null ? Math.max(1, Math.floor(opts.wave)) : ((horde.community.wave || 0) + 1);
     horde.community.wave = wave;
     horde.community.wavesSpawned = (horde.community.wavesSpawned || 0) + 1;
     horde.community.lastWaveWeek = week;
 
-    const count = Math.max(MIN_ZOMBIES_PER_WAVE, Number(opts.count) || waveSizeFor(wave));
-    const spawned = [];
-    for (let slot = 0; slot < count; slot++) {
-      const z = makeZombie(horde, { ...targetSite, _isPlayer: true }, slot, week, wave);
-      horde.trolls.push(z);
-      spawned.push(z);
+    const perSiteCount = Math.max(MIN_ZOMBIES_PER_WAVE, Number(opts.count) || waveSizeFor(wave));
+    const playerSpawned = [];
+    let totalSpawned = 0;
+
+    // Count existing alive zombies per community in O(N) once before spawning
+    const alivePerSite = new Map();
+    for (const t of horde.trolls) {
+      if (!t || t.state === 'slain' || t.hp <= 0) continue;
+      alivePerSite.set(t.targetSiteId, (alivePerSite.get(t.targetSiteId) || 0) + 1);
     }
 
-    if (others.length) {
-      const otherCount = Math.min(others.length, 2);
-      for (let i = 0; i < otherCount; i++) {
-        const other = others[(wave + i - 1) % others.length];
-        if (!other) continue;
-        horde.trolls.push(makeZombie(horde, other, count + i, week, wave));
+    for (const comm of targets) {
+      if (!comm || !comm.id) continue;
+      // Guarantee EVERY community has identical walls, 4 shielded gates, Giant Wolf Cave & starter wolves!
+      ensureCommunityProtections(comm, week);
+      const existing = alivePerSite.get(comm.id) || 0;
+      const room = Math.max(0, MAX_CONCURRENT_LOCAL_ZOMBIES - existing);
+      const toSpawn = Math.min(perSiteCount, room);
+      const isPlayer = comm.id === targetSite.id || (world.sites || []).some(s => s && s.id === comm.id);
+      for (let slot = 0; slot < toSpawn; slot++) {
+        const z = makeZombie(horde, { ...comm, _isPlayer: isPlayer }, slot, week, wave);
+        horde.trolls.push(z);
+        totalSpawned++;
+        if (comm.id === targetSite.id) playerSpawned.push(z);
       }
     }
 
-    const msg = 'ZOMBIE WAVE ' + wave + '! ' + count + ' ravenous zombies emerged from the dark woods hunting villagers and wolves around ' + targetSite.name + '!';
+    const otherCommunities = Math.max(0, targets.length - 1);
+    const msg = 'ZOMBIE WAVE ' + wave + '! ' + playerSpawned.length + ' undead zombies emerged from the dark woods marching on ' + targetSite.name +
+      (otherCommunities > 0 ? ' (and ' + otherCommunities + ' other protected communities — ETA 5+ min)!' : ' (ETA 5+ min)!');
     record(horde, week, msg);
-    return { wave, spawned, count, message: msg };
+    return {
+      wave,
+      spawned: playerSpawned,
+      count: playerSpawned.length,
+      totalSpawned,
+      communitiesTargeted: targets.length,
+      message: msg
+    };
   }
 
   function ensure(world) {
@@ -317,28 +439,44 @@
     horde.log ||= [];
     if (!Number.isSafeInteger(horde.serial)) horde.serial = horde.trolls.length;
 
-    // Migrate any legacy giant-troll records cleanly to realistic zombies
-    for (let i = 0; i < horde.trolls.length; i++) {
-      const z = horde.trolls[i];
-      if (!z || z.species === 'zombie') continue;
-      const arch = ARCHETYPES[i % ARCHETYPES.length];
-      z.species = 'zombie';
-      z.name = arch.name + ' #' + (i + 1);
-      z.title = arch.title;
-      z.skin = arch.skin;
-      z.cloth = arch.cloth;
-      z.accent = arch.accent;
-      z.blood = arch.blood;
-      z.heightMeters = arch.heightMeters;
-      z.speedMul = arch.speedMul;
-      z.maxHp = Math.min(z.maxHp || arch.maxHp, arch.maxHp + 180);
-      z.hp = Math.min(z.hp || z.maxHp, z.maxHp);
+    // Migrate any legacy giant-troll records cleanly to realistic zombies (only when needed)
+    if (!horde._migratedLen || horde._migratedLen !== horde.trolls.length) {
+      for (let i = 0; i < horde.trolls.length; i++) {
+        const z = horde.trolls[i];
+        if (!z || z.species === 'zombie') continue;
+        const arch = ARCHETYPES[i % ARCHETYPES.length];
+        z.species = 'zombie';
+        z.name = arch.name + ' #' + (i + 1);
+        z.title = arch.title;
+        z.skin = arch.skin;
+        z.cloth = arch.cloth;
+        z.accent = arch.accent;
+        z.blood = arch.blood;
+        z.heightMeters = arch.heightMeters;
+        z.speedMul = arch.speedMul;
+        z.maxHp = Math.min(z.maxHp || arch.maxHp, arch.maxHp + 180);
+        z.hp = Math.min(z.hp || z.maxHp, z.maxHp);
+      }
+      horde._migratedLen = horde.trolls.length;
+    }
+
+    // Guarantee EVERY community in the world has identical starter protections
+    if (horde._protectionsEnsuredCount !== communities.length) {
+      for (const comm of communities) {
+        ensureCommunityProtections(comm, world.week || 1);
+      }
+      horde._protectionsEnsuredCount = communities.length;
     }
 
     const playerSite = communities.find(s => s.id === world.activeSiteId) || world.sites?.[0] || communities[0];
-    const alive = horde.trolls.filter(t => t && t.state !== 'slain' && t.hp > 0);
-    if (playerSite && alive.length === 0) {
+    let hasAlive = false;
+    for (let i = 0; i < horde.trolls.length; i++) {
+      const t = horde.trolls[i];
+      if (t && t.state !== 'slain' && t.hp > 0) { hasAlive = true; break; }
+    }
+    if (playerSite && !hasAlive) {
       spawnWave(world, playerSite, { wave: Math.max(1, (horde.community.wave || 0) + 1) });
+      horde._migratedLen = horde.trolls.length;
     }
     return horde;
   }
@@ -581,7 +719,109 @@
       }
     }
 
+    const communities = allHumanCommunities(world);
+    const byId = new Map();
+    const rectById = new Map();
+    for (const comm of communities) {
+      byId.set(comm.id, comm);
+      rectById.set(comm.id, sitePerimeterRect(comm));
+    }
+    const localRect = rectById.get(site.id) || sitePerimeterRect(site);
+
+    // Advance off-screen communities' zombie hordes & autonomous wolf pack defenses in fast batched O(N)
+    const nightSpeedBoost = isNight ? 1.22 : 1.0;
+    horde._otherMarchClock = (horde._otherMarchClock || 0) + step;
+    if (horde._otherMarchClock >= 0.20) {
+      const mStep = horde._otherMarchClock;
+      horde._otherMarchClock = 0;
+      const otherDefenseSites = new Map();
+      for (let ti = 0; ti < horde.trolls.length; ti++) {
+        const z = horde.trolls[ti];
+        if (!z || z.state === 'slain' || z.hp <= 0 || z.targetSiteId === site.id) continue;
+        const otherRect = rectById.get(z.targetSiteId);
+        if (!otherRect) continue;
+        z.howling = isNight;
+        const outUnits = distanceOutsideRectUnits(z.x, z.y, otherRect);
+        if (outUnits > 0.65) {
+          const dx = TOWN_CENTER_X - z.x;
+          const dy = TOWN_CENTER_Y - z.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const mv = Math.min(outUnits - 0.5, APPROACH_SPEED * (z.speedMul || 1.0) * nightSpeedBoost * mStep);
+          z.x = round3(z.x + (dx / dist) * mv);
+          z.y = round3(z.y + (dy / dist) * mv);
+          z.distanceKm = round2(Math.max(0, outUnits - mv) * STREET_KM);
+        }
+        if (outUnits <= 8.2) {
+          let bucket = otherDefenseSites.get(z.targetSiteId);
+          if (!bucket) {
+            bucket = { site: byId.get(z.targetSiteId), zombies: [] };
+            otherDefenseSites.set(z.targetSiteId, bucket);
+          }
+          bucket.zombies.push(z);
+        }
+      }
+      if (otherDefenseSites.size > 0) {
+        horde._otherDefClock = (horde._otherDefClock || 0) + mStep;
+        if (horde._otherDefClock >= 0.85) {
+          const defDt = horde._otherDefClock;
+          horde._otherDefClock = 0;
+          for (const { site: oSite, zombies: oZombies } of otherDefenseSites.values()) {
+            if (!oSite) continue;
+            ensureCommunityProtections(oSite, world.week || 1);
+            const pack = oSite.dragonStable?.dragons || [];
+            for (let wi = 0; wi < pack.length && wi < oZombies.length; wi++) {
+              const wolf = pack[wi];
+              const targetZ = oZombies[wi];
+              if (!wolf || !targetZ || targetZ.hp <= 0) continue;
+              const dmg = Math.round(58 * Math.min(1.5, defDt));
+              attackTroll(world, oSite, targetZ.id, {
+                source: 'wolfBite',
+                damage: dmg,
+                wolfName: wolf.name,
+                dragonName: wolf.name,
+                autonomous: true
+              });
+            }
+          }
+        }
+      }
+    }
+
     if (!local.length) return events;
+
+    // Fast-check if ALL local zombies are still in outer far-march (> 14 units outside walls)
+    let anyNearLocal = false;
+    for (let i = 0; i < local.length; i++) {
+      const z = local[i];
+      if (z.state !== 'approaching' || z._wallTarget || z.climbState || distanceOutsideRectUnits(z.x, z.y, localRect) <= 14.5) {
+        anyNearLocal = true;
+        break;
+      }
+    }
+    if (!anyNearLocal) {
+      for (let i = 0; i < local.length; i++) {
+        const z = local[i];
+        z.z = 0;
+        z.howling = isNight;
+        if (isNight) z.howlPhase = ((z.howlPhase || 0) + step * (2.6 + (i % 4) * 0.45)) % (Math.PI * 2);
+        const dx = TOWN_CENTER_X - z.x;
+        const dy = TOWN_CENTER_Y - z.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        z.facingX = round3(nx);
+        z.facingY = round3(ny);
+        const sway = Math.sin((z.swingPhase || 0) * 1.6) * 0.10;
+        const mv = APPROACH_SPEED * (z.speedMul || 1.0) * nightSpeedBoost * step;
+        z.x = round3(z.x + (nx - ny * sway) * mv);
+        z.y = round3(z.y + (ny + nx * sway) * mv);
+        z.swingPhase = ((z.swingPhase || 0) + mv * 2.1) % (Math.PI * 2);
+        z.distanceKm = round2(distanceOutsideRectUnits(z.x, z.y, localRect) * STREET_KM);
+        z.worldX = round2((z.x - TOWN_CENTER_X) * 3.2);
+        z.worldZ = round2((z.y - TOWN_CENTER_Y) * 3.2);
+      }
+      return events;
+    }
 
     const buildings = Array.isArray(sceneContext?.buildings) && sceneContext.buildings.length
       ? sceneContext.buildings
@@ -604,7 +844,6 @@
     let solidSet = FP?.collectSolidObstacles
       ? FP.collectSolidObstacles(site, sceneContext?.solids, { forKind: 'zombie' })
       : { walls: [], buildings: [], all: [] };
-    const nightSpeedBoost = isNight ? 1.22 : 1.0;
 
     const BASE_STACK_MIN = FP?.ZOMBIE_BASE_STACK_MIN || 3; // No less than 3 other zombies forming the vertical shoulder ladder
     const TOTAL_CLIMB_REQUIRED = BASE_STACK_MIN + 1;       // 3 base zombies + 1 climbing zombie = 4 zombies total
@@ -863,23 +1102,34 @@
       }
     }
 
+    // O(N) bucketed wall-candidate clustering by wallId so 220-500 zombies never cause quadratic stalls
     const clusters = [];
-    const assigned = new Set();
-    wallCandidates.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const byWallId = new Map();
     for (const z of wallCandidates) {
-      if (assigned.has(z.id)) continue;
-      const group = [z];
-      assigned.add(z.id);
-      for (const other of wallCandidates) {
-        if (assigned.has(other.id)) continue;
-        if (other._wallTarget.wallId !== z._wallTarget.wallId) continue;
-        // Zombies on the same outer wall segment rally together within 9.0 units to form a climb stack
-        if (Math.hypot(other.x - z.x, other.y - z.y) <= 9.0) {
-          group.push(other);
-          assigned.add(other.id);
-        }
+      const wid = z._wallTarget.wallId;
+      let list = byWallId.get(wid);
+      if (!list) {
+        list = [];
+        byWallId.set(wid, list);
       }
-      clusters.push(group);
+      list.push(z);
+    }
+    for (const bucket of byWallId.values()) {
+      bucket.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      const assigned = new Set();
+      for (const z of bucket) {
+        if (assigned.has(z.id)) continue;
+        const group = [z];
+        assigned.add(z.id);
+        for (const other of bucket) {
+          if (assigned.has(other.id)) continue;
+          if (Math.hypot(other.x - z.x, other.y - z.y) <= 9.0) {
+            group.push(other);
+            assigned.add(other.id);
+          }
+        }
+        clusters.push(group);
+      }
     }
 
     for (const group of clusters) {
@@ -1085,8 +1335,39 @@
         z.howlPhase = ((z.howlPhase || 0) + step * (2.6 + (i % 4) * 0.45)) % (Math.PI * 2);
       }
 
-      const km = distanceKm(z);
+      const outUnits = distanceOutsideRectUnits(z.x, z.y, localRect);
+      const km = round2(outUnits * STREET_KM);
       z.distanceKm = km;
+
+      // FAST-PATH O(1) FAR-MARCH:
+      // While zombies are still > 14 units (~180m) outside the perimeter walls (well outside the 100m wolf line
+      // and clear of all walls/buildings/Sims), march directly toward the community in O(1) for smooth 60 FPS!
+      if (z.state === 'approaching' && outUnits > 14.0 && !z._wallTarget) {
+        const dx = TOWN_CENTER_X - z.x;
+        const dy = TOWN_CENTER_Y - z.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        z.facingX = round3(nx);
+        z.facingY = round3(ny);
+        z.targetKind = 'building';
+        z.targetId = 'market';
+        z.targetName = site.name;
+        z.targetX = TOWN_CENTER_X;
+        z.targetY = TOWN_CENTER_Y;
+        z.attackPhase = 'march';
+        z.attackProgress = 0;
+
+        const sway = Math.sin((z.swingPhase || 0) * 1.6) * 0.10;
+        const mv = APPROACH_SPEED * spdMul * step;
+        z.x = round3(z.x + (nx - ny * sway) * mv);
+        z.y = round3(z.y + (ny + nx * sway) * mv);
+        z.swingPhase = ((z.swingPhase || 0) + mv * 2.1) % (Math.PI * 2);
+        z.distanceKm = round2(distanceOutsideRectUnits(z.x, z.y, localRect) * STREET_KM);
+        z.worldX = round2((z.x - TOWN_CENTER_X) * 3.2);
+        z.worldZ = round2((z.y - TOWN_CENTER_Y) * 3.2);
+        continue;
+      }
 
       // Check for living Sims or Majestic Wolves within wide scent/sight radius (only clear-LOS prey!)
       const nearbyPrey = pickTargetForZombie(z, site, [], sims, wolves);
@@ -1110,7 +1391,7 @@
         z.attackProgress = 0;
 
         // Uneven zombie shamble with slight erratic sway — strictly colliding against ALL solid walls, shielded gates & buildings!
-        const sway = Math.sin((z.swingPhase || 0) * 1.6) * 0.14;
+        const sway = Math.sin((z.swingPhase || 0) * 1.6) * 0.10;
         const nx = dx / dist;
         const ny = dy / dist;
         const nextX = z.x + (nx - ny * sway) * APPROACH_SPEED * spdMul * step;
@@ -1131,7 +1412,7 @@
           }
         }
 
-        z.distanceKm = distanceKm(z);
+        z.distanceKm = distanceKm(z, site);
         const p3 = toWorld3D(z.x, z.y);
         z.worldX = p3.x;
         z.worldZ = p3.z;
@@ -1457,13 +1738,33 @@
 
   function summary(world, siteId) {
     const horde = world?.trollHorde;
+    const communities = allHumanCommunities(world);
+    const activeSite = communities.find(s => s.id === siteId) || null;
     const alive = activeTrolls(world);
     const local = alive.filter(t => t.targetSiteId === siteId);
     const elsewhere = alive.filter(t => t.targetSiteId !== siteId);
     const approaching = local.filter(t => t.state === 'approaching');
     const attacking = local.filter(t => t.state !== 'approaching');
-    const nearestKm = local.length ? Math.min(...local.map(t => distanceKm(t))) : 0;
+    const isNight = Boolean(root.EarthDayClock?.read?.(world)?.night);
+    let nearestKm = Infinity;
+    let nearestEtaSec = Infinity;
+    let nearestZombie = null;
+    for (const t of local) {
+      const km = distanceKm(t, activeSite);
+      if (km < nearestKm) {
+        nearestKm = km;
+        nearestZombie = t;
+      }
+      const eta = etaSecondsFor(t, activeSite, isNight);
+      if (eta < nearestEtaSec) nearestEtaSec = eta;
+    }
+    if (!local.length) {
+      nearestKm = 0;
+      nearestEtaSec = 0;
+    }
     const howlingCount = local.filter(t => t.howling).length;
+    const dmg = activeSite ? buildingDamageSummary(activeSite) : { damaged: 0, ruined: 0 };
+    const communitiesUnderSiege = new Set(alive.map(t => t.targetSiteId)).size;
     return {
       communityName: horde?.community?.name || 'Undead Plague Horde',
       wave: horde?.community?.wave || 1,
@@ -1473,7 +1774,12 @@
       attackingCount: attacking.length,
       howlingCount,
       nearestKm,
+      nearestEtaSec,
+      nearestZombie,
+      communitiesUnderSiege,
       elsewhereCount: elsewhere.length,
+      damagedBuildings: dmg.damaged,
+      ruinedBuildings: dmg.ruined,
       totalSlain: horde?.community?.totalSlain || 0,
       humansLost: horde?.community?.humansLost || 0,
       buildingsRuined: horde?.community?.buildingsRuined || 0,
@@ -1498,17 +1804,24 @@
     ARCHETYPES,
     SOURCE_MULTIPLIER,
     STREET_KM,
+    APPROACH_SPEED,
+    MIN_WALL_ARRIVAL_SEC,
+    MIN_WALL_CLEARANCE_UNITS,
     MIN_TROLLS_PER_WAVE: MIN_ZOMBIES_PER_WAVE,
     MIN_ZOMBIES_PER_WAVE,
+    MAX_CONCURRENT_LOCAL_ZOMBIES,
     WAVE_INTERVAL_SEC,
     waveSizeFor,
+    ensureCommunityProtections,
     spawnWave,
     ensure,
     activeTrolls,
     trollsForSite,
     activeZombies: activeTrolls,
     zombiesForSite: trollsForSite,
+    distanceOutsidePerimeterUnits,
     distanceKm,
+    etaSecondsFor,
     toWorld3D,
     buildingDamageSummary,
     stepLive,

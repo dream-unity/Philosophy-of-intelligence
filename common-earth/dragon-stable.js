@@ -682,39 +682,131 @@
       : [];
     const WOLF_RADIUS = 0.36;
 
-    const wallBetween = (ax, ay, bx, by) => {
+    const wallBetween = (ax, ay, bx, by, pad = 0.16) => {
       if (!FP?.segmentIntersectsBox || !solidSet.walls.length) return null;
       for (const wOb of solidSet.walls) {
-        if (FP.segmentIntersectsBox(ax, ay, bx, by, wOb.box, 0.14).hit) return wOb;
+        if (FP.segmentIntersectsBox(ax, ay, bx, by, wOb.box, pad).hit) return wOb;
       }
       return null;
     };
 
-    // If an intact solid perimeter wall blocks the straight path from (sx, sy) to (gx, gy),
-    // steer the wolf toward the closest passable gateway or smashed wall breach!
-    const steerAroundWalls = (sx, sy, gx, gy) => {
-      if (!gateways.length || !wallBetween(sx, sy, gx, gy)) return { x: gx, y: gy, viaGate: false };
+    // Helper: check if a wolf is currently inside or straddling any gateway threshold
+    const gatewayContaining = (x, y, perpPad = 1.15, alongPad = 2.05) => {
+      for (const g of gateways) {
+        const nx = g.outNx || 0;
+        const ny = g.outNy || 0;
+        const perp = (x - g.x) * nx + (y - g.y) * ny;
+        const along = Math.abs((x - g.x) * (-ny) + (y - g.y) * nx);
+        if (Math.abs(perp) <= perpPad && along <= alongPad) return { g, perp, along };
+      }
+      return null;
+    };
+
+    // Smooth Perpendicular Gate-Transit Corridor:
+    // 1. When a solid perimeter wall or stone gatepost blocks the path from wolf -> (gx, gy),
+    //    pick the closest passable gateway (never exiting into ocean on waterfront south gate).
+    // 2. First steer to the clean centerline approach point 2.1 units BEFORE the gateway so the
+    //    wolf enters dead-center between both stone gateposts.
+    // 3. Once aligned with the gateway center corridor, commit `st._gateTransit` and sprint
+    //    STRAIGHT PERPENDICULARLY through the doorway to 2.45 units PAST the far side of the gate
+    //    before turning laterally toward the target — completely eliminating gatepost oscillation!
+    const steerAroundWalls = (st, gx, gy) => {
+      const sx = st.x;
+      const sy = st.y;
+      const clearNow = !wallBetween(sx, sy, gx, gy, 0.28);
+
+      // Continue an active perpendicular gate transit until the wolf has fully cleared BOTH gateposts
+      if (st._gateTransit) {
+        const tr = st._gateTransit;
+        tr.timer = (tr.timer || 0) - step;
+        const perpNow = (sx - tr.gx) * tr.nx + (sy - tr.gy) * tr.ny;
+        const goalPerp = (gx - tr.gx) * tr.nx + (gy - tr.gy) * tr.ny;
+        const clearedFarSide = tr.dir > 0 ? perpNow >= 2.05 : perpNow <= -2.05;
+        const reachedExit = Math.hypot(tr.exitX - sx, tr.exitY - sy) <= 0.48;
+        const beforeThreshold = tr.dir > 0 ? perpNow < -1.15 : perpNow > 1.15;
+        const goalFlippedSameSide = beforeThreshold && clearNow && (tr.dir > 0 ? goalPerp < -0.5 : goalPerp > 0.5);
+
+        if (clearedFarSide || reachedExit || tr.timer <= 0 || goalFlippedSameSide) {
+          st._gateTransit = null;
+        } else {
+          // Keep wolf centered laterally along the gate normal as it dashes straight through
+          return { x: tr.exitX, y: tr.exitY, viaGate: true, transiting: true };
+        }
+      }
+
+      // If no wall/gatepost blocks the straight line AND the wolf is not straddling a gateway, go direct!
+      if (clearNow) {
+        const insideGate = gatewayContaining(sx, sy, 0.95, 1.95);
+        if (!insideGate) return { x: gx, y: gy, viaGate: false, transiting: false };
+        // If currently right inside a gateway aperture and target is laterally sharp, finish clearing the gate cleanly first
+        const g = insideGate.g;
+        const nx = g.outNx || 0;
+        const ny = g.outNy || 0;
+        const goalPerp = (gx - g.x) * nx + (gy - g.y) * ny;
+        const goalAlong = Math.abs((gx - g.x) * (-ny) + (gy - g.y) * nx);
+        if (goalAlong > 1.85 && Math.abs(goalPerp) < 2.2) {
+          let dir = goalPerp >= 0 ? 1 : -1;
+          if (hasWater && g.side === 'south' && dir > 0) dir = -1;
+          const exitPt = clampWolfPosition(site, g.x + dir * nx * 2.45, g.y + dir * ny * 2.45);
+          st._gateTransit = {
+            gateId: g.id, gx: g.x, gy: g.y, nx, ny, dir,
+            exitX: exitPt.x, exitY: exitPt.y, timer: 1.8
+          };
+          return { x: exitPt.x, y: exitPt.y, viaGate: true, transiting: true };
+        }
+        return { x: gx, y: gy, viaGate: false, transiting: false };
+      }
+
+      if (!gateways.length) return { x: gx, y: gy, viaGate: false, transiting: false };
+
       let bestGate = null;
       let bestCost = Infinity;
       for (const g of gateways) {
-        const dToGate = Math.hypot(g.x - sx, g.y - sy);
-        const dFromGate = Math.hypot(gx - g.x, gy - g.y);
-        const cost = dToGate + dFromGate;
+        const nx = g.outNx || 0;
+        const ny = g.outNy || 0;
+        const wolfPerp = (sx - g.x) * nx + (sy - g.y) * ny;
+        const goalPerp = (gx - g.x) * nx + (gy - g.y) * ny;
+        const dir = goalPerp >= wolfPerp ? 1 : -1;
+        // On coastal/waterfront sites, the south waterfront wall cannot be exited outward into the sea
+        if (hasWater && g.side === 'south' && dir > 0) continue;
+        const cost = Math.hypot(g.x - sx, g.y - sy) + Math.hypot(gx - g.x, gy - g.y);
         if (cost < bestCost) {
           bestCost = cost;
           bestGate = g;
         }
       }
-      if (!bestGate) return { x: gx, y: gy, viaGate: false };
-      // Once close to the gate threshold, aim slightly through the doorway onto the far side!
-      const dGate = Math.hypot(bestGate.x - sx, bestGate.y - sy);
-      if (dGate < 1.15) {
-        const pushDx = gx - bestGate.x;
-        const pushDy = gy - bestGate.y;
-        const pLen = Math.hypot(pushDx, pushDy) || 1;
-        return { x: bestGate.x + (pushDx / pLen) * 1.6, y: bestGate.y + (pushDy / pLen) * 1.6, viaGate: true };
+      if (!bestGate) return { x: gx, y: gy, viaGate: false, transiting: false };
+
+      const nx = bestGate.outNx || 0;
+      const ny = bestGate.outNy || 0;
+      const wolfPerp = (sx - bestGate.x) * nx + (sy - bestGate.y) * ny;
+      const goalPerp = (gx - bestGate.x) * nx + (gy - bestGate.y) * ny;
+      let dir = goalPerp >= wolfPerp ? 1 : -1;
+      if (hasWater && bestGate.side === 'south' && dir > 0) dir = -1;
+
+      const alongOffset = Math.abs((sx - bestGate.x) * (-ny) + (sy - bestGate.y) * nx);
+      const approachPt = clampWolfPosition(site, bestGate.x - dir * nx * 2.15, bestGate.y - dir * ny * 2.15);
+      const exitPt = clampWolfPosition(site, bestGate.x + dir * nx * 2.45, bestGate.y + dir * ny * 2.45);
+
+      // Once aligned with the open gateway centerline (safely inside the 4.8-unit wide doorway,
+      // well clear of both stone gateposts), commit straight perpendicular transit through the gate!
+      const alignedWithAperture = alongOffset <= 1.45 && (dir * wolfPerp >= -2.55) && (dir * wolfPerp <= 1.95);
+      if (alignedWithAperture && !wallBetween(sx, sy, exitPt.x, exitPt.y, 0.14)) {
+        st._gateTransit = {
+          gateId: bestGate.id,
+          gx: bestGate.x,
+          gy: bestGate.y,
+          nx,
+          ny,
+          dir,
+          exitX: exitPt.x,
+          exitY: exitPt.y,
+          timer: 2.2
+        };
+        return { x: exitPt.x, y: exitPt.y, viaGate: true, transiting: true };
       }
-      return { x: bestGate.x, y: bestGate.y, viaGate: true };
+
+      return { x: approachPt.x, y: approachPt.y, viaGate: true, transiting: false };
     };
 
     const moveWolfGrounded = (st, destX, destY) => {
@@ -775,7 +867,8 @@
           targetKind: null,
           targetName: null,
           biteTarget: null,
-          announcedTargetId: null
+          announcedTargetId: null,
+          _gateTransit: null
         };
         map.set(wolf.id, st);
       }
@@ -801,16 +894,19 @@
       });
 
       const inRangeThreats = activeThreats.filter(th => distanceOutsideTerritoryMeters(site, th.x, th.y) <= MAX_OUTSIDE_METERS + 4);
+      const alertThreats = inRangeThreats.length
+        ? inRangeThreats
+        : activeThreats.filter(th => distanceOutsideTerritoryMeters(site, th.x, th.y) <= MAX_OUTSIDE_METERS + 120);
       const immediateThreat = inRangeThreats.find(th => Math.hypot(th.x - st.x, th.y - st.y) <= 8.5 && !wallBetween(st.x, st.y, th.x, th.y));
 
       if (st.recoverTimer > 0) {
         st.state = 'retreat';
         const goal = st.retreatGoal || denFront;
-        const steer = steerAroundWalls(st.x, st.y, goal.x, goal.y);
+        const steer = steerAroundWalls(st, goal.x, goal.y);
         const dx = steer.x - st.x;
         const dy = steer.y - st.y;
         const d = Math.hypot(dx, dy);
-        if (d > 0.75) {
+        if (d > 0.45) {
           const spd = 7.4 * speedBonus * step;
           const move = Math.min(d, spd);
           moveWolfGrounded(st, st.x + (dx / d) * move, st.y + (dy / d) * move);
@@ -821,7 +917,7 @@
         howlingCount++;
         const gatherX = clamp(denFront.x + 1.4 + (i % 3 - 1) * 1.8, wb.territoryMinX + 1.5, wb.territoryMaxX - 1.5);
         const gatherY = clamp(denFront.y + 0.8 + Math.floor(i / 3) * 1.5, wb.territoryMinY + 1.5, wb.territoryMaxY - 1.5);
-        const steer = steerAroundWalls(st.x, st.y, gatherX, gatherY);
+        const steer = steerAroundWalls(st, gatherX, gatherY);
         const gx = steer.x - st.x;
         const gy = steer.y - st.y;
         const gd = Math.hypot(gx, gy);
@@ -831,9 +927,9 @@
         } else {
           st.angle = -0.35 + (i % 2 === 0 ? 0.14 : -0.14);
         }
-      } else if (activeThreats.length > 0) {
+      } else if (alertThreats.length > 0) {
         defendingCount++;
-        const pool = inRangeThreats.length ? inRangeThreats : activeThreats;
+        const pool = inRangeThreats.length ? inRangeThreats : alertThreats;
         const target = pool.find(th => th.id === st.targetId) || pool[i % pool.length] || pool[0];
         st.targetId = target.id;
         st.targetKind = target.kind;
@@ -843,7 +939,8 @@
         const ty = target.y;
         const clampedGoal = clampWolfPosition(site, tx, ty);
         const distToTarget = Math.hypot(tx - st.x, ty - st.y);
-        const blockedByWall = Boolean(wallBetween(st.x, st.y, tx, ty));
+        const blockedByWall = Boolean(wallBetween(st.x, st.y, tx, ty, 0.22));
+        const inGateTransit = Boolean(st._gateTransit);
         const biteReach = 2.35;
         const sprintSpeed = 9.6 * speedBonus;
 
@@ -862,12 +959,12 @@
           });
         }
 
-        if (distToTarget > biteReach || blockedByWall) {
-          const steer = steerAroundWalls(st.x, st.y, clampedGoal.x, clampedGoal.y);
+        if (inGateTransit || distToTarget > biteReach || blockedByWall) {
+          const steer = steerAroundWalls(st, clampedGoal.x, clampedGoal.y);
           const gx = steer.x - st.x;
           const gy = steer.y - st.y;
           const gDist = Math.hypot(gx, gy);
-          if (gDist > 0.45) {
+          if (gDist > 0.35) {
             st.state = 'intercept';
             const stepDist = Math.min(gDist, sprintSpeed * step);
             moveWolfGrounded(st, st.x + (gx / gDist) * stepDist, st.y + (gy / gDist) * stepDist);
@@ -880,11 +977,13 @@
               clampedGoal.x + Math.cos(st.roamAngle) * 0.55,
               clampedGoal.y + Math.sin(st.roamAngle) * 0.55
             );
-            moveWolfGrounded(st, patrolPos.x, patrolPos.y);
+            if (!wallBetween(st.x, st.y, patrolPos.x, patrolPos.y, 0.24)) {
+              moveWolfGrounded(st, patrolPos.x, patrolPos.y);
+            }
             st.angle = Math.atan2(((tx - st.x) + (ty - st.y)) * TILT, (tx - st.x) - (ty - st.y));
           }
         } else {
-          // FIERCE WOLF MELEE LUNGE & FANG BITE (strictly grounded & solid-colliding!)
+          // FIERCE WOLF MELEE LUNGE & FANG BITE (strictly grounded, solid-colliding, never orbiting into gateposts!)
           st.state = 'attack';
           const dir = i % 2 === 0 ? 1 : -1;
           st.roamAngle += dir * 2.2 * step;
@@ -893,12 +992,21 @@
             tx + Math.cos(st.roamAngle) * 1.45,
             ty + Math.sin(st.roamAngle) * 1.45
           );
-          const ox = orb.x - st.x;
-          const oy = orb.y - st.y;
-          const od = Math.hypot(ox, oy);
-          if (od > 0.1) {
-            const pull = Math.min(od, 6.2 * speedBonus * step);
-            moveWolfGrounded(st, st.x + (ox / od) * pull, st.y + (oy / od) * pull);
+          if (!wallBetween(st.x, st.y, orb.x, orb.y, 0.28) && !gatewayContaining(st.x, st.y, 0.9, 1.9)) {
+            const ox = orb.x - st.x;
+            const oy = orb.y - st.y;
+            const od = Math.hypot(ox, oy);
+            if (od > 0.1) {
+              const pull = Math.min(od, 6.2 * speedBonus * step);
+              moveWolfGrounded(st, st.x + (ox / od) * pull, st.y + (oy / od) * pull);
+            }
+          } else if (distToTarget > 1.35) {
+            // Safely close straight along the clear sightline toward the zombie without clipping gateposts
+            const lx = tx - st.x;
+            const ly = ty - st.y;
+            const ld = Math.hypot(lx, ly) || 1;
+            const pull = Math.min(ld - 1.2, 5.2 * speedBonus * step);
+            if (pull > 0.02) moveWolfGrounded(st, st.x + (lx / ld) * pull, st.y + (ly / ld) * pull);
           }
           st.angle = Math.atan2(((tx - st.x) + (ty - st.y)) * TILT, (tx - st.x) - (ty - st.y));
 
@@ -1006,23 +1114,24 @@
           }
         }
       } else {
-        // Peaceful Majestic Wolf roaming through the Enchanted Forest on solid ground (never through walls/buildings!)
+        // Peaceful Majestic Wolf roaming through the Enchanted Forest inside AND out through the 4 gates
+        // up to ~80m outside the community walls (never > 100m and never clipping solid walls/gateposts!)
         st.state = 'roam';
         st.targetId = null;
         st.targetKind = null;
         st.targetName = null;
         st.announcedTargetId = null;
         st.biteTarget = null;
-        const roamT = visualTime * (0.28 + ring * 0.05) + i * 2.3;
-        const rx = 10.5 + ring * 4.2;
-        const ry = 9.0 + ring * 3.6;
+        const roamT = visualTime * (0.16 + ring * 0.03) + i * 2.3;
+        const rx = 14.5 + ring * 6.5;
+        const ry = 13.5 + ring * 5.5;
         const goal = clampWolfPosition(site, 12 + Math.cos(roamT) * rx, 11 + Math.sin(roamT) * ry);
-        const steer = steerAroundWalls(st.x, st.y, goal.x, goal.y);
+        const steer = steerAroundWalls(st, goal.x, goal.y);
         const dx = steer.x - st.x;
         const dy = steer.y - st.y;
         const dist = Math.hypot(dx, dy);
         if (dist > 0.25) {
-          const move = Math.min(dist, 4.4 * speedBonus * step);
+          const move = Math.min(dist, (steer.transiting ? 6.4 : 4.8) * speedBonus * step);
           moveWolfGrounded(st, st.x + (dx / dist) * move, st.y + (dy / dist) * move);
         }
       }

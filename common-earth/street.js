@@ -4995,7 +4995,7 @@
       }
     }
 
-    function drawGiantTroll(zombie){
+    function drawGiantTroll(zombie, showLabel=true){
       // Realistic, unmistakable rotting human Zombie:
       // Articulated dragging legs, hunched tattered blood-soaked clothes with rib gash,
       // TWO bent outstretched arms with bloody grasping claws, crooked decaying skull with
@@ -5243,7 +5243,7 @@
       ctx.fillRect(-barW/2,barY,barW,barH);
       ctx.fillStyle=hpFrac>0.4?'#c43428':'#eb6d28';
       ctx.fillRect(-barW/2,barY,barW*hpFrac,barH);
-      if(unit>=11){
+      if(showLabel&&unit>=11){
         ctx.font='700 9.5px system-ui,sans-serif';
         ctx.textAlign='center';ctx.textBaseline='bottom';
         ctx.fillStyle=isHowling?'#d6eed8':'#f4d4cc';
@@ -5408,11 +5408,33 @@
       if(!localTrolls.length)return;
       ctx.save();
       const townPos=v.screen(baseTown.x,baseTown.y);
-      for(const t of localTrolls){
-        const rp=renderRegion.regionalPoint(baseTown,t.x,t.y);
-        const p=v.screen(rp.x,rp.y);
-        const km=window.EarthGiantTrolls.distanceKm(t);
-        // Dashed crimson march path from approaching giant troll straight into town
+      if(unit>=5){
+        let labelsShown=0;
+        for(const t of localTrolls){
+          const [sx,sy]=screen(t.x,t.y,t.z||0);
+          if(sx<-80||sx>width+80||sy<-90||sy>height+130)continue;
+          const priority=Boolean(t.climbState||t.hp<t.maxHp||t.state!=='approaching');
+          const showLbl=priority?labelsShown<24:labelsShown<12;
+          if(showLbl)labelsShown++;
+          drawGiantTroll(t,showLbl);
+        }
+      }else{
+        // Zoomed-out regional view: render clean swarm dots + 1 aggregate Horde vanguard beacon
+        let nearest=localTrolls[0];
+        let nearestKm=Infinity;
+        const stride=Math.max(1,Math.floor(localTrolls.length/28));
+        for(let i=0;i<localTrolls.length;i++){
+          const t=localTrolls[i];
+          const km=window.EarthGiantTrolls.distanceKm(t,state.site);
+          if(km<nearestKm){nearestKm=km;nearest=t;}
+          if(i%stride!==0)continue;
+          const rp=renderRegion.regionalPoint(baseTown,t.x,t.y);
+          const p=v.screen(rp.x,rp.y);
+          ctx.fillStyle='rgba(235,64,46,0.78)';
+          ctx.beginPath();ctx.arc(p.x,p.y,3.2,0,Math.PI*2);ctx.fill();
+        }
+        const rpLead=renderRegion.regionalPoint(baseTown,nearest.x,nearest.y);
+        const p=v.screen(rpLead.x,rpLead.y);
         ctx.strokeStyle='rgba(235,68,48,0.72)';
         ctx.lineWidth=2;
         ctx.setLineDash([6,5]);
@@ -5420,32 +5442,24 @@
         ctx.moveTo(p.x,p.y);ctx.lineTo(townPos.x,townPos.y);
         ctx.stroke();
         ctx.setLineDash([]);
-        if(unit>=5){
-          drawGiantTroll(t);
-        }else{
-          // Pulsing crimson titan beacon when zoomed far out on regional overview
-          const pulse=1+Math.sin(visualTime*5)*0.22;
-          ctx.fillStyle='rgba(235,54,38,0.34)';
-          ctx.beginPath();ctx.arc(p.x,p.y,15*pulse,0,Math.PI*2);ctx.fill();
-          ctx.fillStyle='#241316';
-          ctx.strokeStyle='#ff4834';
-          ctx.lineWidth=2.2;
-          ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.fill();ctx.stroke();
-          ctx.fillStyle='#ff583d';
-          ctx.beginPath();
-          ctx.moveTo(p.x-5,p.y-2);ctx.lineTo(p.x-7,p.y-8);ctx.lineTo(p.x-2,p.y-4);
-          ctx.moveTo(p.x+5,p.y-2);ctx.lineTo(p.x+7,p.y-8);ctx.lineTo(p.x+2,p.y-4);
-          ctx.fill();
-          const tag=t.state==='approaching'?`${t.name} · ${km.toFixed(2)} km`:`${t.name} · ATTACKING`;
-          ctx.font='700 11px system-ui,sans-serif';
-          const tw=ctx.measureText(tag).width+14;
-          ctx.fillStyle='rgba(20,10,13,0.92)';
-          ctx.strokeStyle='#e04834';
-          ctx.lineWidth=1.2;
-          ctx.beginPath();ctx.roundRect(p.x-tw/2,p.y-30,tw,18,4);ctx.fill();ctx.stroke();
-          ctx.fillStyle='#ffd9ce';ctx.textAlign='center';ctx.textBaseline='middle';
-          ctx.fillText(tag,p.x,p.y-21);
-        }
+        const pulse=1+Math.sin(visualTime*5)*0.22;
+        ctx.fillStyle='rgba(235,54,38,0.34)';
+        ctx.beginPath();ctx.arc(p.x,p.y,15*pulse,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#241316';
+        ctx.strokeStyle='#ff4834';
+        ctx.lineWidth=2.2;
+        ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.fill();ctx.stroke();
+        const tag=nearest.state==='approaching'
+          ? `${localTrolls.length} Zombies · ${nearestKm.toFixed(2)} km`
+          : `${localTrolls.length} Zombies · ATTACKING`;
+        ctx.font='700 11px system-ui,sans-serif';
+        const tw=ctx.measureText(tag).width+14;
+        ctx.fillStyle='rgba(20,10,13,0.92)';
+        ctx.strokeStyle='#e04834';
+        ctx.lineWidth=1.2;
+        ctx.beginPath();ctx.roundRect(p.x-tw/2,p.y-30,tw,18,4);ctx.fill();ctx.stroke();
+        ctx.fillStyle='#ffd9ce';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(tag,p.x,p.y-21);
       }
       // Render Majestic Wolves roaming & defending the enchanted forest on regional map
       const autoWolves=window.EarthDragonStable?.getAutonomousPoses?.(state.site)||[];
@@ -5472,20 +5486,28 @@
       if(!w||!state.site||!window.EarthGiantTrolls)return;
       const localTrolls=window.EarthGiantTrolls.trollsForSite(w,state.site.id);
       if(!localTrolls.length)return;
-      const offscreen=[];
+      let offCount=0;
+      let lead=null;
+      let leadDist=Infinity;
       for(const t of localTrolls){
         const [sx,sy]=screen(t.x,t.y,0);
         if(sx>28&&sx<width-28&&sy>28&&sy<height-28)continue;
-        offscreen.push({t,sx,sy,dist:Math.hypot(sx-width*0.5,sy-height*0.5)});
+        offCount++;
+        const d=Math.hypot(sx-width*0.5,sy-height*0.5);
+        if(d<leadDist){
+          leadDist=d;
+          lead={t,sx,sy};
+        }
       }
-      if(!offscreen.length)return;
-      offscreen.sort((a,b)=>a.dist-b.dist);
-      const lead=offscreen[0];
-      const extra=offscreen.length-1;
-      const distM=Math.round(window.EarthGiantTrolls.distanceKm(lead.t)*1000);
-      const label=extra>0
-        ? `${offscreen.length} Zombies · ${distM}m`
-        : `${lead.t.name} · ${distM}m`;
+      if(!lead)return;
+      const km=window.EarthGiantTrolls.distanceKm(lead.t,state.site);
+      const distStr=km>=1?`${km.toFixed(2)}km`:`${Math.round(km*1000)}m`;
+      const isNight=Boolean(window.EarthDayClock?.read?.(w)?.night);
+      const etaSec=window.EarthGiantTrolls.etaSecondsFor?.(lead.t,state.site,isNight)||0;
+      const etaStr=etaSec>=60?` · ~${Math.floor(etaSec/60)}m ${String(etaSec%60).padStart(2,'0')}s`:(etaSec>5?` · ~${etaSec}s`:'');
+      const label=offCount>1
+        ? `${offCount} Zombies · ${distStr}${etaStr}`
+        : `${lead.t.name} · ${distStr}${etaStr}`;
       ctx.save();
       ctx.font='700 10.5px system-ui,sans-serif';
       const tw=ctx.measureText(label).width+24;
@@ -5921,9 +5943,16 @@
         const c=state.companion;addItem(c.x,c.y,c.x+c.y+.075,()=>activityFigure(c.id,c,COATS[c.slot],p.dx,p.dy,p.moving?1:0,visualTime*10+c.slot,state.looks.get(c.id)));
       }
       const localTrolls=window.EarthGiantTrolls?.trollsForSite?.(options.getWorld?.(),state.site.id)||[];
+      let visibleZombieLabels=0;
       for(const troll of localTrolls){
-        const zDepth=(troll.z||0)*0.45;
-        addItem(troll.x,troll.y,troll.x+troll.y+.65+zDepth,()=>drawGiantTroll(troll),[2.5,2.5,4.8]);
+        const zElev=troll.z||0;
+        const [tsx,tsy]=screen(troll.x,troll.y,zElev);
+        if(tsx<-85||tsx>width+85||tsy<-95||tsy>height+135)continue;
+        const zDepth=zElev*0.45;
+        const isPriority=Boolean(troll.climbState||troll.hp<troll.maxHp||troll.state!=='approaching');
+        const showLbl=isPriority?visibleZombieLabels<24:visibleZombieLabels<14;
+        if(showLbl)visibleZombieLabels++;
+        addItem(troll.x,troll.y,troll.x+troll.y+.65+zDepth,()=>drawGiantTroll(troll,showLbl),[2.5,2.5,4.8]);
       }
       if(trollShake>0.01&&!reduced){
         const amp=trollShake*trollShake*7;
@@ -7192,11 +7221,18 @@
       const w=options.getWorld?.();
       if(!w||!state.site||!window.EarthGiantTrolls)return false;
       const local=window.EarthGiantTrolls.trollsForSite(w,state.site.id);
-      const t=trollId?local.find(item=>item.id===trollId):local[0];
+      let t=trollId?local.find(item=>item.id===trollId):null;
+      if(!t&&local.length){
+        let bestD=Infinity;
+        for(const item of local){
+          const d=window.EarthGiantTrolls.distanceKm(item,state.site);
+          if(d<bestD){bestD=d;t=item;}
+        }
+      }
       if(!t)return false;
       cancelFieldTap();clearObservation();overviewZoom=null;cameraFollows=false;
       trackedTrollId=t.id;
-      const km=window.EarthGiantTrolls.distanceKm(t);
+      const km=window.EarthGiantTrolls.distanceKm(t,state.site);
       zoom=km>0.12?Math.max(minZoom(),0.62):Math.max(zoom,0.95);
       unit=baseUnit()*zoom;
       centreX=t.x;centreY=t.y;
@@ -7231,11 +7267,13 @@
         g.fillStyle=observedId?'#c9edc1':'#fff0bf';g.strokeStyle='#523e2b';g.lineWidth=.8;g.beginPath();g.arc(p[0],p[1],2.55,0,Math.PI*2);g.fill();g.stroke();
       }
       const miniTrolls=state.site?window.EarthGiantTrolls?.trollsForSite?.(options.getWorld?.(),state.site.id)||[]:[];
-      for(const t of miniTrolls){
+      const miniStride=Math.max(1,Math.floor(miniTrolls.length/48));
+      for(let mi=0;mi<miniTrolls.length;mi+=miniStride){
+        const t=miniTrolls[mi];
         const raw=xy(t.x,t.y);
         const mx=clamp(raw[0],4,w-4),my=clamp(raw[1],4,h-4);
         g.fillStyle='#ff3c2a';g.strokeStyle='#fff0d8';g.lineWidth=.8;
-        g.beginPath();g.arc(mx,my,2.6,0,Math.PI*2);g.fill();g.stroke();
+        g.beginPath();g.arc(mx,my,2.3,0,Math.PI*2);g.fill();g.stroke();
       }
       g.font='600 6.5px system-ui,sans-serif';g.textAlign='right';g.fillStyle='#c5d3bd';g.fillText('N',w-4,8);line([w-12,10],[w-9,8],'#c5d3bd',.9);
       miniButton.setAttribute('aria-pressed',String(overviewZoom!==null));miniButton.title=overviewZoom===null?'Show whole district':'Return to street scale';

@@ -570,6 +570,175 @@ test('Zombies can ONLY jump over walls by climbing atop no less than 3 other zom
   assert.equal(vaultingZombie.stackTier, -1, 'Collapsed climber must reset stackTier to -1');
 });
 
+test('Wolves smoothly exit and re-enter community wall gates without oscillating/glitching on gateposts, patrolling up to 100m outside', async () => {
+  const ctx = loadSimEnv();
+  const FP = ctx.EarthFlightPhysics;
+  const WC = ctx.EarthDragonStable;
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Reykjavik', region: 'Iceland', lat: 64.1466, lon: -21.9426, water: false });
+  const site = sim.active();
+  const inner = FP.perimeterBounds(0, false);
+
+  // Place a zombie OUTSIDE the East wall, laterally offset NORTH of the East Gate (exact scenario from user screenshot!)
+  const zombies = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
+  for (const z of zombies) { z.hp = 0; z.state = 'slain'; }
+  const targetZ = zombies[0];
+  targetZ.hp = 500; targetZ.maxHp = 500; targetZ.state = 'hunting';
+  targetZ.x = inner.maxX + 4.5; // ~58m outside the East wall
+  targetZ.y = 4.0;              // Laterally offset 8 units north of East Gate (y = 12)!
+
+  // Put wolf inside near the East Gate
+  const wolfSolids = FP.collectSolidObstacles(site, null, { forKind: 'wolf', isMember: true });
+  let exitedEastWall = false;
+  let reachedZombie = false;
+  let directionFlipsInGate = 0;
+  let prevDx = 0;
+
+  for (let s = 0; s < 160; s++) {
+    const res = WC.stepAutonomousDefenders(sim.state, site, 0.12, { time: s * 0.12, isNight: false });
+    const p = res.poses[0];
+    assert.ok(p, 'Expected starter wolf pose');
+    // Must never clip inside any wall or stone gatepost
+    for (const ob of wolfSolids.all) {
+      assert.equal(FP.pointInRect({ x: p.x, y: p.y }, ob.box, 0.20), false, `Wolf clipped solid ${ob.id}`);
+    }
+    const outM = FP.distanceOutsideTerritoryMeters(p.x, p.y, 0, false);
+    assert.ok(outM <= 100.05, `Wolf exceeded 100m outside limit (${outM.toFixed(2)}m)`);
+
+    // Check smooth monotonic transit while passing through the East Gate aperture (x in [29.8, 31.8], y in [9.5, 14.5])
+    if (p.x >= inner.maxX - 1.0 && p.x <= inner.maxX + 1.0 && p.y >= 9.5 && p.y <= 14.5) {
+      const dx = p.x - (res._prevX ?? p.x);
+      if (prevDx !== 0 && Math.sign(dx) !== 0 && Math.sign(dx) !== Math.sign(prevDx)) {
+        directionFlipsInGate++;
+      }
+      if (Math.abs(dx) > 0.01) prevDx = dx;
+    }
+    res._prevX = p.x;
+
+    if (p.x > inner.maxX + 2.0) exitedEastWall = true;
+    if (Math.hypot(p.x - targetZ.x, p.y - targetZ.y) <= 2.6 || targetZ.hp < 500) {
+      reachedZombie = true;
+      break;
+    }
+  }
+  assert.equal(exitedEastWall, true, 'Wolf must smoothly exit through the East Gate beyond the East wall');
+  assert.equal(reachedZombie, true, 'Wolf must smoothly reach & attack laterally offset zombie outside the East wall');
+  assert.ok(directionFlipsInGate <= 1, `Wolf must not oscillate/glitch back and forth inside the gate (flips=${directionFlipsInGate})`);
+
+  // Now kill the outer zombie and place a zombie INSIDE the community — wolf must smoothly re-enter through the East Gate!
+  targetZ.x = 12; targetZ.y = 12; targetZ.hp = 500;
+  let reEntered = false;
+  for (let s = 0; s < 160; s++) {
+    const res = WC.stepAutonomousDefenders(sim.state, site, 0.12, { time: (160 + s) * 0.12, isNight: false });
+    const p = res.poses[0];
+    if (p.x < inner.maxX - 2.0 && p.x > inner.minX + 1.0 && p.y > inner.minY + 1.0 && p.y < inner.maxY - 1.0) {
+      reEntered = true;
+      break;
+    }
+  }
+  assert.equal(reEntered, true, 'Wolf must smoothly re-enter through the gate back into the community');
+});
+
+test('Waves spawn hundreds (220+) of zombies per community, and ZERO zombies reach any community wall in less than 5 minutes (300s)', async () => {
+  const ctx = loadSimEnv();
+  const Z = ctx.EarthGiantTrolls;
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Kyoto', region: 'Japan', lat: 35.0116, lon: 135.7681, water: false });
+  const site = sim.active();
+
+  assert.ok(Z.MIN_ZOMBIES_PER_WAVE >= 200, `Expected hundreds of zombies per wave (>= 200), got ${Z.MIN_ZOMBIES_PER_WAVE}`);
+  assert.equal(Z.MIN_WALL_ARRIVAL_SEC, 300, 'Minimum wall arrival time must be 300 seconds (5 minutes)');
+
+  const localWave1 = Z.trollsForSite(sim.state, site.id);
+  assert.ok(localWave1.length >= 200, `Wave 1 must spawn hundreds of zombies (>= 200) for the player community (got ${localWave1.length})`);
+
+  // Verify ALL spawned zombies across ALL communities start strictly >= MIN_WALL_CLEARANCE_UNITS outside walls
+  const allComms = [...sim.state.sites, ...(sim.state.communityLife?.outposts || [])];
+  const byId = new Map(allComms.map(c => [c.id, c]));
+  for (const z of Z.activeTrolls(sim.state)) {
+    const targetComm = byId.get(z.targetSiteId);
+    const outUnits = Z.distanceOutsidePerimeterUnits(z.x, z.y, targetComm);
+    assert.ok(outUnits >= Z.MIN_WALL_CLEARANCE_UNITS, `Zombie ${z.id} spawned too close to walls (${outUnits.toFixed(1)} units)`);
+    assert.ok(Z.etaSecondsFor(z, targetComm, true) >= 300, `Even at permanent night, ETA must be >= 300s (got ${Z.etaSecondsFor(z, targetComm, true)}s)`);
+  }
+
+  // Simulate a FULL 300.0 seconds (5 minutes) under WORST-CASE permanent Full Moon Night speed boost (1.22x)!
+  // Zero zombies may touch or breach ANY community's walls within 300 seconds!
+  const dt = 0.25;
+  const stepsFor5Min = 300 / dt; // 1200 steps = 300.0 seconds
+  for (let s = 0; s < stepsFor5Min; s++) {
+    Z.stepLive(sim.state, site, dt, { sims: [], wolves: [], isNight: true });
+  }
+  let minDistAfter5Min = Infinity;
+  for (const z of Z.activeTrolls(sim.state)) {
+    const targetComm = byId.get(z.targetSiteId);
+    const outUnits = Z.distanceOutsidePerimeterUnits(z.x, z.y, targetComm);
+    if (outUnits < minDistAfter5Min) minDistAfter5Min = outUnits;
+    assert.ok(outUnits > 0.5, `Zombie ${z.name} reached ${targetComm?.name}'s wall before 5 minutes elapsed! (outUnits=${outUnits.toFixed(2)})`);
+  }
+  assert.ok(minDistAfter5Min > 2.0, `All zombies must still be outside walls after exactly 5m00s (closest=${minDistAfter5Min.toFixed(2)} units)`);
+
+  // Continue marching past 5 minutes -> vanguard Infected zombies MUST eventually arrive at the walls!
+  let arrivedAtWall = false;
+  for (let s = 0; s < 400; s++) {
+    Z.stepLive(sim.state, site, 0.25, { sims: [], wolves: [], isNight: true });
+    const closest = Math.min(...Z.trollsForSite(sim.state, site.id).map(z => Z.distanceOutsidePerimeterUnits(z.x, z.y, site)));
+    if (closest <= 1.2) {
+      arrivedAtWall = true;
+      break;
+    }
+  }
+  assert.equal(arrivedAtWall, true, 'Zombies must eventually arrive at community walls after the 5-minute march');
+});
+
+test('Zombie waves are sent to ALL communities, and every other community has the exact same protections as the primary player', async () => {
+  const ctx = loadSimEnv();
+  const FP = ctx.EarthFlightPhysics;
+  const WC = ctx.EarthDragonStable;
+  const Z = ctx.EarthGiantTrolls;
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Stone Town', region: 'Zanzibar', lat: -6.1622, lon: 39.1922, water: false });
+
+  const allComms = [...sim.state.sites, ...(sim.state.communityLife?.outposts || [])];
+  assert.ok(allComms.length >= 2, `Expected multiple communities in world (got ${allComms.length})`);
+
+  for (const comm of allComms) {
+    // 1. Hundreds of zombies sent to EVERY community (not just the primary player!)
+    const horde = Z.trollsForSite(sim.state, comm.id);
+    assert.ok(horde.length >= 200, `Community ${comm.name} must receive a full 200+ zombie wave (got ${horde.length})`);
+
+    // 2. Identical Giant Wolf Cave + Starter Majestic Wolf Pack (2+ wolves)
+    assert.equal(WC.hasStable(comm), true, `Community ${comm.name} must have a Giant Wolf Cave`);
+    assert.ok((comm.dragonStable?.dragons?.length || 0) >= 2, `Community ${comm.name} must have starter Majestic Wolves`);
+    assert.ok(comm.dragonStable.dragons.every(w => w.homeSiteId === comm.id), `Wolves in ${comm.name} must belong to that community`);
+
+    // 3. Identical tall 4-sided indestructible perimeter walls + 4 auto-closing magically-shielded gates
+    const tLevel = comm.territoryLevel || 0;
+    const hasWater = Boolean(comm.water || comm.coastal);
+    const segs = FP.perimeterWallSegments(comm.communityLife?.border?.defence?.stage || 0, tLevel, hasWater);
+    const wallSides = new Set(segs.filter(s => s.kind === 'wall').map(s => s.side));
+    assert.deepEqual([...wallSides].sort(), ['east', 'north', 'south', 'west'], `${comm.name} must have tall walls on all 4 sides`);
+    const gates = FP.perimeterGates(tLevel, hasWater, comm);
+    assert.equal(gates.length, 4, `${comm.name} must have 4 auto-closing member-only gates`);
+    assert.equal(FP.perimeterGateways(0, tLevel, hasWater, comm, { forKind: 'zombie' }).length, 0, `${comm.name} must block zombies at all gates`);
+  }
+
+  // 4. Verify off-screen neighbouring community's Majestic Wolves actively defend it when zombies enter its 100m perimeter!
+  const playerSite = sim.active();
+  const otherComm = allComms.find(c => c.id !== playerSite.id);
+  assert.ok(otherComm, 'Expected at least one neighbouring community');
+  const otherHorde = Z.trollsForSite(sim.state, otherComm.id);
+  const otherRect = FP.perimeterBounds(otherComm.territoryLevel || 0, Boolean(otherComm.water));
+  const scout = otherHorde[0];
+  scout.x = 12;
+  scout.y = otherRect.minY - 3.0; // Inside otherComm's 100m wolf defense zone!
+  const hpBefore = scout.hp;
+  for (let s = 0; s < 12; s++) {
+    Z.stepLive(sim.state, playerSite, 0.25, { sims: [], wolves: [], isNight: false });
+  }
+  assert.ok(scout.hp < hpBefore, `Neighbouring community ${otherComm.name}'s wolves must actively defend it against its zombie wave!`);
+});
+
 test('index.html loads all updated enchanted forest, wolf, zombie, and night-audio assets with valid SHA-256 hashes and zero dragon/wizard labels', () => {
   const html = fs.readFileSync(path.join(ROOT, 'common-earth/index.html'), 'utf8');
   for (const asset of [
