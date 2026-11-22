@@ -348,12 +348,13 @@
       const map = getRuntimeMap(site);
       const st = map.get(wolf.id);
       const cave = stableLocation(site) || { x: -4.8, y: 6.2 };
+      const denFront = { x: cave.x, y: cave.y + 2.45 };
       if (st) {
         st.recoverTimer = 6.5;
         st.state = 'retreat';
         st.targetId = null;
-        st.x = cave.x;
-        st.y = cave.y;
+        // Wolf sprints back to the clear mossy den mouth instead of teleporting through walls
+        st.retreatGoal = denFront;
       }
       const msg = attackerName + ' bit ' + wolf.name + ' badly! ' + wolf.name + ' retreated to the Giant Wolf Cave to mend its wounds.';
       record(site, world, msg);
@@ -663,13 +664,76 @@
     if (!pack.length) return empty;
 
     const cave = stableLocation(site) || { x: -4.8, y: 6.2 };
+    const denFront = { x: cave.x, y: cave.y + 2.45 };
     const wb = wolfBoundsForSite(site);
     const step = clamp(dt || 0.016, 0.001, 0.25);
     const visualTime = Number.isFinite(sceneContext.time) ? sceneContext.time : ((site._dragonClock || 0) + step);
     site._dragonClock = visualTime;
     const isNight = Boolean(sceneContext.isNight);
 
-    // Synchronized Full Moon pack howl cycle every ~11s during night (6.2s of pack howling together!)
+    const FP = root.EarthFlightPhysics;
+    const fortStage = site.communityLife?.border?.defence?.stage || 0;
+    const { lvl: tLevel, hasWater } = territoryParams(site);
+    const solidSet = FP?.collectSolidObstacles
+      ? FP.collectSolidObstacles(site, sceneContext?.solids)
+      : { walls: [], buildings: [], all: [] };
+    const gateways = FP?.perimeterGateways
+      ? FP.perimeterGateways(fortStage, tLevel, hasWater, site)
+      : [];
+    const WOLF_RADIUS = 0.36;
+
+    const wallBetween = (ax, ay, bx, by) => {
+      if (!FP?.segmentIntersectsBox || !solidSet.walls.length) return null;
+      for (const wOb of solidSet.walls) {
+        if (FP.segmentIntersectsBox(ax, ay, bx, by, wOb.box, 0.14).hit) return wOb;
+      }
+      return null;
+    };
+
+    // If an intact solid perimeter wall blocks the straight path from (sx, sy) to (gx, gy),
+    // steer the wolf toward the closest passable gateway or smashed wall breach!
+    const steerAroundWalls = (sx, sy, gx, gy) => {
+      if (!gateways.length || !wallBetween(sx, sy, gx, gy)) return { x: gx, y: gy, viaGate: false };
+      let bestGate = null;
+      let bestCost = Infinity;
+      for (const g of gateways) {
+        const dToGate = Math.hypot(g.x - sx, g.y - sy);
+        const dFromGate = Math.hypot(gx - g.x, gy - g.y);
+        const cost = dToGate + dFromGate;
+        if (cost < bestCost) {
+          bestCost = cost;
+          bestGate = g;
+        }
+      }
+      if (!bestGate) return { x: gx, y: gy, viaGate: false };
+      // Once close to the gate threshold, aim slightly through the doorway onto the far side!
+      const dGate = Math.hypot(bestGate.x - sx, bestGate.y - sy);
+      if (dGate < 1.15) {
+        const pushDx = gx - bestGate.x;
+        const pushDy = gy - bestGate.y;
+        const pLen = Math.hypot(pushDx, pushDy) || 1;
+        return { x: bestGate.x + (pushDx / pLen) * 1.6, y: bestGate.y + (pushDy / pLen) * 1.6, viaGate: true };
+      }
+      return { x: bestGate.x, y: bestGate.y, viaGate: true };
+    };
+
+    const moveWolfGrounded = (st, destX, destY) => {
+      const clampedDest = clampWolfPosition(site, destX, destY);
+      if (!FP?.moveWithSolidCollision || !solidSet.all.length) {
+        const moved = Math.hypot(clampedDest.x - st.x, clampedDest.y - st.y);
+        st.x = clampedDest.x;
+        st.y = clampedDest.y;
+        return { moved, hitWall: null, hitBuilding: null };
+      }
+      const res = FP.moveWithSolidCollision(st.x, st.y, clampedDest.x, clampedDest.y, WOLF_RADIUS, solidSet);
+      const safe = clampWolfPosition(site, res.x, res.y);
+      const moved = Math.hypot(safe.x - st.x, safe.y - st.y);
+      st.x = safe.x;
+      st.y = safe.y;
+      return { moved, hitWall: res.hitWall, hitBuilding: res.hitBuilding };
+    };
+
+    // Synchronized Full Moon pack howl cycle every ~11.5s during night (6.4s of pack howling together!)
     const moonCycle = visualTime % 11.5;
     const packMoonChorus = isNight && moonCycle < 6.4;
 
@@ -689,20 +753,24 @@
 
       let st = map.get(wolf.id);
       if (!st) {
-        const initAng = i * 2.15 + 0.6;
-        const initPos = clampWolfPosition(site, cave.x + Math.cos(initAng) * (3.2 + ring * 1.4), cave.y + Math.sin(initAng) * (2.6 + ring * 1.2));
+        const initAng = 0.65 + i * 1.15;
+        const rawPos = clampWolfPosition(site, denFront.x + Math.cos(initAng) * (1.8 + ring * 0.8), denFront.y + Math.sin(initAng) * (1.4 + ring * 0.6));
+        const resolvedInit = FP?.moveWithSolidCollision
+          ? FP.moveWithSolidCollision(rawPos.x, rawPos.y, rawPos.x, rawPos.y, WOLF_RADIUS, solidSet)
+          : rawPos;
         st = {
-          x: initPos.x,
-          y: initPos.y,
+          x: resolvedInit.x,
+          y: resolvedInit.y,
           z: 0,
           angle: 0,
           stridePhase: i * 1.4,
+          speedRatio: 0,
           roamAngle: initAng,
           biteTimer: 0,
-          biteCooldown: 0.2 + (i % 3) * 0.16,
+          biteCooldown: 0.25 + (i % 3) * 0.16,
           howlTimer: 0,
           recoverTimer: 0,
-          state: 'roam', // 'roam' | 'intercept' | 'guard' | 'attack' | 'howling' | 'retreat'
+          state: 'roam',
           targetId: null,
           targetKind: null,
           targetName: null,
@@ -711,6 +779,9 @@
         };
         map.set(wolf.id, st);
       }
+
+      const prevX = st.x;
+      const prevY = st.y;
 
       if (st.biteTimer > 0) st.biteTimer = Math.max(0, st.biteTimer - step);
       if (st.biteCooldown > 0) st.biteCooldown = Math.max(0, st.biteCooldown - step);
@@ -722,7 +793,6 @@
         wolf.hp = clamp((wolf.hp ?? 280) + 6 * step, 1, wolf.maxHp || 280);
       }
 
-      // Filter live threats (an earlier wolf in this step may have just killed a zombie)
       const activeThreats = threats.filter(th => {
         if (th.kind === 'troll') return th.ref && th.ref.state !== 'slain' && th.ref.hp > 0;
         if (th.kind === 'campaign') return th.ref && th.ref.phase !== 'return' && (th.ref.strength || 0) > 0;
@@ -730,40 +800,35 @@
         return !th.ref?.dead && (th.ref?.hp == null || th.ref.hp > 0);
       });
 
-      // Threats inside or within the wolves' 100m outer hunt perimeter
       const inRangeThreats = activeThreats.filter(th => distanceOutsideTerritoryMeters(site, th.x, th.y) <= MAX_OUTSIDE_METERS + 4);
-      const immediateThreat = inRangeThreats.find(th => Math.hypot(th.x - st.x, th.y - st.y) <= 8.5);
+      const immediateThreat = inRangeThreats.find(th => Math.hypot(th.x - st.x, th.y - st.y) <= 8.5 && !wallBetween(st.x, st.y, th.x, th.y));
 
       if (st.recoverTimer > 0) {
-        // Recovering at the Giant Wolf Cave
         st.state = 'retreat';
-        const dx = cave.x - st.x;
-        const dy = cave.y - st.y;
+        const goal = st.retreatGoal || denFront;
+        const steer = steerAroundWalls(st.x, st.y, goal.x, goal.y);
+        const dx = steer.x - st.x;
+        const dy = steer.y - st.y;
         const d = Math.hypot(dx, dy);
-        if (d > 1.2) {
-          const spd = 7.2 * speedBonus * step;
-          st.x += (dx / d) * Math.min(d, spd);
-          st.y += (dy / d) * Math.min(d, spd);
-          st.stridePhase += step * 11;
-          st.angle = Math.atan2((dx + dy) * TILT, dx - dy);
+        if (d > 0.75) {
+          const spd = 7.4 * speedBonus * step;
+          const move = Math.min(d, spd);
+          moveWolfGrounded(st, st.x + (dx / d) * move, st.y + (dy / d) * move);
         }
       } else if ((packMoonChorus || st.howlTimer > 0) && !immediateThreat) {
         // FULL MOON PACK HOWLING: wolves gather in moonlit forest clearing and howl together at the Full Moon!
         st.state = 'howling';
         howlingCount++;
-        const gatherX = clamp(cave.x + 2.8 + (i % 3 - 1) * 1.9, wb.territoryMinX + 1.5, wb.territoryMaxX - 1.5);
-        const gatherY = clamp(cave.y + 1.4 + Math.floor(i / 3) * 1.6, wb.territoryMinY + 1.5, wb.territoryMaxY - 1.5);
-        const gx = gatherX - st.x;
-        const gy = gatherY - st.y;
+        const gatherX = clamp(denFront.x + 1.4 + (i % 3 - 1) * 1.8, wb.territoryMinX + 1.5, wb.territoryMaxX - 1.5);
+        const gatherY = clamp(denFront.y + 0.8 + Math.floor(i / 3) * 1.5, wb.territoryMinY + 1.5, wb.territoryMaxY - 1.5);
+        const steer = steerAroundWalls(st.x, st.y, gatherX, gatherY);
+        const gx = steer.x - st.x;
+        const gy = steer.y - st.y;
         const gd = Math.hypot(gx, gy);
         if (gd > 0.65 && st.howlTimer <= 0) {
-          const move = Math.min(gd, 6.2 * speedBonus * step);
-          st.x += (gx / gd) * move;
-          st.y += (gy / gd) * move;
-          st.stridePhase += step * 8.5;
-          st.angle = Math.atan2((gx + gy) * TILT, gx - gy);
+          const move = Math.min(gd, 6.0 * speedBonus * step);
+          moveWolfGrounded(st, st.x + (gx / gd) * move, st.y + (gy / gd) * move);
         } else {
-          // Sit back on haunches facing the Full Moon in the upper-right sky
           st.angle = -0.35 + (i % 2 === 0 ? 0.14 : -0.14);
         }
       } else if (activeThreats.length > 0) {
@@ -776,16 +841,16 @@
 
         const tx = target.x;
         const ty = target.y;
-        // Clamp chase destination strictly within the 100-meter max outside-territory limit!
         const clampedGoal = clampWolfPosition(site, tx, ty);
         const distToTarget = Math.hypot(tx - st.x, ty - st.y);
-        const biteReach = 2.45;
-        const sprintSpeed = 10.6 * speedBonus;
+        const blockedByWall = Boolean(wallBetween(st.x, st.y, tx, ty));
+        const biteReach = 2.35;
+        const sprintSpeed = 9.6 * speedBonus;
 
         if (st.announcedTargetId !== target.id && distToTarget <= 11.5) {
           st.announcedTargetId = target.id;
           events.push({
-            type: 'dragonIntercept', // kept event type compatible for street.js callouts
+            type: 'dragonIntercept',
             dragon: wolf,
             wolf,
             target,
@@ -797,17 +862,15 @@
           });
         }
 
-        if (distToTarget > biteReach) {
-          const gx = clampedGoal.x - st.x;
-          const gy = clampedGoal.y - st.y;
+        if (distToTarget > biteReach || blockedByWall) {
+          const steer = steerAroundWalls(st.x, st.y, clampedGoal.x, clampedGoal.y);
+          const gx = steer.x - st.x;
+          const gy = steer.y - st.y;
           const gDist = Math.hypot(gx, gy);
           if (gDist > 0.45) {
             st.state = 'intercept';
             const stepDist = Math.min(gDist, sprintSpeed * step);
-            st.x += (gx / gDist) * stepDist;
-            st.y += (gy / gDist) * stepDist;
-            st.stridePhase += step * 14.5;
-            st.angle = Math.atan2((gx + gy) * TILT, gx - gy);
+            moveWolfGrounded(st, st.x + (gx / gDist) * stepDist, st.y + (gy / gDist) * stepDist);
           } else {
             // Holding the exact 100-meter forest perimeter line, snarling at zombies beyond 100m!
             st.state = 'guard';
@@ -817,29 +880,31 @@
               clampedGoal.x + Math.cos(st.roamAngle) * 0.55,
               clampedGoal.y + Math.sin(st.roamAngle) * 0.55
             );
-            st.x = patrolPos.x;
-            st.y = patrolPos.y;
+            moveWolfGrounded(st, patrolPos.x, patrolPos.y);
             st.angle = Math.atan2(((tx - st.x) + (ty - st.y)) * TILT, (tx - st.x) - (ty - st.y));
           }
         } else {
-          // FIERCE WOLF MELEE LUNGE & FANG BITE!
+          // FIERCE WOLF MELEE LUNGE & FANG BITE (strictly grounded & solid-colliding!)
           st.state = 'attack';
           const dir = i % 2 === 0 ? 1 : -1;
-          st.roamAngle += dir * 2.4 * step;
+          st.roamAngle += dir * 2.2 * step;
           const orb = clampWolfPosition(
             site,
             tx + Math.cos(st.roamAngle) * 1.45,
             ty + Math.sin(st.roamAngle) * 1.45
           );
-          const pull = Math.min(1, step * 6.5);
-          st.x += (orb.x - st.x) * pull;
-          st.y += (orb.y - st.y) * pull;
-          st.stridePhase += step * 16;
+          const ox = orb.x - st.x;
+          const oy = orb.y - st.y;
+          const od = Math.hypot(ox, oy);
+          if (od > 0.1) {
+            const pull = Math.min(od, 6.2 * speedBonus * step);
+            moveWolfGrounded(st, st.x + (ox / od) * pull, st.y + (oy / od) * pull);
+          }
           st.angle = Math.atan2(((tx - st.x) + (ty - st.y)) * TILT, (tx - st.x) - (ty - st.y));
 
-          if (st.biteCooldown <= 0) {
-            st.biteCooldown = 0.88;
-            st.biteTimer = 0.46;
+          if (st.biteCooldown <= 0 && !wallBetween(st.x, st.y, tx, ty)) {
+            st.biteCooldown = 1.05;
+            st.biteTimer = 0.42;
             st.biteTarget = { x: tx, y: ty, name: target.name, id: target.id };
 
             const hungerFactor = wolf.hunger > 15 ? 1.0 : 0.8;
@@ -854,7 +919,7 @@
             let msg = '';
 
             if (target.kind === 'troll' && root.EarthGiantTrolls) {
-              const rawDmg = Math.round(92 * speedBonus * hungerFactor);
+              const rawDmg = Math.round(62 * speedBonus * hungerFactor);
               const hit = root.EarthGiantTrolls.attackTroll(world, site, target.id, {
                 source: 'wolfBite',
                 damage: rawDmg,
@@ -908,7 +973,7 @@
                 : wolf.name + ' lunged and bit ' + target.name + ' (-55 HP)!';
               if (killed) record(site, world, msg);
             } else {
-              dealt = Math.round(88 * speedBonus * hungerFactor);
+              dealt = Math.round(72 * speedBonus * hungerFactor);
               const res = sceneContext.onEnemyHit?.(target, dealt, wolf);
               killed = Boolean(res?.killed);
               if (killed) {
@@ -941,7 +1006,7 @@
           }
         }
       } else {
-        // Peaceful Majestic Wolf roaming through the Enchanted Forest and out to the 100m perimeter!
+        // Peaceful Majestic Wolf roaming through the Enchanted Forest on solid ground (never through walls/buildings!)
         st.state = 'roam';
         st.targetId = null;
         st.targetKind = null;
@@ -949,26 +1014,40 @@
         st.announcedTargetId = null;
         st.biteTarget = null;
         const roamT = visualTime * (0.28 + ring * 0.05) + i * 2.3;
-        const rx = 11.0 + ring * 4.5;
-        const ry = 9.5 + ring * 3.8;
+        const rx = 10.5 + ring * 4.2;
+        const ry = 9.0 + ring * 3.6;
         const goal = clampWolfPosition(site, 12 + Math.cos(roamT) * rx, 11 + Math.sin(roamT) * ry);
-        const dx = goal.x - st.x;
-        const dy = goal.y - st.y;
+        const steer = steerAroundWalls(st.x, st.y, goal.x, goal.y);
+        const dx = steer.x - st.x;
+        const dy = steer.y - st.y;
         const dist = Math.hypot(dx, dy);
-        if (dist > 0.2) {
+        if (dist > 0.25) {
           const move = Math.min(dist, 4.4 * speedBonus * step);
-          st.x += (dx / dist) * move;
-          st.y += (dy / dist) * move;
-          st.stridePhase += step * 8.5;
-          st.angle = Math.atan2((dx + dy) * TILT, dx - dy);
+          moveWolfGrounded(st, st.x + (dx / dist) * move, st.y + (dy / dist) * move);
         }
       }
 
-      // HARD INVARIANT: Majestic Wolves NEVER travel more than 100.0 meters outside community territory!
+      // HARD INVARIANT: Majestic Wolves NEVER travel more than 100.0 meters outside community territory
+      // and NEVER overlap any solid wall or building!
       const finalClamped = clampWolfPosition(site, st.x, st.y);
       st.x = finalClamped.x;
       st.y = finalClamped.y;
       st.z = 0;
+
+      // Ground-coupled locomotion: stridePhase advances STRICTLY from real paw-over-earth distance moved!
+      const realDx = st.x - prevX;
+      const realDy = st.y - prevY;
+      const movedDist = Math.hypot(realDx, realDy);
+      const instantSpeed = movedDist / step;
+      st.speedRatio = st.speedRatio != null
+        ? st.speedRatio + (clamp(instantSpeed / 8.5, 0, 1.15) - st.speedRatio) * Math.min(1, step * 10)
+        : clamp(instantSpeed / 8.5, 0, 1.15);
+      if (movedDist > 0.002) {
+        st.stridePhase = (st.stridePhase || 0) + movedDist * 2.85;
+        if (st.state !== 'attack' && st.state !== 'guard' && st.state !== 'howling') {
+          st.angle = Math.atan2((realDx + realDy) * TILT, realDx - realDy);
+        }
+      }
 
       poses.push({
         wolf,
@@ -978,13 +1057,15 @@
         z: 0,
         angle: st.angle,
         stridePhase: st.stridePhase,
+        speedRatio: st.state === 'howling' ? 0 : st.speedRatio,
+        moving: movedDist > 0.002,
         size: st.state === 'attack' || st.state === 'intercept' ? 1.04 : 0.96,
         depth: st.x + st.y + 0.48,
         state: st.state,
         defending: st.state === 'attack' || st.state === 'intercept' || st.state === 'guard',
         howling: st.state === 'howling',
         biting: st.biteTimer > 0,
-        breathingFire: st.biteTimer > 0, // alias for legacy render hooks
+        breathingFire: st.biteTimer > 0,
         biteTarget: st.biteTimer > 0 ? st.biteTarget : null,
         fireTarget: st.biteTimer > 0 ? st.biteTarget : null,
         targetName: st.targetName,
@@ -1012,6 +1093,8 @@
         z: 0,
         angle: st.angle,
         stridePhase: st.stridePhase || 0,
+        speedRatio: st.state === 'howling' ? 0 : (st.speedRatio || 0),
+        moving: (st.speedRatio || 0) > 0.05,
         size: st.state === 'attack' || st.state === 'intercept' ? 1.04 : 0.96,
         depth: st.x + st.y + 0.48,
         state: st.state,

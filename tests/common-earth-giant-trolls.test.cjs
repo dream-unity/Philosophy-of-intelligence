@@ -242,6 +242,131 @@ test('Full Moon Night triggers continuous never-stopping Zombie howling, synchro
   assert.equal(dayStatus.wolfHowling, false);
 });
 
+test('Walls and all buildings are 100% solid: neither zombies nor wolves can pass through intact walls or buildings', async () => {
+  const ctx = loadSimEnv();
+  const FP = ctx.EarthFlightPhysics;
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Stone Town', region: 'Zanzibar', lat: -6.1622, lon: 39.1922, water: false });
+  const site = sim.active();
+  // Fortify perimeter walls to stage 2 (solid walls surrounding the community)
+  site.communityLife ||= {};
+  site.communityLife.border ||= {};
+  site.communityLife.border.defence = { stage: 2 };
+
+  const solids = FP.collectSolidObstacles(site);
+  assert.ok(solids.walls.length >= 6, 'Stage 2 fortification must produce solid perimeter walls');
+  assert.ok(solids.buildings.length >= 5, 'Market, Homes, Giant Wolf Cave, and Airbase must all be registered as solid buildings');
+
+  // 1. High-speed sprint straight at the solid north-west wall MUST stop outside the wall — never tunnel through!
+  const nwWall = solids.walls.find(w => w.wallId === 'north-west');
+  assert.ok(nwWall, 'Expected intact north-west perimeter wall');
+  const wallMinY = nwWall.box[1];
+  const chargeRes = FP.moveWithSolidCollision(2.0, wallMinY - 1.5, 2.0, wallMinY + 6.0, 0.36, solids);
+  assert.ok(chargeRes.hitWall, 'Charging into an intact wall must report hitWall');
+  assert.ok(chargeRes.y <= wallMinY - 0.34, `Entity must NOT penetrate or cross intact wall (y=${chargeRes.y.toFixed(3)}, wallMinY=${wallMinY})`);
+
+  // 2. Charging directly through the solid Giant Wolf Cave & Market building MUST NEVER enter their solid footprint!
+  const marketOb = solids.buildings.find(b => b.id === 'market');
+  assert.ok(marketOb, 'Market building must be a solid obstacle');
+  const bldgRes = FP.moveWithSolidCollision(marketOb.cx, marketOb.box[1] - 1.2, marketOb.cx, marketOb.cy, 0.36, solids);
+  assert.ok(bldgRes.hitBuilding, 'Moving into a building must report hitBuilding');
+  const insideMarket = FP.pointInRect({ x: bldgRes.x, y: bldgRes.y }, marketOb.box, 0.30);
+  assert.equal(insideMarket, false, 'Entity must remain strictly outside solid building footprint');
+
+  // 3. Wolves roaming & intercepting NEVER clip inside any intact wall or solid building AND remain strictly grounded (z === 0)
+  const zombies = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
+  for (const z of zombies) { z.hp = 0; z.state = 'slain'; }
+  const scout = zombies[0];
+  scout.hp = 400; scout.maxHp = 400; scout.state = 'approaching';
+  scout.x = 2.0; scout.y = wallMinY - 3.5;
+
+  let prevPhase = null;
+  let movedSteps = 0;
+  for (let s = 0; s < 80; s++) {
+    const res = ctx.EarthDragonStable.stepAutonomousDefenders(sim.state, site, 0.2, { time: s * 0.2, isNight: false });
+    for (const p of res.poses) {
+      assert.equal(p.z, 0, 'Wolves must stay strictly grounded on land (z === 0)');
+      for (const ob of solids.all) {
+        assert.equal(
+          FP.pointInRect({ x: p.x, y: p.y }, ob.box, 0.20),
+          false,
+          `Wolf ${p.wolf.name} clipped into solid ${ob.id} at (${p.x.toFixed(2)}, ${p.y.toFixed(2)})`
+        );
+      }
+      if (p.wolf.id === res.poses[0].wolf.id) {
+        if (prevPhase != null && p.moving) {
+          assert.ok(p.stridePhase > prevPhase, 'Moving wolf must advance stridePhase proportionally to ground displacement');
+          movedSteps++;
+        }
+        prevPhase = p.stridePhase;
+      }
+    }
+  }
+  assert.ok(movedSteps >= 5, 'Expected wolf to run on the ground across multiple steps');
+});
+
+test('Zombies blocked by a solid perimeter wall stop, bash it until destroyed, then breach through the rubble and fiercely bite wolves', async () => {
+  const ctx = loadSimEnv();
+  const FP = ctx.EarthFlightPhysics;
+  const sim = ctx.CommonEarthSim.create({ storage: null });
+  await sim.perform('found', { name: 'Mombasa', region: 'Kenya', lat: -4.0381, lon: 39.688, water: false });
+  const site = sim.active();
+  site.communityLife ||= {};
+  site.communityLife.border ||= {};
+  site.communityLife.border.defence = { stage: 2 };
+
+  const solids = FP.collectSolidObstacles(site);
+  const nwWall = solids.walls.find(w => w.wallId === 'north-west');
+  assert.ok(nwWall);
+  const wallMinY = nwWall.box[1];
+  const wallMaxY = nwWall.box[3];
+
+  const zombies = ctx.EarthGiantTrolls.trollsForSite(sim.state, site.id);
+  for (let i = 1; i < zombies.length; i++) { zombies[i].hp = 0; zombies[i].state = 'slain'; }
+  const z = zombies[0];
+  z.x = 2.0;
+  z.y = wallMinY - 1.2;
+  z.state = 'hunting';
+  z.attackPhase = 'chase';
+
+  const insideSim = [{ id: 'sim-inside', name: 'Nadia', x: 2.0, y: wallMaxY + 2.5, downed: false }];
+  let wallStrikes = 0;
+  let wallBreached = false;
+  let crossedAfterBreach = false;
+
+  for (let step = 0; step < 120; step++) {
+    const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.2, { sims: insideSim, wolves: [], isNight: false });
+    for (const ev of evs) {
+      if (ev.type === 'wallStrike') wallStrikes++;
+      if (ev.type === 'wallBreach') wallBreached = true;
+    }
+    if (!FP.isWallDestroyed(site, 'north-west')) {
+      assert.ok(z.y <= wallMinY - 0.28, `Zombie passed through intact wall before destroying it! (y=${z.y.toFixed(2)}, wallMinY=${wallMinY})`);
+    } else if (z.y > wallMaxY) {
+      crossedAfterBreach = true;
+      break;
+    }
+  }
+  assert.ok(wallStrikes >= 3, `Zombie must repeatedly smash the blocking solid wall (got ${wallStrikes} strikes)`);
+  assert.equal(wallBreached, true, 'Zombie must destroy the blocking perimeter wall into rubble');
+  assert.equal(FP.isWallDestroyed(site, 'north-west'), true, 'Destroyed wall must be recorded as ruined');
+  assert.equal(crossedAfterBreach, true, 'Zombie must cross through the smashed wall breach ONLY after destroying it');
+
+  // Verify hyper-aggressive zombie bite deals substantial damage (>= 40 HP) to a Majestic Wolf!
+  const wolf = site.dragonStable.dragons[0];
+  const hpBefore = wolf.hp;
+  z.x = 12; z.y = 12; z._wallTarget = null; z.attackPhase = 'chase'; z.attackTimer = 0;
+  const mockWolf = [{ wolf, dragon: wolf, x: 12.6, y: 12.1 }];
+  let biteDmg = 0;
+  for (let i = 0; i < 40; i++) {
+    const evs = ctx.EarthGiantTrolls.stepLive(sim.state, site, 0.15, { sims: [], wolves: mockWolf, isNight: false });
+    const hit = evs.find(e => e.type === 'wolfStrike');
+    if (hit) { biteDmg = hit.damage; break; }
+  }
+  assert.ok(biteDmg >= 40, `Hyper-aggressive zombie bite against wolf must deal >= 40 HP (got ${biteDmg})`);
+  assert.equal(wolf.hp, hpBefore - biteDmg);
+});
+
 test('index.html loads all updated enchanted forest, wolf, zombie, and night-audio assets with valid SHA-256 hashes and zero dragon/wizard labels', () => {
   const html = fs.readFileSync(path.join(ROOT, 'common-earth/index.html'), 'utf8');
   for (const asset of [

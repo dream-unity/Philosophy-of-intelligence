@@ -212,213 +212,308 @@
   }
 
   /**
-   * Draws a richly sculpted Majestic Wolf in isometric perspective:
-   * - Running/striding muscular quadruped anatomy with thick fur mane ruff & bushy tail
-   * - Fierce fang-lunge & silver slash arc when biting zombies (`biting = true`)
-   * - Noble seated/reared Full-Moon Howling silhouette with head tilted high skyward
-   *   and visible silver-cyan acoustic howl rings rising toward the Full Moon (`howling = true`)
+   * Draws a grounded, anatomically sculpted Majestic Wolf in isometric perspective:
+   * - True paw-to-earth ground contact (y = 0): planted paws stay locked on the ground
+   *   plane while hips/shoulders flex through a real 2-segment articulated canine gait!
+   * - Muscular wolf silhouette (deep sloping chest, tucked waist, haunches, layered shoulder
+   *   mane ruff, bushy feathered tail, alert pointed ears — ZERO floating oval).
+   * - Subtle earthy dust kicks behind pushing paws when running across the land.
+   * - Noble seated Full-Moon howling pose with acoustic rings when `howling = true`.
    */
-  function drawMajesticWolf(g, sx, sy, s, ang = 0, time = 0, palette = {}, howling = false, biting = false, stridePhase = null) {
+  function drawMajesticWolf(g, sx, sy, s, ang = 0, time = 0, palette = {}, howling = false, biting = false, stridePhase = null, speedRatio = null) {
     const furCol = palette.fur || palette.scale || '#cfd8e2';
     const accentCol = palette.accent || '#f2f7ff';
-    const maneCol = palette.mane || palette.wing || '#7c8b9c';
-    const auraCol = palette.aura || '#b8dcff';
+    const maneCol = palette.mane || palette.wing || '#6e7e90';
+    const darkFur = '#2a3440';
     const eyeCol = palette.eye || '#ffd452';
 
     const facingLeft = Math.cos(ang) < -0.05;
     const faceDir = facingLeft ? -1 : 1;
-    const phase = stridePhase != null ? stridePhase : time * 9.5;
-    const stride = howling ? 0 : Math.sin(phase);
-    const bounce = howling ? 0 : Math.abs(stride) * s * 0.08;
+    const phase = stridePhase != null ? stridePhase : time * 8.0;
+    const moveAmp = howling
+      ? 0
+      : (speedRatio != null ? Math.min(1.1, Math.max(0, speedRatio)) : 0.72);
+    const breath = Math.sin(time * 2.8) * s * 0.014;
+
+    // 2-segment articulated canine leg with strict y = 0 ground contact during stance phase
+    function drawCanineLeg(hipX, hipY, legPhase, isFront, isNear, upperCol, lowerCol) {
+      const cyc = Math.sin(legPhase);
+      const fwd = Math.cos(legPhase);
+      const strideReach = s * (isFront ? 0.30 : 0.32) * moveAmp;
+      const liftH = s * (isFront ? 0.14 : 0.13) * moveAmp;
+      // Foot stays LOCKED on the ground plane (y = 0) during stance (cyc <= 0), lifts only during forward swing!
+      const pawX = hipX + (isFront ? s * 0.04 : -s * 0.05) + fwd * strideReach;
+      const pawY = (cyc > 0 ? -cyc * liftH : 0) + (isNear ? s * 0.02 : -s * 0.02);
+
+      // Ground contact micro-shadow directly beneath planted paws
+      if (cyc <= 0.18) {
+        g.fillStyle = 'rgba(10, 18, 14, 0.28)';
+        g.beginPath();
+        g.ellipse(pawX, isNear ? s * 0.02 : -s * 0.02, s * 0.10, s * 0.036, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+
+      // Compute anatomically bent middle joint (front elbow bends slightly back; hind hock bends back sharply)
+      const midX = (hipX + pawX) * 0.5 + (isFront ? -s * 0.075 : -s * 0.125) * (0.75 + 0.35 * Math.max(0, cyc));
+      const midY = (hipY + pawY) * 0.5 + (isFront ? s * 0.02 : -s * 0.02);
+
+      // Muscular upper thigh / shoulder segment
+      g.strokeStyle = upperCol;
+      g.lineWidth = Math.max(2.0, s * (isFront ? 0.135 : 0.155));
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(hipX, hipY);
+      g.lineTo(midX, midY);
+      g.stroke();
+
+      // Slender lower limb / cannon bone
+      g.strokeStyle = lowerCol;
+      g.lineWidth = Math.max(1.5, s * 0.095);
+      g.beginPath();
+      g.moveTo(midX, midY);
+      g.lineTo(pawX, pawY - s * 0.02);
+      g.stroke();
+
+      // Distinct planted wolf paw touching the earth
+      g.fillStyle = isNear ? accentCol : lowerCol;
+      g.strokeStyle = darkFur;
+      g.lineWidth = Math.max(0.6, s * 0.024);
+      g.beginPath();
+      g.ellipse(pawX + s * 0.035, pawY - s * 0.015, s * 0.075, s * 0.042, 0, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    }
 
     g.save();
     g.translate(sx, sy);
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
 
-    // Grounded soft shadow beneath paws
-    g.fillStyle = 'rgba(10, 20, 18, 0.34)';
+    // Tight, realistic ground-contact cast shadow directly beneath the wolf's paws at y = 0
+    g.fillStyle = 'rgba(12, 22, 16, 0.34)';
     g.beginPath();
-    g.ellipse(0, s * 0.10, s * 0.82, s * 0.30, 0, 0, Math.PI * 2);
+    g.ellipse(0, 0, s * (howling ? 0.54 : 0.72), s * (howling ? 0.19 : 0.21), 0, 0, Math.PI * 2);
     g.fill();
-
-    // Subtle moonlit enchanted forest fur aura
-    const aura = g.createRadialGradient(0, -s * 0.45, s * 0.08, 0, -s * 0.45, s * 1.25);
-    aura.addColorStop(0, auraCol + (howling ? '55' : '2a'));
-    aura.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = aura;
-    g.beginPath(); g.arc(0, -s * 0.45, s * 1.25, 0, Math.PI * 2); g.fill();
 
     g.save();
     g.scale(faceDir, 1);
 
     if (howling) {
-      // ── NOBLE FULL-MOON HOWLING POSE (Seated on haunches, muzzle tilted high to the sky!) ──
-      // Swept bushy tail resting behind haunches
+      // ── NOBLE FULL-MOON HOWLING POSE (Firmly seated on ground at y = 0, muzzle skyward) ──
+      // Subtle moonlit rim glow only when howling under the Full Moon
+      const moonHalo = g.createRadialGradient(s * 0.1, -s * 0.6, s * 0.05, s * 0.1, -s * 0.6, s * 1.05);
+      moonHalo.addColorStop(0, 'rgba(168, 226, 255, 0.28)');
+      moonHalo.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = moonHalo;
+      g.beginPath(); g.arc(s * 0.1, -s * 0.6, s * 1.05, 0, Math.PI * 2); g.fill();
+
+      // Swept bushy tail curled along the forest ground
       g.strokeStyle = maneCol;
-      g.lineWidth = Math.max(2.2, s * 0.24);
+      g.lineWidth = Math.max(2.2, s * 0.22);
       g.beginPath();
-      g.moveTo(-s * 0.38, -s * 0.12);
-      g.quadraticCurveTo(-s * 0.92, -s * 0.02, -s * 1.12, -s * 0.28 + Math.sin(time * 2.4) * s * 0.04);
+      g.moveTo(-s * 0.36, -s * 0.08);
+      g.quadraticCurveTo(-s * 0.86, s * 0.02, -s * 1.06, -s * 0.22 + Math.sin(time * 2.2) * s * 0.03);
       g.stroke();
       g.strokeStyle = accentCol;
-      g.lineWidth = Math.max(1.0, s * 0.09);
+      g.lineWidth = Math.max(1.0, s * 0.08);
       g.beginPath();
-      g.moveTo(-s * 0.65, -s * 0.08);
-      g.quadraticCurveTo(-s * 0.96, -s * 0.14, -s * 1.12, -s * 0.28);
+      g.moveTo(-s * 0.64, -s * 0.04);
+      g.quadraticCurveTo(-s * 0.90, -s * 0.10, -s * 1.06, -s * 0.22);
       g.stroke();
 
-      // Seated hind leg & upright forelegs
+      // Grounded haunches & upright forelegs with paws planted at y = 0
       g.fillStyle = maneCol;
-      g.beginPath(); g.ellipse(-s * 0.28, -s * 0.18, s * 0.28, s * 0.20, -0.3, 0, Math.PI * 2); g.fill();
-      strokeLine(g, [s * 0.16, -s * 0.56], [s * 0.26, 0.02], maneCol, Math.max(2.0, s * 0.15));
-      strokeLine(g, [s * 0.04, -s * 0.52], [s * 0.12, 0.04], furCol, Math.max(2.0, s * 0.15));
+      g.beginPath(); g.ellipse(-s * 0.26, -s * 0.16, s * 0.27, s * 0.17, -0.25, 0, Math.PI * 2); g.fill();
+      strokeLine(g, [s * 0.18, -s * 0.56], [s * 0.25, -s * 0.01], maneCol, Math.max(1.8, s * 0.13));
+      strokeLine(g, [s * 0.06, -s * 0.52], [s * 0.13, 0.01], furCol, Math.max(2.0, s * 0.135));
+      g.fillStyle = accentCol;
+      g.beginPath(); g.ellipse(s * 0.16, 0.0, s * 0.08, s * 0.04, 0, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(s * 0.28, -s * 0.02, s * 0.075, s * 0.038, 0, 0, Math.PI * 2); g.fill();
 
-      // Proud angled chest & torso
+      // Sculpted seated chest & torso
       const bodyG = g.createLinearGradient(-s * 0.4, -s * 0.1, s * 0.3, -s * 0.85);
       bodyG.addColorStop(0, maneCol);
       bodyG.addColorStop(0.55, furCol);
       bodyG.addColorStop(1, accentCol);
       poly(g, [
-        [-s * 0.44, -s * 0.10], [-s * 0.28, -s * 0.52],
-        [s * 0.06, -s * 0.82], [s * 0.34, -s * 0.66],
-        [s * 0.24, -s * 0.24], [-s * 0.18, -s * 0.02]
-      ], bodyG, '#24303c', Math.max(0.8, s * 0.036));
+        [-s * 0.42, -s * 0.06], [-s * 0.26, -s * 0.50],
+        [s * 0.06, -s * 0.82], [s * 0.32, -s * 0.66],
+        [s * 0.22, -s * 0.24], [-s * 0.18, -s * 0.01]
+      ], bodyG, darkFur, Math.max(0.8, s * 0.034));
 
-      // Thick noble neck ruff / mane
+      // Layered neck ruff / mane
       poly(g, [
-        [-s * 0.04, -s * 0.72], [s * 0.18, -s * 0.98],
-        [s * 0.40, -s * 0.78], [s * 0.30, -s * 0.48], [s * 0.04, -s * 0.52]
-      ], accentCol, maneCol, Math.max(0.75, s * 0.032));
+        [-s * 0.04, -s * 0.72], [s * 0.18, -s * 0.96],
+        [s * 0.38, -s * 0.76], [s * 0.28, -s * 0.48], [s * 0.04, -s * 0.52]
+      ], accentCol, maneCol, Math.max(0.75, s * 0.03));
 
-      // Head tilted HIGH SKYWARD howling at the Full Moon (-65°)
+      // Head tilted HIGH SKYWARD howling at the Full Moon
       g.save();
-      g.translate(s * 0.22, -s * 0.94);
+      g.translate(s * 0.21, -s * 0.92);
       g.rotate(-1.08 + Math.sin(time * 5.2) * 0.05);
-      // Cranium + elongated upper muzzle + open howling lower jaw
       poly(g, [
-        [-s * 0.18, -s * 0.14], [s * 0.10, -s * 0.18],
-        [s * 0.48, -s * 0.08], [s * 0.46, 0.0],
-        [s * 0.12, 0.04], [-s * 0.16, s * 0.14]
-      ], furCol, '#24303c', Math.max(0.8, s * 0.034));
-      // Open howling lower jaw
+        [-s * 0.17, -s * 0.13], [s * 0.10, -s * 0.17],
+        [s * 0.46, -s * 0.08], [s * 0.44, 0.0],
+        [s * 0.12, 0.04], [-s * 0.15, s * 0.13]
+      ], furCol, darkFur, Math.max(0.8, s * 0.032));
       poly(g, [
-        [s * 0.06, 0.02], [s * 0.42, s * 0.10],
-        [s * 0.36, s * 0.18], [s * 0.02, s * 0.12]
-      ], maneCol, '#24303c', Math.max(0.7, s * 0.03));
-      // Pointed wolf ears swept back
-      poly(g, [[-s * 0.14, -s * 0.12], [-s * 0.30, -s * 0.32], [-s * 0.02, -s * 0.18]], maneCol, accentCol, Math.max(0.7, s * 0.028));
-      poly(g, [[-s * 0.04, -s * 0.14], [-s * 0.16, -s * 0.34], [s * 0.08, -s * 0.16]], furCol, accentCol, Math.max(0.7, s * 0.028));
-      // Closed/squinted soulful howling eye + dark nose tip
+        [s * 0.06, 0.02], [s * 0.40, s * 0.10],
+        [s * 0.34, s * 0.17], [s * 0.02, s * 0.11]
+      ], maneCol, darkFur, Math.max(0.7, s * 0.028));
+      poly(g, [[-s * 0.13, -s * 0.11], [-s * 0.28, -s * 0.30], [-s * 0.02, -s * 0.17]], maneCol, accentCol, Math.max(0.7, s * 0.026));
+      poly(g, [[-s * 0.04, -s * 0.13], [-s * 0.15, -s * 0.32], [s * 0.08, -s * 0.15]], furCol, accentCol, Math.max(0.7, s * 0.026));
       g.fillStyle = '#182028';
-      g.beginPath(); g.arc(s * 0.47, -s * 0.04, Math.max(1.1, s * 0.045), 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(s * 0.45, -s * 0.04, Math.max(1.1, s * 0.042), 0, Math.PI * 2); g.fill();
       g.fillStyle = eyeCol;
-      g.beginPath(); g.ellipse(s * 0.10, -s * 0.08, Math.max(1.2, s * 0.05), Math.max(0.8, s * 0.025), 0.1, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(s * 0.10, -s * 0.075, Math.max(1.2, s * 0.048), Math.max(0.8, s * 0.024), 0.1, 0, Math.PI * 2); g.fill();
       g.restore();
 
-      // Visible Silver-Moonlight Sonic Howl Waves rising skyward from open maw!
-      const mouthX = s * 0.44;
-      const mouthY = -s * 1.38;
+      // Silver-Moonlight Sonic Howl Rings rising from open maw
+      const mouthX = s * 0.42;
+      const mouthY = -s * 1.34;
       for (let w = 0; w < 3; w++) {
         const pWave = (time * 1.15 + w * 0.33) % 1;
-        const r = s * (0.28 + pWave * 1.05);
+        const r = s * (0.26 + pWave * 0.96);
         const alpha = (1 - pWave) * 0.72;
         g.strokeStyle = `rgba(176, 236, 255, ${alpha})`;
-        g.lineWidth = Math.max(1.2, s * 0.055 * (1 - pWave * 0.4));
+        g.lineWidth = Math.max(1.2, s * 0.05 * (1 - pWave * 0.4));
         g.beginPath();
-        g.arc(mouthX + pWave * s * 0.25, mouthY - pWave * s * 0.65, r, -Math.PI * 0.85, -Math.PI * 0.15);
+        g.arc(mouthX + pWave * s * 0.22, mouthY - pWave * s * 0.62, r, -Math.PI * 0.85, -Math.PI * 0.15);
         g.stroke();
       }
     } else {
-      // ── MAJESTIC STRIDING / SPRINTING / LUNGING WOLF POSE ──
-      const lungeLean = biting ? 0.18 : 0;
-      g.translate(0, -bounce);
-      g.rotate(lungeLean);
+      // ── GROUNDED QUADRUPED STANDING / TROTTING / GALLOPING / LUNGING WOLF ──
+      // Gentle spine pitch & shoulder/hip heave while paws stay planted at y = 0!
+      const spineHeave = Math.sin(phase * 2) * s * 0.030 * moveAmp + breath;
+      const spinePitch = Math.cos(phase) * 0.075 * moveAmp + (biting ? 0.14 : 0);
+      const shoulderY = -s * 0.46 + spineHeave + Math.sin(spinePitch) * s * 0.28;
+      const hipY = -s * 0.44 + spineHeave - Math.sin(spinePitch) * s * 0.28;
 
-      // Bushy feathered tail streaming behind
-      const tailWag = Math.sin(time * 5.6) * s * 0.10;
+      // Subtle kicked-up forest dirt/grass dust wisps behind running hind paws right on the ground (y = 0)
+      if (moveAmp > 0.28) {
+        const dustCycle = (phase * 0.32) % 1;
+        for (let d = 0; d < 2; d++) {
+          const t = (dustCycle + d * 0.5) % 1;
+          const dx = -s * (0.35 + t * 0.55);
+          const dy = -s * (0.03 + t * 0.12);
+          g.fillStyle = `rgba(128, 122, 98, ${(1 - t) * 0.36 * Math.min(1, moveAmp)})`;
+          g.beginPath();
+          g.arc(dx, dy, s * (0.045 + t * 0.075), 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+
+      // 1. Far-side articulated legs (drawn BEHIND torso; diagonal quadruped trot/gallop phasing!)
+      drawCanineLeg(-s * 0.36, hipY, phase + Math.PI, false, false, maneCol, '#53606e');
+      drawCanineLeg(s * 0.26, shoulderY, phase + 0.35, true, false, maneCol, '#53606e');
+
+      // 2. Bushy feathered wolf tail streaming from the sculpted rump
+      const tailWave = Math.sin(phase * 0.9 + time * 2.2) * s * (0.05 + 0.05 * moveAmp);
+      const rumpX = -s * 0.48;
+      const rumpY = hipY - s * 0.05;
       g.strokeStyle = maneCol;
-      g.lineWidth = Math.max(2.4, s * 0.22);
+      g.lineWidth = Math.max(2.4, s * 0.21);
       g.beginPath();
-      g.moveTo(-s * 0.52, -s * 0.56);
-      g.quadraticCurveTo(-s * 0.92, -s * 0.62 + tailWag, -s * 1.18, -s * 0.40 + tailWag * 1.2);
+      g.moveTo(rumpX, rumpY);
+      g.quadraticCurveTo(rumpX - s * 0.38, rumpY + s * 0.04 + tailWave, rumpX - s * 0.64, rumpY + s * 0.16 + tailWave * 1.2);
       g.stroke();
       g.strokeStyle = accentCol;
       g.lineWidth = Math.max(1.0, s * 0.085);
       g.beginPath();
-      g.moveTo(-s * 0.78, -s * 0.56 + tailWag * 0.6);
-      g.quadraticCurveTo(-s * 1.02, -s * 0.50 + tailWag, -s * 1.18, -s * 0.40 + tailWag * 1.2);
+      g.moveTo(rumpX - s * 0.24, rumpY + s * 0.02 + tailWave * 0.5);
+      g.quadraticCurveTo(rumpX - s * 0.46, rumpY + s * 0.09 + tailWave, rumpX - s * 0.64, rumpY + s * 0.16 + tailWave * 1.2);
       g.stroke();
 
-      // Far-side striding legs
-      const legStride = stride * s * 0.28;
-      strokeLine(g, [-s * 0.38, -s * 0.40], [-s * 0.44 - legStride, s * 0.02], maneCol, Math.max(1.8, s * 0.13));
-      strokeLine(g, [s * 0.30, -s * 0.42], [s * 0.34 + legStride, s * 0.02], maneCol, Math.max(1.8, s * 0.13));
-
-      // Muscular wolf torso with layered coat gradient
-      const torsoG = g.createLinearGradient(-s * 0.6, -s * 0.75, s * 0.6, -s * 0.25);
+      // 3. Sculpted muscular wolf torso (deep chest, lean tucked belly, powerful haunches — NO OVAL!)
+      const torsoG = g.createLinearGradient(0, shoulderY - s * 0.28, 0, shoulderY + s * 0.22);
       torsoG.addColorStop(0, maneCol);
-      torsoG.addColorStop(0.5, furCol);
+      torsoG.addColorStop(0.45, furCol);
       torsoG.addColorStop(1, accentCol);
-      g.fillStyle = torsoG;
+      poly(g, [
+        [-s * 0.50, hipY - s * 0.08],           // tail root
+        [-s * 0.34, hipY - s * 0.21],           // upper croup/haunch
+        [-s * 0.04, (hipY + shoulderY) * 0.5 - s * 0.19], // lean back ridge
+        [s * 0.28, shoulderY - s * 0.24],       // proud withers/shoulders
+        [s * 0.48, shoulderY - s * 0.10],       // deep muscular chest front
+        [s * 0.36, shoulderY + s * 0.16],       // lower brisket
+        [s * 0.06, (hipY + shoulderY) * 0.5 + s * 0.14],  // ribcage bottom
+        [-s * 0.22, hipY + s * 0.07],           // tucked lean wolf flank/waist!
+        [-s * 0.44, hipY + s * 0.13]            // rear thigh curve
+      ], torsoG, darkFur, Math.max(0.85, s * 0.034));
+
+      // Dark dorsal fur stripe along the wolf's back
+      g.strokeStyle = maneCol;
+      g.lineWidth = Math.max(1.4, s * 0.085);
       g.beginPath();
-      g.ellipse(0, -s * 0.52, s * 0.58, s * 0.24, -0.06, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = '#24303c';
-      g.lineWidth = Math.max(0.8, s * 0.035);
+      g.moveTo(-s * 0.42, hipY - s * 0.14);
+      g.quadraticCurveTo(-s * 0.04, (hipY + shoulderY) * 0.5 - s * 0.18, s * 0.26, shoulderY - s * 0.21);
       g.stroke();
 
-      // Near-side striding legs
-      strokeLine(g, [-s * 0.32, -s * 0.38], [-s * 0.36 + legStride, s * 0.04], furCol, Math.max(2.0, s * 0.14));
-      strokeLine(g, [s * 0.34, -s * 0.40], [s * 0.40 - legStride, s * 0.04], furCol, Math.max(2.0, s * 0.14));
-
-      // Thick shoulder mane / fur ruff
+      // 4. Thick layered wolf shoulder ruff & neck mane
       poly(g, [
-        [s * 0.18, -s * 0.76], [s * 0.54, -s * 0.84],
-        [s * 0.68, -s * 0.56], [s * 0.46, -s * 0.32], [s * 0.16, -s * 0.40]
-      ], accentCol, maneCol, Math.max(0.8, s * 0.032));
+        [s * 0.14, shoulderY - s * 0.26],
+        [s * 0.46, shoulderY - s * 0.32],
+        [s * 0.58, shoulderY - s * 0.06],
+        [s * 0.42, shoulderY + s * 0.14],
+        [s * 0.16, shoulderY + s * 0.04],
+        [s * 0.24, shoulderY - s * 0.08]
+      ], accentCol, maneCol, Math.max(0.75, s * 0.03));
 
-      // Noble sculpted wolf head, pointed ears & snarling jaws
+      // 5. Near-side articulated legs (overlapping torso cleanly, paws solidly on y = 0!)
+      drawCanineLeg(-s * 0.30, hipY + s * 0.02, phase, false, true, furCol, accentCol);
+      drawCanineLeg(s * 0.32, shoulderY + s * 0.02, phase + Math.PI + 0.35, true, true, furCol, accentCol);
+
+      // 6. Sculpted Wolf Head, Muzzle, Pointed Ears & Glowing Predator Eye
+      const headX = s * 0.50;
+      const headY = shoulderY - s * 0.22 + (biting ? s * 0.06 : 0);
+      g.save();
+      g.translate(headX, headY);
+      g.rotate(biting ? 0.16 : spinePitch * 0.4);
+
+      // Back ear
+      poly(g, [[-s * 0.04, -s * 0.11], [-s * 0.10, -s * 0.37], [s * 0.08, -s * 0.15]], maneCol, darkFur, Math.max(0.7, s * 0.026));
+      // Cranium & tapered canine snout
       poly(g, [
-        [s * 0.44, -s * 0.82], [s * 0.76, -s * 0.86],
-        [s * 1.06, -s * 0.72], [s * 1.04, -s * 0.62],
-        [s * 0.72, -s * 0.56], [s * 0.46, -s * 0.60]
-      ], furCol, '#24303c', Math.max(0.8, s * 0.036));
+        [-s * 0.14, -s * 0.12], [s * 0.16, -s * 0.17],
+        [s * 0.49, -s * 0.05], [s * 0.47, s * 0.04],
+        [s * 0.15, s * 0.09], [-s * 0.12, s * 0.08]
+      ], furCol, darkFur, Math.max(0.85, s * 0.034));
+      // Pale cheek fur & muzzle underside
+      poly(g, [
+        [s * 0.06, -s * 0.02], [s * 0.45, s * 0.01],
+        [s * 0.44, s * 0.05], [s * 0.12, s * 0.09], [-s * 0.06, s * 0.06]
+      ], accentCol);
+      // Front alert triangular wolf ear with pale inner tuft
+      poly(g, [[s * 0.04, -s * 0.13], [s * 0.05, -s * 0.39], [s * 0.18, -s * 0.14]], furCol, darkFur, Math.max(0.7, s * 0.026));
+      poly(g, [[s * 0.07, -s * 0.16], [s * 0.07, -s * 0.31], [s * 0.14, -s * 0.16]], accentCol);
 
-      // Pointed triangular ears
-      poly(g, [[s * 0.48, -s * 0.80], [s * 0.44, -s * 1.08], [s * 0.62, -s * 0.84]], maneCol, accentCol, Math.max(0.7, s * 0.028));
-      poly(g, [[s * 0.60, -s * 0.82], [s * 0.62, -s * 1.10], [s * 0.74, -s * 0.84]], furCol, accentCol, Math.max(0.7, s * 0.028));
+      // Dark wet nose tip
+      g.fillStyle = '#151b22';
+      g.beginPath(); g.arc(s * 0.49, -s * 0.02, Math.max(1.2, s * 0.044), 0, Math.PI * 2); g.fill();
 
-      // Nose & glowing predator eyes
-      g.fillStyle = '#182028';
-      g.beginPath(); g.arc(s * 1.05, -s * 0.69, Math.max(1.2, s * 0.048), 0, Math.PI * 2); g.fill();
+      // Piercing predator eye
+      g.fillStyle = '#14191e';
+      g.beginPath(); g.ellipse(s * 0.18, -s * 0.07, Math.max(1.5, s * 0.055), Math.max(1.0, s * 0.038), -0.12, 0, Math.PI * 2); g.fill();
       g.fillStyle = eyeCol;
-      g.shadowColor = eyeCol;
-      g.shadowBlur = Math.max(3, s * 0.18);
-      g.beginPath(); g.arc(s * 0.76, -s * 0.75, Math.max(1.2, s * 0.052), 0, Math.PI * 2); g.fill();
-      g.shadowBlur = 0;
+      g.beginPath(); g.arc(s * 0.19, -s * 0.07, Math.max(1.1, s * 0.038), 0, Math.PI * 2); g.fill();
 
-      // Fierce snapping jaws + silver claw/fang slash arc when biting a zombie!
+      // Fierce snapping jaw & slender razor slash when biting a zombie
       if (biting) {
         poly(g, [
-          [s * 0.72, -s * 0.60], [s * 1.02, -s * 0.50],
-          [s * 0.96, -s * 0.44], [s * 0.68, -s * 0.52]
-        ], maneCol, '#24303c', Math.max(0.7, s * 0.028));
-        // Razor white fangs
+          [s * 0.12, s * 0.05], [s * 0.44, s * 0.14],
+          [s * 0.38, s * 0.21], [s * 0.08, s * 0.13]
+        ], maneCol, darkFur, Math.max(0.7, s * 0.026));
         g.fillStyle = '#ffffff';
         g.beginPath();
-        g.moveTo(s * 0.88, -s * 0.63); g.lineTo(s * 0.92, -s * 0.53); g.lineTo(s * 0.96, -s * 0.63);
+        g.moveTo(s * 0.31, s * 0.04); g.lineTo(s * 0.35, s * 0.13); g.lineTo(s * 0.39, s * 0.04);
         g.fill();
-        // Silver crescent fang/claw slash arc in front of jaws
-        g.strokeStyle = 'rgba(235, 248, 255, 0.92)';
-        g.lineWidth = Math.max(1.8, s * 0.09);
+        g.strokeStyle = 'rgba(224, 245, 255, 0.9)';
+        g.lineWidth = Math.max(1.5, s * 0.065);
         g.beginPath();
-        g.arc(s * 1.05, -s * 0.62, s * 0.52, -0.95, 0.95);
-        g.stroke();
-        g.strokeStyle = 'rgba(130, 224, 255, 0.65)';
-        g.lineWidth = Math.max(1.1, s * 0.05);
-        g.beginPath();
-        g.arc(s * 1.15, -s * 0.62, s * 0.68, -0.75, 0.75);
+        g.arc(s * 0.48, s * 0.04, s * 0.42, -0.85, 0.85);
         g.stroke();
       }
+      g.restore();
     }
 
     g.restore(); // faceDir

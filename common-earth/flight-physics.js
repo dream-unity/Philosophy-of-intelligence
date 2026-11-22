@@ -258,6 +258,326 @@
   }
 
   /**
+   * Returns true if a perimeter wall segment has been smashed down into passable rubble.
+   */
+  function isWallDestroyed(site, wallId) {
+    if (!site || !wallId) return false;
+    const key = String(wallId).startsWith('wall-') ? String(wallId) : ('wall-' + wallId);
+    return Boolean(site.trollDamage?.[key]?.ruined);
+  }
+
+  /**
+   * Slab intersection test between 2D segment (ax, ay)->(bx, by) and AABB box [minX, minY, maxX, maxY]
+   * inflated by `pad`. Used to detect whether an intact solid wall or building blocks a path.
+   */
+  function segmentIntersectsBox(ax, ay, bx, by, box, pad = 0) {
+    if (!box || box.length < 4) return { hit: false, t: 1 };
+    const minX = box[0] - pad;
+    const minY = box[1] - pad;
+    const maxX = box[2] + pad;
+    const maxY = box[3] + pad;
+    const dx = bx - ax;
+    const dy = by - ay;
+    let tMin = 0;
+    let tMax = 1;
+    if (Math.abs(dx) < 1e-8) {
+      if (ax < minX || ax > maxX) return { hit: false, t: 1 };
+    } else {
+      let t1 = (minX - ax) / dx;
+      let t2 = (maxX - ax) / dx;
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tMin = Math.max(tMin, t1);
+      tMax = Math.min(tMax, t2);
+      if (tMin > tMax) return { hit: false, t: 1 };
+    }
+    if (Math.abs(dy) < 1e-8) {
+      if (ay < minY || ay > maxY) return { hit: false, t: 1 };
+    } else {
+      let t1 = (minY - ay) / dy;
+      let t2 = (maxY - ay) / dy;
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tMin = Math.max(tMin, t1);
+      tMax = Math.min(tMax, t2);
+      if (tMin > tMax) return { hit: false, t: 1 };
+    }
+    return { hit: tMin <= tMax && tMax >= 0 && tMin <= 1, t: Math.max(0, tMin) };
+  }
+
+  /**
+   * Returns all currently passable openings through the community perimeter walls:
+   * the built road gateways PLUS any wall segment that has been smashed down into rubble.
+   */
+  function perimeterGateways(stage, territoryLevel = 0, hasWaterfront = false, site = null) {
+    if (!stage || stage < 2) return [];
+    const b = perimeterBounds(territoryLevel, hasWaterfront);
+    const gates = [
+      { id: 'north-gate', x: 12, y: b.minY },
+      { id: 'west-gate', x: b.minX, y: 12 },
+      { id: 'east-gate', x: b.maxX, y: 12 }
+    ];
+    if (!hasWaterfront) {
+      gates.push({ id: 'south-gate', x: 12, y: b.maxY });
+    }
+    if (site) {
+      for (const seg of perimeterWallSegments(stage, territoryLevel, hasWaterfront)) {
+        if (seg.box && isWallDestroyed(site, seg.id)) {
+          gates.push({
+            id: 'breach-' + seg.id,
+            x: seg.x + seg.w * 0.5,
+            y: seg.y + seg.d * 0.5,
+            breach: true
+          });
+        }
+      }
+    }
+    return gates;
+  }
+
+  /**
+   * Authoritative solid-object registry for a community:
+   * - EVERY intact perimeter wall segment & gatepost (until actually destroyed!)
+   * - EVERY standing building (Market, core Homes, plot buildings, freeBuildings incl. Giant Wolf Cave,
+   *   playerHouses, Military Airbase structures, plus any scene-provided extra solid boxes).
+   * Nobody (zombies, wolves, Sims, or player) may pass through any solid obstacle in this list.
+   */
+  function collectSolidObstacles(site, extraSolids = null) {
+    const walls = [];
+    const buildings = [];
+    if (!site) return { walls, buildings, all: [] };
+
+    const fortStage = site.communityLife?.border?.defence?.stage || 0;
+    const tLevel = site.territoryLevel || 0;
+    const hasWater = Boolean(site.water || site.coastal || root.CommonEarthSim?.waterfront?.(site));
+
+    // 1. Intact perimeter walls & gateposts (solid until smashed to 0 HP!)
+    if (fortStage > 0) {
+      for (const seg of perimeterWallSegments(fortStage, tLevel, hasWater)) {
+        if (!seg.box) continue;
+        if (isWallDestroyed(site, seg.id)) continue;
+        const ob = {
+          id: 'wall-' + seg.id,
+          wallId: seg.id,
+          kind: seg.kind === 'post' ? 'post' : 'wall',
+          name: seg.kind === 'post' ? 'Stone Gatepost' : 'Community Perimeter Wall',
+          box: seg.box,
+          cx: (seg.box[0] + seg.box[2]) * 0.5,
+          cy: (seg.box[1] + seg.box[3]) * 0.5,
+          maxHp: seg.kind === 'post' ? 210 : 260
+        };
+        walls.push(ob);
+      }
+    }
+
+    const addBox = (id, name, cx, cy, w, d, maxHp = 180) => {
+      buildings.push({
+        id,
+        kind: 'building',
+        name,
+        box: [cx - w * 0.5, cy - d * 0.5, cx + w * 0.5, cy + d * 0.5],
+        cx,
+        cy,
+        maxHp
+      });
+    };
+
+    // 2. Core district Market & Homes (matching street.js block coordinates: block * 6 + 3)
+    const homesBlocks = root.EarthShifts?.district?.homes || [[1, 3], [3, 2], [3, 3]];
+    const marketBlock = root.EarthShifts?.district?.market || [2, 3];
+    addBox('market', 'Village Hall & Market', marketBlock[0] * 6 + 3, marketBlock[1] * 6 + 3, 3.1, 2.9, 220);
+    homesBlocks.forEach((blk, idx) => {
+      addBox('home-' + idx, 'Village Cottage ' + (idx + 1), blk[0] * 6 + 3, blk[1] * 6 + 3, 2.54, 2.25, 175);
+    });
+
+    // 3. Built plot buildings
+    for (const b of (site.buildings || [])) {
+      const plot = Number.isInteger(b.plot) ? b.plot : 0;
+      const cx = (plot % 3) * 6 + 3;
+      const cy = Math.floor(plot / 3) * 6 + 3;
+      const w = b.kind === 'wetland' ? 2.62 : 3.12;
+      const d = b.kind === 'wetland' ? 2.10 : 2.84;
+      addBox(b.id || ('lot-' + plot), b.name || b.kind || 'Village Building', cx, cy, w, d, 185);
+    }
+
+    // 4. Free-placed buildings (including the Giant Wolf Cave!)
+    for (const fb of (site.freeBuildings || [])) {
+      if (!fb || !Number.isFinite(fb.x) || !Number.isFinite(fb.y)) continue;
+      addBox(
+        fb.id || ('fb-' + fb.kind),
+        fb.name || (fb.kind === 'dragonStable' ? 'Giant Wolf Cave' : fb.kind) || 'Outpost Building',
+        fb.x, fb.y, 3.2, 3.0,
+        fb.kind === 'dragonStable' ? 320 : 180
+      );
+    }
+
+    // 5. Player-built houses
+    for (let i = 0; i < (site.playerHouses || []).length; i++) {
+      const ph = site.playerHouses[i];
+      if (!ph || !Number.isFinite(ph.x) || !Number.isFinite(ph.y)) continue;
+      addBox(ph.id || ('house-' + i), ph.name || 'Forest Cabin', ph.x, ph.y, 2.6, 2.4, 170);
+    }
+
+    // 6. Military Airbase structures
+    const mbLayout = militaryBaseLayout(tLevel);
+    if (mbLayout?.solids) {
+      mbLayout.solids.forEach((box, idx) => {
+        buildings.push({
+          id: 'airbase-' + idx,
+          kind: 'building',
+          name: 'Airbase Structure',
+          box,
+          cx: (box[0] + box[2]) * 0.5,
+          cy: (box[1] + box[3]) * 0.5,
+          maxHp: 320
+        });
+      });
+    }
+
+    // 7. Optional extra scene solids (venues, benches, parked vans, props from street.js)
+    if (Array.isArray(extraSolids)) {
+      for (let i = 0; i < extraSolids.length; i++) {
+        const b = extraSolids[i];
+        if (!Array.isArray(b) || b.length < 4) continue;
+        // Skip boxes already covered by walls or buildings (exact match)
+        const dup = walls.some(w => Math.abs(w.box[0] - b[0]) < 0.02 && Math.abs(w.box[1] - b[1]) < 0.02 && Math.abs(w.box[2] - b[2]) < 0.02 && Math.abs(w.box[3] - b[3]) < 0.02)
+          || buildings.some(o => Math.abs(o.box[0] - b[0]) < 0.02 && Math.abs(o.box[1] - b[1]) < 0.02 && Math.abs(o.box[2] - b[2]) < 0.02 && Math.abs(o.box[3] - b[3]) < 0.02);
+        if (dup) continue;
+        buildings.push({
+          id: 'solid-' + i,
+          kind: 'building',
+          name: 'Structure',
+          box: b,
+          cx: (b[0] + b[2]) * 0.5,
+          cy: (b[1] + b[3]) * 0.5,
+          maxHp: 180
+        });
+      }
+    }
+
+    return { walls, buildings, all: walls.concat(buildings) };
+  }
+
+  /**
+   * Sub-stepped solid-body ground motion resolver.
+   * Guarantees that a moving circle (zombie, wolf, Sim) NEVER tunnels through or enters
+   * ANY intact perimeter wall or solid building.
+   * - Sub-steps <= 0.20 units (less than half wall thickness 0.44) so tunneling is impossible.
+   * - If blocked by a solid building (not an intact wall), gently slides tangentially around
+   *   its exterior edge while still strictly honoring every solid obstacle.
+   * - If blocked by an intact perimeter wall, stops flush at the wall face and reports `hitWall`.
+   */
+  function moveWithSolidCollision(prevX, prevY, targetX, targetY, radius, obstacles, options = {}) {
+    const r = Math.max(0.16, Number(radius) || 0.34);
+    const list = Array.isArray(obstacles) ? obstacles : (obstacles?.all || []);
+    const allowBuildingSlide = options.slideBuildings !== false;
+
+    const resolveAt = (px, py) => {
+      let x = px;
+      let y = py;
+      let hitWall = null;
+      let hitBuilding = null;
+      let hitAny = null;
+      for (let iter = 0; iter < 3; iter++) {
+        let movedAny = false;
+        for (let i = 0; i < list.length; i++) {
+          const ob = list[i];
+          const box = ob.box || ob;
+          const res = resolveCircleRect({ x, y }, r, box);
+          if (res.hit) {
+            x = res.x;
+            y = res.y;
+            movedAny = true;
+            if (!hitAny) hitAny = ob;
+            if ((ob.kind === 'wall' || ob.kind === 'post') && !hitWall) hitWall = ob;
+            if (ob.kind !== 'wall' && ob.kind !== 'post' && !hitBuilding) hitBuilding = ob;
+          }
+        }
+        if (!movedAny) break;
+      }
+      return { x, y, hitAny, hitWall, hitBuilding };
+    };
+
+    const start = resolveAt(prevX, prevY);
+    let curX = start.x;
+    let curY = start.y;
+    const totalDx = targetX - curX;
+    const totalDy = targetY - curY;
+    const totalDist = Math.hypot(totalDx, totalDy);
+
+    if (totalDist < 1e-6) {
+      return {
+        x: curX,
+        y: curY,
+        moved: Math.hypot(curX - prevX, curY - prevY),
+        blocked: Boolean(start.hitAny),
+        hitObstacle: start.hitAny,
+        hitWall: start.hitWall,
+        hitBuilding: start.hitBuilding
+      };
+    }
+
+    const substeps = Math.max(1, Math.ceil(totalDist / 0.20));
+    const sx = totalDx / substeps;
+    const sy = totalDy / substeps;
+    let firstHit = null;
+    let firstWall = null;
+    let firstBuilding = null;
+
+    for (let s = 0; s < substeps; s++) {
+      const next = resolveAt(curX + sx, curY + sy);
+      if (next.hitAny && !firstHit) firstHit = next.hitAny;
+      if (next.hitWall && !firstWall) firstWall = next.hitWall;
+      if (next.hitBuilding && !firstBuilding) firstBuilding = next.hitBuilding;
+      curX = next.x;
+      curY = next.y;
+      // If we slammed squarely into an intact perimeter wall, stop right at the wall face!
+      if (next.hitWall) break;
+    }
+
+    let moved = Math.hypot(curX - start.x, curY - start.y);
+
+    // Tangential slide around a solid BUILDING (never around an intact wall!) so wolves & zombies
+    // smoothly navigate around houses/trees/caves instead of getting stuck nose-first on a corner.
+    if (allowBuildingSlide && !firstWall && firstBuilding && moved < totalDist * 0.45) {
+      const nx = totalDx / totalDist;
+      const ny = totalDy / totalDist;
+      const slideLen = Math.min(totalDist, 0.48);
+      // Try left and right perpendicular tangents; pick whichever advances closer to target without hitting a wall
+      const candidates = [
+        { tx: start.x - ny * slideLen, ty: start.y + nx * slideLen },
+        { tx: start.x + ny * slideLen, ty: start.y - nx * slideLen }
+      ];
+      let bestX = curX;
+      let bestY = curY;
+      let bestScore = Math.hypot(targetX - curX, targetY - curY);
+      for (const c of candidates) {
+        const stepRes = resolveAt(c.tx, c.ty);
+        if (stepRes.hitWall) continue;
+        const m = Math.hypot(stepRes.x - start.x, stepRes.y - start.y);
+        if (m < 0.04) continue;
+        const score = Math.hypot(targetX - stepRes.x, targetY - stepRes.y) - m * 0.25;
+        if (score < bestScore) {
+          bestScore = score;
+          bestX = stepRes.x;
+          bestY = stepRes.y;
+        }
+      }
+      curX = bestX;
+      curY = bestY;
+      moved = Math.hypot(curX - start.x, curY - start.y);
+    }
+
+    return {
+      x: curX,
+      y: curY,
+      moved,
+      blocked: Boolean(firstHit),
+      hitObstacle: firstHit,
+      hitWall: firstWall,
+      hitBuilding: firstBuilding
+    };
+  }
+
+  /**
    * Dedicated Military Airbase + Long Runway layout, cleanly separated from
    * perimeter walls and surrounding houses regardless of territory expansion.
    */
@@ -926,6 +1246,11 @@
     clampPointToWolfTerritory2D,
     communityWallBounds3D,
     perimeterWallSegments,
+    isWallDestroyed,
+    segmentIntersectsBox,
+    perimeterGateways,
+    collectSolidObstacles,
+    moveWithSolidCollision,
     militaryBaseLayout,
     isLandClearForBuilding,
     createFlightState,

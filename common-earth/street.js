@@ -1674,7 +1674,7 @@
       const tLevel=s.territoryLevel||0;
       if(FP&&fortStage>0){
         for(const seg of FP.perimeterWallSegments(fortStage,tLevel,Boolean(berths.length))){
-          if(seg.box)state.solids.push(seg.box);
+          if(seg.box&&!FP.isWallDestroyed?.(s,seg.id))state.solids.push(seg.box);
         }
       }
       if(FP&&window.EarthMilitaryBase){
@@ -4691,29 +4691,37 @@
     const downedSims=new Map();
 
     function spawnTrollBurst(x,y,kind,label){
-      const count=kind==='footstep'?5:kind==='simStrike'?12:16;
+      const isWall=kind==='wallStrike'||kind==='wallBreach';
+      const count=kind==='footstep'?4:kind==='wallBreach'?14:kind==='simStrike'?9:8;
       for(let i=0;i<count;i++){
         const a=(i/count)*Math.PI*2+Math.random()*0.45;
-        const spd=kind==='footstep'?(0.6+Math.random()*0.9):(1.4+Math.random()*2.8);
+        const spd=kind==='footstep'?(0.4+Math.random()*0.6):(1.0+Math.random()*2.1);
         trollFx.push({
-          kind:'particle',x,y,z:kind==='footstep'?0.1:0.55+Math.random()*0.6,
-          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,vz:kind==='footstep'?0.6+Math.random()*0.5:1.6+Math.random()*2.2,
-          age:0,life:kind==='footstep'?0.55:0.75+Math.random()*0.35,
-          color:kind==='simStrike'?(i%2?'#ff3b2f':'#ffd4a8'):kind==='footstep'?'#9b8e78':(i%3===0?'#ff6e2a':i%3===1?'#4d4642':'#c49c6e'),
-          size:kind==='footstep'?0.18:0.14+Math.random()*0.14
+          kind:'particle',x:x+(Math.random()-0.5)*0.25,y:y+(Math.random()-0.5)*0.25,z:kind==='footstep'?0.06:0.35+Math.random()*0.45,
+          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,vz:kind==='footstep'?0.45+Math.random()*0.4:1.2+Math.random()*1.8,
+          age:0,life:kind==='footstep'?0.42:0.48+Math.random()*0.22,
+          color:kind==='simStrike'?(i%3===0?'#8c1414':i%3===1?'#b82420':'#521010')
+            :isWall?(i%3===0?'#cbb893':i%3===1?'#8c7b62':'#615648')
+              :kind==='footstep'?'#8a7e68':(i%2?'#8f7a62':'#5a4c42'),
+          size:kind==='footstep'?0.055:isWall?0.06+Math.random()*0.05:0.048+Math.random()*0.042
         });
       }
-      if(kind!=='footstep'){
+      if(kind==='simStrike'){
         trollFx.push({
-          kind:'ring',x,y,age:0,life:0.58,
-          maxR:kind==='breach'?3.8:kind==='buildingStrike'?2.9:2.2,
-          color:kind==='simStrike'?'#ff2d20':'#ff7c2e'
+          kind:'slash',x,y,z:0.42,angle:Math.random()*Math.PI*2,
+          age:0,life:0.28,radius:0.85,color:'#c92822'
+        });
+      }else if(kind==='wallBreach'||kind==='breach'){
+        trollFx.push({
+          kind:'ring',x,y,age:0,life:0.52,
+          maxR:kind==='wallBreach'?2.4:2.8,
+          color:kind==='wallBreach'?'#d8c298':'#cc3428'
         });
       }
       if(label){
         trollFx.push({
-          kind:'callout',x,y,z:2.1,age:0,life:1.35,text:label,
-          color:kind==='simStrike'||kind==='breach'?'#ff5c4a':'#ffd27a'
+          kind:'callout',x,y,z:1.95,age:0,life:1.15,text:label,
+          color:kind==='simStrike'||kind==='breach'?'#ff6b5a':kind==='wallBreach'?'#ffe0a3':'#e8d098'
         });
       }
       if(trollFx.length>140)trollFx.splice(0,trollFx.length-140);
@@ -4749,30 +4757,37 @@
     }
 
     function spawnDragonFireBurst(x,y,z,tx,ty,wolf,dealt,killed){
-      // Silver moon-fang wolf lunge slash FX
-      const slashCol=wolf?.aura||'#d8eeff';
-      const count=killed?18:10;
+      // Crisp, slender wolf fang/claw slash FX (never obscures the zombie or wolf!)
+      const slashCol=wolf?.accent||'#e8f6ff';
+      const dirAng=Math.atan2((ty-y)+(tx-x),(tx-x)-(ty-y));
+      trollFx.push({
+        kind:'slash',x:tx,y:ty,z:0.45,angle:dirAng,
+        age:0,life:0.32,radius:killed?1.15:0.82,color:slashCol
+      });
+      const count=killed?10:6;
       for(let i=0;i<count;i++){
         const a=(i/count)*Math.PI*2+Math.random()*0.4;
-        const spd=1.4+Math.random()*(killed?3.6:2.2);
+        const spd=1.1+Math.random()*(killed?2.4:1.6);
         trollFx.push({
-          kind:'particle',x:tx+(Math.random()-0.5)*0.6,y:ty+(Math.random()-0.5)*0.6,z:0.35+Math.random()*0.6,
-          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,vz:1.4+Math.random()*2.2,
-          age:0,life:0.55+Math.random()*0.3,
-          color:i%3===0?'#ffffff':i%3===1?slashCol:'#b32828',
-          size:killed?0.19+Math.random()*0.13:0.13+Math.random()*0.1
+          kind:'particle',x:tx+(Math.random()-0.5)*0.3,y:ty+(Math.random()-0.5)*0.3,z:0.28+Math.random()*0.45,
+          vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,vz:1.1+Math.random()*1.6,
+          age:0,life:0.38+Math.random()*0.2,
+          color:i%2===0?'#8e1b1b':slashCol,
+          size:killed?0.068+Math.random()*0.038:0.048+Math.random()*0.032
+        });
+      }
+      if(killed){
+        trollFx.push({
+          kind:'ring',x:tx,y:ty,age:0,life:0.42,
+          maxR:1.65,color:'#c8ecff'
         });
       }
       trollFx.push({
-        kind:'ring',x:tx,y:ty,age:0,life:0.46,
-        maxR:killed?2.6:1.7,color:killed?'#d4f0ff':'#a9d6f5'
-      });
-      trollFx.push({
-        kind:'callout',x:tx,y:ty,z:1.95,age:0,life:1.25,
-        text:killed?`TORN DOWN BY ${(wolf?.name||'WOLF').toUpperCase()}!`:`-${dealt||88} WOLF BITE!`,
+        kind:'callout',x:tx,y:ty,z:1.85,age:0,life:1.1,
+        text:killed?`TORN DOWN BY ${(wolf?.name||'WOLF').toUpperCase()}!`:`-${dealt||88} BITE`,
         color:killed?'#d8f4ff':'#bfe6ff'
       });
-      if(trollFx.length>180)trollFx.splice(0,trollFx.length-180);
+      if(trollFx.length>160)trollFx.splice(0,trollFx.length-160);
     }
 
     function collectHostileStreetEnemies(w){
@@ -4810,8 +4825,10 @@
         const events=window.EarthGiantTrolls.stepLive(w,state.site,dt,{
           sims,
           wolves:wolfPosesBefore,
+          solids:state.solids,
           isNight:evening
         });
+        let wallBreached=false;
         for(const ev of events){
           if(ev.type==='footstep'){
             spawnTrollBurst(ev.x,ev.y,'footstep');
@@ -4819,6 +4836,16 @@
             spawnTrollBurst(ev.x,ev.y,'breach','ZOMBIE BREACH!');
             trollShake=Math.max(trollShake,0.34);
             message(ev.message);
+            changed=true;
+          }else if(ev.type==='wallStrike'){
+            spawnTrollBurst(ev.x,ev.y,'wallStrike',`WALL -${ev.damage}`);
+            trollShake=Math.max(trollShake,0.16);
+            changed=true;
+          }else if(ev.type==='wallBreach'){
+            spawnTrollBurst(ev.x,ev.y,'wallBreach','WALL DESTROYED!');
+            trollShake=Math.max(trollShake,0.45);
+            message(ev.message);
+            wallBreached=true;
             changed=true;
           }else if(ev.type==='simStrike'){
             spawnTrollBurst(ev.x,ev.y,'simStrike',ev.isPlayer?'BITTEN!':'VILLAGER BITTEN!');
@@ -4833,8 +4860,8 @@
             }
             changed=true;
           }else if(ev.type==='wolfStrike'){
-            spawnTrollBurst(ev.x,ev.y,'simStrike',`${(ev.wolfName||'WOLF').toUpperCase()} BITTEN!`);
-            trollShake=Math.max(trollShake,0.22);
+            spawnTrollBurst(ev.x,ev.y,'simStrike',`${(ev.wolfName||'WOLF').toUpperCase()} -${ev.damage} HP!`);
+            trollShake=Math.max(trollShake,0.24);
             changed=true;
           }else if(ev.type==='buildingStrike'){
             spawnTrollBurst(ev.x,ev.y,'buildingStrike',ev.justRuined?'OVERRUN!':`-${ev.damage} HP`);
@@ -4849,16 +4876,18 @@
             changed=true;
           }
         }
+        if(wallBreached)districtData();
       }
 
       // Autonomous Majestic Wolf Pack: roam the enchanted forest (max 100m outside territory),
-      // hunt & bite Zombies, and howl together at the Full Moon every night!
+      // respect ALL solid walls & buildings, hunt & bite Zombies, and howl together at the Full Moon!
       let howlingWolves=0;
       if(window.EarthDragonStable?.stepAutonomousDefenders&&state.site.dragonStable?.dragons?.length){
         const hostileEnemies=collectHostileStreetEnemies(w);
         const autoRes=window.EarthDragonStable.stepAutonomousDefenders(w,state.site,dt,{
           time:visualTime,
           isNight:evening,
+          solids:state.solids,
           pursuit,
           enemies:hostileEnemies,
           onEnemyHit:(target,dmg,wolf)=>{
@@ -4937,65 +4966,70 @@
     }
 
     function drawGiantTroll(zombie){
-      // Realistic human-sized undead Zombie with hunched shamble, pale decayed skin,
-      // tattered blood-stained clothes, outstretched grasping arms, biting/feeding poses,
-      // and eerie continuous nighttime howling mist.
+      // Realistic, unmistakable rotting human Zombie:
+      // Articulated dragging legs, hunched tattered blood-soaked clothes with rib gash,
+      // TWO bent outstretched arms with bloody grasping claws, crooked decaying skull with
+      // sunken eye sockets, milky dead eyes, blood-dripping snapping jaw with jagged teeth,
+      // violent lunge/bite/wall-bash/feeding poses, and eerie continuous night howling mist.
       const [sx,sy]=screen(zombie.x,zombie.y,0);
-      const scaleH=clamp((zombie.heightMeters||1.8)/1.8,0.92,1.08);
-      const s=unit*0.48*scaleH;
+      const scaleH=clamp((zombie.heightMeters||1.8)/1.8,0.94,1.08);
+      const s=unit*0.66*scaleH;
       const phase=zombie.swingPhase||0;
       const atkPhase=zombie.attackPhase||'march';
       const prog=clamp(zombie.attackProgress||0,0,1);
       const moving=atkPhase==='march'||atkPhase==='chase';
       const limp=moving?Math.sin(phase):0;
-      const limpDrag=moving?Math.max(0,Math.sin(phase+0.8)):0;
-      const bob=moving?Math.abs(limp)*s*0.12:0;
-      const skin=zombie.skin||'#7b8473';
-      const cloth=zombie.cloth||'#3c4246';
-      const pants=zombie.pants||'#2c2c2b';
-      const blood=zombie.blood||'#6e1818';
+      const limpDrag=moving?Math.max(0,Math.sin(phase+0.85)):0;
+      const bob=moving?Math.abs(limp)*s*0.07:0;
+      const skin=zombie.skin||'#8c997e';
+      const skinDark='#57634d';
+      const cloth=zombie.cloth||'#4c524b';
+      const pants='#323432';
+      const blood=zombie.blood||'#7d1616';
       const hpFrac=clamp((zombie.hp||0)/Math.max(1,zombie.maxHp||420),0,1);
 
       const faceScreenX=(zombie.facingX||0)-(zombie.facingY||0);
       const faceDir=faceScreenX<-0.06?-1:1;
 
-      let torsoTilt=moving?0.24+limpDrag*0.09:0.20;
-      let armReach=0.12+Math.sin(phase*1.1)*0.12;
+      let torsoTilt=moving?0.30+limpDrag*0.11:0.24;
+      let armReach=0.18+Math.sin(phase*1.2)*0.16;
       let crouchDrop=0;
       let biteFlash=0;
       if(atkPhase==='windup'){
-        torsoTilt=0.34+prog*0.12;
-        armReach=-0.32*prog;
+        torsoTilt=0.22-prog*0.14;
+        armReach=-0.45*prog;
       }else if(atkPhase==='strike'){
-        const snap=Math.min(1,prog*2.8);
-        torsoTilt=0.46*snap;
-        armReach=0.58*snap;
-        biteFlash=Math.max(0,1-prog*1.3);
+        const snap=Math.min(1,prog*2.9);
+        torsoTilt=0.52*snap;
+        armReach=0.72*snap;
+        biteFlash=Math.max(0,1-prog*1.35);
       }else if(atkPhase==='feed'){
-        torsoTilt=0.62+Math.sin(visualTime*9)*0.08;
-        crouchDrop=s*0.46;
-        armReach=0.35;
+        torsoTilt=0.68+Math.sin(visualTime*11)*0.10;
+        crouchDrop=s*0.36;
+        armReach=0.42;
       }else if(atkPhase==='recover'){
-        torsoTilt=0.32*(1-prog)+0.18;
-        armReach=0.2*(1-prog);
+        torsoTilt=0.34*(1-prog)+0.22;
+        armReach=0.25*(1-prog);
       }
       const isHowling=Boolean(zombie.howling);
 
       ctx.save();
       ctx.translate(sx,sy);
+      ctx.lineJoin='round';
+      ctx.lineCap='round';
 
-      // Soft ground shadow
-      ctx.fillStyle='rgba(10,14,10,0.44)';
+      // Ground contact shadow directly beneath feet (y = 0)
+      ctx.fillStyle='rgba(10,14,10,0.40)';
       ctx.beginPath();
-      ctx.ellipse(0,s*0.06,s*0.62,s*0.26,0,0,Math.PI*2);
+      ctx.ellipse(0,0,s*0.48,s*0.17,0,0,Math.PI*2);
       ctx.fill();
 
-      // Blood lunge splash when biting
+      // Sharp claw/bite swipe flash when lunging at living prey or bashing a wall
       if(biteFlash>0.06){
-        ctx.strokeStyle=`rgba(190,28,24,${biteFlash*0.85})`;
-        ctx.lineWidth=Math.max(1.5,s*0.12);
+        ctx.strokeStyle=`rgba(196,28,24,${biteFlash*0.85})`;
+        ctx.lineWidth=Math.max(1.4,s*0.075);
         ctx.beginPath();
-        ctx.arc(faceDir*s*0.65,-s*0.95,s*(0.55+(1-biteFlash)*0.7),-0.6,0.9);
+        ctx.arc(faceDir*s*0.68,-s*0.92,s*(0.42+(1-biteFlash)*0.45),-0.7,0.85);
         ctx.stroke();
       }
 
@@ -5003,152 +5037,181 @@
       ctx.scale(faceDir,1);
       ctx.translate(0,crouchDrop);
 
-      // Uneven dragging zombie legs (tattered dark trousers + mud/blood stains)
-      const legL=limp*s*0.24, legR=-limp*s*0.14;
-      ctx.strokeStyle='#181a18';
-      ctx.lineWidth=Math.max(1,s*0.055);
+      // Articulated zombie legs (back dragging leg + front shambling bent leg, boots planted at y = 0!)
+      const strideA=limp*s*0.24;
+      const strideB=-limp*s*0.18;
       // Back dragging leg
-      ctx.fillStyle=pants;
+      ctx.strokeStyle='#222624';
+      ctx.lineWidth=Math.max(2.4,s*0.20);
       ctx.beginPath();
-      ctx.roundRect(-s*0.28+legR*0.5,-s*0.96,s*0.24,s*0.98,s*0.08);
-      ctx.fill();ctx.stroke();
-      // Front limping leg
-      ctx.fillStyle='#353736';
+      ctx.moveTo(-s*0.08,-s*0.86);
+      ctx.lineTo(-s*0.18+strideB*0.4,-s*0.44);
+      ctx.lineTo(-s*0.26+strideB*0.75,-s*0.02);
+      ctx.stroke();
+      // Torn calf skin strip on dragging leg
+      ctx.strokeStyle=skinDark;
+      ctx.lineWidth=Math.max(1.4,s*0.11);
       ctx.beginPath();
-      ctx.roundRect(s*0.04+legL*0.65,-s*0.98,s*0.24,s*1.0,s*0.08);
-      ctx.fill();ctx.stroke();
+      ctx.moveTo(-s*0.21+strideB*0.52,-s*0.30);
+      ctx.lineTo(-s*0.25+strideB*0.70,-s*0.10);
+      ctx.stroke();
 
-      // Hunched decayed torso
+      // Front shambling leg (bent knee)
+      ctx.strokeStyle=pants;
+      ctx.lineWidth=Math.max(2.5,s*0.21);
+      ctx.beginPath();
+      ctx.moveTo(s*0.06,-s*0.86);
+      ctx.lineTo(s*0.16+strideA*0.55,-s*0.44);
+      ctx.lineTo(s*0.10+strideA*0.85,-s*0.01);
+      ctx.stroke();
+      // Muddy boots planted on y = 0
+      ctx.fillStyle='#1c1916';
+      ctx.beginPath();ctx.ellipse(-s*0.23+strideB*0.75,-s*0.01,s*0.12,s*0.055,0,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.ellipse(s*0.14+strideA*0.85,0,s*0.12,s*0.055,0,0,Math.PI*2);ctx.fill();
+
+      // Hunched rotting torso
       ctx.save();
-      ctx.translate(0,-s*0.92-bob);
+      ctx.translate(0,-s*0.86-bob);
       ctx.rotate(torsoTilt);
 
-      // Back outstretched grasping arm
+      // Back outstretched articulated zombie arm (bent elbow + reaching clawed hand)
       ctx.save();
-      ctx.translate(s*0.12,-s*0.72);
-      ctx.rotate(-0.22+armReach*0.7);
-      ctx.fillStyle=cloth;
-      ctx.fillRect(0,-s*0.09,s*0.44,s*0.18);
-      ctx.fillStyle=skin;
-      ctx.fillRect(s*0.40,-s*0.075,s*0.38,s*0.14);
-      // Curved fingers
-      ctx.strokeStyle=skin;
-      ctx.lineWidth=Math.max(1,s*0.045);
+      ctx.translate(s*0.10,-s*0.66);
+      ctx.rotate(-0.18+armReach*0.72);
+      ctx.strokeStyle=cloth;
+      ctx.lineWidth=Math.max(2.0,s*0.155);
+      ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(s*0.38,s*0.04);ctx.stroke();
+      ctx.strokeStyle=skinDark;
+      ctx.lineWidth=Math.max(1.6,s*0.12);
+      ctx.beginPath();ctx.moveTo(s*0.38,s*0.04);ctx.lineTo(s*0.74,-s*0.04);ctx.stroke();
+      ctx.strokeStyle=blood;
+      ctx.lineWidth=Math.max(1.0,s*0.045);
       ctx.beginPath();
-      ctx.moveTo(s*0.78,-s*0.04);ctx.lineTo(s*0.89,s*0.02);
-      ctx.moveTo(s*0.78,s*0.03);ctx.lineTo(s*0.87,s*0.09);
+      ctx.moveTo(s*0.74,-s*0.04);ctx.lineTo(s*0.88,-s*0.09);
+      ctx.moveTo(s*0.74,-s*0.02);ctx.lineTo(s*0.88,s*0.04);
       ctx.stroke();
       ctx.restore();
 
-      // Tattered jacket/shirt with torn hem & bloodstain
+      // Tattered blood-soaked jacket & torn hem
       ctx.fillStyle=cloth;
-      ctx.strokeStyle='#1a1e1c';
-      ctx.lineWidth=Math.max(1,s*0.05);
+      ctx.strokeStyle='#181c19';
+      ctx.lineWidth=Math.max(0.9,s*0.042);
       ctx.beginPath();
-      ctx.moveTo(-s*0.30,s*0.06);
-      ctx.lineTo(-s*0.34,-s*0.86);
-      ctx.quadraticCurveTo(0,-s*0.98,s*0.34,-s*0.82);
-      ctx.lineTo(s*0.28,s*0.04);
-      ctx.lineTo(s*0.12,-s*0.05);
-      ctx.lineTo(-s*0.04,s*0.08);
-      ctx.lineTo(-s*0.18,-s*0.03);
+      ctx.moveTo(-s*0.27,s*0.06);
+      ctx.lineTo(-s*0.32,-s*0.78);
+      ctx.quadraticCurveTo(0,-s*0.92,s*0.32,-s*0.74);
+      ctx.lineTo(s*0.26,s*0.05);
+      ctx.lineTo(s*0.11,-s*0.06);
+      ctx.lineTo(-s*0.04,s*0.09);
+      ctx.lineTo(-s*0.17,-s*0.04);
       ctx.closePath();
       ctx.fill();ctx.stroke();
 
-      // Realistic dark dried bloodstains across chest/collar
+      // Exposed torn chest flesh + pale bone rib lines + dark crimson bloodstain
       ctx.fillStyle=blood;
-      ctx.globalAlpha=0.72;
       ctx.beginPath();
-      ctx.ellipse(s*0.10,-s*0.58,s*0.16,s*0.22,0.2,0,Math.PI*2);
+      ctx.ellipse(s*0.09,-s*0.46,s*0.15,s*0.21,0.18,0,Math.PI*2);
       ctx.fill();
-      ctx.globalAlpha=1;
+      ctx.strokeStyle='#d9d4be';
+      ctx.lineWidth=Math.max(0.8,s*0.032);
+      for(let r=0;r<3;r++){
+        ctx.beginPath();
+        ctx.moveTo(s*0.02,-s*(0.55-r*0.08));
+        ctx.lineTo(s*0.16,-s*(0.53-r*0.08));
+        ctx.stroke();
+      }
 
-      // Pale decayed head (tilts upward when howling at night, lolls forward when shambling)
+      // Crooked rotting human head (tilted up when howling, thrust forward when biting!)
       ctx.save();
-      ctx.translate(s*0.10,-s*1.12);
-      ctx.rotate(isHowling?-0.52+Math.sin(visualTime*7+(zombie.howlPhase||0))*0.08:0.14);
+      ctx.translate(s*0.12,-s*1.04);
+      ctx.rotate(isHowling?-0.52+Math.sin(visualTime*7+(zombie.howlPhase||0))*0.08:(atkPhase==='strike'?0.28:0.14));
+      // Gaunt olive-grey skull
       ctx.fillStyle=skin;
-      ctx.strokeStyle='#222821';
-      ctx.lineWidth=Math.max(0.9,s*0.05);
+      ctx.strokeStyle='#1f261e';
+      ctx.lineWidth=Math.max(0.9,s*0.044);
       ctx.beginPath();
-      ctx.ellipse(0,0,s*0.24,s*0.27,0,0,Math.PI*2);
+      ctx.ellipse(0,0,s*0.22,s*0.26,0.06,0,Math.PI*2);
       ctx.fill();ctx.stroke();
-
-      // Sparse unkempt hair
-      ctx.fillStyle='#2b2926';
-      ctx.beginPath();
-      ctx.arc(-s*0.04,-s*0.08,s*0.23,Math.PI*0.9,Math.PI*2.05);
-      ctx.fill();
-
-      // Hollow sunken dark eye socket + pale clouded cataract eye
-      ctx.fillStyle='#191c18';
-      ctx.beginPath();
-      ctx.ellipse(s*0.11,-s*0.04,s*0.075,s*0.06,0,0,Math.PI*2);
-      ctx.fill();
-      ctx.fillStyle='#cdd6be';
-      ctx.beginPath();
-      ctx.arc(s*0.12,-s*0.04,s*0.025,0,Math.PI*2);
-      ctx.fill();
-
-      // Slack open blood-stained jaw (wider when howling or biting!)
-      ctx.fillStyle='#2a0c0e';
-      const jawOpen=isHowling||atkPhase==='strike'||atkPhase==='feed'?0.13:0.065;
-      ctx.beginPath();
-      ctx.ellipse(s*0.13,s*0.11,s*0.09,s*jawOpen,0.12,0,Math.PI*2);
-      ctx.fill();
+      // Gaunt shadowed cheek hollow
+      ctx.fillStyle=skinDark;
+      ctx.beginPath();ctx.ellipse(s*0.04,s*0.07,s*0.09,s*0.055,-0.2,0,Math.PI*2);ctx.fill();
+      // Tangled dark hair tufts
+      ctx.fillStyle='#242220';
+      ctx.beginPath();ctx.arc(-s*0.05,-s*0.09,s*0.21,Math.PI*0.88,Math.PI*2.02);ctx.fill();
+      // Deep sunken dark eye socket + eerie milky pale undead eye
+      ctx.fillStyle='#141713';
+      ctx.beginPath();ctx.ellipse(s*0.10,-s*0.05,s*0.072,s*0.056,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#dce8be';
+      ctx.beginPath();ctx.arc(s*0.11,-s*0.05,Math.max(1.0,s*0.028),0,Math.PI*2);ctx.fill();
+      // Wide snarling blood-stained mouth with jagged pale teeth
+      const jawOpen=isHowling||atkPhase==='strike'||atkPhase==='feed'?0.13:0.075;
+      ctx.fillStyle='#2d090b';
+      ctx.beginPath();ctx.ellipse(s*0.12,s*0.12,s*0.095,s*jawOpen,0.1,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#e8e4cf';
+      ctx.fillRect(s*0.06,s*0.06,s*0.032,s*0.04);
+      ctx.fillRect(s*0.11,s*0.06,s*0.032,s*0.045);
+      ctx.fillRect(s*0.16,s*0.065,s*0.028,s*0.038);
+      // Dried blood dripping from chin
       ctx.fillStyle=blood;
-      ctx.fillRect(s*0.06,s*0.16,s*0.11,s*0.08);
+      ctx.beginPath();ctx.ellipse(s*0.11,s*0.21,s*0.07,s*0.055,0,0,Math.PI*2);ctx.fill();
 
-      // Eerie cold breath / continuous night-howl mist escaping open mouth
+      // Continuous eerie breath mist when howling at night
       if(isHowling){
         const pulse=(visualTime*1.8+(zombie.howlPhase||0))%1;
-        ctx.strokeStyle=`rgba(196,220,206,${(1-pulse)*0.55})`;
-        ctx.lineWidth=Math.max(1,s*0.045);
+        ctx.strokeStyle=`rgba(196,224,206,${(1-pulse)*0.55})`;
+        ctx.lineWidth=Math.max(1,s*0.042);
         ctx.beginPath();
-        ctx.arc(s*0.24+pulse*s*0.35,s*0.02-pulse*s*0.45,s*(0.16+pulse*0.42),-0.9,0.7);
+        ctx.arc(s*0.24+pulse*s*0.34,s*0.02-pulse*s*0.44,s*(0.16+pulse*0.38),-0.9,0.7);
         ctx.stroke();
       }
       ctx.restore();
 
-      // Front grasping tattered arm reaching for villagers/wolves
+      // Front outstretched grasping zombie arm reaching aggressively for wolves & Sims!
       ctx.save();
-      ctx.translate(-s*0.06,-s*0.66);
-      ctx.rotate(0.06+armReach);
-      ctx.fillStyle=cloth;
-      ctx.fillRect(0,-s*0.10,s*0.46,s*0.20);
-      ctx.fillStyle=skin;
-      ctx.fillRect(s*0.44,-s*0.08,s*0.40,s*0.15);
-      // Blood-tipped grasping claws
+      ctx.translate(-s*0.05,-s*0.62);
+      ctx.rotate(0.08+armReach);
+      ctx.strokeStyle=cloth;
+      ctx.lineWidth=Math.max(2.1,s*0.165);
+      ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(s*0.40,s*0.05);ctx.stroke();
+      ctx.strokeStyle=skin;
+      ctx.lineWidth=Math.max(1.7,s*0.13);
+      ctx.beginPath();ctx.moveTo(s*0.40,s*0.05);ctx.lineTo(s*0.80,-s*0.02);ctx.stroke();
+      // Bloody outstretched clawing fingers
       ctx.strokeStyle=blood;
-      ctx.lineWidth=Math.max(1,s*0.045);
+      ctx.lineWidth=Math.max(1.1,s*0.048);
       ctx.beginPath();
-      ctx.moveTo(s*0.84,-s*0.04);ctx.lineTo(s*0.96,s*0.03);
-      ctx.moveTo(s*0.84,s*0.03);ctx.lineTo(s*0.94,s*0.10);
+      ctx.moveTo(s*0.80,-s*0.04);ctx.lineTo(s*0.95,-s*0.09);
+      ctx.moveTo(s*0.80,0);ctx.lineTo(s*0.96,s*0.02);
+      ctx.moveTo(s*0.80,s*0.04);ctx.lineTo(s*0.93,s*0.10);
       ctx.stroke();
       ctx.restore();
 
       ctx.restore(); // torsoTilt
       ctx.restore(); // faceDir
 
-      // Compact, crisp HP bar + status tag (clean even with 10+ zombies on screen)
-      const barW=clamp(s*2.6,34,64);
-      const barH=Math.max(4,s*0.16);
-      const barY=-s*2.65-bob+crouchDrop;
-      ctx.fillStyle='rgba(16,14,15,0.82)';
+      // Compact HP bar + clean status tag
+      const barW=clamp(s*2.0,34,62);
+      const barH=Math.max(4,s*0.13);
+      const barY=-s*2.32-bob+crouchDrop;
+      ctx.fillStyle='rgba(16,14,15,0.84)';
       ctx.fillRect(-barW/2-1,barY-1,barW+2,barH+2);
       ctx.fillStyle='#2a1214';
       ctx.fillRect(-barW/2,barY,barW,barH);
-      ctx.fillStyle=hpFrac>0.4?'#b83428':'#e66828';
+      ctx.fillStyle=hpFrac>0.4?'#c43428':'#eb6d28';
       ctx.fillRect(-barW/2,barY,barW*hpFrac,barH);
-      if(unit>=12){
+      if(unit>=11){
         ctx.font='700 9.5px system-ui,sans-serif';
         ctx.textAlign='center';ctx.textBaseline='bottom';
-        ctx.fillStyle=isHowling?'#d6eed8':'#f2d2ca';
-        const shortTag=isHowling
-          ? `${zombie.name} · HOWLING`
+        ctx.fillStyle=isHowling?'#d6eed8':'#f4d4cc';
+        const shortTag=zombie.targetKind==='wall'
+          ? `${zombie.name} · SMASHING WALL`
           : atkPhase==='feed'
             ? `${zombie.name} · EATING`
-            : zombie.name;
+            : atkPhase==='strike'||atkPhase==='windup'
+              ? `${zombie.name} · BITING`
+              : isHowling
+                ? `${zombie.name} · HOWLING`
+                : zombie.name;
         ctx.fillText(shortTag,0,barY-3);
       }
 
@@ -5255,11 +5318,19 @@
           continue;
         }
         const [sx,sy]=screen(fx.x,fx.y,fx.z||0);
-        if(fx.kind==='particle'){
+        if(fx.kind==='slash'){
+          const r=unit*(fx.radius||0.85)*(0.75+frac*0.45);
+          ctx.globalAlpha=Math.max(0,1-frac);
+          ctx.strokeStyle=fx.color||'#e6f4ff';
+          ctx.lineWidth=Math.max(1.4,3.0*(1-frac));
+          ctx.beginPath();
+          ctx.arc(sx,sy,r,(fx.angle||0)-0.85,(fx.angle||0)+0.85);
+          ctx.stroke();
+        }else if(fx.kind==='particle'){
           ctx.globalAlpha=Math.max(0,1-frac);
           ctx.fillStyle=fx.color;
           ctx.beginPath();
-          ctx.arc(sx,sy,Math.max(2,unit*fx.size*(1-frac*0.4)),0,Math.PI*2);
+          ctx.arc(sx,sy,Math.max(1.4,unit*fx.size*(1-frac*0.35)),0,Math.PI*2);
           ctx.fill();
         }else if(fx.kind==='ring'){
           const r=unit*(0.45+frac*fx.maxR);
@@ -5335,7 +5406,7 @@
         if(unit>=5){
           const [sx,sy]=screen(pose.x,pose.y,0);
           const drawWolf=window.EarthDragonArt?.drawMajesticWolf||window.EarthDragonArt?.drawEnchantedDragon;
-          drawWolf?.(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,wolf,Boolean(pose.howling),Boolean(pose.biting),pose.stridePhase||0);
+          drawWolf?.(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,wolf,Boolean(pose.howling),Boolean(pose.biting),pose.stridePhase||0,pose.speedRatio??0);
         }else{
           const drp=renderRegion.regionalPoint(baseTown,pose.x,pose.y);
           const dp=v.screen(drp.x,drp.y);
@@ -5428,8 +5499,26 @@
         const wallSegs=FP.perimeterWallSegments(fort,tLevel,Boolean(berths.length));
         for(const seg of wallSegs){
           const x1=seg.x,y1=seg.y,w=seg.w,d=seg.d,z0=seg.z||0,h=seg.h||1.18,cx=x1+w/2,cy=y1+d/2;
-          addItem(cx,cy,cx+cy+.45,()=>{
-            box(x1,y1,w,d,z0,h,'#d3c29c','#a79272','#82725b');
+          const wallRec=state.site.trollDamage?.['wall-'+seg.id];
+          const ruined=Boolean(wallRec?.ruined);
+          addItem(cx,cy,cx+cy+(ruined?.12:.45),()=>{
+            if(ruined){
+              // Smashed stone rubble piles marking a passable wall breach!
+              const horiz=w>d;
+              const stones=Math.max(2,Math.min(6,Math.floor(Math.max(w,d)/1.4)));
+              for(let i=0;i<stones;i++){
+                const frac=(i+0.5)/stones;
+                const rx=horiz?x1+w*frac-0.24:x1+0.04;
+                const ry=horiz?y1+0.04:y1+d*frac-0.24;
+                box(rx,ry,horiz?0.48:w*0.82,horiz?d*0.82:0.48,0,0.12+(i%2)*0.09,'#9f8f74','#7a6c56','#5e5343');
+              }
+              return;
+            }
+            const damaged=Boolean(wallRec&&wallRec.hp<wallRec.maxHp);
+            const topCol=damaged?'#baa784':'#d3c29c';
+            const leftCol=damaged?'#8f7b5d':'#a79272';
+            const rightCol=damaged?'#6e5e4a':'#82725b';
+            box(x1,y1,w,d,z0,h,topCol,leftCol,rightCol);
             if(seg.kind==='post'||seg.kind==='tower'){
               box(x1-.06,y1-.06,w+.12,d+.12,z0+h,.22,'#e2d1a8','#b59e7a','#8d7a60');
             }else if(seg.kind==='wall'&&Math.max(w,d)>2){
@@ -5438,6 +5527,15 @@
                 const mx=horiz?x1+i*(w/steps)+.2:x1,my=horiz?y1:y1+i*(d/steps)+.2;
                 box(mx,my,horiz?.48:w,horiz?d:.48,z0+h,.22,'#dfd0a7','#b09a78','#8b785f');
               }
+            }
+            if(damaged&&unit>=8){
+              const [wx,wy]=screen(wallRec.x||cx,wallRec.y||cy,h+0.45);
+              const bw=48,pct=clamp(wallRec.hp/Math.max(1,wallRec.maxHp),0,1);
+              ctx.save();
+              ctx.fillStyle='rgba(20,14,12,0.84)';ctx.fillRect(wx-bw/2-1,wy-3,bw+2,6);
+              ctx.fillStyle='#3b1a16';ctx.fillRect(wx-bw/2,wy-2,bw,4);
+              ctx.fillStyle=pct>0.45?'#e8b85a':'#e64833';ctx.fillRect(wx-bw/2,wy-2,bw*pct,4);
+              ctx.restore();
             }
           },[Math.max(3,w+1),3,2]);
         }
@@ -5543,7 +5641,7 @@
         addItem(pose.x,pose.y,pose.depth,()=>{
           const [sx,sy]=screen(pose.x,pose.y,0);
           const drawWolf=window.EarthDragonArt?.drawMajesticWolf||window.EarthDragonArt?.drawEnchantedDragon;
-          drawWolf?.(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,wolf,Boolean(pose.howling),Boolean(pose.biting),pose.stridePhase||0);
+          drawWolf?.(ctx,sx,sy,unit*pose.size,pose.angle,visualTime,wolf,Boolean(pose.howling),Boolean(pose.biting),pose.stridePhase||0,pose.speedRatio??0);
           if(unit>=8){
             const tag=pose.howling
               ? `${wolf.name} · HOWLING AT MOON`

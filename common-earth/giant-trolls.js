@@ -14,12 +14,13 @@
   const TOWN_PERIMETER_UNITS = 19.5; // Community wall edge (~254m from center)
   // Spawn zombies in the dark outer woods (~125-175m outside territory walls) so they shamble in toward the 100m wolf line!
   const SPAWN_RADIUS_UNITS = 31.0; // ~11.5 units (~150m) beyond the walls!
-  const APPROACH_SPEED = 1.65; // Shamble speed (~21 m/s scaled to game time so they arrive steadily)
-  const HUNT_SPEED = 2.45; // Lunge/lurch speed when locking onto moving villagers or wolves
-  const WINDUP_SEC = 0.42;
-  const BITE_SEC = 0.30;
-  const FEED_SEC = 0.78;
-  const RECOVER_SEC = 0.45;
+  const APPROACH_SPEED = 2.05; // Relentless approaching shamble
+  const HUNT_SPEED = 3.25; // Frantic rabid lurch/sprint when locking onto living Sims or Wolves
+  const ZOMBIE_RADIUS = 0.34;
+  const WINDUP_SEC = 0.22;
+  const BITE_SEC = 0.22;
+  const FEED_SEC = 0.50;
+  const RECOVER_SEC = 0.28;
   const MIN_ZOMBIES_PER_WAVE = 10;
   const MAX_CONCURRENT_LOCAL_ZOMBIES = 40;
   const WAVE_INTERVAL_SEC = 55;
@@ -70,20 +71,41 @@
   function collectCommunityBuildings(site) {
     const list = [];
     if (!site) return list;
-    const fixed = [
-      { id: 'market', name: 'Village Hall & Market', x: 15, y: 15, maxHp: 220 },
-      { id: 'home-nw', name: 'North Forest Cottage', x: 9, y: 9, maxHp: 170 },
-      { id: 'home-sw', name: 'West Timber Cabin', x: 9, y: 15, maxHp: 170 },
-      { id: 'home-ne', name: 'East Woodland Home', x: 15, y: 9, maxHp: 170 }
-    ];
-    for (const f of fixed) list.push(f);
+    const marketBlock = root.EarthShifts?.district?.market || [2, 3];
+    const homesBlocks = root.EarthShifts?.district?.homes || [[1, 3], [3, 2], [3, 3]];
+    const mCx = marketBlock[0] * 6 + 3;
+    const mCy = marketBlock[1] * 6 + 3;
+    list.push({
+      id: 'market',
+      name: 'Village Hall & Market',
+      x: mCx,
+      y: mCy,
+      box: [mCx - 1.55, mCy - 1.45, mCx + 1.55, mCy + 1.45],
+      maxHp: 220
+    });
+    const homeNames = ['West Forest Cottage', 'East Timber Cabin', 'South Woodland Home'];
+    homesBlocks.forEach((blk, idx) => {
+      const cx = blk[0] * 6 + 3;
+      const cy = blk[1] * 6 + 3;
+      list.push({
+        id: 'home-' + idx,
+        name: homeNames[idx] || ('Village Cottage ' + (idx + 1)),
+        x: cx,
+        y: cy,
+        box: [cx - 1.27, cy - 1.125, cx + 1.27, cy + 1.125],
+        maxHp: 175
+      });
+    });
     for (const b of site.buildings || []) {
       const plot = Number.isInteger(b.plot) ? b.plot : 0;
+      const cx = (plot % 3) * 6 + 3;
+      const cy = Math.floor(plot / 3) * 6 + 3;
       list.push({
         id: b.id || ('lot-' + plot),
         name: b.name || b.kind || 'Village Shelter',
-        x: (plot % 3) * 6 + 3,
-        y: Math.floor(plot / 3) * 6 + 3,
+        x: cx,
+        y: cy,
+        box: [cx - 1.56, cy - 1.42, cx + 1.56, cy + 1.42],
         maxHp: 185
       });
     }
@@ -94,10 +116,23 @@
         name: fb.name || (fb.kind === 'dragonStable' ? 'Giant Wolf Cave' : fb.kind) || 'Outpost Cabin',
         x: fb.x,
         y: fb.y,
+        box: [fb.x - 1.6, fb.y - 1.5, fb.x + 1.6, fb.y + 1.5],
         maxHp: fb.kind === 'dragonStable' ? 320 : 175
       });
     }
     return list;
+  }
+
+  function distToBox(px, py, box) {
+    if (!box) return Infinity;
+    const cx = clamp(px, box[0], box[2]);
+    const cy = clamp(py, box[1], box[3]);
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  function closestPointOnBox(px, py, box) {
+    if (!box) return { x: px, y: py };
+    return { x: clamp(px, box[0], box[2]), y: clamp(py, box[1], box[3]) };
   }
 
   function ensureDamageMap(site) {
@@ -320,21 +355,21 @@
   }
 
   /**
-   * Authentic Zombie Target Selection:
-   * Drawn relentlessly to ANYTHING moving — exposed human villagers/Sims, roaming Majestic Wolves,
-   * and village houses/shelters (to claw inside and eat the villagers)!
+   * Hyper-Aggressive Authentic Zombie Target Selection:
+   * Drawn relentlessly to ALL living life — exposed human villagers/Sims AND roaming Majestic Wolves
+   * across a wide 22-unit sight/scent radius, plus village shelters when no living prey is closer.
    */
   function pickTargetForZombie(zombie, site, buildings, sims, wolves) {
     const dmgMap = site?.trollDamage || {};
     let best = null;
     let bestScore = Infinity;
 
-    // 1. Moving villagers / human Sims (strongest living scent within 12 units!)
+    // 1. Living human villagers / Sims (wide 22-unit scent & sight radius!)
     for (const s of sims || []) {
       if (!s || s.downed || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
       const d = Math.hypot(s.x - zombie.x, s.y - zombie.y);
-      if (d > 13.5) continue;
-      const score = d * 0.72; // Zombies crave living human flesh above buildings
+      if (d > 22.0) continue;
+      const score = d * 0.52;
       if (score < bestScore) {
         bestScore = score;
         best = {
@@ -348,13 +383,13 @@
       }
     }
 
-    // 2. Moving Majestic Wolves (zombies lunge & bite wolves too — they try to eat anything moving!)
+    // 2. Living Majestic Wolves (zombies hyper-aggressively swarm & bite wolves!)
     for (const w of wolves || []) {
       if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) continue;
       if (w.state === 'retreat') continue;
       const d = Math.hypot(w.x - zombie.x, w.y - zombie.y);
-      if (d > 10.5) continue;
-      const score = d * 0.78;
+      if (d > 20.0) continue;
+      const score = d * 0.56;
       if (score < bestScore) {
         bestScore = score;
         best = {
@@ -367,13 +402,13 @@
       }
     }
 
-    // 3. Standing village buildings (zombies claw and pound doors/walls to break in and eat villagers!)
+    // 3. Standing village buildings (clawing doors/walls to break inside and devour hiding villagers)
     const standing = (buildings || []).filter(b => !dmgMap[b.id]?.ruined);
     const pool = standing.length ? standing : (buildings || []);
     for (const b of pool) {
       if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
-      const d = Math.hypot(b.x - zombie.x, b.y - zombie.y);
-      const score = d + 1.8;
+      const d = b.box ? distToBox(zombie.x, zombie.y, b.box) : Math.hypot(b.x - zombie.x, b.y - zombie.y);
+      const score = d + 4.5;
       if (score < bestScore) {
         bestScore = score;
         best = {
@@ -382,6 +417,7 @@
           name: b.name,
           x: b.x,
           y: b.y,
+          box: b.box || null,
           maxHp: b.maxHp || 180
         };
       }
@@ -393,11 +429,60 @@
     const week = world.week || 1;
     zombie.strikesLanded = (zombie.strikesLanded || 0) + 1;
 
+    if (target.kind === 'wall') {
+      const map = ensureDamageMap(site);
+      const rec = map[target.id] || (map[target.id] = {
+        id: target.id,
+        wallId: target.wallId || target.id.replace(/^wall-/, ''),
+        kind: 'wall',
+        name: target.name || 'Community Perimeter Wall',
+        x: target.x,
+        y: target.y,
+        hp: target.maxHp || 260,
+        maxHp: target.maxHp || 260,
+        ruined: false,
+        burning: false
+      });
+      const dmg = 38 + ((zombie.strikesLanded * 7) % 18);
+      const wasRuined = Boolean(rec.ruined);
+      rec.hp = Math.max(0, rec.hp - dmg);
+      rec.burning = rec.hp < rec.maxHp * 0.55;
+      let justDestroyed = false;
+      if (rec.hp <= 0 && !wasRuined) {
+        rec.ruined = true;
+        justDestroyed = true;
+        zombie.buildingsSmashed = (zombie.buildingsSmashed || 0) + 1;
+        horde.community.buildingsRuined = (horde.community.buildingsRuined || 0) + 1;
+        site.wellbeing = clamp((site.wellbeing || 50) - 3, 0, 100);
+        zombie._wallTarget = null;
+      }
+      const msg = justDestroyed
+        ? 'WALL BREACHED! ' + zombie.name + ' smashed through ' + rec.name + ' in ' + site.name + '!'
+        : zombie.name + ' slammed against ' + rec.name + ' (-' + dmg + ' HP · ' + rec.hp + '/' + rec.maxHp + ' HP)!';
+      if (justDestroyed) record(horde, week, msg);
+      events.push({
+        type: justDestroyed ? 'wallBreach' : 'wallStrike',
+        troll: zombie,
+        zombie,
+        wallId: rec.wallId,
+        buildingId: rec.id,
+        buildingName: rec.name,
+        damage: dmg,
+        hp: rec.hp,
+        maxHp: rec.maxHp,
+        justRuined: justDestroyed,
+        x: target.x,
+        y: target.y,
+        message: msg
+      });
+      return;
+    }
+
     if (target.kind === 'wolf' && root.EarthDragonStable?.damageWolf) {
-      const dmg = 18 + ((zombie.strikesLanded * 5) % 12);
+      const dmg = 42 + ((zombie.strikesLanded * 7) % 21);
       const hit = root.EarthDragonStable.damageWolf(world, site, target.id, dmg, zombie.name);
       if (hit?.ok) {
-        zombie.hp = Math.min(zombie.maxHp, zombie.hp + 14);
+        zombie.hp = Math.min(zombie.maxHp, zombie.hp + 18);
         events.push({
           type: 'wolfStrike',
           troll: zombie,
@@ -552,7 +637,32 @@
       ? sceneContext.wolves
       : (root.EarthDragonStable?.getAutonomousPoses?.(site) || []);
 
-    const nightSpeedBoost = isNight ? 1.18 : 1.0;
+    const FP = root.EarthFlightPhysics;
+    let solidSet = FP?.collectSolidObstacles
+      ? FP.collectSolidObstacles(site, sceneContext?.solids)
+      : { walls: [], buildings: [], all: [] };
+    const nightSpeedBoost = isNight ? 1.22 : 1.0;
+
+    const wallBetween = (ax, ay, bx, by) => {
+      if (!FP?.segmentIntersectsBox || !solidSet.walls.length) return null;
+      for (const wOb of solidSet.walls) {
+        if (FP.segmentIntersectsBox(ax, ay, bx, by, wOb.box, 0.08).hit) return wOb;
+      }
+      return null;
+    };
+
+    const moveZombie = (z, destX, destY) => {
+      if (!FP?.moveWithSolidCollision || !solidSet.all.length) {
+        const moved = Math.hypot(destX - z.x, destY - z.y);
+        z.x = Number(destX.toFixed(3));
+        z.y = Number(destY.toFixed(3));
+        return { x: z.x, y: z.y, moved, hitWall: null, hitBuilding: null };
+      }
+      const res = FP.moveWithSolidCollision(z.x, z.y, destX, destY, ZOMBIE_RADIUS, solidSet);
+      z.x = Number(res.x.toFixed(3));
+      z.y = Number(res.y.toFixed(3));
+      return res;
+    };
 
     for (let i = 0; i < local.length; i++) {
       const z = local[i];
@@ -564,15 +674,23 @@
         z.howlPhase = ((z.howlPhase || 0) + step * (2.6 + (i % 4) * 0.45)) % (Math.PI * 2);
       }
 
+      // Drop stale wall target if that wall segment was already smashed down into rubble
+      if (z._wallTarget && FP?.isWallDestroyed?.(site, z._wallTarget.wallId || z._wallTarget.id)) {
+        z._wallTarget = null;
+        solidSet = FP.collectSolidObstacles(site, sceneContext?.solids);
+      }
+
       const km = distanceKm(z);
       z.distanceKm = km;
 
-      // Check if a roaming Majestic Wolf or exposed villager is already right next to an approaching zombie!
+      // Check for living Sims or Majestic Wolves within wide scent/sight radius (only clear-LOS prey!)
       const nearbyPrey = pickTargetForZombie(z, site, [], sims, wolves);
+      const preyBlockedByWall = nearbyPrey ? wallBetween(z.x, z.y, nearbyPrey.x, nearbyPrey.y) : null;
+      const reachablePrey = nearbyPrey && !preyBlockedByWall ? nearbyPrey : null;
 
-      // PHASE 1: Shambling emergence from the outer dark enchanted forest toward the village
-      if (z.state === 'approaching' && km > 0.025 && !nearbyPrey) {
-        const entryTarget = pickTargetForZombie(z, site, buildings, sims, wolves) || { x: TOWN_CENTER_X, y: TOWN_CENTER_Y, name: site.name, kind: 'building', id: 'market' };
+      // PHASE 1: Shambling emergence from the outer dark woods toward the village
+      if (z.state === 'approaching' && km > 0.025 && !reachablePrey && !z._wallTarget) {
+        const entryTarget = nearbyPrey || pickTargetForZombie(z, site, buildings, sims, wolves) || { x: TOWN_CENTER_X, y: TOWN_CENTER_Y, name: site.name, kind: 'building', id: 'market' };
         const dx = entryTarget.x - z.x;
         const dy = entryTarget.y - z.y;
         const dist = Math.hypot(dx, dy) || 1;
@@ -586,36 +704,68 @@
         z.attackPhase = 'march';
         z.attackProgress = 0;
 
-        // Uneven zombie shamble with slight erratic sway
+        // Uneven zombie shamble with slight erratic sway — strictly colliding against ALL solid walls & buildings!
         const sway = Math.sin((z.swingPhase || 0) * 1.6) * 0.14;
         const nx = dx / dist;
         const ny = dy / dist;
-        z.x = Number((z.x + (nx - ny * sway) * APPROACH_SPEED * spdMul * step).toFixed(3));
-        z.y = Number((z.y + (ny + nx * sway) * APPROACH_SPEED * spdMul * step).toFixed(3));
-        z.swingPhase = ((z.swingPhase || 0) + step * 3.4 * spdMul) % (Math.PI * 2);
+        const nextX = z.x + (nx - ny * sway) * APPROACH_SPEED * spdMul * step;
+        const nextY = z.y + (ny + nx * sway) * APPROACH_SPEED * spdMul * step;
+        const mRes = moveZombie(z, nextX, nextY);
+        z.swingPhase = ((z.swingPhase || 0) + Math.max(0.01, mRes.moved) * 2.1) % (Math.PI * 2);
+
+        if (mRes.hitWall) {
+          // Blocked by a SOLID intact perimeter wall — switch immediately to bashing down this wall!
+          const cp = closestPointOnBox(z.x, z.y, mRes.hitWall.box);
+          z._wallTarget = {
+            kind: 'wall',
+            id: mRes.hitWall.id,
+            wallId: mRes.hitWall.wallId,
+            name: mRes.hitWall.name,
+            x: cp.x,
+            y: cp.y,
+            box: mRes.hitWall.box,
+            maxHp: mRes.hitWall.maxHp || 260
+          };
+          z.state = 'attacking';
+          z.attackPhase = 'windup';
+          z.attackTimer = 0;
+          z.attackProgress = 0;
+        }
 
         z.distanceKm = distanceKm(z);
         const p3 = toWorld3D(z.x, z.y);
         z.worldX = p3.x;
         z.worldZ = p3.z;
 
-        if (z.distanceKm <= 0.025) {
+        if (!z._wallTarget && z.distanceKm <= 0.025) {
           z.state = 'hunting';
           z.attackPhase = 'chase';
-          const breachMsg = 'BREACH! ' + z.name + ' shambled into ' + site.name + ' hunting villagers!';
+          const breachMsg = 'BREACH! ' + z.name + ' shambled into ' + site.name + ' hunting all living life!';
           record(horde, world.week || 1, breachMsg);
           events.push({ type: 'breach', troll: z, zombie: z, x: z.x, y: z.y, message: breachMsg });
         }
         continue;
       }
 
-      if (z.state === 'approaching' && !nearbyPrey) {
+      if (z.state === 'approaching' && !reachablePrey && !z._wallTarget) {
         z.state = 'hunting';
         z.attackPhase = 'chase';
       }
 
-      // PHASE 2: Relentless hunting, lunging, biting & feeding on villagers, wolves, and shelters!
-      const target = nearbyPrey || pickTargetForZombie(z, site, buildings, sims, wolves);
+      // PHASE 2: Hyper-aggressive hunting, wall-smashing, lunging, biting & feeding on ALL living life!
+      // If a living Sim or Wolf is right beside the zombie on the SAME side of any wall, bite the living prey first!
+      let target = null;
+      if (reachablePrey && Math.hypot(reachablePrey.x - z.x, reachablePrey.y - z.y) <= 4.5) {
+        target = reachablePrey;
+        z._wallTarget = null;
+      } else if (z._wallTarget) {
+        const cp = closestPointOnBox(z.x, z.y, z._wallTarget.box);
+        z._wallTarget.x = cp.x;
+        z._wallTarget.y = cp.y;
+        target = z._wallTarget;
+      } else {
+        target = reachablePrey || nearbyPrey || pickTargetForZombie(z, site, buildings, sims, wolves);
+      }
       if (!target) continue;
 
       z.targetKind = target.kind;
@@ -624,22 +774,41 @@
       z.targetX = target.x;
       z.targetY = target.y;
 
-      const dx = target.x - z.x;
-      const dy = target.y - z.y;
+      // Compute exact surface distance for solid buildings & walls so zombies never clip inside solid objects
+      const aimPt = target.box ? closestPointOnBox(z.x, z.y, target.box) : { x: target.x, y: target.y };
+      const dx = aimPt.x - z.x;
+      const dy = aimPt.y - z.y;
       const dist = Math.hypot(dx, dy);
-      if (dist > 0.05) {
+      if (dist > 0.04) {
         z.facingX = Number((dx / dist).toFixed(3));
         z.facingY = Number((dy / dist).toFixed(3));
       }
 
-      const contactRange = target.kind === 'building' ? 2.1 : 1.45;
+      const contactRange = (target.kind === 'wall' || target.kind === 'building') ? 0.95 : 1.75;
+      const blockedNow = (target.kind === 'sim' || target.kind === 'wolf') ? wallBetween(z.x, z.y, target.x, target.y) : null;
 
       if (z.attackPhase === 'windup' || z.attackPhase === 'strike' || z.attackPhase === 'feed' || z.attackPhase === 'recover') {
         z.state = z.attackPhase === 'feed' ? 'feeding' : 'attacking';
-        if (z.attackPhase === 'windup' && dist > contactRange * 0.8) {
-          const lunge = HUNT_SPEED * 0.65 * spdMul * step;
-          z.x = Number((z.x + (dx / Math.max(0.01, dist)) * lunge).toFixed(3));
-          z.y = Number((z.y + (dy / Math.max(0.01, dist)) * lunge).toFixed(3));
+        if (z.attackPhase === 'windup' && dist > contactRange * 0.75) {
+          const lunge = HUNT_SPEED * 0.72 * spdMul * step;
+          const mRes = moveZombie(
+            z,
+            z.x + (dx / Math.max(0.01, dist)) * lunge,
+            z.y + (dy / Math.max(0.01, dist)) * lunge
+          );
+          if (mRes.hitWall && target.kind !== 'wall') {
+            const cp = closestPointOnBox(z.x, z.y, mRes.hitWall.box);
+            z._wallTarget = {
+              kind: 'wall',
+              id: mRes.hitWall.id,
+              wallId: mRes.hitWall.wallId,
+              name: mRes.hitWall.name,
+              x: cp.x,
+              y: cp.y,
+              box: mRes.hitWall.box,
+              maxHp: mRes.hitWall.maxHp || 260
+            };
+          }
         }
 
         z.attackTimer = (z.attackTimer || 0) + step;
@@ -649,10 +818,17 @@
             z.attackPhase = 'strike';
             z.attackTimer = 0;
             z.attackProgress = 0;
-            const biteReach = target.kind === 'building' ? 2.8 : 2.35;
-            if (dist <= biteReach) {
+            const liveAim = target.box ? closestPointOnBox(z.x, z.y, target.box) : { x: target.x, y: target.y };
+            const strikeDist = Math.hypot(liveAim.x - z.x, liveAim.y - z.y);
+            const biteReach = (target.kind === 'wall' || target.kind === 'building') ? 1.45 : 2.45;
+            const strikeWallBlock = (target.kind === 'sim' || target.kind === 'wolf') ? wallBetween(z.x, z.y, target.x, target.y) : null;
+            if (strikeDist <= biteReach && !strikeWallBlock) {
               executeZombieBite(world, horde, site, z, target, events);
               z._justBitLiving = target.kind === 'sim' || target.kind === 'wolf';
+              // Refresh solid obstacle set immediately if a wall was just breached!
+              if (target.kind === 'wall' && FP?.isWallDestroyed?.(site, target.wallId || target.id)) {
+                solidSet = FP.collectSolidObstacles(site, sceneContext?.solids);
+              }
             } else {
               z._justBitLiving = false;
             }
@@ -665,7 +841,6 @@
             z.attackProgress = 0;
           }
         } else if (z.attackPhase === 'feed') {
-          // Brief hunched feeding frenzy after biting a villager/wolf
           z.attackProgress = clamp(z.attackTimer / FEED_SEC, 0, 1);
           if (z.attackTimer >= FEED_SEC) {
             z.attackPhase = 'recover';
@@ -675,10 +850,11 @@
         } else if (z.attackPhase === 'recover') {
           z.attackProgress = clamp(z.attackTimer / RECOVER_SEC, 0, 1);
           if (z.attackTimer >= RECOVER_SEC) {
-            const nextTarget = pickTargetForZombie(z, site, buildings, sims, wolves);
-            const nextDist = nextTarget ? Math.hypot(nextTarget.x - z.x, nextTarget.y - z.y) : Infinity;
-            const nextRange = nextTarget?.kind === 'building' ? 2.1 : 1.45;
-            if (nextTarget && nextDist <= nextRange + 0.4) {
+            const nextTarget = z._wallTarget || pickTargetForZombie(z, site, buildings, sims, wolves);
+            const nextAim = nextTarget?.box ? closestPointOnBox(z.x, z.y, nextTarget.box) : nextTarget;
+            const nextDist = nextAim ? Math.hypot(nextAim.x - z.x, nextAim.y - z.y) : Infinity;
+            const nextRange = (nextTarget?.kind === 'wall' || nextTarget?.kind === 'building') ? 1.15 : 1.95;
+            if (nextTarget && nextDist <= nextRange) {
               z.attackPhase = 'windup';
               z.attackTimer = 0;
               z.attackProgress = 0;
@@ -690,16 +866,40 @@
             }
           }
         }
-      } else if (dist > contactRange) {
+      } else if (dist > contactRange || blockedNow) {
         z.state = 'hunting';
         z.attackPhase = 'chase';
         z.attackProgress = 0;
-        const moveDist = Math.min(dist - contactRange * 0.65, HUNT_SPEED * spdMul * step);
-        if (moveDist > 0) {
-          z.x = Number((z.x + (dx / dist) * moveDist).toFixed(3));
-          z.y = Number((z.y + (dy / dist) * moveDist).toFixed(3));
+        const stepGoal = Math.min(Math.max(0.1, dist), HUNT_SPEED * spdMul * step);
+        const nx = dx / Math.max(0.01, dist);
+        const ny = dy / Math.max(0.01, dist);
+        const mRes = moveZombie(z, z.x + nx * stepGoal, z.y + ny * stepGoal);
+        z.swingPhase = ((z.swingPhase || 0) + Math.max(0.01, mRes.moved) * 2.6) % (Math.PI * 2);
+
+        if (mRes.hitWall) {
+          // Stopped squarely by an intact SOLID perimeter wall — bash it down!
+          const cp = closestPointOnBox(z.x, z.y, mRes.hitWall.box);
+          z._wallTarget = {
+            kind: 'wall',
+            id: mRes.hitWall.id,
+            wallId: mRes.hitWall.wallId,
+            name: mRes.hitWall.name,
+            x: cp.x,
+            y: cp.y,
+            box: mRes.hitWall.box,
+            maxHp: mRes.hitWall.maxHp || 260
+          };
+          z.state = 'attacking';
+          z.attackPhase = 'windup';
+          z.attackTimer = 0;
+          z.attackProgress = 0;
+        } else if (mRes.hitBuilding && target.kind === 'building' && mRes.hitBuilding.id === target.id) {
+          // Reached the exterior wall of the targeted solid building — claw it!
+          z.state = 'attacking';
+          z.attackPhase = 'windup';
+          z.attackTimer = 0;
+          z.attackProgress = 0;
         }
-        z.swingPhase = ((z.swingPhase || 0) + step * 4.6 * spdMul) % (Math.PI * 2);
       } else {
         z.state = 'attacking';
         z.attackPhase = 'windup';
