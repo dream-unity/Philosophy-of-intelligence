@@ -222,8 +222,54 @@ body:not([data-view="journey"]) .home-game-nav,
   margin-inline: auto;
 }
 body:not([data-view="journey"]) .home-download-nav,
+html.pwa-standalone .home-download-nav,
 body.pwa-standalone .home-download-nav,
 .opening-practice .home-download-nav { display: none; }
+
+/* Remove online music player completely in the installed PWA and when offline */
+html.pwa-standalone #site-music-panel,
+body.pwa-standalone #site-music-panel,
+html.pwa-offline #site-music-panel,
+body.pwa-offline #site-music-panel { display: none !important; }
+
+html.pwa-standalone .portal-hero,
+body.pwa-standalone .portal-hero,
+html.pwa-offline .portal-hero,
+body.pwa-offline .portal-hero {
+  --hero-logo-height: calc(100vh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+@supports (height: 100svh) {
+  html.pwa-standalone .portal-hero,
+  body.pwa-standalone .portal-hero,
+  html.pwa-offline .portal-hero,
+  body.pwa-offline .portal-hero {
+    --hero-logo-height: calc(100svh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+}
+html.pwa-standalone .portal-hero > .creation-intro,
+body.pwa-standalone .portal-hero > .creation-intro,
+html.pwa-offline .portal-hero > .creation-intro,
+body.pwa-offline .portal-hero > .creation-intro,
+html.pwa-standalone .universe-tattoo,
+body.pwa-standalone .universe-tattoo,
+html.pwa-offline .universe-tattoo,
+body.pwa-offline .universe-tattoo {
+  margin-bottom: 0;
+}
+
+@media (display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen), (display-mode: window-controls-overlay) {
+  .home-download-nav,
+  #site-music-panel {
+    display: none !important;
+  }
+  .portal-hero {
+    --hero-logo-height: calc(100vh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+  .portal-hero > .creation-intro,
+  .universe-tattoo {
+    margin-bottom: 0;
+  }
+}
 .download-app-btn {
   position: absolute;
   z-index: 5;
@@ -345,33 +391,26 @@ body.pwa-standalone .home-download-nav,
   gap: 10px;
   align-items: center;
 }
-.pwa-install-primary,
-.pwa-install-secondary {
+.pwa-install-actions[hidden] {
+  display: none;
+}
+.pwa-install-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   min-height: 42px;
-  padding: 8px 16px;
+  padding: 8px 18px;
+  border: 1px solid #302b23;
   border-radius: 2px;
+  background: #302b23;
+  color: #f6f1e6;
   font: 600 14px/1.2 Georgia, serif;
   text-decoration: none;
   cursor: pointer;
 }
-.pwa-install-primary {
-  border: 1px solid #302b23;
-  background: #302b23;
-  color: #f6f1e6;
-}
 .pwa-install-primary:hover { background: #1f1c16; }
-.pwa-install-secondary {
-  border: 1px solid #796f59;
-  background: #efe8d9;
-  color: #302b23;
-}
-.pwa-install-secondary:hover { background: #e5ddc9; }
-.pwa-install-primary:focus-visible,
-.pwa-install-secondary:focus-visible { outline: 3px solid #244b40; outline-offset: 2px; }
+.pwa-install-primary:focus-visible { outline: 3px solid #244b40; outline-offset: 2px; }
 .pwa-install-note {
   margin: 14px 0 0;
   padding-top: 12px;

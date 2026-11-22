@@ -49,10 +49,18 @@
     return 'desktop';
   }
 
+  function shouldShowDownloadButton({ isStandalone = false } = {}) {
+    return !isStandalone;
+  }
+
+  function shouldShowMusicPlayer({ isStandalone = false, isOnline = true } = {}) {
+    return !isStandalone && isOnline !== false;
+  }
+
   function getInstallButtonState({ isStandalone = false, hasDeferredPrompt = false, platform = 'desktop' } = {}) {
     const resolvedPlatform = isStandalone ? 'standalone' : platform;
     return {
-      visible: !isStandalone,
+      visible: shouldShowDownloadButton({ isStandalone }),
       action: hasDeferredPrompt ? 'prompt' : 'guide',
       label: 'Download app',
       platform: resolvedPlatform
@@ -103,6 +111,8 @@
     shouldCacheRequest,
     isNavigationFallbackAllowed,
     detectInstallPlatform,
+    shouldShowDownloadButton,
+    shouldShowMusicPlayer,
     getInstallButtonState,
     validateManifest
   };

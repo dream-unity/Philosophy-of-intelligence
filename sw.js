@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'poi-app-v1';
+const CACHE_NAME = 'poi-app-v2';
 
 // Explicit allowlist of Philosophy of Intelligence application assets ONLY.
 // /common-earth is strictly excluded from caching and service worker control.

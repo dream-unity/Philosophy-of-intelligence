@@ -19,6 +19,17 @@
     } else {
       document.head.append(document.getElementById('hero-preload').content);
     }
+    if ((typeof window.matchMedia === 'function' && (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: window-controls-overlay)').matches
+    )) || window.navigator.standalone === true || /^android-app:\/\//i.test(document.referrer || '')) {
+      document.documentElement.classList.add('pwa-standalone');
+    }
+    if (navigator.onLine === false) {
+      document.documentElement.classList.add('pwa-offline');
+    }
   </script>
   <style id="home-visibility">body[data-view="journey"] .site-header, body[data-view="journey"] .site-footer, body[data-view="journey"] .skip-link { display: none; }</style>
   <style>
@@ -141,9 +152,22 @@
       (() => {
         const source = document.getElementById('site-song-source');
         const panel = source.parentElement;
+        const nav = typeof navigator !== 'undefined' ? navigator : window.navigator;
+        const isStandalone = () => Boolean(
+          (typeof window.matchMedia === 'function' && (
+            window.matchMedia('(display-mode: standalone)').matches ||
+            window.matchMedia('(display-mode: minimal-ui)').matches ||
+            window.matchMedia('(display-mode: fullscreen)').matches ||
+            window.matchMedia('(display-mode: window-controls-overlay)').matches
+          )) ||
+          (nav && nav.standalone === true) ||
+          (typeof document !== 'undefined' && /^android-app:\/\//i.test(document.referrer || ''))
+        );
+        const isOffline = () => Boolean(nav && nav.onLine === false);
+        const details = typeof panel.closest === 'function' ? panel.closest('#site-music-panel') : null;
         let observer;
         function mount() {
-          if (!source.isConnected) return;
+          if (!source.isConnected || isStandalone() || isOffline()) return;
           observer?.disconnect();
           panel.removeEventListener('pointermove', mount);
           panel.removeEventListener('pointerdown', mount);
@@ -151,12 +175,27 @@
           panel.removeAttribute('tabindex');
           source.replaceWith(source.content);
         }
+        // In the installed PWA, remove the online music player completely.
+        if (isStandalone()) {
+          if (details) details.hidden = true;
+          return;
+        }
         // The offline edition includes a local availability note in this slot.
         if (!source.content.querySelector('iframe')) { mount(); return; }
+        if (isOffline() && details) {
+          details.hidden = true;
+        }
         panel.tabIndex = 0;
         panel.addEventListener('pointermove', mount);
         panel.addEventListener('pointerdown', mount);
         panel.addEventListener('focusin', mount);
+        if (typeof window.addEventListener === 'function') {
+          window.addEventListener('online', () => {
+            if (isStandalone()) return;
+            if (details) details.hidden = false;
+            mount();
+          });
+        }
         if (!('IntersectionObserver' in window)) {
           mount();
           return;
@@ -413,9 +452,8 @@
       <li>Choose <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</li>
       <li>Launch Philosophy of Intelligence directly from your home screen or desktop, even offline.</li>
     </ol>
-    <div class="pwa-install-actions">
+    <div id="pwa-install-actions" class="pwa-install-actions" hidden>
       <button type="button" id="pwa-install-confirm" class="pwa-install-primary" hidden>Install app now</button>
-      <a class="pwa-install-secondary" href="dist/Philosophy-of-Intelligence-Offline.html" download="Philosophy-of-Intelligence-Offline.html">Download offline HTML copy</a>
     </div>
     <p class="pwa-install-note">Includes Philosophy of Intelligence practice, theory, and archive only. Your saved notes stay private on this device.</p>
   </dialog>
@@ -425,16 +463,24 @@
       const downloadBtn = document.getElementById('download-app-button');
       const dialog = document.getElementById('pwa-install-dialog');
       const closeBtn = document.getElementById('pwa-install-close');
+      const actionsEl = document.getElementById('pwa-install-actions');
       const confirmBtn = document.getElementById('pwa-install-confirm');
       const stepsEl = document.getElementById('pwa-install-steps');
       const leadEl = document.getElementById('pwa-install-lead');
       const offlineBadge = document.getElementById('offline-indicator');
+      const musicPanel = document.getElementById('site-music-panel');
 
       let deferredPrompt = null;
 
       function isStandaloneMode() {
-        const mediaStandalone = typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
-        return Boolean(mediaStandalone || window.navigator.standalone === true);
+        const mediaStandalone = typeof window.matchMedia === 'function' && (
+          window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia('(display-mode: minimal-ui)').matches ||
+          window.matchMedia('(display-mode: fullscreen)').matches ||
+          window.matchMedia('(display-mode: window-controls-overlay)').matches
+        );
+        const referrerStandalone = /^android-app:\/\//i.test(document.referrer || '');
+        return Boolean(mediaStandalone || window.navigator.standalone === true || referrerStandalone);
       }
 
       function detectPlatform() {
@@ -445,15 +491,43 @@
         return 'desktop';
       }
 
+      function syncMusicVisibility() {
+        const standalone = isStandaloneMode();
+        const offline = navigator.onLine === false;
+        const hideMusic = standalone || offline;
+        if (musicPanel) {
+          musicPanel.hidden = hideMusic;
+          if (standalone) {
+            const iframe = document.getElementById('site-song');
+            if (iframe && typeof iframe.remove === 'function') iframe.remove();
+          }
+        }
+      }
+
       function syncStandaloneState() {
         const standalone = isStandaloneMode();
+        if (document.documentElement && document.documentElement.classList) {
+          document.documentElement.classList.toggle('pwa-standalone', standalone);
+        }
         document.body.classList.toggle('pwa-standalone', standalone);
         if (downloadBtn) downloadBtn.hidden = standalone;
+        syncMusicVisibility();
       }
 
       function syncOnlineState() {
-        if (!offlineBadge) return;
-        offlineBadge.hidden = navigator.onLine !== false;
+        const offline = navigator.onLine === false;
+        if (document.documentElement && document.documentElement.classList) {
+          document.documentElement.classList.toggle('pwa-offline', offline);
+        }
+        document.body.classList.toggle('pwa-offline', offline);
+        if (offlineBadge) offlineBadge.hidden = !offline;
+        syncMusicVisibility();
+      }
+
+      function syncInstallConfirmButton() {
+        const canPrompt = Boolean(deferredPrompt);
+        if (confirmBtn) confirmBtn.hidden = !canPrompt;
+        if (actionsEl) actionsEl.hidden = !canPrompt;
       }
 
       function populateInstallGuide() {
@@ -474,7 +548,7 @@
             : [
                 'Click the install icon in your browser address bar, or open the browser menu.',
                 'Choose "Install Philosophy of Intelligence" (or "Add to Dock" in Safari).',
-                'Or use the button below to save a self-contained single-file offline copy.'
+                'Confirm to launch Philosophy of Intelligence directly from your desktop or home screen, even offline.'
               ];
         stepsEl.textContent = '';
         for (const text of items) {
@@ -482,7 +556,7 @@
           li.textContent = text;
           stepsEl.appendChild(li);
         }
-        if (confirmBtn) confirmBtn.hidden = !deferredPrompt;
+        syncInstallConfirmButton();
       }
 
       function openInstallDialog() {
@@ -507,41 +581,37 @@
         }
         const promptEvent = deferredPrompt;
         deferredPrompt = null;
-        if (confirmBtn) confirmBtn.hidden = true;
+        syncInstallConfirmButton();
         try {
           await promptEvent.prompt();
           const outcome = await promptEvent.userChoice;
           if (outcome && outcome.outcome === 'accepted') {
             closeInstallDialog();
-            document.body.classList.add('pwa-standalone');
-            if (downloadBtn) downloadBtn.hidden = true;
           }
         } catch {
           openInstallDialog();
+        } finally {
+          syncStandaloneState();
         }
       }
 
       window.addEventListener('beforeinstallprompt', event => {
         event.preventDefault();
         deferredPrompt = event;
-        if (confirmBtn) confirmBtn.hidden = false;
+        syncInstallConfirmButton();
         syncStandaloneState();
       });
 
       window.addEventListener('appinstalled', () => {
         deferredPrompt = null;
+        syncInstallConfirmButton();
         closeInstallDialog();
-        document.body.classList.add('pwa-standalone');
-        if (downloadBtn) downloadBtn.hidden = true;
+        syncStandaloneState();
       });
 
       if (downloadBtn) {
         downloadBtn.addEventListener('click', () => {
-          if (deferredPrompt) {
-            triggerNativeInstall();
-          } else {
-            openInstallDialog();
-          }
+          openInstallDialog();
         });
       }
 
@@ -562,9 +632,11 @@
       window.addEventListener('online', syncOnlineState);
       window.addEventListener('offline', syncOnlineState);
       if (typeof window.matchMedia === 'function') {
-        const standaloneQuery = window.matchMedia('(display-mode: standalone)');
-        if (typeof standaloneQuery.addEventListener === 'function') {
-          standaloneQuery.addEventListener('change', syncStandaloneState);
+        for (const query of ['(display-mode: standalone)', '(display-mode: minimal-ui)', '(display-mode: fullscreen)', '(display-mode: window-controls-overlay)']) {
+          const mediaQuery = window.matchMedia(query);
+          if (mediaQuery && typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', syncStandaloneState);
+          }
         }
       }
 

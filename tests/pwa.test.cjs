@@ -87,6 +87,12 @@ test('platform detection and install button state handle iOS, iPadOS, Android, d
     label: 'Download app',
     platform: 'ios'
   });
+  assert.equal(helpers.shouldShowDownloadButton({ isStandalone: false }), true);
+  assert.equal(helpers.shouldShowDownloadButton({ isStandalone: true }), false);
+  assert.equal(helpers.shouldShowMusicPlayer({ isStandalone: false, isOnline: true }), true);
+  assert.equal(helpers.shouldShowMusicPlayer({ isStandalone: true, isOnline: true }), false);
+  assert.equal(helpers.shouldShowMusicPlayer({ isStandalone: true, isOnline: false }), false);
+  assert.equal(helpers.shouldShowMusicPlayer({ isStandalone: false, isOnline: false }), false);
 });
 
 test('manifest.webmanifest is valid, excludes Common Earth, and all referenced PNG icons exist with exact dimensions', () => {
@@ -185,11 +191,18 @@ test('sw.js passes syntax check, precaches only existing PoI assets, and bypasse
   });
 });
 
-test('index.html exposes Download app icon button, manifest, apple-touch-icon, and working PWA bootstrap', async () => {
+test('index.html exposes Download app icon button without offline HTML download, keeps button visible after install in browser, and removes music in standalone/offline modes', async () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.match(html, /<link\b[^>]*rel="manifest"[^>]*href="manifest\.webmanifest"/i);
   assert.match(html, /<link\b[^>]*rel="apple-touch-icon"[^>]*href="assets\/apple-touch-icon\.png"/i);
   assert.match(html, /id="download-app-button"[^>]*>[\s\S]*?<svg\b[\s\S]*?<span>Download app<\/span>/i);
+
+  // Issue 1: Verify offline HTML copy button and link are completely removed from install dialog
+  const dialogMarkup = html.match(/<dialog id="pwa-install-dialog"[\s\S]*?<\/dialog>/i)[0];
+  assert.doesNotMatch(dialogMarkup, /Download offline HTML copy/i);
+  assert.doesNotMatch(dialogMarkup, /Philosophy-of-Intelligence-Offline\.html/i);
+  assert.doesNotMatch(dialogMarkup, /<a\b/i);
+  assert.match(dialogMarkup, /id="pwa-install-confirm"[^>]*>Install app now<\/button>/i);
 
   const bootstrap = html.match(/<script id="pwa-bootstrap"[^>]*>([\s\S]*?)<\/script>/)[1];
 
@@ -200,6 +213,8 @@ test('index.html exposes Download app icon button, manifest, apple-touch-icon, a
     el.open = false;
     el.textContent = '';
     el.children = [];
+    el.removed = false;
+    el.remove = () => { el.removed = true; };
     el.appendChild = child => el.children.push(child);
     el.setAttribute = (k, v) => { if (k === 'open') el.open = true; };
     el.removeAttribute = k => { if (k === 'open') el.open = false; };
@@ -208,84 +223,166 @@ test('index.html exposes Download app icon button, manifest, apple-touch-icon, a
     return el;
   }
 
-  const elements = new Map([
-    ['download-app-button', createElement('download-app-button')],
-    ['pwa-install-dialog', createElement('pwa-install-dialog')],
-    ['pwa-install-close', createElement('pwa-install-close')],
-    ['pwa-install-confirm', createElement('pwa-install-confirm')],
-    ['pwa-install-steps', createElement('pwa-install-steps')],
-    ['pwa-install-lead', createElement('pwa-install-lead')],
-    ['offline-indicator', createElement('offline-indicator')]
-  ]);
-  elements.get('pwa-install-confirm').hidden = true;
-  elements.get('offline-indicator').hidden = true;
+  function runBootstrap({ standalone = false, online = true, userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' } = {}) {
+    const elements = new Map([
+      ['download-app-button', createElement('download-app-button')],
+      ['pwa-install-dialog', createElement('pwa-install-dialog')],
+      ['pwa-install-close', createElement('pwa-install-close')],
+      ['pwa-install-actions', createElement('pwa-install-actions')],
+      ['pwa-install-confirm', createElement('pwa-install-confirm')],
+      ['pwa-install-steps', createElement('pwa-install-steps')],
+      ['pwa-install-lead', createElement('pwa-install-lead')],
+      ['offline-indicator', createElement('offline-indicator')],
+      ['site-music-panel', createElement('site-music-panel')],
+      ['site-song', createElement('site-song')]
+    ]);
+    elements.get('pwa-install-actions').hidden = true;
+    elements.get('pwa-install-confirm').hidden = true;
+    elements.get('offline-indicator').hidden = true;
 
-  const classes = new Set();
-  const win = new EventTarget();
-  let swRegistered = null;
-  let onlineState = true;
-  const nav = {
-    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
-    maxTouchPoints: 5,
-    standalone: false,
-    get onLine() { return onlineState; },
-    serviceWorker: {
-      register: (script, opts) => {
-        swRegistered = { script, opts };
-        return Promise.resolve();
-      }
-    }
-  };
-  win.navigator = nav;
-  win.matchMedia = () => ({ matches: false, addEventListener() {} });
-
-  vm.runInNewContext(bootstrap, {
-    window: win,
-    navigator: nav,
-    location: { protocol: 'https:', hostname: 'www.philosophyofintelligence.life' },
-    document: {
-      getElementById: id => elements.get(id) || null,
-      createElement: tag => ({ tag, textContent: '' }),
-      body: {
-        classList: {
-          toggle(name, force) { force ? classes.add(name) : classes.delete(name); },
-          add(name) { classes.add(name); }
+    const bodyClasses = new Set();
+    const rootClasses = new Set();
+    const win = new EventTarget();
+    let swRegistered = null;
+    let onlineState = online;
+    const nav = {
+      userAgent,
+      maxTouchPoints: 5,
+      standalone: false,
+      get onLine() { return onlineState; },
+      serviceWorker: {
+        register: (script, opts) => {
+          swRegistered = { script, opts };
+          return Promise.resolve();
         }
       }
-    }
-  });
+    };
+    win.navigator = nav;
+    win.matchMedia = query => ({
+      matches: standalone && query === '(display-mode: standalone)',
+      addEventListener() {}
+    });
 
-  // Load triggers SW registration at root scope
-  win.dispatchEvent(new Event('load'));
-  assert.equal(swRegistered.script, './sw.js');
-  assert.equal(swRegistered.opts.scope, './');
+    vm.runInNewContext(bootstrap, {
+      window: win,
+      navigator: nav,
+      location: { protocol: 'https:', hostname: 'www.philosophyofintelligence.life' },
+      document: {
+        referrer: '',
+        getElementById: id => elements.get(id) || null,
+        createElement: tag => ({ tag, textContent: '' }),
+        documentElement: {
+          classList: {
+            toggle(name, force) { force ? rootClasses.add(name) : rootClasses.delete(name); },
+            add(name) { rootClasses.add(name); }
+          }
+        },
+        body: {
+          classList: {
+            toggle(name, force) { force ? bodyClasses.add(name) : bodyClasses.delete(name); },
+            add(name) { bodyClasses.add(name); }
+          }
+        }
+      }
+    });
 
-  // Clicking Download app without beforeinstallprompt opens iOS guidance dialog
-  elements.get('download-app-button').dispatchEvent(new Event('click'));
-  assert.equal(elements.get('pwa-install-dialog').open, true);
-  assert.ok(elements.get('pwa-install-steps').children.some(li => /Add to Home Screen/i.test(li.textContent)));
+    return {
+      elements,
+      bodyClasses,
+      rootClasses,
+      win,
+      setOnline(v) { onlineState = v; },
+      get swRegistered() { return swRegistered; }
+    };
+  }
+
+  // 1. Browser mode (online): Download app visible, music visible, SW registered
+  const ctx = runBootstrap({ standalone: false, online: true });
+  ctx.win.dispatchEvent(new Event('load'));
+  assert.equal(ctx.swRegistered.script, './sw.js');
+  assert.equal(ctx.swRegistered.opts.scope, './');
+  assert.equal(ctx.elements.get('download-app-button').hidden, false);
+  assert.equal(ctx.elements.get('site-music-panel').hidden, false);
+
+  // Clicking Download app without beforeinstallprompt opens iOS guidance dialog and keeps button visible
+  ctx.elements.get('download-app-button').dispatchEvent(new Event('click'));
+  assert.equal(ctx.elements.get('pwa-install-dialog').open, true);
+  assert.equal(ctx.elements.get('download-app-button').hidden, false);
+  assert.ok(ctx.elements.get('pwa-install-steps').children.some(li => /Add to Home Screen/i.test(li.textContent)));
 
   // Close dialog
-  elements.get('pwa-install-close').dispatchEvent(new Event('click'));
-  assert.equal(elements.get('pwa-install-dialog').open, false);
+  ctx.elements.get('pwa-install-close').dispatchEvent(new Event('click'));
+  assert.equal(ctx.elements.get('pwa-install-dialog').open, false);
 
-  // Offline / online toggles indicator
-  onlineState = false;
-  win.dispatchEvent(new Event('offline'));
-  assert.equal(elements.get('offline-indicator').hidden, false);
-  onlineState = true;
-  win.dispatchEvent(new Event('online'));
-  assert.equal(elements.get('offline-indicator').hidden, true);
+  // Issue 2: Offline hides music panel & toggles offline indicator; returning online restores music panel
+  ctx.setOnline(false);
+  ctx.win.dispatchEvent(new Event('offline'));
+  assert.equal(ctx.elements.get('offline-indicator').hidden, false);
+  assert.equal(ctx.elements.get('site-music-panel').hidden, true);
+  assert.equal(ctx.bodyClasses.has('pwa-offline'), true);
 
-  // Capturing beforeinstallprompt invokes native prompt on click
+  ctx.setOnline(true);
+  ctx.win.dispatchEvent(new Event('online'));
+  assert.equal(ctx.elements.get('offline-indicator').hidden, true);
+  assert.equal(ctx.elements.get('site-music-panel').hidden, false);
+  assert.equal(ctx.bodyClasses.has('pwa-offline'), false);
+
+  // Issue 1 & 3: Capturing beforeinstallprompt reveals Install app now inside dialog;
+  // accepting install AND firing appinstalled in browser keeps Download app button visible!
   let prompted = false;
   const bip = new Event('beforeinstallprompt');
   bip.preventDefault = () => {};
   bip.prompt = async () => { prompted = true; };
   bip.userChoice = Promise.resolve({ outcome: 'accepted' });
-  win.dispatchEvent(bip);
-  elements.get('download-app-button').dispatchEvent(new Event('click'));
+  ctx.win.dispatchEvent(bip);
+  ctx.elements.get('download-app-button').dispatchEvent(new Event('click'));
+  assert.equal(ctx.elements.get('pwa-install-dialog').open, true);
+  assert.equal(ctx.elements.get('pwa-install-confirm').hidden, false);
+  assert.equal(ctx.elements.get('download-app-button').hidden, false);
+
+  ctx.elements.get('pwa-install-confirm').dispatchEvent(new Event('click'));
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(prompted, true);
-  assert.equal(elements.get('download-app-button').hidden, true);
+  assert.equal(ctx.elements.get('pwa-install-dialog').open, false);
+  assert.equal(ctx.elements.get('download-app-button').hidden, false, 'Download app button must remain visible in browser after install');
+  assert.equal(ctx.bodyClasses.has('pwa-standalone'), false, 'Browser tab must not be marked standalone after install');
+
+  ctx.win.dispatchEvent(new Event('appinstalled'));
+  assert.equal(ctx.elements.get('download-app-button').hidden, false, 'Download app button must remain visible after appinstalled event');
+  assert.equal(ctx.elements.get('site-music-panel').hidden, false, 'Browser music player stays visible in browser tab');
+
+  // Issue 2: Installed standalone PWA hides Download app AND completely removes music player even when online
+  const standaloneCtx = runBootstrap({ standalone: true, online: true });
+  assert.equal(standaloneCtx.bodyClasses.has('pwa-standalone'), true);
+  assert.equal(standaloneCtx.elements.get('download-app-button').hidden, true);
+  assert.equal(standaloneCtx.elements.get('site-music-panel').hidden, true);
+  assert.equal(standaloneCtx.elements.get('site-song').removed, true);
+
+  // Verify site-song-loader never mounts the Suno iframe in standalone mode or offline mode
+  const songLoader = html.match(/<script id="site-song-loader">([\s\S]*?)<\/script>/)[1];
+  for (const scenario of [
+    { name: 'standalone online', standalone: true, onLine: true },
+    { name: 'browser offline', standalone: false, onLine: false }
+  ]) {
+    let mounted = false;
+    const detailsEl = { hidden: false };
+    const panel = new EventTarget();
+    panel.removeAttribute = () => {};
+    panel.closest = () => detailsEl;
+    const slot = {
+      isConnected: true,
+      parentElement: panel,
+      content: { querySelector: () => ({}) },
+      replaceWith() { mounted = true; }
+    };
+    const loaderWin = new EventTarget();
+    loaderWin.matchMedia = q => ({ matches: scenario.standalone && q === '(display-mode: standalone)' });
+    vm.runInNewContext(songLoader, {
+      document: { referrer: '', getElementById: () => slot },
+      window: loaderWin,
+      navigator: { onLine: scenario.onLine, standalone: false }
+    });
+    assert.equal(mounted, false, `site-song-loader must not mount Suno iframe when ${scenario.name}`);
+    assert.equal(detailsEl.hidden, true, `site-music-panel must be hidden when ${scenario.name}`);
+  }
 });
