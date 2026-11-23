@@ -402,3 +402,30 @@ test('a northern predator hears the actual file of feet and breaks away from it'
   assert.ok(Math.hypot(beast.x - front.x, beast.z - front.z) > before + 0.7);
   assert.equal(beast.alerted, false);
 });
+
+test('an early walker is recorded where Zelda last saw it without exposing the entire column', async () => {
+  const nav = await import('../zelda-and-the-princess-zombie/navigation.mjs');
+  const w = field(geo.roadX(170), 170);
+  const x = w.player.x, z = w.player.z + 6;
+  const pose = { id: 310, x, z, h: 1.75, y: geo.terrainHeight(x, z), kind: 2, roadFile: true, state: 'march' };
+  w.player.yaw = Math.PI;
+  game.recordProcessionView(w, [pose], 1.8);
+  advance(w, 0.23);
+  assert.equal(w.hostSighting, undefined);
+  w.player.yaw = 0;
+  game.recordProcessionView(w, [pose], 1.8);
+  advance(w, 0.23);
+  assert.ok(w.journal.some(n => n.id === 'looseWalker'));
+  assert.ok(!w.milestones.procession);
+  const observation = { ...w.hostSighting };
+  assert.equal(observation.id, pose.id);
+  const chart = nav.hostReport(w, game.rankPosition(w, 0));
+  assert.match(chart, /Last sighting/);
+  assert.doesNotMatch(chart, /Front rank/);
+  w.player.yaw = Math.PI;
+  game.recordProcessionView(w, [{ ...pose, x: x + 3 }], 1.8);
+  advance(w, 0.4);
+  assert.deepEqual(w.hostSighting, observation);
+  w.hostFallen = { [pose.id]: true };
+  assert.equal(nav.lastWalkerSighting(w), null);
+});

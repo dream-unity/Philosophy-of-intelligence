@@ -14,6 +14,7 @@ import {
   skirtWreckage,
   marchPace,
   frontStation,
+  roadFilePosition, castleGuestPosition, roadFileIds, nextMealAge,
   marchClock as hostClock,
   stillTheColumn,
 } from './procession.mjs';
@@ -35,6 +36,9 @@ import {
 import { barrier, footHeight, footing, clearSegment, riverImmersion, recoverFooting } from './travel.mjs';
 import { beginSwing, moveBody, strikeContacts, cue, tossPhial, advancePhial } from './swordplay.mjs';
 import { advanceWildlife } from './wildlife.mjs';
+import { nearbyHost, advanceHost, slidePastHost, detachedPosition, damageHost } from './host-encounters.mjs';
+import { gateArrival, gateForecast, livingLead, reliefPosition } from './host-vanguard.mjs';
+import { hostWithin } from './host-query.mjs';
 import { MAP, LANDMARKS, roadX, terrainHeight, clamp, distance, course } from './geography.mjs';
 export { bladeCoordinates } from './swordplay.mjs';
 export { registerObstacle, bridgeRise } from './travel.mjs';
@@ -69,6 +73,9 @@ export function arrivalView(w) {
 }
 export { MAP, LANDMARKS, roadX, trailX, terrainHeight } from './geography.mjs';
 export function hordePosition(w, index) {
+  return detachedPosition(w, index) || rankPosition(w, index);
+}
+export function rankPosition(w, index, formationOnly = false) {
   const i = clamp(Math.floor(index), 0, HORDE_COUNT - 1),
     line = Math.floor(i / 48);
   const file = i % 48,
@@ -76,6 +83,18 @@ export function hordePosition(w, index) {
   const time = w.ropeFallen ? (w.dispersalAt ?? w.elapsed) : w.elapsed;
   const clock = hostClock(w, time, line),
     listen = clamp(((w.hostListeningUntil || 0) - time) / 3.5, 0, 1);
+  const retreat = w.ropeFallen ? Math.max(0, w.elapsed - time) * 1.82 : 0;
+  // The broad row geometry remains cheap for the thousands of ordinary feet.
+  // Detached files and the guests at the table still occupy their original IDs.
+  if (!formationOnly && w.gateClosedAt != null) {
+    const guest = castleGuestPosition(w, i, time, retreat);
+    if (guest) return guest;
+  }
+  if (!formationOnly && w.gateRelief?.i === i) {
+    const point = reliefPosition(w, i, time, retreat);
+    if (point) return point;
+  }
+  if (!formationOnly && roadFileIds.includes(i)) return roadFilePosition(w, i, clock, retreat);
   // Rear ranks gradually fall in behind the vanguard. Inside the approach,
   // each five-abreast file folds into consecutive places in one gate lane.
   const pace = marchPace(i, clock);
@@ -115,6 +134,7 @@ export function hordePosition(w, index) {
     const press = Math.max(0, Math.cos(waiting * 1.8 - slot * 0.51 - line * 0.42));
     metres += 0.22 * Math.min(1, waiting) * press ** 4;
   }
+  metres = Math.max(-117, metres - retreat);
   const point = herdPoint(metres, skirtWreckage(metres, spread));
   const reaction = w.hostReactions?.[i];
   if (reaction) {
@@ -140,21 +160,40 @@ export function hordePosition(w, index) {
       }
     }
   }
-  if (w.ropeFallen) {
-    const away = w.elapsed - time;
-    const angle = (i % 23) * 2.39996;
-    point.x += Math.cos(angle) * away * 2.2;
-    point.z -= Math.abs(Math.sin(angle)) * away * 2.2;
-  }
   return point;
 }
-// Footfalls remain along the ground the host has crossed. They can be rebuilt
-// from route distance and the march clock after loading a journey.
+const lastHostSteps = new WeakMap();
+function leaveHostTracks(w, marchers) {
+  const last = lastHostSteps.get(w);
+  if (last?.player === w.player && w.elapsed >= last.at && w.elapsed - last.at < 0.55) return;
+  const feet = new Map();
+  for (const q of marchers) {
+    const a = w.hostActors?.[q.i] || q;
+    if ((!w.hostActors?.[q.i] && !roadFileIds.includes(q.i)) || w.hostFallen?.[q.i]) continue;
+    if (distance(w.player, a) > 19 || a.z > 1435) continue;
+    const prev = last?.player === w.player && last.feet.get(q.i);
+    const step = prev ? distance(prev, a) : 0;
+    const prints = prev?.prints || 0;
+    if (prev && step < 0.74) {
+      feet.set(q.i, prev);
+      continue;
+    }
+    feet.set(q.i, { x: a.x, z: a.z, prints: prints + 1 });
+    if (!prev || step > 4.2 || !['leaves', 'grass', 'gravel'].includes(footing(w, a.x, a.z))) continue;
+    const side = prints % 2 ? -0.11 : 0.11;
+    const tracks = (w.hostTracks ??= []);
+    tracks.push({ x: a.x + side * (a.z - prev.z) / step, z: a.z - side * (a.x - prev.x) / step });
+    if (tracks.length > 64) tracks.shift();
+  }
+  lastHostSteps.set(w, { at: w.elapsed, player: w.player, feet });
+}
+// The broad tracks in the valley follow the settled column. Detached walkers
+// leave prints at the places their feet actually reached on yielding ground.
 export function hostFootprints(w) {
   const p = w.player;
-  if (p.z < 1015) return [];
+  const marks = (w.hostTracks || []).filter((q) => distance(q, p) < 22);
+  if (p.z < 1015) return marks;
   const head = frontStation(hostClock(w, w.dispersalAt ?? w.elapsed), raceDuration(w));
-  const marks = [];
   for (const leg of hordeLength) {
     const dx = p.x - leg.x,
       dz = p.z - leg.z;
@@ -315,6 +354,9 @@ export function resumeCheckpoint(w) {
       w.raceGrace = (w.raceGrace || 0) + rewind;
       if (needed > rewind) w.raceDuration = raceDuration(w) + needed - rewind;
       w.gateClosedAt = null;
+      delete w.gateRelief;
+      delete w.gateWaitSince;
+      delete w.gateVanguard;
     }
   }
   return w;
@@ -498,8 +540,27 @@ export function migrate(w) {
 }
 const raceTime = (w) => hostClock(w, w.elapsed);
 const event = (w, type, text) => w.events.push(text ? { type, text } : { type });
-export const secondsToGate = (w) =>
-  Math.max(0, raceDuration(w) - raceTime(w)) + Math.max(0, (w.hostPauseUntil || 0) - w.elapsed);
+export const secondsToGate = (w) => gateForecast(w, raceDuration(w), rankPosition);
+// A later, optional view of the same feast. Nothing in this view is written
+// back into Zelda's journey, including ranks that died on the way to the keep.
+export function feastAftermath(w) {
+  if (w.ending?.id !== 'feast') return null;
+  const arrival = w.gateClosedAt ?? w.elapsed + secondsToGate(w);
+  if (!Number.isFinite(arrival)) return null;
+  const age = nextMealAge(w, Math.max(0,w.elapsed - arrival));
+  if (!Number.isFinite(age)) return null;
+  const scene = {
+    ...w, feastAftermath: true, elapsed: arrival + age,
+    gateClosedAt: arrival, ending: null, sequence: null, dialogue: null, watchedTable: true,
+    events: [], hostWarning: null, hostReactions: {}, recognisedAt: null,
+    hostActors: Object.fromEntries(Object.entries(w.hostActors || {}).filter(([,a]) => a.state === 'fallen')),
+    player: {...w.player, x: 35.3, z: 1509.8, yaw: Math.atan2(-3.9, 6.85), pitch: -0.08,
+      speed: 0, vx: 0, vz: 0, gaitOffset: 0},
+    actors: w.actors.map(a => a.type === 'princess' ? {...a, x: a.homeX, z: a.homeZ} : a),
+  };
+  scene.player.feetY = footHeight(scene, scene.player.x, scene.player.z);
+  return scene;
+}
 function notify(w, text, seconds = 4) {
   w.notice = text;
   w.noticeUntil = w.elapsed + seconds;
@@ -727,7 +788,8 @@ function ring(w, tone) {
     if (tone === 'low' && w.sluiceDecoyAt == null && !w.gateClosedAt && !w.ropeFallen) {
       w.sluiceDecoyAt = w.elapsed;
       stillTheColumn(w, 14);
-      cue(w, 'answer', 'host', hordePosition(w, 0));
+      const listener = livingLead(w);
+    if (listener && !w.ropeFallen) cue(w, 'answer', 'host', hordePosition(w, listener.i));
       notify(
         w,
         'The low bell speaks alone. Beyond the water a rank turns towards it. For a little while, the boots fall quiet.',
@@ -952,37 +1014,43 @@ function injury(w, a) {
   w.player.health = Math.max(0, w.player.health - (a.type === 'wolf' || a.type === 'host' ? 1 : 2));
   cue(w, 'hurt', a.type, a);
   if (!w.player.health) {
+    if (a.type === 'host') {
+      end(w, 'taken', 'Taken by the dead',
+        'A hand catches your sword arm. Its weight drives you to your knees. When the tower calls again, your sword is lying where you fell.');
+      return;
+    }
     const line = {
       wolf: 'You hear a second set of paws behind you. Your boot slips on the wet roots. The second wolf is already there.',
       troll:
         'The troll’s shadow falls across your path. Your sword rings once against stone and falls silent.',
       dragon: 'Wind folds the canopy flat. In the dragon’s breath, the forest turns white.',
-      host: 'Grey hands close over the blue ribbon. The ranks fold together again and carry the bell’s answer uphill.',
     }[a.type];
     end(w, 'wilds', 'Lost in the green', line);
   } else if (a.type === 'host')
-    notify(w, 'Fingers hook your sleeve. The next shoulder forces you free.', 2.7);
+    notify(w, 'Teeth catch your shoulder. You tear free of the dead hand.', 2.7);
   else notify(w, 'The ' + a.type + ' strikes. Move out of reach.', 2.7);
 }
 // Renderers submit only illustrated walkers from the last painted view. This
 // ephemeral shortlist never enters a save or an ending-camera reconstruction.
 const processionViews = new WeakMap();
 export function recordProcessionView(w, poses, aspect) {
-  if (w.milestones.bowl || w.player.z < 995 || w.raceWitness || w.sequence || w.ending) return;
+  if (w.raceWitness || w.sequence || w.ending || w.ropeFallen) return;
   processionViews.set(w.renderSource || w, { poses, aspect, at: w.elapsed });
 }
 function inspectProcession(w) {
-  if (w.milestones.bowl || w.player.z < 995 || w.elapsed < (w.nextHostLook || 0)) return;
+  if (w.ropeFallen || w.elapsed < (w.nextHostLook || 0)) return;
   const view = processionViews.get(w);
-  if (!view || w.elapsed < view.at || w.elapsed - view.at > 0.45) return;
+  if (!view?.poses.length || w.elapsed < view.at || w.elapsed - view.at > 0.45) return;
   w.nextHostLook = w.elapsed + 0.19;
   const p = w.player,
     eye = Math.max(p.feetY ?? 0, footHeight(w, p.x, p.z)) + 1.64;
   const threshold = Math.cos(Math.min(0.48, Math.atan((view.aspect || 1) / 1.48) * 0.84));
-  let seen = false,
-    bowl = false;
+  let seen = false, bowl = false, feeding = false, traveller;
   for (const a of view.poses) {
-    if (a.kind !== 0 && (seen || w.milestones.procession)) continue;
+    if (a.state === 'fallen' || w.hostFallen?.[a.id]) continue;
+    const loose = a.roadFile || ['pursue', 'windup', 'recover', 'stagger', 'return'].includes(a.state);
+    const atFeast = a.state === 'feed' && w.milestones.reveal;
+    if (!loose && !atFeast && (w.milestones.procession || seen) && (a.kind !== 0 || w.milestones.bowl)) continue;
     const dx = a.x - p.x,
       dz = a.z - p.z,
       d = Math.hypot(dx, dz);
@@ -996,7 +1064,7 @@ function inspectProcession(w) {
     if (Math.abs((p.pitch || 0) - Math.atan2(detail - eye, d)) > 0.46) continue;
     if (!clearSegment(w, p.x, p.z, a.x, a.z, 0.04, eye, detail)) continue;
     const hidden = view.poses.some((b) => {
-      if (b === a) return false;
+      if (b === a || b.state === 'fallen' || w.hostFallen?.[b.id]) return false;
       const bx = b.x - p.x,
         bz = b.z - p.z,
         u = (bx * dx + bz * dz) / (d * d);
@@ -1005,18 +1073,30 @@ function inspectProcession(w) {
       return height > b.y + 0.25 && height < b.y + b.h;
     });
     if (hidden) continue;
-    seen = true;
-    if (a.kind === 0) {
-      bowl = true;
-      break;
+    if (loose && (!traveller || d < traveller.d)) traveller = { id: a.id, x: a.x, z: a.z, d };
+    if (!loose && !a.castleGuest) seen = true;
+    if (atFeast && d < 17) feeding = true;
+    if (a.kind === 0) bowl = true;
+  }
+  if (traveller) {
+    const old = w.hostSighting;
+    if (!old || old.id !== traveller.id || w.elapsed >= old.at + 1)
+      w.hostSighting = { id: traveller.id, x: traveller.x, z: traveller.z, at: w.elapsed };
+    if (!w.milestones.looseWalker) {
+      w.milestones.looseWalker = true;
+      storyBeat(w, 'looseWalker');
     }
+  }
+  if (feeding && !w.milestones.guestsAtTable) {
+    w.milestones.guestsAtTable = true;
+    storyBeat(w, 'guestsAtTable');
   }
   if (seen && !w.milestones.procession) {
     w.milestones.procession = true;
     storyBeat(w, 'procession');
     notify(w, 'The dead file past, shoulder to shoulder, on the broken road to the keep.', 4.5);
   }
-  if (bowl) {
+  if (bowl && !w.milestones.bowl) {
     w.milestones.bowl = true;
     storyBeat(w, 'bowl');
     notify(w, 'One of the dead carries a wooden bowl pressed against its ribs.', 4.5);
@@ -1052,29 +1132,8 @@ function landmarkBeat(w, id, condition, text, sound) {
   notify(w, text, 5.5);
   if (sound) event(w, sound);
 }
-const contactsByWorld = new WeakMap();
-function crowdContact(w) {
-  const p = w.player;
-  if (p.z < 955 || w.ropeFallen) return;
-  const head = hordePosition(w, 0);
-  if (distance(p, head) > 470) return;
-  let cache = contactsByWorld.get(w);
-  if (!cache || w.elapsed < cache.at || w.elapsed - cache.at > 0.18 || distance(p, cache) > 2.2) {
-    cache = { x: p.x, z: p.z, at: w.elapsed, people: [] };
-    contactsByWorld.set(w, cache);
-    for (let start = 0; start < HORDE_COUNT; start += 48) {
-      if (distance(p, hordePosition(w, start)) > 33) continue;
-      for (let i = start; i < start + 48; i++) {
-        const q = hordePosition(w, i);
-        if (distance(p, q) < 4.8) cache.people.push({ ...q, i });
-      }
-    }
-  }
-  // The broad phase stores identities. Every contact uses this tick’s pose,
-  // including sidesteps, so colliders stay on the illustrated body.
-  return cache.people.map(({ i }) => ({ ...hordePosition(w, i), i }));
-}
 function reactToHost(w, q, quiet = false) {
+  if (w.hostActors?.[q.i] || w.hostFallen?.[q.i]) return;
   const p = w.player,
     dx = q.x - p.x,
     dz = q.z - p.z,
@@ -1126,48 +1185,6 @@ function avoidHost(w, nearby) {
       return false;
     });
 }
-function warnMarcher(w, walker) {
-  if (w.hostWarning || w.elapsed < (w.hostNextWarning || 0) || w.ropeFallen) return;
-  w.hostWarning = { i: walker.i, at: w.elapsed };
-  cue(w, 'brush', 'host', walker);
-  notify(w, 'A hand opens in the moving rank. Its nails catch the thread on your cuff.', 1.8);
-}
-function crowdPressure(w, people, dt) {
-  if (w.ropeFallen || w.gateCrossed) {
-    delete w.hostWarning;
-    return;
-  }
-  const p = w.player;
-  let nearest,
-    gap = Infinity,
-    shoulders = 0;
-  for (const q of people) {
-    const d = distance(q, p);
-    if (d < 2.6) shoulders++;
-    if (d < gap) {
-      nearest = q;
-      gap = d;
-    }
-  }
-  // Passing alongside the column is safe. Staying pinned between several
-  // shoulders gives one guest time to turn, or Zelda can provoke one himself.
-  w.crowdExposure = shoulders >= 5 && gap < 1.22 ? Math.min(4, (w.crowdExposure || 0) + dt) : 0;
-  if (w.crowdExposure > 1.5 && nearest) warnMarcher(w, nearest);
-  const warning = w.hostWarning;
-  if (!warning || w.elapsed < warning.at + 1.32) return;
-  const source = hordePosition(w, warning.i),
-    dx = source.x - p.x,
-    dz = source.z - p.z;
-  const d = Math.hypot(dx, dz);
-  const facing = (dx * Math.sin(p.yaw) + dz * Math.cos(p.yaw)) / Math.max(0.01, d);
-  if (d < 1.75 && clearSegment(w, p.x, p.z, source.x, source.z)) {
-    if (w.guardUntil > w.elapsed && facing > 0.16) cue(w, 'block', 'host', source);
-    else injury(w, { ...source, type: 'host' });
-  }
-  w.hostNextWarning = w.elapsed + 3.7;
-  w.crowdExposure = 0;
-  delete w.hostWarning;
-}
 function walk(w, dt, input) {
   const p = w.player;
   let f = clamp(Number(input.forward) || 0, -1, 1),
@@ -1216,9 +1233,14 @@ function walk(w, dt, input) {
   }
   const oldX = p.x,
     oldZ = p.z;
-  const host = crowdContact(w),
+  const host = nearbyHost(w, rankPosition),
     avoid = host && avoidHost(w, host);
-  if (Math.hypot(p.vx, p.vz) > 0.02) moveBody(w, p, p.vx * dt, p.vz * dt, avoid);
+  const dx = p.vx * dt, dz = p.vz * dt;
+  if (Math.hypot(p.vx, p.vz) > 0.02) {
+    moveBody(w, p, dx, dz, avoid);
+    if (host.length && !dodging && Math.hypot(p.x - oldX, p.z - oldZ) < Math.hypot(dx, dz) * 0.2)
+      slidePastHost(w, host, dx, dz, avoid);
+  }
   const ground = footHeight(w, p.x, p.z);
   // Snap to rising ground. Drop from ledges under gravity instead of snapping the camera down.
   const drop = p.feetY - ground;
@@ -1259,13 +1281,15 @@ function walk(w, dt, input) {
   }
   return { oldZ, marchers: host || [] };
 }
+const phialHost = {
+  inRange: (w, point, radius) => hostWithin(w, point, radius, rankPosition),
+  damage: damageHost,
+};
 function simulate(w, dt, input) {
   const p = w.player;
   w.elapsed += dt;
   const { oldZ, marchers } = walk(w, dt, input);
-  crowdPressure(w, marchers, dt);
-  if (w.ending) return;
-  advancePhial(w, dt, notify);
+  advancePhial(w, dt, notify, phialHost);
   strikeContacts(
     w,
     { move: (a, x, z) => moveBody(w, a, x, z) },
@@ -1274,14 +1298,13 @@ function simulate(w, dt, input) {
       notify,
       drop,
       marchers,
-      hitMarcher: (w, q, pt) => {
-        reactToHost(w, q);
-        warnMarcher(w, q);
-        cue(w, 'impact', 'zombie', pt || q);
-      },
+      hitMarcher: damageHost,
     }
   );
-  storyTick(w, dt, hordePosition);
+  advanceHost(w, dt, marchers, rankPosition, injury, notify);
+  leaveHostTracks(w, marchers);
+  if (w.ending) return;
+  storyTick(w, dt, rankPosition);
   const peal = Math.floor((w.elapsed + 31) / 37);
   if (peal > w.lastBell) {
     w.lastBell = peal;
@@ -1293,10 +1316,11 @@ function simulate(w, dt, input) {
     }
   }
   if (w.nextAnswer && w.elapsed >= w.nextAnswer) {
-    cue(w, 'answer', 'host', hordePosition(w, 0));
+    const listener = livingLead(w);
+    if (listener && !w.ropeFallen) cue(w, 'answer', 'host', hordePosition(w, listener.i));
     w.nextAnswer = 0;
   }
-  advanceWildlife(w, dt, { injury, notify, marcherAt: hordePosition });
+  advanceWildlife(w, dt, { injury, notify, marcherAt: rankPosition, nearMarchers: marchers });
   if (w.ending) return;
   if (w.route === 'undecided' && w.consideringOffers && distance(p, w.actors[0]) > 32) {
     w.route = 'wander';
@@ -1313,13 +1337,14 @@ function simulate(w, dt, input) {
     meet(w);
     return;
   }
+  const arrival = gateArrival(w, raceDuration(w), rankPosition);
   if (
     !w.gateCrossed &&
     w.gateClosedAt == null &&
     oldZ < GATE_Z &&
     p.z >= GATE_Z &&
     Math.abs(p.x - 30) < 4.55 &&
-    raceTime(w) - (dt * (p.z - GATE_Z)) / (p.z - oldZ) <= raceDuration(w)
+    (!arrival || w.elapsed - dt * (p.z - GATE_Z) / (p.z - oldZ) <= arrival.at + 1e-9)
   ) {
     w.gateCrossed = true;
     w.gateCrossedAt = w.elapsed - (dt * (p.z - GATE_Z)) / (p.z - oldZ);
@@ -1328,8 +1353,9 @@ function simulate(w, dt, input) {
     notify(w, 'Through the gate. You free the small wicket latch as you pass. Xero is somewhere inside.');
     cue(w, 'gate', 'crossed', p);
   }
-  if (raceTime(w) >= raceDuration(w) && w.gateClosedAt == null) {
-    w.gateClosedAt = w.elapsed - Math.max(0, raceTime(w) - raceDuration(w));
+  if (arrival) {
+    w.gateClosedAt = arrival.at;
+    w.gateVanguard = arrival.i;
     if (w.gateCrossed && Math.abs(p.x - 30) < 4.7 && Math.abs(p.z - GATE_Z) < 0.73) w.holdingGate = true;
     cue(w, 'gate', 'close', { x: 30, z: GATE_Z });
     if (!w.gateCrossed && w.route !== 'wander') {
@@ -1356,7 +1382,10 @@ function simulate(w, dt, input) {
     const beat = Math.floor(((w.elapsed - w.gateClosedAt) * 1.8) / (Math.PI * 2));
     if (beat > 0 && beat !== w.gatePressBeat) {
       w.gatePressBeat = beat;
-      cue(w, 'impact', beat % 3 ? 'wood' : 'iron', hordePosition(w, (beat * 6) % 48));
+      // Only hands within reach of the iron can rattle it.
+      const atGate = hostWithin(w, { x: 30, z: GATE_Z }, 6, rankPosition)
+        .filter(q => !w.hostActors?.[q.i] && q.z < GATE_Z && q.z > GATE_Z - 2.5);
+      if (atGate.length) cue(w, 'impact', beat % 3 ? 'wood' : 'iron', atGate[beat % atGate.length]);
     }
   }
   if (

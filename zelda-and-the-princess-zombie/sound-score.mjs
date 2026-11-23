@@ -165,6 +165,10 @@ const endings = {
     ['cello', 50, 0.81, 2.89, 0.036, -0.13], ['flute', 65, 1.68, 0.91, 0.057, 0.08],
     ['flute', 64, 2.86, 1.94, 0.047, 0.08],
   ],
+  taken: [
+    ['cello', 38, 0, 1.84, 0.044, -0.13], ['viola', 62, 0.18, 0.57, 0.048, 0.11],
+    ['viola', 61, 0.92, 0.83, 0.042, 0.09], ['choir', 56, 1.72, 2.32, 0.032, -0.11],
+  ],
 };
 export function playEnding(id, time, voice) {
   for (const [instrument, pitch, offset, duration, gain, pan] of endings[id] || endings.wilds)
@@ -220,6 +224,13 @@ export function createScore() {
         if (!actor.alive || !actor.alerted) continue;
         const d = Math.hypot(actor.x - p.x, actor.z - p.z);
         danger = Math.max(danger, clamp(1 - d / 55), actor.windupUntil > world.elapsed ? 0.96 : 0);
+      }
+    }
+    if (!listeningOnly && !world.ropeFallen && world.hostActors) {
+      for (const a of Object.values(world.hostActors)) {
+        if (a.state !== 'windup' && a.state !== 'pursue') continue;
+        const d = Math.hypot(a.x - p.x, a.z - p.z);
+        danger = Math.max(danger, a.state === 'windup' ? 0.98 : clamp(1 - d / 21));
       }
     }
     if (p.speed > 1)

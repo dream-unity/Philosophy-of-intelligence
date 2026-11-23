@@ -41,6 +41,11 @@ export function groundDecals(w, t, footprints = []) {
     );
     if (air < 0.35) mark(a.x, a.z, y + 0.012, rad * 0.9, rad * 0.52, 'shade', 0.68);
   }
+  for (const a of Object.values(w.hostActors || {})) {
+    if (w.ropeFallen || !close(a.x, a.z, 35)) continue;
+    const down = a.state === 'fallen';
+    mark(a.x, a.z, footHeight(w, a.x, a.z) + 0.04, down ? 0.79 : 0.34, down ? 0.37 : 0.29, 'shade', down ? 0.26 : 0.32);
+  }
   for (const [x, z, size] of [
     [-6.2, 6.6, 2.9],
     [6.2, 9.4, 2.9],

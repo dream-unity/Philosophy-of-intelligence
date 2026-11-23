@@ -1,5 +1,5 @@
 import { ridgePollards } from './ridge-landscape.mjs';
-import { marchObstructions } from './procession.mjs';
+import { marchObstructions, guestWicketLift } from './procession.mjs';
 // All distances and collider radii are in metres. Geometry is available before the first draw.
 import { edgeDistance, scentPatch } from './forest-edge.mjs';
 import { roadX, trailX, terrainHeight, clamp } from './geography.mjs';
@@ -156,8 +156,8 @@ export function riverImmersion(w, x, z) {
 export const gateClearance = (w) =>
   w.gateClosedAt == null || w.holdingGate ? 8 : Math.max(0, 7.56 * (1 - (w.elapsed - (w.gateFallAt ?? w.gateClosedAt))));
 export function wicketLift(w) {
-  if (w.wicketAt == null) return 0;
-  return 2.42 * clamp(Math.min((w.elapsed - w.wicketAt) / 0.55, ((w.wicketHoldUntil || 0) - w.elapsed) / 0.65), 0, 1);
+  const manual = w.wicketAt == null ? 0 : 2.42 * clamp(Math.min((w.elapsed - w.wicketAt) / 0.55, ((w.wicketHoldUntil || 0) - w.elapsed) / 0.65), 0, 1);
+  return Math.max(manual, guestWicketLift(w));
 }
 const bridgeTop = Math.max(terrainHeight(30, 1007), terrainHeight(30, 1035)) + 0.69;
 export function footHeight(w, x, z) {
@@ -295,6 +295,8 @@ export function bodyRadius(a) {
     case 'princess':
     case 'traveller':
       return 0.34;
+    case 'host':
+      return 0.28;
     case 'wolf':
       return 0.38;
     case 'troll':

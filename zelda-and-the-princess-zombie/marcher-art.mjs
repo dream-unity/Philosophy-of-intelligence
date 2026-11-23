@@ -15,8 +15,8 @@ export function marcherFrame(image, rig, t, height) {
     key = index + size + reach * 512;
   if (frames.has(key)) return frames.get(key);
   const cv = document.createElement('canvas'),
-    iw = image.naturalWidth,
-    ih = image.naturalHeight;
+    iw = image.naturalWidth || image.width,
+    ih = image.naturalHeight || image.height;
   cv.height = size;
   cv.width = Math.max(2, Math.round((size * iw) / ih));
   const c = cv.getContext('2d'),
@@ -41,4 +41,21 @@ export function marcherFrame(image, rig, t, height) {
     }
   frames.set(key, cv);
   return cv;
+}
+
+const sheets = new WeakMap();
+// Crop each costume once for the software painter. Keeping the cell separate
+// also prevents the adjoining character bleeding in at the edge of a close-up.
+export function costumeCell(sheet, kind) {
+  let cells = sheets.get(sheet);
+  if (!cells) { cells = new Map(); sheets.set(sheet, cells); }
+  if (cells.has(kind)) return cells.get(kind);
+  const width = sheet.naturalWidth / 4, height = sheet.naturalHeight / 2;
+  const tile = document.createElement('canvas');
+  tile.width = width;
+  tile.height = height;
+  tile.getContext('2d').drawImage(sheet, kind % 4 * width, Math.floor(kind / 4) * height,
+    width, height, 0, 0, width, height);
+  cells.set(kind, tile);
+  return tile;
 }

@@ -23,6 +23,9 @@ function percentile(d, q) {
 function section(w) {
   const p = w.player;
   if (insideHall(p.x, p.z)) return 'The Long Hall';
+  if (!w.ropeFallen && Object.values(w.hostActors || {}).some((a) =>
+    (a.state === 'windup' || a.state === 'pursue') && Math.hypot(a.x - p.x, a.z - p.z) < 24))
+    return 'Close combat';
   if (
     w.actors?.some(
       (a) =>

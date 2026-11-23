@@ -23,7 +23,7 @@ import {
 import { createFieldKeyboard, isHeldAction } from './field-keyboard.mjs';
 import { advanceGameClock, presentationWorld, resetPresentation } from './game-clock.mjs';
 import { makeFieldSurvey } from './map-controls.mjs';
-import { hasDirections, compassPoint, bearing, describeRace, survey, bridgeReport } from './navigation.mjs';
+import { hasDirections, compassPoint, bearing, describeRace, raceFront, survey, bridgeReport } from './navigation.mjs';
 import {
   saveKey,
   settingsKey,
@@ -42,7 +42,7 @@ import {
   readJourneyFile,
   applyJourneyFile,
 } from './journey-store.mjs';
-import { createWorld, act, choose, getHUD, resumeCheckpoint, hordePosition, arrivalView } from './world.mjs';
+import { createWorld, act, choose, getHUD, resumeCheckpoint, arrivalView, feastAftermath } from './world.mjs';
 import { createAudio } from './audio.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -153,7 +153,8 @@ let world = null,
   screen = 'title',
   panel = '',
   dialogueRef = null,
-  endingRef = null;
+  endingRef = null,
+  afterFeast = null;
 let frameId = 0,
   lastTime = 0,
   lastHUD = 0,
@@ -237,7 +238,7 @@ function soundState() {
       options.sound &&
         screen === 'game' &&
         !document.hidden &&
-        (!panel || listeningPanels.has(panel) || panel === 'ending' || panel === 'device')
+        (!panel || listeningPanels.has(panel) || panel === 'ending' || panel === 'after-feast' || panel === 'device')
     )
   );
 }
@@ -259,6 +260,7 @@ function modal(name, kicker, heading, body, actions, { closable = true } = {}) {
   fieldCheck.pause();
   stopMotion();
   panel = name;
+  overlay.classList.toggle('after-feast', name === 'after-feast');
   releaseLook();
   display(overlay, true);
   overlay.classList.toggle('bag-open', name === 'bag');
@@ -289,6 +291,8 @@ function modal(name, kicker, heading, body, actions, { closable = true } = {}) {
   soundState();
 }
 function dismiss() {
+  overlay.classList.remove('after-feast');
+  afterFeast = null;
   display(overlay, false);
   panel = '';
   title.inert = false;
@@ -309,6 +313,12 @@ function dismiss() {
   focusNode?.focus({ preventScroll: true });
 }
 function returnFromPanel() {
+  if (panel === 'after-feast') {
+    dismiss();
+    needsFrame = true;
+    syncStory();
+    return;
+  }
   if (panel === 'binding' && bindingsFromPad) {
     bindingsFromPad = false;
     dismiss();
@@ -1125,6 +1135,13 @@ function syncStory() {
     endingRef = ending;
     rememberEnding(world);
     const actions = [button('Begin anew', () => start(false), 'primary')];
+    const guests = ending.id === 'feast' && feastAftermath(world);
+    if (guests)
+      actions.unshift(button('Watch the guests arrive', () => {
+        afterFeast = JSON.parse(JSON.stringify(guests));
+        modal('after-feast', '', 'Later in the Long Hall', [], [button('Back to ending', returnFromPanel)], {closable:false});
+        refreshHUD();
+      }));
     if (ending.id !== 'saved')
       actions.push(
         button('Return to checkpoint', () => {
@@ -1246,6 +1263,12 @@ function refreshTouchKeys(hint = '', item = world && selectedItem(world)) {
 }
 function refreshHUD() {
   if (!world) return;
+  if (panel === 'after-feast') {
+    display($('hud'), false);
+    display($('resist'), false);
+    display($('sequence-caption'), false);
+    return;
+  }
   if (!$('number-pad').hidden) paintNumberPad(world, touchRun.active || keyboard.sprinting());
   display($('hud'), !world.sequence);
   display($('resist'), world.sequence?.id === 'bound');
@@ -1322,13 +1345,14 @@ function refreshHUD() {
       : ''
   );
   const sighted = world.milestones?.ridge || world.milestones?.procession || world.survey?.visits?.downs;
-  const status = describeRace(world, h.hordeProgress);
+  const front = raceFront(world);
+  const status = describeRace(world, h.hordeProgress, front);
   text(
     'race-readout',
     (world.gateCrossed && !world.ropeFallen ? 'Through in time. ' : '') +
       status +
-      (status && sighted && !world.ropeFallen
-        ? ' · ' + compassPoint(bearing(world.player, hordePosition(world, 0)))
+      (status && front && sighted && !world.ropeFallen
+        ? ' · ' + compassPoint(bearing(world.player, front))
         : '')
   );
   const stamina = clamp(Math.round((world.player.stamina ?? 1) * 100), 0, 100);
@@ -1546,6 +1570,10 @@ function frame(timestamp) {
     dt = Math.max(0, now - lastTime);
   lastTime = now;
   if (!document.hidden) {
+    if (afterFeast) {
+      afterFeast.elapsed += Math.min(dt, 0.25);
+      audio.update(afterFeast);
+    }
     if (!panel) {
       const input = keyboard.sample(movement, touchAutoForward(), touchRun.active || rimSprint);
       accumulator = advanceGameClock(world, dt, accumulator, input, input.pitch);
@@ -1565,9 +1593,9 @@ function frame(timestamp) {
         damageTimer = setTimeout(() => (damage.style.opacity = '0'), 160);
       }
     }
-    if (!panel || needsFrame) {
+    if (!panel || needsFrame || afterFeast) {
       try {
-        const scene = presentationWorld(world, accumulator);
+        const scene = afterFeast || presentationWorld(world, accumulator);
         const drawn = renderer.render(scene, scene.elapsed);
         if (drawn && !panel)
           fieldCheck.frame(performance.now(), world, renderer.surface || view, renderer.backend);
@@ -1613,14 +1641,30 @@ const captionActions = {
   },
 };
 const localCaptionRange = { fieldbird: 48, knock: 18, relay: 31, latch: 28, pebble: 14, potion: 40 };
+let warningCaptionUntil = 0;
 function soundCaption(ev) {
   if (!options.subtitles) return;
-  const range = localCaptionRange[ev.type];
+  const zombie = ev.type === 'host' || ev.text === 'host' || ev.text === 'zombie';
+  const warning = ev.type === 'telegraph';
+  const range = ev.type === 'host' ? 55 : localCaptionRange[ev.type];
   if (range && Number.isFinite(ev.x) && Math.hypot(ev.x - world.player.x, ev.z - world.player.z) > range)
     return;
+  // Keep the wind-up on screen long enough to react even if a brush or bell
+  // arrives in the same frame. A committed outcome ends the warning early.
+  if (performance.now() < warningCaptionUntil && !warning &&
+      !['hurt', 'block', 'ending'].includes(ev.type) && !(zombie && ['down', 'miss'].includes(ev.text))) return;
   const directional = captionActions[ev.type]?.[ev.text];
-  const line =
+  const hostLine = zombie && ({
+    telegraph: 'A zombie draws a rasping breath and raises its arms',
+    brush: 'A sleeve drags across yours',
+    block: 'A dead hand scrapes across your guard',
+    hurt: 'A zombie catches you',
+    impact: 'Your blow lands on a zombie',
+    host: { notice: 'A zombie turns and its footsteps quicken', miss: 'Grasping hands miss', down: 'A zombie falls' }[ev.text],
+  })[ev.type];
+  let line =
     ev.caption ||
+    hostLine ||
     directional ||
     {
       bell: 'Castle bells ring in the distance',
@@ -1636,6 +1680,15 @@ function soundCaption(ev) {
       roar: 'A low roar',
     }[ev.type];
   if (!line) return;
+  if (zombie && ['host', 'telegraph'].includes(ev.type) && Number.isFinite(ev.x) && Number.isFinite(ev.z)) {
+    const p = world.player;
+    const angle = Math.atan2(ev.x - p.x, ev.z - p.z) - p.yaw;
+    const side = ['ahead', 'ahead on the right', 'on the right', 'behind on the right',
+      'behind', 'behind on the left', 'on the left', 'ahead on the left'][Math.round(angle * 4 / Math.PI) & 7];
+    line += ' · ' + side;
+  }
+  if (warning) warningCaptionUntil = performance.now() + (zombie ? 980 : 430);
+  else if (['hurt', 'block'].includes(ev.type) || (zombie && ['down', 'miss'].includes(ev.text))) warningCaptionUntil = 0;
   text('captions', line);
   clearTimeout(captionTimer);
   captionTimer = setTimeout(() => text('captions', ''), 2700);

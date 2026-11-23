@@ -1,4 +1,4 @@
-import { hasDirections, knownLandmarks, survey } from './navigation.mjs';
+import { hasDirections, knownLandmarks, lastWalkerSighting, survey } from './navigation.mjs';
 import { MAP, LANDMARKS, terrainHeight, roadX, hordePosition, HORDE_COUNT } from './world.mjs';
 
 // A single north-up projection drives the image, keyboard pan, touch and saved pins.
@@ -716,6 +716,7 @@ export function drawFieldMap(canvas, world, view = {}) {
   route(g, map, world);
   if (world.milestones.ridge || world.milestones.procession) {
     for (let i = 0; i < HORDE_COUNT; i += 11) {
+      if (world.hostFallen?.[i] || world.hostActors?.[i]) continue;
       const a = hordePosition(world, i),
         [x, y] = map.point(a.x, a.z);
       dot(g, x, y, 1, 'rgba(126,65,53,.72)');
@@ -788,6 +789,18 @@ export function drawFieldMap(canvas, world, view = {}) {
     sites.push({ ...place, px, py });
     if (interior) dot(g, px, py, 2.5, '#695337');
     else marker(g, place.id, px, py, h < 210 ? 0.77 : 1);
+  }
+  const sighting = lastWalkerSighting(world);
+  if (sighting) {
+    const [px, py] = map.point(sighting.x, sighting.z);
+    if (px > 7 && px < w - 7 && py > 7 && py < h - 7) {
+      g.beginPath();
+      g.arc(px, py, 4, 0, Math.PI * 2);
+      g.strokeStyle = '#884d40';
+      g.lineWidth = 1.3;
+      g.stroke();
+      sites.push({ id: 'lastWalker', name: 'Walker last seen', px, py });
+    }
   }
   for (const [i, pin] of (world.survey?.pins || []).entries()) {
     const [x, y] = map.point(pin.x, pin.z);

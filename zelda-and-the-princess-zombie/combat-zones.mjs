@@ -2,6 +2,7 @@
 // geometry and its collision centres run through the same skin deformation.
 import { animateCreature } from './creature-motion.mjs';
 import { terrainHeight } from './geography.mjs';
+import { marcherHeight, marcherReach, marcherLean } from './marcher-body.mjs';
 const part = (name, a, b, r) => ({ name, a, b, r });
 const bodyZones = {
   wolf: [
@@ -24,7 +25,6 @@ const bodyZones = {
     part('tail', [0.14, 0.26, 1.9], [0.49, 0.5, 3.22], 0.1),
   ],
   witch: [part('robe', [0, 0.4, 0], [0, 1.39, 0], 0.34), part('head', [0, 1.53, 0], [0, 1.8, 0], 0.17)],
-  marcher: [part('torso', [0, 0.65, 0], [0, 1.31, 0], 0.25), part('head', [0, 1.46, 0], [0, 1.61, 0], 0.17)],
 };
 for (const sign of [-1, 1]) {
   for (const z of [-0.43, 0.45])
@@ -43,11 +43,12 @@ for (const type of ['wolf', 'troll', 'dragon']) {
   jointClouds[type] = Float32Array.from(bodyZones[type].flatMap((s) => [...s.a, 0, 0, 0, ...s.b, 0, 0, 0]));
 }
 export function actorVolumes(a, time) {
-  const originY = terrainHeight(a.x, a.z) + (a.airHeight ?? (a.type === 'dragon' ? 3.25 : 0));
+  const floor = a.type === 'marcher' && Number.isFinite(a.feetY) ? a.feetY : terrainHeight(a.x, a.z);
+  const originY = floor + (a.airHeight ?? (a.type === 'dragon' ? 3.25 : 0));
   const yaw = (a.attackYaw ?? a.heading ?? 0) + Math.PI,
     cs = Math.cos(yaw),
     sn = Math.sin(yaw),
-    scale = a.type === 'dragon' ? 1.4 : 1;
+    scale = a.type === 'dragon' ? 1.4 : a.type === 'marcher' ? marcherHeight(a.i) / 1.8 : 1;
   const kind = a.type;
   if (kind === 'bell') {
     const size = { low: 1.14, mid: 0.86, high: 0.59 }[a.tone] || 0.86,
@@ -66,6 +67,33 @@ export function actorVolumes(a, time) {
         size * 0.31
       ),
     ];
+  }
+  if (kind === 'marcher') {
+    const reach = marcherReach(a, time);
+    const lean = marcherLean(a, time);
+    const leanSin = Math.sin(lean),
+      leanCos = Math.cos(lean);
+    function joint(x, y, z) {
+      const u = Math.max(0, Math.min(1, (y / 1.8 - 0.14) / 0.51));
+      const upper = u * u * (3 - 2 * u);
+      return world([x, y * (1 - (1 - leanCos) * upper) + 0.026 / scale, z - y * leanSin * upper]);
+    }
+    const zones = [
+      part('torso', joint(0, 0.67, 0), joint(0, 1.33, 0), 0.245 * scale),
+      part('head', joint(0, 1.49, -0.03), joint(0, 1.64, -0.04), 0.16 * scale),
+    ];
+    for (const side of [-1, 1]) {
+      zones.push(
+        part(
+          'arm',
+          joint(side * 0.22, 1.36, 0),
+          joint(side * 0.28, 0.84 + ((reach - 0.12) * 0.37) / scale, -reach / scale),
+          0.09 * scale
+        ),
+        part('leg', joint(side * 0.13, 0.7, 0), joint(side * 0.14, 0.12, 0), 0.098 * scale)
+      );
+    }
+    return zones;
   }
   const shapes = bodyZones[kind];
   if (!shapes) return [];

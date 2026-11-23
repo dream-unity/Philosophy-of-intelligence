@@ -11,42 +11,46 @@
     <base href="/zelda-and-the-princess-zombie/" />
     <title>Zelda and the Princess Zombie | Philosophy of Intelligence</title>
     <link rel="preload" as="image" href="forest.webp" />
-    <link rel="stylesheet" href="game.css?v=49f03419dbb1" />
+    <link rel="stylesheet" href="game.css?v=00ba02cea828" />
     <!-- Refresh module and stylesheet versions with node scripts/version-princess-zombie.mjs. -->
     <script type="importmap">
       {
         "imports": {
-          "./audio.mjs": "./audio.mjs?v=1efe5104d91a",
+          "./audio.mjs": "./audio.mjs?v=291eb63fe87e",
           "./bag-view.mjs": "./bag-view.mjs?v=8ba058cd1330",
           "./blade-pose.mjs": "./blade-pose.mjs?v=0a1d040573c3",
           "./castle-view.mjs": "./castle-view.mjs?v=d2c5f3e71dc7",
-          "./combat-zones.mjs": "./combat-zones.mjs?v=a0938f536b84",
+          "./combat-zones.mjs": "./combat-zones.mjs?v=9466134e8fd7",
           "./control-layout.mjs": "./control-layout.mjs?v=6c56e352547f",
           "./creature-motion.mjs": "./creature-motion.mjs?v=950b961b6929",
-          "./field-check.mjs": "./field-check.mjs?v=d4d54bb8428f",
-          "./field-effects.mjs": "./field-effects.mjs?v=69fe217a6e7b",
+          "./field-check.mjs": "./field-check.mjs?v=d4f734de802e",
+          "./field-effects.mjs": "./field-effects.mjs?v=302fc7c86009",
           "./field-keyboard.mjs": "./field-keyboard.mjs?v=b6cb7aed2e2a",
-          "./field-map.mjs": "./field-map.mjs?v=c6908787834c",
+          "./field-map.mjs": "./field-map.mjs?v=bb8db0c3a169",
           "./forest-edge.mjs": "./forest-edge.mjs?v=857d1b8c0f1a",
           "./forest-projection.mjs": "./forest-projection.mjs?v=174cd20c23ec",
           "./fortress.mjs": "./fortress.mjs?v=2ef00c56b6c1",
           "./game-clock.mjs": "./game-clock.mjs?v=b90281c3d513",
-          "./game.mjs": "./game.mjs?v=e7319677cdf1",
+          "./game.mjs": "./game.mjs?v=c839a2eb034b",
           "./geography.mjs": "./geography.mjs?v=6e25de90cecc",
           "./ground-paint.mjs": "./ground-paint.mjs?v=e5fa8525d99b",
           "./hall.mjs": "./hall.mjs?v=a267a6d8f5ff",
+          "./host-encounters.mjs": "./host-encounters.mjs?v=565e41d464eb",
+          "./host-query.mjs": "./host-query.mjs?v=f38aa18b21be",
+          "./host-vanguard.mjs": "./host-vanguard.mjs?v=b360b6dd7f5c",
           "./inventory.mjs": "./inventory.mjs?v=a2c0c72b0cb7",
           "./journey-store.mjs": "./journey-store.mjs?v=f330af0a033d",
-          "./map-controls.mjs": "./map-controls.mjs?v=983b72df04cc",
-          "./marcher-art.mjs": "./marcher-art.mjs?v=e5f9e8196507",
+          "./map-controls.mjs": "./map-controls.mjs?v=f98226183734",
+          "./marcher-art.mjs": "./marcher-art.mjs?v=45933f287ec5",
+          "./marcher-body.mjs": "./marcher-body.mjs?v=11ee2769bcbb",
           "./masonry-paint.mjs": "./masonry-paint.mjs?v=fe01e64dfe7c",
           "./mountain-range.mjs": "./mountain-range.mjs?v=9147466c06b9",
-          "./navigation.mjs": "./navigation.mjs?v=816b54cc1de4",
+          "./navigation.mjs": "./navigation.mjs?v=068d60bd141b",
           "./number-pad.mjs": "./number-pad.mjs?v=8bc37f7e2c1a",
-          "./procession-view.mjs": "./procession-view.mjs?v=129aabda6ddc",
-          "./procession.mjs": "./procession.mjs?v=416d916e0020",
+          "./procession-view.mjs": "./procession-view.mjs?v=5506a5ebffdf",
+          "./procession.mjs": "./procession.mjs?v=9754ec6ed3cd",
           "./render-quality.mjs": "./render-quality.mjs?v=90292ea84d9f",
-          "./render.mjs": "./render.mjs?v=ed81f96d5833",
+          "./render.mjs": "./render.mjs?v=16bad8c08813",
           "./ridge-landscape.mjs": "./ridge-landscape.mjs?v=494dc26c0e92",
           "./river-view.mjs": "./river-view.mjs?v=6d85d768360b",
           "./rooted-trees.mjs": "./rooted-trees.mjs?v=f3b80b46fea2",
@@ -56,22 +60,23 @@
           "./sky.mjs": "./sky.mjs?v=638c44ebb770",
           "./software-mesh.mjs": "./software-mesh.mjs?v=21528c98c2dd",
           "./sound-foley.mjs": "./sound-foley.mjs?v=0b012b599699",
-          "./sound-landscape.mjs": "./sound-landscape.mjs?v=9126b96756cb",
-          "./sound-score.mjs": "./sound-score.mjs?v=b787ead1375e",
+          "./sound-host.mjs": "./sound-host.mjs?v=34ddb663c78d",
+          "./sound-landscape.mjs": "./sound-landscape.mjs?v=7f69818ca77f",
+          "./sound-score.mjs": "./sound-score.mjs?v=feb125efa94a",
           "./story-art.mjs": "./story-art.mjs?v=c83293f75040",
           "./story-contact.mjs": "./story-contact.mjs?v=c3c36bdc3b7d",
           "./story-field-art.mjs": "./story-field-art.mjs?v=b9ef945f335b",
           "./story-field.mjs": "./story-field.mjs?v=25ee9ecadd17",
           "./story-witch.mjs": "./story-witch.mjs?v=c55199c2c054",
-          "./story.mjs": "./story.mjs?v=ed7e9757cb49",
-          "./swordplay.mjs": "./swordplay.mjs?v=ed9e3e8d01a9",
+          "./story.mjs": "./story.mjs?v=82dad1607518",
+          "./swordplay.mjs": "./swordplay.mjs?v=3f962cf739ef",
           "./touch-keys.mjs": "./touch-keys.mjs?v=7d9b9a95a78e",
-          "./travel.mjs": "./travel.mjs?v=de12d58e993f",
-          "./wildlife.mjs": "./wildlife.mjs?v=15d3804f09fd",
+          "./travel.mjs": "./travel.mjs?v=323372faceba",
+          "./wildlife.mjs": "./wildlife.mjs?v=fa4969eb40bd",
           "./witch-body.mjs": "./witch-body.mjs?v=add4d3df6e4b",
           "./wood-painter.mjs": "./wood-painter.mjs?v=dcbf49df11ff",
           "./woodland.mjs": "./woodland.mjs?v=552b853e0625",
-          "./world.mjs": "./world.mjs?v=e309162bdf93"
+          "./world.mjs": "./world.mjs?v=ec7ae7452e0b"
         }
       }
     </script>
@@ -285,6 +290,6 @@
       </div>
     </main>
     <noscript>This game needs JavaScript enabled to enter the forest.</noscript>
-    <script type="module" src="game.mjs?v=e7319677cdf1"></script>
+    <script type="module" src="game.mjs?v=c839a2eb034b"></script>
   </body>
 </html>

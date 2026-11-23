@@ -1,5 +1,6 @@
 import { LANDMARKS } from './geography.mjs';
-import { hordePosition } from './world.mjs';
+import { rankPosition } from './world.mjs';
+import { livingLead } from './host-vanguard.mjs';
 const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 export const compassPoint = (a) => directions[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
 export function bearing(p, q) {
@@ -37,11 +38,20 @@ export function knownLandmarks(w) {
     ...castleNotes.filter((s) => remembered.has(s.id)),
   ];
 }
-export function describeRace(w, progress) {
+export function raceFront(w) {
+  const lead = livingLead(w);
+  if (!lead) return null;
+  if (w.gateClosedAt != null) return rankPosition(w, lead.i, true);
+  const relief = w.gateRelief;
+  const reliefAvailable = relief && !w.hostFallen?.[relief.i] && !w.hostActors?.[relief.i];
+  return rankPosition(w, lead.offset && reliefAvailable ? relief.i : lead.i);
+}
+export function describeRace(w, progress, front = raceFront(w)) {
   if (w.ropeFallen) return 'The host is turning away.';
   if (w.route === 'undecided' && !w.greeted && !w.milestones?.ridge) return '';
-  const front = hordePosition(w, 0);
-  if (w.gateClosedAt != null) return 'The first rank is pressed against the iron.';
+  if (w.milestones?.guestsAtTable) return 'The first guests have reached Xero’s table.';
+  if (w.gateClosedAt != null) return 'The vanguard has reached the castle gate.';
+  if (!front) return 'The march on the gate has stopped.';
   if (w.hostPauseUntil > w.elapsed) return 'The first rank has stopped to listen.';
   if (Math.hypot(front.x - 30, front.z - 1435) < 38) return 'The front rank is on the last ramp to the gate.';
   if (front.z > 1300) return 'The host is climbing the castle approach.';
@@ -51,9 +61,14 @@ export function describeRace(w, progress) {
 
 export function hostReport(w, front) {
   const field = survey(w),
-    seen = w.milestones?.ridge || field.visits.downs || w.journal?.some((n) => n.id === 'procession');
-  if (!seen || !front) return '';
-  if (w.ropeFallen) return 'The host has turned away from the gate.';
+    seen = w.milestones?.ridge || w.milestones?.procession || field.visits.downs || w.journal?.some((n) => n.id === 'procession');
+  if (w.ropeFallen) return seen ? 'The host has turned away from the gate.' : '';
+  const sighting = lastWalkerSighting(w);
+  const gap = sighting && Math.round(Math.hypot(sighting.x - w.player.x, sighting.z - w.player.z));
+  const local = sighting
+    ? 'Last sighting of a lone walker: ' + (gap < 5 ? 'here.' : gap + ' metres ' + compassPoint(bearing(w.player, sighting)) + ' of you.')
+    : '';
+  if (!seen || !front) return local;
   const refs = [
     ['you', w.player],
     ['the gate', LANDMARKS.find((s) => s.id === 'gate')],
@@ -67,8 +82,12 @@ export function hostReport(w, front) {
         return d < 8 ? 'at ' + name : d + ' metres ' + compassPoint(bearing(site, front)) + ' of ' + name;
       })
       .join(', ') +
-    '.'
+    '.' + (local ? ' ' + local : '')
   );
+}
+export function lastWalkerSighting(w) {
+  const q = w.hostSighting;
+  return q && Number.isFinite(q.x) && Number.isFinite(q.z) && !w.ropeFallen && !w.hostFallen?.[q.id] ? q : null;
 }
 export function bridgeReport(w) {
   if (!w.bridgeOpen) return 'Lowered. The sluice must be operated before the road can cross.';

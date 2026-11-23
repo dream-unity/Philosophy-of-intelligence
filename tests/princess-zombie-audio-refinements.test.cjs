@@ -227,6 +227,71 @@ test('warning direction, distinct terrain and materials, staggered replies, clos
   assert.ok(run('dialogue').some((n) => n.frequency === 1960));
 });
 
+test('zombie footsteps follow a detached walker and its warning, swing and fall have distinct sounds', async (t) => {
+  const { audio, ctx, w } = fixture(t);
+  const id = 150;
+  const person = { i: id, x: w.player.x + 6, z: w.player.z, hp: 2, state: 'pursue' };
+  w.hostActors = { [id]: person };
+  const { createHostSoundscape } = await import('../zelda-and-the-princess-zombie/sound-host.mjs');
+  const listen = createHostSoundscape();
+  let steps = [];
+  const sounds = { note() {}, noise: (...args) => steps.push(args) };
+  const acoustic = (q) => ({ d: Math.hypot(q.x - w.player.x, q.z - w.player.z), gain: 1, pan: Math.sign(q.x - w.player.x) });
+  listen(w, 2, sounds, acoustic);
+  assert.ok(steps.length && steps.every(([, , , , pan]) => pan === 1));
+  person.x -= 12;
+  steps = [];
+  listen(w, 4, sounds, acoustic);
+  assert.ok(steps.length && steps.every(([, , , , pan]) => pan === -1));
+  w.hostFallen = { [id]: true };
+  steps = [];
+  listen(w, 6, sounds, acoustic);
+  assert.equal(steps.length, 0);
+  const event = (type, text) => {
+    ctx.starts.length = 0;
+    audio.cue({ type, text, ...person });
+    return ctx.starts.slice();
+  };
+  const warn = event('telegraph', 'host');
+  assert.ok(warn.length && warn.every((n) => n.pan < -0.6));
+  w.player.yaw = Math.PI;
+  assert.ok(event('telegraph', 'host').every((n) => n.pan > 0.6));
+  const sets = [warn, event('telegraph', 'dragon'), event('host', 'notice'), event('host', 'miss'),
+    event('host', 'down'), event('impact', 'zombie'), event('block', 'host')];
+  assert.ok(sets.every((notes) => notes.length > 0));
+  assert.equal(new Set(sets.map((notes) => JSON.stringify(notes.map((n) => n.frequency)))).size, sets.length);
+});
+
+test('the hall sound changes from distant ranks to feeding guests, then to retreating footsteps', async () => {
+  const { createHostSoundscape } = await import('../zelda-and-the-princess-zombie/sound-host.mjs');
+  const { castleGuestIds } = await import('../zelda-and-the-princess-zombie/procession.mjs');
+  const w = createWorld();
+  Object.assign(w.player, { x: 31.3, z: 1517 });
+  w.gateCrossed = true;
+  function hear() {
+    const update = createHostSoundscape(), noises = [], boots = [];
+    const sound = {
+      noise: (_gain, frequency, duration) => noises.push({ frequency, duration }),
+      note: (type) => boots.push(type),
+    };
+    const acoustic = (q) => ({ d: Math.hypot(q.x - w.player.x, q.z - w.player.z), gain: 1, pan: 0 });
+    update(w, 0, sound, acoustic);
+    return { feeding: noises.some((n) => n.frequency === 1010 && n.duration === 0.13), walking: boots.includes('sine') };
+  }
+  w.elapsed = w.raceDuration - 10;
+  assert.equal(hear().feeding, false);
+  w.gateClosedAt = w.raceDuration;
+  w.elapsed = w.raceDuration + 80;
+  assert.equal(hear().feeding, true, 'the first living guests have reached the stag');
+  w.hostFallen = Object.fromEntries(castleGuestIds.map((i) => [i, true]));
+  assert.equal(hear().feeding, false);
+  w.elapsed = w.raceDuration + 180;
+  assert.equal(hear().feeding, true, 'another group arrives after the original guests have fallen');
+  w.ropeFallen = true;
+  w.dispersalAt = w.elapsed - 3;
+  assert.deepEqual(hear(), { feeding: false, walking: true });
+});
+
 test('bellglass continues sounding from its impact position as Zelda turns and falls silent when spent', (t) => {
   const { audio, ctx, w } = fixture(t);
   const impact = { x: w.player.x + 6, z: w.player.z + 1, at: 10, until: 22 };
@@ -399,7 +464,7 @@ test(
     const traces = {};
     const all = { music: 1, effects: 1, ambience: 1 },
       solo = (n) => ({ music: 0, effects: 0, ambience: 0, [n]: 1 });
-    for (const kind of ['wolf', 'troll', 'dragon']) {
+    for (const kind of ['wolf', 'troll', 'dragon', 'host']) {
       const event = [{ type: 'telegraph', text: kind }];
       // Keep the same warning automation and deterministic background in both stems.
       const alert = await render(event, { mix: solo('effects') });

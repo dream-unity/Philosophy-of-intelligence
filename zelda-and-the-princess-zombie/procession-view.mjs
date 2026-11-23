@@ -1,8 +1,11 @@
 // The simulation owns the pace, path and obstacle responses. Each walking file
 // samples that path in turn, so the 3,072 guests never need a single-frame rebuild.
-import * as simulation from './world.mjs';
-import { marchClock } from './procession.mjs';
-const { hordePosition, HORDE_COUNT, terrainHeight } = simulation;
+import { rankPosition as rankAt, hordePosition, HORDE_COUNT, terrainHeight, recordProcessionView } from './world.mjs';
+import { marchClock, roadFileIds, castleGuests, guestAtTable } from './procession.mjs';
+import { marcherHeight, facingOfMarcher } from './marcher-body.mjs';
+import { footHeight } from './travel.mjs';
+const roadFiles = new Set(roadFileIds);
+const identity = (id) => id % 107 === 0 ? 0 : 1 + ((Math.imul(id + 31, 19349663) >>> 6) % 7);
 
 const WIDTH = 48,
   ROWS = HORDE_COUNT / WIDTH,
@@ -30,8 +33,7 @@ export function createProcessionView() {
     cursor = 0,
     now = 0;
   const ids = new Set(),
-    selected = [],
-    empty = { poses: [], ids };
+    selected = [];
   let picked = -Infinity,
     yaw = Infinity,
     prevCap = 0,
@@ -60,9 +62,9 @@ export function createProcessionView() {
       if (valid[row]) continue;
       const id = row * WIDTH,
         o = row * 6,
-        a = hordePosition(w, id),
-        b = hordePosition(w, id + 46),
-        c = hordePosition(w, id + 47);
+        a = rankAt(w, id, true),
+        b = rankAt(w, id + 46, true),
+        c = rankAt(w, id + 47, true);
       rowInfo[o] = a.x;
       rowInfo[o + 1] = a.z;
       rowInfo[o + 2] = (c.x - b.x) / 47;
@@ -78,8 +80,10 @@ export function createProcessionView() {
       valid[row] = 2;
       for (let j = 0; j < WIDTH; j++) {
         const id = row * WIDTH + j,
-          a = hordePosition(w, id),
-          b = hordePosition(next, id);
+          // This cache describes the rank even while one of its guests is at
+          // table. Detached guests get their exact position separately below.
+          a = rankAt(w, id, true),
+          b = rankAt(next, id, true);
         x[id] = a.x;
         z[id] = a.z;
         y[id] = terrainHeight(a.x, a.z);
@@ -117,19 +121,23 @@ export function createProcessionView() {
   const scratch = {},
     best = new Float32Array(64),
     which = new Uint16Array(64);
-  function near(w, aspect, time, cap) {
-    update(w);
+  function near(w, aspect, time, cap, includeRanks = true) {
+    if (includeRanks) update(w);
+    const tableGuests = new Set(castleGuests(w));
+    const singled = new Set([...roadFiles, ...tableGuests]);
+    if (w.gateRelief) singled.add(w.gateRelief.i);
+    if (w.hostActors) for (const actor of Object.values(w.hostActors)) singled.add(actor.i);
     const p = w.player,
       s = Math.sin(p.yaw),
       c = Math.cos(p.yaw),
       slope = aspect / 1.37;
-    if (
+    if (includeRanks && (
       picked === -Infinity ||
       now - picked >= 0.21 ||
       Math.abs(p.yaw - yaw) > 0.13 ||
       cap !== prevCap ||
       Math.abs(p.x - prevX) + Math.abs(p.z - prevZ) > 1.9
-    ) {
+    )) {
       yaw = p.yaw;
       picked = now;
       prevCap = cap;
@@ -142,6 +150,7 @@ export function createProcessionView() {
           oz = rowInfo[row * 6 + 1] - p.z;
         if (ox * ox + oz * oz > 99 * 99) continue;
         for (let id = row * WIDTH; id < (row + 1) * WIDTH; id++) {
+          if (singled.has(id) || w.hostFallen?.[id]) continue;
           at(id, scratch);
           const dx = scratch.x - p.x,
             dz = scratch.z - p.z,
@@ -162,43 +171,62 @@ export function createProcessionView() {
       function minRadius() {
         return Math.min(70 * 70, best[cap - 1]);
       }
-      ids.clear();
       selected.length = count;
-      for (let i = 0; i < count; i++) {
-        selected[i] = which[i];
-        ids.add(which[i]);
+      for (let i = 0; i < count; i++) selected[i] = which[i];
+    }
+    const poses = [];
+    ids.clear();
+    // A scout or a pursuer can be hundreds of metres away from the centre of
+    // its old rank. Read these few bodies directly on every frame, even indoors.
+    if (w.hostFallen) for (const id of Object.keys(w.hostFallen)) ids.add(Number(id));
+    for (const id of singled) {
+      ids.add(id);
+      const actor = w.hostActors?.[id];
+      if (w.hostFallen?.[id] && actor?.state !== 'fallen') continue;
+      const q = hordePosition(w, id);
+      const dx = q.x - p.x, dz = q.z - p.z, dep = dx * s + dz * c;
+      if (dep < -1.1 || Math.abs(dx * c - dz * s) > Math.max(0, dep) * slope + 1.6 ||
+          (id !== w.gateRelief?.i && dx * dx + dz * dz > 380 * 380)) continue;
+      const feeding = !actor && w.gateClosedAt != null && tableGuests.has(id) && guestAtTable(w, id);
+      let heading = w.ropeFallen && actor?.state !== 'fallen' ? undefined : actor?.heading;
+      if (!Number.isFinite(heading)) {
+        if (feeding) heading = Math.atan2(31.5 - q.x, 1517 - q.z);
+        else {
+          const later = Object.create(w);
+          later.elapsed = w.elapsed + 0.33;
+          const next = hordePosition(later, id);
+          heading = Math.atan2(next.x - q.x, next.z - q.z);
+        }
       }
+      poses.push({
+        id, x: q.x, y: footHeight(w, q.x, q.z), z: q.z, h: marcherHeight(id),
+        w: 0.90 + ((id * 13) % 17) * 0.013, kind: identity(id), heading,
+        state: w.ropeFallen && actor?.state !== 'fallen' ? 'return' : actor?.state || (feeding ? 'feed' : 'march'),
+        since: actor?.since, until: actor?.until,
+        roadFile: roadFiles.has(id), castleGuest: tableGuests.has(id), special: true,
+        ...facingOfMarcher(heading, q.x, q.z, p),
+      });
     }
-    if (!selected.length) {
-      simulation.recordProcessionView?.(w, empty.poses, aspect);
-      return empty;
-    }
-    let bowl = false;
-    const poses = selected.map((id) => {
+    if (includeRanks) for (const id of selected) {
+      if (ids.has(id)) continue;
+      ids.add(id);
       at(id, scratch);
       const movementTime = marchClock(w, time, Math.floor(id / WIDTH));
       const reach = w.hostWarning?.i === id ? Math.min(1, Math.max(0, (time - w.hostWarning.at) / 0.88)) : 0;
-      const phase = ((id * 37) % 101) * 0.117 + movementTime * (2.55 + ((id * 3) % 11) * 0.054),
-        sway = Math.sin(phase) * 0.038;
-      let kind = 1 + ((Math.imul(id + 31, 19349663) >>> 6) % 7);
-      if (!bowl && (id * 43) % 107 === 0) {
-        kind = 0;
-        bowl = true;
-      }
-      return {
-        id,
-        x: scratch.x + sway * c,
-        z: scratch.z - sway * s,
-        y: scratch.y + Math.cos(phase) ** 2 * 0.042,
-        h: 1.64 + ((id * 19) % 31) * 0.011,
-        w: 0.9 + ((id * 13) % 17) * 0.013,
-        flip: scratch.vx * c - scratch.vz * s < 0,
-        seed: id,
-        kind,
+      const phase = ((id * 37) % 101) * 0.117 + movementTime * (2.55 + ((id * 3) % 11) * 0.054);
+      const heading = Math.atan2(scratch.vx, scratch.vz);
+      // Sway is perpendicular to the march, independent of camera yaw.
+      const sway = Math.sin(phase) * 0.029;
+      poses.push({
+        id, x: scratch.x + sway * Math.cos(heading), z: scratch.z - sway * Math.sin(heading),
+        y: scratch.y + Math.cos(phase) ** 2 * 0.034, h: marcherHeight(id),
+        w: 0.9 + ((id * 13) % 17) * 0.013, seed: id, kind: identity(id), heading,
+        state: 'march', roadFile: false, castleGuest: false,
+        ...facingOfMarcher(heading, scratch.x, scratch.z, p),
         rig: { type: 'marcher', phase: id * 0.78 + (movementTime - time) * 4.7 / 1.76, reach },
-      };
-    });
-    simulation.recordProcessionView?.(w, poses, aspect);
+      });
+    }
+    recordProcessionView(w, poses, aspect);
     return { poses, ids };
   }
   const sight = new Uint8Array(ROWS / 4);
@@ -218,7 +246,7 @@ export function createProcessionView() {
     let clear = false;
     for (let row = 0; row < ROWS && !clear; row += 7) {
       for (const file of [0, 46, 47]) {
-        if (terrainSight(p, eye, hordePosition(w, row * WIDTH + file))) { clear = true; break; }
+        if (terrainSight(p, eye, rankAt(w, row * WIDTH + file, true))) { clear = true; break; }
       }
     }
     lookout = { w: source, at: w.elapsed, x: p.x, z: p.z, eye, clear };

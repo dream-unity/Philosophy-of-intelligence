@@ -9,6 +9,173 @@ for (let i = 1; i < MAP.horde.length; i++) {
   running += length;
 }
 export const processionLength = running;
+// These members take the old woodcutters' paths through the forest. Keep
+// their actual IDs off rank centres and shoulders used to sample the main host.
+export const roadFileIds = [310, 358, 406, 1230, 1278, 1326, 2182, 2230, 2278];
+export const castleGuestIds = [7, 13, 19, 25, 31, 37];
+function trailThrough(points) {
+  let length = 0;
+  const legs = points.slice(1).map(([x1, z1], j) => {
+    const [x, z] = points[j];
+    const size = Math.hypot(x1 - x, z1 - z);
+    const start = length;
+    length += size;
+    return { x, z, start, end: length, dx: (x1 - x) / size, dz: (z1 - z) / size };
+  });
+  return { legs, length };
+}
+function followTrail(path, metres) {
+  const station = clamp(metres, 0, path.length);
+  const leg = path.legs.find((leg) => station <= leg.end) || path.legs.at(-1);
+  return { x: leg.x + leg.dx * (station - leg.start), z: leg.z + leg.dz * (station - leg.start) };
+}
+// Three small files from the western wood meet the travelled road at the
+// fork, hollow and downs. They use the real stepping stones even if the
+// sluice is shut, and reach the queue from its western shoulder.
+const hollowToFord = [[39,738],[7,803],[-69,885],[-126,966],[-125,1007]];
+const stones = Array.from({length:16}, (_, i) => [-125 + Math.sin(i * 0.45) * 0.55, 1008 + i * 1.76]);
+const beyondFord = [...stones,[-125,1036],[-119,1065],[-91,1089],[38,1120],[79,1137],[74,1228],
+  [60,1259],[43,1280],[7,1312],[-12,1340],[-19,1365]];
+const roadTrails = [
+  [[-27,144],[17,187],[22,220],[84,338],[48,480],[80,610],...hollowToFord],
+  [[-119,594],[-60,603],[75,615],...hollowToFord],
+  [[-148,926],[-126,966],[-125,1007]],
+].map((approach, k) => trailThrough([...approach, ...beyondFord, [-19 - k * 2.3, 1374 - k * 2.4]]));
+export function roadFilePosition(w, id, clock, retreat) {
+  const index = roadFileIds.indexOf(id);
+  if (index < 0) return null;
+  const file = Math.floor(index / 3), person = index % 3;
+  const path = roadTrails[file], spacing = person * 2.24;
+  const walked = Math.min(path.length - spacing, 5.5 - spacing + clock * [1.78, 1.66, 1.84][file]);
+  return followTrail(path, walked - retreat);
+}
+
+// The six seats are shared in relays. The rank leaders stay with their
+// following files and eat last, after the woodcutters reach the keep.
+const seats = [[33.55,1515.6],[33.66,1517],[33.56,1518.65],[31.95,1519.1],[29.72,1518.22],[29.68,1516.63]];
+const diners = [...castleGuestIds];
+for (let id = 1; id < 3072; id++)
+  if (id % 48 && !castleGuestIds.includes(id) && !roadFileIds.includes(id)) diners.push(id);
+diners.push(...roadFileIds);
+for (let id = 48; id < 3072; id += 48) diners.push(id);
+diners.push(0);
+const placeInLine = new Int16Array(3072).fill(-1);
+for (let j = 0; j < diners.length; j++) placeInLine[diners[j]] = j;
+const relayPeriod = 42;
+const feastCycle = relayPeriod * (diners.length / 6 + 7);
+const plans = new Map();
+function waitingPlace(id) {
+  if (roadFileIds.includes(id)) {
+    const p = roadFilePosition(null, id, 1e6, 0);
+    return [p.x, p.z];
+  }
+  const file = id % 48, line = Math.floor(id / 48);
+  const lane = file % 2 ? (file + 1) / 2 : -file / 2;
+  const slot = (lane + 25) % 5;
+  if (line < 4) {
+    const p = coursePoint(running - slot * 1.28 - line * 6.53, (Math.floor((lane + 25) / 5) - 5) * 0.83);
+    return [p.x, p.z];
+  }
+  const p = coursePoint(running - 27 - (line - 4) * 1.16, lane * 0.91);
+  return [p.x, p.z];
+}
+function visitPlan(id) {
+  if (plans.has(id)) return plans.get(id);
+  const order = placeInLine[id], k = order % 6, west = k > 2;
+  const origin = waitingPlace(id);
+  const queue = [origin];
+  if (origin[1] < 1412) queue.push([29.1,1415.3]);
+  queue.push([33.55,1433.35]);
+  const path = trailThrough([...queue, [33.55,1436.4], [32.1,1451], [30.65,1466.9],
+    [west ? 27.9 : 34.78,1492],[west ? 28.75 : 33.85,1514.75],
+    ...(k === 3 ? [[29.75,1519.03]] : []), seats[k]]);
+  const approach = trailThrough(queue).length + 1.65;
+  const pace = 1.87 + (k % 3) * 0.045;
+  const cross = Math.floor(order / 6) * relayPeriod + 21 + k * 3.9;
+  const depart = cross - approach / pace;
+  const seated = depart + path.length / pace;
+  const leave = seated + 29;
+  const finish = leave + path.length / pace;
+  const plan = {path, depart, seated, leave, finish, pace};
+  if (plans.size >= 128) plans.delete(plans.keys().next().value);
+  plans.set(id, plan);
+  return plan;
+}
+const arrivalAge = (w, time) => w.gateClosedAt == null ? -Infinity : (time - w.gateClosedAt) % feastCycle;
+export function nextMealAge(w, minimum) {
+  let next = Infinity;
+  const cycleStart = Math.floor(minimum / feastCycle) * feastCycle;
+  for (const id of diners) {
+    if (w.hostFallen?.[id]) continue;
+    const v = visitPlan(id);
+    const base = cycleStart + (cycleStart + v.leave <= minimum ? feastCycle : 0);
+    next = Math.min(next, Math.max(minimum, base + v.seated - 1.4));
+    if (next === minimum) break;
+    // Later files enter in order. Their first seat cannot open sooner.
+    if (next < cycleStart + Math.floor(placeInLine[id] / 6) * relayPeriod && minimum < next) break;
+  }
+  return next;
+}
+function leftPlace(id, age) {
+  const order = placeInLine[id];
+  if (order < 0) return false;
+  const downbeat = Math.floor(order / 6) * relayPeriod;
+  // Limits include the walk from the outermost place in the assembled host.
+  if (age < downbeat - 56 || age > downbeat + 229) return false;
+  const visit = visitPlan(id);
+  return age >= visit.depart && age < visit.finish;
+}
+function visitStation(v, age) {
+  if (age < v.seated) return (age - v.depart) * v.pace;
+  if (age < v.leave) return v.path.length;
+  return v.path.length - (age - v.leave) * v.pace;
+}
+const guestCache = new WeakMap();
+export function castleGuests(w) {
+  const age = arrivalAge(w, w.ropeFallen ? w.dispersalAt ?? w.elapsed : w.elapsed);
+  if (!Number.isFinite(age)) return noGuests;
+  const last = guestCache.get(w);
+  if (last?.age === age) return last.ids;
+  const first = Math.max(0, Math.floor((age - 229) / relayPeriod) * 6);
+  const end = Math.min(diners.length, (Math.floor((age + 56) / relayPeriod) + 1) * 6);
+  const ids = [];
+  for (let i = first; i < end; i++) if (leftPlace(diners[i], age)) ids.push(diners[i]);
+  guestCache.set(w, {age, ids});
+  return ids;
+}
+const noGuests = Object.freeze([]);
+export function castleGuestPosition(w, id, time, retreat = 0) {
+  const age = arrivalAge(w, time);
+  if (!leftPlace(id, age)) return null;
+  const v = visitPlan(id);
+  const station = visitStation(v, age) - retreat;
+  const p = followTrail(v.path, station);
+  // Two can pass abreast at the wicket. Leaving guests keep the west half
+  // while arriving guests keep the east; the lanes merge at their own seats.
+  const lane = clamp(station / 3, 0, 1) * clamp((p.z - 1428) / 4, 0, 1) * clamp((1466 - p.z) / 4, 0, 1);
+  p.x += (age >= v.leave || retreat ? -0.36 : 0.36) * lane;
+  return p;
+}
+export function guestAtTable(w, id) {
+  if (w.ropeFallen || w.hostFallen?.[id] || w.hostActors?.[id]) return false;
+  const age = arrivalAge(w, w.elapsed);
+  if (!leftPlace(id, age)) return false;
+  const v = visitPlan(id);
+  return age >= v.seated && age < v.leave;
+}
+export function guestWicketLift(w) {
+  if (w.gateClosedAt == null) return 0;
+  const clock = w.ropeFallen ? w.dispersalAt ?? w.elapsed : w.elapsed;
+  const retreat = w.ropeFallen ? Math.max(0, w.elapsed - clock) * 1.82 : 0;
+  let lift = 0;
+  for (const id of castleGuests(w)) {
+    if (w.hostFallen?.[id] || w.hostActors?.[id]) continue;
+    const p = castleGuestPosition(w, id, clock, retreat);
+    if (p && Math.abs(p.x - 33.55) < 1.2)
+      lift = Math.max(lift, 2.42 * clamp((4.1 - Math.abs(p.z - 1435)) / 2.15, 0, 1));
+  }
+  return lift;
+}
 // The approach to the iron narrows to five abreast. All travellers share the
 // same timetable, even when the player stops, doubles back, or leaves the road.
 export function frontStation(clock, duration) {

@@ -167,7 +167,7 @@ export function advanceWildlife(w, dt, hooks) {
     if (w.ending) return;
     if (carryMomentum(w, a, dt, hooks)) continue;
     if (
-      a.z > 1045 &&
+      (a.z > 1045 || (a.type === 'wolf' && d < 35 && hooks.nearMarchers?.length)) &&
       !w.ropeFallen &&
       hooks.marcherAt &&
       (!a.nextHostListen || w.elapsed >= a.nextHostListen)
@@ -177,13 +177,27 @@ export function advanceWildlife(w, dt, hooks) {
       // nearest rank, even when the player stays behind cover.
       let closest,
         gap = a.type === 'dragon' ? 48 : 31;
-      for (let row = 0; row < 64; row += 4) {
+      for (let row = 0; a.z > 1045 && row < 64; row += 4) {
         const q = hooks.marcherAt(w, row * 48);
         const d = distance(a, q);
         if (d < gap) {
           closest = q;
           gap = d;
         }
+      }
+      // In the woods a pack gives way only to a cluster it can actually hear.
+      // One straggler across the trail is no shelter from a pursuing wolf.
+      if (!closest && a.type === 'wolf' && hooks.nearMarchers) {
+        let count = 0, nearest, nearestRange = 10;
+        for (const q of hooks.nearMarchers) {
+          if (w.hostFallen?.[q.i]) continue;
+          const person = w.hostActors?.[q.i] || q;
+          const range = distance(a, person);
+          if (range > 10) continue;
+          count++;
+          if (range < nearestRange) { nearest = person; nearestRange = range; }
+        }
+        if (count >= 2 && nearest) { closest = nearest; gap = nearestRange; }
       }
       if (closest) {
         const scale = 27 / Math.max(0.5, gap);

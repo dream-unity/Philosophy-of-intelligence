@@ -1,4 +1,5 @@
 import { createLandscape } from './sound-landscape.mjs';
+import { createHostSoundscape, hostFoley } from './sound-host.mjs';
 import { createScore, playEnding } from './sound-score.mjs';
 import { createScoreInstruments } from './score-instruments.mjs';
 import { hordePosition, HORDE_COUNT } from './world.mjs';
@@ -14,6 +15,7 @@ const groupNames = ['music', 'effects', 'ambience'];
 
 export function createAudio() {
   const score = createScore();
+  const hostSoundscape = createHostSoundscape();
   const mix = { music: 1, effects: 1, ambience: 1 },
     channels = {};
   const cueSpace = {};
@@ -38,10 +40,8 @@ export function createAudio() {
   let nextMix = 0,
     nextBreath = 0,
     nextCreature = 0,
-    nextRank = 0,
     lastLureBeat = -1,
-    lastLureAt,
-    rank = 0;
+    lastLureAt;
   function route(node, dest, pan) {
     if (Math.abs(pan) < 0.001 || !ctx.createStereoPanner) {
       node.connect(dest);
@@ -289,10 +289,21 @@ export function createAudio() {
     return true;
   }
   function hostAnswer(t) {
-    if (!latest) return;
-    const head = hordePosition(latest, 0);
-    const arrivals = [0.02, 0.31, 0.65, 0.93].map((fraction, i) => {
-      const pos = hordePosition(latest, Math.floor(HORDE_COUNT * fraction));
+    if (!latest || latest.ropeFallen) return;
+    const positions = [];
+    for (const fraction of [0.02, 0.31, 0.65, 0.93]) {
+      const sample = Math.floor(HORDE_COUNT * fraction);
+      const row = sample - sample % 48;
+      for (let file = 0; file < 48; file++) {
+        const id = row + (sample + file) % 48;
+        if (latest.hostFallen?.[id] || latest.hostActors?.[id]) continue;
+        positions.push(hordePosition(latest, id));
+        break;
+      }
+    }
+    const head = positions[0];
+    if (!head) return;
+    const arrivals = positions.map((pos, i) => {
       const at = acoustic(pos, 146, 0.19);
       // One rank takes up another's cry. Account for the different sound paths
       // to a listener standing at either end of a stretched-out column.
@@ -360,8 +371,15 @@ export function createAudio() {
         }
         break;
       case 'telegraph':
-        makeRoomForCue(t, kind === 'dragon' ? 0.76 : 0.43, 0.85);
-        creatureSound(effects, kind, t, pan, g, true);
+        makeRoomForCue(t, kind === 'dragon' ? 0.76 : kind === 'host' ? 0.66 : 0.43, 0.85);
+        if (kind === 'host') hostFoley(effects, 'windup', t, pan, g, ev.i);
+        else creatureSound(effects, kind, t, pan, g, true);
+        break;
+      case 'host':
+        if (at.d < 55) {
+          if (kind === 'notice') makeRoomForCue(t, 0.28, 0.44);
+          hostFoley(effects, kind, t, pan, g, ev.i);
+        }
         break;
       case 'enemy-breath':
         creatureSound(effects, kind || 'dragon', t, pan, g * 0.96, true);
@@ -378,7 +396,8 @@ export function createAudio() {
         );
         break;
       case 'impact':
-        metalContact(effects, kind, t, pan, g);
+        if (kind === 'zombie') hostFoley(effects, 'struck', t, pan, g, ev.i);
+        else metalContact(effects, kind, t, pan, g);
         break;
       case 'dodge':
         scuffSound(effects, kind || 'gravel', t, -0.18, 6.4);
@@ -397,10 +416,12 @@ export function createAudio() {
         effects.note('triangle', 678, 0.045, t + 0.036, 0.17, -0.04, 625);
         break;
       case 'block':
-        metalContact(effects, 'metal', t, pan, g);
+        if (kind === 'host') hostFoley(effects, 'block', t, pan, g, ev.i);
+        else metalContact(effects, 'metal', t, pan, g);
         if (kind === 'parry') effects.bell(984, t + 0.065, 0.113 * g, 0.48, pan);
         break;
       case 'hurt':
+        if (kind === 'host') effects.noise(0.39, 1410, 0.16, t, pan, 0.025);
         effects.noise(0.63, 570, 0.29, t, pan);
         effects.note('triangle', 115, 0.15, t, 0.32, pan, 45);
         break;
@@ -669,13 +690,13 @@ export function createAudio() {
       lastX = lastZ = undefined;
       turnHeading = p.yaw;
       headingAt = nextScuff = world.elapsed;
-      step = stride = exertion = recentSpeed = rank = 0;
-      nextCreature = nextRank = nextMix = 0;
+      step = stride = exertion = recentSpeed = 0;
+      nextCreature = nextMix = 0;
       lastLureAt = undefined;
       lastLureBeat = -1;
       nextBreath = t + 1;
     }
-    if (!listeningOnly) updateFootwork(world, t);
+    if (!listeningOnly && !world.feastAftermath) updateFootwork(world, t);
     if (t < nextMix) return;
     nextMix = t + 0.22;
     score(world, t, music.note, listeningOnly);
@@ -715,16 +736,7 @@ export function createAudio() {
         nextCreature = t + (closest.type === 'dragon' ? 1.6 : closest.alerted ? 0.93 : 2.3);
       } else nextCreature = t + 0.35;
     }
-    if (t >= nextRank && p.z > 950) {
-      const pos = hordePosition(world, Math.floor(((rank++ * 0.381966) % 1) * HORDE_COUNT));
-      const at = acoustic(pos, 17);
-      if (at.d < 100) {
-        ambience.noise(0.39 * at.gain, 650 + (rank % 4) * 134, 0.42, t, at.pan, 0.087);
-        ambience.note('triangle', 127 + (rank % 3) * 24, 0.046 * at.gain, t + 0.06, 0.48, at.pan, 87, 0.17);
-        if (rank % 5 === 0) ambience.bell(637, t + 0.15, 0.032 * at.gain, 0.31, at.pan);
-      }
-      nextRank = t + (at.d < 80 ? 0.39 : 0.72);
-    }
+    hostSoundscape(world, t, ambience, acoustic);
   }
   function dispose() {
     if (disposed) return;

@@ -13,6 +13,7 @@ import {
   mix,
 } from './blade-pose.mjs';
 import { actorVolumes, capsuleEntry } from './combat-zones.mjs';
+import { guestAtTable } from './procession.mjs';
 export { bladeCoordinates, bladeFallbackGeometry, steelLength, gripToEdge } from './blade-pose.mjs';
 
 export const isEnemy = (a) => ['wolf', 'dragon', 'troll'].includes(a.type);
@@ -22,8 +23,23 @@ export function cue(w, type, text, source) {
   if (source) {
     ev.x = source.x;
     ev.z = source.z;
+    if (Number.isInteger(source.i)) ev.i = source.i;
   }
   w.events.push(ev);
+}
+// The ID and pose refer to the same individual in the march, in pursuit and
+// on guard recovery. A boot on bridge planks stands at deck height.
+function marcherTarget(w, walker) {
+  const feeding = !walker.state && guestAtTable(w, walker.i);
+  return {
+    ...walker,
+    type: 'marcher',
+    id: 'host' + walker.i,
+    marcher: walker,
+    state: feeding ? 'feed' : walker.state,
+    heading: feeding ? Math.atan2(31.5 - walker.x, 1517 - walker.z) : walker.heading,
+    feetY: footHeight(w, walker.x, walker.z),
+  };
 }
 export function beginSwing(w, kind) {
   if (w.elapsed < w.strikeUntil || w.elapsed < (w.guardUntil || 0)) return false;
@@ -96,7 +112,9 @@ function commitContact(w, hooks, rig, hit, fraction, eye) {
         ? hit.zone === 'club'
           ? 'wood'
           : 'stone'
-        : foe.type
+        : foe.type === 'marcher'
+          ? 'zombie'
+          : foe.type
     : hit.material;
   a.contact = { x, y, z, at: w.elapsed, fraction, material, zone: hit.zone || 'scenery' };
   if (!foe) {
@@ -110,7 +128,9 @@ function commitContact(w, hooks, rig, hit, fraction, eye) {
     return;
   }
   if (foe.type === 'marcher') {
-    hooks.hitMarcher?.(w, foe.marcher, a.contact);
+    const opening = foe.state === 'stagger' || foe.state === 'recover';
+    const points = a.kind === 'thrust' && (hit.zone === 'head' || opening) ? 2 : 1;
+    hooks.hitMarcher?.(w, foe.marcher, points, a.kind, { ...a.contact, i: foe.i });
     return;
   }
   cue(w, 'impact', material, a.contact);
@@ -161,8 +181,7 @@ export function strikeContacts(w, rig, hooks) {
       Math.hypot(v.x - w.player.x, v.z - w.player.z) < (v.type === 'dragon' ? 8.3 : 4.2)
   );
   for (const q of hooks.marchers || []) {
-    if (Math.hypot(q.x - eye.x, q.z - eye.z) < 3)
-      actors.push({ type: 'marcher', id: 'host' + q.i, x: q.x, z: q.z, marcher: q });
+    if (!w.hostFallen?.[q.i] && Math.hypot(q.x - eye.x, q.z - eye.z) < 3) actors.push(marcherTarget(w, q));
   }
   const targets = actors.map((actor) => ({ actor, zones: actorVolumes(actor, w.elapsed) }));
   const steps = clamp(
@@ -256,10 +275,27 @@ export function tossPhial(w, kind = 'cinder') {
   cue(w, 'throw', kind, p);
   return true;
 }
-export function advancePhial(w, dt, notify) {
+function exposedToBurst(w, actor, origin) {
+  // A visible head or limb can catch a cinder, while stone and the ground
+  // shield anyone behind them. Only exposed parts of this model count.
+  return actorVolumes(actor, w.elapsed).some((zone) => {
+    if (!['torso', 'flank', 'head', 'throat', 'leg'].includes(zone.name)) return false;
+    const center = lerpPoint(zone.a, zone.b, 0.5);
+    const d = Math.hypot(...center.map((v, i) => v - origin[i]));
+    return d <= 10.5 + zone.r && !obstruction(w, origin, center, 0.025);
+  });
+}
+export function advancePhial(w, dt, notify, host) {
   const q = w.phialFlight;
   if (!q) return;
   const slices = Math.max(1, Math.ceil((Math.hypot(q.vx, q.vy, q.vz) * dt) / 0.19));
+  const drift = dt * Math.hypot(q.vx, q.vz);
+  const bodies = w.actors.filter(
+    (a) =>
+      a.alive && isEnemy(a) && Math.hypot(a.x - q.x, a.z - q.z) < drift + (a.type === 'dragon' ? 6.3 : 2.2)
+  );
+  for (const walker of host?.inRange(w, q, drift + 1.3) || []) bodies.push(marcherTarget(w, walker));
+  const hitZones = bodies.flatMap((a) => actorVolumes(a, w.elapsed));
   for (let i = 0; i < slices; i++) {
     const step = dt / slices,
       x = q.x + q.vx * step,
@@ -267,20 +303,17 @@ export function advancePhial(w, dt, notify) {
       y = q.y + q.vy * step - 0.5 * 9.81 * step * step;
     q.vy -= 9.81 * step;
     const floor = footHeight(w, x, z);
-    const blocked = barrier(w, x, z, 0.05, false, undefined, undefined, y);
     const from = [q.x, q.y, q.z],
       to = [x, y, z];
-    const contact = w.actors.some((a) => {
-      if (!a.alive || !isEnemy(a) || Math.hypot(a.x - x, a.z - z) > (a.type === 'dragon' ? 6.3 : 2.2))
-        return false;
-      return actorVolumes(a, w.elapsed).some((zone) => Number.isFinite(capsuleEntry(from, to, zone)));
-    });
-    if (!blocked) {
-      q.x = x;
-      q.y = Math.max(y, floor + 0.05);
-      q.z = z;
-    }
-    if (!blocked && !contact && y > floor + 0.05 && w.elapsed - q.at < 3.5) continue;
+    const solid = obstruction(w, from, to, 0.05);
+    let contact = Infinity;
+    for (const zone of hitZones) contact = Math.min(contact, capsuleEntry(from, to, zone));
+    // Stop just outside a struck wall so its near face can reflect the burst,
+    // and the far side is still in shadow.
+    const fraction = Math.min(contact, solid ? Math.max(0, solid.u - 0.38) : 1);
+    [q.x, q.y, q.z] = lerpPoint(from, to, fraction);
+    q.y = Math.max(q.y, footHeight(w, q.x, q.z) + 0.05);
+    if (!solid && !Number.isFinite(contact) && y > floor + 0.05 && w.elapsed - q.at < 3.5) continue;
     const burst = { x: q.x, y: q.y, z: q.z, at: w.elapsed };
     if (q.kind === 'veil' || q.kind === 'lure') {
       const mist = q.kind === 'veil';
@@ -295,28 +328,40 @@ export function advancePhial(w, dt, notify) {
       );
       return;
     }
-    let struck = 0;
+    let struck = 0,
+      nearest,
+      nearestDistance = Infinity;
+    const origin = [q.x, q.y + 0.09, q.z];
     for (const a of w.actors) {
       if (!a.alive || !isEnemy(a)) continue;
       if (Math.hypot(a.x - q.x, a.z - q.z) > (a.type === 'dragon' ? 16 : 13)) continue;
-      const origin = [q.x, q.y + 0.09, q.z];
-      // A cinder burst must reach the body through open air. Use the actual posed
-      // body; a dragon's airborne throat and a wolf's flank occupy different heights.
-      const exposed = actorVolumes(a, w.elapsed).some((zone) => {
-        if (!['flank', 'head', 'throat', 'leg'].includes(zone.name)) return false;
-        const center = lerpPoint(zone.a, zone.b, 0.5),
-          d = Math.hypot(...center.map((v, i) => v - origin[i]));
-        return d <= 10.5 + zone.r && !obstruction(w, origin, center, 0.025);
-      });
-      if (!exposed) continue;
+      if (!exposedToBurst(w, a, origin)) continue;
       a.alive = false;
       struck++;
       cue(w, 'impact', a.type, a);
     }
+    for (const walker of host?.inRange(w, burst, 11.5) || []) {
+      if (!exposedToBurst(w, marcherTarget(w, walker), origin)) continue;
+      if (!host.damage(w, walker, 3, 'cinder', burst)) continue;
+      const d = Math.hypot(walker.x - q.x, walker.z - q.z);
+      if (d < nearestDistance) {
+        nearest = walker;
+        nearestDistance = d;
+      }
+    }
+    // One crack of burning cloth, even when a tightly packed rank falls together.
+    if (nearest) cue(w, 'impact', 'zombie', nearest);
     w.phialFlight = null;
     w.cinder = burst;
     cue(w, 'potion', 'shatter', burst);
-    notify(w, struck ? 'Cinder light scatters the beasts.' : 'A ring of cinder light fades.');
+    notify(
+      w,
+      nearest
+        ? 'Grey hands drop out of the cinder light.'
+        : struck
+          ? 'Cinder light scatters the beasts.'
+          : 'A ring of cinder light fades.'
+    );
     return;
   }
 }

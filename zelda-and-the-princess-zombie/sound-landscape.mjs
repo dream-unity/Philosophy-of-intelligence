@@ -222,7 +222,9 @@ export function createLandscape(ctx, output, noiseBuffer) {
     );
 
     const protectedRoost = roosts.some((r) => Math.hypot(p.x - r.x, p.z - r.z) < 55);
-    const hunted = world.actors.some((a) => a.alive && a.alerted && Math.hypot(p.x - a.x, p.z - a.z) < 42);
+    const hunted = world.actors.some((a) => a.alive && a.alerted && Math.hypot(p.x - a.x, p.z - a.z) < 42) ||
+      (!world.ropeFallen && Object.values(world.hostActors || {}).some((a) =>
+        (a.state === 'pursue' || a.state === 'windup') && Math.hypot(p.x - a.x, p.z - a.z) < 24));
     if (
       quiet ||
       listeningOnly ||

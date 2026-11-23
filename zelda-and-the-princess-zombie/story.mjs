@@ -18,7 +18,7 @@ export const storyFates = {
   feast: {
     duration: 5.9,
     title: 'The guest of honour',
-    text: 'The blue knot catches between her teeth. Xero folds your arm against the table. Your pulse stops. From the far side of the oak doors comes the soft knock of a wooden bowl.',
+    text: 'The blue knot catches between her teeth. Xero folds your arm against the table. Your pulse stops. She gathers the slack cord in one hand and rings again.',
   },
   saved: {
     duration: 10.6,
@@ -66,6 +66,14 @@ const journalEntries = {
   procession: [
     'The procession',
     'The dead walk shoulder to shoulder. From the edge of the road I can see the seams in their worn coats.',
+  ],
+  looseWalker: [
+    'A walker off the road',
+    'I saw one of the dead away from the main column. I marked the spot on my sketch.',
+  ],
+  guestsAtTable: [
+    'A place at the table',
+    'I saw a traveller from the road bend over the stag. The bell had called them to supper.',
   ],
   bowl: [
     'The wooden bowl',

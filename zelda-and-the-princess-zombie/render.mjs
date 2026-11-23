@@ -1,7 +1,8 @@
 import { createWoodPainter } from './wood-painter.mjs';
 import { castleShelf, createCastleView } from './castle-view.mjs';
 import { createRiverView } from './river-view.mjs';
-import { marcherFrame } from './marcher-art.mjs';
+import { marcherFrame, costumeCell } from './marcher-art.mjs';
+import { marcherBodyFaces, marcherAtlasCell } from './marcher-body.mjs';
 import { createProcessionView, queueProcession } from './procession-view.mjs';
 import { makeRidgeLandscape } from './ridge-landscape.mjs';
 import { lightShader, sceneLights, bindLamps, illuminatedSprite } from './scene-light.mjs';
@@ -49,7 +50,6 @@ import {
   terrainHeight as ground,
   roadX,
   trailX,
-  hordePosition,
   hostFootprints,
   HORDE_COUNT,
 } from './world.mjs';
@@ -803,7 +803,7 @@ function artImage(name) {
   image.src = new URL('./' + name, import.meta.url).href;
   return image;
 }
-const readyImage = (im) => im?.complete && im.naturalWidth > 0;
+const readyImage = (im) => !!im && (im.complete ? im.naturalWidth > 0 : typeof im.getContext === 'function' && im.width > 0);
 function buildCell(cx, cz) {
   const mesh = [],
     rand = rng(78013 + cx * 3851 + cz * 907);
@@ -1459,6 +1459,7 @@ gl_FragColor=vec4(lightSurface(c.rgb,mix(uGrip,uTip,t)),c.a);}`
     lunge: imageTexture('xero-lunge.webp'),
     cured: imageTexture('xero-cured.webp'),
   };
+  const hostAngles = { front: imageTexture('host-front.webp'), back: imageTexture('host-back.webp') };
   const marcherArt = Array.from({ length: 8 }, (_, i) => imageTexture('marcher-' + (i + 1) + '.webp')),
     procession = createProcessionView();
   const stoneTexture = imageTexture('castle-stone.webp');
@@ -1897,7 +1898,7 @@ gl_FragColor=vec4(lightSurface(c.rgb,mix(uGrip,uTip,t)),c.a);}`
       const ratio = asset.im.naturalWidth / asset.im.naturalHeight;
       for (const b of items) {
         const y = b.y ?? ground(b.x, b.z) + (b.dy || 0),
-          width = b.h * ratio * (b.w || 1),
+          width = b.h * ratio * (b.uv ? b.uv[2] / b.uv[3] : 1) * (b.w || 1),
           flip = b.flip ?? b.seed % 2 === 0;
         const dx = px - b.x,
           dz = pz - b.z,
@@ -1917,7 +1918,8 @@ gl_FragColor=vec4(lightSurface(c.rgb,mix(uGrip,uTip,t)),c.a);}`
               v = row / rows,
               pos = near ? actorWarp(b.rig, t, u, v) : [u, v],
               side = (flip ? 0.5 - pos[0] : pos[0] - 0.5) * width;
-            verts.push([b.x + rightX * side, y + (1 - pos[1]) * b.h, b.z + rightZ * side, u, v, b.alpha ?? 1]);
+            verts.push([b.x + rightX * side, y + (1 - pos[1]) * b.h, b.z + rightZ * side,
+              b.uv ? b.uv[0] + u * b.uv[2] : u, b.uv ? b.uv[1] + v * b.uv[3] : v, b.alpha ?? 1]);
           }
         for (let row = 0; row < rows; row++)
           for (let col = 0; col < cols; col++) {
@@ -1974,17 +1976,33 @@ gl_FragColor=vec4(lightSurface(c.rgb,mix(uGrip,uTip,t)),c.a);}`
     }
     // The procession updates at a lower rate than the camera, including distant ranks.
     // Terrain depth hides groups behind the ridge. Each point becomes a walking figure.
-    const exteriorHost = !insideHall(px, pz) && procession.aboveHorizon(w, y);
-    const detailed =
-      exteriorHost && marcherArt.every((a) => a.ready)
-        ? procession.near(w, aspect, t, quality < 0.8 ? 32 : 64)
-        : { poses: [], ids: new Set() };
-    if (detailed.poses.length)
-      for (let k = 0; k < marcherArt.length; k++)
-        batchSprites(
-          detailed.poses.filter((a) => a.kind === k),
-          marcherArt[k]
-        );
+    const exteriorHost = outside && procession.aboveHorizon(w, y);
+    const detailed = procession.near(w, aspect, t, quality < 0.8 ? 32 : 64, exteriorHost);
+    const skins = new Map(), limbs = new Map(), fallback = [];
+    for (const a of detailed.poses) {
+      const atlas = hostAngles[a.view];
+      const asset = atlas?.ready ? atlas : marcherArt[a.kind];
+      if (!asset?.ready) { fallback.push(a); continue; }
+      const atlasUV = asset === atlas ? marcherAtlasCell(a.kind) : undefined;
+      if (a.special) {
+        const ratio = asset.im.naturalWidth / asset.im.naturalHeight * (atlasUV ? 0.5 : 1);
+        if (!limbs.has(asset)) limbs.set(asset, []);
+        const vertices = limbs.get(asset);
+        for (const face of marcherBodyFaces(a, p, t, ratio, atlasUV))
+          for (const i of [0, 1, 2, 0, 2, 3]) vertices.push(...face[i], 1);
+      } else {
+        if (!skins.has(asset)) skins.set(asset, []);
+        a.uv = atlasUV;
+        skins.get(asset).push(a);
+      }
+    }
+    for (const [asset, walkers] of skins) batchSprites(walkers, asset);
+    for (const [asset, triangles] of limbs) streamTexture(Float32Array.from(triangles), asset);
+    if (fallback.length) {
+      setup(solid);
+      gl.uniform1f(solid.uni.uMode, 1);
+      for (const a of fallback) draw(models.traveller, a.x, a.y, a.z, a.heading, a.h / 1.85, 1);
+    }
     if (exteriorHost) updateHorde(w, t, detailed.ids);
     updatePollen(px, pz, t);
     setup(points);
@@ -2011,7 +2029,7 @@ gl_FragColor=vec4(lightSurface(c.rgb,mix(uGrip,uTip,t)),c.a);}`
       potionFlash = Math.max(0, (w.potionUntil || 0) - w.elapsed);
     const slide = aspect < 0.95 ? -0.075 : 0,
       tuck = bound ? sp * 0.55 : feast ? Math.max(0, sp - 0.3) * 0.55 : 0;
-    if (!storyPose.physical && paintedSword.ready && (!bound || sp < 0.72)) {
+    if (!w.feastAftermath && !storyPose.physical && paintedSword.ready && (!bound || sp < 0.72)) {
       const W = canvas.width,
         H = canvas.height,
         sz = Math.min(H * 0.52, W * 0.65),
@@ -2066,14 +2084,14 @@ gl_FragColor=vec4(lightSurface(c.rgb,mix(uGrip,uTip,t)),c.a);}`
       gl.disable(gl.BLEND);
       setup(solid);
     }
-    if (!storyPose.physical && (!bound || sp < 0.72)) {
+    if (!w.feastAftermath && !storyPose.physical && (!bound || sp < 0.72)) {
       const vertices = bladeFallbackGeometry(w, paintedSword.ready);
       gl.bindBuffer(gl.ARRAY_BUFFER, motionBuffer.b);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
       motionBuffer.count = vertices.length / 6;
       draw(motionBuffer, 0, 0, 0, 0, 1, 1);
     }
-    if (!storyPose.physical && (bound || storyPose.reach > 0.02 || potionFlash > 0.35)) {
+    if (!w.feastAftermath && !storyPose.physical && (bound || storyPose.reach > 0.02 || potionFlash > 0.35)) {
       const reach = storyPose.reach || 0,
         clench = storyPose.clench || 0;
       draw(
@@ -2190,6 +2208,7 @@ function softwareRenderer(canvas) {
   };
   const masonry = artImage('castle-stone.webp');
   let stonePattern = null;
+  const hostAngles = { front: artImage('host-front.webp'), back: artImage('host-back.webp') };
   const marchers = Array.from({ length: 8 }, (_, i) => artImage('marcher-' + (i + 1) + '.webp')),
     procession = createProcessionView();
   let skyBackdrop = null,
@@ -2348,13 +2367,13 @@ function softwareRenderer(canvas) {
       const a = ray(x, y, z),
         b = ray(x, y + height, z);
       if (!a || !b) return true;
-      const h = Math.abs(a[1] - b[1]),
-        width = ((h * im.naturalWidth) / im.naturalHeight) * widthScale;
+      const imageRatio = (im.naturalWidth || im.width) / (im.naturalHeight || im.height);
+      const h = Math.abs(a[1] - b[1]), width = h * imageRatio * widthScale;
       if (h < 1 || a[0] + width * 0.5 < 0 || a[0] - width * 0.5 > W || b[1] > H || a[1] < 0) return true;
       let frame;
       if (rig && a[2] < 65) {
         const dx = x - p.x, dz = z - p.z, dist = Math.hypot(dx, dz) || 1;
-        const half = height * widthScale * im.naturalWidth / im.naturalHeight * 0.5;
+        const half = height * widthScale * imageRatio * 0.5;
         const lx = dz / dist * half, lz = -dx / dist * half;
         const left = ray(x - lx, y + height * 0.5, z - lz),
           right = ray(x + lx, y + height * 0.5, z + lz);
@@ -2590,11 +2609,76 @@ function softwareRenderer(canvas) {
       }
     }
 
+    const showColumn = needsExterior && procession.aboveHorizon(world, ey);
+    const detailed = procession.near(world, W / H, time, resolution < 0.8 ? 24 : 48, showColumn);
+    function drawWalker(a) {
+      const sheet = hostAngles[a.view];
+      const im = readyImage(sheet) ? costumeCell(sheet, a.kind) : marchers[a.kind];
+      if (!readyImage(im)) {
+        drawModel(models.traveller, a.x, a.y, a.z, a.heading, a.h / 1.85);
+        return;
+      }
+      if (!a.special) { billboard(im, a.x, a.y, a.z, a.h, a.flip, a.w, 1, a.rig); return; }
+      const skin = illuminatedSprite(im, light, a.x, a.y, a.z, a.h, insideHall(a.x, a.z));
+      const ratio = (im.naturalWidth || im.width) / (im.naturalHeight || im.height);
+      for (const face of marcherBodyFaces(a, p, time, ratio))
+        queueLeafFace(queue, ray, face, skin, 0, W, H);
+    }
+    // Draw exterior walkers before the stone hall occludes them. A guest who
+    // crosses the threshold joins the same depth queue as the banquet table.
+    for (const a of detailed.poses) if (!inside || !insideHall(a.x, a.z)) drawWalker(a);
+    if (showColumn) {
+      procession.update(world);
+      const hostSight = procession.visibility(world, ey);
+      if (!world.ropeFallen)
+        for (let row = 0; row < 64; row += 2) {
+          if (!hostSight[row >> 2]) continue;
+          // A lone replacement at the iron cannot raise the dust of two full ranks.
+          if (world.hostFallen) {
+            let bodies = 0;
+            for (let id = row * 48; id < (row + 2) * 48 && bodies < 32; id++) {
+              if (!detailed.ids.has(id)) bodies++;
+            }
+            if (bodies < 32) continue;
+          }
+          const a = procession.at(row * 48, {}),
+            b = procession.at(Math.min(HORDE_COUNT - 48, (row + 2) * 48), {});
+          const near = Math.hypot(a.x - p.x, a.z - p.z);
+          if (near < 110) continue;
+          const verts = [
+            [a.x - 13, a.z],
+            [b.x - 11, b.z],
+            [b.x + 13, b.z],
+            [a.x + 12, a.z],
+          ];
+          path(
+            verts.map(([x, z]) => ray(x, ground(x, z) + 1.8, z)),
+            row % 4 ? '#656b62' : '#555c54'
+          );
+          const cloud = ray(a.x, ground(a.x, a.z) + 2.9, a.z);
+          if (cloud) {
+            const d = cloud[2],
+              diam = Math.max(3, Math.min(W * 0.14, (f * 26) / d));
+            queue.push({
+              d: d + 0.15,
+              draw: (c) => {
+                const g = c.createRadialGradient(cloud[0], cloud[1], 0, cloud[0], cloud[1], diam);
+                g.addColorStop(0, 'rgba(166,154,127,.22)');
+                g.addColorStop(1, 'rgba(166,154,127,0)');
+                c.fillStyle = g;
+                c.fillRect(cloud[0] - diam, cloud[1] - diam, diam * 2, diam * 2);
+              },
+            });
+          }
+        }
+      queueProcession(procession, ray, queue, W, H, f, detailed.ids, resolution < 0.8, hostSight);
+    }
     let room = false;
     if (inside) {
       paint();
       room = hallPainter.draw(ctx, W, H, world, ray, queue) !== false;
     }
+    if (inside) for (const a of detailed.poses) if (insideHall(a.x, a.z)) drawWalker(a);
     if (p.z > 1290 && Math.abs(p.x - 30) < 160) {
       if (!room) drawModel(models.hall, 0, castleAltitude, 0);
       else drawModel(models.hallProps, 0, castleAltitude, 0);
@@ -2657,48 +2741,6 @@ function softwareRenderer(canvas) {
           c.restore();
         },
       });
-    }
-    if (!inside && procession.aboveHorizon(world, ey)) {
-      procession.update(world);
-      const hostSight = procession.visibility(world, ey);
-      if (!world.ropeFallen)
-        for (let row = 0; row < 64; row += 2) {
-          if (!hostSight[row >> 2]) continue;
-          const a = hordePosition(world, row * 48),
-            b = hordePosition(world, Math.min(HORDE_COUNT - 1, (row + 2) * 48));
-          const near = Math.hypot(a.x - p.x, a.z - p.z);
-          if (near < 110) continue;
-          const verts = [
-            [a.x - 13, a.z],
-            [b.x - 11, b.z],
-            [b.x + 13, b.z],
-            [a.x + 12, a.z],
-          ];
-          path(
-            verts.map(([x, z]) => ray(x, ground(x, z) + 1.8, z)),
-            row % 4 ? '#656b62' : '#555c54'
-          );
-          const cloud = ray(a.x, ground(a.x, a.z) + 2.9, a.z);
-          if (cloud) {
-            const d = cloud[2],
-              diam = Math.max(3, Math.min(W * 0.14, (f * 26) / d));
-            queue.push({
-              d: d + 0.15,
-              draw: (c) => {
-                const g = c.createRadialGradient(cloud[0], cloud[1], 0, cloud[0], cloud[1], diam);
-                g.addColorStop(0, 'rgba(166,154,127,.22)');
-                g.addColorStop(1, 'rgba(166,154,127,0)');
-                c.fillStyle = g;
-                c.fillRect(cloud[0] - diam, cloud[1] - diam, diam * 2, diam * 2);
-              },
-            });
-          }
-        }
-      const detailed = marchers.every(readyImage)
-        ? procession.near(world, W / H, time, resolution < 0.8 ? 24 : 48)
-        : { poses: [], ids: new Set() };
-      for (const a of detailed.poses) billboard(marchers[a.kind], a.x, a.y, a.z, a.h, a.flip, a.w, 1, a.rig);
-      queueProcession(procession, ray, queue, W, H, f, detailed.ids, resolution < 0.8, hostSight);
     }
     for (const a of world.actors || []) {
       if (
@@ -2763,9 +2805,9 @@ function softwareRenderer(canvas) {
     const feast = world.sequence?.id === 'feast',
       saved = world.sequence?.id === 'saved',
       q = world.sequence?.progress || 0;
-    if (bound && !storyPose.physical) drawModel(models.hand, 0, 0, 0, 0, 1, true);
+    if (bound && !world.feastAftermath && !storyPose.physical) drawModel(models.hand, 0, 0, 0, 0, 1, true);
     const bladeReady = readyImage(swordArt);
-    if (!bound && !storyPose.physical && bladeReady) {
+    if (!bound && !world.feastAftermath && !storyPose.physical && bladeReady) {
       const { grip } = bladeCoordinates(world);
       const bladeArt = illuminatedSprite(swordArt, light, grip[0], grip[1], grip[2], 0.85, inside);
       const size = Math.min(H * 0.52, W * 0.65);
@@ -2791,8 +2833,8 @@ function softwareRenderer(canvas) {
       }
       ctx.restore();
     }
-    if (!bound && !storyPose.physical) paintTransientMesh(scene, bladeFallbackGeometry(world, bladeReady));
-    if (!storyPose.physical && storyPose.reach > 0.02)
+    if (!bound && !world.feastAftermath && !storyPose.physical) paintTransientMesh(scene, bladeFallbackGeometry(world, bladeReady));
+    if (!world.feastAftermath && !storyPose.physical && storyPose.reach > 0.02)
       drawModel(
         storyPose.clench > 0.48 ? models.fist : models.hand,
         -0.21 + 0.12 * storyPose.reach,

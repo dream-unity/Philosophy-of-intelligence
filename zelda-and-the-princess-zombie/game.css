@@ -493,6 +493,16 @@ h1 {
   scrollbar-width: thin;
   scrollbar-color: #8b795a #1b2822;
 }
+.overlay.after-feast {
+  align-items: end;
+  justify-items: start;
+  background: linear-gradient(0deg, #090c0cd9, transparent 30%);
+}
+.after-feast .panel { display: flex; align-items: center; gap: 0.7rem; width: auto; max-width: 100%;
+  padding: 0; background: transparent; border: 0; box-shadow: none; }
+.after-feast .panel h2 { font-size: clamp(1rem, 2vw, 1.35rem); margin: 0; }
+.after-feast .panel .panel-rule, .after-feast .panel #panel-body, .after-feast .panel #panel-kicker { display: none; }
+.after-feast .panel #panel-actions { margin: 0; }
 .panel-rule {
   display: flex;
   align-items: center;
