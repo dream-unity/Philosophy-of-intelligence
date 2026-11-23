@@ -235,7 +235,7 @@ export function createScore() {
     }
     if (p.speed > 1)
       travelPace += (Math.min(5.25, Math.max(3.65, p.speed)) - travelPace) * (1 - Math.exp(-dt / 8));
-    if (listeningOnly || world.gateCrossed || world.gateClosedAt != null || world.route === 'wander' || world.route === 'undecided')
+    if (listeningOnly || world.lastBellCastAt != null || world.gateCrossed || world.gateClosedAt != null || world.route === 'wander' || world.route === 'undecided')
       race = 0;
     else if (time >= nextEstimate) {
       race = clamp((80 - raceMargin(world, travelPace)) / 92);

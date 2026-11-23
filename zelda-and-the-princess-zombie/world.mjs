@@ -1,7 +1,9 @@
 import {
   addForage,
-  fieldBottles,
+  throwableBottles,
+  isStolenBottle,
   giveRoadBottles,
+  giveStolenBottles,
   quickItem,
   selectedItem,
   takeItem,
@@ -39,6 +41,7 @@ import { advanceWildlife } from './wildlife.mjs';
 import { nearbyHost, advanceHost, slidePastHost, detachedPosition, damageHost } from './host-encounters.mjs';
 import { gateArrival, gateForecast, livingLead, reliefPosition } from './host-vanguard.mjs';
 import { hostWithin } from './host-query.mjs';
+import { fallenWitnesses } from './last-bell-witnesses.mjs';
 import { MAP, LANDMARKS, roadX, terrainHeight, clamp, distance, course } from './geography.mjs';
 export { bladeCoordinates } from './swordplay.mjs';
 export { registerObstacle, bridgeRise } from './travel.mjs';
@@ -51,8 +54,12 @@ const GATE_Z = 1435;
 const arrivalCoda = 3.25;
 const gateCameras = new WeakMap();
 export function arrivalView(w) {
-  if (!w.raceWitness || w.reducedMotion || w.ending || w.gateCrossed || w.route === 'wander') return w;
-  const gate = w.raceWitness;
+  const restoration = w.royalPrize?.phase === 'restoring';
+  if (!restoration && (!w.raceWitness || w.reducedMotion || w.ending || w.gateCrossed || w.route === 'wander')) return w;
+  // A fixed sightline lets a distant throw show the change in Xero's face. The
+  // observer moves to the table for this shot; Zelda's saved feet stay put.
+  const subject = restoration ? w.actors.find(actor => actor.type === 'princess') : w.raceWitness;
+  const shotZ = restoration ? subject.z - 2.25 : subject.z;
   let shot = gateCameras.get(w);
   if (!shot || Object.getPrototypeOf(shot.player) !== w.player) {
     shot = Object.create(w);
@@ -60,11 +67,12 @@ export function arrivalView(w) {
     gateCameras.set(w, shot);
   }
   Object.assign(shot.player, {
-    x: gate.x,
-    z: gate.z,
-    yaw: gate.yaw,
-    pitch: 0.11,
-    feetY: terrainHeight(gate.x, gate.z),
+    x: subject.x,
+    z: shotZ,
+    yaw: restoration ? 0 : subject.yaw,
+    pitch: restoration ? -0.27 : 0.11,
+    feetY: restoration ? footHeight(w, subject.x, shotZ) : terrainHeight(subject.x, shotZ),
+    gaitOffset: 0,
     speed: 0,
     vx: 0,
     vz: 0,
@@ -193,7 +201,7 @@ export function hostFootprints(w) {
   const p = w.player;
   const marks = (w.hostTracks || []).filter((q) => distance(q, p) < 22);
   if (p.z < 1015) return marks;
-  const head = frontStation(hostClock(w, w.dispersalAt ?? w.elapsed), raceDuration(w));
+  const head = frontStation(hostClock(w, w.lastBellCastAt ?? w.dispersalAt ?? w.elapsed), raceDuration(w));
   for (const leg of hordeLength) {
     const dx = p.x - leg.x,
       dz = p.z - leg.z;
@@ -534,6 +542,7 @@ export function migrate(w) {
       if (['berries', 'herb'].includes(a.type) && !existing.has(a.id)) w.actors.push(a);
     w.journeyEdition = 3;
   }
+  if (w.hasMap && w.route === 'unbound') giveStolenBottles(w);
   w.player.stamina ??= 1;
   w.player.feetY ??= footHeight(w, w.player.x, w.player.z);
   return w;
@@ -544,7 +553,7 @@ export const secondsToGate = (w) => gateForecast(w, raceDuration(w), rankPositio
 // A later, optional view of the same feast. Nothing in this view is written
 // back into Zelda's journey, including ranks that died on the way to the keep.
 export function feastAftermath(w) {
-  if (w.ending?.id !== 'feast') return null;
+  if (w.ending?.id !== 'feast' || w.lastBellCastAt != null) return null;
   const arrival = w.gateClosedAt ?? w.elapsed + secondsToGate(w);
   if (!Number.isFinite(arrival)) return null;
   const age = nextMealAge(w, Math.max(0,w.elapsed - arrival));
@@ -622,7 +631,7 @@ function canSeeBanquet(w) {
     clearSegment(w, p.x, p.z, a.x, a.z, 0.03, eye, face)
   );
 }
-function banquet(w) {
+function banquet(w, automatic = false) {
   if (w.ending || !canSeeBanquet(w)) return false;
   if (!w.milestones.reveal) {
     w.milestones.reveal = true;
@@ -630,6 +639,12 @@ function banquet(w) {
     cue(w, 'reveal');
   }
   const ready = w.route === 'unbound' && w.antidote;
+  const casting = isStolenBottle(w.bag?.selected) || (w.lastBellCastAt != null && !w.bag?.selected);
+  if (automatic && w.bag?.stock?.saveher > 0 && (!ready || casting)) {
+    w.watchedTable = true;
+    notify(w, 'The cord winds around Xero’s wrist. She looks up. “You kept the ribbon.”', 5);
+    return true;
+  }
   const choices = ready ? [{ id: 1, label: 'Lift the silver vial between you' }] : [];
   choices.push({ id: 2, label: 'Reach for the princess' });
   choices.push({ id: 3, label: 'Tap the old orchard knock on the oak' });
@@ -652,6 +667,25 @@ function beginFate(w, id) {
     pitch: p.pitch,
   };
   if (id === 'bound') w.actors.push(entity('traveller', 'traveller', -3, -18, { heading: 0 }));
+}
+function beginThrownRescue(w, xero, contact) {
+  if (w.ending || w.sequence || w.royalPrize || xero?.type !== 'princess' || !xero.alive || xero.cured) return false;
+  w.rescueImpact = { x: contact.x, y: contact.y, z: contact.z, at: w.elapsed };
+  w.royalPrize = { earnedAt: w.elapsed, phase: 'restoring', time: 0 };
+  w.milestones.reveal = true;
+  w.milestones.xeroSaved = true;
+  w.watchedTable = true;
+  storyBeat(w, 'banquet');
+  beginFate(w, 'saved');
+  // The catch and release are one event. No later bite or race tick can undo it.
+  xero.cured = true;
+  w.ropeFallen = true;
+  w.dispersalAt = w.elapsed;
+  w.tetherRelease = { at: w.elapsed, x: xero.x - 0.2, z: xero.z, height: 1.27, cause: 'release' };
+  cue(w, 'cure', 'silver', xero);
+  cue(w, 'royalprize', 'restoring', xero);
+  notify(w, 'The bell cord slips from Xero’s hand. A breath catches in her throat.', 3.4);
+  return true;
 }
 export function choose(w, n) {
   if (!w.dialogue) return false;
@@ -754,7 +788,7 @@ const reachByType = {
 function target(w) {
   const wicket = { type: 'wicket', x: 34.05, z: 1435, label: 'Lift the wicket latch' };
   if (
-    w.gateCrossed &&
+    (w.gateCrossed || w.lastBellCastAt != null) &&
     w.gateClosedAt != null &&
     w.elapsed - w.gateClosedAt > 0.9 &&
     !(w.wicketHoldUntil > w.elapsed + 0.65) &&
@@ -785,11 +819,11 @@ function ring(w, tone) {
   w.hostListeningUntil = w.elapsed + 3.5;
   cue(w, 'sluice', tone, bell);
   if (w.bridgeOpen) {
-    if (tone === 'low' && w.sluiceDecoyAt == null && !w.gateClosedAt && !w.ropeFallen) {
+    if (tone === 'low' && w.sluiceDecoyAt == null && w.gateClosedAt == null && !w.ropeFallen && livingLead(w)) {
       w.sluiceDecoyAt = w.elapsed;
       stillTheColumn(w, 14);
       const listener = livingLead(w);
-    if (listener && !w.ropeFallen) cue(w, 'answer', 'host', hordePosition(w, listener.i));
+      cue(w, 'answer', 'host', hordePosition(w, listener.i));
       notify(
         w,
         'The low bell speaks alone. Beyond the water a rank turns towards it. For a little while, the boots fall quiet.',
@@ -824,7 +858,7 @@ function interact(w, a) {
     w.wicketAt = w.elapsed;
     w.wicketHoldUntil = w.elapsed + 6;
     cue(w, 'chain', 'tight', a);
-    notify(w, 'The latch you freed lifts two bars. The small wicket stays open on its counterweight.', 3.2);
+    notify(w, 'The counterweight lifts two bars. The small wicket is open.', 3.2);
     return true;
   }
   if (storyInteract(w, a)) return true;
@@ -856,6 +890,7 @@ function interact(w, a) {
     w.route = 'unbound';
     storyBeat(w, 'satchel');
     const freshBottles = giveRoadBottles(w);
+    giveStolenBottles(w);
     event(w, 'loot');
     talk(
       w,
@@ -864,6 +899,7 @@ function interact(w, a) {
       (freshBottles
         ? 'You fasten the satchel to your belt. Its loops hold a red clay jar, a stoppered reed and a hollow bronze pear. '
         : 'You fasten the satchel to your belt. Three worn loops match the bottles she gave you. ') +
+        'Under the flap are two more bottles. Their labels read “Last Bell” and “Save Her”. You tuck both into your bag. ' +
         'In the lining, silver catches on a fold of paper. Pale ink traces a second trail. Beside the spring someone has drawn two reeds: one black, one in leaf.'
     );
   } else if (a.type === 'spring') {
@@ -957,7 +993,7 @@ export function act(w, action) {
       notify(w, pocket ? pocket.name + ' pocket is empty.' : 'There is nothing ready in your bag.');
       return false;
     }
-    if (fieldBottles.includes(held.id)) {
+    if (throwableBottles.includes(held.id)) {
       if (w.elapsed < w.potionUntil || w.phialFlight) return false;
       return tossPhial(w, held.id);
     }
@@ -1104,9 +1140,10 @@ function inspectProcession(w) {
 }
 function witnessedHost(w) {
   const p = w.player;
-  if (w.milestones.ridge || Math.hypot(p.x - 48, p.z - 480) > 28) return false;
+  if (w.lastBellCastAt != null || w.milestones.ridge || Math.hypot(p.x - 48, p.z - 480) > 28) return false;
   const eye = Math.max(p.feetY ?? 0, footHeight(w, p.x, p.z)) + 1.64;
   for (const i of [0, 674, 1570, 2544]) {
+    if (w.hostFallen?.[i]) continue;
     const q = hordePosition(w, i),
       dx = q.x - p.x,
       dz = q.z - p.z,
@@ -1281,7 +1318,27 @@ function walk(w, dt, input) {
   }
   return { oldZ, marchers: host || [] };
 }
+function silenceHost(w, impact) {
+  const nearby = hostWithin(w, w.player, 38, rankPosition);
+  w.lastBellWitnesses = fallenWitnesses(w, impact, nearby, rankPosition);
+  w.lastBellCastAt = w.elapsed;
+  w.lastBellImpact = impact;
+  const fallen = {};
+  for (let i = 0; i < HORDE_COUNT; i++) fallen[i] = true;
+  w.hostFallen = fallen;
+  w.hostActors = {};
+  w.hostWounds = {};
+  w.hostReactions = {};
+  w.hostRosterEpoch = (w.hostRosterEpoch || 0) + 1;
+  delete w.hostWarning;
+  delete w.hostSighting;
+  delete w.gateRelief;
+  delete w.raceWitness;
+  w.nextAnswer = 0;
+}
 const phialHost = {
+  silence: silenceHost,
+  rescue: (w, xero, impact) => beginThrownRescue(w, xero, impact),
   inRange: (w, point, radius) => hostWithin(w, point, radius, rankPosition),
   damage: damageHost,
 };
@@ -1290,6 +1347,7 @@ function simulate(w, dt, input) {
   w.elapsed += dt;
   const { oldZ, marchers } = walk(w, dt, input);
   advancePhial(w, dt, notify, phialHost);
+  if (w.sequence) return;
   strikeContacts(
     w,
     { move: (a, x, z) => moveBody(w, a, x, z) },
@@ -1304,7 +1362,7 @@ function simulate(w, dt, input) {
   advanceHost(w, dt, marchers, rankPosition, injury, notify);
   leaveHostTracks(w, marchers);
   if (w.ending) return;
-  storyTick(w, dt, rankPosition);
+  storyTick(w, dt, w.lastBellCastAt == null ? rankPosition : null);
   const peal = Math.floor((w.elapsed + 31) / 37);
   if (peal > w.lastBell) {
     w.lastBell = peal;
@@ -1320,7 +1378,7 @@ function simulate(w, dt, input) {
     if (listener && !w.ropeFallen) cue(w, 'answer', 'host', hordePosition(w, listener.i));
     w.nextAnswer = 0;
   }
-  advanceWildlife(w, dt, { injury, notify, marcherAt: rankPosition, nearMarchers: marchers });
+  advanceWildlife(w, dt, { injury, notify, marcherAt: w.lastBellCastAt == null ? rankPosition : null, nearMarchers: marchers });
   if (w.ending) return;
   if (w.route === 'undecided' && w.consideringOffers && distance(p, w.actors[0]) > 32) {
     w.route = 'wander';
@@ -1340,7 +1398,7 @@ function simulate(w, dt, input) {
   const arrival = gateArrival(w, raceDuration(w), rankPosition);
   if (
     !w.gateCrossed &&
-    w.gateClosedAt == null &&
+    (w.gateClosedAt == null || w.lastBellCastAt != null) &&
     oldZ < GATE_Z &&
     p.z >= GATE_Z &&
     Math.abs(p.x - 30) < 4.55 &&
@@ -1350,7 +1408,9 @@ function simulate(w, dt, input) {
     w.gateCrossedAt = w.elapsed - (dt * (p.z - GATE_Z)) / (p.z - oldZ);
     w.milestones.gateSave = true;
     saveCheckpoint(w);
-    notify(w, 'Through the gate. You free the small wicket latch as you pass. Xero is somewhere inside.');
+    notify(w, w.gateClosedAt == null
+      ? 'Through the gate. You free the small wicket latch as you pass. Xero is somewhere inside.'
+      : 'Through the wicket. The courtyard is silent.');
     cue(w, 'gate', 'crossed', p);
   }
   if (arrival) {
@@ -1391,6 +1451,7 @@ function simulate(w, dt, input) {
   if (
     !w.gateCrossed &&
     w.route !== 'wander' &&
+    w.lastBellCastAt == null &&
     w.gateClosedAt != null &&
     w.elapsed - w.gateClosedAt >= arrivalCoda
   ) {
@@ -1433,7 +1494,7 @@ function simulate(w, dt, input) {
     w.milestones.riverSave = true;
     saveCheckpoint(w);
   }
-  if (!w.milestones.reveal && p.z > 1508 && canSeeBanquet(w)) banquet(w);
+  if (!w.milestones.reveal && !isStolenBottle(w.phialFlight?.kind) && p.z > 1508 && canSeeBanquet(w)) banquet(w, true);
 }
 // Substep so doors, water and attacks remain consistent at low frame rates.
 export function tick(w, dt, input = {}) {
@@ -1448,7 +1509,7 @@ export function tick(w, dt, input = {}) {
   const slices = Math.ceil(length / 0.05);
   for (let i = 0; i < slices; i++) {
     simulate(w, length / slices, input);
-    if (w.dialogue || w.ending) break;
+    if (w.dialogue || w.ending || w.sequence) break;
   }
 }
 function location(w) {
@@ -1477,7 +1538,7 @@ function objective(w) {
   if (w.route === 'undecided' && w.consideringOffers) return 'Stay by the lantern, or walk on.';
   if (w.route === 'undecided' && !w.greeted && w.actors[0].alive)
     return 'Find the castle where Princess Xero is held.';
-  return 'Reach Princess Xero before the host reaches the gate.';
+  return w.lastBellCastAt == null ? 'Reach Princess Xero before the host reaches the gate.' : 'Reach Princess Xero in the keep.';
 }
 export function getHUD(w) {
   const a = target(w);

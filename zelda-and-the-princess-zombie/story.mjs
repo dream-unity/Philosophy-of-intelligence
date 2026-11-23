@@ -9,6 +9,7 @@ const between = (v, a, b) => v >= a && v <= b;
 const mix = (a, b, t) => a + (b - a) * t;
 const away = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 
+export const ROYAL_PHASE_SECONDS = Object.freeze({ restoring: 3.4, report: 8, honour: 12 });
 export const storyFates = {
   bound: {
     duration: 8.5,
@@ -139,6 +140,10 @@ const journalEntries = {
   recognition: [
     'Three taps on oak',
     'The fingers that were pulling the rope tapped the cloth three times. For a breath I saw Xero look straight at the knot on my hilt.',
+  ],
+  royalHonour: [
+    'The king’s daughter',
+    'Xero told her father herself. When the king called me to the dais, she was already there with the blue ribbon. Thousands of hands rose from the square.',
   ],
   pony: [
     'The loose halter',
@@ -510,6 +515,7 @@ export function storyHandPose(w) {
       clench: smooth((t - 0.36) / 0.16),
       ribbon: 1,
     };
+  if (q?.id === 'saved' && w.royalPrize) return { physical: true, reach: 0, clench: 0, ribbon: 0 };
   if (q?.id === 'saved')
     return {
       physical: true,
@@ -533,10 +539,41 @@ function once(q, k, callback) {
     callback();
   }
 }
+// Persist each part of the audience on the same clock as the throw. A save
+// made halfway through the cheering resumes there without awarding twice.
+function stageRoyalPrize(w, dt) {
+  const q = w.sequence, prize = w.royalPrize;
+  const { restoring, report, honour } = ROYAL_PHASE_SECONDS;
+  q.duration = restoring + report + honour;
+  q.time = Math.min(q.duration, q.time + dt);
+  q.progress = q.time / q.duration;
+  w.elapsed += dt;
+  const phase = q.time < restoring ? 'restoring' : q.time < restoring + report ? 'report' :
+    q.time < q.duration ? 'honour' : 'complete';
+  if (phase !== prize.phase) {
+    prize.phase = phase;
+    if (phase === 'report') {
+      const hart = w.actors.find(a => a.type === 'body');
+      if (hart) hart.freed = true;
+    }
+    signal(w, 'royalprize', phase, w.player.x, w.player.z);
+  }
+  prize.time = phase === 'restoring' ? q.time : phase === 'report' ? q.time - restoring :
+    phase === 'honour' ? q.time - restoring - report : honour;
+  if (phase !== 'complete') return;
+  remember(w, 'royalHonour');
+  w.ending = {
+    id: 'saved', prize: 'royal-honour', title: 'The king’s daughter',
+    text: 'Xero takes your hand on the dais. Below, the square is still calling your name. She knots the torn ribbon around your hilt and this time, when she lets go, you know she is home.',
+  };
+  w.sequence = null;
+  signal(w, 'ending', 'saved', w.player.x, w.player.z);
+}
 export function stageStoryFate(w, dt, input = {}) {
   const q = w.sequence,
     p = w.player;
   if (!q) return;
+  if (q.id === 'saved' && w.royalPrize) return stageRoyalPrize(w, dt);
   q.time += dt;
   w.elapsed += dt;
   q.duration = storyFates[q.id].duration;

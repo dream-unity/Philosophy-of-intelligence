@@ -14,7 +14,7 @@ for (let row = 0; row < ranks; row++) {
 
 /** Living bodies inside a world-space disc, whether marching or pursuing. */
 export function hostWithin(w, centre, radius, rankAt) {
-  if (w.ropeFallen) return [];
+  if (w.lastBellCastAt != null || w.ropeFallen) return [];
   const actors = w.hostActors,
     fallen = w.hostFallen,
     found = [];

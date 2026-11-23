@@ -36,7 +36,7 @@ function section(w) {
     )
   )
     return 'Close combat';
-  if (p.z > 960) {
+  if (p.z > 960 && w.lastBellCastAt == null) {
     // Sample rank centres rather than just the head. It may already be at the gate.
     for (let i = 0; i < HORDE_COUNT; i += 192) {
       const q = hordePosition(w, i);

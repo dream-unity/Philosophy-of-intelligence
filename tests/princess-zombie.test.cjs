@@ -411,3 +411,84 @@ test('physical shelters, observed map entries, and an approaching host retain th
   world.hasMap = true;
   assert.match(navigation.hostReport(world, front), /metres [NESW]+ of Pale Ford/);
 });
+
+test('the two stolen bottles can finish a continuous journey from the witch to Xero without visiting the spring', async () => {
+  const { restoreJourney } = await import('../zelda-and-the-princess-zombie/journey-store.mjs');
+  let w = meetWitch();
+  assert.ok(!inventory.availableQuickItems(w).includes('item:saveher'));
+  game.act(w, 'close');
+  advance(w, 1.8);
+  const witch = w.actors.find(a => a.type === 'witch');
+  at(w, witch.x, witch.z, { radius: 1.38 });
+  w.player.yaw = Math.atan2(witch.x - w.player.x, witch.z - w.player.z);
+  assert.ok(game.act(w, 'thrust'));
+  advance(w, 0.36);
+  const bag = w.actors.find(a => a.type === 'satchel' && a.alive);
+  assert.ok(bag);
+  assert.ok(!inventory.availableQuickItems(w).includes('item:saveher'));
+  faceAndUse(w, bag);
+  game.act(w, 'close');
+  assert.ok(inventory.equipItem(w, 'lastbell'));
+  at(w, -2, 12);
+  at(w, 6, 110);
+  at(w, 15, 177);
+  const nearestScout = () => Object.values(w.hostActors || {})
+    .filter(a => a.hp && ['pursue', 'windup'].includes(a.state))
+    .sort((a,b) => distance(w.player, a.x, a.z) - distance(w.player, b.x, b.z))[0];
+  for (let n = 0; n < 15 * 24; n++) {
+    const scout = nearestScout();
+    if (scout && distance(w.player, scout.x, scout.z) < 5) break;
+    game.tick(w, frame, {});
+  }
+  const scout = nearestScout();
+  assert.ok(scout && distance(w.player, scout.x, scout.z) < 5, 'a living scout reaches the road');
+  w.player.yaw = Math.atan2(scout.x - w.player.x, scout.z - w.player.z);
+  w.player.pitch = -0.17;
+  assert.ok(game.act(w, 'use-equipped'));
+  assert.equal(w.phialFlight?.kind, 'lastbell');
+  advance(w, 1.6);
+  assert.equal(Object.values(w.hostFallen || {}).filter(Boolean).length, game.HORDE_COUNT);
+  assert.equal(game.secondsToGate(w), Infinity);
+  w = restoreJourney(JSON.parse(JSON.stringify(w)));
+  assert.ok(w.actors.find(a => a.type === 'princess').alive);
+  assert.ok(inventory.equipItem(w, 'saveher'));
+  assert.equal(inventory.selectedItem(w).name, 'Save Her');
+  assert.ok(!inventory.selectedItem(w).description);
+  w.player.pitch = 0;
+  for (const [x,z] of game.MAP.trail.filter(([,z]) => z >= 200 && z < 850)) at(w,x,z);
+  at(w,-148,844);
+  at(w,-148,855);
+  for (const [x,z] of game.MAP.trail.filter(([,z]) => z > 850)) at(w,x,z,{radius:0.38});
+  at(w, 30, 1511.9, { radius: 0.25 });
+  assert.ok(w.gateCrossed);
+  assert.ok(!w.antidote, 'the stolen potion is independently sufficient');
+  if (w.dialogue) {
+    assert.doesNotMatch(JSON.stringify(w.dialogue), /Save Her|throw (?:the |your )?potion/i);
+    game.act(w,'close');
+  }
+  // Aim at the visible dress; when Xero leans over the table her body is offset from her feet.
+  const { storyFigure } = await import('../zelda-and-the-princess-zombie/story-art.mjs');
+  const figure = storyFigure(w, w.elapsed);
+  w.player.yaw = Math.atan2(figure.x - w.player.x, figure.z - w.player.z);
+  w.player.pitch = Math.atan2(figure.y + figure.h * 0.5 - w.player.feetY - 1.64,
+    distance(w.player, figure.x, figure.z));
+  assert.ok(game.act(w, 'use-equipped'));
+  assert.equal(w.phialFlight?.kind, 'saveher');
+  game.tick(w, frame, {});
+  assert.equal(w.phialFlight?.kind, 'saveher', 'the bottle crosses the room after the button press');
+  w = restoreJourney(JSON.parse(JSON.stringify(w)));
+  const phases = [];
+  for (let n = 0; n < 60 * 24 && !w.ending; n++) {
+    game.tick(w, frame, {});
+    const phase = w.royalPrize?.phase;
+    if (phase && phases.at(-1) !== phase) {
+      phases.push(phase);
+      w = restoreJourney(JSON.parse(JSON.stringify(w)));
+    }
+  }
+  assert.deepEqual(phases, ['restoring', 'report', 'honour', 'complete']);
+  assert.equal(w.ending?.prize, 'royal-honour');
+  assert.equal(w.actors.find(a => a.type === 'princess').cured, true);
+  assert.equal(w.ending?.id, 'saved');
+  assert.ok(!inventory.availableQuickItems(w).includes('item:saveher'));
+});

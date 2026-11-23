@@ -57,3 +57,21 @@ test('the skin draws back before reaching out, then drops onto the ground on def
   const rolled = {id: 'host7', i: 7, state: 'feed'};
   assert.equal(skin.marcherLean(rolled,30),skin.marcherLean({id: 7, state: 'feed'},30));
 });
+
+test('Last Bell keeps visible bodies for their fall, then clears every drawing tier', async () => {
+  const { fallenWitnesses } = await import('../zelda-and-the-princess-zombie/last-bell-witnesses.mjs');
+  const w = game.createWorld(), painters = view.createProcessionView();
+  Object.assign(w.player, { x: 20, z: 210, yaw: 0 });
+  w.elapsed = 10;
+  const nearby = Array.from({ length: 64 }, (_, i) => ({i, x: 20 + i % 6, z: 215 + i % 7, heading: 0.2}));
+  w.lastBellWitnesses = fallenWitnesses(w, nearby[0], nearby, game.rankPosition);
+  w.lastBellCastAt = 10;
+  assert.equal(w.lastBellWitnesses.length, 32);
+  for (const includeRanks of [false, true]) {
+    assert.equal(painters.aboveHorizon(w, 1.6), false);
+    const bodies = painters.near(w, 1.8, 10.12, 24, includeRanks).poses;
+    assert.equal(bodies.length, 24);
+    assert.ok(bodies.every(q => q.state === 'fallen' && q.since === 10 && q.heading === 0.2));
+    assert.equal(painters.near(w, 1.8, 13.2, 24, includeRanks).poses.length, 0);
+  }
+});

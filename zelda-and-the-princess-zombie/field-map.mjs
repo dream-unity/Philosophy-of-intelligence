@@ -714,7 +714,7 @@ export function drawFieldMap(canvas, world, view = {}) {
   g.clip();
   if (hasDirections(world) || world.survey?.visits?.bells || world.survey?.visits?.ford) water(g, map);
   route(g, map, world);
-  if (world.milestones.ridge || world.milestones.procession) {
+  if (world.lastBellCastAt == null && (world.milestones.ridge || world.milestones.procession)) {
     for (let i = 0; i < HORDE_COUNT; i += 11) {
       if (world.hostFallen?.[i] || world.hostActors?.[i]) continue;
       const a = hordePosition(world, i),

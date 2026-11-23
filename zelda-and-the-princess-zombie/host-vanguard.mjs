@@ -19,6 +19,7 @@ const front = order.filter((entry) => entry.offset === 0);
 const selection = new WeakMap();
 const available = (w, i) => !w.hostFallen?.[i] && !w.hostActors?.[i];
 export function livingLead(w) {
+  if (w.lastBellCastAt != null) return null;
   for (const entry of front) if (available(w, entry.i)) return entry;
   const now = w.elapsed,
     cached = selection.get(w);
@@ -142,7 +143,7 @@ export function gateForecast(w, duration, nominalAt) {
   return Math.max(0, plan.due - clock) + pause;
 }
 export function gateArrival(w, duration, nominalAt) {
-  if (w.gateClosedAt != null) return null;
+  if (w.lastBellCastAt != null || w.gateClosedAt != null) return null;
   const clock = marchClock(w, w.elapsed);
   if (clock < duration) return null;
   const entry = livingLead(w);

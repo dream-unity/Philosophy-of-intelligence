@@ -1,3 +1,4 @@
+import { createRoyalAudio } from './royal-audio.mjs';
 import { createLandscape } from './sound-landscape.mjs';
 import { createHostSoundscape, hostFoley } from './sound-host.mjs';
 import { createScore, playEnding } from './sound-score.mjs';
@@ -20,7 +21,7 @@ export function createAudio() {
     channels = {};
   const cueSpace = {};
   let cueUntil = 0, cueDepth = 0;
-  let ctx, master, hallSend, landscape, samples, effects, ambience, music;
+  let ctx, master, hallSend, landscape, samples, effects, ambience, music, royalAudio;
   let enabled = true,
     touched = false,
     disposed = false,
@@ -166,6 +167,7 @@ export function createAudio() {
     ambience = instrument(channels.ambience);
     music = instrument(channels.music);
     music.note = createScoreInstruments(ctx, channels.music, music.note);
+    royalAudio = createRoyalAudio(ctx, channels, music.note);
     samples = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 3.137), ctx.sampleRate);
     const data = samples.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
@@ -199,6 +201,7 @@ export function createAudio() {
     master.gain.setTargetAtTime(enabled ? 0.58 : 0, ctx.currentTime, enabled ? 0.09 : 0.024);
     if (enabled && touched && ctx.state !== 'running') ctx.resume().catch(() => {});
     if (!enabled) {
+      royalAudio?.stop();
       music?.note.reset?.(ctx.currentTime);
       suspendTimer = setTimeout(() => {
         if (!enabled && !disposed) ctx.suspend().catch(() => {});
@@ -289,7 +292,7 @@ export function createAudio() {
     return true;
   }
   function hostAnswer(t) {
-    if (!latest || latest.ropeFallen) return;
+    if (!latest || latest.lastBellCastAt != null || latest.ropeFallen) return;
     const positions = [];
     for (const fraction of [0.02, 0.31, 0.65, 0.93]) {
       const sample = Math.floor(HORDE_COUNT * fraction);
@@ -696,6 +699,10 @@ export function createAudio() {
       lastLureBeat = -1;
       nextBreath = t + 1;
     }
+    if (royalAudio.update(world.royalPrize)) {
+      hallSend.gain.setTargetAtTime(0, t, 0.1);
+      return;
+    }
     if (!listeningOnly && !world.feastAftermath) updateFootwork(world, t);
     if (t < nextMix) return;
     nextMix = t + 0.22;
@@ -743,8 +750,9 @@ export function createAudio() {
     disposed = true;
     clearTimeout(suspendTimer);
     if (!ctx) return;
+    royalAudio?.stop();
     landscape?.dispose();
     ctx.close().catch(() => {});
   }
-  return { unlock, setEnabled, setMix, update, cue, preview, dispose };
+  return { unlock, setEnabled, setMix, update, cue, preview, stopRoyal: () => royalAudio?.stop(), dispose };
 }

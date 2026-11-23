@@ -24,7 +24,7 @@ export function detachedPosition(w, i) {
 // Rebuild an identity shortlist at walking intervals. Body collision and sword
 // contacts always sample those identities at their current tick positions.
 export function nearbyHost(w, rankAt) {
-  if (w.ropeFallen) return [];
+  if (w.lastBellCastAt != null || w.ropeFallen) return [];
   const p = w.player;
   let cache = vicinity.get(w);
   if (
@@ -247,7 +247,7 @@ function strike(w, a, injury, notify) {
   } else injury(w, a);
 }
 export function advanceHost(w, dt, nearby, rankAt, injury, notify) {
-  if (w.ropeFallen) {
+  if (w.lastBellCastAt != null || w.ropeFallen) {
     delete w.hostWarning;
     return;
   }

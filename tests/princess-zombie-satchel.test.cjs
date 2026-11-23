@@ -89,6 +89,63 @@ test('a numbered pocket uses only its named item, preserves the belt and leaves 
   assert.equal(bag.selectedItem(resumed).id, 'cinder');
 });
 
+test('the private bottles stay in the fallen satchel until pickup, then work as separate assignable items', async () => {
+  const controls = await import(directory + 'control-layout.mjs');
+  const { touchKeys, assignTouchKey } = await import(directory + 'touch-keys.mjs');
+  const { numberPadLegend } = await import(directory + 'number-pad.mjs');
+  const w = chooseRoad();
+  assert.deepEqual(bag.availableQuickItems(w), ['item:cinder', 'item:veil', 'item:lure']);
+  const witch = w.actors.find(a => a.type === 'witch');
+  position(w, witch.x, witch.z - 1.4);
+  assert.ok(game.act(w, 'thrust'));
+  elapse(w, 0.42);
+  assert.equal(witch.alive, false);
+  assert.equal(bag.equipItem(w, 'saveher'), false);
+  const satchel = w.actors.find(a => a.type === 'satchel' && a.alive);
+  assert.ok(satchel);
+  position(w, satchel.x, satchel.z - 1.4);
+  assert.ok(game.act(w, 'interact'));
+  assert.equal(satchel.alive, false);
+  assert.match(w.dialogue.text, /“Last Bell” and “Save Her”/);
+  const extras = bag.bagItems(w).filter(item => ['saveher', 'lastbell'].includes(item.id));
+  assert.deepEqual(extras.map(item => [item.name, item.count]), [['Last Bell', 1], ['Save Her', 1]]);
+  assert.equal(extras[1].description, undefined);
+  assert.notEqual(extras[0].shape, extras[1].shape);
+  const layout = controls.controlLayout();
+  const thumb = touchKeys();
+  for (const [id, name, digit] of [['lastbell', 'Last Bell', '2'], ['saveher', 'Save Her', '3']]) {
+    const action = 'item:' + id;
+    assert.ok(bag.equipItem(w, id));
+    assert.equal(bag.selectedItem(w).name, name);
+    assert.ok(assignTouchKey(thumb, 'action', action));
+    assert.equal(thumb.action, action);
+    assert.ok(controls.rebindKeypad(layout, action, 'Numpad' + digit));
+    assert.equal(controls.actionForKey(layout, 'Digit' + digit), action);
+    assert.equal(numberPadLegend(layout, 'Numpad' + digit, w).text, name + ' ×1');
+  }
+});
+
+test('loading and retrying an older looted satchel grants its two new bottles once and keeps spent pockets empty', () => {
+  const old = chooseRoad();
+  assert.ok(bag.takeItem(old, 'veil'));
+  Object.assign(old, { hasMap: true, hasVial: true, route: 'unbound' });
+  const checkpoint = { ...old };
+  delete checkpoint.checkpoint;
+  old.checkpoint = JSON.stringify(checkpoint);
+  const load = w => store.restoreJourney(JSON.parse(JSON.stringify(w)));
+  const loaded = load(old);
+  assert.equal(bag.quickItem(loaded, 'item:saveher').count, 1);
+  assert.equal(bag.quickItem(loaded, 'item:lastbell').count, 1);
+  assert.equal(bag.selectedItem(loaded).id, 'cinder');
+  assert.equal(bag.quickItem(loaded, 'item:veil').count, 0);
+  game.resumeCheckpoint(loaded);
+  assert.equal(bag.quickItem(loaded, 'item:saveher').count, 1);
+  assert.ok(bag.takeItem(loaded, 'lastbell'));
+  assert.ok(bag.takeItem(loaded, 'saveher'));
+  const saved = load(loaded);
+  for (const id of ['lastbell', 'saveher']) assert.equal(bag.quickItem(saved, 'item:' + id).count, 0);
+});
+
 test('scent disperses a real wolf and bellglass turns a troll toward the landing place', () => {
   const w = chooseRoad();
   position(w, 22, 218, -0.95);

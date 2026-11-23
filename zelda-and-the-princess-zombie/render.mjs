@@ -7,7 +7,7 @@ import { createProcessionView, queueProcession } from './procession-view.mjs';
 import { makeRidgeLandscape } from './ridge-landscape.mjs';
 import { lightShader, sceneLights, bindLamps, illuminatedSprite } from './scene-light.mjs';
 import { bladeCoordinates, bladeFallbackGeometry } from './swordplay.mjs';
-import { storyHands, paintStoryPortrait } from './story-art.mjs';
+import { storyHands, paintStoryPortrait, restorePortraitPlate } from './story-art.mjs';
 import { paintTransientMesh } from './software-mesh.mjs';
 import { makeFortressDetail, makeFallFoam } from './fortress.mjs';
 import {
@@ -1228,11 +1228,18 @@ void main(){wp=aPosition;opacity=aColor.z;vec3 v=aPosition-uCamera;float f=dot(v
 const standFrag = `
 precision highp float;
 ${lightShader}
-varying vec3 wp;uniform sampler2D uArt,uRunner;uniform float uMark,uHall,uRange;varying vec2 uv;varying float dep;varying float opacity;
+varying vec3 wp;uniform sampler2D uArt,uRunner;uniform float uMark,uHall,uRange,uRestoration;varying vec2 uv;varying float dep;varying float opacity;
 void main(){
  if(uMark>.5){float r=length((uv-.5)*2.);float a=(1.-smoothstep(.10,1.,r))*opacity;
  if(a<.004)discard;gl_FragColor=vec4(uMark<1.5?vec3(.075,.085,.068):uMark<2.5?vec3(1.,.62,.23):vec3(1.,.35,.08),a);return;}
- vec4 c=texture2D(uArt,uv);if(uRange>.5){if(c.a<.05)discard;gl_FragColor=vec4(mix(c.rgb,vec3(.62,.66,.71),.12),c.a);return;}
+ vec4 c=texture2D(uArt,uv);
+ if(uRestoration>0.){
+   vec4 living=texture2D(uRunner,uv);
+   float wave=smoothstep(0.,.44,uRestoration-abs(uv.y-.35)*.85);
+   float alpha=mix(c.a,living.a,wave);
+   c=vec4(mix(c.rgb*c.a,living.rgb*living.a,wave)/max(alpha,.0001),alpha);
+ }
+ if(uRange>.5){if(c.a<.05)discard;gl_FragColor=vec4(mix(c.rgb,vec3(.62,.66,.71),.12),c.a);return;}
  if(uHall>.5&&abs(wp.y-32.17)<.05&&abs(wp.x-30.)<1.17&&wp.z>1466.3&&wp.z<1514.3)
  c=texture2D(uRunner,vec2((wp.x-28.83)/2.34,fract((wp.z-1466.3)/2.34)));
  if(c.a<.36||fract(dot(floor(gl_FragCoord.xy),vec2(.75488,.56984)))>opacity)discard;gl_FragColor=vec4(mix(lightSurface(c.rgb,wp),vec3(.59,.65,.58),min(.33,max(0.,dep)*.0019)),1.);}
@@ -1291,6 +1298,7 @@ function program(gl, vs, fs) {
     'uGrip',
     'uTip',
     'uRunner',
+    'uRestoration',
     'uHall',
   ])
     uni[n] = gl.getUniformLocation(p, n);
@@ -1965,8 +1973,14 @@ gl_FragColor=vec4(lightSurface(c.rgb,mix(uGrip,uTip,t)),c.a);}`
     }
     for(const key of Object.keys(bySpecies)) if(bySpecies[key].length)streamTexture(Float32Array.from(bySpecies[key]),groveArt[key]);
     for (const { b, asset } of monsterPictures) batchSprites([b], asset);
-    if (fig && storyArt?.ready && Math.hypot(px - fig.x, pz - fig.z) < 120)
+    if (fig && storyArt?.ready && Math.hypot(px - fig.x, pz - fig.z) < 120) {
+      if (fig.restoration > 0 && fig.restoration < 1 && xeroPoses.cured.ready) {
+        useTexture(1, xeroPoses.cured.tex, stands.uni.uRunner);
+        gl.uniform1f(stands.uni.uRestoration, fig.restoration);
+      }
       batchSprites([{ ...fig, seed: 1 }], storyArt);
+      gl.uniform1f(stands.uni.uRestoration, 0);
+    }
     const witch = (w.actors || []).find((a) => a.alive && a.type === 'witch');
     if (witch && Math.hypot(px - witch.x, pz - witch.z) < 105) {
       if (paintedWitch.ready && witchRear.ready) {
@@ -2200,6 +2214,7 @@ function softwareRenderer(canvas) {
   const rangeArt=artImage('ravenback-range.webp'), treeBark=artImage('oak-bark.webp');
   const witchRear = artImage('witch-costume-back.webp'),
     foeArt = creaturePaintings(artImage);
+  let restorationPlate;
   const xeroPoses = {
     offer: xeroArt,
     feeding: artImage('xero-feeding.webp'),
@@ -2705,7 +2720,16 @@ function softwareRenderer(canvas) {
       const at = ray(fig.x, fig.y + fig.h * 0.5, fig.z);
       if (at) {
         const error = (f * fig.h * fig.h * Math.abs(sp)) / (4 * at[2] * at[2]);
-        if (error > 0.65)
+        if (fig.restoration > 0 && fig.restoration < 1 && readyImage(xeroPoses.cured)) {
+          if (!restorationPlate) {
+            restorationPlate = document.createElement('canvas');
+            restorationPlate.width = 258;
+            restorationPlate.height = 510;
+          }
+          const lit = (im) => illuminatedSprite(im, light, fig.x, fig.y, fig.z, fig.h, inside);
+          const plate = restorePortraitPlate(restorationPlate, lit(storyArt), lit(xeroPoses.cured), fig.restoration);
+          paintStoryPortrait(plate, fig, ray, queue, cy, sy);
+        } else if (error > 0.65)
           paintStoryPortrait(
             illuminatedSprite(storyArt, light, fig.x, fig.y, fig.z, fig.h, inside),
             fig,

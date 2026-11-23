@@ -24,6 +24,10 @@ export function sceneLights(w, t) {
   }
   const a = w.phialFlight;
   if (a) all.push([a.x, a.y, a.z, 3.3]);
+  for (const impact of [w.lastBellImpact, w.rescueImpact]) {
+    if (impact && t >= impact.at && t < impact.at + 1.15)
+      all.push([impact.x, impact.y, impact.z, 7.8 * (1 - (t - impact.at) / 1.15)]);
+  }
   const c = w.cinder;
   if (c && t >= c.at && t < c.at + 1.15) all.push([c.x, terrainHeight(c.x, c.z) + 0.77, c.z, 8.7 * (1 - (t - c.at) / 1.15)]);
   all.sort((a, b) => (a[0] - p.x) ** 2 + (a[2] - p.z) ** 2 - (b[0] - p.x) ** 2 - (b[2] - p.z) ** 2);

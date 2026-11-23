@@ -1,5 +1,5 @@
 // The field satchel is part of the saved world. The older potion counter is retained
-// for existing journeys and callers that display the number of throwable bottles.
+// for existing journeys and callers that count the three ordinary road supplies.
 const catalogue = {
   cinder: {
     name: 'Red cinder',
@@ -21,6 +21,17 @@ const catalogue = {
     color: '#dcba73',
     description:
       'A hollow bronze pear with a bead inside. It keeps ringing where it lands. Heavy feet follow the sound. A dragon can mistake the ringing stone for prey.',
+  },
+  lastbell: {
+    name: 'Last Bell',
+    shape: 'ampulla',
+    color: '#9e89af',
+    description: 'Under the black wax, one footprint is cut into the glass. Turn it in the light and a thousand hairline cracks run out from the heel.',
+  },
+  saveher: {
+    name: 'Save Her',
+    shape: 'flacon',
+    color: '#a7cbdf',
   },
   leaf: {
     name: 'Moonleaf',
@@ -55,6 +66,9 @@ const catalogue = {
   },
 };
 export const fieldBottles = ['cinder', 'veil', 'lure'];
+const stolenBottles = ['lastbell', 'saveher'];
+export const isStolenBottle = (id) => stolenBottles.includes(id);
+export const throwableBottles = [...fieldBottles, ...stolenBottles];
 export const quickItemActions = Object.fromEntries(
   Object.entries(catalogue)
     .filter(([, data]) => data.equippable !== false)
@@ -90,6 +104,11 @@ export function giveRoadBottles(w) {
   bag.selected = 'cinder';
   updateBelt(w);
   return true;
+}
+export function giveStolenBottles(w) {
+  const { stock } = pouch(w);
+  // A spent pocket keeps its zero. Older satchels predate both pockets.
+  for (const id of stolenBottles) stock[id] ??= 1;
 }
 export function addForage(w, id) {
   pouch(w).stock[id] = quantity(w, id) + 1;

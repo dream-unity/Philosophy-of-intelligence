@@ -117,7 +117,16 @@ export function metalContact(sound, kind, t, pan, gain) {
 export function useVial(sound, kind, t, pan, gain = 1) {
   const noise = (level, ...args) => sound.noise(level * gain, ...args);
   const note = (shape, f, level, ...args) => sound.note(shape, f, level * gain, ...args);
-  if (kind === 'veil') {
+  if (kind === 'lastbell') {
+    // The tiny ring of the stopper opens into one great, slowly beating bell.
+    noise(0.24, 2090, 0.11, t, pan, 0.004);
+    sound.bell(196, t + 0.045, 0.21 * gain, 2.5, pan);
+    note('sine', 392.8, 0.08, t + 0.08, 2.1, -pan * 0.35, 391.4, 0.13);
+    note('triangle', 294, 0.055, t + 0.22, 1.3, 0, 196, 0.11);
+  } else if (kind === 'rebound') {
+    sound.bell(1010, t, 0.09 * gain, 0.16, pan);
+    note('sine', 570, 0.05, t + 0.075, 0.25, 0, 850, 0.033);
+  } else if (kind === 'veil') {
     noise(0.38, 2280, 0.13, t, pan, 0.005);
     noise(0.24, 1280, 1.24, t + 0.03, pan, 0.22);
   } else if (kind === 'lure') {

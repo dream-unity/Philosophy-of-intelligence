@@ -182,17 +182,19 @@ export function fieldMotion(m, g, w, t) {
       a = t * 7.9,
       reed = flight.kind === 'veil',
       bronze = flight.kind === 'lure',
-      tint = reed ? '95baa3' : bronze ? 'c9a65c' : 'd77b4a';
+      last = flight.kind === 'lastbell',
+      silver = flight.kind === 'saveher',
+      tint = last ? '9e89af' : silver ? 'a7cbdf' : reed ? '95baa3' : bronze ? 'c9a65c' : 'd77b4a';
     g.rings(
       m,
       [
-        [x, y - 0.105, z, 0.044],
-        [x, y - 0.055, z, reed ? 0.046 : 0.08],
+        [x, y - 0.105, z, last ? 0.11 : silver ? 0.022 : 0.044],
+        [x, y - 0.055, z, last ? 0.099 : silver ? 0.075 : reed ? 0.046 : 0.08],
         [x, y + 0.055, z, bronze ? 0.052 : reed ? 0.044 : 0.073],
         [x, y + 0.11, z, 0.032],
         [x, y + 0.14, z, 0.03],
       ],
-      8,
+      silver ? 5 : 8,
       tint,
       a
     );
@@ -239,6 +241,27 @@ export function fieldMotion(m, g, w, t) {
         return [x, footHeight(w, x, z) + above, z];
       };
       beam(m, point(a), point(arc), mist ? 0.077 : 0.024, 0.01, mist ? 'a3bd99' : 'd5b77a', 3);
+    }
+  }
+  const bell = w.lastBellImpact;
+  if (bell && t >= bell.at && t < bell.at + 1.65) {
+    // Three ripples start where the glass broke. They skim the actual relief
+    // and dwindle as the note travels out into the valley.
+    for (let ring = 0; ring < 3; ring++) {
+      const age = (t - bell.at - ring * 0.15) / 1.35;
+      if (age <= 0 || age >= 1) continue;
+      const radius = 0.28 + age * 19, width = 0.075 * (1 - age) + 0.008;
+      const point = (i) => {
+        const angle = i * Math.PI / 12;
+        const x = bell.x + Math.cos(angle) * radius, z = bell.z + Math.sin(angle) * radius;
+        return [x, footHeight(w, x, z) + 0.08 + (1 - age) * 0.26, z];
+      };
+      let prev = point(0);
+      for (let i = 1; i <= 24; i++) {
+        const next = point(i);
+        beam(m, prev, next, width, width, ring === 1 ? 'd5c1dd' : 'ad98bb', 3);
+        prev = next;
+      }
     }
   }
   if (w.cinder && t - w.cinder.at < 0.78 && t >= w.cinder.at) {

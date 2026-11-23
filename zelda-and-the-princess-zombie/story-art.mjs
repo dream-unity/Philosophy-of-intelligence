@@ -2,6 +2,7 @@
 import { castleAltitude, terrainHeight } from './geography.mjs';
 import { fieldModels, fieldPieces } from './story-field-art.mjs';
 import { contactPose, drawContact } from './story-contact.mjs';
+import { ROYAL_PHASE_SECONDS } from './story.mjs';
 export { storyHandPose } from './story.mjs';
 
 const tau = Math.PI * 2;
@@ -525,6 +526,15 @@ export function storyFigure(w, t = w.elapsed, ground = terrainHeight) {
     flip = false;
   const rightX = Math.cos(w.player.yaw),
     rightZ = -Math.sin(w.player.yaw);
+  if (w.royalPrize?.phase === 'restoring') {
+    // The two matched portraits share a crown, dress and footprint. Straighten
+    // the shoulders before the wave reaches her face, then hold the living face.
+    const elapsed = w.royalPrize.time;
+    const change = smooth((elapsed - 0.18) / (ROYAL_PHASE_SECONDS.restoring - 1.08));
+    const rise = smooth(elapsed / 1.05);
+    return { key: change >= 1 ? 'cured' : 'offer', restoration: change,
+      x: p.x, y: ground(p.x, p.z) + 0.11, z: p.z, h: 1.68 + 0.19 * rise, w: 1, flip: false };
+  }
   if (p.cured || (q?.id === 'saved' && u > 0.19)) {
     key = 'cured';
     h = 1.84;
@@ -663,7 +673,7 @@ export function storyPieces(w, t = w.elapsed, ground = terrainHeight) {
     [32.63, 1517.0, 1.05],
   ])
     put('rushlight', x, restY + 0.01, z, 0, scale * (1 + 0.026 * Math.sin(t * 5.63 + x)));
-  if (saved && u < 0.19) {
+  if (saved && !w.royalPrize && u < 0.19) {
     const pose = contactPose(w, fig, ground),
       flight = smooth((u - 0.075) / 0.115);
     const to = [fig.x - 0.2 * Math.cos(p.yaw), fig.y + 1.17, fig.z + 0.2 * Math.sin(p.yaw)];
@@ -773,4 +783,26 @@ export function paintStoryPortrait(image, fig, ray, queue, cy, sy) {
     topL = bottomL;
     topR = bottomR;
   }
+}
+
+// Both original costume plates are registered at the crown and hem. Blend in
+// premultiplied alpha so the silhouette of the extended hand can recede.
+export function restorePortraitPlate(plate, before, after, t) {
+  const ctx = plate.getContext('2d'), width = plate.width, height = plate.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const slice = (image, y, h, alpha) => {
+    if (alpha <= 0) return;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(image, 0, y * image.height / height, image.width, h * image.height / height, 0, y, width, h);
+  };
+  for (let y = 0; y < height; y += 4) {
+    const h = Math.min(4, height - y);
+    const wave = smooth((t - Math.abs((y + h * 0.5) / height - 0.35) * 0.85) / 0.44);
+    slice(before, y, h, 1 - wave);
+    slice(after, y, h, wave);
+  }
+  ctx.restore();
+  return plate;
 }

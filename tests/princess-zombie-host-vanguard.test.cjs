@@ -118,3 +118,17 @@ test('if only the woodcutters survive, the nearest real patrol finishes the west
   assert.equal(w.gateVanguard, expected);
   assert.ok(game.hordePosition(w, expected).z > 1432.9);
 });
+
+test('a timely Last Bell at the falling grille leaves a real way into the courtyard', () => {
+  const w = game.createWorld();
+  Object.assign(w, { route: 'unbound', hasMap: true, greeted: true, elapsed: 440, gateClosedAt: 438.5, lastBellCastAt: 440 });
+  Object.assign(w.player, { x: 33.55, z: 1432.65, yaw: 0 });
+  assert.equal(game.act(w, 'interact'), true);
+  assert.equal(w.wicketAt, 440);
+  advance(w, 0.65);
+  for (let n = 0; n < 75 && !w.gateCrossed; n++) game.tick(w, 1 / 30, {forward: 1});
+  assert.ok(w.gateCrossed);
+  assert.equal(w.gateClosedAt, 438.5);
+  assert.ok(!w.ending);
+  assert.ok(game.getHUD(w).distance < 100);
+});

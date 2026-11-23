@@ -2,10 +2,10 @@
 // crossing joins the two banks explicitly, so a projection cannot cross the
 // river through an inaccessible segment simply because its destination is near.
 export function planCourse(w, map, landmarks, ground) {
-  if ((!w.hasMap && w.route !== 'guided') || (w.gateClosedAt != null && !w.gateCrossed)) return null;
+  if ((!w.hasMap && w.route !== 'guided') || (w.gateClosedAt != null && !w.gateCrossed && w.lastBellCastAt == null)) return null;
   const p = [w.player.x, w.player.z],
     spot = (id) => landmarks.find((s) => s.id === id);
-  const well = w.hasMap && !w.antidote && !w.ropeFallen,
+  const well = w.hasMap && !w.antidote && !w.ropeFallen && !w.gateCrossed && p[1] < 1035,
     goal = spot(well ? 'chapel' : 'hall'),
     end = [goal.x, goal.z];
   const fordKnown = w.hasMap || w.survey?.visits?.ford,

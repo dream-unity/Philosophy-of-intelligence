@@ -61,7 +61,7 @@ export function createHostSoundscape() {
       next = nextMeal = time;
       turn = 0;
     }
-    if (time < next) return;
+    if (world.lastBellCastAt != null || time < next) return;
     next = time + 0.72;
     const p = world.player;
     let closest, closestD = 190, pursuer, pursuerD = 28, bank, bankD = 120, nearRanks = 0;

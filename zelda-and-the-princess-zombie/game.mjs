@@ -1,4 +1,4 @@
-import { selectedItem, quickItem, quickItemActions, availableQuickItems } from './inventory.mjs';
+import { isStolenBottle, selectedItem, quickItem, quickItemActions, availableQuickItems } from './inventory.mjs';
 import { makeBagView } from './bag-view.mjs';
 import { mountNumberPad } from './number-pad.mjs';
 import { touchKeys, assignTouchKey, touchKeyIcon, touchActionNames, createTouchRun } from './touch-keys.mjs';
@@ -44,6 +44,8 @@ import {
 } from './journey-store.mjs';
 import { createWorld, act, choose, getHUD, resumeCheckpoint, arrivalView, feastAftermath } from './world.mjs';
 import { createAudio } from './audio.mjs';
+import { createRoyalCeremony } from './royal-ceremony.mjs';
+import { ROYAL_PHASE_SECONDS } from './story.mjs';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -95,6 +97,7 @@ const view = $('view'),
   title = $('title-screen'),
   overlay = $('overlay');
 const audio = createAudio(),
+  ceremony = createRoyalCeremony(stage),
   fieldCheck = createFieldCheck();
 let activeSurvey = null,
   accumulator = 0,
@@ -154,7 +157,8 @@ let world = null,
   panel = '',
   dialogueRef = null,
   endingRef = null,
-  afterFeast = null;
+  afterFeast = null,
+  royalReplay = null;
 let frameId = 0,
   lastTime = 0,
   lastHUD = 0,
@@ -238,7 +242,7 @@ function soundState() {
       options.sound &&
         screen === 'game' &&
         !document.hidden &&
-        (!panel || listeningPanels.has(panel) || panel === 'ending' || panel === 'after-feast' || panel === 'device')
+        (!panel || listeningPanels.has(panel) || panel === 'ending' || panel === 'after-feast' || panel === 'royal-replay' || panel === 'device')
     )
   );
 }
@@ -261,6 +265,7 @@ function modal(name, kicker, heading, body, actions, { closable = true } = {}) {
   stopMotion();
   panel = name;
   overlay.classList.toggle('after-feast', name === 'after-feast');
+  overlay.classList.toggle('royal-replay', name === 'royal-replay');
   releaseLook();
   display(overlay, true);
   overlay.classList.toggle('bag-open', name === 'bag');
@@ -291,8 +296,10 @@ function modal(name, kicker, heading, body, actions, { closable = true } = {}) {
   soundState();
 }
 function dismiss() {
-  overlay.classList.remove('after-feast');
+  if (royalReplay) audio.stopRoyal();
+  overlay.classList.remove('after-feast', 'royal-replay');
   afterFeast = null;
+  royalReplay = null;
   display(overlay, false);
   panel = '';
   title.inert = false;
@@ -313,7 +320,7 @@ function dismiss() {
   focusNode?.focus({ preventScroll: true });
 }
 function returnFromPanel() {
-  if (panel === 'after-feast') {
+  if (panel === 'after-feast' || panel === 'royal-replay') {
     dismiss();
     needsFrame = true;
     syncStory();
@@ -1142,6 +1149,13 @@ function syncStory() {
         modal('after-feast', '', 'Later in the Long Hall', [], [button('Back to ending', returnFromPanel)], {closable:false});
         refreshHUD();
       }));
+    if (ending.prize === 'royal-honour') {
+      actions.unshift(button('Revisit the ceremony', () => {
+        royalReplay = Object.create(world);
+        royalReplay.royalPrize = { phase: 'report', time: 0 };
+        modal('royal-replay', '', 'Royal honour', [], [button('Back to ending', returnFromPanel)], { closable: false });
+      }));
+    }
     if (ending.id !== 'saved')
       actions.push(
         button('Return to checkpoint', () => {
@@ -1263,7 +1277,7 @@ function refreshTouchKeys(hint = '', item = world && selectedItem(world)) {
 }
 function refreshHUD() {
   if (!world) return;
-  if (panel === 'after-feast') {
+  if (panel === 'after-feast' || panel === 'royal-replay') {
     display($('hud'), false);
     display($('resist'), false);
     display($('sequence-caption'), false);
@@ -1275,7 +1289,8 @@ function refreshHUD() {
   const h = getHUD(world),
     healthEl = $('health'),
     old = healthEl.getAttribute('aria-valuenow');
-  const cinematic = Boolean(world.sequence && options.subtitles && h.notice);
+  const privateHall = !['report', 'honour'].includes(world.royalPrize?.phase);
+  const cinematic = Boolean(privateHall && world.sequence && options.subtitles && h.notice);
   display($('sequence-caption'), cinematic);
   text('sequence-caption', cinematic ? h.notice : '');
   if (old !== String(h.health) || healthEl.childElementCount !== h.maxHealth) {
@@ -1334,10 +1349,8 @@ function refreshHUD() {
       item ? 'Use ' + item.name + ', ' + item.count + ' remaining' : 'Open bag to equip an item'
     );
   survey(world);
-  text(
-    'belt-readout',
-    world.hasVial ? (world.antidote ? 'Silver vial · moonwater' : 'Silver vial · empty') : ''
-  );
+  const vialStatus = world.hasVial ? (world.antidote ? 'Silver vial · moonwater' : 'Silver vial · empty') : '';
+  text('belt-readout', isStolenBottle(item?.id) ? item.name : vialStatus);
   text(
     'route-readout',
     hasDirections(world) && Number.isFinite(h.distance)
@@ -1349,7 +1362,7 @@ function refreshHUD() {
   const status = describeRace(world, h.hordeProgress, front);
   text(
     'race-readout',
-    (world.gateCrossed && !world.ropeFallen ? 'Through in time. ' : '') +
+    (world.gateCrossed && world.lastBellCastAt == null && !world.ropeFallen ? 'Through in time. ' : '') +
       status +
       (status && front && sighted && !world.ropeFallen
         ? ' · ' + compassPoint(bearing(world.player, front))
@@ -1570,6 +1583,17 @@ function frame(timestamp) {
     dt = Math.max(0, now - lastTime);
   lastTime = now;
   if (!document.hidden) {
+    if (royalReplay) {
+      const prize = royalReplay.royalPrize;
+      prize.time += Math.min(dt, 0.25);
+      if (prize.time >= ROYAL_PHASE_SECONDS[prize.phase]) {
+        if (prize.phase === 'report') {
+          prize.phase = 'honour';
+          prize.time = 0;
+        } else returnFromPanel();
+      }
+      if (royalReplay) audio.update(royalReplay);
+    }
     if (afterFeast) {
       afterFeast.elapsed += Math.min(dt, 0.25);
       audio.update(afterFeast);
@@ -1580,11 +1604,12 @@ function frame(timestamp) {
     }
     // The traveller can listen while reading or consulting the map. Only the
     // audio clock advances here; footsteps, threats and the race stay frozen.
-    if (!panel || listeningPanels.has(panel))
+    if (!panel || (listeningPanels.has(panel) && !world.royalPrize))
       audio.update(arrivalView(world), Boolean(panel));
     for (const ev of world.events.splice(0)) {
       audio.cue(ev);
       soundCaption(ev);
+      if (ev.type === 'royalprize') save();
       if (ev.type === 'bell' || ev.type === 'sluice') showBell(ev);
       if (ev.type === 'hurt' && !options.reduceMotion) {
         const damage = $('damage');
@@ -1593,7 +1618,8 @@ function frame(timestamp) {
         damageTimer = setTimeout(() => (damage.style.opacity = '0'), 160);
       }
     }
-    if (!panel || needsFrame || afterFeast) {
+    const painted = ceremony.render((royalReplay || world).royalPrize, options.reduceMotion);
+    if (!painted && (!panel || needsFrame || afterFeast)) {
       try {
         const scene = afterFeast || presentationWorld(world, accumulator);
         const drawn = renderer.render(scene, scene.elapsed);
@@ -1638,6 +1664,9 @@ const captionActions = {
     lure: 'Bronze rings where the bottle landed',
     shatter: 'Clay cracks, then cinders scatter',
     fill: 'Water trickles into glass',
+    lastbell: 'A single deep bell sounds. The marching stops.',
+    cure: 'Glass breaks. Xero draws a breath.',
+    rebound: 'A bottle chimes back into the satchel',
   },
 };
 const localCaptionRange = { fieldbird: 48, knock: 18, relay: 31, latch: 28, pebble: 14, potion: 40 };
@@ -1651,7 +1680,7 @@ function soundCaption(ev) {
     return;
   // Keep the wind-up on screen long enough to react even if a brush or bell
   // arrives in the same frame. A committed outcome ends the warning early.
-  if (performance.now() < warningCaptionUntil && !warning &&
+  if (performance.now() < warningCaptionUntil && !warning && ev.text !== 'lastbell' &&
       !['hurt', 'block', 'ending'].includes(ev.type) && !(zombie && ['down', 'miss'].includes(ev.text))) return;
   const directional = captionActions[ev.type]?.[ev.text];
   const hostLine = zombie && ({

@@ -10,7 +10,7 @@ const up = [0, 1, 0];
 
 export function contactPose(w, fig, ground) {
   const q = w.sequence;
-  if (!fig || !['feast', 'saved'].includes(q?.id)) return null;
+  if (w.royalPrize || !fig || !['feast', 'saved'].includes(q?.id)) return null;
   const u = q.progress || 0,
     p = w.player,
     side = [Math.cos(p.yaw), 0, -Math.sin(p.yaw)],

@@ -47,6 +47,7 @@ export function raceFront(w) {
   return rankPosition(w, lead.offset && reliefAvailable ? relief.i : lead.i);
 }
 export function describeRace(w, progress, front = raceFront(w)) {
+  if (w.lastBellCastAt != null) return 'The march has fallen silent.';
   if (w.ropeFallen) return 'The host is turning away.';
   if (w.route === 'undecided' && !w.greeted && !w.milestones?.ridge) return '';
   if (w.milestones?.guestsAtTable) return 'The first guests have reached Xero’s table.';
@@ -60,6 +61,7 @@ export function describeRace(w, progress, front = raceFront(w)) {
 }
 
 export function hostReport(w, front) {
+  if (w.lastBellCastAt != null) return 'No boots answer the castle bell.';
   const field = survey(w),
     seen = w.milestones?.ridge || w.milestones?.procession || field.visits.downs || w.journal?.some((n) => n.id === 'procession');
   if (w.ropeFallen) return seen ? 'The host has turned away from the gate.' : '';

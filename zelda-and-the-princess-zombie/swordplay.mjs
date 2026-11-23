@@ -1,4 +1,4 @@
-import { takeItem } from './inventory.mjs';
+import { isStolenBottle, quickItem, takeItem } from './inventory.mjs';
 import { clamp } from './geography.mjs';
 import { barrier, footHeight, bodyRadius } from './travel.mjs';
 import {
@@ -14,6 +14,7 @@ import {
 } from './blade-pose.mjs';
 import { actorVolumes, capsuleEntry } from './combat-zones.mjs';
 import { guestAtTable } from './procession.mjs';
+import { princessBottleTarget, princessBottleEntry } from './witch-spell-contact.mjs';
 export { bladeCoordinates, bladeFallbackGeometry, steelLength, gripToEdge } from './blade-pose.mjs';
 
 export const isEnemy = (a) => ['wolf', 'dragon', 'troll'].includes(a.type);
@@ -256,34 +257,79 @@ export function moveBody(w, a, dx, dz, extraBlock) {
   }
 }
 
+const gravity = 9.81;
+const maxFlightSeconds = 3.5;
+
+function rescueThrowLift(w, handY, pitch, horizontalSpeed) {
+  const p = w.player;
+  const target = princessBottleTarget(w, w.elapsed);
+  if (!target) return 2;
+  const depth = (target.figure.x - p.x) * target.sin + (target.figure.z - p.z) * target.cos;
+  const time = depth / horizontalSpeed;
+  if (time < 0.04 || time >= maxFlightSeconds) return 2;
+
+  // Aim from the crosshair, throw from the hand. When the crosshair is on
+  // Xero, give the glass enough lift to cross that spot on its natural arc.
+  // Direction is fixed at release; walls and intervening bodies can still stop it.
+  const eyeY = handY + 0.23 + (w.reducedMotion ? 0 : p.gaitOffset || 0);
+  const eye = [p.x, eyeY, p.z];
+  const aim = [p.x + depth * target.sin, eyeY + depth * Math.tan(pitch), p.z + depth * target.cos];
+  const hit = princessBottleEntry(target, eye, aim);
+  if (!Number.isFinite(hit) || (obstruction(w, eye, aim, 0.025)?.u ?? Infinity) < hit) return 2;
+  return (eyeY - handY) / time + gravity * time / 2;
+}
+
 export function tossPhial(w, kind = 'cinder') {
-  if (w.phialFlight || !takeItem(w, kind)) return false;
+  if (w.phialFlight) return false;
+  // The witch's glass returns unbroken after a miss. Reserving it in flight
+  // also preserves the equipped pocket and makes an interrupted save resumable.
+  const stolen = isStolenBottle(kind);
+  if (stolen ? !quickItem(w, 'item:' + kind)?.count : !takeItem(w, kind)) return false;
   const p = w.player,
     pitch = clamp(p.pitch || 0, -1.05, 1.12),
-    speed = 10.9;
+    speed = stolen ? 17 : 10.9,
+    horizontalSpeed = speed * Math.cos(pitch),
+    handY = (p.feetY ?? footHeight(w, p.x, p.z)) + 1.43;
   w.phialFlight = {
     kind,
     x: p.x,
-    y: (p.feetY ?? footHeight(w, p.x, p.z)) + 1.43,
+    y: handY,
     z: p.z,
     at: w.elapsed,
-    vx: speed * Math.sin(p.yaw) * Math.cos(pitch),
-    vz: speed * Math.cos(p.yaw) * Math.cos(pitch),
-    vy: 2 + speed * Math.sin(pitch),
+    vx: horizontalSpeed * Math.sin(p.yaw),
+    vz: horizontalSpeed * Math.cos(p.yaw),
+    vy: speed * Math.sin(pitch) + (kind === 'saveher' ? rescueThrowLift(w, handY, pitch, horizontalSpeed) : 2),
   };
   w.potionUntil = w.elapsed + 1.1;
   cue(w, 'throw', kind, p);
   return true;
 }
-function exposedToBurst(w, actor, origin) {
+function exposedToBurst(w, actor, origin, radius = 10.5) {
   // A visible head or limb can catch a cinder, while stone and the ground
   // shield anyone behind them. Only exposed parts of this model count.
   return actorVolumes(actor, w.elapsed).some((zone) => {
     if (!['torso', 'flank', 'head', 'throat', 'leg'].includes(zone.name)) return false;
     const center = lerpPoint(zone.a, zone.b, 0.5);
     const d = Math.hypot(...center.map((v, i) => v - origin[i]));
-    return d <= 10.5 + zone.r && !obstruction(w, origin, center, 0.025);
+    return d <= radius + zone.r && !obstruction(w, origin, center, 0.025);
   });
+}
+function lastBellHeard(w, burst, hit, xero, host) {
+  if (hit?.type === 'marcher' || hit?.type === 'princess') return true;
+  const radius = 8.5;
+  const origin = [burst.x, burst.y + 0.09, burst.z];
+  // Xero can wake the spell while cursed, even if every ordinary zombie is
+  // across the map. Only the marching host is on its list of victims.
+  if (xero && Math.hypot(xero.x - burst.x, xero.z - burst.z) <= radius + 2) {
+    const figure = princessBottleTarget(w, w.elapsed)?.figure;
+    if (figure) {
+      const centre = [figure.x, figure.y + figure.h * 0.55, figure.z];
+      if (Math.hypot(centre[0] - origin[0], centre[1] - origin[1], centre[2] - origin[2]) <= radius &&
+          !obstruction(w, origin, centre, 0.025)) return true;
+    }
+  }
+  return host.inRange(w, burst, radius + 1.5)
+    .some(walker => exposedToBurst(w, marcherTarget(w, walker), origin, radius));
 }
 export function advancePhial(w, dt, notify, host) {
   const q = w.phialFlight;
@@ -295,26 +341,54 @@ export function advancePhial(w, dt, notify, host) {
       a.alive && isEnemy(a) && Math.hypot(a.x - q.x, a.z - q.z) < drift + (a.type === 'dragon' ? 6.3 : 2.2)
   );
   for (const walker of host?.inRange(w, q, drift + 1.3) || []) bodies.push(marcherTarget(w, walker));
-  const hitZones = bodies.flatMap((a) => actorVolumes(a, w.elapsed));
+  const hitZones = bodies.map(actor => ({ actor, zones: actorVolumes(actor, w.elapsed) }));
+  const stolen = isStolenBottle(q.kind);
+  const xero = stolen && w.actors.find(a => a.type === 'princess' && a.alive && !a.cured);
+  const figure = xero && Math.hypot(xero.x - q.x, xero.z - q.z) < drift + 4 &&
+    princessBottleTarget(w, w.elapsed);
   for (let i = 0; i < slices; i++) {
     const step = dt / slices,
       x = q.x + q.vx * step,
       z = q.z + q.vz * step,
-      y = q.y + q.vy * step - 0.5 * 9.81 * step * step;
-    q.vy -= 9.81 * step;
+      y = q.y + q.vy * step - 0.5 * gravity * step * step;
+    q.vy -= gravity * step;
     const floor = footHeight(w, x, z);
     const from = [q.x, q.y, q.z],
       to = [x, y, z];
     const solid = obstruction(w, from, to, 0.05);
-    let contact = Infinity;
-    for (const zone of hitZones) contact = Math.min(contact, capsuleEntry(from, to, zone));
+    let contact = figure ? princessBottleEntry(figure, from, to) : Infinity;
+    let struckBody = Number.isFinite(contact) ? xero : null;
+    for (const { actor, zones } of hitZones) for (const zone of zones) {
+      const u = capsuleEntry(from, to, zone);
+      if (u < contact) { contact = u; struckBody = actor; }
+    }
+    if (solid && solid.u <= contact) struckBody = null;
     // Stop just outside a struck wall so its near face can reflect the burst,
     // and the far side is still in shadow.
-    const fraction = Math.min(contact, solid ? Math.max(0, solid.u - 0.38) : 1);
+    const fraction = solid && solid.u <= contact ? Math.max(0, solid.u - 0.38) : Math.min(contact, 1);
     [q.x, q.y, q.z] = lerpPoint(from, to, fraction);
     q.y = Math.max(q.y, footHeight(w, q.x, q.z) + 0.05);
-    if (!solid && !Number.isFinite(contact) && y > floor + 0.05 && w.elapsed - q.at < 3.5) continue;
+    if (!solid && !Number.isFinite(contact) && y > floor + 0.05 && w.elapsed - q.at < maxFlightSeconds) continue;
     const burst = { x: q.x, y: q.y, z: q.z, at: w.elapsed };
+    if (stolen) {
+      w.phialFlight = null;
+      let tookEffect = false;
+      if (q.kind === 'saveher' && struckBody?.type === 'princess') {
+        tookEffect = host.rescue(w, struckBody, burst);
+        if (tookEffect) cue(w, 'potion', 'cure', burst);
+      } else if (q.kind === 'lastbell' && lastBellHeard(w, burst, struckBody, xero, host)) {
+        host.silence(w, burst);
+        tookEffect = true;
+        cue(w, 'potion', 'lastbell', burst);
+        notify(w, 'The note runs out across the valley. Every dead foot falls silent.', 5);
+      }
+      if (tookEffect) takeItem(w, q.kind);
+      else {
+        cue(w, 'potion', 'rebound', burst);
+        notify(w, 'The unbroken bottle slips back into your bag.');
+      }
+      return;
+    }
     if (q.kind === 'veil' || q.kind === 'lure') {
       const mist = q.kind === 'veil';
       const groundY = footHeight(w, burst.x, burst.z);

@@ -122,6 +122,22 @@ export function createProcessionView() {
     best = new Float32Array(64),
     which = new Uint16Array(64);
   function near(w, aspect, time, cap, includeRanks = true) {
+    if (w.lastBellCastAt != null) {
+      ids.clear();
+      const poses = [];
+      if (time < w.lastBellCastAt + 3) {
+        for (const q of (w.lastBellWitnesses || []).slice(0, cap)) {
+          const { i, x, z, heading } = q;
+          ids.add(i);
+          poses.push({
+            id: i, x, z, heading, y: footHeight(w, x, z), h: marcherHeight(i),
+            w: 0.90 + ((i * 13) % 17) * 0.013, kind: identity(i), special: true,
+            state: 'fallen', since: w.lastBellCastAt, ...facingOfMarcher(heading, x, z, w.player),
+          });
+        }
+      }
+      return { poses, ids };
+    }
     if (includeRanks) update(w);
     const tableGuests = new Set(castleGuests(w));
     const singled = new Set([...roadFiles, ...tableGuests]);
@@ -236,6 +252,7 @@ export function createProcessionView() {
     sightZ = Infinity;
   let lookout = null;
   function aboveHorizon(w, eye) {
+    if (w.lastBellCastAt != null) return false;
     const p = w.player;
     // Downstream, ordinary depth testing handles individual ranks. In the
     // forest test the real ground across the valley instead of a trigger line.
