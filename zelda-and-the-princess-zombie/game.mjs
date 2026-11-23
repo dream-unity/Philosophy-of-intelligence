@@ -1,103 +1,120 @@
-import { createFieldCheck } from './field-check.mjs';
-import { witchVignette } from './story-witch.mjs';
-import {
-  actionNames,
-  slotNames,
-  keyChoices,
-  controlLayout,
-  moveTouchAction,
-  rebind,
-  actionForKey,
-} from './control-layout.mjs';
-import { advanceGameClock } from './game-clock.mjs';
-import { makeFieldSurvey } from './map-controls.mjs';
-import { hasDirections, compassPoint, bearing, describeRace, survey, bridgeReport } from './navigation.mjs';
-import {
-  saveKey,
-  settingsKey,
-  read,
-  write,
-  restoreJourney,
-  lasting,
-  newRun,
-  rememberFork,
-  recallFork,
-  hasFork,
-  rememberEnding,
-  pastJourneys,
-  retryPending,
-  journeyFile,
-  readJourneyFile,
-  applyJourneyFile,
-} from './journey-store.mjs';
-import { createWorld, act, choose, getHUD, resumeCheckpoint, hordePosition, arrivalView } from './world.mjs';
+import { drawFieldMap, describeFieldMap } from './field-map.mjs';
+import { createWorld, tick, act, choose, getHUD, resumeCheckpoint } from './world.mjs';
 import { createAudio } from './audio.mjs';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-function loadJourney() {
-  return restoreJourney(read(saveKey));
+const saveKey = 'xero.forest.journey.v1',
+  crossroadsKey = 'xero.forest.crossroads.v1',
+  endingsKey = 'xero.forest.endings.v1',
+  settingsKey = 'xero.forest.controls.v1';
+
+const ENDING_NAMES = {
+  saved: 'The Bell Falls Silent',
+  feast: 'The Feast',
+  bound: 'The Bound Way',
+  horde: 'The Three Thousand',
+  wilds: 'Lost to the Wilds',
+};
+
+let storageWarned = false;
+function showStorageWarning() {
+  if (storageWarned) return;
+  storageWarned = true;
+  const banner = $('storage-banner');
+  if (!banner) return;
+  banner.textContent = 'Browser storage is unavailable — progress will not persist after closing this tab.';
+  banner.hidden = false;
 }
+function read(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function write(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    showStorageWarning();
+    return false;
+  }
+}
+function hydrateJourney(saved) {
+  if (
+    !(saved?.version === 1 || saved?.version === 2) ||
+    !Array.isArray(saved.actors) ||
+    !saved.actors.length ||
+    !Number.isFinite(saved.player?.x) ||
+    !Number.isFinite(saved.elapsed) ||
+    typeof saved.checkpoint !== 'string'
+  )
+    return null;
+  const base = createWorld();
+  return {
+    ...base,
+    ...saved,
+    player: { ...base.player, ...saved.player },
+    milestones: { ...base.milestones, ...(saved.milestones || {}) },
+    discovered: { ...base.discovered, ...(saved.discovered || {}) },
+    journal: Array.isArray(saved.journal) ? saved.journal : base.journal,
+    effects: [],
+    events: [],
+    mapOpen: false,
+    version: 2,
+  };
+}
+function loadJourney(key = saveKey) {
+  return hydrateJourney(read(key));
+}
+function recordEnding(id) {
+  if (!id) return;
+  const list = read(endingsKey);
+  const next = Array.isArray(list) ? [...new Set([...list, id])] : [id];
+  write(endingsKey, next);
+}
+
 const preferences = read(settingsKey) || {};
 const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-const validMix = (v) => (Number.isFinite(v) ? clamp(v, 0, 1) : 1);
 const options = {
-  layout: controlLayout(preferences.layout),
-  handedness: preferences.handedness === 'left' ? 'left' : 'right',
-  stickSize: ['small', 'standard', 'large'].includes(preferences.stickSize)
-    ? preferences.stickSize
-    : 'standard',
-  stickHeight: ['low', 'raised'].includes(preferences.stickHeight) ? preferences.stickHeight : 'low',
-  quality: ['low', 'auto', 'high'].includes(preferences.quality) ? preferences.quality : 'auto',
-  subtitles: preferences.subtitles !== false,
-  mix: {
-    music: validMix(preferences.mix?.music),
-    effects: validMix(preferences.mix?.effects),
-    ambience: validMix(preferences.mix?.ambience),
-  },
   sound: preferences.sound !== false,
+  masterVolume: clamp(Number(preferences.masterVolume ?? 1), 0, 1),
+  musicVolume: clamp(Number(preferences.musicVolume ?? 0.85), 0, 1),
+  sfxVolume: clamp(Number(preferences.sfxVolume ?? 1), 0, 1),
   sensitivity: clamp(Number(preferences.sensitivity) || 1, 0.4, 2),
   reduceMotion:
     typeof preferences.reduceMotion === 'boolean' ? preferences.reduceMotion : motionQuery.matches,
+  leftHanded: Boolean(preferences.leftHanded),
+  largeTouch: Boolean(preferences.largeTouch),
 };
+function applyBodyPrefs() {
+  document.body.classList.toggle('touch-left-handed', options.leftHanded);
+  document.body.classList.toggle('touch-large', options.largeTouch);
+}
+applyBodyPrefs();
+
 motionQuery.addEventListener?.('change', (event) => {
   if (typeof read(settingsKey)?.reduceMotion === 'boolean') return;
   options.reduceMotion = event.matches;
   if (world) world.reducedMotion = event.matches;
 });
-const physicalShift = new Set();
+
 const keys = new Set(),
   movement = { forward: 0, strafe: 0 };
 const view = $('view'),
   stage = $('stage'),
   title = $('title-screen'),
   overlay = $('overlay');
-const audio = createAudio(),
-  fieldCheck = createFieldCheck();
-let activeSurvey = null,
-  accumulator = 0,
-  captionTimer = 0,
-  bellTimer = 0,
-  sprintBeforeMap = false;
-function applyPreferences() {
-  document.body.dataset.hand = options.handedness;
-  document.body.dataset.stick = options.stickSize;
-  document.body.dataset.stickHeight = options.stickHeight;
-  for (const [order, id] of options.layout.slots.entries()) {
-    const action = id === 'run' ? $('sprint') : document.querySelector('[data-act="' + id + '"]');
-    action.style.order = order;
-    if (options.layout.keys[id]) {
-      const letter = options.layout.keys[id].slice(3);
-      action.querySelector('kbd').textContent = letter;
-      action.setAttribute('aria-keyshortcuts', letter);
-    }
-  }
-  audio.setMix?.(options.mix);
-  if (world) {
-    world.renderQuality = options.quality;
-    world.reducedMotion = options.reduceMotion;
-  }
-}
+const audio = createAudio();
+audio.setVolumes({
+  master: options.masterVolume,
+  music: options.musicVolume,
+  sfx: options.sfxVolume,
+});
+
 let world = null,
   renderer = null,
   createView = null,
@@ -115,30 +132,52 @@ let frameId = 0,
   stickId = null,
   lookId = null,
   lookX = 0,
-  lookY = 0;
+  lookY = 0,
+  lookDownX = 0,
+  lookDownY = 0,
+  lookDownAt = 0,
+  lookMoved = false,
+  guardHeld = false,
+  swordHoldTimer = 0,
+  swordLongPressed = false,
+  crossroadsSaved = false;
 let lastFocus = null,
   damageTimer = 0,
   ignoreUnlock = false,
   showingLoad = false;
+
+const mapView = { zoom: 1, panX: 0, panY: 0 };
+let lastMapProjection = null;
+
+function syncBodyState() {
+  let state = 'title';
+  if (screen === 'game') {
+    if (world?.ending || panel === 'ending') state = 'gameover';
+    else if (panel) state = 'paused';
+    else state = 'playing';
+  }
+  document.body.dataset.state = state;
+}
 function display(node, visible) {
-  node.hidden = !visible;
+  if (node) node.hidden = !visible;
 }
 function text(nodeId, value) {
   const node = $(nodeId);
-  if (node.textContent !== value) node.textContent = value;
+  if (node && node.textContent !== value) node.textContent = value;
 }
 function icon(name) {
   const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg'),
     use = document.createElementNS(el.namespaceURI, 'use');
   el.setAttribute('aria-hidden', 'true');
-  use.setAttribute('href', location.pathname + '#' + name);
+  use.setAttribute('href', location.pathname + location.search + '#' + name);
   el.append(use);
   return el;
 }
-// Fragment-only sprite links retain the current document on both clean URL forms.
+// Fragment-only sprite links retain the current document on both clean URL forms and query strings.
 document
   .querySelectorAll('use[href^="#"]')
-  .forEach((use) => use.setAttribute('href', location.pathname + use.getAttribute('href')));
+  .forEach((use) => use.setAttribute('href', location.pathname + location.search + use.getAttribute('href')));
+
 function paragraph(content, className) {
   const el = document.createElement('p');
   el.textContent = content;
@@ -153,24 +192,32 @@ function button(label, callback, style = 'secondary') {
   el.addEventListener('click', callback);
   return el;
 }
-function stopMotion() {
+function stopMotion({ keepSprint = false } = {}) {
   keys.clear();
   movement.forward = 0;
   movement.strafe = 0;
   stickId = null;
   lookId = null;
-  $('stick').firstElementChild.style.transform = '';
-  sprint = false;
-  $('sprint').setAttribute('aria-pressed', 'false');
+  if (guardHeld && world) act(world, 'unguard');
+  guardHeld = false;
+  $('guard-button')?.setAttribute('aria-pressed', 'false');
+  const stick = $('stick');
+  if (stick?.firstElementChild) stick.firstElementChild.style.transform = '';
+  if (!keepSprint) {
+    sprint = false;
+    $('sprint')?.setAttribute('aria-pressed', 'false');
+  }
 }
 function save() {
   if (!world || showingLoad) return;
-  if (!world.runId) world.runId = newRun();
-  survey(world);
-  const ok = write(saveKey, { ...world, events: [], mapOpen: false });
-  if (screen === 'game')
-    text('storage-status', ok && lasting() ? '' : 'Saving is unavailable. This journey stays in this tab.');
-  return ok;
+  write(saveKey, { ...world, events: [], effects: [], mapOpen: false });
+}
+function saveCrossroadsIfReady() {
+  if (!world || crossroadsSaved) return;
+  if (world.greeted && world.route === 'undecided' && world.actors[0]?.alive) {
+    crossroadsSaved = true;
+    write(crossroadsKey, { ...world, events: [], effects: [], mapOpen: false });
+  }
 }
 function soundState() {
   $('title-sound').replaceChildren(
@@ -178,6 +225,11 @@ function soundState() {
     Object.assign(document.createElement('span'), { textContent: options.sound ? 'Sound on' : 'Sound off' })
   );
   $('title-sound').setAttribute('aria-pressed', String(options.sound));
+  audio.setVolumes({
+    master: options.masterVolume,
+    music: options.musicVolume,
+    sfx: options.sfxVolume,
+  });
   audio.setEnabled(
     Boolean(
       options.sound &&
@@ -194,24 +246,23 @@ function toggleSound() {
   soundState();
 }
 $('title-sound').addEventListener('click', toggleSound);
+
 function releaseLook() {
   if (document.pointerLockElement === view) {
     ignoreUnlock = true;
     document.exitPointerLock?.();
   }
 }
-function modal(name, kicker, heading, body, actions, { closable = true } = {}) {
+function modal(name, kicker, heading, body, actions, { closable = true, keepSprint = false } = {}) {
   if (!panel) lastFocus = document.activeElement;
-  fieldCheck.pause();
-  stopMotion();
+  stopMotion({ keepSprint });
   panel = name;
   releaseLook();
   display(overlay, true);
   title.inert = screen === 'title';
   stage.inert = screen === 'game';
   $('panel').classList.toggle('map-panel', name === 'map');
-  const portrait =
-    name === 'dialogue' && world?.dialogue?.speaker === 'The witch' && world.dialogue.kind !== 'witch';
+  const portrait = name === 'dialogue' && world?.dialogue?.speaker === 'The witch';
   $('panel').classList.toggle('witch-panel', portrait);
   let portraitImage = $('witch-portrait');
   if (portrait && !portraitImage) {
@@ -231,8 +282,9 @@ function modal(name, kicker, heading, body, actions, { closable = true } = {}) {
   $('panel').scrollTop = 0;
   $('panel-title').focus({ preventScroll: true });
   soundState();
+  syncBodyState();
 }
-function dismiss() {
+function dismiss({ keepSprint = false } = {}) {
   display(overlay, false);
   panel = '';
   title.inert = false;
@@ -240,9 +292,9 @@ function dismiss() {
   dialogueRef = null;
   endingRef = null;
   lastTime = performance.now() / 1000;
-  accumulator = 0;
-  stopMotion();
+  stopMotion({ keepSprint });
   soundState();
+  syncBodyState();
   const focusNode =
     screen === 'game'
       ? view
@@ -252,50 +304,17 @@ function dismiss() {
   focusNode?.focus({ preventScroll: true });
 }
 function returnFromPanel() {
-  if (panel === 'binding' || panel === 'device') {
-    preferencesPanel();
-    return;
-  }
-  if (panel === 'load-confirm') {
-    saveFiles();
-    return;
-  }
-  if (panel === 'files') {
-    if (screen === 'game') {
-      if (world?.ending) {
-        dismiss();
-        syncStory();
-      } else pause();
-    } else dismiss();
-    return;
-  }
-  if (panel === 'history') {
-    dismiss();
-    if (world?.ending) syncStory();
-    else if (screen === 'game') pause();
-    return;
-  }
-  if (panel === 'journal' || panel === 'preferences' || panel === 'fork') {
-    if (world?.ending) {
-      dismiss();
-      syncStory();
-    } else pause();
-    return;
-  }
-  if (panel === 'help') {
-    screen === 'game' ? pause() : dismiss();
-    return;
-  }
-  if (panel === 'restart') {
+  if (panel === 'help' || panel === 'restart') {
     screen === 'game' ? pause() : dismiss();
     return;
   }
   if (panel === 'map') {
     act(world, 'close');
-    activeSurvey = null;
-    dismiss();
-    sprint = sprintBeforeMap;
-    $('sprint').setAttribute('aria-pressed', String(sprint));
+    dismiss({ keepSprint: true });
+    return;
+  }
+  if (panel === 'journal') {
+    dismiss({ keepSprint: true });
     return;
   }
   if (panel === 'dialogue') {
@@ -309,47 +328,47 @@ function returnFromPanel() {
   if (panel === 'pause') dismiss();
 }
 $('panel-close').addEventListener('click', returnFromPanel);
+
 function controls() {
   const touch = paragraph(
-    'On a touchscreen, move with your left thumb and drag the view with your right. Drag from a tool to aim, then release to use it. Nudge the stick to walk or push it farther to jog. Run toggles sprint. Swap sides or resize the joystick in Settings.'
+    'On a touchscreen, move with the thumb stick and drag the scene to look. Tap Sword to slash or hold to thrust. Hold Guard to parry an incoming blow. Swap handedness or enlarge buttons in Pause.'
   );
   const table = document.createElement('div');
   table.className = 'key-table';
   for (const label of [
-    'Jog',
+    'Move',
     'W A S D',
-    'Walk',
-    'Hold Space while moving',
-    'Look',
-    'Mouse or drag',
+    'Look / pitch',
+    'Mouse, drag, or I / K',
     'Turn / move',
     'Arrow keys',
-    'Look up / down',
-    'Page Up / Page Down',
-    'Thrust / guard',
-    options.layout.keys.thrust.slice(3) + ' / ' + options.layout.keys.guard.slice(3),
-    'Run',
+    'Sprint',
     'Hold Shift',
-    'Interact',
-    options.layout.keys.interact.slice(3),
-    'Swing sword',
-    options.layout.keys.strike.slice(3) + ' or a short click',
-    'Cast cinder phial',
-    options.layout.keys.potion.slice(3),
-    'Map / pause',
-    'M / Esc',
+    'Interact / forage',
+    'E',
+    'Slash / Thrust',
+    'F or click · Shift+F or V',
+    'Guard & Parry',
+    'Hold R or right-click',
+    'Step-dodge',
+    'Space',
+    'Throw cinder phial',
+    'Q',
+    'Map / Journal / Pause',
+    'M / J / Esc',
   ]) {
     const cell = document.createElement('span');
     cell.textContent = label;
     table.append(cell);
   }
   const hint = paragraph(
-    'Drag the scene to turn. A short mouse click swings your sword. Mouse capture is available in Settings. Hold a second touch on the view to aim while operating a tool.',
+    'Quick left-click swings your sword even without pointer lock; drag to turn. Right-click holds guard to deflect attacks.',
     'field-note'
   );
   modal('help', 'Field guide', 'How to play', [touch, table, hint], [button('Back', returnFromPanel)]);
 }
 $('help').addEventListener('click', controls);
+
 function openFullscreen() {
   const f = document.fullscreenElement ? document.exitFullscreen?.() : $('app').requestFullscreen?.();
   if (f?.catch)
@@ -368,9 +387,73 @@ function textFull() {
     ? 'Leave fullscreen'
     : 'Fullscreen';
 }
+
+function sliderSetting(labelText, min, max, step, value, onChange) {
+  const row = document.createElement('label');
+  row.className = 'setting';
+  row.append(labelText);
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = String(min);
+  input.max = String(max);
+  input.step = String(step);
+  input.value = String(value);
+  input.addEventListener('input', () => onChange(Number(input.value)));
+  row.append(input);
+  return row;
+}
+function checkSetting(labelText, checked, onChange) {
+  const row = document.createElement('label');
+  row.className = 'setting';
+  row.append(labelText);
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = Boolean(checked);
+  input.addEventListener('change', () => onChange(input.checked));
+  row.append(input);
+  return row;
+}
+
 function pause() {
   if (!world || world.ending) return;
   save();
+  const rows = [
+    checkSetting('Sound enabled', options.sound, () => toggleSound()),
+    sliderSetting('Master volume', 0, 1, 0.05, options.masterVolume, (v) => {
+      options.masterVolume = v;
+      write(settingsKey, options);
+      soundState();
+    }),
+    sliderSetting('Music volume', 0, 1, 0.05, options.musicVolume, (v) => {
+      options.musicVolume = v;
+      write(settingsKey, options);
+      soundState();
+    }),
+    sliderSetting('Effects volume', 0, 1, 0.05, options.sfxVolume, (v) => {
+      options.sfxVolume = v;
+      write(settingsKey, options);
+      soundState();
+    }),
+    sliderSetting('Look sensitivity', 0.4, 2, 0.1, options.sensitivity, (v) => {
+      options.sensitivity = v;
+      write(settingsKey, options);
+    }),
+    checkSetting('Reduce camera motion', options.reduceMotion, (checked) => {
+      options.reduceMotion = checked;
+      world.reducedMotion = checked;
+      write(settingsKey, options);
+    }),
+    checkSetting('Left-handed touch layout', options.leftHanded, (checked) => {
+      options.leftHanded = checked;
+      applyBodyPrefs();
+      write(settingsKey, options);
+    }),
+    checkSetting('Larger touch controls', options.largeTouch, (checked) => {
+      options.largeTouch = checked;
+      applyBodyPrefs();
+      write(settingsKey, options);
+    }),
+  ];
   const actions = [
     button(
       'Resume',
@@ -380,345 +463,17 @@ function pause() {
       },
       'primary'
     ),
-    button('Journal', journalPanel),
-    button('Save files', saveFiles),
-    button('Settings', preferencesPanel),
+    button('Field journal', journalPanel),
     button('How to play', controls),
     button('Title screen', goHome),
+    button('Begin anew', confirmNew),
   ];
-  if (hasFork(world)) actions.push(button('Return to the forest fork', confirmFork));
-  actions.push(button('Begin anew', confirmNew));
-  modal(
-    'pause',
-    getHUD(world).location,
-    'Journey paused',
-    [
-      paragraph(
-        lasting()
-          ? 'Progress saved on this device.'
-          : 'Saving is unavailable. This journey stays in this tab.',
-        'field-note'
-      ),
-    ],
-    actions
-  );
-}
-$('pause-button').addEventListener('click', pause);
-function preferencesPanel() {
-  const rows = [];
-  function setting(label, input) {
-    const row = document.createElement('label');
-    row.className = 'setting';
-    row.append(label, input);
-    rows.push(row);
-  }
-  function changed() {
-    applyPreferences();
-    write(settingsKey, options);
-    needsFrame = true;
-  }
-  function check(label, value, change) {
-    const i = document.createElement('input');
-    i.type = 'checkbox';
-    i.checked = value;
-    i.onchange = () => {
-      change(i.checked);
-      changed();
-    };
-    setting(label, i);
-  }
-  function range(label, value, max, min, step, change) {
-    const i = document.createElement('input');
-    i.type = 'range';
-    i.min = min;
-    i.max = max;
-    i.step = step;
-    i.value = value;
-    i.oninput = () => {
-      change(Number(i.value));
-      changed();
-    };
-    setting(label, i);
-  }
-  function select(label, key, choices) {
-    const i = document.createElement('select');
-    for (const [value, name] of choices) {
-      const o = document.createElement('option');
-      o.value = value;
-      o.textContent = name;
-      i.append(o);
-    }
-    i.value = options[key];
-    i.onchange = () => {
-      options[key] = i.value;
-      changed();
-    };
-    setting(label, i);
-  }
-  check('Sound', options.sound, (v) => {
-    options.sound = v;
-    if (v) audio.unlock();
-    soundState();
-  });
-  for (const [key, name] of [
-    ['music', 'Music'],
-    ['effects', 'Effects'],
-    ['ambience', 'Ambience'],
-  ])
-    range(name, options.mix[key], 1, 0, 0.05, (v) => (options.mix[key] = v));
-  check('Sound captions', options.subtitles, (v) => (options.subtitles = v));
-  check('Reduce camera motion', options.reduceMotion, (v) => (options.reduceMotion = v));
-  range('Look sensitivity', options.sensitivity, 2, 0.4, 0.1, (v) => (options.sensitivity = v));
-  select('Graphics', 'quality', [
-    ['auto', 'Adaptive'],
-    ['low', 'Battery saver'],
-    ['high', 'High detail'],
-  ]);
-  select('Movement thumb', 'handedness', [
-    ['right', 'Left thumb'],
-    ['left', 'Right thumb'],
-  ]);
-  select('Joystick size', 'stickSize', [
-    ['small', 'Small'],
-    ['standard', 'Standard'],
-    ['large', 'Large'],
-  ]);
-  select('Joystick position', 'stickHeight', [
-    ['low', 'Lower'],
-    ['raised', 'Raised'],
-  ]);
-  const actions = [
-    button('Back', returnFromPanel, 'primary'),
-    button('Arrange controls', bindingsPanel),
-    button('Device check', devicePanel),
-  ];
-  if (view.requestPointerLock)
-    actions.push(
-      button('Capture mouse', () => {
-        dismiss();
-        try {
-          view.requestPointerLock()?.catch?.(() => {});
-        } catch {}
-      })
-    );
   if (document.fullscreenEnabled)
     actions.push(button(document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen', openFullscreen));
-  modal('preferences', '', 'Settings', rows, actions);
+  modal('pause', getHUD(world).location, 'Journey paused', rows, actions);
 }
-function devicePanel() {
-  const content = document.createElement('div');
-  modal('device', '', 'Device check', [content], [button('Back', returnFromPanel)]);
-  fieldCheck.mount(content, {
-    resume: () => {
-      audio.unlock();
-      dismiss();
-    },
-    playExample: (id) => options.sound && audio.preview(id),
-  });
-}
-function bindingsPanel() {
-  const group = document.createElement('div');
-  group.className = 'binding-rows';
-  const rows = [];
-  function menu(values, changed, label) {
-    const select = document.createElement('select');
-    select.setAttribute('aria-label', label);
-    for (const [value, text] of values) {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = text;
-      select.append(option);
-    }
-    select.onchange = () => {
-      changed(select.value);
-      refresh();
-      applyPreferences();
-      write(settingsKey, options);
-    };
-    return select;
-  }
-  function refresh() {
-    for (const { id, position, key } of rows) {
-      position.value = String(options.layout.slots.indexOf(id));
-      if (key) key.value = options.layout.keys[id];
-    }
-  }
-  for (const [id, name] of Object.entries(actionNames)) {
-    const row = document.createElement('div'),
-      title = document.createElement('strong');
-    title.textContent = name;
-    const position = menu(
-      slotNames.map((v, i) => [i, v]),
-      (n) => moveTouchAction(options.layout, id, Number(n)),
-      name + ' touch position'
-    );
-    const key =
-      id === 'run'
-        ? null
-        : menu(
-            keyChoices.map((k) => [k, k.slice(3)]),
-            (code) => rebind(options.layout, id, code),
-            name + ' keyboard key'
-          );
-    row.append(title, position, key || document.createTextNode('Shift'));
-    group.append(row);
-    rows.push({ id, position, key });
-  }
-  refresh();
-  modal(
-    'binding',
-    '',
-    'Arrange controls',
-    [
-      paragraph(
-        'Choose a touch position or key for each action. If another action uses it, the two swap.',
-        'field-note'
-      ),
-      group,
-    ],
-    [
-      button('Back', returnFromPanel, 'primary'),
-      button('Reset controls', () => {
-        options.layout = controlLayout();
-        refresh();
-        applyPreferences();
-        write(settingsKey, options);
-      }),
-    ]
-  );
-}
-function saveFiles() {
-  const active = world || loadJourney(),
-    status = paragraph(
-      lasting()
-        ? 'Your browser can save on this device.'
-        : 'Device storage is unavailable. Download your journey to keep a copy.',
-      'field-note'
-    );
-  const file = document.createElement('input');
-  file.type = 'file';
-  file.accept = '.json,application/json';
-  file.hidden = true;
-  file.onchange = async () => {
-    try {
-      if (!file.files[0]) return;
-      const bundle = readJourneyFile(JSON.parse(await file.files[0].text()));
-      if (!bundle) throw Error();
-      modal(
-        'load-confirm',
-        '',
-        'Load this journey?',
-        [
-          paragraph(
-            'Replace the active position with this saved journey? Completed journeys stay in your history.'
-          ),
-        ],
-        [
-          button(
-            'Load journey',
-            () => {
-              applyJourneyFile(bundle);
-              start(true);
-            },
-            'primary'
-          ),
-          button('Keep my place', saveFiles),
-        ]
-      );
-    } catch {
-      status.textContent = 'This file could not be read as a saved journey.';
-      file.value = '';
-    }
-  };
-  const actions = [];
-  if (active)
-    actions.push(
-      button('Download journey', () => {
-        const blob = new Blob([JSON.stringify(journeyFile(active))], { type: 'application/json' }),
-          url = URL.createObjectURL(blob),
-          link = document.createElement('a');
-        link.href = url;
-        link.download = 'princess-xero-journey.json';
-        document.body.append(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      })
-    );
-  actions.push(button('Load journey file', () => file.click()));
-  if (!lasting())
-    actions.push(
-      button('Retry device save', () => {
-        const ok = retryPending();
-        status.textContent = ok
-          ? 'Your journey is saved on this device.'
-          : 'Device storage is still unavailable. Your current journey remains in this tab.';
-        if (screen === 'game' && ok) text('storage-status', '');
-      })
-    );
-  actions.push(button('Back', returnFromPanel));
-  modal('files', '', 'Save files', [status, file], actions);
-}
-$('save-files').addEventListener('click', saveFiles);
-function journalPanel() {
-  if (!world || world.dialogue || world.ending) return;
-  const notes = Array.isArray(world.journal) ? world.journal : [],
-    entries = [];
-  if (!notes.length)
-    entries.push(paragraph('The first page is still blank. Discoveries will appear here as you travel.'));
-  for (const note of [...notes].reverse()) {
-    const entry = document.createElement('article'),
-      h = document.createElement('h3');
-    h.textContent = note.title;
-    entry.append(h, paragraph(note.text));
-    entries.push(entry);
-  }
-  modal('journal', 'Field notes', 'Travel journal', entries, [button('Back', returnFromPanel)]);
-}
-function historyPanel() {
-  const entries = pastJourneys().map((item) => {
-    const e = document.createElement('article'),
-      h = document.createElement('h3');
-    h.textContent = item.ending.title;
-    e.append(
-      h,
-      paragraph(item.ending.text),
-      paragraph(
-        new Date(item.at).toLocaleDateString() + ' · ' + Math.round(item.elapsed / 60) + ' minutes',
-        'field-note'
-      )
-    );
-    return e;
-  });
-  modal('history', '', 'Past journeys', entries, [button('Back', returnFromPanel)]);
-}
-$('history').addEventListener('click', historyPanel);
-function confirmFork() {
-  modal(
-    'fork',
-    'Lanternwood',
-    'Return to the forest fork?',
-    [
-      paragraph(
-        'Start again at the forest meeting. This replaces your current position. Completed journeys stay in your history.'
-      ),
-    ],
-    [
-      button(
-        'Return to the fork',
-        () => {
-          const fork = recallFork(world);
-          if (fork) {
-            write(saveKey, fork);
-            start(true);
-          }
-        },
-        'primary'
-      ),
-      button('Keep my place', returnFromPanel),
-    ]
-  );
-}
+$('pause-button').addEventListener('click', pause);
+
 function confirmNew() {
   modal(
     'restart',
@@ -729,15 +484,27 @@ function confirmNew() {
   );
 }
 $('fresh').addEventListener('click', confirmNew);
+
 function updateStart() {
-  const saved = loadJourney();
+  const saved = loadJourney(saveKey);
+  const crossroads = loadJourney(crossroadsKey);
   $('start').querySelector('span').textContent = saved ? 'Continue journey' : 'Enter the forest';
   display($('fresh'), Boolean(saved));
-  display($('history'), pastJourneys().length > 0);
+  display($('resume-crossroads'), Boolean(crossroads));
+  const endings = read(endingsKey);
+  const recordEl = $('endings-record');
+  if (Array.isArray(endings) && endings.length) {
+    const names = endings.map((id) => ENDING_NAMES[id] || id).join(' · ');
+    recordEl.textContent = `Endings reached (${endings.length}/5): ${names}`;
+    display(recordEl, true);
+  } else {
+    display(recordEl, false);
+  }
 }
+$('resume-crossroads').addEventListener('click', () => start('crossroads'));
+
 function goHome() {
   save();
-  fieldCheck.pause();
   releaseLook();
   cancelAnimationFrame(frameId);
   frameId = 0;
@@ -750,7 +517,9 @@ function goHome() {
   updateStart();
   $('start').focus();
   soundState();
+  syncBodyState();
 }
+
 function graphicsError() {
   running = false;
   save();
@@ -758,39 +527,32 @@ function graphicsError() {
     'error',
     'Lanternwood',
     'The view could not open',
-    [
-      paragraph(
-        lasting()
-          ? 'Try opening the forest again. Your last position is saved on this device.'
-          : 'Try opening the forest again. Your current position remains in this tab.'
-      ),
-    ],
+    [paragraph('Try opening the forest again. Your last position is saved on this device.')],
     [button('Return to title', goHome, 'primary')],
     { closable: false }
   );
   renderer?.dispose();
   renderer = null;
 }
-async function start(resume = true) {
+
+async function start(mode = true) {
   if (showingLoad) return;
   showingLoad = true;
   $('start').disabled = true;
   text('startup-status', '');
   audio.unlock();
   try {
-    world = resume ? loadJourney() || createWorld() : createWorld();
-    world.events = [];
-    world.runId ||= newRun();
-    applyPreferences();
-    survey(world);
-    rememberFork(world, true);
-    if (!hasFork(world)) {
-      const opening = createWorld();
-      opening.runId = world.runId;
-      rememberFork(opening, true);
+    if (mode === 'crossroads') {
+      world = loadJourney(crossroadsKey) || createWorld();
+    } else if (mode === true) {
+      world = loadJourney(saveKey) || createWorld();
+    } else {
+      world = createWorld();
     }
-    accumulator = 0;
-    activeSurvey = null;
+    world.events = [];
+    world.effects = [];
+    world.reducedMotion = options.reduceMotion;
+    crossroadsSaved = Boolean(world.route && world.route !== 'undecided');
     needsFrame = true;
     if (!renderer) {
       const module = await import('./render.mjs');
@@ -808,6 +570,7 @@ async function start(resume = true) {
     lastSave = lastTime;
     refreshHUD();
     syncStory();
+    syncBodyState();
     cancelAnimationFrame(frameId);
     frameId = requestAnimationFrame(frame);
   } catch (error) {
@@ -824,16 +587,14 @@ async function start(resume = true) {
   if (screen === 'game') save();
 }
 $('start').addEventListener('click', () => start(true));
+
 function drawMap() {
-  activeSurvey?.draw();
+  const canvas = $('field-map');
+  if (!canvas || !world) return;
+  lastMapProjection = drawFieldMap(canvas, world, mapView);
+  canvas.setAttribute('aria-label', describeFieldMap(world));
 }
-function routePhrase(crossing) {
-  return crossing === 'sluice'
-    ? 'including the remaining sluice detour'
-    : crossing === 'ford'
-      ? 'via Pale Ford'
-      : 'by the marked route';
-}
+
 function mapPanel() {
   if (!world || world.dialogue || world.ending || world.sequence) return;
   if (panel === 'map') {
@@ -841,57 +602,195 @@ function mapPanel() {
     return;
   }
   if (panel) return;
-  sprintBeforeMap = sprint;
   act(world, 'map');
-  activeSurvey = makeFieldSurvey(world, save);
-  const { canvas, bar, text: description } = activeSurvey,
-    hud = getHUD(world);
-  const notes = [bar, canvas, description];
-  if (hasDirections(world) && Number.isFinite(hud.distance))
-    notes.push(
+  const toolbar = document.createElement('div');
+  toolbar.className = 'map-toolbar';
+  const zoomGroup = document.createElement('div');
+  zoomGroup.className = 'map-toolbar-group';
+  const pinGroup = document.createElement('div');
+  pinGroup.className = 'map-toolbar-group';
+  const clearPinBtn = button('Clear pin', () => {
+    world.waypoint = null;
+    display(clearPinBtn, false);
+    drawMap();
+    refreshHUD();
+    save();
+  });
+  display(clearPinBtn, Boolean(world.waypoint));
+  zoomGroup.append(
+    button('Zoom +', () => {
+      mapView.zoom = clamp(mapView.zoom + 0.55, 1, 3.2);
+      drawMap();
+    }),
+    button('Zoom −', () => {
+      mapView.zoom = clamp(mapView.zoom - 0.55, 1, 3.2);
+      if (mapView.zoom <= 1.02) {
+        mapView.panX = 0;
+        mapView.panY = 0;
+      }
+      drawMap();
+    }),
+    button('Center', () => {
+      mapView.zoom = 1;
+      mapView.panX = 0;
+      mapView.panY = 0;
+      drawMap();
+    })
+  );
+  pinGroup.append(clearPinBtn);
+  toolbar.append(zoomGroup, pinGroup);
+
+  const canvas = document.createElement('canvas');
+  canvas.id = 'field-map';
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', describeFieldMap(world));
+
+  let dragId = null,
+    dragStartX = 0,
+    dragStartY = 0,
+    dragLastX = 0,
+    dragLastY = 0,
+    dragMoved = false;
+  canvas.addEventListener('pointerdown', (ev) => {
+    dragId = ev.pointerId;
+    dragStartX = dragLastX = ev.clientX;
+    dragStartY = dragLastY = ev.clientY;
+    dragMoved = false;
+    try {
+      canvas.setPointerCapture(ev.pointerId);
+    } catch {}
+  });
+  canvas.addEventListener('pointermove', (ev) => {
+    if (dragId !== ev.pointerId || !lastMapProjection) return;
+    const dx = ev.clientX - dragLastX,
+      dy = ev.clientY - dragLastY;
+    if (Math.hypot(ev.clientX - dragStartX, ev.clientY - dragStartY) > 6) dragMoved = true;
+    if (dragMoved && mapView.zoom > 1.01) {
+      mapView.panX -= dx / lastMapProjection.scale;
+      mapView.panY += dy / lastMapProjection.scale;
+      drawMap();
+    }
+    dragLastX = ev.clientX;
+    dragLastY = ev.clientY;
+  });
+  canvas.addEventListener('pointerup', (ev) => {
+    if (dragId !== ev.pointerId) return;
+    dragId = null;
+    if (!dragMoved && lastMapProjection) {
+      const rect = canvas.getBoundingClientRect();
+      const [wx, wz] = lastMapProjection.world(ev.clientX - rect.left, ev.clientY - rect.top);
+      world.waypoint = { x: Math.round(wx), z: Math.round(wz) };
+      display(clearPinBtn, true);
+      drawMap();
+      refreshHUD();
+      save();
+    }
+  });
+  canvas.addEventListener('pointercancel', () => {
+    dragId = null;
+  });
+
+  const legend = document.createElement('div');
+  legend.className = 'map-key';
+  for (const [label, color] of [
+    ['You', '#fff4d0'],
+    ...(world.knowsRoad ? [['Castle road', '#ddbb79']] : []),
+    ...(world.hasMap ? [['Pale trail', '#c8e1bf']] : []),
+    ...(world.milestones.ridge ? [['The host', '#c78f77']] : []),
+    ['Pin (click map)', '#f0c86d'],
+  ]) {
+    const item = document.createElement('span');
+    item.style.setProperty('--key-color', color);
+    item.textContent = label;
+    legend.append(item);
+  }
+  const hud = getHUD(world);
+  modal(
+    'map',
+    '',
+    world.hasMap ? 'The inked map' : 'Field map',
+    [
+      toolbar,
+      canvas,
+      legend,
       paragraph(
         hud.location +
           ' · ' +
           Math.round(hud.distance) +
-          ' m ' +
-          routePhrase(hud.crossing) +
-          ' · next bearing ' +
-          compassPoint(hud.bearing) +
-          '.',
+          ' m by path to ' +
+          (world.hasMap && !world.antidote ? 'the Moonwell.' : 'Princess Xero.') +
+          ' Tap or click the chart to set a compass waypoint.',
         'field-note'
-      )
-    );
-  if (hasDirections(world) || world.survey?.visits?.bells)
-    notes.push(paragraph('Sluice bridge · ' + bridgeReport(world), 'field-note'));
-  modal('map', '', world.hasMap ? 'The inked map' : 'Field sketch', notes, [
-    button('Fold map', returnFromPanel),
-  ]);
+      ),
+    ],
+    [button('Fold map', returnFromPanel)],
+    { keepSprint: true }
+  );
   drawMap();
 }
 $('map-button').addEventListener('click', mapPanel);
+
+function journalPanel() {
+  if (!world || world.dialogue || world.ending || world.sequence) return;
+  if (panel === 'journal') {
+    returnFromPanel();
+    return;
+  }
+  const entries = Array.isArray(world.journal) ? world.journal : [];
+  const body = [];
+  if (!entries.length) {
+    body.push(
+      paragraph('No notes yet. Landmarks, inscriptions, and discoveries along your journey are recorded here.')
+    );
+  } else {
+    const list = document.createElement('div');
+    list.className = 'journal-list';
+    for (const item of [...entries].reverse()) {
+      const card = document.createElement('article');
+      card.className = 'journal-entry';
+      const h3 = document.createElement('h3');
+      h3.textContent = item.title;
+      const p = document.createElement('p');
+      p.textContent = item.text;
+      card.append(h3, p);
+      list.append(card);
+    }
+    body.push(list);
+  }
+  modal(
+    'journal',
+    'Field journal',
+    'Notes along the way',
+    body,
+    [button('Close journal', returnFromPanel)],
+    { keepSprint: true }
+  );
+}
+$('journal-button').addEventListener('click', journalPanel);
+
 function syncStory() {
   if (!world) return;
+  saveCrossroadsIfReady();
   if (world.ending && endingRef !== world.ending) {
     const ending = world.ending;
     endingRef = ending;
-    rememberEnding(world);
+    recordEnding(ending.id);
     const actions = [button('Begin anew', () => start(false), 'primary')];
     if (ending.id !== 'saved')
       actions.push(
         button('Return to checkpoint', () => {
-          const runId = world.runId;
           world = resumeCheckpoint(world);
-          world.runId = runId;
-          applyPreferences();
-          survey(world);
+          world.reducedMotion = options.reduceMotion;
           needsFrame = true;
           dismiss();
           refreshHUD();
           save();
         })
       );
-    if (hasFork(world)) actions.push(button('Return to the forest fork', confirmFork));
-    actions.push(button('Past journeys', historyPanel), button('Title screen', goHome));
+    if (loadJourney(crossroadsKey)) {
+      actions.push(button('Return to crossroads', () => start('crossroads')));
+    }
+    actions.push(button('Title screen', goHome));
     modal('ending', 'Journey’s end', ending.title, [paragraph(ending.text)], actions, { closable: false });
     save();
     return;
@@ -900,20 +799,9 @@ function syncStory() {
     const d = world.dialogue;
     dialogueRef = d;
     const paragraphs = [];
-    if (d.kind === 'witch') rememberFork(world);
     if (d.question) paragraphs.push(paragraph('Zelda: “' + d.question + '”', 'question'));
     if (d.kind === 'witch') {
-      const gestures = [
-        'She tilts the lantern and listens to the castle.',
-        'Three ember-coloured bottles knock together in her palm.',
-        'A moth settles on the green vial. Its wings fold.',
-        'She opens one hand toward the trees.',
-      ];
-      const lines = d.text.split(/\s+(?=Option number (?:one|two|three))/);
-      lines.forEach((line, i) => {
-        if (gestures[i]) paragraphs.push(witchVignette(i, gestures[i], options.reduceMotion));
-        paragraphs.push(paragraph(line));
-      });
+      for (const s of d.text.split(/\s+(?=Option number (?:one|two|three))/)) paragraphs.push(paragraph(s));
     } else paragraphs.push(paragraph(d.text));
     const actions = d.choices.map((c, i) => {
       const b = button(
@@ -927,6 +815,7 @@ function syncStory() {
         },
         'choice'
       );
+      b.dataset.choiceIndex = String(i + 1);
       const sign = document.createElement('b');
       sign.setAttribute('aria-hidden', 'true');
       sign.textContent = ['I', 'II', 'III'][i] || '';
@@ -934,23 +823,23 @@ function syncStory() {
       return b;
     });
     if (!actions.length) actions.push(button('Continue', returnFromPanel, 'primary'));
-    else if (d.kind === 'banquet') actions.push(button('Step back', returnFromPanel));
     modal('dialogue', d.kind === 'witch' ? 'Lanternwood' : '', d.speaker, paragraphs, actions, {
-      closable: d.kind !== 'banquet' || Boolean(d.choices.length),
+      closable: true,
     });
     save();
   }
 }
+
+function compassDirection(angle) {
+  return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8];
+}
+
 function refreshHUD() {
   if (!world) return;
   display($('hud'), !world.sequence);
-  display($('resist'), world.sequence?.id === 'bound');
   const h = getHUD(world),
     healthEl = $('health'),
     old = healthEl.getAttribute('aria-valuenow');
-  const cinematic = Boolean(world.sequence && options.subtitles && h.notice);
-  display($('sequence-caption'), cinematic);
-  text('sequence-caption', cinematic ? h.notice : '');
   if (old !== String(h.health) || healthEl.childElementCount !== h.maxHealth) {
     healthEl.replaceChildren();
     for (let i = 0; i < h.maxHealth; i++) {
@@ -963,46 +852,59 @@ function refreshHUD() {
     healthEl.setAttribute('aria-valuenow', String(h.health));
     healthEl.setAttribute('aria-valuemax', String(h.maxHealth));
   }
-  const dir = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][
-    ((Math.round(world.player.yaw / (Math.PI / 4)) % 8) + 8) % 8
-  ];
-  text('heading', dir);
+  const staminaEl = $('stamina'),
+    staminaFill = $('stamina-fill');
+  if (staminaEl && staminaFill) {
+    const pct = clamp((h.stamina / (h.maxStamina || 100)) * 100, 0, 100);
+    staminaFill.style.width = pct.toFixed(1) + '%';
+    staminaEl.setAttribute('aria-valuenow', String(h.stamina));
+    staminaEl.classList.toggle('exhausted', world.elapsed < (world.player.exhaustedUntil || 0));
+  }
+  const vialBadge = $('vial-badge');
+  if (vialBadge) {
+    display(vialBadge, Boolean(h.hasVial));
+    vialBadge.classList.toggle('filled', Boolean(h.antidote));
+    text('vial-label', h.antidote ? 'Silver Moonwater' : 'Empty Vial');
+  }
+  const reticle = $('reticle');
+  if (reticle) {
+    reticle.classList.toggle('in-range', Boolean(h.inSwordRange) && !h.guarding);
+    reticle.classList.toggle('guarding', Boolean(h.guarding));
+  }
+  $('guard-button')?.setAttribute('aria-pressed', String(Boolean(h.guarding)));
+
+  text('heading', compassDirection(world.player.yaw));
+  const goalEl = $('compass-goal');
+  if (goalEl) {
+    if (world.waypoint) {
+      const wx = world.waypoint.x - world.player.x,
+        wz = world.waypoint.z - world.player.z,
+        wd = Math.round(Math.hypot(wx, wz));
+      if (wd < 10) {
+        world.waypoint = null;
+        display(goalEl, false);
+      } else {
+        goalEl.textContent = `Pin ${compassDirection(Math.atan2(wx, wz))} · ${wd}m`;
+        goalEl.classList.remove('urgent');
+        display(goalEl, true);
+      }
+    } else if (!h.gateCrossed && world.route !== 'wander' && h.hordeProgress > 0.68) {
+      goalEl.textContent = h.hordeProgress > 0.86 ? 'Host at the gate' : 'Host closing in';
+      goalEl.classList.add('urgent');
+      display(goalEl, true);
+    } else {
+      display(goalEl, false);
+    }
+  }
+
   text('location', h.location);
   text('objective', h.objective);
   text('notice', h.notice);
   text('potion-count', 'Cinder · ' + h.potions);
-  document
-    .querySelector('[data-act="potion"]')
-    .setAttribute('aria-label', 'Cast cinder potion, ' + h.potions + ' remaining');
-  survey(world);
-  text(
-    'belt-readout',
-    world.hasVial ? (world.antidote ? 'Silver vial · moonwater' : 'Silver vial · empty') : ''
-  );
-  text(
-    'route-readout',
-    hasDirections(world) && Number.isFinite(h.distance)
-      ? compassPoint(h.bearing) + ' · ' + Math.round(h.distance) + ' m ' + routePhrase(h.crossing)
-      : ''
-  );
-  const sighted = world.milestones?.ridge || world.survey?.visits?.downs;
-  const status = world.gateCrossed
-    ? 'You reached the castle before the host.'
-    : describeRace(world, h.hordeProgress);
-  text(
-    'race-readout',
-    status +
-      (status && sighted && !world.ropeFallen && !world.gateCrossed
-        ? ' · ' + compassPoint(bearing(world.player, hordePosition(world, 0)))
-        : '')
-  );
-  const stamina = clamp(Math.round((world.player.stamina ?? 1) * 100), 0, 100);
-  $('stamina').firstElementChild.style.width = stamina + '%';
-  $('stamina').setAttribute('aria-valuenow', String(stamina));
-  display($('stamina'), stamina < 99);
   text('interact-hint', h.hint);
   display($('interact-hint'), Boolean(h.hint));
 }
+
 function gameAction(action) {
   if (screen !== 'game' || panel) return;
   act(world, action);
@@ -1011,72 +913,82 @@ function gameAction(action) {
   save();
 }
 $('interact-hint').addEventListener('click', () => gameAction('interact'));
+
 document.querySelectorAll('[data-act]').forEach((b) => {
-  let gesture = null,
-    consumed = -1000;
-  b.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse' || panel) return;
-    gesture = { id: e.pointerId, x: e.clientX, y: e.clientY };
-    try {
-      b.setPointerCapture(e.pointerId);
-    } catch {
-      /* A released pointer cannot be captured. */
-    }
-  });
-  b.addEventListener('pointermove', (e) => {
-    if (gesture?.id !== e.pointerId) return;
-    moveLook(e.clientX - gesture.x, e.clientY - gesture.y);
-    gesture.x = e.clientX;
-    gesture.y = e.clientY;
-  });
-  b.addEventListener('pointerup', (e) => {
-    if (gesture?.id !== e.pointerId) return;
-    gesture = null;
-    consumed = performance.now();
-    gameAction(b.dataset.act);
-  });
-  b.addEventListener('pointercancel', () => {
-    gesture = null;
-  });
-  b.addEventListener('click', () => {
-    if (performance.now() - consumed > 500) gameAction(b.dataset.act);
-  });
+  const actName = b.dataset.act;
+  if (actName === 'guard') {
+    b.addEventListener('pointerdown', (ev) => {
+      if (screen !== 'game' || panel) return;
+      ev.preventDefault();
+      guardHeld = true;
+      gameAction('guard');
+    });
+    const endGuard = () => {
+      if (!guardHeld) return;
+      guardHeld = false;
+      if (world) act(world, 'unguard');
+      refreshHUD();
+    };
+    b.addEventListener('pointerup', endGuard);
+    b.addEventListener('pointercancel', endGuard);
+    b.addEventListener('pointerleave', endGuard);
+    return;
+  }
+  if (actName === 'strike') {
+    b.addEventListener('pointerdown', (ev) => {
+      if (screen !== 'game' || panel) return;
+      swordLongPressed = false;
+      clearTimeout(swordHoldTimer);
+      swordHoldTimer = setTimeout(() => {
+        swordLongPressed = true;
+        gameAction('thrust');
+      }, 240);
+      ev.stopPropagation();
+    });
+    b.addEventListener('pointerup', () => {
+      clearTimeout(swordHoldTimer);
+      if (!swordLongPressed) gameAction('strike');
+      swordLongPressed = false;
+    });
+    b.addEventListener('pointercancel', () => {
+      clearTimeout(swordHoldTimer);
+      swordLongPressed = false;
+    });
+    return;
+  }
+  b.addEventListener('click', () => gameAction(actName));
 });
-$('resist').addEventListener('click', () => gameAction('resist'));
+
 $('sprint').addEventListener('click', () => {
   sprint = !sprint;
   $('sprint').setAttribute('aria-pressed', String(sprint));
 });
+
 function frame(timestamp) {
   if (!running || screen !== 'game') return;
   const now = timestamp / 1000,
-    dt = Math.max(0, now - lastTime);
+    dt = clamp(now - lastTime, 0, 0.35);
   lastTime = now;
   if (!document.hidden) {
     if (!panel) {
-      const input = {
+      const pitchKey =
+        Number(keys.has('KeyI') || keys.has('PageUp')) - Number(keys.has('KeyK') || keys.has('PageDown'));
+      if (pitchKey) {
+        world.player.pitch = clamp(world.player.pitch + pitchKey * 1.45 * dt, -1.03, 1.04);
+      }
+      tick(world, dt, {
         forward:
           movement.forward +
           Number(keys.has('KeyW') || keys.has('ArrowUp')) -
           Number(keys.has('KeyS') || keys.has('ArrowDown')),
         strafe: movement.strafe + Number(keys.has('KeyD')) - Number(keys.has('KeyA')),
         turn: Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')),
-        sprint: sprint || physicalShift.size > 0,
-        walk: keys.has('Space'),
-      };
-      accumulator = advanceGameClock(
-        world,
-        dt,
-        accumulator,
-        input,
-        Number(keys.has('PageUp')) - Number(keys.has('PageDown'))
-      );
-      audio.update(arrivalView(world));
+        sprint: sprint || keys.has('ShiftLeft') || keys.has('ShiftRight'),
+      });
+      audio.update(world);
     }
     for (const ev of world.events.splice(0)) {
       audio.cue(ev);
-      soundCaption(ev);
-      if (ev.type === 'bell' || ev.type === 'sluice') showBell(ev);
       if (ev.type === 'hurt' && !options.reduceMotion) {
         const damage = $('damage');
         damage.style.opacity = '1';
@@ -1086,9 +998,7 @@ function frame(timestamp) {
     }
     if (!panel || needsFrame) {
       try {
-        const drawn = renderer.render(arrivalView(world), world.elapsed);
-        if (drawn && !panel)
-          fieldCheck.frame(performance.now(), world, renderer.surface || view, renderer.backend);
+        renderer.render(world, world.elapsed);
         needsFrame = false;
       } catch (error) {
         console.error('Forest rendering failed', error);
@@ -1096,7 +1006,7 @@ function frame(timestamp) {
         return;
       }
     }
-    if (now - lastHUD > 0.14) {
+    if (now - lastHUD > 0.1) {
       refreshHUD();
       lastHUD = now;
     }
@@ -1108,94 +1018,50 @@ function frame(timestamp) {
   }
   frameId = requestAnimationFrame(frame);
 }
-function soundCaption(ev) {
-  if (!options.subtitles) return;
-  const directional =
-    ev.type === 'telegraph'
-      ? { wolf: 'Paws scrape the ground', troll: 'Heavy stone shifts', dragon: 'Wings draw back' }[ev.text] ||
-        'A creature draws back'
-      : ev.type === 'enemy-breath'
-        ? 'Flame rushes past'
-        : ev.type === 'block'
-          ? 'A blow strikes your guard'
-          : ev.type === 'shackle'
-            ? 'An iron shackle rattles'
-            : ev.type === 'relay'
-              ? 'The shutters shift'
-              : null;
-  const line =
-    ev.caption ||
-    directional ||
-    {
-      bell: 'Castle bells ring in the distance',
-      answer: 'A crowd answers across the valley',
-      howl: 'Wolves call in the woods',
-      hurt: 'A blow lands',
-      chime: 'An iron chain pulls taut',
-      dragon: 'Wingbeats approach',
-      roar: 'A low roar',
-    }[ev.type];
-  if (!line) return;
-  text('captions', line);
-  clearTimeout(captionTimer);
-  captionTimer = setTimeout(() => text('captions', ''), 2700);
-}
-function showBell(ev) {
-  const box = $('bell-call');
-  clearTimeout(bellTimer);
-  box.replaceChildren();
-  display(box, true);
-  const tones =
-    ev.type === 'bell' ? ['low', 'high', 'mid'] : [ev.text].filter((x) => ['low', 'mid', 'high'].includes(x));
-  const names = { low: 'Low', mid: 'Middle', high: 'High' };
-  const timing = ev.type === 'bell' ? 'The castle calls' : 'Your bell';
-  const source = document.createElement('small');
-  source.textContent = timing;
-  box.append(source);
-  box.setAttribute('aria-label', timing + ' · ' + tones.map((v) => names[v]).join(', '));
-  for (const tone of tones) {
-    const ch = document.createElement('span');
-    ch.className = 'bell-tone ' + tone;
-    ch.textContent = { low: '▁', mid: '▄', high: '█' }[tone];
-    if (ev.type === 'bell' && !options.reduceMotion) {
-      ch.classList.add('pealing');
-      ch.style.animationDelay = String(tones.indexOf(tone) * 0.46) + 's';
-    }
-    ch.title = names[tone];
-    box.append(ch);
-  }
-  bellTimer = setTimeout(() => display(box, false), 3000);
-}
+
 function moveLook(dx, dy) {
   if (!world || panel || world.sequence) return;
   const scale = 0.0031 * options.sensitivity;
   world.player.yaw = (world.player.yaw + dx * scale) % (Math.PI * 2);
   world.player.pitch = clamp(world.player.pitch - dy * scale, -1.03, 1.04);
 }
+
+view.addEventListener('contextmenu', (event) => event.preventDefault());
+
 view.addEventListener('pointerdown', (event) => {
-  if (panel || event.button !== 0 || lookId !== null) return;
+  if (panel) return;
   view.focus({ preventScroll: true });
-  if (event.pointerType === 'mouse' && document.pointerLockElement === view) {
-    gameAction('strike');
+  if (event.button === 2) {
+    event.preventDefault();
+    guardHeld = true;
+    gameAction('guard');
     return;
   }
-
-  if (event.pointerType === 'mouse')
-    mouseTap = { x: event.clientX, y: event.clientY, at: performance.now(), drift: 0 };
+  if (event.button !== 0 || lookId !== null) return;
+  if (event.pointerType === 'mouse' && document.pointerLockElement === view) {
+    gameAction(event.shiftKey ? 'thrust' : 'strike');
+    return;
+  }
+  if (event.pointerType === 'mouse' && view.requestPointerLock) {
+    try {
+      const req = view.requestPointerLock();
+      req?.catch?.(() => {});
+    } catch {
+      /* Drag-to-look remains available. */
+    }
+  }
   lookId = event.pointerId;
-  lookX = event.clientX;
-  lookY = event.clientY;
+  lookX = lookDownX = event.clientX;
+  lookY = lookDownY = event.clientY;
+  lookDownAt = performance.now();
+  lookMoved = false;
   try {
     view.setPointerCapture(event.pointerId);
   } catch {}
 });
 view.addEventListener('pointermove', (event) => {
   if (lookId !== event.pointerId || document.pointerLockElement === view) return;
-  if (mouseTap)
-    mouseTap.drift = Math.max(
-      mouseTap.drift,
-      Math.hypot(event.clientX - mouseTap.x, event.clientY - mouseTap.y)
-    );
+  if (Math.hypot(event.clientX - lookDownX, event.clientY - lookDownY) > 7) lookMoved = true;
   moveLook(event.clientX - lookX, event.clientY - lookY);
   lookX = event.clientX;
   lookY = event.clientY;
@@ -1215,6 +1081,7 @@ document.addEventListener('pointerlockchange', () => {
   }
   if (screen === 'game' && !panel) pause();
 });
+
 function moveStick(event) {
   const r = $('stick').getBoundingClientRect(),
     radius = r.width * 0.39;
@@ -1229,44 +1096,39 @@ function moveStick(event) {
 $('stick').addEventListener('pointerdown', (event) => {
   if (stickId !== null || panel) return;
   stickId = event.pointerId;
-  try {
-    $('stick').setPointerCapture(stickId);
-  } catch {
-    /* The pad still receives its own events. */
-  }
+  $('stick').setPointerCapture(stickId);
   moveStick(event);
 });
 $('stick').addEventListener('pointermove', (event) => {
   if (stickId === event.pointerId) moveStick(event);
 });
-let mouseTap = null;
+
 function stopPointer(event) {
-  if (
-    lookId === event.pointerId &&
-    event.type === 'pointerup' &&
-    event.pointerType === 'mouse' &&
-    mouseTap &&
-    !document.pointerLockElement
-  ) {
-    if (
-      performance.now() - mouseTap.at < 350 &&
-      mouseTap.drift < 5 &&
-      Math.hypot(event.clientX - mouseTap.x, event.clientY - mouseTap.y) < 5
-    )
-      gameAction('strike');
+  if (event.button === 2 && guardHeld) {
+    guardHeld = false;
+    if (world) act(world, 'unguard');
+    refreshHUD();
   }
-  if (lookId === event.pointerId) mouseTap = null;
   if (stickId === event.pointerId) {
     stickId = null;
     movement.strafe = movement.forward = 0;
     $('stick').firstElementChild.style.transform = '';
   }
-  if (lookId === event.pointerId) lookId = null;
+  if (lookId === event.pointerId) {
+    const isQuickClick =
+      event.type === 'pointerup' &&
+      event.pointerType === 'mouse' &&
+      !lookMoved &&
+      performance.now() - lookDownAt < 190 &&
+      document.pointerLockElement !== view;
+    lookId = null;
+    if (isQuickClick) gameAction(event.shiftKey ? 'thrust' : 'strike');
+  }
 }
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
   document.addEventListener(type, stopPointer, true);
+
 document.addEventListener('keydown', (event) => {
-  if (['ShiftLeft', 'ShiftRight'].includes(event.code)) physicalShift.add(event.code);
   if (panel) {
     if (event.code === 'Escape') {
       event.preventDefault();
@@ -1278,10 +1140,22 @@ document.addEventListener('keydown', (event) => {
       returnFromPanel();
       return;
     }
+    if (panel === 'journal' && event.code === 'KeyJ') {
+      event.preventDefault();
+      returnFromPanel();
+      return;
+    }
+    if (panel === 'dialogue' && ['Digit1', 'Digit2', 'Digit3'].includes(event.code)) {
+      const idx = event.code.slice(-1);
+      const btn = $('panel-actions')?.querySelector(`[data-choice-index="${idx}"]`);
+      if (btn) {
+        event.preventDefault();
+        btn.click();
+        return;
+      }
+    }
     if (event.key === 'Tab') {
-      const focus = [
-        ...$('panel').querySelectorAll('button:not([hidden]),input,select,summary,canvas[tabindex]'),
-      ];
+      const focus = [...$('panel').querySelectorAll('button:not([hidden]),input')];
       if (!focus.length) return;
       const first = focus[0],
         last = focus[focus.length - 1];
@@ -1299,26 +1173,33 @@ document.addEventListener('keydown', (event) => {
     return;
   }
   if (screen !== 'game') {
-    if (event.code === 'Enter' && !event.repeat && [document.body, title].includes(document.activeElement))
+    if (
+      (event.code === 'Enter' || event.code === 'Space') &&
+      !event.repeat &&
+      [document.body, title].includes(document.activeElement)
+    ) {
+      event.preventDefault();
       start();
+    }
     return;
   }
-  if (world?.sequence?.id === 'bound' && ['Space', 'KeyE', 'KeyF', 'KeyW', 'ArrowUp'].includes(event.code)) {
+  if (event.code === 'KeyR') {
     event.preventDefault();
-    if (!event.repeat) gameAction('resist');
-    return;
-  }
-  if (event.code === 'Space' && event.target?.closest?.('button, input, select')) return;
-  const bound = actionForKey(options.layout, event.code);
-  if (bound) {
-    event.preventDefault();
-    if (!event.repeat) gameAction(bound);
+    if (!event.repeat) {
+      guardHeld = true;
+      gameAction('guard');
+    }
     return;
   }
   const commands = {
     KeyM: mapPanel,
-    Escape: pause,
     KeyJ: journalPanel,
+    Escape: pause,
+    KeyE: () => gameAction('interact'),
+    KeyF: () => gameAction(event.shiftKey ? 'thrust' : 'strike'),
+    KeyV: () => gameAction('thrust'),
+    Space: () => gameAction('dodge'),
+    KeyQ: () => gameAction('potion'),
   };
   if (commands[event.code]) {
     event.preventDefault();
@@ -1331,55 +1212,38 @@ document.addEventListener('keydown', (event) => {
       'KeyA',
       'KeyS',
       'KeyD',
+      'KeyI',
+      'KeyK',
+      'PageUp',
+      'PageDown',
       'ArrowUp',
       'ArrowDown',
       'ArrowLeft',
       'ArrowRight',
-      'Space',
       'ShiftLeft',
       'ShiftRight',
-      'PageUp',
-      'PageDown',
     ].includes(event.code)
   ) {
     event.preventDefault();
-    // A brief keyboard tap can fall entirely between two low-rate tablet frames.
-    if (
-      !event.repeat &&
-      !keys.has(event.code) &&
-      !world.sequence &&
-      ['PageUp', 'PageDown'].includes(event.code)
-    ) {
-      world.player.pitch = clamp(
-        world.player.pitch + (event.code === 'PageUp' ? 0.055 : -0.055),
-        -1.03,
-        1.04
-      );
-      needsFrame = true;
-    }
     keys.add(event.code);
   }
 });
-stage.addEventListener(
-  'pointerdown',
-  (e) => {
-    if (screen === 'game' && !panel && e.isTrusted) fieldCheck.input(performance.now());
-  },
-  { capture: true, passive: true }
-);
 document.addEventListener('keyup', (event) => {
   keys.delete(event.code);
-  physicalShift.delete(event.code);
+  if (event.code === 'KeyR' && guardHeld) {
+    guardHeld = false;
+    if (world) act(world, 'unguard');
+    refreshHUD();
+  }
 });
+
+// Clear held inputs on blur without auto-pausing (prevents stalls in embedded previews / automation).
 window.addEventListener('blur', () => {
-  physicalShift.clear();
-  stopMotion();
-  if (screen === 'game' && !panel) pause();
+  stopMotion({ keepSprint: true });
 });
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    fieldCheck.pause();
-    physicalShift.clear();
     stopMotion();
     save();
     if (screen === 'game' && !panel) pause();
@@ -1414,6 +1278,11 @@ view.addEventListener('webglcontextrestored', () => {
     graphicsError();
   }
 });
-applyPreferences();
+
 updateStart();
 soundState();
+syncBodyState();
+
+if (new URLSearchParams(location.search).get('autostart') === '1') {
+  start(false);
+}

@@ -10,7 +10,7 @@
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const EXCLUDED_PATTERNS = [
-    /^\/(?:common-earth|zelda-and-the-princess-zombie)(?:\/|$)/i,
+    /^\/common-earth(?:\/|$)/i,
     /^\/(?:server\.js|package(?:-lock)?\.json|metadata\.json)$/i
   ];
 

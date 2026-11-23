@@ -1,32 +1,50 @@
-import { hasDirections, knownLandmarks, survey } from './navigation.mjs';
-import { MAP, LANDMARKS, terrainHeight, roadX, hordePosition, HORDE_COUNT } from './world.mjs';
+import {
+  MAP,
+  LANDMARKS,
+  terrainHeight,
+  roadX,
+  hordePosition,
+  HORDE_COUNT,
+  routeDistance,
+  HOURGLASS,
+} from './world.mjs';
 
-// A single north-up projection drives the image, keyboard pan, touch and saved pins.
-export function mapProjection(w, h, world, view = {}) {
-  const margin = Math.min(20, w * 0.04, h * 0.06);
-  const scale =
-    Math.min((w - 2 * margin) / (MAP.maxX - MAP.minX), (h - 2 * margin) / (MAP.maxZ - MAP.minZ)) *
-    (view.zoom || 1);
-  const centerX = view.x ?? (MAP.maxX + MAP.minX) / 2,
-    centerZ = view.z ?? (MAP.maxZ + MAP.minZ) / 2;
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+// Consistently North-Up projection across portrait and landscape viewports (#52),
+// with interactive zoom and pan support (#53).
+export function createMapProjection(w, h, world, view = {}) {
+  const margin = Math.min(20, w * 0.04, h * 0.05);
+  const fullX = MAP.maxX - MAP.minX;
+  const fullZ = MAP.maxZ - MAP.minZ;
+  const zoom = clamp(Number(view.zoom) || 1, 1, 3.2);
+  const baseScale = Math.min((w - 2 * margin) / (fullX * 0.78), (h - 2 * margin) / fullZ);
+  const scale = baseScale * zoom;
+  const defaultCX = world?.hasMap ? -35 : 20;
+  const defaultCZ = (MAP.minZ + MAP.maxZ) * 0.5;
+  const centerX = clamp(defaultCX + (Number(view.panX) || 0), MAP.minX + 120, MAP.maxX - 120);
+  const centerZ = clamp(defaultCZ + (Number(view.panY) || 0), MAP.minZ + 160, MAP.maxZ - 160);
   return {
     w,
     h,
-    wide: false,
+    zoom,
     scale,
     angle: 0,
+    centerX,
+    centerZ,
     point(x, z) {
       return [w / 2 + (x - centerX) * scale, h / 2 - (z - centerZ) * scale];
     },
-    world(x, y) {
-      return [centerX + (x - w / 2) / scale, centerZ - (y - h / 2) / scale];
+    world(px, py) {
+      return [centerX + (px - w / 2) / scale, centerZ - (py - h / 2) / scale];
     },
   };
 }
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
 function seedGenerator(s) {
   return () => (s = (1664525 * s + 1013904223) >>> 0) / 4294967296;
 }
+
 function path(g, points, ink, width, fill) {
   if (!points.length) return;
   g.beginPath();
@@ -43,12 +61,14 @@ function path(g, points, ink, width, fill) {
     g.stroke();
   }
 }
+
 function dot(g, x, y, r, color) {
   g.beginPath();
   g.arc(x, y, r, 0, 2 * Math.PI);
   g.fillStyle = color;
   g.fill();
 }
+
 function wooded(x, z) {
   if (z > 1420 || Math.abs(z - 1021) < 19 || (z > 1140 && z < 1400 && Math.abs(x + 170) < 215)) return 0;
   const groves =
@@ -58,11 +78,13 @@ function wooded(x, z) {
     0.16 * Math.cos(x * 0.038 - z * 0.021);
   return groves * (z < 875 ? 1 : z < 1115 ? 0.7 : 0.4) * clamp((Math.abs(x - roadX(z)) - 10) / 38, 0, 1);
 }
+
 const madeCanvas = () =>
   typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1) : document.createElement('canvas');
+
 function wash(g, map) {
   const layer = madeCanvas(),
-    resolution = Math.min(1, 330 / Math.max(map.w, map.h));
+    resolution = Math.min(1, 310 / Math.max(map.w, map.h));
   layer.width = Math.max(1, Math.round(map.w * resolution));
   layer.height = Math.max(1, Math.round(map.h * resolution));
   const brush = layer.getContext('2d'),
@@ -70,12 +92,16 @@ function wash(g, map) {
     random = seedGenerator(67079);
   for (let j = 0; j < layer.height; j++) {
     for (let i = 0; i < layer.width; i++) {
-      const [x, z] = map.world(i / resolution, j / resolution),
-        e = terrainHeight(x, z);
-      const relief = (terrainHeight(x - 9, z + 11) - e) * 1.8;
-      const canopy = wooded(x, z),
-        mottle = Math.sin(x * 0.046 + z * 0.014) * 1.6 + Math.sin(z * 0.036 - x * 0.053) * 1.2;
-      const weather = (random() - 0.5) * 9 + mottle + relief;
+      const [rawX, rawZ] = map.world(i / resolution, j / resolution);
+      const x = clamp(rawX, MAP.minX + 6, MAP.maxX - 6),
+        z = clamp(rawZ, MAP.minZ + 6, MAP.maxZ - 6);
+      const e = terrainHeight(x, z);
+      const relief = clamp((terrainHeight(x - 9, z + 11) - e) * 1.5, -20, 20);
+      const outside =
+        rawX < MAP.minX || rawX > MAP.maxX || rawZ < MAP.minZ || rawZ > MAP.maxZ ? 10 : 0;
+      const canopy = wooded(x, z) * (outside ? 0.35 : 1),
+        mottle = Math.sin(rawX * 0.046 + rawZ * 0.014) * 1.6 + Math.sin(rawZ * 0.036 - rawX * 0.053) * 1.2;
+      const weather = (random() - 0.5) * 9 + mottle + relief - outside;
       const edge = Math.min(
         i / layer.width,
         (layer.width - i) / layer.width,
@@ -84,26 +110,26 @@ function wash(g, map) {
       );
       const dark = clamp(1 - edge * 7, 0, 1) * 12,
         idx = (j * layer.width + i) * 4;
-      pixels.data[idx] = 231 - 40 * canopy + weather - dark;
-      pixels.data[idx + 1] = 216 - 21 * canopy + weather - dark;
-      pixels.data[idx + 2] = 177 - 23 * canopy + weather - dark;
+      pixels.data[idx] = clamp(231 - 38 * canopy + weather - dark, 0, 255);
+      pixels.data[idx + 1] = clamp(216 - 20 * canopy + weather - dark, 0, 255);
+      pixels.data[idx + 2] = clamp(177 - 22 * canopy + weather - dark, 0, 255);
       pixels.data[idx + 3] = 255;
     }
   }
   brush.putImageData(pixels, 0, 0);
   g.drawImage(layer, 0, 0, map.w, map.h);
 }
+
 function contourSurvey(g, map) {
-  // March a survey grid through real terrain heights at surveyed intervals.
-  const step = 25,
-    minX = MAP.minX - 90,
-    minZ = MAP.minZ - 90;
-  const nx = Math.ceil((MAP.maxX + 90 - minX) / step) + 1,
-    nz = Math.ceil((MAP.maxZ + 90 - minZ) / step) + 1;
+  const step = 28,
+    minX = MAP.minX - 60,
+    minZ = MAP.minZ - 60;
+  const nx = Math.ceil((MAP.maxX + 60 - minX) / step) + 1,
+    nz = Math.ceil((MAP.maxZ + 60 - minZ) / step) + 1;
   const heights = new Float32Array(nx * nz);
   for (let j = 0; j < nz; j++)
     for (let i = 0; i < nx; i++) heights[j * nx + i] = terrainHeight(minX + i * step, minZ + j * step);
-  for (const level of [-3.5, -1.75, 1.75, 3.5, 5.25, 7, 8.75, 10.5, 12.25, 14, 15.75, 17.5, 19.25]) {
+  for (const level of [-3.5, 1.75, 5.25, 8.75, 12.25, 15.75, 19.25]) {
     g.beginPath();
     for (let j = 0; j < nz - 1; j++)
       for (let i = 0; i < nx - 1; i++) {
@@ -125,22 +151,23 @@ function contourSurvey(g, map) {
           g.lineTo(...points[k]);
         }
       }
-    const major = Number.isInteger(level / 3.5);
-    g.strokeStyle = major ? 'rgba(99,84,51,.36)' : 'rgba(99,84,51,.23)';
-    g.lineWidth = major ? 0.85 : 0.6;
+    g.strokeStyle = 'rgba(99,84,51,.27)';
+    g.lineWidth = 0.7;
     g.stroke();
   }
 }
+
 function woods(g, map) {
   const r = seedGenerator(4622),
     trees = [],
-    small = clamp(map.scale * 17, 2.1, 5.2);
-  for (let z = MAP.minZ - 60; z < MAP.maxZ; z += 36)
-    for (let x = MAP.minX - 60; x < MAP.maxX + 60; x += 35) {
+    small = clamp(map.scale * 17, 2.2, 5.6);
+  for (let z = MAP.minZ - 40; z < MAP.maxZ; z += 38)
+    for (let x = MAP.minX - 40; x < MAP.maxX + 40; x += 38) {
       const xx = x + r() * 31,
         zz = z + r() * 32;
       if (r() >= wooded(xx, zz) * 0.9) continue;
       const [px, py] = map.point(xx, zz);
+      if (px < -15 || px > map.w + 15 || py < -15 || py > map.h + 15) continue;
       trees.push([px, py, small * (0.82 + 0.39 * r()), r() > 0.63 && zz < 1020]);
     }
   trees.sort((a, b) => a[1] - b[1]);
@@ -154,19 +181,9 @@ function woods(g, map) {
       g.quadraticCurveTo(x, y + 0.76 * s, x - s * 0.77, y + 0.25 * s);
       g.fillStyle = '#a5ac84';
       g.fill();
-      g.strokeStyle = 'rgba(67,86,63,.62)';
+      g.strokeStyle = 'rgba(67,86,63,.58)';
       g.lineWidth = 0.65;
       g.stroke();
-      path(
-        g,
-        [
-          [x, y + 0.9 * s],
-          [x, y + 0.06 * s],
-          [x + 0.34 * s, y - 0.25 * s],
-        ],
-        'rgba(60,76,58,.67)',
-        0.65
-      );
       continue;
     }
     path(
@@ -179,15 +196,14 @@ function woods(g, map) {
         [x + 0.65 * s, y + 0.54 * s],
         [x, y - 0.8 * s],
       ],
-      'rgba(59,79,64,.64)',
+      'rgba(59,79,64,.62)',
       0.65,
       '#acb38b'
     );
-    dot(g, x - 0.9 * s, y + 0.83 * s, 0.55, '#838c6a');
   }
 }
+
 function water(g, map) {
-  // The river spans the region, with the same narrow channel and banks as the 3D view.
   const outline = [],
     opposite = [];
   for (let x = MAP.minX - 180; x <= MAP.maxX + 180; x += 15) {
@@ -195,12 +211,13 @@ function water(g, map) {
     outline.push(map.point(x, 1009 + ripple));
     opposite.push(map.point(x, 1034 + ripple));
   }
-  path(g, [...outline, ...opposite.reverse()], '#667e78', 0.95, '#91aaa0');
+  path(g, [...outline, ...opposite.reverse()], '#5b7671', 1.0, '#8ba79e');
   for (let x = MAP.minX - 60; x < MAP.maxX + 60; x += 46) {
     const z = 1018 + 3 * Math.sin(x);
-    path(g, [map.point(x, z), map.point(x + 13, z + 1)], '#c3cdb4', 0.85);
+    path(g, [map.point(x, z), map.point(x + 13, z + 1)], '#c8d4be', 0.85);
   }
 }
+
 function marker(g, id, x, y, scale = 1) {
   g.save();
   g.translate(x, y);
@@ -209,7 +226,7 @@ function marker(g, id, x, y, scale = 1) {
   g.lineCap = 'round';
   const ink = '#51432e',
     paper = '#ecdbad',
-    wash = '#b79b61';
+    washCol = '#b79b61';
   if (id === 'gate') {
     path(
       g,
@@ -251,28 +268,7 @@ function marker(g, id, x, y, scale = 1) {
       ],
       ink,
       0.9,
-      wash
-    );
-    for (const tx of [-9, 0, 9])
-      path(
-        g,
-        [
-          [tx, -6],
-          [tx, -4],
-        ],
-        ink,
-        1.25
-      );
-    path(
-      g,
-      [
-        [-14, 3],
-        [-6, 2],
-        [1, 3],
-        [13, 3],
-      ],
-      ink,
-      0.9
+      washCol
     );
   } else if (id === 'ridge') {
     path(
@@ -287,21 +283,6 @@ function marker(g, id, x, y, scale = 1) {
       ink,
       1.1,
       paper
-    );
-    path(
-      g,
-      [
-        [-4, -8],
-        [-2, -2],
-        [-4, -3],
-        [0, 2],
-        [4, -12],
-        [6, -4],
-        [4, -5],
-        [9, 2],
-      ],
-      ink,
-      0.8
     );
   } else if (id === 'clearing') {
     for (const [tx, ty, size] of [
@@ -319,15 +300,6 @@ function marker(g, id, x, y, scale = 1) {
         ink,
         0.9,
         '#879674'
-      );
-      path(
-        g,
-        [
-          [tx, ty + 1],
-          [tx, ty + 4],
-        ],
-        ink,
-        1
       );
     }
   } else if (id === 'bells') {
@@ -365,7 +337,7 @@ function marker(g, id, x, y, scale = 1) {
       ],
       ink,
       0.8,
-      wash
+      washCol
     );
     dot(g, 0, 2, 1, ink);
   } else if (id === 'chapel') {
@@ -399,17 +371,17 @@ function marker(g, id, x, y, scale = 1) {
       [0, 0],
       [3, -3],
     ])
-      dot(g, dx, dy, 1.45, ink);
+      dot(g, dx, dy, 1.5, ink);
   } else {
     dot(g, 0, 0, 2.7, ink);
     dot(g, 0, 0, 1.15, paper);
   }
   g.restore();
 }
-function rose(g, x, y, angle, s) {
+
+function rose(g, x, y, s) {
   g.save();
   g.translate(x, y);
-  g.rotate(angle);
   g.strokeStyle = '#826f4d';
   g.lineWidth = 0.65;
   g.beginPath();
@@ -443,49 +415,41 @@ function rose(g, x, y, angle, s) {
     g.restore();
   }
   g.restore();
-  const nx = x + Math.sin(angle) * (s + 8),
-    ny = y - Math.cos(angle) * (s + 8);
   g.fillStyle = '#524a34';
   g.font = 'bold 11px Georgia, serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('N', nx, ny);
+  g.fillText('N', x, y - (s + 8));
 }
+
 const avoidOverlap = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+
 function labels(g, map, sites, player) {
   const small = map.w < 430 || map.h < 250,
-    fontSize = small ? 12 : 14;
+    fontSize = small ? 11.5 : 13.5;
   const occupied = sites.map((s) => [s.px - 7, s.py - (s.id === 'gate' ? 18 : 7), s.px + 7, s.py + 4]);
   occupied.push(
-    [player[0] - 7, player[1] - 7, player[0] + 7, player[1] + 7],
-    [10, 10, 59, 62],
-    [map.w - 96, map.h - 32, map.w - 8, map.h - 8]
+    [player[0] - 8, player[1] - 8, player[0] + 8, player[1] + 8],
+    [10, 10, 62, 66],
+    [map.w - 102, map.h - 34, map.w - 8, map.h - 8]
   );
   for (const site of sites) {
     const main = site.id === 'gate',
       secondary = ['mire', 'crossing', 'downs'].includes(site.id);
-    const size = main ? fontSize + 3 : secondary ? fontSize - 1 : fontSize;
+    const size = main ? fontSize + 2.5 : secondary ? fontSize - 1 : fontSize;
     g.font = `${main ? 'bold ' : secondary ? 'italic ' : ''}${size}px Georgia, serif`;
     const tw = g.measureText(site.name).width,
       pad = 3;
-    const tries = map.wide
-      ? [
-          [0, -22],
-          [0, 20],
-          [8, -29],
-          [-8, 28],
-          [-14, 0],
-          [14, 0],
-        ]
-      : [
-          [14, -5],
-          [-14, -5],
-          [0, -23],
-          [0, 20],
-          [15, 10],
-          [-15, 10],
-        ];
-    tries.push([0, -36], [0, 36], [23, -33], [-23, 33], [22, 27], [-22, -29], [0, -47], [0, 47]);
+    const tries = [
+      [14, -4],
+      [-14, -4],
+      [0, -21],
+      [0, 19],
+      [15, 11],
+      [-15, 11],
+      [0, -34],
+      [0, 34],
+    ];
     let selection = null;
     for (const [dx, dy] of tries) {
       const left = dx >= 13 ? site.px + dx : dx <= -13 ? site.px + dx - tw : site.px + dx - tw / 2;
@@ -498,7 +462,7 @@ function labels(g, map, sites, player) {
     }
     if (!selection && (main || site.secret || site.id === 'bells')) {
       const x = clamp(site.px - tw * 0.5, 12, map.w - 12 - tw),
-        y = clamp(site.py - 36, 16 + size / 2, map.h - 14 - size / 2);
+        y = clamp(site.py - 28, 16 + size / 2, map.h - 14 - size / 2);
       selection = { x, y, rect: [x - pad, y - size / 2 - pad, x + tw + pad, y + size / 2 + pad] };
     }
     if (!selection) continue;
@@ -508,84 +472,105 @@ function labels(g, map, sites, player) {
     g.textBaseline = 'middle';
     g.lineJoin = 'round';
     g.strokeStyle = '#e1d0a9';
-    g.lineWidth = 3.4;
+    g.lineWidth = 3.2;
     g.strokeText(site.name, x, y);
     g.fillStyle = secondary ? '#4b5140' : '#453923';
     g.fillText(site.name, x, y);
-    const targetX = clamp(site.px, x, x + tw),
-      targetY = y + Math.sign(site.py - y) * (size / 2 + 1);
-    if (Math.hypot(site.px - targetX, site.py - targetY) > 17) {
-      const bearing = Math.atan2(targetY - site.py, targetX - site.px);
-      path(
-        g,
-        [
-          [site.px + 8 * Math.cos(bearing), site.py + 8 * Math.sin(bearing)],
-          [targetX, targetY],
-        ],
-        '#89744b',
-        0.65
-      );
-    }
   }
 }
-function route(g, map, world) {
+
+function drawRoutesAndBridge(g, map, world) {
   const line = (mapPath) => mapPath.map(([x, z]) => map.point(x, z));
-  if (!hasDirections(world)) {
-    const field = survey(world);
-    path(g, line(field.trace), '#856849', 2);
-    return;
-  }
-  path(g, line(MAP.road), '#f0e0b7', 4.8);
-  path(g, line(MAP.road), '#826841', 3.2);
-  path(g, line(MAP.road), '#dcb774', 1.55);
-  if (world.hasMap) {
-    g.setLineDash([4, 3]);
-    path(g, line(MAP.trail), '#526744', 1.9);
+  const showFullRoad = Boolean(world.knowsRoad || world.hasMap || world.discovered?.bells || world.discovered?.gate);
+
+  if (showFullRoad) {
+    path(g, line(MAP.road), '#f0e0b7', 4.6);
+    path(g, line(MAP.road), '#826841', 3.0);
+    path(g, line(MAP.road), '#dcb774', 1.5);
+  } else {
+    // Before consulting the witch or looting her satchel, only the local road out of Lanternwood is sketched (#50)
+    const partial = MAP.road.filter(([, z]) => z <= Math.max(240, world.player.z + 140));
+    g.setLineDash([5, 4]);
+    path(g, line(partial), '#826841', 2.4);
     g.setLineDash([]);
   }
-  const bridge = map.point(30, 1021);
-  g.save();
-  g.translate(...bridge);
-  g.rotate(map.angle);
-  const half = Math.max(3.5, 11 * map.scale),
-    length = Math.max(8, 27 * map.scale);
-  for (const x of [-half, half])
-    path(
-      g,
-      [
-        [x, -length / 2],
-        [x, length / 2],
-      ],
-      '#574b34',
-      1.05
-    );
-  if (!world.bridgeOpen) {
-    path(
-      g,
-      [
-        [-half, -length * 0.35],
-        [half, length * 0.35],
-      ],
-      '#965d43',
-      2
-    );
+
+  // Witch's Option-1 beast danger warnings inked on the road (#50)
+  if (world.knowsRoad) {
+    for (const [bx, bz] of [
+      [75, 315],
+      [79, 620],
+      [88, 1185],
+    ]) {
+      const [px, py] = map.point(bx, bz);
+      g.strokeStyle = 'rgba(138, 52, 42, 0.72)';
+      g.lineWidth = 1.4;
+      g.beginPath();
+      g.moveTo(px - 3.5, py - 3.5);
+      g.lineTo(px + 3.5, py + 3.5);
+      g.moveTo(px + 3.5, py - 3.5);
+      g.lineTo(px - 3.5, py + 3.5);
+      g.stroke();
+    }
+  }
+
+  if (world.hasMap) {
+    g.setLineDash([4, 3]);
+    path(g, line(MAP.trail), '#4b653d', 2.0);
+    g.setLineDash([]);
+  }
+
+  // Bridge icon clearly distinguishes SUBMERGED vs RAISED state (#56)
+  if (showFullRoad || world.discovered?.bells) {
+    const bridge = map.point(30, 1021);
+    g.save();
+    g.translate(...bridge);
+    const half = Math.max(3.6, 10 * map.scale),
+      length = Math.max(8, 26 * map.scale);
+    if (world.bridgeOpen) {
+      g.fillStyle = '#c8a86b';
+      g.fillRect(-half, -length / 2, half * 2, length);
+      for (const x of [-half, half])
+        path(
+          g,
+          [
+            [x, -length / 2],
+            [x, length / 2],
+          ],
+          '#4d3f28',
+          1.35
+        );
+      for (let k = 0; k < 4; k++) {
+        const y = -length / 2 + (k * length) / 3;
+        path(
+          g,
+          [
+            [-half, y],
+            [half, y],
+          ],
+          '#7b5e34',
+          0.9
+        );
+      }
+    } else {
+      // Submerged bridge: pale dashed timbers beneath river water
+      g.setLineDash([2.5, 2.5]);
+      for (const x of [-half, half])
+        path(
+          g,
+          [
+            [x, -length / 2],
+            [x, length / 2],
+          ],
+          'rgba(60, 86, 86, 0.85)',
+          1.1
+        );
+      g.setLineDash([]);
+    }
     g.restore();
-    return;
   }
-  for (let k = 0; k < 4; k++) {
-    const y = -length / 2 + (k * length) / 3;
-    path(
-      g,
-      [
-        [-half, y],
-        [half, y],
-      ],
-      '#8c7041',
-      0.8
-    );
-  }
-  g.restore();
 }
+
 function drawBorder(g, map) {
   g.strokeStyle = '#8d7954';
   g.lineWidth = 1;
@@ -622,22 +607,23 @@ function drawBorder(g, map) {
     );
     g.restore();
   }
-  const cartouche = g.createRadialGradient(30, 34, 5, 30, 34, 25);
+  const cartouche = g.createRadialGradient(32, 36, 5, 32, 36, 26);
   cartouche.addColorStop(0, '#dfceaa');
   cartouche.addColorStop(0.6, 'rgba(225,207,167,.93)');
   cartouche.addColorStop(1, 'rgba(225,207,167,0)');
   g.fillStyle = cartouche;
-  g.fillRect(6, 10, 49, 49);
-  rose(g, 30, 34, map.angle, map.h < 220 ? 9 : 12);
-  const scaleMetres = [250, 100, 50, 25, 10].find((m) => map.scale * m <= Math.min(85, map.w * 0.22)) || 10;
-  const length = scaleMetres * map.scale;
+  g.fillRect(6, 10, 52, 52);
+  rose(g, 32, 36, map.h < 220 ? 9 : 12);
+
+  const metres = map.scale * 250 > 84 ? 100 : 250;
+  const length = metres * map.scale;
   const x = map.w - 16 - length,
     y = map.h - 15;
   g.textAlign = 'center';
   g.textBaseline = 'bottom';
   g.font = '10px Georgia, serif';
   g.fillStyle = '#504431';
-  g.fillText(`${Math.round(length / map.scale)} m`, x + length / 2, y - 3);
+  g.fillText(`${metres} m`, x + length / 2, y - 3);
   path(
     g,
     [
@@ -659,149 +645,117 @@ function drawBorder(g, map) {
     2.6
   );
 }
-let surveyPlate;
-function paintTerrain(g, map) {
-  // Keep the engraved terrain fixed to its coordinates while panning or zooming.
-  // Only routes, discovered landmarks, pins, the player and moving host are redrawn.
-  const left = MAP.minX - 100,
-    right = MAP.maxX + 100,
-    north = MAP.maxZ + 100,
-    south = MAP.minZ - 100;
-  if (!surveyPlate) {
-    const plate = madeCanvas(),
-      scale = 0.72;
-    plate.width = Math.ceil((right - left) * scale);
-    plate.height = Math.ceil((north - south) * scale);
-    const ink = plate.getContext('2d'),
-      atlas = {
-        w: plate.width,
-        h: plate.height,
-        wide: false,
-        angle: 0,
-        scale,
-        point: (x, z) => [(x - left) * scale, (north - z) * scale],
-        world: (x, y) => [left + x / scale, north - y / scale],
-      };
-    wash(ink, atlas);
-    contourSurvey(ink, atlas);
-    woods(ink, atlas);
-    surveyPlate = plate;
+
+export function describeFieldMap(world) {
+  if (!world) return '';
+  const p = world.player;
+  const dist = routeDistance(world);
+  const goalName = world.hasMap && !world.antidote ? 'the Moonwell' : 'Princess Xero at Castle Xero';
+  const parts = [`You are facing ${['North', 'Northeast', 'East', 'Southeast', 'South', 'Southwest', 'West', 'Northwest'][((Math.round(p.yaw / (Math.PI / 4)) % 8) + 8) % 8]}, about ${dist} metres by trail from ${goalName}.`];
+  if (world.gateCrossed) {
+    parts.push('You are inside Castle Xero.');
+  } else if (world.gateClosed) {
+    parts.push('The castle gate is sealed shut.');
+  } else if (world.milestones?.fork || world.milestones?.ridge) {
+    const pct = Math.round(clamp((world.elapsed || 0) / HOURGLASS, 0, 1) * 100);
+    const lead = hordePosition(world, 0);
+    const gateDist = Math.round(Math.hypot(30 - lead.x, 1435 - lead.z));
+    parts.push(`The dead host is ${pct}% of the way to the castle, with its front rank roughly ${gateDist} metres from the gate.`);
   }
-  g.fillStyle = '#d8c8a2';
-  g.fillRect(0, 0, map.w, map.h);
-  const [x, y] = map.point(left, north);
-  g.drawImage(surveyPlate, x, y, (right - left) * map.scale, (north - south) * map.scale);
+  if (world.knowsRoad || world.discovered?.bells) {
+    parts.push(world.bridgeOpen ? 'The Three-Bell Sluice bridge is raised and passable.' : 'The Three-Bell Sluice bridge is submerged.');
+  }
+  if (world.hasMap) {
+    parts.push(
+      world.antidote
+        ? 'Your silver vial is filled with moonwater; the Pale Ford crosses the river to the west.'
+        : 'The inked Pale Trail leads northwest to the Moonwell and Pale Ford.'
+    );
+  }
+  if (world.waypoint) {
+    const wpDist = Math.round(Math.hypot(world.waypoint.x - p.x, world.waypoint.z - p.z));
+    parts.push(`Custom waypoint pinned ${wpDist} metres away.`);
+  }
+  return parts.join(' ');
 }
+
 export function drawFieldMap(canvas, world, view = {}) {
-  if (!canvas || !world) return;
+  if (!canvas || !world) return null;
   const bounds = canvas.getBoundingClientRect(),
     dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
-  if (!bounds.width || !bounds.height) return;
+  if (!bounds.width || !bounds.height) return null;
   const w = bounds.width,
     h = bounds.height,
-    map = mapProjection(w, h, world, view);
+    map = createMapProjection(w, h, world, view);
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
   const g = canvas.getContext('2d');
-  if (!g) return;
+  if (!g) return null;
   g.scale(dpr, dpr);
   g.lineCap = 'round';
   g.lineJoin = 'round';
-  paintTerrain(g, map);
+  wash(g, map);
   g.save();
   g.beginPath();
   g.rect(7, 7, w - 14, h - 14);
   g.clip();
-  if (hasDirections(world) || world.survey?.visits?.bells || world.survey?.visits?.ford) water(g, map);
-  route(g, map, world);
-  if (world.milestones.ridge) {
-    for (let i = 0; i < HORDE_COUNT; i += 11) {
+  contourSurvey(g, map);
+  woods(g, map);
+  water(g, map);
+  drawRoutesAndBridge(g, map, world);
+
+  if (world.milestones?.fork || world.milestones?.ridge) {
+    for (let i = 0; i < HORDE_COUNT; i += 10) {
       const a = hordePosition(world, i),
         [x, y] = map.point(a.x, a.z);
-      dot(g, x, y, 1, 'rgba(126,65,53,.72)');
+      dot(g, x, y, 1.25, 'rgba(130, 56, 46, 0.78)');
     }
   }
-  const sites = [],
-    places = knownLandmarks(world),
-    insideCastle = world.gateCrossed || world.survey?.visits?.hall;
-  if (insideCastle && map.scale > 0.38) {
-    const shape = (coords) => coords.map(([x, z]) => map.point(x, z));
-    path(
-      g,
-      shape([
-        [5, 1435],
-        [5, 1553],
-        [55, 1553],
-        [55, 1435],
-        [36, 1435],
-      ]),
-      '#63543e',
-      1.5
-    );
-    path(
-      g,
-      shape([
-        [5, 1435],
-        [24, 1435],
-      ]),
-      '#63543e',
-      1.5
-    );
-    if (places.some((s) => s.id === 'gallery'))
-      path(
-        g,
-        shape([
-          [16, 1441],
-          [20, 1441],
-          [20, 1457],
-          [22, 1457],
-          [22, 1464],
-          [9, 1464],
-          [9, 1457],
-          [16, 1457],
-          [16, 1441],
-        ]),
-        '#78694d',
-        1.1,
-        '#ccb88a'
-      );
-    if (places.some((s) => s.id === 'banquet'))
-      path(
-        g,
-        shape([
-          [10, 1490],
-          [50, 1490],
-          [50, 1531],
-          [10, 1531],
-          [10, 1490],
-        ]),
-        '#78694d',
-        1.1
-      );
-  }
-  for (const place of places) {
-    if (place.id === 'hall' && places.some((s) => s.id === 'banquet')) continue;
-    const interior = ['gallery', 'galleryOpen', 'register', 'banquet', 'hall'].includes(place.id);
-    if (interior && map.scale < 0.9) continue;
+
+  const sites = [];
+  for (const id of ['gate', 'clearing', 'bells', 'ridge', 'chapel', 'ford', 'downs', 'crossing', 'mire']) {
+    const place = LANDMARKS.find((l) => l.id === id);
+    if (!place) continue;
+    const unlocked =
+      id === 'clearing' ||
+      world.discovered?.[id] ||
+      (world.knowsRoad && ['gate', 'bells', 'crossing', 'ridge', 'mire', 'downs'].includes(id)) ||
+      (world.hasMap && ['gate', 'chapel', 'ford', 'clearing'].includes(id));
+    if (!unlocked) continue;
+    if (place.secret && !world.hasMap && !world.discovered?.[id]) continue;
     const [px, py] = map.point(place.x, place.z);
-    if (px < 6 || py < 6 || px > w - 6 || py > h - 6) continue;
     sites.push({ ...place, px, py });
-    if (interior) dot(g, px, py, 2.5, '#695337');
-    else marker(g, place.id, px, py, h < 210 ? 0.77 : 1);
+    marker(g, id, px, py, h < 210 ? 0.77 : 1);
   }
-  for (const [i, pin] of (world.survey?.pins || []).entries()) {
-    const [x, y] = map.point(pin.x, pin.z);
-    g.fillStyle = '#863e38';
-    dot(g, x, y, 4, '#863e38');
-    g.font = 'bold 12px sans-serif';
-    g.textAlign = 'left';
-    g.fillText(String(i + 1), x + 5, y - 4);
+
+  // Draw custom waypoint pin if placed (#53)
+  if (world.waypoint) {
+    const [wx, wy] = map.point(world.waypoint.x, world.waypoint.z);
+    g.save();
+    g.translate(wx, wy);
+    path(
+      g,
+      [
+        [0, 0],
+        [-5, -11],
+        [0, -15],
+        [5, -11],
+      ],
+      '#3a2d1a',
+      1.2,
+      '#f0c86d'
+    );
+    dot(g, 0, -10.5, 1.8, '#3a2d1a');
+    g.restore();
   }
+
   const player = map.point(world.player.x, world.player.z);
   labels(g, map, sites, player);
+
+  // North-Up player arrow
   g.save();
   g.translate(...player);
-  g.rotate(world.player.yaw + map.angle);
+  g.rotate(world.player.yaw);
   dot(g, 0, 0, 6.6, '#d8c88c');
   path(
     g,
@@ -818,4 +772,5 @@ export function drawFieldMap(canvas, world, view = {}) {
   g.restore();
   g.restore();
   drawBorder(g, map);
+  return map;
 }

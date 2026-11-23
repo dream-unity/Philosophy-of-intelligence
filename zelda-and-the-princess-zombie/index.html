@@ -11,61 +11,18 @@
     <base href="/zelda-and-the-princess-zombie/" />
     <title>Zelda and the Princess Zombie | Philosophy of Intelligence</title>
     <link rel="preload" as="image" href="forest.webp" />
-    <link rel="stylesheet" href="game.css?v=265d2c824817" />
-    <!-- Refresh module and stylesheet versions with node scripts/version-princess-zombie.mjs. -->
-    <script type="importmap">
-      {
-        "imports": {
-          "./audio.mjs": "./audio.mjs?v=b4f8b7a3f7d6",
-          "./blade-pose.mjs": "./blade-pose.mjs?v=0a1d040573c3",
-          "./castle-view.mjs": "./castle-view.mjs?v=d2c5f3e71dc7",
-          "./combat-zones.mjs": "./combat-zones.mjs?v=a0938f536b84",
-          "./control-layout.mjs": "./control-layout.mjs?v=12aee47f40ef",
-          "./creature-motion.mjs": "./creature-motion.mjs?v=8d90acdd5eae",
-          "./field-check.mjs": "./field-check.mjs?v=d4d54bb8428f",
-          "./field-effects.mjs": "./field-effects.mjs?v=69d1901e3f0d",
-          "./field-map.mjs": "./field-map.mjs?v=474bbb2db25f",
-          "./forest-edge.mjs": "./forest-edge.mjs?v=857d1b8c0f1a",
-          "./fortress.mjs": "./fortress.mjs?v=2ef00c56b6c1",
-          "./game-clock.mjs": "./game-clock.mjs?v=38da1dc29b0d",
-          "./game.mjs": "./game.mjs?v=ab0584b2b824",
-          "./geography.mjs": "./geography.mjs?v=bff742774e5e",
-          "./ground-paint.mjs": "./ground-paint.mjs?v=e5fa8525d99b",
-          "./hall.mjs": "./hall.mjs?v=d9cc84f7e149",
-          "./journey-store.mjs": "./journey-store.mjs?v=1e9b423de74f",
-          "./map-controls.mjs": "./map-controls.mjs?v=e7c67eff7c79",
-          "./marcher-art.mjs": "./marcher-art.mjs?v=b3151eb67b09",
-          "./masonry-paint.mjs": "./masonry-paint.mjs?v=fe01e64dfe7c",
-          "./navigation.mjs": "./navigation.mjs?v=92e487aac4e3",
-          "./procession-view.mjs": "./procession-view.mjs?v=69fefd288bc3",
-          "./procession.mjs": "./procession.mjs?v=1701509653ab",
-          "./render-quality.mjs": "./render-quality.mjs?v=90292ea84d9f",
-          "./render.mjs": "./render.mjs?v=d45e2055ae68",
-          "./ridge-landscape.mjs": "./ridge-landscape.mjs?v=494dc26c0e92",
-          "./river-view.mjs": "./river-view.mjs?v=6d85d768360b",
-          "./route-course.mjs": "./route-course.mjs?v=c85da251b655",
-          "./scene-light.mjs": "./scene-light.mjs?v=1dde703666d9",
-          "./sky.mjs": "./sky.mjs?v=638c44ebb770",
-          "./software-mesh.mjs": "./software-mesh.mjs?v=21528c98c2dd",
-          "./sound-foley.mjs": "./sound-foley.mjs?v=84632f002dab",
-          "./sound-score.mjs": "./sound-score.mjs?v=99e4012e9b62",
-          "./story-art.mjs": "./story-art.mjs?v=3f4198dba970",
-          "./story-contact.mjs": "./story-contact.mjs?v=c3c36bdc3b7d",
-          "./story-witch.mjs": "./story-witch.mjs?v=c55199c2c054",
-          "./story.mjs": "./story.mjs?v=c3762592ea12",
-          "./swordplay.mjs": "./swordplay.mjs?v=b6fa3a86dbe2",
-          "./travel.mjs": "./travel.mjs?v=efab6a894313",
-          "./wildlife.mjs": "./wildlife.mjs?v=c909d3fdc2ef",
-          "./woodland.mjs": "./woodland.mjs?v=26df8dcafd88",
-          "./world.mjs": "./world.mjs?v=8a7288712bb6"
-        }
-      }
-    </script>
+    <link rel="stylesheet" href="game.css" />
   </head>
-  <body>
+  <body data-state="title">
     <svg aria-hidden="true" class="symbols" xmlns="http://www.w3.org/2000/svg">
       <symbol id="sword" viewBox="0 0 24 24">
         <path d="m7 17 9-12 5-2-1 5-11 11M4 14l7 6m-5-2-3 4m-1-2 3 3" />
+      </symbol>
+      <symbol id="shield" viewBox="0 0 24 24">
+        <path d="M12 3 4.5 6v6c0 4.6 3.1 7.9 7.5 9 4.4-1.1 7.5-4.4 7.5-9V6L12 3z" />
+      </symbol>
+      <symbol id="dodge" viewBox="0 0 24 24">
+        <path d="M4 12h12m0 0-4-4m4 4-4 4M19 6v12" />
       </symbol>
       <symbol id="sigil" viewBox="0 0 32 32">
         <path d="M16 2 28 16 16 30 4 16Z" />
@@ -80,12 +37,18 @@
       <symbol id="book" viewBox="0 0 24 24">
         <path d="M12 6C9 3 5 3 2 4v14c4-1 7-1 10 2 3-3 6-3 10-2V4c-3-1-7-1-10 2zm0 0v14" />
       </symbol>
+      <symbol id="journal" viewBox="0 0 24 24">
+        <path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm3 4h6M9 11h6M9 15h4" />
+      </symbol>
       <symbol id="mapicon" viewBox="0 0 24 24">
         <path d="m3 5 6-2 6 3 6-2v15l-6 2-6-3-6 2zm6-2v15m6-12v15" />
       </symbol>
       <symbol id="pauseicon" viewBox="0 0 24 24"><path d="M8 4v16M16 4v16" stroke-width="3" /></symbol>
       <symbol id="flask" viewBox="0 0 24 24">
         <path d="M9 3h6m-5 0v6L5 18q-1 3 2 3h10q3 0 2-3l-5-9V3M7 15h10" />
+      </symbol>
+      <symbol id="vial" viewBox="0 0 24 24">
+        <path d="M9 3h6m-4 0v4.5L7.5 14a4.5 4.5 0 0 0 4.5 7 4.5 4.5 0 0 0 4.5-7L13 7.5V3" />
       </symbol>
       <symbol id="hand" viewBox="0 0 24 24">
         <path
@@ -115,18 +78,20 @@
             ><span class="second-word">Princess Zombie</span>
           </h1>
           <p class="intro">Beyond the forest, a bell is calling. Reach Princess Xero before the dead do.</p>
-          <button id="start" class="primary" type="button">
-            <svg aria-hidden="true"><use href="#sword" /></svg><span>Enter the forest</span>
-          </button>
-          <button id="history" type="button" class="link-button" hidden>Past journeys</button>
-          <button id="fresh" type="button" class="link-button" hidden>Begin anew</button>
+          <div class="title-actions">
+            <button id="start" class="primary" type="button" data-start="true">
+              <svg aria-hidden="true"><use href="#sword" /></svg><span>Enter the forest</span>
+            </button>
+            <button id="resume-crossroads" type="button" class="link-button" hidden>Return to the crossroads</button>
+            <button id="fresh" type="button" class="link-button" hidden>Begin anew</button>
+          </div>
+          <div id="endings-record" class="endings-record" hidden></div>
           <div id="startup-status" role="status"></div>
         </div>
         <footer class="title-footer">
           <button id="help" class="text-tool" type="button">
             <svg aria-hidden="true"><use href="#book" /></svg>How to play
           </button>
-          <button id="save-files" class="text-tool" type="button">Save files</button>
           <button id="fullscreen" class="text-tool" type="button">
             <svg aria-hidden="true"><use href="#expand" /></svg><span>Fullscreen</span>
           </button>
@@ -136,18 +101,37 @@
         <canvas id="view" aria-label="First-person view of the forest and castle" tabindex="0"></canvas>
         <div class="lens"></div>
         <div id="damage"></div>
-        <div id="sequence-caption" aria-live="polite" hidden></div>
-        <button id="resist" class="primary" type="button" hidden>Pull your hand back</button>
-        <div id="storage-status" role="status"></div>
         <div class="hud" id="hud">
+          <div id="storage-banner" class="storage-banner" role="status" hidden></div>
           <div class="hud-top">
             <div class="vitals">
               <div class="health" id="health" role="meter" aria-label="Health" aria-valuemin="0"></div>
-              <span id="location"></span>
+              <div
+                class="stamina"
+                id="stamina"
+                role="meter"
+                aria-label="Stamina"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="100"
+              >
+                <div id="stamina-fill" class="stamina-fill"></div>
+              </div>
+              <div class="vitals-row">
+                <span id="location"></span>
+                <span id="vial-badge" class="vial-badge" hidden>
+                  <svg aria-hidden="true"><use href="#vial" /></svg><span id="vial-label">Vial</span>
+                </span>
+              </div>
             </div>
-            <div class="compass" aria-label="Compass"><span id="heading">N</span><i></i></div>
+            <div class="compass" aria-label="Compass">
+              <span id="heading">N</span><i></i>
+              <span id="compass-goal" class="compass-goal" hidden></span>
+            </div>
             <div class="utility">
-              <button id="map-button" title="Map (M)" aria-label="Open map">
+              <button id="journal-button" title="Field journal (J)" aria-label="Open field journal">
+                <svg aria-hidden="true"><use href="#journal" /></svg></button
+              ><button id="map-button" title="Map (M)" aria-label="Open map">
                 <svg aria-hidden="true"><use href="#mapicon" /></svg></button
               ><button id="pause-button" title="Pause (Esc)" aria-label="Pause">
                 <svg aria-hidden="true"><use href="#pauseicon" /></svg>
@@ -155,23 +139,8 @@
             </div>
           </div>
           <div class="objective" id="objective"></div>
-          <div class="route-readout" id="route-readout"></div>
-          <div class="race-readout" id="race-readout" role="status" aria-live="polite"></div>
-          <div class="belt-readout" id="belt-readout" role="status"></div>
-          <div
-            class="stamina"
-            id="stamina"
-            role="meter"
-            aria-label="Stamina"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
-            <i></i>
-          </div>
-          <div class="reticle"></div>
+          <div class="reticle" id="reticle"></div>
           <div class="feedback">
-            <div id="bell-call" aria-live="polite" hidden></div>
-            <div id="captions" aria-live="polite"></div>
             <div id="notice" role="status"></div>
             <button type="button" id="interact-hint" hidden></button>
           </div>
@@ -181,17 +150,17 @@
               <button data-act="interact" aria-label="Interact">
                 <svg><use href="#hand" /></svg><span>Interact</span><kbd>E</kbd>
               </button>
-              <button data-act="potion" aria-label="Use potion">
-                <svg><use href="#flask" /></svg><span id="potion-count">Potion</span><kbd>Q</kbd>
+              <button data-act="potion" aria-label="Throw cinder phial">
+                <svg><use href="#flask" /></svg><span id="potion-count">Cinder · 0</span><kbd>Q</kbd>
               </button>
-              <button data-act="strike" aria-label="Swing sword">
+              <button id="sword-button" data-act="strike" aria-label="Swing sword (Shift or hold to thrust)">
                 <svg><use href="#sword" /></svg><span>Sword</span><kbd>F</kbd>
               </button>
-              <button data-act="thrust" aria-label="Thrust">
-                <svg><use href="#sword" /></svg><span>Thrust</span><kbd>R</kbd>
+              <button id="guard-button" data-act="guard" aria-label="Guard and parry" aria-pressed="false">
+                <svg><use href="#shield" /></svg><span>Guard</span><kbd>R</kbd>
               </button>
-              <button data-act="guard" aria-label="Guard">
-                <svg><use href="#sigil" /></svg><span>Guard</span><kbd>G</kbd>
+              <button data-act="dodge" aria-label="Step dodge">
+                <svg><use href="#dodge" /></svg><span>Dodge</span><kbd>Space</kbd>
               </button>
               <button id="sprint" aria-label="Toggle sprint" aria-pressed="false">
                 <svg><use href="#run" /></svg><span>Run</span>
@@ -216,6 +185,6 @@
       </div>
     </main>
     <noscript>This game needs JavaScript enabled to enter the forest.</noscript>
-    <script type="module" src="game.mjs?v=ab0584b2b824"></script>
+    <script type="module" src="game.mjs"></script>
   </body>
 </html>
