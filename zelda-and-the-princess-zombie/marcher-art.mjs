@@ -11,7 +11,8 @@ export function marcherFrame(image, rig, t, height) {
   const phase = t * 4.7 + rig.phase * 1.76,
     index = ((Math.floor((phase * 8) / (Math.PI * 2)) % 8) + 8) % 8;
   const size = height > 180 ? 240 : height > 68 ? 128 : 56,
-    key = index + size;
+    reach = Math.round((rig.reach || 0) * 3),
+    key = index + size + reach * 512;
   if (frames.has(key)) return frames.get(key);
   const cv = document.createElement('canvas'),
     iw = image.naturalWidth,
@@ -20,7 +21,7 @@ export function marcherFrame(image, rig, t, height) {
   cv.width = Math.max(2, Math.round((size * iw) / ih));
   const c = cv.getContext('2d'),
     at = (index * Math.PI * 2) / (8 * 4.7),
-    actor = { type: 'marcher', phase: 0 };
+    actor = { type: 'marcher', phase: 0, reach: reach / 3 };
   for (let row = 0; row < 3; row++)
     for (let col = 0; col < 2; col++) {
       const u = col / 2,

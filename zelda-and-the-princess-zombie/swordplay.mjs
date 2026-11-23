@@ -1,3 +1,4 @@
+import { takeItem } from './inventory.mjs';
 import { clamp } from './geography.mjs';
 import { barrier, footHeight, bodyRadius } from './travel.mjs';
 import {
@@ -217,6 +218,8 @@ export function moveBody(w, a, dx, dz, extraBlock) {
   const r = a === w.player ? 0.28 : bodyRadius(a);
   function legal(x, z) {
     if (barrier(w, x, z, r || 0.18, true, a.x, a.z)) return false;
+    // A boot can mount a stair or a small root, never the sheer side of a platform.
+    if (r && footHeight(w, x, z) - footHeight(w, a.x, a.z) > 0.4) return false;
     const player = a === w.player;
     for (const b of player ? w.actors : [w.player, ...w.actors]) {
       if (a === b || b.alive === false) continue;
@@ -234,11 +237,13 @@ export function moveBody(w, a, dx, dz, extraBlock) {
   }
 }
 
-export function tossPhial(w) {
+export function tossPhial(w, kind = 'cinder') {
+  if (w.phialFlight || !takeItem(w, kind)) return false;
   const p = w.player,
     pitch = clamp(p.pitch || 0, -1.05, 1.12),
     speed = 10.9;
   w.phialFlight = {
+    kind,
     x: p.x,
     y: (p.feetY ?? footHeight(w, p.x, p.z)) + 1.43,
     z: p.z,
@@ -247,9 +252,9 @@ export function tossPhial(w) {
     vz: speed * Math.cos(p.yaw) * Math.cos(pitch),
     vy: 2 + speed * Math.sin(pitch),
   };
-  w.potions--;
   w.potionUntil = w.elapsed + 1.1;
-  cue(w, 'throw', 'phial', p);
+  cue(w, 'throw', kind, p);
+  return true;
 }
 export function advancePhial(w, dt, notify) {
   const q = w.phialFlight;
@@ -277,6 +282,19 @@ export function advancePhial(w, dt, notify) {
     }
     if (!blocked && !contact && y > floor + 0.05 && w.elapsed - q.at < 3.5) continue;
     const burst = { x: q.x, y: q.y, z: q.z, at: w.elapsed };
+    if (q.kind === 'veil' || q.kind === 'lure') {
+      const mist = q.kind === 'veil';
+      const groundY = footHeight(w, burst.x, burst.z);
+      w.fieldMedicine ||= {};
+      w.fieldMedicine[q.kind] = { ...burst, y: groundY, until: w.elapsed + (mist ? 18 : 12) };
+      w.phialFlight = null;
+      cue(w, 'potion', q.kind, burst);
+      notify(
+        w,
+        mist ? 'Willow mist rolls along the ground.' : 'The bronze seed goes on ringing where it fell.'
+      );
+      return;
+    }
     let struck = 0;
     for (const a of w.actors) {
       if (!a.alive || !isEnemy(a)) continue;

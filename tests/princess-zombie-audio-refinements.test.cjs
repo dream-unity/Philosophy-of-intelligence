@@ -207,7 +207,13 @@ test('warning direction, distinct terrain and materials, staggered replies, clos
   assert.ok(left.pan > 0.6 && right.pan < -0.6);
   const signature = (t, k) => JSON.stringify(run(t, k).map((v) => [v.shape, v.frequency, v.at]));
   assert.equal(new Set(['wolf', 'troll', 'dragon'].map((k) => signature('telegraph', k))).size, 3);
-  assert.equal(new Set(['drink', 'fill', 'shatter'].map((k) => signature('potion', k))).size, 3);
+  assert.equal(
+    new Set(['drink', 'fill', 'shatter', 'veil', 'lure', 'sip'].map((k) => signature('potion', k))).size,
+    6
+  );
+  assert.equal(new Set(['song', 'alarm', 'wings'].map((k) => signature('fieldbird', k))).size, 3);
+  assert.equal(new Set(['single', 'reply', 'orchard'].map((k) => signature('knock', k))).size, 3);
+  assert.notEqual(signature('relay', 'brace'), signature('relay', 'slip'));
   const dry = signature('strike', 'thrust');
   assert.equal(
     new Set([dry, ...['wood', 'metal', 'stone', 'wolf'].map((k) => signature('impact', k))]).size,
@@ -219,6 +225,24 @@ test('warning direction, distinct terrain and materials, staggered replies, clos
   assert.ok(run('release', 'hart', { x: 31, z: 1517 }).filter((n) => n.frequency === 1880).length >= 3);
   w.dialogue = { kind: 'witch' };
   assert.ok(run('dialogue').some((n) => n.frequency === 1960));
+});
+
+test('bellglass continues sounding from its impact position as Zelda turns and falls silent when spent', (t) => {
+  const { audio, ctx, w } = fixture(t);
+  const impact = { x: w.player.x + 6, z: w.player.z + 1, at: 10, until: 22 };
+  w.fieldMedicine = { lure: impact };
+  function listen(time, yaw) {
+    ctx.starts.length = 0;
+    ctx.currentTime = w.elapsed = time;
+    w.player.yaw = yaw;
+    audio.update(w);
+    return voiced(ctx, 832);
+  }
+  assert.equal(listen(10.1, 0).length, 0);
+  assert.ok(listen(11.4, 0)[0].pan > 0.65);
+  assert.equal(listen(11.7, 0).length, 0);
+  assert.ok(listen(13, Math.PI)[0].pan < -0.65);
+  assert.equal(listen(22.1, 0).length, 0);
 });
 
 test('walking follows the actual surface and stops while airborne', (t) => {

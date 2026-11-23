@@ -22,7 +22,7 @@ const a = hostRoad[0],
   l = Math.hypot(b.x - a.x, b.z - a.z);
 hostRoad.unshift({ x: a.x - ((b.x - a.x) * 130) / l, z: a.z - ((b.z - a.z) * 130) / l });
 export function onHostRoad(x, z) {
-  if (z < 1030 || z > 1460 || x > 65) return false;
+  if (z < 1030 || z > 1460 || x > 92) return false;
   for (let i = 1; i < hostRoad.length; i++) {
     const a = hostRoad[i - 1],
       b = hostRoad[i],
@@ -100,3 +100,8 @@ export function sceneryBoulders(cx, cz) {
   rocks.set(key, list);
   return list;
 }
+
+// Six individually recognizable trees frame the first encounter and the return walk.
+export const clearingPopulation = clearingTrees.map(([x,z,h,rad],i)=>({
+  x,z,h,rad,oak:i!==4,seed:Math.floor(x*z),variant:[0,1,2,0,3,0][i],w:.87,landmark:true
+}));

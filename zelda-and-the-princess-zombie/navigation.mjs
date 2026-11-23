@@ -1,4 +1,5 @@
 import { LANDMARKS } from './geography.mjs';
+import { hordePosition } from './world.mjs';
 const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 export const compassPoint = (a) => directions[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
 export function bearing(p, q) {
@@ -39,9 +40,12 @@ export function knownLandmarks(w) {
 export function describeRace(w, progress) {
   if (w.ropeFallen) return 'The host is turning away.';
   if (w.route === 'undecided' && !w.greeted && !w.milestones?.ridge) return '';
-  if (progress > 0.9) return 'The first ranks are approaching the gate.';
-  if (progress > 0.7) return 'The host is on the castle approach.';
-  if (progress > 0.4) return 'The host has crossed the downs.';
+  const front = hordePosition(w, 0);
+  if (w.gateClosedAt != null) return 'The first rank is pressed against the iron.';
+  if (w.hostPauseUntil > w.elapsed) return 'The first rank has stopped to listen.';
+  if (Math.hypot(front.x - 30, front.z - 1435) < 38) return 'The front rank is on the last ramp to the gate.';
+  if (front.z > 1300) return 'The host is climbing the castle approach.';
+  if (front.x > -100) return 'The host is crossing the downs.';
   return 'The host is marching from the west.';
 }
 

@@ -1,240 +1,134 @@
-// Ground is sampled in world metres. Each horizontal band is one affine Canvas
-// pattern blit. Mip levels filter the leaves and pebbles into a distant haze.
-import { roadX, trailX, terrainHeight } from './world.mjs';
+// CPU perspective texture mapper for the fallback camera. A horizontal row shares
+// its depth and mip level. The visible ground consequently needs one small RGBA
+// upload, even when the player moves or rotates among a large number of trees.
+import { roadX, trailX, terrainHeight } from './geography.mjs';
 
-const tileMetres = 5;
-const colours = ['#536044', '#81694c'];
-const tileSizes = [256, 128, 64, 32, 16];
-
-function makeTiles(image) {
-  return [0, 1].map((material) =>
-    tileSizes.map((size) => {
-      const tile = document.createElement('canvas');
-      tile.width = tile.height = size;
-      const context = tile.getContext('2d');
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = 'high';
-      context.drawImage(image, material * 512, 0, 512, 512, 0, 0, size, size);
-      return tile;
-    })
-  );
+const atlasURL = new URL('./woodland-ground.webp', import.meta.url).href;
+const z0 = -352,
+  route = new Float32Array(2300),
+  trail = new Float32Array(route.length);
+for (let j = 0; j < route.length; j++) {
+  route[j] = roadX(z0 + j);
+  trail[j] = trailX(z0 + j);
 }
-
-function roadShape(p, eye, width, height, route, halfWidth) {
-  const shape = new Path2D(),
-    sy = Math.sin(p.yaw),
-    cy = Math.cos(p.yaw);
-  const sp = Math.sin(p.pitch || 0),
-    cp = Math.cos(p.pitch || 0),
-    f = height * 0.685;
-  const project = (x, z) => {
-    const dx = x - p.x,
-      dz = z - p.z,
-      h = terrainHeight(x, z) - eye + 0.07;
-    const front = dx * sy + dz * cy;
-    return { side: dx * cy - dz * sy, up: h * cp - front * sp, depth: front * cp + h * sp };
-  };
-  function polygon(points) {
-    const clipped = [];
-    for (let j = 0; j < points.length; j++) {
-      const a = points[(j + points.length - 1) % points.length],
-        b = points[j];
-      if (a.depth > 0.15 !== b.depth > 0.15) {
-        const t = (0.15 - a.depth) / (b.depth - a.depth);
-        clipped.push({ side: a.side + (b.side - a.side) * t, up: a.up + (b.up - a.up) * t, depth: 0.15 });
-      }
-      if (b.depth > 0.15) clipped.push(b);
-    }
-    if (clipped.length < 3) return;
-    clipped.forEach((v, i) => {
-      const x = width * 0.5 + (v.side * f) / v.depth,
-        y = height * 0.5 - (v.up * f) / v.depth;
-      if (i === 0) shape.moveTo(x, y);
-      else shape.lineTo(x, y);
-    });
-    shape.closePath();
-  }
-  const edge = (x, z, side) => {
-    // Meandering edges break up the transition without changing the route.
-    const verge = halfWidth * (1 + 0.044 * Math.sin(z * 0.91 + side) + 0.07 * Math.sin(z * 0.29 - side));
-    return project(x + side * verge, z);
-  };
-  const start = Math.max(-145, Math.floor((p.z - 205) / 4) * 4),
-    end = Math.min(1434, p.z + 305);
-  if (start >= end) return shape;
-  let left = edge(route(start), start, -1),
-    right = edge(route(start), start, 1);
-  for (let z = start; z < end; ) {
-    const dz = Math.abs(z - p.z) < 16 ? 1 : Math.abs(z - p.z) < 60 ? 3 : 10,
-      n = Math.min(z + dz, end),
-      x = route(n);
-    const nextL = edge(x, n, -1),
-      nextR = edge(x, n, 1);
-    polygon([left, nextL, nextR, right]);
-    left = nextL;
-    right = nextR;
-    z = n;
-  }
-  return shape;
-}
-
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const pack = (r, g, b) => ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+const plain = [pack(92, 107, 76), pack(148, 131, 94)];
 export function createGroundPainter() {
-  let tiles = null,
-    loaded = false,
-    active = true,
-    patternContext = null,
-    patterns = null;
-  let lastView = null,
-    cached = false,
-    stillFrame = null;
   const atlas = new Image();
-  atlas.onload = () => {
-    if (active) {
-      tiles = makeTiles(atlas);
-      loaded = true;
-    }
-  };
-  atlas.src = new URL('./woodland-ground.webp', import.meta.url).href;
-  const matrix = typeof DOMMatrix === 'function' ? new DOMMatrix() : null;
-  function paintBands(ctx, width, height, p, horizon, eye) {
-    const sp = Math.sin(p.pitch || 0),
-      cp = Math.cos(p.pitch || 0);
-    const sy = Math.sin(p.yaw),
-      cy = Math.cos(p.yaw),
-      f = height * 0.685,
-      cx = width / 2,
-      gy = terrainHeight(p.x, p.z);
-    if (horizon > height + height * 0.07) return;
-    const startY = Math.max(0, Math.floor(horizon) - 1);
-    if (loaded && ctx !== patternContext) {
-      patternContext = ctx;
-      patterns = tiles.map((levels) => levels.map((tile) => ctx.createPattern(tile, 'repeat')));
-    }
-    const usable = Boolean(patterns?.[0]?.[0]?.setTransform && matrix);
-    const road = roadShape(p, eye, width, height, roadX, 5.4),
-      trail = roadShape(p, eye, width, height, trailX, 1.15);
-    ctx.save();
-    ctx.fillStyle = colours[0];
-    ctx.fillRect(0, startY, width, height - startY);
-    const bands = [];
-    if (usable) {
-      // At grazing angles there are hundreds of metres per pixel. The mist and
-      // the coarsest mip suffice there, so texture bands begin closer in.
-      const first = Math.max(startY, Math.floor(horizon + f * 0.006));
-      const sampleY = (screenY) => {
-        const vertical = (height * 0.5 - screenY) / f,
-          rayUp = sp + vertical * cp,
-          rayForward = cp - vertical * sp;
-        if (rayUp >= -0.0001) return { depth: 140, forward: 140 };
-        const depth = Math.max(0.05, Math.min(180, (gy - eye) / rayUp)),
-          forward = depth * rayForward;
-        return { depth, forward };
-      };
-      const band = Math.max(3, Math.ceil(height / 109));
-      for (let y = first; y < height; y += band) {
-        const n = Math.min(height, y + band),
-          mid = (y + n) * 0.5,
-          b = sampleY(mid),
-          after = sampleY(mid + 1);
-        const change = after.forward - b.forward,
-          side = b.depth / f;
-        if (Math.abs(change) < 0.00001) continue;
-        const screenTile = tileMetres / side;
-        let level = 0;
-        while (level < tileSizes.length - 1 && tileSizes[level] > screenTile * 1.6) level++;
-        const units = tileSizes[level] / tileMetres;
-        const a = cy * side * units,
-          bx = -sy * side * units,
-          c = sy * change * units,
-          d = cy * change * units;
-        const det = a * d - bx * c;
-        if (Math.abs(det) < 1e-8) continue;
-        const u = (p.x + sy * b.forward) * units - a * cx - c * mid;
-        const v = (p.z + cy * b.forward) * units - bx * cx - d * mid;
-        bands.push({
-          y,
-          n,
-          level,
-          a: d / det,
-          b: -bx / det,
-          c: -c / det,
-          d: a / det,
-          e: (c * v - d * u) / det,
-          f: (bx * u - a * v) / det,
-          alpha: Math.max(0, Math.min(1, (102 - b.forward) / 62)),
-        });
+  atlas.decoding = 'async';
+  let tiles = null,
+    off = null,
+    context = null,
+    frame = null,
+    out = null,
+    lastKey = '',
+    disposed = false;
+  function build() {
+    if (disposed) return;
+    const src = [];
+    for (const dim of [512, 256, 128, 64, 32, 16, 8]) {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = dim;
+      const c = cv.getContext('2d', { willReadFrequently: true });
+      const layer = [];
+      for (let k = 0; k < 2; k++) {
+        c.drawImage(
+          atlas,
+          (k * atlas.naturalWidth) / 2,
+          0,
+          atlas.naturalWidth / 2,
+          atlas.naturalHeight,
+          0,
+          0,
+          dim,
+          dim
+        );
+        const bytes = c.getImageData(0, 0, dim, dim).data;
+        const set = new Uint32Array(dim * dim),
+          mist = Math.min(0.57, Math.max(0, (Math.log2(512 / dim) - 1) * 0.087));
+        for (let j = 0; j < set.length; j++) {
+          const i = j * 4,
+            r = bytes[i],
+            g = bytes[i + 1],
+            b = bytes[i + 2];
+          set[j] = pack((r + (137 - r) * mist) | 0, (g + (144 - g) * mist) | 0, (b + (119 - b) * mist) | 0);
+        }
+        layer.push(set);
       }
+      src.push(layer);
+      cv.width = cv.height = 1;
     }
-    function material(id, opacity) {
-      for (const b of bands) {
-        const pat = patterns[id][b.level];
-        if (!pat || b.alpha <= 0.015) continue;
-        matrix.a = b.a;
-        matrix.b = b.b;
-        matrix.c = b.c;
-        matrix.d = b.d;
-        matrix.e = b.e;
-        matrix.f = b.f;
-        pat.setTransform(matrix);
-        ctx.fillStyle = pat;
-        ctx.globalAlpha = b.alpha * opacity;
-        ctx.fillRect(0, b.y, width, b.n - b.y + 0.08);
-      }
-      ctx.globalAlpha = 1;
-    }
-    if (usable) material(0, 1);
-    for (const [path, opacity] of [
-      [road, 1],
-      [trail, 0.64],
-    ]) {
-      ctx.save();
-      ctx.clip(path);
-      ctx.globalAlpha = opacity;
-      ctx.fillStyle = colours[1];
-      ctx.fillRect(0, 0, width, height);
-      if (usable) material(1, opacity);
-      ctx.restore();
-    }
-    ctx.restore();
+    tiles = src;
+    lastKey = '';
   }
-  function paint(ctx, width, height, p, horizon, eye) {
-    const same =
-      lastView &&
-      lastView.width === width &&
-      lastView.height === height &&
-      lastView.x === p.x &&
-      lastView.z === p.z &&
-      lastView.yaw === p.yaw &&
-      lastView.pitch === p.pitch &&
-      lastView.eye === eye &&
-      lastView.horizon === horizon &&
-      lastView.loaded === loaded;
-    if (!same) {
-      lastView = { width, height, x: p.x, z: p.z, yaw: p.yaw, pitch: p.pitch, eye, horizon, loaded };
-      cached = false;
-      paintBands(ctx, width, height, p, horizon, eye);
-      return;
+  atlas.onload = build;
+  atlas.src = atlasURL;
+  function paint(ctx, W, H, p, horizon, eye, time = 0, quality = 1) {
+    if (disposed) return false;
+    // A flat foreground receives the most samples. The highly compressed last
+    // few metres of image height use the coarsest terrain mip at the skyline.
+    const fraction = Math.min(1, (quality < 0.8 ? 350 : 470) / W, (quality < 0.8 ? 195 : 268) / H);
+    const sw = Math.max(2, Math.round(W * fraction)),
+      sh = Math.max(2, Math.round(H * fraction));
+    const start = clamp(Math.floor((horizon * sh) / H), 0, sh);
+    if (start === sh) return true;
+    if (!off || off.width !== sw || off.height !== sh) {
+      off ??= document.createElement('canvas');
+      off.width = sw;
+      off.height = sh;
+      context = off.getContext('2d');
+      frame = context.createImageData(sw, sh);
+      out = new Uint32Array(frame.data.buffer);
+      lastKey = '';
     }
-    if (!cached) {
-      if (!stillFrame) stillFrame = document.createElement('canvas');
-      if (stillFrame.width !== width || stillFrame.height !== height) {
-        stillFrame.width = width;
-        stillFrame.height = height;
+    const key = [p.x, p.z, p.yaw, p.pitch, eye, sw, sh, !!tiles].join(',');
+    if (lastKey !== key) {
+      lastKey = key;
+      out.fill(0, 0, start * sw);
+      const sy = Math.sin(p.yaw),
+        cy = Math.cos(p.yaw),
+        sp = Math.sin(p.pitch || 0),
+        cp = Math.cos(p.pitch || 0),
+        f = sh * 0.685;
+      const eyeAbove = Math.max(0.08, eye - terrainHeight(p.x, p.z)),
+        perspective = ((W / H) * sh) / sw;
+      for (let row = start; row < sh; row++) {
+        const vertical = (sh * 0.5 - row - 0.5) / f,
+          ry = sp + vertical * cp,
+          depth = ry < -0.00001 ? Math.min(1200, eyeAbove / -ry) : 1200;
+        const forward = (cp - vertical * sp) * depth,
+          step = (depth / f) * perspective;
+        const mapWidth = Math.max(1, 5.25 / step),
+          lv = Math.round(clamp(Math.log2(512 / mapWidth), 0, 6)),
+          dim = 512 >> lv,
+          mask = dim - 1,
+          tex = tiles?.[lv],
+          factor = dim / 5.25;
+        const side = (0.5 - sw * 0.5) * step,
+          dx = cy * step,
+          dz = -sy * step;
+        let x = p.x + forward * sy + side * cy,
+          z = p.z + forward * cy - side * sy;
+        for (let col = 0, idx = row * sw; col < sw; col++, idx++, x += dx, z += dz) {
+          const rz = clamp((z - z0) | 0, 0, route.length - 1),
+            dist = Math.abs(x - route[rz]),
+            shortcut = Math.abs(x - trail[rz]);
+          const tx = Math.floor(x * factor) & mask,
+            tz = Math.floor(z * factor) & mask;
+          const k = z < 1435 && (dist < 5.45 || shortcut < 1.13) ? 1 : 0;
+          out[idx] = tex ? tex[k][tz * dim + tx] : plain[k];
+        }
       }
-      const cache = stillFrame.getContext('2d');
-      cache.clearRect(0, 0, width, height);
-      paintBands(cache, width, height, p, horizon, eye);
-      cached = true;
+      context.putImageData(frame, 0, 0, 0, start, sw, sh - start);
     }
-    ctx.drawImage(stillFrame, 0, 0);
+    ctx.drawImage(off, 0, start, sw, sh - start, 0, (start * H) / sh, W, ((sh - start) * H) / sh);
+    return true;
   }
   function dispose() {
-    active = false;
+    disposed = true;
     atlas.onload = null;
-    tiles = null;
-    patterns = null;
-    patternContext = null;
-    stillFrame = null;
+    off = context = frame = out = tiles = null;
   }
   return { paint, dispose };
 }

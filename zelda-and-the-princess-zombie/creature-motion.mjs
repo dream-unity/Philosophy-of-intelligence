@@ -170,9 +170,10 @@ export function actorWarp(a, time, u, v) {
   if (a.type === 'marcher') {
     const legs = limit((v - 0.56) / 0.4),
       head = limit((0.32 - v) / 0.27);
+    const hand = (a.reach || 0) * limit((u - 0.42) * 2.1) * Math.max(0, 1 - Math.abs(v - 0.48) * 2.5);
     return [
-      u + step * 0.039 * legs + Math.sin(phase) * 0.009 * head,
-      v + legs * 0.019 * Math.max(0, Math.cos(phase + u * 5.3)) + head * Math.sin(phase) * 0.008,
+      u + step * 0.039 * legs + Math.sin(phase) * 0.009 * head + hand * 0.16,
+      v + legs * 0.019 * Math.max(0, Math.cos(phase + u * 5.3)) + head * Math.sin(phase) * 0.008 - hand * 0.18,
     ];
   }
   if (a.type === 'dragon') {

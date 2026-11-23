@@ -1,7 +1,7 @@
 import { drawForestEdge, drawTrailHerbs } from './forest-edge.mjs';
 import { drawMarchObstructions } from './procession.mjs';
 import { terrainHeight, castleAltitude } from './geography.mjs';
-import { fordStoneX, bridgeRise, footHeight } from './travel.mjs';
+import { fordStoneX, bridgeRise, footHeight, gateClearance, wicketLift } from './travel.mjs';
 import { bladeCoordinates } from './swordplay.mjs';
 
 export const saturated = (v) => Math.max(0, Math.min(1, v));
@@ -152,35 +152,43 @@ export function fieldMotion(m, g, w, t) {
     }
   }
   if (w.gateClosedAt != null && Math.abs(p.z - 1435) < 155) {
-    const trough = castleAltitude + 7.56 * (1 - saturated((w.elapsed - w.gateClosedAt) / 1.0));
+    const trough = castleAltitude + gateClearance(w);
+    const lift = wicketLift(w);
     for (let k = -4; k <= 4; k++) {
-      const x = 30 + k * 1.08;
-      box(m, x, trough + 0.22, 1435, 0.16, 7.65, 0.18, '53525a');
+      const x = 30 + k * 1.08,
+        toe = trough + (k >= 3 ? lift : 0);
+      box(m, x, toe + 0.22, 1435, 0.16, 7.65 - (toe - trough), 0.18, '53525a');
       tri(
         m,
-        [x - 0.16, trough + 0.26, 1434.91],
-        [x, trough - 0.08, 1434.91],
-        [x + 0.16, trough + 0.26, 1434.91],
+        [x - 0.16, toe + 0.26, 1434.91],
+        [x, toe - 0.08, 1434.91],
+        [x + 0.16, toe + 0.26, 1434.91],
         '958a77'
       );
     }
-    for (let k = 0; k < 5; k++) box(m, 30, trough + 1.0 + k * 1.36, 1435, 9.15, 0.2, 0.25, '797375');
+    box(m, 28.99, trough + 1, 1435, 7.15, 0.2, 0.25, '797375');
+    box(m, 33.58, trough + 1 + lift, 1435, 1.99, 0.2, 0.25, '797375');
+    for (let k = 1; k < 5; k++) box(m, 30, trough + 1.0 + k * 1.36, 1435, 9.15, 0.2, 0.25, '797375');
+    box(m, 34.05, trough + 1.12 + lift, 1434.75, 0.55, 0.11, 0.22, 'c7a16a');
   }
   const flight = w.phialFlight;
   if (flight) {
     const { x, y, z } = flight,
-      a = t * 7.9;
+      a = t * 7.9,
+      reed = flight.kind === 'veil',
+      bronze = flight.kind === 'lure',
+      tint = reed ? '95baa3' : bronze ? 'c9a65c' : 'd77b4a';
     g.rings(
       m,
       [
         [x, y - 0.105, z, 0.044],
-        [x, y - 0.055, z, 0.08],
-        [x, y + 0.055, z, 0.073],
+        [x, y - 0.055, z, reed ? 0.046 : 0.08],
+        [x, y + 0.055, z, bronze ? 0.052 : reed ? 0.044 : 0.073],
         [x, y + 0.11, z, 0.032],
         [x, y + 0.14, z, 0.03],
       ],
       8,
-      'e6aa62',
+      tint,
       a
     );
     g.rings(
@@ -204,9 +212,28 @@ export function fieldMotion(m, g, w, t) {
         [x - dx * (u + 0.01), y - (flight.vy || 0) * (u + 0.01), z - dz * (u + 0.01)],
         0.013,
         0.006,
-        'efb471',
+        tint,
         3
       );
+    }
+  }
+  for (const [kind, patch] of Object.entries(w.fieldMedicine || {})) {
+    if (patch.until < t || Math.hypot(p.x - patch.x, p.z - patch.z) > 65) continue;
+    const age = t - patch.at;
+    if (age < 0) continue;
+    const mist = kind === 'veil';
+    const size = mist ? Math.min(4.7, 0.2 + age * 1.3) : 0.25 + (age % 1.25) * 1.35;
+    const spokes = mist ? 12 : 9;
+    for (let i = 0; i < spokes; i++) {
+      const a = (i / spokes) * Math.PI * 2 + (mist ? age * 0.1 : 0);
+      const arc = a + (mist ? 0.28 : 0.5);
+      const above = mist ? 0.18 + 0.17 * Math.sin(age * 0.9 + i) : 0.09;
+      const point = (a) => {
+        const x = patch.x + Math.sin(a) * size,
+          z = patch.z + Math.cos(a) * size;
+        return [x, footHeight(w, x, z) + above, z];
+      };
+      beam(m, point(a), point(arc), mist ? 0.077 : 0.024, 0.01, mist ? 'a3bd99' : 'd5b77a', 3);
     }
   }
   if (w.cinder && t - w.cinder.at < 0.78 && t >= w.cinder.at) {

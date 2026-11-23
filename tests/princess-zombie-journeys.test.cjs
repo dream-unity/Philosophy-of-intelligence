@@ -54,6 +54,8 @@ test('device storage reloads the committed decision, returns separately to the w
   assert.equal(w.dialogue.kind, 'witch');
   a.rememberFork(w);
   game.choose(w, 2);
+  assert.equal(w.dialogue.kind, 'cordial');
+  game.choose(w, 1);
   play(w, 10);
   a.rememberEnding(w);
   a.rememberEnding(w);

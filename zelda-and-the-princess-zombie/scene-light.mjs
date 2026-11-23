@@ -1,3 +1,4 @@
+import { witchLanternPoint } from './witch-body.mjs';
 import { terrainHeight } from './geography.mjs';
 // Point emitters are fixed to the fixtures in the world. The same squared
 // falloff lights masonry, moving bodies, the blade and the player's fingers.
@@ -16,11 +17,15 @@ export function sceneLights(w, t) {
   const p = w.player,
     all = [];
   for (const l of fixtures) if (Math.abs(l[0] - p.x) < 66 && Math.abs(l[2] - p.z) < 66) all.push(l);
+  const witch = w.actors?.find((a) => a.alive && a.type === 'witch');
+  if (witch && Math.hypot(p.x - witch.x, p.z - witch.z) < 19) {
+    const point = witchLanternPoint(w, witch, t, terrainHeight(witch.x, witch.z));
+    all.push([...point, 4.4]);
+  }
   const a = w.phialFlight;
   if (a) all.push([a.x, a.y, a.z, 3.3]);
   const c = w.cinder;
-  if (c && t >= c.at && t < c.at + 1.15)
-    all.push([c.x, terrainHeight(c.x, c.z) + 0.77, c.z, 8.7 * (1 - (t - c.at) / 1.15)]);
+  if (c && t >= c.at && t < c.at + 1.15) all.push([c.x, terrainHeight(c.x, c.z) + 0.77, c.z, 8.7 * (1 - (t - c.at) / 1.15)]);
   all.sort((a, b) => (a[0] - p.x) ** 2 + (a[2] - p.z) ** 2 - (b[0] - p.x) ** 2 - (b[2] - p.z) ** 2);
   return [all[0] || none, all[1] || none, all[2] || none];
 }

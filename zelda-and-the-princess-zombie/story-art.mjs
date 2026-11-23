@@ -1,5 +1,6 @@
 // Small reusable scene meshes for the gallery, spring and final tableau. All positions are in world metres.
 import { castleAltitude, terrainHeight } from './geography.mjs';
+import { fieldModels, fieldPieces } from './story-field-art.mjs';
 import { contactPose, drawContact } from './story-contact.mjs';
 export { storyHandPose } from './story.mjs';
 
@@ -419,7 +420,7 @@ function reed(m, g, bloom) {
   }
 }
 export function storyModels(model, g) {
-  const models = {};
+  const models = fieldModels(model, g, ellipsoid);
   for (const pose of ['feeding', 'offer', 'lunge', 'cured'])
     models['xero-' + pose] = model((m) => xeroModel(m, g, pose));
   models['hart-rest'] = model((m) => hartModel(m, g, 'rest'));
@@ -515,7 +516,7 @@ export function storyFigure(w, t = w.elapsed, ground = terrainHeight) {
   if (!p) return null;
   const q = w.sequence,
     u = q?.progress || 0,
-    pull = bellPull(t);
+    pull = w.silentPealAt != null && t - w.silentPealAt < 3 ? 0 : bellPull(t);
   let key = 'feeding',
     x = p.x,
     z = p.z,
@@ -540,7 +541,10 @@ export function storyFigure(w, t = w.elapsed, ground = terrainHeight) {
     x = p.x;
     z = p.z;
     dy = -0.13 * Math.sin(clamp((u - 0.2) / 0.6) * Math.PI);
-  } else if (w.milestones?.reveal || q?.id === 'saved') {
+  } else if (
+    (w.milestones?.reveal && (!w.watchedTable || (w.recognisedAt != null && t - w.recognisedAt < 3.4))) ||
+    q?.id === 'saved'
+  ) {
     key = 'offer';
     h = 1.88;
     x = p.x;
@@ -568,6 +572,7 @@ export function storyPieces(w, t = w.elapsed, ground = terrainHeight) {
   const p = w.player,
     list = [];
   const put = (key, x, y, z, rot = 0, scale = 1) => list.push({ key, x, y, z, rot, scale });
+  fieldPieces(w, t, ground, put);
   if (dist(p, 0, 9) < 22) {
     const witch = w.actors.find((a) => a.type === 'witch' && a.alive);
     if (witch) {
@@ -601,7 +606,12 @@ export function storyPieces(w, t = w.elapsed, ground = terrainHeight) {
         z = 1458.15 + 2 * i;
       const test = w.relayTest?.tone === tone ? Math.max(0, 1 - (t - w.relayTest.at) / 0.68) : 0;
       const movement =
-        (tone === 'mid' && !opened ? 0.092 * Math.sin(t * 5.3) : 0) + 0.21 * Math.sin(test * Math.PI);
+        (tone === 'mid' && w.relayBraced
+          ? -0.21
+          : tone === 'mid' && !opened
+            ? 0.092 * Math.sin(t * 5.3)
+            : 0) +
+        0.21 * Math.sin(test * Math.PI);
       put('relay-shutter', 9.22, castleAltitude + 11.25 + opened * 1.31, z);
       put(
         'relay-handle',
@@ -687,7 +697,7 @@ export function storyTethers(w, t = w.elapsed, ground = terrainHeight) {
   if (!fig) return [];
   const anchor = [30.46, hallY + 4.01, 1516.08];
   const fed = fig.key === 'feeding',
-    pull = bellPull(t);
+    pull = w.silentPealAt != null && t - w.silentPealAt < 3 ? 0 : bellPull(t);
   const wristOffset = fed ? (fig.flip ? 1 : -1) * fig.h * (832 / 680) * 0.26 : -0.2;
   const release = w.tetherRelease;
   const wrist = [

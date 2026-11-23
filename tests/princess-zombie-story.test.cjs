@@ -116,6 +116,8 @@ test('a player can resist the command while camera motion is reduced', () => {
   world.tick(w, 0.03);
   assert.equal(w.dialogue.kind, 'witch');
   world.choose(w, 2);
+  assert.equal(w.dialogue.kind, 'cordial');
+  world.choose(w, 1);
   w.reducedMotion = true;
   const { x, z, yaw, pitch } = w.player;
   advanceTo(w, 1.4);
@@ -253,4 +255,145 @@ test('Canvas places painted fingers at their projected 3D height in a pitched cl
   const actual = strips[i].y + (strips[i].h - 0.38) * fraction;
   const physical = ray(fig.x, fig.y + fig.h * (1 - v), fig.z)[1];
   assert.ok(Math.abs(actual - physical) < 0.18);
+});
+
+function playFor(w, seconds, input = {}) {
+  for (let i = 0; i < Math.ceil(seconds / 0.025); i++) world.tick(w, 0.025, input);
+}
+function stand(w, x, z, yaw) {
+  Object.assign(w.player, { x, z, yaw, pitch: 0, vx: 0, vz: 0 });
+}
+test('the three offers stay available while Zelda looks around and drinking the cordial requires consent', async () => {
+  const { bagItems } = await import('../zelda-and-the-princess-zombie/inventory.mjs');
+  const w = world.createWorld();
+  stand(w, 0, 5.85, Math.PI);
+  world.tick(w, 0.03);
+  assert.equal(w.dialogue, null);
+  assert.ok(!w.journal.some((e) => e.id === 'witch'));
+  w.player.yaw = 0;
+  world.tick(w, 0.03);
+  assert.deepEqual(
+    w.dialogue.choices.map((c) => c.id),
+    [1, 2, 3]
+  );
+  world.act(w, 'close');
+  assert.equal(w.route, 'undecided');
+  assert.ok(world.act(w, 'interact'));
+  world.choose(w, 2);
+  assert.equal(w.dialogue.kind, 'cordial');
+  assert.ok(bagItems(w).some((item) => item.id === 'cordial'));
+  world.choose(w, 2);
+  assert.equal(w.sequence, null);
+  stand(w, 0, 42, 0);
+  world.tick(w, 0.03);
+  assert.equal(w.route, 'wander');
+});
+
+test('bracing and releasing the relay changes exactly one peal and the actual advancing front', async () => {
+  const { marchClock } = await import('../zelda-and-the-princess-zombie/procession.mjs');
+  const w = world.createWorld();
+  Object.assign(w, { elapsed: 39, gateCrossed: true, greeted: true, route: 'guided', lastBell: 1 });
+  stand(w, 10.83, 1460.15, -Math.PI / 2);
+  w.player.feetY = world.terrainHeight(w.player.x, w.player.z) + 10.25;
+  assert.equal(world.act(w, 'interact'), true);
+  assert.ok(w.galleryOpenedAt != null);
+  assert.equal(world.act(w, 'interact'), true);
+  assert.equal(w.relayBraced, true);
+  world.act(w, 'interact');
+  assert.equal(w.relayBraced, false);
+  world.act(w, 'interact');
+  playFor(w, 4.8);
+  assert.ok(Math.abs(w.silentPealAt - 43) < 0.05);
+  assert.ok(w.journal.some((e) => e.id === 'relaySilent'));
+  assert.ok(!w.events.some((e) => e.type === 'bell' && e.text === 'tower'));
+  assert.ok(marchClock(w, w.elapsed, 0) < marchClock(w, w.elapsed, 58));
+  const frozen = marchClock(w, w.elapsed, 0);
+  playFor(w, 0.55);
+  assert.equal(marchClock(w, w.elapsed, 0), frozen);
+  playFor(w, 36.8);
+  assert.ok(w.events.some((e) => e.type === 'bell' && e.text === 'tower'));
+});
+
+test('an orchard knock opens the wicket, moves Xero’s hands, and leaves the original fate intact', () => {
+  const w = world.createWorld();
+  Object.assign(w, { greeted: true, gateCrossed: true, route: 'guided' });
+  stand(w, 23.45, 1460.35, -Math.PI / 2);
+  world.act(w, 'interact');
+  assert.equal(w.dialogue.kind, 'knock-door');
+  world.choose(w, 2);
+  assert.equal(w.keepersDoorAt, undefined);
+  world.act(w, 'interact');
+  world.choose(w, 1);
+  playFor(w, 1.5);
+  assert.ok(w.journal.some((e) => e.id === 'doorKnock'));
+  assert.ok(art.storyPieces(w).some((p) => p.key === 'orchard-cloth'));
+  stand(w, 30, 1512, 0);
+  world.act(w, 'interact');
+  world.choose(w, 3);
+  playFor(w, 1.6);
+  assert.equal(w.sequence, null);
+  assert.ok(w.journal.some((e) => e.id === 'recognition' && e.revises === 'memory'));
+  assert.equal(art.storyFigure(w).key, 'offer');
+  world.act(w, 'interact');
+  world.choose(w, 2);
+  assert.equal(w.sequence.id, 'feast');
+});
+
+test('the stable pin opens a physical passage and the living pony reaches a persistent position outside', async () => {
+  const { fieldPassable, stable, ponyPose } = await import(
+    '../zelda-and-the-princess-zombie/story-field.mjs'
+  );
+  const w = world.createWorld();
+  Object.assign(w, { greeted: true, gateCrossed: true, route: 'guided' });
+  stand(w, stable.x, stable.z - 4.7, 0);
+  assert.equal(fieldPassable(w, stable.x, stable.z - 3), false);
+  world.act(w, 'interact');
+  playFor(w, 6.2);
+  assert.equal(fieldPassable(w, stable.x, stable.z - 3), true);
+  assert.ok(ponyPose(w, w.elapsed).z < stable.z - 5);
+  assert.ok(w.ponyPastGate);
+  assert.deepEqual(ponyPose(JSON.parse(JSON.stringify(w)), w.elapsed), ponyPose(w, w.elapsed));
+});
+
+test('the lantern anticipates a regular bell but waits for the loose stone to sound', () => {
+  const w = world.createWorld();
+  Object.assign(w, { greeted: true });
+  stand(w, -3.7, 5.5, Math.atan2(3.7, 3.5));
+  playFor(w, 6.3);
+  const before = w.journal.find((e) => e.id === 'expected');
+  assert.ok(before && before.at < 6);
+  stand(w, -3.7, 5.5, 0);
+  world.act(w, 'interact');
+  assert.ok(!w.journal.some((e) => e.id === 'unbidden'));
+  w.player.yaw = Math.atan2(3.7, 3.5);
+  playFor(w, 1.2);
+  const revision = w.journal.find((e) => e.id === 'unbidden');
+  assert.ok(revision.at > w.pebbleAt + 0.44 && revision.revises === 'expected');
+});
+
+test('the burner’s smoke and roof hide different threats, and birds distinguish a wolf from the bell', async () => {
+  const { kiln, kilnCover, charcoalWind, roosts } = await import(
+    '../zelda-and-the-princess-zombie/story-field.mjs'
+  );
+  const w = world.createWorld();
+  Object.assign(w, { route: 'guided', greeted: true });
+  const wind = charcoalWind(0);
+  stand(w, kiln.x + wind.x * 6, kiln.z + wind.z * 6, 0);
+  assert.equal(kilnCover(w, 'wolf'), true);
+  assert.equal(kilnCover(w, 'dragon'), false);
+  stand(w, kiln.x - 3, kiln.z, 0);
+  const dragon = w.actors.find((a) => a.id === 'dragon-1');
+  dragon.alerted = true;
+  world.tick(w, 0.03);
+  assert.equal(kilnCover(w, 'dragon'), true);
+  assert.equal(kilnCover(w, 'wolf'), false);
+  assert.equal(dragon.alerted, false);
+  const r = roosts[0];
+  stand(w, r.x, r.z - 6, 0);
+  playFor(w, 0.5);
+  assert.ok(w.flockQuietUntil > w.elapsed && w.journal.some((e) => e.id === 'birdsWolf'));
+  for (const a of w.actors.filter((a) => a.type === 'wolf')) a.alive = false;
+  playFor(w, 6);
+  assert.ok(w.events.some((e) => e.type === 'fieldbird' && e.text === 'wings'));
+  assert.ok(w.journal.some((e) => e.id === 'birdsBell' && e.revises === 'birdsWolf'));
 });

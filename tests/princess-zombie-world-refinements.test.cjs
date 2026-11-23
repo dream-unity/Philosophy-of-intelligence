@@ -41,7 +41,7 @@ test('1/6/8: simultaneous arrivals are resolved at the physical plane and a winn
   assert.equal(travel.barrier(late, 30, 1435), 'metal');
   advance(late, 2.5);
   assert.equal(late.ending?.id, 'horde');
-  assert.equal(game.secondsToGate(game.createWorld()), 350);
+  assert.equal(game.secondsToGate(game.createWorld()), 435);
   const legacy = field(40, 100);
   delete legacy.raceDuration;
   assert.equal(game.secondsToGate(legacy), 395);
@@ -295,4 +295,110 @@ test('12/48: a close procession clue needs a visible illustrated figure, and the
   view([bowl]);
   assert.equal(w.milestones.bowl, true);
   assert.match(w.journal.find((entry) => entry.id === 'bowl').text, /wooden bowl/);
+});
+
+test('the ordinary road and ford both afford a close, forward view of the actual procession', async () => {
+  const { createProcessionView } = await import('../zelda-and-the-princess-zombie/procession-view.mjs');
+  // Positions and headings are from full, non-teleporting guided and ford route
+  // replays. The second road sample is from a journey which never sprinted.
+  for (const [x, z, yaw, time] of [
+    [80.4, 1175.7, -0.115, 247],
+    [80.4, 1175.7, -0.115, 346],
+    [-110.7, 1115.7, 0.252, 207],
+  ]) {
+    const w = field(x, z);
+    w.elapsed = time;
+    w.player.yaw = yaw;
+    const view = createProcessionView();
+    // Stream all rows exactly as an active camera would.
+    for (let i = 0; i < 36; i++) { w.elapsed = time - (36 - i) / 60; view.update(w); }
+    w.elapsed = time;
+    const group = view.near(w, 800 / 450, time, 48).poses;
+    assert.ok(group.some(guest => {
+      const dist = Math.hypot(guest.x - x, guest.z - z);
+      return dist < 36 && travel.clearSegment(w, x, z, guest.x, guest.z, 0.02, w.player.feetY + 1.64, guest.y + 1.5);
+    }), 'there must be at least one near, in-view walker unobstructed by terrain or scenery');
+  }
+});
+
+test('an isolated low bell changes the march clock once while the independent rear files settle at the castle', () => {
+  const w = field(19, 993.8);
+  w.bridgeOpen = true;
+  w.elapsed = 205;
+  const original = game.hordePosition(w, 0);
+  const before = game.secondsToGate(w);
+  assert.ok(game.act(w, 'interact'));
+  assert.equal(w.sluiceDecoyAt, 205);
+  assert.equal(game.secondsToGate(w), before + 14);
+  advance(w, 4);
+  const paused = game.hordePosition(w, 0);
+  assert.ok(Math.hypot(original.x - paused.x, original.z - paused.z) < 1.45);
+  game.act(w, 'interact');
+  assert.equal(w.hostPauseUntil, 219, 'ringing repeatedly cannot create unlimited race time');
+  const loaded = JSON.parse(JSON.stringify(w));
+  assert.deepEqual(game.hordePosition(loaded, 500), game.hordePosition(w, 500));
+  w.elapsed = w.raceDuration + 14 + 320;
+  const vanguard = game.hordePosition(w, 0), tail = game.hordePosition(w, 3071);
+  assert.ok(Math.hypot(vanguard.x - 30, vanguard.z - 1435) < 2.2);
+  assert.ok(Math.hypot(tail.x - 30, tail.z - 1435) < 102);
+});
+
+test('winning then returning outside closes the main gate but the unlatched wicket permits re-entry', () => {
+  const w = field(33.6, 1434.8);
+  advance(w, 0.39, { forward: 1 });
+  assert.ok(w.gateCrossed);
+  advance(w, 1.5, { forward: -1 });
+  assert.ok(w.player.z < 1434);
+  w.elapsed = w.raceDuration - 0.02;
+  advance(w, 1.65);
+  assert.ok(w.gateClosedAt != null);
+  assert.equal(travel.barrier(w, 30, 1435), 'metal');
+  w.player.yaw = Math.atan2(34.05 - w.player.x, 1435 - w.player.z);
+  assert.equal(game.getHUD(w).hint, 'Lift the wicket latch');
+  assert.ok(game.act(w, 'interact'));
+  advance(w, 0.8);
+  assert.equal(travel.barrier(w, 30, 1435), 'metal');
+  assert.equal(travel.barrier(w, 33.6, 1435), '');
+  w.player.yaw = 0;
+  advance(w, 1.6, { forward: 1 });
+  assert.ok(w.player.z > 1437);
+  advance(w, 7);
+  assert.equal(travel.barrier(w, 33.6, 1435), 'metal');
+  assert.equal(w.ending, null);
+});
+
+test('the press warns before taking a heart, and a guard turned towards that specific hand stops it', () => {
+  for (const guard of [false, true]) {
+    const w = field(0, 0);
+    w.route = 'wander';
+    w.nextHunt = Infinity;
+    w.elapsed = 420;
+    const body = game.hordePosition(w, 99);
+    Object.assign(w.player, { x: body.x + 0.1, z: body.z + 0.12, feetY: travel.footHeight(w, body.x, body.z) });
+    for (let i = 0; i < 200 && !w.hostWarning; i++) game.tick(w, 1 / 60);
+    assert.ok(w.hostWarning);
+    assert.equal(w.player.health, 5);
+    advance(w, 0.9);
+    if (guard) {
+      const hand = game.hordePosition(w, w.hostWarning.i);
+      w.player.yaw = Math.atan2(hand.x - w.player.x, hand.z - w.player.z);
+      assert.ok(game.act(w, 'guard'));
+    }
+    advance(w, 0.55);
+    assert.equal(w.player.health, guard ? 5 : 4);
+    assert.ok(w.events.some(e => e.type === (guard ? 'block' : 'hurt') && e.text === 'host'));
+  }
+});
+
+test('a northern predator hears the actual file of feet and breaks away from it', () => {
+  const w = field(0, 0);
+  w.elapsed = 215;
+  const front = game.hordePosition(w, 0);
+  const beast = w.actors.find(a => a.type === 'dragon');
+  Object.assign(beast, { x: front.x + 5, z: front.z + 12, homeX: front.x + 5, homeZ: front.z + 12 });
+  const before = Math.hypot(beast.x - front.x, beast.z - front.z);
+  advance(w, 0.65);
+  assert.ok(beast.hostFlight.until > w.elapsed);
+  assert.ok(Math.hypot(beast.x - front.x, beast.z - front.z) > before + 0.7);
+  assert.equal(beast.alerted, false);
 });

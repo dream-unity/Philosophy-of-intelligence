@@ -1,50 +1,21 @@
-// The great hall, servants' cloister and east bell gallery within Castle Xero.
-// All bounds, collisions, line-of-sight tests and painted surfaces share exact metre coordinates.
-export const HALL_BOUNDS = {
-  west: 8,
-  east: 52,
-  south: 1466,
-  north: 1530,
-  floor: 0.17,
-  ceiling: 13.7,
-  openingL: 24,
-  openingR: 36,
-  lintel: 7.6,
-};
-
-export const BELL_ANCHOR = { x: 30.46, y: 4.22, z: 1516.08 };
-export const TABLE_BOUNDS = { minX: 30.35, maxX: 33.0, minZ: 1515.4, maxZ: 1518.65 };
-
-const { west, east, south, north, floor, ceiling, openingL, openingR, lintel } = HALL_BOUNDS;
+import { castleAltitude } from './geography.mjs';
+// The great hall stands within the outer curtain wall. Eye, lights, dining table,
+// doorway and all painted surfaces use the same metre coordinates as the overworld.
+const west = 8,
+  east = 52,
+  south = 1466,
+  north = 1530;
+const floor = 0.17,
+  ceiling = 13.7,
+  openingL = 24,
+  openingR = 36,
+  lintel = 7.6;
 const artURL = new URL('./hall.webp', import.meta.url).href;
-
 export function insideHall(x, z) {
   return x > west && x < east && z > south && z < north;
 }
-
-export function insideCloister(x, z) {
-  return x >= 5.8 && x <= 17.5 && z >= 1441 && z <= 1465;
-}
-
-export function insideGallery(x, z) {
-  return x >= 42.5 && x <= 54.2 && z >= 1441 && z <= 1465;
-}
-
-export function castleSurfaceHeight(x, z) {
-  // Smooth stone stair climb onto the eastern Bell Gallery overlook (z: 1443..1451 -> y: 0..2.4m)
-  if (x >= 44.5 && x <= 54.2 && z >= 1442 && z <= 1464.5) {
-    if (z < 1450) {
-      const t = Math.max(0, Math.min(1, (z - 1442) / 8));
-      return t * 2.4;
-    }
-    return 2.4;
-  }
-  if (insideHall(x, z)) return floor;
-  if (z >= 1435 && z <= 1554 && x >= 5 && x <= 55) return 0.12;
-  return 0;
-}
-
-export function hallWalkable(x, z, radius = 0.42) {
+export function hallWalkable(x, z) {
+  const radius = 0.4;
   if (
     z >= south - radius &&
     z <= north + radius &&
@@ -59,67 +30,8 @@ export function hallWalkable(x, z, radius = 0.42) {
     (x < openingL + radius || x > openingR - radius)
   )
     return false;
-  // Banquet trestle table
-  if (
-    x > TABLE_BOUNDS.minX - radius * 0.6 &&
-    x < TABLE_BOUNDS.maxX + radius * 0.6 &&
-    z > TABLE_BOUNDS.minZ - radius * 0.6 &&
-    z < TABLE_BOUNDS.maxZ + radius * 0.6
-  )
-    return false;
-  // Four hall candelabra pedestals
-  for (const [cx, cz] of [
-    [27.35, 1516.8],
-    [34.5, 1518.5],
-    [18.4, 1492],
-    [41.5, 1495],
-  ]) {
-    if ((x - cx) ** 2 + (z - cz) ** 2 < (0.42 + radius * 0.6) ** 2) return false;
-  }
-  // Cloister stone bench with discarded irons
-  if (x > 6.6 - radius * 0.5 && x < 9.2 + radius * 0.5 && z > 1451.5 - radius * 0.5 && z < 1456.5 + radius * 0.5)
-    return false;
-  // Gallery stone parapet rail along inner west edge of raised platform (z: 1450..1464)
-  if (z >= 1450 && z <= 1464.5 && Math.abs(x - 44.5) < 0.45 + radius * 0.4) return false;
-  return true;
+  return !(x > 30.38 && x < 32.96 && z > 1515.45 && z < 1518.62);
 }
-
-// Segment-vs-segment intersection in XZ for honest wall line-of-sight checks.
-function segsIntersect(ax, az, bx, bz, cx, cz, dx, dz) {
-  const rX = bx - ax,
-    rZ = bz - az,
-    sX = dx - cx,
-    sZ = dz - cz;
-  const denom = rX * sZ - rZ * sX;
-  if (Math.abs(denom) < 1e-7) return false;
-  const t = ((cx - ax) * sZ - (cz - az) * sX) / denom;
-  const u = ((cx - ax) * rZ - (cz - az) * rX) / denom;
-  return t > 0.01 && t < 0.99 && u >= 0 && u <= 1;
-}
-
-const SOLID_WALLS = [
-  // Hall west, east, north, and south walls (leaving doorway openingL..openingR clear)
-  [west, south, west, north],
-  [east, south, east, north],
-  [west, north, east, north],
-  [west, south, openingL, south],
-  [openingR, south, east, south],
-  // Castle outer curtain wall (leaving gate 25.3..34.7 clear)
-  [5, 1435, 25.3, 1435],
-  [34.7, 1435, 55, 1435],
-  [5, 1435, 5, 1554],
-  [55, 1435, 55, 1554],
-  [5, 1554, 55, 1554],
-];
-
-export function hallWallRayBlocked(ax, az, bx, bz, gateClosed = false) {
-  for (const [x1, z1, x2, z2] of SOLID_WALLS) {
-    if (segsIntersect(ax, az, bx, bz, x1, z1, x2, z2)) return true;
-  }
-  if (gateClosed && segsIntersect(ax, az, bx, bz, 25.3, 1435, 34.7, 1435)) return true;
-  return false;
-}
-
 function wax(m, g, x, y, z, scale = 1) {
   const { rings, beam } = g,
     r = 0.066 * scale;
@@ -136,58 +48,65 @@ function wax(m, g, x, y, z, scale = 1) {
   beam(m, [x, y + 0.295 * scale, z], [x, y + 0.42 * scale, z], 0.038 * scale, 0.002, 'ffc267', 6);
   beam(m, [x, y + 0.32 * scale, z], [x, y + 0.39 * scale, z], 0.019 * scale, 0.002, 'fff3d2', 5);
 }
-
-export function makeHallProps(m, g) {
-  const { box, beam, rings, quad, stone } = g;
-  // Woven runner joining the doorway arch to the banquet table.
-  for (let z = south + 0.3, course = 0; z < 1514.3; z += 2, course++) {
-    const h = floor + 0.021,
-      n = z + 2,
-      x = 30;
-    quad(
-      m,
-      [x - 1.17, h, z],
-      [x - 1.17, h, n],
-      [x + 1.17, h, n],
-      [x + 1.17, h, z],
-      course % 2 ? '354453' : '374655',
-      false
-    );
-    for (const side of [-1, 1]) {
-      const edge = x + side * 1.055;
-      quad(
-        m,
-        [edge - 0.025, h + 0.006, z],
-        [edge - 0.025, h + 0.006, n],
-        [edge + 0.025, h + 0.006, n],
-        [edge + 0.025, h + 0.006, z],
-        'a38e61',
-        false
-      );
-    }
-    if (course % 2 === 0) {
-      const mid = z + 1;
-      quad(
-        m,
-        [x - 0.29, h + 0.009, mid],
-        [x, h + 0.009, mid + 0.36],
-        [x + 0.29, h + 0.009, mid],
-        [x, h + 0.009, mid - 0.36],
-        '8d7e56',
-        false
-      );
-      quad(
-        m,
-        [x - 0.18, h + 0.011, mid],
-        [x, h + 0.011, mid + 0.22],
-        [x + 0.18, h + 0.011, mid],
-        [x, h + 0.011, mid - 0.22],
-        '46505a',
-        false
-      );
-    }
+export function bellSwing(w, t = w.elapsed) {
+  if (w.ropeFallen || (w.silentPealAt!=null && t-w.silentPealAt<3.65)) return 0;
+  // Three pulls pivot the bronze body on the crossbeam. Each strike rings down.
+  const dt = (((t - 6) % 37) + 37) % 37;
+  let a = 0;
+  for (const delay of [0, 0.46, 0.92]) {
+    const d = dt - delay;
+    if (d >= 0 && d < 3.6) a += 0.27 * Math.sin(d * 11.6) * Math.exp(-d * 2.3);
   }
-  // Black-oak trestle table beside Xero, with silver trenchers, overturned goblet and blue runner.
+  return Math.round(a * 50) / 50;
+}
+export function makeHangingBell(m, g, angle = 0) {
+  const { beam, rings } = g,
+    X = 30.46,
+    Z = 1516.08,
+    start = m.length;
+  beam(m, [X, 6.13, Z], [X, 5.64, Z], 0.052, 0.052, '8c7253', 7);
+  rings(
+    m,
+    [
+      [X, 4.28, Z, 0.83],
+      [X, 4.39, Z, 0.88],
+      [X, 4.51, Z, 0.71],
+      [X, 4.94, Z, 0.55],
+      [X, 5.47, Z, 0.41],
+      [X, 5.61, Z, 0.19],
+      [X, 5.69, Z, 0.104],
+    ],
+    14,
+    (row, k) => (k % 4 === 1 ? 'ad8554' : row <= 2 ? '956e43' : '7f5d3c'),
+    0.12
+  );
+  rings(
+    m,
+    [
+      [X, 4.32, Z, 0.867],
+      [X, 4.365, Z, 0.892],
+    ],
+    14,
+    'c79c60'
+  );
+  beam(m, [X, 4.48, Z], [X, 4.16, Z], 0.044, 0.093, '51402d', 7);
+
+  const ca = Math.cos(angle),
+    sa = Math.sin(angle);
+  for (let i = start; i < m.length; i += 6) {
+    const x = m[i] - X,
+      y = m[i + 1] - 6.13;
+    m[i] = X + ca * x - sa * y;
+    m[i + 1] = castleAltitude + 6.13 + sa * x + ca * y;
+  }
+}
+export function bellAnchorOffset(angle) {
+  const y = 4.18 - 6.13;
+  return [-Math.sin(angle) * y, (Math.cos(angle) - 1) * y, 0];
+}
+export function makeHallProps(m, g) {
+  const { box, beam, rings, quad } = g;
+  // Black-oak trestle table beside Xero, with silver trenchers and a blue runner.
   const tx = 31.66,
     tz = 1517.03;
   box(m, tx, 0.87, tz, 2.62, 0.13, 3.18, '64412d');
@@ -218,39 +137,10 @@ export function makeHallProps(m, g) {
       'a8987f'
     );
   }
-  // Overhead hall bell mounted directly above Xero's station at BELL_ANCHOR.
-  const X = BELL_ANCHOR.x,
-    Z = BELL_ANCHOR.z;
+  const X = 30.46,
+    Z = 1516.08;
   beam(m, [X, ceiling - 0.25, Z], [X, 6.23, Z], 0.029, 0.029, '4a3b2d', 5);
   beam(m, [X - 1.35, 6.19, Z], [X + 1.35, 6.19, Z], 0.13, 0.13, '694930', 6);
-  beam(m, [X, 6.13, Z], [X, 5.64, Z], 0.052, 0.052, '8c7253', 7);
-  rings(
-    m,
-    [
-      [X, 4.28, Z, 0.83],
-      [X, 4.39, Z, 0.88],
-      [X, 4.51, Z, 0.71],
-      [X, 4.94, Z, 0.55],
-      [X, 5.47, Z, 0.41],
-      [X, 5.61, Z, 0.19],
-      [X, 5.69, Z, 0.104],
-    ],
-    14,
-    (row, k) => (k % 4 === 1 ? 'ad8554' : row <= 2 ? '956e43' : '7f5d3c'),
-    0.12
-  );
-  rings(
-    m,
-    [
-      [X, 4.32, Z, 0.867],
-      [X, 4.365, Z, 0.892],
-    ],
-    14,
-    'c79c60'
-  );
-  beam(m, [X, 4.48, Z], [X, 4.16, Z], 0.044, 0.093, '51402d', 7);
-
-  // Warm candelabra focusing light around Xero, the stag, and the hall approach.
   for (const [cx, cz] of [
     [27.35, 1516.8],
     [34.5, 1518.5],
@@ -287,87 +177,16 @@ export function makeHallProps(m, g) {
       wax(m, g, xx, yy + 0.04, cz, 1.22);
     }
   }
-
-  // Timber roof rafters and royal banners framing the hall nave.
+  // A living structure: rafters traverse the chamber rather than hovering behind it.
   for (let z = 1474; z <= 1524; z += 12) {
     for (const side of [-1, 1]) {
       const x = 30 + side * 21.74;
       beam(m, [x, 8.4, z], [x - side * 5.5, 12.15, z], 0.22, 0.17, '46342a', 6);
       beam(m, [x - side * 3.3, 11.05, z], [x - side * 3.3, 13.58, z], 0.155, 0.14, '584231', 5);
       beam(m, [x, 12.7, z], [30, 13.55, z], 0.19, 0.17, '4e382d', 6);
-      // Hanging blue-and-gold castle banners along side piers
-      const bx = 30 + side * 19.8;
-      quad(
-        m,
-        [bx, 3.6, z - 0.7],
-        [bx, 8.2, z - 0.7],
-        [bx, 8.2, z + 0.7],
-        [bx, 3.6, z + 0.7],
-        '394a63',
-        false
-      );
-      quad(
-        m,
-        [bx - side * 0.04, 3.9, z - 0.14],
-        [bx - side * 0.04, 8.0, z - 0.14],
-        [bx - side * 0.04, 8.0, z + 0.14],
-        [bx - side * 0.04, 3.9, z + 0.14],
-        'b3945d',
-        false
-      );
     }
   }
-
-  // West Servants' Cloister (courtyard side gallery: broken irons & torn captor's cloak).
-  for (let z = 1443; z <= 1463; z += 5) {
-    box(m, 15.6, 0.1, z, 0.72, 4.6, 0.72, '88827e');
-    box(m, 15.6, 4.6, z, 0.96, 0.34, 0.96, '9d948a');
-  }
-  box(m, 10.7, 4.9, 1453, 10.6, 0.38, 22.5, '665d58');
-  // Stone bench in the cloister holding broken irons and a torn dark-red cloak.
-  box(m, 7.9, 0.1, 1454, 1.8, 0.56, 4.4, '7e7872');
-  box(m, 7.9, 0.66, 1454, 2.0, 0.14, 4.6, '958e85');
-  // Broken iron shackles & chain links on the bench
-  for (let i = 0; i < 4; i++) {
-    rings(
-      m,
-      [
-        [7.8 + i * 0.18, 0.82, 1453.1 + i * 0.16, 0.12],
-        [7.8 + i * 0.18, 0.89, 1453.1 + i * 0.16, 0.12],
-      ],
-      8,
-      '4d5259'
-    );
-  }
-  // Torn captor's cloak slumped beside the broken irons
-  stone(m, 7.95, 0.76, 1454.9, 0.65, 0.28, 0.9, '5a3638', 1.4);
-  if (g.lantern) g.lantern(m, 14.8, 2.5, 1454, 1.15);
-
-  // East Bell Gallery & Rampart Overlook (steps up to 2.4m overlooking the approaching host).
-  for (let i = 0; i < 10; i++) {
-    const sz = 1442 + i * 0.8,
-      sh = (i + 1) * 0.24;
-    box(m, 49.4, 0.05, sz + 0.4, 9.2, sh, 0.82, i % 2 ? '837c78' : '8d857f');
-  }
-  box(m, 49.4, 0.05, 1457.2, 9.4, 2.38, 14.6, '7b7571');
-  box(m, 44.5, 2.4, 1457.2, 0.48, 1.08, 14.6, '968e86');
-  // Cast-bronze bell wheel & chain pulley on the overlook connecting up to the keep tower.
-  box(m, 51.8, 2.42, 1456, 0.42, 2.4, 0.42, '6b5642');
-  box(m, 51.8, 2.42, 1459, 0.42, 2.4, 0.42, '6b5642');
-  beam(m, [51.8, 4.6, 1456], [51.8, 4.6, 1459], 0.16, 0.16, '786048', 6);
-  rings(
-    m,
-    [
-      [51.8, 3.6, 1457.5, 0.72, 0.72],
-      [51.8, 3.85, 1457.5, 0.75, 0.75],
-    ],
-    12,
-    '9a7d4f'
-  );
-  beam(m, [51.8, 4.6, 1457.5], [46.5, 11.4, 1466], 0.05, 0.05, '595046', 5);
-  if (g.lantern) g.lantern(m, 45.2, 3.48, 1454, 1.15);
 }
-
 export function makeHall(m, g) {
   const { box, beam, tri, quad } = g;
   box(m, 30, -0.03, (south + north) / 2, 44, 0.17, north - south, '5d514c');
@@ -403,8 +222,8 @@ export function makeHall(m, g) {
     tri(m, [west, ceiling, z], [east, ceiling, z], [30, ridge, z], '665951');
   makeHallProps(m, g);
 }
-
-// Painted interior panels shared by WebGL and software renderers.
+// These rectangles refer to regions of the painted interior atlas. Both renderers
+// traverse precisely the same wall panels and flagstone repeats.
 const roomPanels = [];
 function panel(a, b, c, d, uv) {
   roomPanels.push({ a, b, c, d, uv });
@@ -413,8 +232,6 @@ const floorUV = [0.17, 0.976, 0.64, 0.768],
   roofUV = [0.12, 0.03, 0.45, 0.19];
 const sideUV = [0.022, 0.633, 0.239, 0.101],
   northUV = [0.175, 0.634, 0.825, 0.062];
-const lintelUV = [0.28, 0.335, 0.72, 0.054];
-
 for (let x = west; x < east; x += 11)
   for (let z = south; z < north; z += 8) {
     const flipX = (x - west) % 22 !== 0,
@@ -450,8 +267,7 @@ function endPanel(x0, x1, y0, y1, z, uv) {
 endPanel(west, east, floor, ceiling, north - 0.03, northUV);
 endPanel(west, openingL, floor, ceiling, south + 0.03, sideUV);
 endPanel(openingR, east, floor, ceiling, south + 0.03, [sideUV[2], sideUV[1], sideUV[0], sideUV[3]]);
-endPanel(openingL, openingR, lintel, ceiling, south + 0.03, lintelUV);
-
+endPanel(openingL, openingR, lintel, ceiling, south + 0.03, [0.28, 0.335, 0.72, 0.054]);
 export function hallSurfaceVertices() {
   const points = [];
   for (const {
@@ -469,15 +285,17 @@ export function hallSurfaceVertices() {
       [c, u1, v1],
       [d, u0, v1],
     ])
-      points.push(...pt, u, v, 1);
+      points.push(pt[0], pt[1] + castleAltitude, pt[2], u, v, 1);
   }
   return new Float32Array(points);
 }
-
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const mirror = (n) => 1 - Math.abs((((n % 2) + 2) % 2) - 1);
-
 export function createHallPainter() {
+  const runner = new Image();
+  runner.decoding = 'async';
+  runner.src = new URL('./hall-runner.webp', import.meta.url).href;
+  let weave = null;
   const image = new Image();
   image.decoding = 'async';
   let source = null,
@@ -494,7 +312,6 @@ export function createHallPainter() {
     slowFrames = 0,
     fastFrames = 0,
     pixelsUnavailable = false;
-
   function unpack() {
     if (source) return true;
     if (pixelsUnavailable || !image.complete || !image.naturalWidth) return false;
@@ -504,6 +321,9 @@ export function createHallPainter() {
     try {
       const context = sheet.getContext('2d', { willReadFrequently: true });
       context.drawImage(image, 0, 0);
+      // Candlelit faces and the living stag remain the brightest low-level forms.
+      context.fillStyle = 'rgba(20,17,30,.22)';
+      context.fillRect(0, 0, sheet.width, sheet.height);
       source = new Uint32Array(context.getImageData(0, 0, sheet.width, sheet.height).data.buffer);
       textureWidth = sheet.width;
       textureHeight = sheet.height;
@@ -514,11 +334,19 @@ export function createHallPainter() {
     return Boolean(source);
   }
   image.src = artURL;
-
   function draw(ctx, W, H, world, ray, queue) {
     const p = world.player;
     if (!insideHall(p.x, p.z) || !unpack()) return false;
-    const scale = Math.min(1, 620 / W, 360 / H) * quality,
+    if (!weave && runner.complete && runner.naturalWidth) {
+      const tile = document.createElement('canvas');
+      tile.width = tile.height = 256;
+      const c = tile.getContext('2d', { willReadFrequently: true });
+      c.drawImage(runner, 0, 0, 256, 256);
+      weave = new Uint32Array(c.getImageData(0, 0, 256, 256).data.buffer);
+      lastView = [];
+    }
+    const target = world.renderQuality === 'low' ? 0.58 : world.renderQuality === 'high' ? 1 : quality;
+    const scale = Math.min(1, 505 / W, 286 / H) * target,
       sw = Math.max(2, Math.round(W * scale)),
       sh = Math.max(2, Math.round(H * scale));
     const f = H * 0.685;
@@ -533,21 +361,15 @@ export function createHallPainter() {
       rows = Float32Array.from({ length: sh }, (_, y) => ((0.5 - (y + 0.5) / sh) * H) / f);
       lastView = [];
     }
-    const view = [
-      Math.round(p.x * 100),
-      Math.round(p.z * 100),
-      Math.round((p.yaw || 0) * 500),
-      Math.round((p.pitch || 0) * 500),
-      Math.round((W / H) * 200),
-    ];
+    const view = [p.x, p.z, p.yaw, p.pitch || 0, W / H];
     const changed = view.some((value, i) => value !== lastView[i]);
     if (changed) {
       const started = performance.now();
-      const sy = Math.sin(p.yaw || 0),
-        cy = Math.cos(p.yaw || 0),
-        sp = Math.sin(p.pitch || 0),
-        cp = Math.cos(p.pitch || 0);
-      const eyeY = floor + 1.66;
+      const sy = Math.sin(view[2]),
+        cy = Math.cos(view[2]),
+        sp = Math.sin(view[3]),
+        cp = Math.cos(view[3]);
+      const eyeY = (p.feetY ?? castleAltitude + 0.17) - castleAltitude + 1.66;
       for (let y = 0, i = 0; y < sh; y++) {
         const front = cp - rows[y] * sp,
           ry = sp + rows[y] * cp;
@@ -559,7 +381,16 @@ export function createHallPainter() {
           const zHit = ((dz < 0 ? south : north) - p.z) / dz;
           let a, b, crop;
           if (yHit <= xHit && yHit <= zHit) {
-            a = mirror((p.x + dx * yHit - west) / 11);
+            const floorX = p.x + dx * yHit,
+              floorZ = p.z + dz * yHit;
+            if (weave && ry < 0 && Math.abs(floorX - 30) < 1.17 && floorZ > 1466.3 && floorZ < 1514.3) {
+              output[i] =
+                weave[
+                  ((((floorZ - 1466.3) * 109.4) | 0) & 255) * 256 + ((((floorX - 28.83) * 109.4) | 0) & 255)
+                ];
+              continue;
+            }
+            a = mirror((floorX - west) / 11);
             b = mirror((p.z + dz * yHit - south) / 8);
             crop = ry < 0 ? floorUV : roofUV;
           } else if (xHit < zHit) {
@@ -593,54 +424,53 @@ export function createHallPainter() {
       }
       offscreen.putImageData(pixels, 0, 0);
       lastView = view;
-      const ms = performance.now() - started;
-      if (ms > 18) {
+      const cost = performance.now() - started;
+      if (cost > 16) {
         slowFrames++;
         fastFrames = 0;
-      } else if (ms < 8) {
-        fastFrames++;
-        slowFrames = Math.max(0, slowFrames - 1);
       } else {
         slowFrames = Math.max(0, slowFrames - 1);
+        fastFrames = cost < 11 ? fastFrames + 1 : 0;
       }
-      if (slowFrames > 3 && quality > 0.68) {
-        quality = Math.max(0.66, quality - 0.12);
-        slowFrames = 0;
-      } else if (fastFrames > 24 && quality < 1) {
-        quality = Math.min(1, quality + 0.08);
+      if (fastFrames > 58 && quality < 1) {
+        quality = Math.min(1, quality + 0.075);
         fastFrames = 0;
+      }
+      if (slowFrames > 3 && quality > 0.72) {
+        quality = Math.max(0.7, quality - 0.12);
+        slowFrames = 0;
       }
     }
     ctx.drawImage(canvas, 0, 0, W, H);
     if (queue && ray) {
       const flicker = 0.92 + 0.08 * Math.sin(world.elapsed * 7.8);
-      for (const [x, z, size] of [
-        [27.35, 1516.8, 0.42],
-        [34.5, 1518.5, 0.42],
-        [30.5, 1516.5, 0.68],
-        [18.4, 1492, 0.28],
-        [41.5, 1495, 0.28],
+      for (const [x, z] of [
+        [27.35, 1516.8],
+        [34.5, 1518.5],
+        [18.4, 1492],
+        [41.5, 1495],
       ]) {
-        const pt = ray(x, 2.16, z);
+        const pt = ray(x, castleAltitude + 2.16, z);
         if (pt && pt[0] > -W * 0.1 && pt[0] < W * 1.1 && pt[1] > -H * 0.1 && pt[1] < H * 1.1)
           queue.push({
             glow: true,
             x: pt[0],
             y: pt[1],
-            r: clamp(((f * size) / pt[2]) * flicker, 1, 56),
+            r: clamp(((f * 0.28) / pt[2]) * flicker, 1, 35),
             d: pt[2] - 0.06,
           });
       }
     }
     return true;
   }
-
   function dispose() {
     image.onload = null;
     source = null;
+    weave = null;
     canvas = null;
     pixels = null;
     output = null;
   }
   return { draw, dispose };
 }
+const lintelUV = [0.28, 0.335, 0.72, 0.054];

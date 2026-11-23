@@ -23,12 +23,14 @@ export function makeFieldSurvey(world, save) {
   let pinMode = false,
     animation = 0,
     drag = null;
+  const touches = new Map();
+  let pinch = null;
   canvas.id = 'field-map';
   canvas.tabIndex = 0;
   canvas.setAttribute('role', 'img');
   canvas.setAttribute(
     'aria-label',
-    'North-up field map. Arrow keys pan. Plus and minus zoom. Text directions and marked places follow.'
+    'North-up field map. Arrow keys pan. Plus and minus zoom. Enter pins the centre. Pinch to zoom on touch. Text directions and marked places follow.'
   );
   bar.className = 'map-tools';
   text.className = 'map-details';
@@ -153,32 +155,71 @@ export function makeFieldSurvey(world, save) {
     },
     { passive: false }
   );
+  const contact = (e) => ({ x: e.clientX, y: e.clientY });
+  function pinchState() {
+    const [a, b] = touches.values(),
+      r = canvas.getBoundingClientRect();
+    const x = (a.x + b.x) / 2 - r.left,
+      y = (a.y + b.y) / 2 - r.top;
+    return { x, y, span: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), r };
+  }
   canvas.addEventListener('pointerdown', (e) => {
-    if (drag) return;
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY };
-    canvas.setPointerCapture(e.pointerId);
+    if (touches.size >= 2) return;
+    touches.set(e.pointerId, contact(e));
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {}
+    if (touches.size === 2) {
+      const p = pinchState();
+      pinch = {
+        span: p.span,
+        zoom: view.zoom,
+        anchor: mapProjection(p.r.width, p.r.height, world, view).world(p.x, p.y),
+      };
+      drag = null;
+    } else drag = { id: e.pointerId, x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY };
   });
   canvas.addEventListener('pointermove', (e) => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, contact(e));
+    if (pinch && touches.size === 2) {
+      const p = pinchState();
+      view.zoom = clamp((pinch.zoom * p.span) / pinch.span, 1, 24);
+      const [x, z] = mapProjection(p.r.width, p.r.height, world, view).world(p.x, p.y);
+      pan(pinch.anchor[0] - x, pinch.anchor[1] - z);
+      return;
+    }
     if (drag?.id !== e.pointerId) return;
-    const size = canvas.getBoundingClientRect(),
-      s = mapProjection(size.width, size.height, world, view).scale;
-    if (!pinMode) pan((drag.x - e.clientX) / s, (e.clientY - drag.y) / s);
+    const r = canvas.getBoundingClientRect(),
+      scale = mapProjection(r.width, r.height, world, view).scale;
+    if (!pinMode || drag.noPin) pan((drag.x - e.clientX) / scale, (e.clientY - drag.y) / scale);
     drag.x = e.clientX;
     drag.y = e.clientY;
   });
-  canvas.addEventListener('pointerup', (e) => {
-    if (drag?.id !== e.pointerId) return;
-    if (pinMode && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 12) {
+  function release(e) {
+    if (!touches.delete(e.pointerId)) return;
+    if (
+      !pinch &&
+      drag?.id === e.pointerId &&
+      e.type === 'pointerup' &&
+      pinMode &&
+      !drag.noPin &&
+      Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 12
+    ) {
       const r = canvas.getBoundingClientRect(),
         q = mapProjection(r.width, r.height, world, view).world(e.clientX - r.left, e.clientY - r.top);
       pin(clamp(q[0], MAP.minX, MAP.maxX), clamp(q[1], MAP.minZ, MAP.maxZ));
       drop.click();
     }
+    pinch = null;
     drag = null;
-  });
-  canvas.addEventListener('pointercancel', () => {
-    drag = null;
-  });
+    if (touches.size === 1) {
+      const [id, pos] = touches.entries().next().value;
+      drag = { id, ...pos, startX: pos.x, startY: pos.y, noPin: true };
+    }
+  }
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture'])
+    canvas.addEventListener(event, release);
   canvas.addEventListener('keydown', (e) => {
     const d = 110 / view.zoom;
     const keys = {
@@ -189,6 +230,7 @@ export function makeFieldSurvey(world, save) {
       '+': () => zoom(1.5),
       '=': () => zoom(1.5),
       '-': () => zoom(1 / 1.5),
+      Enter: () => pin(view.x, view.z),
     };
     if (keys[e.key]) {
       e.preventDefault();

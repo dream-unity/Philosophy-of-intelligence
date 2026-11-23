@@ -44,7 +44,7 @@ const PRECACHE_URLS = [
 
 function isExcludedPath(pathname) {
   return (
-    /^\/common-earth(?:\/|$)/i.test(pathname) ||
+    /^\/(?:common-earth|zelda-and-the-princess-zombie)(?:\/|$)/i.test(pathname) ||
     /^\/dist(?:\/|$)/i.test(pathname) ||
     /^\/(?:server\.js|package(?:-lock)?\.json|metadata\.json)$/i.test(pathname)
   );

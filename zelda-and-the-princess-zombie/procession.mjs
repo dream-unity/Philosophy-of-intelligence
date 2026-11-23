@@ -9,6 +9,32 @@ for (let i = 1; i < MAP.horde.length; i++) {
   running += length;
 }
 export const processionLength = running;
+// The approach to the iron narrows to five abreast. All travellers share the
+// same timetable, even when the player stops, doubles back, or leaves the road.
+export function frontStation(clock, duration) {
+  const fraction = clamp(clock / duration, 0, 1);
+  // Ease from a walking pace to the final queue over the width of the bend.
+  const bend = 0.61, transition = 0.065, after = 0.115;
+  const before = (1 - after * (1 - bend)) / bend;
+  const t = clamp((fraction - bend + transition) / (2 * transition), 0, 1);
+  const tail = Math.max(0, fraction - bend - transition);
+  const slow = transition * t * t + tail;
+  return running * (fraction * before + (after - before) * slow);
+}
+export function stillTheColumn(w, seconds) {
+  const at = w.elapsed;
+  const start = w.hostPauseAt ?? at, end = w.hostPauseUntil ?? at;
+  w.hostPauseSpent = (w.hostPauseSpent || 0) + clamp(at - start, 0, Math.max(0, end - start));
+  w.hostPauseAt = at;
+  w.hostPauseUntil = Math.max(end, at + seconds);
+}
+export function marchClock(w, time, rank = 0) {
+  const start = w.hostPauseAt, end = w.hostPauseUntil;
+  // Word travels from the point to the rear. The leading body is the race clock.
+  const wave = rank * 0.033;
+  const pause = start == null ? 0 : clamp(time - start - wave, 0, Math.max(0, end - start));
+  return Math.max(0, time - (w.raceGrace || 0) - (w.hostPauseSpent || 0) - pause);
+}
 const normals = MAP.horde.map((_, i) => {
   const a = courses[Math.max(0, i - 1)],
     b = courses[Math.min(i, courses.length - 1)];

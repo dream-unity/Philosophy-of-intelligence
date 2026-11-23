@@ -1,11 +1,21 @@
 // The simulation owns the pace, path and obstacle responses. Each walking file
 // samples that path in turn, so the 3,072 guests never need a single-frame rebuild.
 import * as simulation from './world.mjs';
+import { marchClock } from './procession.mjs';
 const { hordePosition, HORDE_COUNT, terrainHeight } = simulation;
 
 const WIDTH = 48,
   ROWS = HORDE_COUNT / WIDTH,
   PERIOD = 0.42;
+function terrainSight(p, eye, q) {
+  const dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz);
+  const head = terrainHeight(q.x, q.z) + 1.63;
+  for (let step = 2; step < d; step += 7) {
+    const u = step / d;
+    if (terrainHeight(p.x + dx * u, p.z + dz * u) > eye + (head - eye) * u + 0.02) return false;
+  }
+  return true;
+}
 export function createProcessionView() {
   const x = new Float32Array(HORDE_COUNT),
     z = new Float32Array(HORDE_COUNT),
@@ -166,7 +176,9 @@ export function createProcessionView() {
     let bowl = false;
     const poses = selected.map((id) => {
       at(id, scratch);
-      const phase = ((id * 37) % 101) * 0.117 + time * (2.55 + ((id * 3) % 11) * 0.054),
+      const movementTime = marchClock(w, time, Math.floor(id / WIDTH));
+      const reach = w.hostWarning?.i === id ? Math.min(1, Math.max(0, (time - w.hostWarning.at) / 0.88)) : 0;
+      const phase = ((id * 37) % 101) * 0.117 + movementTime * (2.55 + ((id * 3) % 11) * 0.054),
         sway = Math.sin(phase) * 0.038;
       let kind = 1 + ((Math.imul(id + 31, 19349663) >>> 6) % 7);
       if (!bowl && (id * 43) % 107 === 0) {
@@ -183,7 +195,7 @@ export function createProcessionView() {
         flip: scratch.vx * c - scratch.vz * s < 0,
         seed: id,
         kind,
-        rig: { type: 'marcher', phase: id * 0.78 },
+        rig: { type: 'marcher', phase: id * 0.78 + (movementTime - time) * 4.7 / 1.76, reach },
       };
     });
     simulation.recordProcessionView?.(w, poses, aspect);
@@ -194,6 +206,24 @@ export function createProcessionView() {
     sightTime = -Infinity,
     sightX = Infinity,
     sightZ = Infinity;
+  let lookout = null;
+  function aboveHorizon(w, eye) {
+    const p = w.player;
+    // Downstream, ordinary depth testing handles individual ranks. In the
+    // forest test the real ground across the valley instead of a trigger line.
+    if (p.z >= 470 || w.raceWitness) return true;
+    const source = w.renderSource || w;
+    if (lookout && lookout.w === source && w.elapsed >= lookout.at && w.elapsed - lookout.at < 0.65 &&
+        Math.hypot(p.x - lookout.x, p.z - lookout.z) < 2 && Math.abs(eye - lookout.eye) < 0.45) return lookout.clear;
+    let clear = false;
+    for (let row = 0; row < ROWS && !clear; row += 7) {
+      for (const file of [0, 46, 47]) {
+        if (terrainSight(p, eye, hordePosition(w, row * WIDTH + file))) { clear = true; break; }
+      }
+    }
+    lookout = { w: source, at: w.elapsed, x: p.x, z: p.z, eye, clear };
+    return clear;
+  }
   function visibility(w, eye) {
     const p = w.player;
     if (
@@ -210,25 +240,11 @@ export function createProcessionView() {
     const q = {};
     for (let band = 0; band < sight.length; band++) {
       at((band * 4 + 2) * WIDTH, q);
-      const dx = q.x - p.x,
-        dz = q.z - p.z,
-        dist = Math.hypot(dx, dz);
-      let clear = 1;
-      if (dist > 100) {
-        const target = terrainHeight(q.x, q.z) + 1.63;
-        for (let step = 2; step < dist; step += 7) {
-          const u = step / dist;
-          if (terrainHeight(p.x + dx * u, p.z + dz * u) > eye + (target - eye) * u + 0.02) {
-            clear = 0;
-            break;
-          }
-        }
-      }
-      sight[band] = clear;
+      sight[band] = Math.hypot(q.x - p.x, q.z - p.z) <= 100 || terrainSight(p, eye, q) ? 1 : 0;
     }
     return sight;
   }
-  return { update, at, near, visibility };
+  return { update, at, near, visibility, aboveHorizon };
 }
 
 // Same-depth silhouettes share a draw call. Detailed walkers, walls, and trees

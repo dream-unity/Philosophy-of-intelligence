@@ -1,6 +1,6 @@
 export const actionNames = {
   interact: 'Interact',
-  potion: 'Cinder phial',
+  potion: 'Use belt item',
   strike: 'Sword',
   thrust: 'Thrust',
   guard: 'Guard',
@@ -14,26 +14,50 @@ export const slotNames = [
   'Lower middle',
   'Lower right',
 ];
-export const keyChoices = 'EQFRGZXCVBTHYUIOPKLN'.split('').map((letter) => 'Key' + letter);
-const defaultKeys = { interact: 'KeyE', potion: 'KeyQ', strike: 'KeyF', thrust: 'KeyR', guard: 'KeyG' };
+export const utilityActions = { dodge: 'Dodge', bag: 'Bag', map: 'Map', journal: 'Journal', tools: 'Tools' };
+export function fieldAction(hand, item, hint) {
+  if (hand === 'belt' && item) return 'potion';
+  return hint ? 'interact' : 'strike';
+}
+export function toolsGesture(dx, dy) {
+  if (Math.hypot(dx, dy) < 24) return 'tools';
+  if (Math.abs(dx) > Math.abs(dy)) return 'dodge';
+  return dy < 0 ? 'guard' : 'potion';
+}
+export const keyChoices = [...'EQFRGZXCVBTHYUIOPKLNMJ'.split('').map((letter) => 'Key' + letter), 'Space'];
+export function keyLabel(code) {
+  return code?.startsWith('Key') ? code.slice(3) : code || '';
+}
+const defaultKeys = {
+  interact: 'KeyE',
+  potion: 'KeyQ',
+  strike: 'KeyF',
+  thrust: 'KeyV',
+  guard: 'KeyR',
+  dodge: 'Space',
+  bag: 'KeyB',
+  map: 'KeyM',
+  journal: 'KeyJ',
+  tools: 'KeyT',
+};
 export function controlLayout(saved = {}) {
   const ids = Object.keys(actionNames),
     slots = [];
   for (const id of Array.isArray(saved?.slots) ? saved.slots : [])
     if (ids.includes(id) && !slots.includes(id)) slots.push(id);
   slots.push(...ids.filter((id) => !slots.includes(id)));
-  const keys = { ...defaultKeys },
+  const keys = {},
     taken = new Set();
-  for (const id of Object.keys(keys)) {
+  for (const id of Object.keys(defaultKeys)) {
     const code = saved?.keys?.[id];
     if (keyChoices.includes(code) && !taken.has(code)) {
       keys[id] = code;
       taken.add(code);
-    } else keys[id] = null;
+    }
   }
-  for (const id of Object.keys(keys))
+  for (const [id, preferred] of Object.entries(defaultKeys))
     if (!keys[id]) {
-      keys[id] = !taken.has(defaultKeys[id]) ? defaultKeys[id] : keyChoices.find((code) => !taken.has(code));
+      keys[id] = !taken.has(preferred) ? preferred : keyChoices.find((code) => !taken.has(code));
       taken.add(keys[id]);
     }
   return { slots, keys };

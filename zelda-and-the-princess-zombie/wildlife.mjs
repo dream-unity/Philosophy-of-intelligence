@@ -1,3 +1,4 @@
+import { kilnCover } from './story-field.mjs';
 import { distance, clamp, terrainHeight } from './geography.mjs';
 import { clearSegment, isSheltered, barrier } from './travel.mjs';
 import { isEnemy, cue, moveBody } from './swordplay.mjs';
@@ -91,7 +92,7 @@ function advancingFire(w, a, hooks) {
     delete a.breath;
     return;
   }
-  if (b.hit) return;
+  if (b.hit || kilnCover(w, 'dragon')) return;
   const p = w.player,
     dx = p.x - b.x,
     dz = p.z - b.z,
@@ -148,6 +149,10 @@ export function advanceWildlife(w, dt, hooks) {
       hooks.notify(w, 'A howl rises behind the trees. A second answers it.', 4);
     }
   }
+  const mist = w.fieldMedicine?.veil,
+    lure = w.fieldMedicine?.lure;
+  if (mist && mist.until > w.elapsed && distance(mist, p) < 4.8 && clearSegment(w, mist.x, mist.z, p.x, p.z))
+    p.scentMaskedUntil = w.elapsed + 13;
   const pack = w.actors
     .filter((a) => a.alive && a.type === 'wolf' && (distance(a, p) < 50 || a.huntingUntil > w.elapsed))
     .sort((a, b) => distance(a, p) - distance(b, p));
@@ -161,17 +166,83 @@ export function advanceWildlife(w, dt, hooks) {
     if (a.type === 'dragon') advancingFire(w, a, hooks);
     if (w.ending) return;
     if (carryMomentum(w, a, dt, hooks)) continue;
+    if (
+      a.z > 1045 &&
+      !w.ropeFallen &&
+      hooks.marcherAt &&
+      (!a.nextHostListen || w.elapsed >= a.nextHostListen)
+    ) {
+      a.nextHostListen = w.elapsed + 0.45;
+      // Animals hear files of boots across the downs and retreat from the
+      // nearest rank, even when the player stays behind cover.
+      let closest,
+        gap = a.type === 'dragon' ? 48 : 31;
+      for (let row = 0; row < 64; row += 4) {
+        const q = hooks.marcherAt(w, row * 48);
+        const d = distance(a, q);
+        if (d < gap) {
+          closest = q;
+          gap = d;
+        }
+      }
+      if (closest) {
+        const scale = 27 / Math.max(0.5, gap);
+        a.hostFlight = {
+          until: w.elapsed + 1.8,
+          x: a.x + (a.x - closest.x) * scale,
+          z: a.z + (a.z - closest.z) * scale,
+        };
+      }
+    }
+    if (a.hostFlight?.until > w.elapsed) {
+      a.windupUntil = 0;
+      a.alerted = false;
+      if (a.type === 'dragon') a.airHeight = Math.min(4.4, (a.airHeight || 1.7) + dt);
+      steer(w, a, a.hostFlight.x, a.hostFlight.z, dt * spec.speed * 0.84);
+      continue;
+    }
+    if (a.type === 'wolf' && (p.scentMaskedUntil > w.elapsed || kilnCover(w, 'wolf')) && d > 1.6) {
+      a.windupUntil = 0;
+      a.huntingUntil = 0;
+      a.alerted = false;
+      const az = Math.atan2(a.x - p.x, a.z - p.z) + Math.sin(a.phase) * 0.45;
+      steer(w, a, a.x + Math.sin(az) * 4, a.z + Math.cos(az) * 4, dt * (d < 10 ? 4.8 : 1.3));
+      continue;
+    }
+    if (
+      lure &&
+      lure.until > w.elapsed &&
+      a.type !== 'wolf' &&
+      distance(lure, a) < (a.type === 'dragon' ? 50 : 34) &&
+      a.lureSpentAt !== lure.at &&
+      !a.windupUntil &&
+      (a.recoverUntil || 0) <= w.elapsed
+    ) {
+      const gap = distance(lure, a);
+      a.alerted = false;
+      if (gap > (a.type === 'dragon' ? 13 : 2.7)) {
+        steer(w, a, lure.x, lure.z, dt * spec.speed);
+      } else {
+        a.heading = a.attackYaw = Math.atan2(lure.x - a.x, lure.z - a.z);
+        a.windupUntil = w.elapsed + spec.wind;
+        a.lureSpentAt = lure.at;
+        cue(w, 'telegraph', a.type, a);
+      }
+      continue;
+    }
     const rank = a.type === 'wolf' ? pack.indexOf(a) : -1;
     const hunt =
       a.huntingUntil > w.elapsed || (rank > 0 && lead && distance(lead, p) < 30 && distance(a, lead) < 35);
     if (rank >= 0) a.packRole = rank === 0 ? 'press' : rank % 2 ? 'left' : 'right';
-    a.alerted = !refuge && (hunt || (d < spec.notice && Math.hypot(p.x - a.homeX, p.z - a.homeZ) < 90));
+    const hiddenFromCreature = refuge || kilnCover(w, a.type);
+    a.alerted =
+      !hiddenFromCreature && (hunt || (d < spec.notice && Math.hypot(p.x - a.homeX, p.z - a.homeZ) < 90));
     if (!a.alerted && d > 160) {
       a.airHeight = a.type === 'dragon' ? 3.8 : 0;
       continue;
     }
     if (a.windupUntil) {
-      if (refuge) {
+      if (hiddenFromCreature && !(lure && a.lureSpentAt === lure.at)) {
         a.windupUntil = 0;
         continue;
       }

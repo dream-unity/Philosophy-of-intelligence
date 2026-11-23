@@ -1,8 +1,10 @@
 import { createWorld, migrate } from './world.mjs';
+import { recoverFooting } from './travel.mjs';
 // A rejected storage write retains this tab’s copy, and the UI can describe its durability honestly.
 export const saveKey = 'xero.forest.journey.v1',
   settingsKey = 'xero.forest.controls.v1';
 const forkKey = 'xero.forest.fork.v1',
+  olderForkKey = 'xero.forest.crossroads.v1',
   historyKey = 'xero.forest.endings.v1',
   memory = new Map(),
   failed = new Set();
@@ -70,6 +72,7 @@ export function restoreJourney(saved) {
     ...copy,
     player: { ...current.player, ...copy.player },
     runId: copy.runId || newRun(),
+    legacyCrossroads: copy.legacyCrossroads ?? (!copy.runId && Number.isFinite(copy.player.maxStamina)),
     events: [],
     mapOpen: false,
   };
@@ -80,7 +83,9 @@ export function restoreJourney(saved) {
   if (w.survey && (!Array.isArray(w.survey.trace) || !Array.isArray(w.survey.pins) || !w.survey.visits))
     delete w.survey;
   if (!Array.isArray(w.journal)) w.journal = [];
+  if (copy.journeyEdition == null) delete w.journeyEdition;
   migrate(w);
+  if (!w.ending && !w.sequence) recoverFooting(w);
   return w;
 }
 export function rememberFork(w, initial = false) {
@@ -91,15 +96,28 @@ export function rememberFork(w, initial = false) {
 }
 export function recallFork(w) {
   const record = read(forkKey);
-  if (!record?.world || record.runId !== w.runId) return null;
-  const next = { ...record.world, runId: newRun(), events: [], mapOpen: false };
+  if (!record?.world || record.runId !== w.runId) {
+    if (!w.legacyCrossroads) return null;
+    const old = restoreJourney(read(olderForkKey));
+    if (!old || old.route !== 'undecided' || old.ending) return null;
+    old.runId = newRun();
+    rememberFork(old);
+    return old;
+  }
+  const next = restoreJourney(record.world);
+  if (!next) return null;
+  next.runId = newRun();
   rememberFork(next, !record.atFork);
   return next;
 }
-export const hasFork = (w) => read(forkKey)?.runId === w?.runId;
+export const hasFork = (w) =>
+  Boolean(
+    w &&
+      (read(forkKey)?.runId === w.runId || (w.legacyCrossroads && read(olderForkKey)?.route === 'undecided'))
+  );
 export function rememberEnding(w) {
   if (!w.ending) return;
-  const history = read(historyKey) || [],
+  const history = pastJourneys(),
     id = w.runId + '-' + w.ending.id;
   if (history.some((item) => item.id === id)) return;
   write(historyKey, [
@@ -107,7 +125,29 @@ export function rememberEnding(w) {
     ...history,
   ]);
 }
-export const pastJourneys = () => read(historyKey) || [];
+const oldTitles = {
+  saved: 'The Bell Falls Silent',
+  feast: 'The Feast',
+  bound: 'The Bound Way',
+  horde: 'The Three Thousand',
+  wilds: 'Lost to the Wilds',
+};
+export function pastJourneys() {
+  const rows = read(historyKey);
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row) => {
+    if (typeof row === 'string' && oldTitles[row])
+      return [
+        {
+          id: 'legacy-' + row,
+          ending: { id: row, title: oldTitles[row], text: 'Recorded in an earlier journey.' },
+          journal: [],
+          legacy: true,
+        },
+      ];
+    return row?.ending?.title ? [row] : [];
+  });
+}
 
 export function journeyFile(w) {
   if (!w) return null;

@@ -30,6 +30,33 @@ function volatileStore() {
 }
 const store = () => import(root + 'journey-store.mjs?fixture=' + Math.random());
 
+test('the compact hand speaks to a nearby witch and prioritises only an explicitly readied belt', () => {
+  const w = sim.createWorld(), witch = w.actors.find((actor) => actor.type === 'witch');
+  near(w, witch.x, witch.z - 2);
+  w.player.yaw = 0;
+  const prompt = sim.getHUD(w).hint;
+  assert.match(prompt, /Speak to the witch/);
+  assert.equal(control.fieldAction('sword', { id: 'cinder' }, prompt), 'interact');
+  assert.equal(control.fieldAction('belt', null, prompt), 'interact');
+  assert.equal(control.fieldAction('belt', { id: 'veil' }, prompt), 'potion');
+  assert.equal(control.fieldAction('sword', null, ''), 'strike');
+  const chosen = control.fieldAction('sword', null, prompt);
+  w.player.yaw = Math.PI;
+  assert.equal(sim.getHUD(w).hint, '');
+  sim.act(w, chosen);
+  assert.equal(witch.alive, true);
+  assert.ok(!w.attack);
+});
+test('the tools key accepts a tap, two horizontal dodge directions, guard and belt from either hand', () => {
+  for (const [dx, dy, action] of [[4, 3, 'tools'], [0, -24, 'guard'], [0, 24, 'potion'], [28, -4, 'dodge'], [-28, 7, 'dodge']])
+    assert.equal(control.toolsGesture(dx, dy), action);
+  const layout = control.controlLayout();
+  control.rebind(layout, 'bag', 'KeyZ');
+  const restored = control.controlLayout(JSON.parse(JSON.stringify(layout)));
+  assert.equal(restored.keys.bag, 'KeyZ');
+  assert.equal(restored.keys.dodge, 'Space');
+});
+
 test('50/52–54: sketches accrue real sites and keep north up through zoom and pan', () => {
   const w = sim.createWorld();
   assert.equal(geo.course(w), null);
