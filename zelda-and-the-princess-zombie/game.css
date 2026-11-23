@@ -932,3 +932,230 @@ h1 {
   vertical-align: 0.24em;
   border-top: 2px solid var(--key-color);
 }
+.route-readout,
+.race-readout,
+.belt-readout {
+  max-width: min(31rem, 65%);
+  font-size: 0.77rem;
+  line-height: 1.4;
+  color: #f3dbac;
+  text-shadow:
+    0 1px 3px #000,
+    0 1px 7px #000;
+  letter-spacing: 0.012em;
+}
+.route-readout:not(:empty) {
+  margin-top: 0.3rem;
+}
+.race-readout {
+  color: #edcfb4;
+}
+.belt-readout {
+  color: #c3ded5;
+}
+.stamina {
+  width: 6.5rem;
+  height: 5px;
+  background: #121b15b0;
+  border: 1px solid #d4ba846e;
+  margin-top: 0.4rem;
+}
+.stamina i {
+  display: block;
+  background: #bbae71;
+  height: 100%;
+}
+#bell-call:not([hidden]),
+#captions:not(:empty) {
+  background: #10201ce8;
+  color: #efe0b8;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid #9e8d6080;
+  font-size: 0.85rem;
+  line-height: 1.25;
+}
+#bell-call {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  min-height: 1.8rem;
+}
+.bell-tone {
+  color: #eac98c;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+.bell-tone.high {
+  color: #f3dfa9;
+}
+#captions {
+  font-style: italic;
+}
+.stage-direction {
+  font-style: italic;
+  color: #c7bc9a !important;
+  font-size: 0.9rem !important;
+}
+.panel article + article {
+  border-top: 1px solid #b1a47742;
+  padding-top: 0.6rem;
+}
+.panel h3 {
+  font: 1.2rem var(--serif);
+  color: var(--gold);
+  margin: 0.65rem 0 0.25rem;
+}
+.setting select {
+  max-width: 54%;
+  padding: 0.4rem;
+  background: #182b24;
+  border: 1px solid #aa936b88;
+  color: var(--cream);
+  font: inherit;
+}
+#storage-status:not(:empty) {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  background: #16231f;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.74rem;
+  z-index: 2;
+  color: #eddebb;
+}
+#resist {
+  position: absolute;
+  bottom: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+.map-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 0.4rem 0;
+}
+.map-tools button {
+  font-size: 0.82rem;
+  min-width: 2.3rem;
+  min-height: 2.3rem;
+  padding: 0.35rem 0.63rem;
+}
+.map-tools button[aria-pressed='true'] {
+  background: #debc7a;
+  color: #17241c;
+}
+.map-panel canvas {
+  touch-action: none;
+  cursor: grab;
+}
+.map-panel canvas:active {
+  cursor: grabbing;
+}
+.map-details {
+  font-size: 0.88rem;
+  color: #e3d7ba;
+  margin-top: 0.6rem;
+}
+.map-details summary {
+  cursor: pointer;
+  padding: 0.4rem 0;
+}
+.map-details ul {
+  list-style: none;
+  padding: 0;
+}
+.map-details li {
+  margin: 0.3rem 0;
+}
+.map-details li .secondary {
+  min-height: 1.9rem;
+  padding: 0.2rem 0.5rem;
+  margin: 0 0.35rem;
+  font-size: 0.83rem;
+}
+@media (pointer: coarse), (any-pointer: coarse), (hover: none) {
+  .game-bottom .equipment {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(3rem, auto));
+    max-width: 58%;
+    gap: 0.25rem;
+  }
+  .equipment button {
+    min-height: 2.75rem;
+    padding: 0.28rem 0.48rem;
+    touch-action: none;
+  }
+  .equipment button svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  body[data-hand='left'] .game-bottom {
+    flex-direction: row-reverse;
+  }
+  body[data-hand='left'] .equipment {
+    margin-left: 0;
+    margin-right: auto;
+  }
+  body[data-stick='large'] .stick {
+    width: clamp(6rem, 12vw, 8.6rem);
+  }
+  body[data-stick='small'] .stick {
+    width: clamp(3.8rem, 8vw, 5.5rem);
+  }
+  body[data-stick-height='raised'] .stick {
+    margin-bottom: clamp(1.8rem, 6vh, 4rem);
+  }
+}
+@media (max-height: 500px) {
+  .route-readout,
+  .race-readout,
+  .belt-readout {
+    font-size: 0.68rem;
+  }
+  .feedback {
+    bottom: 21%;
+  }
+  .game-bottom .equipment button {
+    min-height: 2.25rem;
+    font-size: 0.65rem;
+  }
+  .objective {
+    max-width: 65%;
+  }
+}
+@media (max-width: 440px) {
+  .hud .utility {
+    gap: 0.2rem;
+  }
+  .race-readout,
+  .route-readout,
+  .belt-readout {
+    font-size: 0.7rem;
+  }
+  .feedback {
+    bottom: 26%;
+  }
+}
+#sequence-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 27%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(90%, 40rem);
+  padding: 0.5rem 0.85rem;
+  color: #f4e6c8;
+  background: #0c1713dc;
+  border-bottom: 1px solid #b29d73;
+  line-height: 1.45;
+  text-align: center;
+}
+@media (pointer: coarse), (any-pointer: coarse), (hover: none) {
+  .game-bottom .equipment button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+}

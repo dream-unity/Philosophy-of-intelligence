@@ -1,3 +1,4 @@
+import { castleAltitude } from './geography.mjs';
 // The great hall stands within the outer curtain wall. Eye, lights, dining table,
 // doorway and all painted surfaces use the same metre coordinates as the overworld.
 const west = 8,
@@ -46,6 +47,62 @@ function wax(m, g, x, y, z, scale = 1) {
   );
   beam(m, [x, y + 0.295 * scale, z], [x, y + 0.42 * scale, z], 0.038 * scale, 0.002, 'ffc267', 6);
   beam(m, [x, y + 0.32 * scale, z], [x, y + 0.39 * scale, z], 0.019 * scale, 0.002, 'fff3d2', 5);
+}
+export function bellSwing(w, t = w.elapsed) {
+  if (w.ropeFallen) return 0;
+  // Three pulls pivot the bronze body on the crossbeam. Each strike rings down.
+  const dt = (((t - 6) % 37) + 37) % 37;
+  let a = 0;
+  for (const delay of [0, 0.46, 0.92]) {
+    const d = dt - delay;
+    if (d >= 0 && d < 3.6) a += 0.27 * Math.sin(d * 11.6) * Math.exp(-d * 2.3);
+  }
+  return Math.round(a * 50) / 50;
+}
+export function makeHangingBell(m, g, angle = 0) {
+  const { beam, rings } = g,
+    X = 30.46,
+    Z = 1516.08,
+    start = m.length;
+  beam(m, [X, 6.13, Z], [X, 5.64, Z], 0.052, 0.052, '8c7253', 7);
+  rings(
+    m,
+    [
+      [X, 4.28, Z, 0.83],
+      [X, 4.39, Z, 0.88],
+      [X, 4.51, Z, 0.71],
+      [X, 4.94, Z, 0.55],
+      [X, 5.47, Z, 0.41],
+      [X, 5.61, Z, 0.19],
+      [X, 5.69, Z, 0.104],
+    ],
+    14,
+    (row, k) => (k % 4 === 1 ? 'ad8554' : row <= 2 ? '956e43' : '7f5d3c'),
+    0.12
+  );
+  rings(
+    m,
+    [
+      [X, 4.32, Z, 0.867],
+      [X, 4.365, Z, 0.892],
+    ],
+    14,
+    'c79c60'
+  );
+  beam(m, [X, 4.48, Z], [X, 4.16, Z], 0.044, 0.093, '51402d', 7);
+
+  const ca = Math.cos(angle),
+    sa = Math.sin(angle);
+  for (let i = start; i < m.length; i += 6) {
+    const x = m[i] - X,
+      y = m[i + 1] - 6.13;
+    m[i] = X + ca * x - sa * y;
+    m[i + 1] = castleAltitude + 6.13 + sa * x + ca * y;
+  }
+}
+export function bellAnchorOffset(angle) {
+  const y = 4.18 - 6.13;
+  return [-Math.sin(angle) * y, (Math.cos(angle) - 1) * y, 0];
 }
 export function makeHallProps(m, g) {
   const { box, beam, rings, quad } = g;
@@ -133,32 +190,6 @@ export function makeHallProps(m, g) {
     Z = 1516.08;
   beam(m, [X, ceiling - 0.25, Z], [X, 6.23, Z], 0.029, 0.029, '4a3b2d', 5);
   beam(m, [X - 1.35, 6.19, Z], [X + 1.35, 6.19, Z], 0.13, 0.13, '694930', 6);
-  beam(m, [X, 6.13, Z], [X, 5.64, Z], 0.052, 0.052, '8c7253', 7);
-  rings(
-    m,
-    [
-      [X, 4.28, Z, 0.83],
-      [X, 4.39, Z, 0.88],
-      [X, 4.51, Z, 0.71],
-      [X, 4.94, Z, 0.55],
-      [X, 5.47, Z, 0.41],
-      [X, 5.61, Z, 0.19],
-      [X, 5.69, Z, 0.104],
-    ],
-    14,
-    (row, k) => (k % 4 === 1 ? 'ad8554' : row <= 2 ? '956e43' : '7f5d3c'),
-    0.12
-  );
-  rings(
-    m,
-    [
-      [X, 4.32, Z, 0.867],
-      [X, 4.365, Z, 0.892],
-    ],
-    14,
-    'c79c60'
-  );
-  beam(m, [X, 4.48, Z], [X, 4.16, Z], 0.044, 0.093, '51402d', 7);
   for (const [cx, cz] of [
     [27.35, 1516.8],
     [34.5, 1518.5],
@@ -303,7 +334,7 @@ export function hallSurfaceVertices() {
       [c, u1, v1],
       [d, u0, v1],
     ])
-      points.push(...pt, u, v, 1);
+      points.push(pt[0], pt[1] + castleAltitude, pt[2], u, v, 1);
   }
   return new Float32Array(points);
 }
@@ -324,6 +355,7 @@ export function createHallPainter() {
     rows = null,
     quality = 1,
     slowFrames = 0,
+    fastFrames = 0,
     pixelsUnavailable = false;
   function unpack() {
     if (source) return true;
@@ -347,7 +379,8 @@ export function createHallPainter() {
   function draw(ctx, W, H, world, ray, queue) {
     const p = world.player;
     if (!insideHall(p.x, p.z) || !unpack()) return false;
-    const scale = Math.min(1, 660 / W, 380 / H) * quality,
+    const target = world.renderQuality === 'low' ? 0.58 : world.renderQuality === 'high' ? 1 : quality;
+    const scale = Math.min(1, 568 / W, 332 / H) * target,
       sw = Math.max(2, Math.round(W * scale)),
       sh = Math.max(2, Math.round(H * scale));
     const f = H * 0.685;
@@ -370,7 +403,7 @@ export function createHallPainter() {
         cy = Math.cos(view[2]),
         sp = Math.sin(view[3]),
         cp = Math.cos(view[3]);
-      const eyeY = 1.66;
+      const eyeY = (p.feetY ?? castleAltitude + 0.17) - castleAltitude + 1.66;
       for (let y = 0, i = 0; y < sh; y++) {
         const front = cp - rows[y] * sp,
           ry = sp + rows[y] * cp;
@@ -416,8 +449,18 @@ export function createHallPainter() {
       }
       offscreen.putImageData(pixels, 0, 0);
       lastView = view;
-      if (performance.now() - started > 19) slowFrames++;
-      else slowFrames = Math.max(0, slowFrames - 1);
+      const cost = performance.now() - started;
+      if (cost > 16) {
+        slowFrames++;
+        fastFrames = 0;
+      } else {
+        slowFrames = Math.max(0, slowFrames - 1);
+        fastFrames = cost < 11 ? fastFrames + 1 : 0;
+      }
+      if (fastFrames > 58 && quality < 1) {
+        quality = Math.min(1, quality + 0.075);
+        fastFrames = 0;
+      }
       if (slowFrames > 3 && quality > 0.72) {
         quality = Math.max(0.7, quality - 0.12);
         slowFrames = 0;
@@ -432,7 +475,7 @@ export function createHallPainter() {
         [18.4, 1492],
         [41.5, 1495],
       ]) {
-        const pt = ray(x, 2.16, z);
+        const pt = ray(x, castleAltitude + 2.16, z);
         if (pt && pt[0] > -W * 0.1 && pt[0] < W * 1.1 && pt[1] > -H * 0.1 && pt[1] < H * 1.1)
           queue.push({
             glow: true,

@@ -1,41 +1,44 @@
-import { drawFieldMap } from './field-map.mjs';
-import { createWorld, tick, act, choose, getHUD, resumeCheckpoint } from './world.mjs';
+import { advanceGameClock } from './game-clock.mjs';
+import { makeFieldSurvey } from './map-controls.mjs';
+import { hasDirections, compassPoint, bearing, describeRace, survey } from './navigation.mjs';
+import {
+  saveKey,
+  settingsKey,
+  read,
+  write,
+  restoreJourney,
+  lasting,
+  newRun,
+  rememberFork,
+  recallFork,
+  hasFork,
+  rememberEnding,
+  pastJourneys,
+} from './journey-store.mjs';
+import { createWorld, act, choose, getHUD, resumeCheckpoint, hordePosition } from './world.mjs';
 import { createAudio } from './audio.mjs';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const saveKey = 'xero.forest.journey.v1',
-  settingsKey = 'xero.forest.controls.v1';
-function read(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key));
-  } catch {
-    return null;
-  }
-}
-function write(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* Storage may be disabled. */
-  }
-}
 function loadJourney() {
-  const saved = read(saveKey);
-  if (
-    saved?.version !== 1 ||
-    !Array.isArray(saved.actors) ||
-    !saved.actors.length ||
-    !Number.isFinite(saved.player?.x) ||
-    !Number.isFinite(saved.elapsed) ||
-    typeof saved.checkpoint !== 'string'
-  )
-    return null;
-  return { ...createWorld(), ...saved, events: [], mapOpen: false };
+  return restoreJourney(read(saveKey));
 }
 const preferences = read(settingsKey) || {};
 const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+const validMix = (v) => (Number.isFinite(v) ? clamp(v, 0, 1) : 1);
 const options = {
+  handedness: preferences.handedness === 'left' ? 'left' : 'right',
+  stickSize: ['small', 'standard', 'large'].includes(preferences.stickSize)
+    ? preferences.stickSize
+    : 'standard',
+  stickHeight: ['low', 'raised'].includes(preferences.stickHeight) ? preferences.stickHeight : 'low',
+  quality: ['low', 'auto', 'high'].includes(preferences.quality) ? preferences.quality : 'auto',
+  subtitles: preferences.subtitles !== false,
+  mix: {
+    music: validMix(preferences.mix?.music),
+    effects: validMix(preferences.mix?.effects),
+    ambience: validMix(preferences.mix?.ambience),
+  },
   sound: preferences.sound !== false,
   sensitivity: clamp(Number(preferences.sensitivity) || 1, 0.4, 2),
   reduceMotion:
@@ -46,6 +49,7 @@ motionQuery.addEventListener?.('change', (event) => {
   options.reduceMotion = event.matches;
   if (world) world.reducedMotion = event.matches;
 });
+const physicalShift = new Set();
 const keys = new Set(),
   movement = { forward: 0, strafe: 0 };
 const view = $('view'),
@@ -53,6 +57,21 @@ const view = $('view'),
   title = $('title-screen'),
   overlay = $('overlay');
 const audio = createAudio();
+let activeSurvey = null,
+  accumulator = 0,
+  captionTimer = 0,
+  bellTimer = 0,
+  sprintBeforeMap = false;
+function applyPreferences() {
+  document.body.dataset.hand = options.handedness;
+  document.body.dataset.stick = options.stickSize;
+  document.body.dataset.stickHeight = options.stickHeight;
+  audio.setMix?.(options.mix);
+  if (world) {
+    world.renderQuality = options.quality;
+    world.reducedMotion = options.reduceMotion;
+  }
+}
 let world = null,
   renderer = null,
   createView = null,
@@ -120,7 +139,12 @@ function stopMotion() {
 }
 function save() {
   if (!world || showingLoad) return;
-  write(saveKey, { ...world, events: [], mapOpen: false });
+  if (!world.runId) world.runId = newRun();
+  survey(world);
+  const ok = write(saveKey, { ...world, events: [], mapOpen: false });
+  if (screen === 'game')
+    text('storage-status', ok && lasting() ? '' : 'Saving is unavailable. This journey stays in this tab.');
+  return ok;
 }
 function soundState() {
   $('title-sound').replaceChildren(
@@ -188,6 +212,7 @@ function dismiss() {
   dialogueRef = null;
   endingRef = null;
   lastTime = performance.now() / 1000;
+  accumulator = 0;
   stopMotion();
   soundState();
   const focusNode =
@@ -199,6 +224,19 @@ function dismiss() {
   focusNode?.focus({ preventScroll: true });
 }
 function returnFromPanel() {
+  if (panel === 'history') {
+    dismiss();
+    if (world?.ending) syncStory();
+    else if (screen === 'game') pause();
+    return;
+  }
+  if (panel === 'journal' || panel === 'preferences' || panel === 'fork') {
+    if (world?.ending) {
+      dismiss();
+      syncStory();
+    } else pause();
+    return;
+  }
   if (panel === 'help') {
     screen === 'game' ? pause() : dismiss();
     return;
@@ -209,7 +247,10 @@ function returnFromPanel() {
   }
   if (panel === 'map') {
     act(world, 'close');
+    activeSurvey = null;
     dismiss();
+    sprint = sprintBeforeMap;
+    $('sprint').setAttribute('aria-pressed', String(sprint));
     return;
   }
   if (panel === 'dialogue') {
@@ -225,7 +266,7 @@ function returnFromPanel() {
 $('panel-close').addEventListener('click', returnFromPanel);
 function controls() {
   const touch = paragraph(
-    'On a touchscreen, move with your left thumb and drag the view with your right. Tap a tool to use it. Run switches between walking and sprinting.'
+    'On a touchscreen, move with your left thumb and drag the view with your right. Drag from a tool to aim, then release to use it. Run switches between walking and sprinting. Swap sides or resize the joystick in Settings.'
   );
   const table = document.createElement('div');
   table.className = 'key-table';
@@ -236,13 +277,17 @@ function controls() {
     'Mouse or drag',
     'Turn / move',
     'Arrow keys',
+    'Look up / down',
+    'Page Up / Page Down',
+    'Thrust / guard',
+    'R / G',
     'Run',
     'Hold Shift',
     'Interact',
     'E',
     'Swing sword',
-    'F or left click',
-    'Use potion',
+    'F or a short click',
+    'Cast cinder phial',
     'Q',
     'Map / pause',
     'M / Esc',
@@ -252,7 +297,7 @@ function controls() {
     table.append(cell);
   }
   const hint = paragraph(
-    'Click the scene for mouse look. If your browser keeps the cursor visible, drag the scene to turn.',
+    'Drag the scene to turn. A short mouse click swings your sword. Mouse capture is available in Settings. Hold a second touch on the view to aim while operating a tool.',
     'field-note'
   );
   modal('help', 'Field guide', 'How to play', [touch, table, hint], [button('Back', returnFromPanel)]);
@@ -279,40 +324,6 @@ function textFull() {
 function pause() {
   if (!world || world.ending) return;
   save();
-  const sound = document.createElement('label');
-  sound.className = 'setting';
-  sound.append('Sound');
-  const enabled = document.createElement('input');
-  enabled.type = 'checkbox';
-  enabled.checked = options.sound;
-  enabled.addEventListener('change', toggleSound);
-  sound.append(enabled);
-  const look = document.createElement('label');
-  look.className = 'setting';
-  look.append('Look sensitivity');
-  const sensitivity = document.createElement('input');
-  sensitivity.type = 'range';
-  sensitivity.min = '.4';
-  sensitivity.max = '2';
-  sensitivity.step = '.1';
-  sensitivity.value = String(options.sensitivity);
-  sensitivity.addEventListener('input', () => {
-    options.sensitivity = Number(sensitivity.value);
-    write(settingsKey, options);
-  });
-  look.append(sensitivity);
-  const motion = document.createElement('label');
-  motion.className = 'setting';
-  motion.append('Reduce camera motion');
-  const reduced = document.createElement('input');
-  reduced.type = 'checkbox';
-  reduced.checked = options.reduceMotion;
-  reduced.addEventListener('change', () => {
-    options.reduceMotion = reduced.checked;
-    world.reducedMotion = reduced.checked;
-    write(settingsKey, options);
-  });
-  motion.append(reduced);
   const actions = [
     button(
       'Resume',
@@ -322,15 +333,185 @@ function pause() {
       },
       'primary'
     ),
+    button('Journal', journalPanel),
+    button('Settings', preferencesPanel),
     button('How to play', controls),
     button('Title screen', goHome),
-    button('Begin anew', confirmNew),
   ];
-  if (document.fullscreenEnabled)
-    actions.push(button(document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen', openFullscreen));
-  modal('pause', getHUD(world).location, 'Journey paused', [sound, look, motion], actions);
+  if (hasFork(world)) actions.push(button('Return to the forest fork', confirmFork));
+  actions.push(button('Begin anew', confirmNew));
+  modal(
+    'pause',
+    getHUD(world).location,
+    'Journey paused',
+    [
+      paragraph(
+        lasting()
+          ? 'Progress saved on this device.'
+          : 'Saving is unavailable. This journey stays in this tab.',
+        'field-note'
+      ),
+    ],
+    actions
+  );
 }
 $('pause-button').addEventListener('click', pause);
+function preferencesPanel() {
+  const rows = [];
+  function setting(label, input) {
+    const row = document.createElement('label');
+    row.className = 'setting';
+    row.append(label, input);
+    rows.push(row);
+  }
+  function changed() {
+    applyPreferences();
+    write(settingsKey, options);
+    needsFrame = true;
+  }
+  function check(label, value, change) {
+    const i = document.createElement('input');
+    i.type = 'checkbox';
+    i.checked = value;
+    i.onchange = () => {
+      change(i.checked);
+      changed();
+    };
+    setting(label, i);
+  }
+  function range(label, value, max, min, step, change) {
+    const i = document.createElement('input');
+    i.type = 'range';
+    i.min = min;
+    i.max = max;
+    i.step = step;
+    i.value = value;
+    i.oninput = () => {
+      change(Number(i.value));
+      changed();
+    };
+    setting(label, i);
+  }
+  function select(label, key, choices) {
+    const i = document.createElement('select');
+    for (const [value, name] of choices) {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = name;
+      i.append(o);
+    }
+    i.value = options[key];
+    i.onchange = () => {
+      options[key] = i.value;
+      changed();
+    };
+    setting(label, i);
+  }
+  check('Sound', options.sound, (v) => {
+    options.sound = v;
+    if (v) audio.unlock();
+    soundState();
+  });
+  for (const [key, name] of [
+    ['music', 'Music'],
+    ['effects', 'Effects'],
+    ['ambience', 'Ambience'],
+  ])
+    range(name, options.mix[key], 1, 0, 0.05, (v) => (options.mix[key] = v));
+  check('Sound captions', options.subtitles, (v) => (options.subtitles = v));
+  check('Reduce camera motion', options.reduceMotion, (v) => (options.reduceMotion = v));
+  range('Look sensitivity', options.sensitivity, 2, 0.4, 0.1, (v) => (options.sensitivity = v));
+  select('Graphics', 'quality', [
+    ['auto', 'Adaptive'],
+    ['low', 'Battery saver'],
+    ['high', 'High detail'],
+  ]);
+  select('Movement thumb', 'handedness', [
+    ['right', 'Left thumb'],
+    ['left', 'Right thumb'],
+  ]);
+  select('Joystick size', 'stickSize', [
+    ['small', 'Small'],
+    ['standard', 'Standard'],
+    ['large', 'Large'],
+  ]);
+  select('Joystick position', 'stickHeight', [
+    ['low', 'Lower'],
+    ['raised', 'Raised'],
+  ]);
+  const actions = [button('Back', returnFromPanel, 'primary')];
+  if (view.requestPointerLock)
+    actions.push(
+      button('Capture mouse', () => {
+        dismiss();
+        try {
+          view.requestPointerLock()?.catch?.(() => {});
+        } catch {}
+      })
+    );
+  if (document.fullscreenEnabled)
+    actions.push(button(document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen', openFullscreen));
+  modal('preferences', '', 'Settings', rows, actions);
+}
+function journalPanel() {
+  if (!world || world.dialogue || world.ending) return;
+  const notes = Array.isArray(world.journal) ? world.journal : [],
+    entries = [];
+  if (!notes.length)
+    entries.push(paragraph('The first page is still blank. Discoveries will appear here as you travel.'));
+  for (const note of [...notes].reverse()) {
+    const entry = document.createElement('article'),
+      h = document.createElement('h3');
+    h.textContent = note.title;
+    entry.append(h, paragraph(note.text));
+    entries.push(entry);
+  }
+  modal('journal', 'Field notes', 'Travel journal', entries, [button('Back', returnFromPanel)]);
+}
+function historyPanel() {
+  const entries = pastJourneys().map((item) => {
+    const e = document.createElement('article'),
+      h = document.createElement('h3');
+    h.textContent = item.ending.title;
+    e.append(
+      h,
+      paragraph(item.ending.text),
+      paragraph(
+        new Date(item.at).toLocaleDateString() + ' · ' + Math.round(item.elapsed / 60) + ' minutes',
+        'field-note'
+      )
+    );
+    return e;
+  });
+  modal('history', '', 'Past journeys', entries, [button('Back', returnFromPanel)]);
+}
+$('history').addEventListener('click', historyPanel);
+function confirmFork() {
+  modal(
+    'fork',
+    'Lanternwood',
+    'Return to the forest fork?',
+    [
+      paragraph(
+        'Start again at the forest meeting. This replaces your current position. Completed journeys stay in your history.'
+      ),
+    ],
+    [
+      button(
+        'Return to the fork',
+        () => {
+          const fork = recallFork(world);
+          if (fork) {
+            write(saveKey, fork);
+            start(true);
+          }
+        },
+        'primary'
+      ),
+      button('Keep my place', returnFromPanel),
+    ]
+  );
+}
 function confirmNew() {
   modal(
     'restart',
@@ -345,6 +526,7 @@ function updateStart() {
   const saved = loadJourney();
   $('start').querySelector('span').textContent = saved ? 'Continue journey' : 'Enter the forest';
   display($('fresh'), Boolean(saved));
+  display($('history'), pastJourneys().length > 0);
 }
 function goHome() {
   save();
@@ -368,7 +550,13 @@ function graphicsError() {
     'error',
     'Lanternwood',
     'The view could not open',
-    [paragraph('Try opening the forest again. Your last position is saved on this device.')],
+    [
+      paragraph(
+        lasting()
+          ? 'Try opening the forest again. Your last position is saved on this device.'
+          : 'Try opening the forest again. Your current position remains in this tab.'
+      ),
+    ],
     [button('Return to title', goHome, 'primary')],
     { closable: false }
   );
@@ -384,7 +572,17 @@ async function start(resume = true) {
   try {
     world = resume ? loadJourney() || createWorld() : createWorld();
     world.events = [];
-    world.reducedMotion = options.reduceMotion;
+    world.runId ||= newRun();
+    applyPreferences();
+    survey(world);
+    rememberFork(world, true);
+    if (!hasFork(world)) {
+      const opening = createWorld();
+      opening.runId = world.runId;
+      rememberFork(opening, true);
+    }
+    accumulator = 0;
+    activeSurvey = null;
     needsFrame = true;
     if (!renderer) {
       const module = await import('./render.mjs');
@@ -419,7 +617,7 @@ async function start(resume = true) {
 }
 $('start').addEventListener('click', () => start(true));
 function drawMap() {
-  drawFieldMap($('field-map'), world);
+  activeSurvey?.draw();
 }
 function mapPanel() {
   if (!world || world.dialogue || world.ending || world.sequence) return;
@@ -428,42 +626,34 @@ function mapPanel() {
     return;
   }
   if (panel) return;
+  sprintBeforeMap = sprint;
   act(world, 'map');
-  const canvas = document.createElement('canvas');
-  canvas.id = 'field-map';
-  canvas.setAttribute('aria-label', 'Map showing the road north, your position and nearby landmarks.');
-  const legend = document.createElement('div');
-  legend.className = 'map-key';
-  for (const [label, color] of [
-    ['You', '#fff4d0'],
-    ['Castle road', '#ddbb79'],
-    ...(world.hasMap ? [['Pale trail', '#c8e1bf']] : []),
-    ...(world.milestones.ridge ? [['The host', '#c78f77']] : []),
-  ]) {
-    const item = document.createElement('span');
-    item.style.setProperty('--key-color', color);
-    item.textContent = label;
-    legend.append(item);
-  }
-  const hud = getHUD(world);
-  modal(
-    'map',
-    '',
-    world.hasMap ? 'The inked map' : 'Field map',
-    [
-      canvas,
-      legend,
+  activeSurvey = makeFieldSurvey(world, save);
+  const { canvas, bar, text: description } = activeSurvey,
+    hud = getHUD(world);
+  const notes = [bar, canvas, description];
+  if (hasDirections(world) && Number.isFinite(hud.distance))
+    notes.push(
       paragraph(
         hud.location +
           ' · ' +
           Math.round(hud.distance) +
-          ' m to ' +
-          (world.hasMap && !world.antidote ? 'the Moonwell.' : 'Princess Xero.'),
+          ' m by the marked route · next bearing ' +
+          compassPoint(hud.bearing) +
+          '.',
         'field-note'
-      ),
-    ],
-    [button('Fold map', returnFromPanel)]
-  );
+      )
+    );
+  if (hasDirections(world) || world.survey?.visits?.bells)
+    notes.push(
+      paragraph(
+        world.bridgeOpen ? 'Sluice bridge: raised and passable.' : 'Sluice bridge: lowered.',
+        'field-note'
+      )
+    );
+  modal('map', '', world.hasMap ? 'The inked map' : 'Field sketch', notes, [
+    button('Fold map', returnFromPanel),
+  ]);
   drawMap();
 }
 $('map-button').addEventListener('click', mapPanel);
@@ -472,19 +662,24 @@ function syncStory() {
   if (world.ending && endingRef !== world.ending) {
     const ending = world.ending;
     endingRef = ending;
+    rememberEnding(world);
     const actions = [button('Begin anew', () => start(false), 'primary')];
     if (ending.id !== 'saved')
       actions.push(
         button('Return to checkpoint', () => {
+          const runId = world.runId;
           world = resumeCheckpoint(world);
-          world.reducedMotion = options.reduceMotion;
+          world.runId = runId;
+          applyPreferences();
+          survey(world);
           needsFrame = true;
           dismiss();
           refreshHUD();
           save();
         })
       );
-    actions.push(button('Title screen', goHome));
+    if (hasFork(world)) actions.push(button('Return to the forest fork', confirmFork));
+    actions.push(button('Past journeys', historyPanel), button('Title screen', goHome));
     modal('ending', 'Journey’s end', ending.title, [paragraph(ending.text)], actions, { closable: false });
     save();
     return;
@@ -493,9 +688,20 @@ function syncStory() {
     const d = world.dialogue;
     dialogueRef = d;
     const paragraphs = [];
+    if (d.kind === 'witch') rememberFork(world);
     if (d.question) paragraphs.push(paragraph('Zelda: “' + d.question + '”', 'question'));
     if (d.kind === 'witch') {
-      for (const s of d.text.split(/\s+(?=Option number (?:one|two|three))/)) paragraphs.push(paragraph(s));
+      const gestures = [
+        'She tilts the lantern and listens to the castle.',
+        'Three ember-coloured bottles knock together in her palm.',
+        'A moth settles on the green vial. Its wings fold.',
+        'She opens one hand toward the trees.',
+      ];
+      const lines = d.text.split(/\s+(?=Option number (?:one|two|three))/);
+      lines.forEach((line, i) => {
+        if (gestures[i]) paragraphs.push(paragraph(gestures[i], 'stage-direction'));
+        paragraphs.push(paragraph(line));
+      });
     } else paragraphs.push(paragraph(d.text));
     const actions = d.choices.map((c, i) => {
       const b = button(
@@ -516,8 +722,9 @@ function syncStory() {
       return b;
     });
     if (!actions.length) actions.push(button('Continue', returnFromPanel, 'primary'));
+    else if (d.kind === 'banquet') actions.push(button('Step back', returnFromPanel));
     modal('dialogue', d.kind === 'witch' ? 'Lanternwood' : '', d.speaker, paragraphs, actions, {
-      closable: d.kind !== 'banquet',
+      closable: d.kind !== 'banquet' || Boolean(d.choices.length),
     });
     save();
   }
@@ -525,9 +732,13 @@ function syncStory() {
 function refreshHUD() {
   if (!world) return;
   display($('hud'), !world.sequence);
+  display($('resist'), world.sequence?.id === 'bound');
   const h = getHUD(world),
     healthEl = $('health'),
     old = healthEl.getAttribute('aria-valuenow');
+  const cinematic = Boolean(world.sequence && options.subtitles && h.notice);
+  display($('sequence-caption'), cinematic);
+  text('sequence-caption', cinematic ? h.notice : '');
   if (old !== String(h.health) || healthEl.childElementCount !== h.maxHealth) {
     healthEl.replaceChildren();
     for (let i = 0; i < h.maxHealth; i++) {
@@ -547,7 +758,36 @@ function refreshHUD() {
   text('location', h.location);
   text('objective', h.objective);
   text('notice', h.notice);
-  text('potion-count', 'Potion · ' + h.potions);
+  text('potion-count', 'Cinder · ' + h.potions);
+  document
+    .querySelector('[data-act="potion"]')
+    .setAttribute('aria-label', 'Cast cinder potion, ' + h.potions + ' remaining');
+  survey(world);
+  text(
+    'belt-readout',
+    world.hasVial ? (world.antidote ? 'Silver vial · moonwater' : 'Silver vial · empty') : ''
+  );
+  text(
+    'route-readout',
+    hasDirections(world) && Number.isFinite(h.distance)
+      ? compassPoint(h.bearing) + ' · ' + Math.round(h.distance) + ' m by trail'
+      : ''
+  );
+  const sighted = world.milestones?.ridge || world.survey?.visits?.downs;
+  const status = world.gateCrossed
+    ? 'You reached the castle before the host.'
+    : describeRace(world, h.hordeProgress);
+  text(
+    'race-readout',
+    status +
+      (status && sighted && !world.ropeFallen && !world.gateCrossed
+        ? ' · ' + compassPoint(bearing(world.player, hordePosition(world, 0)))
+        : '')
+  );
+  const stamina = clamp(Math.round((world.player.stamina ?? 1) * 100), 0, 100);
+  $('stamina').firstElementChild.style.width = stamina + '%';
+  $('stamina').setAttribute('aria-valuenow', String(stamina));
+  display($('stamina'), stamina < 99);
   text('interact-hint', h.hint);
   display($('interact-hint'), Boolean(h.hint));
 }
@@ -559,9 +799,34 @@ function gameAction(action) {
   save();
 }
 $('interact-hint').addEventListener('click', () => gameAction('interact'));
-document
-  .querySelectorAll('[data-act]')
-  .forEach((b) => b.addEventListener('click', () => gameAction(b.dataset.act)));
+document.querySelectorAll('[data-act]').forEach((b) => {
+  let gesture = null,
+    consumed = -1000;
+  b.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' || panel) return;
+    gesture = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    b.setPointerCapture(e.pointerId);
+  });
+  b.addEventListener('pointermove', (e) => {
+    if (gesture?.id !== e.pointerId) return;
+    moveLook(e.clientX - gesture.x, e.clientY - gesture.y);
+    gesture.x = e.clientX;
+    gesture.y = e.clientY;
+  });
+  b.addEventListener('pointerup', (e) => {
+    if (gesture?.id !== e.pointerId) return;
+    gesture = null;
+    consumed = performance.now();
+    gameAction(b.dataset.act);
+  });
+  b.addEventListener('pointercancel', () => {
+    gesture = null;
+  });
+  b.addEventListener('click', () => {
+    if (performance.now() - consumed > 500) gameAction(b.dataset.act);
+  });
+});
+$('resist').addEventListener('click', () => gameAction('resist'));
 $('sprint').addEventListener('click', () => {
   sprint = !sprint;
   $('sprint').setAttribute('aria-pressed', String(sprint));
@@ -569,23 +834,32 @@ $('sprint').addEventListener('click', () => {
 function frame(timestamp) {
   if (!running || screen !== 'game') return;
   const now = timestamp / 1000,
-    dt = clamp(now - lastTime, 0, 0.12);
+    dt = Math.max(0, now - lastTime);
   lastTime = now;
   if (!document.hidden) {
     if (!panel) {
-      tick(world, dt, {
+      const input = {
         forward:
           movement.forward +
           Number(keys.has('KeyW') || keys.has('ArrowUp')) -
           Number(keys.has('KeyS') || keys.has('ArrowDown')),
         strafe: movement.strafe + Number(keys.has('KeyD')) - Number(keys.has('KeyA')),
         turn: Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')),
-        sprint: sprint || keys.has('ShiftLeft') || keys.has('ShiftRight'),
-      });
+        sprint: sprint || physicalShift.size > 0,
+      };
+      accumulator = advanceGameClock(
+        world,
+        dt,
+        accumulator,
+        input,
+        Number(keys.has('PageUp')) - Number(keys.has('PageDown'))
+      );
       audio.update(world);
     }
     for (const ev of world.events.splice(0)) {
       audio.cue(ev);
+      soundCaption(ev);
+      if (ev.type === 'bell' || ev.type === 'sluice') showBell(ev);
       if (ev.type === 'hurt' && !options.reduceMotion) {
         const damage = $('damage');
         damage.style.opacity = '1';
@@ -615,6 +889,60 @@ function frame(timestamp) {
   }
   frameId = requestAnimationFrame(frame);
 }
+function soundCaption(ev) {
+  if (!options.subtitles) return;
+  const directional =
+    ev.type === 'telegraph'
+      ? { wolf: 'Paws scrape the ground', troll: 'Heavy stone shifts', dragon: 'Wings draw back' }[ev.text] ||
+        'A creature draws back'
+      : ev.type === 'enemy-breath'
+        ? 'Flame rushes past'
+        : ev.type === 'block'
+          ? 'A blow strikes your guard'
+          : ev.type === 'shackle'
+            ? 'An iron shackle rattles'
+            : ev.type === 'relay'
+              ? 'The shutters shift'
+              : null;
+  const line =
+    ev.caption ||
+    directional ||
+    {
+      bell: 'Castle bells ring in the distance',
+      answer: 'A crowd answers across the valley',
+      howl: 'Wolves call in the woods',
+      hurt: 'A blow lands',
+      chime: 'An iron chain pulls taut',
+      dragon: 'Wingbeats approach',
+      roar: 'A low roar',
+    }[ev.type];
+  if (!line) return;
+  text('captions', line);
+  clearTimeout(captionTimer);
+  captionTimer = setTimeout(() => text('captions', ''), 2700);
+}
+function showBell(ev) {
+  const box = $('bell-call');
+  clearTimeout(bellTimer);
+  box.replaceChildren();
+  display(box, true);
+  const tones =
+    ev.type === 'bell' ? ['low', 'high', 'mid'] : [ev.text].filter((x) => ['low', 'mid', 'high'].includes(x));
+  const names = { low: 'Low', mid: 'Middle', high: 'High' };
+  const timing = ev.type === 'bell' ? 'The castle calls' : 'Your bell';
+  const source = document.createElement('small');
+  source.textContent = timing;
+  box.append(source);
+  box.setAttribute('aria-label', timing + ' · ' + tones.map((v) => names[v]).join(', '));
+  for (const tone of tones) {
+    const ch = document.createElement('span');
+    ch.className = 'bell-tone ' + tone;
+    ch.textContent = { low: '▁', mid: '▄', high: '█' }[tone];
+    ch.title = names[tone];
+    box.append(ch);
+  }
+  bellTimer = setTimeout(() => display(box, false), 3000);
+}
 function moveLook(dx, dy) {
   if (!world || panel || world.sequence) return;
   const scale = 0.0031 * options.sensitivity;
@@ -628,14 +956,9 @@ view.addEventListener('pointerdown', (event) => {
     gameAction('strike');
     return;
   }
-  if (event.pointerType === 'mouse' && view.requestPointerLock) {
-    try {
-      const req = view.requestPointerLock();
-      req?.catch?.(() => {});
-    } catch {
-      /* Drag-to-look remains available. */
-    }
-  }
+
+  if (event.pointerType === 'mouse')
+    mouseTap = { x: event.clientX, y: event.clientY, at: performance.now(), drift: 0 };
   lookId = event.pointerId;
   lookX = event.clientX;
   lookY = event.clientY;
@@ -645,6 +968,11 @@ view.addEventListener('pointerdown', (event) => {
 });
 view.addEventListener('pointermove', (event) => {
   if (lookId !== event.pointerId || document.pointerLockElement === view) return;
+  if (mouseTap)
+    mouseTap.drift = Math.max(
+      mouseTap.drift,
+      Math.hypot(event.clientX - mouseTap.x, event.clientY - mouseTap.y)
+    );
   moveLook(event.clientX - lookX, event.clientY - lookY);
   lookX = event.clientX;
   lookY = event.clientY;
@@ -684,7 +1012,23 @@ $('stick').addEventListener('pointerdown', (event) => {
 $('stick').addEventListener('pointermove', (event) => {
   if (stickId === event.pointerId) moveStick(event);
 });
+let mouseTap = null;
 function stopPointer(event) {
+  if (
+    lookId === event.pointerId &&
+    event.type === 'pointerup' &&
+    event.pointerType === 'mouse' &&
+    mouseTap &&
+    !document.pointerLockElement
+  ) {
+    if (
+      performance.now() - mouseTap.at < 350 &&
+      mouseTap.drift < 5 &&
+      Math.hypot(event.clientX - mouseTap.x, event.clientY - mouseTap.y) < 5
+    )
+      gameAction('strike');
+  }
+  if (lookId === event.pointerId) mouseTap = null;
   if (stickId === event.pointerId) {
     stickId = null;
     movement.strafe = movement.forward = 0;
@@ -695,6 +1039,7 @@ function stopPointer(event) {
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
   document.addEventListener(type, stopPointer, true);
 document.addEventListener('keydown', (event) => {
+  if (['ShiftLeft', 'ShiftRight'].includes(event.code)) physicalShift.add(event.code);
   if (panel) {
     if (event.code === 'Escape') {
       event.preventDefault();
@@ -707,7 +1052,9 @@ document.addEventListener('keydown', (event) => {
       return;
     }
     if (event.key === 'Tab') {
-      const focus = [...$('panel').querySelectorAll('button:not([hidden]),input')];
+      const focus = [
+        ...$('panel').querySelectorAll('button:not([hidden]),input,select,summary,canvas[tabindex]'),
+      ];
       if (!focus.length) return;
       const first = focus[0],
         last = focus[focus.length - 1];
@@ -729,12 +1076,20 @@ document.addEventListener('keydown', (event) => {
       start();
     return;
   }
+  if (world?.sequence?.id === 'bound' && ['Space', 'KeyE', 'KeyF', 'KeyW', 'ArrowUp'].includes(event.code)) {
+    event.preventDefault();
+    if (!event.repeat) gameAction('resist');
+    return;
+  }
   const commands = {
     KeyM: mapPanel,
     Escape: pause,
     KeyE: () => gameAction('interact'),
     KeyF: () => gameAction('strike'),
     KeyQ: () => gameAction('potion'),
+    KeyG: () => gameAction('guard'),
+    KeyR: () => gameAction('thrust'),
+    KeyJ: journalPanel,
   };
   if (commands[event.code]) {
     event.preventDefault();
@@ -753,19 +1108,40 @@ document.addEventListener('keydown', (event) => {
       'ArrowRight',
       'ShiftLeft',
       'ShiftRight',
+      'PageUp',
+      'PageDown',
     ].includes(event.code)
   ) {
     event.preventDefault();
+    // A brief keyboard tap can fall entirely between two low-rate tablet frames.
+    if (
+      !event.repeat &&
+      !keys.has(event.code) &&
+      !world.sequence &&
+      ['PageUp', 'PageDown'].includes(event.code)
+    ) {
+      world.player.pitch = clamp(
+        world.player.pitch + (event.code === 'PageUp' ? 0.055 : -0.055),
+        -1.03,
+        1.04
+      );
+      needsFrame = true;
+    }
     keys.add(event.code);
   }
 });
-document.addEventListener('keyup', (event) => keys.delete(event.code));
+document.addEventListener('keyup', (event) => {
+  keys.delete(event.code);
+  physicalShift.delete(event.code);
+});
 window.addEventListener('blur', () => {
+  physicalShift.clear();
   stopMotion();
   if (screen === 'game' && !panel) pause();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
+    physicalShift.clear();
     stopMotion();
     save();
     if (screen === 'game' && !panel) pause();
@@ -800,5 +1176,6 @@ view.addEventListener('webglcontextrestored', () => {
     graphicsError();
   }
 });
+applyPreferences();
 updateStart();
 soundState();

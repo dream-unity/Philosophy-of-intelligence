@@ -1,95 +1,157 @@
-// A small original score for bowed bass, wood and glass. Leave open bars
-// between the forest phrases so birds and the tower can take the foreground.
-const forestPhrases = [
-  [
-    [0, 62],
-    [0.64, 69],
-    [1.64, 71],
-  ],
-  [
-    [0, 65],
-    [1.08, 64],
-  ],
-  [
-    [0, 57],
-    [0.64, 64],
-    [1.9, 67],
-  ],
-  [
-    [0, 62],
-    [1.3, 55],
-  ],
-];
+// The three notes of Xero's tower are Ab, D and B. The forest cadences hint at
+// those intervals long before the player learns what the tower is calling for.
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 const clamp = (n) => Math.max(0, Math.min(1, n));
 
-function pluck(voice, midi, time, pan, level) {
-  const f = hz(midi);
-  voice('sine', f, level, time, 1.25, pan, f * 0.9985, 0.012);
-  voice('triangle', f * 2, level * 0.17, time, 0.22, pan, f * 2, 0.007);
+const themes = {
+  forest: [
+    [62, 69, 71, 64],
+    [57, 64, 67],
+    [69, 65, 62],
+    [64, 71, 69, 62],
+    [55, 62, 66],
+    [67, 64, 57],
+  ],
+  witch: [
+    [68, 74, 71],
+    [65, 68, 62, 59],
+    [59, 65, 62],
+  ],
+  ridge: [
+    [55, 62, 69, 67],
+    [62, 74, 71],
+    [57, 64, 69],
+  ],
+  water: [
+    [80, 86, 83],
+    [76, 71, 74, 68],
+    [71, 78, 80],
+  ],
+  gate: [
+    [44, 50, 47],
+    [59, 56, 50],
+    [50, 56, 59],
+  ],
+  hall: [
+    [68, 74, 71],
+    [62, 59, 56],
+    [56, 62, 59],
+  ],
+};
+const tone = {
+  forest: ['sine', 0.02, 1.5, 0.054, 0.66],
+  witch: ['triangle', 0.16, 1.4, 0.04, 0.54],
+  ridge: ['triangle', 0.32, 2.25, 0.044, 0.86],
+  water: ['sine', 0.008, 1.8, 0.063, 0.55],
+  gate: ['triangle', 0.24, 1.85, 0.048, 0.74],
+  hall: ['sine', 0.18, 2.35, 0.039, 0.87],
+};
+function playPhrase(voice, place, notes, start, pan, pace = 1) {
+  const [shape, attack, decay, level, spacing] = tone[place];
+  notes.forEach((midi, i) => {
+    const time = start + (i * spacing + (i >= 2 ? 0.22 : 0)) * pace;
+    const f = hz(midi);
+    voice(shape, f, level, time, decay, pan, f * 0.999, attack);
+    voice(
+      place === 'water' ? 'sine' : 'triangle',
+      f * (place === 'water' ? 2.997 : 2),
+      level * 0.21,
+      time + 0.008,
+      decay * 0.49,
+      pan * 0.4,
+      f * (place === 'water' ? 2.99 : 2),
+      attack
+    );
+  });
 }
-
-// The simulation owns the environment and creatures. A separate score instance
-// only retains the music's tempo and the last phrase heard on this playthrough.
+export function playEnding(id, time, voice) {
+  const cadences = {
+    saved: ['water', [68, 74, 71, 76, 80], 0.79],
+    feast: ['hall', [68, 74, 71, 58, 46], 0.61],
+    bound: ['witch', [68, 74, 71, 68, 65], 0.64],
+    horde: ['gate', [56, 62, 59, 47, 35], 0.8],
+    wilds: ['forest', [69, 64, 62, 55], 1.03],
+  };
+  const [place, notes, pace] = cadences[id] || cadences.wilds;
+  playPhrase(voice, place, notes, time, 0, pace);
+  if (id === 'saved') {
+    voice('triangle', hz(52), 0.047, time + 1.8, 2.9, -0.17, hz(52), 0.38);
+    voice('sine', hz(59), 0.052, time + 1.88, 2.8, 0.2, hz(59), 0.38);
+  }
+}
 export function createScore() {
-  let movement = 0,
-    phrase = 0,
-    nextPhrase = Infinity,
-    nextPulse = 0;
-  let playerSeen,
-    lastTime,
-    tension = 0;
-  return function updateScore(world, time, voice) {
-    const p = world?.player;
-    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.z) || !Number.isFinite(time)) return;
-    if (p !== playerSeen || time < lastTime || time - lastTime > 3) {
-      movement = 0;
-      phrase = 0;
-      nextPhrase = time + 3.6;
+  let previousPlayer,
+    lastTime = 0,
+    nextPhrase = 0,
+    nextPulse = 0,
+    bar = 0,
+    pulse = 0,
+    tension = 0,
+    previousPlace;
+  return function update(world, time, voice) {
+    const p = world.player;
+    if (previousPlayer !== p || time < lastTime || time - lastTime > 3) {
+      previousPlayer = p;
+      previousPlace = null;
+      bar = pulse = tension = 0;
+      nextPhrase = time + 1.4;
       nextPulse = time;
-      tension = 0;
-      playerSeen = p;
     }
-    const dt = Math.min(1, Math.max(0, time - (lastTime ?? time)));
+    const dt = clamp(time - lastTime);
     lastTime = time;
-    if (world.ending) return;
-
-    const approach = clamp((p.z - 1040) / 455);
+    if (world.ending || world.sequence || world.dialogue?.kind === 'banquet') return;
+    const nearWell = Math.hypot(p.x + 155, p.z - 850) < 59;
+    const place =
+      p.z > 1465 && Math.abs(p.x - 30) < 25
+        ? 'hall'
+        : p.z > 1230
+          ? 'gate'
+          : nearWell || Math.abs(p.z - 1021) < 42
+            ? 'water'
+            : p.z > 425 && p.z < 552
+              ? 'ridge'
+              : world.greeted && world.actors[0]?.alive && Math.hypot(p.x, p.z - 9) < 28
+                ? 'witch'
+                : 'forest';
+    if (previousPlace && previousPlace !== place) {
+      bar = 0;
+      nextPhrase = Math.min(nextPhrase, time + 0.65);
+    }
+    previousPlace = place;
     let danger = 0;
     for (const actor of world.actors) {
-      if (!actor.alive || (actor.type !== 'wolf' && actor.type !== 'troll' && actor.type !== 'dragon'))
-        continue;
-      const reach = actor.type === 'dragon' ? 51 : actor.type === 'troll' ? 34 : 42;
-      const range = Math.hypot(actor.x - p.x, actor.z - p.z);
-      danger = Math.max(danger, clamp(1 - range / reach));
+      if (!actor.alive || !actor.alerted) continue;
+      const d = Math.hypot(actor.x - p.x, actor.z - p.z);
+      danger = Math.max(danger, clamp(1 - d / 55), actor.windupUntil > world.elapsed ? 0.96 : 0);
     }
-    const target = Math.max(danger, approach * 0.6);
-    // Resolve back into the woods gradually after a pursuit.
-    tension += (target - tension) * (1 - Math.exp(-dt / (target > tension ? 0.85 : 4)));
-    if (tension >= 0.17 && time >= nextPulse) {
-      const f = hz(approach > 0.55 ? 36 : 38);
-      const level = 0.023 + 0.05 * tension;
-      voice('sine', f, level, time, 0.63, 0, f * 0.89, 0.035);
-      if (movement++ % 3 === 2) {
-        voice('triangle', f * 1.49, level * 0.42, time + 0.24, 0.76, 0.18, f * 1.43, 0.15);
-      }
-      nextPulse = time + 2.9 - tension * 2.1;
+    // Lead compares the time left with a traversable-road pace. It changes when
+    // the hero hesitates or makes up ground, even in the same part of the map.
+    const raceClock = Math.max(0, world.elapsed - (world.raceGrace || 0));
+    const timeLeft = 395 - raceClock;
+    const lead = timeLeft - (Math.hypot(p.x - 30, p.z - 1435) / 4.5 + (p.z < 1010 ? 9 : 0));
+    const race =
+      world.gateCrossed || world.gateClosedAt != null || world.route === 'wander'
+        ? 0
+        : clamp((95 - lead) / 95) * clamp(raceClock / 120);
+    const target = Math.max(danger, race * 0.87);
+    tension += (target - tension) * (1 - Math.exp(-dt / (target > tension ? 0.65 : 3.3)));
+    if (tension > 0.16 && time >= nextPulse) {
+      const bass = hz(race > danger ? 44 : 38);
+      const level = 0.024 + 0.047 * tension;
+      voice('sine', bass, level, time, 0.39, 0, bass * 0.94, 0.026);
+      // An audible wooden partial carries the rhythm on small mono speakers.
+      voice('triangle', bass * 3, 0.48 * level, time, 0.18, 0.13, bass * 2.93);
+      if (pulse++ % 3 === 2) voice('triangle', bass * 1.5, level * 0.53, time + 0.17, 0.35, -0.22);
+      nextPulse = time + 1.72 - tension * 1.07;
     }
     if (time < nextPhrase) return;
-    if (tension > 0.31) {
-      // Long spaced fifths replace the field melody as the walls draw near.
-      if (danger < 0.5) {
-        const lower = hz(phrase % 2 ? 43 : 38);
-        voice('triangle', lower, 0.026, time, 1.9, -0.14, lower, 0.47);
-        voice('sine', lower * 1.501, 0.021, time + 0.3, 2.1, 0.14, lower * 1.496, 0.62);
-      }
-      nextPhrase = time + 6.5;
-    } else {
-      const opening = forestPhrases[phrase % forestPhrases.length];
-      for (const [offset, midi] of opening)
-        pluck(voice, midi, time + offset, phrase % 2 ? -0.22 : 0.25, 0.042);
-      nextPhrase = time + (phrase % 2 ? 9.25 : 6.75);
+    if (danger > 0.7) {
+      nextPhrase = time + 1.7;
+      return;
     }
-    phrase++;
+    const lines = themes[place];
+    playPhrase(voice, place, lines[bar % lines.length], time, bar % 2 ? -0.2 : 0.22, 1 - 0.16 * tension);
+    nextPhrase =
+      time + (place === 'hall' ? 10 : place === 'witch' ? 6.2 : 6.65) + [0, 2.3, 0.8, 3.8][bar++ % 4];
   };
 }

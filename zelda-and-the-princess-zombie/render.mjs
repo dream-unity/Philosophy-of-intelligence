@@ -1,17 +1,51 @@
-import { makeHall, makeHallProps, hallSurfaceVertices, createHallPainter, insideHall } from './hall.mjs';
+import { makeFortressDetail, makeFallFoam } from './fortress.mjs';
+import {
+  storyStatic,
+  storyModels,
+  storyPieces,
+  storyFigure,
+  storyReplaces,
+  storyTethers,
+  storyHandPose,
+} from './story-art.mjs';
+import { clearingTrees, sceneryTrees, ridgeVista, youngFirs, sceneryBoulders } from './woodland.mjs';
+import { castleAltitude } from './geography.mjs';
+import { footHeight, fordStoneX, bridgeRise } from './travel.mjs';
+import { isCreature, creaturePose, actorWarp, makeCreatureBank } from './creature-motion.mjs';
+import {
+  fieldMotion,
+  groundDecals,
+  species,
+  swordPlacement,
+  witchView,
+  saturated,
+} from './field-effects.mjs';
+import { paintPatina, stonePatina } from './masonry-paint.mjs';
+import { paintSoftwareMesh } from './software-mesh.mjs';
+import { createQualityController } from './render-quality.mjs';
+import {
+  makeHall,
+  makeHallProps,
+  hallSurfaceVertices,
+  createHallPainter,
+  insideHall,
+  makeHangingBell,
+  bellSwing,
+  bellAnchorOffset,
+} from './hall.mjs';
 import {
   terrainHeight as ground,
   roadX,
   trailX,
   hordePosition,
+  hostFootprints,
   HORDE_COUNT,
-  registerObstacle,
 } from './world.mjs';
 
 // Flat-shaded geometry, painted with a single sun direction. Static geometry lives in
 // spatial cells. No remote textures, runtime dependencies or asset downloads.
 const TAU = Math.PI * 2;
-const hallTools = { box, beam, rings, tri, quad, stone, lantern };
+const hallTools = { box, beam, rings, tri, quad, stone, lantern, disc };
 const rgbCache = new Map();
 function rgb(s) {
   if (Array.isArray(s)) return s;
@@ -199,8 +233,7 @@ function broadleaf(m, x, y, z, h, r, rand) {
         [bx, by + h * 0.22, bz, r * 0.33],
       ],
       6,
-      (l, k) =>
-        palettes.oak[Math.min(3, (l > 1 ? 1 : 0) + (k === 1 || k === 5 ? 1 : 0) + (j === 1 ? 1 : 0))],
+      (l, k) => palettes.oak[Math.min(3, (l > 1 ? 1 : 0) + (k === 1 || k === 5 ? 1 : 0) + (j === 1 ? 1 : 0))],
       a,
       0.19
     );
@@ -368,72 +401,6 @@ function makeWitch(m) {
   beam(m, [0.72, 1.82, -0.13], [0.81, 1.74, -0.13], 0.045, 0.023, '957957');
   beam(m, [0.81, 1.74, -0.13], [0.81, 1.65, -0.13], 0.011, 0.009, '9b8050');
   lantern(m, 0.81, 1.335, -0.13, 0.5);
-}
-function makePrincess(m) {
-  disc(m, 0, 0.02, 0, 0.64, 0.44, '393c3c');
-  rings(
-    m,
-    [
-      [0, 0.035, 0, 0.6, 0.44],
-      [0, 0.14, 0, 0.61, 0.43],
-      [0, 0.74, 0, 0.29, 0.25],
-      [0, 0.99, 0, 0.16, 0.15],
-      [0, 1.3, 0, 0.22, 0.17],
-      [0, 1.43, 0, 0.26, 0.16],
-      [0, 1.48, 0, 0.11],
-    ],
-    10,
-    (j, k) => ['9891ae', '817d9a', 'b8a7b9', 'a19ab0'][k % 4],
-    0.23
-  );
-  rings(
-    m,
-    [
-      [0, 1.44, 0, 0.085],
-      [0, 1.51, -0.035, 0.148, 0.12],
-      [0, 1.72, 0, 0.17, 0.15],
-      [0, 1.82, 0, 0.12],
-    ],
-    8,
-    '91a296',
-    0.45
-  );
-  for (const s of [-1, 1]) {
-    beam(m, [s * 0.21, 1.4, 0], [s * 0.32, 1.09, -0.07], 0.072, 0.055, 'a69eb5');
-    beam(m, [s * 0.32, 1.09, -0.07], [s * 0.29, 1, -0.24], 0.056, 0.04, '98a59a');
-    rings(
-      m,
-      [
-        [s * 0.16, 1.2, 0.05, 0.035],
-        [s * 0.17, 1.43, 0.04, 0.069],
-        [s * 0.138, 1.735, 0.012, 0.085],
-      ],
-      6,
-      'a09b86'
-    );
-    box(m, s * 0.079, 1.65, -0.14, 0.056, 0.028, 0.02, '55454a');
-    box(m, s * 0.082, 1.667, -0.157, 0.024, 0.012, 0.01, 'eaad86');
-  }
-  rings(
-    m,
-    [
-      [0, 1.757, 0, 0.184, 0.157],
-      [0, 1.81, 0, 0.17, 0.145],
-    ],
-    8,
-    'bc9d5e'
-  );
-  for (let i = 0; i < 5; i++) {
-    const a = (i * TAU) / 5;
-    beam(
-      m,
-      [Math.cos(a) * 0.155, 1.78, Math.sin(a) * 0.13],
-      [Math.cos(a) * 0.174, 1.92 + (i === 3 ? 0.07 : 0), Math.sin(a) * 0.15],
-      0.038,
-      0.002,
-      'dec487'
-    );
-  }
 }
 function makeWolf(m) {
   disc(m, 0, 0.03, 0, 0.49, 0.85, '353f36');
@@ -840,50 +807,6 @@ function artImage(name) {
   return image;
 }
 const readyImage = (im) => im?.complete && im.naturalWidth > 0;
-const clearingTrees = [
-  [-8, 7, 19, 5.6],
-  [9, 10, 21, 6.0],
-  [-13, 20, 20, 6.5],
-  [13, 23, 18, 5.8],
-  [-16, -5, 19, 6.3],
-  [17, -7, 22, 6],
-];
-const drawnGroves = new Map();
-function ridgeVista(x, z) {
-  const offset = z - 475;
-  return offset >= -10 && offset < 760 && x > 51 - offset * 0.93 - 14 && x < 51 + offset * 0.08 + 15;
-}
-function sceneryTrees(cx, cz) {
-  const key = cx + ',' + cz;
-  if (drawnGroves.has(key)) return drawnGroves.get(key);
-  const result = [],
-    r = rng(7731 + cx * 3851 + cz * 907),
-    num = cz < 11 ? 23 : cz < 14 ? 15 : 5;
-  for (let i = 0; i < num; i++) {
-    const x = (cx + r()) * 80,
-      z = (cz + r()) * 80,
-      h = 8 + r() * 16,
-      rad = h * (0.17 + r() * 0.09),
-      oak = r() > 0.64 && cz < 13,
-      seed = (r() * 1e6) | 0;
-    if (
-      ridgeVista(x, z) ||
-      Math.abs(z - 1021) < 14 ||
-      (z > 1424 && z < 1572 && Math.abs(x - 30) < 37) ||
-      Math.abs(x - roadX(z)) < 10.0 ||
-      Math.abs(x - trailX(z)) < 4.4 ||
-      Math.hypot(x + 155, z - 850) < 8 ||
-      Math.hypot(x - 30, z - 996) < 19 ||
-      (z > 1128 && z < 1400 && x >= -560 && x < 73) ||
-      (z > 0 && z < 660 && Math.abs(x - 0.019 * z) < 8.7)
-    )
-      continue;
-    registerObstacle(x, z, rad * (oak ? 0.14 : 0.1));
-    result.push({ x, z, h, rad, oak, seed, painted: oak || seed % 3 === 0 });
-  }
-  drawnGroves.set(key, result);
-  return result;
-}
 function buildCell(cx, cz) {
   const mesh = [],
     rand = rng(78013 + cx * 3851 + cz * 907);
@@ -931,9 +854,11 @@ function buildCell(cx, cz) {
   }
   ribbon(roadX, 5.4, 'a69770');
   ribbon(trailX, 1.15, '7d815d');
+  for (const b of sceneryBoulders(cx, cz))
+    stone(mesh, b.x, ground(b.x, b.z) - 0.1, b.z, b.rad, b.h, b.rad * 0.84, '838973', b.seed);
   const inRiver = (x, z) => z >= 1007 && z <= 1036;
   const inCastle = (x, z) => z > 1424 && z < 1572 && Math.abs(x - 30) < 37;
-  for (const { x, z, h, rad, oak, seed, painted } of sceneryTrees(cx, cz)) {
+  for (const { x, z, rad } of sceneryTrees(cx, cz)) {
     const y = ground(x, z);
     disc(mesh, x, y + 0.035, z, rad * 0.97, rad * 0.92, '434f38', 7);
   }
@@ -944,7 +869,7 @@ function buildCell(cx, cz) {
       road = Math.abs(x - roadX(z));
     if (inRiver(x, z) || inCastle(x, z) || road < 4.95 || Math.abs(x - trailX(z)) < 1.05) continue;
     const s = 0.28 + rand() * 1.1;
-    if (i % 8 === 0) stone(mesh, x, y - 0.09, z, s, s * 0.8, s * 0.81, '858b77', rand() * TAU);
+    if (i % 8 === 0) stone(mesh, x, y - 0.06, z, s * 0.37, s * 0.24, s * 0.34, '858b77', rand() * TAU);
     else if (i % 5 === 0) fern(mesh, x, y, z, s, rand);
     else
       for (let j = 0; j < 4; j++) {
@@ -979,7 +904,7 @@ function buildCell(cx, cz) {
     }
     if (x0 <= -125 && x0 + 80 > -125)
       for (let i = 0; i < 16; i++) {
-        const x = -125 + Math.sin(i * 1.3) * 2.1,
+        const x = fordStoneX(i),
           z = 1008 + i * 1.76;
         stone(mesh, x, y - 0.19, z, 1.62, 0.53, 1.42, '989a87', rand() * TAU);
       }
@@ -990,9 +915,7 @@ function makeLandmarks(m) {
   const rand = rng(173);
   // Deliberate foreground composition: long limbs make a natural arch and a band
   // of warm leaves marks the opening, visible when the player turns back.
-  for (const [x, z, h, rad] of clearingTrees) {
-    registerObstacle(x, z, rad * 0.15);
-  }
+
   for (let i = 0; i < 100; i++) {
     const z = rand() * 48 - 11,
       x = (5.55 + rand() * 8) * (i % 2 ? -1 : 1),
@@ -1091,17 +1014,47 @@ function makeSatchel(m) {
   beam(m, [-0.2, 0.32, 0], [0, 0.59, 0.035], 0.032, 0.032, '765d46');
   beam(m, [0, 0.59, 0.035], [0.22, 0.32, 0], 0.032, 0.032, '765d46');
 }
-function makeBanquet(m) {
-  // Fallen stag: the approaching player first sees the antlers against the runner.
-  stone(m, 0, 0.08, 0, 0.48, 0.68, 0.84, '795c55');
-  stone(m, 0.22, 0.07, -0.82, 0.2, 0.29, 0.33, '8c7261');
-  for (const s of [-1, 1]) {
-    beam(m, [s * 0.28, 0.24, 0.47], [s * 0.6, 0.08, 0.79], 0.095, 0.04, '846758');
-    beam(m, [0.2 + s * 0.09, 0.24, -0.82], [0.21 + s * 0.32, 0.56, -1.11], 0.035, 0.015, 'c3ad86');
-    beam(m, [0.21 + s * 0.24, 0.41, -0.99], [0.2 + s * 0.45, 0.48, -0.91], 0.028, 0.008, 'c3ad86');
+function makeBerries(m) {
+  for (let k = 0; k < 11; k++) {
+    const a = k * 2.4,
+      r = 0.15 + 0.24 * Math.abs(Math.sin(k * 0.76)),
+      x = r * Math.cos(a),
+      z = r * Math.sin(a),
+      y = 0.28 + 0.28 * Math.sin(k * 0.49) ** 2;
+    beam(m, [0, 0.02, 0], [x, y, z], 0.032, 0.017, '68523c', 5);
+    stone(m, x, y, z, 0.19, 0.23, 0.16, k % 2 ? '73845a' : '52745a', a);
+    for (let j = 0; j < 3; j++)
+      stone(
+        m,
+        x + 0.09 * Math.cos(a + j),
+        y + 0.09 + j * 0.021,
+        z - 0.12 + 0.047 * j,
+        0.043,
+        0.069,
+        0.041,
+        j % 2 ? '657aa6' : '48587f',
+        a
+      );
   }
-  disc(m, 0, 0.045, -0.38, 0.67, 0.85, '734d48');
-  tri(m, [0.22, 0.21, -0.87], [0.31, 0.16, -0.86], [0.6, 0.075, -0.53], '7b9ab1', false);
+}
+function dynamicField(m, w, t) {
+  fieldMotion(m, hallTools, w, t);
+  if (w.player.z > 1100 && !insideHall(w.player.x, w.player.z)) makeFallFoam(m, quad, t);
+  const cords = storyTethers(w, t, ground),
+    shift = bellAnchorOffset(bellSwing(w, t));
+  const move = (p, k) => p.map((v, j) => v + shift[j] * k);
+  for (let i = 0; i < cords.length; i++) {
+    const b = cords[i];
+    beam(
+      m,
+      move(b.a, 1 - i / cords.length),
+      move(b.b, 1 - (i + 1) / cords.length),
+      b.radius,
+      b.radius,
+      b.color,
+      5
+    );
+  }
 }
 const vertexShader = `
 attribute vec3 aPosition,aColor;
@@ -1127,7 +1080,7 @@ void main(){
 const fragShader = `
 precision highp float;
 uniform float uMode,uTime,uHurt,uHex,uGold;
-uniform vec3 uCamera;uniform sampler2D uPaint,uWarm;
+uniform vec3 uCamera;uniform sampler2D uPaint,uWarm,uStone;uniform float uStoneReady;
 varying vec3 vColor,vPos;varying float vDist;
 void main(){
  vec3 c=vColor;
@@ -1143,7 +1096,7 @@ void main(){
  }
  float dapple=.5+.5*sin(vPos.x*.42+sin(vPos.z*.41)) * sin(vPos.z*.36+sin(vPos.x*.61));
  if(uMode<.5){c*=.92+.11*dapple;float detail=sin(vPos.x*6.0+vPos.z*5.0)*sin(vPos.z*3.0+vPos.y*4.0);c+=.009*detail*(1.-smoothstep(8.,35.,vDist));}
- if(uMode>2.5 && uMode<3.5 && vDist<115.) discard;
+ if(uMode>2.5 && uMode<3.5){float screen=fract(dot(floor(gl_FragCoord.xy),vec2(.75488,.56984)));if(screen>smoothstep(143.,198.,vDist))discard;}
  if(!(uMode>1.5 && uMode<2.5)){
    float fog=(1.-exp(-vDist*.00123))*.78;
    if(uMode>3.5)fog*=.53;
@@ -1151,6 +1104,22 @@ void main(){
    c=mix(c,haze,fog);
    float clarity=1.-smoothstep(15.,80.,vDist);
    c+=vec3(.034,.028,-.002)*clarity;
+ }
+ if(uMode<.5&&uStoneReady>.5&&vPos.z>1375.&&vPos.z<1570.&&vDist<108.&&max(max(vColor.r,vColor.g),vColor.b)-min(min(vColor.r,vColor.g),vColor.b)<.092){
+   vec3 n=vec3(.12,.08,.8);
+   #ifdef SURFACE_NORMALS
+   n=abs(normalize(cross(dFdx(vPos),dFdy(vPos))));n*=n;n/=max(.0001,n.x+n.y+n.z);
+   #else
+   if(abs(abs(vPos.x-30.)-25.)<2.3)n=vec3(.9,.04,.06);
+   #endif
+   vec3 uv=vPos*.285;
+   vec3 tex=n.x*texture2D(uStone,uv.zy).rgb+n.y*texture2D(uStone,uv.xz).rgb+n.z*texture2D(uStone,uv.xy).rgb;
+   float v=dot(tex,vec3(.26,.59,.15));float detail=clamp(.65+v*.80,.70,1.26);
+   c*=mix(1.,detail,(1.-smoothstep(33.,108.,vDist))*.88);
+ }
+ if(uMode<1.5){
+   vec2 lamp=abs(vPos.z-8.)<12.?vec2(vPos.x<0.?-6.2:6.2,vPos.x<0.?6.6:9.4):vec2(vPos.x<30.?27.35:34.5,vPos.x<30.?1516.8:1518.5);
+   float d=distance(vPos.xz,lamp);c+=vec3(.16,.062,.009)*exp(-d*.63)*(.94+.06*sin(uTime*6.));
  }
  c=mix(c,c*vec3(1.08,.97,.94)+vec3(.08,.036,.0),uGold*.5);
  c=mix(c,vec3(.29,.16,.46),uHex*.20);
@@ -1214,8 +1183,11 @@ attribute vec3 aPosition,aColor;uniform vec3 uCamera;uniform vec4 uView;uniform 
 void main(){opacity=aColor.z;vec3 v=aPosition-uCamera;float f=dot(v.xz,uView.xy);vec3 e=vec3(v.x*uView.y-v.z*uView.x,v.y*uView.w-f*uView.z,f*uView.w+v.y*uView.z);uv=aColor.xy;dep=e.z;gl_Position=vec4(e.x*uLens.x,e.y*uLens.y,e.z*1.00008-.12,e.z);}
 `;
 const standFrag = `
-precision highp float;uniform sampler2D uArt;varying vec2 uv;varying float dep;varying float opacity;
-void main(){vec4 c=texture2D(uArt,uv);if(c.a<.36||fract(dot(floor(gl_FragCoord.xy),vec2(.75488,.56984)))>opacity)discard;gl_FragColor=vec4(mix(c.rgb,vec3(.59,.65,.58),min(.33,max(0.,dep)*.0019)),1.);}
+precision highp float;uniform sampler2D uArt;uniform float uMark;varying vec2 uv;varying float dep;varying float opacity;
+void main(){
+ if(uMark>.5){float r=length((uv-.5)*2.);float a=(1.-smoothstep(.10,1.,r))*opacity;
+ if(a<.004)discard;gl_FragColor=vec4(uMark<1.5?vec3(.075,.085,.068):uMark<2.5?vec3(1.,.62,.23):vec3(1.,.35,.08),a);return;}
+ vec4 c=texture2D(uArt,uv);if(c.a<.36||fract(dot(floor(gl_FragCoord.xy),vec2(.75488,.56984)))>opacity)discard;gl_FragColor=vec4(mix(c.rgb,vec3(.59,.65,.58),min(.33,max(0.,dep)*.0019)),1.);}
 `;
 function program(gl, vs, fs) {
   function compile(type, src) {
@@ -1259,6 +1231,9 @@ function program(gl, vs, fs) {
     'uWarm',
     'uSky',
     'uSkyReady',
+    'uMark',
+    'uStone',
+    'uStoneReady',
   ])
     uni[n] = gl.getUniformLocation(p, n);
   return { p, attrs, uni };
@@ -1268,65 +1243,51 @@ function farTerrain(m) {
   for (let x = -756; x < 756; x += grid)
     for (let z = -270; z < 1728; z += grid) {
       const p = (a, b) => [a, ground(a, b) - 1.2, b];
-      quad(
-        m,
-        p(x, z),
-        p(x, z + grid),
-        p(x + grid, z + grid),
-        p(x + grid, z),
-        z > 1130 ? '788373' : '647a62'
-      );
+      quad(m, p(x, z), p(x, z + grid), p(x + grid, z + grid), p(x + grid, z), z > 1130 ? '788373' : '647a62');
     }
 }
 function farTrees(m) {
-  const R = rng(9467);
-  for (let i = 0; i < 4200; i++) {
-    const x = (R() - 0.5) * 1300,
-      z = -210 + R() * 1920,
-      road = Math.abs(x - roadX(z));
-    if (
-      ridgeVista(x, z) ||
-      road < 16 ||
-      Math.abs(x - trailX(z)) < 8 ||
-      Math.abs(z - 1020) < 20 ||
-      (z > 1421 && Math.abs(x - 30) < 46) ||
-      (z > 1130 && z < 1410 && x > -415 && x < 70) ||
-      (z > 1120 && R() > 0.26)
-    )
-      continue;
-    const y = ground(x, z) - 0.4,
-      h = 7 + R() * 17,
-      w = h * (0.13 + R() * 0.12),
-      c = R() > 0.65 ? '54705e' : '466557';
-    const top = [x, y + h, z];
-    for (let j = 0; j < 4; j++) {
-      const a = (j * TAU) / 4,
-        b = a + TAU / 4;
-      tri(
-        m,
-        [x + Math.cos(a) * w, y, z + Math.sin(a) * w],
-        top,
-        [x + Math.cos(b) * w, y, z + Math.sin(b) * w],
-        c
-      );
-    }
-  }
+  // One tree population from a moss-covered root out to the horizon. The distant
+  // mesh uses the same trunk position and crown as the near painted individual.
+  for (let cz = -3; cz <= 20; cz++)
+    for (let cx = -8; cx <= 8; cx++)
+      for (const b of sceneryTrees(cx, cz)) {
+        const { x, z, h, rad, oak, seed } = b,
+          y = ground(x, z),
+          col = oak ? '526b53' : '435f54';
+        const tip = [x, y + h, z],
+          bottom = oak ? h * 0.48 : h * 0.16,
+          wide = rad * (oak ? 1.45 : 1);
+        const n = oak ? 6 : 4;
+        for (let j = 0; j < n; j++) {
+          const a = (j * TAU) / n + seed,
+            b = ((j + 1) * TAU) / n + seed;
+          const q = [x + Math.cos(a) * wide, y + bottom, z + Math.sin(a) * wide],
+            r = [x + Math.cos(b) * wide, y + bottom, z + Math.sin(b) * wide];
+          tri(m, q, tip, r, col);
+          if (oak) tri(m, [x, y + h * 0.29, z], q, r, '405647');
+        }
+      }
 }
-function makeHand(m) {
-  beam(m, [0.19, -0.56, 0.33], [0.155, -0.24, 0.53], 0.066, 0.04, '596650');
-  stone(m, 0.15, -0.245, 0.54, 0.063, 0.117, 0.039, 'a78970');
+function makeGesture(m, closed = false) {
+  beam(m, [0.19, -0.56, 0.33], [0.155, -0.24, 0.53], 0.066, 0.04, '596650', 8);
+  stone(m, 0.148, -0.245, 0.54, 0.066, 0.12, 0.044, 'a78970');
   for (let i = 0; i < 4; i++) {
-    const x = 0.1 + i * 0.029;
-    beam(
-      m,
-      [x, -0.145, 0.544],
-      [x + (i - 1.3) * 0.012, -0.048 + Math.abs(i - 1) * -0.01, 0.565],
-      0.016,
-      0.01,
-      'b99b7e'
-    );
+    const x = 0.098 + i * 0.03,
+      a = [x, -0.148, 0.544],
+      b = [x + (i - 1.3) * 0.009, closed ? -0.108 : -0.081, 0.554],
+      c = [
+        x + (i - 1.1) * 0.013,
+        closed ? -0.151 : -0.041 + Math.abs(i - 1.1) * -0.012,
+        closed ? 0.596 : 0.575,
+      ];
+    beam(m, a, b, 0.018, 0.014, 'ba9c81', 6);
+    beam(m, b, c, 0.015, 0.01, 'b99a7a', 6);
   }
-  beam(m, [0.102, -0.19, 0.543], [0.056, -0.131, 0.58], 0.02, 0.013, 'b3987a');
+  beam(m, [0.096, -0.19, 0.54], [0.062, -0.149, 0.574], 0.021, 0.015, 'b6977c', 6);
+  beam(m, [0.171, -0.284, 0.501], [0.168, -0.265, 0.512], 0.055, 0.055, '466e93', 8);
+  tri(m, [0.123, -0.272, 0.48], [0.109, -0.263, 0.475], [0.068, -0.308, 0.48], '809db4', false);
+  tri(m, [0.116, -0.272, 0.477], [0.104, -0.283, 0.475], [0.089, -0.323, 0.49], '456789', false);
 }
 function makeTraveller(m) {
   for (const s of [-1, 1]) {
@@ -1366,7 +1327,7 @@ function makeMarcherTier() {
     oldX = 0,
     oldZ = 0,
     oldWorld = null;
-  function update(world, aspect, time) {
+  function update(world, aspect, time, cap = 64) {
     const p = world.player,
       s = Math.sin(p.yaw),
       c = Math.cos(p.yaw),
@@ -1405,7 +1366,7 @@ function makeMarcherTier() {
         candidates.sort((a, b) => a.dist2 - b.dist2 || a.id - b.id);
         // Sorting a fixed shortlist per fifth of a second bounds draw cost and
         // leaves distant figures in the batched crowd pass.
-        for (const m of candidates.slice(0, 48)) {
+        for (const m of candidates.slice(0, cap)) {
           selected.push(m.id);
           ids.add(m.id);
         }
@@ -1415,6 +1376,7 @@ function makeMarcherTier() {
     future.elapsed = world.elapsed + 0.65;
     const earlier = Object.create(world);
     earlier.elapsed = Math.max(0, world.elapsed - 0.65);
+    let bowlShown = false;
     const poses = selected.map((id) => {
       const cur = hordePosition(world, id),
         a = hordePosition(earlier, id),
@@ -1422,6 +1384,11 @@ function makeMarcherTier() {
       const dx = b.x - a.x,
         dz = b.z - a.z,
         side = dx * c - dz * s;
+      let kind = 1 + ((Math.imul(id + 31, 19349663) >>> 6) % 7);
+      if (!bowlShown && (id * 43) % 107 === 0) {
+        kind = 0;
+        bowlShown = true;
+      }
       const phase = ((id * 37) % 101) * 0.117 + world.elapsed * (2.55 + ((id * 3) % 11) * 0.054);
       const sway = Math.sin(phase) * 0.038,
         bob = Math.pow(Math.cos(phase), 2) * 0.042;
@@ -1434,7 +1401,8 @@ function makeMarcherTier() {
         w: 0.9 + ((id * 13) % 17) * 0.013,
         flip: side < 0,
         seed: id,
-        kind: (id * 13) % 43 < 22 ? 0 : 1,
+        kind,
+        rig: { type: 'marcher', phase: id * 0.78 },
       };
     });
     return { poses, ids };
@@ -1443,7 +1411,13 @@ function makeMarcherTier() {
 }
 function createGLRenderer(canvas, gl) {
   const programs = [
-    program(gl, vertexShader, fragShader),
+    program(
+      gl,
+      vertexShader,
+      (gl.getExtension('OES_standard_derivatives')
+        ? '#extension GL_OES_standard_derivatives : enable\n#define SURFACE_NORMALS\n'
+        : '') + fragShader
+    ),
     program(gl, skyVertex, skyFrag),
     program(gl, pointVertex, pointFrag),
     program(gl, standVertex, standFrag),
@@ -1498,8 +1472,48 @@ function createGLRenderer(canvas, gl) {
     paintedCastle = imageTexture('castle.webp'),
     paintedHall = imageTexture('hall.webp'),
     paintedSky = imageTexture('sky.webp');
-  const marcherArt = [imageTexture('marcher-1.webp'), imageTexture('marcher-2.webp')],
+  const groveArt = {
+    oak: paintedTree,
+    pine: paintedPine,
+    birch: imageTexture('birch.webp'),
+    hollow: imageTexture('hollow-oak.webp'),
+    cedar: imageTexture('cedar.webp'),
+  };
+  const witchRear = imageTexture('witch-back.webp'),
+    foeArt = {
+      wolf: imageTexture('wolf.webp'),
+      troll: imageTexture('troll.webp'),
+      dragon: imageTexture('dragon.webp'),
+    };
+  const xeroPoses = {
+    offer: paintedXero,
+    feeding: imageTexture('xero-feeding.webp'),
+    lunge: imageTexture('xero-lunge.webp'),
+    cured: imageTexture('xero-cured.webp'),
+  };
+  const marcherArt = Array.from({ length: 8 }, (_, i) => imageTexture('marcher-' + (i + 1) + '.webp')),
     marcherTier = makeMarcherTier();
+  const stoneTexture = imageTexture('castle-stone.webp');
+  const stoneLoaded = stoneTexture.im.onload;
+  stoneTexture.im.onload = () => {
+    stoneLoaded?.();
+    if (disposed) return;
+    const im = stoneTexture.im;
+    gl.bindTexture(gl.TEXTURE_2D, stoneTexture.tex);
+    if (
+      (im.naturalWidth & (im.naturalWidth - 1)) !== 0 ||
+      (im.naturalHeight & (im.naturalHeight - 1)) !== 0
+    ) {
+      const tile = document.createElement('canvas');
+      tile.width = tile.height = 512;
+      tile.getContext('2d').drawImage(im, 0, 0, 512, 512);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tile);
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.generateMipmap(gl.TEXTURE_2D);
+  };
   const groundAtlas = artImage('woodland-ground.webp');
   const mossTex = newTexture(floorPaint('moss').canvas),
     roadTex = newTexture(floorPaint('road').canvas);
@@ -1553,63 +1567,47 @@ function createGLRenderer(canvas, gl) {
     mountains: model(makeBackdrop),
     farTrees: model(farTrees),
     landmarks: model(makeLandmarks),
+    fortress: model((m) => makeFortressDetail(m, hallTools)),
+    storyStatic: model((m) => storyStatic(m, hallTools)),
+    ...storyModels(model, hallTools),
+    berries: model(makeBerries),
     witch: model(makeWitch),
-    princess: model(makePrincess),
-    troll: model(makeTroll),
-    wolf: model(makeWolf),
-    dragon: model(makeDragon),
     satchel: model(makeSatchel),
-    body: model(makeBanquet),
     traveller: model(makeTraveller),
     sword: model(makeBlade),
-    hand: model(makeHand),
+    hand: model((m) => makeGesture(m)),
+    fist: model((m) => makeGesture(m, true)),
     bridge: model(makeBridge),
     low: model((m) => bell(m, 1.14)),
     mid: model((m) => bell(m, 0.86)),
     high: model((m) => bell(m, 0.59)),
-    rope: model((m) => {
-      beam(m, [0.46, 0.09, 0.08], [0.46, 4.22, 0.08], 0.038, 0.036, 'bcac7d');
-      for (let i = 0; i < 5; i++)
-        rings(
-          m,
-          [
-            [0.46, 0.14 + i * 0.1, 0.08, 0.049],
-            [0.46, 0.18 + i * 0.1, 0.08, 0.053],
-          ],
-          6,
-          'cab888'
-        );
-    }),
-    fallen: model((m) => {
-      for (let i = 0; i < 12; i++)
-        beam(
-          m,
-          [0.46 + i * 0.1, 0.07, 0.08 + Math.sin(i * 0.6) * 0.15],
-          [0.56 + i * 0.1, 0.07, 0.08 + Math.sin((i + 1) * 0.6) * 0.15],
-          0.033,
-          0.033,
-          'c4b185'
-        );
-    }),
   };
+  const bellFrames = new Map();
+  const creatureMesh = makeCreatureBank(
+    { wolf: makeWolf, troll: makeTroll, dragon: makeDragon },
+    hallTools,
+    (data) => makeBuffer(data)
+  );
+  const motionData = new Float32Array(131072),
+    motionBuffer = makeBuffer(motionData, true);
   const crowdData = new Float32Array(HORDE_COUNT * 6),
     crowd = makeBuffer(crowdData, true);
   const pollenData = new Float32Array(104 * 6),
     pollen = makeBuffer(pollenData, true);
-  const standData = new Float32Array(768 * 36),
+  const standData = new Float32Array(96000),
     standMesh = makeBuffer(standData, true);
   const skyMesh = makeBuffer([-1, -1, 3, -1, -1, 3], false, 2);
   const cells = new Map(),
     locations = [];
   for (let j = -3; j < 4; j++) for (let i = -3; i < 4; i++) locations.push([i, j]);
+  const budget = createQualityController();
+  let workTime = 0;
   let crowdAt = -1e4,
     elapsedAt = -1e4,
     particleAt = -1e4,
     oldX = NaN,
     oldZ = NaN,
     distance = 0,
-    lastRender = 0,
-    slow = 0,
     quality = 1,
     disposed = false;
   function resize() {
@@ -1690,14 +1688,8 @@ function createGLRenderer(canvas, gl) {
   function render(w, t = 0) {
     if (disposed || !w?.player || gl.isContextLost()) return;
     if (!Number.isFinite(t)) t = w.elapsed || 0;
-    if (lastRender && t - lastRender > 0.041 && t - lastRender < 0.3) {
-      slow++;
-    } else slow = Math.max(0, slow - 1);
-    if (slow > 50 && quality > 0.71) {
-      quality = Math.max(0.7, quality - 0.1);
-      slow = 0;
-    }
-    lastRender = t;
+    const frameStarted = performance.now();
+    quality = budget.sample(frameStarted, w.renderQuality, workTime);
     resize();
     const p = w.player,
       px = p.x,
@@ -1715,7 +1707,7 @@ function createGLRenderer(canvas, gl) {
       saved = seq?.id === 'saved';
     const reduced = !!w.reducedMotion;
     const bob = reduced ? 0 : Math.sin(distance * 2.19) * 0.035 * Math.min(1, movement * 8),
-      y = ground(px, pz) + 1.66 + bob;
+      y = (p.feetY ?? footHeight(w, px, pz)) + 1.66 + bob;
     const aspect = canvas.width / canvas.height,
       lensY = 1.37,
       lensX = lensY / aspect;
@@ -1748,6 +1740,8 @@ function createGLRenderer(canvas, gl) {
     setup(solid);
     useTexture(0, mossTex, solid.uni.uPaint);
     useTexture(1, roadTex, solid.uni.uWarm);
+    useTexture(2, stoneTexture.tex, solid.uni.uStone);
+    gl.uniform1f(solid.uni.uStoneReady, stoneTexture.ready ? 1 : 0);
     gl.uniform1f(solid.uni.uHurt, feast ? sp : Math.max(0, ((w.hurtUntil || 0) - w.elapsed) / 1.5));
     gl.uniform1f(solid.uni.uHex, bound ? sp : 0);
     function draw(b, x = 0, yy = 0, z = 0, rot = 0, size = 1, mode = 0) {
@@ -1795,81 +1789,145 @@ function createGLRenderer(canvas, gl) {
         }
       }
     draw(models.landmarks);
-    if (pz > 1280 && Math.abs(px - 30) < 180) draw(models.hall);
-    if (w.bridgeOpen) draw(models.bridge);
+    if (pz > 1280 && Math.abs(px - 30) < 180) draw(models.hall, 0, castleAltitude, 0);
+    if (Math.hypot(px - 30, pz - 1516) < 140) {
+      const angle = bellSwing(w, t);
+      if (!bellFrames.has(angle))
+        bellFrames.set(
+          angle,
+          model((m) => makeHangingBell(m, hallTools, angle))
+        );
+      draw(bellFrames.get(angle));
+    }
+    const fig = storyFigure(w, t, ground),
+      storyArt = fig ? xeroPoses[fig.key] : null,
+      storyPose = storyHandPose(w, t) || {};
+    if (!insideHall(px, pz)) draw(models.fortress);
+    if (pz > 1300 && Math.abs(px - 30) < 170) draw(models.storyStatic);
+    for (const part of storyPieces(w, t, ground)) {
+      if (part.key.startsWith('xero-') && storyArt?.ready) continue;
+      draw(models[part.key], part.x, part.y, part.z, part.rot, part.scale);
+    }
+    const dynamic = [];
+    dynamicField(dynamic, w, t);
+    if (dynamic.length) {
+      const count = Math.min(motionData.length - (motionData.length % 18), dynamic.length);
+      motionData.set(count === dynamic.length ? dynamic : dynamic.slice(0, count));
+      gl.bindBuffer(gl.ARRAY_BUFFER, motionBuffer.b);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, motionData.subarray(0, count));
+      motionBuffer.count = count / 6;
+      draw(motionBuffer);
+    }
+    if (Math.abs(pz - 1021) < 190) draw(models.bridge, 0, -3.1 * (1 - bridgeRise(w)), 0);
+    const monsterPictures = [];
     for (const a of w.actors || []) {
-      if (!a.alive || Math.hypot(px - a.x, pz - a.z) > 255) continue;
-      const moving = ['wolf', 'troll', 'dragon'].includes(a.type),
-        isXero = a.type === 'princess';
-      const m = a.type === 'bell' ? models[a.tone] : models[a.type];
-      if (!m) continue;
-      // Mesh faces -Z. Simulation heading zero is +Z.
-      const rot = a.type === 'bell' ? 0 : (a.heading ?? Math.PI) + Math.PI,
-        phase = a.phase || 0;
-      const groundY = ground(a.x, a.z);
-      let bodyY = groundY,
-        scale = 1;
-      if (a.type === 'body') bodyY += 0.91 + 0.027 * Math.sin(t * 2.1);
-      if (a.type === 'dragon') {
-        bodyY += 3.25 + Math.sin(t * 1.13 + phase) * 0.65;
-        scale = 1.4;
-      } else if (moving) bodyY += Math.max(0, Math.sin(t * 3.8 + phase)) * 0.05;
-      else if (isXero && feast && sp < 0.44) bodyY -= 0.29 * (1 - sp / 0.44);
-      const frontFacing =
-        (px - a.x) * Math.sin(a.heading ?? Math.PI) + (pz - a.z) * Math.cos(a.heading ?? Math.PI) > 0;
-      if (
-        !(a.type === 'witch' && paintedWitch.ready && frontFacing) &&
-        !(isXero && !a.cured && paintedXero.ready)
-      )
-        draw(m, a.x, bodyY, a.z, rot, scale, 1);
-      if (isXero) draw(w.ropeFallen ? models.fallen : models.rope, a.x, groundY, a.z, 0, 1, 1);
+      if (!a.alive || storyReplaces(w, a.type) || Math.hypot(px - a.x, pz - a.z) > 255) continue;
+      if (isCreature(a)) {
+        const b = creaturePose(a, t, p),
+          art = foeArt[a.type];
+        if (art.ready && b.profile) {
+          monsterPictures.push({ b, asset: art });
+        } else
+          draw(
+            creatureMesh(a, t),
+            a.x,
+            ground(a.x, a.z) + b.dy,
+            a.z,
+            (a.attackYaw ?? a.heading ?? 0) + Math.PI,
+            a.type === 'dragon' ? 1.4 : 1,
+            1
+          );
+        continue;
+      }
+      const model = a.type === 'bell' ? models[a.tone] : models[a.type];
+      if (model && !(a.type === 'witch' && paintedWitch.ready)) {
+        const rot = a.type === 'bell' ? 0 : (a.heading ?? Math.PI) + Math.PI;
+        draw(model, a.x, ground(a.x, a.z), a.z, rot, 1, 1);
+      }
     }
     const trees = [];
     for (const c of candidates) trees.push(...sceneryTrees(c.x, c.z));
     for (const [x, z, h, rad] of clearingTrees)
       if (Math.hypot(px - x, pz - z) < 220)
         trees.push({ x, z, h, rad, oak: true, seed: Math.floor(x * z), w: 0.87 });
-    for (let i = 0; i < 12 && Math.abs(pz) < 140; i++) {
-      const z = 17 + i * 4.1,
-        x = (10 + (i % 3) * 3.1) * (i % 2 ? 1 : -1);
-      trees.push({ x, z, h: 5.2 + (i % 4) * 1.6, rad: 2.1, oak: false, seed: i, w: 0.88 });
-    }
+    if (Math.abs(pz) < 140) trees.push(...youngFirs);
     if (!paintedTree.ready || !paintedPine.ready)
       for (const b of trees) {
         if (!(b.oak ? paintedTree : paintedPine).ready)
           draw(b.oak ? models.oakProxy : models.pineProxy, b.x, ground(b.x, b.z), b.z, 0, b.h);
       }
     setup(stands);
+    gl.uniform1f(stands.uni.uMark, 0);
     if (paintedHall.ready && insideHall(px, pz)) {
       useTexture(0, paintedHall.tex, stands.uni.uArt);
       bind(stands, models.paintedHall);
       gl.drawArrays(gl.TRIANGLES, 0, models.paintedHall.count);
     }
+    const decals = groundDecals(w, t, hostFootprints(w));
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    for (const [i, type] of ['shade', 'light', 'ember'].entries()) {
+      let at = 0;
+      for (const d of decals) {
+        if (d.kind !== type) continue;
+        for (const [u, v] of [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 0],
+          [1, 1],
+          [0, 1],
+        ]) {
+          standData.set([d.x + (u - 0.5) * 2 * d.rx, d.y, d.z + (v - 0.5) * 2 * d.rz, u, v, d.opacity], at);
+          at += 6;
+        }
+      }
+      if (!at) continue;
+      gl.uniform1f(stands.uni.uMark, i + 1);
+      gl.bindBuffer(gl.ARRAY_BUFFER, standMesh.b);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, standData.subarray(0, at));
+      bind(stands, standMesh);
+      gl.drawArrays(gl.TRIANGLES, 0, at / 6);
+    }
+    gl.uniform1f(stands.uni.uMark, 0);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
     function batchSprites(items, asset) {
-      if (!asset.ready || !items.length) return;
+      if (!asset?.ready || !items.length) return;
       let n = 0;
       const ratio = asset.im.naturalWidth / asset.im.naturalHeight;
       for (const b of items) {
-        if (n + 36 > standData.length) break;
-        const yy = ground(b.x, b.z) + (b.dy || 0),
-          ww = b.h * ratio * 0.5 * (b.w || 1),
+        const y = b.y ?? ground(b.x, b.z) + (b.dy || 0),
+          width = b.h * ratio * (b.w || 1),
           flip = b.flip ?? b.seed % 2 === 0;
-        const left = b.x - cy * ww,
-          right = b.x + cy * ww,
-          zl = b.z + sy * ww,
-          zr = b.z - sy * ww;
-        for (const v of [
-          [left, yy, zl, flip ? 1 : 0, 1],
-          [right, yy, zr, flip ? 0 : 1, 1],
-          [right, yy + b.h, zr, flip ? 0 : 1, 0],
-          [left, yy, zl, flip ? 1 : 0, 1],
-          [right, yy + b.h, zr, flip ? 0 : 1, 0],
-          [left, yy + b.h, zl, flip ? 1 : 0, 0],
-        ]) {
-          standData.set(v, n);
-          standData[n + 5] = b.alpha ?? 1;
-          n += 6;
-        }
+        const dx = px - b.x,
+          dz = pz - b.z,
+          dist = Math.hypot(dx, dz),
+          near = !!b.rig && dist < 48;
+        const cols = near ? (b.rig.type === 'marcher' ? 2 : 5) : 1,
+          rows = near ? (b.rig.type === 'marcher' ? 3 : 6) : 1;
+        if (n + cols * rows * 36 > standData.length) break;
+        const verts = [];
+        for (let row = 0; row <= rows; row++)
+          for (let col = 0; col <= cols; col++) {
+            const u = col / cols,
+              v = row / rows,
+              pos = near ? actorWarp(b.rig, t, u, v) : [u, v],
+              side = (flip ? 0.5 - pos[0] : pos[0] - 0.5) * width;
+            verts.push([b.x + cy * side, y + (1 - pos[1]) * b.h, b.z - sy * side, u, v, b.alpha ?? 1]);
+          }
+        for (let row = 0; row < rows; row++)
+          for (let col = 0; col < cols; col++) {
+            const a = row * (cols + 1) + col,
+              b = a + 1,
+              c = a + cols + 1,
+              d = c + 1;
+            for (const k of [a, c, d, a, d, b]) {
+              standData.set(verts[k], n);
+              n += 6;
+            }
+          }
       }
       useTexture(0, asset.tex, stands.uni.uArt);
       gl.bindBuffer(gl.ARRAY_BUFFER, standMesh.b);
@@ -1877,14 +1935,15 @@ function createGLRenderer(canvas, gl) {
       bind(stands, standMesh);
       gl.drawArrays(gl.TRIANGLES, 0, n / 6);
     }
-    batchSprites(
-      trees.filter((b) => b.oak),
-      paintedTree
-    );
-    batchSprites(
-      trees.filter((b) => !b.oak),
-      paintedPine
-    );
+    const bySpecies = { oak: [], pine: [], birch: [], hollow: [], cedar: [] };
+    for (const b of trees) {
+      const key = species(b),
+        asset = groveArt[key]?.ready ? key : b.oak ? 'oak' : 'pine';
+      const d = Math.hypot(b.x - px, b.z - pz);
+      if (d > 212) continue;
+      bySpecies[asset].push({ ...b, alpha: 1 - saturated((d - 154) / 48) });
+    }
+    for (const key of Object.keys(bySpecies)) batchSprites(bySpecies[key], groveArt[key]);
     const castleDist = Math.hypot(px - 30, pz - 1435);
     if (pz < 1410 && castleDist > 48 && paintedCastle.ready) {
       const h = 102,
@@ -1894,34 +1953,26 @@ function createGLRenderer(canvas, gl) {
         paintedCastle
       );
     }
-    const xero = (w.actors || []).find((a) => a.alive && a.type === 'princess');
-    if (xero && !xero.cured && Math.hypot(px - xero.x, pz - xero.z) < 120)
-      batchSprites([{ ...xero, h: feast && sp < 0.33 ? 1.55 : 1.96, seed: 1 }], paintedXero);
+    for (const { b, asset } of monsterPictures) batchSprites([b], asset);
+    if (fig && storyArt?.ready && Math.hypot(px - fig.x, pz - fig.z) < 120)
+      batchSprites([{ ...fig, seed: 1 }], storyArt);
     const witch = (w.actors || []).find((a) => a.alive && a.type === 'witch');
-    if (
-      witch &&
-      Math.hypot(px - witch.x, pz - witch.z) < 85 &&
-      (px - witch.x) * Math.sin(witch.heading ?? Math.PI) +
-        (pz - witch.z) * Math.cos(witch.heading ?? Math.PI) >
-        0
-    )
-      batchSprites([{ ...witch, h: 2.4, seed: 1 }], paintedWitch);
+    if (witch && Math.hypot(px - witch.x, pz - witch.z) < 105) {
+      const art = witchView(w, witch) === 'rear' && witchRear.ready ? witchRear : paintedWitch;
+      batchSprites([{ ...witch, h: 2.4, seed: 1 }], art);
+    }
     // The procession updates at a lower rate than the camera, including distant ranks.
     // Terrain depth hides groups behind the ridge. Each point becomes a walking figure.
     const detailed =
       pz > 315 && marcherArt.every((a) => a.ready)
-        ? marcherTier.update(w, aspect, t)
+        ? marcherTier.update(w, aspect, t, quality < 0.8 ? 32 : 64)
         : { poses: [], ids: new Set() };
-    if (detailed.poses.length) {
-      batchSprites(
-        detailed.poses.filter((a) => a.kind === 0),
-        marcherArt[0]
-      );
-      batchSprites(
-        detailed.poses.filter((a) => a.kind === 1),
-        marcherArt[1]
-      );
-    }
+    if (detailed.poses.length)
+      for (let k = 0; k < marcherArt.length; k++)
+        batchSprites(
+          detailed.poses.filter((a) => a.kind === k),
+          marcherArt[k]
+        );
     if (pz > 315) updateHorde(w, t, detailed.ids);
     updatePollen(px, pz, t);
     setup(points);
@@ -1967,6 +2018,20 @@ function createGLRenderer(canvas, gl) {
         sa = Math.sin(ang);
       const wristX = W - 0.2 * sz - swing * 0.21 * W,
         wristY = H - 0.18 * sz + tuck * 0.65 * H + bob * H * 0.05;
+      const paintBlade = swordPlacement(w, W, H, (x, y0, z) => {
+        const dx = x - px,
+          dy = y0 - y,
+          dz = z - pz,
+          front = dx * sy + dz * cy,
+          dep = front * cpit + dy * spit;
+        return dep > 0.07
+          ? [
+              W * 0.5 + ((dx * cy - dz * sy) * H * 0.685) / dep,
+              H * 0.5 - ((dy * cpit - front * spit) * H * 0.685) / dep,
+              dep,
+            ]
+          : null;
+      });
       let k = 0;
       for (const [u, v] of [
         [0, 0],
@@ -1978,8 +2043,9 @@ function createGLRenderer(canvas, gl) {
       ]) {
         const x = (u - 0.78) * sz,
           y = (v - 0.78) * sz;
-        const xx = wristX + x * ca - y * sa,
-          yy = wristY + x * sa + y * ca;
+        const at = paintBlade?.map(u, v);
+        const xx = at ? at[0] : wristX + x * ca - y * sa,
+          yy = at ? at[1] + tuck * H * 0.65 : wristY + x * sa + y * ca;
         standData.set([(xx / W) * 2 - 1, 1 - (yy / H) * 2, 0, u, v, 0], k);
         k += 6;
       }
@@ -1994,9 +2060,21 @@ function createGLRenderer(canvas, gl) {
       gl.disable(gl.BLEND);
       setup(solid);
     }
-    if (bound || (feast && sp > 0.4) || potionFlash > 0.35)
-      draw(models.hand, slide - 0.21, -0.1 + (bound ? sp : feast ? sp : potionFlash) * 0.16, 0, 0.14, 1, 2);
+    if (bound || storyPose.reach > 0.02 || potionFlash > 0.35) {
+      const reach = storyPose.reach || 0,
+        clench = storyPose.clench || 0;
+      draw(
+        clench > 0.48 ? models.fist : models.hand,
+        slide - 0.21 + reach * 0.12,
+        -0.1 + Math.max(reach, bound ? sp : 0, potionFlash) * 0.16,
+        reach * 0.14,
+        0.14 + clench * 0.4,
+        1,
+        2
+      );
+    }
     gl.enable(gl.DEPTH_TEST);
+    workTime = performance.now() - frameStarted;
   }
   function dispose() {
     disposed = true;
@@ -2022,19 +2100,19 @@ function softwareRenderer(canvas) {
   if (!ctx) throw Error('Canvas rendering is unavailable.');
   const models = {};
   for (const [key, fn] of Object.entries({
+    boulder: (m) => stone(m, 0, 0, 0, 1, 0.73, 0.84, '838973', 0.8),
+    fortress: (m) => makeFortressDetail(m, hallTools),
+    storyStatic: (m) => storyStatic(m, hallTools),
+    berries: makeBerries,
     witch: makeWitch,
-    princess: makePrincess,
-    wolf: makeWolf,
-    troll: makeTroll,
-    dragon: makeDragon,
     satchel: makeSatchel,
     traveller: makeTraveller,
-    body: makeBanquet,
     castle,
     well: spring,
     bridge: makeBridge,
     blade: makeBlade,
-    hand: makeHand,
+    hand: (m) => makeGesture(m),
+    fist: (m) => makeGesture(m, true),
     low: (m) => bell(m, 1.14),
     mid: (m) => bell(m, 0.86),
     high: (m) => bell(m, 0.59),
@@ -2051,14 +2129,45 @@ function softwareRenderer(canvas) {
     make(m, hallTools);
     models[name] = m;
   }
+  Object.assign(
+    models,
+    storyModels((fn) => {
+      const m = [];
+      fn(m);
+      return m;
+    }, hallTools)
+  );
   const hallPainter = createHallPainter();
+  const bellFrames = new Map();
+  const creatureMesh = makeCreatureBank(
+    { wolf: makeWolf, troll: makeTroll, dragon: makeDragon },
+    hallTools,
+    (data) => data
+  );
   const treeArt = artImage('tree.webp'),
     pineArt = artImage('pine.webp'),
     witchArt = artImage('witch-figure.webp'),
     xeroArt = artImage('xero.webp'),
     swordArt = artImage('sword.webp'),
     castleArt = artImage('castle.webp');
-  const marchers = [artImage('marcher-1.webp'), artImage('marcher-2.webp')],
+  const groveArt = {
+    oak: treeArt,
+    pine: pineArt,
+    birch: artImage('birch.webp'),
+    hollow: artImage('hollow-oak.webp'),
+    cedar: artImage('cedar.webp'),
+  };
+  const witchRear = artImage('witch-back.webp'),
+    foeArt = { wolf: artImage('wolf.webp'), troll: artImage('troll.webp'), dragon: artImage('dragon.webp') };
+  const xeroPoses = {
+    offer: xeroArt,
+    feeding: artImage('xero-feeding.webp'),
+    lunge: artImage('xero-lunge.webp'),
+    cured: artImage('xero-cured.webp'),
+  };
+  const masonry = artImage('castle-stone.webp');
+  let stonePattern = null;
+  const marchers = Array.from({ length: 8 }, (_, i) => artImage('marcher-' + (i + 1) + '.webp')),
     marcherTier = makeMarcherTier();
   let skyBackdrop = null,
     floorPainter = null;
@@ -2072,11 +2181,17 @@ function softwareRenderer(canvas) {
       floorPainter = m.createGroundPainter();
     })
     .catch(() => {});
+  const renderBudget = createQualityController(true);
+  let resolution = 1,
+    lastWork = 0;
   let last = -1e4,
     lastWorld = null;
   function resize() {
-    const w = Math.round(canvas.clientWidth || 640),
-      h = Math.round(canvas.clientHeight || 400);
+    const cssW = canvas.clientWidth || 640,
+      cssH = canvas.clientHeight || 400,
+      ratio = Math.min(1, Math.sqrt(820000 / (cssW * cssH))) * resolution;
+    const w = Math.round(cssW * ratio),
+      h = Math.round(cssH * ratio);
     if (layer.width !== w || layer.height !== h) {
       layer.width = w;
       layer.height = h;
@@ -2089,7 +2204,9 @@ function softwareRenderer(canvas) {
   }
   function render(world, time = 0) {
     if (!world?.player) return;
-    if (time >= last && time - last < 1 / 26 && lastWorld === world) return;
+    if (time >= last && time - last < 1 / 30 && lastWorld === world) return;
+    const frameStarted = performance.now();
+    resolution = renderBudget.sample(frameStarted, world.renderQuality, lastWork);
     lastWorld = world;
     last = time;
     resize();
@@ -2097,7 +2214,7 @@ function softwareRenderer(canvas) {
       W = layer.width,
       H = layer.height,
       f = H * 0.685,
-      ey = ground(p.x, p.z) + 1.66;
+      ey = (p.feetY ?? footHeight(world, p.x, p.z)) + 1.66;
     const sy = Math.sin(p.yaw),
       cy = Math.cos(p.yaw),
       sp = Math.sin(p.pitch || 0),
@@ -2121,7 +2238,7 @@ function softwareRenderer(canvas) {
       if (Z < 0.075) return null;
       return [W * 0.5 + (side / Z) * f, H * 0.5 - (Y / Z) * f, Z];
     }
-    function path(pts, c, depth) {
+    function path(pts, c, depth, tex = null) {
       if (pts.some((v) => !v)) return;
       if (
         pts.every((v) => v[0] < 0) ||
@@ -2130,7 +2247,7 @@ function softwareRenderer(canvas) {
         pts.every((v) => v[1] > H)
       )
         return;
-      queue.push({ p: pts, c, d: depth ?? pts.reduce((t, v) => t + v[2], 0) / pts.length });
+      queue.push({ p: pts, c, tex, d: depth ?? pts.reduce((t, v) => t + v[2], 0) / pts.length });
     }
     function paint() {
       queue.sort((a, b) => b.d - a.d);
@@ -2145,7 +2262,34 @@ function softwareRenderer(canvas) {
           ctx.globalAlpha = item.alpha;
           ctx.translate(item.x, item.y);
           if (item.flip) ctx.scale(-1, 1);
-          ctx.drawImage(item.im, -item.w * 0.5, -item.h, item.w, item.h);
+          if (!item.rig || item.d > 48) ctx.drawImage(item.im, -item.w * 0.5, -item.h, item.w, item.h);
+          else {
+            const im = item.im,
+              iw = im.naturalWidth,
+              ih = im.naturalHeight,
+              cols = item.rig.type === 'marcher' ? 2 : 4,
+              rows = item.rig.type === 'marcher' ? 3 : 5;
+            ctx.translate(-item.w * 0.5, -item.h);
+            for (let row = 0; row < rows; row++)
+              for (let col = 0; col < cols; col++) {
+                const u = col / cols,
+                  v = row / rows,
+                  a = actorWarp(item.rig, time, u, v),
+                  b = actorWarp(item.rig, time, u + 1 / cols, v),
+                  c = actorWarp(item.rig, time, u, v + 1 / rows);
+                ctx.save();
+                ctx.transform(
+                  (b[0] - a[0]) * item.w,
+                  (b[1] - a[1]) * item.h,
+                  (c[0] - a[0]) * item.w,
+                  (c[1] - a[1]) * item.h,
+                  a[0] * item.w,
+                  a[1] * item.h
+                );
+                ctx.drawImage(im, u * iw, v * ih, iw / cols, ih / rows, 0, 0, 1.014, 1.014);
+                ctx.restore();
+              }
+          }
           ctx.restore();
           continue;
         }
@@ -2164,10 +2308,14 @@ function softwareRenderer(canvas) {
         for (let i = 1; i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]);
         ctx.closePath();
         ctx.fill();
+        if (item.tex && resolution > 0.6) {
+          stonePattern ??= stonePatina(masonry, ctx);
+          if (stonePattern) paintPatina(ctx, stonePattern, p, item.tex);
+        }
       }
       queue.length = 0;
     }
-    function billboard(im, x, y, z, height, flip = false, widthScale = 1, alpha = 1) {
+    function billboard(im, x, y, z, height, flip = false, widthScale = 1, alpha = 1, rig = null) {
       if (!readyImage(im)) return false;
       const a = ray(x, y, z),
         b = ray(x, y + height, z);
@@ -2175,237 +2323,286 @@ function softwareRenderer(canvas) {
       const h = Math.abs(a[1] - b[1]),
         width = ((h * im.naturalWidth) / im.naturalHeight) * widthScale;
       if (h < 1 || a[0] + width * 0.5 < 0 || a[0] - width * 0.5 > W || b[1] > H || a[1] < 0) return true;
-      queue.push({ im, x: a[0], y: a[1], h, w: width, alpha, flip, d: a[2] });
+      queue.push({ im, x: a[0], y: a[1], h, w: width, alpha, flip, rig, d: a[2] });
       return true;
     }
-    const hasSky = skyBackdrop?.draw(ctx, W, H, p.yaw, p.pitch || 0, 2 * Math.atan(H / (2 * f)));
-    if (!hasSky) {
-      const sun = ray(p.x - 370, ey + 290, p.z + 760);
-      if (sun) {
-        ctx.fillStyle = '#f9e4b3';
-        ctx.beginPath();
-        ctx.arc(sun[0], sun[1], Math.max(4, H * 0.031), 0, TAU);
-        ctx.fill();
-      }
-      for (let i = 0; i < 2; i++) {
-        ctx.fillStyle = i ? '#879b92' : '#99a6a1';
-        ctx.beginPath();
-        ctx.moveTo(0, horizon + 3);
-        for (let x = 0; x <= W + 12; x += 12) {
-          const a = p.yaw + (x / W) * 1.45;
-          ctx.lineTo(
-            x,
-            horizon -
-              H *
-                (0.04 +
-                  i * 0.012 +
-                  (0.5 + 0.5 * Math.sin(a * (i ? 14 : 8) + i)) * 0.075 +
-                  0.012 * Math.sin(a * 38))
-          );
-        }
-        ctx.lineTo(W, horizon + 12);
-        ctx.closePath();
-        ctx.fill();
-      }
+    const scene = {
+      ray,
+      path,
+      W,
+      H,
+      visible(x, y, z, r) {
+        const dx = x - p.x,
+          dy = y - ey,
+          dz = z - p.z,
+          front = dx * sy + dz * cy,
+          dep = front * cp + dy * sp,
+          side = dx * cy - dz * sy,
+          vertical = dy * cp - front * sp;
+        return (
+          dep + r > 0.08 &&
+          Math.abs(side) <= (Math.max(0, dep) * W) / (2 * f) + r * (1 + W / (2 * f)) &&
+          Math.abs(vertical) <= (Math.max(0, dep) * H) / (2 * f) + r * 1.9
+        );
+      },
+    };
+    function drawModel(mesh, x = 0, y = 0, z = 0, rot = 0, scale = 1, own = false) {
+      paintSoftwareMesh(scene, mesh, x, y, z, rot, scale, own);
     }
-    ctx.fillStyle = '#657550';
-    ctx.fillRect(0, Math.max(0, horizon), W, H);
-    const hasPaint = floorPainter?.paint(ctx, W, H, p, horizon, ey, time) !== false && !!floorPainter;
-    const color = (r, g, b) =>
-      'rgb(' +
-      Math.min(255, (r * 255) | 0) +
-      ',' +
-      Math.min(255, (g * 255) | 0) +
-      ',' +
-      Math.min(255, (b * 255) | 0) +
-      ')';
-    function drawModel(mesh, x = 0, y = 0, z = 0, rot = 0, s = 1, own = false) {
-      const c = Math.cos(rot),
-        si = Math.sin(rot);
-      for (let i = 0; i < mesh.length; i += 18) {
-        const pts = [];
-        for (const j of [i, i + 6, i + 12]) {
-          const ax = mesh[j],
-            az = mesh[j + 2];
-          pts.push(ray(x + (ax * c + az * si) * s, y + mesh[j + 1] * s, z + (-ax * si + az * c) * s, own));
+    const inside = insideHall(p.x, p.z),
+      needsExterior = !inside || ((p.z < 1474 || Math.abs(p.x - 30) < 16) && cy < -0.15);
+    if (needsExterior) {
+      const hasSky = skyBackdrop?.draw(ctx, W, H, p.yaw, p.pitch || 0, 2 * Math.atan(H / (2 * f)));
+      if (!hasSky) {
+        const sun = ray(p.x - 370, ey + 290, p.z + 760);
+        if (sun) {
+          ctx.fillStyle = '#f9e4b3';
+          ctx.beginPath();
+          ctx.arc(sun[0], sun[1], Math.max(4, H * 0.031), 0, TAU);
+          ctx.fill();
         }
-        if (!pts[0] || !pts[1] || !pts[2]) continue;
-        path(pts, color(mesh[i + 3], mesh[i + 4], mesh[i + 5]));
-      }
-    }
-    // Distant lanes are subdivided more sparsely. The flat colours retain legibility
-    // under the software renderer without rendering distant individual grass blades.
-    if (!hasPaint)
-      for (const [route, width, col] of [
-        [roadX, 5.4, '#a69770'],
-        [trailX, 1.15, '#7d815d'],
-      ]) {
-        const start = Math.max(-150, Math.floor((p.z - 215) / 2) * 2),
-          end = Math.min(1440, p.z + 420);
-        for (let z = start; z < end; ) {
-          const dz = Math.abs(z - p.z) < 20 ? 1 : Math.abs(z - p.z) < 70 ? 3 : 11,
-            n = z + dz;
-          path(
-            [
-              [route(z) - width, z],
-              [route(n) - width, n],
-              [route(n) + width, n],
-              [route(z) + width, z],
-            ].map(([x, z]) => ray(x, ground(x, z) + 0.08, z)),
-            col
-          );
-          z = n;
+        for (let i = 0; i < 2; i++) {
+          ctx.fillStyle = i ? '#879b92' : '#99a6a1';
+          ctx.beginPath();
+          ctx.moveTo(0, horizon + 3);
+          for (let x = 0; x <= W + 12; x += 12) {
+            const a = p.yaw + (x / W) * 1.45;
+            ctx.lineTo(
+              x,
+              horizon -
+                H *
+                  (0.04 +
+                    i * 0.012 +
+                    (0.5 + 0.5 * Math.sin(a * (i ? 14 : 8) + i)) * 0.075 +
+                    0.012 * Math.sin(a * 38))
+            );
+          }
+          ctx.lineTo(W, horizon + 12);
+          ctx.closePath();
+          ctx.fill();
         }
       }
-    function tree(x, z, height, rad, oak, seed) {
-      const y = ground(x, z),
-        im = oak ? treeArt : pineArt;
-      if (Math.abs(x - p.x) < 45 && Math.abs(z - p.z) < 49) {
-        const ct = ray(x + rad * 0.22, y + 0.04, z + rad * 0.25),
-          edge = ray(x + rad * 0.22, y + 0.04, z + rad * 0.25 + rad * 0.63);
-        if (ct && edge) {
-          const xx = Math.max(1, (f * rad * 0.71) / ct[2]),
-            yy = Math.max(1, Math.abs(edge[1] - ct[1]));
-          if (xx < W * 2.0)
-            queue.push({
-              d: ct[2] + 0.65,
-              draw: (c) => {
-                c.save();
-                c.translate(ct[0], ct[1]);
-                c.scale(xx, yy);
-                const g = c.createRadialGradient(0, 0, 0.07, 0, 0, 1);
-                g.addColorStop(0, 'rgba(23,34,26,.39)');
-                g.addColorStop(0.6, 'rgba(32,43,29,.22)');
-                g.addColorStop(1, 'rgba(37,46,31,0)');
-                c.fillStyle = g;
-                c.fillRect(-1, -1, 2, 2);
-                c.restore();
-              },
-            });
+      ctx.fillStyle = '#657550';
+      ctx.fillRect(0, Math.max(0, horizon), W, H);
+      const hasPaint =
+        floorPainter?.paint(ctx, W, H, p, horizon, ey, time, resolution) !== false && !!floorPainter;
+      // Distant lanes are subdivided more sparsely. The flat colours retain legibility
+      // under the software renderer without rendering distant individual grass blades.
+      if (!hasPaint)
+        for (const [route, width, col] of [
+          [roadX, 5.4, '#a69770'],
+          [trailX, 1.15, '#7d815d'],
+        ]) {
+          const start = Math.max(-150, Math.floor((p.z - 215) / 2) * 2),
+            end = Math.min(1440, p.z + 420);
+          for (let z = start; z < end; ) {
+            const dz = Math.abs(z - p.z) < 20 ? 1 : Math.abs(z - p.z) < 70 ? 3 : 11,
+              n = z + dz;
+            path(
+              [
+                [route(z) - width, z],
+                [route(n) - width, n],
+                [route(n) + width, n],
+                [route(z) + width, z],
+              ].map(([x, z]) => ray(x, ground(x, z) + 0.08, z)),
+              col
+            );
+            z = n;
+          }
         }
-      }
-      if (billboard(im, x, y - 0.05, z, height, seed % 2 === 0, oak ? 0.87 : 0.88)) return;
-      const a = ray(x, y, z),
-        top = ray(x, y + height, z);
-      if (!a || !top || a[0] < -W * 0.3 || a[0] > W * 1.3) return;
-      const pix = (f * rad) / a[2],
-        l = Math.max(1, pix * 0.13),
-        h = a[1] - top[1];
-      path(
-        [
-          [a[0] - l, a[1], a[2]],
-          [a[0] + l, a[1], a[2]],
-          [top[0] + l * 0.4, top[1] + h * 0.2, a[2]],
-          [top[0] - l * 0.4, top[1] + h * 0.2, a[2]],
-        ],
-        '#625746',
-        a[2] + 0.2
-      );
-      for (let tier = 0; tier < 3; tier++) {
-        const hh = h * (1 - tier * 0.3),
-          ww = pix * (1 - tier * 0.3),
-          T = top[1] + tier * -0.015 * h;
+      function tree(x, z, height, rad, oak, seed) {
+        const y = ground(x, z),
+          variant = (Math.abs(seed) >> 3) % 4,
+          key = species({ oak, seed, variant }),
+          im = readyImage(groveArt[key]) ? groveArt[key] : oak ? treeArt : pineArt;
+        if (Math.abs(x - p.x) < 45 && Math.abs(z - p.z) < 49) {
+          const ct = ray(x + rad * 0.22, y + 0.04, z + rad * 0.25),
+            edge = ray(x + rad * 0.22, y + 0.04, z + rad * 0.25 + rad * 0.63);
+          if (ct && edge) {
+            const xx = Math.max(1, (f * rad * 0.71) / ct[2]),
+              yy = Math.max(1, Math.abs(edge[1] - ct[1]));
+            if (xx < W * 2.0)
+              queue.push({
+                d: ct[2] + 0.65,
+                draw: (c) => {
+                  c.save();
+                  c.translate(ct[0], ct[1]);
+                  c.scale(xx, yy);
+                  const g = c.createRadialGradient(0, 0, 0.07, 0, 0, 1);
+                  g.addColorStop(0, 'rgba(23,34,26,.39)');
+                  g.addColorStop(0.6, 'rgba(32,43,29,.22)');
+                  g.addColorStop(1, 'rgba(37,46,31,0)');
+                  c.fillStyle = g;
+                  c.fillRect(-1, -1, 2, 2);
+                  c.restore();
+                },
+              });
+          }
+        }
+        if (billboard(im, x, y - 0.05, z, height, seed % 2 === 0, oak ? 0.87 : 0.88)) return;
+        const a = ray(x, y, z),
+          top = ray(x, y + height, z);
+        if (!a || !top || a[0] < -W * 0.3 || a[0] > W * 1.3) return;
+        const pix = (f * rad) / a[2],
+          l = Math.max(1, pix * 0.13),
+          h = a[1] - top[1];
         path(
           [
-            [top[0], T, a[2]],
-            [a[0] + ww, T + hh * 0.82, a[2]],
-            [a[0] - ww, T + hh * 0.85, a[2]],
+            [a[0] - l, a[1], a[2]],
+            [a[0] + l, a[1], a[2]],
+            [top[0] + l * 0.4, top[1] + h * 0.2, a[2]],
+            [top[0] - l * 0.4, top[1] + h * 0.2, a[2]],
           ],
-          ['#365744', '#42674c', '#567456'][tier],
-          a[2] + 0.11 - tier * 0.045
+          '#625746',
+          a[2] + 0.2
         );
-      }
-    }
-    const cx = Math.floor(p.x / 80),
-      cz = Math.floor(p.z / 80);
-    for (let dz = -3; dz <= 3; dz++)
-      for (let dx = -3; dx <= 3; dx++) {
-        const xx = (cx + dx + 0.5) * 80 - p.x,
-          zz = (cz + dz + 0.5) * 80 - p.z;
-        if (xx * sy + zz * cy < -68 || xx * xx + zz * zz > 69000) continue;
-        for (const b of sceneryTrees(cx + dx, cz + dz)) tree(b.x, b.z, b.h, b.rad, b.oak, b.seed);
-      }
-    for (const [x, z, h, rad] of clearingTrees) {
-      registerObstacle(x, z, rad * 0.15);
-      tree(x, z, h, rad, true, Math.floor(x * z));
-    }
-    // Several young firs make a soft, irregular frame down the pilgrim road.
-    if (Math.abs(p.z) < 140)
-      for (let i = 0; i < 12; i++) {
-        const z = 17 + i * 4.1,
-          x = (10 + (i % 3) * 3.1) * (i % 2 ? 1 : -1);
-        tree(x, z, 5.2 + (i % 4) * 1.6, 2.1, false, i);
-      }
-    // Two warm oil lamps flank the clearing. Their glow reads even under daylight.
-    for (const side of [-1, 1]) {
-      const x = side * 6.2,
-        z = 8 + side * 1.4,
-        a = ray(x, 1.8, z);
-      if (a && Math.abs(a[0] - W * 0.5) < W) {
-        const b = ray(x, 0, z),
-          top = ray(x, 2.06, z);
-        if (top && b) {
-          const lw = Math.max(1, (f * 0.06) / a[2]);
+        for (let tier = 0; tier < 3; tier++) {
+          const hh = h * (1 - tier * 0.3),
+            ww = pix * (1 - tier * 0.3),
+            T = top[1] + tier * -0.015 * h;
           path(
             [
-              [b[0] - lw, b[1], a[2]],
-              [b[0] + lw, b[1], a[2]],
-              [top[0] + lw, top[1], a[2]],
-              [top[0] - lw, top[1], a[2]],
+              [top[0], T, a[2]],
+              [a[0] + ww, T + hh * 0.82, a[2]],
+              [a[0] - ww, T + hh * 0.85, a[2]],
             ],
-            '#604c33',
-            a[2] + 0.1
+            ['#365744', '#42674c', '#567456'][tier],
+            a[2] + 0.11 - tier * 0.045
           );
         }
-        queue.push({
-          glow: true,
-          x: a[0],
-          y: a[1],
-          r: Math.min(80, Math.max(2, (f * 0.68) / a[2])),
-          d: a[2] - 0.1,
-        });
       }
-    }
-    const castleDistance = Math.hypot(p.x - 30, p.z - 1435);
-    if (!readyImage(castleArt) || castleDistance < 175 || p.z > 1400) drawModel(models.castle);
-    if (p.z < 1410 && castleDistance > 48 && readyImage(castleArt)) {
-      const h = 102,
-        scale = 112 / ((h * castleArt.naturalWidth) / castleArt.naturalHeight);
-      billboard(
-        castleArt,
-        30,
-        ground(30, 1431),
-        1431,
-        h,
-        false,
-        scale,
-        Math.min(1, (castleDistance - 48) / 105)
-      );
-    }
-    if (Math.abs(p.z - 850) < 125) drawModel(models.well);
-    if (Math.abs(p.z - 1020) < 150) {
-      for (let x = Math.floor((p.x - 220) / 8) * 8; x < p.x + 220; x += 8) {
-        path(
-          [
-            [x, 1009],
-            [x, 1034],
-            [x + 8, 1034],
-            [x + 8, 1009],
-          ].map(([X, Z]) => ray(X, 0.06, Z)),
-          '#729a99'
+      const cx = Math.floor(p.x / 80),
+        cz = Math.floor(p.z / 80);
+      for (let dz = -3; dz <= 3; dz++)
+        for (let dx = -3; dx <= 3; dx++) {
+          const xx = (cx + dx + 0.5) * 80 - p.x,
+            zz = (cz + dz + 0.5) * 80 - p.z;
+          if (xx * sy + zz * cy < -68 || xx * xx + zz * zz > 69000) continue;
+          if (xx * xx + zz * zz < 11300)
+            for (const b of sceneryBoulders(cx + dx, cz + dz))
+              drawModel(models.boulder, b.x, ground(b.x, b.z) - 0.1, b.z, b.seed, b.rad);
+          for (const b of sceneryTrees(cx + dx, cz + dz)) tree(b.x, b.z, b.h, b.rad, b.oak, b.seed);
+        }
+      for (const [x, z, h, rad] of clearingTrees) {
+        tree(x, z, h, rad, true, Math.floor(x * z));
+      }
+      if (Math.abs(p.z) < 140) for (const b of youngFirs) tree(b.x, b.z, b.h, b.rad, b.oak, b.seed);
+      // Two warm oil lamps flank the clearing. Their glow reads even under daylight.
+      for (const side of [-1, 1]) {
+        const x = side * 6.2,
+          z = 8 + side * 1.4,
+          a = ray(x, 1.8, z);
+        if (a && Math.abs(a[0] - W * 0.5) < W) {
+          const b = ray(x, 0, z),
+            top = ray(x, 2.06, z);
+          if (top && b) {
+            const lw = Math.max(1, (f * 0.06) / a[2]);
+            path(
+              [
+                [b[0] - lw, b[1], a[2]],
+                [b[0] + lw, b[1], a[2]],
+                [top[0] + lw, top[1], a[2]],
+                [top[0] - lw, top[1], a[2]],
+              ],
+              '#604c33',
+              a[2] + 0.1
+            );
+          }
+          queue.push({
+            glow: true,
+            x: a[0],
+            y: a[1],
+            r: Math.min(80, Math.max(2, (f * 0.68) / a[2])),
+            d: a[2] - 0.1,
+          });
+        }
+      }
+      const castleDistance = Math.hypot(p.x - 30, p.z - 1435);
+      if (!readyImage(castleArt) || castleDistance < 175 || p.z > 1400) drawModel(models.castle);
+      if (p.z < 1410 && castleDistance > 48 && readyImage(castleArt)) {
+        const h = 102,
+          scale = 112 / ((h * castleArt.naturalWidth) / castleArt.naturalHeight);
+        billboard(
+          castleArt,
+          30,
+          ground(30, 1431),
+          1431,
+          h,
+          false,
+          scale,
+          Math.min(1, (castleDistance - 48) / 105)
         );
       }
-      if (world.bridgeOpen) drawModel(models.bridge);
+      if (Math.abs(p.z - 850) < 125) drawModel(models.well);
+      if (Math.abs(p.z - 1020) < 150) {
+        for (let x = Math.floor((p.x - 220) / 8) * 8; x < p.x + 220; x += 8) {
+          path(
+            [
+              [x, 1009],
+              [x, 1034],
+              [x + 8, 1034],
+              [x + 8, 1009],
+            ].map(([X, Z]) => ray(X, 0.06, Z)),
+            '#729a99'
+          );
+        }
+        drawModel(models.bridge, 0, -3.1 * (1 - bridgeRise(world)), 0);
+      }
     }
-    const inside = insideHall(p.x, p.z);
+
     let room = false;
     if (inside) {
       paint();
       room = hallPainter.draw(ctx, W, H, world, ray, queue) !== false;
     }
     if (p.z > 1290 && Math.abs(p.x - 30) < 160) {
-      if (!room) drawModel(models.hall);
-      else drawModel(models.hallProps);
+      if (!room) drawModel(models.hall, 0, castleAltitude, 0);
+      else drawModel(models.hallProps, 0, castleAltitude, 0);
+    }
+    if (Math.hypot(p.x - 30, p.z - 1516) < 140) {
+      const angle = bellSwing(world, time);
+      if (!bellFrames.has(angle)) {
+        const m = [];
+        makeHangingBell(m, hallTools, angle);
+        bellFrames.set(angle, m);
+      }
+      drawModel(bellFrames.get(angle));
+    }
+    const fig = storyFigure(world, time, ground),
+      storyArt = fig ? xeroPoses[fig.key] : null,
+      storyPose = storyHandPose(world, time) || {};
+    if (needsExterior) drawModel(models.fortress);
+    if (p.z > 1300 && Math.abs(p.x - 30) < 170) drawModel(models.storyStatic);
+    for (const part of storyPieces(world, time, ground)) {
+      if (part.key.startsWith('xero-') && readyImage(storyArt)) continue;
+      drawModel(models[part.key], part.x, part.y, part.z, part.rot, part.scale);
+    }
+    if (fig && readyImage(storyArt) && Math.hypot(p.x - fig.x, p.z - fig.z) < 120)
+      billboard(storyArt, fig.x, fig.y, fig.z, fig.h, fig.flip, fig.w);
+    const dynamic = [];
+    dynamicField(dynamic, world, time);
+    if (dynamic.length) drawModel(dynamic);
+    for (const d of groundDecals(world, time, hostFootprints(world))) {
+      const a = ray(d.x, d.y, d.z);
+      if (!a || a[0] < -W * 0.25 || a[0] > W * 1.25) continue;
+      const xRad = Math.max(1, (f * d.rx) / a[2]),
+        yRad = Math.max(0.8, ((xRad * d.rz) / d.rx) * Math.min(0.9, Math.abs(ey - d.y) / Math.max(1, a[2])));
+      if (xRad > W * 3) continue;
+      queue.push({
+        d: a[2] + 0.04,
+        draw: (c) => {
+          c.save();
+          c.translate(a[0], a[1]);
+          c.scale(xRad, yRad);
+          const g = c.createRadialGradient(0, 0, 0.03, 0, 0, 1);
+          const tint = d.kind === 'shade' ? '22,25,18' : d.kind === 'light' ? '255,166,77' : '250,99,31';
+          g.addColorStop(0, 'rgba(' + tint + ',' + d.opacity + ')');
+          g.addColorStop(1, 'rgba(' + tint + ',0)');
+          c.fillStyle = g;
+          c.fillRect(-1, -1, 2, 2);
+          c.restore();
+        },
+      });
     }
     if (!inside && p.z > 310) {
       if (!world.ropeFallen)
@@ -2441,10 +2638,10 @@ function softwareRenderer(canvas) {
           }
         }
       const detailed = marchers.every(readyImage)
-        ? marcherTier.update(world, W / H, time)
+        ? marcherTier.update(world, W / H, time, resolution < 0.8 ? 24 : 48)
         : { poses: [], ids: new Set() };
       for (const a of detailed.poses)
-        billboard(marchers[a.kind], a.x, ground(a.x, a.z) + a.dy, a.z, a.h, a.flip, a.w);
+        billboard(marchers[a.kind], a.x, ground(a.x, a.z) + a.dy, a.z, a.h, a.flip, a.w, 1, a.rig);
       for (let i = 0; i < HORDE_COUNT; i += 2) {
         if (detailed.ids.has(i)) continue;
         const a = hordePosition(world, i),
@@ -2467,76 +2664,42 @@ function softwareRenderer(canvas) {
       }
     }
     for (const a of world.actors || []) {
-      if (!a.alive || Math.hypot(a.x - p.x, a.z - p.z) > 95 || a.type === 'spring') continue;
-      if (!['dragon', 'bell'].includes(a.type)) {
-        const y = ground(a.x, a.z),
-          foot = ray(a.x, y + 0.04, a.z);
-        if (foot) {
-          const sz = a.type === 'troll' ? 1.9 : a.type === 'wolf' ? 1.0 : 0.63;
-          const verts = Array.from({ length: 12 }, (_, k) => {
-            const t = (k * TAU) / 12;
-            return ray(a.x + Math.cos(t) * sz + 0.3, y + 0.042, a.z + Math.sin(t) * sz * 0.52 + 0.19);
-          });
-          path(verts, 'rgba(42,45,29,.36)', foot[2] + 0.12);
-        }
-      }
-      if (a.type === 'princess') {
-        const fallen = !!world.ropeFallen,
-          y = ground(a.x, a.z);
-        if (!fallen) {
-          const A = ray(a.x + 0.46, y + 0.12, a.z + 0.08),
-            B = ray(a.x + 0.46, y + 4.22, a.z + 0.08);
-          if (A && B) {
-            const q = Math.max(0.6, (f * 0.028) / A[2]);
-            path(
-              [
-                [A[0] - q, A[1], A[2]],
-                [B[0] - q, B[1], B[2]],
-                [B[0] + q, B[1], B[2]],
-                [A[0] + q, A[1], A[2]],
-              ],
-              '#bba778'
-            );
-          }
-        } else
-          for (let i = 0; i < 7; i++) {
-            const A = ray(a.x + 0.46 + i * 0.15, y + 0.07, a.z + 0.08 + Math.sin(i * 1.2) * 0.15),
-              B = ray(a.x + 0.61 + i * 0.15, y + 0.07, a.z + 0.08 + Math.sin((i + 1) * 1.2) * 0.15);
-            if (A && B)
-              path(
-                [
-                  [A[0], A[1] - 1, A[2]],
-                  [B[0], B[1] - 1, B[2]],
-                  [B[0], B[1] + 1, B[2]],
-                  [A[0], A[1] + 1, A[2]],
-                ],
-                '#bbab83'
-              );
-          }
-        if (
-          !a.cured &&
-          billboard(
-            xeroArt,
-            a.x,
-            y,
-            a.z,
-            world.sequence?.id === 'feast' && world.sequence.progress < 0.33 ? 1.55 : 1.96
-          )
-        )
-          continue;
-      }
-      if (a.type === 'witch' && billboard(witchArt, a.x, ground(a.x, a.z), a.z, 2.46)) continue;
-      const m = models[a.type === 'bell' ? a.tone : a.type];
-      if (m)
-        drawModel(
-          m,
+      if (
+        !a.alive ||
+        storyReplaces(world, a.type) ||
+        Math.hypot(a.x - p.x, a.z - p.z) > 95 ||
+        a.type === 'spring'
+      )
+        continue;
+      if (
+        a.type === 'witch' &&
+        billboard(
+          witchView(world, a) === 'rear' && readyImage(witchRear) ? witchRear : witchArt,
           a.x,
-          ground(a.x, a.z) +
-            (a.type === 'body' ? 0.91 + 0.027 * Math.sin(time * 2.1) : a.type === 'dragon' ? 3 : 0),
+          ground(a.x, a.z),
           a.z,
-          (a.heading ?? Math.PI) + Math.PI,
-          a.type === 'dragon' ? 1.4 : 1
-        );
+          2.4
+        )
+      )
+        continue;
+      if (isCreature(a)) {
+        const b = creaturePose(a, time, p),
+          art = foeArt[a.type],
+          yy = ground(a.x, a.z) + b.dy;
+        if (readyImage(art) && b.profile) billboard(art, a.x, yy, a.z, b.h, b.flip, b.w, 1, a);
+        else
+          drawModel(
+            creatureMesh(a, time),
+            a.x,
+            yy,
+            a.z,
+            (a.attackYaw ?? a.heading ?? 0) + Math.PI,
+            a.type === 'dragon' ? 1.4 : 1
+          );
+        continue;
+      }
+      const m = models[a.type === 'bell' ? a.tone : a.type];
+      if (m) drawModel(m, a.x, ground(a.x, a.z), a.z, (a.heading ?? Math.PI) + Math.PI);
     }
     paint();
     if (p.z < 950) {
@@ -2580,15 +2743,37 @@ function softwareRenderer(canvas) {
     else {
       const size = Math.min(H * 0.52, W * 0.65);
       ctx.save();
-      ctx.translate(
-        W - size * 0.2 - s * 0.21 * W,
-        H - size * 0.18 + (feast ? Math.max(0, q - 0.32) * 0.43 * H : 0)
-      );
-      ctx.rotate(-s * 1.06);
-      ctx.drawImage(swordArt, -size * 0.78, -size * 0.78, size, size);
+      const physical = swordPlacement(world, W, H, ray);
+      if (physical) {
+        ctx.transform(
+          physical.c,
+          physical.s,
+          -physical.s,
+          physical.c,
+          physical.x,
+          physical.y + (feast ? Math.max(0, q - 0.32) * 0.43 * H : 0)
+        );
+        ctx.drawImage(swordArt, 0, 0, 1, 1);
+      } else {
+        ctx.translate(
+          W - size * 0.2 - s * 0.21 * W,
+          H - size * 0.18 + (feast ? Math.max(0, q - 0.32) * 0.43 * H : 0)
+        );
+        ctx.rotate(-s * 1.06);
+        ctx.drawImage(swordArt, -size * 0.78, -size * 0.78, size, size);
+      }
       ctx.restore();
     }
-    if (feast && q > 0.38) drawModel(models.hand, -0.2, 0.01, 0, 0.12, 1, true);
+    if (storyPose.reach > 0.02)
+      drawModel(
+        storyPose.clench > 0.48 ? models.fist : models.hand,
+        -0.21 + 0.12 * storyPose.reach,
+        -0.1 + storyPose.reach * 0.16,
+        0.14 * storyPose.reach,
+        0.14 + (storyPose.clench || 0) * 0.4,
+        1,
+        true
+      );
     paint();
     if (bound || feast || saved) {
       const light = bound ? '96,65,133' : feast ? '73,25,35' : '237,196,116',
@@ -2624,6 +2809,7 @@ function softwareRenderer(canvas) {
         ctx.restore();
       }
     }
+    lastWork = performance.now() - frameStarted;
   }
   return { render, resize, dispose };
 }

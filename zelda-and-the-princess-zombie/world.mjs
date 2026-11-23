@@ -1,96 +1,28 @@
-import { hallWalkable } from './hall.mjs';
+import { insideHall } from './hall.mjs';
+import {
+  storyFates,
+  banquetText,
+  storyChoose,
+  storyAct,
+  storyTarget,
+  storyInteract,
+  storyBeat,
+  storyTick,
+  storyLocation,
+  stageStoryFate,
+} from './story.mjs';
+import { barrier, footHeight, footing, clearSegment } from './travel.mjs';
+import { beginSwing, moveBody, strikeContacts, cue, tossPhial, advancePhial } from './swordplay.mjs';
+import { advanceWildlife } from './wildlife.mjs';
+import { MAP, LANDMARKS, roadX, terrainHeight, clamp, distance, course } from './geography.mjs';
+export { bladeCoordinates } from './swordplay.mjs';
+export { registerObstacle, bridgeRise } from './travel.mjs';
 
 // World distances are metres. North is +z. All mutable state is plain JSON.
 export const HORDE_COUNT = 3072;
 const HOURGLASS = 395;
 const GATE_Z = 1435;
-export const MAP = {
-  minX: -530,
-  maxX: 530,
-  minZ: -145,
-  maxZ: 1605,
-  road: [
-    [0, -115],
-    [0, 9],
-    [6, 110],
-    [22, 220],
-    [84, 338],
-    [48, 480],
-    [80, 610],
-    [39, 738],
-    [45, 843],
-    [30, 990],
-    [30, 1045],
-    [86, 1130],
-    [73, 1240],
-    [30, 1375],
-    [30, 1516],
-  ],
-  trail: [
-    [0, 9],
-    [-41, 108],
-    [-74, 200],
-    [-89, 420],
-    [-144, 605],
-    [-155, 850],
-    [-125, 988],
-    [-125, 1060],
-    [-107, 1130],
-    [-90, 1230],
-    [-53, 1300],
-    [30, 1392],
-  ],
-  horde: [
-    [-405, 1160],
-    [-361, 1192],
-    [-308, 1122],
-    [-230, 1154],
-    [-145, 1200],
-    [-65, 1264],
-    [0, 1346],
-    [30, 1395],
-    [30, 1433],
-  ],
-};
-export const LANDMARKS = [
-  { id: 'clearing', name: 'Lanternwood', x: 0, z: 9 },
-  { id: 'crossing', name: 'Wayfarer’s Fork', x: 22, z: 220 },
-  { id: 'ridge', name: 'Ravenback Ridge', x: 48, z: 480 },
-  { id: 'mire', name: 'Briar Hollow', x: 80, z: 610 },
-  { id: 'chapel', name: 'The Moonwell', x: -155, z: 850, secret: true },
-  { id: 'bells', name: 'Three-Bell Sluice', x: 30, z: 996 },
-  { id: 'ford', name: 'Pale Ford', x: -125, z: 1020, secret: true },
-  { id: 'downs', name: 'The Ash Downs', x: 73, z: 1240 },
-  { id: 'gate', name: 'Castle Xero', x: 30, z: 1431 },
-  { id: 'hall', name: 'The Long Hall', x: 30, z: 1516 },
-];
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
-function interpolateX(points, z) {
-  if (z <= points[0][1]) return points[0][0];
-  for (let i = 1; i < points.length; i++) {
-    const [x1, z1] = points[i - 1],
-      [x2, z2] = points[i];
-    if (z <= z2) {
-      const t = (z - z1) / (z2 - z1);
-      return x1 + (x2 - x1) * t;
-    }
-  }
-  return points[points.length - 1][0];
-}
-export const roadX = (z) => interpolateX(MAP.road, z);
-export const trailX = (z) => interpolateX(MAP.trail, z);
-export function terrainHeight(x, z) {
-  // Flatten the banks, buildings and clearing so actors, stonework and feet agree.
-  const swell =
-    Math.sin(x * 0.014 + z * 0.008) * 2.9 +
-    Math.sin(z * 0.024 - x * 0.009) * 1.55 +
-    Math.cos(x * 0.042) * 0.65;
-  const ridge = 17 * Math.exp(-(((z - 486) / 89) ** 2)) * Math.exp(-(((x - 7) / 290) ** 2));
-  const bank = clamp((Math.abs(z - 1021) - 12) / 37, 0, 1);
-  const flat = clamp((z - 30) / 70, 0, 1) * clamp((1415 - z) / 85, 0, 1);
-  return (swell + ridge) * bank * flat;
-}
+export { MAP, LANDMARKS, roadX, trailX, terrainHeight } from './geography.mjs';
 const hordeLength = [];
 let travelled = 0;
 for (let i = 0; i < MAP.horde.length - 1; i++) {
@@ -118,7 +50,7 @@ function herdPoint(metres, offset) {
   const bend = t * t * (3 - 2 * t),
     a = hordeNormals[i],
     b = hordeNormals[i + 1];
-  const width = offset * clamp((travelled - metres) / 44, 0.22, 1);
+  const width = offset;
   return {
     x: leg.a[0] + leg.tangent.x * along + (a.x + (b.x - a.x) * bend) * width,
     z: leg.a[1] + leg.tangent.z * along + (a.z + (b.z - a.z) * bend) * width,
@@ -127,10 +59,38 @@ function herdPoint(metres, offset) {
 export function hordePosition(w, index) {
   const i = clamp(Math.floor(index), 0, HORDE_COUNT - 1),
     line = Math.floor(i / 48);
-  const spread = (((i * 37) % 97) / 96 - 0.5) * 37 + Math.sin(i * 2.4 + w.elapsed * 0.4) * 0.45;
-  const lag = line * 2.0 + (i % 13) * 0.27;
+  const file = i % 48,
+    lane = file % 2 ? (file + 1) / 2 : -file / 2;
   const time = w.ropeFallen ? (w.dispersalAt ?? w.elapsed) : w.elapsed;
-  const point = herdPoint(travelled * clamp(time / HOURGLASS, 0, 1) - lag, spread);
+  const clock = Math.max(0, time - (w.raceGrace || 0)),
+    listen = clamp(((w.hostListeningUntil || 0) - time) / 3.5, 0, 1);
+  // Rear ranks gradually fall in behind the vanguard. Inside the approach,
+  // each five-abreast file folds into consecutive places in one gate lane.
+  const clockFraction = clamp(clock / HOURGLASS, 0, 1);
+  const rankSpacing = 1.65 + 4.88 * clockFraction;
+  const head = (travelled * clock) / HOURGLASS;
+  const base = head - line * rankSpacing;
+  const funnel = clamp((base - travelled + 86) / 78, 0, 1);
+  const laneIndex = lane + 25,
+    slot = laneIndex % 5,
+    gateLane = Math.floor(laneIndex / 5) - 5;
+  const sway = Math.sin(i + time * (0.72 + (i % 7) * 0.017)) * 0.055 * (1 - 0.75 * listen);
+  const spread = lane * 0.9 * (1 - funnel) + gateLane * 0.83 * funnel + sway;
+  const stagger = Math.sin(i * 74.123) * 0.06 + Math.abs(lane) * 0.012;
+  const metres = Math.min(
+    travelled - slot * 1.28 - line * 6.53,
+    base - stagger * (1 - funnel) - slot * 1.28 * funnel
+  );
+  const point = herdPoint(metres, spread);
+  const reaction = w.hostReactions?.[i];
+  if (reaction) {
+    const elapsed = w.elapsed - reaction.at;
+    if (elapsed >= 0 && elapsed < 2.5) {
+      const t = Math.sin((Math.PI * elapsed) / 2.5);
+      point.x += reaction.x * t;
+      point.z += reaction.z * t;
+    }
+  }
   if (w.ropeFallen) {
     const away = w.elapsed - time;
     const angle = (i % 23) * 2.39996;
@@ -138,6 +98,33 @@ export function hordePosition(w, index) {
     point.z -= Math.abs(Math.sin(angle)) * away * 2.2;
   }
   return point;
+}
+// Footfalls remain along the ground the host has crossed. They can be rebuilt
+// from route distance and the march clock after loading a journey.
+export function hostFootprints(w) {
+  const p = w.player;
+  if (p.z < 1015) return [];
+  const head = Math.min(
+    travelled,
+    (travelled * Math.max(0, (w.dispersalAt ?? w.elapsed) - (w.raceGrace || 0))) / HOURGLASS
+  );
+  const marks = [];
+  for (const leg of hordeLength) {
+    const dx = p.x - leg.a[0],
+      dz = p.z - leg.a[1];
+    const near = clamp(dx * leg.tangent.x + dz * leg.tangent.z, 0, leg.len);
+    if (Math.hypot(dx - near * leg.tangent.x, dz - near * leg.tangent.z) > 38) continue;
+    const start = Math.ceil(Math.max(leg.start, leg.start + near - 22) / 1.8);
+    const end = Math.floor(Math.min(leg.start + leg.len, leg.start + near + 22, head - 2) / 1.8);
+    for (let i = start; i <= end; i++) {
+      const taper = clamp((travelled - i * 1.8) / 65, 0.2, 1);
+      for (const lane of [-12, -3.6, 5.2, 13]) {
+        const q = herdPoint(i * 1.8, ((i % 2 ? 0.13 : -0.13) + lane) * taper + 0.06 * Math.sin(i * 0.39));
+        if (distance(q, p) < 22) marks.push(q);
+      }
+    }
+  }
+  return marks;
 }
 const entity = (id, type, x, z, fields = {}) => ({
   id,
@@ -156,6 +143,8 @@ function spawnActors() {
   return [
     entity('witch', 'witch', 0, 9, { heading: Math.PI }),
     entity('well', 'spring', -155, 850),
+    entity('rowan-fork', 'berries', 65, 331),
+    entity('rowan-hollow', 'berries', 37, 738),
     entity('bell-low', 'bell', 19, 996, { tone: 'low' }),
     entity('bell-mid', 'bell', 30, 996, { tone: 'mid' }),
     entity('bell-high', 'bell', 41, 996, { tone: 'high' }),
@@ -174,8 +163,22 @@ function spawnActors() {
 }
 export function createWorld() {
   const w = {
-    version: 1,
-    player: { x: 0, z: 0, yaw: 0, pitch: 0, health: 5, maxHealth: 5 },
+    version: 2,
+    gateCrossed: false,
+    gateClosedAt: null,
+    bridgeRaisedAt: null,
+    player: {
+      x: -2.2,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      health: 5,
+      maxHealth: 5,
+      stamina: 1,
+      speed: 0,
+      feetY: 0,
+      surface: 'gravel',
+    },
     actors: spawnActors(),
     elapsed: 0,
     route: 'undecided',
@@ -213,11 +216,57 @@ function saveCheckpoint(w) {
 }
 export const getCheckpoint = (w) => w.checkpoint;
 export function resumeCheckpoint(w) {
-  if (!w.checkpoint) return createWorld();
-  const saved = w.checkpoint;
-  Object.assign(w, JSON.parse(saved), { checkpoint: saved, events: [], mapOpen: false });
+  let restored;
+  try {
+    restored = JSON.parse(w.checkpoint);
+  } catch {
+    restored = null;
+  }
+  if (!restored?.player || !Array.isArray(restored.actors)) restored = createWorld();
+  const saved = restored.checkpoint || JSON.stringify(restored);
+  for (const k of Object.keys(w)) delete w[k];
+  Object.assign(w, restored, { checkpoint: saved, events: [], mapOpen: false });
+  migrate(w);
+  if (!w.gateCrossed && w.route !== 'wander') {
+    const remainingRoad = Math.hypot(w.player.x - 30, w.player.z - GATE_Z);
+    const reserve = remainingRoad / 4.65 + (w.player.z < 1010 ? 35 : 12);
+    if (HOURGLASS - w.elapsed < reserve) {
+      // Give a late retry enough daylight while preserving local animation clocks.
+      w.raceGrace = (w.raceGrace || 0) + Math.max(0, reserve - (HOURGLASS - raceTime(w)));
+      w.gateClosedAt = null;
+    }
+  }
   return w;
 }
+export function migrate(w) {
+  if (w.version !== 2) {
+    w.gateCrossed = w.player.z > GATE_Z + 1.2 && w.player.z < 1554 && Math.abs(w.player.x - 30) < 25;
+    w.version = 2;
+    w.phialsGiven = w.route === 'guided';
+    if (w.route === 'undecided' && w.greeted && !w.dialogue) {
+      w.route = 'wander';
+      w.nextHunt = w.elapsed + 15;
+    }
+    if (w.dialogue?.kind === 'banquet') {
+      w.dialogue = null;
+      w.milestones.reveal = false;
+      if (canSeeBanquet(w)) banquet(w);
+    }
+    if (w.sequence && fates[w.sequence.id]) {
+      const q = w.sequence,
+        t = clamp(q.time / (q.duration || 1), 0, 1);
+      q.duration = fates[q.id].duration;
+      q.time = t * q.duration;
+      q.progress = t;
+    }
+    for (const a of spawnActors().filter((v) => v.type === 'berries'))
+      if (!w.actors.some((v) => v.id === a.id)) w.actors.push(a);
+  }
+  w.player.stamina ??= 1;
+  w.player.feetY ??= footHeight(w, w.player.x, w.player.z);
+  return w;
+}
+const raceTime = (w) => Math.max(0, w.elapsed - (w.raceGrace || 0));
 const event = (w, type, text) => w.events.push(text ? { type, text } : { type });
 function notify(w, text, seconds = 4) {
   w.notice = text;
@@ -231,6 +280,11 @@ const witchText =
   'Zelda, princess Xero is in a castle about a mile away. But let me give you a warning first. Zelda, I present you with three options. Option number one is that I tell you how to find the princess who is in grave danger of being eaten by zombies followed by turning into a zombie herself. I will also warn you of monsters that lurk the path to finding the princess and give you potions to destroy the beasts that stand in your way of saving the princess. Option number two is, because of the grave danger you will put yourself in, I present you a potion instead that will make you a stronger person to deal with the loss of the princess after having chosen to not save her. Option number three is, you move on from here and continue to wander the forest how you please.';
 function meet(w) {
   w.greeted = true;
+  storyBeat(w, 'witch');
+  if (w.route === 'wander') {
+    talk(w, 'directions', 'The witch', 'You chose the woods, traveller. They are yours to walk.');
+    return;
+  }
   if (w.route === 'guided') {
     talk(
       w,
@@ -260,46 +314,30 @@ function end(w, id, title, text) {
   w.mapOpen = false;
   event(w, 'ending', id);
 }
-function banquet(w) {
-  if (w.milestones.reveal || w.ending) return;
-  w.milestones.reveal = true;
-  const bellText =
-    'The bell rope is tied to Xero’s wrist. She tugs it three times between mouthfuls. Under her hands the stag shudders, still alive. From the downs, thousands of throats answer her invitation.';
-  event(w, 'reveal');
-  const cureReady = w.route === 'unbound' && w.antidote;
-  talk(
-    w,
-    'banquet',
-    'The Long Hall',
-    bellText +
-      (cureReady
-        ? ' A silver drop slides up the mouth of your vial toward her blackened hand.'
-        : ' Xero rises. A scrap of blue ribbon hangs from a tooth.'),
-    cureReady
-      ? [
-          { id: 1, label: 'Break the moonwater vial over Xero’s hand' },
-          { id: 2, label: 'Reach for the princess' },
-        ]
-      : []
+function canSeeBanquet(w) {
+  const p = w.player,
+    a = w.actors.find((v) => v.type === 'princess');
+  return (
+    insideHall(p.x, p.z) &&
+    Math.abs(p.pitch || 0) < 0.82 &&
+    nearFacing(w, a, 5, 0.67) &&
+    clearSegment(w, p.x, p.z, a.x, a.z)
   );
 }
-const fates = {
-  feast: {
-    duration: 3.7,
-    title: 'The guest of honour',
-    text: 'You reach for the ribbon. Xero catches your wrist between her teeth and pulls you across the table. Your pulse stops under her teeth. The other dead are still outside when Xero begins her second meal.',
-  },
-  saved: {
-    duration: 3.8,
-    title: 'The fourth dawn',
-    text: 'Silver water runs along Xero’s bitten hand. For the first time her fingers let the bell rope go. Outside, the host turns away. You set the injured stag loose together. At the gate, Xero takes your hand of her own accord.',
-  },
-  bound: {
-    duration: 4.1,
-    title: 'The borrowed hand',
-    text: 'The potion tastes of pears. The witch lifts her hand. Yours rises with it. You try to ask what she has done, but your mouth is already thanking her in her voice. She sends you to gather another traveller.',
-  },
-};
+function banquet(w) {
+  if (w.ending || !canSeeBanquet(w)) return false;
+  if (!w.milestones.reveal) {
+    w.milestones.reveal = true;
+    storyBeat(w, 'banquet');
+    cue(w, 'reveal');
+  }
+  const ready = w.route === 'unbound' && w.antidote;
+  const choices = ready ? [{ id: 1, label: 'Break the moonwater vial over Xero’s hand' }] : [];
+  choices.push({ id: 2, label: 'Reach for the princess' });
+  talk(w, 'banquet', 'The Long Hall', banquetText(ready), choices);
+  return true;
+}
+const fates = storyFates;
 function beginFate(w, id) {
   const p = w.player;
   w.dialogue = null;
@@ -316,69 +354,25 @@ function beginFate(w, id) {
   };
   if (id === 'bound') w.actors.push(entity('traveller', 'traveller', -3, -18, { heading: 0 }));
 }
-const ease = (t) => t * t * (3 - 2 * t);
-const shortestTurn = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
-function stageFate(w, dt) {
-  const q = w.sequence,
-    p = w.player;
-  q.time += dt;
-  q.progress = clamp(q.time / q.duration, 0, 1);
-  w.elapsed += dt;
-  const t = q.progress;
-  if (q.id === 'bound') {
-    const traveller = w.actors.find((a) => a.type === 'traveller');
-    const facing = Math.atan2(traveller.x - q.x, traveller.z - q.z);
-    const turn = w.reducedMotion ? Number(t > 0.55) : ease(clamp((t - 0.2) / 0.52, 0, 1));
-    p.yaw = q.yaw + shortestTurn(q.yaw, facing) * turn;
-    p.pitch = w.reducedMotion ? q.pitch : q.pitch * (1 - t) - 0.045 * Math.sin(Math.PI * t);
-    const walk = w.reducedMotion ? 0 : 2.8 * ease(clamp((t - 0.63) / 0.37, 0, 1));
-    p.x = q.x + Math.sin(facing) * walk;
-    p.z = q.z + Math.cos(facing) * walk;
-  } else {
-    const xero = w.actors.find((a) => a.type === 'princess');
-    const facing = Math.atan2(xero.homeX - q.x, xero.homeZ - q.z);
-    const turn = w.reducedMotion ? 1 : ease(clamp(t / 0.27, 0, 1));
-    p.yaw = q.yaw + shortestTurn(q.yaw, facing) * turn;
-    p.pitch = w.reducedMotion ? 0 : q.pitch * (1 - t) - 0.16 * Math.sin(Math.PI * clamp(t / 0.58, 0, 1));
-    if (q.id === 'feast') {
-      const lunge = ease(clamp((t - 0.33) / 0.36, 0, 1));
-      xero.x = xero.homeX + (q.x - xero.homeX) * lunge - 0.58 * Math.sin(facing) * lunge;
-      xero.z = xero.homeZ + (q.z - xero.homeZ) * lunge - 0.58 * Math.cos(facing) * lunge;
-      const fall = w.reducedMotion ? 0 : ease(clamp((t - 0.64) / 0.34, 0, 1));
-      p.pitch -= fall * 0.63;
-      p.x = q.x - Math.sin(facing) * fall * 0.8;
-      p.z = q.z - Math.cos(facing) * fall * 0.8;
-      if (t > 0.62 && !q.contact) {
-        q.contact = true;
-        event(w, 'hurt');
-      }
-    } else if (t > 0.43 && !w.ropeFallen) {
-      w.ropeFallen = true;
-      w.dispersalAt = w.elapsed;
-      xero.cured = true;
-      event(w, 'chime');
-    }
-  }
-  if (t >= 1) {
-    if (q.id === 'feast') p.health = 0;
-    end(w, q.id, fates[q.id].title, fates[q.id].text);
-  }
-}
 export function choose(w, n) {
   if (!w.dialogue) return false;
   n = Number(n);
+  if (storyChoose(w, n)) return true;
   if (w.dialogue.kind === 'banquet') {
     if (w.route === 'unbound' && w.antidote && n === 1) {
       w.antidote = false;
-      event(w, 'potion');
+      cue(w, 'potion', 'cure', w.player);
       beginFate(w, 'saved');
     } else if (n === 2) beginFate(w, 'feast');
+    else return false;
     return true;
   }
   if (w.dialogue.kind !== 'witch' || ![1, 2, 3].includes(n)) return false;
   if (n === 1) {
     w.route = 'guided';
+    storyBeat(w, 'guided');
     w.potions = 3;
+    w.phialsGiven = true;
     talk(
       w,
       'directions',
@@ -387,14 +381,20 @@ export function choose(w, n) {
     );
   } else if (n === 2) {
     w.route = 'bound';
-    event(w, 'potion');
+    cue(w, 'potion', 'drink', w.player);
     beginFate(w, 'bound');
   } else {
     w.route = 'wander';
+    storyBeat(w, 'wander');
     w.dialogue = null;
     w.nextHunt = w.elapsed + 15;
     notify(w, 'The witch steps aside. Somewhere in the trees, a wolf answers another.', 5);
-    event(w, 'howl');
+    cue(
+      w,
+      'howl',
+      'wolf',
+      w.actors.find((a) => a.type === 'wolf')
+    );
   }
   return true;
 }
@@ -418,59 +418,94 @@ function nearest(w, predicate) {
     }
   return found;
 }
-const isEnemy = (a) => a.type === 'wolf' || a.type === 'troll' || a.type === 'dragon';
-const reachByType = { witch: 14, satchel: 12, bell: 6, spring: 12, princess: 14 };
+const reachByType = { berries: 2.1, witch: 3.4, satchel: 2.6, bell: 2.7, spring: 6.2, princess: 5 };
 function target(w) {
-  return nearest(w, (a) => reachByType[a.type] && nearFacing(w, a, reachByType[a.type]));
+  return (
+    storyTarget(w) ||
+    nearest(
+      w,
+      (a) =>
+        reachByType[a.type] &&
+        (Math.abs(w.player.pitch || 0) < 0.87 || a.type === 'satchel' || a.type === 'berries') &&
+        nearFacing(w, a, reachByType[a.type], 0.48) &&
+        (a.type === 'spring' || clearSegment(w, w.player.x, w.player.z, a.x, a.z))
+    )
+  );
 }
 function ring(w, tone) {
+  const bell = w.actors.find((a) => a.type === 'bell' && a.tone === tone);
+  bell.lastRung = w.elapsed;
+  w.bellAt = w.elapsed;
+  w.hostRangAt = w.elapsed;
+  w.hostListeningUntil = w.elapsed + 3.5;
+  cue(w, 'sluice', tone, bell);
   if (w.bridgeOpen) {
-    event(w, 'chime', tone);
     notify(w, 'The bridge holds.');
     return;
   }
   const phrase = ['low', 'high', 'mid'];
-  event(w, 'sluice', tone);
   w.bells.push(tone);
-  if (w.bells.some((value, i) => value !== phrase[i])) {
+  if (w.bells.some((v, i) => v !== phrase[i])) {
     w.bells = tone === 'low' ? ['low'] : [];
-    notify(w, 'The chain drops slack. Across the water, the castle answers: low, high, middle.', 6);
+    cue(w, 'chain', 'slack', bell);
+    cue(w, 'bell', 'replay', { x: 30, z: 1530 });
+    notify(w, 'The chain drops slack. Listen for the castle’s answer.', 4);
   } else if (w.bells.length === 3) {
     w.bridgeOpen = true;
-    event(w, 'chime');
-    notify(w, 'The three notes settle into place. The bridge rises from the water.', 6);
-  } else
-    notify(
-      w,
-      'The first ' +
-        (w.bells.length === 1 ? 'chain' : 'two chains') +
-        ' draw' +
-        (w.bells.length === 1 ? 's' : '') +
-        ' taut.'
-    );
+    w.bridgeRaisedAt = w.elapsed;
+    cue(w, 'chain', 'rise', bell);
+    cue(w, 'chime');
+    notify(w, 'The three chains haul the deck out of the river.', 5);
+  } else {
+    cue(w, 'chain', 'tight', bell);
+    notify(w, w.bells.length === 1 ? 'The first chain draws taut.' : 'Two chains hold.', 2);
+  }
 }
 function interact(w, a) {
   if (!a) return false;
+  if (storyInteract(w, a)) return true;
+  if (a.type === 'berries') {
+    if (w.player.health >= w.player.maxHealth) {
+      notify(w, 'Blue rowanberries glisten on the branch.');
+      return true;
+    }
+    w.player.health = Math.min(w.player.maxHealth, w.player.health + 2);
+    a.alive = false;
+    cue(w, 'gather', 'berries', a);
+    notify(w, 'The tart fruit steadies you. Your heartbeat settles.');
+    return true;
+  }
   if (a.type === 'witch') meet(w);
   else if (a.type === 'bell') ring(w, a.tone);
-  else if (a.type === 'princess') banquet(w);
+  else if (a.type === 'princess') return banquet(w);
   else if (a.type === 'satchel') {
     a.alive = false;
     w.hasMap = true;
     w.hasVial = true;
     w.route = 'unbound';
-    w.potions = 3;
+    storyBeat(w, 'satchel');
+    if (!w.phialsGiven) w.potions = 3;
     event(w, 'loot');
     talk(
       w,
       'map',
       'The mapmaker’s hand',
-      'Inside her satchel lie three cinder phials, an empty silver vial and a map. A second trail is drawn beneath the road in pale ink. At its spring someone has written, “Moonwater lifts what the mouth has taken. Break the filled vial against living skin.”'
+      (w.phialsGiven
+        ? 'Inside her satchel lie an empty silver vial and a map. '
+        : 'Inside her satchel lie three cinder phials, an empty silver vial and a map. ') +
+        'A second trail is drawn beneath the road in pale ink. At its spring someone has written, “Moonwater lifts what the mouth has taken. Break the filled vial against living skin.”'
     );
   } else if (a.type === 'spring') {
+    if (!w.milestones.drankWell && w.player.health < w.player.maxHealth) {
+      w.player.health = Math.min(w.player.maxHealth, w.player.health + 2);
+      w.milestones.drankWell = true;
+      cue(w, 'potion', 'drink', a);
+      notify(w, 'The cool water steadies your breathing.');
+    }
     if (w.hasVial && !w.antidote) {
       w.antidote = true;
-      event(w, 'potion');
+      storyBeat(w, 'spring');
+      cue(w, 'potion', 'fill', a);
       talk(
         w,
         'spring',
@@ -478,14 +513,12 @@ function interact(w, a) {
         'You fill the silver vial. Where a drop falls on a blackened reed, its green returns. The pale trail bends northeast toward a ford.'
       );
     } else
-      notify(
-        w,
-        w.antidote ? 'The moonwater vial is full.' : 'Cold water runs through a cupped stone hand.'
-      );
+      notify(w, w.antidote ? 'The moonwater vial is full.' : 'Cold water runs through a cupped stone hand.');
   }
   return true;
 }
 export function act(w, action) {
+  if (storyAct(w, action)) return true;
   if (w.ending || w.sequence) return false;
   if (action === 'close') {
     if (w.mapOpen) {
@@ -493,10 +526,12 @@ export function act(w, action) {
       return true;
     }
     if (!w.dialogue) return false;
-    if (w.dialogue.kind === 'banquet') {
-      if (w.route === 'unbound' && w.antidote) return false;
-      beginFate(w, 'feast');
-    } else w.dialogue = null;
+    if (w.dialogue.kind === 'witch' && w.route === 'undecided') {
+      w.route = 'wander';
+      w.nextHunt = w.elapsed + 15;
+      storyBeat(w, 'wander');
+    }
+    w.dialogue = null;
     return true;
   }
   if (w.dialogue) return false;
@@ -506,33 +541,15 @@ export function act(w, action) {
   }
   if (w.mapOpen) return false;
   if (action === 'interact') return interact(w, target(w));
-  if (action === 'strike') {
-    if (w.elapsed < w.strikeUntil) return false;
-    w.strikeUntil = w.elapsed + 0.48;
-    event(w, 'strike');
-    const a = nearest(
-      w,
-      (a) =>
-        (a.type === 'witch' || a.type === 'bell' || isEnemy(a)) &&
-        nearFacing(w, a, a.type === 'witch' ? 6 : a.type === 'bell' ? 6 : 8, 0.43)
-    );
-    if (!a) return true;
-    if (a.type === 'bell') ring(w, a.tone);
-    else if (a.type === 'witch') {
-      a.alive = false;
-      w.actors.push(entity('satchel', 'satchel', a.x + 0.6, a.z - 0.3));
-      notify(w, 'A clasp springs open in the leaves.', 4);
-    } else {
-      a.hp -= 1;
-      if (a.hp <= 0) {
-        a.alive = false;
-        notify(w, 'The ' + a.type + ' falls back into the undergrowth.');
-      } else {
-        a.attackAt = Math.max(a.attackAt, w.elapsed + 0.55);
-        a.x += Math.sin(w.player.yaw) * 1.4;
-        a.z += Math.cos(w.player.yaw) * 1.4;
-      }
-    }
+  if (action === 'strike' || action === 'thrust')
+    return beginSwing(w, action === 'strike' ? 'slash' : 'thrust');
+  if (action === 'guard') {
+    if (w.elapsed < (w.guardReadyAt || 0) || w.elapsed < w.strikeUntil || w.player.stamina < 0.06)
+      return false;
+    w.guardUntil = w.elapsed + 0.75;
+    w.guardReadyAt = w.elapsed + 1.04;
+    w.player.stamina -= 0.06;
+    cue(w, 'guard');
     return true;
   }
   if (action === 'potion') {
@@ -541,25 +558,23 @@ export function act(w, action) {
       notify(w, 'Your belt holds no cinder phials.');
       return false;
     }
-    w.potions--;
-    w.potionUntil = w.elapsed + 1;
-    event(w, 'potion');
-    let count = 0;
-    for (const a of w.actors)
-      if (a.alive && isEnemy(a) && distance(a, w.player) < 44) {
-        a.alive = false;
-        count++;
-      }
-    notify(w, count ? 'Cinder light scatters the beasts.' : 'A ring of cinder light fades in the grass.');
+    if (w.phialFlight) return false;
+    tossPhial(w);
     return true;
   }
   return false;
+}
+function drop(w, a) {
+  a.alive = false;
+  w.greeted = true;
+  w.actors.push(entity('satchel', 'satchel', a.x + 0.24, a.z - 0.23));
+  notify(w, 'A clasp springs open in the leaves.', 4);
 }
 function injury(w, a) {
   if (w.elapsed < w.hurtUntil) return;
   w.hurtUntil = w.elapsed + 1.5;
   w.player.health = Math.max(0, w.player.health - (a.type === 'wolf' ? 1 : 2));
-  event(w, 'hurt');
+  cue(w, 'hurt', a.type, a);
   if (!w.player.health) {
     const line = {
       wolf: 'You hear a second set of paws behind you. Your lantern rolls into the ferns.',
@@ -570,138 +585,172 @@ function injury(w, a) {
     end(w, 'wilds', 'Lost in the green', line);
   } else notify(w, 'The ' + a.type + ' strikes. Move out of reach.', 2.7);
 }
-function advanceWildlife(w, dt) {
-  const p = w.player;
-  const shelter =
-    Math.hypot(p.x, p.z - 9) < 36 ||
-    p.z > 1428 ||
-    Math.abs(p.z - 996) < 23 ||
-    (w.hasMap && Math.abs(p.x - trailX(p.z)) < 17 && p.z < 1375);
-  // Off the road a pack can pick up the lone traveller's scent. A howl gives
-  // the player a head start; returning to the clearing or keeping moving works.
-  if (w.route === 'wander' && !shelter && w.elapsed >= (w.nextHunt ?? Infinity)) {
-    w.nextHunt = w.elapsed + 34;
-    const members = w.actors.filter((a) => a.alive && a.type === 'wolf');
-    const hunter = members.sort((a, b) => distance(a, p) - distance(b, p))[0];
-    if (hunter) {
-      hunter.huntingUntil = w.elapsed + 48;
-      event(w, 'howl');
-      notify(w, 'A wolf has caught your scent. Its answer comes from behind the trees.', 5);
-    }
-  }
-  for (const a of w.actors) {
-    if (!a.alive || !isEnemy(a)) continue;
-    const d = distance(a, p);
-    const range = a.type === 'dragon' ? 51 : a.type === 'wolf' ? 42 : 34;
-    const alerted =
-      !shelter &&
-      ((a.huntingUntil || 0) > w.elapsed || (d < range && Math.hypot(p.x - a.homeX, p.z - a.homeZ) < 115));
-    const radius = a.type === 'dragon' ? 20 : 6;
-    const tx = alerted ? p.x : a.homeX + Math.sin(w.elapsed * 0.12 + a.phase) * radius;
-    const tz = alerted ? p.z : a.homeZ + Math.cos(w.elapsed * 0.12 + a.phase) * radius;
-    const gap = Math.hypot(tx - a.x, tz - a.z);
-    if (gap > 0.1) {
-      a.heading = Math.atan2(tx - a.x, tz - a.z);
-      const speed = alerted
-        ? a.type === 'wolf'
-          ? 10.6
-          : a.type === 'dragon'
-            ? 8.4
-            : 5.1
-        : a.type === 'dragon'
-          ? 3.1
-          : 1.5;
-      const s = Math.min(gap, dt * speed);
-      a.x += Math.sin(a.heading) * s;
-      a.z += Math.cos(a.heading) * s;
-    }
-    if (
-      alerted &&
-      d < (a.type === 'dragon' ? 13 : a.type === 'troll' ? 7.5 : 4) &&
-      w.elapsed >= a.attackAt
-    ) {
-      a.attackAt = w.elapsed + (a.type === 'wolf' ? 2.2 : 3);
-      injury(w, a);
-      if (w.ending) return;
-    }
-  }
-}
-const obstacleCells = new Map();
-const cellKey = (cx, cz) => cx + ',' + cz;
-// Rendered tree trunks register once per generated patch, outside the save.
-export function registerObstacle(x, z, radius) {
-  const key = cellKey(Math.floor(x / 10), Math.floor(z / 10));
-  if (!obstacleCells.has(key)) obstacleCells.set(key, new Map());
-  const trunkKey = x.toFixed(2) + ',' + z.toFixed(2);
-  obstacleCells.get(key).set(trunkKey, { x, z, radius });
-}
-function hitsProp(x, z) {
-  const cx = Math.floor(x / 10),
-    cz = Math.floor(z / 10);
-  for (let ix = cx - 1; ix <= cx + 1; ix++)
-    for (let iz = cz - 1; iz <= cz + 1; iz++) {
-      const props = obstacleCells.get(cellKey(ix, iz));
-      if (!props) continue;
-      for (const a of props.values())
-        if ((x - a.x) ** 2 + (z - a.z) ** 2 < (a.radius + 0.29) ** 2) return true;
-    }
-  return false;
-}
-function passable(w, x, z) {
-  if (x < MAP.minX || x > MAP.maxX || z < MAP.minZ || z > MAP.maxZ) return false;
-  if (!hallWalkable(x, z) || hitsProp(x, z)) return false;
-  if (z > 1010 && z < 1032 && !(Math.abs(x + 125) < 10 || (w.bridgeOpen && Math.abs(x - 30) < 11)))
-    return false;
-  // The material walls correspond to the renderer's curtain-wall footprint.
-  if (z >= GATE_Z - 1.6 && z <= GATE_Z + 1.6 && x >= 4 && x <= 56 && Math.abs(x - 30) > 4.7) return false;
-  if (z >= GATE_Z && z <= 1554 && (Math.abs(x - 5) < 1.4 || Math.abs(x - 55) < 1.4)) return false;
-  if (Math.abs(z - 1553) < 1.5 && x >= 4 && x <= 56) return false;
-  return true;
-}
 function landmarkBeat(w, id, condition, text, sound) {
   if (!condition || w.milestones[id]) return;
   w.milestones[id] = true;
   notify(w, text, 5.5);
   if (sound) event(w, sound);
 }
-function simulate(w, dt, input) {
+const contactsByWorld = new WeakMap();
+function crowdContact(w) {
   const p = w.player;
-  w.elapsed += dt;
+  if (p.z < 955 || w.ropeFallen) return;
+  const head = hordePosition(w, 0);
+  if (distance(p, head) > 470) return;
+  let cache = contactsByWorld.get(w);
+  if (!cache || w.elapsed < cache.at || w.elapsed - cache.at > 0.18 || distance(p, cache) > 2.2) {
+    cache = { x: p.x, z: p.z, at: w.elapsed, people: [] };
+    contactsByWorld.set(w, cache);
+    for (let start = 0; start < HORDE_COUNT; start += 48) {
+      if (distance(p, hordePosition(w, start)) > 33) continue;
+      for (let i = start; i < start + 48; i++) {
+        const q = hordePosition(w, i);
+        if (distance(p, q) < 4.8) cache.people.push({ ...q, i });
+      }
+    }
+  }
+  return cache.people;
+}
+function reactToHost(w, q) {
+  const p = w.player,
+    dx = q.x - p.x,
+    dz = q.z - p.z,
+    d = Math.hypot(dx, dz);
+  w.hostReactions ??= {};
+  for (const [i, v] of Object.entries(w.hostReactions))
+    if (w.elapsed - v.at >= 2.5) delete w.hostReactions[i];
+  if (w.hostReactions[q.i]) return;
+  const ax = d > 0.01 ? dx / d : 1,
+    az = d > 0.01 ? dz / d : 0;
+  w.hostReactions[q.i] = { x: ax * 0.74, z: az * 0.74, at: w.elapsed };
+  if (w.elapsed >= (w.nextBrush || 0)) {
+    cue(w, 'brush', 'host', q);
+    w.nextBrush = w.elapsed + 2.2;
+  }
+}
+function avoidHost(w, nearby) {
+  const p = w.player;
+  for (const q of nearby) {
+    const d = distance(p, q);
+    if (d < 0.48) reactToHost(w, q);
+    const swing = w.attack,
+      t = swing ? (w.elapsed - swing.start) / swing.duration : 1;
+    if (t > 0.28 && t < 0.7 && d < 1.6 && nearFacing(w, q, 1.6, 0.74) && !swing.hits.includes('host' + q.i)) {
+      swing.hits.push('host' + q.i);
+      reactToHost(w, q);
+      cue(w, 'impact', 'zombie', q);
+    }
+  }
+  return (x, z) =>
+    nearby.some((q) => {
+      const d = (x - q.x) ** 2 + (z - q.z) ** 2;
+      if (d < 0.5 ** 2 && d < (p.x - q.x) ** 2 + (p.z - q.z) ** 2) {
+        if (w.elapsed >= (w.nextBrush || 0)) {
+          cue(w, 'brush', 'host', q);
+          w.nextBrush = w.elapsed + 3;
+        }
+        return true;
+      }
+      return false;
+    });
+}
+function walk(w, dt, input) {
+  const p = w.player;
   const f = clamp(Number(input.forward) || 0, -1, 1),
     s = clamp(Number(input.strafe) || 0, -1, 1);
   p.yaw += (Number(input.turn) || 0) * 1.9 * dt;
-  const speed = input.sprint ? 12.9 : 8.2;
-  const stride = (speed * dt) / Math.max(1, Math.hypot(f, s));
-  const dx = stride * (Math.sin(p.yaw) * f + Math.cos(p.yaw) * s),
-    dz = stride * (Math.cos(p.yaw) * f - Math.sin(p.yaw) * s);
-  if (dx && passable(w, p.x + dx, p.z)) p.x += dx;
-  if (dz && passable(w, p.x, p.z + dz)) p.z += dz;
-  else if (Math.abs(dz) > 0.01 && Math.abs(p.z - 1021) < 20 && w.noticeUntil < w.elapsed)
-    notify(
-      w,
-      w.hasMap
-        ? 'Deep water. Your map marks a ford west of the bridge.'
-        : 'Deep water. Three bells stand on the southern bank.'
-    );
+  const surface = footing(w, p.x, p.z);
+  if (p.exhausted && p.stamina > 0.45) p.exhausted = false;
+  const sprint = input.sprint && f > 0.45 && !p.exhausted && !(w.guardUntil > w.elapsed);
+  p.stamina = clamp(p.stamina + (sprint ? -0.082 : 0.115) * dt, 0, 1);
+  if (p.stamina <= 0.002) p.exhausted = true;
+  const grade = terrainHeight(p.x + Math.sin(p.yaw), p.z + Math.cos(p.yaw)) - terrainHeight(p.x, p.z);
+  let speed =
+    (sprint ? 6.75 : 3.95) * (surface === 'water' ? 0.65 : 1) * clamp(1 - grade * f * 0.48, 0.68, 1.08);
+  if (w.guardUntil > w.elapsed) speed *= 0.58;
+  const norm = Math.max(1, Math.hypot(f, s));
+  const forward = (f * speed * (f < 0 ? 0.64 : 1)) / norm,
+    side = (s * speed * 0.8) / norm;
+  const sx = Math.sin(p.yaw),
+    cz = Math.cos(p.yaw);
+  const desiredX = forward * sx + side * cz,
+    desiredZ = forward * cz - side * sx;
+  const response = 1 - Math.exp(-dt * (sprint ? 8.2 : 12));
+  p.vx = (p.vx || 0) + (desiredX - (p.vx || 0)) * response;
+  p.vz = (p.vz || 0) + (desiredZ - (p.vz || 0)) * response;
+  const oldX = p.x,
+    oldZ = p.z;
+  const host = crowdContact(w),
+    avoid = host && avoidHost(w, host);
+  if (Math.hypot(p.vx, p.vz) > 0.02) moveBody(w, p, p.vx * dt, p.vz * dt, avoid);
+  const ground = footHeight(w, p.x, p.z);
+  // Snap to rising ground. Drop from ledges under gravity instead of snapping the camera down.
+  if (!Number.isFinite(p.feetY) || p.feetY <= ground + 0.08) {
+    p.feetY = ground;
+    p.verticalSpeed = 0;
+  } else {
+    p.verticalSpeed = (p.verticalSpeed || 0) - dt * 9.81;
+    p.feetY = Math.max(ground, p.feetY + p.verticalSpeed * dt);
+  }
+  p.speed = Math.hypot(p.x - oldX, p.z - oldZ) / dt;
+  p.surface = footing(w, p.x, p.z);
+  if (p.speed < 0.18 && Math.abs(f) + Math.abs(s) > 0.4 && w.elapsed > w.noticeUntil) {
+    const block = barrier(w, p.x + p.vx * 0.3, p.z + p.vz * 0.3);
+    if (block === 'water')
+      notify(
+        w,
+        w.hasMap ? 'The ford lies west of the bridge.' : 'Deep water. Three bells stand on the southern bank.'
+      );
+    if (block === 'thorns') notify(w, 'A wall of blackthorn closes the forest here.');
+  }
+  return oldZ;
+}
+function simulate(w, dt, input) {
+  const p = w.player;
+  w.elapsed += dt;
+  const oldZ = walk(w, dt, input);
+  advancePhial(w, dt, notify);
+  strikeContacts(w, { move: (a, x, z) => moveBody(w, a, x, z) }, { ring, notify, drop });
+  storyTick(w, dt);
   const peal = Math.floor((w.elapsed + 31) / 37);
   if (peal > w.lastBell) {
     w.lastBell = peal;
     if (w.elapsed > 2) {
-      event(w, 'bell');
+      cue(w, 'bell', 'tower', { x: 30, z: 1530 });
+      w.hostRangAt = w.elapsed;
+      w.hostListeningUntil = w.elapsed + 4;
       w.nextAnswer = w.elapsed + 3.1;
     }
   }
   if (w.nextAnswer && w.elapsed >= w.nextAnswer) {
-    event(w, 'answer');
+    cue(w, 'answer', 'host', hordePosition(w, 0));
     w.nextAnswer = 0;
   }
-  advanceWildlife(w, dt);
+  advanceWildlife(w, dt, { injury, notify });
   if (w.ending) return;
   if (!w.greeted && w.actors[0].alive && distance(p, w.actors[0]) < 6.7) {
     meet(w);
     return;
   }
-  if (w.elapsed >= HOURGLASS) {
+  if (
+    !w.gateCrossed &&
+    w.gateClosedAt == null &&
+    oldZ < GATE_Z + 1.25 &&
+    p.z >= GATE_Z + 1.25 &&
+    Math.abs(p.x - 30) < 4.55 &&
+    raceTime(w) <= HOURGLASS
+  ) {
+    w.gateCrossed = true;
+    w.milestones.gateSave = true;
+    saveCheckpoint(w);
+    notify(w, 'Inside the gate. Xero is still somewhere in the keep.');
+    cue(w, 'gate', 'crossed', p);
+  }
+  if (raceTime(w) >= HOURGLASS && w.gateClosedAt == null) {
+    w.gateClosedAt = w.elapsed;
+    cue(w, 'gate', 'close', { x: 30, z: GATE_Z });
+  }
+  if (!w.gateCrossed && w.route !== 'wander' && w.gateClosedAt != null && w.elapsed - w.gateClosedAt >= 2.2) {
     end(
       w,
       'horde',
@@ -713,21 +762,21 @@ function simulate(w, dt, input) {
   landmarkBeat(
     w,
     'fork',
-    p.z > 195 && p.z < 245,
+    nearFacing(w, { x: roadX(220) + 7, z: 220 }, 10, 0.1),
     'On the northbound milepost, Xero’s blue ribbon hangs from an open shackle. In the western valley, a long dark line is moving.'
   );
   landmarkBeat(
     w,
     'ridge',
-    p.z > 449 && p.z < 550 && Math.abs(p.x) < 235,
+    p.z > 449 && p.z < 550 && Math.abs(p.x) < 235 && nearFacing(w, hordePosition(w, 0), 1300, 0.46),
     'From the ridge you can see them advancing under the castle banners. There must be thousands.',
     'howl'
   );
   landmarkBeat(
     w,
     'sluice',
-    p.z > 956 && p.z < 1008 && Math.abs(p.x - 30) < 55,
-    'In the stone: “When the keep calls, answer in kind.” A deep toll, a high note, then the middle voice.',
+    Math.hypot(p.x - 30, p.z - 996) < 19,
+    'Cut into the stone are three bell mouths. Beneath them: “When the keep calls, answer in kind.”',
     'bell'
   );
   if (!w.milestones.procession && p.z > 1000 && Math.abs(p.x) < 450 && w.elapsed > (w.nextHostLook || 0)) {
@@ -751,22 +800,20 @@ function simulate(w, dt, input) {
     p.z > 1352 && Math.abs(p.x - 30) < 56,
     'A bell rings beyond the open gate. Something heavy moves across the flagstones.'
   );
-  if (!w.milestones.gateSave && p.z > 1390 && p.z < 1440 && Math.abs(p.x - 30) < 48) {
-    w.milestones.gateSave = true;
-    saveCheckpoint(w);
-  }
   if (!w.milestones.riverSave && p.z > 1036 && p.z < 1100) {
     w.milestones.riverSave = true;
     saveCheckpoint(w);
   }
-  if (Math.abs(p.x - 30) < 22 && p.z > 1504 && p.z < 1539) banquet(w);
+  if (!w.milestones.reveal && p.z > 1508 && canSeeBanquet(w)) banquet(w);
 }
 // Substep so doors, water and attacks remain consistent at low frame rates.
 export function tick(w, dt, input = {}) {
   if (!w || w.dialogue || w.ending || w.mapOpen || !Number.isFinite(dt) || dt <= 0) return;
-  const length = Math.min(dt, 0.3);
+  migrate(w);
+  const length = Math.min(dt, 0.5);
   if (w.sequence) {
-    stageFate(w, length);
+    stageStoryFate(w, length, input);
+    storyTick(w, length);
     return;
   }
   const slices = Math.ceil(length / 0.05);
@@ -777,11 +824,14 @@ export function tick(w, dt, input = {}) {
 }
 function location(w) {
   const p = w.player;
-  if (p.z > 1440 && Math.abs(p.x - 30) < 27) return 'The Long Hall';
+  if (storyLocation(w)) return storyLocation(w);
+  if (insideHall(p.x, p.z)) return 'The Long Hall';
+  if (p.z > 1435 && p.z < 1553 && Math.abs(p.x - 30) < 25) return 'Castle Xero courtyard';
   let nearestMark = LANDMARKS[0],
     best = Infinity;
   for (const place of LANDMARKS) {
     const d = distance(p, place);
+    if ((place.secret && !w.hasMap && d > 12) || place.id === 'hall') continue;
     if (d < best) {
       nearestMark = place;
       best = d;
@@ -790,6 +840,7 @@ function location(w) {
   return best < 235 ? nearestMark.name : p.z > 980 ? 'The Ash Downs' : 'The Deepwood';
 }
 function objective(w) {
+  if (w.gateCrossed) return 'Find Princess Xero inside the keep.';
   if (w.route === 'unbound' && !w.antidote) return 'Carry the silver vial to the Moonwell.';
   if (w.route === 'guided' && !w.bridgeOpen && w.player.z > 870 && w.player.z < 1034)
     return 'Answer the castle’s three notes at the sluice.';
@@ -801,6 +852,7 @@ function objective(w) {
 export function getHUD(w) {
   const a = target(w);
   const labels = {
+    berries: 'Gather the blue rowanberries',
     witch: 'Speak to the witch',
     satchel: 'Examine the fallen satchel',
     spring: 'Examine the spring',
@@ -809,12 +861,9 @@ export function getHUD(w) {
   const hint = a
     ? (a.type === 'bell'
         ? 'Ring the ' + { low: 'deep', high: 'high', mid: 'middle' }[a.tone] + ' bell'
-        : labels[a.type]) || ''
+        : a.label || labels[a.type]) || ''
     : '';
-  const goal =
-    w.hasMap && !w.antidote
-      ? LANDMARKS.find((i) => i.id === 'chapel')
-      : LANDMARKS.find((i) => i.id === 'hall');
+  const route = course(w);
   return {
     location: location(w),
     objective: objective(w),
@@ -823,9 +872,11 @@ export function getHUD(w) {
     health: w.player.health,
     maxHealth: w.player.maxHealth,
     potions: w.potions,
-    hordeProgress: clamp(w.elapsed / HOURGLASS, 0, 1),
+    hordeProgress: clamp(raceTime(w) / HOURGLASS, 0, 1),
     hasMap: w.hasMap,
-    bearing: Math.atan2(goal.x - w.player.x, goal.z - w.player.z),
-    distance: Math.round(distance(w.player, goal)),
+    gateCrossed: !!w.gateCrossed,
+    secondsLeft: Math.max(0, HOURGLASS - raceTime(w)),
+    bearing: route?.bearing ?? null,
+    distance: route?.metres ?? null,
   };
 }

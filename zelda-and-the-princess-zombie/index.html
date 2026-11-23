@@ -11,7 +11,21 @@
     <base href="/zelda-and-the-princess-zombie/" />
     <title>Zelda and the Princess Zombie | Philosophy of Intelligence</title>
     <link rel="preload" as="image" href="forest.webp" />
-    <link rel="stylesheet" href="game.css" />
+    <link rel="stylesheet" href="game.css?v=lanternwood-2" />
+    <!-- Keep returning journeys on the same edition of the previously shipped modules. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "./audio.mjs": "./audio.mjs?v=lanternwood-2",
+          "./field-map.mjs": "./field-map.mjs?v=lanternwood-2",
+          "./ground-paint.mjs": "./ground-paint.mjs?v=lanternwood-2",
+          "./hall.mjs": "./hall.mjs?v=lanternwood-2",
+          "./render.mjs": "./render.mjs?v=lanternwood-2",
+          "./sound-score.mjs": "./sound-score.mjs?v=lanternwood-2",
+          "./world.mjs": "./world.mjs?v=lanternwood-2"
+        }
+      }
+    </script>
   </head>
   <body>
     <svg aria-hidden="true" class="symbols" xmlns="http://www.w3.org/2000/svg">
@@ -69,6 +83,7 @@
           <button id="start" class="primary" type="button">
             <svg aria-hidden="true"><use href="#sword" /></svg><span>Enter the forest</span>
           </button>
+          <button id="history" type="button" class="link-button" hidden>Past journeys</button>
           <button id="fresh" type="button" class="link-button" hidden>Begin anew</button>
           <div id="startup-status" role="status"></div>
         </div>
@@ -85,6 +100,9 @@
         <canvas id="view" aria-label="First-person view of the forest and castle" tabindex="0"></canvas>
         <div class="lens"></div>
         <div id="damage"></div>
+        <div id="sequence-caption" aria-live="polite" hidden></div>
+        <button id="resist" class="primary" type="button" hidden>Pull your hand back</button>
+        <div id="storage-status" role="status"></div>
         <div class="hud" id="hud">
           <div class="hud-top">
             <div class="vitals">
@@ -101,8 +119,23 @@
             </div>
           </div>
           <div class="objective" id="objective"></div>
+          <div class="route-readout" id="route-readout"></div>
+          <div class="race-readout" id="race-readout"></div>
+          <div class="belt-readout" id="belt-readout"></div>
+          <div
+            class="stamina"
+            id="stamina"
+            role="meter"
+            aria-label="Stamina"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <i></i>
+          </div>
           <div class="reticle"></div>
           <div class="feedback">
+            <div id="bell-call" aria-live="polite" hidden></div>
+            <div id="captions" aria-live="polite"></div>
             <div id="notice" role="status"></div>
             <button type="button" id="interact-hint" hidden></button>
           </div>
@@ -117,6 +150,12 @@
               </button>
               <button data-act="strike" aria-label="Swing sword">
                 <svg><use href="#sword" /></svg><span>Sword</span><kbd>F</kbd>
+              </button>
+              <button data-act="thrust" aria-label="Thrust">
+                <svg><use href="#sword" /></svg><span>Thrust</span><kbd>R</kbd>
+              </button>
+              <button data-act="guard" aria-label="Guard">
+                <svg><use href="#sigil" /></svg><span>Guard</span><kbd>G</kbd>
               </button>
               <button id="sprint" aria-label="Toggle sprint" aria-pressed="false">
                 <svg><use href="#run" /></svg><span>Run</span>
@@ -141,6 +180,6 @@
       </div>
     </main>
     <noscript>This game needs JavaScript enabled to enter the forest.</noscript>
-    <script type="module" src="game.mjs"></script>
+    <script type="module" src="game.mjs?v=lanternwood-2"></script>
   </body>
 </html>

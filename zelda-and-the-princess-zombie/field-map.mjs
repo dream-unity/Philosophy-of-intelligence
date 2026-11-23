@@ -1,47 +1,25 @@
+import { hasDirections, knownLandmarks, survey } from './navigation.mjs';
 import { MAP, LANDMARKS, terrainHeight, roadX, hordePosition, HORDE_COUNT } from './world.mjs';
 
-// The longer edge always follows the journey. Rotating the survey on a wide
-// display preserves distances; the rose and player bearing rotate with it.
-function projection(w, h, world) {
-  const wide = w > h,
-    margin = Math.min(20, w * 0.04, h * 0.06);
-  const fullWidth = MAP.maxX - MAP.minX,
-    rangeZ = MAP.maxZ - MAP.minZ;
-  let rangeX = fullWidth,
-    centerX = (MAP.minX + MAP.maxX) / 2;
-  if (wide && w / h > 2.15) {
-    const visible = MAP.road.map(([x]) => x);
-    visible.push(world.player.x);
-    if (world.hasMap) visible.push(...MAP.trail.map(([x]) => x));
-    if (world.milestones.ridge) {
-      for (let i = 0; i < HORDE_COUNT; i += 31) visible.push(hordePosition(world, i).x);
-    }
-    const left = Math.max(MAP.minX, Math.min(...visible) - 55),
-      right = Math.min(MAP.maxX, Math.max(...visible) + 55);
-    const bestWidth = ((h - 2 * margin) * rangeZ) / (w - 2 * margin);
-    rangeX = Math.min(fullWidth, Math.max(bestWidth, right - left));
-    centerX = clamp((left + right) / 2, MAP.minX + rangeX / 2, MAP.maxX - rangeX / 2);
-  }
-  const scale = Math.min(
-    (w - 2 * margin) / (wide ? rangeZ : rangeX),
-    (h - 2 * margin) / (wide ? rangeX : rangeZ)
-  );
-  const centerZ = (MAP.minZ + MAP.maxZ) / 2;
+// A single north-up projection drives the image, keyboard pan, touch and saved pins.
+export function mapProjection(w, h, world, view = {}) {
+  const margin = Math.min(20, w * 0.04, h * 0.06);
+  const scale =
+    Math.min((w - 2 * margin) / (MAP.maxX - MAP.minX), (h - 2 * margin) / (MAP.maxZ - MAP.minZ)) *
+    (view.zoom || 1);
+  const centerX = view.x ?? (MAP.maxX + MAP.minX) / 2,
+    centerZ = view.z ?? (MAP.maxZ + MAP.minZ) / 2;
   return {
     w,
     h,
-    wide,
+    wide: false,
     scale,
-    angle: wide ? Math.PI / 2 : 0,
+    angle: 0,
     point(x, z) {
-      return wide
-        ? [w / 2 + (z - centerZ) * scale, h / 2 + (x - centerX) * scale]
-        : [w / 2 + (x - centerX) * scale, h / 2 - (z - centerZ) * scale];
+      return [w / 2 + (x - centerX) * scale, h / 2 - (z - centerZ) * scale];
     },
-    world(px, py) {
-      return wide
-        ? [centerX + (py - h / 2) / scale, centerZ + (px - w / 2) / scale]
-        : [centerX + (px - w / 2) / scale, centerZ - (py - h / 2) / scale];
+    world(x, y) {
+      return [centerX + (x - w / 2) / scale, centerZ - (y - h / 2) / scale];
     },
   };
 }
@@ -552,6 +530,11 @@ function labels(g, map, sites, player) {
 }
 function route(g, map, world) {
   const line = (mapPath) => mapPath.map(([x, z]) => map.point(x, z));
+  if (!hasDirections(world)) {
+    const field = survey(world);
+    path(g, line(field.trace), '#856849', 2);
+    return;
+  }
   path(g, line(MAP.road), '#f0e0b7', 4.8);
   path(g, line(MAP.road), '#826841', 3.2);
   path(g, line(MAP.road), '#dcb774', 1.55);
@@ -576,6 +559,19 @@ function route(g, map, world) {
       '#574b34',
       1.05
     );
+  if (!world.bridgeOpen) {
+    path(
+      g,
+      [
+        [-half, -length * 0.35],
+        [half, length * 0.35],
+      ],
+      '#965d43',
+      2
+    );
+    g.restore();
+    return;
+  }
   for (let k = 0; k < 4; k++) {
     const y = -length / 2 + (k * length) / 3;
     path(
@@ -633,7 +629,8 @@ function drawBorder(g, map) {
   g.fillStyle = cartouche;
   g.fillRect(6, 10, 49, 49);
   rose(g, 30, 34, map.angle, map.h < 220 ? 9 : 12);
-  const length = (map.scale * 250 > 74 ? 100 : 250) * map.scale;
+  const scaleMetres = [250, 100, 50, 25, 10].find((m) => map.scale * m <= Math.min(85, map.w * 0.22)) || 10;
+  const length = scaleMetres * map.scale;
   const x = map.w - 16 - length,
     y = map.h - 15;
   g.textAlign = 'center';
@@ -662,14 +659,47 @@ function drawBorder(g, map) {
     2.6
   );
 }
-export function drawFieldMap(canvas, world) {
+let surveyPlate;
+function paintTerrain(g, map) {
+  // Keep the engraved terrain fixed to its coordinates while panning or zooming.
+  // Only routes, discovered landmarks, pins, the player and moving host are redrawn.
+  const left = MAP.minX - 100,
+    right = MAP.maxX + 100,
+    north = MAP.maxZ + 100,
+    south = MAP.minZ - 100;
+  if (!surveyPlate) {
+    const plate = madeCanvas(),
+      scale = 0.72;
+    plate.width = Math.ceil((right - left) * scale);
+    plate.height = Math.ceil((north - south) * scale);
+    const ink = plate.getContext('2d'),
+      atlas = {
+        w: plate.width,
+        h: plate.height,
+        wide: false,
+        angle: 0,
+        scale,
+        point: (x, z) => [(x - left) * scale, (north - z) * scale],
+        world: (x, y) => [left + x / scale, north - y / scale],
+      };
+    wash(ink, atlas);
+    contourSurvey(ink, atlas);
+    woods(ink, atlas);
+    surveyPlate = plate;
+  }
+  g.fillStyle = '#d8c8a2';
+  g.fillRect(0, 0, map.w, map.h);
+  const [x, y] = map.point(left, north);
+  g.drawImage(surveyPlate, x, y, (right - left) * map.scale, (north - south) * map.scale);
+}
+export function drawFieldMap(canvas, world, view = {}) {
   if (!canvas || !world) return;
   const bounds = canvas.getBoundingClientRect(),
     dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
   if (!bounds.width || !bounds.height) return;
   const w = bounds.width,
     h = bounds.height,
-    map = projection(w, h, world);
+    map = mapProjection(w, h, world, view);
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
   const g = canvas.getContext('2d');
@@ -677,14 +707,12 @@ export function drawFieldMap(canvas, world) {
   g.scale(dpr, dpr);
   g.lineCap = 'round';
   g.lineJoin = 'round';
-  wash(g, map);
+  paintTerrain(g, map);
   g.save();
   g.beginPath();
   g.rect(7, 7, w - 14, h - 14);
   g.clip();
-  contourSurvey(g, map);
-  woods(g, map);
-  water(g, map);
+  if (hasDirections(world) || world.survey?.visits?.bells || world.survey?.visits?.ford) water(g, map);
   route(g, map, world);
   if (world.milestones.ridge) {
     for (let i = 0; i < HORDE_COUNT; i += 11) {
@@ -693,13 +721,81 @@ export function drawFieldMap(canvas, world) {
       dot(g, x, y, 1, 'rgba(126,65,53,.72)');
     }
   }
-  const sites = [];
-  for (const id of ['gate', 'clearing', 'bells', 'ridge', 'chapel', 'ford', 'downs', 'crossing', 'mire']) {
-    const place = LANDMARKS.find((l) => l.id === id);
-    if (!place || (place.secret && !world.hasMap)) continue;
+  const sites = [],
+    places = knownLandmarks(world),
+    insideCastle = world.gateCrossed || world.survey?.visits?.hall;
+  if (insideCastle && map.scale > 0.38) {
+    const shape = (coords) => coords.map(([x, z]) => map.point(x, z));
+    path(
+      g,
+      shape([
+        [5, 1435],
+        [5, 1553],
+        [55, 1553],
+        [55, 1435],
+        [36, 1435],
+      ]),
+      '#63543e',
+      1.5
+    );
+    path(
+      g,
+      shape([
+        [5, 1435],
+        [24, 1435],
+      ]),
+      '#63543e',
+      1.5
+    );
+    if (places.some((s) => s.id === 'gallery'))
+      path(
+        g,
+        shape([
+          [16, 1441],
+          [20, 1441],
+          [20, 1457],
+          [22, 1457],
+          [22, 1464],
+          [9, 1464],
+          [9, 1457],
+          [16, 1457],
+          [16, 1441],
+        ]),
+        '#78694d',
+        1.1,
+        '#ccb88a'
+      );
+    if (places.some((s) => s.id === 'banquet'))
+      path(
+        g,
+        shape([
+          [10, 1490],
+          [50, 1490],
+          [50, 1531],
+          [10, 1531],
+          [10, 1490],
+        ]),
+        '#78694d',
+        1.1
+      );
+  }
+  for (const place of places) {
+    if (place.id === 'hall' && places.some((s) => s.id === 'banquet')) continue;
+    const interior = ['gallery', 'galleryOpen', 'register', 'banquet', 'hall'].includes(place.id);
+    if (interior && map.scale < 0.9) continue;
     const [px, py] = map.point(place.x, place.z);
+    if (px < 6 || py < 6 || px > w - 6 || py > h - 6) continue;
     sites.push({ ...place, px, py });
-    marker(g, id, px, py, h < 210 ? 0.77 : 1);
+    if (interior) dot(g, px, py, 2.5, '#695337');
+    else marker(g, place.id, px, py, h < 210 ? 0.77 : 1);
+  }
+  for (const [i, pin] of (world.survey?.pins || []).entries()) {
+    const [x, y] = map.point(pin.x, pin.z);
+    g.fillStyle = '#863e38';
+    dot(g, x, y, 4, '#863e38');
+    g.font = 'bold 12px sans-serif';
+    g.textAlign = 'left';
+    g.fillText(String(i + 1), x + 5, y - 4);
   }
   const player = map.point(world.player.x, world.player.z);
   labels(g, map, sites, player);
