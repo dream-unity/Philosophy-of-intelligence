@@ -1,4 +1,6 @@
+import { createLandscape } from './sound-landscape.mjs';
 import { createScore, playEnding } from './sound-score.mjs';
+import { createScoreInstruments } from './score-instruments.mjs';
 import { hordePosition, HORDE_COUNT } from './world.mjs';
 import { insideHall } from './hall.mjs';
 import { footing, fordStoneX } from './travel.mjs';
@@ -14,7 +16,9 @@ export function createAudio() {
   const score = createScore();
   const mix = { music: 1, effects: 1, ambience: 1 },
     channels = {};
-  let ctx, master, hallSend, air, airTone, airLevel, samples, effects, ambience, music;
+  const cueSpace = {};
+  let cueUntil = 0, cueDepth = 0;
+  let ctx, master, hallSend, landscape, samples, effects, ambience, music;
   let enabled = true,
     touched = false,
     disposed = false,
@@ -32,13 +36,11 @@ export function createAudio() {
     nextScuff = 0,
     exertion = 0;
   let nextMix = 0,
-    nextBird = 0,
     nextBreath = 0,
     nextCreature = 0,
     nextRank = 0,
     lastLureBeat = -1,
     lastLureAt,
-    nextWater = 0,
     rank = 0;
   function route(node, dest, pan) {
     if (Math.abs(pan) < 0.001 || !ctx.createStereoPanner) {
@@ -60,7 +62,8 @@ export function createAudio() {
       duration,
       pan = 0,
       endFrequency = frequency,
-      attack = 0.012
+      attack = 0.012,
+      destination = dest
     ) {
       const source = ctx.createOscillator(),
         envelope = ctx.createGain();
@@ -74,7 +77,7 @@ export function createAudio() {
       );
       envelope.gain.exponentialRampToValueAtTime(0.00001, time + duration);
       source.connect(envelope);
-      const panner = route(envelope, dest, pan);
+      const panner = route(envelope, destination, pan);
       source.onended = () => {
         source.disconnect();
         envelope.disconnect();
@@ -82,6 +85,7 @@ export function createAudio() {
       };
       source.start(time);
       source.stop(time + duration + 0.02);
+      return source;
     }
     function noise(level, centre, duration, time, pan = 0, attack = 0.03, q = 0.82) {
       const source = ctx.createBufferSource(),
@@ -126,8 +130,14 @@ export function createAudio() {
     for (const group of groupNames) {
       const ch = ctx.createGain();
       ch.gain.value = mix[group];
-      ch.connect(master);
-      if (group !== 'music') ch.connect(hallSend);
+      let output = ch;
+      if (group !== 'effects') {
+        output = ctx.createGain();
+        cueSpace[group] = output.gain;
+        ch.connect(output);
+      }
+      output.connect(master);
+      if (group !== 'music') output.connect(hallSend);
       channels[group] = ch;
     }
     // Three early reflections and one longer stone return are shared by all
@@ -155,21 +165,11 @@ export function createAudio() {
     effects = instrument(channels.effects);
     ambience = instrument(channels.ambience);
     music = instrument(channels.music);
+    music.note = createScoreInstruments(ctx, channels.music, music.note);
     samples = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 3.137), ctx.sampleRate);
     const data = samples.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    air = ctx.createBufferSource();
-    air.buffer = samples;
-    air.loop = true;
-    airTone = ctx.createBiquadFilter();
-    airTone.type = 'lowpass';
-    airTone.frequency.value = 840;
-    airLevel = ctx.createGain();
-    airLevel.gain.value = 0.035;
-    air.connect(airTone);
-    airTone.connect(airLevel);
-    airLevel.connect(channels.ambience);
-    air.start();
+    landscape = createLandscape(ctx, channels.ambience, samples);
   }
   function setMix(values) {
     for (const name of groupNames) {
@@ -180,6 +180,18 @@ export function createAudio() {
       channels[name]?.gain.setTargetAtTime(mix[name], ctx.currentTime, 0.035);
     }
   }
+  function makeRoomForCue(time, duration, depth = 0.72) {
+    if (mix.effects <= 0) return;
+    cueDepth = time < cueUntil ? Math.max(depth, cueDepth) : depth;
+    cueUntil = Math.max(cueUntil, time + duration);
+    // Separate faders keep consecutive bells and warnings clear while the
+    // player's mix sliders remain live, even during the release.
+    for (const [group, gain] of Object.entries(cueSpace)) {
+      gain.cancelScheduledValues(time);
+      gain.setTargetAtTime(1 - (group === 'music' ? 1 : 0.72) * cueDepth * mix.effects, time, 0.018);
+      gain.setTargetAtTime(1, cueUntil, 0.34);
+    }
+  }
   function applyEnabled() {
     if (!ctx || disposed) return;
     clearTimeout(suspendTimer);
@@ -187,6 +199,7 @@ export function createAudio() {
     master.gain.setTargetAtTime(enabled ? 0.58 : 0, ctx.currentTime, enabled ? 0.09 : 0.024);
     if (enabled && touched && ctx.state !== 'running') ctx.resume().catch(() => {});
     if (!enabled) {
+      music?.note.reset?.(ctx.currentTime);
       suspendTimer = setTimeout(() => {
         if (!enabled && !disposed) ctx.suspend().catch(() => {});
       }, 5500);
@@ -304,10 +317,14 @@ export function createAudio() {
       pan = at.pan;
     switch (name) {
       case 'bell':
+        makeRoomForCue(t, 1.38);
         ['low', 'high', 'mid'].forEach((n, i) => pullBell(t + i * 0.46, n));
         break;
       case 'wristbell':
-        if (bellPitch[kind]) towerBell(t, kind, namedSource || tower);
+        if (bellPitch[kind]) {
+          makeRoomForCue(t, 0.48);
+          towerBell(t, kind, namedSource || tower);
+        }
         break;
       case 'answer':
         hostAnswer(t);
@@ -340,26 +357,17 @@ export function createAudio() {
           effects.noise(0.1 * near.gain, 940, 0.17, t, near.pan, 0.033);
           for (const [i, f] of [1510, 1960, 1700].entries())
             effects.bell(f, t + 0.36 + i * 0.12, 0.055 * near.gain, 0.21, near.pan, 0.55);
-          music.note('triangle', 415.3, 0.039, t + 0.11, 1.03, -0.12, 413.4, 0.14);
-          music.note('triangle', 587.33, 0.029, t + 0.68, 0.78, 0.07, 584.7, 0.13);
-          music.note('sine', 493.88, 0.041, t + 1.21, 1.46, -0.03, 492.3, 0.17);
         }
         break;
       case 'telegraph':
-        // Make space for the wind-up without changing the user's mix after the
-        // attack. A new slider gesture cancels these scheduled returns.
-        for (const group of ['music', 'ambience']) {
-          const gain = channels[group].gain;
-          gain.cancelScheduledValues(t);
-          gain.setTargetAtTime(mix[group] * (1 - 0.58 * mix.effects), t, 0.025);
-          gain.setTargetAtTime(mix[group], t + (kind === 'dragon' ? 0.76 : 0.43), 0.19);
-        }
+        makeRoomForCue(t, kind === 'dragon' ? 0.76 : 0.43, 0.85);
         creatureSound(effects, kind, t, pan, g, true);
         break;
       case 'enemy-breath':
         creatureSound(effects, kind || 'dragon', t, pan, g * 0.96, true);
         break;
       case 'strike':
+        makeRoomForCue(t, 0.16, 0.24);
         effects.noise(
           0.42,
           kind === 'thrust' ? 2640 : 2080,
@@ -469,6 +477,7 @@ export function createAudio() {
       case 'sluice':
       case 'chime':
         if (bellPitch[kind]) {
+          makeRoomForCue(t, 0.58);
           const source = namedSource || latest?.actors.find((a) => a.type === 'bell' && a.tone === kind);
           const pos = acoustic(source, 25);
           effects.bell(bellPitch[kind], t, 0.24 * pos.gain, 1.85, pos.pan);
@@ -497,8 +506,8 @@ export function createAudio() {
       }
       case 'gate':
         if (kind === 'crossed') {
-          music.note('triangle', 123.47, 0.051, t, 1.19, -0.07, 123.47, 0.16);
-          music.note('sine', 185, 0.044, t + 0.36, 1.4, 0.06, 185, 0.28);
+          music.note('cello', 123.47, 0.051, t, 1.19, -0.07, 123.47, 0.16);
+          music.note('horn', 185, 0.044, t + 0.36, 1.4, 0.06, 185, 0.28);
         } else {
           effects.noise(0.64 * g, 580, 0.95, t, pan, 0.095);
           metalContact(effects, 'stone', t + 0.71, pan, g);
@@ -564,12 +573,12 @@ export function createAudio() {
       case 'recognition':
         if (kind === 'hand') {
           effects.noise(0.12 * g, 1370, 0.21, t, pan, 0.07);
-          music.note('sine', 493.88, 0.039, t + 0.04, 1.35, pan);
+          music.note('harp', 493.88, 0.039, t + 0.04, 1.35, pan);
           break;
         }
         for (const delay of [0, 0.19, 0.53]) effects.noise(0.14 * g, 1170, 0.065, t + delay, pan, 0.007);
-        music.note('sine', 329.63, 0.064, t, 1.7, 0.13);
-        music.note('sine', 415.3, 0.052, t + 0.45, 1.5, -0.13);
+        music.note('harp', 329.63, 0.064, t, 1.7, 0.13);
+        music.note('viola', 415.3, 0.052, t + 0.45, 1.5, -0.13);
         break;
       case 'cure':
         effects.bell(415.3, t, 0.088 * g, 1.72, pan);
@@ -580,10 +589,11 @@ export function createAudio() {
         effects.note('triangle', 293.66, 0.071, t, 0.52, pan, 246.94, 0.071);
         break;
       case 'reveal':
-        music.note('triangle', 207.65, 0.081, t, 2.2, 0.1, 146.83, 0.28);
+        music.note('cello', 207.65, 0.081, t, 2.2, 0.1, 146.83, 0.28);
         effects.noise(0.27, 910, 0.59, t, 0.04, 0.081);
         break;
       case 'ending':
+        music.note.reset?.(t);
         playEnding(kind || latest?.ending?.id, t, music.note);
         break;
     }
@@ -647,37 +657,32 @@ export function createAudio() {
       nextBreath = t + 2.05 - exertion * 0.94;
     }
   }
-  function update(world) {
+  function update(world, listeningOnly = false) {
     latest = world;
     const p = world?.player;
     if (!enabled || !ctx || ctx.state !== 'running' || !p || disposed) return;
     const t = ctx.currentTime;
     if (lastPlayer !== p) {
+      if (lastPlayer) music.note.reset?.(t);
       lastPlayer = p;
       lastT = undefined;
       lastX = lastZ = undefined;
       turnHeading = p.yaw;
       headingAt = nextScuff = world.elapsed;
       step = stride = exertion = recentSpeed = rank = 0;
-      nextCreature = nextRank = nextBird = nextWater = nextMix = 0;
+      nextCreature = nextRank = nextMix = 0;
       lastLureAt = undefined;
       lastLureBeat = -1;
       nextBreath = t + 1;
     }
-    updateFootwork(world, t);
+    if (!listeningOnly) updateFootwork(world, t);
     if (t < nextMix) return;
     nextMix = t + 0.22;
-    score(world, t, music.note);
+    score(world, t, music.note, listeningOnly);
     const room = insideHall(p.x, p.z);
     hallSend.gain.setTargetAtTime(room ? 0.93 : 0, t, 0.14);
-    const forest = clamp((1450 - p.z) / 610);
-    airTone.frequency.setTargetAtTime(room ? 310 : 480 + forest * (560 + 90 * Math.sin(t * 0.16)), t, 0.45);
-    airLevel.gain.setTargetAtTime(
-      room ? 0.009 : 0.021 + forest * (0.027 + 0.009 * Math.sin(t * 0.37)),
-      t,
-      0.55
-    );
-    if (world.ending || world.sequence) return;
+    landscape.update(world, t, room, acoustic, listeningOnly);
+    if (world.ending || world.sequence || listeningOnly) return;
     const lure = world.fieldMedicine?.lure;
     if (lure && world.elapsed < lure.until && distance(p, lure) < 58) {
       if (lastLureAt !== lure.at) {
@@ -692,22 +697,6 @@ export function createAudio() {
         effects.bell(1267, t + 0.09, level * 0.52, 0.34, source.pan);
         lastLureBeat = beat;
       }
-    }
-    if (t >= nextWater && Math.abs(p.z - 1021) < 55) {
-      const water = acoustic({ x: p.x - 9, z: 1021 }, 18);
-      ambience.noise(0.28 * water.gain, 1180, 1.45, t, water.pan, 0.38);
-      nextWater = t + 1.14;
-    }
-    if (t >= nextBird && forest > 0.38 && !(world.flockQuietUntil > world.elapsed)) {
-      if (nextBird) {
-        const side = Math.floor(t / 7) % 2 ? 1 : -1;
-        const pos = { x: Math.floor(p.x / 30) * 30 + side * 22, z: Math.floor(p.z / 41) * 41 + 29 };
-        const a = acoustic(pos, 28),
-          f = 1670 + Math.random() * 660;
-        ambience.note('sine', f, 0.049 * forest * a.gain, t, 0.13, a.pan, f * 1.2);
-        ambience.note('sine', f * 1.07, 0.04 * forest * a.gain, t + 0.14, 0.18, a.pan, f * 0.86);
-      }
-      nextBird = t + 6 + Math.random() * 8;
     }
     if (t >= nextCreature) {
       let closest,
@@ -742,7 +731,7 @@ export function createAudio() {
     disposed = true;
     clearTimeout(suspendTimer);
     if (!ctx) return;
-    air?.stop();
+    landscape?.dispose();
     ctx.close().catch(() => {});
   }
   return { unlock, setEnabled, setMix, update, cue, preview, dispose };

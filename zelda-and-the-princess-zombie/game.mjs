@@ -224,18 +224,20 @@ function save() {
     text('storage-status', ok && lasting() ? '' : 'Saving is unavailable. This journey stays in this tab.');
   return ok;
 }
+const listeningPanels = new Set(['dialogue', 'map', 'bag', 'journal', 'preferences']);
 function soundState() {
   $('title-sound').replaceChildren(
     icon(options.sound ? 'sound' : 'mute'),
     Object.assign(document.createElement('span'), { textContent: options.sound ? 'Sound on' : 'Sound off' })
   );
   $('title-sound').setAttribute('aria-pressed', String(options.sound));
+  audio.setMix(panel === 'device' ? { ...options.mix, music: 0, ambience: 0 } : options.mix);
   audio.setEnabled(
     Boolean(
       options.sound &&
         screen === 'game' &&
         !document.hidden &&
-        !['pause', 'help', 'restart', 'error', 'context'].includes(panel)
+        (!panel || listeningPanels.has(panel) || panel === 'ending' || panel === 'device')
     )
   );
 }
@@ -1547,8 +1549,11 @@ function frame(timestamp) {
     if (!panel) {
       const input = keyboard.sample(movement, touchAutoForward(), touchRun.active || rimSprint);
       accumulator = advanceGameClock(world, dt, accumulator, input, input.pitch);
-      audio.update(arrivalView(world));
     }
+    // The traveller can listen while reading or consulting the map. Only the
+    // audio clock advances here; footsteps, threats and the race stay frozen.
+    if (!panel || listeningPanels.has(panel))
+      audio.update(arrivalView(world), Boolean(panel));
     for (const ev of world.events.splice(0)) {
       audio.cue(ev);
       soundCaption(ev);
