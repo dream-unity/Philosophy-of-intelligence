@@ -21,12 +21,14 @@ export function createQualityController(fallback = false) {
       level = 1;
       return level;
     }
-    const dt = previous ? (now - previous) / 1000 : 0;
+    const gap = previous ? (now - previous) / 1000 : 0;
     previous = now;
-    if (dt <= 0 || dt > 0.2) {
+    // A long idle gap is distinct from a genuinely costly foreground frame.
+    if (gap <= 0 || (gap > 0.2 && (work < 46 || gap * 1000 > work * 4))) {
       slowSeconds = fastSeconds = 0;
       return level;
     }
+    const dt = Math.min(gap, 0.2);
     // A software frame is deliberately capped at 30. Native rendering may run
     // on either a 30 Hz or a 60 Hz composited surface.
     if (dt > 0.046 || work > 31) {

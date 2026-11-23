@@ -1,3 +1,8 @@
+import { course, LANDMARKS } from './geography.mjs';
+import { secondsToGate } from './world.mjs';
+import { insideHall } from './hall.mjs';
+import { isSheltered } from './travel.mjs';
+
 // The three notes of Xero's tower are Ab, D and B. The forest cadences hint at
 // those intervals long before the player learns what the tower is calling for.
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
@@ -46,8 +51,30 @@ const tone = {
   gate: ['triangle', 0.24, 1.85, 0.048, 0.74],
   hall: ['sine', 0.18, 2.35, 0.039, 0.87],
 };
+const hallToGate = LANDMARKS.find((l) => l.id === 'hall').z - 1435;
+export function raceMargin(world, pace = 4.45) {
+  // The actual route has a switchback at the ridge and two different river
+  // crossings. The gate clock includes the time granted by a late checkpoint.
+  const route = course({ ...world, route: 'guided', antidote: true });
+  const metres = Math.max(0, route.metres - hallToGate);
+  const sluice = world.player.z < 1006 && !world.hasMap && !world.bridgeOpen ? 10 : 0;
+  return secondsToGate(world) - metres / pace - sluice;
+}
 function playPhrase(voice, place, notes, start, pan, pace = 1) {
   const [shape, attack, decay, level, spacing] = tone[place];
+  const root = hz(notes[0]);
+  if (place === 'forest') {
+    // A short answer from the other bank of the stereo field, like a plucked string.
+    voice('triangle', root * 0.75, 0.026, start + 0.34 * pace, 0.48, -pan, root * 0.747, 0.012);
+  } else if (place === 'water') {
+    // A glassy, slightly inharmonic rim. Its reflected pitch arrives after the attack.
+    voice('sine', root * 2.71, 0.024, start + 0.025, 0.78, -pan, root * 2.7, 0.009);
+    voice('sine', root * 1.5, 0.022, start + 0.29 * pace, 1.4, -pan, root * 1.498, 0.06);
+  } else if (place === 'hall' || place === 'gate') {
+    const pedal = root * (place === 'hall' ? 0.25 : 0.5);
+    voice('triangle', pedal, 0.037, start, 2.7, -pan, pedal, 0.46);
+    voice('sine', pedal * 1.5, 0.03, start + 0.13, 2.45, pan, pedal * 1.498, 0.42);
+  }
   notes.forEach((midi, i) => {
     const time = start + (i * spacing + (i >= 2 ? 0.22 : 0)) * pace;
     const f = hz(midi);
@@ -87,13 +114,15 @@ export function createScore() {
     bar = 0,
     pulse = 0,
     tension = 0,
-    previousPlace;
+    previousPlace,
+    travelPace = 4.45;
   return function update(world, time, voice) {
     const p = world.player;
     if (previousPlayer !== p || time < lastTime || time - lastTime > 3) {
       previousPlayer = p;
       previousPlace = null;
       bar = pulse = tension = 0;
+      travelPace = 4.45;
       nextPhrase = time + 1.4;
       nextPulse = time;
     }
@@ -101,38 +130,41 @@ export function createScore() {
     lastTime = time;
     if (world.ending || world.sequence || world.dialogue?.kind === 'banquet') return;
     const nearWell = Math.hypot(p.x + 155, p.z - 850) < 59;
-    const place =
-      p.z > 1465 && Math.abs(p.x - 30) < 25
-        ? 'hall'
-        : p.z > 1230
-          ? 'gate'
-          : nearWell || Math.abs(p.z - 1021) < 42
-            ? 'water'
-            : p.z > 425 && p.z < 552
-              ? 'ridge'
-              : world.greeted && world.actors[0]?.alive && Math.hypot(p.x, p.z - 9) < 28
-                ? 'witch'
-                : 'forest';
+    const place = insideHall(p.x, p.z)
+      ? 'hall'
+      : p.z > 1230
+        ? 'gate'
+        : nearWell || Math.abs(p.z - 1021) < 42
+          ? 'water'
+          : p.z > 425 && p.z < 552
+            ? 'ridge'
+            : world.greeted && world.actors[0]?.alive && Math.hypot(p.x, p.z - 9) < 28
+              ? 'witch'
+              : 'forest';
     if (previousPlace && previousPlace !== place) {
       bar = 0;
       nextPhrase = Math.min(nextPhrase, time + 0.65);
     }
     previousPlace = place;
     let danger = 0;
+    const shelter = isSheltered(p.x, p.z);
     for (const actor of world.actors) {
-      if (!actor.alive || !actor.alerted) continue;
+      if (shelter || !actor.alive || !actor.alerted) continue;
       const d = Math.hypot(actor.x - p.x, actor.z - p.z);
       danger = Math.max(danger, clamp(1 - d / 55), actor.windupUntil > world.elapsed ? 0.96 : 0);
     }
     // Lead compares the time left with a traversable-road pace. It changes when
     // the hero hesitates or makes up ground, even in the same part of the map.
-    const raceClock = Math.max(0, world.elapsed - (world.raceGrace || 0));
-    const timeLeft = 395 - raceClock;
-    const lead = timeLeft - (Math.hypot(p.x - 30, p.z - 1435) / 4.5 + (p.z < 1010 ? 9 : 0));
+    if (p.speed > 1)
+      travelPace += (Math.min(5.25, Math.max(3.65, p.speed)) - travelPace) * (1 - Math.exp(-dt / 8));
+    const lead = raceMargin(world, travelPace);
     const race =
-      world.gateCrossed || world.gateClosedAt != null || world.route === 'wander'
+      world.gateCrossed ||
+      world.gateClosedAt != null ||
+      world.route === 'wander' ||
+      world.route === 'undecided'
         ? 0
-        : clamp((95 - lead) / 95) * clamp(raceClock / 120);
+        : clamp((80 - lead) / 92);
     const target = Math.max(danger, race * 0.87);
     tension += (target - tension) * (1 - Math.exp(-dt / (target > tension ? 0.65 : 3.3)));
     if (tension > 0.16 && time >= nextPulse) {
@@ -140,7 +172,8 @@ export function createScore() {
       const level = 0.024 + 0.047 * tension;
       voice('sine', bass, level, time, 0.39, 0, bass * 0.94, 0.026);
       // An audible wooden partial carries the rhythm on small mono speakers.
-      voice('triangle', bass * 3, 0.48 * level, time, 0.18, 0.13, bass * 2.93);
+      voice('triangle', bass * 3, 0.54 * level, time, 0.24, 0.13, bass * 2.93);
+      voice('sine', bass * 6, 0.91 * level, time + 0.005, 0.31, -0.09, bass * 5.78, 0.013);
       if (pulse++ % 3 === 2) voice('triangle', bass * 1.5, level * 0.53, time + 0.17, 0.35, -0.22);
       nextPulse = time + 1.72 - tension * 1.07;
     }

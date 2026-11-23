@@ -58,11 +58,15 @@ const journalEntries = {
   ],
   ridge: [
     'The western host',
-    'From high ground the moving figures resolve into ranks. Their heads turn together at the sound of the keep.',
+    'Across the western valley a dark rank moves, then another. From high ground you can follow the lines along the road to Castle Xero.',
   ],
   procession: [
-    'The bowls',
-    'One of the dead carries a wooden bowl. At the sound of the bell he turns towards the keep.',
+    'The procession',
+    'The dead walk shoulder to shoulder. From the edge of the road I can see the seams in their worn coats.',
+  ],
+  bowl: [
+    'The wooden bowl',
+    'One of the dead holds a wooden bowl against its ribs. It carries the bowl along the road to the keep.',
   ],
   register: [
     'The keeper’s register',
@@ -123,6 +127,10 @@ export function storyFloor(x, z) {
   return null;
 }
 export function storyPassable(x, z, w, fromX = x, fromZ = z) {
+  if (between(x, 27.29, 34.14)) {
+    const screenZ = 1519.82 - Math.max(0, 29.52 - x, x - 31.91) * 0.36;
+    if (Math.abs(z - screenZ) < 0.29) return false;
+  }
   if (z < 1438 || z > 1476 || x < 7 || x > 46) return true;
   if (between(x, 38.6, 41.4) && between(z, 1472.6, 1474.35)) return false;
   const fy = storyFloor(fromX, fromZ) ?? 0,
@@ -243,7 +251,8 @@ const mealBeats = [
 export function storyTick(w, dt) {
   remember(w, 'memory');
   if (w.greeted) storyBeat(w, 'witch');
-  for (const key of ['fork', 'ridge', 'procession']) if (w.milestones[key]) remember(w, key);
+  for (const key of ['fork', 'ridge', 'procession', 'bowl'])
+    if (w.milestones[key] && remember(w, key) && key === 'fork') signal(w, 'shackle', 'milepost', 29, 220);
   if (w.route === 'guided' || w.route === 'wander') storyBeat(w, w.route);
   if (w.hasMap) storyBeat(w, 'satchel');
   if (w.antidote) storyBeat(w, 'spring');
@@ -269,12 +278,14 @@ export function storyHandPose(w) {
     t = q?.progress || 0;
   if (q?.id === 'feast')
     return {
+      physical: true,
       reach: smooth(t / 0.26) * (1 - smooth((t - 0.63) / 0.28) * 0.6),
       clench: smooth((t - 0.36) / 0.16),
       ribbon: 1,
     };
   if (q?.id === 'saved')
     return {
+      physical: true,
       reach: Math.max(Math.sin(Math.PI * clamp(t / 0.4)), smooth((t - 0.77) / 0.19)),
       clench: 1 - smooth((t - 0.18) / 0.15),
       ribbon: 1,
@@ -338,12 +349,24 @@ export function stageStoryFate(w, dt, input = {}) {
     if (q.id === 'feast') {
       const reach = smooth((t - 0.27) / 0.27),
         fall = w.reducedMotion ? 0 : smooth((t - 0.57) / 0.27);
-      xero.x = mix(xero.homeX, sx + Math.sin(yaw) * 0.75, reach);
-      xero.z = mix(xero.homeZ, sz + Math.cos(yaw) * 0.75, reach);
+      const contactYaw = w.reducedMotion ? q.yaw : yaw;
+      xero.x = mix(xero.homeX, sx + Math.sin(contactYaw) * (0.75 - 0.34 * fall), reach);
+      xero.z = mix(xero.homeZ, sz + Math.cos(contactYaw) * (0.75 - 0.34 * fall), reach);
       xero.heading = yaw + Math.PI;
       p.x = sx - Math.sin(yaw) * fall * 0.34;
       p.z = sz - Math.cos(yaw) * fall * 0.34;
       if (!w.reducedMotion) p.pitch -= fall * 0.58;
+      if (t > 0.365)
+        once(q, 'looseCuff', () => {
+          w.tetherRelease = {
+            at: w.elapsed,
+            x: xero.x - 0.2 * Math.cos(p.yaw),
+            height: 1.22,
+            z: xero.z + 0.2 * Math.sin(p.yaw),
+            cause: 'slip',
+          };
+          signal(w, 'shackle', 'slip', xero.x, xero.z);
+        });
       if (t > 0.49)
         once(q, 'contact', () => {
           signal(w, 'hurt', 'bite', p.x, p.z);
@@ -352,6 +375,13 @@ export function stageStoryFate(w, dt, input = {}) {
     } else {
       if (t > 0.19)
         once(q, 'cure', () => {
+          w.tetherRelease = {
+            at: w.elapsed,
+            x: xero.x - 0.2 * Math.cos(p.yaw),
+            height: 1.32,
+            z: xero.z + 0.2 * Math.sin(p.yaw),
+            cause: 'release',
+          };
           w.ropeFallen = true;
           w.dispersalAt = w.elapsed;
           xero.cured = true;
@@ -361,6 +391,16 @@ export function stageStoryFate(w, dt, input = {}) {
         once(q, 'release', () => {
           signal(w, 'release', 'hart', 31.3, 1517);
           notice(w, 'She opens her fingers. The stag gathers its legs and climbs down.', 3);
+        });
+      const approach = smooth((t - 0.55) / 0.215),
+        contactYaw = w.reducedMotion ? q.yaw : yaw;
+      xero.x = mix(xero.homeX, sx + Math.sin(contactYaw) * 0.98, approach);
+      xero.z = mix(xero.homeZ, sz + Math.cos(contactYaw) * 0.98, approach);
+      if (!w.reducedMotion) p.pitch -= 0.14 * smooth((t - 0.64) / 0.23);
+      if (t > 0.9)
+        once(q, 'joined', () => {
+          signal(w, 'touch', 'hand', xero.x, xero.z);
+          notice(w, 'Her fingers meet yours beneath the blue ribbon.', 2.4);
         });
       if (t > 0.72)
         once(q, 'offer', () => {

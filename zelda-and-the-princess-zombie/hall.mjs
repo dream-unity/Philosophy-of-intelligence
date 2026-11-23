@@ -106,55 +106,6 @@ export function bellAnchorOffset(angle) {
 }
 export function makeHallProps(m, g) {
   const { box, beam, rings, quad } = g;
-  // A narrow woven runner joins the arch to the banquet. Its gold border and
-  // repeating medallions are laid on the floor in metres, with normal parallax.
-  for (let z = south + 0.3, course = 0; z < 1514.3; z += 2, course++) {
-    const h = floor + 0.021,
-      n = z + 2,
-      x = 30;
-    quad(
-      m,
-      [x - 1.17, h, z],
-      [x - 1.17, h, n],
-      [x + 1.17, h, n],
-      [x + 1.17, h, z],
-      course % 2 ? '354453' : '374655',
-      false
-    );
-    for (const side of [-1, 1]) {
-      const edge = x + side * 1.055;
-      quad(
-        m,
-        [edge - 0.025, h + 0.006, z],
-        [edge - 0.025, h + 0.006, n],
-        [edge + 0.025, h + 0.006, n],
-        [edge + 0.025, h + 0.006, z],
-        'a38e61',
-        false
-      );
-    }
-    if (course % 2 === 0) {
-      const mid = z + 1;
-      quad(
-        m,
-        [x - 0.29, h + 0.009, mid],
-        [x, h + 0.009, mid + 0.36],
-        [x + 0.29, h + 0.009, mid],
-        [x, h + 0.009, mid - 0.36],
-        '8d7e56',
-        false
-      );
-      quad(
-        m,
-        [x - 0.18, h + 0.011, mid],
-        [x, h + 0.011, mid + 0.22],
-        [x + 0.18, h + 0.011, mid],
-        [x, h + 0.011, mid - 0.22],
-        '46505a',
-        false
-      );
-    }
-  }
   // Black-oak trestle table beside Xero, with silver trenchers and a blue runner.
   const tx = 31.66,
     tz = 1517.03;
@@ -341,6 +292,10 @@ export function hallSurfaceVertices() {
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const mirror = (n) => 1 - Math.abs((((n % 2) + 2) % 2) - 1);
 export function createHallPainter() {
+  const runner = new Image();
+  runner.decoding = 'async';
+  runner.src = new URL('./hall-runner.webp', import.meta.url).href;
+  let weave = null;
   const image = new Image();
   image.decoding = 'async';
   let source = null,
@@ -366,6 +321,9 @@ export function createHallPainter() {
     try {
       const context = sheet.getContext('2d', { willReadFrequently: true });
       context.drawImage(image, 0, 0);
+      // Candlelit faces and the living stag remain the brightest low-level forms.
+      context.fillStyle = 'rgba(20,17,30,.22)';
+      context.fillRect(0, 0, sheet.width, sheet.height);
       source = new Uint32Array(context.getImageData(0, 0, sheet.width, sheet.height).data.buffer);
       textureWidth = sheet.width;
       textureHeight = sheet.height;
@@ -379,8 +337,16 @@ export function createHallPainter() {
   function draw(ctx, W, H, world, ray, queue) {
     const p = world.player;
     if (!insideHall(p.x, p.z) || !unpack()) return false;
+    if (!weave && runner.complete && runner.naturalWidth) {
+      const tile = document.createElement('canvas');
+      tile.width = tile.height = 256;
+      const c = tile.getContext('2d', { willReadFrequently: true });
+      c.drawImage(runner, 0, 0, 256, 256);
+      weave = new Uint32Array(c.getImageData(0, 0, 256, 256).data.buffer);
+      lastView = [];
+    }
     const target = world.renderQuality === 'low' ? 0.58 : world.renderQuality === 'high' ? 1 : quality;
-    const scale = Math.min(1, 568 / W, 332 / H) * target,
+    const scale = Math.min(1, 505 / W, 286 / H) * target,
       sw = Math.max(2, Math.round(W * scale)),
       sh = Math.max(2, Math.round(H * scale));
     const f = H * 0.685;
@@ -415,7 +381,16 @@ export function createHallPainter() {
           const zHit = ((dz < 0 ? south : north) - p.z) / dz;
           let a, b, crop;
           if (yHit <= xHit && yHit <= zHit) {
-            a = mirror((p.x + dx * yHit - west) / 11);
+            const floorX = p.x + dx * yHit,
+              floorZ = p.z + dz * yHit;
+            if (weave && ry < 0 && Math.abs(floorX - 30) < 1.17 && floorZ > 1466.3 && floorZ < 1514.3) {
+              output[i] =
+                weave[
+                  ((((floorZ - 1466.3) * 109.4) | 0) & 255) * 256 + ((((floorX - 28.83) * 109.4) | 0) & 255)
+                ];
+              continue;
+            }
+            a = mirror((floorX - west) / 11);
             b = mirror((p.z + dz * yHit - south) / 8);
             crop = ry < 0 ? floorUV : roofUV;
           } else if (xHit < zHit) {
@@ -491,6 +466,7 @@ export function createHallPainter() {
   function dispose() {
     image.onload = null;
     source = null;
+    weave = null;
     canvas = null;
     pixels = null;
     output = null;

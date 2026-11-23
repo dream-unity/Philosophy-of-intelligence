@@ -2,7 +2,7 @@ import { createScore, playEnding } from './sound-score.mjs';
 import { hordePosition, HORDE_COUNT } from './world.mjs';
 import { insideHall } from './hall.mjs';
 import { footing, fordStoneX } from './travel.mjs';
-import { walkSound, creatureSound, useVial, metalContact } from './sound-foley.mjs';
+import { walkSound, scuffSound, breathSound, creatureSound, useVial, metalContact } from './sound-foley.mjs';
 
 const bellPitch = { low: 207.65, mid: 246.94, high: 293.66 };
 const tower = { x: 30.46, z: 1516.08 };
@@ -26,8 +26,11 @@ export function createAudio() {
     lastT,
     stride = 0,
     step = 0,
-    previousSpeed = 0,
-    previousYaw = 0;
+    recentSpeed = 0,
+    turnHeading = 0,
+    headingAt = 0,
+    nextScuff = 0,
+    exertion = 0;
   let nextMix = 0,
     nextBird = 0,
     nextBreath = 0,
@@ -171,6 +174,7 @@ export function createAudio() {
       const value = values?.[name];
       if (!Number.isFinite(value)) continue;
       mix[name] = clamp(value);
+      channels[name]?.gain.cancelScheduledValues(ctx.currentTime);
       channels[name]?.gain.setTargetAtTime(mix[name], ctx.currentTime, 0.035);
     }
   }
@@ -187,7 +191,7 @@ export function createAudio() {
       lastT = undefined;
       lastX = undefined;
       lastZ = undefined;
-      stride = previousSpeed = 0;
+      stride = recentSpeed = exertion = 0;
     }
   }
   function unlock() {
@@ -207,13 +211,13 @@ export function createAudio() {
     enabled = !!value;
     applyEnabled();
   }
-  function acoustic(source, reach = 14, floor = 0) {
+  function acoustic(source, reach = 14, floor = 0, openTower = false) {
     const p = latest?.player;
     if (!p || !source || !Number.isFinite(source.x) || !Number.isFinite(source.z))
       return { pan: 0, gain: 1, brightness: 1, d: 0 };
     const d = distance(source, p);
     const angle = Math.atan2(source.x - p.x, source.z - p.z) - p.yaw;
-    const exterior = insideHall(p.x, p.z) !== insideHall(source.x, source.z);
+    const exterior = !openTower && insideHall(p.x, p.z) !== insideHall(source.x, source.z);
     const byDoor = Math.hypot(p.x - 30, p.z - 1466);
     const throughDoor = exterior ? 0.28 + 0.5 / (1 + byDoor / 8) : 1;
     return {
@@ -239,15 +243,49 @@ export function createAudio() {
     return best;
   }
   function towerBell(t, tone, src = tower) {
-    const at = acoustic(src, 262, 0.16);
+    const at = acoustic(src, 262, 0.16, true);
     effects.bell(bellPitch[tone], t, 0.255 * at.gain, 2.47, at.pan, at.brightness);
+  }
+  function pullBell(t, tone) {
+    towerBell(t, tone);
+    if (!latest?.ropeFallen && latest?.player && distance(latest.player, tower) < 35) {
+      const at = acoustic(tower, 10);
+      effects.noise(0.24 * at.gain, 1010, 0.18, t, at.pan, 0.052);
+      effects.note('triangle', 277, 0.035 * at.gain, t + 0.037, 0.115, at.pan, 179, 0.03);
+    }
+  }
+  async function preview(id) {
+    if (!['step', 'wolf', 'bell'].includes(id) || disposed || !enabled || mix.effects <= 0) return false;
+    unlock();
+    if (!ctx || !effects) return false;
+    try {
+      if (ctx.state !== 'running') await ctx.resume();
+    } catch {
+      return false;
+    }
+    if (disposed || !enabled || ctx.state !== 'running') return false;
+    const t = ctx.currentTime + 0.07;
+    if (id === 'step') {
+      walkSound(effects, 'leaves', t, -0.12, 3.95);
+      walkSound(effects, 'leaves', t + 0.43, 0.12, 3.95);
+      scuffSound(effects, 'leaves', t + 0.73, -0.12, 3.95);
+    } else if (id === 'wolf') creatureSound(effects, 'wolf', t, -0.45, 0.8, true);
+    else effects.bell(bellPitch.low, t, 0.2, 2.47, 0.08, 0.88);
+    return true;
   }
   function hostAnswer(t) {
     if (!latest) return;
-    for (const [i, fraction] of [0.02, 0.31, 0.65, 0.93].entries()) {
+    const head = hordePosition(latest, 0);
+    const arrivals = [0.02, 0.31, 0.65, 0.93].map((fraction, i) => {
       const pos = hordePosition(latest, Math.floor(HORDE_COUNT * fraction));
-      const at = acoustic(pos, 146, 0.19),
-        when = t + i * 0.19;
+      const at = acoustic(pos, 146, 0.19);
+      // One rank takes up another's cry. Account for the different sound paths
+      // to a listener standing at either end of a stretched-out column.
+      return { at, delay: 0.12 * i + distance(head, pos) / 225 + at.d / 343 };
+    });
+    const first = Math.min(...arrivals.map((v) => v.delay));
+    for (const [i, { at, delay }] of arrivals.entries()) {
+      const when = t + delay - first;
       const level = at.gain * (i ? 0.81 : 1.06);
       ambience.noise(0.31 * level, 390 + i * 52 + at.brightness * 118, 1.3 + i * 0.13, when, at.pan, 0.24);
       ambience.note('triangle', 104 + i * 28, 0.11 * level, when + 0.06, 1.6, at.pan, 78 + i * 16, 0.28);
@@ -264,7 +302,7 @@ export function createAudio() {
       pan = at.pan;
     switch (name) {
       case 'bell':
-        ['low', 'high', 'mid'].forEach((n, i) => towerBell(t + i * 0.46, n));
+        ['low', 'high', 'mid'].forEach((n, i) => pullBell(t + i * 0.46, n));
         break;
       case 'wristbell':
         if (bellPitch[kind]) towerBell(t, kind, namedSource || tower);
@@ -295,12 +333,25 @@ export function createAudio() {
       }
       case 'dialogue':
         if (latest?.dialogue?.kind === 'witch') {
+          const near = acoustic(nearest('witch'), 6);
+          // Lantern hook, then the ember phials knocked together in the witch's palm.
+          effects.noise(0.1 * near.gain, 940, 0.17, t, near.pan, 0.033);
+          for (const [i, f] of [1510, 1960, 1700].entries())
+            effects.bell(f, t + 0.36 + i * 0.12, 0.055 * near.gain, 0.21, near.pan, 0.55);
           music.note('triangle', 415.3, 0.039, t + 0.11, 1.03, -0.12, 413.4, 0.14);
           music.note('triangle', 587.33, 0.029, t + 0.68, 0.78, 0.07, 584.7, 0.13);
           music.note('sine', 493.88, 0.041, t + 1.21, 1.46, -0.03, 492.3, 0.17);
         }
         break;
       case 'telegraph':
+        // Make space for the wind-up without changing the user's mix after the
+        // attack. A new slider gesture cancels these scheduled returns.
+        for (const group of ['music', 'ambience']) {
+          const gain = channels[group].gain;
+          gain.cancelScheduledValues(t);
+          gain.setTargetAtTime(mix[group] * (1 - 0.58 * mix.effects), t, 0.025);
+          gain.setTargetAtTime(mix[group], t + (kind === 'dragon' ? 0.76 : 0.43), 0.19);
+        }
         creatureSound(effects, kind, t, pan, g, true);
         break;
       case 'enemy-breath':
@@ -319,19 +370,32 @@ export function createAudio() {
       case 'impact':
         metalContact(effects, kind, t, pan, g);
         break;
+      case 'land':
+        walkSound(effects, kind || latest?.player?.surface || 'grass', t, pan, 6.4);
+        effects.noise(0.21 * g, 720, 0.17, t + 0.035, pan, 0.017);
+        break;
+      case 'bough':
+        metalContact(effects, 'wood', t, pan, g);
+        effects.noise(0.43 * g, 480, 0.38, t + 0.055, pan, 0.064);
+        break;
       case 'guard':
         effects.noise(0.19, 1490, 0.16, t, 0.12, 0.018);
         effects.note('triangle', 678, 0.045, t + 0.036, 0.17, -0.04, 625);
         break;
       case 'block':
         metalContact(effects, 'metal', t, pan, g);
+        if (kind === 'parry') effects.bell(984, t + 0.065, 0.113 * g, 0.48, pan);
         break;
       case 'hurt':
         effects.noise(0.63, 570, 0.29, t, pan);
         effects.note('triangle', 115, 0.15, t, 0.32, pan, 45);
         break;
+      case 'throw':
+        effects.noise(0.21 * g, 1980, 0.13, t, pan, 0.026);
+        effects.bell(1310, t + 0.025, 0.035 * g, 0.14, pan);
+        break;
       case 'potion':
-        useVial(effects, kind || (latest?.sequence?.id === 'bound' ? 'drink' : 'shatter'), t, pan);
+        useVial(effects, kind || (latest?.sequence?.id === 'bound' ? 'drink' : 'shatter'), t, pan, g);
         break;
       case 'loot':
         effects.noise(0.18, 1790, 0.22, t, 0.16);
@@ -406,13 +470,45 @@ export function createAudio() {
       case 'reed':
       case 'release':
         effects.noise(0.22 * g, 1670, 0.41, t, pan);
-        if (name === 'release') effects.noise(0.31 * g, 800, 0.45, t + 0.23, pan, 0.07);
+        if (name === 'release') {
+          effects.noise(0.31 * g, 800, 0.45, t + 0.23, pan, 0.07);
+          const duration = latest?.sequence?.duration || 6;
+          // Hooves gather on the board, land on tile, then recede down the aisle.
+          for (const [u, x, z, m] of [
+            [0.48, 31.4, 1516.7, 'wood'],
+            [0.62, 31.7, 1515.6, 'wood'],
+            [0.73, 31.8, 1514.8, 'stone'],
+            [0.78, 32.1, 1513.4, 'stone'],
+            [0.85, 32.8, 1508, 'stone'],
+            [0.93, 33.5, 1503, 'stone'],
+          ]) {
+            const pos = acoustic({ x, z }, 9),
+              when = t + (u - 0.37) * duration;
+            effects.note(
+              'triangle',
+              m === 'wood' ? 216 : 318,
+              0.11 * pos.gain,
+              when,
+              0.11,
+              pos.pan,
+              154,
+              0.004
+            );
+            effects.noise(0.23 * pos.gain, m === 'wood' ? 890 : 1880, 0.095, when, pos.pan, 0.006);
+          }
+        }
         break;
       case 'gallery':
         if (kind === 'wrong') metalContact(effects, 'wood', t, pan, g);
         else effects.bell(kind === 'memory' ? 246.94 : 311.1, t, 0.13 * g, 1.4, pan);
         break;
       case 'recognition':
+        if (kind === 'hand') {
+          effects.noise(0.12 * g, 1370, 0.21, t, pan, 0.07);
+          music.note('sine', 493.88, 0.039, t + 0.04, 1.35, pan);
+          break;
+        }
+        for (const delay of [0, 0.19, 0.53]) effects.noise(0.14 * g, 1170, 0.065, t + delay, pan, 0.007);
         music.note('sine', 329.63, 0.064, t, 1.7, 0.13);
         music.note('sine', 415.3, 0.052, t + 0.45, 1.5, -0.13);
         break;
@@ -436,9 +532,61 @@ export function createAudio() {
   function surfaceAt(world) {
     const p = world.player;
     const surface = p.surface || footing(world, p.x, p.z);
-    if (surface === 'water' && Math.abs(p.x - fordStoneX(clamp((p.z - 1008) / 1.76, 0, 15))) < 1.05)
+    if (
+      (surface === 'water' || surface === 'stone') &&
+      p.z >= 1007 &&
+      p.z <= 1035 &&
+      Math.abs(p.x - fordStoneX(clamp((p.z - 1008) / 1.76, 0, 15))) < 1.05
+    )
       return 'wetstone';
     return surface;
+  }
+  function updateFootwork(world, t) {
+    const p = world.player,
+      now = world.elapsed;
+    // The simulation steps at 30 Hz. An intervening display frame has no
+    // movement sample. Treating it as a stop causes a scuff every other frame.
+    if (now === lastT) return;
+    const dt = now - lastT,
+      dx = p.x - lastX,
+      dz = p.z - lastZ,
+      d = Math.hypot(dx, dz);
+    lastT = now;
+    lastX = p.x;
+    lastZ = p.z;
+    if (!(dt > 0 && dt < 0.7 && d < 8) || world.ending || world.sequence || world.dialogue) {
+      stride = recentSpeed = exertion = 0;
+      return;
+    }
+    const speed = d / dt,
+      surface = surfaceAt(world);
+    const airborne = p.airborne || (p.verticalSpeed || 0) < -0.7;
+    if (!airborne) stride += d;
+    const strideLength = clamp(0.87 + speed * 0.16, 0.87, 2.05);
+    if (stride >= strideLength) {
+      stride %= strideLength;
+      walkSound(effects, surface, t, step++ % 2 ? -0.12 : 0.12, speed);
+    }
+    const heading = d > 0.001 ? Math.atan2(dx, dz) : turnHeading;
+    const corner = speed > 2.1 && Math.cos(heading - turnHeading) < 0.69;
+    if (!airborne && now >= nextScuff && (corner || (speed < 1.3 && recentSpeed > 2.1))) {
+      scuffSound(effects, surface, t, step % 2 ? -0.11 : 0.11, recentSpeed);
+      nextScuff = now + 0.48;
+      recentSpeed = 0;
+    }
+    if (corner || now - headingAt > 0.28 || speed < 1.5) {
+      turnHeading = heading;
+      headingAt = now;
+    }
+    recentSpeed = Math.max(speed, recentSpeed * Math.exp(-dt * 1.7));
+    const stamina = clamp(p.stamina ?? 1),
+      output = clamp((speed - 4.1) / 2.1);
+    const work = Math.max(output * 0.86, 1 - stamina);
+    exertion += (work - exertion) * (1 - Math.exp(-dt / (work > exertion ? 0.95 : 3)));
+    if (exertion > 0.23 && t >= nextBreath) {
+      breathSound(effects, t, exertion, speed < 2);
+      nextBreath = t + 2.05 - exertion * 0.94;
+    }
   }
   function update(world) {
     latest = world;
@@ -449,33 +597,13 @@ export function createAudio() {
       lastPlayer = p;
       lastT = undefined;
       lastX = lastZ = undefined;
-      previousYaw = p.yaw;
-      step = stride = previousSpeed = rank = 0;
+      turnHeading = p.yaw;
+      headingAt = nextScuff = world.elapsed;
+      step = stride = exertion = recentSpeed = rank = 0;
       nextCreature = nextRank = nextBird = nextWater = nextMix = 0;
       nextBreath = t + 1;
     }
-    const dt = lastT === undefined ? 0 : t - lastT;
-    const d = lastX === undefined ? 0 : Math.hypot(p.x - lastX, p.z - lastZ);
-    const speed = dt > 0 && dt < 0.7 && d < 8 ? d / dt : 0;
-    if (dt > 0 && dt < 0.7 && d < 8 && !world.ending) stride += d;
-    const strideLength = clamp(0.87 + speed * 0.16, 0.87, 2.05);
-    if (stride >= strideLength) {
-      stride %= strideLength;
-      walkSound(effects, surfaceAt(world), t, step++ % 2 ? -0.12 : 0.12, speed);
-    }
-    if (previousSpeed > 5 && (speed < 1.2 || Math.cos(p.yaw - previousYaw) < 0.4)) {
-      effects.noise(0.26, 1240, 0.22, t, 0.12);
-      if (t >= nextBreath - 0.5) effects.noise(0.18, 690, 0.48, t + 0.05, -0.08, 0.11);
-    }
-    if (speed > 5 && t >= nextBreath) {
-      effects.noise(0.17, 735, 0.36, t, 0.02, 0.065);
-      nextBreath = t + 1.32;
-    }
-    previousSpeed = speed;
-    previousYaw = p.yaw;
-    lastT = t;
-    lastX = p.x;
-    lastZ = p.z;
+    updateFootwork(world, t);
     if (t < nextMix) return;
     nextMix = t + 0.22;
     score(world, t, music.note);
@@ -534,11 +662,12 @@ export function createAudio() {
     }
   }
   function dispose() {
+    if (disposed) return;
     disposed = true;
     clearTimeout(suspendTimer);
     if (!ctx) return;
     air?.stop();
     ctx.close().catch(() => {});
   }
-  return { unlock, setEnabled, setMix, update, cue, dispose };
+  return { unlock, setEnabled, setMix, update, cue, preview, dispose };
 }

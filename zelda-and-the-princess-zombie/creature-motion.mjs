@@ -202,6 +202,7 @@ export function actorWarp(a, time, u, v) {
     v + 0.024 * leg * Math.sin(phase * 1.08 + u * 7) + wind * (1 - v) * 0.098 - impact * head * 0.072,
   ];
 }
+const views = new WeakMap();
 export function creaturePose(a, t, p) {
   const dragon = a.type === 'dragon',
     h = dragon ? 2.85 : a.type === 'troll' ? 3.33 : 1.65;
@@ -211,16 +212,28 @@ export function creaturePose(a, t, p) {
     heading = a.attackYaw ?? a.heading ?? 0;
   const side = Math.sin(heading) * Math.cos(p.yaw) - Math.cos(heading) * Math.sin(p.yaw);
   const toward = (-dx * Math.sin(heading) - dz * Math.cos(heading)) / d;
+  // Adjacent viewing sectors overlap slightly. Standing at a sector boundary
+  // will never flicker from the animal's face to its flank on successive frames.
+  const prior = views.get(a),
+    k = Math.abs(toward),
+    threshold = prior === 'side' ? 0.73 : 0.63;
+  const view = k < threshold ? 'side' : toward >= 0 ? 'front' : 'rear';
+  views.set(a, view);
   return {
     x: a.x,
     z: a.z,
+    view,
     dy: dragon ? (a.airHeight ?? 3.25) : 0,
     h,
-    w: (dragon ? 1.6 : a.type === 'wolf' ? 1.25 : 0.97) * (0.77 + 0.23 * Math.abs(side)),
+    w:
+      view === 'side'
+        ? (dragon ? 1.6 : a.type === 'wolf' ? 1.25 : 0.97) * (0.84 + 0.16 * Math.abs(side))
+        : dragon
+          ? 1.7
+          : 1,
     flip: side < 0,
     seed: 1,
     rig: a,
-    profile: Math.abs(toward) < 0.91 || d > 12,
     tilt: 0,
   };
 }

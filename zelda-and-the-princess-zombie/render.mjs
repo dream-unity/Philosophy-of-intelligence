@@ -1,3 +1,12 @@
+import { castleShelf, createCastleView } from './castle-view.mjs';
+import { createRiverView } from './river-view.mjs';
+import { marcherFrame } from './marcher-art.mjs';
+import { createProcessionView, queueProcession } from './procession-view.mjs';
+import { makeRidgeLandscape } from './ridge-landscape.mjs';
+import { lightShader, sceneLights, bindLamps, illuminatedSprite } from './scene-light.mjs';
+import { bladeCoordinates, bladeFallbackGeometry } from './swordplay.mjs';
+import { storyHands, paintStoryPortrait } from './story-art.mjs';
+import { paintTransientMesh } from './software-mesh.mjs';
 import { makeFortressDetail, makeFallFoam } from './fortress.mjs';
 import {
   storyStatic,
@@ -529,42 +538,6 @@ function makeDragon(m) {
   beam(m, [0.12, 0.24, 1.9], [0.48, 0.52, 3.25], 0.17, 0.07, c);
   beam(m, [0.48, 0.52, 3.25], [1.06, 0.87, 3.79], 0.07, 0.003, c);
 }
-function makeBlade(m) {
-  // View-space with +Z pointing away from the player. Build a faceted, asymmetrical
-  // silhouette so the blade catches a different light on either side of its ridge.
-  const p = (u, v, z) => [0.245 + u + 0.13 * v, -0.256 + v, z + 0.15 * v];
-  beam(m, p(0, -0.18, 0.4), p(0, -0.007, 0.4), 0.024, 0.024, '524b4c', 8);
-  for (let i = 0; i < 6; i++)
-    beam(m, p(0, -0.17 + i * 0.024, 0.4), p(0, -0.161 + i * 0.024, 0.4), 0.026, 0.026, '928262', 7);
-  const a = p(-0.087, 0.04, 0.394),
-    b = p(-0.039, 0.026, 0.4),
-    c = p(0, 0.037, 0.4),
-    d = p(0.053, 0.027, 0.4),
-    e = p(0.1, 0.06, 0.402);
-  beam(m, a, b, 0.009, 0.013, 'c9ad6a');
-  beam(m, b, c, 0.013, 0.019, 'd7b975');
-  beam(m, c, d, 0.019, 0.013, 'c2a264');
-  beam(m, d, e, 0.013, 0.007, 'ab894d');
-  const q = [
-      p(0, 0.027, 0.4),
-      p(-0.025, 0.063, 0.408),
-      p(-0.025, 0.23, 0.46),
-      p(0, 0.4, 0.57),
-      p(0.023, 0.23, 0.46),
-      p(0.027, 0.063, 0.408),
-    ],
-    ridge = p(0, 0.125, 0.38);
-  tri(m, q[0], q[1], ridge, 'b7c9c4');
-  tri(m, q[1], q[2], ridge, 'c5d6cf');
-  tri(m, q[2], q[3], ridge, 'd7ded2');
-  tri(m, ridge, q[3], q[4], '899caa');
-  tri(m, ridge, q[4], q[5], '81959b');
-  tri(m, ridge, q[5], q[0], '91a49f');
-  stone(m, 0.229, -0.37, 0.37, 0.054, 0.113, 0.053, '806657', 0.26);
-  beam(m, [0.218, -0.345, 0.362], [0.264, -0.46, 0.3], 0.052, 0.068, '536454', 7);
-  for (let i = 0; i < 3; i++)
-    beam(m, [0.237, -0.32 - i * 0.021, 0.357], [0.264, -0.32 - i * 0.021, 0.38], 0.012, 0.012, 'a99170');
-}
 function makeBridge(m) {
   const y = Math.max(ground(30, 1007), ground(30, 1035)) + 0.35;
   for (let i = 0; i < 24; i++) {
@@ -579,7 +552,7 @@ function makeBridge(m) {
     beam(m, [x, y + 1.58, 1007], [x, y + 1.58, 1036], 0.105, 0.105, '85755c');
   }
 }
-function castle(m) {
+function castle(m, distant = false) {
   const X = 30,
     y = ground(30, 1435) - 0.12,
     z = 1435;
@@ -588,6 +561,7 @@ function castle(m) {
     const p = (a, b) => [x + a, base + b, z];
     quad(m, p(-w / 2, 0), p(w / 2, 0), p(w / 2, h * 0.73), p(-w / 2, h * 0.73), col, false);
     tri(m, p(-w / 2, h * 0.73), p(0, h), p(w / 2, h * 0.73), col, false);
+    if (distant) return;
     box(m, x, base, z - 0.04, 0.12, h * 0.77, 0.09, '676875');
     box(m, x, base + h * 0.42, z - 0.04, w, 0.13, 0.09, '776e73');
   }
@@ -649,6 +623,7 @@ function castle(m) {
       alongX ? depth + 0.35 : width + 0.15,
       'a39b98'
     );
+    if (distant) return;
     const n = Math.max(1, Math.floor(width / 2.4));
     for (let i = 0; i < n; i++) {
       const p = -width / 2 + ((i + 0.5) * width) / n;
@@ -703,6 +678,25 @@ function castle(m) {
   window(X, y + 3, 1530.96, 7.2, 10.6, 'c294a1');
   window(20.8, y + 4, 1530.95, 2.9, 6.7, 'd1b380');
   window(39.2, y + 4, 1530.95, 2.9, 6.7, 'd1b380');
+  // Flying buttresses and copper dormers bind the lantern tower to the rear keep.
+  for (const side of [-1, 1]) {
+    tower(30 + side * 16, 1553, 3.4, 36, 15, '88858a');
+    tower(30 + side * 22, 1560, 4.1, 30, 13, '8e8b92');
+    for (let j = 0; j < 3; j++) {
+      const dx = 10 + j * 3;
+      beam(
+        m,
+        [30 + side * 7, y + 37 - j * 2.3, 1552],
+        [30 + side * dx, y + 23 - j * 2.7, 1546],
+        0.37,
+        0.69,
+        '9c9490',
+        5
+      );
+    }
+    for (let j = 0; j < 3; j++) window(30 + side * (2.5 + j * 2.7), y + 47, 1545.4, 1.55, 5.8, 'd8b18b');
+  }
+  if (distant) return;
   for (const s of [-1, 1]) {
     for (let i = 0; i < 4; i++) {
       const zz = 1455 + i * 19;
@@ -1014,6 +1008,16 @@ function makeSatchel(m) {
   beam(m, [-0.2, 0.32, 0], [0, 0.59, 0.035], 0.032, 0.032, '765d46');
   beam(m, [0, 0.59, 0.035], [0.22, 0.32, 0], 0.032, 0.032, '765d46');
 }
+function creaturePaintings(load) {
+  const bank = {};
+  for (const type of ['wolf', 'troll', 'dragon'])
+    bank[type] = {
+      side: load(type + '.webp'),
+      front: load(type + '-front.webp'),
+      rear: load(type + '-rear.webp'),
+    };
+  return bank;
+}
 function makeBerries(m) {
   for (let k = 0; k < 11; k++) {
     const a = k * 2.4,
@@ -1038,8 +1042,10 @@ function makeBerries(m) {
   }
 }
 function dynamicField(m, w, t) {
+  storyHands(m, hallTools, w, t, ground);
   fieldMotion(m, hallTools, w, t);
-  if (w.player.z > 1100 && !insideHall(w.player.x, w.player.z)) makeFallFoam(m, quad, t);
+  if (Math.hypot(w.player.x - 95, w.player.z - 1444) < 170 && !insideHall(w.player.x, w.player.z))
+    makeFallFoam(m, quad, t);
   const cords = storyTethers(w, t, ground),
     shift = bellAnchorOffset(bellSwing(w, t));
   const move = (p, k) => p.map((v, j) => v + shift[j] * k);
@@ -1079,6 +1085,7 @@ void main(){
 }`;
 const fragShader = `
 precision highp float;
+${lightShader}
 uniform float uMode,uTime,uHurt,uHex,uGold;
 uniform vec3 uCamera;uniform sampler2D uPaint,uWarm,uStone;uniform float uStoneReady;
 varying vec3 vColor,vPos;varying float vDist;
@@ -1117,10 +1124,13 @@ void main(){
    float v=dot(tex,vec3(.26,.59,.15));float detail=clamp(.65+v*.80,.70,1.26);
    c*=mix(1.,detail,(1.-smoothstep(33.,108.,vDist))*.88);
  }
- if(uMode<1.5){
-   vec2 lamp=abs(vPos.z-8.)<12.?vec2(vPos.x<0.?-6.2:6.2,vPos.x<0.?6.6:9.4):vec2(vPos.x<30.?27.35:34.5,vPos.x<30.?1516.8:1518.5);
-   float d=distance(vPos.xz,lamp);c+=vec3(.16,.062,.009)*exp(-d*.63)*(.94+.06*sin(uTime*6.));
+ if(uMode<.5&&vPos.z>1008.9&&vPos.z<1034.1&&vPos.y<.10&&vColor.g>vColor.r*1.38&&vColor.b>vColor.g*.99){
+  float w=sin(vPos.z*1.8+vPos.x*.23-uTime*1.15+sin(vPos.x*.33+uTime*.44)*1.3),r=sin(vPos.z*.84+vPos.x*.18-uTime*.65);
+  float shallow=clamp(1.-min(vPos.z-1009.,1034.-vPos.z)*.29,0.,1.);
+  c=vec3(.26,.407,.43)+vec3(.14,.06,.024)*shallow+vec3(.18)*max(0.,w+r*.34-.75)*(1.-min(.56,vDist*.001));
+  c.r+=.042+.044*sin(vPos.x*.053-vPos.z*.042);
  }
+ if(uMode<1.5)c=lightSurface(c,vPos);
  c=mix(c,c*vec3(1.08,.97,.94)+vec3(.08,.036,.0),uGold*.5);
  c=mix(c,vec3(.29,.16,.46),uHex*.20);
  c=mix(c,vec3(.47,.11,.12),uHurt*.16);
@@ -1179,15 +1189,20 @@ void main(){
  gl_FragColor=vec4(mix(vColor,vec3(.56,.64,.62),smoothstep(35.,800.,vDepth)*.65),1.);
 }`;
 const standVertex = `
-attribute vec3 aPosition,aColor;uniform vec3 uCamera;uniform vec4 uView;uniform vec2 uLens;varying vec2 uv;varying float dep;varying float opacity;
-void main(){opacity=aColor.z;vec3 v=aPosition-uCamera;float f=dot(v.xz,uView.xy);vec3 e=vec3(v.x*uView.y-v.z*uView.x,v.y*uView.w-f*uView.z,f*uView.w+v.y*uView.z);uv=aColor.xy;dep=e.z;gl_Position=vec4(e.x*uLens.x,e.y*uLens.y,e.z*1.00008-.12,e.z);}
+attribute vec3 aPosition,aColor;uniform vec3 uCamera;uniform vec4 uView;uniform vec2 uLens;varying vec3 wp;varying vec2 uv;varying float dep;varying float opacity;
+void main(){wp=aPosition;opacity=aColor.z;vec3 v=aPosition-uCamera;float f=dot(v.xz,uView.xy);vec3 e=vec3(v.x*uView.y-v.z*uView.x,v.y*uView.w-f*uView.z,f*uView.w+v.y*uView.z);uv=aColor.xy;dep=e.z;gl_Position=vec4(e.x*uLens.x,e.y*uLens.y,e.z*1.00008-.12,e.z);}
 `;
 const standFrag = `
-precision highp float;uniform sampler2D uArt;uniform float uMark;varying vec2 uv;varying float dep;varying float opacity;
+precision highp float;
+${lightShader}
+varying vec3 wp;uniform sampler2D uArt,uRunner;uniform float uMark,uHall;varying vec2 uv;varying float dep;varying float opacity;
 void main(){
  if(uMark>.5){float r=length((uv-.5)*2.);float a=(1.-smoothstep(.10,1.,r))*opacity;
  if(a<.004)discard;gl_FragColor=vec4(uMark<1.5?vec3(.075,.085,.068):uMark<2.5?vec3(1.,.62,.23):vec3(1.,.35,.08),a);return;}
- vec4 c=texture2D(uArt,uv);if(c.a<.36||fract(dot(floor(gl_FragCoord.xy),vec2(.75488,.56984)))>opacity)discard;gl_FragColor=vec4(mix(c.rgb,vec3(.59,.65,.58),min(.33,max(0.,dep)*.0019)),1.);}
+ vec4 c=texture2D(uArt,uv);
+ if(uHall>.5&&abs(wp.y-32.17)<.05&&abs(wp.x-30.)<1.17&&wp.z>1466.3&&wp.z<1514.3)
+ c=texture2D(uRunner,vec2((wp.x-28.83)/2.34,fract((wp.z-1466.3)/2.34)));
+ if(c.a<.36||fract(dot(floor(gl_FragCoord.xy),vec2(.75488,.56984)))>opacity)discard;gl_FragColor=vec4(mix(lightSurface(c.rgb,wp),vec3(.59,.65,.58),min(.33,max(0.,dep)*.0019)),1.);}
 `;
 function program(gl, vs, fs) {
   function compile(type, src) {
@@ -1234,6 +1249,13 @@ function program(gl, vs, fs) {
     'uMark',
     'uStone',
     'uStoneReady',
+    'uLamp0',
+    'uLamp1',
+    'uLamp2',
+    'uGrip',
+    'uTip',
+    'uRunner',
+    'uHall',
   ])
     uni[n] = gl.getUniformLocation(p, n);
   return { p, attrs, uni };
@@ -1318,97 +1340,6 @@ function makeTraveller(m) {
 }
 // Only the nearest visible marchers receive illustrated bodies. Stable identity,
 // height, gait phase and clothes follow a marcher as it enters or leaves this tier.
-function makeMarcherTier() {
-  const ids = new Set(),
-    selected = [],
-    candidates = [];
-  let sampled = -Infinity,
-    oldYaw = 0,
-    oldX = 0,
-    oldZ = 0,
-    oldWorld = null;
-  function update(world, aspect, time, cap = 64) {
-    const p = world.player,
-      s = Math.sin(p.yaw),
-      c = Math.cos(p.yaw),
-      slope = aspect / 1.37;
-    const refresh =
-      oldWorld !== world ||
-      time < sampled ||
-      time - sampled >= 0.16 ||
-      Math.abs(p.yaw - oldYaw) > 0.12 ||
-      Math.hypot(p.x - oldX, p.z - oldZ) > 1.6;
-    if (refresh) {
-      sampled = time;
-      oldWorld = world;
-      oldYaw = p.yaw;
-      oldX = p.x;
-      oldZ = p.z;
-      selected.length = candidates.length = 0;
-      ids.clear();
-      const head = hordePosition(world, 0),
-        tail = hordePosition(world, HORDE_COUNT - 1);
-      // Account for both ends of a snaking column as it rounds the castle.
-      if (
-        Math.hypot(head.x - p.x, head.z - p.z) < 245 ||
-        Math.hypot(tail.x - p.x, tail.z - p.z) < 245 ||
-        world.ropeFallen
-      ) {
-        for (let id = 0; id < HORDE_COUNT; id++) {
-          const at = hordePosition(world, id),
-            dx = at.x - p.x,
-            dz = at.z - p.z,
-            depth = dx * s + dz * c,
-            dist2 = dx * dx + dz * dz;
-          if (depth > 0.7 && dist2 < 70 * 70 && Math.abs(dx * c - dz * s) < depth * slope + 0.75)
-            candidates.push({ id, dist2 });
-        }
-        candidates.sort((a, b) => a.dist2 - b.dist2 || a.id - b.id);
-        // Sorting a fixed shortlist per fifth of a second bounds draw cost and
-        // leaves distant figures in the batched crowd pass.
-        for (const m of candidates.slice(0, cap)) {
-          selected.push(m.id);
-          ids.add(m.id);
-        }
-      }
-    }
-    const future = Object.create(world);
-    future.elapsed = world.elapsed + 0.65;
-    const earlier = Object.create(world);
-    earlier.elapsed = Math.max(0, world.elapsed - 0.65);
-    let bowlShown = false;
-    const poses = selected.map((id) => {
-      const cur = hordePosition(world, id),
-        a = hordePosition(earlier, id),
-        b = hordePosition(future, id);
-      const dx = b.x - a.x,
-        dz = b.z - a.z,
-        side = dx * c - dz * s;
-      let kind = 1 + ((Math.imul(id + 31, 19349663) >>> 6) % 7);
-      if (!bowlShown && (id * 43) % 107 === 0) {
-        kind = 0;
-        bowlShown = true;
-      }
-      const phase = ((id * 37) % 101) * 0.117 + world.elapsed * (2.55 + ((id * 3) % 11) * 0.054);
-      const sway = Math.sin(phase) * 0.038,
-        bob = Math.pow(Math.cos(phase), 2) * 0.042;
-      return {
-        id,
-        x: cur.x + sway * c,
-        z: cur.z - sway * s,
-        dy: bob,
-        h: 1.64 + ((id * 19) % 31) * 0.011,
-        w: 0.9 + ((id * 13) % 17) * 0.013,
-        flip: side < 0,
-        seed: id,
-        kind,
-        rig: { type: 'marcher', phase: id * 0.78 },
-      };
-    });
-    return { poses, ids };
-  }
-  return { update, ids };
-}
 function createGLRenderer(canvas, gl) {
   const programs = [
     program(
@@ -1424,7 +1355,11 @@ function createGLRenderer(canvas, gl) {
     program(
       gl,
       'attribute vec3 aPosition,aColor;varying vec2 uv;void main(){uv=aColor.xy;gl_Position=vec4(aPosition.xy,0.,1.);}',
-      'precision highp float;uniform sampler2D uArt;varying vec2 uv;void main(){vec4 c=texture2D(uArt,uv);if(c.a<.02)discard;gl_FragColor=c;}'
+      `precision highp float;
+${lightShader}
+uniform vec3 uGrip,uTip;uniform sampler2D uArt;varying vec2 uv;void main(){vec4 c=texture2D(uArt,uv);if(c.a<.02)discard;
+float t=clamp(dot(uv-vec2(.648,.721),vec2(-.598,-.666))/.801,-.31,1.);
+gl_FragColor=vec4(lightSurface(c.rgb,mix(uGrip,uTip,t)),c.a);}`
     ),
   ];
   const [solid, sky, points, stands, held] = programs;
@@ -1469,8 +1404,8 @@ function createGLRenderer(canvas, gl) {
     paintedWitch = imageTexture('witch-figure.webp'),
     paintedXero = imageTexture('xero.webp'),
     paintedSword = imageTexture('sword.webp'),
-    paintedCastle = imageTexture('castle.webp'),
     paintedHall = imageTexture('hall.webp'),
+    hallRunner = imageTexture('hall-runner.webp'),
     paintedSky = imageTexture('sky.webp');
   const groveArt = {
     oak: paintedTree,
@@ -1480,11 +1415,7 @@ function createGLRenderer(canvas, gl) {
     cedar: imageTexture('cedar.webp'),
   };
   const witchRear = imageTexture('witch-back.webp'),
-    foeArt = {
-      wolf: imageTexture('wolf.webp'),
-      troll: imageTexture('troll.webp'),
-      dragon: imageTexture('dragon.webp'),
-    };
+    foeArt = creaturePaintings(imageTexture);
   const xeroPoses = {
     offer: paintedXero,
     feeding: imageTexture('xero-feeding.webp'),
@@ -1492,7 +1423,7 @@ function createGLRenderer(canvas, gl) {
     cured: imageTexture('xero-cured.webp'),
   };
   const marcherArt = Array.from({ length: 8 }, (_, i) => imageTexture('marcher-' + (i + 1) + '.webp')),
-    marcherTier = makeMarcherTier();
+    procession = createProcessionView();
   const stoneTexture = imageTexture('castle-stone.webp');
   const stoneLoaded = stoneTexture.im.onload;
   stoneTexture.im.onload = () => {
@@ -1563,6 +1494,7 @@ function createGLRenderer(canvas, gl) {
     paintedHall: makeBuffer(hallSurfaceVertices()),
     pineProxy: model((m) => pine(m, 0, 0, 0, 1, 0.22, rng(15))),
     oakProxy: model((m) => broadleaf(m, 0, 0, 0, 1, 0.3, rng(19))),
+    ridge: model((m) => makeRidgeLandscape(m, hallTools)),
     landscape: model(farTerrain),
     mountains: model(makeBackdrop),
     farTrees: model(farTrees),
@@ -1574,7 +1506,6 @@ function createGLRenderer(canvas, gl) {
     witch: model(makeWitch),
     satchel: model(makeSatchel),
     traveller: model(makeTraveller),
-    sword: model(makeBlade),
     hand: model((m) => makeGesture(m)),
     fist: model((m) => makeGesture(m, true)),
     bridge: model(makeBridge),
@@ -1638,17 +1569,19 @@ function createGLRenderer(canvas, gl) {
   }
   let crowdTierKey = '';
   function updateHorde(w, t, nearIds) {
+    procession.update(w);
     const key = Array.from(nearIds).join(',');
     if (t - crowdAt < 0.18 && w.elapsed >= elapsedAt && key === crowdTierKey) return;
     crowdTierKey = key;
     crowdAt = t;
     elapsedAt = w.elapsed;
+    const sample = {};
     for (let i = 0; i < HORDE_COUNT; i++) {
-      const p = hordePosition(w, i),
+      const p = procession.at(i, sample),
         j = i * 6,
         v = ((i * 19) % 31) * 0.004;
       crowdData[j] = p.x;
-      crowdData[j + 1] = nearIds.has(i) ? -90 : ground(p.x, p.z) + 0.88;
+      crowdData[j + 1] = nearIds.has(i) ? -90 : p.y + 0.88;
       crowdData[j + 2] = p.z;
       crowdData[j + 3] = 0.26 + v;
       crowdData[j + 4] = 0.285 + v * 0.65;
@@ -1686,7 +1619,7 @@ function createGLRenderer(canvas, gl) {
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, pollenData);
   }
   function render(w, t = 0) {
-    if (disposed || !w?.player || gl.isContextLost()) return;
+    if (disposed || !w?.player || gl.isContextLost()) return false;
     if (!Number.isFinite(t)) t = w.elapsed || 0;
     const frameStarted = performance.now();
     quality = budget.sample(frameStarted, w.renderQuality, workTime);
@@ -1711,13 +1644,16 @@ function createGLRenderer(canvas, gl) {
     const aspect = canvas.width / canvas.height,
       lensY = 1.37,
       lensX = lensY / aspect;
+    w.viewAspect = aspect;
     const sy = Math.sin(yaw),
       cy = Math.cos(yaw),
       spit = Math.sin(pitch),
       cpit = Math.cos(pitch);
+    const light = sceneLights(w, t);
     const setup = (prog) => {
       const u = prog.uni;
       gl.useProgram(prog.p);
+      if (prog === solid || prog === stands) bindLamps(gl, prog, light);
       gl.uniform3f(u.uCamera, px, y, pz);
       gl.uniform4f(u.uView, sy, cy, spit, cpit);
       gl.uniform2f(u.uLens, lensX, lensY);
@@ -1752,13 +1688,23 @@ function createGLRenderer(canvas, gl) {
       bind(solid, b);
       gl.drawArrays(gl.TRIANGLES, 0, b.count);
     }
-    draw(models.mountains, 0, 0, 0, 0, 1, 4);
-    draw(models.landscape);
-    draw(models.farTrees, 0, 0, 0, 0, 1, 3);
+    const inRoom = insideHall(px, pz);
+    const doorX = 30 - px,
+      doorZ = 1466 - pz,
+      doorDepth = doorX * sy + doorZ * cy;
+    const outside =
+      !inRoom ||
+      (doorDepth > -5 && Math.abs(doorX * cy - doorZ * sy) < (Math.max(0, doorDepth) * aspect) / 1.37 + 7);
+    if (outside) {
+      draw(models.mountains, 0, 0, 0, 0, 1, 4);
+      draw(models.landscape);
+      if (pz > 280 && pz < 1050) draw(models.ridge);
+      draw(models.farTrees, 0, 0, 0, 0, 1, 3);
+    }
     const cx = Math.floor(px / 80),
       cz = Math.floor(pz / 80),
       deadline = performance.now() + (cells.size < 4 ? 26 : 4.5);
-    const candidates = locations
+    const candidates = (outside ? locations : [])
       .map(([i, j]) => {
         const x = cx + i,
           z = cz + j,
@@ -1788,7 +1734,7 @@ function createGLRenderer(canvas, gl) {
           cells.delete(key);
         }
       }
-    draw(models.landmarks);
+    if (outside) draw(models.landmarks);
     if (pz > 1280 && Math.abs(px - 30) < 180) draw(models.hall, 0, castleAltitude, 0);
     if (Math.hypot(px - 30, pz - 1516) < 140) {
       const angle = bellSwing(w, t);
@@ -1802,7 +1748,7 @@ function createGLRenderer(canvas, gl) {
     const fig = storyFigure(w, t, ground),
       storyArt = fig ? xeroPoses[fig.key] : null,
       storyPose = storyHandPose(w, t) || {};
-    if (!insideHall(px, pz)) draw(models.fortress);
+    if (!insideHall(px, pz) && pz > 850) draw(models.fortress);
     if (pz > 1300 && Math.abs(px - 30) < 170) draw(models.storyStatic);
     for (const part of storyPieces(w, t, ground)) {
       if (part.key.startsWith('xero-') && storyArt?.ready) continue;
@@ -1824,8 +1770,9 @@ function createGLRenderer(canvas, gl) {
       if (!a.alive || storyReplaces(w, a.type) || Math.hypot(px - a.x, pz - a.z) > 255) continue;
       if (isCreature(a)) {
         const b = creaturePose(a, t, p),
-          art = foeArt[a.type];
-        if (art.ready && b.profile) {
+          group = foeArt[a.type],
+          art = group[b.view].ready ? group[b.view] : group.side;
+        if (art.ready) {
           monsterPictures.push({ b, asset: art });
         } else
           draw(
@@ -1858,10 +1805,14 @@ function createGLRenderer(canvas, gl) {
       }
     setup(stands);
     gl.uniform1f(stands.uni.uMark, 0);
+    gl.uniform1f(stands.uni.uHall, 0);
     if (paintedHall.ready && insideHall(px, pz)) {
+      gl.uniform1f(stands.uni.uHall, hallRunner.ready ? 1 : 0);
+      useTexture(1, hallRunner.tex, stands.uni.uRunner);
       useTexture(0, paintedHall.tex, stands.uni.uArt);
       bind(stands, models.paintedHall);
       gl.drawArrays(gl.TRIANGLES, 0, models.paintedHall.count);
+      gl.uniform1f(stands.uni.uHall, 0);
     }
     const decals = groundDecals(w, t, hostFootprints(w));
     gl.enable(gl.BLEND);
@@ -1944,15 +1895,6 @@ function createGLRenderer(canvas, gl) {
       bySpecies[asset].push({ ...b, alpha: 1 - saturated((d - 154) / 48) });
     }
     for (const key of Object.keys(bySpecies)) batchSprites(bySpecies[key], groveArt[key]);
-    const castleDist = Math.hypot(px - 30, pz - 1435);
-    if (pz < 1410 && castleDist > 48 && paintedCastle.ready) {
-      const h = 102,
-        w = 112 / ((h * paintedCastle.im.naturalWidth) / paintedCastle.im.naturalHeight);
-      batchSprites(
-        [{ x: 30, z: 1431, h, w, seed: 1, alpha: Math.min(1, (castleDist - 48) / 105) }],
-        paintedCastle
-      );
-    }
     for (const { b, asset } of monsterPictures) batchSprites([b], asset);
     if (fig && storyArt?.ready && Math.hypot(px - fig.x, pz - fig.z) < 120)
       batchSprites([{ ...fig, seed: 1 }], storyArt);
@@ -1964,8 +1906,8 @@ function createGLRenderer(canvas, gl) {
     // The procession updates at a lower rate than the camera, including distant ranks.
     // Terrain depth hides groups behind the ridge. Each point becomes a walking figure.
     const detailed =
-      pz > 315 && marcherArt.every((a) => a.ready)
-        ? marcherTier.update(w, aspect, t, quality < 0.8 ? 32 : 64)
+      pz > 315 && !insideHall(px, pz) && marcherArt.every((a) => a.ready)
+        ? procession.near(w, aspect, t, quality < 0.8 ? 32 : 64)
         : { poses: [], ids: new Set() };
     if (detailed.poses.length)
       for (let k = 0; k < marcherArt.length; k++)
@@ -1973,11 +1915,11 @@ function createGLRenderer(canvas, gl) {
           detailed.poses.filter((a) => a.kind === k),
           marcherArt[k]
         );
-    if (pz > 315) updateHorde(w, t, detailed.ids);
+    if (pz > 315 && !insideHall(px, pz)) updateHorde(w, t, detailed.ids);
     updatePollen(px, pz, t);
     setup(points);
     gl.uniform1f(points.uni.uHeight, canvas.height);
-    if (pz > 315) {
+    if (pz > 315 && !insideHall(px, pz)) {
       gl.uniform1f(points.uni.uParticle, 0);
       bind(points, crowd);
       gl.drawArrays(gl.POINTS, 0, crowd.count);
@@ -1999,17 +1941,7 @@ function createGLRenderer(canvas, gl) {
       potionFlash = Math.max(0, (w.potionUntil || 0) - w.elapsed);
     const slide = aspect < 0.95 ? -0.075 : 0,
       tuck = bound ? sp * 0.55 : feast ? Math.max(0, sp - 0.3) * 0.55 : 0;
-    if (!paintedSword.ready && (!bound || sp < 0.72))
-      draw(
-        models.sword,
-        slide - swing * 0.32 + Math.sin(distance * 1.4) * 0.006,
-        -tuck + bob * 0.25,
-        0,
-        swing * -0.36,
-        1,
-        2
-      );
-    if (paintedSword.ready && (!bound || sp < 0.72)) {
+    if (!storyPose.physical && paintedSword.ready && (!bound || sp < 0.72)) {
       const W = canvas.width,
         H = canvas.height,
         sz = Math.min(H * 0.52, W * 0.65),
@@ -2050,6 +1982,10 @@ function createGLRenderer(canvas, gl) {
         k += 6;
       }
       gl.useProgram(held.p);
+      bindLamps(gl, held, light);
+      const joints = bladeCoordinates(w);
+      gl.uniform3f(held.uni.uGrip, ...joints.grip);
+      gl.uniform3f(held.uni.uTip, ...joints.tip);
       useTexture(0, paintedSword.tex, held.uni.uArt);
       gl.bindBuffer(gl.ARRAY_BUFFER, standMesh.b);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, standData.subarray(0, k));
@@ -2060,7 +1996,14 @@ function createGLRenderer(canvas, gl) {
       gl.disable(gl.BLEND);
       setup(solid);
     }
-    if (bound || storyPose.reach > 0.02 || potionFlash > 0.35) {
+    if (!storyPose.physical && (!bound || sp < 0.72)) {
+      const vertices = bladeFallbackGeometry(w, paintedSword.ready);
+      gl.bindBuffer(gl.ARRAY_BUFFER, motionBuffer.b);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+      motionBuffer.count = vertices.length / 6;
+      draw(motionBuffer, 0, 0, 0, 0, 1, 1);
+    }
+    if (!storyPose.physical && (bound || storyPose.reach > 0.02 || potionFlash > 0.35)) {
       const reach = storyPose.reach || 0,
         clench = storyPose.clench || 0;
       draw(
@@ -2075,6 +2018,7 @@ function createGLRenderer(canvas, gl) {
     }
     gl.enable(gl.DEPTH_TEST);
     workTime = performance.now() - frameStarted;
+    return true;
   }
   function dispose() {
     disposed = true;
@@ -2084,7 +2028,7 @@ function createGLRenderer(canvas, gl) {
     buffers.clear();
     cells.clear();
   }
-  return { render, resize, dispose };
+  return { render, resize, dispose, surface: canvas, backend: 'WebGL' };
 }
 // The software path projects the same models, roads and landmarks. It allows a full
 // playthrough on devices whose WebGL driver is unavailable.
@@ -2108,9 +2052,15 @@ function softwareRenderer(canvas) {
     satchel: makeSatchel,
     traveller: makeTraveller,
     castle,
+    shelf: (m) => castleShelf(m, hallTools),
+    ford: (m) => {
+      for (let i = 0; i < 16; i++)
+        stone(m, fordStoneX(i), -0.12, 1008 + i * 1.76, 1.62, 0.53, 1.42, '989a87', i * 1.91);
+    },
+    distantCastle: (m) => castle(m, true),
+    ridge: (m) => makeRidgeLandscape(m, hallTools),
     well: spring,
     bridge: makeBridge,
-    blade: makeBlade,
     hand: (m) => makeGesture(m),
     fist: (m) => makeGesture(m, true),
     low: (m) => bell(m, 1.14),
@@ -2138,6 +2088,8 @@ function softwareRenderer(canvas) {
     }, hallTools)
   );
   const hallPainter = createHallPainter();
+  const distantCastle = createCastleView([models.shelf, models.distantCastle, models.fortress]),
+    riverPaint = createRiverView();
   const bellFrames = new Map();
   const creatureMesh = makeCreatureBank(
     { wolf: makeWolf, troll: makeTroll, dragon: makeDragon },
@@ -2148,8 +2100,7 @@ function softwareRenderer(canvas) {
     pineArt = artImage('pine.webp'),
     witchArt = artImage('witch-figure.webp'),
     xeroArt = artImage('xero.webp'),
-    swordArt = artImage('sword.webp'),
-    castleArt = artImage('castle.webp');
+    swordArt = artImage('sword.webp');
   const groveArt = {
     oak: treeArt,
     pine: pineArt,
@@ -2158,7 +2109,7 @@ function softwareRenderer(canvas) {
     cedar: artImage('cedar.webp'),
   };
   const witchRear = artImage('witch-back.webp'),
-    foeArt = { wolf: artImage('wolf.webp'), troll: artImage('troll.webp'), dragon: artImage('dragon.webp') };
+    foeArt = creaturePaintings(artImage);
   const xeroPoses = {
     offer: xeroArt,
     feeding: artImage('xero-feeding.webp'),
@@ -2168,7 +2119,7 @@ function softwareRenderer(canvas) {
   const masonry = artImage('castle-stone.webp');
   let stonePattern = null;
   const marchers = Array.from({ length: 8 }, (_, i) => artImage('marcher-' + (i + 1) + '.webp')),
-    marcherTier = makeMarcherTier();
+    procession = createProcessionView();
   let skyBackdrop = null,
     floorPainter = null;
   import('./sky.mjs')
@@ -2210,11 +2161,13 @@ function softwareRenderer(canvas) {
     lastWorld = world;
     last = time;
     resize();
+    const light = sceneLights(world, time);
     const p = world.player,
       W = layer.width,
       H = layer.height,
       f = H * 0.685,
       ey = (p.feetY ?? footHeight(world, p.x, p.z)) + 1.66;
+    world.viewAspect = W / H;
     const sy = Math.sin(p.yaw),
       cy = Math.cos(p.yaw),
       sp = Math.sin(p.pitch || 0),
@@ -2249,6 +2202,7 @@ function softwareRenderer(canvas) {
         return;
       queue.push({ p: pts, c, tex, d: depth ?? pts.reduce((t, v) => t + v[2], 0) / pts.length });
     }
+    let patinaBudget = 15;
     function paint() {
       queue.sort((a, b) => b.d - a.d);
       for (const item of queue) {
@@ -2265,8 +2219,8 @@ function softwareRenderer(canvas) {
           if (!item.rig || item.d > 48) ctx.drawImage(item.im, -item.w * 0.5, -item.h, item.w, item.h);
           else {
             const im = item.im,
-              iw = im.naturalWidth,
-              ih = im.naturalHeight,
+              iw = im.naturalWidth || im.width,
+              ih = im.naturalHeight || im.height,
               cols = item.rig.type === 'marcher' ? 2 : 4,
               rows = item.rig.type === 'marcher' ? 3 : 5;
             ctx.translate(-item.w * 0.5, -item.h);
@@ -2308,9 +2262,15 @@ function softwareRenderer(canvas) {
         for (let i = 1; i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]);
         ctx.closePath();
         ctx.fill();
-        if (item.tex && resolution > 0.6) {
+        if (
+          item.tex &&
+          resolution > 0.6 &&
+          patinaBudget > 0 &&
+          Math.abs(p[0][0] - p[1][0]) + Math.abs(p[0][0] - p[2][0]) < W * 1.7 &&
+          Math.abs(p[0][1] - p[1][1]) + Math.abs(p[0][1] - p[2][1]) < H * 1.7
+        ) {
           stonePattern ??= stonePatina(masonry, ctx);
-          if (stonePattern) paintPatina(ctx, stonePattern, p, item.tex);
+          if (stonePattern && paintPatina(ctx, stonePattern, p, item.tex)) patinaBudget--;
         }
       }
       queue.length = 0;
@@ -2323,6 +2283,11 @@ function softwareRenderer(canvas) {
       const h = Math.abs(a[1] - b[1]),
         width = ((h * im.naturalWidth) / im.naturalHeight) * widthScale;
       if (h < 1 || a[0] + width * 0.5 < 0 || a[0] - width * 0.5 > W || b[1] > H || a[1] < 0) return true;
+      if (rig?.type === 'marcher') {
+        im = marcherFrame(im, rig, time, h);
+        rig = null;
+      }
+      if (a[2] < 65) im = illuminatedSprite(im, light, x, y, z, height, insideHall(x, z));
       queue.push({ im, x: a[0], y: a[1], h, w: width, alpha, flip, rig, d: a[2] });
       return true;
     }
@@ -2518,34 +2483,16 @@ function softwareRenderer(canvas) {
         }
       }
       const castleDistance = Math.hypot(p.x - 30, p.z - 1435);
-      if (!readyImage(castleArt) || castleDistance < 175 || p.z > 1400) drawModel(models.castle);
-      if (p.z < 1410 && castleDistance > 48 && readyImage(castleArt)) {
-        const h = 102,
-          scale = 112 / ((h * castleArt.naturalWidth) / castleArt.naturalHeight);
-        billboard(
-          castleArt,
-          30,
-          ground(30, 1431),
-          1431,
-          h,
-          false,
-          scale,
-          Math.min(1, (castleDistance - 48) / 105)
-        );
+      if (castleDistance > 245) distantCastle(ray, queue, p, ey, f);
+      else {
+        drawModel(models.shelf);
+        drawModel(models.castle);
       }
+      if (p.z > 280 && p.z < 1050) drawModel(models.ridge);
       if (Math.abs(p.z - 850) < 125) drawModel(models.well);
       if (Math.abs(p.z - 1020) < 150) {
-        for (let x = Math.floor((p.x - 220) / 8) * 8; x < p.x + 220; x += 8) {
-          path(
-            [
-              [x, 1009],
-              [x, 1034],
-              [x + 8, 1034],
-              [x + 8, 1009],
-            ].map(([X, Z]) => ray(X, 0.06, Z)),
-            '#729a99'
-          );
-        }
+        riverPaint(ctx, W, H, p, ey, time, resolution);
+        if (Math.abs(p.x + 125) < 140) drawModel(models.ford);
         drawModel(models.bridge, 0, -3.1 * (1 - bridgeRise(world)), 0);
       }
     }
@@ -2571,17 +2518,31 @@ function softwareRenderer(canvas) {
     const fig = storyFigure(world, time, ground),
       storyArt = fig ? xeroPoses[fig.key] : null,
       storyPose = storyHandPose(world, time) || {};
-    if (needsExterior) drawModel(models.fortress);
+    if (needsExterior && Math.hypot(p.x - 30, p.z - 1435) < 246 && p.z < 1452) drawModel(models.fortress);
     if (p.z > 1300 && Math.abs(p.x - 30) < 170) drawModel(models.storyStatic);
     for (const part of storyPieces(world, time, ground)) {
       if (part.key.startsWith('xero-') && readyImage(storyArt)) continue;
       drawModel(models[part.key], part.x, part.y, part.z, part.rot, part.scale);
     }
-    if (fig && readyImage(storyArt) && Math.hypot(p.x - fig.x, p.z - fig.z) < 120)
-      billboard(storyArt, fig.x, fig.y, fig.z, fig.h, fig.flip, fig.w);
+    if (fig && readyImage(storyArt) && Math.hypot(p.x - fig.x, p.z - fig.z) < 120) {
+      const at = ray(fig.x, fig.y + fig.h * 0.5, fig.z);
+      if (at) {
+        const error = (f * fig.h * fig.h * Math.abs(sp)) / (4 * at[2] * at[2]);
+        if (error > 0.65)
+          paintStoryPortrait(
+            illuminatedSprite(storyArt, light, fig.x, fig.y, fig.z, fig.h, inside),
+            fig,
+            ray,
+            queue,
+            cy,
+            sy
+          );
+        else billboard(storyArt, fig.x, fig.y, fig.z, fig.h, fig.flip, fig.w);
+      }
+    }
     const dynamic = [];
     dynamicField(dynamic, world, time);
-    if (dynamic.length) drawModel(dynamic);
+    if (dynamic.length) paintTransientMesh(scene, dynamic);
     for (const d of groundDecals(world, time, hostFootprints(world))) {
       const a = ray(d.x, d.y, d.z);
       if (!a || a[0] < -W * 0.25 || a[0] > W * 1.25) continue;
@@ -2605,8 +2566,11 @@ function softwareRenderer(canvas) {
       });
     }
     if (!inside && p.z > 310) {
+      procession.update(world);
+      const hostSight = procession.visibility(world, ey);
       if (!world.ropeFallen)
         for (let row = 0; row < 64; row += 2) {
+          if (!hostSight[row >> 2]) continue;
           const a = hordePosition(world, row * 48),
             b = hordePosition(world, Math.min(HORDE_COUNT - 1, (row + 2) * 48));
           const near = Math.hypot(a.x - p.x, a.z - p.z);
@@ -2638,30 +2602,10 @@ function softwareRenderer(canvas) {
           }
         }
       const detailed = marchers.every(readyImage)
-        ? marcherTier.update(world, W / H, time, resolution < 0.8 ? 24 : 48)
+        ? procession.near(world, W / H, time, resolution < 0.8 ? 24 : 48)
         : { poses: [], ids: new Set() };
-      for (const a of detailed.poses)
-        billboard(marchers[a.kind], a.x, ground(a.x, a.z) + a.dy, a.z, a.h, a.flip, a.w, 1, a.rig);
-      for (let i = 0; i < HORDE_COUNT; i += 2) {
-        if (detailed.ids.has(i)) continue;
-        const a = hordePosition(world, i),
-          a0 = ray(a.x, ground(a.x, a.z), a.z);
-        if (!a0) continue;
-        const h = Math.max(1.5, (f / a0[2]) * 1.82),
-          w = Math.max(0.55, h * 0.31),
-          x = a0[0],
-          y = a0[1];
-        path(
-          [
-            [x - w, y, a0[2]],
-            [x - w, y - h * 0.71, a0[2]],
-            [x, y - h, a0[2]],
-            [x + w, y - h * 0.73, a0[2]],
-            [x + w * 0.7, y, a0[2]],
-          ],
-          i % 7 ? '#40483f' : '#68665a'
-        );
-      }
+      for (const a of detailed.poses) billboard(marchers[a.kind], a.x, a.y, a.z, a.h, a.flip, a.w, 1, a.rig);
+      queueProcession(procession, ray, queue, W, H, f, detailed.ids, resolution < 0.8, hostSight);
     }
     for (const a of world.actors || []) {
       if (
@@ -2684,9 +2628,10 @@ function softwareRenderer(canvas) {
         continue;
       if (isCreature(a)) {
         const b = creaturePose(a, time, p),
-          art = foeArt[a.type],
+          group = foeArt[a.type],
+          art = readyImage(group[b.view]) ? group[b.view] : group.side,
           yy = ground(a.x, a.z) + b.dy;
-        if (readyImage(art) && b.profile) billboard(art, a.x, yy, a.z, b.h, b.flip, b.w, 1, a);
+        if (readyImage(art)) billboard(art, a.x, yy, a.z, b.h, b.flip, b.w, 1, a);
         else
           drawModel(
             creatureMesh(a, time),
@@ -2730,17 +2675,11 @@ function softwareRenderer(canvas) {
     const feast = world.sequence?.id === 'feast',
       saved = world.sequence?.id === 'saved',
       q = world.sequence?.progress || 0;
-    if (bound || !readyImage(swordArt))
-      drawModel(
-        bound ? models.hand : models.blade,
-        (W / H < 0.95 ? -0.075 : 0) - s * 0.29,
-        feast ? -Math.max(0, q - 0.32) * 0.5 : 0,
-        0,
-        -s * 0.28,
-        1,
-        true
-      );
-    else {
+    if (bound && !storyPose.physical) drawModel(models.hand, 0, 0, 0, 0, 1, true);
+    const bladeReady = readyImage(swordArt);
+    if (!bound && !storyPose.physical && bladeReady) {
+      const { grip } = bladeCoordinates(world);
+      const bladeArt = illuminatedSprite(swordArt, light, grip[0], grip[1], grip[2], 0.85, inside);
       const size = Math.min(H * 0.52, W * 0.65);
       ctx.save();
       const physical = swordPlacement(world, W, H, ray);
@@ -2753,18 +2692,19 @@ function softwareRenderer(canvas) {
           physical.x,
           physical.y + (feast ? Math.max(0, q - 0.32) * 0.43 * H : 0)
         );
-        ctx.drawImage(swordArt, 0, 0, 1, 1);
+        ctx.drawImage(bladeArt, 0, 0, 1, 1);
       } else {
         ctx.translate(
           W - size * 0.2 - s * 0.21 * W,
           H - size * 0.18 + (feast ? Math.max(0, q - 0.32) * 0.43 * H : 0)
         );
         ctx.rotate(-s * 1.06);
-        ctx.drawImage(swordArt, -size * 0.78, -size * 0.78, size, size);
+        ctx.drawImage(bladeArt, -size * 0.78, -size * 0.78, size, size);
       }
       ctx.restore();
     }
-    if (storyPose.reach > 0.02)
+    if (!bound && !storyPose.physical) paintTransientMesh(scene, bladeFallbackGeometry(world, bladeReady));
+    if (!storyPose.physical && storyPose.reach > 0.02)
       drawModel(
         storyPose.clench > 0.48 ? models.fist : models.hand,
         -0.21 + 0.12 * storyPose.reach,
@@ -2810,8 +2750,9 @@ function softwareRenderer(canvas) {
       }
     }
     lastWork = performance.now() - frameStarted;
+    return true;
   }
-  return { render, resize, dispose };
+  return { render, resize, dispose, surface: layer, backend: 'Canvas 2D' };
 }
 export function createRenderer(canvas) {
   let gl;
@@ -2842,6 +2783,12 @@ export function createRenderer(canvas) {
   }
   canvas.addEventListener('webglcontextlost', lost);
   return {
+    get surface() {
+      return impl.surface;
+    },
+    get backend() {
+      return impl.backend;
+    },
     render: (w, t) => impl.render(w, t),
     resize: () => impl.resize(),
     dispose: () => {

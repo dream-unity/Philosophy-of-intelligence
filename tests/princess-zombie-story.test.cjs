@@ -128,3 +128,129 @@ test('a player can resist the command while camera motion is reduced', () => {
   advanceTo(w, 9);
   assert.equal(w.ending.id, 'bound');
 });
+
+test('Xero reaches the actual wrist for the attack and lays an open hand beneath the rescued player’s palm', async () => {
+  const { contactPose } = await import('../zelda-and-the-princess-zombie/story-contact.mjs');
+  for (const ready of [false, true])
+    for (const reduced of [false, true]) {
+      const w = enterBanquet(ready);
+      w.reducedMotion = reduced;
+      w.player.yaw += 0.28;
+      assert.ok(world.choose(w, ready ? 1 : 2));
+      advanceTo(w, w.sequence.duration * 0.15);
+      let pose = contactPose(w, art.storyFigure(w), world.terrainHeight);
+      assert.equal(pose.joined, 0, 'a hand cannot reach across the room');
+      advanceTo(w, w.sequence.duration * 0.955);
+      pose = contactPose(w, art.storyFigure(w), world.terrainHeight);
+      assert.equal(pose.joined, 1);
+      assert.equal(art.storyHandPose(w).physical, true);
+      const contact = ready ? pose.palm : pose.wrist;
+      assert.ok(Math.hypot(...pose.queenPalm.map((v, i) => v - contact[i])) < 0.06);
+      assert.ok(ready ? pose.queenPalm[1] < contact[1] : pose.queenPalm[1] > contact[1]);
+      const sections = { beam: 0, quad: 0, tri: 0 };
+      const capture = Object.fromEntries(
+        Object.keys(sections).map((k) => [
+          k,
+          (_, ...values) => {
+            sections[k]++;
+            assert.ok(values.filter(Array.isArray).flat().every(Number.isFinite));
+          },
+        ])
+      );
+      art.storyHands([], capture, w);
+      assert.ok(sections.beam > 18 && sections.quad >= 32 && sections.tri >= 16);
+    }
+});
+
+test('the fixed bell stays in place and the loose wrist loop falls independently after the lunge', () => {
+  const w = enterBanquet();
+  world.choose(w, 2);
+  advanceTo(w, w.sequence.duration * 0.28);
+  const first = art.storyTethers(w),
+    anchor = first[0].a;
+  assert.equal(w.tetherRelease, undefined);
+  advanceTo(w, w.sequence.duration * 0.38);
+  assert.equal(w.tetherRelease.cause, 'slip');
+  const start = art.storyTethers(w).at(-1).b;
+  advanceTo(w, w.sequence.duration * 0.71);
+  const final = art.storyTethers(w);
+  assert.deepEqual(final[0].a, anchor);
+  const dangling = final.at(-1).b;
+  assert.ok(dangling[1] < start[1] - 0.6);
+  assert.ok(Math.hypot(dangling[0] - anchor[0], dangling[2] - anchor[2]) < 0.25);
+  assert.ok(Math.hypot(dangling[0] - art.storyFigure(w).x, dangling[2] - art.storyFigure(w).z) > 1.5);
+  assert.equal(w.ropeFallen, false, 'a broken loop does not cure the princess or disperse the host');
+});
+
+test('vial leaves the player’s hand, breaks at Xero, and the candlelit table stays visible from the aisle', () => {
+  const w = enterBanquet(true);
+  world.choose(w, 1);
+  advanceTo(w, w.sequence.duration * 0.056);
+  const belt = art.storyPieces(w).find((p) => p.key === 'vial-silver');
+  assert.ok(belt.z < w.player.z + 1 && belt.z > w.player.z);
+  advanceTo(w, w.sequence.duration * 0.176);
+  const flight = art.storyPieces(w).find((p) => p.key === 'vial-silver');
+  assert.ok(flight.z > belt.z + 2);
+  advanceTo(w, w.sequence.duration * 0.215);
+  const pieces = art.storyPieces(w);
+  assert.ok(!pieces.some((p) => p.key === 'vial-silver'));
+  assert.ok(pieces.filter((p) => p.key === 'silver-drop').length >= 7);
+  assert.ok(pieces.some((p) => p.key === 'rushlight'));
+  assert.equal(story.storyPassable(31, 1519.75, w, 31, 1519.45), false);
+  assert.equal(story.storyPassable(35.1, 1519.75, w, 35.1, 1519.45), true);
+});
+
+test('each of the four painted witch gestures moves its own prop while keeping the frame edges registered', async () => {
+  const { witchWarp } = await import('../zelda-and-the-princess-zombie/story-witch.mjs');
+  for (const [beat, x, y] of [
+    [0, 0.25, 0.61],
+    [1, 0.39, 0.6],
+    [2, 0.32, 0.31],
+    [3, 0.65, 0.48],
+  ]) {
+    const a = witchWarp(beat, x, y, 0.5),
+      b = witchWarp(beat, x, y, 2.6);
+    assert.ok(Math.hypot(a[0] - b[0], a[1] - b[1]) > 0.0005);
+    assert.deepEqual(witchWarp(beat, 0, 0.5, 1), [0, 0.5]);
+  }
+});
+
+test('Canvas places painted fingers at their projected 3D height in a pitched close-up', () => {
+  const w = enterBanquet(true);
+  world.choose(w, 1);
+  advanceTo(w, w.sequence.duration * 0.94);
+  const fig = art.storyFigure(w),
+    queue = [],
+    strips = [];
+  const eye = world.terrainHeight(w.player.x, w.player.z) + 1.83,
+    c = Math.cos(w.player.pitch),
+    s = Math.sin(w.player.pitch),
+    h = 510,
+    f = 0.685 * h;
+  function ray(x, y, z) {
+    const dz = z - w.player.z,
+      dy = y - eye,
+      depth = c * dz + s * dy;
+    return [425 + ((x - w.player.x) * f) / depth, h * 0.5 - ((dy * c - dz * s) * f) / depth, depth];
+  }
+  art.paintStoryPortrait({ width: 344, height: 680 }, fig, ray, queue, 1, 0);
+  assert.equal(queue.length, 24);
+  for (const q of queue) {
+    q.draw({
+      save() {},
+      restore() {},
+      translate(x, y) {
+        strips.push({ x, y });
+      },
+      drawImage(...a) {
+        strips.at(-1).h = a.at(-1);
+      },
+    });
+  }
+  const v = 0.412,
+    i = Math.floor(v * 24),
+    fraction = v * 24 - i;
+  const actual = strips[i].y + (strips[i].h - 0.38) * fraction;
+  const physical = ray(fig.x, fig.y + fig.h * (1 - v), fig.z)[1];
+  assert.ok(Math.abs(actual - physical) < 0.18);
+});

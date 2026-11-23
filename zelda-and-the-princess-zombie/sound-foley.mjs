@@ -48,17 +48,47 @@ export function walkSound(sound, surface, time, side, speed) {
     if (side > 0) note('sine', 730, 0.013, time + 0.099, 0.058, -side, 718);
   }
 }
+export function scuffSound(sound, surface, t, pan, speed) {
+  const center = {
+    stone: 1870,
+    gravel: 2330,
+    wood: 1070,
+    water: 1350,
+    wetstone: 1510,
+    leaves: 2060,
+    grass: 1140,
+  };
+  const level = 0.13 + 0.026 * Math.min(6, speed);
+  sound.noise(level, center[surface] || 1250, 0.22, t, pan, 0.021);
+  if (surface === 'gravel' || surface === 'leaves')
+    sound.noise(level * 0.48, 2860, 0.11, t + 0.076, -pan, 0.022);
+}
+export function breathSound(sound, t, effort, recovering) {
+  // The cooler inhalation and the longer, lower exhalation form a pair.
+  // Recovery naturally opens the spacing and lengthens the second breath.
+  sound.noise(0.09 + 0.11 * effort, 1180 + effort * 110, 0.24, t, -0.035, 0.075);
+  sound.noise(0.12 + 0.17 * effort, recovering ? 638 : 725, recovering ? 0.61 : 0.36, t + 0.25, 0.04, 0.08);
+  sound.note('sine', 154, 0.013 * effort, t + 0.27, 0.22, 0, 112, 0.08);
+}
 export function creatureSound(sound, kind, time, pan, level, attacking = false) {
   const { noise, note } = sound;
   if (kind === 'wolf') {
     noise(level * 0.48, attacking ? 770 : 525, 0.39, time, pan, 0.035);
     note('sawtooth', attacking ? 142 : 97, level * 0.055, time, 0.36, pan, 71, 0.08);
+    if (attacking) {
+      noise(level * 0.38, 1380, 0.17, time + 0.07, pan, 0.012);
+      note('triangle', 340, level * 0.1, time + 0.04, 0.24, pan, 215, 0.025);
+    }
     return;
   }
   if (kind === 'troll') {
     note('sine', 87, level * 0.28, time, 0.41, pan, 42, 0.014);
     noise(level * 0.54, attacking ? 390 : 580, 0.33, time, pan, 0.019);
     noise(level * 0.25, attacking ? 1790 : 1270, 0.24, time + 0.09, pan);
+    if (attacking) {
+      note('triangle', 465, level * 0.11, time + 0.08, 0.22, pan, 313, 0.009);
+      noise(level * 0.41, 2050, 0.13, time + 0.13, pan, 0.012);
+    }
     return;
   }
   noise(level * 0.64, attacking ? 1470 : 580, attacking ? 0.86 : 0.46, time, pan, 0.13);
@@ -84,8 +114,9 @@ export function metalContact(sound, kind, t, pan, gain) {
     sound.note('sine', 1903, 0.068 * gain, t + 0.006, 0.25, pan, 1740, 0.006);
   }
 }
-export function useVial(sound, kind, t, pan) {
-  const { noise, note } = sound;
+export function useVial(sound, kind, t, pan, gain = 1) {
+  const noise = (level, ...args) => sound.noise(level * gain, ...args);
+  const note = (shape, f, level, ...args) => sound.note(shape, f, level * gain, ...args);
   if (kind === 'drink') {
     noise(0.16, 750, 0.14, t, pan);
     for (const s of [0.1, 0.34]) {

@@ -44,3 +44,31 @@ export function describeRace(w, progress) {
   if (progress > 0.4) return 'The host has crossed the downs.';
   return 'The host is marching from the west.';
 }
+
+export function hostReport(w, front) {
+  const field = survey(w),
+    seen = w.milestones?.ridge || field.visits.downs || w.journal?.some((n) => n.id === 'procession');
+  if (!seen || !front) return '';
+  if (w.ropeFallen) return 'The host has turned away from the gate.';
+  const refs = [
+    ['you', w.player],
+    ['the gate', LANDMARKS.find((s) => s.id === 'gate')],
+  ];
+  if (w.hasMap || field.visits.ford) refs.push(['Pale Ford', LANDMARKS.find((s) => s.id === 'ford')]);
+  return (
+    'Front rank: ' +
+    refs
+      .map(([name, site]) => {
+        const d = Math.round(Math.hypot(front.x - site.x, front.z - site.z));
+        return d < 8 ? 'at ' + name : d + ' metres ' + compassPoint(bearing(site, front)) + ' of ' + name;
+      })
+      .join(', ') +
+    '.'
+  );
+}
+export function bridgeReport(w) {
+  if (!w.bridgeOpen) return 'Lowered. The sluice must be operated before the road can cross.';
+  if (w.bridgeRaisedAt != null && w.elapsed - w.bridgeRaisedAt < 1.8 * 0.95)
+    return 'Rising. Wait for the deck to meet the bank.';
+  return 'Raised. The road crosses the river.';
+}

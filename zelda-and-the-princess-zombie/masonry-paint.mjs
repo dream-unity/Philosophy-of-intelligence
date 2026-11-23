@@ -3,15 +3,15 @@
 export function stonePatina(im, ctx) {
   if (!im?.complete || !im.naturalWidth) return null;
   const cv = document.createElement('canvas');
-  cv.width = cv.height = 192;
+  cv.width = cv.height = 96;
   const tile = cv.getContext('2d', { willReadFrequently: true });
-  tile.drawImage(im, 0, 0, 192, 192);
-  const pixels = tile.getImageData(0, 0, 192, 192),
+  tile.drawImage(im, 0, 0, 96, 96);
+  const pixels = tile.getImageData(0, 0, 96, 96),
     bytes = pixels.data;
   let mean = 0;
   for (let i = 0; i < bytes.length; i += 4)
     mean += bytes[i] * 0.26 + bytes[i + 1] * 0.59 + bytes[i + 2] * 0.15;
-  mean /= 192 * 192;
+  mean /= 96 * 96;
   for (let i = 0; i < bytes.length; i += 4) {
     const v = bytes[i] * 0.26 + bytes[i + 1] * 0.59 + bytes[i + 2] * 0.15 - mean;
     bytes[i] = bytes[i + 1] = bytes[i + 2] = v >= 0 ? 243 : 31;
@@ -38,6 +38,12 @@ export function paintPatina(ctx, pattern, triangle, tex) {
     B = (ey * uwy - fy * uvy) / det,
     C = (fx * uvx - ex * uwx) / det,
     D = (fy * uvx - ey * uwx) / det;
+  // A receding wall can project a single texel over thousands of backing
+  // pixels at the near plane. At this grazing angle the pigment is unresolved.
+  const sx = Math.hypot(A, B),
+    sy = Math.hypot(C, D),
+    area = Math.abs(A * D - B * C);
+  if (sx < 0.075 || sy < 0.075 || sx > 4 || sy > 4 || area / (sx * sy) < 0.19) return false;
   const matrix = new DOMMatrix();
   matrix.a = A;
   matrix.b = B;
@@ -48,4 +54,5 @@ export function paintPatina(ctx, pattern, triangle, tex) {
   pattern.setTransform(matrix);
   ctx.fillStyle = pattern;
   ctx.fill();
+  return true;
 }

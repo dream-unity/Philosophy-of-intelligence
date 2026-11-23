@@ -1,3 +1,10 @@
+import {
+  coursePoint as herdPoint,
+  marchLegs as hordeLength,
+  processionLength as travelled,
+  skirtWreckage,
+  marchPace,
+} from './procession.mjs';
 import { insideHall } from './hall.mjs';
 import {
   storyFates,
@@ -11,7 +18,7 @@ import {
   storyLocation,
   stageStoryFate,
 } from './story.mjs';
-import { barrier, footHeight, footing, clearSegment } from './travel.mjs';
+import { barrier, footHeight, footing, clearSegment, riverImmersion } from './travel.mjs';
 import { beginSwing, moveBody, strikeContacts, cue, tossPhial, advancePhial } from './swordplay.mjs';
 import { advanceWildlife } from './wildlife.mjs';
 import { MAP, LANDMARKS, roadX, terrainHeight, clamp, distance, course } from './geography.mjs';
@@ -20,42 +27,29 @@ export { registerObstacle, bridgeRise } from './travel.mjs';
 
 // World distances are metres. North is +z. All mutable state is plain JSON.
 export const HORDE_COUNT = 3072;
-const HOURGLASS = 395;
+const legacyRaceSeconds = 395;
+const raceDuration = (w) => w.raceDuration ?? legacyRaceSeconds;
 const GATE_Z = 1435;
-export { MAP, LANDMARKS, roadX, trailX, terrainHeight } from './geography.mjs';
-const hordeLength = [];
-let travelled = 0;
-for (let i = 0; i < MAP.horde.length - 1; i++) {
-  const a = MAP.horde[i],
-    b = MAP.horde[i + 1];
-  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  const tangent = { x: (b[0] - a[0]) / len, z: (b[1] - a[1]) / len };
-  hordeLength.push({ a, b, start: travelled, len, tangent });
-  travelled += len;
-}
-// Average neighbouring tangents at each bend. Each lane then turns gradually
-// without an individual jumping from one side of the column to the other.
-const hordeNormals = MAP.horde.map((_, i) => {
-  const prev = hordeLength[Math.max(0, i - 1)].tangent;
-  const next = hordeLength[Math.min(i, hordeLength.length - 1)].tangent;
-  const length = Math.hypot(prev.x + next.x, prev.z + next.z);
-  return { x: (prev.z + next.z) / length, z: -(prev.x + next.x) / length };
-});
-function herdPoint(metres, offset) {
-  let i = 0;
-  while (i < hordeLength.length - 1 && metres > hordeLength[i].start + hordeLength[i].len) i++;
-  const leg = hordeLength[i],
-    along = metres - leg.start,
-    t = clamp(along / leg.len, 0, 1);
-  const bend = t * t * (3 - 2 * t),
-    a = hordeNormals[i],
-    b = hordeNormals[i + 1];
-  const width = offset;
+const arrivalCoda = 3.25;
+export function arrivalView(w) {
+  if (!w.raceWitness || w.reducedMotion || w.ending || w.gateCrossed || w.route === 'wander') return w;
+  const gate = w.raceWitness;
   return {
-    x: leg.a[0] + leg.tangent.x * along + (a.x + (b.x - a.x) * bend) * width,
-    z: leg.a[1] + leg.tangent.z * along + (a.z + (b.z - a.z) * bend) * width,
+    ...w,
+    player: {
+      ...w.player,
+      x: gate.x,
+      z: gate.z,
+      yaw: gate.yaw,
+      pitch: 0.11,
+      feetY: terrainHeight(gate.x, gate.z),
+      speed: 0,
+      vx: 0,
+      vz: 0,
+    },
   };
 }
+export { MAP, LANDMARKS, roadX, trailX, terrainHeight } from './geography.mjs';
 export function hordePosition(w, index) {
   const i = clamp(Math.floor(index), 0, HORDE_COUNT - 1),
     line = Math.floor(i / 48);
@@ -66,22 +60,36 @@ export function hordePosition(w, index) {
     listen = clamp(((w.hostListeningUntil || 0) - time) / 3.5, 0, 1);
   // Rear ranks gradually fall in behind the vanguard. Inside the approach,
   // each five-abreast file folds into consecutive places in one gate lane.
-  const clockFraction = clamp(clock / HOURGLASS, 0, 1);
+  const pace = marchPace(i, clock);
+  const marchClock = pace?.clock ?? clock;
+  const clockFraction = clamp(marchClock / raceDuration(w), 0, 1);
   const rankSpacing = 1.65 + 4.88 * clockFraction;
-  const head = (travelled * clock) / HOURGLASS;
+  const head = (travelled * Math.min(marchClock, raceDuration(w))) / raceDuration(w);
   const base = head - line * rankSpacing;
   const funnel = clamp((base - travelled + 86) / 78, 0, 1);
   const laneIndex = lane + 25,
     slot = laneIndex % 5,
     gateLane = Math.floor(laneIndex / 5) - 5;
   const sway = Math.sin(i + time * (0.72 + (i % 7) * 0.017)) * 0.055 * (1 - 0.75 * listen);
-  const spread = lane * 0.9 * (1 - funnel) + gateLane * 0.83 * funnel + sway;
+  let spread = lane * 0.9 * (1 - funnel) + gateLane * 0.83 * funnel + sway + (pace?.shoulder || 0);
   const stagger = Math.sin(i * 74.123) * 0.06 + Math.abs(lane) * 0.012;
-  const metres = Math.min(
+  let metres = Math.min(
     travelled - slot * 1.28 - line * 6.53,
     base - stagger * (1 - funnel) - slot * 1.28 * funnel
   );
-  const point = herdPoint(metres, spread);
+  if (marchClock > raceDuration(w) && line >= 4) {
+    // Once the front reaches iron, the rest keep coming. Rear files fan into the
+    // assembly ground instead of freezing hundreds of metres down the valley.
+    const goal = travelled - 27 - (line - 4) * 1.76;
+    const progress = clamp(
+      ((marchClock - raceDuration(w)) * 1.23) / Math.max(12, (line - 4) * 4.77 + 8),
+      0,
+      1
+    );
+    metres += (goal - metres) * progress;
+    spread += (lane * 0.91 + sway - spread) * progress;
+  }
+  const point = herdPoint(metres, skirtWreckage(metres, spread));
   const reaction = w.hostReactions?.[i];
   if (reaction) {
     const elapsed = w.elapsed - reaction.at;
@@ -106,20 +114,23 @@ export function hostFootprints(w) {
   if (p.z < 1015) return [];
   const head = Math.min(
     travelled,
-    (travelled * Math.max(0, (w.dispersalAt ?? w.elapsed) - (w.raceGrace || 0))) / HOURGLASS
+    (travelled * Math.max(0, (w.dispersalAt ?? w.elapsed) - (w.raceGrace || 0))) / raceDuration(w)
   );
   const marks = [];
   for (const leg of hordeLength) {
-    const dx = p.x - leg.a[0],
-      dz = p.z - leg.a[1];
-    const near = clamp(dx * leg.tangent.x + dz * leg.tangent.z, 0, leg.len);
-    if (Math.hypot(dx - near * leg.tangent.x, dz - near * leg.tangent.z) > 38) continue;
+    const dx = p.x - leg.x,
+      dz = p.z - leg.z;
+    const near = clamp(dx * leg.dx + dz * leg.dz, 0, leg.length);
+    if (Math.hypot(dx - near * leg.dx, dz - near * leg.dz) > 38) continue;
     const start = Math.ceil(Math.max(leg.start, leg.start + near - 22) / 1.8);
-    const end = Math.floor(Math.min(leg.start + leg.len, leg.start + near + 22, head - 2) / 1.8);
+    const end = Math.floor(Math.min(leg.start + leg.length, leg.start + near + 22, head - 2) / 1.8);
     for (let i = start; i <= end; i++) {
       const taper = clamp((travelled - i * 1.8) / 65, 0.2, 1);
       for (const lane of [-12, -3.6, 5.2, 13]) {
-        const q = herdPoint(i * 1.8, ((i % 2 ? 0.13 : -0.13) + lane) * taper + 0.06 * Math.sin(i * 0.39));
+        const q = herdPoint(
+          i * 1.8,
+          skirtWreckage(i * 1.8, ((i % 2 ? 0.13 : -0.13) + lane) * taper + 0.06 * Math.sin(i * 0.39))
+        );
         if (distance(q, p) < 22) marks.push(q);
       }
     }
@@ -164,6 +175,7 @@ function spawnActors() {
 export function createWorld() {
   const w = {
     version: 2,
+    raceDuration: 350,
     gateCrossed: false,
     gateClosedAt: null,
     bridgeRaisedAt: null,
@@ -230,9 +242,9 @@ export function resumeCheckpoint(w) {
   if (!w.gateCrossed && w.route !== 'wander') {
     const remainingRoad = Math.hypot(w.player.x - 30, w.player.z - GATE_Z);
     const reserve = remainingRoad / 4.65 + (w.player.z < 1010 ? 35 : 12);
-    if (HOURGLASS - w.elapsed < reserve) {
+    if (secondsToGate(w) < reserve) {
       // Give a late retry enough daylight while preserving local animation clocks.
-      w.raceGrace = (w.raceGrace || 0) + Math.max(0, reserve - (HOURGLASS - raceTime(w)));
+      w.raceGrace = (w.raceGrace || 0) + Math.max(0, reserve - (raceDuration(w) - raceTime(w)));
       w.gateClosedAt = null;
     }
   }
@@ -242,6 +254,7 @@ export function migrate(w) {
   if (w.version !== 2) {
     w.gateCrossed = w.player.z > GATE_Z + 1.2 && w.player.z < 1554 && Math.abs(w.player.x - 30) < 25;
     w.version = 2;
+    w.raceDuration = legacyRaceSeconds;
     w.phialsGiven = w.route === 'guided';
     if (w.route === 'undecided' && w.greeted && !w.dialogue) {
       w.route = 'wander';
@@ -268,6 +281,7 @@ export function migrate(w) {
 }
 const raceTime = (w) => Math.max(0, w.elapsed - (w.raceGrace || 0));
 const event = (w, type, text) => w.events.push(text ? { type, text } : { type });
+export const secondsToGate = (w) => Math.max(0, raceDuration(w) - raceTime(w));
 function notify(w, text, seconds = 4) {
   w.notice = text;
   w.noticeUntil = w.elapsed + seconds;
@@ -316,12 +330,17 @@ function end(w, id, title, text) {
 }
 function canSeeBanquet(w) {
   const p = w.player,
-    a = w.actors.find((v) => v.type === 'princess');
+    a = w.actors.find((v) => v.type === 'princess'),
+    d = distance(p, a);
+  const eye = Math.max(p.feetY ?? -Infinity, footHeight(w, p.x, p.z)) + 1.64,
+    face = terrainHeight(a.x, a.z) + 1.35;
+  const angle = Math.atan2(face - eye, d);
   return (
     insideHall(p.x, p.z) &&
-    Math.abs(p.pitch || 0) < 0.82 &&
-    nearFacing(w, a, 5, 0.67) &&
-    clearSegment(w, p.x, p.z, a.x, a.z)
+    d <= 5 &&
+    (a.x - p.x) * Math.sin(p.yaw) + (a.z - p.z) * Math.cos(p.yaw) > 0.77 * d &&
+    Math.abs((p.pitch || 0) - angle) < 0.48 &&
+    clearSegment(w, p.x, p.z, a.x, a.z, 0.03, eye, face)
   );
 }
 function banquet(w) {
@@ -426,6 +445,7 @@ function target(w) {
       w,
       (a) =>
         reachByType[a.type] &&
+        (a.type !== 'princess' || canSeeBanquet(w)) &&
         (Math.abs(w.player.pitch || 0) < 0.87 || a.type === 'satchel' || a.type === 'berries') &&
         nearFacing(w, a, reachByType[a.type], 0.48) &&
         (a.type === 'spring' || clearSegment(w, w.player.x, w.player.z, a.x, a.z))
@@ -546,6 +566,7 @@ export function act(w, action) {
   if (action === 'guard') {
     if (w.elapsed < (w.guardReadyAt || 0) || w.elapsed < w.strikeUntil || w.player.stamina < 0.06)
       return false;
+    w.guardAt = w.elapsed;
     w.guardUntil = w.elapsed + 0.75;
     w.guardReadyAt = w.elapsed + 1.04;
     w.player.stamina -= 0.06;
@@ -585,6 +606,88 @@ function injury(w, a) {
     end(w, 'wilds', 'Lost in the green', line);
   } else notify(w, 'The ' + a.type + ' strikes. Move out of reach.', 2.7);
 }
+// Renderers submit only illustrated walkers from the last painted view. This
+// ephemeral shortlist never enters a save or an ending-camera reconstruction.
+const processionViews = new WeakMap();
+export function recordProcessionView(w, poses, aspect) {
+  if (w.milestones.bowl || w.player.z < 995 || w.raceWitness || w.sequence || w.ending) return;
+  processionViews.set(w, { poses, aspect, at: w.elapsed });
+}
+function inspectProcession(w) {
+  if (w.milestones.bowl || w.player.z < 995 || w.elapsed < (w.nextHostLook || 0)) return;
+  const view = processionViews.get(w);
+  if (!view || w.elapsed < view.at || w.elapsed - view.at > 0.45) return;
+  w.nextHostLook = w.elapsed + 0.19;
+  const p = w.player,
+    eye = Math.max(p.feetY ?? 0, footHeight(w, p.x, p.z)) + 1.64;
+  const threshold = Math.cos(Math.min(0.48, Math.atan((view.aspect || 1) / 1.48) * 0.84));
+  let seen = false,
+    bowl = false;
+  for (const a of view.poses) {
+    if (a.kind !== 0 && (seen || w.milestones.procession)) continue;
+    const dx = a.x - p.x,
+      dz = a.z - p.z,
+      d = Math.hypot(dx, dz);
+    if (
+      d < 0.3 ||
+      d > (a.kind === 0 ? 13 : 18) ||
+      (dx * Math.sin(p.yaw) + dz * Math.cos(p.yaw)) / d < threshold
+    )
+      continue;
+    const detail = a.y + (a.kind === 0 ? a.h * 0.48 : a.h * 0.78);
+    if (Math.abs((p.pitch || 0) - Math.atan2(detail - eye, d)) > 0.46) continue;
+    if (!clearSegment(w, p.x, p.z, a.x, a.z, 0.04, eye, detail)) continue;
+    const hidden = view.poses.some((b) => {
+      if (b === a) return false;
+      const bx = b.x - p.x,
+        bz = b.z - p.z,
+        u = (bx * dx + bz * dz) / (d * d);
+      if (u <= 0.025 || u >= 0.97 || Math.hypot(bx - u * dx, bz - u * dz) > 0.32) return false;
+      const height = eye + (detail - eye) * u;
+      return height > b.y + 0.25 && height < b.y + b.h;
+    });
+    if (hidden) continue;
+    seen = true;
+    if (a.kind === 0) {
+      bowl = true;
+      break;
+    }
+  }
+  if (seen && !w.milestones.procession) {
+    w.milestones.procession = true;
+    storyBeat(w, 'procession');
+    notify(w, 'The dead file past, shoulder to shoulder, on the broken road to the keep.', 4.5);
+  }
+  if (bowl) {
+    w.milestones.bowl = true;
+    storyBeat(w, 'bowl');
+    notify(w, 'One of the dead carries a wooden bowl pressed against its ribs.', 4.5);
+  }
+}
+function witnessedHost(w) {
+  const p = w.player;
+  if (w.milestones.ridge || Math.hypot(p.x - 48, p.z - 480) > 28) return false;
+  const eye = Math.max(p.feetY ?? 0, footHeight(w, p.x, p.z)) + 1.64;
+  for (const i of [0, 674, 1570, 2544]) {
+    const q = hordePosition(w, i),
+      dx = q.x - p.x,
+      dz = q.z - p.z,
+      d = Math.hypot(dx, dz);
+    if ((dx * Math.sin(p.yaw) + dz * Math.cos(p.yaw)) / d < 0.965) continue;
+    const target = terrainHeight(q.x, q.z) + 1.63;
+    if (Math.abs((p.pitch || 0) - Math.atan2(target - eye, d)) > 0.4) continue;
+    let visible = true;
+    for (let step = 2; step < d; step += 7) {
+      const u = step / d;
+      if (terrainHeight(p.x + dx * u, p.z + dz * u) > 0.02 + eye + (target - eye) * u) {
+        visible = false;
+        break;
+      }
+    }
+    if (visible) return true;
+  }
+  return false;
+}
 function landmarkBeat(w, id, condition, text, sound) {
   if (!condition || w.milestones[id]) return;
   w.milestones[id] = true;
@@ -609,46 +712,57 @@ function crowdContact(w) {
       }
     }
   }
-  return cache.people;
+  // The broad phase stores identities. Every contact uses this tick’s pose,
+  // including sidesteps, so colliders stay on the illustrated body.
+  return cache.people.map(({ i }) => ({ ...hordePosition(w, i), i }));
 }
-function reactToHost(w, q) {
+function reactToHost(w, q, quiet = false) {
   const p = w.player,
     dx = q.x - p.x,
     dz = q.z - p.z,
-    d = Math.hypot(dx, dz);
+    speed = Math.hypot(p.vx || 0, p.vz || 0);
+  const forwardX = speed > 0.25 ? p.vx / speed : Math.sin(p.yaw),
+    forwardZ = speed > 0.25 ? p.vz / speed : Math.cos(p.yaw);
+  const cross = dx * forwardZ - dz * forwardX,
+    sign = Math.abs(cross) > 0.045 ? Math.sign(cross) : q.i % 2 ? 1 : -1;
   w.hostReactions ??= {};
   for (const [i, v] of Object.entries(w.hostReactions))
     if (w.elapsed - v.at >= 2.5) delete w.hostReactions[i];
-  if (w.hostReactions[q.i]) return;
-  const ax = d > 0.01 ? dx / d : 1,
-    az = d > 0.01 ? dz / d : 0;
-  w.hostReactions[q.i] = { x: ax * 0.74, z: az * 0.74, at: w.elapsed };
-  if (w.elapsed >= (w.nextBrush || 0)) {
+  if (!quiet && w.elapsed >= (w.nextBrush || 0)) {
     cue(w, 'brush', 'host', q);
     w.nextBrush = w.elapsed + 2.2;
   }
+  const current = w.hostReactions[q.i];
+  if (current) return;
+  // Nearby files lean the same way as their closest shoulder. That preserves a
+  // finger-width between neighbours while leaving the traveller a real passage.
+  const magnitude = 0.94 * Math.exp(-Math.abs(cross) / 1.65);
+  let x = forwardZ * sign * magnitude,
+    z = -forwardX * sign * magnitude;
+  if (barrier(w, q.x + x, q.z + z, 0.21, false)) {
+    x *= -0.55;
+    z *= -0.55;
+  }
+  if (!barrier(w, q.x + x, q.z + z, 0.21, false)) w.hostReactions[q.i] = { x, z, at: w.elapsed };
 }
 function avoidHost(w, nearby) {
-  const p = w.player;
+  const p = w.player,
+    v = Math.hypot(p.vx || 0, p.vz || 0),
+    fx = v > 0.25 ? p.vx / v : 0,
+    fz = v > 0.25 ? p.vz / v : 0;
   for (const q of nearby) {
-    const d = distance(p, q);
-    if (d < 0.48) reactToHost(w, q);
-    const swing = w.attack,
-      t = swing ? (w.elapsed - swing.start) / swing.duration : 1;
-    if (t > 0.28 && t < 0.7 && d < 1.6 && nearFacing(w, q, 1.6, 0.74) && !swing.hits.includes('host' + q.i)) {
-      swing.hits.push('host' + q.i);
-      reactToHost(w, q);
-      cue(w, 'impact', 'zombie', q);
-    }
+    const dx = q.x - p.x,
+      dz = q.z - p.z,
+      along = dx * fx + dz * fz,
+      side = Math.abs(dx * fz - dz * fx);
+    if (Math.hypot(dx, dz) < 0.53) reactToHost(w, q);
+    else if (v > 0.35 && along > -0.25 && along < 1.45 && side < 2) reactToHost(w, q, true);
   }
   return (x, z) =>
     nearby.some((q) => {
       const d = (x - q.x) ** 2 + (z - q.z) ** 2;
       if (d < 0.5 ** 2 && d < (p.x - q.x) ** 2 + (p.z - q.z) ** 2) {
-        if (w.elapsed >= (w.nextBrush || 0)) {
-          cue(w, 'brush', 'host', q);
-          w.nextBrush = w.elapsed + 3;
-        }
+        reactToHost(w, q);
         return true;
       }
       return false;
@@ -659,21 +773,26 @@ function walk(w, dt, input) {
   const f = clamp(Number(input.forward) || 0, -1, 1),
     s = clamp(Number(input.strafe) || 0, -1, 1);
   p.yaw += (Number(input.turn) || 0) * 1.9 * dt;
-  const surface = footing(w, p.x, p.z);
+  const immersion = riverImmersion(w, p.x, p.z),
+    surface = footing(w, p.x, p.z);
+  p.immersion = immersion;
   if (p.exhausted && p.stamina > 0.45) p.exhausted = false;
-  const sprint = input.sprint && f > 0.45 && !p.exhausted && !(w.guardUntil > w.elapsed);
+  const sprint =
+    !input.walk && input.sprint && immersion < 0.3 && f > 0.45 && !p.exhausted && !(w.guardUntil > w.elapsed);
   p.stamina = clamp(p.stamina + (sprint ? -0.082 : 0.115) * dt, 0, 1);
   if (p.stamina <= 0.002) p.exhausted = true;
   const grade = terrainHeight(p.x + Math.sin(p.yaw), p.z + Math.cos(p.yaw)) - terrainHeight(p.x, p.z);
   let speed =
-    (sprint ? 6.75 : 3.95) * (surface === 'water' ? 0.65 : 1) * clamp(1 - grade * f * 0.48, 0.68, 1.08);
+    (input.walk ? 1.55 : sprint ? 6.75 : 3.95) *
+    (1 - 0.78 * Math.min(1, immersion)) *
+    clamp(1 - grade * f * 0.48, 0.68, 1.08);
   if (w.guardUntil > w.elapsed) speed *= 0.58;
   const norm = Math.max(1, Math.hypot(f, s));
   const forward = (f * speed * (f < 0 ? 0.64 : 1)) / norm,
     side = (s * speed * 0.8) / norm;
   const sx = Math.sin(p.yaw),
     cz = Math.cos(p.yaw);
-  const desiredX = forward * sx + side * cz,
+  const desiredX = forward * sx + side * cz + immersion * (0.65 + immersion * 0.6),
     desiredZ = forward * cz - side * sx;
   const response = 1 - Math.exp(-dt * (sprint ? 8.2 : 12));
   p.vx = (p.vx || 0) + (desiredX - (p.vx || 0)) * response;
@@ -685,10 +804,17 @@ function walk(w, dt, input) {
   if (Math.hypot(p.vx, p.vz) > 0.02) moveBody(w, p, p.vx * dt, p.vz * dt, avoid);
   const ground = footHeight(w, p.x, p.z);
   // Snap to rising ground. Drop from ledges under gravity instead of snapping the camera down.
-  if (!Number.isFinite(p.feetY) || p.feetY <= ground + 0.08) {
+  const drop = p.feetY - ground;
+  if (!Number.isFinite(p.feetY) || drop <= 0.055) {
+    if (p.airborne && p.verticalSpeed < -0.9) {
+      cue(w, 'land', footing(w, p.x, p.z), p);
+      p.landedAt = w.elapsed;
+    }
+    p.airborne = false;
     p.feetY = ground;
     p.verticalSpeed = 0;
   } else {
+    p.airborne = true;
     p.verticalSpeed = (p.verticalSpeed || 0) - dt * 9.81;
     p.feetY = Math.max(ground, p.feetY + p.verticalSpeed * dt);
   }
@@ -703,14 +829,27 @@ function walk(w, dt, input) {
       );
     if (block === 'thorns') notify(w, 'A wall of blackthorn closes the forest here.');
   }
-  return oldZ;
+  return { oldZ, marchers: host || [] };
 }
 function simulate(w, dt, input) {
   const p = w.player;
   w.elapsed += dt;
-  const oldZ = walk(w, dt, input);
+  const { oldZ, marchers } = walk(w, dt, input);
   advancePhial(w, dt, notify);
-  strikeContacts(w, { move: (a, x, z) => moveBody(w, a, x, z) }, { ring, notify, drop });
+  strikeContacts(
+    w,
+    { move: (a, x, z) => moveBody(w, a, x, z) },
+    {
+      ring,
+      notify,
+      drop,
+      marchers,
+      hitMarcher: (w, q, pt) => {
+        reactToHost(w, q);
+        cue(w, 'impact', 'zombie', pt || q);
+      },
+    }
+  );
   storyTick(w, dt);
   const peal = Math.floor((w.elapsed + 31) / 37);
   if (peal > w.lastBell) {
@@ -735,22 +874,39 @@ function simulate(w, dt, input) {
   if (
     !w.gateCrossed &&
     w.gateClosedAt == null &&
-    oldZ < GATE_Z + 1.25 &&
-    p.z >= GATE_Z + 1.25 &&
+    oldZ < GATE_Z &&
+    p.z >= GATE_Z &&
     Math.abs(p.x - 30) < 4.55 &&
-    raceTime(w) <= HOURGLASS
+    raceTime(w) - (dt * (p.z - GATE_Z)) / (p.z - oldZ) <= raceDuration(w)
   ) {
     w.gateCrossed = true;
+    w.gateCrossedAt = w.elapsed - (dt * (p.z - GATE_Z)) / (p.z - oldZ);
     w.milestones.gateSave = true;
     saveCheckpoint(w);
     notify(w, 'Inside the gate. Xero is still somewhere in the keep.');
     cue(w, 'gate', 'crossed', p);
   }
-  if (raceTime(w) >= HOURGLASS && w.gateClosedAt == null) {
-    w.gateClosedAt = w.elapsed;
+  if (
+    raceTime(w) >= raceDuration(w) &&
+    w.gateClosedAt == null &&
+    (!w.gateCrossed || (p.z > GATE_Z + 1.2 && p.z < 1554 && Math.abs(p.x - 30) < 25))
+  ) {
+    w.gateClosedAt = w.gateCrossed ? w.elapsed : Math.min(w.elapsed, raceDuration(w) + (w.raceGrace || 0));
     cue(w, 'gate', 'close', { x: 30, z: GATE_Z });
+    if (!w.gateCrossed && w.route !== 'wander') {
+      const gate = { x: 30, z: GATE_Z };
+      if (!nearFacing(w, gate, 42, 0.65) || Math.abs(p.pitch || 0) > 0.48) {
+        w.raceWitness = { x: 42, z: 1418, yaw: Math.atan2(-12, 17) };
+        notify(w, 'At Castle Xero, the vanguard reaches the iron gate.', arrivalCoda);
+      }
+    }
   }
-  if (!w.gateCrossed && w.route !== 'wander' && w.gateClosedAt != null && w.elapsed - w.gateClosedAt >= 2.2) {
+  if (
+    !w.gateCrossed &&
+    w.route !== 'wander' &&
+    w.gateClosedAt != null &&
+    w.elapsed - w.gateClosedAt >= arrivalCoda
+  ) {
     end(
       w,
       'horde',
@@ -762,15 +918,15 @@ function simulate(w, dt, input) {
   landmarkBeat(
     w,
     'fork',
-    nearFacing(w, { x: roadX(220) + 7, z: 220 }, 10, 0.1),
-    'On the northbound milepost, Xero’s blue ribbon hangs from an open shackle. In the western valley, a long dark line is moving.'
+    Math.abs(p.pitch || 0) < 0.51 && nearFacing(w, { x: roadX(220) + 7, z: 220 }, 9, 0.64),
+    'On the northbound milepost, Xero’s blue ribbon hangs from an open shackle. The little iron tongue knocks against the post.'
   );
   landmarkBeat(
     w,
     'ridge',
-    p.z > 449 && p.z < 550 && Math.abs(p.x) < 235 && nearFacing(w, hordePosition(w, 0), 1300, 0.46),
-    'From the ridge you can see them advancing under the castle banners. There must be thousands.',
-    'howl'
+    witnessedHost(w),
+    'Across the western valley, a dark rank moves, then another. Both are following the road to Castle Xero.',
+    'answer'
   );
   landmarkBeat(
     w,
@@ -779,21 +935,7 @@ function simulate(w, dt, input) {
     'Cut into the stone are three bell mouths. Beneath them: “When the keep calls, answer in kind.”',
     'bell'
   );
-  if (!w.milestones.procession && p.z > 1000 && Math.abs(p.x) < 450 && w.elapsed > (w.nextHostLook || 0)) {
-    w.nextHostLook = w.elapsed + 1.2;
-    for (let i = 0; i < HORDE_COUNT; i += 240) {
-      if (distance(p, hordePosition(w, i)) < 48) {
-        landmarkBeat(
-          w,
-          'procession',
-          true,
-          'A grey face turns at the toll. The dead pass within earshot without once looking at you.',
-          'answer'
-        );
-        break;
-      }
-    }
-  }
+  inspectProcession(w);
   landmarkBeat(
     w,
     'approach',
@@ -872,11 +1014,12 @@ export function getHUD(w) {
     health: w.player.health,
     maxHealth: w.player.maxHealth,
     potions: w.potions,
-    hordeProgress: clamp(raceTime(w) / HOURGLASS, 0, 1),
+    hordeProgress: clamp(raceTime(w) / raceDuration(w), 0, 1),
     hasMap: w.hasMap,
     gateCrossed: !!w.gateCrossed,
-    secondsLeft: Math.max(0, HOURGLASS - raceTime(w)),
+    secondsLeft: secondsToGate(w),
     bearing: route?.bearing ?? null,
     distance: route?.metres ?? null,
+    crossing: route?.crossing || '',
   };
 }

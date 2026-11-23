@@ -1159,3 +1159,80 @@ h1 {
     min-width: 2.75rem;
   }
 }
+.binding-rows > div {
+  display: grid;
+  grid-template-columns: minmax(5rem, 1fr) minmax(7rem, 1.4fr) minmax(3rem, 0.65fr);
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #ae9a663e;
+}
+.binding-rows select {
+  padding: 0.6rem 0.3rem;
+  width: 100%;
+  min-height: 44px;
+  background: #182b24;
+  color: var(--cream);
+  border: 1px solid #aa936b88;
+  font: inherit;
+}
+@media (pointer: coarse), (any-pointer: coarse), (hover: none) {
+  .map-tools button,
+  .map-details li .secondary,
+  .panel .choice,
+  .panel #panel-actions button,
+  .panel .close,
+  .map-details summary,
+  .setting select {
+    min-height: 44px;
+  }
+  .map-tools button,
+  .panel .close {
+    min-width: 44px;
+  }
+  .map-details summary {
+    display: list-item;
+    align-content: center;
+  }
+}
+@keyframes bell-call-note {
+  from {
+    opacity: 0.16;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.bell-tone.pealing {
+  animation: bell-call-note 0.16s ease-out both;
+}
+
+.device-report dl {
+  margin: 1rem 0;
+}
+.device-report dt {
+  font-weight: 700;
+}
+.device-report dd {
+  margin: 0.25rem 0 0.9rem;
+}
+.device-report h3 {
+  margin: 1.2rem 0 0.25rem;
+}
+.device-report > button {
+  margin: 0.25rem 0.4rem 0.25rem 0;
+}
+.device-listen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+.device-listen [role='status']:empty {
+  display: none;
+}
+.device-listen [role='status'] {
+  order: 1;
+  flex-basis: 100%;
+}

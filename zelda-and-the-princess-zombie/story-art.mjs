@@ -1,5 +1,6 @@
 // Small reusable scene meshes for the gallery, spring and final tableau. All positions are in world metres.
 import { castleAltitude, terrainHeight } from './geography.mjs';
+import { contactPose, drawContact } from './story-contact.mjs';
 export { storyHandPose } from './story.mjs';
 
 const tau = Math.PI * 2;
@@ -122,6 +123,45 @@ export function storyStatic(m, g) {
     box(m, 9.64, deck + 0.02, z, 0.72, 0.71, 0.72, '5d564b');
     circularIron(m, g, 9.85, deck + 1.04, z, 0.27, 0.048, 'af9061', 'x');
     beam(m, [9.85, deck + 1.1, z], [9.85, deck + 2.94, z], 0.029, 0.03, 'bfa679', 5);
+  }
+  // A portable oak-and-cloth screen separates the sickbed table from the bright east windows.
+  // The folding wings leave both side aisles and the overhead bell visible.
+  const screens = [
+    [27.48, 1519.08, 29.52, 1519.82],
+    [29.52, 1519.82, 31.91, 1519.82],
+    [31.91, 1519.82, 33.96, 1519.08],
+  ];
+  for (const [x1, z1, x2, z2] of screens) {
+    const at = (t, h) => [mix(x1, x2, t), hallY + h, mix(z1, z2, t)];
+    const lower = 0.17,
+      upper = 2.63;
+    quad(m, at(0, lower), at(1, lower), at(1, upper), at(0, upper), '3b4a45');
+    for (let j = 0; j < 7; j++) {
+      const a = j / 7,
+        b = (j + 1) / 7;
+      quad(
+        m,
+        at(a, lower + 0.07),
+        at(b, lower + 0.07),
+        at(b, upper - 0.07),
+        at(a, upper - 0.07),
+        ['34433e', '394842', '405149', '3a4942'][j % 4]
+      );
+    }
+    for (const h of [lower, upper]) beam(m, at(0, h), at(1, h), 0.065, 0.065, '786447', 7);
+    for (const k of [0, 1]) {
+      beam(m, at(k, 0.025), at(k, upper + 0.07), 0.057, 0.055, '68513d', 7);
+      g.rings(
+        m,
+        [
+          [x1 + (x2 - x1) * k, hallY + upper + 0.045, z1 + (z2 - z1) * k, 0.065],
+          [x1 + (x2 - x1) * k, hallY + upper + 0.18, z1 + (z2 - z1) * k, 0.008],
+        ],
+        7,
+        'ab9264'
+      );
+    }
+    for (const h of [0.32, 2.47]) beam(m, at(0.035, h), at(0.965, h), 0.013, 0.013, '8b7958', 5);
   }
   // An open registry, broken cuffs and a royal seal tell the captivity story within arm's reach.
   box(m, 40, hallY + 0.8, 1473.48, 2.8, 0.15, 1.78, '574138');
@@ -440,6 +480,12 @@ export function storyModels(model, g) {
       'd3c190'
     );
   });
+  models['silver-drop'] = model((m) => ellipsoid(m, g, 0, 0, 0, 0.018, 0.036, 0.018, 'd5ead5', 8));
+  models['rushlight'] = model((m) => {
+    g.beam(m, [0, 0, 0], [0, 0.083, 0], 0.058, 0.023, 'a78955', 9);
+    g.beam(m, [0, 0.079, 0], [0, 0.155, 0], 0.022, 0.012, 'd7b373', 7);
+    g.beam(m, [0, 0.15, 0], [0.006, 0.197, 0.002], 0.019, 0.002, 'ffe0a0', 7);
+  });
   models['rope-coil'] = model((m) => {
     for (let k = 0; k < 18; k++) {
       const a = k * 0.61,
@@ -481,8 +527,9 @@ export function storyFigure(w, t = w.elapsed, ground = terrainHeight) {
   if (p.cured || (q?.id === 'saved' && u > 0.19)) {
     key = 'cured';
     h = 1.84;
-    x = p.x + 0.23;
-    z = p.z + 0.16;
+    const besideHart = q ? 1 - smooth((u - 0.52) / 0.22) : 0;
+    x = p.x + 0.23 * besideHart;
+    z = p.z + 0.16 * besideHart;
     dy = 0.02;
     // Xero kneels to release the cord first. Only afterwards does she offer Zelda her hand.
     dy -= 0.23 * (1 - smooth((u - 0.42) / 0.26)) * (q ? 1 : 0);
@@ -596,10 +643,43 @@ export function storyPieces(w, t = w.elapsed, ground = terrainHeight) {
       put(u < 0.54 ? 'hart-fold' : 'hart-step-' + (Math.floor(t * 7) % 6), x, y, z, 0.04 + run * 0.16);
     }
   }
-  if (w.ropeFallen) put('rope-coil', 30.43, hallY + 0.02, 1516.04);
-  if (saved && u < 0.34)
-    put('vial-silver', fig.x + 0.18, fig.y + 1.03 + Math.sin(u * 9) * 0.11, fig.z - 0.25, 0, 1.18);
+  const dropped = w.tetherRelease,
+    age = dropped ? t - dropped.at : Infinity;
+  if ((w.ropeFallen || dropped) && age > 0.44)
+    put('rope-coil', 30.43, hallY + 0.02, 1516.04, 0, 0.37 + 0.63 * smooth((age - 0.44) / 0.62));
+  for (const [x, z, scale] of [
+    [30.65, 1517.71, 1.67],
+    [32.56, 1516.77, 1.32],
+    [32.63, 1517.0, 1.05],
+  ])
+    put('rushlight', x, restY + 0.01, z, 0, scale * (1 + 0.026 * Math.sin(t * 5.63 + x)));
+  if (saved && u < 0.19) {
+    const pose = contactPose(w, fig, ground),
+      flight = smooth((u - 0.075) / 0.115);
+    const to = [fig.x - 0.2 * Math.cos(p.yaw), fig.y + 1.17, fig.z + 0.2 * Math.sin(p.yaw)];
+    const [x, y, z] = pose.palm.map((n, i) => mix(n, to[i], flight));
+    put('vial-silver', x, y + 0.045 + 0.48 * Math.sin(Math.PI * flight), z, flight * 4, 1.13);
+  } else if (saved && u < 0.31 && dropped) {
+    const f = (u - 0.19) / 0.12;
+    for (let j = 0; j < 11; j++) {
+      const a = j * 2.39996,
+        r = (0.13 + (j % 4) * 0.064) * f;
+      const y = ground(dropped.x, dropped.z) + dropped.height + 0.4 * f * (1 - f) - 0.83 * f * f;
+      put(
+        'silver-drop',
+        dropped.x + Math.cos(a) * r,
+        y + Math.sin(a) * 0.07 * (1 - f),
+        dropped.z + Math.sin(a) * r,
+        a,
+        1 - f * 0.85
+      );
+    }
+  }
   return list;
+}
+export function storyHands(m, g, w, t = w.elapsed, ground = terrainHeight) {
+  if (!w.sequence) return;
+  drawContact(m, g, contactPose(w, storyFigure(w, t, ground), ground));
 }
 export function storyTethers(w, t = w.elapsed, ground = terrainHeight) {
   if (dist(w.player, 30, 1516) > 85) return [];
@@ -609,25 +689,78 @@ export function storyTethers(w, t = w.elapsed, ground = terrainHeight) {
   const fed = fig.key === 'feeding',
     pull = bellPull(t);
   const wristOffset = fed ? (fig.flip ? 1 : -1) * fig.h * (832 / 680) * 0.26 : -0.2;
-  const end = w.ropeFallen
-    ? [30.48, hallY + 0.12, 1516.11]
-    : [
-        fig.x + wristOffset * Math.cos(w.player.yaw),
-        fig.y + (fed ? fig.h * 0.59 : 1.17) - 0.11 * pull,
-        fig.z - wristOffset * Math.sin(w.player.yaw) - 0.035,
-      ];
-  const slack = w.ropeFallen ? 0.11 : fed ? 0.09 * (1 - pull) : 0.035,
-    segments = [];
+  const release = w.tetherRelease;
+  const wrist = [
+    fig.x + wristOffset * Math.cos(w.player.yaw),
+    fig.y + (fed ? fig.h * 0.59 : 1.17) - 0.11 * pull,
+    fig.z - wristOffset * Math.sin(w.player.yaw) - 0.035,
+  ];
+  const chosen = release?.cause === 'release';
+  let end = w.ropeFallen ? [30.48, hallY + 0.12, 1516.11] : wrist;
+  let slack = fed ? 0.19 * (1 - pull) : 0.28;
+  if (release) {
+    const age = Math.max(0, t - release.at),
+      low = [30.48, hallY + 0.12, 1516.11],
+      where = [release.x, ground(release.x, release.z) + release.height, release.z];
+    // The loop slips clear of the moving wrist, swings back under the clapper and pools on the flags.
+    const releaseT = clamp(age / 0.8),
+      fall = smooth(releaseT),
+      ring = Math.exp(-age * 3.0) * Math.sin(age * 7.5) * (chosen ? 0.14 : 0.36);
+    end = where.map((v, i) => mix(v, low[i], fall));
+    end[0] += ring;
+    end[2] -= ring * 0.25;
+    slack = 0.19 * (1 - fall) + 0.07;
+  } else if (w.sequence?.id === 'feast') slack *= 1 - smooth((w.sequence.progress - 0.27) / 0.095);
+  const segments = [];
   let prev = anchor;
   for (let i = 1; i <= 5; i++) {
     const p = i / 5;
     const pt = [
       mix(anchor[0], end[0], p) + slack * Math.sin(Math.PI * p),
-      mix(anchor[1], end[1], p),
+      mix(anchor[1], end[1], p) - slack * 0.53 * Math.sin(Math.PI * p),
       mix(anchor[2], end[2], p) - slack * Math.sin(Math.PI * p),
     ];
     segments.push({ a: prev, b: pt, radius: 0.028, color: i % 2 ? 'bfa878' : 'ad956e' });
     prev = pt;
   }
   return segments;
+}
+
+// Canvas images ordinarily use one affine screen rectangle. At arm's length the near and far
+// ends of a tall actor have different projection scales. Slice the painting in world space so
+// her illustrated palms land on the exact same 3D coordinates as the articulated fingertips.
+export function paintStoryPortrait(image, fig, ray, queue, cy, sy) {
+  const width = image.naturalWidth || image.width,
+    height = image.naturalHeight || image.height;
+  if (!width || !height) return;
+  const span = ((fig.h * width) / height) * (fig.w || 1),
+    rows = 24;
+  const point = (u, v) =>
+    ray(fig.x + cy * (u - 0.5) * span, fig.y + (1 - v) * fig.h, fig.z - sy * (u - 0.5) * span);
+  let topL = point(0, 0),
+    topR = point(1, 0);
+  for (let i = 0; i < rows; i++) {
+    const v = (i + 1) / rows,
+      bottomL = point(0, v),
+      bottomR = point(1, v);
+    if (topL && topR && bottomL && bottomR) {
+      const y = topL[1],
+        h = bottomL[1] - y + 0.38,
+        x = (topL[0] + bottomL[0]) * 0.5,
+        w = (topR[0] + bottomR[0]) * 0.5 - x;
+      if (h > 0 && w > 0)
+        queue.push({
+          d: (topL[2] + bottomL[2]) * 0.5,
+          draw(ctx) {
+            ctx.save();
+            ctx.translate(fig.flip ? x + w : x, y);
+            if (fig.flip) ctx.scale(-1, 1);
+            ctx.drawImage(image, 0, (i * height) / rows, width, height / rows, 0, 0, w, h);
+            ctx.restore();
+          },
+        });
+    }
+    topL = bottomL;
+    topR = bottomR;
+  }
 }

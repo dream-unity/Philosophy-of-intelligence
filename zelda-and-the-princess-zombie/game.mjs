@@ -1,6 +1,17 @@
+import { createFieldCheck } from './field-check.mjs';
+import { witchVignette } from './story-witch.mjs';
+import {
+  actionNames,
+  slotNames,
+  keyChoices,
+  controlLayout,
+  moveTouchAction,
+  rebind,
+  actionForKey,
+} from './control-layout.mjs';
 import { advanceGameClock } from './game-clock.mjs';
 import { makeFieldSurvey } from './map-controls.mjs';
-import { hasDirections, compassPoint, bearing, describeRace, survey } from './navigation.mjs';
+import { hasDirections, compassPoint, bearing, describeRace, survey, bridgeReport } from './navigation.mjs';
 import {
   saveKey,
   settingsKey,
@@ -14,8 +25,12 @@ import {
   hasFork,
   rememberEnding,
   pastJourneys,
+  retryPending,
+  journeyFile,
+  readJourneyFile,
+  applyJourneyFile,
 } from './journey-store.mjs';
-import { createWorld, act, choose, getHUD, resumeCheckpoint, hordePosition } from './world.mjs';
+import { createWorld, act, choose, getHUD, resumeCheckpoint, hordePosition, arrivalView } from './world.mjs';
 import { createAudio } from './audio.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +42,7 @@ const preferences = read(settingsKey) || {};
 const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 const validMix = (v) => (Number.isFinite(v) ? clamp(v, 0, 1) : 1);
 const options = {
+  layout: controlLayout(preferences.layout),
   handedness: preferences.handedness === 'left' ? 'left' : 'right',
   stickSize: ['small', 'standard', 'large'].includes(preferences.stickSize)
     ? preferences.stickSize
@@ -56,7 +72,8 @@ const view = $('view'),
   stage = $('stage'),
   title = $('title-screen'),
   overlay = $('overlay');
-const audio = createAudio();
+const audio = createAudio(),
+  fieldCheck = createFieldCheck();
 let activeSurvey = null,
   accumulator = 0,
   captionTimer = 0,
@@ -66,6 +83,15 @@ function applyPreferences() {
   document.body.dataset.hand = options.handedness;
   document.body.dataset.stick = options.stickSize;
   document.body.dataset.stickHeight = options.stickHeight;
+  for (const [order, id] of options.layout.slots.entries()) {
+    const action = id === 'run' ? $('sprint') : document.querySelector('[data-act="' + id + '"]');
+    action.style.order = order;
+    if (options.layout.keys[id]) {
+      const letter = options.layout.keys[id].slice(3);
+      action.querySelector('kbd').textContent = letter;
+      action.setAttribute('aria-keyshortcuts', letter);
+    }
+  }
   audio.setMix?.(options.mix);
   if (world) {
     world.renderQuality = options.quality;
@@ -176,6 +202,7 @@ function releaseLook() {
 }
 function modal(name, kicker, heading, body, actions, { closable = true } = {}) {
   if (!panel) lastFocus = document.activeElement;
+  fieldCheck.pause();
   stopMotion();
   panel = name;
   releaseLook();
@@ -183,7 +210,8 @@ function modal(name, kicker, heading, body, actions, { closable = true } = {}) {
   title.inert = screen === 'title';
   stage.inert = screen === 'game';
   $('panel').classList.toggle('map-panel', name === 'map');
-  const portrait = name === 'dialogue' && world?.dialogue?.speaker === 'The witch';
+  const portrait =
+    name === 'dialogue' && world?.dialogue?.speaker === 'The witch' && world.dialogue.kind !== 'witch';
   $('panel').classList.toggle('witch-panel', portrait);
   let portraitImage = $('witch-portrait');
   if (portrait && !portraitImage) {
@@ -224,6 +252,23 @@ function dismiss() {
   focusNode?.focus({ preventScroll: true });
 }
 function returnFromPanel() {
+  if (panel === 'binding' || panel === 'device') {
+    preferencesPanel();
+    return;
+  }
+  if (panel === 'load-confirm') {
+    saveFiles();
+    return;
+  }
+  if (panel === 'files') {
+    if (screen === 'game') {
+      if (world?.ending) {
+        dismiss();
+        syncStory();
+      } else pause();
+    } else dismiss();
+    return;
+  }
   if (panel === 'history') {
     dismiss();
     if (world?.ending) syncStory();
@@ -266,13 +311,15 @@ function returnFromPanel() {
 $('panel-close').addEventListener('click', returnFromPanel);
 function controls() {
   const touch = paragraph(
-    'On a touchscreen, move with your left thumb and drag the view with your right. Drag from a tool to aim, then release to use it. Run switches between walking and sprinting. Swap sides or resize the joystick in Settings.'
+    'On a touchscreen, move with your left thumb and drag the view with your right. Drag from a tool to aim, then release to use it. Nudge the stick to walk or push it farther to jog. Run toggles sprint. Swap sides or resize the joystick in Settings.'
   );
   const table = document.createElement('div');
   table.className = 'key-table';
   for (const label of [
-    'Move',
+    'Jog',
     'W A S D',
+    'Walk',
+    'Hold Space while moving',
     'Look',
     'Mouse or drag',
     'Turn / move',
@@ -280,15 +327,15 @@ function controls() {
     'Look up / down',
     'Page Up / Page Down',
     'Thrust / guard',
-    'R / G',
+    options.layout.keys.thrust.slice(3) + ' / ' + options.layout.keys.guard.slice(3),
     'Run',
     'Hold Shift',
     'Interact',
-    'E',
+    options.layout.keys.interact.slice(3),
     'Swing sword',
-    'F or a short click',
+    options.layout.keys.strike.slice(3) + ' or a short click',
     'Cast cinder phial',
-    'Q',
+    options.layout.keys.potion.slice(3),
     'Map / pause',
     'M / Esc',
   ]) {
@@ -334,6 +381,7 @@ function pause() {
       'primary'
     ),
     button('Journal', journalPanel),
+    button('Save files', saveFiles),
     button('Settings', preferencesPanel),
     button('How to play', controls),
     button('Title screen', goHome),
@@ -439,7 +487,11 @@ function preferencesPanel() {
     ['low', 'Lower'],
     ['raised', 'Raised'],
   ]);
-  const actions = [button('Back', returnFromPanel, 'primary')];
+  const actions = [
+    button('Back', returnFromPanel, 'primary'),
+    button('Arrange controls', bindingsPanel),
+    button('Device check', devicePanel),
+  ];
   if (view.requestPointerLock)
     actions.push(
       button('Capture mouse', () => {
@@ -453,6 +505,161 @@ function preferencesPanel() {
     actions.push(button(document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen', openFullscreen));
   modal('preferences', '', 'Settings', rows, actions);
 }
+function devicePanel() {
+  const content = document.createElement('div');
+  modal('device', '', 'Device check', [content], [button('Back', returnFromPanel)]);
+  fieldCheck.mount(content, {
+    resume: () => {
+      audio.unlock();
+      dismiss();
+    },
+    playExample: (id) => options.sound && audio.preview(id),
+  });
+}
+function bindingsPanel() {
+  const group = document.createElement('div');
+  group.className = 'binding-rows';
+  const rows = [];
+  function menu(values, changed, label) {
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', label);
+    for (const [value, text] of values) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      select.append(option);
+    }
+    select.onchange = () => {
+      changed(select.value);
+      refresh();
+      applyPreferences();
+      write(settingsKey, options);
+    };
+    return select;
+  }
+  function refresh() {
+    for (const { id, position, key } of rows) {
+      position.value = String(options.layout.slots.indexOf(id));
+      if (key) key.value = options.layout.keys[id];
+    }
+  }
+  for (const [id, name] of Object.entries(actionNames)) {
+    const row = document.createElement('div'),
+      title = document.createElement('strong');
+    title.textContent = name;
+    const position = menu(
+      slotNames.map((v, i) => [i, v]),
+      (n) => moveTouchAction(options.layout, id, Number(n)),
+      name + ' touch position'
+    );
+    const key =
+      id === 'run'
+        ? null
+        : menu(
+            keyChoices.map((k) => [k, k.slice(3)]),
+            (code) => rebind(options.layout, id, code),
+            name + ' keyboard key'
+          );
+    row.append(title, position, key || document.createTextNode('Shift'));
+    group.append(row);
+    rows.push({ id, position, key });
+  }
+  refresh();
+  modal(
+    'binding',
+    '',
+    'Arrange controls',
+    [
+      paragraph(
+        'Choose a touch position or key for each action. If another action uses it, the two swap.',
+        'field-note'
+      ),
+      group,
+    ],
+    [
+      button('Back', returnFromPanel, 'primary'),
+      button('Reset controls', () => {
+        options.layout = controlLayout();
+        refresh();
+        applyPreferences();
+        write(settingsKey, options);
+      }),
+    ]
+  );
+}
+function saveFiles() {
+  const active = world || loadJourney(),
+    status = paragraph(
+      lasting()
+        ? 'Your browser can save on this device.'
+        : 'Device storage is unavailable. Download your journey to keep a copy.',
+      'field-note'
+    );
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.accept = '.json,application/json';
+  file.hidden = true;
+  file.onchange = async () => {
+    try {
+      if (!file.files[0]) return;
+      const bundle = readJourneyFile(JSON.parse(await file.files[0].text()));
+      if (!bundle) throw Error();
+      modal(
+        'load-confirm',
+        '',
+        'Load this journey?',
+        [
+          paragraph(
+            'Replace the active position with this saved journey? Completed journeys stay in your history.'
+          ),
+        ],
+        [
+          button(
+            'Load journey',
+            () => {
+              applyJourneyFile(bundle);
+              start(true);
+            },
+            'primary'
+          ),
+          button('Keep my place', saveFiles),
+        ]
+      );
+    } catch {
+      status.textContent = 'This file could not be read as a saved journey.';
+      file.value = '';
+    }
+  };
+  const actions = [];
+  if (active)
+    actions.push(
+      button('Download journey', () => {
+        const blob = new Blob([JSON.stringify(journeyFile(active))], { type: 'application/json' }),
+          url = URL.createObjectURL(blob),
+          link = document.createElement('a');
+        link.href = url;
+        link.download = 'princess-xero-journey.json';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })
+    );
+  actions.push(button('Load journey file', () => file.click()));
+  if (!lasting())
+    actions.push(
+      button('Retry device save', () => {
+        const ok = retryPending();
+        status.textContent = ok
+          ? 'Your journey is saved on this device.'
+          : 'Device storage is still unavailable. Your current journey remains in this tab.';
+        if (screen === 'game' && ok) text('storage-status', '');
+      })
+    );
+  actions.push(button('Back', returnFromPanel));
+  modal('files', '', 'Save files', [status, file], actions);
+}
+$('save-files').addEventListener('click', saveFiles);
 function journalPanel() {
   if (!world || world.dialogue || world.ending) return;
   const notes = Array.isArray(world.journal) ? world.journal : [],
@@ -530,6 +737,7 @@ function updateStart() {
 }
 function goHome() {
   save();
+  fieldCheck.pause();
   releaseLook();
   cancelAnimationFrame(frameId);
   frameId = 0;
@@ -619,6 +827,13 @@ $('start').addEventListener('click', () => start(true));
 function drawMap() {
   activeSurvey?.draw();
 }
+function routePhrase(crossing) {
+  return crossing === 'sluice'
+    ? 'including the remaining sluice detour'
+    : crossing === 'ford'
+      ? 'via Pale Ford'
+      : 'by the marked route';
+}
 function mapPanel() {
   if (!world || world.dialogue || world.ending || world.sequence) return;
   if (panel === 'map') {
@@ -638,19 +853,16 @@ function mapPanel() {
         hud.location +
           ' · ' +
           Math.round(hud.distance) +
-          ' m by the marked route · next bearing ' +
+          ' m ' +
+          routePhrase(hud.crossing) +
+          ' · next bearing ' +
           compassPoint(hud.bearing) +
           '.',
         'field-note'
       )
     );
   if (hasDirections(world) || world.survey?.visits?.bells)
-    notes.push(
-      paragraph(
-        world.bridgeOpen ? 'Sluice bridge: raised and passable.' : 'Sluice bridge: lowered.',
-        'field-note'
-      )
-    );
+    notes.push(paragraph('Sluice bridge · ' + bridgeReport(world), 'field-note'));
   modal('map', '', world.hasMap ? 'The inked map' : 'Field sketch', notes, [
     button('Fold map', returnFromPanel),
   ]);
@@ -699,7 +911,7 @@ function syncStory() {
       ];
       const lines = d.text.split(/\s+(?=Option number (?:one|two|three))/);
       lines.forEach((line, i) => {
-        if (gestures[i]) paragraphs.push(paragraph(gestures[i], 'stage-direction'));
+        if (gestures[i]) paragraphs.push(witchVignette(i, gestures[i], options.reduceMotion));
         paragraphs.push(paragraph(line));
       });
     } else paragraphs.push(paragraph(d.text));
@@ -770,7 +982,7 @@ function refreshHUD() {
   text(
     'route-readout',
     hasDirections(world) && Number.isFinite(h.distance)
-      ? compassPoint(h.bearing) + ' · ' + Math.round(h.distance) + ' m by trail'
+      ? compassPoint(h.bearing) + ' · ' + Math.round(h.distance) + ' m ' + routePhrase(h.crossing)
       : ''
   );
   const sighted = world.milestones?.ridge || world.survey?.visits?.downs;
@@ -805,7 +1017,11 @@ document.querySelectorAll('[data-act]').forEach((b) => {
   b.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' || panel) return;
     gesture = { id: e.pointerId, x: e.clientX, y: e.clientY };
-    b.setPointerCapture(e.pointerId);
+    try {
+      b.setPointerCapture(e.pointerId);
+    } catch {
+      /* A released pointer cannot be captured. */
+    }
   });
   b.addEventListener('pointermove', (e) => {
     if (gesture?.id !== e.pointerId) return;
@@ -846,6 +1062,7 @@ function frame(timestamp) {
         strafe: movement.strafe + Number(keys.has('KeyD')) - Number(keys.has('KeyA')),
         turn: Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')),
         sprint: sprint || physicalShift.size > 0,
+        walk: keys.has('Space'),
       };
       accumulator = advanceGameClock(
         world,
@@ -854,7 +1071,7 @@ function frame(timestamp) {
         input,
         Number(keys.has('PageUp')) - Number(keys.has('PageDown'))
       );
-      audio.update(world);
+      audio.update(arrivalView(world));
     }
     for (const ev of world.events.splice(0)) {
       audio.cue(ev);
@@ -869,7 +1086,9 @@ function frame(timestamp) {
     }
     if (!panel || needsFrame) {
       try {
-        renderer.render(world, world.elapsed);
+        const drawn = renderer.render(arrivalView(world), world.elapsed);
+        if (drawn && !panel)
+          fieldCheck.frame(performance.now(), world, renderer.surface || view, renderer.backend);
         needsFrame = false;
       } catch (error) {
         console.error('Forest rendering failed', error);
@@ -938,6 +1157,10 @@ function showBell(ev) {
     const ch = document.createElement('span');
     ch.className = 'bell-tone ' + tone;
     ch.textContent = { low: '▁', mid: '▄', high: '█' }[tone];
+    if (ev.type === 'bell' && !options.reduceMotion) {
+      ch.classList.add('pealing');
+      ch.style.animationDelay = String(tones.indexOf(tone) * 0.46) + 's';
+    }
     ch.title = names[tone];
     box.append(ch);
   }
@@ -1006,7 +1229,11 @@ function moveStick(event) {
 $('stick').addEventListener('pointerdown', (event) => {
   if (stickId !== null || panel) return;
   stickId = event.pointerId;
-  $('stick').setPointerCapture(stickId);
+  try {
+    $('stick').setPointerCapture(stickId);
+  } catch {
+    /* The pad still receives its own events. */
+  }
   moveStick(event);
 });
 $('stick').addEventListener('pointermove', (event) => {
@@ -1081,14 +1308,16 @@ document.addEventListener('keydown', (event) => {
     if (!event.repeat) gameAction('resist');
     return;
   }
+  if (event.code === 'Space' && event.target?.closest?.('button, input, select')) return;
+  const bound = actionForKey(options.layout, event.code);
+  if (bound) {
+    event.preventDefault();
+    if (!event.repeat) gameAction(bound);
+    return;
+  }
   const commands = {
     KeyM: mapPanel,
     Escape: pause,
-    KeyE: () => gameAction('interact'),
-    KeyF: () => gameAction('strike'),
-    KeyQ: () => gameAction('potion'),
-    KeyG: () => gameAction('guard'),
-    KeyR: () => gameAction('thrust'),
     KeyJ: journalPanel,
   };
   if (commands[event.code]) {
@@ -1106,6 +1335,7 @@ document.addEventListener('keydown', (event) => {
       'ArrowDown',
       'ArrowLeft',
       'ArrowRight',
+      'Space',
       'ShiftLeft',
       'ShiftRight',
       'PageUp',
@@ -1130,6 +1360,13 @@ document.addEventListener('keydown', (event) => {
     keys.add(event.code);
   }
 });
+stage.addEventListener(
+  'pointerdown',
+  (e) => {
+    if (screen === 'game' && !panel && e.isTrusted) fieldCheck.input(performance.now());
+  },
+  { capture: true, passive: true }
+);
 document.addEventListener('keyup', (event) => {
   keys.delete(event.code);
   physicalShift.delete(event.code);
@@ -1141,6 +1378,7 @@ window.addEventListener('blur', () => {
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
+    fieldCheck.pause();
     physicalShift.clear();
     stopMotion();
     save();

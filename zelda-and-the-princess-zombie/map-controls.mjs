@@ -1,6 +1,7 @@
 import { drawFieldMap, mapProjection } from './field-map.mjs';
+import { hordePosition } from './world.mjs';
 import { MAP } from './geography.mjs';
-import { knownLandmarks, hasDirections, bearing, compassPoint, survey } from './navigation.mjs';
+import { knownLandmarks, hasDirections, bearing, compassPoint, survey, hostReport } from './navigation.mjs';
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 function control(label, f) {
   const b = document.createElement('button');
@@ -48,6 +49,12 @@ export function makeFieldSurvey(world, save) {
         ? 'The marked route follows the landscape.'
         : 'Your field sketch records places as you reach them.');
     details.append(intro);
+    const report = hostReport(world, hordePosition(world, 0));
+    if (report) {
+      const line = document.createElement('p');
+      line.textContent = report;
+      details.append(line);
+    }
     const list = document.createElement('ul');
     for (const [place, name] of [
       ...knownLandmarks(world).map((l) => [l, l.name]),

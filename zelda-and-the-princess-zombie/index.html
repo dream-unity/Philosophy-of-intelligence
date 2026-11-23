@@ -11,18 +11,53 @@
     <base href="/zelda-and-the-princess-zombie/" />
     <title>Zelda and the Princess Zombie | Philosophy of Intelligence</title>
     <link rel="preload" as="image" href="forest.webp" />
-    <link rel="stylesheet" href="game.css?v=lanternwood-2" />
-    <!-- Keep returning journeys on the same edition of the previously shipped modules. -->
+    <link rel="stylesheet" href="game.css?v=265d2c824817" />
+    <!-- Refresh module and stylesheet versions with node scripts/version-princess-zombie.mjs. -->
     <script type="importmap">
       {
         "imports": {
-          "./audio.mjs": "./audio.mjs?v=lanternwood-2",
-          "./field-map.mjs": "./field-map.mjs?v=lanternwood-2",
-          "./ground-paint.mjs": "./ground-paint.mjs?v=lanternwood-2",
-          "./hall.mjs": "./hall.mjs?v=lanternwood-2",
-          "./render.mjs": "./render.mjs?v=lanternwood-2",
-          "./sound-score.mjs": "./sound-score.mjs?v=lanternwood-2",
-          "./world.mjs": "./world.mjs?v=lanternwood-2"
+          "./audio.mjs": "./audio.mjs?v=b4f8b7a3f7d6",
+          "./blade-pose.mjs": "./blade-pose.mjs?v=0a1d040573c3",
+          "./castle-view.mjs": "./castle-view.mjs?v=d2c5f3e71dc7",
+          "./combat-zones.mjs": "./combat-zones.mjs?v=a0938f536b84",
+          "./control-layout.mjs": "./control-layout.mjs?v=12aee47f40ef",
+          "./creature-motion.mjs": "./creature-motion.mjs?v=8d90acdd5eae",
+          "./field-check.mjs": "./field-check.mjs?v=d4d54bb8428f",
+          "./field-effects.mjs": "./field-effects.mjs?v=69d1901e3f0d",
+          "./field-map.mjs": "./field-map.mjs?v=474bbb2db25f",
+          "./forest-edge.mjs": "./forest-edge.mjs?v=857d1b8c0f1a",
+          "./fortress.mjs": "./fortress.mjs?v=2ef00c56b6c1",
+          "./game-clock.mjs": "./game-clock.mjs?v=38da1dc29b0d",
+          "./game.mjs": "./game.mjs?v=ab0584b2b824",
+          "./geography.mjs": "./geography.mjs?v=bff742774e5e",
+          "./ground-paint.mjs": "./ground-paint.mjs?v=e5fa8525d99b",
+          "./hall.mjs": "./hall.mjs?v=d9cc84f7e149",
+          "./journey-store.mjs": "./journey-store.mjs?v=1e9b423de74f",
+          "./map-controls.mjs": "./map-controls.mjs?v=e7c67eff7c79",
+          "./marcher-art.mjs": "./marcher-art.mjs?v=b3151eb67b09",
+          "./masonry-paint.mjs": "./masonry-paint.mjs?v=fe01e64dfe7c",
+          "./navigation.mjs": "./navigation.mjs?v=92e487aac4e3",
+          "./procession-view.mjs": "./procession-view.mjs?v=69fefd288bc3",
+          "./procession.mjs": "./procession.mjs?v=1701509653ab",
+          "./render-quality.mjs": "./render-quality.mjs?v=90292ea84d9f",
+          "./render.mjs": "./render.mjs?v=d45e2055ae68",
+          "./ridge-landscape.mjs": "./ridge-landscape.mjs?v=494dc26c0e92",
+          "./river-view.mjs": "./river-view.mjs?v=6d85d768360b",
+          "./route-course.mjs": "./route-course.mjs?v=c85da251b655",
+          "./scene-light.mjs": "./scene-light.mjs?v=1dde703666d9",
+          "./sky.mjs": "./sky.mjs?v=638c44ebb770",
+          "./software-mesh.mjs": "./software-mesh.mjs?v=21528c98c2dd",
+          "./sound-foley.mjs": "./sound-foley.mjs?v=84632f002dab",
+          "./sound-score.mjs": "./sound-score.mjs?v=99e4012e9b62",
+          "./story-art.mjs": "./story-art.mjs?v=3f4198dba970",
+          "./story-contact.mjs": "./story-contact.mjs?v=c3c36bdc3b7d",
+          "./story-witch.mjs": "./story-witch.mjs?v=c55199c2c054",
+          "./story.mjs": "./story.mjs?v=c3762592ea12",
+          "./swordplay.mjs": "./swordplay.mjs?v=b6fa3a86dbe2",
+          "./travel.mjs": "./travel.mjs?v=efab6a894313",
+          "./wildlife.mjs": "./wildlife.mjs?v=c909d3fdc2ef",
+          "./woodland.mjs": "./woodland.mjs?v=26df8dcafd88",
+          "./world.mjs": "./world.mjs?v=8a7288712bb6"
         }
       }
     </script>
@@ -91,6 +126,7 @@
           <button id="help" class="text-tool" type="button">
             <svg aria-hidden="true"><use href="#book" /></svg>How to play
           </button>
+          <button id="save-files" class="text-tool" type="button">Save files</button>
           <button id="fullscreen" class="text-tool" type="button">
             <svg aria-hidden="true"><use href="#expand" /></svg><span>Fullscreen</span>
           </button>
@@ -120,8 +156,8 @@
           </div>
           <div class="objective" id="objective"></div>
           <div class="route-readout" id="route-readout"></div>
-          <div class="race-readout" id="race-readout"></div>
-          <div class="belt-readout" id="belt-readout"></div>
+          <div class="race-readout" id="race-readout" role="status" aria-live="polite"></div>
+          <div class="belt-readout" id="belt-readout" role="status"></div>
           <div
             class="stamina"
             id="stamina"
@@ -180,6 +216,6 @@
       </div>
     </main>
     <noscript>This game needs JavaScript enabled to enter the forest.</noscript>
-    <script type="module" src="game.mjs?v=lanternwood-2"></script>
+    <script type="module" src="game.mjs?v=ab0584b2b824"></script>
   </body>
 </html>

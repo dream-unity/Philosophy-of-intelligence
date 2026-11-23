@@ -54,7 +54,9 @@ test('the gate, the long hall, the gallery stair and the tabletop occupy the sam
   assert.equal(travel.barrier(w, 30, 1435), '');
   assert.equal(travel.barrier(w, 20, 1435), 'stone');
   w.gateClosedAt = w.elapsed;
-  assert.equal(travel.barrier(w, 30, 1435), 'metal');
+  assert.equal(travel.barrier(w, 30, 1435), '', 'the gate starts above the traveller');
+  w.elapsed += 1.05;
+  assert.equal(travel.barrier(w, 30, 1435), 'metal', 'the lowered portcullis now blocks passage');
   assert.equal(travel.barrier(w, 30, 1466), '');
   assert.equal(travel.barrier(w, 40, 1466), 'stone');
   assert.equal(travel.barrier(w, 31.6, 1517), 'stone', 'solid dining table');

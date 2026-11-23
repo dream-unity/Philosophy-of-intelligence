@@ -21,11 +21,23 @@ export function write(key, value) {
   try {
     localStorage.setItem(key, raw);
     failed.delete(key);
+    retryPending();
     return true;
   } catch {
     failed.add(key);
     return false;
   }
+}
+export function retryPending() {
+  for (const key of [...failed]) {
+    try {
+      localStorage.setItem(key, JSON.stringify(memory.get(key)));
+      failed.delete(key);
+    } catch {
+      /* Other pending records can be smaller. */
+    }
+  }
+  return lasting();
 }
 export function lasting() {
   return ![saveKey, forkKey, historyKey].some((key) => failed.has(key));
@@ -96,3 +108,31 @@ export function rememberEnding(w) {
   ]);
 }
 export const pastJourneys = () => read(historyKey) || [];
+
+export function journeyFile(w) {
+  if (!w) return null;
+  const fork = read(forkKey);
+  return {
+    format: 'xero-journey',
+    version: 1,
+    world: { ...w, events: [], mapOpen: false },
+    fork: fork?.runId === w.runId ? fork : null,
+  };
+}
+export function readJourneyFile(raw) {
+  if (raw?.format !== 'xero-journey' || raw.version !== 1) return null;
+  const world = restoreJourney(raw.world);
+  if (!world) return null;
+  const fork = raw.fork?.runId === world.runId ? restoreJourney(raw.fork.world) : null;
+  return {
+    world,
+    fork:
+      fork && fork.route === 'undecided' && !fork.ending
+        ? { runId: world.runId, atFork: Boolean(raw.fork.atFork), world: fork }
+        : null,
+  };
+}
+export function applyJourneyFile(bundle) {
+  if (bundle.fork) write(forkKey, bundle.fork);
+  return write(saveKey, bundle.world);
+}

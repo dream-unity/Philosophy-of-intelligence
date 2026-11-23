@@ -1,3 +1,5 @@
+import { drawForestEdge, drawTrailHerbs } from './forest-edge.mjs';
+import { drawMarchObstructions } from './procession.mjs';
 import { terrainHeight, castleAltitude } from './geography.mjs';
 import { fordStoneX, bridgeRise, footHeight } from './travel.mjs';
 import { bladeCoordinates } from './swordplay.mjs';
@@ -79,6 +81,10 @@ export function groundDecals(w, t, footprints = []) {
 export function fieldMotion(m, g, w, t) {
   const { beam, tri, quad, box } = g,
     p = w.player;
+  drawForestEdge(m, g, w, terrainHeight);
+  drawTrailHerbs(m, g, w, terrainHeight);
+  drawMarchObstructions(m, g, w);
+  drawCreatureEffects(m, g, w, t);
   // The chains pull a submerged bridge vertically into place, revealing wet timber.
   if (Math.abs(p.z - 1021) < 150) {
     const base = Math.floor(p.x / 16) * 16;
@@ -99,20 +105,21 @@ export function fieldMotion(m, g, w, t) {
           false
         );
       }
-    for (let i = 0; i < 16; i++) {
-      const x = fordStoneX(i),
-        z = 1008 + i * 1.76;
-      for (let side of [-1, 1]) {
-        const y = 0.105,
-          phase = (t * 0.7 + i * 0.3) % 1,
-          r = 0.68 + phase * 1.35;
-        const a = [x + 0.18, y, z + side * 0.6],
-          b = [x + r, y, z + side * (0.63 + phase * 0.4)],
-          c = [x + r + 1.05, y, z + side * (0.55 + phase * 0.6)];
-        beam(m, a, b, 0.027, 0.038, 'afc9bb', 3);
-        beam(m, b, c, 0.038, 0.008, '91bcad', 3);
+    if (Math.abs(p.x + 125) < 64)
+      for (let i = 0; i < 16; i++) {
+        const x = fordStoneX(i),
+          z = 1008 + i * 1.76;
+        for (let side of [-1, 1]) {
+          const y = 0.105,
+            phase = (t * 0.7 + i * 0.3) % 1,
+            r = 0.68 + phase * 1.35;
+          const a = [x + 0.18, y, z + side * 0.6],
+            b = [x + r, y, z + side * (0.63 + phase * 0.4)],
+            c = [x + r + 1.05, y, z + side * (0.55 + phase * 0.6)];
+          beam(m, a, b, 0.027, 0.038, 'afc9bb', 3);
+          beam(m, b, c, 0.038, 0.008, '91bcad', 3);
+        }
       }
-    }
     if (p.z > 1008 && p.z < 1034 && Math.abs(p.x + 125) < 2.2) {
       for (let n = 0; n < 4; n++) {
         const a = (t * 0.85 + n * 0.25) % 1,
@@ -244,11 +251,6 @@ export function fieldMotion(m, g, w, t) {
   }
 }
 export function swordPlacement(world, W, H, project) {
-  const attack = world.attack,
-    f = attack ? (world.elapsed - attack.start) / attack.duration : 1,
-    guard = world.guardUntil > world.elapsed;
-  const blend = guard ? 1 : Math.min(saturated(f / 0.19), saturated((1 - f) / 0.19));
-  if (blend <= 0) return null;
   const { grip, tip } = bladeCoordinates(world),
     a = project(...grip),
     b = project(...tip);
@@ -257,22 +259,15 @@ export function swordPlacement(world, W, H, project) {
   // hit detection. The wrist can leave the edge of the screen during a wide cut.
   const ax = 0.648,
     ay = 0.721,
-    tx = 0.05,
-    ty = 0.055;
+    tx = 40 / 768,
+    ty = 45 / 768;
   const vx = tx - ax,
     vy = ty - ay,
     dx = b[0] - a[0],
     dy = b[1] - a[1],
     len = vx * vx + vy * vy;
-  const size = Math.min(H * 0.52, W * 0.65),
-    idleX = W - size * 0.98,
-    idleY = H - size * 0.96;
-  let c = (dx * vx + dy * vy) / len,
+  const c = (dx * vx + dy * vy) / len,
     s = (dy * vx - dx * vy) / len;
-  c = size + (c - size) * blend;
-  s *= blend;
-  a[0] = (idleX + ax * size) * (1 - blend) + a[0] * blend;
-  a[1] = (idleY + ay * size) * (1 - blend) + a[1] * blend;
   return {
     map(u, v) {
       return [a[0] + (u - ax) * c - (v - ay) * s, a[1] + (u - ax) * s + (v - ay) * c];
@@ -282,4 +277,69 @@ export function swordPlacement(world, W, H, project) {
     x: a[0] - ax * c + ay * s,
     y: a[1] - ax * s - ay * c,
   };
+}
+
+// A breath ignites consecutive pockets of air along the *committed* heading.
+// Its trailing edge clears each patch of ground after the simulation's damage window.
+function drawCreatureEffects(m, g, w, t) {
+  const breath = w.dragonBreath;
+  if (breath) {
+    const age = t - breath.at;
+    if (age >= 0 && age < breath.duration) {
+      const dx = Math.sin(breath.heading),
+        dz = Math.cos(breath.heading);
+      const head = Math.min(breath.length, age * 24),
+        tail = Math.max(0, (age - 0.27) * 24);
+      for (let i = 0; i < 13; i++) {
+        const u = i / 13,
+          reach = tail + (head - tail) * u,
+          spread = breath.width * (reach / breath.length) * 0.72,
+          phase = i * 2.4 + t * 9,
+          side = Math.sin(phase) * spread,
+          x = breath.x + reach * dx + side * dz,
+          z = breath.z + reach * dz - side * dx;
+        const h = terrainHeight(x, z) + 0.38 + (0.65 + Math.sin(i + t * 6) * 0.26) * (1 - u),
+          r = 0.16 + spread * 0.25;
+        if (head <= tail) break;
+        g.tri(
+          m,
+          [x - dz * r, h, z + dx * r],
+          [x + dz * r, h, z - dx * r],
+          [x + dx * 0.55, h + 0.4 + r, z + dz * 0.55],
+          i % 3 ? 'eb9d50' : 'eec87d',
+          false
+        );
+        g.tri(
+          m,
+          [x - dz * r * 0.5, h, z + dx * r * 0.5],
+          [x + dz * r * 0.5, h, z - dx * r * 0.5],
+          [x + 0.14 * dx, h + 0.33, z + 0.14 * dz],
+          'edc76c',
+          false
+        );
+      }
+    }
+  }
+  for (const a of w.actors)
+    if (a.type === 'troll' && a.trollFollowThrough) {
+      const age = t - a.trollFollowThrough.at;
+      if (age < 0 || age > 0.63 || Math.hypot(a.x - w.player.x, a.z - w.player.z) > 40) continue;
+      const heading = a.trollFollowThrough.heading,
+        dx = Math.sin(heading),
+        dz = Math.cos(heading);
+      for (let i = 0; i < 12; i++) {
+        const side = Math.sin(i * 3.9) * (0.2 + age * 2),
+          x = a.x + dx * (0.8 + age * 1.7) + dz * side,
+          z = a.z + dz * (0.8 + age * 1.7) - dx * side,
+          y = terrainHeight(x, z) + 0.1 + Math.sin((age * Math.PI) / 0.63) * (0.43 + (i % 3) * 0.19);
+        g.tri(
+          m,
+          [x - 0.07, y, z],
+          [x + 0.13, y + 0.06, z + 0.06],
+          [x + 0.02, y + 0.11, z - 0.04],
+          i % 3 ? '889365' : '6b5341',
+          false
+        );
+      }
+    }
 }

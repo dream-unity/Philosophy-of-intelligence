@@ -1,8 +1,7 @@
+import { planCourse } from './route-course.mjs';
+import { edgeRise, prepareTrailHerbs, boundaryExtents } from './forest-edge.mjs';
 export const MAP = {
-  minX: -530,
-  maxX: 530,
-  minZ: -145,
-  maxZ: 1605,
+  ...boundaryExtents,
   road: [
     [0, -115],
     [0, 9],
@@ -46,6 +45,7 @@ export const MAP = {
     [30, 1433],
   ],
 };
+prepareTrailHerbs(MAP.trail);
 export const LANDMARKS = [
   { id: 'clearing', name: 'Lanternwood', x: 0, z: 9 },
   { id: 'crossing', name: 'Wayfarer’s Fork', x: 22, z: 220 },
@@ -98,37 +98,8 @@ export function terrainHeight(x, z) {
   const ridge = 17 * Math.exp(-(((z - 486) / 89) ** 2)) * Math.exp(-(((x - 7) / 290) ** 2));
   const bank = clamp((Math.abs(z - 1021) - 12) / 37, 0, 1);
   const flat = clamp((z - 30) / 70, 0, 1) * clamp((1415 - z) / 85, 0, 1);
-  return (swell + ridge) * bank * flat + castleRise(x, z);
+  return (swell + ridge) * bank * flat + castleRise(x, z) + edgeRise(x, z);
 }
 export function course(w) {
-  if (!w.hasMap && w.route !== 'guided') return null;
-  const p = w.player,
-    well = w.hasMap && !w.antidote && !w.ropeFallen;
-  const dest = LANDMARKS.find((l) => l.id === (well ? 'chapel' : 'hall'));
-  const path = w.hasMap
-    ? well
-      ? MAP.trail.slice(0, MAP.trail.findIndex((v) => v[1] === dest.z) + 1)
-      : [...MAP.trail, [30, 1435], [dest.x, dest.z]]
-    : MAP.road;
-  let nearest = Infinity,
-    leg = 0,
-    u = 0;
-  for (let i = 0; i < path.length - 1; i++) {
-    const a = path[i],
-      b = path[i + 1],
-      dx = b[0] - a[0],
-      dz = b[1] - a[1];
-    const t = clamp(((p.x - a[0]) * dx + (p.z - a[1]) * dz) / (dx * dx + dz * dz || 1), 0, 1);
-    const d = Math.hypot(p.x - a[0] - t * dx, p.z - a[1] - t * dz);
-    if (d < nearest) {
-      nearest = d;
-      leg = i;
-      u = t;
-    }
-  }
-  let metres = nearest;
-  for (let i = leg; i < path.length - 1; i++)
-    metres += Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]) * (i === leg ? 1 - u : 1);
-  const q = path[Math.min(leg + 1, path.length - 1)];
-  return { metres: Math.round(metres), bearing: Math.atan2(q[0] - p.x, q[1] - p.z) };
+  return planCourse(w, MAP, LANDMARKS, terrainHeight);
 }

@@ -132,3 +132,36 @@ export function paintSoftwareMesh(scene, mesh, x = 0, y = 0, z = 0, rot = 0, sca
     }
   }
 }
+
+// Animated ribbons, water and hands are consumed once. Building an indexed
+// string-keyed spatial mesh for a one-frame splash costs more than projecting it.
+const ink = new Map();
+export function paintTransientMesh(scene, mesh) {
+  const { ray, W, H, path } = scene;
+  for (let i = 0; i < mesh.length; i += 18) {
+    const a = ray(mesh[i], mesh[i + 1], mesh[i + 2]),
+      b = ray(mesh[i + 6], mesh[i + 7], mesh[i + 8]),
+      c = ray(mesh[i + 12], mesh[i + 13], mesh[i + 14]);
+    if (
+      !a ||
+      !b ||
+      !c ||
+      (a[0] < 0 && b[0] < 0 && c[0] < 0) ||
+      (a[0] > W && b[0] > W && c[0] > W) ||
+      (a[1] < 0 && b[1] < 0 && c[1] < 0) ||
+      (a[1] > H && b[1] > H && c[1] > H)
+    )
+      continue;
+    if (Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) < 0.38) continue;
+    const r = mesh[i + 3],
+      g = mesh[i + 4],
+      bl = mesh[i + 5],
+      key = (((r * 255) | 0) << 16) | (((g * 255) | 0) << 8) | ((bl * 255) | 0);
+    let color = ink.get(key);
+    if (!color) {
+      color = material(r, g, bl);
+      ink.set(key, color);
+    }
+    path([a, b, c], color, (a[2] + b[2] + c[2]) / 3);
+  }
+}

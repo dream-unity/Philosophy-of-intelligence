@@ -1,5 +1,8 @@
+import { ridgePollards } from './ridge-landscape.mjs';
+import { marchObstructions } from './procession.mjs';
 // All distances and collider radii are in metres. Geometry is available before the first draw.
-import { MAP, roadX, trailX, terrainHeight, clamp } from './geography.mjs';
+import { edgeDistance, scentPatch } from './forest-edge.mjs';
+import { roadX, trailX, terrainHeight, clamp } from './geography.mjs';
 import { clearingTrees, sceneryTrees, youngFirs, sceneryBoulders } from './woodland.mjs';
 import { hallWalkable, insideHall } from './hall.mjs';
 import { storyFloor, storyPassable } from './story.mjs';
@@ -24,6 +27,9 @@ function rect(x, z, hx, hz, material = 'stone') {
   store({ x, z, hx, hz, material, id: x + ':' + z }, x - hx - 1, z - hz - 1, x + hx + 1, z + hz + 1);
 }
 function fixedScenery() {
+  for (const t of ridgePollards) registerObstacle(t.x, t.z, t.radius, 'wood', t.h);
+  for (const q of marchObstructions)
+    registerObstacle(q.x, q.z, q.r, q.kind === 'cart' ? 'wood' : 'stone', 1.2);
   for (const [x, z, h, r] of clearingTrees) registerObstacle(x, z, r * 0.15, 'wood', h);
   for (const t of youngFirs) registerObstacle(t.x, t.z, 0.23, 'wood', t.h);
   for (const s of [-1, 1]) registerObstacle(s * 6.2, 8 + s * 1.4, 0.12, 'wood', 3.2);
@@ -84,6 +90,19 @@ export function bridgeRise(w) {
 }
 export const fordStoneX = (i) => -125 + Math.sin(i * 0.45) * 0.55;
 const fordCenter = (z) => fordStoneX(clamp((z - 1008) / 1.76, 0, 15));
+export function riverImmersion(w, x, z) {
+  if (z < 1008.6 || z > 1034.4) return 0;
+  if (bridgeRise(w) > 0.95 && Math.abs(x - 30) < 9.88) return 0;
+  // The ford stones overlap at their broad bases. A walker's boot is supported by
+  // a stone only within its tread, with shallow moving water around the edges.
+  const i = Math.round((z - 1008) / 1.76);
+  for (let k = Math.max(0, i - 1); k <= Math.min(15, i + 1); k++) {
+    if (((x - fordStoneX(k)) / 1.18) ** 2 + ((z - (1008 + k * 1.76)) / 1.3) ** 2 < 1) return 0;
+  }
+  return clamp(Math.min(z - 1008.6, 1034.4 - z) * 0.39, 0, 2.1);
+}
+export const gateClearance = (w) =>
+  w.gateClosedAt == null ? 8 : Math.max(0, 7.56 * (1 - (w.elapsed - w.gateClosedAt)));
 const bridgeTop = Math.max(terrainHeight(30, 1007), terrainHeight(30, 1035)) + 0.69;
 export function footHeight(w, x, z) {
   const ground = terrainHeight(x, z);
@@ -92,18 +111,27 @@ export function footHeight(w, x, z) {
   if (insideHall(x, z)) return ground + 0.17;
   if (w.bridgeOpen && Math.abs(x - 30) < 10 && z >= 1005 && z <= 1039)
     return ground + (bridgeTop - ground) * bridgeRise(w) * clamp(Math.min(z - 1005, 1039 - z) / 1.5, 0, 1);
-  if (z >= 1007 && z <= 1035 && Math.abs(x - fordCenter(z)) < 1.2)
-    return Math.max(ground, 0.26 + 0.04 * Math.sin(z * 3.57));
+  if (z >= 1007 && z <= 1035) {
+    const water = riverImmersion(w, x, z);
+    if (!water && Math.abs(x - fordCenter(z)) < 1.3) {
+      const i = clamp(Math.round((z - 1008) / 1.76), 0, 15);
+      const d = Math.hypot((x - fordStoneX(i)) / 1.62, (z - 1008 - i * 1.76) / 1.42);
+      return Math.max(ground, 0.41 - 0.21 * clamp(d - 0.28, 0, 1));
+    }
+    if (water) return ground - Math.min(0.82, water);
+  }
   return ground;
 }
 export function footing(w, x, z) {
   if (insideHall(x, z) || (z > 1435 && Math.abs(x - 30) < 25 && z < 1553)) return 'stone';
   if (w.bridgeOpen && Math.abs(x - 30) < 10 && z > 1005 && z < 1039) return 'wood';
-  if (z >= 1007 && z <= 1035) return 'water';
+  if (z >= 1007 && z <= 1035)
+    return riverImmersion(w, x, z) > 0.03 ? 'water' : Math.abs(x - fordCenter(z)) < 1.3 ? 'stone' : 'gravel';
   return Math.abs(x - roadX(z)) < 5.6 ? 'gravel' : z < 850 ? 'leaves' : 'grass';
 }
 export function barrier(w, x, z, r = 0.29, water = true, fromX, fromZ, absoluteY) {
-  if (x < MAP.minX + r || x > MAP.maxX - r || z < MAP.minZ + r || z > MAP.maxZ - r) return 'thorns';
+  if (edgeDistance(x, z) < r && (fromX == null || edgeDistance(x, z) <= edgeDistance(fromX, fromZ)))
+    return 'thorns';
   if (Number.isFinite(fromX) && Number.isFinite(fromZ) && z > 1225 && z < 1430) {
     const run = Math.hypot(x - fromX, z - fromZ);
     if (run > 0.001 && terrainHeight(x, z) - terrainHeight(fromX, fromZ) > run * 0.84) return 'stone';
@@ -111,7 +139,12 @@ export function barrier(w, x, z, r = 0.29, water = true, fromX, fromZ, absoluteY
   const localY = Number.isFinite(absoluteY) ? absoluteY - terrainHeight(x, z) : 0;
   const aboveTable = localY > 1.15 && x > 30.38 && x < 32.96 && z > 1515.45 && z < 1518.62;
   if ((!aboveTable && !hallWalkable(x, z)) || !storyPassable(x, z, w, fromX, fromZ)) return 'stone';
-  if (w.gateClosedAt != null && Math.abs(z - 1435) < 1.05 + r && Math.abs(x - 30) < 5.6) return 'metal';
+  if (
+    Math.abs(z - 1435) < 0.32 + r &&
+    Math.abs(x - 30) < 5.6 &&
+    gateClearance(w) < (Number.isFinite(absoluteY) ? localY + r : 1.78)
+  )
+    return 'metal';
   if (
     localY < 2.0 &&
     bridgeRise(w) > 0.8 &&
@@ -120,14 +153,7 @@ export function barrier(w, x, z, r = 0.29, water = true, fromX, fromZ, absoluteY
     Math.abs(Math.abs(x - 30) - 9.88) < r + 0.13
   )
     return 'wood';
-  if (
-    water &&
-    z > 1010 &&
-    z < 1032 &&
-    Math.abs(x - fordCenter(z)) > 1.05 &&
-    !(bridgeRise(w) > 0.95 && Math.abs(x - 30) < 9.88 - r)
-  )
-    return 'water';
+  if (water && riverImmersion(w, x, z) > 0.78) return 'water';
   prepare(x, z);
   const objects = shapes.get(bucket(x, z));
   if (objects)
@@ -180,6 +206,6 @@ export function isSheltered(x, z) {
     Math.hypot(x, z - 9) < 18 ||
     (z >= 1434 && z <= 1553 && Math.abs(x - 30) < 25) ||
     Math.hypot(x - 30, z - 996) < 17 ||
-    (z > 76 && z < 1375 && Math.abs(x - trailX(z)) < 7)
+    Boolean(scentPatch(x, z))
   );
 }

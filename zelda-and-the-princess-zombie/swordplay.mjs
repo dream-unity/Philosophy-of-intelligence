@@ -1,5 +1,18 @@
-import { clamp, terrainHeight } from './geography.mjs';
-import { barrier, clearSegment, footHeight, bodyRadius } from './travel.mjs';
+import { clamp } from './geography.mjs';
+import { barrier, footHeight, bodyRadius } from './travel.mjs';
+import {
+  observer,
+  nominalBlade,
+  shortAngle,
+  interpolateEye,
+  inspectBlade,
+  hazardFreeBlade,
+  obstruction,
+  lerpPoint,
+  mix,
+} from './blade-pose.mjs';
+import { actorVolumes, capsuleEntry } from './combat-zones.mjs';
+export { bladeCoordinates, bladeFallbackGeometry, steelLength, gripToEdge } from './blade-pose.mjs';
 
 export const isEnemy = (a) => ['wolf', 'dragon', 'troll'].includes(a.type);
 export function cue(w, type, text, source) {
@@ -11,63 +24,8 @@ export function cue(w, type, text, source) {
   }
   w.events.push(ev);
 }
-const smooth = (u) => {
-  u = clamp(u, 0, 1);
-  return u * u * (3 - 2 * u);
-};
-export function bladeCoordinates(w, fraction) {
-  const p = w.player,
-    a = w.attack;
-  const t = clamp(fraction ?? (a ? (w.elapsed - a.start) / a.duration : 1), 0, 1);
-  const side = a?.side || 1,
-    thrust = a?.kind === 'thrust';
-  const active = a && t < 1;
-  const guard = (w.guardUntil ?? 0) > w.elapsed;
-  const swing = active ? smooth((t - 0.2) / 0.48) : 0;
-  const reach = active ? Math.sin(Math.PI * smooth(t)) : 0;
-  const lunge = thrust ? reach : 0;
-  const axes = (x, y, z) => {
-    const cy = Math.cos(p.yaw),
-      sy = Math.sin(p.yaw),
-      lp = p.pitch || 0;
-    const front = z * Math.cos(lp) - y * Math.sin(lp);
-    return [
-      p.x + x * cy + front * sy,
-      (p.feetY ?? footHeight(w, p.x, p.z)) + 1.64 + y * Math.cos(lp) + z * Math.sin(lp),
-      p.z - x * sy + front * cy,
-    ];
-  };
-  const gripX = guard ? -0.14 : 0.31 + (active && !thrust ? side * (0.32 - swing * 0.59) : 0);
-  const gripY = guard ? -0.14 : -0.37 + 0.085 * reach;
-  const gripZ = 0.31 + 0.28 * reach + 0.34 * lunge;
-  let tx = -0.42,
-    ty = 0.65,
-    tz = 0.83;
-  if (guard) {
-    tx = 0.82;
-    ty = 0.67;
-    tz = 0.4;
-  } else if (active) {
-    const angle = thrust ? 0.02 : side * (1.03 - 2.1 * swing);
-    const mix = Math.min(smooth(t / 0.17), smooth((1 - t) / 0.21));
-    tx += (Math.sin(angle) - tx) * mix;
-    ty += ((thrust ? -0.06 : 0.3 - 0.67 * swing) - ty) * mix;
-    tz += (Math.cos(angle) - tz) * mix;
-  }
-  const norm = Math.hypot(tx, ty, tz),
-    length = 1.38;
-  tx /= norm;
-  ty /= norm;
-  tz /= norm;
-  const base = axes(gripX + tx * 0.12, gripY + ty * 0.12, gripZ + tz * 0.12);
-  return {
-    grip: axes(gripX, gripY, gripZ),
-    base,
-    tip: axes(gripX + tx * (length + 0.12), gripY + ty * (length + 0.12), gripZ + tz * (length + 0.12)),
-  };
-}
 export function beginSwing(w, kind) {
-  if (w.elapsed < w.strikeUntil || w.elapsed < (w.guardUntil || 0) - 0.18) return false;
+  if (w.elapsed < w.strikeUntil || w.elapsed < (w.guardUntil || 0)) return false;
   const duration = kind === 'thrust' ? 0.64 : 0.54;
   w.attack = {
     kind,
@@ -76,85 +34,181 @@ export function beginSwing(w, kind) {
     side: -(w.attack?.side || -1),
     hits: [],
     checked: 0.24,
+    eye: observer(w),
+    eyeAt: w.elapsed,
   };
   w.strikeUntil = w.elapsed + duration;
   cue(w, 'strike', kind);
   return true;
 }
-const heights = {
-  wolf: [0.25, 1.58, 0.4],
-  troll: [0.12, 3.06, 0.86],
-  witch: [0.16, 2.08, 0.39],
-  bell: [1.13, 2.46, 0.64],
-  dragon: [-0.27, 1.35, 1.17],
-};
+function aimedEye(w, a) {
+  const current = observer(w),
+    previous = a.eye || current;
+  const dt = clamp(w.elapsed - (a.eyeAt ?? a.start), 0, 0.2);
+  // The head may turn instantly, but the hands and the weight of the sword
+  // follow at a finite angular speed during a committed cut.
+  return {
+    ...current,
+    yaw: previous.yaw + clamp(shortAngle(previous.yaw, current.yaw), -dt * 5.2, dt * 5.2),
+    pitch: previous.pitch + clamp(current.pitch - previous.pitch, -dt * 4.0, dt * 4.0),
+  };
+}
+function firstContact(w, blade, eye, targets) {
+  const solid = inspectBlade(w, blade, eye);
+  let best = solid ? { ...solid, order: '', actor: null } : null;
+  for (const { actor, zones } of targets)
+    for (const zone of zones) {
+      const u = capsuleEntry(blade.base, blade.tip, zone),
+        order = String(actor.id);
+      if (!Number.isFinite(u)) continue;
+      if (best && (u > best.u + 1e-7 || (Math.abs(u - best.u) <= 1e-7 && order >= best.order))) continue;
+      best = { u, order, actor, zone: zone.name, point: lerpPoint(blade.base, blade.tip, u) };
+    }
+  return best;
+}
+function surfacePoint(w, hit, fraction, eye) {
+  const pose = hazardFreeBlade(w, nominalBlade(w, fraction, eye), eye);
+  // The edge rises into close guard as it meets a surface. Emit its spark
+  // on the point that visibly grazes that surface, including close-range posts.
+  for (const radius of [0.042, 0.075]) {
+    const near = obstruction(w, pose.base, pose.tip, radius);
+    if (near?.material === hit.material) return near.point;
+    const hilt = obstruction(w, pose.grip, pose.base, radius);
+    if (hilt?.material === hit.material) return hilt.point;
+  }
+  const span = pose.tip.map((v, i) => v - pose.grip[i]);
+  const along = hit.point.reduce((n, v, i) => n + (v - pose.grip[i]) * span[i], 0);
+  return lerpPoint(pose.grip, pose.tip, clamp(along / span.reduce((n, v) => n + v * v, 0), 0, 1));
+}
+function commitContact(w, hooks, rig, hit, fraction, eye) {
+  const a = w.attack,
+    foe = hit.actor;
+  const [x, y, z] = foe ? hit.point : surfacePoint(w, hit, fraction, eye);
+  const hard =
+    !foe || foe.type === 'bell' || (foe.type === 'troll' && (hit.zone === 'club' || hit.zone === 'armour'));
+  a.landed = true;
+  if (hard) a.stopAt = fraction;
+  const material = foe
+    ? foe.type === 'bell'
+      ? 'bronze'
+      : hard
+        ? hit.zone === 'club'
+          ? 'wood'
+          : 'stone'
+        : foe.type
+    : hit.material;
+  a.contact = { x, y, z, at: w.elapsed, fraction, material, zone: hit.zone || 'scenery' };
+  if (!foe) {
+    a.wall = true;
+    cue(w, 'impact', material, a.contact);
+    return;
+  }
+  a.hits.push(foe.id);
+  if (foe.type === 'bell') {
+    hooks.ring(w, foe.tone);
+    return;
+  }
+  if (foe.type === 'marcher') {
+    hooks.hitMarcher?.(w, foe.marcher, a.contact);
+    return;
+  }
+  cue(w, 'impact', material, a.contact);
+  if (foe.type === 'witch') {
+    hooks.drop(w, foe);
+    return;
+  }
+  if (hard) {
+    hooks.notify(
+      w,
+      hit.zone === 'club' ? 'Your blade catches on the club.' : 'Your edge glances off the stone shoulder.',
+      1.7
+    );
+    return;
+  }
+  const opening = (foe.recoverUntil || 0) > w.elapsed;
+  const precise = hit.zone === 'head' || hit.zone === 'throat';
+  foe.hp -= a.kind === 'thrust' && (opening || precise) ? 2 : 1;
+  if (foe.hp <= 0) {
+    foe.alive = false;
+    hooks.notify(w, 'The ' + foe.type + ' falls.');
+    return;
+  }
+  if (foe.type === 'wolf' || opening) {
+    foe.windupUntil = 0;
+    foe.attackAt = Math.max(foe.attackAt || 0, w.elapsed + 0.32);
+  }
+  const dx = foe.x - w.player.x,
+    dz = foe.z - w.player.z,
+    length = Math.hypot(dx, dz) || 1;
+  const impulse = foe.type === 'troll' ? 0.13 : 0.42;
+  rig.move(foe, (dx / length) * impulse, (dz / length) * impulse);
+}
 export function strikeContacts(w, rig, hooks) {
   const a = w.attack;
-  if (!a || a.checked >= 0.72) return;
+  if (!a || w.elapsed > a.start + a.duration + 0.12) return;
+  const previous = a.eye || observer(w),
+    eye = aimedEye(w, a);
+  a.eye = eye;
+  a.eyeAt = w.elapsed;
+  if (a.landed || a.wall || a.hits?.length || a.checked >= 0.72) return;
   const fraction = clamp((w.elapsed - a.start) / a.duration, 0, 0.72);
   if (fraction <= a.checked) return;
-  const candidates = w.actors.filter(
+  const actors = w.actors.filter(
     (v) =>
       v.alive &&
-      heights[v.type] &&
-      !a.hits.includes(v.id) &&
-      Math.hypot(v.x - w.player.x, v.z - w.player.z) < 4.6
+      (isEnemy(v) || v.type === 'witch' || v.type === 'bell') &&
+      Math.hypot(v.x - w.player.x, v.z - w.player.z) < (v.type === 'dragon' ? 8.3 : 4.2)
   );
-  const steps = Math.max(1, Math.ceil((fraction - a.checked) / 0.045));
-  for (let j = 1; j <= steps; j++) {
-    const blade = bladeCoordinates(w, a.checked + ((fraction - a.checked) * j) / steps);
-    for (let k = 1; k <= 15; k++) {
-      const u = k / 15,
-        x = blade.base[0] + (blade.tip[0] - blade.base[0]) * u,
-        y = blade.base[1] + (blade.tip[1] - blade.base[1]) * u,
-        z = blade.base[2] + (blade.tip[2] - blade.base[2]) * u;
-      const material = barrier(w, x, z, 0.03, false, undefined, undefined, y);
-      if (material || y < terrainHeight(x, z) + 0.04) {
-        if (!a.wall) {
-          a.contact = { x, y, z, at: w.elapsed, material: material || 'stone' };
-          cue(w, 'impact', a.contact.material, { x, z });
-          a.wall = true;
-        }
-        break;
+  for (const q of hooks.marchers || []) {
+    if (Math.hypot(q.x - eye.x, q.z - eye.z) < 3)
+      actors.push({ type: 'marcher', id: 'host' + q.i, x: q.x, z: q.z, marcher: q });
+  }
+  const targets = actors.map((actor) => ({ actor, zones: actorVolumes(actor, w.elapsed) }));
+  const steps = clamp(
+    Math.ceil(
+      Math.max(
+        (fraction - a.checked) / 0.019,
+        Math.abs(shortAngle(previous.yaw, eye.yaw)) / 0.045,
+        Math.abs(previous.pitch - eye.pitch) / 0.045,
+        Math.hypot(eye.x - previous.x, eye.z - previous.z) / 0.075
+      )
+    ),
+    1,
+    72
+  );
+  for (let i = 1; i <= steps; i++) {
+    const u = i / steps,
+      f = mix(a.checked, fraction, u),
+      view = interpolateEye(previous, eye, u);
+    const blade = nominalBlade(w, f, view);
+    const hit = firstContact(w, blade, view, targets);
+    if (hit) {
+      let here = u,
+        there = (i - 1) / steps,
+        contact = hit;
+      for (let k = 0; k < 5; k++) {
+        const mid = (there + here) / 2,
+          frame = interpolateEye(previous, eye, mid);
+        const earlier = firstContact(
+          w,
+          nominalBlade(w, mix(a.checked, fraction, mid), frame),
+          frame,
+          targets
+        );
+        if (earlier) {
+          here = mid;
+          contact = earlier;
+        } else there = mid;
       }
-      for (const foe of candidates) {
-        if (!foe.alive || a.hits.includes(foe.id)) continue;
-        const [bottom, top, r] = heights[foe.type],
-          ground = terrainHeight(foe.x, foe.z) + (foe.airHeight || 0);
-        if (
-          Math.hypot(x - foe.x, z - foe.z) > r ||
-          y < ground + bottom ||
-          y > ground + top ||
-          !clearSegment(w, w.player.x, w.player.z, foe.x, foe.z)
-        )
-          continue;
-        a.hits.push(foe.id);
-        a.contact = { x, y, z, at: w.elapsed, material: foe.type };
-        if (foe.type === 'bell') {
-          hooks.ring(w, foe.tone);
-          continue;
-        }
-        cue(w, 'impact', foe.type, foe);
-        if (foe.type === 'witch') {
-          hooks.drop(w, foe);
-          continue;
-        }
-        const opening = (foe.recoverUntil || 0) > w.elapsed;
-        const damage = (a.kind === 'thrust' && opening) || y > ground + top * 0.88 ? 2 : 1;
-        foe.hp -= damage;
-        if (foe.hp <= 0) {
-          foe.alive = false;
-          hooks.notify(w, 'The ' + foe.type + ' falls.');
-          continue;
-        }
-        if (foe.type === 'wolf' || opening) {
-          foe.windupUntil = 0;
-          foe.attackAt = Math.max(foe.attackAt, w.elapsed + 0.32);
-        }
-        const d = Math.max(0.01, Math.hypot(foe.x - w.player.x, foe.z - w.player.z));
-        const impulse = foe.type === 'troll' ? 0.19 : 0.51;
-        rig.move(foe, ((foe.x - w.player.x) / d) * impulse, ((foe.z - w.player.z) / d) * impulse);
-      }
+      commitContact(
+        w,
+        hooks,
+        rig,
+        contact,
+        mix(a.checked, fraction, here),
+        interpolateEye(previous, eye, here)
+      );
+      break;
     }
   }
   a.checked = fraction;
@@ -209,13 +263,13 @@ export function advancePhial(w, dt, notify) {
     q.vy -= 9.81 * step;
     const floor = footHeight(w, x, z);
     const blocked = barrier(w, x, z, 0.05, false, undefined, undefined, y);
-    const contact = w.actors.some(
-      (a) =>
-        a.alive &&
-        isEnemy(a) &&
-        Math.hypot(a.x - x, a.z - z) < (bodyRadius(a) || 0.8) + 0.12 &&
-        Math.abs(y - terrainHeight(a.x, a.z) - (a.airHeight || 0) - 0.85) < 1
-    );
+    const from = [q.x, q.y, q.z],
+      to = [x, y, z];
+    const contact = w.actors.some((a) => {
+      if (!a.alive || !isEnemy(a) || Math.hypot(a.x - x, a.z - z) > (a.type === 'dragon' ? 6.3 : 2.2))
+        return false;
+      return actorVolumes(a, w.elapsed).some((zone) => Number.isFinite(capsuleEntry(from, to, zone)));
+    });
     if (!blocked) {
       q.x = x;
       q.y = Math.max(y, floor + 0.05);
@@ -226,12 +280,17 @@ export function advancePhial(w, dt, notify) {
     let struck = 0;
     for (const a of w.actors) {
       if (!a.alive || !isEnemy(a)) continue;
-      const cy = terrainHeight(a.x, a.z) + (a.airHeight || 0) + 0.8;
-      if (
-        Math.hypot(a.x - q.x, a.z - q.z, cy - q.y) > 10.5 ||
-        !clearSegment(w, q.x, q.z, a.x, a.z, 0.03, q.y + 0.18, cy)
-      )
-        continue;
+      if (Math.hypot(a.x - q.x, a.z - q.z) > (a.type === 'dragon' ? 16 : 13)) continue;
+      const origin = [q.x, q.y + 0.09, q.z];
+      // A cinder burst must reach the body through open air. Use the actual posed
+      // body; a dragon's airborne throat and a wolf's flank occupy different heights.
+      const exposed = actorVolumes(a, w.elapsed).some((zone) => {
+        if (!['flank', 'head', 'throat', 'leg'].includes(zone.name)) return false;
+        const center = lerpPoint(zone.a, zone.b, 0.5),
+          d = Math.hypot(...center.map((v, i) => v - origin[i]));
+        return d <= 10.5 + zone.r && !obstruction(w, origin, center, 0.025);
+      });
+      if (!exposed) continue;
       a.alive = false;
       struck++;
       cue(w, 'impact', a.type, a);
