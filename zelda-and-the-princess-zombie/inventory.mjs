@@ -55,6 +55,17 @@ const catalogue = {
   },
 };
 export const fieldBottles = ['cinder', 'veil', 'lure'];
+export const quickItemActions = Object.fromEntries(
+  Object.entries(catalogue)
+    .filter(([, data]) => data.equippable !== false)
+    .map(([id, data]) => ['item:' + id, data.name])
+);
+export function availableQuickItems(w) {
+  return w ? Object.keys(quickItemActions).filter((action) => quantity(w, action.slice(5)) > 0) : [];
+}
+export function quickItem(w, action) {
+  return Object.hasOwn(quickItemActions, action) ? item(w, action.slice(5)) : null;
+}
 const count = (n) => (Number.isFinite(n) ? Math.min(999, Math.max(0, Math.floor(n))) : 0);
 
 function pouch(w) {

@@ -1,4 +1,5 @@
 import { bagItems, selectedItem, equipItem } from './inventory.mjs';
+import { keypadChoices, keypadLabel } from './control-layout.mjs';
 
 const shapes = {
   cinder: 'M8 10h12v4h-2q8 3 8 9 0 7-12 8Q2 30 2 23q0-6 8-9H8z',
@@ -39,7 +40,7 @@ function glyph(item) {
   svg.append(shine);
   return svg;
 }
-export function makeBagView(world, onEquip) {
+export function makeBagView(world, onEquip, shortcuts) {
   const pocket = document.createElement('div'),
     slots = document.createElement('div'),
     detail = document.createElement('section');
@@ -73,6 +74,29 @@ export function makeBagView(world, onEquip) {
         if (equipItem(world, item.id)) onEquip(item);
       };
       detail.append(use);
+      if (shortcuts) {
+        const label = document.createElement('label'),
+          select = document.createElement('select'),
+          action = 'item:' + item.id;
+        label.className = 'item-shortcut';
+        label.append('Field number key', select);
+        select.setAttribute('aria-label', item.name + ' field number key');
+        const empty = new Option('Unassigned', '');
+        select.append(empty);
+        for (const code of keypadChoices) {
+          if (!code) continue;
+          const owner = shortcuts.ownerName(code, action);
+          const label = keypadLabel(code) + (owner ? ' · ' + owner : '');
+          select.append(new Option(label, code));
+        }
+        select.value = shortcuts.layout.keypad[action] || '';
+        select.addEventListener('change', () => {
+          shortcuts.assign(action, select.value);
+          inspect(item.id);
+          detail.querySelector('select')?.focus({ preventScroll: true });
+        });
+        detail.append(label);
+      }
     }
   }
   items.forEach((item, index) => {

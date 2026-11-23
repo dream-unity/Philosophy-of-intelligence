@@ -1,5 +1,7 @@
-import { selectedItem } from './inventory.mjs';
+import { selectedItem, quickItem, quickItemActions, availableQuickItems } from './inventory.mjs';
 import { makeBagView } from './bag-view.mjs';
+import { mountNumberPad } from './number-pad.mjs';
+import { touchKeys, assignTouchKey, touchKeyIcon, touchActionNames, createTouchRun } from './touch-keys.mjs';
 import { createFieldCheck } from './field-check.mjs';
 import { witchVignette } from './story-witch.mjs';
 import {
@@ -10,11 +12,15 @@ import {
   keyLabel,
   slotNames,
   keyChoices,
+  keypadChoices,
+  keypadLabel,
+  rebindKeypad,
   controlLayout,
   moveTouchAction,
   rebind,
   actionForKey,
 } from './control-layout.mjs';
+import { createFieldKeyboard, isHeldAction } from './field-keyboard.mjs';
 import { advanceGameClock, presentationWorld, resetPresentation } from './game-clock.mjs';
 import { makeFieldSurvey } from './map-controls.mjs';
 import { hasDirections, compassPoint, bearing, describeRace, survey, bridgeReport } from './navigation.mjs';
@@ -45,10 +51,12 @@ function loadJourney() {
   return restoreJourney(read(saveKey));
 }
 const preferences = read(settingsKey) || {};
+const touchRun = createTouchRun();
 const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 const validMix = (v) => (Number.isFinite(v) ? clamp(v, 0, 1) : 1);
 const options = {
   layout: controlLayout(preferences.layout),
+  touchKeys: touchKeys(preferences.touchKeys),
   controlStyle: preferences.controlStyle === 'classic' ? 'classic' : 'compact',
   handedness: (preferences.handedness ? preferences.handedness === 'left' : preferences.leftHanded)
     ? 'left'
@@ -80,9 +88,8 @@ motionQuery.addEventListener?.('change', (event) => {
   options.reduceMotion = event.matches;
   if (world) world.reducedMotion = event.matches;
 });
-const physicalShift = new Set();
-const keys = new Set(),
-  movement = { forward: 0, strafe: 0 };
+const keyboard = createFieldKeyboard();
+const movement = { forward: 0, strafe: 0 };
 const view = $('view'),
   stage = $('stage'),
   title = $('title-screen'),
@@ -96,11 +103,14 @@ let activeSurvey = null,
   sprintBeforeMap = false,
   panelReturn = '',
   helpFromField = false,
+  bindingsFromGuide = false,
   panelSprint = false,
   rimSprint = false,
+  fieldInputEpoch = 0,
   paletteOpen = false;
 function setPalette(open) {
   paletteOpen = open && options.controlStyle === 'compact';
+  if (paletteOpen) setNumberPad(false);
   document.body.dataset.palette = paletteOpen ? 'open' : 'closed';
   $('quick-tools').setAttribute('aria-expanded', String(paletteOpen));
 }
@@ -110,24 +120,26 @@ function applyPreferences() {
   document.body.dataset.hand = options.handedness;
   document.body.dataset.stick = options.stickSize;
   document.body.dataset.stickHeight = options.stickHeight;
+  refreshTouchKeys();
+  function describeKey(button, id) {
+    const primary = keyLabel(options.layout.keys[id]);
+    const number = options.layout.keypad[id];
+    const digit = number === 'NumpadDecimal' ? '.' : number?.slice(-1);
+    const fallback = actionNames[id] || utilityActions[id];
+    const legend = [primary, keypadLabel(number)].filter(Boolean).join(' · ');
+    button.title = fallback + ' (' + legend + ')';
+    button.setAttribute('aria-keyshortcuts', [primary, digit].filter(Boolean).join(' '));
+    const badge = button.querySelector('kbd');
+    if (badge) badge.textContent = primary;
+  }
   for (const [order, id] of options.layout.slots.entries()) {
     const action = id === 'run' ? $('sprint') : document.querySelector('[data-act="' + id + '"]');
     action.style.order = order;
-    if (options.layout.keys[id]) {
-      const letter = keyLabel(options.layout.keys[id]);
-      action.querySelector('kbd').textContent = letter;
-      action.setAttribute('aria-keyshortcuts', letter);
-    }
+    describeKey(action, id);
   }
   const bindings = { bag: 'bag-button', map: 'map-button', tools: 'quick-tools' };
-  for (const [action, id] of Object.entries(bindings)) {
-    const name = keyLabel(options.layout.keys[action]);
-    $(id).title = utilityActions[action] + ' (' + name + ')';
-    $(id).setAttribute('aria-keyshortcuts', name);
-  }
-  const dodge = document.querySelector('[data-act="dodge"]');
-  dodge.querySelector('kbd').textContent = keyLabel(options.layout.keys.dodge);
-  dodge.setAttribute('aria-keyshortcuts', keyLabel(options.layout.keys.dodge));
+  for (const [action, id] of Object.entries(bindings)) describeKey($(id), action);
+  describeKey(document.querySelector('[data-act="dodge"]'), 'dodge');
   audio.setMix?.(options.mix);
   if (world) {
     world.renderQuality = options.quality;
@@ -147,7 +159,6 @@ let frameId = 0,
   lastHUD = 0,
   lastSave = 0,
   running = false,
-  sprint = false,
   stickId = null,
   lookId = null,
   lookX = 0,
@@ -190,16 +201,18 @@ function button(label, callback, style = 'secondary') {
   return el;
 }
 function stopMotion() {
+  setNumberPad(false);
+  fieldInputEpoch++;
   setPalette(false);
   rimSprint = false;
   stopTool();
-  keys.clear();
+  keyboard.reset();
   movement.forward = 0;
   movement.strafe = 0;
   stickId = null;
   lookId = null;
   $('stick').firstElementChild.style.transform = '';
-  sprint = false;
+  touchRun.reset();
   $('sprint').setAttribute('aria-pressed', 'false');
 }
 function save() {
@@ -294,6 +307,25 @@ function dismiss() {
   focusNode?.focus({ preventScroll: true });
 }
 function returnFromPanel() {
+  if (panel === 'binding' && bindingsFromPad) {
+    bindingsFromPad = false;
+    dismiss();
+    setNumberPad(true);
+    $('assign-number-keys').focus({ preventScroll: true });
+    return;
+  }
+  if (panel === 'touch-keys') {
+    if (touchKeysReturn === 'binding') bindingsPanel();
+    else if (touchKeysReturn === 'preferences') preferencesPanel();
+    else if (touchKeysReturn === 'help') controls();
+    else dismiss();
+    return;
+  }
+  if (panel === 'binding' && bindingsFromGuide) {
+    bindingsFromGuide = false;
+    controls();
+    return;
+  }
   if (panel === 'binding' || panel === 'device') {
     preferencesPanel();
     return;
@@ -323,8 +355,7 @@ function returnFromPanel() {
       pause();
     } else {
       dismiss();
-      sprint = panelSprint;
-      $('sprint').setAttribute('aria-pressed', String(sprint));
+      setTouchRun(panelSprint);
     }
     return;
   }
@@ -348,8 +379,7 @@ function returnFromPanel() {
     act(world, 'close');
     activeSurvey = null;
     dismiss();
-    sprint = sprintBeforeMap;
-    $('sprint').setAttribute('aria-pressed', String(sprint));
+    setTouchRun(sprintBeforeMap);
     return;
   }
   if (panel === 'dialogue') {
@@ -364,19 +394,34 @@ function returnFromPanel() {
 }
 $('panel-close').addEventListener('click', returnFromPanel);
 function controls() {
-  helpFromField = screen === 'game' && !panel;
+  if (panel !== 'binding') helpFromField = screen === 'game' && !panel;
   const touch = paragraph(
-    'Move with the stick and drag the scene to look. Push past the upper rim to run. The round action key names what you can do where you are looking. Tap it to act. In open ground, drag from the sword to aim the cut, or hold and release it for a thrust.'
+    'Tap Run to run forward and tap it again to stop, or hold it and release to stop. Steer with the stick or drag the view. Tap Sword to cut while running. Drag from Sword to aim, or hold and release for a thrust.'
+  );
+  const tools = paragraph(
+    'Tap Tools to open the Number pad or assign an action to either thumb. Hold Tools to open the bag. You can give a carried item its own number key in the bag.',
+    'field-note'
   );
   const table = document.createElement('div');
   table.className = 'key-table';
   const pairs = [
     ['Move / turn', 'W A S D / arrows'],
-    ['Walk / sprint', 'Alt / Shift while moving'],
-    ['Look up / down', 'I / K or Page Up / Down'],
-    ...Object.entries({ ...actionNames, ...utilityActions })
-      .filter(([id]) => id !== 'run')
-      .map(([id, name]) => [name, keyLabel(options.layout.keys[id])]),
+    [
+      'Sprint while steering',
+      'Double-tap W or ↑, holding the second press. Shift also sprints while moving.',
+    ],
+    ['Walk slowly', 'Alt while moving'],
+    ['Look up / down', 'Page Up / Page Down'],
+    ...Object.entries({ ...actionNames, ...utilityActions }).map(([id, name]) => [
+      name,
+      [keyLabel(options.layout.keys[id]), keypadLabel(options.layout.keypad[id])].filter(Boolean).join(' · '),
+    ]),
+    ...Object.entries(quickItemActions)
+      .filter(([id]) => options.layout.keypad[id])
+      .map(([id, name]) => [
+        world ? quickItem(world, id).name : name,
+        keypadLabel(options.layout.keypad[id]),
+      ]),
     ['Dialogue choices', '1, 2, 3…'],
     ['Pause', 'Esc'],
   ];
@@ -386,11 +431,26 @@ function controls() {
       cell.textContent = label;
       table.append(cell);
     }
-  const hint = paragraph(
-    'Tap Tools for all actions. Flick Tools up to guard, sideways to dodge or down to use your belt. Hold Tools to open your bag. Ready an item to put it beside Tools. A quick tap on the scene uses a nearby prompt or swings in open ground.',
-    'field-note'
+  const keys = paragraph(
+    'Hold ' +
+      keyLabel(options.layout.keys.run) +
+      ' to run forward. Press ' +
+      keyLabel(options.layout.keys.strike) +
+      ' while holding it to swing. Number keys and their keypad equivalents share assignments during play.'
   );
-  modal('help', 'Field guide', 'How to play', [touch, hint, table], [button('Back', returnFromPanel)]);
+  modal(
+    'help',
+    'Field guide',
+    'How to play',
+    [touch, tools, keys, table],
+    [
+      button('Assign keys', () => {
+        bindingsFromGuide = true;
+        bindingsPanel();
+      }),
+      button('Back', returnFromPanel),
+    ]
+  );
 }
 $('help').addEventListener('click', controls);
 function openFullscreen() {
@@ -538,6 +598,7 @@ function preferencesPanel() {
   const actions = [
     button('Back', returnFromPanel, 'primary'),
     button('Arrange controls', bindingsPanel),
+    button('Assign touch keys', touchKeysPanel),
     button('Device check', devicePanel),
   ];
   if (view.requestPointerLock)
@@ -552,6 +613,63 @@ function preferencesPanel() {
   if (document.fullscreenEnabled)
     actions.push(button(document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen', openFullscreen));
   modal('preferences', '', 'Settings', rows, actions);
+}
+let touchKeysReturn = '';
+function touchKeysPanel() {
+  touchKeysReturn = panel;
+  const group = document.createElement('div');
+  group.className = 'touch-bindings';
+  const selects = {};
+  const inventoryWorld = world || loadJourney();
+  const owned = new Set(availableQuickItems(inventoryWorld));
+  for (const [side, name] of [
+    ['movement', 'Movement-side key'],
+    ['action', 'Action-side key'],
+  ]) {
+    const label = document.createElement('label');
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', name);
+    for (const [id, title] of Object.entries(touchActionNames)) {
+      if (id.startsWith('item:') && !owned.has(id) && !Object.values(options.touchKeys).includes(id))
+        continue;
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent =
+        inventoryWorld && id.startsWith('item:') ? quickItem(inventoryWorld, id).name : title;
+      select.append(option);
+    }
+    selects[side] = select;
+    select.value = options.touchKeys[side];
+    select.onchange = () => {
+      assignTouchKey(options.touchKeys, side, select.value);
+      for (const [key, el] of Object.entries(selects)) el.value = options.touchKeys[key];
+      refreshTouchKeys();
+      write(settingsKey, options);
+    };
+    label.append(name, select);
+    group.append(label);
+  }
+  modal(
+    'touch-keys',
+    '',
+    'Assign touch keys',
+    [
+      paragraph(
+        'Choose what each thumb can use directly. Assigning the same action to the other side swaps the keys. Items you carry can be pinned to either side.',
+        'field-note'
+      ),
+      group,
+    ],
+    [
+      button('Back', returnFromPanel, 'primary'),
+      button('Restore Run and Sword', () => {
+        options.touchKeys = touchKeys();
+        for (const [key, el] of Object.entries(selects)) el.value = options.touchKeys[key];
+        refreshTouchKeys();
+        write(settingsKey, options);
+      }),
+    ]
+  );
 }
 function devicePanel() {
   const content = document.createElement('div');
@@ -586,12 +704,26 @@ function bindingsPanel() {
     return select;
   }
   function refresh() {
-    for (const { id, position, key } of rows) {
+    for (const { id, position, key, keypad } of rows) {
       if (position) position.value = String(options.layout.slots.indexOf(id));
       if (key) key.value = options.layout.keys[id];
+      keypad.value = options.layout.keypad[id] || '';
     }
   }
-  for (const [id, name] of Object.entries({ ...actionNames, ...utilityActions })) {
+  const header = document.createElement('div');
+  header.className = 'binding-head';
+  for (const label of ['Action', 'Palette slot', 'Key', 'Number']) {
+    const cell = document.createElement('span');
+    cell.textContent = label;
+    header.append(cell);
+  }
+  group.append(header);
+  const actionLabels = { ...actionNames, ...utilityActions };
+  const carried = new Set(availableQuickItems(world));
+  for (const [id, name] of Object.entries(quickItemActions)) {
+    if (carried.has(id) || options.layout.keypad[id]) actionLabels[id] = name;
+  }
+  for (const [id, name] of Object.entries(actionLabels)) {
     const row = document.createElement('div'),
       title = document.createElement('strong');
     title.textContent = name;
@@ -602,17 +734,26 @@ function bindingsPanel() {
           name + ' touch position'
         )
       : null;
-    const key =
-      id === 'run'
-        ? null
-        : menu(
-            keyChoices.map((k) => [k, keyLabel(k)]),
-            (code) => rebind(options.layout, id, code),
-            name + ' keyboard key'
-          );
-    row.append(title, position || document.createTextNode(''), key || document.createTextNode('Shift'));
+    const key = Object.hasOwn(options.layout.keys, id)
+      ? menu(
+          keyChoices.map((k) => [k, keyLabel(k)]),
+          (code) => rebind(options.layout, id, code),
+          name + ' keyboard key'
+        )
+      : null;
+    const keypad = menu(
+      [['', 'Unassigned'], ...keypadChoices.map((code) => [code, keypadLabel(code)])],
+      (code) => rebindKeypad(options.layout, id, code),
+      name + ' number key'
+    );
+    row.append(
+      title,
+      position || document.createElement('span'),
+      key || document.createElement('span'),
+      keypad
+    );
     group.append(row);
-    rows.push({ id, position, key });
+    rows.push({ id, position, key, keypad });
   }
   refresh();
   modal(
@@ -621,13 +762,14 @@ function bindingsPanel() {
     'Arrange controls',
     [
       paragraph(
-        'Choose a touch position or key for each action. If another action uses it, the two swap.',
+        'The number row and numeric keypad share assignments in the field. A number selects a reply or pocket inside its menu. Changing an occupied key swaps its assignments.',
         'field-note'
       ),
       group,
     ],
     [
       button('Back', returnFromPanel, 'primary'),
+      button('Assign touch keys', touchKeysPanel),
       button('Reset controls', () => {
         options.layout = controlLayout();
         refresh();
@@ -717,22 +859,36 @@ function bagPanel() {
     return;
   }
   panelReturn = panel;
-  panelSprint = sprint;
-  const contents = makeBagView(world, () => {
-    world.fieldHand = 'belt';
-    save();
-    dismiss();
-    sprint = panelSprint;
-    $('sprint').setAttribute('aria-pressed', String(sprint));
-    refreshHUD();
-  });
+  panelSprint = touchRun.latched;
+  const contents = makeBagView(
+    world,
+    () => {
+      world.fieldHand = 'belt';
+      save();
+      dismiss();
+      setTouchRun(panelSprint);
+      refreshHUD();
+    },
+    {
+      layout: options.layout,
+      ownerName(code, current) {
+        const owner = actionForKey(options.layout, code);
+        if (!owner || owner === current) return '';
+        return actionNames[owner] || utilityActions[owner] || quickItemActions[owner] || '';
+      },
+      assign(action, code) {
+        rebindKeypad(options.layout, action, code);
+        applyPreferences();
+        write(settingsKey, options);
+      },
+    }
+  );
   modal('bag', 'Equipment', 'Traveller’s bag', contents, [
     button('Ready sword', () => {
       world.fieldHand = 'sword';
       save();
       dismiss();
-      sprint = panelSprint;
-      $('sprint').setAttribute('aria-pressed', String(sprint));
+      setTouchRun(panelSprint);
       refreshHUD();
     }),
     button('Close bag', returnFromPanel),
@@ -742,7 +898,7 @@ $('bag-button').addEventListener('click', bagPanel);
 function journalPanel() {
   if (!world || world.dialogue || world.ending) return;
   panelReturn = panel;
-  panelSprint = sprint;
+  panelSprint = touchRun.latched;
   const notes = Array.isArray(world.journal) ? world.journal : [],
     entries = [];
   if (!notes.length)
@@ -932,7 +1088,7 @@ function mapPanel() {
     return;
   }
   if (panel) return;
-  sprintBeforeMap = sprint;
+  sprintBeforeMap = touchRun.latched;
   act(world, 'map');
   activeSurvey = makeFieldSurvey(world, save);
   const { canvas, bar, text: description } = activeSurvey,
@@ -1034,8 +1190,61 @@ function syncStory() {
     save();
   }
 }
+function refreshTouchKeys(hint = '', item = world && selectedItem(world)) {
+  const pinned = options.touchKeys;
+  for (const [side, buttonId] of [
+    ['movement', 'move-key'],
+    ['action', 'action-key'],
+  ]) {
+    const action = pinned[side],
+      key = $(buttonId);
+    const direct = action.startsWith('item:');
+    const pocket = direct && world ? quickItem(world, action) : null;
+    const name =
+      action === 'potion'
+        ? item?.name || 'Belt'
+        : action === 'run' && touchRun.active
+          ? 'Stop'
+          : action === 'interact' && hint
+            ? hint
+            : pocket?.name || touchActionNames[action];
+    const glyph = touchKeyIcon(action);
+    const visual = glyph + name;
+    if (key.dataset.legend !== visual) {
+      key.dataset.legend = visual;
+      key.replaceChildren(icon(glyph), Object.assign(document.createElement('span'), { textContent: name }));
+    }
+    const accessible =
+      action === 'run'
+        ? touchRun.active
+          ? 'Stop running'
+          : 'Run'
+        : action === 'strike'
+          ? 'Swing sword'
+          : action === 'interact' && hint
+            ? hint
+            : direct
+              ? name + ', ' + (pocket?.count || 0) + ' remaining'
+              : name;
+    key.setAttribute('aria-label', accessible);
+    key.title = accessible;
+    if (action === 'run') key.setAttribute('aria-pressed', String(touchRun.active));
+    else key.removeAttribute('aria-pressed');
+    key.classList.toggle('empty-pocket', direct && !pocket?.count);
+  }
+  const palette = $('tool-palette');
+  const signature = pinned.movement + '/' + pinned.action;
+  if (palette.dataset.pins !== signature) {
+    palette.dataset.pins = signature;
+    for (const control of palette.querySelectorAll('[data-act], #sprint')) {
+      const action = control.id === 'sprint' ? 'run' : control.dataset.act;
+      control.classList.toggle('on-field-key', pinned.movement === action || pinned.action === action);
+    }
+  }
+}
 function refreshHUD() {
   if (!world) return;
+  if (!$('number-pad').hidden) paintNumberPad(world, touchRun.active || keyboard.sprinting());
   display($('hud'), !world.sequence);
   display($('resist'), world.sequence?.id === 'bound');
   const h = getHUD(world),
@@ -1069,6 +1278,11 @@ function refreshHUD() {
   const field = $('field-action'),
     holdsItem = fieldAction(world.fieldHand, item, h.hint) === 'potion';
   const fieldLabel = holdsItem ? item.name : h.hint || 'Sword';
+  const contextual = fieldAction(world.fieldHand, item, h.hint);
+  const pinned = Object.values(options.touchKeys);
+  const duplicatesPinned = pinned.includes(contextual) || (holdsItem && pinned.includes('item:' + item.id));
+  display(field, !duplicatesPinned);
+  refreshTouchKeys(h.hint, item);
   if (field.lastElementChild.textContent !== fieldLabel) {
     field.replaceChildren(
       icon(holdsItem ? (item.id === 'leaf' ? 'leaf-icon' : 'flask') : h.hint ? 'hand' : 'sword'),
@@ -1086,7 +1300,7 @@ function refreshHUD() {
     .setAttribute('aria-pressed', String((world.guardUntil || 0) > world.elapsed));
   $('stick').classList.toggle(
     'running',
-    Boolean(rimSprint || sprint || physicalShift.size) && !world.player.exhausted
+    Boolean(rimSprint || touchRun.active || keyboard.sprinting()) && !world.player.exhausted
   );
   document
     .querySelector('[data-act="potion"]')
@@ -1128,7 +1342,7 @@ function refreshHUD() {
 }
 function gameAction(action) {
   if (screen !== 'game' || panel) return;
-  const prepared = action === 'potion' ? selectedItem(world) : null;
+  const prepared = action === 'potion' || action.startsWith('item:') ? selectedItem(world) : null;
   if (action === 'potion' && !prepared) {
     bagPanel();
     return;
@@ -1148,7 +1362,11 @@ function dispatch(action) {
   if (action === 'map') return mapPanel();
   if (action === 'journal') return journalPanel();
   if (action === 'tools') {
-    if (options.controlStyle === 'classic') return bagPanel();
+    if (options.controlStyle === 'classic') {
+      setNumberPad(false);
+      $('tool-palette').focus({ preventScroll: true });
+      return;
+    }
     setPalette(!paletteOpen);
     refreshHUD();
     if (paletteOpen && !matchMedia('(any-pointer:coarse)').matches)
@@ -1157,8 +1375,7 @@ function dispatch(action) {
   }
   if (action === 'pause') return pause();
   if (action === 'run') {
-    sprint = !sprint;
-    $('sprint').setAttribute('aria-pressed', String(sprint));
+    setTouchRun(!touchRun.active);
     setPalette(false);
     return;
   }
@@ -1167,24 +1384,44 @@ function dispatch(action) {
   gameAction(action);
 }
 $('interact-hint').addEventListener('click', () => dispatch('interact'));
+function setTouchRun(on) {
+  touchRun.reset(on);
+  paintTouchRun();
+}
+function paintTouchRun() {
+  $('sprint').setAttribute('aria-pressed', String(touchRun.active));
+  refreshTouchKeys();
+}
+function touchAutoForward() {
+  return touchRun.active ? 1 : 0;
+}
 function aimedButton(b, resolve, holdSword = false) {
   let gesture = null;
   b.addEventListener('pointerdown', (e) => {
+    if (gesture && gesture.epoch !== fieldInputEpoch) gesture = null;
     if (panel || gesture || e.button !== 0) return;
+    const action = resolve();
+    if (!action) return;
     gesture = {
       id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      start: performance.now(),
+      start: e.timeStamp,
       w: world,
-      action: resolve(),
+      epoch: fieldInputEpoch,
+      action,
     };
+    if (gesture.action === 'run') {
+      touchRun.press(e.pointerId);
+      paintTouchRun();
+    }
     try {
       b.setPointerCapture(e.pointerId);
     } catch {}
   });
   b.addEventListener('pointermove', (e) => {
-    if (gesture?.id !== e.pointerId) return;
+    if (gesture?.id !== e.pointerId || gesture.epoch !== fieldInputEpoch) return;
+    if (gesture.action === 'run') return;
     moveLook(e.clientX - gesture.x, e.clientY - gesture.y);
     gesture.x = e.clientX;
     gesture.y = e.clientY;
@@ -1193,17 +1430,34 @@ function aimedButton(b, resolve, holdSword = false) {
     if (gesture?.id !== e.pointerId) return;
     const last = gesture;
     gesture = null;
-    if (panel || world !== last.w || world?.sequence) return;
+    if (last.epoch !== fieldInputEpoch) return;
+    const canAct = !panel && world === last.w && !world?.sequence;
+    const held = e.timeStamp - last.start >= 330;
     let action = last.action;
-    if (holdSword && action === 'strike' && performance.now() - last.start >= 330) action = 'thrust';
+    if (action === 'run') {
+      touchRun.release(e.pointerId, canAct && !held);
+      paintTouchRun();
+      return;
+    }
+    if (!canAct) return;
+    if (holdSword && action === 'strike' && held) action = 'thrust';
     dispatch(action);
   });
   for (const type of ['lostpointercapture', 'pointercancel'])
     b.addEventListener(type, (e) => {
-      if (gesture?.id === e.pointerId) gesture = null;
+      if (gesture?.id === e.pointerId) {
+        if (gesture.action === 'run' && gesture.epoch === fieldInputEpoch) {
+          touchRun.release(e.pointerId, false);
+          paintTouchRun();
+        }
+        gesture = null;
+      }
     });
   b.addEventListener('click', (e) => {
-    if (e.detail === 0) dispatch(resolve());
+    if (e.detail === 0 && !panel) {
+      const action = resolve();
+      if (action) dispatch(action);
+    }
   });
 }
 document
@@ -1215,6 +1469,31 @@ aimedButton(
   true
 );
 const toolsKey = $('quick-tools');
+aimedButton($('move-key'), () => options.touchKeys.movement, true);
+aimedButton($('action-key'), () => options.touchKeys.action, true);
+const paintNumberPad = mountNumberPad($('number-pad-grid'), () => options.layout, aimedButton);
+let bindingsFromPad = false;
+function setNumberPad(open) {
+  $('number-pad').hidden = !open;
+  document.body.dataset.numberPad = open ? 'open' : 'closed';
+  $('palette-number-pad').setAttribute('aria-expanded', String(open));
+  if (open) {
+    setPalette(false);
+    paintNumberPad(world, touchRun.active || keyboard.sprinting());
+  }
+}
+$('palette-number-pad').addEventListener('click', () => {
+  setNumberPad($('number-pad').hidden);
+});
+$('close-number-pad').addEventListener('click', () => {
+  setNumberPad(false);
+  view.focus({ preventScroll: true });
+});
+$('assign-number-keys').addEventListener('click', () => {
+  bindingsFromPad = true;
+  bindingsPanel();
+});
+$('palette-bind').addEventListener('click', touchKeysPanel);
 $('palette-bag').addEventListener('click', bagPanel);
 $('palette-guide').addEventListener('click', controls);
 let toolGesture = null;
@@ -1266,23 +1545,8 @@ function frame(timestamp) {
   lastTime = now;
   if (!document.hidden) {
     if (!panel) {
-      const input = {
-        forward:
-          movement.forward +
-          Number(keys.has('KeyW') || keys.has('ArrowUp')) -
-          Number(keys.has('KeyS') || keys.has('ArrowDown')),
-        strafe: movement.strafe + Number(keys.has('KeyD')) - Number(keys.has('KeyA')),
-        turn: Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')),
-        sprint: sprint || rimSprint || physicalShift.size > 0,
-        walk: keys.has('AltLeft') || keys.has('AltRight'),
-      };
-      accumulator = advanceGameClock(
-        world,
-        dt,
-        accumulator,
-        input,
-        Number(keys.has('PageUp') || keys.has('KeyI')) - Number(keys.has('PageDown') || keys.has('KeyK'))
-      );
+      const input = keyboard.sample(movement, touchAutoForward(), touchRun.active || rimSprint);
+      accumulator = advanceGameClock(world, dt, accumulator, input, input.pitch);
       audio.update(arrivalView(world));
     }
     for (const ev of world.events.splice(0)) {
@@ -1460,6 +1724,7 @@ function moveStick(event) {
     dy = event.clientY - r.top - r.height / 2;
   const length = Math.max(radius, Math.hypot(dx, dy));
   const push = -dy / radius;
+  if (touchRun.active && push < -0.44 && Math.abs(dy) > Math.abs(dx)) setTouchRun(false);
   rimSprint = push > (rimSprint ? 1.08 : 1.24) && Math.abs(dx) < Math.abs(dy);
   movement.strafe = dx / length;
   movement.forward = -dy / length;
@@ -1506,14 +1771,8 @@ function stopPointer(event) {
 }
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
   document.addEventListener(type, stopPointer, true);
-function boundSequenceAction(code) {
-  return (
-    world?.sequence?.id === 'bound' &&
-    ['strike', 'interact', 'dodge'].includes(actionForKey(options.layout, code))
-  );
-}
 document.addEventListener('keydown', (event) => {
-  if (['ShiftLeft', 'ShiftRight'].includes(event.code)) physicalShift.add(event.code);
+  if (event.ctrlKey || event.metaKey || event.isComposing) return;
   if (panel) {
     if (event.code === 'Escape') {
       event.preventDefault();
@@ -1533,7 +1792,7 @@ document.addEventListener('keydown', (event) => {
     }
     if (['bag', 'map', 'journal'].includes(panel) && actionForKey(options.layout, event.code) === panel) {
       event.preventDefault();
-      returnFromPanel();
+      if (!event.repeat) returnFromPanel();
       return;
     }
     if (event.key === 'Tab') {
@@ -1561,72 +1820,46 @@ document.addEventListener('keydown', (event) => {
       start();
     return;
   }
-  if (world?.sequence?.id === 'bound' && ['Space', 'KeyE', 'KeyF', 'KeyW', 'ArrowUp'].includes(event.code)) {
+  if (event.target?.closest?.('input, select, textarea, [contenteditable="true"]')) return;
+  if (event.code === 'Escape') {
     event.preventDefault();
-    if (!event.repeat) gameAction('resist');
-    return;
-  }
-  if (event.code === 'Space' && event.target?.closest?.('button, input, select')) return;
-  if (boundSequenceAction(event.code)) {
-    event.preventDefault();
-    if (!event.repeat) gameAction('resist');
-    return;
-  }
-  const bound = actionForKey(options.layout, event.code);
-  if (bound) {
-    event.preventDefault();
-    if (!event.repeat) dispatch(bound === 'strike' && event.shiftKey ? 'thrust' : bound);
-    return;
-  }
-  const commands = {
-    Escape: () => {
-      if (paletteOpen) {
+    if (!event.repeat) {
+      if (!$('number-pad').hidden) {
+        setNumberPad(false);
+        view.focus();
+      } else if (paletteOpen) {
         setPalette(false);
         view.focus();
       } else pause();
-    },
-  };
-  if (commands[event.code]) {
-    event.preventDefault();
-    if (!event.repeat) commands[event.code]();
+    }
     return;
   }
+  const input = keyboard.press(options.layout, event.code, performance.now(), event.repeat);
+  if (!input) return;
+  // Field bindings have priority even if the last touch or click focused a HUD
+  // button. Modal controls above retain normal Space and Enter activation.
+  event.preventDefault();
+  if (!input.fresh) return;
+  if (input.action === 'back' && touchRun.active) setTouchRun(false);
   if (
-    [
-      'KeyW',
-      'KeyA',
-      'KeyS',
-      'KeyD',
-      'ArrowUp',
-      'ArrowDown',
-      'ArrowLeft',
-      'ArrowRight',
-      'AltLeft',
-      'AltRight',
-      'KeyI',
-      'KeyK',
-      'ShiftLeft',
-      'ShiftRight',
-      'PageUp',
-      'PageDown',
-    ].includes(event.code)
+    world?.sequence?.id === 'bound' &&
+    ['run', 'forward', 'interact', 'dodge', 'strike'].includes(input.action)
   ) {
-    event.preventDefault();
-    // A brief keyboard tap can fall entirely between two low-rate tablet frames.
-    if (
-      !event.repeat &&
-      !keys.has(event.code) &&
-      !world.sequence &&
-      ['PageUp', 'PageDown'].includes(event.code)
-    ) {
-      world.player.pitch = clamp(
-        world.player.pitch + (event.code === 'PageUp' ? 0.055 : -0.055),
-        -1.03,
-        1.04
-      );
-      needsFrame = true;
-    }
-    keys.add(event.code);
+    gameAction('resist');
+    return;
+  }
+  if (!isHeldAction(input.action)) {
+    dispatch(input.action);
+    return;
+  }
+  if (!world.sequence && ['PageUp', 'PageDown'].includes(event.code)) {
+    // A short tap at low frame rates still produces perceptible vertical look.
+    world.player.pitch = clamp(
+      world.player.pitch + (input.action === 'lookUp' ? 0.055 : -0.055),
+      -1.03,
+      1.04
+    );
+    needsFrame = true;
   }
 });
 stage.addEventListener(
@@ -1637,18 +1870,17 @@ stage.addEventListener(
   { capture: true, passive: true }
 );
 document.addEventListener('keyup', (event) => {
-  keys.delete(event.code);
-  physicalShift.delete(event.code);
+  if (keyboard.release(event.code, performance.now()) && !panel && screen === 'game') event.preventDefault();
 });
 window.addEventListener('blur', () => {
-  physicalShift.clear();
+  panelSprint = sprintBeforeMap = false;
   stopMotion();
   if (screen === 'game' && !panel) pause();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
+    panelSprint = sprintBeforeMap = false;
     fieldCheck.pause();
-    physicalShift.clear();
     stopMotion();
     save();
     if (screen === 'game' && !panel) pause();

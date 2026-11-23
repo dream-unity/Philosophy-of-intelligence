@@ -54,7 +54,8 @@ test('the tools key accepts a tap, two horizontal dodge directions, guard and be
   control.rebind(layout, 'bag', 'KeyZ');
   const restored = control.controlLayout(JSON.parse(JSON.stringify(layout)));
   assert.equal(restored.keys.bag, 'KeyZ');
-  assert.equal(restored.keys.dodge, 'Space');
+  assert.equal(restored.keys.dodge, 'KeyC');
+  assert.equal(restored.keys.run, 'Space');
 });
 
 test('50/52–54: sketches accrue real sites and keep north up through zoom and pan', () => {

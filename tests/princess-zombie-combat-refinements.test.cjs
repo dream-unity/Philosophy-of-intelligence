@@ -375,3 +375,34 @@ test('the visible height of each bronze bell sets its striking zone and playing 
   assert.ok(w.bridgeOpen);
   assert.ok(w.events.some((e) => e.type === 'chain' && e.text === 'rise'));
 });
+
+test('holding the run key carries a moving cut into a wolf and releasing Sword keeps the run active', async () => {
+  const { createFieldKeyboard } = await import(gameDir + 'field-keyboard.mjs');
+  const { controlLayout } = await import(gameDir + 'control-layout.mjs');
+  const w = game.createWorld();
+  Object.assign(w, { elapsed: 18, greeted: true, route: 'guided' });
+  Object.assign(w.player, { x: 22, z: 208, yaw: 0, pitch: -0.24, feetY: travel.footHeight(w, 22, 208) });
+  const wolf = w.actors.find((a) => a.type === 'wolf');
+  Object.assign(wolf, { x: 22, z: 213, homeX: 22, homeZ: 213, heading: Math.PI, recoverUntil: 100, attackAt: 100 });
+  const hp = wolf.hp;
+  const keyboard = createFieldKeyboard();
+  const layout = controlLayout();
+  function advance(frames) {
+    for (let i = 0; i < frames; i++) {
+      const input = keyboard.sample({ forward: 0, strafe: 0 }, false, false);
+      game.tick(w, 1 / 30, input);
+    }
+  }
+  keyboard.press(layout, 'Space', 0);
+  advance(13);
+  assert.ok(w.player.speed > 5);
+  const from = w.player.z;
+  const action = keyboard.press(layout, 'KeyF', 440);
+  assert.ok(game.act(w, action.action));
+  keyboard.release('KeyF', 480);
+  advance(11);
+  assert.equal(w.attack.kind, 'slash');
+  assert.equal(w.attack.contact.material, 'wolf');
+  assert.equal(wolf.hp, hp - 1);
+  assert.ok(w.player.z > from + 2 && w.player.speed > 5 && w.player.stamina < 1);
+});

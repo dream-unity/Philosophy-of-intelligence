@@ -11,36 +11,38 @@
     <base href="/zelda-and-the-princess-zombie/" />
     <title>Zelda and the Princess Zombie | Philosophy of Intelligence</title>
     <link rel="preload" as="image" href="forest.webp" />
-    <link rel="stylesheet" href="game.css?v=6bffa4df0413" />
+    <link rel="stylesheet" href="game.css?v=49f03419dbb1" />
     <!-- Refresh module and stylesheet versions with node scripts/version-princess-zombie.mjs. -->
     <script type="importmap">
       {
         "imports": {
           "./audio.mjs": "./audio.mjs?v=d0c763e6528b",
-          "./bag-view.mjs": "./bag-view.mjs?v=e19dac5b729d",
+          "./bag-view.mjs": "./bag-view.mjs?v=8ba058cd1330",
           "./blade-pose.mjs": "./blade-pose.mjs?v=0a1d040573c3",
           "./castle-view.mjs": "./castle-view.mjs?v=d2c5f3e71dc7",
           "./combat-zones.mjs": "./combat-zones.mjs?v=a0938f536b84",
-          "./control-layout.mjs": "./control-layout.mjs?v=cf19295cf8e3",
+          "./control-layout.mjs": "./control-layout.mjs?v=6c56e352547f",
           "./creature-motion.mjs": "./creature-motion.mjs?v=950b961b6929",
           "./field-check.mjs": "./field-check.mjs?v=d4d54bb8428f",
           "./field-effects.mjs": "./field-effects.mjs?v=69fe217a6e7b",
+          "./field-keyboard.mjs": "./field-keyboard.mjs?v=b6cb7aed2e2a",
           "./field-map.mjs": "./field-map.mjs?v=c6908787834c",
           "./forest-edge.mjs": "./forest-edge.mjs?v=857d1b8c0f1a",
           "./forest-projection.mjs": "./forest-projection.mjs?v=174cd20c23ec",
           "./fortress.mjs": "./fortress.mjs?v=2ef00c56b6c1",
           "./game-clock.mjs": "./game-clock.mjs?v=b90281c3d513",
-          "./game.mjs": "./game.mjs?v=099e0f67fbce",
+          "./game.mjs": "./game.mjs?v=6b4460c3c2bf",
           "./geography.mjs": "./geography.mjs?v=6e25de90cecc",
           "./ground-paint.mjs": "./ground-paint.mjs?v=e5fa8525d99b",
           "./hall.mjs": "./hall.mjs?v=a267a6d8f5ff",
-          "./inventory.mjs": "./inventory.mjs?v=f9e0e7e3f0f0",
+          "./inventory.mjs": "./inventory.mjs?v=a2c0c72b0cb7",
           "./journey-store.mjs": "./journey-store.mjs?v=f330af0a033d",
           "./map-controls.mjs": "./map-controls.mjs?v=983b72df04cc",
           "./marcher-art.mjs": "./marcher-art.mjs?v=e5f9e8196507",
           "./masonry-paint.mjs": "./masonry-paint.mjs?v=fe01e64dfe7c",
           "./mountain-range.mjs": "./mountain-range.mjs?v=9147466c06b9",
           "./navigation.mjs": "./navigation.mjs?v=816b54cc1de4",
+          "./number-pad.mjs": "./number-pad.mjs?v=8bc37f7e2c1a",
           "./procession-view.mjs": "./procession-view.mjs?v=129aabda6ddc",
           "./procession.mjs": "./procession.mjs?v=416d916e0020",
           "./render-quality.mjs": "./render-quality.mjs?v=90292ea84d9f",
@@ -61,12 +63,13 @@
           "./story-witch.mjs": "./story-witch.mjs?v=c55199c2c054",
           "./story.mjs": "./story.mjs?v=ed7e9757cb49",
           "./swordplay.mjs": "./swordplay.mjs?v=ed9e3e8d01a9",
+          "./touch-keys.mjs": "./touch-keys.mjs?v=7d9b9a95a78e",
           "./travel.mjs": "./travel.mjs?v=de12d58e993f",
           "./wildlife.mjs": "./wildlife.mjs?v=15d3804f09fd",
           "./witch-body.mjs": "./witch-body.mjs?v=add4d3df6e4b",
           "./wood-painter.mjs": "./wood-painter.mjs?v=dcbf49df11ff",
           "./woodland.mjs": "./woodland.mjs?v=552b853e0625",
-          "./world.mjs": "./world.mjs?v=a2a7a780cac9"
+          "./world.mjs": "./world.mjs?v=e309162bdf93"
         }
       }
     </script>
@@ -199,6 +202,9 @@
           </div>
           <div class="game-bottom">
             <div id="stick" class="stick" aria-label="Movement joystick"><i></i></div>
+            <button type="button" class="pinned-key" id="move-key" aria-label="Run" aria-pressed="false">
+              <svg aria-hidden="true"><use href="#run" /></svg><span>Run</span>
+            </button>
             <div class="master-keys">
               <button
                 type="button"
@@ -209,11 +215,14 @@
               >
                 <svg aria-hidden="true"><use href="#tools-icon" /></svg><span>Tools</span>
               </button>
-              <button type="button" id="field-action" aria-label="Swing sword">
+              <button type="button" id="field-action" aria-label="Swing sword" hidden>
+                <svg aria-hidden="true"><use href="#sword" /></svg><span>Sword</span>
+              </button>
+              <button type="button" class="pinned-key" id="action-key" aria-label="Swing sword">
                 <svg aria-hidden="true"><use href="#sword" /></svg><span>Sword</span>
               </button>
             </div>
-            <div class="equipment" id="tool-palette" aria-label="Action palette">
+            <div class="equipment" id="tool-palette" role="group" aria-label="Action palette" tabindex="-1">
               <button data-act="interact" aria-label="Interact">
                 <svg><use href="#hand" /></svg><span>Interact</span><kbd>E</kbd>
               </button>
@@ -224,16 +233,16 @@
                 <svg><use href="#sword" /></svg><span>Sword</span><kbd>F</kbd>
               </button>
               <button data-act="thrust" aria-label="Thrust">
-                <svg><use href="#sword" /></svg><span>Thrust</span><kbd>R</kbd>
+                <svg><use href="#sword" /></svg><span>Thrust</span><kbd>V</kbd>
               </button>
               <button data-act="guard" aria-label="Guard">
-                <svg><use href="#sigil" /></svg><span>Guard</span><kbd>G</kbd>
+                <svg><use href="#sigil" /></svg><span>Guard</span><kbd>R</kbd>
               </button>
               <button data-act="dodge" aria-label="Dodge">
-                <svg aria-hidden="true"><use href="#leap" /></svg><span>Dodge</span><kbd>Space</kbd>
+                <svg aria-hidden="true"><use href="#leap" /></svg><span>Dodge</span><kbd>C</kbd>
               </button>
               <button id="sprint" aria-label="Toggle sprint" aria-pressed="false">
-                <svg><use href="#run" /></svg><span>Run</span>
+                <svg><use href="#run" /></svg><span>Run</span><kbd>Space</kbd>
               </button>
               <button id="palette-bag" class="palette-extra" type="button">
                 <svg aria-hidden="true"><use href="#pack" /></svg><span>Bag</span>
@@ -241,6 +250,19 @@
               <button id="palette-guide" class="palette-extra" type="button">
                 <svg aria-hidden="true"><use href="#book" /></svg><span>Controls</span>
               </button>
+              <button id="palette-bind" class="palette-extra" type="button">
+                <svg aria-hidden="true"><use href="#tools-icon" /></svg><span>Assign touch keys</span>
+              </button>
+              <button id="palette-number-pad" type="button" aria-expanded="false" aria-controls="number-pad">
+                <b aria-hidden="true">123</b><span>Number pad</span>
+              </button>
+            </div>
+            <div id="number-pad" role="group" aria-label="Field number pad" hidden>
+              <div class="number-pad-tools">
+                <button type="button" id="assign-number-keys">Assign keys</button>
+                <button type="button" id="close-number-pad" aria-label="Hide number pad">Hide</button>
+              </div>
+              <div id="number-pad-grid"></div>
             </div>
           </div>
         </div>
@@ -261,6 +283,6 @@
       </div>
     </main>
     <noscript>This game needs JavaScript enabled to enter the forest.</noscript>
-    <script type="module" src="game.mjs?v=099e0f67fbce"></script>
+    <script type="module" src="game.mjs?v=6b4460c3c2bf"></script>
   </body>
 </html>

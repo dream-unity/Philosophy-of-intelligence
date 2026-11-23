@@ -2,6 +2,7 @@ import {
   addForage,
   fieldBottles,
   giveRoadBottles,
+  quickItem,
   selectedItem,
   takeItem,
   setCordial,
@@ -887,10 +888,11 @@ export function act(w, action) {
     cue(w, 'guard');
     return true;
   }
-  if (action === 'use-equipped' || action === 'potion') {
-    const held = selectedItem(w);
-    if (!held) {
-      notify(w, 'There is nothing ready in your bag.');
+  const pocket = quickItem(w, action);
+  if (pocket || action === 'use-equipped' || action === 'potion') {
+    const held = pocket || selectedItem(w);
+    if (!held?.count) {
+      notify(w, pocket ? pocket.name + ' pocket is empty.' : 'There is nothing ready in your bag.');
       return false;
     }
     if (fieldBottles.includes(held.id)) {

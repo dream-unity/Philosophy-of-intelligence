@@ -66,6 +66,29 @@ test('the three road gifts occupy different pockets and spend separately without
   assert.equal(resumed.potions, 0);
 });
 
+test('a numbered pocket uses only its named item, preserves the belt and leaves sword and movement available', () => {
+  const w = chooseRoad();
+  position(w, 22, 218, -0.9);
+  assert.equal(bag.selectedItem(w).id, 'cinder');
+  assert.deepEqual(bag.availableQuickItems(w), ['item:cinder', 'item:veil', 'item:lure']);
+  assert.ok(game.act(w, 'item:veil'));
+  assert.equal(w.phialFlight.kind, 'veil');
+  assert.equal(bag.selectedItem(w).id, 'cinder');
+  const z = w.player.z;
+  for (let i = 0; i < 75; i++) game.tick(w, 1 / 60, { forward: 1, sprint: true });
+  assert.ok(w.player.z > z + 4);
+  assert.ok(game.act(w, 'strike'));
+  assert.equal(game.act(w, 'item:veil'), false);
+  assert.match(w.notice, /Willow veil.*empty/i);
+  assert.equal(w.potions, 2);
+  assert.equal(w.fieldMedicine.veil != null, true);
+  assert.equal(game.act(w, 'item:cordial'), false);
+  assert.equal(w.sequence, null);
+  const resumed = store.restoreJourney(JSON.parse(JSON.stringify(w)));
+  assert.deepEqual(bag.availableQuickItems(resumed), ['item:cinder', 'item:lure']);
+  assert.equal(bag.selectedItem(resumed).id, 'cinder');
+});
+
 test('scent disperses a real wolf and bellglass turns a troll toward the landing place', () => {
   const w = chooseRoad();
   position(w, 22, 218, -0.95);
