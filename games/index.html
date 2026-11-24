@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0e1618"><title>Games</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0e1618;color:#eff2e9;font:16px/1.5 system-ui,sans-serif}
+main{width:min(1100px,100%);margin:auto;padding:clamp(20px,5vw,64px)}nav{border-bottom:1px solid #354340;padding-bottom:14px}
+nav a{color:#ced8d0;text-decoration:none}nav a:hover{text-decoration:underline}h1{font-size:clamp(48px,9vw,100px);letter-spacing:-.075em;line-height:.95;margin:.55em 0 .45em}
+article a{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch;color:inherit;text-decoration:none;border:1px solid #43524d;border-radius:12px;overflow:hidden;background:#192325}
+article a:hover,article a:focus-visible{outline:2px solid #c7f476}article .art{width:100%;height:100%;min-height:240px;background:#10191b}
+.copy{align-self:center;padding:clamp(20px,4vw,48px)}h2{font-size:clamp(26px,4.5vw,50px);margin:0;line-height:1.08;letter-spacing:-.06em}
+p{color:#bbcac5;max-width:32ch}.play{display:inline-block;margin-top:.6em;border-radius:6px;padding:10px 20px;font-weight:700;color:#172313;background:#c7f476}
+@media(max-width:580px){article a{grid-template-columns:1fr}.art{max-height:230px}.copy{padding:22px}}
+</style></head>
+<body><main><nav><a href="/">Philosophy of Intelligence</a></nav><h1>Games</h1>
+<article><a href="/4sided-tetris/" aria-label="Play 4-Sided Tetris">
+<svg class="art" aria-hidden="true" viewBox="0 0 360 240">
+<defs><pattern id="grid" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="11" height="11" fill="#263537"/></pattern></defs>
+<path d="M144 0h72v84h144v72H216v84h-72v-84H0V84h144z" fill="url(#grid)"/>
+<g stroke="#172323" stroke-width="1.5">
+<g fill="#ff9d79"><path d="M144 0h36v12h-36z M168 12h12v12h-12z M180 0h36v12h-36z"/><path d="M168 48h36v12h-36z M180 60h12v12h-12z"/></g>
+<g fill="#6bdde1"><path d="M0 96h12v48H0z M12 120h12v24H12z M72 108h12v36H72z M84 108h12v12H84z"/></g>
+<g fill="#c3a7ff"><path d="M348 84h12v48h-12z M336 108h12v24h-12z M264 108h24v24h-24z"/></g>
+<g fill="#c7f476"><path d="M144 228h48v12h-48z M192 216h24v24h-24z M168 168h24v12h-24z M180 180h24v12h-24z"/></g>
+</g></svg>
+<div class="copy"><h2>4-Sided Tetris</h2><p>Stack four pieces against four edges at once. Each side has its own keypad.</p><span class="play">Play game</span></div>
+</a></article></main></body></html>
