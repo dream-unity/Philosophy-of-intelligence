@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10191c">
+  <meta name="description" content="Read the mark on ten approaching alien cutouts. Fire at foes and let friends pass in this pixel-art arcade range.">
+  <title>Friend or Foe · Games</title>
+  <link rel="stylesheet" href="range.css">
+  <script type="module" src="game.js"></script>
+</head>
+<body data-phase="ready">
+  <header class="bar">
+    <nav aria-label="Game navigation"><a href="/games/">Games</a><span aria-hidden="true">/</span><h1>Friend or Foe</h1></nav>
+    <div class="tools">
+      <button id="sound" type="button" aria-pressed="true">Sound on</button>
+      <button id="pause" type="button" disabled>Pause</button>
+    </div>
+  </header>
+  <main class="arena" id="arena">
+    <div class="view">
+      <canvas id="range" tabindex="0" aria-label="Arcade shooting range" aria-describedby="keyboard-guide">Use the keyboard controls or tap a target.</canvas>
+      <div class="hud">
+        <div class="counter">
+          <div class="readout"><span class="label">Target</span> <b id="target-count">00</b><span class="denominator">/ 10</span></div>
+          <div id="pips" aria-hidden="true"></div>
+        </div>
+        <div class="score"><span class="label">Score</span> <b id="score">0000</b></div>
+      </div>
+      <div id="verdict" role="status" aria-atomic="true"></div>
+    </div>
+    <section class="panel" id="panel" aria-labelledby="panel-title">
+      <h2 id="panel-title"><span>Friend</span><span><i>or</i> Foe</span></h2>
+      <p id="panel-copy">Ten targets ride out of the far end of the range. Read the mark on each one before it reaches you.</p>
+      <dl id="summary" hidden>
+        <div><dt>Foes hit</dt><dd id="foes-hit"></dd></div>
+        <div><dt>Friends spared</dt><dd id="friends-spared"></dd></div>
+      </dl>
+      <button type="button" class="primary" id="start">Start round</button>
+    </section>
+  </main>
+  <footer>
+    <div class="legend" aria-label="Target identification">
+      <span><b class="mark friend" aria-hidden="true">♥</b> Friend <small>— let pass</small></span>
+      <span><b class="mark foe" aria-hidden="true">×</b> Foe <small>— fire</small></span>
+    </div>
+    <div class="actions">
+      <button type="button" id="controls">Controls</button>
+      <button type="button" id="pass" hidden>Let pass <kbd>F</kbd></button>
+      <button type="button" id="fire" hidden>Fire <kbd>Space</kbd></button>
+    </div>
+  </footer>
+  <p class="sr" id="keyboard-guide">Use the arrow keys to move the sight, Space to fire, F to let a target pass, and P to pause. To shoot with a mouse or touchscreen, click or tap the target.</p>
+  <div class="sr" id="target-description" aria-live="polite"></div>
+  <dialog id="help" aria-labelledby="help-title">
+    <h2 id="help-title">Controls</h2>
+    <p>Fire at the orange ×. Spare the mint heart by letting it reach the line or choosing <strong>Let pass</strong>.</p>
+    <dl class="bindings">
+      <div><dt>Mouse or touch</dt><dd>Click or tap the target to fire.</dd></div>
+      <div><dt>Arrow keys</dt><dd>Move the sight.</dd></div>
+      <div><dt>Space</dt><dd>Fire at the sight.</dd></div>
+      <div><dt>F</dt><dd>Let the current target pass.</dd></div>
+      <div><dt>P</dt><dd>Pause or resume the round.</dd></div>
+    </dl>
+    <p>Each correct decision earns 100 points. A perfect round is 1,000.</p>
+    <button id="close" class="primary" type="button">Close</button>
+  </dialog>
+  <noscript>This game needs JavaScript to move the targets.</noscript>
+</body>
+</html>
