@@ -48,7 +48,6 @@ dialog::backdrop{background:#050909bb}dialog h2{margin:0}dl{display:grid;grid-te
 .board{width:var(--arena);height:var(--arena);position:relative;margin:auto;overflow:hidden;background:#11191c;outline:1px solid #273533;outline-offset:-1px}
 .board canvas{will-change:transform;outline:0}
 #board-message{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:6px;padding:.4em .85em;background:#101618ee;color:#fff;font-size:clamp(18px,3vmin,34px);white-space:nowrap}
-#spin{font:600 13px system-ui,sans-serif;white-space:nowrap}
 @media(orientation:landscape) {
   :root{--pad-width:clamp(94px,15vw,225px);--arena:min(calc(100dvh - var(--bar)),calc(100vw - 2 * var(--pad-width) - 20px))}
   .console{width:100%}.pad{width:var(--pad-width)}.pad.top,.pad.left{left:4px}.pad.bottom,.pad.right{right:4px}

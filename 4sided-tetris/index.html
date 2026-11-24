@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0e1618">
 <title>Games</title>
-<link rel="stylesheet" href="game.css?v=3">
+<link rel="stylesheet" href="game.css?v=4">
 </head>
 <body>
 <header>
   <a href="/games/">Games</a><h1>4-Sided Tetris</h1>
-  <div class="metrics" aria-label="Game statistics"><span>Score <b id="score">0</b></span><span>Lines <b id="lines">0</b></span><span>Level <b id="level">1</b></span><button id="spin" aria-keyshortcuts="B" title="Reverse board rotation (B)">↻ Clockwise</button></div>
+  <div class="metrics" aria-label="Game statistics"><span>Score <b id="score">0</b></span><span>Lines <b id="lines">0</b></span><span>Level <b id="level">1</b></span></div>
   <button id="help" aria-label="How to play">?</button>
   <button id="fullscreen" hidden>Full screen</button>
   <button id="run" class="primary">Start game</button>
@@ -24,10 +24,10 @@
 </main>
 <dialog id="guide"><h2>How to play</h2>
 <p>Four pieces leave the centre together. Each coloured keypad always controls its matching edge. Press several pads together, or hold a slide on one while rotating or dropping another.</p>
-<p>The board turns once every 30 seconds. Use the rotation button or press B to reverse it. Each keypad follows the colour of its starting edge as the board turns.</p>
+<p>The board is always turning. Its direction reverses at random, even while the pieces are paused. Each keypad follows the colour of its starting edge as the board turns.</p>
 <p>Fill rows against the top and bottom, and columns against the left and right. Each dotted outline shows where that piece will land. A stack reaching its entrance ends the game.</p>
 <p>On a keyboard, the four keys in each row below slide one way, slide the other way, rotate clockwise and drop, in that order.</p>
 <dl><dt>Top</dt><dd>Q W E R</dd><dt>Left</dt><dd>A S D F</dd><dt>Right</dt><dd>J K L ;</dd><dt>Bottom</dt><dd>Z X C V</dd></dl>
 <p>Press Space to start, pause, resume or play again.</p><button id="close-help">Close</button></dialog>
-<script src="game.js?v=3"></script>
+<script src="gameplay.js"></script>
 </body></html>
