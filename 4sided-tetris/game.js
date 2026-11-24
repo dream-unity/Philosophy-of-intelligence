@@ -171,20 +171,29 @@ $('help').onclick = () => {
   guide.showModal();
 };
 $('close-help').onclick = () => guide.close();
+// Some Android keyboards supply a printable key without a physical key code.
+function shortcutCode(event) {
+  if (bindings.has(event.code) || event.code === 'Space') return event.code;
+  const key = event.key || '';
+  if (key === ' ') return 'Space';
+  if (key === ';') return 'Semicolon';
+  if (/^[a-z]$/i.test(key)) return 'Key' + key.toUpperCase();
+  return '';
+}
 document.addEventListener('keydown', e => {
-  if (e.altKey || e.ctrlKey || e.metaKey || guide.open) return;
-  if (e.code === 'Space' && (mode === 'play' || mode === 'paused') &&
-      !['help','fullscreen'].includes(e.target.id) && e.target.tagName !== 'A') {
+  if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing || guide.open) return;
+  const code = shortcutCode(e);
+  if (code === 'Space' && !['help','fullscreen'].includes(e.target.id) && e.target.tagName !== 'A') {
     e.preventDefault();
     if (!e.repeat) toggleRun();
     return;
   }
-  const binding = bindings.get(e.code);
+  const binding = bindings.get(code);
   if (!binding || mode !== 'play') return;
   e.preventDefault();
-  if (!e.repeat) press(e.code, binding);
+  if (!e.repeat) press(code, binding);
 });
-document.addEventListener('keyup', e => release(e.code));
+document.addEventListener('keyup', e => release(shortcutCode(e)));
 window.addEventListener('blur', releaseAll);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && mode === 'play') toggleRun();
