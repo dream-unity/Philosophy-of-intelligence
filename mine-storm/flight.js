@@ -17,7 +17,53 @@ let fieldTime = 0, phaseTime = 0, returned = false, seedingBonus = 0;
 let sound = true, audio, displayTime = 0;
 const held = new Map();
 const controls = [...document.querySelectorAll('[data-act]')];
-const keys = {ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ArrowUp:'thrust',KeyW:'thrust',Space:'fire',KeyX:'escape'};
+const initialKeys = {KeyA:'left',ArrowLeft:'left',KeyD:'right',ArrowRight:'right',KeyW:'thrust',ArrowUp:'thrust',Space:'fire',KeyX:'escape'};
+const keyLabels = {KeyA:'A',ArrowLeft:'←',KeyD:'D',ArrowRight:'→',KeyW:'W',ArrowUp:'↑',Space:'Space',KeyX:'X'};
+const flightCodes = Object.keys(initialKeys);
+const shuffleInterval = 30000;
+let keys = {...initialKeys};
+let shuffleAt = null, shuffleRemaining = shuffleInterval;
+
+function showBindings(){
+  for(const button of controls){
+    const assigned = flightCodes.filter(code => keys[code] === button.dataset.act);
+    button.querySelector('kbd').textContent = assigned.map(code => keyLabels[code]).join(' / ');
+    button.setAttribute('aria-keyshortcuts',assigned.map(code => code.replace(/^Key/, '')).join(' '));
+  }
+}
+function shuffleKeys(){
+  const previous = flightCodes.map(code => keys[code]);
+  let next;
+  do {
+    next = previous.slice();
+    for(let i=next.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [next[i],next[j]] = [next[j],next[i]];
+    }
+  } while(next.some((action,i)=>action===previous[i]));
+  flightCodes.forEach((code,i)=>{
+    keys[code]=next[i];
+    if(held.has(code))held.set(code,next[i]);
+  });
+  showBindings();
+  refreshButtons();
+}
+function updateShuffle(now){
+  while(shuffleAt!==null && now>=shuffleAt){
+    shuffleKeys();
+    shuffleAt+=shuffleInterval;
+  }
+}
+function resumeShuffle(){
+  if(shuffleAt===null)shuffleAt=performance.now()+shuffleRemaining;
+}
+function pauseShuffle(){
+  if(shuffleAt===null)return;
+  const now=performance.now();
+  updateShuffle(now);
+  shuffleRemaining=shuffleAt-now;
+  shuffleAt=null;
+}
 const stars = Array.from({length:75}, () => [Math.random(), Math.random(), rand(.35,1)]);
 function pilot(){return roster[active]}
 function resize(){
@@ -75,6 +121,7 @@ function modal(title,detail,action,choose=false){
   $('playerChoice').hidden=!choose;$('overlay').hidden=false;
 }
 function startField(){
+  resumeShuffle();
   clearControls();ship=newShip();shots=[];bolts=[];sparks=[];mines=[];seeds=[];returned=false;
   fieldTime=phaseTime=seedingBonus=0;phase='seed';paused=false;
   const types=fields[Math.min(pilot().field,13)-1];
@@ -83,6 +130,7 @@ function startField(){
   $('overlay').hidden=true;$('pause').disabled=false;$('pause').textContent='Pause';$('notice').textContent='FIELD '+String(pilot().field).padStart(2,'0');stats();tone(130,290,.28);
 }
 function startGame(){
+  keys={...initialKeys};shuffleRemaining=shuffleInterval;shuffleAt=null;showBindings();
   initAudio();active=0;roster=Array.from({length:Number($('count').value)},()=>({score:0,lives:5,field:1}));startField();
 }
 function startAction(){
@@ -93,6 +141,7 @@ function startAction(){
 function togglePause(){
   if(!['seed','fly','loss'].includes(phase))return;
   clearControls();paused=!paused;$('pause').textContent=paused?'Resume':'Pause';
+  if(paused)pauseShuffle();else resumeShuffle();
   if(paused)modal('Paused','Field '+pilot().field+' · Player '+(active+1),'Resume');
   else {$('overlay').hidden=true;initAudio()}
 }
@@ -104,13 +153,13 @@ function lose(){
 function nextPilot(){
   const survivor=roster.findIndex(p=>p.lives>0);
   if(survivor<0){
-    phase='over';$('pause').disabled=true;$('notice').textContent='';
+    pauseShuffle();phase='over';$('pause').disabled=true;$('notice').textContent='';
     modal('Game over',roster.map((p,i)=>(roster.length===2?'P'+(i+1)+' · ':'')+p.score.toLocaleString()+' points').join('   /   '),'Play again',true);
     return;
   }
   const other=(active+1)%roster.length;
   if(roster[other].lives>0&&other!==active){
-    active=other;phase='handoff';$('pause').disabled=true;$('notice').textContent='';stats();
+    pauseShuffle();active=other;phase='handoff';$('pause').disabled=true;$('notice').textContent='';stats();
     modal('Player '+(active+1),'Field '+pilot().field+' · '+pilot().lives+' ships','Take controls');
   }else startField();
 }
@@ -286,7 +335,7 @@ document.addEventListener('keydown',e=>{
   if(e.target.closest('button,a')&&['Space','Enter'].includes(k)&&(!['fly','seed'].includes(phase)||e.target=== $('pause')||e.target=== $('sound')||e.target=== $('help')))return;
   if(k==='KeyP'){e.preventDefault();if(!e.repeat)togglePause();return}
   if((k==='Enter'||k==='Space')&&!$('overlay').hidden){e.preventDefault();if(!e.repeat)startAction();return}
-  if(keys[k]){e.preventDefault();if(!e.repeat)press(k,keys[k])}
+  if(keys[k]){e.preventDefault();updateShuffle(performance.now());if(!e.repeat)press(k,keys[k])}
 });
 document.addEventListener('keyup',e=>release(code(e)));
 $('start').onclick=startAction;$('pause').onclick=()=>{togglePause();$('pause').blur()};
@@ -296,9 +345,11 @@ $('close').onclick=()=>$('instructions').close();
 function suspend(){clearControls();if(!paused&&['seed','fly','loss'].includes(phase))togglePause()}
 window.addEventListener('blur',suspend);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)suspend()});
+showBindings();
 new ResizeObserver(resize).observe(canvas);resize();
 let lastTime,buffer=0;
 function frame(now){
+  updateShuffle(now);
   if(lastTime!==undefined)buffer+=Math.min(.10,(now-lastTime)/1000);
   lastTime=now;
   while(buffer>=1/90){simulate(1/90);buffer-=1/90}
