@@ -18,19 +18,11 @@ let sound = true, audio, displayTime = 0;
 const held = new Map();
 const controls = [...document.querySelectorAll('[data-act]')];
 const initialKeys = {KeyA:'left',ArrowLeft:'left',KeyD:'right',ArrowRight:'right',KeyW:'thrust',ArrowUp:'thrust',Space:'fire',KeyX:'escape'};
-const keyLabels = {KeyA:'A',ArrowLeft:'←',KeyD:'D',ArrowRight:'→',KeyW:'W',ArrowUp:'↑',Space:'Space',KeyX:'X'};
 const flightCodes = Object.keys(initialKeys);
 const shuffleInterval = 30000;
 let keys = {...initialKeys};
 let shuffleAt = null, shuffleRemaining = shuffleInterval;
 
-function showBindings(){
-  for(const button of controls){
-    const assigned = flightCodes.filter(code => keys[code] === button.dataset.act);
-    button.querySelector('kbd').textContent = assigned.map(code => keyLabels[code]).join(' / ');
-    button.setAttribute('aria-keyshortcuts',assigned.map(code => code.replace(/^Key/, '')).join(' '));
-  }
-}
 function shuffleKeys(){
   const previous = flightCodes.map(code => keys[code]);
   let next;
@@ -45,8 +37,6 @@ function shuffleKeys(){
     keys[code]=next[i];
     if(held.has(code))held.set(code,next[i]);
   });
-  showBindings();
-  refreshButtons();
 }
 function updateShuffle(now){
   while(shuffleAt!==null && now>=shuffleAt){
@@ -130,7 +120,7 @@ function startField(){
   $('overlay').hidden=true;$('pause').disabled=false;$('pause').textContent='Pause';$('notice').textContent='FIELD '+String(pilot().field).padStart(2,'0');stats();tone(130,290,.28);
 }
 function startGame(){
-  keys={...initialKeys};shuffleRemaining=shuffleInterval;shuffleAt=null;showBindings();
+  keys={...initialKeys};shuffleRemaining=shuffleInterval;shuffleAt=null;
   initAudio();active=0;roster=Array.from({length:Number($('count').value)},()=>({score:0,lives:5,field:1}));startField();
 }
 function startAction(){
@@ -300,7 +290,10 @@ function render(){
   ctx.globalAlpha=1;
 }
 function refreshButtons(){
-  const down=new Set(held.values());
+  const down=new Set();
+  for(const [input,action] of held){
+    if(typeof input==='number')down.add(action); // Pointer IDs are numeric. Keyboard codes are strings.
+  }
   for(const b of controls)b.classList.toggle('down',down.has(b.dataset.act));
 }
 function press(id,action){
@@ -345,7 +338,6 @@ $('close').onclick=()=>$('instructions').close();
 function suspend(){clearControls();if(!paused&&['seed','fly','loss'].includes(phase))togglePause()}
 window.addEventListener('blur',suspend);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)suspend()});
-showBindings();
 new ResizeObserver(resize).observe(canvas);resize();
 let lastTime,buffer=0;
 function frame(now){
