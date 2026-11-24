@@ -7,7 +7,7 @@
 :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0e1618;color:#eff2e9;font:16px/1.5 system-ui,sans-serif}
 main{width:min(1100px,100%);margin:auto;padding:clamp(20px,5vw,64px)}nav{border-bottom:1px solid #354340;padding-bottom:14px}
 nav a{color:#ced8d0;text-decoration:none}nav a:hover{text-decoration:underline}h1{font-size:clamp(48px,9vw,100px);letter-spacing:-.075em;line-height:.95;margin:.55em 0 .45em}
-article a{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch;color:inherit;text-decoration:none;border:1px solid #43524d;border-radius:12px;overflow:hidden;background:#192325}
+article + article{margin-top:22px}article a{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch;color:inherit;text-decoration:none;border:1px solid #43524d;border-radius:12px;overflow:hidden;background:#192325}
 article a:hover,article a:focus-visible{outline:2px solid #c7f476}article .art{width:100%;height:100%;min-height:240px;background:#10191b}
 .copy{align-self:center;padding:clamp(20px,4vw,48px)}h2{font-size:clamp(26px,4.5vw,50px);margin:0;line-height:1.08;letter-spacing:-.06em}
 p{color:#bbcac5;max-width:32ch}.play{display:inline-block;margin-top:.6em;border-radius:6px;padding:10px 20px;font-weight:700;color:#172313;background:#c7f476}
@@ -25,4 +25,15 @@ p{color:#bbcac5;max-width:32ch}.play{display:inline-block;margin-top:.6em;border
 <g fill="#c7f476"><path d="M144 228h48v12h-48z M192 216h24v24h-24z M168 168h24v12h-24z M180 180h24v12h-24z"/></g>
 </g></svg>
 <div class="copy"><h2>4-Sided Tetris</h2><p>Stack four pieces against four edges at once. Each side has its own keypad.</p><span class="play">Play game</span></div>
+</a></article>
+<article><a href="/mine-storm/" aria-label="Play Mine Storm">
+<svg class="art" aria-hidden="true" viewBox="0 0 360 240">
+<rect width="360" height="240" fill="#081319"/>
+<defs><g id="drifter" fill="none" stroke="#9fddeb" stroke-width="1.8"><path d="m0-17 4 11 11-3-6 9 6 9-11-3-4 11-4-11-11 3 6-9-6-9 11 3z"/><circle r="2.7"/></g></defs>
+<g fill="#76939b"><circle cx="24" cy="37" r="1"/><circle cx="162" cy="40" r="1.4"/><circle cx="110" cy="104" r="1"/><circle cx="201" cy="165" r="1"/><circle cx="330" cy="88" r="1"/><circle cx="274" cy="213" r="1.5"/><circle cx="59" cy="195" r="1"/></g>
+<use href="#drifter" transform="translate(63 77) rotate(-18) scale(1.2)"/><use href="#drifter" transform="translate(225 83) rotate(18) scale(.8)"/><use href="#drifter" transform="translate(264 179) rotate(35)"/>
+<g transform="translate(123 151) rotate(-26)" fill="none" stroke-width="2.2" stroke-linejoin="round"><path d="m19 0-34-12 6 10v4l-6 10z" stroke="#bcfff1"/><path d="m-12-4-13 4 13 4" stroke="#ffb780"/><path d="M47 0h8 M83 0h8" stroke="#ccfff1"/></g>
+<path d="m264 44 10-3 6-5h17l6 5 12 3-10 8-10 2-7 6-8-6-9-2z m0 0 14 4h22l15-4" fill="none" stroke="#ffd4a3" stroke-width="1.5"/>
+</svg>
+<div class="copy"><h2>Mine Storm</h2><p>Fly through a vector minefield. Blast drifting mines, dodge returning fire and jump across space.</p><span class="play">Play game</span></div>
 </a></article></main></body></html>
