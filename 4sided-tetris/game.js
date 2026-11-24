@@ -24,7 +24,7 @@ const cells=l.p.cells.map(([x,y])=>clockwise?[m-y,x]:[y,m-x]);
 for(const [dx,dy] of [[0,0],[-1,0],[1,0],[-2,0],[2,0],[0,-1],[0,-2],[0,1]]){const p={...l.p,cells,x:l.p.x+dx,y:l.p.y+dy};if(fits(l,p)){l.p=p;return}}}
 function project(s,x,y){const a=10+x,b=SIZE-DEPTH+y;
 return [[a,b],[SIZE-1-b,a],[SIZE-1-a,SIZE-1-b],[b,SIZE-1-a]][s]}
-function reset(){const first=bag();lanes=sides.map((_,i)=>({grid:Array.from({length:DEPTH},row),p:piece(first[i]),bag:[],clears:0}));mode='ready';score=lines=elapsed=last=0;loser=null;sync()}
+function reset(){const first=bag();lanes=sides.map((_,i)=>({grid:Array.from({length:DEPTH},row),p:piece(first[i]),bag:[],clears:0}));angle=0;paintRotation();mode='ready';score=lines=elapsed=last=0;loser=null;sync()}
 function floor(l){while(step(l,0,1)){}}
 function lock(s){const l=lanes[s];for(const [x,y] of l.p.cells)l.grid[y+l.p.y][x+l.p.x]=true;
 const keep=l.grid.filter(r=>!r.every(Boolean)),n=DEPTH-keep.length;
@@ -36,6 +36,9 @@ function tick(){for(let s=0;s<4&&mode==='play';s++)advance(s)}
 const $ = id => document.getElementById(id);
 const canvas = $('arena');
 const ctx = canvas.getContext('2d');
+const degreesPerMillisecond = 360 / 30000;
+let angle = 0;
+let spinDirection = 1;
 let lanes, mode, score, lines, elapsed, last, loser;
 
 // The four bindings on each pad always address that lane directly.
@@ -132,10 +135,23 @@ function sync() {
   $('score').textContent = score;
   $('lines').textContent = lines;
   $('level').textContent = 1 + Math.floor(lines / 10);
+  $('board-message').hidden = mode !== 'paused' && mode !== 'over';
+  $('board-message').textContent = mode === 'over' ? 'Game over' : 'Paused';
   $('run').textContent = {ready:'Start game', play:'Pause', paused:'Resume', over:'Play again'}[mode];
   $('status').textContent = mode === 'over' ? sides[loser] + ' reached the centre. Game over.' : mode;
   draw();
 }
+
+function paintRotation() {
+  canvas.style.transform = 'rotate(' + angle + 'deg) scale(' + SIZE / Math.hypot(SIZE, WIDTH) + ')';
+}
+
+function reverseSpin() {
+  spinDirection *= -1;
+  $('spin').textContent = spinDirection > 0 ? '↻ Clockwise' : '↺ Anticlockwise';
+}
+
+$('spin').onclick = reverseSpin;
 
 function toggleRun() {
   if (mode === 'over') reset();
@@ -152,7 +168,12 @@ function frame(now) {
         binding.repeatAt = now + 100;
       }
     }
-    if (last) elapsed += Math.min(150, now - last);
+    if (last) {
+      const delta = Math.min(150, now - last);
+      elapsed += delta;
+      angle = (angle + spinDirection * degreesPerMillisecond * delta) % 360;
+      paintRotation();
+    }
     last = now;
     const delay = Math.max(280, 1250 - Math.floor(lines / 10) * 85);
     if (elapsed >= delay) {
@@ -183,7 +204,12 @@ function shortcutCode(event) {
 document.addEventListener('keydown', e => {
   if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing || guide.open) return;
   const code = shortcutCode(e);
-  if (code === 'Space' && !['help','fullscreen'].includes(e.target.id) && e.target.tagName !== 'A') {
+  if (code === 'KeyB') {
+    e.preventDefault();
+    if (!e.repeat) reverseSpin();
+    return;
+  }
+  if (code === 'Space' && !['help','fullscreen','spin'].includes(e.target.id) && e.target.tagName !== 'A') {
     e.preventDefault();
     if (!e.repeat) toggleRun();
     return;
@@ -220,8 +246,7 @@ for(const [x,y] of ghost.cells){const [a,b]=project(s,x+ghost.x,y+ghost.y);ctx.s
 for(const [x,y] of l.p.cells){const [a,b]=project(s,x+l.p.x,y+l.p.y);tile(a,b,c,true)}
 ctx.save();ctx.translate(15,15);ctx.rotate(s*Math.PI/2);ctx.fillStyle=c;ctx.fillRect(-5,14.78,10,.22);
 ctx.beginPath();ctx.moveTo(-.3,1.25);ctx.lineTo(.3,1.25);ctx.lineTo(0,1.65);ctx.closePath();ctx.fill();ctx.restore()}
-ctx.fillStyle='#899895';ctx.font='bold .53px monospace';ctx.textAlign='center';
-if(mode==='paused'||mode==='over'){ctx.fillStyle='#101618dc';ctx.fillRect(3,12.8,24,4.4);ctx.fillStyle='#f1f3e9';ctx.font='bold 1.4px sans-serif';ctx.fillText(mode==='paused'?'Paused':'Game over',15,15.45)}}
+}
 function tile(x,y,c,active){ctx.fillStyle=c;ctx.globalAlpha=active?1:.78;ctx.fillRect(x+.045,y+.045,.91,.91);ctx.globalAlpha=1;ctx.fillStyle='#ffffff62';ctx.fillRect(x+.1,y+.1,.8,.09);ctx.fillStyle='#13201d45';ctx.fillRect(x+.1,y+.81,.8,.09)}
 
 makePads();
