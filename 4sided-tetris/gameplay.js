@@ -155,17 +155,16 @@ function randomSpinInterval() {
 
 // The board has its own clock. Piece drops, pause and restart never reset it.
 function animateBoard(now) {
-  const delta = lastSpinFrame === undefined ? 0 : Math.min(now - lastSpinFrame, 150);
+  let remaining = lastSpinFrame === undefined ? 0 : now - lastSpinFrame;
   lastSpinFrame = now;
-  const beforeTurn = Math.min(delta, spinTimeLeft);
-  angle += spinDirection * beforeTurn * degreesPerMillisecond;
-  spinTimeLeft -= beforeTurn;
-  if (spinTimeLeft <= 0) {
+  while (remaining >= spinTimeLeft) {
+    angle += spinDirection * spinTimeLeft * degreesPerMillisecond;
+    remaining -= spinTimeLeft;
     spinDirection *= -1;
-    const afterTurn = delta - beforeTurn;
-    angle += spinDirection * afterTurn * degreesPerMillisecond;
-    spinTimeLeft = randomSpinInterval() - afterTurn;
+    spinTimeLeft = randomSpinInterval();
   }
+  angle += spinDirection * remaining * degreesPerMillisecond;
+  spinTimeLeft -= remaining;
   angle %= 360;
   paintRotation();
 }
@@ -233,6 +232,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => release(shortcutCode(e)));
 window.addEventListener('blur', releaseAll);
 document.addEventListener('visibilitychange', () => {
+  lastSpinFrame = undefined;
   if (document.hidden && mode === 'play') toggleRun();
 });
 if (document.fullscreenEnabled) {
