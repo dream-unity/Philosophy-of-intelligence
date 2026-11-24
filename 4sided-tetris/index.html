@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111719">
+<title>4-Sided Tetris · Philosophy of Intelligence</title>
+<style>
+*{box-sizing:border-box} :root{color-scheme:dark;--bg:#101618;--panel:#192023;--rule:#344044;--ink:#f1f3e9;--dim:#a5b2b1;--accent:#c7f476}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Arial",sans-serif}main{max-width:1020px;margin:auto;padding:clamp(12px,3vw,36px)}header,.bar,.statrow,.panelhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+header{margin-bottom:16px;border-bottom:1px solid var(--rule);padding-bottom:14px}h1{font-size:clamp(25px,4vw,44px);line-height:1;margin:0;font-weight:800;letter-spacing:-.055em}h1 span{color:var(--accent)}button{font:inherit;cursor:pointer;touch-action:manipulation;color:var(--ink);background:#222c2f;border:1px solid #435154;border-radius:6px;padding:9px 14px;min-height:44px;font-weight:600}button:hover:enabled{border-color:#c2d2c8}button:active:enabled{background:#384643}button:focus-visible,summary:focus-visible{outline:3px solid white;outline-offset:2px}button:disabled{opacity:.48;cursor:default}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(225px,31%);align-items:start;gap:clamp(14px,3vw,32px)}.board{border:1px solid #536462;border-radius:9px;overflow:hidden;background:#101719}canvas{display:block;width:100%;aspect-ratio:1;touch-action:manipulation}.bar{padding:9px 14px;border-top:1px solid var(--rule);font:600 13px ui-monospace,monospace;color:var(--dim)}#focus{color:var(--accent)}
+aside{display:grid;gap:12px}.panel{border:1px solid var(--rule);border-radius:8px;padding:15px;background:var(--panel)}h2,.label{font:600 12px/1.2 ui-monospace,monospace;letter-spacing:.11em;text-transform:uppercase;color:var(--dim);margin:0}.score{font:700 clamp(23px,3vw,36px)/1.1 ui-monospace,monospace;margin-top:6px}.stats{display:flex;justify-content:space-between;gap:12px}.stats div:last-child{text-align:right}.compass{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:12px 0}.compass button{padding:5px;font-size:14px}.compass button[aria-pressed=true]{background:var(--tone);border-color:var(--tone);color:#101618}.compass [data-side="0"]{grid-area:3/2}.compass [data-side="1"]{grid-area:2/1}.compass [data-side="2"]{grid-area:1/2}.compass [data-side="3"]{grid-area:2/3}.pivot{grid-area:2/2;place-self:center;color:#8e9b99;font-size:24px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.actions button{padding:7px}.go{width:100%;background:var(--accent);color:#142014;border:none;font-weight:750}.go:active:enabled{background:#addc60}.info{color:var(--dim);font-size:14px;margin:10px 0 0}details{font-size:14px;color:var(--dim)}summary{cursor:pointer;color:var(--ink);padding:5px 0}.status{font-size:14px;margin:0 0 8px;color:#d4dfd8}.panelhead span{font:12px ui-monospace,monospace;color:var(--dim)}
+@media(max-width:680px){main{max-width:510px;padding:9px 12px 20px}header{margin-bottom:8px;padding-bottom:8px}header button{min-height:38px}.layout{display:flex;flex-direction:column;gap:8px}.board,aside{width:100%}.bar{padding:5px 10px}aside{gap:6px}.panel{padding:8px 10px}.stats{align-items:center}.stats>div{display:flex;gap:6px;align-items:center}.score{font-size:18px;margin:0}.controlpanel{display:grid;grid-template-columns:1fr 1fr;gap:6px}.panelhead{grid-column:1/-1}.compass{margin:0}.compass button{min-height:36px}.actions{align-content:center}.runpanel{order:-1;display:flex;align-items:center;gap:8px}.go{width:auto;min-width:110px;margin-left:auto}.status{margin:0}.stats{order:1}}
+@media(orientation:landscape) and (min-width:681px){main{max-width:min(1020px,calc(146svh - 85px))}}
+</style></head>
+<body><main>
+<header><h1><span>4-Sided</span> Tetris</h1><button id="pause" disabled>Pause</button></header>
+<div class="layout"><section class="board" aria-label="Four-sided playfield"><canvas id="arena" aria-label="Four falling pieces in one square. Tap a lane to select it."></canvas><div class="bar"><span id="focus">BOTTOM SELECTED</span><span id="level">LEVEL 1</span></div></section>
+<aside><section class="panel stats"><div><h2>Score</h2><div class="score" id="score">0</div></div><div><h2>Lines</h2><div class="score" id="lines">0</div></div></section>
+<section class="panel controlpanel"><div class="panelhead"><h2>Select a side</h2><span>W A S D</span></div><div class="compass"><button data-side="2">Top</button><button data-side="1">Left</button><span class="pivot" aria-hidden="true">✣</span><button data-side="3">Right</button><button data-side="0">Bottom</button></div><div class="actions"><button id="minus">←</button><button id="plus">→</button><button id="rotate">Rotate ↻</button><button id="drop">Drop</button></div></section>
+<section class="panel runpanel"><p class="status" id="status" role="status">Four pieces. Four different floors.</p><button class="go" id="start">Start game</button></section>
+<details><summary>How to play</summary><p>All four pieces leave the centre together. Tap a lane or its side button to steer it. Use the arrows to slide along that edge, Rotate to turn clockwise and Drop to land immediately. The dotted outline shows the landing place.</p><p>Fill a row at the top or bottom, or a column on the left or right. Each side gets a fresh piece as soon as its last one lands. Keep all four stacks clear of their starting positions.</p><p>Keyboard: W/A/S/D selects top/left/bottom/right. Arrow keys slide in screen directions or speed up toward the selected edge. Z/X rotates, Space drops and P pauses.</p></details>
+</aside></div></main>
+<script>
+'use strict';
+const WIDTH=10, DEPTH=13, SIZE=30;
+const sides=['Bottom','Left','Top','Right'];
+const colours=['#c7f476','#6bdde1','#ff9d79','#c3a7ff'];
+const shapes=[
+ [[0,1],[1,1],[2,1],[3,1]], [[1,0],[2,0],[1,1],[2,1]],
+ [[1,0],[0,1],[1,1],[2,1]], [[0,0],[0,1],[1,1],[2,1]],
+ [[2,0],[0,1],[1,1],[2,1]], [[1,0],[2,0],[0,1],[1,1]],
+ [[0,0],[1,0],[1,1],[2,1]]
+];
+const row=()=>Array(WIDTH).fill(false);
+function bag(){const b=[0,1,2,3,4,5,6];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b}
+function piece(type){return {type,x:3,y:0,cells:shapes[type].map(c=>c.slice())}}
+// The four entrances flare from the hub. A cell belongs to exactly one lane.
+function insideLane(x,y){
+  const inset=Math.max(0,3-y);
+  return y>=0 && y<DEPTH && x>=inset && x<WIDTH-inset;
+}
+function fits(l,p){return p.cells.every(([a,b])=>{const x=p.x+a,y=p.y+b;return insideLane(x,y)&&!l.grid[y][x]})}
+function step(l,dx,dy){const p={...l.p,x:l.p.x+dx,y:l.p.y+dy};if(!fits(l,p))return false;l.p=p;return true}
+function turn(l,clockwise){if(l.p.type===1)return;const m=l.p.type===0?3:2;
+const cells=l.p.cells.map(([x,y])=>clockwise?[m-y,x]:[y,m-x]);
+for(const [dx,dy] of [[0,0],[-1,0],[1,0],[-2,0],[2,0],[0,-1],[0,-2],[0,1]]){const p={...l.p,cells,x:l.p.x+dx,y:l.p.y+dy};if(fits(l,p)){l.p=p;return}}}
+function project(s,x,y){const a=10+x,b=SIZE-DEPTH+y;
+return [[a,b],[SIZE-1-b,a],[SIZE-1-a,SIZE-1-b],[b,SIZE-1-a]][s]}
+const $=id=>document.getElementById(id);
+const canvas=$('arena'),ctx=canvas.getContext('2d'),sideButtons=[...document.querySelectorAll('[data-side]')];
+let lanes,selected,mode,score,lines,elapsed,last,loser;
+function reset(){const first=bag();lanes=sides.map((_,i)=>({grid:Array.from({length:DEPTH},row),p:piece(first[i]),bag:[],clears:0}));selected=0;mode='ready';score=lines=elapsed=last=0;loser=null;sync()}
+function floor(l){while(step(l,0,1)){}}
+function lock(s){const l=lanes[s];for(const [x,y] of l.p.cells)l.grid[y+l.p.y][x+l.p.x]=true;
+const keep=l.grid.filter(r=>!r.every(Boolean)),n=DEPTH-keep.length;
+l.grid=[...Array.from({length:n},row),...keep];score+=4+[0,100,300,500,800][n]*(1+Math.floor(lines/10));lines+=n;l.clears+=n;
+if(!l.bag.length)l.bag=bag();l.p=piece(l.bag.pop());if(!fits(l,l.p)){mode='over';loser=s}sync()}
+function advance(s){if(!step(lanes[s],0,1))lock(s)}
+function tick(){for(let s=0;s<4&&mode==='play';s++)advance(s)}
+function frame(now){if(mode==='play'){if(last)elapsed+=Math.min(150,now-last);last=now;
+const delay=Math.max(280,1250-Math.floor(lines/10)*85);if(elapsed>=delay){elapsed-=delay;tick();draw()}}requestAnimationFrame(frame)}
+function sync(){sideButtons.forEach(b=>{const s=Number(b.dataset.side);b.style.setProperty('--tone',colours[s]);b.setAttribute('aria-pressed',s===selected)});
+const vertical=selected%2===1;$('minus').textContent=vertical?'↑':'←';$('plus').textContent=vertical?'↓':'→';
+$('minus').ariaLabel=vertical?'Slide up':'Slide left';$('plus').ariaLabel=vertical?'Slide down':'Slide right';
+for(const id of ['minus','plus','rotate','drop'])$(id).disabled=mode!=='play';
+$('focus').textContent=sides[selected].toUpperCase()+' SELECTED';$('focus').style.color=colours[selected];$('score').textContent=score;$('lines').textContent=lines;$('level').textContent='LEVEL '+(1+Math.floor(lines/10));
+$('pause').disabled=mode==='ready'||mode==='over';$('pause').textContent=mode==='paused'?'Resume':'Pause';
+$('start').hidden=mode==='play'||mode==='paused';$('start').textContent=mode==='over'?'Play again':'Start game';
+$('status').textContent=({ready:'Four pieces. Four different floors.',play:'Tap a side to take control.',paused:'Paused. All four pieces are held.',over:sides[loser]+' stack reached the centre.'})[mode];draw()}
+function select(s){selected=s;sync()}
+function slide(sign){step(lanes[selected],selected>=2?-sign:sign,0)}
+function act(action){if(mode!=='play')return;const l=lanes[selected];if(action==='minus'||action==='plus')slide(action==='minus'?-1:1);else if(action==='rotate'||action==='reverse')turn(l,action==='rotate');else if(action==='drop'){floor(l);lock(selected)}else if(action==='soft')advance(selected);draw()}
+function pause(){if(mode==='play'||mode==='paused'){mode=mode==='play'?'paused':'play';last=0;sync()}}
+$('pause').onclick=pause;$('start').onclick=()=>{if(mode==='over')reset();mode='play';sync();$('pause').focus({preventScroll:true})};
+for(const b of sideButtons)b.onclick=()=>select(+b.dataset.side);
+for(const id of ['minus','plus','rotate','drop'])$(id).onclick=()=>act(id);
+document.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey)return;const k=e.key.toLowerCase();const side={s:0,a:1,w:2,d:3}[k];
+if(side!==undefined){select(side);return}if(k==='p'){if(!e.repeat)pause();return}
+if(mode!=='play')return;
+const directions=['arrowdown','arrowleft','arrowup','arrowright'];let action=({z:'reverse',x:'rotate',' ':'drop'})[k];
+if(k===directions[selected])action='soft';
+else if(k===(selected%2?'arrowup':'arrowleft'))action='minus';
+else if(k===(selected%2?'arrowdown':'arrowright'))action='plus';
+if(action){e.preventDefault();if(e.repeat&&['drop','rotate','reverse'].includes(action))return;act(action)}});
+canvas.addEventListener('pointerdown',e=>{const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;select(Math.abs(x)>Math.abs(y)?(x>0?3:1):(y>0?0:2))});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='play')pause()});
+function draw(){if(!lanes)return;const pixels=Math.max(1,Math.round(canvas.clientWidth*Math.min(devicePixelRatio||1,2)));if(canvas.width!==pixels||canvas.height!==pixels){canvas.width=canvas.height=pixels}
+const u=pixels/SIZE;ctx.setTransform(u,0,0,u,0,0);ctx.fillStyle='#11191c';ctx.fillRect(0,0,SIZE,SIZE);
+for(let s=0;s<4;s++){const l=lanes[s],c=colours[s];
+for(let y=0;y<DEPTH;y++)for(let x=0;x<WIDTH;x++){if(!insideLane(x,y))continue;const [a,b]=project(s,x,y);ctx.fillStyle=s===selected?'#25302f':'#1b2629';ctx.fillRect(a+.025,b+.025,.95,.95);if(l.grid[y][x])tile(a,b,c,false)}
+const ghost={...l.p};while(fits(l,{...ghost,y:ghost.y+1}))ghost.y++;
+for(const [x,y] of ghost.cells){const [a,b]=project(s,x+ghost.x,y+ghost.y);ctx.strokeStyle=c;ctx.globalAlpha=s===selected?.8:.38;ctx.lineWidth=.07;ctx.setLineDash([.16,.12]);ctx.strokeRect(a+.09,b+.09,.82,.82);ctx.setLineDash([]);ctx.globalAlpha=1}
+for(const [x,y] of l.p.cells){const [a,b]=project(s,x+l.p.x,y+l.p.y);tile(a,b,c,true)}
+ctx.save();ctx.translate(15,15);ctx.rotate(s*Math.PI/2);ctx.fillStyle=c;ctx.fillRect(-5,14.78,10,.22);
+ctx.beginPath();ctx.moveTo(-.3,1.25);ctx.lineTo(.3,1.25);ctx.lineTo(0,1.65);ctx.closePath();ctx.fill();ctx.restore()}
+ctx.fillStyle='#899895';ctx.font='bold .53px monospace';ctx.textAlign='center';
+for(const [x,y,label] of [[5,5,'N / W'],[25,5,'N / E'],[5,25,'S / W'],[25,25,'S / E']]){ctx.fillStyle='#415051';ctx.fillRect(x-.35,y-.05,.7,.1);ctx.fillRect(x-.05,y-.35,.1,.7);ctx.fillStyle='#82918f';ctx.fillText(label,x,y+1.25)}
+if(mode==='paused'||mode==='over'){ctx.fillStyle='#101618dc';ctx.fillRect(3,12.8,24,4.4);ctx.fillStyle='#f1f3e9';ctx.font='bold 1.4px sans-serif';ctx.fillText(mode==='paused'?'Paused':'Game over',15,15.45)}}
+function tile(x,y,c,active){ctx.fillStyle=c;ctx.globalAlpha=active?1:.78;ctx.fillRect(x+.045,y+.045,.91,.91);ctx.globalAlpha=1;ctx.fillStyle='#ffffff62';ctx.fillRect(x+.1,y+.1,.8,.09);ctx.fillStyle='#13201d45';ctx.fillRect(x+.1,y+.81,.8,.09)}
+reset();new ResizeObserver(draw).observe(canvas);requestAnimationFrame(frame);
+</script></body></html>
