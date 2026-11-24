@@ -1,5 +1,5 @@
-import {advance, decide, newRound, species, TARGET_COUNT, totals, CHANGEOVER} from './round.js';
-import {drawCarrier, drawPlacard, drawRange, drawSight, inTarget, targetRect} from './scene.js';
+import {advance, decide, newRound, species, TARGET_COUNT, totals} from './round-five.js';
+import {drawCarrier, drawPlacard, drawRange, drawSight, inTarget, targetRect} from './scene-five.js';
 
 const byId = id => document.getElementById(id);
 const canvas = byId('range');
@@ -15,7 +15,11 @@ for (const name of species) {
     sprites.set(name + role, sprite);
   }
 }
-const sample = {species: 'cyclops', role: 'foe'};
+const preview = newRound().targets;
+preview.forEach((target, i) => { target.elapsed = target.duration * [.52, .2, .78, .38, .65][i]; });
+const tags = [];
+let locked = null;
+let feedbackFor = 0;
 const dots = Array.from({length: TARGET_COUNT}, () => byId('pips').appendChild(document.createElement('i')));
 const arrows = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 const held = new Set();
@@ -68,27 +72,21 @@ function state(next) {
 function syncHUD() {
   const score = totals(round).score;
   byId('score').textContent = String(score).padStart(4, '0');
-  byId('target-count').textContent = String(round.index + 1).padStart(2, '0');
+  byId('target-count').textContent = String(round.results.length).padStart(2, '0');
   const canDecide = mode === 'playing' && round.phase === 'approach';
   byId('pass').disabled = byId('fire').disabled = !canDecide;
   dots.forEach((dot, i) => {
     const result = round.results[i];
-    dot.className = result ? (result.correct ? 'correct' : 'wrong') : (i === round.index ? 'current' : '');
+    dot.className = result ? (result.correct ? 'correct' : 'wrong') : (i === round.results.length ? 'current' : '');
   });
 }
 
-function announceTarget() {
-  const {lane, role} = round.targets[round.index];
-  const position = ['Left', 'Middle', 'Right'][lane + 1];
-  const mark = role === 'foe' ? 'An X' : 'A heart';
-  byId('target-description').textContent = 'Target ' + (round.index + 1) + '. ' + position + ' rail. ' + mark + ' on the placard.';
-}
-
 function feedback() {
-  const {role, action, correct} = round.results.at(-1);
+  const {role, name, action, correct} = round.results.at(-1);
   const verdict = role === 'friend' ? (correct ? 'Friend spared' : 'Friend hit') : (correct ? 'Foe hit' : 'Foe passed');
   const message = byId('verdict');
-  message.textContent = verdict + (correct ? '  +100' : '  +0');
+  feedbackFor = 1;
+  message.textContent = name + ' · ' + verdict + (correct ? '  +100' : '  +0');
   message.dataset.tone = correct ? 'correct' : 'wrong';
   if (role === 'foe' && action === 'fire') beep(600, 220);
   else if (correct) beep(320, 570);
@@ -105,7 +103,7 @@ function start() {
   state('playing');
   byId('verdict').textContent = '';
   syncHUD();
-  announceTarget();
+  locked = null;
   beep(285, 445, 0.1);
   canvas.focus({preventScroll: true});
   resize();
@@ -116,11 +114,10 @@ function end() {
   const {score, friends, foes, correct} = totals(round);
   state('complete');
   byId('verdict').textContent = '';
-  byId('target-description').textContent = '';
   byId('panel-title').textContent = 'Round complete';
   byId('panel-copy').textContent = correct + ' of 10 correct · ' + score.toLocaleString() + ' points.';
-  byId('foes-hit').textContent = foes + ' / 5';
-  byId('friends-spared').textContent = friends + ' / 5';
+  byId('foes-hit').textContent = foes + ' / ' + round.results.filter(r => r.role === 'foe').length;
+  byId('friends-spared').textContent = friends + ' / ' + round.results.filter(r => r.role === 'friend').length;
   byId('start').textContent = 'Play again';
   syncHUD();
   resize();
@@ -131,7 +128,7 @@ function pause() {
   if (mode !== 'playing') return;
   state('paused');
   byId('panel-title').textContent = 'Paused';
-  byId('panel-copy').textContent = 'The target will continue from here when you resume.';
+  byId('panel-copy').textContent = 'All five targets will resume from here.';
   byId('start').textContent = 'Resume round';
   syncHUD();
   resize();
@@ -146,33 +143,70 @@ function resume() {
   schedule();
 }
 
-function activeRect() {
-  const target = round.targets[round.index];
-  return targetRect(canvas.width, canvas.height, target.lane, round.elapsed / target.duration);
+function bounds(target) {
+  return targetRect(canvas.width, canvas.height, target.lane, target.elapsed / target.duration);
+}
+
+function aimedTarget(padding = 0) {
+  return round.targets.find(t => inTarget(bounds(t), aim.x * canvas.width, aim.y * canvas.height, padding));
+}
+
+function resolve(target, action) {
+  if (mode !== 'playing' || !target || round.targets[target.lane] !== target) return;
+  decide(round, target, action);
+  feedback();
+  if (round.phase === 'complete') end();
+  else paint();
 }
 
 function fire(touch = false) {
-  if (mode !== 'playing' || round.phase !== 'approach') return;
-  const x = aim.x * canvas.width;
-  const y = aim.y * canvas.height;
+  if (mode !== 'playing') return;
   shot = {x: aim.x, y: aim.y, age: 0};
-  const padding = touch ? 2 : 0;
-  if (inTarget(activeRect(), x, y, padding)) {
-    decide(round, 'fire');
-    feedback();
-  } else {
+  const target = aimedTarget(touch ? 1 : 0);
+  if (target) resolve(target, 'fire');
+  else {
     byId('verdict').textContent = 'Wide';
     byId('verdict').dataset.tone = '';
+    feedbackFor = 0.5;
     beep(170, 90, 0.08);
   }
-  paint();
 }
 
 function letPass() {
-  if (mode !== 'playing' || round.phase !== 'approach') return;
-  decide(round, 'pass');
-  feedback();
-  paint();
+  if (mode !== 'playing') return;
+  const target = aimedTarget();
+  if (target) resolve(target, 'pass');
+  else {
+    byId('verdict').textContent = 'Aim at a target to let it pass';
+    byId('verdict').dataset.tone = '';
+    feedbackFor = 1;
+  }
+}
+
+function pointAt(target) {
+  const rect = bounds(target);
+  aim.x = (rect.x + rect.w / 2) / canvas.width;
+  aim.y = (rect.y + rect.h / 2) / canvas.height;
+  showSight = true;
+}
+
+function label(target, rect, playable) {
+  let entry = tags[target.lane];
+  if (!entry || entry.target !== target || entry.playable !== playable) {
+    const node = document.createElement(playable ? 'button' : 'span');
+    node.className = 'nameplate';
+    node.textContent = target.name;
+    if (playable) {
+      node.type = 'button';
+      node.setAttribute('aria-label', target.name + ', lane ' + (target.lane + 1) + ', ' + target.role + '. Let pass');
+      node.addEventListener('click', () => resolve(target, 'pass'));
+    }
+    if (entry) entry.node.replaceWith(node);
+    else byId('names').append(node);
+    entry = tags[target.lane] = {target, node, playable};
+  }
+  entry.node.style.left = (rect.x + rect.w / 2) * 100 / canvas.width + '%';
+  entry.node.style.top = (rect.floor + 2) * 100 / canvas.height + '%';
 }
 
 function resize() {
@@ -193,19 +227,14 @@ function paint() {
   const {width, height} = canvas;
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(backdrop, 0, 0);
-  if (mode === 'ready' || mode === 'complete') {
-    const previewLane = innerWidth / innerHeight < 0.8 ? 0 : 1;
-    const preview = targetRect(width, height, previewLane, 0.96);
-    drawCarrier(ctx, preview, sprites.get(sample.species + sample.role));
-    return;
+  const targets = mode === 'ready' || mode === 'complete' ? preview : round.targets;
+  for (const target of targets) {
+    const rect = bounds(target);
+    drawCarrier(ctx, rect, sprites.get(target.species + target.role));
+    label(target, rect, mode === 'playing');
   }
-  const target = round.targets[round.index];
-  const rect = activeRect();
-  let folded = 0;
-  if (round.phase === 'feedback') {
-    folded = Math.min(1, round.feedbackTime / (CHANGEOVER * 0.7));
-  }
-  drawCarrier(ctx, rect, sprites.get(target.species + target.role), folded);
+  if (locked && targets[locked.lane] === locked) pointAt(locked);
+  else locked = null;
   if (shot && shot.age < 0.16) {
     const offset = Math.round(2 + 26 * shot.age);
     const x = Math.round(width * shot.x);
@@ -235,22 +264,16 @@ function tick(now) {
   moveSight(dt);
   if (shot) {
     shot.age += dt;
-    if (shot.age > 0.4) {
-      shot = null;
-      if (round.phase === 'approach') byId('verdict').textContent = '';
-    }
+    if (shot.age > 0.4) shot = null;
   }
-  const phase = round.phase;
+  if (feedbackFor > 0) {
+    feedbackFor -= dt;
+    if (feedbackFor <= 0) byId('verdict').textContent = '';
+  }
+  const count = round.results.length;
   advance(round, dt);
-  if (round.phase !== phase) {
-    if (round.phase === 'complete') { end(); return; }
-    if (round.phase === 'feedback') feedback();
-    else {
-      byId('verdict').textContent = '';
-      syncHUD();
-      announceTarget();
-    }
-  }
+  if (round.results.length > count) feedback();
+  if (round.phase === 'complete') { end(); return; }
   paint();
   schedule();
 }
@@ -260,6 +283,7 @@ function schedule() {
 }
 
 function point(event) {
+  locked = null;
   const box = canvas.getBoundingClientRect();
   aim.x = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
   aim.y = Math.min(1, Math.max(0, (event.clientY - box.top) / box.height));
@@ -285,7 +309,13 @@ document.addEventListener('keydown', event => {
     return;
   }
   if (mode !== 'playing') return;
-  if (arrows.has(event.code)) {
+  const laneKey = /^(?:Digit|Numpad)([1-5])$/.exec(event.code);
+  if (laneKey) {
+    event.preventDefault();
+    locked = round.targets[Number(laneKey[1]) - 1];
+    pointAt(locked);
+  } else if (arrows.has(event.code)) {
+    locked = null;
     event.preventDefault();
     held.add(event.code);
     showSight = true;

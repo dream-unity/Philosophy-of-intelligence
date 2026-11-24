@@ -130,12 +130,12 @@ export function targetRect(width, height, lane, progress) {
   // Perspective compresses the far end; both the carrier and its shadow follow the same rail.
   const distance = 0.65 * progress + 0.35 * progress * progress;
   const depth = 0.18 + 0.82 * distance;
-  const maxH = Math.min(height * 0.49, width * 0.39);
-  const h = Math.max(19, Math.round(maxH * (0.24 + 0.76 * distance)));
+  const maxH = Math.min(height * 0.47, width * 0.198);
+  const h = Math.round(maxH * (0.50 + 0.50 * distance));
   const w = Math.round(h * 25 / 30);
-  const floor = Math.round(height * (0.46 + 0.45 * depth));
+  const floor = Math.round(height * (0.46 + 0.39 * depth));
   const post = Math.max(2, Math.round(h * 0.09));
-  const x = Math.round(width * (0.5 + lane * 0.32 * depth) - w / 2);
+  const x = Math.round(width * (0.5 + (lane - 2) * (0.164 + 0.033 * depth)) - w / 2);
   return {x, y: floor - h - post, w, h, floor, post};
 }
 
@@ -195,10 +195,11 @@ export function drawRange(ctx, width, height) {
     const y = horizon + height * 0.54 * d;
     lineTo(ctx, 0, y, width, y, '#274041');
   }
-  for (const lane of [-1, 0, 1]) {
-    for (const offset of [-0.025, 0.025]) {
-      const end = cx + (lane * 0.32 + offset) * width * 1.2;
-      lineTo(ctx, cx, horizon, end, height, line);
+  for (const lane of [-2, -1, 0, 1, 2]) {
+    for (const offset of [-0.008, 0.008]) {
+      const start = cx + (lane * 0.164 + offset * 0.25) * width;
+      const end = cx + (lane * (0.164 + 0.033 * 0.54 / 0.39) + offset) * width;
+      lineTo(ctx, start, horizon, end, height, line);
     }
   }
   for (const x of [0.04, 0.96]) {

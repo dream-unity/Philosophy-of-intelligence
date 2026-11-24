@@ -146,3 +146,19 @@ dialog h2, dialog p { margin: 0 0 .85rem; }
   #summary div { padding: .05rem 0; }
 }
 [data-phase="ready"] .hud { visibility: hidden; }
+
+#names { position:absolute; inset:0; pointer-events:none; }
+.nameplate {
+  position:absolute; transform:translateX(-50%); white-space:nowrap; padding:1px 4px;
+  border:1px solid #607674; border-radius:2px; background:#102024;
+  color:#f2edce; font:700 clamp(12px,1.15vw,17px)/1.2 var(--mono);
+  min-height:0; min-width:0;
+}
+button.nameplate { pointer-events:auto; }
+#verdict { bottom:auto; top:4%; }
+@media (min-aspect-ratio:4/5) {
+  body:is([data-phase="ready"],[data-phase="complete"]) .view { width:58%; margin-left:auto; }
+}
+@media (max-width:550px) {
+  #verdict { top:18%; }
+}
