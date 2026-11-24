@@ -24,7 +24,7 @@ const cells=l.p.cells.map(([x,y])=>clockwise?[m-y,x]:[y,m-x]);
 for(const [dx,dy] of [[0,0],[-1,0],[1,0],[-2,0],[2,0],[0,-1],[0,-2],[0,1]]){const p={...l.p,cells,x:l.p.x+dx,y:l.p.y+dy};if(fits(l,p)){l.p=p;return}}}
 function project(s,x,y){const a=10+x,b=SIZE-DEPTH+y;
 return [[a,b],[SIZE-1-b,a],[SIZE-1-a,SIZE-1-b],[b,SIZE-1-a]][s]}
-function reset(){const first=bag();lanes=sides.map((_,i)=>({grid:Array.from({length:DEPTH},row),p:piece(first[i]),bag:[],clears:0}));mode='ready';score=lines=elapsed=last=0;loser=null;sync()}
+function reset(){applyKeySets(padKeys);shuffleRemaining = shufflePeriod;const first=bag();lanes=sides.map((_,i)=>({grid:Array.from({length:DEPTH},row),p:piece(first[i]),bag:[],clears:0}));mode='ready';score=lines=elapsed=last=0;loser=null;sync()}
 function floor(l){while(step(l,0,1)){}}
 function lock(s){const l=lanes[s];for(const [x,y] of l.p.cells)l.grid[y+l.p.y][x+l.p.x]=true;
 const keep=l.grid.filter(r=>!r.every(Boolean)),n=DEPTH-keep.length;
@@ -52,6 +52,11 @@ const padKeys = [
   ['KeyJ', 'KeyK', 'KeyL', 'Semicolon']
 ];
 const actions = ['minus', 'plus', 'rotate', 'drop'];
+const controls = sides.map(() => []);
+const shufflePeriod = 30000;
+let shuffleRemaining = shufflePeriod;
+let shuffleDue;
+let currentSets;
 const bindings = new Map();
 const held = new Map();
 
@@ -106,16 +111,12 @@ function makePads() {
     actions.forEach((action, i) => {
       const button = document.createElement('button');
       button.className = 'key';
-      const code = padKeys[side][i];
-      const key = code === 'Semicolon' ? ';' : code.slice(3);
       button.setAttribute('aria-label', name + ' ' + descriptions[i]);
-      button.setAttribute('aria-keyshortcuts', key);
       button.textContent = labels[i];
       const shortcut = document.createElement('kbd');
-      shortcut.textContent = key;
       button.append(shortcut);
-      const binding = {side, action, button, repeatAt: 0};
-      bindings.set(code, binding);
+      const binding = {side, action, button, shortcut, repeatAt: 0};
+      controls[side].push(binding);
       button.onpointerdown = e => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -129,6 +130,49 @@ function makePads() {
     });
     pad.append(heading, keys);
     $('pads').append(pad);
+  }
+}
+
+function applyKeySets(sets) {
+  const pressedKeys = [...held.keys()].filter(token => typeof token === 'string');
+  for (const code of pressedKeys) release(code);
+  currentSets = sets;
+  bindings.clear();
+  sets.forEach((codes, side) => {
+    codes.forEach((code, actionIndex) => {
+      const binding = controls[side][actionIndex];
+      const label = code === 'Semicolon' ? ';' : code.slice(3);
+      binding.shortcut.textContent = label;
+      binding.button.setAttribute('aria-keyshortcuts', label);
+      bindings.set(code, binding);
+    });
+  });
+  // Transfer held keyboard inputs without firing another turn or drop.
+  // Touch pointers remain attached to the pad under the player's finger.
+  for (const code of pressedKeys) {
+    const binding = bindings.get(code);
+    held.set(code, binding);
+    binding.repeatAt = performance.now() + 100;
+    binding.button.classList.add('held');
+  }
+}
+
+function shuffleKeySets() {
+  let next;
+  do {
+    next = currentSets.slice();
+    for (let i = next.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [next[i], next[j]] = [next[j], next[i]];
+    }
+  } while (next.some((set, i) => set === currentSets[i]));
+  applyKeySets(next);
+}
+
+function updateKeyClock(now) {
+  while (now >= shuffleDue) {
+    shuffleKeySets();
+    shuffleDue += shufflePeriod;
   }
 }
 
@@ -171,7 +215,15 @@ function animateBoard(now) {
 
 function toggleRun() {
   if (mode === 'over') reset();
-  mode = mode === 'play' ? 'paused' : 'play';
+  const now = performance.now();
+  if (mode === 'play') {
+    updateKeyClock(now);
+    shuffleRemaining = shuffleDue - now;
+    mode = 'paused';
+  } else {
+    shuffleDue = now + shuffleRemaining;
+    mode = 'play';
+  }
   last = 0;
   sync();
 }
@@ -179,6 +231,7 @@ function toggleRun() {
 function frame(now) {
   animateBoard(now);
   if (mode === 'play') {
+    updateKeyClock(now);
     for (const binding of new Set(held.values())) {
       if ((binding.action === 'minus' || binding.action === 'plus') && now >= binding.repeatAt) {
         act(binding.side, binding.action);
@@ -224,8 +277,10 @@ document.addEventListener('keydown', e => {
     if (!e.repeat) toggleRun();
     return;
   }
+  if (mode !== 'play') return;
+  updateKeyClock(performance.now());
   const binding = bindings.get(code);
-  if (!binding || mode !== 'play') return;
+  if (!binding) return;
   e.preventDefault();
   if (!e.repeat) press(code, binding);
 });
