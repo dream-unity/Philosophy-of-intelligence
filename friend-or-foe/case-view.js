@@ -1,24 +1,27 @@
-import {roleNames, rolePolarity, roleVerbs} from './case-layout.js';
+import {roleNames, roleVerbs} from './case-layout.js';
 
 const opSymbols = {
   eq: '=',
   neq: '≠',
   imp: '⇒',
-  or: '∨'
+  or: 'or',
+  nand: 'not both'
 };
 
 const opSpoken = {
   eq: ' has the same truth value as ',
   neq: ' has the opposite truth value to ',
   imp: ' implies ',
-  or: ' or at least one holds with '
+  or: ' or at least one holds with ',
+  nand: ' cannot both hold with '
 };
 
 const opLegend = {
   eq: '= same truth',
   neq: '≠ opposite truth',
-  imp: '⇒ if left holds, right holds',
-  or: '∨ at least one holds'
+  imp: '⇒ if left, then right',
+  or: 'or: at least one holds',
+  nand: 'not both: at most one holds'
 };
 
 function element(tag, className, text) {
@@ -45,19 +48,25 @@ function roleRow(row, index) {
   const entry = element('div', 'case-row' + (row.disputed ? ' case-unconfirmed' : '') + divEnd);
   const term = element('dt', 'case-row-label');
   const name = element('span', 'case-role-name');
-  const safe = rolePolarity[row.role] > 0;
-  const badge = element('span', 'case-pol ' + (safe ? 'case-pol-safe' : 'case-pol-threat'), safe ? '+' : '−');
-  badge.setAttribute('aria-hidden', 'true');
-  name.append(badge, element('span', 'case-sr', safe ? 'Safe ' : 'Threat '), roleLabel(row.role));
-  if (row.disputed && !row.alias) {
+  name.append(roleLabel(row.role));
+  if (row.disputed && !row.alias && !row.alt) {
     const marker = element('span', 'case-query', '?');
     marker.setAttribute('aria-hidden', 'true');
     name.append(marker, element('span', 'case-sr', ' direction unconfirmed'));
   }
   term.append(name, element('small', 'case-verb', roleVerbs[row.role]));
   const links = element('dd', 'case-links');
-  for (const link of row.links) links.append(arrow(link));
-  if (row.alias) links.append(element('small', 'case-swap', 'Swap ' + row.alias.join(' and ') + '?'));
+  row.links.forEach((link, i) => {
+    const cell = element('span', 'case-link-cell');
+    cell.append(arrow(link));
+    if (row.disputed && row.alt && row.alt.index === i) {
+      cell.append(element('small', 'case-alt', 'or ' + row.alt.link.from + ' → ' + row.alt.link.to + '?'));
+    }
+    links.append(cell);
+  });
+  if (row.disputed && row.alias) {
+    links.append(element('small', 'case-swap', 'Swap ' + row.alias.join(' and ') + '?'));
+  }
   entry.append(term, links);
   return entry;
 }
@@ -76,8 +85,10 @@ function reportLine(report) {
       claim(report.right)
     );
   } else {
-    const isLogic = report.op === 'imp' || report.op === 'or';
-    const sign = element('b', 'case-sign' + (isLogic ? ' case-sign-logic' : ''), opSymbols[report.op]);
+    const isWord = report.op === 'or' || report.op === 'nand';
+    const isLogic = report.op === 'imp' || isWord;
+    const cls = 'case-sign' + (isLogic ? ' case-sign-logic' : '') + (isWord ? ' case-sign-word' : '');
+    const sign = element('b', cls, opSymbols[report.op]);
     sign.setAttribute('aria-hidden', 'true');
     line.append(
       claim(report.left),
@@ -97,7 +108,8 @@ function easyReport(report, rows) {
     eq: 'Both claims are true or both are false.',
     neq: 'Exactly one claim is true.',
     imp: 'If the left claim holds, the right claim must hold.',
-    or: 'At least one of the two claims is true.'
+    or: 'At least one of the two claims holds.',
+    nand: 'At most one of the two claims holds (not both).'
   };
   block.append(
     element('h3', '', 'Check the ' + roleNames[confirmed.role] + ' row first'),
@@ -114,13 +126,9 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
   const brief = element('header', 'case-brief');
   const titleRow = element('div', 'case-title-row');
   titleRow.append(element('p', 'case-title', evidence.title));
-  const polKey = element('p', 'case-polarity-key');
-  polKey.append(
-    element('span', 'pol-safe', '+ Safe'),
-    document.createTextNode(' · '),
-    element('span', 'pol-threat', '− Threat')
-  );
-  titleRow.append(polKey);
+  if (evidence.domain) {
+    titleRow.append(element('p', 'case-domain', evidence.domain));
+  }
   brief.append(titleRow, element('h2', '', evidence.order));
   board.append(brief);
 
@@ -159,15 +167,22 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
   }
 
   const records = element('dl', 'case-records');
-  records.setAttribute('aria-label', 'Contact records by role');
+  records.setAttribute('aria-label', 'Intelligence records by category');
   evidence.rows.forEach((row, index) => records.append(roleRow(row, index)));
   board.append(records);
 
-  if (evidence.rows.some(row => row.disputed && !row.alias)) {
-    board.append(element('p', 'case-key', '? beside a role means both arrows may run backward.'));
+  const keyNotes = [];
+  if (evidence.rows.some(row => row.disputed && !row.alias && !row.alt)) {
+    keyNotes.push('? beside a role means both arrows may run backward.');
   }
-  if (evidence.rows.some(row => row.alias)) {
-    board.append(element('p', 'case-key', 'A swap trades the two names everywhere in that row.'));
+  if (evidence.rows.some(row => row.disputed && row.alias)) {
+    keyNotes.push('Swap trades those two names everywhere in that row.');
+  }
+  if (evidence.rows.some(row => row.disputed && row.alt)) {
+    keyNotes.push('An “or X → Y?” tag marks an alternate contact for that link.');
+  }
+  if (keyNotes.length) {
+    board.append(element('p', 'case-key', keyNotes.join(' ')));
   }
 
   if (evidence.level === 'easy' && evidence.reports.length === 1 && evidence.reports[0].left) {
@@ -175,7 +190,7 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
   } else if (evidence.reports.length) {
     const reports = element('section', 'case-reports');
     reports.append(element('h3', '', 'Cross-checks'));
-    const presentOps = ['eq', 'neq', 'imp', 'or'].filter(op => evidence.reports.some(r => r.op === op));
+    const presentOps = ['eq', 'neq', 'imp', 'or', 'nand'].filter(op => evidence.reports.some(r => r.op === op));
     if (presentOps.length) {
       reports.append(element('p', 'case-key', presentOps.map(op => opLegend[op]).join(' · ')));
     }
@@ -208,17 +223,17 @@ export function renderCaseGuide(root, level, {shortlist = true} = {}) {
     guide.append(block);
   };
   section(
-    'Read polarity and divisions',
-    'Every contact has a Safe (+) or Threat (−) sign across three divisions: Overt (Friend + / Foe −), Covert (Spy + / Double agent −), and Border (Civilian + / Foreigner −). On two-step chains, two Threats cancel to Allied (− × − = +), while Safe + Threat turns Hostile.'
+    'Read all six intelligence categories',
+    'Each category records a distinct operational link: Friend backs, Foe opposes, Spy watches, Double agent leaks to, Civilian reports to, and Foreigner handles. Arrows always run from the actor on the left to the recipient on the right. Depending on the order, even an ally or civilian may belong in the target pair.'
   );
   if ((level === 'super-easy' || level === 'very-easy') && shortlist) {
-    section('Use the shortlist', 'The pair is among the four names shown. You can uncheck Shortlist at any time to evaluate all ten targets across all six rows.');
+    section('Use the shortlist', 'All six rows are confirmed, and the answer pair is among the four shortlist names. You can uncheck Shortlist at any time to weigh all ten targets.');
   } else if (level === 'super-easy' || level === 'very-easy') {
-    section('Check the whole file', 'All six rows are confirmed. Evaluate every name across all three divisions and both polarities to find the pair.');
+    section('Check the whole file', 'All six rows are confirmed. Weigh every suspect across all six categories to find the exact pair required by the order.');
   } else if (level === 'easy') {
-    section('Resolve one disputed row', 'Five rows are confirmed. Check the confirmed claim first, then use =, ≠, ⇒ (if left then right), or ∨ (at least one) to settle the disputed row.');
+    section('Settle one disputed record', 'Five rows are confirmed and one is disputed. Check the confirmed claim first, then use =, ≠, ⇒ (if left then right), or (at least one), or not both (at most one) to settle the disputed row.');
   } else {
-    section('Resolve coupled cross-checks', 'A ? row may reverse both arrows; a Swap row may trade two names. Some cross-check clusters form coupled cycles with no standalone Verified clue: trace = and ≠ around the loop to see the two competing worlds, then use ⇒ or ∨ to eliminate the impossible world.');
+    section('Resolve coupled cross-checks', 'A ? row may reverse both arrows; a Swap row may trade two names; an “or X → Y?” tag marks an alternate contact. Cross-checks form coupled logic cycles with no standalone handouts: test an interpretation around the cycle to rule out every impossible reading.');
   }
   root.replaceChildren(guide);
 }

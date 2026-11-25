@@ -1,19 +1,20 @@
-import {evaluatePattern} from './case-patterns.js';
+import {evaluateFamily, getFamily} from './case-families.js';
 import {caseRoles} from './case-layout.js';
 
-// Score wrong names by whether the actual order would select them after a
-// small reading error (reversing an arrow or misreading its Safe/Threat role).
-export function nearMisses(id, edges, anchor, correct, singleRowAlternatives = [], variant, evaluator = evaluatePattern) {
+// Score wrong names by whether the current operational order would select them after a
+// small reading mistake (reversing an arrow, misreading a category row, or swapping a contact),
+// then balance mention frequency so shortlist decoys leak zero structural frequency clues.
+export function nearMisses(id, edges, anchor, correct, singleRowAlternatives = [], evaluator = evaluateFamily) {
+  const family = getFamily(id);
   const excluded = new Set(correct);
-  if (id === 'signed-chain' || id === 'profile-mirror' || id === 'triadic-stance' ||
-      id === 'se-shared-target' || id === 'se-anchor-threat-hop') excluded.add(anchor);
+  if (family.useAnchor && anchor) excluded.add(anchor);
   const people = [...new Set(edges.flatMap(edge => [edge.from, edge.to]))];
   const names = people.filter(name => !excluded.has(name));
   const scores = new Map(names.map(name => [name, {tier: 0, hits: 0, pairHits: 0}]));
   const trial = edges.slice();
 
   function evaluate(tier, reading = trial) {
-    const {pair} = evaluator(id, reading, anchor, false, variant);
+    const {pair} = evaluator(id, reading, anchor, false);
     for (const name of pair) {
       const score = scores.get(name);
       if (!score || tier < score.tier) continue;

@@ -1,21 +1,13 @@
 import {caseCatalog} from './case-catalog.js';
-import {superEasyCatalog} from './super-easy-catalog.js';
 import {nearMisses} from './case-decoys.js';
-import {alternate, caseRoles, edgesFor, layoutFor, roleNames, shuffled, symbols} from './case-layout.js';
-import {displayEdge, displayRole, evaluatePattern, patternBrief, patterns, variantsFor} from './case-patterns.js';
-import {
-  evaluateSuperEasyPattern,
-  superEasyBrief,
-  superEasyDisplayEdge,
-  superEasyDisplayRole,
-  superEasyPatterns,
-  superEasyVariantsFor
-} from './super-easy-patterns.js';
+import {DOMAINS, evaluateFamily, familiesForLevel, getFamily} from './case-families.js';
+import {alternateLinks, caseRoles, edgesFor, layoutFor, seededDraw, shuffled, symbols} from './case-layout.js';
+import {buildCrossChecks, pairKey, reportHolds, solveCaseEvidence as solveEvidenceCore} from './case-logic.js';
 import {networkRoster} from './roster.js';
 
-const label = role => roleNames[role];
+export {reportHolds};
+
 const pick = (array, draw) => array[Math.floor(draw() * array.length)];
-const pairKey = pair => pair.slice().sort().join('|');
 
 function takeFromBag(items, old, draw, avoidRepeat = true) {
   if (old && old.index + 1 < old.order.length) return {...old, index: old.index + 1};
@@ -27,17 +19,39 @@ function takeFromBag(items, old, draw, avoidRepeat = true) {
   return {order, index: 0};
 }
 
-function decodeTree(code) {
-  return caseRoles.map((_, i) => Math.floor(code / (8 ** i)) % 8);
+// Build a 100-trial family schedule divided into 10 shuffled blocks of 10 trials,
+// where EVERY 10-trial block visits all 10 espionage domains once in random order
+// and cycles through all 100 families with zero repeats!
+function buildDomainBlockOrder(families, draw, lastId = null) {
+  const byDomain = Array.from({length: DOMAINS.length}, () => []);
+  for (const f of families) byDomain[f.domain].push(f.id);
+  const queues = byDomain.map(list => shuffled(list, draw));
+  const rounds = Math.max(...queues.map(q => q.length));
+  const order = [];
+  for (let r = 0; r < rounds; r++) {
+    const block = [];
+    for (let d = 0; d < queues.length; d++) {
+      if (r < queues[d].length) block.push(queues[d][r]);
+    }
+    order.push(...shuffled(block, draw));
+  }
+  if (lastId && order.length > 1 && order[0] === lastId) {
+    const swapIdx = 1 + Math.floor(draw() * Math.min(9, order.length - 1));
+    [order[0], order[swapIdx]] = [order[swapIdx], order[0]];
+  }
+  return order;
 }
 
-function branchMask(parents, index) {
-  return parents.reduce((mask, _, i) => {
-    for (let ancestor = i; ancestor < parents.length; ancestor = parents[ancestor]) {
-      if (ancestor === index) return mask | (1 << i);
-    }
-    return mask;
-  }, 0);
+function takeFamilyFromDeck(families, old, draw) {
+  if (old && old.index + 1 < old.order.length) return {...old, index: old.index + 1};
+  const lastId = old ? old.order[old.index] : null;
+  return {order: buildDomainBlockOrder(families, draw, lastId), index: 0};
+}
+
+function maskToIndices(mask) {
+  const out = [];
+  for (let i = 0; i < 6; i++) if (mask & (1 << i)) out.push(i);
+  return out;
 }
 
 function assignNames(previous, forbidden, draw) {
@@ -46,233 +60,58 @@ function assignNames(previous, forbidden, draw) {
   }
   const slots = [];
   symbols.forEach((a, i) => {
-    for (const b of symbols.slice(i + 1)) if (!forbidden.has(pairKey([a, b]))) slots.push([a, b]);
+    for (const b of symbols.slice(i + 1)) {
+      if (!forbidden.has(pairKey([a, b]))) slots.push([a, b]);
+    }
   });
-  const hosts = pick(slots, draw);
+  const hosts = slots.length ? pick(slots, draw) : [symbols[0], symbols[1]];
   const remaining = shuffled(networkRoster.filter(name => !previous.includes(name)), draw);
   const old = shuffled(previous, draw);
-  return new Map(symbols.map(name => [name, hosts.includes(name) ? old[hosts.indexOf(name)] : remaining.pop()]));
-}
-
-const matches = (a, b) => a.role === b.role && a.from === b.from && a.to === b.to;
-const truth = (edges, claim) => edges.some(edge => matches(edge, claim));
-
-export function reportHolds(edges, report) {
-  const right = truth(edges, report.right);
-  if (report.op === 'verified') return right;
-  if (report.op === 'ruled-out') return !right;
-  const left = truth(edges, report.left);
-  switch (report.op) {
-    case 'eq': return left === right;
-    case 'neq': return left !== right;
-    case 'imp': return !left || right;
-    case 'or': return left || right;
-    default: throw new RangeError('Unknown report operator ' + report.op);
-  }
-}
-
-function evidenceReports(rows, parents, level, draw) {
-  function makeClaim(index, forcedValue = null) {
-    const row = rows[index];
-    const actual = row.links.map(link => ({role: row.role, ...link}));
-    const other = row.links.map(link => ({role: row.role, ...alternate(link, row.alias)}));
-    const value = forcedValue === null ? draw() < .5 : forcedValue;
-    const [group, opposite] = value ? [actual, other] : [other, actual];
-    return {clue: pick(group.filter(edge => !truth(opposite, edge)), draw), value};
-  }
-
-  function makeDirectionalLink(parentIdx, childIdx, allowLogic) {
-    const r = draw();
-    if (allowLogic && r < .22) {
-      // Modus Ponens: parent(true) => child(true)
-      return {left: makeClaim(parentIdx, true).clue, right: makeClaim(childIdx, true).clue, op: 'imp'};
-    }
-    if (allowLogic && r < .40) {
-      // Modus Tollens: child(false) => parent(false)
-      return {left: makeClaim(childIdx, false).clue, right: makeClaim(parentIdx, false).clue, op: 'imp'};
-    }
-    if (allowLogic && r < .55) {
-      // Disjunctive Syllogism: parent(false) v child(true)
-      const p = makeClaim(parentIdx, false).clue;
-      const c = makeClaim(childIdx, true).clue;
-      return draw() < .5 ? {left: p, right: c, op: 'or'} : {left: c, right: p, op: 'or'};
-    }
-    const source = makeClaim(parentIdx);
-    const child = makeClaim(childIdx);
-    const [left, right] = draw() < .5 ? [source, child] : [child, source];
-    return {left: left.clue, right: right.clue, op: left.value === right.value ? 'eq' : 'neq'};
-  }
-
-  const reports = [];
-  if (level === 'very-easy') return reports;
-
-  if (level === 'easy') {
-    const child = parents.findIndex(p => p < 6);
-    if (child >= 0) reports.push(makeDirectionalLink(parents[child], child, true));
-    return reports;
-  }
-
-  // Group disputed rows into tree components rooted at parents[r] === 6.
-  const roots = [];
-  for (let i = 0; i < parents.length; i++) if (parents[i] === 6) roots.push(i);
-  const components = roots.map(root => {
-    const nodes = [];
-    for (let i = 0; i < parents.length; i++) {
-      if (parents[i] === 7) continue;
-      let cur = i;
-      while (cur < 6 && parents[cur] < 6) cur = parents[cur];
-      if (cur === root) nodes.push(i);
-    }
-    return {root, nodes};
-  });
-
-  // On Hard, guarantee at least one component uses an irreducible coupled cycle (no Verified handout).
-  // On Moderate, use a coupled cycle 75% of the time and a mixed implication chain 25% of the time.
-  const eligibleCycles = components.filter(c => c.nodes.length >= 2);
-  const forcedCycleRoot = level === 'hard' && eligibleCycles.length
-    ? pick(eligibleCycles, draw).root
-    : null;
-
-  for (const {root, nodes} of components) {
-    const useCycle = nodes.length >= 2 && (
-      root === forcedCycleRoot ||
-      (level === 'moderate' || level === 'medium' ? draw() < .75 : draw() < .65)
-    );
-
-    if (useCycle) {
-      // Every tree edge uses = or != so the tree leaves only two complementary worlds: W0 and ~W0.
-      for (const u of nodes) {
-        if (u === root) continue;
-        const source = makeClaim(parents[u]);
-        const child = makeClaim(u);
-        const [left, right] = draw() < .5 ? [source, child] : [child, source];
-        reports.push({left: left.clue, right: right.clue, op: left.value === right.value ? 'eq' : 'neq'});
-      }
-      // Pick a deep node (preferring a leaf) to close the coupled cycle with => or v.
-      const leaves = nodes.filter(u => u !== root && !nodes.some(other => parents[other] === u));
-      const partner = pick(leaves.length ? leaves : nodes.filter(u => u !== root), draw);
-      if (draw() < .55) {
-        // c_root(false) => c_partner(true): kills ~W0 (1 => 0), preserves all subtree flips (0 => *).
-        reports.push({
-          left: makeClaim(root, false).clue,
-          right: makeClaim(partner, true).clue,
-          op: 'imp'
-        });
-      } else {
-        // c_root(true) v c_partner(true): kills ~W0 (0 v 0), preserves all subtree flips (1 v *).
-        const rClaim = makeClaim(root, true).clue;
-        const pClaim = makeClaim(partner, true).clue;
-        reports.push(draw() < .5
-          ? {left: rClaim, right: pClaim, op: 'or'}
-          : {left: pClaim, right: rClaim, op: 'or'});
-      }
-    } else {
-      const rootClaim = makeClaim(root);
-      reports.push({left: null, right: rootClaim.clue, op: rootClaim.value ? 'verified' : 'ruled-out'});
-      for (const u of nodes) {
-        if (u === root) continue;
-        reports.push(makeDirectionalLink(parents[u], u, true));
-      }
-    }
-  }
-
-  return shuffled(reports, draw);
-}
-
-function describeRow(rows, mask, role) {
-  const i = rows.findIndex(row => row.role === role);
-  if (!(mask & (1 << i))) return label(role) + ' reads as printed';
-  return rows[i].alias ? label(role) + ' swaps ' + rows[i].alias.join(' and ') : label(role) + ' reverses';
-}
-
-function explainRows(rows, reports, mask) {
-  const edges = edgesFor(rows, mask);
-  const pending = reports.slice();
-  const known = new Set(rows.filter(row => !row.disputed).map(row => row.role));
-  const steps = [];
-
-  function canForceFromKnown(r) {
-    if (!r.left) return !known.has(r.right.role);
-    const lKnown = known.has(r.left.role);
-    const rKnown = known.has(r.right.role);
-    if (lKnown === rKnown) return false;
-    if (r.op === 'eq' || r.op === 'neq') return true;
-    const lVal = truth(edges, r.left);
-    const rVal = truth(edges, r.right);
-    if (r.op === 'imp') {
-      return (lKnown && lVal) || (rKnown && !rVal);
-    }
-    if (r.op === 'or') {
-      return (lKnown && !lVal) || (rKnown && !rVal);
-    }
-    return false;
-  }
-
-  while (pending.length) {
-    const i = pending.findIndex(canForceFromKnown);
-    if (i >= 0) {
-      const [r] = pending.splice(i, 1);
-      const parent = r.left && (known.has(r.left.role) ? r.left.role : r.right.role);
-      const child = !r.left || parent === r.left.role ? r.right.role : r.left.role;
-      const opTag = r.op === 'imp' ? ' (⇒)' : r.op === 'or' ? ' (∨)' : '';
-      const lead = parent ? 'From ' + label(parent) + opTag : r.op === 'verified' ? 'Verified link' : 'Ruled-out link';
-      steps.push(lead + ' → ' + describeRow(rows, mask, child) + '.');
-      known.add(child);
-      continue;
-    }
-
-    // No single clue resolves a row alone: identify a coupled cycle among remaining unknown rows.
-    const eqClues = pending.filter(r => (r.op === 'eq' || r.op === 'neq') && !known.has(r.left.role) && !known.has(r.right.role));
-    const lockIndex = pending.findIndex(r => (r.op === 'imp' || r.op === 'or') && !known.has(r.left.role) && !known.has(r.right.role));
-    if (lockIndex < 0) break;
-    const lock = pending[lockIndex];
-
-    // BFS over eq/neq clues starting from lock.left.role to gather the coupled cluster.
-    const cluster = new Set([lock.left.role, lock.right.role]);
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const c of eqClues) {
-        if (cluster.has(c.left.role) && !cluster.has(c.right.role)) { cluster.add(c.right.role); grew = true; }
-        else if (cluster.has(c.right.role) && !cluster.has(c.left.role)) { cluster.add(c.left.role); grew = true; }
-      }
-    }
-    const members = [...cluster];
-    const lockSymbol = lock.op === 'imp' ? '⇒' : '∨';
-    steps.push(
-      'Coupled cycle (' + members.map(label).join(', ') + '): ' +
-      label(lock.left.role) + ' ' + lockSymbol + ' ' + label(lock.right.role) +
-      ' eliminates the opposite reading → ' +
-      members.map(role => describeRow(rows, mask, role)).join('; ') + '.'
-    );
-    for (const role of members) known.add(role);
-    for (let j = pending.length - 1; j >= 0; j--) {
-      const c = pending[j];
-      if ((!c.left || known.has(c.left.role)) && known.has(c.right.role)) pending.splice(j, 1);
-    }
-  }
-  return steps;
+  return new Map(symbols.map(sym => [sym, hosts.includes(sym) ? old[hosts.indexOf(sym)] : remaining.pop()]));
 }
 
 export function solveCaseEvidence(evidence) {
-  const {rows, reports, family, anchor, level} = evidence;
-  const evaluator = level === 'super-easy' ? evaluateSuperEasyPattern : evaluatePattern;
-  const fixed = rows.reduce((mask, row, i) => row.disputed ? mask : mask | (1 << i), 0);
-  let solution;
-  let validWorlds = 0;
-  for (let mask = 0; mask < 1 << rows.length; mask++) {
-    if (mask & fixed) continue;
-    const edges = edgesFor(rows, mask);
-    if (!reports.every(report => reportHolds(edges, report))) continue;
-    const participants = new Set(edges.flatMap(edge => [edge.from, edge.to]));
-    if (evidence.roster?.some(name => !participants.has(name))) continue;
-    validWorlds++;
-    const answer = evaluator(family, edges, anchor, true, evidence.variant);
-    if (answer.pair.length !== 2) continue;
-    if (solution && pairKey(solution.pair) !== pairKey(answer.pair)) return {pair: [], proof: [], validWorlds};
-    solution ??= {...answer, proof: [...answer.proof, ...explainRows(rows, reports, mask)]};
+  return solveEvidenceCore(evidence, evaluateFamily);
+}
+
+// Compute all worlds admitted by disputedMask on the raw symbol layout,
+// requiring all 10 suspects to appear so roster completeness can never leak a cross-check.
+function computeWorldPairs(familyId, rawRows, anchorSym, disputedMask) {
+  const fixedMask = (~disputedMask) & 63;
+  const worldPairs = new Array(64).fill(null);
+  for (let m = 0; m < 64; m++) {
+    if (m & fixedMask) continue;
+    const edges = edgesFor(rawRows, m);
+    const seen = new Set();
+    for (const e of edges) { seen.add(e.from); seen.add(e.to); }
+    if (seen.size < 10) continue;
+    worldPairs[m] = evaluateFamily(familyId, edges, anchorSym, false).pair;
   }
-  return solution ? {...solution, validWorlds} : {pair: [], proof: [], validWorlds};
+  return worldPairs;
+}
+
+// Present a row cleanly to the player: if disputed, randomly flip its displayed state (50%)
+// while preserving an exact involution across all 3 uncertainty modes (reverse, alias, alt).
+function presentRow(resolvedRow, disputed, draw) {
+  const exchange = disputed && draw() < 0.5;
+  const swapOrder = draw() < 0.5;
+  const baseLinks = exchange ? alternateLinks(resolvedRow) : resolvedRow.links.map(l => ({...l}));
+
+  const row = {
+    role: resolvedRow.role,
+    links: swapOrder ? [baseLinks[1], baseLinks[0]] : [baseLinks[0], baseLinks[1]],
+    disputed
+  };
+
+  if (disputed && resolvedRow.alias) {
+    row.alias = shuffled(resolvedRow.alias, draw);
+  } else if (disputed && resolvedRow.alt) {
+    const origIdx = resolvedRow.alt.index;
+    const dispIdx = swapOrder ? 1 - origIdx : origIdx;
+    const altTarget = exchange ? {...resolvedRow.links[origIdx]} : {...resolvedRow.alt.link};
+    row.alt = {index: dispIdx, link: altTarget};
+  }
+  return row;
 }
 
 export function makeCaseTrial(level, previous = null, draw = Math.random, options = {}) {
@@ -280,92 +119,123 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
   if (!['super-easy', 'very-easy', 'easy', 'medium', 'hard'].includes(level)) {
     throw new RangeError('Unknown difficulty ' + level);
   }
-  const isSuperEasy = level === 'super-easy';
-  const patternList = isSuperEasy ? superEasyPatterns : patterns;
-  const catalog = isSuperEasy ? superEasyCatalog : caseCatalog;
-  const getVariants = isSuperEasy ? superEasyVariantsFor : variantsFor;
-  const getBrief = isSuperEasy ? superEasyBrief : patternBrief;
-  const evalFn = isSuperEasy ? evaluateSuperEasyPattern : evaluatePattern;
-  const mapRole = isSuperEasy ? superEasyDisplayRole : displayRole;
-  const mapEdge = isSuperEasy ? superEasyDisplayEdge : displayEdge;
 
+  const familyPool = familiesForLevel(level);
   const last = previous?.level === level ? previous.deck : null;
-  const rules = takeFromBag(patternList.map(p => p.id), last?.rules, draw);
+  const rules = takeFamilyFromDeck(familyPool, last?.rules, draw);
   const id = rules.order[rules.index];
-  const variants = getVariants(id);
-  const readings = takeFromBag(variants.map((_, i) => i), last?.readings?.[id], draw, false);
-  const variant = variants[readings.order[readings.index]];
-  const brief = getBrief(id, variant);
-  const entries = catalog[id];
-  const boards = takeFromBag(entries.map((_, i) => i), last?.boards[id], draw);
-  const entry = entries[boards.order[boards.index]];
-  const [seed, anchorIndex, moderate, hard] = entry;
-  const deck = {rules, boards: {...last?.boards, [id]: boards}, readings: {...last?.readings, [id]: readings}};
-  const parents = level === 'hard'
-    ? decodeTree(hard)
-    : level === 'medium'
-      ? decodeTree(moderate)
-      : caseRoles.map(() => 7);
-  if (level === 'easy') {
-    const tree = decodeTree(hard);
-    const indices = caseRoles.map((_, i) => i);
-    const leaves = indices.filter(i => !tree.includes(i));
-    const single = pick(leaves.length ? leaves : indices, draw);
-    parents[single] = pick(indices.filter(i => i !== single), draw);
-  }
+  const family = getFamily(id);
+
+  const entries = caseCatalog[id];
+  if (!entries || !entries.length) throw new Error('Missing catalog entries for ' + id);
+  const boards = takeFromBag(entries.map((_, i) => i), last?.boards?.[id], draw);
+  const [seed, anchorIndex, disputedMask] = entries[boards.order[boards.index]];
+  const deck = {rules, boards: {...last?.boards, [id]: boards}};
+
   const raw = layoutFor(seed);
-  const original = edgesFor(raw, 0);
-  const key = symbols[anchorIndex];
-  const actualPair = evalFn(id, original, key, false).pair;
-  const forbidden = new Set([pairKey(actualPair)]);
-  if (previous?.pair) parents.forEach((p, i) => {
-    if (p !== 7) forbidden.add(pairKey(evalFn(id, edgesFor(raw, branchMask(parents, i)), key, false).pair));
-  });
+  const originalEdges = edgesFor(raw, 0);
+  const anchorSym = symbols[anchorIndex];
+  const actualPair = evaluateFamily(id, originalEdges, anchorSym, false).pair;
+  const correctKey = pairKey(actualPair);
+  const disputedIndices = maskToIndices(disputedMask);
+
+  // Precompute valid world pairs on symbol graph for strict pair-level cross-check synthesis
+  const worldPairs = disputedIndices.length
+    ? computeWorldPairs(id, raw, anchorSym, disputedMask)
+    : null;
+
+  // Ensure the previous trial's pair does NOT collide with the current answer (nor with single-row rivals)
+  const forbidden = new Set([correctKey]);
+  if (previous?.pair && worldPairs) {
+    for (const idx of disputedIndices) {
+      const rp = worldPairs[1 << idx];
+      if (rp && rp.length === 2) forbidden.add(pairKey(rp));
+    }
+  }
+
   const names = assignNames(previous?.pair, forbidden, draw);
-  const rename = ({from, to}) => ({from: names.get(from), to: names.get(to)});
+  const renameLink = ({from, to}) => ({from: names.get(from), to: names.get(to)});
   const resolved = raw.map(row => ({
     role: row.role,
-    links: row.links.map(rename),
-    alias: row.alias?.map(name => names.get(name))
+    links: row.links.map(renameLink),
+    ...(row.alias ? {alias: row.alias.map(s => names.get(s))} : {}),
+    ...(row.alt ? {alt: {index: row.alt.index, link: renameLink(row.alt.link)}} : {})
   }));
-  const reports = isSuperEasy
-    ? []
-    : evidenceReports(resolved, parents, level, draw).map(({left, right, op}) => ({
-      left: left && mapEdge(left, variant),
-      right: mapEdge(right, variant),
-      op
-    }));
-  const rows = resolved.map((row, i) => {
-    const disputed = parents[i] !== 7;
-    const exchange = disputed && draw() < .5;
-    const links = shuffled(row.links, draw).map(link => {
-      const arrow = exchange ? alternate(link, row.alias) : link;
-      const {from, to} = mapEdge({...arrow, role: row.role}, variant);
-      return {from, to};
-    });
-    return {
-      role: mapRole(row.role, variant),
-      links,
-      disputed,
-      ...(disputed && row.alias ? {alias: shuffled(row.alias, draw)} : {})
-    };
-  });
+
+  let prevKeySym = null;
+  if (previous?.pair?.length === 2) {
+    const prevSyms = symbols.filter(s => previous.pair.includes(names.get(s)));
+    if (prevSyms.length === 2) prevKeySym = pairKey(prevSyms);
+  }
+
+  // Build balanced, strictly pair-minimal coupled 2-SAT cross-checks (zero Verified handouts on Moderate/Hard)
+  let reports = [];
+  if (disputedIndices.length) {
+    reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, prevKeySym, level, draw);
+    if (!reports) {
+      reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, null, level, draw);
+    }
+    if (!reports) {
+      for (let retry = 1; retry <= 16 && !reports; retry++) {
+        reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, prevKeySym, level, seededDraw(seed + retry * 9973));
+      }
+    }
+    if (!reports) {
+      const certSalt = level === 'hard' ? 0x7f4a : level === 'medium' ? 0x9e37 : 0x51a7;
+      reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, null, level, seededDraw(seed ^ certSalt));
+    }
+    if (!reports) {
+      for (let retry = 17; retry <= 40 && !reports; retry++) {
+        reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, null, level, seededDraw(seed + retry * 9973));
+      }
+    }
+    reports = reports || [];
+  }
+
+  // Randomly orient each disputed row (50% printed as true, 50% printed as alternate)
+  const rows = resolved.map((row, i) => presentRow(row, disputedIndices.includes(i), draw));
+  rows.sort((a, b) => caseRoles.indexOf(a.role) - caseRoles.indexOf(b.role));
+
+  // Optional shortlist on Super Easy & Very Easy only
   const supportsShortlist = level === 'super-easy' || level === 'very-easy';
   const includeShortlist = supportsShortlist && options?.shortlist !== false;
   let leads = [];
   if (includeShortlist) {
     const alternatives = raw.map((_, i) => edgesFor(raw, 1 << i));
-    const decoys = nearMisses(id, original, key, actualPair, alternatives, undefined, evalFn);
-    leads = shuffled([...actualPair, ...decoys].map(name => names.get(name)), draw);
+    const decoys = nearMisses(id, originalEdges, anchorSym, actualPair, alternatives, evaluateFamily);
+    leads = shuffled([...actualPair, ...decoys].map(s => names.get(s)), draw);
   }
-  const anchor = names.get(key);
+
+  const anchor = names.get(anchorSym);
   const roster = shuffled(networkRoster, draw);
-  rows.sort((a, b) => caseRoles.indexOf(a.role) - caseRoles.indexOf(b.role));
-  const title = brief.title;
-  const order = brief.order.replaceAll('{name}', anchor);
-  const hint = brief.hint.replaceAll('{name}', anchor);
-  const evidence = {level, roster, family: id, variant, title, order, hint, anchor, rows, reports, leads};
+  const title = family.title.replaceAll('{name}', anchor);
+  const order = family.order.replaceAll('{name}', anchor);
+  const hint = (family.hint || '').replaceAll('{name}', anchor);
+
+  const evidence = {
+    level,
+    domain: DOMAINS[family.domain],
+    roster,
+    family: id,
+    title,
+    order,
+    hint,
+    anchor,
+    rows,
+    reports,
+    leads
+  };
+
   const answer = solveCaseEvidence(evidence);
-  if (answer.pair.length !== 2) throw new Error('Inconsistent case ' + id + '/' + seed);
-  return {number: (previous?.number || 0) + 1, level, roster, evidence, deck, ...answer};
+  if (answer.pair.length !== 2) {
+    throw new Error('Inconsistent case ' + id + '/' + seed);
+  }
+  return {
+    number: (previous?.number || 0) + 1,
+    level,
+    roster,
+    evidence,
+    deck,
+    ...answer
+  };
 }
