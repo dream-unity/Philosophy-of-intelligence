@@ -43,13 +43,13 @@ test('ten moving targets have distinct positions and speeds and do not repeat th
 test('all difficulties use the selected speed ceiling and visibly separate targets as they approach', async () => {
   const {ArcadeRun} = await import('../friend-or-foe/covert-range.js');
   const {targetBounds} = await import('../friend-or-foe/covert-scene.js');
-  const {makeLevelTrial} = await import('../friend-or-foe/network-levels.js');
+  const {makeCaseTrial} = await import('../friend-or-foe/case-decks.js');
   const draw = seeded(2471);
   for (const difficulty of ['very-easy', 'easy', 'medium', 'hard']) {
     let previous = [];
     let trial;
     for (let speed = .25; speed <= 3; speed += .25) {
-      trial = makeLevelTrial(difficulty, trial, draw);
+      trial = makeCaseTrial(difficulty, trial, draw);
       const seed = Math.floor(draw() * 1e8);
       const run = new ArcadeRun(trial.roster, trial.pair, previous, seeded(seed), speed);
       const normal = new ArcadeRun(trial.roster, trial.pair, previous, seeded(seed), 1);

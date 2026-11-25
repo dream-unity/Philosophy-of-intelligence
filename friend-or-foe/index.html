@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10171e">
-  <meta name="description" content="Ten moving alien cutouts. Two bullets. Work out who helped, watched and sheltered whom to find the pair for this trial.">
+  <meta name="description" content="You’re the intelligence officer. Use six kinds of contact to identify two of ten moving targets in a different field case each trial.">
   <title>Friend or Foe · Games</title>
   <link rel="stylesheet" href="covert-gallery.css">
-  <link rel="stylesheet" href="network-view.css">
   <link rel="stylesheet" href="difficulty.css?v=speed">
-  <script type="module" src="dossier-gallery.js?case=speed"></script>
+  <link rel="stylesheet" href="case-view.css">
+  <script type="module" src="dossier-gallery.js?case=field"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -37,7 +37,7 @@
       <section id="setup" class="panel" aria-labelledby="setup-heading">
         <div class="setup-intro">
           <h2 id="setup-heading">Ten targets.<br><em>Two bullets.</em></h2>
-          <p>Follow the clues and find the pair before they pass you.</p>
+          <p>You’re the intelligence officer. Read the case file and identify the pair before they pass.</p>
         </div>
         <form id="run-form">
           <fieldset class="levels">
@@ -46,22 +46,22 @@
               <label class="level-choice">
                 <input type="radio" id="difficulty-very-easy" name="difficulty" value="very-easy" checked aria-labelledby="very-easy-label" aria-describedby="very-easy-description">
                 <strong id="very-easy-label">Very Easy</strong>
-                <span id="very-easy-description">Follow two links from a given name.</span>
+                <span id="very-easy-description">Four leads and a first clue.</span>
               </label>
               <label class="level-choice">
                 <input type="radio" id="difficulty-easy" name="difficulty" value="easy" aria-labelledby="easy-label" aria-describedby="easy-description">
                 <strong id="easy-label">Easy</strong>
-                <span id="easy-description">Follow two confirmed links.</span>
+                <span id="easy-description">Ten names. Check one disputed record.</span>
               </label>
               <label class="level-choice">
                 <input type="radio" id="difficulty-medium" name="difficulty" value="medium" aria-labelledby="medium-label" aria-describedby="medium-description">
-                <strong id="medium-label">Medium</strong>
-                <span id="medium-description">Trace three links. One is disputed.</span>
+                <strong id="medium-label">Moderate</strong>
+                <span id="medium-description">Resolve three disputed records.</span>
               </label>
               <label class="level-choice">
                 <input type="radio" id="difficulty-hard" name="difficulty" value="hard" aria-labelledby="hard-label" aria-describedby="hard-description">
                 <strong id="hard-label">Hard</strong>
-                <span id="hard-description">Resolve conflicting witness accounts.</span>
+                <span id="hard-description">Reconstruct all six records.</span>
               </label>
             </div>
           </fieldset>

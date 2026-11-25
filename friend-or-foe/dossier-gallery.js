@@ -1,15 +1,14 @@
 import {createArcadeRange} from './covert-range.js?v=speed';
 import {bindSpeedDial} from './speed-dial.js';
-import {makeLevelTrial} from './network-levels.js?v=trail';
-import {renderNetwork, renderNetworkGuide, renderNetworkResult} from './network-view.js?v=trail';
-import {renderLevelEvidence, renderLevelGuide, renderLevelResult} from './network-level-view.js?v=trail';
+import {makeCaseTrial} from './case-decks.js';
+import {renderCaseEvidence, renderCaseGuide, renderCaseResult} from './case-view.js';
 import {ArcadeSession} from './arcade-session.js';
 
 const el = id => document.getElementById(id);
 const dialog = el('controls');
 let phase = 'ready';
 let difficulty = 'very-easy';
-const difficultyNames = {'very-easy':'Very Easy', easy:'Easy', medium:'Medium', hard:'Hard'};
+const difficultyNames = {'very-easy':'Very Easy', easy:'Easy', medium:'Moderate', hard:'Hard'};
 const difficultyChoices = el('run-form').elements.namedItem('difficulty');
 const speedInput = el('master-speed');
 let masterSpeed = speedInput.valueAsNumber;
@@ -68,11 +67,10 @@ function update(status) {
 }
 
 function enterTrial() {
-  trial = makeLevelTrial(difficulty, trial);
+  trial = makeCaseTrial(difficulty, trial);
   shots = 0;
   setPhase('play');
-  if (difficulty === 'hard') renderNetwork(el('cues'), trial.evidence);
-  else renderLevelEvidence(el('cues'), trial.evidence);
+  renderCaseEvidence(el('cues'), trial.evidence);
   el('cues').parentElement.scrollTop = 0;
   el('trial-meter').textContent = difficultyNames[difficulty] + ' · Trial ' + session.number + ' / ' + session.total;
   el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
@@ -95,8 +93,7 @@ function scheduleNext(delay) {
 function finishTrial(result) {
   if (phase !== 'play' || !session.accept(result)) return;
   setPhase('between');
-  if (difficulty === 'hard') renderNetworkResult(el('cues'), trial, result);
-  else renderLevelResult(el('cues'), trial);
+  renderCaseResult(el('cues'), trial);
   el('cues').parentElement.scrollTop = 0;
   el('range-message').dataset.result = result.reason;
   const elapsed = result.elapsed.toFixed(1) + ' s';
@@ -144,8 +141,7 @@ function openPanel(page = 'pause') {
   el('dialog-title').textContent = help ? 'How to play' : 'Range paused';
   if (help) {
     const level = phase === 'ready' ? difficultyChoices.value : difficulty;
-    if (level === 'hard') renderNetworkGuide(el('cue-guide'));
-    else renderLevelGuide(el('cue-guide'), level);
+    renderCaseGuide(el('cue-guide'), level);
   }
   el('return').textContent = inRun ? 'Resume' : 'Back';
   el('end').hidden = !inRun;
