@@ -123,193 +123,226 @@ test('sessions enforce the 20–1000 range and count each round once', async () 
   }
 });
 
-// Reconstruct every side assignment directly from the five duos and the reports.
-function possibleBoards(trial) {
-  const boards = [];
-  for (let mask = 0; mask < 2 ** trial.duos.length; mask++) {
-    const allied = new Set([trial.anchor]);
-    for (const [index, duo] of trial.duos.entries()) {
-      allied.add(mask & (1 << index) ? duo.lead : duo.partner);
+// Walking together around the seats and the printed stations reconstructs every
+// duty in a crew from the one person hypothesized to hold its double station.
+function crewWorlds(crew) {
+  const double = crew.stations.findIndex(group => group.length === 2);
+  assert.notEqual(double, -1);
+  return crew.names.map((target, seat) => {
+    const assignments = new Map();
+    const holders = new Map();
+    for (let distance = 0; distance < crew.names.length; distance++) {
+      const member = crew.names[(seat + distance) % crew.names.length];
+      const duties = crew.stations[(double + distance) % crew.stations.length];
+      assignments.set(member, [...duties].sort());
+      for (const duty of duties) holders.set(duty, member);
     }
-    const errors = [];
-    for (const [index, report] of trial.reports.entries()) {
-      const sameSide = allied.has(report.left) === allied.has(report.right);
-      const truthful = report.speaker === null || allied.has(report.speaker);
-      if ((sameSide === report.same) !== truthful) errors.push(index);
-    }
-    const pair = orderedPair(trial, allied);
-    boards.push({allied, pair, errors});
+    return {target, assignments, holders};
+  });
+}
+
+function arcNames(crew, path) {
+  const start = crew.names.indexOf(path.from);
+  assert.ok(start >= 0 && crew.names.includes(path.to));
+  assert.notEqual(path.to, path.from);
+  const entered = [];
+  for (let step = 1; step <= crew.names.length; step++) {
+    const name = crew.names[(start + step) % crew.names.length];
+    entered.push(name);
+    if (name === path.to) return entered;
   }
-  return boards;
+  throw new Error('Missing route endpoint');
 }
 
-function orderedPair(trial, allied) {
-  const {duos} = trial;
-  const found = [];
-  const role = trial.query.role;
-  const alliedLeads = duos.filter(duo => allied.has(duo.lead)).length;
-  for (const [i, duo] of duos.entries()) {
-    const before = allied.has(duos[(i + duos.length - 1) % duos.length].lead);
-    const current = allied.has(duo.lead);
-    const after = allied.has(duos[(i + 1) % duos.length].lead);
-    let correctSide;
-    switch (role) {
-      case 'friend':
-      case 'foe':
-        if (before === current) continue;
-        correctSide = role === 'friend';
-        break;
-      case 'spy':
-      case 'double':
-        if (before === after) continue;
-        correctSide = role === 'spy' ? after : before;
-        break;
-      case 'civilian':
-      case 'foreigner':
-        if (current !== (alliedLeads < duos.length / 2)) continue;
-        correctSide = role === 'civilian' ? before : !before;
-        break;
-      default: assert.fail('Unrecognized order role ' + role);
-    }
-    found.push(allied.has(duo.lead) === correctSide ? duo.lead : duo.partner);
+function candidateBoards(trial) {
+  const [a, b] = trial.crews.map(crewWorlds);
+  const arcs = trial.reports.map(report => report.paths.map((path, index) => arcNames(trial.crews[index], path)));
+  const result = [];
+  for (const left of a) for (const right of b) {
+    const choices = [left, right];
+    const fails = [];
+    const pathTruths = trial.reports.map((report, row) => {
+      const values = report.paths.map((path, i) => arcs[row][i].includes(choices[i].holders.get(path.role)));
+      return values;
+    });
+    const expectedSigns = pathTruths.map(([left, right]) => left === right);
+    expectedSigns.forEach((sign, row) => { if (sign !== trial.reports[row].same) fails.push(row); });
+    result.push({pair: [left.target, right.target], crews: choices, fails, expectedSigns, pathTruths});
   }
-  return found;
+  return result;
 }
 
-function samePair(a, b) {
-  return a.length === b.length && a.every(name => b.includes(name));
+function pairKey(pair) { return sorted(pair).join('/'); }
+
+function commonTargets(candidates) {
+  return candidates[0].pair.filter(name => candidates.every(c => c.pair.includes(name)));
 }
 
-function expectedRoles(trial, solved) {
-  const cycle = ['handoff', 'intercept', 'arrival'];
-  const active = cycle.indexOf(trial.query.family);
-  const assigned = trial.duos.map(({lead, partner}) =>
-    solved.pair.includes(lead) || solved.pair.includes(partner) ? [cycle[active]] : []
-  );
-  const unused = assigned.filter(families => families.length === 0);
-  for (const families of unused.slice(0, 2)) families.push(cycle[(active + 1) % 3]);
-  for (const families of unused.slice(1)) families.push(cycle[(active + 2) % 3]);
-
-  const roles = {friend: [], foe: [], spy: [], double: [], civilian: [], foreigner: []};
-  for (const [i, {lead, partner}] of trial.duos.entries()) {
-    const prev = trial.duos[(i + 4) % 5].lead;
-    const next = trial.duos[(i + 1) % 5].lead;
-    for (const name of [lead, partner]) {
-      const ally = solved.allied.has(name);
-      for (const family of assigned[i]) {
-        if (family === 'handoff') roles[ally ? 'friend' : 'foe'].push(name);
-        if (family === 'intercept') roles[ally === solved.allied.has(next) ? 'spy' : 'double'].push(name);
-        if (family === 'arrival') roles[ally === solved.allied.has(prev) ? 'civilian' : 'foreigner'].push(name);
+function changedOperands(trial, omitted) {
+  const names = new Set();
+  const duties = new Set();
+  for (const [row, candidates] of omitted.entries()) {
+    const report = trial.reports[row];
+    for (const [crewIndex, original] of report.paths.entries()) {
+      const crew = trial.crews[crewIndex];
+      const checkPath = revised => {
+        const seats = arcNames(crew, revised);
+        return candidates.some(board => {
+          const roleHolder = board.crews[crewIndex].holders.get(revised.role);
+          const agrees = seats.includes(roleHolder) === board.pathTruths[row][1 - crewIndex];
+          return agrees === report.same;
+        });
+      };
+      for (const endpoint of ['from', 'to']) {
+        if (crew.names.some(name => name !== original.from && name !== original.to &&
+            checkPath({...original, [endpoint]: name}))) names.add(original[endpoint]);
       }
+      if (crew.stations.flat().some(role => role !== original.role &&
+          checkPath({...original, role}))) duties.add(original.role);
     }
   }
-  return roles;
+  return {names, duties};
 }
 
-// Erase every same/opposite sign. For each proposed allegiance board, re-sign
-// the statements to match it. Could that graph legitimately yield another case?
-function signlessAlternatives(candidates, reportCount, previousPair) {
-  const signature = board => board.errors.reduce((bits, index) => bits | (1 << index), 0);
-  const groups = new Map();
-  for (const board of candidates) {
-    const key = signature(board);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(board);
-  }
-  const answers = [];
-  for (const [signs, worlds] of groups) {
-    if (worlds.length !== 1) continue;
-    const pair = worlds[0].pair;
-    if (samePair(pair, previousPair)) continue;
-    const alternatives = [];
-    for (let i = 0; i < reportCount; i++) {
-      const neighbors = groups.get(signs ^ (1 << i)) || [];
-      alternatives.push(neighbors.filter(w => !samePair(w.pair, pair) && !samePair(w.pair, previousPair)));
-    }
-    if (alternatives.some(group => group.length === 0)) continue;
-    if (pair.every(name => alternatives.flat().some(w => !w.pair.includes(name)))) answers.push(pair);
-  }
-  return answers;
+// Can a player learn the two starting seat numbers from the visible duties
+// alone? Normalize duty spellings so a mere change of labels cannot hide a
+// repeated layout. The first half trains the lookup, the second half tests it.
+function stationPattern(crews) {
+  const roles = new Map();
+  return crews.map(crew => crew.stations.map(station => station.map(role => {
+    if (!roles.has(role)) roles.set(role, roles.size);
+    return roles.get(role);
+  }).join('+')).join('|')).join('/');
 }
 
-test('a previously exhausted six-trial deal completes with a solvable sixth order', async () => {
-  const {makeCovertTrial} = await import('../friend-or-foe/covert-case.js');
-  const random = seeded(1414597142);
-  let trial;
-  for (let number = 1; number <= 6; number++) {
-    trial = makeCovertTrial(trial, random);
-    assert.equal(trial.number, number);
-    const accepted = possibleBoards(trial).filter(board => !board.errors.length && board.pair.length === 2);
-    assert.equal(accepted.length, 1);
-    assert.deepEqual(sorted(accepted[0].pair), sorted(trial.pair));
-  }
-});
-
-test('the public duos, reports and order determine one complete board', async () => {
-  const {caseRoles, makeCovertTrial, possibleCovertPairs} = await import('../friend-or-foe/covert-case.js');
+test('public duty orders and comparisons give one complete roster, and every operand matters', async () => {
+  const {makeDutyTrial, caseRoles, possibleDutyPairs} = await import('../friend-or-foe/duty-wheels.js');
   const random = seeded(372);
-  const roles = new Set();
-  const seenPairs = new Set();
-  let sharedWithPrevious = 0;
+  const possibleDuties = ['civilian', 'double', 'foe', 'foreigner', 'friend', 'spy'];
+  const ordered = new Set();
   let previous;
-
+  let partialRepeat = 0;
+  const seatHistory = new Map();
+  let seatGuesses = 0;
   for (let i = 0; i < 1100; i++) {
-    const trial = makeCovertTrial(previous, random);
-    const namesOnBoard = trial.duos.flatMap(duo => [duo.lead, duo.partner]);
-    assert.equal(new Set(namesOnBoard).size, 10);
-    assert.deepEqual(sorted(namesOnBoard), sorted(trial.roster));
-    const publicNames = [trial.anchor, ...namesOnBoard];
-    for (const report of trial.reports) {
-      assert.ok(publicNames.includes(report.left) && publicNames.includes(report.right));
-      assert.ok(report.speaker === null || namesOnBoard.includes(report.speaker));
+    const trial = makeDutyTrial(previous, random);
+    const {crews, reports, roster} = trial;
+    assert.equal(crews.length, 2);
+    assert.equal(new Set(crews.flatMap(crew => crew.names)).size, 10);
+    assert.deepEqual(sorted(crews.flatMap(crew => crew.names)), sorted(roster));
+    for (const crew of crews) {
+      assert.equal(crew.names.length, 5);
+      assert.deepEqual(sorted(crew.stations.flat()), possibleDuties);
+      assert.deepEqual(sorted(crew.stations.map(station => station.length)), [1, 1, 1, 1, 2]);
+    }
+    assert.equal(reports.length, 4);
+    for (const report of reports) {
+      assert.equal(typeof report.same, 'boolean');
+      assert.equal(report.paths.length, 2);
+      for (const [index, path] of report.paths.entries()) assert.ok(crews[index].stations.flat().includes(path.role));
     }
 
-    const candidates = possibleBoards(trial).filter(board => board.pair.length === 2);
-    const solved = candidates.filter(board => !board.errors.length);
-    assert.equal(solved.length, 1, 'More or fewer than one complete board');
-    assert.deepEqual(sorted(solved[0].pair), sorted(trial.pair));
-    const {anchor, duos, reports, query, order, roster} = trial;
-    const assignments = caseRoles({anchor, duos, reports, query, order, roster});
-    const expected = expectedRoles(trial, solved[0]);
-    assert.deepEqual(sorted(Object.keys(assignments)), sorted(Object.keys(expected)));
-    for (const role of Object.keys(expected)) {
-      assert.equal(new Set(assignments[role]).size, 2);
-      assert.deepEqual(sorted(assignments[role]), sorted(expected[role]));
+    const boards = candidateBoards(trial);
+    assert.equal(boards.length, 25);
+    const correct = boards.filter(candidate => candidate.fails.length === 0);
+    assert.equal(correct.length, 1);
+    const answer = correct[0];
+    assert.equal(pairKey(answer.pair), pairKey(trial.pair));
+    const projected = caseRoles({crews, roster, reports});
+    for (const role of possibleDuties) {
+      assert.deepEqual(projected[role], answer.crews.map(crew => crew.holders.get(role)));
     }
-    assert.deepEqual(sorted(assignments[query.role]), sorted(trial.pair));
-    const allMembers = Object.values(assignments).flat();
-    const counts = roster.map(name => allMembers.filter(member => member === name).length);
-    assert.deepEqual(counts.sort(), [1, 1, 1, 1, 1, 1, 1, 1, 2, 2]);
-    const unresolved = caseRoles({anchor, duos, reports: reports.slice(1), query, order, roster});
-    assert.ok(Object.values(unresolved).every(members => members.length === 0));
-    const alternatives = [];
-    for (const index of trial.reports.keys()) {
-      const oneReport = candidates.filter(board => !board.errors.includes(index));
-      assert.ok(trial.pair.every(name => oneReport.some(board => !board.pair.includes(name))),
-        'One statement by itself gives away a target.');
-      const competitors = candidates.filter(board =>
-        board.errors.length === 1 && board.errors[0] === index &&
-        !samePair(board.pair, trial.pair) && !samePair(board.pair, previous?.pair || [])
+
+    const memberships = Object.values(projected).flat();
+    const doubleDuty = roster.filter(name => memberships.filter(member => member === name).length === 2);
+    assert.deepEqual(sorted(new Set(memberships)), sorted(roster));
+    assert.equal(pairKey(doubleDuty), pairKey(trial.pair));
+
+    const priorKey = pairKey(previous?.pair || []);
+    const legal = boards.filter(board => pairKey(board.pair) !== priorKey);
+    const omissions = reports.map((_, row) => {
+      const allowed = legal.filter(board => board.fails.every(failed => failed === row));
+      assert.deepEqual(new Set(possibleDutyPairs(trial, row).map(pairKey)), new Set(allowed.map(b => pairKey(b.pair))));
+      const otherPairs = legal.filter(board => board.fails.length === 1 && board.fails[0] === row &&
+        board.pair.every(name => !answer.pair.includes(name)));
+      assert.ok(otherPairs.length, 'Missing signed comparison should let both targets change');
+      const oneReport = legal.filter(board => !board.fails.includes(row));
+      assert.equal(commonTargets(oneReport).length, 0, 'Reading one sign already gives away a target');
+      return otherPairs;
+    });
+    const {names, duties} = changedOperands(trial, omissions);
+    assert.deepEqual(sorted(names), sorted(roster));
+    assert.deepEqual(sorted(duties), possibleDuties);
+    // Re-sign the exact same routes in every way that meets the generation
+    // guarantees, including previous-pair exclusion and operand sensitivity.
+    let eligible = legal.filter(proposed => {
+      const signed = reports.map((r, row) => ({...r, same: proposed.expectedSigns[row]}));
+      const failures = board => board.expectedSigns.flatMap((sign, row) => sign !== signed[row].same ? [row] : []);
+      if (boards.filter(b => failures(b).length === 0).length !== 1) return false;
+      const disjoint = legal.filter(b => b.pair.every(name => !proposed.pair.includes(name)));
+      const omissions = signed.map((r, row) => disjoint.filter(b => {
+        const f = failures(b);
+        return f.length === 1 && f[0] === row;
+      }));
+      if (omissions.some(group => !group.length)) return false;
+      const changed = changedOperands({...trial, reports: signed}, omissions);
+      return changed.names.size === 10 && changed.duties.size === 6;
+    });
+    // A player who knows the selection process may also exclude worlds that
+    // would fail this same check. Continue until there are no more to exclude.
+    for (;;) {
+      const remaining = eligible.filter(candidate =>
+        reports.every((_, row) => eligible.some(other =>
+          other.expectedSigns[row] === candidate.expectedSigns[row] &&
+          other.pair.every(name => !candidate.pair.includes(name))))
       );
-      assert.ok(competitors.length, 'Redundant report ' + index);
-      const answerKey = pair => sorted(pair).join('/');
-      const expected = [trial.pair, ...competitors.map(board => board.pair)].map(answerKey);
-      assert.deepEqual(new Set(possibleCovertPairs(trial, index).map(answerKey)), new Set(expected));
-      alternatives.push(...competitors);
+      if (remaining.length === eligible.length) break;
+      eligible = remaining;
     }
-    assert.ok(trial.pair.every(name => alternatives.some(board => !board.pair.includes(name))));
-    const signless = signlessAlternatives(candidates, trial.reports.length, previous?.pair || []);
-    assert.ok(signless.some(pair => pair.every(name => !trial.pair.includes(name))),
-      'The unsigned graph alone rules out every disjoint answer.');
-    seenPairs.add(sorted(trial.pair).join('/'));
-    roles.add(trial.query.role);
+    assert.ok(eligible.includes(answer), 'A single sign and the selection rules identify a target');
     if (previous) {
-      assert.ok(!samePair(previous.pair, trial.pair));
-      if (previous.pair.some(name => trial.pair.includes(name))) sharedWithPrevious++;
+      assert.notEqual(pairKey(trial.pair), priorKey);
+      if (previous.pair.some(name => trial.pair.includes(name))) partialRepeat++;
     }
+    const layout = stationPattern(crews);
+    const seats = crews.map(crew => crew.names.findIndex(name => trial.pair.includes(name))).join('/');
+    if (i < 550) {
+      const counts = seatHistory.get(layout) || new Map();
+      counts.set(seats, (counts.get(seats) || 0) + 1);
+      seatHistory.set(layout, counts);
+    } else {
+      const counts = seatHistory.get(layout);
+      const guess = counts ? [...counts].sort((a, b) => b[1] - a[1])[0][0] : '0/0';
+      if (seats === guess) seatGuesses++;
+    }
+    ordered.add(pairKey(trial.pair));
     previous = trial;
   }
-  assert.equal(roles.size, 6);
-  assert.equal(seenPairs.size, 45);
-  assert.ok(sharedWithPrevious > 0, 'Previous targets can be ruled out without reading the case');
+  assert.ok(seatGuesses < 550 * 0.12, 'Remembering station patterns predicts both seats without any reports');
+  assert.equal(ordered.size, 45);
+  assert.ok(partialRepeat > 0, 'Prior names can be excluded without reading the case');
+});
+
+test('clockwise paths wrap, omit the starting seat and include the ending seat', async () => {
+  const {solveDutyTrial, caseRoles} = await import('../friend-or-foe/duty-wheels.js');
+  const path = (from, to, role) => ({from, to, role});
+  const board = {
+    crews: [
+      {names: ['Dex', 'Ivo', 'Luma', 'Mira', 'Nia'],
+       stations: [['friend', 'foe'], ['spy'], ['double'], ['civilian'], ['foreigner']]},
+      {names: ['Orin', 'Pia', 'Sol', 'Tess', 'Vale'],
+       stations: [['spy'], ['foe'], ['double', 'foreigner'], ['friend'], ['civilian']]}
+    ],
+    reports: [
+      {paths: [path('Nia', 'Dex', 'foreigner'), path('Vale', 'Orin', 'friend')], same: false},
+      {paths: [path('Nia', 'Mira', 'double'), path('Tess', 'Orin', 'foe')], same: false},
+      {paths: [path('Mira', 'Ivo', 'friend'), path('Tess', 'Vale', 'double')], same: false},
+      {paths: [path('Dex', 'Luma', 'foreigner'), path('Pia', 'Tess', 'friend')], same: true}
+    ]
+  };
+  assert.deepEqual(solveDutyTrial(board).pair, ['Ivo', 'Tess']);
+  assert.deepEqual(caseRoles(board), {
+    friend: ['Ivo', 'Vale'], foe: ['Ivo', 'Sol'], spy: ['Luma', 'Pia'],
+    double: ['Mira', 'Tess'], civilian: ['Nia', 'Orin'], foreigner: ['Dex', 'Tess']
+  });
 });

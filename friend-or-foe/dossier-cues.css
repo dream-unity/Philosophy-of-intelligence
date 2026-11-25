@@ -1,0 +1,90 @@
+.dossier-cues,.dossier-guide,.ds-resolved {
+  --ds-ink:#f4f2e9; --ds-label:#c4d1d1; --ds-border:#465961;
+  --ds-gold:#ffc27e; --ds-mint:#a5e4cd; --ds-mono:ui-monospace,"Courier New",monospace;
+  color:var(--ds-ink);
+}
+.dossier-cues {
+  display:grid;gap:clamp(10px,2.1vh,21px);container:dossier / inline-size;min-width:0;
+}
+.ds-order {border-left:3px solid var(--ds-gold);padding-left:10px}
+.ds-order h2 {margin:0;font:750 clamp(20px,1.9vw,29px)/1.1 var(--display,system-ui,sans-serif);letter-spacing:-.025em}
+.ds-order p,.ds-read,.ds-crew h3,.ds-reports th {color:var(--ds-label)}
+.ds-order p,.ds-read {margin:4px 0 0;font:500 .81rem/1.3 system-ui,sans-serif}
+.ds-crews {display:grid;gap:9px}
+.ds-crew {display:grid;grid-template-columns:3rem minmax(0,1fr);gap:5px;align-items:start;min-width:0}
+.ds-crew h3 {margin:0;font:700 .78rem/1.5 system-ui,sans-serif}
+.ds-wheel {display:grid;gap:3px;min-width:0}
+.ds-track {display:flex;align-items:center;flex-wrap:nowrap;gap:0;padding:0;margin:0;list-style:none}
+.ds-track li {display:flex;align-items:center;white-space:nowrap}
+.ds-track li::after {content:"›";font:400 .85em/1 var(--ds-mono);color:#9aaead;margin:0 .34em}
+.ds-track li:last-child::after {content:"↻";margin-right:0}
+.ds-names {font:700 clamp(13px,1.15vw,17px)/1.3 var(--ds-mono)}
+.ds-duties {font:550 .81rem/1.2 var(--ds-mono)}
+.ds-duties li::after {margin:0 .3em}
+.ds-station {display:inline-flex;align-items:baseline;background:#132029;border:1px solid #4a5c64;border-radius:3px;padding:2px 3px}
+.ds-plus {font-size:.8em;line-height:1;color:var(--ds-label)}
+.ds-badge {font:700 .86em/1 var(--ds-mono);white-space:nowrap}
+.ds-friend {color:#a4e4c6}.ds-foe {color:#ffae93}.ds-spy {color:#b9bdff}
+.ds-double {color:#ffd28a}.ds-civilian {color:#9fdae9}.ds-foreigner {color:#e7b7e5}
+.ds-reports,.ds-resolved {width:100%;border-collapse:collapse;border-spacing:0;table-layout:auto}
+.ds-reports th,.ds-reports td,.ds-resolved th,.ds-resolved td {text-align:left;padding:4px 1px}
+.ds-reports th,.ds-resolved thead th {font:650 .75rem/1.2 system-ui,sans-serif;border-bottom:1px solid #5a6d74}
+.ds-reports td,.ds-resolved tbody tr {border-bottom:1px solid #364952}
+.ds-reports th:nth-child(2),.ds-reports .ds-sign {text-align:center}
+.ds-reports th:nth-child(3),.ds-reports td:nth-child(3) {padding-left:5px}
+.ds-path {display:inline-flex;align-items:baseline;gap:.28em;white-space:nowrap;font:600 clamp(12px,1.15vw,17px)/1.3 var(--ds-mono)}
+.ds-path strong {font:inherit}
+.ds-path .ds-badge {background:#122028;padding:.17em .22em;border-radius:2px;border:1px solid #45565d;margin-left:.13em}
+.ds-arrow {font-weight:400;color:#b8c9c9}
+.ds-sign {font:750 1.2rem/1 var(--ds-mono);width:2em}
+.ds-agree {color:var(--ds-mint)}.ds-split {color:var(--ds-gold)}
+.ds-legend {display:grid;grid-template-columns:repeat(3,max-content);justify-content:space-between;gap:5px 8px;margin:0;padding-top:7px;border-top:1px solid var(--ds-border)}
+.ds-legend div,.ds-resolved th[scope="row"] {font:550 .82rem/1.25 system-ui,sans-serif}
+.ds-legend div {display:flex;gap:5px;align-items:baseline}
+.ds-legend dt,.ds-legend dd {margin:0}
+.ds-legend .ds-badge,.ds-resolved .ds-badge {font-size:.91em}
+.dossier-guide {display:grid;gap:12px}
+.dossier-guide h3 {font:700 1rem/1.2 system-ui,sans-serif;margin:0 0 3px}
+.dossier-guide p {margin:0;line-height:1.4}
+.ds-example {border-left:3px solid var(--ds-gold);padding-left:9px}
+.ds-example .ds-reports {max-width:330px;margin:5px 0}
+.ds-resolved tbody td {font:600 .91rem/1.25 var(--ds-mono)}
+.ds-resolved th .ds-badge {display:inline-block;min-width:2.2em}
+@container dossier (min-width:38rem) {
+  .ds-crews {grid-template-columns:1fr 1fr;gap:14px}
+  .ds-crew {display:block}
+  .ds-legend {grid-template-columns:repeat(6,max-content);gap:4px}
+}
+@media (orientation:portrait) and (max-width:640px), (orientation:landscape) and (max-height:510px) {
+  .dossier-cues {gap:6px}
+  .ds-crew {grid-template-columns:2.9rem minmax(0,1fr)}
+  .ds-order {padding-left:7px}
+  .ds-order h2 {font-size:19px}
+  .ds-order p,.ds-read {font-size:.73rem;line-height:1.15;margin-top:2px}
+  .ds-crews,.ds-wheel {gap:3px}
+  .ds-crew h3,.ds-reports th {font-size:.7rem}
+  .ds-names,.ds-path {font-size:clamp(12px,3.3vw,15px)}
+  .ds-duties {font-size:.77rem}
+  .ds-station {padding:1px 3px}
+  .ds-reports td,.ds-reports th {padding-block:1px}
+  .ds-sign {font-size:1rem}
+  .ds-legend {gap:2px 6px;padding-top:3px}
+  .ds-legend div {font-size:.72rem}
+}
+@media (orientation:landscape) and (max-height:510px) {
+  .ds-track li::after {margin:0 .19em}
+  .ds-path {gap:.2em}
+  .ds-sign {width:1.2em}
+  .ds-names,.ds-path {font-size:13px}
+}
+.ds-question {margin:0 0 5px;color:var(--ds-ink);font:650 .87rem/1.2 system-ui,sans-serif}
+@media (orientation:portrait) and (max-width:640px), (orientation:landscape) and (max-height:510px) {
+  .ds-question {margin-bottom:2px;font-size:.77rem}
+}
+.ds-station .ds-badge {font-size:1em}
+@media (min-width:641px) and (min-height:560px) {
+  .ds-duties {font-size:clamp(14px,1.05vw,16px)}
+}
+@media (orientation:portrait) and (max-width:640px) {
+  body[data-phase="play"] .console {max-height:54dvh}
+}

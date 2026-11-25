@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10171e">
-  <meta name="description" content="Ten moving alien cutouts. Two bullets. Work out whose reports to trust and find the pair.">
+  <meta name="description" content="Ten moving alien cutouts. Two bullets. Reconstruct six duties across two crews to find the two on double duty.">
   <title>Friend or Foe · Games</title>
   <link rel="stylesheet" href="covert-gallery.css">
-  <link rel="stylesheet" href="covert-cues.css">
-  <script type="module" src="covert-gallery.js"></script>
+  <link rel="stylesheet" href="dossier-cues.css">
+  <script type="module" src="dossier-gallery.js"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -30,13 +30,12 @@
       <div id="labels" aria-label="Named cutouts"></div>
       <div id="range-message" class="range-message" hidden aria-live="polite" aria-atomic="true">
         <strong id="outcome"></strong><span id="outcome-detail"></span>
-        <button type="button" class="why" id="why">Why this pair?</button>
       </div>
     </section>
     <aside class="console" aria-label="Range controls and clues">
       <section id="setup" class="panel">
         <h2>Ten targets.<br><em>Two bullets.</em></h2>
-        <p>Each duo hides an ally and a rival. Work out whose reports to trust, then take your two shots.</p>
+        <p>Two patrols share six duties. Reconstruct both shifts and shoot the one pulling double duty in each crew.</p>
         <form id="run-form">
           <label for="count">Trials per run</label>
           <input id="count" type="number" min="20" max="1000" step="1" value="20" required inputmode="numeric" aria-describedby="count-hint">
@@ -46,11 +45,10 @@
           <button class="primary" type="submit">Start run</button>
         </form>
       </section>
-      <section id="cues" hidden aria-label="Live order, rival duos and witness reports"></section>
+      <section id="cues" hidden aria-label="Duty rotations and patrol reports"></section>
       <section id="results" class="panel" hidden aria-labelledby="summary-heading">
         <h2 id="summary-heading" tabindex="-1">Run complete</h2>
         <p id="summary-score"></p><dl id="totals"></dl>
-        <button type="button" id="summary-review" hidden>Review last pair</button>
         <button type="button" id="again" class="primary">Set up next run</button>
       </section>
     </aside>
@@ -60,28 +58,10 @@
     <h2 id="dialog-title"></h2>
     <div id="help-copy" hidden>
       <div id="cue-guide"></div>
-      <details class="duty-details">
-        <summary>How can ten names fill six pairs?</summary>
-        <p>Each duo has two rival members. Duties cycle from friend or foe to spy or double agent, then civilian or foreigner, before starting over.</p>
-        <p>The two duos in the order take the active duty. Read the remaining three duos in number order. The first two take the next duty and the last two take the final duty. The middle duo serves twice.</p>
-        <p>In each duty, the friend sides with the contact, the spy sides with the next lead, and the civilian sides with the previous lead. Their partners take the opposing roles.</p>
-      </details>
       <p>Tap a cutout or its nameplate to fire. On a keyboard, aim with 1–9 or 0, then press Space. A miss costs one bullet.</p>
       <p>Your second shot ends the trial. If all remaining members of the assigned pair pass you, you die.</p>
     </div>
-    <section id="review-copy" hidden aria-label="Completed trial">
-      <p id="review-order"></p>
-      <ol id="review-proof"></ol>
-      <div id="changed-case">
-        <label for="withhold">Withhold one report</label>
-        <select id="withhold"></select>
-        <p id="possible" aria-live="polite"></p>
-      </div>
-      <details id="duty-roster" class="duty-details"><summary>See all six pairs</summary><dl id="role-pairs"></dl><p id="double-duty"></p></details>
-      <details id="review-details"><summary>See that trial’s evidence</summary><div id="review-evidence"></div></details>
-    </section>
     <div class="dialog-actions">
-    <button type="button" id="last-review" hidden>Review last pair</button>
     <button type="button" id="return" class="primary">Resume</button>
     <button type="button" id="end" hidden>End run</button>
     </div>
