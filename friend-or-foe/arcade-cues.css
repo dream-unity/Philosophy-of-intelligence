@@ -1,0 +1,91 @@
+/* The same cue strip fits above the range or beside it. */
+.arcade-cues {
+  --ac-line: #405557;
+  --ac-name: #e8efdf;
+  --ac-caption: #a9bab4;
+  --ac-first: #a6dfcf;
+  --ac-second: #f6bf91;
+  container: arcadecues / inline-size;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  color: var(--ac-name);
+  text-align: left;
+  font: 16px/1.25 Roboto, system-ui, sans-serif;
+}
+.arcade-cues * { box-sizing: border-box; }
+.ac-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .36rem .42rem;
+}
+.ac-order {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.ac-command {
+  margin: 0 0 .14rem;
+  color: var(--ac-caption);
+  font: 700 .75rem/1.1 ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.ac-order-title {
+  margin: 0;
+  color: var(--ac-name);
+  font: 720 clamp(1rem, 4.5cqi, 1.35rem)/1.17 Roboto, system-ui, sans-serif;
+  text-wrap: pretty;
+}
+.ac-anchor { color: #ffcf9d; font-style: normal; }
+.ac-card {
+  min-width: 0;
+  align-self: start;
+  border: 1px solid var(--ac-line);
+  border-radius: 3px;
+  background: #122124;
+}
+.ac-kind {
+  margin: 0;
+  padding: .23rem .46rem;
+  background: #1e3133;
+  border-bottom: 1px solid var(--ac-line);
+  color: var(--ac-first);
+  font: 700 .87rem/1.2 Roboto, system-ui, sans-serif;
+}
+.ac-card + .ac-card .ac-kind { color: var(--ac-second); }
+.ac-links { list-style: none; padding: .13rem .44rem; margin: 0; }
+.ac-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: .24rem;
+  min-width: 0;
+  padding: .15rem 0;
+  font: 650 .91rem/1.14 ui-monospace, "Courier New", monospace;
+  color: var(--ac-name);
+}
+.ac-link + .ac-link { border-top: 1px solid #2b3c3e; }
+.ac-arrow { color: #91a8a3; font-weight: 400; line-height: 1; }
+.ac-to { text-align: right; }
+.ac-read { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@container arcadecues (max-width: 18.8rem) {
+  .ac-content { grid-template-columns: minmax(0, 1fr); gap: .52rem; }
+  .ac-link { font-size: .98rem; padding-block: .24rem; }
+  .ac-kind { font-size: .93rem; padding-block: .3rem; }
+}
+@container arcadecues (min-width: 40rem) {
+  .ac-content { grid-template-columns: minmax(0,1.04fr) repeat(2,minmax(0,1fr)); align-items: start; gap: .64rem; }
+  .ac-order { grid-column: auto; }
+  .ac-order-title { font-size: 1.13rem; }
+}
+@media (max-height: 530px) {
+  .ac-command { margin-bottom: .04rem; }
+  .ac-kind { padding-block: .12rem; }
+  .ac-link { padding-block: .07rem; }
+  @container arcadecues (min-width: 14rem) and (max-width: 18.8rem) {
+    .ac-content { grid-template-columns: repeat(2, minmax(0,1fr)); gap: .3rem; }
+    .ac-kind { padding: .2rem .25rem; font-size: .8rem; }
+    .ac-links { padding: .12rem .2rem; }
+    .ac-link { font-size: .82rem; gap: .1rem; padding-block: .13rem; }
+  }
+}

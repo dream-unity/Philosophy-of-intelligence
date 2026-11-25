@@ -2,86 +2,61 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#101a1e">
-  <meta name="description" content="Work out who is connected to whom, then pick the two named cutouts that fit your order.">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10171e">
+  <meta name="description" content="Ten moving cutouts. Two bullets. Follow the links to find the pair before they reach you.">
   <title>Friend or Foe · Games</title>
-  <link rel="stylesheet" href="mission.css">
-  <link rel="stylesheet" href="notebook.css">
-  <script type="module" src="mission.js"></script>
+  <link rel="stylesheet" href="gallery.css">
+  <link rel="stylesheet" href="arcade-cues.css">
+  <script type="module" src="gallery.js"></script>
 </head>
-<body data-phase="briefing">
-  <header class="appbar">
-    <nav aria-label="Game navigation"><a href="/games/">Games</a><span aria-hidden="true">/</span><h1>Friend <i>or</i> Foe</h1></nav>
-    <div class="toolbar">
-      <span id="case-number">Trial 01</span>
+<body data-phase="ready">
+  <header class="mast">
+    <nav aria-label="Games"><a href="/games/">Games</a><span aria-hidden="true">/</span><h1>Friend <i>or</i> Foe</h1></nav>
+    <div class="meter" id="meters" hidden>
+      <span id="trial-meter"></span>
+      <time id="clock" aria-label="Trial time">0.0 s</time>
+      <span id="ammo-meter" role="status" aria-live="polite"><i class="round"></i><i class="round"></i><b>2 bullets</b></span>
+    </div>
+    <div class="tools">
       <button id="sound" type="button" aria-pressed="true">Sound on</button>
-      <button id="how" type="button">How to play</button>
+      <button id="help-open" type="button" aria-label="How to play">?</button>
+      <button id="pause" type="button" hidden>Pause</button>
     </div>
   </header>
-  <main id="briefing" class="sheet">
-    <div class="sheet-inner">
-      <section class="order-card" aria-labelledby="order">
-        <div class="eyebrow" id="order-label">Your order</div>
-        <h2 id="order" tabindex="-1">Opening the trial…</h2>
-        <p id="brief-instructions">Ten names, two shots. Take as long as you need to file two names under each role. Two people each hold a second role.</p>
-      </section>
-      <div id="notebook"></div>
-    </div>
-  </main>
-  <main id="field" hidden>
-    <div class="range-order"><b>Your order</b><span id="live-order"></span></div>
-    <div id="view">
-      <canvas id="range" tabindex="0" aria-label="Five-lane arcade range" aria-describedby="range-guide"></canvas>
-      <div id="names" aria-label="Cutout names"></div>
-      <p class="sr" id="range-guide">Tap a cutout or name to take a shot. Keys 1 to 5 select a lane. Space fires. F lets the selected cutout pass. B opens the briefing and pauses the range.</p>
-      <section id="pause-overlay" class="pause-overlay" hidden aria-labelledby="pause-title">
-        <div><h2 id="pause-title">Range paused</h2><button class="primary" id="resume" type="button">Resume range</button></div>
-      </section>
-    </div>
-  </main>
-  <main id="review" class="sheet" hidden>
-    <div class="sheet-inner">
-      <section class="order-card" aria-labelledby="verdict">
-        <div class="eyebrow">Trial report</div>
-        <h2 id="verdict" tabindex="-1"></h2><p id="report-order"></p>
-      </section>
-      <div class="review-grid">
-        <section class="review-card"><h3>Why this pair?</h3><p id="your-picks"></p><ol id="proof"></ol></section>
-        <section class="review-card"><h3>Your notebook</h3>
-          <p id="note-score"></p>
-          <table id="comparison"><thead><tr><th>Role</th><th>You filed</th><th>Solution</th></tr></thead><tbody></tbody></table>
-        </section>
+  <main class="cabinet">
+    <section id="gallery" aria-label="Shooting range">
+      <canvas id="range" tabindex="0" aria-label="Shooting range with ten approaching alien cutouts" aria-describedby="keys"></canvas>
+      <div id="labels" aria-label="Named cutouts"></div>
+      <div id="range-message" class="range-message" hidden aria-live="polite" aria-atomic="true">
+        <strong id="outcome"></strong><span id="outcome-detail"></span>
       </div>
-    </div>
+    </section>
+    <aside class="console" aria-label="Range controls and clues">
+      <section id="setup" class="panel">
+        <h2>Ten targets.<br><em>Two bullets.</em></h2>
+        <p>Follow the links. Shoot the two matching names before they pass you.</p>
+        <form id="run-form">
+          <label for="count">Trials per run</label>
+          <input id="count" type="number" min="20" max="1000" step="1" value="20" required inputmode="numeric" aria-describedby="count-hint">
+          <small id="count-hint">20–1,000</small>
+          <button class="primary" type="submit">Start run</button>
+        </form>
+      </section>
+      <section id="cues" hidden aria-label="Live order and links"></section>
+      <section id="results" class="panel" hidden aria-labelledby="summary-heading">
+        <h2 id="summary-heading" tabindex="-1">Run complete</h2>
+        <p id="summary-score"></p><dl id="totals"></dl>
+        <button type="button" id="again" class="primary">Set up next run</button>
+      </section>
+    </aside>
   </main>
-  <footer>
-    <div id="brief-actions" class="action-row">
-      <div class="footer-copy"><strong id="placement-count" aria-live="polite">0 of 12 placements</strong><small id="placement-hint">File two names in each of the six roles.</small></div>
-      <button class="primary" id="launch" type="button" disabled>Enter range</button>
-    </div>
-    <div id="range-actions" class="action-row" hidden>
-      <div class="footer-copy"><strong id="shots" aria-live="polite">2 shots left</strong><small id="picks"></small></div>
-      <div class="controls">
-        <button id="read" type="button">Briefing <kbd>B</kbd></button>
-        <button id="pause" type="button">Pause <kbd>P</kbd></button>
-        <button id="pass" type="button">Let pass <kbd>F</kbd></button>
-        <button id="fire" class="primary" type="button">Fire <kbd>Space</kbd></button>
-      </div>
-    </div>
-    <div id="report-actions" class="action-row" hidden>
-      <div class="footer-copy"><strong id="session-score"></strong><small>Next trial deals new relationships.</small></div>
-      <button class="primary" id="next" type="button">Next trial</button>
-    </div>
-  </footer>
-  <dialog id="help" aria-labelledby="help-title">
-    <h2 id="help-title">How to play</h2>
-    <ol><li><strong>Read your order.</strong> It describes two of the ten names. Both can be allies.</li>
-      <li><strong>Work the evidence.</strong> Assign two names to each role in your notebook. You get the answer key after the trial.</li>
-      <li><strong>Take two shots.</strong> Five cutouts start together. The other five enter as lanes open. Tap a cutout or its name to select it. The range closes when you find the pair or all ten have gone by.</li></ol>
-    <p>Open <strong>Briefing</strong> during play to stop the clock and check your notes. On a keyboard, use <kbd>1–5</kbd> to aim at a lane or use the arrows to move the sight. <kbd>Space</kbd> fires and <kbd>F</kbd> lets the aimed cutout pass.</p>
-    <button class="primary" id="close-help" type="button">Got it</button>
+  <footer><p id="keys">Tap or click a cutout or its name to fire. <span class="key-guide"><kbd>1–9</kbd> <kbd>0</kbd> aim · <kbd>Space</kbd> fire</span></p><p id="score" hidden></p></footer>
+  <dialog id="controls" aria-labelledby="dialog-title">
+    <h2 id="dialog-title"></h2>
+    <div id="help-copy" hidden><p>Each arrow goes from the name on the left to the name on the right. Trace the relationships in the order to find the two cutouts.</p><p>Tap a cutout or its name to shoot. A shot into empty space uses a bullet. On a keyboard, press 1–9 or 0 to aim, then Space to fire.</p><p>Your second shot ends the trial. If the assigned cutouts get past you, you die and the next trial starts.</p></div>
+    <button type="button" id="return" class="primary">Resume</button>
+    <button type="button" id="end" hidden>End run</button>
   </dialog>
-  <noscript>This game needs JavaScript to deal a trial and move the cutouts.</noscript>
-</body>
-</html>
+  <noscript>Enable JavaScript to play Friend or Foe.</noscript>
+</body></html>
