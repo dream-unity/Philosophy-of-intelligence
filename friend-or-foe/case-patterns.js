@@ -111,7 +111,11 @@ export function evaluatePattern(id, visibleEdges, anchor, includeProof = true, v
       case 'return-link':
         for (const a of outgoing) {
           const b = incoming.find(b => a.to === b.from && a.role !== b.role);
-          if (b) mark(name, () => trail(a, b));
+          if (b) {
+            const exchange = () => trail(a, b);
+            mark(name, exchange);
+            mark(a.to, exchange);
+          }
         }
         break;
       case 'shortcut':
