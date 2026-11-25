@@ -1,79 +1,217 @@
-// A role belongs to a particular encounter. One name may occupy different
-// roles in different encounters. Each arrow goes from a sender to a contact.
+import {oppositePolarityRole, roleDivision, roleNames, rolePolarity} from './case-layout.js';
+
+// Ten genuinely distinct semantic relational reasoning families.
+// Every family uses the real operational meaning of all six categories:
+//   Safe (+): Friend, Spy, Civilian
+//   Threat (-): Foe, Double agent, Foreigner
+//   Divisions: Overt (Friend/Foe), Covert (Spy/Double agent), Border (Civilian/Foreigner)
 export const patterns = [
-  {id: 'return-link', title: 'Return message', order: 'Find the pair who sent to each other under different roles.'},
-  {id: 'shortcut', title: 'Parallel routes', order: 'Find a direct link with a second route through one person. The routes start under different roles. Find both ends.'},
-  {id: 'shared-source', title: 'Common source', order: 'Who else heard from the same sender as {name}, under a different role?'},
-  {id: 'shared-contact', title: 'Indirect contact', order: 'Who reached {name} through one other person, switching roles, but never sent to {name} directly?'},
-  {id: 'relay', title: 'Relay', order: 'Follow two arrows under the same role. Find the final receivers. Skip returns to the start.'},
-  {id: 'split-cover', title: 'One-sided contact', order: 'Who only sent in Spy/Double agent and only received in the other roles, or the reverse?'},
-  {id: 'corroboration', title: 'Independent sources', order: 'Who received from two different senders under the same role?'},
-  {id: 'silent-contact', title: 'Silent contacts', order: 'Who heard from two different senders under different roles and never sent anything?'},
-  {id: 'boundary', title: 'Across divisions', order: 'Who sent in two groups and received in the third? Count Friend/Foe, Spy/Double agent and Civilian/Foreigner as three groups.'},
-  {id: 'bypass', title: 'Widest reach', order: 'Follow two arrows with different roles. Who can reach the most other names? Skip returns to the start.'}
+  {
+    id: 'signed-chain',
+    title: 'Allied chain',
+    order: 'From {name}, follow two roles (Threat × Threat = Allied; mixed = Hostile). Who ends strictly Allied?',
+    hint: 'Trace two steps from {name}. Threat × Threat turns Allied; rule out anyone also reached by a Hostile chain.'
+  },
+  {
+    id: 'double-cross',
+    title: 'Two-faced',
+    order: 'Find a direct arrow whose Safe/Threat sign contradicts a 2-step route between the same ends. Shoot both.',
+    hint: 'Compare a direct arrow against a 2-step route between its ends (Threat × Threat = Safe; mixed = Threat).'
+  },
+  {
+    id: 'burned-cover',
+    title: 'Burned cover',
+    order: 'Who receives Safe from someone targeted by Threat, without being targeted by Threat themselves?',
+    hint: 'Find who gets an incoming Threat, follow Safe arrows leaving them, then exclude direct Threat targets.'
+  },
+  {
+    id: 'profile-mirror',
+    title: 'Exact mirror',
+    order: 'Who is {name}’s exact opposite across all six rows — flipping both direction and Safe/Threat?',
+    hint: 'Check {name}’s 4-part stance (sends/gets Safe, sends/gets Threat), flip both direction and sign, then match all six rows.'
+  },
+  {
+    id: 'net-standing',
+    title: 'Cleanest clearance',
+    order: 'Score all six rows: in Safe (+1), in Threat (−1), out Threat (−1). Who ties for highest?',
+    hint: 'Every Threat arrow (in or out) costs −1; only incoming Safe adds +1. Compare every name.'
+  },
+  {
+    id: 'turncoat-bridge',
+    title: 'Turncoat bridge',
+    order: 'Who receives Safe in one division and sends Threat in another, while never sending Safe?',
+    hint: 'Rule out anyone who sends Safe. Then match incoming Safe and outgoing Threat across different divisions.'
+  },
+  {
+    id: 'counter-loop',
+    title: 'Sabotaged ally',
+    order: 'Find the pair where one sends Threat and the other answers on Safe links (1 or 2 steps). Shoot both.',
+    hint: 'Pick a Threat arrow A → B, then look for a Safe return from B to A directly or via one Safe step.'
+  },
+  {
+    id: 'three-front',
+    title: 'Three-front threat',
+    order: 'Who appears in all three divisions (row pairs) with more Threat links than Safe links?',
+    hint: 'Find names active in all three row pairs (Friend/Foe, Spy/Double, Civilian/Foreigner), then tally Threat vs Safe.'
+  },
+  {
+    id: 'signed-reach',
+    title: 'Widest hostile reach',
+    order: 'Follow two roles (mixed = Hostile; Threat × Threat = Allied; no returns). Who reaches the most on Hostile chains?',
+    hint: 'Pick a sender and trace two steps with one Safe and one Threat arrow. Count each distinct endpoint once.'
+  },
+  {
+    id: 'triadic-stance',
+    title: 'Opposed outsider',
+    order: 'Who has no direct link to {name}, yet shares a neighbor with the opposite Safe/Threat sign in another division?',
+    hint: 'List {name}’s neighbors and their signs, then find outsiders linked (either way) to them with the opposite sign in another division.'
+  }
 ];
 
-const roleNames = {friend:'Friend', foe:'Foe', spy:'Spy', double:'Double agent', civilian:'Civilian', foreigner:'Foreigner'};
-const groups = {friend:0, foe:0, spy:1, double:1, civilian:2, foreigner:2};
-const firstChecks = {
-  'return-link': 'Follow one arrow. Can you get back in a different row?',
-  shortcut: 'Try a direct arrow. Look for a second way between its ends.',
-  'shared-source': 'Find {name} on the right. Look for the same sender in another row.',
-  'shared-contact': 'Work backward from {name}. Who contacted each sender?',
-  relay: 'Look within one row. Can one arrow start where the other ends?',
-  'split-cover': 'Pick a name. Compare its arrow directions inside and outside the named group.',
-  corroboration: 'Check the right ends of the two arrows in a row.',
-  'silent-contact': 'First rule out anyone on the left of an arrow.',
-  boundary: 'Pick a name. Which two groups did that person send in?',
-  bypass: 'Try one sender. Count each name at the end of two steps once.'
+const variantTable = {
+  'signed-chain': [
+    {reverse: false, invert: false},
+    {
+      reverse: true, invert: false,
+      title: 'Allied origins',
+      order: 'End at {name} via two roles (Threat × Threat = Allied; mixed = Hostile). Who starts strictly Allied?',
+      hint: 'Work two steps back from {name}. Threat × Threat turns Allied; rule out anyone with a Hostile chain too.'
+    }
+  ],
+  'double-cross': [
+    {reverse: false, invert: false},
+    {
+      reverse: false, invert: true,
+      title: 'Double-backed',
+      order: 'Find a direct arrow whose Safe/Threat sign matches a 2-step route between the same ends (Threat × Threat = Safe). Shoot both.',
+      hint: 'Compare a direct arrow against a 2-step route between its ends whose combined sign matches it.'
+    }
+  ],
+  'burned-cover': [
+    {reverse: false, invert: false},
+    {
+      reverse: true, invert: false,
+      title: 'Tainted source',
+      order: 'Who sends Safe to someone who sends Threat, without sending Threat themselves?',
+      hint: 'Find who sends a Threat, trace incoming Safe arrows back to them, then rule out anyone who sends Threat.'
+    },
+    {
+      reverse: false, invert: true,
+      title: 'Isolated target',
+      order: 'Who receives Threat from someone backed by Safe, without receiving Safe themselves?',
+      hint: 'Find who receives Safe, follow Threat arrows leaving them, then exclude anyone who receives Safe.'
+    },
+    {
+      reverse: true, invert: true,
+      title: 'Hostile pressure',
+      order: 'Who sends Threat to someone who sends Safe, without sending Safe themselves?',
+      hint: 'Find who sends Safe, trace incoming Threat arrows back to them, then rule out anyone who sends Safe.'
+    }
+  ],
+  'profile-mirror': [
+    {reverse: false, invert: false},
+    {
+      reverse: false, invert: true,
+      title: 'Exact mirror',
+      order: 'Who is {name}’s exact opposite across all six rows — flipping both direction and Safe/Threat?',
+      hint: 'Check {name}’s 4-part stance (sends/gets Safe, sends/gets Threat), flip both direction and sign, then match all six rows.'
+    }
+  ],
+  'net-standing': [
+    {reverse: false, invert: false},
+    {
+      reverse: false, invert: true,
+      title: 'Highest risk',
+      order: 'Score all six rows: in Threat (+1), in Safe (−1), out Safe (−1). Who ties for highest?',
+      hint: 'Every Safe arrow (in or out) subtracts 1; only incoming Threat adds +1. Compare every name.'
+    },
+    {
+      reverse: true, invert: false,
+      title: 'Most loyal',
+      order: 'Score all six rows: out Safe (+1), out Threat (−1), in Threat (−1). Who ties for highest?',
+      hint: 'Every Threat arrow (in or out) costs −1; only outgoing Safe adds +1. Compare every name.'
+    },
+    {
+      reverse: true, invert: true,
+      title: 'Most aggressive',
+      order: 'Score all six rows: out Threat (+1), out Safe (−1), in Safe (−1). Who ties for highest?',
+      hint: 'Every Safe arrow (in or out) subtracts 1; only outgoing Threat adds +1. Compare every name.'
+    }
+  ],
+  'turncoat-bridge': [
+    {reverse: false, invert: false},
+    {
+      reverse: true, invert: false,
+      title: 'Exposed defector',
+      order: 'Who sends Safe in one division and receives Threat in another, while never receiving Safe?',
+      hint: 'Rule out anyone who receives Safe. Then match outgoing Safe and incoming Threat across different divisions.'
+    },
+    {
+      reverse: false, invert: true,
+      title: 'Double shield',
+      order: 'Who receives Threat in one division and sends Safe in another, while never sending Threat?',
+      hint: 'Rule out anyone who sends Threat. Then match incoming Threat and outgoing Safe across different divisions.'
+    },
+    {
+      reverse: true, invert: true,
+      title: 'Marked courier',
+      order: 'Who sends Threat in one division and receives Safe in another, while never receiving Threat?',
+      hint: 'Rule out anyone who receives Threat. Then match outgoing Threat and incoming Safe across different divisions.'
+    }
+  ],
+  'counter-loop': [
+    {reverse: false, invert: false},
+    {
+      reverse: false, invert: true,
+      title: 'Covert retaliation',
+      order: 'Find the pair where one sends Safe and the other answers on Threat links (1 or 2 steps). Shoot both.',
+      hint: 'Pick a Safe arrow A → B, then look for a Threat return from B to A directly or via one Threat step.'
+    }
+  ],
+  'three-front': [
+    {reverse: false, invert: false},
+    {
+      reverse: false, invert: true,
+      title: 'Three-front ally',
+      order: 'Who appears in all three divisions (row pairs) with more Safe links than Threat links?',
+      hint: 'Find names active in all three row pairs (Friend/Foe, Spy/Double, Civilian/Foreigner), then tally Safe vs Threat.'
+    }
+  ],
+  'signed-reach': [
+    {reverse: false, invert: false},
+    {
+      reverse: true, invert: false,
+      title: 'Most exposed',
+      order: 'Follow two roles (mixed = Hostile; Threat × Threat = Allied; no returns). Who is hit by the most on Hostile chains?',
+      hint: 'Pick a receiver and trace two steps back with one Safe and one Threat arrow. Count each distinct sender once.'
+    }
+  ],
+  'triadic-stance': [
+    {reverse: false, invert: false},
+    {
+      reverse: false, invert: true,
+      title: 'Opposed outsider',
+      order: 'Who has no direct link to {name}, yet shares a neighbor with the opposite Safe/Threat sign in another division?',
+      hint: 'List {name}’s neighbors and their signs, then find outsiders linked (either way) to them with the opposite sign in another division.'
+    }
+  ]
 };
-
-const mirrors = {
-  shortcut: ['Parallel routes', 'Find a direct link with a second route through one person. The routes finish under different roles. Find both ends.', firstChecks.shortcut],
-  'shared-source': ['Common recipient', 'Who else sent to the same contact as {name}, under a different role?', 'Find {name} on the left. Look for the same recipient in another row.'],
-  'shared-contact': ['Indirect recipient', 'Whom did {name} reach through one other person, switching roles, without contacting them directly?', 'Start at {name}. Who heard from each of their contacts?'],
-  relay: ['Relay origin', 'Follow two arrows under the same role. Find the original senders. Skip returns to the start.', firstChecks.relay],
-  corroboration: ['Independent recipients', 'Who sent to two different contacts under the same role?', 'Check the left ends of the two arrows in a row.'],
-  'silent-contact': ['Silent sources', 'Who sent to two different contacts under different roles and never received anything?', 'First rule out anyone on the right of an arrow.'],
-  boundary: ['Across divisions', 'Who received in two groups and sent in the third? Count Friend/Foe, Spy/Double agent and Civilian/Foreigner as three groups.', 'Pick a name. Which two groups did that person hear from?'],
-  bypass: ['Broadest sources', 'Follow two arrows with different roles. Who heard from the most original senders? Skip returns to the start.', 'Try one receiver. Trace two steps back and count each source once.']
-};
-
-const groupRoles = {
-  friend: ['friend', 'foe'], spy: ['spy', 'double'], civilian: ['civilian', 'foreigner']
-};
-const groupLabels = {friend: 'Friend/Foe', spy: 'Spy/Double agent', civilian: 'Civilian/Foreigner'};
 
 export function variantsFor(family) {
-  if (family === 'split-cover') return Object.keys(groupRoles).map(focus => ({reverse: false, focus}));
-  const directions = mirrors[family] ? [false, true] : [false];
-  return directions.map(reverse => ({reverse, focus: 'spy'}));
-}
-
-export function chooseVariant(family, draw) {
-  const choices = variantsFor(family);
-  return choices[Math.floor(draw() * choices.length)];
+  return variantTable[family] || [{reverse: false, invert: false}];
 }
 
 export function patternBrief(family, variant) {
-  if (variant?.reverse && mirrors[family]) {
-    const [title, order, hint] = mirrors[family];
-    return {title, order, hint};
-  }
-  const {title, order} = patterns.find(pattern => pattern.id === family);
-  const focus = groupLabels[variant?.focus] || groupLabels.spy;
-  return {title, order: family === 'split-cover' ? order.replace(groupLabels.spy, focus) : order, hint: firstChecks[family]};
+  const base = patterns.find(pattern => pattern.id === family);
+  if (!base) throw new RangeError('Unknown case pattern ' + family);
+  if (variant?.order) return {title: variant.title, order: variant.order, hint: variant.hint};
+  return {title: base.title, order: base.order, hint: base.hint};
 }
 
-// Swapping two whole divisions, and reversing all arrows, each undo themselves.
-// The same conversion both renders a canonical layout and reads a displayed one.
+// Reversing all arrows and/or inverting Safe <-> Threat are exact involutions:
+// applying the same conversion twice returns the canonical layout unchanged.
 export function displayRole(role, variant) {
-  const focus = variant?.focus;
-  if (!focus || focus === 'spy' || !groupRoles[focus]) return role;
-  const focalIndex = groupRoles[focus].indexOf(role);
-  if (focalIndex >= 0) return groupRoles.spy[focalIndex];
-  const covertIndex = groupRoles.spy.indexOf(role);
-  return covertIndex >= 0 ? groupRoles[focus][covertIndex] : role;
+  return variant?.invert ? oppositePolarityRole[role] : role;
 }
 
 export function displayEdge(edge, variant) {
@@ -82,125 +220,256 @@ export function displayEdge(edge, variant) {
 }
 
 export function evaluatePattern(id, visibleEdges, anchor, includeProof = true, variant) {
-  const transformed = variant?.reverse || (variant?.focus && variant.focus !== 'spy');
+  const transformed = Boolean(variant?.reverse || variant?.invert);
   const edges = transformed ? visibleEdges.map(edge => displayEdge(edge, variant)) : visibleEdges;
+
   const arrow = edge => {
     const real = transformed ? displayEdge(edge, variant) : edge;
-    return roleNames[real.role] + ' ' + real.from + ' → ' + real.to;
+    const tag = rolePolarity[real.role] > 0 ? '+' : '−';
+    return roleNames[real.role] + ' (' + tag + ') ' + real.from + ' → ' + real.to;
   };
   const trail = (first, second) => variant?.reverse
     ? arrow(second) + ' · ' + arrow(first)
     : arrow(first) + ' · ' + arrow(second);
+
   const people = new Map();
   function person(name) {
-    if (!people.has(name)) people.set(name, {incoming: [], outgoing: []});
+    if (!people.has(name)) people.set(name, {incoming: [], outgoing: [], all: []});
     return people.get(name);
   }
   for (const edge of edges) {
     if (edge.from === edge.to) continue;
     person(edge.from).outgoing.push(edge);
+    person(edge.from).all.push(edge);
     person(edge.to).incoming.push(edge);
+    person(edge.to).all.push(edge);
   }
+
   const answers = new Map();
   function mark(name, reason) {
     if (!answers.has(name)) answers.set(name, includeProof ? reason() : '');
   }
-  let bestReach = 0;
-  for (const [name, {incoming, outgoing}] of people) {
-    switch (id) {
-      case 'return-link':
-        for (const a of outgoing) {
-          const b = incoming.find(b => a.to === b.from && a.role !== b.role);
-          if (b) {
-            const exchange = () => trail(a, b);
-            mark(name, exchange);
-            mark(a.to, exchange);
-          }
-        }
-        break;
-      case 'shortcut':
-        for (const a of outgoing) {
-          for (const b of people.get(a.to).outgoing) {
-            if (b.to === name) continue;
-            const direct = outgoing.find(d => d.to === b.to && d.role !== a.role);
-            if (direct) {
-              const proof = () => arrow(direct) + ', also ' + trail(a, b);
-              mark(name, proof);
-              mark(b.to, proof);
+
+  switch (id) {
+    case 'signed-chain': {
+      const start = people.get(anchor);
+      if (start) {
+        const allied = new Map();
+        const hostile = new Set();
+        for (const e1 of start.outgoing) {
+          for (const e2 of people.get(e1.to).outgoing) {
+            if (e2.to === anchor || e2.role === e1.role) continue;
+            const prod = rolePolarity[e1.role] * rolePolarity[e2.role];
+            if (prod > 0) {
+              if (!allied.has(e2.to)) allied.set(e2.to, [e1, e2]);
+            } else {
+              hostile.add(e2.to);
             }
           }
         }
-        break;
-      case 'shared-source':
-        if (name === anchor) break;
-        for (const a of incoming) {
-          const b = people.get(a.from).outgoing.find(e => e.to === anchor && e.role !== a.role);
-          if (b) mark(name, () => trail(b, a));
+        for (const [name, [e1, e2]] of allied) {
+          if (!hostile.has(name)) mark(name, () => trail(e1, e2) + ' → Allied.');
         }
-        break;
-      case 'shared-contact':
-        if (name === anchor || outgoing.some(e => e.to === anchor)) break;
-        for (const a of outgoing) {
-          const b = people.get(a.to).outgoing.find(e => e.to === anchor && e.role !== a.role);
-          if (b) mark(name, () => trail(a, b) + (variant?.reverse ? '. No direct link from ' + anchor + '.' : '. No direct link to ' + anchor + '.'));
-        }
-        break;
-      case 'relay':
-        for (const a of incoming) {
-          for (const b of outgoing) {
-            if (b.role === a.role && b.to !== a.from) mark(b.to, () => trail(a, b));
-          }
-        }
-        break;
-      case 'split-cover': {
-        const sentInside = outgoing.find(e => groups[e.role] === 1);
-        const heardInside = incoming.find(e => groups[e.role] === 1);
-        const sentOutside = outgoing.find(e => groups[e.role] !== 1);
-        const heardOutside = incoming.find(e => groups[e.role] !== 1);
-        const focus = groupLabels[variant?.focus] || groupLabels.spy;
-        if (sentInside && heardOutside && !heardInside && !sentOutside) {
-          mark(name, () => trail(sentInside, heardOutside) + '. All outgoing links are inside ' + focus + '. All incoming links are outside.');
-        } else if (heardInside && sentOutside && !sentInside && !heardOutside) {
-          mark(name, () => trail(heardInside, sentOutside) + '. All incoming links are inside ' + focus + '. All outgoing links are outside.');
-        }
-        break;
       }
-      case 'corroboration':
-      case 'silent-contact':
-        if (id === 'silent-contact' && outgoing.length) break;
-        for (const a of incoming) {
-          const b = incoming.find(e => e.from !== a.from && (id === 'silent-contact' ? e.role !== a.role : e.role === a.role));
-          if (b) mark(name, () => trail(a, b) + (id === 'silent-contact' ? (variant?.reverse ? '. No incoming link.' : '. No outgoing link.') : ''));
-        }
-        break;
-      case 'boundary':
-        for (const receiver of incoming) {
-          const first = outgoing.find(e => groups[e.role] !== groups[receiver.role]);
-          if (!first) continue;
-          const second = outgoing.find(e => groups[e.role] !== groups[receiver.role] && groups[e.role] !== groups[first.role]);
-          if (second) mark(name, () => trail(first, second) + ' · ' + arrow(receiver));
-        }
-        break;
-      case 'bypass': {
-        const ends = new Map();
-        for (const a of outgoing) {
-          for (const b of people.get(a.to).outgoing) {
-            if (b.to !== name && b.role !== a.role) ends.set(b.to, a.to);
-          }
-        }
-        if (!ends.size || ends.size < bestReach) break;
-        if (ends.size > bestReach) {
-          answers.clear();
-          bestReach = ends.size;
-        }
-        mark(name, () => name + (variant?.reverse ? ' heard from ' : ' reaches ') + ends.size + ' (' +
-          [...ends].map(([end, middle]) => end + ' via ' + middle).join(', ') + ').');
-        break;
-      }
-      default:
-        throw new RangeError('Unknown case pattern ' + id);
+      break;
     }
+
+    case 'double-cross': {
+      for (const [name, {outgoing}] of people) {
+        for (const direct of outgoing) {
+          const directSign = rolePolarity[direct.role];
+          for (const e1 of outgoing) {
+            if (e1.to === direct.to) continue;
+            for (const e2 of people.get(e1.to).outgoing) {
+              if (e2.to !== direct.to) continue;
+              const routeSign = rolePolarity[e1.role] * rolePolarity[e2.role];
+              if (routeSign !== directSign) {
+                const proof = () => arrow(direct) + ' vs ' + trail(e1, e2);
+                mark(name, proof);
+                mark(direct.to, proof);
+              }
+            }
+          }
+        }
+      }
+      break;
+    }
+
+    case 'burned-cover': {
+      const targetedByThreat = new Set();
+      for (const [name, {incoming}] of people) {
+        if (incoming.some(e => rolePolarity[e.role] < 0)) targetedByThreat.add(name);
+      }
+      for (const [name, {incoming}] of people) {
+        if (targetedByThreat.has(name)) continue;
+        const safeFromTargeted = incoming.find(e => rolePolarity[e.role] > 0 && targetedByThreat.has(e.from));
+        if (safeFromTargeted) {
+          const threatToMid = people.get(safeFromTargeted.from).incoming.find(e => rolePolarity[e.role] < 0);
+          mark(name, () => trail(threatToMid, safeFromTargeted) + '.');
+        }
+      }
+      break;
+    }
+
+    case 'profile-mirror': {
+      const profile = node => [
+        node.outgoing.some(e => rolePolarity[e.role] > 0),
+        node.incoming.some(e => rolePolarity[e.role] > 0),
+        node.outgoing.some(e => rolePolarity[e.role] < 0),
+        node.incoming.some(e => rolePolarity[e.role] < 0)
+      ];
+      const baseNode = people.get(anchor);
+      if (baseNode) {
+        const [outS, inS, outT, inT] = profile(baseNode);
+        // Full double-inversion: direction flipped AND polarity flipped.
+        const target = [inT, outT, inS, outS];
+        for (const [name, node] of people) {
+          if (name === anchor) continue;
+          const p = profile(node);
+          if (p.every((v, i) => v === target[i])) {
+            mark(name, () => name + ' mirrors ' + anchor + ' across all six rows (direction and Safe/Threat inverted).');
+          }
+        }
+      }
+      break;
+    }
+
+    case 'net-standing': {
+      let best = -Infinity;
+      for (const [name, {incoming, outgoing}] of people) {
+        const inS = incoming.filter(e => rolePolarity[e.role] > 0).length;
+        const inT = incoming.filter(e => rolePolarity[e.role] < 0).length;
+        const outT = outgoing.filter(e => rolePolarity[e.role] < 0).length;
+        const score = inS - inT - outT;
+        if (score < best) continue;
+        if (score > best) {
+          answers.clear();
+          best = score;
+        }
+        mark(name, () => name + ' scores ' + (score >= 0 ? '+' + score : String(score)) +
+          ' (best standing across all six rows).');
+      }
+      break;
+    }
+
+    case 'turncoat-bridge': {
+      for (const [name, {incoming, outgoing}] of people) {
+        if (outgoing.some(e => rolePolarity[e.role] > 0)) continue;
+        const inSafe = incoming.filter(e => rolePolarity[e.role] > 0);
+        const outThreat = outgoing.filter(e => rolePolarity[e.role] < 0);
+        outer: for (const a of inSafe) {
+          for (const b of outThreat) {
+            if (roleDivision[a.role] !== roleDivision[b.role]) {
+              mark(name, () => trail(a, b) + ' (cross-division flip).');
+              break outer;
+            }
+          }
+        }
+      }
+      break;
+    }
+
+    case 'counter-loop': {
+      for (const [a, {outgoing}] of people) {
+        for (const direct of outgoing) {
+          if (rolePolarity[direct.role] !== -1) continue;
+          const b = direct.to;
+          const bOut = people.get(b).outgoing;
+          const directBack = bOut.find(e => e.to === a && rolePolarity[e.role] === 1);
+          if (directBack) {
+            const proof = () => arrow(direct) + ' answered by ' + arrow(directBack);
+            mark(a, proof);
+            mark(b, proof);
+            continue;
+          }
+          for (const e1 of bOut) {
+            if (rolePolarity[e1.role] !== 1 || e1.to === a) continue;
+            for (const e2 of people.get(e1.to).outgoing) {
+              if (rolePolarity[e2.role] !== 1 || e2.to !== a) continue;
+              const proof = () => arrow(direct) + ' answered by ' + trail(e1, e2);
+              mark(a, proof);
+              mark(b, proof);
+            }
+          }
+        }
+      }
+      break;
+    }
+
+    case 'three-front': {
+      for (const [name, {all}] of people) {
+        const divs = new Set(all.map(e => roleDivision[e.role]));
+        if (divs.size !== 3) continue;
+        const safeCount = all.filter(e => rolePolarity[e.role] > 0).length;
+        const threatCount = all.length - safeCount;
+        if (threatCount > safeCount) {
+          mark(name, () => {
+            const realSafe = variant?.invert ? threatCount : safeCount;
+            const realThreat = variant?.invert ? safeCount : threatCount;
+            return name + ' spans all 3 divisions (' + realThreat + ' Threat vs ' + realSafe + ' Safe).';
+          });
+        }
+      }
+      break;
+    }
+
+    case 'signed-reach': {
+      let best = 0;
+      for (const [name, {outgoing}] of people) {
+        const reached = new Map();
+        for (const e1 of outgoing) {
+          for (const e2 of people.get(e1.to).outgoing) {
+            if (e2.to === name || e2.role === e1.role) continue;
+            if (rolePolarity[e1.role] * rolePolarity[e2.role] < 0) {
+              if (!reached.has(e2.to)) reached.set(e2.to, e1.to);
+            }
+          }
+        }
+        if (!reached.size || reached.size < best) continue;
+        if (reached.size > best) {
+          answers.clear();
+          best = reached.size;
+        }
+        mark(name, () => name + (variant?.reverse ? ' is hit by ' : ' reaches ') + reached.size +
+          ' on Hostile chains (' + [...reached].map(([end, mid]) => end + ' via ' + mid).join(', ') + ').');
+      }
+      break;
+    }
+
+    case 'triadic-stance': {
+      const anchorNode = people.get(anchor);
+      if (anchorNode) {
+        const directNeighbors = new Set();
+        const anchorLinksByNeighbor = new Map();
+        for (const e of anchorNode.all) {
+          const other = e.from === anchor ? e.to : e.from;
+          directNeighbors.add(other);
+          if (!anchorLinksByNeighbor.has(other)) anchorLinksByNeighbor.set(other, []);
+          anchorLinksByNeighbor.get(other).push(e);
+        }
+        for (const [name, {all}] of people) {
+          if (name === anchor || directNeighbors.has(name)) continue;
+          outer: for (const e2 of all) {
+            const mid = e2.from === name ? e2.to : e2.from;
+            const anchorEdges = anchorLinksByNeighbor.get(mid);
+            if (!anchorEdges) continue;
+            for (const e1 of anchorEdges) {
+              if (rolePolarity[e1.role] !== rolePolarity[e2.role] &&
+                  roleDivision[e1.role] !== roleDivision[e2.role]) {
+                mark(name, () => arrow(e1) + ' vs ' + arrow(e2) + ' (no direct link with ' + anchor + ').');
+                break outer;
+              }
+            }
+          }
+        }
+      }
+      break;
+    }
+
+    default:
+      throw new RangeError('Unknown case pattern ' + id);
   }
+
   const pair = [...answers.keys()].sort();
   return {pair, proof: includeProof ? [...new Set(pair.map(name => answers.get(name)))] : []};
 }

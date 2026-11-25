@@ -7,9 +7,9 @@ import {ArcadeSession} from './arcade-session.js';
 const el = id => document.getElementById(id);
 const dialog = el('controls');
 let phase = 'ready';
-let difficulty = 'very-easy';
+let difficulty = 'super-easy';
 let shortlist = true;
-const difficultyNames = {'very-easy':'Very Easy', easy:'Easy', medium:'Moderate', hard:'Hard'};
+const difficultyNames = {'super-easy':'Super Easy', 'very-easy':'Very Easy', easy:'Easy', medium:'Moderate', hard:'Hard'};
 const difficultyChoices = el('run-form').elements.namedItem('difficulty');
 const speedInput = el('master-speed');
 let masterSpeed = speedInput.valueAsNumber;
@@ -233,3 +233,10 @@ try {
 } catch {}
 bindSpeedDial(speedInput, el('speed-value'), el('speed-hint'));
 reset();
+
+const params = new URLSearchParams(window.location.search);
+if (params.get('autostart') === '1') {
+  const requested = params.get('difficulty');
+  if (requested && Object.hasOwn(difficultyNames, requested)) difficultyChoices.value = requested;
+  el('run-form').requestSubmit();
+}

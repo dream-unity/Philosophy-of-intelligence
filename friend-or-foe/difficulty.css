@@ -52,6 +52,10 @@ body[data-phase="ready"] .cabinet {
   touch-action: manipulation;
 }
 
+.level-choice-wide {
+  grid-column: 1 / -1;
+}
+
 .level-choice:has(input:checked) {
   border-color: var(--mint);
   background: #1c3337;

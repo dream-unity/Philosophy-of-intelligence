@@ -1,6 +1,62 @@
-// Catalog entries are seeds and clue dependencies, never winning names.
+// Catalog entries are seeds and deduction topologies, never winning names.
 export const caseRoles = ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'];
 export const symbols = [...'ABCDEFGHIJ'];
+
+export const roleNames = {
+  friend: 'Friend',
+  foe: 'Foe',
+  spy: 'Spy',
+  double: 'Double agent',
+  civilian: 'Civilian',
+  foreigner: 'Foreigner'
+};
+
+export const roleVerbs = {
+  friend: 'backs',
+  foe: 'opposes',
+  spy: 'observes',
+  double: 'leaks to',
+  civilian: 'reports to',
+  foreigner: 'visits'
+};
+
+// Semantic axes shared across all six categories:
+// Polarity: Safe (+1) = Friend, Spy, Civilian; Threat (-1) = Foe, Double agent, Foreigner.
+// Division: 0 = Overt (Friend/Foe), 1 = Covert (Spy/Double agent), 2 = Border (Civilian/Foreigner).
+export const rolePolarity = {
+  friend: 1,
+  foe: -1,
+  spy: 1,
+  double: -1,
+  civilian: 1,
+  foreigner: -1
+};
+
+export const roleDivision = {
+  friend: 0,
+  foe: 0,
+  spy: 1,
+  double: 1,
+  civilian: 2,
+  foreigner: 2
+};
+
+export const oppositePolarityRole = {
+  friend: 'foe',
+  foe: 'friend',
+  spy: 'double',
+  double: 'spy',
+  civilian: 'foreigner',
+  foreigner: 'civilian'
+};
+
+export function isThreat(role) {
+  return rolePolarity[role] === -1;
+}
+
+export function isSafe(role) {
+  return rolePolarity[role] === 1;
+}
 
 export function shuffled(items, draw) {
   const order = items.slice();
@@ -26,7 +82,7 @@ export function layoutFor(seed) {
   while (endpoints.length < 24) endpoints.push(symbols[Math.floor(draw() * symbols.length)]);
   const slots = shuffled(endpoints, draw);
   const rows = caseRoles.map((role, i) => {
-    const links = [0, 2].map(offset => ({from: slots[4*i + offset], to: slots[4*i + offset + 1]}));
+    const links = [0, 2].map(offset => ({from: slots[4 * i + offset], to: slots[4 * i + offset + 1]}));
     return {role, links};
   });
   for (const {links: [a, b]} of rows) {
