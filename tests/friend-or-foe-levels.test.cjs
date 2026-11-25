@@ -30,7 +30,8 @@ test('difficulty is a single pregame choice next to the existing run settings', 
   assert.match(form, /<fieldset[\s>]/);
   assert.match(form, /<legend\b[^>]*>[^<]*difficulty[^<]*<\/legend>/i);
   assert.ok(inputs.some(input => /\bid="count"/.test(input) && /\bmin="20"/.test(input) && /\bmax="1000"/.test(input)));
-  assert.match(form, /<select\b[^>]*\bid="pace"/);
+  assert.ok(inputs.some(input => /\bid="master-speed"/.test(input) && /\btype="range"/.test(input) &&
+    /\bmin="0.25"/.test(input) && /\bmax="3"/.test(input) && /\bstep="0.25"/.test(input)));
   assert.match(form, /<button\b[^>]*\btype="submit"/);
 });
 

@@ -1,7 +1,7 @@
-import {ArcadeRun} from './arcade-range.js';
+import {ArcadeRun} from './arcade-range.js?v=speed';
 import {SPECIES, drawCutout, hitCutout} from './arcade-scene.js';
 import {drawSight} from './mission-scene.js';
-import {drawStage, drawTrolley, drawProjector, targetBounds} from './covert-scene.js';
+import {drawStage, drawTrolley, drawProjector, targetBounds} from './covert-scene.js?v=speed';
 
 export {ArcadeRun};
 
@@ -179,12 +179,11 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
     resize();
   }
 
-  function start(names, pair, travelMultiplier = 1) {
+  function start(names, pair, settings = {}) {
     stopClock();
-    run = new ArcadeRun(names, pair, previous);
-    for (const target of run.targets) {
-      target.duration *= travelMultiplier;
-    }
+    // Older galleries pass their travel-time multiplier as the third argument.
+    const speed = typeof settings === 'number' ? 1 / settings : settings.masterSpeed;
+    run = new ArcadeRun(names, pair, previous, Math.random, speed);
     previous = run.targets;
     lock = pulse = null;
     paused = announcedEnd = false;

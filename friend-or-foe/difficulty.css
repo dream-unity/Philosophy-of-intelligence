@@ -94,7 +94,7 @@ body[data-phase="ready"] .cabinet {
 
 .run-settings {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
   gap: .75rem;
 }
 
@@ -103,8 +103,7 @@ body[data-phase="ready"] .cabinet {
   display: block;
 }
 
-.run-settings input,
-.run-settings select {
+.run-settings input[type="number"] {
   width: 100%;
   margin: .22rem 0 0;
   min-height: 42px;
@@ -113,6 +112,53 @@ body[data-phase="ready"] .cabinet {
 .run-settings small {
   margin-top: .18rem;
 }
+
+.speed-row {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  margin-top: .25rem;
+}
+.speed-dial {
+  --sweep: 73.636deg;
+  position: relative;
+  flex: 0 0 3.75rem;
+  height: 3.75rem;
+  border-radius: 50%;
+  background: conic-gradient(from 225deg, var(--mint) 0 var(--sweep), #586b71 var(--sweep) 270deg, transparent 270deg);
+}
+.dial-face {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px solid #5a7075;
+  background: #26373e;
+  transform: rotate(calc(-135deg + var(--sweep)));
+}
+.dial-face::after {
+  content: "";
+  position: absolute;
+  left: calc(50% - 2px);
+  top: 3px;
+  width: 4px;
+  height: 30%;
+  border-radius: 3px;
+  background: var(--mint);
+}
+.speed-dial input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  touch-action: none;
+}
+.speed-dial:focus-within { outline: 2px solid var(--mint); outline-offset: 3px; }
+.speed-reading { min-width: 0; }
+#speed-value { color: var(--mint); font: 700 1.1rem/1.2 var(--mono); }
+#speed-hint { line-height: 1.2; }
 
 #run-form button {
   margin: 0;

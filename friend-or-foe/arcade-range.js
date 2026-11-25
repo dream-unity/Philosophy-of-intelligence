@@ -6,6 +6,11 @@ const SLOTS = Array.from({length: COUNT}, (_, index) => index);
 const DEFAULT_NAMES = ['Mira', 'Tess', 'Nia', 'Luma', 'Vale', 'Pia', 'Ivo', 'Samp', 'Sol', 'Orin'];
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
+export function fastestCrossingSeconds(masterSpeed = 1) {
+  if (!Number.isFinite(masterSpeed) || masterSpeed <= 0) throw new RangeError('Master speed must be positive.');
+  return 10 / masterSpeed;
+}
+
 function shuffle(values, random) {
   const shuffled = values.slice();
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -38,32 +43,36 @@ function deal(values, allowed, random) {
   return assignment;
 }
 
-function dealTargets(names, previous, random) {
+function dealTargets(names, previous, random, masterSpeed = 1) {
+  const fastestCrossing = fastestCrossingSeconds(masterSpeed);
   const byName = new Map(previous.map(t => [t.name, t]));
   const bySlot = new Map(previous.map(t => [t.slot, t]));
   const bySpecies = new Map(previous.map(t => [t.species, t]));
   const slots = deal(SLOTS, (i, value) => value !== byName.get(names[i])?.slot, random);
   const types = deal(SPECIES, (i, value) =>
     value !== byName.get(names[i])?.species && value !== bySlot.get(slots[i])?.species, random);
-  const paces = deal(SLOTS, (i, value) =>
-    value !== byName.get(names[i])?.pace && value !== bySlot.get(slots[i])?.pace &&
-    value !== bySpecies.get(types[i])?.pace, random);
+  const paces = deal(SLOTS, (i, value) => {
+    const lastPace = byName.get(names[i])?.pace;
+    return (lastPace === undefined || Math.abs(value - lastPace) >= 2) &&
+      value !== bySlot.get(slots[i])?.pace && value !== bySpecies.get(types[i])?.pace;
+  }, random);
   return names.map((name, i) => ({
     name, slot: slots[i], species: types[i], pace: paces[i],
-    duration: 20 + paces[i] * 2.25 + random() * 1.25, elapsed: 0,
+    // Ten speed bands run from 37% to 100% of the selected maximum.
+    duration: fastestCrossing / ((37 + 7 * paces[i]) / 100), elapsed: 0,
     offsetX: random() * 2 - 1, offsetY: random() * 2 - 1, state: 'moving'
   })).sort((a, b) => a.slot - b.slot);
 }
 
 export class ArcadeRun {
   #pair;
-  constructor(names, pair, previousTargets = [], random = Math.random) {
+  constructor(names, pair, previousTargets = [], random = Math.random, masterSpeed = 1) {
     if (names.length !== COUNT || new Set(names).size !== COUNT || pair.length !== 2 ||
         new Set(pair).size !== 2 || !pair.every(name => names.includes(name))) {
       throw new Error('A trial needs ten different names and two different names from that roster.');
     }
     this.#pair = new Set(pair);
-    this.targets = dealTargets(names, previousTargets, random);
+    this.targets = dealTargets(names, previousTargets, random, masterSpeed);
     this.elapsed = 0;
     this.shotLog = [];
     this.passed = [];

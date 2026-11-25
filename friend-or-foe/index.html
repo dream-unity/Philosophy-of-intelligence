@@ -8,8 +8,8 @@
   <title>Friend or Foe · Games</title>
   <link rel="stylesheet" href="covert-gallery.css">
   <link rel="stylesheet" href="network-view.css">
-  <link rel="stylesheet" href="difficulty.css?v=trail">
-  <script type="module" src="dossier-gallery.js?case=trail"></script>
+  <link rel="stylesheet" href="difficulty.css?v=speed">
+  <script type="module" src="dossier-gallery.js?case=speed"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -71,9 +71,18 @@
               <input id="count" type="number" min="20" max="1000" step="1" value="20" required inputmode="numeric" aria-describedby="count-hint">
               <small id="count-hint">20–1,000</small>
             </div>
-            <div>
-              <label for="pace">Target pace</label>
-              <select id="pace"><option value="4">Steady</option><option value="1">Quick</option></select>
+            <div class="speed-setting">
+              <label for="master-speed">Master speed</label>
+              <div class="speed-row">
+                <div class="speed-dial">
+                  <span class="dial-face" aria-hidden="true"></span>
+                  <input type="range" id="master-speed" min="0.25" max="3" step="0.25" value="1" aria-describedby="speed-hint">
+                </div>
+                <div class="speed-reading">
+                  <output for="master-speed" id="speed-value" aria-hidden="true">1×</output>
+                  <small id="speed-hint">First arrival in 10 s</small>
+                </div>
+              </div>
             </div>
           </div>
           <button class="primary" type="submit">Start run</button>

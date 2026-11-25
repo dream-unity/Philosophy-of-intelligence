@@ -4,6 +4,8 @@
 const REAR_SPACING = 0.164;
 const FRONT_SPACING = 0.188;
 const BANK_OFFSET = 0.016;
+const FLOOR_START = 0.635;
+const FLOOR_TRAVEL = 0.208;
 
 function laneX(slot, depth) {
   const column = slot % 5 - 2;
@@ -12,13 +14,12 @@ function laneX(slot, depth) {
 }
 
 export function targetBounds(width, height, target) {
-  const progress = Math.min(1, target.elapsed / target.duration);
-  const depth = progress / (1.8 - 0.8 * progress);
+  const depth = Math.min(1, target.elapsed / target.duration);
   const suspended = target.slot < 5;
   const cx = width * (laneX(target.slot, depth) + target.offsetX * 0.003);
-  const baseY = suspended ? 0.385 - 0.031 * depth : 0.636 + 0.186 * depth;
+  const baseY = suspended ? 0.418 - 0.108 * depth : FLOOR_START + FLOOR_TRAVEL * depth;
   const floor = Math.round(height * (baseY + 0.004 * target.offsetY));
-  const size = Math.max(12, Math.round(Math.min(height * 0.345, width * 0.193) * (0.56 + 0.44 * depth)));
+  const size = Math.max(12, Math.round(Math.min(height * 0.345, width * 0.193) * (0.46 + 0.54 * depth)));
   const railY = Math.round(height * (0.211 - depth * 0.165));
   return {
     x: Math.round(cx - size / 2), y: Math.round(floor - size * 16 / 19) - 2,
@@ -134,7 +135,7 @@ function guideRails(ctx, w, h) {
     const overhead = slot < 5;
     const yFar = overhead ? 0.205 : 0.55;
     const yNear = overhead ? 0 : 1;
-    const depthAt = y => overhead ? (0.211 - y) / 0.165 : (y - 0.636) / 0.186;
+    const depthAt = y => overhead ? (0.211 - y) / 0.165 : (y - FLOOR_START) / FLOOR_TRAVEL;
     const xFar = w * laneX(slot, depthAt(yFar));
     const xNear = w * laneX(slot, depthAt(yNear));
     const half = Math.max(1, Math.round(w * 0.003));

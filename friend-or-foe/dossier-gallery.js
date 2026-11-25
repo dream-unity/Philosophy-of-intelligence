@@ -1,4 +1,5 @@
-import {createArcadeRange} from './covert-range.js?v=trail';
+import {createArcadeRange} from './covert-range.js?v=speed';
+import {bindSpeedDial} from './speed-dial.js';
 import {makeLevelTrial} from './network-levels.js?v=trail';
 import {renderNetwork, renderNetworkGuide, renderNetworkResult} from './network-view.js?v=trail';
 import {renderLevelEvidence, renderLevelGuide, renderLevelResult} from './network-level-view.js?v=trail';
@@ -10,6 +11,8 @@ let phase = 'ready';
 let difficulty = 'very-easy';
 const difficultyNames = {'very-easy':'Very Easy', easy:'Easy', medium:'Medium', hard:'Hard'};
 const difficultyChoices = el('run-form').elements.namedItem('difficulty');
+const speedInput = el('master-speed');
+let masterSpeed = speedInput.valueAsNumber;
 let session;
 let trial;
 let locked = false;
@@ -73,7 +76,7 @@ function enterTrial() {
   el('cues').parentElement.scrollTop = 0;
   el('trial-meter').textContent = difficultyNames[difficulty] + ' · Trial ' + session.number + ' / ' + session.total;
   el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
-  range.start(trial.roster, trial.pair, Number(el('pace').value));
+  range.start(trial.roster, trial.pair, {masterSpeed});
   el('range').focus({preventScroll:true});
 }
 
@@ -163,10 +166,11 @@ el('run-form').addEventListener('submit', e => {
   if (phase !== 'ready' || !e.currentTarget.reportValidity()) return;
   const total = el('count').valueAsNumber;
   difficulty = difficultyChoices.value;
+  masterSpeed = speedInput.valueAsNumber;
   session = new ArcadeSession(total);
   try {
     localStorage.setItem('friend-or-foe.trials', String(total));
-    localStorage.setItem('friend-or-foe.pace', el('pace').value);
+    localStorage.setItem('friend-or-foe.masterSpeed', String(masterSpeed));
     localStorage.setItem('friend-or-foe.difficulty', difficulty);
   } catch {}
   tone(260, 445, .12);
@@ -212,9 +216,15 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 try {
   const savedLevel = localStorage.getItem('friend-or-foe.difficulty');
   if (Object.hasOwn(difficultyNames, savedLevel)) difficultyChoices.value = savedLevel;
-  const pace = localStorage.getItem('friend-or-foe.pace');
-  if (pace === '1') el('pace').value = '1';
+  const savedSpeed = localStorage.getItem('friend-or-foe.masterSpeed');
+  if (savedSpeed !== null) {
+    speedInput.value = savedSpeed;
+    if (speedInput.valueAsNumber !== Number(savedSpeed)) speedInput.value = speedInput.defaultValue;
+  } else if (localStorage.getItem('friend-or-foe.pace') === '1') {
+    speedInput.value = '1.5';
+  }
   const saved = Number(localStorage.getItem('friend-or-foe.trials'));
   if (Number.isInteger(saved) && saved >= 20 && saved <= 1000) el('count').value = saved;
 } catch {}
+bindSpeedDial(speedInput, el('speed-value'), el('speed-hint'));
 reset();

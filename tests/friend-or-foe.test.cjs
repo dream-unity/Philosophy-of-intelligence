@@ -29,11 +29,47 @@ test('ten moving targets have distinct positions and speeds and do not repeat th
       for (const field of ['slot', 'pace', 'species']) {
         assert.notEqual(tile[field], previous[field], tile.name + ' repeated ' + field);
       }
+      assert.ok(Math.abs(tile.pace - previous.pace) >= 2);
+      assert.notEqual(tile.duration, previous.duration);
+      assert.notEqual(tile.pace, last.find(other => other.species === tile.species).pace);
       const sameSlot = last.find(other => other.slot === tile.slot);
       assert.notEqual(tile.pace, sameSlot.pace);
       assert.notEqual(tile.species, sameSlot.species);
     }
     last = targets;
+  }
+});
+
+test('all difficulties use the selected speed ceiling and visibly separate targets as they approach', async () => {
+  const {ArcadeRun} = await import('../friend-or-foe/covert-range.js');
+  const {targetBounds} = await import('../friend-or-foe/covert-scene.js');
+  const {makeLevelTrial} = await import('../friend-or-foe/network-levels.js');
+  const draw = seeded(2471);
+  for (const difficulty of ['very-easy', 'easy', 'medium', 'hard']) {
+    let previous = [];
+    let trial;
+    for (let speed = .25; speed <= 3; speed += .25) {
+      trial = makeLevelTrial(difficulty, trial, draw);
+      const seed = Math.floor(draw() * 1e8);
+      const run = new ArcadeRun(trial.roster, trial.pair, previous, seeded(seed), speed);
+      const normal = new ArcadeRun(trial.roster, trial.pair, previous, seeded(seed), 1);
+      const fastest = 10 / speed;
+      assert.equal(Math.min(...run.targets.map(t => t.duration)), fastest);
+      assert.equal(new Set(run.targets.map(t => t.duration)).size, 10);
+      run.advance(fastest / 2);
+      for (const t of run.targets) {
+        assert.equal(t.name, normal.targets[t.slot].name);
+        assert.ok(Math.abs(t.duration * speed - normal.targets[t.slot].duration) < 1e-10);
+        const initial = targetBounds(520, 295, {...t, elapsed: 0});
+        const now = targetBounds(520, 295, t);
+        assert.ok(now.w > initial.w && Math.abs(now.floor - initial.floor) >= 5);
+        const last = previous.find(other => other.name === t.name);
+        if (last) assert.ok(Math.abs(t.pace - last.pace) >= 2);
+      }
+      run.advance(fastest / 2);
+      assert.equal(run.snapshot().escaped, 1);
+      previous = run.targets;
+    }
   }
 });
 
