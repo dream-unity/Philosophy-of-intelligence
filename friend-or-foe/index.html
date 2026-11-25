@@ -2,70 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#10191c">
-  <meta name="description" content="Read the mark on ten approaching alien cutouts. Fire at foes and let friends pass in this pixel-art arcade range.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101a1e">
+  <meta name="description" content="Work out who is connected to whom, then pick the two named cutouts that fit your order.">
   <title>Friend or Foe · Games</title>
-  <link rel="stylesheet" href="range-five.css">
-  <script type="module" src="game-five.js"></script>
+  <link rel="stylesheet" href="mission.css">
+  <link rel="stylesheet" href="notebook.css">
+  <script type="module" src="mission.js"></script>
 </head>
-<body data-phase="ready">
-  <header class="bar">
-    <nav aria-label="Game navigation"><a href="/games/">Games</a><span aria-hidden="true">/</span><h1>Friend or Foe</h1></nav>
-    <div class="tools">
+<body data-phase="briefing">
+  <header class="appbar">
+    <nav aria-label="Game navigation"><a href="/games/">Games</a><span aria-hidden="true">/</span><h1>Friend <i>or</i> Foe</h1></nav>
+    <div class="toolbar">
+      <span id="case-number">Trial 01</span>
       <button id="sound" type="button" aria-pressed="true">Sound on</button>
-      <button id="pause" type="button" disabled>Pause</button>
+      <button id="how" type="button">How to play</button>
     </div>
   </header>
-  <main class="arena" id="arena">
-    <div class="view">
-      <canvas id="range" tabindex="0" aria-label="Arcade shooting range" aria-describedby="keyboard-guide">Use the keyboard controls or tap a target.</canvas>
-      <div id="names" aria-label="Target names"></div>
-      <div class="hud">
-        <div class="counter">
-          <div class="readout"><span class="label">Judged</span> <b id="target-count">00</b><span class="denominator">/ 10</span></div>
-          <div id="pips" aria-hidden="true"></div>
-        </div>
-        <div class="score"><span class="label">Score</span> <b id="score">0000</b></div>
-      </div>
-      <div id="verdict" role="status" aria-atomic="true"></div>
+  <main id="briefing" class="sheet">
+    <div class="sheet-inner">
+      <section class="order-card" aria-labelledby="order">
+        <div class="eyebrow" id="order-label">Your order</div>
+        <h2 id="order" tabindex="-1">Opening the trial…</h2>
+        <p>Use the evidence to file two names under each role, then enter the range. A name can belong to two roles.</p>
+      </section>
+      <div id="notebook"></div>
     </div>
-    <section class="panel" id="panel" aria-labelledby="panel-title">
-      <h2 id="panel-title"><span>Friend</span><span><i>or</i> Foe</span></h2>
-      <p id="panel-copy">Five named targets approach at once. Shoot the × and let the ♥ pass. The round ends after ten decisions.</p>
-      <dl id="summary" hidden>
-        <div><dt>Foes hit</dt><dd id="foes-hit"></dd></div>
-        <div><dt>Friends spared</dt><dd id="friends-spared"></dd></div>
-      </dl>
-      <button type="button" class="primary" id="start">Start round</button>
-    </section>
+  </main>
+  <main id="field" hidden>
+    <div class="range-order"><b>Your order</b><span id="live-order"></span></div>
+    <div id="view">
+      <canvas id="range" tabindex="0" aria-label="Five-lane arcade range" aria-describedby="range-guide"></canvas>
+      <div id="names" aria-label="Cutout names"></div>
+      <p class="sr" id="range-guide">Tap a cutout or name to take a shot. Keys 1 to 5 select a lane. Space fires. F lets the selected cutout pass. B opens the briefing and pauses the range.</p>
+      <section id="pause-overlay" class="pause-overlay" hidden aria-labelledby="pause-title">
+        <div><h2 id="pause-title">Range paused</h2><button class="primary" id="resume" type="button">Resume range</button></div>
+      </section>
+    </div>
+  </main>
+  <main id="review" class="sheet" hidden>
+    <div class="sheet-inner">
+      <section class="order-card" aria-labelledby="verdict">
+        <div class="eyebrow">Trial report</div>
+        <h2 id="verdict" tabindex="-1"></h2><p id="report-order"></p>
+      </section>
+      <div class="review-grid">
+        <section class="review-card"><h3>Why this pair?</h3><p id="your-picks"></p><ol id="proof"></ol></section>
+        <section class="review-card"><h3>Your notebook</h3>
+          <p id="note-score"></p>
+          <table id="comparison"><thead><tr><th>Role</th><th>You filed</th><th>Solution</th></tr></thead><tbody></tbody></table>
+        </section>
+      </div>
+    </div>
   </main>
   <footer>
-    <div class="legend" aria-label="Target identification">
-      <span><b class="mark friend" aria-hidden="true">♥</b> Friend <small>— let pass</small></span>
-      <span><b class="mark foe" aria-hidden="true">×</b> Foe <small>— fire</small></span>
+    <div id="brief-actions" class="action-row">
+      <div class="footer-copy"><strong id="placement-count" aria-live="polite">0 of 12 placements</strong><small id="placement-hint">File two names in each of the six roles.</small></div>
+      <button class="primary" id="launch" type="button" disabled>Enter range</button>
     </div>
-    <div class="actions">
-      <button type="button" id="controls">Controls</button>
-      <button type="button" id="pass" hidden>Let pass <kbd>F</kbd></button>
-      <button type="button" id="fire" hidden>Fire <kbd>Space</kbd></button>
+    <div id="range-actions" class="action-row" hidden>
+      <div class="footer-copy"><strong id="shots" aria-live="polite">2 shots left</strong><small id="picks"></small></div>
+      <div class="controls">
+        <button id="read" type="button">Briefing <kbd>B</kbd></button>
+        <button id="pause" type="button">Pause <kbd>P</kbd></button>
+        <button id="pass" type="button">Let pass <kbd>F</kbd></button>
+        <button id="fire" class="primary" type="button">Fire <kbd>Space</kbd></button>
+      </div>
+    </div>
+    <div id="report-actions" class="action-row" hidden>
+      <div class="footer-copy"><strong id="session-score"></strong><small>Next trial deals new relationships.</small></div>
+      <button class="primary" id="next" type="button">Next trial</button>
     </div>
   </footer>
-  <p class="sr" id="keyboard-guide">Press 1–5 to select a lane. Use the arrow keys to move the sight, Space to fire, F to let a target pass, and P to pause. To shoot with a mouse or touchscreen, click or tap the target.</p>
   <dialog id="help" aria-labelledby="help-title">
-    <h2 id="help-title">Controls</h2>
-    <p>Fire at the orange ×. Spare the mint heart by letting it reach the line or tapping its name below the target.</p>
-    <dl class="bindings">
-      <div><dt>Mouse or touch</dt><dd>Click or tap the target to fire.</dd></div>
-      <div><dt>1–5</dt><dd>Aim at the target in that lane, left to right.</dd></div>
-      <div><dt>Arrow keys</dt><dd>Move the sight.</dd></div>
-      <div><dt>Space</dt><dd>Fire at the sight.</dd></div>
-      <div><dt>F</dt><dd>Let the target in your sight pass.</dd></div>
-      <div><dt>P</dt><dd>Pause or resume the round.</dd></div>
-    </dl>
-    <p>Each correct decision earns 100 points. A perfect round is 1,000.</p>
-    <button id="close" class="primary" type="button">Close</button>
+    <h2 id="help-title">How to play</h2>
+    <ol><li><strong>Read your order.</strong> It describes two of the ten names. Both can be allies.</li>
+      <li><strong>Work the evidence.</strong> Assign two names to each role in your notebook. You get the answer key after the trial.</li>
+      <li><strong>Take two shots.</strong> Five cutouts start together. The other five enter as lanes open. Tap a cutout or its name to select it. The range closes when you find the pair or all ten have gone by.</li></ol>
+    <p>Open <strong>Briefing</strong> during play to stop the clock and check your notes. On a keyboard, use <kbd>1–5</kbd> to aim at a lane or use the arrows to move the sight. <kbd>Space</kbd> fires and <kbd>F</kbd> lets the aimed cutout pass.</p>
+    <button class="primary" id="close-help" type="button">Got it</button>
   </dialog>
-  <noscript>This game needs JavaScript to move the targets.</noscript>
+  <noscript>This game needs JavaScript to deal a trial and move the cutouts.</noscript>
 </body>
 </html>

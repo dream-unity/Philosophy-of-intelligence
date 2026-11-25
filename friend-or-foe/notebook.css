@@ -1,0 +1,117 @@
+.field-book {
+  --nb-ink: #e9eee9;
+  --nb-dim: #b8c7c4;
+  --nb-line: #385052;
+  --nb-mint: #9be5cf;
+  --nb-mono: ui-monospace, "Courier New", monospace;
+  container: fieldbook / inline-size;
+  width: 100%;
+  min-width: 0;
+  color: var(--nb-ink);
+  font: 1rem/1.43 system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.field-book, .field-book * { box-sizing: border-box; }
+.field-book .nb-pages {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin: 0 0 .8rem;
+  padding: .18rem;
+  background: #0d1a1c;
+  border: 1px solid var(--nb-line);
+  border-radius: 5px;
+}
+.field-book button {
+  min-width: 0;
+  cursor: pointer;
+  font: inherit;
+  color: var(--nb-ink);
+  background: #1b2c2e;
+  border: 1px solid var(--nb-line);
+  border-radius: 4px;
+  touch-action: manipulation;
+}
+.field-book button:focus-visible { outline: 2px solid #ffd5ac; outline-offset: 2px; }
+.field-book .nb-tab {
+  flex: 1 1 0;
+  min-height: 42px;
+  padding: .35rem;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 650;
+}
+.field-book .nb-tab[aria-pressed="true"] { background: #29413f; color: var(--nb-mint); }
+.field-book .nb-spread { min-width: 0; }
+.field-book .nb-page { min-width: 0; }
+.field-book .nb-heading { display: none; margin: 0 0 .8rem; font-size: 1.14rem; }
+.field-book[data-view="notes"] .nb-evidence, .field-book[data-view="evidence"] .nb-notes { display: none; }
+.field-book .nb-roster-summary, .field-book .nb-instruction {
+  margin: 0 0 .8rem;
+  font-size: .94rem;
+  color: var(--nb-dim);
+  max-width: none;
+}
+.field-book .nb-roster-summary strong { display: inline-block; margin-right: .55rem; color: var(--nb-ink); }
+.field-book .nb-ledger {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: .95rem;
+  background: #102023;
+  border: 1px solid var(--nb-line);
+}
+.field-book .nb-ledger caption, .field-book .nb-clues dt {
+  text-align: left;
+  color: var(--nb-ink);
+  font-weight: 700;
+}
+.field-book .nb-ledger caption { padding-bottom: .35rem; }
+.field-book .nb-ledger th, .field-book .nb-ledger td {
+  padding: .32rem .42rem;
+  border-bottom: 1px solid var(--nb-line);
+}
+.field-book .nb-ledger thead th { background: #203233; color: var(--nb-dim); font-size: .82rem; }
+.field-book .nb-ledger tbody th, .field-book .nb-ledger td { font-family: var(--nb-mono); font-size: .89rem; }
+.field-book .nb-clues { margin: .38rem 0 0; }
+.field-book .nb-clue { padding: .55rem 0; border-bottom: 1px solid var(--nb-line); }
+.field-book .nb-clues dd { margin: .12rem 0 0; color: var(--nb-dim); white-space: pre-line; overflow-wrap: anywhere; }
+.field-book .nb-categories {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: .35rem;
+  align-items: stretch;
+}
+.field-book .nb-category {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+  gap: .16rem;
+  padding: .45rem .55rem;
+  min-height: 50px;
+  line-height: 1.17;
+}
+.field-book .nb-category-title { font-size: .94rem; font-weight: 650; }
+.field-book .nb-pair { font: .79rem/1.2 var(--nb-mono); color: var(--nb-dim); }
+.field-book .nb-category[aria-pressed="true"] { background: #223f3a; border-color: var(--nb-mint); }
+.field-book .nb-category[aria-pressed="true"] .nb-category-title { color: var(--nb-mint); }
+.field-book .nb-picker { margin: .95rem 0 0; padding: 0; border: 0; min-width: 0; }
+.field-book .nb-picker legend { padding: 0; margin: 0 0 .42rem; font-size: 1rem; font-weight: 700; }
+.field-book .nb-picks { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: .28rem; }
+.field-book .nb-name { min-height: 44px; padding: .3rem .1rem; font: bold .96rem var(--nb-mono); }
+.field-book .nb-name[aria-pressed="true"] { background: var(--nb-mint); border-color: var(--nb-mint); color: #102724; }
+.field-book .nb-name:disabled { opacity: .55; cursor: default; }
+.field-book .nb-count { margin: .4rem 0 0; font-size: .85rem; color: var(--nb-dim); }
+@container fieldbook (min-width: 51rem) {
+  .field-book .nb-pages { display: none; }
+  .field-book .nb-spread { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: 1.4rem; align-items: start; }
+  .field-book .nb-page.nb-evidence, .field-book .nb-page.nb-notes, .field-book .nb-heading { display: block; }
+  .field-book .nb-roster-summary { display: none; }
+}
+@container fieldbook (max-width: 19rem) {
+  .field-book .nb-picks { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .field-book .nb-ledger th, .field-book .nb-ledger td { padding-inline: .2rem; }
+}
