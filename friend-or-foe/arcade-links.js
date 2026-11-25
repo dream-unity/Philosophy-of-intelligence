@@ -1,6 +1,6 @@
 // Each arrow reads left to right. A case uses the two highlighted kinds of
 // relationship; its other four roles can vary without changing the solution.
-const cast = ['Dex', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
+const cast = ['Samp', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
 const words = {
   friend:   {label:'Friend of', single:'friend of', plural:'friends of'},
   foe:      {label:'Foe of', single:'foe of', plural:'foes of'},

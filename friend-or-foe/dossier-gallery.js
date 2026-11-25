@@ -1,7 +1,7 @@
-import {createArcadeRange} from './covert-range.js?v=shapes';
-import {makeLevelTrial} from './network-levels.js?v=shapes';
-import {renderNetwork, renderNetworkGuide, renderNetworkResult} from './network-view.js';
-import {renderLevelEvidence, renderLevelGuide, renderLevelResult} from './network-level-view.js?v=shapes';
+import {createArcadeRange} from './covert-range.js?v=trail';
+import {makeLevelTrial} from './network-levels.js?v=trail';
+import {renderNetwork, renderNetworkGuide, renderNetworkResult} from './network-view.js?v=trail';
+import {renderLevelEvidence, renderLevelGuide, renderLevelResult} from './network-level-view.js?v=trail';
 import {ArcadeSession} from './arcade-session.js';
 
 const el = id => document.getElementById(id);
@@ -73,7 +73,7 @@ function enterTrial() {
   el('cues').parentElement.scrollTop = 0;
   el('trial-meter').textContent = difficultyNames[difficulty] + ' · Trial ' + session.number + ' / ' + session.total;
   el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
-  range.start(trial.roster, trial.pair, Number(el('pace').value), trial.evidence.badges);
+  range.start(trial.roster, trial.pair, Number(el('pace').value));
   el('range').focus({preventScroll:true});
 }
 

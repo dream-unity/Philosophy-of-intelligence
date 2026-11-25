@@ -8,7 +8,7 @@ function seeded(seed) {
   };
 }
 
-const names = ['Dex', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
+const names = ['Samp', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
 const sorted = values => [...values].sort();
 
 test('ten moving targets have distinct positions and speeds and do not repeat their assignment', async () => {
@@ -328,21 +328,21 @@ test('clockwise paths wrap, omit the starting seat and include the ending seat',
   const path = (from, to, role) => ({from, to, role});
   const board = {
     crews: [
-      {names: ['Dex', 'Ivo', 'Luma', 'Mira', 'Nia'],
+      {names: ['Samp', 'Ivo', 'Luma', 'Mira', 'Nia'],
        stations: [['friend', 'foe'], ['spy'], ['double'], ['civilian'], ['foreigner']]},
       {names: ['Orin', 'Pia', 'Sol', 'Tess', 'Vale'],
        stations: [['spy'], ['foe'], ['double', 'foreigner'], ['friend'], ['civilian']]}
     ],
     reports: [
-      {paths: [path('Nia', 'Dex', 'foreigner'), path('Vale', 'Orin', 'friend')], same: false},
+      {paths: [path('Nia', 'Samp', 'foreigner'), path('Vale', 'Orin', 'friend')], same: false},
       {paths: [path('Nia', 'Mira', 'double'), path('Tess', 'Orin', 'foe')], same: false},
       {paths: [path('Mira', 'Ivo', 'friend'), path('Tess', 'Vale', 'double')], same: false},
-      {paths: [path('Dex', 'Luma', 'foreigner'), path('Pia', 'Tess', 'friend')], same: true}
+      {paths: [path('Samp', 'Luma', 'foreigner'), path('Pia', 'Tess', 'friend')], same: true}
     ]
   };
   assert.deepEqual(solveDutyTrial(board).pair, ['Ivo', 'Tess']);
   assert.deepEqual(caseRoles(board), {
     friend: ['Ivo', 'Vale'], foe: ['Ivo', 'Sol'], spy: ['Luma', 'Pia'],
-    double: ['Mira', 'Tess'], civilian: ['Nia', 'Orin'], foreigner: ['Dex', 'Tess']
+    double: ['Mira', 'Tess'], civilian: ['Nia', 'Orin'], foreigner: ['Samp', 'Tess']
   });
 });

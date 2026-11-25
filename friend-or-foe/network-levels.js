@@ -1,5 +1,4 @@
-import {makeNetworkTrial, materializeLayout, networkRoster, solveNetworkTrial} from './network-case.js?v=shapes';
-import {shapes} from './picture-badges.js';
+import {makeNetworkTrial, materializeLayout, networkRoster, solveNetworkTrial} from './network-case.js?v=trail';
 import {networkFrames} from './network-data.js';
 import {easyLayouts,mediumLayouts} from './practice-layouts.js';
 
@@ -84,14 +83,60 @@ function orderText(steps,pick) {
   return 'Follow '+steps.join(' → ')+'. Shoot both '+positions[pick]+'.';
 }
 
+function followLink(link, name, backwards) {
+  if (backwards && link.to === name) return link.from;
+  if (!backwards && link.from === name) return link.to;
+}
+
+function solveGuidedTrail({start, steps}) {
+  const [first, second] = steps;
+  const paths = [];
+  for (const firstLink of first.links) {
+    const middle = followLink(firstLink, start, first.backwards);
+    if (!middle) continue;
+    for (const secondLink of second.links) {
+      const end = followLink(secondLink, middle, second.backwards);
+      if (!end) continue;
+      const proof = firstLink.from + ' ' + first.verb + ' ' + firstLink.to + '. ' +
+        secondLink.from + ' ' + second.verb + ' ' + secondLink.to + '.';
+      paths.push({end, proof});
+    }
+  }
+  paths.sort((a, b) => a.end.localeCompare(b.end));
+  return {pair: paths.map(path => path.end), proof: paths.map(path => path.proof)};
+}
+
+function makeGuidedTrial(previous, draw) {
+  const roster = networkRoster.slice();
+  const cast = shuffle(roster, draw);
+  const [start, otherStart] = cast;
+  const middle = cast.slice(2, 6);
+  const ends = cast.slice(6);
+  if (previous && pairKey(ends.slice(0, 2)) === pairKey(previous.pair)) {
+    [ends[1], ends[2]] = [ends[2], ends[1]];
+  }
+  const verbs = shuffle(['helped', 'warned'], draw);
+  // Introduce a forward trail first. After that, the wording determines
+  // whether to follow or retrace each kind of relationship independently.
+  const step = (verb, edges) => {
+    const backwards = Boolean(previous) && draw() < .5;
+    const links = edges.map(([a, b]) => backwards ? {from: b, to: a} : {from: a, to: b});
+    return {verb, backwards, links: shuffle(links, draw)};
+  };
+  const first = step(verbs[0], middle.map((name, i) => [i < 2 ? start : otherStart, name]));
+  const second = step(verbs[1], middle.map((name, i) => [name, ends[i]]));
+  const premise = first.backwards ? 'Two people ' + first.verb + ' ' + start : start + ' ' + first.verb + ' two people';
+  const question = second.backwards ? 'Who ' + second.verb + ' them?' :
+    'Who did they ' + (second.verb === 'helped' ? 'help' : 'warn') + '?';
+  const evidence = {level: 'very-easy', roster, start, steps: [first, second], order: premise + '. ' + question};
+  return {level: evidence.level, number: (previous?.number ?? 0) + 1, roster, evidence, ...solveGuidedTrail(evidence)};
+}
+
 // Resolve only what the player can see. The disputed row publishes two sets;
 // neither the ordering of the receivers nor the order of the witnesses is evidence.
 export function solveLevelEvidence(evidence) {
   if (!evidence.level || evidence.level==='hard') return solveNetworkTrial(evidence);
-  if (evidence.level === 'very-easy') {
-    const pair = evidence.roster.filter(name => evidence.badges[name] === evidence.shape);
-    return {pair, proof: [pair.join(' and ') + ' both have a ' + evidence.shape + '.']};
-  }
+  if (evidence.level === 'very-easy') return solveGuidedTrail(evidence);
   const proof=[];
   let rows=evidence.rows;
   if (evidence.level==='medium') {
@@ -213,17 +258,7 @@ function candidateFor(code,level,draw,previousOrder) {
 export function makeLevelTrial(level,previous=null,randomSource=Math.random) {
   if (level==='hard') return makeNetworkTrial(previous?.level && previous.level!=='hard' ? null : previous,randomSource);
   if (previous?.level!==level) previous=null;
-  if (level === 'very-easy') {
-    const roster = networkRoster.slice();
-    const shuffled = shuffle(roster, randomSource);
-    const badges = Object.fromEntries(shuffled.map((name, i) => [name, shapes[Math.floor(i / 2)]]));
-    // Knowing last round's picture or names should never give away this round.
-    const options = shapes.filter(shape => shape !== previous?.evidence.shape &&
-      !previous?.pair.every(name => badges[name] === shape));
-    const shape = choice(options, randomSource);
-    const evidence = {level, roster, badges, shape, order: 'Tap the two ' + shape + 's.'};
-    return {level, number: (previous?.number ?? 0) + 1, roster, evidence, ...solveLevelEvidence(evidence)};
-  }
+  if (level === 'very-easy') return makeGuidedTrial(previous, randomSource);
   if (level!=='easy' && level!=='medium') throw new RangeError('Choose Very Easy, Easy, Medium or Hard.');
   const number=(previous?.number??0)+1;
   const draw=random((Math.floor(randomSource()*4294967296)^Math.imul(number,2654435761))>>>0);

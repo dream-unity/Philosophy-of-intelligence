@@ -1,5 +1,3 @@
-import {pictureBadge} from './picture-badges.js';
-
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -42,18 +40,24 @@ function relationship(row) {
 }
 
 export function renderLevelEvidence(root, evidence) {
+  const panel = element('div', 'network-view level-evidence');
+  const question = element('header', 'nw-order');
+  question.append(element('h2', '', evidence.order));
   if (evidence.level === 'very-easy') {
-    const panel = element('section', 'picture-order');
-    const pictures = element('div', 'picture-pair');
-    pictures.append(pictureBadge(evidence.shape), pictureBadge(evidence.shape));
-    panel.append(pictures, element('h2', '', evidence.order));
+    const board = element('div', 'guided-trail');
+    for (const step of evidence.steps) {
+      const group = element('section', 'guided-step');
+      const aid = step.verb === 'helped';
+      group.append(element('h3', aid ? 'nw-aid-word' : 'nw-alert-word',
+        aid ? 'Who helped whom' : 'Who warned whom'));
+      for (const link of step.links) group.append(route(link.from, link.to));
+      board.append(group);
+    }
+    panel.append(question, board);
     root.replaceChildren(panel);
     return;
   }
-  const panel = element('div', 'network-view level-evidence');
-  const question = element('header', 'nw-order');
-  question.append(element('h2', '', evidence.order),
-    element('p', 'nw-tip', 'Read arrows from sender to receiver. Use each name once per chain.'));
+  question.append(element('p', 'nw-tip', 'Read arrows from sender to receiver. Use each name once per chain.'));
   const links = element('section', 'level-board');
   links.setAttribute('aria-label', 'Relationships by role');
   for (const row of evidence.rows) links.append(relationship(row));
@@ -80,7 +84,8 @@ export function renderLevelGuide(root, level) {
     guide.append(block);
   };
   if (level === 'very-easy') {
-    section('Match the pictures', 'Look at the big shape. Tap the two aliens wearing that shape. You can tap their badges, too.');
+    section('Start with one name', 'Find the two people linked to the name in the question. Then follow each of them through the second set of clues.');
+    section('Watch the arrow', 'Under “Who helped whom,” Samp → Mira means Samp helped Mira. If Mira warned Sol, then Sol got a warning from someone Samp helped. Find the other person the same way.');
     root.replaceChildren(guide);
     return;
   }
@@ -96,17 +101,6 @@ export function renderLevelGuide(root, level) {
 }
 
 export function renderLevelResult(root, trial) {
-  if (trial.level === 'very-easy') {
-    const result = element('section', 'picture-result');
-    result.append(element('h3', '', 'The two ' + trial.evidence.shape + 's'));
-    for (const name of trial.pair) {
-      const match = element('p', 'picture-match');
-      match.append(pictureBadge(trial.evidence.shape), document.createTextNode(name));
-      result.append(match);
-    }
-    root.replaceChildren(result);
-    return;
-  }
   const panel = element('section', 'network-result');
   const proof = element('ul', 'nw-winning');
   for (const reason of trial.proof) proof.append(element('li', '', reason));

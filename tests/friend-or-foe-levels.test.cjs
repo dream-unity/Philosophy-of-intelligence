@@ -34,44 +34,74 @@ test('difficulty is a single pregame choice next to the existing run settings', 
   assert.match(form, /<button\b[^>]*\btype="submit"/);
 });
 
-test('Very Easy can be solved from the pictures alone throughout a full run', async () => {
-  const {makeLevelTrial} = await import('../friend-or-foe/network-levels.js');
+test('Very Easy requires two visible relationships from one named start throughout a full run', async () => {
+  const {makeLevelTrial, solveLevelEvidence} = await import('../friend-or-foe/network-levels.js');
   const {ArcadeRun} = await import('../friend-or-foe/arcade-range.js');
   const draw = seeded(71023);
-  const prompts = new Set();
+  const orders = new Set();
   const pairs = new Set();
   let previous;
   let previousTargets = [];
   for (let index = 0; index < 1000; index++) {
     const trial = makeLevelTrial('very-easy', previous, draw);
-    const {shape, badges} = trial.evidence;
-    const run = new ArcadeRun(trial.roster, trial.pair, previousTargets, draw);
+    const {evidence} = trial;
+    const [premise, question] = evidence.order.split('. ');
+    const incoming = premise.startsWith('Two people ');
+    const findSender = !question.includes('did they');
+    const start = incoming ? premise.split(' ').at(-1) : premise.split(' ')[0];
+    const firstVerb = premise.includes('helped') ? 'helped' : 'warned';
+    const secondVerb = question.includes('help') ? 'helped' : 'warned';
+    const [first, second] = evidence.steps;
+    assert.equal(first.verb, firstVerb);
+    assert.equal(second.verb, secondVerb);
+    assert.notEqual(firstVerb, secondVerb);
+    assert.ok(trial.roster.includes(start));
+    assert.ok(trial.roster.includes('Samp'));
     assert.equal(trial.number, index + 1);
-    assert.equal(run.snapshot().active, 10);
-    const counts = Object.values(badges);
-    assert.equal(new Set(counts).size, 5);
-    assert.ok(counts.every(symbol => counts.filter(other => other === symbol).length === 2));
-    const matching = run.targets.filter(target => badges[target.name] === shape);
-    assert.equal(matching.length, 2);
-    assert.deepEqual(matching.map(target => target.name).sort(), trial.pair);
-    assert.equal(run.snapshot().bullets, 2);
-    matching.forEach(target => run.fire(target));
-    assert.equal(run.result().correct, true);
-    prompts.add(shape);
-    pairs.add(trial.pair.join('/'));
-    if (previous) {
-      assert.notEqual(shape, previous.evidence.shape);
-      assert.notDeepEqual(trial.pair, previous.pair);
+    orders.add([incoming, findSender, firstVerb].join('/'));
+    const source = incoming ? 'to' : 'from';
+    const via = incoming ? 'from' : 'to';
+    const middle = first.links.filter(link => link[source] === start).map(link => link[via]);
+    assert.equal(new Set(middle).size, 2);
+    const secondVia = findSender ? 'to' : 'from';
+    const end = findSender ? 'from' : 'to';
+    assert.equal(new Set(second.links.map(link => link[end])).size, 4);
+    const paths = second.links.filter(link => middle.includes(link[secondVia]));
+    const answer = paths.map(link => link[end]).sort();
+    assert.equal(new Set(answer).size, 2);
+    assert.deepEqual(answer, trial.pair);
+    assert.deepEqual(new Set(evidence.steps.flatMap(step => step.links.flatMap(link => [link.from, link.to]))), new Set(trial.roster));
+    assert.equal(trial.proof.length, 2);
+    // Alter one link pairing in either panel, preserving its names and counts.
+    // A solver copying one panel would miss at least one of these changes.
+    for (const panel of [0, 1]) {
+      const alternate = structuredClone(evidence);
+      const field = panel === 0 ? via : end;
+      const links = alternate.steps[panel].links;
+      const onTrail = link => panel === 0 ? link[source] === start : middle.includes(link[secondVia]);
+      const yes = links.find(onTrail);
+      const no = links.find(link => !onTrail(link));
+      [yes[field], no[field]] = [no[field], yes[field]];
+      const revised = solveLevelEvidence(alternate).pair;
+      assert.equal(revised.length, 2);
+      assert.equal(revised.filter(name => answer.includes(name)).length, 1);
     }
+    const run = new ArcadeRun(trial.roster, trial.pair, previousTargets, draw);
+    assert.equal(run.snapshot().active, 10);
+    assert.equal(run.snapshot().bullets, 2);
+    answer.forEach(name => run.fire(run.targets.find(target => target.name === name)));
+    assert.equal(run.result().correct, true);
+    pairs.add(answer.join('/'));
+    if (previous) assert.notDeepEqual(answer, previous.pair);
     previous = trial;
     previousTargets = run.targets;
   }
-  assert.equal(prompts.size, 5);
+  assert.equal(orders.size, 8);
   assert.equal(pairs.size, 45);
   for (const level of ['easy', 'medium', 'hard']) {
     const other = makeLevelTrial(level, previous, draw);
     assert.equal(other.number, 1);
-    assert.equal(other.evidence.badges, undefined);
+    assert.deepEqual(new Set(other.roster), new Set(previous.roster));
     assert.equal(makeLevelTrial('very-easy', other, draw).number, 1);
   }
 });

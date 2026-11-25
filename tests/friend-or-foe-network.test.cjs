@@ -315,12 +315,12 @@ test('named suppliers, challengers, observers, handlers and hosts yield directed
   const {caseRoles, solveNetworkTrial} = await import('../friend-or-foe/network-case.js');
   const event = (id, role, members, contacts, anchor) => ({id, role, members, contacts, anchor});
   const incidents = [
-    event('D1', 'friend', ['Dex', 'Ivo'], ['Mira', 'Tess'], 'Pia'),
-    event('D2', 'foe', ['Luma', 'Mira'], ['Vale', 'Tess'], 'Dex'),
+    event('D1', 'friend', ['Samp', 'Ivo'], ['Mira', 'Tess'], 'Pia'),
+    event('D2', 'foe', ['Luma', 'Mira'], ['Vale', 'Tess'], 'Samp'),
     event('I1', 'spy', ['Nia', 'Orin'], ['Mira', 'Sol'], 'Tess'),
     event('I2', 'double', ['Pia', 'Sol'], ['Ivo', 'Vale'], 'Nia'),
-    event('H1', 'civilian', ['Tess', 'Vale'], ['Luma', 'Dex'], 'Mira'),
-    event('H2', 'foreigner', ['Dex', 'Mira'], ['Orin', 'Pia'], 'Sol')
+    event('H1', 'civilian', ['Tess', 'Vale'], ['Luma', 'Samp'], 'Mira'),
+    event('H2', 'foreigner', ['Samp', 'Mira'], ['Orin', 'Pia'], 'Sol')
   ];
   const truths = incidents.map(scene => ({
     actor: scene.members[0], incident: scene.id, contact: scene.contacts[0],
@@ -329,8 +329,8 @@ test('named suppliers, challengers, observers, handlers and hosts yield directed
   const reports = [0, 2, 4].map(i => ({kind: 'record', source: truths[i], claim: truths[i + 1]}));
   const board = {roster: [...new Set(incidents.flatMap(scene => scene.members))], incidents, reports};
   assert.deepEqual(caseRoles(board), {
-    friend: ['Dex', 'Mira'], foe: ['Ivo', 'Luma'], spy: ['Nia', 'Sol'],
-    double: ['Orin', 'Pia'], civilian: ['Tess', 'Mira'], foreigner: ['Vale', 'Dex']
+    friend: ['Samp', 'Mira'], foe: ['Ivo', 'Luma'], spy: ['Nia', 'Sol'],
+    double: ['Orin', 'Pia'], civilian: ['Tess', 'Mira'], foreigner: ['Vale', 'Samp']
   });
   assert.deepEqual(solveNetworkTrial({...board, query: 'receive'}).pair, ['Sol', 'Tess']);
   assert.deepEqual(solveNetworkTrial({...board, query: 'end'}).pair, ['Ivo', 'Vale']);

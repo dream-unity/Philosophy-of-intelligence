@@ -12,7 +12,7 @@ function shuffled(items, random) {
 
 export const species = ['cyclops', 'stalker', 'reader', 'moth', 'crab'];
 
-const names = ['Pip', 'Zig', 'Mox', 'Vela', 'Juno', 'Kip', 'Orin', 'Nix', 'Luma', 'Finn', 'Rook', 'Mira', 'Tavi', 'Lex', 'Zuri', 'Nova', 'Dex', 'Tess'];
+const names = ['Pip', 'Zig', 'Mox', 'Vela', 'Juno', 'Kip', 'Orin', 'Nix', 'Luma', 'Finn', 'Rook', 'Mira', 'Tavi', 'Lex', 'Zuri', 'Nova', 'Samp', 'Tess'];
 
 function spawn(round, lane) {
   const id = round.next++;

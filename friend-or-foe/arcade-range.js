@@ -3,7 +3,7 @@ import {drawSight} from './mission-scene.js';
 
 const COUNT = 10;
 const SLOTS = Array.from({length: COUNT}, (_, index) => index);
-const DEFAULT_NAMES = ['Mira', 'Tess', 'Nia', 'Luma', 'Vale', 'Pia', 'Ivo', 'Dex', 'Sol', 'Orin'];
+const DEFAULT_NAMES = ['Mira', 'Tess', 'Nia', 'Luma', 'Vale', 'Pia', 'Ivo', 'Samp', 'Sol', 'Orin'];
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 function shuffle(values, random) {

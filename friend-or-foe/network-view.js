@@ -1,4 +1,4 @@
-import {resolvedNetwork, winningNetworkRoutes, explainNetworkConflict} from './network-case.js';
+import {resolvedNetwork, winningNetworkRoutes, explainNetworkConflict} from './network-case.js?v=trail';
 
 const roles = {
   friend: {label:'Friend', channel:'Aid'},
@@ -166,10 +166,10 @@ export function renderNetworkGuide(root) {
   const worked = el('section', 'nw-worked');
   worked.append(el('h3','','Worked example'));
   for (const [label,text] of [
-    ['I1 candidates','Tess (Nia) and Dex (Sol).'],
+    ['I1 candidates','Tess (Nia) and Samp (Sol).'],
     ['Record','D1 · Mira gave supplies to Pia.'],
     ['Witness','Ivo, the other D1 candidate, claims Friend. He says Tess watched Nia in I1.'],
-    ['Deduction','Mira was the D1 Friend. Ivo lied, so Tess did not watch her contact Nia. That makes Dex the spy.']
+    ['Deduction','Mira was the D1 Friend. Ivo lied, so Tess did not watch her contact Nia. That makes Samp the spy.']
   ]) {
     const line = el('p');
     line.append(el('b','',label), document.createTextNode(' · ' + text));

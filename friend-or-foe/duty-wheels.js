@@ -1,6 +1,6 @@
 // Two independent rotations describe all 25 complete rosters. A path walks
 // clockwise through the ending person, leaving its starting person behind.
-const cast = ['Dex','Ivo','Luma','Mira','Nia','Orin','Pia','Sol','Tess','Vale'];
+const cast = ['Samp','Ivo','Luma','Mira','Nia','Orin','Pia','Sol','Tess','Vale'];
 const duties = ['friend','foe','spy','double','civilian','foreigner'];
 const labels = {friend:'Friend',foe:'Foe',spy:'Spy',double:'Double agent',civilian:'Civilian',foreigner:'Foreigner'};
 const offsets = [0,1,2,3,4];

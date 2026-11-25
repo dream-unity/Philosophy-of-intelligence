@@ -144,8 +144,8 @@ export function renderCueGuide(root) {
   }
   const example = element('section', 'cv-example');
   example.append(element('h3', '', 'Two claims, one contradiction'),
-    reportBoard([{speaker:null, left:'Dex', right:'Ivo', same:false},
-      {speaker:'Tess', left:'Dex', right:'Ivo', same:true}]),
+    reportBoard([{speaker:null, left:'Samp', right:'Ivo', same:false},
+      {speaker:'Tess', left:'Samp', right:'Ivo', same:true}]),
     element('p', '', 'Tess reverses a known fact. She must oppose the contact, so her partner must be an ally.'));
   guide.append(example);
   root.replaceChildren(guide);

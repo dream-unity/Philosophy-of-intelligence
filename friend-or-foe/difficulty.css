@@ -146,49 +146,26 @@ body[data-phase="ready"] .cabinet {
   .level-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
-.picture-badge {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  flex: none;
-  background: currentColor;
-}
-.shape-star {
-  color: #ffcf68;
-  clip-path: polygon(50% 0, 62% 33%, 99% 36%, 71% 60%, 80% 97%, 50% 77%, 20% 97%, 29% 60%, 1% 36%, 38% 33%);
-}
-.shape-heart {
-  color: #ff939e;
-  clip-path: polygon(50% 98%, 6% 53%, 0 32%, 4% 17%, 16% 6%, 31% 4%, 44% 10%, 50% 19%, 56% 10%, 69% 4%, 84% 6%, 96% 17%, 100% 32%, 94% 53%);
-}
-.shape-circle { color: #72d6ef; border-radius: 50%; }
-.shape-square { color: #c3a6ff; }
-.shape-triangle { color: #a7e796; clip-path: polygon(50% 0, 100% 96%, 0 96%); }
-.picture-order { display: grid; gap: .8rem; text-align: center; padding: clamp(.5rem, 3vw, 2rem) 0; }
-.picture-pair { display: flex; gap: .5em; justify-content: center; font-size: clamp(2.5rem, 5vw, 4rem); }
-.picture-order h2, .picture-result h3 { margin: 0; font: 750 clamp(1.25rem, 2.6vw, 2rem)/1.1 var(--display); }
-.picture-result { display: grid; gap: .5rem; }
-.picture-match { display: flex; align-items: center; gap: .45rem; font: 700 1.15rem var(--mono); }
-#labels .picture-nameplate {
-  display: inline-grid;
-  justify-items: center;
-  gap: 2px;
-  padding: 3px 4px 2px;
-  min-width: 44px;
-  min-height: 44px;
-  transform: translate(-50%, -12px);
-}
-.picture-nameplate .picture-badge { font-size: clamp(20px, 2.4vw, 28px); }
-@media (orientation: portrait) {
-  .picture-order { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1rem; }
-}
-
 @media (orientation: landscape) and (max-height: 680px) {
   #setup { padding: .6rem .9rem; gap: .65rem; }
   #setup h2 { font-size: 1.8rem; }
   #run-form { gap: .62rem; }
   .setup-intro p { margin-top: .2rem; }
   .level-choice { padding-block: .3rem; }
+}
+
+.guided-trail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  gap: .8rem 1rem;
+  margin-top: .85rem;
+}
+.guided-step { display: grid; align-content: start; gap: .25rem; }
+.guided-step h3 {
+  margin: 0 0 .12rem;
+  padding-bottom: .22rem;
+  border-bottom: 1px solid var(--edge);
+  font: 700 .9rem/1.25 var(--display);
 }
 
 .level-board {

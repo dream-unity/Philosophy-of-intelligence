@@ -1,6 +1,6 @@
 // A five-bit world records the allegiance of each duo's lead. The partner
 // always has the opposite allegiance. The off-range contact is the reference.
-const cast = ['Dex', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
+const cast = ['Samp', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
 const contacts = ['Echo', 'Flint', 'Halo', 'Kite', 'Nova', 'Reed'];
 const ruleSets = {handoff: ['friend', 'foe'], intercept: ['spy', 'double'], arrival: ['civilian', 'foreigner']};
 const roleNames = {friend:'Friend', foe:'Foe', spy:'Spy', double:'Double agent', civilian:'Civilian', foreigner:'Foreigner'};

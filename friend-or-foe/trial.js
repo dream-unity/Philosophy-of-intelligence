@@ -1,5 +1,5 @@
 // All deductions use only the star, bench and slip records shown in the briefing.
-const roster = ['Dex', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
+const roster = ['Samp', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
 const families = ['trace', 'xor', 'split', 'relay'];
 const criteria = ['spy', 'double', 'paidFriend', 'paidVisitor', 'pledgedFriend', 'pledgedVisitor', 'pledgedCivilian', 'pledgedFoe', 'satWithFriend', 'paidPeer'];
 const columns = {author: 0, scanned: 1, pledged: 2, paid: 3};
