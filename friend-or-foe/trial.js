@@ -1,7 +1,7 @@
 // All deductions use only the star, bench and slip records shown in the briefing.
 const roster = ['Dex', 'Ivo', 'Luma', 'Mira', 'Nia', 'Orin', 'Pia', 'Sol', 'Tess', 'Vale'];
 const families = ['trace', 'xor', 'split', 'relay'];
-const criteria = ['spy', 'double', 'paidFriend', 'paidVisitor', 'pledgedFriend', 'pledgedVisitor', 'pledgedCivilian', 'pledgedFoe', 'satWithFriend'];
+const criteria = ['spy', 'double', 'paidFriend', 'paidVisitor', 'pledgedFriend', 'pledgedVisitor', 'pledgedCivilian', 'pledgedFoe', 'satWithFriend', 'paidPeer'];
 const columns = {author: 0, scanned: 1, pledged: 2, paid: 3};
 const fields = {
   author: 'the author', paid: 'the person paid', pledged: 'the person promised the point',
@@ -42,7 +42,10 @@ function criterionMap(b, roles) {
   const byRole = Object.fromEntries(roles.map(r => [r.key, r.names]));
   const marked = (key, col) => b.table.rows.filter(row => byRole[key].includes(row[col])).map(row => row[0]);
   const nearFriend = b.table.rows.filter(row => byRole.friend.includes(value(b,row,'seatmate'))).map(row => row[0]);
+  const peerFriends = b.peer ? b.peer.sent.filter(n => b.peer.received.includes(n)) : [];
+  const peerPayers = b.table.rows.filter(row => peerFriends.includes(row[3])).map(row => row[0]);
   return {
+    paidPeer: {names:peerPayers, words:'paid a friend of ' + (b.peer?.witness ?? ''), evidence:b.peer && (duo(peerFriends) + ' exchanged stars both ways with ' + b.peer.witness + '. They were paid by ' + duo(peerPayers) + '.')},
     pledgedCivilian: {names:marked('civilian',2), words:'pledged to a civilian', evidence:duo(byRole.civilian) + ' share the civilian bench. The authors pledging to those two were ' + duo(marked('civilian',2)) + '.'},
     pledgedFoe: {names:marked('foe',2), words:'pledged to a foe of ' + b.witness, evidence:'The two scanned tiles belong to ' + duo(byRole.foe) + ', the foes of ' + b.witness + '. Those foes appear on pledges by ' + duo(marked('foe',2)) + '.'},
     satWithFriend: {names:nearFriend, words:'sat beside a friend of ' + b.witness, evidence:duo(byRole.friend) + ' exchanged stars both ways with ' + b.witness + '. Their benchmates were ' + duo(nearFriend) + '.'},
@@ -92,7 +95,7 @@ function linkingRows(rows) {
 export function solveTrial(b) {
   const roles = classify(b);
   const empty = {roles, pair:[], proof:[]};
-  if (!balanced(roles)) return empty;
+  if (!balanced(roles) || !consistentRecords(b)) return empty;
   const q = b.query;
   const c = criterionMap(b, roles);
   const first = c[q.a];
@@ -143,17 +146,37 @@ export function solveTrial(b) {
   return {roles, pair, proof};
 }
 
+function consistentRecords(b) {
+  if (b.table.rows.some(([author, ...entries]) => entries.includes(author))) return false;
+  if (b.sent.includes(b.witness) || b.received.includes(b.witness)) return false;
+  if (!b.peer) return true;
+  const peer = b.peer;
+  return !peer.sent.includes(peer.witness) && !peer.received.includes(peer.witness) &&
+    b.sent.includes(peer.witness) === peer.received.includes(b.witness) &&
+    b.received.includes(peer.witness) === peer.sent.includes(b.witness);
+}
+
+function starClue(log) {
+  return log.witness + ' sent stars to ' + log.sent.join(', ') + '. Stars sent to ' + log.witness + ' came from ' + log.received.join(', ') + '.';
+}
+
+function needsPeer(q) {
+  return q.a === 'paidPeer' || (q.family !== 'relay' && q.b === 'paidPeer');
+}
+
 function evidence(b) {
   const marked = duo(b.sealedSlips);
-  return [
-    {title:'Star exchange', text:'Anyone who exchanged stars both ways with ' + b.witness + ' counts as their friend. ' + b.witness + ' sent stars to ' + b.sent.join(', ') + '. Stars sent to ' + b.witness + ' came from ' + b.received.join(', ') + '.'},
+  const clues = [
+    {title:'Star exchange', text:'Two people are friends when they exchange stars both ways. ' + starClue(b)},
     {title:'Scans & pledges', text:'The slips are the complete log. Owners of scanned tiles challenged ' + b.witness + ' (foes). Anyone scanning ' + b.watched + ' is a spy on ' + b.watched + '. A double agent paid someone other than the person they pledged to.'},
     {title:'Visiting seals', text:'The slips by ' + marked + ' carry visiting seals. Their actual payees are the two foreigners to this arena.'},
     {title:'Bench register', text:'The two civilians in this contest share ' + b.witness + '’s bench. Benchmates: ' + b.benches.map(pair => pair.join(' + ')).join(' · ') + '.'}
   ];
+  if (b.peer && needsPeer(b.query)) clues.splice(1,0,{title:'Second star exchange', text:starClue(b.peer)});
+  return clues;
 }
 
-function drawFacts(random) {
+function fallbackFacts(random) {
   const cast = shuffle(roster, random);
   const [witness, seatmate, watched, rival] = cast;
   const payees = cast.slice(4,7);
@@ -186,6 +209,79 @@ function drawFacts(random) {
   };
 }
 
+function recordStars(witness, friends, forbidden, random) {
+  const decoys = shuffle(roster.filter(n => n !== witness && !friends.includes(n) && !forbidden.includes(n)),random);
+  return {
+    witness,
+    sent:shuffle([...friends, decoys[0]],random),
+    received:shuffle([...friends, decoys[1]],random)
+  };
+}
+
+function drawFacts(random, number) {
+  const cast = shuffle(roster,random);
+  const authorCount = number === 1 || random() < .34 ? 3 : 4;
+  const authors = cast.slice(0,authorCount);
+  const unassigned = cast.slice(authorCount);
+  // With three authors one is both a spy and a double agent. With four authors
+  // those pairs are disjoint, so both additional memberships are free to move.
+  const doubleIndices = [authorCount-2,authorCount-1];
+  const alreadyDual = authorCount === 3 ? [authors[1]] : [];
+  const extra = shuffle(cast.filter(n => !alreadyDual.includes(n)),random).slice(0,8-unassigned.length);
+  const slots = shuffle([...unassigned,...extra],random);
+  const friends = slots.slice(0,2), rivals = slots.slice(2,4);
+  const civilians = slots.slice(4,6), visitors = slots.slice(6,8);
+  if ([friends,rivals,civilians,visitors].some(pair => pair[0] === pair[1])) return null;
+  const [witness] = civilians;
+  if (friends.includes(witness) || rivals.some(n => friends.includes(n) || civilians.includes(n))) return null;
+  // A civilian may be a friend or visitor, but isn't assigned an active scanner.
+  if (civilians.some(n => authors.includes(n))) return null;
+  const [watched,otherTile] = rivals;
+  if (authors.some((n,i) => n === (i < 2 ? watched : otherTile))) return null;
+  const primary = recordStars(witness, friends, [], random);
+
+  const priority = random() < .65 ? shuffle(friends,random) : [];
+  const payeePool = [...new Set([...visitors,...priority,...shuffle(cast,random)])].slice(0,authorCount);
+  const payees = shuffle(payeePool,random);
+  if (authors.some((n,i) => n === payees[i])) return null;
+  const rows = authors.map((n,i) => [n,i < 2 ? watched : otherTile,payees[i],payees[i]]);
+  const [dx,dy] = doubleIndices;
+  const style = random();
+  if (style < .50) {
+    // A two-hop pledge/payment chain supports inverse-direction orders.
+    const honest = shuffle(rows.filter((_,i) => !doubleIndices.includes(i)),random)[0];
+    rows[dx][2] = honest[3];
+    rows[dy][2] = rows[dx][3];
+  } else {
+    const preferred = style < .62 ? civilians : style < .74 ? rivals : cast;
+    for (const i of doubleIndices) {
+      const candidates = preferred.filter(n => n !== authors[i] && n !== payees[i]);
+      if (!candidates.length) return null;
+      rows[i][2] = shuffle(candidates,random)[0];
+    }
+  }
+  if (rows.some(row => row[0] === row[2])) return null;
+
+  const otherSeats = shuffle(cast.filter(n => !civilians.includes(n)),random);
+  const benches = [shuffle(civilians,random)];
+  for (let i=0;i<otherSeats.length;i+=2) benches.push(otherSeats.slice(i,i+2));
+  const b = {
+    roster:roster.slice(), ...primary, watched, benches:shuffle(benches,random),
+    sealedSlips:shuffle(rows.filter(row => visitors.includes(row[3])).map(row=>row[0]),random),
+    table:{headers:['Author','Scanned','Pledged to','Paid'],rows:shuffle(rows,random)}
+  };
+  if (number >= 3) {
+    // Keep the second exchange independent, with one shared friend where
+    // possible. The same payee can genuinely be a friend of both witnesses.
+    const shared = shuffle(payees.filter(n => friends.includes(n)),random);
+    const others = shuffle(payees.filter(n => !friends.includes(n) && n !== witness),random);
+    const peerFriends = shared.length && others.length ? [shared[0],others[0]] : shuffle(payees.filter(n=>n!==witness),random).slice(0,2);
+    const peer = shuffle(cast.filter(n => n !== witness && !primary.sent.includes(n) && !primary.received.includes(n) && !peerFriends.includes(n)),random)[0];
+    if (peer && peerFriends.length === 2) b.peer = recordStars(peer,peerFriends,[witness],random);
+  }
+  return b;
+}
+
 function shape(q, number, random) {
   const pick = items => items[Math.floor(random()*items.length)];
   if (q.family === 'xor') { q.first = number < 3 ? 'author' : pick(['author','paid','seatmate']); return; }
@@ -195,6 +291,10 @@ function shape(q, number, random) {
 }
 
 function withAnswer(b, solution, number, revisedRecord = null) {
+  if (b.peer && !needsPeer(b.query)) {
+    b = {...b};
+    delete b.peer;
+  }
   const c = criterionMap(b, solution.roles);
   b.clues = evidence(b);
   b.order = orderText(b.query,c);
@@ -205,8 +305,8 @@ function alteredFacts(b) {
   // Each variant changes just one public relationship or swaps the endpoints
   // of two links. All other facts (and the player's original order) survive.
   const variants = [];
-  for (let i = 0; i < 3; i++) {
-    for (let j = i + 1; j < 3; j++) {
+  for (let i = 0; i < b.table.rows.length; i++) {
+    for (let j = i + 1; j < b.table.rows.length; j++) {
       for (const col of [1, 2, 3]) {
         const rows = b.table.rows.map(row => row.slice());
         [rows[i][col],rows[j][col]] = [rows[j][col],rows[i][col]];
@@ -237,7 +337,8 @@ function graphSignature(b) {
   const roles = classify(b);
   const c = criterionMap(b,roles);
   const overlaps = (a,d) => c[a].names.filter(n=>c[d].names.includes(n)).length;
-  return [linkingRows(b.table.rows).length,overlaps('spy','paidFriend'),overlaps('double','paidVisitor'),overlaps('spy','pledgedFriend'),overlaps('double','pledgedVisitor')].join('/');
+  const dualRoles = roster.map(n=>roles.filter(r=>r.names.includes(n)).map(r=>r.key)).filter(keys=>keys.length===2).map(keys=>keys.join('+')).sort().join(',');
+  return [dualRoles,b.table.rows.length,linkingRows(b.table.rows).length,overlaps('spy','paidFriend'),overlaps('double','paidVisitor'),overlaps('spy','pledgedFriend'),overlaps('double','pledgedVisitor')].join('/');
 }
 
 export function makeTrial(previous = null, random = Math.random, number = previous ? previous.number + 1 : 1) {
@@ -261,11 +362,15 @@ export function makeTrial(previous = null, random = Math.random, number = previo
   }
   const order = number <= families.length ? families[number-1] : shuffle(families.filter(f=>f !== previous?.family),draw)[0];
   const priorSignature = previous && graphSignature(previous.brief);
-  for (let attempt = 0; attempt < 64; attempt++) {
-    const b = drawFacts(draw);
+  for (let attempt = 0; attempt < 192; attempt++) {
+    const b = drawFacts(draw, number);
+    if (!b) continue;
     if (priorSignature && graphSignature(b) === priorSignature) continue;
     const pairs = criteria.flatMap(a => criteria.filter(d=>d!==a).map(d=>({a,b:d})));
-    for (const predicates of shuffle(pairs,draw)) {
+    const preferPeer = b.peer && draw() < .40;
+    const possibilities = shuffle(pairs,draw);
+    if (preferPeer) possibilities.sort((left,right) => Number(right.a==='paidPeer' || (order!=='relay' && right.b==='paidPeer')) - Number(left.a==='paidPeer' || (order!=='relay' && left.b==='paidPeer')));
+    for (const predicates of possibilities) {
       // First case crosses the star/visitor evidence with the scanner/pledge log.
       if (number === 1 && (!['spy','double'].includes(predicates.a) || !['paidVisitor','paidFriend'].includes(predicates.b))) continue;
       const q = {family:order,...predicates};
@@ -275,10 +380,10 @@ export function makeTrial(previous = null, random = Math.random, number = previo
       if (solution.pair.length && pairKey(solution.pair) !== lastPair) return withAnswer(b,solution,number);
     }
   }
-  // Every constructed table has exactly one author who both broke a pledge and
-  // scanned the watched tile. These two guaranteed orders have disjoint answer
+  // The fallback table has exactly one author who broke a pledge and scanned
+  // the watched tile. These two guaranteed orders have disjoint answer
   // types (author + payee versus two authors) and cannot both repeat the last pair.
-  const b = drawFacts(draw);
+  const b = fallbackFacts(draw);
   for (const family of ['trace','xor']) {
     b.query = {family,a:'spy',b:'double',first:'author',second:'paid'};
     const solution = solveTrial(b);

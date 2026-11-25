@@ -3,6 +3,7 @@ import {createRange} from './mission-range.js';
 import {mountNotebook} from './notebook.js';
 
 const el = id => document.getElementById(id);
+const briefInstructions = el('brief-instructions').textContent;
 let trial;
 let notebook;
 let phase = 'briefing';
@@ -64,9 +65,13 @@ function deal() {
   fieldState = null;
   setPhase('briefing');
   el('case-number').textContent = 'Trial ' + String(trial.number).padStart(2, '0');
-  el('order-label').textContent = trial.amended ? 'Same order · Revised record: ' + trial.revisedRecord : 'Your order';
+  el('order-label').textContent = trial.amended ? 'Same order · ' + trial.revisedRecord + ' revised' : 'Your order';
+  el('brief-instructions').textContent = trial.amended
+    ? 'One record changed. Your previous notes are here. Revise any affected roles and work out the new pair.'
+    : briefInstructions;
   el('order').textContent = el('live-order').textContent = trial.brief.order;
-  notebook = mountNotebook(el('notebook'), trial, placementStatus);
+  const priorNotes = trial.amended ? notebook.getNotes() : null;
+  notebook = mountNotebook(el('notebook'), trial, placementStatus, priorNotes);
   placementStatus();
   el('briefing').scrollTop = 0;
   if (trial.number > 1) el('order').focus({preventScroll:true});
@@ -110,7 +115,8 @@ function updateField(status) {
   fieldState = status;
   const left = 2 - status.shots;
   el('shots').textContent = left + (left === 1 ? ' shot left' : ' shots left');
-  el('picks').textContent = status.selected.length ? 'Marked ' + status.selected.join(' & ') : 'Tap a cutout or its name to fire.';
+  const marked = status.selected.length ? 'Marked ' + status.selected.join(' & ') : 'Tap a cutout or its name to fire.';
+  el('picks').textContent = left ? marked : marked + ' · ' + (status.total - status.shots - status.passed) + ' still to pass';
   el('fire').disabled = !left || status.paused || status.finished;
   if (!left) {
     el('pass').textContent = status.fastForwarding ? 'Fast-forwarding' : 'Fast forward';

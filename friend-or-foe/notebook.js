@@ -34,17 +34,19 @@ function makeLedger({headers, rows}) {
   return table;
 }
 
-export function mountNotebook(root, trial, onChange = () => {}) {
+export function mountNotebook(root, trial, onChange = () => {}, priorNotes = {}) {
   // Use the public headings, names and clues. Only the player's own choices
   // populate the six pairs.
   const roles = trial.roles.map(({key, label}) => ({key, label}));
   const names = [...trial.roster].sort((a, b) => a.localeCompare(b));
   if (!pages.has(trial)) {
-    pages.set(trial, {
-      view: 'evidence',
-      active: roles[0].key,
-      marks: new Map(roles.map(({key}) => [key, new Set()]))
-    });
+    const marks = new Map();
+    for (const {key} of roles) {
+      const carried = trial.amended && Array.isArray(priorNotes?.[key]) ? priorNotes[key] : [];
+      const valid = new Set(carried.filter(name => names.includes(name)));
+      marks.set(key, new Set([...valid].slice(0, 2)));
+    }
+    pages.set(trial, {view: 'evidence', active: roles[0].key, marks});
   }
   const page = pages.get(trial);
 
