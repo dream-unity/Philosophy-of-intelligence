@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10171e">
+  <meta name="description" content="You’re the intelligence officer. Weigh Safe vs Threat polarity across six categories and coupled cross-checks to identify two of ten moving targets.">
+  <title>Foes to Friends · Games</title>
+  <link rel="stylesheet" href="covert-gallery.css">
+  <link rel="stylesheet" href="difficulty.css">
+  <link rel="stylesheet" href="case-view.css">
+  <script type="module" src="dossier-gallery.js"></script>
+</head>
+<body data-phase="ready">
+  <header class="mast">
+    <nav aria-label="Games"><a href="/games/">Games</a><span aria-hidden="true">/</span><h1>Foes <i>to</i> Friends</h1></nav>
+    <div class="meter" id="meters" hidden>
+      <span id="trial-meter"></span>
+      <time id="clock" aria-label="Trial time">0.0 s</time>
+      <span id="ammo-meter" role="status" aria-live="polite"><i class="round"></i><i class="round"></i><b>2 bullets</b></span>
+    </div>
+    <div class="tools">
+      <button id="sound" type="button" aria-pressed="true">Sound on</button>
+      <button id="help-open" type="button" aria-label="How to play">?</button>
+      <button id="pause" type="button" hidden>Pause</button>
+    </div>
+  </header>
+  <main class="cabinet">
+    <section id="gallery" aria-label="Shooting range">
+      <canvas id="range" tabindex="0" aria-label="Shooting range with ten approaching alien cutouts" aria-describedby="keys"></canvas>
+      <div id="labels" aria-label="Named cutouts"></div>
+      <div id="range-message" class="range-message" hidden aria-live="polite" aria-atomic="true">
+        <strong id="outcome"></strong><span id="outcome-detail"></span>
+      </div>
+    </section>
+    <aside class="console" aria-label="Range controls and clues">
+      <section id="setup" class="panel" aria-labelledby="setup-heading">
+        <div class="setup-intro">
+          <h2 id="setup-heading">Ten targets.<br><em>Two bullets.</em></h2>
+          <p>You’re the intelligence officer. Weigh Safe (+) against Threat (−) across all six categories and identify the pair before they pass.</p>
+        </div>
+        <form id="run-form">
+          <fieldset class="levels">
+            <legend>Choose a difficulty</legend>
+            <div class="level-options">
+              <label class="level-choice">
+                <input type="radio" id="difficulty-very-easy" name="difficulty" value="very-easy" checked aria-labelledby="very-easy-label" aria-describedby="very-easy-description">
+                <strong id="very-easy-label">Very Easy</strong>
+                <span id="very-easy-description">Confirmed file, optional shortlist and first clue.</span>
+              </label>
+              <label class="level-choice">
+                <input type="radio" id="difficulty-easy" name="difficulty" value="easy" aria-labelledby="easy-label" aria-describedby="easy-description">
+                <strong id="easy-label">Easy</strong>
+                <span id="easy-description">Ten names. Settle one disputed record.</span>
+              </label>
+              <label class="level-choice">
+                <input type="radio" id="difficulty-medium" name="difficulty" value="medium" aria-labelledby="medium-label" aria-describedby="medium-description">
+                <strong id="medium-label">Moderate</strong>
+                <span id="medium-description">Three disputed records with coupled logic.</span>
+              </label>
+              <label class="level-choice">
+                <input type="radio" id="difficulty-hard" name="difficulty" value="hard" aria-labelledby="hard-label" aria-describedby="hard-description">
+                <strong id="hard-label">Hard</strong>
+                <span id="hard-description">All six records disputed in coupled cycles.</span>
+              </label>
+            </div>
+          </fieldset>
+          <div class="run-settings">
+            <div>
+              <label for="count">Trials per run</label>
+              <input id="count" type="number" min="20" max="1000" step="1" value="20" required inputmode="numeric" aria-describedby="count-hint">
+              <small id="count-hint">20–1,000</small>
+            </div>
+            <div class="speed-setting">
+              <label for="master-speed">Master speed</label>
+              <div class="speed-row">
+                <div class="speed-dial">
+                  <span class="dial-face" aria-hidden="true"></span>
+                  <input type="range" id="master-speed" min="0.25" max="3" step="0.25" value="1" aria-describedby="speed-hint">
+                </div>
+                <div class="speed-reading">
+                  <output for="master-speed" id="speed-value" aria-hidden="true">1×</output>
+                  <small id="speed-hint">First arrival in 10 s</small>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="primary" type="submit">Start run</button>
+        </form>
+      </section>
+      <section id="cues" hidden aria-label="Trial order and evidence"></section>
+      <section id="results" class="panel" hidden aria-labelledby="summary-heading">
+        <h2 id="summary-heading" tabindex="-1">Run complete</h2>
+        <p id="summary-score"></p><dl id="totals"></dl>
+        <button type="button" id="again" class="primary">Set up next run</button>
+      </section>
+    </aside>
+  </main>
+  <footer><p id="keys">Tap or click a cutout or its name to fire. <span class="key-guide"><kbd>1–9</kbd> <kbd>0</kbd> aim · <kbd>Space</kbd> fire</span></p><p id="score" hidden></p></footer>
+  <dialog id="controls" aria-labelledby="dialog-title">
+    <h2 id="dialog-title"></h2>
+    <div id="help-copy" hidden>
+      <div id="cue-guide"></div>
+      <p>Tap a cutout or its nameplate to fire. On a keyboard, aim with 1–9 or 0, then press Space. A miss costs one bullet.</p>
+      <p>Your second shot ends the trial. If all remaining members of the assigned pair pass you, you die.</p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="return" class="primary">Resume</button>
+      <button type="button" id="end" hidden>End run</button>
+    </div>
+  </dialog>
+  <noscript>Enable JavaScript to play Foes to Friends.</noscript>
+</body></html>
