@@ -8,7 +8,8 @@
   <title>Friend or Foe · Games</title>
   <link rel="stylesheet" href="covert-gallery.css">
   <link rel="stylesheet" href="network-view.css">
-  <script type="module" src="dossier-gallery.js?case=network"></script>
+  <link rel="stylesheet" href="difficulty.css">
+  <script type="module" src="dossier-gallery.js?case=levels-1"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -33,15 +34,43 @@
       </div>
     </section>
     <aside class="console" aria-label="Range controls and clues">
-      <section id="setup" class="panel">
-        <h2>Ten targets.<br><em>Two bullets.</em></h2>
-        <p>Work out who helped, watched and sheltered whom. Use your two shots on the pair in this trial’s order.</p>
+      <section id="setup" class="panel" aria-labelledby="setup-heading">
+        <div class="setup-intro">
+          <h2 id="setup-heading">Ten targets.<br><em>Two bullets.</em></h2>
+          <p>Follow the clues and find the pair before they pass you.</p>
+        </div>
         <form id="run-form">
-          <label for="count">Trials per run</label>
-          <input id="count" type="number" min="20" max="1000" step="1" value="20" required inputmode="numeric" aria-describedby="count-hint">
-          <small id="count-hint">20–1,000</small>
-          <label for="pace">Target pace</label>
-          <select id="pace"><option value="4">Steady</option><option value="1">Quick</option></select>
+          <fieldset class="levels">
+            <legend>Choose a difficulty</legend>
+            <div class="level-options">
+              <label class="level-choice">
+                <input type="radio" id="difficulty-easy" name="difficulty" value="easy" checked aria-labelledby="easy-label" aria-describedby="easy-description">
+                <strong id="easy-label">Easy</strong>
+                <span id="easy-description">Follow two confirmed links.</span>
+              </label>
+              <label class="level-choice">
+                <input type="radio" id="difficulty-medium" name="difficulty" value="medium" aria-labelledby="medium-label" aria-describedby="medium-description">
+                <strong id="medium-label">Medium</strong>
+                <span id="medium-description">Trace three links. One is disputed.</span>
+              </label>
+              <label class="level-choice">
+                <input type="radio" id="difficulty-hard" name="difficulty" value="hard" aria-labelledby="hard-label" aria-describedby="hard-description">
+                <strong id="hard-label">Hard</strong>
+                <span id="hard-description">Resolve conflicting witness accounts.</span>
+              </label>
+            </div>
+          </fieldset>
+          <div class="run-settings">
+            <div>
+              <label for="count">Trials per run</label>
+              <input id="count" type="number" min="20" max="1000" step="1" value="20" required inputmode="numeric" aria-describedby="count-hint">
+              <small id="count-hint">20–1,000</small>
+            </div>
+            <div>
+              <label for="pace">Target pace</label>
+              <select id="pace"><option value="4">Steady</option><option value="1">Quick</option></select>
+            </div>
+          </div>
           <button class="primary" type="submit">Start run</button>
         </form>
       </section>

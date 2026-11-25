@@ -1,11 +1,15 @@
 import {createArcadeRange} from './covert-range.js';
-import {makeNetworkTrial} from './network-case.js';
+import {makeLevelTrial} from './network-levels.js';
 import {renderNetwork, renderNetworkGuide, renderNetworkResult} from './network-view.js';
+import {renderLevelEvidence, renderLevelGuide, renderLevelResult} from './network-level-view.js';
 import {ArcadeSession} from './arcade-session.js';
 
 const el = id => document.getElementById(id);
 const dialog = el('controls');
 let phase = 'ready';
+let difficulty = 'easy';
+const difficultyNames = {easy:'Easy', medium:'Medium', hard:'Hard'};
+const difficultyChoices = el('run-form').elements.namedItem('difficulty');
 let session;
 let trial;
 let locked = false;
@@ -61,12 +65,13 @@ function update(status) {
 }
 
 function enterTrial() {
-  trial = makeNetworkTrial(trial);
+  trial = makeLevelTrial(difficulty, trial);
   shots = 0;
   setPhase('play');
-  renderNetwork(el('cues'), trial.evidence);
+  if (difficulty === 'hard') renderNetwork(el('cues'), trial.evidence);
+  else renderLevelEvidence(el('cues'), trial.evidence);
   el('cues').parentElement.scrollTop = 0;
-  el('trial-meter').textContent = 'Trial ' + session.number + ' / ' + session.total;
+  el('trial-meter').textContent = difficultyNames[difficulty] + ' · Trial ' + session.number + ' / ' + session.total;
   el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
   range.start(trial.roster, trial.pair, Number(el('pace').value));
   el('range').focus({preventScroll:true});
@@ -87,7 +92,8 @@ function scheduleNext(delay) {
 function finishTrial(result) {
   if (phase !== 'play' || !session.accept(result)) return;
   setPhase('between');
-  renderNetworkResult(el('cues'), trial, result);
+  if (difficulty === 'hard') renderNetworkResult(el('cues'), trial, result);
+  else renderLevelResult(el('cues'), trial);
   el('cues').parentElement.scrollTop = 0;
   el('range-message').dataset.result = result.reason;
   const elapsed = result.elapsed.toFixed(1) + ' s';
@@ -133,7 +139,11 @@ function openPanel(page = 'pause') {
   const help = page === 'help';
   el('help-copy').hidden = !help;
   el('dialog-title').textContent = help ? 'How to play' : 'Range paused';
-  if (help) renderNetworkGuide(el('cue-guide'));
+  if (help) {
+    const level = phase === 'ready' ? difficultyChoices.value : difficulty;
+    if (level === 'hard') renderNetworkGuide(el('cue-guide'));
+    else renderLevelGuide(el('cue-guide'), level);
+  }
   el('return').textContent = inRun ? 'Resume' : 'Back';
   el('end').hidden = !inRun;
   if (!dialog.open) dialog.showModal();
@@ -152,15 +162,20 @@ el('run-form').addEventListener('submit', e => {
   e.preventDefault();
   if (phase !== 'ready' || !e.currentTarget.reportValidity()) return;
   const total = el('count').valueAsNumber;
+  difficulty = difficultyChoices.value;
   session = new ArcadeSession(total);
   try {
     localStorage.setItem('friend-or-foe.trials', String(total));
     localStorage.setItem('friend-or-foe.pace', el('pace').value);
+    localStorage.setItem('friend-or-foe.difficulty', difficulty);
   } catch {}
   tone(260, 445, .12);
   enterTrial();
 });
-el('again').addEventListener('click', reset);
+el('again').addEventListener('click', () => {
+  reset();
+  el('difficulty-' + difficultyChoices.value).focus({preventScroll:true});
+});
 el('help-open').addEventListener('click', () => openPanel('help'));
 el('pause').addEventListener('click', () => openPanel());
 el('return').addEventListener('click', () => dialog.close());
@@ -195,6 +210,8 @@ function pauseIfRunning() {
 window.addEventListener('blur', pauseIfRunning);
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseIfRunning(); });
 try {
+  const savedLevel = localStorage.getItem('friend-or-foe.difficulty');
+  if (Object.hasOwn(difficultyNames, savedLevel)) difficultyChoices.value = savedLevel;
   const pace = localStorage.getItem('friend-or-foe.pace');
   if (pace === '1') el('pace').value = '1';
   const saved = Number(localStorage.getItem('friend-or-foe.trials'));
