@@ -3,6 +3,7 @@ import {networkFrames} from './network-data.js';
 // One binary choice resolves both personal roles at each incident. The six
 // incidents are independent; there are 64 possible complete social networks.
 const names = ['Dex','Ivo','Luma','Mira','Nia','Orin','Pia','Sol','Tess','Vale'];
+export {names as networkRoster};
 const roles = ['friend','foe','spy','double','civilian','foreigner'];
 const roleLabel = {friend:'Friend',foe:'Foe',spy:'Spy',double:'Double agent',civilian:'Civilian',foreigner:'Foreigner'};
 const ids = ['D1','D2','I1','I2','H1','H2'];

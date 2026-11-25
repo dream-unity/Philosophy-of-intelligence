@@ -16,7 +16,7 @@ test('difficulty is a single pregame choice next to the existing run settings', 
   assert.ok(form, 'Game setup is missing');
   const inputs = form.match(/<input\b[^>]*>/g) ?? [];
   const levels = inputs.filter(input => /\bname="difficulty"/.test(input));
-  assert.deepEqual(levels.map(input => input.match(/\bvalue="([^"]+)"/)?.[1]).sort(), ['easy', 'hard', 'medium']);
+  assert.deepEqual(levels.map(input => input.match(/\bvalue="([^"]+)"/)?.[1]), ['very-easy', 'easy', 'medium', 'hard']);
   assert.ok(levels.every(input => /\btype="radio"/.test(input)));
   for (const input of levels) {
     const label = input.match(/aria-labelledby="([^"]+)"/)?.[1];
@@ -26,12 +26,54 @@ test('difficulty is a single pregame choice next to the existing run settings', 
   }
   const initial = levels.filter(input => /\bchecked(?=[\s/>])/.test(input));
   assert.equal(initial.length, 1);
-  assert.match(initial[0], /\bvalue="easy"/);
+  assert.match(initial[0], /\bvalue="very-easy"/);
   assert.match(form, /<fieldset[\s>]/);
   assert.match(form, /<legend\b[^>]*>[^<]*difficulty[^<]*<\/legend>/i);
   assert.ok(inputs.some(input => /\bid="count"/.test(input) && /\bmin="20"/.test(input) && /\bmax="1000"/.test(input)));
   assert.match(form, /<select\b[^>]*\bid="pace"/);
   assert.match(form, /<button\b[^>]*\btype="submit"/);
+});
+
+test('Very Easy can be solved from the pictures alone throughout a full run', async () => {
+  const {makeLevelTrial} = await import('../friend-or-foe/network-levels.js');
+  const {ArcadeRun} = await import('../friend-or-foe/arcade-range.js');
+  const draw = seeded(71023);
+  const prompts = new Set();
+  const pairs = new Set();
+  let previous;
+  let previousTargets = [];
+  for (let index = 0; index < 1000; index++) {
+    const trial = makeLevelTrial('very-easy', previous, draw);
+    const {shape, badges} = trial.evidence;
+    const run = new ArcadeRun(trial.roster, trial.pair, previousTargets, draw);
+    assert.equal(trial.number, index + 1);
+    assert.equal(run.snapshot().active, 10);
+    const counts = Object.values(badges);
+    assert.equal(new Set(counts).size, 5);
+    assert.ok(counts.every(symbol => counts.filter(other => other === symbol).length === 2));
+    const matching = run.targets.filter(target => badges[target.name] === shape);
+    assert.equal(matching.length, 2);
+    assert.deepEqual(matching.map(target => target.name).sort(), trial.pair);
+    assert.equal(run.snapshot().bullets, 2);
+    matching.forEach(target => run.fire(target));
+    assert.equal(run.result().correct, true);
+    prompts.add(shape);
+    pairs.add(trial.pair.join('/'));
+    if (previous) {
+      assert.notEqual(shape, previous.evidence.shape);
+      assert.notDeepEqual(trial.pair, previous.pair);
+    }
+    previous = trial;
+    previousTargets = run.targets;
+  }
+  assert.equal(prompts.size, 5);
+  assert.equal(pairs.size, 45);
+  for (const level of ['easy', 'medium', 'hard']) {
+    const other = makeLevelTrial(level, previous, draw);
+    assert.equal(other.number, 1);
+    assert.equal(other.evidence.badges, undefined);
+    assert.equal(makeLevelTrial('very-easy', other, draw).number, 1);
+  }
 });
 
 test('Hard deals the original trials and keeps their answers and explanations', async () => {

@@ -1,4 +1,5 @@
-import {makeNetworkTrial, materializeLayout, solveNetworkTrial} from './network-case.js';
+import {makeNetworkTrial, materializeLayout, networkRoster, solveNetworkTrial} from './network-case.js?v=shapes';
+import {shapes} from './picture-badges.js';
 import {networkFrames} from './network-data.js';
 import {easyLayouts,mediumLayouts} from './practice-layouts.js';
 
@@ -87,6 +88,10 @@ function orderText(steps,pick) {
 // neither the ordering of the receivers nor the order of the witnesses is evidence.
 export function solveLevelEvidence(evidence) {
   if (!evidence.level || evidence.level==='hard') return solveNetworkTrial(evidence);
+  if (evidence.level === 'very-easy') {
+    const pair = evidence.roster.filter(name => evidence.badges[name] === evidence.shape);
+    return {pair, proof: [pair.join(' and ') + ' both have a ' + evidence.shape + '.']};
+  }
   const proof=[];
   let rows=evidence.rows;
   if (evidence.level==='medium') {
@@ -207,8 +212,19 @@ function candidateFor(code,level,draw,previousOrder) {
 
 export function makeLevelTrial(level,previous=null,randomSource=Math.random) {
   if (level==='hard') return makeNetworkTrial(previous?.level && previous.level!=='hard' ? null : previous,randomSource);
-  if (level!=='easy' && level!=='medium') throw new RangeError('Choose Easy, Medium or Hard.');
   if (previous?.level!==level) previous=null;
+  if (level === 'very-easy') {
+    const roster = networkRoster.slice();
+    const shuffled = shuffle(roster, randomSource);
+    const badges = Object.fromEntries(shuffled.map((name, i) => [name, shapes[Math.floor(i / 2)]]));
+    // Knowing last round's picture or names should never give away this round.
+    const options = shapes.filter(shape => shape !== previous?.evidence.shape &&
+      !previous?.pair.every(name => badges[name] === shape));
+    const shape = choice(options, randomSource);
+    const evidence = {level, roster, badges, shape, order: 'Tap the two ' + shape + 's.'};
+    return {level, number: (previous?.number ?? 0) + 1, roster, evidence, ...solveLevelEvidence(evidence)};
+  }
+  if (level!=='easy' && level!=='medium') throw new RangeError('Choose Very Easy, Easy, Medium or Hard.');
   const number=(previous?.number??0)+1;
   const draw=random((Math.floor(randomSource()*4294967296)^Math.imul(number,2654435761))>>>0);
   const previousDeck=previous?.level===level ? previous.deck : null;

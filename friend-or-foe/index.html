@@ -8,8 +8,8 @@
   <title>Friend or Foe · Games</title>
   <link rel="stylesheet" href="covert-gallery.css">
   <link rel="stylesheet" href="network-view.css">
-  <link rel="stylesheet" href="difficulty.css">
-  <script type="module" src="dossier-gallery.js?case=levels-1"></script>
+  <link rel="stylesheet" href="difficulty.css?v=shapes">
+  <script type="module" src="dossier-gallery.js?case=shapes"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -44,7 +44,12 @@
             <legend>Choose a difficulty</legend>
             <div class="level-options">
               <label class="level-choice">
-                <input type="radio" id="difficulty-easy" name="difficulty" value="easy" checked aria-labelledby="easy-label" aria-describedby="easy-description">
+                <input type="radio" id="difficulty-very-easy" name="difficulty" value="very-easy" checked aria-labelledby="very-easy-label" aria-describedby="very-easy-description">
+                <strong id="very-easy-label">Very Easy</strong>
+                <span id="very-easy-description">Match two pictures.</span>
+              </label>
+              <label class="level-choice">
+                <input type="radio" id="difficulty-easy" name="difficulty" value="easy" aria-labelledby="easy-label" aria-describedby="easy-description">
                 <strong id="easy-label">Easy</strong>
                 <span id="easy-description">Follow two confirmed links.</span>
               </label>

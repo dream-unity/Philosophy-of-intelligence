@@ -2,6 +2,7 @@ import {ArcadeRun} from './arcade-range.js';
 import {SPECIES, drawCutout, hitCutout} from './arcade-scene.js';
 import {drawSight} from './mission-scene.js';
 import {drawStage, drawTrolley, drawProjector, targetBounds} from './covert-scene.js';
+import {pictureBadge} from './picture-badges.js';
 
 export {ArcadeRun};
 
@@ -79,9 +80,14 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
       const node = document.createElement(clickable ? 'button' : 'span');
       node.className = 'nameplate';
       node.textContent = name;
+      if (target.badge) {
+        node.classList.add('picture-nameplate');
+        node.prepend(pictureBadge(target.badge));
+      }
       if (clickable) {
         node.type = 'button';
-        node.setAttribute('aria-label', 'Shoot ' + name + ', lane ' + (slot + 1));
+        node.setAttribute('aria-label', 'Shoot ' + name + ', lane ' + (slot + 1) +
+          (target.badge ? ', ' + target.badge + ' badge' : ''));
         node.addEventListener('click', () => {
           if (!playing() || run.targets[slot] !== target || target.state !== 'moving') return;
           canvas.focus({preventScroll: true});
@@ -179,10 +185,13 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
     resize();
   }
 
-  function start(names, pair, travelMultiplier = 1) {
+  function start(names, pair, travelMultiplier = 1, badges) {
     stopClock();
     run = new ArcadeRun(names, pair, previous);
-    for (const target of run.targets) target.duration *= travelMultiplier;
+    for (const target of run.targets) {
+      target.duration *= travelMultiplier;
+      if (badges) target.badge = badges[target.name];
+    }
     previous = run.targets;
     lock = pulse = null;
     paused = announcedEnd = false;

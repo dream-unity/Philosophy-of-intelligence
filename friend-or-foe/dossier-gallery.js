@@ -1,14 +1,14 @@
-import {createArcadeRange} from './covert-range.js';
-import {makeLevelTrial} from './network-levels.js';
+import {createArcadeRange} from './covert-range.js?v=shapes';
+import {makeLevelTrial} from './network-levels.js?v=shapes';
 import {renderNetwork, renderNetworkGuide, renderNetworkResult} from './network-view.js';
-import {renderLevelEvidence, renderLevelGuide, renderLevelResult} from './network-level-view.js';
+import {renderLevelEvidence, renderLevelGuide, renderLevelResult} from './network-level-view.js?v=shapes';
 import {ArcadeSession} from './arcade-session.js';
 
 const el = id => document.getElementById(id);
 const dialog = el('controls');
 let phase = 'ready';
-let difficulty = 'easy';
-const difficultyNames = {easy:'Easy', medium:'Medium', hard:'Hard'};
+let difficulty = 'very-easy';
+const difficultyNames = {'very-easy':'Very Easy', easy:'Easy', medium:'Medium', hard:'Hard'};
 const difficultyChoices = el('run-form').elements.namedItem('difficulty');
 let session;
 let trial;
@@ -73,7 +73,7 @@ function enterTrial() {
   el('cues').parentElement.scrollTop = 0;
   el('trial-meter').textContent = difficultyNames[difficulty] + ' · Trial ' + session.number + ' / ' + session.total;
   el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
-  range.start(trial.roster, trial.pair, Number(el('pace').value));
+  range.start(trial.roster, trial.pair, Number(el('pace').value), trial.evidence.badges);
   el('range').focus({preventScroll:true});
 }
 
