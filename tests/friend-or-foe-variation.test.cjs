@@ -279,3 +279,49 @@ test('the live briefing renders the public records, questions and difficulty-spe
     assert.ok(root.walk().some(node => trial.pair.every(person => node.textContent.includes(person))));
   }
 });
+
+test('Very Easy can toggle the shortlist on or off without altering the confirmed records or answer', async t => {
+  const {readFileSync} = require('node:fs');
+  const {join} = require('node:path');
+  const {makeCaseTrial, solveCaseEvidence} = await import('../friend-or-foe/case-decks.js');
+  const {renderCaseEvidence, renderCaseGuide} = await import('../friend-or-foe/case-view.js');
+  const html = readFileSync(join(__dirname, '../friend-or-foe/index.html'), 'utf8');
+  assert.match(html, /<input\b[^>]*\btype="checkbox"[^>]*\bid="very-easy-shortlist"[^>]*\bchecked(?=[\s/>])/);
+
+  class Node {
+    constructor(tag, text = '') { this.tag = tag; this.textContent = text; this.children = []; }
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = children; }
+    setAttribute(name, value) { this[name] = value; }
+    walk() { return [this, ...this.children.flatMap(child => child.walk())]; }
+  }
+  const previous = global.document;
+  global.document = {createElement: tag => new Node(tag), createTextNode: text => new Node('#text', text)};
+  t.after(() => { if (previous === undefined) delete global.document; else global.document = previous; });
+
+  const withShortlist = makeCaseTrial('very-easy', null, seeded(91827), {shortlist: true});
+  const withoutShortlist = makeCaseTrial('very-easy', null, seeded(91827), {shortlist: false});
+  assert.equal(withShortlist.evidence.leads.length, 4);
+  assert.deepEqual(withoutShortlist.evidence.leads, []);
+  assert.equal(withoutShortlist.evidence.rows.filter(row => row.disputed).length, 0);
+  assert.equal(withoutShortlist.evidence.reports.length, 0);
+  assert.equal(withoutShortlist.pair.length, 2);
+  assert.deepEqual(sorted(solveCaseEvidence(withoutShortlist.evidence).pair), sorted(withoutShortlist.pair));
+
+  const root = new Node('div');
+  renderCaseEvidence(root, withShortlist.evidence);
+  assert.ok(root.walk().some(node => node.className === 'case-leads'));
+  assert.ok(root.walk().some(node => node.className === 'case-first'));
+
+  renderCaseEvidence(root, withoutShortlist.evidence);
+  assert.ok(!root.walk().some(node => node.className === 'case-leads'));
+  assert.ok(root.walk().some(node => node.className === 'case-first'));
+
+  renderCaseGuide(root, 'very-easy', {shortlist: true});
+  assert.ok(root.walk().some(node => node.textContent === 'Use the shortlist'));
+
+  renderCaseGuide(root, 'very-easy', {shortlist: false});
+  assert.ok(!root.walk().some(node => node.textContent === 'Use the shortlist'));
+  assert.ok(root.walk().some(node => node.textContent === 'Check the whole file'));
+});
+

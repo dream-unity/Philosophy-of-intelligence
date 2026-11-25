@@ -87,7 +87,9 @@ export function renderCaseEvidence(root, evidence) {
     const leads = element('p', 'case-leads');
     leads.append(element('b', '', 'Shortlist'), document.createTextNode(evidence.leads.join(' · ')));
     board.append(leads);
-    if (evidence.hint) board.append(element('p', 'case-first', evidence.hint));
+  }
+  if (evidence.level === 'very-easy' && evidence.hint) {
+    board.append(element('p', 'case-first', evidence.hint));
   }
 
   const records = element('dl', 'case-records');
@@ -125,7 +127,7 @@ export function renderCaseResult(root, trial) {
   root.replaceChildren(panel);
 }
 
-export function renderCaseGuide(root, level) {
+export function renderCaseGuide(root, level, {shortlist = true} = {}) {
   const guide = element('div', 'case-guide');
   const section = (title, words) => {
     const block = element('section');
@@ -133,8 +135,10 @@ export function renderCaseGuide(root, level) {
     guide.append(block);
   };
   section('Read the contact file', 'You’re the intelligence officer. Read each arrow from sender to contact. In the Spy row, Samp → Mira means Samp observed Mira. Samp can be a friend to someone else in the same file.');
-  if (level === 'very-easy') {
+  if (level === 'very-easy' && shortlist) {
     section('Use the shortlist', 'The pair is among the four names shown. Use the arrows across the whole file to work out which two fit the question.');
+  } else if (level === 'very-easy') {
+    section('Check the whole file', 'All six rows are confirmed. Compare every name against the order to work out which two fit the question.');
   } else if (level === 'easy') {
     section('Check one disputed row', 'Five rows are confirmed. Look up the first claim in its confirmed row. The clue tells you whether the second claim agrees with it. Use that to decide which way the disputed arrows run, or whether two names traded places.');
   } else {

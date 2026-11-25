@@ -43,11 +43,17 @@
           <fieldset class="levels">
             <legend>Choose a difficulty</legend>
             <div class="level-options">
-              <label class="level-choice">
-                <input type="radio" id="difficulty-very-easy" name="difficulty" value="very-easy" checked aria-labelledby="very-easy-label" aria-describedby="very-easy-description">
-                <strong id="very-easy-label">Very Easy</strong>
-                <span id="very-easy-description">Four leads and a first clue.</span>
-              </label>
+              <div class="level-choice level-choice-with-option">
+                <label class="level-choice-main">
+                  <input type="radio" id="difficulty-very-easy" name="difficulty" value="very-easy" checked aria-labelledby="very-easy-label" aria-describedby="very-easy-description">
+                  <strong id="very-easy-label">Very Easy</strong>
+                  <span id="very-easy-description">Four leads and a first clue.</span>
+                </label>
+                <label class="level-suboption" for="very-easy-shortlist">
+                  <input type="checkbox" id="very-easy-shortlist" name="shortlist" checked>
+                  <span>Shortlist</span>
+                </label>
+              </div>
               <label class="level-choice">
                 <input type="radio" id="difficulty-easy" name="difficulty" value="easy" aria-labelledby="easy-label" aria-describedby="easy-description">
                 <strong id="easy-label">Easy</strong>

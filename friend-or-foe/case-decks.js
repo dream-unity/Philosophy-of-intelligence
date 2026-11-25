@@ -120,7 +120,7 @@ export function solveCaseEvidence(evidence) {
   return solution || {pair:[],proof:[]};
 }
 
-export function makeCaseTrial(level,previous=null,draw=Math.random) {
+export function makeCaseTrial(level,previous=null,draw=Math.random,options={}) {
   if (level === 'moderate') level = 'medium';
   if (!['very-easy','easy','medium','hard'].includes(level)) throw new RangeError('Unknown difficulty ' + level);
   const last = previous?.level===level ? previous.deck : null;
@@ -168,8 +168,9 @@ export function makeCaseTrial(level,previous=null,draw=Math.random) {
     });
     return {role:displayRole(row.role,variant),links,disputed,...(disputed && row.alias ? {alias:shuffled(row.alias,draw)} : {})};
   });
+  const includeShortlist = level==='very-easy' && options?.shortlist !== false;
   let leads = [];
-  if (level==='very-easy') {
+  if (includeShortlist) {
     const alternatives = raw.map((_,i)=>edgesFor(raw,1 << i));
     const decoys = nearMisses(id,original,key,actualPair,alternatives);
     leads = shuffled([...actualPair,...decoys].map(name=>names.get(name)),draw);
