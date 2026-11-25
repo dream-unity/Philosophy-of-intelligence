@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'poi-app-v2';
+const CACHE_NAME = 'poi-app-v3';
 
 // Explicit allowlist of Philosophy of Intelligence application assets ONLY.
 // /common-earth is strictly excluded from caching and service worker control.
@@ -44,7 +44,7 @@ const PRECACHE_URLS = [
 
 function isExcludedPath(pathname) {
   return (
-    /^\/(?:common-earth|zelda-and-the-princess-zombie)(?:\/|$)/i.test(pathname) ||
+    /^\/(?:common-earth|zelda-and-the-princess-zombie|friend-or-foe)(?:\/|$)/i.test(pathname) ||
     /^\/dist(?:\/|$)/i.test(pathname) ||
     /^\/(?:server\.js|package(?:-lock)?\.json|metadata\.json)$/i.test(pathname)
   );

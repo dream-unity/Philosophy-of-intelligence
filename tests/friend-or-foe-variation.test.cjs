@@ -272,7 +272,14 @@ test('the live briefing renders the public records, questions and difficulty-spe
       }
     }
     assert.equal(nodes.filter(node => node.className === 'case-report').length, trial.evidence.reports.length);
-    assert.ok(nodes.every(node => !['button', 'input', 'select'].includes(node.tag)));
+    const controls = nodes.filter(node => ['button', 'input', 'select'].includes(node.tag));
+    if (level === 'very-easy') {
+      assert.equal(controls.length, 1);
+      assert.equal(controls[0].id, 'shortlist-toggle');
+      assert.equal(controls[0].type, 'checkbox');
+    } else {
+      assert.equal(controls.length, 0);
+    }
     renderCaseGuide(root, level);
     assert.ok(root.walk().some(node => /intelligence officer/i.test(node.textContent)));
     renderCaseResult(root, trial);
@@ -280,42 +287,60 @@ test('the live briefing renders the public records, questions and difficulty-spe
   }
 });
 
-test('Very Easy can toggle the shortlist on or off without altering the confirmed records or answer', async t => {
+test('Very Easy places the Shortlist checkbox in the gameplay problem view and toggles the four leads live', async t => {
   const {readFileSync} = require('node:fs');
   const {join} = require('node:path');
   const {makeCaseTrial, solveCaseEvidence} = await import('../friend-or-foe/case-decks.js');
   const {renderCaseEvidence, renderCaseGuide} = await import('../friend-or-foe/case-view.js');
   const html = readFileSync(join(__dirname, '../friend-or-foe/index.html'), 'utf8');
-  assert.match(html, /<input\b[^>]*\btype="checkbox"[^>]*\bid="very-easy-shortlist"[^>]*\bchecked(?=[\s/>])/);
+  const form = html.match(/<form\b[^>]*\bid="run-form"[^>]*>([\s\S]*?)<\/form>/)?.[1] || '';
+  assert.doesNotMatch(form, /type="checkbox"/, 'Pre-game setup form should not contain the shortlist checkbox');
 
   class Node {
-    constructor(tag, text = '') { this.tag = tag; this.textContent = text; this.children = []; }
+    constructor(tag, text = '') { this.tag = tag; this.textContent = text; this.children = []; this.listeners = {}; }
     append(...children) { this.children.push(...children); }
     replaceChildren(...children) { this.children = children; }
     setAttribute(name, value) { this[name] = value; }
+    addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
+    dispatch(type) { for (const fn of this.listeners[type] || []) fn(); }
     walk() { return [this, ...this.children.flatMap(child => child.walk())]; }
   }
   const previous = global.document;
   global.document = {createElement: tag => new Node(tag), createTextNode: text => new Node('#text', text)};
   t.after(() => { if (previous === undefined) delete global.document; else global.document = previous; });
 
-  const withShortlist = makeCaseTrial('very-easy', null, seeded(91827), {shortlist: true});
-  const withoutShortlist = makeCaseTrial('very-easy', null, seeded(91827), {shortlist: false});
-  assert.equal(withShortlist.evidence.leads.length, 4);
-  assert.deepEqual(withoutShortlist.evidence.leads, []);
-  assert.equal(withoutShortlist.evidence.rows.filter(row => row.disputed).length, 0);
-  assert.equal(withoutShortlist.evidence.reports.length, 0);
-  assert.equal(withoutShortlist.pair.length, 2);
-  assert.deepEqual(sorted(solveCaseEvidence(withoutShortlist.evidence).pair), sorted(withoutShortlist.pair));
+  const trial = makeCaseTrial('very-easy', null, seeded(91827));
+  assert.equal(trial.evidence.leads.length, 4);
+  assert.equal(trial.evidence.rows.filter(row => row.disputed).length, 0);
+  assert.deepEqual(sorted(solveCaseEvidence(trial.evidence).pair), sorted(trial.pair));
 
   const root = new Node('div');
-  renderCaseEvidence(root, withShortlist.evidence);
-  assert.ok(root.walk().some(node => node.className === 'case-leads'));
-  assert.ok(root.walk().some(node => node.className === 'case-first'));
+  const states = [];
+  renderCaseEvidence(root, trial.evidence, {shortlist: true, onShortlistChange: enabled => states.push(enabled)});
+  const checkbox = root.walk().find(node => node.id === 'shortlist-toggle');
+  const namesNode = root.walk().find(node => node.className === 'case-leads-names');
+  assert.ok(checkbox && checkbox.type === 'checkbox' && checkbox.checked === true);
+  assert.ok(namesNode && namesNode.hidden === false);
+  assert.ok(trial.evidence.leads.every(name => namesNode.textContent.includes(name)));
 
-  renderCaseEvidence(root, withoutShortlist.evidence);
-  assert.ok(!root.walk().some(node => node.className === 'case-leads'));
-  assert.ok(root.walk().some(node => node.className === 'case-first'));
+  // Turning shortlist off hides the four lead names immediately
+  checkbox.checked = false;
+  checkbox.dispatch('change');
+  assert.equal(namesNode.hidden, true);
+  assert.deepEqual(states, [false]);
+
+  // Turning shortlist back on reveals the four lead names immediately
+  checkbox.checked = true;
+  checkbox.dispatch('change');
+  assert.equal(namesNode.hidden, false);
+  assert.deepEqual(states, [false, true]);
+
+  // Rendering initially with shortlist off starts unchecked and hidden
+  renderCaseEvidence(root, trial.evidence, {shortlist: false});
+  const offCheckbox = root.walk().find(node => node.id === 'shortlist-toggle');
+  const offNames = root.walk().find(node => node.className === 'case-leads-names');
+  assert.equal(offCheckbox.checked, false);
+  assert.equal(offNames.hidden, true);
 
   renderCaseGuide(root, 'very-easy', {shortlist: true});
   assert.ok(root.walk().some(node => node.textContent === 'Use the shortlist'));

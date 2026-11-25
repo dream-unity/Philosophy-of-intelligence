@@ -52,37 +52,17 @@ body[data-phase="ready"] .cabinet {
   touch-action: manipulation;
 }
 
-.level-choice:has(input[type="radio"]:checked) {
+.level-choice:has(input:checked) {
   border-color: var(--mint);
   background: #1c3337;
 }
 
-.level-choice:has(input[type="radio"]:focus-visible) {
+.level-choice:has(input:focus-visible) {
   outline: 2px solid var(--mint);
   outline-offset: 2px;
 }
 
-.level-choice-with-option {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 0;
-  cursor: default;
-}
-
-.level-choice-main {
-  display: grid;
-  grid-template-columns: 1.1rem minmax(0, 1fr);
-  column-gap: .7rem;
-  align-content: center;
-  flex: 1 1 auto;
-  padding: .42rem .75rem;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.level-choice > input,
-.level-choice-main > input {
+.level-choice input {
   order: 0;
   grid-column: 1;
   grid-row: 1 / span 2;
@@ -95,66 +75,21 @@ body[data-phase="ready"] .cabinet {
   accent-color: var(--mint);
 }
 
-.level-choice > strong,
-.level-choice > span,
-.level-choice-main > strong,
-.level-choice-main > span {
+.level-choice strong,
+.level-choice span {
   grid-column: 2;
   line-height: 1.25;
 }
 
-.level-choice > strong,
-.level-choice-main > strong {
+.level-choice strong {
   font-size: 1.05rem;
 }
 
-.level-choice > span,
-.level-choice-main > span {
+.level-choice span {
   margin-top: .1rem;
   color: var(--dim);
   font-size: .875rem;
   font-weight: 450;
-}
-
-.level-suboption {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  padding: .34rem .75rem;
-  border-top: 1px solid var(--edge);
-  color: var(--dim);
-  font-size: .84rem;
-  font-weight: 600;
-  line-height: 1.2;
-  cursor: pointer;
-  touch-action: manipulation;
-  opacity: .78;
-}
-
-.level-choice-with-option:has(input[type="radio"]:checked) .level-suboption {
-  border-top-color: #3a5b60;
-  color: var(--text);
-  opacity: 1;
-}
-
-.level-suboption input[type="checkbox"] {
-  order: 0;
-  grid-column: auto;
-  grid-row: auto;
-  flex: 0 0 auto;
-  width: .98rem;
-  height: .98rem;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--mint);
-  cursor: pointer;
-}
-
-.level-suboption:has(input:focus-visible) {
-  outline: 2px solid var(--mint);
-  outline-offset: -2px;
-  border-radius: 0 0 3px 3px;
 }
 
 .run-settings {
@@ -248,23 +183,9 @@ body[data-phase="ready"] .cabinet {
     column-gap: .28rem;
     padding: .5rem;
   }
-  .level-choice-with-option {
-    padding: 0;
-  }
-  .level-choice-main {
-    grid-template-columns: auto minmax(0, 1fr);
-    align-content: start;
-    column-gap: .28rem;
-    padding: .5rem;
-  }
-  .level-choice > input,
-  .level-choice-main > input { grid-row: 1; width: .9rem; height: .9rem; }
-  .level-choice > strong,
-  .level-choice-main > strong { font-size: 1rem; }
-  .level-choice > span,
-  .level-choice-main > span { grid-column: 1 / -1; margin-top: .28rem; }
-  .level-suboption { padding: .34rem .5rem; gap: .38rem; font-size: .82rem; }
-  .level-suboption input[type="checkbox"] { width: .9rem; height: .9rem; }
+  .level-choice input { grid-row: 1; width: .9rem; height: .9rem; }
+  .level-choice strong { font-size: 1rem; }
+  .level-choice span { grid-column: 1 / -1; margin-top: .28rem; }
 }
 
 @media (orientation: portrait) and (min-width: 600px) {
@@ -277,9 +198,6 @@ body[data-phase="ready"] .cabinet {
   #run-form { gap: .62rem; }
   .setup-intro p { margin-top: .2rem; }
   .level-choice { padding-block: .3rem; }
-  .level-choice-with-option { padding-block: 0; }
-  .level-choice-main { padding-block: .3rem; }
-  .level-suboption { padding-block: .24rem; }
 }
 
 .guided-trail {

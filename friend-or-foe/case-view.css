@@ -18,11 +18,31 @@
 }
 .case-leads {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
-  gap: .2rem .55rem;
+  gap: .25rem .6rem;
   margin: .65rem 0 0;
   font: 650 .95rem/1.25 var(--mono);
+}
+.case-shortlist-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .38rem;
+  font: 650 .9rem/1.25 var(--display);
+  color: var(--case-muted);
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+.case-shortlist-toggle input[type="checkbox"] {
+  width: .98rem;
+  height: .98rem;
+  margin: 0;
+  accent-color: var(--mint);
+  cursor: pointer;
+}
+.case-leads-names {
+  color: var(--case-ink);
 }
 .case-leads b, .case-key, .case-reports h3, .case-guide h3 { font-family: var(--display); }
 .case-leads b, .case-key, .case-first { color: var(--case-muted); }

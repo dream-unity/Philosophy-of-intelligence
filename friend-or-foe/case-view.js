@@ -77,13 +77,36 @@ function easyReport(report, rows) {
   return block;
 }
 
-export function renderCaseEvidence(root, evidence) {
+export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlistChange} = {}) {
   const board = element('div', 'case-file');
   const brief = element('header', 'case-brief');
   brief.append(element('p', 'case-title', evidence.title), element('h2', '', evidence.order));
   board.append(brief);
 
-  if (evidence.leads.length) {
+  if (evidence.level === 'very-easy') {
+    const leads = element('div', 'case-leads');
+    const toggle = element('label', 'case-shortlist-toggle');
+    const checkbox = element('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = 'shortlist-toggle';
+    checkbox.name = 'shortlist';
+    checkbox.checked = Boolean(shortlist);
+    toggle.append(checkbox, element('span', '', 'Shortlist'));
+    leads.append(toggle);
+
+    const names = element('span', 'case-leads-names', evidence.leads.join(' · '));
+    names.hidden = !shortlist || !evidence.leads.length;
+    leads.append(names);
+
+    if (typeof checkbox.addEventListener === 'function') {
+      checkbox.addEventListener('change', () => {
+        const enabled = checkbox.checked;
+        names.hidden = !enabled || !evidence.leads.length;
+        if (onShortlistChange) onShortlistChange(enabled);
+      });
+    }
+    board.append(leads);
+  } else if (evidence.leads.length) {
     const leads = element('p', 'case-leads');
     leads.append(element('b', '', 'Shortlist'), document.createTextNode(evidence.leads.join(' · ')));
     board.append(leads);

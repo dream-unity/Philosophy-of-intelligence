@@ -11,7 +11,6 @@ let difficulty = 'very-easy';
 let shortlist = true;
 const difficultyNames = {'very-easy':'Very Easy', easy:'Easy', medium:'Moderate', hard:'Hard'};
 const difficultyChoices = el('run-form').elements.namedItem('difficulty');
-const shortlistInput = el('very-easy-shortlist');
 const speedInput = el('master-speed');
 let masterSpeed = speedInput.valueAsNumber;
 let session;
@@ -68,11 +67,17 @@ function update(status) {
   [...meter.querySelectorAll('i')].forEach((round, i) => round.classList.toggle('spent', i >= remaining));
 }
 
+function setShortlist(enabled) {
+  shortlist = Boolean(enabled);
+  try { localStorage.setItem('friend-or-foe.shortlist', shortlist ? '1' : '0'); } catch {}
+  if (phase === 'play') el('range').focus({preventScroll:true});
+}
+
 function enterTrial() {
-  trial = makeCaseTrial(difficulty, trial, Math.random, {shortlist});
+  trial = makeCaseTrial(difficulty, trial);
   shots = 0;
   setPhase('play');
-  renderCaseEvidence(el('cues'), trial.evidence);
+  renderCaseEvidence(el('cues'), trial.evidence, {shortlist, onShortlistChange: setShortlist});
   el('cues').parentElement.scrollTop = 0;
   el('trial-meter').textContent = difficultyNames[difficulty] + ' · Trial ' + session.number + ' / ' + session.total;
   el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
@@ -143,8 +148,7 @@ function openPanel(page = 'pause') {
   el('dialog-title').textContent = help ? 'How to play' : 'Range paused';
   if (help) {
     const level = phase === 'ready' ? difficultyChoices.value : difficulty;
-    const useShortlist = phase === 'ready' ? shortlistInput.checked : shortlist;
-    renderCaseGuide(el('cue-guide'), level, {shortlist: useShortlist});
+    renderCaseGuide(el('cue-guide'), level, {shortlist});
   }
   el('return').textContent = inRun ? 'Resume' : 'Back';
   el('end').hidden = !inRun;
@@ -160,32 +164,17 @@ function reset() {
   range.preview();
 }
 
-function syncShortlistCopy() {
-  el('very-easy-description').textContent = shortlistInput.checked
-    ? 'Four leads and a first clue.'
-    : 'All ten names and a first clue.';
-}
-
-shortlistInput.addEventListener('change', () => {
-  shortlist = shortlistInput.checked;
-  if (difficultyChoices.value !== 'very-easy') el('difficulty-very-easy').checked = true;
-  syncShortlistCopy();
-  try { localStorage.setItem('friend-or-foe.shortlist', shortlist ? '1' : '0'); } catch {}
-});
-
 el('run-form').addEventListener('submit', e => {
   e.preventDefault();
   if (phase !== 'ready' || !e.currentTarget.reportValidity()) return;
   const total = el('count').valueAsNumber;
   difficulty = difficultyChoices.value;
-  shortlist = shortlistInput.checked;
   masterSpeed = speedInput.valueAsNumber;
   session = new ArcadeSession(total);
   try {
     localStorage.setItem('friend-or-foe.trials', String(total));
     localStorage.setItem('friend-or-foe.masterSpeed', String(masterSpeed));
     localStorage.setItem('friend-or-foe.difficulty', difficulty);
-    localStorage.setItem('friend-or-foe.shortlist', shortlist ? '1' : '0');
   } catch {}
   tone(260, 445, .12);
   enterTrial();
@@ -231,10 +220,7 @@ try {
   const savedLevel = localStorage.getItem('friend-or-foe.difficulty');
   if (Object.hasOwn(difficultyNames, savedLevel)) difficultyChoices.value = savedLevel;
   const savedShortlist = localStorage.getItem('friend-or-foe.shortlist');
-  if (savedShortlist === '0' || savedShortlist === '1') {
-    shortlist = savedShortlist === '1';
-    shortlistInput.checked = shortlist;
-  }
+  if (savedShortlist === '0' || savedShortlist === '1') shortlist = savedShortlist === '1';
   const savedSpeed = localStorage.getItem('friend-or-foe.masterSpeed');
   if (savedSpeed !== null) {
     speedInput.value = savedSpeed;
@@ -245,6 +231,5 @@ try {
   const saved = Number(localStorage.getItem('friend-or-foe.trials'));
   if (Number.isInteger(saved) && saved >= 20 && saved <= 1000) el('count').value = saved;
 } catch {}
-syncShortlistCopy();
 bindSpeedDial(speedInput, el('speed-value'), el('speed-hint'));
 reset();
