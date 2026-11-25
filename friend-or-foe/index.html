@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10171e">
-  <meta name="description" content="Ten moving alien cutouts. Two bullets. Reconstruct six duties across two crews to find the two on double duty.">
+  <meta name="description" content="Ten moving alien cutouts. Two bullets. Work out who helped, watched and sheltered whom to find the pair for this trial.">
   <title>Friend or Foe · Games</title>
   <link rel="stylesheet" href="covert-gallery.css">
-  <link rel="stylesheet" href="dossier-cues.css">
-  <script type="module" src="dossier-gallery.js"></script>
+  <link rel="stylesheet" href="network-view.css">
+  <script type="module" src="dossier-gallery.js?case=network"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -35,17 +35,17 @@
     <aside class="console" aria-label="Range controls and clues">
       <section id="setup" class="panel">
         <h2>Ten targets.<br><em>Two bullets.</em></h2>
-        <p>Two patrols share six duties. Reconstruct both shifts and shoot the one pulling double duty in each crew.</p>
+        <p>Work out who helped, watched and sheltered whom. Use your two shots on the pair in this trial’s order.</p>
         <form id="run-form">
           <label for="count">Trials per run</label>
           <input id="count" type="number" min="20" max="1000" step="1" value="20" required inputmode="numeric" aria-describedby="count-hint">
           <small id="count-hint">20–1,000</small>
           <label for="pace">Target pace</label>
-          <select id="pace"><option value="2.5">Steady</option><option value="1">Quick</option></select>
+          <select id="pace"><option value="4">Steady</option><option value="1">Quick</option></select>
           <button class="primary" type="submit">Start run</button>
         </form>
       </section>
-      <section id="cues" hidden aria-label="Duty rotations and patrol reports"></section>
+      <section id="cues" hidden aria-label="Trial order and evidence"></section>
       <section id="results" class="panel" hidden aria-labelledby="summary-heading">
         <h2 id="summary-heading" tabindex="-1">Run complete</h2>
         <p id="summary-score"></p><dl id="totals"></dl>

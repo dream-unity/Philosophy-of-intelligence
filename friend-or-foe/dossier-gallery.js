@@ -1,6 +1,6 @@
 import {createArcadeRange} from './covert-range.js';
-import {makeDutyTrial} from './duty-wheels.js';
-import {renderDossier, renderDossierGuide, renderResolvedDossier} from './dossier-cues.js';
+import {makeNetworkTrial} from './network-case.js';
+import {renderNetwork, renderNetworkGuide, renderNetworkResult} from './network-view.js';
 import {ArcadeSession} from './arcade-session.js';
 
 const el = id => document.getElementById(id);
@@ -61,10 +61,10 @@ function update(status) {
 }
 
 function enterTrial() {
-  trial = makeDutyTrial(trial);
+  trial = makeNetworkTrial(trial);
   shots = 0;
   setPhase('play');
-  renderDossier(el('cues'), trial);
+  renderNetwork(el('cues'), trial.evidence);
   el('cues').parentElement.scrollTop = 0;
   el('trial-meter').textContent = 'Trial ' + session.number + ' / ' + session.total;
   el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
@@ -87,7 +87,7 @@ function scheduleNext(delay) {
 function finishTrial(result) {
   if (phase !== 'play' || !session.accept(result)) return;
   setPhase('between');
-  renderResolvedDossier(el('cues'), trial);
+  renderNetworkResult(el('cues'), trial, result);
   el('cues').parentElement.scrollTop = 0;
   el('range-message').dataset.result = result.reason;
   const elapsed = result.elapsed.toFixed(1) + ' s';
@@ -95,7 +95,7 @@ function finishTrial(result) {
   el('outcome-detail').textContent = trial.pair.join(' + ') + ' · ' + elapsed;
   el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
   tone(result.correct ? 380 : 210, result.correct ? 625 : 112, .18);
-  scheduleNext(2800);
+  scheduleNext(result.correct ? 2800 : 5500);
 }
 
 function showSummary() {
@@ -133,7 +133,7 @@ function openPanel(page = 'pause') {
   const help = page === 'help';
   el('help-copy').hidden = !help;
   el('dialog-title').textContent = help ? 'How to play' : 'Range paused';
-  if (help) renderDossierGuide(el('cue-guide'));
+  if (help) renderNetworkGuide(el('cue-guide'));
   el('return').textContent = inRun ? 'Resume' : 'Back';
   el('end').hidden = !inRun;
   if (!dialog.open) dialog.showModal();
@@ -196,7 +196,7 @@ window.addEventListener('blur', pauseIfRunning);
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseIfRunning(); });
 try {
   const pace = localStorage.getItem('friend-or-foe.pace');
-  if (pace === '1' || pace === '2.5') el('pace').value = pace;
+  if (pace === '1') el('pace').value = '1';
   const saved = Number(localStorage.getItem('friend-or-foe.trials'));
   if (Number.isInteger(saved) && saved >= 20 && saved <= 1000) el('count').value = saved;
 } catch {}
