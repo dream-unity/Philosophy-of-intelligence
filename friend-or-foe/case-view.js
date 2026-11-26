@@ -148,12 +148,18 @@ function renderStatementWithSuspects(text, suspects) {
   return frag;
 }
 
-function renderNBackEvidence(root, evidence) {
-  const board = element('div', 'case-file nback-case');
-  const brief = element('header', 'case-brief');
-  brief.append(element('h2', '', evidence.order));
-  board.append(brief);
+const NBACK_DECISION_SPECS = [
+  {index: 0, label: 'Line 1', yesLabel: 'Match', yesKey: 'A', noLabel: 'No', noKey: 'S'},
+  {index: 1, label: 'Line 2', yesLabel: 'Match', yesKey: 'D', noLabel: 'No', noKey: 'F'},
+  {index: 2, label: 'Line 3', yesLabel: 'Match', yesKey: 'H', noLabel: 'No', noKey: 'J'},
+  {index: 3, label: 'Logic', yesLabel: 'Valid', yesKey: 'K', noLabel: 'Clash', noKey: 'L'},
+  {index: 4, label: 'All 3', yesLabel: 'Match', yesKey: 'Space', noLabel: 'No', noKey: 'N'}
+];
 
+function renderNBackEvidence(root, evidence, {onNBackDecision, onNBackAdvance, nbackDecisions} = {}) {
+  const board = element('div', 'case-file nback-case');
+
+  // Strictly NO intro header before the 3 premises.
   const list = element('ol', 'nback-statements');
   list.setAttribute('aria-label', 'Three intelligence leads');
   evidence.statements.forEach((stmt, idx) => {
@@ -166,14 +172,67 @@ function renderNBackEvidence(root, evidence) {
   });
   board.append(list);
 
-  const keyText = 'Friends tell truth · Foes lie · Suspects: ' + evidence.suspects.join(' · ');
-  board.append(element('p', 'nback-meta', keyText));
+  if (evidence.isEncoding) {
+    const actionWrap = element('div', 'nback-encode-actions');
+    const nextBtn = element('button', 'primary nback-next-btn', 'Next');
+    nextBtn.type = 'button';
+    if (typeof nextBtn.setAttribute === 'function') nextBtn.setAttribute('data-action', 'nback-next');
+    if (typeof nextBtn.addEventListener === 'function' && typeof onNBackAdvance === 'function') {
+      nextBtn.addEventListener('click', () => onNBackAdvance());
+    }
+    actionWrap.append(nextBtn);
+    board.append(actionWrap);
+  } else {
+    const grid = element('div', 'nback-matrix');
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', 'N-back logical judgment');
+    for (const spec of NBACK_DECISION_SPECS) {
+      const entry = element('div', 'nback-decision');
+      if (typeof entry.setAttribute === 'function') entry.setAttribute('data-decision', String(spec.index));
+      entry.append(element('span', 'nback-decision-label', spec.label));
+
+      const currentVal = Array.isArray(nbackDecisions) ? nbackDecisions[spec.index] : null;
+      const makeBtn = (value, text, keyLabel, polarityClass) => {
+        const btn = element('button', 'nback-choice ' + polarityClass);
+        btn.type = 'button';
+        if (typeof btn.setAttribute === 'function') {
+          btn.setAttribute('data-decision', String(spec.index));
+          btn.setAttribute('data-value', value ? '1' : '0');
+          btn.setAttribute('aria-pressed', String(currentVal === value));
+        }
+        btn.append(
+          element('span', 'nback-choice-text', text),
+          element('kbd', 'nback-choice-key', keyLabel)
+        );
+        if (typeof btn.addEventListener === 'function' && typeof onNBackDecision === 'function') {
+          btn.addEventListener('click', () => onNBackDecision(spec.index, value));
+        }
+        return btn;
+      };
+
+      const pair = element('div', 'nback-choice-pair');
+      pair.append(
+        makeBtn(true, spec.yesLabel, spec.yesKey, 'nback-choice-yes'),
+        makeBtn(false, spec.noLabel, spec.noKey, 'nback-choice-no')
+      );
+      entry.append(pair);
+      grid.append(entry);
+    }
+    board.append(grid);
+  }
+
   root.replaceChildren(board);
 }
 
-export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlistChange} = {}) {
+export function renderCaseEvidence(root, evidence, {
+  shortlist = true,
+  onShortlistChange,
+  onNBackDecision,
+  onNBackAdvance,
+  nbackDecisions
+} = {}) {
   if (evidence && evidence.mode === 'climb-the-ladder') {
-    renderNBackEvidence(root, evidence);
+    renderNBackEvidence(root, evidence, {onNBackDecision, onNBackAdvance, nbackDecisions});
     return;
   }
   const board = element('div', 'case-file');
@@ -292,17 +351,6 @@ export function renderCaseResult(root, trial, {onHoldToggle, onNext, held = fals
   for (const explanation of trial.proof) list.append(element('li', '', explanation));
   panel.append(list);
 
-  if (trial.nbackDebrief && trial.nbackDebrief.refStatements) {
-    const refBox = element('div', 'nback-ref-box');
-    refBox.append(element('p', 'nback-ref-title', 'Reference briefing #' + trial.nbackDebrief.refNumber));
-    const refList = element('ul', 'nback-ref-list');
-    trial.nbackDebrief.refStatements.forEach((stmt, i) => {
-      refList.append(element('li', '', (i + 1) + '. ' + stmt));
-    });
-    refBox.append(refList);
-    panel.append(refBox);
-  }
-
   const fileNode = typeof root.querySelector === 'function' ? root.querySelector('.case-file') : null;
   if (fileNode && typeof root.prepend === 'function') {
     if (fileNode.classList && typeof fileNode.classList.add === 'function') {
@@ -312,22 +360,7 @@ export function renderCaseResult(root, trial, {onHoldToggle, onNext, held = fals
     if (oldResult && typeof oldResult.remove === 'function') oldResult.remove();
     if (typeof root.querySelectorAll === 'function') {
       root.querySelectorAll('.case-decisive').forEach(node => node.classList.remove('case-decisive'));
-      root.querySelectorAll('.nback-stmt').forEach(node => {
-        node.classList.remove('nback-clash', 'nback-broken', 'nback-matched');
-      });
-      if (trial.nbackDebrief) {
-        for (const ci of trial.nbackDebrief.clashIndices || []) {
-          const hit = root.querySelector(`[data-stmt-index="${ci}"]`);
-          if (hit) hit.classList.add('nback-clash');
-        }
-        for (const bi of trial.nbackDebrief.mismatchIndices || []) {
-          const hit = root.querySelector(`[data-stmt-index="${bi}"]`);
-          if (hit) hit.classList.add('nback-broken');
-        }
-        if (trial.nbackDebrief.isEcho) {
-          root.querySelectorAll('.nback-stmt').forEach(node => node.classList.add('nback-matched'));
-        }
-      } else if (trial.rivalDebrief && typeof trial.rivalDebrief.reportIndex === 'number') {
+      if (trial.rivalDebrief && typeof trial.rivalDebrief.reportIndex === 'number') {
         const hit = root.querySelector(`[data-report-index="${trial.rivalDebrief.reportIndex}"]`);
         if (hit) hit.classList.add('case-decisive');
       } else if (trial.rivalDebrief && trial.rivalDebrief.decisiveRole) {
@@ -350,12 +383,16 @@ export function renderCaseGuide(root, level, {shortlist = true, zeroToHero = fal
   };
   if (level === 'climb-the-ladder') {
     section(
-      'Crack all three intelligence leads',
-      'Each briefing names three suspects in three compact statements. Friends always tell the truth and Foes always lie. Unpack nested loyalties, speaker claims, analogies, and conditionals to deduce the Foes—or catch two speakers whose claims directly clash.'
+      'Decode the intelligence roles',
+      'Friends and Civilians always tell the truth; Foes, Spies, and Double agents always lie; a Foreigner reports factual external intelligence. Unpack nested loyalties, analogies, speaker claims, and conditionals across all three leads.'
     );
     section(
-      'Compare N briefings back (' + nBack + '-back)',
-      'Hold the underlying logical rules of each briefing across ' + nBack + ' trials. Names shift, order scrambles, and phrasing rewrites. If all three logical rules echo the briefing ' + nBack + ' trials back, invert your shot among the three suspects: shoot the Friends instead of the Foes, or shoot the uninvolved speaker instead of the clashing pair.'
+      'Match logic ' + nBack + (nBack === 1 ? ' trial' : ' trials') + ' back',
+      'Hold each three-lead briefing across ' + nBack + (nBack === 1 ? ' trial' : ' trials') + '. Compare the current briefing against ' + nBack + (nBack === 1 ? ' trial' : ' trials') + ' back under one consistent suspect renaming—names shift, order scrambles, and phrasing rewrites. Maximize matching lines (breaking ties No-first from Line 1), mark whether all three leads are internally Valid or form a logical Clash, and call All 3 to advance straight to the next briefing.'
+    );
+    section(
+      'Fast controls',
+      'Click any choice or use the keyboard: A/S (Line 1), D/F (Line 2), H/J (Line 3), K/L (Valid or Clash), Space/N (All 3). On the initial ' + nBack + (nBack === 1 ? ' briefing' : ' briefings') + ', press Space or click Next to advance.'
     );
     root.replaceChildren(guide);
     return;

@@ -30,6 +30,7 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
   let lock = null;
   let pulse = null;
   let paused = false;
+  let interactive = true;
   let frameId = 0;
   let lastTime = null;
   let announcedEnd = false;
@@ -38,6 +39,7 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
   let lastPassed = 0;
 
   function playing() { return run && !run.complete && !paused; }
+  function canFire() { return playing() && interactive; }
   function bounds(t) { return targetBounds(canvas.width, canvas.height, t); }
   function aimed(pad = 0) {
     if (!playing()) return null;
@@ -73,7 +75,7 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
 
   function tagTarget(target, r) {
     const {slot, name} = target;
-    const clickable = !!playing();
+    const clickable = !!canFire();
     let tag = tags[slot];
     if (tag?.target !== target || tag.clickable !== clickable) {
       const node = document.createElement(clickable ? 'button' : 'span');
@@ -192,6 +194,7 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
     stopClock();
     // Older galleries pass their travel-time multiplier as the third argument.
     const speed = typeof settings === 'number' ? 1 / settings : settings.masterSpeed;
+    interactive = typeof settings === 'object' && settings !== null ? settings.interactive !== false : true;
     run = new ArcadeRun(names, pair, previous, Math.random, speed);
     previous = run.targets;
     lock = pulse = null;
@@ -201,7 +204,7 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
     lastTime = performance.now();
     resize();
     publish(true);
-    canvas.focus({preventScroll: true});
+    if (interactive) canvas.focus({preventScroll: true});
     frameId = requestAnimationFrame(tick);
   }
 
@@ -240,7 +243,7 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
   }
 
   function shoot(namedTarget, pad = 0) {
-    if (!playing()) return false;
+    if (!canFire()) return false;
     updateClock(performance.now());
     if (run.complete) { draw(); publish(true); return false; }
     const target = namedTarget || aimed(pad);
@@ -261,17 +264,17 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
   }
 
   canvas.addEventListener('pointermove', event => {
-    if (playing() && event.isPrimary) point(event);
+    if (canFire() && event.isPrimary) point(event);
   }, opts);
   canvas.addEventListener('pointerdown', event => {
-    if (!playing() || !event.isPrimary || event.button !== 0) return;
+    if (!canFire() || !event.isPrimary || event.button !== 0) return;
     event.preventDefault();
     canvas.focus({preventScroll:true});
     point(event);
     shoot(null, event.pointerType === 'touch' ? 4 : 2);
   }, opts);
   canvas.addEventListener('keydown', event => {
-    if (!playing() || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!canFire() || event.altKey || event.ctrlKey || event.metaKey) return;
     const digit = /^(?:Digit|Numpad)(\d)$/.exec(event.code);
     if (digit) {
       event.preventDefault();

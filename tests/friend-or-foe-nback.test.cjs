@@ -8,7 +8,7 @@ function loadModule(relPath) {
   return import(pathToFileURL(path.join(__dirname, '..', relPath)).href);
 }
 
-const BANNED_COPY = /\b(rows?|arrows?|left side|right side|points?|score|top two|IQ|categor(y|ies)|files?|records?|appears? in|named in|listed|distinct|overt|covert|hostile|safe|threat|dossier)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
+const BANNED_COPY = /\b(rows?|arrows?|left side|right side|points?|score|top two|IQ|categor(y|ies)|files?|records?|appears? in|named in|listed|distinct|overt|covert|hostile|safe|threat|dossier|echo(es)?|invert(ed|ing)?|inversion|breach(es)?)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
 
 function makeFakeDocument() {
   class FakeNode {
@@ -31,9 +31,13 @@ function makeFakeDocument() {
       };
     }
     setAttribute(k, v) { this.attributes[k] = String(v); }
+    getAttribute(k) { return this.attributes[k] ?? null; }
     addEventListener(type, fn) {
       if (!this.listeners.has(type)) this.listeners.set(type, []);
       this.listeners.get(type).push(fn);
+    }
+    click() {
+      for (const fn of this.listeners.get('click') || []) fn();
     }
     append(...nodes) {
       for (const n of nodes) {
@@ -50,14 +54,17 @@ function makeFakeDocument() {
       this.append(...nodes);
     }
     remove() {}
+    findAll(pred, out = []) {
+      if (pred(this)) out.push(this);
+      for (const c of this.children) {
+        if (c && typeof c.findAll === 'function') c.findAll(pred, out);
+      }
+      return out;
+    }
     querySelector(sel) {
       if (sel.startsWith('.')) {
         const cls = sel.slice(1);
         return this.findAll(n => n.className.split(/\s+/).includes(cls))[0] || null;
-      }
-      const attrMatch = sel.match(/^\[([^=]+)="([^"]+)"\]$/);
-      if (attrMatch) {
-        return this.findAll(n => n.attributes[attrMatch[1]] === attrMatch[2])[0] || null;
       }
       return null;
     }
@@ -68,219 +75,246 @@ function makeFakeDocument() {
       }
       return [];
     }
-    findAll(pred, out = []) {
-      if (pred(this)) out.push(this);
-      for (const c of this.children) if (c instanceof FakeNode) c.findAll(pred, out);
-      return out;
-    }
     allText() {
-      return this.textContent + this.children.map(c => c instanceof FakeNode ? c.allText() : c.textContent).join('');
+      let text = this.textContent || '';
+      for (const c of this.children) {
+        if (!c) continue;
+        text += ' ' + (typeof c.allText === 'function' ? c.allText() : (c.textContent || ''));
+      }
+      return text;
     }
   }
   return {
+    FakeNode,
     createElement: tag => new FakeNode(tag),
-    createTextNode: text => ({textContent: String(text), children: []})
+    createTextNode: text => ({textContent: text, children: []})
   };
 }
 
-test('semantic isomorphism aligns logically equivalent disguises (Smullyan, contrapositive, depth-3) and enforces No-first tie-breaking', async () => {
-  const {maskFromPred, permuteMask, analyzeNBackAlignment} = await loadModule('friend-or-foe/nback-cases.js');
+test('N-back semantic alignment verifies disguised cross-family equivalence and No-first tie-breaking', async () => {
+  const {analyzeNBackAlignment, buildCandidateStatements, maskFromPred} =
+    await loadModule('friend-or-foe/nback-cases.js');
 
-  // Verify Smullyan 3rd-order identity: "A says B differs from A on C" === (B = -1)
-  const smullyanMask = maskFromPred((a, b, c) => (a === 1) === ((b * c) === -(a * c)));
-  const directFoeB = maskFromPred((a, b) => b === -1);
-  assert.equal(smullyanMask, directFoeB);
+  // Verify cross-family semantic equivalence:
+  // "If A is Friend, B is a Double." (NAND) === "Either X or Y is a Foe." (Disjunction)
+  const poolRef = buildCandidateStatements(['Samp', 'Orin', 'Luma']);
+  const poolCur = buildCandidateStatements(['Vale', 'Tess', 'Nia']);
 
-  // Verify contrapositive equivalence: (A = -1 => B*C = -1) === (B*C = +1 => A = +1)
-  const condDirect = maskFromPred((a, b, c) => !(a === -1) || (b * c === -1));
-  const condContra = maskFromPred((a, b, c) => !(b * c === 1) || (a === 1));
-  assert.equal(condDirect, condContra);
+  const ref1 = poolRef.find(s => s.text === 'If Samp is Friend, Orin is a Double.');
+  const ref2 = poolRef.find(s => s.text === 'Samp says Orin opposes Samp\'s spy.');
+  const ref3 = poolRef.find(s => s.text === 'If Luma is a Spy, Samp opposes Orin\'s friend.');
 
-  // Verify 3/3 alignment under non-trivial bijection phi = [1, 2, 0] and shuffled statement order
-  const m0 = maskFromPred((a, b, c) => !(a === -1) || (b * c === -1));
-  const m1 = maskFromPred((a, b, c) => b * c === 1);
-  const m2 = maskFromPred((a, b, c) => a * c === -1);
-  const ref = [{mask: m0}, {mask: m1}, {mask: m2}];
-  const phi = [1, 2, 0];
-  const cur = [
-    {mask: permuteMask(m2, phi)},
-    {mask: permuteMask(m0, phi)},
-    {mask: permuteMask(m1, phi)}
-  ];
-  const match = analyzeNBackAlignment(ref, cur);
-  assert.equal(match.isEcho, true);
-  assert.equal(match.matchedCount, 3);
-  assert.deepEqual(match.curMatches, [true, true, true]);
+  const cur1 = poolCur.find(s => s.text === 'If Vale backs Tess\'s friend, Nia is Civilian.');
+  const cur2 = poolCur.find(s => s.text === 'Either Vale or Tess is a Foe.');
+  const cur3 = poolCur.find(s => s.text === 'Vale says Tess matches Vale on Nia.');
 
-  // Mutating 1 statement drops alignment to exact 2/3 breach
-  const curBreach = [
-    {mask: permuteMask(m2, phi)},
-    {mask: permuteMask(m0, phi)},
-    {mask: maskFromPred((a, b, c) => a * b * c === -1)}
-  ];
-  const breach = analyzeNBackAlignment(ref, curBreach);
-  assert.equal(breach.isEcho, false);
-  assert.equal(breach.matchedCount, 2);
-  assert.equal(breach.mismatchIndices.length, 1);
+  assert.ok(ref1 && ref2 && ref3 && cur1 && cur2 && cur3, 'all cross-family statements exist');
+  const align = analyzeNBackAlignment([ref1, ref2, ref3], [cur1, cur2, cur3]);
+  assert.equal(align.matchedCount, 3, 'cross-family disguised triad must certify as a 3/3 logical match');
+  assert.equal(align.isFullMatch, true);
+  assert.deepEqual(align.curMatches, [true, true, true]);
+
+  // Verify deterministic No-first tie-break:
+  // If two bijections tie at 1/3 match (one matching Line 1 [T,F,F], one matching Line 3 [F,F,T]),
+  // Ontological Worlds' No-first tie-break picks [F,F,T].
+  const mA = maskFromPred((v0) => v0 === 1);
+  const mB = maskFromPred((v0, v1) => v1 === 1);
+  const mC = maskFromPred((v0, v1, v2) => v2 === -1);
+  const tieRef = [{mask: mA}, {mask: mC}, {mask: mC}];
+  const tieCur = [{mask: mB}, {mask: mB}, {mask: mA}];
+  const tieAlign = analyzeNBackAlignment(tieRef, tieCur);
+  assert.equal(tieAlign.matchedCount, 1);
+  assert.deepEqual(tieAlign.curMatches, [false, false, true], 'No-first tie-break prefers [No, No, Yes] over [Yes, No, No]');
 });
 
-test('Climb the ladder generates certified 3-statement runs across 1-back to 6-back within Ontological Worlds word/char ceiling and zero ammo leak', async () => {
+test('Climb the ladder generates 480 certified high-order trials across 1-back to 6-back within 25w/129c and escalating complexity', async () => {
   const {
+    MAX_PREMISE_CHARS,
+    MAX_PREMISE_WORDS,
+    analyzeNBackAlignment,
+    evaluateNBackDecisions,
     makeNBackDeck,
     measurePremises,
-    solveNBackCell,
-    analyzeNBackAlignment,
-    MAX_PREMISE_WORDS,
-    MAX_PREMISE_CHARS,
-    MIN_NBACK,
-    MAX_NBACK
+    solveNBackCell
   } = await loadModule('friend-or-foe/nback-cases.js');
-  const {ArcadeRun} = await loadModule('friend-or-foe/arcade-range.js');
 
-  assert.throws(() => makeNBackDeck(0), RangeError);
-  assert.throws(() => makeNBackDeck(7), RangeError);
+  const roleHits = {
+    friend: 0,
+    foe: 0,
+    spy: 0,
+    double: 0,
+    civilian: 0,
+    foreigner: 0
+  };
+  const nonlinearRateByN = {};
+  const familyVarietyByN = {};
 
-  for (let nBack = MIN_NBACK; nBack <= MAX_NBACK; nBack++) {
-    const deck = makeNBackDeck(nBack, 13370 + nBack * 97);
-    let prevTargetsKey = null;
-    let prevArcadeTargets = [];
-    let echoCount = 0;
-    let breachCount = 0;
-    let exactTwoOfThreeBreaches = 0;
-    let contradictionCount = 0;
-    const bulletsByQuadrant = {
-      echo: new Set(),
-      breach: new Set(),
-      consistent: new Set(),
-      contradiction: new Set()
-    };
-
+  for (let n = 1; n <= 6; n++) {
+    const deck = makeNBackDeck(n, 20260 + n * 97);
     const trials = [];
-    for (let i = 0; i < 60; i++) {
+    let fullMatchCount = 0;
+    let partialCount = 0;
+    let clashCount = 0;
+    let validCount = 0;
+    let nonlinearTotal = 0;
+    let distinctFamilySum = 0;
+
+    for (let t = 0; t < 80; t++) {
       const trial = deck.nextTrial();
       trials.push(trial);
-      assert.equal(trial.number, i + 1);
-      assert.equal(trial.roster.length, 10);
-      assert.equal(trial.evidence.mode, 'climb-the-ladder');
-      assert.equal(trial.evidence.statements.length, 3, 'Must present strictly 3 statements per trial');
 
-      const {words, chars, joined} = measurePremises(trial.evidence.statements);
-      assert.ok(words <= MAX_PREMISE_WORDS, `${nBack}-back trial ${i + 1} exceeded ${MAX_PREMISE_WORDS} words (${words}): ${joined}`);
-      assert.ok(chars <= MAX_PREMISE_CHARS, `${nBack}-back trial ${i + 1} exceeded ${MAX_PREMISE_CHARS} chars (${chars}): ${joined}`);
-      assert.doesNotMatch(joined, BANNED_COPY, `Premises contain banned copy: ${joined}`);
-      assert.doesNotMatch(trial.evidence.order, BANNED_COPY, `Order contains banned copy: ${trial.evidence.order}`);
-      for (const line of trial.proof) {
-        assert.doesNotMatch(line, BANNED_COPY, `Proof contains banned copy: ${line}`);
-      }
+      // Zero intro banner before the 3 premises
+      assert.equal(trial.evidence.order, '', `N=${n} trial ${t + 1} must have empty order (no intro)`);
+      assert.equal(trial.evidence.statements.length, 3, 'strictly 3 statements per trial');
 
-      // Independently re-solve the cell
-      const solved = solveNBackCell(trial.nback.suspects, trial.nback.statements);
-      assert.equal(solved.valid, true, `${nBack}-back trial ${i + 1} failed independent solver certification`);
+      // Premise word & character ceiling matching Ontological Worlds
+      const metrics = measurePremises(trial.evidence.statements);
+      assert.ok(metrics.words <= MAX_PREMISE_WORDS, `N=${n} t=${t + 1} exceeded ${MAX_PREMISE_WORDS} words (${metrics.words}): ${metrics.joined}`);
+      assert.ok(metrics.chars <= MAX_PREMISE_CHARS, `N=${n} t=${t + 1} exceeded ${MAX_PREMISE_CHARS} chars (${metrics.chars}): ${metrics.joined}`);
+      assert.equal(BANNED_COPY.test(metrics.joined), false, `banned copy in premises: ${metrics.joined}`);
 
-      const curTargetsKey = [...trial.pair].sort().join('/');
-      if (prevTargetsKey) {
-        assert.notEqual(curTargetsKey, prevTargetsKey, 'Consecutive target sets must not repeat');
-      }
-      prevTargetsKey = curTargetsKey;
+      const lower = metrics.joined.toLowerCase();
+      if (/\bfriend\b/.test(lower)) roleHits.friend++;
+      if (/\bfoe\b/.test(lower)) roleHits.foe++;
+      if (/\bspy\b/.test(lower)) roleHits.spy++;
+      if (/\bdouble\b/.test(lower)) roleHits.double++;
+      if (/\bcivilian\b/.test(lower)) roleHits.civilian++;
+      if (/\bforeigner\b/.test(lower)) roleHits.foreigner++;
 
-      if (i < nBack) {
-        assert.equal(trial.nback.isWarmup, true);
-        assert.deepEqual([...trial.pair].sort(), [...solved.primaryTargets].sort());
-      } else {
-        assert.equal(trial.nback.isWarmup, false);
-        const refTrial = trials[i - nBack];
-        const align = analyzeNBackAlignment(refTrial.nback.statements, trial.nback.statements);
-        assert.equal(align.isEcho, trial.nback.isEcho);
-        if (align.isEcho) {
-          echoCount++;
-          assert.equal(align.matchedCount, 3);
-          assert.deepEqual([...trial.pair].sort(), [...solved.complementTargets].sort());
-          bulletsByQuadrant.echo.add(trial.pair.length);
-        } else {
-          breachCount++;
-          assert.ok(align.matchedCount <= 2);
-          if (align.matchedCount === 2) exactTwoOfThreeBreaches++;
-          assert.deepEqual([...trial.pair].sort(), [...solved.primaryTargets].sort());
-          bulletsByQuadrant.breach.add(trial.pair.length);
-        }
-      }
+      // Complexity telemetry
+      const fams = new Set(trial.nback.statements.map(s => s.family));
+      distinctFamilySum += fams.size;
+      nonlinearTotal += trial.nback.statements.filter(s =>
+        s.family === 'foreigner-cond' || s.family === 'conditional2' || s.family === 'disjunction2' ||
+        s.family === 'conditional3' || s.family === 'epistemic-nonlinear'
+      ).length;
 
+      // Exact solver certification (minimal Valid or irreducible 3-line Clash)
+      const solved = solveNBackCell(trial.nback.suspects, trial.nback.statements, {requireIrreducibleClash: true});
+      assert.equal(solved.valid, true, `N=${n} t=${t + 1} failed certification: ${JSON.stringify(solved)}`);
       if (solved.kind === 'contradiction') {
-        contradictionCount++;
-        bulletsByQuadrant.contradiction.add(trial.pair.length);
+        assert.equal(solved.irreducible, true, 'contradictions must be irreducible 3-line clashes');
+        clashCount++;
       } else {
-        bulletsByQuadrant.consistent.add(trial.pair.length);
+        validCount++;
       }
 
-      // Verify full compatibility with ArcadeRun shooting range
-      const run = new ArcadeRun(trial.roster, trial.pair, prevArcadeTargets, () => 0.42);
-      assert.equal(run.snapshot().bullets, trial.pair.length);
-      for (const name of trial.pair) {
-        run.fire(run.targets.find(t => t.name === name));
+      if (t < n) {
+        assert.equal(trial.nback.isEncoding, true);
+        assert.equal(trial.nback.expectedDecisions, null);
+      } else {
+        assert.equal(trial.nback.isEncoding, false);
+        const ref = trials[t - n];
+        const recheck = analyzeNBackAlignment(ref.nback.statements, trial.nback.statements);
+        assert.deepEqual(trial.nback.alignment.curMatches, recheck.curMatches);
+        assert.equal(trial.nback.isFullMatch, recheck.isFullMatch);
+
+        const expected = [
+          recheck.curMatches[0],
+          recheck.curMatches[1],
+          recheck.curMatches[2],
+          solved.kind === 'consistent',
+          recheck.isFullMatch
+        ];
+        assert.deepEqual(trial.nback.expectedDecisions, expected);
+
+        const perfect = evaluateNBackDecisions(trial, expected);
+        assert.equal(perfect.exact, true);
+        assert.equal(perfect.lineCorrect, 3);
+        const flipped = [...expected];
+        flipped[4] = !flipped[4];
+        const wrong = evaluateNBackDecisions(trial, flipped);
+        assert.equal(wrong.exact, false);
+
+        if (recheck.isFullMatch) fullMatchCount++;
+        else partialCount++;
       }
-      assert.equal(run.result().correct, true);
-      prevArcadeTargets = run.targets;
     }
 
-    assert.ok(echoCount >= 12, `${nBack}-back should have >=12 echoes in 60 trials, got ${echoCount}`);
-    assert.ok(breachCount >= 18, `${nBack}-back should have >=18 breaches in 60 trials, got ${breachCount}`);
-    assert.ok(exactTwoOfThreeBreaches / breachCount >= 0.85,
-      `${nBack}-back breaches should be >=85% exact 2/3 lures (got ${exactTwoOfThreeBreaches}/${breachCount})`);
-    assert.ok(contradictionCount >= 8, `${nBack}-back should include >=8 contradiction cells, got ${contradictionCount}`);
+    assert.ok(fullMatchCount >= 12, `N=${n} should include enough full 3/3 matches (got ${fullMatchCount})`);
+    assert.ok(partialCount >= 20, `N=${n} should include enough partial/mismatch lures (got ${partialCount})`);
+    assert.ok(clashCount >= 12, `N=${n} should include irreducible 3-line clashes (got ${clashCount})`);
+    assert.ok(validCount >= 20, `N=${n} should include certified consistent triads (got ${validCount})`);
 
-    // Zero ammo leak: both 1-bullet and 2-bullet outcomes occur in Echoes, Breaches, and Consistent cells
-    assert.deepEqual([...bulletsByQuadrant.echo].sort(), [1, 2], `${nBack}-back Echoes must balance 1 and 2 bullets`);
-    assert.deepEqual([...bulletsByQuadrant.breach].sort(), [1, 2], `${nBack}-back Breaches must balance 1 and 2 bullets`);
-    assert.deepEqual([...bulletsByQuadrant.consistent].sort(), [1, 2], `${nBack}-back Consistent cells must balance 1 and 2 bullets`);
+    nonlinearRateByN[n] = nonlinearTotal / 80;
+    familyVarietyByN[n] = distinctFamilySum / 80;
   }
+
+  // All 6 Friend or Foe intelligence roles must appear across sessions
+  for (const [role, count] of Object.entries(roleHits)) {
+    assert.ok(count >= 15, `Role "${role}" should be actively represented (got ${count})`);
+  }
+
+  // Relational complexity scales upward from 1-back to 6-back
+  assert.ok(
+    nonlinearRateByN[6] > nonlinearRateByN[1],
+    `6-back nonlinear density (${nonlinearRateByN[6].toFixed(2)}) should exceed 1-back (${nonlinearRateByN[1].toFixed(2)})`
+  );
+  assert.ok(
+    familyVarietyByN[6] >= familyVarietyByN[1],
+    `6-back distinct family variety (${familyVarietyByN[6].toFixed(2)}) should be >= 1-back (${familyVarietyByN[1].toFixed(2)})`
+  );
 });
 
-test('Climb the ladder setup UI sits right next to From Zero to Hero with an N-back level picker and renders clean briefings/debriefs', async () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'friend-or-foe/index.html'), 'utf8');
-  const visibleText = html.replace(/<head[\s\S]*?<\/head>/i, '').replace(/<[^>]+>/g, ' ');
-  assert.doesNotMatch(visibleText, BANNED_COPY);
-
-  // Climb the ladder sits immediately next to From Zero to Hero
-  const zthPos = html.indexOf('id="difficulty-zero-to-hero"');
-  const ctlPos = html.indexOf('id="difficulty-climb-the-ladder"');
-  const ssePos = html.indexOf('id="difficulty-super-super-easy"');
-  assert.ok(zthPos > 0 && ctlPos > zthPos && ctlPos < ssePos, 'Climb the ladder must sit right next to From Zero to Hero');
-  assert.ok(html.includes('Climb the ladder'));
-  assert.match(html, /N-back version of Friend or Foe/i);
-
-  // N-back level picker exists inside #run-form, hidden by default, with 1-back..6-back controls
-  assert.ok(html.includes('id="nback-setting"'));
+test('Climb the ladder HTML and UI render zero intro, zero debrief, Next on encoding, and 5-decision matrix on scored trials', async () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'friend-or-foe', 'index.html'), 'utf8');
+  const zeroIdx = html.indexOf('value="zero-to-hero"');
+  const climbIdx = html.indexOf('value="climb-the-ladder"');
+  const sseIdx = html.indexOf('value="super-super-easy"');
+  assert.ok(zeroIdx > 0 && climbIdx > zeroIdx && climbIdx < sseIdx, 'Climb the ladder sits right next to From Zero to Hero');
+  assert.match(html, /Climb the ladder[\s\S]*?N-back version of Friend or Foe/i);
+  assert.match(html, /id="nback-setting"[^>]*hidden/);
   for (let n = 1; n <= 6; n++) {
-    assert.ok(html.includes(`data-nback="${n}"`), `Missing ${n}-back button`);
+    assert.match(html, new RegExp(`data-nback="${n}"`), `missing ${n}-back picker button`);
   }
 
-  // Render live trial, debrief, and guide through case-view.js
+  const bodyOnly = html.replace(/<head[\s\S]*?<\/head>/i, '').replace(/<[^>]+>/g, ' ');
+  assert.equal(BANNED_COPY.test(bodyOnly), false, 'index.html visible copy must have zero banned/echo/inversion words');
+
+  const formMatch = html.match(/<form id="run-form">[\s\S]*?<\/form>/);
+  assert.ok(formMatch);
+  assert.equal(/type="checkbox"/i.test(formMatch[0]), false, '#run-form must remain free of checkboxes');
+
+  const fakeDoc = makeFakeDocument();
+  global.document = fakeDoc;
+  const {renderCaseEvidence, renderCaseGuide} = await loadModule('friend-or-foe/case-view.js');
   const {makeNBackDeck} = await loadModule('friend-or-foe/nback-cases.js');
-  const {renderCaseEvidence, renderCaseResult, renderCaseGuide} = await loadModule('friend-or-foe/case-view.js');
-  const prevDocument = global.document;
-  global.document = makeFakeDocument();
-  try {
-    const deck = makeNBackDeck(2, 9001);
-    const t1 = deck.nextTrial();
-    deck.nextTrial();
-    const t3 = deck.nextTrial();
 
-    const root = global.document.createElement('section');
-    renderCaseEvidence(root, t1.evidence);
-    assert.equal(root.querySelectorAll('.nback-stmt').length, 3);
-    assert.ok(root.allText().includes('Friends tell truth'));
+  const deck = makeNBackDeck(1, 777);
+  const t1 = deck.nextTrial();
+  const t2 = deck.nextTrial();
 
-    renderCaseEvidence(root, t3.evidence);
-    renderCaseResult(root, t3, {onHoldToggle: () => {}, onNext: () => {}});
-    assert.ok(root.querySelector('.case-result'));
-    assert.ok(root.querySelector('.nback-ref-box'), 'Scored N-back debrief should display reference briefing #t-N');
-    assert.ok(root.allText().includes('Reference briefing #1'));
+  // Trial 1 (encoding): zero .case-brief intro, 3 statements, Next button
+  const root1 = fakeDoc.createElement('section');
+  let advanced = false;
+  renderCaseEvidence(root1, t1.evidence, {onNBackAdvance: () => { advanced = true; }});
+  assert.equal(root1.querySelector('.case-brief'), null, 'encoding trial must have NO intro header');
+  assert.equal(root1.querySelectorAll('.nback-stmt').length, 3);
+  const nextBtn = root1.querySelector('.nback-next-btn');
+  assert.ok(nextBtn, 'encoding trial renders Next button');
+  nextBtn.click();
+  assert.equal(advanced, true);
+  assert.equal(BANNED_COPY.test(root1.allText()), false);
 
-    const guideRoot = global.document.createElement('div');
-    renderCaseGuide(guideRoot, 'climb-the-ladder', {nBack: 3});
-    assert.doesNotMatch(guideRoot.allText(), BANNED_COPY);
-    assert.ok(guideRoot.allText().includes('3-back'));
-  } finally {
-    global.document = prevDocument;
-  }
+  // Trial 2 (scored 1-back): zero .case-brief intro, 3 statements, 5-decision matrix (10 buttons)
+  const root2 = fakeDoc.createElement('section');
+  const picked = [];
+  renderCaseEvidence(root2, t2.evidence, {
+    nbackDecisions: [null, null, null, null, null],
+    onNBackDecision: (idx, val) => picked.push([idx, val])
+  });
+  assert.equal(root2.querySelector('.case-brief'), null, 'scored trial must have NO intro header');
+  assert.equal(root2.querySelectorAll('.nback-stmt').length, 3);
+  const choices = root2.querySelectorAll('.nback-choice');
+  assert.equal(choices.length, 10, '5-decision matrix renders 10 buttons (2 per decision)');
+  choices[0].click();
+  assert.deepEqual(picked, [[0, true]]);
+  assert.equal(BANNED_COPY.test(root2.allText()), false, `banned copy in scored console: ${root2.allText()}`);
+
+  // Help guide mentions all 6 roles and has zero banned/echo/inversion copy
+  const guideRoot = fakeDoc.createElement('div');
+  renderCaseGuide(guideRoot, 'climb-the-ladder', {nBack: 3});
+  const guideText = guideRoot.allText();
+  assert.match(guideText, /Friends.*Civilians.*Foes.*Spies.*Double agents.*Foreigner/i);
+  assert.equal(BANNED_COPY.test(guideText), false, `banned copy in guide: ${guideText}`);
 });

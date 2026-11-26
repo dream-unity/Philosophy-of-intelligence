@@ -15,6 +15,111 @@ export const PERMS_3 = Object.freeze([
   [2, 1, 0]
 ]);
 
+// Progressive relational complexity profiles keyed by N-back level (1..6).
+// Every tier stays strictly within 3 premises, <=25 words, and <=129 chars,
+// while escalating operator non-linearity, cross-family rewrite pressure,
+// decoy suspect overlap, and irreducible 3-line contradiction density.
+export const NBACK_COMPLEXITY_TIERS = Object.freeze({
+  1: Object.freeze({
+    tier: 1,
+    allowedFamilies: Object.freeze([
+      'smullyan', 'nested2', 'nested3', 'analogy', 'foreigner', 'foreigner-cond',
+      'epistemic-parity', 'conditional2', 'disjunction2'
+    ]),
+    minDistinctFamilies: 2,
+    minAdvancedCount: 2,
+    minNonlinearCount: 1,
+    decoyOverlapRate: 0.40,
+    minRewrittenOnMatch: 2,
+    clashRate: 0.32,
+    requireIrreducibleClash: true
+  }),
+  2: Object.freeze({
+    tier: 2,
+    allowedFamilies: Object.freeze([
+      'smullyan', 'nested2', 'nested3', 'analogy', 'foreigner', 'foreigner-cond',
+      'epistemic-parity', 'conditional2', 'disjunction2', 'conditional3'
+    ]),
+    minDistinctFamilies: 2,
+    minAdvancedCount: 2,
+    minNonlinearCount: 1,
+    decoyOverlapRate: 0.58,
+    minRewrittenOnMatch: 2,
+    clashRate: 0.36,
+    requireIrreducibleClash: true
+  }),
+  3: Object.freeze({
+    tier: 3,
+    allowedFamilies: Object.freeze([
+      'smullyan', 'nested3', 'analogy', 'foreigner', 'foreigner-cond',
+      'epistemic-parity', 'conditional2', 'disjunction2', 'conditional3', 'epistemic-nonlinear'
+    ]),
+    minDistinctFamilies: 3,
+    minAdvancedCount: 3,
+    minNonlinearCount: 1,
+    decoyOverlapRate: 0.72,
+    minRewrittenOnMatch: 2,
+    clashRate: 0.40,
+    requireIrreducibleClash: true
+  }),
+  4: Object.freeze({
+    tier: 4,
+    allowedFamilies: Object.freeze([
+      'smullyan', 'nested3', 'foreigner', 'foreigner-cond',
+      'epistemic-parity', 'conditional2', 'disjunction2', 'conditional3', 'epistemic-nonlinear'
+    ]),
+    minDistinctFamilies: 3,
+    minAdvancedCount: 3,
+    minNonlinearCount: 2,
+    decoyOverlapRate: 0.82,
+    minRewrittenOnMatch: 3,
+    clashRate: 0.42,
+    requireIrreducibleClash: true
+  }),
+  5: Object.freeze({
+    tier: 5,
+    allowedFamilies: Object.freeze([
+      'smullyan', 'nested3', 'foreigner', 'foreigner-cond',
+      'epistemic-parity', 'disjunction2', 'conditional3', 'epistemic-nonlinear'
+    ]),
+    minDistinctFamilies: 3,
+    minAdvancedCount: 3,
+    minNonlinearCount: 2,
+    decoyOverlapRate: 0.90,
+    minRewrittenOnMatch: 3,
+    clashRate: 0.45,
+    requireIrreducibleClash: true
+  }),
+  6: Object.freeze({
+    tier: 6,
+    allowedFamilies: Object.freeze([
+      'smullyan', 'nested3', 'foreigner', 'foreigner-cond',
+      'epistemic-parity', 'disjunction2', 'conditional3', 'epistemic-nonlinear'
+    ]),
+    minDistinctFamilies: 3,
+    minAdvancedCount: 3,
+    minNonlinearCount: 2,
+    decoyOverlapRate: 0.96,
+    minRewrittenOnMatch: 3,
+    clashRate: 0.48,
+    requireIrreducibleClash: true
+  })
+});
+
+const ADVANCED_FAMILIES = new Set([
+  'smullyan', 'nested3', 'foreigner', 'foreigner-cond', 'epistemic-parity',
+  'conditional2', 'disjunction2', 'conditional3', 'epistemic-nonlinear'
+]);
+
+const NONLINEAR_FAMILIES = new Set([
+  'foreigner-cond', 'conditional2', 'disjunction2', 'conditional3', 'epistemic-nonlinear'
+]);
+
+export function complexityForNBack(nBack) {
+  const clamped = Math.max(MIN_NBACK, Math.min(MAX_NBACK, Number(nBack) || 1));
+  return NBACK_COMPLEXITY_TIERS[clamped];
+}
+
 function worldVal(world, idx) {
   return (world & (4 >> idx)) ? 1 : -1;
 }
@@ -64,25 +169,21 @@ function possessive(name) {
   return name + "'s";
 }
 
-function formatNameList(names) {
-  if (!names || !names.length) return '';
-  if (names.length === 1) return names[0];
-  if (names.length === 2) return names[0] + ' and ' + names[1];
-  return names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1];
-}
-
 export function measurePremises(statements) {
   const joined = statements.map(s => (typeof s === 'string' ? s : s.text)).join(' ').trim();
   const words = joined ? joined.split(/\s+/).length : 0;
   return {words, chars: joined.length, joined};
 }
 
-// Catalog of high-order relational statement constructors over 3 suspects [v0, v1, v2].
-// Every constructor yields {text, mask, templateId, family, speakerIdx, shortMeaning}.
-// Friends = +1 (always tell truth); Foes = -1 (always lie).
-function buildCandidateStatements(suspects) {
+// High-order relational statement catalog over 3 suspects [v0, v1, v2].
+// Friend / Civilian = truth-tellers (+1).
+// Foe / Spy / Double agent = liars (-1).
+// Foreigner = impartial external intelligence observer (factual statement).
+export function buildCandidateStatements(suspects, allowedFamilies = null) {
+  const allow = allowedFamilies ? new Set(allowedFamilies) : null;
   const out = [];
   const add = (templateId, family, speakerIdx, text, pred, shortMeaning) => {
+    if (allow && !allow.has(family)) return;
     const mask = maskFromPred(pred);
     out.push({templateId, family, speakerIdx, text, mask, shortMeaning});
   };
@@ -95,129 +196,137 @@ function buildCandidateStatements(suspects) {
     const pb = possessive(b);
     const pc = possessive(c);
 
-    // 1. Third-order Smullyan epistemic unary traps (forces b = +1 or b = -1 regardless of speaker a!)
+    // 1. Third-order Smullyan self-referential epistemic traps (forces B = +1 or B = -1 regardless of speaker A!)
     add(
       'smullyan-match', 'smullyan', i,
       `${a} says ${b} matches ${a} on ${c}.`,
       (v0, v1, v2) => {
         const vs = [v0, v1, v2];
-        const inner = (vs[j] * vs[k]) === (vs[i] * vs[k]);
-        return (vs[i] === 1) === inner;
+        return (vs[i] === 1) === (vs[j] === vs[i]);
       },
-      `${b} is Friend`
+      `${b} tells truth`
     );
     add(
       'smullyan-differ', 'smullyan', i,
       `${a} says ${b} differs from ${a} on ${c}.`,
       (v0, v1, v2) => {
         const vs = [v0, v1, v2];
-        const inner = (vs[j] * vs[k]) === -(vs[i] * vs[k]);
-        return (vs[i] === 1) === inner;
+        return (vs[i] === 1) === (vs[j] === -vs[i]);
       },
-      `${b} is Foe`
+      `${b} lies`
     );
     add(
-      'ep-self-dneg', 'smullyan', i,
+      'smullyan-opp-spy', 'smullyan', i,
+      `${a} says ${b} opposes ${pa} spy.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        return (vs[i] === 1) === (vs[j] === vs[i]);
+      },
+      `${b} tells truth`
+    );
+    add(
+      'smullyan-opp-foe', 'smullyan', i,
       `${a} says ${b} opposes ${pa} foe.`,
       (v0, v1, v2) => {
         const vs = [v0, v1, v2];
-        const inner = vs[j] === vs[i];
-        return (vs[i] === 1) === inner;
+        return (vs[i] === 1) === (vs[j] === vs[i]);
       },
-      `${b} is Friend`
+      `${b} tells truth`
     );
     add(
-      'ep-self-ff', 'smullyan', i,
-      `${a} says ${b} backs ${pa} friend.`,
+      'smullyan-clear-friend', 'smullyan', i,
+      `${a} says ${b} clears ${pa} friend.`,
       (v0, v1, v2) => {
         const vs = [v0, v1, v2];
-        const inner = vs[j] === vs[i];
-        return (vs[i] === 1) === inner;
+        return (vs[i] === 1) === (vs[j] === vs[i]);
       },
-      `${b} is Friend`
+      `${b} tells truth`
     );
     add(
-      'ep-self-fe', 'smullyan', i,
-      `${a} says ${b} backs ${pa} foe.`,
+      'smullyan-back-double', 'smullyan', i,
+      `${a} says ${b} backs ${pa} double.`,
       (v0, v1, v2) => {
         const vs = [v0, v1, v2];
-        const inner = vs[j] === -vs[i];
-        return (vs[i] === 1) === inner;
+        return (vs[i] === 1) === (vs[j] === -vs[i]);
       },
-      `${b} is Foe`
+      `${b} lies`
     );
     add(
-      'ep-self-ef', 'smullyan', i,
-      `${a} says ${b} opposes ${pa} friend.`,
+      'smullyan-back-spy', 'smullyan', i,
+      `${a} says ${b} backs ${pa} spy.`,
       (v0, v1, v2) => {
         const vs = [v0, v1, v2];
-        const inner = vs[j] === -vs[i];
-        return (vs[i] === 1) === inner;
+        return (vs[i] === 1) === (vs[j] === -vs[i]);
       },
-      `${b} is Foe`
+      `${b} lies`
+    );
+    add(
+      'smullyan-betray-friend', 'smullyan', i,
+      `${a} says ${b} betrays ${pa} friend.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        return (vs[i] === 1) === (vs[j] === -vs[i]);
+      },
+      `${b} lies`
     );
 
-    // 2. Binary equality / opposition (depth-2, depth-3 nested, 2nd-order analogy, epistemic direct)
+    // 2. Depth-2 & Depth-3 nested allegiance chains (binary A = B or A != B)
     add(
-      'nest2-ee', 'nested2', null,
-      `${a} opposes ${pb} foe.`,
+      'nest2-opp-spy', 'nested2', null,
+      `${a} opposes ${pb} spy.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === 1; },
       `${a} = ${b}`
     );
     add(
-      'nest2-ff', 'nested2', null,
-      `${a} backs ${pb} friend.`,
+      'nest2-clear-friend', 'nested2', null,
+      `${a} clears ${pb} friend.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === 1; },
       `${a} = ${b}`
     );
     add(
-      'nest3-efe', 'nested3', null,
-      `${a} opposes the friend of ${pb} foe.`,
+      'nest2-back-double', 'nested2', null,
+      `${a} backs ${pb} double.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
+      `${a} ≠ ${b}`
+    );
+    add(
+      'nest2-betray-friend', 'nested2', null,
+      `${a} betrays ${pb} friend.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
+      `${a} ≠ ${b}`
+    );
+
+    add(
+      'nest3-opp-f-spy', 'nested3', null,
+      `${a} opposes the friend of ${pb} spy.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === 1; },
       `${a} = ${b}`
     );
     add(
-      'nest3-bee', 'nested3', null,
-      `${a} backs the foe of ${pb} foe.`,
+      'nest3-back-foe-spy', 'nested3', null,
+      `${a} backs the foe of ${pb} spy.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === 1; },
       `${a} = ${b}`
     );
+    add(
+      'nest3-back-f-double', 'nested3', null,
+      `${a} backs the friend of ${pb} double.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
+      `${a} ≠ ${b}`
+    );
+    add(
+      'nest3-opp-foe-spy', 'nested3', null,
+      `${a} opposes the foe of ${pb} spy.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
+      `${a} ≠ ${b}`
+    );
+
+    // 3. Second-order relational analogies & Foreigner external intelligence links
     add(
       'analogy-pos', 'analogy', null,
       `${a} matches ${b} on ${c}.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === 1; },
       `${a} = ${b}`
-    );
-    add(
-      'ep-direct-pos', 'epistemic', i,
-      `${a} says ${b} is a Friend.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] === 1); },
-      `${a} = ${b}`
-    );
-
-    add(
-      'nest2-fe', 'nested2', null,
-      `${a} backs ${pb} foe.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
-      `${a} ≠ ${b}`
-    );
-    add(
-      'nest2-ef', 'nested2', null,
-      `${a} opposes ${pb} friend.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
-      `${a} ≠ ${b}`
-    );
-    add(
-      'nest3-bfe', 'nested3', null,
-      `${a} backs the friend of ${pb} foe.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
-      `${a} ≠ ${b}`
-    );
-    add(
-      'nest3-eff', 'nested3', null,
-      `${a} opposes the foe of ${pb} foe.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
-      `${a} ≠ ${b}`
     );
     add(
       'analogy-neg', 'analogy', null,
@@ -226,124 +335,261 @@ function buildCandidateStatements(suspects) {
       `${a} ≠ ${b}`
     );
     add(
-      'ep-direct-neg', 'epistemic', i,
-      `${a} says ${b} is a Foe.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] === -1); },
+      'foreigner-ally', 'foreigner', null,
+      `Foreigner links ${a} to ${pb} ally.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === 1; },
+      `${a} = ${b}`
+    );
+    add(
+      'foreigner-spy', 'foreigner', null,
+      `Foreigner links ${a} to ${pb} spy.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] * vs[j] === -1; },
       `${a} ≠ ${b}`
     );
-
-    // 3. 3-way epistemic parity (nested + 2nd-order epistemic analogy)
     add(
-      'ep-nest-ee', 'epistemic-nested', i,
-      `${a} says ${b} opposes ${pc} foe.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] * vs[k] === 1); },
-      `even Foes (0 or 2)`
+      'foreigner-exposes-if-friend', 'foreigner-cond', null,
+      `Foreigner exposes ${a} if ${b} is Friend.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[j] === 1) || vs[i] === -1; },
+      `not both ${a}, ${b} honest`
     );
     add(
-      'ep-nest-ff', 'epistemic-nested', i,
+      'foreigner-clears-unless-civ', 'foreigner-cond', null,
+      `Foreigner clears ${a} unless ${b} is Civilian.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[j] === -1) || vs[i] === 1; },
+      `${a} or ${b} honest`
+    );
+
+    // 4. 3-way epistemic parity (nested & analogical 3-variable XOR/XNOR)
+    add(
+      'ep-par-opp-spy', 'epistemic-parity', i,
+      `${a} says ${b} opposes ${pc} spy.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] * vs[k] === 1); },
+      `even liars (0 or 2)`
+    );
+    add(
+      'ep-par-back-friend', 'epistemic-parity', i,
       `${a} says ${b} backs ${pc} friend.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] * vs[k] === 1); },
-      `even Foes (0 or 2)`
+      `even liars (0 or 2)`
     );
     add(
-      'ep-analogy-pos', 'epistemic-analogy', i,
+      'ep-par-match', 'epistemic-parity', i,
       `${a} says ${b} matches ${c} on ${a}.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] * vs[k] === 1); },
-      `even Foes (0 or 2)`
+      `even liars (0 or 2)`
     );
     add(
-      'ep-nest-fe', 'epistemic-nested', i,
-      `${a} says ${b} backs ${pc} foe.`,
+      'ep-par-back-spy', 'epistemic-parity', i,
+      `${a} says ${b} backs ${pc} spy.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] * vs[k] === -1); },
-      `odd Foes (1 or 3)`
+      `odd liars (1 or 3)`
     );
     add(
-      'ep-nest-ef', 'epistemic-nested', i,
-      `${a} says ${b} opposes ${pc} friend.`,
+      'ep-par-betray-friend', 'epistemic-parity', i,
+      `${a} says ${b} betrays ${pc} friend.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] * vs[k] === -1); },
-      `odd Foes (1 or 3)`
+      `odd liars (1 or 3)`
     );
     add(
-      'ep-analogy-neg', 'epistemic-analogy', i,
+      'ep-par-differ', 'epistemic-parity', i,
       `${a} says ${b} differs from ${c} on ${a}.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return (vs[i] === 1) === (vs[j] * vs[k] === -1); },
-      `odd Foes (1 or 3)`
+      `odd liars (1 or 3)`
     );
 
-    // 4. Non-linear asymmetric 2-variable conditionals
+    // 5. Non-linear 2-variable asymmetric conditionals & disjunctive / only-if equivalents
     add(
-      'cond2-ff', 'conditional', null,
-      `If ${a} lies, ${b} is Foe.`,
+      'cond2-f-spy', 'conditional2', null,
+      `If ${a} lies, ${b} is a Spy.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === -1) || vs[j] === -1; },
-      `${a} Foe ⇒ ${b} Foe`
+      `${a} liar ⇒ ${b} liar`
     );
     add(
-      'cond2-tf', 'conditional', null,
-      `If ${a} is Friend, ${b} lies.`,
+      'cond2-civ-friend', 'conditional2', null,
+      `If ${b} is Civilian, ${a} tells truth.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[j] === 1) || vs[i] === 1; },
+      `${b} honest ⇒ ${a} honest`
+    );
+    add(
+      'cond2-onlyif-spy', 'conditional2', null,
+      `${a} lies only if ${b} is a Spy.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === -1) || vs[j] === -1; },
+      `${a} liar ⇒ ${b} liar`
+    );
+    add(
+      'cond2-f-double', 'conditional2', null,
+      `If ${a} is Friend, ${b} is a Double.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === 1) || vs[j] === -1; },
-      `${a} Friend ⇒ ${b} Foe`
+      `not both ${a}, ${b} honest`
     );
     add(
-      'cond2-ft', 'conditional', null,
-      `If ${a} lies, ${b} is Friend.`,
+      'disj2-foe', 'disjunction2', null,
+      `Either ${a} or ${b} is a Foe.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] === -1 || vs[j] === -1; },
+      `not both ${a}, ${b} honest`
+    );
+    add(
+      'cond2-spy-civ', 'conditional2', null,
+      `If ${a} is a Spy, ${b} is Civilian.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === -1) || vs[j] === 1; },
-      `${a} Foe ⇒ ${b} Friend`
+      `${a} or ${b} honest`
     );
     add(
-      'cond2-tt', 'conditional', null,
-      `If ${a} is Friend, ${b} is Friend.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === 1) || vs[j] === 1; },
-      `${a} Friend ⇒ ${b} Friend`
+      'disj2-truth', 'disjunction2', null,
+      `Either ${a} or ${b} tells truth.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return vs[i] === 1 || vs[j] === 1; },
+      `${a} or ${b} honest`
+    );
+    add(
+      'disj2-unless-civ', 'disjunction2', null,
+      `${a} is Friend unless ${b} is Civilian.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[j] === -1) || vs[i] === 1; },
+      `${a} or ${b} honest`
     );
 
-    // 5. Non-linear asymmetric 3-variable conditionals (and their contrapositive twins!)
+    // 6. Non-linear 3-variable nested conditionals & contrapositive twins (popcount 6)
     add(
-      'cond3-f-neg', 'conditional3', null,
-      `If ${a} lies, ${b} opposes ${pc} friend.`,
+      'cond3-spy-opp-f', 'conditional3', null,
+      `If ${a} is a Spy, ${b} opposes ${pc} friend.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === -1) || (vs[j] * vs[k] === -1); },
-      `${a} Foe ⇒ ${b} ≠ ${c}`
+      `${a} liar ⇒ ${b} ≠ ${c}`
     );
     add(
-      'cond3-f-pos', 'conditional3', null,
-      `If ${a} lies, ${b} opposes ${pc} foe.`,
+      'cond3-contra-eq-civ', 'conditional3', null,
+      `If ${b} backs ${pc} friend, ${a} is Civilian.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[j] * vs[k] === 1) || (vs[i] === 1); },
+      `${b} = ${c} ⇒ ${a} honest`
+    );
+    add(
+      'cond3-lies-opp-spy', 'conditional3', null,
+      `If ${a} lies, ${b} opposes ${pc} spy.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === -1) || (vs[j] * vs[k] === 1); },
-      `${a} Foe ⇒ ${b} = ${c}`
+      `${a} liar ⇒ ${b} = ${c}`
     );
     add(
-      'cond3-t-neg', 'conditional3', null,
-      `If ${a} is Friend, ${b} backs ${pc} foe.`,
+      'cond3-contra-diff-friend', 'conditional3', null,
+      `If ${b} differs from ${c} on ${a}, ${a} is Friend.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[j] * vs[k] === -1) || (vs[i] === 1); },
+      `${b} ≠ ${c} ⇒ ${a} honest`
+    );
+    add(
+      'cond3-civ-back-spy', 'conditional3', null,
+      `If ${a} is Civilian, ${b} backs ${pc} spy.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === 1) || (vs[j] * vs[k] === -1); },
-      `${a} Friend ⇒ ${b} ≠ ${c}`
+      `${a} honest ⇒ ${b} ≠ ${c}`
     );
     add(
-      'cond3-t-pos', 'conditional3', null,
-      `If ${a} is Friend, ${b} backs ${pc} friend.`,
+      'cond3-contra-eq-double', 'conditional3', null,
+      `If ${b} opposes ${pc} spy, ${a} is a Double.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[j] * vs[k] === 1) || (vs[i] === -1); },
+      `${b} = ${c} ⇒ ${a} liar`
+    );
+    add(
+      'cond3-friend-match', 'conditional3', null,
+      `If ${a} is Friend, ${b} matches ${c} on ${a}.`,
       (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] === 1) || (vs[j] * vs[k] === 1); },
-      `${a} Friend ⇒ ${b} = ${c}`
+      `${a} honest ⇒ ${b} = ${c}`
     );
     add(
-      'cond3-pair-pos-f', 'conditional3', null,
-      `If ${a} backs ${pb} friend, ${c} lies.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] * vs[j] === 1) || (vs[k] === -1); },
-      `${a} = ${b} ⇒ ${c} Foe`
+      'cond3-contra-opp-spy', 'conditional3', null,
+      `If ${b} opposes ${pc} friend, ${a} is a Spy.`,
+      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[j] * vs[k] === -1) || (vs[i] === -1); },
+      `${b} ≠ ${c} ⇒ ${a} liar`
+    );
+
+    // 7. Epistemic non-linear conditionals, conjunctions & disjunctions (bent 3-variable case-splitting!)
+    add(
+      'ep-cond-spy-if-lies', 'epistemic-nonlinear', i,
+      `${a} says ${b} is a Spy if ${c} lies.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = !(vs[k] === -1) || (vs[j] === -1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${c} liar ⇒ ${b} liar)`
     );
     add(
-      'cond3-pair-neg-f', 'conditional3', null,
-      `If ${a} opposes ${pb} friend, ${c} lies.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] * vs[j] === -1) || (vs[k] === -1); },
-      `${a} ≠ ${b} ⇒ ${c} Foe`
+      'ep-cond-friend-unless-lies', 'epistemic-nonlinear', i,
+      `${a} says ${b} is Friend unless ${c} lies.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = !(vs[k] === 1) || (vs[j] === 1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${c} honest ⇒ ${b} honest)`
     );
     add(
-      'cond3-pair-pos-t', 'conditional3', null,
-      `If ${a} opposes ${pb} foe, ${c} is Friend.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] * vs[j] === 1) || (vs[k] === 1); },
-      `${a} = ${b} ⇒ ${c} Friend`
+      'ep-disj-spy', 'epistemic-nonlinear', i,
+      `${a} says either ${b} or ${c} is Spy.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = (vs[j] === -1) || (vs[k] === -1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${b} or ${c} liar)`
     );
     add(
-      'cond3-pair-neg-t', 'conditional3', null,
-      `If ${a} backs ${pb} foe, ${c} is Friend.`,
-      (v0, v1, v2) => { const vs = [v0, v1, v2]; return !(vs[i] * vs[j] === -1) || (vs[k] === 1); },
-      `${a} ≠ ${b} ⇒ ${c} Friend`
+      'ep-disj-truth', 'epistemic-nonlinear', i,
+      `${a} says either ${b} or ${c} tells truth.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = (vs[j] === 1) || (vs[k] === 1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${b} or ${c} honest)`
+    );
+    add(
+      'ep-conj-lie', 'epistemic-nonlinear', i,
+      `${a} says both ${b} and ${c} lie.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = (vs[j] === -1) && (vs[k] === -1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${b} and ${c} lie)`
+    );
+    add(
+      'ep-conj-truth', 'epistemic-nonlinear', i,
+      `${a} says both ${b} and ${c} tell truth.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = (vs[j] === 1) && (vs[k] === 1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${b} and ${c} honest)`
+    );
+    // Asymmetric twin of ep-cond-spy-if-lies (exact same truth mask with contrapositive phrasing!)
+    add(
+      'ep-cond-civ-if-civ', 'epistemic-nonlinear', i,
+      `${a} says ${c} tells truth if ${b} is Civilian.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = !(vs[j] === 1) || (vs[k] === 1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${b} honest ⇒ ${c} honest)`
+    );
+    // Asymmetric twin of ep-disj-spy (if B is Friend then C is Spy!)
+    add(
+      'ep-cond-if-friend-spy', 'epistemic-nonlinear', i,
+      `${a} says ${c} is Spy if ${b} is Friend.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = !(vs[j] === 1) || (vs[k] === -1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${b} or ${c} liar)`
+    );
+    // Asymmetric twin of ep-disj-truth (if B is Spy then C is Civilian!)
+    add(
+      'ep-cond-if-spy-civ', 'epistemic-nonlinear', i,
+      `${a} says ${c} is Civilian if ${b} is Spy.`,
+      (v0, v1, v2) => {
+        const vs = [v0, v1, v2];
+        const inner = !(vs[j] === -1) || (vs[k] === 1);
+        return (vs[i] === 1) === inner;
+      },
+      `${a} honest ⇔ (${b} or ${c} honest)`
     );
   }
 
@@ -351,7 +597,7 @@ function buildCandidateStatements(suspects) {
 }
 
 // Exhaustively solve a 3-statement cell over suspects = [v0, v1, v2].
-export function solveNBackCell(suspects, statements) {
+export function solveNBackCell(suspects, statements, {requireIrreducibleClash = true} = {}) {
   if (!Array.isArray(statements) || statements.length !== 3) {
     return {valid: false, kind: 'invalid'};
   }
@@ -370,7 +616,7 @@ export function solveNBackCell(suspects, statements) {
     if (foes.length < 1 || foes.length > 2) {
       return {valid: false, kind: 'unbalanced', solutions};
     }
-    // Strict minimality: dropping ANY 1 statement must leave >=2 worlds (changing Foe set).
+    // Strict minimality: dropping ANY 1 statement must leave >=2 valid worlds.
     const pairMasks = [m1 & m2, m0 & m2, m0 & m1];
     const minimal = pairMasks.every(pm => popcount8(pm) >= 2);
     return {
@@ -379,45 +625,20 @@ export function solveNBackCell(suspects, statements) {
       kind: 'consistent',
       world: w,
       foes,
-      friends,
-      primaryTargets: foes,
-      complementTargets: friends
+      friends
     };
   }
 
   if (solutions.length === 0) {
-    // Contradiction cell: all 3 statements must have 3 distinct speakers,
-    // and EXACTLY ONE pair of statements must clash (maskA & maskB === 0)
-    // while both other pairs remain consistent (> 0).
-    const speakers = statements.map(s => s.speakerIdx);
-    if (speakers.some(sp => sp === null || sp === undefined)) {
-      return {valid: false, kind: 'contradiction-unattributed'};
-    }
-    if (new Set(speakers).size !== 3) {
-      return {valid: false, kind: 'contradiction-duplicate-speaker'};
-    }
-    const pairs = [
-      [0, 1, 2],
-      [0, 2, 1],
-      [1, 2, 0]
-    ];
-    const clashes = pairs.filter(([a, b]) => (statements[a].mask & statements[b].mask) === 0);
-    if (clashes.length !== 1) {
-      return {valid: false, kind: 'contradiction-ambiguous-core', clashCount: clashes.length};
-    }
-    const [ci, cj, uninvolvedStmtIdx] = clashes[0];
-    const clashingSpeakers = [suspects[speakers[ci]], suspects[speakers[cj]]];
-    const uninvolvedSpeaker = [suspects[speakers[uninvolvedStmtIdx]]];
+    // Irreducible 3-line contradiction: every pair of premises is consistent,
+    // and ONLY combining all 3 premises produces a contradiction.
+    const irreducible = (m0 & m1) !== 0 && (m0 & m2) !== 0 && (m1 & m2) !== 0;
+    const valid = requireIrreducibleClash ? irreducible : true;
     return {
-      valid: true,
-      minimal: true,
-      kind: 'contradiction',
-      clashIndices: [ci, cj],
-      uninvolvedStmtIdx,
-      clashingSpeakers,
-      uninvolvedSpeaker,
-      primaryTargets: clashingSpeakers,
-      complementTargets: uninvolvedSpeaker
+      valid,
+      minimal: irreducible,
+      irreducible,
+      kind: 'contradiction'
     };
   }
 
@@ -425,8 +646,8 @@ export function solveNBackCell(suspects, statements) {
 }
 
 // Compare Trial t-N and Trial t across all 36 (bijection phi, statement pairing sigma) alignments.
-// Matching is strictly semantic (8-bit truth-set equivalence under suspect bijection).
-// Tie-breaking mirrors Ontological Worlds: maximize matchedCount, then prefer earliest mismatch (0 before 1).
+// Matching is strictly semantic (8-bit truth-set equivalence under one consistent suspect renaming phi).
+// Tie-breaking mirrors Ontological Worlds: maximize matchedCount, then prefer earliest No (0 before 1).
 export function analyzeNBackAlignment(refStatements, curStatements) {
   let best = null;
 
@@ -445,7 +666,7 @@ export function analyzeNBackAlignment(refStatements, curStatements) {
       if (!best || isBetterAlignment(matchedCount, curMatches, best)) {
         best = {
           matchedCount,
-          isEcho: matchedCount === 3,
+          isFullMatch: matchedCount === 3,
           phi: [...phi],
           sigma: [...sigma],
           curMatches: curMatches.map(Boolean),
@@ -463,13 +684,9 @@ function isBetterAlignment(matchedCount, curMatches, best) {
   for (let i = 0; i < 3; i++) {
     const cand = curMatches[i];
     const prev = best.curMatches[i] ? 1 : 0;
-    if (cand !== prev) return cand < prev; // No-first deterministic tie-break
+    if (cand !== prev) return cand < prev; // Ontological Worlds No-first tie-break
   }
   return false;
-}
-
-function targetKey(names) {
-  return [...names].sort().join('/');
 }
 
 function pickFrom(list, draw) {
@@ -485,17 +702,17 @@ function indexByMask(pool) {
   return byMask;
 }
 
-function pickSuspects(roster, refSuspects, draw, preferOverlap) {
-  if (!refSuspects || !preferOverlap) {
+function pickSuspects(roster, refSuspects, draw, overlapRate) {
+  if (!refSuspects || draw() >= overlapRate) {
     return shuffled(roster, draw).slice(0, 3);
   }
-  const overlapCount = draw() < 0.65 ? 1 : 2;
+  const overlapCount = draw() < 0.55 ? 2 : 1;
   const reused = shuffled(refSuspects, draw).slice(0, overlapCount);
   const fresh = shuffled(roster.filter(n => !refSuspects.includes(n)), draw).slice(0, 3 - overlapCount);
   return shuffled([...reused, ...fresh], draw);
 }
 
-// Pick a bijection phi: refIdx -> curIdx that shifts every reused suspect to a DIFFERENT slot whenever possible.
+// Pick a bijection phi: refIdx -> curIdx shifting reused suspects to different slots whenever possible.
 function pickDecoyBijection(refSuspects, curSuspects, draw) {
   const shifted = PERMS_3.filter(phi =>
     [0, 1, 2].every(i => curSuspects[phi[i]] !== refSuspects[i])
@@ -504,391 +721,315 @@ function pickDecoyBijection(refSuspects, curSuspects, draw) {
 }
 
 function chooseStatementForMask(byMask, mask, draw, {
-  spokenOnly = false,
-  requiredSpeaker = null,
   avoidTemplateId = null,
-  avoidFamily = null
+  avoidFamily = null,
+  usedFamilies = null
 } = {}) {
-  let cands = byMask.get(mask) || [];
-  if (spokenOnly) cands = cands.filter(s => s.speakerIdx !== null);
-  if (requiredSpeaker !== null) cands = cands.filter(s => s.speakerIdx === requiredSpeaker);
+  const cands = byMask.get(mask) || [];
   if (!cands.length) return null;
 
-  const diffFamily = avoidFamily ? cands.filter(s => s.family !== avoidFamily && s.templateId !== avoidTemplateId) : [];
-  if (diffFamily.length) return pickFrom(diffFamily, draw);
-  const diffTpl = avoidTemplateId ? cands.filter(s => s.templateId !== avoidTemplateId) : [];
-  if (diffTpl.length) return pickFrom(diffTpl, draw);
+  const filterNotUsed = list => (usedFamilies ? list.filter(s => !usedFamilies.has(s.family)) : list);
+
+  if (avoidFamily || avoidTemplateId) {
+    const tier1 = filterNotUsed(cands.filter(s => s.family !== avoidFamily && s.templateId !== avoidTemplateId));
+    if (tier1.length) return pickFrom(tier1, draw);
+    const tier2 = cands.filter(s => s.family !== avoidFamily && s.templateId !== avoidTemplateId);
+    if (tier2.length) return pickFrom(tier2, draw);
+    const tier3 = filterNotUsed(cands.filter(s => s.templateId !== avoidTemplateId));
+    if (tier3.length) return pickFrom(tier3, draw);
+    const tier4 = cands.filter(s => s.templateId !== avoidTemplateId);
+    if (tier4.length) return pickFrom(tier4, draw);
+  }
+
+  const freshFamily = filterNotUsed(cands);
+  if (freshFamily.length) return pickFrom(freshFamily, draw);
   return pickFrom(cands, draw);
 }
 
-// High-order canonical mask archetypes for fresh Consistent trials.
-// Every archetype produces 3 masks over [0,1,2] that are then randomly permuted & rendered with rich templates.
-function sampleConsistentStatements(suspects, byMask, draw, desiredFoeCount) {
+function meetsComplexityProfile(statements, profile) {
+  const families = new Set(statements.map(s => s.family));
+  if (families.size < profile.minDistinctFamilies) return false;
+  const advanced = statements.filter(s => ADVANCED_FAMILIES.has(s.family)).length;
+  if (advanced < profile.minAdvancedCount) return false;
+  const nonlinear = statements.filter(s => NONLINEAR_FAMILIES.has(s.family)).length;
+  if (nonlinear < profile.minNonlinearCount) return false;
+  return true;
+}
+
+function sampleTriadStatements(suspects, byMask, draw, profile, wantClash) {
   const allMasks = [...byMask.keys()].filter(m => {
     const pc = popcount8(m);
-    return pc === 4 || pc === 6; // unary/binary/3-way (4) or conditional (6)
+    return pc === 4 || pc === 6;
   });
+  if (allMasks.length < 3) return null;
 
-  // Encourage rich mixes: include at least one non-trivial high-order family (conditional / smullyan / epistemic-nested / nested3)
-  const highOrderMasks = allMasks.filter(m => {
-    const list = byMask.get(m);
-    return list.some(s =>
-      s.family === 'conditional3' || s.family === 'conditional' ||
-      s.family === 'smullyan' || s.family === 'epistemic-nested' ||
-      s.family === 'epistemic-analogy' || s.family === 'nested3'
-    );
-  });
+  const nonlinearMasks = allMasks.filter(m =>
+    (byMask.get(m) || []).some(s => NONLINEAR_FAMILIES.has(s.family))
+  );
+  const linearMasks = allMasks.filter(m => popcount8(m) === 4);
 
-  const condMasks = allMasks.filter(m => popcount8(m) === 6);
-  const linMasks = allMasks.filter(m => popcount8(m) === 4);
-
-  for (let attempt = 0; attempt < 260; attempt++) {
+  for (let attempt = 0; attempt < 360; attempt++) {
     let mA, mB, mC;
-    const style = attempt % 4;
-    if (style === 0 && condMasks.length) {
-      // Modus Tollens / Modus Ponens: 1 conditional + 2 linear/high-order
-      mA = pickFrom(condMasks, draw);
-      mB = pickFrom(linMasks, draw);
-      mC = pickFrom(linMasks, draw);
-    } else if (style === 1 && condMasks.length >= 2) {
-      // Double conditional web + 1 linear anchor
-      mA = pickFrom(condMasks, draw);
-      mB = pickFrom(condMasks, draw);
-      mC = pickFrom(linMasks, draw);
+    if (nonlinearMasks.length >= 2 && (profile.minNonlinearCount >= 2 || attempt % 2 === 0)) {
+      mA = pickFrom(nonlinearMasks, draw);
+      mB = pickFrom(nonlinearMasks, draw);
+      mC = pickFrom(allMasks, draw);
+    } else if (nonlinearMasks.length) {
+      mA = pickFrom(nonlinearMasks, draw);
+      mB = pickFrom(linearMasks.length ? linearMasks : allMasks, draw);
+      mC = pickFrom(allMasks, draw);
     } else {
-      // Pure high-order nested + Smullyan + epistemic parity
-      mA = pickFrom(highOrderMasks, draw);
-      mB = pickFrom(linMasks, draw);
+      mA = pickFrom(allMasks, draw);
+      mB = pickFrom(allMasks, draw);
       mC = pickFrom(allMasks, draw);
     }
     if (mA === mB || mB === mC || mA === mC) continue;
-    const combined = mA & mB & mC;
-    if (popcount8(combined) !== 1) continue;
-    if (popcount8(mA & mB) < 2 || popcount8(mA & mC) < 2 || popcount8(mB & mC) < 2) continue;
 
-    const w = worldsFromMask(combined)[0];
-    const foesCount = [0, 1, 2].filter(i => worldVal(w, i) === -1).length;
-    if (desiredFoeCount && foesCount !== desiredFoeCount) continue;
-    if (foesCount < 1 || foesCount > 2) continue;
+    const comb = mA & mB & mC;
+    if (wantClash) {
+      if (comb !== 0) continue;
+      if (profile.requireIrreducibleClash) {
+        if ((mA & mB) === 0 || (mA & mC) === 0 || (mB & mC) === 0) continue;
+      }
+    } else {
+      if (popcount8(comb) !== 1) continue;
+      if (popcount8(mA & mB) < 2 || popcount8(mA & mC) < 2 || popcount8(mB & mC) < 2) continue;
+      const w = worldsFromMask(comb)[0];
+      const liars = [0, 1, 2].filter(idx => worldVal(w, idx) === -1).length;
+      if (liars < 1 || liars > 2) continue;
+    }
 
     const masks = shuffled([mA, mB, mC], draw);
     const chosen = [];
     const usedFamilies = new Set();
     let ok = true;
     for (const m of masks) {
-      const cands = byMask.get(m) || [];
-      // Prefer complex templates (smullyan, nested3, epistemic-analogy, epistemic-nested, conditional3)
-      const preferred = cands.filter(s =>
-        !usedFamilies.has(s.family) &&
-        s.family !== 'epistemic'
-      );
-      const secondary = cands.filter(s => !usedFamilies.has(s.family));
-      const stmt = preferred.length
-        ? pickFrom(preferred, draw)
-        : secondary.length
-          ? pickFrom(secondary, draw)
-          : pickFrom(cands, draw);
+      const stmt = chooseStatementForMask(byMask, m, draw, {usedFamilies});
+      if (!stmt) { ok = false; break; }
+      usedFamilies.add(stmt.family);
+      chosen.push(stmt);
+    }
+    if (!ok) continue;
+    if (attempt < 260 && !meetsComplexityProfile(chosen, profile)) continue;
+
+    const {words, chars} = measurePremises(chosen);
+    if (words > MAX_PREMISE_WORDS || chars > MAX_PREMISE_CHARS) continue;
+
+    const solved = solveNBackCell(suspects, chosen, {
+      requireIrreducibleClash: profile.requireIrreducibleClash
+    });
+    if (!solved.valid) continue;
+    if (wantClash ? solved.kind !== 'contradiction' : solved.kind !== 'consistent') continue;
+    return {statements: chosen, solved};
+  }
+
+  return null;
+}
+
+// Synthesize a certified 3/3 logical match of refTrial with disguised syntax,
+// shuffled statement order, and N-scaled decoy suspect name reuse.
+function synthesizeFullMatch(refTrial, roster, draw, profile) {
+  const refSolved = refTrial.nback.solved;
+  const fullPoolFamilies = null; // Allow cross-family rewrites from the full role ontology on matches
+
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const suspects = pickSuspects(roster, refTrial.nback.suspects, draw, Math.max(0.5, profile.decoyOverlapRate));
+    const phi = pickDecoyBijection(refTrial.nback.suspects, suspects, draw);
+    const pool = buildCandidateStatements(
+      suspects,
+      attempt < 80 ? profile.allowedFamilies : fullPoolFamilies
+    );
+    const byMask = indexByMask(pool);
+
+    const nonIdPerms = PERMS_3.slice(1);
+    const sigma = pickFrom(nonIdPerms, draw);
+    const chosen = [null, null, null];
+    const usedFamilies = new Set();
+    let ok = true;
+
+    for (let k = 0; k < 3; k++) {
+      const refStmt = refTrial.nback.statements[k];
+      const targetMask = permuteMask(refStmt.mask, phi);
+      const stmt = chooseStatementForMask(byMask, targetMask, draw, {
+        avoidTemplateId: refStmt.templateId,
+        avoidFamily: refStmt.family,
+        usedFamilies
+      });
+      if (!stmt) { ok = false; break; }
+      usedFamilies.add(stmt.family);
+      chosen[sigma[k]] = stmt;
+    }
+    if (!ok) continue;
+
+    let rewritten = 0;
+    for (let k = 0; k < 3; k++) {
+      if (chosen[sigma[k]].templateId !== refTrial.nback.statements[k].templateId) rewritten++;
+    }
+    const minReq = attempt < 65 ? profile.minRewrittenOnMatch : 2;
+    if (rewritten < minReq) continue;
+
+    const {words, chars} = measurePremises(chosen);
+    if (words > MAX_PREMISE_WORDS || chars > MAX_PREMISE_CHARS) continue;
+
+    const solved = solveNBackCell(suspects, chosen, {
+      requireIrreducibleClash: profile.requireIrreducibleClash
+    });
+    if (!solved.valid || solved.kind !== refSolved.kind) continue;
+
+    const alignment = analyzeNBackAlignment(refTrial.nback.statements, chosen);
+    if (!alignment.isFullMatch) continue;
+
+    return {suspects, statements: chosen, solved, alignment};
+  }
+  return null;
+}
+
+// Synthesize a certified partial-match lure (targetMatches in {2, 1, 0}) against refTrial.
+function synthesizePartialOrMismatch(refTrial, roster, draw, profile, targetMatches, wantClash) {
+  for (let attempt = 0; attempt < 220; attempt++) {
+    const suspects = pickSuspects(roster, refTrial.nback.suspects, draw, profile.decoyOverlapRate);
+    const phi = pickDecoyBijection(refTrial.nback.suspects, suspects, draw);
+    const pool = buildCandidateStatements(
+      suspects,
+      attempt < 150 ? profile.allowedFamilies : null
+    );
+    const byMask = indexByMask(pool);
+    const allMasks = [...byMask.keys()].filter(m => {
+      const pc = popcount8(m);
+      return pc === 4 || pc === 6;
+    });
+    if (allMasks.length < 3) continue;
+
+    if (targetMatches === 0) {
+      const built = sampleTriadStatements(suspects, byMask, draw, profile, wantClash);
+      if (!built) continue;
+      const alignment = analyzeNBackAlignment(refTrial.nback.statements, built.statements);
+      if (alignment.matchedCount !== 0) continue;
+      return {suspects, statements: built.statements, solved: built.solved, alignment};
+    }
+
+    const refOrder = shuffled([0, 1, 2], draw);
+    const keepIndices = refOrder.slice(0, targetMatches);
+    const dropIndices = refOrder.slice(targetMatches);
+    const keepMasks = keepIndices.map(i => permuteMask(refTrial.nback.statements[i].mask, phi));
+    const forbiddenMasks = new Set(dropIndices.map(i => permuteMask(refTrial.nback.statements[i].mask, phi)));
+
+    let finalMasks = null;
+    if (targetMatches === 2) {
+      const base = keepMasks[0] & keepMasks[1];
+      if (wantClash) {
+        if (profile.requireIrreducibleClash && base === 0) continue;
+        const cands = allMasks.filter(m => {
+          if (forbiddenMasks.has(m) || m === keepMasks[0] || m === keepMasks[1]) return false;
+          if ((base & m) !== 0) return false;
+          if (profile.requireIrreducibleClash) {
+            return (keepMasks[0] & m) !== 0 && (keepMasks[1] & m) !== 0;
+          }
+          return true;
+        });
+        if (!cands.length) continue;
+        finalMasks = [keepMasks[0], keepMasks[1], pickFrom(cands, draw)];
+      } else {
+        if (popcount8(base) < 2) continue;
+        const cands = allMasks.filter(m => {
+          if (forbiddenMasks.has(m) || m === keepMasks[0] || m === keepMasks[1]) return false;
+          const comb = base & m;
+          if (popcount8(comb) !== 1) return false;
+          if (popcount8(keepMasks[0] & m) < 2 || popcount8(keepMasks[1] & m) < 2) return false;
+          const w = worldsFromMask(comb)[0];
+          const liars = [0, 1, 2].filter(idx => worldVal(w, idx) === -1).length;
+          return liars === 1 || liars === 2;
+        });
+        if (!cands.length) continue;
+        finalMasks = [keepMasks[0], keepMasks[1], pickFrom(cands, draw)];
+      }
+    } else {
+      // targetMatches === 1
+      const m0 = keepMasks[0];
+      const m1 = pickFrom(allMasks, draw);
+      const m2 = pickFrom(allMasks, draw);
+      if (m1 === m0 || m2 === m0 || m1 === m2) continue;
+      if (forbiddenMasks.has(m1) || forbiddenMasks.has(m2)) continue;
+      const comb = m0 & m1 & m2;
+      if (wantClash) {
+        if (comb !== 0) continue;
+        if (profile.requireIrreducibleClash && ((m0 & m1) === 0 || (m0 & m2) === 0 || (m1 & m2) === 0)) continue;
+      } else {
+        if (popcount8(comb) !== 1) continue;
+        if (popcount8(m0 & m1) < 2 || popcount8(m0 & m2) < 2 || popcount8(m1 & m2) < 2) continue;
+        const w = worldsFromMask(comb)[0];
+        const liars = [0, 1, 2].filter(idx => worldVal(w, idx) === -1).length;
+        if (liars < 1 || liars > 2) continue;
+      }
+      finalMasks = [m0, m1, m2];
+    }
+
+    const usedFamilies = new Set();
+    const chosen = [];
+    let ok = true;
+    for (let idx = 0; idx < 3; idx++) {
+      const m = finalMasks[idx];
+      const refPartner = idx < keepIndices.length ? refTrial.nback.statements[keepIndices[idx]] : null;
+      const stmt = chooseStatementForMask(byMask, m, draw, {
+        avoidTemplateId: refPartner ? refPartner.templateId : null,
+        avoidFamily: refPartner ? refPartner.family : null,
+        usedFamilies
+      });
       if (!stmt) { ok = false; break; }
       usedFamilies.add(stmt.family);
       chosen.push(stmt);
     }
     if (!ok) continue;
 
-    // Require at least 2 statements from advanced families (no trivial 3x direct epistemic!)
-    const advancedCount = chosen.filter(s =>
-      s.family === 'smullyan' || s.family === 'nested3' ||
-      s.family === 'epistemic-nested' || s.family === 'epistemic-analogy' ||
-      s.family === 'conditional3' || s.family === 'conditional' || s.family === 'analogy'
-    ).length;
-    if (advancedCount < 2) continue;
+    const ordered = shuffled(chosen, draw);
+    if (attempt < 140 && !meetsComplexityProfile(ordered, profile)) continue;
 
-    const {words, chars} = measurePremises(chosen);
+    const {words, chars} = measurePremises(ordered);
     if (words > MAX_PREMISE_WORDS || chars > MAX_PREMISE_CHARS) continue;
 
-    const solved = solveNBackCell(suspects, chosen);
-    if (solved.valid && solved.kind === 'consistent') {
-      return {statements: chosen, solved};
-    }
+    const solved = solveNBackCell(suspects, ordered, {
+      requireIrreducibleClash: profile.requireIrreducibleClash
+    });
+    if (!solved.valid) continue;
+    if (wantClash ? solved.kind !== 'contradiction' : solved.kind !== 'consistent') continue;
+
+    const alignment = analyzeNBackAlignment(refTrial.nback.statements, ordered);
+    if (alignment.matchedCount !== targetMatches) continue;
+
+    return {suspects, statements: ordered, solved, alignment};
   }
+
   return null;
 }
 
-// Sample a certified Contradiction cell (3 distinct speakers, exact 1 unsatisfiable pair).
-function sampleContradictionStatements(suspects, byMask, draw) {
-  const spokenMasks = [...byMask.keys()].filter(m =>
-    (byMask.get(m) || []).some(s => s.speakerIdx !== null)
-  );
-  // Complementary pairs (m1 & m2 === 0) among spoken masks
-  const clashPairs = [];
-  for (let a = 0; a < spokenMasks.length; a++) {
-    for (let b = a + 1; b < spokenMasks.length; b++) {
-      if ((spokenMasks[a] & spokenMasks[b]) === 0) {
-        clashPairs.push([spokenMasks[a], spokenMasks[b]]);
-      }
-    }
+// Evaluate player's 5-decision Ontological Worlds matrix response against ground truth.
+// decisions = [line1Match, line2Match, line3Match, isConsistent, fullTriadMatch] (booleans).
+export function evaluateNBackDecisions(trial, decisions) {
+  if (!trial?.nback || trial.nback.isEncoding || !Array.isArray(decisions) || decisions.length !== 5) {
+    return {
+      exact: false,
+      lineCorrect: 0,
+      lineTotal: 3,
+      logicCorrect: false,
+      triadCorrect: false,
+      expected: trial?.nback?.expectedDecisions || null
+    };
   }
-
-  for (let attempt = 0; attempt < 220; attempt++) {
-    const [m1, m2] = pickFrom(clashPairs, draw);
-    const m3 = pickFrom(spokenMasks, draw);
-    if ((m1 & m3) === 0 || (m2 & m3) === 0) continue;
-
-    const speakerOrder = shuffled([0, 1, 2], draw);
-    const s1 = chooseStatementForMask(byMask, m1, draw, {spokenOnly: true, requiredSpeaker: speakerOrder[0]});
-    const s2 = chooseStatementForMask(byMask, m2, draw, {spokenOnly: true, requiredSpeaker: speakerOrder[1]});
-    const s3 = chooseStatementForMask(byMask, m3, draw, {spokenOnly: true, requiredSpeaker: speakerOrder[2]});
-    if (!s1 || !s2 || !s3) continue;
-
-    const chosen = shuffled([s1, s2, s3], draw);
-    const advancedCount = chosen.filter(s =>
-      s.family === 'smullyan' || s.family === 'epistemic-nested' || s.family === 'epistemic-analogy'
-    ).length;
-    if (advancedCount < 2) continue;
-
-    const {words, chars} = measurePremises(chosen);
-    if (words > MAX_PREMISE_WORDS || chars > MAX_PREMISE_CHARS) continue;
-
-    const solved = solveNBackCell(suspects, chosen);
-    if (solved.valid && solved.kind === 'contradiction') {
-      return {statements: chosen, solved};
-    }
+  const exp = trial.nback.expectedDecisions;
+  let lineCorrect = 0;
+  for (let i = 0; i < 3; i++) {
+    if (Boolean(decisions[i]) === exp[i]) lineCorrect++;
   }
-  return null;
-}
-
-// Synthesize a certified 3/3 Semantic Echo of refTrial with disguised syntax, shuffled order, and decoy reused names.
-function synthesizeEcho(refTrial, roster, prevTargetKey, draw) {
-  const refSolved = refTrial.nback.solved;
-  const isContradiction = refSolved.kind === 'contradiction';
-
-  for (let attempt = 0; attempt < 90; attempt++) {
-    const suspects = pickSuspects(roster, refTrial.nback.suspects, draw, true);
-    const phi = pickDecoyBijection(refTrial.nback.suspects, suspects, draw);
-    const pool = buildCandidateStatements(suspects);
-    const byMask = indexByMask(pool);
-
-    const nonIdPerms = PERMS_3.slice(1);
-    const sigma = pickFrom(nonIdPerms, draw);
-    const chosen = [null, null, null];
-    let ok = true;
-
-    for (let k = 0; k < 3; k++) {
-      const refStmt = refTrial.nback.statements[k];
-      const targetMask = permuteMask(refStmt.mask, phi);
-      const reqSpeaker = isContradiction ? phi[refStmt.speakerIdx] : null;
-      const stmt = chooseStatementForMask(byMask, targetMask, draw, {
-        spokenOnly: isContradiction,
-        requiredSpeaker: reqSpeaker,
-        avoidTemplateId: refStmt.templateId,
-        avoidFamily: refStmt.family
-      });
-      if (!stmt) { ok = false; break; }
-      chosen[sigma[k]] = stmt;
-    }
-    if (!ok) continue;
-
-    // Require at least 2 of 3 statements to use a DIFFERENT surface template than their ref partner
-    let rewritten = 0;
-    for (let k = 0; k < 3; k++) {
-      if (chosen[sigma[k]].templateId !== refTrial.nback.statements[k].templateId) rewritten++;
-    }
-    if (rewritten < 2 && attempt < 60) continue;
-
-    const {words, chars} = measurePremises(chosen);
-    if (words > MAX_PREMISE_WORDS || chars > MAX_PREMISE_CHARS) continue;
-
-    const solved = solveNBackCell(suspects, chosen);
-    if (!solved.valid || solved.kind !== refSolved.kind) continue;
-
-    const alignment = analyzeNBackAlignment(refTrial.nback.statements, chosen);
-    if (!alignment.isEcho) continue;
-
-    // Echo inverts targets within the 3 suspects!
-    const targets = solved.complementTargets;
-    if (prevTargetKey && targetKey(targets) === prevTargetKey) continue;
-
-    return {suspects, statements: chosen, solved, alignment, targets};
-  }
-  return null;
-}
-
-// Synthesize a certified High-Interference 2-of-3 Breach against refTrial (mutating 1 of 3 semantic rules).
-function synthesizeBreach(refTrial, roster, prevTargetKey, draw, desiredKind, desiredBulletCount) {
-  for (let attempt = 0; attempt < 180; attempt++) {
-    const suspects = pickSuspects(roster, refTrial.nback.suspects, draw, true);
-    const phi = pickDecoyBijection(refTrial.nback.suspects, suspects, draw);
-    const pool = buildCandidateStatements(suspects);
-    const byMask = indexByMask(pool);
-
-    const dropRefIdx = Math.floor(draw() * 3);
-    const keepIndices = [0, 1, 2].filter(i => i !== dropRefIdx);
-    const keepMasks = keepIndices.map(i => permuteMask(refTrial.nback.statements[i].mask, phi));
-
-    const wantContradiction = desiredKind === 'contradiction';
-
-    if (wantContradiction) {
-      // To form a valid 2-of-3 Contradiction Breach:
-      // Either the 2 kept masks already clash (keepMasks[0] & keepMasks[1] === 0) and we swap the 3rd non-clashing mask,
-      // OR the 2 kept masks don't clash and the new 3rd mask clashes with EXACTLY ONE of them!
-      const alreadyClashes = (keepMasks[0] & keepMasks[1]) === 0;
-      const spokenMasks = [...byMask.keys()].filter(m =>
-        (byMask.get(m) || []).some(s => s.speakerIdx !== null)
-      );
-      const thirdCandidates = spokenMasks.filter(m => {
-        if (m === permuteMask(refTrial.nback.statements[dropRefIdx].mask, phi)) return false;
-        if (alreadyClashes) {
-          return (keepMasks[0] & m) !== 0 && (keepMasks[1] & m) !== 0;
-        }
-        const c0 = (keepMasks[0] & m) === 0;
-        const c1 = (keepMasks[1] & m) === 0;
-        return (c0 !== c1);
-      });
-      if (!thirdCandidates.length) continue;
-
-      const m3 = pickFrom(thirdCandidates, draw);
-      const speakers = shuffled([0, 1, 2], draw);
-      const s0 = chooseStatementForMask(byMask, keepMasks[0], draw, {
-        spokenOnly: true,
-        requiredSpeaker: speakers[0],
-        avoidTemplateId: refTrial.nback.statements[keepIndices[0]].templateId
-      });
-      const s1 = chooseStatementForMask(byMask, keepMasks[1], draw, {
-        spokenOnly: true,
-        requiredSpeaker: speakers[1],
-        avoidTemplateId: refTrial.nback.statements[keepIndices[1]].templateId
-      });
-      const s2 = chooseStatementForMask(byMask, m3, draw, {
-        spokenOnly: true,
-        requiredSpeaker: speakers[2]
-      });
-      if (!s0 || !s1 || !s2) continue;
-
-      const chosen = shuffled([s0, s1, s2], draw);
-      const {words, chars} = measurePremises(chosen);
-      if (words > MAX_PREMISE_WORDS || chars > MAX_PREMISE_CHARS) continue;
-
-      const solved = solveNBackCell(suspects, chosen);
-      if (!solved.valid || solved.kind !== 'contradiction') continue;
-
-      const alignment = analyzeNBackAlignment(refTrial.nback.statements, chosen);
-      if (alignment.matchedCount !== 2) continue;
-
-      const targets = solved.primaryTargets; // Breach => standard target set (2 clashing speakers)
-      if (prevTargetKey && targetKey(targets) === prevTargetKey) continue;
-
-      return {suspects, statements: chosen, solved, alignment, targets};
-    } else {
-      // Consistent 2-of-3 Breach: keep 2 permuted masks (provided their intersection has >= 2 worlds),
-      // pick a 3rd mask that narrows to exact 1 world with desiredBulletCount Foes!
-      const baseMask = keepMasks[0] & keepMasks[1];
-      if (popcount8(baseMask) < 2) continue;
-
-      const dropOrigMask = permuteMask(refTrial.nback.statements[dropRefIdx].mask, phi);
-      const validThirdMasks = [...byMask.keys()].filter(m => {
-        if (m === dropOrigMask || m === keepMasks[0] || m === keepMasks[1]) return false;
-        const comb = baseMask & m;
-        if (popcount8(comb) !== 1) return false;
-        if (popcount8(keepMasks[0] & m) < 2 || popcount8(keepMasks[1] & m) < 2) return false;
-        const w = worldsFromMask(comb)[0];
-        const foesCount = [0, 1, 2].filter(i => worldVal(w, i) === -1).length;
-        if (desiredBulletCount && foesCount !== desiredBulletCount) return false;
-        return foesCount === 1 || foesCount === 2;
-      });
-      if (!validThirdMasks.length) continue;
-
-      const m3 = pickFrom(validThirdMasks, draw);
-      const s0 = chooseStatementForMask(byMask, keepMasks[0], draw, {
-        avoidTemplateId: refTrial.nback.statements[keepIndices[0]].templateId,
-        avoidFamily: refTrial.nback.statements[keepIndices[0]].family
-      });
-      const s1 = chooseStatementForMask(byMask, keepMasks[1], draw, {
-        avoidTemplateId: refTrial.nback.statements[keepIndices[1]].templateId,
-        avoidFamily: refTrial.nback.statements[keepIndices[1]].family
-      });
-      const s2 = chooseStatementForMask(byMask, m3, draw);
-      if (!s0 || !s1 || !s2) continue;
-
-      const chosen = shuffled([s0, s1, s2], draw);
-      const {words, chars} = measurePremises(chosen);
-      if (words > MAX_PREMISE_WORDS || chars > MAX_PREMISE_CHARS) continue;
-
-      const solved = solveNBackCell(suspects, chosen);
-      if (!solved.valid || solved.kind !== 'consistent') continue;
-
-      const alignment = analyzeNBackAlignment(refTrial.nback.statements, chosen);
-      if (alignment.matchedCount !== 2) continue;
-
-      const targets = solved.primaryTargets; // Breach => standard target set (deduced Foes)
-      if (prevTargetKey && targetKey(targets) === prevTargetKey) continue;
-
-      return {suspects, statements: chosen, solved, alignment, targets};
-    }
-  }
-
-  // Fallback: fresh independent cell guaranteed to be a non-echo (< 3/3 match)
-  for (let attempt = 0; attempt < 80; attempt++) {
-    const suspects = pickSuspects(roster, refTrial.nback.suspects, draw, true);
-    const pool = buildCandidateStatements(suspects);
-    const byMask = indexByMask(pool);
-    const built = desiredKind === 'contradiction'
-      ? sampleContradictionStatements(suspects, byMask, draw)
-      : sampleConsistentStatements(suspects, byMask, draw, desiredBulletCount);
-    if (!built) continue;
-    const alignment = analyzeNBackAlignment(refTrial.nback.statements, built.statements);
-    if (alignment.isEcho) continue;
-    const targets = built.solved.primaryTargets;
-    if (prevTargetKey && targetKey(targets) === prevTargetKey) continue;
-    return {suspects, statements: built.statements, solved: built.solved, alignment, targets};
-  }
-  return null;
-}
-
-function buildProofAndDebrief({number, nBack, refTrial, suspects, statements, solved, alignment, targets}) {
-  const proof = [];
-  if (solved.kind === 'consistent') {
-    const fLabel = formatNameList(solved.friends);
-    const eLabel = formatNameList(solved.foes);
-    proof.push(`Resolved loyalty: ${fLabel} (${solved.friends.length === 1 ? 'Friend' : 'Friends'}) · ${eLabel} (${solved.foes.length === 1 ? 'Foe' : 'Foes'}).`);
-  } else {
-    const [ci, cj] = solved.clashIndices;
-    proof.push(`Contradiction: lines ${ci + 1} and ${cj + 1} directly clash (${formatNameList(solved.clashingSpeakers)}); ${solved.uninvolvedSpeaker[0]} is uninvolved.`);
-  }
-
-  // Explain each statement's reduced logical meaning
-  proof.push(
-    statements.map((s, idx) => `(${idx + 1}) ${s.shortMeaning}`).join(' · ')
-  );
-
-  let aliasKey = null;
-  let comparisonSummary = null;
-  if (refTrial && alignment) {
-    const refSuspects = refTrial.nback.suspects;
-    aliasKey = [0, 1, 2].map(i => `${refSuspects[i]}→${suspects[alignment.phi[i]]}`).join(' · ');
-    const refNum = refTrial.number;
-    if (alignment.isEcho) {
-      comparisonSummary = `3/3 echo of briefing #${refNum} (${aliasKey}) — inverted target set to ${formatNameList(targets)}.`;
-    } else {
-      const broken = alignment.mismatchIndices.map(i => i + 1).join(', ');
-      comparisonSummary = `${alignment.matchedCount}/3 breach vs briefing #${refNum} (${aliasKey}; broken line ${broken}) — standard target set ${formatNameList(targets)}.`;
-    }
-    proof.push(comparisonSummary);
-  } else {
-    proof.push(`Warm-up briefing #${number} — hold these 3 logical rules for ${nBack}-back.`);
-  }
-
+  const logicCorrect = Boolean(decisions[3]) === exp[3];
+  const triadCorrect = Boolean(decisions[4]) === exp[4];
+  const exact = lineCorrect === 3 && logicCorrect && triadCorrect;
   return {
-    proof,
-    nbackDebrief: {
-      refNumber: refTrial ? refTrial.number : null,
-      refStatements: refTrial ? refTrial.nback.statements.map(s => s.text) : null,
-      verdictKind: solved.kind,
-      isEcho: alignment ? alignment.isEcho : false,
-      matchedCount: alignment ? alignment.matchedCount : null,
-      aliasKey,
-      curMatches: alignment ? alignment.curMatches : null,
-      mismatchIndices: alignment ? alignment.mismatchIndices : [],
-      clashIndices: solved.kind === 'contradiction' ? solved.clashIndices : []
-    }
+    exact,
+    lineCorrect,
+    lineTotal: 3,
+    logicCorrect,
+    triadCorrect,
+    expected: [...exp]
   };
 }
 
@@ -899,117 +1040,121 @@ export class NBackSessionDeck {
       throw new RangeError(`Choose an N-back level from ${MIN_NBACK} to ${MAX_NBACK}.`);
     }
     this.nBack = n;
+    this.profile = complexityForNBack(n);
     this.draw = draw;
     this.history = [];
-    this.echoes = 0;
-    this.breaches = 0;
-    this.contradictions = 0;
-    this.oneBulletCount = 0;
-    this.twoBulletCount = 0;
+    this.fullMatches = 0;
+    this.nonMatches = 0;
+    this.clashes = 0;
   }
 
   nextTrial() {
     const number = this.history.length + 1;
     const roster = [...networkRoster];
     const prev = this.history.length ? this.history[this.history.length - 1] : null;
-    const prevTargetKey = prev ? targetKey(prev.pair) : null;
     const refTrial = number > this.nBack ? this.history[number - 1 - this.nBack] : null;
+    const profile = this.profile;
 
     let built = null;
-    let isEcho = false;
 
     if (!refTrial) {
-      // Warm-up trial (1..N): balanced mix of 1-Foe, 2-Foe, and Contradiction
-      const wantContradiction = this.draw() < 0.30;
-      const desiredFoeCount = this.oneBulletCount <= this.twoBulletCount ? 1 : 2;
-      for (let attempt = 0; attempt < 60 && !built; attempt++) {
-        const suspects = pickSuspects(roster, prev?.nback?.suspects, this.draw, false);
-        const pool = buildCandidateStatements(suspects);
+      // Initial N encoding trials: maximal relational complexity appropriate to N.
+      const wantClash = this.draw() < profile.clashRate;
+      for (let attempt = 0; attempt < 50 && !built; attempt++) {
+        const suspects = pickSuspects(roster, prev?.nback?.suspects, this.draw, 0.35);
+        const pool = buildCandidateStatements(suspects, attempt < 35 ? profile.allowedFamilies : null);
         const byMask = indexByMask(pool);
-        const res = wantContradiction
-          ? sampleContradictionStatements(suspects, byMask, this.draw)
-          : sampleConsistentStatements(suspects, byMask, this.draw, desiredFoeCount);
+        const res = sampleTriadStatements(suspects, byMask, this.draw, profile, wantClash);
         if (!res) continue;
-        const targets = res.solved.primaryTargets;
-        if (prevTargetKey && targetKey(targets) === prevTargetKey) continue;
-        built = {suspects, statements: res.statements, solved: res.solved, alignment: null, targets};
+        built = {suspects, statements: res.statements, solved: res.solved, alignment: null};
       }
       if (!built) {
-        // Unconditional fallback
-        const suspects = pickSuspects(roster, null, this.draw, false);
-        const pool = buildCandidateStatements(suspects);
+        const suspects = pickSuspects(roster, null, this.draw, 0);
+        const pool = buildCandidateStatements(suspects, null);
         const byMask = indexByMask(pool);
-        const res = sampleConsistentStatements(suspects, byMask, this.draw, null);
-        built = {suspects, statements: res.statements, solved: res.solved, alignment: null, targets: res.solved.primaryTargets};
+        const res = sampleTriadStatements(suspects, byMask, this.draw, profile, false);
+        built = {suspects, statements: res.statements, solved: res.solved, alignment: null};
       }
     } else {
-      // Scored N-back trial: ~44% Echo, ~56% High-Interference 2/3 Breach, balanced 1-bullet vs 2-bullet
-      const scoredSoFar = this.echoes + this.breaches;
-      const echoRatio = scoredSoFar ? this.echoes / scoredSoFar : 0.44;
-      const wantEcho = echoRatio < 0.44 ? this.draw() < 0.62 : this.draw() < 0.30;
+      // Scored N-back trial: balanced ~38% Full 3/3 Match, ~34% 2/3 lure, ~20% 1/3 lure, ~8% 0/3 lure.
+      const scoredSoFar = this.fullMatches + this.nonMatches;
+      const matchRatio = scoredSoFar ? this.fullMatches / scoredSoFar : 0.38;
+      const wantFullMatch = matchRatio < 0.38 ? this.draw() < 0.56 : this.draw() < 0.24;
 
-      if (wantEcho) {
-        built = synthesizeEcho(refTrial, roster, prevTargetKey, this.draw);
-        if (built) isEcho = true;
+      if (wantFullMatch) {
+        built = synthesizeFullMatch(refTrial, roster, this.draw, profile);
       }
+
       if (!built) {
-        const wantContradiction = this.draw() < 0.32;
-        const desiredBulletCount = wantContradiction
-          ? 2
-          : (this.oneBulletCount <= this.twoBulletCount ? 1 : 2);
-        built = synthesizeBreach(refTrial, roster, prevTargetKey, this.draw, wantContradiction ? 'contradiction' : 'consistent', desiredBulletCount);
-        if (!built && wantContradiction) {
-          built = synthesizeBreach(refTrial, roster, prevTargetKey, this.draw, 'consistent', 1);
+        const wantClash = this.draw() < profile.clashRate;
+        const r = this.draw();
+        const targetMatches = r < 0.55 ? 2 : r < 0.86 ? 1 : 0;
+        built = synthesizePartialOrMismatch(refTrial, roster, this.draw, profile, targetMatches, wantClash);
+        if (!built) {
+          built = synthesizePartialOrMismatch(refTrial, roster, this.draw, profile, 2, !wantClash);
         }
         if (!built) {
-          built = synthesizeEcho(refTrial, roster, prevTargetKey, this.draw);
-          if (built) isEcho = true;
+          built = synthesizePartialOrMismatch(refTrial, roster, this.draw, profile, 1, false);
+        }
+        if (!built) {
+          built = synthesizeFullMatch(refTrial, roster, this.draw, profile);
+        }
+        if (!built) {
+          // Unconditional fallback: fresh valid triad verified against refTrial
+          for (let attempt = 0; attempt < 40 && !built; attempt++) {
+            const suspects = pickSuspects(roster, refTrial.nback.suspects, this.draw, profile.decoyOverlapRate);
+            const pool = buildCandidateStatements(suspects, null);
+            const byMask = indexByMask(pool);
+            const res = sampleTriadStatements(suspects, byMask, this.draw, profile, false);
+            if (!res) continue;
+            const alignment = analyzeNBackAlignment(refTrial.nback.statements, res.statements);
+            built = {suspects, statements: res.statements, solved: res.solved, alignment};
+          }
         }
       }
     }
 
-    const {suspects, statements, solved, alignment, targets} = built;
+    const {suspects, statements, solved, alignment} = built;
     const metrics = measurePremises(statements);
-    const {proof, nbackDebrief} = buildProofAndDebrief({
-      number,
-      nBack: this.nBack,
-      refTrial,
-      suspects,
-      statements,
-      solved,
-      alignment,
-      targets
-    });
+    const isEncoding = !refTrial;
+    const isFullMatch = alignment ? alignment.isFullMatch : false;
+    const isConsistent = solved.kind === 'consistent';
 
     if (refTrial) {
-      if (isEcho) this.echoes++;
-      else this.breaches++;
+      if (isFullMatch) this.fullMatches++;
+      else this.nonMatches++;
     }
-    if (solved.kind === 'contradiction') this.contradictions++;
-    if (targets.length === 1) this.oneBulletCount++;
-    else this.twoBulletCount++;
+    if (!isConsistent) this.clashes++;
 
-    const order = refTrial
-      ? `${this.nBack}-back vs #${refTrial.number}: shoot Foes (or clashing pair); invert on a 3/3 echo.`
-      : `Warm-up #${number} · Hold for ${this.nBack}-back. Shoot Foes, or the two clashing speakers.`;
+    const expectedDecisions = alignment
+      ? [
+          alignment.curMatches[0],
+          alignment.curMatches[1],
+          alignment.curMatches[2],
+          isConsistent,
+          isFullMatch
+        ]
+      : null;
+
+    // Dummy active range targets so ArcadeRun drives the approaching cutouts clock smoothly.
+    const rangeTargets = suspects.slice(0, 2);
 
     const trial = {
       number,
       roster,
-      pair: [...targets],
-      targets: [...targets],
-      validWorlds: solved.kind === 'consistent' ? 1 : 0,
-      proof,
-      nbackDebrief,
+      pair: rangeTargets,
+      targets: rangeTargets,
+      validWorlds: isConsistent ? 1 : 0,
+      proof: [],
       evidence: {
         mode: 'climb-the-ladder',
         level: 'climb-the-ladder',
-        family: `nback-${this.nBack}-${solved.kind}-${isEcho ? 'echo' : refTrial ? 'breach' : 'warmup'}`,
-        order,
+        family: `nback-${this.nBack}-${solved.kind}-${isEncoding ? 'encode' : `m${alignment.matchedCount}`}`,
+        order: '', // Intentionally empty: zero intro banner before the 3 premises
         nBack: this.nBack,
         trialNumber: number,
         refNumber: refTrial ? refTrial.number : null,
-        isWarmup: !refTrial,
+        isEncoding,
         suspects: [...suspects],
         statements: statements.map(s => s.text),
         words: metrics.words,
@@ -1020,13 +1165,16 @@ export class NBackSessionDeck {
       },
       nback: {
         nBack: this.nBack,
-        isWarmup: !refTrial,
-        isEcho,
+        tier: profile.tier,
+        isEncoding,
+        isFullMatch,
+        isConsistent,
         refNumber: refTrial ? refTrial.number : null,
         suspects: [...suspects],
         statements,
         solved,
-        alignment
+        alignment,
+        expectedDecisions
       }
     };
 
