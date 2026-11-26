@@ -160,10 +160,28 @@ function buildConnectedCycle(nodes, draw, variant) {
     const a = 1 + Math.floor(draw() * (n - 2));
     const b = a + Math.floor(draw() * (n - 1 - a));
     for (let i = a; i <= b; i++) s[i] = !outer;
+  } else if (variant.kind === 'fig8-or-exact' || variant.kind === 'fig8-nand-exact') {
+    // Figure-8 with s[A[0]]=s[B[0]]=anchorPol and s[A[p-1]]=s[B[q-1]]=!anchorPol:
+    // The 3 bridge disjunctions emit EXACTLY {or(TT), or(TF), or(FT)} or {nand(FF), nand(TF), nand(FT)}.
+    // Interior nodes match anchorPol so a non-sym interior edge emits imp(TT/FF) rather than diluting or(TT)/nand(FF).
+    const anchorPol = variant.kind === 'fig8-or-exact';
+    const p = variant.p;
+    for (let i = 0; i < n; i++) s[i] = anchorPol;
+    if (p >= 2) s[p - 1] = !anchorPol;
+    if (n - p >= 2) s[n - 1] = !anchorPol;
+  } else if (variant.kind === 'fig8-imp-exact') {
+    // Figure-8 with s[A[0]]=head, s[B[0]]=!head, s[A[p-1]]=!head, s[B[q-1]]=head:
+    // The 3 bridge disjunctions emit EXACTLY {imp(TT), imp(FT), imp(FF)} — uniform 33/33/33!
+    // Alternating interior nodes emit or/nand(TF/FT) when non-sym rather than piling up extra imp(TT/FF).
+    const p = variant.p;
+    const head = variant.head ?? (draw() < 0.5);
+    for (let i = 0; i < p; i++) s[i] = (i % 2 === 0) ? head : !head;
+    for (let i = p; i < n; i++) s[i] = ((i - p) % 2 === 0) ? !head : head;
+    s[0] = head;
+    s[p] = !head;
+    if (p >= 2) s[p - 1] = !head;
+    if (n - p >= 2) s[n - 1] = head;
   } else if (variant.kind === 'fig8-same-T' || variant.kind === 'fig8-same-F') {
-    // Figure-8 with s[A[0]] === s[B[0]] so bridge (A[0] OR B[0]) emits or(T,T) or nand(F,F).
-    // Setting tail nodes A[p-1], B[q-1] opposite to anchorPol on 6-node cycles turns the other
-    // two bridge edges into or/nand(TF/FT) instead of piling up excess imp(TT/FF)!
     const anchorPol = variant.kind === 'fig8-same-T';
     const p = variant.p;
     for (let i = 0; i < n; i++) s[i] = anchorPol;
@@ -177,8 +195,6 @@ function buildConnectedCycle(nodes, draw, variant) {
   } else if (variant.kind === 'fig8-mixed') {
     const p = variant.p;
     const head = variant.head ?? (draw() < 0.5);
-    // Guarantee s[A[0]] !== s[B[0]] so bridge (A[0] OR B[0]) emits imp(F, T),
-    // and set tail nodes A[p-1] = head, B[q-1] = !head so the other two bridges emit or/nand(TF/FT)!
     for (let i = 0; i < n; i++) s[i] = draw() < 0.5;
     s[0] = head;
     s[p] = !head;
@@ -189,8 +205,6 @@ function buildConnectedCycle(nodes, draw, variant) {
       for (let i = p + 1; i < n - 1; i++) s[i] = ((i - p) % 2 === 1) ? head : !head;
     }
   } else if (variant.kind === 'alt-diff') {
-    // Multi-transition ring with s[0] !== s[n-1]: chord emits imp(F, T) while
-    // alternating transitions convert ring edges into or/nand instead of imp(TT)/imp(FF)!
     const head = variant.head ?? (draw() < 0.5);
     for (let i = 0; i < n; i++) s[i] = (i % 2 === 0) ? head : !head;
     s[0] = head;
@@ -222,7 +236,7 @@ function buildConnectedCycle(nodes, draw, variant) {
     }
     const symEdges = new Set();
     if (symCand.length) {
-      const cap = variant.maxSym ?? 3;
+      const cap = variant.maxSym ?? 4;
       const want = Math.min(symCand.length, cap);
       for (const k of shuffled(symCand, draw).slice(0, want)) symEdges.add(k);
     }
@@ -312,8 +326,12 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
     // confirmed-anchored symmetric =/!= chains (~25%). ZERO Style-4 trees!
     const confirmed = rows.map((_, i) => i).filter(i => !disputedIndices.includes(i));
     const plans = shuffled([
-      {kind: 'all-true'},
-      {kind: 'all-false'},
+      {kind: 'same-ends-T'},
+      {kind: 'same-ends-F'},
+      {kind: 'same-ends-T'},
+      {kind: 'same-ends-F'},
+      {kind: 'same-ends-T'},
+      {kind: 'same-ends-F'},
       {kind: 'fig8-same-T', p: 1},
       {kind: 'fig8-same-F', p: 2},
       {kind: 'fig8-same-T', p: 2},
@@ -324,8 +342,9 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
       {kind: 'fig8-mixed', p: 2, head: true},
       {kind: 'diff-ends', head: true},
       {kind: 'diff-ends', head: false},
-      {kind: 'alt-diff', head: true},
-      {kind: 'alt-diff', head: false},
+      {kind: 'diff-ends', head: true},
+      {kind: 'diff-ends', head: false},
+      {kind: 'anchored'},
       {kind: 'anchored'},
       {kind: 'anchored'},
       {kind: 'anchored'},
@@ -347,42 +366,39 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
 
   if (level === 'hard') {
     // ALL 6 records disputed in ONE single connected 6-node coupled 2-SAT cycle
-    // balancing ring-plus-chord and figure-8 topologies with uniform + multi-transition
-    // polarities and interior =/!= edges so ALL 5 operators (including imp TT/FT/FF) stay near-uniform!
+    // with >=4 non-symmetric coupled clauses (maxSym <= 3) and balanced exact Figure-8 polarities
+    // so ALL 5 operators (=, !=, =>, or, not both) stay near-uniform with near-50/50 LHS/RHS!
     const plans = shuffled([
-      {kind: 'all-true'},
-      {kind: 'all-false'},
-      {kind: 'fig8-same-T', p: 2},
-      {kind: 'fig8-same-T', p: 3},
-      {kind: 'fig8-same-T', p: 4},
-      {kind: 'fig8-same-F', p: 2},
-      {kind: 'fig8-same-F', p: 3},
-      {kind: 'fig8-same-F', p: 4},
-      {kind: 'fig8-mixed', p: 2, head: true, altInterior: true},
-      {kind: 'fig8-mixed', p: 3, head: false, altInterior: true},
-      {kind: 'fig8-mixed', p: 4, head: true, altInterior: true},
-      {kind: 'fig8-mixed', p: 3, head: true, altInterior: true},
-      {kind: 'fig8-mixed', p: 2, head: false, altInterior: true},
-      {kind: 'fig8-mixed', p: 4, head: false, altInterior: true},
-      {kind: 'fig8-mixed', p: 2, head: true, altInterior: true},
-      {kind: 'fig8-mixed', p: 3, head: false, altInterior: true},
-      {kind: 'fig8-mixed', p: 4, head: false, altInterior: true},
-      {kind: 'alt-diff', head: true},
-      {kind: 'alt-diff', head: false},
-      {kind: 'alt-diff', head: true},
-      {kind: 'alt-diff', head: false},
-      {kind: 'alt-diff', head: true},
-      {kind: 'alt-diff', head: false},
+      {kind: 'fig8-or-exact', p: 2},
+      {kind: 'fig8-or-exact', p: 3},
+      {kind: 'fig8-or-exact', p: 4},
+      {kind: 'fig8-or-exact', p: 3},
+      {kind: 'fig8-nand-exact', p: 2},
+      {kind: 'fig8-nand-exact', p: 3},
+      {kind: 'fig8-nand-exact', p: 4},
+      {kind: 'fig8-nand-exact', p: 3},
+      {kind: 'fig8-imp-exact', p: 2, head: true},
+      {kind: 'fig8-imp-exact', p: 3, head: false},
+      {kind: 'fig8-imp-exact', p: 4, head: true},
+      {kind: 'fig8-imp-exact', p: 2, head: false},
+      {kind: 'fig8-imp-exact', p: 3, head: true},
+      {kind: 'fig8-imp-exact', p: 4, head: false},
+      {kind: 'fig8-imp-exact', p: 3, head: true},
+      {kind: 'fig8-imp-exact', p: 3, head: false},
+      {kind: 'same-ends-T'},
+      {kind: 'same-ends-F'},
       {kind: 'diff-ends', head: true},
       {kind: 'diff-ends', head: false}
     ], draw);
 
-    for (const plan of plans) {
-      for (let attempt = 0; attempt < 24; attempt++) {
-        const maxSym = attempt < 12 ? 3 : attempt < 18 ? 2 : 0;
-        const clauses = buildConnectedCycle(disputedIndices, draw, {...plan, maxSym});
-        if (verifyClausesTargetMinimal(clauses, fixedMask, worldTargets, correctKey, targetSize, forbiddenKey)) {
-          return materialize(clauses, rows, draw);
+    for (const sym of [3, 2, 0]) {
+      const tries = sym === 3 ? 16 : 12;
+      for (const plan of plans) {
+        for (let attempt = 0; attempt < tries; attempt++) {
+          const clauses = buildConnectedCycle(disputedIndices, draw, {...plan, maxSym: sym});
+          if (verifyClausesTargetMinimal(clauses, fixedMask, worldTargets, correctKey, targetSize, forbiddenKey)) {
+            return materialize(clauses, rows, draw);
+          }
         }
       }
     }

@@ -165,7 +165,7 @@ export const easyFamilies = [
   // =========================================================================
   easyCutout({
     id: 'ea-00', domain: 0, title: 'Same-site blind cutout',
-    order: 'Take out anyone acting as a same-site cutout between two people with no direct contact — unless audited by a Spy.',
+    order: 'Take out anyone contacted on a site who reaches a third person there unconnected to their source — unless audited by a Spy.',
     sameIncident: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteTaint({
@@ -175,7 +175,7 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-02', domain: 0, title: 'Cross-site blind cutout',
-    order: 'Cover blown: drop anyone acting as a cross-site cutout between two people with no direct contact — unless warned by a Civilian.',
+    order: 'Cover blown: drop anyone contacted on one site who reaches a third person on the other unconnected to their source — unless warned by a Civilian.',
     sameIncident: false, unconnected: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   easySiteTaint({
@@ -211,7 +211,7 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-08', domain: 0, title: 'Closed same-site triangle',
-    order: 'Take out anyone bridging two people on the same site who are already in direct contact — unless audited by a Spy.',
+    order: 'Take out anyone contacted on a site who reaches a third person there already in direct contact with their source — unless audited by a Spy.',
     sameIncident: true, unconnected: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteDual({
@@ -278,7 +278,7 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-18', domain: 1, title: 'Cross-site closed triangle',
-    order: 'Fire on anyone bridging two people across different sites who are already in direct contact — unless escorted by a Friend.',
+    order: 'Fire on anyone contacted on one site who reaches a third person on the other already in direct contact with their source — unless escorted by a Friend.',
     sameIncident: false, unconnected: false, exc: {roles: ['friend'], dir: 'in'}
   }),
   easySiteDual({
@@ -337,7 +337,7 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-29', domain: 2, title: 'Same-site role-switching cutout',
-    order: 'Engage anyone acting as a cutout on one site across two different roles — unless pressured by a Foe.',
+    order: 'Engage anyone contacted on a site who reaches a third person there in a different role — unless pressured by a Foe.',
     sameIncident: true, diffRole: true, exc: {roles: ['foe'], dir: 'in'}
   }),
 
@@ -366,7 +366,7 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-34', domain: 3, title: 'Cross-site role-switching cutout',
-    order: 'Street misdirection: engage anyone acting as a cutout across both sites in two different roles — unless monitored by a Spy.',
+    order: 'Street misdirection: engage anyone contacted on one site who reaches a third person on the other in a different role — unless monitored by a Spy.',
     sameIncident: false, diffRole: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteCorr({
@@ -400,7 +400,7 @@ export const easyFamilies = [
   // =========================================================================
   easyCutout({
     id: 'ea-40', domain: 4, title: 'Blind cutout in different roles',
-    order: 'Eliminate anyone bridging two strangers across two different roles — unless backed by a Friend.',
+    order: 'Eliminate anyone contacted who reaches a third person in a different role unconnected to their source — unless backed by a Friend.',
     diffRole: true, unconnected: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   easySiteTaint({
@@ -410,7 +410,7 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-42', domain: 4, title: 'Closed triangle in different roles',
-    order: 'Take down anyone bridging two people already in direct contact across two different roles — unless handed off to by a Foreigner.',
+    order: 'Take down anyone contacted who reaches a third person in a different role already in direct contact with their source — unless handed off to by a Foreigner.',
     diffRole: true, unconnected: false, exc: {roles: ['foreigner'], dir: 'in'}
   }),
   easySiteRelay({

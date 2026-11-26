@@ -221,12 +221,12 @@ export const moderateFamilies = [
   // =========================================================================
   modCutout({
     id: 'mo-00', domain: 0, title: 'Same-site blind cutout',
-    order: 'Cover blown: take down anyone acting as a same-site cutout between two people with no direct contact — unless cleared by a Friend.',
+    order: 'Cover blown: take down anyone contacted on a site who reaches a third person there unconnected to their source — unless cleared by a Friend.',
     sameIncident: true, unconnected: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   modCutout({
     id: 'mo-01', domain: 0, title: 'Cross-site blind cutout',
-    order: 'Burned clearance: neutralize anyone acting as a cross-site cutout between two people with no direct contact — unless audited by a Spy.',
+    order: 'Burned clearance: neutralize anyone contacted on one site who reaches a third person on the other unconnected to their source — unless audited by a Spy.',
     sameIncident: false, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteTaint({
@@ -256,7 +256,7 @@ export const moderateFamilies = [
   }),
   modCutout({
     id: 'mo-07', domain: 0, title: 'Closed same-site triangle',
-    order: 'Fire on anyone bridging two people on the same site who are already in direct contact — unless warned by a Civilian.',
+    order: 'Fire on anyone contacted on a site who reaches a third person there already in direct contact with their source — unless warned by a Civilian.',
     sameIncident: true, unconnected: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
@@ -310,7 +310,7 @@ export const moderateFamilies = [
   }),
   modCutout({
     id: 'mo-17', domain: 1, title: 'Unwatched closed cross-site triangle',
-    order: 'Drop anyone bridging two people across different sites who are already in direct contact — unless escorted by a Friend.',
+    order: 'Drop anyone contacted on one site who reaches a third person on the other already in direct contact with their source — unless escorted by a Friend.',
     sameIncident: false, unconnected: false, exc: {roles: ['friend'], dir: 'in'}
   }),
   modTimePriority({
@@ -320,7 +320,7 @@ export const moderateFamilies = [
   }),
   modCutout({
     id: 'mo-19', domain: 1, title: 'Double-role same-site cutout',
-    order: 'Compromised tail: eliminate anyone bridging two strangers on the same site across two different roles — unless shadowed by a Spy.',
+    order: 'Compromised tail: eliminate anyone contacted on a site who reaches a third person there in another role unconnected to their source — unless shadowed by a Spy.',
     sameIncident: true, diffRole: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
 
@@ -359,7 +359,7 @@ export const moderateFamilies = [
   }),
   modCutout({
     id: 'mo-26', domain: 2, title: 'Cross-site role-switching cutout',
-    order: 'Take down anyone bridging two strangers across different sites in two different roles — unless reported by a Civilian.',
+    order: 'Take down anyone contacted on one site who reaches a third person on the other in another role unconnected to their source — unless reported by a Civilian.',
     sameIncident: false, diffRole: true, unconnected: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
@@ -482,7 +482,7 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-49', domain: 4, title: 'Early same-site reach into a mark',
-    order: 'Engage anyone acting on a site toward someone who is contacted later on that same site — unless warned by a Civilian.',
+    order: 'Engage anyone whose outgoing contact on a site is later contacted by a third person on that same site — unless warned by a Civilian.',
     roles1: null, dir1: 'out', roles2: null, dir2: 'in', sameIncident: true, timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
 
@@ -673,12 +673,12 @@ export const moderateFamilies = [
   }),
   modCutout({
     id: 'mo-84', domain: 8, title: 'Two masters on one site',
-    order: 'Two masters at once: drop anyone acting as a cutout on one site across two different roles — unless protected by a Friend.',
+    order: 'Two masters at once: drop anyone contacted on a site who reaches a third person there in a different role — unless protected by a Friend.',
     sameIncident: true, diffRole: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   modCutout({
     id: 'mo-85', domain: 8, title: 'Cross-site double-role cutout',
-    order: 'Engage anyone acting as a cutout across both sites in two different roles — unless hosted by a Foreigner.',
+    order: 'Engage anyone contacted on one site who reaches a third person on the other in a different role — unless hosted by a Foreigner.',
     sameIncident: false, diffRole: true, exc: {roles: ['foreigner'], dir: 'in'}
   }),
   modSiteDual({
@@ -688,12 +688,12 @@ export const moderateFamilies = [
   }),
   modCutout({
     id: 'mo-87', domain: 8, title: 'Closed triangle without hunter',
-    order: 'Fire on anyone bridging two people who are already in direct contact across two different roles — unless hunted by a Foe.',
+    order: 'Fire on anyone contacted who reaches a third person in a different role already in direct contact with their source — unless hunted by a Foe.',
     diffRole: true, unconnected: false, exc: {roles: ['foe'], dir: 'in'}
   }),
   modCutout({
     id: 'mo-88', domain: 8, title: 'Blind cutout without watch',
-    order: 'Take down anyone bridging two strangers across two different roles — unless watched by a Spy.',
+    order: 'Take down anyone contacted who reaches a third person in a different role unconnected to their source — unless watched by a Spy.',
     diffRole: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   mod({

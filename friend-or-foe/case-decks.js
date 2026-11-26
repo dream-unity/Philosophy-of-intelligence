@@ -175,8 +175,8 @@ function rowFlipSummary(familyId, rows, anchor, correctKey, targetSize) {
 // Fast cheap filters (layoutFor + base evaluate + delSens + flipSummary) run first; expensive
 // 64-world sweeps + buildCrossChecks are tightly capped so trial start stays instant (<15 ms).
 function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
-  const budget = level === 'hard' ? 560 : level === 'medium' ? 280 : level === 'easy' ? 48 : 24;
-  const maxSolverCalls = level === 'hard' ? 6 : level === 'medium' ? 6 : 8;
+  const budget = level === 'hard' ? 920 : level === 'medium' ? 480 : level === 'easy' ? 64 : 32;
+  const maxSolverCalls = level === 'hard' ? 9 : level === 'medium' ? 9 : 8;
   let solverCalls = 0;
   let best = null;
   for (let attempt = 0; attempt < budget && solverCalls < maxSolverCalls; attempt++) {
@@ -216,10 +216,16 @@ function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
       if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: dMask, raw: rows, actualTargets, score};
       if (delSens >= 3 && sz !== prevSize) return best;
     } else if (level === 'medium') {
-      if (flipInfo.flipsDifferent < 3) continue;
+      if (flipInfo.flipsDifferent < 3 || flipInfo.rivalRows.length < 2) continue;
       const candidates = TRIPLE_MASKS.filter(m => {
-        for (let i = 0; i < 6; i++) if ((m & (1 << i)) && !flipInfo.diffRows.includes(i)) return false;
-        return true;
+        let rCount = 0;
+        for (let i = 0; i < 6; i++) {
+          if (m & (1 << i)) {
+            if (!flipInfo.diffRows.includes(i)) return false;
+            if (flipInfo.rivalRows.includes(i)) rCount++;
+          }
+        }
+        return rCount >= 2;
       });
       if (!candidates.length) continue;
       candidates.sort((a, b) =>
@@ -238,7 +244,7 @@ function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
         }
       }
     } else if (level === 'hard') {
-      if (flipInfo.flipsDifferent < 4) continue;
+      if (flipInfo.flipsDifferent < 4 || flipInfo.rivalRows.length < 2) continue;
       solverCalls++;
       const dMask = 63;
       const wt = computeWorldTargets(family.id, rows, anchor, dMask);

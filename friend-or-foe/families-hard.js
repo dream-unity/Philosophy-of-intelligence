@@ -257,7 +257,7 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-03', domain: 0, title: 'Withdrawn clearance',
-    order: 'Withdrawn clearance: neutralize anyone who acts after a Civilian warns or Friend clears them — unless a Spy audits them.',
+    order: 'Withdrawn clearance: neutralize anyone who reaches a third person after a Civilian warns or Friend clears them — unless a Spy audits them.',
     inRoles: ['civilian', 'friend'], timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
   hardSiteTaint({
@@ -267,7 +267,7 @@ export const hardFamilies = [
   }),
   hardTimePriority({
     id: 'ha-05', domain: 0, title: 'Premature move',
-    order: 'Premature move: shoot anyone who initiates a contact strictly earlier than every incoming contact they receive — unless audited by a Spy.',
+    order: 'Premature move: shoot anyone contacted who initiates a dispatch strictly earlier than every contact they receive — unless audited by a Spy.',
     dirA: 'out', dirB: 'in', relation: 'before_all', exc: {roles: ['spy'], dir: 'in'}
   }),
   hardSiteTaint({
@@ -277,12 +277,12 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-07', domain: 0, title: 'Closed betrayal loop',
-    order: 'Closed loop: engage anyone bridging a sender and recipient on the same site who are already in direct contact.',
+    order: 'Closed loop: engage anyone contacted on a site who reaches a third person there already in direct contact with their source.',
     sameIncident: true, unconnected: false
   }),
   hardCutout({
     id: 'ha-08', domain: 0, title: 'Cross-site shadow relay',
-    order: 'Cross-site leak — eliminate anyone who receives a contact on one site and later reaches a stranger on the other site.',
+    order: 'Cross-site leak — eliminate anyone contacted on one site who later reaches a third person on the other unconnected to their source.',
     sameIncident: false, timeOrder: 'before', unconnected: true
   }),
   hard({
@@ -321,17 +321,17 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-12', domain: 1, title: 'Unseen surveillance cutout',
-    order: 'Blind-spot cutout: engage anyone bridging two people with no direct contact across different roles — unless a Spy shadows them.',
+    order: 'Blind-spot cutout: engage anyone contacted who reaches a third person in another role unconnected to their source — unless a Spy shadows them.',
     diffRole: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   hardSiteTaint({
     id: 'ha-13', domain: 1, title: 'Cross-site tail',
-    order: 'Cross-site tail: eliminate anyone reaching someone on one site who is contacted later on the other site.',
+    order: 'Cross-site tail: eliminate anyone whose outgoing contact on one site is later contacted by a third person on the other site.',
     dir1: 'out', dir2: 'in', sameIncident: false, timeOrder: 'before'
   }),
   hardTimePriority({
     id: 'ha-14', domain: 1, title: 'Escort arriving last',
-    order: 'Late escort: fire on anyone escorted by a Friend or shadowed by a Spy later than every other contact they receive — unless spotted by a Civilian.',
+    order: 'Late escort: fire on anyone with an earlier incoming contact whose Friend escort or Spy shadow arrives last — unless spotted by a Civilian.',
     rolesA: ['friend', 'spy'], dirA: 'in', rolesB: null, dirB: 'in', relation: 'after_all', exc: {roles: ['civilian'], dir: 'in'}
   }),
   hardSiteTaint({
@@ -341,22 +341,22 @@ export const hardFamilies = [
   }),
   hardTimePriority({
     id: 'ha-16', domain: 1, title: 'Unwatched late move',
-    order: 'Unwatched move: neutralize anyone acting strictly later than every incoming contact they receive — unless a Spy shadows them.',
+    order: 'Unwatched move: neutralize anyone contacted who initiates a dispatch strictly later than every contact they receive — unless a Spy shadows them.',
     dirA: 'out', dirB: 'in', relation: 'after_all', exc: {roles: ['spy'], dir: 'in'}
   }),
   hardTimePriority({
     id: 'ha-17', domain: 1, title: 'First mover on site',
-    order: 'First to break cover: take out anyone acting strictly earlier than every incoming contact on that same site.',
+    order: 'First to break cover: take out anyone contacted on a site who initiates a dispatch strictly earlier than every contact they receive there.',
     dirA: 'out', dirB: 'in', relation: 'before_all', sameIncident: true
   }),
   hardSiteTaint({
     id: 'ha-18', domain: 1, title: 'Ambusher under cover',
-    order: 'Shielded ambusher — shoot anyone ambushed by a Foe or signaled by a Foreigner whose source was escorted or spotted.',
+    order: 'Shielded ambusher — shoot anyone ambushed by a Foe or signaled by a Foreigner whose source was escorted by a Friend or spotted by a Civilian.',
     roles1: ['foe', 'foreigner'], dir1: 'in', roles2: ['friend', 'civilian'], dir2: 'in'
   }),
   hardCutout({
     id: 'ha-19', domain: 1, title: 'Cross-site closed watch',
-    order: 'Staged sighting: drop anyone bridging a sender and recipient on opposite sites who are already in direct contact.',
+    order: 'Staged sighting: drop anyone contacted on one site who reaches a third person on the other already in direct contact with their source.',
     sameIncident: false, unconnected: false
   }),
 
@@ -365,7 +365,7 @@ export const hardFamilies = [
   // =========================================================================
   hardCutout({
     id: 'ha-20', domain: 2, title: 'Cross-border cutout',
-    order: 'Border broker: take down anyone relaying from one site to a stranger on the other site — unless tracked by a Spy.',
+    order: 'Border broker: take down anyone contacted on one site who reaches a third person on the other unconnected to their source — unless tracked by a Spy.',
     sameIncident: false, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   hardSiteTaint({
@@ -375,7 +375,7 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-22', domain: 2, title: 'Activated recruit',
-    order: 'Activated recruit — take out anyone recruited by a Foreigner or pressured by a Foe who later initiates a contact of their own.',
+    order: 'Activated recruit — take out anyone recruited by a Foreigner or pressured by a Foe who later reaches a third person.',
     inRoles: ['foreigner', 'foe'], timeOrder: 'before'
   }),
   hardSiteDual({
@@ -390,12 +390,12 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-25', domain: 2, title: 'Same-site blind channel',
-    order: 'Hidden channel: engage anyone passing a contact onward on the same site to someone their source never contacts.',
+    order: 'Hidden channel: engage anyone contacted on a site who reaches a third person there unconnected to their source.',
     sameIncident: true, unconnected: true
   }),
   hardCutout({
     id: 'ha-26', domain: 2, title: 'Pre-recruitment move',
-    order: 'Early leak: eliminate anyone who initiated a contact earlier than a Foreigner recruited or Foe pressured them — unless vouched for by a Friend.',
+    order: 'Early leak: eliminate anyone who reached a third person earlier than a Foreigner recruited or Foe pressured them — unless vouched for by a Friend.',
     inRoles: ['foreigner', 'foe'], timeOrder: 'after', exc: {roles: ['friend'], dir: 'in'}
   }),
   hardSiteTaint({
@@ -410,7 +410,7 @@ export const hardFamilies = [
   }),
   hardSiteTaint({
     id: 'ha-29', domain: 2, title: 'Delayed cross-border chain',
-    order: 'Delayed border chain: neutralize anyone reaching someone on one site who was already reached earlier on the other site.',
+    order: 'Delayed border chain: neutralize anyone whose outgoing contact on one site was already contacted earlier by a third person on the other site.',
     dir1: 'out', dir2: 'in', sameIncident: false, timeOrder: 'after'
   }),
 
@@ -419,7 +419,7 @@ export const hardFamilies = [
   // =========================================================================
   hardCutout({
     id: 'ha-30', domain: 3, title: 'Acted after civilian tip-off',
-    order: 'Withdrawn tip-off: engage anyone who initiates a contact after a Civilian tips them off or Spy monitors them — unless confirmed by a Friend.',
+    order: 'Withdrawn tip-off: engage anyone who reaches a third person after a Civilian tips them off or Spy monitors them — unless confirmed by a Friend.',
     inRoles: ['civilian', 'spy'], timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   hardSiteTaint({
@@ -444,12 +444,12 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-35', domain: 3, title: 'Acted after deception',
-    order: 'False brief: take out anyone who initiates a contact after a Double agent misleads or Foreigner briefs them.',
+    order: 'False brief: take out anyone who reaches a third person after a Double agent misleads or Foreigner briefs them.',
     inRoles: ['double', 'foreigner'], timeOrder: 'before'
   }),
   hardCutout({
     id: 'ha-36', domain: 3, title: 'Acted before warning',
-    order: 'Ahead of the warning — shoot anyone who initiated a contact earlier than a Civilian tipped them off or Spy monitored them.',
+    order: 'Ahead of the warning — shoot anyone who reached a third person earlier than a Civilian tipped them off or Spy monitored them.',
     inRoles: ['civilian', 'spy'], timeOrder: 'after'
   }),
   hardRelay({
@@ -464,7 +464,7 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-39', domain: 3, title: 'Late confirmation',
-    order: 'Too late to confirm: eliminate anyone who initiated a contact earlier than a Friend confirmed or Foreigner briefed them.',
+    order: 'Too late to confirm: eliminate anyone who reached a third person earlier than a Friend confirmed or Foreigner briefed them.',
     inRoles: ['friend', 'foreigner'], timeOrder: 'after'
   }),
 
@@ -473,17 +473,17 @@ export const hardFamilies = [
   // =========================================================================
   hardCutout({
     id: 'ha-40', domain: 4, title: 'Hidden cross-site proxy',
-    order: 'Cutout exposed: take out anyone bridging an incoming and outgoing contact on opposite sites whose endpoints never meet — unless backed by a Friend.',
+    order: 'Cutout exposed: take out anyone contacted on one site who reaches a third person on the other unconnected to their source — unless backed by a Friend.',
     sameIncident: false, unconnected: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   hardCutout({
     id: 'ha-41', domain: 4, title: 'Same-site active proxy',
-    order: 'Active proxy: shoot anyone backed by a Friend or warned by a Civilian who acts later on that same site.',
+    order: 'Active proxy: shoot anyone backed by a Friend or warned by a Civilian who later reaches a third person on that same site.',
     inRoles: ['friend', 'civilian'], sameIncident: true, timeOrder: 'before'
   }),
   hardCutout({
     id: 'ha-42', domain: 4, title: 'Closed proxy triangle',
-    order: 'Closed proxy ring: drop anyone bridging a sender and recipient who are already in direct contact — unless traced by a Spy.',
+    order: 'Closed proxy ring: drop anyone contacted who reaches a third person already in direct contact with their source — unless traced by a Spy.',
     unconnected: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   hardSiteTaint({
@@ -513,7 +513,7 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-48', domain: 4, title: 'Post-strike cross-site relay',
-    order: 'Post-strike relay — take out anyone struck by a Foe or traced by a Spy who acts later on the other site.',
+    order: 'Post-strike relay — take out anyone struck by a Foe or traced by a Spy who later reaches a third person on the other site.',
     inRoles: ['foe', 'spy'], sameIncident: false, timeOrder: 'before'
   }),
   hardSiteTaint({
@@ -675,7 +675,7 @@ export const hardFamilies = [
   }),
   hardTimePriority({
     id: 'ha-78', domain: 7, title: 'Unvetted cross-site move',
-    order: 'Unvetted move: neutralize anyone acting on one site strictly earlier than every incoming contact on the other site — unless vetted by a Spy.',
+    order: 'Unvetted move: neutralize anyone contacted on one site who acts on the other strictly earlier than every contact they receive on the first — unless vetted by a Spy.',
     dirA: 'out', dirB: 'in', relation: 'before_all', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   hardSiteTaint({
@@ -699,7 +699,7 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-82', domain: 8, title: 'Protected then acting on site',
-    order: 'Shelter breached — take down anyone protected by a Friend or sheltered by a Civilian who acts later on the other site.',
+    order: 'Shelter breached — take down anyone protected by a Friend or sheltered by a Civilian who later reaches a third person on the other site.',
     inRoles: ['friend', 'civilian'], sameIncident: false, timeOrder: 'before'
   }),
   hardSiteDual({
@@ -709,12 +709,12 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-84', domain: 8, title: 'Watched before acting',
-    order: 'Watched operator: take out anyone watched by a Spy or hunted by a Foe who initiates a contact afterward — unless sheltered by a Civilian.',
+    order: 'Watched operator: take out anyone watched by a Spy or hunted by a Foe who later reaches a third person — unless sheltered by a Civilian.',
     inRoles: ['spy', 'foe'], timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
   hardTimePriority({
     id: 'ha-85', domain: 8, title: 'Last mover on site',
-    order: 'Late operator: shoot anyone acting strictly later than every incoming contact on that same site — unless protected by a Friend.',
+    order: 'Late operator: shoot anyone contacted on a site who initiates a dispatch strictly later than every contact they receive there — unless protected by a Friend.',
     dirA: 'out', dirB: 'in', relation: 'after_all', sameIncident: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   hardSiteDual({
@@ -724,12 +724,12 @@ export const hardFamilies = [
   }),
   hardCutout({
     id: 'ha-87', domain: 8, title: 'Isolated double-life broker',
-    order: 'Hidden broker: engage anyone bridging two strangers on the same site — unless watched by a Spy.',
+    order: 'Hidden broker: engage anyone contacted on a site who reaches a third person there unconnected to their source — unless watched by a Spy.',
     sameIncident: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   hardCutout({
     id: 'ha-88', domain: 8, title: 'Acting before hosted or hunted',
-    order: 'Pre-emptive cover: eliminate anyone acting earlier than a Foreigner hosts or Foe hunts them — unless sheltered by a Civilian.',
+    order: 'Pre-emptive cover: eliminate anyone who reached a third person earlier than a Foreigner hosted or Foe hunted them — unless sheltered by a Civilian.',
     inRoles: ['foreigner', 'foe'], timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
   hard({
