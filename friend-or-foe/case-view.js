@@ -184,10 +184,10 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
 
   const keyNotes = [];
   if (evidence.rows.some(row => row.disputed && !row.alias && !row.alt)) {
-    keyNotes.push('? beside a category means both contacts may run the opposite way.');
+    keyNotes.push('? beside a role means both contacts may run the opposite way.');
   }
   if (evidence.rows.some(row => row.disputed && row.alias)) {
-    keyNotes.push('Swap trades those two names throughout that file.');
+    keyNotes.push('Swap trades those two names throughout that dispatch.');
   }
   if (evidence.rows.some(row => row.disputed && row.alt)) {
     keyNotes.push('An “or X → Y?” tag marks a disputed contact.');
@@ -259,17 +259,17 @@ export function renderCaseGuide(root, level, {shortlist = true} = {}) {
     guide.append(block);
   };
   section(
-    'Read all six intelligence categories',
-    'Each category logs a distinct operational contact with a dispatch timestamp (01:00–06:00): Friend vouches for, Foe targets, Spy shadows, Double agent leaks to, Civilian tips off, and Foreigner meets. Each dispatch shows the actor first and the recipient second. Every trial assigns between one and four targets with matching bullets; depending on the order, even an ally or civilian may be marked.'
+    'Read all six intelligence roles',
+    'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00): Friend vouches for, Foe targets, Spy shadows, Double agent leaks to, Civilian tips off, and Foreigner meets. Operating as a role means acting first in that dispatch; being tied to a role means being either actor or recipient. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'
   );
   if ((level === 'super-easy' || level === 'very-easy') && shortlist) {
-    section('Use the shortlist', 'All six category files are confirmed, and every assigned target appears in the shortlist. You can uncheck Shortlist at any time to weigh all ten suspects.');
+    section('Use the shortlist', 'All six dispatches are confirmed, and every assigned target appears in the shortlist. Uncheck Shortlist at any time to weigh all ten suspects.');
   } else if (level === 'super-easy' || level === 'very-easy') {
-    section('Check the whole dossier', 'All six category files are confirmed. Weigh every suspect across all six categories and dispatch times to identify every target required by the order.');
+    section('Weigh all ten suspects', 'All six dispatches are confirmed. Cross-reference every suspect across all six roles and dispatch times to identify every target required by the order.');
   } else if (level === 'easy') {
-    section('Settle one disputed file', 'Five category files are confirmed and one is disputed. Compare the cross-check against the confirmed file using = (same truth) or ≠ (opposite truth) to settle the disputed file.');
+    section('Settle one disputed dispatch', 'Five dispatches are confirmed and one is disputed. Compare the cross-check against the confirmed dispatch using = (same truth) or ≠ (opposite truth) to settle the disputed one.');
   } else {
-    section('Resolve coupled cross-checks', 'A ? file may reverse both contacts; a Swap file may trade two names; an “or X → Y?” tag marks a disputed contact. Cross-checks form coupled cycles with no standalone handouts: test an interpretation around the cycle to eliminate every impossible reading.');
+    section('Resolve coupled cross-checks', 'A ? role may reverse both contacts; a Swap tag may trade two names throughout that dispatch; an “or X → Y?” tag marks a disputed contact. Cross-checks form coupled cycles with no standalone handouts: test an interpretation around the cycle to eliminate every impossible reading.');
   }
   root.replaceChildren(guide);
 }

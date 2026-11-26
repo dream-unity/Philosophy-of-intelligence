@@ -14,8 +14,8 @@ import {buildCrossChecks, targetKey} from '../friend-or-foe/case-logic.js';
 //   5. Strict target-ID cross-check minimality against same-size rival target sets (100% single connected 6-row cycle on Hard!).
 
 const TARGET_PER_FAMILY = 12;
-const MAX_SEEDS_PER_FAMILY = 18000;
-const BANNED_COPY = /\brows?\b|\barrows?\b|\bleft side\b|\bright side\b|\btop two\b|\bscores?\b|\bpoints?\b|Safe \(\+\)|Threat \(−\)|\bIQ\b|relational reasoning/i;
+const MAX_SEEDS_PER_FAMILY = 24000;
+const BANNED_COPY = /\b(rows?|arrows?|left side|right side|top two|scores?|points?|IQ|appears? in|appearing|named in|listed|distinct|categor(y|ies)|file|files|acts? in|acting in|acted upon|records?|dossier)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
 
 const TRIPLE_MASKS = [];
 for (let a = 0; a < 6; a++) {
@@ -92,7 +92,7 @@ function computeWorldTargets(familyId, rows, anchor, disputedMask) {
   return worldTargets;
 }
 
-function certifyBoard(family, seed, anchorIdx) {
+function certifyBoard(family, seed, anchorIdx, strictHardDel = true, skipSizes = null) {
   const rows = layoutFor(seed);
   if (!rows) return null;
   const anchor = symbols[anchorIdx];
@@ -100,6 +100,7 @@ function certifyBoard(family, seed, anchorIdx) {
   const base = evaluateFamily(family.id, baseEdges, anchor, false);
   const targetSize = base.pair.length;
   if (targetSize < 1 || targetSize > 4) return null;
+  if (skipSizes && skipSizes.has(targetSize)) return null;
   const correctKey = targetKey(base.pair);
 
   if (isSingleCategoryShortcut(rows, correctKey)) return null;
@@ -109,7 +110,7 @@ function certifyBoard(family, seed, anchorIdx) {
 
   if (family.tier === 'super-easy' || family.tier === 'very-easy') {
     if (flipInfo.flipsDifferent < 2 || delSens < 2) return null;
-    const score = delSens * 10 + flipInfo.flipsDifferent * 4 + flipInfo.flipsSameSizeRival * 3;
+    const score = delSens * 12 + flipInfo.flipsDifferent * 4 + flipInfo.flipsSameSizeRival * 3;
     return {entry: [seed, anchorIdx, 0], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
   }
 
@@ -121,7 +122,7 @@ function certifyBoard(family, seed, anchorIdx) {
     const wt = computeWorldTargets(family.id, rows, anchor, dMask);
     const reports = buildCrossChecks(rows, [chosen], wt, correctKey, null, 'easy', draw);
     if (!reports || !reports.length) return null;
-    const score = delSens * 12 + flipInfo.flipsSameSizeRival * 5 + flipInfo.flipsDifferent * 2;
+    const score = delSens * 14 + flipInfo.flipsSameSizeRival * 5 + flipInfo.flipsDifferent * 2;
     return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
   }
 
@@ -144,7 +145,7 @@ function certifyBoard(family, seed, anchorIdx) {
       const reports = buildCrossChecks(rows, disputed, wt, correctKey, null, 'medium', draw);
       if (reports && reports.length >= 3) {
         const rivalCount = disputed.filter(i => flipInfo.rivalRows.includes(i)).length;
-        const score = delSens * 12 + rivalCount * 8 + flipInfo.flipsDifferent * 2;
+        const score = delSens * 16 + rivalCount * 8 + flipInfo.flipsDifferent * 2;
         return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
       }
     }
@@ -152,13 +153,14 @@ function certifyBoard(family, seed, anchorIdx) {
   }
 
   if (family.tier === 'hard') {
-    if (flipInfo.flipsDifferent < 4 || delSens < 3) return null;
+    const minDel = strictHardDel ? 4 : 3;
+    if (flipInfo.flipsDifferent < 4 || delSens < minDel) return null;
     const dMask = 63;
     const wt = computeWorldTargets(family.id, rows, anchor, dMask);
     const draw = seededDraw(seed ^ 0x7f4a);
     const reports = buildCrossChecks(rows, [0, 1, 2, 3, 4, 5], wt, correctKey, null, 'hard', draw);
     if (!reports || reports.length < 6) return null;
-    const score = delSens * 25 + flipInfo.flipsDifferent * 10 + flipInfo.flipsSameSizeRival * 8;
+    const score = delSens * 45 + flipInfo.flipsDifferent * 12 + flipInfo.flipsSameSizeRival * 8;
     return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
   }
 
@@ -172,8 +174,9 @@ function pickBalancedTop12(pool) {
 
   const chosen = [];
   const used = new Set();
+  // Round-robin across sizes [2, 1, 3, 4] so 1-target trials never dominate a family!
   for (let round = 0; round < 4 && chosen.length < TARGET_PER_FAMILY; round++) {
-    for (const sz of [1, 2, 3, 4]) {
+    for (const sz of [2, 1, 3, 4]) {
       if (chosen.length >= TARGET_PER_FAMILY) break;
       const list = bySize.get(sz);
       if (round < list.length) {
@@ -195,26 +198,34 @@ function certifyRange(indices) {
     const family = allFamilies[fi];
     const pool = [];
     const sizeCounts = {1: 0, 2: 0, 3: 0, 4: 0};
+    const skipSizes = new Set();
     const baseSeed = (fi + 1) * 100003;
-    const desiredPool = 18;
+    const desiredPool = 22;
+    const capForSize = sz => (sz === 1 ? 5 : 8);
 
     for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY && pool.length < desiredPool; offset++) {
       const seed = (baseSeed + offset * 7919) >>> 0;
       const anchorIdx = family.useAnchor ? (offset % symbols.length) : 0;
-      const cert = certifyBoard(family, seed, anchorIdx);
+      const cert = certifyBoard(family, seed, anchorIdx, true, skipSizes);
       if (cert) {
-        if (sizeCounts[cert.targetSize] >= 8 && pool.length >= 12) continue;
         pool.push(cert);
         sizeCounts[cert.targetSize]++;
+        if (sizeCounts[cert.targetSize] >= capForSize(cert.targetSize)) skipSizes.add(cert.targetSize);
       }
     }
 
+    // Fallback pass if a rare family needs additional boards (or Hard delSens === 3) to reach 12
     if (pool.length < TARGET_PER_FAMILY) {
-      for (let offset = MAX_SEEDS_PER_FAMILY + 1; offset <= MAX_SEEDS_PER_FAMILY * 6 && pool.length < TARGET_PER_FAMILY; offset++) {
+      const seenSeeds = new Set(pool.map(p => p.entry[0]));
+      for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY * 10 && pool.length < TARGET_PER_FAMILY; offset++) {
         const seed = (baseSeed + offset * 7919) >>> 0;
+        if (seenSeeds.has(seed)) continue;
         const anchorIdx = family.useAnchor ? (offset % symbols.length) : 0;
-        const cert = certifyBoard(family, seed, anchorIdx);
-        if (cert) pool.push(cert);
+        const cert = certifyBoard(family, seed, anchorIdx, false, null);
+        if (cert) {
+          seenSeeds.add(seed);
+          pool.push(cert);
+        }
       }
     }
 

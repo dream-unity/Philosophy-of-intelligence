@@ -54,19 +54,19 @@ export const veryEasyFamilies = [
   carry({
     id: 've-00', domain: 0, title: 'Tainted voucher',
     order: 'Shoot anyone vouched for by a Friend who also leaks as a Double agent or meets as a Foreigner.',
-    hint: 'Trace who vouches in Friend, then see if that voucher acts in Double agent or Foreigner.',
+    hint: 'Trace who vouches in Friend, then see if that voucher operates as a Double agent or Foreigner.',
     firstRoles: ['friend'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'out'
   }),
   carry({
     id: 've-01', domain: 0, title: 'Vouching for a mole',
     order: 'Shoot anyone who vouches as a Friend for someone who leaks as a Double agent or meets as a Foreigner.',
-    hint: 'Follow each Friend voucher to the person they back, then check if that person acts in Double agent or Foreigner.',
+    hint: 'Follow each Friend voucher to the person they back, then check if that person operates as a Double agent or Foreigner.',
     firstRoles: ['friend'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out'
   }),
   carry({
     id: 've-02', domain: 0, title: 'Vouched by an enemy',
     order: 'Shoot anyone vouched for by a Friend who also targets someone as a Foe.',
-    hint: 'Check each Friend voucher, then see if that voucher also targets someone in Foe.',
+    hint: 'Check each Friend voucher, then see if that voucher also targets someone tied to Foe.',
     firstRoles: ['friend'], firstDir: 'in', secondRoles: ['foe'], secondDir: 'out'
   }),
   carry({
@@ -90,7 +90,7 @@ export const veryEasyFamilies = [
   carry({
     id: 've-06', domain: 0, title: 'Mole’s friend-backed partner',
     order: 'Shoot anyone who receives a Double agent’s leak from someone who vouches as a Friend or tips off as a Civilian.',
-    hint: 'Trace each Double agent leak back to the mole, then check if that mole acts in Friend or Civilian.',
+    hint: 'Trace each Double agent leak back to the mole, then check if that mole operates as a Friend or Civilian.',
     firstRoles: ['double'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'out'
   }),
   carry({
@@ -118,19 +118,19 @@ export const veryEasyFamilies = [
   carry({
     id: 've-10', domain: 1, title: 'Watched by a mole',
     order: 'Shoot anyone shadowed by a Spy who also leaks as a Double agent or meets as a Foreigner.',
-    hint: 'Find who is shadowing in Spy, then check if that Spy acts in Double agent or Foreigner.',
+    hint: 'Find who is shadowing in Spy, then check if that Spy operates as a Double agent or Foreigner.',
     firstRoles: ['spy'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'out'
   }),
   carry({
     id: 've-11', domain: 1, title: 'Shadowing a mole',
     order: 'Shoot anyone who shadows as a Spy someone who leaks as a Double agent or targets as a Foe.',
-    hint: 'Follow each Spy watch to the watched person, then check if they act in Double agent or Foe.',
+    hint: 'Follow each Spy watch to the watched person, then check if they operate as a Double agent or Foe.',
     firstRoles: ['spy'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'out'
   }),
   carry({
     id: 've-12', domain: 1, title: 'Watched by a hostile',
     order: 'Shoot anyone shadowed by a Spy who also targets someone as a Foe.',
-    hint: 'Trace each Spy shadow back to the watcher, then check if that watcher targets someone in Foe.',
+    hint: 'Trace each Spy shadow back to the watcher, then check if that watcher targets someone tied to Foe.',
     firstRoles: ['spy'], firstDir: 'in', secondRoles: ['foe'], secondDir: 'out'
   }),
   carry({
@@ -160,7 +160,7 @@ export const veryEasyFamilies = [
   carry({
     id: 've-17', domain: 1, title: 'Vouched by a Spy',
     order: 'Shoot anyone vouched for by a Friend who also shadows someone as a Spy.',
-    hint: 'Trace each Friend voucher, then check if that voucher also shadows someone in Spy.',
+    hint: 'Trace each Friend voucher, then check if that voucher also shadows someone tied to Spy.',
     firstRoles: ['friend'], firstDir: 'in', secondRoles: ['spy'], secondDir: 'out'
   }),
   carry({
@@ -172,7 +172,7 @@ export const veryEasyFamilies = [
   carry({
     id: 've-19', domain: 1, title: 'Watched by an ally',
     order: 'Shoot anyone shadowed by a Spy who also vouches as a Friend or tips off as a Civilian.',
-    hint: 'Trace each Spy shadow back to the Spy, then check if that Spy acts in Friend or Civilian.',
+    hint: 'Trace each Spy shadow back to the Spy, then check if that Spy operates as a Friend or Civilian.',
     firstRoles: ['spy'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'out'
   }),
 
@@ -182,13 +182,13 @@ export const veryEasyFamilies = [
   carry({
     id: 've-20', domain: 2, title: 'Foreigner’s mole link',
     order: 'Shoot anyone met by a Foreigner who also leaks as a Double agent or targets as a Foe.',
-    hint: 'Trace each Foreigner meeting back to the Foreigner, then check if they act in Double agent or Foe.',
+    hint: 'Trace each Foreigner meeting back to the Foreigner, then check if they operate as a Double agent or Foe.',
     firstRoles: ['foreigner'], firstDir: 'in', secondRoles: ['double', 'foe'], secondDir: 'out'
   }),
   carry({
     id: 've-21', domain: 2, title: 'Meeting a mole',
     order: 'Shoot anyone who meets as a Foreigner someone who leaks as a Double agent or targets as a Foe.',
-    hint: 'Follow each Foreigner meeting to the contact, then check if that contact acts in Double agent or Foe.',
+    hint: 'Follow each Foreigner meeting to the contact, then check if that contact operates as a Double agent or Foe.',
     firstRoles: ['foreigner'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'out'
   }),
   carry({
@@ -200,7 +200,7 @@ export const veryEasyFamilies = [
   carry({
     id: 've-23', domain: 2, title: 'Met by an insider',
     order: 'Shoot anyone met by a Foreigner who also vouches as a Friend or shadows as a Spy.',
-    hint: 'Trace each Foreigner meeting back to the Foreigner, then check if they act in Friend or Spy.',
+    hint: 'Trace each Foreigner meeting back to the Foreigner, then check if they operate as a Friend or Spy.',
     firstRoles: ['foreigner'], firstDir: 'in', secondRoles: ['friend', 'spy'], secondDir: 'out'
   }),
   carry({
@@ -230,7 +230,7 @@ export const veryEasyFamilies = [
   carry({
     id: 've-28', domain: 2, title: 'Met by a civilian informant',
     order: 'Shoot anyone met by a Foreigner who also tips off someone as a Civilian.',
-    hint: 'Trace each Foreigner meeting back to the Foreigner, then check if they tip off someone in Civilian.',
+    hint: 'Trace each Foreigner meeting back to the Foreigner, then check if they tip off someone tied to Civilian.',
     firstRoles: ['foreigner'], firstDir: 'in', secondRoles: ['civilian'], secondDir: 'out'
   }),
   carry({
@@ -246,19 +246,19 @@ export const veryEasyFamilies = [
   carry({
     id: 've-30', domain: 3, title: 'Tipped by a mole',
     order: 'Shoot anyone tipped off by a Civilian who also leaks as a Double agent or meets as a Foreigner.',
-    hint: 'Trace each Civilian tip-off back to the informant, then check if they act in Double agent or Foreigner.',
+    hint: 'Trace each Civilian tip-off back to the informant, then check if they operate as a Double agent or Foreigner.',
     firstRoles: ['civilian'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'out'
   }),
   carry({
     id: 've-31', domain: 3, title: 'Tipping off a mole',
     order: 'Shoot anyone who tips off as a Civilian someone who leaks as a Double agent or targets as a Foe.',
-    hint: 'Follow each Civilian tip-off to the recipient, then check if they act in Double agent or Foe.',
+    hint: 'Follow each Civilian tip-off to the recipient, then check if they operate as a Double agent or Foe.',
     firstRoles: ['civilian'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'out'
   }),
   carry({
     id: 've-32', domain: 3, title: 'Tipped by an enemy',
     order: 'Shoot anyone tipped off by a Civilian who also targets someone as a Foe.',
-    hint: 'Trace each Civilian tip-off back to the informant, then check if that informant targets someone in Foe.',
+    hint: 'Trace each Civilian tip-off back to the informant, then check if that informant targets someone tied to Foe.',
     firstRoles: ['civilian'], firstDir: 'in', secondRoles: ['foe'], secondDir: 'out'
   }),
   carry({
@@ -282,19 +282,19 @@ export const veryEasyFamilies = [
   carry({
     id: 've-36', domain: 3, title: 'Tipped by an insider',
     order: 'Shoot anyone tipped off by a Civilian who also vouches as a Friend or shadows as a Spy.',
-    hint: 'Trace each Civilian tip-off back to the informant, then check if they act in Friend or Spy.',
+    hint: 'Trace each Civilian tip-off back to the informant, then check if they operate as a Friend or Spy.',
     firstRoles: ['civilian'], firstDir: 'in', secondRoles: ['friend', 'spy'], secondDir: 'out'
   }),
   carry({
     id: 've-37', domain: 3, title: 'Leaking to an informant',
     order: 'Shoot anyone who leaks as a Double agent to someone who tips off as a Civilian.',
-    hint: 'Follow each Double agent leak to its recipient, then check if that recipient acts in Civilian.',
+    hint: 'Follow each Double agent leak to its recipient, then check if that recipient operates as Civilian.',
     firstRoles: ['double'], firstDir: 'out', secondRoles: ['civilian'], secondDir: 'out'
   }),
   carry({
     id: 've-38', domain: 3, title: 'Targeted by an informant',
     order: 'Shoot anyone targeted by a Foe who also tips off someone as a Civilian.',
-    hint: 'Trace each Foe attack back to the Foe, then check if that Foe also acts in Civilian.',
+    hint: 'Trace each Foe attack back to the Foe, then check if that Foe also operates as Civilian.',
     firstRoles: ['foe'], firstDir: 'in', secondRoles: ['civilian'], secondDir: 'out'
   }),
   carry({
@@ -310,13 +310,13 @@ export const veryEasyFamilies = [
   carry({
     id: 've-40', domain: 4, title: 'Covert handoff starter',
     order: 'Shoot anyone who leaks as a Double agent to someone who then meets a contact as a Foreigner (no return).',
-    hint: 'Follow a Double agent leak to the middleman, then follow that middleman acting in Foreigner.',
+    hint: 'Follow a Double agent leak to the middleman, then follow that middleman operating as Foreigner.',
     firstRoles: ['double'], firstDir: 'out', secondRoles: ['foreigner'], secondDir: 'out'
   }),
   carry({
     id: 've-41', domain: 4, title: 'Hostile handoff starter',
     order: 'Shoot anyone who targets as a Foe someone who then leaks as a Double agent or meets as a Foreigner (no return).',
-    hint: 'Follow a Foe target to the victim, then check if that victim acts in Double agent or Foreigner.',
+    hint: 'Follow a Foe target to the victim, then check if that victim operates as a Double agent or Foreigner.',
     firstRoles: ['foe'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out'
   }),
   carry({
@@ -328,7 +328,7 @@ export const veryEasyFamilies = [
   carry({
     id: 've-43', domain: 4, title: 'Ally-to-Spy relay',
     order: 'Shoot anyone who vouches as a Friend for someone who then shadows as a Spy or tips off as a Civilian (no return).',
-    hint: 'Follow a Friend voucher to their ward, then see if that ward acts in Spy or Civilian.',
+    hint: 'Follow a Friend voucher to their ward, then see if that ward operates as a Spy or Civilian.',
     firstRoles: ['friend'], firstDir: 'out', secondRoles: ['spy', 'civilian'], secondDir: 'out'
   }),
   carry({
@@ -340,7 +340,7 @@ export const veryEasyFamilies = [
   carry({
     id: 've-45', domain: 4, title: 'Spy-to-mole starter',
     order: 'Shoot anyone who shadows as a Spy someone who then leaks as a Double agent or meets as a Foreigner (no return).',
-    hint: 'Follow a Spy shadow to the watched person, then check if they act in Double agent or Foreigner.',
+    hint: 'Follow a Spy shadow to the watched person, then check if they operate as a Double agent or Foreigner.',
     firstRoles: ['spy'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out'
   }),
   carry({
@@ -358,13 +358,13 @@ export const veryEasyFamilies = [
   carry({
     id: 've-48', domain: 4, title: 'Tip-to-cover starter',
     order: 'Shoot anyone who tips off as a Civilian someone who then vouches as a Friend or shadows as a Spy (no return).',
-    hint: 'Follow a Civilian tip-off to the recipient, then check if they act in Friend or Spy.',
+    hint: 'Follow a Civilian tip-off to the recipient, then check if they operate as a Friend or Spy.',
     firstRoles: ['civilian'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'out'
   }),
   carry({
-    id: 've-49', domain: 4, title: 'Cross-category relay starter',
-    order: 'Shoot anyone who acts in Friend or Civilian toward someone who then acts in Foe or Double agent (no return).',
-    hint: 'Follow a Friend or Civilian action, then check if the recipient acts in Foe or Double agent.',
+    id: 've-49', domain: 4, title: 'Cross-role relay starter',
+    order: 'Shoot anyone who moves as a Friend or Civilian toward someone who then operates as a Foe or Double agent (no return).',
+    hint: 'Follow a Friend or Civilian action, then check if the recipient operates as a Foe or Double agent.',
     firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'out'
   }),
 
@@ -373,38 +373,38 @@ export const veryEasyFamilies = [
   // =========================================================================
   carry({
     id: 've-50', domain: 5, title: 'Protected by an enemy’s mark',
-    order: 'Shoot anyone vouched for by a Friend who is targeted by a Foe — excluding anyone shadowed by a Spy.',
+    order: 'Shoot anyone vouched for by a Friend who is targeted by a Foe — unless a Spy shadows them.',
     hint: 'Find who a Friend backs whose voucher is targeted by a Foe, then exclude anyone under Spy watch.',
     firstRoles: ['friend'], firstDir: 'in', secondRoles: ['foe'], secondDir: 'in', exc: {roles: ['spy'], dir: 'in'}
   }),
   carry({
     id: 've-51', domain: 5, title: 'Targeted by a Friend’s partner',
     order: 'Shoot anyone targeted by a Foe who also vouches as a Friend.',
-    hint: 'Trace each Foe attack back to the Foe, then check if that Foe vouches for someone in Friend.',
+    hint: 'Trace each Foe attack back to the Foe, then check if that Foe vouches for someone tied to Friend.',
     firstRoles: ['foe'], firstDir: 'in', secondRoles: ['friend'], secondDir: 'out'
   }),
   carry({
     id: 've-52', domain: 5, title: 'Leaked to by a Spy',
     order: 'Shoot anyone who receives a Double agent’s leak from someone who also shadows as a Spy.',
-    hint: 'Trace each Double agent leak back to the mole, then check if that mole shadows someone in Spy.',
+    hint: 'Trace each Double agent leak back to the mole, then check if that mole shadows someone tied to Spy.',
     firstRoles: ['double'], firstDir: 'in', secondRoles: ['spy'], secondDir: 'out'
   }),
   carry({
     id: 've-53', domain: 5, title: 'Targeted by a Spy',
     order: 'Shoot anyone targeted by a Foe who also shadows someone as a Spy.',
-    hint: 'Trace each Foe attack back to the Foe, then check if that Foe also shadows someone in Spy.',
+    hint: 'Trace each Foe attack back to the Foe, then check if that Foe also shadows someone tied to Spy.',
     firstRoles: ['foe'], firstDir: 'in', secondRoles: ['spy'], secondDir: 'out'
   }),
   carry({
     id: 've-54', domain: 5, title: 'Leaked to by a hostile',
     order: 'Shoot anyone who receives a Double agent’s leak from someone who also targets as a Foe or meets as a Foreigner.',
-    hint: 'Trace each Double agent leak back to the mole, then check if that mole acts in Foe or Foreigner.',
+    hint: 'Trace each Double agent leak back to the mole, then check if that mole operates as a Foe or Foreigner.',
     firstRoles: ['double'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out'
   }),
   carry({
     id: 've-55', domain: 5, title: 'Targeted by a mole',
     order: 'Shoot anyone targeted by a Foe who also leaks as a Double agent or meets as a Foreigner.',
-    hint: 'Trace each Foe attack back to the Foe, then check if that Foe acts in Double agent or Foreigner.',
+    hint: 'Trace each Foe attack back to the Foe, then check if that Foe operates as a Double agent or Foreigner.',
     firstRoles: ['foe'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'out'
   }),
   carry({
@@ -438,7 +438,7 @@ export const veryEasyFamilies = [
   timedRule({
     id: 've-60', domain: 6, title: 'Vouched then betrayed',
     order: 'Shoot anyone vouched for by a Friend before they leaked as a Double agent or met as a Foreigner.',
-    hint: 'Compare dispatch times: Friend vouching must come earlier than acting in Double agent or Foreigner.',
+    hint: 'Compare dispatch times: Friend vouching must come earlier than operating as a Double agent or Foreigner.',
     early: {roles: ['friend'], dir: 'in'}, late: {roles: ['double', 'foreigner'], dir: 'out'}
   }),
   timedRule({
@@ -456,18 +456,18 @@ export const veryEasyFamilies = [
   timedRule({
     id: 've-63', domain: 6, title: 'Leaked then shadowed',
     order: 'Shoot anyone who leaked as a Double agent or targeted as a Foe before a Spy shadowed them.',
-    hint: 'Check dispatch times: acting in Double agent or Foe must precede the Spy watch.',
+    hint: 'Check dispatch times: operating as a Double agent or Foe must precede the Spy watch.',
     early: {roles: ['double', 'foe'], dir: 'out'}, late: {roles: ['spy'], dir: 'in'}
   }),
   timedRule({
     id: 've-64', domain: 6, title: 'Shadowed then turned',
     order: 'Shoot anyone shadowed by a Spy before they targeted as a Foe, leaked as a Double agent, or met as a Foreigner.',
-    hint: 'Check dispatch times: the Spy watch must precede acting in Foe, Double agent, or Foreigner.',
+    hint: 'Check dispatch times: the Spy watch must precede operating as a Foe, Double agent, or Foreigner.',
     early: {roles: ['spy'], dir: 'in'}, late: {roles: ['foe', 'double', 'foreigner'], dir: 'out'}
   }),
   carry({
     id: 've-65', domain: 6, title: 'Delayed foreign handoff',
-    order: 'Shoot anyone who acts in Friend or Civilian toward someone who LATER acts in Double agent or Foreigner (no return).',
+    order: 'Shoot anyone who moves as a Friend or Civilian toward someone who later operates as a Double agent or Foreigner (no return).',
     hint: 'Follow a Friend or Civilian link, then check that the second action happened at a later time.',
     firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out', timeOrder: 'before'
   }),
@@ -492,7 +492,7 @@ export const veryEasyFamilies = [
   timedRule({
     id: 've-69', domain: 6, title: 'Hostile before cover',
     order: 'Shoot anyone who targeted as a Foe or leaked as a Double agent before a Friend vouched for them.',
-    hint: 'Check dispatch times: acting in Foe or Double agent must precede Friend backing.',
+    hint: 'Check dispatch times: operating as a Foe or Double agent must precede Friend backing.',
     early: {roles: ['foe', 'double'], dir: 'out'}, late: {roles: ['friend'], dir: 'in'}
   }),
 
@@ -501,62 +501,62 @@ export const veryEasyFamilies = [
   // =========================================================================
   carry({
     id: 've-70', domain: 7, title: 'Vouched by a covert contact',
-    order: 'Shoot anyone vouched for by a Friend who appears anywhere in Double agent or Foreigner — unless shadowed by a Spy.',
-    hint: 'Check Friend vouchers appearing in Double agent or Foreigner, then rule out targets under Spy watch.',
+    order: 'Shoot anyone vouched for by a Friend who is tied anywhere in Double agent or Foreigner — unless a Spy shadows them.',
+    hint: 'Check Friend vouchers tied to Double agent or Foreigner, then rule out targets under Spy watch.',
     firstRoles: ['friend'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'any', exc: {roles: ['spy'], dir: 'in'}
   }),
   carry({
     id: 've-71', domain: 7, title: 'Tipped by a covert contact',
-    order: 'Shoot anyone tipped off by a Civilian who appears anywhere in Foe or Foreigner — unless backed by a Friend.',
-    hint: 'Check Civilian informants appearing in Foe or Foreigner, then rule out targets backed by a Friend.',
+    order: 'Shoot anyone tipped off by a Civilian who is tied anywhere in Foe or Foreigner — unless a Friend vouches for them.',
+    hint: 'Check Civilian informants tied to Foe or Foreigner, then rule out targets backed by a Friend.',
     firstRoles: ['civilian'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'any', exc: {roles: ['friend'], dir: 'in'}
   }),
   carry({
     id: 've-72', domain: 7, title: 'Shadowed by a covert contact',
-    order: 'Shoot anyone shadowed by a Spy who appears anywhere in Foe or Double agent — unless backed by a Friend.',
-    hint: 'Check Spies appearing in Foe or Double agent, then rule out targets backed by a Friend.',
+    order: 'Shoot anyone shadowed by a Spy who is tied anywhere in Foe or Double agent — unless a Friend vouches for them.',
+    hint: 'Check Spies tied to Foe or Double agent, then rule out targets backed by a Friend.',
     firstRoles: ['spy'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'any', exc: {roles: ['friend'], dir: 'in'}
   }),
   carry({
     id: 've-73', domain: 7, title: 'Hostile via mole',
-    order: 'Shoot anyone targeted by a Foe who appears anywhere in Double agent — unless shadowed by a Spy.',
-    hint: 'Check Foes appearing in Double agent, then exclude targets under Spy watch.',
+    order: 'Shoot anyone targeted by a Foe who is tied anywhere in Double agent — unless a Spy shadows them.',
+    hint: 'Check Foes tied to Double agent, then exclude targets under Spy watch.',
     firstRoles: ['foe'], firstDir: 'in', secondRoles: ['double'], secondDir: 'any', exc: {roles: ['spy'], dir: 'in'}
   }),
   carry({
     id: 've-74', domain: 7, title: 'Fed by a hostile',
-    order: 'Shoot anyone receiving a Double agent’s leak from someone in Foe or Foreigner — unless backed by a Friend.',
-    hint: 'Check Double agents appearing in Foe or Foreigner, then exclude targets backed by a Friend.',
+    order: 'Shoot anyone receiving a Double agent’s leak from someone tied to Foe or Foreigner — unless a Friend vouches for them.',
+    hint: 'Check Double agents tied to Foe or Foreigner, then exclude targets backed by a Friend.',
     firstRoles: ['double'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'any', exc: {roles: ['friend'], dir: 'in'}
   }),
   carry({
     id: 've-75', domain: 7, title: 'Met by an exposed outsider',
-    order: 'Shoot anyone met by a Foreigner who appears anywhere in Foe or Double agent — unless backed by a Friend.',
-    hint: 'Check Foreigners appearing in Foe or Double agent, then rule out targets backed by a Friend.',
+    order: 'Shoot anyone met by a Foreigner who is tied anywhere in Foe or Double agent — unless a Friend vouches for them.',
+    hint: 'Check Foreigners tied to Foe or Double agent, then rule out targets backed by a Friend.',
     firstRoles: ['foreigner'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'any', exc: {roles: ['friend'], dir: 'in'}
   }),
   carry({
     id: 've-76', domain: 7, title: 'Hostile’s inside mark',
-    order: 'Shoot anyone who targets as a Foe someone appearing in Friend or Spy — unless shadowed by a Spy.',
-    hint: 'Check Foes whose victim appears in Friend or Spy, then exclude Foes under Spy watch.',
+    order: 'Shoot anyone who targets as a Foe someone tied to Friend or Spy — unless a Spy shadows them.',
+    hint: 'Check Foes whose victim is tied to Friend or Spy, then exclude Foes under Spy watch.',
     firstRoles: ['foe'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'any', exc: {roles: ['spy'], dir: 'in'}
   }),
   carry({
     id: 've-77', domain: 7, title: 'Mole’s civilian mark',
-    order: 'Shoot anyone who leaks as a Double agent to someone appearing in Civilian or Friend — unless shadowed by a Spy.',
-    hint: 'Check Double agents leaking to someone in Civilian or Friend, then exclude those under Spy watch.',
+    order: 'Shoot anyone who leaks as a Double agent to someone tied to Civilian or Friend — unless a Spy shadows them.',
+    hint: 'Check Double agents leaking to someone tied to Civilian or Friend, then exclude those under Spy watch.',
     firstRoles: ['double'], firstDir: 'out', secondRoles: ['civilian', 'friend'], secondDir: 'any', exc: {roles: ['spy'], dir: 'in'}
   }),
   carry({
     id: 've-78', domain: 7, title: 'Foreigner’s inside mark',
-    order: 'Shoot anyone who meets as a Foreigner someone appearing in Friend or Civilian — unless shadowed by a Spy.',
-    hint: 'Check Foreigners meeting someone in Friend or Civilian, then exclude those under Spy watch.',
+    order: 'Shoot anyone who meets as a Foreigner someone tied to Friend or Civilian — unless a Spy shadows them.',
+    hint: 'Check Foreigners meeting someone tied to Friend or Civilian, then exclude those under Spy watch.',
     firstRoles: ['foreigner'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'any', exc: {roles: ['spy'], dir: 'in'}
   }),
   carry({
     id: 've-79', domain: 7, title: 'Unwatched informant’s target',
-    order: 'Shoot anyone who tips off as a Civilian someone appearing in Foe or Foreigner — unless backed by a Friend.',
-    hint: 'Check Civilian informants tipping off someone in Foe or Foreigner, then exclude those backed by a Friend.',
+    order: 'Shoot anyone who tips off as a Civilian someone tied to Foe or Foreigner — unless a Friend vouches for them.',
+    hint: 'Check Civilian informants tipping off someone tied to Foe or Foreigner, then exclude those backed by a Friend.',
     firstRoles: ['civilian'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'any', exc: {roles: ['friend'], dir: 'in'}
   }),
 
@@ -565,44 +565,44 @@ export const veryEasyFamilies = [
   // =========================================================================
   carry({
     id: 've-80', domain: 8, title: 'Covertly linked voucher',
-    order: 'Shoot anyone who vouches as a Friend for someone who also acts in Foe, Double agent, or Foreigner.',
-    hint: 'Follow Friend vouching to the ward, then check if that ward acts in Foe, Double agent, or Foreigner.',
+    order: 'Shoot anyone who vouches as a Friend for someone who also operates as a Foe, Double agent, or Foreigner.',
+    hint: 'Follow Friend vouching to the ward, then check if that ward operates as a Foe, Double agent, or Foreigner.',
     firstRoles: ['friend'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out'
   }),
   carry({
     id: 've-81', domain: 8, title: 'Covertly linked shadow',
-    order: 'Shoot anyone who shadows as a Spy someone who also acts in Friend or Civilian.',
-    hint: 'Follow Spy shadowing to the watched person, then check if they act in Friend or Civilian.',
+    order: 'Shoot anyone who shadows as a Spy someone who also operates as a Friend or Civilian.',
+    hint: 'Follow Spy shadowing to the watched person, then check if they operate as a Friend or Civilian.',
     firstRoles: ['spy'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'out'
   }),
   carry({
     id: 've-82', domain: 8, title: 'Hostile targeting an actor',
     order: 'Shoot anyone who targets as a Foe someone who vouches as a Friend or shadows as a Spy.',
-    hint: 'Follow Foe targeting to the victim, then check if that victim acts in Friend or Spy.',
+    hint: 'Follow Foe targeting to the victim, then check if that victim operates as a Friend or Spy.',
     firstRoles: ['foe'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'out'
   }),
   carry({
     id: 've-83', domain: 8, title: 'Foreigner meeting an actor',
     order: 'Shoot anyone who meets as a Foreigner someone who vouches as a Friend or tips off as a Civilian.',
-    hint: 'Follow Foreigner meetings to the contact, then check if that contact acts in Friend or Civilian.',
+    hint: 'Follow Foreigner meetings to the contact, then check if that contact operates as a Friend or Civilian.',
     firstRoles: ['foreigner'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'out'
   }),
   carry({
     id: 've-84', domain: 8, title: 'Mole leaking to a watcher',
     order: 'Shoot anyone who leaks as a Double agent to someone who shadows as a Spy or targets as a Foe.',
-    hint: 'Follow Double agent leaks to the recipient, then check if they act in Spy or Foe.',
+    hint: 'Follow Double agent leaks to the recipient, then check if they operate as a Spy or Foe.',
     firstRoles: ['double'], firstDir: 'out', secondRoles: ['spy', 'foe'], secondDir: 'out'
   }),
   carry({
     id: 've-85', domain: 8, title: 'Overt recipient of a covert actor',
-    order: 'Shoot anyone vouched for by a Friend or tipped off by a Civilian who also acts in Foe or Foreigner.',
-    hint: 'Trace Friend backing or Civilian tip-off back to the actor, then check if they act in Foe or Foreigner.',
+    order: 'Shoot anyone vouched for by a Friend or tipped off by a Civilian who also operates as a Foe or Foreigner.',
+    hint: 'Trace Friend backing or Civilian tip-off back to the actor, then check if they operate as a Foe or Foreigner.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out'
   }),
   carry({
     id: 've-86', domain: 8, title: 'Covert target of an overt actor',
     order: 'Shoot anyone targeted by a Foe or met by a Foreigner who also vouches as a Friend or tips off as a Civilian.',
-    hint: 'Trace Foe targeting or Foreigner meeting back to the actor, then check if they act in Friend or Civilian.',
+    hint: 'Trace Foe targeting or Foreigner meeting back to the actor, then check if they operate as a Friend or Civilian.',
     firstRoles: ['foe', 'foreigner'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'out'
   }),
   carry({
@@ -630,7 +630,7 @@ export const veryEasyFamilies = [
   anchorCarry({
     id: 've-90', domain: 9, title: 'Two steps from {name}',
     order: 'Shoot anyone reached in two forward steps from {name} (not directly linked to {name}).',
-    hint: 'Follow who {name} acts upon, then follow who those people act upon — skipping direct contacts of {name}.',
+    hint: 'Follow who {name} reaches, then follow who those people act upon — skipping direct contacts of {name}.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     excludeDirect: true
@@ -638,7 +638,7 @@ export const veryEasyFamilies = [
   anchorCarry({
     id: 've-91', domain: 9, title: 'Two steps into {name}',
     order: 'Shoot anyone who reaches {name} in two forward steps (not directly linked to {name}).',
-    hint: 'Work backward from {name}: who acts on {name}, and who acts on them?',
+    hint: 'Work backward from {name}: who initiates on {name}, and who initiates on them?',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
     excludeDirect: true
@@ -659,15 +659,15 @@ export const veryEasyFamilies = [
   }),
   anchorCarry({
     id: 've-94', domain: 9, title: 'Shared target with {name}',
-    order: 'Shoot anyone else who acts directly upon the same person {name} acts upon.',
-    hint: 'Find who {name} acts upon, then see who else also acts upon those same people.',
+    order: 'Shoot anyone else who initiates directly upon the same person {name} reaches.',
+    hint: 'Find who {name} reaches, then see who else also reaches those same people.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in'
   }),
   anchorCarry({
     id: 've-95', domain: 9, title: 'Shared handler with {name}',
-    order: 'Shoot anyone else acted upon by the same person who acts upon {name}.',
-    hint: 'Find who acts upon {name}, then see who else that person acts upon.',
+    order: 'Shoot anyone else reached by the same person who reaches {name}.',
+    hint: 'Find who reaches {name}, then see who else that person reaches.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out'
   }),

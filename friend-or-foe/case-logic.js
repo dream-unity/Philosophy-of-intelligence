@@ -116,132 +116,130 @@ function makeSymmetricClause(u, uVal, v, vVal, draw) {
     : {lIdx: v, lTrue: vVal, rIdx: u, rTrue: uVal, op};
 }
 
+// Emit an exact 2-literal disjunction (lit(u, polU) OR lit(v, polV)) under display polarity vector `s`:
+// Because replacing x_i with y_i = !x_i is an exact Boolean automorphism of 2-SAT, every
+// polarity vector preserves unique solvability, strict minimality, and single-component connectivity
+// while freely balancing (TT, TF, FT, FF) across `or`, `not both`, and `imp`!
+function emitDisjunction(u, polU, v, polV, s, draw) {
+  const uVal = s[u];
+  const vVal = s[v];
+  const cU = polU === uVal;
+  const cV = polV === vVal;
+  if (cU && cV) {
+    return draw() < 0.5
+      ? {lIdx: u, lTrue: uVal, rIdx: v, rTrue: vVal, op: 'or'}
+      : {lIdx: v, lTrue: vVal, rIdx: u, rTrue: uVal, op: 'or'};
+  }
+  if (!cU && !cV) {
+    return draw() < 0.5
+      ? {lIdx: u, lTrue: uVal, rIdx: v, rTrue: vVal, op: 'nand'}
+      : {lIdx: v, lTrue: vVal, rIdx: u, rTrue: uVal, op: 'nand'};
+  }
+  if (!cU && cV) {
+    return {lIdx: u, lTrue: uVal, rIdx: v, rTrue: vVal, op: 'imp'};
+  }
+  return {lIdx: v, lTrue: vVal, rIdx: u, rTrue: uVal, op: 'imp'};
+}
+
 // Build a single connected N-node irreducible coupled 2-SAT cycle (N = 3 or N = 6)
-// with ZERO Style-4 single-closing-connective trees and ZERO disconnected clusters!
-//
-// Generalized (p, q) coupled cycle on N nodes (p true, q false):
-//   - Mixed (p >= 1, q >= 1): N + 1 clauses mixing `or`, `nand`, `imp` (and optionally 1-2 `=`/`!=`
-//     on N=6 while preserving >= 4 non-symmetric connectives!).
-//   - Dualized mixed: flips every truth value and swaps `or` <-> `nand`.
-//   - Pure-True (p = N, q = 0): `or (T,T)` + directed `imp` ring (plus optional 1 `=`/`!=` on N=6).
-//   - Pure-False (p = 0, q = N): `nand (F,F)` + directed `imp` ring (plus optional 1 `=`/`!=` on N=6).
+// using TWO distinct irreducible topologies (ring-plus-chord AND figure-8), both under
+// exact literal polarity substitution so ZERO Style-4 trees and ZERO disconnected clusters
+// ever occur while achieving balanced ~33/33/33 operator truth tables on `or`, `not both`, `imp`!
 function buildConnectedCycle(nodes, draw, variant) {
   const order = shuffled(nodes, draw);
   const n = order.length;
-  const clauses = [];
+  const s = new Array(n).fill(true);
 
   if (variant.kind === 'all-true') {
-    // v[0] or v[n-1] (T,T), plus directed ring v[n-1]=>v[n-2]=>...=>v[0], and v[0]=>v[n-1]
-    clauses.push(draw() < 0.5
-      ? {lIdx: order[0], lTrue: true, rIdx: order[n - 1], rTrue: true, op: 'or'}
-      : {lIdx: order[n - 1], lTrue: true, rIdx: order[0], rTrue: true, op: 'or'});
-    const symSlot = n >= 6 && draw() < 0.55 ? 1 + Math.floor(draw() * (n - 2)) : -1;
-    for (let i = n - 1; i >= 1; i--) {
-      if (i === symSlot) {
-        clauses.push(makeSymmetricClause(order[i], draw() < 0.5, order[i - 1], draw() < 0.5, draw));
-      } else {
-        clauses.push({lIdx: order[i], lTrue: true, rIdx: order[i - 1], rTrue: true, op: 'imp'});
+    s.fill(true);
+  } else if (variant.kind === 'all-false') {
+    s.fill(false);
+  } else if (variant.kind === 'same-ends-T' || variant.kind === 'same-ends-F') {
+    const outer = variant.kind === 'same-ends-T';
+    s.fill(outer);
+    const a = 1 + Math.floor(draw() * (n - 2));
+    const b = a + Math.floor(draw() * (n - 1 - a));
+    for (let i = a; i <= b; i++) s[i] = !outer;
+  } else if (variant.kind === 'fig8-same-T' || variant.kind === 'fig8-same-F') {
+    // Figure-8 with s[a0] === s[b0] so clause (a0 OR b0) emits or(T,T) or nand(F,F)!
+    const anchorPol = variant.kind === 'fig8-same-T';
+    const p = variant.p;
+    for (let i = 0; i < n; i++) s[i] = draw() < 0.5;
+    s[0] = anchorPol;
+    s[p] = anchorPol;
+    // Keep at most 1 polarity transition in each half so or(T,T)/nand(F,F) stay ~33%
+    if (draw() < 0.65) {
+      for (let i = 0; i < n; i++) s[i] = anchorPol;
+      if (n >= 6 && draw() < 0.55) {
+        const flipIdx = 1 + Math.floor(draw() * (n - 2));
+        if (flipIdx !== p) s[flipIdx] = !anchorPol;
       }
     }
-    clauses.push({lIdx: order[0], lTrue: true, rIdx: order[n - 1], rTrue: true, op: 'imp'});
-    return clauses;
-  }
-
-  if (variant.kind === 'all-false') {
-    // not both(v[0], v[n-1]) (F,F), plus directed ring v[0]=>v[1]=>...=>v[n-1]=>v[0]
-    clauses.push(draw() < 0.5
-      ? {lIdx: order[0], lTrue: false, rIdx: order[n - 1], rTrue: false, op: 'nand'}
-      : {lIdx: order[n - 1], lTrue: false, rIdx: order[0], rTrue: false, op: 'nand'});
-    const symSlot = n >= 6 && draw() < 0.55 ? Math.floor(draw() * (n - 1)) : -1;
-    for (let i = 0; i < n - 1; i++) {
-      if (i === symSlot) {
-        clauses.push(makeSymmetricClause(order[i], draw() < 0.5, order[i + 1], draw() < 0.5, draw));
-      } else {
-        clauses.push({lIdx: order[i], lTrue: false, rIdx: order[i + 1], rTrue: false, op: 'imp'});
-      }
-    }
-    clauses.push({lIdx: order[n - 1], lTrue: false, rIdx: order[0], rTrue: false, op: 'imp'});
-    return clauses;
-  }
-
-  // Mixed (p, q) cycle with p >= 1, q >= 1, p + q = n
-  const p = variant.p;
-  const q = n - p;
-  const V = order.slice(0, p);
-  const U = order.slice(p);
-  const dual = Boolean(variant.dual);
-
-  // Choose at most 1–2 edges on N=6 to turn into symmetric `=` / `!=` (never dropping non-sym below 4!)
-  const symCandidates = [];
-  if (n >= 6) {
-    for (let i = 0; i < p - 1; i++) symCandidates.push({group: 'V', i});
-    for (let i = 0; i < q - 1; i++) symCandidates.push({group: 'U', i});
-  }
-  const chosenSym = new Set();
-  if (symCandidates.length && draw() < 0.72) {
-    const picked = shuffled(symCandidates, draw).slice(0, draw() < 0.45 && symCandidates.length >= 2 ? 2 : 1);
-    for (const c of picked) chosenSym.add(c.group + ':' + c.i);
-  }
-
-  if (!dual) {
-    // V[0..p-1] = True, U[0..q-1] = False
-    // Contradiction loop: V[0] or U[q-1] (T,F), U[q-1]=>...=>U[0] (F,F), U[0]=>V[0] (F,T)
-    // Forward chain: V[0]=>...=>V[p-1] (T,T), not both(V[p-1], U[0]) (T,F)
-    clauses.push(draw() < 0.5
-      ? {lIdx: V[0], lTrue: true, rIdx: U[q - 1], rTrue: false, op: 'or'}
-      : {lIdx: U[q - 1], lTrue: false, rIdx: V[0], rTrue: true, op: 'or'});
-    for (let i = q - 1; i >= 1; i--) {
-      if (chosenSym.has('U:' + (i - 1))) {
-        const aVal = draw() < 0.5;
-        const bVal = draw() < 0.5;
-        clauses.push(makeSymmetricClause(U[i], aVal, U[i - 1], bVal, draw));
-      } else {
-        clauses.push({lIdx: U[i], lTrue: false, rIdx: U[i - 1], rTrue: false, op: 'imp'});
-      }
-    }
-    clauses.push({lIdx: U[0], lTrue: false, rIdx: V[0], rTrue: true, op: 'imp'});
-    for (let i = 0; i < p - 1; i++) {
-      if (chosenSym.has('V:' + i)) {
-        const aVal = draw() < 0.5;
-        const bVal = draw() < 0.5;
-        clauses.push(makeSymmetricClause(V[i], aVal, V[i + 1], bVal, draw));
-      } else {
-        clauses.push({lIdx: V[i], lTrue: true, rIdx: V[i + 1], rTrue: true, op: 'imp'});
-      }
-    }
-    clauses.push(draw() < 0.5
-      ? {lIdx: V[p - 1], lTrue: true, rIdx: U[0], rTrue: false, op: 'nand'}
-      : {lIdx: U[0], lTrue: false, rIdx: V[p - 1], rTrue: true, op: 'nand'});
+  } else if (variant.kind === 'fig8-mixed') {
+    const p = variant.p;
+    const head = variant.head ?? (draw() < 0.5);
+    for (let i = 0; i < p; i++) s[i] = head;
+    for (let i = p; i < n; i++) s[i] = !head;
   } else {
-    // Dual: V[0..p-1] = False, U[0..q-1] = True
-    // Contradiction loop: not both(V[0], U[q-1]) (F,T), U[0]=>...=>U[q-1] (T,T), V[0]=>U[0] (F,T)
-    // Forward chain: V[p-1]=>...=>V[0] (F,F), V[p-1] or U[0] (F,T)
-    clauses.push(draw() < 0.5
-      ? {lIdx: V[0], lTrue: false, rIdx: U[q - 1], rTrue: true, op: 'nand'}
-      : {lIdx: U[q - 1], lTrue: true, rIdx: V[0], rTrue: false, op: 'nand'});
-    for (let i = 0; i < q - 1; i++) {
-      if (chosenSym.has('U:' + i)) {
-        const aVal = draw() < 0.5;
-        const bVal = draw() < 0.5;
-        clauses.push(makeSymmetricClause(U[i], aVal, U[i + 1], bVal, draw));
-      } else {
-        clauses.push({lIdx: U[i], lTrue: true, rIdx: U[i + 1], rTrue: true, op: 'imp'});
-      }
-    }
-    clauses.push({lIdx: V[0], lTrue: false, rIdx: U[0], rTrue: true, op: 'imp'});
-    for (let i = p - 1; i >= 1; i--) {
-      if (chosenSym.has('V:' + (i - 1))) {
-        const aVal = draw() < 0.5;
-        const bVal = draw() < 0.5;
-        clauses.push(makeSymmetricClause(V[i], aVal, V[i - 1], bVal, draw));
-      } else {
-        clauses.push({lIdx: V[i], lTrue: false, rIdx: V[i - 1], rTrue: false, op: 'imp'});
-      }
-    }
-    clauses.push(draw() < 0.5
-      ? {lIdx: V[p - 1], lTrue: false, rIdx: U[0], rTrue: true, op: 'or'}
-      : {lIdx: U[0], lTrue: true, rIdx: V[p - 1], rTrue: false, op: 'or'});
+    // diff-ends ring: s[0] !== s[n-1] with a single polarity split along the ring
+    const head = variant.head ?? (draw() < 0.5);
+    const cut = 1 + Math.floor(draw() * (n - 1));
+    for (let i = 0; i < n; i++) s[i] = i < cut ? head : !head;
   }
+
+  const sByNode = {};
+  for (let i = 0; i < n; i++) sByNode[order[i]] = s[i];
+  const clauses = [];
+
+  if (variant.kind.startsWith('fig8')) {
+    const p = variant.p;
+    const A = order.slice(0, p);
+    const B = order.slice(p);
+    const q = B.length;
+    // Abstract unique-solution (all x = T) figure-8:
+    //   1. (A[0] OR !B[q-1])
+    //   2. (B[i] OR !B[i-1]) for i = q-1..1
+    //   3. (B[0] OR A[0])   -> or(T,T) if both T, nand(F,F) if both F, imp(F,T) if opposite!
+    //   4. (!A[i] OR A[i+1]) for i = 0..p-2
+    //   5. (!A[p-1] OR B[0])
+    const symCand = [];
+    if (n >= 6) {
+      for (let i = 0; i < p - 1; i++) symCand.push('A:' + i);
+      for (let i = 1; i < q; i++) symCand.push('B:' + i);
+    }
+    const symEdge = symCand.length && draw() < 0.45 ? pick(symCand, draw) : '';
+
+    clauses.push(emitDisjunction(A[0], true, B[q - 1], false, sByNode, draw));
+    for (let i = q - 1; i >= 1; i--) {
+      if (symEdge === 'B:' + i) {
+        clauses.push(makeSymmetricClause(B[i], draw() < 0.5, B[i - 1], draw() < 0.5, draw));
+      } else {
+        clauses.push(emitDisjunction(B[i], true, B[i - 1], false, sByNode, draw));
+      }
+    }
+    clauses.push(emitDisjunction(B[0], true, A[0], true, sByNode, draw));
+    for (let i = 0; i < p - 1; i++) {
+      if (symEdge === 'A:' + i) {
+        clauses.push(makeSymmetricClause(A[i], draw() < 0.5, A[i + 1], draw() < 0.5, draw));
+      } else {
+        clauses.push(emitDisjunction(A[i], false, A[i + 1], true, sByNode, draw));
+      }
+    }
+    clauses.push(emitDisjunction(A[p - 1], false, B[0], true, sByNode, draw));
+    return clauses;
+  }
+
+  // Ring-plus-chord: (x_0 OR x_{n-1}) + directed ring x_{n-1} => ... => x_0 => x_{n-1}
+  const symSlot = n >= 6 && draw() < 0.45 ? 1 + Math.floor(draw() * (n - 2)) : -1;
+  clauses.push(emitDisjunction(order[0], true, order[n - 1], true, sByNode, draw));
+  for (let i = n - 1; i >= 1; i--) {
+    if (i === symSlot) {
+      clauses.push(makeSymmetricClause(order[i], draw() < 0.5, order[i - 1], draw() < 0.5, draw));
+    } else {
+      clauses.push(emitDisjunction(order[i], false, order[i - 1], true, sByNode, draw));
+    }
+  }
+  clauses.push(emitDisjunction(order[0], false, order[n - 1], true, sByNode, draw));
   return clauses;
 }
 
@@ -285,16 +283,21 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
   }
 
   if (level === 'medium' || level === 'moderate') {
-    // 3 disputed records: mix irreducible 3-node coupled 2-SAT cycles (70%) and
-    // confirmed-anchored symmetric =/!= chains (30%). ZERO Style-4 trees!
+    // 3 disputed records: balanced polarity-substituted 3-node coupled 2-SAT cycles (~75%) +
+    // confirmed-anchored symmetric =/!= chains (~25%). ZERO Style-4 trees!
     const confirmed = rows.map((_, i) => i).filter(i => !disputedIndices.includes(i));
     const plans = shuffled([
-      {kind: 'mixed', p: 1, dual: false},
-      {kind: 'mixed', p: 2, dual: false},
-      {kind: 'mixed', p: 1, dual: true},
-      {kind: 'mixed', p: 2, dual: true},
       {kind: 'all-true'},
       {kind: 'all-false'},
+      {kind: 'same-ends-T'},
+      {kind: 'same-ends-F'},
+      {kind: 'fig8-same-T', p: 1},
+      {kind: 'fig8-same-F', p: 2},
+      {kind: 'fig8-mixed', p: 1, head: true},
+      {kind: 'fig8-mixed', p: 2, head: false},
+      {kind: 'diff-ends', head: true},
+      {kind: 'diff-ends', head: false},
+      {kind: 'anchored'},
       {kind: 'anchored'},
       {kind: 'anchored'}
     ], draw);
@@ -313,21 +316,27 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
   }
 
   if (level === 'hard') {
-    // ALL 6 records disputed in ONE single connected 6-node coupled 2-SAT cycle.
+    // ALL 6 records disputed in ONE single connected 6-node coupled 2-SAT cycle
+    // mixing ring-plus-chord and figure-8 topologies with balanced polarity classes:
+    // ~33% TT/TF/FT on `or` and ~33% FF/TF/FT on `not both`!
     // ZERO split/disconnected clusters! ZERO Style-4 single-closing-connective trees!
     const plans = shuffled([
-      {kind: 'mixed', p: 1, dual: false},
-      {kind: 'mixed', p: 2, dual: false},
-      {kind: 'mixed', p: 3, dual: false},
-      {kind: 'mixed', p: 4, dual: false},
-      {kind: 'mixed', p: 5, dual: false},
-      {kind: 'mixed', p: 1, dual: true},
-      {kind: 'mixed', p: 2, dual: true},
-      {kind: 'mixed', p: 3, dual: true},
-      {kind: 'mixed', p: 4, dual: true},
-      {kind: 'mixed', p: 5, dual: true},
       {kind: 'all-true'},
-      {kind: 'all-false'}
+      {kind: 'all-false'},
+      {kind: 'same-ends-T'},
+      {kind: 'same-ends-F'},
+      {kind: 'fig8-same-T', p: 2},
+      {kind: 'fig8-same-T', p: 3},
+      {kind: 'fig8-same-T', p: 4},
+      {kind: 'fig8-same-F', p: 2},
+      {kind: 'fig8-same-F', p: 3},
+      {kind: 'fig8-same-F', p: 4},
+      {kind: 'fig8-mixed', p: 2, head: true},
+      {kind: 'fig8-mixed', p: 3, head: false},
+      {kind: 'fig8-mixed', p: 4, head: true},
+      {kind: 'fig8-mixed', p: 3, head: true},
+      {kind: 'diff-ends', head: true},
+      {kind: 'diff-ends', head: false}
     ], draw);
 
     for (const plan of plans) {
