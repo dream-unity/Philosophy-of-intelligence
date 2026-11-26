@@ -15,7 +15,7 @@ import {buildCrossChecks, targetKey} from '../friend-or-foe/case-logic.js';
 
 const TARGET_PER_FAMILY = 12;
 const MAX_SEEDS_PER_FAMILY = 24000;
-const BANNED_COPY = /\b(rows?|arrows?|left side|right side|top two|scores?|points?|IQ|appears? in|appearing|named in|listed|distinct|categor(y|ies)|file|files|acts? in|acting in|acted upon|records?|dossier)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
+const BANNED_COPY = /\b(rows?|arrows?|left side|right side|top two|scores?|points?|IQ|appears? in|appearing|named in|listed|distinct|categor(y|ies)|file|files|acts? in|acting in|acted upon|records?|dossier|overt|covert|hostile|safe|threat)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
 
 const TRIPLE_MASKS = [];
 for (let a = 0; a < 6; a++) {
@@ -160,7 +160,7 @@ function certifyBoard(family, seed, anchorIdx, strictHardDel = true, skipSizes =
     const draw = seededDraw(seed ^ 0x7f4a);
     const reports = buildCrossChecks(rows, [0, 1, 2, 3, 4, 5], wt, correctKey, null, 'hard', draw);
     if (!reports || reports.length < 6) return null;
-    const score = delSens * 45 + flipInfo.flipsDifferent * 12 + flipInfo.flipsSameSizeRival * 8;
+    const score = delSens * 65 + (delSens >= 5 ? 90 : 0) + (delSens === 6 ? 120 : 0) + flipInfo.flipsDifferent * 14 + flipInfo.flipsSameSizeRival * 8;
     return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
   }
 
@@ -200,8 +200,8 @@ function certifyRange(indices) {
     const sizeCounts = {1: 0, 2: 0, 3: 0, 4: 0};
     const skipSizes = new Set();
     const baseSeed = (fi + 1) * 100003;
-    const desiredPool = 22;
-    const capForSize = sz => (sz === 1 ? 5 : 8);
+    const desiredPool = family.tier === 'hard' ? 36 : 24;
+    const capForSize = sz => (sz === 1 ? 5 : 9);
 
     for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY && pool.length < desiredPool; offset++) {
       const seed = (baseSeed + offset * 7919) >>> 0;

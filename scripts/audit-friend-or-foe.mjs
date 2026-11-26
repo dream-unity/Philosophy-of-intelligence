@@ -6,7 +6,7 @@ import {pairKey, reportHolds, truth} from '../friend-or-foe/case-logic.js';
 
 const LEVELS = ['super-easy', 'very-easy', 'easy', 'medium', 'hard'];
 const TRIALS_PER_LEVEL = 1000;
-const BANNED_RE = /\b(rows?|arrows?|left side|right side|points?|score|top two|IQ|appears? in|appearing|named in|listed|distinct|categor(y|ies)|file|files|acts? in|acting in|acted upon|records?|dossier)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
+const BANNED_RE = /\b(rows?|arrows?|left side|right side|points?|score|top two|IQ|appears? in|appearing|named in|listed|distinct|categor(y|ies)|file|files|acts? in|acting in|acted upon|records?|dossier|overt|covert|hostile|safe|threat)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
 
 function fmtClaim(c) {
   return `${c.from} ${roleVerbs[c.role]} ${c.to} (${roleNames[c.role]})`;

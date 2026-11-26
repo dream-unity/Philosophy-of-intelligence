@@ -204,14 +204,23 @@ function buildConnectedCycle(nodes, draw, variant) {
     //   5. (!A[p-1] OR B[0])
     const symCand = [];
     if (n >= 6) {
-      for (let i = 0; i < p - 1; i++) symCand.push('A:' + i);
-      for (let i = 1; i < q; i++) symCand.push('B:' + i);
+      for (let i = 0; i < p - 1; i++) {
+        if (sByNode[A[i]] === sByNode[A[i + 1]]) symCand.push('A:' + i);
+      }
+      for (let i = 1; i < q; i++) {
+        if (sByNode[B[i]] === sByNode[B[i - 1]]) symCand.push('B:' + i);
+      }
     }
-    const symEdge = symCand.length && draw() < 0.45 ? pick(symCand, draw) : '';
+    const symEdges = new Set();
+    if (symCand.length) {
+      const cap = variant.maxSym ?? 3;
+      const want = Math.min(symCand.length, cap);
+      for (const k of shuffled(symCand, draw).slice(0, want)) symEdges.add(k);
+    }
 
     clauses.push(emitDisjunction(A[0], true, B[q - 1], false, sByNode, draw));
     for (let i = q - 1; i >= 1; i--) {
-      if (symEdge === 'B:' + i) {
+      if (symEdges.has('B:' + i)) {
         clauses.push(makeSymmetricClause(B[i], draw() < 0.5, B[i - 1], draw() < 0.5, draw));
       } else {
         clauses.push(emitDisjunction(B[i], true, B[i - 1], false, sByNode, draw));
@@ -219,7 +228,7 @@ function buildConnectedCycle(nodes, draw, variant) {
     }
     clauses.push(emitDisjunction(B[0], true, A[0], true, sByNode, draw));
     for (let i = 0; i < p - 1; i++) {
-      if (symEdge === 'A:' + i) {
+      if (symEdges.has('A:' + i)) {
         clauses.push(makeSymmetricClause(A[i], draw() < 0.5, A[i + 1], draw() < 0.5, draw));
       } else {
         clauses.push(emitDisjunction(A[i], false, A[i + 1], true, sByNode, draw));
@@ -230,10 +239,21 @@ function buildConnectedCycle(nodes, draw, variant) {
   }
 
   // Ring-plus-chord: (x_0 OR x_{n-1}) + directed ring x_{n-1} => ... => x_0 => x_{n-1}
-  const symSlot = n >= 6 && draw() < 0.45 ? 1 + Math.floor(draw() * (n - 2)) : -1;
+  // Replacing up to 3 interior same-polarity edges with =/!= preserves strict minimality of all 7 clauses
+  // and keeps >=4 non-symmetric clauses (ZERO Style-4 trees) while balancing imp(TT/FT/FF)!
+  const symSlots = new Set();
+  if (n >= 6) {
+    const interior = [];
+    for (let i = 1; i <= n - 2; i++) {
+      if (s[i] === s[i - 1]) interior.push(i);
+    }
+    const cap = variant.maxSym ?? 3;
+    const want = Math.min(interior.length, cap);
+    for (const slot of shuffled(interior, draw).slice(0, want)) symSlots.add(slot);
+  }
   clauses.push(emitDisjunction(order[0], true, order[n - 1], true, sByNode, draw));
   for (let i = n - 1; i >= 1; i--) {
-    if (i === symSlot) {
+    if (symSlots.has(i)) {
       clauses.push(makeSymmetricClause(order[i], draw() < 0.5, order[i - 1], draw() < 0.5, draw));
     } else {
       clauses.push(emitDisjunction(order[i], false, order[i - 1], true, sByNode, draw));
@@ -317,10 +337,12 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
 
   if (level === 'hard') {
     // ALL 6 records disputed in ONE single connected 6-node coupled 2-SAT cycle
-    // mixing ring-plus-chord and figure-8 topologies with balanced polarity classes:
-    // ~33% TT/TF/FT on `or` and ~33% FF/TF/FT on `not both`!
-    // ZERO split/disconnected clusters! ZERO Style-4 single-closing-connective trees!
+    // mixing ring-plus-chord and figure-8 topologies with balanced polarity classes
+    // and interior symmetric =/!= edges so ALL 5 operators stay balanced:
+    // ~32% TT/TF/FT on `or`, ~32% FF/TF/FT on `not both`, ~20%+ FT on `imp`, 50/50 on `=`/`!=`!
     const plans = shuffled([
+      {kind: 'all-true'},
+      {kind: 'all-false'},
       {kind: 'all-true'},
       {kind: 'all-false'},
       {kind: 'same-ends-T'},
@@ -335,13 +357,18 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
       {kind: 'fig8-mixed', p: 3, head: false},
       {kind: 'fig8-mixed', p: 4, head: true},
       {kind: 'fig8-mixed', p: 3, head: true},
+      {kind: 'fig8-mixed', p: 2, head: false},
+      {kind: 'fig8-mixed', p: 4, head: false},
+      {kind: 'diff-ends', head: true},
+      {kind: 'diff-ends', head: false},
       {kind: 'diff-ends', head: true},
       {kind: 'diff-ends', head: false}
     ], draw);
 
     for (const plan of plans) {
       for (let attempt = 0; attempt < 24; attempt++) {
-        const clauses = buildConnectedCycle(disputedIndices, draw, plan);
+        const maxSym = attempt < 10 ? 3 : attempt < 18 ? 2 : 0;
+        const clauses = buildConnectedCycle(disputedIndices, draw, {...plan, maxSym});
         if (verifyClausesTargetMinimal(clauses, fixedMask, worldTargets, correctKey, targetSize, forbiddenKey)) {
           return materialize(clauses, rows, draw);
         }

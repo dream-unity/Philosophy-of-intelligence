@@ -127,7 +127,7 @@ function finishTrial(result) {
   el('outcome-detail').textContent = trial.pair.join(' + ') + ' · ' + elapsed;
   el('score').textContent = 'Cases ' + session.wins + ' / ' + session.completed;
   tone(result.correct ? 380 : 210, result.correct ? 625 : 112, .18);
-  scheduleNext(result.correct ? 3500 : 6500);
+  scheduleNext(result.correct ? 3500 : 7500);
 }
 
 function showSummary() {
@@ -225,11 +225,21 @@ el('sound').addEventListener('click', () => {
   if (phase === 'play') el('range').focus({preventScroll:true});
 });
 document.addEventListener('keydown', e => {
-  if (e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.code !== 'KeyP') return;
-  if (phase !== 'play' && phase !== 'between') return;
-  e.preventDefault();
-  if (dialog.open) dialog.close();
-  else openPanel();
+  if (e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code === 'KeyP') {
+    if (phase !== 'play' && phase !== 'between') return;
+    e.preventDefault();
+    if (dialog.open) dialog.close();
+    else openPanel();
+    return;
+  }
+  if ((e.code === 'Space' || e.code === 'Enter') && phase === 'between' && !dialog.open && !locked) {
+    e.preventDefault();
+    window.clearTimeout(transitionTimer);
+    transitionTimer = 0;
+    if (session.next()) enterTrial();
+    else showSummary();
+  }
 });
 function pauseIfRunning() {
   if (!dialog.open && (phase === 'play' || phase === 'between')) openPanel();

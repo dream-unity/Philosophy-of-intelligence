@@ -178,7 +178,7 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
   }
 
   const records = element('dl', 'case-records');
-  records.setAttribute('aria-label', 'Intelligence files by category');
+  records.setAttribute('aria-label', 'Intelligence dispatches by role');
   evidence.rows.forEach((row, index) => records.append(roleEntry(row, index)));
   board.append(records);
 
@@ -217,8 +217,13 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
 export function renderCaseResult(root, trial) {
   const targets = trial.targets || trial.pair;
   const panel = element('section', 'case-result');
-  panel.append(
+  const titleRow = element('div', 'case-title-row');
+  titleRow.append(
     element('p', 'case-title', 'Debrief · ' + trial.evidence.title),
+    element('p', 'case-domain', 'Space: next · P: hold')
+  );
+  panel.append(
+    titleRow,
     element('h3', '', 'Why ' + formatNameList(targets))
   );
   if (trial.rivalDebrief) {
@@ -263,7 +268,7 @@ export function renderCaseGuide(root, level, {shortlist = true} = {}) {
     'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00): Friend vouches for, Foe targets, Spy shadows, Double agent leaks to, Civilian tips off, and Foreigner meets. Operating as a role means acting first in that dispatch; being tied to a role means being either actor or recipient. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'
   );
   if ((level === 'super-easy' || level === 'very-easy') && shortlist) {
-    section('Use the shortlist', 'All six dispatches are confirmed, and every assigned target appears in the shortlist. Uncheck Shortlist at any time to weigh all ten suspects.');
+    section('Use the shortlist', 'All six dispatches are confirmed, and every assigned target is on the shortlist. Uncheck Shortlist at any time to weigh all ten suspects.');
   } else if (level === 'super-easy' || level === 'very-easy') {
     section('Weigh all ten suspects', 'All six dispatches are confirmed. Cross-reference every suspect across all six roles and dispatch times to identify every target required by the order.');
   } else if (level === 'easy') {

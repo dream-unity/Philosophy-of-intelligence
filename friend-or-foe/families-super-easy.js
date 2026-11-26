@@ -146,7 +146,7 @@ export const superEasyFamilies = [
     inc: {roles: ['double']}, exc: {roles: ['spy'], dir: 'in'}
   }),
   direct({
-    id: 'se-11', domain: 1, title: 'Unwatched hostile',
+    id: 'se-11', domain: 1, title: 'Unwatched enemy',
     order: 'Shoot anyone who targets as a Foe or meets as a Foreigner without a Spy shadowing them.',
     hint: 'Check active actors in Foe and Foreigner, then rule out anyone under Spy watch.',
     inc: {roles: ['foe', 'foreigner'], dir: 'out'}, exc: {roles: ['spy'], dir: 'in'}
@@ -170,13 +170,13 @@ export const superEasyFamilies = [
     inc: {roles: ['civilian']}, exc: {roles: ['spy', 'friend'], dir: 'in'}
   }),
   direct({
-    id: 'se-15', domain: 1, title: 'Spy in hostile hands',
+    id: 'se-15', domain: 1, title: 'Spy in enemy hands',
     order: 'Shoot anyone tied to Spy who is targeted by a Foe or met by a Foreigner.',
     hint: 'Check who is tied to Spy, then keep those targeted by a Foe or met by a Foreigner.',
     inc: {roles: ['spy']}, req: {roles: ['foe', 'foreigner'], dir: 'in'}
   }),
   direct({
-    id: 'se-16', domain: 1, title: 'Unwatched threat',
+    id: 'se-16', domain: 1, title: 'Unwatched danger',
     order: 'Shoot anyone tied to Foe or Double agent who has no Spy tie at all.',
     hint: 'Check everyone tied to Foe and Double agent, then exclude anyone named anywhere in Spy.',
     inc: {roles: ['foe', 'double']}, exc: {roles: ['spy']}
@@ -310,7 +310,7 @@ export const superEasyFamilies = [
     inc: {roles: ['civilian'], dir: 'in'}, req: {roles: ['double', 'foreigner'], dir: 'in'}
   }),
   direct({
-    id: 'se-37', domain: 3, title: 'Hostile civilian',
+    id: 'se-37', domain: 3, title: 'Enemy civilian',
     order: 'Shoot anyone tied to Civilian who also targets as a Foe or leaks as a Double agent.',
     hint: 'Start with everyone tied to Civilian, then see who operates as a Foe or Double agent.',
     inc: {roles: ['civilian']}, req: {roles: ['foe', 'double'], dir: 'out'}
@@ -322,7 +322,7 @@ export const superEasyFamilies = [
     inc: {roles: ['foe'], dir: 'in'}, req: {roles: ['friend', 'civilian']}, exc: {roles: ['spy'], dir: 'in'}
   }),
   direct({
-    id: 'se-39', domain: 3, title: 'Unwarned hostile',
+    id: 'se-39', domain: 3, title: 'Unwarned enemy',
     order: 'Shoot anyone who targets as a Foe — unless a Civilian tips them off.',
     hint: 'Find active Foes, then cross off anyone who received a Civilian tip-off.',
     inc: {roles: ['foe'], dir: 'out'}, exc: {roles: ['civilian'], dir: 'in'}
@@ -332,13 +332,13 @@ export const superEasyFamilies = [
   // DOMAIN 4: Proxy Chains (Direct Multi-File Intersections) (10)
   // =========================================================================
   direct({
-    id: 'se-40', domain: 4, title: 'Two covert channels',
+    id: 'se-40', domain: 4, title: 'Two shadow channels',
     order: 'Shoot anyone tied to at least two of Foe, Double agent, and Foreigner.',
     hint: 'Check which suspects are tied to two or more of Foe, Double agent, and Foreigner.',
     inc: {roles: ['foe', 'double', 'foreigner']}, minDistinct: 2
   }),
   direct({
-    id: 'se-41', domain: 4, title: 'Two overt channels',
+    id: 'se-41', domain: 4, title: 'Two inside channels',
     order: 'Shoot anyone tied to at least two of Friend, Spy, and Civilian.',
     hint: 'Check which suspects are tied to two or more of Friend, Spy, and Civilian.',
     inc: {roles: ['friend', 'spy', 'civilian']}, minDistinct: 2
@@ -380,7 +380,7 @@ export const superEasyFamilies = [
     inc: {roles: ['friend', 'foe', 'civilian', 'foreigner'], dir: 'in'}, minDistinct: 2
   }),
   direct({
-    id: 'se-48', domain: 4, title: 'Covert bridge',
+    id: 'se-48', domain: 4, title: 'Shadow bridge',
     order: 'Shoot anyone tied to Friend or Civilian who is also tied to Foe, Double agent, or Foreigner — excluding anyone who shadows as a Spy.',
     hint: 'Check suspects in Friend or Civilian who also are tied to Foe, Double agent, or Foreigner, then rule out active Spies.',
     inc: {roles: ['friend', 'civilian']}, req: {roles: ['foe', 'double', 'foreigner']}, exc: {roles: ['spy'], dir: 'out'}
@@ -426,7 +426,7 @@ export const superEasyFamilies = [
     inc: {roles: ['spy'], dir: 'in'}, req: {roles: ['friend', 'civilian'], dir: 'out'}
   }),
   direct({
-    id: 'se-55', domain: 5, title: 'Hostile receiving cover',
+    id: 'se-55', domain: 5, title: 'Enemy receiving cover',
     order: 'Shoot anyone who targets as a Foe while a Friend vouches for them or a Civilian tips them off.',
     hint: 'Find active Foes, then keep those backed by a Friend or tipped off by a Civilian.',
     inc: {roles: ['foe'], dir: 'out'}, req: {roles: ['friend', 'civilian'], dir: 'in'}
@@ -524,13 +524,13 @@ export const superEasyFamilies = [
   // DOMAIN 7: Tainted Sources (10)
   // =========================================================================
   direct({
-    id: 'se-70', domain: 7, title: 'Leak fed to a hostile',
+    id: 'se-70', domain: 7, title: 'Leak fed to an enemy',
     order: 'Shoot anyone who receives a Double agent’s leak and is also tied to Foe.',
     hint: 'Find who receives a Double agent leak, then check who is also tied to Foe.',
     inc: {roles: ['double'], dir: 'in'}, req: {roles: ['foe']}
   }),
   direct({
-    id: 'se-71', domain: 7, title: 'Hostile under Spy watch',
+    id: 'se-71', domain: 7, title: 'Enemy under Spy watch',
     order: 'Shoot anyone targeted by a Foe who is also tied to Spy.',
     hint: 'Find who is targeted by a Foe, then keep anyone also tied to Spy.',
     inc: {roles: ['foe'], dir: 'in'}, req: {roles: ['spy']}
@@ -600,31 +600,31 @@ export const superEasyFamilies = [
     inc: {roles: ['spy'], dir: 'out'}, req: {roles: ['foreigner', 'friend'], dir: 'in'}
   }),
   direct({
-    id: 'se-82', domain: 8, title: 'Covert actor with overt cover',
+    id: 'se-82', domain: 8, title: 'Shadow actor with insider cover',
     order: 'Shoot anyone who leaks as a Double agent or meets as a Foreigner while also tied to Friend or Civilian.',
     hint: 'Find active Double agents and Foreigners, then keep those also tied to Friend or Civilian.',
     inc: {roles: ['double', 'foreigner'], dir: 'out'}, req: {roles: ['friend', 'civilian']}
   }),
   direct({
-    id: 'se-83', domain: 8, title: 'Overt actor under covert pressure',
+    id: 'se-83', domain: 8, title: 'Insider actor under shadow pressure',
     order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian while targeted by a Foe or leaked to by a Double agent.',
     hint: 'Check active Friends and Civilians who are also targeted by a Foe or fed a leak.',
     inc: {roles: ['friend', 'civilian'], dir: 'out'}, req: {roles: ['foe', 'double'], dir: 'in'}
   }),
   direct({
-    id: 'se-84', domain: 8, title: 'Pure covert operator',
+    id: 'se-84', domain: 8, title: 'Pure shadow operator',
     order: 'Shoot anyone tied to Double agent or Foreigner who never is tied to Friend or Civilian.',
     hint: 'Check everyone tied to Double agent and Foreigner, then cross off anyone tied to Friend or Civilian.',
     inc: {roles: ['double', 'foreigner']}, exc: {roles: ['friend', 'civilian']}
   }),
   direct({
-    id: 'se-85', domain: 8, title: 'Pure overt target',
+    id: 'se-85', domain: 8, title: 'Pure inside target',
     order: 'Shoot anyone tied to Friend or Civilian who never is tied to Foe, Double agent, or Foreigner.',
     hint: 'Check everyone tied to Friend and Civilian, then cross off anyone tied to Foe, Double agent, or Foreigner.',
     inc: {roles: ['friend', 'civilian']}, exc: {roles: ['foe', 'double', 'foreigner']}
   }),
   direct({
-    id: 'se-86', domain: 8, title: 'Hostile without allies',
+    id: 'se-86', domain: 8, title: 'Enemy without allies',
     order: 'Shoot anyone tied to Foe or Spy who never is tied to Friend or Civilian.',
     hint: 'Check everyone tied to Foe and Spy, then exclude anyone tied to Friend or Civilian.',
     inc: {roles: ['foe', 'spy']}, exc: {roles: ['friend', 'civilian']}
@@ -642,7 +642,7 @@ export const superEasyFamilies = [
     inc: {roles: ['spy', 'double']}, exc: {roles: ['friend', 'foreigner']}
   }),
   direct({
-    id: 'se-89', domain: 8, title: 'Covert recipient only',
+    id: 'se-89', domain: 8, title: 'Shadow recipient only',
     order: 'Shoot anyone targeted by a Foe or met by a Foreigner who never vouches as a Friend or shadows as a Spy.',
     hint: 'Check who a Foe targets or a Foreigner meets, then cross off active Friends and Spies.',
     inc: {roles: ['foe', 'foreigner'], dir: 'in'}, exc: {roles: ['friend', 'spy'], dir: 'out'}
@@ -666,14 +666,14 @@ export const superEasyFamilies = [
     exc: {roles: ['friend'], dir: 'in'}
   }),
   anchorDirect({
-    id: 'se-92', domain: 9, title: '{name}’s covert associates',
+    id: 'se-92', domain: 9, title: '{name}’s shadow associates',
     order: 'Shoot anyone directly linked to {name} who is also tied to Foe, Double agent, or Foreigner.',
     hint: 'Find {name}’s direct contacts, then keep those also tied to Foe, Double agent, or Foreigner.',
     incRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'],
     req: {roles: ['foe', 'double', 'foreigner']}
   }),
   anchorDirect({
-    id: 'se-93', domain: 9, title: '{name}’s overt associates',
+    id: 'se-93', domain: 9, title: '{name}’s insider associates',
     order: 'Shoot anyone directly linked to {name} who is also tied to Friend or Civilian.',
     hint: 'Find {name}’s direct contacts, then keep those also tied to Friend or Civilian.',
     incRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'],
@@ -708,7 +708,7 @@ export const superEasyFamilies = [
     exc: {roles: ['civilian']}
   }),
   anchorDirect({
-    id: 'se-98', domain: 9, title: '{name}’s hostile reach',
+    id: 'se-98', domain: 9, title: '{name}’s enemy reach',
     order: 'Shoot anyone directly linked to {name} who targets as a Foe or meets as a Foreigner.',
     hint: 'Find {name}’s direct contacts, then keep those who operate as a Foe or Foreigner.',
     incRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'],
