@@ -129,7 +129,53 @@ function easyReport(report) {
   return block;
 }
 
+function renderStatementWithSuspects(text, suspects) {
+  const frag = element('span', 'nback-stmt-text');
+  if (!suspects || !suspects.length) {
+    frag.textContent = text;
+    return frag;
+  }
+  const escaped = suspects.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const pattern = new RegExp(`\\b(${escaped})(?='s\\b|\\b)`, 'g');
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    const idx = match.index;
+    if (idx > cursor) frag.append(document.createTextNode(text.slice(cursor, idx)));
+    frag.append(element('strong', 'nback-stmt-suspect', match[1]));
+    cursor = idx + match[1].length;
+  }
+  if (cursor < text.length) frag.append(document.createTextNode(text.slice(cursor)));
+  return frag;
+}
+
+function renderNBackEvidence(root, evidence) {
+  const board = element('div', 'case-file nback-case');
+  const brief = element('header', 'case-brief');
+  brief.append(element('h2', '', evidence.order));
+  board.append(brief);
+
+  const list = element('ol', 'nback-statements');
+  list.setAttribute('aria-label', 'Three intelligence leads');
+  evidence.statements.forEach((stmt, idx) => {
+    const item = element('li', 'nback-stmt');
+    if (typeof item.setAttribute === 'function') item.setAttribute('data-stmt-index', String(idx));
+    const num = element('span', 'nback-stmt-num', (idx + 1) + '.');
+    num.setAttribute('aria-hidden', 'true');
+    item.append(num, renderStatementWithSuspects(stmt, evidence.suspects));
+    list.append(item);
+  });
+  board.append(list);
+
+  const keyText = 'Friends tell truth · Foes lie · Suspects: ' + evidence.suspects.join(' · ');
+  board.append(element('p', 'nback-meta', keyText));
+  root.replaceChildren(board);
+}
+
 export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlistChange} = {}) {
+  if (evidence && evidence.mode === 'climb-the-ladder') {
+    renderNBackEvidence(root, evidence);
+    return;
+  }
   const board = element('div', 'case-file');
   const brief = element('header', 'case-brief');
   brief.append(element('h2', '', evidence.order));
@@ -246,6 +292,17 @@ export function renderCaseResult(root, trial, {onHoldToggle, onNext, held = fals
   for (const explanation of trial.proof) list.append(element('li', '', explanation));
   panel.append(list);
 
+  if (trial.nbackDebrief && trial.nbackDebrief.refStatements) {
+    const refBox = element('div', 'nback-ref-box');
+    refBox.append(element('p', 'nback-ref-title', 'Reference briefing #' + trial.nbackDebrief.refNumber));
+    const refList = element('ul', 'nback-ref-list');
+    trial.nbackDebrief.refStatements.forEach((stmt, i) => {
+      refList.append(element('li', '', (i + 1) + '. ' + stmt));
+    });
+    refBox.append(refList);
+    panel.append(refBox);
+  }
+
   const fileNode = typeof root.querySelector === 'function' ? root.querySelector('.case-file') : null;
   if (fileNode && typeof root.prepend === 'function') {
     if (fileNode.classList && typeof fileNode.classList.add === 'function') {
@@ -255,7 +312,22 @@ export function renderCaseResult(root, trial, {onHoldToggle, onNext, held = fals
     if (oldResult && typeof oldResult.remove === 'function') oldResult.remove();
     if (typeof root.querySelectorAll === 'function') {
       root.querySelectorAll('.case-decisive').forEach(node => node.classList.remove('case-decisive'));
-      if (trial.rivalDebrief && typeof trial.rivalDebrief.reportIndex === 'number') {
+      root.querySelectorAll('.nback-stmt').forEach(node => {
+        node.classList.remove('nback-clash', 'nback-broken', 'nback-matched');
+      });
+      if (trial.nbackDebrief) {
+        for (const ci of trial.nbackDebrief.clashIndices || []) {
+          const hit = root.querySelector(`[data-stmt-index="${ci}"]`);
+          if (hit) hit.classList.add('nback-clash');
+        }
+        for (const bi of trial.nbackDebrief.mismatchIndices || []) {
+          const hit = root.querySelector(`[data-stmt-index="${bi}"]`);
+          if (hit) hit.classList.add('nback-broken');
+        }
+        if (trial.nbackDebrief.isEcho) {
+          root.querySelectorAll('.nback-stmt').forEach(node => node.classList.add('nback-matched'));
+        }
+      } else if (trial.rivalDebrief && typeof trial.rivalDebrief.reportIndex === 'number') {
         const hit = root.querySelector(`[data-report-index="${trial.rivalDebrief.reportIndex}"]`);
         if (hit) hit.classList.add('case-decisive');
       } else if (trial.rivalDebrief && trial.rivalDebrief.decisiveRole) {
@@ -269,13 +341,25 @@ export function renderCaseResult(root, trial, {onHoldToggle, onNext, held = fals
   }
 }
 
-export function renderCaseGuide(root, level, {shortlist = true, zeroToHero = false} = {}) {
+export function renderCaseGuide(root, level, {shortlist = true, zeroToHero = false, nBack = 1} = {}) {
   const guide = element('div', 'case-guide');
   const section = (title, words) => {
     const block = element('section');
     block.append(element('h3', '', title), element('p', '', words));
     guide.append(block);
   };
+  if (level === 'climb-the-ladder') {
+    section(
+      'Crack all three intelligence leads',
+      'Each briefing names three suspects in three compact statements. Friends always tell the truth and Foes always lie. Unpack nested loyalties, speaker claims, analogies, and conditionals to deduce the Foes—or catch two speakers whose claims directly clash.'
+    );
+    section(
+      'Compare N briefings back (' + nBack + '-back)',
+      'Hold the underlying logical rules of each briefing across ' + nBack + ' trials. Names shift, order scrambles, and phrasing rewrites. If all three logical rules echo the briefing ' + nBack + ' trials back, invert your shot among the three suspects: shoot the Friends instead of the Foes, or shoot the uninvolved speaker instead of the clashing pair.'
+    );
+    root.replaceChildren(guide);
+    return;
+  }
   section(
     'Read all six intelligence roles',
     'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00), an operation tag (split across two active sites), and an action verb adapted to the case. Each contact runs from the operative acting in that role to the person they reach. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'

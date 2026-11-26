@@ -16,7 +16,7 @@ test('difficulty is a single pregame choice next to the existing run settings', 
   assert.ok(form, 'Game setup is missing');
   const inputs = form.match(/<input\b[^>]*>/g) ?? [];
   const levels = inputs.filter(input => /\bname="difficulty"/.test(input));
-  assert.deepEqual(levels.map(input => input.match(/\bvalue="([^"]+)"/)?.[1]), ['zero-to-hero', 'super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard']);
+  assert.deepEqual(levels.map(input => input.match(/\bvalue="([^"]+)"/)?.[1]), ['zero-to-hero', 'climb-the-ladder', 'super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard']);
   assert.ok(levels.every(input => /\btype="radio"/.test(input)));
   for (const input of levels) {
     const label = input.match(/aria-labelledby="([^"]+)"/)?.[1];

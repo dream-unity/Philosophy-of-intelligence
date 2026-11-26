@@ -1,16 +1,19 @@
 import {createArcadeRange} from './covert-range.js?v=fof20';
 import {bindSpeedDial} from './speed-dial.js?v=fof20';
 import {makeCaseTrial} from './case-decks.js?v=fof20';
-import {renderCaseEvidence, renderCaseGuide, renderCaseResult} from './case-view.js?v=fof20';
+import {renderCaseEvidence, renderCaseGuide, renderCaseResult} from './case-view.js?v=fof21';
 import {ArcadeSession, ZeroToHeroLadder} from './arcade-session.js?v=fof20';
+import {MAX_NBACK, MIN_NBACK, NBackSessionDeck} from './nback-cases.js?v=fof21';
 
 const el = id => document.getElementById(id);
 const dialog = el('controls');
 let phase = 'ready';
 let difficulty = 'zero-to-hero';
+let nbackLevel = 1;
 let shortlist = false;
 const difficultyNames = {
   'zero-to-hero': 'From Zero to Hero',
+  'climb-the-ladder': 'Climb the ladder',
   'super-super-easy': 'Super-super Easy',
   'super-easy': 'Super Easy',
   'very-easy': 'Very Easy',
@@ -19,10 +22,15 @@ const difficultyNames = {
   hard: 'Hard'
 };
 const difficultyChoices = el('run-form').elements.namedItem('difficulty');
+const nbackSetting = el('nback-setting');
+const nbackHint = el('nback-hint');
+const nbackButtons = [...document.querySelectorAll('.nback-btn')];
 const speedInput = el('master-speed');
 let masterSpeed = speedInput.valueAsNumber;
 let session;
 let ladder = null;
+let nbackDeck = null;
+let nbackStats = null;
 let decksByLevel = new Map();
 let trial;
 let locked = false;
@@ -101,23 +109,52 @@ function setShortlist(enabled) {
   if (phase === 'play') el('range').focus({preventScroll:true});
 }
 
+function syncNBackPicker() {
+  const show = difficultyChoices.value === 'climb-the-ladder';
+  if (nbackSetting) nbackSetting.hidden = !show;
+  for (const btn of nbackButtons) {
+    const val = Number(btn.dataset.nback);
+    btn.setAttribute('aria-pressed', String(val === nbackLevel));
+  }
+  if (nbackHint) {
+    const plural = nbackLevel === 1 ? '1 trial back' : nbackLevel + ' trials back';
+    nbackHint.textContent = 'Compare each briefing against ' + plural;
+  }
+}
+
+function setNBackLevel(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < MIN_NBACK || parsed > MAX_NBACK) return;
+  nbackLevel = parsed;
+  try { localStorage.setItem('friend-or-foe.nbackLevel', String(nbackLevel)); } catch {}
+  syncNBackPicker();
+}
+
 function activeLevel() {
+  if (nbackDeck) return 'climb-the-ladder';
   return ladder ? ladder.level : difficulty;
 }
 
 function enterTrial() {
   const level = activeLevel();
-  const prevArg = trial
-    ? {level, deck: decksByLevel.get(level) || null, pair: trial.pair, targets: trial.targets, number: trial.number}
-    : null;
-  trial = makeCaseTrial(level, prevArg);
-  decksByLevel.set(level, trial.deck);
+  if (nbackDeck) {
+    trial = nbackDeck.nextTrial();
+  } else {
+    const prevArg = trial
+      ? {level, deck: decksByLevel.get(level) || null, pair: trial.pair, targets: trial.targets, number: trial.number}
+      : null;
+    trial = makeCaseTrial(level, prevArg);
+    decksByLevel.set(level, trial.deck);
+  }
   shots = 0;
   debriefHeld = false;
   setPhase('play');
   renderCaseEvidence(el('cues'), trial.evidence, {shortlist, onShortlistChange: setShortlist});
   el('cues').parentElement.scrollTop = 0;
-  el('trial-meter').textContent = difficultyNames[level] + ' · ' + session.number + '/' + session.total;
+  const meterPrefix = nbackDeck
+    ? 'Climb the ladder (' + nbackDeck.nBack + '-back)'
+    : difficultyNames[level];
+  el('trial-meter').textContent = meterPrefix + ' · ' + session.number + '/' + session.total;
   el('score').textContent = 'Cases ' + session.wins + ' / ' + session.completed;
   syncAmmoMeter(trial.pair.length, trial.pair.length);
   range.start(trial.roster, trial.pair, {masterSpeed});
@@ -148,6 +185,22 @@ function advanceFromDebrief() {
 function finishTrial(result) {
   if (phase !== 'play' || !session.accept(result, trial?.evidence?.family || null)) return;
   const change = ladder ? ladder.record(result.correct) : null;
+  if (nbackStats && trial?.nback) {
+    const nb = trial.nback;
+    if (!nb.isWarmup) {
+      if (nb.isEcho) {
+        nbackStats.echoTotal++;
+        if (result.correct) nbackStats.echoWins++;
+      } else {
+        nbackStats.breachTotal++;
+        if (result.correct) nbackStats.breachWins++;
+      }
+    }
+    if (nb.solved.kind === 'contradiction') {
+      nbackStats.clashTotal++;
+      if (result.correct) nbackStats.clashWins++;
+    }
+  }
   setPhase('between');
   renderCaseResult(el('cues'), trial, {
     onHoldToggle: toggleDebriefHold,
@@ -160,7 +213,9 @@ function finishTrial(result) {
   const hitLabel = trial.pair.length === 1 ? 'Target hit' : 'Targets cleared';
   const tierNote = change
     ? (change.direction === 'up' ? ' · Up to ' : ' · Down to ') + difficultyNames[change.to]
-    : '';
+    : (trial?.nback && !trial.nback.isWarmup
+      ? (trial.nback.isEcho ? ' · 3/3 echo (inverted)' : ' · Breach')
+      : '');
   el('outcome').textContent = result.correct ? hitLabel : result.reason === 'escaped' ? 'You died' : 'Out of bullets';
   el('outcome-detail').textContent = trial.pair.join(' + ') + ' · ' + elapsed + tierNote;
   el('score').textContent = 'Cases ' + session.wins + ' / ' + session.completed;
@@ -204,11 +259,20 @@ function showSummary() {
       ['Tier moves', ladder.promotions + ' up · ' + ladder.demotions + ' down']
     );
   }
-  rows.push(
-    ['First-seen cases', session.firstSeenTotal ? session.firstSeenWins + ' / ' + session.firstSeenTotal : '—']
-  );
-  if (session.repeatTotal) {
-    rows.push(['Repeat-type cases', session.repeatWins + ' / ' + session.repeatTotal]);
+  if (nbackDeck && nbackStats) {
+    rows.push(
+      ['N-back level', nbackDeck.nBack + '-back'],
+      ['Echoes cleared', nbackStats.echoTotal ? nbackStats.echoWins + ' / ' + nbackStats.echoTotal : '—'],
+      ['Breaches cleared', nbackStats.breachTotal ? nbackStats.breachWins + ' / ' + nbackStats.breachTotal : '—'],
+      ['Clashes caught', nbackStats.clashTotal ? nbackStats.clashWins + ' / ' + nbackStats.clashTotal : '—']
+    );
+  } else {
+    rows.push(
+      ['First-seen cases', session.firstSeenTotal ? session.firstSeenWins + ' / ' + session.firstSeenTotal : '—']
+    );
+    if (session.repeatTotal) {
+      rows.push(['Repeat-type cases', session.repeatWins + ' / ' + session.repeatTotal]);
+    }
   }
   rows.push(
     ['Out of bullets', session.ammoLosses],
@@ -241,7 +305,11 @@ function openPanel(page = 'pause') {
   el('dialog-title').textContent = help ? 'How to play' : 'Range paused';
   if (help) {
     const level = phase === 'ready' ? difficultyChoices.value : activeLevel();
-    renderCaseGuide(el('cue-guide'), level, {shortlist, zeroToHero: Boolean(ladder)});
+    renderCaseGuide(el('cue-guide'), level, {
+      shortlist,
+      zeroToHero: Boolean(ladder),
+      nBack: nbackDeck ? nbackDeck.nBack : nbackLevel
+    });
   }
   el('return').textContent = inRun ? 'Resume' : 'Back';
   el('end').hidden = !inRun;
@@ -254,9 +322,19 @@ function reset() {
   trial = null;
   session = null;
   ladder = null;
+  nbackDeck = null;
+  nbackStats = null;
   decksByLevel.clear();
+  syncNBackPicker();
   setPhase('ready');
   range.preview();
+}
+
+for (const radio of document.querySelectorAll('input[name="difficulty"]')) {
+  radio.addEventListener('change', syncNBackPicker);
+}
+for (const btn of nbackButtons) {
+  btn.addEventListener('click', () => setNBackLevel(btn.dataset.nback));
 }
 
 el('run-form').addEventListener('submit', e => {
@@ -268,10 +346,18 @@ el('run-form').addEventListener('submit', e => {
   session = new ArcadeSession(total);
   decksByLevel.clear();
   ladder = difficulty === 'zero-to-hero' ? new ZeroToHeroLadder() : null;
+  if (difficulty === 'climb-the-ladder') {
+    nbackDeck = new NBackSessionDeck(nbackLevel);
+    nbackStats = {echoTotal: 0, echoWins: 0, breachTotal: 0, breachWins: 0, clashTotal: 0, clashWins: 0};
+  } else {
+    nbackDeck = null;
+    nbackStats = null;
+  }
   try {
     localStorage.setItem('friend-or-foe.trials', String(total));
     localStorage.setItem('friend-or-foe.masterSpeed', String(masterSpeed));
     localStorage.setItem('friend-or-foe.difficulty', difficulty);
+    localStorage.setItem('friend-or-foe.nbackLevel', String(nbackLevel));
   } catch {}
   tone(260, 445, .12);
   enterTrial();
@@ -328,6 +414,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 try {
   const savedLevel = localStorage.getItem('friend-or-foe.difficulty');
   if (Object.hasOwn(difficultyNames, savedLevel)) difficultyChoices.value = savedLevel;
+  const savedNBack = Number(localStorage.getItem('friend-or-foe.nbackLevel'));
+  if (Number.isInteger(savedNBack) && savedNBack >= MIN_NBACK && savedNBack <= MAX_NBACK) nbackLevel = savedNBack;
   const savedShortlist = localStorage.getItem('friend-or-foe.shortlist');
   if (savedShortlist === '0' || savedShortlist === '1') shortlist = savedShortlist === '1';
   const savedSpeed = localStorage.getItem('friend-or-foe.masterSpeed');
@@ -347,5 +435,8 @@ const params = new URLSearchParams(window.location.search);
 if (params.get('autostart') === '1') {
   const requested = params.get('difficulty');
   if (requested && Object.hasOwn(difficultyNames, requested)) difficultyChoices.value = requested;
+  const reqNBack = Number(params.get('nback'));
+  if (Number.isInteger(reqNBack) && reqNBack >= MIN_NBACK && reqNBack <= MAX_NBACK) nbackLevel = reqNBack;
+  syncNBackPicker();
   el('run-form').requestSubmit();
 }
