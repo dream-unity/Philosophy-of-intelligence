@@ -1,17 +1,22 @@
 import {writeFileSync} from 'node:fs';
-import {allFamilies, evaluateFamily} from '../friend-or-foe/case-families.js';
+import {availableParallelism} from 'node:os';
+import {isMainThread, parentPort, Worker, workerData} from 'node:worker_threads';
+import {allFamilies, evaluateFamily, familiesByLevel} from '../friend-or-foe/case-families.js';
 import {caseRoles, edgesFor, layoutFor, seededDraw, symbols} from '../friend-or-foe/case-layout.js';
-import {buildCrossChecks, pairKey} from '../friend-or-foe/case-logic.js';
+import {buildCrossChecks, targetKey} from '../friend-or-foe/case-logic.js';
 
 // Certify 12 distinct, high-conflict boards for EVERY ONE of the 500 families (6,000 boards total).
-// Compact format: { [familyId]: [[seed, anchorIdx, disputedMask], ...] }
-// With 100 families per difficulty and 12 certified boards each, a maximum 1,000-trial run
-// deals each family at most 10 times and NEVER repeats a board!
+// Guarantees enforced at build time:
+//   1. ZERO immersion-breaking words ("row", "arrow", "left/right side", "score", "points", "top two", "IQ").
+//   2. ZERO semantically duplicate families within any difficulty (checked across 220 test boards).
+//   3. Variable target counts (1, 2, 3, or 4 targets), actively preferring mixed target sizes per family!
+//   4. ZERO single-category column shortcuts (target set NEVER equals a single category's actors, recipients, or participants!).
+//   5. Strict target-ID cross-check minimality against same-size rival target sets (100% single connected 6-row cycle on Hard!).
 
 const TARGET_PER_FAMILY = 12;
-const MAX_SEEDS_PER_FAMILY = 16000;
+const MAX_SEEDS_PER_FAMILY = 18000;
+const BANNED_COPY = /\brows?\b|\barrows?\b|\bleft side\b|\bright side\b|\btop two\b|\bscores?\b|\bpoints?\b|Safe \(\+\)|Threat \(−\)|\bIQ\b|relational reasoning/i;
 
-// Enumerate all 20 3-element subsets of {0..5} for Moderate disputed row selection
 const TRIPLE_MASKS = [];
 for (let a = 0; a < 6; a++) {
   for (let b = a + 1; b < 6; b++) {
@@ -27,23 +32,31 @@ function maskToIndices(mask) {
   return idx;
 }
 
-// Compute whole-category deletion sensitivity: how many of the 6 categories, if deleted,
-// change the exact 2-name answer pair (or break uniqueness)?
-function countDeletionSensitiveCategories(familyId, edges, anchor, correctKey) {
+function isSingleCategoryShortcut(rows, correctKey) {
+  for (const row of rows) {
+    const froms = [...new Set(row.links.map(l => l.from))];
+    const tos = [...new Set(row.links.map(l => l.to))];
+    const all = [...new Set([...froms, ...tos])];
+    if (targetKey(froms) === correctKey || targetKey(tos) === correctKey || targetKey(all) === correctKey) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function countDeletionSensitiveCategories(familyId, edges, anchor, correctKey, targetSize) {
   let count = 0;
   for (const role of caseRoles) {
     const trimmed = edges.filter(e => e.role !== role);
     const res = evaluateFamily(familyId, trimmed, anchor, false);
-    if (res.pair.length !== 2 || pairKey(res.pair) !== correctKey) count++;
+    if (res.pair.length !== targetSize || targetKey(res.pair) !== correctKey) count++;
   }
   return count;
 }
 
-// Compute single-row flip sensitivity: for each row 0..5, does flipping that row alone
-// yield a different result, and does it yield a DIFFERENT legal 2-name rival pair?
-function rowFlipProfile(familyId, rows, anchor, correctKey) {
+function rowFlipProfile(familyId, rows, anchor, correctKey, targetSize) {
   let flipsDifferent = 0;
-  let flipsRivalPair = 0;
+  let flipsSameSizeRival = 0;
   const rivalRows = [];
   const diffRows = [];
   for (let i = 0; i < 6; i++) {
@@ -52,33 +65,31 @@ function rowFlipProfile(familyId, rows, anchor, correctKey) {
     for (const e of edges) { seen.add(e.from); seen.add(e.to); }
     if (seen.size < 10) continue;
     const alt = evaluateFamily(familyId, edges, anchor, false).pair;
-    const k = alt.length === 2 ? pairKey(alt) : '';
+    const k = alt.length === targetSize ? targetKey(alt) : '';
     if (k !== correctKey) {
       flipsDifferent++;
       diffRows.push(i);
-      if (alt.length === 2) {
-        flipsRivalPair++;
+      if (alt.length === targetSize) {
+        flipsSameSizeRival++;
         rivalRows.push(i);
       }
     }
   }
-  return {flipsDifferent, flipsRivalPair, rivalRows, diffRows};
+  return {flipsDifferent, flipsSameSizeRival, rivalRows, diffRows};
 }
 
-// Precompute worldPairs for all 64 masks (or subset of masks allowed by disputedMask),
-// requiring all 10 suspects to appear so roster completeness can never leak a cross-check.
-function computeWorldPairs(familyId, rows, anchor, disputedMask) {
+function computeWorldTargets(familyId, rows, anchor, disputedMask) {
   const fixedMask = (~disputedMask) & 63;
-  const worldPairs = new Array(64).fill(null);
+  const worldTargets = new Array(64).fill(null);
   for (let m = 0; m < 64; m++) {
     if (m & fixedMask) continue;
     const edges = edgesFor(rows, m);
     const seen = new Set();
     for (const e of edges) { seen.add(e.from); seen.add(e.to); }
     if (seen.size < 10) continue;
-    worldPairs[m] = evaluateFamily(familyId, edges, anchor, false).pair;
+    worldTargets[m] = evaluateFamily(familyId, edges, anchor, false).pair;
   }
-  return worldPairs;
+  return worldTargets;
 }
 
 function certifyBoard(family, seed, anchorIdx) {
@@ -87,43 +98,36 @@ function certifyBoard(family, seed, anchorIdx) {
   const anchor = symbols[anchorIdx];
   const baseEdges = edgesFor(rows, 0);
   const base = evaluateFamily(family.id, baseEdges, anchor, false);
-  if (base.pair.length !== 2) return null;
-  const correctKey = pairKey(base.pair);
+  const targetSize = base.pair.length;
+  if (targetSize < 1 || targetSize > 4) return null;
+  const correctKey = targetKey(base.pair);
 
-  const flipInfo = rowFlipProfile(family.id, rows, anchor, correctKey);
-  const delSens = countDeletionSensitiveCategories(family.id, baseEdges, anchor, correctKey);
+  if (isSingleCategoryShortcut(rows, correctKey)) return null;
 
-  if (family.tier === 'super-easy') {
-    if (flipInfo.flipsDifferent < 1 || delSens < 1) return null;
-    const score = delSens * 10 + flipInfo.flipsDifferent * 4 + flipInfo.flipsRivalPair * 3;
-    return {entry: [seed, anchorIdx, 0], score, delSens, flips: flipInfo.flipsDifferent};
-  }
+  const flipInfo = rowFlipProfile(family.id, rows, anchor, correctKey, targetSize);
+  const delSens = countDeletionSensitiveCategories(family.id, baseEdges, anchor, correctKey, targetSize);
 
-  if (family.tier === 'very-easy') {
+  if (family.tier === 'super-easy' || family.tier === 'very-easy') {
     if (flipInfo.flipsDifferent < 2 || delSens < 2) return null;
-    const score = delSens * 10 + flipInfo.flipsDifferent * 4 + flipInfo.flipsRivalPair * 3;
-    return {entry: [seed, anchorIdx, 0], score, delSens, flips: flipInfo.flipsDifferent};
+    const score = delSens * 10 + flipInfo.flipsDifferent * 4 + flipInfo.flipsSameSizeRival * 3;
+    return {entry: [seed, anchorIdx, 0], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
   }
 
   if (family.tier === 'easy') {
-    // Need a disputed row whose flip produces a DIFFERENT legal 2-name rival pair!
-    if (!flipInfo.rivalRows.length) return null;
+    if (!flipInfo.rivalRows.length || delSens < 2) return null;
     const draw = seededDraw(seed ^ 0x51a7);
     const chosen = flipInfo.rivalRows[Math.floor(draw() * flipInfo.rivalRows.length)];
     const dMask = 1 << chosen;
-    const wp = computeWorldPairs(family.id, rows, anchor, dMask);
-    const reports = buildCrossChecks(rows, [chosen], wp, correctKey, null, 'easy', draw);
+    const wt = computeWorldTargets(family.id, rows, anchor, dMask);
+    const reports = buildCrossChecks(rows, [chosen], wt, correctKey, null, 'easy', draw);
     if (!reports || !reports.length) return null;
-    const score = delSens * 10 + flipInfo.flipsRivalPair * 5 + flipInfo.flipsDifferent * 2;
-    return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent};
+    const score = delSens * 12 + flipInfo.flipsSameSizeRival * 5 + flipInfo.flipsDifferent * 2;
+    return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
   }
 
   if (family.tier === 'medium') {
-    // Need 3 disputed rows where EVERY disputed row changes the answer on flip,
-    // and coupled 2-SAT cross-checks pass strict pair-level minimality!
-    if (flipInfo.flipsDifferent < 3) return null;
+    if (flipInfo.flipsDifferent < 3 || delSens < 3) return null;
     const draw = seededDraw(seed ^ 0x9e37);
-    // Prefer triples containing the most rival-pair rows
     const candidateMasks = TRIPLE_MASKS.filter(m => {
       for (let i = 0; i < 6; i++) if ((m & (1 << i)) && !flipInfo.diffRows.includes(i)) return false;
       return true;
@@ -136,109 +140,195 @@ function certifyBoard(family, seed, anchorIdx) {
     });
     for (const dMask of candidateMasks.slice(0, 4)) {
       const disputed = maskToIndices(dMask);
-      const wp = computeWorldPairs(family.id, rows, anchor, dMask);
-      const reports = buildCrossChecks(rows, disputed, wp, correctKey, null, 'medium', draw);
+      const wt = computeWorldTargets(family.id, rows, anchor, dMask);
+      const reports = buildCrossChecks(rows, disputed, wt, correctKey, null, 'medium', draw);
       if (reports && reports.length >= 3) {
         const rivalCount = disputed.filter(i => flipInfo.rivalRows.includes(i)).length;
         const score = delSens * 12 + rivalCount * 8 + flipInfo.flipsDifferent * 2;
-        return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent};
+        return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
       }
     }
     return null;
   }
 
   if (family.tier === 'hard') {
-    // All 6 rows disputed! Require high row sensitivity + verified 6-row coupled 2-SAT pair-minimality.
-    if (flipInfo.flipsDifferent < 5) return null;
+    if (flipInfo.flipsDifferent < 4 || delSens < 3) return null;
     const dMask = 63;
-    const wp = computeWorldPairs(family.id, rows, anchor, dMask);
+    const wt = computeWorldTargets(family.id, rows, anchor, dMask);
     const draw = seededDraw(seed ^ 0x7f4a);
-    const reports = buildCrossChecks(rows, [0, 1, 2, 3, 4, 5], wp, correctKey, null, 'hard', draw);
+    const reports = buildCrossChecks(rows, [0, 1, 2, 3, 4, 5], wt, correctKey, null, 'hard', draw);
     if (!reports || reports.length < 6) return null;
-    const score = delSens * 15 + flipInfo.flipsDifferent * 10 + flipInfo.flipsRivalPair * 6;
-    return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent};
+    const score = delSens * 25 + flipInfo.flipsDifferent * 10 + flipInfo.flipsSameSizeRival * 8;
+    return {entry: [seed, anchorIdx, dMask], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
   }
 
   return null;
 }
 
-const catalog = {};
-const tierStats = {};
-const failures = [];
-const startTime = Date.now();
+function pickBalancedTop12(pool) {
+  const bySize = new Map([[1, []], [2, []], [3, []], [4, []]]);
+  for (const item of pool) bySize.get(item.targetSize).push(item);
+  for (const list of bySize.values()) list.sort((a, b) => b.score - a.score);
 
-for (let fi = 0; fi < allFamilies.length; fi++) {
-  const family = allFamilies[fi];
-  const pool = [];
-  const baseSeed = (fi + 1) * 100003;
-  // Collect up to 24 candidates and keep the highest-conflict top 12!
-  const desiredPool = 20;
-
-  for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY && pool.length < desiredPool; offset++) {
-    const seed = (baseSeed + offset * 7919) >>> 0;
-    const anchorIdx = family.useAnchor ? (offset % symbols.length) : 0;
-    const cert = certifyBoard(family, seed, anchorIdx);
-    if (cert) pool.push(cert);
+  const chosen = [];
+  const used = new Set();
+  for (let round = 0; round < 4 && chosen.length < TARGET_PER_FAMILY; round++) {
+    for (const sz of [1, 2, 3, 4]) {
+      if (chosen.length >= TARGET_PER_FAMILY) break;
+      const list = bySize.get(sz);
+      if (round < list.length) {
+        chosen.push(list[round]);
+        used.add(list[round]);
+      }
+    }
   }
+  if (chosen.length < TARGET_PER_FAMILY) {
+    const rest = pool.filter(c => !used.has(c)).sort((a, b) => b.score - a.score);
+    chosen.push(...rest.slice(0, TARGET_PER_FAMILY - chosen.length));
+  }
+  return chosen;
+}
 
-  // Fallback pass for rare structural families to hit 12 strict boards
-  if (pool.length < TARGET_PER_FAMILY) {
-    console.warn(`WARN: ${family.id} (${family.tier}) only found ${pool.length} strict boards in ${MAX_SEEDS_PER_FAMILY} seeds; scanning more...`);
-    for (let offset = MAX_SEEDS_PER_FAMILY + 1; offset <= MAX_SEEDS_PER_FAMILY * 6 && pool.length < TARGET_PER_FAMILY; offset++) {
+function certifyRange(indices) {
+  const results = [];
+  for (const fi of indices) {
+    const family = allFamilies[fi];
+    const pool = [];
+    const sizeCounts = {1: 0, 2: 0, 3: 0, 4: 0};
+    const baseSeed = (fi + 1) * 100003;
+    const desiredPool = 18;
+
+    for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY && pool.length < desiredPool; offset++) {
       const seed = (baseSeed + offset * 7919) >>> 0;
       const anchorIdx = family.useAnchor ? (offset % symbols.length) : 0;
       const cert = certifyBoard(family, seed, anchorIdx);
-      if (cert) pool.push(cert);
+      if (cert) {
+        if (sizeCounts[cert.targetSize] >= 8 && pool.length >= 12) continue;
+        pool.push(cert);
+        sizeCounts[cert.targetSize]++;
+      }
+    }
+
+    if (pool.length < TARGET_PER_FAMILY) {
+      for (let offset = MAX_SEEDS_PER_FAMILY + 1; offset <= MAX_SEEDS_PER_FAMILY * 6 && pool.length < TARGET_PER_FAMILY; offset++) {
+        const seed = (baseSeed + offset * 7919) >>> 0;
+        const anchorIdx = family.useAnchor ? (offset % symbols.length) : 0;
+        const cert = certifyBoard(family, seed, anchorIdx);
+        if (cert) pool.push(cert);
+      }
+    }
+
+    if (pool.length < TARGET_PER_FAMILY) {
+      results.push({fi, id: family.id, tier: family.tier, failed: pool.length});
+    } else {
+      const chosen = pickBalancedTop12(pool);
+      results.push({
+        fi,
+        id: family.id,
+        tier: family.tier,
+        entries: chosen.map(c => c.entry),
+        delSum: chosen.reduce((s, c) => s + c.delSens, 0),
+        flipSum: chosen.reduce((s, c) => s + c.flips, 0),
+        sizes: chosen.reduce((acc, c) => { acc[c.targetSize]++; return acc; }, {1: 0, 2: 0, 3: 0, 4: 0})
+      });
     }
   }
-
-  if (pool.length < TARGET_PER_FAMILY) {
-    failures.push(`${family.id} (${family.tier}): ${pool.length}/${TARGET_PER_FAMILY}`);
-    continue;
-  }
-
-  pool.sort((a, b) => b.score - a.score);
-  const chosen = pool.slice(0, TARGET_PER_FAMILY);
-  catalog[family.id] = chosen.map(c => c.entry);
-
-  const st = (tierStats[family.tier] ??= {families: 0, boards: 0, delSum: 0, flipSum: 0});
-  st.families++;
-  st.boards += chosen.length;
-  for (const c of chosen) {
-    st.delSum += c.delSens;
-    st.flipSum += c.flips;
-  }
-
-  if ((fi + 1) % 50 === 0) {
-    console.log(`Certified ${fi + 1}/${allFamilies.length} families (${((Date.now() - startTime) / 1000).toFixed(1)}s)...`);
-  }
+  return results;
 }
 
-if (failures.length) {
-  console.error(`\nFAILED families (${failures.length}):`);
-  for (const f of failures) console.error('  ' + f);
-  process.exit(1);
-}
+if (!isMainThread) {
+  parentPort.postMessage(certifyRange(workerData.indices));
+} else {
+  const startTime = Date.now();
+  // Step 1: Audit all 500 families for banned meta-UI text & semantic duplicates!
+  const textErrors = [];
+  for (const f of allFamilies) {
+    for (const field of ['title', 'order', 'hint']) {
+      if (f[field] && BANNED_COPY.test(f[field])) {
+        textErrors.push(`${f.id}.${field}: matched banned wording -> "${f[field]}"`);
+      }
+    }
+  }
+  if (textErrors.length) {
+    console.error('BANNED COPY DETECTED:\n' + textErrors.join('\n'));
+    process.exit(1);
+  }
 
-const lines = [
-  '// Generated by scripts/build-case-catalog.mjs — 500 families × 12 certified boards = 6,000 boards.',
-  '// Entry format: [seed, anchorIndex, disputedMask]',
-  'export const caseCatalog = {'
-];
-const keys = Object.keys(catalog);
-keys.forEach((id, idx) => {
-  const comma = idx < keys.length - 1 ? ',' : '';
-  lines.push(`  '${id}': ${JSON.stringify(catalog[id])}${comma}`);
-});
-lines.push('};', '');
+  const probeLayouts = [];
+  for (let s = 1; probeLayouts.length < 220; s++) {
+    const rows = layoutFor((s * 7919 + 1337) >>> 0);
+    if (rows) probeLayouts.push({edges: edgesFor(rows, 0), anchor: symbols[s % symbols.length]});
+  }
+  const dupErrors = [];
+  for (const [tier, list] of Object.entries(familiesByLevel)) {
+    const sigMap = new Map();
+    for (const f of list) {
+      const sig = probeLayouts.map(p => targetKey(evaluateFamily(f.id, p.edges, p.anchor, false).pair)).join(';');
+      if (sigMap.has(sig)) {
+        dupErrors.push(`Duplicate predicate in ${tier}: ${f.id} ("${f.title}") === ${sigMap.get(sig)}`);
+      } else {
+        sigMap.set(sig, `${f.id} ("${f.title}")`);
+      }
+    }
+  }
+  if (dupErrors.length) {
+    console.error('SEMANTIC DUPLICATES DETECTED:\n' + dupErrors.join('\n'));
+    process.exit(1);
+  }
+  console.log('Pre-flight OK: 0 banned meta-UI words, 0 semantic duplicate predicates across all 500 families.');
 
-writeFileSync('friend-or-foe/case-catalog.js', lines.join('\n'));
+  // Step 2: Interleave family indices across workers for balanced CPU load across all 5 tiers
+  const workersCount = Math.max(1, Math.min(4, availableParallelism()));
+  const buckets = Array.from({length: workersCount}, () => []);
+  for (let fi = 0; fi < allFamilies.length; fi++) buckets[fi % workersCount].push(fi);
 
-console.log(`\nDone in ${((Date.now() - startTime) / 1000).toFixed(1)}s! Wrote 6,000 certified boards.`);
-for (const [tier, st] of Object.entries(tierStats)) {
-  console.log(
-    `  ${tier.padEnd(11)}: ${st.families} families, ${st.boards} boards | ` +
-    `avg deletion-sensitive cats: ${(st.delSum / st.boards).toFixed(2)}/6 | ` +
-    `avg flip-sensitive rows: ${(st.flipSum / st.boards).toFixed(2)}/6`
-  );
+  const workerResults = await Promise.all(buckets.map(indices => new Promise((resolve, reject) => {
+    const w = new Worker(new URL(import.meta.url), {workerData: {indices}});
+    w.on('message', resolve);
+    w.on('error', reject);
+  })));
+
+  const flat = workerResults.flat().sort((a, b) => a.fi - b.fi);
+  const failures = flat.filter(r => r.failed !== undefined);
+  if (failures.length) {
+    console.error(`\nFAILED families (${failures.length}):`);
+    for (const f of failures) console.error(`  ${f.id} (${f.tier}): ${f.failed}/${TARGET_PER_FAMILY}`);
+    process.exit(1);
+  }
+
+  const catalog = {};
+  const tierStats = {};
+  for (const r of flat) {
+    catalog[r.id] = r.entries;
+    const st = (tierStats[r.tier] ??= {families: 0, boards: 0, delSum: 0, flipSum: 0, sizes: {1: 0, 2: 0, 3: 0, 4: 0}});
+    st.families++;
+    st.boards += r.entries.length;
+    st.delSum += r.delSum;
+    st.flipSum += r.flipSum;
+    for (const sz of [1, 2, 3, 4]) st.sizes[sz] += r.sizes[sz];
+  }
+
+  const lines = [
+    '// Generated by scripts/build-case-catalog.mjs — 500 families × 12 certified boards = 6,000 boards.',
+    '// Entry format: [seed, anchorIndex, disputedMask]',
+    'export const caseCatalog = {'
+  ];
+  const keys = Object.keys(catalog);
+  keys.forEach((id, idx) => {
+    const comma = idx < keys.length - 1 ? ',' : '';
+    lines.push(`  '${id}': ${JSON.stringify(catalog[id])}${comma}`);
+  });
+  lines.push('};', '');
+
+  writeFileSync('friend-or-foe/case-catalog.js', lines.join('\n'));
+  console.log(`\nDone in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${workersCount} workers)! Wrote 6,000 certified boards.`);
+  for (const [tier, st] of Object.entries(tierStats)) {
+    const s = st.sizes;
+    console.log(
+      `  ${tier.padEnd(11)}: ${st.families} families, ${st.boards} boards | ` +
+      `avg del-sens: ${(st.delSum / st.boards).toFixed(2)}/6 | ` +
+      `avg flip-sens: ${(st.flipSum / st.boards).toFixed(2)}/6 | ` +
+      `targets [1:${s[1]}, 2:${s[2]}, 3:${s[3]}, 4:${s[4]}]`
+    );
+  }
 }

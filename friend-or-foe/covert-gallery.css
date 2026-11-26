@@ -65,7 +65,7 @@ dialog p{margin:0 0 .85rem}
 dialog button{margin:.2rem .32rem 0 0}
 @media(orientation:portrait){
   .cabinet{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
-  .console{border-left:0;border-top:1px solid var(--edge);max-height:48dvh}
+  .console{border-left:0;border-top:1px solid var(--edge);max-height:54dvh}
   .panel{padding:.65rem .8rem;gap:.45rem;display:grid;grid-template-columns:minmax(0,1fr) minmax(128px,42%);align-items:center}
   .panel h2{font-size:clamp(22px,6.2vw,31px)} .panel h2 br{display:none} .panel h2 em::before{content:" "}
   #setup>p{grid-column:1;font-size:.91rem} #setup form{grid-column:2;grid-row:1/3;gap:3px}

@@ -1,5 +1,5 @@
-// Grounded intelligence-dossier layout and uncertainty primitives.
-// All six categories carry distinct operational meanings — never permanently collapsed into binary Safe/Threat.
+// Grounded intelligence-dossier layout, operational timestamps, and uncertainty primitives.
+// All six categories carry distinct operational meanings and shuffled dispatch times (01:00–06:00).
 export const caseRoles = ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'];
 export const symbols = [...'ABCDEFGHIJ'];
 
@@ -13,13 +13,17 @@ export const roleNames = {
 };
 
 export const roleVerbs = {
-  friend: 'backs',
-  foe: 'opposes',
-  spy: 'watches',
+  friend: 'vouches for',
+  foe: 'targets',
+  spy: 'shadows',
   double: 'leaks to',
-  civilian: 'reports to',
-  foreigner: 'handles'
+  civilian: 'tips off',
+  foreigner: 'meets'
 };
+
+export function formatDispatchTime(step) {
+  return '0' + step + ':00';
+}
 
 export function shuffled(items, draw) {
   const order = items.slice();
@@ -55,7 +59,6 @@ export function alternateLinks(row) {
   return row.links.map(flip);
 }
 
-// Legacy single-link helper kept for compatibility where needed.
 export function alternate(link, alias) {
   if (!alias) return flip(link);
   const [a, b] = alias;
@@ -66,20 +69,23 @@ export function alternate(link, alias) {
 export function edgesFor(rows, mask) {
   return rows.flatMap((row, i) => {
     const links = (mask & (1 << i)) ? alternateLinks(row) : row.links;
-    return links.map(link => ({role: row.role, from: link.from, to: link.to}));
+    const time = row.time ?? (i + 1);
+    return links.map(link => ({role: row.role, from: link.from, to: link.to, time}));
   });
 }
 
-// Generate a 6-row, 12-edge intelligence network covering all 10 suspects,
-// with varied per-row uncertainty types: direction reversal (?), name swap, or alternate contact.
+// Generate a 6-category, 12-contact intelligence network covering all 10 suspects,
+// with shuffled dispatch timestamps (01:00–06:00) and varied per-category uncertainty types:
+// direction reversal (?), identity swap, or alternate contact.
 export function layoutFor(seed) {
   const draw = seededDraw((seed ^ Math.imul(seed, 2654435761)) >>> 0);
   const endpoints = [...symbols];
   while (endpoints.length < 24) endpoints.push(symbols[Math.floor(draw() * symbols.length)]);
   const slots = shuffled(endpoints, draw);
+  const times = shuffled([1, 2, 3, 4, 5, 6], draw);
   const rows = caseRoles.map((role, i) => {
     const links = [0, 2].map(offset => ({from: slots[4 * i + offset], to: slots[4 * i + offset + 1]}));
-    return {role, links};
+    return {role, time: times[i], links};
   });
   for (const {links: [a, b]} of rows) {
     if (a.from === a.to || b.from === b.to ||
@@ -95,21 +101,19 @@ export function layoutFor(seed) {
   for (const row of rows) {
     const modeRoll = draw();
     if (modeRoll < 0.36) {
-      // Name-swap identity confusion (preserves all 10 names when swapped name appears elsewhere or only if present >= 2)
       const present = [...new Set(row.links.flatMap(link => [link.from, link.to]))];
-      // Prefer swapping a name that appears elsewhere too, so neither reading drops a name from the 10-person dossier
       const safePresent = present.filter(s => {
         const rowOcc = row.links.reduce((n, l) => n + (l.from === s ? 1 : 0) + (l.to === s ? 1 : 0), 0);
         return totalCounts.get(s) > rowOcc;
       });
-      const pool = safePresent.length ? safePresent : present;
-      const a = pool[Math.floor(draw() * pool.length)];
-      const choices = symbols.filter(b => b !== a && !present.includes(b));
-      if (choices.length && safePresent.length) {
-        row.alias = [a, choices[Math.floor(draw() * choices.length)]];
+      if (safePresent.length) {
+        const a = safePresent[Math.floor(draw() * safePresent.length)];
+        const choices = symbols.filter(b => b !== a && !present.includes(b));
+        if (choices.length) {
+          row.alias = [a, choices[Math.floor(draw() * choices.length)]];
+        }
       }
     } else if (modeRoll < 0.68) {
-      // Alternate-contact scope substitution (only replaces an endpoint appearing >= 2 times so all 10 names stay covered)
       const slotOptions = [];
       for (const index of [0, 1]) {
         const orig = row.links[index];
@@ -135,7 +139,6 @@ export function layoutFor(seed) {
         }
       }
     }
-    // Otherwise: direction reversal (? beside role)
   }
   return rows;
 }

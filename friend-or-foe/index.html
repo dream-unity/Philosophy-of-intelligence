@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10171e">
-  <meta name="description" content="You’re the intelligence officer. Weigh all six contact categories and coupled cross-checks to identify which two of ten approaching targets to shoot.">
+  <meta name="description" content="You’re the intelligence officer. Weigh all six contact files, dispatch times, and coupled cross-checks to identify every suspect matching the order before they pass.">
   <title>Friend or Foe · Games</title>
-  <link rel="stylesheet" href="covert-gallery.css">
-  <link rel="stylesheet" href="difficulty.css?v=fof4">
-  <link rel="stylesheet" href="case-view.css?v=fof4">
-  <script type="module" src="dossier-gallery.js?v=fof4"></script>
+  <link rel="stylesheet" href="covert-gallery.css?v=fof5">
+  <link rel="stylesheet" href="difficulty.css?v=fof5">
+  <link rel="stylesheet" href="case-view.css?v=fof5">
+  <script type="module" src="dossier-gallery.js?v=fof5"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -36,8 +36,8 @@
     <aside class="console" aria-label="Range controls and clues">
       <section id="setup" class="panel" aria-labelledby="setup-heading">
         <div class="setup-intro">
-          <h2 id="setup-heading">Ten targets.<br><em>Two bullets.</em></h2>
-          <p>You’re the intelligence officer. Read all six contact categories and identify which two suspects match the current order before they pass.</p>
+          <h2 id="setup-heading">Ten suspects.<br><em>Exact targets.</em></h2>
+          <p>You’re the intelligence officer. Weigh all six contact files and dispatch times to identify every suspect matching the current order before they pass.</p>
         </div>
         <form id="run-form">
           <fieldset class="levels">
@@ -107,7 +107,7 @@
     <div id="help-copy" hidden>
       <div id="cue-guide"></div>
       <p>Tap a cutout or its nameplate to fire. On a keyboard, aim with 1–9 or 0, then press Space. A miss costs one bullet.</p>
-      <p>Your second shot ends the trial. If all remaining members of the assigned pair pass you, you die.</p>
+      <p>Your final bullet ends the trial. If all remaining assigned targets pass you, you die.</p>
     </div>
     <div class="dialog-actions">
     <button type="button" id="return" class="primary">Resume</button>

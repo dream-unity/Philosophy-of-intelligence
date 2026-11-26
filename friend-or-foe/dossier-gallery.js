@@ -55,16 +55,33 @@ function setPhase(next) {
   el('range-message').hidden = next !== 'between';
 }
 
+function syncAmmoMeter(total, remaining) {
+  const meter = el('ammo-meter');
+  const existing = meter.querySelectorAll('i');
+  if (existing.length !== total) {
+    const label = document.createElement('b');
+    const nodes = [];
+    for (let i = 0; i < total; i++) {
+      const round = document.createElement('i');
+      round.className = 'round';
+      nodes.push(round);
+    }
+    nodes.push(label);
+    meter.replaceChildren(...nodes);
+  }
+  const text = remaining + (remaining === 1 ? ' bullet' : ' bullets');
+  if (meter.lastElementChild.textContent !== text) meter.lastElementChild.textContent = text;
+  [...meter.querySelectorAll('i')].forEach((round, i) => round.classList.toggle('spent', i >= remaining));
+}
+
 function update(status) {
   if (phase !== 'play') return;
   el('clock').textContent = status.elapsed.toFixed(1) + ' s';
   if (status.shots > shots) tone(410, 102, .1);
   shots = status.shots;
-  const remaining = 2 - shots;
-  const meter = el('ammo-meter');
-  const text = remaining + (remaining === 1 ? ' bullet' : ' bullets');
-  if (meter.lastElementChild.textContent !== text) meter.lastElementChild.textContent = text;
-  [...meter.querySelectorAll('i')].forEach((round, i) => round.classList.toggle('spent', i >= remaining));
+  const total = trial ? trial.pair.length : 2;
+  const remaining = typeof status.bullets === 'number' ? status.bullets : Math.max(0, total - shots);
+  syncAmmoMeter(total, remaining);
 }
 
 function setShortlist(enabled) {
@@ -80,7 +97,8 @@ function enterTrial() {
   renderCaseEvidence(el('cues'), trial.evidence, {shortlist, onShortlistChange: setShortlist});
   el('cues').parentElement.scrollTop = 0;
   el('trial-meter').textContent = difficultyNames[difficulty] + ' · Trial ' + session.number + ' / ' + session.total;
-  el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
+  el('score').textContent = 'Cases ' + session.wins + ' / ' + session.completed;
+  syncAmmoMeter(trial.pair.length, trial.pair.length);
   range.start(trial.roster, trial.pair, {masterSpeed});
   el('range').focus({preventScroll:true});
 }
@@ -104,11 +122,12 @@ function finishTrial(result) {
   el('cues').parentElement.scrollTop = 0;
   el('range-message').dataset.result = result.reason;
   const elapsed = result.elapsed.toFixed(1) + ' s';
-  el('outcome').textContent = result.correct ? 'Pair hit' : result.reason === 'escaped' ? 'You died' : 'Out of bullets';
+  const hitLabel = trial.pair.length === 1 ? 'Target hit' : 'Targets cleared';
+  el('outcome').textContent = result.correct ? hitLabel : result.reason === 'escaped' ? 'You died' : 'Out of bullets';
   el('outcome-detail').textContent = trial.pair.join(' + ') + ' · ' + elapsed;
-  el('score').textContent = 'Pairs ' + session.wins + ' / ' + session.completed;
+  el('score').textContent = 'Cases ' + session.wins + ' / ' + session.completed;
   tone(result.correct ? 380 : 210, result.correct ? 625 : 112, .18);
-  scheduleNext(result.correct ? 2800 : 5500);
+  scheduleNext(result.correct ? 3500 : 6500);
 }
 
 function showSummary() {
@@ -117,12 +136,13 @@ function showSummary() {
   range.pause();
   setPhase('summary');
   el('summary-heading').textContent = session.finished ? 'Run complete' : 'Run ended';
-  el('summary-score').textContent = session.wins + ' pairs found in ' + session.completed + ' completed trials.';
+  const caseWord = session.wins === 1 ? 'case' : 'cases';
+  el('summary-score').textContent = session.wins + ' ' + caseWord + ' cleared in ' + session.completed + ' completed trials.';
   const totals = el('totals');
   totals.replaceChildren();
   for (const [label, value] of [
     ['Out of bullets', session.ammoLosses], ['Deaths', session.deaths],
-    ['Fastest pair', session.bestTime === null ? '—' : session.bestTime.toFixed(1) + ' s']
+    ['Fastest clearance', session.bestTime === null ? '—' : session.bestTime.toFixed(1) + ' s']
   ]) {
     const term = document.createElement('dt');
     const count = document.createElement('dd');

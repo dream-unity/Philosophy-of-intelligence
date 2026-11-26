@@ -1,115 +1,551 @@
-import {collectMatches, collectPairs, pickTopTwo} from './case-graph.js';
+import {collectMatches} from './case-graph.js';
+import {
+  hasCleanCivilian, hasCleanFriend, hasCleanSpy, hasTaintedFriend, hasTaintedSpy,
+  matchAnchorRelay, matchAtom, matchRelay, matchTemporal
+} from './case-predicates.js';
 
-// 100 genuinely distinct Hard operational families (10 domains × 10 families).
-// Calibrated to 135–140+ IQ demand, paired with ALL 6 records disputed in irreducible
-// coupled 2-SAT logic cycles (zero standalone Verified handouts).
-// Every family integrates all six distinct categories (Friend, Foe, Spy, Double agent,
-// Civilian, Foreigner) with distinct operational roles — never collapsible to binary Safe/Threat.
+// 100 genuinely distinct Hard intelligence cases (10 domains × 10 families).
+// ZERO weighted arithmetic scoring ("+3/+2/-1 Shoot the top two")!
+// Every Hard case is a concise (15–28 word), high-consequence, 4-to-6-category structural,
+// epistemic, temporal, or causal officer judgment — paired with ALL 6 disputed files in ONE
+// single connected 6-node coupled 2-SAT cycle (ZERO split clusters, ZERO Style-4 trees!).
 
-function makeHard({id, domain, title, order, useAnchor = false, evaluate}) {
+function hard({id, domain, title, order, useAnchor = false, evaluate}) {
   return {id, tier: 'hard', domain, title, order, hint: '', useAnchor, evaluate};
 }
 
-function makeHardRank({id, domain, title, order, useAnchor = false, scoreFn, minScore = -Infinity}) {
-  return {
-    id, tier: 'hard', domain, title, order, hint: '', useAnchor,
-    evaluate(g, anchor, proof) {
-      return pickTopTwo(g.people, x => scoreFn(g, x, anchor, proof), proof, minScore);
-    }
-  };
-}
-
-function sumWeights(g, x, weights, includeProof) {
-  let score = 0;
-  const parts = [];
-  for (const e of g.touch(x)) {
-    const dir = e.from === x ? 'out' : 'in';
-    const key = e.role + '_' + dir;
-    const w = weights[key] ?? weights[e.role] ?? 0;
-    if (w !== 0) {
-      score += w;
-      if (includeProof) parts.push(g.fmt(e) + ' (' + (w > 0 ? '+' + w : w) + ')');
+// Helper: does suspect x have a Friend voucher whose own Friend voucher acts in `roles`?
+function hasTwoHopCompromisedVoucher(g, x, roles) {
+  for (const f1 of g.in(x, 'friend')) {
+    for (const f2 of g.in(f1.from, 'friend')) {
+      if (g.hasOut(f2.from, roles)) return {f1, f2};
     }
   }
-  return {score, parts};
+  return null;
 }
 
-// Helper: does suspect x have a "clean" Friend backer (a Friend who does NOT link to Double agent or Foreigner)?
-function hasCleanFriend(g, x) {
-  return g.in(x, 'friend').some(f => !g.hasTouch(f.from, ['double', 'foreigner']));
-}
-
-// Helper: does suspect x have a "clean" Spy watcher (a Spy who does NOT link to Foe, Double agent, or Foreigner)?
-function hasCleanSpy(g, x) {
-  return g.in(x, 'spy').some(s => !g.hasTouch(s.from, ['foe', 'double', 'foreigner']));
-}
-
-// Helper: shortest undirected distance from anchor to x (0..4, 99 if unreachable)
-function distFrom(g, anchor) {
-  const dist = new Map([[anchor, 0]]);
-  const queue = [anchor];
-  while (queue.length) {
-    const cur = queue.shift();
-    const d = dist.get(cur);
-    for (const next of g.neighbors(cur)) {
-      if (!dist.has(next)) {
-        dist.set(next, d + 1);
-        queue.push(next);
-      }
-    }
-  }
-  return dist;
+// Helper: any clean shield among specified clean shields
+function hasAnyShield(g, x, shields) {
+  if (shields.includes('cleanFriend') && hasCleanFriend(g, x)) return true;
+  if (shields.includes('cleanSpy') && hasCleanSpy(g, x)) return true;
+  if (shields.includes('cleanCivilian') && hasCleanCivilian(g, x)) return true;
+  if (shields.includes('friend') && g.hasIn(x, 'friend')) return true;
+  if (shields.includes('spy') && g.hasIn(x, 'spy')) return true;
+  if (shields.includes('civilian') && g.hasIn(x, 'civilian')) return true;
+  return false;
 }
 
 export const hardFamilies = [
   // =========================================================================
-  // DOMAIN 0: Cover, Betrayal & Corrupted Alibis (10 families)
+  // DOMAIN 0: Cover & Betrayal (10)
   // =========================================================================
-  makeHardRank({
+  hard({
+    // FIXED verbatim match for Compromised vouching chain (2-hop Friend voucher check!)
     id: 'ha-00', domain: 0, title: 'Compromised vouching chain',
-    order: 'Score each suspect: +3 if backed by a Friend whose backer sends a Foe, Double agent, or Foreigner arrow; +2 per outgoing Double agent/Foreigner arrow; +1 per outgoing Foe arrow; −2 per Spy watch received; −1 per Civilian arrow sent. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const taintedF = g.in(x, 'friend').some(f => g.hasOut(f.from, ['foe', 'double', 'foreigner'])) ? 3 : 0;
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, foe_out: 1, spy_in: -2, civilian_out: -1}, proof);
-      const score = taintedF + r.score;
-      if (proof && taintedF) r.parts.push('tainted Friend backer (+3)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-01', domain: 0, title: 'Betrayal exposure ledger',
-    order: 'Score each suspect: +3 per Double agent link, +2 per Foreigner link, +2 per Foe arrow sent, +1 per Civilian link, −2 per clean Friend backer (not in Double agent/Foreigner), −2 per Spy watch received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {double: 3, foreigner: 2, foe_out: 2, civilian: 1, spy_in: -2}, proof);
-      const cleanF = g.in(x, 'friend').filter(f => !g.hasTouch(f.from, ['double', 'foreigner'])).length;
-      const score = r.score - cleanF * 2;
-      if (proof && cleanF) r.parts.push(cleanF + ' clean Friend (−' + (cleanF * 2) + ')');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-02', domain: 0, title: 'Corrupted ally’s proxy',
-    order: 'Score each suspect: +3 if they receive an arrow from someone backed by a Friend who also sends a Foe/Double agent/Foreigner arrow; +2 per outgoing Double agent or Foreigner arrow; +1 per incoming Civilian report; −2 per Spy watch received; −1 per Friend backing received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const taintedProxy = g.in(x).some(e => g.hasIn(e.from, 'friend') && g.hasOut(e.from, ['foe', 'double', 'foreigner'])) ? 3 : 0;
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, civilian_in: 1, spy_in: -2, friend_in: -1}, proof);
-      const score = taintedProxy + r.score;
-      if (proof && taintedProxy) r.parts.push('fed by tainted Friend-backed source (+3)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-03', domain: 0, title: 'Cover-breaking triangle',
-    order: 'Shoot the two suspects who link (either way) to a Friend-backed suspect AND to a Foreigner/Double agent suspect (two different people) — excluding anyone with a clean Spy watcher or Civilian backing.',
+    order: 'Shoot anyone backed by a Friend whose own Friend voucher acts in Foe, Double agent, or Foreigner — or who leaks as a Double agent without a clean Spy shadow or Civilian tip-off.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x) || g.hasIn(x, 'civilian')) return null;
+        const chain = hasTwoHopCompromisedVoucher(g, x, ['foe', 'double', 'foreigner']);
+        if (chain) return proof ? x + ': 2-hop compromised voucher via ' + g.fmt(chain.f1) + ' ← ' + g.fmt(chain.f2) + '.' : 'ok';
+        const leak = g.out(x, 'double')[0];
+        if (leak && !hasCleanSpy(g, x) && !g.hasIn(x, 'civilian')) {
+          return proof ? x + ': ' + g.fmt(leak) + ' with no clean Spy shadow or Civilian tip-off.' : 'ok';
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-01', domain: 0, title: 'Unshielded covert actor',
+    order: 'Shoot anyone who acts in Foe, Double agent, or Foreigner without a clean Friend voucher, clean Spy shadow, or Civilian tip-off.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy', 'civilian'])) return null;
+        const hit = g.out(x, ['foe', 'double', 'foreigner'])[0];
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit) + ', zero clean cover or Civilian tip.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-02', domain: 0, title: 'Exposed covert recipient',
+    order: 'Shoot anyone targeted by a Foe, fed a Double agent’s leak, or met by a Foreigner — unless backed by a clean Friend, shadowed by a clean Spy, or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy', 'cleanCivilian'])) return null;
+        const hit = g.in(x, ['foe', 'double', 'foreigner'])[0];
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit) + ', zero clean shield across Friend, Spy, and Civilian.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-03', domain: 0, title: 'Tainted cover under fire',
+    order: 'Shoot anyone backed by a tainted Friend (in Double agent or Foreigner) OR targeted by a Foe — unless shadowed by a clean Spy or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
+        const tf = hasTaintedFriend(g, x);
+        if (tf) return proof ? x + ' backed by tainted Friend ' + g.fmt(tf) + '.' : 'ok';
+        const foe = g.in(x, 'foe')[0];
+        if (foe) return proof ? x + ': ' + g.fmt(foe) + ', no clean Spy/Civilian shield.' : 'ok';
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-04', domain: 0, title: 'Double-crossed ally or informant',
+    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian someone in Foe or Double agent — unless shadowed by a clean Spy or appearing in Foreigner.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x) || g.hasTouch(x, 'foreigner')) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ' backs compromised contact: ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-05', domain: 0, title: 'Hollow Friend alibi',
+    order: 'Shoot anyone whose Friend voucher appears in Foe, Double agent, or Foreigner — excluding anyone with a second clean Friend, clean Spy, or clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy', 'cleanCivilian'])) return null;
+        const bad = g.in(x, 'friend').find(f => g.hasTouch(f.from, ['foe', 'double', 'foreigner']));
+        if (!bad) return null;
+        return proof ? x + ' relies on compromised Friend ' + g.fmt(bad) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-06', domain: 0, title: 'Mole with overt disguise',
+    order: 'Shoot anyone in Friend or Civilian who also acts in Foe, Double agent, or Foreigner — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const ov = g.touch(x, ['friend', 'civilian'])[0];
+        const cov = g.out(x, ['foe', 'double', 'foreigner'])[0];
+        if (!ov || !cov) return null;
+        return proof ? x + ': overt ' + g.fmt(ov) + ' masking ' + g.fmt(cov) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-07', domain: 0, title: 'Compromised voucher’s target',
+    order: 'Shoot anyone targeted by a Foe or fed a Double agent’s leak by someone backed by a Friend or tipped off by a Civilian — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['foe', 'double'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'in'});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' from overtly backed actor (' + g.fmt(hit.e2) + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-08', domain: 0, title: 'Ally corrupted by mole or outsider',
+    order: 'Shoot anyone vouched for by a Friend who also appears in Foe, Double agent, or Foreigner — excluding anyone shadowed by a clean Spy or tipped off by a Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'civilian'])) return null;
+        const f = g.in(x, 'friend')[0];
+        const c = g.touch(x, ['foe', 'double', 'foreigner'])[0];
+        if (!f || !c) return null;
+        return proof ? x + ': ' + g.fmt(f) + ' yet ' + g.fmt(c) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-09', domain: 0, title: 'Betrayal across overt lines',
+    order: 'Shoot anyone who acts in Foe, Double agent, or Foreigner toward someone in Friend or Civilian — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' hitting overt ' + hit.mid + '.' : 'ok';
+      }, proof);
+    }
+  }),
+
+  // =========================================================================
+  // DOMAIN 1: Surveillance & Blind Spots (10)
+  // =========================================================================
+  hard({
+    id: 'ha-10', domain: 1, title: 'Watchdog turned traitor',
+    order: 'Shoot anyone who shadows as a Spy AND appears in Foe, Double agent, or Foreigner — unless backed by a clean Friend or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        const s = g.out(x, 'spy')[0];
+        const c = g.touch(x, ['foe', 'double', 'foreigner'])[0];
+        if (!s || !c) return null;
+        return proof ? x + ': ' + g.fmt(s) + ' while compromised by ' + g.fmt(c) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-11', domain: 1, title: 'False Spy cover',
+    order: 'Shoot anyone shadowed ONLY by compromised Spies (appearing in Foe, Double agent, or Foreigner) — unless backed by a clean Friend or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        const ss = g.in(x, 'spy');
+        if (!ss.length || !ss.every(s => g.hasTouch(s.from, ['foe', 'double', 'foreigner']))) return null;
+        return proof ? x + ' shadowed only by compromised Spy (' + ss.map(s => s.from).join(', ') + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-12', domain: 1, title: 'Unwatched covert link',
+    order: 'Shoot anyone named in Double agent or Foreigner who has NO Spy contact at all — unless backed by a clean Friend and tipped off by a Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (g.hasTouch(x, 'spy')) return null;
+        if (hasCleanFriend(g, x) && g.hasIn(x, 'civilian')) return null;
+        const c = g.touch(x, ['double', 'foreigner'])[0];
+        if (!c) return null;
+        return proof ? x + ': ' + g.fmt(c) + ', invisible to Spy and lacks Friend+Civilian cover.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-13', domain: 1, title: 'Blind-spot hostile network',
+    order: 'Shoot anyone linked (either way) to an unwatched suspect (no Spy shadow) in Double agent or Foreigner — unless backed by a clean Friend or clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], firstDir: 'any',
+          secondRoles: ['double', 'foreigner'], secondDir: 'any',
+          midExc: {roles: ['spy'], dir: 'in'}
+        });
+        if (!hit) return null;
+        return proof ? x + ' links to unwatched covert ' + hit.mid + ' (' + g.fmt(hit.e1) + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-14', domain: 1, title: 'Spy shadowing an enemy’s ally',
+    order: 'Shoot anyone who shadows as a Spy someone in Foe, Double agent, or Foreigner — while ALSO appearing in Friend or Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (!g.hasTouch(x, ['friend', 'civilian'])) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['spy'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ' shadows covert ' + hit.mid + ' while appearing in Friend/Civilian.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-15', domain: 1, title: 'Compromised watcher’s quarry',
+    order: 'Shoot anyone shadowed by a tainted Spy (in Foe, Double agent, or Foreigner) OR targeted by a Foe — unless backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanFriend(g, x)) return null;
+        const ts = hasTaintedSpy(g, x);
+        if (ts) return proof ? x + ' watched by tainted Spy ' + g.fmt(ts) + '.' : 'ok';
+        const f = g.in(x, 'foe')[0];
+        if (f) return proof ? x + ': ' + g.fmt(f) + ' without clean Friend.' : 'ok';
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-16', domain: 1, title: 'Spy blind to double exposure',
+    order: 'Shoot anyone appearing in at least two of Foe, Double agent, and Foreigner — unless shadowed by a clean Spy or backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'cleanFriend'])) return null;
+        const cats = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role));
+        if (cats.size < 2) return null;
+        return proof ? x + ' spans ' + [...cats].join(' + ') + ' with no clean Spy or Friend.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-17', domain: 1, title: 'Unwatched overt intermediary',
+    order: 'Shoot anyone who acts in Friend or Civilian toward someone in Foe, Double agent, or Foreigner — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' into covert ' + hit.mid + ' (no clean Spy).' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-18', domain: 1, title: 'Watched yet unshielded',
+    order: 'Shoot anyone shadowed by a Spy who is ALSO targeted by a Foe, fed a Double agent’s leak, or met by a Foreigner — excluding anyone backed by a clean Friend or tipped off by a Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'civilian'])) return null;
+        const s = g.in(x, 'spy')[0];
+        const c = g.in(x, ['foe', 'double', 'foreigner'])[0];
+        if (!s || !c) return null;
+        return proof ? x + ': ' + g.fmt(s) + ' and ' + g.fmt(c) + ' without Friend/Civilian.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-19', domain: 1, title: 'Unbacked watch near covert circles',
+    order: 'Shoot anyone in Spy or Civilian who has NO clean Friend voucher AND links directly to someone in Foe, Double agent, or Foreigner.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (!g.hasTouch(x, ['spy', 'civilian']) || hasCleanFriend(g, x)) return null;
+        const cov = g.neighbors(x).find(n => g.hasTouch(n, ['foe', 'double', 'foreigner']));
+        if (!cov) return null;
+        return proof ? x + ' (Spy/Civilian, no clean Friend) links directly to covert ' + cov + '.' : 'ok';
+      }, proof);
+    }
+  }),
+
+  // =========================================================================
+  // DOMAIN 2: Foreign Contact (10)
+  // =========================================================================
+  hard({
+    id: 'ha-20', domain: 2, title: 'Foreigner’s unshielded insider',
+    order: 'Shoot anyone in Foreigner who also appears in Friend, Spy, or Civilian — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const f = g.touch(x, 'foreigner')[0];
+        const o = g.touch(x, ['friend', 'spy', 'civilian'])[0];
+        if (!f || !o) return null;
+        return proof ? x + ': ' + g.fmt(f) + ' while holding ' + g.fmt(o) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-21', domain: 2, title: 'Foreign cut-out network',
+    order: 'Shoot anyone in Foreigner OR linked to a Foreigner who acts in Foe or Double agent — excluding anyone backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const directF = g.touch(x, 'foreigner')[0];
+        if (directF) return proof ? x + ' in Foreigner (' + g.fmt(directF) + ') without clean cover.' : 'ok';
+        const hit = matchRelay(g, x, {
+          firstRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], firstDir: 'any',
+          secondRoles: ['foe', 'double'], secondDir: 'out',
+          midReq: {roles: ['foreigner'], dir: 'any'}
+        });
+        if (!hit) return null;
+        return proof ? x + ' links to hostile Foreigner-file contact ' + hit.mid + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-22', domain: 2, title: 'Foreigner meeting an unwarned ally',
+    order: 'Shoot anyone who meets as a Foreigner someone in Friend, Spy, or Civilian — unless shadowed by a clean Spy or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['foreigner'], firstDir: 'out', secondRoles: ['friend', 'spy', 'civilian'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' targeting overt ' + hit.mid + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-23', domain: 2, title: 'Foreign-funded betrayal',
+    order: 'Shoot anyone fed a Double agent’s leak OR met by a Foreigner who ALSO acts in Friend, Foe, or Civilian — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const i = g.in(x, ['double', 'foreigner'])[0];
+        const o = g.out(x, ['friend', 'foe', 'civilian'])[0];
+        if (!i || !o) return null;
+        return proof ? x + ': ' + g.fmt(i) + ' while acting via ' + g.fmt(o) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-24', domain: 2, title: 'Foreign drop without clean watch',
+    order: 'Shoot anyone linked (either way) to someone met by a Foreigner — while appearing in Foe or Double agent and lacking a clean Friend or clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.hasTouch(x, ['foe', 'double'])) return null;
+        const m = g.neighbors(x).find(n => g.hasIn(n, 'foreigner'));
+        if (!m) return null;
+        return proof ? x + ' (in Foe/Double agent) links to Foreigner contact ' + m + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-25', domain: 2, title: 'Foreigner or mole bypassing alerts',
+    order: 'Shoot anyone met by a Foreigner or fed a Double agent’s leak who has NO Civilian tip-off, NO clean Friend voucher, and NO clean Spy shadow.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['civilian', 'cleanFriend', 'cleanSpy'])) return null;
+        const f = g.in(x, ['foreigner', 'double'])[0];
+        if (!f) return null;
+        return proof ? x + ': ' + g.fmt(f) + ', no Civilian warning or clean shield.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-26', domain: 2, title: 'Outsider’s covert proxy',
+    order: 'Shoot anyone who acts in Double agent or Foe toward someone in Foreigner — unless shadowed by a clean Spy or backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'cleanFriend'])) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['double', 'foe'], firstDir: 'out', secondRoles: ['foreigner'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' into Foreigner-file ' + hit.mid + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-27', domain: 2, title: 'Foreign reach into Friend circles',
+    order: 'Shoot anyone backed by a Friend who links directly to someone in Foreigner — unless shadowed by a clean Spy or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian']) || !g.hasIn(x, 'friend')) return null;
+        const m = g.neighbors(x).find(n => g.hasTouch(n, 'foreigner'));
+        if (!m) return null;
+        return proof ? x + ' (Friend-backed) links to Foreigner contact ' + m + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-28', domain: 2, title: 'Foreigner’s tainted handler',
+    order: 'Shoot anyone met by a Foreigner whose Foreigner contact also appears in Foe, Double agent, or Spy — unless backed by a clean Friend or tipped off by a Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'civilian'])) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['foreigner'], firstDir: 'in', secondRoles: ['foe', 'double', 'spy'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' from compromised outsider (' + g.fmt(hit.e2) + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-29', domain: 2, title: 'Double-exposed foreign link',
+    order: 'Shoot anyone in Foreigner who also appears in Foe, Double agent, or Civilian — excluding anyone with BOTH a Friend voucher and a Spy shadow.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (g.hasIn(x, 'friend') && g.hasIn(x, 'spy')) return null;
+        const f = g.touch(x, 'foreigner')[0];
+        const o = g.touch(x, ['foe', 'double', 'civilian'])[0];
+        if (!f || !o) return null;
+        return proof ? x + ': ' + g.fmt(f) + ' and ' + g.fmt(o) + ' (lacks dual Friend+Spy shield).' : 'ok';
+      }, proof);
+    }
+  }),
+
+  // =========================================================================
+  // DOMAIN 3: Civilian Tip-Offs (10)
+  // =========================================================================
+  hard({
+    id: 'ha-30', domain: 3, title: 'Compromised informant chain',
+    order: 'Shoot anyone tipped off by a Civilian who appears in Foe, Double agent, or Foreigner — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['civilian'], firstDir: 'in', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ' tipped off by compromised Civilian: ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-31', domain: 3, title: 'Unshielded witness',
+    order: 'Shoot anyone in Civilian who is targeted by a Foe, fed a Double agent’s leak, or met by a Foreigner — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.hasTouch(x, 'civilian')) return null;
+        const hit = g.in(x, ['foe', 'double', 'foreigner'])[0];
+        if (!hit) return null;
+        return proof ? x + ' (Civilian) exposed to ' + g.fmt(hit) + ' with no clean shield.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-32', domain: 3, title: 'Informant tipping a covert actor',
+    order: 'Shoot anyone who tips off as a Civilian someone who acts in Foe, Double agent, or Foreigner — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['civilian'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out'});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' warning covert actor ' + hit.mid + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-33', domain: 3, title: 'Exposed Civilian without Friend cover',
+    order: 'Shoot anyone in Civilian who links directly to someone in Foe, Double agent, or Foreigner — excluding anyone backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.hasTouch(x, 'civilian')) return null;
+        const m = g.neighbors(x).find(n => g.hasTouch(n, ['foe', 'double', 'foreigner']));
+        if (!m) return null;
+        return proof ? x + ' (Civilian) links to covert contact ' + m + ' with no clean shield.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-34', domain: 3, title: 'Tipped off then betrayed',
+    order: 'Shoot anyone tipped off by a Civilian who ALSO appears in Foe, Double agent, or Foreigner — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const c = g.in(x, 'civilian')[0];
+        const h = g.touch(x, ['foe', 'double', 'foreigner'])[0];
+        if (!c || !h) return null;
+        return proof ? x + ': ' + g.fmt(c) + ' and ' + g.fmt(h) + ', no clean Friend/Spy.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-35', domain: 3, title: 'False Civilian shield',
+    order: 'Shoot anyone tipped off ONLY by compromised Civilians (in Foe, Double agent, or Foreigner) — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const cs = g.in(x, 'civilian');
+        if (!cs.length || !cs.every(c => g.hasTouch(c.from, ['foe', 'double', 'foreigner']))) return null;
+        return proof ? x + ' tipped off only by compromised Civilians (' + cs.map(c => c.from).join(', ') + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-36', domain: 3, title: 'Covert strike on an informant’s circle',
+    order: 'Shoot anyone who acts in Foe, Double agent, or Foreigner toward someone in Civilian — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const hit = matchRelay(g, x, {firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out', secondRoles: ['civilian'], secondDir: 'any'});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' into Civilian ' + hit.mid + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-37', domain: 3, title: 'Unwarned operative in two covert files',
+    order: 'Shoot anyone appearing in at least two of Foe, Double agent, and Foreigner who has NO clean Civilian tip-off and NO clean Friend voucher.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanCivilian', 'cleanFriend'])) return null;
+        const cats = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role));
+        if (cats.size < 2) return null;
+        return proof ? x + ' spans ' + [...cats].join(' + ') + ' with no clean Civilian or Friend.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-38', domain: 3, title: 'Informant bridging Friend and threat',
+    order: 'Shoot anyone in Civilian who links to a Friend-backed suspect AND to a Foe, Double agent, or Foreigner suspect (two different people).',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (!g.hasTouch(x, 'civilian')) return null;
         const n = g.neighbors(x);
         for (const a of n) {
           if (!g.hasIn(a, 'friend')) continue;
           for (const b of n) {
-            if (b !== a && g.hasTouch(b, ['foreigner', 'double'])) {
-              return proof ? x + ' links Friend-backed ' + a + ' and covert ' + b + ' (no clean Spy/Civilian shield).' : 'ok';
+            if (b !== a && g.hasTouch(b, ['foe', 'double', 'foreigner'])) {
+              return proof ? x + ' (Civilian) links Friend-backed ' + a + ' and covert ' + b + '.' : 'ok';
             }
           }
         }
@@ -117,1224 +553,920 @@ export const hardFamilies = [
       }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-04', domain: 0, title: 'Tainted voucher penalty',
-    order: 'Score each suspect: +3 per link to anyone in Double agent or Foreigner, +2 per link to anyone in Foe, +1 per Civilian link, −2 if watched by a Spy, −2 if backed by a Friend whose backer is NOT in Foe/Double agent/Foreigner. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      let score = 0;
-      const parts = [];
-      for (const e of g.touch(x)) {
-        const m = e.from === x ? e.to : e.from;
-        if (g.hasTouch(m, ['double', 'foreigner'])) { score += 3; if (proof) parts.push('link to covert ' + m + ' (+3)'); }
-        if (g.hasTouch(m, 'foe')) { score += 2; if (proof) parts.push('link to Foe ' + m + ' (+2)'); }
-        if (e.role === 'civilian') { score += 1; if (proof) parts.push(g.fmt(e) + ' (+1)'); }
-      }
-      if (g.hasIn(x, 'spy')) { score -= 2; if (proof) parts.push('Spy watch (−2)'); }
-      const cleanF = g.in(x, 'friend').some(f => !g.hasTouch(f.from, ['foe', 'double', 'foreigner']));
-      if (cleanF) { score -= 2; if (proof) parts.push('clean Friend (−2)'); }
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-05', domain: 0, title: 'Double-crossed ally network',
-    order: 'Shoot the two suspects who back a Friend OR receive a Civilian report — while ALSO linking (in 1 or 2 steps, following arrows) to someone in Double agent or Foreigner, with NO Spy watch.',
+  hard({
+    id: 'ha-39', domain: 3, title: 'Unwatched overt cover on a covert lead',
+    order: 'Shoot anyone in Foe, Double agent, or Foreigner who is tipped off by an unwatched Civilian or backed by an unwatched Friend (no Spy shadow on that source).',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        if (g.hasIn(x, 'spy')) return null;
-        const cov = g.out(x, 'friend')[0] || g.in(x, 'civilian')[0];
-        if (!cov) return null;
-        for (const e1 of g.out(x)) {
-          if (g.hasTouch(e1.to, ['double', 'foreigner'])) return proof ? x + ': ' + g.fmt(cov) + ', 1-step to covert ' + e1.to + '.' : 'ok';
-          for (const e2 of g.out(e1.to)) {
-            if (e2.to !== x && g.hasTouch(e2.to, ['double', 'foreigner'])) return proof ? x + ': ' + g.fmt(cov) + ', 2-step ' + g.fmt(e1) + ' → ' + g.fmt(e2) + '.' : 'ok';
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  makeHardRank({
-    id: 'ha-06', domain: 0, title: 'Traitor behind an ally',
-    order: 'Score each suspect: +3 per outgoing Foe, Double agent, or Foreigner arrow hitting someone backed by a Friend; +2 per outgoing Foreigner or Double agent arrow; +1 per incoming Civilian report; −2 per Spy watch received; −2 per Friend backing received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const hitAlly = g.out(x, ['foe', 'double', 'foreigner']).filter(e => g.hasIn(e.to, 'friend')).length * 3;
-      const r = sumWeights(g, x, {foreigner_out: 2, double_out: 2, civilian_in: 1, spy_in: -2, friend_in: -2}, proof);
-      const score = hitAlly + r.score;
-      if (proof && hitAlly) r.parts.push('targets Friend-backed (+' + hitAlly + ')');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-07', domain: 0, title: 'Full-spectrum betrayal index',
-    order: 'Score each suspect: +3 per outgoing Double agent/Foreigner arrow, +2 per incoming Foe/Double agent arrow, +2 if appearing in BOTH Friend and any of (Foe, Double agent, Foreigner), −2 if watched by a Spy, −1 per Civilian report sent. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {double_out: 3, foreigner_out: 3, foe_in: 2, double_in: 2, spy_in: -2, civilian_out: -1}, proof);
-      const split = g.hasTouch(x, 'friend') && g.hasTouch(x, ['foe', 'double', 'foreigner']) ? 2 : 0;
-      const score = r.score + split;
-      if (proof && split) r.parts.push('Friend+hostile split (+2)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-08', domain: 0, title: 'Hostile backer of a neutral',
-    order: 'Score each suspect: +2 per outgoing arrow, +2 if they appear in Friend or Civilian while sending a Foe/Double agent/Foreigner arrow, +1 per Foreigner link, −2 per clean Friend backer (not in Foe/Double agent/Foreigner), −2 per Spy watch received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const out = g.out(x).length * 2;
-      const split = g.hasTouch(x, ['friend', 'civilian']) && g.hasOut(x, ['foe', 'double', 'foreigner']) ? 2 : 0;
-      const cleanF = g.in(x, 'friend').some(f => !g.hasTouch(f.from, ['foe', 'double', 'foreigner'])) ? -2 : 0;
-      const r = sumWeights(g, x, {foreigner: 1, spy_in: -2}, proof);
-      const score = out + split + cleanF + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + g.out(x).length + ' out, split ' + split + ', mods ' + (cleanF + r.score) + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-09', domain: 0, title: 'Cover-vs-exposure differential',
-    order: 'Score each suspect: +3 per outgoing Foe, Double agent, or Foreigner arrow; +2 if they back someone (Friend) who sends a Double agent or Foreigner arrow; −2 per Spy watch received; −2 per Civilian arrow sent; −1 per Friend backing received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foe_out: 3, double_out: 3, foreigner_out: 3, spy_in: -2, civilian_out: -2, friend_in: -1}, proof);
-      const badBack = g.out(x, 'friend').some(f => g.hasOut(f.to, ['double', 'foreigner'])) ? 2 : 0;
-      const score = r.score + badBack;
-      if (proof && badBack) r.parts.push('backs active mole/handler (+2)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 1: Surveillance & Counter-Surveillance (10 families)
-  // =========================================================================
-  makeHardRank({
-    id: 'ha-10', domain: 1, title: 'Compromised watch chain',
-    order: 'Score each suspect: +3 if watched by a Spy whose watcher touches Foe/Double agent/Foreigner, +2 per outgoing Double agent/Foreigner/Foe arrow, +1 per incoming Civilian report, −3 if watched by a clean Spy, −2 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const badSpy = g.in(x, 'spy').some(s => g.hasTouch(s.from, ['foe', 'double', 'foreigner'])) ? 3 : 0;
-      const cleanS = hasCleanSpy(g, x) ? -3 : 0;
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, foe_out: 2, civilian_in: 1, friend_in: -2}, proof);
-      const score = badSpy + cleanS + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (badSpy ? ' (compromised Spy +3)' : cleanS ? ' (clean Spy −3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-11', domain: 1, title: 'Counter-surveillance threat score',
-    order: 'Score each suspect: +3 if watching someone (Spy) who links to Foe/Double agent/Foreigner, +2 per Double agent or Foreigner link, +2 per Foe link, −2 per Friend backing received, −2 if watched by a clean Spy, +1 per Civilian link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {double: 2, foreigner: 2, foe: 2, friend_in: -2, civilian: 1}, proof);
-      const watchHot = g.out(x, 'spy').some(s => g.hasTouch(s.to, ['foe', 'double', 'foreigner'])) ? 3 : 0;
-      const cleanS = hasCleanSpy(g, x) ? -2 : 0;
-      const score = r.score + watchHot + cleanS;
-      if (proof && watchHot) r.parts.push('watches hostile target (+3)');
-      if (proof && cleanS) r.parts.push('clean Spy watch (−2)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-12', domain: 1, title: 'Blind-spot operator with cover',
-    order: 'Score each suspect: +3 if they send a Friend or Civilian arrow into someone NOT watched by a Spy; +2 per outgoing Double agent/Foreigner/Foe arrow; −2 per Spy watch received; −2 per Friend backing received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const blindCov = g.out(x, ['friend', 'civilian']).some(e => !g.hasIn(e.to, 'spy')) ? 3 : 0;
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, foe_out: 2, spy_in: -2, friend_in: -2}, proof);
-      const score = blindCov + r.score;
-      if (proof && blindCov) r.parts.push('cover arrow into unwatched contact (+3)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-13', domain: 1, title: 'Surveillance gap priority',
-    order: 'Score each suspect: +2 per outgoing arrow across all six rows, +2 per Foreigner or Double agent touch, +1 per Civilian touch, −3 if watched by a Spy, −1 if backed by a Friend, +1 if opposed by a Foe. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const out = g.out(x).length * 2;
-      const r = sumWeights(g, x, {foreigner: 2, double: 2, civilian: 1, spy_in: -3, friend_in: -1, foe_in: 1}, proof);
-      const score = out + r.score;
-      return {score, reason: proof ? x + ': ' + out + ' outgoing + ' + r.score + ' role modifiers = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-14', domain: 1, title: 'Watching a double-backed threat',
-    order: 'Score each suspect: +3 if they send an arrow into a Spy watcher (left of Spy), +2 per outgoing Foreigner or Double agent arrow, +2 per incoming Foe arrow, −2 per incoming Friend backing, −1 per outgoing Civilian report. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const hitSpy = g.out(x).some(e => g.hasOut(e.to, 'spy')) ? 3 : 0;
-      const r = sumWeights(g, x, {foreigner_out: 2, double_out: 2, foe_in: 2, friend_in: -2, civilian_out: -1}, proof);
-      const score = hitSpy + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (hitSpy ? ' (targets a Spy +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-15', domain: 1, title: 'Unwatched neighbor pressure',
-    order: 'For each suspect, add +2 for every direct contact NOT watched by a Spy, +1 if the suspect appears in Foe/Double agent/Foreigner, −2 if watched by a Spy, −1 if backed by a Friend, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const unwatched = g.neighbors(x).filter(m => !g.hasIn(m, 'spy'));
-      const bonus = g.hasTouch(x, ['foe', 'double', 'foreigner']) ? 1 : 0;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 1 : 0) + (g.hasTouch(x, 'civilian') ? 1 : 0);
-      const score = unwatched.length * 2 + bonus - pen;
-      return {score, reason: proof ? x + ': ' + unwatched.length + ' unwatched contacts (+' + (unwatched.length * 2) + ') +' + bonus + ' −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-16', domain: 1, title: 'Shadow-breaking relay',
-    order: 'Score each suspect: +3 if they receive an arrow from someone watched by a Spy; +2 per outgoing Foe, Double agent, or Foreigner arrow; +1 per Civilian arrow received; −2 if watched by a Spy; −2 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const fromWatched = g.in(x).some(e => g.hasIn(e.from, 'spy')) ? 3 : 0;
-      const r = sumWeights(g, x, {foe_out: 2, double_out: 2, foreigner_out: 2, civilian_in: 1, spy_in: -2, friend_in: -2}, proof);
-      const score = fromWatched + r.score;
-      if (proof && fromWatched) r.parts.push('fed by watched source (+3)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-17', domain: 1, title: 'Watched-vs-unwatched balance',
-    order: 'Score each suspect: +3 per Spy arrow sent, +2 per Double agent or Foreigner link, +2 per Foe arrow received, −2 per Friend link, −1 per Civilian link, −2 per Spy arrow received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {spy_out: 3, double: 2, foreigner: 2, foe_in: 2, friend: -2, civilian: -1, spy_in: -2}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-18', domain: 1, title: 'Evading both watch and ally',
-    order: 'Shoot the two suspects linked to at least THREE distinct people across the file — who have NEITHER a Spy watching them NOR a Friend backing them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.hasIn(x, 'spy') || g.hasIn(x, 'friend')) return null;
-        const n = g.neighbors(x);
-        if (n.length >= 3) return proof ? x + ' reaches ' + n.length + ' contacts (' + n.join(', ') + ') with no Spy watch or Friend backer.' : 'ok';
-        return null;
-      }, proof);
-    }
-  }),
-  makeHardRank({
-    id: 'ha-19', domain: 1, title: 'Counter-watch leverage',
-    order: 'Score each suspect: +2 per distinct category they appear in, +2 if they watch someone (Spy) or handle someone (Foreigner), +1 if they leak (Double agent) or oppose (Foe), −2 if backed by a Friend, −1 if reported to by a Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const cats = g.distinctRoles(x).size * 2;
-      const a = g.hasOut(x, ['spy', 'foreigner']) ? 2 : 0;
-      const b = g.hasOut(x, ['double', 'foe']) ? 1 : 0;
-      const pen = (g.hasIn(x, 'friend') ? 2 : 0) + (g.hasIn(x, 'civilian') ? 1 : 0);
-      const score = cats + a + b - pen;
-      return {score, reason: proof ? x + ': ' + cats + ' role-spread +' + (a + b) + ' ops −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 2: Foreign Infiltration & Deep Border Chains (10 families)
-  // =========================================================================
-  makeHardRank({
-    id: 'ha-20', domain: 2, title: 'Foreign network reach',
-    order: 'Score each suspect: +3 per Foreigner link, +2 if linked to someone in Foreigner (via another row), +2 per Double agent link, +1 per Foe link, −2 per clean Friend backer, −1 per Spy watch, −1 per Civilian link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foreigner: 3, double: 2, foe: 1, spy_in: -1, civilian: -1}, proof);
-      const nearF = g.neighbors(x).some(m => g.touch(m, 'foreigner').some(e => e.from !== x && e.to !== x)) ? 2 : 0;
-      const cleanF = hasCleanFriend(g, x) ? -2 : 0;
-      const score = r.score + nearF + cleanF;
-      if (proof && nearF) r.parts.push('touches Foreigner circle (+2)');
-      if (proof && cleanF) r.parts.push('clean Friend (−2)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-21', domain: 2, title: 'Foreigner’s domestic asset',
-    order: 'Score each suspect: +3 if handled by a Foreigner OR 1 outgoing step from a Foreigner handler; +2 per Friend or Civilian link; +2 per Double agent link; −2 per Spy watch received; −2 per incoming Foe arrow. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const nearH = g.hasIn(x, 'foreigner') || g.in(x).some(e => g.hasOut(e.from, 'foreigner')) ? 3 : 0;
-      const r = sumWeights(g, x, {friend: 2, civilian: 2, double: 2, spy_in: -2, foe_in: -2}, proof);
-      const score = nearH + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (nearH ? ' (fed by Foreigner handler +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-22', domain: 2, title: 'Border-to-mole fusion',
-    order: 'Score each suspect: +3 per Foreigner arrow sent, +3 per Double agent arrow sent, +2 per Foreigner or Double agent arrow received, +1 per Spy link, −2 per Foe arrow received, −1 per Friend or Civilian link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foreigner_out: 3, double_out: 3, foreigner_in: 2, double_in: 2, spy: 1, foe_in: -2, friend: -1, civilian: -1}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-23', domain: 2, title: 'Two-hop foreign recruitment',
-    order: 'Score each suspect: +3 if reachable in 1 OR 2 outgoing arrows from someone in Foreigner, +2 per outgoing Double agent/Foe arrow, +1 per Spy link, −2 per incoming Friend backing, −2 per outgoing Civilian report. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      let fromF = false;
-      for (const e1 of g.in(x)) {
-        if (g.hasTouch(e1.from, 'foreigner')) { fromF = true; break; }
-        if (g.in(e1.from).some(e0 => e0.from !== x && g.hasTouch(e0.from, 'foreigner'))) { fromF = true; break; }
-      }
-      const r = sumWeights(g, x, {double_out: 2, foe_out: 2, spy: 1, friend_in: -2, civilian_out: -2}, proof);
-      const score = (fromF ? 3 : 0) + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (fromF ? ' (≤2 steps downstream of Foreigner +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-24', domain: 2, title: 'Infiltration depth score',
-    order: 'Score each suspect: +3 if handled by a Foreigner, +2 per link to someone in Friend or Civilian, +2 per Double agent link, +1 per Foe link, −2 per Spy watch received, −2 per Foreigner arrow sent. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foreigner_in: 3, double: 2, foe: 1, spy_in: -2, foreigner_out: -2}, proof);
-      const domLinks = g.neighbors(x).filter(m => g.hasTouch(m, ['friend', 'civilian'])).length * 2;
-      const score = r.score + domLinks;
-      if (proof && domLinks) r.parts.push('domestic contacts (+' + domLinks + ')');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-25', domain: 2, title: 'Foreigner shielded by witness',
-    order: 'Score each suspect: +3 if they send an arrow to someone in Foreigner, +2 per incoming Civilian or Friend arrow, +2 per Double agent link, −2 per incoming Foe arrow, −2 per incoming Spy watch. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const toF = g.out(x).some(e => g.hasTouch(e.to, 'foreigner')) ? 3 : 0;
-      const r = sumWeights(g, x, {civilian_in: 2, friend_in: 2, double: 2, foe_in: -2, spy_in: -2}, proof);
-      const score = toF + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (toF ? ' (points into Foreigner circle +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-26', domain: 2, title: 'Border counter-ops balance',
-    order: 'Score each suspect: +3 per outgoing Foreigner arrow, +2 per incoming Foreigner or Double agent arrow, +2 per incoming Civilian report, +1 per outgoing Friend arrow, −2 per incoming Spy watch, −2 per outgoing Foe arrow. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foreigner_out: 3, foreigner_in: 2, double_in: 2, civilian_in: 2, friend_out: 1, spy_in: -2, foe_out: -2}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-27', domain: 2, title: 'Border cut-out under cover',
-    order: 'Score each suspect: +3 if they receive an arrow from Foreigner/Double agent AND send an arrow in another row, +2 per outgoing Friend/Spy/Civilian arrow, +1 per Foreigner link, −2 per incoming Foe arrow, −2 per incoming Spy watch. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const relay = g.in(x, ['foreigner', 'double']).some(e1 => g.out(x).some(e2 => e2.role !== e1.role && e2.to !== e1.from)) ? 3 : 0;
-      const r = sumWeights(g, x, {friend_out: 2, spy_out: 2, civilian_out: 2, foreigner: 1, foe_in: -2, spy_in: -2}, proof);
-      const score = relay + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (relay ? ' (border cut-out relay +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-28', domain: 2, title: 'Cross-border exposure matrix',
-    order: 'Score each suspect: +2 per link in Foreigner, Foe, or Spy; +3 per Double agent link; −2 if backed by a Friend; −2 if reporting as a Civilian (left of Civilian). Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foreigner: 2, foe: 2, spy: 2, double: 3, friend_in: -2, civilian_out: -2}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-29', domain: 2, title: 'Foreigner’s silent target',
-    order: 'Score each suspect: +2 per outgoing arrow, +3 if they receive an arrow from a Foreigner or Double agent, +2 per incoming Foe arrow, −2 per incoming Spy watch, −2 per incoming Friend backing, −1 per Civilian link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foreigner_in: 3, double_in: 3, foe_in: 2, spy_in: -2, friend_in: -2, civilian: -1}, proof);
-      const score = g.out(x).length * 2 + r.score;
-      return {score, reason: proof ? x + ': ' + g.out(x).length + ' out (+' + (g.out(x).length * 2) + ') + role mods ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 3: Civilian Exposure & Witness Protection (10 families)
-  // =========================================================================
-  makeHardRank({
-    id: 'ha-30', domain: 3, title: 'Civilian jeopardy index',
-    order: 'Score each suspect: +3 per Civilian link, +2 per link to someone in Foe/Double agent/Foreigner, +1 per Spy link, −2 if backed by a Friend, −2 if watched by a clean Spy. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {civilian: 3, spy: 1, friend_in: -2}, proof);
-      const hotN = g.neighbors(x).filter(m => g.hasTouch(m, ['foe', 'double', 'foreigner'])).length * 2;
-      const cleanS = hasCleanSpy(g, x) ? -2 : 0;
-      const score = r.score + hotN + cleanS;
-      if (proof && hotN) r.parts.push('hostile contacts (+' + hotN + ')');
-      if (proof && cleanS) r.parts.push('clean Spy (−2)');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-31', domain: 3, title: 'Burned informant’s handler',
-    order: 'Score each suspect: +3 if they receive a Civilian report from someone who also touches Foe/Double agent/Foreigner, +2 per outgoing Foreigner or Double agent arrow, +1 per outgoing Foe arrow, −2 per incoming Friend backing, −2 per incoming Spy watch. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const burned = g.in(x, 'civilian').some(c => g.hasTouch(c.from, ['foe', 'double', 'foreigner'])) ? 3 : 0;
-      const r = sumWeights(g, x, {foreigner_out: 2, double_out: 2, foe_out: 1, friend_in: -2, spy_in: -2}, proof);
-      const score = burned + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (burned ? ' (burned Civilian source +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-32', domain: 3, title: 'Witness-shield exploitation',
-    order: 'Score each suspect: +3 per Civilian arrow received, +2 per Double agent arrow sent, +2 per Foreigner arrow sent, +1 per Foe link, −2 per Friend link, −1 per Spy arrow received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {civilian_in: 3, double_out: 2, foreigner_out: 2, foe: 1, friend: -2, spy_in: -1}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-33', domain: 3, title: 'Unprotected witness chain',
-    order: 'Follow two outgoing arrows (no return) starting from someone in Civilian — where the end target is NOT backed by a Friend and NOT watched by a Spy. Shoot the two at the end.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.hasIn(x, 'friend') || g.hasIn(x, 'spy')) return null;
-        for (const e2 of g.in(x)) {
-          for (const e1 of g.in(e2.from)) {
-            if (e1.from !== x && g.hasTouch(e1.from, 'civilian')) {
-              return proof ? x + ': Civilian-linked ' + e1.from + ' → ' + g.fmt(e1) + ' → ' + g.fmt(e2) + '.' : 'ok';
-            }
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  makeHardRank({
-    id: 'ha-34', domain: 3, title: 'Bystander fallout ledger',
-    order: 'Score each suspect: +2 per link to someone in Civilian, +3 per Foe or Double agent arrow sent, +2 per Foreigner link, −2 per Friend backing received, −2 per Spy watch received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foe_out: 3, double_out: 3, foreigner: 2, friend_in: -2, spy_in: -2}, proof);
-      const civN = g.neighbors(x).filter(m => g.hasTouch(m, 'civilian')).length * 2;
-      const score = r.score + civN;
-      if (proof && civN) r.parts.push('Civilian neighbors (+' + civN + ')');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-35', domain: 3, title: 'Exposed informant relay',
-    order: 'Score each suspect: +3 per outgoing Civilian or Friend arrow into someone who sends a Foe, Double agent, or Foreigner arrow; +2 per incoming Double agent or Foreigner arrow; +1 per outgoing Foe arrow; −2 per Spy watch received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const feedHot = g.out(x, ['civilian', 'friend']).filter(e => g.hasOut(e.to, ['foe', 'double', 'foreigner'])).length * 3;
-      const r = sumWeights(g, x, {double_in: 2, foreigner_in: 2, foe_out: 1, spy_in: -2}, proof);
-      const score = feedHot + r.score;
-      if (proof && feedHot) r.parts.push('feeds active hostile (+' + feedHot + ')');
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-36', domain: 3, title: 'Civilian-to-covert bridge score',
-    order: 'Score each suspect: +3 if they touch BOTH Civilian and any of (Foe, Double agent, Foreigner), +2 per distinct category touched, −2 if watched by a Spy, −2 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const bridge = g.hasTouch(x, 'civilian') && g.hasTouch(x, ['foe', 'double', 'foreigner']) ? 3 : 0;
-      const cats = g.distinctRoles(x).size * 2;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 2 : 0);
-      const score = bridge + cats - pen;
-      return {score, reason: proof ? x + ': ' + cats + ' role-spread +' + bridge + ' bridge −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-37', domain: 3, title: 'Threat around a witness',
-    order: 'Score each suspect: +3 per outgoing arrow hitting someone in Civilian, +2 per outgoing Foe/Double agent/Foreigner arrow, +1 per Friend arrow sent, −2 per incoming Spy watch, −2 per incoming Friend backing. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const hitCiv = g.out(x).filter(e => g.hasTouch(e.to, 'civilian')).length * 3;
-      const r = sumWeights(g, x, {foe_out: 2, double_out: 2, foreigner_out: 2, friend_out: 1, spy_in: -2, friend_in: -2}, proof);
-      const score = hitCiv + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (hitCiv ? ' (targets Civilian circle +' + hitCiv + ')' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-38', domain: 3, title: 'Witness corruption ledger',
-    order: 'Score each suspect: +3 per Civilian arrow sent, +2 per Foreigner or Double agent link, +1 per Friend arrow sent, −2 per Foe link, −2 per Spy watch received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {civilian_out: 3, foreigner: 2, double: 2, friend_out: 1, foe: -2, spy_in: -2}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-39', domain: 3, title: 'Unwitnessed double-target',
-    order: 'Shoot the two suspects NOT in Civilian who receive arrows from TWO DIFFERENT categories — when at least one sender is NOT backed by a Friend.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.hasTouch(x, 'civilian')) return null;
-        const inc = g.in(x);
-        for (let i = 0; i < inc.length; i++) {
-          for (let j = i + 1; j < inc.length; j++) {
-            if (inc[i].role !== inc[j].role && (!g.hasIn(inc[i].from, 'friend') || !g.hasIn(inc[j].from, 'friend'))) {
-              return proof ? x + ': ' + g.fmt(inc[i]) + ' · ' + g.fmt(inc[j]) + ' (no Civilian).' : 'ok';
-            }
-          }
-        }
-        return null;
+        if (!g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
+        const c = g.in(x, ['civilian', 'friend']).find(e => !g.hasIn(e.from, 'spy'));
+        if (!c) return null;
+        return proof ? x + ' (covert) relies on unwatched source ' + g.fmt(c) + '.' : 'ok';
       }, proof);
     }
   }),
 
   // =========================================================================
-  // DOMAIN 4: Deep Proxies, Cut-Outs & Cascading Chains (10 families)
+  // DOMAIN 4: Proxy Chains (10)
   // =========================================================================
-  makeHardRank({
-    id: 'ha-40', domain: 4, title: 'Downstream command reach',
-    order: 'For each suspect, count distinct people reachable in 1 OR 2 outgoing arrows (excluding self), +2 if they appear in Double agent or Foreigner, −2 if watched by a Spy, −1 if backed by a Friend, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const reach = new Set();
-      for (const e1 of g.out(x)) {
-        reach.add(e1.to);
-        for (const e2 of g.out(e1.to)) if (e2.to !== x) reach.add(e2.to);
-      }
-      const bonus = g.hasTouch(x, ['double', 'foreigner']) ? 2 : 0;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 1 : 0) + (g.hasTouch(x, 'civilian') ? 1 : 0);
-      const score = reach.size + bonus - pen;
-      return {score, reason: proof ? x + ' reaches ' + reach.size + ' in ≤2 hops +' + bonus + ' −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-41', domain: 4, title: 'Upstream convergence target',
-    order: 'For each suspect, count distinct people who can reach them in 1 OR 2 outgoing arrows (excluding self), +2 if they appear in Foe or Foreigner, −2 if backed by a Friend, −1 if watched by a Spy, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const src = new Set();
-      for (const e1 of g.in(x)) {
-        src.add(e1.from);
-        for (const e2 of g.in(e1.from)) if (e2.from !== x) src.add(e2.from);
-      }
-      const bonus = g.hasTouch(x, ['foe', 'foreigner']) ? 2 : 0;
-      const pen = (g.hasIn(x, 'friend') ? 2 : 0) + (g.hasIn(x, 'spy') ? 1 : 0) + (g.hasTouch(x, 'civilian') ? 1 : 0);
-      const score = src.size + bonus - pen;
-      return {score, reason: proof ? x + ' reached by ' + src.size + ' in ≤2 hops +' + bonus + ' −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-42', domain: 4, title: 'Three-step covert cascade',
-    order: 'Follow THREE outgoing arrows across at least TWO different categories (no repeated suspect) starting from someone in Foe, Double agent, or Foreigner. Shoot the two at the end not backed by a Friend.',
+  hard({
+    id: 'ha-40', domain: 4, title: 'Unwatched two-step covert relay',
+    order: 'Shoot anyone who reaches a Foe, Double agent, or Foreigner action in two forward steps through an unwatched middleman (no Spy shadow) — unless backed by a clean Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        if (g.hasIn(x, 'friend')) return null;
-        for (const e3 of g.in(x)) {
-          for (const e2 of g.in(e3.from)) {
-            if (e2.from === x) continue;
-            for (const e1 of g.in(e2.from)) {
-              if (e1.from === x || e1.from === e3.from) continue;
-              if (g.hasTouch(e1.from, ['foe', 'double', 'foreigner']) && new Set([e1.role, e2.role, e3.role]).size >= 2) {
-                return proof ? x + ': ' + g.fmt(e1) + ' → ' + g.fmt(e2) + ' → ' + g.fmt(e3) + '.' : 'ok';
-              }
-            }
-          }
-        }
-        return null;
+        if (hasCleanFriend(g, x)) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], firstDir: 'out',
+          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
+          diffRole: true, midExc: {roles: ['spy'], dir: 'in'}
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + ' (unwatched proxy, no clean Friend).' : 'ok';
       }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-43', domain: 4, title: 'Chokepoint centrality',
-    order: 'For each suspect, count directed 2-step relays A → suspect → B (with A ≠ B and DIFFERENT categories), +2 if they appear in Double agent or Foreigner, −2 if watched by a Spy, −1 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      let relays = 0;
-      for (const e1 of g.in(x)) {
-        for (const e2 of g.out(x)) {
-          if (e1.from !== e2.to && e1.role !== e2.role) relays++;
-        }
-      }
-      const bonus = g.hasTouch(x, ['double', 'foreigner']) ? 2 : 0;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 1 : 0);
-      const score = relays + bonus - pen;
-      return {score, reason: proof ? x + ': ' + relays + ' cross-category relays +' + bonus + ' −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-44', domain: 4, title: 'Unwatched 3-step sender',
-    order: 'Follow THREE outgoing arrows across at least TWO different categories (no repeated suspect) where the middle two suspects are NOT watched by a Spy. Shoot the two starters.',
+  hard({
+    id: 'ha-41', domain: 4, title: 'Covert relay into overt cover',
+    order: 'Shoot anyone who acts in Foe, Double agent, or Foreigner toward an unbacked contact (no Friend voucher) who then acts in Friend, Spy, or Civilian (no return).',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        for (const e1 of g.out(x)) {
-          if (g.hasIn(e1.to, 'spy')) continue;
-          for (const e2 of g.out(e1.to)) {
-            if (e2.to === x || g.hasIn(e2.to, 'spy')) continue;
-            for (const e3 of g.out(e2.to)) {
-              if (e3.to === x || e3.to === e1.to) continue;
-              if (new Set([e1.role, e2.role, e3.role]).size >= 2) {
-                return proof ? x + ': ' + g.fmt(e1) + ' → ' + g.fmt(e2) + ' → ' + g.fmt(e3) + ' (unwatched cut-outs).' : 'ok';
-              }
-            }
-          }
-        }
-        return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out',
+          secondRoles: ['friend', 'spy', 'civilian'], secondDir: 'out',
+          midExc: {roles: ['friend'], dir: 'in'}
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
       }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-45', domain: 4, title: 'Undirected 2-step footprint',
-    order: 'For each suspect, count distinct people within 2 links (either arrow direction, excluding self), +2 per Double agent/Foreigner link, −2 if watched by a Spy, −2 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const d = distFrom(g, x);
-      let within2 = 0;
-      for (const [p, dist] of d) if (p !== x && dist <= 2) within2++;
-      const bonus = g.touch(x, ['double', 'foreigner']).length * 2;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 2 : 0);
-      const score = within2 + bonus - pen;
-      return {score, reason: proof ? x + ': ' + within2 + ' within 2 links +' + bonus + ' covert −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-46', domain: 4, title: 'Covert middleman without a shield',
-    order: 'Shoot the two middlemen receiving an arrow in ANY category and sending an arrow in a DIFFERENT category (no return) — who touch Foe, Double agent, or Foreigner AND have neither Friend backing nor Spy watch.',
+  hard({
+    id: 'ha-42', domain: 4, title: 'Overt relay into covert strike',
+    order: 'Shoot anyone who acts in Friend, Spy, or Civilian toward an unwatched contact (no Spy shadow) who then acts in Foe, Double agent, or Foreigner (no return).',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        if (g.hasIn(x, 'friend') || g.hasIn(x, 'spy') || !g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
-        for (const e1 of g.in(x)) {
-          for (const e2 of g.out(x)) {
-            if (e2.to !== e1.from && e2.role !== e1.role) return proof ? x + ': ' + g.fmt(e1) + ' → ' + g.fmt(e2) + ' (unshielded).' : 'ok';
-          }
-        }
-        return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['friend', 'spy', 'civilian'], firstDir: 'out',
+          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
+          midExc: {roles: ['spy'], dir: 'in'}
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
       }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-47', domain: 4, title: 'Proxy reach with role weighting',
-    order: 'For each suspect, add +2 for each outgoing arrow, +2 for each person 2 outgoing steps away (distinct from 1-step), +1 per Foreigner/Double agent touch, −2 per Friend backing received, −2 per Civilian link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const s1 = new Set(g.out(x).map(e => e.to));
-      const s2 = new Set();
-      for (const m of s1) for (const e2 of g.out(m)) if (e2.to !== x && !s1.has(e2.to)) s2.add(e2.to);
-      const r = sumWeights(g, x, {foreigner: 1, double: 1, friend_in: -2, civilian: -2}, proof);
-      const score = g.out(x).length * 2 + s2.size * 2 + r.score;
-      return {score, reason: proof ? x + ': ' + g.out(x).length + ' out, ' + s2.size + ' at 2-hop, mod ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-48', domain: 4, title: 'Two-hop strike from Friend or Civilian',
-    order: 'Score each suspect: +3 if reachable in 1 OR 2 outgoing arrows from someone in Friend or Civilian, +2 per outgoing Double agent/Foreigner/Foe arrow, −2 per incoming Spy watch, −2 per incoming Friend backing. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      let fromCov = false;
-      for (const e1 of g.in(x)) {
-        if (g.hasTouch(e1.from, ['friend', 'civilian'])) { fromCov = true; break; }
-        if (g.in(e1.from).some(e0 => e0.from !== x && g.hasTouch(e0.from, ['friend', 'civilian']))) { fromCov = true; break; }
-      }
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, foe_out: 2, spy_in: -2, friend_in: -2}, proof);
-      const score = (fromCov ? 3 : 0) + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (fromCov ? ' (≤2 hops from cover +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-49', domain: 4, title: 'Two-hop covert spillover',
-    order: 'For each suspect, count how many people in Foe, Double agent, or Foreigner they can reach in 1 OR 2 outgoing arrows (excluding self), then subtract 1 if watched by a Spy and subtract 1 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const reach = new Set();
-      for (const e1 of g.out(x)) {
-        if (g.hasTouch(e1.to, ['foe', 'double', 'foreigner'])) reach.add(e1.to);
-        for (const e2 of g.out(e1.to)) {
-          if (e2.to !== x && g.hasTouch(e2.to, ['foe', 'double', 'foreigner'])) reach.add(e2.to);
-        }
-      }
-      const pen = (g.hasIn(x, 'spy') ? 1 : 0) + (g.hasIn(x, 'friend') ? 1 : 0);
-      const score = reach.size - pen;
-      return {score, reason: proof ? x + ' reaches ' + reach.size + ' hostile/covert targets in ≤2 hops −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 5: Alibi Contradictions & Conflicting Evidence (10 families)
-  // =========================================================================
-  makeHardRank({
-    id: 'ha-50', domain: 5, title: 'Contradiction friction score',
-    order: 'Score each suspect: +3 if they BOTH send and receive arrows in DIFFERENT categories, +2 for each direct contact who links to BOTH Friend/Civilian AND Foe/Double agent/Foreigner, −2 if watched by a Spy, −1 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const both = g.out(x).some(o => g.in(x).some(i => i.role !== o.role)) ? 3 : 0;
-      const splitN = g.neighbors(x).filter(m => g.hasTouch(m, ['friend', 'civilian']) && g.hasTouch(m, ['foe', 'double', 'foreigner']));
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 1 : 0);
-      const score = both + splitN.length * 2 - pen;
-      return {score, reason: proof ? x + ': ' + both + ' dual-flow +' + (splitN.length * 2) + ' split-contacts −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-51', domain: 5, title: 'Shortcut contradiction (unwatched)',
-    order: 'Find a direct arrow A → B where A also reaches B in two steps across other categories, OR two suspects linked directly in TWO DIFFERENT categories. Shoot those two.',
+  hard({
+    id: 'ha-43', domain: 4, title: 'End of a covert-to-covert chain',
+    order: 'Shoot anyone acted upon in Foe, Double agent, or Foreigner by someone acted upon in a DIFFERENT covert category (no return) — unless backed by a clean Friend or shadowed by a clean Spy.',
     evaluate(g, _a, proof) {
-      const pairs = [];
-      for (const d of g.edges) {
-        for (const m of g.people) {
-          if (m === d.from || m === d.to) continue;
-          const e1 = g.direct(d.from, m).find(e => e.role !== d.role);
-          const e2 = e1 && g.direct(m, d.to).find(e => e.role !== d.role);
-          if (e1 && e2) pairs.push({a: d.from, b: d.to, reason: g.fmt(d) + ' contradicted by ' + g.fmt(e1) + ' → ' + g.fmt(e2) + '.'});
-        }
-      }
-      for (let i = 0; i < g.people.length; i++) {
-        for (let j = i + 1; j < g.people.length; j++) {
-          const a = g.people[i], b = g.people[j];
-          const links = g.between(a, b);
-          if (new Set(links.map(e => e.role)).size >= 2) {
-            pairs.push({a, b, reason: 'Dual link: ' + g.fmt(links[0]) + ' · ' + g.fmt(links.find(e => e.role !== links[0].role)) + '.'});
-          }
-        }
-      }
-      return collectPairs(pairs, proof);
-    }
-  }),
-  makeHardRank({
-    id: 'ha-52', domain: 5, title: 'Cross-category friction index',
-    order: 'Score each suspect: +2 per distinct category they appear in, +2 if they appear in BOTH (Friend or Civilian) and (Foe, Double agent, or Foreigner), +1 per outgoing arrow, −2 if watched by a Spy, −1 if backed by a clean Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const cats = g.distinctRoles(x).size * 2;
-      const clash = g.hasTouch(x, ['friend', 'civilian']) && g.hasTouch(x, ['foe', 'double', 'foreigner']) ? 2 : 0;
-      const out = g.out(x).length;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (hasCleanFriend(g, x) ? 1 : 0);
-      const score = cats + clash + out - pen;
-      return {score, reason: proof ? x + ': ' + cats + ' cats +' + clash + ' clash +' + out + ' out −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-53', domain: 5, title: 'Triangle contradiction',
-    order: 'Find three suspects forming a triangle (all three pairs linked in DIFFERENT categories). Shoot the two members of the triangle with the MOST total links across the file.',
-    evaluate(g, _a, proof) {
-      const nodes = new Set();
-      let desc = '';
-      for (let i = 0; i < g.people.length; i++) {
-        for (let j = i + 1; j < g.people.length; j++) {
-          const a = g.people[i], b = g.people[j];
-          const abs = g.between(a, b);
-          if (!abs.length) continue;
-          for (let k = j + 1; k < g.people.length; k++) {
-            const c = g.people[k];
-            const acs = g.between(a, c);
-            const bcs = g.between(b, c);
-            if (!acs.length || !bcs.length) continue;
-            let tri = null;
-            for (const ab of abs) {
-              for (const ac of acs) {
-                if (ac.role === ab.role) continue;
-                const bc = bcs.find(e => e.role !== ab.role && e.role !== ac.role);
-                if (bc) { tri = [ab, ac, bc]; break; }
-              }
-              if (tri) break;
-            }
-            if (tri) {
-              nodes.add(a); nodes.add(b); nodes.add(c);
-              if (!desc) desc = g.fmt(tri[0]) + ' · ' + g.fmt(tri[1]) + ' · ' + g.fmt(tri[2]);
-            }
-          }
-        }
-      }
-      if (!nodes.size) return {pair: [], proof: []};
-      return pickTopTwo([...nodes], x => ({
-        score: g.touch(x).length,
-        reason: proof ? x + ' in triangle (' + desc + ') with ' + g.touch(x).length + ' total links.' : ''
-      }), proof);
-    }
-  }),
-  makeHardRank({
-    id: 'ha-54', domain: 5, title: 'Conflicting incoming-outgoing ledger',
-    order: 'Score each suspect: +2 per incoming Foe/Double agent/Foreigner arrow, +2 per outgoing Friend/Spy/Civilian arrow, +1 per outgoing Foe/Double agent/Foreigner arrow, −2 per incoming Friend arrow, −1 per incoming Spy arrow. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {
-        foe_in: 2, double_in: 2, foreigner_in: 2,
-        friend_out: 2, spy_out: 2, civilian_out: 2,
-        foe_out: 1, double_out: 1, foreigner_out: 1,
-        friend_in: -2, spy_in: -1
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'in',
+          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'in',
+          diffRole: true
+        });
+        if (!hit) return null;
+        return proof ? x + ': end of covert chain ' + g.fmt(hit.e2) + ' → ' + g.fmt(hit.e1) + '.' : 'ok';
       }, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
     }
   }),
-  makeHardRank({
-    id: 'ha-55', domain: 5, title: 'Split-loyalty suspect',
-    order: 'Score each suspect: +3 if they send an arrow in (Friend, Spy, or Civilian) AND send an arrow in (Foe, Double agent, or Foreigner), +2 per outgoing Double agent/Foreigner arrow, +1 per incoming Foe arrow, −2 per incoming Friend backing, −2 per incoming Spy watch. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const split = g.hasOut(x, ['friend', 'spy', 'civilian']) && g.hasOut(x, ['foe', 'double', 'foreigner']) ? 3 : 0;
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, foe_in: 1, friend_in: -2, spy_in: -2}, proof);
-      const score = split + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (split ? ' (split outgoing loyalty +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-56', domain: 5, title: 'Broken alibi index',
-    order: 'For each suspect, add +2 per link they have, +2 if they link to BOTH someone in Friend and someone in Foe/Double agent/Foreigner (distinct contacts), −3 if watched by a Spy, −2 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const deg = g.touch(x).length * 2;
-      const n = g.neighbors(x);
-      let hasSplit = false;
-      for (const fr of n) {
-        if (!g.hasTouch(fr, 'friend')) continue;
-        if (n.some(hot => hot !== fr && g.hasTouch(hot, ['foe', 'double', 'foreigner']))) {
-          hasSplit = true;
-          break;
-        }
-      }
-      const split = hasSplit ? 2 : 0;
-      const pen = (g.hasIn(x, 'spy') ? 3 : 0) + (g.hasTouch(x, 'civilian') ? 2 : 0);
-      const score = deg + split - pen;
-      return {score, reason: proof ? x + ': ' + deg + ' links +' + split + ' split-contacts −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-57', domain: 5, title: 'Double-channel convergence',
-    order: 'Score each suspect: +2 per outgoing arrow into someone in Foe/Double agent/Foreigner, +2 per incoming arrow from Foe/Double agent/Foreigner, +1 per Civilian link, −2 per incoming Spy watch, −2 per incoming Friend backing. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const outHot = g.out(x).filter(e => g.hasTouch(e.to, ['foe', 'double', 'foreigner'])).length * 2;
-      const inHot = g.in(x).filter(e => g.hasTouch(e.from, ['foe', 'double', 'foreigner'])).length * 2;
-      const r = sumWeights(g, x, {civilian: 1, spy_in: -2, friend_in: -2}, proof);
-      const score = outHot + inHot + r.score;
-      return {score, reason: proof ? x + ': +' + outHot + ' out-hot +' + inHot + ' in-hot + ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-58', domain: 5, title: 'Mutual-suspicion weight',
-    order: 'Score each suspect: +2 per link to someone who appears in at least TWO categories, +2 per Double agent link, +1 per Foreigner link, −2 per Friend backing received, −2 per Spy watch received, −1 per Civilian link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const heavy = g.neighbors(x).filter(m => g.distinctRoles(m).size >= 2).length * 2;
-      const r = sumWeights(g, x, {double: 2, foreigner: 1, friend_in: -2, spy_in: -2, civilian: -1}, proof);
-      const score = heavy + r.score;
-      return {score, reason: proof ? x + ': ' + heavy + ' multi-role contacts + ' + r.score + ' role mods = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-59', domain: 5, title: 'Corroborated rival target',
-    order: 'For each suspect, add +2 for each outgoing arrow whose target ALSO receives an arrow from someone else, +2 per Double agent/Foreigner link, −2 per incoming Spy watch, −2 per incoming Friend backing, −1 per outgoing Civilian report. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const sharedTarget = g.out(x).filter(e => g.in(e.to).some(o => o.from !== x)).length * 2;
-      const r = sumWeights(g, x, {double: 2, foreigner: 2, spy_in: -2, friend_in: -2, civilian_out: -1}, proof);
-      const score = sharedTarget + r.score;
-      return {score, reason: proof ? x + ': +' + sharedTarget + ' converged-targets + ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 6: Perspective & Multi-Hop Scope around {name} (10 families)
-  // =========================================================================
-  makeHardRank({
-    id: 'ha-60', domain: 6, title: 'Hostile shadow past {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +3 if 2 links from {name} (not 1), +2 per Double agent or Foreigner link, +1 per Foe link, +1 per Spy link, −2 if directly linked to {name}, −2 if backed by a Friend, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const d = distFrom(g, anchor).get(x) ?? 99;
-      const pos = d === 2 ? 3 : d === 1 ? -2 : 0;
-      const r = sumWeights(g, x, {double: 2, foreigner: 2, foe: 1, spy: 1, friend_in: -2, civilian: -1}, proof);
-      const score = pos + r.score;
-      return {score, reason: proof ? x + ' (dist ' + d + ' from ' + anchor + ') scores ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-61', domain: 6, title: 'Rival vantage to {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +2 for each common contact shared with {name}, +2 per distinct category shared with {name}, +2 if in Double agent or Foreigner, −2 if watched by a Spy, −2 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const aN = new Set(g.neighbors(anchor));
-      const aR = g.distinctRoles(anchor);
-      const sharedN = g.neighbors(x).filter(m => aN.has(m)).length * 2;
-      const sharedR = [...g.distinctRoles(x)].filter(r => aR.has(r)).length * 2;
-      const cov = g.hasTouch(x, ['double', 'foreigner']) ? 2 : 0;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 2 : 0);
-      const score = sharedN + sharedR + cov - pen;
-      return {score, reason: proof ? x + ': ' + sharedN + ' shared-contacts +' + sharedR + ' shared-roles +' + cov + ' −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-62', domain: 6, title: 'Blind spot beyond {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +3 if ≥3 links away (or unreachable) from {name}, +2 per outgoing Double agent/Foreigner/Foe arrow, +1 per incoming Civilian report, −2 per incoming Spy watch, −2 per incoming Friend backing. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const d = distFrom(g, anchor).get(x) ?? 99;
-      const far = d >= 3 ? 3 : 0;
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, foe_out: 2, civilian_in: 1, spy_in: -2, friend_in: -2}, proof);
-      const score = far + r.score;
-      return {score, reason: proof ? x + ' (dist ' + (d === 99 ? '∞' : d) + ' from ' + anchor + ') scores ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-63', domain: 6, title: 'Asymmetric distance from {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +3 if directly linked to {name} via Foe/Double agent/Foreigner, +2 if 2 links from {name}, +1 per distinct category touched, −2 if directly linked to {name} via Friend/Spy/Civilian, −1 if watched by a Spy. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const d = distFrom(g, anchor).get(x) ?? 99;
-      let score = g.distinctRoles(x).size;
-      if (d === 1) {
-        if (g.between(anchor, x, ['foe', 'double', 'foreigner']).length) score += 3;
-        if (g.between(anchor, x, ['friend', 'spy', 'civilian']).length) score -= 2;
-      } else if (d === 2) {
-        score += 2;
-      }
-      if (g.hasIn(x, 'spy')) score -= 1;
-      return {score, reason: proof ? x + ' (dist ' + d + ' from ' + anchor + ') scores ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-64', domain: 6, title: 'Indirect lever against {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +3 if NOT directly linked to {name} yet pointing to one of {name}’s contacts, +2 per outgoing Double agent/Foreigner/Foe arrow, +1 per Spy arrow sent, −2 per incoming Friend backing, −1 per outgoing Civilian report. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const direct = new Set(g.neighbors(anchor));
-      const lever = !direct.has(x) && g.out(x).some(e => direct.has(e.to)) ? 3 : 0;
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, foe_out: 2, spy_out: 1, friend_in: -2, civilian_out: -1}, proof);
-      const score = lever + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (lever ? ' (indirect lever on ' + anchor + ' +3)' : '') + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-65', domain: 6, title: 'Covert perimeter around {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +2 per outgoing arrow, +2 if they can reach {name} in 1 OR 2 outgoing arrows, +2 per Double agent/Foreigner link, −2 per Friend backing received, −2 per Civilian link. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const canReach = g.direct(x, anchor).length > 0 || g.out(x).some(e => g.direct(e.to, anchor).length > 0);
-      const r = sumWeights(g, x, {double: 2, foreigner: 2, friend_in: -2, civilian: -2}, proof);
-      const score = g.out(x).length * 2 + (canReach ? 2 : 0) + r.score;
-      return {score, reason: proof ? x + ': ' + g.out(x).length + ' out' + (canReach ? ', reaches ' + anchor : '') + ', score ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-66', domain: 6, title: 'Downstream shadow from {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +3 if {name} can reach them in 1 OR 2 outgoing arrows, +2 per Foe/Double agent/Foreigner link, −2 if watched by a Spy, −1 if backed by a Friend, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const reached = g.direct(anchor, x).length > 0 || g.out(anchor).some(e => g.direct(e.to, x).length > 0);
-      const r = sumWeights(g, x, {foe: 2, double: 2, foreigner: 2, spy_in: -2, friend_in: -1, civilian: -1}, proof);
-      const score = (reached ? 3 : 0) + r.score;
-      return {score, reason: proof ? x + (reached ? ' (downstream of ' + anchor + ')' : '') + ' scores ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-67', domain: 6, title: 'Unlinked mirror of {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +2 for each outgoing category they have that {name} does NOT have, +2 if NOT directly linked to {name}, +2 per Double agent/Foreigner arrow sent, −2 per incoming Spy watch, −2 per incoming Friend backing. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const aOut = g.distinctRoles(anchor, 'out');
-      const freshOut = [...g.distinctRoles(x, 'out')].filter(r => !aOut.has(r)).length * 2;
-      const unlinked = g.between(anchor, x).length === 0 ? 2 : 0;
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, spy_in: -2, friend_in: -2}, proof);
-      const score = freshOut + unlinked + r.score;
-      return {score, reason: proof ? x + ': +' + freshOut + ' fresh-out +' + unlinked + ' unlinked + ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-68', domain: 6, title: 'Counter-circle around {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +3 if ≥3 links away (or unreachable) from {name}, +2 per distinct category touched, +1 per Double agent or Foreigner link, −2 if watched by a Spy, −2 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const d = distFrom(g, anchor).get(x) ?? 99;
-      const far = d >= 3 ? 3 : 0;
-      const cats = g.distinctRoles(x).size * 2;
-      const cov = g.touch(x, ['double', 'foreigner']).length;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 2 : 0);
-      const score = far + cats + cov - pen;
-      return {score, reason: proof ? x + ' (dist ' + (d === 99 ? '∞' : d) + ' from ' + anchor + ') scores ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-69', domain: 6, title: 'Mutual contact pressure with {name}', useAnchor: true,
-    order: 'Excluding {name}, score each suspect: +2 per outgoing arrow, +2 if they point to one of {name}’s contacts, +2 per outgoing Foe or Double agent arrow, +1 per Foreigner link, −2 per incoming Friend backing, −2 per incoming Spy watch, −1 per outgoing Civilian report. Shoot the top two.',
-    scoreFn(g, x, anchor, proof) {
-      if (x === anchor) return null;
-      const aN = new Set(g.neighbors(anchor));
-      const ptsCircle = g.out(x).some(e => aN.has(e.to)) ? 2 : 0;
-      const r = sumWeights(g, x, {foe_out: 2, double_out: 2, foreigner: 1, friend_in: -2, spy_in: -2, civilian_out: -1}, proof);
-      const score = g.out(x).length * 2 + ptsCircle + r.score;
-      return {score, reason: proof ? x + ' scores ' + score + (ptsCircle ? ' (points into ' + anchor + '’s circle)' : '') + '.' : ''};
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 7: Corroboration, Independence & Tainted Channels (10 families)
-  // =========================================================================
-  makeHardRank({
-    id: 'ha-70', domain: 7, title: 'Independent channel dominance',
-    order: 'Score each suspect: +3 per distinct category they appear in, +2 if they have links to ≥3 different suspects, −2 if watched by a Spy, −2 if backed by a Friend, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const cats = g.distinctRoles(x).size * 3;
-      const spread = g.neighbors(x).length >= 3 ? 2 : 0;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 2 : 0) + (g.hasTouch(x, 'civilian') ? 1 : 0);
-      const score = cats + spread - pen;
-      return {score, reason: proof ? x + ': ' + g.distinctRoles(x).size + ' categories, ' + g.neighbors(x).length + ' contacts, score ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-71', domain: 7, title: 'Tainted-corroboration score',
-    order: 'For each suspect, add +2 for each incoming arrow from a DIFFERENT category, +2 for each sender who touches Foe/Double agent/Foreigner, −2 if backed by a Friend, −2 if watched by a Spy. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const inc = g.in(x);
-      const cats = new Set(inc.map(e => e.role)).size * 2;
-      const hotS = new Set(inc.filter(e => g.hasTouch(e.from, ['foe', 'double', 'foreigner'])).map(e => e.from)).size * 2;
-      const pen = (g.hasIn(x, 'friend') ? 2 : 0) + (g.hasIn(x, 'spy') ? 2 : 0);
-      const score = cats + hotS - pen;
-      return {score, reason: proof ? x + ': ' + cats + ' in-cats +' + hotS + ' covert-senders −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-72', domain: 7, title: 'Multi-channel suspect without clean cover',
-    order: 'Score each suspect: +2 per distinct outgoing category, +2 per distinct incoming category, +2 per Double agent/Foreigner link, −3 per clean Friend backer (not in Double agent/Foreigner), −3 per clean Spy watcher (not in Foe/Double agent/Foreigner). Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const spread = (g.distinctRoles(x, 'out').size + g.distinctRoles(x, 'in').size) * 2;
-      const cov = g.touch(x, ['double', 'foreigner']).length * 2;
-      const pen = (hasCleanFriend(g, x) ? 3 : 0) + (hasCleanSpy(g, x) ? 3 : 0);
-      const score = spread + cov - pen;
-      return {score, reason: proof ? x + ': ' + spread + ' dir-roles +' + cov + ' covert −' + pen + ' clean-guards = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-73', domain: 7, title: 'Corroborated sender pressure',
-    order: 'For each suspect, add +2 for each outgoing arrow in a DIFFERENT category, +2 for each target they hit who appears in ≥2 categories, −2 if watched by a Spy, −1 if backed by a Friend, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const out = g.out(x);
-      const cats = new Set(out.map(e => e.role)).size * 2;
-      const heavyT = new Set(out.filter(e => g.distinctRoles(e.to).size >= 2).map(e => e.to)).size * 2;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 1 : 0) + (g.hasTouch(x, 'civilian') ? 1 : 0);
-      const score = cats + heavyT - pen;
-      return {score, reason: proof ? x + ': ' + cats + ' out-cats +' + heavyT + ' hub-targets −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-74', domain: 7, title: 'Unbacked neighborhood reach',
-    order: 'For each suspect, count distinct contacts who are NOT backed by a Friend, add +2 if the suspect appears in Double agent or Foreigner, +1 if in Foe, −2 if watched by a Spy, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const unb = g.neighbors(x).filter(m => !g.hasIn(m, 'friend')).length;
-      const bonus = (g.hasTouch(x, ['double', 'foreigner']) ? 2 : 0) + (g.hasTouch(x, 'foe') ? 1 : 0);
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasTouch(x, 'civilian') ? 1 : 0);
-      const score = unb + bonus - pen;
-      return {score, reason: proof ? x + ': ' + unb + ' unbacked contacts +' + bonus + ' −' + pen + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-75', domain: 7, title: 'Category rarity score',
-    order: 'Score each suspect: +3 per link in Double agent or Foreigner, +2 per link in Spy or Civilian, +1 per link in Foe, −2 per Friend backing received, +1 for each distinct neighbor beyond 2. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {double: 3, foreigner: 3, spy: 2, civilian: 2, foe: 1, friend_in: -2}, proof);
-      const extra = Math.max(0, g.neighbors(x).length - 2);
-      const score = r.score + extra;
-      return {score, reason: proof ? x + ' scores ' + score + ' (role ' + r.score + ' + ' + extra + ' excess neighbors).' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-76', domain: 7, title: 'Independent covert corroboration',
-    order: 'Shoot the two suspects linked (either way) to at least THREE distinct people across at least THREE different categories — excluding anyone with a clean Spy watcher.',
+  hard({
+    id: 'ha-44', domain: 4, title: 'Unwatched covert conduit',
+    order: 'Shoot anyone receiving contact in Foe, Double agent, or Foreigner AND passing on a contact in Friend, Spy, or Civilian (no return) — unless shadowed by a clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
+        for (const e1 of g.in(x, ['foe', 'double', 'foreigner'])) {
+          for (const e2 of g.out(x, ['friend', 'spy', 'civilian'])) {
+            if (e2.to !== e1.from) return proof ? x + ' conduits ' + g.fmt(e1) + ' → ' + g.fmt(e2) + '.' : 'ok';
+          }
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-45', domain: 4, title: 'Overt conduit feeding covert action',
+    order: 'Shoot anyone receiving contact in Friend, Spy, or Civilian AND passing on a contact in Foe, Double agent, or Foreigner (no return) — unless backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanFriend(g, x)) return null;
+        for (const e1 of g.in(x, ['friend', 'spy', 'civilian'])) {
+          for (const e2 of g.out(x, ['foe', 'double', 'foreigner'])) {
+            if (e2.to !== e1.from) return proof ? x + ' conduits ' + g.fmt(e1) + ' → ' + g.fmt(e2) + '.' : 'ok';
+          }
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-46', domain: 4, title: 'Two-step covert reach from overt cover',
+    order: 'Shoot anyone in Friend or Civilian who reaches someone in Double agent or Foreigner in 1 or 2 forward steps — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x) || !g.hasTouch(x, ['friend', 'civilian'])) return null;
+        for (const e1 of g.out(x)) {
+          if (g.hasTouch(e1.to, ['double', 'foreigner'])) return proof ? x + ' (overt) reaches covert ' + e1.to + ' directly.' : 'ok';
+          for (const e2 of g.out(e1.to)) {
+            if (e2.to !== x && g.hasTouch(e2.to, ['double', 'foreigner'])) {
+              return proof ? x + ' (overt) reaches covert ' + e2.to + ' via ' + e1.to + '.' : 'ok';
+            }
+          }
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-47', domain: 4, title: 'Relay through a tainted Friend',
+    order: 'Shoot anyone acted upon in any category by someone whose Friend voucher appears in Double agent or Foreigner — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        for (const e1 of g.in(x)) {
+          const tf = hasTaintedFriend(g, e1.from);
+          if (tf) return proof ? x + ' reached by ' + e1.from + ' (' + g.fmt(e1) + '), whose voucher is tainted.' : 'ok';
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-48', domain: 4, title: 'Relay through a tainted Spy’s target',
+    order: 'Shoot anyone who acts in any category toward someone shadowed by a tainted Spy (in Foe, Double agent, or Foreigner) — unless backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanFriend(g, x)) return null;
+        for (const e1 of g.out(x)) {
+          const ts = hasTaintedSpy(g, e1.to);
+          if (ts) return proof ? x + ': ' + g.fmt(e1) + ' into suspect watched by tainted Spy ' + ts.from + '.' : 'ok';
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-49', domain: 4, title: 'Three-category chain receiver',
+    order: 'Shoot anyone acted upon in Friend, Spy, or Civilian by an unwatched contact (no Spy shadow) who received a Foe, Double agent, or Foreigner contact (no return).',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        const hit = matchRelay(g, x, {
+          firstRoles: ['friend', 'spy', 'civilian'], firstDir: 'in',
+          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'in',
+          midExc: {roles: ['spy'], dir: 'in'}
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e2) + ' → ' + g.fmt(hit.e1) + ' (unwatched proxy).' : 'ok';
+      }, proof);
+    }
+  }),
+
+  // =========================================================================
+  // DOMAIN 5: Alibi & Contradiction (10)
+  // =========================================================================
+  hard({
+    id: 'ha-50', domain: 5, title: 'Broken cover triangle',
+    order: 'Shoot anyone linked (either way) to a Friend-backed suspect AND to a Double agent or Foreigner suspect (two different people) — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
         const n = g.neighbors(x);
-        const r = g.distinctRoles(x);
-        if (n.length >= 3 && r.size >= 3) return proof ? x + ' spans ' + r.size + ' categories across ' + n.length + ' contacts (no clean Spy).' : 'ok';
-        return null;
-      }, proof);
-    }
-  }),
-  makeHardRank({
-    id: 'ha-77', domain: 7, title: 'Cross-division corroboration',
-    order: 'Score each suspect: +2 for each pair they send an arrow in (Friend/Foe, Spy/Double agent, Civilian/Foreigner), +2 per outgoing Double agent/Foreigner arrow, +1 per incoming Foe arrow, −2 per incoming Spy watch, −2 per incoming Friend backing. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const divs = (g.hasOut(x, ['friend', 'foe']) ? 1 : 0) + (g.hasOut(x, ['spy', 'double']) ? 1 : 0) + (g.hasOut(x, ['civilian', 'foreigner']) ? 1 : 0);
-      const r = sumWeights(g, x, {double_out: 2, foreigner_out: 2, foe_in: 1, spy_in: -2, friend_in: -2}, proof);
-      const score = divs * 2 + r.score;
-      return {score, reason: proof ? x + ': ' + divs + ' active pairs (+' + (divs * 2) + ') + ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-78', domain: 7, title: 'Unwitnessed network density',
-    order: 'For each suspect, sum the number of links held by ALL of their direct contacts, then subtract 3 if the suspect is watched by a Spy, subtract 3 if backed by a Friend, and subtract 2 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      let nSum = 0;
-      for (const m of g.neighbors(x)) nSum += g.touch(m).length;
-      const pen = (g.hasIn(x, 'spy') ? 3 : 0) + (g.hasIn(x, 'friend') ? 3 : 0) + (g.hasTouch(x, 'civilian') ? 2 : 0);
-      const score = nSum - pen;
-      return {score, reason: proof ? x + ': neighbor-link sum ' + nSum + ' −' + pen + ' guard = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-79', domain: 7, title: 'Multi-source exposure index',
-    order: 'Score each suspect: +2 per link across all six rows, +2 if appearing in both incoming and outgoing roles, −3 if backed by a Friend, −2 if watched by a Spy, +1 per Foreigner or Double agent link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const links = g.touch(x).length * 2;
-      const both = g.in(x).length > 0 && g.out(x).length > 0 ? 2 : 0;
-      const r = sumWeights(g, x, {foreigner: 1, double: 1, friend_in: -3, spy_in: -2}, proof);
-      const score = links + both + r.score;
-      return {score, reason: proof ? x + ': ' + links + ' links +' + both + ' dual-dir + ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 8: Double Lives, Role Asymmetry & Undercover Anomalies (10 families)
-  // =========================================================================
-  makeHardRank({
-    id: 'ha-80', domain: 8, title: 'Asymmetric operational aggression',
-    order: 'For each suspect, compute (outgoing arrows × 2) minus (incoming arrows), then add +2 per Double agent/Foreigner link, +1 per Foe link, −2 per Friend backing received, −2 per Spy watch received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const asym = g.out(x).length * 2 - g.in(x).length;
-      const r = sumWeights(g, x, {double: 2, foreigner: 2, foe: 1, friend_in: -2, spy_in: -2}, proof);
-      const score = asym + r.score;
-      return {score, reason: proof ? x + ': ' + g.out(x).length + '×2 − ' + g.in(x).length + ' + ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-81', domain: 8, title: 'Asymmetric target exposure',
-    order: 'For each suspect, compute (incoming arrows × 2) minus (outgoing arrows), then add +2 per Foe/Double agent/Foreigner link, −3 if backed by a Friend, −2 if watched by a Spy, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const asym = g.in(x).length * 2 - g.out(x).length;
-      const r = sumWeights(g, x, {foe: 2, double: 2, foreigner: 2, friend_in: -3, spy_in: -2, civilian: -1}, proof);
-      const score = asym + r.score;
-      return {score, reason: proof ? x + ': ' + g.in(x).length + '×2 − ' + g.out(x).length + ' + ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-82', domain: 8, title: 'Three-pair double life (unwatched)',
-    order: 'Score each suspect: +2 for each pair they touch (Friend/Foe, Spy/Double agent, Civilian/Foreigner), +2 per outgoing arrow, −2 per incoming Friend backing, −2 per incoming Spy watch, −1 per outgoing Civilian report. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const pairs = (g.hasTouch(x, ['friend', 'foe']) ? 1 : 0) + (g.hasTouch(x, ['spy', 'double']) ? 1 : 0) + (g.hasTouch(x, ['civilian', 'foreigner']) ? 1 : 0);
-      const out = g.out(x).length * 2;
-      const r = sumWeights(g, x, {friend_in: -2, spy_in: -2, civilian_out: -1}, proof);
-      const score = pairs * 2 + out + r.score;
-      return {score, reason: proof ? x + ': ' + pairs + ' pairs (+' + (pairs * 2) + ') +' + out + ' out + ' + r.score + ' = ' + score + '.' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-83', domain: 8, title: 'Active-vs-passive role inversion',
-    order: 'Score each suspect: +3 per outgoing Double agent, Foreigner, or Foe arrow; +2 per incoming Civilian or Friend arrow; −2 per incoming Spy arrow; −2 per outgoing Friend or Civilian arrow. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {
-        double_out: 3, foreigner_out: 3, foe_out: 3,
-        civilian_in: 2, friend_in: 2,
-        spy_in: -2, friend_out: -2, civilian_out: -2
-      }, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-84', domain: 8, title: 'Undercover role-switch score',
-    order: 'Score each suspect: +3 per outgoing Spy or Friend arrow, +2 per incoming Double agent or Foreigner arrow, +1 per Foe link, −2 per incoming Friend arrow, −1 per Civilian link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {
-        spy_out: 3, friend_out: 3,
-        double_in: 2, foreigner_in: 2,
-        foe: 1, friend_in: -2, civilian: -1
-      }, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHard({
-    id: 'ha-85', domain: 8, title: 'Silent receiver across roles',
-    order: 'Shoot the two suspects who RECEIVE more arrows than they SEND, appear in at least TWO categories, AND have NO Friend backing them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.hasIn(x, 'friend')) return null;
-        if (g.in(x).length > g.out(x).length && g.distinctRoles(x).size >= 2) {
-          return proof ? x + ' receives ' + g.in(x).length + ' vs sends ' + g.out(x).length + ' across ' + g.distinctRoles(x).size + ' roles (no Friend).' : 'ok';
+        for (const a of n) {
+          if (!g.hasIn(a, 'friend')) continue;
+          for (const b of n) {
+            if (b !== a && g.hasTouch(b, ['double', 'foreigner'])) {
+              return proof ? x + ' links Friend-backed ' + a + ' and covert ' + b + ' without clean cover.' : 'ok';
+            }
+          }
         }
         return null;
       }, proof);
     }
   }),
-  makeHard({
-    id: 'ha-86', domain: 8, title: 'Dominant actor across roles',
-    order: 'Shoot the two suspects who SEND more arrows than they RECEIVE, appear in at least TWO categories, AND are NOT watched by a Spy.',
+  hard({
+    id: 'ha-51', domain: 5, title: 'Overt and covert collision',
+    order: 'Shoot anyone who acts in Friend, Spy, or Civilian toward someone ALSO linked to them in Foe, Double agent, or Foreigner — or who receives both overt and covert contact from two different actors without a clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        if (g.hasIn(x, 'spy')) return null;
-        if (g.out(x).length > g.in(x).length && g.distinctRoles(x).size >= 2) {
-          return proof ? x + ' sends ' + g.out(x).length + ' vs receives ' + g.in(x).length + ' across ' + g.distinctRoles(x).size + ' roles (unwatched).' : 'ok';
+        for (const e1 of g.out(x, ['friend', 'spy', 'civilian'])) {
+          const e2 = g.between(x, e1.to, ['foe', 'double', 'foreigner'])[0];
+          if (e2) return proof ? x + ' collides with ' + e1.to + ': ' + g.fmt(e1) + ' vs ' + g.fmt(e2) + '.' : 'ok';
+        }
+        if (hasCleanSpy(g, x)) return null;
+        for (const a of g.in(x, ['friend', 'civilian'])) {
+          for (const b of g.in(x, ['foe', 'double', 'foreigner'])) {
+            if (a.from !== b.from) return proof ? x + ' caught between ' + g.fmt(a) + ' and ' + g.fmt(b) + '.' : 'ok';
+          }
         }
         return null;
       }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-87', domain: 8, title: 'Directional split tension',
-    order: 'Score each suspect: +2 per outgoing arrow in (Foe, Spy, Foreigner), +2 per incoming arrow in (Double agent, Civilian, Foreigner), −2 per outgoing Friend arrow, −2 per incoming Spy arrow, +1 if appearing on BOTH sides of arrows. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {
-        foe_out: 2, spy_out: 2, foreigner_out: 2,
-        double_in: 2, civilian_in: 2, foreigner_in: 2,
-        friend_out: -2, spy_in: -2
+  hard({
+    id: 'ha-52', domain: 5, title: 'Contradicted clearance',
+    order: 'Shoot anyone backed by a Friend AND targeted by a Foe, fed a Double agent’s leak, or met by a Foreigner — excluding anyone shadowed by a clean Spy or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
+        const f = g.in(x, 'friend')[0];
+        const c = g.in(x, ['foe', 'double', 'foreigner'])[0];
+        if (!f || !c) return null;
+        return proof ? x + ': ' + g.fmt(f) + ' contradicted by ' + g.fmt(c) + '.' : 'ok';
       }, proof);
-      const both = g.out(x).length > 0 && g.in(x).length > 0 ? 1 : 0;
-      const score = r.score + both;
-      return {score, reason: proof ? x + ' scores ' + score + ' (' + r.parts.join('; ') + (both ? '; dual-side +1' : '') + ').' : ''};
     }
   }),
-  makeHardRank({
-    id: 'ha-88', domain: 8, title: 'Cover-to-aggression ratio',
-    order: 'Score each suspect: +3 per Double agent link, +2 per Foe arrow sent, +2 per Foreigner arrow received, +1 per Spy arrow sent, −2 per Friend backing received, −2 per Civilian arrow sent. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {
-        double: 3, foe_out: 2, foreigner_in: 2, spy_out: 1, friend_in: -2, civilian_out: -2
+  hard({
+    id: 'ha-53', domain: 5, title: 'Covert actor with conflicting cover',
+    order: 'Shoot anyone who acts in Foe, Double agent, or Foreigner while ALSO receiving contact in Friend or Civilian — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const o = g.out(x, ['foe', 'double', 'foreigner'])[0];
+        const i = g.in(x, ['friend', 'civilian'])[0];
+        if (!o || !i) return null;
+        return proof ? x + ': ' + g.fmt(o) + ' while receiving ' + g.fmt(i) + '.' : 'ok';
       }, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
     }
   }),
-  makeHardRank({
-    id: 'ha-89', domain: 8, title: 'Six-role operational imbalance',
-    order: 'Score each suspect: +3 per Foreigner arrow sent, +2 per Double agent arrow received, +2 per Foe arrow sent, +1 per Civilian arrow received, −2 per Friend arrow received, −2 per Spy arrow received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {
-        foreigner_out: 3, double_in: 2, foe_out: 2, civilian_in: 1, friend_in: -2, spy_in: -2
+  hard({
+    id: 'ha-54', domain: 5, title: 'Two-sided covert exposure',
+    order: 'Shoot anyone acting in Foe, Double agent, or Foreigner AND receiving contact in a DIFFERENT covert category — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        for (const o of g.out(x, ['foe', 'double', 'foreigner'])) {
+          const i = g.in(x, ['foe', 'double', 'foreigner']).find(e => e.role !== o.role);
+          if (i) return proof ? x + ': ' + g.fmt(o) + ' and ' + g.fmt(i) + '.' : 'ok';
+        }
+        return null;
       }, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
+    }
+  }),
+  hard({
+    id: 'ha-55', domain: 5, title: 'Shared covert handler with an ally',
+    order: 'Shoot anyone acted upon in Foe, Double agent, or Foreigner by someone who ALSO acts upon a Friend-backed or Civilian-tipped suspect — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        for (const e1 of g.in(x, ['foe', 'double', 'foreigner'])) {
+          const other = g.out(e1.from).find(e2 => e2.to !== x && g.hasIn(e2.to, ['friend', 'civilian']));
+          if (other) return proof ? x + ' shares handler ' + e1.from + ' with ' + other.to + '.' : 'ok';
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-56', domain: 5, title: 'Silent mark without clean shield',
+    order: 'Shoot anyone who initiates NO contacts anywhere AND receives contact in Foe, Double agent, or Foreigner — excluding anyone backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (g.out(x).length > 0 || hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const c = g.in(x, ['foe', 'double', 'foreigner'])[0];
+        if (!c) return null;
+        return proof ? x + ' initiates no contacts and receives ' + g.fmt(c) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-57', domain: 5, title: 'Cross-file double contact',
+    order: 'Shoot anyone acting toward two DIFFERENT people across overt (Friend, Spy, Civilian) and covert (Foe, Double agent, Foreigner) categories — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        for (const a of g.out(x, ['friend', 'spy', 'civilian'])) {
+          for (const b of g.out(x, ['foe', 'double', 'foreigner'])) {
+            if (a.to !== b.to) return proof ? x + ': ' + g.fmt(a) + ' and ' + g.fmt(b) + '.' : 'ok';
+          }
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-58', domain: 5, title: 'Dual-source covert target',
+    order: 'Shoot anyone acted upon by two DIFFERENT people in Foe, Double agent, or Foreigner — unless backed by a clean Friend or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        const ins = g.in(x, ['foe', 'double', 'foreigner']);
+        const senders = new Set(ins.map(e => e.from));
+        if (senders.size < 2) return null;
+        return proof ? x + ' hit by ' + senders.size + ' covert actors without clean Friend/Civilian.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-59', domain: 5, title: 'Compromised dual-link pair',
+    order: 'Shoot anyone linked (either way) to a Spy-watched suspect AND to a Foe or Foreigner suspect (two different people) — excluding anyone backed by a clean Friend or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        const n = g.neighbors(x);
+        for (const a of n) {
+          if (!g.hasIn(a, 'spy')) continue;
+          for (const b of n) {
+            if (b !== a && g.hasTouch(b, ['foe', 'foreigner'])) {
+              return proof ? x + ' links Spy-watched ' + a + ' and hostile ' + b + '.' : 'ok';
+            }
+          }
+        }
+        return null;
+      }, proof);
     }
   }),
 
   // =========================================================================
-  // DOMAIN 9: Full-File Six-Category Strategic Synthesis (10 families)
+  // DOMAIN 6: Chronology & Timing (10)
   // =========================================================================
-  makeHardRank({
-    id: 'ha-90', domain: 9, title: 'Full-dossier kill order',
-    order: 'Score each suspect across all six rows: +4 Double agent, +3 Foreigner, +2 Foe, +1 Spy, −2 Friend, −1 Civilian (counting every link they touch). Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {double: 4, foreigner: 3, foe: 2, spy: 1, friend: -2, civilian: -1}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
-    }
-  }),
-  makeHardRank({
-    id: 'ha-91', domain: 9, title: 'Directional kill ledger',
-    order: 'Score outgoing arrows (+4 Double agent, +3 Foreigner, +2 Foe, +1 Spy, −2 Friend, −1 Civilian) PLUS incoming arrows (+2 Foreigner, +2 Double agent, +1 Foe, −2 Spy, −2 Friend, +1 Civilian). Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {
-        double_out: 4, foreigner_out: 3, foe_out: 2, spy_out: 1, friend_out: -2, civilian_out: -1,
-        foreigner_in: 2, double_in: 2, foe_in: 1, spy_in: -2, friend_in: -2, civilian_in: 1
+  hard({
+    id: 'ha-60', domain: 6, title: 'Betrayed after Friend clearance',
+    order: 'Shoot anyone in Friend or Civilian EARLIER than they appear in Foe, Double agent, or Foreigner — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const hit = matchTemporal(g, x, {roles: ['friend', 'civilian']}, {roles: ['foe', 'double', 'foreigner']});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit[0]) + ' before ' + g.fmt(hit[1]) + ' (no clean Spy).' : 'ok';
       }, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
     }
   }),
-  makeHardRank({
-    id: 'ha-92', domain: 9, title: 'Network contagion index',
-    order: 'Each suspect’s score = their own covert links (Double agent +2, Foreigner +2, Foe +1) PLUS +1 for every direct contact who touches Double agent, Foreigner, or Foe, MINUS 2 if backed by a Friend, MINUS 2 if watched by a Spy, MINUS 1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {double: 2, foreigner: 2, foe: 1, friend_in: -2, spy_in: -2, civilian: -1}, proof);
-      const contag = g.neighbors(x).filter(m => g.hasTouch(m, ['double', 'foreigner', 'foe'])).length;
-      const score = r.score + contag;
-      return {score, reason: proof ? x + ': own ' + r.score + ' + ' + contag + ' hostile neighbors = ' + score + '.' : ''};
+  hard({
+    id: 'ha-61', domain: 6, title: 'Covert move before surveillance',
+    order: 'Shoot anyone in Foe, Double agent, or Foreigner EARLIER than they appear in Spy — excluding anyone backed by a clean Friend or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        const hit = matchTemporal(g, x, {roles: ['foe', 'double', 'foreigner']}, {roles: ['spy']});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit[0]) + ' preceded ' + g.fmt(hit[1]) + '.' : 'ok';
+      }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-93', domain: 9, title: 'High-value mole extraction',
-    order: 'Score each suspect: +3 per Double agent link, +3 per Spy link, +2 per Foreigner link, −2 per Foe link, −2 per Friend backing received, +1 per Civilian link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {double: 3, spy: 3, foreigner: 2, foe: -2, friend_in: -2, civilian: 1}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
+  hard({
+    id: 'ha-62', domain: 6, title: 'Late cover after covert exposure',
+    order: 'Shoot anyone in Foe, Double agent, or Foreigner EARLIER than a Friend vouched for them or a Civilian tipped them off — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const hit = matchTemporal(g, x, {roles: ['foe', 'double', 'foreigner']}, {roles: ['friend', 'civilian'], dir: 'in'});
+        if (!hit) return null;
+        return proof ? x + ': covert ' + g.fmt(hit[0]) + ' came before ' + g.fmt(hit[1]) + '.' : 'ok';
+      }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-94', domain: 9, title: 'Border-overt squeeze',
-    order: 'Score each suspect: +3 per Foreigner link, +3 per Foe link, +2 per Civilian link, +1 per Double agent link, −3 per Friend link, −2 per Spy link. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {foreigner: 3, foe: 3, civilian: 2, double: 1, friend: -3, spy: -2}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
+  hard({
+    id: 'ha-63', domain: 6, title: 'Escalating relay into betrayal',
+    order: 'Shoot anyone who acts in Friend, Spy, or Civilian toward someone who LATER acts in Foe, Double agent, or Foreigner (no return) — unless backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanFriend(g, x)) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['friend', 'spy', 'civilian'], firstDir: 'out',
+          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
+          timeOrder: 'before'
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' followed later by ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-95', domain: 9, title: 'Counter-espionage sweep',
-    order: 'Score each suspect: +3 per Double agent link, +2 per Foreigner link, +2 per Friend arrow sent, +1 per Civilian arrow received, −2 per Spy arrow received, −2 per Foe arrow received. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const r = sumWeights(g, x, {double: 3, foreigner: 2, friend_out: 2, civilian_in: 1, spy_in: -2, foe_in: -2}, proof);
-      return {score: r.score, reason: proof ? x + ' scores ' + r.score + ' (' + r.parts.join('; ') + ').' : ''};
+  hard({
+    id: 'ha-64', domain: 6, title: 'Backed by an already-compromised source',
+    order: 'Shoot anyone backed by a Friend or tipped off by a Civilian who had EARLIER appeared in Foe, Double agent, or Foreigner — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['friend', 'civilian'], firstDir: 'in',
+          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any',
+          timeOrder: 'after'
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' after source’s ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-96', domain: 9, title: 'Second-order vulnerability',
-    order: 'For each suspect, add +2 per contact in Double agent/Foreigner, +1 per contact in Foe/Civilian, +1 per own link in any row, −2 if watched by a Spy, −2 if backed by a Friend. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      let score = g.touch(x).length;
-      for (const m of g.neighbors(x)) {
-        if (g.hasTouch(m, ['double', 'foreigner'])) score += 2;
-        if (g.hasTouch(m, ['foe', 'civilian'])) score += 1;
-      }
-      if (g.hasIn(x, 'spy')) score -= 2;
-      if (g.hasIn(x, 'friend')) score -= 2;
-      return {score, reason: proof ? x + ' scores ' + score + ' across own links and neighbor roles.' : ''};
+  hard({
+    id: 'ha-65', domain: 6, title: 'Backing an already-compromised contact',
+    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian someone who had EARLIER appeared in Foe, Double agent, or Foreigner — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['friend', 'civilian'], firstDir: 'out',
+          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any',
+          timeOrder: 'after'
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' after contact’s ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-97', domain: 9, title: 'Covert footprint minus protection',
-    order: 'Score each suspect: +2 per outgoing arrow in any row, +2 per link in Double agent/Foreigner/Foe, −2 per incoming arrow in Friend/Spy/Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const out = g.out(x).length * 2;
-      const hot = g.touch(x, ['double', 'foreigner', 'foe']).length * 2;
-      const prot = g.in(x, ['friend', 'spy', 'civilian']).length * 2;
-      const score = out + hot - prot;
-      return {score, reason: proof ? x + ': ' + out + ' out +' + hot + ' covert −' + prot + ' incoming-shield = ' + score + '.' : ''};
+  hard({
+    id: 'ha-66', domain: 6, title: 'Earliest file covert, later file overt',
+    order: 'Shoot anyone whose EARLIEST dossier contact is in Foe, Double agent, or Foreigner AND who later appears in Friend, Spy, or Civilian — unless backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanFriend(g, x)) return null;
+        const all = g.touch(x);
+        if (all.length < 2) return null;
+        const minT = Math.min(...all.map(e => e.time));
+        const first = all.find(e => e.time === minT && ['foe', 'double', 'foreigner'].includes(e.role));
+        const later = all.find(e => e.time > minT && ['friend', 'spy', 'civilian'].includes(e.role));
+        if (!first || !later) return null;
+        return proof ? x + ': earliest ' + g.fmt(first) + ', later ' + g.fmt(later) + '.' : 'ok';
+      }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-98', domain: 9, title: 'Escalation chain priority',
-    order: 'Score each suspect: +3 if they send an arrow into someone in Double agent/Foreigner, +2 if they receive an arrow from Foe/Double agent/Foreigner, +1 per distinct category touched, −2 if watched by a Spy, −1 if backed by a Friend, −1 if in Civilian. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const a = g.out(x).some(e => g.hasTouch(e.to, ['double', 'foreigner'])) ? 3 : 0;
-      const b = g.in(x).some(e => g.hasTouch(e.from, ['foe', 'double', 'foreigner'])) ? 2 : 0;
-      const cats = g.distinctRoles(x).size;
-      const pen = (g.hasIn(x, 'spy') ? 2 : 0) + (g.hasIn(x, 'friend') ? 1 : 0) + (g.hasTouch(x, 'civilian') ? 1 : 0);
-      const score = a + b + cats - pen;
-      return {score, reason: proof ? x + ': ' + a + ' feed +' + b + ' targeted +' + cats + ' cats −' + pen + ' = ' + score + '.' : ''};
+  hard({
+    id: 'ha-67', domain: 6, title: 'Latest file covert, earlier file overt',
+    order: 'Shoot anyone whose LATEST dossier contact is in Foe, Double agent, or Foreigner AND who earlier appeared in Friend, Spy, or Civilian — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const all = g.touch(x);
+        if (all.length < 2) return null;
+        const maxT = Math.max(...all.map(e => e.time));
+        const last = all.find(e => e.time === maxT && ['foe', 'double', 'foreigner'].includes(e.role));
+        const earlier = all.find(e => e.time < maxT && ['friend', 'spy', 'civilian'].includes(e.role));
+        if (!last || !earlier) return null;
+        return proof ? x + ': earlier ' + g.fmt(earlier) + ', latest ' + g.fmt(last) + '.' : 'ok';
+      }, proof);
     }
   }),
-  makeHardRank({
-    id: 'ha-99', domain: 9, title: 'Whole-network kill synthesis',
-    order: 'Score each suspect: +2 per distinct contact, +2 per Double agent or Foreigner link, +1 per Foe or Spy link, −2 per Friend backing received, −2 per Civilian report received, +1 if they send more arrows than they receive. Shoot the top two.',
-    scoreFn(g, x, _a, proof) {
-      const deg = g.neighbors(x).length * 2;
-      const r = sumWeights(g, x, {double: 2, foreigner: 2, foe: 1, spy: 1, friend_in: -2, civilian_in: -2}, proof);
-      const act = g.out(x).length > g.in(x).length ? 1 : 0;
-      const score = deg + r.score + act;
-      return {score, reason: proof ? x + ': ' + deg + ' contacts + ' + r.score + ' roles +' + act + ' active = ' + score + '.' : ''};
+  hard({
+    id: 'ha-68', domain: 6, title: 'Timed covert-to-covert chain',
+    order: 'Shoot anyone who acts in Foe, Double agent, or Foreigner toward someone who LATER acts in another category (no return) — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out',
+          secondRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], secondDir: 'out',
+          diffRole: true, timeOrder: 'before'
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' followed later by ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-69', domain: 6, title: 'Shadowed or backed after compromise',
+    order: 'Shoot anyone shadowed by a Spy or backed by a Friend who had EARLIER appeared in Foe, Double agent, or Foreigner — excluding anyone tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanCivilian(g, x)) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['spy', 'friend'], firstDir: 'in',
+          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any',
+          timeOrder: 'after'
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' after source’s ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+
+  // =========================================================================
+  // DOMAIN 7: Tainted Sources (10)
+  // =========================================================================
+  hard({
+    id: 'ha-70', domain: 7, title: 'Tainted triad of cover',
+    order: 'Shoot anyone whose Friend voucher, watching Spy, OR Civilian informant appears in Double agent or Foreigner — unless they hold at least one clean Friend or clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const bad = g.in(x, ['friend', 'spy', 'civilian']).find(e => g.hasTouch(e.from, ['double', 'foreigner']));
+        if (!bad) return null;
+        return proof ? x + ' relies on compromised source ' + g.fmt(bad) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-71', domain: 7, title: 'Tainted source under Foe pressure',
+    order: 'Shoot anyone whose Friend voucher, watching Spy, OR Civilian informant appears in Foe — excluding anyone with a clean Friend or clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const bad = g.in(x, ['friend', 'spy', 'civilian']).find(e => g.hasTouch(e.from, 'foe'));
+        if (!bad) return null;
+        return proof ? x + ' relies on Foe-linked source ' + g.fmt(bad) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-72', domain: 7, title: 'Zero clean overt sources',
+    order: 'Shoot anyone receiving contact in Friend, Spy, or Civilian where EVERY such actor appears in Foe, Double agent, or Foreigner.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        const ins = g.in(x, ['friend', 'spy', 'civilian']);
+        if (!ins.length) return null;
+        if (!ins.every(e => g.hasTouch(e.from, ['foe', 'double', 'foreigner']))) return null;
+        return proof ? x + ': every overt source (' + ins.map(e => e.from).join(', ') + ') is covertly compromised.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-73', domain: 7, title: 'Covertly fed by an overt insider',
+    order: 'Shoot anyone targeted by a Foe, fed a Double agent’s leak, or met by a Foreigner by someone who ALSO appears in Friend, Spy, or Civilian — unless backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanFriend(g, x)) return null;
+        const hit = matchRelay(g, x, {
+          firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'in',
+          secondRoles: ['friend', 'spy', 'civilian'], secondDir: 'any'
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' from overt insider (' + g.fmt(hit.e2) + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-74', domain: 7, title: 'Backing a compromised insider',
+    order: 'Shoot anyone who acts in Friend, Spy, or Civilian toward someone appearing in BOTH an overt (Friend, Spy, Civilian) and a covert (Foe, Double agent, Foreigner) category.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        for (const e of g.out(x, ['friend', 'spy', 'civilian'])) {
+          if (g.hasTouch(e.to, ['foe', 'double', 'foreigner']) &&
+              g.touch(e.to, ['friend', 'spy', 'civilian']).some(o => o.role !== e.role)) {
+            return proof ? x + ': ' + g.fmt(e) + ' toward double-file contact ' + e.to + '.' : 'ok';
+          }
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-75', domain: 7, title: 'Two-hop tainted cover',
+    order: 'Shoot anyone backed by a Friend whose own contact (either way) appears in Double agent or Foreigner — unless shadowed by a clean Spy or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
+        for (const f of g.in(x, 'friend')) {
+          const cov = g.neighbors(f.from).find(n => n !== x && g.hasTouch(n, ['double', 'foreigner']));
+          if (cov) return proof ? x + ' backed by ' + f.from + ', who links to covert ' + cov + '.' : 'ok';
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-76', domain: 7, title: 'Two-hop tainted surveillance',
+    order: 'Shoot anyone shadowed by a Spy whose own contact (either way) appears in Double agent or Foreigner — unless backed by a clean Friend or tipped off by a clean Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        for (const s of g.in(x, 'spy')) {
+          const cov = g.neighbors(s.from).find(n => n !== x && g.hasTouch(n, ['double', 'foreigner']));
+          if (cov) return proof ? x + ' shadowed by ' + s.from + ', who links to covert ' + cov + '.' : 'ok';
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-77', domain: 7, title: 'Compromised informant’s second link',
+    order: 'Shoot anyone tipped off by a Civilian whose own contact (either way) appears in Foe, Double agent, or Foreigner — unless backed by a clean Friend or shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        for (const c of g.in(x, 'civilian')) {
+          const cov = g.neighbors(c.from).find(n => n !== x && g.hasTouch(n, ['foe', 'double', 'foreigner']));
+          if (cov) return proof ? x + ' tipped off by ' + c.from + ', who links to covert ' + cov + '.' : 'ok';
+        }
+        return null;
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-78', domain: 7, title: 'Unverified Foe target',
+    order: 'Shoot anyone targeted by a Foe who has NO clean Friend voucher, NO clean Spy watcher, and NO clean Civilian tip-off.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy', 'cleanCivilian'])) return null;
+        const f = g.in(x, 'foe')[0];
+        if (!f) return null;
+        return proof ? x + ': ' + g.fmt(f) + ' with zero clean overt protection.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-79', domain: 7, title: 'Handler of a tainted asset',
+    order: 'Shoot anyone who acts in Foe, Double agent, or Foreigner toward someone with a tainted Friend or tainted Spy — unless backed by a clean Friend.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanFriend(g, x)) return null;
+        for (const e of g.out(x, ['foe', 'double', 'foreigner'])) {
+          if (hasTaintedFriend(g, e.to) || hasTaintedSpy(g, e.to)) {
+            return proof ? x + ': ' + g.fmt(e) + ' toward compromised asset ' + e.to + '.' : 'ok';
+          }
+        }
+        return null;
+      }, proof);
+    }
+  }),
+
+  // =========================================================================
+  // DOMAIN 8: Double Lives (10)
+  // =========================================================================
+  hard({
+    id: 'ha-80', domain: 8, title: 'Deep cover across three files',
+    order: 'Shoot anyone appearing in at least THREE distinct categories including at least one overt (Friend, Spy, Civilian) and one covert (Foe, Double agent, Foreigner) — unless shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const d = g.distinctRoles(x);
+        if (d.size < 3) return null;
+        const hasOv = ['friend', 'spy', 'civilian'].some(r => d.has(r));
+        const hasCov = ['foe', 'double', 'foreigner'].some(r => d.has(r));
+        if (!hasOv || !hasCov) return null;
+        return proof ? x + ' spans ' + d.size + ' categories across overt and covert files.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-81', domain: 8, title: 'Covert predominance',
+    order: 'Shoot anyone appearing in MORE covert categories (Foe, Double agent, Foreigner) than overt categories (Friend, Spy, Civilian) — excluding anyone backed by a clean Friend or clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const cov = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role)).size;
+        const ov = new Set(g.touch(x, ['friend', 'spy', 'civilian']).map(e => e.role)).size;
+        if (cov <= ov) return null;
+        return proof ? x + ' has ' + cov + ' covert vs ' + ov + ' overt categories (no clean cover).' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-82', domain: 8, title: 'Overt predominance hiding a mole',
+    order: 'Shoot anyone appearing in MORE overt categories (Friend, Spy, Civilian) than covert categories (Foe, Double agent, Foreigner), yet still acting in Double agent or Foreigner.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        const hit = g.out(x, ['double', 'foreigner'])[0];
+        if (!hit) return null;
+        const cov = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role)).size;
+        const ov = new Set(g.touch(x, ['friend', 'spy', 'civilian']).map(e => e.role)).size;
+        if (ov <= cov) return null;
+        return proof ? x + ' holds ' + ov + ' overt vs ' + cov + ' covert files while ' + g.fmt(hit) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-83', domain: 8, title: 'Strict covert-out, overt-in split',
+    order: 'Shoot anyone who acts ONLY in Foe, Double agent, or Foreigner (at least once) and receives ONLY in Friend, Spy, or Civilian (at least once).',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        const outs = g.out(x);
+        const ins = g.in(x);
+        if (!outs.length || !ins.length) return null;
+        if (!outs.every(e => ['foe', 'double', 'foreigner'].includes(e.role))) return null;
+        if (!ins.every(e => ['friend', 'spy', 'civilian'].includes(e.role))) return null;
+        return proof ? x + ' receives strictly overt (' + g.fmt(ins[0]) + ') while acting strictly covert (' + g.fmt(outs[0]) + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-84', domain: 8, title: 'Strict overt-out, covert-in split',
+    order: 'Shoot anyone who acts ONLY in Friend, Spy, or Civilian (at least once) and receives ONLY in Foe, Double agent, or Foreigner (at least once).',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        const outs = g.out(x);
+        const ins = g.in(x);
+        if (!outs.length || !ins.length) return null;
+        if (!outs.every(e => ['friend', 'spy', 'civilian'].includes(e.role))) return null;
+        if (!ins.every(e => ['foe', 'double', 'foreigner'].includes(e.role))) return null;
+        return proof ? x + ' acts strictly overt (' + g.fmt(outs[0]) + ') while receiving strictly covert (' + g.fmt(ins[0]) + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-85', domain: 8, title: 'Unwatched covert specialist',
+    order: 'Shoot anyone appearing ONLY in Foe, Double agent, or Foreigner (no Friend, Spy, or Civilian contact at all) who also acts toward someone in Friend, Spy, or Civilian.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (g.hasTouch(x, ['friend', 'spy', 'civilian'])) return null;
+        const hit = g.out(x, ['foe', 'double', 'foreigner']).find(e => g.hasTouch(e.to, ['friend', 'spy', 'civilian']));
+        if (!hit) return null;
+        return proof ? x + ' stays purely covert yet acts on overt ' + hit.to + ' (' + g.fmt(hit) + ').' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-86', domain: 8, title: 'Overt specialist surrounded by covert contacts',
+    order: 'Shoot anyone appearing ONLY in Friend, Spy, or Civilian (no Foe, Double agent, or Foreigner contact) whose direct contacts include BOTH Double agent and Foreigner (or Foe and Foreigner).',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
+        const n = g.neighbors(x);
+        const hasFor = n.some(p => g.hasTouch(p, 'foreigner'));
+        const hasHost = n.some(p => g.hasTouch(p, ['double', 'foe']));
+        if (!hasFor || !hasHost) return null;
+        return proof ? x + ' stays purely overt while linked to both Foreigner and Foe/Double agent circles.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-87', domain: 8, title: 'Four-category operator',
+    order: 'Shoot anyone appearing in at least THREE distinct categories with NO clean Friend voucher and NO clean Spy shadow.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const d = g.distinctRoles(x);
+        if (d.size < 3) return null;
+        return proof ? x + ' spans ' + d.size + ' categories with no clean Friend or Spy shield.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-88', domain: 8, title: 'Balanced overt-covert double agent',
+    order: 'Shoot anyone appearing in the SAME number of overt categories (Friend, Spy, Civilian) and covert categories (Foe, Double agent, Foreigner) — at least 1 each, excluding anyone shadowed by a clean Spy.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const cov = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role)).size;
+        const ov = new Set(g.touch(x, ['friend', 'spy', 'civilian']).map(e => e.role)).size;
+        if (cov < 1 || cov !== ov) return null;
+        return proof ? x + ' balances ' + ov + ' overt and ' + cov + ' covert categories (no clean Spy).' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-89', domain: 8, title: 'Unmonitored covert receiver-actor',
+    order: 'Shoot anyone who acts in Foe, Double agent, or Foreigner AND receives contact in Friend, Spy, or Civilian — excluding anyone with a clean Friend voucher or clean Civilian tip-off.',
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        const o = g.out(x, ['foe', 'double', 'foreigner'])[0];
+        const i = g.in(x, ['friend', 'spy', 'civilian'])[0];
+        if (!o || !i) return null;
+        return proof ? x + ': ' + g.fmt(o) + ' while receiving ' + g.fmt(i) + ' (no clean Friend/Civilian).' : 'ok';
+      }, proof);
+    }
+  }),
+
+  // =========================================================================
+  // DOMAIN 9: Command & Leverage (10)
+  // =========================================================================
+  hard({
+    id: 'ha-90', domain: 9, title: '{name}’s unwatched covert reach',
+    order: 'Shoot anyone reached from {name} in two forward steps through an unwatched middleman (no Spy shadow) — excluding anyone backed by a clean Friend or tipped off by a clean Civilian.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        const hit = matchAnchorRelay(g, anchor, x, {
+          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
+          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
+          midExc: {roles: ['spy'], dir: 'in'}
+        });
+        if (!hit) return null;
+        return proof ? x + ': 2-step from ' + anchor + ' via unwatched ' + hit.mid + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-91', domain: 9, title: '{name}’s unbacked incoming network',
+    order: 'Shoot anyone who reaches {name} in two forward steps through an unbacked middleman (no Friend voucher) — excluding anyone shadowed by a clean Spy or tipped off by a clean Civilian.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
+        const hit = matchAnchorRelay(g, anchor, x, {
+          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
+          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
+          midExc: {roles: ['friend'], dir: 'in'}
+        });
+        if (!hit) return null;
+        return proof ? x + ' reaches ' + anchor + ' via unbacked ' + hit.mid + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-92', domain: 9, title: 'Covert link outside {name}’s circle',
+    order: 'Shoot anyone NOT directly linked to {name} who appears in at least two of Foe, Double agent, and Foreigner — unless backed by a clean Friend or shadowed by a clean Spy.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      const near = new Set([anchor, ...g.neighbors(anchor)]);
+      return collectMatches(g.people, x => {
+        if (near.has(x) || hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const cats = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role));
+        if (cats.size < 2) return null;
+        return proof ? x + ' (outside ' + anchor + '’s circle) spans ' + [...cats].join(' + ') + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-93', domain: 9, title: '{name}’s covert ring',
+    order: 'Shoot anyone two contacts away from {name} (not directly linked to {name}) who acts in Foe, Double agent, or Foreigner — unless backed by a clean Friend or shadowed by a clean Spy.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.hasOut(x, ['foe', 'double', 'foreigner'])) return null;
+        const hit = matchAnchorRelay(g, anchor, x, {
+          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'any',
+          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'any',
+          excludeDirect: true
+        });
+        if (!hit) return null;
+        return proof ? x + ': 2 hops from ' + anchor + ', active covert without clean cover.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-94', domain: 9, title: 'Timed relay from {name} without shield',
+    order: 'Shoot anyone reached from {name} in two forward steps where the second dispatch is LATER — excluding anyone backed by a clean Friend or shadowed by a clean Spy.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const hit = matchAnchorRelay(g, anchor, x, {
+          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
+          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
+          timeOrder: 'before'
+        });
+        if (!hit) return null;
+        return proof ? x + ': timed relay ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-95', domain: 9, title: 'Timed relay into {name} without shield',
+    order: 'Shoot anyone who reaches {name} in two forward steps where the first dispatch is EARLIER — excluding anyone backed by a clean Friend or shadowed by a clean Spy.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
+        const hit = matchAnchorRelay(g, anchor, x, {
+          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
+          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
+          timeOrder: 'after'
+        });
+        if (!hit) return null;
+        return proof ? x + ': timed relay ' + g.fmt(hit.e2) + ' → ' + g.fmt(hit.e1) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-96', domain: 9, title: '{name}’s compromised intermediaries',
+    order: 'Shoot anyone directly linked to {name} who ALSO links to someone in Foe, Double agent, or Foreigner — unless backed by a clean Friend or shadowed by a clean Spy.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (x === anchor || hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.between(anchor, x).length) return null;
+        const cov = g.neighbors(x).find(n => n !== anchor && g.hasTouch(n, ['foe', 'double', 'foreigner']));
+        if (!cov) return null;
+        return proof ? x + ' links ' + anchor + ' to covert ' + cov + ' with no clean shield.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-97', domain: 9, title: 'Shared covert circle with {name}',
+    order: 'Shoot anyone else sharing a direct neighbor with {name} who appears in Foe, Double agent, or Foreigner — unless backed by a clean Friend or tipped off by a clean Civilian.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      const aN = new Set(g.neighbors(anchor));
+      return collectMatches(g.people, x => {
+        if (x === anchor || hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
+        if (!g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
+        const shared = g.neighbors(x).find(n => aN.has(n));
+        if (!shared) return null;
+        return proof ? x + ' shares contact ' + shared + ' with ' + anchor + ' while covert.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-98', domain: 9, title: '{name}’s covert-to-overt targets',
+    order: 'Shoot anyone reached from {name} by a covert link (Foe, Double agent, Foreigner) followed by an overt link (Friend, Spy, Civilian) — excluding anyone backed by a clean Friend.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanFriend(g, x)) return null;
+        const hit = matchAnchorRelay(g, anchor, x, {
+          step1Roles: ['foe', 'double', 'foreigner'], step1Dir: 'any',
+          step2Roles: ['friend', 'spy', 'civilian'], step2Dir: 'any'
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  }),
+  hard({
+    id: 'ha-99', domain: 9, title: '{name}’s overt-to-covert targets',
+    order: 'Shoot anyone reached from {name} by an overt link (Friend, Spy, Civilian) followed by a covert link (Foe, Double agent, Foreigner) — excluding anyone shadowed by a clean Spy.',
+    useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (hasCleanSpy(g, x)) return null;
+        const hit = matchAnchorRelay(g, anchor, x, {
+          step1Roles: ['friend', 'spy', 'civilian'], step1Dir: 'any',
+          step2Roles: ['foe', 'double', 'foreigner'], step2Dir: 'any'
+        });
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
     }
   })
 ];

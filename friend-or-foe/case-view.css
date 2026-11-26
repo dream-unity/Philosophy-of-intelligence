@@ -28,7 +28,7 @@
 }
 .case-brief h2, .case-result h3 {
   margin: 0;
-  font: 700 clamp(.94rem, 1.32vw, 1.24rem)/1.2 var(--display);
+  font: 700 clamp(.94rem, 1.32vw, 1.22rem)/1.2 var(--display);
   letter-spacing: -.015em;
 }
 .case-leads {
@@ -36,8 +36,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: .25rem .6rem;
-  margin: .55rem 0 0;
-  font: 650 .93rem/1.25 var(--mono);
+  margin: .52rem 0 0;
+  font: 650 .92rem/1.25 var(--mono);
 }
 .case-shortlist-toggle {
   display: inline-flex;
@@ -62,13 +62,13 @@
 .case-leads b, .case-key, .case-reports h3, .case-guide h3 { font-family: var(--display); }
 .case-leads b, .case-key, .case-first { color: var(--case-muted); }
 .case-first { margin: .22rem 0 0; font: 450 .84rem/1.3 var(--display); }
-.case-records { margin: .52rem 0 .3rem; padding: 0; }
+.case-records { margin: .5rem 0 .28rem; padding: 0; }
 .case-row {
   display: grid;
-  grid-template-columns: minmax(6.8rem, .92fr) minmax(0, 2fr);
+  grid-template-columns: minmax(7.4rem, .96fr) minmax(0, 2fr);
   align-items: center;
-  gap: .16rem .58rem;
-  padding: .21rem 0;
+  gap: .16rem .56rem;
+  padding: .22rem 0;
   border-bottom: 1px solid var(--case-line);
 }
 .case-row.case-div-end {
@@ -76,9 +76,15 @@
   padding-bottom: .28rem;
   margin-bottom: .06rem;
 }
-.case-row-label { display: grid; align-content: center; margin: 0; }
+.case-row-label { display: grid; align-content: center; gap: .04rem; margin: 0; }
 .case-role-name { display: flex; gap: .26rem; align-items: baseline; flex-wrap: nowrap; }
+.case-role-meta { display: flex; align-items: baseline; gap: .38rem; flex-wrap: wrap; }
 .case-verb { font: 500 .73rem/1.12 var(--display); color: var(--case-muted); }
+.case-time {
+  font: 600 .72rem/1.1 var(--mono);
+  color: #93b0b8;
+  font-variant-numeric: tabular-nums;
+}
 .case-role { font: 675 .86rem/1.2 var(--display); }
 .case-friend { color: #abe3cd; }
 .case-foe { color: #ffbd94; }
@@ -104,7 +110,7 @@
 .case-swap { grid-column: 1/-1; color: var(--amber); font: 600 .76rem/1.15 var(--display); }
 .case-alt { color: var(--amber); font: 600 .74rem/1.15 var(--mono); white-space: nowrap; }
 .case-key { margin: .16rem 0; font-size: .8rem; line-height: 1.24; }
-.case-reports { margin-top: .5rem; }
+.case-reports { margin-top: .48rem; }
 .case-reports h3, .case-guide h3 { margin: 0 0 .14rem; font-size: .94rem; line-height: 1.2; }
 .case-report-list, .case-proof { list-style: none; margin: 0; padding: 0; }
 .case-report {
@@ -112,8 +118,13 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: .08rem .4rem;
-  padding: .19rem 0;
+  padding: .2rem .18rem;
   border-bottom: 1px solid var(--case-line);
+}
+.case-report.case-decisive {
+  background: rgba(255, 194, 126, .11);
+  border-left: 2px solid var(--amber);
+  padding-left: .42rem;
 }
 .case-claim { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: .04rem .28rem; }
 .case-claim .case-role, .case-fact { font: 650 .79rem/1.22 var(--display); }
@@ -127,10 +138,23 @@
   border-radius: 3px;
   background: rgba(171, 227, 205, .12);
 }
+.case-result {
+  margin-bottom: .75rem;
+  padding: .58rem .72rem;
+  background: rgba(13, 21, 27, .9);
+  border: 1px solid var(--case-div-line);
+  border-left: 3px solid var(--mint);
+  border-radius: 3px;
+}
+.case-rival {
+  margin: .36rem 0 0;
+  color: var(--amber);
+  font: 600 .8rem/1.28 var(--display);
+}
 .case-guide { display: grid; gap: .65rem; margin-bottom: .85rem; }
-.case-guide p, .case-proof li { margin: 0; line-height: 1.35; }
-.case-proof { margin-top: .5rem; }
-.case-proof li + li { margin-top: .25rem; }
+.case-guide p, .case-proof li { margin: 0; line-height: 1.32; }
+.case-proof { margin-top: .42rem; font-size: .84rem; color: var(--case-muted); }
+.case-proof li + li { margin-top: .22rem; }
 .case-sr {
   position: absolute;
   width: 1px; height: 1px;
@@ -138,11 +162,11 @@
   overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 @container case (max-width: 21rem) {
-  .case-row { grid-template-columns: 6.5rem minmax(0, 1fr); gap: .16rem .55rem; }
+  .case-row { grid-template-columns: 6.7rem minmax(0, 1fr); gap: .16rem .5rem; }
   .case-role { font-size: .81rem; }
   .case-links { grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.1rem), 1fr)); }
 }
 @container case (min-width: 42rem) {
   .case-records { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.25rem; }
-  .case-row { grid-template-columns: minmax(6.8rem, .88fr) minmax(0, 1.8fr); }
+  .case-row { grid-template-columns: minmax(7.2rem, .92fr) minmax(0, 1.8fr); }
 }

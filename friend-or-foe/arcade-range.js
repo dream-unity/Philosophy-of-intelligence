@@ -65,13 +65,16 @@ function dealTargets(names, previous, random, masterSpeed = 1) {
 }
 
 export class ArcadeRun {
-  #pair;
+  #targets;
+  #bulletCount;
   constructor(names, pair, previousTargets = [], random = Math.random, masterSpeed = 1) {
-    if (names.length !== COUNT || new Set(names).size !== COUNT || pair.length !== 2 ||
-        new Set(pair).size !== 2 || !pair.every(name => names.includes(name))) {
-      throw new Error('A trial needs ten different names and two different names from that roster.');
+    if (names.length !== COUNT || new Set(names).size !== COUNT ||
+        !Array.isArray(pair) || pair.length < 1 || pair.length > 5 ||
+        new Set(pair).size !== pair.length || !pair.every(name => names.includes(name))) {
+      throw new Error('A trial needs ten different names and 1 to 5 distinct targets from that roster.');
     }
-    this.#pair = new Set(pair);
+    this.#targets = new Set(pair);
+    this.#bulletCount = pair.length;
     this.targets = dealTargets(names, previousTargets, random, masterSpeed);
     this.elapsed = 0;
     this.shotLog = [];
@@ -81,10 +84,12 @@ export class ArcadeRun {
   }
 
   finishIfDecided() {
-    const liveThreat = this.targets.some(t => t.state === 'moving' && this.#pair.has(t.name));
-    const bothHit = this.shotLog.length === 2 && this.shotLog.every(s => this.#pair.has(s.name));
-    if (bothHit) this.reason = 'pair';
-    else if (this.shotLog.length === 2) this.reason = 'ammo';
+    const liveThreat = this.targets.some(t => t.state === 'moving' && this.#targets.has(t.name));
+    const allHit = this.shotLog.length === this.#bulletCount &&
+      this.shotLog.every(s => this.#targets.has(s.name)) &&
+      new Set(this.shotLog.map(s => s.name)).size === this.#bulletCount;
+    if (allHit) this.reason = 'pair';
+    else if (this.shotLog.length === this.#bulletCount) this.reason = 'ammo';
     else if (!liveThreat) this.reason = 'escaped';
     this.complete = this.reason !== null;
   }
@@ -101,7 +106,7 @@ export class ArcadeRun {
   advance(seconds) {
     if (this.complete || !Number.isFinite(seconds) || seconds <= 0) return;
     const moving = this.targets.filter(t => t.state === 'moving');
-    const lastThreat = Math.max(...moving.filter(t => this.#pair.has(t.name)).map(t => t.duration));
+    const lastThreat = Math.max(...moving.filter(t => this.#targets.has(t.name)).map(t => t.duration));
     this.elapsed = Math.min(this.elapsed + seconds, lastThreat);
     const passed = [];
     for (const target of moving) {
@@ -120,7 +125,9 @@ export class ArcadeRun {
 
   snapshot() {
     return {
-      shots: this.shotLog.length, bullets: 2 - this.shotLog.length,
+      shots: this.shotLog.length,
+      bullets: this.#bulletCount - this.shotLog.length,
+      bulletCount: this.#bulletCount,
       selected: this.shotLog.filter(s => s.name !== null).map(s => s.name),
       passed: this.passed.slice(), escaped: this.passed.length,
       active: this.targets.filter(t => t.state === 'moving').length, total: COUNT,
@@ -132,7 +139,7 @@ export class ArcadeRun {
     if (!this.complete) return null;
     return {
       ...this.snapshot(), correct: this.reason === 'pair', reason: this.reason,
-      escapedThreats: this.passed.filter(name => this.#pair.has(name)),
+      escapedThreats: this.passed.filter(name => this.#targets.has(name)),
       shotLog: this.shotLog.map(shot => ({...shot}))
     };
   }

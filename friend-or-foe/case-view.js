@@ -1,4 +1,4 @@
-import {roleNames, roleVerbs} from './case-layout.js';
+import {formatDispatchTime, roleNames, roleVerbs} from './case-layout.js';
 
 const opSymbols = {
   eq: '=',
@@ -19,7 +19,7 @@ const opSpoken = {
 const opLegend = {
   eq: '= same truth',
   neq: '≠ opposite truth',
-  imp: '⇒ if left, then right',
+  imp: '⇒ if first, then second',
   or: 'or: at least one holds',
   nand: 'not both: at most one holds'
 };
@@ -31,7 +31,14 @@ function element(tag, className, text) {
   return node;
 }
 
-function arrow({from, to}) {
+function formatNameList(names) {
+  if (!names || !names.length) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return names[0] + ' and ' + names[1];
+  return names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1];
+}
+
+function contactLink({from, to}) {
   const item = element('span', 'case-arrow');
   const mark = element('span', 'case-arrow-mark', ' → ');
   mark.setAttribute('aria-hidden', 'true');
@@ -43,7 +50,7 @@ function roleLabel(role) {
   return element('span', 'case-role case-' + role, roleNames[role]);
 }
 
-function roleRow(row, index) {
+function roleEntry(row, index) {
   const divEnd = index === 1 || index === 3 ? ' case-div-end' : '';
   const entry = element('div', 'case-row' + (row.disputed ? ' case-unconfirmed' : '') + divEnd);
   const term = element('dt', 'case-row-label');
@@ -54,11 +61,16 @@ function roleRow(row, index) {
     marker.setAttribute('aria-hidden', 'true');
     name.append(marker, element('span', 'case-sr', ' direction unconfirmed'));
   }
-  term.append(name, element('small', 'case-verb', roleVerbs[row.role]));
+  const meta = element('span', 'case-role-meta');
+  meta.append(element('small', 'case-verb', roleVerbs[row.role]));
+  if (row.time) {
+    meta.append(element('time', 'case-time', formatDispatchTime(row.time)));
+  }
+  term.append(name, meta);
   const links = element('dd', 'case-links');
   row.links.forEach((link, i) => {
     const cell = element('span', 'case-link-cell');
-    cell.append(arrow(link));
+    cell.append(contactLink(link));
     if (row.disputed && row.alt && row.alt.index === i) {
       cell.append(element('small', 'case-alt', 'or ' + row.alt.link.from + ' → ' + row.alt.link.to + '?'));
     }
@@ -73,12 +85,13 @@ function roleRow(row, index) {
 
 function claim(clue) {
   const item = element('span', 'case-claim');
-  item.append(roleLabel(clue.role), arrow(clue));
+  item.append(roleLabel(clue.role), contactLink(clue));
   return item;
 }
 
-function reportLine(report) {
+function reportLine(report, index) {
   const line = element('li', 'case-report');
+  if (typeof line.setAttribute === 'function') line.setAttribute('data-report-index', String(index));
   if (!report.left) {
     line.append(
       element('span', 'case-fact', report.op === 'verified' ? 'Verified' : 'Ruled out'),
@@ -100,23 +113,21 @@ function reportLine(report) {
   return line;
 }
 
-function easyReport(report, rows) {
-  const leftKnown = rows.some(row => row.role === report.left.role && !row.disputed);
-  const confirmed = leftKnown ? report.left : report.right;
+function easyReport(report) {
   const block = element('section', 'case-reports');
   const explainMap = {
-    eq: 'Both claims are true or both are false.',
-    neq: 'Exactly one claim is true.',
-    imp: 'If the left claim holds, the right claim must hold.',
-    or: 'At least one of the two claims holds.',
-    nand: 'At most one of the two claims holds (not both).'
+    eq: '= same truth: both claims hold or both fail.',
+    neq: '≠ opposite truth: exactly one claim holds.',
+    imp: '⇒ if the first claim holds, the second must hold.',
+    or: 'or: at least one of the two claims holds.',
+    nand: 'not both: at most one of the two claims holds.'
   };
   block.append(
-    element('h3', '', 'Check the ' + roleNames[confirmed.role] + ' row first'),
-    element('p', 'case-key', explainMap[report.op])
+    element('h3', '', 'Cross-check'),
+    element('p', 'case-key', explainMap[report.op] || opLegend[report.op] || '')
   );
   const list = element('ul', 'case-report-list');
-  list.append(reportLine(report));
+  list.append(reportLine(report, 0));
   block.append(list);
   return block;
 }
@@ -167,26 +178,26 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
   }
 
   const records = element('dl', 'case-records');
-  records.setAttribute('aria-label', 'Intelligence records by category');
-  evidence.rows.forEach((row, index) => records.append(roleRow(row, index)));
+  records.setAttribute('aria-label', 'Intelligence files by category');
+  evidence.rows.forEach((row, index) => records.append(roleEntry(row, index)));
   board.append(records);
 
   const keyNotes = [];
   if (evidence.rows.some(row => row.disputed && !row.alias && !row.alt)) {
-    keyNotes.push('? beside a role means both arrows may run backward.');
+    keyNotes.push('? beside a category means both contacts may run the opposite way.');
   }
   if (evidence.rows.some(row => row.disputed && row.alias)) {
-    keyNotes.push('Swap trades those two names everywhere in that row.');
+    keyNotes.push('Swap trades those two names throughout that file.');
   }
   if (evidence.rows.some(row => row.disputed && row.alt)) {
-    keyNotes.push('An “or X → Y?” tag marks an alternate contact for that link.');
+    keyNotes.push('An “or X → Y?” tag marks a disputed contact.');
   }
   if (keyNotes.length) {
     board.append(element('p', 'case-key', keyNotes.join(' ')));
   }
 
   if (evidence.level === 'easy' && evidence.reports.length === 1 && evidence.reports[0].left) {
-    board.append(easyReport(evidence.reports[0], evidence.rows));
+    board.append(easyReport(evidence.reports[0]));
   } else if (evidence.reports.length) {
     const reports = element('section', 'case-reports');
     reports.append(element('h3', '', 'Cross-checks'));
@@ -195,7 +206,7 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
       reports.append(element('p', 'case-key', presentOps.map(op => opLegend[op]).join(' · ')));
     }
     const list = element('ul', 'case-report-list');
-    for (const report of evidence.reports) list.append(reportLine(report));
+    evidence.reports.forEach((report, index) => list.append(reportLine(report, index)));
     reports.append(list);
     board.append(reports);
   }
@@ -204,15 +215,40 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
 }
 
 export function renderCaseResult(root, trial) {
+  const targets = trial.targets || trial.pair;
   const panel = element('section', 'case-result');
   panel.append(
-    element('p', 'case-title', trial.evidence.title),
-    element('h3', '', 'Why ' + trial.pair.join(' and '))
+    element('p', 'case-title', 'Debrief · ' + trial.evidence.title),
+    element('h3', '', 'Why ' + formatNameList(targets))
   );
+  if (trial.rivalDebrief) {
+    const rival = trial.rivalDebrief;
+    const line = element(
+      'p',
+      'case-rival',
+      'Rival ' + formatNameList(rival.rivalTargets) + ' ruled out by: ' + rival.defeatedBy
+    );
+    panel.append(line);
+  }
   const list = element('ul', 'case-proof');
   for (const explanation of trial.proof) list.append(element('li', '', explanation));
   panel.append(list);
-  root.replaceChildren(panel);
+
+  const hasExistingFile = typeof root.querySelector === 'function' && Boolean(root.querySelector('.case-file'));
+  if (hasExistingFile && typeof root.prepend === 'function') {
+    const oldResult = root.querySelector('.case-result');
+    if (oldResult && typeof oldResult.remove === 'function') oldResult.remove();
+    if (typeof root.querySelectorAll === 'function') {
+      root.querySelectorAll('.case-decisive').forEach(node => node.classList.remove('case-decisive'));
+      if (trial.rivalDebrief && typeof trial.rivalDebrief.reportIndex === 'number') {
+        const hit = root.querySelector(`[data-report-index="${trial.rivalDebrief.reportIndex}"]`);
+        if (hit) hit.classList.add('case-decisive');
+      }
+    }
+    root.prepend(panel);
+  } else {
+    root.replaceChildren(panel);
+  }
 }
 
 export function renderCaseGuide(root, level, {shortlist = true} = {}) {
@@ -224,16 +260,16 @@ export function renderCaseGuide(root, level, {shortlist = true} = {}) {
   };
   section(
     'Read all six intelligence categories',
-    'Each category records a distinct operational link: Friend backs, Foe opposes, Spy watches, Double agent leaks to, Civilian reports to, and Foreigner handles. Arrows always run from the actor on the left to the recipient on the right. Depending on the order, even an ally or civilian may belong in the target pair.'
+    'Each category logs a distinct operational contact with a dispatch timestamp (01:00–06:00): Friend vouches for, Foe targets, Spy shadows, Double agent leaks to, Civilian tips off, and Foreigner meets. Each dispatch shows the actor first and the recipient second. Every trial assigns between one and four targets with matching bullets; depending on the order, even an ally or civilian may be marked.'
   );
   if ((level === 'super-easy' || level === 'very-easy') && shortlist) {
-    section('Use the shortlist', 'All six rows are confirmed, and the answer pair is among the four shortlist names. You can uncheck Shortlist at any time to weigh all ten targets.');
+    section('Use the shortlist', 'All six category files are confirmed, and every assigned target appears in the shortlist. You can uncheck Shortlist at any time to weigh all ten suspects.');
   } else if (level === 'super-easy' || level === 'very-easy') {
-    section('Check the whole file', 'All six rows are confirmed. Weigh every suspect across all six categories to find the exact pair required by the order.');
+    section('Check the whole dossier', 'All six category files are confirmed. Weigh every suspect across all six categories and dispatch times to identify every target required by the order.');
   } else if (level === 'easy') {
-    section('Settle one disputed record', 'Five rows are confirmed and one is disputed. Check the confirmed claim first, then use =, ≠, ⇒ (if left then right), or (at least one), or not both (at most one) to settle the disputed row.');
+    section('Settle one disputed file', 'Five category files are confirmed and one is disputed. Compare the cross-check against the confirmed file using = (same truth) or ≠ (opposite truth) to settle the disputed file.');
   } else {
-    section('Resolve coupled cross-checks', 'A ? row may reverse both arrows; a Swap row may trade two names; an “or X → Y?” tag marks an alternate contact. Cross-checks form coupled logic cycles with no standalone handouts: test an interpretation around the cycle to rule out every impossible reading.');
+    section('Resolve coupled cross-checks', 'A ? file may reverse both contacts; a Swap file may trade two names; an “or X → Y?” tag marks a disputed contact. Cross-checks form coupled cycles with no standalone handouts: test an interpretation around the cycle to eliminate every impossible reading.');
   }
   root.replaceChildren(guide);
 }

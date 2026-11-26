@@ -2,7 +2,7 @@ import {caseCatalog} from './case-catalog.js';
 import {nearMisses} from './case-decoys.js';
 import {DOMAINS, evaluateFamily, familiesForLevel, getFamily} from './case-families.js';
 import {alternateLinks, caseRoles, edgesFor, layoutFor, seededDraw, shuffled, symbols} from './case-layout.js';
-import {buildCrossChecks, pairKey, reportHolds, solveCaseEvidence as solveEvidenceCore} from './case-logic.js';
+import {buildCrossChecks, pairKey, reportHolds, solveCaseEvidence as solveEvidenceCore, targetKey} from './case-logic.js';
 import {networkRoster} from './roster.js';
 
 export {reportHolds};
@@ -19,9 +19,8 @@ function takeFromBag(items, old, draw, avoidRepeat = true) {
   return {order, index: 0};
 }
 
-// Build a 100-trial family schedule divided into 10 shuffled blocks of 10 trials,
-// where EVERY 10-trial block visits all 10 espionage domains once in random order
-// and cycles through all 100 families with zero repeats!
+// 100-trial family schedule divided into 10 shuffled blocks of 10 trials,
+// visiting all 10 espionage domains once per block with zero repeats across all 100 families.
 function buildDomainBlockOrder(families, draw, lastId = null) {
   const byDomain = Array.from({length: DOMAINS.length}, () => []);
   for (const f of families) byDomain[f.domain].push(f.id);
@@ -54,20 +53,27 @@ function maskToIndices(mask) {
   return out;
 }
 
-function assignNames(previous, forbidden, draw) {
-  if (!previous || previous.length !== 2 || !previous.every(name => networkRoster.includes(name))) {
+// Assign concrete suspect names to symbols A..J while ensuring the previous trial's exact
+// target set NEVER repeats as the current answer or as any forbidden single-row rival set!
+function assignNames(previousTargets, forbiddenKeys, draw) {
+  if (!previousTargets || previousTargets.length < 1 || previousTargets.length > 4 ||
+      !previousTargets.every(name => networkRoster.includes(name))) {
     return new Map(shuffled(networkRoster, draw).map((name, i) => [symbols[i], name]));
   }
-  const slots = [];
-  symbols.forEach((a, i) => {
-    for (const b of symbols.slice(i + 1)) {
-      if (!forbidden.has(pairKey([a, b]))) slots.push([a, b]);
-    }
-  });
-  const hosts = slots.length ? pick(slots, draw) : [symbols[0], symbols[1]];
-  const remaining = shuffled(networkRoster.filter(name => !previous.includes(name)), draw);
-  const old = shuffled(previous, draw);
-  return new Map(symbols.map(sym => [sym, hosts.includes(sym) ? old[hosts.indexOf(sym)] : remaining.pop()]));
+  const k = previousTargets.length;
+  // Pick a random k-subset of symbols that is NOT in forbiddenKeys
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const perm = shuffled(symbols, draw);
+    const hosts = perm.slice(0, k);
+    if (forbiddenKeys.has(targetKey(hosts))) continue;
+    const remaining = shuffled(networkRoster.filter(name => !previousTargets.includes(name)), draw);
+    const old = shuffled(previousTargets, draw);
+    const map = new Map();
+    hosts.forEach((sym, i) => map.set(sym, old[i]));
+    perm.slice(k).forEach((sym, i) => map.set(sym, remaining[i]));
+    return map;
+  }
+  return new Map(shuffled(networkRoster, draw).map((name, i) => [symbols[i], name]));
 }
 
 export function solveCaseEvidence(evidence) {
@@ -76,21 +82,21 @@ export function solveCaseEvidence(evidence) {
 
 // Compute all worlds admitted by disputedMask on the raw symbol layout,
 // requiring all 10 suspects to appear so roster completeness can never leak a cross-check.
-function computeWorldPairs(familyId, rawRows, anchorSym, disputedMask) {
+function computeWorldTargets(familyId, rawRows, anchorSym, disputedMask) {
   const fixedMask = (~disputedMask) & 63;
-  const worldPairs = new Array(64).fill(null);
+  const worldTargets = new Array(64).fill(null);
   for (let m = 0; m < 64; m++) {
     if (m & fixedMask) continue;
     const edges = edgesFor(rawRows, m);
     const seen = new Set();
     for (const e of edges) { seen.add(e.from); seen.add(e.to); }
     if (seen.size < 10) continue;
-    worldPairs[m] = evaluateFamily(familyId, edges, anchorSym, false).pair;
+    worldTargets[m] = evaluateFamily(familyId, edges, anchorSym, false).pair;
   }
-  return worldPairs;
+  return worldTargets;
 }
 
-// Present a row cleanly to the player: if disputed, randomly flip its displayed state (50%)
+// Present a file cleanly to the player: if disputed, randomly flip its displayed state (50%)
 // while preserving an exact involution across all 3 uncertainty modes (reverse, alias, alt).
 function presentRow(resolvedRow, disputed, draw) {
   const exchange = disputed && draw() < 0.5;
@@ -99,6 +105,7 @@ function presentRow(resolvedRow, disputed, draw) {
 
   const row = {
     role: resolvedRow.role,
+    time: resolvedRow.time,
     links: swapOrder ? [baseLinks[1], baseLinks[0]] : [baseLinks[0], baseLinks[1]],
     disputed
   };
@@ -135,64 +142,61 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
   const raw = layoutFor(seed);
   const originalEdges = edgesFor(raw, 0);
   const anchorSym = symbols[anchorIndex];
-  const actualPair = evaluateFamily(id, originalEdges, anchorSym, false).pair;
-  const correctKey = pairKey(actualPair);
+  const actualTargets = evaluateFamily(id, originalEdges, anchorSym, false).pair;
+  const correctKey = targetKey(actualTargets);
   const disputedIndices = maskToIndices(disputedMask);
 
-  // Precompute valid world pairs on symbol graph for strict pair-level cross-check synthesis
-  const worldPairs = disputedIndices.length
-    ? computeWorldPairs(id, raw, anchorSym, disputedMask)
+  const worldTargets = disputedIndices.length
+    ? computeWorldTargets(id, raw, anchorSym, disputedMask)
     : null;
 
-  // Ensure the previous trial's pair does NOT collide with the current answer (nor with single-row rivals)
+  // Ensure the previous trial's exact target set does NOT collide with the current answer
+  // OR with any single-disputed-world rival of the same size (eliminating prevKey cross-check leaks!).
   const forbidden = new Set([correctKey]);
-  if (previous?.pair && worldPairs) {
-    for (const idx of disputedIndices) {
-      const rp = worldPairs[1 << idx];
-      if (rp && rp.length === 2) forbidden.add(pairKey(rp));
+  const prevTargets = previous?.targets || previous?.pair || null;
+  if (prevTargets && worldTargets && prevTargets.length === actualTargets.length) {
+    for (let m = 1; m < 64; m++) {
+      const rp = worldTargets[m];
+      if (rp && rp.length === actualTargets.length && forbidden.size < 25) {
+        forbidden.add(targetKey(rp));
+      }
     }
   }
 
-  const names = assignNames(previous?.pair, forbidden, draw);
+  const names = assignNames(prevTargets, forbidden, draw);
   const renameLink = ({from, to}) => ({from: names.get(from), to: names.get(to)});
   const resolved = raw.map(row => ({
     role: row.role,
+    time: row.time,
     links: row.links.map(renameLink),
     ...(row.alias ? {alias: row.alias.map(s => names.get(s))} : {}),
     ...(row.alt ? {alt: {index: row.alt.index, link: renameLink(row.alt.link)}} : {})
   }));
 
   let prevKeySym = null;
-  if (previous?.pair?.length === 2) {
-    const prevSyms = symbols.filter(s => previous.pair.includes(names.get(s)));
-    if (prevSyms.length === 2) prevKeySym = pairKey(prevSyms);
+  if (prevTargets && prevTargets.length === actualTargets.length) {
+    const prevSyms = symbols.filter(s => prevTargets.includes(names.get(s)));
+    if (prevSyms.length === actualTargets.length) prevKeySym = targetKey(prevSyms);
   }
 
-  // Build balanced, strictly pair-minimal coupled 2-SAT cross-checks (zero Verified handouts on Moderate/Hard)
+  // Strictly enforce prevKeySym exclusion on EVERY retry so prevTarget never leaks a cross-check!
   let reports = [];
   if (disputedIndices.length) {
-    reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, prevKeySym, level, draw);
-    if (!reports) {
-      reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, null, level, draw);
-    }
-    if (!reports) {
-      for (let retry = 1; retry <= 16 && !reports; retry++) {
-        reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, prevKeySym, level, seededDraw(seed + retry * 9973));
-      }
+    reports = buildCrossChecks(resolved, disputedIndices, worldTargets, correctKey, prevKeySym, level, draw);
+    for (let retry = 1; retry <= 24 && !reports; retry++) {
+      reports = buildCrossChecks(resolved, disputedIndices, worldTargets, correctKey, prevKeySym, level, seededDraw(seed + retry * 9973));
     }
     if (!reports) {
       const certSalt = level === 'hard' ? 0x7f4a : level === 'medium' ? 0x9e37 : 0x51a7;
-      reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, null, level, seededDraw(seed ^ certSalt));
+      reports = buildCrossChecks(resolved, disputedIndices, worldTargets, correctKey, prevKeySym, level, seededDraw(seed ^ certSalt));
     }
     if (!reports) {
-      for (let retry = 17; retry <= 40 && !reports; retry++) {
-        reports = buildCrossChecks(resolved, disputedIndices, worldPairs, correctKey, null, level, seededDraw(seed + retry * 9973));
-      }
+      reports = buildCrossChecks(resolved, disputedIndices, worldTargets, correctKey, null, level, seededDraw(seed ^ 0x4242));
     }
     reports = reports || [];
   }
 
-  // Randomly orient each disputed row (50% printed as true, 50% printed as alternate)
+  // Randomly orient each disputed file (50% printed as true, 50% printed as alternate)
   const rows = resolved.map((row, i) => presentRow(row, disputedIndices.includes(i), draw));
   rows.sort((a, b) => caseRoles.indexOf(a.role) - caseRoles.indexOf(b.role));
 
@@ -202,8 +206,8 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
   let leads = [];
   if (includeShortlist) {
     const alternatives = raw.map((_, i) => edgesFor(raw, 1 << i));
-    const decoys = nearMisses(id, originalEdges, anchorSym, actualPair, alternatives, evaluateFamily);
-    leads = shuffled([...actualPair, ...decoys].map(s => names.get(s)), draw);
+    const decoys = nearMisses(id, originalEdges, anchorSym, actualTargets, alternatives, evaluateFamily);
+    leads = shuffled([...actualTargets, ...decoys].map(s => names.get(s)), draw);
   }
 
   const anchor = names.get(anchorSym);
@@ -221,13 +225,14 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
     order,
     hint,
     anchor,
+    targetCount: actualTargets.length,
     rows,
     reports,
     leads
   };
 
   const answer = solveCaseEvidence(evidence);
-  if (answer.pair.length !== 2) {
+  if (answer.pair.length < 1 || answer.pair.length > 4) {
     throw new Error('Inconsistent case ' + id + '/' + seed);
   }
   return {

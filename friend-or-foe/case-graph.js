@@ -1,20 +1,21 @@
-import {caseRoles, roleNames, roleVerbs} from './case-layout.js';
+import {caseRoles, formatDispatchTime, roleNames, roleVerbs} from './case-layout.js';
 
 export const DOMAINS = [
   'Cover & Betrayal',
   'Surveillance & Blind Spots',
-  'Foreign Infiltration',
-  'Civilian Exposure',
-  'Proxy & Cut-Outs',
+  'Foreign Contact',
+  'Civilian Tip-Offs',
+  'Proxy Chains',
   'Alibi & Contradiction',
-  'Perspective & Scope',
-  'Tainted Testimony',
+  'Chronology & Timing',
+  'Tainted Sources',
   'Double Lives',
-  'Network Leverage'
+  'Command & Leverage'
 ];
 
 export function fmtEdge(edge) {
-  return roleNames[edge.role] + ': ' + edge.from + ' ' + roleVerbs[edge.role] + ' ' + edge.to;
+  const stamp = edge.time ? ' [' + formatDispatchTime(edge.time) + ']' : '';
+  return roleNames[edge.role] + stamp + ': ' + edge.from + ' ' + roleVerbs[edge.role] + ' ' + edge.to;
 }
 
 export function buildGraph(edges) {
@@ -22,11 +23,13 @@ export function buildGraph(edges) {
   const byOut = new Map();
   const byIn = new Map();
   const byAll = new Map();
+  const roleTime = new Map();
   const peopleSet = new Set();
 
   for (const edge of edges) {
     if (edge.from === edge.to) continue;
     clean.push(edge);
+    if (edge.time && !roleTime.has(edge.role)) roleTime.set(edge.role, edge.time);
     peopleSet.add(edge.from);
     peopleSet.add(edge.to);
     if (!byOut.has(edge.from)) byOut.set(edge.from, []);
@@ -69,6 +72,7 @@ export function buildGraph(edges) {
     const list = mode === 'out' ? out(name) : mode === 'in' ? inc(name) : touch(name);
     return new Set(list.map(e => e.role));
   };
+  const timeOf = role => roleTime.get(role) ?? 0;
 
   return {
     edges: clean,
@@ -84,54 +88,9 @@ export function buildGraph(edges) {
     between,
     neighbors,
     distinctRoles,
+    timeOf,
     fmt: fmtEdge
   };
-}
-
-// Helper for ranking families: returns exact top-scoring suspects with proofs.
-export function pickHighest(people, scoreFn, includeProof, minScore = -Infinity) {
-  let best = minScore;
-  const winners = [];
-  for (const name of people) {
-    const res = scoreFn(name);
-    if (!res || res.score < best) continue;
-    if (res.score > best) {
-      best = res.score;
-      winners.length = 0;
-    }
-    winners.push({name, reason: includeProof ? res.reason : ''});
-  }
-  const pair = winners.map(w => w.name).sort();
-  return {
-    pair,
-    proof: includeProof ? [...new Set(winners.map(w => w.reason).filter(Boolean))] : []
-  };
-}
-
-// Helper for "Shoot the top two" ranking families: returns the unambiguous #1 and #2 suspects
-// whenever the 2nd-highest score is strictly greater than the 3rd-highest score (so there is
-// no tie at the cutoff, whether #1 > #2 > #3 or #1 == #2 > #3).
-export function pickTopTwo(people, scoreFn, includeProof, minScore = -Infinity) {
-  const scored = [];
-  for (const name of people) {
-    const res = scoreFn(name);
-    if (!res || res.score < minScore) continue;
-    scored.push({name, score: res.score, reason: includeProof ? res.reason : ''});
-  }
-  if (scored.length < 2) return {pair: [], proof: []};
-  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-  if (scored.length >= 3 && scored[1].score === scored[2].score) {
-    return {pair: [], proof: []};
-  }
-  const top = [scored[0], scored[1]];
-  const pair = top.map(w => w.name).sort();
-  const proof = includeProof
-    ? [
-        ...top.map(w => w.reason).filter(Boolean),
-        ...(scored.length >= 3 ? ['Next highest is ' + scored[2].name + ' (' + scored[2].score + ').'] : [])
-      ]
-    : [];
-  return {pair, proof};
 }
 
 export function collectMatches(people, matchFn, includeProof) {
@@ -143,6 +102,7 @@ export function collectMatches(people, matchFn, includeProof) {
   const pair = [...answers.keys()].sort();
   return {
     pair,
+    targets: pair,
     proof: includeProof ? [...new Set(pair.map(n => answers.get(n)).filter(Boolean))] : []
   };
 }
@@ -156,6 +116,7 @@ export function collectPairs(pairList, includeProof) {
   const pair = [...answers.keys()].sort();
   return {
     pair,
+    targets: pair,
     proof: includeProof ? [...new Set(pair.map(n => answers.get(n)).filter(Boolean))] : []
   };
 }
