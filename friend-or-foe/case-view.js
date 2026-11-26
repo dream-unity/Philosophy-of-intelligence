@@ -135,7 +135,7 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
   brief.append(element('h2', '', evidence.order));
   board.append(brief);
 
-  const hasShortlistToggle = evidence.level === 'super-easy' || evidence.level === 'very-easy';
+  const hasShortlistToggle = evidence.level === 'super-super-easy' || evidence.level === 'super-easy' || evidence.level === 'very-easy';
   if (hasShortlistToggle) {
     const leads = element('div', 'case-leads');
     const toggle = element('label', 'case-shortlist-toggle');
@@ -280,9 +280,10 @@ export function renderCaseGuide(root, level, {shortlist = true} = {}) {
     'Read all six intelligence roles',
     'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00), an operation tag (split across two active sites), and an action verb adapted to the case. Each contact runs from the operative acting in that role to the person they reach. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'
   );
-  if ((level === 'super-easy' || level === 'very-easy') && shortlist) {
+  const isIntro = level === 'super-super-easy' || level === 'super-easy' || level === 'very-easy';
+  if (isIntro && shortlist) {
     section('Use the shortlist', 'All six dispatches are confirmed, and every assigned target is on the shortlist. Uncheck Shortlist at any time to weigh all ten suspects.');
-  } else if (level === 'super-easy' || level === 'very-easy') {
+  } else if (isIntro) {
     section('Weigh all ten suspects', 'All six dispatches are confirmed. Cross-reference every suspect across all six roles and dispatch times to identify every target required by the order.');
   } else if (level === 'easy') {
     section('Settle one disputed dispatch', 'Five dispatches are confirmed and one is disputed. Compare the cross-check against the confirmed dispatch using = (same truth) or ≠ (opposite truth) to settle the disputed one.');

@@ -113,12 +113,12 @@ function countDisputedComponents(rows, reports) {
   return comps;
 }
 
-test('friend-or-foe catalog has 500 distinct families (100 per difficulty) with 12 certified boards each and zero banned meta-UI wording', async () => {
+test('friend-or-foe catalog has 600 distinct families (100 per difficulty) with 12 certified boards each and zero banned meta-UI wording', async () => {
   const {caseCatalog} = await loadModule('friend-or-foe/case-catalog.js');
   const {allFamilies, familiesForLevel, DOMAINS} = await loadModule('friend-or-foe/case-families.js');
   assert.equal(DOMAINS.length, 10);
-  assert.equal(allFamilies.length, 500);
-  for (const level of ['super-easy', 'very-easy', 'easy', 'medium', 'hard']) {
+  assert.equal(allFamilies.length, 600);
+  for (const level of ['super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard']) {
     const list = familiesForLevel(level);
     assert.equal(list.length, 100, `Expected 100 families for ${level}`);
     assert.equal(new Set(list.map(f => f.id)).size, 100);
@@ -135,12 +135,12 @@ test('friend-or-foe catalog has 500 distinct families (100 per difficulty) with 
   }
 });
 
-test('all five difficulties cycle 100 unique families with variable target counts (1-4), leak-free cross-checks, and single connected Hard webs', async () => {
+test('all six difficulties cycle 100 unique families with variable target counts (1-4), leak-free cross-checks, and single connected Hard webs', async () => {
   const {makeCaseTrial, solveCaseEvidence} = await loadModule('friend-or-foe/case-decks.js');
   const {seededDraw} = await loadModule('friend-or-foe/case-layout.js');
   const draw = seededDraw(424242);
 
-  for (const level of ['super-easy', 'very-easy', 'easy', 'medium', 'hard']) {
+  for (const level of ['super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard']) {
     let prev = null;
     const seenFamilies = new Set();
     const seenTargetSizes = new Set();
@@ -176,7 +176,7 @@ test('all five difficulties cycle 100 unique families with variable target count
       assert.deepEqual(incCounts, [3, 3], `${level} trial ${i} must split 6 dispatches 3v3 across two operational sites`);
 
       const disputedCount = trial.evidence.rows.filter(r => r.disputed).length;
-      if (level === 'super-easy' || level === 'very-easy') {
+      if (level === 'super-super-easy' || level === 'super-easy' || level === 'very-easy') {
         assert.equal(disputedCount, 0);
         assert.ok(trial.evidence.leads.length >= trial.pair.length + 2);
         assert.ok(trial.pair.every(name => trial.evidence.leads.includes(name)));
@@ -265,7 +265,7 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
   const formMatch = html.match(/<form id="run-form">[\s\S]*?<\/form>/);
   assert.ok(formMatch, 'Expected #run-form in friend-or-foe/index.html');
   assert.equal(/type=["']checkbox["']/.test(formMatch[0]), false, 'Setup form must not contain a checkbox');
-  for (const id of ['difficulty-super-easy', 'difficulty-very-easy', 'difficulty-easy', 'difficulty-medium', 'difficulty-hard']) {
+  for (const id of ['difficulty-super-super-easy', 'difficulty-super-easy', 'difficulty-very-easy', 'difficulty-easy', 'difficulty-medium', 'difficulty-hard']) {
     assert.ok(formMatch[0].includes(`id="${id}"`), `Expected radio #${id} in setup form`);
   }
 
@@ -276,7 +276,7 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
   global.document = makeFakeDocument();
   try {
     const draw = seededDraw(999);
-    for (const level of ['super-easy', 'very-easy']) {
+    for (const level of ['super-super-easy', 'super-easy', 'very-easy']) {
       const trial = makeCaseTrial(level, null, draw);
       const root = global.document.createElement('section');
       let toggled = null;
@@ -392,9 +392,9 @@ test('Domain-contextual operational role verbs vary across domains and render in
   }
 });
 
-test('All five difficulty tiers eliminate directionless "tied to" matching, permanent safe/threat role pooling, monotonous openings, and article typos', async () => {
+test('All six difficulty tiers eliminate directionless "tied to" matching, permanent safe/threat role pooling, monotonous openings, and article typos', async () => {
   const {familiesByLevel} = await loadModule('friend-or-foe/case-families.js');
-  for (const level of ['super-easy', 'very-easy', 'easy', 'medium', 'hard']) {
+  for (const level of ['super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard']) {
     const list = familiesByLevel[level];
     const tiedCount = list.filter(f => /\btied to\b|\btie\b|\bties\b/i.test(f.order)).length;
     assert.equal(tiedCount, 0, `${level} must have 0 directionless "tied to" orders, got ${tiedCount}`);

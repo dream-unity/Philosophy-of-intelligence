@@ -200,7 +200,7 @@ function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
     const flipInfo = rowFlipSummary(family.id, rows, anchor, correctKey, sz);
     const sizeBonus = (prevSize && sz !== prevSize) ? 18 : 0;
 
-    if (level === 'super-easy' || level === 'very-easy') {
+    if (level === 'super-super-easy' || level === 'super-easy' || level === 'very-easy') {
       if (flipInfo.flipsDifferent < 2) continue;
       const score = delSens * 12 + flipInfo.flipsDifferent * 4 + sizeBonus;
       if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: 0, raw: rows, actualTargets, score};
@@ -259,7 +259,7 @@ function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
 
 export function makeCaseTrial(level, previous = null, draw = Math.random, options = {}) {
   if (level === 'moderate') level = 'medium';
-  if (!['super-easy', 'very-easy', 'easy', 'medium', 'hard'].includes(level)) {
+  if (!['super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard'].includes(level)) {
     throw new RangeError('Unknown difficulty ' + level);
   }
 
@@ -349,8 +349,8 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
   const rows = resolved.map((row, i) => presentRow(row, disputedIndices.includes(i), draw));
   rows.sort((a, b) => caseRoles.indexOf(a.role) - caseRoles.indexOf(b.role));
 
-  // Optional shortlist on Super Easy & Very Easy only
-  const supportsShortlist = level === 'super-easy' || level === 'very-easy';
+  // Optional shortlist on Super-super Easy, Super Easy & Very Easy only
+  const supportsShortlist = level === 'super-super-easy' || level === 'super-easy' || level === 'very-easy';
   const includeShortlist = supportsShortlist && options?.shortlist !== false;
   let leads = [];
   if (includeShortlist) {

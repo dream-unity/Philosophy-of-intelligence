@@ -193,7 +193,7 @@ body[data-phase="ready"] .cabinet {
 }
 
 @media (orientation: portrait) and (min-width: 600px) {
-  .level-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .level-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (orientation: landscape) and (max-height: 680px) {

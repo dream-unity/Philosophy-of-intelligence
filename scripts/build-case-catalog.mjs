@@ -1,11 +1,12 @@
 import {writeFileSync} from 'node:fs';
 import {availableParallelism} from 'node:os';
 import {isMainThread, parentPort, Worker, workerData} from 'node:worker_threads';
+import {caseCatalog as existingCatalog} from '../friend-or-foe/case-catalog.js';
 import {allFamilies, evaluateFamily, familiesByLevel} from '../friend-or-foe/case-families.js';
 import {caseRoles, edgesFor, layoutFor, seededDraw, symbols} from '../friend-or-foe/case-layout.js';
 import {buildCrossChecks, targetKey} from '../friend-or-foe/case-logic.js';
 
-// Certify 12 distinct, high-conflict boards for EVERY ONE of the 500 families (6,000 boards total).
+// Certify 12 distinct, high-conflict boards for EVERY ONE of the 600 families (7,200 boards total).
 // Guarantees enforced at build time:
 //   1. ZERO immersion-breaking words ("row", "arrow", "left/right side", "score", "points", "top two", "IQ").
 //   2. ZERO semantically duplicate families within any difficulty (checked across 220 test boards).
@@ -108,7 +109,7 @@ function certifyBoard(family, seed, anchorIdx, strictHardDel = true, skipSizes =
   const flipInfo = rowFlipProfile(family.id, rows, anchor, correctKey, targetSize);
   const delSens = countDeletionSensitiveCategories(family.id, baseEdges, anchor, correctKey, targetSize);
 
-  if (family.tier === 'super-easy' || family.tier === 'very-easy') {
+  if (family.tier === 'super-super-easy' || family.tier === 'super-easy' || family.tier === 'very-easy') {
     if (flipInfo.flipsDifferent < 2 || delSens < 2) return null;
     const score = delSens * 12 + flipInfo.flipsDifferent * 4 + flipInfo.flipsSameSizeRival * 3;
     return {entry: [seed, anchorIdx, 0], score, delSens, flips: flipInfo.flipsDifferent, targetSize};
@@ -217,7 +218,7 @@ function certifyRange(indices) {
     // Fallback pass if a rare family needs additional boards (or Hard delSens === 3) to reach 12
     if (pool.length < TARGET_PER_FAMILY) {
       const seenSeeds = new Set(pool.map(p => p.entry[0]));
-      for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY * 3 && pool.length < TARGET_PER_FAMILY; offset++) {
+      for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY * 5 && pool.length < TARGET_PER_FAMILY; offset++) {
         const seed = (baseSeed + offset * 7919) >>> 0;
         if (seenSeeds.has(seed)) continue;
         const anchorIdx = family.useAnchor ? (offset % symbols.length) : 0;
@@ -286,18 +287,28 @@ if (!isMainThread) {
     console.error('SEMANTIC DUPLICATES DETECTED:\n' + dupErrors.join('\n'));
     process.exit(1);
   }
-  console.log('Pre-flight OK: 0 banned meta-UI words, 0 semantic duplicate predicates across all 500 families.');
+  console.log(`Pre-flight OK: 0 banned meta-UI words, 0 semantic duplicate predicates across all ${allFamilies.length} families.`);
 
-  // Step 2: Interleave family indices across workers for balanced CPU load across all 5 tiers
-  const workersCount = Math.max(1, Math.min(4, availableParallelism()));
+  const onlyMissing = process.argv.includes('--only-missing');
+  const targetIndices = [];
+  for (let fi = 0; fi < allFamilies.length; fi++) {
+    const id = allFamilies[fi].id;
+    if (onlyMissing && Array.isArray(existingCatalog[id]) && existingCatalog[id].length === TARGET_PER_FAMILY) continue;
+    targetIndices.push(fi);
+  }
+
+  // Step 2: Interleave family indices across workers for balanced CPU load
+  const workersCount = Math.max(1, Math.min(4, availableParallelism(), targetIndices.length || 1));
   const buckets = Array.from({length: workersCount}, () => []);
-  for (let fi = 0; fi < allFamilies.length; fi++) buckets[fi % workersCount].push(fi);
+  targetIndices.forEach((fi, idx) => buckets[idx % workersCount].push(fi));
 
-  const workerResults = await Promise.all(buckets.map(indices => new Promise((resolve, reject) => {
-    const w = new Worker(new URL(import.meta.url), {workerData: {indices}});
-    w.on('message', resolve);
-    w.on('error', reject);
-  })));
+  const workerResults = targetIndices.length
+    ? await Promise.all(buckets.map(indices => new Promise((resolve, reject) => {
+        const w = new Worker(new URL(import.meta.url), {workerData: {indices}});
+        w.on('message', resolve);
+        w.on('error', reject);
+      })))
+    : [];
 
   const flat = workerResults.flat().sort((a, b) => a.fi - b.fi);
   const failures = flat.filter(r => r.failed !== undefined);
@@ -307,16 +318,22 @@ if (!isMainThread) {
     process.exit(1);
   }
 
+  const freshById = new Map(flat.map(r => [r.id, r]));
   const catalog = {};
   const tierStats = {};
-  for (const r of flat) {
-    catalog[r.id] = r.entries;
-    const st = (tierStats[r.tier] ??= {families: 0, boards: 0, delSum: 0, flipSum: 0, sizes: {1: 0, 2: 0, 3: 0, 4: 0}});
-    st.families++;
-    st.boards += r.entries.length;
-    st.delSum += r.delSum;
-    st.flipSum += r.flipSum;
-    for (const sz of [1, 2, 3, 4]) st.sizes[sz] += r.sizes[sz];
+  for (const family of allFamilies) {
+    const r = freshById.get(family.id);
+    if (r) {
+      catalog[family.id] = r.entries;
+      const st = (tierStats[r.tier] ??= {families: 0, boards: 0, delSum: 0, flipSum: 0, sizes: {1: 0, 2: 0, 3: 0, 4: 0}});
+      st.families++;
+      st.boards += r.entries.length;
+      st.delSum += r.delSum;
+      st.flipSum += r.flipSum;
+      for (const sz of [1, 2, 3, 4]) st.sizes[sz] += r.sizes[sz];
+    } else {
+      catalog[family.id] = existingCatalog[family.id];
+    }
   }
 
   const lines = [
@@ -331,8 +348,10 @@ if (!isMainThread) {
   });
   lines.push('};', '');
 
+  const totalBoards = keys.length * TARGET_PER_FAMILY;
+  lines[0] = `// Generated by scripts/build-case-catalog.mjs — ${keys.length} families × ${TARGET_PER_FAMILY} certified boards = ${totalBoards} boards.`;
   writeFileSync('friend-or-foe/case-catalog.js', lines.join('\n'));
-  console.log(`\nDone in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${workersCount} workers)! Wrote 6,000 certified boards.`);
+  console.log(`\nDone in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${workersCount} workers)! Wrote ${totalBoards} certified boards.`);
   for (const [tier, st] of Object.entries(tierStats)) {
     const s = st.sizes;
     console.log(

@@ -1,4 +1,5 @@
 import {buildGraph, DOMAINS} from './case-graph.js';
+import {superSuperEasyFamilies} from './families-super-super-easy.js';
 import {superEasyFamilies} from './families-super-easy.js';
 import {veryEasyFamilies} from './families-very-easy.js';
 import {easyFamilies} from './families-easy.js';
@@ -8,6 +9,7 @@ import {hardFamilies} from './families-hard.js';
 export {DOMAINS};
 
 export const familiesByLevel = {
+  'super-super-easy': superSuperEasyFamilies,
   'super-easy': superEasyFamilies,
   'very-easy': veryEasyFamilies,
   'easy': easyFamilies,
@@ -20,7 +22,8 @@ export const allFamilies = [
   ...veryEasyFamilies,
   ...easyFamilies,
   ...moderateFamilies,
-  ...hardFamilies
+  ...hardFamilies,
+  ...superSuperEasyFamilies
 ];
 
 const familyIndex = new Map(allFamilies.map(f => [f.id, f]));

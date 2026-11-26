@@ -16,7 +16,7 @@ test('difficulty is a single pregame choice next to the existing run settings', 
   assert.ok(form, 'Game setup is missing');
   const inputs = form.match(/<input\b[^>]*>/g) ?? [];
   const levels = inputs.filter(input => /\bname="difficulty"/.test(input));
-  assert.deepEqual(levels.map(input => input.match(/\bvalue="([^"]+)"/)?.[1]), ['super-easy', 'very-easy', 'easy', 'medium', 'hard']);
+  assert.deepEqual(levels.map(input => input.match(/\bvalue="([^"]+)"/)?.[1]), ['super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard']);
   assert.ok(levels.every(input => /\btype="radio"/.test(input)));
   for (const input of levels) {
     const label = input.match(/aria-labelledby="([^"]+)"/)?.[1];
@@ -26,7 +26,7 @@ test('difficulty is a single pregame choice next to the existing run settings', 
   }
   const initial = levels.filter(input => /\bchecked(?=[\s/>])/.test(input));
   assert.equal(initial.length, 1);
-  assert.match(initial[0], /\bvalue="super-easy"/);
+  assert.match(initial[0], /\bvalue="super-super-easy"/);
   assert.match(form, /<fieldset[\s>]/);
   assert.match(form, /<legend\b[^>]*>[^<]*difficulty[^<]*<\/legend>/i);
   assert.ok(inputs.some(input => /\bid="count"/.test(input) && /\bmin="20"/.test(input) && /\bmax="1000"/.test(input)));

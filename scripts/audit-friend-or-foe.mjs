@@ -4,7 +4,7 @@ import {evaluateFamily} from '../friend-or-foe/case-families.js';
 import {caseRoles, edgesFor, formatDispatchTime, roleNames, seededDraw, verbsForDomain} from '../friend-or-foe/case-layout.js';
 import {pairKey, reportHolds, truth} from '../friend-or-foe/case-logic.js';
 
-const LEVELS = ['super-easy', 'very-easy', 'easy', 'medium', 'hard'];
+const LEVELS = ['super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard'];
 const TRIALS_PER_LEVEL = 1000;
 const BANNED_RE = /\b(rows?|arrows?|left side|right side|points?|score|top two|IQ|appears? in|appearing|named in|listed|distinct|categor(y|ies)|file|files|acts? in|acting in|acted upon|records?|dossier|overt|covert|hostile|safe|threat)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
 
@@ -125,7 +125,7 @@ function median(arr) {
 const draw = seededDraw(20261125);
 let sampleHardTrial = null;
 
-console.log('=== FRIEND OR FOE — 5,000-TRIAL INDEPENDENT AUDIT (1,000 PER DIFFICULTY) ===\n');
+console.log('=== FRIEND OR FOE — 6,000-TRIAL INDEPENDENT AUDIT (1,000 PER DIFFICULTY) ===\n');
 
 for (const level of LEVELS) {
   let prev = null;

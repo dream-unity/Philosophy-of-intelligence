@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#10171e">
   <meta name="description" content="You’re the intelligence officer. Weigh all six contact dispatches, timestamps, and coupled cross-checks to identify every suspect matching the order before they pass.">
   <title>Friend or Foe · Games</title>
-  <link rel="stylesheet" href="covert-gallery.css?v=fof17">
-  <link rel="stylesheet" href="difficulty.css?v=fof17">
-  <link rel="stylesheet" href="case-view.css?v=fof17">
-  <script type="module" src="dossier-gallery.js?v=fof17"></script>
+  <link rel="stylesheet" href="covert-gallery.css?v=fof18">
+  <link rel="stylesheet" href="difficulty.css?v=fof18">
+  <link rel="stylesheet" href="case-view.css?v=fof18">
+  <script type="module" src="dossier-gallery.js?v=fof18"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -43,8 +43,13 @@
           <fieldset class="levels">
             <legend>Choose a difficulty</legend>
             <div class="level-options">
-              <label class="level-choice level-choice-wide">
-                <input type="radio" id="difficulty-super-easy" name="difficulty" value="super-easy" checked aria-labelledby="super-easy-label" aria-describedby="super-easy-description">
+              <label class="level-choice">
+                <input type="radio" id="difficulty-super-super-easy" name="difficulty" value="super-super-easy" checked aria-labelledby="super-super-easy-label" aria-describedby="super-super-easy-description">
+                <strong id="super-super-easy-label">Super-super Easy</strong>
+                <span id="super-super-easy-description">Confirmed intelligence, single-step calls and optional shortlist.</span>
+              </label>
+              <label class="level-choice">
+                <input type="radio" id="difficulty-super-easy" name="difficulty" value="super-easy" aria-labelledby="super-easy-label" aria-describedby="super-easy-description">
                 <strong id="super-easy-label">Super Easy</strong>
                 <span id="super-easy-description">Confirmed intelligence, direct operational calls and optional shortlist.</span>
               </label>
