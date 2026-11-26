@@ -140,22 +140,65 @@
   background: rgba(171, 227, 205, .12);
 }
 .case-result {
-  margin-bottom: .58rem;
-  padding: .52rem .68rem;
+  margin-bottom: .42rem;
+  padding: .44rem .62rem;
   background: rgba(13, 21, 27, .92);
   border: 1px solid var(--case-div-line);
   border-left: 3px solid var(--mint);
   border-radius: 3px;
 }
-.case-rival {
-  margin: .32rem 0 0;
+.case-debrief-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  flex-wrap: wrap;
+}
+.case-debrief-btn {
+  padding: .14rem .46rem;
+  border: 1px solid var(--case-div-line);
+  border-radius: 3px;
+  background: rgba(24, 37, 46, .95);
+  color: var(--case-ink);
+  font: 600 .74rem/1.2 var(--display);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.case-debrief-btn:hover,
+.case-debrief-btn:focus-visible {
+  border-color: var(--amber);
   color: var(--amber);
-  font: 600 .8rem/1.28 var(--display);
+}
+.case-debrief-next {
+  border-color: rgba(171, 227, 205, .55);
+  color: var(--mint);
+}
+.case-file.case-debrief-active .case-brief {
+  display: none;
+}
+.case-file.case-debrief-active .case-key {
+  display: none;
+}
+.case-file.case-debrief-active .case-records {
+  margin: .18rem 0 .2rem;
+}
+.case-file.case-debrief-active .case-row {
+  padding: .14rem 0;
+}
+.case-file.case-debrief-active .case-reports {
+  margin-top: .28rem;
+}
+.case-file.case-debrief-active .case-report {
+  padding: .14rem .18rem;
+}
+.case-rival {
+  margin: .24rem 0 0;
+  color: var(--amber);
+  font: 600 .8rem/1.25 var(--display);
 }
 .case-guide { display: grid; gap: .65rem; margin-bottom: .85rem; }
-.case-guide p, .case-proof li { margin: 0; line-height: 1.32; }
-.case-proof { margin-top: .36rem; font-size: .82rem; color: var(--case-muted); }
-.case-proof li + li { margin-top: .18rem; }
+.case-guide p, .case-proof li { margin: 0; line-height: 1.28; }
+.case-proof { margin-top: .28rem; font-size: .8rem; color: var(--case-muted); }
+.case-proof li + li { margin-top: .14rem; }
 .case-sr {
   position: absolute;
   width: 1px; height: 1px;

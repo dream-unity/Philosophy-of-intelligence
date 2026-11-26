@@ -117,10 +117,23 @@ function scheduleNext(delay) {
   }, delay);
 }
 
+function advanceFromDebrief() {
+  if (phase !== 'between' || dialog.open || locked) return;
+  debriefHeld = false;
+  window.clearTimeout(transitionTimer);
+  transitionTimer = 0;
+  if (session.next()) enterTrial();
+  else showSummary();
+}
+
 function finishTrial(result) {
   if (phase !== 'play' || !session.accept(result, trial?.evidence?.family || null)) return;
   setPhase('between');
-  renderCaseResult(el('cues'), trial);
+  renderCaseResult(el('cues'), trial, {
+    onHoldToggle: toggleDebriefHold,
+    onNext: advanceFromDebrief,
+    held: debriefHeld
+  });
   el('cues').parentElement.scrollTop = 0;
   el('range-message').dataset.result = result.reason;
   const elapsed = result.elapsed.toFixed(1) + ' s';
@@ -135,13 +148,16 @@ function finishTrial(result) {
 function toggleDebriefHold() {
   debriefHeld = !debriefHeld;
   const hint = el('cues').querySelector('.case-result-hint');
+  const holdBtn = el('cues').querySelector('[data-action="hold"]');
   if (debriefHeld) {
     window.clearTimeout(transitionTimer);
     transitionTimer = 0;
     remainingDelay = Math.max(1200, transitionAt - performance.now());
     if (hint) hint.textContent = 'Held · Space: next · P: resume';
+    if (holdBtn) holdBtn.textContent = 'Resume';
   } else {
     if (hint) hint.textContent = 'Space: next · P: hold';
+    if (holdBtn) holdBtn.textContent = 'Hold';
     scheduleNext(remainingDelay || 3000);
   }
 }

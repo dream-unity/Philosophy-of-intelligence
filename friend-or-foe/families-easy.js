@@ -61,43 +61,43 @@ export const easyFamilies = [
   // =========================================================================
   guardedCarry({
     id: 'ea-00', domain: 0, title: 'Tainted clearance without audit',
-    order: 'Shoot anyone cleared by a Friend or warned by a Civilian whose source leaks as a Double agent or contacts as a Foreigner — unless audited by a Spy.',
+    order: 'Take out anyone cleared by a Friend or warned by a Civilian whose source leaks as a Double agent or contacts as a Foreigner; hold fire on anyone audited by a Spy.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-01', domain: 0, title: 'Clearing an unmonitored striker',
-    order: 'Shoot anyone who clears as a Friend or warns as a Civilian someone who targets as a Foe or leaks as a Double agent — unless audited by a Spy.',
+    order: 'Compromised vetting: shoot anyone who clears as a Friend or warns as a Civilian someone who targets as a Foe or leaks as a Double agent, except anyone audited by a Spy.',
     firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-02', domain: 0, title: 'Cleared by an attacker without warning',
-    order: 'Shoot anyone cleared by a Friend or audited by a Spy whose source targets as a Foe or contacts as a Foreigner — unless warned by a Civilian.',
+    order: 'Cover blown: drop anyone cleared by a Friend or audited by a Spy whose source targets as a Foe or contacts as a Foreigner — unless warned by a Civilian.',
     firstRoles: ['friend', 'spy'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-03', domain: 0, title: 'Mole leaking to a cleared mark',
-    order: 'Shoot anyone who leaks as a Double agent or contacts as a Foreigner someone cleared by a Friend or warned by a Civilian — unless audited by a Spy.',
+    order: 'Engage anyone who leaks as a Double agent or contacts as a Foreigner someone cleared by a Friend or warned by a Civilian, sparing anyone audited by a Spy.',
     firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-04', domain: 0, title: 'Unaudited ally of a foreign mark',
-    order: 'Shoot anyone who clears as a Friend or audits as a Spy someone contacted by a Foreigner or fed a Double agent’s leak — unless audited by a Spy.',
+    order: 'Eliminate anyone who clears as a Friend or audits as a Spy someone contacted by a Foreigner or fed a Double agent’s leak; hold fire on anyone audited by a Spy.',
     firstRoles: ['friend', 'spy'], firstDir: 'out', secondRoles: ['foreigner', 'double'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-05', domain: 0, title: 'Cleared by a targeted insider',
-    order: 'Shoot anyone cleared by a Friend or warned by a Civilian whose source is targeted by a Foe or contacted by a Foreigner — unless warned by a Civilian.',
+    order: 'Insider betrayal: fire on anyone cleared by a Friend or warned by a Civilian whose source is targeted by a Foe or contacted by a Foreigner, except anyone warned by a Civilian.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'in',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
   custom({
     id: 'ea-06', domain: 0, title: 'No uncompromised clearance',
-    order: 'Shoot anyone targeted by a Foe or contacted by a Foreigner unless cleared by a Friend untouched by Double agent or Foreigner.',
+    order: 'False cover — take down anyone targeted by a Foe or contacted by a Foreigner unless cleared by a Friend untouched by Double agent or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = g.in(x, ['foe', 'foreigner'])[0];
@@ -108,19 +108,19 @@ export const easyFamilies = [
   }),
   guardedCarry({
     id: 'ea-07', domain: 0, title: 'Strike on a cleared mark',
-    order: 'Shoot anyone who targets as a Foe or leaks as a Double agent to someone cleared by a Friend or audited by a Spy — unless audited by a Spy.',
+    order: 'Compromised vetting: neutralize anyone who targets as a Foe or leaks as a Double agent to someone cleared by a Friend or audited by a Spy, sparing anyone audited by a Spy.',
     firstRoles: ['foe', 'double'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-08', domain: 0, title: 'Leak from a double-hatted ally',
-    order: 'Shoot anyone fed a Double agent’s leak or targeted by a Foe whose source clears as a Friend or warns as a Civilian — unless audited by a Spy.',
+    order: 'Take out anyone fed a Double agent’s leak or targeted by a Foe whose source clears as a Friend or warns as a Civilian; hold fire on anyone audited by a Spy.',
     firstRoles: ['double', 'foe'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-09', domain: 0, title: 'Uncleared ally of a leak recipient',
-    order: 'Shoot anyone who clears as a Friend or warns as a Civilian someone fed a Double agent’s leak or targeted by a Foe — unless cleared by a Friend.',
+    order: 'Burned clearance: shoot anyone who clears as a Friend or warns as a Civilian someone fed a Double agent’s leak or targeted by a Foe, except anyone cleared by a Friend.',
     firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
@@ -130,19 +130,19 @@ export const easyFamilies = [
   // =========================================================================
   guardedCarry({
     id: 'ea-10', domain: 1, title: 'Shadowed by a turned watcher',
-    order: 'Shoot anyone shadowed by a Spy or signaled by a Foreigner whose contact leaks as a Double agent or ambushes as a Foe — unless escorted by a Friend.',
+    order: 'Watcher exposed: fire on anyone shadowed by a Spy or signaled by a Foreigner whose contact leaks as a Double agent or ambushes as a Foe — unless escorted by a Friend.',
     firstRoles: ['spy', 'foreigner'], firstDir: 'in', secondRoles: ['double', 'foe'], secondDir: 'out',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-11', domain: 1, title: 'Unescorted watcher on an ambusher',
-    order: 'Shoot anyone who shadows as a Spy or escorts as a Friend someone who ambushes as a Foe or leaks as a Double agent — unless escorted by a Friend.',
+    order: 'Signal in the alley: take down anyone who shadows as a Spy or escorts as a Friend someone who ambushes as a Foe or leaks as a Double agent, sparing anyone escorted by a Friend.',
     firstRoles: ['spy', 'friend'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'out',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   custom({
     id: 'ea-12', domain: 1, title: 'Outside uncompromised Spy watch',
-    order: 'Shoot anyone leaking as a Double agent or signaling as a Foreigner unless shadowed by a Spy untouched by Foe or Foreigner.',
+    order: 'Escort off-script — neutralize anyone leaking as a Double agent or signaling as a Foreigner unless shadowed by a Spy untouched by Foe or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = g.out(x, ['double', 'foreigner'])[0];
@@ -153,19 +153,19 @@ export const easyFamilies = [
   }),
   guardedCarry({
     id: 'ea-13', domain: 1, title: 'Unshadowed proxy to a mole',
-    order: 'Shoot anyone who escorts as a Friend or spots as a Civilian a contact no Spy shadows who leaks as a Double agent or signals as a Foreigner.',
+    order: 'Take out anyone who escorts as a Friend or spots as a Civilian a contact no Spy shadows who leaks as a Double agent or signals as a Foreigner.',
     firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-14', domain: 1, title: 'Shadowed by an ambush agent',
-    order: 'Shoot anyone shadowed by a Spy or spotted by a Civilian whose watcher ambushes as a Foe or leaks as a Double agent — unless spotted by a Civilian.',
+    order: 'Blind-spot ambush: shoot anyone shadowed by a Spy or spotted by a Civilian whose watcher ambushes as a Foe or leaks as a Double agent — unless spotted by a Civilian.',
     firstRoles: ['spy', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'out',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
   custom({
     id: 'ea-15', domain: 1, title: 'Blind-spot ambush target',
-    order: 'Shoot anyone ambushed by a Foe or fed a Double agent’s leak from someone no Spy shadows — unless escorted by a Friend.',
+    order: 'Compromised tail: drop anyone ambushed by a Foe or fed a Double agent’s leak from someone no Spy shadows, sparing anyone escorted by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'friend')) return null;
@@ -177,25 +177,25 @@ export const easyFamilies = [
   }),
   guardedCarry({
     id: 'ea-16', domain: 1, title: 'Watcher on a foreign signal',
-    order: 'Shoot anyone who shadows as a Spy or spots as a Civilian someone signaled by a Foreigner or ambushed by a Foe — unless spotted by a Civilian.',
+    order: 'Watcher exposed — engage anyone who shadows as a Spy or spots as a Civilian someone signaled by a Foreigner or ambushed by a Foe; hold fire on anyone spotted by a Civilian.',
     firstRoles: ['spy', 'civilian'], firstDir: 'out', secondRoles: ['foreigner', 'foe'], secondDir: 'in',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-17', domain: 1, title: 'Shadowed by a signaled watcher',
-    order: 'Shoot anyone shadowed by a Spy or escorted by a Friend whose contact receives a Double agent’s leak or Foreigner’s signal — unless escorted by a Friend.',
+    order: 'Signal in the alley: eliminate anyone shadowed by a Spy or escorted by a Friend whose contact receives a Double agent’s leak or Foreigner’s signal, except anyone escorted by a Friend.',
     firstRoles: ['spy', 'friend'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-18', domain: 1, title: 'Unescorted leak to a shadowed mark',
-    order: 'Shoot anyone who leaks as a Double agent or ambushes as a Foe someone shadowed by a Spy or spotted by a Civilian — unless escorted by a Friend.',
+    order: 'Fire on anyone who leaks as a Double agent or ambushes as a Foe someone shadowed by a Spy or spotted by a Civilian — unless escorted by a Friend.',
     firstRoles: ['double', 'foe'], firstDir: 'out', secondRoles: ['spy', 'civilian'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-19', domain: 1, title: 'Escorted by an active signaler',
-    order: 'Shoot anyone escorted by a Friend or spotted by a Civilian whose contact also shadows as a Spy or signals as a Foreigner — unless ambushed by a Foe.',
+    order: 'Dead drop watched: take down anyone escorted by a Friend or spotted by a Civilian whose contact also shadows as a Spy or signals as a Foreigner, sparing anyone ambushed by a Foe.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['spy', 'foreigner'], secondDir: 'out',
     exc: {roles: ['foe'], dir: 'in'}
   }),
@@ -205,61 +205,61 @@ export const easyFamilies = [
   // =========================================================================
   guardedCarry({
     id: 'ea-20', domain: 2, title: 'Recruited by a mole without tracking',
-    order: 'Shoot anyone recruited by a Foreigner or reported by a Civilian whose contact leaks as a Double agent or pressures as a Foe — unless tracked by a Spy.',
+    order: 'Drop anyone recruited by a Foreigner or reported by a Civilian whose contact leaks as a Double agent or pressures as a Foe; hold fire on anyone tracked by a Spy.',
     firstRoles: ['foreigner', 'civilian'], firstDir: 'in', secondRoles: ['double', 'foe'], secondDir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-21', domain: 2, title: 'Recruiting a mole unvouched',
-    order: 'Shoot anyone who recruits as a Foreigner or vouches as a Friend for someone who leaks as a Double agent or pressures as a Foe — unless vouched for by a Friend.',
+    order: 'Engage anyone who recruits as a Foreigner or vouches as a Friend for someone who leaks as a Double agent or pressures as a Foe, except anyone vouched for by a Friend.',
     firstRoles: ['foreigner', 'friend'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'out',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-22', domain: 2, title: 'Recruiter on a tracked mark',
-    order: 'Shoot anyone who recruits as a Foreigner or reports as a Civilian someone vouched for by a Friend or tracked by a Spy — unless tracked by a Spy.',
+    order: 'Foreign contact in play: eliminate anyone who recruits as a Foreigner or reports as a Civilian someone vouched for by a Friend or tracked by a Spy — unless tracked by a Spy.',
     firstRoles: ['foreigner', 'civilian'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-23', domain: 2, title: 'Recruited by a tracked outsider',
-    order: 'Shoot anyone recruited by a Foreigner or pressured by a Foe whose contact is tracked by a Spy or vouched for by a Friend — unless reported by a Civilian.',
+    order: 'Fire on anyone recruited by a Foreigner or pressured by a Foe whose contact is tracked by a Spy or vouched for by a Friend, sparing anyone reported by a Civilian.',
     firstRoles: ['foreigner', 'foe'], firstDir: 'in', secondRoles: ['spy', 'friend'], secondDir: 'in',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-24', domain: 2, title: 'Tracking an unvouched recruit',
-    order: 'Shoot anyone who tracks as a Spy or pressures as a Foe someone recruited by a Foreigner or fed a Double agent’s leak — unless vouched for by a Friend.',
+    order: 'Take down anyone who tracks as a Spy or pressures as a Foe someone recruited by a Foreigner or fed a Double agent’s leak; hold fire on anyone vouched for by a Friend.',
     firstRoles: ['spy', 'foe'], firstDir: 'out', secondRoles: ['foreigner', 'double'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-25', domain: 2, title: 'Recruit turned voucher',
-    order: 'Shoot anyone recruited by a Foreigner or tracked by a Spy whose source vouches as a Friend or reports as a Civilian — unless pressured by a Foe.',
+    order: 'External handler: neutralize anyone recruited by a Foreigner or tracked by a Spy whose source vouches as a Friend or reports as a Civilian, except anyone pressured by a Foe.',
     firstRoles: ['foreigner', 'spy'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'out',
     exc: {roles: ['foe'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-26', domain: 2, title: 'Leak reaching a recruit',
-    order: 'Shoot anyone who leaks as a Double agent or reports as a Civilian someone recruited by a Foreigner or pressured by a Foe — unless tracked by a Spy.',
+    order: 'Border leak: take out anyone who leaks as a Double agent or reports as a Civilian someone recruited by a Foreigner or pressured by a Foe — unless tracked by a Spy.',
     firstRoles: ['double', 'civilian'], firstDir: 'out', secondRoles: ['foreigner', 'foe'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-27', domain: 2, title: 'Vouched by an active recruiter',
-    order: 'Shoot anyone vouched for by a Friend or reported by a Civilian whose source recruits as a Foreigner or pressures as a Foe — unless tracked by a Spy.',
+    order: 'Unreported recruitment: shoot anyone vouched for by a Friend or reported by a Civilian whose source recruits as a Foreigner or pressures as a Foe, sparing anyone tracked by a Spy.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foreigner', 'foe'], secondDir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-28', domain: 2, title: 'Pressured via a reported insider',
-    order: 'Shoot anyone pressured by a Foe or fed a Double agent’s leak by someone reported by a Civilian or tracked by a Spy — unless vouched for by a Friend.',
+    order: 'Drop anyone pressured by a Foe or fed a Double agent’s leak by someone reported by a Civilian or tracked by a Spy; hold fire on anyone vouched for by a Friend.',
     firstRoles: ['foe', 'double'], firstDir: 'in', secondRoles: ['civilian', 'spy'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-29', domain: 2, title: 'Recruiting a vouched mark',
-    order: 'Shoot anyone who recruits as a Foreigner or leaks as a Double agent to someone reported by a Civilian or vouched for by a Friend — unless pressured by a Foe.',
+    order: 'Engage anyone who recruits as a Foreigner or leaks as a Double agent to someone reported by a Civilian or vouched for by a Friend, except anyone pressured by a Foe.',
     firstRoles: ['foreigner', 'double'], firstDir: 'out', secondRoles: ['civilian', 'friend'], secondDir: 'in',
     exc: {roles: ['foe'], dir: 'in'}
   }),
@@ -269,61 +269,61 @@ export const easyFamilies = [
   // =========================================================================
   guardedCarry({
     id: 'ea-30', domain: 3, title: 'Tipped off by a deceiver',
-    order: 'Shoot anyone tipped off by a Civilian or confirmed by a Friend whose source misleads as a Double agent or targets as a Foe — unless monitored by a Spy.',
+    order: 'Informant in play: neutralize anyone tipped off by a Civilian or confirmed by a Friend whose source misleads as a Double agent or targets as a Foe — unless monitored by a Spy.',
     firstRoles: ['civilian', 'friend'], firstDir: 'in', secondRoles: ['double', 'foe'], secondDir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-31', domain: 3, title: 'Tipping off a deceiver',
-    order: 'Shoot anyone who tips off as a Civilian or confirms as a Friend someone who misleads as a Double agent or briefs as a Foreigner — unless targeted by a Foe.',
+    order: 'Take out anyone who tips off as a Civilian or confirms as a Friend someone who misleads as a Double agent or briefs as a Foreigner, sparing anyone targeted by a Foe.',
     firstRoles: ['civilian', 'friend'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out',
     exc: {roles: ['foe'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-32', domain: 3, title: 'Tipped by a briefed witness',
-    order: 'Shoot anyone tipped off by a Civilian or monitored by a Spy whose source is briefed by a Foreigner or targeted by a Foe — unless confirmed by a Friend.',
+    order: 'Shoot anyone tipped off by a Civilian or monitored by a Spy whose source is briefed by a Foreigner or targeted by a Foe; hold fire on anyone confirmed by a Friend.',
     firstRoles: ['civilian', 'spy'], firstDir: 'in', secondRoles: ['foreigner', 'foe'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-33', domain: 3, title: 'Tipping off a monitored mark',
-    order: 'Shoot anyone who tips off as a Civilian or briefs as a Foreigner someone confirmed by a Friend or monitored by a Spy — unless targeted by a Foe.',
+    order: 'Drop anyone who tips off as a Civilian or briefs as a Foreigner someone confirmed by a Friend or monitored by a Spy, except anyone targeted by a Foe.',
     firstRoles: ['civilian', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'in',
     exc: {roles: ['foe'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-34', domain: 3, title: 'Confirmed by a briefed ally',
-    order: 'Shoot anyone confirmed by a Friend or targeted by a Foe whose source is tipped off by a Civilian or briefed by a Foreigner — unless monitored by a Spy.',
+    order: 'Street misdirection: engage anyone confirmed by a Friend or targeted by a Foe whose source is tipped off by a Civilian or briefed by a Foreigner — unless monitored by a Spy.',
     firstRoles: ['friend', 'foe'], firstDir: 'in', secondRoles: ['civilian', 'foreigner'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-35', domain: 3, title: 'Deceiving a tipped-off mark',
-    order: 'Shoot anyone who misleads as a Double agent or briefs as a Foreigner someone tipped off by a Civilian or monitored by a Spy — unless confirmed by a Friend.',
+    order: 'Tainted brief: eliminate anyone who misleads as a Double agent or briefs as a Foreigner someone tipped off by a Civilian or monitored by a Spy, sparing anyone confirmed by a Friend.',
     firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['civilian', 'spy'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-36', domain: 3, title: 'Tipped off by an active monitor',
-    order: 'Shoot anyone tipped off by a Civilian or misled by a Double agent whose source monitors as a Spy or confirms as a Friend — unless briefed by a Foreigner.',
+    order: 'Fire on anyone tipped off by a Civilian or misled by a Double agent whose source monitors as a Spy or confirms as a Friend; hold fire on anyone briefed by a Foreigner.',
     firstRoles: ['civilian', 'double'], firstDir: 'in', secondRoles: ['spy', 'friend'], secondDir: 'out',
     exc: {roles: ['foreigner'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-37', domain: 3, title: 'Monitoring a briefed target',
-    order: 'Shoot anyone who monitors as a Spy or confirms as a Friend someone briefed by a Foreigner or targeted by a Foe — unless misled by a Double agent.',
+    order: 'False warning: take down anyone who monitors as a Spy or confirms as a Friend someone briefed by a Foreigner or targeted by a Foe, except anyone misled by a Double agent.',
     firstRoles: ['spy', 'friend'], firstDir: 'out', secondRoles: ['foreigner', 'foe'], secondDir: 'in',
     exc: {roles: ['double'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-38', domain: 3, title: 'Briefed by a tipped-off source',
-    order: 'Shoot anyone briefed by a Foreigner or misled by a Double agent whose source is tipped off by a Civilian or confirmed by a Friend — unless monitored by a Spy.',
+    order: 'Neutralize anyone briefed by a Foreigner or misled by a Double agent whose source is tipped off by a Civilian or confirmed by a Friend — unless monitored by a Spy.',
     firstRoles: ['foreigner', 'double'], firstDir: 'in', secondRoles: ['civilian', 'friend'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-39', domain: 3, title: 'Targeting a witness’s mark',
-    order: 'Shoot anyone who targets as a Foe or misleads as a Double agent someone tipped off by a Civilian or confirmed by a Friend — unless briefed by a Foreigner.',
+    order: 'Compromised witness: take out anyone who targets as a Foe or misleads as a Double agent someone tipped off by a Civilian or confirmed by a Friend, sparing anyone briefed by a Foreigner.',
     firstRoles: ['foe', 'double'], firstDir: 'out', secondRoles: ['civilian', 'friend'], secondDir: 'in',
     exc: {roles: ['foreigner'], dir: 'in'}
   }),
@@ -333,61 +333,61 @@ export const easyFamilies = [
   // =========================================================================
   guardedCarry({
     id: 'ea-40', domain: 4, title: 'Handoff to an active striker',
-    order: 'Shoot anyone who hands off as a Foreigner or relays as a Double agent to someone who strikes as a Foe or traces as a Spy — unless backed by a Friend.',
+    order: 'Eliminate anyone who hands off as a Foreigner or relays as a Double agent to someone who strikes as a Foe or traces as a Spy; hold fire on anyone backed by a Friend.',
     firstRoles: ['foreigner', 'double'], firstDir: 'out', secondRoles: ['foe', 'spy'], secondDir: 'out',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-41', domain: 4, title: 'Backed by a handoff agent',
-    order: 'Shoot anyone backed by a Friend or traced by a Spy whose contact hands off as a Foreigner or strikes as a Foe — unless relayed to by a Double agent.',
+    order: 'Fire on anyone backed by a Friend or traced by a Spy whose contact hands off as a Foreigner or strikes as a Foe, except anyone relayed to by a Double agent.',
     firstRoles: ['friend', 'spy'], firstDir: 'in', secondRoles: ['foreigner', 'foe'], secondDir: 'out',
     exc: {roles: ['double'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-42', domain: 4, title: 'Striker’s backed proxy',
-    order: 'Shoot anyone who strikes as a Foe or traces as a Spy someone who backs as a Friend or warns as a Civilian — unless handed off to by a Foreigner.',
+    order: 'Take down anyone who strikes as a Foe or traces as a Spy someone who backs as a Friend or warns as a Civilian — unless handed off to by a Foreigner.',
     firstRoles: ['foe', 'spy'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'out',
     exc: {roles: ['foreigner'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-43', domain: 4, title: 'Handoff from a traced courier',
-    order: 'Shoot anyone handed off to by a Foreigner or relayed to by a Double agent whose courier is traced by a Spy or warned by a Civilian — unless backed by a Friend.',
+    order: 'Neutralize anyone handed off to by a Foreigner or relayed to by a Double agent whose courier is traced by a Spy or warned by a Civilian, sparing anyone backed by a Friend.',
     firstRoles: ['foreigner', 'double'], firstDir: 'in', secondRoles: ['spy', 'civilian'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-44', domain: 4, title: 'Backing an untraced courier',
-    order: 'Shoot anyone who backs as a Friend or warns as a Civilian someone handed off to by a Foreigner or relayed to by a Double agent — unless traced by a Spy.',
+    order: 'Take out anyone who backs as a Friend or warns as a Civilian someone handed off to by a Foreigner or relayed to by a Double agent; hold fire on anyone traced by a Spy.',
     firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foreigner', 'double'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-45', domain: 4, title: 'Proxy bypassing a Spy trace',
-    order: 'Shoot anyone backed by a Friend or warned by a Civilian through someone no Spy traces who strikes as a Foe or hands off as a Foreigner.',
+    order: 'Compromised middleman: shoot anyone backed by a Friend or warned by a Civilian through someone no Spy traces who strikes as a Foe or hands off as a Foreigner.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-46', domain: 4, title: 'Warned proxy’s handler',
-    order: 'Shoot anyone warned by a Civilian or backed by a Friend whose source is traced by a Spy or relayed to by a Double agent — unless struck by a Foe.',
+    order: 'Drop anyone warned by a Civilian or backed by a Friend whose source is traced by a Spy or relayed to by a Double agent — unless struck by a Foe.',
     firstRoles: ['civilian', 'friend'], firstDir: 'in', secondRoles: ['spy', 'double'], secondDir: 'in',
     exc: {roles: ['foe'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-47', domain: 4, title: 'Relay hitting a warned contact',
-    order: 'Shoot anyone who relays as a Double agent or hands off as a Foreigner to someone warned by a Civilian or struck by a Foe — unless traced by a Spy.',
+    order: 'Engage anyone who relays as a Double agent or hands off as a Foreigner to someone warned by a Civilian or struck by a Foe, sparing anyone traced by a Spy.',
     firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['civilian', 'foe'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-48', domain: 4, title: 'Striker’s upstream backer',
-    order: 'Shoot anyone struck by a Foe or traced by a Spy whose contact is backed by a Friend or handed off to by a Foreigner — unless warned by a Civilian.',
+    order: 'Eliminate anyone struck by a Foe or traced by a Spy whose contact is backed by a Friend or handed off to by a Foreigner; hold fire on anyone warned by a Civilian.',
     firstRoles: ['foe', 'spy'], firstDir: 'in', secondRoles: ['friend', 'foreigner'], secondDir: 'in',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-49', domain: 4, title: 'Warning an active courier',
-    order: 'Shoot anyone who warns as a Civilian or strikes as a Foe someone who relays as a Double agent or backs as a Friend — unless traced by a Spy.',
+    order: 'Chain of proxies: fire on anyone who warns as a Civilian or strikes as a Foe someone who relays as a Double agent or backs as a Friend, except anyone traced by a Spy.',
     firstRoles: ['civilian', 'foe'], firstDir: 'out', secondRoles: ['double', 'friend'], secondDir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
@@ -397,7 +397,7 @@ export const easyFamilies = [
   // =========================================================================
   custom({
     id: 'ea-50', domain: 5, title: 'Colluding alibi pair',
-    order: 'Shoot anyone corroborated by a Friend or identified by a Civilian and verified by a Spy or consulted by a Foreigner when those two are linked.',
+    order: 'Alibi broken — shoot anyone corroborated by a Friend or identified by a Civilian and verified by a Spy or consulted by a Foreigner when those two are linked.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchDependentSupport(g, x, {roleA: ['friend', 'civilian'], dirA: 'in', roleB: ['spy', 'foreigner'], dirB: 'in'});
@@ -408,7 +408,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-51', domain: 5, title: 'Two unlinked accusers',
-    order: 'Shoot anyone accused by a Foe or identified by a Civilian and deceived by a Double agent or corroborated by a Friend with no link between them.',
+    order: 'Staged corroboration: drop anyone accused by a Foe or identified by a Civilian and deceived by a Double agent or corroborated by a Friend whose two sources have no contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchIndependentSupport(g, x, {roleA: ['foe', 'civilian'], dirA: 'in', roleB: ['double', 'friend'], dirB: 'in'});
@@ -419,7 +419,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-52', domain: 5, title: 'Linked witness and accuser',
-    order: 'Shoot anyone identified by a Civilian or verified by a Spy and accused by a Foe or deceived by a Double agent when those two are linked.',
+    order: 'Contradicted witness — engage anyone identified by a Civilian or verified by a Spy and accused by a Foe or deceived by a Double agent when those two are linked.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchDependentSupport(g, x, {roleA: ['civilian', 'spy'], dirA: 'in', roleB: ['foe', 'double'], dirB: 'in'});
@@ -430,7 +430,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-53', domain: 5, title: 'Independent cover and consultation',
-    order: 'Shoot anyone corroborated by a Friend or verified by a Spy and consulted by a Foreigner or identified by a Civilian with no link between them.',
+    order: 'Eliminate anyone corroborated by a Friend or verified by a Spy and consulted by a Foreigner or identified by a Civilian whose two sources have no contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchIndependentSupport(g, x, {roleA: ['friend', 'spy'], dirA: 'in', roleB: ['foreigner', 'civilian'], dirB: 'in'});
@@ -441,7 +441,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-54', domain: 5, title: 'Coordinated cover story',
-    order: 'Shoot anyone corroborated by a Friend or accused by a Foe and identified by a Civilian or consulted by a Foreigner when those two are linked.',
+    order: 'Colluding sources — fire on anyone corroborated by a Friend or accused by a Foe and identified by a Civilian or consulted by a Foreigner when those two are linked.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchDependentSupport(g, x, {roleA: ['friend', 'foe'], dirA: 'in', roleB: ['civilian', 'foreigner'], dirB: 'in'});
@@ -452,7 +452,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-55', domain: 5, title: 'Independent doubt on a witness',
-    order: 'Shoot anyone verified by a Spy or deceived by a Double agent and accused by a Foe or consulted by a Foreigner with no link between them.',
+    order: 'Fabricated account: take down anyone verified by a Spy or deceived by a Double agent and accused by a Foe or consulted by a Foreigner whose two sources have no contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchIndependentSupport(g, x, {roleA: ['spy', 'double'], dirA: 'in', roleB: ['foe', 'foreigner'], dirB: 'in'});
@@ -463,7 +463,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-56', domain: 5, title: 'Double entry in one role',
-    order: 'Shoot anyone involved twice inside the same role, initiating or receiving — unless verified by a Spy.',
+    order: 'Alibi broken — neutralize anyone involved twice inside the same role, initiating or receiving; hold fire on anyone verified by a Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'spy')) return null;
@@ -477,7 +477,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-57', domain: 5, title: 'Shared accuser with a corroborated ally',
-    order: 'Shoot anyone accused by a Foe or deceived by a Double agent whose sender also reaches someone corroborated by a Friend.',
+    order: 'Staged corroboration: take out anyone accused by a Foe or deceived by a Double agent whose sender also reaches someone corroborated by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         for (const e1 of g.in(x, ['foe', 'double'])) {
@@ -503,7 +503,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-59', domain: 5, title: 'Unidentified dual exposure',
-    order: 'Shoot anyone reached by at least two different senders, including a Foe or Foreigner — unless identified by a Civilian.',
+    order: 'False verification: drop anyone reached by at least two different senders, including a Foe or Foreigner, sparing anyone identified by a Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'civilian')) return null;
@@ -521,17 +521,17 @@ export const easyFamilies = [
   // =========================================================================
   guardedTime({
     id: 'ea-60', domain: 6, title: 'Cleared before turning, unlogged',
-    order: 'Shoot anyone cleared by a Friend or corrected by a Civilian earlier than they leaked as a Double agent or met as a Foreigner — unless logged by a Spy.',
+    order: 'Take down anyone cleared by a Friend or corrected by a Civilian earlier than they leaked as a Double agent or met as a Foreigner; hold fire on anyone logged by a Spy.',
     early: {roles: ['friend', 'civilian'], dir: 'in'}, late: {roles: ['double', 'foreigner'], dir: 'out'}, exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedTime({
     id: 'ea-61', domain: 6, title: 'Strike before logging arrived',
-    order: 'Shoot anyone struck by a Foe or met by a Foreigner earlier than a Spy logged or Civilian corrected them — unless cleared by a Friend.',
+    order: 'Timed betrayal: neutralize anyone struck by a Foe or met by a Foreigner earlier than a Spy logged or Civilian corrected them, except anyone cleared by a Friend.',
     early: {roles: ['foe', 'foreigner'], dir: 'in'}, late: {roles: ['spy', 'civilian'], dir: 'in'}, exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedTime({
     id: 'ea-62', domain: 6, title: 'Correction arrived too late',
-    order: 'Shoot anyone struck by a Foe or fed a Double agent’s leak earlier than a Civilian corrected or Friend cleared them — unless logged by a Spy.',
+    order: 'Wrong side of the clock: take out anyone struck by a Foe or fed a Double agent’s leak earlier than a Civilian corrected or Friend cleared them — unless logged by a Spy.',
     early: {roles: ['foe', 'double'], dir: 'in'}, late: {roles: ['civilian', 'friend'], dir: 'in'}, exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
@@ -542,35 +542,35 @@ export const easyFamilies = [
   }),
   guardedCarry({
     id: 'ea-64', domain: 6, title: 'Cleared after source’s betrayal',
-    order: 'Shoot anyone cleared by a Friend or corrected by a Civilian whose source had earlier struck as a Foe or leaked as a Double agent — unless logged by a Spy.',
+    order: 'Drop anyone cleared by a Friend or corrected by a Civilian whose source had earlier struck as a Foe or leaked as a Double agent; hold fire on anyone logged by a Spy.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'out',
     timeOrder: 'after', exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-65', domain: 6, title: 'Timed strike after prior leak',
-    order: 'Shoot anyone struck by a Foe or met by a Foreigner whose contact had earlier received a Double agent’s leak or Civilian correction.',
+    order: 'Post-correction move: engage anyone struck by a Foe or met by a Foreigner whose contact had earlier received a Double agent’s leak or Civilian correction.',
     firstRoles: ['foe', 'foreigner'], firstDir: 'in', secondRoles: ['double', 'civilian'], secondDir: 'in',
     timeOrder: 'after'
   }),
   guardedTime({
     id: 'ea-66', domain: 6, title: 'Foreign meeting before clearance',
-    order: 'Shoot anyone met by a Foreigner or fed a Double agent’s leak earlier than a Friend cleared or Civilian corrected them — unless logged by a Spy.',
+    order: 'Too late to clear: eliminate anyone met by a Foreigner or fed a Double agent’s leak earlier than a Friend cleared or Civilian corrected them — unless logged by a Spy.',
     early: {roles: ['foreigner', 'double'], dir: 'in'}, late: {roles: ['friend', 'civilian'], dir: 'in'}, exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedTime({
     id: 'ea-67', domain: 6, title: 'Corrected before striking',
-    order: 'Shoot anyone corrected by a Civilian or logged by a Spy earlier than they struck as a Foe or leaked as a Double agent — unless cleared by a Friend.',
+    order: 'Timed betrayal: fire on anyone corrected by a Civilian or logged by a Spy earlier than they struck as a Foe or leaked as a Double agent, sparing anyone cleared by a Friend.',
     early: {roles: ['civilian', 'spy'], dir: 'in'}, late: {roles: ['foe', 'double'], dir: 'out'}, exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-68', domain: 6, title: 'Logged after source’s strike',
-    order: 'Shoot anyone logged by a Spy or cleared by a Friend whose source had earlier struck as a Foe or met as a Foreigner.',
+    order: 'Take down anyone logged by a Spy or cleared by a Friend whose source had earlier struck as a Foe or met as a Foreigner.',
     firstRoles: ['spy', 'friend'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out',
     timeOrder: 'after'
   }),
   guardedCarry({
     id: 'ea-69', domain: 6, title: 'Corrected after source’s leak',
-    order: 'Shoot anyone corrected by a Civilian or logged by a Spy whose source had earlier leaked as a Double agent or met as a Foreigner.',
+    order: 'Acted after the breach: neutralize anyone corrected by a Civilian or logged by a Spy whose source had earlier leaked as a Double agent or met as a Foreigner.',
     firstRoles: ['civilian', 'spy'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'out',
     timeOrder: 'after'
   }),
@@ -580,61 +580,61 @@ export const easyFamilies = [
   // =========================================================================
   guardedCarry({
     id: 'ea-70', domain: 7, title: 'Alibi from a compromised source',
-    order: 'Shoot anyone given a Friend’s alibi or Spy’s vetting by someone compromised by a Double agent or funded by a Foreigner — unless exposed by a Civilian.',
+    order: 'Coerced vetting: engage anyone given a Friend’s alibi or Spy’s vetting by someone compromised by a Double agent or funded by a Foreigner — unless exposed by a Civilian.',
     firstRoles: ['friend', 'spy'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'in',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-71', domain: 7, title: 'Exposed by a funded source',
-    order: 'Shoot anyone exposed by a Civilian or given a Friend’s alibi by someone compromised by a Double agent or funded by a Foreigner — unless vetted by a Spy.',
+    order: 'Poisoned source: eliminate anyone exposed by a Civilian or given a Friend’s alibi by someone compromised by a Double agent or funded by a Foreigner, sparing anyone vetted by a Spy.',
     firstRoles: ['civilian', 'friend'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-72', domain: 7, title: 'Vetted by a coercer or funder',
-    order: 'Shoot anyone vetted by a Spy or exposed by a Civilian whose source coerces as a Foe or funds as a Foreigner — unless given a Friend’s alibi.',
+    order: 'Paid witness — fire on anyone vetted by a Spy or exposed by a Civilian whose source coerces as a Foe or funds as a Foreigner; hold fire on anyone given a Friend’s alibi.',
     firstRoles: ['spy', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-73', domain: 7, title: 'Coerced by an exposed source',
-    order: 'Shoot anyone coerced by a Foe or funded by a Foreigner whose source was compromised by a Double agent or exposed by a Civilian — unless given a Friend’s alibi.',
+    order: 'Take down anyone coerced by a Foe or funded by a Foreigner whose source was compromised by a Double agent or exposed by a Civilian, except anyone given a Friend’s alibi.',
     firstRoles: ['foe', 'foreigner'], firstDir: 'in', secondRoles: ['double', 'civilian'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-74', domain: 7, title: 'Compromised by a vetted insider',
-    order: 'Shoot anyone compromised by a Double agent or coerced by a Foe whose source was given a Friend’s alibi or Spy’s vetting — unless exposed by a Civilian.',
+    order: 'Bought alibi: neutralize anyone compromised by a Double agent or coerced by a Foe whose source was given a Friend’s alibi or Spy’s vetting — unless exposed by a Civilian.',
     firstRoles: ['double', 'foe'], firstDir: 'in', secondRoles: ['friend', 'spy'], secondDir: 'in',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-75', domain: 7, title: 'Funded by an infiltrated ally',
-    order: 'Shoot anyone funded by a Foreigner or compromised by a Double agent whose source was given a Friend’s alibi or Spy’s vetting — unless vetted by a Spy.',
+    order: 'Dirty funding: take out anyone funded by a Foreigner or compromised by a Double agent whose source was given a Friend’s alibi or Spy’s vetting, sparing anyone vetted by a Spy.',
     firstRoles: ['foreigner', 'double'], firstDir: 'in', secondRoles: ['friend', 'spy'], secondDir: 'in',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-76', domain: 7, title: 'Alibiing a compromised target',
-    order: 'Shoot anyone who alibis as a Friend or exposes as a Civilian someone compromised by a Double agent or funded by a Foreigner — unless coerced by a Foe.',
+    order: 'Shoot anyone who alibis as a Friend or exposes as a Civilian someone compromised by a Double agent or funded by a Foreigner; hold fire on anyone coerced by a Foe.',
     firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'in',
     exc: {roles: ['foe'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-77', domain: 7, title: 'Vetting an unalibied funder',
-    order: 'Shoot anyone who vets as a Spy or alibis as a Friend someone who compromises as a Double agent or funds as a Foreigner — unless given a Friend’s alibi.',
+    order: 'Poisoned source: drop anyone who vets as a Spy or alibis as a Friend someone who compromises as a Double agent or funds as a Foreigner, except anyone given a Friend’s alibi.',
     firstRoles: ['spy', 'friend'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-78', domain: 7, title: 'Exposing an unvetted coercer',
-    order: 'Shoot anyone who exposes as a Civilian or funds as a Foreigner someone who compromises as a Double agent or coerces as a Foe — unless vetted by a Spy.',
+    order: 'Engage anyone who exposes as a Civilian or funds as a Foreigner someone who compromises as a Double agent or coerces as a Foe — unless vetted by a Spy.',
     firstRoles: ['civilian', 'foreigner'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedCarry({
     id: 'ea-79', domain: 7, title: 'Coercing a funded witness',
-    order: 'Shoot anyone who coerces as a Foe or compromises as a Double agent someone funded by a Foreigner or exposed by a Civilian — unless given a Friend’s alibi.',
+    order: 'Compromised backer: eliminate anyone who coerces as a Foe or compromises as a Double agent someone funded by a Foreigner or exposed by a Civilian, sparing anyone given a Friend’s alibi.',
     firstRoles: ['foe', 'double'], firstDir: 'out', secondRoles: ['foreigner', 'civilian'], secondDir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
@@ -644,7 +644,7 @@ export const easyFamilies = [
   // =========================================================================
   custom({
     id: 'ea-80', domain: 8, title: 'Protected or hunted spy-mole',
-    order: 'Shoot anyone protected by a Friend or hunted by a Foe who initiates contacts only as a Spy, Double agent, or Foreigner.',
+    order: 'Two masters at once — take out anyone protected by a Friend or hunted by a Foe who initiates contacts only as a Spy, Double agent, or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const ins = g.in(x, ['friend', 'foe']);
@@ -657,7 +657,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-81', domain: 8, title: 'Unprotected double-hatted agent',
-    order: 'Shoot anyone watched by a Spy, fed a Double agent’s leak, or hosted by a Foreigner who protects as a Friend, hunts as a Foe, or shelters as a Civilian — unless protected by a Friend.',
+    order: 'Shoot anyone watched by a Spy, fed a Double agent’s leak, or hosted by a Foreigner who protects as a Friend, hunts as a Foe, or shelters as a Civilian, except anyone protected by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'friend')) return null;
@@ -670,7 +670,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-82', domain: 8, title: 'Pure Spy and Mole split',
-    order: 'Shoot anyone who initiates contacts only as a Spy or Double agent and receives only outside those two roles, or vice versa.',
+    order: 'Turned guardian — drop anyone who initiates contacts only as a Spy or Double agent and receives only outside those two roles, or vice versa.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const outs = g.out(x);
@@ -686,7 +686,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-83', domain: 8, title: 'Civilian and Foreigner split',
-    order: 'Shoot anyone who initiates contacts only as a Civilian or Foreigner and receives only outside those two roles, or vice versa.',
+    order: 'Engage anyone who initiates contacts only as a Civilian or Foreigner and receives only outside those two roles, or vice versa.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const outs = g.out(x);
@@ -702,7 +702,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-84', domain: 8, title: 'Friend and Foe split',
-    order: 'Shoot anyone who initiates contacts only as a Friend or Foe and receives only outside those two roles, or vice versa.',
+    order: 'Shelter breached — eliminate anyone who initiates contacts only as a Friend or Foe and receives only outside those two roles, or vice versa.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const outs = g.out(x);
@@ -718,7 +718,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-85', domain: 8, title: 'Cross-circle guest without cover',
-    order: 'Shoot anyone protected by a Friend or hunted by a Foe who is also sheltered by a Civilian or hosted by a Foreigner — unless they protect as a Friend or watch as a Spy.',
+    order: 'Fire on anyone protected by a Friend or hunted by a Foe who is also sheltered by a Civilian or hosted by a Foreigner — unless they protect as a Friend or watch as a Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasOut(x, ['friend', 'spy'])) return null;
@@ -731,7 +731,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-86', domain: 8, title: 'Dual-hatted operative without shelter',
-    order: 'Shoot anyone who watches as a Spy or leaks as a Double agent and protects as a Friend or hunts as a Foe — unless sheltered by a Civilian.',
+    order: 'Two masters at once: take down anyone who watches as a Spy or leaks as a Double agent and protects as a Friend or hunts as a Foe — unless sheltered by a Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'civilian')) return null;
@@ -744,7 +744,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-87', domain: 8, title: 'Unprotected hunter or host',
-    order: 'Shoot anyone who initiates contacts only as a Foe, Civilian, or Foreigner — unless watched by a Spy or protected by a Friend.',
+    order: 'Hideout compromised: neutralize anyone who initiates contacts only as a Foe, Civilian, or Foreigner, sparing anyone watched by a Spy or protected by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, ['spy', 'friend'])) return null;
@@ -756,7 +756,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-88', domain: 8, title: 'Three-circle protector or host',
-    order: 'Shoot anyone spanning three or more roles, including Friend or Civilian and Double agent or Foreigner.',
+    order: 'Take out anyone spanning three or more roles, including Friend or Civilian and Double agent or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const d = g.distinctRoles(x);
@@ -769,7 +769,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-89', domain: 8, title: 'Unwatched three-role operative',
-    order: 'Shoot anyone spanning three or more roles — unless watched by a Spy.',
+    order: 'Double life exposed: shoot anyone spanning three or more roles, except anyone watched by a Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'spy')) return null;
@@ -785,69 +785,69 @@ export const easyFamilies = [
   // =========================================================================
   guardedAnchor({
     id: 'ea-90', domain: 9, title: '{name}’s unwatched two-step reach',
-    order: 'Shoot anyone reached from {name} in two forward steps with no direct contact to {name} — unless a Spy shadows them.',
+    order: 'Shadow reach: fire on anyone reached from {name} in two forward steps with no direct contact to {name} — unless a Spy shadows them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     excludeDirect: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-91', domain: 9, title: '{name}’s unbacked two-step source',
-    order: 'Shoot anyone reaching {name} in two forward steps with no direct contact to {name} — unless a Friend vouches for them.',
+    order: 'Unchecked influence: take down anyone reaching {name} in two forward steps with no direct contact to {name}; stand down if a Friend vouches for them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
     excludeDirect: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-92', domain: 9, title: 'Shared target with {name}, unbacked',
-    order: 'Shoot anyone else who reaches the same contact {name} reaches — unless a Friend vouches for them.',
+    order: 'Chain of leverage — neutralize anyone else who reaches the same contact {name} reaches, sparing them if a Friend vouches for them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-93', domain: 9, title: 'Shared contact with {name}, unwatched',
-    order: 'Shoot anyone else reached by the same sender who reaches {name} — unless a Spy shadows them.',
+    order: 'Take out anyone else reached by the same sender who reaches {name} — unless a Spy shadows them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-94', domain: 9, title: '{name}’s foreign or mole second-hop',
-    order: 'Shoot anyone two contacts away from {name} with no direct link to {name} who leaks as a Double agent or meets as a Foreigner.',
+    order: 'Command breach — shoot anyone two contacts away from {name} with no direct contact with {name} who leaks as a Double agent or meets as a Foreigner.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'any',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'any',
     excludeDirect: true, req: {roles: ['double', 'foreigner'], dir: 'out'}
   }),
   guardedAnchor({
     id: 'ea-95', domain: 9, title: '{name}’s unshadowed cutout relay',
-    order: 'Shoot anyone reached from {name} in two forward steps through a cutout no Spy shadows.',
+    order: 'Asset under leverage: drop anyone reached from {name} in two forward steps through a cutout no Spy shadows.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-96', domain: 9, title: 'Later relay from {name}',
-    order: 'Shoot anyone reached from {name} in two forward steps where the second dispatch happened later — unless a Friend vouches for them.',
+    order: 'Shadow reach — engage anyone reached from {name} in two forward steps where the second dispatch happened later, sparing them if a Friend vouches for them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-97', domain: 9, title: 'Earlier relay into {name}',
-    order: 'Shoot anyone reaching {name} in two forward steps where the first dispatch happened earlier — unless a Spy shadows them.',
+    order: 'Unchecked influence: eliminate anyone reaching {name} in two forward steps where the first dispatch happened earlier — unless a Spy shadows them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
     timeOrder: 'after', exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-98', domain: 9, title: '{name}’s two-circle outbound chain',
-    order: 'Shoot anyone reached from {name} by a Friend, Civilian, or Foreigner contact followed by a Foe, Double agent, or Spy contact in either direction.',
+    order: 'Fire on anyone reached from {name} by a Friend, Civilian, or Foreigner contact followed by a Foe, Double agent, or Spy contact in either direction.',
     step1Roles: ['friend', 'civilian', 'foreigner'], step1Dir: 'any',
     step2Roles: ['foe', 'double', 'spy'], step2Dir: 'any'
   }),
   guardedAnchor({
     id: 'ea-99', domain: 9, title: '{name}’s two-circle return chain',
-    order: 'Shoot anyone reached from {name} by a Foe, Double agent, or Civilian contact followed by a Friend, Spy, or Foreigner contact in either direction.',
+    order: 'Handler compromised: take down anyone reached from {name} by a Foe, Double agent, or Civilian contact followed by a Friend, Spy, or Foreigner contact in either direction.',
     step1Roles: ['foe', 'double', 'civilian'], step1Dir: 'any',
     step2Roles: ['friend', 'spy', 'foreigner'], step2Dir: 'any'
   })

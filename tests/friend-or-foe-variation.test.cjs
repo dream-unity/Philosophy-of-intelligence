@@ -299,10 +299,23 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
     assert.equal(hardRoot.findAll(n => n.tagName === 'INPUT' && n.type === 'checkbox').length, 0);
     assert.ok(hardRoot.allText().includes('Cross-checks'));
 
-    // In-place debrief keeps the original .case-file visible underneath .case-result
-    renderCaseResult(hardRoot, hardTrial);
+    // In-place debrief keeps the original .case-file visible underneath .case-result and exposes Hold/Next buttons
+    let holdClicked = false;
+    let nextClicked = false;
+    renderCaseResult(hardRoot, hardTrial, {
+      onHoldToggle: () => { holdClicked = true; },
+      onNext: () => { nextClicked = true; }
+    });
     assert.ok(hardRoot.querySelector('.case-result'), 'Debrief banner should be present');
     assert.ok(hardRoot.querySelector('.case-file'), 'Original dossier should remain visible during debrief');
+    assert.ok(hardRoot.querySelector('.case-debrief-active'), 'Active debrief should compact the dossier');
+    const holdBtn = hardRoot.querySelector('[data-action="hold"]');
+    const nextBtn = hardRoot.querySelector('[data-action="next"]');
+    assert.ok(holdBtn && nextBtn, 'Debrief should render Hold and Next buttons for touch devices');
+    holdBtn.dispatchEvent('click');
+    nextBtn.dispatchEvent('click');
+    assert.equal(holdClicked, true);
+    assert.equal(nextClicked, true);
     assert.ok(hardTrial.pair.every(name => hardRoot.allText().includes(name)));
 
     // Confirmed-tier in-place debrief shows "Why not ...?" and highlights decisive role
@@ -320,6 +333,7 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
     const guideRoot = global.document.createElement('div');
     renderCaseGuide(guideRoot, 'hard', {shortlist: true});
     assert.doesNotMatch(guideRoot.allText(), BANNED_COPY);
+    assert.doesNotMatch(guideRoot.allText(), /\btied to\b|\blink\b/i, 'How-to-play guide must not use "tied to" or "link"');
     assert.ok(guideRoot.allText().includes('coupled cycles'));
   } finally {
     global.document = prevDocument;
@@ -369,7 +383,7 @@ test('Domain-contextual operational role verbs vary across domains and render in
   }
 });
 
-test('All five difficulty tiers eliminate directionless "tied to" matching, permanent safe/threat role pooling, and article typos', async () => {
+test('All five difficulty tiers eliminate directionless "tied to" matching, permanent safe/threat role pooling, monotonous openings, and article typos', async () => {
   const {familiesByLevel} = await loadModule('friend-or-foe/case-families.js');
   for (const level of ['super-easy', 'very-easy', 'easy', 'medium', 'hard']) {
     const list = familiesByLevel[level];
@@ -379,8 +393,11 @@ test('All five difficulty tiers eliminate directionless "tied to" matching, perm
     assert.equal(pooledGood, 0, `${level} must have 0 permanent "clean Friend/Spy/Civilian" boilerplate orders, got ${pooledGood}`);
     const pooledBad = list.filter(f => /Foe, Double agent, or Foreigner/.test(f.order)).length;
     assert.ok(pooledBad <= 1, `${level} must have <=1 pooled Foe/Double/Foreigner order, got ${pooledBad}`);
+    const shootStarts = list.filter(f => /^Shoot anyone\b/i.test(f.order)).length;
+    assert.ok(shootStarts <= 25, `${level} must vary order openings rather than repeating "Shoot anyone" (got ${shootStarts}/100)`);
     for (const f of list) {
       assert.doesNotMatch(f.order, /\ban (suspect|Foe|contact|cutout|Friend|Spy|Civilian|Double|Foreigner)\b/i, `${f.id} has an article grammar typo`);
+      assert.doesNotMatch(f.order, /\blink\b/i, `${f.id} should use operational contact language rather than "link"`);
     }
   }
 });

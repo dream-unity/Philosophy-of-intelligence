@@ -121,6 +121,125 @@ function presentRow(resolvedRow, disputed, draw) {
   return row;
 }
 
+const TRIPLE_MASKS = [];
+for (let a = 0; a < 6; a++) {
+  for (let b = a + 1; b < 6; b++) {
+    for (let c = b + 1; c < 6; c++) TRIPLE_MASKS.push((1 << a) | (1 << b) | (1 << c));
+  }
+}
+
+function isSingleCategoryShortcut(rows, correctKey) {
+  for (const row of rows) {
+    const froms = [...new Set(row.links.map(l => l.from))];
+    const tos = [...new Set(row.links.map(l => l.to))];
+    const all = [...new Set([...froms, ...tos])];
+    if (targetKey(froms) === correctKey || targetKey(tos) === correctKey || targetKey(all) === correctKey) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function countDelSensitive(familyId, edges, anchor, correctKey, targetSize) {
+  let count = 0;
+  for (const role of caseRoles) {
+    const res = evaluateFamily(familyId, edges.filter(e => e.role !== role), anchor, false);
+    if (res.pair.length !== targetSize || targetKey(res.pair) !== correctKey) count++;
+  }
+  return count;
+}
+
+function rowFlipSummary(familyId, rows, anchor, correctKey, targetSize) {
+  let flipsDifferent = 0;
+  const rivalRows = [];
+  const diffRows = [];
+  for (let i = 0; i < 6; i++) {
+    const edges = edgesFor(rows, 1 << i);
+    const seen = new Set();
+    for (const e of edges) { seen.add(e.from); seen.add(e.to); }
+    if (seen.size < 10) continue;
+    const alt = evaluateFamily(familyId, edges, anchor, false).pair;
+    const k = alt.length === targetSize ? targetKey(alt) : '';
+    if (k !== correctKey) {
+      flipsDifferent++;
+      diffRows.push(i);
+      if (alt.length === targetSize) rivalRows.push(i);
+    }
+  }
+  return {flipsDifferent, rivalRows, diffRows};
+}
+
+// Fast live layout synthesizer: generates brand-new certified topologies on the fly from random 32-bit
+// seeds so returning players cannot memorize the 12 fallback catalog layouts.
+function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
+  const budget = level === 'hard' ? 32 : level === 'medium' ? 24 : level === 'easy' ? 20 : 16;
+  let best = null;
+  for (let attempt = 0; attempt < budget; attempt++) {
+    const seed = (Math.floor(draw() * 0x7ffffffe) + 1) >>> 0;
+    if (catalogSeeds.has(seed)) continue;
+    const rows = layoutFor(seed);
+    if (!rows) continue;
+    const anchorIndex = family.useAnchor ? Math.floor(draw() * symbols.length) : 0;
+    const anchor = symbols[anchorIndex];
+    const baseEdges = edgesFor(rows, 0);
+    const actualTargets = evaluateFamily(family.id, baseEdges, anchor, false).pair;
+    const sz = actualTargets.length;
+    if (sz < 1 || sz > 4) continue;
+    const correctKey = targetKey(actualTargets);
+    if (isSingleCategoryShortcut(rows, correctKey)) continue;
+
+    const flipInfo = rowFlipSummary(family.id, rows, anchor, correctKey, sz);
+    const delSens = countDelSensitive(family.id, baseEdges, anchor, correctKey, sz);
+    const sizeBonus = (prevSize && sz !== prevSize) ? 18 : 0;
+
+    if (level === 'super-easy' || level === 'very-easy') {
+      if (flipInfo.flipsDifferent < 2 || delSens < 2) continue;
+      const score = delSens * 12 + flipInfo.flipsDifferent * 4 + sizeBonus;
+      if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: 0, raw: rows, actualTargets, score};
+      if (delSens >= 3 && sz !== prevSize) return best;
+    } else if (level === 'easy') {
+      if (!flipInfo.rivalRows.length || delSens < 2) continue;
+      const chosen = flipInfo.rivalRows[Math.floor(draw() * flipInfo.rivalRows.length)];
+      const dMask = 1 << chosen;
+      const wt = computeWorldTargets(family.id, rows, anchor, dMask);
+      if (!buildCrossChecks(rows, [chosen], wt, correctKey, null, 'easy', seededDraw(seed ^ 0x51a7))) continue;
+      const score = delSens * 12 + flipInfo.rivalRows.length * 4 + sizeBonus;
+      if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: dMask, raw: rows, actualTargets, score};
+      if (delSens >= 3 && sz !== prevSize) return best;
+    } else if (level === 'medium') {
+      if (flipInfo.flipsDifferent < 3 || delSens < 3) continue;
+      const candidates = TRIPLE_MASKS.filter(m => {
+        for (let i = 0; i < 6; i++) if ((m & (1 << i)) && !flipInfo.diffRows.includes(i)) return false;
+        return true;
+      });
+      if (!candidates.length) continue;
+      candidates.sort((a, b) =>
+        maskToIndices(b).filter(i => flipInfo.rivalRows.includes(i)).length -
+        maskToIndices(a).filter(i => flipInfo.rivalRows.includes(i)).length
+      );
+      for (const dMask of candidates.slice(0, 2)) {
+        const disputed = maskToIndices(dMask);
+        const wt = computeWorldTargets(family.id, rows, anchor, dMask);
+        if (buildCrossChecks(rows, disputed, wt, correctKey, null, 'medium', seededDraw(seed ^ 0x9e37))) {
+          const score = delSens * 15 + flipInfo.flipsDifferent * 3 + sizeBonus;
+          if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: dMask, raw: rows, actualTargets, score};
+          if (delSens >= 4 && sz !== prevSize) return best;
+          break;
+        }
+      }
+    } else if (level === 'hard') {
+      if (flipInfo.flipsDifferent < 4 || delSens < 4) continue;
+      const dMask = 63;
+      const wt = computeWorldTargets(family.id, rows, anchor, dMask);
+      if (!buildCrossChecks(rows, [0, 1, 2, 3, 4, 5], wt, correctKey, null, 'hard', seededDraw(seed ^ 0x7f4a))) continue;
+      const score = delSens * 40 + flipInfo.flipsDifferent * 8 + sizeBonus;
+      if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: dMask, raw: rows, actualTargets, score};
+      if (delSens >= 5) return best;
+    }
+  }
+  return best;
+}
+
 export function makeCaseTrial(level, previous = null, draw = Math.random, options = {}) {
   if (level === 'moderate') level = 'medium';
   if (!['super-easy', 'very-easy', 'easy', 'medium', 'hard'].includes(level)) {
@@ -136,13 +255,26 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
   const entries = caseCatalog[id];
   if (!entries || !entries.length) throw new Error('Missing catalog entries for ' + id);
   const boards = takeFromBag(entries.map((_, i) => i), last?.boards?.[id], draw);
-  const [seed, anchorIndex, disputedMask] = entries[boards.order[boards.index]];
   const deck = {rules, boards: {...last?.boards, [id]: boards}};
 
-  const raw = layoutFor(seed);
+  const prevTargets = previous?.targets || previous?.pair || null;
+  const prevSize = prevTargets ? prevTargets.length : 0;
+  const catalogSeeds = new Set(entries.map(e => e[0]));
+
+  // Attempt fresh live layout synthesis first; fall back cleanly to the certified catalog board.
+  const live = options?.catalogOnly ? null : synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw);
+  const liveSynthesized = Boolean(live);
+  let seed, anchorIndex, disputedMask, raw, actualTargets;
+  if (live) {
+    ({seed, anchorIndex, disputedMask, raw, actualTargets} = live);
+  } else {
+    [seed, anchorIndex, disputedMask] = entries[boards.order[boards.index]];
+    raw = layoutFor(seed);
+    actualTargets = evaluateFamily(id, edgesFor(raw, 0), symbols[anchorIndex], false).pair;
+  }
+
   const originalEdges = edgesFor(raw, 0);
   const anchorSym = symbols[anchorIndex];
-  const actualTargets = evaluateFamily(id, originalEdges, anchorSym, false).pair;
   const correctKey = targetKey(actualTargets);
   const disputedIndices = maskToIndices(disputedMask);
 
@@ -153,7 +285,6 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
   // Ensure the previous trial's exact target set does NOT collide with the current answer
   // OR with any single-disputed-world rival of the same size (eliminating prevKey cross-check leaks!).
   const forbidden = new Set([correctKey]);
-  const prevTargets = previous?.targets || previous?.pair || null;
   if (prevTargets && worldTargets && prevTargets.length === actualTargets.length) {
     for (let m = 1; m < 64; m++) {
       const rp = worldTargets[m];
@@ -238,6 +369,8 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
   return {
     number: (previous?.number || 0) + 1,
     level,
+    seed,
+    liveSynthesized,
     roster,
     evidence,
     deck,

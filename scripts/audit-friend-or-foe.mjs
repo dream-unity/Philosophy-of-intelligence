@@ -136,6 +136,8 @@ for (const level of LEVELS) {
   let familyBlocksOk = 0;
   let domainBlocksOk = 0;
   const boardKeys = new Set();
+  const uniqueSeeds = new Set();
+  let liveSynthCount = 0;
   const sizeCounts = {1: 0, 2: 0, 3: 0, 4: 0};
   const orderWordCounts = [];
   let bannedCopyHits = 0;
@@ -215,7 +217,9 @@ for (const level of LEVELS) {
       cycleFamilies = new Set();
     }
     const boardIdx = trial.deck.boards[evidence.family].order[trial.deck.boards[evidence.family].index];
-    boardKeys.add(`${evidence.family}#${boardIdx}`);
+    boardKeys.add(trial.liveSynthesized ? `${evidence.family}@${trial.seed}` : `${evidence.family}#${boardIdx}`);
+    if (trial.seed) uniqueSeeds.add(trial.seed);
+    if (trial.liveSynthesized) liveSynthCount++;
 
     // 2. Previous target-set exclusion & partial overlap
     if (prev) {
@@ -385,7 +389,7 @@ for (const level of LEVELS) {
   console.log(`--- ${level.toUpperCase()} (${TRIALS_PER_LEVEL} trials) ---`);
   console.log(`  Unique solvability (1 valid world, exact target set): ${uniqueOk}/${TRIALS_PER_LEVEL} (${pct(uniqueOk, TRIALS_PER_LEVEL)})`);
   console.log(`  Target counts: 1→${sizeCounts[1]}, 2→${sizeCounts[2]}, 3→${sizeCounts[3]}, 4→${sizeCounts[4]} | Order length: median ${median(orderWordCounts)}w, max ${Math.max(...orderWordCounts)}w | Banned words: ${bannedCopyHits}`);
-  console.log(`  100-family cycles complete (100/100): ${familyBlocksOk}/10 | 10-domain blocks: ${domainBlocksOk}/100 | Distinct boards: ${boardKeys.size}/${TRIALS_PER_LEVEL}`);
+  console.log(`  100-family cycles complete (100/100): ${familyBlocksOk}/10 | 10-domain blocks: ${domainBlocksOk}/100 | Distinct boards: ${boardKeys.size}/${TRIALS_PER_LEVEL} (live-synthesized: ${liveSynthCount}/${TRIALS_PER_LEVEL}, unique seeds: ${uniqueSeeds.size})`);
   console.log(`  Prev-target repeats: ${prevPairRepeats} | Partial name overlaps: ${partialPairOverlaps}/${TRIALS_PER_LEVEL - 1} (${pct(partialPairOverlaps, TRIALS_PER_LEVEL - 1)})`);
   console.log(`  Single-category column shortcuts: ${singleCatShortcuts}/${TRIALS_PER_LEVEL} (${pct(singleCatShortcuts, TRIALS_PER_LEVEL)})`);
   console.log(`  Single-link withholding: avg ${(linkSensSum / TRIALS_PER_LEVEL).toFixed(2)} / 12 links alter/break targets when omitted`);

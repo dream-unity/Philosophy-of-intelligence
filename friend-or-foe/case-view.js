@@ -216,14 +216,32 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
   root.replaceChildren(board);
 }
 
-export function renderCaseResult(root, trial) {
+export function renderCaseResult(root, trial, {onHoldToggle, onNext, held = false} = {}) {
   const targets = trial.targets || trial.pair;
   const panel = element('section', 'case-result');
   const titleRow = element('div', 'case-title-row');
-  titleRow.append(
-    element('p', 'case-title', 'Debrief · ' + trial.evidence.title),
-    element('p', 'case-domain case-result-hint', 'Space: next · P: hold')
+  titleRow.append(element('p', 'case-title', 'Debrief · ' + trial.evidence.title));
+
+  const controls = element('div', 'case-debrief-actions');
+  controls.append(
+    element('p', 'case-domain case-result-hint', held ? 'Held · Space: next · P: resume' : 'Space: next · P: hold')
   );
+  if (typeof onHoldToggle === 'function') {
+    const holdBtn = element('button', 'case-debrief-btn', held ? 'Resume' : 'Hold');
+    holdBtn.type = 'button';
+    if (typeof holdBtn.setAttribute === 'function') holdBtn.setAttribute('data-action', 'hold');
+    holdBtn.addEventListener('click', () => onHoldToggle());
+    controls.append(holdBtn);
+  }
+  if (typeof onNext === 'function') {
+    const nextBtn = element('button', 'case-debrief-btn case-debrief-next', 'Next');
+    nextBtn.type = 'button';
+    if (typeof nextBtn.setAttribute === 'function') nextBtn.setAttribute('data-action', 'next');
+    nextBtn.addEventListener('click', () => onNext());
+    controls.append(nextBtn);
+  }
+  titleRow.append(controls);
+
   panel.append(
     titleRow,
     element('h3', '', 'Why ' + formatNameList(targets))
@@ -240,8 +258,11 @@ export function renderCaseResult(root, trial) {
   for (const explanation of trial.proof) list.append(element('li', '', explanation));
   panel.append(list);
 
-  const hasExistingFile = typeof root.querySelector === 'function' && Boolean(root.querySelector('.case-file'));
-  if (hasExistingFile && typeof root.prepend === 'function') {
+  const fileNode = typeof root.querySelector === 'function' ? root.querySelector('.case-file') : null;
+  if (fileNode && typeof root.prepend === 'function') {
+    if (fileNode.classList && typeof fileNode.classList.add === 'function') {
+      fileNode.classList.add('case-debrief-active');
+    }
     const oldResult = root.querySelector('.case-result');
     if (oldResult && typeof oldResult.remove === 'function') oldResult.remove();
     if (typeof root.querySelectorAll === 'function') {
@@ -269,7 +290,7 @@ export function renderCaseGuide(root, level, {shortlist = true} = {}) {
   };
   section(
     'Read all six intelligence roles',
-    'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00), and its action verb adapts to the case (such as clears, escorts, tracks, corrects, or funds). Acting in a role means initiating the link; being tied to a role means being either actor or recipient. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'
+    'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00), and its action verb adapts to the case (such as clears, escorts, tracks, corrects, or funds). Each contact runs from the operative acting in that role to the person they reach. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'
   );
   if ((level === 'super-easy' || level === 'very-easy') && shortlist) {
     section('Use the shortlist', 'All six dispatches are confirmed, and every assigned target is on the shortlist. Uncheck Shortlist at any time to weigh all ten suspects.');
