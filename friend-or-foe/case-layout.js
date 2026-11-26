@@ -21,6 +21,50 @@ export const roleVerbs = {
   foreigner: 'meets'
 };
 
+export const domainRoleVerbs = [
+  // 0: Cover & Betrayal
+  {friend: 'clears', foe: 'targets', spy: 'audits', double: 'leaks to', civilian: 'warns', foreigner: 'contacts'},
+  // 1: Surveillance & Blind Spots
+  {friend: 'escorts', foe: 'ambushes', spy: 'shadows', double: 'leaks to', civilian: 'spots', foreigner: 'signals'},
+  // 2: Foreign Contact
+  {friend: 'vouches for', foe: 'pressures', spy: 'tracks', double: 'leaks to', civilian: 'reports', foreigner: 'recruits'},
+  // 3: Civilian Tip-Offs
+  {friend: 'confirms', foe: 'targets', spy: 'monitors', double: 'misleads', civilian: 'tips off', foreigner: 'briefs'},
+  // 4: Proxy Chains
+  {friend: 'backs', foe: 'strikes', spy: 'traces', double: 'relays to', civilian: 'warns', foreigner: 'hands off to'},
+  // 5: Alibi & Contradiction
+  {friend: 'corroborates', foe: 'accuses', spy: 'verifies', double: 'deceives', civilian: 'identifies', foreigner: 'consults'},
+  // 6: Chronology & Timing
+  {friend: 'clears', foe: 'strikes', spy: 'logs', double: 'leaks to', civilian: 'corrects', foreigner: 'meets'},
+  // 7: Tainted Sources
+  {friend: 'alibis', foe: 'coerces', spy: 'vets', double: 'compromises', civilian: 'exposes', foreigner: 'funds'},
+  // 8: Double Lives
+  {friend: 'protects', foe: 'hunts', spy: 'watches', double: 'leaks to', civilian: 'shelters', foreigner: 'hosts'},
+  // 9: Command & Leverage
+  {friend: 'vouches for', foe: 'targets', spy: 'shadows', double: 'leaks to', civilian: 'tips off', foreigner: 'meets'}
+];
+
+const domainNameToIndex = {
+  'Cover & Betrayal': 0,
+  'Surveillance & Blind Spots': 1,
+  'Foreign Contact': 2,
+  'Civilian Tip-Offs': 3,
+  'Proxy Chains': 4,
+  'Alibi & Contradiction': 5,
+  'Chronology & Timing': 6,
+  'Tainted Sources': 7,
+  'Double Lives': 8,
+  'Command & Leverage': 9
+};
+
+export function verbsForDomain(domain) {
+  if (typeof domain === 'number' && domainRoleVerbs[domain]) return domainRoleVerbs[domain];
+  if (typeof domain === 'string' && Object.hasOwn(domainNameToIndex, domain)) {
+    return domainRoleVerbs[domainNameToIndex[domain]];
+  }
+  return roleVerbs;
+}
+
 export function formatDispatchTime(step) {
   return '0' + step + ':00';
 }

@@ -1,14 +1,14 @@
 import {collectMatches} from './case-graph.js';
 import {
-  hasCleanCivilian, hasCleanFriend, hasCleanSpy, hasTaintedFriend, hasTaintedSpy,
-  matchAnchorRelay, matchAtom, matchRelay, matchTemporal
+  hasCompromised, hasUncompromised, matchAnchorRelay, matchAtom,
+  matchDependentSupport, matchIndependentSupport, matchRelay, matchTemporal
 } from './case-predicates.js';
 
 // 100 genuinely distinct Hard intelligence cases (10 domains × 10 families).
-// ZERO weighted arithmetic scoring ("+3/+2/-1 Shoot the top two")!
-// Every Hard case is a concise (15–28 word), high-consequence, 4-to-6-category structural,
-// epistemic, temporal, or causal officer judgment — paired with ALL 6 disputed files in ONE
-// single connected 6-node coupled 2-SAT cycle (ZERO split clusters, ZERO Style-4 trees!).
+// ZERO numerical scoring ("shoot the top two"), ZERO permanent safe/threat role pooling,
+// crisp (18–25 word) high-consequence officer calls weaving 5–6 specific cross-paired roles
+// via multi-hop chains, dependent vs. independent corroboration, epistemic timing, and
+// context-relative source integrity — paired with ALL 6 disputed dispatches in ONE connected cycle.
 
 function hard({id, domain, title, order, useAnchor = false, evaluate}) {
   return {id, tier: 'hard', domain, title, order, hint: '', useAnchor, evaluate};
@@ -24,1447 +24,703 @@ function hasTwoHopCompromisedVoucher(g, x, roles) {
   return null;
 }
 
-// Helper: any clean shield among specified clean shields
-function hasAnyShield(g, x, shields) {
-  if (shields.includes('cleanFriend') && hasCleanFriend(g, x)) return true;
-  if (shields.includes('cleanSpy') && hasCleanSpy(g, x)) return true;
-  if (shields.includes('cleanCivilian') && hasCleanCivilian(g, x)) return true;
-  if (shields.includes('friend') && g.hasIn(x, 'friend')) return true;
-  if (shields.includes('spy') && g.hasIn(x, 'spy')) return true;
-  if (shields.includes('civilian') && g.hasIn(x, 'civilian')) return true;
-  return false;
+function hardRelay({id, domain, title, order, firstRoles, firstDir, secondRoles, secondDir, diffRole = false, timeOrder = null, midExc = null, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchRelay(g, x, {firstRoles, firstDir, secondRoles, secondDir, diffRole, timeOrder, midExc});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardTaint({id, domain, title, order, roles, taint, taintDir = 'any', exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        for (const r of roles) {
+          const bad = hasCompromised(g, x, r, taint, taintDir);
+          if (bad) return proof ? x + ' relies on compromised ' + g.fmt(bad) + '.' : 'ok';
+        }
+        return null;
+      }, proof);
+    }
+  });
+}
+
+function hardTime({id, domain, title, order, early, late, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchTemporal(g, x, early, late);
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit[0]) + ' before ' + g.fmt(hit[1]) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardDep({id, domain, title, order, roleA, dirA = 'in', roleB, dirB = 'in', linkRoles = null, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchDependentSupport(g, x, {roleA, dirA, roleB, dirB, linkRoles});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' linked via ' + g.fmt(hit.link) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardIndep({id, domain, title, order, roleA, dirA = 'in', roleB, dirB = 'in', exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchIndependentSupport(g, x, {roleA, dirA, roleB, dirB});
+        if (!hit) return null;
+        return proof ? x + ': independent ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardDual({id, domain, title, order, a, b, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const e1 = matchAtom(g, x, a)[0];
+        const e2 = matchAtom(g, x, b)[0];
+        if (!e1 || !e2) return null;
+        return proof ? x + ': ' + g.fmt(e1) + ' & ' + g.fmt(e2) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardAnchor({id, domain, title, order, step1Roles, step1Dir, step2Roles, step2Dir, diffRole = false, excludeDirect = false, timeOrder = null, midExc = null, exc = null}) {
+  return hard({
+    id, domain, title, order, useAnchor: true,
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchAnchorRelay(g, anchor, x, {step1Roles, step1Dir, step2Roles, step2Dir, diffRole, excludeDirect, timeOrder, midExc});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  });
 }
 
 export const hardFamilies = [
   // =========================================================================
-  // DOMAIN 0: Cover & Betrayal (10)
+  // DOMAIN 0: Cover & Betrayal (10) — clears, targets, audits, leaks to, warns, contacts
   // =========================================================================
   hard({
-    // FIXED verbatim match for Compromised vouching chain (2-hop Friend voucher check!)
+    // Exact 2-hop Friend voucher predicate (Weakness #2 verbatim match!)
     id: 'ha-00', domain: 0, title: 'Compromised vouching chain',
-    order: 'Shoot anyone backed by a Friend whose own Friend voucher operates as a Foe, Double agent, or Foreigner — or who leaks as a Double agent without a clean Spy shadow or Civilian tip-off.',
+    order: 'Shoot anyone cleared by a Friend whose own Friend operates as a Foe, Double agent, or Foreigner — or who leaks as a Double agent or contacts as a Foreigner without a Spy audit or Civilian warning.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const chain = hasTwoHopCompromisedVoucher(g, x, ['foe', 'double', 'foreigner']);
-        if (chain) return proof ? x + ': 2-hop compromised voucher via ' + g.fmt(chain.f1) + ' ← ' + g.fmt(chain.f2) + '.' : 'ok';
-        const leak = g.out(x, 'double')[0];
-        if (leak && !hasCleanSpy(g, x) && !g.hasIn(x, 'civilian')) {
-          return proof ? x + ': ' + g.fmt(leak) + ' with no clean Spy shadow or Civilian tip-off.' : 'ok';
+        if (chain) return proof ? x + ': 2-hop compromised clearance via ' + g.fmt(chain.f1) + ' ← ' + g.fmt(chain.f2) + '.' : 'ok';
+        const hit = g.out(x, ['double', 'foreigner'])[0];
+        if (hit && !g.hasIn(x, ['spy', 'civilian'])) {
+          return proof ? x + ': ' + g.fmt(hit) + ' with no Spy audit or Civilian warning.' : 'ok';
         }
         return null;
       }, proof);
     }
   }),
-  hard({
-    id: 'ha-01', domain: 0, title: 'Unshielded shadow actor',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner without a clean Friend, clean Spy, or Civilian tip-off.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy', 'civilian'])) return null;
-        const hit = g.out(x, ['foe', 'double', 'foreigner'])[0];
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit) + ', zero clean cover or Civilian tip.' : 'ok';
-      }, proof);
-    }
+  hardTaint({
+    id: 'ha-01', domain: 0, title: 'Tainted clearance or audit',
+    order: 'Shoot anyone cleared by a Friend or audited by a Spy who leaks as a Double agent or contacts as a Foreigner — unless a Foe targets them.',
+    roles: ['friend', 'spy'], taint: ['double', 'foreigner'], taintDir: 'out', exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-02', domain: 0, title: 'Insider shielding an attacker',
+    order: 'Shoot anyone who clears as a Friend or warns as a Civilian an active Foe or Double agent — unless a Foreigner contacts them.',
+    firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'out', exc: {roles: ['foreigner'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-03', domain: 0, title: 'Witness compromised by audit or Foe',
+    order: 'Shoot anyone warned by a Civilian or cleared by a Friend whose source was audited by a Spy or targeted by a Foe — unless a Double agent leaks to them.',
+    roles: ['civilian', 'friend'], taint: ['spy', 'foe'], taintDir: 'in', exc: {roles: ['double'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-04', domain: 0, title: 'Betrayed by a trusted circle',
+    order: 'Shoot anyone targeted by a Foe or leaked to by a Double agent whose contact is cleared by a Friend or audited by a Spy — unless warned by a Civilian.',
+    firstRoles: ['foe', 'double'], firstDir: 'in', secondRoles: ['friend', 'spy'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-05', domain: 0, title: 'Clearance after warning or leak',
+    order: 'Shoot anyone warned by a Civilian, contacted by a Foreigner, or leaked to by a Double agent earlier than they cleared as a Friend, audited as a Spy, or targeted as a Foe.',
+    early: {roles: ['civilian', 'foreigner', 'double'], dir: 'in'}, late: {roles: ['friend', 'spy', 'foe'], dir: 'out'}
+  }),
+  hardTaint({
+    id: 'ha-06', domain: 0, title: 'Foreigner or mole behind the clearance',
+    order: 'Shoot anyone cleared by a Friend or warned by a Civilian whose source was contacted by a Foreigner or leaked to by a Double agent — unless audited by a Spy.',
+    roles: ['friend', 'civilian'], taint: ['foreigner', 'double'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-07', domain: 0, title: 'Leaking to a cleared or warned ward',
+    order: 'Shoot anyone who leaks as a Double agent or contacts as a Foreigner someone cleared by a Friend or warned by a Civilian — unless targeted by a Foe.',
+    firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-08', domain: 0, title: 'Foe or Foreigner with insider backing',
+    order: 'Shoot anyone targeted by a Foe or contacted by a Foreigner whose source is cleared by a Friend or audited by a Spy — unless warned by a Civilian.',
+    roles: ['foe', 'foreigner'], taint: ['friend', 'spy'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
   }),
   hard({
-    id: 'ha-02', domain: 0, title: 'Exposed shadow recipient',
-    order: 'Shoot anyone hit by a Foe, Double agent, or Foreigner — unless a clean Friend, clean Spy, or clean Civilian covers them.',
+    id: 'ha-09', domain: 0, title: 'Unverified clearance swap',
+    order: 'Shoot anyone cleared by a Friend or warned by a Civilian who also contacts as a Foreigner or targets as a Foe — unless audited by a Spy untouched by Double agent.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy', 'cleanCivilian'])) return null;
-        const hit = g.in(x, ['foe', 'double', 'foreigner'])[0];
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit) + ', zero clean shield across Friend, Spy, and Civilian.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-03', domain: 0, title: 'Tainted cover under fire',
-    order: 'Shoot anyone backed by a Friend tainted by Double agent or Foreigner OR targeted by a Foe — unless cleared by a clean Spy or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
-        const tf = hasTaintedFriend(g, x);
-        if (tf) return proof ? x + ' backed by tainted Friend ' + g.fmt(tf) + '.' : 'ok';
-        const foe = g.in(x, 'foe')[0];
-        if (foe) return proof ? x + ': ' + g.fmt(foe) + ', no clean Spy/Civilian shield.' : 'ok';
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-04', domain: 0, title: 'Double-crossed ally or informant',
-    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian someone tied to Foe or Double agent — unless a clean Spy shadows them or they have Foreigner ties.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x) || g.hasTouch(x, 'foreigner')) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ' backs compromised contact: ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-05', domain: 0, title: 'Hollow Friend alibi',
-    order: 'Shoot anyone whose Friend voucher is tied to Foe, Double agent, or Foreigner — unless a clean Friend, clean Spy, or clean Civilian covers them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy', 'cleanCivilian'])) return null;
-        const bad = g.in(x, 'friend').find(f => g.hasTouch(f.from, ['foe', 'double', 'foreigner']));
-        if (!bad) return null;
-        return proof ? x + ' relies on compromised Friend ' + g.fmt(bad) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-06', domain: 0, title: 'Mole with insider disguise',
-    order: 'Shoot anyone tied to Friend or Civilian who also operates as a Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const ov = g.touch(x, ['friend', 'civilian'])[0];
-        const cov = g.out(x, ['foe', 'double', 'foreigner'])[0];
-        if (!ov || !cov) return null;
-        return proof ? x + ': insider ' + g.fmt(ov) + ' masking ' + g.fmt(cov) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-07', domain: 0, title: 'Compromised voucher’s target',
-    order: 'Shoot anyone targeted by a Foe or fed a Double agent’s leak by someone backed by a Friend or tipped off by a Civilian — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['foe', 'double'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'in'});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' from overtly backed actor (' + g.fmt(hit.e2) + ').' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-08', domain: 0, title: 'Ally corrupted by mole or outsider',
-    order: 'Shoot anyone vouched for by a Friend also tied to Foe, Double agent, or Foreigner — unless cleared by a clean Spy or Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'civilian'])) return null;
-        const f = g.in(x, 'friend')[0];
-        const c = g.touch(x, ['foe', 'double', 'foreigner'])[0];
-        if (!f || !c) return null;
-        return proof ? x + ': ' + g.fmt(f) + ' yet ' + g.fmt(c) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-09', domain: 0, title: 'Betrayal across insider lines',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward someone tied to Friend or Civilian — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' hitting insider ' + hit.mid + '.' : 'ok';
+        if (hasUncompromised(g, x, 'spy', ['double'], 'any')) return null;
+        const a = g.in(x, ['friend', 'civilian'])[0];
+        const b = g.out(x, ['foreigner', 'foe'])[0];
+        if (!a || !b) return null;
+        return proof ? x + ': ' + g.fmt(a) + ' while ' + g.fmt(b) + '.' : 'ok';
       }, proof);
     }
   }),
 
   // =========================================================================
-  // DOMAIN 1: Surveillance & Blind Spots (10)
+  // DOMAIN 1: Surveillance & Blind Spots (10) — escorts, ambushes, shadows, leaks to, spots, signals
   // =========================================================================
-  hard({
-    id: 'ha-10', domain: 1, title: 'Watchdog turned traitor',
-    order: 'Shoot anyone who shadows as a Spy and is tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        const s = g.out(x, 'spy')[0];
-        const c = g.touch(x, ['foe', 'double', 'foreigner'])[0];
-        if (!s || !c) return null;
-        return proof ? x + ': ' + g.fmt(s) + ' while compromised by ' + g.fmt(c) + '.' : 'ok';
-      }, proof);
-    }
+  hardTaint({
+    id: 'ha-10', domain: 1, title: 'Watchers compromised from outside',
+    order: 'Shoot anyone shadowed by a Spy or escorted by a Friend whose contact was signaled by a Foreigner or ambushed by a Foe — unless a Civilian spots them.',
+    roles: ['spy', 'friend'], taint: ['foreigner', 'foe'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
   }),
   hard({
     id: 'ha-11', domain: 1, title: 'False Spy cover',
-    order: 'Shoot anyone shadowed ONLY by Spies compromised by Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Civilian.',
+    order: 'Shoot anyone shadowed by a Spy or spotted by a Civilian whose watcher was signaled by a Foreigner or ambushed by a Foe — unless escorted by a Friend untouched by Double agent.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        const ss = g.in(x, 'spy');
-        if (!ss.length || !ss.every(s => g.hasTouch(s.from, ['foe', 'double', 'foreigner']))) return null;
-        return proof ? x + ' shadowed only by compromised Spy (' + ss.map(s => s.from).join(', ') + ').' : 'ok';
+        if (hasUncompromised(g, x, 'friend', ['double'], 'any')) return null;
+        const w = g.in(x, ['spy', 'civilian']).find(e => g.hasIn(e.from, ['foreigner', 'foe']));
+        if (!w) return null;
+        return proof ? x + ' watched by compromised ' + g.fmt(w) + '.' : 'ok';
       }, proof);
     }
   }),
-  hard({
-    id: 'ha-12', domain: 1, title: 'Unwatched shadow link',
-    order: 'Shoot anyone tied to Double agent or Foreigner who has no Spy tie at all — unless both a clean Friend vouches for them and a Civilian tips them off.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.hasTouch(x, 'spy')) return null;
-        if (hasCleanFriend(g, x) && g.hasIn(x, 'civilian')) return null;
-        const c = g.touch(x, ['double', 'foreigner'])[0];
-        if (!c) return null;
-        return proof ? x + ': ' + g.fmt(c) + ', invisible to Spy and lacks Friend+Civilian cover.' : 'ok';
-      }, proof);
-    }
+  hardRelay({
+    id: 'ha-12', domain: 1, title: 'Blind spot around an ambush',
+    order: 'Shoot anyone who ambushes as a Foe or signals as a Foreigner someone shadowed by a Spy or spotted by a Civilian — unless escorted by a Friend.',
+    firstRoles: ['foe', 'foreigner'], firstDir: 'out', secondRoles: ['spy', 'civilian'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-13', domain: 1, title: 'Shadowing into an ambush',
+    order: 'Shoot anyone who shadows as a Spy or spots as a Civilian someone ambushed by a Foe or signaled by a Foreigner — unless a Double agent leaks to them.',
+    firstRoles: ['spy', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'in', exc: {roles: ['double'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-14', domain: 1, title: 'Escort after ambush or sighting',
+    order: 'Shoot anyone ambushed by a Foe, signaled by a Foreigner, or spotted by a Civilian earlier than a Spy shadowed, Friend escorted, or Double agent leaked to them.',
+    early: {roles: ['foe', 'foreigner', 'civilian'], dir: 'in'}, late: {roles: ['spy', 'friend', 'double'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-15', domain: 1, title: 'Spotter under enemy watch',
+    order: 'Shoot anyone spotted by a Civilian or escorted by a Friend whose contact was shadowed by a Spy or leaked to by a Double agent — unless signaled by a Foreigner.',
+    roles: ['civilian', 'friend'], taint: ['spy', 'double'], taintDir: 'in', exc: {roles: ['foreigner'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-16', domain: 1, title: 'Unwatched escort or witness',
+    order: 'Shoot anyone escorted by a Friend or spotted by a Civilian who ambushes as a Foe or leaks as a Double agent — unless shadowed by a Spy.',
+    firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-17', domain: 1, title: 'Watcher turned late',
+    order: 'Shoot anyone who shadowed as a Spy, leaked as a Double agent, or spotted as a Civilian earlier than a Friend escorted, Foe ambushed, or Foreigner signaled them.',
+    early: {roles: ['spy', 'double', 'civilian'], dir: 'out'}, late: {roles: ['friend', 'foe', 'foreigner'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-18', domain: 1, title: 'Ambusher under Friend or Civilian cover',
+    order: 'Shoot anyone ambushed by a Foe or signaled by a Foreigner whose contact is escorted by a Friend or spotted by a Civilian — unless shadowed by a Spy.',
+    roles: ['foe', 'foreigner'], taint: ['friend', 'civilian'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-19', domain: 1, title: 'Double-blind relay',
+    order: 'Shoot anyone who leaks as a Double agent or escorts as a Friend someone shadowed by a Spy or signaled by a Foreigner — unless ambushed by a Foe.',
+    firstRoles: ['double', 'friend'], firstDir: 'out', secondRoles: ['spy', 'foreigner'], secondDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  }),
+
+  // =========================================================================
+  // DOMAIN 2: Foreign Contact (10) — vouches for, pressures, tracks, leaks to, reports, recruits
+  // =========================================================================
+  hardRelay({
+    id: 'ha-20', domain: 2, title: 'Foreigner’s inside sponsor',
+    order: 'Shoot anyone who vouches as a Friend or tracks as a Spy someone recruited by a Foreigner or pressured by a Foe — unless reported by a Civilian.',
+    firstRoles: ['friend', 'spy'], firstDir: 'out', secondRoles: ['foreigner', 'foe'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-21', domain: 2, title: 'Recruited witness or voucher',
+    order: 'Shoot anyone reported by a Civilian or vouched for by a Friend whose source was recruited by a Foreigner or pressured by a Foe — unless tracked by a Spy.',
+    roles: ['civilian', 'friend'], taint: ['foreigner', 'foe'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-22', domain: 2, title: 'Recruiter targeting insiders',
+    order: 'Shoot anyone who recruits as a Foreigner or pressures as a Foe someone vouched for by a Friend or reported by a Civilian — unless a Double agent leaks to them.',
+    firstRoles: ['foreigner', 'foe'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'in', exc: {roles: ['double'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-23', domain: 2, title: 'Recruited before vouching or report',
+    order: 'Shoot anyone recruited by a Foreigner, pressured by a Foe, or tracked by a Spy earlier than a Friend vouched for, Civilian reported, or Double agent leaked to them.',
+    early: {roles: ['foreigner', 'foe', 'spy'], dir: 'in'}, late: {roles: ['friend', 'civilian', 'double'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-24', domain: 2, title: 'Foreigner or mole backed by insiders',
+    order: 'Shoot anyone recruited by a Foreigner or leaked to by a Double agent whose contact is tracked by a Spy or reported by a Civilian — unless vouched for by a Friend.',
+    roles: ['foreigner', 'double'], taint: ['spy', 'civilian'], taintDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-25', domain: 2, title: 'Leak feeding a recruiter or Foe',
+    order: 'Shoot anyone who leaks as a Double agent or reports as a Civilian an active Foreigner or Foe — unless tracked by a Spy.',
+    firstRoles: ['double', 'civilian'], firstDir: 'out', secondRoles: ['foreigner', 'foe'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-26', domain: 2, title: 'Tracked after foreign or ally contact',
+    order: 'Shoot anyone recruited by a Foreigner, leaked to by a Double agent, or vouched for by a Friend earlier than they tracked as a Spy, reported as a Civilian, or pressured as a Foe.',
+    early: {roles: ['foreigner', 'double', 'friend'], dir: 'in'}, late: {roles: ['spy', 'civilian', 'foe'], dir: 'out'}
+  }),
+  hardRelay({
+    id: 'ha-27', domain: 2, title: 'Recruit turning informant or voucher',
+    order: 'Shoot anyone recruited by a Foreigner or pressured by a Foe who reports as a Civilian or vouches as a Friend — unless tracked by a Spy.',
+    firstRoles: ['foreigner', 'foe'], firstDir: 'in', secondRoles: ['civilian', 'friend'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-28', domain: 2, title: 'Tracker recruiting abroad',
+    order: 'Shoot anyone tracked by a Spy or vouched for by a Friend whose contact recruits as a Foreigner or leaks as a Double agent — unless reported by a Civilian.',
+    roles: ['spy', 'friend'], taint: ['foreigner', 'double'], taintDir: 'out', exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-29', domain: 2, title: 'Foreigner’s delayed chain',
+    order: 'Shoot anyone recruited by a Foreigner, pressured by a Foe, or vouched for by a Friend earlier than a Civilian reported, Spy tracked, or Double agent leaked to that contact.',
+    firstRoles: ['foreigner', 'foe', 'friend'], firstDir: 'in', secondRoles: ['civilian', 'spy', 'double'], secondDir: 'in', timeOrder: 'before'
+  }),
+
+  // =========================================================================
+  // DOMAIN 3: Civilian Tip-Offs (10) — confirms, targets, monitors, misleads, tips off, briefs
+  // =========================================================================
+  hardRelay({
+    id: 'ha-30', domain: 3, title: 'Tip-off to an attacker or outsider',
+    order: 'Shoot anyone who tips off as a Civilian or confirms as a Friend an active Foe or Foreigner — unless monitored by a Spy.',
+    firstRoles: ['civilian', 'friend'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-31', domain: 3, title: 'Misled witness or ally',
+    order: 'Shoot anyone tipped off by a Civilian or confirmed by a Friend whose source was misled by a Double agent or briefed by a Foreigner — unless targeted by a Foe.',
+    roles: ['civilian', 'friend'], taint: ['double', 'foreigner'], taintDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-32', domain: 3, title: 'Late confirmation after strike or tip-off',
+    order: 'Shoot anyone targeted by a Foe, misled by a Double agent, or tipped off by a Civilian earlier than a Friend confirmed, Spy monitored, or Foreigner briefed them.',
+    early: {roles: ['foe', 'double', 'civilian'], dir: 'in'}, late: {roles: ['friend', 'spy', 'foreigner'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-33', domain: 3, title: 'Monitor’s misled informant',
+    order: 'Shoot anyone who monitors as a Spy or tips off as a Civilian someone misled by a Double agent or briefed by a Foreigner — unless confirmed by a Friend.',
+    firstRoles: ['spy', 'civilian'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-34', domain: 3, title: 'Informant or Foe backed by insiders',
+    order: 'Shoot anyone tipped off by a Civilian or targeted by a Foe whose contact is monitored by a Spy or confirmed by a Friend — unless briefed by a Foreigner.',
+    roles: ['civilian', 'foe'], taint: ['spy', 'friend'], taintDir: 'in', exc: {roles: ['foreigner'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-35', domain: 3, title: 'Deceiver exploiting a tip-off',
+    order: 'Shoot anyone who misleads as a Double agent or briefs as a Foreigner someone tipped off by a Civilian or monitored by a Spy — unless targeted by a Foe.',
+    firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['civilian', 'spy'], secondDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-36', domain: 3, title: 'Moving after tip-off or strike',
+    order: 'Shoot anyone tipped off by a Civilian, confirmed by a Friend, or targeted by a Foe earlier than they briefed as a Foreigner, misled as a Double agent, or monitored as a Spy.',
+    early: {roles: ['civilian', 'friend', 'foe'], dir: 'in'}, late: {roles: ['foreigner', 'double', 'spy'], dir: 'out'}
+  }),
+  hardRelay({
+    id: 'ha-37', domain: 3, title: 'Informant’s own attacker',
+    order: 'Shoot anyone tipped off by a Civilian or monitored by a Spy who targets as a Foe or misleads as a Double agent — unless confirmed by a Friend.',
+    firstRoles: ['civilian', 'spy'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-38', domain: 3, title: 'Foreigner briefed by a witness',
+    order: 'Shoot anyone briefed by a Foreigner or misled by a Double agent whose contact is tipped off by a Civilian or monitored by a Spy — unless targeted by a Foe.',
+    roles: ['foreigner', 'double'], taint: ['civilian', 'spy'], taintDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-39', domain: 3, title: 'Delayed confirmation after briefing',
+    order: 'Shoot anyone confirmed by a Friend, monitored by a Spy, or targeted by a Foe later than a Foreigner briefed, Double agent misled, or Civilian tipped off that source.',
+    firstRoles: ['friend', 'spy', 'foe'], firstDir: 'in', secondRoles: ['foreigner', 'double', 'civilian'], secondDir: 'in', timeOrder: 'after'
+  }),
+
+  // =========================================================================
+  // DOMAIN 4: Proxy Chains (10) — backs, strikes, traces, relays to, warns, hands off to
+  // =========================================================================
+  hardRelay({
+    id: 'ha-40', domain: 4, title: 'Handoff to a striker or tracer',
+    order: 'Shoot anyone who hands off as a Foreigner or relays as a Double agent to an active Foe or Spy — unless backed by a Friend.',
+    firstRoles: ['foreigner', 'double'], firstDir: 'out', secondRoles: ['foe', 'spy'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-41', domain: 4, title: 'Backer behind a handoff or strike',
+    order: 'Shoot anyone backed by a Friend or warned by a Civilian who hands off as a Foreigner or strikes as a Foe — unless traced by a Spy.',
+    firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foreigner', 'foe'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-42', domain: 4, title: 'Two-hop strike or handoff',
+    order: 'Shoot anyone who strikes as a Foe or hands off as a Foreigner to someone backed by a Friend or traced by a Spy — unless warned by a Civilian.',
+    firstRoles: ['foe', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-43', domain: 4, title: 'Traced courier chain',
+    order: 'Shoot anyone who traces as a Spy or warns as a Civilian an active Double agent or Friend — unless struck by a Foe.',
+    firstRoles: ['spy', 'civilian'], firstDir: 'out', secondRoles: ['double', 'friend'], secondDir: 'out', exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-44', domain: 4, title: 'Timed proxy relay',
+    order: 'Shoot anyone handed off to by a Foreigner or backed by a Friend earlier than their source relayed as a Double agent or struck as a Foe — unless warned by a Civilian.',
+    firstRoles: ['foreigner', 'friend'], firstDir: 'in', secondRoles: ['double', 'foe'], secondDir: 'out', timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-45', domain: 4, title: 'Unwarned proxy recipient',
+    order: 'Shoot anyone handed off to by a Foreigner or relayed to by a Double agent whose contact is backed by a Friend or struck by a Foe — unless warned by a Civilian.',
+    firstRoles: ['foreigner', 'double'], firstDir: 'in', secondRoles: ['friend', 'foe'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-46', domain: 4, title: 'Proxy bypassing surveillance',
+    order: 'Shoot anyone backed by a Friend or warned by a Civilian through someone no Spy traces who strikes as a Foe or hands off as a Foreigner.',
+    firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out', midExc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-47', domain: 4, title: 'Reverse-timed handoff',
+    order: 'Shoot anyone who backs as a Friend or traces as a Spy someone who had earlier struck as a Foe or handed off as a Foreigner — unless a Double agent relays to them.',
+    firstRoles: ['friend', 'spy'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'out', timeOrder: 'after', exc: {roles: ['double'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-48', domain: 4, title: 'Striker or tracer feeding a courier',
+    order: 'Shoot anyone struck by a Foe or traced by a Spy who relays as a Double agent or hands off as a Foreigner — unless backed by a Friend.',
+    firstRoles: ['foe', 'spy'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardRelay({
+    id: 'ha-49', domain: 4, title: 'Backer’s hidden upstream',
+    order: 'Shoot anyone backed by a Friend or handed off to by a Foreigner whose source is warned by a Civilian or struck by a Foe — unless traced by a Spy.',
+    firstRoles: ['friend', 'foreigner'], firstDir: 'in', secondRoles: ['civilian', 'foe'], secondDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  }),
+
+  // =========================================================================
+  // DOMAIN 5: Alibi & Contradiction (10) — corroborates, accuses, verifies, deceives, identifies, consults
+  // =========================================================================
+  hardDep({
+    id: 'ha-50', domain: 5, title: 'Colluding alibi pair',
+    order: 'Shoot anyone corroborated by a Friend, identified by a Civilian, or accused by a Foe and verified by a Spy, consulted by a Foreigner, or deceived by a Double agent when those two are linked.',
+    roleA: ['friend', 'civilian', 'foe'], dirA: 'in', roleB: ['spy', 'foreigner', 'double'], dirB: 'in'
+  }),
+  hardIndep({
+    id: 'ha-51', domain: 5, title: 'Two unlinked accusers',
+    order: 'Shoot anyone accused by a Foe or identified by a Civilian and deceived by a Double agent or corroborated by a Friend with no link — unless verified by a Spy.',
+    roleA: ['foe', 'civilian'], dirA: 'in', roleB: ['double', 'friend'], dirB: 'in', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardDep({
+    id: 'ha-52', domain: 5, title: 'Linked witness and accuser',
+    order: 'Shoot anyone identified by a Civilian, verified by a Spy, or accused by a Foe and deceived by a Double agent, corroborated by a Friend, or consulted by a Foreigner when those two are linked.',
+    roleA: ['civilian', 'spy', 'foe'], dirA: 'in', roleB: ['double', 'friend', 'foreigner'], dirB: 'in'
+  }),
+  hardIndep({
+    id: 'ha-53', domain: 5, title: 'Independent cover and consultation',
+    order: 'Shoot anyone corroborated by a Friend or verified by a Spy and consulted by a Foreigner or identified by a Civilian with no link — unless accused by a Foe.',
+    roleA: ['friend', 'spy'], dirA: 'in', roleB: ['foreigner', 'civilian'], dirB: 'in', exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardDep({
+    id: 'ha-54', domain: 5, title: 'Coordinated cover story',
+    order: 'Shoot anyone corroborated by a Friend, accused by a Foe, or deceived by a Double agent and identified by a Civilian, consulted by a Foreigner, or verified by a Spy when those two are linked.',
+    roleA: ['friend', 'foe', 'double'], dirA: 'in', roleB: ['civilian', 'foreigner', 'spy'], dirB: 'in'
+  }),
+  hardIndep({
+    id: 'ha-55', domain: 5, title: 'Independent verification under doubt',
+    order: 'Shoot anyone verified by a Spy or deceived by a Double agent and accused by a Foe or consulted by a Foreigner with no link — unless corroborated by a Friend.',
+    roleA: ['spy', 'double'], dirA: 'in', roleB: ['foe', 'foreigner'], dirB: 'in', exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardDep({
+    id: 'ha-56', domain: 5, title: 'Rehearsed defense',
+    order: 'Shoot anyone deceived by a Double agent, accused by a Foe, or verified by a Spy and corroborated by a Friend, identified by a Civilian, or consulted by a Foreigner when those two are linked.',
+    roleA: ['double', 'foe', 'spy'], dirA: 'in', roleB: ['friend', 'civilian', 'foreigner'], dirB: 'in'
+  }),
+  hardIndep({
+    id: 'ha-57', domain: 5, title: 'Unlinked witness and deceiver',
+    order: 'Shoot anyone identified by a Civilian or accused by a Foe and deceived by a Double agent or consulted by a Foreigner with no link — unless verified by a Spy.',
+    roleA: ['civilian', 'foe'], dirA: 'in', roleB: ['double', 'foreigner'], dirB: 'in', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardDep({
+    id: 'ha-58', domain: 5, title: 'Linked accusers and verifiers',
+    order: 'Shoot anyone accused by a Foe, corroborated by a Friend, or consulted by a Foreigner and verified by a Spy, deceived by a Double agent, or identified by a Civilian when those two are linked.',
+    roleA: ['foe', 'friend', 'foreigner'], dirA: 'in', roleB: ['spy', 'double', 'civilian'], dirB: 'in'
+  }),
+  hardIndep({
+    id: 'ha-59', domain: 5, title: 'Two independent insiders',
+    order: 'Shoot anyone corroborated by a Friend or consulted by a Foreigner and verified by a Spy or identified by a Civilian with no link — unless deceived by a Double agent.',
+    roleA: ['friend', 'foreigner'], dirA: 'in', roleB: ['spy', 'civilian'], dirB: 'in', exc: {roles: ['double'], dir: 'in'}
+  }),
+
+  // =========================================================================
+  // DOMAIN 6: Chronology & Timing (10) — clears, strikes, logs, leaks to, corrects, meets
+  // =========================================================================
+  hardTime({
+    id: 'ha-60', domain: 6, title: 'Relayed after correction or strike',
+    order: 'Shoot anyone corrected by a Civilian, logged by a Spy, or struck by a Foe earlier than they cleared as a Friend, leaked as a Double agent, or met as a Foreigner.',
+    early: {roles: ['civilian', 'spy', 'foe'], dir: 'in'}, late: {roles: ['friend', 'double', 'foreigner'], dir: 'out'}
+  }),
+  hardTime({
+    id: 'ha-61', domain: 6, title: 'Struck before logging or leak',
+    order: 'Shoot anyone who struck as a Foe, met as a Foreigner, or cleared as a Friend earlier than a Spy logged, Civilian corrected, or Double agent leaked to them.',
+    early: {roles: ['foe', 'foreigner', 'friend'], dir: 'out'}, late: {roles: ['spy', 'civilian', 'double'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-62', domain: 6, title: 'Logged after strike or clearance',
+    order: 'Shoot anyone struck by a Foe, leaked to by a Double agent, or cleared by a Friend earlier than a Spy logged, Civilian corrected, or Foreigner met them.',
+    early: {roles: ['foe', 'double', 'friend'], dir: 'in'}, late: {roles: ['spy', 'civilian', 'foreigner'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-63', domain: 6, title: 'Meeting before clearance or strike',
+    order: 'Shoot anyone met by a Foreigner, corrected by a Civilian, or logged by a Spy earlier than a Friend cleared, Foe struck, or Double agent leaked to them.',
+    early: {roles: ['foreigner', 'civilian', 'spy'], dir: 'in'}, late: {roles: ['friend', 'foe', 'double'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-64', domain: 6, title: 'Leaked before witness or strike',
+    order: 'Shoot anyone who leaked as a Double agent, met as a Foreigner, or cleared as a Friend earlier than a Civilian corrected, Spy logged, or Foe struck them.',
+    early: {roles: ['double', 'foreigner', 'friend'], dir: 'out'}, late: {roles: ['civilian', 'spy', 'foe'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-65', domain: 6, title: 'Correction before late action',
+    order: 'Shoot anyone corrected by a Civilian, logged by a Spy, or leaked to by a Double agent earlier than they struck as a Foe, met as a Foreigner, or cleared as a Friend.',
+    early: {roles: ['civilian', 'spy', 'double'], dir: 'in'}, late: {roles: ['foe', 'foreigner', 'friend'], dir: 'out'}
+  }),
+  hardTime({
+    id: 'ha-66', domain: 6, title: 'Early cover, late leak or correction',
+    order: 'Shoot anyone cleared by a Friend, logged by a Spy, or met by a Foreigner earlier than a Double agent leaked to, Foe struck, or Civilian corrected them.',
+    early: {roles: ['friend', 'spy', 'foreigner'], dir: 'in'}, late: {roles: ['double', 'foe', 'civilian'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-67', domain: 6, title: 'Late correction after strike or log',
+    order: 'Shoot anyone who struck as a Foe, cleared as a Friend, or logged as a Spy earlier than a Civilian corrected, Foreigner met, or Double agent leaked to them.',
+    early: {roles: ['foe', 'friend', 'spy'], dir: 'out'}, late: {roles: ['civilian', 'foreigner', 'double'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-68', domain: 6, title: 'Spy or mole before Friend or Foe',
+    order: 'Shoot anyone logged by a Spy, corrected by a Civilian, or leaked to by a Double agent earlier than a Friend cleared, Foe struck, or Foreigner met them.',
+    early: {roles: ['spy', 'civilian', 'double'], dir: 'in'}, late: {roles: ['friend', 'foe', 'foreigner'], dir: 'in'}
+  }),
+  hardTime({
+    id: 'ha-69', domain: 6, title: 'Foreigner or Friend before Foe or Spy',
+    order: 'Shoot anyone met by a Foreigner, cleared by a Friend, or corrected by a Civilian earlier than a Foe struck, Spy logged, or Double agent leaked to them.',
+    early: {roles: ['foreigner', 'friend', 'civilian'], dir: 'in'}, late: {roles: ['foe', 'spy', 'double'], dir: 'in'}
+  }),
+
+  // =========================================================================
+  // DOMAIN 7: Tainted Sources (10) — alibis, coerces, vets, compromises, exposes, funds
+  // =========================================================================
+  hardTaint({
+    id: 'ha-70', domain: 7, title: 'Funder or coercer giving alibi',
+    order: 'Shoot anyone given a Friend’s alibi or Spy’s vetting by an active Foreigner funder or Foe coercer — unless compromised by a Double agent.',
+    roles: ['friend', 'spy'], taint: ['foreigner', 'foe'], taintDir: 'out', exc: {roles: ['double'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-71', domain: 7, title: 'Exposed by a funded witness',
+    order: 'Shoot anyone exposed by a Civilian or compromised by a Double agent whose source was funded by a Foreigner or given a Friend’s alibi — unless coerced by a Foe.',
+    roles: ['civilian', 'double'], taint: ['foreigner', 'friend'], taintDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-72', domain: 7, title: 'Vetted funder or exposed coercer',
+    order: 'Shoot anyone funded by a Foreigner or coerced by a Foe whose source was vetted by a Spy or exposed by a Civilian — unless given a Friend’s alibi.',
+    roles: ['foreigner', 'foe'], taint: ['spy', 'civilian'], taintDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-73', domain: 7, title: 'Compromised witness or ally',
+    order: 'Shoot anyone exposed by a Civilian or given a Friend’s alibi by someone compromised by a Double agent or coerced by a Foe — unless vetted by a Spy.',
+    roles: ['civilian', 'friend'], taint: ['double', 'foe'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-74', domain: 7, title: 'Vetted by a compromised source',
+    order: 'Shoot anyone vetted by a Spy or funded by a Foreigner whose source was compromised by a Double agent or coerced by a Foe — unless exposed by a Civilian.',
+    roles: ['spy', 'foreigner'], taint: ['double', 'foe'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-75', domain: 7, title: 'Alibi from an exposed or vetted source',
+    order: 'Shoot anyone given a Friend’s alibi or Foe’s coercion by someone exposed by a Civilian or vetted by a Spy — unless funded by a Foreigner.',
+    roles: ['friend', 'foe'], taint: ['civilian', 'spy'], taintDir: 'in', exc: {roles: ['foreigner'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-76', domain: 7, title: 'Funder with an alibi or exposure',
+    order: 'Shoot anyone funded by a Foreigner or compromised by a Double agent whose source had a Friend’s alibi or Civilian’s exposure — unless vetted by a Spy.',
+    roles: ['foreigner', 'double'], taint: ['friend', 'civilian'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-77', domain: 7, title: 'Coerced witness or funded Spy',
+    order: 'Shoot anyone exposed by a Civilian or vetted by a Spy whose source was coerced by a Foe or funded by a Foreigner — unless compromised by a Double agent.',
+    roles: ['civilian', 'spy'], taint: ['foe', 'foreigner'], taintDir: 'in', exc: {roles: ['double'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-78', domain: 7, title: 'Compromised coercer or alibied Spy',
+    order: 'Shoot anyone coerced by a Foe or vetted by a Spy whose source was compromised by a Double agent or given a Friend’s alibi — unless funded by a Foreigner.',
+    roles: ['foe', 'spy'], taint: ['double', 'friend'], taintDir: 'in', exc: {roles: ['foreigner'], dir: 'in'}
+  }),
+  hardTaint({
+    id: 'ha-79', domain: 7, title: 'Alibi from a vetted or compromised source',
+    order: 'Shoot anyone given a Friend’s alibi or Foreigner’s funding by someone vetted by a Spy or compromised by a Double agent — unless exposed by a Civilian.',
+    roles: ['friend', 'foreigner'], taint: ['spy', 'double'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  }),
+
+  // =========================================================================
+  // DOMAIN 8: Double Lives (10) — protects, hunts, watches, leaks to, shelters, hosts
+  // =========================================================================
+  hardDual({
+    id: 'ha-80', domain: 8, title: 'Protector who hunts, watcher who leaks',
+    order: 'Shoot anyone who protects as a Friend or watches as a Spy while hunting as a Foe or leaking as a Double agent — unless sheltered by a Civilian.',
+    a: {roles: ['friend', 'spy'], dir: 'out'}, b: {roles: ['foe', 'double'], dir: 'out'}, exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardDual({
+    id: 'ha-81', domain: 8, title: 'Sheltered host or protected hunter',
+    order: 'Shoot anyone sheltered by a Civilian or protected by a Friend who hosts as a Foreigner or hunts as a Foe — unless watched by a Spy.',
+    a: {roles: ['civilian', 'friend'], dir: 'in'}, b: {roles: ['foreigner', 'foe'], dir: 'out'}, exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardDual({
+    id: 'ha-82', domain: 8, title: 'Watched mole or hosted witness',
+    order: 'Shoot anyone watched by a Spy or hosted by a Foreigner who leaks as a Double agent or shelters as a Civilian — unless hunted by a Foe.',
+    a: {roles: ['spy', 'foreigner'], dir: 'in'}, b: {roles: ['double', 'civilian'], dir: 'out'}, exc: {roles: ['foe'], dir: 'in'}
+  }),
+  hardDual({
+    id: 'ha-83', domain: 8, title: 'Dual patron target',
+    order: 'Shoot anyone protected by a Friend or sheltered by a Civilian who is also hosted by a Foreigner or hunted by a Foe — unless a Double agent leaks to them.',
+    a: {roles: ['friend', 'civilian'], dir: 'in'}, b: {roles: ['foreigner', 'foe'], dir: 'in'}, exc: {roles: ['double'], dir: 'in'}
+  }),
+  hardDual({
+    id: 'ha-84', domain: 8, title: 'Hunted protector or watched host',
+    order: 'Shoot anyone who protects as a Friend or hosts as a Foreigner while hunted by a Foe or watched by a Spy — unless sheltered by a Civilian.',
+    a: {roles: ['friend', 'foreigner'], dir: 'out'}, b: {roles: ['foe', 'spy'], dir: 'in'}, exc: {roles: ['civilian'], dir: 'in'}
+  }),
+  hardDual({
+    id: 'ha-85', domain: 8, title: 'Shelterer who hunts or hosts',
+    order: 'Shoot anyone who shelters as a Civilian or watches as a Spy while hunting as a Foe or hosting as a Foreigner — unless protected by a Friend.',
+    a: {roles: ['civilian', 'spy'], dir: 'out'}, b: {roles: ['foe', 'foreigner'], dir: 'out'}, exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardDual({
+    id: 'ha-86', domain: 8, title: 'Double-exposed recipient',
+    order: 'Shoot anyone hunted by a Foe or leaked to by a Double agent who is also watched by a Spy or hosted by a Foreigner — unless protected by a Friend.',
+    a: {roles: ['foe', 'double'], dir: 'in'}, b: {roles: ['spy', 'foreigner'], dir: 'in'}, exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardDual({
+    id: 'ha-87', domain: 8, title: 'Protector or hunter feeding outsiders',
+    order: 'Shoot anyone who protects as a Friend or hunts as a Foe while leaking as a Double agent or hosting as a Foreigner — unless watched by a Spy.',
+    a: {roles: ['friend', 'foe'], dir: 'out'}, b: {roles: ['double', 'foreigner'], dir: 'out'}, exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardDual({
+    id: 'ha-88', domain: 8, title: 'Sheltered mole or watched protector',
+    order: 'Shoot anyone sheltered by a Civilian or watched by a Spy who leaks as a Double agent or protects as a Friend — unless hosted by a Foreigner.',
+    a: {roles: ['civilian', 'spy'], dir: 'in'}, b: {roles: ['double', 'friend'], dir: 'out'}, exc: {roles: ['foreigner'], dir: 'in'}
   }),
   hard({
-    id: 'ha-13', domain: 1, title: 'Blind-spot enemy network',
-    order: 'Shoot anyone in contact with an suspect unwatched by any Spy in Double agent or Foreigner — unless cleared by a clean Friend or clean Civilian.',
+    id: 'ha-89', domain: 8, title: 'Three-role juggler',
+    order: 'Shoot anyone who initiates contacts in at least two roles while receiving a contact in a third role — unless protected by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], firstDir: 'any',
-          secondRoles: ['double', 'foreigner'], secondDir: 'any',
-          midExc: {roles: ['spy'], dir: 'in'}
-        });
-        if (!hit) return null;
-        return proof ? x + ' links to unwatched shadow ' + hit.mid + ' (' + g.fmt(hit.e1) + ').' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-14', domain: 1, title: 'Spy shadowing an enemy’s ally',
-    order: 'Shoot anyone who shadows as a Spy someone tied to Foe, Double agent, or Foreigner — while ALSO tied to Friend or Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (!g.hasTouch(x, ['friend', 'civilian'])) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['spy'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ' shadows shadow ' + hit.mid + ' while appearing in Friend/Civilian.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-15', domain: 1, title: 'Compromised watcher’s quarry',
-    order: 'Shoot anyone shadowed by a Spy tainted by Foe, Double agent, or Foreigner OR targeted by a Foe — unless a clean Friend backs them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        const ts = hasTaintedSpy(g, x);
-        if (ts) return proof ? x + ' watched by tainted Spy ' + g.fmt(ts) + '.' : 'ok';
-        const f = g.in(x, 'foe')[0];
-        if (f) return proof ? x + ': ' + g.fmt(f) + ' without clean Friend.' : 'ok';
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-16', domain: 1, title: 'Spy blind to double exposure',
-    order: 'Shoot anyone tied to at least two of Foe, Double agent, and Foreigner — unless a clean Spy or clean Friend covers them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'cleanFriend'])) return null;
-        const cats = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role));
-        if (cats.size < 2) return null;
-        return proof ? x + ' spans ' + [...cats].join(' + ') + ' with no clean Spy or Friend.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-17', domain: 1, title: 'Unwatched insider intermediary',
-    order: 'Shoot anyone who moves as a Friend or Civilian toward someone tied to Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' into shadow ' + hit.mid + ' (no clean Spy).' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-18', domain: 1, title: 'Watched yet unshielded',
-    order: 'Shoot anyone shadowed by a Spy also hit by a Foe, Double agent, or Foreigner — unless cleared by a clean Friend or Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'civilian'])) return null;
-        const s = g.in(x, 'spy')[0];
-        const c = g.in(x, ['foe', 'double', 'foreigner'])[0];
-        if (!s || !c) return null;
-        return proof ? x + ': ' + g.fmt(s) + ' and ' + g.fmt(c) + ' without Friend/Civilian.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-19', domain: 1, title: 'Unbacked watch near shadow circles',
-    order: 'Shoot anyone tied to Spy or Civilian who has NO clean Friend voucher AND links directly to someone tied to Foe, Double agent, or Foreigner.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (!g.hasTouch(x, ['spy', 'civilian']) || hasCleanFriend(g, x)) return null;
-        const cov = g.neighbors(x).find(n => g.hasTouch(n, ['foe', 'double', 'foreigner']));
-        if (!cov) return null;
-        return proof ? x + ' (Spy/Civilian, no clean Friend) links directly to shadow ' + cov + '.' : 'ok';
+        if (g.hasIn(x, 'friend')) return null;
+        const outRoles = new Set(g.out(x).map(e => e.role));
+        if (outRoles.size < 2) return null;
+        const extraIn = g.in(x).find(e => !outRoles.has(e.role));
+        if (!extraIn) return null;
+        return proof ? x + ': operates in ' + [...outRoles].join(' & ') + ' and receives ' + g.fmt(extraIn) + '.' : 'ok';
       }, proof);
     }
   }),
 
   // =========================================================================
-  // DOMAIN 2: Foreign Contact (10)
+  // DOMAIN 9: Command & Leverage (10) — vouches for, targets, shadows, leaks to, tips off, meets
   // =========================================================================
-  hard({
-    id: 'ha-20', domain: 2, title: 'Foreigner’s unshielded insider',
-    order: 'Shoot anyone tied to Foreigner also tied to Friend, Spy, or Civilian — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const f = g.touch(x, 'foreigner')[0];
-        const o = g.touch(x, ['friend', 'spy', 'civilian'])[0];
-        if (!f || !o) return null;
-        return proof ? x + ': ' + g.fmt(f) + ' while holding ' + g.fmt(o) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-21', domain: 2, title: 'Foreign cut-out network',
-    order: 'Shoot anyone tied to Foreigner OR linked to a Foreigner who operates as Foe or Double agent — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const directF = g.touch(x, 'foreigner')[0];
-        if (directF) return proof ? x + ' in Foreigner (' + g.fmt(directF) + ') without clean cover.' : 'ok';
-        const hit = matchRelay(g, x, {
-          firstRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], firstDir: 'any',
-          secondRoles: ['foe', 'double'], secondDir: 'out',
-          midReq: {roles: ['foreigner'], dir: 'any'}
-        });
-        if (!hit) return null;
-        return proof ? x + ' links to enemy Foreigner contact ' + hit.mid + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-22', domain: 2, title: 'Foreigner meeting an unwarned ally',
-    order: 'Shoot anyone who meets as a Foreigner someone tied to Friend, Spy, or Civilian — unless cleared by a clean Spy or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['foreigner'], firstDir: 'out', secondRoles: ['friend', 'spy', 'civilian'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' targeting insider ' + hit.mid + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-23', domain: 2, title: 'Foreign-funded betrayal',
-    order: 'Shoot anyone fed a Double agent’s leak OR met by a Foreigner who also operates as a Friend, Foe, or Civilian — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const i = g.in(x, ['double', 'foreigner'])[0];
-        const o = g.out(x, ['friend', 'foe', 'civilian'])[0];
-        if (!i || !o) return null;
-        return proof ? x + ': ' + g.fmt(i) + ' while acting via ' + g.fmt(o) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-24', domain: 2, title: 'Foreign drop without clean watch',
-    order: 'Shoot anyone in contact with someone met by a Foreigner — while tied to Foe or Double agent and lacking a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.hasTouch(x, ['foe', 'double'])) return null;
-        const m = g.neighbors(x).find(n => g.hasIn(n, 'foreigner'));
-        if (!m) return null;
-        return proof ? x + ' (in Foe/Double agent) links to Foreigner contact ' + m + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-25', domain: 2, title: 'Foreigner or mole bypassing alerts',
-    order: 'Shoot anyone met by a Foreigner or fed a Double agent’s leak who has NO Civilian tip-off, NO clean Friend voucher, and NO clean Spy shadow.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['civilian', 'cleanFriend', 'cleanSpy'])) return null;
-        const f = g.in(x, ['foreigner', 'double'])[0];
-        if (!f) return null;
-        return proof ? x + ': ' + g.fmt(f) + ', no Civilian warning or clean shield.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-26', domain: 2, title: 'Outsider’s shadow proxy',
-    order: 'Shoot anyone who moves as a Double agent or Foe toward someone tied to Foreigner — unless a clean Spy or clean Friend covers them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'cleanFriend'])) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['double', 'foe'], firstDir: 'out', secondRoles: ['foreigner'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' into Foreigner contact ' + hit.mid + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-27', domain: 2, title: 'Foreign reach into Friend circles',
-    order: 'Shoot anyone backed by a Friend who links directly to someone tied to Foreigner — unless cleared by a clean Spy or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian']) || !g.hasIn(x, 'friend')) return null;
-        const m = g.neighbors(x).find(n => g.hasTouch(n, 'foreigner'));
-        if (!m) return null;
-        return proof ? x + ' (Friend-backed) links to Foreigner contact ' + m + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-28', domain: 2, title: 'Foreigner’s tainted handler',
-    order: 'Shoot anyone met by a Foreigner whose Foreigner contact is also tied to Foe, Double agent, or Spy — unless cleared by a clean Friend or Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'civilian'])) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['foreigner'], firstDir: 'in', secondRoles: ['foe', 'double', 'spy'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' from compromised outsider (' + g.fmt(hit.e2) + ').' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-29', domain: 2, title: 'Double-exposed foreign link',
-    order: 'Shoot anyone tied to Foreigner also tied to Foe, Double agent, or Civilian — excluding anyone with BOTH a Friend voucher and a Spy shadow.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.hasIn(x, 'friend') && g.hasIn(x, 'spy')) return null;
-        const f = g.touch(x, 'foreigner')[0];
-        const o = g.touch(x, ['foe', 'double', 'civilian'])[0];
-        if (!f || !o) return null;
-        return proof ? x + ': ' + g.fmt(f) + ' and ' + g.fmt(o) + ' (lacks dual Friend+Spy shield).' : 'ok';
-      }, proof);
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 3: Civilian Tip-Offs (10)
-  // =========================================================================
-  hard({
-    id: 'ha-30', domain: 3, title: 'Compromised informant chain',
-    order: 'Shoot anyone tipped off by a Civilian who is tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['civilian'], firstDir: 'in', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ' tipped off by compromised Civilian: ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-31', domain: 3, title: 'Unshielded witness',
-    order: 'Shoot anyone tied to Civilian who is hit by a Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.hasTouch(x, 'civilian')) return null;
-        const hit = g.in(x, ['foe', 'double', 'foreigner'])[0];
-        if (!hit) return null;
-        return proof ? x + ' (Civilian) exposed to ' + g.fmt(hit) + ' with no clean shield.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-32', domain: 3, title: 'Informant tipping a shadow actor',
-    order: 'Shoot anyone who tips off as a Civilian someone acting as a Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['civilian'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out'});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' warning shadow actor ' + hit.mid + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-33', domain: 3, title: 'Exposed Civilian without Friend cover',
-    order: 'Shoot anyone tied to Civilian who links directly to someone tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.hasTouch(x, 'civilian')) return null;
-        const m = g.neighbors(x).find(n => g.hasTouch(n, ['foe', 'double', 'foreigner']));
-        if (!m) return null;
-        return proof ? x + ' (Civilian) links to shadow contact ' + m + ' with no clean shield.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-34', domain: 3, title: 'Tipped off then betrayed',
-    order: 'Shoot anyone tipped off by a Civilian also tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const c = g.in(x, 'civilian')[0];
-        const h = g.touch(x, ['foe', 'double', 'foreigner'])[0];
-        if (!c || !h) return null;
-        return proof ? x + ': ' + g.fmt(c) + ' and ' + g.fmt(h) + ', no clean Friend/Spy.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-35', domain: 3, title: 'False Civilian shield',
-    order: 'Shoot anyone tipped off ONLY by Civilians compromised by Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const cs = g.in(x, 'civilian');
-        if (!cs.length || !cs.every(c => g.hasTouch(c.from, ['foe', 'double', 'foreigner']))) return null;
-        return proof ? x + ' tipped off only by compromised Civilians (' + cs.map(c => c.from).join(', ') + ').' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-36', domain: 3, title: 'Shadow strike on an informant’s circle',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward someone tied to Civilian — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const hit = matchRelay(g, x, {firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out', secondRoles: ['civilian'], secondDir: 'any'});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' into Civilian ' + hit.mid + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-37', domain: 3, title: 'Unwarned operative in two shadow roles',
-    order: 'Shoot anyone tied to at least two of Foe, Double agent, and Foreigner who has NO clean Civilian tip-off and NO clean Friend voucher.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanCivilian', 'cleanFriend'])) return null;
-        const cats = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role));
-        if (cats.size < 2) return null;
-        return proof ? x + ' spans ' + [...cats].join(' + ') + ' with no clean Civilian or Friend.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-38', domain: 3, title: 'Informant bridging Friend and danger',
-    order: 'Shoot anyone tied to Civilian who links two different contacts: one backed by a Friend and one in Foe, Double agent, or Foreigner.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (!g.hasTouch(x, 'civilian')) return null;
-        const n = g.neighbors(x);
-        for (const a of n) {
-          if (!g.hasIn(a, 'friend')) continue;
-          for (const b of n) {
-            if (b !== a && g.hasTouch(b, ['foe', 'double', 'foreigner'])) {
-              return proof ? x + ' (Civilian) links Friend-backed ' + a + ' and shadow ' + b + '.' : 'ok';
-            }
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-39', domain: 3, title: 'Unwatched insider cover on a shadow lead',
-    order: 'Shoot anyone tied to Foe, Double agent, or Foreigner who is tipped off by a Civilian or backed by a Friend unwatched by any Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (!g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
-        const c = g.in(x, ['civilian', 'friend']).find(e => !g.hasIn(e.from, 'spy'));
-        if (!c) return null;
-        return proof ? x + ' (shadow) relies on unwatched source ' + g.fmt(c) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 4: Proxy Chains (10)
-  // =========================================================================
-  hard({
-    id: 'ha-40', domain: 4, title: 'Unwatched two-step shadow relay',
-    order: 'Shoot anyone who reaches a Foe, Double agent, or Foreigner action in two forward steps through an middleman unwatched by any Spy — unless a clean Friend backs them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], firstDir: 'out',
-          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
-          diffRole: true, midExc: {roles: ['spy'], dir: 'in'}
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + ' (unwatched proxy, no clean Friend).' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-41', domain: 4, title: 'Shadow relay into insider cover',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward an contact lacking Friend backing who then operates as a Friend, Spy, or Civilian without circling back.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        const hit = matchRelay(g, x, {
-          firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out',
-          secondRoles: ['friend', 'spy', 'civilian'], secondDir: 'out',
-          midExc: {roles: ['friend'], dir: 'in'}
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-42', domain: 4, title: 'Insider relay into shadow strike',
-    order: 'Shoot anyone acting as a Friend, Spy, or Civilian toward an contact unwatched by any Spy who then operates as a Foe, Double agent, or Foreigner without circling back.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        const hit = matchRelay(g, x, {
-          firstRoles: ['friend', 'spy', 'civilian'], firstDir: 'out',
-          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
-          midExc: {roles: ['spy'], dir: 'in'}
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-43', domain: 4, title: 'End of a mixed relay chain',
-    order: 'Shoot anyone targeted by a Foe or met by a Foreigner who had received a Double agent’s leak, Spy shadow, or Civilian tip-off without circling back — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['foe', 'foreigner'], firstDir: 'in',
-          secondRoles: ['double', 'spy', 'civilian'], secondDir: 'in'
-        });
-        if (!hit) return null;
-        return proof ? x + ': end of relay ' + g.fmt(hit.e2) + ' → ' + g.fmt(hit.e1) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-44', domain: 4, title: 'Unwatched shadow conduit',
-    order: 'Shoot anyone receiving contact in Foe, Double agent, or Foreigner AND passing on a contact in Friend, Spy, or Civilian without circling back — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        for (const e1 of g.in(x, ['foe', 'double', 'foreigner'])) {
-          for (const e2 of g.out(x, ['friend', 'spy', 'civilian'])) {
-            if (e2.to !== e1.from) return proof ? x + ' conduits ' + g.fmt(e1) + ' → ' + g.fmt(e2) + '.' : 'ok';
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-45', domain: 4, title: 'Insider conduit feeding shadow action',
-    order: 'Shoot anyone receiving contact in Friend, Spy, or Civilian AND passing on a contact in Foe, Double agent, or Foreigner without circling back — unless a clean Friend backs them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        for (const e1 of g.in(x, ['friend', 'spy', 'civilian'])) {
-          for (const e2 of g.out(x, ['foe', 'double', 'foreigner'])) {
-            if (e2.to !== e1.from) return proof ? x + ' conduits ' + g.fmt(e1) + ' → ' + g.fmt(e2) + '.' : 'ok';
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-46', domain: 4, title: 'Two-step shadow reach from insider cover',
-    order: 'Shoot anyone tied to Friend or Civilian who reaches someone tied to Double agent or Foreigner in 1 or 2 forward steps — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x) || !g.hasTouch(x, ['friend', 'civilian'])) return null;
-        for (const e1 of g.out(x)) {
-          if (g.hasTouch(e1.to, ['double', 'foreigner'])) return proof ? x + ' (insider) reaches shadow ' + e1.to + ' directly.' : 'ok';
-          for (const e2 of g.out(e1.to)) {
-            if (e2.to !== x && g.hasTouch(e2.to, ['double', 'foreigner'])) {
-              return proof ? x + ' (insider) reaches shadow ' + e2.to + ' via ' + e1.to + '.' : 'ok';
-            }
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-47', domain: 4, title: 'Relay through a tainted Friend',
-    order: 'Shoot anyone reached in any role by someone whose Friend voucher is tied to Double agent or Foreigner — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        for (const e1 of g.in(x)) {
-          const tf = hasTaintedFriend(g, e1.from);
-          if (tf) return proof ? x + ' reached by ' + e1.from + ' (' + g.fmt(e1) + '), whose voucher is tainted.' : 'ok';
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-48', domain: 4, title: 'Relay through a tainted Spy’s target',
-    order: 'Shoot anyone who initiates in any role toward someone shadowed by a Spy tainted by Foe, Double agent, or Foreigner — unless a clean Friend backs them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        for (const e1 of g.out(x)) {
-          const ts = hasTaintedSpy(g, e1.to);
-          if (ts) return proof ? x + ': ' + g.fmt(e1) + ' into suspect watched by tainted Spy ' + ts.from + '.' : 'ok';
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-49', domain: 4, title: 'Three-role chain receiver',
-    order: 'Shoot anyone reached via Friend, Spy, or Civilian by an contact unwatched by any Spy who received a Foe, Double agent, or Foreigner contact without circling back.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        const hit = matchRelay(g, x, {
-          firstRoles: ['friend', 'spy', 'civilian'], firstDir: 'in',
-          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'in',
-          midExc: {roles: ['spy'], dir: 'in'}
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e2) + ' → ' + g.fmt(hit.e1) + ' (unwatched proxy).' : 'ok';
-      }, proof);
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 5: Alibi & Contradiction (10)
-  // =========================================================================
-  hard({
-    id: 'ha-50', domain: 5, title: 'Broken cover triangle',
-    order: 'Shoot anyone linking two different contacts: one backed by a Friend and one in Double agent or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const n = g.neighbors(x);
-        for (const a of n) {
-          if (!g.hasIn(a, 'friend')) continue;
-          for (const b of n) {
-            if (b !== a && g.hasTouch(b, ['double', 'foreigner'])) {
-              return proof ? x + ' links Friend-backed ' + a + ' and shadow ' + b + ' without clean cover.' : 'ok';
-            }
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-51', domain: 5, title: 'Cross-role collision without Spy cover',
-    order: 'Shoot anyone acting as a Friend, Civilian, or Foreigner toward someone ALSO tied to them in Foe, Double agent, or Spy — or receiving both a Friend/Foreigner contact and a Foe/Double agent contact from two different actors without a clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        for (const e1 of g.out(x, ['friend', 'civilian', 'foreigner'])) {
-          const e2 = g.between(x, e1.to, ['foe', 'double', 'spy'])[0];
-          if (e2) return proof ? x + ' collides with ' + e1.to + ': ' + g.fmt(e1) + ' vs ' + g.fmt(e2) + '.' : 'ok';
-        }
-        if (hasCleanSpy(g, x)) return null;
-        for (const a of g.in(x, ['friend', 'foreigner'])) {
-          for (const b of g.in(x, ['foe', 'double'])) {
-            if (a.from !== b.from) return proof ? x + ' caught between ' + g.fmt(a) + ' and ' + g.fmt(b) + '.' : 'ok';
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-52', domain: 5, title: 'Contradicted clearance',
-    order: 'Shoot anyone backed by a Friend AND hit by a Foe, Double agent, or Foreigner — unless cleared by a clean Spy or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
-        const f = g.in(x, 'friend')[0];
-        const c = g.in(x, ['foe', 'double', 'foreigner'])[0];
-        if (!f || !c) return null;
-        return proof ? x + ': ' + g.fmt(f) + ' contradicted by ' + g.fmt(c) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-53', domain: 5, title: 'Shadow actor with conflicting cover',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner while ALSO receiving contact in Friend or Civilian — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const o = g.out(x, ['foe', 'double', 'foreigner'])[0];
-        const i = g.in(x, ['friend', 'civilian'])[0];
-        if (!o || !i) return null;
-        return proof ? x + ': ' + g.fmt(o) + ' while receiving ' + g.fmt(i) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-54', domain: 5, title: 'Two-sided exposure across four circles',
-    order: 'Shoot anyone operating as a Foe, Double agent, or Foreigner AND receiving contact in a different role among Foe, Double agent, Foreigner, or Civilian — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        for (const o of g.out(x, ['foe', 'double', 'foreigner'])) {
-          const i = g.in(x, ['foe', 'double', 'foreigner', 'civilian']).find(e => e.role !== o.role);
-          if (i) return proof ? x + ': ' + g.fmt(o) + ' and ' + g.fmt(i) + '.' : 'ok';
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-55', domain: 5, title: 'Shared shadow handler with an ally',
-    order: 'Shoot anyone reached via Foe, Double agent, or Foreigner by someone who also reaches a Friend-backed or Civilian-tipped suspect — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        for (const e1 of g.in(x, ['foe', 'double', 'foreigner'])) {
-          const other = g.out(e1.from).find(e2 => e2.to !== x && g.hasIn(e2.to, ['friend', 'civilian']));
-          if (other) return proof ? x + ' shares handler ' + e1.from + ' with ' + other.to + '.' : 'ok';
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-56', domain: 5, title: 'Silent mark without clean shield',
-    order: 'Shoot anyone who initiates NO contacts anywhere who also receives contact in Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.out(x).length > 0 || hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const c = g.in(x, ['foe', 'double', 'foreigner'])[0];
-        if (!c) return null;
-        return proof ? x + ' initiates no contacts and receives ' + g.fmt(c) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-57', domain: 5, title: 'Split loyalty across two contacts',
-    order: 'Shoot anyone acting as a Friend, Civilian, or Foreigner toward one person AND as a Foe, Double agent, or Spy toward a DIFFERENT person — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        for (const a of g.out(x, ['friend', 'civilian', 'foreigner'])) {
-          for (const b of g.out(x, ['foe', 'double', 'spy'])) {
-            if (a.to !== b.to) return proof ? x + ': ' + g.fmt(a) + ' and ' + g.fmt(b) + '.' : 'ok';
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-58', domain: 5, title: 'Dual-source shadow target',
-    order: 'Shoot anyone reached by two DIFFERENT people in Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        const ins = g.in(x, ['foe', 'double', 'foreigner']);
-        const senders = new Set(ins.map(e => e.from));
-        if (senders.size < 2) return null;
-        return proof ? x + ' hit by ' + senders.size + ' shadow actors without clean Friend/Civilian.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-59', domain: 5, title: 'Compromised dual-link pair',
-    order: 'Shoot anyone linking two different contacts: one watched by a Spy and one in Foe or Foreigner — unless cleared by a clean Friend or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        const n = g.neighbors(x);
-        for (const a of n) {
-          if (!g.hasIn(a, 'spy')) continue;
-          for (const b of n) {
-            if (b !== a && g.hasTouch(b, ['foe', 'foreigner'])) {
-              return proof ? x + ' links Spy-watched ' + a + ' and enemy ' + b + '.' : 'ok';
-            }
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 6: Chronology & Timing (10)
-  // =========================================================================
-  hard({
-    id: 'ha-60', domain: 6, title: 'Betrayed after Friend clearance',
-    order: 'Shoot anyone tied to Friend or Civilian EARLIER than their tie to Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const hit = matchTemporal(g, x, {roles: ['friend', 'civilian']}, {roles: ['foe', 'double', 'foreigner']});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit[0]) + ' before ' + g.fmt(hit[1]) + ' (no clean Spy).' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-61', domain: 6, title: 'Shadow move before surveillance',
-    order: 'Shoot anyone tied to Foe, Double agent, or Foreigner EARLIER than their tie to Spy — unless cleared by a clean Friend or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        const hit = matchTemporal(g, x, {roles: ['foe', 'double', 'foreigner']}, {roles: ['spy']});
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit[0]) + ' preceded ' + g.fmt(hit[1]) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-62', domain: 6, title: 'Late cover after shadow exposure',
-    order: 'Shoot anyone tied to Foe, Double agent, or Foreigner EARLIER than a Friend vouched for them or a Civilian tipped them off — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const hit = matchTemporal(g, x, {roles: ['foe', 'double', 'foreigner']}, {roles: ['friend', 'civilian'], dir: 'in'});
-        if (!hit) return null;
-        return proof ? x + ': shadow ' + g.fmt(hit[0]) + ' came before ' + g.fmt(hit[1]) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-63', domain: 6, title: 'Escalating relay into betrayal',
-    order: 'Shoot anyone acting as a Friend, Spy, or Civilian toward someone who later operates as a Foe, Double agent, or Foreigner without circling back — unless a clean Friend backs them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['friend', 'spy', 'civilian'], firstDir: 'out',
-          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
-          timeOrder: 'before'
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' followed later by ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-64', domain: 6, title: 'Backed by an already-compromised source',
-    order: 'Shoot anyone backed by a Friend or tipped off by a Civilian already tied earlier to Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['friend', 'civilian'], firstDir: 'in',
-          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any',
-          timeOrder: 'after'
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' after source’s ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-65', domain: 6, title: 'Backing an already-compromised contact',
-    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian someone already tied earlier to Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['friend', 'civilian'], firstDir: 'out',
-          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any',
-          timeOrder: 'after'
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' after contact’s ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-66', domain: 6, title: 'Earliest dispatch shadow, later dispatch insider',
-    order: 'Shoot anyone whose earliest tie is in Foe, Double agent, or Foreigner before a later Friend, Spy, or Civilian tie — unless a clean Friend backs them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        const all = g.touch(x);
-        if (all.length < 2) return null;
-        const minT = Math.min(...all.map(e => e.time));
-        const first = all.find(e => e.time === minT && ['foe', 'double', 'foreigner'].includes(e.role));
-        const later = all.find(e => e.time > minT && ['friend', 'spy', 'civilian'].includes(e.role));
-        if (!first || !later) return null;
-        return proof ? x + ': earliest ' + g.fmt(first) + ', later ' + g.fmt(later) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-67', domain: 6, title: 'Latest dispatch shadow, earlier dispatch insider',
-    order: 'Shoot anyone whose latest tie is in Foe, Double agent, or Foreigner after an earlier Friend, Spy, or Civilian tie — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const all = g.touch(x);
-        if (all.length < 2) return null;
-        const maxT = Math.max(...all.map(e => e.time));
-        const last = all.find(e => e.time === maxT && ['foe', 'double', 'foreigner'].includes(e.role));
-        const earlier = all.find(e => e.time < maxT && ['friend', 'spy', 'civilian'].includes(e.role));
-        if (!last || !earlier) return null;
-        return proof ? x + ': earlier ' + g.fmt(earlier) + ', latest ' + g.fmt(last) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-68', domain: 6, title: 'Timed shadow-to-shadow chain',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward someone who later initiates in another role without circling back — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out',
-          secondRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], secondDir: 'out',
-          diffRole: true, timeOrder: 'before'
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' followed later by ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-69', domain: 6, title: 'Shadowed or backed after compromise',
-    order: 'Shoot anyone shadowed by a Spy or backed by a Friend already tied earlier to Foe, Double agent, or Foreigner — unless a clean Civilian tips them off.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanCivilian(g, x)) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['spy', 'friend'], firstDir: 'in',
-          secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any',
-          timeOrder: 'after'
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' after source’s ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 7: Tainted Sources (10)
-  // =========================================================================
-  hard({
-    id: 'ha-70', domain: 7, title: 'Tainted triad of cover',
-    order: 'Shoot anyone whose Friend voucher, watching Spy, OR Civilian informant is tied to Double agent or Foreigner — unless they hold at least one clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const bad = g.in(x, ['friend', 'spy', 'civilian']).find(e => g.hasTouch(e.from, ['double', 'foreigner']));
-        if (!bad) return null;
-        return proof ? x + ' relies on compromised source ' + g.fmt(bad) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-71', domain: 7, title: 'Tainted source under Foe pressure',
-    order: 'Shoot anyone whose Friend voucher, watching Spy, OR Civilian informant is tied to Foe — unless shielded by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const bad = g.in(x, ['friend', 'spy', 'civilian']).find(e => g.hasTouch(e.from, 'foe'));
-        if (!bad) return null;
-        return proof ? x + ' relies on Foe-linked source ' + g.fmt(bad) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-72', domain: 7, title: 'Zero clean insider sources',
-    order: 'Shoot anyone receiving contact in Friend, Spy, or Civilian where every such actor is tied to Foe, Double agent, or Foreigner.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        const ins = g.in(x, ['friend', 'spy', 'civilian']);
-        if (!ins.length) return null;
-        if (!ins.every(e => g.hasTouch(e.from, ['foe', 'double', 'foreigner']))) return null;
-        return proof ? x + ': every insider source (' + ins.map(e => e.from).join(', ') + ') is in shadow compromised.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-73', domain: 7, title: 'Targeted by a connected insider',
-    order: 'Shoot anyone hit by a Foe, Double agent, or Foreigner by someone also tied to Friend, Spy, or Civilian — unless a clean Friend backs them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        const hit = matchRelay(g, x, {
-          firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'in',
-          secondRoles: ['friend', 'spy', 'civilian'], secondDir: 'any'
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' from connected insider (' + g.fmt(hit.e2) + ').' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-74', domain: 7, title: 'Backing a three-circle insider',
-    order: 'Shoot anyone operating as a Friend, Civilian, or Foreigner toward someone tied to Foe, Double agent, or Spy who ALSO holds another role among Friend, Civilian, or Foreigner.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        for (const e of g.out(x, ['friend', 'civilian', 'foreigner'])) {
-          if (g.hasTouch(e.to, ['foe', 'double', 'spy']) &&
-              g.touch(e.to, ['friend', 'civilian', 'foreigner']).some(o => o.role !== e.role)) {
-            return proof ? x + ': ' + g.fmt(e) + ' toward multi-circle contact ' + e.to + '.' : 'ok';
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-75', domain: 7, title: 'Two-hop tainted cover',
-    order: 'Shoot anyone backed by a Friend whose own contact in either direction is tied to Double agent or Foreigner — unless cleared by a clean Spy or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
-        for (const f of g.in(x, 'friend')) {
-          const cov = g.neighbors(f.from).find(n => n !== x && g.hasTouch(n, ['double', 'foreigner']));
-          if (cov) return proof ? x + ' backed by ' + f.from + ', who links to shadow ' + cov + '.' : 'ok';
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-76', domain: 7, title: 'Two-hop tainted surveillance',
-    order: 'Shoot anyone shadowed by a Spy whose own contact in either direction is tied to Double agent or Foreigner — unless cleared by a clean Friend or clean Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        for (const s of g.in(x, 'spy')) {
-          const cov = g.neighbors(s.from).find(n => n !== x && g.hasTouch(n, ['double', 'foreigner']));
-          if (cov) return proof ? x + ' shadowed by ' + s.from + ', who links to shadow ' + cov + '.' : 'ok';
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-77', domain: 7, title: 'Compromised informant’s second link',
-    order: 'Shoot anyone tipped off by a Civilian whose own contact in either direction is tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        for (const c of g.in(x, 'civilian')) {
-          const cov = g.neighbors(c.from).find(n => n !== x && g.hasTouch(n, ['foe', 'double', 'foreigner']));
-          if (cov) return proof ? x + ' tipped off by ' + c.from + ', who links to shadow ' + cov + '.' : 'ok';
-        }
-        return null;
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-78', domain: 7, title: 'Unverified Foe target',
-    order: 'Shoot anyone targeted by a Foe who has NO clean Friend voucher, NO clean Spy watcher, and NO clean Civilian tip-off.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy', 'cleanCivilian'])) return null;
-        const f = g.in(x, 'foe')[0];
-        if (!f) return null;
-        return proof ? x + ': ' + g.fmt(f) + ' with zero clean insider protection.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-79', domain: 7, title: 'Handler of a tainted asset',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward someone with a tainted Friend or tainted Spy — unless a clean Friend backs them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        for (const e of g.out(x, ['foe', 'double', 'foreigner'])) {
-          if (hasTaintedFriend(g, e.to) || hasTaintedSpy(g, e.to)) {
-            return proof ? x + ': ' + g.fmt(e) + ' toward compromised asset ' + e.to + '.' : 'ok';
-          }
-        }
-        return null;
-      }, proof);
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 8: Double Lives (10)
-  // =========================================================================
-  hard({
-    id: 'ha-80', domain: 8, title: 'Three-circle operator without Spy watch',
-    order: 'Shoot anyone spanning three or more roles including Friend or Foreigner AND at least one of Foe, Double agent, or Civilian — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const d = g.distinctRoles(x);
-        if (d.size < 3) return null;
-        const hasA = ['friend', 'foreigner'].some(r => d.has(r));
-        const hasB = ['foe', 'double', 'civilian'].some(r => d.has(r));
-        if (!hasA || !hasB) return null;
-        return proof ? x + ' spans ' + d.size + ' roles bridging Friend/Foreigner with Foe/Double agent/Civilian.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-81', domain: 8, title: 'Foe-mole-civilian predominance',
-    order: 'Shoot anyone holding more roles among Foe, Double agent, and Civilian than among Friend, Spy, and Foreigner — unless cleared by a clean Friend or clean Spy.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const a = new Set(g.touch(x, ['foe', 'double', 'civilian']).map(e => e.role)).size;
-        const b = new Set(g.touch(x, ['friend', 'spy', 'foreigner']).map(e => e.role)).size;
-        if (a <= b) return null;
-        return proof ? x + ' holds ' + a + ' Foe/Double/Civilian vs ' + b + ' Friend/Spy/Foreigner roles.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-82', domain: 8, title: 'Insider predominance hiding an attacker',
-    order: 'Shoot anyone holding more roles among Friend, Spy, and Foreigner than among Foe, Double agent, and Civilian, yet still operating as a Double agent or Foe.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        const hit = g.out(x, ['double', 'foe'])[0];
-        if (!hit) return null;
-        const a = new Set(g.touch(x, ['foe', 'double', 'civilian']).map(e => e.role)).size;
-        const b = new Set(g.touch(x, ['friend', 'spy', 'foreigner']).map(e => e.role)).size;
-        if (b <= a) return null;
-        return proof ? x + ' holds ' + b + ' Friend/Spy/Foreigner vs ' + a + ' Foe/Double/Civilian roles while ' + g.fmt(hit) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-83', domain: 8, title: 'Strict shadow-out, insider-in split',
-    order: 'Shoot anyone who initiates ONLY in Foe, Double agent, or Foreigner and receives ONLY in Friend, Spy, or Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        const outs = g.out(x);
-        const ins = g.in(x);
-        if (!outs.length || !ins.length) return null;
-        if (!outs.every(e => ['foe', 'double', 'foreigner'].includes(e.role))) return null;
-        if (!ins.every(e => ['friend', 'spy', 'civilian'].includes(e.role))) return null;
-        return proof ? x + ' receives strictly insider (' + g.fmt(ins[0]) + ') while acting strictly shadow (' + g.fmt(outs[0]) + ').' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-84', domain: 8, title: 'Strict insider-out, shadow-in split',
-    order: 'Shoot anyone who initiates ONLY in Friend, Spy, or Civilian and receives ONLY in Foe, Double agent, or Foreigner.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        const outs = g.out(x);
-        const ins = g.in(x);
-        if (!outs.length || !ins.length) return null;
-        if (!outs.every(e => ['friend', 'spy', 'civilian'].includes(e.role))) return null;
-        if (!ins.every(e => ['foe', 'double', 'foreigner'].includes(e.role))) return null;
-        return proof ? x + ' acts strictly insider (' + g.fmt(outs[0]) + ') while receiving strictly shadow (' + g.fmt(ins[0]) + ').' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-85', domain: 8, title: 'Unwatched shadow specialist',
-    order: 'Shoot anyone tied only to Foe, Double agent, or Foreigner with zero Friend, Spy, or Civilian ties who also acts toward someone tied to Friend, Spy, or Civilian.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.hasTouch(x, ['friend', 'spy', 'civilian'])) return null;
-        const hit = g.out(x, ['foe', 'double', 'foreigner']).find(e => g.hasTouch(e.to, ['friend', 'spy', 'civilian']));
-        if (!hit) return null;
-        return proof ? x + ' stays purely shadow yet acts on insider ' + hit.to + ' (' + g.fmt(hit) + ').' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-86', domain: 8, title: 'Insider specialist surrounded by shadow contacts',
-    order: 'Shoot anyone tied only to Friend, Spy, or Civilian with zero Foe, Double agent, or Foreigner ties whose direct contacts span Foreigner plus Foe or Double agent.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
-        const n = g.neighbors(x);
-        const hasFor = n.some(p => g.hasTouch(p, 'foreigner'));
-        const hasHost = n.some(p => g.hasTouch(p, ['double', 'foe']));
-        if (!hasFor || !hasHost) return null;
-        return proof ? x + ' stays purely insider while linked to both Foreigner and Foe/Double agent circles.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-87', domain: 8, title: 'Four-role operator',
-    order: 'Shoot anyone spanning three or more roles with NO clean Friend voucher and NO clean Spy shadow.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const d = g.distinctRoles(x);
-        if (d.size < 3) return null;
-        return proof ? x + ' spans ' + d.size + ' roles with no clean Friend or Spy shield.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-88', domain: 8, title: 'Balanced double life across rival circles',
-    order: 'Shoot anyone holding an equal number of roles among Friend, Civilian, and Foreigner as among Foe, Double agent, and Spy, with at least one in each — unless a clean Spy watches them.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const a = new Set(g.touch(x, ['friend', 'civilian', 'foreigner']).map(e => e.role)).size;
-        const b = new Set(g.touch(x, ['foe', 'double', 'spy']).map(e => e.role)).size;
-        if (a < 1 || a !== b) return null;
-        return proof ? x + ' balances ' + a + ' Friend/Civilian/Foreigner and ' + b + ' Foe/Double/Spy roles.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-89', domain: 8, title: 'Unmonitored shadow receiver-actor',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner who also receives contact in Friend, Spy, or Civilian — unless shielded by a clean Friend voucher or clean Civilian tip-off.',
-    evaluate(g, _a, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        const o = g.out(x, ['foe', 'double', 'foreigner'])[0];
-        const i = g.in(x, ['friend', 'spy', 'civilian'])[0];
-        if (!o || !i) return null;
-        return proof ? x + ': ' + g.fmt(o) + ' while receiving ' + g.fmt(i) + ' (no clean Friend/Civilian).' : 'ok';
-      }, proof);
-    }
-  }),
-
-  // =========================================================================
-  // DOMAIN 9: Command & Leverage (10)
-  // =========================================================================
-  hard({
-    id: 'ha-90', domain: 9, title: '{name}’s unwatched shadow reach',
-    order: 'Shoot anyone reached from {name} in two forward steps through an middleman unwatched by any Spy — unless cleared by a clean Friend or clean Civilian.',
-    useAnchor: true,
+  hardAnchor({
+    id: 'ha-90', domain: 9, title: '{name}’s unbacked proxy',
+    order: 'Shoot anyone reached in two outgoing steps from {name} via different roles with no direct link to {name} — unless a Friend vouches for them.',
+    step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'out', diffRole: true, excludeDirect: true, exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardAnchor({
+    id: 'ha-91', domain: 9, title: '{name}’s hidden controller',
+    order: 'Shoot anyone two incoming steps upstream of {name} via different roles with no direct link to {name} — unless a Spy shadows them.',
+    step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'in', diffRole: true, excludeDirect: true, exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hard({
+    id: 'ha-92', domain: 9, title: '{name}’s delayed downstream', useAnchor: true,
+    order: 'Shoot anyone reached from {name} in two outgoing steps where the second contact is later — or anyone {name} targets as a Foe or meets as a Foreigner.',
     evaluate(g, anchor, proof) {
       return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        const hit = matchAnchorRelay(g, anchor, x, {
-          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
-          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
-          midExc: {roles: ['spy'], dir: 'in'}
-        });
-        if (!hit) return null;
-        return proof ? x + ': 2-step from ' + anchor + ' via unwatched ' + hit.mid + '.' : 'ok';
+        const hit = matchAnchorRelay(g, anchor, x, {step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'out', timeOrder: 'before'});
+        if (hit) return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+        const direct = g.out(anchor, ['foe', 'foreigner']).find(e => e.to === x);
+        if (direct) return proof ? x + ': direct ' + g.fmt(direct) + '.' : 'ok';
+        return null;
       }, proof);
     }
   }),
   hard({
-    id: 'ha-91', domain: 9, title: '{name}’s unbacked incoming network',
-    order: 'Shoot anyone who reaches {name} in two forward steps through an middleman lacking Friend backing — unless cleared by a clean Spy or clean Civilian.',
-    useAnchor: true,
+    id: 'ha-93', domain: 9, title: '{name}’s pre-staged upstream', useAnchor: true,
+    order: 'Shoot anyone two incoming steps upstream of {name} where the earlier contact is closer to {name} — or anyone who shadows {name} as a Spy or tips off {name} as a Civilian.',
     evaluate(g, anchor, proof) {
       return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
-        const hit = matchAnchorRelay(g, anchor, x, {
-          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
-          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
-          midExc: {roles: ['friend'], dir: 'in'}
-        });
-        if (!hit) return null;
-        return proof ? x + ' reaches ' + anchor + ' via unbacked ' + hit.mid + '.' : 'ok';
+        const hit = matchAnchorRelay(g, anchor, x, {step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'in', timeOrder: 'before'});
+        if (hit) return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+        const direct = g.in(anchor, ['spy', 'civilian']).find(e => e.from === x);
+        if (direct) return proof ? x + ': direct ' + g.fmt(direct) + '.' : 'ok';
+        return null;
       }, proof);
     }
   }),
-  hard({
-    id: 'ha-92', domain: 9, title: 'Shadow link outside {name}’s circle',
-    order: 'Shoot anyone NOT directly linked to {name} who is tied to at least two of Foe, Double agent, and Foreigner — unless cleared by a clean Friend or clean Spy.',
-    useAnchor: true,
-    evaluate(g, anchor, proof) {
-      const near = new Set([anchor, ...g.neighbors(anchor)]);
-      return collectMatches(g.people, x => {
-        if (near.has(x) || hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const cats = new Set(g.touch(x, ['foe', 'double', 'foreigner']).map(e => e.role));
-        if (cats.size < 2) return null;
-        return proof ? x + ' (outside ' + anchor + '’s circle) spans ' + [...cats].join(' + ') + '.' : 'ok';
-      }, proof);
-    }
+  hardAnchor({
+    id: 'ha-94', domain: 9, title: '{name}’s unwatched cutout',
+    order: 'Shoot anyone reached from {name} through an intermediary no Spy shadows, with no direct link to {name} — unless a Foreigner meets them.',
+    step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'out', excludeDirect: true, midExc: {roles: ['spy'], dir: 'in'}, exc: {roles: ['foreigner'], dir: 'in'}
+  }),
+  hardAnchor({
+    id: 'ha-95', domain: 9, title: '{name}’s untipped upstream',
+    order: 'Shoot anyone upstream of {name} through an intermediary no Civilian tips off, with no direct link to {name} — unless a Double agent leaks to them.',
+    step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'in', excludeDirect: true, midExc: {roles: ['civilian'], dir: 'in'}, exc: {roles: ['double'], dir: 'in'}
+  }),
+  hardAnchor({
+    id: 'ha-96', domain: 9, title: '{name}’s shared contact rival',
+    order: 'Shoot anyone who operates toward someone {name} also reaches, across two different roles — unless a Friend vouches for them.',
+    step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'in', diffRole: true, exc: {roles: ['friend'], dir: 'in'}
+  }),
+  hardAnchor({
+    id: 'ha-97', domain: 9, title: '{name}’s common handler target',
+    order: 'Shoot anyone reached by someone who also operates toward {name}, across two different roles — unless a Spy shadows them.',
+    step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'out', diffRole: true, exc: {roles: ['spy'], dir: 'in'}
+  }),
+  hardAnchor({
+    id: 'ha-98', domain: 9, title: '{name}’s late-moving partner',
+    order: 'Shoot anyone reached by someone who also operates toward {name} when {name}’s incoming contact happened earlier.',
+    step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'out', timeOrder: 'before'
   }),
   hard({
-    id: 'ha-93', domain: 9, title: '{name}’s shadow ring',
-    order: 'Shoot anyone two contacts away from {name} with no direct link to {name} acting as a Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    useAnchor: true,
+    id: 'ha-99', domain: 9, title: '{name}’s earlier rival', useAnchor: true,
+    order: 'Shoot anyone who operates toward someone {name} also reaches when {name}’s contact happened later — or anyone {name} vouches for as a Friend or leaks to as a Double agent.',
     evaluate(g, anchor, proof) {
       return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.hasOut(x, ['foe', 'double', 'foreigner'])) return null;
-        const hit = matchAnchorRelay(g, anchor, x, {
-          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'any',
-          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'any',
-          excludeDirect: true
-        });
-        if (!hit) return null;
-        return proof ? x + ': 2 hops from ' + anchor + ', active shadow without clean cover.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-94', domain: 9, title: 'Timed relay from {name} without shield',
-    order: 'Shoot anyone reached from {name} in two forward steps where the second dispatch is LATER — unless cleared by a clean Friend or clean Spy.',
-    useAnchor: true,
-    evaluate(g, anchor, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const hit = matchAnchorRelay(g, anchor, x, {
-          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
-          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
-          timeOrder: 'before'
-        });
-        if (!hit) return null;
-        return proof ? x + ': timed relay ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-95', domain: 9, title: 'Timed relay into {name} without shield',
-    order: 'Shoot anyone who reaches {name} in two forward steps where the first dispatch is EARLIER — unless cleared by a clean Friend or clean Spy.',
-    useAnchor: true,
-    evaluate(g, anchor, proof) {
-      return collectMatches(g.people, x => {
-        if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
-        const hit = matchAnchorRelay(g, anchor, x, {
-          step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
-          step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
-          timeOrder: 'after'
-        });
-        if (!hit) return null;
-        return proof ? x + ': timed relay ' + g.fmt(hit.e2) + ' → ' + g.fmt(hit.e1) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-96', domain: 9, title: '{name}’s compromised intermediaries',
-    order: 'Shoot anyone directly linked to {name} who ALSO links to someone tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
-    useAnchor: true,
-    evaluate(g, anchor, proof) {
-      return collectMatches(g.people, x => {
-        if (x === anchor || hasAnyShield(g, x, ['cleanFriend', 'cleanSpy']) || !g.between(anchor, x).length) return null;
-        const cov = g.neighbors(x).find(n => n !== anchor && g.hasTouch(n, ['foe', 'double', 'foreigner']));
-        if (!cov) return null;
-        return proof ? x + ' links ' + anchor + ' to shadow ' + cov + ' with no clean shield.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-97', domain: 9, title: 'Shared shadow circle with {name}',
-    order: 'Shoot anyone else sharing a direct neighbor with {name} who is tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Civilian.',
-    useAnchor: true,
-    evaluate(g, anchor, proof) {
-      const aN = new Set(g.neighbors(anchor));
-      return collectMatches(g.people, x => {
-        if (x === anchor || hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
-        if (!g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
-        const shared = g.neighbors(x).find(n => aN.has(n));
-        if (!shared) return null;
-        return proof ? x + ' shares contact ' + shared + ' with ' + anchor + ' while tied to Foe/Double agent/Foreigner.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-98', domain: 9, title: '{name}’s two-circle outbound reach',
-    order: 'Shoot anyone reached from {name} by a Foe, Double agent, or Civilian link followed by a Friend, Spy, or Foreigner link — unless a clean Friend backs them.',
-    useAnchor: true,
-    evaluate(g, anchor, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanFriend(g, x)) return null;
-        const hit = matchAnchorRelay(g, anchor, x, {
-          step1Roles: ['foe', 'double', 'civilian'], step1Dir: 'any',
-          step2Roles: ['friend', 'spy', 'foreigner'], step2Dir: 'any'
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
-      }, proof);
-    }
-  }),
-  hard({
-    id: 'ha-99', domain: 9, title: '{name}’s two-circle shadow reach',
-    order: 'Shoot anyone reached from {name} by a Friend, Civilian, or Foreigner link followed by a Foe, Double agent, or Spy link — unless a clean Spy watches them.',
-    useAnchor: true,
-    evaluate(g, anchor, proof) {
-      return collectMatches(g.people, x => {
-        if (hasCleanSpy(g, x)) return null;
-        const hit = matchAnchorRelay(g, anchor, x, {
-          step1Roles: ['friend', 'civilian', 'foreigner'], step1Dir: 'any',
-          step2Roles: ['foe', 'double', 'spy'], step2Dir: 'any'
-        });
-        if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+        const hit = matchAnchorRelay(g, anchor, x, {step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'in', timeOrder: 'after'});
+        if (hit) return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+        const direct = g.out(anchor, ['friend', 'double']).find(e => e.to === x);
+        if (direct) return proof ? x + ': direct ' + g.fmt(direct) + '.' : 'ok';
+        return null;
       }, proof);
     }
   })

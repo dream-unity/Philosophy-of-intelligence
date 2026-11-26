@@ -19,6 +19,7 @@ let locked = false;
 let transitionTimer = 0;
 let transitionAt = 0;
 let remainingDelay = 0;
+let debriefHeld = false;
 let shots = 0;
 let sound = true;
 let audio;
@@ -93,6 +94,7 @@ function setShortlist(enabled) {
 function enterTrial() {
   trial = makeCaseTrial(difficulty, trial);
   shots = 0;
+  debriefHeld = false;
   setPhase('play');
   renderCaseEvidence(el('cues'), trial.evidence, {shortlist, onShortlistChange: setShortlist});
   el('cues').parentElement.scrollTop = 0;
@@ -130,9 +132,24 @@ function finishTrial(result) {
   scheduleNext(result.correct ? 3500 : 7500);
 }
 
+function toggleDebriefHold() {
+  debriefHeld = !debriefHeld;
+  const hint = el('cues').querySelector('.case-result-hint');
+  if (debriefHeld) {
+    window.clearTimeout(transitionTimer);
+    transitionTimer = 0;
+    remainingDelay = Math.max(1200, transitionAt - performance.now());
+    if (hint) hint.textContent = 'Held · Space: next · P: resume';
+  } else {
+    if (hint) hint.textContent = 'Space: next · P: hold';
+    scheduleNext(remainingDelay || 3000);
+  }
+}
+
 function showSummary() {
   clearTimeout(transitionTimer);
   transitionTimer = 0;
+  debriefHeld = false;
   range.pause();
   setPhase('summary');
   el('summary-heading').textContent = session.finished ? 'Run complete' : 'Run ended';
@@ -224,7 +241,7 @@ dialog.addEventListener('close', () => {
   if (phase === 'play') {
     range.resume();
     el('range').focus({preventScroll:true});
-  } else if (phase === 'between') scheduleNext(remainingDelay);
+  } else if (phase === 'between' && !debriefHeld) scheduleNext(remainingDelay);
 });
 el('sound').addEventListener('click', () => {
   sound = !sound;
@@ -239,11 +256,13 @@ document.addEventListener('keydown', e => {
     if (phase !== 'play' && phase !== 'between') return;
     e.preventDefault();
     if (dialog.open) dialog.close();
+    else if (phase === 'between') toggleDebriefHold();
     else openPanel();
     return;
   }
   if ((e.code === 'Space' || e.code === 'Enter') && phase === 'between' && !dialog.open && !locked) {
     e.preventDefault();
+    debriefHeld = false;
     window.clearTimeout(transitionTimer);
     transitionTimer = 0;
     if (session.next()) enterTrial();

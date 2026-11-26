@@ -1,4 +1,4 @@
-import {caseRoles, formatDispatchTime, roleNames, roleVerbs} from './case-layout.js';
+import {caseRoles, formatDispatchTime, roleNames, verbsForDomain} from './case-layout.js';
 
 export const DOMAINS = [
   'Cover & Betrayal',
@@ -13,12 +13,13 @@ export const DOMAINS = [
   'Command & Leverage'
 ];
 
-export function fmtEdge(edge) {
+export function fmtEdge(edge, domain = null) {
+  const verbs = verbsForDomain(domain);
   const stamp = edge.time ? ' [' + formatDispatchTime(edge.time) + ']' : '';
-  return roleNames[edge.role] + stamp + ': ' + edge.from + ' ' + roleVerbs[edge.role] + ' ' + edge.to;
+  return roleNames[edge.role] + stamp + ': ' + edge.from + ' ' + verbs[edge.role] + ' ' + edge.to;
 }
 
-export function buildGraph(edges) {
+export function buildGraph(edges, domain = null) {
   const clean = [];
   const byOut = new Map();
   const byIn = new Map();
@@ -89,7 +90,7 @@ export function buildGraph(edges) {
     neighbors,
     distinctRoles,
     timeOf,
-    fmt: fmtEdge
+    fmt: edge => fmtEdge(edge, domain)
   };
 }
 

@@ -40,6 +40,6 @@ export function getFamily(id) {
 
 export function evaluateFamily(id, edges, anchor, includeProof = false) {
   const family = getFamily(id);
-  const g = buildGraph(edges);
+  const g = buildGraph(edges, family.domain);
   return family.evaluate(g, anchor, includeProof);
 }

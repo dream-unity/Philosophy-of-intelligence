@@ -1,23 +1,24 @@
 import {ArcadeRun} from '../friend-or-foe/arcade-range.js';
 import {makeCaseTrial} from '../friend-or-foe/case-decks.js';
 import {evaluateFamily} from '../friend-or-foe/case-families.js';
-import {caseRoles, edgesFor, formatDispatchTime, roleNames, roleVerbs, seededDraw} from '../friend-or-foe/case-layout.js';
+import {caseRoles, edgesFor, formatDispatchTime, roleNames, seededDraw, verbsForDomain} from '../friend-or-foe/case-layout.js';
 import {pairKey, reportHolds, truth} from '../friend-or-foe/case-logic.js';
 
 const LEVELS = ['super-easy', 'very-easy', 'easy', 'medium', 'hard'];
 const TRIALS_PER_LEVEL = 1000;
 const BANNED_RE = /\b(rows?|arrows?|left side|right side|points?|score|top two|IQ|appears? in|appearing|named in|listed|distinct|categor(y|ies)|file|files|acts? in|acting in|acted upon|records?|dossier|overt|covert|hostile|safe|threat)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
 
-function fmtClaim(c) {
-  return `${c.from} ${roleVerbs[c.role]} ${c.to} (${roleNames[c.role]})`;
+function fmtClaim(c, domain) {
+  const verbs = verbsForDomain(domain);
+  return `${c.from} ${verbs[c.role]} ${c.to} (${roleNames[c.role]})`;
 }
 
-function fmtReport(r) {
-  if (r.op === 'verified') return `Verified: ${fmtClaim(r.right)}`;
-  if (r.op === 'ruled-out') return `Ruled out: ${fmtClaim(r.right)}`;
+function fmtReport(r, domain) {
+  if (r.op === 'verified') return `Verified: ${fmtClaim(r.right, domain)}`;
+  if (r.op === 'ruled-out') return `Ruled out: ${fmtClaim(r.right, domain)}`;
   const sym = {eq: '=', neq: '≠', imp: '⇒', or: 'or', nand: 'not both'}[r.op];
-  if (r.op === 'nand') return `Not both: (${fmtClaim(r.left)}) and (${fmtClaim(r.right)})`;
-  return `(${fmtClaim(r.left)}) ${sym} (${fmtClaim(r.right)})`;
+  if (r.op === 'nand') return `Not both: (${fmtClaim(r.left, domain)}) and (${fmtClaim(r.right, domain)})`;
+  return `(${fmtClaim(r.left, domain)}) ${sym} (${fmtClaim(r.right, domain)})`;
 }
 
 // Independent world enumerator strictly from player-visible evidence
@@ -429,13 +430,14 @@ for (const level of LEVELS) {
 if (sampleHardTrial) {
   const {trial, solvedWorld, rival, droppedIndex, droppedReport} = sampleHardTrial;
   const ev = trial.evidence;
+  const verbs = verbsForDomain(ev.domain);
   console.log('=== SAMPLE HARD TRIAL WALKTHROUGH ===');
   console.log(`Family: ${ev.family} | Domain: ${ev.domain} | Title: ${ev.title}`);
   console.log(`Order: ${ev.order}`);
-  console.log('\nDisplayed disputed files (all 6):');
+  console.log('\nDisplayed disputed dispatches (all 6):');
   ev.rows.forEach((row, i) => {
     const mode = row.alias ? `alias(${row.alias.join('↔')})` : row.alt ? `alt(${row.alt.link.from}→${row.alt.link.to})` : 'reverse(?)';
-    const links = row.links.map(l => `${l.from} ${roleVerbs[row.role]} ${l.to}`).join(' ; ');
+    const links = row.links.map(l => `${l.from} ${verbs[row.role]} ${l.to}`).join(' ; ');
     const actualState = ((solvedWorld.mask >> i) & 1) ? 'ALTERNATE' : 'AS PRINTED';
     const rivalState = ((rival.mask >> i) & 1) ? 'ALTERNATE' : 'AS PRINTED';
     console.log(`  [${roleNames[row.role].padEnd(12)} ${formatDispatchTime(row.time)}] ${links}  | uncertainty: ${mode}  | True=${actualState}, Rival=${rivalState}`);
@@ -443,10 +445,10 @@ if (sampleHardTrial) {
   console.log('\nCoupled cross-checks:');
   ev.reports.forEach((r, idx) => {
     const holdsRival = reportHolds(rival.edges, r);
-    console.log(`  ${idx + 1}. ${fmtReport(r)}  [True world: HOLDS | Rival world: ${holdsRival ? 'HOLDS' : 'FAILS'}]`);
+    console.log(`  ${idx + 1}. ${fmtReport(r, ev.domain)}  [True world: HOLDS | Rival world: ${holdsRival ? 'HOLDS' : 'FAILS'}]`);
   });
   console.log(`\nTrue targets (${trial.pair.length} bullets): ${trial.pair.join(', ')}`);
   console.log(`True proof:\n  - ${trial.proof.join('\n  - ')}`);
-  console.log(`\nCredible rival interpretation (satisfies ${ev.reports.length - 1}/${ev.reports.length} cross-checks, defeated by #${droppedIndex + 1}: ${fmtReport(droppedReport)}):`);
+  console.log(`\nCredible rival interpretation (satisfies ${ev.reports.length - 1}/${ev.reports.length} cross-checks, defeated by #${droppedIndex + 1}: ${fmtReport(droppedReport, ev.domain)}):`);
   console.log(`  Rival targets (${rival.pair.length}): ${rival.pair.join(', ')}`);
 }

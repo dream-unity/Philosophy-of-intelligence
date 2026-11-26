@@ -113,3 +113,48 @@ export function matchAnchorRelay(g, anchor, x, {step1Roles, step1Dir, step2Roles
   }
   return null;
 }
+
+// Context-specific source integrity: does x receive `role` from someone NOT linked to `taintRoles`?
+export function hasUncompromised(g, x, role, taintRoles, taintDir = 'any') {
+  return g.in(x, role).some(e => edgesBy(g, e.from, taintRoles, taintDir).length === 0);
+}
+
+// Context-specific tainted source: does x receive `role` from someone linked to `taintRoles`?
+export function hasCompromised(g, x, role, taintRoles, taintDir = 'any') {
+  return g.in(x, role).find(e => edgesBy(g, e.from, taintRoles, taintDir).length > 0) || null;
+}
+
+// Apparent agreement that is actually dependent: x has contacts via roleA (from/with a) and roleB (from/with b),
+// where a and b are distinct people connected by `linkRoles` (any or directed).
+export function matchDependentSupport(g, x, {roleA, dirA = 'in', roleB, dirB = 'in', linkRoles = null}) {
+  const listA = edgesBy(g, x, roleA, dirA);
+  const listB = edgesBy(g, x, roleB, dirB);
+  for (const eA of listA) {
+    const a = eA.from === x ? eA.to : eA.from;
+    for (const eB of listB) {
+      if (eA === eB) continue;
+      const b = eB.from === x ? eB.to : eB.from;
+      if (a === b) continue;
+      const link = g.between(a, b, linkRoles)[0];
+      if (link) return {eA, eB, a, b, link};
+    }
+  }
+  return null;
+}
+
+// Independent corroboration: x has contacts via roleA (with a) and roleB (with b), a !== b, with NO contact between a and b.
+export function matchIndependentSupport(g, x, {roleA, dirA = 'in', roleB, dirB = 'in'}) {
+  const listA = edgesBy(g, x, roleA, dirA);
+  const listB = edgesBy(g, x, roleB, dirB);
+  for (const eA of listA) {
+    const a = eA.from === x ? eA.to : eA.from;
+    for (const eB of listB) {
+      if (eA === eB) continue;
+      const b = eB.from === x ? eB.to : eB.from;
+      if (a === b) continue;
+      if (!g.between(a, b).length) return {eA, eB, a, b};
+    }
+  }
+  return null;
+}
+

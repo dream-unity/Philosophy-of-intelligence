@@ -1,4 +1,4 @@
-import {alternateLinks, edgesFor, roleNames, roleVerbs, shuffled} from './case-layout.js';
+import {alternateLinks, edgesFor, roleNames, shuffled, verbsForDomain} from './case-layout.js';
 
 const pick = (array, draw) => array[Math.floor(draw() * array.length)];
 export const pairKey = pair => pair.slice().sort().join('|');
@@ -161,27 +161,46 @@ function buildConnectedCycle(nodes, draw, variant) {
     const b = a + Math.floor(draw() * (n - 1 - a));
     for (let i = a; i <= b; i++) s[i] = !outer;
   } else if (variant.kind === 'fig8-same-T' || variant.kind === 'fig8-same-F') {
-    // Figure-8 with s[a0] === s[b0] so clause (a0 OR b0) emits or(T,T) or nand(F,F)!
+    // Figure-8 with s[A[0]] === s[B[0]] so bridge (A[0] OR B[0]) emits or(T,T) or nand(F,F).
+    // Setting tail nodes A[p-1], B[q-1] opposite to anchorPol on 6-node cycles turns the other
+    // two bridge edges into or/nand(TF/FT) instead of piling up excess imp(TT/FF)!
     const anchorPol = variant.kind === 'fig8-same-T';
     const p = variant.p;
-    for (let i = 0; i < n; i++) s[i] = draw() < 0.5;
-    s[0] = anchorPol;
-    s[p] = anchorPol;
-    // Keep at most 1 polarity transition in each half so or(T,T)/nand(F,F) stay ~33%
-    if (draw() < 0.65) {
-      for (let i = 0; i < n; i++) s[i] = anchorPol;
-      if (n >= 6 && draw() < 0.55) {
-        const flipIdx = 1 + Math.floor(draw() * (n - 2));
-        if (flipIdx !== p) s[flipIdx] = !anchorPol;
+    for (let i = 0; i < n; i++) s[i] = anchorPol;
+    if (n >= 6) {
+      if (draw() < 0.5) {
+        if (p >= 2) s[p - 1] = !anchorPol;
+      } else if (n - p >= 2) {
+        s[n - 1] = !anchorPol;
       }
     }
   } else if (variant.kind === 'fig8-mixed') {
     const p = variant.p;
     const head = variant.head ?? (draw() < 0.5);
-    for (let i = 0; i < p; i++) s[i] = head;
-    for (let i = p; i < n; i++) s[i] = !head;
+    // Guarantee s[A[0]] !== s[B[0]] so bridge (A[0] OR B[0]) emits imp(F, T),
+    // and set tail nodes A[p-1] = head, B[q-1] = !head so the other two bridges emit or/nand(TF/FT)!
+    for (let i = 0; i < n; i++) s[i] = draw() < 0.5;
+    s[0] = head;
+    s[p] = !head;
+    if (variant.altInterior && n >= 6) {
+      if (p >= 2) s[p - 1] = head;
+      if (n - p >= 2) s[n - 1] = !head;
+      for (let i = 1; i < p - 1; i++) s[i] = (i % 2 === 1) ? !head : head;
+      for (let i = p + 1; i < n - 1; i++) s[i] = ((i - p) % 2 === 1) ? head : !head;
+    }
+  } else if (variant.kind === 'alt-diff') {
+    // Multi-transition ring with s[0] !== s[n-1]: chord emits imp(F, T) while
+    // alternating transitions convert ring edges into or/nand instead of imp(TT)/imp(FF)!
+    const head = variant.head ?? (draw() < 0.5);
+    for (let i = 0; i < n; i++) s[i] = (i % 2 === 0) ? head : !head;
+    s[0] = head;
+    s[n - 1] = !head;
+    if (n >= 6 && draw() < 0.45) {
+      const k = 1 + Math.floor(draw() * (n - 2));
+      s[k] = !s[k];
+    }
   } else {
-    // diff-ends ring: s[0] !== s[n-1] with a single polarity split along the ring
+    // diff-ends ring: s[0] !== s[n-1] so chord emits imp(F, T)
     const head = variant.head ?? (draw() < 0.5);
     const cut = 1 + Math.floor(draw() * (n - 1));
     for (let i = 0; i < n; i++) s[i] = i < cut ? head : !head;
@@ -196,20 +215,10 @@ function buildConnectedCycle(nodes, draw, variant) {
     const A = order.slice(0, p);
     const B = order.slice(p);
     const q = B.length;
-    // Abstract unique-solution (all x = T) figure-8:
-    //   1. (A[0] OR !B[q-1])
-    //   2. (B[i] OR !B[i-1]) for i = q-1..1
-    //   3. (B[0] OR A[0])   -> or(T,T) if both T, nand(F,F) if both F, imp(F,T) if opposite!
-    //   4. (!A[i] OR A[i+1]) for i = 0..p-2
-    //   5. (!A[p-1] OR B[0])
     const symCand = [];
     if (n >= 6) {
-      for (let i = 0; i < p - 1; i++) {
-        if (sByNode[A[i]] === sByNode[A[i + 1]]) symCand.push('A:' + i);
-      }
-      for (let i = 1; i < q; i++) {
-        if (sByNode[B[i]] === sByNode[B[i - 1]]) symCand.push('B:' + i);
-      }
+      for (let i = 0; i < p - 1; i++) symCand.push('A:' + i);
+      for (let i = 1; i < q; i++) symCand.push('B:' + i);
     }
     const symEdges = new Set();
     if (symCand.length) {
@@ -239,14 +248,10 @@ function buildConnectedCycle(nodes, draw, variant) {
   }
 
   // Ring-plus-chord: (x_0 OR x_{n-1}) + directed ring x_{n-1} => ... => x_0 => x_{n-1}
-  // Replacing up to 3 interior same-polarity edges with =/!= preserves strict minimality of all 7 clauses
-  // and keeps >=4 non-symmetric clauses (ZERO Style-4 trees) while balancing imp(TT/FT/FF)!
   const symSlots = new Set();
   if (n >= 6) {
     const interior = [];
-    for (let i = 1; i <= n - 2; i++) {
-      if (s[i] === s[i - 1]) interior.push(i);
-    }
+    for (let i = 1; i <= n - 2; i++) interior.push(i);
     const cap = variant.maxSym ?? 3;
     const want = Math.min(interior.length, cap);
     for (const slot of shuffled(interior, draw).slice(0, want)) symSlots.add(slot);
@@ -309,14 +314,19 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
     const plans = shuffled([
       {kind: 'all-true'},
       {kind: 'all-false'},
-      {kind: 'same-ends-T'},
-      {kind: 'same-ends-F'},
       {kind: 'fig8-same-T', p: 1},
       {kind: 'fig8-same-F', p: 2},
+      {kind: 'fig8-same-T', p: 2},
+      {kind: 'fig8-same-F', p: 1},
       {kind: 'fig8-mixed', p: 1, head: true},
       {kind: 'fig8-mixed', p: 2, head: false},
+      {kind: 'fig8-mixed', p: 1, head: false},
+      {kind: 'fig8-mixed', p: 2, head: true},
       {kind: 'diff-ends', head: true},
       {kind: 'diff-ends', head: false},
+      {kind: 'alt-diff', head: true},
+      {kind: 'alt-diff', head: false},
+      {kind: 'anchored'},
       {kind: 'anchored'},
       {kind: 'anchored'},
       {kind: 'anchored'}
@@ -337,30 +347,31 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
 
   if (level === 'hard') {
     // ALL 6 records disputed in ONE single connected 6-node coupled 2-SAT cycle
-    // mixing ring-plus-chord and figure-8 topologies with balanced polarity classes
-    // and interior symmetric =/!= edges so ALL 5 operators stay balanced:
-    // ~32% TT/TF/FT on `or`, ~32% FF/TF/FT on `not both`, ~20%+ FT on `imp`, 50/50 on `=`/`!=`!
+    // balancing ring-plus-chord and figure-8 topologies with uniform + multi-transition
+    // polarities and interior =/!= edges so ALL 5 operators stay near-uniform!
     const plans = shuffled([
       {kind: 'all-true'},
       {kind: 'all-false'},
       {kind: 'all-true'},
       {kind: 'all-false'},
-      {kind: 'same-ends-T'},
-      {kind: 'same-ends-F'},
       {kind: 'fig8-same-T', p: 2},
       {kind: 'fig8-same-T', p: 3},
       {kind: 'fig8-same-T', p: 4},
       {kind: 'fig8-same-F', p: 2},
       {kind: 'fig8-same-F', p: 3},
       {kind: 'fig8-same-F', p: 4},
-      {kind: 'fig8-mixed', p: 2, head: true},
-      {kind: 'fig8-mixed', p: 3, head: false},
-      {kind: 'fig8-mixed', p: 4, head: true},
-      {kind: 'fig8-mixed', p: 3, head: true},
-      {kind: 'fig8-mixed', p: 2, head: false},
-      {kind: 'fig8-mixed', p: 4, head: false},
-      {kind: 'diff-ends', head: true},
-      {kind: 'diff-ends', head: false},
+      {kind: 'fig8-same-T', p: 3},
+      {kind: 'fig8-same-F', p: 3},
+      {kind: 'fig8-mixed', p: 2, head: true, altInterior: true},
+      {kind: 'fig8-mixed', p: 3, head: false, altInterior: true},
+      {kind: 'fig8-mixed', p: 4, head: true, altInterior: true},
+      {kind: 'fig8-mixed', p: 3, head: true, altInterior: true},
+      {kind: 'fig8-mixed', p: 2, head: false, altInterior: true},
+      {kind: 'fig8-mixed', p: 4, head: false, altInterior: true},
+      {kind: 'alt-diff', head: true},
+      {kind: 'alt-diff', head: false},
+      {kind: 'alt-diff', head: true},
+      {kind: 'alt-diff', head: false},
       {kind: 'diff-ends', head: true},
       {kind: 'diff-ends', head: false}
     ], draw);
@@ -380,26 +391,27 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
   return null;
 }
 
-function describeRow(rows, mask, role) {
+function describeRow(rows, mask, role, verbs) {
   const i = rows.findIndex(row => row.role === role);
   if (!(mask & (1 << i))) return roleNames[role] + ' holds as printed';
   if (rows[i].alias) return roleNames[role] + ' swaps ' + rows[i].alias.join(' and ');
-  if (rows[i].alt) return roleNames[role] + ' uses ' + rows[i].alt.link.from + ' ' + roleVerbs[role] + ' ' + rows[i].alt.link.to;
+  if (rows[i].alt) return roleNames[role] + ' uses ' + rows[i].alt.link.from + ' ' + verbs[role] + ' ' + rows[i].alt.link.to;
   return roleNames[role] + ' reverses direction';
 }
 
-function fmtClaimShort(c) {
-  return roleNames[c.role] + ' (' + c.from + ' ' + roleVerbs[c.role] + ' ' + c.to + ')';
+function fmtClaimShort(c, verbs) {
+  return roleNames[c.role] + ' (' + c.from + ' ' + verbs[c.role] + ' ' + c.to + ')';
 }
 
-function fmtReportShort(r) {
-  if (!r.left) return (r.op === 'verified' ? 'Verified: ' : 'Ruled out: ') + fmtClaimShort(r.right);
+function fmtReportShort(r, verbs) {
+  if (!r.left) return (r.op === 'verified' ? 'Verified: ' : 'Ruled out: ') + fmtClaimShort(r.right, verbs);
   const sym = {eq: '=', neq: '≠', imp: '⇒', or: 'or', nand: 'not both'}[r.op];
-  return fmtClaimShort(r.left) + ' ' + sym + ' ' + fmtClaimShort(r.right);
+  return fmtClaimShort(r.left, verbs) + ' ' + sym + ' ' + fmtClaimShort(r.right, verbs);
 }
 
-export function explainRows(rows, reports, mask) {
+export function explainRows(rows, reports, mask, domain = null) {
   if (!reports.length) return [];
+  const verbs = verbsForDomain(domain);
   const edges = edgesFor(rows, mask);
   const pending = reports.slice();
   const known = new Set(rows.filter(row => !row.disputed).map(row => row.role));
@@ -428,7 +440,7 @@ export function explainRows(rows, reports, mask) {
       const child = !r.left || parent === r.left.role ? r.right.role : r.left.role;
       const opTag = r.op === 'imp' ? ' (if–then)' : r.op === 'or' ? ' (or)' : r.op === 'nand' ? ' (not both)' : '';
       const lead = parent ? 'From ' + roleNames[parent] + opTag : r.op === 'verified' ? 'Verified' : 'Ruled out';
-      steps.push(lead + ' → ' + describeRow(rows, mask, child) + '.');
+      steps.push(lead + ' → ' + describeRow(rows, mask, child, verbs) + '.');
       known.add(child);
       continue;
     }
@@ -457,7 +469,7 @@ export function explainRows(rows, reports, mask) {
     steps.push(
       'Coupled cross-checks (' + members.map(r => roleNames[r]).join(', ') +
       ') eliminate every rival reading → ' +
-      members.map(r => describeRow(rows, mask, r)).join('; ') + '.'
+      members.map(r => describeRow(rows, mask, r, verbs)).join('; ') + '.'
     );
     for (const r of members) known.add(r);
     for (let j = pending.length - 1; j >= 0; j--) {
@@ -471,7 +483,8 @@ export function explainRows(rows, reports, mask) {
 // Identify the closest plausible rival on confirmed trials (Super Easy / Very Easy)
 // by finding the exact single operational fact (timing, direction, or role) that spares them.
 function findDecisiveDirectRival(evidence, solvedMask, correctTargets, evaluateFamily) {
-  const {rows, family, anchor, leads} = evidence;
+  const {rows, family, anchor, leads, domain} = evidence;
+  const verbs = verbsForDomain(domain);
   const edges = edgesFor(rows, solvedMask);
   const correctSet = new Set(correctTargets);
   const leadList = (leads || []).filter(name => !correctSet.has(name) && name !== anchor);
@@ -492,7 +505,7 @@ function findDecisiveDirectRival(evidence, solvedMask, correctTargets, evaluateF
       const stamp = e.time ? ' at 0' + e.time + ':00' : '';
       return {
         rivalTargets: [hit],
-        defeatedBy: roleNames[e.role] + stamp + ' runs ' + e.from + ' ' + roleVerbs[e.role] + ' ' + e.to + ', not the reverse.',
+        defeatedBy: roleNames[e.role] + stamp + ' runs ' + e.from + ' ' + verbs[e.role] + ' ' + e.to + ', not the reverse.',
         decisiveRole: e.role
       };
     }
@@ -536,7 +549,7 @@ function findDecisiveDirectRival(evidence, solvedMask, correctTargets, evaluateF
         const stamp = e.time ? ' at 0' + e.time + ':00' : '';
         return {
           rivalTargets: [hit],
-          defeatedBy: e.from + ' ' + roleVerbs[e.role] + ' ' + e.to + stamp + ' is ' + roleNames[e.role] + ', not ' + roleNames[altRole] + '.',
+          defeatedBy: e.from + ' ' + verbs[e.role] + ' ' + e.to + stamp + ' is ' + roleNames[e.role] + ', not ' + roleNames[altRole] + '.',
           decisiveRole: e.role
         };
       }
@@ -548,8 +561,9 @@ function findDecisiveDirectRival(evidence, solvedMask, correctTargets, evaluateF
 
 // Identify the closest rival reading (failing only ONE cross-check) for concise post-trial debrief.
 export function findDecisiveRival(evidence, solvedMask, correctTargets, evaluateFamily) {
-  const {rows, reports, family, anchor} = evidence;
+  const {rows, reports, family, anchor, domain} = evidence;
   if (!reports.length) return findDecisiveDirectRival(evidence, solvedMask, correctTargets, evaluateFamily);
+  const verbs = verbsForDomain(domain);
   const fixed = rows.reduce((mask, row, i) => row.disputed ? mask : mask | (1 << i), 0);
   const correctKey = targetKey(correctTargets);
   const wantSize = correctTargets.length;
@@ -572,7 +586,7 @@ export function findDecisiveRival(evidence, solvedMask, correctTargets, evaluate
     if (alt.length === wantSize && targetKey(alt) !== correctKey) {
       return {
         rivalTargets: alt,
-        defeatedBy: fmtReportShort(failed),
+        defeatedBy: fmtReportShort(failed, verbs),
         reportIndex: reports.indexOf(failed)
       };
     }
@@ -581,7 +595,7 @@ export function findDecisiveRival(evidence, solvedMask, correctTargets, evaluate
 }
 
 export function solveCaseEvidence(evidence, evaluateFamily) {
-  const {rows, reports, family, anchor} = evidence;
+  const {rows, reports, family, anchor, domain} = evidence;
   const fixed = rows.reduce((mask, row, i) => row.disputed ? mask : mask | (1 << i), 0);
   let solution = null;
   let validWorlds = 0;
@@ -600,7 +614,7 @@ export function solveCaseEvidence(evidence, evaluateFamily) {
     }
     if (!solution) {
       solvedMask = mask;
-      solution = {...answer, proof: [...answer.proof, ...explainRows(rows, reports, mask)]};
+      solution = {...answer, proof: [...answer.proof, ...explainRows(rows, reports, mask, domain)]};
     }
   }
   if (!solution) return {pair: [], targets: [], proof: [], validWorlds, solvedMask: -1, rivalDebrief: null};

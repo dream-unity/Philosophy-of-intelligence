@@ -343,3 +343,44 @@ test('ArcadeSession separates first-seen family accuracy, repeat-family accuracy
   assert.equal(session.bestTime, 6.0);
   assert.equal(session.medianTime, 8.0);
 });
+
+test('Domain-contextual operational role verbs vary across domains and render in dispatches', async () => {
+  const {domainRoleVerbs, verbsForDomain, caseRoles} = await loadModule('friend-or-foe/case-layout.js');
+  const {makeCaseTrial} = await loadModule('friend-or-foe/case-decks.js');
+  const {renderCaseEvidence} = await loadModule('friend-or-foe/case-view.js');
+  const {seededDraw} = await loadModule('friend-or-foe/case-layout.js');
+  const domains = Object.keys(domainRoleVerbs);
+  assert.equal(domains.length, 10, 'Expected 10 distinct intelligence domains');
+  for (const role of caseRoles) {
+    const distinct = new Set(domains.map(d => domainRoleVerbs[d][role]));
+    assert.ok(distinct.size >= 4, `Role ${role} should have >=4 contextual verbs across domains, got ${distinct.size}`);
+  }
+  const prevDocument = global.document;
+  global.document = makeFakeDocument();
+  try {
+    const trial = makeCaseTrial('hard', null, seededDraw(4242));
+    const verbs = verbsForDomain(trial.evidence.domain);
+    const root = global.document.createElement('section');
+    renderCaseEvidence(root, trial.evidence, {shortlist: false});
+    const text = root.allText();
+    assert.ok(text.includes(verbs.foreigner), `Expected rendered dispatch to include domain verb "${verbs.foreigner}" for domain "${trial.evidence.domain}"`);
+  } finally {
+    global.document = prevDocument;
+  }
+});
+
+test('Super Easy, Moderate, and Hard families eliminate directionless "tied to" matching and permanent safe/threat role pooling', async () => {
+  const {familiesByLevel} = await loadModule('friend-or-foe/case-families.js');
+  for (const level of ['super-easy', 'medium', 'hard']) {
+    const list = familiesByLevel[level];
+    const tiedCount = list.filter(f => /\btied to\b|\btie\b|\bties\b/i.test(f.order)).length;
+    assert.equal(tiedCount, 0, `${level} must have 0 directionless "tied to" orders, got ${tiedCount}`);
+    const pooledGood = list.filter(f => /Friend, Spy, or Civilian|clean Friend|clean Spy|clean Civilian/.test(f.order)).length;
+    assert.equal(pooledGood, 0, `${level} must have 0 permanent "clean Friend/Spy/Civilian" boilerplate orders, got ${pooledGood}`);
+    const pooledBad = list.filter(f => /Foe, Double agent, or Foreigner/.test(f.order)).length;
+    assert.ok(pooledBad <= 1, `${level} must have <=1 pooled Foe/Double/Foreigner order, got ${pooledBad}`);
+    for (const f of list) {
+      assert.doesNotMatch(f.order, /\ban suspect\b|\ban Foe\b/i, `${f.id} has an article grammar typo`);
+    }
+  }
+});
