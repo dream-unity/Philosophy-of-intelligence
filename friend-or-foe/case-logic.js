@@ -348,10 +348,8 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
   if (level === 'hard') {
     // ALL 6 records disputed in ONE single connected 6-node coupled 2-SAT cycle
     // balancing ring-plus-chord and figure-8 topologies with uniform + multi-transition
-    // polarities and interior =/!= edges so ALL 5 operators stay near-uniform!
+    // polarities and interior =/!= edges so ALL 5 operators (including imp TT/FT/FF) stay near-uniform!
     const plans = shuffled([
-      {kind: 'all-true'},
-      {kind: 'all-false'},
       {kind: 'all-true'},
       {kind: 'all-false'},
       {kind: 'fig8-same-T', p: 2},
@@ -360,14 +358,17 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
       {kind: 'fig8-same-F', p: 2},
       {kind: 'fig8-same-F', p: 3},
       {kind: 'fig8-same-F', p: 4},
-      {kind: 'fig8-same-T', p: 3},
-      {kind: 'fig8-same-F', p: 3},
       {kind: 'fig8-mixed', p: 2, head: true, altInterior: true},
       {kind: 'fig8-mixed', p: 3, head: false, altInterior: true},
       {kind: 'fig8-mixed', p: 4, head: true, altInterior: true},
       {kind: 'fig8-mixed', p: 3, head: true, altInterior: true},
       {kind: 'fig8-mixed', p: 2, head: false, altInterior: true},
       {kind: 'fig8-mixed', p: 4, head: false, altInterior: true},
+      {kind: 'fig8-mixed', p: 2, head: true, altInterior: true},
+      {kind: 'fig8-mixed', p: 3, head: false, altInterior: true},
+      {kind: 'fig8-mixed', p: 4, head: false, altInterior: true},
+      {kind: 'alt-diff', head: true},
+      {kind: 'alt-diff', head: false},
       {kind: 'alt-diff', head: true},
       {kind: 'alt-diff', head: false},
       {kind: 'alt-diff', head: true},
@@ -378,7 +379,7 @@ export function buildCrossChecks(rows, disputedIndices, worldTargets, correctKey
 
     for (const plan of plans) {
       for (let attempt = 0; attempt < 24; attempt++) {
-        const maxSym = attempt < 10 ? 3 : attempt < 18 ? 2 : 0;
+        const maxSym = attempt < 12 ? 3 : attempt < 18 ? 2 : 0;
         const clauses = buildConnectedCycle(disputedIndices, draw, {...plan, maxSym});
         if (verifyClausesTargetMinimal(clauses, fixedMask, worldTargets, correctKey, targetSize, forbiddenKey)) {
           return materialize(clauses, rows, draw);

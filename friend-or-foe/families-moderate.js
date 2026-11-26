@@ -1,8 +1,8 @@
 import {collectMatches} from './case-graph.js';
 import {
-  hasCompromised, matchAnchorRelay, matchAtom,
-  matchDependentSupport, matchIncidentCorroboration, matchIncidentDual,
-  matchIncidentRelay, matchIndependentSupport, matchRelay, matchTemporal
+  hasCompromised, matchAllTimeOrder, matchAnchorRelay, matchAtom,
+  matchCutoutBridge, matchDependentSupport, matchIncidentCorroboration, matchIncidentDual,
+  matchIncidentRelay, matchIndependentSupport, matchRelay, matchSharedOrigin, matchSiteTaint, matchTemporal
 } from './case-predicates.js';
 
 // 100 genuinely distinct Moderate intelligence cases (10 domains × 10 families).
@@ -159,275 +159,331 @@ function modDual({id, domain, title, order, a, b, exc = null}) {
   });
 }
 
+function modOrigin({id, domain, title, order, sameIncident = true, exc = null}) {
+  return mod({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchSharedOrigin(g, x, {sameIncident});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' both trace back to ' + hit.origin + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function modCutout({id, domain, title, order, inRoles = null, outRoles = null, sameIncident = null, timeOrder = null, diffRole = false, unconnected = null, exc = null}) {
+  return mod({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchCutoutBridge(g, x, {inRoles, outRoles, sameIncident, timeOrder, diffRole, unconnected});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function modSiteTaint({id, domain, title, order, roles1 = null, dir1 = 'in', roles2 = null, dir2 = 'in', sameIncident = null, timeOrder = null, exc = null}) {
+  return mod({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchSiteTaint(g, x, {roles1, dir1, roles2, dir2, sameIncident, timeOrder});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' ← ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function modTimePriority({id, domain, title, order, rolesA = null, dirA = 'out', rolesB = null, dirB = 'in', relation = 'before_all', sameIncident = null, exc = null}) {
+  return mod({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchAllTimeOrder(g, x, {rolesA, dirA, rolesB, dirB, relation, sameIncident});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' vs ' + g.fmt(hit.eB) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
 export const moderateFamilies = [
   // =========================================================================
   // DOMAIN 0: Cover & Betrayal (10) — clears, targets, audits, leaks to, warns, contacts
   // =========================================================================
-  modTaint({
-    id: 'mo-00', domain: 0, title: 'Tainted clearance or audit',
-    order: 'Cover blown — take down anyone cleared by a Friend or audited by a Spy who leaks as a Double agent or contacts as a Foreigner; stand down if a Civilian warns them.',
-    roles: ['friend', 'spy'], taint: ['double', 'foreigner'], taintDir: 'out', exc: {roles: ['civilian'], dir: 'in'}
+  modCutout({
+    id: 'mo-00', domain: 0, title: 'Same-site blind cutout',
+    order: 'Cover blown: take down anyone acting as a same-site cutout between two people with no direct contact — unless cleared by a Friend.',
+    sameIncident: true, unconnected: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-01', domain: 0, title: 'Cover for an attacker or outsider',
-    order: 'Burned clearance: neutralize anyone who clears as a Friend or warns as a Civilian an active Foe or Foreigner; hold fire on anyone audited by a Spy.',
-    firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  modCutout({
+    id: 'mo-01', domain: 0, title: 'Cross-site blind cutout',
+    order: 'Burned clearance: neutralize anyone acting as a cross-site cutout between two people with no direct contact — unless audited by a Spy.',
+    sameIncident: false, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-02', domain: 0, title: 'Insider shielding a contacted mark',
-    order: 'Take out anyone who clears as a Friend or warns as a Civilian someone contacted by a Foreigner or leaked to by a Double agent, except anyone targeted by a Foe.',
-    firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foreigner', 'double'], secondDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-02', domain: 0, title: 'Clearance from an active site source',
+    order: 'False cover: shoot anyone cleared by a Friend or warned by a Civilian whose source acts again on that same site — unless audited by a Spy.',
+    roles1: ['friend', 'civilian'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-03', domain: 0, title: 'Audited by an insider backer',
-    order: 'Insider betrayal: shoot anyone audited by a Spy or warned by a Civilian who also clears as a Friend or targets as a Foe — unless contacted by a Foreigner.',
-    roles: ['spy', 'civilian'], taint: ['friend', 'foe'], taintDir: 'out', exc: {roles: ['foreigner'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-03', domain: 0, title: 'Audited by a contacted insider',
+    order: 'Insider betrayal: drop anyone cleared by a Friend or audited by a Spy whose source was contacted on that same site — unless warned by a Civilian.',
+    roles1: ['friend', 'spy'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-04', domain: 0, title: 'Mole or outsider reaching an active voucher',
-    order: 'False cover — drop anyone who leaks as a Double agent or contacts as a Foreigner an active Friend or Spy, sparing anyone targeted by a Foe.',
-    firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'out', exc: {roles: ['foe'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-04', domain: 0, title: 'Reaching a pressured site mark',
+    order: 'Compromised vetting: engage anyone acting on a site toward someone a Foe targets or Foreigner contacts on that same site — unless cleared by a Friend.',
+    roles1: null, dir1: 'out', roles2: ['foe', 'foreigner'], dir2: 'in', sameIncident: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-05', domain: 0, title: 'Foe or Foreigner hitting a cleared mark',
-    order: 'Compromised vetting: engage anyone who targets as a Foe or contacts as a Foreigner someone cleared by a Friend or audited by a Spy; hold fire on anyone warned by a Civilian.',
-    firstRoles: ['foe', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modTimePriority({
+    id: 'mo-05', domain: 0, title: 'Acted before every incoming call',
+    order: 'Station breach: eliminate anyone contacted who still initiates a dispatch earlier than every contact they receive — unless warned by a Civilian.',
+    dirA: 'out', dirB: 'in', relation: 'before_all', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-06', domain: 0, title: 'Clearance under pressure',
-    order: 'Cover blown — eliminate anyone cleared by a Friend or warned by a Civilian who was contacted by a Foreigner or targeted by a Foe, except anyone audited by a Spy.',
-    roles: ['friend', 'civilian'], taint: ['foreigner', 'foe'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-06', domain: 0, title: 'Cross-site mole or outsider source',
+    order: 'Take out anyone contacted on one site by someone leaking as a Double agent or contacting as a Foreigner on the other — unless audited by a Spy.',
+    roles1: null, dir1: 'in', roles2: ['double', 'foreigner'], dir2: 'out', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-07', domain: 0, title: 'Double agent or Foe reaching a witness',
-    order: 'Fire on anyone who leaks as a Double agent or targets as a Foe someone warned by a Civilian or cleared by a Friend — unless audited by a Spy.',
-    firstRoles: ['double', 'foe'], firstDir: 'out', secondRoles: ['civilian', 'friend'], secondDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  modCutout({
+    id: 'mo-07', domain: 0, title: 'Closed same-site triangle',
+    order: 'Fire on anyone bridging two people on the same site who are already in direct contact — unless warned by a Civilian.',
+    sameIncident: true, unconnected: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-08', domain: 0, title: 'Witness or voucher audited by a Spy',
-    order: 'Station breach — take down anyone warned by a Civilian or targeted by a Foe who was audited by a Spy or cleared by a Friend, sparing anyone contacted by a Foreigner.',
-    roles: ['civilian', 'foe'], taint: ['spy', 'friend'], taintDir: 'in', exc: {roles: ['foreigner'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-08', domain: 0, title: 'Late clearance after source acted',
+    order: 'Delayed cover: take down anyone cleared by a Friend or audited by a Spy after their source had already acted elsewhere — unless targeted by a Foe.',
+    roles1: ['friend', 'spy'], dir1: 'in', roles2: null, dir2: 'out', timeOrder: 'after', exc: {roles: ['foe'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-09', domain: 0, title: 'Delayed clearance after leak or strike',
-    order: 'Insider betrayal: neutralize anyone who clears as a Friend or audits as a Spy someone who had earlier leaked as a Double agent or targeted as a Foe.',
-    firstRoles: ['friend', 'spy'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'out', timeOrder: 'after'
+  modTimePriority({
+    id: 'mo-09', domain: 0, title: 'Acted after every same-site contact',
+    order: 'Late response: neutralize anyone contacted on a site who initiates a dispatch later than every contact they receive on that site.',
+    dirA: 'out', dirB: 'in', relation: 'after_all', sameIncident: true
   }),
 
   // =========================================================================
   // DOMAIN 1: Surveillance & Blind Spots (10) — escorts, ambushes, shadows, leaks to, spots, signals
   // =========================================================================
-  modRelay({
-    id: 'mo-10', domain: 1, title: 'Shadowing an ambushed or signaled mark',
-    order: 'Escort off-script — engage anyone who shadows as a Spy or spots as a Civilian someone ambushed by a Foe or signaled by a Foreigner, except anyone escorted by a Friend.',
-    firstRoles: ['spy', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  modCutout({
+    id: 'mo-10', domain: 1, title: 'Delayed cross-site cutout',
+    order: 'Escort off-script: engage anyone contacted on one site who later reaches a third person on the other site — unless escorted by a Friend.',
+    sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-11', domain: 1, title: 'Ambushed watcher or escort',
-    order: 'Dead drop watched: eliminate anyone ambushed by a Foe or leaked to by a Double agent who shadows as a Spy or escorts as a Friend — unless spotted by a Civilian.',
-    firstRoles: ['foe', 'double'], firstDir: 'in', secondRoles: ['spy', 'friend'], secondDir: 'out', exc: {roles: ['civilian'], dir: 'in'}
+  modCutout({
+    id: 'mo-11', domain: 1, title: 'Pre-positioned same-site relay',
+    order: 'Dead drop watched: eliminate anyone who reached someone on a site earlier than a third person contacted them on that same site — unless spotted by a Civilian.',
+    sameIncident: true, timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-12', domain: 1, title: 'Signal or ambush inside the watch',
-    order: 'Fire on anyone shadowed by a Spy or escorted by a Friend who was signaled by a Foreigner or ambushed by a Foe, sparing anyone spotted by a Civilian.',
-    roles: ['spy', 'friend'], taint: ['foreigner', 'foe'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-12', domain: 1, title: 'Shadowed before watcher was reached',
+    order: 'Compromised tail: fire on anyone shadowed by a Spy or escorted by a Friend earlier than their watcher was contacted — unless spotted by a Civilian.',
+    roles1: ['spy', 'friend'], dir1: 'in', roles2: null, dir2: 'in', timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-13', domain: 1, title: 'Unwatched signal or ambush relay',
-    order: 'Compromised tail: take down anyone signaled by a Foreigner or ambushed by a Foe who leaks as a Double agent or spots as a Civilian; hold fire on anyone shadowed by a Spy.',
-    firstRoles: ['foreigner', 'foe'], firstDir: 'in', secondRoles: ['double', 'civilian'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-13', domain: 1, title: 'Blind-spot signal relay',
+    order: 'Take down anyone signaled by a Foreigner or ambushed by a Foe whose contact initiates another dispatch on the other site — unless shadowed by a Spy.',
+    roles1: ['foreigner', 'foe'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-14', domain: 1, title: 'Escort or spotter walking into danger',
-    order: 'Watcher exposed — neutralize anyone who escorts as a Friend or spots as a Civilian someone ambushed by a Foe or leaked to by a Double agent, except anyone shadowed by a Spy.',
-    firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-14', domain: 1, title: 'Watcher targeting a contacted mark',
+    order: 'Watcher exposed: neutralize anyone acting on a site toward someone already contacted earlier on that same site — unless shadowed by a Spy.',
+    roles1: null, dir1: 'out', roles2: null, dir2: 'in', sameIncident: true, timeOrder: 'after', exc: {roles: ['spy'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-15', domain: 1, title: 'Ambushed or signaled before watch',
-    order: 'Signal in the alley: take out anyone who ambushes as a Foe or signals as a Foreigner someone a Civilian spotted or Spy shadowed only later.',
-    firstRoles: ['foe', 'foreigner'], firstDir: 'out', secondRoles: ['civilian', 'spy'], secondDir: 'in', timeOrder: 'before'
+  modSiteRelay({
+    id: 'mo-15', domain: 1, title: 'Cross-site ambush before watch',
+    order: 'Signal in the alley: take out anyone acting on one site toward someone contacted later on the other site — unless escorted by a Friend.',
+    firstDir: 'out', secondDir: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-16', domain: 1, title: 'Shadowed or spotted by an escort’s ward',
-    order: 'Escort off-script — shoot anyone shadowed by a Spy or spotted by a Civilian whose watcher is escorted by a Friend or ambushed by a Foe, sparing anyone signaled by a Foreigner.',
-    firstRoles: ['spy', 'civilian'], firstDir: 'in', secondRoles: ['friend', 'foe'], secondDir: 'in', exc: {roles: ['foreigner'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-16', domain: 1, title: 'Watched by a cross-site mole',
+    order: 'Shoot anyone shadowed by a Spy or spotted by a Civilian whose watcher was contacted on the opposite site — unless signaled by a Foreigner.',
+    roles1: ['spy', 'civilian'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['foreigner'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-17', domain: 1, title: 'Watcher tracking a mole or Foreigner',
-    order: 'Drop anyone who spots as a Civilian or shadows as a Spy someone leaking as a Double agent or signaling as a Foreigner; hold fire on anyone escorted by a Friend.',
-    firstRoles: ['civilian', 'spy'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  modCutout({
+    id: 'mo-17', domain: 1, title: 'Unwatched closed cross-site triangle',
+    order: 'Drop anyone bridging two people across different sites who are already in direct contact — unless escorted by a Friend.',
+    sameIncident: false, unconnected: false, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-18', domain: 1, title: 'Signaled by a watched outsider',
-    order: 'Engage anyone signaled by a Foreigner or leaked to by a Double agent whose contact is shadowed by a Spy or escorted by a Friend, except anyone spotted by a Civilian.',
-    firstRoles: ['foreigner', 'double'], firstDir: 'in', secondRoles: ['spy', 'friend'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modTimePriority({
+    id: 'mo-18', domain: 1, title: 'First strike on a watched site',
+    order: 'Engage anyone contacted on a site who initiates a dispatch earlier than every contact they receive on that same site — unless spotted by a Civilian.',
+    dirA: 'out', dirB: 'in', relation: 'before_all', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-19', domain: 1, title: 'Escort or spotter working in shadow',
-    order: 'Compromised tail: eliminate anyone escorted by a Friend or spotted by a Civilian who also ambushes as a Foe or signals as a Foreigner — unless shadowed by a Spy.',
-    roles: ['friend', 'civilian'], taint: ['foe', 'foreigner'], taintDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  modCutout({
+    id: 'mo-19', domain: 1, title: 'Double-role same-site cutout',
+    order: 'Compromised tail: eliminate anyone bridging two strangers on the same site across two different roles — unless shadowed by a Spy.',
+    sameIncident: true, diffRole: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
 
   // =========================================================================
   // DOMAIN 2: Foreign Contact (10) — vouches for, pressures, tracks, leaks to, reports, recruits
   // =========================================================================
-  modRelay({
-    id: 'mo-20', domain: 2, title: 'Recruiter or Foe with inside backing',
-    order: 'Foreign contact in play — take out anyone recruited by a Foreigner or pressured by a Foe whose contact is vouched for by a Friend or reported by a Civilian, sparing anyone tracked by a Spy.',
-    firstRoles: ['foreigner', 'foe'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  modOrigin({
+    id: 'mo-20', domain: 2, title: 'Echo chamber from one handler',
+    order: 'Foreign contact in play: take out anyone reached by two sources who both received dispatches from the same upstream handler — unless tracked by a Spy.',
+    sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-21', domain: 2, title: 'Pressuring a recruit or tracked mark',
-    order: 'Shoot anyone who pressures as a Foe or leaks as a Double agent to someone recruited by a Foreigner or tracked by a Spy; hold fire on anyone reported by a Civilian.',
-    firstRoles: ['foe', 'double'], firstDir: 'out', secondRoles: ['foreigner', 'spy'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-21', domain: 2, title: 'Pressuring a cross-site contact',
+    order: 'Shoot anyone acting on one site toward someone already contacted on the opposite site — unless reported by a Civilian.',
+    roles1: null, dir1: 'out', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-22', domain: 2, title: 'Recruit or mole turning active',
-    order: 'Drop anyone recruited by a Foreigner or tracked by a Spy who leaks as a Double agent or pressures as a Foe, except anyone vouched for by a Friend.',
-    firstRoles: ['foreigner', 'spy'], firstDir: 'in', secondRoles: ['double', 'foe'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  modCutout({
+    id: 'mo-22', domain: 2, title: 'Recruit or mole cutout',
+    order: 'Drop anyone recruited by a Foreigner or tracked by a Spy who reaches a third person with no direct contact to their source — unless vouched for by a Friend.',
+    inRoles: ['foreigner', 'spy'], unconnected: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-23', domain: 2, title: 'Recruiting a witness or voucher',
-    order: 'External handler: engage anyone who recruits as a Foreigner or pressures as a Foe someone who reports as a Civilian or vouches as a Friend — unless tracked by a Spy.',
-    firstRoles: ['foreigner', 'foe'], firstDir: 'out', secondRoles: ['civilian', 'friend'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-23', domain: 2, title: 'Recruiter reaching an active insider',
+    order: 'External handler: engage anyone acting on a site toward someone who initiates another dispatch on the opposite site — unless tracked by a Spy.',
+    roles1: null, dir1: 'out', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-24', domain: 2, title: 'Recruited before tracking or reporting',
-    order: 'Border leak — eliminate anyone recruited by a Foreigner or leaked to by a Double agent earlier than a Spy tracked or Civilian reported that contact.',
-    firstRoles: ['foreigner', 'double'], firstDir: 'in', secondRoles: ['spy', 'civilian'], secondDir: 'in', timeOrder: 'before'
+  modSiteTaint({
+    id: 'mo-24', domain: 2, title: 'Recruited earlier than source’s cover',
+    order: 'Border leak: eliminate anyone contacted by someone who received a dispatch later on the same site — unless vouched for by a Friend.',
+    roles1: null, dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-25', domain: 2, title: 'Witness or tracker recruited abroad',
-    order: 'Fire on anyone reported by a Civilian or tracked by a Spy who was recruited by a Foreigner or leaked to by a Double agent; hold fire on anyone pressured by a Foe.',
-    roles: ['civilian', 'spy'], taint: ['foreigner', 'double'], taintDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-25', domain: 2, title: 'Witness reached on both fronts',
+    order: 'Fire on anyone reported by a Civilian or tracked by a Spy whose source was contacted on the opposite site — unless pressured by a Foe.',
+    roles1: ['civilian', 'spy'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['foe'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-26', domain: 2, title: 'Insider backing an active Foreigner or Foe',
-    order: 'Foreign contact in play — take down anyone who vouches as a Friend or tracks as a Spy an active Foreigner or Foe, except anyone reported by a Civilian.',
-    firstRoles: ['friend', 'spy'], firstDir: 'out', secondRoles: ['foreigner', 'foe'], secondDir: 'out', exc: {roles: ['civilian'], dir: 'in'}
+  modCutout({
+    id: 'mo-26', domain: 2, title: 'Cross-site role-switching cutout',
+    order: 'Take down anyone bridging two strangers across different sites in two different roles — unless reported by a Civilian.',
+    sameIncident: false, diffRole: true, unconnected: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-27', domain: 2, title: 'Recruited by a pressured contact',
-    order: 'Neutralize anyone recruited by a Foreigner or tracked by a Spy whose contact was pressured by a Foe or leaked to by a Double agent — unless vouched for by a Friend.',
-    firstRoles: ['foreigner', 'spy'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-27', domain: 2, title: 'Recruited by a same-site proxy',
+    order: 'Neutralize anyone recruited by a Foreigner or tracked by a Spy whose source initiates another dispatch on that same site — unless vouched for by a Friend.',
+    roles1: ['foreigner', 'spy'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-28', domain: 2, title: 'Mole or witness feeding a recruiter',
-    order: 'Cross-border breach — take out anyone who leaks as a Double agent or reports as a Civilian an active Foreigner or Spy, sparing anyone pressured by a Foe.',
-    firstRoles: ['double', 'civilian'], firstDir: 'out', secondRoles: ['foreigner', 'spy'], secondDir: 'out', exc: {roles: ['foe'], dir: 'in'}
+  modTimePriority({
+    id: 'mo-28', domain: 2, title: 'Cross-border move before inbound',
+    order: 'Cross-border breach: take out anyone contacted on one site who acts on the other earlier than every contact they receive on the first.',
+    dirA: 'out', dirB: 'in', relation: 'before_all', sameIncident: false
   }),
-  modRelay({
-    id: 'mo-29', domain: 2, title: 'Tracked or vouched recruiter',
-    order: 'Shoot anyone tracked by a Spy or vouched for by a Friend who recruits as a Foreigner or leaks as a Double agent; hold fire on anyone pressured by a Foe.',
-    firstRoles: ['spy', 'friend'], firstDir: 'in', secondRoles: ['foreigner', 'double'], secondDir: 'out', exc: {roles: ['foe'], dir: 'in'}
+  modSiteCorr({
+    id: 'mo-29', domain: 2, title: 'Independent pair across sites',
+    order: 'Shoot anyone contacted by one source on each site when those two sources have no direct contact — unless pressured by a Foe.',
+    dirA: 'in', dirB: 'in', sameIncident: false, connected: false, exc: {roles: ['foe'], dir: 'in'}
   }),
 
   // =========================================================================
   // DOMAIN 3: Civilian Tip-Offs (10) — confirms, targets, monitors, misleads, tips off, briefs
   // =========================================================================
-  modRelay({
-    id: 'mo-30', domain: 3, title: 'Tip-off to a targeted or misled mark',
-    order: 'Burned tip-off — fire on anyone who tips off as a Civilian or monitors as a Spy someone targeted by a Foe or misled by a Double agent, except anyone confirmed by a Friend.',
-    firstRoles: ['civilian', 'spy'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  modCutout({
+    id: 'mo-30', domain: 3, title: 'Delayed same-site cutout',
+    order: 'Burned tip-off: fire on anyone contacted on a site who later reaches a third person on that same site — unless confirmed by a Friend.',
+    sameIncident: true, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-31', domain: 3, title: 'Misled informant or voucher',
-    order: 'Take down anyone tipped off by a Civilian or confirmed by a Friend whose source was misled by a Double agent or briefed by a Foreigner — unless monitored by a Spy.',
-    firstRoles: ['civilian', 'friend'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-31', domain: 3, title: 'Tipped off by a cross-site source',
+    order: 'Take down anyone tipped off by a Civilian or confirmed by a Friend whose source was contacted on the opposite site — unless monitored by a Spy.',
+    roles1: ['civilian', 'friend'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-32', domain: 3, title: 'Confirming a tipped or briefed suspect',
-    order: 'Neutralize anyone who confirms as a Friend or monitors as a Spy someone tipped off by a Civilian or briefed by a Foreigner, sparing anyone targeted by a Foe.',
-    firstRoles: ['friend', 'spy'], firstDir: 'out', secondRoles: ['civilian', 'foreigner'], secondDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  modSiteCorr({
+    id: 'mo-32', domain: 3, title: 'Independent outreach on one site',
+    order: 'Neutralize anyone acting toward two people on the same site who have no direct contact — unless targeted by a Foe.',
+    dirA: 'out', dirB: 'out', sameIncident: true, connected: false, exc: {roles: ['foe'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-33', domain: 3, title: 'Briefed or monitored witness',
-    order: 'Take out anyone tipped off by a Civilian or targeted by a Foe whose contact was briefed by a Foreigner or monitored by a Spy; hold fire on anyone confirmed by a Friend.',
-    firstRoles: ['civilian', 'foe'], firstDir: 'in', secondRoles: ['foreigner', 'spy'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-33', domain: 3, title: 'Contacted after source’s cross-site act',
+    order: 'Take out anyone contacted on one site by someone who had earlier initiated a dispatch on the other site — unless confirmed by a Friend.',
+    roles1: null, dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, timeOrder: 'after', exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-34', domain: 3, title: 'Late tip-off after strike or deception',
-    order: 'Informant in play — shoot anyone tipped off by a Civilian or confirmed by a Friend later than a Foe targeted or Double agent misled that source.',
-    firstRoles: ['civilian', 'friend'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'in', timeOrder: 'after'
+  modSiteTaint({
+    id: 'mo-34', domain: 3, title: 'Late tip-off after same-site move',
+    order: 'Informant in play: shoot anyone tipped off by a Civilian or confirmed by a Friend after their source had already been contacted on that site.',
+    roles1: ['civilian', 'friend'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, timeOrder: 'after'
   }),
-  modRelay({
-    id: 'mo-35', domain: 3, title: 'Monitor’s civilian or ally source',
-    order: 'False warning: drop anyone monitored by a Spy or briefed by a Foreigner who tips off as a Civilian or confirms as a Friend — unless misled by a Double agent.',
-    firstRoles: ['spy', 'foreigner'], firstDir: 'in', secondRoles: ['civilian', 'friend'], secondDir: 'out', exc: {roles: ['double'], dir: 'in'}
+  modCutout({
+    id: 'mo-35', domain: 3, title: 'Monitored cutout to an ally',
+    order: 'False warning: drop anyone monitored by a Spy or briefed by a Foreigner who reaches a third person on the same site — unless misled by a Double agent.',
+    inRoles: ['spy', 'foreigner'], sameIncident: true, exc: {roles: ['double'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-36', domain: 3, title: 'Foe or Double agent hunting a witness',
-    order: 'Burned tip-off — engage anyone who targets as a Foe or misleads as a Double agent an active Civilian or Spy, sparing anyone briefed by a Foreigner.',
-    firstRoles: ['foe', 'double'], firstDir: 'out', secondRoles: ['civilian', 'spy'], secondDir: 'out', exc: {roles: ['foreigner'], dir: 'in'}
+  modSiteCorr({
+    id: 'mo-36', domain: 3, title: 'Cross-site coordinated outreach',
+    order: 'Burned tip-off: engage anyone acting toward one person on each site who are themselves in direct contact — unless briefed by a Foreigner.',
+    dirA: 'out', dirB: 'out', sameIncident: false, connected: true, exc: {roles: ['foreigner'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-37', domain: 3, title: 'Deceiver fooling a witness or ally',
-    order: 'Eliminate anyone who misleads as a Double agent or briefs as a Foreigner someone tipped off by a Civilian or confirmed by a Friend; hold fire on anyone monitored by a Spy.',
-    firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['civilian', 'friend'], secondDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  modCutout({
+    id: 'mo-37', domain: 3, title: 'Pre-positioned cross-site bridge',
+    order: 'Eliminate anyone who reached someone on one site earlier than a third person contacted them on the other site — unless monitored by a Spy.',
+    sameIncident: false, timeOrder: 'after', exc: {roles: ['spy'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-38', domain: 3, title: 'Confirmed by a misled or briefed Friend',
-    order: 'Street misdirection — fire on anyone confirmed by a Friend or monitored by a Spy who was misled by a Double agent or briefed by a Foreigner, except anyone tipped off by a Civilian.',
-    roles: ['friend', 'spy'], taint: ['double', 'foreigner'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-38', domain: 3, title: 'Confirmed by a misled or briefed source',
+    order: 'Street misdirection: fire on anyone confirmed by a Friend or monitored by a Spy whose source was misled by a Double agent or briefed by a Foreigner — unless tipped off by a Civilian.',
+    roles1: ['friend', 'spy'], dir1: 'in', roles2: ['double', 'foreigner'], dir2: 'in', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-39', domain: 3, title: 'Foreigner or Foe briefing a witness',
-    order: 'Tainted brief: take down anyone who briefs as a Foreigner or targets as a Foe someone who tips off as a Civilian or monitors as a Spy — unless confirmed by a Friend.',
-    firstRoles: ['foreigner', 'foe'], firstDir: 'out', secondRoles: ['civilian', 'spy'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  modTimePriority({
+    id: 'mo-39', domain: 3, title: 'Late cross-site response',
+    order: 'Tainted brief: take down anyone contacted on one site who acts on the other later than every contact they receive on the first — unless confirmed by a Friend.',
+    dirA: 'out', dirB: 'in', relation: 'after_all', sameIncident: false, exc: {roles: ['friend'], dir: 'in'}
   }),
 
   // =========================================================================
   // DOMAIN 4: Proxy Chains (10) — backs, strikes, traces, relays to, warns, hands off to
   // =========================================================================
-  modRelay({
-    id: 'mo-40', domain: 4, title: 'Foreign handoff to a striker or tracer',
-    order: 'Proxy breach — drop anyone who hands off as a Foreigner or warns as a Civilian an active Foe or Spy, sparing anyone backed by a Friend.',
-    firstRoles: ['foreigner', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'spy'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  modSiteRelay({
+    id: 'mo-40', domain: 4, title: 'Same-site two-step handoff',
+    order: 'Proxy breach: drop anyone acting on a site toward someone who initiates another dispatch on that same site — unless backed by a Friend.',
+    firstDir: 'out', secondDir: 'out', sameIncident: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-41', domain: 4, title: 'Relay through a backed or traced contact',
-    order: 'Engage anyone who relays as a Double agent or strikes as a Foe someone backed by a Friend or traced by a Spy; hold fire on anyone warned by a Civilian.',
-    firstRoles: ['double', 'foe'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteRelay({
+    id: 'mo-41', domain: 4, title: 'Cross-site relay into a backed mark',
+    order: 'Engage anyone acting on one site toward someone who initiates a dispatch on the other site in a different role — unless warned by a Civilian.',
+    firstDir: 'out', secondDir: 'out', sameIncident: false, diffRole: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-42', domain: 4, title: 'Traced or warned courier',
-    order: 'Eliminate anyone traced by a Spy or warned by a Civilian who hands off as a Foreigner or relays as a Double agent, except anyone backed by a Friend.',
-    firstRoles: ['spy', 'civilian'], firstDir: 'in', secondRoles: ['foreigner', 'double'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  modCutout({
+    id: 'mo-42', domain: 4, title: 'Traced courier switching sites',
+    order: 'Eliminate anyone traced by a Spy or warned by a Civilian who reaches a third person on the opposite site — unless backed by a Friend.',
+    inRoles: ['spy', 'civilian'], sameIncident: false, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-43', domain: 4, title: 'Striker or tracer hitting a courier',
-    order: 'Fire on anyone who strikes as a Foe or traces as a Spy someone who relays as a Double agent or hands off as a Foreigner — unless warned by a Civilian.',
-    firstRoles: ['foe', 'spy'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteRelay({
+    id: 'mo-43', domain: 4, title: 'Same-site delayed handoff',
+    order: 'Fire on anyone acting on a site toward someone who later initiates another dispatch on that same site — unless warned by a Civilian.',
+    firstDir: 'out', secondDir: 'out', sameIncident: true, timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-44', domain: 4, title: 'Backer behind a tracer or witness',
-    order: 'Rogue relay — take down anyone backed by a Friend or handed off to by a Foreigner whose source traces as a Spy or warns as a Civilian, sparing anyone struck by a Foe.',
-    firstRoles: ['friend', 'foreigner'], firstDir: 'in', secondRoles: ['spy', 'civilian'], secondDir: 'out', exc: {roles: ['foe'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-44', domain: 4, title: 'Backer behind an active tracer',
+    order: 'Rogue relay: take down anyone backed by a Friend or handed off to by a Foreigner whose source initiates a same-site dispatch — unless struck by a Foe.',
+    roles1: ['friend', 'foreigner'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['foe'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-45', domain: 4, title: 'Warned or backed suspect turning active',
-    order: 'Intercepted handoff: neutralize anyone warned by a Civilian or backed by a Friend who hands off as a Foreigner or strikes as a Foe; hold fire on anyone traced by a Spy.',
-    firstRoles: ['civilian', 'friend'], firstDir: 'in', secondRoles: ['foreigner', 'foe'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  modCutout({
+    id: 'mo-45', domain: 4, title: 'Warned or backed blind relay',
+    order: 'Intercepted handoff: neutralize anyone warned by a Civilian or backed by a Friend who reaches a third person unconnected to their source — unless traced by a Spy.',
+    inRoles: ['civilian', 'friend'], unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-46', domain: 4, title: 'Relay from a traced or backed source',
-    order: 'Take out anyone relayed to by a Double agent or struck by a Foe whose source is traced by a Spy or backed by a Friend, except anyone warned by a Civilian.',
-    firstRoles: ['double', 'foe'], firstDir: 'in', secondRoles: ['spy', 'friend'], secondDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-46', domain: 4, title: 'Upstream chain across sites',
+    order: 'Take out anyone contacted on one site by someone who was contacted earlier on the opposite site — unless warned by a Civilian.',
+    roles1: null, dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-47', domain: 4, title: 'Striker’s backed or warned cutout',
-    order: 'Shoot anyone struck by a Foe or handed off to by a Foreigner whose source is backed by a Friend or warned by a Civilian — unless a Double agent relays to them.',
-    firstRoles: ['foe', 'foreigner'], firstDir: 'in', secondRoles: ['friend', 'civilian'], secondDir: 'in', exc: {roles: ['double'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-47', domain: 4, title: 'Striker’s same-site upstream',
+    order: 'Shoot anyone struck by a Foe or handed off to by a Foreigner whose source was contacted on that same site — unless a Double agent relays to them.',
+    roles1: ['foe', 'foreigner'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['double'], dir: 'in'}
   }),
-  modRelay({
-    id: 'mo-48', domain: 4, title: 'Handoff after warning or trace',
-    order: 'Cutout exposed — drop anyone who hands off as a Foreigner or relays as a Double agent to someone a Civilian warned or Spy traced earlier.',
-    firstRoles: ['foreigner', 'double'], firstDir: 'out', secondRoles: ['civilian', 'spy'], secondDir: 'in', timeOrder: 'after'
+  modSiteRelay({
+    id: 'mo-48', domain: 4, title: 'Handoff after same-site warning',
+    order: 'Cutout exposed: drop anyone acting on a site toward someone who had earlier initiated a dispatch on that same site.',
+    firstDir: 'out', secondDir: 'out', sameIncident: true, timeOrder: 'after'
   }),
-  modRelay({
-    id: 'mo-49', domain: 4, title: 'Tracer following an active backer or striker',
-    order: 'Engage anyone who traces as a Spy or relays as a Double agent to someone who backs as a Friend or strikes as a Foe; hold fire on anyone warned by a Civilian.',
-    firstRoles: ['spy', 'double'], firstDir: 'out', secondRoles: ['friend', 'foe'], secondDir: 'out', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-49', domain: 4, title: 'Early same-site reach into a mark',
+    order: 'Engage anyone acting on a site toward someone who is contacted later on that same site — unless warned by a Civilian.',
+    roles1: null, dir1: 'out', roles2: null, dir2: 'in', sameIncident: true, timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
 
   // =========================================================================
@@ -512,133 +568,133 @@ export const moderateFamilies = [
     order: 'Cross-site handoff: take out anyone who reaches out to someone who later initiates a contact on the other site — unless struck by a Foe.',
     firstDir: 'out', secondDir: 'out', sameIncident: false, timeOrder: 'before', exc: {roles: ['foe'], dir: 'in'}
   }),
-  modTime({
-    id: 'mo-65', domain: 6, title: 'Cleared or corrected after strike',
-    order: 'Timed betrayal: shoot anyone struck by a Foe or fed a Double agent’s leak earlier than a Friend cleared or Civilian corrected them, sparing them if a Foreigner met them.',
-    early: {roles: ['foe', 'double'], dir: 'in'}, late: {roles: ['friend', 'civilian'], dir: 'in'}, exc: {roles: ['foreigner'], dir: 'in'}
+  modTimePriority({
+    id: 'mo-65', domain: 6, title: 'Acted later than every inbound',
+    order: 'Timed betrayal: shoot anyone contacted who still initiates a dispatch later than every contact they receive — unless a Foreigner met them.',
+    dirA: 'out', dirB: 'in', relation: 'after_all', exc: {roles: ['foreigner'], dir: 'in'}
   }),
-  modTime({
-    id: 'mo-66', domain: 6, title: 'Late Civilian correction or strike',
-    order: 'Wrong side of the clock — drop anyone who leaked as a Double agent or met as a Foreigner earlier than a Civilian corrected or Foe struck them, except anyone logged by a Spy.',
-    early: {roles: ['double', 'foreigner'], dir: 'out'}, late: {roles: ['civilian', 'foe'], dir: 'in'}, exc: {roles: ['spy'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-66', domain: 6, title: 'Cross-site move before inbound',
+    order: 'Wrong side of the clock: drop anyone who acts on one site earlier than someone contacts them on the other site — unless logged by a Spy.',
+    dirA: 'out', dirB: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
-  modTime({
-    id: 'mo-67', domain: 6, title: 'Foreigner or mole before clearing',
-    order: 'Engage anyone met by a Foreigner or fed a Double agent’s leak earlier than they cleared as a Friend or logged as a Spy — unless struck by a Foe.',
-    early: {roles: ['foreigner', 'double'], dir: 'in'}, late: {roles: ['friend', 'spy'], dir: 'out'}, exc: {roles: ['foe'], dir: 'in'}
+  modSiteRelay({
+    id: 'mo-67', domain: 6, title: 'Same-site contact before source acted',
+    order: 'Engage anyone contacted on a site earlier than their source initiates another dispatch on that same site — unless struck by a Foe.',
+    firstDir: 'in', secondDir: 'out', sameIncident: true, timeOrder: 'before', exc: {roles: ['foe'], dir: 'in'}
   }),
-  modTime({
-    id: 'mo-68', domain: 6, title: 'Logged or cleared before strike',
-    order: 'Out of sequence — eliminate anyone logged by a Spy or cleared by a Friend earlier than a Foe struck or Foreigner met them; stand down if a Civilian corrected them.',
-    early: {roles: ['spy', 'friend'], dir: 'in'}, late: {roles: ['foe', 'foreigner'], dir: 'in'}, exc: {roles: ['civilian'], dir: 'in'}
+  modSiteRelay({
+    id: 'mo-68', domain: 6, title: 'Cross-site contact after source acted',
+    order: 'Out of sequence: eliminate anyone contacted on one site whose source had already initiated a dispatch on the other — unless corrected by a Civilian.',
+    firstDir: 'in', secondDir: 'out', sameIncident: false, timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modTime({
-    id: 'mo-69', domain: 6, title: 'Leak or correction before Foreigner',
-    order: 'Post-correction move: fire on anyone fed a Double agent’s leak or corrected by a Civilian earlier than a Foreigner met or Foe struck them; hold fire on anyone cleared by a Friend.',
-    early: {roles: ['double', 'civilian'], dir: 'in'}, late: {roles: ['foreigner', 'foe'], dir: 'in'}, exc: {roles: ['friend'], dir: 'in'}
+  modSiteRelay({
+    id: 'mo-69', domain: 6, title: 'Same-site contact after source acted',
+    order: 'Post-correction move: fire on anyone contacted on a site whose source had already initiated another dispatch on that site — unless cleared by a Friend.',
+    firstDir: 'in', secondDir: 'out', sameIncident: true, timeOrder: 'after', exc: {roles: ['friend'], dir: 'in'}
   }),
 
   // =========================================================================
   // DOMAIN 7: Tainted Sources (10) — alibis, coerces, vets, compromises, exposes, funds
   // =========================================================================
-  modTaint({
-    id: 'mo-70', domain: 7, title: 'Alibi from a foreign funder or mole',
-    order: 'Paid witness — shoot anyone given a Friend’s alibi or Civilian’s exposure by someone who funds as a Foreigner or compromises as a Double agent, except anyone vetted by a Spy.',
-    roles: ['friend', 'civilian'], taint: ['foreigner', 'double'], taintDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-70', domain: 7, title: 'Alibi from a cross-site actor',
+    order: 'Paid witness: shoot anyone given a Friend’s alibi or Civilian’s exposure whose source acts on the opposite site — unless vetted by a Spy.',
+    roles1: ['friend', 'civilian'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-71', domain: 7, title: 'Vetted by a coerced or funded Spy',
-    order: 'Compromised backer: drop anyone vetted by a Spy or compromised by a Double agent whose source was coerced by a Foe or funded by a Foreigner — unless exposed by a Civilian.',
-    roles: ['spy', 'double'], taint: ['foe', 'foreigner'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-71', domain: 7, title: 'Vetted by a same-site pressured source',
+    order: 'Compromised backer: drop anyone vetted by a Spy or compromised by a Double agent whose source was reached on that site — unless exposed by a Civilian.',
+    roles1: ['spy', 'double'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-72', domain: 7, title: 'Exposed by a compromised or coerced witness',
-    order: 'Engage anyone exposed by a Civilian or funded by a Foreigner whose source was compromised by a Double agent or coerced by a Foe, sparing anyone given a Friend’s alibi.',
-    roles: ['civilian', 'foreigner'], taint: ['double', 'foe'], taintDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-72', domain: 7, title: 'Exposed by a cross-site contacted witness',
+    order: 'Engage anyone exposed by a Civilian or funded by a Foreigner whose source was contacted on the opposite site — unless given a Friend’s alibi.',
+    roles1: ['civilian', 'foreigner'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-73', domain: 7, title: 'Funded by a vetted or alibied source',
-    order: 'Eliminate anyone funded by a Foreigner or exposed by a Civilian whose source was vetted by a Spy or given a Friend’s alibi; hold fire on anyone coerced by a Foe.',
-    roles: ['foreigner', 'civilian'], taint: ['spy', 'friend'], taintDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-73', domain: 7, title: 'Funded by an active same-site source',
+    order: 'Eliminate anyone funded by a Foreigner or exposed by a Civilian whose source initiates another dispatch on that site — unless coerced by a Foe.',
+    roles1: ['foreigner', 'civilian'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['foe'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-74', domain: 7, title: 'Coerced by an exposed or vetted source',
-    order: 'Coerced vetting — fire on anyone coerced by a Foe or compromised by a Double agent whose source was exposed by a Civilian or vetted by a Spy, except anyone funded by a Foreigner.',
-    roles: ['foe', 'double'], taint: ['civilian', 'spy'], taintDir: 'in', exc: {roles: ['foreigner'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-74', domain: 7, title: 'Coerced by an earlier-contacted source',
+    order: 'Coerced vetting: fire on anyone coerced by a Foe or compromised by a Double agent after their source had already been contacted — unless funded by a Foreigner.',
+    roles1: ['foe', 'double'], dir1: 'in', roles2: null, dir2: 'in', timeOrder: 'after', exc: {roles: ['foreigner'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-75', domain: 7, title: 'Compromised by an alibied or funded source',
-    order: 'Poisoned source: take down anyone compromised by a Double agent or coerced by a Foe whose source had a Friend’s alibi or Foreigner’s funding — unless vetted by a Spy.',
-    roles: ['double', 'foe'], taint: ['friend', 'foreigner'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-75', domain: 7, title: 'Compromised by a same-site actor',
+    order: 'Poisoned source: take down anyone compromised by a Double agent or coerced by a Foe whose source acts on that same site — unless vetted by a Spy.',
+    roles1: ['double', 'foe'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-76', domain: 7, title: 'Alibi from a coerced or compromised source',
-    order: 'Paid witness — neutralize anyone given a Friend’s alibi or Spy’s vetting by someone coerced by a Foe or compromised by a Double agent, sparing anyone exposed by a Civilian.',
-    roles: ['friend', 'spy'], taint: ['foe', 'double'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-76', domain: 7, title: 'Alibi from a cross-site contacted source',
+    order: 'Paid witness: neutralize anyone given a Friend’s alibi or Spy’s vetting whose source was contacted on the opposite site — unless exposed by a Civilian.',
+    roles1: ['friend', 'spy'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-77', domain: 7, title: 'Vetted by an exposed or alibied source',
-    order: 'Take out anyone vetted by a Spy or coerced by a Foe whose source was exposed by a Civilian or given a Friend’s alibi; hold fire on anyone compromised by a Double agent.',
-    roles: ['spy', 'foe'], taint: ['civilian', 'friend'], taintDir: 'in', exc: {roles: ['double'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-77', domain: 7, title: 'Vetted before source’s second move',
+    order: 'Take out anyone vetted by a Spy or coerced by a Foe earlier than their source initiated another dispatch — unless compromised by a Double agent.',
+    roles1: ['spy', 'foe'], dir1: 'in', roles2: null, dir2: 'out', timeOrder: 'before', exc: {roles: ['double'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-78', domain: 7, title: 'Funded by a compromised or coerced source',
-    order: 'Bought alibi — shoot anyone funded by a Foreigner or given a Friend’s alibi by someone compromised by a Double agent or coerced by a Foe, except anyone exposed by a Civilian.',
-    roles: ['foreigner', 'friend'], taint: ['double', 'foe'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-78', domain: 7, title: 'Bought alibi from a same-site source',
+    order: 'Bought alibi: shoot anyone funded by a Foreigner or given a Friend’s alibi whose source was contacted on that same site — unless exposed by a Civilian.',
+    roles1: ['foreigner', 'friend'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modTaint({
-    id: 'mo-79', domain: 7, title: 'Exposed by a funded or vetted source',
-    order: 'Dirty funding: drop anyone exposed by a Civilian or compromised by a Double agent whose source was funded by a Foreigner or vetted by a Spy — unless coerced by a Foe.',
-    roles: ['civilian', 'double'], taint: ['foreigner', 'spy'], taintDir: 'in', exc: {roles: ['foe'], dir: 'in'}
+  modSiteTaint({
+    id: 'mo-79', domain: 7, title: 'Dirty funding from a cross-site actor',
+    order: 'Dirty funding: drop anyone exposed by a Civilian or compromised by a Double agent whose source acts on the opposite site — unless coerced by a Foe.',
+    roles1: ['civilian', 'double'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['foe'], dir: 'in'}
   }),
 
   // =========================================================================
   // DOMAIN 8: Double Lives (10) — protects, hunts, watches, leaks to, shelters, hosts
   // =========================================================================
-  modDual({
-    id: 'mo-80', domain: 8, title: 'Protector or watcher who hunts',
-    order: 'Turned guardian — take down anyone who protects as a Friend or watches as a Spy while also hunting as a Foe or hosting as a Foreigner, sparing anyone sheltered by a Civilian.',
-    a: {roles: ['friend', 'spy'], dir: 'out'}, b: {roles: ['foe', 'foreigner'], dir: 'out'}, exc: {roles: ['civilian'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-80', domain: 8, title: 'Two-front operator without shelter',
+    order: 'Turned guardian: take down anyone initiating dispatches on both sites — unless sheltered by a Civilian.',
+    dirA: 'out', dirB: 'out', sameIncident: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modDual({
-    id: 'mo-81', domain: 8, title: 'Watcher or shelterer leaking',
-    order: 'Neutralize anyone who watches as a Spy or shelters as a Civilian while leaking as a Double agent or hosting as a Foreigner; hold fire on anyone hunted by a Foe.',
-    a: {roles: ['spy', 'civilian'], dir: 'out'}, b: {roles: ['double', 'foreigner'], dir: 'out'}, exc: {roles: ['foe'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-81', domain: 8, title: 'Same-site dual operator',
+    order: 'Neutralize anyone initiating two dispatches in different roles on the same site — unless hunted by a Foe.',
+    dirA: 'out', dirB: 'out', sameIncident: true, diffRole: true, exc: {roles: ['foe'], dir: 'in'}
   }),
-  modDual({
-    id: 'mo-82', domain: 8, title: 'Sheltered or protected yet hunted',
-    order: 'Take out anyone sheltered by a Civilian or protected by a Friend who is also hosted by a Foreigner or hunted by a Foe, except anyone watched by a Spy.',
-    a: {roles: ['civilian', 'friend'], dir: 'in'}, b: {roles: ['foreigner', 'foe'], dir: 'in'}, exc: {roles: ['spy'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-82', domain: 8, title: 'Cross-site dual target',
+    order: 'Take out anyone contacted on both sites across two different roles — unless watched by a Spy.',
+    dirA: 'in', dirB: 'in', sameIncident: false, diffRole: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  modDual({
-    id: 'mo-83', domain: 8, title: 'Hunter or mole under insider cover',
-    order: 'Protector playing both sides: shoot anyone protected by a Friend or watched by a Spy who also hunts as a Foe or leaks as a Double agent — unless sheltered by a Civilian.',
-    a: {roles: ['friend', 'spy'], dir: 'in'}, b: {roles: ['foe', 'double'], dir: 'out'}, exc: {roles: ['civilian'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-83', domain: 8, title: 'Same-site dual contact',
+    order: 'Protector playing both sides: shoot anyone contacted twice on the same site in different roles — unless sheltered by a Civilian.',
+    dirA: 'in', dirB: 'in', sameIncident: true, diffRole: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  modDual({
-    id: 'mo-84', domain: 8, title: 'Host or hunter under watch',
-    order: 'Two masters at once — drop anyone watched by a Spy or sheltered by a Civilian who also hosts as a Foreigner or hunts as a Foe, sparing anyone protected by a Friend.',
-    a: {roles: ['spy', 'civilian'], dir: 'in'}, b: {roles: ['foreigner', 'foe'], dir: 'out'}, exc: {roles: ['friend'], dir: 'in'}
+  modCutout({
+    id: 'mo-84', domain: 8, title: 'Two masters on one site',
+    order: 'Two masters at once: drop anyone acting as a cutout on one site across two different roles — unless protected by a Friend.',
+    sameIncident: true, diffRole: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modDual({
-    id: 'mo-85', domain: 8, title: 'Shelterer or protector who leaks',
-    order: 'Engage anyone who shelters as a Civilian or protects as a Friend while leaking as a Double agent or hunting as a Foe; hold fire on anyone hosted by a Foreigner.',
-    a: {roles: ['civilian', 'friend'], dir: 'out'}, b: {roles: ['double', 'foe'], dir: 'out'}, exc: {roles: ['foreigner'], dir: 'in'}
+  modCutout({
+    id: 'mo-85', domain: 8, title: 'Cross-site double-role cutout',
+    order: 'Engage anyone acting as a cutout across both sites in two different roles — unless hosted by a Foreigner.',
+    sameIncident: false, diffRole: true, exc: {roles: ['foreigner'], dir: 'in'}
   }),
-  modDual({
-    id: 'mo-86', domain: 8, title: 'Hunted or hosted watcher',
-    order: 'Eliminate anyone hunted by a Foe or hosted by a Foreigner who is also watched by a Spy or protected by a Friend — unless a Double agent leaks to them.',
-    a: {roles: ['foe', 'foreigner'], dir: 'in'}, b: {roles: ['spy', 'friend'], dir: 'in'}, exc: {roles: ['double'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-86', domain: 8, title: 'Two-front role switcher',
+    order: 'Eliminate anyone initiating dispatches on both sites across two different roles — unless a Double agent leaks to them.',
+    dirA: 'out', dirB: 'out', sameIncident: false, diffRole: true, exc: {roles: ['double'], dir: 'in'}
   }),
-  modDual({
-    id: 'mo-87', domain: 8, title: 'Hosted or leaked to yet protected',
-    order: 'Fire on anyone hosted by a Foreigner or leaked to by a Double agent who is also protected by a Friend or watched by a Spy — unless hunted by a Foe.',
-    a: {roles: ['foreigner', 'double'], dir: 'in'}, b: {roles: ['friend', 'spy'], dir: 'in'}, exc: {roles: ['foe'], dir: 'in'}
+  modCutout({
+    id: 'mo-87', domain: 8, title: 'Closed triangle without hunter',
+    order: 'Fire on anyone bridging two people who are already in direct contact across two different roles — unless hunted by a Foe.',
+    diffRole: true, unconnected: false, exc: {roles: ['foe'], dir: 'in'}
   }),
-  modDual({
-    id: 'mo-88', domain: 8, title: 'Double agent or Foe target with shelter',
-    order: 'Take down anyone leaked to by a Double agent or hunted by a Foe who is also protected by a Friend or sheltered by a Civilian, sparing anyone watched by a Spy.',
-    a: {roles: ['double', 'foe'], dir: 'in'}, b: {roles: ['friend', 'civilian'], dir: 'in'}, exc: {roles: ['spy'], dir: 'in'}
+  modCutout({
+    id: 'mo-88', domain: 8, title: 'Blind cutout without watch',
+    order: 'Take down anyone bridging two strangers across two different roles — unless watched by a Spy.',
+    diffRole: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   mod({
     id: 'mo-89', domain: 8, title: 'Pure recipient without shelter',

@@ -242,4 +242,75 @@ export function matchSharedOrigin(g, x, {sameIncident = true} = {}) {
   return null;
 }
 
+// Hidden cutout / broker (a -> x -> b): x receives e1 from a and initiates e2 to b (a !== b),
+// with optional site match, chronological order (e.g. acted AFTER being warned), role filter,
+// and direct-contact check between a and b (cutout = a & b never meet directly; triangle = they do).
+export function matchCutoutBridge(g, x, {inRoles = null, outRoles = null, sameIncident = null, timeOrder = null, diffRole = false, unconnected = null} = {}) {
+  const ins = edgesBy(g, x, inRoles, 'in');
+  const outs = edgesBy(g, x, outRoles, 'out');
+  for (const e1 of ins) {
+    for (const e2 of outs) {
+      if (e1 === e2) continue;
+      if (e1.from === e2.to) continue;
+      if (diffRole && e1.role === e2.role) continue;
+      if (sameIncident === true && e1.incident !== e2.incident) continue;
+      if (sameIncident === false && e1.incident === e2.incident) continue;
+      if (timeOrder === 'before' && !(e1.time < e2.time)) continue;
+      if (timeOrder === 'after' && !(e1.time > e2.time)) continue;
+      if (unconnected !== null) {
+        const linked = g.between(e1.from, e2.to).length > 0;
+        if (unconnected ? linked : !linked) continue;
+      }
+      return {e1, e2, src: e1.from, dst: e2.to};
+    }
+  }
+  return null;
+}
+
+// Site-aware source taint / provenance: x has contact e1 (dir1, roles1) with source m,
+// and m has contact e2 (dir2, roles2) on the same or opposite site (or earlier/later in time).
+export function matchSiteTaint(g, x, {roles1 = null, dir1 = 'in', roles2 = null, dir2 = 'in', sameIncident = null, timeOrder = null, noReturn = true} = {}) {
+  const firsts = edgesBy(g, x, roles1, dir1);
+  for (const e1 of firsts) {
+    const m = e1.from === x ? e1.to : e1.from;
+    const seconds = edgesBy(g, m, roles2, dir2);
+    for (const e2 of seconds) {
+      if (e2 === e1) continue;
+      const other = e2.from === m ? e2.to : e2.from;
+      if (noReturn && other === x) continue;
+      if (sameIncident === true && e1.incident !== e2.incident) continue;
+      if (sameIncident === false && e1.incident === e2.incident) continue;
+      if (timeOrder === 'before' && !(e1.time < e2.time)) continue;
+      if (timeOrder === 'after' && !(e1.time > e2.time)) continue;
+      return {e1, e2, mid: m, end: other};
+    }
+  }
+  return null;
+}
+
+// Temporal priority on suspect x: x has at least one contact in groupA and one in groupB,
+// or acts strictly before/after every incoming contact (e.g. acted before any warning arrived).
+export function matchAllTimeOrder(g, x, {rolesA = null, dirA = 'out', rolesB = null, dirB = 'in', relation = 'before_all', sameIncident = null} = {}) {
+  const listA = edgesBy(g, x, rolesA, dirA);
+  const listB = edgesBy(g, x, rolesB, dirB);
+  if (!listA.length || !listB.length) return null;
+  for (const eA of listA) {
+    const relevantB = listB.filter(eB => {
+      if (eB === eA) return false;
+      if (sameIncident === true) return eB.incident === eA.incident;
+      if (sameIncident === false) return eB.incident !== eA.incident;
+      return true;
+    });
+    if (!relevantB.length) continue;
+    if (relation === 'before_all' && relevantB.every(eB => eA.time < eB.time)) {
+      return {eA, eB: relevantB[0]};
+    }
+    if (relation === 'after_all' && relevantB.every(eB => eA.time > eB.time)) {
+      return {eA, eB: relevantB[0]};
+    }
+  }
+  return null;
+}
+
+
 

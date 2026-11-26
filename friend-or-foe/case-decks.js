@@ -172,10 +172,14 @@ function rowFlipSummary(familyId, rows, anchor, correctKey, targetSize) {
 
 // Fast live layout synthesizer: generates brand-new certified topologies on the fly from random 32-bit
 // seeds so returning players cannot memorize the 12 fallback catalog layouts.
+// Fast cheap filters (layoutFor + base evaluate + delSens + flipSummary) run first; expensive
+// 64-world sweeps + buildCrossChecks are tightly capped so trial start stays instant (<15 ms).
 function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
-  const budget = level === 'hard' ? 110 : level === 'medium' ? 72 : level === 'easy' ? 28 : 20;
+  const budget = level === 'hard' ? 560 : level === 'medium' ? 280 : level === 'easy' ? 48 : 24;
+  const maxSolverCalls = level === 'hard' ? 6 : level === 'medium' ? 6 : 8;
+  let solverCalls = 0;
   let best = null;
-  for (let attempt = 0; attempt < budget; attempt++) {
+  for (let attempt = 0; attempt < budget && solverCalls < maxSolverCalls; attempt++) {
     const seed = (Math.floor(draw() * 0x7ffffffe) + 1) >>> 0;
     if (catalogSeeds.has(seed)) continue;
     const rows = layoutFor(seed);
@@ -189,17 +193,21 @@ function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
     const correctKey = targetKey(actualTargets);
     if (isSingleCategoryShortcut(rows, correctKey)) continue;
 
-    const flipInfo = rowFlipSummary(family.id, rows, anchor, correctKey, sz);
     const delSens = countDelSensitive(family.id, baseEdges, anchor, correctKey, sz);
+    const minDel = level === 'hard' ? 4 : level === 'medium' ? 3 : 2;
+    if (delSens < minDel) continue;
+
+    const flipInfo = rowFlipSummary(family.id, rows, anchor, correctKey, sz);
     const sizeBonus = (prevSize && sz !== prevSize) ? 18 : 0;
 
     if (level === 'super-easy' || level === 'very-easy') {
-      if (flipInfo.flipsDifferent < 2 || delSens < 2) continue;
+      if (flipInfo.flipsDifferent < 2) continue;
       const score = delSens * 12 + flipInfo.flipsDifferent * 4 + sizeBonus;
       if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: 0, raw: rows, actualTargets, score};
       if (delSens >= 3 && sz !== prevSize) return best;
     } else if (level === 'easy') {
-      if (!flipInfo.rivalRows.length || delSens < 2) continue;
+      if (!flipInfo.rivalRows.length) continue;
+      solverCalls++;
       const chosen = flipInfo.rivalRows[Math.floor(draw() * flipInfo.rivalRows.length)];
       const dMask = 1 << chosen;
       const wt = computeWorldTargets(family.id, rows, anchor, dMask);
@@ -208,7 +216,7 @@ function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
       if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: dMask, raw: rows, actualTargets, score};
       if (delSens >= 3 && sz !== prevSize) return best;
     } else if (level === 'medium') {
-      if (flipInfo.flipsDifferent < 3 || delSens < 3) continue;
+      if (flipInfo.flipsDifferent < 3) continue;
       const candidates = TRIPLE_MASKS.filter(m => {
         for (let i = 0; i < 6; i++) if ((m & (1 << i)) && !flipInfo.diffRows.includes(i)) return false;
         return true;
@@ -218,24 +226,26 @@ function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
         maskToIndices(b).filter(i => flipInfo.rivalRows.includes(i)).length -
         maskToIndices(a).filter(i => flipInfo.rivalRows.includes(i)).length
       );
+      solverCalls++;
       for (const dMask of candidates.slice(0, 2)) {
         const disputed = maskToIndices(dMask);
         const wt = computeWorldTargets(family.id, rows, anchor, dMask);
         if (buildCrossChecks(rows, disputed, wt, correctKey, null, 'medium', seededDraw(seed ^ 0x9e37))) {
           const score = delSens * 15 + flipInfo.flipsDifferent * 3 + sizeBonus;
           if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: dMask, raw: rows, actualTargets, score};
-          if (delSens >= 4 && sz !== prevSize) return best;
+          if (delSens >= 4 || sz !== prevSize) return best;
           break;
         }
       }
     } else if (level === 'hard') {
-      if (flipInfo.flipsDifferent < 4 || delSens < 4) continue;
+      if (flipInfo.flipsDifferent < 4) continue;
+      solverCalls++;
       const dMask = 63;
       const wt = computeWorldTargets(family.id, rows, anchor, dMask);
       if (!buildCrossChecks(rows, [0, 1, 2, 3, 4, 5], wt, correctKey, null, 'hard', seededDraw(seed ^ 0x7f4a))) continue;
       const score = delSens * 40 + flipInfo.flipsDifferent * 8 + sizeBonus;
       if (!best || score > best.score) best = {seed, anchorIndex, disputedMask: dMask, raw: rows, actualTargets, score};
-      if (delSens >= 5) return best;
+      if (delSens >= 4) return best;
     }
   }
   return best;

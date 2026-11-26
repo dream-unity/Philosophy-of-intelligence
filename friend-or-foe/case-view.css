@@ -65,9 +65,9 @@
 .case-records { margin: .5rem 0 .28rem; padding: 0; }
 .case-row {
   display: grid;
-  grid-template-columns: minmax(7.4rem, .96fr) minmax(0, 2fr);
+  grid-template-columns: minmax(8.2rem, max-content) minmax(0, 1fr);
   align-items: center;
-  gap: .16rem .56rem;
+  gap: .16rem .62rem;
   padding: .22rem 0;
   border-bottom: 1px solid var(--case-line);
 }
@@ -219,8 +219,8 @@
   .case-links { grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.1rem), 1fr)); }
 }
 @container case (min-width: 40rem) {
-  .case-records { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.15rem; margin: .38rem 0 .2rem; }
-  .case-row { grid-template-columns: minmax(6.8rem, .9fr) minmax(0, 1.85fr); padding: .16rem 0; }
+  .case-records { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.05rem; margin: .38rem 0 .2rem; }
+  .case-row { grid-template-columns: minmax(7.8rem, max-content) minmax(0, 1fr); gap: .16rem .56rem; padding: .16rem 0; }
   .case-row.case-div-end { padding-bottom: .18rem; margin-bottom: 0; border-bottom-color: var(--case-line); }
   .case-reports { margin-top: .32rem; }
   .case-report-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }

@@ -1,15 +1,14 @@
 import {collectMatches} from './case-graph.js';
 import {
-  hasCompromised, hasUncompromised, matchAnchorRelay, matchAtom,
-  matchDependentSupport, matchIncidentCorroboration, matchIncidentDual,
-  matchIncidentRelay, matchIndependentSupport, matchRelay, matchSharedOrigin, matchTemporal
+  hasCompromised, hasUncompromised, matchAllTimeOrder, matchAnchorRelay, matchAtom,
+  matchCutoutBridge, matchDependentSupport, matchIncidentCorroboration, matchIncidentDual,
+  matchIncidentRelay, matchIndependentSupport, matchRelay, matchSharedOrigin, matchSiteTaint, matchTemporal
 } from './case-predicates.js';
 
 // 100 genuinely distinct Hard intelligence cases (10 domains × 10 families).
 // ZERO numerical scoring ("shoot the top two"), ZERO permanent safe/threat role pooling,
-// crisp (18–25 word) high-consequence officer calls weaving 5–6 specific cross-paired roles
-// via multi-hop chains, dependent vs. independent corroboration, epistemic timing, and
-// context-relative source integrity — paired with ALL 6 disputed dispatches in ONE connected cycle.
+// crisp (15–25 word) officer-grounded briefings engaging all 6 roles via operational sites,
+// chronology, provenance, cutouts, and context-relative integrity — paired with ALL 6 disputed dispatches.
 
 function hard({id, domain, title, order, useAnchor = false, evaluate}) {
   return {id, tier: 'hard', domain, title, order, hint: '', useAnchor, evaluate};
@@ -141,6 +140,48 @@ function hardOrigin({id, domain, title, order, sameIncident = true, exc = null})
   });
 }
 
+function hardCutout({id, domain, title, order, inRoles = null, outRoles = null, sameIncident = null, timeOrder = null, diffRole = false, unconnected = null, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchCutoutBridge(g, x, {inRoles, outRoles, sameIncident, timeOrder, diffRole, unconnected});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardSiteTaint({id, domain, title, order, roles1 = null, dir1 = 'in', roles2 = null, dir2 = 'in', sameIncident = null, timeOrder = null, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchSiteTaint(g, x, {roles1, dir1, roles2, dir2, sameIncident, timeOrder});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' ← ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardTimePriority({id, domain, title, order, rolesA = null, dirA = 'out', rolesB = null, dirB = 'in', relation = 'before_all', sameIncident = null, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchAllTimeOrder(g, x, {rolesA, dirA, rolesB, dirB, relation, sameIncident});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' vs ' + g.fmt(hit.eB) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
 function hardIndep({id, domain, title, order, roleA, dirA = 'in', roleB, dirB = 'in', exc = null}) {
   return hard({
     id, domain, title, order,
@@ -206,47 +247,47 @@ export const hardFamilies = [
   }),
   hardTaint({
     id: 'ha-01', domain: 0, title: 'Tainted clearance or audit',
-    order: 'Fire on anyone cleared by a Friend or audited by a Spy who leaks as a Double agent or contacts as a Foreigner; stand down if a Foe targets them.',
+    order: 'Burned clearance: fire on anyone cleared by a Friend or audited by a Spy who also leaks or contacts abroad — unless a Foe targets them.',
     roles: ['friend', 'spy'], taint: ['double', 'foreigner'], taintDir: 'out', exc: {roles: ['foe'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-02', domain: 0, title: 'Insider shielding an attacker',
-    order: 'Take down anyone who clears as a Friend or warns as a Civilian an active Foe or Double agent; hold fire on anyone contacted by a Foreigner or audited by a Spy.',
-    firstRoles: ['friend', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'double'], secondDir: 'out', exc: {roles: ['foreigner', 'spy'], dir: 'in'}
+  hardCutout({
+    id: 'ha-02', domain: 0, title: 'Hidden relay cutout',
+    order: 'Hidden cutout — drop anyone who receives a contact and relays it later to someone their source never contacts directly.',
+    timeOrder: 'before', unconnected: true
   }),
-  hardTaint({
-    id: 'ha-03', domain: 0, title: 'Witness compromised by audit or Foe',
-    order: 'Neutralize anyone warned by a Civilian or cleared by a Friend whose source was audited by a Spy or targeted by a Foe, except anyone fed a Double agent’s leak or contacted by a Foreigner.',
-    roles: ['civilian', 'friend'], taint: ['spy', 'foe'], taintDir: 'in', exc: {roles: ['double', 'foreigner'], dir: 'in'}
+  hardCutout({
+    id: 'ha-03', domain: 0, title: 'Withdrawn clearance',
+    order: 'Withdrawn clearance: neutralize anyone who acts after a Civilian warns or Friend clears them — unless a Spy audits them.',
+    inRoles: ['civilian', 'friend'], timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-04', domain: 0, title: 'Betrayed by a trusted circle',
-    order: 'Take out anyone targeted by a Foe or leaked to by a Double agent whose contact is cleared by a Friend or audited by a Spy — unless warned by a Civilian or contacted by a Foreigner.',
-    firstRoles: ['foe', 'double'], firstDir: 'in', secondRoles: ['friend', 'spy'], secondDir: 'in', exc: {roles: ['civilian', 'foreigner'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-04', domain: 0, title: 'Compromised insider circle',
+    order: 'Tainted circle: take out anyone targeted by a Foe or leaked to by a Double agent whose source was reached earlier — unless cleared by a Friend.',
+    roles1: ['foe', 'double'], dir1: 'in', dir2: 'in', timeOrder: 'after', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardTime({
-    id: 'ha-05', domain: 0, title: 'Clearance after warning or leak',
-    order: 'Shoot anyone warned by a Civilian, contacted by a Foreigner, or leaked to by a Double agent earlier than they cleared as a Friend, audited as a Spy, or targeted as a Foe.',
-    early: {roles: ['civilian', 'foreigner', 'double'], dir: 'in'}, late: {roles: ['friend', 'spy', 'foe'], dir: 'out'}
+  hardTimePriority({
+    id: 'ha-05', domain: 0, title: 'Premature move',
+    order: 'Premature move: shoot anyone who initiates a contact strictly earlier than every incoming contact they receive — unless audited by a Spy.',
+    dirA: 'out', dirB: 'in', relation: 'before_all', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-06', domain: 0, title: 'Foreigner or mole behind the clearance',
-    order: 'Drop anyone cleared by a Friend or warned by a Civilian whose source was contacted by a Foreigner or leaked to by a Double agent; hold fire on anyone audited by a Spy.',
-    roles: ['friend', 'civilian'], taint: ['foreigner', 'double'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-06', domain: 0, title: 'Compromised clearance source',
+    order: 'Poisoned cover — drop anyone cleared by a Friend or warned by a Civilian whose source was contacted earlier on the other site.',
+    roles1: ['friend', 'civilian'], dir1: 'in', dir2: 'in', sameIncident: false, timeOrder: 'after'
   }),
-  hardRelay({
-    id: 'ha-07', domain: 0, title: 'Leaking to a cleared or warned ward',
-    order: 'Engage anyone who leaks as a Double agent or contacts as a Foreigner someone cleared by a Friend or warned by a Civilian, except anyone targeted by a Foe or audited by a Spy.',
-    firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'in', exc: {roles: ['foe', 'spy'], dir: 'in'}
+  hardCutout({
+    id: 'ha-07', domain: 0, title: 'Closed betrayal loop',
+    order: 'Closed loop: engage anyone bridging a sender and recipient on the same site who are already in direct contact.',
+    sameIncident: true, unconnected: false
   }),
-  hardTaint({
-    id: 'ha-08', domain: 0, title: 'Foe or Foreigner with insider backing',
-    order: 'Eliminate anyone targeted by a Foe or contacted by a Foreigner whose source is cleared by a Friend or audited by a Spy — unless warned by a Civilian or fed a Double agent’s leak.',
-    roles: ['foe', 'foreigner'], taint: ['friend', 'spy'], taintDir: 'in', exc: {roles: ['civilian', 'double'], dir: 'in'}
+  hardCutout({
+    id: 'ha-08', domain: 0, title: 'Cross-site shadow relay',
+    order: 'Cross-site leak — eliminate anyone who receives a contact on one site and later reaches a stranger on the other site.',
+    sameIncident: false, timeOrder: 'before', unconnected: true
   }),
   hard({
     id: 'ha-09', domain: 0, title: 'Unverified clearance swap',
-    order: 'Fire on anyone cleared by a Friend or warned by a Civilian who also contacts as a Foreigner or targets as a Foe, sparing anyone audited by a Spy untouched by Double agent.',
+    order: 'Unverified swap: fire on anyone cleared by a Friend or warned by a Civilian who acts as a Foe or Foreigner — unless audited by a Spy untouched by a Double agent.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasUncompromised(g, x, 'spy', ['double'], 'any')) return null;
@@ -261,14 +302,14 @@ export const hardFamilies = [
   // =========================================================================
   // DOMAIN 1: Surveillance & Blind Spots (10) — escorts, ambushes, shadows, leaks to, spots, signals
   // =========================================================================
-  hardTaint({
-    id: 'ha-10', domain: 1, title: 'Watchers compromised from outside',
-    order: 'Blind-spot ambush — shoot anyone shadowed by a Spy or escorted by a Friend whose contact was signaled by a Foreigner or ambushed by a Foe, sparing them if a Civilian spots them.',
-    roles: ['spy', 'friend'], taint: ['foreigner', 'foe'], taintDir: 'in', exc: {roles: ['civilian'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-10', domain: 1, title: 'Watcher compromised beforehand',
+    order: 'Blind-spot breach: shoot anyone shadowed by a Spy or escorted by a Friend whose contact was reached earlier — unless ambushed by a Foe.',
+    roles1: ['spy', 'friend'], dir1: 'in', dir2: 'in', timeOrder: 'after', exc: {roles: ['foe'], dir: 'in'}
   }),
   hard({
     id: 'ha-11', domain: 1, title: 'False Spy cover',
-    order: 'Drop anyone shadowed by a Spy or spotted by a Civilian whose watcher was signaled by a Foreigner or ambushed by a Foe, except anyone escorted by a Friend untouched by Double agent.',
+    order: 'False watch: drop anyone shadowed by a Spy or spotted by a Civilian whose watcher was hit by a Foe or Foreigner — unless escorted by a Friend untouched by a Double agent.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasUncompromised(g, x, 'friend', ['double'], 'any')) return null;
@@ -278,207 +319,207 @@ export const hardFamilies = [
       }, proof);
     }
   }),
-  hardRelay({
-    id: 'ha-12', domain: 1, title: 'Blind spot around an ambush',
-    order: 'Watcher exposed: engage anyone who ambushes as a Foe or signals as a Foreigner someone shadowed by a Spy or spotted by a Civilian — unless escorted by a Friend.',
-    firstRoles: ['foe', 'foreigner'], firstDir: 'out', secondRoles: ['spy', 'civilian'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  hardCutout({
+    id: 'ha-12', domain: 1, title: 'Unseen surveillance cutout',
+    order: 'Blind-spot cutout: engage anyone bridging two people with no direct contact across different roles — unless a Spy shadows them.',
+    diffRole: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-13', domain: 1, title: 'Shadowing into an ambush',
-    order: 'Eliminate anyone who shadows as a Spy or spots as a Civilian someone ambushed by a Foe or signaled by a Foreigner, sparing anyone fed a Double agent’s leak or escorted by a Friend.',
-    firstRoles: ['spy', 'civilian'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'in', exc: {roles: ['double', 'friend'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-13', domain: 1, title: 'Cross-site tail',
+    order: 'Cross-site tail: eliminate anyone reaching someone on one site who is contacted later on the other site.',
+    dir1: 'out', dir2: 'in', sameIncident: false, timeOrder: 'before'
   }),
-  hardTime({
-    id: 'ha-14', domain: 1, title: 'Escort after ambush or sighting',
-    order: 'Escort off-script — fire on anyone ambushed by a Foe, signaled by a Foreigner, or spotted by a Civilian earlier than a Spy shadowed, Friend escorted, or Double agent leaked to them.',
-    early: {roles: ['foe', 'foreigner', 'civilian'], dir: 'in'}, late: {roles: ['spy', 'friend', 'double'], dir: 'in'}
+  hardTimePriority({
+    id: 'ha-14', domain: 1, title: 'Escort arriving last',
+    order: 'Late escort: fire on anyone escorted by a Friend or shadowed by a Spy later than every other contact they receive — unless spotted by a Civilian.',
+    rolesA: ['friend', 'spy'], dirA: 'in', rolesB: null, dirB: 'in', relation: 'after_all', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-15', domain: 1, title: 'Spotter under enemy watch',
-    order: 'Take down anyone spotted by a Civilian or escorted by a Friend whose contact was shadowed by a Spy or leaked to by a Double agent, except anyone signaled by a Foreigner.',
-    roles: ['civilian', 'friend'], taint: ['spy', 'double'], taintDir: 'in', exc: {roles: ['foreigner'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-15', domain: 1, title: 'Cross-site tainted witness',
+    order: 'Broken watch: take down anyone contacted on one site whose source was already contacted earlier on the other site.',
+    dir1: 'in', dir2: 'in', sameIncident: false, timeOrder: 'after'
   }),
-  hardRelay({
-    id: 'ha-16', domain: 1, title: 'Unwatched escort or witness',
-    order: 'Neutralize anyone escorted by a Friend or spotted by a Civilian who ambushes as a Foe or leaks as a Double agent — unless shadowed by a Spy or signaled by a Foreigner.',
-    firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'out', exc: {roles: ['spy', 'foreigner'], dir: 'in'}
+  hardTimePriority({
+    id: 'ha-16', domain: 1, title: 'Unwatched late move',
+    order: 'Unwatched move: neutralize anyone acting strictly later than every incoming contact they receive — unless a Spy shadows them.',
+    dirA: 'out', dirB: 'in', relation: 'after_all', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTime({
-    id: 'ha-17', domain: 1, title: 'Watcher turned late',
-    order: 'Compromised tail: take out anyone who shadowed as a Spy, leaked as a Double agent, or spotted as a Civilian earlier than a Friend escorted, Foe ambushed, or Foreigner signaled them.',
-    early: {roles: ['spy', 'double', 'civilian'], dir: 'out'}, late: {roles: ['friend', 'foe', 'foreigner'], dir: 'in'}
+  hardTimePriority({
+    id: 'ha-17', domain: 1, title: 'First mover on site',
+    order: 'First to break cover: take out anyone acting strictly earlier than every incoming contact on that same site.',
+    dirA: 'out', dirB: 'in', relation: 'before_all', sameIncident: true
   }),
-  hardTaint({
-    id: 'ha-18', domain: 1, title: 'Ambusher under Friend or Civilian cover',
-    order: 'Shoot anyone ambushed by a Foe or signaled by a Foreigner whose contact is escorted by a Friend or spotted by a Civilian; hold fire on anyone shadowed by a Spy.',
-    roles: ['foe', 'foreigner'], taint: ['friend', 'civilian'], taintDir: 'in', exc: {roles: ['spy'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-18', domain: 1, title: 'Ambusher under cover',
+    order: 'Shielded ambusher — shoot anyone ambushed by a Foe or signaled by a Foreigner whose source was escorted or spotted.',
+    roles1: ['foe', 'foreigner'], dir1: 'in', roles2: ['friend', 'civilian'], dir2: 'in'
   }),
-  hardRelay({
-    id: 'ha-19', domain: 1, title: 'Double-blind relay',
-    order: 'Drop anyone who leaks as a Double agent or escorts as a Friend someone shadowed by a Spy or signaled by a Foreigner, except anyone ambushed by a Foe or spotted by a Civilian.',
-    firstRoles: ['double', 'friend'], firstDir: 'out', secondRoles: ['spy', 'foreigner'], secondDir: 'in', exc: {roles: ['foe', 'civilian'], dir: 'in'}
+  hardCutout({
+    id: 'ha-19', domain: 1, title: 'Cross-site closed watch',
+    order: 'Staged sighting: drop anyone bridging a sender and recipient on opposite sites who are already in direct contact.',
+    sameIncident: false, unconnected: false
   }),
 
   // =========================================================================
   // DOMAIN 2: Foreign Contact (10) — vouches for, pressures, tracks, leaks to, reports, recruits
   // =========================================================================
-  hardRelay({
-    id: 'ha-20', domain: 2, title: 'Foreigner’s inside sponsor',
-    order: 'Take down anyone who vouches as a Friend or tracks as a Spy someone recruited by a Foreigner or pressured by a Foe — unless reported by a Civilian or fed a Double agent’s leak.',
-    firstRoles: ['friend', 'spy'], firstDir: 'out', secondRoles: ['foreigner', 'foe'], secondDir: 'in', exc: {roles: ['civilian', 'double'], dir: 'in'}
+  hardCutout({
+    id: 'ha-20', domain: 2, title: 'Cross-border cutout',
+    order: 'Border broker: take down anyone relaying from one site to a stranger on the other site — unless tracked by a Spy.',
+    sameIncident: false, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-21', domain: 2, title: 'Recruited witness or voucher',
-    order: 'Neutralize anyone reported by a Civilian or vouched for by a Friend whose source was recruited by a Foreigner or pressured by a Foe, sparing anyone tracked by a Spy or fed a Double agent’s leak.',
-    roles: ['civilian', 'friend'], taint: ['foreigner', 'foe'], taintDir: 'in', exc: {roles: ['spy', 'double'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-21', domain: 2, title: 'Tainted foreign approach',
+    order: 'Tainted recruiter: neutralize anyone recruited by a Foreigner or pressured by a Foe whose source was reached earlier — unless tracked by a Spy.',
+    roles1: ['foreigner', 'foe'], dir1: 'in', dir2: 'in', timeOrder: 'after', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-22', domain: 2, title: 'Recruiter targeting insiders',
-    order: 'Take out anyone who recruits as a Foreigner or pressures as a Foe someone vouched for by a Friend or reported by a Civilian; hold fire on anyone fed a Double agent’s leak or tracked by a Spy.',
-    firstRoles: ['foreigner', 'foe'], firstDir: 'out', secondRoles: ['friend', 'civilian'], secondDir: 'in', exc: {roles: ['double', 'spy'], dir: 'in'}
+  hardCutout({
+    id: 'ha-22', domain: 2, title: 'Activated recruit',
+    order: 'Activated recruit — take out anyone recruited by a Foreigner or pressured by a Foe who later initiates a contact of their own.',
+    inRoles: ['foreigner', 'foe'], timeOrder: 'before'
   }),
-  hardTime({
-    id: 'ha-23', domain: 2, title: 'Recruited before vouching or report',
-    order: 'Unreported recruitment: shoot anyone recruited by a Foreigner, pressured by a Foe, or tracked by a Spy earlier than a Friend vouched for, Civilian reported, or Double agent leaked to them.',
-    early: {roles: ['foreigner', 'foe', 'spy'], dir: 'in'}, late: {roles: ['friend', 'civilian', 'double'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-23', domain: 2, title: 'Late vouching after approach',
+    order: 'Unreported approach: shoot anyone contacted on one site who is contacted later on the other site — unless tracked by a Spy.',
+    dirA: 'in', dirB: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-24', domain: 2, title: 'Foreigner or mole backed by insiders',
-    order: 'Drop anyone recruited by a Foreigner or leaked to by a Double agent whose contact is tracked by a Spy or reported by a Civilian — unless vouched for by a Friend.',
-    roles: ['foreigner', 'double'], taint: ['spy', 'civilian'], taintDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-24', domain: 2, title: 'Foreigner backed by witness',
+    order: 'Inside backing: drop anyone recruited by a Foreigner or leaked to by a Double agent whose contact is tracked or reported — unless vouched for by a Friend.',
+    roles1: ['foreigner', 'double'], dir1: 'in', roles2: ['spy', 'civilian'], dir2: 'in', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-25', domain: 2, title: 'Leak feeding a recruiter or Foe',
-    order: 'Station asset turned: engage anyone who leaks as a Double agent or reports as a Civilian an active Foreigner or Foe, sparing anyone tracked by a Spy or vouched for by a Friend.',
-    firstRoles: ['double', 'civilian'], firstDir: 'out', secondRoles: ['foreigner', 'foe'], secondDir: 'out', exc: {roles: ['spy', 'friend'], dir: 'in'}
+  hardCutout({
+    id: 'ha-25', domain: 2, title: 'Same-site blind channel',
+    order: 'Hidden channel: engage anyone passing a contact onward on the same site to someone their source never contacts.',
+    sameIncident: true, unconnected: true
   }),
-  hardTime({
-    id: 'ha-26', domain: 2, title: 'Tracked after foreign or ally contact',
-    order: 'Eliminate anyone recruited by a Foreigner, leaked to by a Double agent, or vouched for by a Friend earlier than they tracked as a Spy, reported as a Civilian, or pressured as a Foe.',
-    early: {roles: ['foreigner', 'double', 'friend'], dir: 'in'}, late: {roles: ['spy', 'civilian', 'foe'], dir: 'out'}
+  hardCutout({
+    id: 'ha-26', domain: 2, title: 'Pre-recruitment move',
+    order: 'Early leak: eliminate anyone who initiated a contact earlier than a Foreigner recruited or Foe pressured them — unless vouched for by a Friend.',
+    inRoles: ['foreigner', 'foe'], timeOrder: 'after', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-27', domain: 2, title: 'Recruit turning informant or voucher',
-    order: 'External handler: fire on anyone recruited by a Foreigner or pressured by a Foe who reports as a Civilian or vouches as a Friend, except anyone tracked by a Spy.',
-    firstRoles: ['foreigner', 'foe'], firstDir: 'in', secondRoles: ['civilian', 'friend'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-27', domain: 2, title: 'Recruit turning insider',
+    order: 'Turned asset: fire on anyone recruited by a Foreigner or pressured by a Foe who vouches or reports — unless tracked by a Spy.',
+    roles1: ['foreigner', 'foe'], dir1: 'in', roles2: ['friend', 'civilian'], dir2: 'out', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-28', domain: 2, title: 'Tracker recruiting abroad',
-    order: 'Take down anyone tracked by a Spy or vouched for by a Friend whose contact recruits as a Foreigner or leaks as a Double agent — unless reported by a Civilian or pressured by a Foe.',
-    roles: ['spy', 'friend'], taint: ['foreigner', 'double'], taintDir: 'out', exc: {roles: ['civilian', 'foe'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-28', domain: 2, title: 'Cross-site inside sponsor',
+    order: 'Two-site sponsor — take down anyone vouched for by a Friend or tracked by a Spy whose source acts on the other site.',
+    roles1: ['friend', 'spy'], dir1: 'in', dir2: 'out', sameIncident: false
   }),
-  hardRelay({
-    id: 'ha-29', domain: 2, title: 'Foreigner’s delayed chain',
-    order: 'Unreported recruitment: neutralize anyone recruited by a Foreigner, pressured by a Foe, or vouched for by a Friend earlier than a Civilian reported, Spy tracked, or Double agent leaked to that contact.',
-    firstRoles: ['foreigner', 'foe', 'friend'], firstDir: 'in', secondRoles: ['civilian', 'spy', 'double'], secondDir: 'in', timeOrder: 'before'
+  hardSiteTaint({
+    id: 'ha-29', domain: 2, title: 'Delayed cross-border chain',
+    order: 'Delayed border chain: neutralize anyone reaching someone on one site who was already reached earlier on the other site.',
+    dir1: 'out', dir2: 'in', sameIncident: false, timeOrder: 'after'
   }),
 
   // =========================================================================
   // DOMAIN 3: Civilian Tip-Offs (10) — confirms, targets, monitors, misleads, tips off, briefs
   // =========================================================================
-  hardRelay({
-    id: 'ha-30', domain: 3, title: 'Tip-off to an attacker or outsider',
-    order: 'Street misdirection — engage anyone who tips off as a Civilian or confirms as a Friend an active Foe or Foreigner; hold fire on anyone monitored by a Spy.',
-    firstRoles: ['civilian', 'friend'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'out', exc: {roles: ['spy'], dir: 'in'}
+  hardCutout({
+    id: 'ha-30', domain: 3, title: 'Acted after civilian tip-off',
+    order: 'Withdrawn tip-off: engage anyone who initiates a contact after a Civilian tips them off or Spy monitors them — unless confirmed by a Friend.',
+    inRoles: ['civilian', 'spy'], timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-31', domain: 3, title: 'Misled witness or ally',
-    order: 'Eliminate anyone tipped off by a Civilian or confirmed by a Friend whose source was misled by a Double agent or briefed by a Foreigner, except anyone targeted by a Foe or monitored by a Spy.',
-    roles: ['civilian', 'friend'], taint: ['double', 'foreigner'], taintDir: 'in', exc: {roles: ['foe', 'spy'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-31', domain: 3, title: 'Poisoned witness source',
+    order: 'Poisoned witness: eliminate anyone tipped off by a Civilian or confirmed by a Friend whose source was reached earlier anywhere.',
+    roles1: ['civilian', 'friend'], dir1: 'in', dir2: 'in', timeOrder: 'after'
   }),
-  hardTime({
-    id: 'ha-32', domain: 3, title: 'Late confirmation after strike or tip-off',
-    order: 'Informant in play — fire on anyone targeted by a Foe, misled by a Double agent, or tipped off by a Civilian earlier than a Friend confirmed, Spy monitored, or Foreigner briefed them.',
-    early: {roles: ['foe', 'double', 'civilian'], dir: 'in'}, late: {roles: ['friend', 'spy', 'foreigner'], dir: 'in'}
+  hardCutout({
+    id: 'ha-32', domain: 3, title: 'Moved before tip-off arrived',
+    order: 'Ignored warning: fire on anyone who reached a third person earlier than a Civilian tipped them off or Spy monitored them — unless confirmed by a Friend.',
+    inRoles: ['civilian', 'spy'], timeOrder: 'after', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardRelay({
+  hardSiteTaint({
     id: 'ha-33', domain: 3, title: 'Monitor’s misled informant',
-    order: 'False warning: take down anyone who monitors as a Spy or tips off as a Civilian someone misled by a Double agent or briefed by a Foreigner, sparing anyone confirmed by a Friend.',
-    firstRoles: ['spy', 'civilian'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
+    order: 'False warning: take down anyone who monitors or tips off someone misled by a Double agent or briefed by a Foreigner — unless confirmed by a Friend.',
+    roles1: ['spy', 'civilian'], dir1: 'out', roles2: ['double', 'foreigner'], dir2: 'in', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-34', domain: 3, title: 'Informant or Foe backed by insiders',
-    order: 'Neutralize anyone tipped off by a Civilian or targeted by a Foe whose contact is monitored by a Spy or confirmed by a Friend; hold fire on anyone briefed by a Foreigner or misled by a Double agent.',
-    roles: ['civilian', 'foe'], taint: ['spy', 'friend'], taintDir: 'in', exc: {roles: ['foreigner', 'double'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-34', domain: 3, title: 'Cross-site witness echo',
+    order: 'Echoed tip-off — neutralize anyone tipped off by a Civilian or monitored by a Spy whose source also acts on the other site.',
+    roles1: ['civilian', 'spy'], dir1: 'in', dir2: 'out', sameIncident: false
+  }),
+  hardCutout({
+    id: 'ha-35', domain: 3, title: 'Acted after deception',
+    order: 'False brief: take out anyone who initiates a contact after a Double agent misleads or Foreigner briefs them.',
+    inRoles: ['double', 'foreigner'], timeOrder: 'before'
+  }),
+  hardCutout({
+    id: 'ha-36', domain: 3, title: 'Acted before warning',
+    order: 'Ahead of the warning — shoot anyone who initiated a contact earlier than a Civilian tipped them off or Spy monitored them.',
+    inRoles: ['civilian', 'spy'], timeOrder: 'after'
   }),
   hardRelay({
-    id: 'ha-35', domain: 3, title: 'Deceiver exploiting a tip-off',
-    order: 'Take out anyone who misleads as a Double agent or briefs as a Foreigner someone tipped off by a Civilian or monitored by a Spy, except anyone targeted by a Foe or confirmed by a Friend.',
-    firstRoles: ['double', 'foreigner'], firstDir: 'out', secondRoles: ['civilian', 'spy'], secondDir: 'in', exc: {roles: ['foe', 'friend'], dir: 'in'}
-  }),
-  hardTime({
-    id: 'ha-36', domain: 3, title: 'Moving after tip-off or strike',
-    order: 'Shoot anyone tipped off by a Civilian, confirmed by a Friend, or targeted by a Foe earlier than they briefed as a Foreigner, misled as a Double agent, or monitored as a Spy.',
-    early: {roles: ['civilian', 'friend', 'foe'], dir: 'in'}, late: {roles: ['foreigner', 'double', 'spy'], dir: 'out'}
-  }),
-  hardRelay({
-    id: 'ha-37', domain: 3, title: 'Informant’s own attacker',
-    order: 'Tainted brief: drop anyone tipped off by a Civilian or monitored by a Spy who targets as a Foe or misleads as a Double agent, sparing anyone confirmed by a Friend.',
+    id: 'ha-37', domain: 3, title: 'Informant turned attacker',
+    order: 'Tainted brief: drop anyone tipped off by a Civilian or monitored by a Spy who targets as a Foe or misleads as a Double agent — unless confirmed by a Friend.',
     firstRoles: ['civilian', 'spy'], firstDir: 'in', secondRoles: ['foe', 'double'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-38', domain: 3, title: 'Foreigner briefed by a witness',
-    order: 'Engage anyone briefed by a Foreigner or misled by a Double agent whose contact is tipped off by a Civilian or monitored by a Spy; hold fire on anyone targeted by a Foe or confirmed by a Friend.',
-    roles: ['foreigner', 'double'], taint: ['civilian', 'spy'], taintDir: 'in', exc: {roles: ['foe', 'friend'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-38', domain: 3, title: 'Staged same-site tip-off',
+    order: 'Staged tip-off: engage anyone contacted on a site by someone who acted earlier on that same site — unless confirmed by a Friend.',
+    dir1: 'in', dir2: 'out', sameIncident: true, timeOrder: 'after', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-39', domain: 3, title: 'Delayed confirmation after briefing',
-    order: 'False warning: eliminate anyone confirmed by a Friend, monitored by a Spy, or targeted by a Foe later than a Foreigner briefed, Double agent misled, or Civilian tipped off that source.',
-    firstRoles: ['friend', 'spy', 'foe'], firstDir: 'in', secondRoles: ['foreigner', 'double', 'civilian'], secondDir: 'in', timeOrder: 'after'
+  hardCutout({
+    id: 'ha-39', domain: 3, title: 'Late confirmation',
+    order: 'Too late to confirm: eliminate anyone who initiated a contact earlier than a Friend confirmed or Foreigner briefed them.',
+    inRoles: ['friend', 'foreigner'], timeOrder: 'after'
   }),
 
   // =========================================================================
   // DOMAIN 4: Proxy Chains (10) — backs, strikes, traces, relays to, warns, hands off to
   // =========================================================================
-  hardRelay({
-    id: 'ha-40', domain: 4, title: 'Handoff to a striker or tracer',
-    order: 'Cutout exposed: take out anyone who hands off as a Foreigner or relays as a Double agent to an active Foe or Spy — unless backed by a Friend.',
-    firstRoles: ['foreigner', 'double'], firstDir: 'out', secondRoles: ['foe', 'spy'], secondDir: 'out', exc: {roles: ['friend'], dir: 'in'}
+  hardCutout({
+    id: 'ha-40', domain: 4, title: 'Hidden cross-site proxy',
+    order: 'Cutout exposed: take out anyone bridging an incoming and outgoing contact on opposite sites whose endpoints never meet — unless backed by a Friend.',
+    sameIncident: false, unconnected: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-41', domain: 4, title: 'Backer behind a handoff or strike',
-    order: 'Shoot anyone backed by a Friend or warned by a Civilian who hands off as a Foreigner or strikes as a Foe, sparing anyone traced by a Spy or given a Double agent’s relay.',
-    firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foreigner', 'foe'], secondDir: 'out', exc: {roles: ['spy', 'double'], dir: 'in'}
+  hardCutout({
+    id: 'ha-41', domain: 4, title: 'Same-site active proxy',
+    order: 'Active proxy: shoot anyone backed by a Friend or warned by a Civilian who acts later on that same site.',
+    inRoles: ['friend', 'civilian'], sameIncident: true, timeOrder: 'before'
   }),
-  hardRelay({
-    id: 'ha-42', domain: 4, title: 'Two-hop strike or handoff',
-    order: 'Drop anyone who strikes as a Foe or hands off as a Foreigner to someone backed by a Friend or traced by a Spy; hold fire on anyone warned by a Civilian or given a Double agent’s relay.',
-    firstRoles: ['foe', 'foreigner'], firstDir: 'out', secondRoles: ['friend', 'spy'], secondDir: 'in', exc: {roles: ['civilian', 'double'], dir: 'in'}
+  hardCutout({
+    id: 'ha-42', domain: 4, title: 'Closed proxy triangle',
+    order: 'Closed proxy ring: drop anyone bridging a sender and recipient who are already in direct contact — unless traced by a Spy.',
+    unconnected: false, exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-43', domain: 4, title: 'Traced courier chain',
-    order: 'Intercepted handoff: engage anyone who traces as a Spy or warns as a Civilian an active Double agent or Friend, except anyone struck by a Foe or given a Foreigner’s handoff.',
-    firstRoles: ['spy', 'civilian'], firstDir: 'out', secondRoles: ['double', 'friend'], secondDir: 'out', exc: {roles: ['foe', 'foreigner'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-43', domain: 4, title: 'Cross-site proxy handoff',
+    order: 'Cross-site proxy: engage anyone acting on one site whose recipient also acts on the other site — unless backed by a Friend.',
+    dir1: 'out', dir2: 'out', sameIncident: false, exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-44', domain: 4, title: 'Timed proxy relay',
-    order: 'Proxy timing — eliminate anyone handed off to by a Foreigner, backed by a Friend, or warned by a Civilian earlier than their source relayed as a Double agent, struck as a Foe, or traced as a Spy.',
-    firstRoles: ['foreigner', 'friend', 'civilian'], firstDir: 'in', secondRoles: ['double', 'foe', 'spy'], secondDir: 'out', timeOrder: 'before'
+  hardSiteTaint({
+    id: 'ha-44', domain: 4, title: 'Proxy timing breach',
+    order: 'Proxy timing: eliminate anyone contacted earlier than their own source initiated another contact — unless warned by a Civilian.',
+    dir1: 'in', dir2: 'out', timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-45', domain: 4, title: 'Unwarned proxy recipient',
-    order: 'Fire on anyone handed off to by a Foreigner or relayed to by a Double agent whose contact is backed by a Friend or struck by a Foe, sparing anyone warned by a Civilian or traced by a Spy.',
-    firstRoles: ['foreigner', 'double'], firstDir: 'in', secondRoles: ['friend', 'foe'], secondDir: 'in', exc: {roles: ['civilian', 'spy'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-45', domain: 4, title: 'Upstream courier trace',
+    order: 'Upstream trace: fire on anyone handed off to by a Foreigner or relayed to by a Double agent whose source was reached earlier.',
+    roles1: ['foreigner', 'double'], dir1: 'in', dir2: 'in', timeOrder: 'after'
   }),
   hardRelay({
     id: 'ha-46', domain: 4, title: 'Proxy bypassing surveillance',
-    order: 'Take down anyone backed by a Friend or warned by a Civilian through someone no Spy traces who strikes as a Foe or hands off as a Foreigner.',
+    order: 'Off-grid proxy — take down anyone backed by a Friend or warned by a Civilian through someone no Spy traces who strikes or hands off.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out', midExc: {roles: ['spy'], dir: 'in'}
   }),
   hardRelay({
     id: 'ha-47', domain: 4, title: 'Reverse-timed handoff',
-    order: 'Neutralize anyone who backs as a Friend or traces as a Spy someone who had earlier struck as a Foe or handed off as a Foreigner — unless a Double agent relays to them.',
+    order: 'Late backing: neutralize anyone who backs as a Friend or traces as a Spy someone who earlier struck or handed off — unless relayed to by a Double agent.',
     firstRoles: ['friend', 'spy'], firstDir: 'out', secondRoles: ['foe', 'foreigner'], secondDir: 'out', timeOrder: 'after', exc: {roles: ['double'], dir: 'in'}
   }),
-  hardRelay({
-    id: 'ha-48', domain: 4, title: 'Striker or tracer feeding a courier',
-    order: 'Take out anyone struck by a Foe or traced by a Spy who relays as a Double agent or hands off as a Foreigner — unless backed by a Friend or warned by a Civilian.',
-    firstRoles: ['foe', 'spy'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'out', exc: {roles: ['friend', 'civilian'], dir: 'in'}
+  hardCutout({
+    id: 'ha-48', domain: 4, title: 'Post-strike cross-site relay',
+    order: 'Post-strike relay — take out anyone struck by a Foe or traced by a Spy who acts later on the other site.',
+    inRoles: ['foe', 'spy'], sameIncident: false, timeOrder: 'before'
   }),
-  hardRelay({
-    id: 'ha-49', domain: 4, title: 'Backer’s hidden upstream',
-    order: 'Shoot anyone backed by a Friend or handed off to by a Foreigner whose source is warned by a Civilian or struck by a Foe, sparing anyone traced by a Spy or given a Double agent’s relay.',
-    firstRoles: ['friend', 'foreigner'], firstDir: 'in', secondRoles: ['civilian', 'foe'], secondDir: 'in', exc: {roles: ['spy', 'double'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-49', domain: 4, title: 'Unwarned same-site relay',
+    order: 'Unwarned proxy: shoot anyone contacted on a site by someone who also acts on that same site — unless warned by a Civilian.',
+    dir1: 'in', dir2: 'out', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
 
   // =========================================================================
@@ -592,108 +633,108 @@ export const hardFamilies = [
   // =========================================================================
   // DOMAIN 7: Tainted Sources (10) — alibis, coerces, vets, compromises, exposes, funds
   // =========================================================================
-  hardTaint({
-    id: 'ha-70', domain: 7, title: 'Funder or coercer giving alibi',
-    order: 'Bought alibi — neutralize anyone given a Friend’s alibi or Spy’s vetting by an active Foreigner funder or Foe coercer; hold fire on anyone compromised by a Double agent.',
-    roles: ['friend', 'spy'], taint: ['foreigner', 'foe'], taintDir: 'out', exc: {roles: ['double'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-70', domain: 7, title: 'Bought alibi on site',
+    order: 'Bought alibi: neutralize anyone given a Friend’s alibi or Spy’s vetting by someone active on the same site — unless compromised by a Double agent.',
+    roles1: ['friend', 'spy'], dir1: 'in', dir2: 'out', sameIncident: true, exc: {roles: ['double'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-71', domain: 7, title: 'Exposed by a funded witness',
-    order: 'Take out anyone exposed by a Civilian or compromised by a Double agent whose source was funded by a Foreigner or given a Friend’s alibi, except anyone coerced by a Foe or vetted by a Spy.',
-    roles: ['civilian', 'double'], taint: ['foreigner', 'friend'], taintDir: 'in', exc: {roles: ['foe', 'spy'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-71', domain: 7, title: 'Exposed by a tainted witness',
+    order: 'Tainted witness: take out anyone exposed by a Civilian or compromised by a Double agent whose source was funded or alibied — unless vetted by a Spy.',
+    roles1: ['civilian', 'double'], dir1: 'in', roles2: ['foreigner', 'friend'], dir2: 'in', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-72', domain: 7, title: 'Vetted funder or exposed coercer',
-    order: 'Shoot anyone funded by a Foreigner or coerced by a Foe whose source was vetted by a Spy or exposed by a Civilian — unless given a Friend’s alibi or compromised by a Double agent.',
-    roles: ['foreigner', 'foe'], taint: ['spy', 'civilian'], taintDir: 'in', exc: {roles: ['friend', 'double'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-72', domain: 7, title: 'Coerced by an earlier contact',
+    order: 'Coerced vetting — shoot anyone funded by a Foreigner or coerced by a Foe whose source was reached earlier on the other site.',
+    roles1: ['foreigner', 'foe'], dir1: 'in', dir2: 'in', sameIncident: false, timeOrder: 'after'
   }),
-  hardTaint({
-    id: 'ha-73', domain: 7, title: 'Compromised witness or ally',
-    order: 'Drop anyone exposed by a Civilian or given a Friend’s alibi by someone compromised by a Double agent or coerced by a Foe, sparing anyone vetted by a Spy or funded by a Foreigner.',
-    roles: ['civilian', 'friend'], taint: ['double', 'foe'], taintDir: 'in', exc: {roles: ['spy', 'foreigner'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-73', domain: 7, title: 'Compromised alibi source',
+    order: 'Poisoned alibi: drop anyone exposed by a Civilian or alibied by a Friend whose source was coerced or compromised — unless vetted by a Spy.',
+    roles1: ['civilian', 'friend'], dir1: 'in', roles2: ['foe', 'double'], dir2: 'in', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-74', domain: 7, title: 'Vetted by a compromised source',
-    order: 'Engage anyone vetted by a Spy or funded by a Foreigner whose source was compromised by a Double agent or coerced by a Foe; hold fire on anyone exposed by a Civilian or given a Friend’s alibi.',
-    roles: ['spy', 'foreigner'], taint: ['double', 'foe'], taintDir: 'in', exc: {roles: ['civilian', 'friend'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-74', domain: 7, title: 'Vetted after earlier taint',
+    order: 'Tainted vetting: engage anyone vetted by a Spy or funded by a Foreigner whose source was reached earlier — unless exposed by a Civilian.',
+    roles1: ['spy', 'foreigner'], dir1: 'in', dir2: 'in', timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-75', domain: 7, title: 'Alibi from an exposed or vetted source',
-    order: 'Eliminate anyone given a Friend’s alibi or Foe’s coercion by someone exposed by a Civilian or vetted by a Spy, except anyone funded by a Foreigner or compromised by a Double agent.',
-    roles: ['friend', 'foe'], taint: ['civilian', 'spy'], taintDir: 'in', exc: {roles: ['foreigner', 'double'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-75', domain: 7, title: 'Alibi from a vetted source',
+    order: 'Dirty vetting: eliminate anyone alibied by a Friend or coerced by a Foe whose source was vetted or exposed — unless funded by a Foreigner.',
+    roles1: ['friend', 'foe'], dir1: 'in', roles2: ['spy', 'civilian'], dir2: 'in', exc: {roles: ['foreigner'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-76', domain: 7, title: 'Funder with an alibi or exposure',
-    order: 'Fire on anyone funded by a Foreigner or compromised by a Double agent whose source had a Friend’s alibi or Civilian’s exposure — unless vetted by a Spy or coerced by a Foe.',
-    roles: ['foreigner', 'double'], taint: ['friend', 'civilian'], taintDir: 'in', exc: {roles: ['spy', 'foe'], dir: 'in'}
+  hardCutout({
+    id: 'ha-76', domain: 7, title: 'Acting after dirty funding',
+    order: 'Dirty funding: fire on anyone funded by a Foreigner or compromised by a Double agent who later reaches a third person — unless vetted by a Spy.',
+    inRoles: ['foreigner', 'double'], timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-77', domain: 7, title: 'Coerced witness or funded Spy',
-    order: 'Take down anyone exposed by a Civilian or vetted by a Spy whose source was coerced by a Foe or funded by a Foreigner, sparing anyone compromised by a Double agent or given a Friend’s alibi.',
-    roles: ['civilian', 'spy'], taint: ['foe', 'foreigner'], taintDir: 'in', exc: {roles: ['double', 'friend'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-77', domain: 7, title: 'Coerced witness chain',
+    order: 'Pressured witness: take down anyone exposed by a Civilian or vetted by a Spy whose source was coerced or funded — unless alibied by a Friend.',
+    roles1: ['civilian', 'spy'], dir1: 'in', roles2: ['foe', 'foreigner'], dir2: 'in', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-78', domain: 7, title: 'Compromised coercer or alibied Spy',
-    order: 'Neutralize anyone coerced by a Foe or vetted by a Spy whose source was compromised by a Double agent or given a Friend’s alibi; hold fire on anyone funded by a Foreigner or exposed by a Civilian.',
-    roles: ['foe', 'spy'], taint: ['double', 'friend'], taintDir: 'in', exc: {roles: ['foreigner', 'civilian'], dir: 'in'}
+  hardTimePriority({
+    id: 'ha-78', domain: 7, title: 'Unvetted cross-site move',
+    order: 'Unvetted move: neutralize anyone acting on one site strictly earlier than every incoming contact on the other site — unless vetted by a Spy.',
+    dirA: 'out', dirB: 'in', relation: 'before_all', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTaint({
-    id: 'ha-79', domain: 7, title: 'Alibi from a vetted or compromised source',
-    order: 'Take out anyone given a Friend’s alibi or Foreigner’s funding by someone vetted by a Spy or compromised by a Double agent, except anyone exposed by a Civilian or coerced by a Foe.',
-    roles: ['friend', 'foreigner'], taint: ['spy', 'double'], taintDir: 'in', exc: {roles: ['civilian', 'foe'], dir: 'in'}
+  hardSiteTaint({
+    id: 'ha-79', domain: 7, title: 'Cross-site tainted alibi',
+    order: 'Cross-site cover: take out anyone alibied by a Friend or funded by a Foreigner whose source acts later on the other site.',
+    roles1: ['friend', 'foreigner'], dir1: 'in', dir2: 'out', sameIncident: false, timeOrder: 'before'
   }),
 
   // =========================================================================
   // DOMAIN 8: Double Lives (10) — protects, hunts, watches, leaks to, shelters, hosts
   // =========================================================================
-  hardDual({
-    id: 'ha-80', domain: 8, title: 'Protector who hunts, watcher who leaks',
-    order: 'Eliminate anyone who protects as a Friend or watches as a Spy while hunting as a Foe or leaking as a Double agent — unless sheltered by a Civilian or hosted by a Foreigner.',
-    a: {roles: ['friend', 'spy'], dir: 'out'}, b: {roles: ['foe', 'double'], dir: 'out'}, exc: {roles: ['civilian', 'foreigner'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-80', domain: 8, title: 'Two-faced operator on site',
+    order: 'Two masters: eliminate anyone initiating contacts in two different roles on the same site — unless sheltered by a Civilian.',
+    dirA: 'out', dirB: 'out', sameIncident: true, diffRole: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  hardDual({
-    id: 'ha-81', domain: 8, title: 'Sheltered host or protected hunter',
-    order: 'Fire on anyone sheltered by a Civilian or protected by a Friend who hosts as a Foreigner or hunts as a Foe, sparing anyone watched by a Spy or fed a Double agent’s leak.',
-    a: {roles: ['civilian', 'friend'], dir: 'in'}, b: {roles: ['foreigner', 'foe'], dir: 'out'}, exc: {roles: ['spy', 'double'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-81', domain: 8, title: 'Active on both sites',
+    order: 'Double life: fire on anyone initiating contacts on both sites — unless watched by a Spy or protected by a Friend.',
+    dirA: 'out', dirB: 'out', sameIncident: false, exc: {roles: ['spy', 'friend'], dir: 'in'}
   }),
-  hardDual({
-    id: 'ha-82', domain: 8, title: 'Watched mole or hosted witness',
-    order: 'Take down anyone watched by a Spy or hosted by a Foreigner who leaks as a Double agent or shelters as a Civilian; hold fire on anyone hunted by a Foe or protected by a Friend.',
-    a: {roles: ['spy', 'foreigner'], dir: 'in'}, b: {roles: ['double', 'civilian'], dir: 'out'}, exc: {roles: ['foe', 'friend'], dir: 'in'}
+  hardCutout({
+    id: 'ha-82', domain: 8, title: 'Protected then acting on site',
+    order: 'Shelter breached — take down anyone protected by a Friend or sheltered by a Civilian who acts later on the other site.',
+    inRoles: ['friend', 'civilian'], sameIncident: false, timeOrder: 'before'
   }),
-  hardDual({
-    id: 'ha-83', domain: 8, title: 'Dual patron target',
-    order: 'Neutralize anyone protected by a Friend or sheltered by a Civilian who is also hosted by a Foreigner or hunted by a Foe, except anyone fed a Double agent’s leak or watched by a Spy.',
-    a: {roles: ['friend', 'civilian'], dir: 'in'}, b: {roles: ['foreigner', 'foe'], dir: 'in'}, exc: {roles: ['double', 'spy'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-83', domain: 8, title: 'Caught on both sites',
+    order: 'Split allegiance: neutralize anyone contacted on both sites — unless protected by a Friend or sheltered by a Civilian.',
+    dirA: 'in', dirB: 'in', sameIncident: false, exc: {roles: ['friend', 'civilian'], dir: 'in'}
   }),
-  hardDual({
-    id: 'ha-84', domain: 8, title: 'Hunted protector or watched host',
-    order: 'Take out anyone who protects as a Friend or hosts as a Foreigner while hunted by a Foe or watched by a Spy — unless sheltered by a Civilian or fed a Double agent’s leak.',
-    a: {roles: ['friend', 'foreigner'], dir: 'out'}, b: {roles: ['foe', 'spy'], dir: 'in'}, exc: {roles: ['civilian', 'double'], dir: 'in'}
+  hardCutout({
+    id: 'ha-84', domain: 8, title: 'Watched before acting',
+    order: 'Watched operator: take out anyone watched by a Spy or hunted by a Foe who initiates a contact afterward — unless sheltered by a Civilian.',
+    inRoles: ['spy', 'foe'], timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  hardDual({
-    id: 'ha-85', domain: 8, title: 'Shelterer who hunts or hosts',
-    order: 'Shoot anyone who shelters as a Civilian or watches as a Spy while hunting as a Foe or hosting as a Foreigner, sparing anyone protected by a Friend or fed a Double agent’s leak.',
-    a: {roles: ['civilian', 'spy'], dir: 'out'}, b: {roles: ['foe', 'foreigner'], dir: 'out'}, exc: {roles: ['friend', 'double'], dir: 'in'}
+  hardTimePriority({
+    id: 'ha-85', domain: 8, title: 'Last mover on site',
+    order: 'Late operator: shoot anyone acting strictly later than every incoming contact on that same site — unless protected by a Friend.',
+    dirA: 'out', dirB: 'in', relation: 'after_all', sameIncident: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardDual({
-    id: 'ha-86', domain: 8, title: 'Double-exposed recipient',
-    order: 'Drop anyone hunted by a Foe or leaked to by a Double agent who is also watched by a Spy or hosted by a Foreigner; hold fire on anyone protected by a Friend or sheltered by a Civilian.',
-    a: {roles: ['foe', 'double'], dir: 'in'}, b: {roles: ['spy', 'foreigner'], dir: 'in'}, exc: {roles: ['friend', 'civilian'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-86', domain: 8, title: 'Cross-site late contact',
+    order: 'Hunted across sites: drop anyone who acts on one site and is contacted later on the other site — unless protected by a Friend.',
+    dirA: 'out', dirB: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardDual({
-    id: 'ha-87', domain: 8, title: 'Protector or hunter feeding outsiders',
-    order: 'Engage anyone who protects as a Friend or hunts as a Foe while leaking as a Double agent or hosting as a Foreigner, except anyone watched by a Spy or sheltered by a Civilian.',
-    a: {roles: ['friend', 'foe'], dir: 'out'}, b: {roles: ['double', 'foreigner'], dir: 'out'}, exc: {roles: ['spy', 'civilian'], dir: 'in'}
+  hardCutout({
+    id: 'ha-87', domain: 8, title: 'Isolated double-life broker',
+    order: 'Hidden broker: engage anyone bridging two strangers on the same site — unless watched by a Spy.',
+    sameIncident: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardDual({
-    id: 'ha-88', domain: 8, title: 'Sheltered mole or watched protector',
-    order: 'Eliminate anyone sheltered by a Civilian or watched by a Spy who leaks as a Double agent or protects as a Friend — unless hosted by a Foreigner or hunted by a Foe.',
-    a: {roles: ['civilian', 'spy'], dir: 'in'}, b: {roles: ['double', 'friend'], dir: 'out'}, exc: {roles: ['foreigner', 'foe'], dir: 'in'}
+  hardCutout({
+    id: 'ha-88', domain: 8, title: 'Acting before hosted or hunted',
+    order: 'Pre-emptive cover: eliminate anyone acting earlier than a Foreigner hosts or Foe hunts them — unless sheltered by a Civilian.',
+    inRoles: ['foreigner', 'foe'], timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
   hard({
     id: 'ha-89', domain: 8, title: 'Three-role juggler',
-    order: 'Hideout compromised: fire on anyone who initiates contacts in at least two roles while receiving a contact in a third role, sparing anyone protected by a Friend.',
+    order: 'Hideout compromised: fire on anyone initiating contacts in at least two roles while contacted in a third — unless protected by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'friend')) return null;
