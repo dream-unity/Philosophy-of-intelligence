@@ -170,12 +170,12 @@ export const easyFamilies = [
   }),
   easySiteTaint({
     id: 'ea-01', domain: 0, title: 'Clearing an active site contact',
-    order: 'Compromised vetting: shoot anyone cleared by a Friend or warned by a Civilian whose source initiates another dispatch on that same site — unless audited by a Spy.',
+    order: 'Shoot anyone cleared by a Friend or warned by a Civilian whose source initiates another dispatch on that same site — unless audited by a Spy.',
     roles1: ['friend', 'civilian'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   easyCutout({
     id: 'ea-02', domain: 0, title: 'Cross-site blind cutout',
-    order: 'Cover blown: drop anyone contacted on one site who reaches a third person on the other unconnected to their source — unless warned by a Civilian.',
+    order: 'Drop anyone contacted on one site who reaches a third person on the other unconnected to their source — unless warned by a Civilian.',
     sameIncident: false, unconnected: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   easySiteTaint({
@@ -190,12 +190,12 @@ export const easyFamilies = [
   }),
   easySiteTaint({
     id: 'ea-05', domain: 0, title: 'Cleared by a contacted insider',
-    order: 'Insider betrayal: fire on anyone cleared by a Friend or audited by a Spy whose source was contacted on that same site — unless warned by a Civilian.',
+    order: 'Fire on anyone cleared by a Friend or audited by a Spy whose source was contacted on that same site — unless warned by a Civilian.',
     roles1: ['friend', 'spy'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   custom({
     id: 'ea-06', domain: 0, title: 'No uncompromised clearance',
-    order: 'False cover: take down anyone targeted by a Foe or contacted by a Foreigner unless cleared by a Friend untouched by Double agent or Foreigner.',
+    order: 'Take down anyone targeted by a Foe or contacted by a Foreigner unless cleared by a Friend untouched by Double agent or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = g.in(x, ['foe', 'foreigner'])[0];
@@ -206,7 +206,7 @@ export const easyFamilies = [
   }),
   easySiteRelay({
     id: 'ea-07', domain: 0, title: 'Same-site two-step chain',
-    order: 'Compromised vetting: neutralize anyone acting on a site toward someone who initiates another dispatch on that same site — unless audited by a Spy.',
+    order: 'Neutralize anyone acting on a site toward someone who initiates another dispatch on that same site — unless audited by a Spy.',
     firstDir: 'out', secondDir: 'out', sameIncident: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   easyCutout({
@@ -216,7 +216,7 @@ export const easyFamilies = [
   }),
   easySiteDual({
     id: 'ea-09', domain: 0, title: 'Cross-site receiver and actor',
-    order: 'Burned clearance: shoot anyone contacted on one site who initiates a dispatch on the other site — unless cleared by a Friend.',
+    order: 'Shoot anyone contacted on one site who initiates a dispatch on the other site — unless cleared by a Friend.',
     dirA: 'in', dirB: 'out', sameIncident: false, exc: {roles: ['friend'], dir: 'in'}
   }),
 
@@ -225,17 +225,17 @@ export const easyFamilies = [
   // =========================================================================
   easyCutout({
     id: 'ea-10', domain: 1, title: 'Delayed cross-site cutout',
-    order: 'Watcher exposed: fire on anyone contacted on one site who later reaches a third person on the other site — unless escorted by a Friend.',
+    order: 'Fire on anyone contacted on one site who later reaches a third person on the other site — unless escorted by a Friend.',
     sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   easySiteTaint({
     id: 'ea-11', domain: 1, title: 'Shadowed by a cross-site contact',
-    order: 'Signal in the alley: take down anyone shadowed by a Spy or escorted by a Friend whose contact was reached on the opposite site — unless spotted by a Civilian.',
+    order: 'Take down anyone shadowed by a Spy or escorted by a Friend whose contact was reached on the opposite site — unless spotted by a Civilian.',
     roles1: ['spy', 'friend'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
   custom({
     id: 'ea-12', domain: 1, title: 'Outside uncompromised Spy watch',
-    order: 'Escort off-script: neutralize anyone leaking as a Double agent or signaling as a Foreigner unless shadowed by a Spy untouched by Foe or Foreigner.',
+    order: 'Neutralize anyone leaking as a Double agent or signaling as a Foreigner unless shadowed by a Spy untouched by Foe or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = g.out(x, ['double', 'foreigner'])[0];
@@ -251,12 +251,12 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-14', domain: 1, title: 'Delayed same-site cutout',
-    order: 'Blind-spot ambush: shoot anyone contacted on a site who later reaches a third person on that same site — unless spotted by a Civilian.',
+    order: 'Shoot anyone contacted on a site who later reaches a third person on that same site — unless spotted by a Civilian.',
     sameIncident: true, timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
   custom({
     id: 'ea-15', domain: 1, title: 'Blind-spot ambush target',
-    order: 'Compromised tail: drop anyone ambushed by a Foe or fed a Double agent’s leak from someone no Spy shadows — unless escorted by a Friend.',
+    order: 'Drop anyone ambushed by a Foe or fed a Double agent’s leak from someone no Spy shadows — unless escorted by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'friend')) return null;
@@ -268,12 +268,12 @@ export const easyFamilies = [
   }),
   easySiteTaint({
     id: 'ea-16', domain: 1, title: 'Acting into a cross-site contact',
-    order: 'Watcher exposed: engage anyone acting on one site toward someone contacted on the opposite site — unless spotted by a Civilian.',
+    order: 'Engage anyone acting on one site toward someone contacted on the opposite site — unless spotted by a Civilian.',
     roles1: null, dir1: 'out', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
   easySiteDual({
     id: 'ea-17', domain: 1, title: 'Same-site dual recipient',
-    order: 'Signal in the alley: eliminate anyone contacted twice on the same site in different roles — unless escorted by a Friend.',
+    order: 'Eliminate anyone contacted twice on the same site in different roles — unless escorted by a Friend.',
     dirA: 'in', dirB: 'in', sameIncident: true, diffRole: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   easyCutout({
@@ -283,7 +283,7 @@ export const easyFamilies = [
   }),
   easySiteDual({
     id: 'ea-19', domain: 1, title: 'Same-site dual operator',
-    order: 'Dead drop watched: take down anyone initiating two dispatches in different roles on the same site — unless ambushed by a Foe.',
+    order: 'Take down anyone initiating two dispatches in different roles on the same site — unless ambushed by a Foe.',
     dirA: 'out', dirB: 'out', sameIncident: true, diffRole: true, exc: {roles: ['foe'], dir: 'in'}
   }),
 
@@ -302,7 +302,7 @@ export const easyFamilies = [
   }),
   easySiteCorr({
     id: 'ea-22', domain: 2, title: 'Independent outreach across sites',
-    order: 'Foreign contact in play: eliminate anyone acting toward one person on each site who have no direct contact — unless tracked by a Spy.',
+    order: 'Eliminate anyone acting toward one person on each site who have no direct contact — unless tracked by a Spy.',
     dirA: 'out', dirB: 'out', sameIncident: false, connected: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteTaint({
@@ -317,17 +317,17 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-25', domain: 2, title: 'Recruit bridging strangers',
-    order: 'External handler: neutralize anyone recruited by a Foreigner or tracked by a Spy who reaches a third person unconnected to their source — unless pressured by a Foe.',
+    order: 'Neutralize anyone recruited by a Foreigner or tracked by a Spy who reaches a third person unconnected to their source — unless pressured by a Foe.',
     inRoles: ['foreigner', 'spy'], unconnected: true, exc: {roles: ['foe'], dir: 'in'}
   }),
   easySiteDual({
     id: 'ea-26', domain: 2, title: 'Cross-site dual target',
-    order: 'Border leak: take out anyone contacted on both sites across two different roles — unless tracked by a Spy.',
+    order: 'Take out anyone contacted on both sites across two different roles — unless tracked by a Spy.',
     dirA: 'in', dirB: 'in', sameIncident: false, diffRole: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteTaint({
     id: 'ea-27', domain: 2, title: 'Vouched by a cross-site actor',
-    order: 'Unreported recruitment: shoot anyone vouched for by a Friend or reported by a Civilian whose source acts on the opposite site — unless tracked by a Spy.',
+    order: 'Shoot anyone vouched for by a Friend or reported by a Civilian whose source acts on the opposite site — unless tracked by a Spy.',
     roles1: ['friend', 'civilian'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteCorr({
@@ -346,7 +346,7 @@ export const easyFamilies = [
   // =========================================================================
   easySiteTaint({
     id: 'ea-30', domain: 3, title: 'Tipped off by a cross-site source',
-    order: 'Informant in play: neutralize anyone tipped off by a Civilian or confirmed by a Friend whose source was contacted on the opposite site — unless monitored by a Spy.',
+    order: 'Neutralize anyone tipped off by a Civilian or confirmed by a Friend whose source was contacted on the opposite site — unless monitored by a Spy.',
     roles1: ['civilian', 'friend'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteCorr({
@@ -366,12 +366,12 @@ export const easyFamilies = [
   }),
   easyCutout({
     id: 'ea-34', domain: 3, title: 'Cross-site role-switching cutout',
-    order: 'Street misdirection: engage anyone contacted on one site who reaches a third person on the other in a different role — unless monitored by a Spy.',
+    order: 'Engage anyone contacted on one site who reaches a third person on the other in a different role — unless monitored by a Spy.',
     sameIncident: false, diffRole: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteCorr({
     id: 'ea-35', domain: 3, title: 'Independent pair on one site',
-    order: 'Tainted brief: eliminate anyone contacted by two sources on the same site who have no direct contact — unless confirmed by a Friend.',
+    order: 'Eliminate anyone contacted by two sources on the same site who have no direct contact — unless confirmed by a Friend.',
     dirA: 'in', dirB: 'in', sameIncident: true, connected: false, exc: {roles: ['friend'], dir: 'in'}
   }),
   easySiteTaint({
@@ -381,7 +381,7 @@ export const easyFamilies = [
   }),
   easySiteCorr({
     id: 'ea-37', domain: 3, title: 'Cross-site coordinated outreach',
-    order: 'False warning: take down anyone acting toward one person on each site who are themselves in direct contact — unless misled by a Double agent.',
+    order: 'Take down anyone acting toward one person on each site who are themselves in direct contact — unless misled by a Double agent.',
     dirA: 'out', dirB: 'out', sameIncident: false, connected: true, exc: {roles: ['double'], dir: 'in'}
   }),
   easyCutout({
@@ -391,7 +391,7 @@ export const easyFamilies = [
   }),
   easySiteDual({
     id: 'ea-39', domain: 3, title: 'Two-front role switcher',
-    order: 'Compromised witness: take out anyone initiating dispatches on both sites across two different roles — unless briefed by a Foreigner.',
+    order: 'Take out anyone initiating dispatches on both sites across two different roles — unless briefed by a Foreigner.',
     dirA: 'out', dirB: 'out', sameIncident: false, diffRole: true, exc: {roles: ['foreigner'], dir: 'in'}
   }),
 
@@ -425,7 +425,7 @@ export const easyFamilies = [
   }),
   guardedCarry({
     id: 'ea-45', domain: 4, title: 'Proxy bypassing a Spy trace',
-    order: 'Compromised middleman: shoot anyone backed by a Friend or warned by a Civilian through someone no Spy traces who strikes as a Foe or hands off as a Foreigner.',
+    order: 'Shoot anyone backed by a Friend or warned by a Civilian through someone no Spy traces who strikes as a Foe or hands off as a Foreigner.',
     firstRoles: ['friend', 'civilian'], firstDir: 'in', secondRoles: ['foe', 'foreigner'], secondDir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
@@ -446,7 +446,7 @@ export const easyFamilies = [
   }),
   easySiteRelay({
     id: 'ea-49', domain: 4, title: 'Cross-site role-switching relay',
-    order: 'Chain of proxies: fire on anyone acting on one site toward someone who acts on the other in a different role — unless traced by a Spy.',
+    order: 'Fire on anyone acting on one site toward someone who acts on the other in a different role — unless traced by a Spy.',
     firstDir: 'out', secondDir: 'out', sameIncident: false, diffRole: true, exc: {roles: ['spy'], dir: 'in'}
   }),
 
@@ -455,7 +455,7 @@ export const easyFamilies = [
   // =========================================================================
   custom({
     id: 'ea-50', domain: 5, title: 'Staged alibi on one site',
-    order: 'Staged alibi — shoot anyone reached by two different sources on the same site who are themselves in direct contact.',
+    order: 'Shoot anyone reached by two different sources on the same site who are themselves in direct contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchIncidentCorroboration(g, x, {dirA: 'in', dirB: 'in', sameIncident: true, connected: true});
@@ -466,7 +466,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-51', domain: 5, title: 'Two independent accusers',
-    order: 'Staged corroboration: drop anyone accused by a Foe or identified by a Civilian and deceived by a Double agent or corroborated by a Friend whose two sources have no contact.',
+    order: 'Drop anyone accused by a Foe or identified by a Civilian and deceived by a Double agent or corroborated by a Friend whose two sources have no contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchIndependentSupport(g, x, {roleA: ['foe', 'civilian'], dirA: 'in', roleB: ['double', 'friend'], dirB: 'in'});
@@ -477,7 +477,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-52', domain: 5, title: 'Cross-site colluding pair',
-    order: 'Contradicted witness — engage anyone contacted by one source on each site whose two sources are in direct contact.',
+    order: 'Engage anyone contacted by one source on each site whose two sources are in direct contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchIncidentCorroboration(g, x, {dirA: 'in', dirB: 'in', sameIncident: false, connected: true});
@@ -499,7 +499,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-54', domain: 5, title: 'Same-site double role',
-    order: 'Colluding sources — fire on anyone both acting and contacted on the same site across two different roles.',
+    order: 'Fire on anyone both acting and contacted on the same site across two different roles.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchIncidentDual(g, x, {dirA: 'in', dirB: 'out', sameIncident: true, diffRole: true});
@@ -510,7 +510,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-55', domain: 5, title: 'Independent doubt on a witness',
-    order: 'Fabricated account: take down anyone verified by a Spy or deceived by a Double agent and accused by a Foe or consulted by a Foreigner whose two sources have no contact.',
+    order: 'Take down anyone verified by a Spy or deceived by a Double agent and accused by a Foe or consulted by a Foreigner whose two sources have no contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchIndependentSupport(g, x, {roleA: ['spy', 'double'], dirA: 'in', roleB: ['foe', 'foreigner'], dirB: 'in'});
@@ -521,7 +521,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-56', domain: 5, title: 'Double entry in one role',
-    order: 'Alibi broken — neutralize anyone involved twice inside the same role, initiating or receiving; hold fire on anyone verified by a Spy.',
+    order: 'Neutralize anyone involved twice inside the same role, initiating or receiving; hold fire on anyone verified by a Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'spy')) return null;
@@ -535,7 +535,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-57', domain: 5, title: 'Shared accuser with a corroborated ally',
-    order: 'Staged corroboration: take out anyone accused by a Foe or deceived by a Double agent whose sender also reaches someone corroborated by a Friend.',
+    order: 'Take out anyone accused by a Foe or deceived by a Double agent whose sender also reaches someone corroborated by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         for (const e1 of g.in(x, ['foe', 'double'])) {
@@ -561,7 +561,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-59', domain: 5, title: 'Unidentified dual exposure',
-    order: 'False verification: drop anyone reached by at least two different senders, including a Foe or Foreigner, sparing anyone identified by a Civilian.',
+    order: 'Drop anyone reached by at least two different senders, including a Foe or Foreigner, sparing anyone identified by a Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'civilian')) return null;
@@ -584,12 +584,12 @@ export const easyFamilies = [
   }),
   easyTimePriority({
     id: 'ea-61', domain: 6, title: 'Acted after every incoming call',
-    order: 'Timed betrayal: neutralize anyone contacted who initiates a dispatch later than every contact they receive — unless cleared by a Friend.',
+    order: 'Neutralize anyone contacted who initiates a dispatch later than every contact they receive — unless cleared by a Friend.',
     dirA: 'out', dirB: 'in', relation: 'after_all', exc: {roles: ['friend'], dir: 'in'}
   }),
   easySiteDual({
     id: 'ea-62', domain: 6, title: 'Acted after same-site contact',
-    order: 'Wrong side of the clock: take out anyone who initiates a dispatch on a site after already being contacted on that same site — unless logged by a Spy.',
+    order: 'Take out anyone who initiates a dispatch on a site after already being contacted on that same site — unless logged by a Spy.',
     dirA: 'in', dirB: 'out', sameIncident: true, timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteDual({
@@ -604,17 +604,17 @@ export const easyFamilies = [
   }),
   easySiteRelay({
     id: 'ea-65', domain: 6, title: 'Same-site delayed handoff',
-    order: 'Post-correction move: engage anyone acting on a site toward someone who later initiates another dispatch on that same site.',
+    order: 'Engage anyone acting on a site toward someone who later initiates another dispatch on that same site.',
     firstDir: 'out', secondDir: 'out', sameIncident: true, timeOrder: 'before'
   }),
   easySiteDual({
     id: 'ea-66', domain: 6, title: 'Cross-site move before inbound',
-    order: 'Too late to clear: eliminate anyone who acts on one site earlier than someone contacts them on the other site — unless logged by a Spy.',
+    order: 'Eliminate anyone who acts on one site earlier than someone contacts them on the other site — unless logged by a Spy.',
     dirA: 'out', dirB: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteRelay({
     id: 'ea-67', domain: 6, title: 'Cross-site delayed handoff',
-    order: 'Timed betrayal: fire on anyone acting on one site toward someone who later initiates a dispatch on the other site — unless cleared by a Friend.',
+    order: 'Fire on anyone acting on one site toward someone who later initiates a dispatch on the other site — unless cleared by a Friend.',
     firstDir: 'out', secondDir: 'out', sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   easySiteRelay({
@@ -624,7 +624,7 @@ export const easyFamilies = [
   }),
   easySiteRelay({
     id: 'ea-69', domain: 6, title: 'Acted after source’s cross-site move',
-    order: 'Acted after the breach: neutralize anyone contacted on one site whose source had already initiated a dispatch on the other site.',
+    order: 'Neutralize anyone contacted on one site whose source had already initiated a dispatch on the other site.',
     firstDir: 'in', secondDir: 'out', sameIncident: false, timeOrder: 'after'
   }),
 
@@ -633,17 +633,17 @@ export const easyFamilies = [
   // =========================================================================
   easySiteTaint({
     id: 'ea-70', domain: 7, title: 'Alibi before source was reached',
-    order: 'Coerced vetting: engage anyone given a Friend’s alibi or Spy’s vetting earlier than their source was contacted — unless exposed by a Civilian.',
+    order: 'Engage anyone given a Friend’s alibi or Spy’s vetting earlier than their source was contacted — unless exposed by a Civilian.',
     roles1: ['friend', 'spy'], dir1: 'in', roles2: null, dir2: 'in', timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
   easySiteTaint({
     id: 'ea-71', domain: 7, title: 'Exposed before source was reached',
-    order: 'Poisoned source: eliminate anyone exposed by a Civilian or given a Friend’s alibi earlier than their source was contacted — unless vetted by a Spy.',
+    order: 'Eliminate anyone exposed by a Civilian or given a Friend’s alibi earlier than their source was contacted — unless vetted by a Spy.',
     roles1: ['civilian', 'friend'], dir1: 'in', roles2: null, dir2: 'in', timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteTaint({
     id: 'ea-72', domain: 7, title: 'Vetted by a cross-site actor',
-    order: 'Paid witness: fire on anyone vetted by a Spy or exposed by a Civilian whose source acts on the opposite site — unless given a Friend’s alibi.',
+    order: 'Fire on anyone vetted by a Spy or exposed by a Civilian whose source acts on the opposite site — unless given a Friend’s alibi.',
     roles1: ['spy', 'civilian'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['friend'], dir: 'in'}
   }),
   easySiteTaint({
@@ -653,12 +653,12 @@ export const easyFamilies = [
   }),
   easySiteTaint({
     id: 'ea-74', domain: 7, title: 'Compromised by a same-site source',
-    order: 'Bought alibi: neutralize anyone compromised by a Double agent or coerced by a Foe whose source was contacted on that same site — unless exposed by a Civilian.',
+    order: 'Neutralize anyone compromised by a Double agent or coerced by a Foe whose source was contacted on that same site — unless exposed by a Civilian.',
     roles1: ['double', 'foe'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   easySiteTaint({
     id: 'ea-75', domain: 7, title: 'Funded by an active same-site source',
-    order: 'Dirty funding: take out anyone funded by a Foreigner or compromised by a Double agent whose source acts again on that same site — unless vetted by a Spy.',
+    order: 'Take out anyone funded by a Foreigner or compromised by a Double agent whose source acts again on that same site — unless vetted by a Spy.',
     roles1: ['foreigner', 'double'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   easySiteTaint({
@@ -668,7 +668,7 @@ export const easyFamilies = [
   }),
   easySiteTaint({
     id: 'ea-77', domain: 7, title: 'Vetted before source’s second move',
-    order: 'Poisoned source: drop anyone vetted by a Spy or given a Friend’s alibi earlier than their source initiates another dispatch — unless coerced by a Foe.',
+    order: 'Drop anyone vetted by a Spy or given a Friend’s alibi earlier than their source initiates another dispatch — unless coerced by a Foe.',
     roles1: ['spy', 'friend'], dir1: 'in', roles2: null, dir2: 'out', timeOrder: 'before', exc: {roles: ['foe'], dir: 'in'}
   }),
   easySiteTaint({
@@ -678,7 +678,7 @@ export const easyFamilies = [
   }),
   easySiteTaint({
     id: 'ea-79', domain: 7, title: 'Coerced by a cross-site actor',
-    order: 'Compromised backer: eliminate anyone coerced by a Foe or compromised by a Double agent whose source acts on the opposite site — unless given a Friend’s alibi.',
+    order: 'Eliminate anyone coerced by a Foe or compromised by a Double agent whose source acts on the opposite site — unless given a Friend’s alibi.',
     roles1: ['foe', 'double'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['friend'], dir: 'in'}
   }),
 
@@ -687,7 +687,7 @@ export const easyFamilies = [
   // =========================================================================
   custom({
     id: 'ea-80', domain: 8, title: 'Protected or hunted spy-mole',
-    order: 'Two masters at once — take out anyone protected by a Friend or hunted by a Foe who initiates contacts only as a Spy, Double agent, or Foreigner.',
+    order: 'Take out anyone protected by a Friend or hunted by a Foe who initiates contacts only as a Spy, Double agent, or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const ins = g.in(x, ['friend', 'foe']);
@@ -713,7 +713,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-82', domain: 8, title: 'Pure Spy and Mole split',
-    order: 'Turned guardian — drop anyone who initiates contacts only as a Spy or Double agent and receives only outside those two roles, or vice versa.',
+    order: 'Drop anyone who initiates contacts only as a Spy or Double agent and receives only outside those two roles, or vice versa.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const outs = g.out(x);
@@ -745,7 +745,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-84', domain: 8, title: 'Friend and Foe split',
-    order: 'Shelter breached — eliminate anyone who initiates contacts only as a Friend or Foe and receives only outside those two roles, or vice versa.',
+    order: 'Eliminate anyone who initiates contacts only as a Friend or Foe and receives only outside those two roles, or vice versa.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const outs = g.out(x);
@@ -774,7 +774,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-86', domain: 8, title: 'Dual-hatted operative without shelter',
-    order: 'Two masters at once: take down anyone who watches as a Spy or leaks as a Double agent and protects as a Friend or hunts as a Foe — unless sheltered by a Civilian.',
+    order: 'Take down anyone who watches as a Spy or leaks as a Double agent and protects as a Friend or hunts as a Foe — unless sheltered by a Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'civilian')) return null;
@@ -787,7 +787,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-87', domain: 8, title: 'Unprotected hunter or host',
-    order: 'Hideout compromised: neutralize anyone who initiates contacts only as a Foe, Civilian, or Foreigner, sparing anyone watched by a Spy or protected by a Friend.',
+    order: 'Neutralize anyone who initiates contacts only as a Foe, Civilian, or Foreigner, sparing anyone watched by a Spy or protected by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, ['spy', 'friend'])) return null;
@@ -812,7 +812,7 @@ export const easyFamilies = [
   }),
   custom({
     id: 'ea-89', domain: 8, title: 'Unwatched three-role operative',
-    order: 'Double life exposed: shoot anyone spanning three or more roles, except anyone watched by a Spy.',
+    order: 'Shoot anyone spanning three or more roles, except anyone watched by a Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'spy')) return null;
@@ -828,21 +828,21 @@ export const easyFamilies = [
   // =========================================================================
   guardedAnchor({
     id: 'ea-90', domain: 9, title: '{name}’s unwatched two-step reach',
-    order: 'Shadow reach: fire on anyone reached from {name} in two forward steps with no direct contact to {name} — unless a Spy shadows them.',
+    order: 'Fire on anyone reached from {name} in two forward steps with no direct contact to {name} — unless a Spy shadows them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     excludeDirect: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-91', domain: 9, title: '{name}’s unbacked two-step source',
-    order: 'Unchecked influence: take down anyone reaching {name} in two forward steps with no direct contact to {name}; stand down if a Friend vouches for them.',
+    order: 'Take down anyone reaching {name} in two forward steps with no direct contact to {name}; stand down if a Friend vouches for them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
     excludeDirect: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-92', domain: 9, title: 'Shared target with {name}, unbacked',
-    order: 'Chain of leverage — neutralize anyone else who reaches the same contact {name} reaches, sparing them if a Friend vouches for them.',
+    order: 'Neutralize anyone else who reaches the same contact {name} reaches, sparing them if a Friend vouches for them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
     exc: {roles: ['friend'], dir: 'in'}
@@ -856,28 +856,28 @@ export const easyFamilies = [
   }),
   guardedAnchor({
     id: 'ea-94', domain: 9, title: '{name}’s foreign or mole second-hop',
-    order: 'Command breach — shoot anyone two contacts away from {name} with no direct contact with {name} who leaks as a Double agent or meets as a Foreigner.',
+    order: 'Shoot anyone two contacts away from {name} with no direct contact with {name} who leaks as a Double agent or meets as a Foreigner.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'any',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'any',
     excludeDirect: true, req: {roles: ['double', 'foreigner'], dir: 'out'}
   }),
   guardedAnchor({
     id: 'ea-95', domain: 9, title: '{name}’s unshadowed cutout relay',
-    order: 'Asset under leverage: drop anyone reached from {name} in two forward steps through a cutout no Spy shadows.',
+    order: 'Drop anyone reached from {name} in two forward steps through a cutout no Spy shadows.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-96', domain: 9, title: 'Later relay from {name}',
-    order: 'Shadow reach — engage anyone reached from {name} in two forward steps where the second dispatch happened later, sparing them if a Friend vouches for them.',
+    order: 'Engage anyone reached from {name} in two forward steps where the second dispatch happened later, sparing them if a Friend vouches for them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   guardedAnchor({
     id: 'ea-97', domain: 9, title: 'Earlier relay into {name}',
-    order: 'Unchecked influence: eliminate anyone reaching {name} in two forward steps where the first dispatch happened earlier — unless a Spy shadows them.',
+    order: 'Eliminate anyone reaching {name} in two forward steps where the first dispatch happened earlier — unless a Spy shadows them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
     timeOrder: 'after', exc: {roles: ['spy'], dir: 'in'}
@@ -890,7 +890,7 @@ export const easyFamilies = [
   }),
   guardedAnchor({
     id: 'ea-99', domain: 9, title: '{name}’s two-circle return chain',
-    order: 'Handler compromised: take down anyone reached from {name} by a Foe, Double agent, or Civilian contact followed by a Friend, Spy, or Foreigner contact in either direction.',
+    order: 'Take down anyone reached from {name} by a Foe, Double agent, or Civilian contact followed by a Friend, Spy, or Foreigner contact in either direction.',
     step1Roles: ['foe', 'double', 'civilian'], step1Dir: 'any',
     step2Roles: ['friend', 'spy', 'foreigner'], step2Dir: 'any'
   })

@@ -17,11 +17,11 @@ const opSpoken = {
 };
 
 const opLegend = {
-  eq: '= same truth',
-  neq: '≠ opposite truth',
-  imp: '⇒ if first, then second',
-  or: 'or: at least one holds',
-  nand: 'not both: at most one holds'
+  eq: '= same',
+  neq: '≠ opposite',
+  imp: '⇒ if→then',
+  or: 'or: ≥1',
+  nand: 'not both: ≤1'
 };
 
 function element(tag, className, text) {
@@ -119,16 +119,9 @@ function reportLine(report, index) {
 
 function easyReport(report) {
   const block = element('section', 'case-reports');
-  const explainMap = {
-    eq: '= same truth: both claims hold or both fail.',
-    neq: '≠ opposite truth: exactly one claim holds.',
-    imp: '⇒ if the first claim holds, the second must hold.',
-    or: 'or: at least one of the two claims holds.',
-    nand: 'not both: at most one of the two claims holds.'
-  };
   block.append(
     element('h3', '', 'Cross-check'),
-    element('p', 'case-key', explainMap[report.op] || opLegend[report.op] || '')
+    element('p', 'case-key', opLegend[report.op] || '')
   );
   const list = element('ul', 'case-report-list');
   list.append(reportLine(report, 0));
@@ -139,12 +132,7 @@ function easyReport(report) {
 export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlistChange} = {}) {
   const board = element('div', 'case-file');
   const brief = element('header', 'case-brief');
-  const titleRow = element('div', 'case-title-row');
-  titleRow.append(element('p', 'case-title', evidence.title));
-  if (evidence.domain) {
-    titleRow.append(element('p', 'case-domain', evidence.domain));
-  }
-  brief.append(titleRow, element('h2', '', evidence.order));
+  brief.append(element('h2', '', evidence.order));
   board.append(brief);
 
   const hasShortlistToggle = evidence.level === 'super-easy' || evidence.level === 'very-easy';
@@ -177,10 +165,6 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
     board.append(leads);
   }
 
-  if (hasShortlistToggle && evidence.hint) {
-    board.append(element('p', 'case-first', evidence.hint));
-  }
-
   const verbs = verbsForDomain(evidence.domain);
   const incidents = incidentsForDomain(evidence.domain);
   const records = element('dl', 'case-records');
@@ -190,16 +174,16 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
 
   const keyNotes = [];
   if (evidence.rows.some(row => row.disputed && !row.alias && !row.alt)) {
-    keyNotes.push('? beside a role means both contacts may run the opposite way.');
+    keyNotes.push('? reverse');
   }
   if (evidence.rows.some(row => row.disputed && row.alias)) {
-    keyNotes.push('Swap trades those two names throughout that dispatch.');
+    keyNotes.push('Swap: trade names');
   }
   if (evidence.rows.some(row => row.disputed && row.alt)) {
-    keyNotes.push('An “or X → Y?” tag marks a disputed contact.');
+    keyNotes.push('or X→Y?: alt');
   }
   if (keyNotes.length) {
-    board.append(element('p', 'case-key', keyNotes.join(' ')));
+    board.append(element('p', 'case-key', keyNotes.join(' · ')));
   }
 
   if (evidence.level === 'easy' && evidence.reports.length === 1 && evidence.reports[0].left) {
@@ -224,7 +208,7 @@ export function renderCaseResult(root, trial, {onHoldToggle, onNext, held = fals
   const targets = trial.targets || trial.pair;
   const panel = element('section', 'case-result');
   const titleRow = element('div', 'case-title-row');
-  titleRow.append(element('p', 'case-title', 'Debrief · ' + trial.evidence.title));
+  titleRow.append(element('p', 'case-title', 'Debrief'));
 
   const controls = element('div', 'case-debrief-actions');
   controls.append(

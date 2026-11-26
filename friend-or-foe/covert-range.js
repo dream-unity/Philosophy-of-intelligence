@@ -82,12 +82,21 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
       if (clickable) {
         node.type = 'button';
         node.setAttribute('aria-label', 'Shoot ' + name + ', lane ' + (slot + 1));
-        node.addEventListener('click', () => {
+        const fireTag = () => {
           if (!playing() || run.targets[slot] !== target || target.state !== 'moving') return;
           canvas.focus({preventScroll: true});
           lock = target;
           followLock();
           shoot(target);
+        };
+        node.addEventListener('pointerdown', event => {
+          if (!event.isPrimary || event.button !== 0) return;
+          event.preventDefault();
+          fireTag();
+        });
+        node.addEventListener('click', event => {
+          if (event.detail !== 0) return;
+          fireTag();
         });
       }
       if (tag) tag.node.replaceWith(node);
@@ -259,7 +268,7 @@ export function createArcadeRange({canvas, labels, onUpdate = () => {}, onFinish
     event.preventDefault();
     canvas.focus({preventScroll:true});
     point(event);
-    shoot(null, event.pointerType === 'touch' ? 2 : 0);
+    shoot(null, event.pointerType === 'touch' ? 4 : 2);
   }, opts);
   canvas.addEventListener('keydown', event => {
     if (!playing() || event.altKey || event.ctrlKey || event.metaKey) return;

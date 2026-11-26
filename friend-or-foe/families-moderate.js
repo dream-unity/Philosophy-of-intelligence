@@ -221,32 +221,32 @@ export const moderateFamilies = [
   // =========================================================================
   modCutout({
     id: 'mo-00', domain: 0, title: 'Same-site blind cutout',
-    order: 'Cover blown: take down anyone contacted on a site who reaches a third person there unconnected to their source — unless cleared by a Friend.',
+    order: 'Take down anyone contacted on a site who reaches a third person there unconnected to their source — unless cleared by a Friend.',
     sameIncident: true, unconnected: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   modCutout({
     id: 'mo-01', domain: 0, title: 'Cross-site blind cutout',
-    order: 'Burned clearance: neutralize anyone contacted on one site who reaches a third person on the other unconnected to their source — unless audited by a Spy.',
+    order: 'Neutralize anyone contacted on one site who reaches a third person on the other unconnected to their source — unless audited by a Spy.',
     sameIncident: false, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-02', domain: 0, title: 'Clearance from an active site source',
-    order: 'False cover: shoot anyone cleared by a Friend or warned by a Civilian whose source acts again on that same site — unless audited by a Spy.',
+    order: 'Shoot anyone cleared by a Friend or warned by a Civilian whose source acts again on that same site — unless audited by a Spy.',
     roles1: ['friend', 'civilian'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-03', domain: 0, title: 'Audited by a contacted insider',
-    order: 'Insider betrayal: drop anyone cleared by a Friend or audited by a Spy whose source was contacted on that same site — unless warned by a Civilian.',
+    order: 'Drop anyone cleared by a Friend or audited by a Spy whose source was contacted on that same site — unless warned by a Civilian.',
     roles1: ['friend', 'spy'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-04', domain: 0, title: 'Reaching a pressured site mark',
-    order: 'Compromised vetting: engage anyone acting on a site toward someone a Foe targets or Foreigner contacts on that same site — unless cleared by a Friend.',
+    order: 'Engage anyone acting on a site toward someone a Foe targets or Foreigner contacts on that same site — unless cleared by a Friend.',
     roles1: null, dir1: 'out', roles2: ['foe', 'foreigner'], dir2: 'in', sameIncident: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   modTimePriority({
     id: 'mo-05', domain: 0, title: 'Acted before every incoming call',
-    order: 'Station breach: eliminate anyone contacted who still initiates a dispatch earlier than every contact they receive — unless warned by a Civilian.',
+    order: 'Eliminate anyone contacted who still initiates a dispatch earlier than every contact they receive — unless warned by a Civilian.',
     dirA: 'out', dirB: 'in', relation: 'before_all', exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
@@ -261,12 +261,12 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-08', domain: 0, title: 'Late clearance after source acted',
-    order: 'Delayed cover: take down anyone cleared by a Friend or audited by a Spy after their source had already acted elsewhere — unless targeted by a Foe.',
+    order: 'Take down anyone cleared by a Friend or audited by a Spy after their source had already acted elsewhere — unless targeted by a Foe.',
     roles1: ['friend', 'spy'], dir1: 'in', roles2: null, dir2: 'out', timeOrder: 'after', exc: {roles: ['foe'], dir: 'in'}
   }),
   modTimePriority({
     id: 'mo-09', domain: 0, title: 'Acted after every same-site contact',
-    order: 'Late response: neutralize anyone contacted on a site who initiates a dispatch later than every contact they receive on that site.',
+    order: 'Neutralize anyone contacted on a site who initiates a dispatch later than every contact they receive on that site.',
     dirA: 'out', dirB: 'in', relation: 'after_all', sameIncident: true
   }),
 
@@ -275,17 +275,17 @@ export const moderateFamilies = [
   // =========================================================================
   modCutout({
     id: 'mo-10', domain: 1, title: 'Delayed cross-site cutout',
-    order: 'Escort off-script: engage anyone contacted on one site who later reaches a third person on the other site — unless escorted by a Friend.',
+    order: 'Engage anyone contacted on one site who later reaches a third person on the other site — unless escorted by a Friend.',
     sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   modCutout({
     id: 'mo-11', domain: 1, title: 'Pre-positioned same-site relay',
-    order: 'Dead drop watched: eliminate anyone who reached someone on a site earlier than a third person contacted them on that same site — unless spotted by a Civilian.',
+    order: 'Eliminate anyone who reached someone on a site earlier than a third person contacted them on that same site — unless spotted by a Civilian.',
     sameIncident: true, timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-12', domain: 1, title: 'Shadowed before watcher was reached',
-    order: 'Compromised tail: fire on anyone shadowed by a Spy or escorted by a Friend earlier than their watcher was contacted — unless spotted by a Civilian.',
+    order: 'Fire on anyone shadowed by a Spy or escorted by a Friend earlier than their watcher was contacted — unless spotted by a Civilian.',
     roles1: ['spy', 'friend'], dir1: 'in', roles2: null, dir2: 'in', timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
@@ -295,12 +295,12 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-14', domain: 1, title: 'Watcher targeting a contacted mark',
-    order: 'Watcher exposed: neutralize anyone acting on a site toward someone already contacted earlier on that same site — unless shadowed by a Spy.',
+    order: 'Neutralize anyone acting on a site toward someone already contacted earlier on that same site — unless shadowed by a Spy.',
     roles1: null, dir1: 'out', roles2: null, dir2: 'in', sameIncident: true, timeOrder: 'after', exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteRelay({
     id: 'mo-15', domain: 1, title: 'Cross-site ambush before watch',
-    order: 'Signal in the alley: take out anyone acting on one site toward someone contacted later on the other site — unless escorted by a Friend.',
+    order: 'Take out anyone acting on one site toward someone contacted later on the other site — unless escorted by a Friend.',
     firstDir: 'out', secondDir: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   modSiteTaint({
@@ -320,7 +320,7 @@ export const moderateFamilies = [
   }),
   modCutout({
     id: 'mo-19', domain: 1, title: 'Double-role same-site cutout',
-    order: 'Compromised tail: eliminate anyone contacted on a site who reaches a third person there in another role unconnected to their source — unless shadowed by a Spy.',
+    order: 'Eliminate anyone contacted on a site who reaches a third person there in another role unconnected to their source — unless shadowed by a Spy.',
     sameIncident: true, diffRole: true, unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
 
@@ -329,7 +329,7 @@ export const moderateFamilies = [
   // =========================================================================
   modOrigin({
     id: 'mo-20', domain: 2, title: 'Echo chamber from one handler',
-    order: 'Foreign contact in play: take out anyone reached by two sources who both received dispatches from the same upstream handler — unless tracked by a Spy.',
+    order: 'Take out anyone reached by two sources who both received dispatches from the same upstream handler — unless tracked by a Spy.',
     sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteTaint({
@@ -344,12 +344,12 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-23', domain: 2, title: 'Recruiter reaching an active insider',
-    order: 'External handler: engage anyone acting on a site toward someone who initiates another dispatch on the opposite site — unless tracked by a Spy.',
+    order: 'Engage anyone acting on a site toward someone who initiates another dispatch on the opposite site — unless tracked by a Spy.',
     roles1: null, dir1: 'out', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-24', domain: 2, title: 'Recruited earlier than source’s cover',
-    order: 'Border leak: eliminate anyone contacted by someone who received a dispatch later on the same site — unless vouched for by a Friend.',
+    order: 'Eliminate anyone contacted by someone who received a dispatch later on the same site — unless vouched for by a Friend.',
     roles1: null, dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   modSiteTaint({
@@ -369,7 +369,7 @@ export const moderateFamilies = [
   }),
   modTimePriority({
     id: 'mo-28', domain: 2, title: 'Cross-border move before inbound',
-    order: 'Cross-border breach: take out anyone contacted on one site who acts on the other earlier than every contact they receive on the first.',
+    order: 'Take out anyone contacted on one site who acts on the other earlier than every contact they receive on the first.',
     dirA: 'out', dirB: 'in', relation: 'before_all', sameIncident: false
   }),
   modSiteCorr({
@@ -383,7 +383,7 @@ export const moderateFamilies = [
   // =========================================================================
   modCutout({
     id: 'mo-30', domain: 3, title: 'Delayed same-site cutout',
-    order: 'Burned tip-off: fire on anyone contacted on a site who later reaches a third person on that same site — unless confirmed by a Friend.',
+    order: 'Fire on anyone contacted on a site who later reaches a third person on that same site — unless confirmed by a Friend.',
     sameIncident: true, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   modSiteTaint({
@@ -403,17 +403,17 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-34', domain: 3, title: 'Late tip-off after same-site move',
-    order: 'Informant in play: shoot anyone tipped off by a Civilian or confirmed by a Friend after their source had already been contacted on that site.',
+    order: 'Shoot anyone tipped off by a Civilian or confirmed by a Friend after their source had already been contacted on that site.',
     roles1: ['civilian', 'friend'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, timeOrder: 'after'
   }),
   modCutout({
     id: 'mo-35', domain: 3, title: 'Monitored cutout to an ally',
-    order: 'False warning: drop anyone monitored by a Spy or briefed by a Foreigner who reaches a third person on the same site — unless misled by a Double agent.',
+    order: 'Drop anyone monitored by a Spy or briefed by a Foreigner who reaches a third person on the same site — unless misled by a Double agent.',
     inRoles: ['spy', 'foreigner'], sameIncident: true, exc: {roles: ['double'], dir: 'in'}
   }),
   modSiteCorr({
     id: 'mo-36', domain: 3, title: 'Cross-site coordinated outreach',
-    order: 'Burned tip-off: engage anyone acting toward one person on each site who are themselves in direct contact — unless briefed by a Foreigner.',
+    order: 'Engage anyone acting toward one person on each site who are themselves in direct contact — unless briefed by a Foreigner.',
     dirA: 'out', dirB: 'out', sameIncident: false, connected: true, exc: {roles: ['foreigner'], dir: 'in'}
   }),
   modCutout({
@@ -423,12 +423,12 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-38', domain: 3, title: 'Confirmed by a misled or briefed source',
-    order: 'Street misdirection: fire on anyone confirmed by a Friend or monitored by a Spy whose source was misled by a Double agent or briefed by a Foreigner — unless tipped off by a Civilian.',
+    order: 'Fire on anyone confirmed by a Friend or monitored by a Spy whose source was misled by a Double agent or briefed by a Foreigner — unless tipped off by a Civilian.',
     roles1: ['friend', 'spy'], dir1: 'in', roles2: ['double', 'foreigner'], dir2: 'in', exc: {roles: ['civilian'], dir: 'in'}
   }),
   modTimePriority({
     id: 'mo-39', domain: 3, title: 'Late cross-site response',
-    order: 'Tainted brief: take down anyone contacted on one site who acts on the other later than every contact they receive on the first — unless confirmed by a Friend.',
+    order: 'Take down anyone contacted on one site who acts on the other later than every contact they receive on the first — unless confirmed by a Friend.',
     dirA: 'out', dirB: 'in', relation: 'after_all', sameIncident: false, exc: {roles: ['friend'], dir: 'in'}
   }),
 
@@ -437,7 +437,7 @@ export const moderateFamilies = [
   // =========================================================================
   modSiteRelay({
     id: 'mo-40', domain: 4, title: 'Same-site two-step handoff',
-    order: 'Proxy breach: drop anyone acting on a site toward someone who initiates another dispatch on that same site — unless backed by a Friend.',
+    order: 'Drop anyone acting on a site toward someone who initiates another dispatch on that same site — unless backed by a Friend.',
     firstDir: 'out', secondDir: 'out', sameIncident: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   modSiteRelay({
@@ -457,12 +457,12 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-44', domain: 4, title: 'Backer behind an active tracer',
-    order: 'Rogue relay: take down anyone backed by a Friend or handed off to by a Foreigner whose source initiates a same-site dispatch — unless struck by a Foe.',
+    order: 'Take down anyone backed by a Friend or handed off to by a Foreigner whose source initiates a same-site dispatch — unless struck by a Foe.',
     roles1: ['friend', 'foreigner'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['foe'], dir: 'in'}
   }),
   modCutout({
     id: 'mo-45', domain: 4, title: 'Warned or backed blind relay',
-    order: 'Intercepted handoff: neutralize anyone warned by a Civilian or backed by a Friend who reaches a third person unconnected to their source — unless traced by a Spy.',
+    order: 'Neutralize anyone warned by a Civilian or backed by a Friend who reaches a third person unconnected to their source — unless traced by a Spy.',
     inRoles: ['civilian', 'friend'], unconnected: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteTaint({
@@ -477,7 +477,7 @@ export const moderateFamilies = [
   }),
   modSiteRelay({
     id: 'mo-48', domain: 4, title: 'Handoff after same-site warning',
-    order: 'Cutout exposed: drop anyone acting on a site toward someone who had earlier initiated a dispatch on that same site.',
+    order: 'Drop anyone acting on a site toward someone who had earlier initiated a dispatch on that same site.',
     firstDir: 'out', secondDir: 'out', sameIncident: true, timeOrder: 'after'
   }),
   modSiteTaint({
@@ -491,12 +491,12 @@ export const moderateFamilies = [
   // =========================================================================
   modSiteCorr({
     id: 'mo-50', domain: 5, title: 'Staged corroboration on one site',
-    order: 'Staged alibi — neutralize anyone reached by two different sources on the same site who are themselves in direct contact.',
+    order: 'Neutralize anyone reached by two different sources on the same site who are themselves in direct contact.',
     dirA: 'in', dirB: 'in', sameIncident: true, connected: true
   }),
   modSiteCorr({
     id: 'mo-51', domain: 5, title: 'Cross-site colluding sources',
-    order: 'False verification: take out anyone contacted by one source on each site whose two sources are in direct contact — unless accused by a Foe.',
+    order: 'Take out anyone contacted by one source on each site whose two sources are in direct contact — unless accused by a Foe.',
     dirA: 'in', dirB: 'in', sameIncident: false, connected: true, exc: {roles: ['foe'], dir: 'in'}
   }),
   modIndep({
@@ -506,12 +506,12 @@ export const moderateFamilies = [
   }),
   modIndep({
     id: 'mo-53', domain: 5, title: 'Two independent opposing claims',
-    order: 'Fabricated account: drop anyone accused by a Foe or corroborated by a Friend and deceived by a Double agent or consulted by a Foreigner when those two sources have no contact.',
+    order: 'Drop anyone accused by a Foe or corroborated by a Friend and deceived by a Double agent or consulted by a Foreigner when those two sources have no contact.',
     roleA: ['foe', 'friend'], dirA: 'in', roleB: ['double', 'foreigner'], dirB: 'in'
   }),
   modSiteCorr({
     id: 'mo-54', domain: 5, title: 'Independent pair on one site',
-    order: 'Alibi broken: engage anyone reached by two different sources on the same site who have no direct contact — unless verified by a Spy.',
+    order: 'Engage anyone reached by two different sources on the same site who have no direct contact — unless verified by a Spy.',
     dirA: 'in', dirB: 'in', sameIncident: true, connected: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   modIndep({
@@ -521,7 +521,7 @@ export const moderateFamilies = [
   }),
   modSiteCorr({
     id: 'mo-56', domain: 5, title: 'Coordinated cover on one site',
-    order: 'Rehearsed cover — fire on anyone acting toward two people on the same site who are themselves in direct contact.',
+    order: 'Fire on anyone acting toward two people on the same site who are themselves in direct contact.',
     dirA: 'out', dirB: 'out', sameIncident: true, connected: true
   }),
   modIndep({
@@ -531,12 +531,12 @@ export const moderateFamilies = [
   }),
   modSiteDual({
     id: 'mo-58', domain: 5, title: 'Same-site contradiction',
-    order: 'Double story: neutralize anyone both acting and contacted on the same site — unless corroborated by a Friend.',
+    order: 'Neutralize anyone both acting and contacted on the same site — unless corroborated by a Friend.',
     dirA: 'in', dirB: 'out', sameIncident: true, diffRole: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   modSiteDual({
     id: 'mo-59', domain: 5, title: 'Cross-site double face',
-    order: 'Split allegiance: take out anyone contacted on one site while acting on the other — unless verified by a Spy.',
+    order: 'Take out anyone contacted on one site while acting on the other — unless verified by a Spy.',
     dirA: 'in', dirB: 'out', sameIncident: false, diffRole: true, exc: {roles: ['spy'], dir: 'in'}
   }),
 
@@ -545,37 +545,37 @@ export const moderateFamilies = [
   // =========================================================================
   modSiteDual({
     id: 'mo-60', domain: 6, title: 'Acted after same-site contact',
-    order: 'Wrong side of the clock — eliminate anyone who initiated a contact on a site after already being contacted on that same site.',
+    order: 'Eliminate anyone who initiated a contact on a site after already being contacted on that same site.',
     dirA: 'in', dirB: 'out', sameIncident: true, timeOrder: 'before'
   }),
   modSiteDual({
     id: 'mo-61', domain: 6, title: 'Cross-site relay after briefing',
-    order: 'Cross-site leak: fire on anyone contacted on one site who later initiates a contact on the other site — unless cleared by a Friend.',
+    order: 'Fire on anyone contacted on one site who later initiates a contact on the other site — unless cleared by a Friend.',
     dirA: 'in', dirB: 'out', sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
   modSiteDual({
     id: 'mo-62', domain: 6, title: 'Late same-site warning',
-    order: 'Too late to clear: take down anyone who acted on a site earlier than someone contacted them on that same site — unless logged by a Spy.',
+    order: 'Take down anyone who acted on a site earlier than someone contacted them on that same site — unless logged by a Spy.',
     dirA: 'out', dirB: 'in', sameIncident: true, timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteRelay({
     id: 'mo-63', domain: 6, title: 'Same-site chain reaction',
-    order: 'Post-correction move: neutralize anyone contacted on a site whose source had already been contacted earlier on that same site.',
+    order: 'Neutralize anyone contacted on a site whose source had already been contacted earlier on that same site.',
     firstDir: 'in', secondDir: 'in', sameIncident: true, timeOrder: 'after'
   }),
   modSiteRelay({
     id: 'mo-64', domain: 6, title: 'Delayed cross-site relay',
-    order: 'Cross-site handoff: take out anyone who reaches out to someone who later initiates a contact on the other site — unless struck by a Foe.',
+    order: 'Take out anyone who reaches out to someone who later initiates a contact on the other site — unless struck by a Foe.',
     firstDir: 'out', secondDir: 'out', sameIncident: false, timeOrder: 'before', exc: {roles: ['foe'], dir: 'in'}
   }),
   modTimePriority({
     id: 'mo-65', domain: 6, title: 'Acted later than every inbound',
-    order: 'Timed betrayal: shoot anyone contacted who still initiates a dispatch later than every contact they receive — unless a Foreigner met them.',
+    order: 'Shoot anyone contacted who still initiates a dispatch later than every contact they receive — unless a Foreigner met them.',
     dirA: 'out', dirB: 'in', relation: 'after_all', exc: {roles: ['foreigner'], dir: 'in'}
   }),
   modSiteDual({
     id: 'mo-66', domain: 6, title: 'Cross-site move before inbound',
-    order: 'Wrong side of the clock: drop anyone who acts on one site earlier than someone contacts them on the other site — unless logged by a Spy.',
+    order: 'Drop anyone who acts on one site earlier than someone contacts them on the other site — unless logged by a Spy.',
     dirA: 'out', dirB: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteRelay({
@@ -585,12 +585,12 @@ export const moderateFamilies = [
   }),
   modSiteRelay({
     id: 'mo-68', domain: 6, title: 'Cross-site contact after source acted',
-    order: 'Out of sequence: eliminate anyone contacted on one site whose source had already initiated a dispatch on the other — unless corrected by a Civilian.',
+    order: 'Eliminate anyone contacted on one site whose source had already initiated a dispatch on the other — unless corrected by a Civilian.',
     firstDir: 'in', secondDir: 'out', sameIncident: false, timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteRelay({
     id: 'mo-69', domain: 6, title: 'Same-site contact after source acted',
-    order: 'Post-correction move: fire on anyone contacted on a site whose source had already initiated another dispatch on that site — unless cleared by a Friend.',
+    order: 'Fire on anyone contacted on a site whose source had already initiated another dispatch on that site — unless cleared by a Friend.',
     firstDir: 'in', secondDir: 'out', sameIncident: true, timeOrder: 'after', exc: {roles: ['friend'], dir: 'in'}
   }),
 
@@ -599,12 +599,12 @@ export const moderateFamilies = [
   // =========================================================================
   modSiteTaint({
     id: 'mo-70', domain: 7, title: 'Alibi from a cross-site actor',
-    order: 'Paid witness: shoot anyone given a Friend’s alibi or Civilian’s exposure whose source acts on the opposite site — unless vetted by a Spy.',
+    order: 'Shoot anyone given a Friend’s alibi or Civilian’s exposure whose source acts on the opposite site — unless vetted by a Spy.',
     roles1: ['friend', 'civilian'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-71', domain: 7, title: 'Vetted by a same-site pressured source',
-    order: 'Compromised backer: drop anyone vetted by a Spy or compromised by a Double agent whose source was reached on that site — unless exposed by a Civilian.',
+    order: 'Drop anyone vetted by a Spy or compromised by a Double agent whose source was reached on that site — unless exposed by a Civilian.',
     roles1: ['spy', 'double'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
@@ -619,17 +619,17 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-74', domain: 7, title: 'Coerced by an earlier-contacted source',
-    order: 'Coerced vetting: fire on anyone coerced by a Foe or compromised by a Double agent after their source had already been contacted — unless funded by a Foreigner.',
+    order: 'Fire on anyone coerced by a Foe or compromised by a Double agent after their source had already been contacted — unless funded by a Foreigner.',
     roles1: ['foe', 'double'], dir1: 'in', roles2: null, dir2: 'in', timeOrder: 'after', exc: {roles: ['foreigner'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-75', domain: 7, title: 'Compromised by a same-site actor',
-    order: 'Poisoned source: take down anyone compromised by a Double agent or coerced by a Foe whose source acts on that same site — unless vetted by a Spy.',
+    order: 'Take down anyone compromised by a Double agent or coerced by a Foe whose source acts on that same site — unless vetted by a Spy.',
     roles1: ['double', 'foe'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-76', domain: 7, title: 'Alibi from a cross-site contacted source',
-    order: 'Paid witness: neutralize anyone given a Friend’s alibi or Spy’s vetting whose source was contacted on the opposite site — unless exposed by a Civilian.',
+    order: 'Neutralize anyone given a Friend’s alibi or Spy’s vetting whose source was contacted on the opposite site — unless exposed by a Civilian.',
     roles1: ['friend', 'spy'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
@@ -639,12 +639,12 @@ export const moderateFamilies = [
   }),
   modSiteTaint({
     id: 'mo-78', domain: 7, title: 'Bought alibi from a same-site source',
-    order: 'Bought alibi: shoot anyone funded by a Foreigner or given a Friend’s alibi whose source was contacted on that same site — unless exposed by a Civilian.',
+    order: 'Shoot anyone funded by a Foreigner or given a Friend’s alibi whose source was contacted on that same site — unless exposed by a Civilian.',
     roles1: ['foreigner', 'friend'], dir1: 'in', roles2: null, dir2: 'in', sameIncident: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteTaint({
     id: 'mo-79', domain: 7, title: 'Dirty funding from a cross-site actor',
-    order: 'Dirty funding: drop anyone exposed by a Civilian or compromised by a Double agent whose source acts on the opposite site — unless coerced by a Foe.',
+    order: 'Drop anyone exposed by a Civilian or compromised by a Double agent whose source acts on the opposite site — unless coerced by a Foe.',
     roles1: ['civilian', 'double'], dir1: 'in', roles2: null, dir2: 'out', sameIncident: false, exc: {roles: ['foe'], dir: 'in'}
   }),
 
@@ -653,7 +653,7 @@ export const moderateFamilies = [
   // =========================================================================
   modSiteDual({
     id: 'mo-80', domain: 8, title: 'Two-front operator without shelter',
-    order: 'Turned guardian: take down anyone initiating dispatches on both sites — unless sheltered by a Civilian.',
+    order: 'Take down anyone initiating dispatches on both sites — unless sheltered by a Civilian.',
     dirA: 'out', dirB: 'out', sameIncident: false, exc: {roles: ['civilian'], dir: 'in'}
   }),
   modSiteDual({
@@ -668,12 +668,12 @@ export const moderateFamilies = [
   }),
   modSiteDual({
     id: 'mo-83', domain: 8, title: 'Same-site dual contact',
-    order: 'Protector playing both sides: shoot anyone contacted twice on the same site in different roles — unless sheltered by a Civilian.',
+    order: 'Shoot anyone contacted twice on the same site in different roles — unless sheltered by a Civilian.',
     dirA: 'in', dirB: 'in', sameIncident: true, diffRole: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
   modCutout({
     id: 'mo-84', domain: 8, title: 'Two masters on one site',
-    order: 'Two masters at once: drop anyone contacted on a site who reaches a third person there in a different role — unless protected by a Friend.',
+    order: 'Drop anyone contacted on a site who reaches a third person there in a different role — unless protected by a Friend.',
     sameIncident: true, diffRole: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   modCutout({
@@ -698,7 +698,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-89', domain: 8, title: 'Pure recipient without shelter',
-    order: 'Protector playing both sides: neutralize anyone receiving contacts in at least two roles who initiates none; hold fire on anyone protected by a Friend.',
+    order: 'Neutralize anyone receiving contacts in at least two roles who initiates none; hold fire on anyone protected by a Friend.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'friend') || g.out(x).length > 0) return null;
@@ -715,12 +715,12 @@ export const moderateFamilies = [
   // =========================================================================
   modAnchor({
     id: 'mo-90', domain: 9, title: '{name}’s two-step proxy',
-    order: 'Chain of leverage — engage anyone reached in two outgoing steps from {name} with no direct contact with {name}, except anyone shadowed by a Spy.',
+    order: 'Engage anyone reached in two outgoing steps from {name} with no direct contact with {name}, except anyone shadowed by a Spy.',
     step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'out', excludeDirect: true, exc: {roles: ['spy'], dir: 'in'}
   }),
   modAnchor({
     id: 'mo-91', domain: 9, title: '{name}’s hidden upstream',
-    order: 'Handler compromised: eliminate anyone two incoming steps upstream of {name} with no direct contact with {name} — unless vouched for by a Friend.',
+    order: 'Eliminate anyone two incoming steps upstream of {name} with no direct contact with {name} — unless vouched for by a Friend.',
     step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'in', excludeDirect: true, exc: {roles: ['friend'], dir: 'in'}
   }),
   modAnchor({
@@ -730,22 +730,22 @@ export const moderateFamilies = [
   }),
   modAnchor({
     id: 'mo-93', domain: 9, title: '{name}’s delayed chain',
-    order: 'Asset under leverage: take down anyone reached from {name} in two outgoing steps where the second contact happens later than the first.',
+    order: 'Take down anyone reached from {name} in two outgoing steps where the second contact happens later than the first.',
     step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'out', timeOrder: 'before'
   }),
   modAnchor({
     id: 'mo-94', domain: 9, title: '{name}’s pre-positioned relay',
-    order: 'Shadow reach — neutralize anyone reached from {name} in two outgoing steps where the second contact happened earlier than the first.',
+    order: 'Neutralize anyone reached from {name} in two outgoing steps where the second contact happened earlier than the first.',
     step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'out', timeOrder: 'after'
   }),
   modAnchor({
     id: 'mo-95', domain: 9, title: '{name}’s shared ward',
-    order: 'Unchecked influence: take out anyone reached by someone who also operates directly toward {name} — unless met by a Foreigner.',
+    order: 'Take out anyone reached by someone who also operates directly toward {name} — unless met by a Foreigner.',
     step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'out', exc: {roles: ['foreigner'], dir: 'in'}
   }),
   modAnchor({
     id: 'mo-96', domain: 9, title: '{name}’s rival source',
-    order: 'Chain of leverage — shoot anyone who operates toward someone {name} also reaches, sparing anyone shadowed by a Spy.',
+    order: 'Shoot anyone who operates toward someone {name} also reaches, sparing anyone shadowed by a Spy.',
     step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'in', exc: {roles: ['spy'], dir: 'in'}
   }),
   modAnchor({
@@ -755,12 +755,12 @@ export const moderateFamilies = [
   }),
   modAnchor({
     id: 'mo-98', domain: 9, title: '{name}’s unbacked cutout',
-    order: 'Command breach: engage anyone upstream of {name} through an intermediary no Friend vouches for — excluding {name}’s direct contacts.',
+    order: 'Engage anyone upstream of {name} through an intermediary no Friend vouches for — excluding {name}’s direct contacts.',
     step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'in', excludeDirect: true, midExc: {roles: ['friend'], dir: 'in'}
   }),
   modAnchor({
     id: 'mo-99', domain: 9, title: '{name}’s cross-role reach',
-    order: 'Asset under leverage: eliminate anyone reached from {name} in two outgoing steps across two different roles — unless a Foe targets them.',
+    order: 'Eliminate anyone reached from {name} in two outgoing steps across two different roles — unless a Foe targets them.',
     step1Roles: null, step1Dir: 'out', step2Roles: null, step2Dir: 'out', diffRole: true, exc: {roles: ['foe'], dir: 'in'}
   })
 ];

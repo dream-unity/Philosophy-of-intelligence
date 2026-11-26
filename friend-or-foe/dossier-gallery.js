@@ -1,4 +1,4 @@
-import {createArcadeRange} from './covert-range.js?v=speed';
+import {createArcadeRange} from './covert-range.js?v=fof17';
 import {bindSpeedDial} from './speed-dial.js';
 import {makeCaseTrial} from './case-decks.js';
 import {renderCaseEvidence, renderCaseGuide, renderCaseResult} from './case-view.js';
@@ -142,7 +142,7 @@ function finishTrial(result) {
   el('outcome-detail').textContent = trial.pair.join(' + ') + ' · ' + elapsed;
   el('score').textContent = 'Cases ' + session.wins + ' / ' + session.completed;
   tone(result.correct ? 380 : 210, result.correct ? 625 : 112, .18);
-  scheduleNext(result.correct ? 3500 : 7500);
+  scheduleNext(result.correct ? 2200 : 7500);
 }
 
 function toggleDebriefHold() {

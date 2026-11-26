@@ -304,6 +304,8 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
     const hardRoot = global.document.createElement('section');
     renderCaseEvidence(hardRoot, hardTrial.evidence, {shortlist: true});
     assert.equal(hardRoot.findAll(n => n.tagName === 'INPUT' && n.type === 'checkbox').length, 0);
+    assert.equal(hardRoot.querySelector('.case-title-row'), null, 'Live trial must not render redundant title/domain row above order');
+    assert.equal(hardRoot.querySelector('.case-first'), null, 'Live trial must not render hint clutter above dispatches');
     assert.ok(hardRoot.allText().includes('Cross-checks'));
 
     // In-place debrief keeps the original .case-file visible underneath .case-result and exposes Hold/Next buttons
@@ -408,6 +410,8 @@ test('All five difficulty tiers eliminate directionless "tied to" matching, perm
       assert.doesNotMatch(f.title, /\b(un)?link(ed|s|ing)?\b/i, `${f.id} title should use operational contact language rather than "link"`);
       assert.doesNotMatch(f.hint || '', /\b(un)?link(ed|s|ing)?\b/i, `${f.id} hint should use operational contact language rather than "link"`);
       assert.doesNotMatch(f.order, / — .* — /, `${f.id} order should not contain double em-dashes`);
+      assert.doesNotMatch(f.order, /^[^.:?!—]+:\s+/, `${f.id} order must not start with a title/label prefix`);
+      assert.match(f.order, /^(Shoot|Take out|Take down|Drop|Eliminate|Fire on|Neutralize|Engage)\b/, `${f.id} order must open directly with an actionable command`);
     }
   }
 });
