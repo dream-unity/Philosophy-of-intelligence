@@ -8,7 +8,7 @@ const el = id => document.getElementById(id);
 const dialog = el('controls');
 let phase = 'ready';
 let difficulty = 'super-easy';
-let shortlist = true;
+let shortlist = false;
 const difficultyNames = {'super-easy':'Super Easy', 'very-easy':'Very Easy', easy:'Easy', medium:'Moderate', hard:'Hard'};
 const difficultyChoices = el('run-form').elements.namedItem('difficulty');
 const speedInput = el('master-speed');

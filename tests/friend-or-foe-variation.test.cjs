@@ -369,9 +369,9 @@ test('Domain-contextual operational role verbs vary across domains and render in
   }
 });
 
-test('Super Easy, Moderate, and Hard families eliminate directionless "tied to" matching and permanent safe/threat role pooling', async () => {
+test('All five difficulty tiers eliminate directionless "tied to" matching, permanent safe/threat role pooling, and article typos', async () => {
   const {familiesByLevel} = await loadModule('friend-or-foe/case-families.js');
-  for (const level of ['super-easy', 'medium', 'hard']) {
+  for (const level of ['super-easy', 'very-easy', 'easy', 'medium', 'hard']) {
     const list = familiesByLevel[level];
     const tiedCount = list.filter(f => /\btied to\b|\btie\b|\bties\b/i.test(f.order)).length;
     assert.equal(tiedCount, 0, `${level} must have 0 directionless "tied to" orders, got ${tiedCount}`);
@@ -380,7 +380,7 @@ test('Super Easy, Moderate, and Hard families eliminate directionless "tied to" 
     const pooledBad = list.filter(f => /Foe, Double agent, or Foreigner/.test(f.order)).length;
     assert.ok(pooledBad <= 1, `${level} must have <=1 pooled Foe/Double/Foreigner order, got ${pooledBad}`);
     for (const f of list) {
-      assert.doesNotMatch(f.order, /\ban suspect\b|\ban Foe\b/i, `${f.id} has an article grammar typo`);
+      assert.doesNotMatch(f.order, /\ban (suspect|Foe|contact|cutout|Friend|Spy|Civilian|Double|Foreigner)\b/i, `${f.id} has an article grammar typo`);
     }
   }
 });

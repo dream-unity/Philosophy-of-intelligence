@@ -222,7 +222,7 @@ export function renderCaseResult(root, trial) {
   const titleRow = element('div', 'case-title-row');
   titleRow.append(
     element('p', 'case-title', 'Debrief · ' + trial.evidence.title),
-    element('p', 'case-domain', 'Space: next · P: hold')
+    element('p', 'case-domain case-result-hint', 'Space: next · P: hold')
   );
   panel.append(
     titleRow,
