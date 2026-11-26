@@ -165,9 +165,15 @@ test('all five difficulties cycle 100 unique families with variable target count
       assert.doesNotMatch(trial.evidence.order, /\{name\}/);
       assert.doesNotMatch(trial.evidence.order, BANNED_COPY);
 
-      // Every file carries a distinct operational dispatch time 1..6
+      // Every dispatch carries a distinct operational time 1..6 and a balanced 3v3 site/incident split
       const times = trial.evidence.rows.map(r => r.time).sort((a, b) => a - b);
       assert.deepEqual(times, [1, 2, 3, 4, 5, 6], `${level} trial ${i} must carry shuffled dispatch times 1..6`);
+      const incCounts = [0, 0];
+      for (const r of trial.evidence.rows) {
+        assert.ok(r.incident === 0 || r.incident === 1, `${level} trial ${i} missing binary incident tag`);
+        incCounts[r.incident]++;
+      }
+      assert.deepEqual(incCounts, [3, 3], `${level} trial ${i} must split 6 dispatches 3v3 across two operational sites`);
 
       const disputedCount = trial.evidence.rows.filter(r => r.disputed).length;
       if (level === 'super-easy' || level === 'very-easy') {
@@ -285,6 +291,7 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
       assert.equal(names.hidden, true);
       assert.equal(toggled, false);
       assert.equal(root.findAll(n => n.className === 'case-time').length, 6, 'Should render 6 dispatch timestamps');
+      assert.equal(root.findAll(n => n.className.split(/\s+/).includes('case-incident')).length, 6, 'Should render 6 operational site tags');
     }
 
     const easyTrial = makeCaseTrial('easy', null, draw);
@@ -397,7 +404,10 @@ test('All five difficulty tiers eliminate directionless "tied to" matching, perm
     assert.ok(shootStarts <= 25, `${level} must vary order openings rather than repeating "Shoot anyone" (got ${shootStarts}/100)`);
     for (const f of list) {
       assert.doesNotMatch(f.order, /\ban (suspect|Foe|contact|cutout|Friend|Spy|Civilian|Double|Foreigner)\b/i, `${f.id} has an article grammar typo`);
-      assert.doesNotMatch(f.order, /\blink\b/i, `${f.id} should use operational contact language rather than "link"`);
+      assert.doesNotMatch(f.order, /\b(un)?link(ed|s|ing)?\b/i, `${f.id} order should use operational contact language rather than "link"`);
+      assert.doesNotMatch(f.title, /\b(un)?link(ed|s|ing)?\b/i, `${f.id} title should use operational contact language rather than "link"`);
+      assert.doesNotMatch(f.hint || '', /\b(un)?link(ed|s|ing)?\b/i, `${f.id} hint should use operational contact language rather than "link"`);
+      assert.doesNotMatch(f.order, / — .* — /, `${f.id} order should not contain double em-dashes`);
     }
   }
 });

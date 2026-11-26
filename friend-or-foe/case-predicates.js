@@ -158,3 +158,88 @@ export function matchIndependentSupport(g, x, {roleA, dirA = 'in', roleB, dirB =
   return null;
 }
 
+// Incident-scoped dual contact on x: eA and eB occur on the same operation (sameIncident=true)
+// or opposite operations (sameIncident=false), optionally ordered in time or in distinct roles.
+export function matchIncidentDual(g, x, {rolesA = null, dirA = 'in', rolesB = null, dirB = 'out', sameIncident = true, timeOrder = null, diffRole = false}) {
+  const listA = edgesBy(g, x, rolesA, dirA);
+  const listB = edgesBy(g, x, rolesB, dirB);
+  for (const eA of listA) {
+    for (const eB of listB) {
+      if (eA === eB) continue;
+      if (diffRole && eA.role === eB.role) continue;
+      const same = eA.incident === eB.incident;
+      if (sameIncident ? !same : same) continue;
+      if (timeOrder === 'before' && !(eA.time < eB.time)) continue;
+      if (timeOrder === 'after' && !(eA.time > eB.time)) continue;
+      return {eA, eB};
+    }
+  }
+  return null;
+}
+
+// Incident-scoped 2-step relay: x -> mid -> end staying on the same operation or crossing operations.
+export function matchIncidentRelay(g, x, {firstRoles = null, firstDir = 'in', secondRoles = null, secondDir = 'out', sameIncident = true, timeOrder = null, diffRole = false, noReturn = true}) {
+  const firsts = edgesBy(g, x, firstRoles, firstDir);
+  for (const e1 of firsts) {
+    const mid = e1.from === x ? e1.to : e1.from;
+    const seconds = edgesBy(g, mid, secondRoles, secondDir);
+    for (const e2 of seconds) {
+      if (e2 === e1) continue;
+      if (diffRole && e2.role === e1.role) continue;
+      const same = e1.incident === e2.incident;
+      if (sameIncident ? !same : same) continue;
+      const end = e2.from === mid ? e2.to : e2.from;
+      if (noReturn && end === x) continue;
+      if (timeOrder === 'before' && !(e1.time < e2.time)) continue;
+      if (timeOrder === 'after' && !(e1.time > e2.time)) continue;
+      return {e1, e2, mid, end};
+    }
+  }
+  return null;
+}
+
+// Incident-scoped dependent or independent corroboration across ANY or specified roles:
+// x has contacts with two distinct sources a & b on the same (or opposite) operation,
+// where a & b are directly in contact (connected=true) or have no direct contact (connected=false).
+export function matchIncidentCorroboration(g, x, {rolesA = null, dirA = 'in', rolesB = null, dirB = 'in', sameIncident = true, connected = true}) {
+  const listA = edgesBy(g, x, rolesA, dirA);
+  const listB = edgesBy(g, x, rolesB, dirB);
+  for (const eA of listA) {
+    const a = eA.from === x ? eA.to : eA.from;
+    for (const eB of listB) {
+      if (eA === eB) continue;
+      const same = eA.incident === eB.incident;
+      if (sameIncident ? !same : same) continue;
+      const b = eB.from === x ? eB.to : eB.from;
+      if (a === b) continue;
+      const bridge = g.between(a, b)[0] || null;
+      if (connected && bridge) return {eA, eB, a, b, link: bridge};
+      if (!connected && !bridge) return {eA, eB, a, b};
+    }
+  }
+  return null;
+}
+
+// Shared-origin intelligence: x receives contacts from two distinct sources a & b (on same or any operation)
+// who both received a contact from the exact same upstream person s (s !== x).
+export function matchSharedOrigin(g, x, {sameIncident = true} = {}) {
+  const list = g.in(x);
+  for (let i = 0; i < list.length; i++) {
+    const eA = list[i];
+    for (let j = i + 1; j < list.length; j++) {
+      const eB = list[j];
+      if (eA.from === eB.from) continue;
+      if (sameIncident && eA.incident !== eB.incident) continue;
+      const upA = g.in(eA.from);
+      const upB = g.in(eB.from);
+      for (const u1 of upA) {
+        if (u1.from === x) continue;
+        const u2 = upB.find(e => e.from === u1.from);
+        if (u2) return {eA, eB, origin: u1.from, u1, u2};
+      }
+    }
+  }
+  return null;
+}
+
+

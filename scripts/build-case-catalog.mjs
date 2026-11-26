@@ -217,7 +217,7 @@ function certifyRange(indices) {
     // Fallback pass if a rare family needs additional boards (or Hard delSens === 3) to reach 12
     if (pool.length < TARGET_PER_FAMILY) {
       const seenSeeds = new Set(pool.map(p => p.entry[0]));
-      for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY * 2 && pool.length < TARGET_PER_FAMILY; offset++) {
+      for (let offset = 1; offset <= MAX_SEEDS_PER_FAMILY * 3 && pool.length < TARGET_PER_FAMILY; offset++) {
         const seed = (baseSeed + offset * 7919) >>> 0;
         if (seenSeeds.has(seed)) continue;
         const anchorIdx = family.useAnchor ? (offset % symbols.length) : 0;

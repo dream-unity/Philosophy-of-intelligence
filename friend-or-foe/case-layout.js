@@ -57,6 +57,27 @@ const domainNameToIndex = {
   'Command & Leverage': 9
 };
 
+export const domainIncidents = [
+  ['Embassy', 'Depot'],      // 0: Cover & Betrayal
+  ['Alley', 'Station'],      // 1: Surveillance & Blind Spots
+  ['Border', 'Port'],        // 2: Foreign Contact
+  ['Market', 'Plaza'],       // 3: Civilian Tip-Offs
+  ['Bridge', 'Tunnel'],      // 4: Proxy Chains
+  ['Dock', 'Vault'],         // 5: Alibi & Contradiction
+  ['Convoy', 'Airfield'],    // 6: Chronology & Timing
+  ['Bank', 'Customs'],       // 7: Tainted Sources
+  ['Quarter', 'Harbor'],     // 8: Double Lives
+  ['Bunker', 'Tower']        // 9: Command & Leverage
+];
+
+export function incidentsForDomain(domain) {
+  if (typeof domain === 'number' && domainIncidents[domain]) return domainIncidents[domain];
+  if (typeof domain === 'string' && Object.hasOwn(domainNameToIndex, domain)) {
+    return domainIncidents[domainNameToIndex[domain]];
+  }
+  return ['North', 'South'];
+}
+
 export function verbsForDomain(domain) {
   if (typeof domain === 'number' && domainRoleVerbs[domain]) return domainRoleVerbs[domain];
   if (typeof domain === 'string' && Object.hasOwn(domainNameToIndex, domain)) {
@@ -114,22 +135,24 @@ export function edgesFor(rows, mask) {
   return rows.flatMap((row, i) => {
     const links = (mask & (1 << i)) ? alternateLinks(row) : row.links;
     const time = row.time ?? (i + 1);
-    return links.map(link => ({role: row.role, from: link.from, to: link.to, time}));
+    const incident = row.incident ?? (i % 2);
+    return links.map(link => ({role: row.role, from: link.from, to: link.to, time, incident}));
   });
 }
 
 // Generate a 6-category, 12-contact intelligence network covering all 10 suspects,
-// with shuffled dispatch timestamps (01:00–06:00) and varied per-category uncertainty types:
-// direction reversal (?), identity swap, or alternate contact.
+// with shuffled dispatch timestamps (01:00–06:00), shuffled 3v3 operational incident tags,
+// and varied per-category uncertainty types: direction reversal (?), identity swap, or alternate contact.
 export function layoutFor(seed) {
   const draw = seededDraw((seed ^ Math.imul(seed, 2654435761)) >>> 0);
   const endpoints = [...symbols];
   while (endpoints.length < 24) endpoints.push(symbols[Math.floor(draw() * symbols.length)]);
   const slots = shuffled(endpoints, draw);
   const times = shuffled([1, 2, 3, 4, 5, 6], draw);
+  const incidents = shuffled([0, 0, 0, 1, 1, 1], draw);
   const rows = caseRoles.map((role, i) => {
     const links = [0, 2].map(offset => ({from: slots[4 * i + offset], to: slots[4 * i + offset + 1]}));
-    return {role, time: times[i], links};
+    return {role, time: times[i], incident: incidents[i], links};
   });
   for (const {links: [a, b]} of rows) {
     if (a.from === a.to || b.from === b.to ||

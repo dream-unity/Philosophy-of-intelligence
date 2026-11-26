@@ -667,13 +667,13 @@ export const superEasyFamilies = [
   anchorDirect({
     id: 'se-92', domain: 9, title: '{name}’s unbacked circle',
     order: 'Command breach: engage anyone sharing a direct contact with {name} in any role — unless a Friend vouches for them.',
-    hint: 'List everyone linked directly to {name}, then exclude anyone a Friend vouches for.',
+    hint: 'Find everyone in direct contact with {name}, then exclude anyone a Friend vouches for.',
     incRoles: null, incDir: 'any', exc: {roles: ['friend'], dir: 'in'}
   }),
   anchorDirect({
     id: 'se-93', domain: 9, title: '{name}’s unwatched circle',
     order: 'Asset under leverage: eliminate anyone sharing a direct contact with {name} in any role; stand down if a Spy shadows them.',
-    hint: 'List everyone linked directly to {name}, then exclude anyone a Spy shadows.',
+    hint: 'Find everyone in direct contact with {name}, then exclude anyone a Spy shadows.',
     incRoles: null, incDir: 'any', exc: {roles: ['spy'], dir: 'in'}
   }),
   anchorDirect({
@@ -683,7 +683,7 @@ export const superEasyFamilies = [
     incRoles: null, incDir: 'any', req: {roles: ['foe', 'double'], dir: 'out'}
   }),
   anchorDirect({
-    id: 'se-95', domain: 9, title: '{name}’s foreign or ally links',
+    id: 'se-95', domain: 9, title: '{name}’s foreign or ally contacts',
     order: 'Take down anyone sharing a direct contact with {name} who also vouches as a Friend or meets as a Foreigner.',
     hint: 'Find {name}’s direct contacts, then keep anyone who vouches as a Friend or meets as a Foreigner.',
     incRoles: null, incDir: 'any', req: {roles: ['friend', 'foreigner'], dir: 'out'}
@@ -691,7 +691,7 @@ export const superEasyFamilies = [
   anchorDirect({
     id: 'se-96', domain: 9, title: '{name}’s untipped circle',
     order: 'Chain of leverage: neutralize anyone sharing a direct contact with {name} in any role — unless a Civilian tips them off.',
-    hint: 'List everyone linked directly to {name}, then exclude anyone a Civilian tips off.',
+    hint: 'Find everyone in direct contact with {name}, then exclude anyone a Civilian tips off.',
     incRoles: null, incDir: 'any', exc: {roles: ['civilian'], dir: 'in'}
   }),
   anchorDirect({
@@ -703,13 +703,13 @@ export const superEasyFamilies = [
   anchorDirect({
     id: 'se-98', domain: 9, title: '{name}’s untargeted circle',
     order: 'Command breach — shoot anyone sharing a direct contact with {name} in any role, sparing them if a Foe targets them.',
-    hint: 'List everyone linked directly to {name}, then cross off anyone a Foe targets.',
+    hint: 'Find everyone in direct contact with {name}, then cross off anyone a Foe targets.',
     incRoles: null, incDir: 'any', exc: {roles: ['foe'], dir: 'in'}
   }),
   anchorDirect({
     id: 'se-99', domain: 9, title: '{name}’s unreached partners',
     order: 'Asset under leverage: drop anyone sharing a direct contact with {name} in any role — unless a Foreigner meets them.',
-    hint: 'List everyone linked directly to {name}, then rule out anyone a Foreigner meets.',
+    hint: 'Find everyone in direct contact with {name}, then rule out anyone a Foreigner meets.',
     incRoles: null, incDir: 'any', exc: {roles: ['foreigner'], dir: 'in'}
   })
 ];

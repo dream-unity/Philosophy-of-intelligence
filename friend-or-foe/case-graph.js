@@ -1,4 +1,4 @@
-import {caseRoles, formatDispatchTime, roleNames, verbsForDomain} from './case-layout.js';
+import {caseRoles, formatDispatchTime, incidentsForDomain, roleNames, verbsForDomain} from './case-layout.js';
 
 export const DOMAINS = [
   'Cover & Betrayal',
@@ -15,7 +15,9 @@ export const DOMAINS = [
 
 export function fmtEdge(edge, domain = null) {
   const verbs = verbsForDomain(domain);
-  const stamp = edge.time ? ' [' + formatDispatchTime(edge.time) + ']' : '';
+  const incNames = incidentsForDomain(domain);
+  const incTag = edge.incident !== undefined ? ' · ' + incNames[edge.incident] : '';
+  const stamp = edge.time ? ' [' + formatDispatchTime(edge.time) + incTag + ']' : '';
   return roleNames[edge.role] + stamp + ': ' + edge.from + ' ' + verbs[edge.role] + ' ' + edge.to;
 }
 
@@ -25,12 +27,14 @@ export function buildGraph(edges, domain = null) {
   const byIn = new Map();
   const byAll = new Map();
   const roleTime = new Map();
+  const roleIncident = new Map();
   const peopleSet = new Set();
 
   for (const edge of edges) {
     if (edge.from === edge.to) continue;
     clean.push(edge);
     if (edge.time && !roleTime.has(edge.role)) roleTime.set(edge.role, edge.time);
+    if (edge.incident !== undefined && !roleIncident.has(edge.role)) roleIncident.set(edge.role, edge.incident);
     peopleSet.add(edge.from);
     peopleSet.add(edge.to);
     if (!byOut.has(edge.from)) byOut.set(edge.from, []);
@@ -74,6 +78,7 @@ export function buildGraph(edges, domain = null) {
     return new Set(list.map(e => e.role));
   };
   const timeOf = role => roleTime.get(role) ?? 0;
+  const incidentOf = role => roleIncident.get(role) ?? 0;
 
   return {
     edges: clean,
@@ -90,6 +95,7 @@ export function buildGraph(edges, domain = null) {
     neighbors,
     distinctRoles,
     timeOf,
+    incidentOf,
     fmt: edge => fmtEdge(edge, domain)
   };
 }

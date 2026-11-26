@@ -520,13 +520,13 @@ export const veryEasyFamilies = [
   carry({
     id: 've-73', domain: 7, title: 'Coerced by an exposed source',
     order: 'Poisoned source: take out anyone coerced by a Foe or funded by a Foreigner whose source was compromised by a Double agent or exposed by a Civilian — unless vetted by a Spy.',
-    hint: 'Trace Foe coercion and Foreigner funding back to the source, check for Double agent or Civilian links, then exclude Spy-vetted suspects.',
+    hint: 'Trace Foe coercion and Foreigner funding back to the source, check for Double agent or Civilian contacts, then exclude Spy-vetted suspects.',
     firstRoles: ['foe', 'foreigner'], firstDir: 'in', secondRoles: ['double', 'civilian'], secondDir: 'in', exc: {roles: ['spy'], dir: 'in'}
   }),
   carry({
     id: 've-74', domain: 7, title: 'Compromised by a vetted source',
     order: 'Shoot anyone compromised by a Double agent or coerced by a Foe whose source was funded by a Foreigner or vetted by a Spy, sparing anyone given a Friend’s alibi.',
-    hint: 'Trace Double agent compromises and Foe coercions back to the source, check for Foreigner or Spy links, then exclude Friend-alibied suspects.',
+    hint: 'Trace Double agent compromises and Foe coercions back to the source, check for Foreigner or Spy contacts, then exclude Friend-alibied suspects.',
     firstRoles: ['double', 'foe'], firstDir: 'in', secondRoles: ['foreigner', 'spy'], secondDir: 'in', exc: {roles: ['friend'], dir: 'in'}
   }),
   carry({
@@ -674,7 +674,7 @@ export const veryEasyFamilies = [
   anchorCarry({
     id: 've-96', domain: 9, title: '{name}’s unbacked second-hop',
     order: 'Command breach: fire on anyone two contacts away from {name} with no direct contact with {name} — unless a Friend vouches for them.',
-    hint: 'Trace two contacts from {name}, skip direct links, and rule out anyone vouched for by a Friend.',
+    hint: 'Trace two contacts from {name}, skip direct contacts, and rule out anyone vouched for by a Friend.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'any',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'any',
     excludeDirect: true, exc: {roles: ['friend'], dir: 'in'}
@@ -682,7 +682,7 @@ export const veryEasyFamilies = [
   anchorCarry({
     id: 've-97', domain: 9, title: '{name}’s unwatched second-hop',
     order: 'Asset under leverage: take down anyone two contacts away from {name} with no direct contact with {name} — unless a Spy shadows them.',
-    hint: 'Trace two contacts from {name}, skip direct links, and rule out anyone shadowed by a Spy.',
+    hint: 'Trace two contacts from {name}, skip direct contacts, and rule out anyone shadowed by a Spy.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'any',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'any',
     excludeDirect: true, exc: {roles: ['spy'], dir: 'in'}

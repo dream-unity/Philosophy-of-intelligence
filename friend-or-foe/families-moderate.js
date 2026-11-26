@@ -1,7 +1,8 @@
 import {collectMatches} from './case-graph.js';
 import {
   hasCompromised, matchAnchorRelay, matchAtom,
-  matchDependentSupport, matchIndependentSupport, matchRelay, matchTemporal
+  matchDependentSupport, matchIncidentCorroboration, matchIncidentDual,
+  matchIncidentRelay, matchIndependentSupport, matchRelay, matchTemporal
 } from './case-predicates.js';
 
 // 100 genuinely distinct Moderate intelligence cases (10 domains × 10 families).
@@ -65,7 +66,51 @@ function modDep({id, domain, title, order, roleA, dirA = 'in', roleB, dirB = 'in
         if (exc && matchAtom(g, x, exc).length) return null;
         const hit = matchDependentSupport(g, x, {roleA, dirA, roleB, dirB, linkRoles});
         if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' linked via ' + g.fmt(hit.link) + '.' : 'ok';
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' connected via ' + g.fmt(hit.link) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function modSiteCorr({id, domain, title, order, dirA = 'in', dirB = 'in', sameIncident = true, connected = true, exc = null}) {
+  return mod({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchIncidentCorroboration(g, x, {dirA, dirB, sameIncident, connected});
+        if (!hit) return null;
+        return proof
+          ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + (hit.link ? ' connected via ' + g.fmt(hit.link) : ' with no direct contact') + '.'
+          : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function modSiteDual({id, domain, title, order, dirA = 'in', dirB = 'out', sameIncident = true, timeOrder = null, diffRole = false, exc = null}) {
+  return mod({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchIncidentDual(g, x, {dirA, dirB, sameIncident, timeOrder, diffRole});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function modSiteRelay({id, domain, title, order, firstDir = 'in', secondDir = 'out', sameIncident = true, timeOrder = null, diffRole = false, exc = null}) {
+  return mod({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchIncidentRelay(g, x, {firstDir, secondDir, sameIncident, timeOrder, diffRole});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
       }, proof);
     }
   });
@@ -388,15 +433,15 @@ export const moderateFamilies = [
   // =========================================================================
   // DOMAIN 5: Alibi & Contradiction (10) — corroborates, accuses, verifies, deceives, identifies, consults
   // =========================================================================
-  modDep({
-    id: 'mo-50', domain: 5, title: 'Circular insider alibi',
-    order: 'Contradicted witness — neutralize anyone corroborated by a Friend or accused by a Foe and verified by a Spy or identified by a Civilian when those two sources are linked.',
-    roleA: ['friend', 'foe'], dirA: 'in', roleB: ['spy', 'civilian'], dirB: 'in'
+  modSiteCorr({
+    id: 'mo-50', domain: 5, title: 'Staged corroboration on one site',
+    order: 'Staged alibi — neutralize anyone reached by two different sources on the same site who are themselves in direct contact.',
+    dirA: 'in', dirB: 'in', sameIncident: true, connected: true
   }),
-  modDep({
-    id: 'mo-51', domain: 5, title: 'Coordinated witness and outsider',
-    order: 'False verification: take out anyone identified by a Civilian or verified by a Spy and accused by a Foe or consulted by a Foreigner when those two sources are linked.',
-    roleA: ['civilian', 'spy'], dirA: 'in', roleB: ['foe', 'foreigner'], dirB: 'in'
+  modSiteCorr({
+    id: 'mo-51', domain: 5, title: 'Cross-site colluding sources',
+    order: 'False verification: take out anyone contacted by one source on each site whose two sources are in direct contact — unless accused by a Foe.',
+    dirA: 'in', dirB: 'in', sameIncident: false, connected: true, exc: {roles: ['foe'], dir: 'in'}
   }),
   modIndep({
     id: 'mo-52', domain: 5, title: 'Independent accusation and cover',
@@ -404,68 +449,68 @@ export const moderateFamilies = [
     roleA: ['friend', 'civilian'], dirA: 'in', roleB: ['foe', 'double'], dirB: 'in'
   }),
   modIndep({
-    id: 'mo-53', domain: 5, title: 'Two unlinked opposing claims',
+    id: 'mo-53', domain: 5, title: 'Two independent opposing claims',
     order: 'Fabricated account: drop anyone accused by a Foe or corroborated by a Friend and deceived by a Double agent or consulted by a Foreigner when those two sources have no contact.',
     roleA: ['foe', 'friend'], dirA: 'in', roleB: ['double', 'foreigner'], dirB: 'in'
   }),
-  modDep({
-    id: 'mo-54', domain: 5, title: 'Linked verifier and opponent',
-    order: 'Alibi broken — engage anyone verified by a Spy or corroborated by a Friend and accused by a Foe or deceived by a Double agent when those two are linked.',
-    roleA: ['spy', 'friend'], dirA: 'in', roleB: ['foe', 'double'], dirB: 'in'
+  modSiteCorr({
+    id: 'mo-54', domain: 5, title: 'Independent pair on one site',
+    order: 'Alibi broken: engage anyone reached by two different sources on the same site who have no direct contact — unless verified by a Spy.',
+    dirA: 'in', dirB: 'in', sameIncident: true, connected: false, exc: {roles: ['spy'], dir: 'in'}
   }),
   modIndep({
     id: 'mo-55', domain: 5, title: 'Independent verifier and witness',
     order: 'Eliminate anyone verified by a Spy or consulted by a Foreigner and identified by a Civilian or corroborated by a Friend whose two sources have no contact — unless accused by a Foe.',
     roleA: ['spy', 'foreigner'], dirA: 'in', roleB: ['civilian', 'friend'], dirB: 'in', exc: {roles: ['foe'], dir: 'in'}
   }),
-  modDep({
-    id: 'mo-56', domain: 5, title: 'Rehearsed foreign cover',
-    order: 'Contradicted witness — fire on anyone consulted by a Foreigner or deceived by a Double agent and corroborated by a Friend or verified by a Spy when those two are linked.',
-    roleA: ['foreigner', 'double'], dirA: 'in', roleB: ['friend', 'spy'], dirB: 'in'
+  modSiteCorr({
+    id: 'mo-56', domain: 5, title: 'Coordinated cover on one site',
+    order: 'Rehearsed cover — fire on anyone acting toward two people on the same site who are themselves in direct contact.',
+    dirA: 'out', dirB: 'out', sameIncident: true, connected: true
   }),
   modIndep({
-    id: 'mo-57', domain: 5, title: 'Unlinked witness and foreign contact',
+    id: 'mo-57', domain: 5, title: 'Independent witness and foreign contact',
     order: 'Take down anyone identified by a Civilian or accused by a Foe and consulted by a Foreigner or deceived by a Double agent when those two sources have no contact.',
     roleA: ['civilian', 'foe'], dirA: 'in', roleB: ['foreigner', 'double'], dirB: 'in'
   }),
-  modDep({
-    id: 'mo-58', domain: 5, title: 'Linked accuser and witness',
-    order: 'Colluding sources — neutralize anyone deceived by a Double agent or identified by a Civilian and accused by a Foe or consulted by a Foreigner when those two are linked.',
-    roleA: ['double', 'civilian'], dirA: 'in', roleB: ['foe', 'foreigner'], dirB: 'in'
+  modSiteDual({
+    id: 'mo-58', domain: 5, title: 'Same-site contradiction',
+    order: 'Double story: neutralize anyone both acting and contacted on the same site — unless corroborated by a Friend.',
+    dirA: 'in', dirB: 'out', sameIncident: true, diffRole: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  modIndep({
-    id: 'mo-59', domain: 5, title: 'Unlinked verifier and outsider',
-    order: 'Take out anyone verified by a Spy or deceived by a Double agent and consulted by a Foreigner or accused by a Foe whose two sources have no contact — unless corroborated by a Friend.',
-    roleA: ['spy', 'double'], dirA: 'in', roleB: ['foreigner', 'foe'], dirB: 'in', exc: {roles: ['friend'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-59', domain: 5, title: 'Cross-site double face',
+    order: 'Split allegiance: take out anyone contacted on one site while acting on the other — unless verified by a Spy.',
+    dirA: 'in', dirB: 'out', sameIncident: false, diffRole: true, exc: {roles: ['spy'], dir: 'in'}
   }),
 
   // =========================================================================
   // DOMAIN 6: Chronology & Timing (10) — clears, strikes, logs, leaks to, corrects, meets
   // =========================================================================
-  modTime({
-    id: 'mo-60', domain: 6, title: 'Cleared after correction or strike',
-    order: 'Wrong side of the clock — eliminate anyone corrected by a Civilian or struck by a Foe earlier than they cleared as a Friend or leaked as a Double agent, sparing anyone logged by a Spy.',
-    early: {roles: ['civilian', 'foe'], dir: 'in'}, late: {roles: ['friend', 'double'], dir: 'out'}, exc: {roles: ['spy'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-60', domain: 6, title: 'Acted after same-site contact',
+    order: 'Wrong side of the clock — eliminate anyone who initiated a contact on a site after already being contacted on that same site.',
+    dirA: 'in', dirB: 'out', sameIncident: true, timeOrder: 'before'
   }),
-  modTime({
-    id: 'mo-61', domain: 6, title: 'Leaked or met after clearance',
-    order: 'Fire on anyone cleared by a Friend or logged by a Spy earlier than they leaked as a Double agent or met as a Foreigner; hold fire on anyone struck by a Foe.',
-    early: {roles: ['friend', 'spy'], dir: 'in'}, late: {roles: ['double', 'foreigner'], dir: 'out'}, exc: {roles: ['foe'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-61', domain: 6, title: 'Cross-site relay after briefing',
+    order: 'Cross-site leak: fire on anyone contacted on one site who later initiates a contact on the other site — unless cleared by a Friend.',
+    dirA: 'in', dirB: 'out', sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
-  modTime({
-    id: 'mo-62', domain: 6, title: 'Struck or leaked before logging',
-    order: 'Take down anyone who struck as a Foe or leaked as a Double agent earlier than a Spy logged or Friend cleared them, except anyone corrected by a Civilian.',
-    early: {roles: ['foe', 'double'], dir: 'out'}, late: {roles: ['spy', 'friend'], dir: 'in'}, exc: {roles: ['civilian'], dir: 'in'}
+  modSiteDual({
+    id: 'mo-62', domain: 6, title: 'Late same-site warning',
+    order: 'Too late to clear: take down anyone who acted on a site earlier than someone contacted them on that same site — unless logged by a Spy.',
+    dirA: 'out', dirB: 'in', sameIncident: true, timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
-  modTime({
-    id: 'mo-63', domain: 6, title: 'Active Foreigner or Foe after warning',
-    order: 'Post-correction move: neutralize anyone corrected by a Civilian or logged by a Spy earlier than they met as a Foreigner or struck as a Foe — unless cleared by a Friend.',
-    early: {roles: ['civilian', 'spy'], dir: 'in'}, late: {roles: ['foreigner', 'foe'], dir: 'out'}, exc: {roles: ['friend'], dir: 'in'}
+  modSiteRelay({
+    id: 'mo-63', domain: 6, title: 'Same-site chain reaction',
+    order: 'Post-correction move: neutralize anyone contacted on a site whose source had already been contacted earlier on that same site.',
+    firstDir: 'in', secondDir: 'in', sameIncident: true, timeOrder: 'after'
   }),
-  modTime({
-    id: 'mo-64', domain: 6, title: 'Logged after foreign meeting or strike',
-    order: 'Too late to clear — take out anyone met by a Foreigner or struck by a Foe earlier than a Spy logged or Civilian corrected them; stand down if a Double agent leaked to them.',
-    early: {roles: ['foreigner', 'foe'], dir: 'in'}, late: {roles: ['spy', 'civilian'], dir: 'in'}, exc: {roles: ['double'], dir: 'in'}
+  modSiteRelay({
+    id: 'mo-64', domain: 6, title: 'Delayed cross-site relay',
+    order: 'Cross-site handoff: take out anyone who reaches out to someone who later initiates a contact on the other site — unless struck by a Foe.',
+    firstDir: 'out', secondDir: 'out', sameIncident: false, timeOrder: 'before', exc: {roles: ['foe'], dir: 'in'}
   }),
   modTime({
     id: 'mo-65', domain: 6, title: 'Cleared or corrected after strike',

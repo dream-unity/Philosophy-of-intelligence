@@ -78,13 +78,21 @@
 }
 .case-row-label { display: grid; align-content: center; gap: .04rem; margin: 0; }
 .case-role-name { display: flex; gap: .26rem; align-items: baseline; flex-wrap: nowrap; }
-.case-role-meta { display: flex; align-items: baseline; gap: .38rem; flex-wrap: wrap; }
-.case-verb { font: 500 .73rem/1.12 var(--display); color: var(--case-muted); }
+.case-role-meta { display: flex; align-items: baseline; gap: .32rem; flex-wrap: nowrap; }
+.case-verb { font: 500 .72rem/1.12 var(--display); color: var(--case-muted); white-space: nowrap; }
 .case-time {
-  font: 600 .72rem/1.1 var(--mono);
+  font: 600 .7rem/1.1 var(--mono);
   color: #93b0b8;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
+.case-incident {
+  font: 600 .66rem/1.1 var(--display);
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.case-inc-0 { color: #8ec8d2; }
+.case-inc-1 { color: #d6ba8a; }
 .case-role { font: 675 .86rem/1.2 var(--display); }
 .case-friend { color: #abe3cd; }
 .case-foe { color: #ffbd94; }

@@ -106,6 +106,7 @@ function presentRow(resolvedRow, disputed, draw) {
   const row = {
     role: resolvedRow.role,
     time: resolvedRow.time,
+    incident: resolvedRow.incident,
     links: swapOrder ? [baseLinks[1], baseLinks[0]] : [baseLinks[0], baseLinks[1]],
     disputed
   };
@@ -172,7 +173,7 @@ function rowFlipSummary(familyId, rows, anchor, correctKey, targetSize) {
 // Fast live layout synthesizer: generates brand-new certified topologies on the fly from random 32-bit
 // seeds so returning players cannot memorize the 12 fallback catalog layouts.
 function synthesizeLiveBoard(family, level, prevSize, catalogSeeds, draw) {
-  const budget = level === 'hard' ? 32 : level === 'medium' ? 24 : level === 'easy' ? 20 : 16;
+  const budget = level === 'hard' ? 110 : level === 'medium' ? 72 : level === 'easy' ? 28 : 20;
   let best = null;
   for (let attempt = 0; attempt < budget; attempt++) {
     const seed = (Math.floor(draw() * 0x7ffffffe) + 1) >>> 0;
@@ -299,6 +300,7 @@ export function makeCaseTrial(level, previous = null, draw = Math.random, option
   const resolved = raw.map(row => ({
     role: row.role,
     time: row.time,
+    incident: row.incident,
     links: row.links.map(renameLink),
     ...(row.alias ? {alias: row.alias.map(s => names.get(s))} : {}),
     ...(row.alt ? {alt: {index: row.alt.index, link: renameLink(row.alt.link)}} : {})

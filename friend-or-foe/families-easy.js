@@ -1,5 +1,5 @@
 import {collectMatches} from './case-graph.js';
-import {hasUncompromised, matchAnchorRelay, matchAtom, matchDependentSupport, matchIndependentSupport, matchRelay, matchTemporal} from './case-predicates.js';
+import {hasUncompromised, matchAnchorRelay, matchAtom, matchDependentSupport, matchIncidentCorroboration, matchIncidentDual, matchIndependentSupport, matchRelay, matchTemporal} from './case-predicates.js';
 
 // 100 genuinely distinct Easy intelligence cases (10 domains × 10 families).
 // Guarded 2-step relays, timing + cover checks, epistemic independence/dependence, and anchor chains —
@@ -396,18 +396,18 @@ export const easyFamilies = [
   // DOMAIN 5: Alibi & Contradiction (10) — corroborates, accuses, verifies, deceives, identifies, consults
   // =========================================================================
   custom({
-    id: 'ea-50', domain: 5, title: 'Colluding alibi pair',
-    order: 'Alibi broken — shoot anyone corroborated by a Friend or identified by a Civilian and verified by a Spy or consulted by a Foreigner when those two are linked.',
+    id: 'ea-50', domain: 5, title: 'Staged alibi on one site',
+    order: 'Staged alibi — shoot anyone reached by two different sources on the same site who are themselves in direct contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        const hit = matchDependentSupport(g, x, {roleA: ['friend', 'civilian'], dirA: 'in', roleB: ['spy', 'foreigner'], dirB: 'in'});
+        const hit = matchIncidentCorroboration(g, x, {dirA: 'in', dirB: 'in', sameIncident: true, connected: true});
         if (!hit) return null;
-        return proof ? x + ': linked ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' via ' + g.fmt(hit.link) + '.' : 'ok';
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' connected via ' + g.fmt(hit.link) + '.' : 'ok';
       }, proof);
     }
   }),
   custom({
-    id: 'ea-51', domain: 5, title: 'Two unlinked accusers',
+    id: 'ea-51', domain: 5, title: 'Two independent accusers',
     order: 'Staged corroboration: drop anyone accused by a Foe or identified by a Civilian and deceived by a Double agent or corroborated by a Friend whose two sources have no contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
@@ -418,13 +418,13 @@ export const easyFamilies = [
     }
   }),
   custom({
-    id: 'ea-52', domain: 5, title: 'Linked witness and accuser',
-    order: 'Contradicted witness — engage anyone identified by a Civilian or verified by a Spy and accused by a Foe or deceived by a Double agent when those two are linked.',
+    id: 'ea-52', domain: 5, title: 'Cross-site colluding pair',
+    order: 'Contradicted witness — engage anyone contacted by one source on each site whose two sources are in direct contact.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        const hit = matchDependentSupport(g, x, {roleA: ['civilian', 'spy'], dirA: 'in', roleB: ['foe', 'double'], dirB: 'in'});
+        const hit = matchIncidentCorroboration(g, x, {dirA: 'in', dirB: 'in', sameIncident: false, connected: true});
         if (!hit) return null;
-        return proof ? x + ': linked ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' via ' + g.fmt(hit.link) + '.' : 'ok';
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' connected via ' + g.fmt(hit.link) + '.' : 'ok';
       }, proof);
     }
   }),
@@ -440,13 +440,13 @@ export const easyFamilies = [
     }
   }),
   custom({
-    id: 'ea-54', domain: 5, title: 'Coordinated cover story',
-    order: 'Colluding sources — fire on anyone corroborated by a Friend or accused by a Foe and identified by a Civilian or consulted by a Foreigner when those two are linked.',
+    id: 'ea-54', domain: 5, title: 'Same-site double role',
+    order: 'Colluding sources — fire on anyone both acting and contacted on the same site across two different roles.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
-        const hit = matchDependentSupport(g, x, {roleA: ['friend', 'foe'], dirA: 'in', roleB: ['civilian', 'foreigner'], dirB: 'in'});
+        const hit = matchIncidentDual(g, x, {dirA: 'in', dirB: 'out', sameIncident: true, diffRole: true});
         if (!hit) return null;
-        return proof ? x + ': linked ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' via ' + g.fmt(hit.link) + '.' : 'ok';
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + '.' : 'ok';
       }, proof);
     }
   }),

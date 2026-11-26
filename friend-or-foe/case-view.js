@@ -1,4 +1,4 @@
-import {formatDispatchTime, roleNames, verbsForDomain} from './case-layout.js';
+import {formatDispatchTime, incidentsForDomain, roleNames, verbsForDomain} from './case-layout.js';
 
 const opSymbols = {
   eq: '=',
@@ -50,7 +50,7 @@ function roleLabel(role) {
   return element('span', 'case-role case-' + role, roleNames[role]);
 }
 
-function roleEntry(row, index, verbs) {
+function roleEntry(row, index, verbs, incidents) {
   const divEnd = index === 1 || index === 3 ? ' case-div-end' : '';
   const entry = element('div', 'case-row' + (row.disputed ? ' case-unconfirmed' : '') + divEnd);
   if (typeof entry.setAttribute === 'function') entry.setAttribute('data-role', row.role);
@@ -66,6 +66,9 @@ function roleEntry(row, index, verbs) {
   meta.append(element('small', 'case-verb', verbs[row.role]));
   if (row.time) {
     meta.append(element('time', 'case-time', formatDispatchTime(row.time)));
+  }
+  if (row.incident !== undefined && incidents) {
+    meta.append(element('span', 'case-incident case-inc-' + row.incident, incidents[row.incident]));
   }
   term.append(name, meta);
   const links = element('dd', 'case-links');
@@ -179,9 +182,10 @@ export function renderCaseEvidence(root, evidence, {shortlist = true, onShortlis
   }
 
   const verbs = verbsForDomain(evidence.domain);
+  const incidents = incidentsForDomain(evidence.domain);
   const records = element('dl', 'case-records');
   records.setAttribute('aria-label', 'Intelligence dispatches by role');
-  evidence.rows.forEach((row, index) => records.append(roleEntry(row, index, verbs)));
+  evidence.rows.forEach((row, index) => records.append(roleEntry(row, index, verbs, incidents)));
   board.append(records);
 
   const keyNotes = [];
@@ -290,7 +294,7 @@ export function renderCaseGuide(root, level, {shortlist = true} = {}) {
   };
   section(
     'Read all six intelligence roles',
-    'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00), and its action verb adapts to the case (such as clears, escorts, tracks, corrects, or funds). Each contact runs from the operative acting in that role to the person they reach. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'
+    'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00), an operation tag (split across two active sites), and an action verb adapted to the case. Each contact runs from the operative acting in that role to the person they reach. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'
   );
   if ((level === 'super-easy' || level === 'very-easy') && shortlist) {
     section('Use the shortlist', 'All six dispatches are confirmed, and every assigned target is on the shortlist. Uncheck Shortlist at any time to weigh all ten suspects.');

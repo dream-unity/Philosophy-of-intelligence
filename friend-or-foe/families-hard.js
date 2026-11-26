@@ -1,7 +1,8 @@
 import {collectMatches} from './case-graph.js';
 import {
   hasCompromised, hasUncompromised, matchAnchorRelay, matchAtom,
-  matchDependentSupport, matchIndependentSupport, matchRelay, matchTemporal
+  matchDependentSupport, matchIncidentCorroboration, matchIncidentDual,
+  matchIncidentRelay, matchIndependentSupport, matchRelay, matchSharedOrigin, matchTemporal
 } from './case-predicates.js';
 
 // 100 genuinely distinct Hard intelligence cases (10 domains × 10 families).
@@ -76,7 +77,65 @@ function hardDep({id, domain, title, order, roleA, dirA = 'in', roleB, dirB = 'i
         if (exc && matchAtom(g, x, exc).length) return null;
         const hit = matchDependentSupport(g, x, {roleA, dirA, roleB, dirB, linkRoles});
         if (!hit) return null;
-        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' linked via ' + g.fmt(hit.link) + '.' : 'ok';
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' connected via ' + g.fmt(hit.link) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardSiteCorr({id, domain, title, order, dirA = 'in', dirB = 'in', sameIncident = true, connected = true, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchIncidentCorroboration(g, x, {dirA, dirB, sameIncident, connected});
+        if (!hit) return null;
+        return proof
+          ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + (hit.link ? ' connected via ' + g.fmt(hit.link) : ' with no direct contact') + '.'
+          : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardSiteDual({id, domain, title, order, dirA = 'in', dirB = 'out', sameIncident = true, timeOrder = null, diffRole = false, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchIncidentDual(g, x, {dirA, dirB, sameIncident, timeOrder, diffRole});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardSiteRelay({id, domain, title, order, firstDir = 'in', secondDir = 'out', sameIncident = true, timeOrder = null, diffRole = false, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchIncidentRelay(g, x, {firstDir, secondDir, sameIncident, timeOrder, diffRole});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+      }, proof);
+    }
+  });
+}
+
+function hardOrigin({id, domain, title, order, sameIncident = true, exc = null}) {
+  return hard({
+    id, domain, title, order,
+    evaluate(g, _a, proof) {
+      return collectMatches(g.people, x => {
+        if (exc && matchAtom(g, x, exc).length) return null;
+        const hit = matchSharedOrigin(g, x, {sameIncident});
+        if (!hit) return null;
+        return proof ? x + ': ' + g.fmt(hit.eA) + ' & ' + g.fmt(hit.eB) + ' both trace back to ' + hit.origin + '.' : 'ok';
       }, proof);
     }
   });
@@ -393,8 +452,8 @@ export const hardFamilies = [
   }),
   hardRelay({
     id: 'ha-44', domain: 4, title: 'Timed proxy relay',
-    order: 'Eliminate anyone handed off to by a Foreigner or backed by a Friend earlier than their source relayed as a Double agent or struck as a Foe — unless warned by a Civilian or traced by a Spy.',
-    firstRoles: ['foreigner', 'friend'], firstDir: 'in', secondRoles: ['double', 'foe'], secondDir: 'out', timeOrder: 'before', exc: {roles: ['civilian', 'spy'], dir: 'in'}
+    order: 'Proxy timing — eliminate anyone handed off to by a Foreigner, backed by a Friend, or warned by a Civilian earlier than their source relayed as a Double agent, struck as a Foe, or traced as a Spy.',
+    firstRoles: ['foreigner', 'friend', 'civilian'], firstDir: 'in', secondRoles: ['double', 'foe', 'spy'], secondDir: 'out', timeOrder: 'before'
   }),
   hardRelay({
     id: 'ha-45', domain: 4, title: 'Unwarned proxy recipient',
@@ -425,109 +484,109 @@ export const hardFamilies = [
   // =========================================================================
   // DOMAIN 5: Alibi & Contradiction (10) — corroborates, accuses, verifies, deceives, identifies, consults
   // =========================================================================
-  hardDep({
-    id: 'ha-50', domain: 5, title: 'Colluding alibi pair',
-    order: 'Fire on anyone corroborated by a Friend, identified by a Civilian, or accused by a Foe and verified by a Spy, consulted by a Foreigner, or deceived by a Double agent when those two are linked.',
-    roleA: ['friend', 'civilian', 'foe'], dirA: 'in', roleB: ['spy', 'foreigner', 'double'], dirB: 'in'
+  hardSiteCorr({
+    id: 'ha-50', domain: 5, title: 'Staged corroboration on one site',
+    order: 'Staged corroboration — neutralize anyone reached by two different sources on the same site who are themselves in direct contact.',
+    dirA: 'in', dirB: 'in', sameIncident: true, connected: true
   }),
-  hardIndep({
-    id: 'ha-51', domain: 5, title: 'Two unlinked accusers',
-    order: 'Take down anyone accused by a Foe or identified by a Civilian and deceived by a Double agent or corroborated by a Friend whose two sources have no contact, except anyone verified by a Spy.',
-    roleA: ['foe', 'civilian'], dirA: 'in', roleB: ['double', 'friend'], dirB: 'in', exc: {roles: ['spy'], dir: 'in'}
+  hardSiteCorr({
+    id: 'ha-51', domain: 5, title: 'Cross-site collusion',
+    order: 'Cross-site collusion: drop anyone contacted by one source on each site whose two sources are in direct contact.',
+    dirA: 'in', dirB: 'in', sameIncident: false, connected: true
   }),
-  hardDep({
-    id: 'ha-52', domain: 5, title: 'Linked witness and accuser',
-    order: 'Neutralize anyone identified by a Civilian, verified by a Spy, or accused by a Foe and deceived by a Double agent, corroborated by a Friend, or consulted by a Foreigner when those two are linked.',
-    roleA: ['civilian', 'spy', 'foe'], dirA: 'in', roleB: ['double', 'friend', 'foreigner'], dirB: 'in'
+  hardOrigin({
+    id: 'ha-52', domain: 5, title: 'Single-origin echo',
+    order: 'Echoed story — fire on anyone reached by two different sources who both trace back to the same upstream source.',
+    sameIncident: false
   }),
-  hardIndep({
-    id: 'ha-53', domain: 5, title: 'Independent cover and consultation',
-    order: 'Take out anyone corroborated by a Friend or verified by a Spy and consulted by a Foreigner or identified by a Civilian whose two sources have no contact, sparing anyone accused by a Foe.',
-    roleA: ['friend', 'spy'], dirA: 'in', roleB: ['foreigner', 'civilian'], dirB: 'in', exc: {roles: ['foe'], dir: 'in'}
+  hardSiteCorr({
+    id: 'ha-53', domain: 5, title: 'Independent witnesses on one site',
+    order: 'Independent witnesses: take out anyone reached by two different sources on the same site with no direct contact — unless accused by a Foe.',
+    dirA: 'in', dirB: 'in', sameIncident: true, connected: false, exc: {roles: ['foe'], dir: 'in'}
   }),
-  hardDep({
-    id: 'ha-54', domain: 5, title: 'Coordinated cover story',
-    order: 'Shoot anyone corroborated by a Friend, accused by a Foe, or deceived by a Double agent and identified by a Civilian, consulted by a Foreigner, or verified by a Spy when those two are linked.',
-    roleA: ['friend', 'foe', 'double'], dirA: 'in', roleB: ['civilian', 'foreigner', 'spy'], dirB: 'in'
+  hardSiteCorr({
+    id: 'ha-54', domain: 5, title: 'Two-site independent claim',
+    order: 'Two-site verification — eliminate anyone contacted on both sites by sources with no direct contact, sparing anyone corroborated by a Friend or deceived by a Double agent.',
+    dirA: 'in', dirB: 'in', sameIncident: false, connected: false, exc: {roles: ['friend', 'double'], dir: 'in'}
   }),
-  hardIndep({
-    id: 'ha-55', domain: 5, title: 'Independent verification under doubt',
-    order: 'Drop anyone verified by a Spy or deceived by a Double agent and accused by a Foe or consulted by a Foreigner whose two sources have no contact, except anyone corroborated by a Friend.',
-    roleA: ['spy', 'double'], dirA: 'in', roleB: ['foe', 'foreigner'], dirB: 'in', exc: {roles: ['friend'], dir: 'in'}
+  hardSiteRelay({
+    id: 'ha-55', domain: 5, title: 'Same-site rumor chain',
+    order: 'Rumor mill: engage anyone contacted on a site by someone who also acts toward another person on that same site — unless corroborated by a Friend.',
+    firstDir: 'in', secondDir: 'out', sameIncident: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardDep({
-    id: 'ha-56', domain: 5, title: 'Rehearsed defense',
-    order: 'Engage anyone deceived by a Double agent, accused by a Foe, or verified by a Spy and corroborated by a Friend, identified by a Civilian, or consulted by a Foreigner when those two are linked.',
-    roleA: ['double', 'foe', 'spy'], dirA: 'in', roleB: ['friend', 'civilian', 'foreigner'], dirB: 'in'
+  hardSiteCorr({
+    id: 'ha-56', domain: 5, title: 'Coordinated cover on one site',
+    order: 'Coordinated cover — drop anyone acting toward two different people on the same site who are themselves in direct contact.',
+    dirA: 'out', dirB: 'out', sameIncident: true, connected: true
   }),
-  hardIndep({
-    id: 'ha-57', domain: 5, title: 'Unlinked witness and deceiver',
-    order: 'Eliminate anyone identified by a Civilian or accused by a Foe and deceived by a Double agent or consulted by a Foreigner whose two sources have no contact, sparing anyone verified by a Spy.',
-    roleA: ['civilian', 'foe'], dirA: 'in', roleB: ['double', 'foreigner'], dirB: 'in', exc: {roles: ['spy'], dir: 'in'}
+  hardSiteCorr({
+    id: 'ha-57', domain: 5, title: 'Split-site manipulation',
+    order: 'Split-site play: fire on anyone acting toward one person on each site whose two targets are themselves in direct contact — unless identified by a Civilian.',
+    dirA: 'out', dirB: 'out', sameIncident: false, connected: true, exc: {roles: ['civilian'], dir: 'in'}
   }),
-  hardDep({
-    id: 'ha-58', domain: 5, title: 'Linked accusers and verifiers',
-    order: 'Fire on anyone accused by a Foe, corroborated by a Friend, or consulted by a Foreigner and verified by a Spy, deceived by a Double agent, or identified by a Civilian when those two are linked.',
-    roleA: ['foe', 'friend', 'foreigner'], dirA: 'in', roleB: ['spy', 'double', 'civilian'], dirB: 'in'
+  hardSiteDual({
+    id: 'ha-58', domain: 5, title: 'Same-site contradiction',
+    order: 'Same-site contradiction — neutralize anyone both acting and contacted on the same site, sparing anyone corroborated by a Friend or verified by a Spy.',
+    dirA: 'in', dirB: 'out', sameIncident: true, diffRole: true, exc: {roles: ['friend', 'spy'], dir: 'in'}
   }),
-  hardIndep({
-    id: 'ha-59', domain: 5, title: 'Two independent insiders',
-    order: 'Take down anyone corroborated by a Friend or consulted by a Foreigner and verified by a Spy or identified by a Civilian whose two sources have no contact, except anyone deceived by a Double agent.',
-    roleA: ['friend', 'foreigner'], dirA: 'in', roleB: ['spy', 'civilian'], dirB: 'in', exc: {roles: ['double'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-59', domain: 5, title: 'Cross-site double face',
+    order: 'Cross-site contradiction: take down anyone contacted on one site while acting on the other, except anyone accused by a Foe or identified by a Civilian.',
+    dirA: 'in', dirB: 'out', sameIncident: false, diffRole: true, exc: {roles: ['foe', 'civilian'], dir: 'in'}
   }),
 
   // =========================================================================
   // DOMAIN 6: Chronology & Timing (10) — clears, strikes, logs, leaks to, corrects, meets
   // =========================================================================
-  hardTime({
-    id: 'ha-60', domain: 6, title: 'Relayed after correction or strike',
-    order: 'Drop anyone corrected by a Civilian, logged by a Spy, or struck by a Foe earlier than they cleared as a Friend, leaked as a Double agent, or met as a Foreigner.',
-    early: {roles: ['civilian', 'spy', 'foe'], dir: 'in'}, late: {roles: ['friend', 'double', 'foreigner'], dir: 'out'}
+  hardSiteDual({
+    id: 'ha-60', domain: 6, title: 'Acted after same-site contact',
+    order: 'Wrong side of the clock — drop anyone who initiated a contact on a site after already being contacted on that same site.',
+    dirA: 'in', dirB: 'out', sameIncident: true, timeOrder: 'before'
   }),
-  hardTime({
-    id: 'ha-61', domain: 6, title: 'Struck before logging or leak',
-    order: 'Engage anyone who struck as a Foe, met as a Foreigner, or cleared as a Friend earlier than a Spy logged, Civilian corrected, or Double agent leaked to them.',
-    early: {roles: ['foe', 'foreigner', 'friend'], dir: 'out'}, late: {roles: ['spy', 'civilian', 'double'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-61', domain: 6, title: 'Cross-site relay after warning',
+    order: 'Cross-site leak: fire on anyone contacted on one site who later initiates a contact on the other site — unless cleared by a Friend.',
+    dirA: 'in', dirB: 'out', sameIncident: false, timeOrder: 'before', exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardTime({
-    id: 'ha-62', domain: 6, title: 'Logged after strike or clearance',
-    order: 'Too late to clear — eliminate anyone struck by a Foe, leaked to by a Double agent, or cleared by a Friend earlier than a Spy logged, Civilian corrected, or Foreigner met them.',
-    early: {roles: ['foe', 'double', 'friend'], dir: 'in'}, late: {roles: ['spy', 'civilian', 'foreigner'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-62', domain: 6, title: 'Too late to clear on one site',
+    order: 'Too late to clear — eliminate anyone who acted on a site earlier than someone contacted them on that same site, sparing anyone logged by a Spy.',
+    dirA: 'out', dirB: 'in', sameIncident: true, timeOrder: 'before', exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardTime({
-    id: 'ha-63', domain: 6, title: 'Meeting before clearance or strike',
-    order: 'Timed betrayal: fire on anyone met by a Foreigner, corrected by a Civilian, or logged by a Spy earlier than a Friend cleared, Foe struck, or Double agent leaked to them.',
-    early: {roles: ['foreigner', 'civilian', 'spy'], dir: 'in'}, late: {roles: ['friend', 'foe', 'double'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-63', domain: 6, title: 'Cross-site containment breach',
+    order: 'Containment breach: neutralize anyone who acted on one site earlier than someone contacted them on the other site — unless corrected by a Civilian.',
+    dirA: 'out', dirB: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['civilian'], dir: 'in'}
   }),
-  hardTime({
-    id: 'ha-64', domain: 6, title: 'Leaked before witness or strike',
-    order: 'Wrong side of the clock — take down anyone who leaked as a Double agent, met as a Foreigner, or cleared as a Friend earlier than a Civilian corrected, Spy logged, or Foe struck them.',
-    early: {roles: ['double', 'foreigner', 'friend'], dir: 'out'}, late: {roles: ['civilian', 'spy', 'foe'], dir: 'in'}
+  hardSiteRelay({
+    id: 'ha-64', domain: 6, title: 'Chain reaction on one site',
+    order: 'Same-site chain — take out anyone contacted on a site whose source had already been contacted earlier on that same site.',
+    firstDir: 'in', secondDir: 'in', sameIncident: true, timeOrder: 'after'
   }),
-  hardTime({
-    id: 'ha-65', domain: 6, title: 'Correction before late action',
-    order: 'Neutralize anyone corrected by a Civilian, logged by a Spy, or leaked to by a Double agent earlier than they struck as a Foe, met as a Foreigner, or cleared as a Friend.',
-    early: {roles: ['civilian', 'spy', 'double'], dir: 'in'}, late: {roles: ['foe', 'foreigner', 'friend'], dir: 'out'}
+  hardSiteRelay({
+    id: 'ha-65', domain: 6, title: 'Delayed cross-site relay',
+    order: 'Delayed relay: engage anyone who reaches out to someone who later initiates a contact on the other site — unless struck by a Foe.',
+    firstDir: 'out', secondDir: 'out', sameIncident: false, timeOrder: 'before', exc: {roles: ['foe'], dir: 'in'}
   }),
-  hardTime({
-    id: 'ha-66', domain: 6, title: 'Early cover, late leak or correction',
-    order: 'Take out anyone cleared by a Friend, logged by a Spy, or met by a Foreigner earlier than a Double agent leaked to, Foe struck, or Civilian corrected them.',
-    early: {roles: ['friend', 'spy', 'foreigner'], dir: 'in'}, late: {roles: ['double', 'foe', 'civilian'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-66', domain: 6, title: 'Double exposure on one site',
+    order: 'Same-site double hit — drop anyone contacted twice across different roles on the same site, sparing anyone cleared by a Friend.',
+    dirA: 'in', dirB: 'in', sameIncident: true, diffRole: true, exc: {roles: ['friend'], dir: 'in'}
   }),
-  hardTime({
-    id: 'ha-67', domain: 6, title: 'Late correction after strike or log',
-    order: 'Post-correction move: shoot anyone who struck as a Foe, cleared as a Friend, or logged as a Spy earlier than a Civilian corrected, Foreigner met, or Double agent leaked to them.',
-    early: {roles: ['foe', 'friend', 'spy'], dir: 'out'}, late: {roles: ['civilian', 'foreigner', 'double'], dir: 'in'}
+  hardSiteDual({
+    id: 'ha-67', domain: 6, title: 'Cross-site follow-up',
+    order: 'Two-site follow-up: fire on anyone contacted on one site and later contacted on the other, except anyone fed a Double agent’s leak or logged by a Spy.',
+    dirA: 'in', dirB: 'in', sameIncident: false, timeOrder: 'before', exc: {roles: ['double', 'spy'], dir: 'in'}
   }),
-  hardTime({
-    id: 'ha-68', domain: 6, title: 'Spy or mole before Friend or Foe',
-    order: 'Too late to clear — drop anyone logged by a Spy, corrected by a Civilian, or leaked to by a Double agent earlier than a Friend cleared, Foe struck, or Foreigner met them.',
-    early: {roles: ['spy', 'civilian', 'double'], dir: 'in'}, late: {roles: ['friend', 'foe', 'foreigner'], dir: 'in'}
+  hardSiteRelay({
+    id: 'ha-68', domain: 6, title: 'Late same-site outreach',
+    order: 'Out of sequence — eliminate anyone who reaches out on a site to someone who had already initiated a contact earlier on that same site.',
+    firstDir: 'out', secondDir: 'out', sameIncident: true, timeOrder: 'after'
   }),
-  hardTime({
-    id: 'ha-69', domain: 6, title: 'Foreigner or Friend before Foe or Spy',
-    order: 'Timed betrayal: engage anyone met by a Foreigner, cleared by a Friend, or corrected by a Civilian earlier than a Foe struck, Spy logged, or Double agent leaked to them.',
-    early: {roles: ['foreigner', 'friend', 'civilian'], dir: 'in'}, late: {roles: ['foe', 'spy', 'double'], dir: 'in'}
+  hardSiteRelay({
+    id: 'ha-69', domain: 6, title: 'Cross-site upstream handoff',
+    order: 'Post-briefing handoff: take down anyone contacted by someone who acted earlier on the other site, sparing anyone cleared by a Friend or corrected by a Civilian.',
+    firstDir: 'in', secondDir: 'out', sameIncident: false, timeOrder: 'after', exc: {roles: ['friend', 'civilian'], dir: 'in'}
   }),
 
   // =========================================================================
@@ -706,10 +765,18 @@ export const hardFamilies = [
     order: 'Asset under leverage: take out anyone reached by someone who also operates toward {name}, across two different roles; stand down if a Spy shadows them.',
     step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'out', diffRole: true, exc: {roles: ['spy'], dir: 'in'}
   }),
-  hardAnchor({
-    id: 'ha-98', domain: 9, title: '{name}’s late-moving partner',
-    order: 'Shadow reach — shoot anyone reached by someone who also operates toward {name} when {name}’s incoming contact happened earlier.',
-    step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'out', timeOrder: 'before'
+  hard({
+    id: 'ha-98', domain: 9, title: '{name}’s late-moving partner', useAnchor: true,
+    order: 'Shadow reach — shoot anyone reached by someone who also operates toward {name} when {name}’s incoming contact happened earlier, or anyone targeting {name} as a Foe or leaking to {name} as a Double agent.',
+    evaluate(g, anchor, proof) {
+      return collectMatches(g.people, x => {
+        const hit = matchAnchorRelay(g, anchor, x, {step1Roles: null, step1Dir: 'in', step2Roles: null, step2Dir: 'out', timeOrder: 'before'});
+        if (hit) return proof ? x + ': ' + g.fmt(hit.e1) + ' → ' + g.fmt(hit.e2) + '.' : 'ok';
+        const direct = g.in(anchor, ['foe', 'double']).find(e => e.from === x);
+        if (direct) return proof ? x + ': direct ' + g.fmt(direct) + '.' : 'ok';
+        return null;
+      }, proof);
+    }
   }),
   hard({
     id: 'ha-99', domain: 9, title: '{name}’s earlier rival', useAnchor: true,
