@@ -1,4 +1,4 @@
-import {alternateLinks, edgesFor, roleNames, shuffled, verbsForDomain} from './case-layout.js';
+import {alternateLinks, edgesFor, roleNames, shuffled, verbsForDomain} from './case-layout.js?v=fof20';
 
 const pick = (array, draw) => array[Math.floor(draw() * array.length)];
 export const pairKey = pair => pair.slice().sort().join('|');

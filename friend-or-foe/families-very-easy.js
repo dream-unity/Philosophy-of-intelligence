@@ -1,8 +1,8 @@
-import {collectMatches} from './case-graph.js';
+import {collectMatches} from './case-graph.js?v=fof20';
 import {
   matchAnchorRelay, matchAtom, matchCutoutBridge, matchIncidentCorroboration,
   matchIncidentDual, matchRelay, matchSiteTaint, matchTemporal
-} from './case-predicates.js';
+} from './case-predicates.js?v=fof20';
 
 // 100 genuinely distinct Very Easy intelligence cases (10 domains × 10 families).
 // Directional 2-step carry-over, operational-site cutouts, corroboration, and temporal sequence across confirmed dispatches.

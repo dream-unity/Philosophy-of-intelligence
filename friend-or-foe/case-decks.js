@@ -1,9 +1,9 @@
-import {caseCatalog} from './case-catalog.js';
-import {nearMisses} from './case-decoys.js';
-import {DOMAINS, evaluateFamily, familiesForLevel, getFamily} from './case-families.js';
-import {alternateLinks, caseRoles, edgesFor, layoutFor, seededDraw, shuffled, symbols} from './case-layout.js';
-import {buildCrossChecks, pairKey, reportHolds, solveCaseEvidence as solveEvidenceCore, targetKey} from './case-logic.js';
-import {networkRoster} from './roster.js';
+import {caseCatalog} from './case-catalog.js?v=fof20';
+import {nearMisses} from './case-decoys.js?v=fof20';
+import {DOMAINS, evaluateFamily, familiesForLevel, getFamily} from './case-families.js?v=fof20';
+import {alternateLinks, caseRoles, edgesFor, layoutFor, seededDraw, shuffled, symbols} from './case-layout.js?v=fof20';
+import {buildCrossChecks, pairKey, reportHolds, solveCaseEvidence as solveEvidenceCore, targetKey} from './case-logic.js?v=fof20';
+import {networkRoster} from './roster.js?v=fof20';
 
 export {reportHolds};
 

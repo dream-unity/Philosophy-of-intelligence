@@ -1,9 +1,9 @@
-import {collectMatches} from './case-graph.js';
+import {collectMatches} from './case-graph.js?v=fof20';
 import {
   hasCompromised, matchAllTimeOrder, matchAnchorRelay, matchAtom,
   matchCutoutBridge, matchDependentSupport, matchIncidentCorroboration, matchIncidentDual,
   matchIncidentRelay, matchIndependentSupport, matchRelay, matchSharedOrigin, matchSiteTaint, matchTemporal
-} from './case-predicates.js';
+} from './case-predicates.js?v=fof20';
 
 // 100 genuinely distinct Moderate intelligence cases (10 domains × 10 families).
 // De-pooled, role-specific, context-relative operational judgments: every family cross-pairs

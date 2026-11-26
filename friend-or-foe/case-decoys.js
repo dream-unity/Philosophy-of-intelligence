@@ -1,5 +1,5 @@
-import {evaluateFamily, getFamily} from './case-families.js';
-import {caseRoles} from './case-layout.js';
+import {evaluateFamily, getFamily} from './case-families.js?v=fof20';
+import {caseRoles} from './case-layout.js?v=fof20';
 
 // Select genuine near-miss decoys for variable-size target sets (1–4 targets) on Super Easy & Very Easy.
 // Balances mention frequency so shortlist decoys leak zero structural frequency clues.

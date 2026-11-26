@@ -1,8 +1,8 @@
-import {createArcadeRange} from './covert-range.js?v=fof17';
-import {bindSpeedDial} from './speed-dial.js';
-import {makeCaseTrial} from './case-decks.js';
-import {renderCaseEvidence, renderCaseGuide, renderCaseResult} from './case-view.js';
-import {ArcadeSession, ZeroToHeroLadder} from './arcade-session.js';
+import {createArcadeRange} from './covert-range.js?v=fof20';
+import {bindSpeedDial} from './speed-dial.js?v=fof20';
+import {makeCaseTrial} from './case-decks.js?v=fof20';
+import {renderCaseEvidence, renderCaseGuide, renderCaseResult} from './case-view.js?v=fof20';
+import {ArcadeSession, ZeroToHeroLadder} from './arcade-session.js?v=fof20';
 
 const el = id => document.getElementById(id);
 const dialog = el('controls');

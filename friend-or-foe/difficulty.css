@@ -197,12 +197,27 @@ body[data-phase="ready"] .cabinet {
   .level-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-@media (orientation: landscape) and (max-height: 680px) {
-  #setup { padding: .6rem .9rem; gap: .65rem; }
-  #setup h2 { font-size: 1.8rem; }
-  #run-form { gap: .62rem; }
-  .setup-intro p { margin-top: .2rem; }
-  .level-choice { padding-block: .3rem; }
+@media (orientation: landscape) and (max-height: 760px) {
+  body[data-phase="ready"] .cabinet {
+    grid-template-columns: minmax(0, 1fr) clamp(380px, 41vw, 520px);
+  }
+  #setup { justify-content: flex-start; padding: .5rem .85rem; gap: .48rem; }
+  #setup h2 { font-size: 1.5rem; line-height: 1.08; }
+  #setup h2 br { display: none; }
+  #setup h2 em::before { content: " "; }
+  .setup-intro p { margin-top: .16rem; font-size: .82rem; line-height: 1.24; max-width: none; }
+  #run-form { gap: .45rem; }
+  .levels legend { padding: 0 0 .2rem; font-size: .88rem; }
+  .level-options { gap: .24rem; }
+  .level-choice { min-height: 32px; padding: .22rem .5rem; column-gap: .45rem; }
+  .level-choice strong { font-size: .88rem; }
+  .level-choice span { font-size: .75rem; line-height: 1.16; margin-top: .03rem; }
+  .run-settings { gap: .55rem; }
+  .run-settings input[type="number"] { min-height: 36px; padding: 4px; }
+  .speed-row { margin-top: .15rem; gap: .5rem; }
+  .speed-dial { flex: 0 0 2.75rem; height: 2.75rem; }
+  #speed-value { font-size: .98rem; }
+  #run-form button { min-height: 38px; padding: .36rem .75rem; }
 }
 
 .guided-trail {

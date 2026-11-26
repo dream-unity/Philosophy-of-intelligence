@@ -29,6 +29,8 @@ app.use(
       } else if (path.basename(filePath) === 'sw.js') {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Service-Worker-Allowed', '/');
+      } else if (/\.(?:html|js|mjs|css)$/i.test(filePath)) {
+        res.setHeader('Cache-Control', 'no-cache');
       }
     },
   })

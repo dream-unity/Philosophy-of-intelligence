@@ -1,10 +1,10 @@
-import {buildGraph, DOMAINS} from './case-graph.js';
-import {superSuperEasyFamilies} from './families-super-super-easy.js';
-import {superEasyFamilies} from './families-super-easy.js';
-import {veryEasyFamilies} from './families-very-easy.js';
-import {easyFamilies} from './families-easy.js';
-import {moderateFamilies} from './families-moderate.js';
-import {hardFamilies} from './families-hard.js';
+import {buildGraph, DOMAINS} from './case-graph.js?v=fof20';
+import {superSuperEasyFamilies} from './families-super-super-easy.js?v=fof20';
+import {superEasyFamilies} from './families-super-easy.js?v=fof20';
+import {veryEasyFamilies} from './families-very-easy.js?v=fof20';
+import {easyFamilies} from './families-easy.js?v=fof20';
+import {moderateFamilies} from './families-moderate.js?v=fof20';
+import {hardFamilies} from './families-hard.js?v=fof20';
 
 export {DOMAINS};
 

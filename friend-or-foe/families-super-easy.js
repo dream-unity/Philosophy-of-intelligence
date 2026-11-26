@@ -1,5 +1,5 @@
-import {collectMatches} from './case-graph.js';
-import {matchAtom, matchTemporal} from './case-predicates.js';
+import {collectMatches} from './case-graph.js?v=fof20';
+import {matchAtom, matchTemporal} from './case-predicates.js?v=fof20';
 
 // 100 genuinely distinct Super Easy intelligence cases (10 domains × 10 families).
 // Every order is an immediately intelligible, directional officer call matched to its domain's

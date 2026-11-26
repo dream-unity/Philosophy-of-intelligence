@@ -1,4 +1,4 @@
-import {caseRoles, formatDispatchTime, incidentsForDomain, roleNames, verbsForDomain} from './case-layout.js';
+import {caseRoles, formatDispatchTime, incidentsForDomain, roleNames, verbsForDomain} from './case-layout.js?v=fof20';
 
 export const DOMAINS = [
   'Cover & Betrayal',

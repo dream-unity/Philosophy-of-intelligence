@@ -1,4 +1,4 @@
-import {formatDispatchTime, incidentsForDomain, roleNames, verbsForDomain} from './case-layout.js';
+import {formatDispatchTime, incidentsForDomain, roleNames, verbsForDomain} from './case-layout.js?v=fof20';
 
 const opSymbols = {
   eq: '=',

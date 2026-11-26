@@ -1,9 +1,9 @@
-import {collectMatches} from './case-graph.js';
+import {collectMatches} from './case-graph.js?v=fof20';
 import {
   hasCompromised, hasUncompromised, matchAllTimeOrder, matchAnchorRelay, matchAtom,
   matchCutoutBridge, matchDependentSupport, matchIncidentCorroboration, matchIncidentDual,
   matchIncidentRelay, matchIndependentSupport, matchRelay, matchSharedOrigin, matchSiteTaint, matchTemporal
-} from './case-predicates.js';
+} from './case-predicates.js?v=fof20';
 
 // 100 genuinely distinct Hard intelligence cases (10 domains × 10 families).
 // ZERO numerical scoring ("shoot the top two"), ZERO permanent safe/threat role pooling,
