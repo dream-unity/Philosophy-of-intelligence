@@ -116,7 +116,7 @@ function scheduleNext(delay) {
 }
 
 function finishTrial(result) {
-  if (phase !== 'play' || !session.accept(result)) return;
+  if (phase !== 'play' || !session.accept(result, trial?.evidence?.family || null)) return;
   setPhase('between');
   renderCaseResult(el('cues'), trial);
   el('cues').parentElement.scrollTop = 0;
@@ -140,10 +140,19 @@ function showSummary() {
   el('summary-score').textContent = session.wins + ' ' + caseWord + ' cleared in ' + session.completed + ' completed trials.';
   const totals = el('totals');
   totals.replaceChildren();
-  for (const [label, value] of [
-    ['Out of bullets', session.ammoLosses], ['Deaths', session.deaths],
+  const rows = [
+    ['First-seen cases', session.firstSeenTotal ? session.firstSeenWins + ' / ' + session.firstSeenTotal : '—']
+  ];
+  if (session.repeatTotal) {
+    rows.push(['Repeat-type cases', session.repeatWins + ' / ' + session.repeatTotal]);
+  }
+  rows.push(
+    ['Out of bullets', session.ammoLosses],
+    ['Deaths (escaped)', session.deaths],
+    ['Median clearance', session.medianTime === null ? '—' : session.medianTime.toFixed(1) + ' s'],
     ['Fastest clearance', session.bestTime === null ? '—' : session.bestTime.toFixed(1) + ' s']
-  ]) {
+  );
+  for (const [label, value] of rows) {
     const term = document.createElement('dt');
     const count = document.createElement('dd');
     term.textContent = label;

@@ -121,7 +121,8 @@
   padding: .2rem .18rem;
   border-bottom: 1px solid var(--case-line);
 }
-.case-report.case-decisive {
+.case-report.case-decisive,
+.case-row.case-decisive {
   background: rgba(255, 194, 126, .11);
   border-left: 2px solid var(--amber);
   padding-left: .42rem;
@@ -139,22 +140,22 @@
   background: rgba(171, 227, 205, .12);
 }
 .case-result {
-  margin-bottom: .75rem;
-  padding: .58rem .72rem;
-  background: rgba(13, 21, 27, .9);
+  margin-bottom: .58rem;
+  padding: .52rem .68rem;
+  background: rgba(13, 21, 27, .92);
   border: 1px solid var(--case-div-line);
   border-left: 3px solid var(--mint);
   border-radius: 3px;
 }
 .case-rival {
-  margin: .36rem 0 0;
+  margin: .32rem 0 0;
   color: var(--amber);
   font: 600 .8rem/1.28 var(--display);
 }
 .case-guide { display: grid; gap: .65rem; margin-bottom: .85rem; }
 .case-guide p, .case-proof li { margin: 0; line-height: 1.32; }
-.case-proof { margin-top: .42rem; font-size: .84rem; color: var(--case-muted); }
-.case-proof li + li { margin-top: .22rem; }
+.case-proof { margin-top: .36rem; font-size: .82rem; color: var(--case-muted); }
+.case-proof li + li { margin-top: .18rem; }
 .case-sr {
   position: absolute;
   width: 1px; height: 1px;
@@ -166,7 +167,11 @@
   .case-role { font-size: .81rem; }
   .case-links { grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.1rem), 1fr)); }
 }
-@container case (min-width: 42rem) {
-  .case-records { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.25rem; }
-  .case-row { grid-template-columns: minmax(7.2rem, .92fr) minmax(0, 1.8fr); }
+@container case (min-width: 40rem) {
+  .case-records { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.15rem; margin: .38rem 0 .2rem; }
+  .case-row { grid-template-columns: minmax(6.8rem, .9fr) minmax(0, 1.85fr); padding: .16rem 0; }
+  .case-row.case-div-end { padding-bottom: .18rem; margin-bottom: 0; border-bottom-color: var(--case-line); }
+  .case-reports { margin-top: .32rem; }
+  .case-report-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+  .case-report { padding: .14rem .14rem; font-size: .95em; }
 }

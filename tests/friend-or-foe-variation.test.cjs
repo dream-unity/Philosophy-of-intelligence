@@ -8,7 +8,7 @@ function loadModule(relPath) {
   return import(pathToFileURL(path.join(__dirname, '..', relPath)).href);
 }
 
-const BANNED_COPY = /\b(rows?|arrows?|left side|right side|points?|score|top two|IQ)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
+const BANNED_COPY = /\b(rows?|arrows?|left side|right side|points?|score|top two|IQ|categor(y|ies)|files?|records?|appears? in|named in|listed|distinct|overt|covert|hostile|safe|threat|dossier)\b|Safe \(\+\)|Threat \(−\)|relational reasoning/i;
 
 function makeFakeDocument() {
   class FakeNode {
@@ -127,6 +127,7 @@ test('friend-or-foe catalog has 500 distinct families (100 per difficulty) with 
     }
     for (const f of list) {
       assert.doesNotMatch(f.order, BANNED_COPY, `${f.id} order has banned copy: ${f.order}`);
+      assert.doesNotMatch(f.order, /\(/, `${f.id} order should avoid parenthetical syntax: ${f.order}`);
       assert.doesNotMatch(f.title, BANNED_COPY, `${f.id} title has banned copy: ${f.title}`);
       assert.ok(Array.isArray(caseCatalog[f.id]), `Missing catalog for ${f.id}`);
       assert.equal(caseCatalog[f.id].length, 12, `Expected 12 certified boards for ${f.id}`);
@@ -304,6 +305,18 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
     assert.ok(hardRoot.querySelector('.case-file'), 'Original dossier should remain visible during debrief');
     assert.ok(hardTrial.pair.every(name => hardRoot.allText().includes(name)));
 
+    // Confirmed-tier in-place debrief shows "Why not ...?" and highlights decisive role
+    const seTrial = makeCaseTrial('super-easy', null, draw);
+    const seRoot = global.document.createElement('section');
+    renderCaseEvidence(seRoot, seTrial.evidence, {shortlist: true});
+    renderCaseResult(seRoot, seTrial);
+    assert.ok(seRoot.querySelector('.case-result'), 'Super Easy debrief banner should be present');
+    assert.ok(seRoot.querySelector('.case-file'), 'Super Easy dispatches should stay visible during debrief');
+    if (seTrial.rivalDebrief) {
+      assert.ok(seRoot.allText().includes('Why not '), 'Confirmed-tier debrief should explain why rival failed');
+      assert.ok(seRoot.querySelector('.case-decisive'), 'Decisive role entry should be highlighted');
+    }
+
     const guideRoot = global.document.createElement('div');
     renderCaseGuide(guideRoot, 'hard', {shortlist: true});
     assert.doesNotMatch(guideRoot.allText(), BANNED_COPY);
@@ -311,4 +324,22 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
   } finally {
     global.document = prevDocument;
   }
+});
+
+test('ArcadeSession separates first-seen family accuracy, repeat-family accuracy, and median solve pace', async () => {
+  const {ArcadeSession} = await loadModule('friend-or-foe/arcade-session.js');
+  const session = new ArcadeSession(20);
+  session.accept({correct: true, reason: 'pair', elapsed: 6.0}, 'ha-01');
+  session.next();
+  session.accept({correct: false, reason: 'bullets', elapsed: 4.0}, 'ha-02');
+  session.next();
+  session.accept({correct: true, reason: 'pair', elapsed: 10.0}, 'ha-01');
+  session.next();
+  session.accept({correct: true, reason: 'pair', elapsed: 8.0}, 'ha-03');
+  assert.equal(session.firstSeenTotal, 3);
+  assert.equal(session.firstSeenWins, 2);
+  assert.equal(session.repeatTotal, 1);
+  assert.equal(session.repeatWins, 1);
+  assert.equal(session.bestTime, 6.0);
+  assert.equal(session.medianTime, 8.0);
 });

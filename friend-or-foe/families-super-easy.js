@@ -119,7 +119,7 @@ export const superEasyFamilies = [
   }),
   direct({
     id: 'se-07', domain: 0, title: 'Turned insider',
-    order: 'Shoot anyone who vouches as a Friend and also is tied to Foreigner or Double agent.',
+    order: 'Shoot anyone who vouches as a Friend and is also tied to Foreigner or Double agent.',
     hint: 'Start with active Friend vouchers, then keep anyone also tied to Foreigner or Double agent.',
     inc: {roles: ['friend'], dir: 'out'}, req: {roles: ['foreigner', 'double']}
   }),
@@ -387,7 +387,7 @@ export const superEasyFamilies = [
   }),
   direct({
     id: 'se-49', domain: 4, title: 'Unwatched multi-role contact',
-    order: 'Shoot anyone tied to at least two of Friend, Foe, and Civilian — excluding anyone tied to Spy.',
+    order: 'Shoot anyone tied to at least two of Friend, Foe, and Civilian — unless tied to Spy.',
     hint: 'Find overlap across Friend, Foe, and Civilian, then exclude anyone tied to Spy.',
     inc: {roles: ['friend', 'foe', 'civilian']}, minDistinct: 2, exc: {roles: ['spy']}
   }),
@@ -613,31 +613,31 @@ export const superEasyFamilies = [
   }),
   direct({
     id: 'se-84', domain: 8, title: 'Pure shadow operator',
-    order: 'Shoot anyone tied to Double agent or Foreigner who never is tied to Friend or Civilian.',
+    order: 'Shoot anyone tied to Double agent or Foreigner who is never tied to Friend or Civilian.',
     hint: 'Check everyone tied to Double agent and Foreigner, then cross off anyone tied to Friend or Civilian.',
     inc: {roles: ['double', 'foreigner']}, exc: {roles: ['friend', 'civilian']}
   }),
   direct({
     id: 'se-85', domain: 8, title: 'Pure inside target',
-    order: 'Shoot anyone tied to Friend or Civilian who never is tied to Foe, Double agent, or Foreigner.',
+    order: 'Shoot anyone tied to Friend or Civilian who is never tied to Foe, Double agent, or Foreigner.',
     hint: 'Check everyone tied to Friend and Civilian, then cross off anyone tied to Foe, Double agent, or Foreigner.',
     inc: {roles: ['friend', 'civilian']}, exc: {roles: ['foe', 'double', 'foreigner']}
   }),
   direct({
     id: 'se-86', domain: 8, title: 'Enemy without allies',
-    order: 'Shoot anyone tied to Foe or Spy who never is tied to Friend or Civilian.',
+    order: 'Shoot anyone tied to Foe or Spy who is never tied to Friend or Civilian.',
     hint: 'Check everyone tied to Foe and Spy, then exclude anyone tied to Friend or Civilian.',
     inc: {roles: ['foe', 'spy']}, exc: {roles: ['friend', 'civilian']}
   }),
   direct({
     id: 'se-87', domain: 8, title: 'Unflagged outsider',
-    order: 'Shoot anyone tied to Foreigner or Civilian who never is tied to Spy or Foe.',
+    order: 'Shoot anyone tied to Foreigner or Civilian who is never tied to Spy or Foe.',
     hint: 'Check everyone tied to Foreigner and Civilian, then exclude anyone tied to Spy or Foe.',
     inc: {roles: ['foreigner', 'civilian']}, exc: {roles: ['spy', 'foe']}
   }),
   direct({
     id: 'se-88', domain: 8, title: 'Shadowed dual contact',
-    order: 'Shoot anyone tied to Spy or Double agent who never is tied to Friend or Foreigner.',
+    order: 'Shoot anyone tied to Spy or Double agent who is never tied to Friend or Foreigner.',
     hint: 'Check everyone tied to Spy and Double agent, then exclude anyone tied to Friend or Foreigner.',
     inc: {roles: ['spy', 'double']}, exc: {roles: ['friend', 'foreigner']}
   }),
@@ -702,7 +702,7 @@ export const superEasyFamilies = [
   }),
   anchorDirect({
     id: 'se-97', domain: 9, title: '{name}’s unwarned contacts',
-    order: 'Shoot anyone directly linked to {name} who never is tied to Civilian.',
+    order: 'Shoot anyone directly linked to {name} who is never tied to Civilian.',
     hint: 'Find {name}’s direct contacts, then rule out anyone tied to Civilian.',
     incRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'],
     exc: {roles: ['civilian']}

@@ -53,6 +53,7 @@ function roleLabel(role) {
 function roleEntry(row, index) {
   const divEnd = index === 1 || index === 3 ? ' case-div-end' : '';
   const entry = element('div', 'case-row' + (row.disputed ? ' case-unconfirmed' : '') + divEnd);
+  if (typeof entry.setAttribute === 'function') entry.setAttribute('data-role', row.role);
   const term = element('dt', 'case-row-label');
   const name = element('span', 'case-role-name');
   name.append(roleLabel(row.role));
@@ -228,12 +229,11 @@ export function renderCaseResult(root, trial) {
   );
   if (trial.rivalDebrief) {
     const rival = trial.rivalDebrief;
-    const line = element(
-      'p',
-      'case-rival',
-      'Rival ' + formatNameList(rival.rivalTargets) + ' ruled out by: ' + rival.defeatedBy
-    );
-    panel.append(line);
+    const isDirect = typeof rival.reportIndex !== 'number' && rival.rivalTargets.length === 1;
+    const text = isDirect
+      ? 'Why not ' + rival.rivalTargets[0] + '? ' + rival.defeatedBy
+      : 'Rival ' + formatNameList(rival.rivalTargets) + ' ruled out by: ' + rival.defeatedBy;
+    panel.append(element('p', 'case-rival', text));
   }
   const list = element('ul', 'case-proof');
   for (const explanation of trial.proof) list.append(element('li', '', explanation));
@@ -247,6 +247,9 @@ export function renderCaseResult(root, trial) {
       root.querySelectorAll('.case-decisive').forEach(node => node.classList.remove('case-decisive'));
       if (trial.rivalDebrief && typeof trial.rivalDebrief.reportIndex === 'number') {
         const hit = root.querySelector(`[data-report-index="${trial.rivalDebrief.reportIndex}"]`);
+        if (hit) hit.classList.add('case-decisive');
+      } else if (trial.rivalDebrief && trial.rivalDebrief.decisiveRole) {
+        const hit = root.querySelector(`[data-role="${trial.rivalDebrief.decisiveRole}"]`);
         if (hit) hit.classList.add('case-decisive');
       }
     }

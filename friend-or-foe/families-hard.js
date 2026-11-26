@@ -81,7 +81,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-03', domain: 0, title: 'Tainted cover under fire',
-    order: 'Shoot anyone backed by a tainted Friend (in Double agent or Foreigner) OR targeted by a Foe — unless cleared by a clean Spy or clean Civilian.',
+    order: 'Shoot anyone backed by a Friend tainted by Double agent or Foreigner OR targeted by a Foe — unless cleared by a clean Spy or clean Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
@@ -95,7 +95,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-04', domain: 0, title: 'Double-crossed ally or informant',
-    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian someone tied to Foe or Double agent — unless a clean Spy shadows them or tied to Foreigner.',
+    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian someone tied to Foe or Double agent — unless a clean Spy shadows them or they have Foreigner ties.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x) || g.hasTouch(x, 'foreigner')) return null;
@@ -186,7 +186,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-11', domain: 1, title: 'False Spy cover',
-    order: 'Shoot anyone shadowed ONLY by compromised Spies (tied to Foe, Double agent, or Foreigner) — unless cleared by a clean Friend or clean Civilian.',
+    order: 'Shoot anyone shadowed ONLY by Spies compromised by Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
@@ -198,7 +198,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-12', domain: 1, title: 'Unwatched shadow link',
-    order: 'Shoot anyone tied to Double agent or Foreigner who has no Spy tie at all — unless a clean Friend vouches for them and tipped off by a Civilian.',
+    order: 'Shoot anyone tied to Double agent or Foreigner who has no Spy tie at all — unless both a clean Friend vouches for them and a Civilian tips them off.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasTouch(x, 'spy')) return null;
@@ -211,7 +211,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-13', domain: 1, title: 'Blind-spot enemy network',
-    order: 'Shoot anyone in contact with an unwatched suspect (no Spy shadow) in Double agent or Foreigner — unless a clean Friend vouches for them or clean Civilian.',
+    order: 'Shoot anyone in contact with an suspect unwatched by any Spy in Double agent or Foreigner — unless cleared by a clean Friend or clean Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
@@ -239,7 +239,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-15', domain: 1, title: 'Compromised watcher’s quarry',
-    order: 'Shoot anyone shadowed by a tainted Spy (in Foe, Double agent, or Foreigner) OR targeted by a Foe — unless a clean Friend backs them.',
+    order: 'Shoot anyone shadowed by a Spy tainted by Foe, Double agent, or Foreigner OR targeted by a Foe — unless a clean Friend backs them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanFriend(g, x)) return null;
@@ -410,7 +410,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-28', domain: 2, title: 'Foreigner’s tainted handler',
-    order: 'Shoot anyone met by a Foreigner whose Foreigner contact also is tied to Foe, Double agent, or Spy — unless cleared by a clean Friend or Civilian.',
+    order: 'Shoot anyone met by a Foreigner whose Foreigner contact is also tied to Foe, Double agent, or Spy — unless cleared by a clean Friend or Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'civilian'])) return null;
@@ -500,7 +500,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-35', domain: 3, title: 'False Civilian shield',
-    order: 'Shoot anyone tipped off ONLY by compromised Civilians (in Foe, Double agent, or Foreigner) — unless cleared by a clean Friend or clean Spy.',
+    order: 'Shoot anyone tipped off ONLY by Civilians compromised by Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
@@ -536,7 +536,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-38', domain: 3, title: 'Informant bridging Friend and danger',
-    order: 'Shoot anyone tied to Civilian who links to a Friend-backed suspect AND to a Foe, Double agent, or Foreigner suspect (two different people).',
+    order: 'Shoot anyone tied to Civilian who links two different contacts: one backed by a Friend and one in Foe, Double agent, or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (!g.hasTouch(x, 'civilian')) return null;
@@ -555,7 +555,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-39', domain: 3, title: 'Unwatched insider cover on a shadow lead',
-    order: 'Shoot anyone tied to Foe, Double agent, or Foreigner who is tipped off by an unwatched Civilian or backed by an unwatched Friend (no Spy shadow on that source).',
+    order: 'Shoot anyone tied to Foe, Double agent, or Foreigner who is tipped off by a Civilian or backed by a Friend unwatched by any Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (!g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
@@ -571,7 +571,7 @@ export const hardFamilies = [
   // =========================================================================
   hard({
     id: 'ha-40', domain: 4, title: 'Unwatched two-step shadow relay',
-    order: 'Shoot anyone who reaches a Foe, Double agent, or Foreigner action in two forward steps through an unwatched middleman (no Spy shadow) — unless a clean Friend backs them.',
+    order: 'Shoot anyone who reaches a Foe, Double agent, or Foreigner action in two forward steps through an middleman unwatched by any Spy — unless a clean Friend backs them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanFriend(g, x)) return null;
@@ -587,7 +587,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-41', domain: 4, title: 'Shadow relay into insider cover',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward an unbacked contact (no Friend voucher) who then operates as a Friend, Spy, or Civilian (no return).',
+    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward an contact lacking Friend backing who then operates as a Friend, Spy, or Civilian without circling back.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchRelay(g, x, {
@@ -602,7 +602,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-42', domain: 4, title: 'Insider relay into shadow strike',
-    order: 'Shoot anyone acting as a Friend, Spy, or Civilian toward an unwatched contact (no Spy shadow) who then operates as a Foe, Double agent, or Foreigner (no return).',
+    order: 'Shoot anyone acting as a Friend, Spy, or Civilian toward an contact unwatched by any Spy who then operates as a Foe, Double agent, or Foreigner without circling back.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchRelay(g, x, {
@@ -617,7 +617,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-43', domain: 4, title: 'End of a mixed relay chain',
-    order: 'Shoot anyone targeted by a Foe or met by a Foreigner who had received a Double agent’s leak, Spy shadow, or Civilian tip-off (no return) — unless cleared by a clean Friend or clean Spy.',
+    order: 'Shoot anyone targeted by a Foe or met by a Foreigner who had received a Double agent’s leak, Spy shadow, or Civilian tip-off without circling back — unless cleared by a clean Friend or clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
@@ -632,7 +632,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-44', domain: 4, title: 'Unwatched shadow conduit',
-    order: 'Shoot anyone receiving contact in Foe, Double agent, or Foreigner AND passing on a contact in Friend, Spy, or Civilian (no return) — unless a clean Spy watches them.',
+    order: 'Shoot anyone receiving contact in Foe, Double agent, or Foreigner AND passing on a contact in Friend, Spy, or Civilian without circling back — unless a clean Spy watches them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
@@ -647,7 +647,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-45', domain: 4, title: 'Insider conduit feeding shadow action',
-    order: 'Shoot anyone receiving contact in Friend, Spy, or Civilian AND passing on a contact in Foe, Double agent, or Foreigner (no return) — unless a clean Friend backs them.',
+    order: 'Shoot anyone receiving contact in Friend, Spy, or Civilian AND passing on a contact in Foe, Double agent, or Foreigner without circling back — unless a clean Friend backs them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanFriend(g, x)) return null;
@@ -694,7 +694,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-48', domain: 4, title: 'Relay through a tainted Spy’s target',
-    order: 'Shoot anyone who initiates in any role toward someone shadowed by a tainted Spy (in Foe, Double agent, or Foreigner) — unless a clean Friend backs them.',
+    order: 'Shoot anyone who initiates in any role toward someone shadowed by a Spy tainted by Foe, Double agent, or Foreigner — unless a clean Friend backs them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanFriend(g, x)) return null;
@@ -708,7 +708,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-49', domain: 4, title: 'Three-role chain receiver',
-    order: 'Shoot anyone reached via Friend, Spy, or Civilian by an unwatched contact (no Spy shadow) who received a Foe, Double agent, or Foreigner contact (no return).',
+    order: 'Shoot anyone reached via Friend, Spy, or Civilian by an contact unwatched by any Spy who received a Foe, Double agent, or Foreigner contact without circling back.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const hit = matchRelay(g, x, {
@@ -727,7 +727,7 @@ export const hardFamilies = [
   // =========================================================================
   hard({
     id: 'ha-50', domain: 5, title: 'Broken cover triangle',
-    order: 'Shoot anyone in contact with a Friend-backed suspect AND to a Double agent or Foreigner suspect (two different people) — unless cleared by a clean Friend or clean Spy.',
+    order: 'Shoot anyone linking two different contacts: one backed by a Friend and one in Double agent or Foreigner — unless cleared by a clean Friend or clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
@@ -819,7 +819,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-56', domain: 5, title: 'Silent mark without clean shield',
-    order: 'Shoot anyone who initiates NO contacts anywhere AND receives contact in Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
+    order: 'Shoot anyone who initiates NO contacts anywhere who also receives contact in Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.out(x).length > 0 || hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
@@ -859,7 +859,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-59', domain: 5, title: 'Compromised dual-link pair',
-    order: 'Shoot anyone in contact with a Spy-watched suspect AND to a Foe or Foreigner suspect (two different people) — unless cleared by a clean Friend or clean Civilian.',
+    order: 'Shoot anyone linking two different contacts: one watched by a Spy and one in Foe or Foreigner — unless cleared by a clean Friend or clean Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
@@ -918,7 +918,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-63', domain: 6, title: 'Escalating relay into betrayal',
-    order: 'Shoot anyone acting as a Friend, Spy, or Civilian toward someone who later operates as a Foe, Double agent, or Foreigner (no return) — unless a clean Friend backs them.',
+    order: 'Shoot anyone acting as a Friend, Spy, or Civilian toward someone who later operates as a Foe, Double agent, or Foreigner without circling back — unless a clean Friend backs them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanFriend(g, x)) return null;
@@ -934,7 +934,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-64', domain: 6, title: 'Backed by an already-compromised source',
-    order: 'Shoot anyone backed by a Friend or tipped off by a Civilian who had EARLIER was tied to Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
+    order: 'Shoot anyone backed by a Friend or tipped off by a Civilian already tied earlier to Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
@@ -950,7 +950,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-65', domain: 6, title: 'Backing an already-compromised contact',
-    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian someone who had EARLIER was tied to Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
+    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian someone already tied earlier to Foe, Double agent, or Foreigner — unless a clean Spy watches them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
@@ -966,7 +966,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-66', domain: 6, title: 'Earliest dispatch shadow, later dispatch insider',
-    order: 'Shoot anyone whose earliest dispatch is with Foe, Double agent, or Foreigner AND who later is tied to Friend, Spy, or Civilian — unless a clean Friend backs them.',
+    order: 'Shoot anyone whose earliest tie is in Foe, Double agent, or Foreigner before a later Friend, Spy, or Civilian tie — unless a clean Friend backs them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanFriend(g, x)) return null;
@@ -982,7 +982,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-67', domain: 6, title: 'Latest dispatch shadow, earlier dispatch insider',
-    order: 'Shoot anyone whose LATEST dispatch is in Foe, Double agent, or Foreigner AND who earlier was tied to Friend, Spy, or Civilian — unless a clean Spy watches them.',
+    order: 'Shoot anyone whose latest tie is in Foe, Double agent, or Foreigner after an earlier Friend, Spy, or Civilian tie — unless a clean Spy watches them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
@@ -998,7 +998,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-68', domain: 6, title: 'Timed shadow-to-shadow chain',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward someone who later initiates in another role (no return) — unless cleared by a clean Friend or clean Spy.',
+    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward someone who later initiates in another role without circling back — unless cleared by a clean Friend or clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
@@ -1014,7 +1014,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-69', domain: 6, title: 'Shadowed or backed after compromise',
-    order: 'Shoot anyone shadowed by a Spy or backed by a Friend who had EARLIER was tied to Foe, Double agent, or Foreigner — unless a clean Civilian tips them off.',
+    order: 'Shoot anyone shadowed by a Spy or backed by a Friend already tied earlier to Foe, Double agent, or Foreigner — unless a clean Civilian tips them off.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanCivilian(g, x)) return null;
@@ -1046,7 +1046,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-71', domain: 7, title: 'Tainted source under Foe pressure',
-    order: 'Shoot anyone whose Friend voucher, watching Spy, OR Civilian informant is tied to Foe — excluding anyone with a clean Friend or clean Spy.',
+    order: 'Shoot anyone whose Friend voucher, watching Spy, OR Civilian informant is tied to Foe — unless shielded by a clean Friend or clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
@@ -1100,7 +1100,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-75', domain: 7, title: 'Two-hop tainted cover',
-    order: 'Shoot anyone backed by a Friend whose own contact (either way) is tied to Double agent or Foreigner — unless cleared by a clean Spy or clean Civilian.',
+    order: 'Shoot anyone backed by a Friend whose own contact in either direction is tied to Double agent or Foreigner — unless cleared by a clean Spy or clean Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanSpy', 'cleanCivilian'])) return null;
@@ -1114,7 +1114,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-76', domain: 7, title: 'Two-hop tainted surveillance',
-    order: 'Shoot anyone shadowed by a Spy whose own contact (either way) is tied to Double agent or Foreigner — unless cleared by a clean Friend or clean Civilian.',
+    order: 'Shoot anyone shadowed by a Spy whose own contact in either direction is tied to Double agent or Foreigner — unless cleared by a clean Friend or clean Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
@@ -1128,7 +1128,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-77', domain: 7, title: 'Compromised informant’s second link',
-    order: 'Shoot anyone tipped off by a Civilian whose own contact (either way) is tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
+    order: 'Shoot anyone tipped off by a Civilian whose own contact in either direction is tied to Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanSpy'])) return null;
@@ -1215,7 +1215,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-83', domain: 8, title: 'Strict shadow-out, insider-in split',
-    order: 'Shoot anyone who initiates ONLY in Foe, Double agent, or Foreigner (at least once) and receives ONLY in Friend, Spy, or Civilian (at least once).',
+    order: 'Shoot anyone who initiates ONLY in Foe, Double agent, or Foreigner and receives ONLY in Friend, Spy, or Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const outs = g.out(x);
@@ -1229,7 +1229,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-84', domain: 8, title: 'Strict insider-out, shadow-in split',
-    order: 'Shoot anyone who initiates ONLY in Friend, Spy, or Civilian (at least once) and receives ONLY in Foe, Double agent, or Foreigner (at least once).',
+    order: 'Shoot anyone who initiates ONLY in Friend, Spy, or Civilian and receives ONLY in Foe, Double agent, or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const outs = g.out(x);
@@ -1243,7 +1243,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-85', domain: 8, title: 'Unwatched shadow specialist',
-    order: 'Shoot anyone tied ONLY in Foe, Double agent, or Foreigner (no Friend, Spy, or Civilian contact at all) who also acts toward someone tied to Friend, Spy, or Civilian.',
+    order: 'Shoot anyone tied only to Foe, Double agent, or Foreigner with zero Friend, Spy, or Civilian ties who also acts toward someone tied to Friend, Spy, or Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasTouch(x, ['friend', 'spy', 'civilian'])) return null;
@@ -1255,7 +1255,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-86', domain: 8, title: 'Insider specialist surrounded by shadow contacts',
-    order: 'Shoot anyone tied ONLY in Friend, Spy, or Civilian (no Foe, Double agent, or Foreigner contact) whose direct contacts include BOTH Double agent and Foreigner (or Foe and Foreigner).',
+    order: 'Shoot anyone tied only to Friend, Spy, or Civilian with zero Foe, Double agent, or Foreigner ties whose direct contacts span Foreigner plus Foe or Double agent.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasTouch(x, ['foe', 'double', 'foreigner'])) return null;
@@ -1281,7 +1281,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-88', domain: 8, title: 'Balanced double life across rival circles',
-    order: 'Shoot anyone holding an equal number of roles among Friend, Civilian, and Foreigner as among Foe, Double agent, and Spy (at least one in each group) — unless a clean Spy watches them.',
+    order: 'Shoot anyone holding an equal number of roles among Friend, Civilian, and Foreigner as among Foe, Double agent, and Spy, with at least one in each — unless a clean Spy watches them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
@@ -1294,7 +1294,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-89', domain: 8, title: 'Unmonitored shadow receiver-actor',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner AND receives contact in Friend, Spy, or Civilian — excluding anyone with a clean Friend voucher or clean Civilian tip-off.',
+    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner who also receives contact in Friend, Spy, or Civilian — unless shielded by a clean Friend voucher or clean Civilian tip-off.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasAnyShield(g, x, ['cleanFriend', 'cleanCivilian'])) return null;
@@ -1311,7 +1311,7 @@ export const hardFamilies = [
   // =========================================================================
   hard({
     id: 'ha-90', domain: 9, title: '{name}’s unwatched shadow reach',
-    order: 'Shoot anyone reached from {name} in two forward steps through an unwatched middleman (no Spy shadow) — unless cleared by a clean Friend or clean Civilian.',
+    order: 'Shoot anyone reached from {name} in two forward steps through an middleman unwatched by any Spy — unless cleared by a clean Friend or clean Civilian.',
     useAnchor: true,
     evaluate(g, anchor, proof) {
       return collectMatches(g.people, x => {
@@ -1328,7 +1328,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-91', domain: 9, title: '{name}’s unbacked incoming network',
-    order: 'Shoot anyone who reaches {name} in two forward steps through an unbacked middleman (no Friend voucher) — unless cleared by a clean Spy or clean Civilian.',
+    order: 'Shoot anyone who reaches {name} in two forward steps through an middleman lacking Friend backing — unless cleared by a clean Spy or clean Civilian.',
     useAnchor: true,
     evaluate(g, anchor, proof) {
       return collectMatches(g.people, x => {
@@ -1359,7 +1359,7 @@ export const hardFamilies = [
   }),
   hard({
     id: 'ha-93', domain: 9, title: '{name}’s shadow ring',
-    order: 'Shoot anyone two contacts away from {name} (not directly linked to {name}) acting as a Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
+    order: 'Shoot anyone two contacts away from {name} with no direct link to {name} acting as a Foe, Double agent, or Foreigner — unless cleared by a clean Friend or clean Spy.',
     useAnchor: true,
     evaluate(g, anchor, proof) {
       return collectMatches(g.people, x => {

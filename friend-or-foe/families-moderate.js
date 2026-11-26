@@ -73,7 +73,7 @@ export const moderateFamilies = [
   // =========================================================================
   mod({
     id: 'mo-00', domain: 0, title: 'Tainted Friend alibi',
-    order: 'Shoot anyone backed by a tainted Friend (one in Double agent or Foreigner) — unless cleared by a clean Spy or Civilian.',
+    order: 'Shoot anyone backed by a Friend tainted by Double agent or Foreigner — unless cleared by a clean Spy or Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x) || g.hasIn(x, 'civilian')) return null;
@@ -90,7 +90,7 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-02', domain: 0, title: 'Voucher backing an unwatched mole',
-    order: 'Shoot anyone who vouches as a Friend for an unwatched suspect (no Spy shadow) who leaks as a Double agent or meets as a Foreigner.',
+    order: 'Shoot anyone who vouches as a Friend for an suspect unwatched by any Spy who leaks as a Double agent or meets as a Foreigner.',
     firstRoles: ['friend'], firstDir: 'out', secondRoles: ['double', 'foreigner'], secondDir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
@@ -161,7 +161,7 @@ export const moderateFamilies = [
   // =========================================================================
   mod({
     id: 'mo-10', domain: 1, title: 'Tainted surveillance',
-    order: 'Shoot anyone shadowed by a tainted Spy (one in Foe, Double agent, or Foreigner) — unless a clean Friend backs them.',
+    order: 'Shoot anyone shadowed by a Spy tainted by Foe, Double agent, or Foreigner — unless a clean Friend backs them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanFriend(g, x)) return null;
@@ -199,13 +199,13 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-13', domain: 1, title: 'Spy watching an unbacked enemy',
-    order: 'Shoot anyone who shadows as a Spy an unbacked suspect (no Friend voucher) acting as a Foe, Double agent, or Foreigner.',
+    order: 'Shoot anyone who shadows as a Spy an suspect lacking Friend backing acting as a Foe, Double agent, or Foreigner.',
     firstRoles: ['spy'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
     midExc: {roles: ['friend'], dir: 'in'}
   }),
   mod({
     id: 'mo-14', domain: 1, title: 'Blind-spot shadow recipient',
-    order: 'Shoot anyone fed a Double agent’s leak or met by a Foreigner by an unwatched contact (no Spy shadow on that actor) — unless a clean Friend backs them.',
+    order: 'Shoot anyone fed a Double agent’s leak or met by a Foreigner whose actor has no Spy watch — unless a clean Friend backs them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanFriend(g, x)) return null;
@@ -217,7 +217,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-15', domain: 1, title: 'Pure blind-spot operator',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner AND receives no Spy watch, no Friend backing, and no Civilian tip-off.',
+    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner who receives no Spy watch, no Friend backing, and no Civilian tip-off.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, ['spy', 'friend', 'civilian'])) return null;
@@ -235,7 +235,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-17', domain: 1, title: 'Watched without Friend or Civilian',
-    order: 'Shoot anyone shadowed by a Spy also tied to Foe or Foreigner — excluding anyone tied to Friend or Civilian.',
+    order: 'Shoot anyone shadowed by a Spy also tied to Foe or Foreigner — unless tied to Friend or Civilian.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasTouch(x, ['friend', 'civilian'])) return null;
@@ -281,7 +281,7 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-21', domain: 2, title: 'Foreigner reaching an unwatched mole',
-    order: 'Shoot anyone who meets as a Foreigner an unwatched suspect (no Spy shadow) who is tied to Double agent or Foe.',
+    order: 'Shoot anyone who meets as a Foreigner an suspect unwatched by any Spy who is tied to Double agent or Foe.',
     firstRoles: ['foreigner'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'any',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
@@ -299,7 +299,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-24', domain: 2, title: 'Foreign-linked insider without watch',
-    order: 'Shoot anyone in contact with someone tied to Foreigner also tied to Friend or Civilian — unless a Spy shadows them.',
+    order: 'Shoot anyone tied to Friend or Civilian who contacts someone in Foreigner — unless a Spy shadows them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'spy')) return null;
@@ -318,7 +318,7 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-26', domain: 2, title: 'Enemy bridging to an unwatched outsider',
-    order: 'Shoot anyone who leaks as a Double agent or targets as a Foe an unwatched contact (no Spy shadow) who is tied to Foreigner.',
+    order: 'Shoot anyone who leaks as a Double agent or targets as a Foe an contact unwatched by any Spy who is tied to Foreigner.',
     firstRoles: ['double', 'foe'], firstDir: 'out', secondRoles: ['foreigner'], secondDir: 'any',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
@@ -330,7 +330,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-28', domain: 2, title: 'Foreign contact bridging Foe and Civilian',
-    order: 'Shoot anyone in contact with someone tied to Foreigner AND to someone tied to Civilian (two different people) — unless a Spy shadows them.',
+    order: 'Shoot anyone linking two different contacts: one tied to Foreigner and one tied to Civilian — unless a Spy shadows them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'spy')) return null;
@@ -371,7 +371,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-31', domain: 3, title: 'No clean Civilian warning',
-    order: 'Shoot anyone targeted by a Foe or met by a Foreigner who has NO clean Civilian tip-off (not tied to Foe, Double agent, or Foreigner) and NO Spy shadow.',
+    order: 'Shoot anyone targeted by a Foe or met by a Foreigner who has no clean Civilian tip-off and NO Spy shadow.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanCivilian(g, x) || g.hasIn(x, 'spy')) return null;
@@ -383,13 +383,13 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-32', domain: 3, title: 'Informant tipping an unwatched mole',
-    order: 'Shoot anyone who tips off as a Civilian an unwatched suspect (no Spy shadow) acting as a Foe, Double agent, or Foreigner.',
+    order: 'Shoot anyone who tips off as a Civilian an suspect unwatched by any Spy acting as a Foe, Double agent, or Foreigner.',
     firstRoles: ['civilian'], firstDir: 'out', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
   modCarry({
     id: 'mo-33', domain: 3, title: 'Informant tipping an unbacked target',
-    order: 'Shoot anyone who tips off as a Civilian an unbacked suspect (no Friend voucher) who is met by a Foreigner or fed a Double agent’s leak.',
+    order: 'Shoot anyone who tips off as a Civilian an suspect lacking Friend backing who is met by a Foreigner or fed a Double agent’s leak.',
     firstRoles: ['civilian'], firstDir: 'out', secondRoles: ['foreigner', 'double'], secondDir: 'in',
     midExc: {roles: ['friend'], dir: 'in'}
   }),
@@ -449,28 +449,28 @@ export const moderateFamilies = [
   // =========================================================================
   modCarry({
     id: 'mo-40', domain: 4, title: 'Unwatched shadow relay starter',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward an unwatched contact (no Spy shadow) who then initiates in a different role (no return).',
+    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward an contact unwatched by any Spy who then initiates in a different role without circling back.',
     firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out',
     secondRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], secondDir: 'out',
     diffRole: true, midExc: {roles: ['spy'], dir: 'in'}
   }),
   modCarry({
     id: 'mo-41', domain: 4, title: 'Unbacked relay into shadow act',
-    order: 'Shoot anyone acting as a Friend, Spy, or Civilian toward an unbacked contact (no Friend voucher) who then operates as a Foe, Double agent, or Foreigner (no return).',
+    order: 'Shoot anyone acting as a Friend, Spy, or Civilian toward an contact lacking Friend backing who then operates as a Foe, Double agent, or Foreigner without circling back.',
     firstRoles: ['friend', 'spy', 'civilian'], firstDir: 'out',
     secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'out',
     midExc: {roles: ['friend'], dir: 'in'}
   }),
   modCarry({
     id: 'mo-42', domain: 4, title: 'Two-step ambush without clean cover',
-    order: 'Shoot anyone targeted by a Foe or met by a Foreigner who had been fed a Double agent’s leak or tipped off by a Civilian (no return) — unless a clean Friend backs them.',
+    order: 'Shoot anyone targeted by a Foe or met by a Foreigner who had been fed a Double agent’s leak or tipped off by a Civilian without circling back — unless a clean Friend backs them.',
     firstRoles: ['foe', 'foreigner'], firstDir: 'in',
     secondRoles: ['double', 'civilian'], secondDir: 'in',
     cleanShield: 'friend'
   }),
   mod({
     id: 'mo-43', domain: 4, title: 'Shadow middleman without Spy watch',
-    order: 'Shoot anyone receiving a Double agent leak or Foreigner meeting AND passing on a Foe, Spy, or Civilian contact (no return) — unless a Spy shadows them.',
+    order: 'Shoot anyone receiving a Double agent leak or Foreigner meeting AND passing on a Foe, Spy, or Civilian contact without circling back — unless a Spy shadows them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'spy')) return null;
@@ -485,7 +485,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-44', domain: 4, title: 'Insider middleman feeding a danger',
-    order: 'Shoot anyone receiving a Friend voucher or Civilian tip-off AND operating as a Foe, Double agent, or Foreigner toward someone else (no return) — unless a clean Spy watches them.',
+    order: 'Shoot anyone receiving a Friend voucher or Civilian tip-off AND operating as a Foe, Double agent, or Foreigner toward someone else without circling back — unless a clean Spy watches them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
@@ -500,20 +500,20 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-45', domain: 4, title: 'Unwatched insider-to-scout starter',
-    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian an unwatched contact (no Spy shadow) who then shadows as a Spy or meets as a Foreigner (no return).',
+    order: 'Shoot anyone who vouches as a Friend or tips off as a Civilian an contact unwatched by any Spy who then shadows as a Spy or meets as a Foreigner without circling back.',
     firstRoles: ['friend', 'civilian'], firstDir: 'out',
     secondRoles: ['spy', 'foreigner'], secondDir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}
   }),
   modCarry({
     id: 'mo-46', domain: 4, title: 'Spy-bypassed enemy relay',
-    order: 'Shoot anyone targeted by a Foe who had been tipped off by a Civilian or backed by a Friend (no return) — unless a clean Spy watches them.',
+    order: 'Shoot anyone targeted by a Foe who had been tipped off by a Civilian or backed by a Friend without circling back — unless a clean Spy watches them.',
     firstRoles: ['foe'], firstDir: 'in', secondRoles: ['civilian', 'friend'], secondDir: 'in',
     cleanShield: 'spy'
   }),
   modCarry({
     id: 'mo-47', domain: 4, title: 'Two-step shadow starter without cover',
-    order: 'Shoot anyone who moves as a Spy or Foreigner toward someone who then operates as a Double agent or Foe (no return) — unless a clean Friend backs them.',
+    order: 'Shoot anyone who moves as a Spy or Foreigner toward someone who then operates as a Double agent or Foe without circling back — unless a clean Friend backs them.',
     firstRoles: ['spy', 'foreigner'], firstDir: 'out', secondRoles: ['double', 'foe'], secondDir: 'out',
     cleanShield: 'friend'
   }),
@@ -537,7 +537,7 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-49', domain: 4, title: 'Enemy relay ending at an unwarned target',
-    order: 'Shoot anyone reached via Double agent or Foreigner by someone targeted by a Foe or shadowed by a Spy (no return) — unless a Civilian tips them off.',
+    order: 'Shoot anyone reached via Double agent or Foreigner by someone targeted by a Foe or shadowed by a Spy without circling back — unless a Civilian tips them off.',
     firstRoles: ['double', 'foreigner'], firstDir: 'in', secondRoles: ['foe', 'spy'], secondDir: 'in',
     exc: {roles: ['civilian'], dir: 'in'}
   }),
@@ -547,7 +547,7 @@ export const moderateFamilies = [
   // =========================================================================
   mod({
     id: 'mo-50', domain: 5, title: 'Cover-breaking triangle',
-    order: 'Shoot anyone in contact with a Friend-backed suspect AND to a Double agent or Foreigner suspect (two different people) — unless a clean Spy watches them.',
+    order: 'Shoot anyone linking two different contacts: one backed by a Friend and one in Double agent or Foreigner — unless a clean Spy watches them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
@@ -616,7 +616,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-55', domain: 5, title: 'Three-party shadow bridge',
-    order: 'Shoot anyone in contact with a Foe-linked suspect AND to a Spy-linked suspect (two different people) — unless a Friend vouches for them.',
+    order: 'Shoot anyone linking two different contacts: one tied to Foe and one tied to Spy — unless a Friend vouches for them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'friend')) return null;
@@ -635,7 +635,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-56', domain: 5, title: 'Two-source contradiction',
-    order: 'Shoot anyone reached by BOTH a Friend or Civilian AND a Foe or Foreigner (two different actors) — unless a Spy shadows them.',
+    order: 'Shoot anyone reached by BOTH a Friend or Civilian AND a Foe or Foreigner from two different sources — unless a Spy shadows them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'spy')) return null;
@@ -718,13 +718,13 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-64', domain: 6, title: 'Pre-compromised voucher',
-    order: 'Shoot anyone vouched for by a Friend who had EARLIER was tied to Double agent or Foreigner — unless a Civilian tips them off.',
+    order: 'Shoot anyone vouched for by a Friend already tied earlier to Double agent or Foreigner — unless a Civilian tips them off.',
     firstRoles: ['friend'], firstDir: 'in', secondRoles: ['double', 'foreigner'], secondDir: 'any',
     timeOrder: 'after', exc: {roles: ['civilian'], dir: 'in'}
   }),
   modCarry({
     id: 'mo-65', domain: 6, title: 'Pre-compromised Spy',
-    order: 'Shoot anyone shadowed by a Spy who had EARLIER was tied to Foe, Double agent, or Foreigner — unless a clean Friend backs them.',
+    order: 'Shoot anyone shadowed by a Spy already tied earlier to Foe, Double agent, or Foreigner — unless a clean Friend backs them.',
     firstRoles: ['spy'], firstDir: 'in', secondRoles: ['foe', 'double', 'foreigner'], secondDir: 'any',
     timeOrder: 'after', cleanShield: 'friend'
   }),
@@ -735,7 +735,7 @@ export const moderateFamilies = [
   }),
   modCarry({
     id: 'mo-67', domain: 6, title: 'Delayed shadow handoff',
-    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward an unwatched contact (no Spy shadow) who later initiates in another role (no return).',
+    order: 'Shoot anyone acting as a Foe, Double agent, or Foreigner toward an contact unwatched by any Spy who later initiates in another role without circling back.',
     firstRoles: ['foe', 'double', 'foreigner'], firstDir: 'out',
     secondRoles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], secondDir: 'out',
     diffRole: true, timeOrder: 'before', midExc: {roles: ['spy'], dir: 'in'}
@@ -864,7 +864,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-81', domain: 8, title: 'Clean front hiding mole and foreign links',
-    order: 'Shoot anyone tied to Friend or Civilian (with zero Double agent or Foreigner ties of their own) who links directly to someone tied to Double agent AND someone tied to Foreigner.',
+    order: 'Shoot anyone tied to Friend or Civilian with no Double agent or Foreigner ties of their own who links directly to someone tied to Double agent AND someone tied to Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (!g.hasTouch(x, ['friend', 'civilian']) || g.hasTouch(x, ['double', 'foreigner'])) return null;
@@ -878,7 +878,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-82', domain: 8, title: 'All-shadow contacts, no insider cover',
-    order: 'Shoot anyone tied only to Foe, Double agent, and Foreigner (at least two of those roles, with no Friend, Spy, or Civilian contact).',
+    order: 'Shoot anyone tied only to Foe, Double agent, and Foreigner across at least two of those roles, with zero Friend, Spy, or Civilian ties.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const d = g.distinctRoles(x);
@@ -940,7 +940,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-87', domain: 8, title: 'More shadow than insider roles',
-    order: 'Shoot anyone holding more roles among (Foe, Double agent, Foreigner) than among (Friend, Spy, Civilian) — unless a Friend vouches for them.',
+    order: 'Shoot anyone holding more roles among Foe, Double agent, Foreigner than among Friend, Spy, Civilian — unless a Friend vouches for them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (g.hasIn(x, 'friend')) return null;
@@ -953,7 +953,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-88', domain: 8, title: 'Dual-role Spy or Friend',
-    order: 'Shoot anyone who both initiates and receives contact within (Friend, Spy, Civilian) while ALSO tied to Foe, Double agent, or Foreigner.',
+    order: 'Shoot anyone who both initiates and receives contact among Friend, Spy, and Civilian while also tied to Foe, Double agent, or Foreigner.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         const o = g.out(x, ['friend', 'spy', 'civilian'])[0];
@@ -966,7 +966,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-89', domain: 8, title: 'Dual-role shadow agent',
-    order: 'Shoot anyone who both initiates and receives contact within (Foe, Double agent, Foreigner) — unless a clean Spy watches them.',
+    order: 'Shoot anyone who both initiates and receives contact among Foe, Double agent, and Foreigner — unless a clean Spy watches them.',
     evaluate(g, _a, proof) {
       return collectMatches(g.people, x => {
         if (hasCleanSpy(g, x)) return null;
@@ -983,33 +983,33 @@ export const moderateFamilies = [
   // =========================================================================
   modAnchor({
     id: 'mo-90', domain: 9, title: '{name}’s unwatched shadow cell',
-    order: 'Shoot anyone reached from {name} in two forward steps through an unwatched middleman (no Spy shadow) — unless a clean Friend backs them.',
+    order: 'Shoot anyone reached from {name} in two forward steps through an middleman unwatched by any Spy — unless a clean Friend backs them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'out',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'out',
     midExc: {roles: ['spy'], dir: 'in'}, cleanShield: 'friend'
   }),
   modAnchor({
     id: 'mo-91', domain: 9, title: '{name}’s unbacked shadow feeders',
-    order: 'Shoot anyone who reaches {name} in two forward steps through an unbacked middleman (no Friend voucher) — unless a clean Spy watches them.',
+    order: 'Shoot anyone who reaches {name} in two forward steps through an middleman lacking Friend backing — unless a clean Spy watches them.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'in',
     step2Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step2Dir: 'in',
     midExc: {roles: ['friend'], dir: 'in'}, cleanShield: 'spy'
   }),
   modAnchor({
     id: 'mo-92', domain: 9, title: '{name}’s timed shadow relay',
-    order: 'Shoot anyone linked in Foe, Double agent, or Foreigner to a direct contact of {name} AFTER that contact’s link with {name} (excluding {name}).',
+    order: 'Shoot anyone linked in Foe, Double agent, or Foreigner to a direct contact of {name} AFTER that contact’s link with {name}, other than {name}.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'any',
     step2Roles: ['foe', 'double', 'foreigner'], step2Dir: 'any', timeOrder: 'before'
   }),
   modAnchor({
     id: 'mo-93', domain: 9, title: '{name}’s timed incoming danger',
-    order: 'Shoot anyone linked in Foe, Double agent, or Foreigner to a direct contact of {name} BEFORE that contact’s link with {name} (excluding {name}).',
+    order: 'Shoot anyone linked in Foe, Double agent, or Foreigner to a direct contact of {name} BEFORE that contact’s link with {name}, other than {name}.',
     step1Roles: ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'], step1Dir: 'any',
     step2Roles: ['foe', 'double', 'foreigner'], step2Dir: 'any', timeOrder: 'after'
   }),
   mod({
     id: 'mo-94', domain: 9, title: 'Outside {name}’s cover ring',
-    order: 'Shoot anyone two contacts away from {name} (not directly linked to {name}) who is tied to Foe, Double agent, or Foreigner and lacks a clean Friend voucher.',
+    order: 'Shoot anyone two contacts away from {name} with no direct link to {name} who is tied to Foe, Double agent, or Foreigner and lacks a clean Friend voucher.',
     useAnchor: true,
     evaluate(g, anchor, proof) {
       return collectMatches(g.people, x => {
@@ -1068,7 +1068,7 @@ export const moderateFamilies = [
   }),
   mod({
     id: 'mo-99', domain: 9, title: 'Bridging {name} to shadow roles',
-    order: 'Shoot anyone directly linked to {name} who ALSO links (either way) to someone tied to Double agent or Foreigner — unless a clean Spy watches them.',
+    order: 'Shoot anyone directly linked to {name} who ALSO links in either direction to someone tied to Double agent or Foreigner — unless a clean Spy watches them.',
     useAnchor: true,
     evaluate(g, anchor, proof) {
       return collectMatches(g.people, x => {

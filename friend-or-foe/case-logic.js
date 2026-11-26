@@ -468,10 +468,88 @@ export function explainRows(rows, reports, mask) {
   return steps;
 }
 
+// Identify the closest plausible rival on confirmed trials (Super Easy / Very Easy)
+// by finding the exact single operational fact (timing, direction, or role) that spares them.
+function findDecisiveDirectRival(evidence, solvedMask, correctTargets, evaluateFamily) {
+  const {rows, family, anchor, leads} = evidence;
+  const edges = edgesFor(rows, solvedMask);
+  const correctSet = new Set(correctTargets);
+  const leadList = (leads || []).filter(name => !correctSet.has(name) && name !== anchor);
+  const restList = (evidence.roster || []).filter(name => !correctSet.has(name) && name !== anchor && !leadList.includes(name));
+  const candidates = [...leadList, ...restList];
+  if (!candidates.length) return null;
+  const pickHit = alt => leadList.find(n => alt.includes(n)) || restList.find(n => alt.includes(n)) || null;
+  const allRoles = ['friend', 'foe', 'spy', 'double', 'civilian', 'foreigner'];
+
+  // 1. Check single-edge direction reversal (most direct operational distinction: actor vs recipient)
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i];
+    const mod = edges.slice();
+    mod[i] = {...e, from: e.to, to: e.from};
+    const alt = evaluateFamily(family, mod, anchor, false).pair;
+    const hit = pickHit(alt);
+    if (hit) {
+      const stamp = e.time ? ' at 0' + e.time + ':00' : '';
+      return {
+        rivalTargets: [hit],
+        defeatedBy: roleNames[e.role] + stamp + ' runs ' + e.from + ' ' + roleVerbs[e.role] + ' ' + e.to + ', not the reverse.',
+        decisiveRole: e.role
+      };
+    }
+  }
+
+  // 2. Check timing swap (exact chronological distinction)
+  for (let a = 0; a < rows.length; a++) {
+    for (let b = a + 1; b < rows.length; b++) {
+      const rA = rows[a];
+      const rB = rows[b];
+      if (!rA.time || !rB.time || rA.time === rB.time) continue;
+      const mod = edges.map(e =>
+        e.role === rA.role ? {...e, time: rB.time}
+          : e.role === rB.role ? {...e, time: rA.time}
+            : e
+      );
+      const alt = evaluateFamily(family, mod, anchor, false).pair;
+      const hit = pickHit(alt);
+      if (hit) {
+        const first = rA.time < rB.time ? rA : rB;
+        const second = rA.time < rB.time ? rB : rA;
+        return {
+          rivalTargets: [hit],
+          defeatedBy: roleNames[first.role] + ' (0' + first.time + ':00) occurred before ' + roleNames[second.role] + ' (0' + second.time + ':00).',
+          decisiveRole: first.role
+        };
+      }
+    }
+  }
+
+  // 3. Check single-edge role distinction (why this role matters instead of another)
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i];
+    for (const altRole of allRoles) {
+      if (altRole === e.role) continue;
+      const mod = edges.slice();
+      mod[i] = {...e, role: altRole};
+      const alt = evaluateFamily(family, mod, anchor, false).pair;
+      const hit = pickHit(alt);
+      if (hit) {
+        const stamp = e.time ? ' at 0' + e.time + ':00' : '';
+        return {
+          rivalTargets: [hit],
+          defeatedBy: e.from + ' ' + roleVerbs[e.role] + ' ' + e.to + stamp + ' is ' + roleNames[e.role] + ', not ' + roleNames[altRole] + '.',
+          decisiveRole: e.role
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 // Identify the closest rival reading (failing only ONE cross-check) for concise post-trial debrief.
 export function findDecisiveRival(evidence, solvedMask, correctTargets, evaluateFamily) {
   const {rows, reports, family, anchor} = evidence;
-  if (!reports.length) return null;
+  if (!reports.length) return findDecisiveDirectRival(evidence, solvedMask, correctTargets, evaluateFamily);
   const fixed = rows.reduce((mask, row, i) => row.disputed ? mask : mask | (1 << i), 0);
   const correctKey = targetKey(correctTargets);
   const wantSize = correctTargets.length;
