@@ -61,3 +61,69 @@ export class ArcadeSession {
     return true;
   }
 }
+
+export const LADDER_LEVELS = Object.freeze([
+  'super-super-easy',
+  'super-easy',
+  'very-easy',
+  'easy',
+  'medium',
+  'hard'
+]);
+
+export class ZeroToHeroLadder {
+  constructor(levels = LADDER_LEVELS, {promoteAfter = 6, demoteAfter = 2} = {}) {
+    this.levels = [...levels];
+    this.promoteAfter = promoteAfter;
+    this.demoteAfter = demoteAfter;
+    this.index = 0;
+    this.peakIndex = 0;
+    this.winStreak = 0;
+    this.lossStreak = 0;
+    this.promotions = 0;
+    this.demotions = 0;
+    this.lastChange = null;
+  }
+
+  get level() {
+    return this.levels[this.index];
+  }
+
+  get peakLevel() {
+    return this.levels[this.peakIndex];
+  }
+
+  record(correct) {
+    this.lastChange = null;
+    if (correct) {
+      this.winStreak++;
+      this.lossStreak = 0;
+      if (this.winStreak >= this.promoteAfter) {
+        if (this.index < this.levels.length - 1) {
+          const from = this.level;
+          this.index++;
+          if (this.index > this.peakIndex) this.peakIndex = this.index;
+          this.promotions++;
+          this.winStreak = 0;
+          this.lastChange = {direction: 'up', from, to: this.level};
+        }
+      }
+    } else {
+      this.lossStreak++;
+      this.winStreak = 0;
+      if (this.lossStreak >= this.demoteAfter) {
+        if (this.index > 0) {
+          const from = this.level;
+          this.index--;
+          this.demotions++;
+          this.lossStreak = 0;
+          this.lastChange = {direction: 'down', from, to: this.level};
+        } else {
+          this.lossStreak = 0;
+        }
+      }
+    }
+    return this.lastChange;
+  }
+}
+

@@ -265,7 +265,7 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
   const formMatch = html.match(/<form id="run-form">[\s\S]*?<\/form>/);
   assert.ok(formMatch, 'Expected #run-form in friend-or-foe/index.html');
   assert.equal(/type=["']checkbox["']/.test(formMatch[0]), false, 'Setup form must not contain a checkbox');
-  for (const id of ['difficulty-super-super-easy', 'difficulty-super-easy', 'difficulty-very-easy', 'difficulty-easy', 'difficulty-medium', 'difficulty-hard']) {
+  for (const id of ['difficulty-zero-to-hero', 'difficulty-super-super-easy', 'difficulty-super-easy', 'difficulty-very-easy', 'difficulty-easy', 'difficulty-medium', 'difficulty-hard']) {
     assert.ok(formMatch[0].includes(`id="${id}"`), `Expected radio #${id} in setup form`);
   }
 
@@ -344,6 +344,11 @@ test('friend-or-foe UI renders inline Shortlist toggle, dispatch times, leak-fre
     assert.doesNotMatch(guideRoot.allText(), BANNED_COPY);
     assert.doesNotMatch(guideRoot.allText(), /\btied to\b|\blink\b/i, 'How-to-play guide must not use "tied to" or "link"');
     assert.ok(guideRoot.allText().includes('coupled cycles'));
+
+    renderCaseGuide(guideRoot, 'zero-to-hero', {shortlist: false});
+    assert.doesNotMatch(guideRoot.allText(), BANNED_COPY);
+    assert.ok(guideRoot.allText().includes('6 straight trials'));
+    assert.ok(guideRoot.allText().includes('2 straight trials'));
   } finally {
     global.document = prevDocument;
   }
@@ -365,6 +370,93 @@ test('ArcadeSession separates first-seen family accuracy, repeat-family accuracy
   assert.equal(session.repeatWins, 1);
   assert.equal(session.bestTime, 6.0);
   assert.equal(session.medianTime, 8.0);
+});
+
+test('ZeroToHeroLadder starts at Super-super Easy, climbs on 6 straight wins, drops on 2 straight misses, and preserves per-tier decks', async () => {
+  const {ZeroToHeroLadder, LADDER_LEVELS} = await loadModule('friend-or-foe/arcade-session.js');
+  const {makeCaseTrial} = await loadModule('friend-or-foe/case-decks.js');
+  const {seededDraw} = await loadModule('friend-or-foe/case-layout.js');
+
+  assert.deepEqual([...LADDER_LEVELS], ['super-super-easy', 'super-easy', 'very-easy', 'easy', 'medium', 'hard']);
+  const ladder = new ZeroToHeroLadder();
+  assert.equal(ladder.level, 'super-super-easy');
+  assert.equal(ladder.peakLevel, 'super-super-easy');
+
+  // 2 misses at base zero stay clamped at Super-super Easy
+  assert.equal(ladder.record(false), null);
+  assert.equal(ladder.record(false), null);
+  assert.equal(ladder.level, 'super-super-easy');
+  assert.equal(ladder.demotions, 0);
+
+  // 5 consecutive wins do NOT promote; 1 miss resets win streak; 1 miss alone does NOT demote
+  for (let i = 0; i < 5; i++) assert.equal(ladder.record(true), null);
+  assert.equal(ladder.level, 'super-super-easy');
+  assert.equal(ladder.winStreak, 5);
+  assert.equal(ladder.record(false), null);
+  assert.equal(ladder.winStreak, 0);
+  assert.equal(ladder.lossStreak, 1);
+
+  // 6 consecutive wins promote to Super Easy and reset streaks
+  for (let i = 0; i < 5; i++) assert.equal(ladder.record(true), null);
+  const up1 = ladder.record(true);
+  assert.deepEqual(up1, {direction: 'up', from: 'super-super-easy', to: 'super-easy'});
+  assert.equal(ladder.level, 'super-easy');
+  assert.equal(ladder.peakLevel, 'super-easy');
+  assert.equal(ladder.winStreak, 0);
+  assert.equal(ladder.promotions, 1);
+
+  // 1 miss then 1 win does NOT demote
+  assert.equal(ladder.record(false), null);
+  assert.equal(ladder.record(true), null);
+  assert.equal(ladder.level, 'super-easy');
+  assert.equal(ladder.lossStreak, 0);
+
+  // 2 consecutive misses drop back down to Super-super Easy
+  assert.equal(ladder.record(false), null);
+  const down1 = ladder.record(false);
+  assert.deepEqual(down1, {direction: 'down', from: 'super-easy', to: 'super-super-easy'});
+  assert.equal(ladder.level, 'super-super-easy');
+  assert.equal(ladder.peakLevel, 'super-easy');
+  assert.equal(ladder.demotions, 1);
+
+  // Full climb: 5 promotions (30 consecutive wins) reach Hard; extra 6 wins clamp at Hard
+  const climbTargets = ['super-easy', 'very-easy', 'easy', 'medium', 'hard'];
+  for (const expected of climbTargets) {
+    let change = null;
+    for (let i = 0; i < 6; i++) change = ladder.record(true);
+    assert.equal(change?.direction, 'up');
+    assert.equal(change?.to, expected);
+    assert.equal(ladder.level, expected);
+  }
+  assert.equal(ladder.peakLevel, 'hard');
+  for (let i = 0; i < 6; i++) assert.equal(ladder.record(true), null);
+  assert.equal(ladder.level, 'hard');
+
+  // 2 consecutive misses at Hard drop to Moderate
+  assert.equal(ladder.record(false), null);
+  assert.deepEqual(ladder.record(false), {direction: 'down', from: 'hard', to: 'medium'});
+  assert.equal(ladder.level, 'medium');
+  assert.equal(ladder.peakLevel, 'hard');
+
+  // Cross-tier trial generation preserves per-tier family decks and avoids repeating the immediate target set
+  const draw = seededDraw(777123);
+  const decks = new Map();
+  const seenSSE = new Set();
+  let prev = null;
+  const sequence = ['super-super-easy', 'super-super-easy', 'super-easy', 'super-super-easy', 'super-easy', 'very-easy'];
+  for (const level of sequence) {
+    const prevArg = prev
+      ? {level, deck: decks.get(level) || null, pair: prev.pair, targets: prev.targets, number: prev.number}
+      : null;
+    const trial = makeCaseTrial(level, prevArg, draw);
+    decks.set(level, trial.deck);
+    if (prev) {
+      assert.notDeepEqual([...trial.pair].sort(), [...prev.pair].sort(), 'Target set must not repeat across tier transitions');
+    }
+    if (level === 'super-super-easy') seenSSE.add(trial.evidence.family);
+    prev = trial;
+  }
+  assert.equal(seenSSE.size, 3, 'Returning to Super-super Easy must resume its deck without repeating families');
 });
 
 test('Domain-contextual operational role verbs vary across domains and render in dispatches', async () => {

@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#10171e">
   <meta name="description" content="You’re the intelligence officer. Weigh all six contact dispatches, timestamps, and coupled cross-checks to identify every suspect matching the order before they pass.">
   <title>Friend or Foe · Games</title>
-  <link rel="stylesheet" href="covert-gallery.css?v=fof18">
-  <link rel="stylesheet" href="difficulty.css?v=fof18">
-  <link rel="stylesheet" href="case-view.css?v=fof18">
-  <script type="module" src="dossier-gallery.js?v=fof18"></script>
+  <link rel="stylesheet" href="covert-gallery.css?v=fof19">
+  <link rel="stylesheet" href="difficulty.css?v=fof19">
+  <link rel="stylesheet" href="case-view.css?v=fof19">
+  <script type="module" src="dossier-gallery.js?v=fof19"></script>
 </head>
 <body data-phase="ready">
   <header class="mast">
@@ -43,8 +43,13 @@
           <fieldset class="levels">
             <legend>Choose a difficulty</legend>
             <div class="level-options">
+              <label class="level-choice level-choice-wide">
+                <input type="radio" id="difficulty-zero-to-hero" name="difficulty" value="zero-to-hero" checked aria-labelledby="zero-to-hero-label" aria-describedby="zero-to-hero-description">
+                <strong id="zero-to-hero-label">From Zero to Hero</strong>
+                <span id="zero-to-hero-description">Start at Super-super Easy. 6 consecutive clears climb a tier; 2 consecutive misses drop one.</span>
+              </label>
               <label class="level-choice">
-                <input type="radio" id="difficulty-super-super-easy" name="difficulty" value="super-super-easy" checked aria-labelledby="super-super-easy-label" aria-describedby="super-super-easy-description">
+                <input type="radio" id="difficulty-super-super-easy" name="difficulty" value="super-super-easy" aria-labelledby="super-super-easy-label" aria-describedby="super-super-easy-description">
                 <strong id="super-super-easy-label">Super-super Easy</strong>
                 <span id="super-super-easy-description">Confirmed intelligence, single-step calls and optional shortlist.</span>
               </label>

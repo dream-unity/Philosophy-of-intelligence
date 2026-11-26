@@ -269,7 +269,7 @@ export function renderCaseResult(root, trial, {onHoldToggle, onNext, held = fals
   }
 }
 
-export function renderCaseGuide(root, level, {shortlist = true} = {}) {
+export function renderCaseGuide(root, level, {shortlist = true, zeroToHero = false} = {}) {
   const guide = element('div', 'case-guide');
   const section = (title, words) => {
     const block = element('section');
@@ -280,15 +280,25 @@ export function renderCaseGuide(root, level, {shortlist = true} = {}) {
     'Read all six intelligence roles',
     'Each role logs two operational contacts with a dispatch timestamp (01:00–06:00), an operation tag (split across two active sites), and an action verb adapted to the case. Each contact runs from the operative acting in that role to the person they reach. Every trial assigns one to four targets with matching bullets; depending on the order, even a Friend or Civilian may be marked.'
   );
-  const isIntro = level === 'super-super-easy' || level === 'super-easy' || level === 'very-easy';
-  if (isIntro && shortlist) {
-    section('Use the shortlist', 'All six dispatches are confirmed, and every assigned target is on the shortlist. Uncheck Shortlist at any time to weigh all ten suspects.');
-  } else if (isIntro) {
-    section('Weigh all ten suspects', 'All six dispatches are confirmed. Cross-reference every suspect across all six roles and dispatch times to identify every target required by the order.');
-  } else if (level === 'easy') {
-    section('Settle one disputed dispatch', 'Five dispatches are confirmed and one is disputed. Compare the cross-check against the confirmed dispatch using = (same truth) or ≠ (opposite truth) to settle the disputed one.');
+  if (level === 'zero-to-hero') {
+    section(
+      'Climb from Zero to Hero',
+      'You start at Super-super Easy with confirmed dispatches. Clear 6 straight trials to climb one difficulty tier all the way to Hard; miss 2 straight trials to drop one tier.'
+    );
   } else {
-    section('Resolve coupled cross-checks', 'A ? role may reverse both contacts; a Swap tag may trade two names throughout that dispatch; an “or X → Y?” tag marks a disputed contact. Cross-checks form coupled cycles with no standalone handouts: test an interpretation around the cycle to eliminate every impossible reading.');
+    const isIntro = level === 'super-super-easy' || level === 'super-easy' || level === 'very-easy';
+    if (isIntro && shortlist) {
+      section('Use the shortlist', 'All six dispatches are confirmed, and every assigned target is on the shortlist. Uncheck Shortlist at any time to weigh all ten suspects.');
+    } else if (isIntro) {
+      section('Weigh all ten suspects', 'All six dispatches are confirmed. Cross-reference every suspect across all six roles and dispatch times to identify every target required by the order.');
+    } else if (level === 'easy') {
+      section('Settle one disputed dispatch', 'Five dispatches are confirmed and one is disputed. Compare the cross-check against the confirmed dispatch using = (same truth) or ≠ (opposite truth) to settle the disputed one.');
+    } else {
+      section('Resolve coupled cross-checks', 'A ? role may reverse both contacts; a Swap tag may trade two names throughout that dispatch; an “or X → Y?” tag marks a disputed contact. Cross-checks form coupled cycles with no standalone handouts: test an interpretation around the cycle to eliminate every impossible reading.');
+    }
+    if (zeroToHero) {
+      section('From Zero to Hero', 'Clear 6 straight trials to climb one difficulty tier up to Hard; miss 2 straight trials to drop one tier.');
+    }
   }
   root.replaceChildren(guide);
 }

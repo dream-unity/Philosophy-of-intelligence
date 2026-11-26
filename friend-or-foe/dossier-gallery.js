@@ -2,18 +2,28 @@ import {createArcadeRange} from './covert-range.js?v=fof17';
 import {bindSpeedDial} from './speed-dial.js';
 import {makeCaseTrial} from './case-decks.js';
 import {renderCaseEvidence, renderCaseGuide, renderCaseResult} from './case-view.js';
-import {ArcadeSession} from './arcade-session.js';
+import {ArcadeSession, ZeroToHeroLadder} from './arcade-session.js';
 
 const el = id => document.getElementById(id);
 const dialog = el('controls');
 let phase = 'ready';
-let difficulty = 'super-super-easy';
+let difficulty = 'zero-to-hero';
 let shortlist = false;
-const difficultyNames = {'super-super-easy':'Super-super Easy', 'super-easy':'Super Easy', 'very-easy':'Very Easy', easy:'Easy', medium:'Moderate', hard:'Hard'};
+const difficultyNames = {
+  'zero-to-hero': 'From Zero to Hero',
+  'super-super-easy': 'Super-super Easy',
+  'super-easy': 'Super Easy',
+  'very-easy': 'Very Easy',
+  easy: 'Easy',
+  medium: 'Moderate',
+  hard: 'Hard'
+};
 const difficultyChoices = el('run-form').elements.namedItem('difficulty');
 const speedInput = el('master-speed');
 let masterSpeed = speedInput.valueAsNumber;
 let session;
+let ladder = null;
+let decksByLevel = new Map();
 let trial;
 let locked = false;
 let transitionTimer = 0;
@@ -91,14 +101,23 @@ function setShortlist(enabled) {
   if (phase === 'play') el('range').focus({preventScroll:true});
 }
 
+function activeLevel() {
+  return ladder ? ladder.level : difficulty;
+}
+
 function enterTrial() {
-  trial = makeCaseTrial(difficulty, trial);
+  const level = activeLevel();
+  const prevArg = trial
+    ? {level, deck: decksByLevel.get(level) || null, pair: trial.pair, targets: trial.targets, number: trial.number}
+    : null;
+  trial = makeCaseTrial(level, prevArg);
+  decksByLevel.set(level, trial.deck);
   shots = 0;
   debriefHeld = false;
   setPhase('play');
   renderCaseEvidence(el('cues'), trial.evidence, {shortlist, onShortlistChange: setShortlist});
   el('cues').parentElement.scrollTop = 0;
-  el('trial-meter').textContent = difficultyNames[difficulty] + ' · ' + session.number + '/' + session.total;
+  el('trial-meter').textContent = difficultyNames[level] + ' · ' + session.number + '/' + session.total;
   el('score').textContent = 'Cases ' + session.wins + ' / ' + session.completed;
   syncAmmoMeter(trial.pair.length, trial.pair.length);
   range.start(trial.roster, trial.pair, {masterSpeed});
@@ -128,6 +147,7 @@ function advanceFromDebrief() {
 
 function finishTrial(result) {
   if (phase !== 'play' || !session.accept(result, trial?.evidence?.family || null)) return;
+  const change = ladder ? ladder.record(result.correct) : null;
   setPhase('between');
   renderCaseResult(el('cues'), trial, {
     onHoldToggle: toggleDebriefHold,
@@ -138,8 +158,11 @@ function finishTrial(result) {
   el('range-message').dataset.result = result.reason;
   const elapsed = result.elapsed.toFixed(1) + ' s';
   const hitLabel = trial.pair.length === 1 ? 'Target hit' : 'Targets cleared';
+  const tierNote = change
+    ? (change.direction === 'up' ? ' · Up to ' : ' · Down to ') + difficultyNames[change.to]
+    : '';
   el('outcome').textContent = result.correct ? hitLabel : result.reason === 'escaped' ? 'You died' : 'Out of bullets';
-  el('outcome-detail').textContent = trial.pair.join(' + ') + ' · ' + elapsed;
+  el('outcome-detail').textContent = trial.pair.join(' + ') + ' · ' + elapsed + tierNote;
   el('score').textContent = 'Cases ' + session.wins + ' / ' + session.completed;
   tone(result.correct ? 380 : 210, result.correct ? 625 : 112, .18);
   scheduleNext(result.correct ? 2200 : 7500);
@@ -173,9 +196,17 @@ function showSummary() {
   el('summary-score').textContent = session.wins + ' ' + caseWord + ' cleared in ' + session.completed + ' completed trials.';
   const totals = el('totals');
   totals.replaceChildren();
-  const rows = [
+  const rows = [];
+  if (ladder) {
+    rows.push(
+      ['Final difficulty', difficultyNames[ladder.level]],
+      ['Peak difficulty', difficultyNames[ladder.peakLevel]],
+      ['Tier moves', ladder.promotions + ' up · ' + ladder.demotions + ' down']
+    );
+  }
+  rows.push(
     ['First-seen cases', session.firstSeenTotal ? session.firstSeenWins + ' / ' + session.firstSeenTotal : '—']
-  ];
+  );
   if (session.repeatTotal) {
     rows.push(['Repeat-type cases', session.repeatWins + ' / ' + session.repeatTotal]);
   }
@@ -209,8 +240,8 @@ function openPanel(page = 'pause') {
   el('help-copy').hidden = !help;
   el('dialog-title').textContent = help ? 'How to play' : 'Range paused';
   if (help) {
-    const level = phase === 'ready' ? difficultyChoices.value : difficulty;
-    renderCaseGuide(el('cue-guide'), level, {shortlist});
+    const level = phase === 'ready' ? difficultyChoices.value : activeLevel();
+    renderCaseGuide(el('cue-guide'), level, {shortlist, zeroToHero: Boolean(ladder)});
   }
   el('return').textContent = inRun ? 'Resume' : 'Back';
   el('end').hidden = !inRun;
@@ -222,6 +253,8 @@ function openPanel(page = 'pause') {
 function reset() {
   trial = null;
   session = null;
+  ladder = null;
+  decksByLevel.clear();
   setPhase('ready');
   range.preview();
 }
@@ -233,6 +266,8 @@ el('run-form').addEventListener('submit', e => {
   difficulty = difficultyChoices.value;
   masterSpeed = speedInput.valueAsNumber;
   session = new ArcadeSession(total);
+  decksByLevel.clear();
+  ladder = difficulty === 'zero-to-hero' ? new ZeroToHeroLadder() : null;
   try {
     localStorage.setItem('friend-or-foe.trials', String(total));
     localStorage.setItem('friend-or-foe.masterSpeed', String(masterSpeed));
