@@ -199,9 +199,44 @@ function wetFloor(c) {
   ]);
 }
 
+function compareGrips(c) {
+  const [patient] = c.p;
+  const needToday = c.flip();
+  const olderWeak = !needToday && c.flip();
+  const currentWeak = !needToday || c.flip();
+  const comparison = weak => weak ? 'the left grip was weaker' : 'both grips were equally strong';
+  const yesterday = 'Yesterday’s original exam: ' + comparison(olderWeak) + '.';
+  const today = (needToday ? 'You test both hands today: ' : 'Today’s independent tests: ') + comparison(currentWeak) + '.';
+  const currentEvidence = 'Two staff have separately tested both hands today. Both found the left grip weaker.';
+  const unconfirmed = 'Today’s two notes both quote one unverified call about a weaker left grip.';
+  const unclearPast = 'Yesterday’s handover says “stable” without recording grip on either side.';
+  const options = ['The difference is new since yesterday.', 'The difference was present at both exams.',
+    'The hands tested equal both days.', 'We still need a comparison.'];
+  const response = (clues, answer, why) => ({question:'What can you tell the patient?', clues, options, answer, why});
+  const answer = !currentWeak ? 2 : olderWeak ? 1 : 0;
+  const why = answer === 2 ? 'Both hands tested equally strong on both days. The copied report of unequal grip did not hold up on examination.' :
+    answer === 1 ? 'The source from yesterday records the same left-sided difference found today. The available exams cannot date its original onset.' :
+    'The earlier exam found equal grips. An independent check now finds the left weaker. The difference appeared between those two exams.';
+  const confirmed = response([yesterday, today], answer, why);
+  return caseWithCheck(c, 'Is this weakness new?', 'During', 'Which check fills the gap?', [
+    `“Is this difference new since yesterday?” asks ${patient} after a hand injury.`,
+    needToday ? yesterday : unclearPast,
+    needToday ? unconfirmed : currentEvidence
+  ], [
+    {action:'Compare both hands now', useful:needToday, result:needToday ? confirmed : response([
+      today, unclearPast],3,'A further exam confirms today’s difference. The comparison still needs an earlier measurement of both hands.')},
+    {action:'Open yesterday’s original exam', useful:!needToday, result:needToday ? response([
+      yesterday, unconfirmed],3,'Yesterday’s grips are documented. Today’s two notes share one unverified source, so an independent current exam is still missing.') : confirmed},
+    {action:'Read today’s two notes again', useful:false, result:response(needToday ? [yesterday,unconfirmed] : [unclearPast,currentEvidence],3,
+      needToday ? 'Reading two copies leaves the reported current difference unverified. Compare both hands today.' :
+        'Both observers tested the hands today. Reading their notes again cannot supply yesterday’s grip measurements.')}
+  ]);
+}
+
 export const investigations = {
   1: chestScan,
   4: doubleVision,
   9: c => (c.flip() ? pupilHistory : departureFilm)(c),
-  75: c => (c.flip() ? newNumbness : wetFloor)(c)
+  75: c => (c.flip() ? newNumbness : wetFloor)(c),
+  80: compareGrips
 };

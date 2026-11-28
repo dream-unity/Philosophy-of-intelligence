@@ -204,3 +204,12 @@ body[data-extra-fit] .clues li { grid-template-columns:1.13rem 1fr; }
 body[data-extra-fit] .menu { min-height:30px; }
 .clues li.changed::before { content: counter(clue,decimal-leading-zero) '*'; font-weight:bold; }
 .game { display:flow-root; }
+
+@media (max-height: 500px) and (min-width: 550px) {
+  #settings { width: min(94%, 640px); padding: .75rem 1rem; }
+  #settings .dialog-head { margin-bottom: .4rem; }
+  .settings-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1.25rem; }
+  .settings-list label { padding: .4rem 0; gap: .5rem; }
+  .settings-note { margin-top: .3rem; }
+  .mode-link { margin-top: .5rem; }
+}

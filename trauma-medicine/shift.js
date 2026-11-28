@@ -1,4 +1,4 @@
-import { makeCall, accepts, reassessment, shuffledCycle, caseSeedForSlot, nextPracticeGoal } from './shift-deck.js';
+import { makeCall, accepts, reassessment, shuffledCycle, caseSeedForSlot, nextPracticeGoal } from './shift-deck.js?v=2';
 import { REASONING_TYPE_LIST } from './reasoning-types.js';
 import { DIFFICULTY_TIERS } from './tiers.js';
 import { loadMasteryStore, saveMasteryStore, PROMOTE_STREAK, DEMOTE_MISS_STREAK } from './trauma-session.js';
@@ -19,6 +19,7 @@ const sceneForTitle = new Map([
   ['Two calls from the bridge','bridge'], ['One side barely moves','imaging'],
   ['The split on the scan','imaging'], ['The spare monitor','imaging'],
   ['The dimming signal','imaging'], ['Two ceiling lights','imaging'],
+  ['The mark in the nurse’s sketch','review'], ['Is this weakness new?','imaging'],
   ['The missing minute','review'], ['The departure film','review'],
   ['The wrong X-ray','review'], ['Before the postmortem meeting','review'],
   ['What travels between shifts?','review'], ['Two lessons from the night shift','review'],
@@ -73,7 +74,7 @@ function reserve() {
   const level=settings.difficulty || state.level;
   const seed = opening || pin ? base : caseSeedForSlot(number,base,deck.index,level);
   const castSeed = opening && deck.index < 3 ? deck.seed : undefined;
-  state.card = { number, seed, castSeed, deckSeed:deck.seed, position:deck.index, level, opening,
+  state.card = { revision:2, number, seed, castSeed, deckSeed:deck.seed, position:deck.index, level, opening,
     practiceGoal:nextPracticeGoal(deck.seed,deck.replays||0), selection:[], originalDone:false, practice:false, answered:false, timedOut:false, remaining:settings.pace * 1000 };
   save();
 }
@@ -91,7 +92,7 @@ function closeCardSlot() {
 }
 function materialise() {
   const c = state.card;
-  const params = {level:c.level, opening:c.opening, route:c.route ?? 0, castSeed:c.castSeed, practiceGoal:c.practiceGoal};
+  const params = {expanded:c.revision === 2, level:c.level, opening:c.opening, route:c.route ?? 0, castSeed:c.castSeed, practiceGoal:c.practiceGoal};
   const original = makeCall(c.number, c.seed, params);
   const key = [c.number,c.seed,c.level,c.opening,c.castSeed,c.practiceGoal].join('/');
   if (variationKey !== key) {

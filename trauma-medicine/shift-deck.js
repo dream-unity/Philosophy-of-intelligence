@@ -4,8 +4,8 @@ import { REASONING_TYPE_LIST } from './reasoning-types.js';
 import { bankA } from './shift-diagnostic.js';
 import { bankB } from './shift-systems.js';
 import { bankC } from './shift-social.js';
-import { fieldCases } from './field-cases.js';
-import { investigations } from './shift-investigations.js';
+import { fieldCases, additionalEncounters } from './field-cases.js?v=2';
+import { investigations } from './shift-investigations.js?v=2';
 import { bedsideCases } from './shift-bedside.js';
 
 const authors = { ...bankA, ...bankB, ...bankC };
@@ -62,7 +62,7 @@ export function shuffledCycle(seed, {first = false, previous = 0} = {}) {
   return order;
 }
 
-function compose(number, seed, level, opening, override, route = 0, castSeed) {
+function compose(number, seed, level, opening, override, route = 0, castSeed, expanded = true) {
   const rng = createRng(seed);
   const names = shuffle(rng, namePool);
   const p = (castSeed == null ? names : shuffle(createRng(castSeed), namePool)).slice(0, 4);
@@ -70,7 +70,10 @@ function compose(number, seed, level, opening, override, route = 0, castSeed) {
   let author = authors[number];
   if (bedsideCases[number] && alternate < 0.43) author=bedsideCases[number];
   if (fieldCases[number] && (opening || alternate < 0.47)) author = fieldCases[number];
-  if (investigations[number] && ((opening && number === 1) || (!opening && alternate > 0.60))) author = investigations[number];
+  if (expanded && !opening && additionalEncounters[number] && alternate >= 0.47 && alternate < 0.75) {
+    author = additionalEncounters[number];
+  }
+  if ((expanded || number !== 80) && investigations[number] && ((opening && number === 1) || (!opening && alternate > 0.60))) author = investigations[number];
   const tape = [];
   const draw = () => {
     const value = rng();
@@ -110,22 +113,22 @@ function present(raw, number, seed) {
   };
 }
 
-export function makeCall(number, seed, {level = 1, opening = false, override, route = 0, castSeed} = {}) {
+export function makeCall(number, seed, {level = 1, opening = false, override, route = 0, castSeed, expanded = true} = {}) {
   if (!authors[number]) throw new RangeError(`Unknown reasoning type ${number}`);
-  return present(compose(number, seed, level, opening, override, route, castSeed), number, seed);
+  return present(compose(number, seed, level, opening, override, route, castSeed, expanded), number, seed);
 }
 
 export function accepts(call, selection) {
   return call.accepted.some(valid => sameSet(valid, selection));
 }
 
-function findVariation(number, seed, {level = 1, opening = false, castSeed} = {}, goal) {
-  const original = compose(number, seed, level, opening, undefined, 0, castSeed);
+function findVariation(number, seed, {level = 1, opening = false, castSeed, expanded = true} = {}, goal) {
+  const original = compose(number, seed, level, opening, undefined, 0, castSeed, expanded);
   if (original.spec.intro) return null;
   for (let i = 0; i < original.tape.length; i++) {
     for (const value of [1 - original.tape[i], 0.01, 0.32, 0.51, 0.72, 0.99]) {
       const override = { index: i, value };
-      const alt = compose(number, seed, level, opening, override, 0, castSeed);
+      const alt = compose(number, seed, level, opening, override, 0, castSeed, expanded);
       if (original.spec.question !== alt.spec.question || original.spec.title !== alt.spec.title ||
         original.spec.phase !== alt.spec.phase || original.spec.clues.length !== alt.spec.clues.length ||
         original.options.length !== alt.options.length || original.options.some((s, j) => s !== alt.options[j])) continue;

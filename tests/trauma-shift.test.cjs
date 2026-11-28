@@ -298,3 +298,81 @@ test('different reasonable first hypotheses lead to different decisive challenge
     }
   }
 });
+
+// reserve() offsets the URL seed once before producing the first pinned call.
+const pinnedFirstSeed = urlSeed => (urlSeed + 2654435761) >>> 0;
+
+test('the pinned postmortem, breathing-machine and resuscitation encounters open with their clinical pivots', async () => {
+  const {makeCall, accepts} = await deck;
+  const examples = [
+    {
+      type:8, seed:3, title:'The mark in the nurse’s sketch', choice:'Either order fits the records.',
+      // A mark first noticed after a fall may already have existed beforehand.
+      evidence:[/fall to 10:22/, /noticed a wrist scrape/, /10:24 and 10:28/]
+    },
+    {
+      type:35, seed:3, title:'When the backup kicked in', choice:'Hana',
+      // Seven minutes bridges six but not ten; eleven bridges both arrivals.
+      evidence:[/batteries died before backup/, /minute 10.*minute 6/, /Tomas had 11.*Hana had 7/]
+    },
+    {
+      type:43, seed:11, title:'Both beds call at once', choice:'Gideon',
+      // Gideon's six-minute first visit fits Nadia's 3+3. The reverse leaves Gideon waiting five against four.
+      evidence:[/Nadia.*within 3.*Gideon.*within 4/, /5 minutes with Nadia or 6 with Gideon/, /3 minutes for Nadia or 0 for Gideon/]
+    }
+  ];
+  for (const {type, seed, title, choice, evidence} of examples) {
+    const call = makeCall(type, pinnedFirstSeed(seed), {level:1});
+    assert.equal(call.title, title);
+    evidence.forEach((pattern, i) => assert.match(call.clues[i], pattern));
+    checkSelections(call, accepts, labels => labels.length === 1 && labels[0] === choice);
+  }
+});
+
+function gripAtEachExam(clues) {
+  // Only a direct bilateral measurement establishes grip. Yesterday's generic
+  // "stable" and two notes quoting one caller supply no such measurement.
+  const finding = line => {
+    if (!line) return null;
+    if (/equally strong/.test(line)) return 'equal';
+    assert.match(line, /left grip (?:was )?weaker/);
+    return 'left weaker';
+  };
+  return {
+    yesterday: finding(clues.find(line => /^Yesterday’s original exam:/.test(line))),
+    today: finding(clues.find(line => /^(?:You test both hands today:|Today’s independent tests:|Two staff have separately tested both hands today\.)/.test(line)))
+  };
+}
+
+test('a dated grip comparison rewards the missing independent exam and scores what each chosen source establishes', async () => {
+  const {makeCall, accepts} = await deck;
+  const title = 'Is this weakness new?';
+  assert.equal(makeCall(80, pinnedFirstSeed(2)).title, title, 'the pinned hand-injury example must open on case one');
+  const informative = new Set(), unresolved = new Set();
+  for (let urlSeed=0; urlSeed<256; urlSeed++) {
+    const seed=pinnedFirstSeed(urlSeed), initial=makeCall(80, seed);
+    if (initial.title !== title) continue;
+    const before=gripAtEachExam(initial.intro.clues);
+    assert.notEqual(before.yesterday === null, before.today === null, 'exactly one exam is missing');
+    const check = before.today === null ? 'Compare both hands now' : 'Open yesterday’s original exam';
+    assert.deepEqual(initial.intro.useful, [initial.intro.options.indexOf(check)]);
+    for (const [route, selected] of initial.intro.options.entries()) {
+      const call=makeCall(80, seed, {route});
+      const {yesterday,today}=gripAtEachExam(call.clues);
+      let choice = 'We still need a comparison.';
+      if (yesterday !== null && today !== null) {
+        assert.equal(selected, check);
+        if (today !== yesterday) choice = 'The difference is new since yesterday.';
+        else if (today === 'equal') choice = 'The hands tested equal both days.';
+        else choice = 'The difference was present at both exams.';
+        informative.add(check + ' | ' + choice);
+      } else {
+        assert.notEqual(selected, check);
+        unresolved.add(check + ' | ' + selected);
+      }
+      checkSelections(call, accepts, labels => labels.length === 1 && labels[0] === choice);
+    }
+  }
+  assert.equal(informative.size, 4, 'each missing exam must have two genuinely different informative outcomes');
+  assert.equal(unresolved.size, 4, 'each alternative source must be tested for each kind of evidence gap');
+});

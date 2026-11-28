@@ -205,4 +205,118 @@ function buildSignalModel(c) {
   };
 }
 
+// Strategic triage: the colleague's cover changes whose deadline binds.
+function simultaneousEmergencies(c) {
+  const [firstName, secondName] = c.p;
+  const early = c.flip() ? firstName : secondName;
+  const later = early === firstName ? secondName : firstName;
+  const breathing = c.flip();
+  const earlyLimit = c.int(2, 3);
+  const laterLimit = earlyLimit + c.int(1, 2);
+  const gapForEarly = c.int(1, 3);
+  const gapForLater = c.int(1, 3);
+  const visitEarly = laterLimit + gapForLater;
+  const visitLater = earlyLimit + gapForEarly;
+  const order = c.pick(['early first', 'later first', 'either']);
+  const earlyMargin = c.int(0, 1);
+  const laterMargin = c.int(0, 1);
+  const earlyExtra = order === 'early first' ? gapForEarly - 1 : gapForEarly + earlyMargin;
+  const laterExtra = order === 'later first' ? gapForLater - 1 : gapForLater + laterMargin;
+  const earlyWithNurse = earlyLimit + earlyExtra;
+  const laterWithNurse = laterLimit + laterExtra;
+  const earlyCanWait = visitLater <= earlyWithNurse;
+  const laterCanWait = visitEarly <= laterWithNurse;
+  const choice = earlyCanWait && laterCanWait ? 'Either patient' : (earlyCanWait ? later : early);
+  const options = [firstName, secondName, 'Either patient'];
+  const minute = n => n === 1 ? 'minute' : 'minutes';
+  const report = (patient, waited, limit) => `${patient} waits ${waited} with ${limit} available`;
+  const why = earlyCanWait && laterCanWait
+    ? `Start with ${early}: ${report(later, visitEarly, laterWithNurse)}. Start with ${later}: ${report(early, visitLater, earlyWithNurse)}. Both orders meet the limits.`
+    : earlyCanWait
+      ? `See ${later} now. The nurse gives ${early} ${earlyWithNurse} minutes, enough for the ${visitLater}-minute wait. The reverse leaves ${later} waiting ${visitEarly} with only ${laterWithNurse} available.`
+      : `See ${early} now. The nurse gives ${later} ${laterWithNurse} minutes, enough for the ${visitEarly}-minute wait. The reverse leaves ${early} waiting ${visitLater} with only ${earlyWithNurse} available.`;
+  return {
+    title: 'Both beds call at once', phase: 'During', question: 'Who should you see first?',
+    clues: [
+      `${early} needs you for ${breathing ? 'breathing' : 'bleeding'} within ${earlyLimit} minutes. ${later} needs you for ${breathing ? 'bleeding' : 'breathing'} within ${laterLimit}.`,
+      `Before switching, stay ${visitEarly} minutes with ${early} or ${visitLater} with ${later}.`,
+      `The nurse supports whoever waits, adding ${earlyExtra} ${minute(earlyExtra)} for ${early} or ${laterExtra} for ${later}.`
+    ],
+    options, answer: options.indexOf(choice), why,
+    outcome: 'Both patients receive a bedside visit in time.'
+  };
+}
+
+function dateWristInjury(c) {
+  const [patient] = c.p;
+  const fallMinute = c.pick([12, 22, 32, 42]);
+  const [start, end] = c.pick([[-6, -2], [-3, 3], [2, 6]]);
+  const sawItHappen = c.flip();
+  const time = minute => '10:' + String(minute).padStart(2, '0');
+  const answer = end < 0 ? 0 : start > 0 && sawItHappen ? 1 : 2;
+  const reasons = [
+    'The scrape was already there by the second logged round. The filmed fall came later.',
+    'The nurse saw this scrape form. Even the earlier of those rounds was after the filmed fall.',
+    sawItHappen
+      ? 'The nurse saw the scrape form, but the rounds bracket the fall. The records leave the order open.'
+      : 'The nurse could date seeing the mark. The scrape could already have been present at the fall or could have happened later.'
+  ];
+  return {
+    title: 'The mark in the nurse’s sketch',
+    phase: 'After',
+    question: 'What timing can you give the family?',
+    clues: [
+      `At the postmortem meeting, a film dates ${patient}’s fall to ${time(fallMinute)}.`,
+      sawItHappen
+        ? 'Between rounds, a nurse saw the wrist catch on a rail and the scrape appear. Their sketch matches the postmortem photo.'
+        : 'Between rounds, a nurse noticed a wrist scrape. Their sketch matches the postmortem photo.',
+      `The rounds log shows ${time(fallMinute + start)} and ${time(fallMinute + end)}.`
+    ],
+    options: ['The scrape happened before the fall.', 'The scrape happened after the fall.', 'Either order fits the records.'],
+    answer,
+    why: reasons[answer]
+  };
+}
+
+function earlierBackupPower(c) {
+  const staggered = c.level >= 4;
+  const patients = c.p.slice(0, staggered ? 3 : 2);
+  const actual = c.int(9, 13);
+  const earlier = actual - c.int(3, 4);
+  const changed = c.int(0, patients.length - 1);
+  const changedExpiry = c.int(earlier + 1, actual - 1);
+  // Other patients can fall on either side independently. A middle-ranked
+  // battery is not necessarily the one for which earlier power changes care.
+  let other = 0;
+  const expiry = patients.map((_, i) => {
+    if (i === changed) return changedExpiry;
+    other++;
+    return c.flip() ? earlier - other : actual + other;
+  });
+  let batteryClue;
+  if (staggered) {
+    const when = c.pick([[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]]);
+    const remaining = expiry.map((end, i) => end - when[i]);
+    batteryClue = `${patients[0]} had ${remaining[0]} minutes left at minute ${when[0]}, ${patients[1]} ${remaining[1]} at minute ${when[1]}, and ${patients[2]} ${remaining[2]} at minute ${when[2]}.`;
+  } else {
+    batteryClue = `At minute zero, ${patients[0]} had ${expiry[0]} minutes of battery left and ${patients[1]} had ${expiry[1]}.`;
+  }
+  const otherOutcomes = patients.flatMap((name, i) => i === changed ? [] : [
+    `${name}’s battery ${expiry[i] < earlier ? `gave out at ${expiry[i]}, before either arrival` : `lasted to ${expiry[i]}, beyond both arrivals`}.`
+  ]).join(' ');
+  return {
+    title:'When the backup kicked in', phase:'During', question:'Whose machine stoppage would earlier power prevent?',
+    clues:[
+      'When breathing-machine batteries died before backup, staff gave breaths by hand.',
+      `Backup power came at minute ${actual}. Imagine minute ${earlier} instead.`,
+      batteryClue
+    ],
+    options:patients, answer:changed,
+    why:`${patients[changed]}’s battery lasted to minute ${changedExpiry}, between ${earlier} and ${actual}. ${otherOutcomes}`,
+    outcome:`With earlier power, ${patients[changed]} could have stayed on the breathing machine without that interruption.`
+  };
+}
+
+export const additionalEncounters = {8:dateWristInjury, 35:earlierBackupPower, 43:simultaneousEmergencies};
+
 export const fieldCases = {1:airPocket, 7:tubeRoute, 8:eventWindow, 9:leadingReport, 12:followPattern, 15:transferOrder, 25:changingCondition, 43:dispatch, 59:buildSignalModel, 66:conflictingDuty, 71:challengeOwnHypothesis, 73:reviewOwnHandover, 75:secondCheck};
