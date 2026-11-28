@@ -26,15 +26,15 @@
             });
           }));
         }).then(function () {
-          if (foundStale && !sessionStorage.getItem('tm_cache_healed_v7')) {
-            sessionStorage.setItem('tm_cache_healed_v7', '1');
+          if (foundStale && !sessionStorage.getItem('tm_cache_healed_v8')) {
+            sessionStorage.setItem('tm_cache_healed_v8', '1');
             location.reload();
           }
         }).catch(function () {});
       }
     })();
   </script>
-  <link rel="stylesheet" href="./trauma.css?v=7">
+  <link rel="stylesheet" href="./trauma.css?v=8">
 </head>
 <body data-state="title">
   <main class="tm-shell">
@@ -276,7 +276,7 @@
       <ul class="tm-guide-list">
         <li><strong>Train cold—just like a real trauma shift:</strong> Every case switches to a different clinical reasoning pattern across triage (before), resuscitation (inside), and family talks &amp; autopsy (after). You won't see the reasoning label until the post-case debrief reveals what you just mastered.</li>
         <li><strong>Direct ward interaction:</strong> Each of the 10 bays shows a live emergency condition and its own countdown clock. Click any bay (or press keys <strong>1–9, 0</strong>) to treat before a target reaches the redline. <strong>Right-click</strong> (or Shift+Click) a bay to rule them out.</li>
-        <li><strong>Smart chart tools &amp; cross-highlighting:</strong> Hover any bay or patient name to highlight every mention across all six charts at once. Use the toolbar to re-sort charts <strong>By Time</strong> or <strong>By Wing</strong> whenever a directive compares timestamps or wings.</li>
+        <li><strong>Relational cross-highlighting:</strong> Hover any bay or patient name to spotlight every link involving that patient across all six charts at once—connect the clues between patients rather than scanning one card in isolation.</li>
         <li><strong>Disputed charts (Tiers 4–6):</strong> Charts marked <strong>?</strong> have an alternate reading. Click <strong>? Test Flip</strong> on a chart to preview its alternate version and watch the Cross-Checks update live with ✓ / ✕ indicators until every check passes.</li>
         <li><strong>Climb the Ladder (Adaptive N-Back):</strong> Rotates cold through all 80 clinical reasoning patterns across live 3-patient crises. Pick the right patient or flag a <strong>Clinical Clash</strong> (keys <strong>1–4</strong>) while matching Phase (<strong>A/S</strong>), Target (<strong>D/F</strong>), and Domain (<strong>H/J</strong>) against N rounds back—4 perfect rounds climb +1 Back.</li>
       </ul>
@@ -286,6 +286,6 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=7"></script>
+  <script type="module" src="./app.js?v=8"></script>
 </body>
 </html>

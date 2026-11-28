@@ -10,7 +10,7 @@ export const DIFFICULTY_TIERS = Object.freeze([
   { id: 'very-easy', rank: 3, label: 'Tier 3 · Fellow', short: 'T3 Fellow', disputed: 0 },
   { id: 'easy', rank: 4, label: 'Tier 4 · Attending', short: 'T4 Attending', disputed: 1 },
   { id: 'medium', rank: 5, label: 'Tier 5 · Trauma Lead', short: 'T5 Lead', disputed: 3 },
-  { id: 'hard', rank: 6, label: 'Tier 6 · Chief', short: 'T6 Chief', disputed: 6 },
+  { id: 'hard', rank: 6, label: 'Tier 6 · Chief', short: 'T6 Chief', disputed: 4 },
 ]);
 
 export const TIER_BY_ID = Object.freeze(

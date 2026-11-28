@@ -32,7 +32,9 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
   const gibberishRe = /\b(1st-named|2nd-named|endpoints|Severity Weight|right-side|left-side|A\s*→\s*M\s*→\s*B|Unit pathway trace|Decon Wing|Compared \()\b/i;
   const jargonRe = /\b(cmH2O|pneumothorax|hemothorax|tamponade|mediastinum|coagulopathy|vasopressors|angiogram|epiglottitis|rhabdo|hypovolemic|pericardial|acidosis|thoracotomy|myoglobin|troponin|d-dimer|subdural|epidural|ischemia|bradycardia|tachycardia|laparotomy|pneumoperitoneum|ketoacidosis)\b/i;
   const spoilerRe = /\b(bayesian|syllogis\w*|antinomic|antithes\w*|dialectic\w*|abduct\w*|deduct\w*|induct\w*|heuristic\w*|metacognit\w*|meta-reasoning|counterfactual|falsif\w*|ontolog\w*|epistemic|combinatorial|divergen\w*|converg\w*|decision-theoretic|game-theoretic|theory of mind|transitiv\w*|disjunctiv\w*|recursiv\w*|extrapolat\w*|prognostic|proportional|analog\w*|anomal\w*|first-principles|lateral|emergent|decompos\w*|non-monotonic|perspectiv\w*|pragmatic|synthesi\w*|second-order|algorithm\w*|adversarial|optimis\w*|instrumental|mentalistic|motivational)\b/i;
-  const giveawayRe = /\(\+\d+% gain\)|\(empty in \d+ min\)|→\s*2,150 mL|\(Immediate Red\)|= 54 expected harm|= \+70 net/i;
+  const giveawayRe = /\(\+\d+% gain\)|\(empty in \d+ min\)|→\s*2,150 mL|\(Immediate Red\)|= 54 expected harm|= \+70 net|\(burns out BEFORE|\(134 − 102|\(13 min after|\(CONTRADICTS|\(= ~6\.7|\(lands at 74|\(RETRACT old|\(HR > BP Shock|\(Shock!\)|\(Physical Tear!\)|\(Blood Chemistry!\)|\(Legal Dispute!\)|\(SAME trapped-box law|\(148 − 80|\(154 − 40|\(92 − 40|\(strong runner-up =|\(solid \+\d+% runner-up|\(matches Sheet \+ Clamps|\(ZERO closet equivalent/i;
+  const fillerRe = /\b(waiting for (routine )?stitches|cleared to go home|sprained (wrist|ankle|thumb|knee)|parking validation|reading phone|minor knee laceration|itchy skin rash)\b/i;
+  const staleLessonRe = /\+6|\+1|\+Right|−Left|05:00 to 06:00|Drivers, Recipients|X→M→B|Weight\s*\d|right-side|left-side/i;
 
   for (const r of REASONING_TYPE_LIST) {
     assert.equal(typeof SEMANTIC_ENGINES[r.id], 'function', `semantic engine exists for #${r.number} ${r.id}`);
@@ -54,6 +56,7 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
     assert.ok(trial.explanation.proof.length > 10, `#${r.number} ${r.id} has proof`);
     assert.ok(trial.reasoningMeta.coreOperation.length > 10);
     assert.ok(trial.reasoningMeta.doctorLesson.length > 15);
+    assert.ok(!staleLessonRe.test(trial.reasoningMeta.doctorLesson), `stale graph-era doctorLesson in #${r.number} ${r.id}: ${trial.reasoningMeta.doctorLesson}`);
 
     // Left-wall bayProfiles coherence: all 10 patients mapped, every target is an active contender (never calm/bystander)
     assert.ok(trial.bayProfiles && Object.keys(trial.bayProfiles).length === 10, `#${r.number} ${r.id} builds 10 bayProfiles`);
@@ -74,6 +77,7 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
     assert.ok(!gibberishRe.test(visibleBoardText), `ZERO graph gibberish in #${r.number} ${r.id}: ${visibleBoardText.slice(0, 200)}`);
     assert.ok(!jargonRe.test(visibleBoardText), `ZERO dense medical jargon in #${r.number} ${r.id}`);
     assert.ok(!giveawayRe.test(visibleBoardText), `ZERO pre-computed math giveaways in #${r.number} ${r.id}`);
+    assert.ok(!fillerRe.test(visibleBoardText), `ZERO throwaway filler cards in #${r.number} ${r.id}`);
     assert.ok(!spoilerRe.test(trial.order), `active directive must not spoil reasoning type #${r.number} ${r.id}: ${trial.order}`);
     assert.ok(!/\*[a-zA-Z]+\*/.test(visibleBoardText), `no raw markdown italics in #${r.number} ${r.id}`);
 
@@ -81,7 +85,7 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
       assert.ok(trial.shortlist.includes(t), `#${r.number} shortlist includes target ${t}`);
     }
 
-    // Tier 5 (disputed ? Test Flip + coupled Cross-Checks)
+    // Tier 5 (disputed ? Test Flip + coupled Cross-Checks) — verify unique world isolation for EVERY engine
     const t5 = synthesizeTrial({
       tierId: 'medium',
       pinnedReasoningType: r.id,
@@ -89,6 +93,16 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
     });
     assert.ok(t5.crossChecks.length >= 1, `#${r.number} ${r.id} builds coupled cross-checks at Tier 5 (got ${t5.crossChecks.length})`);
     assert.ok(t5.targets.length >= 1 && t5.targets.length <= 3, `#${r.number} ${r.id} Tier 5 targets=${t5.targets.length}`);
+    const disputedIdx = t5.records.map((rec, idx) => (rec.disputed ? idx : -1)).filter((idx) => idx !== -1);
+    const satWorlds = [];
+    for (let sub = 0; sub < (1 << disputedIdx.length); sub++) {
+      let mask = 0b111111;
+      for (let k = 0; k < disputedIdx.length; k++) {
+        if (((sub >> k) & 1) === 0) mask &= ~(1 << disputedIdx[k]);
+      }
+      if (t5.crossChecks.every((c) => c.evaluate(mask))) satWorlds.push(mask);
+    }
+    assert.deepEqual(satWorlds, [t5.trueWorldMask], `#${r.number} ${r.id} Tier 5 Cross-Checks uniquely isolate trueWorldMask`);
   }
 });
 
@@ -197,6 +211,8 @@ test('Trauma Doctor: Climb the Ladder (N-Back) covers ALL 80 distinct reasoning 
 
   const spoilerRe = /\b(bayesian|syllogis\w*|antinomic|antithes\w*|dialectic\w*|abduct\w*|deduct\w*|induct\w*|heuristic\w*|metacognit\w*|meta-reasoning|counterfactual|falsif\w*|ontolog\w*|epistemic|combinatorial|divergen\w*|converg\w*|decision-theoretic|game-theoretic|theory of mind|transitiv\w*|disjunctiv\w*|recursiv\w*|extrapolat\w*|prognostic|proportional|analog\w*|anomal\w*|first-principles|lateral|emergent|decompos\w*|non-monotonic|perspectiv\w*|pragmatic|synthesi\w*|second-order|algorithm\w*|adversarial|optimis\w*|instrumental|mentalistic|motivational)\b/i;
   const jargonRe = /\b(cmH2O|pneumothorax|hemothorax|tamponade|mediastinum|coagulopathy|vasopressors|angiogram|epiglottitis|rhabdo|hypovolemic|pericardial|acidosis|thoracotomy|troponin|ketoacidosis|right-side|left-side)\b/i;
+  const nbackFillerRe = /\b(waiting for (routine )?stitches|cleared to go home|sprained (wrist|ankle|thumb|knee)|parking validation|reading phone|minor knee laceration|itchy skin rash)\b/i;
+  const nbackGiveawayRe = /\(HR > Top BP\)|\(HR < Top BP\)|\(passes ≥ 100\)|\(≤ 3 min\)|\(10× OVERDOSE\)|\(elevated, but ≤ 6\.5|\(lost over half/i;
 
   for (let i = 0; i < 80; i++) {
     const trial = stream.nextTrial();
@@ -211,6 +227,8 @@ test('Trauma Doctor: Climb the Ladder (N-Back) covers ALL 80 distinct reasoning 
     );
     assert.ok(!spoilerRe.test(trial.directive), `N-Back directive spoiled #${trial.reasoningMeta.number}: ${trial.directive}`);
     assert.ok(!jargonRe.test(`${trial.directive} ${trial.lines.join(' ')}`), `jargon leaked in #${trial.reasoningMeta.number}`);
+    assert.ok(!nbackFillerRe.test(`${trial.directive} ${trial.lines.join(' ')}`), `throwaway filler leaked in N-Back #${trial.reasoningMeta.number}`);
+    assert.ok(!nbackGiveawayRe.test(trial.lines.join(' ')), `pre-solved giveaway leaked in N-Back #${trial.reasoningMeta.number}`);
 
     const rems = trial.patients.map((p) => p.remSec);
     assert.ok(Math.max(...rems) - Math.min(...rems) >= 40, `varied countdown spread on round ${i + 1}`);

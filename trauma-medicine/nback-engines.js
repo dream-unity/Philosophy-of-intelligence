@@ -92,20 +92,20 @@ export const NBACK_ENGINES_PART1 = {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     const v = pick(rng, [
       {
-        q: 'One patient has occult internal abdominal bleeding—who best explains ALL bedside clues?',
-        w: `${W}: Bruised seatbelt mark, rising pulse (132), and steadily dropping hemoglobin.`,
-        d1: `${D1}: Isolated wrist fracture, steady pulse (84), stable hemoglobin.`,
-        d2: `${D2}: Fever 39.2°C, productive cough, normal abdominal exam.`,
-        proof: `${W}'s seatbelt trauma, racing pulse, and falling red-blood-cell count converge best on hidden internal bleeding.`,
-        rival: `${D2} looks ill, but fever and cough point to infection rather than occult hemorrhage.`,
+        q: 'One patient has hidden internal belly bleeding — compare pulse vs. hemoglobin across all three to find who best explains EVERY clue.',
+        w: `${W}: Seatbelt belly mark, pulse climbing HIGHER THAN 130 (134), hemoglobin DROPPING (13.2 → 9.4).`,
+        d1: `${D1}: Steering-wheel chest bruise, steady pulse (84), hemoglobin UNCHANGED (13.4 → 13.3).`,
+        d2: `${D2}: High fever 39.2°C + productive cough, pulse 124, hemoglobin UNCHANGED (13.6 → 13.5).`,
+        proof: `Only ${W} links blunt belly force, rising pulse (>130), and a real hemoglobin drop (−3.8) into hidden internal bleeding.`,
+        rival: `${D2} has a fast pulse too, but fever, cough, and steady hemoglobin point to infection rather than blood loss.`,
       },
       {
-        q: 'A single carbon monoxide exposure explains cherry-red distress—whose findings fit best?',
-        w: `${W}: Pulled from garage fire, severe headache, pulse ox reads 99% despite gasping confusion.`,
-        d1: `${D1}: Sprained ankle outdoors, clear speech, normal breathing.`,
-        d2: `${D2}: Known asthma, wheezing loudly, pulse ox drops cleanly to 86%.`,
-        proof: `Carbon monoxide fools standard pulse oximeters into reading ~99% while causing hypoxic confusion—matching ${W}.`,
-        rival: `${D2}'s low pulse ox and wheezing fit asthma rather than carbon monoxide masking.`,
+        q: 'Carbon monoxide tricks finger oxygen clips into reading ~99% while starving the brain — compare smoke exposure vs. clip reading to spot who fits.',
+        w: `${W}: Pulled from closed garage fire, gasping & confused, yet finger clip reads HIGHER THAN 98% (99%).`,
+        d1: `${D1}: Pulled from same garage fire, calm clear speech, normal breathing, blood carbon monoxide test 1%.`,
+        d2: `${D2}: Known asthma attack, loud wheezing, finger clip drops cleanly LOWER THAN 88% (86%).`,
+        proof: `Carbon monoxide fools standard finger clips into reading ~99% despite severe confusion — matching ${W} over ${D1} (cleared) and ${D2} (true low clip).`,
+        rival: `${D2}'s low finger clip (86%) and wheezing fit asthma rather than carbon monoxide masking.`,
       },
     ]);
     return {
@@ -340,15 +340,15 @@ export const NBACK_ENGINES_PART1 = {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     if (allowClash) {
       return {
-        directive: `Ward rule: "If a patient gets Heparin, surgery is delayed. If BP < 80, surgery CANNOT be delayed." Evaluate the orders or flag a Clinical Clash.`,
+        directive: `Ward rule: "Heparin BLOCKS immediate surgery. BP < 80 FORCES immediate surgery." Pick who goes to surgery — or flag a Clinical Clash.`,
         lines: makeShuffledLines(rng, [
-          `${W} has BP 72/40 AND was just given IV Heparin.`,
-          `${D1} has BP 118/74 and received no Heparin.`,
-          `${D2} has BP 122/78 and is waiting for X-ray.`,
+          `${W}: BP 72/40 AND was just given IV Heparin.`,
+          `${D1}: BP 118/74 AND received IV Heparin — steady vitals.`,
+          `${D2}: BP 94/60 AND received zero Heparin — monitoring.`,
         ]),
         verdict: 'clash',
-        proof: `For ${W}, Heparin forces a surgical delay while BP < 80 forbids any delay—a direct conditional contradiction.`,
-        rival: `Both conditionals fire simultaneously on ${W} with opposite mandatory outcomes.`,
+        proof: `On ${W}, Heparin BLOCKS immediate surgery while BP < 80 FORCES immediate surgery — a direct rule collision.`,
+        rival: `${D1} and ${D2} both stay ≥ 80 BP, while ${W} triggers two opposing mandatory rules simultaneously.`,
         isClash: true,
       };
     }
@@ -356,8 +356,8 @@ export const NBACK_ENGINES_PART1 = {
       directive: `Protocol rule: "If a patient's potassium > 6.5, give IV Calcium immediately; otherwise monitor." Who gets IV Calcium?`,
       lines: makeShuffledLines(rng, [
         `Lab alert: ${W}'s STAT potassium is 7.1 mEq/L with peaked T-waves.`,
-        `${D1}'s potassium is 4.4 mEq/L (normal range).`,
-        `${D2}'s potassium is 6.1 mEq/L (elevated, but ≤ 6.5 threshold).`,
+        `${D1}'s potassium is 4.4 mEq/L.`,
+        `${D2}'s potassium is 6.1 mEq/L on repeat lab draw.`,
       ]),
       verdict: winIdx,
       proof: `Only ${W} crosses the strict potassium > 6.5 trigger for immediate IV Calcium.`,
@@ -624,15 +624,15 @@ export const NBACK_ENGINES_PART1 = {
   'cross-domain-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Aviation "sterile cockpit" rule transferred to Trauma Ethics: stop all non-essential interruptions during a critical handoff. Which bedside room requires immediate sterile silence?`,
+      directive: `Aviation "sterile cockpit" rule (High-Stakes Moment + Zero Room for Error → BLOCKS all interruptions): which room requires immediate sterile silence?`,
       lines: makeShuffledLines(rng, [
-        `${W}'s family room: delivering unexpected death notification while three phones ring and nurses enter with billing forms.`,
-        `${D1}'s bay: stable ankle X-ray waiting in hallway.`,
-        `${D2}'s room: post-stitch discharge paperwork with calm family.`,
+        `${W}'s family room: Delivering sudden surgical death news while phones ring and billing clerks knock.`,
+        `${D1}'s bay: Routine morning vitals check during quiet recovery — easily paused for 10 seconds.`,
+        `${D2}'s bedside: Calm pre-discharge bandage change with steady vitals — safe to answer a ward page.`,
       ]),
       verdict: winIdx,
-      proof: `Transferring sterile-cockpit protection to critical communication pinpoints ${W}'s death notification room.`,
-      rival: `${D1} and ${D2} are routine low-stakes encounters.`,
+      proof: `Transferring sterile-cockpit protection matches ONLY ${W}: an irreversible high-stakes talk where interruptions cause lasting harm.`,
+      rival: `${D1} and ${D2} are stable, pauseable tasks rather than irreversible high-stakes moments.`,
       isClash: false,
     };
   },
@@ -796,15 +796,15 @@ export const NBACK_ENGINES_PART1 = {
   'hypothetical-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Surge drill: "SUPPOSE the hospital power fails right now, shutting down every electric ventilator." Who faces immediate arrest within 2 minutes?`,
+      directive: `Power-outage drill: "SUPPOSE wall electricity fails right now (shutting down electric pumps & ventilators, while wall-pipe oxygen stays on)." Who arrests within 2 minutes?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Paralyzed on full mechanical ventilation—zero spontaneous breaths.`,
-        `${D1}: Breathing independently on simple nasal oxygen cannula.`,
-        `${D2}: Breathing independently on room air with ankle splint.`,
+        `${W}: Paralyzed on an electric ventilator — DEPENDS ON wall power for every single breath (zero spontaneous breathing).`,
+        `${D1}: Breathing strongly on their own via passive wall-pipe oxygen mask (zero electricity needed).`,
+        `${D2}: Awake on battery-backed monitor receiving gravity-drip saline (zero electric pump needed).`,
       ]),
       verdict: winIdx,
-      proof: `Under the hypothetical power loss, only ${W} depends entirely on electrical ventilation and needs manual bagging.`,
-      rival: `${D1} uses wall oxygen, but breathes spontaneously without a powered ventilator.`,
+      proof: `Under the power-loss model, only ${W} DEPENDS ON wall electricity to keep breathing and needs immediate hand-bagging.`,
+      rival: `${D1} uses pressurized wall oxygen (non-electric) and ${D2} runs on gravity + battery.`,
       isClash: false,
     };
   },

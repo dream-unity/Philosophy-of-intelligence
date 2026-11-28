@@ -28,9 +28,13 @@ const NAME_TO_ID = new Map(PATIENTS.map((p) => [p.name, p.id]));
 const ID_TO_KEY = new Map(PATIENTS.map((p, idx) => [p.id, idx === 9 ? '0' : String(idx + 1)]));
 const NAME_REGEX = new RegExp(`\\b(${PATIENTS.map((p) => p.name).join('|')})\\b`, 'g');
 
+const REL_OP_REGEX = /(\b(?:FASTER THAN|SLOWER THAN|HIGHER THAN|LOWER THAN|EARLIER THAN|LATER THAN|WORSE THAN|BETTER THAN|OLDER THAN|NEWER THAN|SHARPER THAN|WIDER THAN|MORE THAN|LESS THAN|OUTRANKS|OVERRIDES|BLOCKS|TRIGGERS|DEPENDS ON|CAUSES|DRAINS|OPPOSITE OF|SAME AS|BEFORE|AFTER|DOUBLE|TWICE|HALF|VS\.?|NOT)\b|→|≥|≤|≠|::)/g;
+
 function renderSemanticFactHtml(factObj) {
-  const escaped = esc(factObj.text || '');
-  return escaped.replace(NAME_REGEX, (match) => {
+  let html = esc(factObj.text || '');
+  // Highlight key relational operators & directional arrows so relational structure pops visually
+  html = html.replace(REL_OP_REGEX, '<span class="tm-rel-op">$1</span>');
+  return html.replace(NAME_REGEX, (match) => {
     const pid = NAME_TO_ID.get(match);
     if (!pid) return match;
     const keyNum = ID_TO_KEY.get(pid) || '';
@@ -38,12 +42,10 @@ function renderSemanticFactHtml(factObj) {
   });
 }
 
-function uncertaintyTagHtml(rec, isTestingFlip) {
-  if (!rec.disputed) return '';
-  if (isTestingFlip) {
-    return `<div class="tm-uncertain-note is-testing">↺ Testing alternate reading — watch Cross-Checks below</div>`;
-  }
-  return `<div class="tm-uncertain-note">? Disputed chart — click "? Test Flip" to check alternate</div>`;
+function renderNBackLineHtml(line) {
+  let html = esc(line || '');
+  html = html.replace(REL_OP_REGEX, '<span class="tm-rel-op">$1</span>');
+  return html.replace(NAME_REGEX, (match) => `<strong class="tm-nb-pname">${match}</strong>`);
 }
 
 export function applyPatientBoardHighlight(container, highlightedId, ruledOutIds) {
@@ -54,25 +56,6 @@ export function applyPatientBoardHighlight(container, highlightedId, ruledOutIds
     el.classList.toggle('is-hl', !!highlightedId && pid === highlightedId);
     el.classList.toggle('is-ruled-out', ruledSet.has(pid));
   });
-}
-
-function orderRecordIndices(records, sortMode) {
-  const entries = records.map((rec, idx) => ({ rec, idx }));
-  if (sortMode === 'time') {
-    return entries.sort((a, b) => (a.rec.timeRank ?? a.idx) - (b.rec.timeRank ?? b.idx)).map((e) => e.idx);
-  }
-  if (sortMode === 'wing') {
-    const w0 = entries.filter((e) => (e.rec.siteIdx ?? 0) === 0).sort((a, b) => (a.rec.timeRank ?? a.idx) - (b.rec.timeRank ?? b.idx));
-    const w1 = entries.filter((e) => (e.rec.siteIdx ?? 0) !== 0).sort((a, b) => (a.rec.timeRank ?? a.idx) - (b.rec.timeRank ?? b.idx));
-    const out = [];
-    const maxLen = Math.max(w0.length, w1.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (w0[i]) out.push(w0[i].idx);
-      if (w1[i]) out.push(w1[i].idx);
-    }
-    return out;
-  }
-  return entries.map((e) => e.idx);
 }
 
 export function renderClinicalDossier(container, {
@@ -86,8 +69,6 @@ export function renderClinicalDossier(container, {
   holdDebrief,
   highlightedPatientId = null,
   ruledOutIds = null,
-  chartSortMode = 'default',
-  onChangeSortMode = null,
   hypothesisFlips = null,
   onToggleHypothesisFlip = null,
   onClearMarks = null,
@@ -119,7 +100,7 @@ export function renderClinicalDossier(container, {
          </span>`
       : '';
 
-  const displayOrder = orderRecordIndices(trial.records, chartSortMode);
+  const displayOrder = trial.records.map((_, idx) => idx);
 
   const cardsHtml = displayOrder
     .map((idx) => {
@@ -165,7 +146,7 @@ export function renderClinicalDossier(container, {
             .map((f) => `<div class="tm-rec-line">${renderSemanticFactHtml(f)}</div>`)
             .join('')}
         </div>
-        ${!debrief ? uncertaintyTagHtml(rec, isTestingFlip) : resolvedNote}
+        ${resolvedNote}
       </article>`;
     })
     .join('');
@@ -200,6 +181,10 @@ export function renderClinicalDossier(container, {
     : '';
 
   // Top Focal Anchor: Active Clinical Directive -> swaps cleanly IN-PLACE to Post-Case Debrief
+  const clearInline =
+    !debrief && hasMarks
+      ? `<button type="button" class="tm-tool-btn tm-tool-clear" data-action="clear-marks">Clear Marks</button>`
+      : '';
   let topPanelHtml = '';
   if (!debrief) {
     const pickWord = remainingSlots === 1 ? '1 matching bay' : `${remainingSlots} matching bays`;
@@ -269,22 +254,6 @@ export function renderClinicalDossier(container, {
     ? `<span class="tm-dispatch-text">${esc(trial.scenario.dispatch)}</span>`
     : '';
 
-  const sortButtonsHtml = `
-    <div class="tm-chart-toolbar" role="toolbar" aria-label="Chart view controls">
-      <div class="tm-sort-group" role="group" aria-label="Sort clinical charts">
-        <button type="button" class="tm-tool-btn ${chartSortMode === 'default' ? 'is-active' : ''}" data-sort-mode="default" aria-pressed="${chartSortMode === 'default' ? 'true' : 'false'}">Shift</button>
-        <button type="button" class="tm-tool-btn ${chartSortMode === 'time' ? 'is-active' : ''}" data-sort-mode="time" aria-pressed="${chartSortMode === 'time' ? 'true' : 'false'}">By Time</button>
-        <button type="button" class="tm-tool-btn ${chartSortMode === 'wing' ? 'is-active' : ''}" data-sort-mode="wing" aria-pressed="${chartSortMode === 'wing' ? 'true' : 'false'}">By Wing</button>
-      </div>
-      <span class="tm-role-key">Hover any name to spotlight their bay · Right-click bay to cross off</span>
-      ${
-        hasMarks && !debrief
-          ? `<button type="button" class="tm-tool-btn tm-tool-clear" data-action="clear-marks">Clear Marks</button>`
-          : ''
-      }
-    </div>
-  `;
-
   container.innerHTML = `
     <div class="tm-dossier-header">
       <div class="tm-dossier-meta">
@@ -294,6 +263,7 @@ export function renderClinicalDossier(container, {
         ${dispatchText}
       </div>
       <div class="tm-slots-readout" aria-label="${remainingSlots} of ${targetCount} interventions remaining">
+        ${clearInline}
         <span class="tm-meta-label">Actions</span>
         <span class="tm-slots-pips">${slotsHtml}</span>
         <span class="tm-slots-num">${remainingSlots}/${targetCount}</span>
@@ -303,7 +273,6 @@ export function renderClinicalDossier(container, {
     ${topPanelHtml}
 
     <div class="tm-charts-section">
-      ${sortButtonsHtml}
       <div class="tm-dossier-body ${hasCrossChecks ? 'has-crosschecks' : ''}">
         <section class="tm-chart-grid" aria-label="Clinical records">
           ${cardsHtml}
@@ -322,11 +291,6 @@ export function renderClinicalDossier(container, {
   const clearBtn = container.querySelector('[data-action="clear-marks"]');
   if (clearBtn && onClearMarks) clearBtn.addEventListener('click', onClearMarks);
 
-  if (onChangeSortMode) {
-    container.querySelectorAll('[data-sort-mode]').forEach((btn) => {
-      btn.addEventListener('click', () => onChangeSortMode(btn.dataset.sortMode));
-    });
-  }
   if (onToggleHypothesisFlip) {
     container.querySelectorAll('[data-flip-idx]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -593,7 +557,7 @@ export function renderNBackView(container, {
       <section class="tm-nb-briefing" aria-label="Clinical case briefing">
         <div class="tm-nb-directive">${esc(trial.directive)}</div>
         <ol class="tm-nb-lines">
-          ${trial.lines.map((line) => `<li>${esc(line)}</li>`).join('')}
+          ${trial.lines.map((line) => `<li>${renderNBackLineHtml(line)}</li>`).join('')}
         </ol>
       </section>
 

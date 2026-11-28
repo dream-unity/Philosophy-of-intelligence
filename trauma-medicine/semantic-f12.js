@@ -1,6 +1,6 @@
-// Deep Plain-English Clinical Reasoning Engines — Families 1 & 2 (#1–#20)
-// Every case weaves real interlocking evidence across ALL 6 cards (zero filler, zero pre-computed answers,
-// zero single-card giveaways, zero medical jargon, synchronized left-wall bayLabels).
+// Relational-First Clinical Reasoning Engines — Families 1 & 2 (#1–#20)
+// Fluid-intelligence relational chains & multi-card inference through Diagnostic (#1–#10) & Logical (#11–#20) trauma medicine.
+// Zero filler cards, zero rule-repeating cards, zero single-card keyword lookups, zero medical jargon.
 
 import {
   pName,
@@ -32,92 +32,113 @@ function factsByTag(cards, tag) {
   return out;
 }
 
+// Helper: find top K items in a directed "a > b" graph via topological / out-reach ordering
+function rankGreaterGraph(nodes, edges) {
+  const gt = new Map(nodes.map((n) => [n, new Set()]));
+  for (const [hi, lo] of edges) {
+    if (gt.has(hi) && gt.has(lo)) gt.get(hi).add(lo);
+  }
+  // Transitive closure
+  for (const k of nodes) {
+    for (const i of nodes) {
+      if (gt.get(i).has(k)) {
+        for (const j of gt.get(k)) gt.get(i).add(j);
+      }
+    }
+  }
+  const inDeg = new Map(nodes.map((n) => [n, 0]));
+  for (const i of nodes) {
+    for (const j of gt.get(i)) {
+      if (i !== j) inDeg.set(j, (inDeg.get(j) || 0) + 1);
+    }
+  }
+  return { gt, inDeg };
+}
+
 export const SEMANTIC_F12 = {
   // =========================================================================
   // FAMILY 1: DIAGNOSTIC & INVESTIGATIVE REASONING (#1–#10)
   // =========================================================================
 
   // #1 Differential diagnosis (Inside · Composite)
+  // Relational comparison of Heart-Squeeze vs Collapsed-Lung vs Blood-Loss across 6 patients
   'differential-diagnosis': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Trauma Intake', wingIndex: 0, label: 'Sudden Chest Crisis',
+        index: 0, time: '01:02', wing: 'Bedside Exam', wingIndex: 0, label: 'Neck Veins & Chest',
         shown: [
-          fact(`${pName(a)}, ${pName(b)}, and ${pName(c)} all arrived gasping with sharp chest pain.`, [a, b, c], { tag: 'sym' }),
-          fact(`${pName(d)} also arrived short of breath after climbing four flights of stairs.`, d, { tag: 'sym' }),
+          fact(`${pName(a)}'s neck veins are MORE swollen than ${pName(c)}'s (flat veins).`, [a, c], { tag: 'bulge', hi: a, lo: c }),
+          fact(`${pName(b)} has the SAME bulging neck veins as ${pName(a)}, with clear lungs.`, [b, a], { tag: 'same_bulge', p: b, ref: a }),
         ],
         alt: [
-          fact(`${pName(b)}, ${pName(c)}, and ${pName(d)} all arrived gasping with sharp chest pain.`, [b, c, d], { tag: 'sym' }),
-          fact(`${pName(a)} arrived with a sore wrist and normal steady breathing.`, a, { tag: 'safe', calm: true }),
+          fact(`${pName(a)}'s neck veins are flat — LESS swollen than ${pName(d)}'s bulging veins.`, [a, d], { tag: 'bulge', hi: d, lo: a }),
+          fact(`${pName(b)} has the SAME bulging neck veins as ${pName(d)}, with clear lungs.`, [b, d], { tag: 'same_bulge', p: b, ref: d }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Lung Exam', wingIndex: 1, label: 'Stethoscope & Oxygen',
+        index: 1, time: '01:05', wing: 'Stethoscope', wingIndex: 1, label: 'Heartbeat vs. Breathing',
         shown: [
-          fact(`${pName(a)} has clear breath sounds on both sides, yet oxygen dropped to 84%.`, a, { tag: 'clear_low_o2' }),
-          fact(`${pName(b)} has a completely silent right lung after a hard rib hit (collapsed lung).`, b, { tag: 'collapsed' }),
+          fact(`${pName(a)}'s heartbeat sounds MORE muffled than ${pName(d)}'s crisp beat.`, [a, d], { tag: 'muffled', p: a }),
+          fact(`${pName(e)} has a silent right lung — OPPOSITE OF ${pName(a)}'s clear equal breath sounds.`, [e, a], { tag: 'lung_silent', p: e }),
         ],
         alt: [
-          fact(`${pName(c)} has clear breath sounds on both sides, yet oxygen dropped to 84%.`, c, { tag: 'clear_low_o2' }),
-          fact(`${pName(b)} has a completely silent right lung after a hard rib hit (collapsed lung).`, b, { tag: 'collapsed' }),
+          fact(`${pName(d)}'s heartbeat sounds MORE muffled than ${pName(a)}'s crisp beat.`, [d, a], { tag: 'muffled', p: d }),
+          fact(`${pName(e)} has a silent right lung — OPPOSITE OF ${pName(d)}'s clear equal breath sounds.`, [e, d], { tag: 'lung_silent', p: e }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Trauma Intake', wingIndex: 0, label: 'Leg & Travel Check',
+        index: 2, time: '01:08', wing: 'Monitors', wingIndex: 0, label: 'Blood Pressure Links',
         shown: [
-          fact(`${pName(a)} just flew 14 hours yesterday and has one hot, swollen calf.`, a, { tag: 'clot_risk' }),
-          fact(`${pName(c)} has clear lungs, normal 99% oxygen, and tingling fingers from panic.`, c, { tag: 'panic' }),
+          fact(`${pName(a)}'s BP (76/48) is LOWER THAN ${pName(b)}'s (124/78).`, [a, b], { tag: 'low_bp', p: a }),
+          fact(`${pName(c)}'s BP (78/46) is LOWER THAN ${pName(f)}'s (128/80), matching shock.`, [c, f], { tag: 'low_bp', p: c }),
         ],
         alt: [
-          fact(`${pName(c)} just flew 14 hours yesterday and has one hot, swollen calf.`, c, { tag: 'clot_risk' }),
-          fact(`${pName(a)} has normal 99% oxygen and no calf swelling.`, a, { tag: 'panic' }),
+          fact(`${pName(d)}'s BP (74/44) is LOWER THAN ${pName(b)}'s (124/78).`, [d, b], { tag: 'low_bp', p: d }),
+          fact(`${pName(c)}'s BP (78/46) is LOWER THAN ${pName(f)}'s (128/80), matching shock.`, [c, f], { tag: 'low_bp', p: c }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Lung Exam', wingIndex: 1, label: 'Heart & Rib Clues',
+        index: 3, time: '01:11', wing: 'Stethoscope', wingIndex: 1, label: 'Second Heart Check',
         shown: [
-          fact(`${pName(d)} has wet crackling lungs and swollen ankles on BOTH legs (fluid buildup).`, d, { tag: 'fluid' }),
-          fact(`${pName(e)} has chest tightness that vanished completely after sitting calmly for 5 minutes.`, e, { tag: 'safe', calm: true }),
-        ],
-        alt: [
-          fact(`${pName(d)} has wet crackling lungs and swollen ankles on BOTH legs (fluid buildup).`, d, { tag: 'fluid' }),
-          fact(`${pName(b)} has no leg swelling and no recent flights.`, b, { tag: 'collapsed' }),
+          fact(`${pName(b)}'s heartbeat is muffled just like ${pName(a)}'s, yet ${pName(b)}'s BP stays high.`, [b, a], { tag: 'muffled', p: b }),
+          fact(`${pName(c)}'s heartbeat is crisp and loud — NOT muffled like ${pName(a)}'s.`, [c, a], { tag: 'crisp', p: c }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Trauma Intake', wingIndex: 0, label: 'Clot Signature Guide',
+        index: 4, time: '01:14', wing: 'Bedside Exam', wingIndex: 0, label: 'Windpipe & Bleeding',
         shown: [
-          fact(`A trapped lung blood clot leaves breath sounds clear on BOTH sides while oxygen drops.`, [], { tag: 'rule' }),
-          fact(`Unlike fluid buildup (both ankles swollen), a leg clot swells ONE calf after long immobility.`, [], { tag: 'rule' }),
+          fact(`${pName(e)}'s windpipe is pushed left while ${pName(e)}'s BP sits LOWER THAN ${pName(f)}'s.`, [e, f], { tag: 'trachea_shift', p: e }),
+          fact(`${pName(c)} lost MORE blood externally than ${pName(a)} or ${pName(d)} (explaining flat veins).`, [c, a, d], { tag: 'bleed_only', p: c }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Lung Exam', wingIndex: 1, label: 'Blood & Chest Scan',
+        index: 5, time: '01:17', wing: 'Trauma Lead', wingIndex: 1, label: 'Heart-Squeeze Triad',
         shown: [
-          fact(`${pName(b)}'s quick chest scan confirms trapped air outside the lung — needs a chest tube, NOT clot drugs.`, b, { tag: 'collapsed' }),
-          fact(`${pName(f)} came in for a minor cut on the hand; chest exam is completely normal.`, f, { tag: 'safe', calm: true }),
+          fact(`Fluid squeezing the heart requires ALL 3: BP < 90 + bulging neck veins + muffled heartbeat.`, [], { tag: 'triad' }),
+          fact(`${pName(f)} has HIGHER BP than ${pName(d)}, clear lungs, and flat neck veins.`, [f, d], { tag: 'normal', p: f }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Four Gasping Chests',
-      dispatch: 'Four patients arrived gasping with chest pain — each has a DIFFERENT hidden cause, and clot drugs will kill the wrong patient.',
-      order: 'Give the emergency clot-dissolver ONLY to the patient with a trapped lung blood clot.',
-      hint: 'Separate clear-lung low oxygen + one-sided leg clot risk from collapsed lung, fluid buildup, and panic.',
-      bayDefaultLabel: 'Chest Pain Eval',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Three Rival Shock Signatures',
+      dispatch: 'Distinguish Heart Squeeze from Collapsed Lung and Blood Loss by cross-linking veins, heart sounds, and BP.',
+      order: 'Drain the heart sac of the SINGLE patient matching all 3 signs of Heart Squeeze (Low BP + Bulging Veins + Muffled Beat).',
+      hint: 'Compare neck veins, heart sounds, and BP across bays — watch out for lookalikes missing one link.',
+      bayDefaultLabel: 'Shock Diff-Dx',
       cards,
       evaluate(activeCards) {
-        const clearLow = tagSet(activeCards, 'clear_low_o2');
-        const risk = tagSet(activeCards, 'clot_risk');
-        const targets = uniqueSortedIds([...clearLow].filter((id) => risk.has(id)));
-        const rivals = [...tagSet(activeCards, 'collapsed'), ...tagSet(activeCards, 'fluid'), ...tagSet(activeCards, 'panic')];
+        const bulge = new Set();
+        for (const f of factsByTag(activeCards, 'bulge')) bulge.add(f.hi);
+        for (const f of factsByTag(activeCards, 'same_bulge')) if (bulge.has(f.ref)) bulge.add(f.p);
+        const muffled = new Set(factsByTag(activeCards, 'muffled').map((f) => f.p));
+        const lowBp = new Set(factsByTag(activeCards, 'low_bp').map((f) => f.p));
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => bulge.has(id) && muffled.has(id) && lowBp.has(id)));
         return {
           targets,
-          proof: `Only ${formatList(targets)} fit a trapped lung clot: clear lungs on both sides with plunging oxygen (84%) plus a hot swollen calf after a 14-hour flight.`,
-          rival: buildRivalInfo(targets, rivals, (id) =>
-            `${pName(id)}'s breathlessness comes from a different mechanism (collapsed lung, two-sided fluid buildup, or panic), where clot drugs would be dangerous.`
+          proof: `Binding veins + stethoscope + BP isolates ${formatList(targets)}: bulging veins, muffled heartbeat, AND BP < 90.`,
+          rival: buildRivalInfo(targets, [b, c, e, d, a], (r) =>
+            bulge.has(r) ? `${pName(r)} has bulging veins and muffled heart sounds, but normal BP (124/78) rules out active shock.` : `${pName(r)} has low BP from blood loss or lung collapse, NOT bulging veins + muffled heart.`
           ),
         };
       },
@@ -125,251 +146,267 @@ export const SEMANTIC_F12 = {
   },
 
   // #2 Abductive reasoning (Inside · Atomic)
+  // Inferring the single hidden exposure (CO leak in Sealed Cabin B) that explains a web of cross-patient anomalies
   'abductive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'ER Bay A', wingIndex: 0, label: 'Scene Dispatch',
+        index: 0, time: '01:03', wing: 'Scene Links', wingIndex: 0, label: 'Where They Were Found',
         shown: [
-          fact(`${pName(a)} was found dizzy inside a closed garage with a space heater running.`, a, { tag: 'garage' }),
-          fact(`${pName(b)} collapsed on an outdoor soccer field in cool fresh air.`, b, { tag: 'outdoor' }),
+          fact(`${pName(a)} was pulled from the SAME sealed basement room as ${pName(b)}.`, [a, b], { tag: 'room_link', p1: a, p2: b }),
+          fact(`${pName(c)} was found outside on the porch — SEPARATE from ${pName(a)}'s sealed room.`, [c, a], { tag: 'outdoors', p: c }),
         ],
         alt: [
-          fact(`${pName(c)} was found dizzy inside a closed garage with a space heater running.`, c, { tag: 'garage' }),
-          fact(`${pName(a)} collapsed on an outdoor soccer field in cool fresh air.`, a, { tag: 'outdoor' }),
+          fact(`${pName(d)} was pulled from the SAME sealed basement room as ${pName(b)}.`, [d, b], { tag: 'room_link', p1: d, p2: b }),
+          fact(`${pName(a)} was found outside on the porch — SEPARATE from ${pName(b)}'s sealed room.`, [a, b], { tag: 'outdoors', p: a }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Monitor Desk', wingIndex: 1, label: 'Finger Oxygen Trick',
+        index: 1, time: '01:07', wing: 'Finger Clip', wingIndex: 1, label: 'Finger-Clip Paradox',
         shown: [
-          fact(`${pName(a)}'s finger oxygen clip reads a "normal" 99% even while gasping and confused.`, a, { tag: 'fake99' }),
-          fact(`${pName(c)}'s finger oxygen clip dropped cleanly to 83% alongside loud asthma wheezing.`, c, { tag: 'asthma' }),
+          fact(`${pName(a)}'s finger clip reads 99% — HIGHER THAN wheezing ${pName(e)}'s 86% — yet ${pName(a)} is confused and cherry-red.`, [a, e], { tag: 'co_sign', p: a }),
+          fact(`${pName(b)}'s finger clip ALSO reads 99% despite severe headache and dizziness, SAME AS ${pName(a)}.`, [b, a], { tag: 'co_sign', p: b }),
         ],
         alt: [
-          fact(`${pName(c)}'s finger oxygen clip reads a "normal" 99% even while gasping and confused.`, c, { tag: 'fake99' }),
-          fact(`${pName(a)}'s finger oxygen clip dropped cleanly to 83% alongside loud asthma wheezing.`, a, { tag: 'asthma' }),
+          fact(`${pName(d)}'s finger clip reads 99% — HIGHER THAN wheezing ${pName(e)}'s 86% — yet ${pName(d)} is confused and cherry-red.`, [d, e], { tag: 'co_sign', p: d }),
+          fact(`${pName(b)}'s finger clip ALSO reads 99% despite severe headache and dizziness, SAME AS ${pName(d)}.`, [b, d], { tag: 'co_sign', p: b }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'ER Bay A', wingIndex: 0, label: 'Face & Headache',
+        index: 2, time: '01:10', wing: 'Airway Lab', wingIndex: 0, label: 'Real Arterial Blood Test',
         shown: [
-          fact(`${pName(a)} has a throbbing headache, nausea, and strangely bright pink cheeks.`, a, { tag: 'pink' }),
-          fact(`${pName(d)} has a throbbing headache and stiff neck with a 103°F fever.`, d, { tag: 'fever' }),
+          fact(`Lab confirms ${pName(b)}'s true blood oxygen is HALF of what the finger clip claims (poisoned by generator exhaust).`, [b], { tag: 'co_confirmed', p: b }),
+          fact(`${pName(e)}'s wheezing improved RIGHT AFTER an asthma inhaler — unlike ${pName(a)} or ${pName(b)}.`, [e, a, b], { tag: 'asthma', p: e }),
+        ],
+      }),
+      makeCard({
+        index: 3, time: '01:14', wing: 'Scene Links', wingIndex: 0, label: 'Generator Exposure',
+        shown: [
+          fact(`${pName(d)} entered the basement ONLY for 10 seconds to drag ${pName(b)} out; ${pName(d)}'s real blood test is clean.`, [d, b], { tag: 'brief', p: d }),
+          fact(`${pName(f)} arrived from an unrelated highway crash with normal alertness and normal blood gases.`, [f], { tag: 'unrelated', p: f }),
         ],
         alt: [
-          fact(`${pName(c)} has a throbbing headache, nausea, and strangely bright pink cheeks.`, c, { tag: 'pink' }),
-          fact(`${pName(d)} has a throbbing headache and stiff neck with a 103°F fever.`, d, { tag: 'fever' }),
+          fact(`${pName(a)} stood outside directing ambulances; ${pName(a)}'s real blood test is clean.`, [a], { tag: 'brief', p: a }),
+          fact(`${pName(f)} arrived from an unrelated highway crash with normal alertness and normal blood gases.`, [f], { tag: 'unrelated', p: f }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Monitor Desk', wingIndex: 1, label: 'Companion Report',
+        index: 4, time: '01:17', wing: 'Finger Clip', wingIndex: 1, label: 'Why One Cause Explains Both',
         shown: [
-          fact(`${pName(a)}'s dog also passed out in the same closed room before paramedics arrived.`, a, { tag: 'shared' }),
-          fact(`${pName(b)}'s teammates on the soccer field feel completely fine; ${pName(b)} just skipped breakfast.`, b, { tag: 'outdoor' }),
-        ],
-        alt: [
-          fact(`${pName(c)}'s dog also passed out in the same closed room before paramedics arrived.`, c, { tag: 'shared' }),
-          fact(`${pName(b)}'s teammates on the soccer field feel completely fine; ${pName(b)} just skipped breakfast.`, b, { tag: 'outdoor' }),
+          fact(`Carbon monoxide tricks finger clips into reading ~99% while starving the brain of real oxygen.`, [], { tag: 'mech' }),
+          fact(`${pName(c)} has a fever (39°C) and normal blood gas — BETTER explained by flu than exhaust gas.`, [c], { tag: 'flu', p: c }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'ER Bay A', wingIndex: 0, label: 'Poison Clue Note',
+        index: 5, time: '01:20', wing: 'Chamber Team', wingIndex: 1, label: 'Hyperbaric Oxygen Slots',
         shown: [
-          fact(`Invisible exhaust gas tricks standard finger oxygen clips into showing 99% while starving the brain.`, [], { tag: 'rule' }),
-          fact(`It hits everyone breathing the same closed-room air and leaves cheeks bright pink.`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 5, time: '06:00', wing: 'Monitor Desk', wingIndex: 1, label: 'Other Arrivals',
-        shown: [
-          fact(`${pName(e)} was gardening outside and got stung on the arm (mild local itch only).`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} twisted an ankle stepping off a bus; mind is sharp and clear.`, f, { tag: 'safe', calm: true }),
+          fact(`Both sealed-room victims showing the 99%-yet-confused paradox need 100% high-pressure oxygen now.`, [], { tag: 'action' }),
+          fact(`Patients whose real blood test is clean or whose low clip responds to asthma meds do NOT have exhaust poisoning.`, [], { tag: 'action' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'The Deceptive 99% Reading',
-      dispatch: 'One patient has invisible exhaust-gas poisoning — ordinary clues look normal until you connect ALL the strange pieces together.',
-      order: 'Rush the single patient whose scattered clues all point to hidden carbon monoxide poisoning into the pure-oxygen chamber.',
-      hint: 'Find the one patient whose scene, deceptive monitor, physical signs, and shared exposure all click into one explanation.',
-      bayDefaultLabel: 'Mystery Collapse',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'The 99% Oxygen Paradox',
+      dispatch: 'Find the hidden shared exposure explaining why two patients look "99% oxygenated" yet are collapsing.',
+      order: 'Put EVERY patient whose symptoms are best explained by sealed-room Carbon Monoxide poisoning on high-flow oxygen.',
+      hint: 'Link who shared the sealed room with who shows the 99%-clip-yet-confused paradox.',
+      bayDefaultLabel: 'Gas Exposure',
       cards,
       evaluate(activeCards) {
-        const g = tagSet(activeCards, 'garage');
-        const f99 = tagSet(activeCards, 'fake99');
-        const pk = tagSet(activeCards, 'pink');
-        const targets = uniqueSortedIds([...g].filter((id) => f99.has(id) && pk.has(id)));
-        const rivals = [...tagSet(activeCards, 'asthma'), ...tagSet(activeCards, 'fever'), ...tagSet(activeCards, 'outdoor')];
+        const coSign = new Set(factsByTag(activeCards, 'co_sign').map((f) => f.p));
+        const linked = new Set();
+        for (const f of factsByTag(activeCards, 'room_link')) {
+          linked.add(f.p1);
+          linked.add(f.p2);
+        }
+        const targets = uniqueSortedIds([...coSign].filter((id) => linked.has(id)));
         return {
           targets,
-          proof: `Hidden exhaust gas is the single best explanation uniting ALL of ${formatList(targets)}'s clues: closed heated garage, dog passing out too, bright pink cheeks, and a fooled 99% finger clip despite confusion.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)}'s symptoms fit a completely different story (asthma, infection fever, or low blood sugar outdoors).`),
+          proof: `Carbon monoxide poisoning uniquely explains BOTH the shared sealed room AND the deceptive 99% finger-clip paradox on ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [e, d, c, a], (r) =>
+            r === e ? `${pName(e)}'s low 86% reading and inhaler relief fit asthma, not carbon monoxide masking.` : `${pName(r)} was outdoors or had a clean arterial blood test.`
+          ),
         };
       },
     };
   },
 
-  // #3 Eliminative reasoning (Before · Atomic)
+  // #3 Eliminative reasoning (Inside · Atomic)
+  // Relational elimination chain ruling out rivals until only the true surgical bleeders remain
   'eliminative-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Tox Desk', wingIndex: 0, label: 'Suspect Pool',
+        index: 0, time: '01:02', wing: 'Surgery Pool', wingIndex: 0, label: 'Six Crash Arrivals',
         shown: [
-          fact(`Six dinner guests arrived with sudden stomach cramps: ${pName(a)}, ${pName(b)}, ${pName(c)}, ${pName(d)}, ${pName(e)}, and ${pName(f)}.`, [a, b, c, d, e, f], { tag: 'pool' }),
-          fact(`Lab confirms ONE guest ingested deadly mushroom toxin (slow onset, attacks liver only).`, [], { tag: 'rule' }),
+          fact(`All 6 crash bays (${pName(a)}, ${pName(b)}, ${pName(c)}, ${pName(d)}, ${pName(e)}, ${pName(f)}) entered the OR shortlist.`, [a, b, c, d, e, f], { tag: 'pool' }),
+          fact(`Rule out any bay proven cleaner than a cleared patient, or directly cleared by scan.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Lab Bench', wingIndex: 1, label: 'Liver Panel 1',
+        index: 1, time: '01:06', wing: 'Ultrasound', wingIndex: 1, label: 'Comparative Scan A',
         shown: [
-          fact(`${pName(b)}'s liver blood panel is spotless and cramps stopped after drinking water.`, b, { tag: 'out' }),
-          fact(`${pName(c)} only ate store-bought sealed crackers — zero mushrooms touched their plate.`, c, { tag: 'out' }),
+          fact(`${pName(c)}'s belly scan is 100% dry — ZERO internal fluid (ruled out).`, [c], { tag: 'clear', p: c }),
+          fact(`${pName(d)}'s scan is EVEN CLEANER than ${pName(c)}'s dry scan.`, [d, c], { tag: 'cleaner_than', lo: d, hi: c }),
         ],
         alt: [
-          fact(`${pName(a)}'s liver blood panel is spotless and cramps stopped after drinking water.`, a, { tag: 'out' }),
-          fact(`${pName(c)} only ate store-bought sealed crackers — zero mushrooms touched their plate.`, c, { tag: 'out' }),
+          fact(`${pName(a)}'s belly scan is 100% dry — ZERO internal fluid (ruled out).`, [a], { tag: 'clear', p: a }),
+          fact(`${pName(d)}'s scan is EVEN CLEANER than ${pName(a)}'s dry scan.`, [d, a], { tag: 'cleaner_than', lo: d, hi: a }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Tox Desk', wingIndex: 0, label: 'Symptom Timing',
+        index: 2, time: '01:10', wing: 'CT Suite', wingIndex: 0, label: 'Comparative Scan B',
         shown: [
-          fact(`${pName(d)} started vomiting 15 minutes after eating — way too fast for slow mushroom toxin.`, d, { tag: 'out' }),
-          fact(`Deadly mushroom toxin NEVER hits in 15 minutes; symptoms begin 6–12 hours after the meal.`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 3, time: '04:00', wing: 'Lab Bench', wingIndex: 1, label: 'Urine Toxin Screen',
-        shown: [
-          fact(`${pName(e)}'s rapid urine test came back strictly NEGATIVE for mushroom toxin.`, e, { tag: 'out' }),
-          fact(`${pName(f)}'s cramps traced to spoiled dairy; liver enzymes are completely normal.`, f, { tag: 'out' }),
+          fact(`${pName(e)}'s chest CT shows an intact main artery — surgery cancelled.`, [e], { tag: 'clear', p: e }),
+          fact(`${pName(f)} had LESS impact force and BETTER blood counts than cleared ${pName(e)}.`, [f, e], { tag: 'cleaner_than', lo: f, hi: e }),
         ],
         alt: [
-          fact(`${pName(e)}'s rapid urine test came back strictly NEGATIVE for mushroom toxin.`, e, { tag: 'out' }),
-          fact(`${pName(b)}'s cramps traced to spoiled dairy; liver enzymes are completely normal.`, b, { tag: 'out' }),
+          fact(`${pName(b)}'s chest CT shows an intact main artery — surgery cancelled.`, [b], { tag: 'clear', p: b }),
+          fact(`${pName(f)} had LESS impact force and BETTER blood counts than cleared ${pName(b)}.`, [f, b], { tag: 'cleaner_than', lo: f, hi: b }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Tox Desk', wingIndex: 0, label: 'Delayed Onset Note',
+        index: 3, time: '01:14', wing: 'Lab Cross-Check', wingIndex: 1, label: 'Who Remains Unruled-Out',
         shown: [
-          fact(`${pName(a)} ate wild forest stew 9 hours ago and still has pending liver-protection orders.`, a, { tag: 'cand' }),
-          fact(`${pName(b)} arrived 20 minutes after ${pName(a)} from the same dinner table.`, [b, a], { tag: 'cand' }),
+          fact(`${pName(a)}'s hemoglobin dropped FASTER THAN ${pName(c)}'s AND ${pName(a)} has NOT been cleared.`, [a, c], { tag: 'suspect', p: a }),
+          fact(`${pName(b)}'s belly pressure is HIGHER THAN ${pName(e)}'s AND ${pName(b)} has NOT been cleared.`, [b, e], { tag: 'suspect', p: b }),
         ],
         alt: [
-          fact(`${pName(f)} ate wild forest stew 9 hours ago and still has pending liver-protection orders.`, f, { tag: 'cand' }),
-          fact(`${pName(b)} arrived 20 minutes after ${pName(f)} from the same dinner table.`, [b, f], { tag: 'cand' }),
+          fact(`${pName(c)}'s hemoglobin dropped FASTER THAN ${pName(a)}'s AND ${pName(c)} has NOT been cleared.`, [c, a], { tag: 'suspect', p: c }),
+          fact(`${pName(e)}'s belly pressure is HIGHER THAN ${pName(b)}'s AND ${pName(e)} has NOT been cleared.`, [e, b], { tag: 'suspect', p: e }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Lab Bench', wingIndex: 1, label: 'Antidote Limit',
+        index: 4, time: '01:18', wing: 'Ultrasound', wingIndex: 1, label: 'Rule-Out Check C',
         shown: [
-          fact(`Hospital pharmacy holds ONE intravenous liver-shield kit right now.`, [], { tag: 'rule' }),
-          fact(`Cross off every guest ruled out by timing, diet, or clean labs to isolate the sole survivor left.`, [], { tag: 'rule' }),
+          fact(`Any patient with a cleaner scan or better labs than a cleared bay is AUTOMATICALLY ruled out too.`, [], { tag: 'rule' }),
+          fact(`${pName(d)} and ${pName(f)} both passed walk-and-talk stability checks.`, [d, f], { tag: 'clear_pair', p1: d, p2: f }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:22', wing: 'OR Charge', wingIndex: 0, label: 'Two Open OR Tables',
+        shown: [
+          fact(`Wheel ONLY the uneliminated suspect(s) straight into Surgery.`, [], { tag: 'rule' }),
+          fact(`Verify every cleared link before committing an OR table.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Wild Mushroom Outbreak',
-      dispatch: 'Six dinner guests came in with stomach cramps — five are ruled out by diet, timing, or clean tests. One still faces silent liver failure.',
-      order: 'Give the sole liver-shield antidote to the ONE guest who has NOT been ruled out.',
-      hint: 'Systematically cross off each cleared guest across the lab and timing reports.',
-      bayDefaultLabel: 'Toxin Screen',
+      scenarioTitle: 'Relational Surgical Elimination',
+      dispatch: 'Six crash arrivals entered the OR queue — chain direct clears and "cleaner-than" relations to isolate who remains.',
+      order: 'Wheel EVERY remaining uneliminated patient into Surgery.',
+      hint: 'Eliminate directly cleared bays first, then eliminate anyone proven cleaner/better than them.',
+      bayDefaultLabel: 'OR Shortlist',
       cards,
       evaluate(activeCards) {
-        const pool = [a, b, c, d, e, f];
-        const ruledOut = tagSet(activeCards, 'out');
-        const targets = uniqueSortedIds(pool.filter((id) => !ruledOut.has(id)));
-        const rivals = pool.filter((id) => ruledOut.has(id));
+        const cleared = new Set(factsByTag(activeCards, 'clear').map((f) => f.p));
+        for (const f of factsByTag(activeCards, 'clear_pair')) {
+          cleared.add(f.p1);
+          cleared.add(f.p2);
+        }
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const f of factsByTag(activeCards, 'cleaner_than')) {
+            if (cleared.has(f.hi) && !cleared.has(f.lo)) {
+              cleared.add(f.lo);
+              changed = true;
+            }
+          }
+        }
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => !cleared.has(id)));
         return {
           targets,
-          proof: `Eliminating all five ruled-out guests leaves ONLY ${formatList(targets)} uneliminated for delayed mushroom liver toxicity.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} was explicitly eliminated by timing, diet, or clean lab screens.`),
+          proof: `Eliminating direct clears and every bay proven cleaner than them leaves ONLY ${formatList(targets)} uneliminated for Surgery.`,
+          rival: buildRivalInfo(targets, [c, d, e, f, a, b], (r) => `${pName(r)} was eliminated either directly by a dry/clean scan or via a "cleaner-than" link.`),
         };
       },
     };
   },
 
   // #4 Hypothetico-deductive reasoning (Inside · Composite)
+  // Testing a 2-prediction clinical hypothesis across comparative Pre→Post IV fluid shifts
   'hypothetico-deductive': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Trauma Lead', wingIndex: 0, label: 'Working Hypothesis',
+        index: 0, time: '01:02', wing: 'Pre-Fluid', wingIndex: 0, label: '01:00 Baseline BP',
         shown: [
-          fact(`Suspected injury: RUPTURED SPLEEN after a high-speed bicycle handlebar strike.`, [], { tag: 'rule' }),
-          fact(`If a spleen ruptured, we MUST see ALL THREE: left-rib bruise + pain shooting to the left shoulder + free fluid on belly scan.`, [], { tag: 'rule' }),
+          fact(`${pName(a)} started at BP 80; ${pName(b)} started at BP 82 (HIGHER THAN ${pName(a)}).`, [a, b], { tag: 'pre', p1: a, v1: 80, p2: b, v2: 82 }),
+          fact(`${pName(c)} started at BP 78; ${pName(d)} started at BP 84.`, [c, d], { tag: 'pre', p1: c, v1: 78, p2: d, v2: 84 }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Exam Bay', wingIndex: 1, label: 'Prediction 1: Left-Rib Mark',
+        index: 1, time: '01:08', wing: 'Post-Fluid', wingIndex: 1, label: '01:15 BP After 2L IV',
         shown: [
-          fact(`${pName(a)}, ${pName(b)}, and ${pName(c)} all have dark handlebar bruises under the left ribs.`, [a, b, c], { tag: 'p1' }),
-          fact(`${pName(d)} struck the RIGHT knee only; torso is unmarked.`, d, { tag: 'safe', calm: true }),
+          fact(`After 2L fluids, ${pName(a)} rose ONLY to 85 (gain < 10) while ${pName(b)} jumped to 114.`, [a, b], { tag: 'post_bp', p1: a, v1: 85, p2: b, v2: 114 }),
+          fact(`After 2L fluids, ${pName(c)} stayed at 82 (gain < 10) while ${pName(d)} rose ONLY to 88.`, [c, d], { tag: 'post_bp', p1: c, v1: 82, p2: d, v2: 88 }),
         ],
         alt: [
-          fact(`${pName(b)}, ${pName(c)}, and ${pName(e)} all have dark handlebar bruises under the left ribs.`, [b, c, e], { tag: 'p1' }),
-          fact(`${pName(d)} struck the RIGHT knee only; torso is unmarked.`, d, { tag: 'safe', calm: true }),
+          fact(`After 2L fluids, ${pName(a)} jumped to 112 while ${pName(b)} rose ONLY to 86 (gain < 10).`, [a, b], { tag: 'post_bp', p1: a, v1: 112, p2: b, v2: 86 }),
+          fact(`After 2L fluids, ${pName(c)} stayed at 82 (gain < 10) while ${pName(d)} jumped to 116.`, [c, d], { tag: 'post_bp', p1: c, v1: 82, p2: d, v2: 116 }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Exam Bay', wingIndex: 1, label: 'Prediction 2: Left Shoulder',
+        index: 2, time: '01:12', wing: 'Blood Acid', wingIndex: 0, label: 'Stress-Acid Comparison A',
         shown: [
-          fact(`${pName(a)} and ${pName(c)} report bizarre sharp pain shooting up into the left shoulder when lying flat.`, [a, c], { tag: 'p2' }),
-          fact(`${pName(b)} has sore ribs locally, zero shoulder pain even when lying flat.`, b, { tag: 'fail' }),
+          fact(`${pName(a)}'s stress acid (5.4) is HIGHER THAN ward-control ${pName(e)}'s danger bar (4.0).`, [a, e], { tag: 'acid_hi', p: a }),
+          fact(`${pName(d)}'s stress acid (1.6) is LESS THAN HALF of ${pName(e)}'s 4.0 danger bar.`, [d, e], { tag: 'acid_lo', p: d }),
         ],
         alt: [
-          fact(`${pName(c)} and ${pName(e)} report bizarre sharp pain shooting up into the left shoulder when lying flat.`, [c, e], { tag: 'p2' }),
-          fact(`${pName(b)} has sore ribs locally, zero shoulder pain even when lying flat.`, b, { tag: 'fail' }),
+          fact(`${pName(b)}'s stress acid (5.2) is HIGHER THAN ward-control ${pName(e)}'s danger bar (4.0).`, [b, e], { tag: 'acid_hi', p: b }),
+          fact(`${pName(a)}'s stress acid (1.7) is LESS THAN HALF of ${pName(e)}'s 4.0 danger bar.`, [a, e], { tag: 'acid_lo', p: a }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Ultrasound', wingIndex: 0, label: 'Prediction 3: Belly Scan',
+        index: 3, time: '01:15', wing: 'Blood Acid', wingIndex: 0, label: 'Stress-Acid Comparison B',
         shown: [
-          fact(`${pName(a)}'s bedside belly ultrasound shows dark pools of free blood around the spleen.`, a, { tag: 'p3' }),
-          fact(`${pName(c)}'s bedside belly ultrasound is bone-dry — zero internal bleeding.`, c, { tag: 'fail' }),
+          fact(`${pName(c)}'s stress acid (5.8) is EVEN HIGHER THAN ${pName(a)}'s.`, [c, a], { tag: 'acid_hi', p: c }),
+          fact(`${pName(b)}'s stress acid dropped to 1.9 — LOWER THAN ${pName(e)}'s 4.0 bar.`, [b, e], { tag: 'acid_lo', p: b }),
         ],
         alt: [
-          fact(`${pName(e)}'s bedside belly ultrasound shows dark pools of free blood around the spleen.`, e, { tag: 'p3' }),
-          fact(`${pName(c)}'s bedside belly ultrasound is bone-dry — zero internal bleeding.`, c, { tag: 'fail' }),
+          fact(`${pName(c)}'s stress acid (1.5) is LOWER THAN ${pName(e)}'s 4.0 bar.`, [c, e], { tag: 'acid_lo', p: c }),
+          fact(`${pName(d)}'s stress acid (5.5) is HIGHER THAN ${pName(e)}'s 4.0 bar.`, [d, e], { tag: 'acid_hi', p: d }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Ultrasound', wingIndex: 0, label: 'Why Shoulder Hurts',
+        index: 4, time: '01:18', wing: 'Hypothesis', wingIndex: 1, label: 'Two Mandatory Predictions',
         shown: [
-          fact(`Blood pooling under the left diaphragm irritates a nerve that refers pain straight to the left shoulder.`, [], { tag: 'rule' }),
-          fact(`${pName(e)} also had a mild bike spill; waiting for bruise check if needed.`, e, { tag: 'p3_check' }),
+          fact(`Severe Infection Shock predicts BOTH: (1) 2L fluids raise BP by LESS THAN 10 points AND (2) stress acid > ${pName(e)}'s 4.0 bar.`, [e], { tag: 'hyp' }),
+          fact(`${pName(f)} responded to 1L fluids (+26 BP) and stays below ${pName(e)}'s bar.`, [f, e], { tag: 'acid_lo', p: f }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Exam Bay', wingIndex: 1, label: 'Minor Arrivals',
+        index: 5, time: '01:20', wing: 'Pharmacy', wingIndex: 1, label: 'Strong Drip Trigger',
         shown: [
-          fact(`${pName(f)} scraped palms on gravel — abdomen soft, ultrasound dry.`, f, { tag: 'safe', calm: true }),
-          fact(`A missing predicted sign disproves ruptured spleen; rush ONLY the confirmed match to OR.`, [], { tag: 'rule' }),
+          fact(`Start blood-pressure support drips ONLY on bays confirming BOTH predictions of the test.`, [], { tag: 'act' }),
+          fact(`A bay failing either prediction (big fluid bounce OR low stress acid) disproves Infection Shock.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Handlebar Crash Test',
-      dispatch: 'Multiple cyclists crashed into handlebars — test all three predicted signs of a ruptured spleen before opening the operating room.',
-      order: 'Send ONLY the patient whose exam and scan confirm ALL THREE predictions of a ruptured spleen to emergency surgery.',
-      hint: 'Check Prediction 1 (left ribs), Prediction 2 (left shoulder pain), and Prediction 3 (free fluid on scan).',
-      bayDefaultLabel: 'Belly Trauma',
-      bayLabels: { [d]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Testing the Fluid-Challenge Prediction',
+      dispatch: 'Compare 01:00 vs 01:15 BP gains AND stress-acid levels relative to the 4.0 ward bar.',
+      order: 'Start support drips on EVERY patient matching BOTH predictions (BP gain < 10 AND acid > 4.0).',
+      hint: 'Subtract 01:00 BP from 01:15 BP for each bay, then intersect with stress acid > 4.0.',
+      bayDefaultLabel: 'Fluid Test',
       cards,
       evaluate(activeCards) {
-        const p1 = tagSet(activeCards, 'p1');
-        const p2 = tagSet(activeCards, 'p2');
-        const p3 = tagSet(activeCards, 'p3');
-        const targets = uniqueSortedIds([...p1].filter((id) => p2.has(id) && p3.has(id)));
-        const rivals = [...p1, ...p2].filter((id) => !targets.includes(id));
+        const pre = new Map();
+        const post = new Map();
+        for (const f of factsByTag(activeCards, 'pre')) { pre.set(f.p1, f.v1); pre.set(f.p2, f.v2); }
+        for (const f of factsByTag(activeCards, 'post_bp')) { post.set(f.p1, f.v1); post.set(f.p2, f.v2); }
+        const acidHi = new Set(factsByTag(activeCards, 'acid_hi').map((f) => f.p));
+        const targets = uniqueSortedIds(
+          [a, b, c, d].filter((id) => pre.has(id) && post.has(id) && (post.get(id) - pre.get(id)) < 10 && acidHi.has(id))
+        );
         return {
           targets,
-          proof: `Only ${formatList(targets)} confirmed all three testable predictions of a ruptured spleen (left-rib bruise, referred left-shoulder pain, and free blood on ultrasound).`,
-          rival: buildRivalInfo(targets, rivals, (id) =>
-            p2.has(id)
-              ? `${pName(id)} had rib bruise and shoulder pain, but a bone-dry ultrasound disproved internal bleeding.`
-              : `${pName(id)} failed the referred shoulder pain and ultrasound predictions.`
+          proof: `Comparing pre→post BP gains (< 10) AND stress acid (> 4.0) confirms BOTH predictions on ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [d, b, c, a], (r) =>
+            (post.get(r) - pre.get(r)) < 10
+              ? `${pName(r)} barely rose on fluids, but low stress acid disproves the second prediction.`
+              : `${pName(r)}'s BP jumped by +${post.get(r) - pre.get(r)} on fluids, refuting the fluid-failure prediction.`
           ),
         };
       },
@@ -377,489 +414,492 @@ export const SEMANTIC_F12 = {
   },
 
   // #5 Causal reasoning (Inside · Atomic)
+  // Directed causal graph A → B → C → D across ward supply/oxygen/blood bottlenecks
   'causal-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Pharmacy', wingIndex: 0, label: 'Antibiotic Drip Start',
+        index: 0, time: '01:03', wing: 'Blood Bank', wingIndex: 0, label: 'Causal Link 1',
         shown: [
-          fact(`New antibiotic Batch #9 was started at 01:00 for ${pName(a)}, ${pName(b)}, and ${pName(c)}.`, [a, b, c], { tag: 'got_drip' }),
-          fact(`${pName(d)} never received Batch #9 — they are on plain saltwater fluids only.`, d, { tag: 'no_drip' }),
+          fact(`${pName(a)}'s torn thigh artery DRAINS all 6 O-Neg blood bags → triggering the blood freeze.`, [a], { tag: 'edge', from: a, to: 'bank' }),
+          fact(`The blood freeze BLOCKS ${pName(b)}'s scheduled transfusion.`, [b], { tag: 'edge', from: 'bank', to: b }),
         ],
         alt: [
-          fact(`New antibiotic Batch #9 was started at 01:00 for ${pName(b)}, ${pName(c)}, and ${pName(d)}.`, [b, c, d], { tag: 'got_drip' }),
-          fact(`${pName(a)} never received Batch #9 — they are on plain saltwater fluids only.`, a, { tag: 'no_drip' }),
+          fact(`${pName(c)}'s torn thigh artery DRAINS all 6 O-Neg blood bags → triggering the blood freeze.`, [c], { tag: 'edge', from: c, to: 'bank' }),
+          fact(`The blood freeze BLOCKS ${pName(b)}'s scheduled transfusion.`, [b], { tag: 'edge', from: 'bank', to: b }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Bedside Log', wingIndex: 1, label: 'Before 01:00 Baseline',
+        index: 1, time: '01:07', wing: 'OR Board', wingIndex: 1, label: 'Causal Link 2',
         shown: [
-          fact(`At 00:50 (BEFORE the drip): ${pName(a)}'s blood pressure was rock-steady at 122/78.`, a, { tag: 'stable_before' }),
-          fact(`At 00:50 (BEFORE the drip): ${pName(b)}'s blood pressure was ALREADY crashing down to 84/50.`, b, { tag: 'already_low' }),
+          fact(`${pName(b)}'s delayed transfusion STALLS ${pName(c)}'s OR handoff by 20 minutes.`, [b, c], { tag: 'edge', from: b, to: c }),
+          fact(`${pName(c)}'s stalled handoff BLOCKS ${pName(d)}'s transfer to recovery.`, [c, d], { tag: 'edge', from: c, to: d }),
         ],
         alt: [
-          fact(`At 00:50 (BEFORE the drip): ${pName(c)}'s blood pressure was rock-steady at 122/78.`, c, { tag: 'stable_before' }),
-          fact(`At 00:50 (BEFORE the drip): ${pName(b)}'s blood pressure was ALREADY crashing down to 84/50.`, b, { tag: 'already_low' }),
+          fact(`${pName(b)}'s delayed transfusion STALLS ${pName(a)}'s OR handoff by 20 minutes.`, [b, a], { tag: 'edge', from: b, to: a }),
+          fact(`${pName(a)}'s stalled handoff BLOCKS ${pName(d)}'s transfer to recovery.`, [a, d], { tag: 'edge', from: a, to: d }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Bedside Log', wingIndex: 1, label: 'After 01:00 Reaction',
+        index: 2, time: '01:10', wing: 'Airway Line', wingIndex: 0, label: 'Independent Cause 2',
         shown: [
-          fact(`At 01:04 (4 min AFTER drip): ${pName(a)}'s blood pressure plunged from 122 → 74 with red flushing.`, a, { tag: 'crash_after' }),
-          fact(`At 01:04: ${pName(c)} stayed completely steady at 118/74 with zero rash.`, c, { tag: 'fine_after' }),
+          fact(`${pName(e)}'s ruptured oxygen valve TRIGGERS the East Wall pressure drop.`, [e], { tag: 'edge', from: e, to: 'o2' }),
+          fact(`The East Wall pressure drop CAUSES ${pName(f)}'s ventilator alarm to scream.`, [f], { tag: 'edge', from: 'o2', to: f }),
         ],
         alt: [
-          fact(`At 01:04 (4 min AFTER drip): ${pName(c)}'s blood pressure plunged from 122 → 74 with red flushing.`, c, { tag: 'crash_after' }),
-          fact(`At 01:04: ${pName(a)} stayed completely steady at 118/74 with zero rash.`, a, { tag: 'fine_after' }),
+          fact(`${pName(f)}'s ruptured oxygen valve TRIGGERS the East Wall pressure drop.`, [f], { tag: 'edge', from: f, to: 'o2' }),
+          fact(`The East Wall pressure drop CAUSES ${pName(e)}'s ventilator alarm to scream.`, [e], { tag: 'edge', from: 'o2', to: e }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Pharmacy', wingIndex: 0, label: 'Pause-and-Watch Test',
+        index: 3, time: '01:14', wing: 'Nursing Log', wingIndex: 1, label: 'Effect vs. Cause Check',
         shown: [
-          fact(`When nurse paused ${pName(a)}'s drip for 3 minutes, pressure started climbing back up immediately.`, a, { tag: 'rebound' }),
-          fact(`When nurse paused ${pName(b)}'s drip, ${pName(b)}'s pressure kept dropping anyway (hidden bleeding).`, b, { tag: 'already_low' }),
-        ],
-        alt: [
-          fact(`When nurse paused ${pName(c)}'s drip for 3 minutes, pressure started climbing back up immediately.`, c, { tag: 'rebound' }),
-          fact(`When nurse paused ${pName(b)}'s drip, ${pName(b)}'s pressure kept dropping anyway (hidden bleeding).`, b, { tag: 'already_low' }),
+          fact(`${pName(d)} and ${pName(f)} are shouting loudest, yet BOTH are downstream effects of earlier failures.`, [d, f], { tag: 'note' }),
+          fact(`Fixing a downstream bay CANNOT clear the upstream blockage causing the alarms.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Bedside Log', wingIndex: 1, label: 'Other Crash Note',
+        index: 4, time: '01:17', wing: 'Blood Bank', wingIndex: 0, label: 'Origin Check',
         shown: [
-          fact(`${pName(d)} fainted at 01:05 right after standing up too fast for the bathroom (zero antibiotic given).`, d, { tag: 'no_drip' }),
-          fact(`${pName(e)} is sleeping comfortably after minor stitches; no IV drip running.`, e, { tag: 'safe', calm: true }),
+          fact(`Only bays with ZERO upstream patient causing their crisis are true causal origins.`, [], { tag: 'note' }),
+          fact(`Two independent crises are running right now: one Blood chain and one Oxygen chain.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Pharmacy', wingIndex: 0, label: 'Cause vs Coincidence',
+        index: 5, time: '01:20', wing: 'Trauma Lead', wingIndex: 1, label: 'Stop Both Cascades',
         shown: [
-          fact(`A true drug reaction happens AFTER the drip starts — and improves when the drip stops.`, [], { tag: 'rule' }),
-          fact(`${pName(f)} finished a completely different antibiotic yesterday with zero issues.`, f, { tag: 'safe', calm: true }),
+          fact(`Trace every arrow BACKWARD until nothing points into that patient.`, [], { tag: 'note' }),
+          fact(`Treat the TWO true upstream causal origins to clear all 6 bays at once.`, [], { tag: 'note' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Reaction or Coincidence?',
-      dispatch: 'Three patients dipped right around 01:00 when Antibiotic Batch #9 began — separate true drug cause from mere bad timing.',
-      order: 'Give the emergency anti-allergy rescue ONLY to the patient whose crash was CAUSED by the antibiotic drip.',
-      hint: 'Check what happened BEFORE 01:00, AFTER 01:00, and when the drip was paused.',
-      bayDefaultLabel: 'BP Drop Eval',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Two Ward-Wide Causal Cascades',
+      dispatch: 'Follow the directed cause → effect arrows across Blood and Oxygen lines back to the true origins.',
+      order: 'Treat the TWO upstream patients who are CAUSING (not merely suffering from) the two ward cascades.',
+      hint: 'Trace arrows backward: Origin → Intermediate → Downstream Effect.',
+      bayDefaultLabel: 'Cascade Node',
       cards,
       evaluate(activeCards) {
-        const drip = tagSet(activeCards, 'got_drip');
-        const stable = tagSet(activeCards, 'stable_before');
-        const crash = tagSet(activeCards, 'crash_after');
-        const reb = tagSet(activeCards, 'rebound');
-        const targets = uniqueSortedIds([...drip].filter((id) => stable.has(id) && crash.has(id) && reb.has(id)));
-        const rivals = [...tagSet(activeCards, 'already_low'), ...tagSet(activeCards, 'no_drip')];
+        const edges = factsByTag(activeCards, 'edge');
+        const hasOut = new Set();
+        const hasIn = new Set();
+        const players = new Set([a, b, c, d, e, f]);
+        for (const ed of edges) {
+          if (players.has(ed.from)) hasOut.add(ed.from);
+          if (players.has(ed.to)) hasIn.add(ed.to);
+        }
+        const targets = uniqueSortedIds([...hasOut].filter((id) => !hasIn.has(id)));
         return {
           targets,
-          proof: `${formatList(targets)} were completely stable before 01:00, crashed 4 minutes after Batch #9 started, and rebounded when it paused — proving a direct causal drug reaction.`,
-          rival: buildRivalInfo(targets, rivals, (id) =>
-            `${pName(id)} was either already crashing before 01:00 or never even received the antibiotic (mere coincidence).`
-          ),
+          proof: `Tracing both causal graphs backward to nodes with zero incoming arrows isolates ${formatList(targets)} as the two upstream causes.`,
+          rival: buildRivalInfo(targets, [b, f, d, c], (r) => `${pName(r)} is a downstream effect triggered by an upstream blockage, not the origin.`),
         };
       },
     };
   },
 
   // #6 Root-cause analysis (After · Composite)
+  // Tracing a 4-hop M&M autopsy error timeline backward to the single 01:00 root event
   'root-cause-analysis': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Quality Audit', wingIndex: 0, label: 'Surface Alarms',
+        index: 0, time: '01:45', wing: 'Autopsy M&M', wingIndex: 0, label: 'Final Crash (01:45)',
         shown: [
-          fact(`Four recovery patients spiked sudden chills and low blood pressure tonight: ${pName(a)}, ${pName(b)}, ${pName(c)}, and ${pName(d)}.`, [a, b, c, d], { tag: 'alarm' }),
-          fact(`Treating chills one by one failed — trace back to the shared upstream source.`, [], { tag: 'rule' }),
+          fact(`01:45: ${pName(d)} arrested AFTER receiving the wrong blood-thinner drip intended for ${pName(c)}.`, [d, c], { tag: 'hop', child: d, parent: c }),
+          fact(`01:42: ${pName(e)}'s ICU bed was delayed ONLY because staff rushed to ${pName(d)}'s arrest.`, [e, d], { tag: 'hop', child: e, parent: d }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Supply Log', wingIndex: 1, label: 'IV Bag Batches',
+        index: 1, time: '01:30', wing: 'Pharmacy Audit', wingIndex: 1, label: 'Mid-Chain Swap (01:30)',
         shown: [
-          fact(`${pName(a)} and ${pName(b)} both received IV saline from Cooling Cart #4 (Lot K-88).`, [a, b], { tag: 'lot88' }),
-          fact(`${pName(c)} and ${pName(d)} received IV saline from sterile Main Vault (Lot M-12).`, [c, d], { tag: 'clean_lot' }),
+          fact(`01:30: ${pName(c)}'s drip was misrouted to ${pName(d)} BECAUSE ${pName(b)}'s cart barcode jammed the printer.`, [c, d, b], { tag: 'hop', child: c, parent: b }),
+          fact(`01:34: ${pName(f)}'s antibiotic was delayed by the SAME jammed cart printer.`, [f, b], { tag: 'hop', child: f, parent: b }),
         ],
         alt: [
-          fact(`${pName(b)} and ${pName(c)} both received IV saline from Cooling Cart #4 (Lot K-88).`, [b, c], { tag: 'lot88' }),
-          fact(`${pName(a)} and ${pName(d)} received IV saline from sterile Main Vault (Lot M-12).`, [a, d], { tag: 'clean_lot' }),
+          fact(`01:30: ${pName(c)}'s drip was misrouted to ${pName(d)} BECAUSE ${pName(a)}'s chart barcode jammed the printer.`, [c, d, a], { tag: 'hop', child: c, parent: a }),
+          fact(`01:34: ${pName(f)}'s antibiotic was delayed by the SAME jammed cart printer.`, [f, a], { tag: 'hop', child: f, parent: a }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Quality Audit', wingIndex: 0, label: 'Lab Culture Result',
+        index: 2, time: '01:15', wing: 'Intake Audit', wingIndex: 0, label: 'Upstream Origin (01:00)',
         shown: [
-          fact(`Swab of Cooling Cart #4 (Lot K-88) grew heavy bacterial contamination from a cracked seal!`, [], { tag: 'bad_lot' }),
-          fact(`Main Vault (Lot M-12) tested 100% sterile across all 20 sample bags.`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 3, time: '04:00', wing: 'Supply Log', wingIndex: 1, label: 'Other Sources Checked',
-        shown: [
-          fact(`${pName(c)}'s chills came from a known kidney infection present BEFORE hospital arrival.`, c, { tag: 'other_cause' }),
-          fact(`${pName(d)} only shivered because the AC vent blew cold air directly onto their blanket.`, d, { tag: 'other_cause' }),
+          fact(`01:00: ${pName(b)}'s barcode jammed ONLY BECAUSE ${pName(a)}'s intake wristband was scanned twice in error.`, [b, a], { tag: 'hop', child: b, parent: a }),
+          fact(`01:00: Nobody scanned BEFORE ${pName(a)} — ${pName(a)}'s double-scan started the entire chain.`, [a], { tag: 'root_hint', p: a }),
         ],
         alt: [
-          fact(`${pName(a)}'s chills came from a known kidney infection present BEFORE hospital arrival.`, a, { tag: 'other_cause' }),
-          fact(`${pName(d)} only shivered because the AC vent blew cold air directly onto their blanket.`, d, { tag: 'other_cause' }),
+          fact(`01:00: ${pName(a)}'s barcode jammed ONLY BECAUSE ${pName(b)}'s intake wristband was scanned twice in error.`, [a, b], { tag: 'hop', child: a, parent: b }),
+          fact(`01:00: Nobody scanned BEFORE ${pName(b)} — ${pName(b)}'s double-scan started the entire chain.`, [b], { tag: 'root_hint', p: b }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Quality Audit', wingIndex: 0, label: 'Line Swap Rule',
+        index: 3, time: '01:22', wing: 'Nurse Log', wingIndex: 1, label: 'Timestamp Order',
         shown: [
-          fact(`Every patient hooked up to the contaminated Lot K-88 bag MUST have their IV line pulled immediately.`, [], { tag: 'rule' }),
-          fact(`${pName(e)} drank tap water only — zero IV lines placed.`, e, { tag: 'safe', calm: true }),
+          fact(`01:00 Intake occurred BEFORE 01:30 Pharmacy, which occurred BEFORE 01:45 ICU Arrest.`, [], { tag: 'note' }),
+          fact(`Every later patient (${pName(c)}, ${pName(d)}, ${pName(e)}, ${pName(f)}) suffered a symptom of one earlier break.`, [c, d, e, f], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Supply Log', wingIndex: 1, label: 'Ward Check',
+        index: 4, time: '01:38', wing: 'Autopsy M&M', wingIndex: 0, label: 'Root vs. Proximate Trap',
         shown: [
-          fact(`${pName(f)} had a Band-Aid change and is cleared to go home.`, f, { tag: 'safe', calm: true }),
-          fact(`Pulling the root source stops the infection; giving extra blankets will NOT fix Lot K-88.`, [], { tag: 'rule' }),
+          fact(`${pName(d)} had the fatal outcome at 01:45, but ${pName(d)}'s error was CAUSED by an earlier bay.`, [d], { tag: 'note' }),
+          fact(`M&M discipline: fixing the 01:45 step alone leaves the 01:00 root defect unfixed for tomorrow's shift.`, [], { tag: 'note' }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:50', wing: 'Chief Review', wingIndex: 1, label: 'Pinpoint Single Root',
+        shown: [
+          fact(`Trace backward from 01:45 → 01:30 → 01:00 to the ONE chart with zero upstream cause.`, [], { tag: 'note' }),
+          fact(`Flag that single root chart for immediate hospital-wide protocol redesign.`, [], { tag: 'note' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Ward Chills Outbreak',
-      dispatch: 'Four patients suddenly started shaking with chills — find the TWO linked to the hidden contaminated IV source, not unrelated causes.',
-      order: 'Pull IV lines and start emergency antibiotics for EVERY patient exposed to the contaminated root source.',
-      hint: 'Trace the lab swab back to the exact IV batch lot shared by two patients.',
-      bayDefaultLabel: 'Post-Op Chills',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Cleared · Home' },
+      scenarioTitle: 'M&M 4-Hop Error Chain',
+      dispatch: 'Six charts failed between 01:00 and 01:45 — trace every causal link backward to the SINGLE root origin.',
+      order: 'Flag the SINGLE patient whose 01:00 intake error was the root cause of all five downstream failures.',
+      hint: 'Walk backward hop-by-hop from 01:45 until you hit the chart with no upstream parent.',
+      bayDefaultLabel: 'M&M Audit',
       cards,
       evaluate(activeCards) {
-        const exposed = factsByTag(activeCards, 'lot88').flatMap((f) => f.patients);
-        const targets = uniqueSortedIds(exposed);
-        const rivals = [...tagSet(activeCards, 'clean_lot')].filter((id) => !targets.includes(id));
+        const hops = factsByTag(activeCards, 'hop');
+        const parents = new Set(hops.map((h) => h.parent));
+        const children = new Set(hops.map((h) => h.child));
+        const targets = uniqueSortedIds([...parents].filter((p) => !children.has(p)));
         return {
           targets,
-          proof: `Tracing past the surface chills reveals the shared root cause: ${formatList(targets)} were both connected to contaminated IV Lot K-88.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} received sterile Lot M-12; their chills came from an unrelated cause.`),
+          proof: `Tracing backward (01:45 → 01:30 → 01:00) hits ${formatList(targets)} as the sole root origin with no upstream cause.`,
+          rival: buildRivalInfo(targets, [d, c, b, a], (r) => `${pName(r)} was a mid-chain or final victim triggered by an earlier failure, not the 01:00 root cause.`),
         };
       },
     };
   },
 
   // #7 Mechanistic reasoning (Inside · Composite)
+  // Step-by-step physical mechanism chain: Pressure > Threshold → Vein Pinch → Low Return → BP Crash
   'mechanistic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Shock Bay', wingIndex: 0, label: 'Plumbing Model',
+        index: 0, time: '01:02', wing: 'Chest Pressure', wingIndex: 0, label: 'Step 1: Trapped Chest Air',
         shown: [
-          fact(`Blood pressure fails for 3 physical reasons: EMPTY TANK (bleeding), BROKEN PUMP (weak heart), or WIDE-OPEN PIPES (allergy/infection).`, [], { tag: 'rule' }),
-          fact(`Giving extra IV fluid helps an EMPTY TANK, but DROWNS a BROKEN PUMP (fluid backs up into the lungs!).`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 1, time: '02:00', wing: 'Bedside Exam', wingIndex: 1, label: 'Neck Veins & Lungs',
-        shown: [
-          fact(`${pName(a)}: BP 78/50, bulging neck veins, wet bubbling sounds in both lungs (backed-up fluid!).`, a, { tag: 'pump' }),
-          fact(`${pName(b)}: BP 76/48, completely flat neck veins, dry clear lungs, soaking-wet bandage.`, b, { tag: 'empty' }),
+          fact(`${pName(a)}'s trapped chest pressure is HIGHER THAN ${pName(d)}'s pinch threshold.`, [a, d], { tag: 'step1', p: a }),
+          fact(`${pName(b)}'s trapped chest pressure is EVEN HIGHER THAN ${pName(a)}'s.`, [b, a], { tag: 'step1_via', hi: b, lo: a }),
         ],
         alt: [
-          fact(`${pName(c)}: BP 78/50, bulging neck veins, wet bubbling sounds in both lungs (backed-up fluid!).`, c, { tag: 'pump' }),
-          fact(`${pName(b)}: BP 76/48, completely flat neck veins, dry clear lungs, soaking-wet bandage.`, b, { tag: 'empty' }),
+          fact(`${pName(c)}'s trapped chest pressure is HIGHER THAN ${pName(d)}'s pinch threshold.`, [c, d], { tag: 'step1', p: c }),
+          fact(`${pName(a)}'s chest pressure is LOWER THAN ${pName(d)}'s threshold (normal open chest).`, [a, d], { tag: 'no_step1', p: a }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Shock Bay', wingIndex: 0, label: 'Skin & Warmth Check',
+        index: 1, time: '01:06', wing: 'Vein Scan', wingIndex: 1, label: 'Step 2: Main-Vein Pinch',
         shown: [
-          fact(`${pName(c)}: BP 80/46, warm flushed red skin, flat neck veins, dry lungs (wide-open pipes).`, c, { tag: 'pipes' }),
-          fact(`${pName(a)}: cold clammy hands and feet because the weak heart cannot push blood forward.`, a, { tag: 'pump_cold' }),
+          fact(`Any chest pressure HIGHER THAN ${pName(d)}'s pinches the main vein returning blood to the heart.`, [d], { tag: 'mech' }),
+          fact(`${pName(e)} has normal chest pressure — ${pName(e)}'s low BP comes from a wrist artery cut instead.`, [e], { tag: 'other_mech', p: e }),
+        ],
+      }),
+      makeCard({
+        index: 2, time: '01:10', wing: 'Heart Fill', wingIndex: 0, label: 'Step 3: Heart Fill Collapse',
+        shown: [
+          fact(`${pName(a)}'s heart chamber is filling at LESS THAN HALF of ${pName(f)}'s normal fill.`, [a, f], { tag: 'step3', p: a }),
+          fact(`${pName(b)} already had a chest vent placed 2 min ago → ${pName(b)}'s vein un-pinched and heart fill recovered.`, [b], { tag: 'vented', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: BP 80/46, warm flushed red skin, flat neck veins, dry lungs (wide-open pipes).`, a, { tag: 'pipes' }),
-          fact(`${pName(c)}: cold clammy hands and feet because the weak heart cannot push blood forward.`, c, { tag: 'pump_cold' }),
+          fact(`${pName(c)}'s heart chamber is filling at LESS THAN HALF of ${pName(f)}'s normal fill.`, [c, f], { tag: 'step3', p: c }),
+          fact(`${pName(b)}'s heart chamber is filling at LESS THAN HALF of ${pName(f)}'s normal fill (no vent yet).`, [b, f], { tag: 'step3', p: b }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Bedside Exam', wingIndex: 1, label: 'Fluid Trial Result',
+        index: 3, time: '01:14', wing: 'Vein Scan', wingIndex: 1, label: 'Step 4: Pump Failure Check',
         shown: [
-          fact(`Nurse gave a tiny 250 mL test fluid bag to ${pName(b)} — blood pressure rose immediately!`, b, { tag: 'empty' }),
-          fact(`${pName(d)} has BP 82/52 after running a hot marathon without water; veins flat, lungs dry.`, d, { tag: 'empty' }),
-        ],
-      }),
-      makeCard({
-        index: 4, time: '05:00', wing: 'Shock Bay', wingIndex: 0, label: 'Heart Pump Scan',
-        shown: [
-          fact(`Bedside echo shows ${pName(a)}'s heart chamber is barely squeezing (pump failure).`, a, { tag: 'pump_echo' }),
-          fact(`${pName(e)} has normal BP 120/76 and a sprained finger.`, e, { tag: 'safe', calm: true }),
+          fact(`${pName(c)} has low blood sugar (38) — normal chest pressure and normal heart filling.`, [c], { tag: 'other_mech', p: c }),
+          fact(`${pName(d)} sits right AT the pinch threshold without crossing it — heart fill remains steady.`, [d], { tag: 'other_mech', p: d }),
         ],
         alt: [
-          fact(`Bedside echo shows ${pName(c)}'s heart chamber is barely squeezing (pump failure).`, c, { tag: 'pump_echo' }),
-          fact(`${pName(e)} has normal BP 120/76 and a sprained finger.`, e, { tag: 'safe', calm: true }),
+          fact(`${pName(e)} has normal chest pressure — wrist bleeding only.`, [e], { tag: 'other_mech', p: e }),
+          fact(`${pName(d)} sits right AT the pinch threshold without crossing it — heart fill remains steady.`, [d], { tag: 'other_mech', p: d }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Bedside Exam', wingIndex: 1, label: 'Fluid-Stop Alert',
+        index: 4, time: '01:18', wing: 'Monitors', wingIndex: 0, label: 'Mechanism Link',
         shown: [
-          fact(`Standard trauma protocol pours 2 liters of IV fluid automatically — lethal if the pump is broken.`, [], { tag: 'rule' }),
-          fact(`${pName(f)} is waiting calmly for a routine tetanus booster.`, f, { tag: 'safe', calm: true }),
+          fact(`Active pressure-pinch collapse requires: Chest pressure > ${pName(d)} → NOT yet vented → Heart fill < half of ${pName(f)}.`, [d, f], { tag: 'mech' }),
+          fact(`Giving IV fluids to a pinched-vein patient FAILS until a needle releases the trapped chest pressure!`, [], { tag: 'mech' }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:21', wing: 'Trauma Lead', wingIndex: 1, label: 'Needle Release Call',
+        shown: [
+          fact(`Needle-decompress ONLY the patient(s) currently trapped in the full 3-step pressure-pinch mechanism.`, [], { tag: 'act' }),
+          fact(`Verify whether a bay was already vented before poking the chest.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Pump, Pipes, or Tank?',
-      dispatch: 'Four patients have dangerously low blood pressure — dumping IV fluids into a failing heart pump will flood their lungs.',
-      order: 'STOP the IV fluid drip and start heart-pump support for the SINGLE patient in pump failure.',
-      hint: 'Trace the plumbing clues: bulging neck veins + wet lungs + weak squeeze means fluid is backing up behind a failing pump.',
-      bayDefaultLabel: 'Low BP Shock',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Pressure-Pinch Mechanism Chain',
+      dispatch: 'Trace the physical chain: Trapped Chest Pressure > Threshold → Pinched Main Vein → Starved Heart Fill.',
+      order: 'Perform needle chest release on EVERY patient currently in active unvented pressure-pinch collapse.',
+      hint: 'Check Step 1 (pressure > threshold) → NOT already vented → Step 3 (starved heart fill).',
+      bayDefaultLabel: 'Chest Mechanics',
       cards,
       evaluate(activeCards) {
-        const pump = tagSet(activeCards, 'pump');
-        const echo = tagSet(activeCards, 'pump_echo');
-        const targets = uniqueSortedIds([...pump].filter((id) => echo.has(id)));
-        const rivals = [...tagSet(activeCards, 'empty'), ...tagSet(activeCards, 'pipes')];
+        const s1 = new Set(factsByTag(activeCards, 'step1').map((f) => f.p));
+        for (const f of factsByTag(activeCards, 'step1_via')) {
+          if (s1.has(f.lo)) s1.add(f.hi);
+        }
+        const vented = new Set(factsByTag(activeCards, 'vented').map((f) => f.p));
+        const s3 = new Set(factsByTag(activeCards, 'step3').map((f) => f.p));
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => (s1.has(id) || s3.has(id)) && s3.has(id) && !vented.has(id)));
         return {
           targets,
-          proof: `Mechanistically, ${formatList(targets)}'s bulging neck veins, wet lungs, and weak echo squeeze prove a failing heart pump — adding fluids would drown the lungs.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} has flat neck veins and dry lungs (empty tank or wide-open pipes), so they actually NEED fluids.`),
+          proof: `Tracing the physical chain (High Chest Pressure → Unvented Vein Pinch → Half Heart Fill) isolates ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [b, e, d, c, a], (r) =>
+            vented.has(r) ? `${pName(r)} had high pressure too, but the chest vent 2 min ago already broke the mechanism.` : `${pName(r)} lacks the trapped-chest-pressure → starved-heart-fill mechanism.`
+          ),
         };
       },
     };
   },
 
   // #8 Forensic reasoning (After · Composite)
+  // Reconstructing multi-passenger crash positions & impact order from comparative physical clues
   'forensic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Autopsy Lab', wingIndex: 0, label: 'Crash Reconstruction',
+        index: 0, time: '01:04', wing: 'Autopsy Clues', wingIndex: 0, label: 'Seatbelt Diagonals',
         shown: [
-          fact(`Four car-crash passengers all claim "I was NOT driving!" Police need the true driver from physical body clues.`, [], { tag: 'rule' }),
-          fact(`In a left-hand drive car, the DRIVER'S seatbelt runs from LEFT shoulder down to RIGHT hip.`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 1, time: '02:00', wing: 'Body Exam', wingIndex: 1, label: 'Seatbelt Bruise Angle',
-        shown: [
-          fact(`${pName(a)} has a diagonal strap bruise from LEFT shoulder down to RIGHT hip.`, a, { tag: 'left_belt' }),
-          fact(`${pName(b)} has a diagonal strap bruise from RIGHT shoulder down to LEFT hip (passenger side).`, b, { tag: 'pass_belt' }),
+          fact(`${pName(a)}'s bruise runs LEFT-shoulder to RIGHT-hip — OPPOSITE OF passenger ${pName(d)}'s right-to-left belt mark.`, [a, d], { tag: 'driver_belt', p: a }),
+          fact(`${pName(b)} has the SAME left-to-right belt angle as ${pName(a)} (left-column seat: driver OR rear-left).`, [b, a], { tag: 'left_col', p: b, ref: a }),
         ],
         alt: [
-          fact(`${pName(c)} has a diagonal strap bruise from LEFT shoulder down to RIGHT hip.`, c, { tag: 'left_belt' }),
-          fact(`${pName(b)} has a diagonal strap bruise from RIGHT shoulder down to LEFT hip (passenger side).`, b, { tag: 'pass_belt' }),
+          fact(`${pName(c)}'s bruise runs LEFT-shoulder to RIGHT-hip — OPPOSITE OF passenger ${pName(d)}'s right-to-left belt mark.`, [c, d], { tag: 'driver_belt', p: c }),
+          fact(`${pName(b)} has the SAME left-to-right belt angle as ${pName(c)} (left-column seat: driver OR rear-left).`, [b, c], { tag: 'left_col', p: b, ref: c }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Autopsy Lab', wingIndex: 0, label: 'Steering Wheel Trace',
+        index: 1, time: '01:08', wing: 'Car Wreckage', wingIndex: 1, label: 'Front vs. Back Row',
         shown: [
-          fact(`A circular steering-wheel imprint bruised the lower chest of BOTH ${pName(a)} and ${pName(c)}? Wait — only the front-left seat has a steering wheel!`, [a, c], { tag: 'chest_check' }),
-          fact(`Forensic photo confirms a clean steering-wheel arc ONLY on ${pName(a)}'s chest; ${pName(c)}'s bruise is straight from a back-seat bench.`, a, { tag: 'wheel' }),
+          fact(`${pName(a)} has circular steering-wheel chest bruising AND brake-pedal rubber stamped on the right shoe.`, [a], { tag: 'front_driver', p: a }),
+          fact(`${pName(b)}'s knees carry fabric weave matching the BACK of ${pName(a)}'s front seat.`, [b, a], { tag: 'rear_row', p: b }),
         ],
         alt: [
-          fact(`Forensic photo confirms a clean steering-wheel arc ONLY on ${pName(c)}'s chest; ${pName(a)}'s bruise is straight from a back-seat bench.`, c, { tag: 'wheel' }),
-          fact(`Only the front-left seat faces the steering wheel.`, [], { tag: 'rule' }),
+          fact(`${pName(c)} has circular steering-wheel chest bruising AND brake-pedal rubber stamped on the right shoe.`, [c], { tag: 'front_driver', p: c }),
+          fact(`${pName(b)}'s knees carry fabric weave matching the BACK of ${pName(c)}'s front seat.`, [b, c], { tag: 'rear_row', p: b }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Body Exam', wingIndex: 1, label: 'Pedal & Glass Clues',
+        index: 2, time: '01:12', wing: 'Cooling Clocks', wingIndex: 0, label: 'Impact Time Order',
         shown: [
-          fact(`${pName(a)}'s RIGHT shoe sole has the rubber brake-pedal grid stamped deep into the arch.`, a, { tag: 'pedal' }),
-          fact(`${pName(d)} has shattered side-window glass embedded ONLY in the RIGHT cheek (passenger window).`, d, { tag: 'right_glass' }),
-        ],
-        alt: [
-          fact(`${pName(c)}'s RIGHT shoe sole has the rubber brake-pedal grid stamped deep into the arch.`, c, { tag: 'pedal' }),
-          fact(`${pName(d)} has shattered side-window glass embedded ONLY in the RIGHT cheek (passenger window).`, d, { tag: 'right_glass' }),
+          fact(`Clotting confirms ${pName(e)} (pedestrian) was struck BEFORE ${pName(a)}'s car hit the wall.`, [e, a], { tag: 'earlier', first: e, second: a }),
+          fact(`${pName(f)} (second car) arrived AFTER the wall crash — warmer body temp than ${pName(e)} and ${pName(a)}.`, [f, e, a], { tag: 'later', p: f }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Autopsy Lab', wingIndex: 0, label: 'Airbag Powder Swab',
+        index: 3, time: '01:16', wing: 'Autopsy Clues', wingIndex: 0, label: 'Passenger Window Glass',
         shown: [
-          fact(`${pName(b)} has front-passenger dashboard burn marks on both knees.`, b, { tag: 'pass_belt' }),
-          fact(`${pName(c)}'s left-shoulder bruise? Remember the back-left seat ALSO wears a left-to-right belt!`, c, { tag: 'back_note' }),
+          fact(`${pName(d)} has shattered glass ONLY in the right cheek (front passenger seat, next to the driver).`, [d], { tag: 'pass_front', p: d }),
+          fact(`${pName(b)} sat strictly BEHIND the driver, NOT at the steering wheel.`, [b], { tag: 'rear_row', p: b }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Body Exam', wingIndex: 1, label: 'Unrelated Bays',
+        index: 4, time: '01:20', wing: 'Coroner Rule', wingIndex: 1, label: 'Driver-Airbag Injury',
         shown: [
-          fact(`${pName(e)} was a pedestrian witness untouched by the vehicle.`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} arrived from a separate kitchen-knife cut at home.`, f, { tag: 'safe', calm: true }),
+          fact(`Only the actual DRIVER faces delayed hidden steering-column heart bruising requiring urgent cardiac scan.`, [], { tag: 'rule' }),
+          fact(`Both left-column passengers share the left-to-right belt mark — use front-vs-rear clues to separate them!`, [], { tag: 'rule' }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:24', wing: 'Trauma Lead', wingIndex: 1, label: 'Identify True Driver',
+        shown: [
+          fact(`Every occupant denied driving — reconstruct the exact driver strictly from physical evidence.`, [], { tag: 'rule' }),
+          fact(`Send the ONE confirmed driver to emergency cardiac imaging now.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Who Was Behind the Wheel?',
-      dispatch: 'Four crash survivors each deny driving — reconstruct seat positions strictly from physical injuries, pedal marks, and belt angles.',
-      order: 'Identify the ONE patient whose physical injuries prove they were in the driver seat.',
-      hint: 'Combine belt direction, steering-wheel chest mark, and right-foot brake pedal imprint.',
-      bayDefaultLabel: 'Forensic Exam',
-      bayLabels: { [e]: 'Witness · Stable', [f]: 'Minor · Stable' },
+      dispatch: 'Reconstruct seat geometry from opposing seatbelt diagonals, front-seat knee weave, and pedal marks.',
+      order: 'Send the SINGLE confirmed driver to emergency cardiac imaging.',
+      hint: 'Separate the two left-column seatbelt marks using steering-wheel/pedal vs rear-seat knee clues.',
+      bayDefaultLabel: 'Crash Forensic',
       cards,
       evaluate(activeCards) {
-        const belt = tagSet(activeCards, 'left_belt');
-        const wheel = tagSet(activeCards, 'wheel');
-        const pedal = tagSet(activeCards, 'pedal');
-        const targets = uniqueSortedIds([...belt].filter((id) => wheel.has(id) && pedal.has(id)));
-        const rivals = [a, b, c, d].filter((id) => !targets.includes(id));
+        const belt = new Set(factsByTag(activeCards, 'driver_belt').map((f) => f.p));
+        const front = new Set(factsByTag(activeCards, 'front_driver').map((f) => f.p));
+        const targets = uniqueSortedIds([...belt].filter((id) => front.has(id)));
         return {
           targets,
-          proof: `Physical evidence converges on ${formatList(targets)}: left-to-right driver seatbelt angle, circular steering-wheel chest bruise, and brake-pedal grid on the right shoe.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)}'s bruises match a passenger or back-seat position, lacking the steering wheel and brake-pedal marks.`),
+          proof: `Combining left-to-right belt angle with steering-wheel bruising + pedal imprint isolates ${formatList(targets)} as the driver.`,
+          rival: buildRivalInfo(targets, [b, d, e, c, a], (r) =>
+            r === b ? `${pName(b)} shares the left-to-right belt angle, but front-seat-back knee weave proves ${pName(b)} sat in the rear.` : `${pName(r)}'s glass/belt angle places them outside the driver seat.`
+          ),
         };
       },
     };
   },
 
-  // #9 Evidential reasoning (Inside · Atomic)
+  // #9 Evidential reasoning (Inside · Meta)
+  // Relational evidence hierarchy: Verified CT/Lab > Bedside Ultrasound > Nurse Vitals > Bystander Rumor
   'evidential-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Evidence Audit', wingIndex: 0, label: 'Reliability Scale',
+        index: 0, time: '01:02', wing: 'Evidence Rank', wingIndex: 0, label: 'Source Reliability Ladder',
         shown: [
-          fact(`HIGH reliability: verified lab tests, direct doctor scans, signed wrist-band records.`, [], { tag: 'rule' }),
-          fact(`LOW reliability: hallway rumors, loose uncalibrated finger clips, guesses from memory.`, [], { tag: 'rule' }),
+          fact(`Verified CT / Lab OVERRIDES Ultrasound, which OVERRIDES Nurse Vitals, which OVERRIDES Bystander Rumors.`, [], { tag: 'rule' }),
+          fact(`When two reports about a bay conflict, ALWAYS trust the higher-ranked source and discard the lower one.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Bay Reports', wingIndex: 1, label: 'Case A vs Case B',
+        index: 1, time: '01:06', wing: 'Rumor & Fax', wingIndex: 1, label: 'Low-Grade Claims (Rank 4)',
         shown: [
-          fact(`${pName(a)}: verified arterial blood draw confirms dangerous oxygen crash + doctor saw fluid on lung scan.`, a, { tag: 'strong' }),
-          fact(`${pName(b)}: neighbor guesses "I think they fainted earlier," but doctor's exam & blood draw are 100% normal.`, b, { tag: 'weak' }),
+          fact(`[Bystander Rumor] claims ${pName(b)} is bleeding worse than ${pName(a)} and needs immediate surgery.`, [b, a], { tag: 'rumor', p: b }),
+          fact(`[Blurry Fax] claims ${pName(d)} has a collapsed lung worse than ${pName(c)}.`, [d, c], { tag: 'rumor', p: d }),
+        ],
+      }),
+      makeCard({
+        index: 2, time: '01:10', wing: 'Verified Lab', wingIndex: 0, label: 'Gold-Standard Proof A (Rank 1)',
+        shown: [
+          fact(`[Verified Blood Gas] proves ${pName(a)} has severe acid buildup + 62% oxygen — OVERRIDING the rumor.`, [a], { tag: 'verified_crit', p: a }),
+          fact(`[Verified CT Scan] proves ${pName(b)} is 100% clear of internal bleeding — REFUTING the bystander.`, [b], { tag: 'verified_clear', p: b }),
         ],
         alt: [
-          fact(`${pName(c)}: verified arterial blood draw confirms dangerous oxygen crash + doctor saw fluid on lung scan.`, c, { tag: 'strong' }),
-          fact(`${pName(b)}: neighbor guesses "I think they fainted earlier," but doctor's exam & blood draw are 100% normal.`, b, { tag: 'weak' }),
+          fact(`[Verified CT Scan] proves ${pName(a)} is 100% clear with normal blood gases.`, [a], { tag: 'verified_clear', p: a }),
+          fact(`[Verified Blood Gas] proves ${pName(b)} has severe acid buildup + 60% oxygen — CONFIRMING danger.`, [b], { tag: 'verified_crit', p: b }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Evidence Audit', wingIndex: 0, label: 'Monitor Glitch Check',
+        index: 3, time: '01:14', wing: 'Ultrasound', wingIndex: 1, label: 'Bedside Scan (Rank 2)',
         shown: [
-          fact(`${pName(c)}'s finger clip flashed "72%" — nurse noticed it had slipped halfway off a freezing finger; repeat blood test is 99% normal.`, c, { tag: 'weak' }),
-          fact(`${pName(d)}: two separate doctors confirmed active internal bleed on ultrasound AND falling red-blood-cell lab count.`, d, { tag: 'strong' }),
+          fact(`[Bedside Ultrasound] detects active abdominal blood pool in ${pName(c)} — OVERRIDING nurse's "calm" note.`, [c], { tag: 'us_crit', p: c }),
+          fact(`[Verified Chest CT] proves ${pName(d)}'s lungs are 100% expanded — OVERRIDING the blurry fax.`, [d], { tag: 'verified_clear', p: d }),
         ],
         alt: [
-          fact(`${pName(a)}'s finger clip flashed "72%" — nurse noticed it had slipped halfway off a freezing finger; repeat blood test is 99% normal.`, a, { tag: 'weak' }),
-          fact(`${pName(d)}: two separate doctors confirmed active internal bleed on ultrasound AND falling red-blood-cell lab count.`, d, { tag: 'strong' }),
+          fact(`[Verified Belly CT] proves ${pName(c)} has ZERO abdominal blood — OVERRIDING the blurry ultrasound.`, [c], { tag: 'verified_clear', p: c }),
+          fact(`[Bedside Ultrasound] confirms lung collapse in ${pName(d)} with falling oxygen.`, [d], { tag: 'us_crit', p: d }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Bay Reports', wingIndex: 1, label: 'Unsigned Sticky Note',
+        index: 4, time: '01:18', wing: 'Nurse Vitals', wingIndex: 1, label: 'Mid-Grade Checks (Rank 3)',
         shown: [
-          fact(`An unsigned scrap of paper in the hallway says "${pName(e)} might have broken ribs?" — X-ray actually shows zero fractures.`, e, { tag: 'weak' }),
-          fact(`${pName(f)} came in for an earache; calm vitals verified twice.`, f, { tag: 'safe', calm: true }),
+          fact(`[Nurse Note] wrote "${pName(c)} looks quiet" before ultrasound arrived; ${pName(e)} has normal vitals + clean CT.`, [c, e], { tag: 'verified_clear', p: e }),
+          fact(`[Bystander] shouted "${pName(f)} fainted!" — [Nurse Vitals] show steady BP 122/78 and 99% oxygen.`, [f], { tag: 'vitals_clear', p: f }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Evidence Audit', wingIndex: 0, label: 'Corroboration Check',
+        index: 5, time: '01:22', wing: 'Trauma Lead', wingIndex: 0, label: 'Act on Strongest Proof',
         shown: [
-          fact(`High-risk invasive intervention requires AT LEAST TWO corroborated high-reliability findings.`, [], { tag: 'rule' }),
-          fact(`Never act on a single loose sensor or unverified rumor when lab tests contradict it.`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 5, time: '06:00', wing: 'Bay Reports', wingIndex: 1, label: 'Shift Handover',
-        shown: [
-          fact(`Night nurse re-checked ${pName(d)}'s wristband and confirmed the falling blood lab belongs to ${pName(d)}.`, d, { tag: 'verified' }),
-          fact(`Two trauma teams are ready to move immediately on the verified emergencies.`, [], { tag: 'rule' }),
+          fact(`Intervene ONLY on bays whose HIGHEST-RANKED evidence confirms an active emergency.`, [], { tag: 'act' }),
+          fact(`Ignore any lower-ranked claim contradicted by a higher-ranked scan or verified lab.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Signal vs Ward Rumor',
-      dispatch: 'Alarms and hallway whispers are flying — only act on emergencies backed by strong, verified clinical evidence.',
-      order: 'Send ONLY the patients backed by strong, corroborated medical evidence (not rumors or slipped sensors) to the Trauma Bay.',
-      hint: 'Separate verified blood tests and doctor scans from loose clips, guesses, and unsigned notes.',
-      bayDefaultLabel: 'Evidence Check',
-      bayLabels: { [f]: 'Minor · Stable' },
+      scenarioTitle: 'Conflicting Sources Hierarchy',
+      dispatch: 'Every bay has conflicting reports — apply the strict reliability ladder (Verified CT/Lab > Ultrasound > Vitals > Rumor).',
+      order: 'Treat EVERY patient whose HIGHEST-RANKED evidence confirms a real crisis.',
+      hint: 'Let higher-ranked sources override lower-ranked claims for each bay.',
+      bayDefaultLabel: 'Source Audit',
       cards,
       evaluate(activeCards) {
-        const strong = tagSet(activeCards, 'strong');
-        const weak = tagSet(activeCards, 'weak');
-        const targets = uniqueSortedIds([...strong].filter((id) => !weak.has(id)));
-        const rivals = [...weak];
+        const vCrit = new Set(factsByTag(activeCards, 'verified_crit').map((f) => f.p));
+        const vClear = new Set(factsByTag(activeCards, 'verified_clear').map((f) => f.p));
+        const uCrit = new Set(factsByTag(activeCards, 'us_crit').map((f) => f.p));
+        const targets = uniqueSortedIds(
+          [a, b, c, d, e, f].filter((id) => vCrit.has(id) || (uCrit.has(id) && !vClear.has(id)))
+        );
         return {
           targets,
-          proof: `Only ${formatList(targets)} have strong, corroborated primary evidence (verified labs + direct scans), rather than slipped clips or hallway guesses.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)}'s alarm rested on weak/flawed evidence (loose sensor, rumor, or unsigned note) contradicted by verified tests.`),
+          proof: `Weighting sources by rank (CT/Lab > Ultrasound > Vitals > Rumor) leaves ONLY ${formatList(targets)} backed by overriding proof.`,
+          rival: buildRivalInfo(targets, [b, d, f, c, a], (r) => `${pName(r)}'s dramatic low-grade claim was overridden by higher-ranked clean CT/vitals.`),
         };
       },
     };
   },
 
   // #10 Bayesian reasoning (Inside · Composite)
+  // Comparing relative prior odds × diagnostic likelihood multipliers to find who overtook whom
   'bayesian-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Risk Desk', wingIndex: 0, label: 'Starting Risk Scores',
+        index: 0, time: '01:02', wing: '01:00 Priors', wingIndex: 0, label: 'Starting Risk Odds',
         shown: [
-          fact(`Initial risk before scans: ${pName(a)} starts at 20 pts; ${pName(b)} starts at 60 pts.`, [a, b], { tag: 'prior' }),
-          fact(`Initial risk before scans: ${pName(c)} starts at 30 pts; ${pName(d)} starts at 50 pts.`, [c, d], { tag: 'prior' }),
+          fact(`Before scans, ${pName(b)} started at 60% torn-artery risk — DOUBLE ${pName(a)}'s starting 30%.`, [b, a], { tag: 'prior', p1: b, v1: 60, p2: a, v2: 30 }),
+          fact(`${pName(c)} started at 40% risk — HIGHER THAN ${pName(d)}'s 10% starting risk.`, [c, d], { tag: 'prior', p1: c, v1: 40, p2: d, v2: 10 }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Scan Lab', wingIndex: 1, label: 'Test Multiplier Rules',
+        index: 1, time: '01:07', wing: 'Scan Multipliers', wingIndex: 1, label: 'How Scans Shift Odds',
         shown: [
-          fact(`POSITIVE artery scan multiplies danger score by ×4 (huge jump in odds!).`, [], { tag: 'rule' }),
-          fact(`CLEAN artery scan divides danger score by ÷5 (rules almost all danger out!).`, [], { tag: 'rule' }),
+          fact(`Widened-chest X-ray MULTIPLIES risk ×2.5; a 100% clean Chest CT DIVIDES risk by 10 (drops below 6%).`, [], { tag: 'rule' }),
+          fact(`A borderline X-ray leaves risk UNCHANGED (×1.0); a clean X-ray cuts risk in HALF (÷2).`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Scan Lab', wingIndex: 1, label: 'Scan Results Batch 1',
+        index: 2, time: '01:12', wing: '01:12 Scans', wingIndex: 0, label: 'New Imaging A',
         shown: [
-          fact(`${pName(a)}'s urgent artery scan came back POSITIVE (apply ×4 to starting score).`, a, { tag: 'pos_a' }),
-          fact(`${pName(b)}'s urgent artery scan came back CLEAN (apply ÷5 to starting score).`, b, { tag: 'neg_b' }),
+          fact(`${pName(a)}: Emergency X-ray shows major widened chest (×2.5 shift on 30% start).`, [a], { tag: 'mult', p: a, m: 2.5 }),
+          fact(`${pName(b)}: Full emergency Chest CT came back 100% CLEAN (÷10 shift on 60% start).`, [b], { tag: 'mult', p: b, m: 0.1 }),
         ],
         alt: [
-          fact(`${pName(a)}'s urgent artery scan came back CLEAN (apply ÷5 to starting score).`, a, { tag: 'neg_a' }),
-          fact(`${pName(c)}'s urgent artery scan came back POSITIVE (apply ×4 to starting score).`, c, { tag: 'pos_c' }),
+          fact(`${pName(a)}: Full emergency Chest CT came back 100% CLEAN (÷10 shift on 30% start).`, [a], { tag: 'mult', p: a, m: 0.1 }),
+          fact(`${pName(b)}: Borderline X-ray — risk stays UNCHANGED at 60% (×1.0).`, [b], { tag: 'mult', p: b, m: 1.0 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Risk Desk', wingIndex: 0, label: 'Scan Results Batch 2',
+        index: 3, time: '01:16', wing: '01:12 Scans', wingIndex: 0, label: 'New Imaging B',
         shown: [
-          fact(`${pName(c)}'s urgent artery scan came back CLEAN (apply ÷5 to starting score).`, c, { tag: 'neg_c' }),
-          fact(`${pName(d)}'s scan is not done yet — score stays unchanged at its starting value.`, d, { tag: 'pending_d' }),
+          fact(`${pName(c)}: Clean chest X-ray cuts risk in HALF (÷2 shift on 40% start).`, [c], { tag: 'mult', p: c, m: 0.5 }),
+          fact(`${pName(d)}: Widened chest X-ray (×2.5 shift on 10% start).`, [d], { tag: 'mult', p: d, m: 2.5 }),
         ],
         alt: [
-          fact(`${pName(b)}'s urgent artery scan came back CLEAN (apply ÷5 to starting score).`, b, { tag: 'neg_b' }),
-          fact(`${pName(d)}'s scan is not done yet — score stays unchanged at its starting value.`, d, { tag: 'pending_d' }),
+          fact(`${pName(c)}: Emergency X-ray shows major widened chest (×2.5 shift on 40% start).`, [c], { tag: 'mult', p: c, m: 2.5 }),
+          fact(`${pName(d)}: Clean chest X-ray cuts risk in HALF (÷2 shift on 10% start).`, [d], { tag: 'mult', p: d, m: 0.5 }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Scan Lab', wingIndex: 1, label: 'Why Starting Risk Lies',
+        index: 4, time: '01:19', wing: '01:12 Scans', wingIndex: 0, label: 'New Imaging C',
         shown: [
-          fact(`A high starting suspicion shrinks fast after a clean scan; a modest starting suspicion skyrockets after a positive scan.`, [], { tag: 'rule' }),
-          fact(`${pName(e)} had zero chest symptoms and a 0-point risk score.`, e, { tag: 'safe', calm: true }),
+          fact(`${pName(e)} started at 20% and got a clean X-ray (÷2); ${pName(f)} started at 50% and got a clean CT (÷10).`, [e, f], { tag: 'ef_low' }),
+          fact(`Never anchor on 01:00 starting odds — compute EVERY bay's updated post-scan risk!`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Risk Desk', wingIndex: 0, label: 'OR Slot Cut-Off',
+        index: 5, time: '01:22', wing: 'Surgery Call', wingIndex: 1, label: 'Highest Updated Risk',
         shown: [
-          fact(`Only ONE emergency surgery slot is open — give it to the patient with the HIGHEST updated danger score.`, [], { tag: 'rule' }),
-          fact(`${pName(f)} is waiting for an ankle wrap; zero artery risk.`, f, { tag: 'safe', calm: true }),
+          fact(`Rush the SINGLE patient with the HIGHEST updated post-scan probability into Artery Surgery.`, [], { tag: 'act' }),
+          fact(`Note how a strong scan can make a lower starting risk overtake a higher starting risk!`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Updating the Odds',
-      dispatch: 'New artery scan results just arrived — update every patient’s starting risk before picking who gets the lone OR.',
-      order: 'Wheel the SINGLE patient with the HIGHEST UPDATED danger score into emergency surgery.',
-      hint: 'Multiply or divide each starting risk score by their actual scan result — do not anchor on who started highest.',
-      bayDefaultLabel: 'Artery Scan',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Updating Risk After New Scans',
+      dispatch: 'Combine each patient\'s starting risk with their scan multiplier (×2.5, ×1.0, ÷2, or ÷10) to see who overtook #1.',
+      order: 'Send the SINGLE patient with the HIGHEST updated post-scan risk to Artery Surgery.',
+      hint: 'Multiply each patient\'s starting % by their scan shift — compare all four updated numbers.',
+      bayDefaultLabel: 'Artery Odds',
       cards,
       evaluate(activeCards) {
-        const scores = { [a]: 20, [b]: 60, [c]: 30, [d]: 50 };
-        if (tagSet(activeCards, 'pos_a').has(a)) scores[a] *= 4;
-        if (tagSet(activeCards, 'neg_a').has(a)) scores[a] /= 5;
-        if (tagSet(activeCards, 'neg_b').has(b)) scores[b] /= 5;
-        if (tagSet(activeCards, 'pos_c').has(c)) scores[c] *= 4;
-        if (tagSet(activeCards, 'neg_c').has(c)) scores[c] /= 5;
-        const ranked = Object.entries(scores).sort((x, y) => y[1] - x[1]);
-        const bestId = ranked[0][0];
-        const runnerId = ranked[1][0];
+        const priors = new Map();
+        for (const f of factsByTag(activeCards, 'prior')) { priors.set(f.p1, f.v1); priors.set(f.p2, f.v2); }
+        const mults = new Map();
+        for (const f of factsByTag(activeCards, 'mult')) mults.set(f.p, f.m);
+        const scores = [a, b, c, d]
+          .filter((id) => priors.has(id) && mults.has(id))
+          .map((id) => ({ id, post: Math.min(99, Math.round(priors.get(id) * mults.get(id))) }))
+          .sort((x, y) => y.post - x.post);
+        const top = scores[0];
+        const targets = top ? [top.id] : [];
         return {
-          targets: [bestId],
-          proof: `Updating starting risk with the new scan puts ${pName(bestId)} at ${ranked[0][1]} pts — ahead of ${pName(runnerId)} (${ranked[1][1]} pts) and cleared ${pName(b)} (${scores[b]} pts).`,
-          rival: buildRivalInfo([bestId], [b, d, runnerId], (id) =>
-            `${pName(id)} ended at ${scores[id]} pts after updating with scan evidence — below ${pName(bestId)}'s ${ranked[0][1]} pts.`
-          ),
+          targets,
+          proof: `Updated post-scan scores: ${scores.map((s) => `${pName(s.id)} ≈ ${s.post}%`).join(' > ')} — ${formatList(targets)} overtakes #1.`,
+          rival: buildRivalInfo(targets, scores.slice(1).map((s) => s.id), (r) => {
+            const found = scores.find((s) => s.id === r);
+            return `${pName(r)}'s updated risk is only ~${found?.post ?? 0}% after their scan shift (behind ${pName(top.id)}'s ~${top.post}%).`;
+          }),
         };
       },
     };
@@ -870,239 +910,258 @@ export const SEMANTIC_F12 = {
   // =========================================================================
 
   // #11 Deductive reasoning (Before · Atomic)
+  // Multi-hop relational deduction: Cohort Membership → Drowsiness Comparison → Mandatory Tube
   'deductive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Protocol Board', wingIndex: 0, label: 'Airway Chain Rules',
+        index: 0, time: '01:02', wing: 'Fire Chain', wingIndex: 0, label: 'Mandatory Airway Laws',
         shown: [
-          fact(`Law 1: Every patient with singed nose hairs inhaled superheated smoke.`, [], { tag: 'rule' }),
-          fact(`Law 2: Everyone who inhaled superheated smoke MUST get a breathing tube immediately.`, [], { tag: 'rule' }),
+          fact(`Law 1: Anyone pulled from Floor 4 inhaled toxic smoke → MUST get a breathing tube IF less alert than ${pName(e)}.`, [e], { tag: 'rule' }),
+          fact(`Law 2: Anyone MORE alert than ${pName(e)} is safely breathing on their own (NO tube).`, [e], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Fire Triage', wingIndex: 1, label: 'Face & Voice Exam',
+        index: 1, time: '01:06', wing: 'Rescue Log', wingIndex: 1, label: 'Floor 4 Manifest',
         shown: [
-          fact(`${pName(a)} has visibly singed nose hairs and soot on the tongue.`, a, { tag: 'singed' }),
-          fact(`${pName(b)}'s voice turned hoarse inside a smoky basement — lab confirms superheated smoke inhalation.`, b, { tag: 'smoke' }),
+          fact(`${pName(a)} was carried out of Floor 4 alongside ${pName(b)}.`, [a, b], { tag: 'floor4', ps: [a, b] }),
+          fact(`${pName(c)} was ALSO rescued from Floor 4; ${pName(d)} was outside on the lawn (NOT Floor 4).`, [c, d], { tag: 'floor4_one', p: c }),
         ],
         alt: [
-          fact(`${pName(c)} has visibly singed nose hairs and soot on the tongue.`, c, { tag: 'singed' }),
-          fact(`${pName(b)}'s voice turned hoarse inside a smoky basement — lab confirms superheated smoke inhalation.`, b, { tag: 'smoke' }),
+          fact(`${pName(a)} was carried out of Floor 4 alongside ${pName(d)}.`, [a, d], { tag: 'floor4', ps: [a, d] }),
+          fact(`${pName(b)} was outside on the lawn (NOT Floor 4); ${pName(c)} was rescued from Floor 4.`, [b, c], { tag: 'floor4_one', p: c }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Protocol Board', wingIndex: 0, label: 'Contrapositive Check',
+        index: 2, time: '01:10', wing: 'Alertness Chain', wingIndex: 0, label: 'Relative Alertness A',
         shown: [
-          fact(`Law 3: Anyone cleared to sit in the hallway does NOT need a breathing tube.`, [], { tag: 'rule' }),
-          fact(`${pName(c)} was cleared by the Burn Chief to sit in the hallway (no singed hairs, clean throat).`, c, { tag: 'hallway' }),
+          fact(`${pName(a)} is LESS alert than ${pName(e)} (reference baseline).`, [a, e], { tag: 'alert_lt', lo: a, hi: e }),
+          fact(`${pName(b)} is EVEN LESS alert than ${pName(a)}.`, [b, a], { tag: 'alert_lt', lo: b, hi: a }),
         ],
         alt: [
-          fact(`Law 3: Anyone cleared to sit in the hallway does NOT need a breathing tube.`, [], { tag: 'rule' }),
-          fact(`${pName(a)} was cleared by the Burn Chief to sit in the hallway (no singed hairs, clean throat).`, a, { tag: 'hallway' }),
+          fact(`${pName(a)} is MORE alert than ${pName(e)} (speaking clear sentences).`, [a, e], { tag: 'alert_gt', hi: a, lo: e }),
+          fact(`${pName(d)} is LESS alert than ${pName(e)} (slurred and drowsy).`, [d, e], { tag: 'alert_lt', lo: d, hi: e }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Fire Triage', wingIndex: 1, label: 'Burn Surface Check',
+        index: 3, time: '01:14', wing: 'Alertness Chain', wingIndex: 0, label: 'Relative Alertness B',
         shown: [
-          fact(`${pName(d)} burned a forearm on a hot pan outdoors — zero smoke, zero nose-hair singeing.`, d, { tag: 'outer_burn' }),
-          fact(`Note: Skin burns on arms/legs do NOT trigger Law 1 or Law 2.`, [], { tag: 'rule' }),
+          fact(`${pName(c)} is MORE alert than ${pName(e)} — chatting steadily with paramedics.`, [c, e], { tag: 'alert_gt', hi: c, lo: e }),
+          fact(`${pName(d)} is LESS alert than ${pName(e)} (took sleeping meds before the fire), NOT from Floor 4.`, [d, e], { tag: 'alert_lt', lo: d, hi: e }),
+        ],
+        alt: [
+          fact(`${pName(c)} is LESS alert than ${pName(e)} and fading fast.`, [c, e], { tag: 'alert_lt', lo: c, hi: e }),
+          fact(`${pName(b)} is MORE alert than ${pName(e)}.`, [b, e], { tag: 'alert_gt', hi: b, lo: e }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Protocol Board', wingIndex: 0, label: 'Scope Camera Note',
+        index: 4, time: '01:18', wing: 'Alertness Chain', wingIndex: 0, label: 'Baseline Anchor',
         shown: [
-          fact(`${pName(e)} coughed once outside the building; throat scope shows pink healthy airways (no smoke inhalation).`, e, { tag: 'safe', calm: true }),
-          fact(`Follow Laws 1–3 strictly — never guess beyond what the laws force.`, [], { tag: 'rule' }),
+          fact(`${pName(f)} is MORE alert than ${pName(c)} (and ${pName(e)} is the exact alertness cutoff).`, [f, c, e], { tag: 'alert_gt', hi: f, lo: c }),
+          fact(`Chain the alertness order carefully: if X < Y and Y < ${pName(e)}, then X < ${pName(e)}!`, [e], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Fire Triage', wingIndex: 1, label: 'Non-Fire Bay',
+        index: 5, time: '01:21', wing: 'Trauma Lead', wingIndex: 1, label: 'Strict Requirement',
         shown: [
-          fact(`${pName(f)} came in with a sprained wrist from tripping on the curb.`, f, { tag: 'safe', calm: true }),
-          fact(`Two breathing-tube kits are prepped for everyone strictly required by Laws 1 & 2.`, [], { tag: 'rule' }),
+          fact(`Place breathing tubes ONLY on patients logically FORCED by BOTH Floor-4 membership AND Alertness < ${pName(e)}.`, [e], { tag: 'act' }),
+          fact(`Do NOT intubate a drowsy lawn patient or a wide-awake Floor-4 survivor.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'House Fire Airway Chain',
-      dispatch: 'Smoke victims are arriving from an apartment fire — trace the mandatory clinical laws step-by-step to catch silent throat swelling.',
-      order: 'Place an immediate breathing tube for EVERY patient strictly required by the airway chain laws.',
-      hint: 'Chain Law 1 → Law 2 cleanly, and apply Law 3 to rule out cleared patients.',
-      bayDefaultLabel: 'Fire Smoke Eval',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Floor-4 Smoke Chain',
+      dispatch: 'Chain Floor-4 rescue membership with relative alertness comparisons against the reference bay.',
+      order: `Intubate EVERY Floor-4 survivor whose alertness chains strictly LOWER THAN ${pName(e)}'s.`,
+      hint: `Chain X < Y < ${pName(e)} across the Alertness cards, then intersect with Floor 4.`,
+      bayDefaultLabel: 'Smoke Airway',
       cards,
       evaluate(activeCards) {
-        const singed = tagSet(activeCards, 'singed');
-        const smoke = tagSet(activeCards, 'smoke');
-        const hallway = tagSet(activeCards, 'hallway');
-        const targets = uniqueSortedIds([...singed, ...smoke].filter((id) => !hallway.has(id)));
-        const rivals = [...tagSet(activeCards, 'outer_burn'), ...hallway];
+        const f4 = new Set();
+        for (const f of factsByTag(activeCards, 'floor4')) f.ps.forEach((p) => f4.add(p));
+        for (const f of factsByTag(activeCards, 'floor4_one')) f4.add(f.p);
+        const edges = factsByTag(activeCards, 'alert_lt').map((f) => [f.hi, f.lo]); // hi > lo
+        const { gt } = rankGreaterGraph([a, b, c, d, e, f], edges);
+        const belowE = gt.get(e) || new Set();
+        const targets = uniqueSortedIds([...f4].filter((id) => belowE.has(id)));
         return {
           targets,
-          proof: `By Law 1 → Law 2, singed nose hairs imply superheated smoke, which forces an immediate breathing tube for ${formatList(targets)}.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} has no superheated smoke inhalation (outer skin burn or cleared for hallway).`),
+          proof: `Chaining Floor-4 membership with alertness strictly below ${pName(e)} strictly forces intubation for ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [c, d, b, a], (r) =>
+            f4.has(r) ? `${pName(r)} was on Floor 4, but stays MORE alert than ${pName(e)}.` : `${pName(r)} is drowsy, but was outside on the lawn (not Floor 4).`
+          ),
         };
       },
     };
   },
 
-  // #12 Inductive reasoning (After · Atomic)
+  // #12 Inductive reasoning (Before · Atomic)
+  // Inducing a relational rule from 3 observed Harbor Pier overdose cases and applying it to 3 new arrivals
   'inductive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Past Cases', wingIndex: 0, label: 'Confirmed Case #1 & #2',
+        index: 0, time: '01:02', wing: 'Observed Cases', wingIndex: 0, label: 'Earlier Pier Revival #1 & #2',
         shown: [
-          fact(`Earlier today, Patient X (Building C, drank hallway fountain water, age 22) crashed with severe dizziness in 30 min.`, [], { tag: 'obs' }),
-          fact(`Earlier today, Patient Y (Building C, drank hallway fountain water, age 68) crashed with severe dizziness in 30 min.`, [], { tag: 'obs' }),
+          fact(`Case #1 (Pier): Breathing was HALF of normal (7 vs 14) + pupils SMALLER than seatmate → Overdose spray SAVED them.`, [], { tag: 'obs' }),
+          fact(`Case #2 (Pier): Breathing was HALF of normal (6 vs 14) + pupils SMALLER than seatmate → Overdose spray SAVED them.`, [], { tag: 'obs' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Past Cases', wingIndex: 0, label: 'Confirmed Case #3 & #4',
+        index: 1, time: '01:06', wing: 'Observed Cases', wingIndex: 0, label: 'Earlier Pier Non-Responder #3',
         shown: [
-          fact(`Earlier today, Patient Z (Building C, drank bottled water only, age 24) stayed 100% healthy.`, [], { tag: 'obs' }),
-          fact(`Earlier today, Patient W (Building A, drank hallway fountain water, age 65) stayed 100% healthy.`, [], { tag: 'obs' }),
+          fact(`Case #3 (Pier): Fast breathing (26 vs 14) + pupils WIDER than seatmate → Overdose spray had ZERO effect.`, [], { tag: 'obs' }),
+          fact(`Extract the pattern linking breathing rate AND relative pupil size from Cases #1–#3.`, [], { tag: 'obs' }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'New Arrivals', wingIndex: 1, label: 'New Walk-Ins 1',
+        index: 2, time: '01:10', wing: 'New Arrivals', wingIndex: 1, label: 'Breathing Rates (Normal = 14)',
         shown: [
-          fact(`${pName(a)} just came from Building C after refilling a mug at the hallway fountain 10 minutes ago.`, a, { tag: 'bldgC_fountain' }),
-          fact(`${pName(b)} just came from Building C, drank only sealed coffee from home.`, b, { tag: 'bldgC_safe' }),
+          fact(`${pName(a)} is breathing 6/min (SLOWER THAN half of 14); ${pName(b)} is breathing 24/min (FASTER THAN 14).`, [a, b], { tag: 'br', p1: a, v1: 6, p2: b, v2: 24 }),
+          fact(`${pName(c)} is breathing 7/min (HALF of 14); ${pName(d)} is breathing 5/min (SLOWER THAN ${pName(c)}).`, [c, d], { tag: 'br', p1: c, v1: 7, p2: d, v2: 5 }),
         ],
         alt: [
-          fact(`${pName(c)} just came from Building C after refilling a mug at the hallway fountain 10 minutes ago.`, c, { tag: 'bldgC_fountain' }),
-          fact(`${pName(b)} just came from Building C, drank only sealed coffee from home.`, b, { tag: 'bldgC_safe' }),
+          fact(`${pName(a)} is breathing 22/min (FASTER THAN 14); ${pName(b)} is breathing 6/min (LESS THAN half of 14).`, [a, b], { tag: 'br', p1: a, v1: 22, p2: b, v2: 6 }),
+          fact(`${pName(c)} is breathing 7/min (HALF of 14); ${pName(d)} is breathing 16/min (normal).`, [c, d], { tag: 'br', p1: c, v1: 7, p2: d, v2: 16 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'New Arrivals', wingIndex: 1, label: 'New Walk-Ins 2',
+        index: 3, time: '01:14', wing: 'Pupil Compare', wingIndex: 1, label: 'Relative Pupil Sizes A',
         shown: [
-          fact(`${pName(c)} came from Building A after drinking from Building A's hallway fountain.`, c, { tag: 'bldgA_fountain' }),
-          fact(`${pName(d)} just came from Building C after drinking two cups from the hallway fountain.`, d, { tag: 'bldgC_fountain' }),
+          fact(`${pName(a)}'s pupils are SMALLER THAN normal-control ${pName(e)}'s (pinpoint).`, [a, e], { tag: 'pup_sm', p: a }),
+          fact(`${pName(b)}'s pupils are WIDER THAN ${pName(e)}'s (stimulant pattern).`, [b, e], { tag: 'pup_wd', p: b }),
         ],
         alt: [
-          fact(`${pName(a)} came from Building A after drinking from Building A's hallway fountain.`, a, { tag: 'bldgA_fountain' }),
-          fact(`${pName(d)} just came from Building C after drinking two cups from the hallway fountain.`, d, { tag: 'bldgC_fountain' }),
+          fact(`${pName(a)}'s pupils are WIDER THAN normal-control ${pName(e)}'s.`, [a, e], { tag: 'pup_wd', p: a }),
+          fact(`${pName(b)}'s pupils are SMALLER THAN ${pName(e)}'s (pinpoint).`, [b, e], { tag: 'pup_sm', p: b }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'New Arrivals', wingIndex: 1, label: 'Other Arrivals',
+        index: 4, time: '01:18', wing: 'Pupil Compare', wingIndex: 1, label: 'Relative Pupil Sizes B',
         shown: [
-          fact(`${pName(e)} works in Building B and brought bottled juice from home.`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} is age 68 from Building A, came in for a flu shot only.`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(c)}'s pupils are SMALLER THAN ${pName(e)}'s — SAME pinpoint size as ${pName(a)}.`, [c, e, a], { tag: 'pup_sm', p: c }),
+          fact(`${pName(d)}'s pupils are WIDER THAN ${pName(e)}'s (head-injury compression, NOT opioid!).`, [d, e], { tag: 'pup_wd', p: d }),
+        ],
+        alt: [
+          fact(`${pName(c)}'s pupils are WIDER THAN ${pName(e)}'s.`, [c, e], { tag: 'pup_wd', p: c }),
+          fact(`${pName(d)}'s pupils are SMALLER THAN ${pName(e)}'s.`, [d, e], { tag: 'pup_sm', p: d }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Past Cases', wingIndex: 0, label: 'Preventive Hold',
+        index: 5, time: '01:21', wing: 'Pier Triage', wingIndex: 0, label: 'Apply the Pattern',
         shown: [
-          fact(`None of the new walk-ins feel dizzy YET — use the earlier pattern to predict who will crash in 20 minutes.`, [], { tag: 'rule' }),
-          fact(`Look closely at what BOTH crashed cases shared that NEITHER healthy case shared.`, [], { tag: 'rule' }),
+          fact(`${pName(f)} is breathing 16/min with pupils SAME AS ${pName(e)}'s (unexposed bystander).`, [f, e], { tag: 'normal' }),
+          fact(`Give limited Overdose Reversal Spray ONLY to new arrivals matching BOTH signs of the observed Pier pattern.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Mystery Building Outbreak',
-      dispatch: 'Four earlier cases reveal a hidden pattern — discover the general rule and hold the newly exposed arrivals BEFORE they collapse.',
-      order: 'Admit EVERY new arrival who matches the dangerous pattern seen in the earlier crashes.',
-      hint: 'Compare what crashed patients X & Y shared that healthy patients Z & W lacked (ignore age).',
-      bayDefaultLabel: 'Exposure Watch',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Harbor Pier Overdose Pattern',
+      dispatch: 'Infer the two-sign revival pattern from Cases #1–#3, then match it against the new arrivals\' relative rates and pupils.',
+      order: 'Give Overdose Spray ONLY to new arrivals matching BOTH signs of the Pier revival pattern.',
+      hint: 'Cases #1–#2 needed slow breathing (≤ half of 14) AND pupils smaller than control.',
+      bayDefaultLabel: 'Pier Intake',
       cards,
       evaluate(activeCards) {
-        const targets = uniqueSortedIds([...tagSet(activeCards, 'bldgC_fountain')]);
-        const rivals = [...tagSet(activeCards, 'bldgC_safe'), ...tagSet(activeCards, 'bldgA_fountain')];
+        const br = new Map();
+        for (const f of factsByTag(activeCards, 'br')) { br.set(f.p1, f.v1); br.set(f.p2, f.v2); }
+        const sm = new Set(factsByTag(activeCards, 'pup_sm').map((f) => f.p));
+        const targets = uniqueSortedIds([a, b, c, d].filter((id) => (br.get(id) ?? 99) <= 7 && sm.has(id)));
         return {
           targets,
-          proof: `The earlier cases establish one clear pattern: Building C + Hallway Fountain Water (regardless of age) causes collapse — putting ${formatList(targets)} at imminent risk.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} lacks either Building C or the hallway fountain exposure.`),
+          proof: `Cases #1–#2 establish the pattern (breathing ≤ 7/min + pinpoint pupils smaller than ${pName(e)}) — matched strictly by ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [d, b, c, a], (r) =>
+            (br.get(r) ?? 99) <= 7
+              ? `${pName(r)} breathes slowly too, but WIDER pupils break the observed opioid pattern (suspect head injury!).`
+              : `${pName(r)}'s breathing (${br.get(r)}/min) is too fast to fit the pattern.`
+          ),
         };
       },
     };
   },
 
   // #13 Syllogistic reasoning (Before · Atomic)
+  // Categorical subset inclusion across linked transfer cohorts (All X ⊂ Y; No Z ∈ Y; Member chains)
   'syllogistic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Flight Rules', wingIndex: 0, label: 'Cabin Pressure Law',
+        index: 0, time: '01:02', wing: 'Airlift Laws', wingIndex: 0, label: 'Category Inclusions',
         shown: [
-          fact(`Rule 1: Every patient on high-flow oxygen is cleared for cabin pressure.`, [], { tag: 'rule' }),
-          fact(`Rule 2: NO patient with an untreated chest air leak is cleared for cabin pressure.`, [], { tag: 'rule' }),
+          fact(`ALL Blast-Lung patients belong to the Immediate-Chopper category.`, [], { tag: 'rule' }),
+          fact(`NO Minor-Splint patient belongs to the Immediate-Chopper category.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Bay Roster', wingIndex: 1, label: 'North Trauma Bay',
+        index: 1, time: '01:06', wing: 'Cohort Links', wingIndex: 1, label: 'Sub-Group Chains A',
         shown: [
-          fact(`Every patient in the North Trauma Bay is currently on high-flow oxygen.`, [], { tag: 'rule' }),
-          fact(`${pName(a)} and ${pName(b)} are both in the North Trauma Bay.`, [a, b], { tag: 'o2' }),
+          fact(`EVERY survivor from Blast Zone A is a Blast-Lung patient; ${pName(a)} was pulled from Blast Zone A.`, [a], { tag: 'blast', p: a }),
+          fact(`${pName(b)} was in the SAME Blast Zone A room as ${pName(a)}.`, [b, a], { tag: 'same_as', p: b, ref: a }),
         ],
         alt: [
-          fact(`Every patient in the North Trauma Bay is currently on high-flow oxygen.`, [], { tag: 'rule' }),
-          fact(`${pName(b)} and ${pName(d)} are both in the North Trauma Bay.`, [b, d], { tag: 'o2' }),
+          fact(`EVERY survivor from Blast Zone A is a Blast-Lung patient; ${pName(c)} was pulled from Blast Zone A.`, [c], { tag: 'blast', p: c }),
+          fact(`${pName(b)} was in the SAME Blast Zone A room as ${pName(c)}.`, [b, c], { tag: 'same_as', p: b, ref: c }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Scan Desk', wingIndex: 0, label: 'Chest Air-Leak Check',
+        index: 2, time: '01:10', wing: 'Cohort Links', wingIndex: 1, label: 'Exclusion Checks',
         shown: [
-          fact(`${pName(b)} has an UNTREATED chest air leak (chest tube not placed yet).`, b, { tag: 'leak' }),
-          fact(`${pName(c)} had a chest air leak earlier, but it is ALREADY sealed with a working chest tube.`, c, { tag: 'sealed' }),
+          fact(`${pName(d)} is a Minor-Splint patient — therefore excluded from the Immediate-Chopper group.`, [d], { tag: 'minor', p: d }),
+          fact(`${pName(e)} shares the SAME injury category as ${pName(d)} (Minor-Splint).`, [e, d], { tag: 'same_as', p: e, ref: d }),
+        ],
+      }),
+      makeCard({
+        index: 3, time: '01:14', wing: 'Airway Board', wingIndex: 0, label: 'Second Requirement',
+        shown: [
+          fact(`Flight Rule: Chopper passengers MUST ALSO be cleared by Airway Control (NOT pending tube).`, [], { tag: 'rule' }),
+          fact(`${pName(a)} and ${pName(c)} are BOTH cleared by Airway Control; ${pName(b)} is STILL awaiting a tube.`, [a, c, b], { tag: 'cleared_air', ps: [a, c] }),
         ],
         alt: [
-          fact(`${pName(c)} has an UNTREATED chest air leak (chest tube not placed yet).`, c, { tag: 'leak' }),
-          fact(`${pName(b)} had a chest air leak earlier, but it is ALREADY sealed with a working chest tube.`, b, { tag: 'sealed' }),
+          fact(`Flight Rule: Chopper passengers MUST ALSO be cleared by Airway Control (NOT pending tube).`, [], { tag: 'rule' }),
+          fact(`${pName(b)} and ${pName(c)} are BOTH cleared by Airway Control; ${pName(a)} is STILL awaiting a tube.`, [b, c, a], { tag: 'cleared_air', ps: [b, c] }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Bay Roster', wingIndex: 1, label: 'South Bay Oxygen',
+        index: 4, time: '01:18', wing: 'Cohort Links', wingIndex: 1, label: 'Category Check C',
         shown: [
-          fact(`${pName(c)} is on high-flow oxygen in the South Bay.`, c, { tag: 'o2' }),
-          fact(`${pName(d)} is breathing regular room air only (NOT on high-flow oxygen).`, d, { tag: 'no_o2' }),
+          fact(`${pName(c)} is in the Blast-Lung category (factory explosion), SAME AS ${pName(a)}.`, [c, a], { tag: 'blast', p: c }),
+          fact(`${pName(f)} belongs to the Observers group (NO blast exposure; airway clear).`, [f], { tag: 'other', p: f }),
         ],
         alt: [
-          fact(`${pName(c)} is on high-flow oxygen in the South Bay.`, c, { tag: 'o2' }),
-          fact(`${pName(a)} is breathing regular room air only (NOT on high-flow oxygen).`, a, { tag: 'no_o2' }),
+          fact(`${pName(a)} is a Minor-Splint patient — NOT in the Blast-Lung category.`, [a], { tag: 'minor', p: a }),
+          fact(`${pName(f)} belongs to the Observers group (NO blast exposure; airway clear).`, [f], { tag: 'other', p: f }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Flight Rules', wingIndex: 0, label: 'Final Boarding Gate',
+        index: 5, time: '01:21', wing: 'Helipad', wingIndex: 0, label: 'Final Boarding Call',
         shown: [
-          fact(`To board the rescue chopper, a patient must be BOTH cleared for cabin pressure AND hold a Surgical Red-Tag.`, [], { tag: 'rule' }),
-          fact(`${pName(e)} is waiting for stitches only (Green tag).`, e, { tag: 'safe', calm: true }),
-        ],
-      }),
-      makeCard({
-        index: 5, time: '06:00', wing: 'Scan Desk', wingIndex: 0, label: 'Surgical Red-Tags',
-        shown: [
-          fact(`Surgical Red-Tag holders: ${pName(a)}, ${pName(b)}, ${pName(c)}, and ${pName(d)}.`, [a, b, c, d], { tag: 'redtag' }),
-          fact(`${pName(f)} is already cleared to go home.`, f, { tag: 'safe', calm: true }),
+          fact(`Board ONLY patients strictly proven in Immediate-Chopper (Blast-Lung) AND Airway-Cleared.`, [], { tag: 'act' }),
+          fact(`Exclude anyone awaiting a tube or linked to the Minor-Splint category.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Storm Airlift Clearance',
-      dispatch: 'A storm grounds the rescue chopper in 90 seconds — trace the categorical flight rules across all bays before loading.',
-      order: 'Clear EVERY patient who qualifies to board the rescue helicopter right now.',
-      hint: 'Chain bay location → oxygen status → cabin pressure clearance, then check untreated leaks and red-tags.',
-      bayDefaultLabel: 'Airlift Eval',
-      bayLabels: { [e]: 'Minor · Stitches', [f]: 'Cleared · Home' },
+      scenarioTitle: 'Rescue Helicopter Categories',
+      dispatch: 'Chain categorical subsets (Blast Zone A ⊂ Blast-Lung ⊂ Chopper) and intersect with Airway Clearance.',
+      order: 'Board EVERY patient proven to be in BOTH the Blast-Lung Chopper group AND Airway-Cleared.',
+      hint: 'Trace who links into Blast-Lung, eliminate Minor-Splint, then intersect with Airway-Cleared.',
+      bayDefaultLabel: 'Airlift Group',
       cards,
       evaluate(activeCards) {
-        const o2 = tagSet(activeCards, 'o2');
-        const noO2 = tagSet(activeCards, 'no_o2');
-        const leak = tagSet(activeCards, 'leak');
-        const red = new Set([a, b, c, d]);
-        const targets = uniqueSortedIds([...o2].filter((id) => !noO2.has(id) && !leak.has(id) && red.has(id)));
-        const rivals = [...red].filter((id) => !targets.includes(id));
+        const blast = new Set(factsByTag(activeCards, 'blast').map((f) => f.p));
+        const minor = new Set(factsByTag(activeCards, 'minor').map((f) => f.p));
+        for (const f of factsByTag(activeCards, 'same_as')) {
+          if (blast.has(f.ref) && !minor.has(f.p)) blast.add(f.p);
+          if (minor.has(f.ref)) minor.add(f.p);
+        }
+        const air = new Set();
+        for (const f of factsByTag(activeCards, 'cleared_air')) f.ps.forEach((p) => air.add(p));
+        const targets = uniqueSortedIds([...blast].filter((id) => air.has(id) && !minor.has(id)));
         return {
           targets,
-          proof: `Only ${formatList(targets)} hold a Surgical Red-Tag, sit on high-flow oxygen (clearing cabin pressure), and have no untreated air leak.`,
-          rival: buildRivalInfo(targets, rivals, (id) =>
-            leak.has(id)
-              ? `${pName(id)} has an untreated chest air leak, which strictly disqualifies cabin pressure.`
-              : `${pName(id)} is not on high-flow oxygen, so cabin pressure is not cleared.`
+          proof: `Categorical inclusion puts ${formatList([...blast])} in Blast-Lung; intersecting with Airway-Cleared boards ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [b, d, f, a, c], (r) =>
+            blast.has(r) ? `${pName(r)} is in Blast-Lung, but is NOT cleared by Airway Control yet.` : `${pName(r)} is outside the Blast-Lung Chopper category.`
           ),
         };
       },
@@ -1110,88 +1169,80 @@ export const SEMANTIC_F12 = {
   },
 
   // #14 Conditional reasoning (Inside · Atomic)
+  // Real If-Then AND Contrapositive chaining (If A → B; If B → C; NOT C → NOT A!)
   'conditional-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Stroke Desk', wingIndex: 0, label: 'Clot-Buster Gate',
+        index: 0, time: '01:02', wing: 'Heart Protocol', wingIndex: 0, label: 'If-Then Chain Rules',
         shown: [
-          fact(`IF stroke scan shows a blocked artery AND zero brain bleeding → GIVE clot-buster, UNLESS blood pressure > 180 OR surgery within 14 days.`, [], { tag: 'rule' }),
-          fact(`All four conditions must be checked — missing one exception causes a fatal bleed.`, [], { tag: 'rule' }),
+          fact(`IF a patient's potassium is HIGHER THAN ${pName(e)}'s (6.5) → they MUST get IV Calcium.`, [e], { tag: 'rule' }),
+          fact(`IF a patient gets IV Calcium → their ECG monitor MUST be switched to Continuous Alarm.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Head Scan', wingIndex: 1, label: 'Brain Scan Results',
+        index: 1, time: '01:06', wing: 'Lab Ranks', wingIndex: 1, label: 'Potassium Ordering',
         shown: [
-          fact(`${pName(a)}, ${pName(b)}, and ${pName(c)} all have a confirmed blocked brain artery with ZERO bleeding.`, [a, b, c], { tag: 'clean_clot' }),
-          fact(`${pName(d)}'s head scan shows an active brain BLEED (clot-buster strictly forbidden).`, d, { tag: 'bleed' }),
+          fact(`${pName(a)}'s potassium is HIGHER THAN ${pName(e)}'s (6.5) cutoff.`, [a, e], { tag: 'k_hi', p: a }),
+          fact(`${pName(b)}'s potassium is HIGHER THAN ${pName(a)}'s (even more severe!).`, [b, a], { tag: 'k_gt', hi: b, lo: a }),
         ],
         alt: [
-          fact(`${pName(a)}, ${pName(b)}, and ${pName(d)} all have a confirmed blocked brain artery with ZERO bleeding.`, [a, b, d], { tag: 'clean_clot' }),
-          fact(`${pName(c)}'s head scan shows an active brain BLEED (clot-buster strictly forbidden).`, c, { tag: 'bleed' }),
+          fact(`${pName(c)}'s potassium is HIGHER THAN ${pName(e)}'s (6.5) cutoff.`, [c, e], { tag: 'k_hi', p: c }),
+          fact(`${pName(a)}'s potassium is LOWER THAN ${pName(e)}'s (safe at 4.8).`, [a, e], { tag: 'k_lo', p: a }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Stroke Desk', wingIndex: 0, label: 'Blood Pressure Check',
+        index: 2, time: '01:10', wing: 'Alarm Log', wingIndex: 0, label: 'Contrapositive Check A',
         shown: [
-          fact(`${pName(a)}'s blood pressure is 154/88 (safe below 180).`, a, { tag: 'bp_ok' }),
-          fact(`${pName(b)}'s blood pressure is 206/114 (dangerously above 180 — triggers UNLESS block!).`, b, { tag: 'bp_high' }),
+          fact(`${pName(c)}'s ECG monitor is NOT on Continuous Alarm (meaning ${pName(c)} did NOT trigger Calcium!).`, [c], { tag: 'no_alarm', p: c }),
+          fact(`${pName(d)}'s potassium is LOWER THAN ${pName(c)}'s.`, [d, c], { tag: 'k_lt', lo: d, hi: c }),
         ],
         alt: [
-          fact(`${pName(b)}'s blood pressure is 154/88 (safe below 180).`, b, { tag: 'bp_ok' }),
-          fact(`${pName(a)}'s blood pressure is 206/114 (dangerously above 180 — triggers UNLESS block!).`, a, { tag: 'bp_high' }),
+          fact(`${pName(b)}'s ECG monitor is NOT on Continuous Alarm (proving ${pName(b)}'s lab was a safe 5.1!).`, [b], { tag: 'no_alarm', p: b }),
+          fact(`${pName(d)}'s potassium is HIGHER THAN ${pName(e)}'s (6.5) cutoff.`, [d, e], { tag: 'k_hi', p: d }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Head Scan', wingIndex: 1, label: 'Recent Surgery History',
+        index: 3, time: '01:14', wing: 'Lab Ranks', wingIndex: 1, label: 'Potassium Check B',
         shown: [
-          fact(`${pName(c)} had major knee surgery 5 days ago (within 14-day UNLESS block!).`, c, { tag: 'recent_surg' }),
-          fact(`${pName(a)} and ${pName(b)} have had ZERO surgeries in the past year.`, [a, b], { tag: 'no_surg' }),
-        ],
-        alt: [
-          fact(`${pName(d)} had major knee surgery 5 days ago (within 14-day UNLESS block!).`, d, { tag: 'recent_surg' }),
-          fact(`${pName(a)} and ${pName(b)} have had ZERO surgeries in the past year.`, [a, b], { tag: 'no_surg' }),
+          fact(`${pName(f)}'s potassium is LOWER THAN ${pName(e)}'s cutoff (normal 4.2).`, [f, e], { tag: 'k_lo', p: f }),
+          fact(`Remember the contrapositive: NOT on Continuous Alarm → did NOT cross > 6.5!`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Stroke Desk', wingIndex: 0, label: 'Extra Check',
+        index: 4, time: '01:18', wing: 'Pharmacy', wingIndex: 0, label: 'Calcium Readiness',
         shown: [
-          fact(`${pName(c)}'s blood pressure is 148/82; ${pName(d)}'s blood pressure is 150/84.`, [c, d], { tag: 'bp_note' }),
-          fact(`${pName(e)} had a harmless migraine with a completely normal artery scan.`, e, { tag: 'safe', calm: true }),
+          fact(`Chain both directions: forward (K > ${pName(e)} → Calcium) AND backward (NOT Alarm → safe).`, [e], { tag: 'note' }),
+          fact(`${pName(e)} sits right AT 6.5 (NOT strictly higher than 6.5).`, [e], { tag: 'k_lo', p: e }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Head Scan', wingIndex: 1, label: 'Routine Bay',
+        index: 5, time: '01:21', wing: 'Trauma Lead', wingIndex: 1, label: 'Immediate IV Calcium',
         shown: [
-          fact(`${pName(f)} is here for an ankle X-ray (zero stroke symptoms).`, f, { tag: 'safe', calm: true }),
-          fact(`Administer clot-buster ONLY if the IF holds AND neither UNLESS trap fires.`, [], { tag: 'rule' }),
+          fact(`Push IV Calcium immediately for EVERY patient strictly forced above ${pName(e)}'s 6.5 cutoff.`, [e], { tag: 'act' }),
+          fact(`Do NOT treat bays ruled safe by the contrapositive or sitting at/below 6.5.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Stroke Clot-Buster Gate',
-      dispatch: 'Four stroke patients are racing the clock — test the IF/UNLESS safety protocol carefully before pushing powerful clot-busters.',
-      order: 'Push the emergency clot-buster for EVERY patient who passes the full IF / UNLESS safety gate.',
-      hint: 'Check scan type, blood pressure ceiling (180), and 14-day surgery history together.',
-      bayDefaultLabel: 'Stroke Alert',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Potassium If-Then & Contrapositive',
+      dispatch: 'Chain forward If-Then rules AND reverse contrapositive alarm checks to isolate IV Calcium patients.',
+      order: `Give IV Calcium to EVERY patient strictly proven to have potassium HIGHER THAN ${pName(e)}'s (6.5).`,
+      hint: `Chain K > ${pName(e)} forward, and use "NOT on Continuous Alarm" to rule out safe bays.`,
+      bayDefaultLabel: 'Potassium Alert',
       cards,
       evaluate(activeCards) {
-        const clot = tagSet(activeCards, 'clean_clot');
-        const highBp = tagSet(activeCards, 'bp_high');
-        const surg = tagSet(activeCards, 'recent_surg');
-        const bleed = tagSet(activeCards, 'bleed');
-        const targets = uniqueSortedIds([...clot].filter((id) => !highBp.has(id) && !surg.has(id) && !bleed.has(id)));
-        const rivals = [...highBp, ...surg, ...bleed].filter((id) => !targets.includes(id));
+        const hi = new Set(factsByTag(activeCards, 'k_hi').map((f) => f.p));
+        const noAlarm = new Set(factsByTag(activeCards, 'no_alarm').map((f) => f.p));
+        for (const f of factsByTag(activeCards, 'k_gt')) {
+          if (hi.has(f.lo) && !noAlarm.has(f.hi)) hi.add(f.hi);
+        }
+        const targets = uniqueSortedIds([...hi].filter((id) => !noAlarm.has(id)));
         return {
           targets,
-          proof: `Only ${formatList(targets)} have a clean blocked artery with blood pressure under 180 and no surgery in the past 14 days.`,
-          rival: buildRivalInfo(targets, rivals, (id) =>
-            highBp.has(id)
-              ? `${pName(id)}'s BP is over 180, triggering the UNLESS safety block.`
-              : surg.has(id)
-                ? `${pName(id)} had surgery 5 days ago, triggering the 14-day UNLESS block.`
-                : `${pName(id)} has an active brain bleed, making clot-busters fatal.`
+          proof: `Forward chaining above ${pName(e)} (6.5) while ruling out non-alarm bays strictly forces IV Calcium for ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [e, c, d, b, a], (r) =>
+            r === e ? `${pName(e)} sits AT 6.5, not strictly higher than 6.5.` : `${pName(r)} is ruled safe via the contrapositive or sits below 6.5.`
           ),
         };
       },
@@ -1199,530 +1250,532 @@ export const SEMANTIC_F12 = {
   },
 
   // #15 Transitive reasoning (Before · Atomic)
+  // Pure 6-patient scrambled comparative ordering chain (A > B > C > D = E > F) — classic fluid-intelligence core!
   'transitive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Blood Bank', wingIndex: 0, label: 'Comparison 1',
+        index: 0, time: '01:02', wing: 'Bleed Watch', wingIndex: 0, label: 'Pair Compare 1',
         shown: [
-          fact(`Paramedics lost exact numbers in the storm — rank urgency strictly from relative comparisons.`, [], { tag: 'rule' }),
-          fact(`${pName(a)} lost MORE blood than ${pName(b)}.`, [a, b], { tag: 'gt', hi: a, lo: b }),
+          fact(`${pName(b)} is losing blood FASTER THAN ${pName(c)}.`, [b, c], { tag: 'gt', hi: b, lo: c }),
+          fact(`${pName(d)} is losing blood SLOWER THAN ${pName(c)}.`, [d, c], { tag: 'gt', hi: c, lo: d }),
         ],
         alt: [
-          fact(`Paramedics lost exact numbers in the storm — rank urgency strictly from relative comparisons.`, [], { tag: 'rule' }),
-          fact(`${pName(b)} lost MORE blood than ${pName(a)}.`, [b, a], { tag: 'gt', hi: b, lo: a }),
+          fact(`${pName(c)} is losing blood FASTER THAN ${pName(b)}.`, [c, b], { tag: 'gt', hi: c, lo: b }),
+          fact(`${pName(d)} is losing blood SLOWER THAN ${pName(b)}.`, [d, b], { tag: 'gt', hi: b, lo: d }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Field Radio', wingIndex: 1, label: 'Comparison 2',
+        index: 1, time: '01:06', wing: 'Bleed Watch', wingIndex: 0, label: 'Pair Compare 2',
         shown: [
-          fact(`${pName(b)} lost MORE blood than ${pName(c)}.`, [b, c], { tag: 'gt', hi: b, lo: c }),
-          fact(`${pName(c)} lost MORE blood than ${pName(d)}.`, [c, d], { tag: 'gt', hi: c, lo: d }),
+          fact(`${pName(a)} is losing blood FASTER THAN ${pName(b)}.`, [a, b], { tag: 'gt', hi: a, lo: b }),
+          fact(`${pName(e)} is losing blood at the SAME rate as ${pName(d)}.`, [e, d], { tag: 'eq', p1: e, p2: d }),
         ],
         alt: [
-          fact(`${pName(a)} lost MORE blood than ${pName(c)}.`, [a, c], { tag: 'gt', hi: a, lo: c }),
-          fact(`${pName(c)} lost MORE blood than ${pName(d)}.`, [c, d], { tag: 'gt', hi: c, lo: d }),
+          fact(`${pName(b)} is losing blood FASTER THAN ${pName(a)}.`, [b, a], { tag: 'gt', hi: b, lo: a }),
+          fact(`${pName(e)} is losing blood at the SAME rate as ${pName(d)}.`, [e, d], { tag: 'eq', p1: e, p2: d }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Blood Bank', wingIndex: 0, label: 'Comparison 3',
+        index: 2, time: '01:10', wing: 'Triage Desk', wingIndex: 1, label: 'Pair Compare 3',
         shown: [
-          fact(`${pName(d)} lost MORE blood than ${pName(e)}.`, [d, e], { tag: 'gt', hi: d, lo: e }),
-          fact(`${pName(f)} has ZERO bleeding (sprained finger only).`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(f)} is losing blood SLOWER THAN ${pName(e)}.`, [f, e], { tag: 'gt', hi: e, lo: f }),
+          fact(`${pName(c)} is losing blood FASTER THAN ${pName(e)}.`, [c, e], { tag: 'gt', hi: c, lo: e }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Field Radio', wingIndex: 1, label: 'Cross-Check Note',
+        index: 3, time: '01:14', wing: 'Triage Desk', wingIndex: 1, label: 'Cross-Link Check',
         shown: [
-          fact(`Ambulance #2 confirms ${pName(c)} is definitely more stable than ${pName(a)}.`, [c, a], { tag: 'confirm' }),
-          fact(`Ambulance #3 confirms ${pName(e)} only has a shallow forearm scrape.`, e, { tag: 'confirm' }),
+          fact(`${pName(a)} is losing blood FASTER THAN ${pName(c)}.`, [a, c], { tag: 'gt', hi: a, lo: c }),
+          fact(`${pName(f)} is the slowest bleeder on the ward right now.`, [f], { tag: 'slowest', p: f }),
+        ],
+        alt: [
+          fact(`${pName(c)} is losing blood FASTER THAN ${pName(a)}.`, [c, a], { tag: 'gt', hi: c, lo: a }),
+          fact(`${pName(f)} is the slowest bleeder on the ward right now.`, [f], { tag: 'slowest', p: f }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Blood Bank', wingIndex: 0, label: 'Blood Supply Limit',
+        index: 4, time: '01:18', wing: 'Blood Bank', wingIndex: 0, label: 'Two Rapid Infusers',
         shown: [
-          fact(`Only TWO emergency O-negative blood coolers remain on the trauma cart.`, [], { tag: 'rule' }),
-          fact(`Reconstruct the full 5-patient chain from heaviest loss to lightest loss.`, [], { tag: 'rule' }),
+          fact(`Only TWO rapid blood infusers remain on the floor right now.`, [], { tag: 'note' }),
+          fact(`Assemble the full 6-patient speed ranking from fastest (#1) to slowest (#6).`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Field Radio', wingIndex: 1, label: 'Allocation Order',
+        index: 5, time: '01:21', wing: 'Trauma Lead', wingIndex: 1, label: 'Top-Two Priority',
         shown: [
-          fact(`Give the two coolers to the #1 and #2 heaviest blood-loss patients in the chain.`, [], { tag: 'rule' }),
-          fact(`Lower-ranked patients can safely wait 15 minutes for the next blood bank delivery.`, [], { tag: 'rule' }),
+          fact(`Hook up the TWO fastest bleeders (#1 and #2 in the full chain) immediately.`, [], { tag: 'act' }),
+          fact(`Be careful: #3 beats #4, #5, and #6, yet still sits behind the top two!`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Storm Blood-Loss Chain',
-      dispatch: 'Exact volume monitors died in the blackout — piece together the relative comparisons to find the two worst bleeds.',
-      order: 'Give the two O-negative blood coolers to the TOP TWO heaviest blood-loss patients.',
-      hint: 'Link the "lost MORE blood than" statements end-to-end into a single 5-person ranking.',
-      bayDefaultLabel: 'Blood Loss Eval',
-      bayLabels: { [f]: 'Minor · Stable' },
+      scenarioTitle: 'Six-Bay Hemorrhage Ranking',
+      dispatch: 'Six scrambled bleed-rate comparisons link all six bays — build the complete ranking to pick #1 and #2.',
+      order: 'Hook up the TWO fastest-bleeding patients (#1 and #2 in the full order) to the rapid infusers.',
+      hint: 'Link every "FASTER THAN" and "SLOWER THAN" arrow into one full top-to-bottom chain.',
+      bayDefaultLabel: 'Bleed Speed',
       cards,
       evaluate(activeCards) {
-        const edges = factsByTag(activeCards, 'gt');
-        const nodes = [a, b, c, d, e];
-        const inDeg = Object.fromEntries(nodes.map((n) => [n, 0]));
-        const adj = Object.fromEntries(nodes.map((n) => [n, []]));
-        for (const ed of edges) {
-          adj[ed.hi].push(ed.lo);
-          inDeg[ed.lo]++;
+        const nodes = [a, b, c, d, e, f];
+        const edges = factsByTag(activeCards, 'gt').map((f) => [f.hi, f.lo]);
+        const { gt, inDeg } = rankGreaterGraph(nodes, edges);
+        // Check acyclicity: no node beats itself
+        for (const n of nodes) {
+          if (gt.get(n).has(n)) return { targets: [], proof: 'Cycle', rival: null };
         }
-        const order = [];
-        const q = nodes.filter((n) => inDeg[n] === 0);
-        while (q.length) {
-          const cur = q.shift();
-          order.push(cur);
-          for (const nxt of adj[cur]) {
-            inDeg[nxt]--;
-            if (inDeg[nxt] === 0) q.push(nxt);
-          }
+        // Rank by number of people strictly above them (inDeg), then beats count
+        const ordered = [...nodes].sort((x, y) => (inDeg.get(x) - inDeg.get(y)) || (gt.get(y).size - gt.get(x).size));
+        // Ensure top 2 are uniquely separated from #3
+        if (inDeg.get(ordered[0]) !== 0 || inDeg.get(ordered[1]) !== 1 || inDeg.get(ordered[2]) < 2) {
+          return { targets: [], proof: 'Ambiguous order', rival: null };
         }
-        const top2 = uniqueSortedIds(order.slice(0, 2));
-        const third = order[2];
+        const targets = uniqueSortedIds([ordered[0], ordered[1]]);
         return {
-          targets: top2,
-          proof: `Chaining the comparisons orders blood loss from worst to mildest: ${order.map(pName).join(' > ')} — placing ${formatList(top2)} at #1 and #2.`,
-          rival: buildRivalInfo(top2, [third], (id) => `${pName(id)} ranks #3 in the chain, behind both ${formatList(top2)}.`),
+          targets,
+          proof: `Full bleed-speed chain: ${ordered.map(pName).join(' > ')} — placing ${pName(ordered[0])} (#1) and ${pName(ordered[1])} (#2) on the two infusers.`,
+          rival: {
+            patientId: ordered[2],
+            patientName: pName(ordered[2]),
+            reason: `${pName(ordered[2])} ranks #3 (faster than ${pName(ordered[3])}), but strictly slower than both ${pName(ordered[0])} and ${pName(ordered[1])}.`,
+          },
         };
       },
     };
   },
 
   // #16 Disjunctive reasoning (Inside · Atomic)
+  // Coupled Either-Or domino elimination across 3 linked pairs (Eliminate 1 → forces 2nd → forces 3rd!)
   'disjunctive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Pharmacy Audit', wingIndex: 0, label: 'Missing Vial Pair 1',
+        index: 0, time: '01:02', wing: 'Pair 1', wingIndex: 0, label: 'Contaminated Blood Bag',
         shown: [
-          fact(`A mislabeled high-potassium vial was accidentally injected into EITHER ${pName(a)} OR ${pName(b)} (exactly one of them).`, [a, b], { tag: 'pair1', p1: a, p2: b }),
-          fact(`Both patients were in Room 4 when the nurse dropped the tray.`, [a, b], { tag: 'note' }),
-        ],
-      }),
-      makeCard({
-        index: 1, time: '02:00', wing: 'Pharmacy Audit', wingIndex: 0, label: 'Missing Vial Pair 2',
-        shown: [
-          fact(`A second mislabeled vial from the same tray went into EITHER ${pName(c)} OR ${pName(d)} (exactly one of them).`, [c, d], { tag: 'pair2', p1: c, p2: d }),
-          fact(`High potassium stops the heart silently unless reversed with calcium immediately.`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 2, time: '03:00', wing: 'Blood Lab', wingIndex: 1, label: 'STAT Potassium Check 1',
-        shown: [
-          fact(`${pName(b)}'s rapid blood test just came back completely NORMAL potassium (3.9).`, b, { tag: 'clear' }),
-          fact(`${pName(a)}'s blood sample hemolyzed in the tube — no direct lab number yet!`, a, { tag: 'pending' }),
+          fact(`EITHER ${pName(a)} OR ${pName(b)} received the mislabeled blood bag (exact one of the pair).`, [a, b], { tag: 'or1', p1: a, p2: b }),
+          fact(`Lab confirms ${pName(b)}'s blood type matches their bag 100% — NOT ${pName(b)}.`, [b], { tag: 'not', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}'s rapid blood test just came back completely NORMAL potassium (3.9).`, a, { tag: 'clear' }),
-          fact(`${pName(b)}'s blood sample hemolyzed in the tube — no direct lab number yet!`, b, { tag: 'pending' }),
+          fact(`EITHER ${pName(a)} OR ${pName(b)} received the mislabeled blood bag (exact one of the pair).`, [a, b], { tag: 'or1', p1: a, p2: b }),
+          fact(`Lab confirms ${pName(a)}'s blood type matches their bag 100% — NOT ${pName(a)}.`, [a], { tag: 'not', p: a }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Blood Lab', wingIndex: 1, label: 'STAT Potassium Check 2',
+        index: 1, time: '01:06', wing: 'Pair 2', wingIndex: 1, label: 'Linked Ventilator Leak',
         shown: [
-          fact(`${pName(c)}'s rapid blood test just came back completely NORMAL potassium (4.0).`, c, { tag: 'clear' }),
-          fact(`${pName(d)}'s blood test is still spinning in the centrifuge — 10 minutes away.`, d, { tag: 'pending' }),
+          fact(`EITHER ${pName(c)} OR ${pName(d)} is hooked to the leaking oxygen manifold.`, [c, d], { tag: 'or2', p1: c, p2: d }),
+          fact(`Pressure gauge proves ${pName(d)}'s wall port is sealed tight — NOT ${pName(d)}.`, [d], { tag: 'not', p: d }),
         ],
         alt: [
-          fact(`${pName(d)}'s rapid blood test just came back completely NORMAL potassium (4.0).`, d, { tag: 'clear' }),
-          fact(`${pName(c)}'s blood test is still spinning in the centrifuge — 10 minutes away.`, c, { tag: 'pending' }),
+          fact(`EITHER ${pName(c)} OR ${pName(d)} is hooked to the leaking oxygen manifold.`, [c, d], { tag: 'or2', p1: c, p2: d }),
+          fact(`Pressure gauge proves ${pName(c)}'s wall port is sealed tight — NOT ${pName(c)}.`, [c], { tag: 'not', p: c }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Pharmacy Audit', wingIndex: 0, label: 'Unrelated Bays',
+        index: 2, time: '01:10', wing: 'Domino Link', wingIndex: 0, label: 'Cross-Pair Tie',
         shown: [
-          fact(`${pName(e)} received oral water only — zero IV injections all night.`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} arrived after the mislabeled tray was already locked away.`, f, { tag: 'safe', calm: true }),
+          fact(`Whoever received the mislabeled bag ALSO shared a nurse cart with ${pName(e)} (clearing ${pName(f)}).`, [e, f], { tag: 'not', p: f }),
+          fact(`EITHER ${pName(e)} OR ${pName(f)} was missed during the 01:00 safety sweep — and ${pName(e)} was just cleared by check-in.`, [e, f], { tag: 'not', p: e }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Blood Lab', wingIndex: 1, label: 'Calcium Rescue Rule',
+        index: 3, time: '01:14', wing: 'Pair 1', wingIndex: 0, label: 'Safety Verification A',
         shown: [
-          fact(`Do NOT wait 10 minutes for pending tubes — if one half of an EITHER/OR pair is clean, the other MUST have received the vial.`, [], { tag: 'rule' }),
-          fact(`Push protective calcium to both deduced recipients now.`, [], { tag: 'rule' }),
+          fact(`Eliminating one half of an "EITHER X OR Y" pair strictly FORCES the other patient.`, [], { tag: 'note' }),
+          fact(`Both Pair 1 (mislabeled bag) and Pair 2 (leaking oxygen) require immediate bedside rescue.`, [], { tag: 'note' }),
+        ],
+      }),
+      makeCard({
+        index: 4, time: '01:18', wing: 'Pair 2', wingIndex: 1, label: 'Safety Verification B',
+        shown: [
+          fact(`${pName(e)} and ${pName(f)} both passed final bag & oxygen checks (neither needs rescue).`, [e, f], { tag: 'note' }),
+          fact(`Double-check which half of Pair 1 and Pair 2 survived elimination.`, [], { tag: 'note' }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:21', wing: 'Trauma Lead', wingIndex: 0, label: 'Rescue Both Forced Bays',
+        shown: [
+          fact(`Intervene immediately on the ONE forced patient from Pair 1 AND the ONE forced patient from Pair 2.`, [], { tag: 'act' }),
+          fact(`Never treat the eliminated partner in either pair.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Mislabeled Potassium Tray',
-      dispatch: 'Two deadly vials went into two pairs of patients — two tubes came back clean while the other two are still pending.',
-      order: 'Push protective heart-calcium NOW to the TWO patients who MUST have received the mislabeled vials.',
-      hint: 'Use each clean blood test to force the other half of its EITHER/OR pair.',
-      bayDefaultLabel: 'Vial Audit',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Two Coupled Either-Or Emergencies',
+      dispatch: 'Use direct eliminations inside two Either-Or crisis pairs to force the exact two bays needing rescue.',
+      order: 'Rescue the TWO patients forced by eliminating their partners in the Blood-Bag and Oxygen-Leak pairs.',
+      hint: 'In each "EITHER X OR Y" pair, cross off the cleared partner to lock the forced target.',
+      bayDefaultLabel: 'Pair Elimination',
       cards,
       evaluate(activeCards) {
-        const cleared = tagSet(activeCards, 'clear');
-        const p1 = factsByTag(activeCards, 'pair1')[0];
-        const p2 = factsByTag(activeCards, 'pair2')[0];
-        const targets = [];
-        if (p1) targets.push(cleared.has(p1.p1) ? p1.p2 : p1.p1);
-        if (p2) targets.push(cleared.has(p2.p1) ? p2.p2 : p2.p1);
-        const sorted = uniqueSortedIds(targets);
-        const rivals = [...cleared];
+        const notSet = new Set(factsByTag(activeCards, 'not').map((f) => f.p));
+        const res = [];
+        for (const tag of ['or1', 'or2']) {
+          for (const f of factsByTag(activeCards, tag)) {
+            if (notSet.has(f.p1) && !notSet.has(f.p2)) res.push(f.p2);
+            else if (notSet.has(f.p2) && !notSet.has(f.p1)) res.push(f.p1);
+          }
+        }
+        const targets = uniqueSortedIds(res);
         return {
-          targets: sorted,
-          proof: `Ruling out one member of each strict EITHER/OR pair forces ${formatList(sorted)} to be the two recipients of the mislabeled potassium vials.`,
-          rival: buildRivalInfo(sorted, rivals, (id) => `${pName(id)}'s blood test already proved normal potassium, forcing their partner as the recipient.`),
+          targets,
+          proof: `Eliminating the cleared partner in each Either-Or pair strictly forces rescue for ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [b, d, a, c], (r) => `${pName(r)} was explicitly cleared by blood-match or sealed-port verification.`),
         };
       },
     };
   },
 
   // #17 Contradiction-based reasoning (After · Atomic)
+  // Reductio ad absurdum: test each suspect as "Patient Zero"; reject every suspect that creates a timeline contradiction!
   'contradiction-based': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Chart Audit', wingIndex: 0, label: 'Wristband Mix-Up Alert',
+        index: 0, time: '01:02', wing: 'Outbreak Rule', wingIndex: 0, label: 'How Contagion Travels',
         shown: [
-          fact(`Hospital IT warns: ONE patient's electronic chart was merged with someone else's records!`, [], { tag: 'rule' }),
-          fact(`Spot the single chart containing a physical impossibility before surgeons operate on the wrong person.`, [], { tag: 'rule' }),
+          fact(`Patient Zero MUST have arrived BEFORE every other infected patient AND tested POSITIVE for the strain.`, [], { tag: 'rule' }),
+          fact(`Assume a bay is Patient Zero — if that forces an IMPOSSIBLE contradiction, reject that bay!`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'ER Intake', wingIndex: 1, label: '01:00 Admission Log',
+        index: 1, time: '01:06', wing: 'Arrival Order', wingIndex: 1, label: 'Clock Sequence A',
         shown: [
-          fact(`01:00: ${pName(a)} arrived completely unconscious on a ventilator and never left ICU Bed 2 until 02:30.`, a, { tag: 'icu_locked' }),
-          fact(`01:00: ${pName(b)} walked into triage alert with a broken collarbone; sent to X-ray at 01:20.`, b, { tag: 'ok_b' }),
+          fact(`${pName(a)} arrived at the ER strictly BEFORE ${pName(b)}.`, [a, b], { tag: 'before', first: a, second: b }),
+          fact(`${pName(b)} arrived strictly BEFORE ${pName(c)}.`, [b, c], { tag: 'before', first: b, second: c }),
         ],
         alt: [
-          fact(`01:00: ${pName(c)} arrived completely unconscious on a ventilator and never left ICU Bed 2 until 02:30.`, c, { tag: 'icu_locked' }),
-          fact(`01:00: ${pName(b)} walked into triage alert with a broken collarbone; sent to X-ray at 01:20.`, b, { tag: 'ok_b' }),
+          fact(`${pName(b)} arrived at the ER strictly BEFORE ${pName(a)}.`, [b, a], { tag: 'before', first: b, second: a }),
+          fact(`${pName(a)} arrived strictly BEFORE ${pName(c)}.`, [a, c], { tag: 'before', first: a, second: c }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Chart Audit', wingIndex: 0, label: '01:25 Pharmacy & Lab',
+        index: 2, time: '01:10', wing: 'Arrival Order', wingIndex: 1, label: 'Clock Sequence B',
         shown: [
-          fact(`01:25: ${pName(a)} personally walked up to the ground-floor pharmacy window and signed a receipt in person.`, a, { tag: 'walked_pharm' }),
-          fact(`01:25: ${pName(b)} returned from X-ray wearing a shoulder sling.`, b, { tag: 'ok_b' }),
+          fact(`${pName(d)} arrived strictly BEFORE ${pName(a)} — earliest arrival in the entire ward!`, [d, a], { tag: 'before', first: d, second: a }),
+          fact(`${pName(e)} and ${pName(f)} arrived AFTER ${pName(c)}.`, [e, f, c], { tag: 'late', ps: [e, f] }),
         ],
         alt: [
-          fact(`01:25: ${pName(c)} personally walked up to the ground-floor pharmacy window and signed a receipt in person.`, c, { tag: 'walked_pharm' }),
-          fact(`01:25: ${pName(b)} returned from X-ray wearing a shoulder sling.`, b, { tag: 'ok_b' }),
+          fact(`${pName(d)} arrived strictly BEFORE ${pName(b)} — earliest arrival in the entire ward!`, [d, b], { tag: 'before', first: d, second: b }),
+          fact(`${pName(e)} and ${pName(f)} arrived AFTER ${pName(c)}.`, [e, f, c], { tag: 'late', ps: [e, f] }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'ER Intake', wingIndex: 1, label: 'Other Timelines',
+        index: 3, time: '01:14', wing: 'PCR Swab', wingIndex: 0, label: 'Strain Test Results',
         shown: [
-          fact(`${pName(c)}: arrived 00:40 with stomach pain → ultrasound 01:05 → admitted to Surgery Ward at 01:40.`, c, { tag: 'ok_c' }),
-          fact(`${pName(d)}: arrived 00:55 with asthma → inhaler 01:00 → breathing clear at 01:30.`, d, { tag: 'ok_d' }),
-        ],
-        alt: [
-          fact(`${pName(a)}: arrived 00:40 with stomach pain → ultrasound 01:05 → admitted to Surgery Ward at 01:40.`, a, { tag: 'ok_a' }),
-          fact(`${pName(d)}: arrived 00:55 with asthma → inhaler 01:00 → breathing clear at 01:30.`, d, { tag: 'ok_d' }),
+          fact(`${pName(d)} tested 100% NEGATIVE for the outbreak strain (assuming ${pName(d)} = Zero contradicts PCR!).`, [d], { tag: 'neg', p: d }),
+          fact(`${pName(a)}, ${pName(b)}, and ${pName(c)} all tested POSITIVE for the exact same outbreak strain.`, [a, b, c], { tag: 'pos', ps: [a, b, c] }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Chart Audit', wingIndex: 0, label: 'Security Badge Check',
+        index: 4, time: '01:18', wing: 'PCR Swab', wingIndex: 0, label: 'Why Others Contradict',
         shown: [
-          fact(`ICU camera confirms Bed 2 was continuously occupied with zero patient transfers between 01:00 and 02:30.`, [], { tag: 'rule' }),
-          fact(`${pName(e)} arrived 01:10 with a sprained ankle and stayed in Waiting Chair 4 the whole time.`, e, { tag: 'safe', calm: true }),
+          fact(`Assuming ${pName(c)} is Patient Zero contradicts arrival order because someone POSITIVE arrived BEFORE ${pName(c)}.`, [c], { tag: 'note' }),
+          fact(`${pName(e)} and ${pName(f)} both arrived last AND tested NEGATIVE.`, [e, f], { tag: 'neg_pair', ps: [e, f] }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'ER Intake', wingIndex: 1, label: 'Hold Surgery Order',
+        index: 5, time: '01:21', wing: 'Infection Lead', wingIndex: 1, label: 'Only Consistent Origin',
         shown: [
-          fact(`${pName(f)} completed blood draw at 01:15 and is awaiting routine discharge.`, f, { tag: 'safe', calm: true }),
-          fact(`Freeze the single chart whose two timestamped entries directly contradict each other.`, [], { tag: 'rule' }),
+          fact(`Reject every bay whose assumption produces a PCR or arrival-order contradiction.`, [], { tag: 'act' }),
+          fact(`Quarantine the SINGLE bay that causes ZERO contradictions as Patient Zero!`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Impossible Merged Chart',
-      dispatch: 'An IT glitch merged two patients’ files — catch the physically impossible timeline before anyone gets the wrong operation.',
-      order: 'Freeze the SINGLE patient chart that contains an impossible contradiction.',
-      hint: 'Check which patient is logged in two mutually impossible states at the exact same time.',
-      bayDefaultLabel: 'Chart Audit',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Cleared · Home' },
+      scenarioTitle: 'Patient Zero by Contradiction',
+      dispatch: 'Test each suspect as Patient Zero — reject everyone who contradicts arrival order or positive PCR proof.',
+      order: 'Isolate the SINGLE patient who can be Patient Zero WITHOUT contradicting any clock or swab record.',
+      hint: 'Check who arrived earliest among the POSITIVE swabs — reject negative and later arrivals.',
+      bayDefaultLabel: 'Outbreak Trace',
       cards,
       evaluate(activeCards) {
-        const locked = tagSet(activeCards, 'icu_locked');
-        const walked = tagSet(activeCards, 'walked_pharm');
-        const targets = uniqueSortedIds([...locked].filter((id) => walked.has(id)));
-        const rivals = [a, b, c, d].filter((id) => !targets.includes(id));
+        const pos = new Set();
+        for (const f of factsByTag(activeCards, 'pos')) f.ps.forEach((p) => pos.add(p));
+        const neg = new Set(factsByTag(activeCards, 'neg').map((f) => f.p));
+        for (const f of factsByTag(activeCards, 'neg_pair')) f.ps.forEach((p) => neg.add(p));
+        const posList = [...pos].filter((p) => !neg.has(p));
+        const edges = factsByTag(activeCards, 'before')
+          .filter((f) => posList.includes(f.first) && posList.includes(f.second))
+          .map((f) => [f.first, f.second]);
+        const { inDeg } = rankGreaterGraph(posList, edges);
+        const targets = uniqueSortedIds(posList.filter((p) => inDeg.get(p) === 0));
         return {
           targets,
-          proof: `${formatList(targets)} cannot simultaneously be unconscious on an ICU ventilator (01:00–02:30) and walking up to the ground-floor pharmacy window at 01:25 — proving a chart mix-up.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)}'s timeline is completely consistent across every department.`),
-        };
-      },
-    };
-  },
-
-  // #18 Recursive reasoning (Before · Composite)
-  'recursive-reasoning': (rng) => {
-    const [a, b, c, d, e, f] = pickPlayers(rng, 6);
-    const cards = [
-      makeCard({
-        index: 0, time: '01:00', wing: 'Infection Ctrl', wingIndex: 0, label: 'Contagion Rule',
-        shown: [
-          fact(`A fast-spreading airborne bug jumps in waves: anyone sharing a closed room with an EXPOSED person becomes EXPOSED too.`, [], { tag: 'rule' }),
-          fact(`Wave 0 (Patient Zero): ${pName(a)} tested positive on arrival and is ALREADY isolated.`, a, { tag: 'wave0' }),
-        ],
-        alt: [
-          fact(`A fast-spreading airborne bug jumps in waves: anyone sharing a closed room with an EXPOSED person becomes EXPOSED too.`, [], { tag: 'rule' }),
-          fact(`Wave 0 (Patient Zero): ${pName(b)} tested positive on arrival and is ALREADY isolated.`, b, { tag: 'wave0' }),
-        ],
-      }),
-      makeCard({
-        index: 1, time: '02:00', wing: 'Room Logs', wingIndex: 1, label: 'Wave 1 Contacts (01:05)',
-        shown: [
-          fact(`At 01:05, ${pName(a)} shared the ambulance cab with ${pName(b)} (already wearing an isolation mask now).`, [a, b], { tag: 'hop', from: a, to: b }),
-          fact(`At 01:05, ${pName(f)} sat outdoors in the parking lot alone.`, f, { tag: 'safe', calm: true }),
-        ],
-        alt: [
-          fact(`At 01:05, ${pName(b)} shared the ambulance cab with ${pName(a)} (already wearing an isolation mask now).`, [b, a], { tag: 'hop', from: b, to: a }),
-          fact(`At 01:05, ${pName(f)} sat outdoors in the parking lot alone.`, f, { tag: 'safe', calm: true }),
-        ],
-      }),
-      makeCard({
-        index: 2, time: '03:00', wing: 'Room Logs', wingIndex: 1, label: 'Wave 2 Contacts (01:20)',
-        shown: [
-          fact(`At 01:20, ${pName(b)} sat in the small X-ray booth right next to ${pName(c)} (unmasked!).`, [b, c], { tag: 'hop', from: b, to: c }),
-          fact(`At 01:20, ${pName(d)} shared a closed CT waiting room with ${pName(e)} (neither met ${pName(a)} or ${pName(b)}).`, [d, e], { tag: 'isolated_pair' }),
-        ],
-        alt: [
-          fact(`At 01:20, ${pName(a)} sat in the small X-ray booth right next to ${pName(d)} (unmasked!).`, [a, d], { tag: 'hop', from: a, to: d }),
-          fact(`At 01:20, ${pName(c)} shared a closed CT waiting room with ${pName(e)} (neither met ${pName(a)} or ${pName(b)}).`, [c, e], { tag: 'isolated_pair' }),
-        ],
-      }),
-      makeCard({
-        index: 3, time: '04:00', wing: 'Infection Ctrl', wingIndex: 0, label: 'Wave 3 Contacts (01:40)',
-        shown: [
-          fact(`At 01:40, ${pName(c)} rode a cramped elevator with ${pName(d)} (unmasked!).`, [c, d], { tag: 'hop', from: c, to: d }),
-          fact(`Notice: ${pName(a)} and ${pName(b)} are ALREADY locked inside isolation — do NOT pick them.`, [a, b], { tag: 'already_iso' }),
-        ],
-        alt: [
-          fact(`At 01:40, ${pName(d)} rode a cramped elevator with ${pName(e)} (unmasked!).`, [d, e], { tag: 'hop', from: d, to: e }),
-          fact(`Notice: ${pName(a)} and ${pName(b)} are ALREADY locked inside isolation — do NOT pick them.`, [a, b], { tag: 'already_iso' }),
-        ],
-      }),
-      makeCard({
-        index: 4, time: '05:00', wing: 'Room Logs', wingIndex: 1, label: 'Who Still Roams Free?',
-        shown: [
-          fact(`Trace the chain hop-by-hop from Wave 0 → Wave 1 → Wave 2 → Wave 3.`, [], { tag: 'rule' }),
-          fact(`Anyone who only interacted with unexposed people stays safe.`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 5, time: '06:00', wing: 'Infection Ctrl', wingIndex: 0, label: 'Quarantine Order',
-        shown: [
-          fact(`Pull ONLY the newly exposed unmasked patients (Wave 2 & Wave 3) into isolation immediately!`, [], { tag: 'rule' }),
-          fact(`Skip Wave 0 and Wave 1 — they are already safely isolated.`, [], { tag: 'rule' }),
-        ],
-      }),
-    ];
-    return {
-      scenarioTitle: 'Airborne Contact Cascade',
-      dispatch: 'An airborne contagion jumped hop-by-hop through the ER before Patient Zero was isolated — trace every wave of contact.',
-      order: 'Quarantine EVERY newly exposed patient (Waves 2 and 3) who is NOT isolated yet.',
-      hint: 'Start from Wave 0 and apply the room-contact rule repeatedly until the chain ends, skipping already-isolated Waves 0–1.',
-      bayDefaultLabel: 'Contact Trace',
-      bayLabels: { [f]: 'Minor · Stable' },
-      cards,
-      evaluate(activeCards) {
-        const exposed = new Set(tagSet(activeCards, 'wave0'));
-        const hops = factsByTag(activeCards, 'hop');
-        const alreadyIso = new Set(factsByTag(activeCards, 'already_iso').flatMap((f) => f.patients));
-        let changed = true;
-        while (changed) {
-          changed = false;
-          for (const h of hops) {
-            if (exposed.has(h.from) && !exposed.has(h.to)) {
-              exposed.add(h.to);
-              changed = true;
-            }
-          }
-        }
-        const targets = uniqueSortedIds([...exposed].filter((id) => !alreadyIso.has(id)));
-        const rivals = [a, b, c, d, e].filter((id) => !targets.includes(id));
-        return {
-          targets,
-          proof: `Tracing contact waves recursively from Patient Zero reaches ${formatList(targets)} in Waves 2–3 who still need quarantine.`,
-          rival: buildRivalInfo(targets, rivals, (id) =>
-            alreadyIso.has(id)
-              ? `${pName(id)} is already isolated in Waves 0–1.`
-              : `${pName(id)} never crossed paths with anyone in the exposed chain.`
+          proof: `${pName(d)} contradicts PCR (negative); every later positive arrival contradicts arrival order — leaving ONLY ${formatList(targets)} contradiction-free.`,
+          rival: buildRivalInfo(targets, [d, b, c, a], (r) =>
+            neg.has(r) ? `${pName(r)} arrived earliest, but tested NEGATIVE — contradicting Patient Zero.` : `Another positive patient arrived strictly BEFORE ${pName(r)}, contradicting Patient Zero.`
           ),
         };
       },
     };
   },
 
-  // #19 Combinatorial reasoning (Before · Composite)
-  'combinatorial-reasoning': (rng) => {
+  // #18 Recursive reasoning (Inside · Composite)
+  // Stepwise escalation rule applied repeatedly across base score + active-bleed doubling + BP<90 doubling
+  'recursive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'OR Control', wingIndex: 0, label: 'Two-OR Budget',
+        index: 0, time: '01:02', wing: 'Escalation', wingIndex: 0, label: 'Two-Pass Doubling Rule',
         shown: [
-          fact(`We have TWO open operating rooms right now, ONE neurosurgeon, and ONLY 5 units of O-negative blood total.`, [], { tag: 'rule' }),
-          fact(`Pick the ONLY compatible PAIR of urgent patients who can both be operated on RIGHT NOW without running out of blood or surgeons.`, [], { tag: 'rule' }),
+          fact(`Pass 1: Start with Base Score → DOUBLE it (×2) if actively bleeding.`, [], { tag: 'rule' }),
+          fact(`Pass 2: Take Pass 1's output → DOUBLE it AGAIN (×2) if BP < 90!`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Surgical Specs', wingIndex: 1, label: 'Patient Needs 1',
+        index: 1, time: '01:06', wing: 'Base Scores', wingIndex: 1, label: 'Starting Acuity A & B',
         shown: [
-          fact(`${pName(a)}: Needs Neurosurgeon + 3 units O-negative blood.`, a, { tag: 'need', neuro: true, blood: 3 }),
-          fact(`${pName(b)}: Needs Neurosurgeon + 2 units O-negative blood.`, b, { tag: 'need', neuro: true, blood: 2 }),
+          fact(`${pName(a)}: Base 3 (LOWER THAN ${pName(b)}'s Base 5).`, [a, b], { tag: 'base', p1: a, v1: 3, p2: b, v2: 5 }),
+          fact(`${pName(c)}: Base 4 (HIGHER THAN ${pName(d)}'s Base 2).`, [c, d], { tag: 'base', p1: c, v1: 4, p2: d, v2: 2 }),
+        ],
+      }),
+      makeCard({
+        index: 2, time: '01:10', wing: 'Pass 1 · Bleed', wingIndex: 0, label: 'Active Bleed Status',
+        shown: [
+          fact(`${pName(a)} and ${pName(b)} are BOTH actively bleeding (Pass 1 doubles both).`, [a, b], { tag: 'bleed', ps: [a, b] }),
+          fact(`${pName(c)} has NO active bleeding; ${pName(d)} IS actively bleeding.`, [c, d], { tag: 'bleed', ps: [d] }),
         ],
         alt: [
-          fact(`${pName(a)}: Needs General Surgeon + 3 units O-negative blood.`, a, { tag: 'need', neuro: false, blood: 3 }),
-          fact(`${pName(b)}: Needs Neurosurgeon + 2 units O-negative blood.`, b, { tag: 'need', neuro: true, blood: 2 }),
+          fact(`${pName(a)} has NO active bleeding; ${pName(b)} IS actively bleeding.`, [a, b], { tag: 'bleed', ps: [b] }),
+          fact(`${pName(c)} and ${pName(d)} are BOTH actively bleeding.`, [c, d], { tag: 'bleed', ps: [c, d] }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Surgical Specs', wingIndex: 1, label: 'Patient Needs 2',
+        index: 3, time: '01:14', wing: 'Pass 2 · BP', wingIndex: 1, label: 'Blood Pressure < 90 Check',
         shown: [
-          fact(`${pName(c)}: Needs General Surgeon + 2 units O-negative blood.`, c, { tag: 'need', neuro: false, blood: 2 }),
-          fact(`${pName(d)}: Needs General Surgeon + 4 units O-negative blood.`, d, { tag: 'need', neuro: false, blood: 4 }),
+          fact(`${pName(a)}'s BP is 78/44 (< 90); ${pName(b)}'s BP is 116/72 (≥ 90, no 2nd double).`, [a, b], { tag: 'lowbp', ps: [a] }),
+          fact(`${pName(c)}'s BP is 84/50 (< 90); ${pName(d)}'s BP is 80/46 (< 90).`, [c, d], { tag: 'lowbp', ps: [c, d] }),
         ],
         alt: [
-          fact(`${pName(c)}: Needs Neurosurgeon + 4 units O-negative blood.`, c, { tag: 'need', neuro: true, blood: 4 }),
-          fact(`${pName(d)}: Needs General Surgeon + 4 units O-negative blood.`, d, { tag: 'need', neuro: false, blood: 4 }),
+          fact(`${pName(a)}'s BP is 118/74 (≥ 90); ${pName(b)}'s BP is 82/48 (< 90).`, [a, b], { tag: 'lowbp', ps: [b] }),
+          fact(`${pName(c)}'s BP is 84/50 (< 90); ${pName(d)}'s BP is 114/70 (≥ 90).`, [c, d], { tag: 'lowbp', ps: [c] }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'OR Control', wingIndex: 0, label: 'Staffing Rule',
+        index: 4, time: '01:18', wing: 'Ward Control', wingIndex: 0, label: 'Non-Escalating Bays',
         shown: [
-          fact(`General Surgeons are plentiful (2 available), so two General-Surgeon cases CAN run together if blood allows.`, [], { tag: 'rule' }),
-          fact(`Only ONE Neurosurgeon is on duty — two Neurosurgeon cases CANNOT run at the same time.`, [], { tag: 'rule' }),
+          fact(`${pName(e)} (Base 3) and ${pName(f)} (Base 4) have NO bleeding and BP > 115 (zero doublings).`, [e, f], { tag: 'flat' }),
+          fact(`Apply Pass 1 first, then feed Pass 1's result into Pass 2 for every bay!`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Surgical Specs', wingIndex: 1, label: 'Priority Tie-Breaker',
+        index: 5, time: '01:21', wing: 'Trauma Lead', wingIndex: 1, label: 'Highest Final Score',
         shown: [
-          fact(`Rule: If multiple valid pairs fit inside 5 blood units, pick the pair using the MOST blood (max surgical load = 5 units).`, [], { tag: 'rule' }),
-          fact(`${pName(e)} only needs stitches — no operating room required.`, e, { tag: 'safe', calm: true }),
-        ],
-      }),
-      makeCard({
-        index: 5, time: '06:00', wing: 'OR Control', wingIndex: 0, label: 'Lobby Status',
-        shown: [
-          fact(`${pName(f)} has a mild sprain and is cleared to wait in the lobby.`, f, { tag: 'safe', calm: true }),
-          fact(`Test all pairs among the 4 surgical candidates against BOTH the 1-neurosurgeon limit AND the 5-unit blood cap.`, [], { tag: 'rule' }),
+          fact(`Notice how a lower Base Score doubled TWICE can overtake a higher Base Score doubled ONCE!`, [], { tag: 'act' }),
+          fact(`Treat the SINGLE patient with the highest final score after BOTH passes.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Two-OR Pairing Puzzle',
-      dispatch: 'Two operating rooms are open, but you share ONE neurosurgeon and 5 blood units — test which exact pair fits without clashing.',
-      order: 'Send the ONE valid pair of patients who maximize surgical load (5 blood units) without clashing on the lone neurosurgeon.',
-      hint: 'Check every 2-patient combination for: at most 1 Neurosurgeon AND total blood ≤ 5 (preferring exact 5).',
-      bayDefaultLabel: 'OR Candidate',
-      bayLabels: { [e]: 'Minor · Stitches', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Two-Pass Escalation Multiplier',
+      dispatch: 'Feed Pass 1 (Bleed ×2) into Pass 2 (BP < 90 ×2) across four bays to see whose score overtakes #1.',
+      order: 'Treat the SINGLE patient with the HIGHEST final score after applying BOTH doubling passes.',
+      hint: 'Compute Base → (×2 if bleeding) → (×2 if BP < 90) for each of the four bays.',
+      bayDefaultLabel: 'Score Escalation',
       cards,
       evaluate(activeCards) {
-        const needs = factsByTag(activeCards, 'need');
-        const validPairs = [];
-        for (let i = 0; i < needs.length; i++) {
-          for (let j = i + 1; j < needs.length; j++) {
-            const x = needs[i];
-            const y = needs[j];
-            if (x.neuro && y.neuro) continue;
-            const totalBlood = x.blood + y.blood;
-            if (totalBlood <= 5) {
-              validPairs.push({ ids: [x.patients[0], y.patients[0]], totalBlood });
+        const base = new Map();
+        for (const f of factsByTag(activeCards, 'base')) { base.set(f.p1, f.v1); base.set(f.p2, f.v2); }
+        const bleed = new Set(factsByTag(activeCards, 'bleed').flatMap((f) => f.ps));
+        const lowbp = new Set(factsByTag(activeCards, 'lowbp').flatMap((f) => f.ps));
+        const ranked = [a, b, c, d].map((id) => {
+          let s = base.get(id) || 0;
+          if (bleed.has(id)) s *= 2;
+          if (lowbp.has(id)) s *= 2;
+          return { id, s };
+        }).sort((x, y) => y.s - x.s);
+        if (ranked[0].s === ranked[1].s) return { targets: [], proof: 'Tie', rival: null };
+        const targets = [ranked[0].id];
+        return {
+          targets,
+          proof: `Two-pass scores: ${ranked.map((r) => `${pName(r.id)} = ${r.s}`).join(' > ')} — ${pName(ranked[0].id)} takes #1.`,
+          rival: {
+            patientId: ranked[1].id,
+            patientName: pName(ranked[1].id),
+            reason: `${pName(ranked[1].id)} finishes at ${ranked[1].s} — overtaken by ${pName(ranked[0].id)}'s ${ranked[0].s}.`,
+          },
+        };
+      },
+    };
+  },
+
+  // #19 Combinatorial reasoning (Before · Composite)
+  // Resource-pairing puzzle: 1 OR + 1 Cath Lab + 1 O-Neg Pack — who is FORCED into EVERY valid 3-patient pairing?
+  'combinatorial-reasoning': (rng) => {
+    const [a, b, c, d, e, f] = pickPlayers(rng, 6);
+    const cards = [
+      makeCard({
+        index: 0, time: '01:02', wing: 'Resources', wingIndex: 0, label: 'Three Unique Slots',
+        shown: [
+          fact(`Tonight's ward has exactly 3 scarce slots: [1 Operating Room], [1 Cath Lab], [1 O-Neg Blood Pack].`, [], { tag: 'rule' }),
+          fact(`Every slot must go to a DIFFERENT qualified patient (3 patients served total).`, [], { tag: 'rule' }),
+        ],
+      }),
+      makeCard({
+        index: 1, time: '01:06', wing: 'Slot Eligibility', wingIndex: 1, label: 'Operating Room Candidates',
+        shown: [
+          fact(`ONLY ${pName(a)} is cleared to use the Operating Room right now.`, [a], { tag: 'or_ok', ps: [a] }),
+          fact(`${pName(b)} can ONLY use the Cath Lab (NOT OR, NOT O-Neg).`, [b], { tag: 'cath_ok', ps: [b] }),
+        ],
+        alt: [
+          fact(`ONLY ${pName(c)} is cleared to use the Operating Room right now.`, [c], { tag: 'or_ok', ps: [c] }),
+          fact(`${pName(b)} can ONLY use the Cath Lab (NOT OR, NOT O-Neg).`, [b], { tag: 'cath_ok', ps: [b] }),
+        ],
+      }),
+      makeCard({
+        index: 2, time: '01:10', wing: 'Slot Eligibility', wingIndex: 1, label: 'Blood Pack Candidates',
+        shown: [
+          fact(`${pName(c)}, ${pName(d)}, and ${pName(e)} can ALL use the lone O-Neg Blood Pack — and NOTHING else.`, [c, d, e], { tag: 'blood_ok', ps: [c, d, e] }),
+          fact(`${pName(f)} needs routine X-ray only (uses none of the 3 scarce slots).`, [f], { tag: 'none' }),
+        ],
+        alt: [
+          fact(`${pName(a)}, ${pName(d)}, and ${pName(e)} can ALL use the lone O-Neg Blood Pack — and NOTHING else.`, [a, d, e], { tag: 'blood_ok', ps: [a, d, e] }),
+          fact(`${pName(f)} needs routine X-ray only (uses none of the 3 scarce slots).`, [f], { tag: 'none' }),
+        ],
+      }),
+      makeCard({
+        index: 3, time: '01:14', wing: 'Slot Check', wingIndex: 0, label: 'Cath Lab Competition',
+        shown: [
+          fact(`Nobody else on the ward qualifies for the Cath Lab besides ${pName(b)}.`, [b], { tag: 'note' }),
+          fact(`For the Blood Pack, three bays can swap in for one another (3 different valid trios exist!).`, [], { tag: 'note' }),
+        ],
+        alt: [
+          fact(`${pName(d)} ALSO qualifies for the Cath Lab alongside ${pName(b)}.`, [d, b], { tag: 'cath_extra', p: d }),
+          fact(`Test EVERY possible valid 3-slot assignment to see who is unavoidable!`, [], { tag: 'note' }),
+        ],
+      }),
+      makeCard({
+        index: 4, time: '01:18', wing: 'Assignments', wingIndex: 0, label: 'Compare All Valid Schedules',
+        shown: [
+          fact(`A patient is MANDATORY if they appear in 100% of valid 3-slot schedules.`, [], { tag: 'note' }),
+          fact(`If two patients can substitute for each other in a slot, NEITHER is mandatory.`, [], { tag: 'note' }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:21', wing: 'Charge Nurse', wingIndex: 1, label: 'Lock Mandatory Bays First',
+        shown: [
+          fact(`Prep EVERY patient who appears in EVERY valid 3-slot assignment immediately.`, [], { tag: 'act' }),
+          fact(`Leave interchangeable Blood-Pack candidates for secondary triage.`, [], { tag: 'act' }),
+        ],
+      }),
+    ];
+    return {
+      scenarioTitle: 'Mandatory Resource Pairing',
+      dispatch: 'Map all valid assignments of [OR, Cath Lab, Blood Pack] to find who appears in EVERY valid schedule.',
+      order: 'Lock in EVERY patient who MUST appear in 100% of valid [OR + Cath Lab + Blood Pack] pairings.',
+      hint: 'Enumerate valid (OR, Cath, Blood) triples — anyone replaceable in their slot is NOT mandatory.',
+      bayDefaultLabel: 'Resource Slot',
+      cards,
+      evaluate(activeCards) {
+        const orList = uniqueSortedIds(factsByTag(activeCards, 'or_ok').flatMap((f) => f.ps));
+        const cathList = uniqueSortedIds([
+          ...factsByTag(activeCards, 'cath_ok').flatMap((f) => f.ps),
+          ...factsByTag(activeCards, 'cath_extra').map((f) => f.p),
+        ]);
+        const bloodList = uniqueSortedIds(factsByTag(activeCards, 'blood_ok').flatMap((f) => f.ps));
+        const validTriples = [];
+        for (const x of orList) {
+          for (const y of cathList) {
+            if (y === x) continue;
+            for (const z of bloodList) {
+              if (z === x || z === y) continue;
+              validTriples.push([x, y, z]);
             }
           }
         }
-        validPairs.sort((p, q) => q.totalBlood - p.totalBlood);
-        const best = validPairs[0];
-        const targets = best ? uniqueSortedIds(best.ids) : [];
-        const rivals = needs.map((n) => n.patients[0]).filter((id) => !targets.includes(id));
+        if (!validTriples.length) return { targets: [], proof: 'No schedule', rival: null };
+        const mandatory = [a, b, c, d, e, f].filter((id) => validTriples.every((tr) => tr.includes(id)));
+        const targets = uniqueSortedIds(mandatory);
         return {
           targets,
-          proof: `${formatList(targets)} is the optimal compatible pair: uses all ${best?.totalBlood ?? 0}/5 blood units with at most one Neurosurgeon.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `Pairing ${pName(id)} either exceeds 5 blood units, double-books the sole neurosurgeon, or leaves blood unused.`),
+          proof: `Across all ${validTriples.length} valid (OR, Cath, Blood) schedules, ONLY ${formatList(targets)} appear in every single one.`,
+          rival: buildRivalInfo(targets, [d, e, c, b, a], (r) => `${pName(r)} can be swapped out for another candidate in at least one valid schedule.`),
         };
       },
     };
   },
 
   // #20 Constraint-based reasoning (Before · Composite)
+  // Simultaneous relational restrictions on a single medevac helicopter flight
   'constraint-based': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'ICU Desk', wingIndex: 0, label: 'Isolation Suite Rules',
+        index: 0, time: '01:02', wing: 'Flight Rules', wingIndex: 0, label: 'Three Hard Flight Limits',
         shown: [
-          fact(`ICU Suite 1 has FOUR strict specs: (1) Negative-pressure airflow, (2) Adult bed only (age 18+), (3) NO dialysis hookup, (4) Under 250 lbs bed limit.`, [], { tag: 'rule' }),
-          fact(`The patient assigned to Suite 1 MUST need negative-pressure isolation AND break ZERO specs.`, [], { tag: 'rule' }),
+          fact(`Medevac limit: (1) Weight < 90 kg, (2) BP ≥ 90 for altitude, AND (3) Breathing tube ALREADY secured.`, [], { tag: 'rule' }),
+          fact(`Breaking ANY single limit disqualifies that patient from takeoff.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Patient Specs', wingIndex: 1, label: 'Airflow & Age Check',
+        index: 1, time: '01:06', wing: 'Weight & BP', wingIndex: 1, label: 'Relative Weight Links',
         shown: [
-          fact(`${pName(a)}: Needs negative-pressure airflow · Age 34 · Weight 170 lbs.`, a, { tag: 'c_ok', air: true, adult: true, wtOk: true }),
-          fact(`${pName(b)}: Needs negative-pressure airflow · Age 11 (child!) · Weight 85 lbs.`, b, { tag: 'c_ok', air: true, adult: false, wtOk: true }),
+          fact(`${pName(a)} (74 kg) is LIGHTER THAN ${pName(e)} (88 kg), who is LIGHTER THAN ${pName(b)} (104 kg).`, [a, e, b], { tag: 'wt', ok: [a, e], bad: [b] }),
+          fact(`${pName(c)} (78 kg) and ${pName(d)} (82 kg) are BOTH lighter than ${pName(e)} (< 90 kg).`, [c, d, e], { tag: 'wt', ok: [c, d], bad: [] }),
         ],
         alt: [
-          fact(`${pName(c)}: Needs negative-pressure airflow · Age 34 · Weight 170 lbs.`, c, { tag: 'c_ok', air: true, adult: true, wtOk: true }),
-          fact(`${pName(b)}: Needs negative-pressure airflow · Age 11 (child!) · Weight 85 lbs.`, b, { tag: 'c_ok', air: true, adult: false, wtOk: true }),
+          fact(`${pName(b)} (76 kg) is LIGHTER THAN ${pName(e)} (88 kg), who is LIGHTER THAN ${pName(a)} (102 kg).`, [b, e, a], { tag: 'wt', ok: [b, e], bad: [a] }),
+          fact(`${pName(c)} (78 kg) and ${pName(d)} (82 kg) are BOTH lighter than ${pName(e)} (< 90 kg).`, [c, d, e], { tag: 'wt', ok: [c, d], bad: [] }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Patient Specs', wingIndex: 1, label: 'Weight & Airflow Check',
+        index: 2, time: '01:10', wing: 'Weight & BP', wingIndex: 1, label: 'Altitude BP Checks',
         shown: [
-          fact(`${pName(c)}: Needs negative-pressure airflow · Age 48 · Weight 290 lbs (exceeds 250 lb bed!).`, c, { tag: 'c_ok', air: true, adult: true, wtOk: false }),
-          fact(`${pName(d)}: Needs negative-pressure airflow · Age 52 · Weight 185 lbs.`, d, { tag: 'c_ok', air: true, adult: true, wtOk: true }),
+          fact(`${pName(a)} (BP 98) and ${pName(b)} (BP 104) are BOTH ≥ 90; ${pName(c)} (BP 76) is LOWER THAN 90.`, [a, b, c], { tag: 'bp', ok: [a, b], bad: [c] }),
+          fact(`${pName(d)} (BP 108) and ${pName(e)} (BP 94) are BOTH ≥ 90.`, [d, e], { tag: 'bp', ok: [d, e], bad: [] }),
         ],
         alt: [
-          fact(`${pName(a)}: Needs negative-pressure airflow · Age 48 · Weight 290 lbs (exceeds 250 lb bed!).`, a, { tag: 'c_ok', air: true, adult: true, wtOk: false }),
-          fact(`${pName(d)}: Needs negative-pressure airflow · Age 52 · Weight 185 lbs.`, d, { tag: 'c_ok', air: true, adult: true, wtOk: true }),
+          fact(`${pName(a)} (BP 98) and ${pName(b)} (BP 104) are BOTH ≥ 90; ${pName(d)} (BP 74) is LOWER THAN 90.`, [a, b, d], { tag: 'bp', ok: [a, b], bad: [d] }),
+          fact(`${pName(c)} (BP 96) and ${pName(e)} (BP 94) are BOTH ≥ 90.`, [c, e], { tag: 'bp', ok: [c, e], bad: [] }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'ICU Desk', wingIndex: 0, label: 'Dialysis Requirement',
+        index: 3, time: '01:14', wing: 'Airway Lock', wingIndex: 0, label: 'Breathing Tube Check',
         shown: [
-          fact(`${pName(d)} requires continuous emergency kidney dialysis hookup right now!`, d, { tag: 'needs_dialysis' }),
-          fact(`${pName(a)} and ${pName(c)} have healthy kidneys — ZERO dialysis needed.`, [a, c], { tag: 'no_dialysis' }),
+          fact(`${pName(a)}, ${pName(b)}, and ${pName(c)} all have secured breathing tubes.`, [a, b, c], { tag: 'tube', ok: [a, b, c] }),
+          fact(`${pName(d)} and ${pName(e)} do NOT have breathing tubes secured yet.`, [d, e], { tag: 'tube_no', bad: [d, e] }),
         ],
         alt: [
-          fact(`${pName(d)} requires continuous emergency kidney dialysis hookup right now!`, d, { tag: 'needs_dialysis' }),
-          fact(`${pName(a)} and ${pName(c)} have healthy kidneys — ZERO dialysis needed.`, [a, c], { tag: 'no_dialysis' }),
+          fact(`${pName(b)}, ${pName(c)}, and ${pName(e)} all have secured breathing tubes.`, [b, c, e], { tag: 'tube', ok: [b, c, e] }),
+          fact(`${pName(a)} and ${pName(d)} do NOT have breathing tubes secured yet.`, [a, d], { tag: 'tube_no', bad: [a, d] }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Patient Specs', wingIndex: 1, label: 'Non-Airborne Bay',
+        index: 4, time: '01:18', wing: 'Flight Rules', wingIndex: 0, label: 'Final Bay Check',
         shown: [
-          fact(`${pName(e)}: Age 29 · Weight 160 lbs · No dialysis — broken leg only (does NOT need negative-pressure isolation).`, e, { tag: 'safe', calm: true }),
-          fact(`Never waste a negative-pressure room on a non-airborne injury.`, [], { tag: 'rule' }),
+          fact(`${pName(f)} is 96 kg (> 90 kg) with BP 82 (< 90) — fails two limits.`, [f], { tag: 'note' }),
+          fact(`Every candidate passes at least TWO limits — only simultaneous check of ALL THREE finds who clears!`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'ICU Desk', wingIndex: 0, label: 'Final Placement',
+        index: 5, time: '01:21', wing: 'Helipad', wingIndex: 1, label: 'Clear for Takeoff',
         shown: [
-          fact(`${pName(f)} is waiting for discharge papers.`, f, { tag: 'safe', calm: true }),
-          fact(`Only ONE patient satisfies all 4 physical constraints of Suite 1 simultaneously.`, [], { tag: 'rule' }),
+          fact(`Board EVERY patient satisfying ALL THREE restrictions (< 90 kg AND BP ≥ 90 AND tube secured).`, [], { tag: 'act' }),
+          fact(`Hold any bay failing even one flight restriction.`, [], { tag: 'act' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'ICU Isolation Suite Fit',
-      dispatch: 'Four airborne-isolation patients need a bed, but ICU Suite 1 has strict age, weight, and equipment restrictions.',
-      order: 'Assign the SINGLE patient who satisfies ALL FOUR physical constraints of ICU Suite 1.',
-      hint: 'Check airborne need + adult (18+) + under 250 lbs + zero dialysis across all candidates.',
-      bayDefaultLabel: 'ICU Bed Eval',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Cleared · Home' },
+      scenarioTitle: 'Three-Constraint Medevac Clearance',
+      dispatch: 'Every candidate passes two rules and trips on a different third — check all three flight limits simultaneously.',
+      order: 'Clear for takeoff EVERY patient meeting ALL 3 limits (Weight < 90 kg, BP ≥ 90, AND Tube Secured).',
+      hint: 'Intersect Weight < 90, BP ≥ 90, and Secured Tube across all five active bays.',
+      bayDefaultLabel: 'Flight Eval',
       cards,
       evaluate(activeCards) {
-        const dial = tagSet(activeCards, 'needs_dialysis');
-        const cands = factsByTag(activeCards, 'c_ok');
-        const targets = uniqueSortedIds(
-          cands
-            .filter((x) => x.air && x.adult && x.wtOk && !dial.has(x.patients[0]))
-            .map((x) => x.patients[0])
-        );
-        const rivals = cands.map((x) => x.patients[0]).filter((id) => !targets.includes(id));
+        const wtOk = new Set(factsByTag(activeCards, 'wt').flatMap((f) => f.ok));
+        const bpOk = new Set(factsByTag(activeCards, 'bp').flatMap((f) => f.ok));
+        const tubeOk = new Set(factsByTag(activeCards, 'tube').flatMap((f) => f.ok));
+        const targets = uniqueSortedIds([a, b, c, d, e].filter((id) => wtOk.has(id) && bpOk.has(id) && tubeOk.has(id)));
         return {
           targets,
-          proof: `Only ${formatList(targets)} simultaneously meet all 4 Suite 1 constraints: needs negative-pressure airflow, adult 18+, under 250 lbs, and no dialysis hookup.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} violates one of Suite 1's hard limits (under 18, over 250 lbs, or requires dialysis).`),
+          proof: `Intersecting Weight < 90, BP ≥ 90, and Secured Tube simultaneously clears ONLY ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [b, c, d, e, a], (r) => {
+            if (!wtOk.has(r)) return `${pName(r)} exceeds the 90 kg flight weight cap.`;
+            if (!bpOk.has(r)) return `${pName(r)}'s BP is below the 90 altitude safety floor.`;
+            return `${pName(r)} does not have a secured breathing tube yet.`;
+          }),
         };
       },
     };

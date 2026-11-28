@@ -426,14 +426,7 @@ function renderCurrentDossier() {
     holdDebrief: state.holdDebrief,
     highlightedPatientId: state.highlightedPatientId,
     ruledOutIds: state.ruledOutIds,
-    chartSortMode: state.chartSortMode,
     hypothesisFlips: state.hypothesisFlips,
-    onChangeSortMode: (mode) => {
-      if (state.chartSortMode === mode) return;
-      state.chartSortMode = mode;
-      audio.playMark(false);
-      renderCurrentDossier();
-    },
     onToggleHypothesisFlip: (idx) => {
       if (state.debrief) return;
       if (state.hypothesisFlips.has(idx)) {

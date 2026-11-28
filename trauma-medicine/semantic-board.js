@@ -246,16 +246,17 @@ export function synthesizeSemanticLogic(rng, rawCards, evaluateFn, disputedCount
     index: i,
     disputed: false,
   }));
+  const fullMask = (1 << cards.length) - 1;
 
   // Tiers 1–3: confirmed charts
   if (disputedCount <= 0) {
-    const res = evaluateFn(resolveBoard(cards, 0b111111));
+    const res = evaluateFn(resolveBoard(cards, fullMask));
     if (!res || !res.targets || res.targets.length < 1 || res.targets.length > 3) {
       return null;
     }
     return {
       records: cards,
-      trueWorldMask: 0b111111,
+      trueWorldMask: fullMask,
       crossChecks: [],
       trueTargets: uniqueSortedIds(res.targets),
       evaluation: res,
@@ -283,7 +284,7 @@ export function synthesizeSemanticLogic(rng, rawCards, evaluateFn, disputedCount
   const totalWorlds = 1 << disputedIndices.length;
   const candidateMasks = [];
   for (let w = 0; w < totalWorlds; w++) {
-    let mask = 0b111111;
+    let mask = fullMask;
     for (let bit = 0; bit < disputedIndices.length; bit++) {
       const idx = disputedIndices[bit];
       if (!((w >> bit) & 1)) {

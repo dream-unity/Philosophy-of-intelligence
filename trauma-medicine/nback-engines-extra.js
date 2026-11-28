@@ -12,15 +12,15 @@ export const NBACK_ENGINES_PART2 = {
   'systems-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Vicious spiral alert: spot the patient trapped in a runaway bleeding loop (Body gets cold → blood stops clotting → bleeds even faster → gets even colder).`,
+      directive: `Runaway feedback loop alert: spot the patient whose crisis FEEDS ITSELF (Cold → Clots Fail → Bleeds FASTER → Gets Colder) rather than self-stabilizing.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Body temp 33.4°C, blood won't clot, cold IV fluids making bleeding even worse.`,
-        `${D1}: Normal temp 36.8°C, hand cut controlled with clean gauze.`,
-        `${D2}: Mild fever 37.9°C, twisted ankle, normal blood clotting.`,
+        `${W}: Temp 33.4°C → clots dissolve → bleeding speeds up → cold IV fluids drop temp LOWER.`,
+        `${D1}: Temp 36.8°C → pressure bandage → bleeding slows → clot seals the forearm vessel.`,
+        `${D2}: Temp 38.4°C → cooling blanket + fluids → pulse drops from 118 → 92 (self-correcting).`,
       ]),
       verdict: winIdx,
-      proof: `${W} is trapped in a self-worsening cold-bleeding spiral that will crash rapidly unless interrupted.`,
-      rival: `${D1}'s cut is warm and controlled, with no runaway spiral.`,
+      proof: `${W} is caught in a positive runaway loop (cold worsens bleeding which worsens cold), while ${D1} and ${D2} are in stabilizing negative loops.`,
+      rival: `${D2} has a fever, but treatment is actively shrinking the gap back toward normal.`,
       isClash: false,
     };
   },
@@ -46,15 +46,15 @@ export const NBACK_ENGINES_PART2 = {
   'game-theoretic-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Two-team coordination: Trauma Team B always grabs the loudest bay (${D1}) first. Who is your optimal pick so NO critical patient goes uncovered?`,
+      directive: `Two-team coordination: Trauma Team B always moves to the LOUDEST bay (${D1}) first. Who must YOUR team claim so zero crashing patients go uncovered?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Quietly decompensating (BP 76/46); Team B is NOT heading to this bay.`,
-        `${D1}: Loudly calling out (BP 84/50); Team B is already scrubbing into this bay.`,
-        `${D2}: Stable wrist sprain (BP 122/78), safe to wait.`,
+        `${W}: Quiet internal bleed (BP 76/46, crashing in 4 min); Team B is NOT assigned here.`,
+        `${D1}: Shouting chest trauma (BP 84/50, crashing in 5 min); Team B is already scrubbing into this bay.`,
+        `${D2}: Controlled rib fracture (BP 118/74, safe for 30+ min on pain meds).`,
       ]),
       verdict: winIdx,
-      proof: `Accounting for Team B's rational move onto ${D1}, covering ${W} saves BOTH critical patients instead of doubling up.`,
-      rival: `Jumping onto ${D1} duplicates Team B while leaving ${W} unattended.`,
+      proof: `Anticipating Team B's move onto ${D1}, covering ${W} rescues BOTH crashing bays instead of doubling up on ${D1}.`,
+      rival: `Rushing to ${D1} duplicates Team B while leaving silent ${W} uncovered.`,
       isClash: false,
     };
   },
@@ -63,15 +63,15 @@ export const NBACK_ENGINES_PART2 = {
   'adversarial-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Worst-case earthquake aftershock test: suppose the ambulance bridge collapses right now (cutting off external blood supply). Who must be secured FIRST under worst-case isolation?`,
+      directive: `Worst-case bridge collapse: suppose the river bridge drops right now, BLOCKING all external blood deliveries. Who depends on our LAST on-site O-Neg pack to survive?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Needs our last on-site O-Neg pack right now or arrests in 4 min—zero backup if bridge drops.`,
-        `${D1}: Stable on saline alone for 2 hours—unaffected by blood cutoff.`,
-        `${D2}: Minor scalp stitch—needs zero blood products.`,
+        `${W}: Active arterial bleed — needs our last on-site O-Neg pack NOW (arrests in 4 min if external blood is cut off).`,
+        `${D1}: Dehydration shock — stabilizes cleanly on plentiful on-site IV saline (zero blood needed).`,
+        `${D2}: Deep lung infection — needs plentiful on-site IV antibiotics + oxygen (zero blood needed).`,
       ]),
       verdict: winIdx,
-      proof: `Under worst-case isolation, ${W} faces catastrophic mortality if external resupply is cut off.`,
-      rival: `${D1} remains stable on crystalloid even under worst-case cutoff.`,
+      proof: `Under worst-case blood cutoff, only ${W} has zero on-site substitute for the last O-Neg pack.`,
+      rival: `${D1} and ${D2} are seriously ill, but their treatments (saline and antibiotics) remain abundant on site.`,
       isClash: false,
     };
   },
@@ -252,15 +252,15 @@ export const NBACK_ENGINES_PART2 = {
   'dialectical-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Two attendings clash: "Rush to OR now!" vs "Never operate before stabilizing BP!" Which patient's condition reconciles BOTH truths via permissive hypotension + fast damage-control OR?`,
+      directive: `Two attendings clash: "Rush straight to OR!" vs "Never raise BP too high before clamping!" Which patient reconciles BOTH via controlled BP 85 + fast damage-control OR?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Active splenic rupture—holding BP at 85 while rolling straight to damage-control OR saves them.`,
-        `${D1}: Minor knee laceration—needs zero surgery, only bedside stitches.`,
-        `${D2}: Uncomplicated dehydration—needs fluids only, zero surgery.`,
+        `${W}: Active torn spleen — high fluids blow off clots, waiting kills them; holding BP at 85 straight into fast OR fixes BOTH.`,
+        `${D1}: Head bleed needing HIGHER BP (≥ 110) to feed the brain — holding BP at 85 would starve the brain.`,
+        `${D2}: Dehydration with zero internal bleeding — full IV fluids restore BP cleanly with zero surgery needed.`,
       ]),
       verdict: winIdx,
-      proof: `${W}'s active splenic bleed synthesizes both viewpoints: brief controlled resuscitation directly into damage-control surgery.`,
-      rival: `${D1} and ${D2} do not require surgical synthesis at all.`,
+      proof: `${W}'s active torso bleed unites both principles: controlled low-target resuscitation straight into damage-control surgery.`,
+      rival: `${D1}'s head bleed requires HIGHER BP (≥ 110), while ${D2} needs fluids alone without surgery.`,
       isClash: false,
     };
   },
@@ -271,7 +271,7 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Core body rule: Oxygen Delivery = Heart Pump × Red Blood Cells × Lung Oxygen %. Whose oxygen delivery just crashed by HALF despite 99% lung oxygen?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Lung oxygen 99%, steady heart, but red blood cells crashed from 14 → 6 (lost over half of oxygen carriers).`,
+        `${W}: Lung oxygen 99%, steady heart pump, red blood cells dropped from 14 → 6.`,
         `${D1}: Lung oxygen 95%, red blood cells 13.5, normal heart pump.`,
         `${D2}: Lung oxygen 96%, red blood cells 14.0, normal heart pump.`,
       ]),
@@ -303,15 +303,15 @@ export const NBACK_ENGINES_PART2 = {
   'generative-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Mystery case: normal trauma scans are clean, yet ONE patient has BOTH a hot swollen calf AND sudden shortness of breath (classic lung blood clot). Who?`,
+      directive: `Hidden-cause check: standard trauma X-rays are clean, yet ONE patient pairs ONE-SIDED hot swollen calf + SUDDEN oxygen drop (classic traveling lung clot). Who?`,
       lines: makeShuffledLines(rng, [
-        `${W}: One hot swollen calf + sudden chest pain & low oxygen after a 14-hour flight.`,
-        `${D1}: Twisted ankle + normal easy breathing (99% oxygen).`,
-        `${D2}: Both ankles mildly puffy for years + steady normal oxygen.`,
+        `${W}: One hot swollen calf (3 cm wider than the other) + sudden chest pain & oxygen 86% after a 14-hour flight.`,
+        `${D1}: One tender calf after sprinting + easy breathing, oxygen 99%, normal heart rate 72.`,
+        `${D2}: Both ankles mildly puffy for 3 years + steady oxygen 98%, no sudden chest pain.`,
       ]),
       verdict: winIdx,
-      proof: `Connecting one hot swollen calf with sudden low oxygen points straight to a traveling lung clot in ${W}.`,
-      rival: `${D2}'s long-term mild ankle puffiness has no sudden oxygen drop.`,
+      proof: `Pairing an asymmetric hot swollen calf with sudden hypoxia points straight to a traveling lung clot in ${W}.`,
+      rival: `${D1} has a sore calf with 99% oxygen, and ${D2} has chronic symmetric swelling with no oxygen drop.`,
       isClash: false,
     };
   },
@@ -356,15 +356,15 @@ export const NBACK_ENGINES_PART2 = {
   'interpersonal-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Post-crisis family rounds: which family needs the attending physician IN PERSON right now rather than a routine phone update?`,
+      directive: `Family-rounds check: compare WHAT JUST HAPPENED vs. HOW THE FAMILY IS BEING TOLD — which family urgently needs the surgeon IN PERSON instead of a clerk or phone call?`,
       lines: makeShuffledLines(rng, [
-        `${W}'s family: Sitting in quiet room after sudden intraoperative death—waiting for the surgeon's honest bedside talk.`,
-        `${D1}'s family: Waiting for routine plaster cast drying instructions.`,
-        `${D2}'s family: Asking where hospital parking validation is stamped.`,
+        `${W}'s family: Expecting routine repair, unaware ${W} just died in the OR — clerk offered to call them by phone.`,
+        `${D1}'s family: Already met the surgeon in person 10 min ago and is sitting calmly with ${D1} in ICU recovery.`,
+        `${D2}'s family: Received clean scan results face-to-face and is confirming morning clinic follow-up.`,
       ]),
       verdict: winIdx,
-      proof: `Breaking tragic news to ${W}'s family requires direct, compassionate in-person physician presence.`,
-      rival: `${D1} and ${D2} involve routine discharge logistics.`,
+      proof: `Delivering unexpected death news to ${W}'s family demands the attending surgeon in person, never a phone call or clerk.`,
+      rival: `${D1}'s and ${D2}'s families have already had accurate in-person physician briefings.`,
       isClash: false,
     };
   },
@@ -373,15 +373,15 @@ export const NBACK_ENGINES_PART2 = {
   'mentalistic-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Family room briefing check: spot the family member operating on an OUTDATED belief who thinks their loved one is still fine.`,
+      directive: `Knowledge-gap audit: compare LAST FAMILY UPDATE TIME vs. LATEST CLINICAL EVENT — whose family is still acting on an OUTDATED belief?`,
       lines: makeShuffledLines(rng, [
-        `${W}'s spouse: Only heard the 01:00 "stable in ambulance" text—doesn't know ${W} just went into emergency surgery.`,
-        `${D1}'s parent: Just spoke with the trauma nurse 2 minutes ago and knows the current CT plan.`,
-        `${D2}'s sibling: Sitting right beside ${D2} while stitches are finished.`,
+        `${W}'s spouse: Last update at 01:00 ("stable in ambulance") — BEFORE ${W} rushed to emergency surgery at 01:20.`,
+        `${D1}'s parent: Updated at 01:22 — AFTER ${D1}'s 01:15 CT scan cleared internal bleeding.`,
+        `${D2}'s sibling: Updated at 01:25 — AFTER ${D2}'s 01:18 transfer to step-down monitoring.`,
       ]),
       verdict: winIdx,
-      proof: `${W}'s spouse still holds an outdated 01:00 mental model and must be gently updated immediately.`,
-      rival: `${D1}'s and ${D2}'s families already hold accurate current knowledge.`,
+      proof: `Only ${W}'s spouse's last update (01:00) sits BEFORE the major clinical turn (01:20 OR), leaving them with a false belief.`,
+      rival: `${D1}'s and ${D2}'s families were both updated AFTER the latest clinical change.`,
       isClash: false,
     };
   },
@@ -390,15 +390,15 @@ export const NBACK_ENGINES_PART2 = {
   'motivational-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Hidden-motive safety check: identify the patient refusing a life-saving trauma scan out of FEAR/GUILT (not medical stability) while hiding internal injury.`,
+      directive: `Refusal-of-care audit: separate SAFE refusal from FEAR-DRIVEN refusal masking shock — who is trying to leave out of fear while objectively crashing?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Car-crash driver with pale sweat & BP 84/50 insisting "I'm fine, let me leave before police arrive!"`,
-        `${D1}: Calm jogger with clear vitals asking if ice is enough for a bruised knee.`,
-        `${D2}: Cooperative carpenter requesting pain meds while waiting for hand X-ray.`,
+        `${W}: Crash driver (BP 84/50, pale sweat) insisting "Let me walk out BEFORE police arrive!"`,
+        `${D1}: Awake patient (BP 122/76, clean scans) declining optional sleeping pill because they dislike sedatives.`,
+        `${D2}: Stable patient (BP 118/74, normal labs) asking to transfer to their neighborhood hospital tomorrow.`,
       ]),
       verdict: winIdx,
-      proof: `${W}'s refusal is driven by fear of legal trouble while showing objective hypotension (84/50)—requiring urgent bedside intervention.`,
-      rival: `${D1} has stable vitals and no hidden shock signs.`,
+      proof: `${W}'s refusal is driven by legal fear while BP 84/50 signals active shock — requiring immediate compassionate intervention.`,
+      rival: `${D1} and ${D2} have stable vitals and are making informed, non-emergency preferences.`,
       isClash: false,
     };
   },
@@ -407,15 +407,15 @@ export const NBACK_ENGINES_PART2 = {
   'moral-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Duty of honesty & protection: a serious dosing error occurred on ONE chart tonight. Which patient requires immediate transparent disclosure & corrective reversal?`,
+      directive: `Candor & dosing audit: compare PRESCRIBED DOSE vs. DELIVERED DOSE — which patient suffered a dangerous overdose someone wants to hide?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Accidentally given 10× insulin dose—nurse suggests "just give sugar quietly so no one files a report."`,
-        `${D1}: Received exact scheduled antibiotic on time.`,
-        `${D2}: Received exact tetanus booster on time.`,
+        `${W}: Prescribed 5 units insulin · Delivered 50 units — staff member whispers "fix it quietly, skip the report."`,
+        `${D1}: Prescribed 1,000 mg antibiotic · Delivered 1,000 mg exactly on schedule.`,
+        `${D2}: Prescribed 500 mL saline · Delivered 500 mL 3 minutes early.`,
       ]),
       verdict: winIdx,
-      proof: `Moral duty of candor and patient safety mandates immediate reversal, close monitoring, and honest disclosure for ${W}.`,
-      rival: `Hiding a 10× medication error violates core medical ethics and endangers ${W}.`,
+      proof: `Prescribed (5) ≠ Delivered (50) is a 10× harm event on ${W}: duty of honesty and safety demands immediate reversal and full disclosure.`,
+      rival: `${D1} and ${D2} both received their exact prescribed doses.`,
       isClash: false,
     };
   },
@@ -424,15 +424,15 @@ export const NBACK_ENGINES_PART2 = {
   'ethical-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Autonomy vs Beneficence: honor every verified DNR/advance directive while intervening immediately for the critical patient who WANTS full resuscitation.`,
+      directive: `Patient wishes vs. urgency: signed DNR/Refusal OVERRIDES family demands — rush full resuscitation to the ONLY critical patient who WANTS it.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Active hemorrhage (BP 78/46), full code—explicitly requests every life-saving measure.`,
-        `${D1}: End-stage arrest with verified signed DNR & family at bedside requesting comfort care only.`,
-        `${D2}: Competent adult declining elective stitches on a minor knuckle scrape.`,
+        `${W}: Active bleed (BP 78/46), Full Code — awake and explicitly asking for every life-saving step.`,
+        `${D1}: End-stage arrest — verified signed DNR requests comfort-only care (even as a cousin shouts "Do CPR!").`,
+        `${D2}: Clear-minded adult (BP 112/70) with signed blood-refusal card declining elective transfusion.`,
       ]),
       verdict: winIdx,
-      proof: `Medical ethics respects ${D1}'s valid DNR (autonomy) while rushing full resuscitation to ${W} (beneficence + consent).`,
-      rival: `Overriding ${D1}'s verified DNR violates patient autonomy and delays ${W}'s life-saving care.`,
+      proof: `Honoring verified autonomy respects ${D1}'s DNR and ${D2}'s signed refusal while rushing full rescue to ${W}.`,
+      rival: `Overriding ${D1}'s verified DNR violates autonomy and pulls the team away from ${W}.`,
       isClash: false,
     };
   },
@@ -441,15 +441,15 @@ export const NBACK_ENGINES_PART2 = {
   'pragmatic-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Field disaster tent: 1 medic, 3 minutes until evacuation convoy leaves. Pick the high-impact patient who can ACTUALLY be stabilized in time.`,
+      directive: `Field disaster tent: 1 medic, 3 minutes BEFORE evacuation convoy leaves. Pick the patient whose Treatment Time ≤ 3 min AND whose life depends on it.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Arterial leg bleed—90-second tourniquet + stretchering saves their life.`,
-        `${D1}: Complex open-chest repair requiring a 2-hour surgical suite not available in field tent.`,
-        `${D2}: Mild forearm scrape—can walk onto the convoy unassisted.`,
+        `${W}: Leg artery bleed — 90-sec tourniquet stops fatal blood loss immediately.`,
+        `${D1}: Torn heart chamber — requires a 2-hour surgical suite unavailable in the field tent.`,
+        `${D2}: Closed forearm fracture — 2-min splint helps comfort, but patient is stable for hours without it.`,
       ]),
       verdict: winIdx,
-      proof: `Pragmatic field triage acts on ${W}: achievable within 90 seconds with life-saving impact.`,
-      rival: `${D1} requires an unavailable 2-hour OR; ${D2} needs no emergency intervention.`,
+      proof: `Only ${W} combines life-saving impact WITH feasibility inside the 3-minute field window (90 sec ≤ 3 min).`,
+      rival: `${D1} cannot be repaired in a 3-min tent, and ${D2} is stable to wait for the base hospital.`,
       isClash: false,
     };
   },
@@ -475,15 +475,15 @@ export const NBACK_ENGINES_PART2 = {
   'narrative-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Reconstruct the full injury narrative: which patient's story ("high-speed steering wheel impact → brief lucid pause → sudden collapse") fits delayed splenic rupture?`,
+      directive: `Injury-timeline pattern: match "High-Speed Impact → Brief Walk-Around Pause → Sudden Collapse + Left Shoulder Pain" (delayed torn spleen). Who fits ALL 3 beats?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Hit steering wheel at 50 mph → walked around crash scene 15 min → just collapsed in triage with left shoulder pain.`,
-        `${D1}: Tripped on curb at walking speed → immediate ankle swelling → steady vitals.`,
-        `${D2}: Lifted heavy box → immediate lower back ache → normal vitals.`,
+        `${W}: 50 mph steering-wheel impact → walked 15 min at scene → suddenly collapsed in triage with left shoulder pain.`,
+        `${D1}: 40 mph rear-end collision → immediate neck stiffness at scene → no collapse, steady vitals (BP 124/78).`,
+        `${D2}: 15-ft ladder fall → immediate leg pain at scene → continuous pain, zero lucid gap, soft belly.`,
       ]),
       verdict: winIdx,
-      proof: `${W}'s coherent high-energy mechanism + lucid interval + sudden collapse with Kehr's sign (left shoulder pain) tells the classic splenic rupture story.`,
-      rival: `${D1}'s and ${D2}'s narratives match low-energy orthopedic strain.`,
+      proof: `Only ${W} matches the full 3-beat delayed-rupture arc (high-speed torso hit → lucid walk-around → sudden collapse + referred shoulder pain).`,
+      rival: `${D1} and ${D2} both had immediate continuous symptoms without a lucid interval or delayed collapse.`,
       isClash: false,
     };
   },
@@ -590,15 +590,15 @@ export const NBACK_ENGINES_PART2 = {
       };
     }
     return {
-      directive: `Spot the flawed assumption: a junior intern skipped ONE critical patient assuming "young healthy athletes don't have silent internal bleeds." Who was misjudged?`,
+      directive: `Normal-BP fallacy test: when Heart Rate is HIGHER THAN Top BP (Shock Index > 1) + rigid belly, the body is hiding massive blood loss. Who was wrongly called "stable"?`,
       lines: makeShuffledLines(rng, [
-        `${W}: 21-year-old cyclist—normal BP (114/72) masking massive bleed, but pulse is 138 and belly is rigid.`,
-        `${D1}: 68-year-old with bruised shin, pulse 78, soft abdomen.`,
-        `${D2}: 45-year-old with sprained thumb, pulse 72, soft abdomen.`,
+        `${W}: 21-yr cyclist — Top BP 114, Heart Rate 138 + rigid belly.`,
+        `${D1}: 68-yr driver — Top BP 108, Heart Rate 82 + soft belly.`,
+        `${D2}: 45-yr rider — Top BP 122, Heart Rate 96 + soft belly.`,
       ]),
       verdict: winIdx,
-      proof: `Critical check dismantles the "normal BP = safe" fallacy: young patients compensate BP until sudden collapse, betrayed by ${W}'s HR 138 and rigid abdomen.`,
-      rival: `${D1} is older, but shows calm vitals and zero abdominal findings.`,
+      proof: `Young patients hold Top BP near normal while bleeding out: ${W}'s HR 138 > Top BP 114 + rigid belly exposes hidden shock.`,
+      rival: `${D1} has a slightly lower Top BP (108 vs 114), but HR 82 < Top BP 108 and a soft belly rule out hidden shock.`,
       isClash: false,
     };
   },
@@ -608,28 +608,28 @@ export const NBACK_ENGINES_PART2 = {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     if (allowClash) {
       return {
-        directive: `Working claim: "At least one of these 3 patients has a fractured pelvis." Test to DISPROVE it—pick the confirmed pelvis fracture OR flag Clinical Clash if ALL 3 are ruled out.`,
+        directive: `Working claim: "At least one of these 3 patients has a fractured pelvis." Test to DISPROVE it — pick the confirmed fracture OR flag Clinical Clash if ALL 3 disprove it.`,
         lines: makeShuffledLines(rng, [
           `${W}: Pelvic X-ray and CT both show completely intact pelvic ring.`,
           `${D1}: Pelvic X-ray and CT both show completely intact pelvic ring.`,
           `${D2}: Walking pain-free; pelvic X-ray completely intact.`,
         ]),
         verdict: 'clash',
-        proof: `Every candidate's imaging falsifies the working hypothesis—zero pelvic fractures exist (Clinical Clash).`,
-        rival: `Clinging to a falsified hypothesis wastes critical trauma bay time.`,
+        proof: `Every candidate's imaging disproves the working claim — zero pelvic fractures exist (Clinical Clash).`,
+        rival: `Clinging to a disproved claim wastes critical trauma bay time.`,
         isClash: true,
       };
     }
     return {
-      directive: `Counterexample check: working claim is "Everyone in this bay is stable enough to wait 1 hour." Spot the SINGLE patient who DISPROVES that claim.`,
+      directive: `Boundary test: shift rule says "Safe to wait 1 hr ONLY IF Oxygen ≥ 92% AND BP ≥ 100." Spot the SINGLE counterexample who DISPROVES "all 3 can wait."`,
       lines: makeShuffledLines(rng, [
-        `${W}: Oxygen just plunged to 81% with active vomiting—disproves the "all stable" claim immediately.`,
-        `${D1}: Sitting upright, oxygen 98%, BP 122/76.`,
-        `${D2}: Reading phone, oxygen 99%, BP 118/74.`,
+        `${W}: BP 118/74, Oxygen 83% with active vomiting.`,
+        `${D1}: Oxygen 94%, BP 106/68, alert.`,
+        `${D2}: Oxygen 96%, BP 114/72, alert.`,
       ]),
       verdict: winIdx,
-      proof: `A single crashing counterexample (${W}) decisively falsifies the blanket "everyone can wait" assumption.`,
-      rival: `${D1} and ${D2} confirm stability, whereas falsification hunts for the exception.`,
+      proof: `${W} breaks the ≥ 92% oxygen floor (83%), decisively disproving the blanket "everyone can wait" claim.`,
+      rival: `${D1} and ${D2} both clear every safety boundary (O2 ≥ 92% and BP ≥ 100).`,
       isClash: false,
     };
   },
@@ -689,15 +689,15 @@ export const NBACK_ENGINES_PART2 = {
   'analogical-abstraction': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Shared deep principle: "Swelling trapped inside a tight space crushes blood flow" (true in Brain, Chest, AND Tight Shin Muscle). Who shows this exact pressure trap?`,
+      directive: `Shared deep structure: "Swelling trapped INSIDE A RIGID SHELL crushes blood flow" (Brain in Skull :: Heart in Sac :: Muscle in Tight Fascia). Who matches?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Rock-hard swollen shin after bone break cutting off blood flow to the foot.`,
-        `${D1}: Surface itchy skin rash from an allergy.`,
-        `${D2}: Mild viral sore throat with easy swallowing.`,
+        `${W}: Swollen shin trapped inside tight fascia shell → foot pulse just vanished (rigid-shell pressure trap).`,
+        `${D1}: Open forearm laceration bleeding outward → pressure escapes freely, strong hand pulse.`,
+        `${D2}: Soft outer-thigh bruise over loose fat → swelling expands outward, strong foot pulse.`,
       ]),
       verdict: winIdx,
-      proof: `Applying the trapped-pressure principle from brain/chest directly identifies ${W}'s dangerously pressurized swollen shin.`,
-      rival: `${D1} and ${D2} are surface swelling/irritation, not trapped pressure cutting off blood flow.`,
+      proof: `Only ${W} replicates the rigid-shell pressure trap cutting off circulation, whereas ${D1} and ${D2} expand freely outward.`,
+      rival: `${D1} has visible blood, but an open wound cannot build trapped internal shell pressure.`,
       isClash: false,
     };
   },
@@ -706,15 +706,15 @@ export const NBACK_ENGINES_PART2 = {
   'integrative-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Full Trauma Workup: weigh early odds, update with emergency scans, rule out cleared cases, and save the lone confirmed shock patient.`,
+      directive: `Chief's 3-Gate Call: combine Early Risk + New Belly Scan + Live BP Trend to save the ONLY patient failing ALL THREE gates.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Early risk 40% + emergency belly scan POSITIVE for internal blood (jumps to 92%) + BP falling 82/48.`,
-        `${D1}: Early risk 70% + BOTH belly & CT scans clean (ruled out → < 3%) + steady BP 120/76.`,
-        `${D2}: Early risk 30% + minor wrist break + normal BP 118/74 & normal blood tests (low risk).`,
+        `${W}: Early risk 40% + Belly scan POSITIVE (internal blood) + BP falling 108 → 82/48.`,
+        `${D1}: Early risk 75% + Belly & CT scans CLEAN (ruled out) + BP steady 120/76.`,
+        `${D2}: Early risk 50% + Belly scan CLEAN + BP dipped 104 → 96 then climbed back to 112/72.`,
       ]),
       verdict: winIdx,
-      proof: `Combining updated scan odds (${W} → 92%) with ruling out cleared ${D1} locks onto ${W} cleanly.`,
-      rival: `${D1} started with higher early risk (70%), but clean scans completely rule them out.`,
+      proof: `Synthesizing scan confirmation + falling BP locks onto ${W}, while clean scans rule out higher-prior ${D1} and rebounding ${D2}.`,
+      rival: `${D1} started with the highest early risk (75%), but clean scans and steady BP overturn that prior.`,
       isClash: false,
     };
   },

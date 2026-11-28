@@ -78,7 +78,7 @@ function tryBuildForType(rng, meta, tier, prevTargetKey, allowSamePrevTarget) {
   }
 
   const spec = engine(rng);
-  if (!spec || !spec.cards || spec.cards.length !== 6) return null;
+  if (!spec || !spec.cards || (spec.cards.length !== 4 && spec.cards.length !== 6)) return null;
 
   const logic = synthesizeSemanticLogic(rng, spec.cards, spec.evaluate, tier.disputed);
   if (!logic) return null;
@@ -91,6 +91,7 @@ function tryBuildForType(rng, meta, tier, prevTargetKey, allowSamePrevTarget) {
   const explanation = {
     proof: logic.evaluation.proof,
     rival: logic.evaluation.rival || null,
+    chainSummary: logic.evaluation.chainSummary || null,
     decisiveChannels: [],
   };
   const shortlist = buildShortlist(rng, records, logic.trueTargets, explanation.rival?.patientId);
@@ -210,11 +211,13 @@ export function synthesizeTrial({
   const fallbackRng = createRng(seed + 997);
   const spec = SEMANTIC_ENGINES[fallbackMeta.id](fallbackRng);
   const records = enrichRecords(spec.cards);
-  const res = spec.evaluate(resolveBoard(records, 0b111111));
+  const fallbackMask = (1 << records.length) - 1;
+  const res = spec.evaluate(resolveBoard(records, fallbackMask));
   const safeTargets = res && res.targets && res.targets.length ? res.targets : [PATIENT_IDS[0]];
   const explanation = {
     proof: res?.proof || `${safeTargets.join(', ')} matched the clinical rule.`,
     rival: res?.rival || null,
+    chainSummary: res?.chainSummary || null,
     decisiveChannels: [],
   };
 
@@ -240,7 +243,7 @@ export function synthesizeTrial({
     order: spec.order,
     detail: spec.hint || spec.detail || '',
     records,
-    trueWorldMask: 0b111111,
+    trueWorldMask: fallbackMask,
     crossChecks: [],
     targets: safeTargets,
     shortlist: buildShortlist(createRng(seed + 1013), records, safeTargets, explanation.rival?.patientId),

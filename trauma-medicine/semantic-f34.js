@@ -1,6 +1,7 @@
-// Deep Plain-English Clinical Reasoning Engines — Families 3 & 4 (#21–#41)
-// Relational, abstract, spatial, temporal, quantitative & predictive medical emergencies.
-// Zero filler cards, zero pre-computed math giveaways, zero medical jargon, synchronized left-wall labels.
+// Relational-First Clinical Reasoning Engines — Families 3 & 4 (#21–#41)
+// Fluid-intelligence relational chains, structural analogies, spatial/temporal maps & comparative math
+// through Relational/Abstract (#21–#32) & Predictive/Quantitative (#33–#41) trauma medicine.
+// Zero filler cards, zero pre-computed math giveaways, zero medical jargon, zero spoilers.
 
 import {
   pName,
@@ -39,391 +40,419 @@ export const SEMANTIC_F34 = {
   // =========================================================================
 
   // #21 Analogical reasoning (Inside · Atomic)
+  // Structural mapping A : B :: C : D — "Full Tank + Working Pump + Blocked Single Line"
   'analogical-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Trauma Brief', wingIndex: 0, label: 'Reference Pattern',
+        index: 0, time: '01:02', wing: 'Structure Map', wingIndex: 0, label: 'Reference Relation (A :: B)',
         shown: [
-          fact(`Think of a stalled engine: a FULL gas tank with a PINCHED fuel line still starves the motor — pouring MORE gas in fixes nothing until you clear the pinch!`, [], { tag: 'rule' }),
-          fact(`Match this EXACT structure to our trauma bays: normal blood volume + healthy heart, yet ONE pinched/clotted pipe is starving a limb.`, [], { tag: 'rule' }),
+          fact(`Engine :: Pinched Fuel Line → FULL tank + strong pump + ONE starved branch.`, [], { tag: 'rule' }),
+          fact(`Match the EXACT same relation in blood flow: normal blood volume + strong heart + ONE cold pulseless limb.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Bay Exams', wingIndex: 1, label: 'Circulation Check 1',
+        index: 1, time: '01:05', wing: 'Circulation A', wingIndex: 1, label: 'Blood Tank Comparison',
         shown: [
-          fact(`${pName(a)}: Full normal blood count, strong steady heartbeat — yet the RIGHT leg is ice-cold, pale, and has ZERO foot pulse.`, a, { tag: 'pinched' }),
-          fact(`${pName(b)}: Lost half their blood from a deep thigh gash; BOTH legs and hands are cold (empty tank).`, b, { tag: 'empty' }),
+          fact(`${pName(a)} has MORE blood volume than bleeding ${pName(b)} (normal full tank, SAME AS healthy ${pName(f)}).`, [a, b, f], { tag: 'full_tank', p: a }),
+          fact(`${pName(c)}'s blood volume is ALSO full — EQUAL TO ${pName(a)}'s — while ${pName(d)} lost HALF their blood.`, [c, a, d], { tag: 'full_tank', p: c }),
         ],
         alt: [
-          fact(`${pName(c)}: Full normal blood count, strong steady heartbeat — yet the RIGHT leg is ice-cold, pale, and has ZERO foot pulse.`, c, { tag: 'pinched' }),
-          fact(`${pName(b)}: Lost half their blood from a deep thigh gash; BOTH legs and hands are cold (empty tank).`, b, { tag: 'empty' }),
+          fact(`${pName(b)} has MORE blood volume than bleeding ${pName(a)} (normal full tank, SAME AS healthy ${pName(f)}).`, [b, a, f], { tag: 'full_tank', p: b }),
+          fact(`${pName(c)}'s blood volume is ALSO full — EQUAL TO ${pName(b)}'s — while ${pName(d)} lost HALF their blood.`, [c, b, d], { tag: 'full_tank', p: c }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Bay Exams', wingIndex: 1, label: 'Circulation Check 2',
+        index: 2, time: '01:08', wing: 'Heart Echo', wingIndex: 0, label: 'Pump Strength Comparison',
         shown: [
-          fact(`${pName(c)}: Heart muscle is barely beating (broken motor); blood backs up into both lungs.`, c, { tag: 'motor' }),
-          fact(`${pName(d)}: Warm feet, strong pulses in all limbs, only a bruised knee from a fall.`, d, { tag: 'safe', calm: true }),
+          fact(`${pName(a)}'s heart pump is STRONGER THAN ${pName(c)}'s failing pump (matches ${pName(f)}'s strong beat).`, [a, c, f], { tag: 'good_pump', p: a }),
+          fact(`${pName(e)}'s heart pump is ALSO strong — SAME AS ${pName(a)}'s — while ${pName(c)}'s pump barely squeezes.`, [e, a, c], { tag: 'good_pump', p: e }),
         ],
         alt: [
-          fact(`${pName(a)}: Heart muscle is barely beating (broken motor); blood backs up into both lungs.`, a, { tag: 'motor' }),
-          fact(`${pName(d)}: Warm feet, strong pulses in all limbs, only a bruised knee from a fall.`, d, { tag: 'safe', calm: true }),
+          fact(`${pName(b)}'s heart pump is STRONGER THAN ${pName(c)}'s failing pump (matches ${pName(f)}'s strong beat).`, [b, c, f], { tag: 'good_pump', p: b }),
+          fact(`${pName(e)}'s heart pump is ALSO strong — SAME AS ${pName(b)}'s — while ${pName(c)}'s pump barely squeezes.`, [e, b, c], { tag: 'good_pump', p: e }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Trauma Brief', wingIndex: 0, label: 'Doppler Ultrasound',
+        index: 3, time: '01:11', wing: 'Limb Doppler', wingIndex: 1, label: 'Single-Line vs. Whole-Body',
         shown: [
-          fact(`Vascular probe confirms a hard clot blocking the single main artery feeding ${pName(a)}'s right leg.`, a, { tag: 'clot_line' }),
-          fact(`${pName(a)}'s left leg is warm and pink — proving the heart and blood tank work fine.`, a, { tag: 'note' }),
+          fact(`${pName(a)}'s right leg is ice-cold with ZERO pulse while ${pName(a)}'s left leg is warm (ONE line pinched!).`, [a], { tag: 'one_pinch', p: a }),
+          fact(`${pName(b)} and ${pName(d)} have ALL four limbs cold together (empty blood tank, NOT one pinched pipe).`, [b, d], { tag: 'all_cold', p: b }),
         ],
         alt: [
-          fact(`Vascular probe confirms a hard clot blocking the single main artery feeding ${pName(c)}'s right leg.`, c, { tag: 'clot_line' }),
-          fact(`${pName(c)}'s left leg is warm and pink — proving the heart and blood tank work fine.`, c, { tag: 'note' }),
+          fact(`${pName(b)}'s right leg is ice-cold with ZERO pulse while ${pName(b)}'s left leg is warm (ONE line pinched!).`, [b], { tag: 'one_pinch', p: b }),
+          fact(`${pName(a)} and ${pName(d)} have ALL four limbs cold together (empty blood tank, NOT one pinched pipe).`, [a, d], { tag: 'all_cold', p: a }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Bay Exams', wingIndex: 1, label: 'Treatment Mismatch',
+        index: 4, time: '01:14', wing: 'Limb Doppler', wingIndex: 1, label: 'Cross-Bay Verification',
         shown: [
-          fact(`Giving blood bags helps an empty tank (${pName(b)}), NOT a blocked artery!`, b, { tag: 'note' }),
-          fact(`${pName(e)} has a minor wrist sprain and warm hands.`, e, { tag: 'safe', calm: true }),
+          fact(`${pName(e)} has warm pink pulses in ALL four limbs — OPPOSITE OF a blocked limb line.`, [e], { tag: 'all_warm', p: e }),
+          fact(`${pName(c)} has fluid backing up into BOTH lungs from the weak motor (broken pump, NOT blocked pipe).`, [c], { tag: 'weak_motor', p: c }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Trauma Brief', wingIndex: 0, label: 'Vascular Surgeon Call',
+        index: 5, time: '01:17', wing: 'Vascular OR', wingIndex: 0, label: 'Clot-Removal Slot',
         shown: [
-          fact(`${pName(f)} is cleared to go home after skin glue.`, f, { tag: 'safe', calm: true }),
-          fact(`Rush the patient whose body matches the "full tank + working motor + pinched single line" structure to artery surgery.`, [], { tag: 'rule' }),
+          fact(`${pName(f)} serves as our normal reference baseline (full tank, strong pump, 4 warm limbs).`, [f], { tag: 'ref', p: f }),
+          fact(`Send ONLY the patient matching Full Tank + Strong Pump + Single Pinched Branch to Vascular Clot Removal.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'The Pinched Fuel Line',
-      dispatch: 'Three patients have cold limbs — map the "full tank, working motor, pinched fuel line" structure to pick the lone artery clot.',
-      order: 'Send ONLY the patient matching the "pinched single line" structure to the vascular artery surgeon.',
-      hint: 'Distinguish a single blocked pipe (one cold limb, normal tank & heart) from an empty tank or broken motor.',
+      dispatch: 'Map the 3-part relation "Full Tank + Working Pump + One Blocked Line" across six circulation exams.',
+      order: 'Send ONLY the patient matching Full Tank + Strong Pump + Single Blocked Limb Artery to Vascular Surgery.',
+      hint: 'Intersect Full Tank + Strong Pump + One Cold Pulseless Limb across the comparison cards.',
       bayDefaultLabel: 'Limb Flow Eval',
-      bayLabels: { [d]: 'Minor · Stable', [e]: 'Minor · Stable', [f]: 'Cleared · Home' },
       cards,
       evaluate(activeCards) {
-        const p = tagSet(activeCards, 'pinched');
-        const cl = tagSet(activeCards, 'clot_line');
-        const targets = uniqueSortedIds([...p].filter((id) => cl.has(id)));
-        const rivals = [...tagSet(activeCards, 'empty'), ...tagSet(activeCards, 'motor')];
+        const tank = new Set(factsByTag(activeCards, 'full_tank').map((x) => x.p));
+        const pump = new Set(factsByTag(activeCards, 'good_pump').map((x) => x.p));
+        const pinch = new Set(factsByTag(activeCards, 'one_pinch').map((x) => x.p));
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => tank.has(id) && pump.has(id) && pinch.has(id)));
         return {
           targets,
-          proof: `${formatList(targets)} match the exact structure: full blood tank and strong heart, yet one pinched/clotted artery starving a single limb.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} has an empty tank (bleeding) or broken motor (weak heart), not a single pinched line.`),
+          proof: `Mapping Tank × Pump × Single-Line isolates ${formatList(targets)}: full blood volume, strong heart beat, and one cold pulseless limb.`,
+          rival: buildRivalInfo(targets, [c, b, d, e, a], (r) =>
+            !tank.has(r) ? `${pName(r)} has an empty blood tank (all limbs cold), not a single pinched artery.` : `${pName(r)} either has a failing heart pump or warm pulses in every limb.`
+          ),
         };
       },
     };
   },
 
   // #22 Anomalous reasoning (Inside · Atomic)
+  // Relational covariance break: BP↓ normally pairs with HR↑; catch the lone bay where BP↓ pairs with HR↓
   'anomalous-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'ICU Monitors', wingIndex: 0, label: 'Normal Body Reflex',
+        index: 0, time: '01:02', wing: 'Reflex Law', wingIndex: 0, label: 'Inverse Coupling Rule',
         shown: [
-          fact(`Normal survival reflex: whenever blood pressure DROPS, the heart automatically speeds UP fast (115–140 BPM) to keep the brain alive.`, [], { tag: 'rule' }),
-          fact(`When blood pressure crashes AND heart rate DROPS slow (< 55 BPM) instead, it signals a dangerous hidden nerve/brain-pressure trap!`, [], { tag: 'rule' }),
+          fact(`Normal shock coupling: BP drops → Heart Rate climbs HIGHER THAN baseline (opposite directions!).`, [], { tag: 'rule' }),
+          fact(`Dangerous spinal/brain break: BP drops AND Heart Rate ALSO drops LOWER THAN baseline (same direction!).`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Bay Vitals', wingIndex: 1, label: 'Monitor Group A',
+        index: 1, time: '01:06', wing: 'Monitors A', wingIndex: 1, label: 'BP & Pulse Shifts A',
         shown: [
-          fact(`${pName(a)}: Blood pressure fell 124 → 82 · Heart rate sped up 78 → 134 BPM.`, a, { tag: 'normal_resp' }),
-          fact(`${pName(b)}: Blood pressure fell 118 → 76 · Heart rate DROPPED 80 → 46 BPM!`, b, { tag: 'anom' }),
+          fact(`${pName(a)}: BP fell 124 → 82 while HR climbed 78 → 134 (HIGHER THAN ${pName(e)}'s 118).`, [a, e], { tag: 'shift', p: a, bpDown: true, hrDown: false }),
+          fact(`${pName(b)}: BP fell 120 → 76 while HR fell 80 → 46 (LOWER THAN every other crashing bay!).`, [b], { tag: 'shift', p: b, bpDown: true, hrDown: true }),
         ],
         alt: [
-          fact(`${pName(a)}: Blood pressure fell 124 → 82 · Heart rate DROPPED 80 → 46 BPM!`, a, { tag: 'anom' }),
-          fact(`${pName(b)}: Blood pressure fell 118 → 76 · Heart rate sped up 78 → 134 BPM.`, b, { tag: 'normal_resp' }),
+          fact(`${pName(a)}: BP fell 124 → 78 while HR fell 82 → 44 (LOWER THAN every other crashing bay!).`, [a], { tag: 'shift', p: a, bpDown: true, hrDown: true }),
+          fact(`${pName(b)}: BP fell 120 → 84 while HR climbed 76 → 132 (HIGHER THAN ${pName(e)}'s 118).`, [b, e], { tag: 'shift', p: b, bpDown: true, hrDown: false }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Bay Vitals', wingIndex: 1, label: 'Monitor Group B',
+        index: 2, time: '01:10', wing: 'Monitors B', wingIndex: 1, label: 'BP & Pulse Shifts B',
         shown: [
-          fact(`${pName(c)}: Blood pressure fell 120 → 86 · Heart rate sped up 74 → 122 BPM.`, c, { tag: 'normal_resp' }),
-          fact(`${pName(d)}: Blood pressure fell 116 → 80 · Heart rate sped up 82 → 130 BPM.`, d, { tag: 'normal_resp' }),
+          fact(`${pName(c)}: BP fell 118 → 86 while HR climbed 74 → 124 (SAME inverse direction as ${pName(a)}).`, [c, a], { tag: 'shift', p: c, bpDown: true, hrDown: false }),
+          fact(`${pName(d)}: BP climbed 110 → 148 while HR fell 86 → 62 (OPPOSITE OF shock — rising BP!).`, [d], { tag: 'shift', p: d, bpDown: false, hrDown: true }),
+        ],
+        alt: [
+          fact(`${pName(c)}: BP fell 118 → 74 while HR fell 78 → 48 (LOWER THAN ${pName(e)}'s 118!).`, [c, e], { tag: 'shift', p: c, bpDown: true, hrDown: true }),
+          fact(`${pName(d)}: BP climbed 110 → 148 while HR fell 86 → 62 (rising BP, not falling!).`, [d], { tag: 'shift', p: d, bpDown: false, hrDown: true }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'ICU Monitors', wingIndex: 0, label: 'Monitor Group C',
+        index: 3, time: '01:14', wing: 'Monitors C', wingIndex: 0, label: 'Baseline & Control Bays',
         shown: [
-          fact(`${pName(e)}: Blood pressure fell 126 → 88 · Heart rate sped up 76 → 118 BPM.`, e, { tag: 'normal_resp' }),
-          fact(`${pName(f)}: Blood pressure stayed completely steady at 118/74 · Heart rate calm at 72 BPM.`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(e)}: BP fell 126 → 88 while HR climbed 76 → 118 (textbook shock reflex).`, [e], { tag: 'shift', p: e, bpDown: true, hrDown: false }),
+          fact(`${pName(f)}: Athlete resting at BP 118 → 118, steady HR 50 → 50 (NO BP drop at all!).`, [f], { tag: 'shift', p: f, bpDown: false, hrDown: false }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Bay Vitals', wingIndex: 1, label: 'Why Standard Fluids Fail',
+        index: 4, time: '01:18', wing: 'Reflex Law', wingIndex: 0, label: 'Avoid the Slow-Pulse Trap',
         shown: [
-          fact(`A racing heart with low pressure is normal shock compensation — standard fluids and pressure meds work as expected.`, [], { tag: 'rule' }),
-          fact(`The ONE patient breaking the reflex rule needs an emergency neuro/spine check immediately.`, [], { tag: 'rule' }),
+          fact(`${pName(f)} and ${pName(d)} have slow pulses, yet NEITHER has falling blood pressure.`, [f, d], { tag: 'note' }),
+          fact(`Look for BOTH directions falling together: BP DOWN + HR DOWN simultaneously.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'ICU Monitors', wingIndex: 0, label: 'Neuro Alert',
+        index: 5, time: '01:21', wing: 'Neuro Spine', wingIndex: 1, label: 'Spine-Shock Alert',
         shown: [
-          fact(`Check every patient whose blood pressure dropped — ignore calm stable ${pName(f)}.`, f, { tag: 'note' }),
-          fact(`Flag the single paradoxical vital-sign outlier to Neurosurgery right now.`, [], { tag: 'rule' }),
+          fact(`Standard IV fluids fail when the spinal nerve reflex breaks.`, [], { tag: 'rule' }),
+          fact(`Page Neurosurgery for EVERY bay where BP dropped AND Heart Rate dropped together.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'The Backward Heart Reflex',
-      dispatch: 'Five patients have falling blood pressure — four follow the body’s normal reflex, while ONE breaks the rule completely.',
-      order: 'Flag the SINGLE patient whose heart rate is moving in the dangerous opposite direction of the normal reflex.',
-      hint: 'Compare blood-pressure direction vs heart-rate direction across all five dropping patients.',
-      bayDefaultLabel: 'Vital Trend',
-      bayLabels: { [f]: 'Stable · Calm' },
+      scenarioTitle: 'The Broken Vital Coupling',
+      dispatch: 'Compare BP direction vs. Heart-Rate direction across six bays to catch who broke the inverse shock reflex.',
+      order: 'Page Neurosurgery for EVERY patient whose blood pressure DROPPED while their heart rate ALSO DROPPED.',
+      hint: 'Ignore steady athletes and rising BP — isolate falling BP coupled with falling HR.',
+      bayDefaultLabel: 'Vital Coupling',
       cards,
       evaluate(activeCards) {
-        const targets = uniqueSortedIds([...tagSet(activeCards, 'anom')]);
-        const rivals = [...tagSet(activeCards, 'normal_resp')];
+        const list = factsByTag(activeCards, 'shift');
+        const targets = uniqueSortedIds(list.filter((x) => x.bpDown && x.hrDown).map((x) => x.p));
+        const rivals = list.filter((x) => !(x.bpDown && x.hrDown)).map((x) => x.p);
         return {
           targets,
-          proof: `${formatList(targets)} broke the normal shock reflex: blood pressure crashed while heart rate dropped to 46 BPM instead of speeding up.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)}'s heart sped up properly (118–134 BPM) to compensate for falling pressure.`),
+          proof: `Comparing BP trend vs. HR trend isolates ${formatList(targets)}: BP crashed AND HR dropped together, breaking the inverse reflex.`,
+          rival: buildRivalInfo(targets, rivals, (r) => {
+            const x = list.find((item) => item.p === r);
+            return x && !x.bpDown
+              ? `${pName(r)} has a slow pulse, but their BP did NOT drop.`
+              : `${pName(r)}'s heart rate climbed normally as BP fell.`;
+          }),
         };
       },
     };
   },
 
   // #23 Antinomic reasoning (After · Atomic)
+  // Relational incompatibility between Cardiology & Neurosurgery orders across 6 active patients
   'antinomic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Pharmacy Gate', wingIndex: 0, label: 'Order Conflict Alert',
+        index: 0, time: '01:02', wing: 'Pharmacy Gate', wingIndex: 0, label: 'Mutual Exclusion Rule',
         shown: [
-          fact(`Two different specialists typed active orders for the same trauma bay — ONE patient has two orders that directly cancel & endanger each other!`, [], { tag: 'rule' }),
-          fact(`Halt the single patient with mutually incompatible clinical orders before the nurse pushes both drips.`, [], { tag: 'rule' }),
+          fact(`Blood Thinner ↔ Strict Zero-Thinner Brain Bleed CANNOT both be obeyed — they directly negate each other!`, [], { tag: 'rule' }),
+          fact(`High-Dose Steroid ↔ Live Vaccine are ALSO mutually exclusive if ordered on the same chart.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Doctor Orders A', wingIndex: 1, label: '01:10 Cardiology Notes',
+        index: 1, time: '01:06', wing: 'Cardiology', wingIndex: 1, label: '01:05 Active Orders A',
         shown: [
-          fact(`${pName(a)}: Order #1 — "Start maximum-strength blood thinner immediately for suspected leg clot."`, a, { tag: 'thinner' }),
-          fact(`${pName(b)}: Order #1 — "Give pain relief and cool compress for broken wrist."`, b, { tag: 'ok_b' }),
+          fact(`${pName(a)}: Ordered MAX Blood Thinner — SAME drug class as ${pName(b)}'s clot drip.`, [a, b], { tag: 'thinner', p: a }),
+          fact(`${pName(b)}: Ordered MAX Blood Thinner for a leg vein clot (head CT verified 100% clean).`, [b], { tag: 'thinner', p: b }),
         ],
         alt: [
-          fact(`${pName(c)}: Order #1 — "Start maximum-strength blood thinner immediately for suspected leg clot."`, c, { tag: 'thinner' }),
-          fact(`${pName(b)}: Order #1 — "Give pain relief and cool compress for broken wrist."`, b, { tag: 'ok_b' }),
+          fact(`${pName(c)}: Ordered MAX Blood Thinner — SAME drug class as ${pName(b)}'s clot drip.`, [c, b], { tag: 'thinner', p: c }),
+          fact(`${pName(b)}: Ordered MAX Blood Thinner for a leg vein clot (head CT verified 100% clean).`, [b], { tag: 'thinner', p: b }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Doctor Orders B', wingIndex: 0, label: '01:12 Neurosurgery Notes',
+        index: 2, time: '01:10', wing: 'Neurosurgery', wingIndex: 0, label: '01:08 Active Orders B',
         shown: [
-          fact(`${pName(a)}: Order #2 — "STRICT ZERO BLOOD THINNERS — active bleeding inside the brain on head scan!"`, a, { tag: 'no_thinner' }),
-          fact(`${pName(c)}: Order #2 — "Start gentle IV fluids and check temperature every 30 minutes."`, c, { tag: 'ok_c' }),
+          fact(`${pName(a)}: STRICT ZERO BLOOD THINNERS — active skull bleeding on CT (OPPOSITE OF Cardiology!).`, [a], { tag: 'no_thin', p: a }),
+          fact(`${pName(d)}: STRICT ZERO BLOOD THINNERS — head bleed (Cardiology ordered gentle leg wraps only).`, [d], { tag: 'no_thin', p: d }),
         ],
         alt: [
-          fact(`${pName(c)}: Order #2 — "STRICT ZERO BLOOD THINNERS — active bleeding inside the brain on head scan!"`, c, { tag: 'no_thinner' }),
-          fact(`${pName(a)}: Order #2 — "Start gentle IV fluids and check temperature every 30 minutes."`, a, { tag: 'ok_a' }),
+          fact(`${pName(c)}: STRICT ZERO BLOOD THINNERS — active skull bleeding on CT (OPPOSITE OF Cardiology!).`, [c], { tag: 'no_thin', p: c }),
+          fact(`${pName(d)}: STRICT ZERO BLOOD THINNERS — head bleed (Cardiology ordered gentle leg wraps only).`, [d], { tag: 'no_thin', p: d }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Doctor Orders A', wingIndex: 1, label: '01:15 Trauma Notes',
+        index: 3, time: '01:14', wing: 'Trauma Med', wingIndex: 1, label: '01:11 Compatible Pairs',
         shown: [
-          fact(`${pName(b)}: Order #2 — "Place fiberglass arm splint and repeat X-ray in 1 hour." (Fully compatible!)`, b, { tag: 'ok_b' }),
-          fact(`${pName(d)}: Order #1 — "Give oxygen mask." · Order #2 — "Give asthma breathing mist." (Fully compatible!)`, d, { tag: 'ok_d' }),
+          fact(`${pName(c)}: Oxygen mask + asthma mist (synergistic pair — ZERO conflict).`, [c], { tag: 'compat', p: c }),
+          fact(`${pName(e)}: IV antibiotics + cooling blanket (synergistic pair — SAME safe pattern as ${pName(f)}).`, [e, f], { tag: 'compat', p: e }),
+        ],
+        alt: [
+          fact(`${pName(a)}: Oxygen mask + asthma mist (synergistic pair — ZERO conflict).`, [a], { tag: 'compat', p: a }),
+          fact(`${pName(e)}: IV antibiotics + cooling blanket (synergistic pair — SAME safe pattern as ${pName(f)}).`, [e, f], { tag: 'compat', p: e }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Doctor Orders B', wingIndex: 0, label: 'Pharmacy Safety Check',
+        index: 4, time: '01:17', wing: 'Pharmacy Gate', wingIndex: 0, label: '01:15 Second Audit',
         shown: [
-          fact(`${pName(e)}: Order #1 — "Give tetanus shot." · Order #2 — "Clean scrape with saline."`, e, { tag: 'safe', calm: true }),
-          fact(`A patient cannot BOTH receive max blood thinners AND stay strictly blood-thinner-free at the same time.`, [], { tag: 'rule' }),
+          fact(`${pName(f)}: Pain drip + anti-nausea shot (standard compatible post-op pair).`, [f], { tag: 'compat', p: f }),
+          fact(`${pName(b)} has NO head bleed and ${pName(d)} has NO blood thinner ordered — neither clashes!`, [b, d], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Pharmacy Gate', wingIndex: 0, label: 'Stop-Line Call',
+        index: 5, time: '01:20', wing: 'Safety Stop', wingIndex: 1, label: 'Freeze Conflicting Chart',
         shown: [
-          fact(`${pName(f)} has no active medication orders — cleared to go home.`, f, { tag: 'safe', calm: true }),
-          fact(`Trigger the Safety Hold on the single patient caught between two mutually incompatible doctor orders.`, [], { tag: 'rule' }),
+          fact(`Trigger the Safety Hold ONLY on a chart carrying TWO directly self-contradictory orders.`, [], { tag: 'rule' }),
+          fact(`All compatible single-side charts proceed without delay.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Clashing Specialist Orders',
-      dispatch: 'Cardiology and Neurosurgery just entered orders simultaneously — catch the single patient whose two orders cannot both be true.',
-      order: 'Place an immediate Safety Hold on the ONE patient with two mutually incompatible active orders.',
-      hint: 'Check which patient has two separate specialist orders that directly forbid each other.',
+      dispatch: 'Cross-link Cardiology and Neurosurgery orders to catch the chart trapped between two contradictory commands.',
+      order: 'Place an immediate Safety Hold on the SINGLE patient carrying two mutually incompatible active orders.',
+      hint: 'Intersect the "MAX Blood Thinner" orders with the "STRICT ZERO Blood Thinners" orders.',
       bayDefaultLabel: 'Order Audit',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Cleared · Home' },
       cards,
       evaluate(activeCards) {
-        const t = tagSet(activeCards, 'thinner');
-        const nt = tagSet(activeCards, 'no_thinner');
-        const targets = uniqueSortedIds([...t].filter((id) => nt.has(id)));
-        const rivals = [a, b, c, d].filter((id) => !targets.includes(id));
+        const t = new Set(factsByTag(activeCards, 'thinner').map((x) => x.p));
+        const nt = new Set(factsByTag(activeCards, 'no_thin').map((x) => x.p));
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => t.has(id) && nt.has(id)));
         return {
           targets,
-          proof: `${formatList(targets)} cannot simultaneously receive maximum blood thinners and obey a strict zero-blood-thinner brain-bleed order — both orders directly negate each other.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)}'s specialist orders complement each other cleanly without contradiction.`),
+          proof: `Cross-linking Cardiology and Neurosurgery isolates ${formatList(targets)}: ordered MAX Blood Thinner while simultaneously under a STRICT ZERO-Thinner brain-bleed ban.`,
+          rival: buildRivalInfo(targets, [b, d, c, a], (r) =>
+            t.has(r) ? `${pName(r)} is ordered blood thinners with a verified clean head CT (no conflict).` : `${pName(r)} has no blood thinner ordered against their no-thinner precaution.`
+          ),
         };
       },
     };
   },
 
   // #24 Antithetical reasoning (Inside · Atomic)
+  // 4-axis polar inversion relative to live reference bay F: Cold↔Hot, Slow↔Fast, Pinpoint↔Wide, Limp↔Rigid
   'antithetical-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Tox Reference', wingIndex: 0, label: 'Reference Drug Profile',
+        index: 0, time: '01:02', wing: 'Anchor Bay', wingIndex: 0, label: 'Reference Overdose Pole',
         shown: [
-          fact(`Sedative Overdose Reference: FREEZING COLD skin (94°F) + SLOW heart (44 BPM) + PINPOINT tiny pupils + limp sleepy muscles.`, [], { tag: 'rule' }),
-          fact(`Antidote B works ONLY on the EXACT OPPOSITE extreme across ALL FOUR signs (overheated + racing heart + wide-open pupils + rigid agitated muscles).`, [], { tag: 'rule' }),
+          fact(`Anchor ${pName(f)} (Sedative Pole): COLD 94°F · SLOW 44 BPM · PINPOINT pupils · LIMP muscles.`, [f], { tag: 'anchor', p: f }),
+          fact(`Antidote B works ONLY on the exact OPPOSITE OF ${pName(f)} across ALL FOUR axes: Hot + Racing + Wide Pupils + Rigid.`, [f], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Bedside Exam', wingIndex: 1, label: 'Bay Check 1',
+        index: 1, time: '01:06', wing: 'Temp & Heart', wingIndex: 1, label: 'Axes 1 & 2 vs. Anchor',
         shown: [
-          fact(`${pName(a)}: Burning hot 104°F · Racing heart 146 BPM · Huge wide-open pupils · Rigid shaking muscles.`, a, { tag: 'opp' }),
-          fact(`${pName(b)}: Burning hot 103°F · Racing heart 132 BPM · PINPOINT tiny pupils · Sleepy limp muscles.`, b, { tag: 'partial' }),
+          fact(`${pName(a)} & ${pName(b)} are BOTH hotter (104°F) AND faster (>138 BPM) — OPPOSITE OF ${pName(f)} on Axes 1–2.`, [a, b, f], { tag: 'ax12', ps: [a, b] }),
+          fact(`${pName(d)} is COLD (95°F) and SLOW (48 BPM) — SAME AS ${pName(f)}, NOT opposite!`, [d, f], { tag: 'same_pole', p: d }),
         ],
         alt: [
-          fact(`${pName(c)}: Burning hot 104°F · Racing heart 146 BPM · Huge wide-open pupils · Rigid shaking muscles.`, c, { tag: 'opp' }),
-          fact(`${pName(b)}: Burning hot 103°F · Racing heart 132 BPM · PINPOINT tiny pupils · Sleepy limp muscles.`, b, { tag: 'partial' }),
+          fact(`${pName(c)} & ${pName(b)} are BOTH hotter (104°F) AND faster (>138 BPM) — OPPOSITE OF ${pName(f)} on Axes 1–2.`, [c, b, f], { tag: 'ax12', ps: [c, b] }),
+          fact(`${pName(d)} is COLD (95°F) and SLOW (48 BPM) — SAME AS ${pName(f)}, NOT opposite!`, [d, f], { tag: 'same_pole', p: d }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Bedside Exam', wingIndex: 1, label: 'Bay Check 2',
+        index: 2, time: '01:10', wing: 'Eyes & Tone', wingIndex: 0, label: 'Axes 3 & 4 vs. Anchor',
         shown: [
-          fact(`${pName(c)}: Normal temp 98.6°F · Normal heart 76 BPM · Normal pupils · Calm relaxed muscles.`, c, { tag: 'neutral' }),
-          fact(`${pName(d)}: Cold 95°F · Slow heart 48 BPM · Pinpoint tiny pupils · Limp drowsy muscles (same as reference!).`, d, { tag: 'same' }),
+          fact(`${pName(a)}: WIDE-OPEN pupils + RIGID shaking muscles — OPPOSITE OF ${pName(f)} on Axes 3–4 too!`, [a, f], { tag: 'ax34', p: a }),
+          fact(`${pName(b)}: PINPOINT pupils + LIMP muscles — matches ${pName(f)} on Axes 3–4 (only 2/4 flipped!).`, [b, f], { tag: 'partial', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: Normal temp 98.6°F · Normal heart 76 BPM · Normal pupils · Calm relaxed muscles.`, a, { tag: 'neutral' }),
-          fact(`${pName(d)}: Cold 95°F · Slow heart 48 BPM · Pinpoint tiny pupils · Limp drowsy muscles (same as reference!).`, d, { tag: 'same' }),
+          fact(`${pName(c)}: WIDE-OPEN pupils + RIGID shaking muscles — OPPOSITE OF ${pName(f)} on Axes 3–4 too!`, [c, f], { tag: 'ax34', p: c }),
+          fact(`${pName(b)}: PINPOINT pupils + LIMP muscles — matches ${pName(f)} on Axes 3–4 (only 2/4 flipped!).`, [b, f], { tag: 'partial', p: b }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Tox Reference', wingIndex: 0, label: 'Partial Match Trap',
+        index: 3, time: '01:14', wing: 'Temp & Heart', wingIndex: 1, label: 'Neutral & 3/4 Traps',
         shown: [
-          fact(`Watch out: a normal calm patient (${pName(c)} or neutral) is NOT the opposite extreme, and matching only 2 of 4 signs fails!`, [], { tag: 'rule' }),
-          fact(`${pName(e)} has hot 102°F fever from strep throat, normal pupils, and relaxed muscles.`, e, { tag: 'partial' }),
+          fact(`${pName(e)}: Hot 103°F + Racing 135 BPM + WIDE pupils, yet RELAXED soft muscles (only 3/4 flipped!).`, [e], { tag: 'partial', p: e }),
+          fact(`${pName(c)}: Neutral 98.6°F + 76 BPM + normal pupils — middle baseline, NOT opposite extreme of ${pName(f)}.`, [c, f], { tag: 'neutral', p: c }),
+        ],
+        alt: [
+          fact(`${pName(e)}: Hot 103°F + Racing 135 BPM + WIDE pupils, yet RELAXED soft muscles (only 3/4 flipped!).`, [e], { tag: 'partial', p: e }),
+          fact(`${pName(a)}: Neutral 98.6°F + 76 BPM + normal pupils — middle baseline, NOT opposite extreme of ${pName(f)}.`, [a, f], { tag: 'neutral', p: a }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Bedside Exam', wingIndex: 1, label: 'Safety Check',
+        index: 4, time: '01:17', wing: 'Eyes & Tone', wingIndex: 0, label: 'Four-Axis Check',
         shown: [
-          fact(`Giving cooling Antidote B to a sleepy overdose patient (${pName(d)}) would stop their breathing!`, d, { tag: 'note' }),
-          fact(`${pName(f)} came in for a splinter removal; all vitals normal.`, f, { tag: 'safe', calm: true }),
+          fact(`A neutral middle bay OR a 3/4 partial match fails Antidote B safety rules.`, [], { tag: 'rule' }),
+          fact(`All four dimensions must sit at the exact mirror extreme of ${pName(f)}.`, [f], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Tox Reference', wingIndex: 0, label: 'Cooling Antidote Ready',
+        index: 5, time: '01:20', wing: 'Tox Lead', wingIndex: 1, label: 'Give Antidote B',
         shown: [
-          fact(`Verify ALL FOUR flipped dimensions: Hot (vs Cold), Racing (vs Slow), Wide Pupils (vs Pinpoint), Rigid Agitated (vs Limp Sleepy).`, [], { tag: 'rule' }),
-          fact(`Treat the single patient sitting at the complete opposite pole.`, [], { tag: 'rule' }),
+          fact(`Bind Axes 1–2 with Axes 3–4 to isolate the single 4-of-4 opposite pole.`, [], { tag: 'rule' }),
+          fact(`Inject Antidote B into that single bay right now.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Mirror-Opposite Overdose',
-      dispatch: 'Multiple overdose patients arrived together — Antidote B treats ONLY the complete mirror-opposite of a sleepy sedative overdose.',
-      order: 'Give Antidote B ONLY to the patient showing the exact opposite extreme across ALL FOUR vital signs.',
-      hint: 'Check temperature, heart rate, pupil size, and muscle state against the cold/slow/pinpoint/limp reference.',
-      bayDefaultLabel: 'Overdose Eval',
-      bayLabels: { [f]: 'Minor · Stable' },
+      scenarioTitle: '4-Axis Mirror Overdose',
+      dispatch: 'Compare every bay against anchor Sedative Pole across Temp, Heart Rate, Pupils, and Muscle Tone.',
+      order: 'Give Antidote B ONLY to the patient sitting at the exact OPPOSITE extreme across ALL FOUR vital axes.',
+      hint: 'Check Axes 1–2 (Hot + Racing) AND Axes 3–4 (Wide Pupils + Rigid) — reject 3/4 partial matches.',
+      bayDefaultLabel: 'Tox Polarity',
       cards,
       evaluate(activeCards) {
-        const targets = uniqueSortedIds([...tagSet(activeCards, 'opp')]);
-        const rivals = [...tagSet(activeCards, 'partial'), ...tagSet(activeCards, 'same')];
+        const ax12 = new Set(factsByTag(activeCards, 'ax12').flatMap((x) => x.ps));
+        const ax34 = new Set(factsByTag(activeCards, 'ax34').map((x) => x.p));
+        const targets = uniqueSortedIds([a, b, c, d, e].filter((id) => ax12.has(id) && ax34.has(id)));
         return {
           targets,
-          proof: `${formatList(targets)} sit at the complete opposite pole on all four signs (burning hot, racing heart, wide-open pupils, rigid shaking muscles).`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} matches only part of the opposite profile (or matches the sleepy reference itself).`),
+          proof: `Inverting all 4 axes of anchor ${pName(f)} (Hot + Racing + Wide Pupils + Rigid) isolates ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [e, b, d, c, a], (r) =>
+            r === e ? `${pName(e)} flipped 3 of 4 axes, but relaxed muscles fail the 4th axis.` : `${pName(r)} matches only part of the opposite pole or mirrors ${pName(f)} directly.`
+          ),
         };
       },
     };
   },
 
   // #25 Higher-order relational reasoning (Inside · Composite)
+  // Comparing ratios of change (Delta / Baseline) across 6 patients — relation-of-relations!
   'higher-order-relational': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Trend Monitor', wingIndex: 0, label: 'Rate vs Raw Number',
+        index: 0, time: '01:02', wing: 'Baseline Chart', wingIndex: 0, label: '00:45 Normal Baselines',
         shown: [
-          fact(`A steady low-normal person can be completely safe, while a person losing a HUGE FRACTION of their normal baseline is bleeding out!`, [], { tag: 'rule' }),
-          fact(`Compare each patient's DROP relative to their own starting blood pressure (not just who has the lowest raw number right now).`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 1, time: '02:00', wing: 'Vitals Log', wingIndex: 1, label: '15-Min Shift: Pair 1',
-        shown: [
-          fact(`${pName(a)}: Baseline 150 → now 96 over the last 15 minutes.`, a, { tag: 'shift', start: 150, now: 96 }),
-          fact(`${pName(b)}: Baseline 98 → now 92 over the last 15 minutes (always runs low-normal!).`, b, { tag: 'shift', start: 98, now: 92 }),
+          fact(`Normal resting BP: ${pName(a)} = 150 · ${pName(b)} = 100 · ${pName(c)} = 120.`, [a, b, c], { tag: 'base', map: { [a]: 150, [b]: 100, [c]: 120 } }),
+          fact(`Normal resting BP: ${pName(d)} = 160 · ${pName(e)} = 120 · ${pName(f)} = 110.`, [d, e, f], { tag: 'base', map: { [d]: 160, [e]: 120, [f]: 110 } }),
         ],
         alt: [
-          fact(`${pName(a)}: Baseline 104 → now 96 over the last 15 minutes.`, a, { tag: 'shift', start: 104, now: 96 }),
-          fact(`${pName(b)}: Baseline 152 → now 94 over the last 15 minutes.`, b, { tag: 'shift', start: 152, now: 94 }),
+          fact(`Normal resting BP: ${pName(a)} = 100 · ${pName(b)} = 160 · ${pName(c)} = 120.`, [a, b, c], { tag: 'base', map: { [a]: 100, [b]: 160, [c]: 120 } }),
+          fact(`Normal resting BP: ${pName(d)} = 110 · ${pName(e)} = 120 · ${pName(f)} = 150.`, [d, e, f], { tag: 'base', map: { [d]: 110, [e]: 120, [f]: 150 } }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Vitals Log', wingIndex: 1, label: '15-Min Shift: Pair 2',
+        index: 1, time: '01:08', wing: 'Live Wall', wingIndex: 1, label: '01:15 Current BP (A–C)',
         shown: [
-          fact(`${pName(c)}: Baseline 120 → now 108 over the last 15 minutes.`, c, { tag: 'shift', start: 120, now: 108 }),
-          fact(`${pName(d)}: Baseline 116 → now 106 over the last 15 minutes.`, d, { tag: 'shift', start: 116, now: 106 }),
+          fact(`${pName(a)} now reads 96 — HIGHER THAN ${pName(b)}'s 92, yet fell from a much higher start!`, [a, b], { tag: 'now', map: { [a]: 96, [b]: 92 } }),
+          fact(`${pName(c)} now reads 102 (dropped 18 points from 120).`, [c], { tag: 'now', map: { [c]: 102 } }),
         ],
         alt: [
-          fact(`${pName(c)}: Baseline 120 → now 108 over the last 15 minutes.`, c, { tag: 'shift', start: 120, now: 108 }),
-          fact(`${pName(d)}: Baseline 116 → now 106 over the last 15 minutes.`, d, { tag: 'shift', start: 116, now: 106 }),
+          fact(`${pName(a)} now reads 94 while ${pName(b)} now reads 102 (dropped steeply from 160!).`, [a, b], { tag: 'now', map: { [a]: 94, [b]: 102 } }),
+          fact(`${pName(c)} now reads 108 (dropped 12 points from 120).`, [c], { tag: 'now', map: { [c]: 108 } }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Trend Monitor', wingIndex: 0, label: 'Why Raw 92 Can Mislead',
+        index: 2, time: '01:12', wing: 'Live Wall', wingIndex: 1, label: '01:15 Current BP (D–F)',
         shown: [
-          fact(`A marathon runner whose normal pressure is 98 dipping to 92 barely changed (~6% drop).`, [], { tag: 'rule' }),
-          fact(`Someone crashing by over a THIRD of their starting pressure is in active hidden internal hemorrhage!`, [], { tag: 'rule' }),
+          fact(`${pName(d)} now reads 128 — STILL HIGHER THAN ${pName(e)}'s 108.`, [d, e], { tag: 'now', map: { [d]: 128, [e]: 108 } }),
+          fact(`${pName(f)} now reads 104 (almost unchanged from normal resting 110).`, [f], { tag: 'now', map: { [f]: 104 } }),
+        ],
+        alt: [
+          fact(`${pName(d)} now reads 104 while ${pName(e)} now reads 110.`, [d, e], { tag: 'now', map: { [d]: 104, [e]: 110 } }),
+          fact(`${pName(f)} now reads 120 (dropped 30 points from 150).`, [f], { tag: 'now', map: { [f]: 120 } }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Vitals Log', wingIndex: 1, label: 'Other Arrivals',
+        index: 3, time: '01:15', wing: 'Trend Rule', wingIndex: 0, label: 'Compare Drop Fractions',
         shown: [
-          fact(`${pName(e)}: Baseline 118 → now 116 (steady, bruised elbow).`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)}: Baseline 122 → now 122 (cleared to go home).`, f, { tag: 'safe', calm: true }),
+          fact(`Raw BP fools rookies: a runner at 100 → 92 lost under 10%, while a huge fractional drop means active hidden bleeding!`, [], { tag: 'rule' }),
+          fact(`Rank each bay by FRACTION LOST = (Baseline − Current) ÷ Baseline.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Trend Monitor', wingIndex: 0, label: 'Emergency Scan Call',
+        index: 4, time: '01:18', wing: 'Trend Rule', wingIndex: 0, label: 'Quick Benchmark',
         shown: [
-          fact(`Only ONE emergency trauma scanner slot is open right now.`, [], { tag: 'rule' }),
-          fact(`Compare the RELATIVE DROPS across all four monitored patients and scan the steepest collapse first.`, [], { tag: 'rule' }),
+          fact(`A drop of 1/3 (33%+) of starting BP is DOUBLE the danger of a 15–20% dip.`, [], { tag: 'rule' }),
+          fact(`Compare the two biggest drops carefully — only ONE exceeds a 33% collapse!`, [], { tag: 'rule' }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:20', wing: 'CT Scanner', wingIndex: 1, label: 'One Scanner Slot',
+        shown: [
+          fact(`Wheel the SINGLE patient with the HIGHEST fractional BP drop straight to Emergency CT.`, [], { tag: 'rule' }),
+          fact(`Do not grab the lowest raw number without checking where they started.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Hidden Baseline Collapse',
-      dispatch: 'One patient has a lower raw number, but another is plummeting dramatically from their normal baseline — compare the drops!',
-      order: 'Send the SINGLE patient experiencing the steepest drop relative to their own baseline to the trauma scanner.',
-      hint: 'Compare how far each patient fell from their starting baseline, rather than grabbing the lowest current number.',
-      bayDefaultLabel: 'BP Trend Watch',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Cleared · Home' },
+      scenarioTitle: 'Fractional Baseline Collapse',
+      dispatch: 'Compare each patient’s BP drop RELATIVE TO their own starting baseline rather than grabbing the lowest raw number.',
+      order: 'Send the SINGLE patient who lost the LARGEST FRACTION of their starting baseline BP to Emergency CT.',
+      hint: 'Compute (Baseline − Current) ÷ Baseline for the big droppers and pick the steepest percentage fall.',
+      bayDefaultLabel: 'BP Drop Ratio',
       cards,
       evaluate(activeCards) {
-        const shifts = factsByTag(activeCards, 'shift').map((s) => ({
-          id: s.patients[0],
-          start: s.start,
-          now: s.now,
-          drop: s.start - s.now,
-          pct: (s.start - s.now) / s.start,
-        }));
-        shifts.sort((x, y) => y.pct - x.pct);
-        const top = shifts[0];
-        const lowRaw = [...shifts].sort((x, y) => x.now - y.now)[0];
+        const base = {};
+        const now = {};
+        for (const x of factsByTag(activeCards, 'base')) Object.assign(base, x.map);
+        for (const x of factsByTag(activeCards, 'now')) Object.assign(now, x.map);
+        const rows = [a, b, c, d, e, f]
+          .filter((id) => base[id] && now[id])
+          .map((id) => ({ id, base: base[id], now: now[id], drop: base[id] - now[id], pct: (base[id] - now[id]) / base[id] }))
+          .sort((x, y) => y.pct - x.pct);
+        const top = rows[0];
+        const lowRaw = [...rows].sort((x, y) => x.now - y.now)[0];
         const targets = top ? [top.id] : [];
-        const rivals = [lowRaw?.id, shifts[1]?.id].filter((id) => id && id !== top?.id);
+        const rivals = [lowRaw?.id, rows[1]?.id].filter((id) => id && id !== top.id);
         return {
           targets,
-          proof: `${pName(top.id)} plunged ${top.drop} points (${top.start} → ${top.now}, ${Math.round(top.pct * 100)}% of baseline), dwarfing every other dip.`,
-          rival: buildRivalInfo(targets, rivals, (id) => {
-            const r = shifts.find((s) => s.id === id);
-            return `${pName(id)} only dipped ${r.drop} points (${r.start} → ${r.now}), even if their raw number looked low.`;
+          proof: `Comparing fractional drops puts ${pName(top.id)} #1: ${top.base} → ${top.now} (−${top.drop}, ${Math.round(top.pct * 100)}% of baseline), steeper than ${pName(rows[1].id)} (${Math.round(rows[1].pct * 100)}%).`,
+          rival: buildRivalInfo(targets, rivals, (r) => {
+            const row = rows.find((x) => x.id === r);
+            return `${pName(r)} fell ${row.base} → ${row.now} (${Math.round(row.pct * 100)}% drop), smaller proportionally even if raw BP looked lower.`;
           }),
         };
       },
@@ -431,241 +460,254 @@ export const SEMANTIC_F34 = {
   },
 
   // #26 Cross-domain reasoning (After · Composite)
+  // Transferring Aviation's 2×2 matrix (High-Stakes "Landing" × Active Distraction) across 6 ER rooms
   'cross-domain-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Safety Model', wingIndex: 0, label: 'Aviation "Sterile Cockpit"',
+        index: 0, time: '01:02', wing: 'Aviation Law', wingIndex: 0, label: 'Sterile Cockpit Transfer',
         shown: [
-          fact(`Aviation Law: Below 10,000 feet (takeoff & landing), pilots ban ALL non-essential chatter and interruptions because one split-second distraction causes crashes.`, [], { tag: 'rule' }),
-          fact(`Transfer this exact rule to our ER: protect any high-stakes "landing" moment (delicate airway tube, fatal drug mix, or death notification) currently flooded with distractions!`, [], { tag: 'rule' }),
+          fact(`Aviation :: ER Transfer → Critical "Landing" (airway tube, lethal drug math, death talk) + Non-Essential Noise = CRASH RISK.`, [], { tag: 'rule' }),
+          fact(`Routine "Cruise" (X-ray wait, cast wrap) OR a quiet locked Critical room needs ZERO shutdown.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Ward Floor', wingIndex: 1, label: 'Room Check 1',
+        index: 1, time: '01:06', wing: 'Phase Check', wingIndex: 1, label: 'Room Stakes (Landing vs. Cruise)',
         shown: [
-          fact(`${pName(a)}'s room: Doctor is delivering a sudden death notification to the spouse while two billing clerks barge in asking for insurance cards and a TV blares.`, a, { tag: 'viol' }),
-          fact(`${pName(b)}'s bay: Calmly waiting for a foot X-ray while chatting with a friend about weekend sports.`, b, { tag: 'low_stakes' }),
+          fact(`${pName(a)}, ${pName(c)}, and ${pName(d)} are in HIGH-STAKES "Landing" tasks (death talk, child heart-dose math, artery stitch).`, [a, c, d], { tag: 'landing', ps: [a, c, d] }),
+          fact(`${pName(b)}, ${pName(e)}, and ${pName(f)} are in routine "Cruise" care (X-ray wait, ankle tape, blood draw).`, [b, e, f], { tag: 'cruise', ps: [b, e, f] }),
         ],
         alt: [
-          fact(`${pName(c)}'s room: Doctor is delivering a sudden death notification to the spouse while two billing clerks barge in asking for insurance cards and a TV blares.`, c, { tag: 'viol' }),
-          fact(`${pName(b)}'s bay: Calmly waiting for a foot X-ray while chatting with a friend about weekend sports.`, b, { tag: 'low_stakes' }),
+          fact(`${pName(b)}, ${pName(c)}, and ${pName(d)} are in HIGH-STAKES "Landing" tasks (airway tube, child dose math, artery stitch).`, [b, c, d], { tag: 'landing', ps: [b, c, d] }),
+          fact(`${pName(a)}, ${pName(e)}, and ${pName(f)} are in routine "Cruise" care (X-ray wait, ankle tape, blood draw).`, [a, e, f], { tag: 'cruise', ps: [a, e, f] }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Ward Floor', wingIndex: 1, label: 'Room Check 2',
+        index: 2, time: '01:10', wing: 'Noise Audit', wingIndex: 0, label: 'Interruption Levels A',
         shown: [
-          fact(`${pName(c)}'s bay: Nurse is calculating a high-risk pediatric heart dose while a phone rings nonstop and three staff ask lunch questions.`, c, { tag: 'viol' }),
-          fact(`${pName(d)}'s bay: Surgeon is stitching a delicate artery in total focused silence (door closed, zero interruptions).`, d, { tag: 'protected' }),
+          fact(`${pName(a)}'s room is LOUDER THAN ${pName(d)}'s: two billing clerks are interrupting while a TV blares.`, [a, d], { tag: 'noisy', p: a }),
+          fact(`${pName(d)}'s room is sealed in total focused silence — OPPOSITE OF ${pName(a)}'s chaos.`, [d, a], { tag: 'quiet', p: d }),
         ],
         alt: [
-          fact(`${pName(a)}'s bay: Nurse is calculating a high-risk pediatric heart dose while a phone rings nonstop and three staff ask lunch questions.`, a, { tag: 'viol' }),
-          fact(`${pName(d)}'s bay: Surgeon is stitching a delicate artery in total focused silence (door closed, zero interruptions).`, d, { tag: 'protected' }),
+          fact(`${pName(b)}'s room is LOUDER THAN ${pName(d)}'s: two billing clerks are interrupting while a phone rings nonstop.`, [b, d], { tag: 'noisy', p: b }),
+          fact(`${pName(d)}'s room is sealed in total focused silence — OPPOSITE OF ${pName(b)}'s chaos.`, [d, b], { tag: 'quiet', p: d }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Safety Model', wingIndex: 0, label: 'Cruising Altitude vs Landing',
+        index: 3, time: '01:14', wing: 'Noise Audit', wingIndex: 0, label: 'Interruption Levels B',
         shown: [
-          fact(`Routine low-stakes moments (waiting for X-ray, discharge paperwork) are "cruising altitude" — normal chatter is fine!`, [], { tag: 'rule' }),
-          fact(`High-stakes moments ALREADY in quiet focus (${pName(d)}) need NO intervention — don't disrupt them!`, d, { tag: 'note' }),
+          fact(`${pName(c)}'s bay has 3 staff asking lunch orders mid-dose — SAME disruption as ${pName(a)}.`, [c, a], { tag: 'noisy', p: c }),
+          fact(`${pName(b)}'s bay has loud sports chatter — noisy, YET check whether ${pName(b)} is "Landing" or "Cruise"!`, [b], { tag: 'noisy', p: b }),
+        ],
+        alt: [
+          fact(`${pName(c)}'s bay is sealed behind a quiet "Dosing — Do Not Enter" sign.`, [c], { tag: 'quiet', p: c }),
+          fact(`${pName(e)}'s bay has loud hallway chatter during an ankle tape (routine cruise).`, [e], { tag: 'noisy', p: e }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Ward Floor', wingIndex: 1, label: 'Other Rooms',
+        index: 4, time: '01:17', wing: 'Noise Audit', wingIndex: 0, label: 'Remaining Bays',
         shown: [
-          fact(`${pName(e)}'s room: Post-stitch discharge instructions in a quiet cubicle with zero interruptions.`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)}'s room: Reading a magazine while waiting for a ride home.`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(e)} and ${pName(f)} have quiet routine rooms — zero high-stakes landing risk.`, [e, f], { tag: 'quiet', p: e }),
+          fact(`Do NOT disrupt ${pName(d)}'s already-silent surgical suite.`, [d], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Safety Model', wingIndex: 0, label: 'Enforce Silence',
+        index: 5, time: '01:20', wing: 'Charge Nurse', wingIndex: 1, label: 'Enforce Sterile Door',
         shown: [
-          fact(`Step in and lock the door ONLY on rooms combining HIGH-STAKES "landing" work WITH active non-essential distractions.`, [], { tag: 'rule' }),
-          fact(`Two critical rooms are violating Sterile Cockpit right now.`, [], { tag: 'rule' }),
+          fact(`Intersect HIGH-STAKES "Landing" rooms WITH ACTIVE non-essential interruptions.`, [], { tag: 'rule' }),
+          fact(`Lock down and clear non-essential staff ONLY from those exact violating rooms.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Sterile Cockpit in the ER',
-      dispatch: 'Borrow aviation’s "Sterile Cockpit" law to stop dangerous interruptions during the ER’s highest-stakes moments.',
-      order: 'Lock down and clear distractions in EVERY room currently violating the Sterile Cockpit safety rule.',
-      hint: 'Find rooms with BOTH a high-stakes irreversible moment AND active non-essential interruptions.',
-      bayDefaultLabel: 'Safety Audit',
-      bayLabels: { [b]: 'Minor · X-Ray', [e]: 'Cleared · Home', [f]: 'Cleared · Home' },
+      dispatch: 'Transfer aviation’s 2-factor Sterile Cockpit model: intersect High-Stakes "Landing" tasks with Active Distractions.',
+      order: 'Lock down and clear distractions in EVERY room combining a High-Stakes "Landing" task WITH active interruptions.',
+      hint: 'Match the "Landing" room list against the "Noisy/Interrupted" room list — skip quiet or routine-cruise bays.',
+      bayDefaultLabel: 'Sterile Audit',
       cards,
       evaluate(activeCards) {
-        const targets = uniqueSortedIds([...tagSet(activeCards, 'viol')]);
-        const rivals = [...tagSet(activeCards, 'protected'), ...tagSet(activeCards, 'low_stakes')];
+        const landing = new Set(factsByTag(activeCards, 'landing').flatMap((x) => x.ps));
+        const noisy = new Set(factsByTag(activeCards, 'noisy').map((x) => x.p));
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => landing.has(id) && noisy.has(id)));
+        const rivals = [a, b, c, d, e].filter((id) => !targets.includes(id) && (landing.has(id) || noisy.has(id)));
         return {
           targets,
-          proof: `Transferring aviation's Sterile Cockpit rule pinpoints ${formatList(targets)}: both are high-stakes irreversible moments currently flooded with avoidable interruptions.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)}'s room is either already protected in silence or low-stakes routine waiting.`),
+          proof: `Transferring aviation's Sterile Cockpit rule (High-Stakes Landing ∩ Active Noise) isolates ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, rivals, (r) =>
+            landing.has(r) ? `${pName(r)} is high-stakes, but already protected in silent focus.` : `${pName(r)}'s room is noisy, but it is routine low-stakes "cruise" care.`
+          ),
         };
       },
     };
   },
 
   // #27 Abstract reasoning (Before · Composite)
+  // Isomorphic dependency graph: find the single highest out-degree bottleneck node across 6 bays
   'abstract-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Hospital Flow', wingIndex: 0, label: 'Bottleneck Structure',
+        index: 0, time: '01:02', wing: 'Flow Graph', wingIndex: 0, label: 'Dependency Edges A',
         shown: [
-          fact(`Ignore the medical specialty names — look at the dependency graph: ONE patient is sitting on the sole shared bottleneck blocking THREE other critical workflows!`, [], { tag: 'rule' }),
-          fact(`Clearing that single upstream bottleneck immediately unblocks everyone behind them.`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 1, time: '02:00', wing: 'Dept Status', wingIndex: 1, label: 'Resource Hold 1',
-        shown: [
-          fact(`${pName(a)} is occupying the hospital's ONLY emergency CT scanner — already finished scanning, just waiting for a porter to wheel them out!`, a, { tag: 'blocker' }),
-          fact(`${pName(b)} (Head Trauma), ${pName(c)} (Chest Tear), and ${pName(d)} (Belly Bleed) are ALL frozen waiting for that exact CT scanner.`, [b, c, d], { tag: 'blocked' }),
+          fact(`${pName(a)} sits finished inside CT-1 → BLOCKS ${pName(b)}, ${pName(c)}, AND ${pName(d)} from scanning.`, [a, b, c, d], { tag: 'blocks', from: a, to: [b, c, d] }),
+          fact(`${pName(b)} waits in Corridor 2 → BLOCKS zero other patients.`, [b], { tag: 'blocks', from: b, to: [] }),
         ],
         alt: [
-          fact(`${pName(b)} is occupying the hospital's ONLY emergency CT scanner — already finished scanning, just waiting for a porter to wheel them out!`, b, { tag: 'blocker' }),
-          fact(`${pName(a)} (Head Trauma), ${pName(c)} (Chest Tear), and ${pName(d)} (Belly Bleed) are ALL frozen waiting for that exact CT scanner.`, [a, c, d], { tag: 'blocked' }),
+          fact(`${pName(b)} sits finished inside CT-1 → BLOCKS ${pName(a)}, ${pName(c)}, AND ${pName(d)} from scanning.`, [b, a, c, d], { tag: 'blocks', from: b, to: [a, c, d] }),
+          fact(`${pName(a)} waits in Corridor 2 → BLOCKS zero other patients.`, [a], { tag: 'blocks', from: a, to: [] }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Dept Status', wingIndex: 1, label: 'Resource Hold 2',
+        index: 1, time: '01:06', wing: 'Flow Graph', wingIndex: 0, label: 'Dependency Edges B',
         shown: [
-          fact(`${pName(c)} is sitting in Hallway Bed 4 — blocking zero other patients.`, c, { tag: 'leaf' }),
-          fact(`${pName(d)} is sitting in Hallway Bed 7 — blocking zero other patients.`, d, { tag: 'leaf' }),
+          fact(`${pName(e)} holds X-Ray Room 2 → BLOCKS ONLY ${pName(f)} (1 downstream bay).`, [e, f], { tag: 'blocks', from: e, to: [f] }),
+          fact(`${pName(c)} and ${pName(d)} cannot start surgery UNTIL CT-1 frees up.`, [c, d], { tag: 'note' }),
+        ],
+        alt: [
+          fact(`${pName(e)} holds X-Ray Room 2 → BLOCKS ONLY ${pName(f)} (1 downstream bay).`, [e, f], { tag: 'blocks', from: e, to: [f] }),
+          fact(`${pName(c)} and ${pName(d)} cannot start surgery UNTIL CT-1 frees up.`, [c, d], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Hospital Flow', wingIndex: 0, label: 'Downstream Effect',
+        index: 2, time: '01:10', wing: 'Porter Desk', wingIndex: 1, label: 'Move-Time Comparison',
         shown: [
-          fact(`None of the three waiting surgeries can even begin until the scanner bed clears.`, [], { tag: 'rule' }),
-          fact(`Moving the single patient holding the scanner takes 90 seconds and unlocks 3 surgical bays at once.`, [], { tag: 'rule' }),
+          fact(`Moving ${pName(a)} out of CT-1 takes the SAME 90 seconds as moving ${pName(e)} out of X-Ray 2.`, [a, e], { tag: 'note' }),
+          fact(`Yet clearing CT-1 unblocks THREE TIMES as many critical workflows as clearing X-Ray 2!`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Dept Status', wingIndex: 1, label: 'Parallel Room',
+        index: 3, time: '01:14', wing: 'OR Board', wingIndex: 1, label: 'Downstream Status',
         shown: [
-          fact(`${pName(e)} is in Stitch Room 2 (three other stitch rooms are empty — zero bottleneck).`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} is checking out at the front desk.`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(c)}, ${pName(d)}, and ${pName(f)} are leaf nodes — moving any leaf frees ZERO downstream bays.`, [c, d, f], { tag: 'note' }),
+          fact(`Strip away the specialty titles and count outgoing BLOCKS arrows per bay.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Hospital Flow', wingIndex: 0, label: 'Dispatch Porter',
+        index: 4, time: '01:17', wing: 'Flow Graph', wingIndex: 0, label: 'Single Porter Limit',
         shown: [
-          fact(`You have ONE free porter right now — don't move a downstream patient who is still stuck waiting!`, [], { tag: 'rule' }),
-          fact(`Clear the single upstream node holding the whole queue hostage.`, [], { tag: 'rule' }),
+          fact(`Only ONE transport porter is free right now — you can clear ONE room first.`, [], { tag: 'rule' }),
+          fact(`Always clear the node with the MAXIMUM downstream unlock count.`, [], { tag: 'rule' }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:20', wing: 'Dispatch', wingIndex: 1, label: 'Break Top Bottleneck',
+        shown: [
+          fact(`Compare the blocking counts of CT-1 vs. X-Ray 2 vs. Corridor bays.`, [], { tag: 'rule' }),
+          fact(`Move the SINGLE patient unblocking the most downstream trauma bays at once.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'The Single-Point Bottleneck',
-      dispatch: 'Three urgent departments are completely stalled — strip away the specialty labels and spot the single upstream bottleneck.',
-      order: 'Move the SINGLE patient who is holding up the entire downstream trauma queue.',
-      hint: 'Distinguish the one upstream holder of the lone shared scanner from the three downstream patients waiting on it.',
-      bayDefaultLabel: 'Queue Hold',
-      bayLabels: { [e]: 'Minor · Stitches', [f]: 'Cleared · Home' },
+      scenarioTitle: 'The Maximum-Unlock Bottleneck',
+      dispatch: 'Strip away specialty names and count outgoing BLOCKS arrows to clear the highest-leverage bottleneck.',
+      order: 'Move the SINGLE patient whose transfer immediately unblocks the MOST downstream trauma bays.',
+      hint: 'Count how many other patients each bay directly blocks (3 vs. 1 vs. 0).',
+      bayDefaultLabel: 'Queue Node',
       cards,
       evaluate(activeCards) {
-        const targets = uniqueSortedIds([...tagSet(activeCards, 'blocker')]);
-        const rivals = [...tagSet(activeCards, 'blocked')];
+        const edges = factsByTag(activeCards, 'blocks');
+        const counts = new Map();
+        for (const ed of edges) counts.set(ed.from, (counts.get(ed.from) || 0) + ed.to.length);
+        const sorted = [...counts.entries()].sort((x, y) => y[1] - x[1]);
+        const top = sorted[0];
+        const targets = top ? [top[0]] : [];
         return {
           targets,
-          proof: `Abstracting away specialty labels reveals ${formatList(targets)} as the lone upstream bottleneck blocking three downstream critical cases on the hospital's only CT scanner.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} is a downstream waiting node — moving them doesn't free the scanner.`),
+          proof: `In the dependency graph, ${pName(top[0])} directly blocks ${top[1]} downstream patients — outranking ${pName(e)} (blocks 1) and all leaf bays (block 0).`,
+          rival: buildRivalInfo(targets, [e, c, d, b, a], (r) =>
+            r === e ? `${pName(e)} only unblocks 1 patient (${pName(f)}), whereas ${pName(top[0])} unblocks 3 critical bays.` : `${pName(r)} is waiting downstream and blocks zero other bays.`
+          ),
         };
       },
     };
   },
 
   // #28 Hierarchical reasoning (Before · Atomic)
+  // Strict authority lattice (Chief > Attending > Resident > Student) + timestamp precedence within same rank
   'hierarchical-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Command Tree', wingIndex: 0, label: 'Hospital Authority Ladder',
+        index: 0, time: '01:02', wing: 'Authority Tree', wingIndex: 0, label: 'Command Precedence',
         shown: [
-          fact(`Strict Chain of Command (highest to lowest): 1. Trauma Chief  >  2. Senior Attending  >  3. Resident  >  4. Med Student.`, [], { tag: 'rule' }),
-          fact(`A higher rank ALWAYS overrides a lower rank — AND a later update from the SAME rank overrides their own earlier note.`, [], { tag: 'rule' }),
+          fact(`Trauma Chief OUTRANKS Senior Attending OUTRANKS Resident OUTRANKS Med Student.`, [], { tag: 'rule' }),
+          fact(`A higher rank ALWAYS OVERRIDES a lower rank; within the SAME rank, a LATER timestamp OVERRIDES an earlier one.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'OR Dispatch', wingIndex: 1, label: 'Early Orders (01:05)',
+        index: 1, time: '01:05', wing: 'OR Queue', wingIndex: 1, label: '01:05 Early Orders',
         shown: [
-          fact(`01:05 Med Student: "Put ${pName(a)} into OR 1 first."`, a, { tag: 'ord', rank: 1, time: 1 }),
-          fact(`01:05 Trauma Chief: "Put ${pName(b)} into OR 1 first."`, b, { tag: 'ord', rank: 4, time: 1 }),
+          fact(`01:05 [Med Student]: Put ${pName(a)} into OR-1 first.`, [a], { tag: 'ord', p: a, rank: 1, t: 5 }),
+          fact(`01:05 [Trauma Chief]: Put ${pName(b)} into OR-1 first.`, [b], { tag: 'ord', p: b, rank: 4, t: 5 }),
         ],
         alt: [
-          fact(`01:05 Med Student: "Put ${pName(a)} into OR 1 first."`, a, { tag: 'ord', rank: 1, time: 1 }),
-          fact(`01:05 Senior Attending: "Put ${pName(b)} into OR 1 first."`, b, { tag: 'ord', rank: 3, time: 1 }),
+          fact(`01:05 [Med Student]: Put ${pName(a)} into OR-1 first.`, [a], { tag: 'ord', p: a, rank: 1, t: 5 }),
+          fact(`01:05 [Senior Attending]: Put ${pName(b)} into OR-1 first.`, [b], { tag: 'ord', p: b, rank: 3, t: 5 }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'OR Dispatch', wingIndex: 1, label: 'Mid Orders (01:15)',
+        index: 2, time: '01:12', wing: 'OR Queue', wingIndex: 1, label: '01:12 Mid Orders',
         shown: [
-          fact(`01:15 Resident: "Actually send ${pName(c)} to OR 1 immediately."`, c, { tag: 'ord', rank: 2, time: 2 }),
-          fact(`01:15 Senior Attending: "Override Resident — prep ${pName(d)} for OR 1."`, d, { tag: 'ord', rank: 3, time: 2 }),
+          fact(`01:12 [Resident]: Send ${pName(c)} to OR-1 ahead of ${pName(a)}.`, [c, a], { tag: 'ord', p: c, rank: 2, t: 12 }),
+          fact(`01:14 [Senior Attending]: OVERRIDES Resident — prep ${pName(d)} for OR-1.`, [d], { tag: 'ord', p: d, rank: 3, t: 14 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Command Tree', wingIndex: 0, label: 'Late Override (01:25)',
+        index: 3, time: '01:22', wing: 'Command Desk', wingIndex: 0, label: '01:22 Late Update',
         shown: [
-          fact(`01:25 Trauma Chief (updated after new scan!): "Cancel my 01:05 note — move ${pName(c)} into OR 1 NOW!"`, c, { tag: 'ord', rank: 4, time: 3 }),
-          fact(`Notice: Resident's earlier note didn't decide this — the Trauma Chief's 01:25 call did!`, [], { tag: 'rule' }),
+          fact(`01:22 [Trauma Chief]: AFTER new CT, OVERRIDE my 01:05 note — move ${pName(e)} into OR-1 NOW!`, [e], { tag: 'ord', p: e, rank: 4, t: 22 }),
+          fact(`01:25 [Senior Attending]: Logged request for ${pName(f)} (timestamp LATER THAN 01:22, but lower rank!).`, [f], { tag: 'ord', p: f, rank: 3, t: 25 }),
         ],
         alt: [
-          fact(`01:25 Trauma Chief (updated after new scan!): "Move ${pName(d)} into OR 1 NOW!"`, d, { tag: 'ord', rank: 4, time: 3 }),
-          fact(`Trauma Chief outranks every other title on the board.`, [], { tag: 'rule' }),
+          fact(`01:22 [Trauma Chief]: AFTER new CT, OVERRIDE my 01:05 note — move ${pName(d)} into OR-1 NOW!`, [d], { tag: 'ord', p: d, rank: 4, t: 22 }),
+          fact(`01:25 [Resident]: Logged request for ${pName(f)} (timestamp LATER THAN 01:22, but lower rank!).`, [f], { tag: 'ord', p: f, rank: 2, t: 25 }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'OR Dispatch', wingIndex: 1, label: 'Unrelated Notes',
+        index: 4, time: '01:26', wing: 'Authority Tree', wingIndex: 0, label: 'Timestamp vs. Rank Trap',
         shown: [
-          fact(`${pName(e)} is scheduled for non-urgent outpatient clinic next Tuesday.`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} is waiting for a simple arm cast in Ortho.`, f, { tag: 'safe', calm: true }),
+          fact(`Watch 01:25 vs. 01:22: a LATER note from a lower rank NEVER overrides a higher rank!`, [], { tag: 'rule' }),
+          fact(`Only the Trauma Chief can override the Trauma Chief's own 01:05 call.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Command Tree', wingIndex: 0, label: 'Final OR 1 Call',
+        index: 5, time: '01:28', wing: 'OR Charge', wingIndex: 1, label: 'Final Authorization',
         shown: [
-          fact(`Follow ONLY the highest-ranking active directive (breaking ties by latest timestamp).`, [], { tag: 'rule' }),
-          fact(`Wheel that single authorized patient into OR 1 now.`, [], { tag: 'rule' }),
+          fact(`Filter by HIGHEST rank first, then break any same-rank tie by LATEST time.`, [], { tag: 'rule' }),
+          fact(`Roll that single authorized bay into OR-1.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Conflicting Chain of Command',
-      dispatch: 'Four staff ranks issued conflicting OR 1 orders over 20 minutes — resolve rank precedence and same-rank overrides cleanly.',
-      order: 'Wheel the SINGLE patient authorized by the highest-ranking latest command into OR 1.',
-      hint: 'Find the highest title on the ladder (Trauma Chief), then take their latest timestamped order.',
-      bayDefaultLabel: 'OR 1 Queue',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Cast' },
+      scenarioTitle: 'Rank vs. Timestamp Override',
+      dispatch: 'Six conflicting OR-1 orders span four ranks and 20 minutes — resolve rank precedence before timestamp ties.',
+      order: 'Wheel the SINGLE patient authorized by the highest-ranking latest command into OR-1.',
+      hint: 'Find all Trauma Chief orders first, then take the latest Trauma Chief timestamp (ignore later lower-rank notes).',
+      bayDefaultLabel: 'OR-1 Command',
       cards,
       evaluate(activeCards) {
-        const ords = factsByTag(activeCards, 'ord');
-        ords.sort((x, y) => y.rank - x.rank || y.time - x.time);
+        const ords = factsByTag(activeCards, 'ord').sort((x, y) => y.rank - x.rank || y.t - x.t);
         const top = ords[0];
-        const runner = ords.find((o) => o.patients[0] !== top.patients[0]);
-        const targets = top ? [top.patients[0]] : [];
+        const targets = top ? [top.p] : [];
+        const rivals = [f, b, d, e].filter((id) => id !== top.p);
         return {
           targets,
-          proof: `Trauma Chief sits at the top of the authority ladder, and their latest 01:25 directive supersedes every earlier and lower-ranked order — clearing ${formatList(targets)} for OR 1.`,
-          rival: buildRivalInfo(targets, [runner?.patients[0], b, d], (id) => `${pName(id)}'s order came from either a lower rank or an earlier note overridden at 01:25.`),
+          proof: `Rank outranks recency: Trauma Chief (Rank 4) overrides the later 01:25 lower-rank note, and the 01:22 Chief update overrides the 01:05 Chief note → ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, rivals, (r) =>
+            r === f ? `${pName(f)}'s 01:25 note is latest in time, but comes from a lower rank that cannot override the Trauma Chief.` : `${pName(r)}'s order was either lower rank or superseded by the 01:22 Chief override.`
+          ),
         };
       },
     };
   },
 
   // #29 Spatial reasoning (Before · Atomic)
+  // Real 2×5 ICU wall Manhattan-distance geometry on the rendered left bay grid (Bays 1–5 left, 6–10 right)
   'spatial-reasoning': (rng) => {
-    // Use actual ICU wall geometry! Left wall = Bays 1..5 (indices 0..4), Right wall = Bays 6..10 (indices 5..9)
-    // Directly across corridor: 1<->6, 2<->7, 3<->8, 4<->9, 5<->10.
-    // Pick patients directly by bay index so geometry is 100% physically faithful to the rendered left ICU wall!
     const allIds = pickPlayers(rng, 10);
-    // Map each bay number 1..10 to its true patient ID
     const byBay = {};
     for (const id of allIds) byBay[pBay(id)] = id;
-    // Anchor wall oxygen hub at Bay 2 (Left Wall, row 2).
-    // 1-step neighbors of Bay 2: Bay 1 (above), Bay 3 (below), and Bay 7 (directly across the corridor!).
-    // Out of reach: Bay 5 (3 steps down), Bay 9 (across + 2 down), Bay 10 (far corner).
     const hub = byBay[2];
     const adj1 = byBay[1];
     const adj2 = byBay[3];
@@ -675,322 +717,321 @@ export const SEMANTIC_F34 = {
 
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Ward Map', wingIndex: 0, label: 'Backup Oxygen Hub',
+        index: 0, time: '01:02', wing: 'ICU Geometry', wingIndex: 0, label: 'Backup O2 Manifold',
         shown: [
-          fact(`Main oxygen failed! The lone backup manifold sits at Bay 2 (${pName(hub)}) on the LEFT wall (Bays 1–5).`, hub, { tag: 'hub' }),
-          fact(`Backup hoses reach ONLY 1 step away: directly above/below on the SAME wall, OR directly straight across the corridor (2 ↔ 7).`, [], { tag: 'rule' }),
+          fact(`Backup manifold sits at Bay 2 (${pName(hub)}). Left column = Bays 1–5; Right column = Bays 6–10 (1↔6, 2↔7, 3↔8, 4↔9, 5↔10).`, [hub], { tag: 'hub', p: hub }),
+          fact(`Hoses reach ONLY 1 grid step from Bay 2: directly above/below (Bays 1, 3) OR directly across (Bay 7).`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Left Wall 1–5', wingIndex: 1, label: 'Gasping Patients A',
+        index: 1, time: '01:05', wing: 'Left Column', wingIndex: 1, label: 'Left-Wall Alarms',
         shown: [
-          fact(`${pName(adj2)} (Bay ${pBay(adj2)}) is gasping and needs immediate backup oxygen.`, adj2, { tag: 'needs_o2', reachable: true }),
-          fact(`${pName(far1)} (Bay ${pBay(far1)}) is gasping — check their distance from Bay 2 on the left wall!`, far1, { tag: 'needs_o2', reachable: false }),
+          fact(`${pName(adj2)} (Bay 3) is gasping — 1 step BELOW ${pName(hub)} (Bay 2).`, [adj2, hub], { tag: 'needs', p: adj2, reach: true }),
+          fact(`${pName(far1)} (Bay 5) is gasping on the left wall.`, [far1, hub], { tag: 'needs', p: far1, reach: false }),
         ],
         alt: [
-          fact(`${pName(adj1)} (Bay ${pBay(adj1)}) is gasping and needs immediate backup oxygen.`, adj1, { tag: 'needs_o2', reachable: true }),
-          fact(`${pName(far1)} (Bay ${pBay(far1)}) is gasping — check their distance from Bay 2 on the left wall!`, far1, { tag: 'needs_o2', reachable: false }),
+          fact(`${pName(adj1)} (Bay 1) is gasping on the left wall.`, [adj1, hub], { tag: 'needs', p: adj1, reach: true }),
+          fact(`${pName(far1)} (Bay 5) is gasping on the left wall.`, [far1, hub], { tag: 'needs', p: far1, reach: false }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Right Wall 6–10', wingIndex: 0, label: 'Gasping Patients B',
+        index: 2, time: '01:08', wing: 'Right Column', wingIndex: 0, label: 'Right-Wall Alarms',
         shown: [
-          fact(`${pName(across)} (Bay ${pBay(across)}) sits directly across the hall from Bay 2 and is gasping for oxygen!`, across, { tag: 'needs_o2', reachable: true }),
-          fact(`${pName(far2)} (Bay ${pBay(far2)}) is also gasping on the Right Wall — check if a 1-step hose reaches from Bay 2.`, far2, { tag: 'needs_o2', reachable: false }),
+          fact(`${pName(across)} (Bay 7) is gasping on the right wall.`, [across, hub], { tag: 'needs', p: across, reach: true }),
+          fact(`${pName(far2)} (Bay 9) is gasping on the right wall.`, [far2, hub], { tag: 'needs', p: far2, reach: false }),
         ],
         alt: [
-          fact(`${pName(across)} (Bay ${pBay(across)}) is breathing calmly on room air (no oxygen needed).`, across, { tag: 'safe', calm: true }),
-          fact(`${pName(adj2)} (Bay ${pBay(adj2)}) is gasping right next to Bay 2 and needs oxygen!`, adj2, { tag: 'needs_o2', reachable: true }),
+          fact(`${pName(across)} (Bay 7) is breathing calmly on room air.`, [across], { tag: 'calm', p: across }),
+          fact(`${pName(adj2)} (Bay 3) is gasping on the left wall.`, [adj2, hub], { tag: 'needs', p: adj2, reach: true }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Ward Map', wingIndex: 0, label: 'Hub Bay Status',
+        index: 3, time: '01:11', wing: 'Left Column', wingIndex: 1, label: 'Hub & Neighbor Check',
         shown: [
-          fact(`${pName(hub)} (Bay 2) is ALREADY plugged directly into the hub — do NOT pick ${pName(hub)}.`, hub, { tag: 'already' }),
-          fact(`${pName(adj1)} (Bay 1) is breathing comfortably on room air (needs zero oxygen).`, adj1, { tag: 'calm_adj1' }),
+          fact(`${pName(hub)} (Bay 2) is ALREADY plugged directly into the wall manifold.`, [hub], { tag: 'already', p: hub }),
+          fact(`${pName(adj1)} (Bay 1) is breathing calmly on room air (normal oxygen 98%).`, [adj1], { tag: 'calm', p: adj1 }),
         ],
         alt: [
-          fact(`${pName(hub)} (Bay 2) is ALREADY plugged directly into the hub — do NOT pick ${pName(hub)}.`, hub, { tag: 'already' }),
-          fact(`${pName(byBay[4])} (Bay 4) is breathing comfortably on room air.`, byBay[4], { tag: 'safe', calm: true }),
+          fact(`${pName(hub)} (Bay 2) is ALREADY plugged directly into the wall manifold.`, [hub], { tag: 'already', p: hub }),
+          fact(`${pName(far2)} (Bay 9) is gasping on the right wall.`, [far2], { tag: 'needs', p: far2, reach: false }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Left Wall 1–5', wingIndex: 1, label: 'Corridor Layout Reminder',
+        index: 4, time: '01:14', wing: 'ICU Geometry', wingIndex: 0, label: 'Grid Distance Rule',
         shown: [
-          fact(`Look at the left bay wall: Bays 1–5 run top-to-bottom on the Left column; Bays 6–10 run top-to-bottom on the Right column (1↔6, 2↔7, 3↔8, 4↔9, 5↔10).`, [], { tag: 'rule' }),
-          fact(`Out-of-reach bays get portable rolling tanks later — hook up ONLY reachable gasping bays first!`, [], { tag: 'rule' }),
+          fact(`Look directly at the 2×5 bay grid on the left wall: diagonal hops (2 → 6 or 2 → 8) are 2 steps, NOT 1!`, [], { tag: 'rule' }),
+          fact(`Out-of-reach gasping bays get rolling cylinders from downstairs — connect ONLY 1-step reachable gasping bays first.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Right Wall 6–10', wingIndex: 0, label: 'Other Calm Bays',
+        index: 5, time: '01:17', wing: 'Resp Lead', wingIndex: 1, label: 'Connect Hoses Now',
         shown: [
-          fact(`${pName(byBay[8])} (Bay 8) and ${pName(byBay[10])} (Bay 10) are resting comfortably with normal oxygen.`, [byBay[8], byBay[10]], { tag: 'safe', calm: true }),
-          fact(`Connect the backup hoses to EVERY gasping patient within 1 step of Bay 2.`, [], { tag: 'rule' }),
+          fact(`Intersect: (1) Actively GASPING AND (2) Exactly 1 grid step from Bay 2 (Bays 1, 3, or 7).`, [], { tag: 'rule' }),
+          fact(`Hook up EVERY reachable gasping bay immediately.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Emergency Oxygen Hose Reach',
-      dispatch: 'Main wall oxygen failed — use the physical 2×5 bay grid on the left to see which gasping bays a 1-step hose from Bay 2 can reach.',
-      order: 'Hook up backup hoses to EVERY gasping patient sitting within 1 step of Bay 2.',
-      hint: 'Check the actual 2×5 ICU grid on the left wall: Bay 2 touches Bays 1, 3, and directly across to Bay 7.',
-      bayDefaultLabel: 'Needs Oxygen',
-      bayLabels: {
-        [hub]: 'Oxygen Hub (On)',
-        [byBay[8]]: 'Stable · Room Air',
-        [byBay[10]]: 'Stable · Room Air',
-      },
+      scenarioTitle: '2×5 ICU Wall Hose Reach',
+      dispatch: 'Use the real 2×5 bay grid on the left wall to see which gasping bays sit within 1 step of Bay 2.',
+      order: 'Hook up backup hoses to EVERY gasping patient sitting exactly 1 grid step from Bay 2.',
+      hint: 'On the 2×5 ICU wall, 1 step from Bay 2 = Bays 1, 3, and across to Bay 7 — skip calm bays and Bay 2 itself.',
+      bayDefaultLabel: 'O2 Reach Eval',
+      bayLabels: { [hub]: 'O2 Hub (On)' },
       cards,
       evaluate(activeCards) {
-        const needs = factsByTag(activeCards, 'needs_o2');
-        const targets = uniqueSortedIds(needs.filter((n) => n.reachable).map((n) => n.patients[0]));
-        const rivals = needs.filter((n) => !n.reachable).map((n) => n.patients[0]);
+        const needs = factsByTag(activeCards, 'needs');
+        const targets = uniqueSortedIds(needs.filter((x) => x.reach).map((x) => x.p));
+        const rivals = needs.filter((x) => !x.reach).map((x) => x.p);
         return {
           targets,
-          proof: `On the 2×5 ICU wall, Bay 2's 1-step hose reaches Bays 1, 3, and across to Bay 7 — connecting gasping ${formatList(targets)} while Bays 5 and 9 are too far.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} (Bay ${pBay(id)}) is more than 1 step away from Bay 2, so the backup hose cannot reach.`),
+          proof: `On the 2×5 ICU grid, 1 step from Bay 2 reaches Bays 1, 3, and across to Bay 7 — connecting gasping ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, [...rivals, hub], (r) =>
+            r === hub ? `${pName(hub)} (Bay 2) is already plugged directly into the hub.` : `${pName(r)} (Bay ${pBay(r)}) is more than 1 grid step from Bay 2, so the hose cannot reach.`
+          ),
         };
       },
     };
   },
 
   // #30 Temporal reasoning (Inside · Atomic)
+  // Relative clock ordering: Last-Seen-Normal vs. 02:30 cutoff (4.5h before 07:00) using BEFORE / AFTER chains
   'temporal-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Stroke Clock', wingIndex: 0, label: 'The 4.5-Hour Cutoff',
+        index: 0, time: '01:02', wing: 'Stroke Clock', wingIndex: 0, label: '07:00 Cutoff Law',
         shown: [
-          fact(`Current hospital clock: EXACTLY 07:00.`, [], { tag: 'rule' }),
-          fact(`Stroke clot-buster MUST start within 4.5 hours of when the patient was LAST SEEN NORMAL (NOT when someone found them!).`, [], { tag: 'rule' }),
+          fact(`Current clock = 07:00. Clot-buster requires Last-Seen-Normal ≤ 4.5 hours ago (AT OR AFTER 02:30!).`, [], { tag: 'rule' }),
+          fact(`"When found" does NOT reset the clock — unwitnessed sleep starts the clock when they went to bed!`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Timeline Log', wingIndex: 1, label: 'Patient A & B Timelines',
+        index: 1, time: '01:06', wing: 'Timelines A', wingIndex: 1, label: 'Relative Event Order A',
         shown: [
-          fact(`${pName(a)}: Found slumped at 06:15, spoke normally on the phone with sister at 03:30.`, a, { tag: 't_cand', lastNormalMin: 210 }),
-          fact(`${pName(b)}: Found slumped at 06:40, but went to bed alone at 23:00 last night (last seen normal 23:00!).`, b, { tag: 't_cand', lastNormalMin: -60 }),
+          fact(`${pName(a)} called sister normally at 03:30 — found slumped at 06:15.`, [a], { tag: 'tm', p: a, min: 210 }),
+          fact(`${pName(b)} went to bed alone at 23:00 — found slumped at 06:50.`, [b], { tag: 'tm', p: b, min: -60 }),
         ],
         alt: [
-          fact(`${pName(a)}: Found slumped at 06:15, went to bed alone at 01:00 (last seen normal 01:00!).`, a, { tag: 't_cand', lastNormalMin: 60 }),
-          fact(`${pName(b)}: Found slumped at 06:40, spoke normally with neighbor at 04:00.`, b, { tag: 't_cand', lastNormalMin: 240 }),
+          fact(`${pName(a)} went to bed alone at 01:00 — found slumped at 06:15.`, [a], { tag: 'tm', p: a, min: 60 }),
+          fact(`${pName(b)} talked to neighbor normally at 04:00 — found slumped at 06:40.`, [b], { tag: 'tm', p: b, min: 240 }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Timeline Log', wingIndex: 1, label: 'Patient C & D Timelines',
+        index: 2, time: '01:10', wing: 'Timelines B', wingIndex: 1, label: 'Relative Event Order B',
         shown: [
-          fact(`${pName(c)}: Symptoms started right in front of coworkers at 02:00.`, c, { tag: 't_cand', lastNormalMin: 120 }),
-          fact(`${pName(d)}: Ate breakfast normally with family at 03:00; slurred speech began at 04:30.`, d, { tag: 't_cand', lastNormalMin: 180 }),
+          fact(`${pName(c)}'s last normal speech was 40 min BEFORE ${pName(a)}'s call — found at 06:30.`, [c, a], { tag: 'tm_rel', p: c, ref: a, delta: -40 }),
+          fact(`${pName(d)}'s symptoms began in front of coworkers at 02:00 — arrived at 06:45.`, [d], { tag: 'tm', p: d, min: 120 }),
         ],
         alt: [
-          fact(`${pName(c)}: Symptoms started right in front of coworkers at 02:00.`, c, { tag: 't_cand', lastNormalMin: 120 }),
-          fact(`${pName(d)}: Last seen normal at 02:10 before an unwitnessed fall.`, d, { tag: 't_cand', lastNormalMin: 130 }),
+          fact(`${pName(c)}'s last normal speech was 40 min BEFORE ${pName(b)}'s talk — found at 06:30.`, [c, b], { tag: 'tm_rel', p: c, ref: b, delta: -40 }),
+          fact(`${pName(d)}'s last normal moment was 01:50 — arrived at 06:45.`, [d], { tag: 'tm', p: d, min: 110 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Stroke Clock', wingIndex: 0, label: 'Wake-Up Stroke Trap',
+        index: 3, time: '01:14', wing: 'Timelines C', wingIndex: 0, label: 'Anchor Check',
         shown: [
-          fact(`If someone wakes up with a stroke, the clock starts when they went to sleep (last time known normal) — NOT when they woke up!`, [], { tag: 'rule' }),
-          fact(`At 07:00, any "last seen normal" BEFORE 02:30 is outside the 4.5-hour safety limit.`, [], { tag: 'rule' }),
+          fact(`${pName(e)} was last seen normal at 02:15 — found slumped at 06:55.`, [e], { tag: 'tm', p: e, min: 135 }),
+          fact(`${pName(f)} was witnessed normal at 02:05 — head CT clean, arrived at 06:50.`, [f], { tag: 'tm', p: f, min: 125 }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Timeline Log', wingIndex: 1, label: 'Other Arrivals',
+        index: 4, time: '01:17', wing: 'Stroke Clock', wingIndex: 0, label: 'Chain Relative Offsets',
         shown: [
-          fact(`${pName(e)} has a sprained shoulder from 06:00 (no stroke symptoms).`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} is waiting for stitch removal.`, f, { tag: 'safe', calm: true }),
+          fact(`Compute ${pName(c)}'s exact time by subtracting 40 min from their linked partner's normal timestamp!`, [c], { tag: 'note' }),
+          fact(`Ignore recent "found at 06:55" times whenever last-seen-normal falls BEFORE 02:30.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Stroke Clock', wingIndex: 0, label: 'Clear for Clot-Buster',
+        index: 5, time: '01:20', wing: 'Stroke Lead', wingIndex: 1, label: 'Approve Clot-Buster',
         shown: [
-          fact(`All four stroke scans are clean of bleeding — ONLY the 4.5-hour timeline separates safe treatment from danger.`, [], { tag: 'rule' }),
-          fact(`Approve clot-buster for EVERY stroke patient still inside 4.5 hours from last seen normal.`, [], { tag: 'rule' }),
+          fact(`All six head scans show zero bleeding — ONLY the 02:30 last-seen-normal boundary decides safety.`, [], { tag: 'rule' }),
+          fact(`Give clot-buster to EVERY patient whose true last-seen-normal time is AT OR AFTER 02:30.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'The Wake-Up Stroke Clock',
-      dispatch: 'It is 07:00 — separate "when found" from "last seen normal" to see who is truly inside the strict 4.5-hour window.',
-      order: 'Give stroke clot-buster to EVERY patient still inside 4.5 hours of when they were LAST SEEN NORMAL.',
-      hint: 'Count backward 4.5 hours from 07:00 (cutoff = 02:30) and check each patient’s true last-seen-normal time.',
+      scenarioTitle: 'The 02:30 Stroke Boundary',
+      dispatch: 'It is 07:00 — trace absolute and relative Last-Seen-Normal clocks against the strict 4.5-hour (02:30) cutoff.',
+      order: 'Give stroke clot-buster to EVERY patient whose true Last-Seen-Normal time is AT OR AFTER 02:30.',
+      hint: 'Ignore "found at 06:50" times — check absolute Last-Seen-Normal AND subtract 40 min for the linked bay.',
       bayDefaultLabel: 'Stroke Clock',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
       cards,
       evaluate(activeCards) {
-        const nowMin = 420; // 07:00
-        const cands = factsByTag(activeCards, 't_cand');
-        const targets = uniqueSortedIds(
-          cands.filter((x) => nowMin - x.lastNormalMin <= 270).map((x) => x.patients[0])
-        );
-        const rivals = cands.filter((x) => nowMin - x.lastNormalMin > 270).map((x) => x.patients[0]);
+        const mins = new Map();
+        for (const x of factsByTag(activeCards, 'tm')) mins.set(x.p, x.min);
+        for (const x of factsByTag(activeCards, 'tm_rel')) {
+          if (mins.has(x.ref)) mins.set(x.p, mins.get(x.ref) + x.delta);
+        }
+        const cutoff = 150; // 02:30
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => mins.has(id) && mins.get(id) >= cutoff));
+        const rivals = [a, b, c, d, e, f].filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `At 07:00, the 4.5-hour cutoff is 02:30 — only ${formatList(targets)} were last seen normal at or after 02:30.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} was last seen normal BEFORE 02:30 (outside 4.5 hours), even if they were found recently.`),
+          proof: `At 07:00, the 4.5-hour cutoff is 02:30 — resolving direct and relative clocks puts ONLY ${formatList(targets)} at or after 02:30.`,
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} was last seen normal BEFORE 02:30, putting them outside the safe 4.5-hour clot-buster window.`),
         };
       },
     };
   },
 
   // #31 Structural reasoning (Inside · Composite)
+  // Cross-card ABC structural coupling across 3 specialist reports + comparative pillar count
   'structural-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Trauma ABCs', wingIndex: 0, label: 'Three Structural Pillars',
+        index: 0, time: '01:02', wing: 'Pillar 1 · Airway', wingIndex: 0, label: 'Airway Collapse Scan',
         shown: [
-          fact(`Life support stands on THREE pillars: AIRWAY (open throat) · BREATHING (working lungs) · CIRCULATION (holding blood pressure).`, [], { tag: 'rule' }),
-          fact(`Single-pillar alarms can be handled by one nurse; MULTI-PILLAR failure (2+ pillars failing at once) requires the Full Trauma Team NOW!`, [], { tag: 'rule' }),
-        ],
-      }),
-      makeCard({
-        index: 1, time: '02:00', wing: 'Airway Team', wingIndex: 1, label: 'Pillar 1: Airway Check',
-        shown: [
-          fact(`${pName(a)}: Swelling throat blocking airflow (AIRWAY FAILING).`, a, { tag: 'fail_p' }),
-          fact(`${pName(b)}: Clear open airway, speaking clearly.`, b, { tag: 'ok_p' }),
+          fact(`Airway FAILING on ${pName(a)} AND ${pName(e)} (swelling throat); ${pName(b)} & ${pName(c)} have open airways.`, [a, e, b, c], { tag: 'p_fail', ps: [a, e] }),
+          fact(`Single-pillar strain = 1 nurse; ≥ 2 failing pillars at once = FULL TRAUMA TEAM.`, [], { tag: 'rule' }),
         ],
         alt: [
-          fact(`${pName(b)}: Swelling throat blocking airflow (AIRWAY FAILING).`, b, { tag: 'fail_p' }),
-          fact(`${pName(a)}: Clear open airway, speaking clearly.`, a, { tag: 'ok_p' }),
+          fact(`Airway FAILING on ${pName(b)} AND ${pName(e)} (swelling throat); ${pName(a)} & ${pName(c)} have open airways.`, [b, e, a, c], { tag: 'p_fail', ps: [b, e] }),
+          fact(`Single-pillar strain = 1 nurse; ≥ 2 failing pillars at once = FULL TRAUMA TEAM.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Lung Team', wingIndex: 0, label: 'Pillar 2: Breathing Check',
+        index: 1, time: '01:06', wing: 'Pillar 2 · Lungs', wingIndex: 1, label: 'Breathing Collapse Scan',
         shown: [
-          fact(`${pName(b)}: Collapsed right lung, oxygen 80% (BREATHING FAILING).`, b, { tag: 'fail_p' }),
-          fact(`${pName(c)}: Crushed rib cage, shallow gasping breaths (BREATHING FAILING).`, c, { tag: 'fail_p' }),
+          fact(`Breathing FAILING on ${pName(b)} AND ${pName(c)} (collapsed lung / crushed ribs).`, [b, c], { tag: 'p_fail', ps: [b, c] }),
+          fact(`${pName(a)}'s lungs are clear once airway opens; ${pName(d)} & ${pName(f)} breathe smoothly at 98%.`, [a, d, f], { tag: 'note' }),
         ],
         alt: [
-          fact(`${pName(b)}: Collapsed right lung, oxygen 80% (BREATHING FAILING).`, b, { tag: 'fail_p' }),
-          fact(`${pName(c)}: Clear easy breathing, oxygen 98%.`, c, { tag: 'ok_p' }),
+          fact(`Breathing FAILING on ${pName(b)} AND ${pName(d)} (collapsed lung / crushed ribs).`, [b, d], { tag: 'p_fail', ps: [b, d] }),
+          fact(`${pName(a)} & ${pName(c)} breathe smoothly at 98%.`, [a, c], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Shock Team', wingIndex: 1, label: 'Pillar 3: Circulation Check',
+        index: 2, time: '01:10', wing: 'Pillar 3 · Blood', wingIndex: 0, label: 'Circulation Collapse Scan',
         shown: [
-          fact(`${pName(a)}: Active arterial bleeding, BP 72/40 (CIRCULATION FAILING).`, a, { tag: 'fail_p' }),
-          fact(`${pName(d)}: Deep thigh gash, BP 78/46 (CIRCULATION FAILING — airway & breathing normal).`, d, { tag: 'fail_p' }),
+          fact(`Circulation FAILING on ${pName(a)} AND ${pName(d)} (arterial bleed, BP 74/42).`, [a, d], { tag: 'p_fail', ps: [a, d] }),
+          fact(`${pName(b)} & ${pName(e)} hold strong BP 122/76 — MORE stable circulation than ${pName(a)}.`, [b, e, a], { tag: 'note' }),
         ],
         alt: [
-          fact(`${pName(a)}: Steady blood pressure 118/74, no bleeding.`, a, { tag: 'ok_p' }),
-          fact(`${pName(d)}: Deep thigh gash, BP 78/46 (CIRCULATION FAILING — airway & breathing normal).`, d, { tag: 'fail_p' }),
+          fact(`Circulation FAILING on ${pName(c)} AND ${pName(d)} (arterial bleed, BP 74/42).`, [c, d], { tag: 'p_fail', ps: [c, d] }),
+          fact(`${pName(a)} & ${pName(e)} hold strong BP 122/76.`, [a, e], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Trauma ABCs', wingIndex: 0, label: 'Re-Check Notes',
+        index: 3, time: '01:14', wing: 'Cross-Link', wingIndex: 1, label: 'Secondary Re-Check',
         shown: [
-          fact(`${pName(c)}'s airway is open and blood pressure is rock-steady at 122/76.`, c, { tag: 'ok_p' }),
-          fact(`${pName(e)} has a broken collarbone — all 3 pillars (Airway, Breathing, Circulation) intact.`, e, { tag: 'safe', calm: true }),
+          fact(`${pName(f)} has a broken collarbone — 0 of 3 pillars failing (MORE stable than every single-pillar bay).`, [f], { tag: 'zero', p: f }),
+          fact(`${pName(c)}'s circulation just dipped ONLY briefly during a blood draw and rebounded to 124/78 (NOT failing).`, [c], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Shock Team', wingIndex: 1, label: 'Team Activation',
+        index: 4, time: '01:17', wing: 'ABC Rule', wingIndex: 0, label: 'Count Across All 3 Cards',
         shown: [
-          fact(`${pName(f)} is waiting for a routine hand wrap.`, f, { tag: 'safe', calm: true }),
-          fact(`Combine all 3 specialist cards to count total failing pillars per patient and activate Full Trauma Team for 2+ failures.`, [], { tag: 'rule' }),
+          fact(`No single specialist card shows the whole collapse — sum failing pillars across Airway + Breathing + Circulation!`, [], { tag: 'rule' }),
+          fact(`Every bay with ONLY 1 failing pillar stays with its specialist nurse.`, [], { tag: 'rule' }),
+        ],
+      }),
+      makeCard({
+        index: 5, time: '01:20', wing: 'Trauma Lead', wingIndex: 1, label: 'Full Team Activation',
+        shown: [
+          fact(`Call Full Trauma Team ONLY for patients failing ≥ 2 of the 3 structural pillars simultaneously.`, [], { tag: 'rule' }),
+          fact(`Verify each name across all three pillar cards before activating.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Multi-Pillar Collapse',
-      dispatch: 'Three specialist teams each checked ONE pillar (Airway, Breathing, Circulation) — combine their cards to spot multi-pillar collapse.',
-      order: 'Activate the Full Trauma Team for EVERY patient with TWO OR MORE failing pillars at once.',
-      hint: 'Count how many of the 3 pillar cards (Airway, Breathing, Circulation) flag each patient as failing.',
-      bayDefaultLabel: 'ABC Trauma Eval',
-      bayLabels: { [e]: 'Minor · Bone', [f]: 'Minor · Stable' },
+      scenarioTitle: 'Cross-Card ABC Collapse',
+      dispatch: 'Three specialists each audited ONE pillar (Airway, Breathing, Circulation) — combine all three to find multi-pillar failure.',
+      order: 'Activate the Full Trauma Team for EVERY patient failing TWO OR MORE structural pillars at once.',
+      hint: 'Tally how many of the 3 pillar cards (Airway, Breathing, Circulation) list each patient as FAILING.',
+      bayDefaultLabel: 'ABC Pillars',
       cards,
       evaluate(activeCards) {
         const counts = new Map();
-        for (const fObj of factsByTag(activeCards, 'fail_p')) {
-          const id = fObj.patients[0];
-          counts.set(id, (counts.get(id) || 0) + 1);
+        for (const x of factsByTag(activeCards, 'p_fail')) {
+          for (const id of x.ps) counts.set(id, (counts.get(id) || 0) + 1);
         }
         const targets = uniqueSortedIds([...counts.entries()].filter(([, n]) => n >= 2).map(([id]) => id));
         const rivals = [...counts.entries()].filter(([, n]) => n === 1).map(([id]) => id);
         return {
           targets,
-          proof: `Combining all three specialist reports reveals ${formatList(targets)} have 2 failing structural pillars simultaneously (requiring the Full Trauma Team).`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} only has 1 pillar strained while the other 2 pillars remain intact.`),
+          proof: `Summing failing pillars across Airway + Breathing + Circulation puts ${formatList(targets)} at ≥ 2 failing pillars simultaneously.`,
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} only failed 1 of the 3 pillars while the other 2 remained intact.`),
         };
       },
     };
   },
 
   // #32 Semantic reasoning (After · Atomic)
+  // Exact referential scope: WHO reacted × WHICH drug × WHAT kind of reaction across 6 allergy notes
   'semantic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Pharmacy Audit', wingIndex: 0, label: 'Exact Allergy Standard',
+        index: 0, time: '01:02', wing: 'Scope Rule', wingIndex: 0, label: '3-Part Allergy Definition',
         shown: [
-          fact(`Hospital Safety Rule: Hold Penicillin ONLY for a patient's OWN personal allergy (hives, swelling, or breathing reaction).`, [], { tag: 'rule' }),
-          fact(`Do NOT confuse: "Family member is allergic", "Mild upset stomach", or "Allergic to a DIFFERENT drug (Sulfa)" with a personal Penicillin allergy!`, [], { tag: 'rule' }),
+          fact(`Block Penicillin ONLY if ALL 3 hold: (1) Patient's OWN body + (2) Triggered by PENICILLIN + (3) True immune reaction (hives/swelling/wheezing).`, [], { tag: 'rule' }),
+          fact(`Relative's allergy, a DIFFERENT drug (Sulfa/Shellfish), or mild upset stomach ≠ personal Penicillin allergy.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Handoff Notes', wingIndex: 1, label: 'Chart Quotes 1',
+        index: 1, time: '01:06', wing: 'Chart Quotes A', wingIndex: 1, label: 'WHO Had the Reaction?',
         shown: [
-          fact(`${pName(a)}'s chart reads: "Personal history of throat swelling after taking Penicillin."`, a, { tag: 'true_allergy' }),
-          fact(`${pName(b)}'s chart reads: "Mother had a Penicillin rash in 1995; patient tolerated Penicillin fine last year."`, b, { tag: 'false_alarm' }),
+          fact(`${pName(a)}: "Personal throat swelling 15 min after Penicillin pill." (OWN + Penicillin + immune!).`, [a], { tag: 'true_pen', p: a }),
+          fact(`${pName(b)}: "MOTHER had Penicillin hives in 1995; ${pName(b)} took Penicillin fine last year."`, [b], { tag: 'trap', p: b }),
         ],
         alt: [
-          fact(`${pName(c)}'s chart reads: "Personal history of throat swelling after taking Penicillin."`, c, { tag: 'true_allergy' }),
-          fact(`${pName(b)}'s chart reads: "Mother had a Penicillin rash in 1995; patient tolerated Penicillin fine last year."`, b, { tag: 'false_alarm' }),
+          fact(`${pName(c)}: "Personal throat swelling 15 min after Penicillin pill." (OWN + Penicillin + immune!).`, [c], { tag: 'true_pen', p: c }),
+          fact(`${pName(b)}: "MOTHER had Penicillin hives in 1995; ${pName(b)} took Penicillin fine last year."`, [b], { tag: 'trap', p: b }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Handoff Notes', wingIndex: 1, label: 'Chart Quotes 2',
+        index: 2, time: '01:10', wing: 'Chart Quotes B', wingIndex: 1, label: 'WHICH Drug Triggered It?',
         shown: [
-          fact(`${pName(c)}'s chart reads: "Allergic to SULFA antibiotics (hives); NO reaction to Penicillin."`, c, { tag: 'false_alarm' }),
-          fact(`${pName(d)}'s chart reads: "Mild stomach rumbling when taking Penicillin on an empty stomach (zero rash/swelling)."`, d, { tag: 'false_alarm' }),
+          fact(`${pName(c)}: "Personal full-body hives after SULFA pills — tolerated Penicillin with ZERO issue."`, [c], { tag: 'trap', p: c }),
+          fact(`${pName(d)}: "Mild stomach rumbling when taking Penicillin without food (ZERO rash, swelling, or wheeze)."`, [d], { tag: 'trap', p: d }),
         ],
         alt: [
-          fact(`${pName(a)}'s chart reads: "Allergic to SULFA antibiotics (hives); NO reaction to Penicillin."`, a, { tag: 'false_alarm' }),
-          fact(`${pName(d)}'s chart reads: "Mild stomach rumbling when taking Penicillin on an empty stomach (zero rash/swelling)."`, d, { tag: 'false_alarm' }),
+          fact(`${pName(a)}: "Personal full-body hives after SULFA pills — tolerated Penicillin with ZERO issue."`, [a], { tag: 'trap', p: a }),
+          fact(`${pName(d)}: "Mild stomach rumbling when taking Penicillin without food (ZERO rash, swelling, or wheeze)."`, [d], { tag: 'trap', p: d }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Pharmacy Audit', wingIndex: 0, label: 'Chart Quotes 3',
+        index: 3, time: '01:14', wing: 'Chart Quotes C', wingIndex: 0, label: 'Cross-Chart Scope Check',
         shown: [
-          fact(`${pName(e)}'s chart reads: "Broke out in full-body hives 20 minutes after Penicillin pill."`, e, { tag: 'true_allergy' }),
-          fact(`${pName(f)}'s chart reads: "No known drug allergies; cleared to go home."`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(e)}: "Personal hives + lip swelling after Penicillin shot — SAME true allergy as ${pName(a)}."`, [e, a], { tag: 'true_pen', p: e }),
+          fact(`${pName(f)}: "Personal wheezing after SHELLFISH — zero history of antibiotic reaction."`, [f], { tag: 'trap', p: f }),
         ],
         alt: [
-          fact(`${pName(e)}'s chart reads: "Brother is allergic to Penicillin; patient has taken it safely twice."`, e, { tag: 'false_alarm' }),
-          fact(`${pName(f)}'s chart reads: "No known drug allergies; cleared to go home."`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(e)}: "Brother has Penicillin hives; ${pName(e)} has taken Penicillin twice with zero issue."`, [e], { tag: 'trap', p: e }),
+          fact(`${pName(f)}: "Personal hives + wheezing 10 min after Penicillin IV."`, [f], { tag: 'true_pen', p: f }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Handoff Notes', wingIndex: 1, label: 'Why Precision Matters',
+        index: 4, time: '01:17', wing: 'Pharmacy Audit', wingIndex: 0, label: 'Why Exact Meaning Matters',
         shown: [
-          fact(`Needlessly blocking Penicillin forces weaker backup antibiotics that take longer to clear deadly infections.`, [], { tag: 'rule' }),
-          fact(`Read WHO had the reaction, WHICH drug caused it, and WHETHER it was a real allergy vs mild stomach upset.`, [], { tag: 'rule' }),
+          fact(`Every bay above mentions "allergy" or "Penicillin" — false blocks force weaker backup antibiotics!`, [], { tag: 'rule' }),
+          fact(`Verify WHO × WHICH DRUG × IMMUNE vs. SIDE EFFECT on every single quote.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Pharmacy Audit', wingIndex: 0, label: 'Red Wristband Order',
+        index: 5, time: '01:20', wing: 'Band Station', wingIndex: 1, label: 'Issue Red Bands',
         shown: [
-          fact(`Place a RED Penicillin-Block wristband ONLY on patients with a true personal Penicillin allergy.`, [], { tag: 'rule' }),
-          fact(`Everyone else receives standard first-line Penicillin safely.`, [], { tag: 'rule' }),
+          fact(`Place a RED Penicillin-Block wristband ONLY on confirmed personal Penicillin allergies.`, [], { tag: 'rule' }),
+          fact(`All other charts receive first-line Penicillin safely.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Exact Words Save Lives',
-      dispatch: 'Five charts mention the word "Penicillin" or "allergy" — read exact meanings so you block ONLY true personal Penicillin allergies.',
-      order: 'Place a RED Penicillin-Block wristband ONLY on patients with a genuine personal Penicillin allergy.',
-      hint: 'Distinguish a patient’s own hives/swelling to Penicillin from family history, mild tummy upset, or a different drug.',
-      bayDefaultLabel: 'Allergy Audit',
-      bayLabels: { [f]: 'Cleared · Home' },
+      scenarioTitle: 'WHO × WHICH × WHAT Audit',
+      dispatch: 'All six charts contain the words "allergy" or "Penicillin" — bind WHO reacted, WHICH drug, and immune vs. side effect.',
+      order: 'Place a RED Penicillin-Block wristband ONLY on patients with a true personal immune allergy to Penicillin.',
+      hint: 'Check all 3 slots: Patient themselves (not relative) + Penicillin (not Sulfa/Shellfish) + Hives/Swelling (not mild stomach upset).',
+      bayDefaultLabel: 'Allergy Scope',
       cards,
       evaluate(activeCards) {
-        const targets = uniqueSortedIds([...tagSet(activeCards, 'true_allergy')]);
-        const rivals = [...tagSet(activeCards, 'false_alarm')];
+        const targets = uniqueSortedIds(factsByTag(activeCards, 'true_pen').map((x) => x.p));
+        const rivals = factsByTag(activeCards, 'trap').map((x) => x.p);
         return {
           targets,
-          proof: `Reading exact clinical meanings isolates ${formatList(targets)} as true personal Penicillin allergies (hives/swelling), excluding family history, Sulfa allergy, and mild stomach upset.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)}'s note mentions a relative's reaction, a different drug, or non-allergic stomach upset — not a personal Penicillin allergy.`),
+          proof: `Binding exact WHO × WHICH DRUG × IMMUNE scope isolates ${formatList(targets)}, filtering out relatives, Sulfa/Shellfish, and non-allergic stomach upset.`,
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)}'s quote refers to a relative, a different trigger (Sulfa/Shellfish), or mild non-allergic stomach upset.`),
         };
       },
     };
@@ -1001,81 +1042,81 @@ export const SEMANTIC_F34 = {
   // =========================================================================
 
   // #33 Probabilistic reasoning (Before · Atomic)
+  // Marginal survival lift ΔP = P(with) − P(without) compared across 6 poisoned patients
   'probabilistic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Poison Desk', wingIndex: 0, label: 'One Antidote Left',
+        index: 0, time: '01:02', wing: 'Poison Desk', wingIndex: 0, label: 'Marginal Lift Law',
         shown: [
-          fact(`Five patients drank tainted cider — only ONE antidote syringe exists in the city right now.`, [], { tag: 'rule' }),
-          fact(`Maximize expected lives saved: give it to the patient with the BIGGEST jump in survival odds (Odds WITH minus Odds WITHOUT).`, [], { tag: 'rule' }),
+          fact(`One antidote syringe left! Give it to the bay with the BIGGEST jump: (Odds WITH − Odds WITHOUT).`, [], { tag: 'rule' }),
+          fact(`Do NOT pick the highest final % (already safe!) OR lowest start % (if antidote barely helps!).`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Survival Odds', wingIndex: 1, label: 'Odds Sheet A',
+        index: 1, time: '01:06', wing: 'Odds Sheet A', wingIndex: 1, label: 'Bays A & B',
         shown: [
-          fact(`${pName(a)}: 25% survival without antidote · 90% survival WITH antidote.`, a, { tag: 'odds', without: 25, withTx: 90 }),
-          fact(`${pName(b)}: 80% survival without antidote · 96% survival WITH antidote.`, b, { tag: 'odds', without: 80, withTx: 96 }),
+          fact(`${pName(a)}: 25% without → 90% WITH antidote (compare jump vs. ${pName(b)}!).`, [a, b], { tag: 'odds', p: a, wo: 25, wi: 90 }),
+          fact(`${pName(b)}: 80% without → 96% WITH antidote (HIGHER final %, much smaller lift).`, [b], { tag: 'odds', p: b, wo: 80, wi: 96 }),
         ],
         alt: [
-          fact(`${pName(a)}: 75% survival without antidote · 90% survival WITH antidote.`, a, { tag: 'odds', without: 75, withTx: 90 }),
-          fact(`${pName(b)}: 20% survival without antidote · 88% survival WITH antidote.`, b, { tag: 'odds', without: 20, withTx: 88 }),
+          fact(`${pName(a)}: 75% without → 92% WITH antidote (HIGHER final %, smaller lift).`, [a], { tag: 'odds', p: a, wo: 75, wi: 92 }),
+          fact(`${pName(b)}: 20% without → 88% WITH antidote (compare jump vs. ${pName(a)}!).`, [b, a], { tag: 'odds', p: b, wo: 20, wi: 88 }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Survival Odds', wingIndex: 1, label: 'Odds Sheet B',
+        index: 2, time: '01:10', wing: 'Odds Sheet B', wingIndex: 1, label: 'Bays C & D',
         shown: [
-          fact(`${pName(c)}: 5% survival without antidote · 15% survival WITH antidote.`, c, { tag: 'odds', without: 5, withTx: 15 }),
-          fact(`${pName(d)}: 45% survival without antidote · 80% survival WITH antidote.`, d, { tag: 'odds', without: 45, withTx: 80 }),
+          fact(`${pName(c)}: 5% without → 15% WITH antidote (lowest starting odds).`, [c], { tag: 'odds', p: c, wo: 5, wi: 15 }),
+          fact(`${pName(d)}: 40% without → 80% WITH antidote (compare jump vs. ${pName(a)}!).`, [d, a], { tag: 'odds', p: d, wo: 40, wi: 80 }),
+        ],
+        alt: [
+          fact(`${pName(c)}: 5% without → 15% WITH antidote (lowest starting odds).`, [c], { tag: 'odds', p: c, wo: 5, wi: 15 }),
+          fact(`${pName(d)}: 45% without → 80% WITH antidote (compare jump vs. ${pName(b)}!).`, [d, b], { tag: 'odds', p: d, wo: 45, wi: 80 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Poison Desk', wingIndex: 0, label: 'Odds Sheet C',
+        index: 3, time: '01:14', wing: 'Odds Sheet C', wingIndex: 0, label: 'Bays E & F',
         shown: [
-          fact(`${pName(e)}: 88% survival without antidote · 94% survival WITH antidote.`, e, { tag: 'odds', without: 88, withTx: 94 }),
-          fact(`${pName(f)} did NOT drink the cider — 100% safe.`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(e)}: 88% without → 95% WITH antidote (already likely to survive on fluids).`, [e], { tag: 'odds', p: e, wo: 88, wi: 95 }),
+          fact(`${pName(f)}: 30% without → 60% WITH antidote (HALF the lift of the top bay).`, [f], { tag: 'odds', p: f, wo: 30, wi: 60 }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Survival Odds', wingIndex: 1, label: 'Common Triage Trap',
+        index: 4, time: '01:17', wing: 'Poison Desk', wingIndex: 0, label: 'Subtract Every Pair',
         shown: [
-          fact(`Don't automatically pick the highest final % (someone at 80% will likely survive anyway) OR the lowest starting % (if the antidote barely moves them).`, [], { tag: 'rule' }),
-          fact(`Subtract each patient's WITHOUT % from their WITH % to find the true life-saving lift!`, [], { tag: 'rule' }),
+          fact(`Every bay here drank the tainted batch — rank all 6 by (WITH − WITHOUT) gain.`, [], { tag: 'rule' }),
+          fact(`Compare the #1 jump against the #2 runner-up (${pName(d)}) carefully!`, [d], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Poison Desk', wingIndex: 0, label: 'Syringe Allocation',
+        index: 5, time: '01:20', wing: 'Syringe Call', wingIndex: 1, label: 'Single Syringe Release',
         shown: [
-          fact(`Backup vials arrive in 3 hours; everyone else receives supportive IV fluids in the meantime.`, [], { tag: 'rule' }),
-          fact(`Inject the single patient whose survival probability climbs by the largest margin.`, [], { tag: 'rule' }),
+          fact(`Inject the ONE patient whose survival odds climb by the largest percentage-point jump.`, [], { tag: 'rule' }),
+          fact(`Backup vials arrive in 2 hours for supportive care.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'The Last Antidote Syringe',
-      dispatch: 'Five poisoned patients, ONE syringe left — calculate who actually gains the largest jump in survival chance.',
-      order: 'Give the sole antidote syringe to the SINGLE patient with the largest percentage-point jump in survival chance.',
-      hint: 'Compute (WITH antidote − WITHOUT antidote) for each patient — do not just pick the highest final score.',
-      bayDefaultLabel: 'Poison Odds',
-      bayLabels: { [f]: 'Not Exposed · Safe' },
+      dispatch: 'Six poisoned bays, ONE syringe — compare marginal survival lift (WITH − WITHOUT) across all six.',
+      order: 'Give the sole antidote syringe to the SINGLE patient with the LARGEST percentage-point jump in survival odds.',
+      hint: 'Compute (WITH − WITHOUT) for all six bays — don’t grab the highest final % or lowest start %.',
+      bayDefaultLabel: 'Survival Lift',
       cards,
       evaluate(activeCards) {
-        const list = factsByTag(activeCards, 'odds').map((o) => ({
-          id: o.patients[0],
-          without: o.without,
-          withTx: o.withTx,
-          gain: o.withTx - o.without,
-        }));
-        list.sort((x, y) => y.gain - x.gain);
+        const list = factsByTag(activeCards, 'odds')
+          .map((x) => ({ id: x.p, wo: x.wo, wi: x.wi, gain: x.wi - x.wo }))
+          .sort((x, y) => y.gain - x.gain);
         const top = list[0];
-        const runner = list[1];
+        const run = list[1];
         const targets = top ? [top.id] : [];
         return {
           targets,
-          proof: `${pName(top.id)} gains +${top.gain} percentage points (${top.without}% → ${top.withTx}%), beating ${pName(runner.id)} (+${runner.gain}%) and everyone else.`,
-          rival: buildRivalInfo(targets, [runner.id, b, c], (id) => {
-            const r = list.find((x) => x.id === id);
-            return `${pName(id)} only gains +${r.gain}% (${r.without}% → ${r.withTx}%), far less lift than ${pName(top.id)}'s +${top.gain}%.`;
+          proof: `Comparing (WITH − WITHOUT) puts ${pName(top.id)} #1 at +${top.gain}% (${top.wo}% → ${top.wi}%), beating runner-up ${pName(run.id)} (+${run.gain}%).`,
+          rival: buildRivalInfo(targets, [run.id, b, c, a], (r) => {
+            const x = list.find((item) => item.id === r);
+            return `${pName(r)} only gains +${x.gain}% (${x.wo}% → ${x.wi}%), far less marginal lift than ${pName(top.id)}'s +${top.gain}%.`;
           }),
         };
       },
@@ -1083,78 +1124,80 @@ export const SEMANTIC_F34 = {
   },
 
   // #34 Statistical reasoning (After · Composite)
+  // Comparing sample reliability (N=1 noisy spike vs. verified repeat trend > 2× ward ceiling) across 6 labs
   'statistical-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Lab Stats', wingIndex: 0, label: 'Normal Ward Distribution',
+        index: 0, time: '01:02', wing: 'Ward Curve', wingIndex: 0, label: 'Ward Spread & Sample Rule',
         shown: [
-          fact(`Across 1,000 healthy ER patients, Blood-Stress Level averages 1.2, with normal spread from 0.6 to 1.8 (95% of healthy people fall inside 0.6–1.8).`, [], { tag: 'rule' }),
-          fact(`Minor stress nudges it to ~2.1 — ONLY an extreme outlier ABOVE 4.0 signals dangerous hidden organ starvation!`, [], { tag: 'rule' }),
+          fact(`Ward baseline: 95% of normal ER labs fall between 0.6 and 1.8 (DOUBLE the 1.8 ceiling = 3.6).`, [], { tag: 'rule' }),
+          fact(`Flag true hidden organ shock ONLY if: (1) Confirmed on ≥ 2 clean draws AND (2) Above 3.6 (> DOUBLE ceiling).`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Lab Results', wingIndex: 1, label: 'Batch 1 Readings',
+        index: 1, time: '01:06', wing: 'Lab Batch A', wingIndex: 1, label: 'Repeat Counts A',
         shown: [
-          fact(`${pName(a)}: Blood-Stress Level = 6.4 (re-tested twice, confirmed accurate).`, a, { tag: 'stat', val: 6.4 }),
-          fact(`${pName(b)}: Blood-Stress Level = 1.7 (inside normal ward spread).`, b, { tag: 'stat', val: 1.7 }),
+          fact(`${pName(a)}: Draw #1 = 6.2 · Draw #2 = 6.5 (confirmed extreme outlier — HIGHER THAN ${pName(c)}).`, [a, c], { tag: 'st', p: a, val: 6.4, clean: true }),
+          fact(`${pName(b)}: Single unrepeated draw = 5.9 from a squeezed IV tourniquet (Draw #2 = 1.4, lab artifact!).`, [b], { tag: 'st', p: b, val: 1.4, clean: false }),
         ],
         alt: [
-          fact(`${pName(a)}: Blood-Stress Level = 1.5 (inside normal ward spread).`, a, { tag: 'stat', val: 1.5 }),
-          fact(`${pName(b)}: Blood-Stress Level = 6.9 (re-tested twice, confirmed accurate).`, b, { tag: 'stat', val: 6.9 }),
+          fact(`${pName(a)}: Single squeezed draw = 5.8, then Draw #2 = 1.5 (lab artifact!).`, [a], { tag: 'st', p: a, val: 1.5, clean: false }),
+          fact(`${pName(b)}: Draw #1 = 6.6 · Draw #2 = 6.8 (confirmed extreme outlier!).`, [b], { tag: 'st', p: b, val: 6.7, clean: true }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Lab Results', wingIndex: 1, label: 'Batch 2 Readings',
+        index: 2, time: '01:10', wing: 'Lab Batch B', wingIndex: 1, label: 'Repeat Counts B',
         shown: [
-          fact(`${pName(c)}: Blood-Stress Level = 2.1 (slight bump after running up stairs).`, c, { tag: 'stat', val: 2.1 }),
-          fact(`${pName(d)}: Blood-Stress Level = 5.8 (re-tested twice, confirmed accurate).`, d, { tag: 'stat', val: 5.8 }),
+          fact(`${pName(c)}: Draw #1 = 2.1 · Draw #2 = 2.0 (slight stair-climb bump — LESS THAN 3.6 ceiling!).`, [c], { tag: 'st', p: c, val: 2.0, clean: true }),
+          fact(`${pName(d)}: Draw #1 = 5.4 · Draw #2 = 5.8 (confirmed extreme outlier — > TRIPLE ward mean!).`, [d], { tag: 'st', p: d, val: 5.6, clean: true }),
         ],
         alt: [
-          fact(`${pName(c)}: Blood-Stress Level = 2.1 (slight bump after running up stairs).`, c, { tag: 'stat', val: 2.1 }),
-          fact(`${pName(d)}: Blood-Stress Level = 1.9 (borderline mild stress only).`, d, { tag: 'stat', val: 1.9 }),
+          fact(`${pName(c)}: Draw #1 = 2.1 · Draw #2 = 2.0 (mild bump — LESS THAN 3.6!).`, [c], { tag: 'st', p: c, val: 2.0, clean: true }),
+          fact(`${pName(d)}: Draw #1 = 1.9 · Draw #2 = 1.8 (right at normal ward ceiling).`, [d], { tag: 'st', p: d, val: 1.8, clean: true }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Lab Stats', wingIndex: 0, label: 'Base-Rate Caution',
+        index: 3, time: '01:14', wing: 'Lab Batch C', wingIndex: 0, label: 'Reference Anchors',
         shown: [
-          fact(`${pName(e)}: Blood-Stress Level = 1.3 (right at the ward average).`, e, { tag: 'safe', calm: true }),
-          fact(`Small bumps near 2.0 happen all the time from pain or shivering — don't panic-treat normal variance!`, [], { tag: 'rule' }),
+          fact(`${pName(e)}: Draw #1 = 1.2 · Draw #2 = 1.3 (dead center of the 1,000-patient ward curve).`, [e], { tag: 'st', p: e, val: 1.2, clean: true }),
+          fact(`${pName(f)}: Draw #1 = 4.9 from clotted sample; repeat Draw #2 = 1.6 (reverted to normal!).`, [f], { tag: 'st', p: f, val: 1.6, clean: false }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Lab Results', wingIndex: 1, label: 'Sample Size Note',
+        index: 4, time: '01:17', wing: 'Ward Curve', wingIndex: 0, label: 'Artifact vs. Signal',
         shown: [
-          fact(`${pName(f)}: Blood-Stress Level = 0.9 (completely normal, ready for discharge).`, f, { tag: 'safe', calm: true }),
-          fact(`Both confirmed readings above 4.0 sit more than 4 standard deviations above the ward mean.`, [], { tag: 'rule' }),
+          fact(`A single high spike that drops back to ~1.5 on Draw #2 is measurement noise, NOT shock.`, [], { tag: 'rule' }),
+          fact(`A steady 2.0 is mild everyday variance — stay focused on confirmed values > 3.6.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Lab Stats', wingIndex: 0, label: 'Hidden-Shock Call',
+        index: 5, time: '01:20', wing: 'Shock Resus', wingIndex: 1, label: 'Treat True Outliers',
         shown: [
-          fact(`Start emergency hidden-shock fluids ONLY for the extreme statistical outliers (> 4.0).`, [], { tag: 'rule' }),
-          fact(`Everyone inside normal or mild-stress variance stays on standard observation.`, [], { tag: 'rule' }),
+          fact(`Start hidden-shock fluids ONLY for confirmed repeat outliers strictly ABOVE 3.6.`, [], { tag: 'rule' }),
+          fact(`Ignore reverted lab artifacts and mild ~2.0 bumps.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Spotting True Outliers',
-      dispatch: 'Blood-stress labs just posted for the whole ward — separate true extreme statistical outliers from normal random wiggle.',
-      order: 'Start emergency hidden-shock resuscitation for EVERY patient who is an extreme outlier (> 4.0).',
-      hint: 'Compare every patient’s confirmed reading against the ward distribution (normal 0.6–1.8, danger outlier > 4.0).',
-      bayDefaultLabel: 'Lab Stress Eval',
-      bayLabels: { [e]: 'Normal · Stable', [f]: 'Cleared · Home' },
+      scenarioTitle: 'Signal vs. Sample Artifact',
+      dispatch: 'Six bays posted blood-stress labs — separate confirmed extreme outliers (> 3.6) from reverted sample artifacts and normal wiggle.',
+      order: 'Start hidden-shock resuscitation for EVERY patient with a CONFIRMED repeat reading strictly ABOVE 3.6.',
+      hint: 'Check BOTH repeat confirmation (did Draw #2 stay high?) AND height above 3.6 (double the 1.8 ceiling).',
+      bayDefaultLabel: 'Lab Outlier',
       cards,
       evaluate(activeCards) {
-        const list = factsByTag(activeCards, 'stat');
-        const targets = uniqueSortedIds(list.filter((x) => x.val > 4.0).map((x) => x.patients[0]));
-        const rivals = list.filter((x) => x.val <= 4.0).sort((x, y) => y.val - x.val).map((x) => x.patients[0]);
+        const list = factsByTag(activeCards, 'st');
+        const targets = uniqueSortedIds(list.filter((x) => x.clean && x.val > 3.6).map((x) => x.p));
+        const rivals = list.filter((x) => !(x.clean && x.val > 3.6)).map((x) => x.p);
         return {
           targets,
-          proof: `${formatList(targets)} sit far above the 4.0 outlier threshold, signaling hidden organ shock rather than normal ward variance.`,
-          rival: buildRivalInfo(targets, rivals, (id) => {
-            const r = list.find((x) => x.id === id || x.patients[0] === id);
-            return `${pName(id)}'s reading (${r?.val}) is near normal mild variance, well below the 4.0 shock outlier cutoff.`;
+          proof: `Filtering out reverted Draw-#2 lab artifacts and mild ~2.0 variance isolates ${formatList(targets)} as confirmed outliers > 3.6.`,
+          rival: buildRivalInfo(targets, [b, f, c, a], (r) => {
+            const x = list.find((item) => item.p === r);
+            return x && !x.clean
+              ? `${pName(r)}'s first spike reverted to ${x.val} on Draw #2 — a sampling artifact, not organ shock.`
+              : `${pName(r)}'s confirmed reading (${x?.val}) stays well below the 3.6 extreme-outlier line.`;
           }),
         };
       },
@@ -1162,67 +1205,71 @@ export const SEMANTIC_F34 = {
   },
 
   // #35 Counterfactual reasoning (After · Composite)
+  // M&M what-if arithmetic: Current Loss + (10 min × Pre-Tourniquet Rate) > 2,000 mL across 6 bays
   'counterfactual-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'M&M Audit', wingIndex: 0, label: 'What-If Review Question',
+        index: 0, time: '01:02', wing: 'M&M Audit', wingIndex: 0, label: '10-Min What-If Formula',
         shown: [
-          fact(`Post-shift review: paramedics used a new clotting tourniquet 10 minutes before arrival — did it actually save anyone from crossing lethal blood loss (2,000 mL)?`, [], { tag: 'rule' }),
-          fact(`Compute what each patient WOULD have lost WITHOUT the tourniquet: Current Loss + (10 min × Pre-Tourniquet Bleed Rate).`, [], { tag: 'rule' }),
+          fact(`Tourniquets stopped bleeding 10 minutes BEFORE arrival. Lethal threshold = strictly OVER 2,000 mL.`, [], { tag: 'rule' }),
+          fact(`What-If Loss WITHOUT tourniquet = Current Loss + (10 × Pre-Tourniquet Rate/min).`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Ambulance Data', wingIndex: 1, label: 'Bleed Logs A',
+        index: 1, time: '01:06', wing: 'EMS Logs A', wingIndex: 1, label: 'Loss vs. Rate A',
         shown: [
-          fact(`${pName(a)}: Arrived with 1,500 mL lost · Pre-tourniquet bleed rate was 70 mL per minute.`, a, { tag: 'cf', cur: 1500, rate: 70 }),
-          fact(`${pName(b)}: Arrived with 1,600 mL lost · Pre-tourniquet bleed rate was 30 mL per minute.`, b, { tag: 'cf', cur: 1600, rate: 30 }),
+          fact(`${pName(a)}: Arrived at 1,500 mL · bled at 70 mL/min (FASTER THAN ${pName(b)}'s 30 mL/min!).`, [a, b], { tag: 'cf', p: a, cur: 1500, rate: 70 }),
+          fact(`${pName(b)}: Arrived at 1,650 mL (HIGHER starting loss than ${pName(a)}!) · bled at 30 mL/min.`, [b, a], { tag: 'cf', p: b, cur: 1650, rate: 30 }),
         ],
         alt: [
-          fact(`${pName(a)}: Arrived with 1,200 mL lost · Pre-tourniquet bleed rate was 40 mL per minute.`, a, { tag: 'cf', cur: 1200, rate: 40 }),
-          fact(`${pName(b)}: Arrived with 1,650 mL lost · Pre-tourniquet bleed rate was 60 mL per minute.`, b, { tag: 'cf', cur: 1650, rate: 60 }),
+          fact(`${pName(a)}: Arrived at 1,300 mL · bled at 40 mL/min.`, [a], { tag: 'cf', p: a, cur: 1300, rate: 40 }),
+          fact(`${pName(b)}: Arrived at 1,600 mL · bled at 60 mL/min (FASTER THAN ${pName(a)}'s 40 mL/min!).`, [b, a], { tag: 'cf', p: b, cur: 1600, rate: 60 }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Ambulance Data', wingIndex: 1, label: 'Bleed Logs B',
+        index: 2, time: '01:10', wing: 'EMS Logs B', wingIndex: 1, label: 'Loss vs. Rate B',
         shown: [
-          fact(`${pName(c)}: Arrived with 1,100 mL lost · Pre-tourniquet bleed rate was 60 mL per minute.`, c, { tag: 'cf', cur: 1100, rate: 60 }),
-          fact(`${pName(d)}: Arrived with 1,400 mL lost · Pre-tourniquet bleed rate was 50 mL per minute.`, d, { tag: 'cf', cur: 1400, rate: 50 }),
+          fact(`${pName(c)}: Arrived at 1,100 mL · bled at 80 mL/min (fastest rate, lower starting loss!).`, [c], { tag: 'cf', p: c, cur: 1100, rate: 80 }),
+          fact(`${pName(d)}: Arrived at 1,400 mL · bled at 50 mL/min.`, [d], { tag: 'cf', p: d, cur: 1400, rate: 50 }),
+        ],
+        alt: [
+          fact(`${pName(c)}: Arrived at 1,300 mL · bled at 80 mL/min (fastest rate on the board).`, [c], { tag: 'cf', p: c, cur: 1300, rate: 80 }),
+          fact(`${pName(d)}: Arrived at 1,400 mL · bled at 50 mL/min.`, [d], { tag: 'cf', p: d, cur: 1400, rate: 50 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'M&M Audit', wingIndex: 0, label: 'Lethal Threshold Note',
+        index: 3, time: '01:14', wing: 'EMS Logs C', wingIndex: 0, label: 'Loss vs. Rate C',
         shown: [
-          fact(`Strict lethal cutoff: strictly GREATER than 2,000 mL total blood loss.`, [], { tag: 'rule' }),
-          fact(`Notice: someone arriving with 1,600 mL but bleeding slowly only adds 300 mL in 10 minutes!`, [], { tag: 'rule' }),
+          fact(`${pName(e)}: Arrived at 1,700 mL · bled at 20 mL/min (highest arrival loss, slowest trickle).`, [e], { tag: 'cf', p: e, cur: 1700, rate: 20 }),
+          fact(`${pName(f)}: Arrived at 900 mL · bled at 60 mL/min (moderate rate from lower starting loss).`, [f], { tag: 'cf', p: f, cur: 900, rate: 60 }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Ambulance Data', wingIndex: 1, label: 'Non-Tourniquet Bays',
+        index: 4, time: '01:17', wing: 'M&M Audit', wingIndex: 0, label: 'Don’t Grab Raw Maxes',
         shown: [
-          fact(`${pName(e)} had a nosebleed (lost 50 mL total, no tourniquet used).`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} arrived for a twisted ankle (zero blood loss).`, f, { tag: 'safe', calm: true }),
+          fact(`Neither highest arrival loss (${pName(e)}) nor fastest rate alone proves crossing 2,000 mL — add BOTH terms!`, [e], { tag: 'note' }),
+          fact(`Strict cutoff: strictly GREATER THAN 2,000 mL (1,900 or 1,950 stays under!).`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'M&M Audit', wingIndex: 0, label: 'Audit Filing',
+        index: 5, time: '01:20', wing: 'Board Report', wingIndex: 1, label: 'Prove Lives Saved',
         shown: [
-          fact(`Hospital Board asks for the SINGLE case where early tourniquet use literally prevented crossing > 2,000 mL.`, [], { tag: 'rule' }),
-          fact(`Do the 10-minute "what-if" addition for all four bleed logs.`, [], { tag: 'rule' }),
+          fact(`Multiply Rate × 10 and add to Current Loss for every bay.`, [], { tag: 'rule' }),
+          fact(`Flag EVERY patient who WOULD have exceeded 2,000 mL without the early tourniquet.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'What If the Tourniquet Failed?',
-      dispatch: 'During post-shift M&M review, calculate what WOULD have happened without the 10-minute early tourniquet.',
-      order: 'Identify the SINGLE patient who WOULD have crossed > 2,000 mL lethal blood loss without the 10-minute early tourniquet.',
-      hint: 'Add Current Loss + (10 × Rate/min) for each patient to see who strictly passes 2,000 mL.',
-      bayDefaultLabel: 'M&M Bleed Audit',
-      bayLabels: { [e]: 'Minor · Stable', [f]: 'Minor · Stable' },
+      dispatch: 'In M&M review, compute Current Loss + (10 min × Rate) across six cases to prove who would have crossed 2,000 mL.',
+      order: 'Identify EVERY patient who WOULD have exceeded 2,000 mL total blood loss without the 10-minute early tourniquet.',
+      hint: 'Add Current Loss + (10 × Rate/min) for each bay — neither highest start loss nor fastest rate wins alone.',
+      bayDefaultLabel: 'M&M Bleed Math',
       cards,
       evaluate(activeCards) {
         const list = factsByTag(activeCards, 'cf').map((x) => ({
-          id: x.patients[0],
+          id: x.p,
           cur: x.cur,
           rate: x.rate,
           proj: x.cur + 10 * x.rate,
@@ -1231,10 +1278,10 @@ export const SEMANTIC_F34 = {
         const rivals = list.filter((x) => x.proj <= 2000).sort((x, y) => y.proj - x.proj).map((x) => x.id);
         return {
           targets,
-          proof: `Without the 10-minute tourniquet, ${formatList(targets)} would have reached ${list.find((x) => x.id === targets[0])?.proj} mL — the only case crossing the 2,000 mL lethal cutoff.`,
-          rival: buildRivalInfo(targets, rivals, (id) => {
-            const r = list.find((x) => x.id === id);
-            return `${pName(id)} would have reached ${r.proj} mL (${r.cur} + 10×${r.rate}), staying at or below 2,000 mL.`;
+          proof: `Computing Current + 10×Rate puts ${formatList(targets)} strictly above 2,000 mL (${targets.map((id) => { const x = list.find((r) => r.id === id); return `${pName(id)}: ${x.cur}+${x.rate * 10}=${x.proj} mL`; }).join(', ')}).`,
+          rival: buildRivalInfo(targets, rivals, (r) => {
+            const x = list.find((item) => item.id === r);
+            return `${pName(r)} would have reached ${x.proj} mL (${x.cur} + 10×${x.rate}), staying at or below 2,000 mL.`;
           }),
         };
       },
@@ -1242,160 +1289,168 @@ export const SEMANTIC_F34 = {
   },
 
   // #36 Hypothetical reasoning (Before · Atomic)
+  // Real 2×5 ICU power-grid simulation: IF Gen-B (Right Wall Bays 6–10) trips → who loses battery-less electric life support?
   'hypothetical-reasoning': (rng) => {
     const allIds = pickPlayers(rng, 10);
     const byBay = {};
     for (const id of allIds) byBay[pBay(id)] = id;
-    // Right Wall = Bays 6..10! Suppose Generator B (serving Bays 6..10 ONLY) trips offline!
     const r1 = byBay[6];
     const r2 = byBay[8];
     const r3 = byBay[9];
+    const r4 = byBay[10];
     const l1 = byBay[2];
     const l2 = byBay[4];
-    const calm = byBay[1];
 
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Power Ops', wingIndex: 0, label: 'Generator B Failure Drill',
+        index: 0, time: '01:02', wing: 'Power Ops', wingIndex: 0, label: 'IF Generator B Fails',
         shown: [
-          fact(`SUPPOSE Backup Generator B trips offline in 30 seconds — cutting wall electricity to the RIGHT WALL (Bays 6–10) ONLY!`, [], { tag: 'rule' }),
-          fact(`Left Wall (Bays 1–5) stays on Generator A with 100% uninterrupted power.`, [], { tag: 'rule' }),
+          fact(`SUPPOSE Generator B trips in 30 sec → cuts wall power ONLY to RIGHT WALL (Bays 6–10).`, [], { tag: 'rule' }),
+          fact(`Left Wall (Bays 1–5) stays 100% live on Generator A (INDEPENDENT of Generator B).`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Equipment Log', wingIndex: 1, label: 'Life-Support Hookups 1',
+        index: 1, time: '01:06', wing: 'Gear Log A', wingIndex: 1, label: 'Ventilator Hookups',
         shown: [
-          fact(`${pName(r1)} (Bay ${pBay(r1)}) is fully paralyzed on a wall-powered electric ventilator (ZERO internal battery!).`, r1, { tag: 'dep', rightWall: true, electric: true }),
-          fact(`${pName(l1)} (Bay ${pBay(l1)}) is ALSO on a wall-powered electric ventilator (check which wall they are on!).`, l1, { tag: 'dep', rightWall: false, electric: true }),
+          fact(`${pName(r1)} (Bay 6) DEPENDS ON a wall-powered ventilator with ZERO battery.`, [r1], { tag: 'dep', p: r1, right: true, noBat: true }),
+          fact(`${pName(l1)} (Bay 2) uses the SAME zero-battery ventilator — check which wall Bay 2 sits on!`, [l1, r1], { tag: 'dep', p: l1, right: false, noBat: true }),
         ],
         alt: [
-          fact(`${pName(r1)} (Bay ${pBay(r1)}) is breathing independently on a simple oxygen tube (needs zero electricity).`, r1, { tag: 'dep', rightWall: true, electric: false }),
-          fact(`${pName(r3)} (Bay ${pBay(r3)}) is fully paralyzed on a wall-powered electric ventilator (ZERO internal battery!).`, r3, { tag: 'dep', rightWall: true, electric: true }),
+          fact(`${pName(r1)} (Bay 6) uses a non-electric mechanical oxygen cylinder (ZERO power needed).`, [r1], { tag: 'dep', p: r1, right: true, noBat: false }),
+          fact(`${pName(r3)} (Bay 9) DEPENDS ON a wall-powered ventilator with ZERO battery.`, [r3], { tag: 'dep', p: r3, right: true, noBat: true }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Equipment Log', wingIndex: 1, label: 'Life-Support Hookups 2',
+        index: 2, time: '01:10', wing: 'Gear Log B', wingIndex: 1, label: 'Pump & Battery Audit',
         shown: [
-          fact(`${pName(r2)} (Bay ${pBay(r2)}) depends 100% on an electric blood-pressure pump plugged into the wall (battery dead!).`, r2, { tag: 'dep', rightWall: true, electric: true }),
-          fact(`${pName(r3)} (Bay ${pBay(r3)}) is breathing on their own with a mechanical oxygen cylinder (needs zero wall power).`, r3, { tag: 'dep', rightWall: true, electric: false }),
+          fact(`${pName(r2)} (Bay 8) DEPENDS ON an electric heart pump whose backup battery is dead.`, [r2], { tag: 'dep', p: r2, right: true, noBat: true }),
+          fact(`${pName(r3)} (Bay 9) breathes on a mechanical oxygen tank — ZERO wall electricity needed.`, [r3], { tag: 'dep', p: r3, right: true, noBat: false }),
         ],
         alt: [
-          fact(`${pName(r2)} (Bay ${pBay(r2)}) depends 100% on an electric blood-pressure pump plugged into the wall (battery dead!).`, r2, { tag: 'dep', rightWall: true, electric: true }),
-          fact(`${pName(l1)} (Bay ${pBay(l1)}) is on an electric ventilator on the LEFT wall (Generator A stays ON!).`, l1, { tag: 'dep', rightWall: false, electric: true }),
+          fact(`${pName(r2)} (Bay 8) DEPENDS ON an electric heart pump whose backup battery is dead.`, [r2], { tag: 'dep', p: r2, right: true, noBat: true }),
+          fact(`${pName(l1)} (Bay 2) uses a zero-battery ventilator on the LEFT wall (Generator A stays ON!).`, [l1], { tag: 'dep', p: l1, right: false, noBat: true }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Power Ops', wingIndex: 0, label: 'Battery Check',
+        index: 3, time: '01:14', wing: 'Gear Log C', wingIndex: 0, label: 'Backup Batteries Check',
         shown: [
-          fact(`${pName(l2)} (Bay ${pBay(l2)}) is on a wall-powered heart pump on the LEFT wall (Generator A stays ON!).`, l2, { tag: 'dep', rightWall: false, electric: true }),
-          fact(`Only machines on Bays 6–10 with NO battery stop immediately if Generator B trips.`, [], { tag: 'rule' }),
+          fact(`${pName(r4)} (Bay 10) is on an electric ventilator WITH a fresh 4-hour internal battery (survives outage!).`, [r4], { tag: 'dep', p: r4, right: true, noBat: false }),
+          fact(`${pName(l2)} (Bay 4) is on a zero-battery heart pump on the LEFT wall (Generator A stays ON!).`, [l2], { tag: 'dep', p: l2, right: false, noBat: true }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Equipment Log', wingIndex: 1, label: 'Stable Bays',
+        index: 4, time: '01:17', wing: 'Power Ops', wingIndex: 0, label: '3-Way Failure Condition',
         shown: [
-          fact(`${pName(calm)} (Bay ${pBay(calm)}) is resting comfortably with zero powered equipment.`, calm, { tag: 'safe', calm: true }),
-          fact(`Manual squeeze-bags and portable backup batteries are ready at the nursing station.`, [], { tag: 'rule' }),
+          fact(`A bay loses life support ONLY if ALL 3 hold: (1) Right Wall 6–10 + (2) Electric machine + (3) ZERO working battery.`, [], { tag: 'rule' }),
+          fact(`Left-wall bays and fresh-battery bays keep running smoothly if Generator B drops.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Power Ops', wingIndex: 0, label: 'Pre-Stage Rescue',
+        index: 5, time: '01:20', wing: 'Surge Lead', wingIndex: 1, label: 'Pre-Stage Manual Teams',
         shown: [
-          fact(`Do NOT waste manual crews on Bays 1–5 (their power stays ON) or non-electric patients.`, [], { tag: 'rule' }),
-          fact(`Station emergency manual-backup teams at EVERY Right-Wall bay that loses wall-dependent life support.`, [], { tag: 'rule' }),
+          fact(`Station manual squeeze-bag crews ONLY at bays that would immediately go dark under the blackout.`, [], { tag: 'rule' }),
+          fact(`Check bay numbers directly on the left ICU grid.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Blackout Surge Drill',
-      dispatch: 'Storm lightning is flickering Generator B (Bays 6–10) — trace the hypothetical outage to pre-stage manual backup crews.',
-      order: 'Pre-stage manual backup at EVERY bay that will immediately lose life support if Generator B (Bays 6–10) dies.',
-      hint: 'Check BOTH bay wall (6–10 only!) AND whether the patient depends on wall electricity without battery.',
-      bayDefaultLabel: 'Power Drill',
-      bayLabels: { [calm]: 'Minor · Stable' },
+      scenarioTitle: 'Blackout Surge Simulation',
+      dispatch: 'Simulate Generator B failing (Bays 6–10 only) — intersect wall grid, electric gear, and missing battery.',
+      order: 'Pre-stage manual backup at EVERY bay that will immediately lose life support if Generator B (Bays 6–10) trips.',
+      hint: 'Require ALL 3: Right Wall (Bays 6–10) + Electric life support + Dead/Zero battery.',
+      bayDefaultLabel: 'Power Grid',
       cards,
       evaluate(activeCards) {
         const deps = factsByTag(activeCards, 'dep');
-        const targets = uniqueSortedIds(deps.filter((x) => x.rightWall && x.electric).map((x) => x.patients[0]));
-        const rivals = deps.filter((x) => !(x.rightWall && x.electric)).map((x) => x.patients[0]);
+        const targets = uniqueSortedIds(deps.filter((x) => x.right && x.noBat).map((x) => x.p));
+        const rivals = deps.filter((x) => !(x.right && x.noBat)).map((x) => x.p);
         return {
           targets,
-          proof: `Under the hypothetical Generator B blackout (Bays 6–10), ONLY ${formatList(targets)} sit on the Right Wall AND depend on battery-less electric life support.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} is either on the unaffected Left Wall (Bays 1–5) or does not need wall power.`),
+          proof: `Simulating a Generator B trip (Bays 6–10) hits ONLY ${formatList(targets)}: Right Wall + wall-electric support + zero working battery.`,
+          rival: buildRivalInfo(targets, [l1, r4, r3, l2], (r) => {
+            const x = deps.find((item) => item.p === r);
+            return x && !x.right
+              ? `${pName(r)} (Bay ${pBay(r)}) sits on the Left Wall (Generator A stays online).`
+              : `${pName(r)} (Bay ${pBay(r)}) has either a 4-hour internal battery or non-electric mechanical oxygen.`;
+          }),
         };
       },
     };
   },
 
   // #37 Predictive reasoning (Inside · Atomic)
+  // Extrapolating 5-minute slopes (01:00 → 01:05 → 01:10 → 01:15) across 6 patients clustered near BP 80
   'predictive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'ICU Telemetry', wingIndex: 0, label: 'Early Crash Rule',
+        index: 0, time: '01:02', wing: 'Slope Rule', wingIndex: 0, label: '01:15 Crash Threshold',
         shown: [
-          fact(`Danger line: blood pressure hitting 70 or lower causes sudden fainting and brain starvation.`, [], { tag: 'rule' }),
-          fact(`Look at the 3 readings taken every 5 minutes (01:00 → 01:05 → 01:10) and predict who crosses ≤ 70 NEXT (at 01:15)!`, [], { tag: 'rule' }),
+          fact(`Brain-faint line = BP ≤ 70. Readings occur every 5 minutes (01:00 → 01:05 → 01:10).`, [], { tag: 'rule' }),
+          fact(`Project each bay's exact 5-minute step ONE MORE step forward to 01:15 — catch who crosses ≤ 70!`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Trend Sheets', wingIndex: 1, label: 'Trends A & B',
+        index: 1, time: '01:06', wing: 'Telemetry A', wingIndex: 1, label: '5-Min Slopes A & B',
         shown: [
-          fact(`${pName(a)}: 01:00 = 114 · 01:05 = 98 · 01:10 = 82 (steady slide!).`, a, { tag: 'tr', next: 66, cur: 82 }),
-          fact(`${pName(b)}: 01:00 = 76 · 01:05 = 78 · 01:10 = 80 (climbing back up!).`, b, { tag: 'tr', next: 82, cur: 80 }),
+          fact(`${pName(a)}: 114 → 98 → 82 (dropping FASTER THAN ${pName(c)}).`, [a, c], { tag: 'tr', p: a, next: 66, step: -16 }),
+          fact(`${pName(b)}: 72 → 76 → 80 (currently LOWER THAN ${pName(a)}, trending upward).`, [b, a], { tag: 'tr', p: b, next: 84, step: +4 }),
         ],
         alt: [
-          fact(`${pName(a)}: 01:00 = 84 · 01:05 = 82 · 01:10 = 80 (gentle drift).`, a, { tag: 'tr', next: 78, cur: 80 }),
-          fact(`${pName(b)}: 01:00 = 116 · 01:05 = 98 · 01:10 = 80 (steep slide!).`, b, { tag: 'tr', next: 62, cur: 80 }),
+          fact(`${pName(a)}: 86 → 83 → 80 (gentle slide).`, [a], { tag: 'tr', p: a, next: 77, step: -3 }),
+          fact(`${pName(b)}: 116 → 98 → 80 (dropping FASTER THAN ${pName(a)}).`, [b, a], { tag: 'tr', p: b, next: 62, step: -18 }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Trend Sheets', wingIndex: 1, label: 'Trends C & D',
+        index: 2, time: '01:10', wing: 'Telemetry B', wingIndex: 1, label: '5-Min Slopes C & D',
         shown: [
-          fact(`${pName(c)}: 01:00 = 86 · 01:05 = 83 · 01:10 = 80.`, c, { tag: 'tr', next: 77, cur: 80 }),
-          fact(`${pName(d)}: 01:00 = 96 · 01:05 = 92 · 01:10 = 88.`, d, { tag: 'tr', next: 84, cur: 88 }),
+          fact(`${pName(c)}: 86 → 83 → 80.`, [c], { tag: 'tr', p: c, next: 77, step: -3 }),
+          fact(`${pName(d)}: 98 → 92 → 86.`, [d], { tag: 'tr', p: d, next: 80, step: -6 }),
+        ],
+        alt: [
+          fact(`${pName(c)}: 86 → 83 → 80.`, [c], { tag: 'tr', p: c, next: 77, step: -3 }),
+          fact(`${pName(d)}: 110 → 96 → 82.`, [d], { tag: 'tr', p: d, next: 68, step: -14 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'ICU Telemetry', wingIndex: 0, label: 'Watch the Direction!',
+        index: 3, time: '01:14', wing: 'Telemetry C', wingIndex: 0, label: '5-Min Slopes E & F',
         shown: [
-          fact(`All four patients look similar around 80–88 right now — ONLY projecting each 5-minute step forward reveals who crashes first!`, [], { tag: 'rule' }),
-          fact(`${pName(e)} has been rock-steady at 120 → 120 → 120.`, e, { tag: 'safe', calm: true }),
+          fact(`${pName(e)}: 78 → 78 → 78 (currently LOWER THAN ${pName(a)}, holding flat).`, [e, a], { tag: 'tr', p: e, next: 78, step: 0 }),
+          fact(`${pName(f)}: 104 → 94 → 84 (steady drop every 5 minutes).`, [f], { tag: 'tr', p: f, next: 74, step: -10 }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Trend Sheets', wingIndex: 1, label: 'Other Bay',
+        index: 4, time: '01:17', wing: 'Slope Rule', wingIndex: 0, label: 'Snapshot vs. Velocity',
         shown: [
-          fact(`${pName(f)} is cleared to go home after wrist wrap.`, f, { tag: 'safe', calm: true }),
-          fact(`Project one more 5-minute step to 01:15 for every tracked patient.`, [], { tag: 'rule' }),
+          fact(`All six bays sit near 78–86 right now — ONLY 5-minute velocity reveals who crosses ≤ 70 by 01:15!`, [], { tag: 'rule' }),
+          fact(`Subtract each bay's 5-min drop from its 01:10 reading to project 01:15.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'ICU Telemetry', wingIndex: 0, label: 'Pre-Crash Rescue',
+        index: 5, time: '01:20', wing: 'Crash Team', wingIndex: 1, label: 'Pre-Crash Rescue',
         shown: [
-          fact(`Wait until 01:15 and they code — rush the single patient projected to hit ≤ 70 next!`, [], { tag: 'rule' }),
-          fact(`Ignore recovering trends and tiny 2–4 point drifts.`, [], { tag: 'rule' }),
+          fact(`Apply each bay's 5-min step to its 01:10 reading.`, [], { tag: 'rule' }),
+          fact(`Intervene NOW on EVERY bay projected to hit ≤ 70 at 01:15.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Who Crashes in 5 Minutes?',
-      dispatch: 'Four patients hover around BP 80 right now — project each 5-minute slope forward to catch who hits ≤ 70 first.',
-      order: 'Intervene NOW on the SINGLE patient whose trend projects to crash to 70 or below at 01:15.',
-      hint: 'Find each patient’s exact 5-minute change and apply it one more time to their 01:10 reading.',
-      bayDefaultLabel: 'BP Trajectory',
-      bayLabels: { [e]: 'Stable · Flat', [f]: 'Cleared · Home' },
+      scenarioTitle: 'Who Crashes at 01:15?',
+      dispatch: 'All six bays sit near BP 80 right now — project each 5-minute slope one step forward to catch who crosses ≤ 70.',
+      order: 'Intervene NOW on EVERY patient whose 5-minute trend projects to hit 70 OR LOWER at 01:15.',
+      hint: 'Find each bay’s 5-min step (01:05 → 01:10) and apply it once more to predict 01:15.',
+      bayDefaultLabel: 'BP Slope',
       cards,
       evaluate(activeCards) {
         const list = factsByTag(activeCards, 'tr').sort((x, y) => x.next - y.next);
-        const targets = uniqueSortedIds(list.filter((x) => x.next <= 70).map((x) => x.patients[0]));
-        const rivals = list.filter((x) => x.next > 70).map((x) => x.patients[0]);
+        const targets = uniqueSortedIds(list.filter((x) => x.next <= 70).map((x) => x.p));
+        const rivals = list.filter((x) => x.next > 70).map((x) => x.p);
         return {
           targets,
-          proof: `Continuing each 5-minute slope puts ${formatList(targets)} at ${list[0].next} by 01:15 — crashing below 70 while everyone else stays safely above 75.`,
-          rival: buildRivalInfo(targets, rivals, (id) => {
-            const r = list.find((x) => x.patients[0] === id);
-            return `${pName(id)} projects to ${r.next} at 01:15 (either climbing or drifting slowly).`;
+          proof: `Projecting each 5-minute slope to 01:15 drops ${formatList(targets)} to ≤ 70 (${targets.map((id) => `${pName(id)} → ${list.find((x) => x.p === id).next}`).join(', ')}), while all others stay > 70.`,
+          rival: buildRivalInfo(targets, [f, e, b, c], (r) => {
+            const x = list.find((item) => item.p === r);
+            return `${pName(r)} projects to ${x.next} at 01:15 (${x.step >= 0 ? 'flat/climbing' : `${x.step}/step`}), staying above the 70 crash line.`;
           }),
         };
       },
@@ -1403,164 +1458,161 @@ export const SEMANTIC_F34 = {
   },
 
   // #38 Prognostic reasoning (After · Composite)
+  // Multi-organ trajectory coupling (Brain↓ ∩ Kidney↓) across 6 ICU bays
   'prognostic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'ICU Rounds', wingIndex: 0, label: '48-Hour Outlook Rule',
+        index: 0, time: '01:02', wing: 'ICU Rounds', wingIndex: 0, label: 'Multi-Organ Outlook Law',
         shown: [
-          fact(`A single struggling organ often recovers — SIMULTANEOUS decline across TWO vital systems (Brain + Kidneys) signals a grave 48-hour outlook.`, [], { tag: 'rule' }),
-          fact(`Families deserve an honest, early goals-of-care conference whenever TWO organs are actively worsening together.`, [], { tag: 'rule' }),
+          fact(`Single-organ dips often recover — SIMULTANEOUS 24h decline in BOTH Brain AND Kidneys signals grave 48h outlook.`, [], { tag: 'rule' }),
+          fact(`Hold an early honest goals-of-care family conference ONLY for multi-organ simultaneous decline.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Organ Logs', wingIndex: 1, label: 'Brain Trajectory (24h)',
+        index: 1, time: '01:06', wing: 'Neuro 24h', wingIndex: 1, label: 'Brain Score Shifts A',
         shown: [
-          fact(`${pName(a)}: Alertness score dropped from 13 → 6 (worsening rapidly).`, a, { tag: 'brain_down' }),
-          fact(`${pName(b)}: Alertness score climbed from 8 → 14 (waking up steadily!).`, b, { tag: 'brain_up' }),
+          fact(`${pName(a)}: Alertness fell 13 → 6 (WORSE THAN ${pName(b)}'s recovery 8 → 14!).`, [a, b], { tag: 'b_dn', p: a }),
+          fact(`${pName(d)}: Alertness dipped 14 → 11 on heavy pain meds (mild single-axis sedation).`, [d], { tag: 'b_dn', p: d }),
         ],
         alt: [
-          fact(`${pName(c)}: Alertness score dropped from 13 → 6 (worsening rapidly).`, c, { tag: 'brain_down' }),
-          fact(`${pName(b)}: Alertness score climbed from 8 → 14 (waking up steadily!).`, b, { tag: 'brain_up' }),
+          fact(`${pName(c)}: Alertness fell 13 → 6 (WORSE THAN ${pName(b)}'s recovery 8 → 14!).`, [c, b], { tag: 'b_dn', p: c }),
+          fact(`${pName(d)}: Alertness dipped 14 → 11 on heavy pain meds.`, [d], { tag: 'b_dn', p: d }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Organ Logs', wingIndex: 1, label: 'Kidney Trajectory (24h)',
+        index: 2, time: '01:10', wing: 'Kidney 24h', wingIndex: 0, label: 'Urine Output Shifts A',
         shown: [
-          fact(`${pName(a)}: Kidney urine output collapsed from 45 mL/hr → 0 mL/hr (shutting down!).`, a, { tag: 'kid_down' }),
-          fact(`${pName(b)}: Kidney urine output dropped from 40 → 10 mL/hr (struggling, needs dialysis).`, b, { tag: 'kid_down' }),
+          fact(`${pName(a)}: Urine collapsed 45 → 0 mL/hr (shutting down, SAME downward direction as ${pName(b)}!).`, [a, b], { tag: 'k_dn', p: a }),
+          fact(`${pName(b)}: Urine fell 40 → 8 mL/hr (kidneys failing, YET brain is waking up!).`, [b], { tag: 'k_dn', p: b }),
         ],
         alt: [
-          fact(`${pName(c)}: Kidney urine output collapsed from 45 mL/hr → 0 mL/hr (shutting down!).`, c, { tag: 'kid_down' }),
-          fact(`${pName(b)}: Kidney urine output dropped from 40 → 10 mL/hr (struggling, needs dialysis).`, b, { tag: 'kid_down' }),
+          fact(`${pName(c)}: Urine collapsed 45 → 0 mL/hr (shutting down!).`, [c], { tag: 'k_dn', p: c }),
+          fact(`${pName(b)}: Urine fell 40 → 8 mL/hr (kidneys failing, YET brain is waking up!).`, [b], { tag: 'k_dn', p: b }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'ICU Rounds', wingIndex: 0, label: 'Patients C & D Status',
+        index: 3, time: '01:14', wing: 'Kidney 24h', wingIndex: 0, label: 'Urine Output Shifts B',
         shown: [
-          fact(`${pName(c)}: Alertness steady at 14/15; kidneys making normal 60 mL/hr urine.`, c, { tag: 'stable_org' }),
-          fact(`${pName(d)}: Brain alertness dipped 14 → 11 from heavy pain meds, kidneys strong at 70 mL/hr.`, d, { tag: 'one_org' }),
+          fact(`${pName(d)}: Kidneys strong and climbing 50 → 70 mL/hr (OPPOSITE OF ${pName(a)}'s shutdown!).`, [d, a], { tag: 'k_ok', p: d }),
+          fact(`${pName(e)}: Alertness steady 15/15 · urine steady 65 mL/hr; ${pName(f)}: BOTH climbing upward.`, [e, f], { tag: 'both_ok', ps: [e, f] }),
         ],
         alt: [
-          fact(`${pName(a)}: Alertness steady at 14/15; kidneys making normal 60 mL/hr urine.`, a, { tag: 'stable_org' }),
-          fact(`${pName(d)}: Brain alertness dipped 14 → 11 from heavy pain meds, kidneys strong at 70 mL/hr.`, d, { tag: 'one_org' }),
+          fact(`${pName(d)}: Kidneys strong and climbing 50 → 70 mL/hr (OPPOSITE OF ${pName(c)}'s shutdown!).`, [d, c], { tag: 'k_ok', p: d }),
+          fact(`${pName(a)}: Alertness steady 14/15 · urine steady 60 mL/hr; ${pName(e)} & ${pName(f)} improving.`, [a, e, f], { tag: 'both_ok', ps: [a, e, f] }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Organ Logs', wingIndex: 1, label: 'Routine Recovery',
+        index: 4, time: '01:17', wing: 'Neuro 24h', wingIndex: 1, label: 'Cross-Organ Synthesis',
         shown: [
-          fact(`${pName(e)} is eating soup after appendix repair — brain and kidneys both normal.`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} is scheduled to go home this afternoon.`, f, { tag: 'safe', calm: true }),
+          fact(`${pName(b)} has failing kidneys yet an IMPROVING brain; ${pName(d)} has sleepy brain yet STRONG kidneys.`, [b, d], { tag: 'note' }),
+          fact(`Only intersecting Brain DOWN ∩ Kidney DOWN reveals true multi-organ collapse.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'ICU Rounds', wingIndex: 0, label: 'Family Conference Call',
+        index: 5, time: '01:20', wing: 'Family Room', wingIndex: 1, label: 'Urgent Family Talk',
         shown: [
-          fact(`Single-organ dips (${pName(b)} waking up, or ${pName(d)} sleepy on pain meds) have strong recovery odds.`, [b, d], { tag: 'note' }),
-          fact(`Bring the family in immediately for the SINGLE patient declining in BOTH brain and kidneys.`, [], { tag: 'rule' }),
+          fact(`Call an early honest goals-of-care conference for the SINGLE bay worsening in BOTH organs.`, [], { tag: 'rule' }),
+          fact(`Single-organ struggles stay on active recovery plans.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: '48-Hour ICU Outlook',
-      dispatch: 'Four ICU families are waiting for an honest update — combine Brain and Kidney trajectories to see who faces multi-organ decline.',
-      order: 'Call an urgent goals-of-care family meeting for the SINGLE patient worsening across BOTH brain and kidneys.',
-      hint: 'Cross-check the 24-hour Brain card with the 24-hour Kidney card for two simultaneous downward slopes.',
-      bayDefaultLabel: 'ICU Prognosis',
-      bayLabels: { [e]: 'Recovering · Calm', [f]: 'Cleared · Home' },
+      scenarioTitle: '48-Hour Multi-Organ Outlook',
+      dispatch: 'Cross-link 24-hour Brain and Kidney trajectories across six ICU bays to spot simultaneous two-organ collapse.',
+      order: 'Call an urgent goals-of-care family meeting for the SINGLE patient declining in BOTH brain and kidneys.',
+      hint: 'Intersect the Brain-Down list with the Kidney-Down list — reject single-organ dips.',
+      bayDefaultLabel: 'ICU 48h Trend',
       cards,
       evaluate(activeCards) {
-        const bd = tagSet(activeCards, 'brain_down');
-        const kd = tagSet(activeCards, 'kid_down');
-        const targets = uniqueSortedIds([...bd].filter((id) => kd.has(id)));
-        const rivals = [...bd, ...kd].filter((id) => !targets.includes(id));
+        const bd = new Set(factsByTag(activeCards, 'b_dn').map((x) => x.p));
+        const kd = new Set(factsByTag(activeCards, 'k_dn').map((x) => x.p));
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => bd.has(id) && kd.has(id)));
+        const rivals = [b, d, c, a].filter((id) => !targets.includes(id) && (bd.has(id) || kd.has(id)));
         return {
           targets,
-          proof: `Only ${formatList(targets)} show simultaneous decline in both brain alertness (13 → 6) and kidney output (45 → 0 mL/hr), signaling grave multi-organ prognosis.`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} only has one organ stressed while the other organ is stable or actively improving.`),
+          proof: `Intersecting 24h Brain decline with 24h Kidney shutdown isolates ${formatList(targets)} as the lone multi-organ collapse.`,
+          rival: buildRivalInfo(targets, rivals, (r) =>
+            kd.has(r) ? `${pName(r)}'s kidneys are struggling, but their brain is actively waking up (8 → 14).` : `${pName(r)} is mildly sedated on pain meds while their kidneys remain strong (70 mL/hr).`
+          ),
         };
       },
     };
   },
 
   // #39 Extrapolative reasoning (Before · Atomic)
+  // Rate-division burnout time (Liters ÷ Flow < 15 min) across 6 portable oxygen cylinders
   'extrapolative-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Transport Desk', wingIndex: 0, label: 'Portable O2 Math',
+        index: 0, time: '01:02', wing: 'Wall O2 Clock', wingIndex: 0, label: '15-Minute Restart Line',
         shown: [
-          fact(`Four ambulance patients are rolling on portable oxygen cylinders while the wall supply restarts in 15 minutes.`, [], { tag: 'rule' }),
-          fact(`Divide each patient's Remaining Liters by their Flow Rate (L/min) to see whose cylinder runs bone-dry BEFORE 15 minutes!`, [], { tag: 'rule' }),
+          fact(`Wall oxygen restarts in EXACTLY 15 minutes. Tank Time Left = Remaining Liters ÷ Flow Rate (L/min).`, [], { tag: 'rule' }),
+          fact(`Swap fresh cylinders right now for EVERY bay running dry BEFORE Minute 15 (< 15 min)!`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Tank Gauges', wingIndex: 1, label: 'Cylinders 1 & 2',
+        index: 1, time: '01:06', wing: 'Gauges A', wingIndex: 1, label: 'Cylinders A & B',
         shown: [
-          fact(`${pName(a)}: 180 Liters remaining · burning at 15 Liters/min.`, a, { tag: 'tank', lit: 180, rate: 15 }),
-          fact(`${pName(b)}: 120 Liters remaining · burning at 6 Liters/min.`, b, { tag: 'tank', lit: 120, rate: 6 }),
+          fact(`${pName(a)}: 180 L left · burning 15 L/min (MORE Liters than ${pName(b)}, yet OVER DOUBLE the burn rate).`, [a, b], { tag: 'tk', p: a, l: 180, r: 15 }),
+          fact(`${pName(b)}: 120 L left · burning 6 L/min.`, [b], { tag: 'tk', p: b, l: 120, r: 6 }),
         ],
         alt: [
-          fact(`${pName(a)}: 180 Liters remaining · burning at 9 Liters/min.`, a, { tag: 'tank', lit: 180, rate: 9 }),
-          fact(`${pName(b)}: 120 Liters remaining · burning at 12 Liters/min.`, b, { tag: 'tank', lit: 120, rate: 12 }),
+          fact(`${pName(a)}: 180 L left · burning 9 L/min.`, [a], { tag: 'tk', p: a, l: 180, r: 9 }),
+          fact(`${pName(b)}: 120 L left · burning 12 L/min.`, [b], { tag: 'tk', p: b, l: 120, r: 12 }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Tank Gauges', wingIndex: 1, label: 'Cylinders 3 & 4',
+        index: 2, time: '01:10', wing: 'Gauges B', wingIndex: 1, label: 'Cylinders C & D',
         shown: [
-          fact(`${pName(c)}: 240 Liters remaining · burning at 12 Liters/min.`, c, { tag: 'tank', lit: 240, rate: 12 }),
-          fact(`${pName(d)}: 110 Liters remaining · burning at 10 Liters/min.`, d, { tag: 'tank', lit: 110, rate: 10 }),
+          fact(`${pName(c)}: 240 L left · burning 12 L/min.`, [c], { tag: 'tk', p: c, l: 240, r: 12 }),
+          fact(`${pName(d)}: 110 L left · burning 10 L/min.`, [d], { tag: 'tk', p: d, l: 110, r: 10 }),
         ],
         alt: [
-          fact(`${pName(c)}: 240 Liters remaining · burning at 12 Liters/min.`, c, { tag: 'tank', lit: 240, rate: 12 }),
-          fact(`${pName(d)}: 160 Liters remaining · burning at 8 Liters/min.`, d, { tag: 'tank', lit: 160, rate: 8 }),
+          fact(`${pName(c)}: 240 L left · burning 12 L/min.`, [c], { tag: 'tk', p: c, l: 240, r: 12 }),
+          fact(`${pName(d)}: 160 L left · burning 8 L/min.`, [d], { tag: 'tk', p: d, l: 160, r: 8 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Transport Desk', wingIndex: 0, label: 'Gauge Illusion',
+        index: 3, time: '01:14', wing: 'Gauges C', wingIndex: 0, label: 'Cylinders E & F',
         shown: [
-          fact(`A smaller tank at a gentle flow can outlast a bigger tank running at full blast!`, [], { tag: 'rule' }),
-          fact(`${pName(e)} is breathing regular room air (needs zero cylinder).`, e, { tag: 'safe', calm: true }),
+          fact(`${pName(e)}: 150 L left · burning 10 L/min.`, [e], { tag: 'tk', p: e, l: 150, r: 10 }),
+          fact(`${pName(f)}: 90 L left · burning 5 L/min (smallest cylinder on the ward).`, [f], { tag: 'tk', p: f, l: 90, r: 5 }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Tank Gauges', wingIndex: 1, label: 'Other Bay',
+        index: 4, time: '01:17', wing: 'Wall O2 Clock', wingIndex: 0, label: 'Gauge Size Illusion',
         shown: [
-          fact(`${pName(f)} is waiting for discharge papers.`, f, { tag: 'safe', calm: true }),
-          fact(`Wall oxygen comes back online at exactly Minute 15.`, [], { tag: 'rule' }),
+          fact(`Compare ${pName(f)} (90 L) vs. ${pName(a)} (180 L): never judge by raw Liters without dividing by burn rate!`, [f, a], { tag: 'note' }),
+          fact(`Cutoff is strictly UNDER 15 minutes (< 15 min); 15+ min clears safely.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Transport Desk', wingIndex: 0, label: 'Swap Cylinders',
+        index: 5, time: '01:20', wing: 'Tank Cart', wingIndex: 1, label: 'Swap Short Tanks',
         shown: [
-          fact(`Swap fresh cylinders right now for EVERY patient whose tank hits zero BEFORE 15 minutes (< 15 min remaining).`, [], { tag: 'rule' }),
-          fact(`Cylinders lasting 20+ minutes easily clear the 15-minute restart.`, [], { tag: 'rule' }),
+          fact(`Divide Liters ÷ Rate for all six portable tanks.`, [], { tag: 'rule' }),
+          fact(`Swap EVERY tank that empties in strictly LESS THAN 15 minutes.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Oxygen Tank Burnout',
-      dispatch: 'Wall oxygen restarts in 15 minutes — extrapolate each cylinder’s remaining liters and burn rate to swap every tank running dry early.',
-      order: 'Swap fresh tanks NOW for EVERY patient whose portable cylinder will run dry in UNDER 15 minutes.',
-      hint: 'Divide Remaining Liters ÷ Burn Rate (L/min) for each patient and catch everyone under 15 minutes.',
-      bayDefaultLabel: 'O2 Tank Watch',
-      bayLabels: { [e]: 'Room Air · Calm', [f]: 'Cleared · Home' },
+      dispatch: 'Six patients run on portable tanks until wall O2 restarts at Minute 15 — divide Liters ÷ Flow Rate to catch early burnouts.',
+      order: 'Swap fresh tanks NOW for EVERY patient whose portable cylinder empties in strictly UNDER 15 minutes.',
+      hint: 'Compute Liters ÷ Flow Rate (L/min) for all 6 tanks — a small tank at 5 L/min outlasts a huge tank at 15 L/min!',
+      bayDefaultLabel: 'O2 Tank Math',
       cards,
       evaluate(activeCards) {
-        const list = factsByTag(activeCards, 'tank').map((t) => ({
-          id: t.patients[0],
-          mins: t.lit / t.rate,
-          lit: t.lit,
-          rate: t.rate,
-        }));
-        const targets = uniqueSortedIds(list.filter((t) => t.mins < 15).map((t) => t.id));
-        const rivals = list.filter((t) => t.mins >= 15).sort((x, y) => x.mins - y.mins).map((t) => t.id);
+        const list = factsByTag(activeCards, 'tk').map((x) => ({ id: x.p, l: x.l, r: x.r, m: x.l / x.r }));
+        const targets = uniqueSortedIds(list.filter((x) => x.m < 15).map((x) => x.id));
+        const rivals = list.filter((x) => x.m >= 15).sort((x, y) => x.m - y.m).map((x) => x.id);
         return {
           targets,
-          proof: `Dividing Liters ÷ Flow Rate shows ${formatList(targets)} run dry in under 15 minutes (${targets.map((id) => `${pName(id)}: ${list.find((x) => x.id === id).mins} min`).join(', ')}).`,
-          rival: buildRivalInfo(targets, rivals, (id) => {
-            const r = list.find((x) => x.id === id);
-            return `${pName(id)}'s tank lasts ${r.mins} minutes (${r.lit} ÷ ${r.rate}), safely clearing the 15-minute restart.`;
+          proof: `Dividing Liters ÷ Rate shows ONLY ${formatList(targets)} run dry under 15 min (${targets.map((id) => { const x = list.find((r) => r.id === id); return `${pName(id)}: ${x.l}÷${x.r}=${x.m}m`; }).join(', ')}).`,
+          rival: buildRivalInfo(targets, rivals, (r) => {
+            const x = list.find((item) => item.id === r);
+            return `${pName(r)}'s tank lasts ${x.m} minutes (${x.l} ÷ ${x.r}), clearing the 15-minute restart.`;
           }),
         };
       },
@@ -1568,83 +1620,78 @@ export const SEMANTIC_F34 = {
   },
 
   // #40 Proportional reasoning (Inside · Atomic)
+  // Body-volume blood-loss ratios (Lost ÷ Total ≥ 25%) across child, teen, and large-adult bays
   'proportional-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Shock Scale', wingIndex: 0, label: 'Body-Size Blood Rule',
+        index: 0, time: '01:02', wing: 'Volume Rule', wingIndex: 0, label: 'Quarter-Volume Shock Rule',
         shown: [
-          fact(`A smaller body holds far less blood! Critical shock starts when blood loss reaches 25% OR MORE of a patient's total blood supply.`, [], { tag: 'rule' }),
-          fact(`Don't just grab the largest raw milliliter number — compare Blood Lost ÷ Total Blood Supply for each patient!`, [], { tag: 'rule' }),
+          fact(`Emergency transfusion triggers at ≥ 25% (ONE QUARTER) of a patient's own total blood supply.`, [], { tag: 'rule' }),
+          fact(`Total blood scales with body size — compare Lost ÷ Total, NOT raw milliliters!`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Trauma Intake', wingIndex: 1, label: 'Loss Ratios 1',
+        index: 1, time: '01:06', wing: 'Bleed Scale A', wingIndex: 1, label: 'Teen vs. Large Adult',
         shown: [
-          fact(`${pName(a)} (small teen, 3,000 mL total blood): lost 900 mL.`, a, { tag: 'prop', lost: 900, total: 3000 }),
-          fact(`${pName(b)} (large adult, 6,000 mL total blood): lost 1,100 mL.`, b, { tag: 'prop', lost: 1100, total: 6000 }),
+          fact(`${pName(a)} (3,000 mL total supply): lost 900 mL (LESS raw blood than ${pName(b)}).`, [a, b], { tag: 'pr', p: a, lost: 900, tot: 3000 }),
+          fact(`${pName(b)} (6,000 mL total supply): lost 1,200 mL (DOUBLE ${pName(a)}'s body blood supply).`, [b, a], { tag: 'pr', p: b, lost: 1200, tot: 6000 }),
         ],
         alt: [
-          fact(`${pName(a)} (large adult, 6,000 mL total blood): lost 1,000 mL.`, a, { tag: 'prop', lost: 1000, total: 6000 }),
-          fact(`${pName(b)} (small teen, 3,200 mL total blood): lost 960 mL.`, b, { tag: 'prop', lost: 960, total: 3200 }),
+          fact(`${pName(a)} (6,000 mL total supply): lost 1,200 mL.`, [a], { tag: 'pr', p: a, lost: 1200, tot: 6000 }),
+          fact(`${pName(b)} (3,200 mL total supply): lost 960 mL.`, [b], { tag: 'pr', p: b, lost: 960, tot: 3200 }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Trauma Intake', wingIndex: 1, label: 'Loss Ratios 2',
+        index: 2, time: '01:10', wing: 'Bleed Scale B', wingIndex: 1, label: 'Adult vs. Child',
         shown: [
-          fact(`${pName(c)} (adult, 5,000 mL total blood): lost 1,000 mL.`, c, { tag: 'prop', lost: 1000, total: 5000 }),
-          fact(`${pName(d)} (child, 2,000 mL total blood): lost 600 mL.`, d, { tag: 'prop', lost: 600, total: 2000 }),
+          fact(`${pName(c)} (5,000 mL total supply): lost 1,000 mL.`, [c], { tag: 'pr', p: c, lost: 1000, tot: 5000 }),
+          fact(`${pName(d)} (child, 2,000 mL total supply): lost 600 mL (SMALLER raw loss than ${pName(c)}).`, [d, c], { tag: 'pr', p: d, lost: 600, tot: 2000 }),
         ],
         alt: [
-          fact(`${pName(c)} (adult, 5,000 mL total blood): lost 1,000 mL.`, c, { tag: 'prop', lost: 1000, total: 5000 }),
-          fact(`${pName(d)} (child, 2,000 mL total blood): lost 300 mL.`, d, { tag: 'prop', lost: 300, total: 2000 }),
+          fact(`${pName(c)} (5,000 mL total supply): lost 1,000 mL.`, [c], { tag: 'pr', p: c, lost: 1000, tot: 5000 }),
+          fact(`${pName(d)} (child, 2,000 mL total supply): lost 350 mL.`, [d], { tag: 'pr', p: d, lost: 350, tot: 2000 }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Shock Scale', wingIndex: 0, label: 'Quick Quarter Check',
+        index: 3, time: '01:14', wing: 'Bleed Scale C', wingIndex: 0, label: 'Borderline Ratios',
         shown: [
-          fact(`Tip: 25% is ONE QUARTER of total blood (e.g., 1,500 mL for a 6,000 mL adult, but only 500 mL for a 2,000 mL child!).`, [], { tag: 'rule' }),
-          fact(`${pName(e)} (adult, 5,000 mL total blood): lost 150 mL from a small cut.`, e, { tag: 'safe', calm: true }),
+          fact(`${pName(e)} (4,000 mL total supply): lost 900 mL.`, [e], { tag: 'pr', p: e, lost: 900, tot: 4000 }),
+          fact(`${pName(f)} (4,800 mL total supply): lost 1,000 mL.`, [f], { tag: 'pr', p: f, lost: 1000, tot: 4800 }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Trauma Intake', wingIndex: 1, label: 'Routine Bay',
+        index: 4, time: '01:17', wing: 'Volume Rule', wingIndex: 0, label: 'Multiply-by-4 Shortcut',
         shown: [
-          fact(`${pName(f)} has zero bleeding — waiting for a knee brace.`, f, { tag: 'safe', calm: true }),
-          fact(`A child losing 600 mL is in far deeper shock than a large adult losing 1,100 mL!`, [], { tag: 'rule' }),
+          fact(`Fast check: does (Blood Lost × 4) reach or beat Total Blood Supply?`, [], { tag: 'rule' }),
+          fact(`Look how 600 mL in a child outweighs 1,200 mL in a 6,000 mL adult!`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Shock Scale', wingIndex: 0, label: 'Blood Transfusion Call',
+        index: 5, time: '01:20', wing: 'Blood Bank', wingIndex: 1, label: 'Transfuse ≥ 25%',
         shown: [
-          fact(`Start emergency blood transfusion for EVERY patient who has lost 25% OR MORE of their body's blood.`, [], { tag: 'rule' }),
-          fact(`Patients under 25% loss stabilize safely with standard IV saline.`, [], { tag: 'rule' }),
+          fact(`Start emergency blood transfusion for EVERY patient who lost ≥ 25% of their body's blood.`, [], { tag: 'rule' }),
+          fact(`Patients under 25% stabilize on standard IV saline.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Size Matters in Shock',
-      dispatch: 'Adults, teens, and a child all lost blood — check proportion of total blood volume, not raw milliliters.',
+      dispatch: 'Six bleeding patients span child, teen, and large-adult volumes — compare Blood Lost ÷ Total Blood Supply.',
       order: 'Start emergency blood transfusion for EVERY patient who lost 25% OR MORE of their total blood supply.',
-      hint: 'Compare Blood Lost against one-quarter (25%) of each patient’s own total blood supply.',
-      bayDefaultLabel: 'Blood Volume',
-      bayLabels: { [e]: 'Minor · Cut', [f]: 'Minor · Brace' },
+      hint: 'Test (Blood Lost × 4 ≥ Total Blood) for every bay — ignore misleading raw mL totals.',
+      bayDefaultLabel: 'Blood Ratio',
       cards,
       evaluate(activeCards) {
-        const list = factsByTag(activeCards, 'prop').map((x) => ({
-          id: x.patients[0],
-          lost: x.lost,
-          total: x.total,
-          pct: Math.round((x.lost / x.total) * 100),
-        }));
-        const targets = uniqueSortedIds(list.filter((x) => x.lost * 4 >= x.total).map((x) => x.id));
-        const rivals = list.filter((x) => x.lost * 4 < x.total).sort((x, y) => y.lost - x.lost).map((x) => x.id);
+        const list = factsByTag(activeCards, 'pr').map((x) => ({ id: x.p, lost: x.lost, tot: x.tot, pct: Math.round((x.lost / x.tot) * 100) }));
+        const targets = uniqueSortedIds(list.filter((x) => x.lost * 4 >= x.tot).map((x) => x.id));
+        const rivals = list.filter((x) => x.lost * 4 < x.tot).sort((x, y) => y.lost - x.lost).map((x) => x.id);
         return {
           targets,
-          proof: `Checking proportion of body blood flags ${formatList(targets)} at ≥ 25% loss (${targets.map((id) => `${pName(id)}: ${list.find((x) => x.id === id).pct}%`).join(', ')}).`,
-          rival: buildRivalInfo(targets, rivals, (id) => {
-            const r = list.find((x) => x.id === id);
-            return `${pName(id)} lost ${r.lost} mL out of ${r.total} mL (${r.pct}%), staying below the 25% transfusion threshold despite a larger raw number.`;
+          proof: `Comparing Lost ÷ Total flags ${formatList(targets)} at ≥ 25% loss (${targets.map((id) => { const x = list.find((r) => r.id === id); return `${pName(id)}: ${x.lost}/${x.tot}=${x.pct}%`; }).join(', ')}).`,
+          rival: buildRivalInfo(targets, rivals, (r) => {
+            const x = list.find((item) => item.id === r);
+            return `${pName(r)} lost ${x.lost}/${x.tot} mL (${x.pct}%), staying below 25% even with a larger raw milliliter count.`;
           }),
         };
       },
@@ -1652,86 +1699,85 @@ export const SEMANTIC_F34 = {
   },
 
   // #41 Mathematical reasoning (Inside · Composite)
+  // Cross-card 3-component Early Warning Tally + relative tie-breaking across all 6 bays
   'mathematical-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: 'Trauma Score', wingIndex: 0, label: '3-Part Danger Formula',
+        index: 0, time: '01:02', wing: 'Score Formula', wingIndex: 0, label: '3-Card ICU Formula',
         shown: [
-          fact(`Hospital Early Warning Score = Breathing Points + Pressure Points + Alertness Points.`, [], { tag: 'rule' }),
-          fact(`Total score of 7 OR HIGHER triggers immediate ICU transfer (6 or below stays on the regular floor).`, [], { tag: 'rule' }),
+          fact(`Early Warning Score = Breathing + Pressure + Alertness (3 separate nurse cards).`, [], { tag: 'rule' }),
+          fact(`Score ≥ 7 triggers immediate ICU transfer; 6 or lower stays on the step-down floor.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '02:00', wing: 'Nurse Cards', wingIndex: 1, label: 'Part 1: Breathing Points',
+        index: 1, time: '01:05', wing: 'Resp Team', wingIndex: 1, label: 'Card 1: Breathing Points',
         shown: [
-          fact(`${pName(a)}: +3 pts · ${pName(b)}: +2 pts · ${pName(c)}: +3 pts · ${pName(d)}: +1 pt.`, [a, b, c, d], { tag: 's1', map: { [a]: 3, [b]: 2, [c]: 3, [d]: 1 } }),
-          fact(`(Measured by Respiratory Therapist at 01:05.)`, [], { tag: 'note' }),
+          fact(`${pName(a)}: +3 · ${pName(b)}: +2 · ${pName(c)}: +3.`, [a, b, c], { tag: 's1', map: { [a]: 3, [b]: 2, [c]: 3 } }),
+          fact(`${pName(d)}: +1 · ${pName(e)}: +2 · ${pName(f)}: +1.`, [d, e, f], { tag: 's1', map: { [d]: 1, [e]: 2, [f]: 1 } }),
         ],
         alt: [
-          fact(`${pName(a)}: +1 pt · ${pName(b)}: +3 pts · ${pName(c)}: +3 pts · ${pName(d)}: +1 pt.`, [a, b, c, d], { tag: 's1', map: { [a]: 1, [b]: 3, [c]: 3, [d]: 1 } }),
-          fact(`(Measured by Respiratory Therapist at 01:05.)`, [], { tag: 'note' }),
+          fact(`${pName(a)}: +1 · ${pName(b)}: +3 · ${pName(c)}: +3.`, [a, b, c], { tag: 's1', map: { [a]: 1, [b]: 3, [c]: 3 } }),
+          fact(`${pName(d)}: +1 · ${pName(e)}: +2 · ${pName(f)}: +1.`, [d, e, f], { tag: 's1', map: { [d]: 1, [e]: 2, [f]: 1 } }),
         ],
       }),
       makeCard({
-        index: 2, time: '03:00', wing: 'Nurse Cards', wingIndex: 1, label: 'Part 2: Pressure Points',
+        index: 2, time: '01:08', wing: 'Triage Desk', wingIndex: 0, label: 'Card 2: Pressure Points',
         shown: [
-          fact(`${pName(a)}: +2 pts · ${pName(b)}: +2 pts · ${pName(c)}: +1 pt · ${pName(d)}: +3 pts.`, [a, b, c, d], { tag: 's2', map: { [a]: 2, [b]: 2, [c]: 1, [d]: 3 } }),
-          fact(`(Measured by Triage Nurse at 01:08.)`, [], { tag: 'note' }),
+          fact(`${pName(a)}: +2 · ${pName(b)}: +2 · ${pName(c)}: +1.`, [a, b, c], { tag: 's2', map: { [a]: 2, [b]: 2, [c]: 1 } }),
+          fact(`${pName(d)}: +3 · ${pName(e)}: +2 · ${pName(f)}: +2.`, [d, e, f], { tag: 's2', map: { [d]: 3, [e]: 2, [f]: 2 } }),
         ],
         alt: [
-          fact(`${pName(a)}: +2 pts · ${pName(b)}: +3 pts · ${pName(c)}: +1 pt · ${pName(d)}: +3 pts.`, [a, b, c, d], { tag: 's2', map: { [a]: 2, [b]: 3, [c]: 1, [d]: 3 } }),
-          fact(`(Measured by Triage Nurse at 01:08.)`, [], { tag: 'note' }),
+          fact(`${pName(a)}: +2 · ${pName(b)}: +3 · ${pName(c)}: +1.`, [a, b, c], { tag: 's2', map: { [a]: 2, [b]: 3, [c]: 1 } }),
+          fact(`${pName(d)}: +3 · ${pName(e)}: +2 · ${pName(f)}: +2.`, [d, e, f], { tag: 's2', map: { [d]: 3, [e]: 2, [f]: 2 } }),
         ],
       }),
       makeCard({
-        index: 3, time: '04:00', wing: 'Nurse Cards', wingIndex: 1, label: 'Part 3: Alertness Points',
+        index: 3, time: '01:11', wing: 'Neuro Desk', wingIndex: 1, label: 'Card 3: Alertness Points',
         shown: [
-          fact(`${pName(a)}: +3 pts · ${pName(b)}: +2 pts · ${pName(c)}: +2 pts · ${pName(d)}: +3 pts.`, [a, b, c, d], { tag: 's3', map: { [a]: 3, [b]: 2, [c]: 2, [d]: 3 } }),
-          fact(`(Measured by Neuro Resident at 01:10.)`, [], { tag: 'note' }),
+          fact(`${pName(a)}: +3 · ${pName(b)}: +2 · ${pName(c)}: +2.`, [a, b, c], { tag: 's3', map: { [a]: 3, [b]: 2, [c]: 2 } }),
+          fact(`${pName(d)}: +3 · ${pName(e)}: +1 · ${pName(f)}: +2.`, [d, e, f], { tag: 's3', map: { [d]: 3, [e]: 1, [f]: 2 } }),
         ],
         alt: [
-          fact(`${pName(a)}: +2 pts · ${pName(b)}: +2 pts · ${pName(c)}: +2 pts · ${pName(d)}: +2 pts.`, [a, b, c, d], { tag: 's3', map: { [a]: 2, [b]: 2, [c]: 2, [d]: 2 } }),
-          fact(`(Measured by Neuro Resident at 01:10.)`, [], { tag: 'note' }),
+          fact(`${pName(a)}: +2 · ${pName(b)}: +2 · ${pName(c)}: +2.`, [a, b, c], { tag: 's3', map: { [a]: 2, [b]: 2, [c]: 2 } }),
+          fact(`${pName(d)}: +2 · ${pName(e)}: +1 · ${pName(f)}: +2.`, [d, e, f], { tag: 's3', map: { [d]: 2, [e]: 1, [f]: 2 } }),
         ],
       }),
       makeCard({
-        index: 4, time: '05:00', wing: 'Trauma Score', wingIndex: 0, label: 'Low-Score Bays',
+        index: 4, time: '01:15', wing: 'Score Formula', wingIndex: 0, label: 'Watch the 6 vs. 7 Edge',
         shown: [
-          fact(`${pName(e)} scored 1 total across all three checks (calm sprain).`, e, { tag: 'safe', calm: true }),
-          fact(`${pName(f)} scored 0 total (cleared to go home).`, f, { tag: 'safe', calm: true }),
+          fact(`Multiple bays sit right at 6 points (step-down floor) — double-check every sum!`, [], { tag: 'rule' }),
+          fact(`No single card exceeds +3, so ONLY summing across all 3 cards crosses 7.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '06:00', wing: 'Trauma Score', wingIndex: 0, label: 'ICU Transfer Cut-Off',
+        index: 5, time: '01:18', wing: 'ICU Desk', wingIndex: 1, label: 'Transfer ≥ 7 Now',
         shown: [
-          fact(`Add each patient's 3 scores across Breathing + Pressure + Alertness.`, [], { tag: 'rule' }),
-          fact(`Transfer EVERY patient hitting 7 points OR HIGHER into ICU immediately.`, [], { tag: 'rule' }),
+          fact(`Sum Breathing + Pressure + Alertness for all six bays.`, [], { tag: 'rule' }),
+          fact(`Transfer EVERY patient totaling 7 OR HIGHER straight to ICU.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Early Warning Tally',
-      dispatch: 'Three different nurses logged separate score parts — sum Breathing + Pressure + Alertness to catch every ICU transfer.',
-      order: 'Transfer EVERY patient whose 3-part Early Warning Score totals 7 OR HIGHER to ICU.',
-      hint: 'Sum each patient’s points across the Breathing, Pressure, and Alertness cards (cutoff = 7+).',
-      bayDefaultLabel: 'Warning Score',
-      bayLabels: { [e]: 'Minor · Score 1', [f]: 'Cleared · Score 0' },
+      scenarioTitle: '3-Card Early Warning Tally',
+      dispatch: 'Three teams logged separate sub-scores across all six bays — sum Breathing + Pressure + Alertness to hit ≥ 7.',
+      order: 'Transfer EVERY patient whose 3-card Early Warning Score totals 7 OR HIGHER to ICU.',
+      hint: 'Add each patient’s score from Card 1 + Card 2 + Card 3 — watch out for 6-point near-misses!',
+      bayDefaultLabel: 'Warning Tally',
       cards,
       evaluate(activeCards) {
-        const totals = { [a]: 0, [b]: 0, [c]: 0, [d]: 0 };
+        const totals = Object.fromEntries([a, b, c, d, e, f].map((id) => [id, 0]));
         for (const tag of ['s1', 's2', 's3']) {
-          const rec = factsByTag(activeCards, tag)[0];
-          if (rec?.map) {
-            for (const [id, v] of Object.entries(rec.map)) totals[id] += v;
+          for (const rec of factsByTag(activeCards, tag)) {
+            for (const [id, v] of Object.entries(rec.map || {})) totals[id] += v;
           }
         }
         const targets = uniqueSortedIds(Object.entries(totals).filter(([, s]) => s >= 7).map(([id]) => id));
         const rivals = Object.entries(totals).filter(([, s]) => s < 7).sort((x, y) => y[1] - x[1]).map(([id]) => id);
         return {
           targets,
-          proof: `Summing all three cards puts ${formatList(targets)} at ≥ 7 points (${targets.map((id) => `${pName(id)} = ${totals[id]}`).join(', ')}).`,
-          rival: buildRivalInfo(targets, rivals, (id) => `${pName(id)} totaled ${totals[id]} points — just below the 7-point ICU cutoff.`),
+          proof: `Summing Breathing + Pressure + Alertness puts ${formatList(targets)} at ≥ 7 (${targets.map((id) => `${pName(id)}=${totals[id]}`).join(', ')}).`,
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} totaled ${totals[r]} points — staying below the 7-point ICU cutoff.`),
         };
       },
     };
