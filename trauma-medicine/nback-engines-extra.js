@@ -12,15 +12,15 @@ export const NBACK_ENGINES_PART2 = {
   'systems-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Lethal feedback loop alert: identify the patient trapped in the Trauma "Triad of Death" (Hypothermia → Coagulopathy → Worse Bleeding → Deeper Hypothermia).`,
+      directive: `Vicious spiral alert: spot the patient trapped in a runaway bleeding loop (Body gets cold → blood stops clotting → bleeds even faster → gets even colder).`,
       lines: makeShuffledLines(rng, [
-        `${W}: Core temp 33.4°C, blood won't clot, cold IV fluids accelerating bleeding.`,
-        `${D1}: Core temp 36.8°C, localized hand laceration controlled with gauze.`,
-        `${D2}: Core temp 37.9°C, isolated ankle fracture, normal clotting labs.`,
+        `${W}: Body temp 33.4°C, blood won't clot, cold IV fluids making bleeding even worse.`,
+        `${D1}: Normal temp 36.8°C, hand cut controlled with clean gauze.`,
+        `${D2}: Mild fever 37.9°C, twisted ankle, normal blood clotting.`,
       ]),
       verdict: winIdx,
-      proof: `${W} is locked inside a self-reinforcing physiological feedback loop that will spiral unless broken immediately.`,
-      rival: `${D1}'s bleed is controlled and warm, with no amplifying feedback loop.`,
+      proof: `${W} is trapped in a self-worsening cold-bleeding spiral that will crash rapidly unless interrupted.`,
+      rival: `${D1}'s cut is warm and controlled, with no runaway spiral.`,
       isClash: false,
     };
   },
@@ -97,15 +97,15 @@ export const NBACK_ENGINES_PART2 = {
   'instrumental-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `You are holding a sterile Chest Tube kit right now. Match this exact instrument to the patient whose condition it directly resolves.`,
+      directive: `You are holding a sterile Chest Drain Tube right now. Match this exact tool to the patient whose emergency it fixes.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Massive hemothorax (1.4 L blood pooling inside the pleural chest cavity).`,
-        `${D1}: Open forearm arterial laceration (needs tourniquet / direct clamp).`,
-        `${D2}: Acute epidural brain bleed (needs neurosurgical burr hole).`,
+        `${W}: Massive blood trapped inside the chest cavity crushing the lung.`,
+        `${D1}: Deep forearm artery cut (needs a limb tourniquet, not a chest tube).`,
+        `${D2}: Brain bleed inside the skull (needs a brain surgeon, not a chest tube).`,
       ]),
       verdict: winIdx,
-      proof: `A chest tube directly evacuates pleural blood in ${W}'s massive hemothorax.`,
-      rival: `${D1} needs limb hemorrhage control and ${D2} needs cranial decompression, not a chest tube.`,
+      proof: `A chest drain tube directly drains the blood crushing ${W}'s lung.`,
+      rival: `${D1} needs a limb tourniquet and ${D2} needs brain surgery, not a chest drain tube.`,
       isClash: false,
     };
   },
@@ -218,15 +218,15 @@ export const NBACK_ENGINES_PART2 = {
   'convergent-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Three independent clues (Paramedic note + Lab + ECG): which SINGLE patient do all three clues point to?`,
+      directive: `Three independent clues (Paramedic + Blood Test + Heart Monitor): which SINGLE patient do all three clues point to?`,
       lines: makeShuffledLines(rng, [
-        `Paramedic: "Severe chest crush." Lab: "Troponin spiked 10×." ECG: "ST elevation." → All 3 logged on ${W}.`,
-        `${D1}: Chest bruise from seatbelt, normal troponin, normal ECG.`,
-        `${D2}: No chest injury, normal troponin, fast sinus rhythm.`,
+        `Paramedic: "Severe chest crush." Blood Test: "Heart-damage marker spiked 10×." Heart Monitor: "Heart-attack spike." → All 3 on ${W}.`,
+        `${D1}: Seatbelt chest bruise, normal heart blood test, normal heart monitor.`,
+        `${D2}: No chest injury, normal heart blood test, steady fast heartbeat.`,
       ]),
       verdict: winIdx,
-      proof: `All three independent diagnostic lines converge uniquely on ${W} (blunt cardiac injury).`,
-      rival: `${D1} has chest bruising, but both lab and ECG diverge away from cardiac injury.`,
+      proof: `All three independent clues point straight to ${W} (bruised/damaged heart).`,
+      rival: `${D1} has a chest bruise, but both the blood test and heart monitor are completely normal.`,
       isClash: false,
     };
   },
@@ -269,15 +269,15 @@ export const NBACK_ENGINES_PART2 = {
   'first-principles': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Core physiology check: Oxygen Delivery = Heart Output × Hemoglobin × SpO2. Whose oxygen delivery just collapsed by HALF despite normal lungs (SpO2 99%)?`,
+      directive: `Core body rule: Oxygen Delivery = Heart Pump × Red Blood Cells × Lung Oxygen %. Whose oxygen delivery just crashed by HALF despite 99% lung oxygen?`,
       lines: makeShuffledLines(rng, [
-        `${W}: SpO2 99%, steady heart, but Hemoglobin crashed from 14 → 6 g/dL (lost >50% O2 carriers).`,
-        `${D1}: SpO2 95%, Hemoglobin 13.5 g/dL, normal heart output.`,
-        `${D2}: SpO2 96%, Hemoglobin 14.0 g/dL, normal heart output.`,
+        `${W}: Lung oxygen 99%, steady heart, but red blood cells crashed from 14 → 6 (lost over half of oxygen carriers).`,
+        `${D1}: Lung oxygen 95%, red blood cells 13.5, normal heart pump.`,
+        `${D2}: Lung oxygen 96%, red blood cells 14.0, normal heart pump.`,
       ]),
       verdict: winIdx,
-      proof: `From first principles, SpO2 only measures saturation of remaining cells—${W}'s 6 g/dL hemoglobin cuts tissue oxygen delivery in half.`,
-      rival: `${D1}'s SpO2 (95%) looks slightly lower than ${W}'s (99%), yet ${D1} carries more than double the oxygen.`,
+      proof: `A finger clip only measures how full each remaining blood cell is—${W}'s crash from 14 to 6 cuts total oxygen delivery in half.`,
+      rival: `${D1}'s finger clip (95%) looks slightly lower than ${W}'s (99%), yet ${D1} carries more than double the oxygen.`,
       isClash: false,
     };
   },
@@ -303,15 +303,15 @@ export const NBACK_ENGINES_PART2 = {
   'generative-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Unexplained case: standard trauma scans are negative, yet ONE patient has BOTH acute leg swelling AND sudden shortness of breath. Who fits a novel diagnosis (Pulmonary Embolism)?`,
+      directive: `Mystery case: normal trauma scans are clean, yet ONE patient has BOTH a hot swollen calf AND sudden shortness of breath (classic lung blood clot). Who?`,
       lines: makeShuffledLines(rng, [
-        `${W}: One hot swollen calf + sudden chest pain & SpO2 drop after a 14-hour flight.`,
-        `${D1}: Twisted ankle + normal breathing (SpO2 99%).`,
-        `${D2}: Both ankles mildly puffy for years + steady normal SpO2.`,
+        `${W}: One hot swollen calf + sudden chest pain & low oxygen after a 14-hour flight.`,
+        `${D1}: Twisted ankle + normal easy breathing (99% oxygen).`,
+        `${D2}: Both ankles mildly puffy for years + steady normal oxygen.`,
       ]),
       verdict: winIdx,
-      proof: `Linking unilateral calf clot + sudden hypoxia generates the Pulmonary Embolism hypothesis on ${W}.`,
-      rival: `${D2}'s chronic bilateral puffiness lacks acute embolic hypoxia.`,
+      proof: `Connecting one hot swollen calf with sudden low oxygen points straight to a traveling lung clot in ${W}.`,
+      rival: `${D2}'s long-term mild ankle puffiness has no sudden oxygen drop.`,
       isClash: false,
     };
   },
@@ -511,15 +511,15 @@ export const NBACK_ENGINES_PART2 = {
   'metacognitive-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Cognitive bias check (Anchoring Trap): your first instinct locked onto a gruesome open arm fracture—step back and spot who actually has the silent life-threatening airway crisis.`,
+      directive: `First-impression trap: your eyes locked onto a dramatic bloody arm—step back and spot who actually has the silent life-threatening airway crisis.`,
       lines: makeShuffledLines(rng, [
-        `${W}: No visible blood, but stridor and falling SpO2 (82%) from inhaled smoke.`,
-        `${D1}: Dramatic bloody arm fracture, SpO2 99%, BP 124/78, talking clearly.`,
-        `${D2}: Dramatic bloody eyebrow cut, SpO2 98%, BP 120/76, alert.`,
+        `${W}: No visible blood, but raspy gasping and falling oxygen (82%) from inhaled smoke.`,
+        `${D1}: Dramatic bloody arm fracture, 99% oxygen, strong BP 124/78, talking clearly.`,
+        `${D2}: Dramatic bloody eyebrow cut, 98% oxygen, strong BP 120/76, wide awake.`,
       ]),
       verdict: winIdx,
-      proof: `Metacognitive check defeats visual anchoring on ${D1}'s bloody arm and catches ${W}'s silent lethal hypoxia.`,
-      rival: `${D1}'s gruesome arm injury is visually distracting, but non-fatal compared to ${W}'s closing airway.`,
+      proof: `Stepping back from ${D1}'s dramatic bloody arm catches ${W}'s silent closing airway (82% oxygen).`,
+      rival: `${D1}'s bloody arm grabs attention, but is far less urgent than ${W}'s closing airway.`,
       isClash: false,
     };
   },
@@ -529,28 +529,28 @@ export const NBACK_ENGINES_PART2 = {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     if (allowClash) {
       return {
-        directive: `Evidence verification: act ONLY if at least one patient's critical lab is verified—flag a Clinical Clash if ALL THREE critical labs came from a contaminated tube batch.`,
+        directive: `Evidence check: act ONLY if at least one critical blood test is valid—flag a Clinical Clash if ALL THREE samples are ruined/contaminated.`,
         lines: makeShuffledLines(rng, [
-          `${W}: Potassium 8.2 — tube flagged "Hemolyzed / Invalid Sample".`,
-          `${D1}: Potassium 7.9 — tube flagged "Mislabeled / Wrong Barcode".`,
-          `${D2}: Potassium 8.5 — tube flagged "Drawn above IV line / Contaminated".`,
+          `${W}: High potassium alarm — sample flagged "Crushed / Invalid Tube".`,
+          `${D1}: High potassium alarm — sample flagged "Wrong Barcode Label".`,
+          `${D2}: High potassium alarm — sample flagged "Contaminated by IV Drip".`,
         ]),
         verdict: 'clash',
-        proof: `Zero valid epistemic evidence exists—treating any of the three on contaminated labs could cause fatal iatrogenic harm (redraw STAT).`,
-        rival: `Every alarming number is epistemically compromised and cannot justify treatment.`,
+        proof: `Zero trustworthy test results exist — giving strong heart medicine on ruined samples could be fatal (redraw first!).`,
+        rival: `Every alarming number came from a ruined sample and cannot be trusted.`,
         isClash: true,
       };
     }
     return {
-      directive: `Knowledge boundary check: distinguish CONFIRMED stability from UNEXAMINED assumptions—who was merely "assumed fine" without ever being examined?`,
+      directive: `Fact vs. Assumption check: tell CONFIRMED safety apart from UNCHECKED guesses—who was merely "assumed fine" without ever being examined?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Pulled from back seat; marked "probably ok" by bystander—ZERO vitals or exam ever recorded.`,
-        `${D1}: Examined by attending; normal CT, normal ECG, vitals logged q15m.`,
-        `${D2}: Examined by resident; clean X-ray, normal pulse ox, walking safely.`,
+        `${W}: Pulled from back seat; bystander said "looks okay"—ZERO vitals or exam ever done.`,
+        `${D1}: Checked by senior doctor; clean CT scan, clean heart monitor, vitals checked every 15 min.`,
+        `${D2}: Checked by doctor; clean X-ray, normal oxygen, walking safely.`,
       ]),
       verdict: winIdx,
-      proof: `Epistemic audit catches ${W}: absence of bad numbers is NOT evidence of stability when no exam was ever done.`,
-      rival: `${D1} and ${D2} have positive verified examination data.`,
+      proof: `No bad numbers does NOT mean ${W} is safe when nobody has ever checked them.`,
+      rival: `${D1} and ${D2} have confirmed normal exam results.`,
       isClash: false,
     };
   },
@@ -559,15 +559,15 @@ export const NBACK_ENGINES_PART2 = {
   'reflective-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Post-shift M&M reflection: reviewing three near-misses, which patient's chart shows the classic "Premature Closure" error where the team stopped looking too early?`,
+      directive: `Post-shift review: looking back at three cases, which chart shows a team jumping to a quick label ("just anxiety") and stopping too early?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Team diagnosed "anxiety" in 2 minutes and stopped—missing a hidden collapsed lung.`,
-        `${D1}: Team ran full trauma panel, ruled out chest/belly injury, then treated wrist break.`,
-        `${D2}: Team checked serial troponins 3 hours apart before clearing chest pain.`,
+        `${W}: Team guessed "anxiety" in 2 minutes and stopped looking — missing a collapsed lung!`,
+        `${D1}: Team checked chest and belly scans thoroughly before wrapping a broken wrist.`,
+        `${D2}: Team ran two heart blood tests 3 hours apart before clearing chest pain.`,
       ]),
       verdict: winIdx,
-      proof: `${W}'s chart reflects premature closure—accepting a quick label ("anxiety") without ruling out fatal trauma.`,
-      rival: `${D1} and ${D2} underwent complete systematic evaluation before closure.`,
+      proof: `${W}'s chart shows stopping too early on a comforting guess ("anxiety") without checking for real injury.`,
+      rival: `${D1} and ${D2} both received thorough checks before being cleared.`,
       isClash: false,
     };
   },
@@ -623,9 +623,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Counterexample check: working claim is "Everyone in this bay is stable enough to wait 1 hour." Spot the SINGLE patient who DISPROVES that claim.`,
       lines: makeShuffledLines(rng, [
-        `${W}: SpO2 just plunged to 81% with active vomiting—disproves the "all stable" claim immediately.`,
-        `${D1}: Sitting upright, SpO2 98%, BP 122/76.`,
-        `${D2}: Reading phone, SpO2 99%, BP 118/74.`,
+        `${W}: Oxygen just plunged to 81% with active vomiting—disproves the "all stable" claim immediately.`,
+        `${D1}: Sitting upright, oxygen 98%, BP 122/76.`,
+        `${D2}: Reading phone, oxygen 99%, BP 118/74.`,
       ]),
       verdict: winIdx,
       proof: `A single crashing counterexample (${W}) decisively falsifies the blanket "everyone can wait" assumption.`,
@@ -659,7 +659,7 @@ export const NBACK_ENGINES_PART2 = {
       lines: makeShuffledLines(rng, [
         `01:00 Triage: ${D1} flagged #1 for suspected spleen bleed; ${W} looked mild.`,
         `01:08 Update A: ${D1}'s repeat CT is clean and BP rose to 122/78 (withdrawn from redline).`,
-        `01:08 Update B: ${W} just lost consciousness (GCS 6) with expanding brain bleed on STAT head CT.`,
+        `01:08 Update B: ${W} just lost consciousness (unresponsive) with an expanding brain bleed on urgent head scan.`,
       ], true),
       verdict: winIdx,
       proof: `Non-monotonic revision withdraws ${D1}'s cleared 01:00 priority and shifts immediate action to ${W}.`,
@@ -672,15 +672,15 @@ export const NBACK_ENGINES_PART2 = {
   'ontological-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Classify the true nature of each crisis: Surgical Structural Tear vs Medical/Metabolic Crisis vs Ethical/Legal Dispute. Who is the ONLY Surgical Structural Tear?`,
+      directive: `Sort the true kind of crisis: Physical Tear (needs surgeon) vs. Sugar/Chemistry Crisis (needs medicine) vs. Legal/Family Dispute. Who is the ONLY Physical Tear?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Penetrating knife laceration of the right lung apex (physical structural failure).`,
-        `${D1}: Severe diabetic ketoacidosis (biochemical metabolic crisis—needs IV insulin, not scalpel).`,
-        `${D2}: Sibling disagreement over healthcare proxy signature (legal/ethical dispute).`,
+        `${W}: Deep knife puncture into the right lung (physical structural tear).`,
+        `${D1}: Severe high-blood-sugar crisis (needs IV insulin medicine, not surgery).`,
+        `${D2}: Sibling argument over healthcare proxy paperwork (legal/family dispute).`,
       ]),
       verdict: winIdx,
-      proof: `Ontological classification separates ${W}'s physical structural tear from ${D1}'s metabolic crisis and ${D2}'s legal conflict.`,
-      rival: `${D1} is critically ill, but belongs to the medical/metabolic category rather than surgical structural tear.`,
+      proof: `Sorting crisis types cleanly separates ${W}'s physical tear from ${D1}'s chemistry crisis and ${D2}'s legal dispute.`,
+      rival: `${D1} is seriously ill, but needs IV medicine rather than a surgical repair.`,
       isClash: false,
     };
   },
@@ -689,15 +689,15 @@ export const NBACK_ENGINES_PART2 = {
   'analogical-abstraction': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Shared deep principle: "Pressure trapped inside a rigid box crushes vital flow" (works in Brain, Chest, AND Muscle Compartments). Which patient shows this exact universal mechanism?`,
+      directive: `Shared deep principle: "Swelling trapped inside a tight space crushes blood flow" (true in Brain, Chest, AND Tight Shin Muscle). Who shows this exact pressure trap?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Rock-hard swollen shin after tibia break cutting off foot pulse (Acute Compartment Syndrome).`,
-        `${D1}: Surface skin rash from antibiotic allergy.`,
-        `${D2}: Mild viral sore throat with normal swallowing.`,
+        `${W}: Rock-hard swollen shin after bone break cutting off blood flow to the foot.`,
+        `${D1}: Surface itchy skin rash from an allergy.`,
+        `${D2}: Mild viral sore throat with easy swallowing.`,
       ]),
       verdict: winIdx,
-      proof: `Abstracting the rigid-box pressure principle from skull/chest directly identifies ${W}'s limb Compartment Syndrome.`,
-      rival: `${D1} and ${D2} involve inflammatory reactions rather than trapped-compartment pressure.`,
+      proof: `Applying the trapped-pressure principle from brain/chest directly identifies ${W}'s dangerously pressurized swollen shin.`,
+      rival: `${D1} and ${D2} are surface swelling/irritation, not trapped pressure cutting off blood flow.`,
       isClash: false,
     };
   },
@@ -706,15 +706,15 @@ export const NBACK_ENGINES_PART2 = {
   'integrative-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Full Trauma Workup: weigh initial odds, update with STAT scans, rule out cleared candidates, and save the lone confirmed shock patient.`,
+      directive: `Full Trauma Workup: weigh early odds, update with emergency scans, rule out cleared cases, and save the lone confirmed shock patient.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Trauma prior 40% + FAST scan positive for belly blood (odds surge → 92%) + BP falling 82/48.`,
-        `${D1}: Trauma prior 70% + FAST & CT both negative (eliminated → < 3%) + BP steady 120/76.`,
-        `${D2}: Trauma prior 30% + minor wrist break + BP 118/74, lactate 1.1 (low risk).`,
+        `${W}: Early risk 40% + emergency belly scan POSITIVE for internal blood (jumps to 92%) + BP falling 82/48.`,
+        `${D1}: Early risk 70% + BOTH belly & CT scans clean (ruled out → < 3%) + steady BP 120/76.`,
+        `${D2}: Early risk 30% + minor wrist break + normal BP 118/74 & normal blood tests (low risk).`,
       ]),
       verdict: winIdx,
-      proof: `Integrating Bayesian update (${W} → 92%) with elimination (${D1} ruled out by clean CT) locks onto ${W} decisively.`,
-      rival: `${D1} started with the highest initial prior (70%), but integrative elimination clears them.`,
+      proof: `Combining updated scan odds (${W} → 92%) with ruling out cleared ${D1} locks onto ${W} cleanly.`,
+      rival: `${D1} started with higher early risk (70%), but clean scans completely rule them out.`,
       isClash: false,
     };
   },

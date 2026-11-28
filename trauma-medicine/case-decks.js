@@ -1,21 +1,51 @@
-// Live clinical board synthesizer, mention-balanced near-miss shortlist decoys,
+// Live Semantic Clinical Board synthesizer, mention-balanced near-miss shortlist decoys,
 // and 80-type non-repeating Reasoning Type + Family + Cognitive Level + Phase scheduler.
 
-import { PATIENT_IDS, SCENARIOS_BY_PHASE } from './roster.js';
-import { createRng, buildClinicalChart, shuffle } from './case-layout.js';
-import { buildClinicalGraph } from './case-graph.js';
-import { familiesForTier, FAMILY_BY_REASONING_ID, TIER_BY_ID } from './case-families.js';
-import { synthesizeEpistemicLogic } from './case-logic.js';
-import { getReasoningType, getClinicalPhase, PHASE_ORDER } from './reasoning-types.js';
+import { PATIENT_IDS } from './roster.js';
+import { createRng, shuffle } from './case-layout.js';
+import { TIER_BY_ID } from './case-families.js';
+import {
+  REASONING_TYPE_LIST,
+  REASONING_TYPES,
+  getReasoningType,
+  getClinicalPhase,
+  PHASE_ORDER,
+} from './reasoning-types.js';
+import { synthesizeSemanticLogic, resolveBoard } from './semantic-board.js';
+import { SEMANTIC_ENGINES_PART1 } from './semantic-engines-1.js';
+import { SEMANTIC_ENGINES_PART2 } from './semantic-engines-2.js';
 
 const LEVEL_ROTATION = Object.freeze(['atomic', 'composite', 'meta']);
+
+export const SEMANTIC_ENGINES = Object.freeze({
+  ...SEMANTIC_ENGINES_PART1,
+  ...SEMANTIC_ENGINES_PART2,
+});
+
+function parseTimeRank(timeStr, fallbackIdx) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(timeStr || '').trim());
+  if (!m) return fallbackIdx * 60;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+function enrichRecords(records) {
+  return records.map((r, i) => ({
+    ...r,
+    index: i,
+    channelId: `card-${i}`,
+    siteIdx: r.siteIndex ?? 0,
+    timeRank: parseTimeRank(r.time, i),
+  }));
+}
 
 function mentionFrequencyMap(records) {
   const counts = Object.fromEntries(PATIENT_IDS.map((id) => [id, 0]));
   for (const r of records) {
-    for (const e of r.shownEdges) {
-      counts[e.from] = (counts[e.from] || 0) + 1;
-      counts[e.to] = (counts[e.to] || 0) + 1;
+    const facts = r.shownFacts || [];
+    for (const f of facts) {
+      for (const pid of f.patients || []) {
+        counts[pid] = (counts[pid] || 0) + 1;
+      }
     }
   }
   return counts;
@@ -41,27 +71,35 @@ export function buildShortlist(rng, records, targets, rivalId) {
   return shuffle(rng, [...targets, ...decoys]);
 }
 
-function tryBuildForFamily(rng, family, tier, prevTargetKey, allowSamePrevTarget) {
-  const phaseScenarios = SCENARIOS_BY_PHASE[family.phase] || SCENARIOS_BY_PHASE.inside;
-  const scenario = phaseScenarios[Math.floor(rng() * phaseScenarios.length)];
-  const baseRecords = buildClinicalChart(rng, scenario);
-  const baseGraph = buildClinicalGraph(baseRecords, 0b111111);
-  const params = family.pickParams(rng, baseGraph, scenario);
+function tryBuildForType(rng, meta, tier, prevTargetKey, allowSamePrevTarget) {
+  const engine = SEMANTIC_ENGINES[meta.id];
+  if (!engine) {
+    throw new Error(`Missing semantic clinical engine for #${meta.number} "${meta.id}"`);
+  }
 
-  const logic = synthesizeEpistemicLogic(rng, baseRecords, family, params, tier.disputed);
+  const spec = engine(rng);
+  if (!spec || !spec.cards || spec.cards.length !== 6) return null;
+
+  const logic = synthesizeSemanticLogic(rng, spec.cards, spec.evaluate, tier.disputed);
   if (!logic) return null;
 
   const targetKey = logic.trueTargets.join(',');
   if (!allowSamePrevTarget && prevTargetKey && targetKey === prevTargetKey) return null;
 
-  const trueGraph = buildClinicalGraph(logic.records, logic.trueWorldMask);
-  const explanation = family.explain(trueGraph, params, scenario, logic.trueTargets);
-  const shortlist = buildShortlist(rng, logic.records, logic.trueTargets, explanation.rival?.patientId);
+  const records = enrichRecords(logic.records);
+  const siteNames = [...new Set(records.map((r) => r.site))];
+  const explanation = {
+    proof: logic.evaluation.proof,
+    rival: logic.evaluation.rival || null,
+    decisiveChannels: [],
+  };
+  const shortlist = buildShortlist(rng, records, logic.trueTargets, explanation.rival?.patientId);
 
   return {
-    family,
-    scenario,
-    params,
+    meta,
+    spec,
+    records,
+    siteNames,
     logic,
     explanation,
     shortlist,
@@ -69,8 +107,7 @@ function tryBuildForFamily(rng, family, tier, prevTargetKey, allowSamePrevTarget
 }
 
 /**
- * Synthesize a verified clinical trial for a tier and optional specific reasoning type,
- * family filter, or cognitive level filter.
+ * Synthesize a verified plain-English semantic clinical trial for any tier and any of the 80 reasoning types.
  */
 export function synthesizeTrial({
   tierId = 'super-super-easy',
@@ -89,66 +126,68 @@ export function synthesizeTrial({
   const rng = createRng(seed);
 
   let pool;
-  if (pinnedReasoningType && FAMILY_BY_REASONING_ID[pinnedReasoningType]) {
-    pool = [FAMILY_BY_REASONING_ID[pinnedReasoningType]];
+  if (pinnedReasoningType && REASONING_TYPES[pinnedReasoningType]) {
+    pool = [REASONING_TYPES[pinnedReasoningType]];
   } else {
-    pool = familiesForTier(tier.id);
+    pool = [...REASONING_TYPE_LIST];
     if (familyFilter && familyFilter !== 'all') {
-      const filtered = pool.filter((f) => f.familyId === familyFilter);
+      const filtered = pool.filter((m) => m.familyId === familyFilter);
       if (filtered.length) pool = filtered;
     }
     if (levelFilter && levelFilter !== 'all') {
-      const filtered = pool.filter((f) => f.level === levelFilter);
+      const filtered = pool.filter((m) => m.level === levelFilter);
       if (filtered.length) pool = filtered;
     }
     if (excludeReasoningType && pool.length > 1) {
-      pool = pool.filter((f) => f.reasoningType !== excludeReasoningType);
+      pool = pool.filter((m) => m.id !== excludeReasoningType);
     }
   }
 
   // Prefer unseen reasoning types first so 80 consecutive questions visit ALL 80 types!
-  // Among unseen types, rotate across reasoning families, cognitive levels, and trauma phases.
   const seenSet = seenTypes instanceof Set ? seenTypes : new Set();
-  const unseen = pool.filter((f) => !seenSet.has(f.reasoningType));
+  const unseen = pool.filter((m) => !seenSet.has(m.id));
   const primaryPool = unseen.length ? unseen : pool;
 
-  const scoreCandidate = (f) => {
+  const scoreCandidate = (m) => {
     let score = 0;
-    if (excludeFamilyId && f.familyId === excludeFamilyId) score += 8;
-    if (preferredLevel && f.level !== preferredLevel) score += 3;
-    if (preferredPhase && f.phase !== preferredPhase) score += 2;
+    if (excludeFamilyId && m.familyId === excludeFamilyId) score += 8;
+    if (preferredLevel && m.level !== preferredLevel) score += 3;
+    if (preferredPhase && m.phase !== preferredPhase) score += 2;
     return score;
   };
 
   const ranked = shuffle(rng, primaryPool).sort((a, b) => scoreCandidate(a) - scoreCandidate(b));
-
-  // Try top ranked family thoroughly first (especially important when pinned or targeting full 80-type cycle)
   const candidatesToTry = pinnedReasoningType ? ranked : ranked.slice(0, 12);
-  for (const family of candidatesToTry) {
-    const maxAttempts = pinnedReasoningType ? 180 : tier.disputed >= 3 ? 32 : 16;
+
+  for (const meta of candidatesToTry) {
+    const maxAttempts = pinnedReasoningType ? 60 : 20;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const built = tryBuildForFamily(rng, family, tier, prevTargetKey, attempt >= 10);
+      const built = tryBuildForType(rng, meta, tier, prevTargetKey, attempt >= 6);
       if (!built) continue;
 
-      const reasoningMeta = getReasoningType(family.reasoningType);
-      const phaseMeta = getClinicalPhase(family.phase);
-
+      const phaseMeta = getClinicalPhase(meta.phase);
       return {
-        id: `${tier.id}-${family.id}-${seed}-${attempt}`,
+        id: `${tier.id}-${meta.id}-${seed}-${attempt}`,
         tierId: tier.id,
         tierRank: tier.rank,
         tierLabel: tier.label,
-        familyId: family.id,
-        reasoningType: family.reasoningType,
-        reasoningMeta,
-        phase: family.phase,
+        familyId: `type-${meta.number}-${meta.id}`,
+        reasoningType: meta.id,
+        reasoningMeta: meta,
+        phase: meta.phase,
         phaseMeta,
-        usesWeights: family.usesWeights,
-        usesMinutes: family.usesMinutes,
-        scenario: built.scenario,
-        order: family.order(built.params, built.scenario),
-        detail: family.detail(built.params, built.scenario),
-        records: built.logic.records,
+        usesWeights: false,
+        usesMinutes: false,
+        scenario: {
+          id: meta.id,
+          phase: meta.phase,
+          title: built.spec.scenarioTitle,
+          dispatch: built.spec.dispatch,
+          sites: built.siteNames,
+        },
+        order: built.spec.order,
+        detail: built.spec.hint,
+        records: built.records,
         trueWorldMask: built.logic.trueWorldMask,
         crossChecks: built.logic.crossChecks,
         targets: built.logic.trueTargets,
@@ -158,44 +197,45 @@ export function synthesizeTrial({
     }
   }
 
-  // Deterministic guaranteed fallback on clean confirmed chart (never crashes)
-  const fallbackFamily = ranked[0];
-  const scenario = SCENARIOS_BY_PHASE[fallbackFamily.phase][0];
-  let baseRecords = buildClinicalChart(createRng(seed + 997), scenario);
-  let graph = buildClinicalGraph(baseRecords, 0b111111);
-  let params = fallbackFamily.pickParams(createRng(seed + 1009), graph, scenario);
-  let targets = fallbackFamily.evaluate(graph, params);
-
-  // Retry up to 25 deterministic seeds to find a 1..4 target set for fallbackFamily
-  for (let k = 1; (targets.length < 1 || targets.length > 4) && k <= 25; k++) {
-    baseRecords = buildClinicalChart(createRng(seed + 997 + k * 41), scenario);
-    graph = buildClinicalGraph(baseRecords, 0b111111);
-    params = fallbackFamily.pickParams(createRng(seed + 1009 + k * 43), graph, scenario);
-    targets = fallbackFamily.evaluate(graph, params);
-  }
-  const safeTargets = targets.length >= 1 && targets.length <= 4 ? targets : [PATIENT_IDS[0]];
-  const explanation = fallbackFamily.explain(graph, params, scenario, safeTargets);
+  // Guaranteed deterministic clean fallback on the top-ranked semantic engine
+  const fallbackMeta = ranked[0];
+  const fallbackRng = createRng(seed + 997);
+  const spec = SEMANTIC_ENGINES[fallbackMeta.id](fallbackRng);
+  const records = enrichRecords(spec.cards);
+  const res = spec.evaluate(resolveBoard(records, 0b111111));
+  const safeTargets = res && res.targets && res.targets.length ? res.targets : [PATIENT_IDS[0]];
+  const explanation = {
+    proof: res?.proof || `${safeTargets.join(', ')} matched the clinical rule.`,
+    rival: res?.rival || null,
+    decisiveChannels: [],
+  };
 
   return {
-    id: `fallback-${tier.id}-${seed}`,
+    id: `fallback-${tier.id}-${fallbackMeta.id}-${seed}`,
     tierId: tier.id,
     tierRank: tier.rank,
     tierLabel: tier.label,
-    familyId: fallbackFamily.id,
-    reasoningType: fallbackFamily.reasoningType,
-    reasoningMeta: getReasoningType(fallbackFamily.reasoningType),
-    phase: fallbackFamily.phase,
-    phaseMeta: getClinicalPhase(fallbackFamily.phase),
-    usesWeights: fallbackFamily.usesWeights,
-    usesMinutes: fallbackFamily.usesMinutes,
-    scenario,
-    order: fallbackFamily.order(params, scenario),
-    detail: fallbackFamily.detail(params, scenario),
-    records: baseRecords,
+    familyId: `type-${fallbackMeta.number}-${fallbackMeta.id}`,
+    reasoningType: fallbackMeta.id,
+    reasoningMeta: fallbackMeta,
+    phase: fallbackMeta.phase,
+    phaseMeta: getClinicalPhase(fallbackMeta.phase),
+    usesWeights: false,
+    usesMinutes: false,
+    scenario: {
+      id: fallbackMeta.id,
+      phase: fallbackMeta.phase,
+      title: spec.scenarioTitle,
+      dispatch: spec.dispatch,
+      sites: [...new Set(records.map((r) => r.site))],
+    },
+    order: spec.order,
+    detail: spec.hint,
+    records,
     trueWorldMask: 0b111111,
     crossChecks: [],
     targets: safeTargets,
-    shortlist: buildShortlist(createRng(seed + 1013), baseRecords, safeTargets, explanation.rival?.patientId),
+    shortlist: buildShortlist(createRng(seed + 1013), records, safeTargets, explanation.rival?.patientId),
     explanation,
   };
 }
@@ -229,13 +269,12 @@ export class ClinicalDeckScheduler {
     const preferredPhase = PHASE_ORDER[this.trialIndex % PHASE_ORDER.length];
     const preferredLevel = LEVEL_ROTATION[this.trialIndex % LEVEL_ROTATION.length];
 
-    // Determine eligible pool size so we reset seenCycle only once all eligible types have been seen
-    let eligible = familiesForTier(tierId);
+    let eligible = [...REASONING_TYPE_LIST];
     if (this.familyFilter && this.familyFilter !== 'all') {
-      eligible = eligible.filter((f) => f.familyId === this.familyFilter);
+      eligible = eligible.filter((m) => m.familyId === this.familyFilter);
     }
     if (this.levelFilter && this.levelFilter !== 'all') {
-      eligible = eligible.filter((f) => f.level === this.levelFilter);
+      eligible = eligible.filter((m) => m.level === this.levelFilter);
     }
     if (this.seenCycle.size >= eligible.length) {
       this.seenCycle.clear();

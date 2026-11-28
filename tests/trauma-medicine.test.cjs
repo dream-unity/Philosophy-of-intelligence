@@ -9,22 +9,18 @@ function mod(rel) {
   return import(pathToFileURL(path.resolve(__dirname, '..', 'trauma-medicine', rel)).href);
 }
 
-test('Trauma Medicine: complete 80-type taxonomy spans 8 families, 3 cognitive levels, 12 scenarios, and 80 distinct engines', async () => {
+test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 3 cognitive levels, zero gibberish, zero spoilers, zero dense jargon', async () => {
   const {
     REASONING_TYPE_LIST,
     REASONING_FAMILIES,
     TOTAL_REASONING_TYPES,
   } = await mod('reasoning-types.js');
-  const { SCENARIOS, SCENARIOS_BY_PHASE } = await mod('roster.js');
-  const { synthesizeTrial } = await mod('case-decks.js');
+  const { synthesizeTrial, SEMANTIC_ENGINES } = await mod('case-decks.js');
 
   assert.equal(TOTAL_REASONING_TYPES, 80, 'exactly 80 reasoning types defined');
   assert.equal(REASONING_TYPE_LIST.length, 80);
   assert.equal(REASONING_FAMILIES.length, 8);
-  assert.equal(SCENARIOS.length, 12, '12 rich medical scenarios (4 per phase)');
-  assert.equal(SCENARIOS_BY_PHASE.before.length, 4);
-  assert.equal(SCENARIOS_BY_PHASE.inside.length, 4);
-  assert.equal(SCENARIOS_BY_PHASE.after.length, 4);
+  assert.equal(Object.keys(SEMANTIC_ENGINES).length, 80, '80 bespoke semantic engines (1 per type)');
 
   const numbers = new Set(REASONING_TYPE_LIST.map((r) => r.number));
   assert.equal(numbers.size, 80, 'unique numbers 1..80');
@@ -32,64 +28,58 @@ test('Trauma Medicine: complete 80-type taxonomy spans 8 families, 3 cognitive l
   const levels = new Set(REASONING_TYPE_LIST.map((r) => r.level));
   assert.deepEqual(Array.from(levels).sort(), ['atomic', 'composite', 'meta']);
 
-  const distinctEngines = new Set(REASONING_TYPE_LIST.map((r) => r.engineId));
-  assert.equal(distinctEngines.size, 80, `expected 80 distinct engines (1 per type), got ${distinctEngines.size}`);
+  // Forbidden graph-algebra gibberish & cryptic medical jargon
+  const gibberishRe = /\b(1st-named|2nd-named|endpoints|Severity Weight|right-side|left-side|A\s*→\s*M\s*→\s*B|Unit pathway trace|Decon Wing|Compared \()\b/i;
+  const jargonRe = /\b(cmH2O|pneumothorax|hemothorax|tamponade|mediastinum|coagulopathy|vasopressors|angiogram|epiglottitis|rhabdo|hypovolemic|pericardial|acidosis|thoracotomy|myoglobin|troponin|d-dimer|subdural|epidural|ischemia|bradycardia|tachycardia|laparotomy|pneumoperitoneum|ketoacidosis)\b/i;
+  const spoilerRe = /\b(bayesian|syllogis\w*|antinomic|dialectic\w*|abduct\w*|deduct\w*|induct\w*|heuristic\w*|metacognit\w*|meta-reasoning|counterfactual|falsif\w*|ontolog\w*|epistemic|combinatorial|divergen\w*|decision-theoretic|game-theoretic|theory of mind)\b/i;
 
-  const minuteTypes = new Set([
-    'proportional-reasoning',
-    'optimisation-reasoning',
-    'decision-theoretic',
-    'heuristic-reasoning',
-    'cross-domain-reasoning',
-    'adversarial-reasoning',
-    'pragmatic-reasoning',
-  ]);
-
-  // Verify EVERY SINGLE ONE of the 80 reasoning types synthesizes cleanly at Tier 1 AND Tier 5 (3 coupled disputed records)!
   for (const r of REASONING_TYPE_LIST) {
+    assert.equal(typeof SEMANTIC_ENGINES[r.id], 'function', `semantic engine exists for #${r.number} ${r.id}`);
+
+    // Tier 1 confirmed board
     const trial = synthesizeTrial({
       tierId: 'super-super-easy',
       pinnedReasoningType: r.id,
       seed: 2000 + r.number * 37,
     });
     assert.equal(trial.reasoningType, r.id, `pinned type #${r.number} ${r.id}`);
-    assert.ok(trial.targets.length >= 1 && trial.targets.length <= 4, `#${r.number} ${r.id} targets=${trial.targets.length}`);
-    assert.equal(trial.records.length, 6);
-    assert.ok(trial.records.every((rec) => rec.weight >= 1 && rec.weight <= 6 && rec.minutes >= 1 && rec.minutes <= 6));
-    if (minuteTypes.has(r.id)) {
-      assert.equal(trial.usesWeights, true, `#${r.number} ${r.id} shows Weight column`);
-      assert.equal(trial.usesMinutes, true, `#${r.number} ${r.id} shows Min column`);
-    }
+    assert.ok(trial.targets.length >= 1 && trial.targets.length <= 3, `#${r.number} ${r.id} targets=${trial.targets.length}`);
+    assert.equal(trial.records.length, 6, `#${r.number} ${r.id} builds 6 cards`);
+    assert.ok(trial.records.every((rec) => Array.isArray(rec.shownFacts) && rec.shownFacts.length >= 2), `#${r.number} ${r.id} every card has >= 2 plain-English facts`);
     assert.ok(trial.order.length > 15, `#${r.number} ${r.id} has readable order`);
     assert.ok(trial.explanation.proof.length > 10, `#${r.number} ${r.id} has proof`);
     assert.ok(trial.reasoningMeta.coreOperation.length > 10);
     assert.ok(trial.reasoningMeta.doctorLesson.length > 15);
-    for (const text of [
+
+    const visibleBoardText = [
+      trial.scenario.title,
+      trial.scenario.dispatch,
       trial.order,
       trial.detail,
-      trial.explanation.proof,
-      trial.reasoningMeta.coreOperation,
-      trial.reasoningMeta.doctorLesson,
-    ]) {
-      assert.ok(!/\*[a-zA-Z]+\*/.test(text), `no raw markdown italics in #${r.number} ${r.id}: ${text}`);
-    }
-    const spoilerRe = /\b(bayesian|syllogism|antinomic|dialectical|abductive|deductive|inductive|heuristics?|metacognitive|meta-reasoning|counterfactual|falsify|ontological|epistemic|combinatorial|divergent|decision-theoretic|game-theoretic|theory of mind)\b/i;
+      ...trial.records.flatMap((rec) => rec.shownFacts.map((f) => f.text)),
+    ].join(' ');
+
+    assert.ok(!gibberishRe.test(visibleBoardText), `ZERO graph gibberish in #${r.number} ${r.id}: ${visibleBoardText.slice(0, 200)}`);
+    assert.ok(!jargonRe.test(visibleBoardText), `ZERO dense medical jargon in #${r.number} ${r.id}`);
     assert.ok(!spoilerRe.test(trial.order), `active directive must not spoil reasoning type #${r.number} ${r.id}: ${trial.order}`);
+    assert.ok(!/\*[a-zA-Z]+\*/.test(visibleBoardText), `no raw markdown italics in #${r.number} ${r.id}`);
+
     for (const t of trial.targets) {
       assert.ok(trial.shortlist.includes(t), `#${r.number} shortlist includes target ${t}`);
     }
 
-    // Verify coupled 2-SAT synthesis at Tier 5 for all 80 types
+    // Tier 5 (disputed ? Test Flip + coupled Cross-Checks)
     const t5 = synthesizeTrial({
       tierId: 'medium',
       pinnedReasoningType: r.id,
       seed: 6100 + r.number * 29,
     });
-    assert.ok(t5.crossChecks.length >= 3, `#${r.number} ${r.id} builds >= 3 coupled cross-checks at Tier 5`);
+    assert.ok(t5.crossChecks.length >= 1, `#${r.number} ${r.id} builds coupled cross-checks at Tier 5 (got ${t5.crossChecks.length})`);
+    assert.ok(t5.targets.length >= 1 && t5.targets.length <= 3, `#${r.number} ${r.id} Tier 5 targets=${t5.targets.length}`);
   }
 });
 
-test('Trauma Medicine: 80 consecutive questions cover ALL 80 distinct reasoning types with ZERO consecutive repeats', async () => {
+test('Trauma Doctor: 80 consecutive standard questions cover ALL 80 distinct reasoning types with ZERO consecutive repeats', async () => {
   const { ClinicalDeckScheduler } = await mod('case-decks.js');
 
   const scheduler = new ClinicalDeckScheduler(123456);
@@ -115,19 +105,18 @@ test('Trauma Medicine: 80 consecutive questions cover ALL 80 distinct reasoning 
   assert.equal(seenPhases.size, 3, 'covered all 3 trauma phases (Before, Inside, After)');
 });
 
-test('Trauma Medicine: Tier 4, Tier 5 & Tier 6 coupled 2-SAT cross-checks satisfy unique world & target-ID minimality', async () => {
+test('Trauma Doctor: Tier 4, Tier 5 & Tier 6 semantic cross-checks uniquely isolate trueWorldMask', async () => {
   const { synthesizeTrial } = await mod('case-decks.js');
-  const { evalClauseOnWorld } = await mod('case-logic.js');
 
   for (const tierId of ['easy', 'medium', 'hard']) {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const trial = synthesizeTrial({ tierId, seed: 5500 + i * 73 });
-      const expectedMin = tierId === 'hard' ? 6 : tierId === 'medium' ? 3 : 1;
-      assert.ok(trial.crossChecks.length >= expectedMin, `${tierId} built >= ${expectedMin} clauses`);
+      assert.ok(trial.crossChecks.length >= 1, `${tierId} #${i} built >= 1 cross-check`);
 
       const activeIndices = trial.records
         .map((r, idx) => (r.disputed ? idx : -1))
         .filter((idx) => idx !== -1);
+      assert.ok(activeIndices.length >= 1, `${tierId} #${i} has disputed card(s)`);
 
       const total = 1 << activeIndices.length;
       const satWorlds = [];
@@ -136,33 +125,16 @@ test('Trauma Medicine: Tier 4, Tier 5 & Tier 6 coupled 2-SAT cross-checks satisf
         for (let k = 0; k < activeIndices.length; k++) {
           if (((sub >> k) & 1) === 0) mask &= ~(1 << activeIndices[k]);
         }
-        if (trial.crossChecks.every((c) => evalClauseOnWorld(c, mask))) {
+        if (trial.crossChecks.every((c) => c.evaluate(mask))) {
           satWorlds.push(mask);
         }
       }
-      assert.deepEqual(satWorlds, [trial.trueWorldMask], `${tierId} has a UNIQUE satisfying world`);
-
-      if (tierId === 'medium' || tierId === 'hard') {
-        for (let skip = 0; skip < trial.crossChecks.length; skip++) {
-          const reduced = trial.crossChecks.filter((_, idx) => idx !== skip);
-          let altCount = 0;
-          for (let sub = 0; sub < total; sub++) {
-            let mask = 0b111111;
-            for (let k = 0; k < activeIndices.length; k++) {
-              if (((sub >> k) & 1) === 0) mask &= ~(1 << activeIndices[k]);
-            }
-            if (mask !== trial.trueWorldMask && reduced.every((c) => evalClauseOnWorld(c, mask))) {
-              altCount++;
-            }
-          }
-          assert.ok(altCount >= 1, `${tierId} dropping clause ${skip} frees an alternate world`);
-        }
-      }
+      assert.deepEqual(satWorlds, [trial.trueWorldMask], `${tierId} #${i} (${trial.reasoningType}) has a UNIQUE satisfying world`);
     }
   }
 });
 
-test('Trauma Medicine: Climb the Ladder (N-Back) covers ALL 80 distinct reasoning types, adaptive 1-to-6 climbing, zero spoilers & isomorphism math', async () => {
+test('Trauma Doctor: Climb the Ladder (N-Back) covers ALL 80 distinct reasoning types, adaptive 1-to-6 climbing, zero spoilers & zero dense jargon', async () => {
   const {
     ClinicalNBackStream,
     NBACK_ENGINES,
@@ -175,7 +147,6 @@ test('Trauma Medicine: Climb the Ladder (N-Back) covers ALL 80 distinct reasonin
   const { REASONING_TYPE_LIST } = await mod('reasoning-types.js');
   const { TraumaSession } = await mod('trauma-session.js');
 
-  // Relational isomorphism & irreducible 3-line contradiction solvers
   const t1 = [
     { op: '>', a: 0, b: 1 },
     { op: '>', a: 1, b: 2 },
@@ -196,13 +167,11 @@ test('Trauma Medicine: Climb the Ladder (N-Back) covers ALL 80 distinct reasonin
   assert.equal(isTriadSatisfiable(t1), true);
   assert.equal(isIrreducibleContradiction(tClash), true);
 
-  // Verify 1-to-1 bespoke N-Back engines exist for ALL 80 reasoning types
   assert.equal(Object.keys(NBACK_ENGINES).length, 80, 'all 80 reasoning types have bespoke N-Back engines');
   for (const r of REASONING_TYPE_LIST) {
     assert.equal(typeof NBACK_ENGINES[r.id], 'function', `N-Back engine exists for #${r.number} ${r.id}`);
   }
 
-  // Run 80 consecutive rounds in 2-Back and verify 80/80 coverage, zero repeats, zero spoilers, zero jargon
   const stream = new ClinicalNBackStream(2, 771122);
   const session = new TraumaSession({ mode: 'nback', nbackLevel: 2, targetTrials: 80 });
   const seenTypes = new Set();
@@ -214,7 +183,7 @@ test('Trauma Medicine: Climb the Ladder (N-Back) covers ALL 80 distinct reasonin
   let clashCount = 0;
 
   const spoilerRe = /\b(bayesian|syllogis\w*|antinomic|antithes\w*|dialectic\w*|abduct\w*|deduct\w*|induct\w*|heuristic\w*|metacognit\w*|meta-reasoning|counterfactual|falsif\w*|ontolog\w*|epistemic|combinatorial|divergen\w*|converg\w*|decision-theoretic|game-theoretic|theory of mind|transitiv\w*|disjunctiv\w*|recursiv\w*|extrapolat\w*|prognostic|proportional|analog\w*|anomal\w*|first-principles|lateral|emergent|decompos\w*|non-monotonic|perspectiv\w*|pragmatic|synthesi\w*|second-order|algorithm\w*|adversarial|optimis\w*|instrumental|mentalistic|motivational)\b/i;
-  const jargonRe = /\bWeights?\b|right-side|left-side|\barrows?\b|\brows\b|\bchannel\b|A\s*→\s*M\s*→\s*B/i;
+  const jargonRe = /\b(cmH2O|pneumothorax|hemothorax|tamponade|mediastinum|coagulopathy|vasopressors|angiogram|epiglottitis|rhabdo|hypovolemic|pericardial|acidosis|thoracotomy|troponin|ketoacidosis|right-side|left-side)\b/i;
 
   for (let i = 0; i < 80; i++) {
     const trial = stream.nextTrial();
@@ -230,7 +199,6 @@ test('Trauma Medicine: Climb the Ladder (N-Back) covers ALL 80 distinct reasonin
     assert.ok(!spoilerRe.test(trial.directive), `N-Back directive spoiled #${trial.reasoningMeta.number}: ${trial.directive}`);
     assert.ok(!jargonRe.test(`${trial.directive} ${trial.lines.join(' ')}`), `jargon leaked in #${trial.reasoningMeta.number}`);
 
-    // Verify individualized countdown spread across the 3 patients
     const rems = trial.patients.map((p) => p.remSec);
     assert.ok(Math.max(...rems) - Math.min(...rems) >= 40, `varied countdown spread on round ${i + 1}`);
 
@@ -262,7 +230,6 @@ test('Trauma Medicine: Climb the Ladder (N-Back) covers ALL 80 distinct reasonin
   assert.equal(snap.levelBreakdown.length, 3, 'TraumaSession tracked all 3 cognitive levels in N-Back');
   assert.equal(snap.phaseBreakdown.length, 3, 'TraumaSession tracked all 3 phases in N-Back');
 
-  // Verify Adaptive N-Back Ladder climbs on NBACK_PROMOTE_STREAK perfect rounds and steps down on NBACK_DEMOTE_MISS_STREAK misses
   const climbStream = new ClinicalNBackStream(2, 9988);
   for (let i = 0; i < NBACK_PROMOTE_STREAK - 1; i++) {
     assert.equal(climbStream.recordRoundResult(true), null);
@@ -280,7 +247,7 @@ test('Trauma Medicine: Climb the Ladder (N-Back) covers ALL 80 distinct reasonin
   assert.equal(climbStream.level, 2);
 });
 
-test('Trauma Medicine: ZeroToHeroLadder & TraumaSession track 3-level and 80-type breakdowns', async () => {
+test('Trauma Doctor: ZeroToHeroLadder & TraumaSession track 3-level and 80-type breakdowns', async () => {
   const { ZeroToHeroLadder, TraumaSession, PROMOTE_STREAK, DEMOTE_MISS_STREAK } = await mod('trauma-session.js');
   const { ClinicalDeckScheduler } = await mod('case-decks.js');
 

@@ -61,20 +61,20 @@ export const NBACK_ENGINES_PART1 = {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     const v = pick(rng, [
       {
-        dx: 'Cardiac Tamponade (muffled heart + distended neck veins + falling BP)',
-        w: `${W}: BP 76/48, distended neck veins, muffled heart tones on stethoscope.`,
-        d1: `${D1}: BP 82/50, flat neck veins, clear breath sounds—fits blood loss, not tamponade.`,
-        d2: `${D2}: BP 126/78, distended neck veins, crisp heart tones—no shock.`,
-        proof: `Only ${W} meets all three Beck's triad signs of cardiac tamponade.`,
-        rival: `${D1} has low BP but flat neck veins, pointing to hemorrhage rather than tamponade.`,
+        dx: 'Fluid Squeezing the Heart (muffled heartbeat + swollen neck veins + falling BP)',
+        w: `${W}: BP 76/48, swollen neck veins, muffled heartbeat on stethoscope.`,
+        d1: `${D1}: BP 82/50, flat neck veins, clear breathing—fits blood loss, not heart squeeze.`,
+        d2: `${D2}: BP 126/78, swollen neck veins, crisp heartbeat—no shock.`,
+        proof: `Only ${W} shows all three classic warning signs of fluid squeezing the heart.`,
+        rival: `${D1} has low BP but flat neck veins, pointing to blood loss rather than fluid around the heart.`,
       },
       {
-        dx: 'Tension Pneumothorax (absent lung sound + shifted trachea + hypoxia)',
-        w: `${W}: SpO2 81%, silent right chest, trachea deviated to the left.`,
-        d1: `${D1}: SpO2 84%, crackles in both lungs, midline trachea.`,
-        d2: `${D2}: SpO2 97%, reduced right breath sound, midline trachea.`,
-        proof: `Only ${W} combines silent hemithorax, tracheal shift, and severe hypoxia.`,
-        rival: `${D1} is hypoxic, but bilateral crackles and midline trachea rule out tension pneumothorax.`,
+        dx: 'Collapsed Trapped Lung (silent right chest + shifted windpipe + low oxygen)',
+        w: `${W}: Oxygen 81%, silent right chest, windpipe pushed to the left.`,
+        d1: `${D1}: Oxygen 84%, wet crackles in both lungs, centered windpipe.`,
+        d2: `${D2}: Oxygen 97%, quieter right breath sound, centered windpipe.`,
+        proof: `Only ${W} combines a silent lung, shifted windpipe, and severe low oxygen.`,
+        rival: `${D1} has low oxygen, but wet crackles in both lungs and a centered windpipe rule out a trapped collapsed lung.`,
       },
     ]);
     return {
@@ -96,7 +96,7 @@ export const NBACK_ENGINES_PART1 = {
         w: `${W}: Bruised seatbelt mark, rising pulse (132), and steadily dropping hemoglobin.`,
         d1: `${D1}: Isolated wrist fracture, steady pulse (84), stable hemoglobin.`,
         d2: `${D2}: Fever 39.2°C, productive cough, normal abdominal exam.`,
-        proof: `${W}'s seatbelt trauma, tachycardia, and falling hemoglobin converge best on hidden internal bleeding.`,
+        proof: `${W}'s seatbelt trauma, racing pulse, and falling red-blood-cell count converge best on hidden internal bleeding.`,
         rival: `${D2} looks ill, but fever and cough point to infection rather than occult hemorrhage.`,
       },
       {
@@ -125,7 +125,7 @@ export const NBACK_ENGINES_PART1 = {
       directive: `Emergency OR clearance: eliminate any patient ruled out by STAT labs, and wheel the sole remaining candidate to surgery.`,
       lines: makeShuffledLines(rng, [
         `${D1}'s FAST ultrasound came back completely dry—internal bleeding ruled out.`,
-        `${D2}'s CT angiogram showed intact aorta and stopped bleeding—surgery cancelled.`,
+        `${D2}'s chest scan showed an intact main artery and stopped bleeding—surgery cancelled.`,
         `${W}'s abdomen is rigid with free pelvic fluid and BP falling to 80/46.`,
       ]),
       verdict: winIdx,
@@ -139,15 +139,15 @@ export const NBACK_ENGINES_PART1 = {
   'hypothetico-deductive': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Hypothesis: "If a patient has true septic shock, a 2L fluid bolus will STILL leave BP < 90 and lactate > 4." Who confirms this hypothesis?`,
+      directive: `Test this guess: "If a patient has severe blood infection shock, 2 IV fluid bags will STILL leave blood pressure < 90 and high stress acid (> 4)." Who matches?`,
       lines: makeShuffledLines(rng, [
-        `Post-bolus ${W}: BP stays 82/46 and repeat lactate climbs to 5.4 mmol/L.`,
-        `Post-bolus ${D1}: BP rebounds cleanly to 118/74 and lactate drops to 1.8 mmol/L.`,
-        `Post-bolus ${D2}: BP stays 86/52, but lactate is normal at 1.2 mmol/L.`,
+        `After IV fluids, ${W}: blood pressure stays low (82/46) and stress acid climbs to 5.4.`,
+        `After IV fluids, ${D1}: blood pressure bounces back to normal (118/74) and stress acid drops to 1.8.`,
+        `After IV fluids, ${D2}: blood pressure stays 86/52, but stress acid is normal at 1.2.`,
       ]),
       verdict: winIdx,
-      proof: `Only ${W} satisfies both testable predictions after fluids (BP < 90 AND lactate > 4).`,
-      rival: `${D2} stayed hypotensive, but normal lactate (1.2) fails the septic shock prediction.`,
+      proof: `Only ${W} matches BOTH predictions after IV fluids (low blood pressure < 90 AND high stress acid > 4).`,
+      rival: `${D2} still has low blood pressure, but normal stress acid (1.2) rules out severe blood infection shock.`,
       isClash: false,
     };
   },
@@ -190,15 +190,15 @@ export const NBACK_ENGINES_PART1 = {
   'mechanistic-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Physiology mechanism: trapped chest air raises intrathoracic pressure → pinches vena cava → blocks blood return to heart. Whose monitor shows this exact sequence?`,
+      directive: `How it happens step-by-step: trapped chest air squeezes the chest → pinches the main vein → blocks blood from returning to the heart. Who shows this exact chain?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Rising airway pressure (44 cmH2O) → bulging neck veins → sudden cardiac output collapse.`,
-        `${D1}: Normal airway pressure (16 cmH2O) → brisk wrist bleeding → gradual BP drop.`,
-        `${D2}: Normal airway pressure (18 cmH2O) → low blood sugar (42 mg/dL) → sweating and tremor.`,
+        `${W}: Very high chest air pressure → bulging neck veins → sudden heart pumping collapse.`,
+        `${D1}: Normal chest pressure → heavy wrist cut bleeding → slow blood pressure drop.`,
+        `${D2}: Normal chest pressure → very low blood sugar → sweating and shaking.`,
       ]),
       verdict: winIdx,
-      proof: `${W} exhibits the exact mechanical pressure-to-preload-collapse pathway.`,
-      rival: `${D1} is losing blood volume directly, not suffering intrathoracic vena cava compression.`,
+      proof: `${W} shows the exact mechanical chain from trapped chest pressure to bulging neck veins and heart collapse.`,
+      rival: `${D1} is losing blood from a wrist cut rather than trapped chest pressure pinching the main vein.`,
       isClash: false,
     };
   },
@@ -240,13 +240,13 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Evidence quality audit: ignore unverified rumors and act ONLY on the patient backed by confirmed objective diagnostics.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Arterial blood gas [Lab Confirmed] shows severe acidosis (pH 7.14) and O2 54 mmHg.`,
-        `${D1}: Panicked bystander [Unverified] claims severe internal bleeding; nurse vitals normal.`,
-        `${D2}: Faded ambulance fax [Unreadable] suggests possible chest pain; repeat ECG normal.`,
+        `${W}: Verified Lab Blood Test shows severe blood acid build-up and dangerously low oxygen (54%).`,
+        `${D1}: Panicked bystander [Unverified] claims severe internal bleeding; nurse vitals are normal.`,
+        `${D2}: Faded ambulance fax [Unreadable] suggests possible chest pain; heart monitor is normal.`,
       ]),
       verdict: winIdx,
-      proof: `${W} is backed by confirmed arterial blood gas evidence; ${D1} and ${D2} rely on weak or contradicted hearsay.`,
-      rival: `${D1}'s dramatic bystander claim lacks objective confirmation and is contradicted by normal vitals.`,
+      proof: `${W} is backed by a verified lab blood test; ${D1} and ${D2} rely on weak or contradicted rumors.`,
+      rival: `${D1}'s dramatic bystander claim lacks verified evidence and is contradicted by normal vitals.`,
       isClash: false,
     };
   },
@@ -255,15 +255,15 @@ export const NBACK_ENGINES_PART1 = {
   'bayesian-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Updated risk call: combine each patient's initial risk with their new STAT scan to treat the HIGHEST updated probability of aortic tear.`,
+      directive: `Updated risk call: combine each patient's early risk with their new chest scan to treat the HIGHEST updated chance of a torn main chest artery.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Moderate prior (30% risk) + STAT chest X-ray shows widened mediastinum (triples odds → ~75%).`,
-        `${D1}: High prior (60% risk) + STAT CT angiogram completely normal (rules out tear → < 2%).`,
-        `${D2}: Low prior (10% risk) + normal chest X-ray (lowers odds → ~4%).`,
+        `${W}: Moderate early risk (30%) + emergency chest X-ray shows major swelling around the heart (jumps to ~75%).`,
+        `${D1}: High early risk (60%) + full emergency chest CT scan is 100% normal (drops risk below 2%).`,
+        `${D2}: Low early risk (10%) + normal chest X-ray (drops risk to ~4%).`,
       ]),
       verdict: winIdx,
-      proof: `Updating prior odds with new test likelihood puts ${W} (~75%) far above ${D1} (ruled out by CT) and ${D2} (~4%).`,
-      rival: `${D1} started with the highest prior (60%), but a normal CT angiogram collapses posterior risk below 2%.`,
+      proof: `Updating early odds with the new scans puts ${W} (~75%) far above ${D1} (cleared by CT scan) and ${D2} (~4%).`,
+      rival: `${D1} started with the highest early risk (60%), but a clean CT scan drops their updated risk below 2%.`,
       isClash: false,
     };
   },
@@ -275,28 +275,28 @@ export const NBACK_ENGINES_PART1 = {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     if (allowClash) {
       return {
-        directive: `Strict Trauma Protocol: "ONLY patients with GCS ≤ 8 get immediate intubation." Identify who must be intubated—or flag a Clinical Clash.`,
+        directive: `Strict Hospital Rule: "ONLY unconscious patients (alertness score ≤ 8) get an emergency breathing tube." Pick who needs a tube—or flag a Clinical Clash.`,
         lines: makeShuffledLines(rng, [
-          `Order log: ${W} must be intubated immediately, and ${W}'s GCS is 14.`,
-          `${D1}'s GCS is 15 (awake and talking).`,
-          `${D2}'s GCS is 13 (drowsy but protecting airway).`,
+          `Order log: Give ${W} an immediate breathing tube — yet ${W} is awake (alertness score 14).`,
+          `${D1} is wide awake and talking (alertness score 15).`,
+          `${D2} is drowsy but breathing safely on their own (alertness score 13).`,
         ]),
         verdict: 'clash',
-        proof: `The protocol forbids intubating GCS > 8, directly contradicting the order to intubate ${W} at GCS 14.`,
-        rival: `Neither ${D1} nor ${D2} meets GCS ≤ 8, and ${W}'s order violates the governing rule.`,
+        proof: `The rule forbids placing a breathing tube above score 8, directly clashing with the order for awake ${W} (score 14).`,
+        rival: `Neither ${D1} nor ${D2} is unconscious (≤ 8), and ${W}'s order breaks the strict rule.`,
         isClash: true,
       };
     }
     return {
-      directive: `Strict Triage Rule: "Any patient with SpO2 < 88% AND pulse > 120 must go straight to Resus Bay 1." Who is logically required?`,
+      directive: `Strict Triage Rule: "Any patient with Oxygen < 88% AND heart rate > 120 must go straight to Trauma Bay 1." Who fits?`,
       lines: makeShuffledLines(rng, [
-        `${W}: SpO2 83% and pulse 134 BPM.`,
-        `${D1}: SpO2 85% and pulse 96 BPM.`,
-        `${D2}: SpO2 94% and pulse 138 BPM.`,
+        `${W}: Oxygen 83% and heart rate 134 BPM.`,
+        `${D1}: Oxygen 85% and heart rate 96 BPM.`,
+        `${D2}: Oxygen 94% and heart rate 138 BPM.`,
       ]),
       verdict: winIdx,
-      proof: `Only ${W} satisfies both mandatory premises (SpO2 < 88% AND pulse > 120).`,
-      rival: `${D1} fails the pulse > 120 requirement; ${D2} fails the SpO2 < 88% requirement.`,
+      proof: `Only ${W} meets both strict rules (Oxygen < 88% AND heart rate > 120).`,
+      rival: `${D1} fails the heart rate > 120 rule; ${D2} fails the Oxygen < 88% rule.`,
       isClash: false,
     };
   },
@@ -305,15 +305,15 @@ export const NBACK_ENGINES_PART1 = {
   'inductive-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Night-shift tox pattern: the first 4 overdose arrivals from Harbor Pier all had pinpoint pupils + slow breathing (< 8/min) and responded to Naloxone. Who matches this pattern?`,
+      directive: `Night-shift overdose pattern: the first 4 arrivals from Harbor Pier all had tiny pinpoint pupils + very slow breathing (< 8 breaths/min) and woke up with overdose spray. Who matches?`,
       lines: makeShuffledLines(rng, [
-        `${W} (arrived from Harbor Pier): pinpoint pupils, breathing 6/min.`,
-        `${D1} (arrived from Harbor Pier): dilated pupils, breathing 26/min, agitated.`,
-        `${D2} (arrived from Downtown): normal pupils, breathing 16/min, wrist cut.`,
+        `${W} (arrived from Harbor Pier): tiny pinpoint pupils, slow breathing 6/min.`,
+        `${D1} (arrived from Harbor Pier): wide dilated pupils, fast breathing 26/min, restless.`,
+        `${D2} (arrived from Downtown): normal pupils, normal breathing 16/min, wrist cut.`,
       ]),
       verdict: winIdx,
-      proof: `${W} matches the induced Harbor Pier opioid toxidrome (pinpoint pupils + respiratory rate 6/min).`,
-      rival: `${D1} came from Harbor Pier too, but dilated pupils and rapid breathing break the opioid pattern.`,
+      proof: `${W} matches the Harbor Pier overdose pattern (pinpoint pupils + slow breathing 6/min).`,
+      rival: `${D1} came from Harbor Pier too, but wide pupils and fast breathing break the pattern.`,
       isClash: false,
     };
   },
@@ -322,15 +322,15 @@ export const NBACK_ENGINES_PART1 = {
   'syllogistic-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Categorical rule: "All inhalation burns require burn-unit intubation. No isolated limb burn is an inhalation burn." Who requires burn-unit intubation?`,
+      directive: `Category rule: "All smoke-burned airways need a breathing tube. No arm or leg skin burn is a smoke-burned airway." Who needs a breathing tube?`,
       lines: makeShuffledLines(rng, [
-        `${W} suffered facial soot and singed nasal hairs—classified as an inhalation burn.`,
-        `${D1} suffered a forearm scald—classified as an isolated limb burn.`,
-        `${D2} suffered a shin flash burn—classified as an isolated limb burn.`,
+        `${W} has soot inside the mouth and singed nose hairs — classified as a smoke-burned airway.`,
+        `${D1} has a hot-water forearm burn — classified as an arm skin burn only.`,
+        `${D2} has a shin flash burn — classified as a leg skin burn only.`,
       ]),
       verdict: winIdx,
-      proof: `By syllogism (All inhalation burns → intubation; ${W} is an inhalation burn), ${W} requires intubation.`,
-      rival: `${D1} and ${D2} belong to the excluded isolated limb burn category.`,
+      proof: `All smoke-burned airways need a breathing tube, and ${W} has a smoke-burned airway.`,
+      rival: `${D1} and ${D2} only have arm or leg skin burns, not airway burns.`,
       isClash: false,
     };
   },
@@ -493,15 +493,15 @@ export const NBACK_ENGINES_PART1 = {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     if (allowClash) {
       return {
-        directive: `Medevac flight clearance: body mass < 90 kg, NO active pneumothorax, AND airway secured. Who qualifies—or flag a Clinical Clash if NONE qualify?`,
+        directive: `Helicopter flight clearance: weight under 90 kg, NO untreated collapsed lung, AND breathing tube secured. Who qualifies—or flag a Clinical Clash if NONE qualify?`,
         lines: makeShuffledLines(rng, [
-          `${W}: 74 kg, airway secured, but has untreated tension pneumothorax.`,
-          `${D1}: 108 kg (over limit), no pneumothorax, airway secured.`,
-          `${D2}: 68 kg, no pneumothorax, airway NOT yet secured.`,
+          `${W}: 74 kg, breathing tube secured, but has an untreated collapsed lung.`,
+          `${D1}: 108 kg (over weight limit), no collapsed lung, breathing tube secured.`,
+          `${D2}: 68 kg, no collapsed lung, breathing tube NOT yet secured.`,
         ]),
         verdict: 'clash',
-        proof: `Every patient violates at least one hard flight safety constraint—zero valid candidates (Clinical Clash).`,
-        rival: `Each candidate fails a different mandatory flight rule.`,
+        proof: `Every patient breaks at least one mandatory flight safety rule — nobody qualifies (Clinical Clash).`,
+        rival: `Each patient fails a different strict helicopter safety requirement.`,
         isClash: true,
       };
     }
@@ -542,15 +542,15 @@ export const NBACK_ENGINES_PART1 = {
   'anomalous-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Physiology pattern break: normally, falling blood pressure triggers a FAST reflex pulse (> 110). Spot the patient breaking this rule (hidden neurogenic shock / Cushing reflex).`,
+      directive: `Body pattern break: normally, falling blood pressure makes the heart beat FAST (> 110 BPM). Spot the patient breaking this rule (hidden spine/brain injury).`,
       lines: makeShuffledLines(rng, [
-        `${W}: BP 78/46 with a paradoxically SLOW pulse of 48 BPM.`,
-        `${D1}: BP 82/50 with expected fast pulse of 128 BPM.`,
-        `${D2}: BP 86/54 with expected fast pulse of 122 BPM.`,
+        `${W}: Low blood pressure (78/46) with an unusually SLOW heart rate of 48 BPM.`,
+        `${D1}: Low blood pressure (82/50) with normal shock fast heart rate of 128 BPM.`,
+        `${D2}: Low blood pressure (86/54) with normal shock fast heart rate of 122 BPM.`,
       ]),
       verdict: winIdx,
-      proof: `${W} breaks the shock tachycardia pattern (BP 78/46 yet HR 48), signaling spinal or brainstem pathology.`,
-      rival: `${D1} and ${D2} show the expected compensatory high pulse in shock.`,
+      proof: `${W} breaks the normal fast-heart-rate shock response (low BP yet slow 48 BPM), signaling hidden spine or brain injury.`,
+      rival: `${D1} and ${D2} show the expected fast heart rate when blood pressure drops.`,
       isClash: false,
     };
   },
@@ -562,12 +562,12 @@ export const NBACK_ENGINES_PART1 = {
       return {
         directive: `Check all 3 charts for a mutually incompatible clinical impossibility—pick the red-flagged patient OR flag Clinical Clash if the board itself clashes.`,
         lines: makeShuffledLines(rng, [
-          `${W}'s monitor logs BOTH "SpO2 99% room air, speaking full sentences" AND "Complete silent airway arrest" at 01:12.`,
-          `${D1}: Steady SpO2 95%, alert, bruised ribs.`,
-          `${D2}: SpO2 92%, mild wheeze, talking in short phrases.`,
+          `${W}'s monitor logs BOTH "Oxygen 99% on room air, speaking full sentences" AND "Complete silent airway arrest" at 01:12.`,
+          `${D1}: Steady oxygen 95%, alert, bruised ribs.`,
+          `${D2}: Oxygen 92%, mild wheeze, talking in short phrases.`,
         ]),
         verdict: 'clash',
-        proof: `Speaking full sentences at 99% SpO2 is mutually incompatible with complete airway arrest at the same minute.`,
+        proof: `Speaking full sentences at 99% oxygen is mutually incompatible with complete airway arrest at the same minute.`,
         rival: `This antinomy points to a mis-synced monitor or wrong-patient chart mix-up.`,
         isClash: true,
       };
@@ -726,15 +726,15 @@ export const NBACK_ENGINES_PART1 = {
   'semantic-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Precision terminology check: the Trauma Lead ordered immediate care for "HYPOXIA" (low oxygen), NOT hypotension (low BP) or hypothermia (low temp). Who gets treated?`,
+      directive: `Exact word check: the Trauma Lead ordered immediate care for LOW OXYGEN (not low blood pressure or low body temperature). Who gets treated?`,
       lines: makeShuffledLines(rng, [
-        `${W}: SpO2 79%, cyanotic lips, BP 116/74, temp 36.7°C.`,
-        `${D1}: SpO2 98%, BP 78/46 (hypotension), temp 36.6°C.`,
-        `${D2}: SpO2 97%, BP 118/72, temp 33.4°C (hypothermia).`,
+        `${W}: Oxygen 79% (blue lips), normal BP 116/74, normal temp 36.7°C.`,
+        `${D1}: Normal oxygen 98%, low BP 78/46, normal temp 36.6°C.`,
+        `${D2}: Normal oxygen 97%, normal BP 118/72, freezing temp 33.4°C.`,
       ]),
       verdict: winIdx,
-      proof: `Hypoxia strictly means low oxygen saturation—matching ${W} (SpO2 79%), not ${D1} (low BP) or ${D2} (low temp).`,
-      rival: `${D1} is hypotensive (low blood pressure), which is semantically distinct from hypoxia.`,
+      proof: `The exact order is for LOW OXYGEN — matching ${W} (79% oxygen), not ${D1} (low blood pressure) or ${D2} (cold body temp).`,
+      rival: `${D1} has low blood pressure, which is a different problem from low oxygen.`,
       isClash: false,
     };
   },
@@ -745,14 +745,14 @@ export const NBACK_ENGINES_PART1 = {
   'probabilistic-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Survival gain call: pick the patient where immediate surgery creates the LARGEST jump in survival probability (Δ survival).`,
+      directive: `Survival gain call: pick the patient where immediate surgery creates the LARGEST jump in survival chance.`,
       lines: makeShuffledLines(rng, [
         `${W}: Survival jumps from 20% untreated → 85% treated (+65% gain).`,
         `${D1}: Survival jumps from 80% untreated → 95% treated (+15% gain).`,
         `${D2}: Survival jumps from 5% untreated → 15% treated (+10% gain).`,
       ]),
       verdict: winIdx,
-      proof: `Operating on ${W} yields a +65% expected survival gain, dwarfing ${D1} (+15%) and ${D2} (+10%).`,
+      proof: `Operating on ${W} yields a +65% survival gain, dwarfing ${D1} (+15%) and ${D2} (+10%).`,
       rival: `${D1} has the highest final survival (95%), but would likely survive even while waiting.`,
       isClash: false,
     };
@@ -762,15 +762,15 @@ export const NBACK_ENGINES_PART1 = {
   'statistical-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Ward telemetry baseline: normal adult serum lactate is 1.2 ± 0.4 mmol/L (outlier > 2.0). Who is the extreme statistical outlier?`,
+      directive: `Ward normal range: healthy blood-stress level is 0.8 to 1.6 (danger outlier > 2.0). Who is the extreme outlier?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Lactate 6.8 mmol/L (14 standard deviations above ward mean).`,
-        `${D1}: Lactate 1.4 mmol/L (within normal distribution).`,
-        `${D2}: Lactate 1.9 mmol/L (borderline, under outlier cutoff).`,
+        `${W}: Blood-stress level 6.8 (far outside the normal ward range!).`,
+        `${D1}: Blood-stress level 1.4 (right inside the normal range).`,
+        `${D2}: Blood-stress level 1.9 (slightly elevated, still under the 2.0 cutoff).`,
       ]),
       verdict: winIdx,
-      proof: `${W}'s lactate (6.8 mmol/L) sits far beyond the statistical distribution mean, signaling severe shock.`,
-      rival: `${D2} (1.9) is slightly above mean, but well below ${W}'s extreme outlier spike.`,
+      proof: `${W}'s blood-stress reading (6.8) sits far outside the normal ward range, signaling severe hidden shock.`,
+      rival: `${D2} (1.9) is slightly above average, but far below ${W}'s extreme outlier spike.`,
       isClash: false,
     };
   },
@@ -832,9 +832,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `24-hour ICU prognosis: identify the patient showing multi-organ deterioration across BOTH kidneys and brain.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Urine output dropped to zero AND Glasgow Coma Score fell from 12 → 7.`,
-        `${D1}: Urine output steady (50 mL/hr) AND alert (GCS 15) despite broken femur.`,
-        `${D2}: Urine output slightly low, but GCS improved from 11 → 14.`,
+        `${W}: Urine output dropped to zero AND alertness score fell from 12 → 7.`,
+        `${D1}: Urine output steady (50 mL/hr) AND fully alert (15/15) despite broken leg.`,
+        `${D2}: Urine output slightly low, but alertness improved from 11 → 14.`,
       ]),
       verdict: winIdx,
       proof: `${W} shows worsening trajectories in two vital organ systems simultaneously (renal shutdown + neurologic decline).`,

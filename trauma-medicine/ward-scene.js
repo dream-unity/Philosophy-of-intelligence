@@ -704,8 +704,16 @@ export class TraumaWardScene {
     // Live procedural ECG waveform strip
     const waveX = x + pad;
     const waveW = w - pad * 2;
-    const waveY = isTallCard ? y + Math.round(h * 0.64) : y + Math.round(h * 0.56);
-    const waveAmp = isTallCard ? Math.max(8, Math.min(14, h * 0.14)) : Math.max(6, Math.min(11, h * 0.16));
+    const waveY = isTallCard
+      ? y + Math.round(h * 0.64)
+      : isNarrow
+        ? y + Math.round(h * 0.68)
+        : y + Math.round(h * 0.56);
+    const waveAmp = isTallCard
+      ? Math.max(8, Math.min(14, h * 0.14))
+      : isNarrow
+        ? Math.max(5, Math.min(8, h * 0.11))
+        : Math.max(6, Math.min(11, h * 0.16));
 
     ctx.strokeStyle = 'rgba(148, 163, 184, 0.1)';
     ctx.lineWidth = 1;

@@ -497,17 +497,21 @@ body[data-mode="nback"] .tm-dossier {
 .tm-chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-auto-rows: 1fr;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
 
 .tm-rec-card {
   background: var(--bg-subtle);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 6px;
-  padding: 6px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 7px;
+  padding: 9px 11px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  justify-content: flex-start;
+  gap: 5px;
   transition: border-color 140ms ease, background-color 140ms ease;
 }
 
@@ -618,10 +622,15 @@ body[data-mode="nback"] .tm-dossier {
 .tm-rec-lines {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  font-size: 12.5px;
-  line-height: 1.32;
-  color: var(--ink-primary);
+  gap: 5px;
+  font-size: 12.75px;
+  line-height: 1.38;
+  color: var(--ink-secondary);
+}
+
+.tm-rec-line {
+  padding-left: 8px;
+  border-left: 2px solid rgba(148, 163, 184, 0.22);
 }
 
 .tm-verb {
@@ -632,24 +641,18 @@ body[data-mode="nback"] .tm-dossier {
 .tm-pname {
   display: inline;
   font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(56, 189, 248, 0.12);
   border-radius: 3px;
-  padding: 0 2px;
+  padding: 0 3px;
   cursor: pointer;
   transition: background-color 90ms ease, color 90ms ease;
 }
 
-.tm-pname-lead {
-  color: var(--ink-primary);
-}
-
-.tm-pname-comp {
-  color: #7dd3fc;
-}
-
 .tm-pname:hover,
 .tm-pname.is-hl {
-  background: rgba(45, 212, 191, 0.3);
-  color: #ccfbf1;
+  background: rgba(45, 212, 191, 0.36);
+  color: #f0fdfa;
 }
 
 .tm-pname.is-ruled-out {
@@ -736,7 +739,7 @@ body[data-mode="nback"] .tm-dossier {
 
 .tm-cc-op {
   display: inline-block;
-  min-width: 44px;
+  min-width: 18px;
   text-align: center;
   font-family: var(--font-mono);
   font-size: 10px;

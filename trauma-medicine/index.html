@@ -26,15 +26,15 @@
             });
           }));
         }).then(function () {
-          if (foundStale && !sessionStorage.getItem('tm_cache_healed_v5')) {
-            sessionStorage.setItem('tm_cache_healed_v5', '1');
+          if (foundStale && !sessionStorage.getItem('tm_cache_healed_v6')) {
+            sessionStorage.setItem('tm_cache_healed_v6', '1');
             location.reload();
           }
         }).catch(function () {});
       }
     })();
   </script>
-  <link rel="stylesheet" href="./trauma.css?v=5">
+  <link rel="stylesheet" href="./trauma.css?v=6">
 </head>
 <body data-state="title">
   <main class="tm-shell">
@@ -286,6 +286,6 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=5"></script>
+  <script type="module" src="./app.js?v=6"></script>
 </body>
 </html>

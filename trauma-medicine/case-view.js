@@ -7,9 +7,7 @@
 // - In-place Post-Case Debrief revealing #N/80 reasoning taxonomy ONLY after answering
 // - Balanced, medically vivid Climb the Ladder (N-Back) console with memory-depth ribbon
 
-import { PATIENT_BY_ID, getPatientCondition } from './roster.js';
-import { formatEdgeShort } from './case-layout.js';
-import { evalClauseOnWorld } from './case-logic.js';
+import { PATIENTS, PATIENT_BY_ID } from './roster.js';
 import { TOTAL_REASONING_TYPES } from './reasoning-types.js';
 
 function esc(str) {
@@ -24,27 +22,26 @@ function patientName(id) {
   return PATIENT_BY_ID[id]?.name || id;
 }
 
-function renderEdgeInteractive(edge, verb) {
-  const fromName = patientName(edge.from);
-  const toName = patientName(edge.to);
-  return `<span class="tm-pname tm-pname-lead" data-pid="${esc(edge.from)}">${esc(fromName)}</span> <span class="tm-verb">${esc(verb)}</span> <span class="tm-pname tm-pname-comp" data-pid="${esc(edge.to)}">${esc(toName)}</span>`;
+// Highlight every patient name appearing inside plain-English clinical sentences
+// so hovering/clicking ANY name lights up their ICU bay AND every mention across all 6 cards!
+const NAME_TO_ID = new Map(PATIENTS.map((p) => [p.name, p.id]));
+const NAME_REGEX = new RegExp(`\\b(${PATIENTS.map((p) => p.name).join('|')})\\b`, 'g');
+
+function renderSemanticFactHtml(factObj) {
+  const escaped = esc(factObj.text || '');
+  return escaped.replace(NAME_REGEX, (match) => {
+    const pid = NAME_TO_ID.get(match);
+    if (!pid) return match;
+    return `<span class="tm-pname" data-pid="${esc(pid)}">${match}</span>`;
+  });
 }
 
 function uncertaintyTagHtml(rec, isTestingFlip) {
   if (!rec.disputed) return '';
-  const prefix = isTestingFlip ? 'Testing alternate reading' : 'Disputed';
-  if (rec.uncertaintyMode === 'reverse') {
-    return `<div class="tm-uncertain-note ${isTestingFlip ? 'is-testing' : ''}">? ${prefix}: order may be reversed</div>`;
+  if (isTestingFlip) {
+    return `<div class="tm-uncertain-note is-testing">↺ Testing alternate reading — watch Cross-Checks below</div>`;
   }
-  if (rec.uncertaintyMode === 'swap' && rec.swapPair) {
-    const [a, b] = rec.swapPair;
-    return `<div class="tm-uncertain-note ${isTestingFlip ? 'is-testing' : ''}">? ${prefix}: mix-up between ${esc(patientName(a))} &amp; ${esc(patientName(b))}</div>`;
-  }
-  const alt2 = rec.altEdges?.[1];
-  if (alt2) {
-    return `<div class="tm-uncertain-note ${isTestingFlip ? 'is-testing' : ''}">? ${prefix}: alt line 2 — ${esc(formatEdgeShort(alt2, rec.verb))}</div>`;
-  }
-  return `<div class="tm-uncertain-note ${isTestingFlip ? 'is-testing' : ''}">? ${prefix}</div>`;
+  return `<div class="tm-uncertain-note">? Disputed chart — click "? Test Flip" to check alternate</div>`;
 }
 
 export function applyPatientBoardHighlight(container, highlightedId, ruledOutIds) {
@@ -60,12 +57,11 @@ export function applyPatientBoardHighlight(container, highlightedId, ruledOutIds
 function orderRecordIndices(records, sortMode) {
   const entries = records.map((rec, idx) => ({ rec, idx }));
   if (sortMode === 'time') {
-    return entries.sort((a, b) => a.rec.timeRank - b.rec.timeRank).map((e) => e.idx);
+    return entries.sort((a, b) => (a.rec.timeRank ?? a.idx) - (b.rec.timeRank ?? b.idx)).map((e) => e.idx);
   }
   if (sortMode === 'wing') {
-    // Interleave Wing 0 (left column) and Wing 1 (right column) in chronological order so 2-col grid aligns wings cleanly!
-    const w0 = entries.filter((e) => e.rec.siteIdx === 0).sort((a, b) => a.rec.timeRank - b.rec.timeRank);
-    const w1 = entries.filter((e) => e.rec.siteIdx === 1).sort((a, b) => a.rec.timeRank - b.rec.timeRank);
+    const w0 = entries.filter((e) => (e.rec.siteIdx ?? 0) === 0).sort((a, b) => (a.rec.timeRank ?? a.idx) - (b.rec.timeRank ?? b.idx));
+    const w1 = entries.filter((e) => (e.rec.siteIdx ?? 0) !== 0).sort((a, b) => (a.rec.timeRank ?? a.idx) - (b.rec.timeRank ?? b.idx));
     const out = [];
     const maxLen = Math.max(w0.length, w1.length);
     for (let i = 0; i < maxLen; i++) {
@@ -94,11 +90,8 @@ export function renderClinicalDossier(container, {
   onToggleHypothesisFlip = null,
   onClearMarks = null,
 }) {
-  const decisiveSet = new Set(debrief ? trial.explanation.decisiveChannels : []);
   const targetCount = trial.targets.length;
   const remainingSlots = Math.max(0, targetCount - selectedIds.length);
-  const showWeights = !!trial.usesWeights;
-  const showMinutes = !!trial.usesMinutes;
   const hasCrossChecks = trial.crossChecks.length > 0;
   const flipSet = hypothesisFlips instanceof Set ? hypothesisFlips : new Set();
   const hasMarks = (ruledOutIds && ruledOutIds.size > 0) || flipSet.size > 0;
@@ -129,7 +122,6 @@ export function renderClinicalDossier(container, {
   const cardsHtml = displayOrder
     .map((idx) => {
       const rec = trial.records[idx];
-      const isDecisive = decisiveSet.has(rec.channelId);
       const trueBit = (trial.trueWorldMask >> idx) & 1;
       const isTestingFlip = !debrief && rec.disputed && flipSet.has(idx);
 
@@ -140,20 +132,13 @@ export function renderClinicalDossier(container, {
             }</div>`
           : '';
 
-      const edgesToShow = debrief
+      const factsToShow = debrief
         ? rec.disputed && trueBit === 0
-          ? rec.altEdges
-          : rec.shownEdges
+          ? rec.altFacts
+          : rec.shownFacts
         : isTestingFlip
-          ? rec.altEdges
-          : rec.shownEdges;
-
-      const acuityTag = showWeights
-        ? `<span class="tm-rec-weight tm-tabular" title="Clinical acuity score">${rec.weight} pts</span>`
-        : '';
-      const minTag = showMinutes
-        ? `<span class="tm-rec-min tm-tabular" title="Procedure duration">${rec.minutes} min</span>`
-        : '';
+          ? rec.altFacts
+          : rec.shownFacts;
 
       const flipBtn =
         !debrief && rec.disputed
@@ -164,18 +149,19 @@ export function renderClinicalDossier(container, {
             ? `<span class="tm-qmark" title="Disputed chart">?</span>`
             : '';
 
-      const wingClass = rec.siteIdx === 0 ? 'is-wing-a' : 'is-wing-b';
+      const wingClass = (rec.siteIdx ?? 0) === 0 ? 'is-wing-a' : 'is-wing-b';
 
-      return `<article class="tm-rec-card ${rec.disputed ? 'is-disputed' : ''} ${isTestingFlip ? 'is-testing-flip' : ''} ${isDecisive ? 'is-decisive' : ''}">
+      return `<article class="tm-rec-card ${rec.disputed ? 'is-disputed' : ''} ${isTestingFlip ? 'is-testing-flip' : ''}">
         <div class="tm-rec-head">
           <span class="tm-rec-time tm-tabular">${esc(rec.time)}</span>
           <span class="tm-rec-site ${wingClass}">${esc(rec.site)}</span>
           <strong class="tm-rec-label">${esc(rec.label)}</strong>
-          <span class="tm-rec-metrics">${acuityTag}${minTag}${flipBtn}</span>
+          <span class="tm-rec-metrics">${flipBtn}</span>
         </div>
         <div class="tm-rec-lines">
-          <div class="tm-rec-line">${renderEdgeInteractive(edgesToShow[0], rec.verb)}</div>
-          <div class="tm-rec-line">${renderEdgeInteractive(edgesToShow[1], rec.verb)}</div>
+          ${(factsToShow || [])
+            .map((f) => `<div class="tm-rec-line">${renderSemanticFactHtml(f)}</div>`)
+            .join('')}
         </div>
         ${!debrief ? uncertaintyTagHtml(rec, isTestingFlip) : resolvedNote}
       </article>`;
@@ -189,19 +175,20 @@ export function renderClinicalDossier(container, {
            <span class="tm-meta-sub">${
              debrief
                ? 'Resolved disputed charts'
-               : 'Use "? Test Flip" on disputed charts to test combinations'
+               : 'Click "? Test Flip" on disputed cards until every check turns ✓'
            }</span>
          </div>
          <ul class="tm-cc-list">
            ${trial.crossChecks
              .map((cc) => {
-               const satisfied = evalClauseOnWorld(cc, debrief ? trial.trueWorldMask : hypothesisMask);
+               const mask = debrief ? trial.trueWorldMask : hypothesisMask;
+               const satisfied = typeof cc.evaluate === 'function' ? cc.evaluate(mask) : true;
                const checkMark = `<span class="tm-cc-status ${satisfied ? 'is-ok' : 'is-clash'}" title="${
                  satisfied ? 'Matches current chart view' : 'Clashes with current chart view'
                }">${satisfied ? '✓' : '✕'}</span>`;
                return `<li class="tm-cc-item ${satisfied ? 'is-ok' : 'is-clash'}">
                  ${checkMark}
-                 <span class="tm-cc-op">${esc(cc.symbol)}</span>
+                 <span class="tm-cc-op">${esc(cc.symbol || '•')}</span>
                  <span class="tm-cc-text">${esc(cc.text)}</span>
                </li>`;
              })
@@ -286,11 +273,7 @@ export function renderClinicalDossier(container, {
         <button type="button" class="tm-tool-btn ${chartSortMode === 'time' ? 'is-active' : ''}" data-sort-mode="time" aria-pressed="${chartSortMode === 'time' ? 'true' : 'false'}">By Time</button>
         <button type="button" class="tm-tool-btn ${chartSortMode === 'wing' ? 'is-active' : ''}" data-sort-mode="wing" aria-pressed="${chartSortMode === 'wing' ? 'true' : 'false'}">By Wing</button>
       </div>
-      <span class="tm-role-key" title="1st-named Lead patient vs 2nd-named Compared patient">
-        <span class="tm-key-lead">1st Lead</span>
-        <span aria-hidden="true">·</span>
-        <span class="tm-key-comp">2nd Compared</span>
-      </span>
+      <span class="tm-role-key">Hover any name to spotlight their bay · Right-click bay to cross off</span>
       ${
         hasMarks && !debrief
           ? `<button type="button" class="tm-tool-btn tm-tool-clear" data-action="clear-marks">Clear Marks</button>`
