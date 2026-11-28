@@ -48,9 +48,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Two-team coordination: Trauma Team B always moves to the LOUDEST bay (${D1}) first. Who must YOUR team claim so zero crashing patients go uncovered?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Quiet internal bleed (BP 76/46, crashing in 4 min); Team B is NOT assigned here.`,
-        `${D1}: Shouting chest trauma (BP 84/50, crashing in 5 min); Team B is already scrubbing into this bay.`,
-        `${D2}: Controlled rib fracture (BP 118/74, safe for 30+ min on pain meds).`,
+        `${W}: Quiet internal bleed, BP 76/46, crashing in 4 min; Team B is NOT assigned here.`,
+        `${D1}: Shouting chest trauma, BP 84/50, crashing in 5 min; Team B is already scrubbing into this bay.`,
+        `${D2}: Controlled rib fracture, BP 118/74, stable for 30+ min on pain meds.`,
       ]),
       verdict: winIdx,
       proof: `Anticipating Team B's move onto ${D1}, covering ${W} rescues BOTH crashing bays instead of doubling up on ${D1}.`,
@@ -65,9 +65,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Worst-case bridge collapse: suppose the river bridge drops right now, BLOCKING all external blood deliveries. Who depends on our LAST on-site O-Neg pack to survive?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Active arterial bleed — needs our last on-site O-Neg pack NOW (arrests in 4 min if external blood is cut off).`,
-        `${D1}: Dehydration shock — stabilizes cleanly on plentiful on-site IV saline (zero blood needed).`,
-        `${D2}: Deep lung infection — needs plentiful on-site IV antibiotics + oxygen (zero blood needed).`,
+        `${W}: Active arterial bleed — needs our last on-site O-Neg pack NOW or arrests in 4 min.`,
+        `${D1}: Dehydration shock — stabilizes cleanly on plentiful on-site IV saline.`,
+        `${D2}: Deep lung infection — responds to plentiful on-site IV antibiotics and oxygen.`,
       ]),
       verdict: winIdx,
       proof: `Under worst-case blood cutoff, only ${W} has zero on-site substitute for the last O-Neg pack.`,
@@ -99,9 +99,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `You are holding a sterile Chest Drain Tube right now. Match this exact tool to the patient whose emergency it fixes.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Massive blood trapped inside the chest cavity crushing the lung.`,
-        `${D1}: Deep forearm artery cut (needs a limb tourniquet, not a chest tube).`,
-        `${D2}: Brain bleed inside the skull (needs a brain surgeon, not a chest tube).`,
+        `${W}: Massive blood trapped inside the right chest cavity crushing the lung.`,
+        `${D1}: Deep forearm artery cut spurting bright red blood at the wrist.`,
+        `${D2}: Expanding bleed inside the skull with unequal pupils.`,
       ]),
       verdict: winIdx,
       proof: `A chest drain tube directly drains the blood crushing ${W}'s lung.`,
@@ -288,9 +288,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Mass-casualty bedside insight: everyone rushes toward loud screams—but screaming proves an OPEN airway! Spot the silent patient in immediate danger.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Completely silent, sitting upright, clutching throat with bluish lips (total airway block).`,
-        `${D1}: Screaming loudly in pain from a broken shin—airway wide open.`,
-        `${D2}: Shouting for water with a bleeding scalp—airway wide open.`,
+        `${W}: Completely silent, sitting upright, clutching throat with bluish lips and zero breath sounds.`,
+        `${D1}: Screaming loudly in pain from a broken shin with strong airflow.`,
+        `${D2}: Shouting for water with a bleeding scalp laceration.`,
       ]),
       verdict: winIdx,
       proof: `Lateral trauma rule: the silent patient (${W}) has zero airflow, while screaming patients (${D1}, ${D2}) prove patent airways.`,
@@ -341,7 +341,7 @@ export const NBACK_ENGINES_PART2 = {
       lines: makeShuffledLines(rng, [
         `${W}: Minor bathroom head bump + takes Warfarin blood thinner daily.`,
         `${D1}: Minor bathroom head bump + takes zero blood thinners.`,
-        `${D2}: Takes Warfarin daily + twisted ankle (zero head impact).`,
+        `${D2}: Takes Warfarin daily + twisted ankle after stepping off a curb.`,
       ]),
       verdict: winIdx,
       proof: `Only ${W} combines head trauma WITH anticoagulation, creating emergent intracranial hemorrhage risk.`,
@@ -658,8 +658,8 @@ export const NBACK_ENGINES_PART2 = {
       directive: `Withdraw old conclusion! At 01:00 ${D1} was #1 priority—but new 01:08 STAT evidence just overturned the board. Who is the NEW #1 priority?`,
       lines: makeShuffledLines(rng, [
         `01:00 Triage: ${D1} flagged #1 for suspected spleen bleed; ${W} looked mild.`,
-        `01:08 Update A: ${D1}'s repeat CT is clean and BP rose to 122/78 (withdrawn from redline).`,
-        `01:08 Update B: ${W} just lost consciousness (unresponsive) with an expanding brain bleed on urgent head scan.`,
+        `01:08 Update A: ${D1}'s repeat CT is clean and BP rose to 122/78.`,
+        `01:08 Update B: ${W} just became unresponsive with an expanding brain bleed on urgent head scan.`,
       ], true),
       verdict: winIdx,
       proof: `Non-monotonic revision withdraws ${D1}'s cleared 01:00 priority and shifts immediate action to ${W}.`,
@@ -672,11 +672,11 @@ export const NBACK_ENGINES_PART2 = {
   'ontological-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Sort the true kind of crisis: Physical Tear (needs surgeon) vs. Sugar/Chemistry Crisis (needs medicine) vs. Legal/Family Dispute. Who is the ONLY Physical Tear?`,
+      directive: `Sort the true kind of crisis: Physical Tear vs. Sugar/Chemistry Crisis vs. Legal/Family Dispute. Who is the ONLY Physical Tear?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Deep knife puncture into the right lung (physical structural tear).`,
-        `${D1}: Severe high-blood-sugar crisis (needs IV insulin medicine, not surgery).`,
-        `${D2}: Sibling argument over healthcare proxy paperwork (legal/family dispute).`,
+        `${W}: Deep knife puncture into the right lung with active chest-wall air leak.`,
+        `${D1}: Severe high-blood-sugar crisis with fruity breath and blood pH 7.12.`,
+        `${D2}: Sibling disagreement over healthcare proxy paperwork at the nursing desk.`,
       ]),
       verdict: winIdx,
       proof: `Sorting crisis types cleanly separates ${W}'s physical tear from ${D1}'s chemistry crisis and ${D2}'s legal dispute.`,
@@ -691,9 +691,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Shared deep structure: "Swelling trapped INSIDE A RIGID SHELL crushes blood flow" (Brain in Skull :: Heart in Sac :: Muscle in Tight Fascia). Who matches?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Swollen shin trapped inside tight fascia shell → foot pulse just vanished (rigid-shell pressure trap).`,
-        `${D1}: Open forearm laceration bleeding outward → pressure escapes freely, strong hand pulse.`,
-        `${D2}: Soft outer-thigh bruise over loose fat → swelling expands outward, strong foot pulse.`,
+        `${W}: Swollen shin sealed inside tight fascia sheath with vanishing foot pulse and hard calf.`,
+        `${D1}: Open forearm laceration bleeding outward with strong radial hand pulse.`,
+        `${D2}: Soft outer-thigh bruise over loose fat expanding outward with strong foot pulse.`,
       ]),
       verdict: winIdx,
       proof: `Only ${W} replicates the rigid-shell pressure trap cutting off circulation, whereas ${D1} and ${D2} expand freely outward.`,
@@ -708,8 +708,8 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Chief's 3-Gate Call: combine Early Risk + New Belly Scan + Live BP Trend to save the ONLY patient failing ALL THREE gates.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Early risk 40% + Belly scan POSITIVE (internal blood) + BP falling 108 → 82/48.`,
-        `${D1}: Early risk 75% + Belly & CT scans CLEAN (ruled out) + BP steady 120/76.`,
+        `${W}: Early risk 40% + Belly scan POSITIVE for free fluid + BP falling 108 → 82/48.`,
+        `${D1}: Early risk 75% + Belly & CT scans CLEAN + BP steady 120/76.`,
         `${D2}: Early risk 50% + Belly scan CLEAN + BP dipped 104 → 96 then climbed back to 112/72.`,
       ]),
       verdict: winIdx,

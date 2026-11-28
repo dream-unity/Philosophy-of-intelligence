@@ -401,7 +401,7 @@ export const NBACK_ENGINES_PART1 = {
   'disjunctive-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Lone ventilator call: "Either ${W} OR ${D1} has the collapsed lung needing the lone ventilator (not ${D2}, whose lungs are clear)." Use the X-ray to act.`,
+      directive: `Lone ventilator call: "Either ${W} OR ${D1} has the collapsed lung needing the lone ventilator." Use the X-ray and oxygen check to act.`,
       lines: makeShuffledLines(rng, [
         `Initial triage: Either ${W} or ${D1} needs the lone ventilator immediately.`,
         `Portable chest X-ray: ${D1}'s lungs are fully expanded—no collapse.`,
@@ -477,9 +477,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `You have 1 Operating Room + 1 O-Neg Blood Pack (must pair 2 patients, 1 resource each). Who appears in EVERY valid resource assignment?`,
       lines: makeShuffledLines(rng, [
-        `${W} needs BOTH the Operating Room OR O-Neg Blood—and is the ONLY patient who can use the OR safely now.`,
-        `${D1} can ONLY use O-Neg Blood (not cleared for OR).`,
-        `${D2} can ONLY use O-Neg Blood (not cleared for OR).`,
+        `${W} can use EITHER the Operating Room OR O-Neg Blood—and is the only surgical candidate cleared right now.`,
+        `${D1} requires O-Neg Blood only; surgical suite clearance denied.`,
+        `${D2} requires O-Neg Blood only; surgical suite clearance denied.`,
       ]),
       verdict: winIdx,
       proof: `Valid pairs are (${W}=OR, ${D1}=Blood) or (${W}=OR, ${D2}=Blood)—${W} is mandatory in every combination.`,
@@ -495,9 +495,9 @@ export const NBACK_ENGINES_PART1 = {
       return {
         directive: `Helicopter flight clearance: weight under 90 kg, NO untreated collapsed lung, AND breathing tube secured. Who qualifies—or flag a Clinical Clash if NONE qualify?`,
         lines: makeShuffledLines(rng, [
-          `${W}: 74 kg, breathing tube secured, but has an untreated collapsed lung.`,
-          `${D1}: 108 kg (over weight limit), no collapsed lung, breathing tube secured.`,
-          `${D2}: 68 kg, no collapsed lung, breathing tube NOT yet secured.`,
+          `${W}: 74 kg, breathing tube secured, untreated collapsed lung on chest X-ray.`,
+          `${D1}: 108 kg, lungs clear, breathing tube secured.`,
+          `${D2}: 68 kg, lungs clear, breathing tube NOT yet secured.`,
         ]),
         verdict: 'clash',
         proof: `Every patient breaks at least one mandatory flight safety rule — nobody qualifies (Clinical Clash).`,
@@ -509,7 +509,7 @@ export const NBACK_ENGINES_PART1 = {
       directive: `Medevac flight clearance: BP ≥ 90 for the 12-min hop, blood crossmatched, AND family consent signed. Who meets ALL 3?`,
       lines: makeShuffledLines(rng, [
         `${W}: BP 96/60, blood crossmatched, family consent signed.`,
-        `${D1}: BP 72/40 (too unstable), blood crossmatched, consent signed.`,
+        `${D1}: BP 72/40, blood crossmatched, consent signed.`,
         `${D2}: BP 108/68, blood crossmatched, awaiting family consent.`,
       ]),
       verdict: winIdx,
@@ -764,9 +764,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Ward normal range: healthy blood-stress level is 0.8 to 1.6 (danger outlier > 2.0). Who is the extreme outlier?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Blood-stress level 6.8 (far outside the normal ward range!).`,
-        `${D1}: Blood-stress level 1.4 (right inside the normal range).`,
-        `${D2}: Blood-stress level 1.9 (slightly elevated, still under the 2.0 cutoff).`,
+        `${W}: Blood-stress level 6.8 on repeat arterial draw.`,
+        `${D1}: Blood-stress level 1.4 on repeat arterial draw.`,
+        `${D2}: Blood-stress level 1.9 on repeat arterial draw.`,
       ]),
       verdict: winIdx,
       proof: `${W}'s blood-stress reading (6.8) sits far outside the normal ward range, signaling severe hidden shock.`,
@@ -798,9 +798,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Power-outage drill: "SUPPOSE wall electricity fails right now (shutting down electric pumps & ventilators, while wall-pipe oxygen stays on)." Who arrests within 2 minutes?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Paralyzed on an electric ventilator — DEPENDS ON wall power for every single breath (zero spontaneous breathing).`,
-        `${D1}: Breathing strongly on their own via passive wall-pipe oxygen mask (zero electricity needed).`,
-        `${D2}: Awake on battery-backed monitor receiving gravity-drip saline (zero electric pump needed).`,
+        `${W}: Paralyzed on an electric ventilator with zero spontaneous respiratory effort.`,
+        `${D1}: Breathing steadily on their own via passive wall-pipe oxygen mask.`,
+        `${D2}: Awake on battery-backed monitor receiving gravity-drip saline.`,
       ]),
       verdict: winIdx,
       proof: `Under the power-loss model, only ${W} DEPENDS ON wall electricity to keep breathing and needs immediate hand-bagging.`,

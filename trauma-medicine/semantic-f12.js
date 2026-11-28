@@ -68,7 +68,7 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 0, time: '01:02', wing: 'Bedside Exam', wingIndex: 0, label: 'Neck Veins & Chest',
         shown: [
-          fact(`${pName(a)}'s neck veins are MORE swollen than ${pName(c)}'s (flat veins).`, [a, c], { tag: 'bulge', hi: a, lo: c }),
+          fact(`${pName(a)}'s neck veins are MORE swollen than ${pName(c)}'s flat neck veins.`, [a, c], { tag: 'bulge', hi: a, lo: c }),
           fact(`${pName(b)} has the SAME bulging neck veins as ${pName(a)}, with clear lungs.`, [b, a], { tag: 'same_bulge', p: b, ref: a }),
         ],
         alt: [
@@ -90,12 +90,12 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 2, time: '01:08', wing: 'Monitors', wingIndex: 0, label: 'Blood Pressure Links',
         shown: [
-          fact(`${pName(a)}'s BP (76/48) is LOWER THAN ${pName(b)}'s (124/78).`, [a, b], { tag: 'low_bp', p: a }),
-          fact(`${pName(c)}'s BP (78/46) is LOWER THAN ${pName(f)}'s (128/80), matching shock.`, [c, f], { tag: 'low_bp', p: c }),
+          fact(`${pName(a)}'s BP 76/48 is LOWER THAN ${pName(b)}'s 124/78.`, [a, b], { tag: 'low_bp', p: a }),
+          fact(`${pName(c)}'s BP 78/46 is LOWER THAN ${pName(f)}'s 128/80, matching shock.`, [c, f], { tag: 'low_bp', p: c }),
         ],
         alt: [
-          fact(`${pName(d)}'s BP (74/44) is LOWER THAN ${pName(b)}'s (124/78).`, [d, b], { tag: 'low_bp', p: d }),
-          fact(`${pName(c)}'s BP (78/46) is LOWER THAN ${pName(f)}'s (128/80), matching shock.`, [c, f], { tag: 'low_bp', p: c }),
+          fact(`${pName(d)}'s BP 74/44 is LOWER THAN ${pName(b)}'s 124/78.`, [d, b], { tag: 'low_bp', p: d }),
+          fact(`${pName(c)}'s BP 78/46 is LOWER THAN ${pName(f)}'s 128/80, matching shock.`, [c, f], { tag: 'low_bp', p: c }),
         ],
       }),
       makeCard({
@@ -109,7 +109,7 @@ export const SEMANTIC_F12 = {
         index: 4, time: '01:14', wing: 'Bedside Exam', wingIndex: 0, label: 'Windpipe & Bleeding',
         shown: [
           fact(`${pName(e)}'s windpipe is pushed left while ${pName(e)}'s BP sits LOWER THAN ${pName(f)}'s.`, [e, f], { tag: 'trachea_shift', p: e }),
-          fact(`${pName(c)} lost MORE blood externally than ${pName(a)} or ${pName(d)} (explaining flat veins).`, [c, a, d], { tag: 'bleed_only', p: c }),
+          fact(`${pName(c)} lost MORE blood externally than ${pName(a)} or ${pName(d)}, draining neck-vein volume.`, [c, a, d], { tag: 'bleed_only', p: c }),
         ],
       }),
       makeCard({
@@ -246,11 +246,11 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 1, time: '01:06', wing: 'Ultrasound', wingIndex: 1, label: 'Comparative Scan A',
         shown: [
-          fact(`${pName(c)}'s belly scan is 100% dry — ZERO internal fluid (ruled out).`, [c], { tag: 'clear', p: c }),
+          fact(`${pName(c)}'s belly scan is 100% dry with ZERO internal fluid — cleared from Surgery.`, [c], { tag: 'clear', p: c }),
           fact(`${pName(d)}'s scan is EVEN CLEANER than ${pName(c)}'s dry scan.`, [d, c], { tag: 'cleaner_than', lo: d, hi: c }),
         ],
         alt: [
-          fact(`${pName(a)}'s belly scan is 100% dry — ZERO internal fluid (ruled out).`, [a], { tag: 'clear', p: a }),
+          fact(`${pName(a)}'s belly scan is 100% dry with ZERO internal fluid — cleared from Surgery.`, [a], { tag: 'clear', p: a }),
           fact(`${pName(d)}'s scan is EVEN CLEANER than ${pName(a)}'s dry scan.`, [d, a], { tag: 'cleaner_than', lo: d, hi: a }),
         ],
       }),
@@ -339,12 +339,12 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 1, time: '01:08', wing: 'Post-Fluid', wingIndex: 1, label: '01:15 BP After 2L IV',
         shown: [
-          fact(`After 2L fluids, ${pName(a)} rose ONLY to 85 (gain < 10) while ${pName(b)} jumped to 114.`, [a, b], { tag: 'post_bp', p1: a, v1: 85, p2: b, v2: 114 }),
-          fact(`After 2L fluids, ${pName(c)} stayed at 82 (gain < 10) while ${pName(d)} rose ONLY to 88.`, [c, d], { tag: 'post_bp', p1: c, v1: 82, p2: d, v2: 88 }),
+          fact(`After 2L fluids, ${pName(a)} rose to 85 while ${pName(b)} jumped to 114.`, [a, b], { tag: 'post_bp', p1: a, v1: 85, p2: b, v2: 114 }),
+          fact(`After 2L fluids, ${pName(c)} reached 82 while ${pName(d)} reached 88.`, [c, d], { tag: 'post_bp', p1: c, v1: 82, p2: d, v2: 88 }),
         ],
         alt: [
-          fact(`After 2L fluids, ${pName(a)} jumped to 112 while ${pName(b)} rose ONLY to 86 (gain < 10).`, [a, b], { tag: 'post_bp', p1: a, v1: 112, p2: b, v2: 86 }),
-          fact(`After 2L fluids, ${pName(c)} stayed at 82 (gain < 10) while ${pName(d)} jumped to 116.`, [c, d], { tag: 'post_bp', p1: c, v1: 82, p2: d, v2: 116 }),
+          fact(`After 2L fluids, ${pName(a)} jumped to 112 while ${pName(b)} rose to 86.`, [a, b], { tag: 'post_bp', p1: a, v1: 112, p2: b, v2: 86 }),
+          fact(`After 2L fluids, ${pName(c)} reached 82 while ${pName(d)} jumped to 116.`, [c, d], { tag: 'post_bp', p1: c, v1: 82, p2: d, v2: 116 }),
         ],
       }),
       makeCard({
@@ -443,12 +443,12 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 2, time: '01:10', wing: 'Airway Line', wingIndex: 0, label: 'Independent Cause 2',
         shown: [
-          fact(`${pName(e)}'s ruptured oxygen valve TRIGGERS the East Wall pressure drop.`, [e], { tag: 'edge', from: e, to: 'o2' }),
-          fact(`The East Wall pressure drop CAUSES ${pName(f)}'s ventilator alarm to scream.`, [f], { tag: 'edge', from: 'o2', to: f }),
+          fact(`${pName(e)}'s ruptured oxygen valve TRIGGERS the East Wall pressure drop — UPSTREAM of ${pName(f)}.`, [e, f], { tag: 'edge', from: e, to: 'o2' }),
+          fact(`The East Wall pressure drop CAUSES ${pName(f)}'s ventilator alarm to sound.`, [f, e], { tag: 'edge', from: 'o2', to: f }),
         ],
         alt: [
-          fact(`${pName(f)}'s ruptured oxygen valve TRIGGERS the East Wall pressure drop.`, [f], { tag: 'edge', from: f, to: 'o2' }),
-          fact(`The East Wall pressure drop CAUSES ${pName(e)}'s ventilator alarm to scream.`, [e], { tag: 'edge', from: 'o2', to: e }),
+          fact(`${pName(f)}'s ruptured oxygen valve TRIGGERS the East Wall pressure drop — UPSTREAM of ${pName(e)}.`, [f, e], { tag: 'edge', from: f, to: 'o2' }),
+          fact(`The East Wall pressure drop CAUSES ${pName(e)}'s ventilator alarm to sound.`, [e, f], { tag: 'edge', from: 'o2', to: e }),
         ],
       }),
       makeCard({
@@ -476,7 +476,7 @@ export const SEMANTIC_F12 = {
     return {
       scenarioTitle: 'Two Ward-Wide Causal Cascades',
       dispatch: 'Follow the directed cause → effect arrows across Blood and Oxygen lines back to the true origins.',
-      order: 'Treat the TWO upstream patients who are CAUSING (not merely suffering from) the two ward cascades.',
+      order: 'Treat the TWO upstream patients who are CAUSING rather than merely suffering from the two ward cascades.',
       hint: 'Trace arrows backward: Origin → Intermediate → Downstream Effect.',
       bayDefaultLabel: 'Cascade Node',
       cards,
@@ -841,30 +841,30 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 2, time: '01:12', wing: '01:12 Scans', wingIndex: 0, label: 'New Imaging A',
         shown: [
-          fact(`${pName(a)}: Emergency X-ray shows major widened chest (×2.5 shift on 30% start).`, [a], { tag: 'mult', p: a, m: 2.5 }),
-          fact(`${pName(b)}: Full emergency Chest CT came back 100% CLEAN (÷10 shift on 60% start).`, [b], { tag: 'mult', p: b, m: 0.1 }),
+          fact(`${pName(a)}: Emergency X-ray shows a widened chest — OPPOSITE OF ${pName(b)}'s clean CT.`, [a, b], { tag: 'mult', p: a, m: 2.5 }),
+          fact(`${pName(b)}: Full emergency Chest CT came back 100% CLEAN — SAME clean-CT class as ${pName(f)}.`, [b, f], { tag: 'mult', p: b, m: 0.1 }),
         ],
         alt: [
-          fact(`${pName(a)}: Full emergency Chest CT came back 100% CLEAN (÷10 shift on 30% start).`, [a], { tag: 'mult', p: a, m: 0.1 }),
-          fact(`${pName(b)}: Borderline X-ray — risk stays UNCHANGED at 60% (×1.0).`, [b], { tag: 'mult', p: b, m: 1.0 }),
+          fact(`${pName(a)}: Full emergency Chest CT came back 100% CLEAN — SAME clean-CT class as ${pName(f)}.`, [a, f], { tag: 'mult', p: a, m: 0.1 }),
+          fact(`${pName(b)}: Borderline chest X-ray — risk stays unchanged relative to 01:00 prior.`, [b], { tag: 'mult', p: b, m: 1.0 }),
         ],
       }),
       makeCard({
         index: 3, time: '01:16', wing: '01:12 Scans', wingIndex: 0, label: 'New Imaging B',
         shown: [
-          fact(`${pName(c)}: Clean chest X-ray cuts risk in HALF (÷2 shift on 40% start).`, [c], { tag: 'mult', p: c, m: 0.5 }),
-          fact(`${pName(d)}: Widened chest X-ray (×2.5 shift on 10% start).`, [d], { tag: 'mult', p: d, m: 2.5 }),
+          fact(`${pName(c)}: Clean chest X-ray — OPPOSITE OF ${pName(d)}'s widened X-ray.`, [c, d], { tag: 'mult', p: c, m: 0.5 }),
+          fact(`${pName(d)}: Widened chest X-ray — SAME multiplier as ${pName(a)}, from a LOWER 01:00 prior.`, [d, a], { tag: 'mult', p: d, m: 2.5 }),
         ],
         alt: [
-          fact(`${pName(c)}: Emergency X-ray shows major widened chest (×2.5 shift on 40% start).`, [c], { tag: 'mult', p: c, m: 2.5 }),
-          fact(`${pName(d)}: Clean chest X-ray cuts risk in HALF (÷2 shift on 10% start).`, [d], { tag: 'mult', p: d, m: 0.5 }),
+          fact(`${pName(c)}: Emergency X-ray shows a widened chest — HIGHER prior than ${pName(d)}.`, [c, d], { tag: 'mult', p: c, m: 2.5 }),
+          fact(`${pName(d)}: Clean chest X-ray — SAME clean-X-ray class as ${pName(e)}.`, [d, e], { tag: 'mult', p: d, m: 0.5 }),
         ],
       }),
       makeCard({
         index: 4, time: '01:19', wing: '01:12 Scans', wingIndex: 0, label: 'New Imaging C',
         shown: [
-          fact(`${pName(e)} started at 20% and got a clean X-ray (÷2); ${pName(f)} started at 50% and got a clean CT (÷10).`, [e, f], { tag: 'ef_low' }),
-          fact(`Never anchor on 01:00 starting odds — compute EVERY bay's updated post-scan risk!`, [], { tag: 'note' }),
+          fact(`${pName(e)} started at 20% and got a clean X-ray; ${pName(f)} started at 50% and got a clean CT.`, [e, f], { tag: 'ef_low' }),
+          fact(`Never anchor on 01:00 starting odds — compute EVERY bay's updated post-scan risk.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
@@ -925,29 +925,29 @@ export const SEMANTIC_F12 = {
         index: 1, time: '01:06', wing: 'Rescue Log', wingIndex: 1, label: 'Floor 4 Manifest',
         shown: [
           fact(`${pName(a)} was carried out of Floor 4 alongside ${pName(b)}.`, [a, b], { tag: 'floor4', ps: [a, b] }),
-          fact(`${pName(c)} was ALSO rescued from Floor 4; ${pName(d)} was outside on the lawn (NOT Floor 4).`, [c, d], { tag: 'floor4_one', p: c }),
+          fact(`${pName(c)} was ALSO rescued from Floor 4; ${pName(d)} was outside on the lawn, away from Floor 4.`, [c, d], { tag: 'floor4_one', p: c }),
         ],
         alt: [
           fact(`${pName(a)} was carried out of Floor 4 alongside ${pName(d)}.`, [a, d], { tag: 'floor4', ps: [a, d] }),
-          fact(`${pName(b)} was outside on the lawn (NOT Floor 4); ${pName(c)} was rescued from Floor 4.`, [b, c], { tag: 'floor4_one', p: c }),
+          fact(`${pName(b)} was outside on the lawn, away from Floor 4; ${pName(c)} was rescued from Floor 4.`, [b, c], { tag: 'floor4_one', p: c }),
         ],
       }),
       makeCard({
         index: 2, time: '01:10', wing: 'Alertness Chain', wingIndex: 0, label: 'Relative Alertness A',
         shown: [
-          fact(`${pName(a)} is LESS alert than ${pName(e)} (reference baseline).`, [a, e], { tag: 'alert_lt', lo: a, hi: e }),
+          fact(`${pName(a)} is LESS alert than reference baseline ${pName(e)}.`, [a, e], { tag: 'alert_lt', lo: a, hi: e }),
           fact(`${pName(b)} is EVEN LESS alert than ${pName(a)}.`, [b, a], { tag: 'alert_lt', lo: b, hi: a }),
         ],
         alt: [
-          fact(`${pName(a)} is MORE alert than ${pName(e)} (speaking clear sentences).`, [a, e], { tag: 'alert_gt', hi: a, lo: e }),
-          fact(`${pName(d)} is LESS alert than ${pName(e)} (slurred and drowsy).`, [d, e], { tag: 'alert_lt', lo: d, hi: e }),
+          fact(`${pName(a)} is MORE alert than ${pName(e)}, speaking clear sentences.`, [a, e], { tag: 'alert_gt', hi: a, lo: e }),
+          fact(`${pName(d)} is LESS alert than ${pName(e)}, slurred and drowsy.`, [d, e], { tag: 'alert_lt', lo: d, hi: e }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Alertness Chain', wingIndex: 0, label: 'Relative Alertness B',
         shown: [
           fact(`${pName(c)} is MORE alert than ${pName(e)} — chatting steadily with paramedics.`, [c, e], { tag: 'alert_gt', hi: c, lo: e }),
-          fact(`${pName(d)} is LESS alert than ${pName(e)} (took sleeping meds before the fire), NOT from Floor 4.`, [d, e], { tag: 'alert_lt', lo: d, hi: e }),
+          fact(`${pName(d)} is LESS alert than ${pName(e)} after taking evening sedatives before the alarm.`, [d, e], { tag: 'alert_lt', lo: d, hi: e }),
         ],
         alt: [
           fact(`${pName(c)} is LESS alert than ${pName(e)} and fading fast.`, [c, e], { tag: 'alert_lt', lo: c, hi: e }),
@@ -1017,30 +1017,30 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 2, time: '01:10', wing: 'New Arrivals', wingIndex: 1, label: 'Breathing Rates (Normal = 14)',
         shown: [
-          fact(`${pName(a)} is breathing 6/min (SLOWER THAN half of 14); ${pName(b)} is breathing 24/min (FASTER THAN 14).`, [a, b], { tag: 'br', p1: a, v1: 6, p2: b, v2: 24 }),
-          fact(`${pName(c)} is breathing 7/min (HALF of 14); ${pName(d)} is breathing 5/min (SLOWER THAN ${pName(c)}).`, [c, d], { tag: 'br', p1: c, v1: 7, p2: d, v2: 5 }),
+          fact(`${pName(a)} breathes at 6/min — SLOWER THAN ${pName(b)}'s 24/min.`, [a, b], { tag: 'br', p1: a, v1: 6, p2: b, v2: 24 }),
+          fact(`${pName(c)} breathes at 7/min — FASTER THAN ${pName(d)}'s 5/min.`, [c, d], { tag: 'br', p1: c, v1: 7, p2: d, v2: 5 }),
         ],
         alt: [
-          fact(`${pName(a)} is breathing 22/min (FASTER THAN 14); ${pName(b)} is breathing 6/min (LESS THAN half of 14).`, [a, b], { tag: 'br', p1: a, v1: 22, p2: b, v2: 6 }),
-          fact(`${pName(c)} is breathing 7/min (HALF of 14); ${pName(d)} is breathing 16/min (normal).`, [c, d], { tag: 'br', p1: c, v1: 7, p2: d, v2: 16 }),
+          fact(`${pName(a)} breathes at 22/min — FASTER THAN ${pName(b)}'s 6/min.`, [a, b], { tag: 'br', p1: a, v1: 22, p2: b, v2: 6 }),
+          fact(`${pName(c)} breathes at 7/min — SLOWER THAN ${pName(d)}'s 16/min.`, [c, d], { tag: 'br', p1: c, v1: 7, p2: d, v2: 16 }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Pupil Compare', wingIndex: 1, label: 'Relative Pupil Sizes A',
         shown: [
-          fact(`${pName(a)}'s pupils are SMALLER THAN normal-control ${pName(e)}'s (pinpoint).`, [a, e], { tag: 'pup_sm', p: a }),
-          fact(`${pName(b)}'s pupils are WIDER THAN ${pName(e)}'s (stimulant pattern).`, [b, e], { tag: 'pup_wd', p: b }),
+          fact(`${pName(a)}'s pupils are SMALLER THAN normal-control ${pName(e)}'s.`, [a, e], { tag: 'pup_sm', p: a }),
+          fact(`${pName(b)}'s pupils are WIDER THAN ${pName(e)}'s.`, [b, e], { tag: 'pup_wd', p: b }),
         ],
         alt: [
           fact(`${pName(a)}'s pupils are WIDER THAN normal-control ${pName(e)}'s.`, [a, e], { tag: 'pup_wd', p: a }),
-          fact(`${pName(b)}'s pupils are SMALLER THAN ${pName(e)}'s (pinpoint).`, [b, e], { tag: 'pup_sm', p: b }),
+          fact(`${pName(b)}'s pupils are SMALLER THAN ${pName(e)}'s.`, [b, e], { tag: 'pup_sm', p: b }),
         ],
       }),
       makeCard({
         index: 4, time: '01:18', wing: 'Pupil Compare', wingIndex: 1, label: 'Relative Pupil Sizes B',
         shown: [
           fact(`${pName(c)}'s pupils are SMALLER THAN ${pName(e)}'s — SAME pinpoint size as ${pName(a)}.`, [c, e, a], { tag: 'pup_sm', p: c }),
-          fact(`${pName(d)}'s pupils are WIDER THAN ${pName(e)}'s (head-injury compression, NOT opioid!).`, [d, e], { tag: 'pup_wd', p: d }),
+          fact(`${pName(d)}'s pupils are WIDER THAN ${pName(e)}'s — OPPOSITE OF ${pName(a)} and ${pName(c)}.`, [d, e, a, c], { tag: 'pup_wd', p: d }),
         ],
         alt: [
           fact(`${pName(c)}'s pupils are WIDER THAN ${pName(e)}'s.`, [c, e], { tag: 'pup_wd', p: c }),
@@ -1050,7 +1050,7 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 5, time: '01:21', wing: 'Pier Triage', wingIndex: 0, label: 'Apply the Pattern',
         shown: [
-          fact(`${pName(f)} is breathing 16/min with pupils SAME AS ${pName(e)}'s (unexposed bystander).`, [f, e], { tag: 'normal' }),
+          fact(`${pName(f)} breathes at 16/min with pupils SAME AS ${pName(e)}'s.`, [f, e], { tag: 'normal' }),
           fact(`Give limited Overdose Reversal Spray ONLY to new arrivals matching BOTH signs of the observed Pier pattern.`, [], { tag: 'act' }),
         ],
       }),
@@ -1113,23 +1113,23 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 3, time: '01:14', wing: 'Airway Board', wingIndex: 0, label: 'Second Requirement',
         shown: [
-          fact(`Flight Rule: Chopper passengers MUST ALSO be cleared by Airway Control (NOT pending tube).`, [], { tag: 'rule' }),
+          fact(`Flight Rule: Chopper passengers MUST ALSO be cleared by Airway Control — nobody still pending intubation may board.`, [], { tag: 'rule' }),
           fact(`${pName(a)} and ${pName(c)} are BOTH cleared by Airway Control; ${pName(b)} is STILL awaiting a tube.`, [a, c, b], { tag: 'cleared_air', ps: [a, c] }),
         ],
         alt: [
-          fact(`Flight Rule: Chopper passengers MUST ALSO be cleared by Airway Control (NOT pending tube).`, [], { tag: 'rule' }),
+          fact(`Flight Rule: Chopper passengers MUST ALSO be cleared by Airway Control — nobody still pending intubation may board.`, [], { tag: 'rule' }),
           fact(`${pName(b)} and ${pName(c)} are BOTH cleared by Airway Control; ${pName(a)} is STILL awaiting a tube.`, [b, c, a], { tag: 'cleared_air', ps: [b, c] }),
         ],
       }),
       makeCard({
         index: 4, time: '01:18', wing: 'Cohort Links', wingIndex: 1, label: 'Category Check C',
         shown: [
-          fact(`${pName(c)} is in the Blast-Lung category (factory explosion), SAME AS ${pName(a)}.`, [c, a], { tag: 'blast', p: c }),
-          fact(`${pName(f)} belongs to the Observers group (NO blast exposure; airway clear).`, [f], { tag: 'other', p: f }),
+          fact(`${pName(c)} is in the Blast-Lung category from the factory blast — SAME category as ${pName(a)}.`, [c, a], { tag: 'blast', p: c }),
+          fact(`${pName(f)} belongs to the Observers group with clear lungs and no blast exposure.`, [f], { tag: 'other', p: f }),
         ],
         alt: [
-          fact(`${pName(a)} is a Minor-Splint patient — NOT in the Blast-Lung category.`, [a], { tag: 'minor', p: a }),
-          fact(`${pName(f)} belongs to the Observers group (NO blast exposure; airway clear).`, [f], { tag: 'other', p: f }),
+          fact(`${pName(a)} is a Minor-Splint patient — SAME excluded category as ${pName(d)}.`, [a, d], { tag: 'minor', p: a }),
+          fact(`${pName(f)} belongs to the Observers group with clear lungs and no blast exposure.`, [f], { tag: 'other', p: f }),
         ],
       }),
       makeCard({
@@ -1183,37 +1183,37 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 1, time: '01:06', wing: 'Lab Ranks', wingIndex: 1, label: 'Potassium Ordering',
         shown: [
-          fact(`${pName(a)}'s potassium is HIGHER THAN ${pName(e)}'s (6.5) cutoff.`, [a, e], { tag: 'k_hi', p: a }),
-          fact(`${pName(b)}'s potassium is HIGHER THAN ${pName(a)}'s (even more severe!).`, [b, a], { tag: 'k_gt', hi: b, lo: a }),
+          fact(`${pName(a)}'s potassium is HIGHER THAN ${pName(e)}'s 6.5 cutoff.`, [a, e], { tag: 'k_hi', p: a }),
+          fact(`${pName(b)}'s potassium is EVEN HIGHER THAN ${pName(a)}'s.`, [b, a], { tag: 'k_gt', hi: b, lo: a }),
         ],
         alt: [
-          fact(`${pName(c)}'s potassium is HIGHER THAN ${pName(e)}'s (6.5) cutoff.`, [c, e], { tag: 'k_hi', p: c }),
-          fact(`${pName(a)}'s potassium is LOWER THAN ${pName(e)}'s (safe at 4.8).`, [a, e], { tag: 'k_lo', p: a }),
+          fact(`${pName(c)}'s potassium is HIGHER THAN ${pName(e)}'s 6.5 cutoff.`, [c, e], { tag: 'k_hi', p: c }),
+          fact(`${pName(a)}'s potassium is LOWER THAN ${pName(e)}'s at 4.8.`, [a, e], { tag: 'k_lo', p: a }),
         ],
       }),
       makeCard({
         index: 2, time: '01:10', wing: 'Alarm Log', wingIndex: 0, label: 'Contrapositive Check A',
         shown: [
-          fact(`${pName(c)}'s ECG monitor is NOT on Continuous Alarm (meaning ${pName(c)} did NOT trigger Calcium!).`, [c], { tag: 'no_alarm', p: c }),
+          fact(`${pName(c)}'s ECG monitor is NOT on Continuous Alarm.`, [c], { tag: 'no_alarm', p: c }),
           fact(`${pName(d)}'s potassium is LOWER THAN ${pName(c)}'s.`, [d, c], { tag: 'k_lt', lo: d, hi: c }),
         ],
         alt: [
-          fact(`${pName(b)}'s ECG monitor is NOT on Continuous Alarm (proving ${pName(b)}'s lab was a safe 5.1!).`, [b], { tag: 'no_alarm', p: b }),
-          fact(`${pName(d)}'s potassium is HIGHER THAN ${pName(e)}'s (6.5) cutoff.`, [d, e], { tag: 'k_hi', p: d }),
+          fact(`${pName(b)}'s ECG monitor is NOT on Continuous Alarm.`, [b], { tag: 'no_alarm', p: b }),
+          fact(`${pName(d)}'s potassium is HIGHER THAN ${pName(e)}'s 6.5 cutoff.`, [d, e], { tag: 'k_hi', p: d }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Lab Ranks', wingIndex: 1, label: 'Potassium Check B',
         shown: [
-          fact(`${pName(f)}'s potassium is LOWER THAN ${pName(e)}'s cutoff (normal 4.2).`, [f, e], { tag: 'k_lo', p: f }),
-          fact(`Remember the contrapositive: NOT on Continuous Alarm → did NOT cross > 6.5!`, [], { tag: 'note' }),
+          fact(`${pName(f)}'s potassium is LOWER THAN ${pName(e)}'s cutoff at 4.2.`, [f, e], { tag: 'k_lo', p: f }),
+          fact(`Apply the contrapositive: NOT on Continuous Alarm means potassium stayed at or below 6.5.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
         index: 4, time: '01:18', wing: 'Pharmacy', wingIndex: 0, label: 'Calcium Readiness',
         shown: [
-          fact(`Chain both directions: forward (K > ${pName(e)} → Calcium) AND backward (NOT Alarm → safe).`, [e], { tag: 'note' }),
-          fact(`${pName(e)} sits right AT 6.5 (NOT strictly higher than 6.5).`, [e], { tag: 'k_lo', p: e }),
+          fact(`Chain both directions: forward from K > ${pName(e)} to Calcium, and backward from absent Continuous Alarm to safe.`, [e], { tag: 'note' }),
+          fact(`${pName(e)} sits right at the 6.5 boundary rather than strictly above it.`, [e], { tag: 'k_lo', p: e }),
         ],
       }),
       makeCard({
@@ -1345,11 +1345,11 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 0, time: '01:02', wing: 'Pair 1', wingIndex: 0, label: 'Contaminated Blood Bag',
         shown: [
-          fact(`EITHER ${pName(a)} OR ${pName(b)} received the mislabeled blood bag (exact one of the pair).`, [a, b], { tag: 'or1', p1: a, p2: b }),
+          fact(`EITHER ${pName(a)} OR ${pName(b)} received the mislabeled blood bag — strictly one of the pair.`, [a, b], { tag: 'or1', p1: a, p2: b }),
           fact(`Lab confirms ${pName(b)}'s blood type matches their bag 100% — NOT ${pName(b)}.`, [b], { tag: 'not', p: b }),
         ],
         alt: [
-          fact(`EITHER ${pName(a)} OR ${pName(b)} received the mislabeled blood bag (exact one of the pair).`, [a, b], { tag: 'or1', p1: a, p2: b }),
+          fact(`EITHER ${pName(a)} OR ${pName(b)} received the mislabeled blood bag — strictly one of the pair.`, [a, b], { tag: 'or1', p1: a, p2: b }),
           fact(`Lab confirms ${pName(a)}'s blood type matches their bag 100% — NOT ${pName(a)}.`, [a], { tag: 'not', p: a }),
         ],
       }),
@@ -1367,8 +1367,8 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 2, time: '01:10', wing: 'Domino Link', wingIndex: 0, label: 'Cross-Pair Tie',
         shown: [
-          fact(`Whoever received the mislabeled bag ALSO shared a nurse cart with ${pName(e)} (clearing ${pName(f)}).`, [e, f], { tag: 'not', p: f }),
-          fact(`EITHER ${pName(e)} OR ${pName(f)} was missed during the 01:00 safety sweep — and ${pName(e)} was just cleared by check-in.`, [e, f], { tag: 'not', p: e }),
+          fact(`Whoever received the mislabeled bag shared a nurse cart with ${pName(e)} — NOT ${pName(f)}.`, [e, f], { tag: 'not', p: f }),
+          fact(`EITHER ${pName(e)} OR ${pName(f)} was missed during the 01:00 sweep, and ${pName(e)} just signed off clean.`, [e, f], { tag: 'not', p: e }),
         ],
       }),
       makeCard({
@@ -1381,8 +1381,8 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 4, time: '01:18', wing: 'Pair 2', wingIndex: 1, label: 'Safety Verification B',
         shown: [
-          fact(`${pName(e)} and ${pName(f)} both passed final bag & oxygen checks (neither needs rescue).`, [e, f], { tag: 'note' }),
-          fact(`Double-check which half of Pair 1 and Pair 2 survived elimination.`, [], { tag: 'note' }),
+          fact(`${pName(e)} and ${pName(f)} both passed final bag and oxygen line checks cleanly.`, [e, f], { tag: 'note' }),
+          fact(`Verify which half of Pair 1 and Pair 2 survived elimination.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
@@ -1456,7 +1456,7 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 3, time: '01:14', wing: 'PCR Swab', wingIndex: 0, label: 'Strain Test Results',
         shown: [
-          fact(`${pName(d)} tested 100% NEGATIVE for the outbreak strain (assuming ${pName(d)} = Zero contradicts PCR!).`, [d], { tag: 'neg', p: d }),
+          fact(`${pName(d)} tested 100% NEGATIVE for the outbreak strain — UNLIKE ${pName(a)}, ${pName(b)}, and ${pName(c)}.`, [d, a, b, c], { tag: 'neg', p: d }),
           fact(`${pName(a)}, ${pName(b)}, and ${pName(c)} all tested POSITIVE for the exact same outbreak strain.`, [a, b, c], { tag: 'pos', ps: [a, b, c] }),
         ],
       }),
@@ -1526,30 +1526,30 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 2, time: '01:10', wing: 'Pass 1 · Bleed', wingIndex: 0, label: 'Active Bleed Status',
         shown: [
-          fact(`${pName(a)} and ${pName(b)} are BOTH actively bleeding (Pass 1 doubles both).`, [a, b], { tag: 'bleed', ps: [a, b] }),
+          fact(`${pName(a)} and ${pName(b)} are BOTH actively bleeding — SAME Pass-1 trigger.`, [a, b], { tag: 'bleed', ps: [a, b] }),
           fact(`${pName(c)} has NO active bleeding; ${pName(d)} IS actively bleeding.`, [c, d], { tag: 'bleed', ps: [d] }),
         ],
         alt: [
           fact(`${pName(a)} has NO active bleeding; ${pName(b)} IS actively bleeding.`, [a, b], { tag: 'bleed', ps: [b] }),
-          fact(`${pName(c)} and ${pName(d)} are BOTH actively bleeding.`, [c, d], { tag: 'bleed', ps: [c, d] }),
+          fact(`${pName(c)} and ${pName(d)} are BOTH actively bleeding — SAME Pass-1 trigger.`, [c, d], { tag: 'bleed', ps: [c, d] }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Pass 2 · BP', wingIndex: 1, label: 'Blood Pressure < 90 Check',
         shown: [
-          fact(`${pName(a)}'s BP is 78/44 (< 90); ${pName(b)}'s BP is 116/72 (≥ 90, no 2nd double).`, [a, b], { tag: 'lowbp', ps: [a] }),
-          fact(`${pName(c)}'s BP is 84/50 (< 90); ${pName(d)}'s BP is 80/46 (< 90).`, [c, d], { tag: 'lowbp', ps: [c, d] }),
+          fact(`${pName(a)}'s BP is 78/44 — LOWER THAN ${pName(b)}'s 116/72.`, [a, b], { tag: 'lowbp', ps: [a] }),
+          fact(`${pName(c)}'s BP is 84/50 and ${pName(d)}'s BP is 80/46 — BOTH lower than ${pName(b)}.`, [c, d, b], { tag: 'lowbp', ps: [c, d] }),
         ],
         alt: [
-          fact(`${pName(a)}'s BP is 118/74 (≥ 90); ${pName(b)}'s BP is 82/48 (< 90).`, [a, b], { tag: 'lowbp', ps: [b] }),
-          fact(`${pName(c)}'s BP is 84/50 (< 90); ${pName(d)}'s BP is 114/70 (≥ 90).`, [c, d], { tag: 'lowbp', ps: [c] }),
+          fact(`${pName(a)}'s BP is 118/74 — HIGHER THAN ${pName(b)}'s 82/48.`, [a, b], { tag: 'lowbp', ps: [b] }),
+          fact(`${pName(c)}'s BP is 84/50 — LOWER THAN ${pName(d)}'s 114/70.`, [c, d], { tag: 'lowbp', ps: [c] }),
         ],
       }),
       makeCard({
         index: 4, time: '01:18', wing: 'Ward Control', wingIndex: 0, label: 'Non-Escalating Bays',
         shown: [
-          fact(`${pName(e)} (Base 3) and ${pName(f)} (Base 4) have NO bleeding and BP > 115 (zero doublings).`, [e, f], { tag: 'flat' }),
-          fact(`Apply Pass 1 first, then feed Pass 1's result into Pass 2 for every bay!`, [], { tag: 'note' }),
+          fact(`${pName(e)} (Base 3) and ${pName(f)} (Base 4) have NO bleeding and BP above 115.`, [e, f], { tag: 'flat' }),
+          fact(`Apply Pass 1 first, then feed Pass 1's output into Pass 2 for every bay.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
@@ -1608,34 +1608,34 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 1, time: '01:06', wing: 'Slot Eligibility', wingIndex: 1, label: 'Operating Room Candidates',
         shown: [
-          fact(`ONLY ${pName(a)} is cleared to use the Operating Room right now.`, [a], { tag: 'or_ok', ps: [a] }),
-          fact(`${pName(b)} can ONLY use the Cath Lab (NOT OR, NOT O-Neg).`, [b], { tag: 'cath_ok', ps: [b] }),
+          fact(`ONLY ${pName(a)} is cleared to use the Operating Room — UNLIKE ${pName(b)}–${pName(e)}.`, [a, b], { tag: 'or_ok', ps: [a] }),
+          fact(`${pName(b)} qualifies ONLY for the Cath Lab, neither OR nor Blood Pack.`, [b], { tag: 'cath_ok', ps: [b] }),
         ],
         alt: [
-          fact(`ONLY ${pName(c)} is cleared to use the Operating Room right now.`, [c], { tag: 'or_ok', ps: [c] }),
-          fact(`${pName(b)} can ONLY use the Cath Lab (NOT OR, NOT O-Neg).`, [b], { tag: 'cath_ok', ps: [b] }),
+          fact(`ONLY ${pName(c)} is cleared to use the Operating Room — UNLIKE ${pName(a)}, ${pName(b)}, ${pName(d)}, ${pName(e)}.`, [c, a], { tag: 'or_ok', ps: [c] }),
+          fact(`${pName(b)} qualifies ONLY for the Cath Lab, neither OR nor Blood Pack.`, [b], { tag: 'cath_ok', ps: [b] }),
         ],
       }),
       makeCard({
         index: 2, time: '01:10', wing: 'Slot Eligibility', wingIndex: 1, label: 'Blood Pack Candidates',
         shown: [
-          fact(`${pName(c)}, ${pName(d)}, and ${pName(e)} can ALL use the lone O-Neg Blood Pack — and NOTHING else.`, [c, d, e], { tag: 'blood_ok', ps: [c, d, e] }),
-          fact(`${pName(f)} needs routine X-ray only (uses none of the 3 scarce slots).`, [f], { tag: 'none' }),
+          fact(`${pName(c)}, ${pName(d)}, and ${pName(e)} can ALL use the lone O-Neg Blood Pack — and nothing else.`, [c, d, e], { tag: 'blood_ok', ps: [c, d, e] }),
+          fact(`${pName(f)} needs routine X-ray only, outside all 3 scarce slots.`, [f], { tag: 'none' }),
         ],
         alt: [
-          fact(`${pName(a)}, ${pName(d)}, and ${pName(e)} can ALL use the lone O-Neg Blood Pack — and NOTHING else.`, [a, d, e], { tag: 'blood_ok', ps: [a, d, e] }),
-          fact(`${pName(f)} needs routine X-ray only (uses none of the 3 scarce slots).`, [f], { tag: 'none' }),
+          fact(`${pName(a)}, ${pName(d)}, and ${pName(e)} can ALL use the lone O-Neg Blood Pack — and nothing else.`, [a, d, e], { tag: 'blood_ok', ps: [a, d, e] }),
+          fact(`${pName(f)} needs routine X-ray only, outside all 3 scarce slots.`, [f], { tag: 'none' }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Slot Check', wingIndex: 0, label: 'Cath Lab Competition',
         shown: [
           fact(`Nobody else on the ward qualifies for the Cath Lab besides ${pName(b)}.`, [b], { tag: 'note' }),
-          fact(`For the Blood Pack, three bays can swap in for one another (3 different valid trios exist!).`, [], { tag: 'note' }),
+          fact(`Three bays compete interchangeably for the lone Blood Pack slot.`, [], { tag: 'note' }),
         ],
         alt: [
           fact(`${pName(d)} ALSO qualifies for the Cath Lab alongside ${pName(b)}.`, [d, b], { tag: 'cath_extra', p: d }),
-          fact(`Test EVERY possible valid 3-slot assignment to see who is unavoidable!`, [], { tag: 'note' }),
+          fact(`Test EVERY valid 3-slot assignment to see who is unavoidable.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
@@ -1737,8 +1737,8 @@ export const SEMANTIC_F12 = {
       makeCard({
         index: 4, time: '01:18', wing: 'Flight Rules', wingIndex: 0, label: 'Final Bay Check',
         shown: [
-          fact(`${pName(f)} is 96 kg (> 90 kg) with BP 82 (< 90) — fails two limits.`, [f], { tag: 'note' }),
-          fact(`Every candidate passes at least TWO limits — only simultaneous check of ALL THREE finds who clears!`, [], { tag: 'note' }),
+          fact(`${pName(f)} weighs 96 kg — HEAVIER than ${pName(e)} — with BP 82.`, [f, e], { tag: 'note' }),
+          fact(`Every candidate passes at least TWO limits — only checking ALL THREE simultaneously isolates who clears.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({

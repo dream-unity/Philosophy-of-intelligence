@@ -85,7 +85,7 @@ function tryBuildForType(rng, meta, tier, prevTargetKey, allowSamePrevTarget) {
   const spec = engine(rng);
   if (!spec || !spec.cards || spec.cards.length < 4 || spec.cards.length > 6) return null;
 
-  const logic = synthesizeSemanticLogic(rng, spec.cards, spec.evaluate, tier.disputed);
+  const logic = synthesizeSemanticLogic(rng, spec.cards, spec.evaluate, tier.disputed, spec.order);
   if (!logic) return null;
 
   const targetKey = logic.trueTargets.join(',');
@@ -216,7 +216,7 @@ export function synthesizeTrial({
   const fallbackMeta = ranked[0];
   const fallbackRng = createRng(seed + 997);
   const spec = SEMANTIC_ENGINES[fallbackMeta.id](fallbackRng);
-  const compacted = compactClinicalBoard(spec.cards, spec.evaluate);
+  const compacted = compactClinicalBoard(spec.cards, spec.evaluate, spec.order);
   const records = enrichRecords(compacted.cards);
   const fallbackMask = (1 << records.length) - 1;
   const res = spec.evaluate(resolveBoard(records, fallbackMask));

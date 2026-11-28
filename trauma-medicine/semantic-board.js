@@ -266,12 +266,40 @@ function evalTargetsKey(evaluateFn, cards) {
   }
 }
 
+function addsNewProtocolDetail(lawLines, orderText) {
+  if (!Array.isArray(lawLines) || !lawLines.length) return false;
+  const lawText = lawLines.join(' ').trim();
+  if (!lawText) return false;
+  if (!orderText || !String(orderText).trim()) return true;
+
+  // Preserve if Card 0 defines an explicit formula, calculation, multi-step procedure, or distinct numeric threshold
+  const hasFormulaOrStructure = /(=|×|÷|::|STEP\s*1|CASE\s*1|mg\/kg|mmHg|°[FC])/i.test(lawText);
+  const orderNums = new Set((String(orderText).match(/\d+(?:\.\d+)?/g) || []));
+  const lawNums = (lawText.match(/\d+(?:\.\d+)?/g) || []);
+  const introducesNewNumber = lawNums.some((n) => !orderNums.has(n));
+  if (hasFormulaOrStructure || introducesNewNumber) return true;
+
+  // Otherwise check content-word overlap against the directive; suppress if merely paraphrasing the order
+  const tokenize = (s) =>
+    String(s)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !/^(that|this|with|from|into|only|every|patient|patients|whose|their|must|need|needs|check|flag|treat|hold|pick|mark|your|than|when|then|more|less|both|have|been|will|does|each|into|also|just|here|site|tonight|either|planned)$/.test(w));
+
+  const orderWords = new Set(tokenize(orderText));
+  const lawWords = [...new Set(tokenize(lawText))];
+  if (!lawWords.length) return false;
+  const shared = lawWords.filter((w) => orderWords.has(w)).length;
+  return shared / lawWords.length < 0.35;
+}
+
 /**
  * Compact a raw 6-card board by eliminating directive-repeating fluff cards and promoting
  * a standalone Card-0 Clinical Law into a sleek top protocol strip whenever >= 4 real
  * evidence cards remain. Verifies evaluator parity before dropping any card.
  */
-export function compactClinicalBoard(rawCards, evaluateFn) {
+export function compactClinicalBoard(rawCards, evaluateFn, orderText = '') {
   if (!Array.isArray(rawCards) || rawCards.length <= 4) {
     return {
       cards: (rawCards || []).map((c, i) => ({ ...c, index: i })),
@@ -302,11 +330,14 @@ export function compactClinicalBoard(rawCards, evaluateFn) {
       (!baseKey || evalTargetsKey(evaluateFn, withoutLaw) === baseKey);
 
     if (canPromoteToBanner) {
-      clinicalLaw = {
-        label: kept[0].label || 'Clinical Protocol',
-        site: kept[0].site || 'Protocol',
-        lines: (kept[0].shownFacts || []).map((f) => f.text).filter(Boolean),
-      };
+      const lines = (kept[0].shownFacts || []).map((f) => f.text).filter(Boolean);
+      if (addsNewProtocolDetail(lines, orderText)) {
+        clinicalLaw = {
+          label: kept[0].label || 'Clinical Protocol',
+          site: kept[0].site || 'Protocol',
+          lines,
+        };
+      }
       kept = withoutLaw;
     } else {
       kept[0] = { ...kept[0], isLawCard: true };
@@ -332,8 +363,8 @@ export function compactClinicalBoard(rawCards, evaluateFn) {
  *   - Target-ID minimality: flipping ANY disputed card breaks a check and/or changes targets.
  *   - Every Cross-Check uses crystal-clear plain English referencing the card's real title.
  */
-export function synthesizeSemanticLogic(rng, rawCards, evaluateFn, disputedCount = 0) {
-  const compacted = compactClinicalBoard(rawCards, evaluateFn);
+export function synthesizeSemanticLogic(rng, rawCards, evaluateFn, disputedCount = 0, orderText = '') {
+  const compacted = compactClinicalBoard(rawCards, evaluateFn, orderText);
   const cards = compacted.cards.map((c, i) => ({
     ...c,
     index: i,

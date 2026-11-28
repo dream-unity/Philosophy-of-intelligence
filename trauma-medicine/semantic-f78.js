@@ -39,74 +39,74 @@ export const SEMANTIC_F78 = {
   // =========================================================================
 
   // #62 Interpersonal reasoning (After · Atomic)
-  // Within-patient relational contrast: Behavior WITH Companion vs. Behavior ALONE across 6 bays
+  // Within-patient relational contrast: Behavior WITH Companion vs. Behavior ALONE across 6 trauma bays
   'interpersonal-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'Safety Rule', wingIndex: 0, label: 'Two-State Shift Rule',
+        index: 0, time: '01:02', wing: 'Safety Rule', wingIndex: 0, label: 'Two-State Coercion Shift',
         shown: [
-          fact(`Compare each patient WITH their companion vs. ALONE: fear/silence ONLY when companion hovers + urgent relief when alone = coercion!`, [], { tag: 'rule' }),
-          fact(`Patients who stay consistently nervous alone too (needle fear) or consistently relaxed with family are NOT being controlled.`, [], { tag: 'rule' }),
+          fact(`Compare each patient WITH their companion vs. ALONE: silence/fear while companion hovers followed by rapid disclosure alone signals coercion.`, [], { tag: 'rule' }),
+          fact(`Consistent baseline anxiety alone and with visitors, or open speech in front of family, does not meet the coercion shift.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 1, time: '01:06', wing: 'With Visitor', wingIndex: 1, label: 'State 1: Companion Present A',
         shown: [
-          fact(`${pName(a)}: Companion answers EVERY question and grips ${pName(a)}'s wrist — ${pName(a)} freezes silent.`, [a], { tag: 'ctrl', p: a }),
-          fact(`${pName(b)}: Companion steps out politely whenever nurse asks; ${pName(b)} speaks freely.`, [b], { tag: 'free', p: b }),
+          fact(`${pName(a)}'s companion interrupts every question and grips ${pName(a)}'s wrist — ${pName(a)} freezes, MORE withdrawn than ${pName(b)}.`, [a, b], { tag: 'ctrl', p: a }),
+          fact(`${pName(b)}'s companion steps behind the curtain whenever asked; ${pName(b)} answers triage questions directly.`, [b], { tag: 'free', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: Companion steps out politely whenever nurse asks; ${pName(a)} speaks freely.`, [a], { tag: 'free', p: a }),
-          fact(`${pName(b)}: Companion cuts off EVERY question and refuses to leave — ${pName(b)} freezes silent.`, [b], { tag: 'ctrl', p: b }),
+          fact(`${pName(a)}'s companion steps behind the curtain whenever asked; ${pName(a)} answers triage questions directly.`, [a], { tag: 'free', p: a }),
+          fact(`${pName(b)}'s companion interrupts every question and refuses to leave — ${pName(b)} freezes, MORE withdrawn than ${pName(a)}.`, [b, a], { tag: 'ctrl', p: b }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'Alone Check', wingIndex: 0, label: 'State 2: 2 Minutes Alone A',
+        index: 2, time: '01:10', wing: 'Alone Check', wingIndex: 0, label: 'State 2: Private CT Bay A',
         shown: [
-          fact(`${pName(a)} ALONE in X-ray: OPPOSITE OF curtain behavior — speaks fast and whispers "Please don't let them back in!"`, [a], { tag: 'alone_shift', p: a }),
-          fact(`${pName(c)} ALONE in X-ray: STILL shaking from needle phobia (SAME nervousness with or without sister!).`, [c], { tag: 'same_anx', p: c }),
+          fact(`${pName(a)} ALONE in CT: pulse settles by 24 BPM — OPPOSITE OF bedside silence, whispers "Keep them out of my bay."`, [a], { tag: 'alone_shift', p: a }),
+          fact(`${pName(c)} ALONE in CT: trembling at the SAME intensity as with sister — explains lifelong needle phobia.`, [c], { tag: 'same_anx', p: c }),
         ],
         alt: [
-          fact(`${pName(b)} ALONE in X-ray: OPPOSITE OF curtain behavior — speaks fast and whispers "Please keep them outside!"`, [b], { tag: 'alone_shift', p: b }),
-          fact(`${pName(c)} ALONE in X-ray: STILL shaking from needle phobia (SAME nervousness with or without sister!).`, [c], { tag: 'same_anx', p: c }),
+          fact(`${pName(b)} ALONE in CT: pulse settles by 24 BPM — OPPOSITE OF bedside silence, whispers "Keep them out of my bay."`, [b], { tag: 'alone_shift', p: b }),
+          fact(`${pName(c)} ALONE in CT: trembling at the SAME intensity as with sister — explains lifelong needle phobia.`, [c], { tag: 'same_anx', p: c }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'With Visitor', wingIndex: 1, label: 'State 1: Companion Present B',
         shown: [
-          fact(`${pName(d)}: Companion interrupts doctor and insists on signing ${pName(d)} out early — ${pName(d)} stares at the floor.`, [d], { tag: 'ctrl', p: d }),
-          fact(`${pName(e)}: Loud anxious spouse asking too many doctor questions — YET steps back whenever ${pName(e)} talks.`, [e], { tag: 'free', p: e }),
+          fact(`${pName(d)}'s companion demands early discharge before CT finishes — ${pName(d)} stares downward, LESS vocal than ${pName(e)}.`, [d, e], { tag: 'ctrl', p: d }),
+          fact(`${pName(e)}'s anxious spouse peppers the resident with questions, yet pauses immediately whenever ${pName(e)} speaks.`, [e], { tag: 'free', p: e }),
         ],
         alt: [
-          fact(`${pName(d)}: Companion waits calmly outside while ${pName(d)} explains symptoms clearly.`, [d], { tag: 'free', p: d }),
-          fact(`${pName(c)}: Companion refuses to leave and answers for ${pName(c)} — ${pName(c)} stares silently at the floor.`, [c], { tag: 'ctrl', p: c }),
+          fact(`${pName(d)}'s companion waits quietly in the corridor while ${pName(d)} recounts the fall clearly.`, [d], { tag: 'free', p: d }),
+          fact(`${pName(c)}'s companion refuses to exit and answers for ${pName(c)} — ${pName(c)} stares downward, LESS vocal than ${pName(e)}.`, [c, e], { tag: 'ctrl', p: c }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'Alone Check', wingIndex: 0, label: 'State 2: 2 Minutes Alone B',
+        index: 4, time: '01:18', wing: 'Alone Check', wingIndex: 0, label: 'State 2: Private CT Bay B',
         shown: [
-          fact(`${pName(d)} ALONE at sink: immediately opens up and asks nurse for a private social worker (SHARP shift from State 1!).`, [d], { tag: 'alone_shift', p: d }),
-          fact(`${pName(e)} & ${pName(f)} ALONE: relaxed and explicitly invite their spouse/parent right back in.`, [e, f], { tag: 'free_pair', ps: [e, f] }),
+          fact(`${pName(d)} ALONE at wash station: immediately shifts posture and asks the trauma nurse for a private social-work consult.`, [d], { tag: 'alone_shift', p: d }),
+          fact(`${pName(e)} & ${pName(f)} ALONE: calm at the SAME baseline as with visitors and request their relatives back at bedside.`, [e, f], { tag: 'free_pair', ps: [e, f] }),
         ],
         alt: [
-          fact(`${pName(c)} ALONE at sink: immediately opens up and asks nurse for a private social worker (SHARP shift!).`, [c], { tag: 'alone_shift', p: c }),
-          fact(`${pName(e)} & ${pName(f)} ALONE: relaxed and explicitly invite their spouse/parent right back in.`, [e, f], { tag: 'free_pair', ps: [e, f] }),
+          fact(`${pName(c)} ALONE at wash station: immediately shifts posture and asks the trauma nurse for a private social-work consult.`, [c], { tag: 'alone_shift', p: c }),
+          fact(`${pName(e)} & ${pName(f)} ALONE: calm at the SAME baseline as with visitors and request their relatives back at bedside.`, [e, f], { tag: 'free_pair', ps: [e, f] }),
         ],
       }),
       makeCard({
         index: 5, time: '01:22', wing: 'Private Suite', wingIndex: 1, label: 'Separate & Protect',
         shown: [
-          fact(`Intersect Companion Control (State 1) WITH Sharp Relief/Disclosure Alone (State 2).`, [], { tag: 'rule' }),
-          fact(`Move EVERY matching patient to a private visitor-free room with Social Work now.`, [], { tag: 'rule' }),
+          fact(`Intersect Companion Control with a clear disclosure shift when alone.`, [], { tag: 'rule' }),
+          fact(`Transfer matching bays to visitor-restricted trauma rooms with Social Work.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'With-Visitor vs. Alone Shift',
-      dispatch: 'Compare every patient’s behavior WITH their companion against their behavior ALONE to spot coercion.',
-      order: 'Move to a private room EVERY patient showing BOTH companion control AND a sharp fear-to-relief shift when alone.',
-      hint: 'Match State 1 (Companion blocks/controls) against State 2 (Patient opens up or begs for privacy alone).',
+      dispatch: 'Compare every patient’s behavior WITH their companion against their behavior ALONE to isolate coercion.',
+      order: 'Move to a private room EVERY patient showing BOTH companion control AND a sharp fear-to-disclosure shift when alone.',
+      hint: 'Pair State 1 (companion intercepts/controls) with State 2 (patient drops fear and requests protection alone).',
       bayDefaultLabel: 'Bedside Safety',
       cards,
       evaluate(activeCards) {
@@ -116,8 +116,8 @@ export const SEMANTIC_F78 = {
         const rivals = [c, e, b, d, a].filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `Comparing State 1 (companion control) against State 2 (sharp disclosure shift alone) isolates ${formatList(targets)} for immediate private-room protection.`,
-          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} either stayed consistently anxious alone too (needle fear) or spoke freely with a supportive family member.`),
+          proof: `Comparing State 1 (companion control) against State 2 (disclosure shift alone) isolates ${formatList(targets)} for immediate private-room protection.`,
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} either maintained identical anxiety alone (needle phobia) or spoke freely with family present.`),
         };
       },
     };
@@ -129,61 +129,61 @@ export const SEMANTIC_F78 = {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'Family Desk', wingIndex: 0, label: 'Knowledge-Gap Clock Rule',
+        index: 0, time: '01:02', wing: 'Family Desk', wingIndex: 0, label: 'Knowledge-Gap Clock',
         shown: [
-          fact(`A waiting family holds an OUTDATED belief whenever a patient moved to Emergency OR AFTER the family's last update!`, [], { tag: 'rule' }),
-          fact(`If family was updated AFTER the OR transfer (or bay never entered OR), their mental model matches reality.`, [], { tag: 'rule' }),
+          fact(`A waiting family holds an outdated mental model whenever Emergency OR entry occurred AFTER the family's last clinical update.`, [], { tag: 'rule' }),
+          fact(`Families briefed after OR entry, or waiting on non-surgical Observation bays, already hold accurate expectations.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'OR Board', wingIndex: 1, label: 'Emergency OR Transfer Times A',
+        index: 1, time: '01:06', wing: 'OR Board', wingIndex: 1, label: 'Emergency OR Transfers A',
         shown: [
-          fact(`${pName(a)}: Rushed into OR-1 at 01:10 for hidden spleen bleed.`, [a], { tag: 'or', p: a, t: 70 }),
-          fact(`${pName(b)}: Rushed into OR-2 at 01:05 for crushed artery.`, [b], { tag: 'or', p: b, t: 65 }),
+          fact(`${pName(a)} rolled into OR-1 at 01:10 for splenic hemorrhage — 5 min LATER THAN ${pName(b)}'s 01:05 OR-2 start.`, [a, b], { tag: 'or_pair', list: [{ p: a, t: 70 }, { p: b, t: 65 }] }),
+          fact(`Both OR-1 and OR-2 transfers bypassed the waiting lobby via the restricted surgical corridor.`, [], { tag: 'note' }),
         ],
         alt: [
-          fact(`${pName(a)}: Stable in Obs — NO emergency surgery needed.`, [a], { tag: 'no_or', p: a }),
-          fact(`${pName(b)}: Rushed into OR-2 at 01:12 for sudden chest bleed.`, [b], { tag: 'or', p: b, t: 72 }),
+          fact(`${pName(a)} stayed in Observation without surgery; ${pName(b)} rolled into OR-2 at 01:12 for chest hemorrhage.`, [a, b], { tag: 'or', p: b, t: 72 }),
+          fact(`OR-2 transfer bypassed the waiting lobby via the restricted surgical corridor.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
         index: 2, time: '01:12', wing: 'Family Log', wingIndex: 0, label: 'Family Last-Update Times A',
         shown: [
-          fact(`${pName(a)}'s spouse: Last updated at 00:35 ("minor bump") — BEFORE 01:10 OR transfer!`, [a], { tag: 'fam', p: a, t: 35 }),
-          fact(`${pName(b)}'s parent: Briefed by surgeon at 01:14 — AFTER 01:05 OR transfer (knows full truth!).`, [b], { tag: 'fam', p: b, t: 74 }),
+          fact(`${pName(a)}'s spouse was last briefed at 00:35 on stable triage vitals.`, [a], { tag: 'fam', p: a, t: 35 }),
+          fact(`${pName(b)}'s parent spoke with the trauma fellow at 01:14 — LATER THAN ${pName(a)}'s spouse.`, [b, a], { tag: 'fam', p: b, t: 74 }),
         ],
         alt: [
-          fact(`${pName(a)}'s spouse: Briefed at 01:15 — knows ${pName(a)} is stable in Obs.`, [a], { tag: 'fam', p: a, t: 75 }),
-          fact(`${pName(b)}'s parent: Last updated at 00:40 ("just X-ray") — BEFORE 01:12 OR transfer!`, [b], { tag: 'fam', p: b, t: 40 }),
+          fact(`${pName(a)}'s spouse was briefed at 01:15 on stable Observation status.`, [a], { tag: 'fam', p: a, t: 75 }),
+          fact(`${pName(b)}'s parent was last briefed at 00:40 before chest CT — EARLIER THAN ${pName(a)}'s update.`, [b, a], { tag: 'fam', p: b, t: 40 }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:16', wing: 'OR Board', wingIndex: 1, label: 'Emergency OR Transfer Times B',
+        index: 3, time: '01:16', wing: 'OR Board', wingIndex: 1, label: 'Emergency OR Transfers B',
         shown: [
-          fact(`${pName(c)}: Stable in Obs — NO surgery; ${pName(d)}: Rushed into OR-3 at 01:18!`, [c, d], { tag: 'or', p: d, t: 78 }),
-          fact(`${pName(e)}: Rushed into OR-4 at 01:02; ${pName(f)}: Stable in Obs (NO surgery).`, [e, f], { tag: 'or', p: e, t: 62 }),
+          fact(`${pName(d)} rolled into OR-3 at 01:18 — LATER THAN ${pName(e)}'s 01:02 OR-4 start.`, [d, e], { tag: 'or_pair', list: [{ p: d, t: 78 }, { p: e, t: 62 }] }),
+          fact(`${pName(c)} and ${pName(f)} remained in Observation with zero surgical bookings.`, [c, f], { tag: 'no_or_pair', ps: [c, f] }),
         ],
         alt: [
-          fact(`${pName(c)}: Rushed into OR-3 at 01:18! ${pName(d)}: Stable in Obs — NO surgery.`, [c, d], { tag: 'or', p: c, t: 78 }),
-          fact(`${pName(e)}: Rushed into OR-4 at 01:02; ${pName(f)}: Stable in Obs (NO surgery).`, [e, f], { tag: 'or', p: e, t: 62 }),
+          fact(`${pName(c)} rolled into OR-3 at 01:18 — LATER THAN ${pName(e)}'s 01:02 OR-4 start.`, [c, e], { tag: 'or_pair', list: [{ p: c, t: 78 }, { p: e, t: 62 }] }),
+          fact(`${pName(d)} and ${pName(f)} remained in Observation with zero surgical bookings.`, [d, f], { tag: 'no_or_pair', ps: [d, f] }),
         ],
       }),
       makeCard({
         index: 4, time: '01:22', wing: 'Family Log', wingIndex: 0, label: 'Family Last-Update Times B',
         shown: [
-          fact(`${pName(d)}'s sibling: Last updated at 00:45 ("just stitches") — BEFORE 01:18 OR transfer!`, [d], { tag: 'fam', p: d, t: 45 }),
-          fact(`${pName(e)}'s family: Briefed at 01:08 (AFTER 01:02 OR-4 start!); ${pName(c)} & ${pName(f)}'s families last heard "minor check" at 00:50.`, [e, c, f], { tag: 'fam_e', p: e, t: 68 }),
+          fact(`${pName(d)}'s sibling was last briefed at 00:45 on minor laceration repair.`, [d], { tag: 'fam', p: d, t: 45 }),
+          fact(`${pName(e)}'s family was briefed at 01:08; ${pName(c)} & ${pName(f)}'s families were last updated at 00:50.`, [e, c, f], { tag: 'fam_e', p: e, t: 68 }),
         ],
         alt: [
-          fact(`${pName(c)}'s sibling: Last updated at 00:45 ("just stitches") — BEFORE 01:18 OR transfer!`, [c], { tag: 'fam', p: c, t: 45 }),
-          fact(`${pName(e)}'s family: Briefed at 01:08 (AFTER 01:02 OR-4 start!); ${pName(d)} & ${pName(f)}'s families know they are in Obs.`, [e, d, f], { tag: 'fam_e', p: e, t: 68 }),
+          fact(`${pName(c)}'s sibling was last briefed at 00:45 on minor laceration repair.`, [c], { tag: 'fam', p: c, t: 45 }),
+          fact(`${pName(e)}'s family was briefed at 01:08; ${pName(d)} & ${pName(f)}'s families were updated at 00:50.`, [e, d, f], { tag: 'fam_e', p: e, t: 68 }),
         ],
       }),
       makeCard({
-        index: 5, time: '01:25', wing: 'Waiting Room', wingIndex: 1, label: 'Update Blindsided Families',
+        index: 5, time: '01:25', wing: 'Waiting Room', wingIndex: 1, label: 'Sync Waiting Families',
         shown: [
-          fact(`Compare each OR Transfer Time directly against that family's Last-Update Time!`, [], { tag: 'rule' }),
-          fact(`Walk out NOW to update EVERY family whose last update happened BEFORE their loved one entered Emergency OR.`, [], { tag: 'rule' }),
+          fact(`Compare each bay's OR Transfer Time directly against that family's Last-Update Time.`, [], { tag: 'rule' }),
+          fact(`Brief every family whose last update came strictly BEFORE their patient's OR entry.`, [], { tag: 'rule' }),
         ],
       }),
     ];
@@ -191,13 +191,14 @@ export const SEMANTIC_F78 = {
       scenarioTitle: 'Waiting-Room Knowledge Gap',
       dispatch: 'Compare Emergency OR transfer timestamps against each waiting family’s last-update timestamp.',
       order: 'Update in person EVERY family whose loved one entered Emergency OR AFTER the family’s last update.',
-      hint: 'Check OR Time > Family Last-Update Time (skip families updated AFTER surgery started or bays never in OR).',
+      hint: 'Check OR Entry Time > Family Last-Update Time and skip non-surgical Observation bays.',
       bayDefaultLabel: 'Family Sync',
       cards,
       evaluate(activeCards) {
         const orT = new Map();
         const famT = new Map();
         for (const x of factsByTag(activeCards, 'or')) orT.set(x.p, x.t);
+        for (const x of factsByTag(activeCards, 'or_pair')) for (const it of x.list) orT.set(it.p, it.t);
         for (const x of [...factsByTag(activeCards, 'fam'), ...factsByTag(activeCards, 'fam_e')]) famT.set(x.p, x.t);
         const targets = uniqueSortedIds(
           [a, b, c, d, e, f].filter((id) => orT.has(id) && famT.has(id) && famT.get(id) < orT.get(id))
@@ -205,9 +206,9 @@ export const SEMANTIC_F78 = {
         const rivals = [b, e, c, d, a].filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `Comparing OR transfer times vs. family update times catches ${formatList(targets)}: transferred to OR AFTER their family's outdated update.`,
+          proof: `Comparing OR entry timestamps against family last-update times flags ${formatList(targets)}: transferred to OR after their families' outdated updates.`,
           rival: buildRivalInfo(targets, rivals, (r) =>
-            orT.has(r) ? `${pName(r)}'s family was already briefed AFTER ${pName(r)} entered OR.` : `${pName(r)} stayed stable in Obs (no surgery), matching what their family believes.`
+            orT.has(r) ? `${pName(r)}'s family was already briefed AFTER ${pName(r)} entered OR.` : `${pName(r)} remained in Observation without surgery, matching family expectations.`
           ),
         };
       },
@@ -215,89 +216,91 @@ export const SEMANTIC_F78 = {
   },
 
   // #64 Motivational reasoning (After · Composite)
-  // Intersecting Solvable Outside Life Barrier × Active High Medical Risk across 6 patients asking to leave AMA
+  // Trauma AMA Capacity & Hidden Driver Audit: distinguish impaired capacity + occult shock vs. intact autonomous refusal or reversible pain
   'motivational-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'AMA Desk', wingIndex: 0, label: 'Look Beneath "I’m Leaving"',
+        index: 0, time: '01:02', wing: 'AMA Law', wingIndex: 0, label: 'Capacity × Shock Rule',
         shown: [
-          fact(`All six patients want to leave early! Dispatch Social Work + Attending ONLY if: (1) Solvable outside worry drives exit AND (2) Vitals show active danger (BP < 90 or internal bleed).`, [], { tag: 'rule' }),
-          fact(`Stable vitals with an outside worry get a safe outpatient bridge; angry preference without danger signs standard discharge.`, [], { tag: 'rule' }),
+          fact(`Six trauma bays want to sign out Against Medical Advice (AMA). Hold for Emergency Capacity Hold ONLY if: (1) Impaired decision-making capacity AND (2) Occult shock (HR > Top BP or free abdominal fluid).`, [], { tag: 'rule' }),
+          fact(`Oriented adults who accurately restate death risk hold legal autonomy to leave AMA; impaired bays with stable vitals need observation, not resuscitation.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Root Motives', wingIndex: 1, label: 'Why They Want Out A',
+        index: 1, time: '01:06', wing: 'Capacity Exam A', wingIndex: 1, label: 'Comprehension & Motive A',
         shown: [
-          fact(`${pName(a)}: "Nobody is home with my 4-year-old!" (solvable childcare worry!).`, [a], { tag: 'solv', p: a }),
-          fact(`${pName(b)}: "I just hate hospital beds and my ride is outside" (personal preference, NO outside emergency).`, [b], { tag: 'pref', p: b }),
+          fact(`${pName(a)}: Post-concussive — repeats "nothing is wrong" 4 times and cannot restate bleeding risk; LESS oriented than ${pName(b)}.`, [a, b], { tag: 'imp', p: a }),
+          fact(`${pName(b)}: Fully oriented ×4, clearly states "I know I could bleed out, I still refuse admission" after calm attending review.`, [b], { tag: 'cap', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: Agreed to stay once nurse called a relative (NO longer leaving!).`, [a], { tag: 'stay', p: a }),
-          fact(`${pName(b)}: "If I miss my 5 AM shift I lose rent!" (solvable work-note worry!).`, [b], { tag: 'solv', p: b }),
+          fact(`${pName(a)}: Fully oriented ×4, accurately explains bleeding risk and signs standard AMA refusal.`, [a], { tag: 'cap', p: a }),
+          fact(`${pName(b)}: Post-concussive — disoriented to month and cannot recall crash impact; LESS oriented than ${pName(a)}.`, [b, a], { tag: 'imp', p: b }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'Root Motives', wingIndex: 1, label: 'Why They Want Out B',
+        index: 2, time: '01:10', wing: 'Capacity Exam B', wingIndex: 1, label: 'Comprehension & Motive B',
         shown: [
-          fact(`${pName(c)}: "My dog is locked indoors alone!" (solvable pet worry); ${pName(d)}: "No insurance — terrified of ICU bill!" (solvable charity-care worry!).`, [c, d], { tag: 'solv_pair', ps: [c, d] }),
-          fact(`${pName(e)}: "My home oxygen tank ran out — came only for a refill!" (solvable); ${pName(f)}: "I'm bored of waiting."`, [e, f], { tag: 'solv', p: e }),
+          fact(`${pName(c)} & ${pName(d)}: Both agitated and disoriented — ${pName(c)} from alcohol, ${pName(d)} from hypoxia (neither can restate refusal risks).`, [c, d], { tag: 'imp_pair', ps: [c, d] }),
+          fact(`${pName(e)}: Oriented ×4, wanted to leave ONLY until IV pain control calmed chest rib pain; ${pName(f)}: Oriented ×4, calm AMA.`, [e, f], { tag: 'cap_pair', ps: [e, f] }),
         ],
         alt: [
-          fact(`${pName(c)}: "No insurance — terrified of ICU bill!" (solvable charity-care worry!).`, [c], { tag: 'solv', p: c }),
-          fact(`${pName(d)}: Agreed to stay after talking to billing; ${pName(e)} & ${pName(f)} just dislike waiting rooms.`, [d, e, f], { tag: 'stay', p: d }),
+          fact(`${pName(c)}: Disoriented to place and unable to explain consequences of leaving; ${pName(d)}: Oriented ×4 and calmly accepts admission.`, [c, d], { tag: 'imp', p: c }),
+          fact(`${pName(e)} & ${pName(f)}: Both fully oriented ×4 and accurately restate medical risks.`, [e, f], { tag: 'cap_pair', ps: [e, f] }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:14', wing: 'Live Vitals', wingIndex: 0, label: 'Medical Danger Check A',
+        index: 3, time: '01:14', wing: 'Shock Vitals A', wingIndex: 0, label: 'Hemodynamics A & B',
         shown: [
-          fact(`${pName(a)}: BP plunged to 82/48, pulse 130 (WORSE THAN ${pName(c)}'s steady 122/76!).`, [a, c], { tag: 'crit', p: a }),
-          fact(`${pName(b)}: BP 84/50, pale sweat (critical, YET check ${pName(b)}'s motive card!).`, [b], { tag: 'crit', p: b }),
+          fact(`${pName(a)}: HR 132 · Top BP 106 (HR exceeds Top BP — MORE unstable than ${pName(c)}'s HR 84 / BP 122).`, [a, c], { tag: 'shk', p: a }),
+          fact(`${pName(b)}: HR 128 · Top BP 104 + positive pelvic FAST scan.`, [b], { tag: 'shk', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: Steady BP 120/76, clean scans (safe!).`, [a], { tag: 'ok', p: a }),
-          fact(`${pName(b)}: BP plunged to 82/48, O2 87% (active danger!).`, [b], { tag: 'crit', p: b }),
+          fact(`${pName(a)}: HR 78 · Top BP 124, negative FAST scan.`, [a], { tag: 'stab', p: a }),
+          fact(`${pName(b)}: HR 134 · Top BP 102 + worsening abdominal guarding.`, [b], { tag: 'shk', p: b }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'Live Vitals', wingIndex: 0, label: 'Medical Danger Check B',
+        index: 4, time: '01:18', wing: 'Shock Vitals B', wingIndex: 0, label: 'Hemodynamics C–F',
         shown: [
-          fact(`${pName(d)}: Ultrasound shows internal belly fluid + pulse 134 (active danger!).`, [d], { tag: 'crit', p: d }),
-          fact(`${pName(c)}, ${pName(e)}, & ${pName(f)}: All have steady BP ≥ 118, clean scans, normal O2 (medically stable!).`, [c, e, f], { tag: 'ok_all', ps: [c, e, f] }),
+          fact(`${pName(d)}: HR 136 · Top BP 108 + O2 86% + free fluid trapped inside the heart sac on FAST.`, [d], { tag: 'shk', p: d }),
+          fact(`${pName(c)} (HR 84 / BP 122), ${pName(e)} (HR 88 / BP 126), & ${pName(f)} (HR 76 / BP 120): all negative FAST scans.`, [c, e, f], { tag: 'stab_all', ps: [c, e, f] }),
         ],
         alt: [
-          fact(`${pName(c)}: Heart monitor shows skipped beats + BP 80/46 (active danger!).`, [c], { tag: 'crit', p: c }),
-          fact(`${pName(d)}, ${pName(e)}, & ${pName(f)}: All have steady BP ≥ 118, clean scans, normal O2 (medically stable!).`, [d, e, f], { tag: 'ok_all', ps: [d, e, f] }),
+          fact(`${pName(c)}: HR 130 · Top BP 98 + expanding splenic fluid on FAST.`, [c], { tag: 'shk', p: c }),
+          fact(`${pName(d)} (HR 82 / BP 120), ${pName(e)} (HR 88 / BP 126), & ${pName(f)} (HR 76 / BP 120): all negative FAST scans.`, [d, e, f], { tag: 'stab_all', ps: [d, e, f] }),
         ],
       }),
       makeCard({
-        index: 5, time: '01:22', wing: 'Social Work', wingIndex: 1, label: 'Targeted AMA Rescue',
+        index: 5, time: '01:22', wing: 'Trauma Lead', wingIndex: 1, label: 'Invoke Capacity Hold',
         shown: [
-          fact(`Intersect Solvable Outside Worry WITH Active Medical Danger across all six bays.`, [], { tag: 'rule' }),
-          fact(`Send Social Work + Attending immediately to solve the worry and keep those crashing patients safe!`, [], { tag: 'rule' }),
+          fact(`Intersect Impaired Decision Capacity WITH Active Occult Shock (HR > Top BP / Positive FAST).`, [], { tag: 'rule' }),
+          fact(`Place Emergency Resuscitation Holds ONLY where both criteria align.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Leaving Against Advice',
-      dispatch: 'Six patients are trying to walk out — intersect solvable outside life worries with hidden medical danger.',
-      order: 'Intervene with Social Work for EVERY patient leaving over a solvable outside worry who STILL has dangerous vitals.',
-      hint: 'Require BOTH: Solvable outside barrier (childcare/bill/shift) AND Dangerous vitals (BP < 90 / internal bleed).',
-      bayDefaultLabel: 'AMA Audit',
+      scenarioTitle: 'AMA Capacity vs. Occult Shock',
+      dispatch: 'Six trauma patients demand to sign out AMA — separate impaired capacity + occult shock from intact refusal and stable intoxication.',
+      order: 'Place an Emergency Resuscitation Hold on EVERY AMA patient with BOTH impaired capacity AND occult shock (HR > Top BP or positive FAST).',
+      hint: 'Intersect Impaired Capacity (Cards 1–2) WITH Occult Shock (Cards 3–4) — honor oriented refusals and keep stable bays off resus hold.',
+      bayDefaultLabel: 'AMA Capacity',
       cards,
       evaluate(activeCards) {
-        const solv = new Set([
-          ...factsByTag(activeCards, 'solv').map((x) => x.p),
-          ...factsByTag(activeCards, 'solv_pair').flatMap((x) => x.ps),
+        const imp = new Set([
+          ...factsByTag(activeCards, 'imp').map((x) => x.p),
+          ...factsByTag(activeCards, 'imp_pair').flatMap((x) => x.ps),
         ]);
-        const crit = new Set(factsByTag(activeCards, 'crit').map((x) => x.p));
-        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => solv.has(id) && crit.has(id)));
-        const rivals = [c, b, e, d, a].filter((id) => !targets.includes(id));
+        const shk = new Set(factsByTag(activeCards, 'shk').map((x) => x.p));
+        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => imp.has(id) && shk.has(id)));
+        const rivals = [b, c, e, d, a].filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `Intersecting solvable outside barriers with crashing vitals isolates ${formatList(targets)} for urgent Social Work + Attending rescue.`,
+          proof: `Intersecting impaired decision-making capacity with occult shock (HR > Top BP / positive FAST) isolates ${formatList(targets)} for emergency medical hold.`,
           rival: buildRivalInfo(targets, rivals, (r) =>
-            solv.has(r) ? `${pName(r)} has a real outside worry, but their medical vitals and scans are completely stable.` : `${pName(r)} is not driven by a solvable outside life barrier.`
+            imp.has(r)
+              ? `${pName(r)} lacks capacity, but hemodynamics and FAST scan are completely stable (observation hold, not resuscitation).`
+              : `${pName(r)} demonstrated full decision-making capacity (oriented ×4, restated risks), which legally bars involuntary override.`
           ),
         };
       },
@@ -305,79 +308,84 @@ export const SEMANTIC_F78 = {
   },
 
   // #65 Moral reasoning (After · Composite)
-  // Relational ratio check: Pump Delivered ÷ Doctor Prescribed ≠ 1× across 6 IV infusions + anti-coverup candor
+  // Weight-Based Infusion Ceiling (2 mg/kg max) & Clinical Candor Audit across relative weight chains
   'moral-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'Candor Rule', wingIndex: 0, label: 'Dose Ratio & Disclosure Duty',
+        index: 0, time: '01:02', wing: 'Candor Rule', wingIndex: 0, label: '2 mg/kg Ceiling & Disclosure',
         shown: [
-          fact(`Duty of Candor: NEVER hide an IV dosing error quietly! Reverse AND honestly disclose EVERY bay where Delivered ≠ Prescribed.`, [], { tag: 'rule' }),
-          fact(`Watch for 10× decimal-point errors AND under-doses — compare Doctor Order vs. IV Pump Log across all 6 bays.`, [], { tag: 'rule' }),
+          fact(`Max safe bolus ceiling for IV Drug K = 2 mg per kg of body weight (Weight × 2).`, [], { tag: 'rule' }),
+          fact(`Duty of Candor: never quietly dial back a pump — reverse AND disclose EVERY bay whose delivered total exceeded its 2 mg/kg ceiling.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Doctor Order', wingIndex: 1, label: 'Prescribed Doses (A–C)',
+        index: 1, time: '01:06', wing: 'Weight Chain A', wingIndex: 1, label: 'Patient Weights (A–C)',
         shown: [
-          fact(`${pName(a)}: 5 units insulin · ${pName(b)}: 10 mg pain med · ${pName(c)}: 4 mg blood thinner.`, [a, b, c], { tag: 'ord', map: { [a]: 5, [b]: 10, [c]: 4 } }),
-          fact(`All three doses verified by pharmacy at 00:40.`, [], { tag: 'note' }),
+          fact(`${pName(b)} weighs 80 kg; ${pName(a)} weighs 15 kg LESS THAN ${pName(b)}.`, [b, a], { tag: 'wt', map: { [b]: 80, [a]: 65 } }),
+          fact(`${pName(c)} weighs 10 kg LESS THAN ${pName(d)}.`, [c, d], { tag: 'wt_rel', p: c, ref: d, delta: -10 }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'Doctor Order', wingIndex: 1, label: 'Prescribed Doses (D–F)',
+        index: 2, time: '01:10', wing: 'Weight Chain B', wingIndex: 1, label: 'Patient Weights (D–F)',
         shown: [
-          fact(`${pName(d)}: 20 mg BP med · ${pName(e)}: 50 mg antibiotic · ${pName(f)}: 15 mg anti-seizure med.`, [d, e, f], { tag: 'ord', map: { [d]: 20, [e]: 50, [f]: 15 } }),
-          fact(`All three doses verified by pharmacy at 00:45.`, [], { tag: 'note' }),
+          fact(`${pName(d)} weighs 70 kg; ${pName(e)} weighs 15 kg MORE THAN ${pName(d)}.`, [d, e], { tag: 'wt', map: { [d]: 70, [e]: 85 } }),
+          fact(`${pName(f)} weighs 20 kg LESS THAN ${pName(e)}.`, [f, e], { tag: 'wt_rel', p: f, ref: e, delta: -20 }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:14', wing: 'IV Pump Log', wingIndex: 0, label: 'Actual Delivered (A–C)',
+        index: 3, time: '01:14', wing: 'IV Pump Audit', wingIndex: 0, label: 'Pump Totals Delivered (A–C)',
         shown: [
-          fact(`${pName(a)}: Pump ran 50 units (10× OVERDOSE — clerk whispered "just hide it!"). ${pName(b)}: 10 mg exact.`, [a, b], { tag: 'giv', map: { [a]: 50, [b]: 10 } }),
-          fact(`${pName(c)}: Pump ran 40 mg (10× OVERDOSE — ten times higher than prescribed!).`, [c], { tag: 'giv', map: { [c]: 40 } }),
+          fact(`${pName(a)}: Pump delivered 165 mg · ${pName(b)}: Pump delivered 150 mg.`, [a, b], { tag: 'giv', map: { [a]: 165, [b]: 150 } }),
+          fact(`${pName(c)}: Pump delivered 145 mg — junior resident asked to lower the rate quietly without charting.`, [c], { tag: 'giv', map: { [c]: 145 } }),
         ],
         alt: [
-          fact(`${pName(a)}: Pump ran 5 units exact. ${pName(b)}: Pump ran 100 mg (10× OVERDOSE — someone muted the alarm!).`, [a, b], { tag: 'giv', map: { [a]: 5, [b]: 100 } }),
-          fact(`${pName(c)}: Pump ran 4 mg exact on schedule.`, [c], { tag: 'giv', map: { [c]: 4 } }),
+          fact(`${pName(a)}: Pump delivered 120 mg · ${pName(b)}: Pump delivered 195 mg — muted alarm on pump.`, [a, b], { tag: 'giv', map: { [a]: 120, [b]: 195 } }),
+          fact(`${pName(c)}: Pump delivered 115 mg on schedule.`, [c], { tag: 'giv', map: { [c]: 115 } }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'IV Pump Log', wingIndex: 0, label: 'Actual Delivered (D–F)',
+        index: 4, time: '01:18', wing: 'IV Pump Audit', wingIndex: 0, label: 'Pump Totals Delivered (D–F)',
         shown: [
-          fact(`${pName(d)}: Pump ran 20 mg exact. ${pName(e)}: Pump ran 50 mg exact (SAME 1:1 ratio as ${pName(d)}).`, [d, e], { tag: 'giv', map: { [d]: 20, [e]: 50 } }),
-          fact(`${pName(f)}: Pump ran 15 mg exact — zero mismatch.`, [f], { tag: 'giv', map: { [f]: 15 } }),
+          fact(`${pName(d)}: Pump delivered 135 mg · ${pName(e)}: Pump delivered 160 mg.`, [d, e], { tag: 'giv', map: { [d]: 135, [e]: 160 } }),
+          fact(`${pName(f)}: Pump delivered 125 mg — identical pump profile to ${pName(d)}.`, [f, d], { tag: 'giv', map: { [f]: 125 } }),
         ],
         alt: [
-          fact(`${pName(d)}: Pump ran 200 mg (10× OVERDOSE — clerk suggested erasing the tape!). ${pName(e)}: 50 mg exact.`, [d, e], { tag: 'giv', map: { [d]: 200, [e]: 50 } }),
-          fact(`${pName(f)}: Pump ran 15 mg exact — zero mismatch.`, [f], { tag: 'giv', map: { [f]: 15 } }),
+          fact(`${pName(d)}: Pump delivered 175 mg — nurse suggested erasing the pump log · ${pName(e)}: 160 mg.`, [d, e], { tag: 'giv', map: { [d]: 175, [e]: 160 } }),
+          fact(`${pName(f)}: Pump delivered 125 mg.`, [f], { tag: 'giv', map: { [f]: 125 } }),
         ],
       }),
       makeCard({
         index: 5, time: '01:22', wing: 'Ethics Lead', wingIndex: 1, label: 'Reverse & Disclose',
         shown: [
-          fact(`Compare every bay's Prescribed Dose directly against its Actual Delivered Pump Log.`, [], { tag: 'rule' }),
-          fact(`Reverse AND honestly disclose EVERY bay whose pump delivered MORE than prescribed.`, [], { tag: 'rule' }),
+          fact(`Resolve every bay's body weight, multiply × 2 mg/kg, and compare against Delivered mg.`, [], { tag: 'rule' }),
+          fact(`Reverse and formally disclose EVERY infusion exceeding its 2 mg/kg ceiling.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: '10× Pump Error & Candor',
-      dispatch: 'Compare prescribed doses against actual IV pump logs across all six infusions — expose every 10× error honestly.',
-      order: 'Reverse AND honestly disclose EVERY patient whose actual IV pump dose exceeded their prescribed dose.',
-      hint: 'Match Prescribed Doses (Cards 2–3) against Actual Delivered Logs (Cards 4–5) for every bay.',
-      bayDefaultLabel: 'Pump Audit',
+      scenarioTitle: 'Infusion Ceiling & Candor',
+      dispatch: 'Chain patient body weights, compute each bay’s 2 mg/kg ceiling, and expose every concealed over-ceiling infusion.',
+      order: 'Reverse AND honestly disclose EVERY patient whose delivered IV dose exceeded their 2 mg/kg weight ceiling.',
+      hint: 'Chain weights from the two anchors, multiply × 2 mg/kg, then compare against Pump Delivered.',
+      bayDefaultLabel: 'Dose Audit',
       cards,
       evaluate(activeCards) {
-        const ord = {};
+        const wt = {};
+        for (const x of factsByTag(activeCards, 'wt')) Object.assign(wt, x.map);
+        for (const x of factsByTag(activeCards, 'wt_rel')) {
+          if (wt[x.ref] != null) wt[x.p] = wt[x.ref] + x.delta;
+        }
         const giv = {};
-        for (const x of factsByTag(activeCards, 'ord')) Object.assign(ord, x.map);
         for (const x of factsByTag(activeCards, 'giv')) Object.assign(giv, x.map);
-        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => ord[id] != null && giv[id] != null && giv[id] > ord[id]));
+        const targets = uniqueSortedIds(
+          [a, b, c, d, e, f].filter((id) => wt[id] != null && giv[id] != null && giv[id] > wt[id] * 2)
+        );
         const rivals = [a, b, c, d, e, f].filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `Comparing Prescribed vs. Delivered pump logs catches 10× overdoses on ${formatList(targets)} (${targets.map((id) => `${pName(id)}: ${giv[id]} vs ${ord[id]}`).join(', ')}) — reverse and disclose honestly.`,
-          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)}'s pump delivered the exact prescribed dose (${ord[r]}).`),
+          proof: `Resolving weights × 2 mg/kg catches over-ceiling infusions on ${formatList(targets)} (${targets.map((id) => `${pName(id)}: ${giv[id]}mg > ${wt[id] * 2}mg cap`).join(', ')}) — reverse and disclose candidly.`,
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} weighs ${wt[r]} kg (ceiling ${wt[r] * 2} mg), and the pump delivered ${giv[r]} mg — safely within limit.`),
         };
       },
     };
@@ -391,59 +399,59 @@ export const SEMANTIC_F78 = {
       makeCard({
         index: 0, time: '01:02', wing: 'Bioethics Law', wingIndex: 0, label: 'Autonomy Precedence',
         shown: [
-          fact(`Patient's own Verified Signed DNR or Clear-Headed Refusal OVERRIDES any family member shouting "Do everything!"`, [], { tag: 'rule' }),
-          fact(`Full Resuscitation applies ONLY to crashing bays who are Full Code OR unconscious with ZERO DNR on file.`, [], { tag: 'rule' }),
+          fact(`A patient's verified signed DNR or clear-headed refusal OVERRIDES any family member demanding full resuscitation.`, [], { tag: 'rule' }),
+          fact(`Deploy Full Resuscitation ONLY to actively crashing bays (BP < 85 or O2 < 85%) who are Full Code or unconscious with no DNR.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Legal File A', wingIndex: 1, label: 'Directives A & B',
+        index: 1, time: '01:06', wing: 'Directives A', wingIndex: 1, label: 'Legal Status A & B',
         shown: [
-          fact(`${pName(a)}: Verified Full-Code card asking for every life-saving step.`, [a], { tag: 'ok_code', p: a }),
-          fact(`${pName(b)}: Verified Signed Comfort-Only DNR (even though ${pName(b)}'s brother begs "Shock them anyway!").`, [b], { tag: 'no_code', p: b }),
+          fact(`${pName(a)}: Verified Full-Code directive requesting all life-saving interventions.`, [a], { tag: 'ok_code', p: a }),
+          fact(`${pName(b)}: Verified signed Comfort-Only DNR on file; brother at bedside demands defibrillation.`, [b], { tag: 'no_code', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: Verified Signed Comfort-Only DNR signed with physician last month.`, [a], { tag: 'no_code', p: a }),
-          fact(`${pName(b)}: Verified Full-Code card requesting full emergency resuscitation.`, [b], { tag: 'ok_code', p: b }),
+          fact(`${pName(a)}: Verified signed Comfort-Only DNR witnessed by primary physician; spouse demands full code.`, [a], { tag: 'no_code', p: a }),
+          fact(`${pName(b)}: Verified Full-Code directive requesting full emergency resuscitation.`, [b], { tag: 'ok_code', p: b }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'Legal File B', wingIndex: 1, label: 'Directives C & D',
+        index: 2, time: '01:10', wing: 'Directives B', wingIndex: 1, label: 'Legal Status C & D',
         shown: [
-          fact(`${pName(c)}: Wide awake, clear-headed adult signing refusal of blood/tubes for personal beliefs.`, [c], { tag: 'no_code', p: c }),
-          fact(`${pName(d)}: Arrived unconscious from highway crash — ZERO DNR or refusal anywhere on file.`, [d], { tag: 'ok_code', p: d }),
+          fact(`${pName(c)}: Oriented ×4 adult signing explicit refusal of transfusion and intubation.`, [c], { tag: 'no_code', p: c }),
+          fact(`${pName(d)}: Arrived unresponsive from highway rollover — zero DNR or refusal anywhere in registry.`, [d], { tag: 'ok_code', p: d }),
         ],
         alt: [
-          fact(`${pName(c)}: Arrived unconscious after fainting — ZERO DNR or refusal on file.`, [c], { tag: 'ok_code', p: c }),
-          fact(`${pName(d)}: Verified Signed Comfort-Only DNR witnessed by two doctors.`, [d], { tag: 'no_code', p: d }),
+          fact(`${pName(c)}: Arrived unresponsive after syncope — zero DNR or refusal anywhere in registry.`, [c], { tag: 'ok_code', p: c }),
+          fact(`${pName(d)}: Verified signed Comfort-Only DNR witnessed by two physicians.`, [d], { tag: 'no_code', p: d }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:14', wing: 'Live Vitals', wingIndex: 0, label: 'Who Is Crashing Now?',
+        index: 3, time: '01:14', wing: 'Live Vitals', wingIndex: 0, label: 'Hemodynamic Status',
         shown: [
-          fact(`ACTIVELY CRASHING (BP < 82 or O2 < 82%): ${pName(a)}, ${pName(b)}, ${pName(c)}, and ${pName(d)}.`, [a, b, c, d], { tag: 'crash', ps: [a, b, c, d] }),
-          fact(`${pName(e)} (Full Code) & ${pName(f)} (No DNR) both have rock-steady BP 122/76 & O2 99% (NOT crashing!).`, [e, f], { tag: 'steady', ps: [e, f] }),
+          fact(`BP < 82 or O2 < 82% right now: ${pName(a)}, ${pName(b)}, ${pName(c)}, and ${pName(d)} — ALL LOWER THAN ${pName(e)} & ${pName(f)}.`, [a, b, c, d, e, f], { tag: 'crash', ps: [a, b, c, d] }),
+          fact(`${pName(e)} (Full Code) & ${pName(f)} (No DNR) both hold steady BP 122/76 and O2 99%.`, [e, f], { tag: 'steady', ps: [e, f] }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'Bioethics Law', wingIndex: 0, label: 'Two Traps to Avoid',
+        index: 4, time: '01:18', wing: 'Bioethics Law', wingIndex: 0, label: 'Precedence Verification',
         shown: [
-          fact(`Trap 1: Don't override a signed DNR just because a relative shouts! Trap 2: Don't rush resuscitation to calm non-crashing ${pName(e)}/${pName(f)}!`, [e, f], { tag: 'note' }),
-          fact(`Intersect Actively Crashing WITH Authorized Full Code / Implied Unconscious Consent.`, [], { tag: 'rule' }),
+          fact(`Verified patient refusal supersedes family pressure; stable vitals never trigger a code response.`, [], { tag: 'rule' }),
+          fact(`Intersect Active Hemodynamic Collapse WITH Authorized Full Code / Implied Unconscious Consent.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 5, time: '01:21', wing: 'Code Team', wingIndex: 1, label: 'Deploy Full Code',
         shown: [
-          fact(`Rush FULL RESUSCITATION to EVERY crashing patient authorized for full care.`, [], { tag: 'rule' }),
-          fact(`Honor every verified DNR and clear-headed refusal with comfort care.`, [], { tag: 'rule' }),
+          fact(`Deploy full resuscitation to every crashing patient legally authorized for full intervention.`, [], { tag: 'rule' }),
+          fact(`Transition verified DNR and clear-headed refusal bays to comfort care.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Autonomy vs. Resuscitation',
-      dispatch: 'Balance emergency resuscitation against verified signed DNRs, clear-headed refusals, and non-crashing bays.',
+      dispatch: 'Balance emergency resuscitation against verified signed DNRs, clear-headed refusals, and stable bays.',
       order: 'Rush FULL RESUSCITATION to EVERY actively crashing patient who is Full Code or unconscious with no DNR.',
-      hint: 'Intersect Actively Crashing (Card 4) WITH Full Code / Unconscious No-DNR — ignore family overrides of signed DNRs.',
+      hint: 'Intersect Crashing Vitals (BP < 82 / O2 < 82%) WITH Full Code or Unconscious No-DNR — signed DNRs override family demands.',
       bayDefaultLabel: 'Code Status',
       cards,
       evaluate(activeCards) {
@@ -453,9 +461,9 @@ export const SEMANTIC_F78 = {
         const rivals = [b, c, e, d, a].filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `Intersecting active crash status with patient autonomy clears ${formatList(targets)} for full resuscitation while honoring verified DNRs/refusals.`,
+          proof: `Intersecting active crash status with patient autonomy clears ${formatList(targets)} for full resuscitation while honoring verified DNRs and refusals.`,
           rival: buildRivalInfo(targets, rivals, (r) =>
-            !crash.has(r) ? `${pName(r)} is Full Code, but their vitals are completely stable (not crashing).` : `${pName(r)} has a verified signed DNR or clear-headed refusal that overrides family demands.`
+            !crash.has(r) ? `${pName(r)} is Full Code, but their BP (122/76) and O2 (99%) are completely stable.` : `${pName(r)} has a verified signed DNR or clear-headed refusal that overrides family pressure.`
           ),
         };
       },
@@ -463,154 +471,172 @@ export const SEMANTIC_F78 = {
   },
 
   // #67 Pragmatic reasoning (Before · Atomic)
-  // Matching Care-Plan Constraints vs. Actual Home Infrastructure across 6 discharge candidates
+  // Real Trauma Transfer Feasibility: Required Definitive Care + Deterioration Window vs. Storm-Detour Transit Time & Receiving Hospital Outages
   'pragmatic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'Discharge Gate', wingIndex: 0, label: 'Plan vs. Reality Constraint',
+        index: 0, time: '01:02', wing: 'Transfer Gate', wingIndex: 0, label: 'Window vs. Detour Reality',
         shown: [
-          fact(`Hold overnight ANY discharge patient whose Care Plan REQUIRES an item (fridge, elevator, helper) MISSING from their real home tonight!`, [], { tag: 'rule' }),
-          fact(`Room-temp pills or single-story homes that match the patient's plan discharge safely.`, [], { tag: 'rule' }),
+          fact(`Storm flooding closed the main bridge. ABORT transfer & stabilize on-site if a bay's planned receiving hospital EITHER lacks their required specialist service tonight OR has a detour transit time LONGER THAN their deterioration window.`, [], { tag: 'rule' }),
+          fact(`If the receiving hospital has the required service open AND detour transit ≤ deterioration window, transfer clears.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Care Plans A', wingIndex: 1, label: 'Required Home Setup (A–C)',
+        index: 1, time: '01:06', wing: 'Clinical Needs A', wingIndex: 1, label: 'Transfer Orders (A–C)',
         shown: [
-          fact(`${pName(a)}: Needs REFRIGERATED insulin shots every 6h.`, [a], { tag: 'req', p: a, need: 'fridge' }),
-          fact(`${pName(b)}: Needs room-temp pills only; ${pName(c)}: Heavy leg cast — STRICT ZERO STAIRS for 2 weeks.`, [b, c], { tag: 'req', p: c, need: 'no_stairs' }),
+          fact(`${pName(a)}: Expanding skull-lining brain bleed — needs Neuro-OR within 45 min → booked to Riverview.`, [a], { tag: 'trq', p: a, need: 'neuro', win: 45, hosp: 'Riverview' }),
+          fact(`${pName(b)}: Open femur fracture — needs Ortho-OR within 90 min → booked to Riverview · ${pName(c)}: Pelvic bleed — needs IR Coiling within 40 min → booked to Northside.`, [b, c], { tag: 'trq_pair', list: [{ p: b, need: 'ortho', win: 90, hosp: 'Riverview' }, { p: c, need: 'ir', win: 40, hosp: 'Northside' }] }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'Care Plans B', wingIndex: 1, label: 'Required Home Setup (D–F)',
+        index: 2, time: '01:10', wing: 'Clinical Needs B', wingIndex: 1, label: 'Transfer Orders (D–F)',
         shown: [
-          fact(`${pName(d)}: Needs ELECTRIC oxygen concentrator plugged into wall power overnight.`, [d], { tag: 'req', p: d, need: 'power' }),
-          fact(`${pName(e)}: Needs 1 daily dressing wrap; ${pName(f)}: Needs REFRIGERATED antibiotic drip.`, [e, f], { tag: 'req', p: f, need: 'fridge' }),
+          fact(`${pName(d)}: Major burn airway — needs Burn ICU within 50 min → booked to Westside.`, [d], { tag: 'trq', p: d, need: 'burn', win: 50, hosp: 'Westside' }),
+          fact(`${pName(e)}: Stable forearm fracture — needs Ortho-OR within 120 min → booked to Northside · ${pName(f)}: Splenic tear — needs IR Coiling within 45 min → booked to Westside.`, [e, f], { tag: 'trq_pair', list: [{ p: e, need: 'ortho', win: 120, hosp: 'Northside' }, { p: f, need: 'ir', win: 45, hosp: 'Westside' }] }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:14', wing: 'Home Reality A', wingIndex: 0, label: 'Actual Living Conditions (A–C)',
+        index: 3, time: '01:14', wing: 'Storm Ops A', wingIndex: 0, label: 'Riverview & Northside Live',
         shown: [
-          fact(`${pName(a)}: Sleeping in car tonight (ZERO fridge/power!). ${pName(b)}: Lives on 5th-floor walkup (fine — only takes pills!).`, [a, b], { tag: 'lack', p: a, miss: 'fridge' }),
-          fact(`${pName(c)}: Lives alone in 5th-floor walkup with BROKEN elevator (STAIRS ONLY!).`, [c], { tag: 'lack', p: c, miss: 'no_stairs' }),
+          fact(`Riverview: 30-min detour · Ortho-OR OPEN, but Neuro-OR is OFFLINE after transformer flood.`, [a, b], { tag: 'hosp', name: 'Riverview', eta: 30, down: ['neuro'] }),
+          fact(`Northside: Detour is 25 min LONGER THAN Riverview's 30 min · IR Coiling & Ortho-OR both OPEN.`, [c, e], { tag: 'hosp', name: 'Northside', eta: 55, down: [] }),
         ],
         alt: [
-          fact(`${pName(a)}: Staying at sister's house with full kitchen & fridge (supported!).`, [a], { tag: 'ok_h', p: a }),
-          fact(`${pName(c)}: Staying at cousin's single-story home with ramp (ZERO stairs!).`, [c], { tag: 'ok_h', p: c }),
+          fact(`Riverview: 30-min detour · Neuro-OR & Ortho-OR both OPEN on full backup power.`, [a, b], { tag: 'hosp', name: 'Riverview', eta: 30, down: [] }),
+          fact(`Northside: 35-min detour · IR Coiling & Ortho-OR both OPEN.`, [c, e], { tag: 'hosp', name: 'Northside', eta: 35, down: [] }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'Home Reality B', wingIndex: 0, label: 'Actual Living Conditions (D–F)',
+        index: 4, time: '01:18', wing: 'Storm Ops B', wingIndex: 0, label: 'Westside Live Status',
         shown: [
-          fact(`${pName(d)}: Home electricity working normally with backup battery; ${pName(e)}: Visiting nurse stops by daily.`, [d, e], { tag: 'ok_h', p: d }),
-          fact(`${pName(f)}: Full working home fridge & helpful roommate (supported!).`, [f], { tag: 'ok_h', p: f }),
+          fact(`Westside: Detour is 15 min SHORTER THAN Northside's · Burn ICU & IR Coiling both OPEN.`, [d, f], { tag: 'hosp', name: 'Westside', eta: 40, down: [] }),
+          fact(`All 6 patients hold signed transfer consents — only open services and detour ETA govern feasibility.`, [], { tag: 'note' }),
         ],
         alt: [
-          fact(`${pName(d)}: Storm knocked out power to ${pName(d)}'s block until tomorrow (ZERO wall power!).`, [d], { tag: 'lack', p: d, miss: 'power' }),
-          fact(`${pName(f)}: Apartment fridge died yesterday — food spoiled (ZERO fridge!).`, [f], { tag: 'lack', p: f, miss: 'fridge' }),
+          fact(`Westside: 60-min flooded detour (25 min LONGER THAN Northside's 35 min) · Burn ICU OPEN, IR Coiling OFFLINE.`, [d, f], { tag: 'hosp', name: 'Westside', eta: 60, down: ['ir'] }),
+          fact(`All 6 patients hold signed transfer consents — only open services and detour ETA govern feasibility.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 5, time: '01:22', wing: 'Social Hold', wingIndex: 1, label: 'Hold Broken Plans',
+        index: 5, time: '01:22', wing: 'Transfer Desk', wingIndex: 1, label: 'Abort Unfeasible Runs',
         shown: [
-          fact(`Notice ${pName(b)} has a 5th-floor walkup YET only needs pills (no stair ban!).`, [b], { tag: 'note' }),
-          fact(`Hold overnight EVERY patient whose required care item is MISSING from their real home tonight.`, [], { tag: 'rule' }),
+          fact(`Hold and stabilize on-site EVERY transfer whose destination is missing the needed service OR exceeds the clinical window.`, [], { tag: 'rule' }),
+          fact(`Release feasible transfers immediately while detour roads remain passable.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Discharge Reality Check',
-      dispatch: 'Match each patient’s required home care constraints against their actual living conditions tonight.',
-      order: 'Hold overnight EVERY patient whose care plan REQUIRES an item missing from their actual home tonight.',
-      hint: 'Pair Required Setup (fridge / zero stairs / wall power) against what is actually missing at home.',
-      bayDefaultLabel: 'Discharge Fit',
+      scenarioTitle: 'Flooded-Bridge Trauma Transfers',
+      dispatch: 'Storm detours and power outages hit three receiving hospitals — test each bay’s clinical window and required service against live hospital status.',
+      order: 'ABORT transfer & hold on-site EVERY patient whose receiving hospital lacks their needed service OR has a detour LONGER THAN their window.',
+      hint: 'Resolve each hospital’s relative detour ETA and offline services, then test (Service Offline OR Detour ETA > Clinical Window).',
+      bayDefaultLabel: 'Transfer Fit',
       cards,
       evaluate(activeCards) {
-        const reqs = new Map();
-        for (const x of factsByTag(activeCards, 'req')) reqs.set(x.p, x.need);
-        const lacks = new Map();
-        for (const x of factsByTag(activeCards, 'lack')) lacks.set(x.p, x.miss);
-        const targets = uniqueSortedIds([a, b, c, d, e, f].filter((id) => reqs.has(id) && lacks.get(id) === reqs.get(id)));
-        const rivals = [b, d, f, e, a, c].filter((id) => !targets.includes(id));
+        const reqs = [];
+        for (const x of factsByTag(activeCards, 'trq')) reqs.push(x);
+        for (const x of factsByTag(activeCards, 'trq_pair')) for (const it of x.list) reqs.push(it);
+        const hosps = new Map();
+        for (const x of factsByTag(activeCards, 'hosp')) hosps.set(x.name, x);
+        const targets = uniqueSortedIds(
+          reqs.filter((r) => {
+            const h = hosps.get(r.hosp);
+            if (!h) return false;
+            return h.down.includes(r.need) || h.eta > r.win;
+          }).map((r) => r.p)
+        );
+        const rivals = reqs.map((r) => r.p).filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `Matching care-plan constraints against actual home reality catches impossible discharges for ${formatList(targets)}.`,
-          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)}'s real home setup satisfies every requirement of their discharge plan.`),
+          proof: `Testing required specialist services and clinical windows against live storm detours aborts transfers for ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, rivals, (r) => {
+            const req = reqs.find((x) => x.p === r);
+            const h = hosps.get(req.hosp);
+            return `${pName(r)}'s receiving hospital (${req.hosp}) has ${req.need.toUpperCase()} open and a ${h.eta}-min detour fitting inside their ${req.win}-min window.`;
+          }),
         };
       },
     };
   },
 
   // #68 Contextual reasoning (Inside · Atomic)
-  // Identical Current BP (102/64) across ALL 6 bays — compare (Normal Baseline − 102 ≥ 40) to catch hidden shock!
+  // Identical Current BP (102/64) across ALL 6 bays — chain relative chronic baselines and subtract 102 to catch ≥ 40 mmHg hidden shock!
   'contextual-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
         index: 0, time: '01:02', wing: 'Resus Rule', wingIndex: 0, label: 'Identical 102/64 Wall',
         shown: [
-          fact(`ALL SIX bays currently show the EXACT SAME monitor reading: 102/64!`, [], { tag: 'rule' }),
-          fact(`Hidden Shock triggers whenever (Normal Baseline Top BP − 102) ≥ 40 points (i.e. Baseline ≥ 142)!`, [], { tag: 'rule' }),
+          fact(`ALL SIX bays currently show the EXACT SAME monitor reading: 102/64.`, [], { tag: 'rule' }),
+          fact(`Hidden Shock triggers whenever a patient's top BP fell 40 mmHg OR MORE below their own chronic resting baseline.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Clinic File A', wingIndex: 1, label: 'Normal Baselines A & B',
+        index: 1, time: '01:06', wing: 'Clinic File A', wingIndex: 1, label: 'Relative Baselines A & B',
         shown: [
-          fact(`${pName(a)}: Lifelong clinic baseline 168/98.`, [a], { tag: 'bs', p: a, bp: 168 }),
-          fact(`${pName(b)}: Distance runner, normal resting baseline 100/62.`, [b], { tag: 'bs', p: b, bp: 100 }),
+          fact(`${pName(a)}'s chronic clinic baseline is 34 mmHg HIGHER THAN ${pName(d)}'s.`, [a, d], { tag: 'bs_rel', p: a, ref: d, delta: 34 }),
+          fact(`${pName(b)}'s marathon resting baseline is 18 mmHg LOWER THAN ${pName(f)}'s.`, [b, f], { tag: 'bs_rel', p: b, ref: f, delta: -18 }),
         ],
         alt: [
-          fact(`${pName(a)}: Swimmer, normal resting baseline 106/66.`, [a], { tag: 'bs', p: a, bp: 106 }),
-          fact(`${pName(b)}: Chronic clinic baseline 164/96.`, [b], { tag: 'bs', p: b, bp: 164 }),
+          fact(`${pName(a)}'s swimmer resting baseline is 12 mmHg LOWER THAN ${pName(f)}'s.`, [a, f], { tag: 'bs_rel', p: a, ref: f, delta: -12 }),
+          fact(`${pName(b)}'s chronic clinic baseline is 30 mmHg HIGHER THAN ${pName(d)}'s.`, [b, d], { tag: 'bs_rel', p: b, ref: d, delta: 30 }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'Clinic File B', wingIndex: 1, label: 'Normal Baselines C & D',
+        index: 2, time: '01:10', wing: 'Clinic File B', wingIndex: 1, label: 'Relative Baselines C & D',
         shown: [
-          fact(`${pName(c)}: Untreated chronic baseline 156/92 (HIGHER THAN ${pName(d)}'s 134/82).`, [c, d], { tag: 'bs', p: c, bp: 156 }),
-          fact(`${pName(d)}: Mildly elevated clinic baseline 134/82.`, [d], { tag: 'bs', p: d, bp: 134 }),
+          fact(`${pName(c)}'s chronic baseline is 18 mmHg HIGHER THAN ${pName(e)}'s.`, [c, e], { tag: 'bs_rel', p: c, ref: e, delta: 18 }),
+          fact(`${pName(d)}'s documented clinic baseline is 134/82.`, [d], { tag: 'bs', p: d, bp: 134 }),
         ],
         alt: [
-          fact(`${pName(c)}: Normal resting clinic baseline 112/70.`, [c], { tag: 'bs', p: c, bp: 112 }),
-          fact(`${pName(d)}: Chronic clinic baseline 172/100.`, [d], { tag: 'bs', p: d, bp: 172 }),
+          fact(`${pName(c)}'s documented clinic baseline is 112/70.`, [c], { tag: 'bs', p: c, bp: 112 }),
+          fact(`${pName(d)}'s chronic baseline is 34 mmHg HIGHER THAN ${pName(e)}'s.`, [d, e], { tag: 'bs_rel', p: d, ref: e, delta: 34 }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:14', wing: 'Clinic File C', wingIndex: 0, label: 'Borderline Baselines E & F',
+        index: 3, time: '01:14', wing: 'Clinic File C', wingIndex: 0, label: 'Anchor Baselines E & F',
         shown: [
-          fact(`${pName(e)}: Clinic baseline 138/84.`, [e], { tag: 'bs', p: e, bp: 138 }),
-          fact(`${pName(f)}: Clinic baseline 118/74.`, [f], { tag: 'bs', p: f, bp: 118 }),
+          fact(`${pName(e)}'s documented clinic baseline is 138/84.`, [e], { tag: 'bs', p: e, bp: 138 }),
+          fact(`${pName(f)}'s documented clinic baseline is 118/74.`, [f], { tag: 'bs', p: f, bp: 118 }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'Resus Rule', wingIndex: 0, label: 'Context Over Raw Numbers',
+        index: 4, time: '01:18', wing: 'Resus Rule', wingIndex: 0, label: 'Resolve Chain Before Subtracting',
         shown: [
-          fact(`An identical 102/64 reading means completely different physiology depending on each person's normal baseline!`, [], { tag: 'rule' }),
-          fact(`Subtract 102 from every baseline and flag drops of ≥ 40 points.`, [], { tag: 'rule' }),
+          fact(`Chain each relative baseline off the documented anchors before subtracting 102.`, [], { tag: 'rule' }),
+          fact(`An identical 102/64 reading is routine for a runner yet severe shock for chronic hypertension.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 5, time: '01:21', wing: 'Shock Team', wingIndex: 1, label: 'Treat Hidden Crashes',
         shown: [
-          fact(`Start shock resuscitation for EVERY 102/64 bay whose baseline dropped by 40+ points.`, [], { tag: 'rule' }),
+          fact(`Initiate shock resuscitation for every 102/64 bay whose baseline dropped ≥ 40 mmHg.`, [], { tag: 'rule' }),
           fact(`Keep sub-40 drops on routine monitoring.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Six Identical 102/64 Monitors',
-      dispatch: 'Every single bay reads 102/64 — subtract 102 from each patient’s normal baseline to catch ≥ 40-point crashes.',
+      dispatch: 'Every monitor reads 102/64 — chain relative resting baselines and subtract 102 to isolate drops of 40+ mmHg.',
       order: 'Treat for hidden shock EVERY 102/64 patient whose top BP fell 40 POINTS OR MORE below their normal baseline.',
-      hint: 'Check (Baseline − 102 ≥ 40), i.e., normal baseline ≥ 142 — watch out for the 138 near-miss!',
+      hint: 'Resolve the relative baseline links from the documented anchors first, then subtract 102 from each bay.',
       bayDefaultLabel: 'BP 102/64 Eval',
       cards,
       evaluate(activeCards) {
-        const list = factsByTag(activeCards, 'bs').map((x) => ({ id: x.p, bp: x.bp, drop: x.bp - 102 }));
+        const bps = new Map();
+        for (const x of factsByTag(activeCards, 'bs')) bps.set(x.p, x.bp);
+        for (let pass = 0; pass < 3; pass++) {
+          for (const x of factsByTag(activeCards, 'bs_rel')) {
+            if (!bps.has(x.p) && bps.has(x.ref)) bps.set(x.p, bps.get(x.ref) + x.delta);
+          }
+        }
+        const list = [...bps.entries()].map(([id, bp]) => ({ id, bp, drop: bp - 102 }));
         const targets = uniqueSortedIds(list.filter((x) => x.drop >= 40).map((x) => x.id));
         const rivals = list.filter((x) => x.drop < 40).sort((x, y) => y.drop - x.drop).map((x) => x.id);
         return {
           targets,
-          proof: `Subtracting 102 from each baseline exposes ≥ 40-pt hidden shock in ${formatList(targets)} (${targets.map((id) => { const x = list.find((r) => r.id === id); return `${pName(id)}: ${x.bp}→102 (−${x.drop})`; }).join(', ')}).`,
+          proof: `Resolving relative baselines and subtracting 102 exposes ≥ 40-pt hidden shock in ${formatList(targets)} (${targets.map((id) => { const x = list.find((r) => r.id === id); return `${pName(id)}: ${x.bp}→102 (−${x.drop})`; }).join(', ')}).`,
           rival: buildRivalInfo(targets, rivals, (r) => {
             const x = list.find((item) => item.id === r);
             return `${pName(r)}'s baseline is ${x.bp} (drop of ${x.drop} pts), staying under the 40-point shock line.`;
@@ -621,66 +647,66 @@ export const SEMANTIC_F78 = {
   },
 
   // #69 Narrative reasoning (After · Composite)
-  // Relational timeline check: Claimed Injury Age vs. Biological Healing Age across 6 bays
+  // Relational timeline check: Claimed Injury Age vs. Biological Healing Age across 6 trauma bays
   'narrative-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
         index: 0, time: '01:02', wing: 'Tissue Clock', wingIndex: 0, label: 'Biological Age Scale',
         shown: [
-          fact(`Tissue clock: Fresh red/purple = < 24 hours · Yellow-green bruise = 5–7 days OLD · Hard rib bone callus = 3+ weeks OLD!`, [], { tag: 'rule' }),
-          fact(`Flag for Protection Review whenever biological tissue age is MUCH OLDER THAN (or physics-incompatible with) the claimed story!`, [], { tag: 'rule' }),
+          fact(`Tissue healing clock: Red-purple bruise = < 24 hours · Yellow-green bruise = 5–7 days · Calcified rib callus = 3+ weeks.`, [], { tag: 'rule' }),
+          fact(`Flag for Forensic Protection Review whenever physical tissue age or fracture energy contradicts the claimed story.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 1, time: '01:06', wing: 'Stories A', wingIndex: 1, label: 'Claimed Accounts A & B',
         shown: [
-          fact(`${pName(a)}: Claims "1 soft carpet slip 20 minutes ago — zero prior falls."`, [a], { tag: 'st', p: a }),
-          fact(`${pName(b)}: Claims "slipped on icy steps 30 minutes ago, caught myself on right palm."`, [b], { tag: 'st', p: b }),
+          fact(`${pName(a)} reports a single low carpet slip 20 minutes ago — SAME recent timeframe as ${pName(b)}'s icy-step fall 30 minutes ago.`, [a, b], { tag: 'st_pair', ps: [a, b] }),
+          fact(`Both patients deny any prior falls or injuries over the past month.`, [], { tag: 'note' }),
         ],
       }),
       makeCard({
         index: 2, time: '01:10', wing: 'X-Ray Clock A', wingIndex: 0, label: 'Physical Evidence A & B',
         shown: [
-          fact(`${pName(a)}: 3 ribs at DIFFERENT healing stages (3-week hard bone callus + fresh break) + yellow-green bruises.`, [a], { tag: 'mis', p: a }),
-          fact(`${pName(b)}: 1 fresh right-wrist break + fresh red-purple palm swelling.`, [b], { tag: 'ok', p: b }),
+          fact(`${pName(a)}: 3 ribs at distinct healing stages (calcified 3-week callus + acute fracture) and yellow-green trunk bruising — OLDER THAN ${pName(b)}'s injury.`, [a, b], { tag: 'mis', p: a }),
+          fact(`${pName(b)}: Acute distal radius fracture with fresh red-purple palm edema.`, [b], { tag: 'ok', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: 1 fresh red hip bruise only, clean rib X-ray.`, [a], { tag: 'ok', p: a }),
-          fact(`${pName(b)}: 3-week healed rib calluses + yellow-green shoulder bruises.`, [b], { tag: 'mis', p: b }),
+          fact(`${pName(a)}: Single fresh red-purple hip contusion with clean rib series.`, [a], { tag: 'ok', p: a }),
+          fact(`${pName(b)}: Calcified 3-week posterior rib calluses and yellow-green scapular bruises — OLDER THAN ${pName(a)}'s contusion.`, [b, a], { tag: 'mis', p: b }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Stories B', wingIndex: 1, label: 'Claimed Accounts C–F',
         shown: [
-          fact(`${pName(c)}: Claims "bumped lightly into a plastic laundry basket tonight." ${pName(d)}: Claims "dropped heavy toolbox on left foot 1h ago."`, [c, d], { tag: 'st_pair', ps: [c, d] }),
-          fact(`${pName(e)}: Claims "fell off bike 6 days ago (came in now because it still aches)." ${pName(f)}: Claims "slammed car door on thumb 1h ago."`, [e, f], { tag: 'st_pair', ps: [e, f] }),
+          fact(`${pName(c)} reports bumping a plastic hamper tonight; ${pName(d)} reports dropping a heavy steel toolbox on the left foot 1h ago.`, [c, d], { tag: 'st_pair', ps: [c, d] }),
+          fact(`${pName(e)} reports a bicycle fall 6 days ago (came in tonight for persistent ache); ${pName(f)} reports a car door on the thumb 1h ago.`, [e, f], { tag: 'st_pair', ps: [e, f] }),
         ],
       }),
       makeCard({
         index: 4, time: '01:18', wing: 'X-Ray Clock B', wingIndex: 0, label: 'Physical Evidence C–F',
         shown: [
-          fact(`${pName(c)}: High-force defensive forearm breaks + deep wrap-around grip marks.`, [c], { tag: 'mis', p: c }),
-          fact(`${pName(d)}: Fresh red crushed left toe · ${pName(e)}: Yellow-green shoulder bruise · ${pName(f)}: Fresh red thumb bruise.`, [d, e, f], { tag: 'ok_all', ps: [d, e, f] }),
+          fact(`${pName(c)}: High-energy transverse defensive ulna fracture with circumferential grip ecchymosis.`, [c], { tag: 'mis', p: c }),
+          fact(`${pName(d)}: Fresh red crushed left hallux · ${pName(e)}: Yellow-green shoulder bruise · ${pName(f)}: Fresh subungual thumb hematoma.`, [d, e, f], { tag: 'ok_all', ps: [d, e, f] }),
         ],
         alt: [
-          fact(`${pName(c)}: Minor fresh shin scrape · ${pName(e)}: Yellow-green shoulder bruise · ${pName(f)}: Fresh red thumb bruise.`, [c, e, f], { tag: 'ok_all', ps: [c, e, f] }),
-          fact(`${pName(d)}: Spiral upper-arm break + yellow-green upper-arm bruises.`, [d], { tag: 'mis', p: d }),
+          fact(`${pName(c)}: Superficial fresh shin abrasion · ${pName(e)}: Yellow-green shoulder bruise · ${pName(f)}: Fresh subungual thumb hematoma.`, [c, e, f], { tag: 'ok_all', ps: [c, e, f] }),
+          fact(`${pName(d)}: Spiral humeral shaft fracture with yellow-green upper-arm grip marks.`, [d], { tag: 'mis', p: d }),
         ],
       }),
       makeCard({
         index: 5, time: '01:22', wing: 'Forensic Desk', wingIndex: 1, label: 'Compare Both Clocks',
         shown: [
-          fact(`An older yellow-green bruise is ONLY a mismatch if the patient claims the injury happened today!`, [], { tag: 'rule' }),
-          fact(`Flag ONLY bays where physical tissue age or force CANNOT match the claimed account.`, [], { tag: 'rule' }),
+          fact(`Yellow-green tissue contradicts a 20-minute story yet matches an honest 6-day account.`, [], { tag: 'rule' }),
+          fact(`Flag ONLY bays where physical healing age or fracture mechanics cannot match the account.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Story Clock vs. Tissue Clock',
-      dispatch: 'Compare claimed injury timelines & forces against physical healing stages — don’t flag an honest 6-day-old bruise!',
-      order: 'Flag for Protection Review EVERY patient whose physical healing age or force CANNOT match their claimed story.',
-      hint: 'Check BOTH story age and physical tissue age — yellow-green bruises contradict "20 min ago" yet MATCH "6 days ago"!',
+      dispatch: 'Compare claimed injury timelines and forces against physical healing stages across six bays.',
+      order: 'Flag for Forensic Protection Review EVERY patient whose physical healing age or force CANNOT match their claimed story.',
+      hint: 'Match story age/energy against biological tissue age — yellow-green bruises contradict "20 min ago" yet match "6 days ago".',
       bayDefaultLabel: 'Timeline Audit',
       cards,
       evaluate(activeCards) {
@@ -688,8 +714,8 @@ export const SEMANTIC_F78 = {
         const rivals = [e, b, d, c, a].filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `Comparing claimed story age/force against biological healing stages catches mismatches on ${formatList(targets)}, while ${pName(e)}'s 6-day bruise matches their 6-day story.`,
-          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)}'s biological bruise/X-ray age and impact pattern match their claimed account cleanly.`),
+          proof: `Comparing claimed story age and impact energy against biological healing stages catches mismatches on ${formatList(targets)}, while ${pName(e)}'s yellow-green bruise matches their 6-day account.`,
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)}'s biological bruise/X-ray age and impact mechanics match their claimed account cleanly.`),
         };
       },
     };
@@ -703,54 +729,54 @@ export const SEMANTIC_F78 = {
       makeCard({
         index: 0, time: '01:02', wing: '3-Voice Rule', wingIndex: 0, label: 'Unanimous Alignment Standard',
         shown: [
-          fact(`Clear for immediate OR ONLY when ALL THREE viewpoints agree: (1) Patient's Written Plan = YES + (2) Family Voice = YES + (3) Surgeon Odds > 50%.`, [], { tag: 'rule' }),
-          fact(`If ANY single voice clashes (even 2-of-3!), hold for a joint family ethics conference instead.`, [], { tag: 'rule' }),
+          fact(`Clear for immediate OR ONLY when ALL THREE perspectives align: Patient Written Directive = YES, Family Spokesperson = YES, AND Surgeon Recovery Odds > 50%.`, [], { tag: 'rule' }),
+          fact(`Any 2-of-3 split holds for a structured joint ethics conference.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Voice 1 · Patient', wingIndex: 1, label: 'Signed Patient Plans (All 6)',
+        index: 1, time: '01:06', wing: 'Voice 1 · Patient', wingIndex: 1, label: 'Signed Patient Directives',
         shown: [
-          fact(`Signed plan = YES (operate if recovery likely): ${pName(a)}, ${pName(c)}, ${pName(d)}, and ${pName(e)}.`, [a, c, d, e], { tag: 'v1', ps: [a, c, d, e] }),
-          fact(`Signed plan = NO (comfort care only): ${pName(b)} and ${pName(f)}.`, [b, f], { tag: 'no1', ps: [b, f] }),
+          fact(`Signed directive = YES (operate if recovery likely): ${pName(a)}, ${pName(c)}, ${pName(d)}, and ${pName(e)}.`, [a, c, d, e], { tag: 'v1', ps: [a, c, d, e] }),
+          fact(`Signed directive = NO (comfort care only): ${pName(b)} and ${pName(f)}.`, [b, f], { tag: 'no1', ps: [b, f] }),
         ],
         alt: [
-          fact(`Signed plan = YES (operate if recovery likely): ${pName(b)}, ${pName(c)}, ${pName(d)}, and ${pName(e)}.`, [b, c, d, e], { tag: 'v1', ps: [b, c, d, e] }),
-          fact(`Signed plan = NO (comfort care only): ${pName(a)} and ${pName(f)}.`, [a, f], { tag: 'no1', ps: [a, f] }),
+          fact(`Signed directive = YES (operate if recovery likely): ${pName(b)}, ${pName(c)}, ${pName(d)}, and ${pName(e)}.`, [b, c, d, e], { tag: 'v1', ps: [b, c, d, e] }),
+          fact(`Signed directive = NO (comfort care only): ${pName(a)} and ${pName(f)}.`, [a, f], { tag: 'no1', ps: [a, f] }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'Voice 2 · Family', wingIndex: 0, label: 'Family Spokespersons (All 6)',
+        index: 2, time: '01:10', wing: 'Voice 2 · Family', wingIndex: 0, label: 'Family Spokespersons',
         shown: [
-          fact(`Family agrees to operate: ${pName(a)}, ${pName(b)}, ${pName(c)}, and ${pName(d)}.`, [a, b, c, d], { tag: 'v2', ps: [a, b, c, d] }),
-          fact(`Family requests pause/comfort hold: ${pName(e)} (disagrees with plan!) and ${pName(f)}.`, [e, f], { tag: 'no2', ps: [e, f] }),
+          fact(`Family supports proceeding to OR: ${pName(a)}, ${pName(b)}, ${pName(c)}, and ${pName(d)}.`, [a, b, c, d], { tag: 'v2', ps: [a, b, c, d] }),
+          fact(`Family requests pause for comfort discussion: ${pName(e)} and ${pName(f)}.`, [e, f], { tag: 'no2', ps: [e, f] }),
         ],
         alt: [
-          fact(`Family agrees to operate: ${pName(a)}, ${pName(b)}, ${pName(c)}, and ${pName(e)}.`, [a, b, c, e], { tag: 'v2', ps: [a, b, c, e] }),
-          fact(`Family requests pause/comfort hold: ${pName(d)} and ${pName(f)}.`, [d, f], { tag: 'no2', ps: [d, f] }),
+          fact(`Family supports proceeding to OR: ${pName(a)}, ${pName(b)}, ${pName(c)}, and ${pName(e)}.`, [a, b, c, e], { tag: 'v2', ps: [a, b, c, e] }),
+          fact(`Family requests pause for comfort discussion: ${pName(d)} and ${pName(f)}.`, [d, f], { tag: 'no2', ps: [d, f] }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:14', wing: 'Voice 3 · Surgeon', wingIndex: 1, label: 'Surgeon Recovery Odds (All 6)',
+        index: 3, time: '01:14', wing: 'Voice 3 · Surgeon', wingIndex: 1, label: 'Surgeon Recovery Odds',
         shown: [
-          fact(`Surgeon projects > 50% recovery: ${pName(a)} (85%), ${pName(b)} (80%), ${pName(d)} (88%), and ${pName(e)} (75%).`, [a, b, d, e], { tag: 'v3', ps: [a, b, d, e] }),
-          fact(`Surgeon projects futile < 5% recovery: ${pName(c)} (2%) and ${pName(f)} (1%).`, [c, f], { tag: 'no3', ps: [c, f] }),
+          fact(`Surgeon projects > 50% functional recovery: ${pName(a)} at 85%, ${pName(b)} at 80%, ${pName(d)} at 88%, and ${pName(e)} at 75%.`, [a, b, d, e], { tag: 'v3', ps: [a, b, d, e] }),
+          fact(`Surgeon projects futile < 5% survival: ${pName(c)} at 2% and ${pName(f)} at 1%.`, [c, f], { tag: 'no3', ps: [c, f] }),
         ],
         alt: [
-          fact(`Surgeon projects > 50% recovery: ${pName(a)} (85%), ${pName(b)} (80%), ${pName(c)} (82%), and ${pName(d)} (88%).`, [a, b, c, d], { tag: 'v3', ps: [a, b, c, d] }),
-          fact(`Surgeon projects futile < 5% recovery: ${pName(e)} (3%) and ${pName(f)} (1%).`, [e, f], { tag: 'no3', ps: [e, f] }),
+          fact(`Surgeon projects > 50% functional recovery: ${pName(a)} at 85%, ${pName(b)} at 80%, ${pName(c)} at 82%, and ${pName(d)} at 88%.`, [a, b, c, d], { tag: 'v3', ps: [a, b, c, d] }),
+          fact(`Surgeon projects futile < 5% survival: ${pName(e)} at 3% and ${pName(f)} at 1%.`, [e, f], { tag: 'no3', ps: [e, f] }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: '3-Voice Rule', wingIndex: 0, label: 'Spot the 2-of-3 Decoys',
+        index: 4, time: '01:18', wing: '3-Voice Rule', wingIndex: 0, label: 'Filter 2-of-3 Splits',
         shown: [
-          fact(`Multiple bays have 2 of 3 voices aligned — ONLY bays standing inside (Voice 1 ∩ Voice 2 ∩ Voice 3) clear cleanly!`, [], { tag: 'rule' }),
-          fact(`Hold any 2-of-3 split for a calm joint family conference.`, [], { tag: 'rule' }),
+          fact(`Only bays appearing in Voice 1 ∩ Voice 2 ∩ Voice 3 clear without an ethics hold.`, [], { tag: 'rule' }),
+          fact(`Hold any 2-of-3 split for a joint family conference.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 5, time: '01:21', wing: 'Ethics Desk', wingIndex: 1, label: 'Clear Unanimous Bays',
         shown: [
-          fact(`Intersect Patient Wish ∩ Family Voice ∩ Surgeon > 50% Odds.`, [], { tag: 'rule' }),
+          fact(`Intersect Patient Plan ∩ Family Voice ∩ Surgeon > 50% Odds.`, [], { tag: 'rule' }),
           fact(`Clear ONLY unanimous 3-of-3 bays for immediate surgery.`, [], { tag: 'rule' }),
         ],
       }),
@@ -759,7 +785,7 @@ export const SEMANTIC_F78 = {
       scenarioTitle: 'Three-Voice Alignment',
       dispatch: 'Intersect three independent perspectives (Patient Written Plan ∩ Family Voice ∩ Surgeon Odds) across six consults.',
       order: 'Clear for immediate surgery EVERY patient where Patient Plan, Family Voice, AND Surgeon Odds (> 50%) ALL agree.',
-      hint: 'Find every patient listed as YES on all three Voice cards — reject 2-of-3 splits!',
+      hint: 'Find every patient listed as YES across all three Voice cards — hold 2-of-3 splits.',
       bayDefaultLabel: '3-Voice Sync',
       cards,
       evaluate(activeCards) {
@@ -782,66 +808,66 @@ export const SEMANTIC_F78 = {
   // =========================================================================
 
   // #71 Metacognitive reasoning (After · Meta)
-  // Comparing 01:00 Early Anchor Labels vs. 01:20 Objective Severity across 6 bays — catching premature closure!
+  // Comparing 01:00 premature soft labels against 01:20 objective vitals relative to stable control F
   'metacognitive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
         index: 0, time: '01:02', wing: 'Bias Audit', wingIndex: 0, label: 'Early-Label vs. Reality Flip',
         shown: [
-          fact(`Early shortcut trap: tagging bays "Just Anxiety / Drunk / Stress" causes teams to miss silent collapses!`, [], { tag: 'rule' }),
-          fact(`Rescue EVERY bay dismissed with a soft 01:00 label whose 01:20 objective vitals are WORSE THAN stable control ${pName(f)} (O2 98%, sugar 95, BP 120)!`, [f], { tag: 'rule' }),
+          fact(`Premature closure trap: early soft labels ("Anxiety / Intoxication / Stress / Virus") can mask silent physical collapse.`, [], { tag: 'rule' }),
+          fact(`Rescue EVERY bay dismissed with a soft 01:00 label whose 01:20 objective exam falls WORSE THAN control ${pName(f)} (O2 98%, glucose 95, BP 120/76).`, [f], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: '01:00 Labels', wingIndex: 1, label: 'Premature Soft Tags (All 4)',
+        index: 1, time: '01:06', wing: '01:00 Labels', wingIndex: 1, label: 'Premature Soft Tags',
         shown: [
-          fact(`${pName(a)}: Dismissed as "Panic Attack" · ${pName(b)}: Dismissed as "Sleep Off Alcohol."`, [a, b], { tag: 'soft', ps: [a, b] }),
-          fact(`${pName(c)}: Dismissed as "Stress Headache" · ${pName(d)}: Dismissed as "Mild Stomach Bug."`, [c, d], { tag: 'soft', ps: [c, d] }),
+          fact(`${pName(a)}: Dismissed as "Panic Attack" · ${pName(b)}: Dismissed as "Alcohol Intoxication."`, [a, b], { tag: 'soft', ps: [a, b] }),
+          fact(`${pName(c)}: Dismissed as "Tension Headache" · ${pName(d)}: Dismissed as "Viral Stomach Bug."`, [c, d], { tag: 'soft', ps: [c, d] }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:14', wing: '01:20 Vitals', wingIndex: 0, label: 'Objective Findings A & B',
+        index: 2, time: '01:14', wing: '01:20 Vitals', wingIndex: 0, label: 'Objective Exam A & B',
         shown: [
-          fact(`${pName(a)}: O2 plunged to 81% (17 points LOWER THAN ${pName(f)}'s 98%!) + silent right lung!`, [a, f], { tag: 'crit', p: a }),
-          fact(`${pName(b)}: Clean head CT, O2 99%, blood sugar 96 (matches ${pName(f)}'s safe baseline!).`, [b, f], { tag: 'ok', p: b }),
+          fact(`${pName(a)}: O2 dropped to 81% — 17 points LOWER THAN ${pName(f)}'s 98% — with absent right-lung breath sounds.`, [a, f], { tag: 'crit', p: a }),
+          fact(`${pName(b)}: Clear head CT, O2 99%, glucose 96 — matching ${pName(f)}'s stable baseline.`, [b, f], { tag: 'ok', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: O2 99%, clear equal lungs, normal heart strip (truly panic!).`, [a], { tag: 'ok', p: a }),
-          fact(`${pName(b)}: Blood sugar crashed to 34 (LESS THAN HALF of ${pName(f)}'s 95!) + head bruise!`, [b, f], { tag: 'crit', p: b }),
+          fact(`${pName(a)}: O2 99%, equal bilateral breath sounds, normal ECG — matching ${pName(f)}'s stable baseline.`, [a, f], { tag: 'ok', p: a }),
+          fact(`${pName(b)}: Glucose crashed to 34 — LESS THAN HALF of ${pName(f)}'s 95 — with fresh occiput scalp bruise.`, [b, f], { tag: 'crit', p: b }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:18', wing: '01:20 Vitals', wingIndex: 0, label: 'Objective Findings C & D',
+        index: 3, time: '01:18', wing: '01:20 Vitals', wingIndex: 0, label: 'Objective Exam C & D',
         shown: [
-          fact(`${pName(c)}: Right pupil widened + sudden left-arm paralysis (silent stroke, NOT stress!).`, [c], { tag: 'crit', p: c }),
-          fact(`${pName(d)}: Soft belly, BP 122/76, O2 99%, nausea cleared after water.`, [d], { tag: 'ok', p: d }),
+          fact(`${pName(c)}: Fixed dilated right pupil + acute left-arm hemiparesis — WORSE neuro exam than ${pName(d)} and ${pName(f)}.`, [c, d, f], { tag: 'crit', p: c }),
+          fact(`${pName(d)}: Soft non-tender abdomen, BP 122/76, O2 99%, steady after oral rehydration.`, [d], { tag: 'ok', p: d }),
         ],
         alt: [
-          fact(`${pName(c)}: Equal pupils, full arm strength, headache cleared cleanly.`, [c], { tag: 'ok', p: c }),
-          fact(`${pName(d)}: Silent heart-attack strip + BP dropped to 82/48 (38 pts LOWER THAN ${pName(f)}!).`, [d, f], { tag: 'crit', p: d }),
+          fact(`${pName(c)}: Equal reactive pupils, full 5/5 strength, BP 118/74 — matching ${pName(f)}.`, [c, f], { tag: 'ok', p: c }),
+          fact(`${pName(d)}: ST-elevation ECG + BP dropped to 82/48 — 38 mmHg LOWER THAN ${pName(f)}'s 120/76.`, [d, f], { tag: 'crit', p: d }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:21', wing: '01:00 Labels', wingIndex: 1, label: 'Properly Tagged Control Bays',
+        index: 4, time: '01:21', wing: '01:00 Labels', wingIndex: 1, label: 'Control & OR Bays',
         shown: [
-          fact(`${pName(e)}: Was ALREADY tagged RED #1 at 01:00 and is ALREADY in OR (NOT a missed soft-label bias!).`, [e], { tag: 'already', p: e }),
-          fact(`${pName(f)}: Stable control bay (O2 98%, sugar 95, BP 120/76, normal exam).`, [f], { tag: 'ok', p: f }),
+          fact(`${pName(e)}: Properly tagged RED #1 at 01:00 and ALREADY on the OR table for splenectomy.`, [e], { tag: 'already', p: e }),
+          fact(`${pName(f)}: Stable control bay — O2 98%, glucose 95, BP 120/76, intact neuro exam.`, [f], { tag: 'ok', p: f }),
         ],
       }),
       makeCard({
         index: 5, time: '01:24', wing: 'Safety Pull', wingIndex: 1, label: 'Override Soft Labels',
         shown: [
-          fact(`Intersect Soft 01:00 Label WITH Real 01:20 Physical Crisis — skip ${pName(e)} (already in OR)!`, [e], { tag: 'note' }),
+          fact(`Intersect Soft 01:00 Label WITH Objective 01:20 Physical Crisis relative to ${pName(f)}.`, [f], { tag: 'note' }),
           fact(`Pull EVERY mislabeled collapsing bay out of the waiting zone immediately.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Overturning Premature Labels',
-      dispatch: 'Compare 01:00 comforting labels against 01:20 objective vitals to catch hidden physical emergencies.',
-      order: 'Rescue EVERY patient dismissed with a soft 01:00 label whose 01:20 objective exam shows a real crisis.',
-      hint: 'Match the 4 Soft-Label bays (Card 2) against real objective crashes (Cards 3–4); skip already-in-OR bay.',
+      dispatch: 'Compare 01:00 soft triage labels against 01:20 objective exams relative to control to catch premature closure.',
+      order: 'Rescue EVERY patient dismissed with a soft 01:00 label whose 01:20 objective exam shows a physical crisis.',
+      hint: 'Match the 4 Soft-Label bays against objective crashes relative to the stable control — skip already-in-OR bay.',
       bayDefaultLabel: 'Bias Re-Eval',
       cards,
       evaluate(activeCards) {
@@ -861,70 +887,70 @@ export const SEMANTIC_F78 = {
   },
 
   // #72 Epistemic reasoning (Inside · Meta)
-  // Distinguishing Verified Clean Proof vs. Zero-Evidence Assumption ("assumed fine") across 6 crash bays
+  // Separating verified clinical clearance from unexamined assumptions across relative crash speeds
   'epistemic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'Proof Audit', wingIndex: 0, label: 'Unchecked ≠ Safe Rule',
+        index: 0, time: '01:02', wing: 'Proof Audit', wingIndex: 0, label: 'Absence of Evidence Rule',
         shown: [
-          fact(`Absence of bad labs does NOT prove safety if nobody ran an exam or if the sample spilled!`, [], { tag: 'rule' }),
-          fact(`Pull to Trauma Bay 1 EVERY High-Force crash bay (> 45 mph or thrown) with ZERO verified doctor exam/vitals!`, [], { tag: 'rule' }),
+          fact(`An empty chart or spilled tube proves NOTHING — absence of abnormal findings is not evidence of safety.`, [], { tag: 'rule' }),
+          fact(`Pull to Trauma Bay 1 EVERY High-Force crash bay (> 45 mph or ejected) with ZERO verified physician exam or vitals.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Crash Speed', wingIndex: 1, label: 'Impact Forces (All 6)',
+        index: 1, time: '01:06', wing: 'Crash Speed', wingIndex: 1, label: 'Relative Impact Forces',
         shown: [
-          fact(`HIGH-FORCE (> 45 mph / thrown): ${pName(a)} (65-mph rollover), ${pName(b)} (same 65-mph rollover), ${pName(c)} (thrown 15 ft off bike), and ${pName(e)} (55-mph T-bone).`, [a, b, c, e], { tag: 'hi_f', ps: [a, b, c, e] }),
-          fact(`LOW-FORCE (< 10 mph): ${pName(d)} (5-mph parking bump) and ${pName(f)} (tripped on curb).`, [d, f], { tag: 'lo_f', ps: [d, f] }),
+          fact(`${pName(a)} & ${pName(b)} shared a 65-mph rollover — FASTER impact than ${pName(e)}'s 55-mph T-bone; ${pName(c)} was ejected 15 ft off a motorcycle.`, [a, b, e, c], { tag: 'hi_f', ps: [a, b, c, e] }),
+          fact(`${pName(d)} had a 5-mph parking bump and ${pName(f)} tripped on a curb — FAR LOWER force than ${pName(e)}.`, [d, f, e], { tag: 'lo_f', ps: [d, f] }),
         ],
       }),
       makeCard({
         index: 2, time: '01:12', wing: 'Proof Log A', wingIndex: 0, label: 'Verification Audit A & B',
         shown: [
-          fact(`${pName(a)}: Clipboard says "looked quiet in hall" — ZERO vitals, ZERO scan, NEVER seen by a doctor!`, [a], { tag: 'unch', p: a }),
-          fact(`${pName(b)}: Attending verified full exam, clean CT scan, normal vitals every 15 min (PROVEN safe!).`, [b], { tag: 'ver', p: b }),
+          fact(`${pName(a)}: Triage note says "quiet in hall" — ZERO vitals logged, ZERO imaging, NEVER examined by a doctor.`, [a], { tag: 'unch', p: a }),
+          fact(`${pName(b)}: Attending documented full primary survey, negative pan-CT, and q15m normal vitals.`, [b], { tag: 'ver', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: Attending verified clean CT scan, clean labs, steady vitals (PROVEN safe!).`, [a], { tag: 'ver', p: a }),
-          fact(`${pName(b)}: Blood tube spilled + ZERO doctor exam — marked "probably okay" by mistake!`, [b], { tag: 'unch', p: b }),
+          fact(`${pName(a)}: Attending documented negative pan-CT, clean labs, and steady serial vitals.`, [a], { tag: 'ver', p: a }),
+          fact(`${pName(b)}: Hemolyzed blood tube discarded + ZERO physician exam — marked "likely stable" at intake.`, [b], { tag: 'unch', p: b }),
         ],
       }),
       makeCard({
         index: 3, time: '01:16', wing: 'Proof Log B', wingIndex: 0, label: 'Verification Audit C & D',
         shown: [
-          fact(`${pName(c)}: Chart blank after Wi-Fi drop — assumed fine ONLY because ${pName(c)} isn't yelling!`, [c], { tag: 'unch', p: c }),
-          fact(`${pName(d)}: Also unchecked yet (5-mph low-force parking bump — check Impact Force card!).`, [d], { tag: 'unch', p: d }),
+          fact(`${pName(c)}: Electronic chart blank after Wi-Fi drop — ZERO vitals and ZERO physician exam recorded.`, [c], { tag: 'unch', p: c }),
+          fact(`${pName(d)}: Still awaiting first nurse vitals and doctor exam — SAME unexamined chart status as ${pName(c)}.`, [d, c], { tag: 'unch', p: d }),
         ],
         alt: [
-          fact(`${pName(c)}: Attending verified clean CT scan and normal vitals (PROVEN safe!).`, [c], { tag: 'ver', p: c }),
-          fact(`${pName(d)}: Also unchecked yet (5-mph low-force parking bump!).`, [d], { tag: 'unch', p: d }),
+          fact(`${pName(c)}: Attending documented negative trauma CT and normal serial vitals.`, [c], { tag: 'ver', p: c }),
+          fact(`${pName(d)}: Still awaiting first nurse vitals and doctor exam — ZERO exam recorded yet.`, [d], { tag: 'unch', p: d }),
         ],
       }),
       makeCard({
         index: 4, time: '01:20', wing: 'Proof Log C', wingIndex: 1, label: 'Verification Audit E & F',
         shown: [
-          fact(`${pName(e)}: Attending verified clean chest/belly CT and steady vitals (PROVEN safe — SAME AS ${pName(b)}!).`, [e, b], { tag: 'ver', p: e }),
-          fact(`${pName(f)}: Verified clean exam and normal vitals.`, [f], { tag: 'ver', p: f }),
+          fact(`${pName(e)}: Attending documented negative chest/abdomen CT and steady vitals — SAME verified clearance as ${pName(b)}.`, [e, b], { tag: 'ver', p: e }),
+          fact(`${pName(f)}: Attending documented clean orthopedic exam and normal vitals.`, [f], { tag: 'ver', p: f }),
         ],
         alt: [
-          fact(`${pName(e)}: Ambulance radio cut out — ZERO vitals and ZERO doctor exam recorded yet!`, [e], { tag: 'unch', p: e }),
-          fact(`${pName(f)}: Verified clean exam and normal vitals.`, [f], { tag: 'ver', p: f }),
+          fact(`${pName(e)}: EMS radio dropped before handoff — ZERO vitals and ZERO physician exam recorded.`, [e], { tag: 'unch', p: e }),
+          fact(`${pName(f)}: Attending documented clean orthopedic exam and normal vitals.`, [f], { tag: 'ver', p: f }),
         ],
       }),
       makeCard({
-        index: 5, time: '01:23', wing: 'Trauma Bay 1', wingIndex: 1, label: 'Close the Proof Gaps',
+        index: 5, time: '01:23', wing: 'Trauma Bay 1', wingIndex: 1, label: 'Close Proof Gaps',
         shown: [
-          fact(`Notice ${pName(d)} is unchecked YET low-force (5 mph); pull ONLY High-Force (> 45 mph) ∩ Unchecked!`, [d], { tag: 'note' }),
-          fact(`Bring every high-force unchecked bay into Trauma Bay 1 for real vitals & scan now.`, [], { tag: 'rule' }),
+          fact(`Intersect High-Force Mechanism (> 45 mph or ejected) WITH Unexamined / Blank-Chart Status.`, [], { tag: 'rule' }),
+          fact(`Pull EVERY high-force unexamined patient into Trauma Bay 1 immediately.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Proven Safe vs. Never Checked',
-      dispatch: 'Intersect High-Force crash mechanisms (> 45 mph) with Unchecked blank charts — separate proven safety from blind assumption.',
-      order: 'Pull into Trauma Bay 1 EVERY High-Force crash patient (> 45 mph / thrown) who has ZERO verified exam or vitals.',
-      hint: 'Intersect High-Force Crash (Card 2) WITH Unchecked / Spilled-Sample charts (Cards 3–5).',
+      dispatch: 'Intersect High-Force crash mechanisms (> 45 mph) with Unchecked blank charts — separate verified clearance from blind assumption.',
+      order: 'Pull into Trauma Bay 1 EVERY High-Force crash patient (> 45 mph / ejected) who has ZERO verified exam or vitals.',
+      hint: 'Intersect High-Force Mechanism with Unexamined / Spilled-Sample charts — low-force unchecked bays wait in fast-track.',
       bayDefaultLabel: 'Proof Audit',
       cards,
       evaluate(activeCards) {
@@ -944,67 +970,66 @@ export const SEMANTIC_F78 = {
   },
 
   // #73 Reflective reasoning (After · Meta)
-  // TRUE CLOSED-LOOP CLOCK ARITHMETIC! No shallow "ZERO" keyword scan!
-  // Current clock = 01:00. Strong emergency meds require a re-check WITHIN 15 min (Re-Check Time − Drug Time ≤ 15 min, or if none yet, 01:00 − Drug Time > 15 min)!
+  // Closed-loop 15-min re-check audit at 01:00 with cross-bay timestamp chaining
   'reflective-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
         index: 0, time: '01:00', wing: 'Loop Audit', wingIndex: 0, label: '15-Minute Re-Check Window',
         shown: [
-          fact(`Current clock = 01:00. After ANY strong IV/spray med, a follow-up check MUST occur WITHIN 15 minutes (Gap ≤ 15 min)!`, [], { tag: 'rule' }),
-          fact(`Flag EVERY strong-med bay whose gap (Re-Check − Drug Time, or 01:00 − Drug Time if unchecked) EXCEEDS 15 minutes (> 15m)!`, [], { tag: 'rule' }),
+          fact(`Current clock = 01:00. After ANY strong IV or spray drug, a follow-up check MUST occur WITHIN 15 min (Gap ≤ 15m).`, [], { tag: 'rule' }),
+          fact(`Flag EVERY strong-drug bay whose gap (Re-Check − Drug Time, or 01:00 − Drug Time if unlogged) EXCEEDS 15 min.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 1, time: '01:00', wing: 'Drug Clock', wingIndex: 1, label: 'Strong Meds Given (A–C)',
         shown: [
-          fact(`${pName(a)}: Strong IV sedative given at 00:20.`, [a], { tag: 'dg', p: a, t: 20, strong: true }),
-          fact(`${pName(b)}: Overdose spray given at 00:25 · ${pName(c)}: Fast BP drip started at 00:35.`, [b, c], { tag: 'dg_pair', list: [{ p: b, t: 25, strong: true }, { p: c, t: 35, strong: true }] }),
+          fact(`${pName(a)}: Strong IV sedative at 00:20 — 5 min EARLIER THAN ${pName(b)}'s 00:25 reversal spray.`, [a, b], { tag: 'dg_pair', list: [{ p: a, t: 20, strong: true }, { p: b, t: 25, strong: true }] }),
+          fact(`${pName(c)}: Vasopressor drip started at 00:35 — 10 min LATER THAN ${pName(b)}.`, [c, b], { tag: 'dg', p: c, t: 35, strong: true }),
         ],
       }),
       makeCard({
         index: 2, time: '01:00', wing: 'Drug Clock', wingIndex: 1, label: 'Meds Given (D–F)',
         shown: [
-          fact(`${pName(d)}: Strong IV sedative given at 00:50.`, [d], { tag: 'dg', p: d, t: 50, strong: true }),
-          fact(`${pName(e)}: Strong heart-rate drip at 00:30 · ${pName(f)}: Plain ice pack only at 00:15 (non-drug).`, [e, f], { tag: 'dg_pair', list: [{ p: e, t: 30, strong: true }, { p: f, t: 15, strong: false }] }),
+          fact(`${pName(d)}: Strong IV sedative at 00:50 — 20 min LATER THAN ${pName(e)}'s 00:30 rate-control drip.`, [d, e], { tag: 'dg_pair', list: [{ p: d, t: 50, strong: true }, { p: e, t: 30, strong: true }] }),
+          fact(`${pName(f)}: Cold ankle ice pack only at 00:15 — zero medication administered.`, [f], { tag: 'dg', p: f, t: 15, strong: false }),
         ],
       }),
       makeCard({
         index: 3, time: '01:00', wing: 'Re-Check Log', wingIndex: 0, label: 'Follow-Up Timestamps (A–C)',
         shown: [
-          fact(`${pName(a)}: Re-checked at 00:44.`, [a], { tag: 'rc', p: a, t: 44 }),
-          fact(`${pName(b)}: Re-checked at 00:38 · ${pName(c)}: No check logged yet at 01:00.`, [b, c], { tag: 'rc_pair', list: [{ p: b, t: 38 }, { p: c, t: 60 }] }),
+          fact(`${pName(a)}: Re-checked at 00:44 — 6 min LATER THAN ${pName(b)}'s 00:38 check.`, [a, b], { tag: 'rc_pair', list: [{ p: a, t: 44 }, { p: b, t: 38 }] }),
+          fact(`${pName(c)}: No follow-up check logged yet at 01:00.`, [c], { tag: 'rc', p: c, t: 60 }),
         ],
         alt: [
-          fact(`${pName(a)}: Re-checked at 00:33.`, [a], { tag: 'rc', p: a, t: 33 }),
-          fact(`${pName(b)}: Re-checked at 00:48 · ${pName(c)}: Re-checked at 00:48.`, [b, c], { tag: 'rc_pair', list: [{ p: b, t: 48 }, { p: c, t: 48 }] }),
+          fact(`${pName(a)}: Re-checked at 00:33 — 15 min EARLIER THAN ${pName(b)}'s 00:48 check.`, [a, b], { tag: 'rc_pair', list: [{ p: a, t: 33 }, { p: b, t: 48 }] }),
+          fact(`${pName(c)}: Re-checked at 00:48 — SAME time as ${pName(b)}.`, [c, b], { tag: 'rc', p: c, t: 48 }),
         ],
       }),
       makeCard({
         index: 4, time: '01:00', wing: 'Re-Check Log', wingIndex: 0, label: 'Follow-Up Timestamps (D–F)',
         shown: [
-          fact(`${pName(d)}: No check logged yet at 01:00.`, [d], { tag: 'rc', p: d, t: 60 }),
-          fact(`${pName(e)}: Re-checked at 00:45 · ${pName(f)}: Routine check at 00:55.`, [e, f], { tag: 'rc_pair', list: [{ p: e, t: 45 }, { p: f, t: 55 }] }),
+          fact(`${pName(d)}: No follow-up check logged yet at 01:00 — SAME unlogged status as ${pName(c)}.`, [d, c], { tag: 'rc', p: d, t: 60 }),
+          fact(`${pName(e)}: Re-checked at 00:45 · ${pName(f)}: Routine skin check at 00:55.`, [e, f], { tag: 'rc_pair', list: [{ p: e, t: 45 }, { p: f, t: 55 }] }),
         ],
         alt: [
-          fact(`${pName(d)}: No check logged yet at 01:00.`, [d], { tag: 'rc', p: d, t: 60 }),
-          fact(`${pName(e)}: Re-checked at 00:52 · ${pName(f)}: Routine check at 00:55.`, [e, f], { tag: 'rc_pair', list: [{ p: e, t: 52 }, { p: f, t: 55 }] }),
+          fact(`${pName(d)}: No follow-up check logged yet at 01:00.`, [d], { tag: 'rc', p: d, t: 60 }),
+          fact(`${pName(e)}: Re-checked at 00:52 · ${pName(f)}: Routine skin check at 00:55.`, [e, f], { tag: 'rc_pair', list: [{ p: e, t: 52 }, { p: f, t: 55 }] }),
         ],
       }),
       makeCard({
         index: 5, time: '01:00', wing: 'Audit Lead', wingIndex: 1, label: 'Compute Every Gap',
         shown: [
-          fact(`Subtract Drug Time from Re-Check Time (or 01:00 if unlogged) for every STRONG-med bay!`, [], { tag: 'rule' }),
-          fact(`Flag EVERY strong-med bay whose elapsed gap exceeded 15 minutes (> 15m).`, [], { tag: 'rule' }),
+          fact(`Subtract Drug Time from Re-Check Time (or 01:00 if unlogged) for every STRONG-drug bay.`, [], { tag: 'rule' }),
+          fact(`Flag EVERY strong-drug bay whose elapsed gap exceeded 15 minutes (> 15m).`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Closed-Loop 15-Min Audit',
-      dispatch: 'Current time is 01:00 — subtract Drug Time from Re-Check Time (or 01:00) to catch strong-med gaps > 15 minutes.',
+      dispatch: 'Current time is 01:00 — subtract Drug Time from Re-Check Time (or 01:00) to catch strong-drug gaps > 15 minutes.',
       order: 'Flag EVERY strong-drug patient whose re-check gap (Re-Check − Drug Time, or 01:00 − Drug Time) EXCEEDED 15 minutes.',
-      hint: 'Compute elapsed minutes for each strong-med bay — skip the recent 00:50 dose (10m) and the exact 15m check!',
+      hint: 'Compute elapsed minutes for each strong-drug bay — check whether 00:50 → 01:00 or exact 15m checks breach > 15m.',
       bayDefaultLabel: '15-Min Loop',
       cards,
       evaluate(activeCards) {
@@ -1036,74 +1061,74 @@ export const SEMANTIC_F78 = {
   },
 
   // #74 Critical reasoning (After · Meta)
-  // Dismantling the "Normal BP = Safe" fallacy using Relational Shock Index (Heart Rate > Top BP) + rigid belly across 6 young bays
+  // Dismantling the "Normal BP = Safe" fallacy via Shock Index (HR > Top BP) + abdominal rigidity
   'critical-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
         index: 0, time: '01:02', wing: 'Fallacy Audit', wingIndex: 0, label: 'The Normal-BP Fallacy',
         shown: [
-          fact(`Intern's claim: "All 6 young patients have BP ≥ 112, so ZERO internal bleeding!" — FALSE!`, [], { tag: 'rule' }),
-          fact(`True Shock-Index Check: Whenever Heart Rate is HIGHER THAN Top BP (HR > BP) AND belly is rigid/tender, internal bleeding is hiding!`, [], { tag: 'rule' }),
+          fact(`Intern claim: "All 6 young patients have BP ≥ 112, so ZERO internal bleeding!" — FALSE in compensated shock.`, [], { tag: 'rule' }),
+          fact(`Shock-Index Rule: Whenever Heart Rate EXCEEDS Top BP (HR > Top BP) AND abdomen is rigid/guarding, hidden hemorrhage is active.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 1, time: '01:06', wing: 'Vitals A', wingIndex: 1, label: 'HR vs. Top BP (A–C)',
         shown: [
-          fact(`${pName(a)}: HR 136 · Top BP 114. ${pName(b)}: HR 82 · Top BP 118.`, [a, b], { tag: 'vi', list: [{ p: a, hr: 136, bp: 114 }, { p: b, hr: 82, bp: 118 }] }),
-          fact(`${pName(c)}: HR 132 · Top BP 116.`, [c], { tag: 'vi', list: [{ p: c, hr: 132, bp: 116 }] }),
+          fact(`${pName(a)}: HR 136 · Top BP 114 — HIGHER HR than ${pName(b)}'s HR 82 · Top BP 118.`, [a, b], { tag: 'vi', list: [{ p: a, hr: 136, bp: 114 }, { p: b, hr: 82, bp: 118 }] }),
+          fact(`${pName(c)}: HR 132 · Top BP 116 — LOWER Top BP than ${pName(b)}.`, [c, b], { tag: 'vi', list: [{ p: c, hr: 132, bp: 116 }] }),
         ],
         alt: [
-          fact(`${pName(a)}: HR 80 · Top BP 122. ${pName(b)}: HR 140 · Top BP 112.`, [a, b], { tag: 'vi', list: [{ p: a, hr: 80, bp: 122 }, { p: b, hr: 140, bp: 112 }] }),
-          fact(`${pName(c)}: HR 110 · Top BP 120.`, [c], { tag: 'vi', list: [{ p: c, hr: 110, bp: 120 }] }),
+          fact(`${pName(a)}: HR 80 · Top BP 122 — LOWER HR than ${pName(b)}'s HR 140 · Top BP 112.`, [a, b], { tag: 'vi', list: [{ p: a, hr: 80, bp: 122 }, { p: b, hr: 140, bp: 112 }] }),
+          fact(`${pName(c)}: HR 110 · Top BP 120 — HIGHER Top BP than ${pName(b)}.`, [c, b], { tag: 'vi', list: [{ p: c, hr: 110, bp: 120 }] }),
         ],
       }),
       makeCard({
         index: 2, time: '01:10', wing: 'Vitals B', wingIndex: 1, label: 'HR vs. Top BP (D–F)',
         shown: [
-          fact(`${pName(d)}: HR 130 · Top BP 120 (ran in panicked from crash).`, [d], { tag: 'vi', list: [{ p: d, hr: 130, bp: 120 }] }),
-          fact(`${pName(e)}: HR 116 · Top BP 118 · ${pName(f)}: HR 88 · Top BP 124.`, [e, f], { tag: 'vi', list: [{ p: e, hr: 116, bp: 118 }, { p: f, hr: 88, bp: 124 }] }),
+          fact(`${pName(d)}: HR 130 · Top BP 120 — HIGHER HR than ${pName(e)}'s HR 116 · Top BP 118.`, [d, e], { tag: 'vi', list: [{ p: d, hr: 130, bp: 120 }, { p: e, hr: 116, bp: 118 }] }),
+          fact(`${pName(f)}: HR 88 · Top BP 124 — HIGHEST Top BP on the board.`, [f], { tag: 'vi', list: [{ p: f, hr: 88, bp: 124 }] }),
         ],
         alt: [
-          fact(`${pName(d)}: HR 138 · Top BP 114.`, [d], { tag: 'vi', list: [{ p: d, hr: 138, bp: 114 }] }),
-          fact(`${pName(e)}: HR 116 · Top BP 118 · ${pName(f)}: HR 88 · Top BP 124.`, [e, f], { tag: 'vi', list: [{ p: e, hr: 116, bp: 118 }, { p: f, hr: 88, bp: 124 }] }),
+          fact(`${pName(d)}: HR 138 · Top BP 114 — HIGHER HR than ${pName(e)}'s HR 116 · Top BP 118.`, [d, e], { tag: 'vi', list: [{ p: d, hr: 138, bp: 114 }, { p: e, hr: 116, bp: 118 }] }),
+          fact(`${pName(f)}: HR 88 · Top BP 124 — HIGHEST Top BP on the board.`, [f], { tag: 'vi', list: [{ p: f, hr: 88, bp: 124 }] }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:14', wing: 'Belly Exam', wingIndex: 0, label: 'Physical Belly Check (A–C)',
+        index: 3, time: '01:14', wing: 'Belly Exam', wingIndex: 0, label: 'Abdominal Exam (A–C)',
         shown: [
-          fact(`${pName(a)}: Board-rigid tender belly after handlebar impact.`, [a], { tag: 'rig', p: a }),
-          fact(`${pName(b)}: Soft pain-free belly · ${pName(c)}: Rigid guarding belly after ski impact.`, [b, c], { tag: 'rig', p: c }),
+          fact(`${pName(a)}: Board-rigid tender abdomen after handlebar strike · ${pName(b)}: Soft non-tender abdomen.`, [a, b], { tag: 'rig', p: a }),
+          fact(`${pName(c)}: Rigid involuntary guarding after ski impact — SAME peritoneal sign as ${pName(a)}.`, [c, a], { tag: 'rig', p: c }),
         ],
         alt: [
-          fact(`${pName(a)}: Soft pain-free belly · ${pName(b)}: Board-rigid belly with seatbelt bruise.`, [a, b], { tag: 'rig', p: b }),
-          fact(`${pName(c)}: Soft pain-free belly (arm impact only).`, [c], { tag: 'soft_b', p: c }),
+          fact(`${pName(a)}: Soft non-tender abdomen · ${pName(b)}: Board-rigid abdomen with seatbelt ecchymosis.`, [a, b], { tag: 'rig', p: b }),
+          fact(`${pName(c)}: Soft non-tender abdomen — SAME benign belly exam as ${pName(a)}.`, [c, a], { tag: 'soft_b', p: c }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'Belly Exam', wingIndex: 0, label: 'Physical Belly Check (D–F)',
+        index: 4, time: '01:18', wing: 'Belly Exam', wingIndex: 0, label: 'Abdominal Exam (D–F)',
         shown: [
-          fact(`${pName(d)}: Soft pain-free belly on deep exam.`, [d], { tag: 'soft_b', p: d }),
-          fact(`${pName(e)}: Rigid bruised belly after steering-wheel hit · ${pName(f)}: Soft belly.`, [e, f], { tag: 'rig', p: e }),
+          fact(`${pName(d)}: Soft non-tender abdomen on deep palpation — SAME benign exam as ${pName(f)}.`, [d, f], { tag: 'soft_b', p: d }),
+          fact(`${pName(e)}: Rigid bruised abdomen after steering-wheel hit · ${pName(f)}: Soft non-tender abdomen.`, [e, f], { tag: 'rig', p: e }),
         ],
         alt: [
-          fact(`${pName(d)}: Board-rigid swollen belly after dashboard impact.`, [d], { tag: 'rig', p: d }),
-          fact(`${pName(e)}: Rigid bruised belly after steering-wheel hit · ${pName(f)}: Soft belly.`, [e, f], { tag: 'rig', p: e }),
+          fact(`${pName(d)}: Board-rigid distended abdomen after dashboard impact — SAME peritoneal sign as ${pName(e)}.`, [d, e], { tag: 'rig', p: d }),
+          fact(`${pName(e)}: Rigid bruised abdomen after steering-wheel hit · ${pName(f)}: Soft non-tender abdomen.`, [e, f], { tag: 'rig', p: e }),
         ],
       }),
       makeCard({
         index: 5, time: '01:21', wing: 'Trauma Scan', wingIndex: 1, label: 'Scan Masked Bleeders',
         shown: [
-          fact(`Require BOTH halves: Heart Rate strictly HIGHER THAN Top BP AND rigid belly!`, [], { tag: 'rule' }),
+          fact(`Require BOTH halves: Heart Rate strictly HIGHER THAN Top BP AND rigid abdomen.`, [], { tag: 'rule' }),
           fact(`STAT-scan EVERY bay meeting both shock-index conditions.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'Exposing the Normal-BP Fallacy',
-      dispatch: 'All six young bays show BP ≥ 112 — compare Heart Rate vs. Top BP (HR > BP) AND belly rigidity to unmask hidden bleeds.',
-      order: 'STAT-scan EVERY patient whose Heart Rate is STRICTLY HIGHER THAN Top BP (HR > BP) AND whose belly is rigid.',
-      hint: 'Check BOTH (Heart Rate > Top BP) AND Rigid Belly — watch out for soft-belly panic and HR < BP decoys!',
+      dispatch: 'All six young bays show BP ≥ 112 — compare Heart Rate vs. Top BP (HR > BP) AND abdominal rigidity to unmask hidden bleeds.',
+      order: 'STAT-scan EVERY patient whose Heart Rate is STRICTLY HIGHER THAN Top BP (HR > BP) AND whose abdomen is rigid.',
+      hint: 'Check BOTH (Heart Rate > Top BP) AND Rigid Abdomen — watch out for soft-abdomen fast pulse and HR < BP decoys.',
       bayDefaultLabel: 'Shock Index',
       cards,
       evaluate(activeCards) {
@@ -1116,9 +1141,9 @@ export const SEMANTIC_F78 = {
         const rivals = [d, e, b, c, a].filter((id) => !targets.includes(id));
         return {
           targets,
-          proof: `Exposing the "normal BP = safe" fallacy via Shock Index (HR > Top BP) ∩ Rigid Belly catches hidden bleeding in ${formatList(targets)}.`,
+          proof: `Exposing the "normal BP = safe" fallacy via Shock Index (HR > Top BP) ∩ Rigid Abdomen catches hidden bleeding in ${formatList(targets)}.`,
           rival: buildRivalInfo(targets, rivals, (r) =>
-            flipped.has(r) ? `${pName(r)} has HR > Top BP from panic, but their belly is completely soft.` : `${pName(r)}'s Heart Rate stays BELOW their Top BP.`
+            flipped.has(r) ? `${pName(r)} has HR > Top BP, but their abdomen is completely soft.` : `${pName(r)}'s Heart Rate stays BELOW their Top BP.`
           ),
         };
       },
@@ -1126,62 +1151,62 @@ export const SEMANTIC_F78 = {
   },
 
   // #75 Falsification-based reasoning (Inside · Meta)
-  // Testing the universal claim "All Obs Bays match Safe Anchor F (O2 ≥ 94%, BP ≥ 100, Awake)" by hunting counterexamples!
+  // Testing the universal Obs claim against Safe Anchor F (O2 ≥ 94%, BP ≥ 100, Awake) by hunting counterexamples
   'falsification-based': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
         index: 0, time: '01:02', wing: 'Obs Claim', wingIndex: 0, label: 'Universal Claim vs. Anchor',
         shown: [
-          fact(`Night claim: "EVERY Obs bay matches Safe Anchor ${pName(f)}'s 3 bounds: O2 ≥ 94% + Top BP ≥ 100 + Wide Awake."`, [f], { tag: 'rule' }),
-          fact(`Do NOT confirm the calm bays — hunt for EVERY counterexample breaking AT LEAST ONE of those 3 bounds!`, [], { tag: 'rule' }),
+          fact(`Night handoff claim: "EVERY Obs bay meets Anchor ${pName(f)}'s 3 bounds: O2 ≥ 94%, Top BP ≥ 100, Wide Awake."`, [f], { tag: 'rule' }),
+          fact(`Hunt for EVERY counterexample breaking AT LEAST ONE of those 3 bounds.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 1, time: '01:06', wing: 'O2 & BP Wall', wingIndex: 1, label: 'Monitors A & B vs. Anchor',
         shown: [
-          fact(`${pName(a)}: O2 84% · BP 118/74.`, [a], { tag: 'ob', p: a, o2: 84, bp: 118 }),
-          fact(`${pName(b)}: O2 98% · BP 122/78.`, [b], { tag: 'ob', p: b, o2: 98, bp: 122 }),
+          fact(`${pName(a)}: O2 84% · BP 118/74 — 14% LOWER O2 than ${pName(b)}'s 98% · BP 122/78.`, [a, b], { tag: 'ob_pair', list: [{ p: a, o2: 84, bp: 118 }, { p: b, o2: 98, bp: 122 }] }),
+          fact(`${pName(b)}'s BP (122) is HIGHER THAN Anchor ${pName(f)}'s 120.`, [b, f], { tag: 'note' }),
         ],
         alt: [
-          fact(`${pName(a)}: O2 97% · BP 120/76.`, [a], { tag: 'ob', p: a, o2: 97, bp: 120 }),
-          fact(`${pName(b)}: O2 96% · BP 86/52.`, [b], { tag: 'ob', p: b, o2: 96, bp: 86 }),
+          fact(`${pName(a)}: O2 97% · BP 120/76 — 34 mmHg HIGHER BP than ${pName(b)}'s 86/52 (O2 96%).`, [a, b], { tag: 'ob_pair', list: [{ p: a, o2: 97, bp: 120 }, { p: b, o2: 96, bp: 86 }] }),
+          fact(`${pName(b)}'s O2 stays HIGHER THAN ${pName(d)}'s 94%.`, [b, d], { tag: 'note' }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'O2 & BP Wall', wingIndex: 1, label: 'Monitors C–E vs. Anchor',
+        index: 2, time: '01:10', wing: 'O2 & BP Wall', wingIndex: 1, label: 'Monitors C–F',
         shown: [
-          fact(`${pName(c)}: O2 96% · BP 114/70 · ${pName(d)}: O2 94% · BP 100/66.`, [c, d], { tag: 'ob_pair', list: [{ p: c, o2: 96, bp: 114 }, { p: d, o2: 94, bp: 100 }] }),
-          fact(`${pName(e)}: O2 97% · BP 116/72 · Safe Anchor ${pName(f)}: O2 98% · BP 120/76.`, [e, f], { tag: 'ob_pair', list: [{ p: e, o2: 97, bp: 116 }, { p: f, o2: 98, bp: 120 }] }),
+          fact(`${pName(c)}: O2 96% · BP 114/70 · ${pName(d)}: O2 94% · BP 100/66 — LOWER THAN ${pName(e)} yet on the boundary.`, [c, d, e], { tag: 'ob_pair', list: [{ p: c, o2: 96, bp: 114 }, { p: d, o2: 94, bp: 100 }] }),
+          fact(`${pName(e)}: O2 97% · BP 116/72 · Anchor ${pName(f)}: O2 98% · BP 120/76.`, [e, f], { tag: 'ob_pair', list: [{ p: e, o2: 97, bp: 116 }, { p: f, o2: 98, bp: 120 }] }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Nurse Rounds', wingIndex: 0, label: 'Alertness Audit (A–C)',
         shown: [
-          fact(`${pName(c)}: Unresponsive to voice or shoulder tap.`, [c], { tag: 'unaw', p: c }),
-          fact(`${pName(a)} & ${pName(b)}: Both wide awake and answering questions.`, [a, b], { tag: 'aw', ps: [a, b] }),
+          fact(`${pName(c)}: Unresponsive to loud voice or sternal rub — WORSE alertness than ${pName(a)} & ${pName(b)}.`, [c, a, b], { tag: 'unaw', p: c }),
+          fact(`${pName(a)} & ${pName(b)}: Both wide awake answering orientation questions.`, [a, b], { tag: 'aw', ps: [a, b] }),
         ],
         alt: [
           fact(`${pName(c)}: Wide awake drinking water · ${pName(a)} & ${pName(b)}: Wide awake.`, [c, a, b], { tag: 'aw', ps: [c, a, b] }),
-          fact(`${pName(e)}: Went limp and unresponsive to shoulder tap.`, [e], { tag: 'unaw', p: e }),
+          fact(`${pName(e)}: Suddenly limp and unresponsive to sternal rub — WORSE alertness than ${pName(d)}.`, [e, d], { tag: 'unaw', p: e }),
         ],
       }),
       makeCard({
         index: 4, time: '01:18', wing: 'Nurse Rounds', wingIndex: 0, label: 'Alertness Audit (D–F)',
         shown: [
-          fact(`${pName(d)}: Wide awake chatting with nurse.`, [d], { tag: 'aw', ps: [d] }),
-          fact(`${pName(e)}: Wide awake alert · ${pName(f)}: Wide awake (Safe Anchor).`, [e, f], { tag: 'aw', ps: [e, f] }),
+          fact(`${pName(d)}: Wide awake chatting with nurse · ${pName(e)}: Wide awake alert.`, [d, e], { tag: 'aw', ps: [d, e] }),
+          fact(`${pName(f)}: Wide awake — matches all three reference thresholds.`, [f], { tag: 'aw', ps: [f] }),
         ],
         alt: [
-          fact(`${pName(d)}: Wide awake chatting with nurse.`, [d], { tag: 'aw', ps: [d] }),
-          fact(`${pName(f)}: Safe reference anchor (O2 98%, BP 120, wide awake).`, [f], { tag: 'aw', ps: [f] }),
+          fact(`${pName(d)}: Wide awake chatting with nurse · ${pName(f)}: Wide awake reference anchor.`, [d, f], { tag: 'aw', ps: [d, f] }),
+          fact(`Compare both Monitor cards AND both Alertness cards for any broken bound.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 5, time: '01:21', wing: 'Obs Rescue', wingIndex: 1, label: 'Pull Counterexamples',
         shown: [
-          fact(`One broken bound disproves "can safely wait" — check O2 (< 94%), BP (< 100), AND Alertness!`, [], { tag: 'rule' }),
-          fact(`Pull EVERY Obs bay that breaks ANY of the 3 bounds right now.`, [], { tag: 'rule' }),
+          fact(`A single broken bound falsifies "everyone can wait" — check O2 (< 94%), BP (< 100), AND Alertness.`, [], { tag: 'rule' }),
+          fact(`Pull EVERY Obs bay breaking ANY of the 3 bounds right now.`, [], { tag: 'rule' }),
         ],
       }),
     ];
@@ -1189,7 +1214,7 @@ export const SEMANTIC_F78 = {
       scenarioTitle: 'Disproving "Everyone Can Wait"',
       dispatch: 'Test the universal Obs-Wing claim across all six bays — catch every counterexample breaking O2, BP, or Alertness.',
       order: 'Pull out EVERY Observation patient who breaks O2 ≥ 94%, Top BP ≥ 100, OR Wide-Awake alertness.',
-      hint: 'Check all 3 bounds across both Monitor cards and Alertness cards — exact 94% and 100 pass cleanly!',
+      hint: 'Check all 3 bounds across Monitor cards and Alertness cards — exact 94% and 100 pass.',
       bayDefaultLabel: 'Obs Bounds',
       cards,
       evaluate(activeCards) {
@@ -1214,66 +1239,66 @@ export const SEMANTIC_F78 = {
   },
 
   // #76 Heuristic reasoning (Before · Meta)
-  // Fast rule-of-thumb ("Fever > 38.5°C + Aches → Flu") + fatal Exception Boundary (Stiff Neck OR Non-Fading Purple Spots) across 6 fever bays
+  // Fast flu heuristic + fatal meningitis/sepsis exception boundary (Nuchal Rigidity OR Non-Blanching Petechiae)
   'heuristic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
         index: 0, time: '01:02', wing: 'Fast-Track', wingIndex: 0, label: 'Shortcut & Fatal Exceptions',
         shown: [
-          fact(`Winter shortcut: "Fever ≥ 38.5°C + Body Aches → Routine Flu." ALL 6 bays below have fever + aches!`, [], { tag: 'rule' }),
-          fact(`FATAL EXCEPTION: Pull out of the flu line ANYONE with a rock-stiff neck OR purple spots that DO NOT FADE when pressed with a glass!`, [], { tag: 'rule' }),
+          fact(`Winter shortcut: "Fever ≥ 38.5°C + Myalgias → Routine Flu." All 6 bays below meet that heuristic.`, [], { tag: 'rule' }),
+          fact(`FATAL EXCEPTION: Pull out of the flu line ANYONE with rock-stiff neck rigidity OR purple spots that STAY DARK under glass press.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Fever Queue', wingIndex: 1, label: 'Temperatures (Red Herring!)',
+        index: 1, time: '01:06', wing: 'Fever Queue', wingIndex: 1, label: 'Thermometer Ranking',
         shown: [
-          fact(`${pName(b)} (40.1°C) and ${pName(e)} (39.9°C) have HIGHER fevers than ${pName(a)} (38.8°C) and ${pName(c)} (38.7°C)!`, [b, e, a, c], { tag: 'temp' }),
-          fact(`Fever height alone does NOT identify the fatal exception — check Neck + Glass-Press Skin tests!`, [], { tag: 'rule' }),
+          fact(`${pName(b)} (40.1°C) and ${pName(e)} (39.9°C) run HIGHER fevers than ${pName(a)} (38.8°C) and ${pName(c)} (38.7°C).`, [b, e, a, c], { tag: 'temp' }),
+          fact(`${pName(d)} (39.2°C) runs HIGHER than ${pName(f)} (38.9°C) — verify physical exception exams below.`, [d, f], { tag: 'temp' }),
         ],
       }),
       makeCard({
         index: 2, time: '01:10', wing: 'Exception Exam', wingIndex: 0, label: 'Neck & Glass Test A & B',
         shown: [
-          fact(`${pName(a)}: Rock-stiff neck (cannot touch chin to chest) + screams at room light.`, [a], { tag: 'exc', p: a }),
-          fact(`${pName(b)} (40.1°C): Flexible neck + mild pink rash that FADES WHITE under glass.`, [b], { tag: 'flu', p: b }),
+          fact(`${pName(a)}: Rock-stiff neck (cannot flex chin to chest) + severe photophobia — WORSE meningeal sign than ${pName(b)}.`, [a, b], { tag: 'exc', p: a }),
+          fact(`${pName(b)}: Flexible supple neck + pink macular rash that BLANCHES WHITE under glass press.`, [b], { tag: 'flu', p: b }),
         ],
         alt: [
-          fact(`${pName(a)}: Flexible neck + clear skin, steady alertness.`, [a], { tag: 'flu', p: a }),
-          fact(`${pName(b)}: Fast-spreading purple ankle spots that STAY DARK under glass press.`, [b], { tag: 'exc', p: b }),
+          fact(`${pName(a)}: Flexible supple neck + clear skin — SAME benign exam as ${pName(e)}.`, [a, e], { tag: 'flu', p: a }),
+          fact(`${pName(b)}: Spreading purple ankle petechiae that STAY DARK under glass press.`, [b], { tag: 'exc', p: b }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Exception Exam', wingIndex: 0, label: 'Neck & Glass Test C & D',
         shown: [
-          fact(`${pName(c)}: Dark purple leg spots that STAY DARK when pressed with a glass.`, [c], { tag: 'exc', p: c }),
-          fact(`${pName(d)}: Sore throat muscles (neck bends fully chin-to-chest) + clear skin.`, [d], { tag: 'flu', p: d }),
+          fact(`${pName(c)}: Dark purple shin petechiae that STAY DARK under glass press — OPPOSITE OF ${pName(b)}'s blanching rash.`, [c, b], { tag: 'exc', p: c }),
+          fact(`${pName(d)}: Sore throat muscles yet full chin-to-chest neck flexion + clear skin.`, [d], { tag: 'flu', p: d }),
         ],
         alt: [
-          fact(`${pName(c)}: Flexible neck + pink hives that FADE WHITE under glass.`, [c], { tag: 'flu', p: c }),
-          fact(`${pName(d)}: Rock-stiff neck (zero chin-to-chest bend) + sudden confusion.`, [d], { tag: 'exc', p: d }),
+          fact(`${pName(c)}: Flexible neck + pink hives that BLANCH WHITE under glass press.`, [c], { tag: 'flu', p: c }),
+          fact(`${pName(d)}: Rock-stiff neck with zero chin-to-chest flexion + acute confusion.`, [d], { tag: 'exc', p: d }),
         ],
       }),
       makeCard({
         index: 4, time: '01:18', wing: 'Exception Exam', wingIndex: 0, label: 'Neck & Glass Test E & F',
         shown: [
-          fact(`${pName(e)} (39.9°C): Flexible neck + clear skin, severe shaking chills.`, [e], { tag: 'flu', p: e }),
-          fact(`${pName(f)} (38.9°C): Flexible neck + mild heat rash that FADES WHITE under glass.`, [f], { tag: 'flu', p: f }),
+          fact(`${pName(e)}: Flexible neck + clear skin with rigors — SAME supple exam as ${pName(f)}.`, [e, f], { tag: 'flu', p: e }),
+          fact(`${pName(f)}: Flexible neck + faint heat rash that BLANCHES WHITE under glass press.`, [f], { tag: 'flu', p: f }),
         ],
       }),
       makeCard({
         index: 5, time: '01:21', wing: 'Sepsis Bay', wingIndex: 1, label: 'Override Flu Shortcut',
         shown: [
-          fact(`Ignore raw fever height and fading pink rashes — look strictly for Stiff Neck OR Non-Fading Purple Spots!`, [], { tag: 'rule' }),
+          fact(`Look past raw thermometer height and blanching pink rashes — hunt strictly for Stiff Neck OR Non-Blanching Purple Spots.`, [], { tag: 'rule' }),
           fact(`Pull EVERY fatal-exception bay straight into IV antibiotics now.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'When the Flu Shortcut Kills',
-      dispatch: 'All six bays have high fever — look past the highest thermometer numbers to catch stiff-neck and non-fading purple-spot exceptions.',
+      dispatch: 'All six bays have high fever — look past the highest thermometer numbers to catch stiff-neck and non-blanching purple-spot exceptions.',
       order: 'Pull out of the flu line EVERY fever patient with a rock-stiff neck OR purple spots that STAY DARK under glass.',
-      hint: 'Don’t pick the highest fever (40.1°C) or rashes that fade white — catch stiff necks and non-fading dark spots!',
+      hint: 'Raw fever height (40.1°C) and white-blanching rashes fit flu — catch stiff necks and non-blanching dark spots.',
       bayDefaultLabel: 'Fever Audit',
       cards,
       evaluate(activeCards) {
@@ -1282,66 +1307,66 @@ export const SEMANTIC_F78 = {
         return {
           targets,
           proof: `Overriding the "fever = flu" rule-of-thumb catches meningitis/sepsis exceptions on ${formatList(targets)}, ignoring higher-temp routine flu bays.`,
-          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} has a flexible neck and either clear skin or a fading rash — fitting routine flu care despite high fever.`),
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} has a flexible neck and either clear skin or a blanching rash — fitting routine flu care despite high fever.`),
         };
       },
     };
   },
 
   // #77 Non-monotonic reasoning (Inside · Meta)
-  // Full priority-order inversion: 01:00 ranking (A > B > E > F > C > D) overturned by 01:18 STAT CT/Ultrasound evidence!
+  // Full priority-order inversion: 01:00 ranking overturned by 01:18–01:20 STAT CT/Ultrasound scans
   'non-monotonic-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:00', wing: '01:00 Board', wingIndex: 0, label: 'Initial 01:00 Ranking (OLD)',
+        index: 0, time: '01:00', wing: '01:00 Board', wingIndex: 0, label: 'Initial 01:00 Ranking',
         shown: [
-          fact(`01:00 Initial Rank: ${pName(a)} (#1) and ${pName(b)} (#2) OUTRANKED ${pName(c)} (#5) and ${pName(d)} (#6) for suspected internal bleed.`, [a, b, c, d], { tag: 'old' }),
-          fact(`Revision Rule: Whenever 01:18 STAT Scans overturn the 01:00 rank, CANCEL old alerts and act ONLY on 01:18+ truth!`, [], { tag: 'rule' }),
+          fact(`01:00 Initial Rank: ${pName(a)} (#1) > ${pName(b)} (#2) > ${pName(e)} (#3) > ${pName(f)} (#4) > ${pName(c)} (#5) > ${pName(d)} (#6).`, [a, b, e, f, c, d], { tag: 'old' }),
+          fact(`Defeasible Rule: Whenever 01:18–01:20 STAT scans overturn the 01:00 ranking, RETRACT old alerts and act strictly on 01:18+ findings.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:15', wing: '01:18 Scans', wingIndex: 1, label: 'STAT Reversal A & B',
+        index: 1, time: '01:15', wing: '01:18 Scans', wingIndex: 1, label: 'STAT Update A & B',
         shown: [
-          fact(`01:18 CT: ${pName(a)} is 100% CLEAN — BP rebounded to 124/78.`, [a], { tag: 'clr', p: a }),
-          fact(`01:18 CT: ${pName(b)} is 100% CLEAN — muscle spasm only, BP 122/76.`, [b], { tag: 'clr', p: b }),
+          fact(`01:18 CT: ${pName(a)} is negative for hemorrhage — BP rebounded to 124/78.`, [a], { tag: 'clr', p: a }),
+          fact(`01:18 CT: ${pName(b)} is negative — abdominal wall strain only, BP 122/76 — SAME clean result as ${pName(a)}.`, [b, a], { tag: 'clr', p: b }),
         ],
         alt: [
-          fact(`01:18 CT: ${pName(a)} CONFIRMED active spleen tear — BP plunging to 76/44.`, [a], { tag: 'urg', p: a }),
-          fact(`01:18 CT: ${pName(b)} is 100% CLEAN — muscle spasm only, BP 122/76.`, [b], { tag: 'clr', p: b }),
+          fact(`01:18 CT: ${pName(a)} confirms Grade IV splenic laceration with active bleed — BP 76/44, WORSE THAN ${pName(b)}.`, [a, b], { tag: 'urg', p: a }),
+          fact(`01:18 CT: ${pName(b)} is negative — abdominal wall strain only, BP 122/76.`, [b], { tag: 'clr', p: b }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:18', wing: '01:18 Scans', wingIndex: 1, label: 'STAT Reversal C & D',
+        index: 2, time: '01:18', wing: '01:18 Scans', wingIndex: 1, label: 'STAT Update C & D',
         shown: [
-          fact(`01:18 Head CT: Quiet ${pName(c)} (formerly #5!) now has an expanding brain bleed — NOW OUTRANKS ${pName(a)} & ${pName(b)}!`, [c, a, b], { tag: 'urg', p: c }),
-          fact(`01:18 Scan: ${pName(d)} stayed clean — steady BP 120/76.`, [d], { tag: 'clr', p: d }),
+          fact(`01:18 Head CT: ${pName(c)} shows expanding skull-lining brain bleed — NOW OUTRANKS cleared ${pName(a)} & ${pName(b)}.`, [c, a, b], { tag: 'urg', p: c }),
+          fact(`01:18 Scan: ${pName(d)} remains negative — steady BP 120/76.`, [d], { tag: 'clr', p: d }),
         ],
         alt: [
-          fact(`01:18 Head CT: ${pName(c)} stayed clean — normal BP 120/76.`, [c], { tag: 'clr', p: c }),
-          fact(`01:18 Chest Scan: Quiet ${pName(d)} (formerly #6!) now has blood filling the chest — NOW OUTRANKS everyone!`, [d], { tag: 'urg', p: d }),
+          fact(`01:18 Head CT: ${pName(c)} remains negative — normal BP 120/76.`, [c], { tag: 'clr', p: c }),
+          fact(`01:18 Chest CT: ${pName(d)} shows massive hemothorax filling the right chest — NOW OUTRANKS ${pName(b)} & ${pName(c)}.`, [d, b, c], { tag: 'urg', p: d }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:20', wing: '01:18 Scans', wingIndex: 1, label: 'STAT Reversal E & F',
+        index: 3, time: '01:20', wing: '01:18 Scans', wingIndex: 1, label: 'STAT Update E & F',
         shown: [
-          fact(`01:20 Scan: ${pName(e)} (formerly #3) is 100% CLEAN — pain resolved, BP 122/76.`, [e], { tag: 'clr', p: e }),
-          fact(`01:20 Scan: ${pName(f)} (formerly #4) suddenly tore a pelvic vessel on ultrasound — BP 78/46!`, [f], { tag: 'urg', p: f }),
+          fact(`01:20 Scan: ${pName(e)} is negative — pain resolved, BP 122/76.`, [e], { tag: 'clr', p: e }),
+          fact(`01:20 Ultrasound: ${pName(f)} shows active pelvic arterial bleed — BP 78/46, WORSE THAN ${pName(e)}.`, [f, e], { tag: 'urg', p: f }),
         ],
         alt: [
-          fact(`01:20 Scan: ${pName(e)} (formerly #3) is 100% CLEAN — BP 122/76.`, [e], { tag: 'clr', p: e }),
-          fact(`01:20 Scan: ${pName(f)} (formerly #4) is 100% CLEAN — BP 120/78.`, [f], { tag: 'clr', p: f }),
+          fact(`01:20 Scan: ${pName(e)} is negative — BP 122/76.`, [e], { tag: 'clr', p: e }),
+          fact(`01:20 Scan: ${pName(f)} is negative — BP 120/78 — SAME clean result as ${pName(e)}.`, [f, e], { tag: 'clr', p: f }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:22', wing: '01:22 Vitals', wingIndex: 0, label: 'Drop Outdated Anchors',
+        index: 4, time: '01:22', wing: '01:22 Vitals', wingIndex: 0, label: 'Retract Outdated Ranks',
         shown: [
-          fact(`01:18–01:20 Scans OVERRIDE the 01:00 board completely — don't cling to old #1/#2 ranks once cleared!`, [], { tag: 'rule' }),
-          fact(`Check ALL SIX 01:18–01:20 scan updates before booking OR rooms.`, [], { tag: 'rule' }),
+          fact(`01:18–01:20 STAT scans completely supersede the 01:00 intake board.`, [], { tag: 'rule' }),
+          fact(`Check ALL SIX 01:18–01:20 scan updates before booking OR tables.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '01:24', wing: 'OR Charge', wingIndex: 1, label: 'Roll Updated Urgents',
+        index: 5, time: '01:24', wing: 'OR Charge', wingIndex: 1, label: 'Roll Updated Bleeds',
         shown: [
           fact(`Send to Emergency OR EVERY patient confirmed actively bleeding on the LATEST 01:18–01:20 scans.`, [], { tag: 'rule' }),
           fact(`Cancel OR holds on all newly cleared bays.`, [], { tag: 'rule' }),
@@ -1350,9 +1375,9 @@ export const SEMANTIC_F78 = {
     ];
     return {
       scenarioTitle: 'STAT Scan Board Reversal',
-      dispatch: 'New 01:18–01:20 STAT scans completely flipped the 01:00 priority board — retract old alerts and act on the new truth.',
+      dispatch: 'New 01:18–01:20 STAT scans overturned the 01:00 priority board — retract old alerts and act strictly on updated scans.',
       order: 'Send to Emergency OR EVERY patient confirmed actively bleeding on the LATEST 01:18–01:20 STAT scans.',
-      hint: 'Discard the outdated 01:00 ranking — follow ONLY the 01:18–01:20 scan findings.',
+      hint: 'Retract the outdated 01:00 ranking — follow ONLY the 01:18–01:20 STAT scan confirmations.',
       bayDefaultLabel: 'Scan Update',
       cards,
       evaluate(activeCards) {
@@ -1361,58 +1386,58 @@ export const SEMANTIC_F78 = {
         return {
           targets,
           proof: `Retracting the outdated 01:00 priority ranks in light of the 01:18–01:20 STAT scans shifts OR priority strictly to ${formatList(targets)}.`,
-          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} was cleared 100% clean on the latest 01:18–01:20 scan despite earlier 01:00 suspicion.`),
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} was cleared negative on the latest 01:18–01:20 scan despite earlier 01:00 suspicion.`),
         };
       },
     };
   },
 
   // #78 Ontological reasoning (Before · Meta)
-  // Sorting 6 urgent alarms by fundamental kind of reality: Physical Mechanical Tear/Block vs. Blood Chemistry vs. Legal/Social Dispute
+  // Sorting 6 urgent pages by fundamental kind: Mechanical Structural Tear/Block vs. Metabolic/Chemical vs. Legal/Administrative
   'ontological-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'Crisis Kinds', wingIndex: 0, label: 'Three Distinct Categories',
+        index: 0, time: '01:02', wing: 'Crisis Kinds', wingIndex: 0, label: 'Three Ontological Kinds',
         shown: [
-          fact(`Sort by fundamental KIND, not loudness: (1) Mechanical Tear/Block → Trauma Surgeon · (2) Blood Chemistry/Overdose → Medicine Drip · (3) Legal/Family Dispute → Ethics/Social Work.`, [], { tag: 'rule' }),
-          fact(`A scalpel CANNOT fix blood sugar or power-of-attorney fights — page Surgery ONLY for Mechanical Tears/Blocks!`, [], { tag: 'rule' }),
+          fact(`Sort by fundamental KIND, not urgency volume: Mechanical Tear/Block → Trauma Surgeon · Blood Chemistry/Overdose → Medicine Drip · Legal Dispute → Ethics.`, [], { tag: 'rule' }),
+          fact(`A scalpel cannot fix serum potassium or proxy disputes — page Surgery ONLY for Mechanical Structural Tears or Blocks.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 1, time: '01:06', wing: 'Pages A', wingIndex: 1, label: 'Urgent Pages A & B',
         shown: [
-          fact(`${pName(a)}: Glass sliced the thigh artery open — bright blood pulsing from the wound.`, [a], { tag: 'k', p: a, kind: 'mech' }),
-          fact(`${pName(b)}: Missed insulin 3 days — blood sugar 640, fruity breath, rapid breathing.`, [b], { tag: 'k', p: b, kind: 'chem' }),
+          fact(`${pName(a)}: Glass transected the femoral artery — bright pulsatile hemorrhage, DIFFERENT crisis kind from ${pName(b)}.`, [a, b], { tag: 'k', p: a, kind: 'mech' }),
+          fact(`${pName(b)}: Missed insulin 3 days — glucose 640, severe blood-acid crisis, deep rapid gasping.`, [b], { tag: 'k', p: b, kind: 'chem' }),
         ],
         alt: [
-          fact(`${pName(a)}: Swallowed 30 blood-pressure pills — needs chemical antidote drip, zero wounds.`, [a], { tag: 'k', p: a, kind: 'chem' }),
-          fact(`${pName(b)}: Steel rod punctured right chest wall — trapped air collapsing the lung.`, [b], { tag: 'k', p: b, kind: 'mech' }),
+          fact(`${pName(a)}: Ingested 30 beta-blocker tablets — dangerously slow 32 BPM pulse needing antidote drip, zero wounds.`, [a], { tag: 'k', p: a, kind: 'chem' }),
+          fact(`${pName(b)}: Rebar penetrated right thorax — open chest air-trap collapsing lung, DIFFERENT kind from ${pName(a)}.`, [b, a], { tag: 'k', p: b, kind: 'mech' }),
         ],
       }),
       makeCard({
         index: 2, time: '01:10', wing: 'Pages B', wingIndex: 1, label: 'Urgent Pages C & D',
         shown: [
-          fact(`${pName(c)}: Two siblings shouting over who holds legal power of attorney for discharge.`, [c], { tag: 'k', p: c, kind: 'legal' }),
-          fact(`${pName(d)}: Crushed windpipe ring physically blocking airflow — SAME crisis kind as ${pName(a)}.`, [d, a], { tag: 'k', p: d, kind: 'mech' }),
+          fact(`${pName(c)}: Two siblings contesting healthcare power-of-attorney authority — SAME non-physical category as ${pName(f)}.`, [c, f], { tag: 'k', p: c, kind: 'legal' }),
+          fact(`${pName(d)}: Crushed tracheal cartilage physically obstructing airflow — SAME structural kind as ${pName(a)}.`, [d, a], { tag: 'k', p: d, kind: 'mech' }),
         ],
         alt: [
-          fact(`${pName(c)}: Torn spleen leaking blood into the belly after a 12-foot ladder fall.`, [c], { tag: 'k', p: c, kind: 'mech' }),
-          fact(`${pName(d)}: Blood sugar plunged to 28 — needs IV sugar drip, zero physical injury.`, [d], { tag: 'k', p: d, kind: 'chem' }),
+          fact(`${pName(c)}: Shattered splenic capsule bleeding into abdomen after 12-ft fall — SAME structural kind as ${pName(b)}.`, [c, b], { tag: 'k', p: c, kind: 'mech' }),
+          fact(`${pName(d)}: Serum glucose plunged to 28 with seizures — SAME blood-chemistry kind as ${pName(a)}.`, [d, a], { tag: 'k', p: d, kind: 'chem' }),
         ],
       }),
       makeCard({
         index: 3, time: '01:14', wing: 'Pages C', wingIndex: 0, label: 'Urgent Pages E & F',
         shown: [
-          fact(`${pName(e)}: Severe potassium overdose slowing heart rhythm — needs IV calcium blocker.`, [e], { tag: 'k', p: e, kind: 'chem' }),
-          fact(`${pName(f)}: Insurance refusal blocking rehab transfer — family demanding the department chief.`, [f], { tag: 'k', p: f, kind: 'legal' }),
+          fact(`${pName(e)}: Serum potassium 7.8 widening QRS waves — needs IV calcium + insulin, SAME metabolic kind as ${pName(b)}.`, [e, b], { tag: 'k', p: e, kind: 'chem' }),
+          fact(`${pName(f)}: Out-of-network payer denial stalling rehab transfer — family demanding chief medical officer.`, [f], { tag: 'k', p: f, kind: 'legal' }),
         ],
       }),
       makeCard({
         index: 4, time: '01:18', wing: 'Crisis Kinds', wingIndex: 0, label: 'Urgent ≠ Surgical',
         shown: [
-          fact(`${pName(b)} and ${pName(e)} are genuinely life-threatening YET chemical — routing them to OR delays their antidote!`, [b, e], { tag: 'note' }),
-          fact(`Only physical structural tears/blocks belong on the Trauma Surgeon's table.`, [], { tag: 'rule' }),
+          fact(`Metabolic/chemical crashes can be just as fatal as arterial bleeds, yet belong to Medicine/Tox drips rather than the OR.`, [], { tag: 'rule' }),
+          fact(`Route ONLY physical structural tears or mechanical obstructions to Trauma Surgery.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
@@ -1427,7 +1452,7 @@ export const SEMANTIC_F78 = {
       scenarioTitle: 'Sorting the Kind of Crisis',
       dispatch: 'Six urgent pages hit at once — separate Physical Mechanical Tears/Blocks from Blood Chemistry and Legal Disputes.',
       order: 'Page the Trauma Surgeon ONLY for patients suffering a Physical Mechanical Tear or Block.',
-      hint: 'Separate physical structural tears/blocks from chemical/sugar/potassium emergencies and legal/family disputes.',
+      hint: 'Separate physical structural tears/blocks from chemical/glucose/potassium emergencies and legal/proxy disputes.',
       bayDefaultLabel: 'Crisis Kind',
       cards,
       evaluate(activeCards) {
@@ -1447,67 +1472,66 @@ export const SEMANTIC_F78 = {
   },
 
   // #79 Analogical abstraction (After · Meta)
-  // Extracting the cross-organ invariant from Skull + Heart-Sac ("Swelling inside a rigid unstretchable shell crushes flow")
-  // and transferring it across 6 brand-new organs (Shin, Eye Socket, Burn-Scar Hand, Forearm Cast vs. Soft Rash/Ankles)
+  // Cross-organ rigid-shell compartment invariant + perfusion gap (Diastolic BP − Compartment Pressure < 30 mmHg)
   'analogical-abstraction': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'Deep Pattern', wingIndex: 0, label: 'Two Cases → One Invariant',
+        index: 0, time: '01:02', wing: 'Deep Pattern', wingIndex: 0, label: 'Cross-Organ Invariant',
         shown: [
-          fact(`Case 1 (Skull): Bleed inside rigid bone box → crushed brain. Case 2 (Heart Sac): Fluid inside tough sac → crushed heart.`, [], { tag: 'rule' }),
-          fact(`Shared Law: Swelling trapped inside a RIGID UNSTRETCHABLE SHELL cuts off blood flow → needs immediate pressure release!`, [], { tag: 'rule' }),
+          fact(`Case 1 (Skull): Bleed inside rigid cranium crushes brain flow. Case 2 (Pericardium): Fluid inside tough heart sac crushes cardiac fill.`, [], { tag: 'rule' }),
+          fact(`Invariant Law: Swelling trapped inside a RIGID UNSTRETCHABLE SHELL cuts off perfusion (Diastolic BP − Shell Pressure < 30 mmHg) → urgent surgical release.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'New Organs A', wingIndex: 1, label: 'Bays A & B',
+        index: 1, time: '01:06', wing: 'New Organs A', wingIndex: 1, label: 'Compartments A & B',
         shown: [
-          fact(`${pName(a)}: Shin muscle rock-hard inside its tight tough sleeve → foot cold, pale, ZERO pulse.`, [a], { tag: 'box', p: a, trap: true }),
-          fact(`${pName(b)}: Soft itchy hives across both arms → loose skin, warm pink hands, strong pulses.`, [b], { tag: 'box', p: b, trap: false }),
+          fact(`${pName(a)}: Tibial fascia rock-hard at 52 mmHg (Diastolic BP 74 mmHg) — HIGHER pressure than ${pName(b)}'s soft arm; foot cold, pulseless.`, [a, b], { tag: 'box', p: a, trap: true }),
+          fact(`${pName(b)}: Diffuse allergic urticaria across both arms — loose pliable skin, pressure 8 mmHg, strong radial pulses.`, [b], { tag: 'box', p: b, trap: false }),
         ],
         alt: [
-          fact(`${pName(a)}: Soft surface shin bruise → loose tissue, warm foot, strong pulse.`, [a], { tag: 'box', p: a, trap: false }),
-          fact(`${pName(b)}: Forearm swelled rock-hard inside tight plaster cast → fingers pale, numb, vanishing pulse.`, [b], { tag: 'box', p: b, trap: true }),
+          fact(`${pName(a)}: Superficial shin hematoma — soft pliable tissue, pressure 10 mmHg, warm foot with strong pulse.`, [a], { tag: 'box', p: a, trap: false }),
+          fact(`${pName(b)}: Forearm swollen rock-hard inside circular plaster cast at 50 mmHg (Diastolic BP 72 mmHg) — HIGHER than ${pName(a)}; fingers pale, numb.`, [b, a], { tag: 'box', p: b, trap: true }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'New Organs B', wingIndex: 1, label: 'Bays C & D',
+        index: 2, time: '01:10', wing: 'New Organs B', wingIndex: 1, label: 'Compartments C & D',
         shown: [
-          fact(`${pName(c)}: Hand wrapped by tight leathery circular burn scar acting like a vise → finger blood flow STOPPED.`, [c], { tag: 'box', p: c, trap: true }),
-          fact(`${pName(d)}: Puffy ankles after a long flight → soft when pressed, warm pink toes, strong pulses.`, [d], { tag: 'box', p: d, trap: false }),
+          fact(`${pName(c)}: Circumferential leathery burn eschar locking wrist at 56 mmHg (Diastolic BP 76 mmHg) — SAME rigid-shell cutoff as ${pName(a)}; zero Doppler flow.`, [c, a], { tag: 'box', p: c, trap: true }),
+          fact(`${pName(d)}: Dependent bilateral ankle edema — soft pitting tissue, pressure 9 mmHg, warm toes and strong pulses.`, [d], { tag: 'box', p: d, trap: false }),
         ],
         alt: [
-          fact(`${pName(c)}: Mild sunburn across shoulders → soft skin, normal blood flow.`, [c], { tag: 'box', p: c, trap: false }),
-          fact(`${pName(d)}: Bleed trapped behind rigid bony eye socket → eye bulging rock-hard, vision fading.`, [d], { tag: 'box', p: d, trap: true }),
+          fact(`${pName(c)}: Superficial shoulder sunburn — soft elastic skin, normal capillary refill and strong pulses.`, [c], { tag: 'box', p: c, trap: false }),
+          fact(`${pName(d)}: Retrobulbar hemorrhage trapped behind rigid bony orbit at 54 mmHg (Diastolic BP 76 mmHg) — SAME rigid-shell cutoff as ${pName(b)}; proptosis + fading vision.`, [d, b], { tag: 'box', p: d, trap: true }),
         ],
       }),
       makeCard({
-        index: 3, time: '01:14', wing: 'New Organs C', wingIndex: 0, label: 'Bays E & F (Lookalikes)',
+        index: 3, time: '01:14', wing: 'New Organs C', wingIndex: 0, label: 'Lookalikes E & F',
         shown: [
-          fact(`${pName(e)}: Swollen knee joint — soft fluid pocket, warm foot, strong foot pulse.`, [e], { tag: 'box', p: e, trap: false }),
-          fact(`${pName(f)}: Huge swollen lip from bee sting — loose soft tissue, pink color, open airway.`, [f], { tag: 'box', p: f, trap: false }),
+          fact(`${pName(e)}: Swollen knee effusion — soft fluctuant joint, pressure 12 mmHg (Diastolic 78), warm foot with strong pulse.`, [e], { tag: 'box', p: e, trap: false }),
+          fact(`${pName(f)}: Dramatic bee-sting lip angioedema — loose soft tissue, patent airway, LOWER compartment pressure than any rigid shell.`, [f, e], { tag: 'box', p: f, trap: false }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'Deep Pattern', wingIndex: 0, label: 'Rigid Shell + Flow Cutoff',
+        index: 4, time: '01:18', wing: 'Deep Pattern', wingIndex: 0, label: 'Rigid Shell + Perfusion Cutoff',
         shown: [
-          fact(`All six bays are SWOLLEN — ignore surface puffiness (${pName(d)}, ${pName(e)}, ${pName(f)}) where tissue stays soft and pulses stay strong!`, [d, e, f], { tag: 'note' }),
-          fact(`Look ONLY for the deep invariant: Rigid unstretchable shell + rock-hard pressure + lost downstream pulse/vision.`, [], { tag: 'rule' }),
+          fact(`All six bays look visibly swollen — ignore pliable soft-tissue swelling with normal pulses and perfusion gap ≥ 30.`, [], { tag: 'rule' }),
+          fact(`Transfer the skull/pericardium invariant: Rigid unstretchable shell + rock-hard pressure (gap < 30) + lost downstream flow.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
-        index: 5, time: '01:21', wing: 'Release OR', wingIndex: 1, label: 'Cut Pressure Now',
+        index: 5, time: '01:21', wing: 'Release OR', wingIndex: 1, label: 'Decompress Now',
         shown: [
-          fact(`Apply the skull/heart-sac invariant to tonight's limb, cast, burn, and eye bays.`, [], { tag: 'rule' }),
-          fact(`Release pressure immediately for EVERY bay trapped inside a rigid shell cutting off blood flow.`, [], { tag: 'rule' }),
+          fact(`Apply the rigid-shell perfusion invariant across limb fascia, casts, circumferential burn eschar, and bony orbit.`, [], { tag: 'rule' }),
+          fact(`Perform emergency surgical release for EVERY bay trapped in a rigid shell cutting off blood flow.`, [], { tag: 'rule' }),
         ],
       }),
     ];
     return {
       scenarioTitle: 'One Deep Law Across Organs',
-      dispatch: 'Extract the "rigid shell + trapped swelling = lost blood flow" law from Skull/Heart cases and spot it in six swollen bays.',
-      order: 'Release pressure immediately for EVERY patient whose swelling is trapped in a rigid shell cutting off blood flow.',
-      hint: 'Separate rock-hard rigid-shell traps (tight sleeve, cast, burn vise, bony eye socket) from soft swelling with strong pulses.',
+      dispatch: 'Extract the rigid-shell compartment law (Skull / Pericardium → perfusion gap < 30 mmHg) and spot it across six swollen bays.',
+      order: 'Release pressure immediately for EVERY patient whose swelling is trapped in a rigid shell cutting off perfusion.',
+      hint: 'Separate rigid-shell perfusion traps (fascia, cast, burn eschar, bony orbit with gap < 30) from soft pliable swelling.',
       bayDefaultLabel: 'Pressure Trap',
       cards,
       evaluate(activeCards) {
@@ -1516,69 +1540,69 @@ export const SEMANTIC_F78 = {
         const rivals = list.filter((x) => !x.trap).map((x) => x.p);
         return {
           targets,
-          proof: `Transferring the "swelling in a rigid unstretchable shell crushes flow" invariant isolates ${formatList(targets)}.`,
-          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} has soft, loose surface swelling with intact warm blood flow and strong pulses.`),
+          proof: `Transferring the "swelling in a rigid unstretchable shell crushes perfusion" invariant isolates ${formatList(targets)}.`,
+          rival: buildRivalInfo(targets, rivals, (r) => `${pName(r)} has soft, pliable surface swelling with intact perfusion and strong pulses.`),
         };
       },
     };
   },
 
   // #80 Integrative reasoning (Inside · Meta — Grand Capstone!)
-  // Synthesizes ALL major trauma loops: 01:15 Scan Update (overturning 01:00 guess) ∩ Shock (BP < 90 OR HR > Top BP) ∩ Full Code!
+  // Synthesizes 01:15 Scan Update (overturning 01:00 guess) ∩ Shock (BP < 90 OR HR > Top BP) ∩ Full Code
   'integrative-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
         index: 0, time: '01:02', wing: 'Trauma Chief', wingIndex: 0, label: '3-Gate Chief Protocol',
         shown: [
-          fact(`Roll to OR ONLY if ALL 3 gates pass: (1) 01:15 STAT Scan POSITIVE (overriding 01:00 guess!) + (2) Shock (BP < 90 OR HR > Top BP) + (3) Verified Full Code!`, [], { tag: 'rule' }),
-          fact(`Honor verified DNRs, retract cleared 01:00 guesses, and catch compensated young shock (HR > Top BP)!`, [], { tag: 'rule' }),
+          fact(`Roll to OR ONLY if ALL 3 gates pass: Gate 1 = 01:15 STAT Scan POSITIVE (overriding 01:00 guess) · Gate 2 = Shock (BP < 90 OR HR > Top BP) · Gate 3 = Verified Full Code.`, [], { tag: 'rule' }),
+          fact(`Retract cleared 01:00 guesses, catch compensated shock (HR > Top BP), and honor verified Comfort-Only DNRs.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 1, time: '01:06', wing: '01:00 Intake', wingIndex: 1, label: 'Outdated 01:00 Guesses',
         shown: [
-          fact(`01:00 Early Guess: ${pName(b)} looked highest risk (70%) > ${pName(a)} (40%) > ${pName(e)} (35%).`, [b, a, e], { tag: 'old' }),
-          fact(`Wait for 01:15 STAT Scans below before acting — early guesses can flip!`, [], { tag: 'rule' }),
+          fact(`01:00 Early Estimate: ${pName(b)} looked HIGHER risk (70%) than ${pName(a)} (40%) and ${pName(e)} (35%).`, [b, a, e], { tag: 'old' }),
+          fact(`Wait for 01:15 STAT Scans below — verified imaging supersedes early risk estimates.`, [], { tag: 'rule' }),
         ],
       }),
       makeCard({
         index: 2, time: '01:15', wing: 'STAT Scans', wingIndex: 0, label: 'Gate 1: 01:15 Scan Results',
         shown: [
-          fact(`POSITIVE internal bleed: ${pName(a)}, ${pName(c)}, ${pName(d)}, and ${pName(e)}.`, [a, c, d, e], { tag: 'pos', ps: [a, c, d, e] }),
-          fact(`100% CLEAN (zero bleed): ${pName(b)} and ${pName(f)}.`, [b, f], { tag: 'neg', ps: [b, f] }),
+          fact(`POSITIVE internal hemorrhage: ${pName(a)}, ${pName(c)}, ${pName(d)}, and ${pName(e)}.`, [a, c, d, e], { tag: 'pos', ps: [a, c, d, e] }),
+          fact(`NEGATIVE for internal hemorrhage: ${pName(b)} and ${pName(f)}.`, [b, f], { tag: 'neg', ps: [b, f] }),
         ],
         alt: [
-          fact(`POSITIVE internal bleed: ${pName(b)}, ${pName(c)}, ${pName(d)}, and ${pName(e)}.`, [b, c, d, e], { tag: 'pos', ps: [b, c, d, e] }),
-          fact(`100% CLEAN (zero bleed): ${pName(a)} and ${pName(f)}.`, [a, f], { tag: 'neg', ps: [a, f] }),
+          fact(`POSITIVE internal hemorrhage: ${pName(b)}, ${pName(c)}, ${pName(d)}, and ${pName(e)}.`, [b, c, d, e], { tag: 'pos', ps: [b, c, d, e] }),
+          fact(`NEGATIVE for internal hemorrhage: ${pName(a)} and ${pName(f)}.`, [a, f], { tag: 'neg', ps: [a, f] }),
         ],
       }),
       makeCard({
         index: 3, time: '01:20', wing: 'Live Monitors', wingIndex: 1, label: 'Gate 2: BP & Heart Rate',
         shown: [
           fact(`${pName(a)}: BP 80/46, HR 134 · ${pName(b)}: BP 122/78, HR 78 · ${pName(c)}: BP 82/48, HR 136.`, [a, b, c], { tag: 'vit', list: [{ p: a, bp: 80, hr: 134 }, { p: b, bp: 122, hr: 78 }, { p: c, bp: 82, hr: 136 }] }),
-          fact(`${pName(d)}: BP 118/76, HR 134 · ${pName(e)}: BP 120/76, HR 84 · ${pName(f)}: BP 84/50, HR 128.`, [d, e, f], { tag: 'vit', list: [{ p: d, bp: 118, hr: 134 }, { p: e, bp: 120, hr: 84 }, { p: f, bp: 84, hr: 128 }] }),
+          fact(`${pName(d)}: BP 118/76, HR 134 — HIGHER HR than ${pName(e)}'s BP 120/76, HR 84 · ${pName(f)}: BP 84/50, HR 128.`, [d, e, f], { tag: 'vit', list: [{ p: d, bp: 118, hr: 134 }, { p: e, bp: 120, hr: 84 }, { p: f, bp: 84, hr: 128 }] }),
         ],
         alt: [
           fact(`${pName(a)}: BP 120/76, HR 82 · ${pName(b)}: BP 78/44, HR 138 · ${pName(c)}: BP 84/50, HR 132.`, [a, b, c], { tag: 'vit', list: [{ p: a, bp: 120, hr: 82 }, { p: b, bp: 78, hr: 138 }, { p: c, bp: 84, hr: 132 }] }),
-          fact(`${pName(d)}: BP 86/52, HR 130 · ${pName(e)}: BP 122/78, HR 86 · ${pName(f)}: BP 84/50, HR 128.`, [d, e, f], { tag: 'vit', list: [{ p: d, bp: 86, hr: 130 }, { p: e, bp: 122, hr: 86 }, { p: f, bp: 84, hr: 128 }] }),
+          fact(`${pName(d)}: BP 86/52, HR 130 — LOWER BP than ${pName(e)}'s BP 122/78, HR 86 · ${pName(f)}: BP 84/50, HR 128.`, [d, e, f], { tag: 'vit', list: [{ p: d, bp: 86, hr: 130 }, { p: e, bp: 122, hr: 86 }, { p: f, bp: 84, hr: 128 }] }),
         ],
       }),
       makeCard({
         index: 4, time: '01:23', wing: 'Ethics File', wingIndex: 0, label: 'Gate 3: Verified Code Status',
         shown: [
           fact(`Verified FULL CODE: ${pName(a)}, ${pName(b)}, ${pName(d)}, ${pName(e)}, and ${pName(f)}.`, [a, b, d, e, f], { tag: 'fc', ps: [a, b, d, e, f] }),
-          fact(`Verified Signed Comfort-Only DNR: ${pName(c)} (must honor Comfort Care!).`, [c], { tag: 'dnr', p: c }),
+          fact(`Verified Signed Comfort-Only DNR on chart: ${pName(c)}.`, [c], { tag: 'dnr', p: c }),
         ],
         alt: [
           fact(`Verified FULL CODE: ${pName(a)}, ${pName(b)}, ${pName(c)}, ${pName(e)}, and ${pName(f)}.`, [a, b, c, e, f], { tag: 'fc', ps: [a, b, c, e, f] }),
-          fact(`Verified Signed Comfort-Only DNR: ${pName(d)} (must honor Comfort Care!).`, [d], { tag: 'dnr', p: d }),
+          fact(`Verified Signed Comfort-Only DNR on chart: ${pName(d)}.`, [d], { tag: 'dnr', p: d }),
         ],
       }),
       makeCard({
         index: 5, time: '01:25', wing: 'OR Charge', wingIndex: 1, label: 'Execute Full Chief Loop',
         shown: [
-          fact(`Intersect Gate 1 (01:15 Scan +) ∩ Gate 2 (BP < 90 OR HR > BP) ∩ Gate 3 (Full Code)!`, [], { tag: 'rule' }),
+          fact(`Intersect Gate 1 (01:15 Scan +) ∩ Gate 2 (BP < 90 OR HR > BP) ∩ Gate 3 (Full Code).`, [], { tag: 'rule' }),
           fact(`Roll ONLY the bays passing all three gates straight into Emergency OR.`, [], { tag: 'rule' }),
         ],
       }),
@@ -1587,7 +1611,7 @@ export const SEMANTIC_F78 = {
       scenarioTitle: 'Full Trauma Chief Workup',
       dispatch: 'Capstone loop: integrate STAT scan reversals, compensated shock (BP < 90 or HR > Top BP), and Full-Code ethics across all six bays.',
       order: 'Roll to OR EVERY patient who is 01:15 Scan-POSITIVE, in shock (BP < 90 OR HR > Top BP), AND Full Code.',
-      hint: 'Check Gate 1 (Scan +) ∩ Gate 2 (BP < 90 or HR > Top BP) ∩ Gate 3 (Full Code) — don’t miss HR > BP or DNRs!',
+      hint: 'Check Gate 1 (Scan +) ∩ Gate 2 (BP < 90 or HR > Top BP) ∩ Gate 3 (Full Code) — watch HR > BP and DNRs.',
       bayDefaultLabel: 'Chief Loop',
       cards,
       evaluate(activeCards) {
@@ -1603,7 +1627,7 @@ export const SEMANTIC_F78 = {
           targets,
           proof: `Integrating Gate 1 (01:15 Scan +), Gate 2 (BP < 90 or HR > Top BP), and Gate 3 (Full Code) clears ${formatList(targets)} for OR.`,
           rival: buildRivalInfo(targets, rivals, (r) => {
-            if (!pos.has(r)) return `${pName(r)}'s 01:15 STAT scan was 100% clean, overturning earlier guesses.`;
+            if (!pos.has(r)) return `${pName(r)}'s 01:15 STAT scan was negative, overturning earlier guesses.`;
             if (!fc.has(r)) return `${pName(r)} has a verified Comfort-Only DNR that must be honored.`;
             return `${pName(r)}'s vitals show no shock (BP ≥ 90 and HR ≤ Top BP).`;
           }),
