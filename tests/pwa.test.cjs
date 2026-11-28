@@ -171,6 +171,9 @@ test('sw.js passes syntax check, precaches only existing PoI assets, and bypasse
       'https://www.philosophyofintelligence.life/common-earth/',
       'https://www.philosophyofintelligence.life/common-earth/index.html',
       'https://www.philosophyofintelligence.life/common-earth/app.js',
+      'https://www.philosophyofintelligence.life/trauma-medicine/',
+      'https://www.philosophyofintelligence.life/trauma-medicine/trauma.css',
+      'https://www.philosophyofintelligence.life/trauma-medicine/app.js',
       'https://suno.com/embed/9d62272c-0a81-4f29-b6b0-52f03324b7b8'
     ]) {
       let responded = false;

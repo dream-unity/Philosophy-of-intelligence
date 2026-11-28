@@ -27,8 +27,10 @@ app.use(
         res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache');
       } else if (path.basename(filePath) === 'sw.js') {
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         res.setHeader('Service-Worker-Allowed', '/');
+      } else if (/[\\/]trauma-medicine[\\/]/i.test(filePath)) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       } else if (/\.(?:html|js|mjs|css)$/i.test(filePath)) {
         res.setHeader('Cache-Control', 'no-cache');
       }

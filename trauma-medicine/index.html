@@ -6,7 +6,35 @@
   <title>Trauma Doctor — Master the Patterns of Clinical Reasoning</title>
   <meta name="description" content="Play as a medical doctor in the trauma ward, learning the patterns of reasoning that make a great doctor across pre-hospital triage, active resuscitation, family talks, and autopsy review.">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./trauma.css">
+  <script>
+    (function () {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          regs.forEach(function (reg) { reg.update(); });
+        }).catch(function () {});
+      }
+      if ('caches' in window) {
+        var foundStale = false;
+        caches.keys().then(function (keys) {
+          return Promise.all(keys.map(function (k) {
+            return caches.open(k).then(function (cache) {
+              return cache.keys().then(function (reqs) {
+                var stale = reqs.filter(function (r) { return /\/trauma-medicine\//i.test(r.url); });
+                if (stale.length) foundStale = true;
+                return Promise.all(stale.map(function (r) { return cache.delete(r); }));
+              });
+            });
+          }));
+        }).then(function () {
+          if (foundStale && !sessionStorage.getItem('tm_cache_healed_v5')) {
+            sessionStorage.setItem('tm_cache_healed_v5', '1');
+            location.reload();
+          }
+        }).catch(function () {});
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="./trauma.css?v=5">
 </head>
 <body data-state="title">
   <main class="tm-shell">
@@ -258,6 +286,6 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=5"></script>
 </body>
 </html>
