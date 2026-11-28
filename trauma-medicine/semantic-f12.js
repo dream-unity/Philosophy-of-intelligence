@@ -1250,94 +1250,87 @@ export const SEMANTIC_F12 = {
   },
 
   // #15 Transitive reasoning (Before · Atomic)
-  // Pure 6-patient scrambled comparative ordering chain (A > B > C > D = E > F) — classic fluid-intelligence core!
+  // Deep 6-patient scrambled hemorrhage chain across 4 dense cards — #1 already took the sole OR infuser,
+  // forcing the player to assemble the entire transitive order end-to-end to isolate #2 and #3!
   'transitive-reasoning': (rng) => {
     const [a, b, c, d, e, f] = pickPlayers(rng, 6);
     const cards = [
       makeCard({
-        index: 0, time: '01:02', wing: 'Bleed Watch', wingIndex: 0, label: 'Pair Compare 1',
+        index: 0, time: '01:02', wing: 'Resus South', wingIndex: 0, label: 'Bleed Compare A',
         shown: [
-          fact(`${pName(b)} is losing blood FASTER THAN ${pName(c)}.`, [b, c], { tag: 'gt', hi: b, lo: c }),
-          fact(`${pName(d)} is losing blood SLOWER THAN ${pName(c)}.`, [d, c], { tag: 'gt', hi: c, lo: d }),
+          fact(`${pName(c)} is losing blood FASTER THAN ${pName(d)}.`, [c, d], { tag: 'gt', edges: [[c, d]] }),
+          fact(`${pName(d)} is losing blood FASTER THAN ${pName(e)}.`, [d, e], { tag: 'gt', edges: [[d, e]] }),
         ],
         alt: [
-          fact(`${pName(c)} is losing blood FASTER THAN ${pName(b)}.`, [c, b], { tag: 'gt', hi: c, lo: b }),
-          fact(`${pName(d)} is losing blood SLOWER THAN ${pName(b)}.`, [d, b], { tag: 'gt', hi: b, lo: d }),
+          fact(`${pName(d)} is losing blood FASTER THAN ${pName(c)}.`, [d, c], { tag: 'gt', edges: [[d, c]] }),
+          fact(`${pName(c)} is losing blood FASTER THAN ${pName(e)}.`, [c, e], { tag: 'gt', edges: [[c, e]] }),
         ],
       }),
       makeCard({
-        index: 1, time: '01:06', wing: 'Bleed Watch', wingIndex: 0, label: 'Pair Compare 2',
+        index: 1, time: '01:06', wing: 'Resus North', wingIndex: 1, label: 'Bleed Compare B',
         shown: [
-          fact(`${pName(a)} is losing blood FASTER THAN ${pName(b)}.`, [a, b], { tag: 'gt', hi: a, lo: b }),
-          fact(`${pName(e)} is losing blood at the SAME rate as ${pName(d)}.`, [e, d], { tag: 'eq', p1: e, p2: d }),
+          fact(`${pName(b)} is losing blood FASTER THAN both ${pName(c)} and ${pName(d)}.`, [b, c, d], { tag: 'gt', edges: [[b, c], [b, d]] }),
+          fact(`${pName(a)} is losing blood FASTER THAN both ${pName(c)} and ${pName(d)}.`, [a, c, d], { tag: 'gt', edges: [[a, c], [a, d]] }),
         ],
         alt: [
-          fact(`${pName(b)} is losing blood FASTER THAN ${pName(a)}.`, [b, a], { tag: 'gt', hi: b, lo: a }),
-          fact(`${pName(e)} is losing blood at the SAME rate as ${pName(d)}.`, [e, d], { tag: 'eq', p1: e, p2: d }),
+          fact(`${pName(a)} is losing blood FASTER THAN both ${pName(c)} and ${pName(d)}.`, [a, c, d], { tag: 'gt', edges: [[a, c], [a, d]] }),
+          fact(`${pName(b)} is losing blood SLOWER THAN ${pName(e)}, yet FASTER THAN ${pName(f)}.`, [b, e, f], { tag: 'gt', edges: [[e, b], [b, f]] }),
         ],
       }),
       makeCard({
-        index: 2, time: '01:10', wing: 'Triage Desk', wingIndex: 1, label: 'Pair Compare 3',
+        index: 2, time: '01:10', wing: 'Triage Desk', wingIndex: 0, label: 'Bleed Compare C',
         shown: [
-          fact(`${pName(f)} is losing blood SLOWER THAN ${pName(e)}.`, [f, e], { tag: 'gt', hi: e, lo: f }),
-          fact(`${pName(c)} is losing blood FASTER THAN ${pName(e)}.`, [c, e], { tag: 'gt', hi: c, lo: e }),
-        ],
-      }),
-      makeCard({
-        index: 3, time: '01:14', wing: 'Triage Desk', wingIndex: 1, label: 'Cross-Link Check',
-        shown: [
-          fact(`${pName(a)} is losing blood FASTER THAN ${pName(c)}.`, [a, c], { tag: 'gt', hi: a, lo: c }),
-          fact(`${pName(f)} is the slowest bleeder on the ward right now.`, [f], { tag: 'slowest', p: f }),
+          fact(`${pName(a)} is losing blood FASTER THAN ${pName(b)}.`, [a, b], { tag: 'gt', edges: [[a, b]] }),
+          fact(`${pName(e)} is losing blood FASTER THAN ${pName(f)}.`, [e, f], { tag: 'gt', edges: [[e, f]] }),
         ],
         alt: [
-          fact(`${pName(c)} is losing blood FASTER THAN ${pName(a)}.`, [c, a], { tag: 'gt', hi: c, lo: a }),
-          fact(`${pName(f)} is the slowest bleeder on the ward right now.`, [f], { tag: 'slowest', p: f }),
+          fact(`${pName(b)} is losing blood FASTER THAN ${pName(a)}.`, [b, a], { tag: 'gt', edges: [[b, a]] }),
+          fact(`${pName(e)} is losing blood FASTER THAN ${pName(f)}.`, [e, f], { tag: 'gt', edges: [[e, f]] }),
         ],
       }),
       makeCard({
-        index: 4, time: '01:18', wing: 'Blood Bank', wingIndex: 0, label: 'Two Rapid Infusers',
+        index: 3, time: '01:14', wing: 'Blood Bank', wingIndex: 1, label: 'OR Infuser Allocation',
         shown: [
-          fact(`Only TWO rapid blood infusers remain on the floor right now.`, [], { tag: 'note' }),
-          fact(`Assemble the full 6-patient speed ranking from fastest (#1) to slowest (#6).`, [], { tag: 'note' }),
-        ],
-      }),
-      makeCard({
-        index: 5, time: '01:21', wing: 'Trauma Lead', wingIndex: 1, label: 'Top-Two Priority',
-        shown: [
-          fact(`Hook up the TWO fastest bleeders (#1 and #2 in the full chain) immediately.`, [], { tag: 'act' }),
-          fact(`Be careful: #3 beats #4, #5, and #6, yet still sits behind the top two!`, [], { tag: 'act' }),
+          fact(`The #1 fastest bleeder in the entire chain ALREADY went into OR with the first infuser — skip #1.`, [], { tag: 'rule' }),
+          fact(`${pName(f)} has the slowest bleed rate on the ward; assign the two floor infusers to #2 and #3.`, [f], { tag: 'slowest', p: f }),
         ],
       }),
     ];
     return {
-      scenarioTitle: 'Six-Bay Hemorrhage Ranking',
-      dispatch: 'Six scrambled bleed-rate comparisons link all six bays — build the complete ranking to pick #1 and #2.',
-      order: 'Hook up the TWO fastest-bleeding patients (#1 and #2 in the full order) to the rapid infusers.',
-      hint: 'Link every "FASTER THAN" and "SLOWER THAN" arrow into one full top-to-bottom chain.',
+      scenarioTitle: 'Six-Bay Hemorrhage Chain',
+      dispatch: '#1 already went into OR — link all six bleed rates end-to-end to isolate #2 and #3.',
+      order: 'Hook up #2 and #3 in the bleed-speed chain to the two portable infusers (skip #1, already in OR).',
+      hint: 'Chain every FASTER THAN / SLOWER THAN link from #1 to #6, skip #1, then select #2 and #3.',
       bayDefaultLabel: 'Bleed Speed',
       cards,
       evaluate(activeCards) {
         const nodes = [a, b, c, d, e, f];
-        const edges = factsByTag(activeCards, 'gt').map((f) => [f.hi, f.lo]);
+        const edges = [];
+        for (const fItem of factsByTag(activeCards, 'gt')) {
+          for (const pair of fItem.edges || []) edges.push(pair);
+        }
         const { gt, inDeg } = rankGreaterGraph(nodes, edges);
-        // Check acyclicity: no node beats itself
         for (const n of nodes) {
           if (gt.get(n).has(n)) return { targets: [], proof: 'Cycle', rival: null };
         }
-        // Rank by number of people strictly above them (inDeg), then beats count
         const ordered = [...nodes].sort((x, y) => (inDeg.get(x) - inDeg.get(y)) || (gt.get(y).size - gt.get(x).size));
-        // Ensure top 2 are uniquely separated from #3
-        if (inDeg.get(ordered[0]) !== 0 || inDeg.get(ordered[1]) !== 1 || inDeg.get(ordered[2]) < 2) {
+        // Guarantee strict top-4 separation (#1 > #2 > #3 > #4)
+        if (
+          inDeg.get(ordered[0]) !== 0 ||
+          inDeg.get(ordered[1]) !== 1 ||
+          inDeg.get(ordered[2]) !== 2 ||
+          inDeg.get(ordered[3]) < 3
+        ) {
           return { targets: [], proof: 'Ambiguous order', rival: null };
         }
-        const targets = uniqueSortedIds([ordered[0], ordered[1]]);
+        const targets = uniqueSortedIds([ordered[1], ordered[2]]);
         return {
           targets,
-          proof: `Full bleed-speed chain: ${ordered.map(pName).join(' > ')} — placing ${pName(ordered[0])} (#1) and ${pName(ordered[1])} (#2) on the two infusers.`,
+          proof: `Full bleed-speed chain: ${ordered.map(pName).join(' > ')}. ${pName(ordered[0])} (#1) already went into OR, so ${pName(ordered[1])} (#2) and ${pName(ordered[2])} (#3) get the two floor infusers.`,
           rival: {
-            patientId: ordered[2],
-            patientName: pName(ordered[2]),
-            reason: `${pName(ordered[2])} ranks #3 (faster than ${pName(ordered[3])}), but strictly slower than both ${pName(ordered[0])} and ${pName(ordered[1])}.`,
+            patientId: ordered[0],
+            patientName: pName(ordered[0]),
+            reason: `${pName(ordered[0])} is #1 fastest and ALREADY received the OR infuser — floor infusers go to #2 (${pName(ordered[1])}) and #3 (${pName(ordered[2])}).`,
           },
         };
       },

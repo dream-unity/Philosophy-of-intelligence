@@ -177,18 +177,19 @@ export class TraumaWardScene {
     this.orientation = isVertical ? 'vertical' : 'horizontal';
 
     if (isVertical) {
-      const padX = 8;
-      const padTop = 22;
-      const padBottom = 8;
-      const gapX = 8;
-      const gapY = 7;
+      const compactH = this.height < 480;
+      const padX = compactH ? 6 : 8;
+      const padTop = compactH ? 16 : 20;
+      const padBottom = compactH ? 5 : 7;
+      const gapX = compactH ? 6 : 8;
+      const gapY = compactH ? 5 : 6;
       const cols = 2;
       const rows = 5;
 
       const availW = this.width - padX * 2 - gapX * (cols - 1);
       const availH = this.height - padTop - padBottom - gapY * (rows - 1);
-      const cardW = Math.max(90, Math.floor(availW / cols));
-      const cardH = Math.max(58, Math.floor(availH / rows));
+      const cardW = Math.max(84, Math.floor(availW / cols));
+      const cardH = Math.max(38, Math.floor(availH / rows));
       const totalW = cardW * cols + gapX * (cols - 1);
       const totalH = cardH * rows + gapY * (rows - 1);
       const startX = Math.max(padX, Math.floor((this.width - totalW) / 2));
@@ -528,11 +529,12 @@ export class TraumaWardScene {
     const b5 = this.bays[5];
 
     if (this.orientation === 'vertical') {
-      if (b0) ctx.fillText('RESUS BAYS 01–05', b0.x, 11);
-      if (b5) ctx.fillText('INTAKE BAYS 06–10', b5.x, 11);
+      const hdrY = b0 ? Math.max(8, Math.round(b0.y * 0.5)) : 10;
+      if (b0) ctx.fillText('RESUS 01–05', b0.x, hdrY);
+      if (b5) ctx.fillText('INTAKE 06–10', b5.x, hdrY);
     } else {
-      if (b0) ctx.fillText('RESUS BAYS 01–05', b0.x, Math.max(9, b0.y - 9));
-      if (b5) ctx.fillText('INTAKE BAYS 06–10', b5.x, b5.y - 8);
+      if (b0) ctx.fillText('RESUS 01–05', b0.x, Math.max(9, b0.y - 9));
+      if (b5) ctx.fillText('INTAKE 06–10', b5.x, b5.y - 8);
     }
 
     for (const bay of this.bays) {
@@ -586,7 +588,8 @@ export class TraumaWardScene {
     const { x, y, w, h, progress, remainingSec, state, hovered, inShortlist, ruledOut, role } = bay;
     const isCalmBay = role === 'bystander' || role === 'stable';
     const isDimmed = state === 'dim' || (this.mode === 'playing' && (!inShortlist || ruledOut));
-    const isTallCard = h >= 76 && w >= 136;
+    const isTallCard = h >= 72 && w >= 124;
+    const isTightCard = h < 58;
 
     let borderColor = isCalmBay && this.mode === 'playing'
       ? 'rgba(148, 163, 184, 0.14)'
@@ -685,42 +688,44 @@ export class TraumaWardScene {
     }
 
     const keyNum = bay.index === 9 ? '0' : String(bay.index + 1);
-    const isNarrow = w < 118;
-    const pad = isNarrow ? 5 : 8;
-    const row1Y = y + (isTallCard ? 15 : 13);
+    const isNarrow = w < 104;
+    const pad = isNarrow ? 5 : isTightCard ? 6 : 8;
+    const row1Y = y + (isTallCard ? 15 : isTightCard ? 12 : 13);
 
     if (isNarrow) {
       ctx.fillStyle = '#f8fafc';
-      ctx.font = '700 10px system-ui, -apple-system, sans-serif';
+      ctx.font = '700 10.5px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(`${keyNum} ${bay.patient.name}`, x + pad, y + 11);
       if (this.mode === 'playing' || state !== 'active') {
         ctx.fillStyle = topRightColor;
-        ctx.font = '700 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.font = '700 9px ui-monospace, SFMono-Regular, Menlo, monospace';
         ctx.textAlign = 'left';
         ctx.fillText(topRightText, x + pad, y + 23);
       }
     } else {
       // Keycap
+      const capW = isTightCard ? 16 : 18;
+      const capH = isTightCard ? 14 : 16;
       ctx.fillStyle = hovered ? 'rgba(45, 212, 191, 0.25)' : 'rgba(148, 163, 184, 0.14)';
-      this._roundRect(ctx, x + pad, row1Y - 8, 18, 16, 4);
+      this._roundRect(ctx, x + pad, row1Y - capH / 2, capW, capH, 4);
       ctx.fill();
       ctx.fillStyle = hovered ? '#5eead4' : '#cbd5e1';
-      ctx.font = '700 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.font = `700 ${isTightCard ? 9.5 : 10.5}px ui-monospace, SFMono-Regular, Menlo, monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(keyNum, x + pad + 9, row1Y);
+      ctx.fillText(keyNum, x + pad + capW / 2, row1Y);
 
       // Patient name
       ctx.fillStyle = '#f8fafc';
-      ctx.font = '700 13px system-ui, -apple-system, sans-serif';
+      ctx.font = `700 ${isTightCard ? 11.5 : 13}px system-ui, -apple-system, sans-serif`;
       ctx.textAlign = 'left';
-      ctx.fillText(bay.patient.name, x + pad + 23, row1Y);
+      ctx.fillText(bay.patient.name, x + pad + capW + 4, row1Y);
 
       // Live Countdown or Debrief Outcome on top-right
       ctx.fillStyle = topRightColor;
-      ctx.font = '800 11.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.font = `800 ${isTightCard ? 10 : 11.5}px ui-monospace, SFMono-Regular, Menlo, monospace`;
       ctx.textAlign = 'right';
       ctx.fillText(topRightText, x + w - pad, row1Y);
 
@@ -730,7 +735,7 @@ export class TraumaWardScene {
         ctx.fillStyle = state === 'active' && !ruledOut ? '#94a3b8' : '#64748b';
         ctx.font = '600 10.5px system-ui, -apple-system, sans-serif';
         ctx.textAlign = 'left';
-        const maxCondW = w - pad * 2 - 58;
+        const maxCondW = w - pad * 2 - 52;
         let condText = bay.condition;
         while (condText.length > 6 && ctx.measureText(condText).width > maxCondW) {
           condText = condText.slice(0, -2) + '…';
@@ -751,12 +756,16 @@ export class TraumaWardScene {
       ? y + Math.round(h * 0.64)
       : isNarrow
         ? y + Math.round(h * 0.68)
-        : y + Math.round(h * 0.56);
+        : isTightCard
+          ? y + Math.round(h * 0.61)
+          : y + Math.round(h * 0.56);
     const waveAmp = isTallCard
-      ? Math.max(8, Math.min(14, h * 0.14))
-      : isNarrow
-        ? Math.max(5, Math.min(8, h * 0.11))
-        : Math.max(6, Math.min(11, h * 0.16));
+      ? Math.max(8, Math.min(13, h * 0.13))
+      : isTightCard
+        ? Math.max(4, Math.min(7, h * 0.13))
+        : isNarrow
+          ? Math.max(5, Math.min(8, h * 0.11))
+          : Math.max(6, Math.min(10, h * 0.15));
 
     ctx.strokeStyle = 'rgba(148, 163, 184, 0.1)';
     ctx.lineWidth = 1;

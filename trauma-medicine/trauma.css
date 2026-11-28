@@ -73,13 +73,14 @@ body {
    GAME SHELL LAYOUT — SINGLE-SCREEN ZERO-SCROLL DESKTOP COCKPIT
    ========================================================================== */
 .tm-shell {
-  height: 100dvh;
+  height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
   display: flex;
   flex-direction: column;
   max-width: 1480px;
   margin: 0 auto;
-  padding: 6px 10px 8px;
-  gap: 6px;
+  padding: 5px 9px 6px;
+  gap: 5px;
   overflow: hidden;
 }
 
@@ -141,6 +142,10 @@ body[data-state="title"] .tm-ward-wrap {
   font-variant-numeric: tabular-nums;
 }
 
+.tm-hud-val.is-hot {
+  color: #fde68a;
+}
+
 .tm-hud-sub {
   font-size: 11.5px;
   color: var(--accent-teal);
@@ -197,11 +202,11 @@ body[data-state="title"] .tm-ward-wrap {
   height: 15px;
 }
 
-/* Main playing workspace — Side-by-Side ICU Command Cockpit on Desktop */
+/* Main playing workspace — Side-by-Side ICU Command Cockpit on Desktop & Landscape Tablets */
 .tm-workspace {
   display: grid;
-  grid-template-columns: clamp(340px, 34.5vw, 445px) minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: clamp(224px, 27vw, 350px) minmax(0, 1fr);
+  gap: 7px;
   flex: 1;
   min-height: 0;
 }
@@ -267,7 +272,7 @@ body[data-mode="nback"] .tm-workspace {
   background: var(--bg-surface);
   border: 1px solid var(--border-hairline);
   border-radius: 7px;
-  padding: 8px 11px;
+  padding: 7px 10px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -371,19 +376,19 @@ body[data-mode="nback"] .tm-dossier {
   color: var(--ink-primary);
 }
 
-/* Primary Focal Anchor: Clinical Directive */
+/* Primary Focal Anchor: Clinical Directive + Optional Promoted Protocol Rule */
 .tm-order-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
-  padding: 8px 12px;
+  padding: 7px 11px;
   flex-shrink: 0;
 }
 
 .tm-order-main {
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1.3;
+  font-size: clamp(14px, 1.35vw, 17px);
+  font-weight: 750;
+  line-height: 1.26;
   color: var(--ink-primary);
 }
 
@@ -391,15 +396,43 @@ body[data-mode="nback"] .tm-dossier {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
 .tm-order-detail {
-  font-size: 13px;
-  line-height: 1.3;
+  font-size: clamp(11.5px, 1vw, 13px);
+  line-height: 1.28;
   color: var(--ink-secondary);
+}
+
+.tm-law-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 5px 9px;
+  border-radius: 5px;
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid var(--accent-amber);
+  font-size: clamp(12px, 1.05vw, 13.5px);
+  line-height: 1.32;
+  color: #fef3c7;
+}
+
+.tm-law-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.tm-law-text {
+  color: #f1f5f9;
 }
 
 .tm-shortlist-inline {
@@ -464,6 +497,23 @@ body[data-mode="nback"] .tm-dossier {
   color: var(--accent-teal);
 }
 
+.tm-tool-ruleout {
+  border: 1px solid var(--border-hairline);
+  background: var(--bg-deep);
+  color: var(--ink-secondary);
+}
+
+.tm-tool-ruleout:hover {
+  border-color: var(--accent-sky);
+  color: var(--ink-primary);
+}
+
+.tm-tool-ruleout.is-active {
+  border-color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+}
+
 .tm-tool-clear {
   border: 1px solid var(--border-hairline);
   background: var(--bg-deep);
@@ -493,7 +543,7 @@ body[data-mode="nback"] .tm-dossier {
   font-weight: 650;
 }
 
-/* Dossier Body: 2x3 Clinical Charts + Compact Cross-Checks Strip below */
+/* Dossier Body: Content-hugging 2x2 (or compact 2x3) Clinical Charts — ZERO giant empty boxes */
 .tm-dossier-body {
   display: flex;
   flex-direction: column;
@@ -505,24 +555,34 @@ body[data-mode="nback"] .tm-dossier {
 .tm-chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
-  gap: 8px;
-  flex: 1;
+  align-content: start;
+  gap: clamp(6px, 1vh, 11px);
   min-height: 0;
 }
 
 .tm-rec-card {
   background: var(--bg-subtle);
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 7px;
-  padding: 9px 12px;
+  padding: clamp(8px, 1.15vh, 13px) clamp(10px, 1.15vw, 14px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: clamp(5px, 0.85vh, 9px);
   min-height: 0;
-  overflow: hidden;
   transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.tm-rec-card.is-law-card {
+  border-color: rgba(245, 158, 11, 0.36);
+  border-left: 3px solid var(--accent-amber);
+  background: rgba(245, 158, 11, 0.055);
+}
+
+.tm-chart-grid[data-card-count="5"] .tm-rec-card,
+.tm-chart-grid[data-card-count="6"] .tm-rec-card {
+  padding: 7px 10px;
+  gap: 4px;
 }
 
 .tm-dossier-body:has(.tm-crosschecks) .tm-chart-grid {
@@ -530,9 +590,8 @@ body[data-mode="nback"] .tm-dossier {
 }
 
 .tm-dossier-body:has(.tm-crosschecks) .tm-rec-card {
-  padding: 5px 9px;
-  gap: 2px;
-  justify-content: center;
+  padding: 6px 9px;
+  gap: 3px;
 }
 
 .tm-dossier-body:has(.tm-crosschecks) .tm-rec-head {
@@ -650,15 +709,22 @@ body[data-mode="nback"] .tm-dossier {
 .tm-rec-lines {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  font-size: 14.5px;
-  line-height: 1.38;
-  color: #dbe4ef;
+  gap: clamp(5px, 0.9vh, 9px);
+  font-size: clamp(13.5px, 1.25vw, 16px);
+  line-height: 1.4;
+  color: #e2e8f0;
+}
+
+.tm-chart-grid[data-card-count="5"] .tm-rec-lines,
+.tm-chart-grid[data-card-count="6"] .tm-rec-lines {
+  font-size: clamp(12.25px, 1.05vw, 14px);
+  line-height: 1.32;
+  gap: 4px;
 }
 
 .tm-rec-line {
   padding-left: 9px;
-  border-left: 2.5px solid rgba(56, 189, 248, 0.32);
+  border-left: 2.5px solid rgba(56, 189, 248, 0.36);
 }
 
 .tm-rel-op {
@@ -803,11 +869,11 @@ body[data-mode="nback"] .tm-dossier {
   flex-shrink: 0;
 }
 
-/* Cross-Checks density & compact-desktop responsive overrides (placed after base .tm-rec-lines) */
+/* Cross-Checks density & compact-tablet / short-viewport zero-scroll overrides */
 .tm-dossier-body:has(.tm-crosschecks) .tm-rec-lines {
-  font-size: 12.75px;
-  line-height: 1.28;
-  gap: 3px;
+  font-size: clamp(12px, 1.05vw, 13.75px);
+  line-height: 1.3;
+  gap: 4px;
 }
 
 .tm-dossier-body:has(.tm-crosschecks) .tm-pname-key {
@@ -826,47 +892,159 @@ body[data-mode="nback"] .tm-dossier {
   gap: 2px 10px;
 }
 
-@media (max-width: 1180px) and (min-width: 901px), (max-height: 660px) and (min-width: 901px) {
-  .tm-dossier {
-    padding: 6px 10px;
-    gap: 5px;
+@media (max-width: 1060px), (max-height: 600px) {
+  .tm-shell {
+    padding: 4px 6px 5px;
+    gap: 4px;
   }
-  .tm-order-card {
-    padding: 6px 10px;
-  }
-  .tm-order-main {
-    font-size: 14.5px;
-    line-height: 1.24;
-  }
-  .tm-order-detail {
-    font-size: 12px;
-    line-height: 1.22;
-  }
-  .tm-chart-grid {
+  .tm-hud-bar {
+    padding: 3px 8px;
     gap: 6px;
   }
+  .tm-hud-group {
+    gap: 10px;
+  }
+  .tm-hud-val {
+    font-size: 13px;
+  }
+  .tm-hud-sub {
+    font-size: 10.5px;
+  }
+  .tm-pace-control input[type="range"] {
+    width: 56px;
+  }
+  .tm-icon-btn {
+    width: 26px;
+    height: 26px;
+  }
+  .tm-btn-compact {
+    min-height: 26px;
+    padding: 2px 8px;
+    font-size: 11.5px;
+  }
+  .tm-workspace {
+    grid-template-columns: clamp(206px, 27vw, 286px) minmax(0, 1fr);
+    gap: 6px;
+  }
+  .tm-dossier {
+    padding: 5px 8px;
+    gap: 4px;
+  }
+  .tm-dossier-header {
+    padding-bottom: 3px;
+    gap: 5px;
+  }
+  .tm-dossier-meta {
+    font-size: 11px;
+  }
+  .tm-dispatch-text {
+    display: none;
+  }
+  .tm-order-card {
+    padding: 5px 9px;
+  }
+  .tm-order-main {
+    font-size: 13.75px;
+    line-height: 1.22;
+  }
+  .tm-order-detail {
+    font-size: 11.25px;
+    line-height: 1.2;
+  }
+  .tm-law-strip {
+    margin-top: 4px;
+    padding: 4px 7px;
+    font-size: 11.5px;
+    line-height: 1.24;
+  }
+  .tm-chart-grid {
+    gap: 5px;
+  }
   .tm-rec-card {
-    padding: 6px 9px;
-    gap: 3px;
+    padding: 6px 8px;
+    gap: 4px;
   }
   .tm-rec-head {
-    font-size: 11px;
+    font-size: 10.75px;
+    gap: 5px;
+  }
+  .tm-rec-site {
+    font-size: 10.5px;
   }
   .tm-rec-label {
     font-size: 12px;
   }
   .tm-rec-lines {
-    font-size: 13px;
-    line-height: 1.28;
+    font-size: 12.75px;
+    line-height: 1.3;
     gap: 4px;
   }
-  .tm-dossier-body:has(.tm-crosschecks) .tm-rec-lines {
-    font-size: 12px;
+  .tm-chart-grid[data-card-count="5"] .tm-rec-lines,
+  .tm-chart-grid[data-card-count="6"] .tm-rec-lines {
+    font-size: 11.5px;
     line-height: 1.24;
     gap: 2px;
   }
-  .tm-bay-sub {
-    font-size: 10px;
+  .tm-dossier-body:has(.tm-crosschecks) .tm-rec-lines {
+    font-size: 11.75px;
+    line-height: 1.24;
+    gap: 2px;
+  }
+  .tm-cc-item {
+    font-size: 10.5px;
+    line-height: 1.22;
+  }
+  .tm-debrief {
+    padding: 5px 8px;
+    gap: 4px;
+  }
+  .tm-debrief-title {
+    font-size: 13px;
+  }
+  .tm-debrief-proof,
+  .tm-debrief-rival,
+  .tm-lesson-copy {
+    font-size: 11px;
+    line-height: 1.26;
+  }
+  /* Compact N-Back console for 480-580px tablet heights */
+  body[data-mode="nback"] .tm-dossier {
+    padding: 8px 12px;
+  }
+  .tm-nb-shell {
+    gap: 5px;
+  }
+  .tm-nb-bay {
+    padding: 5px 8px;
+    gap: 2px;
+  }
+  .tm-nb-bay-id {
+    font-size: 12px;
+  }
+  .tm-nb-briefing {
+    padding: 7px 11px;
+    gap: 4px;
+  }
+  .tm-nb-directive {
+    font-size: 14px;
+    padding-bottom: 4px;
+  }
+  .tm-nb-lines {
+    font-size: 13px;
+    line-height: 1.34;
+    gap: 3px;
+  }
+  .tm-nb-choice {
+    min-height: 30px;
+    font-size: 12px;
+  }
+  .tm-nb-lock-card {
+    padding: 5px 7px;
+    gap: 3px;
+  }
+  .tm-nb-lock-btn {
+    min-height: 26px;
+    font-size: 11.5px;
   }
 }
 
@@ -1953,56 +2131,20 @@ body[data-mode="nback"] .tm-dossier {
 }
 
 /* ==========================================================================
-   RESPONSIVE LAYOUT
+   RESPONSIVE LAYOUT — Only stack vertically on narrow portrait phones (<= 660px)
+   so landscape tablets, foldables, Chromebooks, and laptops stay zero-scroll at 100% zoom!
    ========================================================================== */
-@media (max-width: 960px) {
+@media (max-width: 660px) {
   .tm-shell {
     height: auto;
-    min-height: 100dvh;
+    max-height: none;
+    min-height: var(--app-vh, 100dvh);
     overflow: visible;
+    padding: 6px 8px 12px;
   }
   .tm-workspace {
     display: flex;
     flex-direction: column;
-  }
-  .tm-ward-wrap {
-    height: 176px;
-    flex-shrink: 0;
-  }
-  .tm-dossier {
-    overflow: visible;
-  }
-  .tm-dossier-header {
-    flex-wrap: wrap;
-  }
-  .tm-dossier-meta {
-    white-space: normal;
-    overflow: visible;
-  }
-  .tm-rec-card {
-    overflow: visible;
-  }
-  .tm-cc-list {
-    grid-template-columns: 1fr;
-  }
-  .tm-debrief-cols {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
-  .tm-lesson-col {
-    padding-left: 0;
-    padding-top: 6px;
-    border-left: none;
-    border-top: 1px solid var(--border-hairline);
-  }
-}
-
-@media (max-width: 680px) {
-  .tm-shell {
-    padding: 6px 8px 12px;
-  }
-  .tm-dispatch-text {
-    display: none;
   }
   .tm-hud-bar {
     padding: 6px 8px;
@@ -2019,19 +2161,37 @@ body[data-mode="nback"] .tm-dossier {
   }
   .tm-ward-wrap {
     height: 168px;
+    flex-shrink: 0;
+  }
+  .tm-dossier {
+    overflow: visible;
+  }
+  .tm-dossier-header {
+    flex-wrap: wrap;
+  }
+  .tm-dossier-meta {
+    white-space: normal;
+    overflow: visible;
+  }
+  .tm-dispatch-text {
+    display: none;
   }
   .tm-chart-grid,
   .tm-nb-bay-grid,
-  .tm-nb-locks-grid {
-    grid-template-columns: 1fr;
-  }
-  .tm-nb-verdict-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  .tm-nb-locks-grid,
+  .tm-cc-list,
+  .tm-debrief-cols,
   .tm-diff-grid,
   .tm-run-controls {
     grid-template-columns: 1fr;
   }
+  .tm-lesson-col {
+    padding-left: 0;
+    padding-top: 6px;
+    border-left: none;
+    border-top: 1px solid var(--border-hairline);
+  }
+  .tm-nb-verdict-row,
   .tm-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

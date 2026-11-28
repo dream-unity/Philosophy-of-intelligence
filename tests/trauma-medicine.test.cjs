@@ -47,8 +47,14 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
     });
     assert.equal(trial.reasoningType, r.id, `pinned type #${r.number} ${r.id}`);
     assert.ok(trial.targets.length >= 1 && trial.targets.length <= 3, `#${r.number} ${r.id} targets=${trial.targets.length}`);
-    assert.equal(trial.records.length, 6, `#${r.number} ${r.id} builds 6 cards`);
+    assert.ok(trial.records.length >= 4 && trial.records.length <= 6, `#${r.number} ${r.id} builds 4..6 compact cards (got ${trial.records.length})`);
     assert.ok(trial.records.every((rec) => Array.isArray(rec.shownFacts) && rec.shownFacts.length >= 2), `#${r.number} ${r.id} every card has >= 2 plain-English facts`);
+    const nonLawZeroPatient = trial.records.filter((rec) => {
+      if (rec.isLawCard) return false;
+      const pCount = new Set([...rec.shownFacts, ...(rec.altFacts || [])].flatMap((f) => f.patients || [])).size;
+      return pCount === 0;
+    });
+    assert.equal(nonLawZeroPatient.length, 0, `#${r.number} ${r.id} has ZERO non-law zero-patient fluff cards`);
     assert.ok(trial.order.length > 15, `#${r.number} ${r.id} has readable order`);
     assert.ok(trial.scenario.title && trial.scenario.title.length > 4, `#${r.number} ${r.id} has scenario title`);
     assert.ok(trial.scenario.dispatch && trial.scenario.dispatch.length > 10, `#${r.number} ${r.id} has scenario dispatch`);
@@ -94,9 +100,10 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
     assert.ok(t5.crossChecks.length >= 1, `#${r.number} ${r.id} builds coupled cross-checks at Tier 5 (got ${t5.crossChecks.length})`);
     assert.ok(t5.targets.length >= 1 && t5.targets.length <= 3, `#${r.number} ${r.id} Tier 5 targets=${t5.targets.length}`);
     const disputedIdx = t5.records.map((rec, idx) => (rec.disputed ? idx : -1)).filter((idx) => idx !== -1);
+    const fullMask5 = (1 << t5.records.length) - 1;
     const satWorlds = [];
     for (let sub = 0; sub < (1 << disputedIdx.length); sub++) {
-      let mask = 0b111111;
+      let mask = fullMask5;
       for (let k = 0; k < disputedIdx.length; k++) {
         if (((sub >> k) & 1) === 0) mask &= ~(1 << disputedIdx[k]);
       }
@@ -146,9 +153,10 @@ test('Trauma Doctor: Tier 4, Tier 5 & Tier 6 semantic cross-checks uniquely isol
       assert.ok(activeIndices.length >= 1, `${tierId} #${i} has disputed card(s)`);
 
       const total = 1 << activeIndices.length;
+      const fullMask = (1 << trial.records.length) - 1;
       const satWorlds = [];
       for (let sub = 0; sub < total; sub++) {
-        let mask = 0b111111;
+        let mask = fullMask;
         for (let k = 0; k < activeIndices.length; k++) {
           if (((sub >> k) & 1) === 0) mask &= ~(1 << activeIndices[k]);
         }

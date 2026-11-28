@@ -95,8 +95,8 @@ const state = {
   trialStartTs: 0,
   selectedIds: [],
   ruledOutIds: new Set(),
+  ruleOutMode: false,
   hypothesisFlips: new Set(),
-  chartSortMode: 'default', // 'default' | 'time' | 'wing'
   highlightedPatientId: null,
   pinnedHighlightId: null,
   debrief: null,
@@ -114,6 +114,22 @@ const scene = new TraumaWardScene(dom.canvas, {
   onTimeout: (patientId) => handleTrialTimeout(patientId),
   onLayout: (bays, w, h) => syncBayOverlayPositions(bays, w, h),
 });
+
+function syncAppViewportHeight() {
+  const vv = window.visualViewport;
+  const h = Math.floor(vv && vv.height ? vv.height : window.innerHeight);
+  if (h > 200) {
+    document.documentElement.style.setProperty('--app-vh', `${h}px`);
+  }
+  requestAnimationFrame(() => scene.resize());
+}
+
+syncAppViewportHeight();
+window.addEventListener('resize', syncAppViewportHeight, { passive: true });
+window.addEventListener('orientationchange', () => setTimeout(syncAppViewportHeight, 120), { passive: true });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncAppViewportHeight, { passive: true });
+}
 
 function formatPace(val) {
   return `${val.toFixed(2).replace(/\.?0+$/, '')}×`;
@@ -291,7 +307,7 @@ function renderBayButtons() {
     const pid = btn.dataset.patientId;
     btn.addEventListener('click', (e) => {
       btn.blur();
-      if (e.shiftKey) {
+      if (e.shiftKey || state.ruleOutMode) {
         toggleRuledOut(pid);
         return;
       }
@@ -333,7 +349,9 @@ function updateHud() {
     dom.hudCase.textContent = `${shownCase}/${state.session.targetTrials}`;
   }
   dom.hudScore.textContent = `${state.session.cleared}/${state.session.total}`;
-  dom.hudStreak.textContent = String(state.session.currentStreak);
+  const streak = state.session.currentStreak;
+  dom.hudStreak.textContent = streak >= 5 ? `${streak} ⚡` : streak >= 3 ? `${streak} 🔥` : String(streak);
+  dom.hudStreak.classList.toggle('is-hot', streak >= 3);
 }
 
 function startShift({ pinnedReasoningType = null } = {}) {
@@ -399,6 +417,7 @@ function advanceStandardTrial() {
   state.currentTrial = state.scheduler.nextTrial(tierId);
   state.selectedIds = [];
   state.ruledOutIds.clear();
+  state.ruleOutMode = false;
   state.hypothesisFlips.clear();
   state.highlightedPatientId = null;
   state.pinnedHighlightId = null;
@@ -426,6 +445,7 @@ function renderCurrentDossier() {
     holdDebrief: state.holdDebrief,
     highlightedPatientId: state.highlightedPatientId,
     ruledOutIds: state.ruledOutIds,
+    ruleOutMode: state.ruleOutMode,
     hypothesisFlips: state.hypothesisFlips,
     onToggleHypothesisFlip: (idx) => {
       if (state.debrief) return;
@@ -438,9 +458,16 @@ function renderCurrentDossier() {
       }
       renderCurrentDossier();
     },
+    onToggleRuleOutMode: () => {
+      if (state.debrief) return;
+      state.ruleOutMode = !state.ruleOutMode;
+      audio.playMark(state.ruleOutMode);
+      renderCurrentDossier();
+    },
     onClearMarks: () => {
       state.ruledOutIds.forEach((pid) => scene.setRuledOut(pid, false));
       state.ruledOutIds.clear();
+      state.ruleOutMode = false;
       state.hypothesisFlips.clear();
       state.pinnedHighlightId = null;
       state.highlightedPatientId = null;

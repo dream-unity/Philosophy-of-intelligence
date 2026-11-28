@@ -69,18 +69,20 @@ export function renderClinicalDossier(container, {
   holdDebrief,
   highlightedPatientId = null,
   ruledOutIds = null,
+  ruleOutMode = false,
   hypothesisFlips = null,
   onToggleHypothesisFlip = null,
+  onToggleRuleOutMode = null,
   onClearMarks = null,
 }) {
   const targetCount = trial.targets.length;
   const remainingSlots = Math.max(0, targetCount - selectedIds.length);
   const hasCrossChecks = trial.crossChecks.length > 0;
   const flipSet = hypothesisFlips instanceof Set ? hypothesisFlips : new Set();
-  const hasMarks = (ruledOutIds && ruledOutIds.size > 0) || flipSet.size > 0;
+  const hasMarks = (ruledOutIds && ruledOutIds.size > 0) || flipSet.size > 0 || ruleOutMode;
 
   // Build player's current scratchpad world mask (purely from player's own Test Flip toggles — zero leakage)
-  let hypothesisMask = 0b111111;
+  let hypothesisMask = (1 << trial.records.length) - 1;
   for (const idx of flipSet) {
     hypothesisMask &= ~(1 << idx);
   }
@@ -133,8 +135,9 @@ export function renderClinicalDossier(container, {
             : '';
 
       const wingClass = (rec.siteIdx ?? 0) === 0 ? 'is-wing-a' : 'is-wing-b';
+      const lawClass = rec.isLawCard ? 'is-law-card' : '';
 
-      return `<article class="tm-rec-card ${rec.disputed ? 'is-disputed' : ''} ${isTestingFlip ? 'is-testing-flip' : ''}">
+      return `<article class="tm-rec-card ${lawClass} ${rec.disputed ? 'is-disputed' : ''} ${isTestingFlip ? 'is-testing-flip' : ''}">
         <div class="tm-rec-head">
           <span class="tm-rec-time tm-tabular">${esc(rec.time)}</span>
           <span class="tm-rec-site ${wingClass}">${esc(rec.site)}</span>
@@ -181,19 +184,32 @@ export function renderClinicalDossier(container, {
     : '';
 
   // Top Focal Anchor: Active Clinical Directive -> swaps cleanly IN-PLACE to Post-Case Debrief
+  const ruleOutBtnHtml = !debrief
+    ? `<button type="button" class="tm-tool-btn tm-tool-ruleout ${ruleOutMode ? 'is-active' : ''}" data-action="toggle-ruleout" aria-pressed="${ruleOutMode ? 'true' : 'false'}" title="Tap bays on the left to cross them out while deducing">${
+        ruleOutMode ? '✕ Ruling Out' : '✕ Rule-Out'
+      }</button>`
+    : '';
   const clearInline =
     !debrief && hasMarks
-      ? `<button type="button" class="tm-tool-btn tm-tool-clear" data-action="clear-marks">Clear Marks</button>`
+      ? `<button type="button" class="tm-tool-btn tm-tool-clear" data-action="clear-marks">Clear</button>`
       : '';
   let topPanelHtml = '';
   if (!debrief) {
-    const pickWord = remainingSlots === 1 ? '1 matching bay' : `${remainingSlots} matching bays`;
+    const pickWord = remainingSlots === 1 ? '1 bay' : `${remainingSlots} bays`;
+    const lawStripHtml =
+      trial.clinicalLaw && trial.clinicalLaw.lines && trial.clinicalLaw.lines.length
+        ? `<div class="tm-law-strip" aria-label="Clinical protocol rule">
+             <span class="tm-law-tag">${esc(trial.clinicalLaw.label || 'Protocol')}</span>
+             <span class="tm-law-text">${trial.clinicalLaw.lines.map((l) => renderSemanticFactHtml({ text: l })).join(' · ')}</span>
+           </div>`
+        : '';
     topPanelHtml = `<section class="tm-order-card" aria-label="Clinical directive">
       <div class="tm-order-main">${esc(trial.order)}</div>
       <div class="tm-order-subrow">
-        <span class="tm-order-detail">Click <strong>${pickWord}</strong> on the left wall (or press keys <strong>1–0</strong>) · ${esc(trial.detail)}</span>
+        <span class="tm-order-detail">Pick <strong>${pickWord}</strong> (keys <strong>1–0</strong>) · ${esc(trial.detail)}</span>
         ${shortlistHtml}
       </div>
+      ${lawStripHtml}
     </section>`;
   } else {
     const outcomeClass = debrief.cleared ? 'is-clear' : 'is-miss';
@@ -263,6 +279,7 @@ export function renderClinicalDossier(container, {
         ${dispatchText}
       </div>
       <div class="tm-slots-readout" aria-label="${remainingSlots} of ${targetCount} interventions remaining">
+        ${ruleOutBtnHtml}
         ${clearInline}
         <span class="tm-meta-label">Actions</span>
         <span class="tm-slots-pips">${slotsHtml}</span>
@@ -274,7 +291,7 @@ export function renderClinicalDossier(container, {
 
     <div class="tm-charts-section">
       <div class="tm-dossier-body ${hasCrossChecks ? 'has-crosschecks' : ''}">
-        <section class="tm-chart-grid" aria-label="Clinical records">
+        <section class="tm-chart-grid" data-card-count="${trial.records.length}" aria-label="Clinical records">
           ${cardsHtml}
         </section>
         ${crossChecksHtml}
@@ -288,6 +305,8 @@ export function renderClinicalDossier(container, {
   if (nextBtn && onNextTrial) nextBtn.addEventListener('click', onNextTrial);
   const holdBtn = container.querySelector('[data-action="hold-debrief"]');
   if (holdBtn && onHoldToggle) holdBtn.addEventListener('click', onHoldToggle);
+  const ruleOutBtn = container.querySelector('[data-action="toggle-ruleout"]');
+  if (ruleOutBtn && onToggleRuleOutMode) ruleOutBtn.addEventListener('click', onToggleRuleOutMode);
   const clearBtn = container.querySelector('[data-action="clear-marks"]');
   if (clearBtn && onClearMarks) clearBtn.addEventListener('click', onClearMarks);
 

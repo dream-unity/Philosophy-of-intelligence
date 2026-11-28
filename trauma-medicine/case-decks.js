@@ -11,7 +11,12 @@ import {
   getClinicalPhase,
   PHASE_ORDER,
 } from './reasoning-types.js';
-import { synthesizeSemanticLogic, resolveBoard, buildBayProfiles } from './semantic-board.js';
+import {
+  synthesizeSemanticLogic,
+  compactClinicalBoard,
+  resolveBoard,
+  buildBayProfiles,
+} from './semantic-board.js';
 import { SEMANTIC_ENGINES_PART1 } from './semantic-engines-1.js';
 import { SEMANTIC_ENGINES_PART2 } from './semantic-engines-2.js';
 
@@ -78,7 +83,7 @@ function tryBuildForType(rng, meta, tier, prevTargetKey, allowSamePrevTarget) {
   }
 
   const spec = engine(rng);
-  if (!spec || !spec.cards || (spec.cards.length !== 4 && spec.cards.length !== 6)) return null;
+  if (!spec || !spec.cards || spec.cards.length < 4 || spec.cards.length > 6) return null;
 
   const logic = synthesizeSemanticLogic(rng, spec.cards, spec.evaluate, tier.disputed);
   if (!logic) return null;
@@ -195,6 +200,7 @@ export function synthesizeTrial({
         },
         order: built.spec.order,
         detail: built.spec.hint || built.spec.detail || '',
+        clinicalLaw: built.logic.clinicalLaw || null,
         records: built.records,
         trueWorldMask: built.logic.trueWorldMask,
         crossChecks: built.logic.crossChecks,
@@ -210,7 +216,8 @@ export function synthesizeTrial({
   const fallbackMeta = ranked[0];
   const fallbackRng = createRng(seed + 997);
   const spec = SEMANTIC_ENGINES[fallbackMeta.id](fallbackRng);
-  const records = enrichRecords(spec.cards);
+  const compacted = compactClinicalBoard(spec.cards, spec.evaluate);
+  const records = enrichRecords(compacted.cards);
   const fallbackMask = (1 << records.length) - 1;
   const res = spec.evaluate(resolveBoard(records, fallbackMask));
   const safeTargets = res && res.targets && res.targets.length ? res.targets : [PATIENT_IDS[0]];
@@ -242,6 +249,7 @@ export function synthesizeTrial({
     },
     order: spec.order,
     detail: spec.hint || spec.detail || '',
+    clinicalLaw: compacted.clinicalLaw || null,
     records,
     trueWorldMask: fallbackMask,
     crossChecks: [],
