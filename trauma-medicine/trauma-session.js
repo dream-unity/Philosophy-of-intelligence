@@ -2,7 +2,7 @@
 // Tracks per-reasoning-type (#1-80), per-family (1-8), per-cognitive-level (Atomic/Composite/Meta),
 // and per-phase (Before/Inside/After) performance.
 
-import { DIFFICULTY_TIERS } from './tiers.js';
+import { DIFFICULTY_TIERS } from './case-families.js';
 import {
   getReasoningType,
   getClinicalPhase,
