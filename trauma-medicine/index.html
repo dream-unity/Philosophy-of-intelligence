@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Trauma Doctor — Train Your Clinical Reasoning</title>
-  <meta name="description" content="Play as a medical student on trauma rotation, learning how to think like a great trauma doctor across pre-hospital triage, resuscitation bays, family talks, and autopsy review.">
+  <title>Trauma Doctor — Master the Patterns of Clinical Reasoning</title>
+  <meta name="description" content="Play as a medical doctor in the trauma ward, learning the patterns of reasoning that make a great doctor across pre-hospital triage, active resuscitation, family talks, and autopsy review.">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./trauma.css">
 </head>
 <body data-state="title">
   <main class="tm-shell">
-    <!-- Active Gameplay Perimeter HUD -->
+    <!-- Compact Perimeter Telemetry Bar -->
     <section class="tm-hud-bar" aria-label="Shift status">
       <div class="tm-hud-group">
         <div class="tm-hud-stat">
@@ -54,17 +54,16 @@
           </svg>
         </button>
 
-        <button type="button" class="tm-btn tm-btn-ghost" id="end-run-btn" tabindex="-1">End Shift</button>
+        <button type="button" class="tm-btn tm-btn-ghost tm-btn-compact" id="end-run-btn" tabindex="-1">End Shift</button>
       </div>
     </section>
 
-    <!-- Main Playing Workspace -->
+    <!-- Zero-Scroll Single-Screen Cockpit Workspace -->
     <div class="tm-workspace">
       <section class="tm-ward-wrap" id="ward-stage-wrap" aria-label="Trauma bay telemetry monitor">
         <canvas id="ward-canvas" aria-label="Ten patient resuscitation bays"></canvas>
+        <div class="tm-bay-overlay" id="bay-buttons-bar" role="group" aria-label="Select patient bay"></div>
       </section>
-
-      <div class="tm-bay-buttons" id="bay-buttons-bar" role="group" aria-label="Select patient bay"></div>
 
       <section class="tm-dossier" id="dossier-container" aria-label="Clinical case dossier"></section>
     </div>
@@ -82,7 +81,7 @@
         <div>
           <h1 id="tm-game-title">Trauma Doctor. <span class="tm-title-accent">Exact calls.</span></h1>
           <p class="tm-title-sub">
-            You're a medical student on trauma rotation—learning how to think like a great doctor before the crisis, inside the resuscitation bay, and after it. Weigh all six clinical records and timestamps to save every exact patient before they crash.
+            You're a medical doctor in the trauma ward—learning the patterns of reasoning that make a great doctor before the crisis, inside the resuscitation bay, and after it. Weigh all six clinical records and timestamps to save every exact patient before they crash.
           </p>
         </div>
       </div>
@@ -211,7 +210,7 @@
       </div>
     </div>
 
-    <p class="tm-control-hint">Click bay or press 1–0 · Space next/submit · P pause · M mute</p>
+    <p class="tm-control-hint">Click bay or press 1–0 · Right-click bay to rule out · Space next · P pause · M mute</p>
   </div>
 
   <!-- Pause Modal -->
@@ -247,10 +246,10 @@
     <div class="tm-modal-card">
       <h2 id="guide-title">How Trauma Doctor Works</h2>
       <ul class="tm-guide-list">
-        <li><strong>Train cold—just like a real rotation:</strong> Every case switches to a different clinical reasoning pattern across triage (before), resuscitation (inside), and family talks &amp; autopsy (after). You won't be told which pattern is tested until after you make your call, when the debrief breaks down the exact reasoning skill you just practiced.</li>
-        <li><strong>Exact action slots:</strong> Each case requires 1 to 4 patient interventions. Click a bay on the monitor or press keys <strong>1–9, 0</strong> before a true target reaches the redline.</li>
-        <li><strong>Disputed records (Tiers 4–6):</strong> Records marked <strong>?</strong> may have reversed arrows, swapped patients, or an alternate reading. Use the coupled Cross-Checks to determine the unique valid clinical world before acting.</li>
-        <li><strong>Climb the Ladder (N-Back):</strong> Track 3-statement clinical briefings across N rounds to judge validity, structural match, clinical domain, and lead patient under working-memory load.</li>
+        <li><strong>Train cold—just like a real trauma shift:</strong> Every case switches to a different clinical reasoning pattern across triage (before), resuscitation (inside), and family talks &amp; autopsy (after). You won't see the reasoning label until the post-case debrief reveals what you just mastered.</li>
+        <li><strong>Direct ward interaction:</strong> Click any patient bay on the monitor (or press keys <strong>1–9, 0</strong>) to intervene before a true target reaches the redline. <strong>Right-click</strong> (or Shift+Click) any bay to cross them off your mental shortlist.</li>
+        <li><strong>Instant cross-highlighting:</strong> Hover any bay on the monitor—or hover/click any patient's name inside the clinical records—to light up every mention of that patient across all six records at once.</li>
+        <li><strong>Disputed records (Tiers 4–6):</strong> Records marked <strong>?</strong> may be reversed, swapped, or altered. Use the Cross-Checks beside the charts to settle the unique valid world before acting.</li>
       </ul>
       <div class="tm-modal-actions">
         <button type="button" class="tm-btn tm-btn-primary" id="close-guide-btn">Got It</button>

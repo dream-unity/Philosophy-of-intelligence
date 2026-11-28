@@ -1,5 +1,5 @@
-// Procedural Web Audio sound cues for Trauma Medicine.
-// Calm, tactile clinical feedback with zero external audio files and full mute control.
+// Procedural Web Audio sound cues for Trauma Doctor.
+// Calm, tactile clinical feedback with streak-escalating harmonics, scratchpad clicks, and mute control.
 
 export class ClinicalAudio {
   constructor() {
@@ -53,30 +53,43 @@ export class ClinicalAudio {
   playSelect(isCorrect) {
     const jitter = 0.96 + Math.random() * 0.08;
     if (isCorrect) {
-      this.playTone({ freq: 640 * jitter, endFreq: 760 * jitter, duration: 0.09, type: 'triangle', gain: 0.055 });
+      this.playTone({ freq: 640 * jitter, endFreq: 780 * jitter, duration: 0.085, type: 'triangle', gain: 0.055 });
     } else {
-      this.playTone({ freq: 240 * jitter, endFreq: 190 * jitter, duration: 0.14, type: 'sawtooth', gain: 0.045 });
+      this.playTone({ freq: 240 * jitter, endFreq: 185 * jitter, duration: 0.14, type: 'sawtooth', gain: 0.045 });
     }
   }
 
-  playClear() {
-    this.playTone({ freq: 523.25, duration: 0.11, type: 'triangle', gain: 0.06, delay: 0 });
-    this.playTone({ freq: 659.25, duration: 0.12, type: 'triangle', gain: 0.06, delay: 0.08 });
-    this.playTone({ freq: 783.99, duration: 0.18, type: 'sine', gain: 0.065, delay: 0.16 });
+  playMark(isRuledOut) {
+    this.playTone({
+      freq: isRuledOut ? 320 : 480,
+      endFreq: isRuledOut ? 260 : 540,
+      duration: 0.045,
+      type: 'sine',
+      gain: 0.032,
+    });
+  }
+
+  playClear(streak = 1) {
+    // Subtle musical step up with streak (up to +5 semitones) for rewarding momentum
+    const semitones = Math.min(5, Math.max(0, streak - 1));
+    const lift = Math.pow(2, semitones / 12);
+    this.playTone({ freq: 523.25 * lift, duration: 0.1, type: 'triangle', gain: 0.055, delay: 0 });
+    this.playTone({ freq: 659.25 * lift, duration: 0.11, type: 'triangle', gain: 0.055, delay: 0.07 });
+    this.playTone({ freq: 783.99 * lift, duration: 0.17, type: 'sine', gain: 0.06, delay: 0.14 });
   }
 
   playMiss() {
-    this.playTone({ freq: 290, endFreq: 210, duration: 0.16, type: 'triangle', gain: 0.06, delay: 0 });
-    this.playTone({ freq: 205, endFreq: 165, duration: 0.22, type: 'sine', gain: 0.06, delay: 0.14 });
+    this.playTone({ freq: 290, endFreq: 210, duration: 0.15, type: 'triangle', gain: 0.058, delay: 0 });
+    this.playTone({ freq: 205, endFreq: 165, duration: 0.21, type: 'sine', gain: 0.058, delay: 0.13 });
   }
 
   playPromote() {
     [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => {
-      this.playTone({ freq: f, duration: 0.14, type: 'triangle', gain: 0.055, delay: idx * 0.075 });
+      this.playTone({ freq: f, duration: 0.14, type: 'triangle', gain: 0.055, delay: idx * 0.07 });
     });
   }
 
   playClick() {
-    this.playTone({ freq: 440, duration: 0.045, type: 'sine', gain: 0.035 });
+    this.playTone({ freq: 440, duration: 0.04, type: 'sine', gain: 0.03 });
   }
 }

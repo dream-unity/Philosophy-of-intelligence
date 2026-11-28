@@ -1,17 +1,17 @@
 // Patient roster and authentic clinical scenarios spanning Before, Inside, and After trauma care.
-// All names are short, distinct, culturally varied, and easy to scan under time pressure.
+// All names are short, distinct, culturally varied, and paired with bedside trauma tags.
 
 export const PATIENTS = Object.freeze([
-  { id: 'nadia', name: 'Nadia', code: 'BAY 01' },
-  { id: 'caleb', name: 'Caleb', code: 'BAY 02' },
-  { id: 'priya', name: 'Priya', code: 'BAY 03' },
-  { id: 'devon', name: 'Devon', code: 'BAY 04' },
-  { id: 'maren', name: 'Maren', code: 'BAY 05' },
-  { id: 'tomas', name: 'Tomas', code: 'BAY 06' },
-  { id: 'hana', name: 'Hana', code: 'BAY 07' },
-  { id: 'gideon', name: 'Gideon', code: 'BAY 08' },
-  { id: 'selma', name: 'Selma', code: 'BAY 09' },
-  { id: 'rory', name: 'Rory', code: 'BAY 10' },
+  { id: 'nadia', name: 'Nadia', code: 'BAY 01', tag: 'Airway', baseBpm: 84 },
+  { id: 'caleb', name: 'Caleb', code: 'BAY 02', tag: 'Bleed', baseBpm: 92 },
+  { id: 'priya', name: 'Priya', code: 'BAY 03', tag: 'Shock', baseBpm: 88 },
+  { id: 'devon', name: 'Devon', code: 'BAY 04', tag: 'Neuro', baseBpm: 76 },
+  { id: 'maren', name: 'Maren', code: 'BAY 05', tag: 'Thorax', baseBpm: 90 },
+  { id: 'tomas', name: 'Tomas', code: 'BAY 06', tag: 'Crush', baseBpm: 86 },
+  { id: 'hana', name: 'Hana', code: 'BAY 07', tag: 'Burn', baseBpm: 94 },
+  { id: 'gideon', name: 'Gideon', code: 'BAY 08', tag: 'Sepsis', baseBpm: 96 },
+  { id: 'selma', name: 'Selma', code: 'BAY 09', tag: 'Spine', baseBpm: 78 },
+  { id: 'rory', name: 'Rory', code: 'BAY 10', tag: 'Toxic', baseBpm: 89 },
 ]);
 
 export const PATIENT_BY_ID = Object.freeze(
@@ -30,13 +30,14 @@ export const CHANNEL_IDS = Object.freeze([
   'consult',
 ]);
 
-// 9 rich medical scenarios across the 3 phases of a trauma doctor's work.
+// 12 rich medical scenarios across the 3 phases of a trauma doctor's work.
 export const SCENARIOS = Object.freeze([
   // BEFORE: Pre-Hospital & Triage
   {
     id: 'mass-casualty-intake',
     phase: 'before',
     title: 'Highway Pileup Triage',
+    dispatch: 'Multi-car rain pileup — ambulances stacking on both ramps.',
     setting: 'Ambulance Bay Intake',
     sites: ['North Ramp', 'South Ramp'],
     channels: {
@@ -52,6 +53,7 @@ export const SCENARIOS = Object.freeze([
     id: 'helicopter-dispatch',
     phase: 'before',
     title: 'Air-Evac Allocation',
+    dispatch: 'One medevac chopper left before storm ceiling closes.',
     setting: 'Regional Dispatch Desk',
     sites: ['Ridge Clinic', 'Harbor ER'],
     channels: {
@@ -67,6 +69,7 @@ export const SCENARIOS = Object.freeze([
     id: 'surge-bed-budget',
     phase: 'before',
     title: 'ER Surge Time Budget',
+    dispatch: 'Holiday night surge — scarce beds and tight minutes.',
     setting: 'Triage Control Board',
     sites: ['Red Zone', 'Yellow Zone'],
     channels: {
@@ -82,6 +85,7 @@ export const SCENARIOS = Object.freeze([
     id: 'austere-disaster-triage',
     phase: 'before',
     title: 'Disaster Zone Resource Triage',
+    dispatch: 'Aftershock field tent — oxygen and stretchers rationed.',
     setting: 'Field Casualty Tent',
     sites: ['East Tent', 'West Tent'],
     channels: {
@@ -99,6 +103,7 @@ export const SCENARIOS = Object.freeze([
     id: 'resuscitation-bay',
     phase: 'inside',
     title: 'Active Resuscitation Bay',
+    dispatch: 'Two bays coding at once — act fast on live telemetry.',
     setting: 'Trauma Resuscitation',
     sites: ['Trauma Bay A', 'Trauma Bay B'],
     channels: {
@@ -114,6 +119,7 @@ export const SCENARIOS = Object.freeze([
     id: 'toxicology-crisis',
     phase: 'inside',
     title: 'Chemical Exposure Ward',
+    dispatch: 'Industrial rail leak — limited antidotes and rising hypoxia.',
     setting: 'Acute Toxicology',
     sites: ['Decon Wing', 'ICU Pod'],
     channels: {
@@ -129,6 +135,7 @@ export const SCENARIOS = Object.freeze([
     id: 'hemorrhage-cascade',
     phase: 'inside',
     title: 'Massive Hemorrhage Call',
+    dispatch: 'Massive transfusion protocol active — blood coolers low.',
     setting: 'Operating Suite',
     sites: ['OR Suite 1', 'OR Suite 2'],
     channels: {
@@ -144,6 +151,7 @@ export const SCENARIOS = Object.freeze([
     id: 'multi-bay-arrest',
     phase: 'inside',
     title: 'Simultaneous Code Blue',
+    dispatch: 'Back-to-back arrests across the corridor — verify every call.',
     setting: 'Critical Care Corridor',
     sites: ['Resus North', 'Resus South'],
     channels: {
@@ -161,6 +169,7 @@ export const SCENARIOS = Object.freeze([
     id: 'family-conference',
     phase: 'after',
     title: 'Family Conference & Consent',
+    dispatch: 'Relatives waiting across two rooms — verify surrogates & updates.',
     setting: 'Post-Trauma Consultation',
     sites: ['Quiet Room 1', 'Quiet Room 2'],
     channels: {
@@ -176,6 +185,7 @@ export const SCENARIOS = Object.freeze([
     id: 'breaking-bad-news',
     phase: 'after',
     title: 'Breaking Bad News & Ethics',
+    dispatch: 'High-stakes family talks — balance compassion, wishes, and truth.',
     setting: 'Family Liaison Suite',
     sites: ['Chapel Wing', 'Consult Room'],
     channels: {
@@ -191,6 +201,7 @@ export const SCENARIOS = Object.freeze([
     id: 'mm-audit',
     phase: 'after',
     title: 'Morbidity & Mortality Review',
+    dispatch: 'Post-shift safety review — trace what went wrong without blame.',
     setting: 'Hospital Quality Board',
     sites: ['Night Shift', 'Day Shift'],
     channels: {
@@ -206,6 +217,7 @@ export const SCENARIOS = Object.freeze([
     id: 'forensic-autopsy',
     phase: 'after',
     title: 'Forensic Autopsy Board',
+    dispatch: 'Medical examiner review — reconstruct cause from sparse clues.',
     setting: 'Medical Examiner Suite',
     sites: ['Exam Table A', 'Exam Table B'],
     channels: {

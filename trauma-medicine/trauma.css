@@ -1,9 +1,10 @@
-/* Trauma Medicine — Clinical Slate, Surgical Teal & Triage Amber design system.
+/* Trauma Doctor — Clinical Slate, Surgical Teal & Triage Amber design system.
+ * Engineered for ZERO-SCROLL single-screen desktop gameplay at 100% zoom (~600-680px viewports),
+ * with smooth responsive stacking on narrow phones.
  * 60-30-10 color discipline:
  *   60% Deep clinical slate (#0c131d / #111a27)
- *   30% Elevated slate chart & control surfaces (#162232 / #1b293b)
+ *   30% Elevated slate chart & control surfaces (#131e2c / #192638)
  *   10% Surgical teal (#2dd4bf), triage amber (#f59e0b), critical coral (#ef4444)
- * Zero pill badges on static metadata, zero thick left accent borders, zero backdrop-filter over canvas.
  */
 
 :root {
@@ -19,12 +20,12 @@
   --ink-muted: #94a3b8;
 
   --accent-teal: #2dd4bf;
-  --accent-teal-dim: rgba(45, 212, 191, 0.14);
+  --accent-teal-dim: rgba(45, 212, 191, 0.16);
   --accent-sky: #38bdf8;
   --accent-amber: #f59e0b;
-  --accent-amber-dim: rgba(245, 158, 11, 0.14);
+  --accent-amber-dim: rgba(245, 158, 11, 0.15);
   --accent-red: #ef4444;
-  --accent-red-dim: rgba(239, 68, 68, 0.15);
+  --accent-red-dim: rgba(239, 68, 68, 0.16);
 
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -44,7 +45,7 @@ body {
   background: var(--bg-deep);
   color: var(--ink-primary);
   font-family: var(--font-sans);
-  line-height: 1.45;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -56,22 +57,33 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.tm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ==========================================================================
-   GAME SHELL LAYOUT
+   GAME SHELL LAYOUT — SINGLE-SCREEN ZERO-SCROLL DESKTOP COCKPIT
    ========================================================================== */
 .tm-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   max-width: 1440px;
   margin: 0 auto;
-  padding: 12px 16px 16px;
-  gap: 10px;
+  padding: 6px 12px 8px;
+  gap: 6px;
 }
 
-/* Compact in-game perimeter telemetry bar (hidden on title screen; ambient ward canvas stays softly visible) */
 body[data-state="title"] .tm-hud-bar,
-body[data-state="title"] .tm-bay-buttons,
+body[data-state="title"] .tm-bay-overlay,
 body[data-state="title"] .tm-dossier {
   visibility: hidden;
   pointer-events: none;
@@ -91,44 +103,45 @@ body[data-state="title"] .tm-ward-wrap {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 14px;
+  gap: 10px;
+  padding: 4px 12px;
   background: var(--bg-surface);
   border: 1px solid var(--border-hairline);
-  border-radius: 8px;
+  border-radius: 7px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .tm-hud-group {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
 .tm-hud-stat {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 5px;
 }
 
 .tm-hud-kicker {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-muted);
 }
 
 .tm-hud-val {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 750;
   color: var(--ink-primary);
   font-variant-numeric: tabular-nums;
 }
 
 .tm-hud-sub {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--accent-teal);
   font-variant-numeric: tabular-nums;
 }
@@ -136,20 +149,20 @@ body[data-state="title"] .tm-ward-wrap {
 .tm-hud-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .tm-pace-control {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 11.5px;
   color: var(--ink-secondary);
 }
 
 .tm-pace-control input[type="range"] {
-  width: 84px;
+  width: 74px;
   accent-color: var(--accent-teal);
   cursor: pointer;
 }
@@ -158,8 +171,8 @@ body[data-state="title"] .tm-ward-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   border-radius: 6px;
   border: 1px solid var(--border-hairline);
   background: var(--bg-elevated);
@@ -179,26 +192,28 @@ body[data-state="title"] .tm-ward-wrap {
 }
 
 .tm-icon-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
 }
 
-/* Main playing workspace: Trauma Ward canvas on top + Clinical Dossier below */
+/* Main playing workspace */
 .tm-workspace {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   flex: 1;
+  min-height: 0;
 }
 
 .tm-ward-wrap {
   position: relative;
   width: 100%;
-  height: 248px;
+  height: clamp(154px, 27dvh, 184px);
   background: var(--bg-deep);
   border: 1px solid var(--border-hairline);
-  border-radius: 8px;
+  border-radius: 7px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 #ward-canvas {
@@ -207,101 +222,66 @@ body[data-state="title"] .tm-ward-wrap {
   height: 100%;
 }
 
-/* Accessible quick-select patient strip directly below canvas */
-.tm-bay-buttons {
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 6px;
+/* 1:1 Overlaid Interactive Bay Hit Areas directly over Canvas Bays */
+.tm-bay-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-.tm-bay-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 6px 8px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-hairline);
-  border-radius: 6px;
-  color: var(--ink-primary);
-  font-size: 13px;
-  font-weight: 600;
+.tm-bay-hit {
+  position: absolute;
+  pointer-events: auto;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 7px;
+  padding: 0;
+  margin: 0;
   cursor: pointer;
-  white-space: nowrap;
-  transition: border-color 120ms ease, background-color 120ms ease, opacity 120ms ease;
+  transition: border-color 100ms ease;
 }
 
-.tm-bay-btn:hover:not(:disabled) {
+.tm-bay-hit:focus-visible {
+  outline: none;
   border-color: var(--accent-teal);
-  background: #1a2d3e;
 }
 
-.tm-bay-btn.is-dimmed {
-  opacity: 0.38;
-}
-
-.tm-bay-btn.is-picked,
-.tm-bay-btn.is-target {
-  border-color: var(--accent-teal);
-  background: var(--accent-teal-dim);
-  color: #ccfbf1;
-}
-
-.tm-bay-btn.is-wrong {
-  border-color: var(--accent-red);
-  background: var(--accent-red-dim);
-  color: #fecaca;
-}
-
-.tm-bay-btn:disabled {
+.tm-bay-hit:disabled {
   cursor: default;
 }
 
-.tm-key-cap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: rgba(148, 163, 184, 0.14);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-secondary);
-}
-
 /* ==========================================================================
-   CLINICAL DOSSIER PANEL
+   CLINICAL DOSSIER COCKPIT — COMPACT 2x3 CARD GRID + SIDE-BY-SIDE CROSS-CHECKS
    ========================================================================== */
 .tm-dossier {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   background: var(--bg-surface);
   border: 1px solid var(--border-hairline);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: 7px;
+  padding: 8px 11px;
+  flex: 1;
+  min-height: 0;
 }
 
 .tm-dossier-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding-bottom: 10px;
+  padding-bottom: 5px;
   border-bottom: 1px solid var(--border-hairline);
 }
 
 .tm-dossier-meta {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 6px;
   flex-wrap: wrap;
-  font-size: 13px;
+  font-size: 12.5px;
+  min-width: 0;
 }
 
 .tm-phase-text {
@@ -311,12 +291,13 @@ body[data-state="title"] .tm-ward-wrap {
 
 .tm-scenario-text {
   color: var(--ink-primary);
-  font-weight: 600;
+  font-weight: 650;
 }
 
-.tm-reasoning-text {
-  color: var(--accent-amber);
-  font-weight: 600;
+.tm-dispatch-text {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  margin-left: 4px;
 }
 
 .tm-sep {
@@ -326,11 +307,12 @@ body[data-state="title"] .tm-ward-wrap {
 .tm-slots-readout {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .tm-meta-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -338,14 +320,14 @@ body[data-state="title"] .tm-ward-wrap {
 }
 
 .tm-meta-sub {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-muted);
 }
 
 .tm-slots-pips {
   display: inline-flex;
-  gap: 4px;
-  font-size: 14px;
+  gap: 3px;
+  font-size: 13px;
 }
 
 .tm-slot.is-ready {
@@ -358,171 +340,196 @@ body[data-state="title"] .tm-ward-wrap {
 
 .tm-slots-num {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ink-primary);
 }
 
-/* Orders box — clean uniform hairline border (no thick left stripe) */
+/* Compact Clinical Directive Bar */
 .tm-order-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
-  padding: 12px 14px;
+  padding: 7px 11px;
 }
 
 .tm-order-main {
-  margin: 0 0 4px;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 650;
+  line-height: 1.32;
   color: var(--ink-primary);
 }
 
+.tm-order-subrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
 .tm-order-detail {
-  margin: 0;
-  font-size: 13.5px;
+  font-size: 12px;
+  line-height: 1.32;
   color: var(--ink-secondary);
 }
 
-.tm-shortlist {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-hairline);
-  display: flex;
+.tm-shortlist-inline {
+  display: inline-flex;
   align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
 }
 
 .tm-shortlist-names {
-  font-size: 13px;
   font-weight: 600;
   color: var(--accent-sky);
 }
 
-/* Coupled 2-SAT Cross-Checks */
-.tm-crosschecks {
-  background: var(--bg-subtle);
-  border: 1px solid rgba(245, 158, 11, 0.34);
-  border-radius: 6px;
-  padding: 10px 14px;
+/* Dossier Body: 2x3 Clinical Record Cards (side-by-side with Cross-Checks on Tiers 4-6) */
+.tm-dossier-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
 }
 
-.tm-section-head {
+.tm-dossier-body.has-crosschecks {
+  grid-template-columns: minmax(0, 1.85fr) minmax(245px, 1fr);
+}
+
+.tm-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tm-rec-card {
+  background: var(--bg-subtle);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  padding: 6px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.tm-rec-card.is-disputed {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(245, 158, 11, 0.055);
+}
+
+.tm-rec-card.is-decisive {
+  border-color: rgba(45, 212, 191, 0.55);
+  background: rgba(45, 212, 191, 0.1);
+}
+
+.tm-rec-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.25;
   flex-wrap: wrap;
 }
 
-.tm-cc-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
-  gap: 6px 14px;
-}
-
-.tm-cc-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--ink-primary);
-}
-
-.tm-cc-op {
-  display: inline-block;
-  min-width: 58px;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--accent-amber);
-  background: var(--accent-amber-dim);
-  border-radius: 4px;
-  padding: 1px 6px;
-  flex-shrink: 0;
-}
-
-/* Clinical 6-Channel Record Table */
-.tm-chart-wrap {
-  overflow-x: auto;
-}
-
-.tm-chart-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13.5px;
-}
-
-.tm-chart-table th {
-  text-align: left;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--border-hairline);
-}
-
-.tm-chart-table td {
-  padding: 6px 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  vertical-align: top;
-}
-
-.tm-chart-row.is-disputed {
-  background: rgba(245, 158, 11, 0.06);
-}
-
-.tm-chart-row.is-decisive {
-  background: rgba(45, 212, 191, 0.11);
-}
-
-.tm-col-time {
+.tm-rec-time {
   font-family: var(--font-mono);
   font-weight: 700;
   color: var(--accent-sky);
-  white-space: nowrap;
-  width: 68px;
+  flex-shrink: 0;
 }
 
-.tm-col-site {
-  color: var(--ink-secondary);
-  white-space: nowrap;
-  width: 126px;
+.tm-rec-site {
+  color: var(--ink-muted);
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
-.tm-col-channel {
-  width: 220px;
+.tm-rec-label {
+  color: var(--ink-primary);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.tm-rec-metrics {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tm-rec-weight {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--accent-amber);
+}
+
+.tm-rec-min {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent-sky);
 }
 
 .tm-qmark {
   display: inline-block;
-  margin-left: 4px;
+  margin-left: 3px;
   font-family: var(--font-mono);
   font-weight: 800;
   color: var(--accent-amber);
 }
 
+.tm-rec-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12.5px;
+  line-height: 1.32;
+  color: var(--ink-primary);
+}
+
+.tm-verb {
+  color: var(--ink-secondary);
+}
+
+/* Interactive Patient Name Cross-Highlight & Rule-Out */
+.tm-pname {
+  display: inline;
+  font-weight: 650;
+  color: var(--ink-primary);
+  border-radius: 3px;
+  padding: 0 2px;
+  cursor: pointer;
+  transition: background-color 90ms ease, color 90ms ease;
+}
+
+.tm-pname:hover,
+.tm-pname.is-hl {
+  background: rgba(45, 212, 191, 0.28);
+  color: #ccfbf1;
+}
+
+.tm-pname.is-ruled-out {
+  opacity: 0.42;
+  text-decoration: line-through;
+}
+
 .tm-uncertain-note {
-  display: block;
-  margin-top: 2px;
-  font-size: 11.5px;
+  font-size: 10.5px;
+  line-height: 1.25;
   color: #fcd34d;
 }
 
 .tm-resolved-state {
-  display: block;
-  margin-top: 2px;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .tm-resolved-state.is-held {
@@ -533,94 +540,178 @@ body[data-state="title"] .tm-ward-wrap {
   color: var(--accent-amber);
 }
 
-.tm-col-links {
-  color: var(--ink-primary);
-  line-height: 1.5;
+/* Coupled 2-SAT Cross-Checks Side Panel */
+.tm-crosschecks {
+  background: var(--bg-subtle);
+  border: 1px solid rgba(245, 158, 11, 0.36);
+  border-radius: 6px;
+  padding: 7px 10px;
 }
 
-/* Post-Trial Debrief & Layperson Reasoning Lesson */
+.tm-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+}
+
+.tm-cc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.tm-cc-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.75px;
+  line-height: 1.3;
+  color: var(--ink-primary);
+}
+
+.tm-cc-op {
+  display: inline-block;
+  min-width: 50px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent-amber);
+  background: var(--accent-amber-dim);
+  border-radius: 4px;
+  padding: 1px 4px;
+  flex-shrink: 0;
+}
+
+/* Compact In-Place Post-Case Debrief (Zero-Scroll) */
 .tm-debrief {
   border-radius: 6px;
-  padding: 12px 14px;
+  padding: 7px 11px;
   border: 1px solid var(--border-strong);
   background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .tm-debrief.is-clear {
   border-color: rgba(45, 212, 191, 0.55);
-  background: rgba(15, 41, 43, 0.85);
+  background: rgba(15, 41, 43, 0.88);
 }
 
 .tm-debrief.is-miss {
   border-color: rgba(239, 68, 68, 0.55);
-  background: rgba(42, 21, 25, 0.85);
+  background: rgba(42, 21, 25, 0.88);
 }
 
 .tm-debrief-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 8px;
+}
+
+.tm-debrief-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .tm-debrief-title {
-  margin: 0 0 2px;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.tm-debrief-targets {
-  margin: 0;
-  font-size: 13.5px;
-  color: var(--ink-secondary);
-}
-
-.tm-debrief-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.tm-debrief-proof {
-  margin: 6px 0;
-  font-size: 13.5px;
+  font-size: 14.5px;
+  font-weight: 750;
   color: var(--ink-primary);
 }
 
-.tm-debrief-rival {
-  margin: 4px 0 8px;
-  font-size: 13px;
+.tm-fast-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
   color: #fde68a;
 }
 
+.tm-debrief-targets {
+  font-size: 12.5px;
+  color: var(--ink-secondary);
+}
+
 .tm-ladder-note {
-  margin: 4px 0 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--accent-teal);
 }
 
-.tm-lesson-box {
-  margin-top: 8px;
-  padding-top: 8px;
+.tm-debrief-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tm-debrief-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 10px;
+  padding-top: 5px;
   border-top: 1px solid var(--border-hairline);
 }
 
-.tm-lesson-box p {
-  margin: 3px 0 0;
-  font-size: 13.5px;
+.tm-debrief-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tm-debrief-proof {
+  font-size: 12px;
+  line-height: 1.32;
+  color: var(--ink-primary);
+}
+
+.tm-debrief-rival {
+  font-size: 11.75px;
+  line-height: 1.3;
+  color: #fde68a;
+}
+
+.tm-lesson-col {
+  padding-left: 10px;
+  border-left: 1px solid var(--border-hairline);
+}
+
+.tm-lesson-head {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  color: var(--accent-teal);
+}
+
+.tm-lesson-copy {
+  font-size: 12px;
+  line-height: 1.32;
   color: var(--ink-secondary);
+}
+
+.tm-lesson-copy strong {
+  color: var(--ink-primary);
+  font-weight: 650;
 }
 
 /* ==========================================================================
    CLINICAL ROUNDS N-BACK VIEW
    ========================================================================== */
 .tm-nb-feedback {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border-radius: 6px;
   border: 1px solid var(--border-hairline);
 }
@@ -641,15 +732,15 @@ body[data-state="title"] .tm-ward-wrap {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
-  padding: 16px 20px;
+  padding: 12px 16px;
 }
 
 .tm-nb-lines {
   margin: 0;
   padding-left: 20px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
-  line-height: 1.7;
+  line-height: 1.6;
   color: var(--ink-primary);
 }
 
@@ -657,23 +748,23 @@ body[data-state="title"] .tm-ward-wrap {
 .tm-nb-encoding {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tm-nb-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 8px 12px;
+  padding: 7px 11px;
   background: var(--bg-subtle);
   border: 1px solid var(--border-hairline);
   border-radius: 6px;
 }
 
 .tm-nb-q {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--ink-primary);
 }
@@ -686,14 +777,14 @@ body[data-state="title"] .tm-ward-wrap {
 .tm-nb-choice {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 6px 14px;
+  gap: 7px;
+  min-height: 36px;
+  padding: 5px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-hairline);
   border-radius: 6px;
   color: var(--ink-primary);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -706,7 +797,22 @@ body[data-state="title"] .tm-ward-wrap {
 
 .tm-nb-submit {
   align-self: flex-start;
-  margin-top: 4px;
+  margin-top: 2px;
+}
+
+.tm-key-cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.14);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-secondary);
 }
 
 /* ==========================================================================
@@ -716,16 +822,22 @@ body[data-state="title"] .tm-ward-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 8px 16px;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 14px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 650;
   cursor: pointer;
   border: 1px solid transparent;
   white-space: nowrap;
   transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.tm-btn-compact {
+  min-height: 30px;
+  padding: 4px 11px;
+  font-size: 12.5px;
 }
 
 .tm-btn-primary {
@@ -749,7 +861,7 @@ body[data-state="title"] .tm-ward-wrap {
 }
 
 /* ==========================================================================
-   TITLE OVERLAY & STATUS MODALS (Zero backdrop-filter over canvas!)
+   TITLE OVERLAY & STATUS MODALS (Auto-margin safe vertical centering)
    ========================================================================== */
 .tm-overlay {
   position: fixed;
@@ -758,39 +870,49 @@ body[data-state="title"] .tm-ward-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 18px;
+  justify-content: flex-start;
+  padding: 8px 14px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: rgba(9, 14, 22, 0.9);
+}
+
+.tm-overlay > :first-child {
+  margin-top: auto;
+}
+
+.tm-overlay > :last-child {
+  margin-bottom: auto;
 }
 
 .tm-title-card {
   width: 100%;
-  max-width: 720px;
+  max-width: 780px;
+  flex-shrink: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
-  padding: 24px 26px 18px;
+  padding: 13px 18px 10px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
 }
 
 .tm-title-lockup {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 16px;
+  gap: 11px;
+  margin-bottom: 8px;
 }
 
 .tm-emblem {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   margin-top: 2px;
 }
 
 .tm-title-lockup h1 {
   margin: 0;
-  font-size: 27px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.025em;
   line-height: 1.15;
@@ -802,22 +924,22 @@ body[data-state="title"] .tm-ward-wrap {
 }
 
 .tm-title-sub {
-  margin: 6px 0 0;
-  font-size: 13.5px;
-  line-height: 1.5;
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.36;
   color: var(--ink-secondary);
 }
 
 .tm-setup-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .tm-section-kicker {
   display: block;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--ink-primary);
   margin: 0;
@@ -827,15 +949,15 @@ body[data-state="title"] .tm-ward-wrap {
 .tm-diff-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 5px;
 }
 
 .tm-diff-card {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
-  padding: 11px 13px;
-  min-height: 68px;
+  gap: 9px;
+  padding: 6px 10px;
+  min-height: 46px;
   background: var(--bg-deep);
   border: 1px solid var(--border-hairline);
   border-radius: 7px;
@@ -856,8 +978,8 @@ body[data-state="title"] .tm-ward-wrap {
 }
 
 .tm-radio-dot {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 2px solid var(--ink-muted);
   background: rgba(148, 163, 184, 0.14);
@@ -883,20 +1005,20 @@ body[data-state="title"] .tm-ward-wrap {
 .tm-diff-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .tm-diff-copy strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.22;
   color: var(--ink-primary);
 }
 
 .tm-diff-copy span {
-  font-size: 12px;
-  line-height: 1.38;
+  font-size: 11.25px;
+  line-height: 1.28;
   color: var(--ink-muted);
 }
 
@@ -904,31 +1026,31 @@ body[data-state="title"] .tm-ward-wrap {
   color: #cbd5e1;
 }
 
-/* Bottom 2-column shift control strip (Cases per shift + Master speed / N-Back depth) */
+/* Bottom 2-column shift control strip */
 .tm-run-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
   align-items: start;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .tm-control-col {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .tm-cases-input {
   width: 100%;
-  min-height: 44px;
-  padding: 8px 12px;
+  min-height: 34px;
+  padding: 4px 10px;
   border-radius: 7px;
   border: 1px solid var(--border-strong);
   background: var(--bg-deep);
   color: var(--ink-primary);
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   text-align: center;
 }
@@ -940,23 +1062,22 @@ body[data-state="title"] .tm-ward-wrap {
 
 .tm-input-hint {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 10.5px;
   color: var(--ink-muted);
 }
 
-/* Interactive Master Speed Rotary Dial */
 .tm-speed-widget {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
 }
 
 .tm-speed-dial-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 54px;
-  height: 54px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border-radius: 50%;
   border: 1px solid var(--border-hairline);
@@ -971,8 +1092,8 @@ body[data-state="title"] .tm-ward-wrap {
 }
 
 .tm-speed-dial {
-  width: 48px;
-  height: 48px;
+  width: 34px;
+  height: 34px;
 }
 
 .tm-dial-track {
@@ -1002,35 +1123,35 @@ body[data-state="title"] .tm-ward-wrap {
 .tm-speed-readout {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   flex: 1;
   min-width: 0;
 }
 
 .tm-speed-val {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--accent-teal);
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .tm-speed-sub {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-secondary);
 }
 
 .tm-speed-range {
   width: 100%;
-  margin-top: 3px;
+  margin-top: 1px;
   accent-color: var(--accent-teal);
   cursor: pointer;
 }
 
 .tm-nback-select {
   width: 100%;
-  min-height: 44px;
+  min-height: 36px;
 }
 
 .tm-field-row {
@@ -1038,43 +1159,42 @@ body[data-state="title"] .tm-ward-wrap {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: var(--ink-secondary);
 }
 
 .tm-select {
-  min-height: 40px;
-  padding: 6px 12px;
+  min-height: 36px;
+  padding: 5px 10px;
   border-radius: 6px;
   border: 1px solid var(--border-strong);
   background: var(--bg-deep);
   color: var(--ink-primary);
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .tm-check-label {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 7px;
+  font-size: 12.5px;
   color: var(--ink-secondary);
   cursor: pointer;
 }
 
 .tm-check-label input {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   accent-color: var(--accent-teal);
 }
 
-/* Full-width primary Start shift CTA matching Friend or Foe clarity */
 .tm-btn-start {
   width: 100%;
-  min-height: 46px;
+  min-height: 38px;
   border-radius: 7px;
   background: #f5b971;
   color: #0f172a;
-  font-size: 15.5px;
+  font-size: 14.5px;
   font-weight: 750;
   letter-spacing: -0.01em;
 }
@@ -1087,8 +1207,8 @@ body[data-state="title"] .tm-ward-wrap {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 12px;
-  padding-top: 10px;
+  margin-top: 7px;
+  padding-top: 6px;
   border-top: 1px solid var(--border-hairline);
 }
 
@@ -1119,7 +1239,8 @@ body[data-state="title"] .tm-ward-wrap {
 }
 
 .tm-control-hint {
-  margin-top: 12px;
+  margin: 8px 0 0;
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--ink-muted);
   text-align: center;
@@ -1130,17 +1251,18 @@ body[data-state="title"] .tm-ward-wrap {
   width: 100%;
   max-width: 540px;
   max-height: 88vh;
+  flex-shrink: 0;
   overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
-  padding: 22px 24px;
+  padding: 20px 22px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 
 .tm-modal-card h2 {
-  margin: 0 0 12px;
-  font-size: 21px;
+  margin: 0 0 10px;
+  font-size: 20px;
   font-weight: 750;
 }
 
@@ -1148,7 +1270,7 @@ body[data-state="title"] .tm-ward-wrap {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .tm-stat-tile {
@@ -1177,12 +1299,12 @@ body[data-state="title"] .tm-ward-wrap {
 }
 
 .tm-breakdown {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .tm-breakdown h4 {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 5px;
+  font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-muted);
@@ -1200,86 +1322,75 @@ body[data-state="title"] .tm-ward-wrap {
 .tm-breakdown-list li {
   display: flex;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: 5px 10px;
   background: var(--bg-subtle);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .tm-modal-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
 .tm-guide-list {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   padding-left: 18px;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--ink-secondary);
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
 .tm-guide-list li + li {
   margin-top: 6px;
 }
 
-.tm-col-weight {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: var(--accent-amber);
-  white-space: nowrap;
-  width: 64px;
-}
-
-.tm-col-minutes {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: var(--accent-sky);
-  white-space: nowrap;
-  width: 54px;
-}
-
-.tm-core-op {
-  margin: 4px 0 3px;
-  font-size: 13px;
-  color: var(--ink-primary);
-}
-
 /* ==========================================================================
    RESPONSIVE LAYOUT
    ========================================================================== */
-@media (max-width: 980px) {
-  .tm-bay-buttons {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+@media (max-width: 920px) {
+  .tm-dossier-body.has-crosschecks {
+    grid-template-columns: 1fr;
   }
-  .tm-ward-wrap {
-    height: 248px;
+  .tm-debrief-cols {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .tm-lesson-col {
+    padding-left: 0;
+    padding-top: 6px;
+    border-left: none;
+    border-top: 1px solid var(--border-hairline);
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 680px) {
   .tm-shell {
-    padding: 8px 10px 14px;
+    padding: 6px 8px 12px;
   }
-  .tm-overlay {
-    justify-content: flex-start;
-    padding: 12px;
+  .tm-dispatch-text {
+    display: none;
   }
   .tm-hud-bar {
-    padding: 8px 10px;
-    gap: 8px;
+    padding: 6px 8px;
+    gap: 6px;
   }
   .tm-hud-group {
-    gap: 12px;
+    gap: 10px;
   }
   .tm-hud-controls {
     width: 100%;
-    gap: 6px;
   }
   .tm-pace-control input[type="range"] {
-    width: 68px;
+    width: 64px;
+  }
+  .tm-ward-wrap {
+    height: 170px;
+  }
+  .tm-chart-grid {
+    grid-template-columns: 1fr;
   }
   .tm-diff-grid,
   .tm-run-controls {
@@ -1288,41 +1399,11 @@ body[data-state="title"] .tm-ward-wrap {
   .tm-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .tm-bay-buttons {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .tm-ward-wrap {
-    height: 212px;
-  }
-  .tm-chart-wrap {
-    overflow-x: auto;
-    max-width: 100%;
-  }
-  .tm-chart-table {
-    font-size: 11.5px;
-  }
-  .tm-chart-table th,
-  .tm-chart-table td {
-    padding: 5px 5px;
-  }
-  .tm-col-time,
-  .tm-col-weight,
-  .tm-col-minutes {
-    width: auto;
-  }
-  .tm-col-site {
-    white-space: normal;
-    width: auto;
-    font-size: 11px;
-  }
-  .tm-col-channel {
-    width: auto;
-  }
   .tm-title-card {
-    padding: 18px 16px 14px;
+    padding: 16px 14px 12px;
   }
   .tm-title-lockup h1 {
-    font-size: 22px;
+    font-size: 21px;
   }
 }
 

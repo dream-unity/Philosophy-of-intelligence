@@ -1,13 +1,9 @@
-// 43 distinct, mathematically verified clinical reasoning engines backing all 80 reasoning types.
-// Each engine executes a genuinely different intellectual operation on the 6-channel, 10-patient,
-// timestamped, dual-unit, severity-weighted, minute-costed clinical chart (including 2D ward grid
-// spatial adjacency, Bayesian prior->posterior updating, time-budget optimisation, expected utility,
-// risk = frequency x harm, Theory of Mind belief gaps, ethical duty conflicts, 3-constraint CSPs,
-// multi-stage differential synthesis, inductive generalization, true cross-domain structural analogy,
-// non-monotonic revision, game-theoretic triage, and Level-3 meta-reasoning method selection).
+// 80 distinct, mathematically verified clinical reasoning engines — one dedicated engine for every
+// single reasoning type in the 80-type taxonomy (48 core engines + 32 extra engines).
 
 import { PATIENT_BY_ID, PATIENT_IDS, CHANNEL_IDS } from './roster.js';
 import { uniqueSorted } from './case-graph.js';
+import { EXTRA_REASONING_ENGINES } from './reasoning-engines-extra.js';
 
 function pName(id) {
   return PATIENT_BY_ID[id]?.name || id;
@@ -2138,4 +2134,5 @@ export const REASONING_ENGINES = {
       };
     },
   },
+  ...EXTRA_REASONING_ENGINES,
 };

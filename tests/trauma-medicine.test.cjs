@@ -9,7 +9,7 @@ function mod(rel) {
   return import(pathToFileURL(path.resolve(__dirname, '..', 'trauma-medicine', rel)).href);
 }
 
-test('Trauma Medicine: complete 80-type taxonomy spans 8 families, 3 cognitive levels, 12 scenarios, and 48 distinct engines', async () => {
+test('Trauma Medicine: complete 80-type taxonomy spans 8 families, 3 cognitive levels, 12 scenarios, and 80 distinct engines', async () => {
   const {
     REASONING_TYPE_LIST,
     REASONING_FAMILIES,
@@ -33,13 +33,16 @@ test('Trauma Medicine: complete 80-type taxonomy spans 8 families, 3 cognitive l
   assert.deepEqual(Array.from(levels).sort(), ['atomic', 'composite', 'meta']);
 
   const distinctEngines = new Set(REASONING_TYPE_LIST.map((r) => r.engineId));
-  assert.ok(distinctEngines.size >= 48, `expected >= 48 distinct engines, got ${distinctEngines.size}`);
+  assert.equal(distinctEngines.size, 80, `expected 80 distinct engines (1 per type), got ${distinctEngines.size}`);
 
   const minuteTypes = new Set([
     'proportional-reasoning',
     'optimisation-reasoning',
     'decision-theoretic',
     'heuristic-reasoning',
+    'cross-domain-reasoning',
+    'adversarial-reasoning',
+    'pragmatic-reasoning',
   ]);
 
   // Verify EVERY SINGLE ONE of the 80 reasoning types synthesizes cleanly at Tier 1 AND Tier 5 (3 coupled disputed records)!

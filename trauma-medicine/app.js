@@ -10,7 +10,11 @@ import { ClinicalNBackStream } from './nback-cases.js';
 import { TraumaSession } from './trauma-session.js';
 import { TraumaWardScene } from './ward-scene.js';
 import { ClinicalAudio } from './audio.js';
-import { renderClinicalDossier, renderNBackView } from './case-view.js';
+import {
+  renderClinicalDossier,
+  renderNBackView,
+  applyPatientBoardHighlight,
+} from './case-view.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -90,6 +94,9 @@ const state = {
   currentTrial: null,
   trialStartTs: 0,
   selectedIds: [],
+  ruledOutIds: new Set(),
+  highlightedPatientId: null,
+  pinnedHighlightId: null,
   debrief: null,
   debriefTimer: null,
 
@@ -102,6 +109,7 @@ const audio = new ClinicalAudio();
 const scene = new TraumaWardScene(dom.canvas, {
   onSelectPatient: (patientId) => handlePatientIntervention(patientId),
   onTimeout: (patientId) => handleTrialTimeout(patientId),
+  onLayout: (bays, w, h) => syncBayOverlayPositions(bays, w, h),
 });
 
 function formatPace(val) {
@@ -129,7 +137,6 @@ function updateSpeedDisplays() {
   const firstCrashSec = Math.max(4, Math.round(baseSec / pace));
   dom.titleSpeedCrash.textContent = `First crash in ${firstCrashSec} s`;
 
-  // Update SVG rotary speed dial (135 deg -> 405 deg clockwise sweep around center 32,32, radius 24)
   const t = Math.max(0, Math.min(1, (pace - 0.25) / (3.0 - 0.25)));
   const startDeg = 135;
   const sweepDeg = Math.max(8, t * 270);
@@ -218,39 +225,83 @@ function readCasesPerShift() {
   return clamped;
 }
 
+// =========================================================================
+// LIVE CROSS-HIGHLIGHT & RIGHT-CLICK RULE-OUT SCRATCHPAD
+// =========================================================================
+function setHighlightedPatient(patientId) {
+  const effective = patientId || state.pinnedHighlightId || null;
+  if (state.highlightedPatientId === effective) return;
+  state.highlightedPatientId = effective;
+  scene.setHighlightedPatient(effective);
+  applyPatientBoardHighlight(dom.dossierContainer, effective, state.ruledOutIds);
+}
+
+function toggleRuledOut(patientId) {
+  if (state.screen !== 'playing' || state.debrief || !state.currentTrial) return;
+  if (state.selectedIds.includes(patientId)) return;
+  const nowRuled = !state.ruledOutIds.has(patientId);
+  if (nowRuled) state.ruledOutIds.add(patientId);
+  else state.ruledOutIds.delete(patientId);
+  scene.setRuledOut(patientId, nowRuled);
+  audio.playMark(nowRuled);
+  applyPatientBoardHighlight(dom.dossierContainer, state.highlightedPatientId, state.ruledOutIds);
+  const btn = dom.bayButtonsBar.querySelector(`[data-patient-id="${patientId}"]`);
+  if (btn) btn.setAttribute('aria-description', nowRuled ? 'Ruled out' : '');
+}
+
+// Native accessible <button> hit areas synced 1:1 with canvas bay rectangles
+function syncBayOverlayPositions(baysArg, widthArg, heightArg) {
+  if (!dom.bayButtonsBar) return;
+  const bays = baysArg || (typeof scene !== 'undefined' ? scene.bays : null);
+  const w = widthArg || (typeof scene !== 'undefined' ? scene.width : 1) || 1;
+  const h = heightArg || (typeof scene !== 'undefined' ? scene.height : 1) || 1;
+  if (!bays) return;
+  const buttons = dom.bayButtonsBar.querySelectorAll('.tm-bay-hit');
+  buttons.forEach((btn, idx) => {
+    const bay = bays[idx];
+    if (!bay) return;
+    btn.style.left = `${(bay.x / w) * 100}%`;
+    btn.style.top = `${(bay.y / h) * 100}%`;
+    btn.style.width = `${(bay.w / w) * 100}%`;
+    btn.style.height = `${(bay.h / h) * 100}%`;
+  });
+}
+
 function renderBayButtons() {
   if (state.setupMode === 'nback' || !state.currentTrial) {
     dom.bayButtonsBar.innerHTML = '';
     return;
   }
-  const shortlistSet =
-    state.useShortlist && state.currentTrial.tierRank <= 3
-      ? new Set(state.currentTrial.shortlist)
-      : null;
 
   dom.bayButtonsBar.innerHTML = PATIENTS.map((p, i) => {
     const keyNum = i === 9 ? '0' : String(i + 1);
     const chosen = state.selectedIds.includes(p.id);
-    const dimmed = shortlistSet && !shortlistSet.has(p.id);
-    const isTarget = state.debrief && state.currentTrial.targets.includes(p.id);
-    const isWrong = state.debrief && state.debrief.wrongId === p.id;
-    let cls = 'tm-bay-btn';
-    if (chosen) cls += ' is-picked';
-    if (dimmed) cls += ' is-dimmed';
-    if (isTarget) cls += ' is-target';
-    if (isWrong) cls += ' is-wrong';
     const disabled = !!state.debrief || chosen;
-    return `<button type="button" class="${cls}" data-patient-id="${p.id}" ${disabled ? 'disabled' : ''}>
-      <span class="tm-key-cap">${keyNum}</span>
-      <span>${p.name}</span>
+    return `<button type="button" class="tm-bay-hit" data-patient-id="${p.id}" aria-label="${keyNum} ${p.name}" title="Click or press ${keyNum} to treat ${p.name} · Right-click to rule out" ${disabled ? 'disabled' : ''}>
+      <span class="tm-sr-only">${keyNum} ${p.name}</span>
     </button>`;
   }).join('');
 
-  dom.bayButtonsBar.querySelectorAll('[data-patient-id]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+  syncBayOverlayPositions();
+
+  dom.bayButtonsBar.querySelectorAll('.tm-bay-hit').forEach((btn) => {
+    const pid = btn.dataset.patientId;
+    btn.addEventListener('click', (e) => {
       btn.blur();
-      handlePatientIntervention(btn.dataset.patientId);
+      if (e.shiftKey) {
+        toggleRuledOut(pid);
+        return;
+      }
+      handlePatientIntervention(pid);
     });
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      toggleRuledOut(pid);
+    });
+    btn.addEventListener('mouseenter', () => setHighlightedPatient(pid));
+    btn.addEventListener('mouseleave', () => setHighlightedPatient(null));
+    btn.addEventListener('focus', () => setHighlightedPatient(pid));
+    btn.addEventListener('blur', () => setHighlightedPatient(null));
   });
 }
 
@@ -305,12 +356,14 @@ function startShift({ pinnedReasoningType = null } = {}) {
 
   state.currentTrial = null;
   state.selectedIds = [];
+  state.ruledOutIds.clear();
+  state.highlightedPatientId = null;
+  state.pinnedHighlightId = null;
   state.debrief = null;
   state.nbackFeedback = null;
 
   const isNback = state.setupMode === 'nback';
   dom.wardWrap.hidden = isNback;
-  dom.bayButtonsBar.hidden = isNback;
   if (dom.paceControl) dom.paceControl.hidden = isNback;
 
   setScreen('playing');
@@ -334,6 +387,9 @@ function advanceStandardTrial() {
   const tierId = state.session.activeTierId();
   state.currentTrial = state.scheduler.nextTrial(tierId);
   state.selectedIds = [];
+  state.ruledOutIds.clear();
+  state.highlightedPatientId = null;
+  state.pinnedHighlightId = null;
   state.debrief = null;
   state.trialStartTs = performance.now();
 
@@ -356,6 +412,8 @@ function renderCurrentDossier() {
     debrief: state.debrief,
     isLastCase: !!(state.session && state.session.isComplete()),
     holdDebrief: state.holdDebrief,
+    highlightedPatientId: state.highlightedPatientId,
+    ruledOutIds: state.ruledOutIds,
     onNextTrial: () => advanceStandardTrial(),
     onHoldToggle: () => {
       state.holdDebrief = !state.holdDebrief;
@@ -373,6 +431,7 @@ function handlePatientIntervention(patientId) {
 
   const isCorrect = state.currentTrial.targets.includes(patientId);
   state.selectedIds.push(patientId);
+  state.ruledOutIds.delete(patientId);
   scene.markPatientResult(patientId, isCorrect);
   audio.playSelect(isCorrect);
 
@@ -403,6 +462,10 @@ function finishStandardTrial({ cleared, reason, wrongId }) {
     elapsedMs,
   });
 
+  state.ruledOutIds.clear();
+  state.pinnedHighlightId = null;
+  state.highlightedPatientId = null;
+  scene.setHighlightedPatient(null);
   state.debrief = { cleared, reason, wrongId, elapsedMs, ladderEvent };
   scene.revealDebrief(state.currentTrial.targets, state.currentTrial.explanation.rival?.patientId);
   scene.setMode('debrief');
@@ -410,7 +473,7 @@ function finishStandardTrial({ cleared, reason, wrongId }) {
   if (ladderEvent?.type === 'promoted') {
     audio.playPromote();
   } else if (cleared) {
-    audio.playClear();
+    audio.playClear(state.session.currentStreak);
   } else {
     audio.playMiss();
   }
@@ -420,7 +483,7 @@ function finishStandardTrial({ cleared, reason, wrongId }) {
   renderCurrentDossier();
 
   if (!state.holdDebrief) {
-    const delayMs = cleared ? 5600 : 7800;
+    const delayMs = cleared ? 5800 : 8000;
     state.debriefTimer = setTimeout(() => {
       if (state.screen === 'playing' && state.debrief) {
         advanceStandardTrial();
@@ -472,7 +535,7 @@ function submitNBackRound() {
       perfect: ok,
       note: truth.valid ? 'Encoding round was valid' : 'Encoding round had a 3-line contradiction',
     };
-    if (ok) audio.playClear();
+    if (ok) audio.playClear(1);
     else audio.playMiss();
     advanceNBackTrial();
     return;
@@ -491,7 +554,7 @@ function submitNBackRound() {
     perfect: correct === 4,
     note: truth.samePattern ? 'Structure matched N-back' : 'Structure differed from N-back',
   };
-  if (correct === 4) audio.playClear();
+  if (correct === 4) audio.playClear(state.session.currentStreak);
   else audio.playMiss();
 
   advanceNBackTrial();
@@ -598,6 +661,24 @@ function endShiftSummary() {
 // =========================================================================
 // EVENT WIRING & KEYBOARD CONTROLS
 // =========================================================================
+dom.dossierContainer.addEventListener('mouseover', (e) => {
+  const el = e.target.closest('.tm-pname[data-pid]');
+  if (el) setHighlightedPatient(el.dataset.pid);
+});
+
+dom.dossierContainer.addEventListener('mouseout', (e) => {
+  const el = e.target.closest('.tm-pname[data-pid]');
+  if (el) setHighlightedPatient(null);
+});
+
+dom.dossierContainer.addEventListener('click', (e) => {
+  const el = e.target.closest('.tm-pname[data-pid]');
+  if (!el) return;
+  const pid = el.dataset.pid;
+  state.pinnedHighlightId = state.pinnedHighlightId === pid ? null : pid;
+  setHighlightedPatient(state.pinnedHighlightId);
+});
+
 dom.diffCards.forEach((btn) => {
   btn.addEventListener('click', () => {
     selectDifficulty(btn.dataset.difficulty);

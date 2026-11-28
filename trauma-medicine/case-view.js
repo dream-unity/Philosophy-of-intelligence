@@ -1,7 +1,7 @@
-// Accessible DOM view renderer for Trauma Doctor dossiers, quantitative clinical weights,
-// coupled cross-checks, post-trial debriefs, and Clinical Rounds N-Back.
-// Strictly hides reasoning-type taxonomy labels before answering so students train cold,
-// then teaches the exact reasoning pattern in the post-case debrief.
+// Zero-scroll single-screen DOM view renderer for Trauma Doctor.
+// Renders all 6 clinical records in a compact 2x3 card grid (with side-by-side Cross-Checks
+// on Tiers 4-6), wraps every patient name for instant cross-highlighting across the entire
+// board, swaps Debrief cleanly in-place, and strictly hides reasoning taxonomy until answered.
 
 import { PATIENT_BY_ID } from './roster.js';
 import { formatEdgeShort } from './case-layout.js';
@@ -19,20 +19,36 @@ function patientName(id) {
   return PATIENT_BY_ID[id]?.name || id;
 }
 
+function renderEdgeInteractive(edge, verb) {
+  const fromName = patientName(edge.from);
+  const toName = patientName(edge.to);
+  return `<span class="tm-pname tm-pname-left" data-pid="${esc(edge.from)}">${esc(fromName)}</span> <span class="tm-verb">${esc(verb)}</span> <span class="tm-pname tm-pname-right" data-pid="${esc(edge.to)}">${esc(toName)}</span>`;
+}
+
 function uncertaintyTagHtml(rec) {
   if (!rec.disputed) return '';
   if (rec.uncertaintyMode === 'reverse') {
-    return `<span class="tm-uncertain-note">Disputed: arrows may be reversed</span>`;
+    return `<div class="tm-uncertain-note">? Arrows may be reversed</div>`;
   }
   if (rec.uncertaintyMode === 'swap' && rec.swapPair) {
     const [a, b] = rec.swapPair;
-    return `<span class="tm-uncertain-note">Chart mix-up? Swap ${esc(patientName(a))} &amp; ${esc(patientName(b))}</span>`;
+    return `<div class="tm-uncertain-note">? Mix-up: swap ${esc(patientName(a))} &amp; ${esc(patientName(b))}</div>`;
   }
   const alt2 = rec.altEdges?.[1];
   if (alt2) {
-    return `<span class="tm-uncertain-note">Or line 2: ${esc(formatEdgeShort(alt2, rec.verb))}</span>`;
+    return `<div class="tm-uncertain-note">? Alt line 2: ${esc(formatEdgeShort(alt2, rec.verb))}</div>`;
   }
-  return `<span class="tm-uncertain-note">Disputed reading</span>`;
+  return `<div class="tm-uncertain-note">? Disputed reading</div>`;
+}
+
+export function applyPatientBoardHighlight(container, highlightedId, ruledOutIds) {
+  if (!container) return;
+  const ruledSet = ruledOutIds instanceof Set ? ruledOutIds : new Set();
+  container.querySelectorAll('.tm-pname[data-pid]').forEach((el) => {
+    const pid = el.dataset.pid;
+    el.classList.toggle('is-hl', !!highlightedId && pid === highlightedId);
+    el.classList.toggle('is-ruled-out', ruledSet.has(pid));
+  });
 }
 
 export function renderClinicalDossier(container, {
@@ -44,12 +60,15 @@ export function renderClinicalDossier(container, {
   onNextTrial,
   onHoldToggle,
   holdDebrief,
+  highlightedPatientId = null,
+  ruledOutIds = null,
 }) {
   const decisiveSet = new Set(debrief ? trial.explanation.decisiveChannels : []);
   const targetCount = trial.targets.length;
   const remainingSlots = Math.max(0, targetCount - selectedIds.length);
   const showWeights = !!trial.usesWeights;
   const showMinutes = !!trial.usesMinutes;
+  const hasCrossChecks = trial.crossChecks.length > 0;
 
   const slotsHtml = Array.from({ length: targetCount }, (_, i) => {
     const filled = i < selectedIds.length;
@@ -58,54 +77,55 @@ export function renderClinicalDossier(container, {
 
   const shortlistHtml =
     useShortlist && trial.tierRank <= 3
-      ? `<div class="tm-shortlist" aria-label="Candidate shortlist">
+      ? `<span class="tm-shortlist-inline" aria-label="Candidate shortlist">
            <span class="tm-meta-label">Shortlist</span>
-           <span class="tm-shortlist-names">${trial.shortlist.map((id) => esc(patientName(id))).join(' · ')}</span>
-         </div>`
+           <span class="tm-shortlist-names">${trial.shortlist
+             .map((id) => `<span class="tm-pname" data-pid="${esc(id)}">${esc(patientName(id))}</span>`)
+             .join(' · ')}</span>
+         </span>`
       : '';
 
-  const rowsHtml = trial.records
+  // Compact 2x3 clinical record cards — all 6 visible simultaneously with zero scrolling!
+  const cardsHtml = trial.records
     .map((rec, idx) => {
       const isDecisive = decisiveSet.has(rec.channelId);
       const trueBit = (trial.trueWorldMask >> idx) & 1;
       const resolvedNote =
         debrief && rec.disputed
-          ? `<span class="tm-resolved-state ${trueBit === 1 ? 'is-held' : 'is-flipped'}">${
-              trueBit === 1 ? 'Held as printed' : 'Flipped reading held'
-            }</span>`
+          ? `<div class="tm-resolved-state ${trueBit === 1 ? 'is-held' : 'is-flipped'}">${
+              trueBit === 1 ? '✓ Held as printed' : '↺ Flipped reading held'
+            }</div>`
           : '';
       const edgesToShow = debrief && rec.disputed && trueBit === 0 ? rec.altEdges : rec.shownEdges;
-      const line1 = formatEdgeShort(edgesToShow[0], rec.verb);
-      const line2 = formatEdgeShort(edgesToShow[1], rec.verb);
-      const weightCell = showWeights
-        ? `<td class="tm-col-weight tm-tabular">+${rec.weight}</td>`
+      const weightTag = showWeights
+        ? `<span class="tm-rec-weight tm-tabular">+${rec.weight}</span>`
         : '';
-      const minCell = showMinutes
-        ? `<td class="tm-col-minutes tm-tabular">${rec.minutes}m</td>`
+      const minTag = showMinutes
+        ? `<span class="tm-rec-min tm-tabular">${rec.minutes}m</span>`
         : '';
+      const qBadge = rec.disputed ? `<span class="tm-qmark" title="Disputed record">?</span>` : '';
 
-      return `<tr class="tm-chart-row ${rec.disputed ? 'is-disputed' : ''} ${isDecisive ? 'is-decisive' : ''}">
-        <td class="tm-col-time">${esc(rec.time)}</td>
-        <td class="tm-col-site">${esc(rec.site)}</td>
-        ${weightCell}
-        ${minCell}
-        <td class="tm-col-channel">
-          <strong>${esc(rec.label)}</strong>${rec.disputed ? ' <span class="tm-qmark" title="Disputed record">?</span>' : ''}
-          ${!debrief ? uncertaintyTagHtml(rec) : resolvedNote}
-        </td>
-        <td class="tm-col-links">
-          <div>${esc(line1)}</div>
-          <div>${esc(line2)}</div>
-        </td>
-      </tr>`;
+      return `<article class="tm-rec-card ${rec.disputed ? 'is-disputed' : ''} ${isDecisive ? 'is-decisive' : ''}">
+        <div class="tm-rec-head">
+          <span class="tm-rec-time tm-tabular">${esc(rec.time)}</span>
+          <span class="tm-rec-site">${esc(rec.site)}</span>
+          <strong class="tm-rec-label">${esc(rec.label)}${qBadge}</strong>
+          <span class="tm-rec-metrics">${weightTag}${minTag}</span>
+        </div>
+        <div class="tm-rec-lines">
+          <div class="tm-rec-line">${renderEdgeInteractive(edgesToShow[0], rec.verb)}</div>
+          <div class="tm-rec-line">${renderEdgeInteractive(edgesToShow[1], rec.verb)}</div>
+        </div>
+        ${!debrief ? uncertaintyTagHtml(rec) : resolvedNote}
+      </article>`;
     })
     .join('');
 
-  const crossChecksHtml = trial.crossChecks.length
-    ? `<section class="tm-crosschecks" aria-label="Chart cross-checks">
+  const crossChecksHtml = hasCrossChecks
+    ? `<aside class="tm-crosschecks" aria-label="Chart cross-checks">
          <div class="tm-section-head">
            <span class="tm-meta-label">Cross-Checks</span>
-           <span class="tm-meta-sub">Resolve disputed (?) records before intervening</span>
+           <span class="tm-meta-sub">Resolve disputed (?) rows</span>
          </div>
          <ul class="tm-cc-list">
            ${trial.crossChecks
@@ -117,63 +137,84 @@ export function renderClinicalDossier(container, {
              )
              .join('')}
          </ul>
-       </section>`
+       </aside>`
     : '';
 
-  let debriefHtml = '';
-  if (debrief) {
+  // Top primary panel: Directive during active play -> swaps cleanly IN-PLACE to Debrief after answering!
+  let topPanelHtml = '';
+  if (!debrief) {
+    topPanelHtml = `<section class="tm-order-card" aria-label="Clinical directive">
+      <div class="tm-order-main">${esc(trial.order)}</div>
+      <div class="tm-order-subrow">
+        <span class="tm-order-detail">${esc(trial.detail)}</span>
+        ${shortlistHtml}
+      </div>
+    </section>`;
+  } else {
     const outcomeClass = debrief.cleared ? 'is-clear' : 'is-miss';
+    const secStr = (debrief.elapsedMs / 1000).toFixed(1);
+    const fastCall = debrief.cleared && debrief.elapsedMs <= 10500
+      ? `<span class="tm-fast-tag">⚡ Fast Call</span>`
+      : '';
     const outcomeHeading = debrief.cleared
-      ? `Stabilized · ${(debrief.elapsedMs / 1000).toFixed(1)}s`
+      ? `Stabilized · ${secStr}s`
       : debrief.reason === 'timeout'
         ? 'Time Expired · Patient Crashed'
         : `Wrong Intervention (${esc(patientName(debrief.wrongId))})`;
     const rivalHtml = trial.explanation.rival
-      ? `<p class="tm-debrief-rival"><strong>Why not ${esc(trial.explanation.rival.patientName)}?</strong> ${esc(trial.explanation.rival.reason)}</p>`
+      ? `<div class="tm-debrief-rival"><strong>Why not ${esc(trial.explanation.rival.patientName)}?</strong> ${esc(trial.explanation.rival.reason)}</div>`
       : '';
     const ladderBanner = debrief.ladderEvent
-      ? `<p class="tm-ladder-note">${
+      ? `<span class="tm-ladder-note">${
           debrief.ladderEvent.type === 'promoted'
-            ? `Promoted to ${esc(debrief.ladderEvent.tier.label)}`
-            : `Stepped down to ${esc(debrief.ladderEvent.tier.label)} for reinforcement`
-        }</p>`
+            ? `▲ Promoted to ${esc(debrief.ladderEvent.tier.label)}`
+            : `▼ Stepped down to ${esc(debrief.ladderEvent.tier.label)}`
+        }</span>`
       : '';
 
     const r = trial.reasoningMeta;
-    const nextLabel = isLastCase ? 'View Shift Summary (Space)' : 'Next Case (Space)';
-    debriefHtml = `<section class="tm-debrief ${outcomeClass}" aria-live="polite">
+    const nextLabel = isLastCase ? 'View Summary (Space)' : 'Next Case (Space)';
+    topPanelHtml = `<section class="tm-debrief ${outcomeClass}" aria-live="polite">
       <div class="tm-debrief-top">
-        <div>
-          <h3 class="tm-debrief-title">${outcomeHeading}</h3>
-          <p class="tm-debrief-targets">Correct target${trial.targets.length > 1 ? 's' : ''}: <strong>${esc(
+        <div class="tm-debrief-headline">
+          <strong class="tm-debrief-title">${outcomeHeading}</strong>
+          ${fastCall}
+          <span class="tm-debrief-targets">Target${trial.targets.length > 1 ? 's' : ''}: <strong>${esc(
             trial.targets.map(patientName).join(', ')
-          )}</strong></p>
+          )}</strong></span>
+          ${ladderBanner}
         </div>
         <div class="tm-debrief-actions">
-          <button type="button" class="tm-btn tm-btn-ghost" data-action="hold-debrief">${
-            holdDebrief ? 'Auto-advance Off' : 'Hold Debrief'
+          <button type="button" class="tm-btn tm-btn-ghost tm-btn-compact" data-action="hold-debrief">${
+            holdDebrief ? 'Auto-Next Off' : 'Hold'
           }</button>
-          <button type="button" class="tm-btn tm-btn-primary" data-action="next-trial">${nextLabel}</button>
+          <button type="button" class="tm-btn tm-btn-primary tm-btn-compact" data-action="next-trial">${nextLabel}</button>
         </div>
       </div>
-      ${ladderBanner}
-      <p class="tm-debrief-proof">${esc(trial.explanation.proof)}</p>
-      ${rivalHtml}
-      <div class="tm-lesson-box">
-        <span class="tm-meta-label">Reasoning Pattern Revealed · #${r.number}/${TOTAL_REASONING_TYPES} ${esc(r.name)} · ${esc(r.levelFull)} · ${esc(r.familyName)}</span>
-        <p class="tm-core-op"><strong>Core operation:</strong> ${esc(r.coreOperation)}</p>
-        <p>${esc(r.doctorLesson)}</p>
+      <div class="tm-debrief-cols">
+        <div class="tm-debrief-col">
+          <div class="tm-debrief-proof">${esc(trial.explanation.proof)}</div>
+          ${rivalHtml}
+        </div>
+        <div class="tm-debrief-col tm-lesson-col">
+          <div class="tm-lesson-head">#${r.number}/${TOTAL_REASONING_TYPES} ${esc(r.name)} · ${esc(r.levelLabel)} · ${esc(r.familyShort)}</div>
+          <div class="tm-lesson-copy"><strong>${esc(r.coreOperation)}</strong> ${esc(r.doctorLesson)}</div>
+        </div>
       </div>
     </section>`;
   }
 
-  // Active header intentionally omits reasoning type / cognitive level before answering so students train cold.
+  const dispatchText = trial.scenario.dispatch
+    ? `<span class="tm-dispatch-text">${esc(trial.scenario.dispatch)}</span>`
+    : '';
+
   container.innerHTML = `
     <div class="tm-dossier-header">
       <div class="tm-dossier-meta">
         <span class="tm-phase-text">${esc(trial.phaseMeta.label)}</span>
         <span class="tm-sep" aria-hidden="true">·</span>
         <span class="tm-scenario-text">${esc(trial.scenario.title)}</span>
+        ${dispatchText}
       </div>
       <div class="tm-slots-readout" aria-label="${remainingSlots} of ${targetCount} interventions remaining">
         <span class="tm-meta-label">Actions</span>
@@ -182,34 +223,17 @@ export function renderClinicalDossier(container, {
       </div>
     </div>
 
-    ${debriefHtml}
+    ${topPanelHtml}
 
-    <section class="tm-order-card" aria-label="Clinical directive">
-      <p class="tm-order-main">${esc(trial.order)}</p>
-      <p class="tm-order-detail">${esc(trial.detail)}</p>
-      ${shortlistHtml}
-    </section>
-
-    ${crossChecksHtml}
-
-    <section class="tm-chart-wrap" aria-label="Clinical records">
-      <table class="tm-chart-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Unit</th>
-            ${showWeights ? '<th>Weight</th>' : ''}
-            ${showMinutes ? '<th>Min</th>' : ''}
-            <th>Record</th>
-            <th>Clinical Findings</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml}
-        </tbody>
-      </table>
-    </section>
+    <div class="tm-dossier-body ${hasCrossChecks ? 'has-crosschecks' : ''}">
+      <section class="tm-chart-grid" aria-label="Clinical records">
+        ${cardsHtml}
+      </section>
+      ${crossChecksHtml}
+    </div>
   `;
+
+  applyPatientBoardHighlight(container, highlightedPatientId, ruledOutIds);
 
   const nextBtn = container.querySelector('[data-action="next-trial"]');
   if (nextBtn && onNextTrial) nextBtn.addEventListener('click', onNextTrial);
@@ -236,7 +260,7 @@ export function renderNBackView(container, {
 
   const matrixHtml = isEncoding
     ? `<div class="tm-nb-encoding">
-         <p>Memorize this briefing (encoding round ${trial.index} of ${trial.level}).</p>
+         <p class="tm-order-detail">Memorize this briefing (encoding round ${trial.index} of ${trial.level}).</p>
          <div class="tm-nb-row">
            <span class="tm-nb-q">Is this briefing logically valid or a contradiction?</span>
            <div class="tm-nb-pair">
